@@ -13,14 +13,15 @@ import { postMoveToChat, rolledTotalCard } from "../utils/chat.js";
 import { capitalizeFirst } from "../utils/strings.js";
 import {
 	BREAK_BREAD, CAMP_FLAG, CAMP_OWED_FLAG, CAMP_STATE, CAMP_STATUS, HAD_ALL_ALONG, HOME_FIRES, SETTLE_REFUSAL,
-	campLedger, campShareUpdate, campState, count, freezeCampPlan, messKitAllAlong, newCampRecord, readCampRecord,
-	readOwedCamps, rollsBedroll, rollsBreakBread, suppliesAllAlong,
+	campLedger, campShareUpdate, campState, count, freezeCampPlan, isFurLinedBedrollName, isSettledRecord, messKitAllAlong, newCampRecord,
+	readCampRecord, readOwedCamps, rollsBedroll, rollsBreakBread, suppliesAllAlong, followersBreakBread,
 } from "./camp-rules.js";
 import { ownsLearnedMoveNamed } from "../actors/character/owns-move.js";
 import { walkItOffChoice } from "../actors/character/walk-it-off.js";
 import { CLEARS_ON, markedTracks, snapshotTracksClearedBy } from "../actors/character/background-tracks.js";
-import { campSummaryRows, hadAllAlongRows } from "./camp-view.js";
+import { campSummaryRows, hadAllAlongRows, settleRefusalText } from "./camp-view.js";
 import { campFollowerShare } from "./camp-followers.js";
+import { setFollowerHp } from "../actors/character/follower-hp.js";
 
 /**
  * THE CAMP'S DOCUMENTS: who is sitting at the fire, the choices they make there, and the moment
@@ -46,6 +47,17 @@ import { campFollowerShare } from "./camp-followers.js";
 const FLAG_PATH = `flags.${SYSTEM_ID}.${CAMP_FLAG}`;
 const OWED_PATH = `flags.${SYSTEM_ID}.${CAMP_OWED_FLAG}`;
 
+/**
+ * The flag, on a Ravenous Thrall, keeping the 1d4 rolled for a camp as `{campId, uses}`. Apart from
+ * the camp record because Send them away removes that record whole, and bringing them back to the
+ * same fire must not roll the bill again.
+ */
+export const CAMP_HUNGER_FLAG = "campHunger";
+const HUNGER_PATH = `flags.${SYSTEM_ID}.${CAMP_HUNGER_FLAG}`;
+
+/** Have What You Need's name in the ledger, for the marks and uses it moves at the fire. */
+const HAVE_WHAT_YOU_NEED = "Have What You Need";
+
 /** The message flag a camp's join card carries: `{campId, hostId}`, the camp its button leads to. */
 export const CAMP_CARD_FLAG = "campJoin";
 
@@ -69,7 +81,7 @@ export function campRecordOf(actor) {
 }
 
 /** Where a camp stands (CAMP_STATE), read off its host. */
-export function stateOfCamp({ campId, hostId } = {}, now = Date.now()) {
+export function stateOfCamp({ campId, hostId } = {}, now = serverNow()) {
 	return campState(campRecordOf(game.actors?.get(hostId)), { campId, hostId }, now);
 }
 
@@ -86,7 +98,7 @@ export function canCamp(actor) {
 export { isUnliving };
 
 /** Every camp in the world that can still be joined, as `{campId, hostId, hostName}`. */
-export function openCamps(now = Date.now()) {
+export function openCamps(now = serverNow()) {
 	const camps = [];
 	for (const actor of characters()) {
 		const record = campRecordOf(actor);
@@ -121,13 +133,15 @@ function markedDebilities(actor, vitals) {
 /** One character at the fire, in the shape camp-rules.js reads (its CampMember). */
 export function campMember(actor, hostId) {
 	const record = campRecordOf(actor);
+	// Read once: the purses' caps and Have What You Need's fresh ◆ both need it, and it reads the steading.
+	const usesPerSupply = usesPerSupplyOf(actor);
 	return {
 		actorId:          actor.id,
 		name:             actor.name,
 		img:              actor.img ?? "",
 		isHost:           actor.id === hostId,
 		record,
-		resources:        actor.getFlag?.(SYSTEM_ID, "inventory.resources") ?? {},
+		resources:        packResources(actor, { usesPerSupply }),
 		hpValue:          count(actor.system?.attributes?.hp?.value),
 		// The published max is the computed one. The stored field is a mirror that only moves when
 		// the owner's sheet renders, so it is the fallback, not the source.
@@ -142,7 +156,7 @@ export function campMember(actor, hostId) {
 		hearthCha:        ownsLearnedMoveNamed(actor, HOME_FIRES) ? Math.trunc(Number(actor.system?.stats?.cha?.value) || 0) : null,
 		// The tracks were named on sitting down (campVitalsFor); whether one is marked is read live.
 		clearsTonight:    markedTracks(record?.vitals.clears, actor.getFlag?.(SYSTEM_ID, "background.setupResources")),
-		pack:             packFor(actor),
+		pack:             packFor(actor, usesPerSupply),
 		// A Thrall's Marks that reach the fire, read live like the moves.
 		slowToHeal:       slowToHeal(actor),
 		ravenous:         hasThrallMark(actor, THRALL_MARK.RAVENOUS),
@@ -153,30 +167,60 @@ export function campMember(actor, hostId) {
 /**
  * A Ravenous Thrall's "extra 1d4 provisions or uses of supplies", rolled as they sit down and posted
  * as its own die, so the table watches it land and every window reads the same bill off their record.
- * Rolled once for the camp: a roll per render would give every reader a different bill. 0, and no
- * die, for anyone without the Mark. A Mark taken while already seated counts from their next camp.
+ * Rolled once for the camp: a roll per render would give every reader a different bill, and so would
+ * a roll per sit-down, which a GM's Send them away and Bring them would make into a re-roll. So the
+ * roll is kept (CAMP_HUNGER_FLAG) and handed back when the Thrall sits down at the SAME camp again.
+ * 0, and no die, for anyone without the Mark. A Mark taken while already seated counts from their
+ * next camp.
+ *
+ * @returns {Promise<{uses: number, kept: object|null}>}  `kept` is the flag to write beside the
+ *          record, or null when nothing new was rolled
  */
-async function rollHunger(actor) {
-	if (!hasThrallMark(actor, THRALL_MARK.RAVENOUS)) return 0;
+async function rollHunger(actor, campId) {
+	if (!hasThrallMark(actor, THRALL_MARK.RAVENOUS)) return { uses: 0, kept: null };
+	const before = actor.getFlag?.(SYSTEM_ID, CAMP_HUNGER_FLAG);
+	if (before?.campId && before.campId === campId) return { uses: count(before.uses), kept: null };
 	const roll = await new Roll("1d4").evaluate();
 	await roll.toMessage({
 		speaker: ChatMessage.getSpeaker({ actor }),
 		flavor:  rolledTotalCard(roll, "Ravenous", "extra provisions or uses of supplies", "at the camp"),
 	});
-	return count(roll.total);
+	const uses = count(roll.total);
+	return { uses, kept: { campId: String(campId), uses } };
+}
+
+/**
+ * The uses a character can feed the camp from, read live: only the printed supplies rows they are
+ * CARRYING (provisions count marked or not), each purse capped at its current size
+ * (StonetopCharacter#spendablePurseResources, supply-cost.js). A supplies row nobody marked is food
+ * left at home. An actor without its typed character reads as stored.
+ * `carriedOnly: false` is for the write that pays an agreed share (StonetopCharacter#spendablePurseResources).
+ * `usesPerSupply` is the size of a ◆ when the caller already read it (usesPerSupplyOf).
+ */
+function packResources(actor, { carriedOnly = true, usesPerSupply = null } = {}) {
+	const stored = actor.getFlag?.(SYSTEM_ID, "inventory.resources") ?? {};
+	try {
+		return actor.typedActor?.spendablePurseResources?.({ carriedOnly, per: usesPerSupply ?? undefined }) ?? stored;
+	} catch {
+		return stored;
+	}
+}
+
+/** The uses in one ◆ of supplies for this character (StonetopCharacter#getUsesPerSupply), or null. */
+function usesPerSupplyOf(actor) {
+	try {
+		return actor.typedActor?.getUsesPerSupply?.() ?? null;
+	} catch {
+		// No readable steading: the rules fall back to the book's default of 4.
+		return null;
+	}
 }
 
 /**
  * What Have What You Need can draw on in a character's pack, read live off the flags, since a mark
  * spent at the fire must show on every reader's window at once.
  */
-function packFor(actor) {
-	let usesPerSupply = null;
-	try {
-		usesPerSupply = actor.typedActor?.getUsesPerSupply?.() ?? null;
-	} catch {
-		// No readable steading: the rules fall back to the book's default of 4.
-	}
+function packFor(actor, usesPerSupply = usesPerSupplyOf(actor)) {
 	return {
 		undefinedMarks: count(actor.getFlag?.(SYSTEM_ID, "inventory.regularPool")),
 		checked:        actor.getFlag?.(SYSTEM_ID, "inventory.checked") ?? {},
@@ -219,16 +263,23 @@ export function myCampCharacters() {
  *
  * A model that fails to build still lets them sit. The stored max stands in, and nothing counts
  * as carried, which errs toward a bedroll left unrolled rather than one rolled that is not there.
+ *
+ * The sheet's numbers and the gear they were built from come from ONE pass
+ * (StonetopCharacter#snapshotWithGear), so the gear picture is not built a second time for the
+ * fur-lined bedroll.
  */
 export async function campVitalsFor(actor) {
 	const storedMax = count(actor?.system?.attributes?.hp?.max);
 	try {
-		const snapshot = await actor.typedActor?.buildSnapshot?.();
+		const { snapshot, gear } = (await actor.typedActor?.snapshotWithGear?.()) ?? {};
+		const furBedroll = carriesFurBedroll(gear);
 		const outfit   = snapshot?.inventory?.outfit?.regularItems ?? [];
 		const carried  = slug => !!outfit.find(item => item.slug === slug)?.checked;
 		return {
 			maxHp:      count(snapshot?.vitals?.hp?.max) || storedMax,
+			// The fur-lined bedroll counts as a bedroll too, on reading (camp-rules.js#readVitals).
 			bedroll:    carried("bedroll"),
+			furBedroll,
 			messKit:    carried("mess-kit"),
 			debilities: (snapshot?.debilities ?? []).map(d => ({ key: d.key, name: d.name })),
 			// Auspicious Birth's circle, which Make Camp clears.
@@ -236,8 +287,18 @@ export async function campVitalsFor(actor) {
 		};
 	} catch (err) {
 		console.warn(`Stonetop | Make Camp: could not read ${actor?.name}'s sheet, so the stored max HP stands in`, err);
-		return { maxHp: storedMax, bedroll: false, messKit: false, debilities: [], clears: [] };
+		return { maxHp: storedMax, bedroll: false, furBedroll: false, messKit: false, debilities: [], clears: [] };
 	}
+}
+
+/**
+ * Whether the fur-lined bedroll (a Book II treasure) is carried. A treasure is not on the outfit
+ * list: dropped on the sheet it is a write-in keyed by its item id, so this asks every gear store
+ * (`gear`, StonetopCharacter#_gearSources' `{ items, marks }`, the one answer to "what is carried")
+ * and knows it by name. No gear to read errs toward it not being there.
+ */
+function carriesFurBedroll(gear) {
+	return !!gear?.items?.some(item => gear.marks?.[item.slug] && isFurLinedBedrollName(item.name));
 }
 
 /**
@@ -269,7 +330,8 @@ export function partyFollowerMouths(actor, followers = null) {
 function owedCamps(host) {
 	const camps  = readOwedCamps(host?.getFlag?.(SYSTEM_ID, CAMP_OWED_FLAG));
 	const record = campRecordOf(host);
-	if (record && record.host === host.id && record.status === CAMP_STATUS.SETTLED && record.plan) {
+	// The plan, not the status: a Break up landing just after the settle must not cost anyone their share.
+	if (record && record.host === host.id && record.plan && isSettledRecord(record)) {
 		camps.push({ id: record.id, plan: record.plan });
 	}
 	return camps;
@@ -292,24 +354,27 @@ async function sitDown(actor, { campId, hostId }) {
 	// A host walking away from their own unsettled camp breaks it up, and this write replaces the record
 	// that said so. The new one names it, along with every camp the old one named, so their cards and
 	// windows go on saying they broke up (campState) however many fires this character moves between.
+	const now   = serverNow();
 	const last  = campRecordOf(actor);
 	const broke = last && last.host === actor.id && last.id !== campId
-		&& [CAMP_STATE.OPEN, CAMP_STATE.CANCELLED].includes(campState(last, { campId: last.id, hostId: actor.id }, Date.now()));
+		&& [CAMP_STATE.OPEN, CAMP_STATE.CANCELLED].includes(campState(last, { campId: last.id, hostId: actor.id }, now));
 	const left  = [...(last?.leftCamps ?? []), ...(broke ? [last.id] : [])];
+	const hunger = await rollHunger(actor, campId);
 	const record = newCampRecord({
 		id:                 campId,
 		hostId,
 		actorId:            actor.id,
-		now:                Date.now(),
+		now,
 		vitals,
 		followers:          partyFollowerMouths(actor, party),
 		hpValue:            actor.system?.attributes?.hp?.value,
 		activeDebilityKeys: markedDebilities(actor, vitals).map(d => d.key),
 		unliving:           isUnliving(actor),
 		leftCamps:          left,
-		hunger:             await rollHunger(actor),
+		hunger:             hunger.uses,
 	});
 	const update = { [FLAG_PATH]: record };
+	if (hunger.kept) update[HUNGER_PATH] = hunger.kept;
 	// The fresh record replaces the one a settled camp's plan is kept on. Whatever of that plan is
 	// still owed to somebody (a player who was away when it settled, with no GM on to pay for them)
 	// moves aside in the same write, and a camp paid in full is let go.
@@ -396,7 +461,7 @@ export async function haveWhatYouNeedAtCamp(actor, what) {
 	const member = campMember(actor, record.host);
 	if (what === HAD_ALL_ALONG.MESS_KIT) {
 		if (!messKitAllAlong(member)) return { ok: false };
-		await character.toggleCarriedItem(HAD_ALL_ALONG.MESS_KIT, true, { weight: 1 });
+		await character.toggleCarriedItem(HAD_ALL_ALONG.MESS_KIT, true, { weight: 1, stonetopMove: HAVE_WHAT_YOU_NEED });
 		// Published on the record, like a mess kit packed before the camp began, and put to use.
 		await actor.update({ [`${FLAG_PATH}.vitals.messKit`]: true, [`${FLAG_PATH}.messKit`]: true }, { stonetopLedger: true });
 		postMoveToChat(actor, "Have What You Need", hadAllAlongRows(what));
@@ -404,19 +469,44 @@ export async function haveWhatYouNeedAtCamp(actor, what) {
 	}
 	const supplies = suppliesAllAlong(member);
 	if (!supplies.ok) return { ok: false };
-	await character.toggleCarriedItem(supplies.row, true, { weight: 1 });
-	await character.setInventoryResource(supplies.row, supplies.uses);
+	// The row's uses ride on the same write as its mark, and are the move's too, so the ledger names
+	// it (`{ stonetopMove }`).
+	await character.toggleCarriedItem(supplies.row, true, { weight: 1, uses: supplies.uses, stonetopMove: HAVE_WHAT_YOU_NEED });
 	postMoveToChat(actor, "Have What You Need", hadAllAlongRows(what, supplies));
 	return { ok: true, row: supplies.row, uses: supplies.uses };
 }
 
-/** Break a camp up without anyone eating. Nothing is spent and nothing is gained. */
+/**
+ * Break a camp up without anyone eating. Nothing is spent and nothing is gained.
+ *
+ * ⚠ ONLY WHILE IT IS OPEN, asked at the moment of writing. Both ways in wait on a confirm first, and a
+ * camp somebody else settled during that wait was eaten at: writing "broken up" over it would have its
+ * card unsay the meal. Answers whether it broke the camp up.
+ */
 export async function breakCamp(host) {
+	const record = campRecordOf(host);
+	if (!record || record.host !== host.id || stateOfCamp({ campId: record.id, hostId: host.id }) !== CAMP_STATE.OPEN) return false;
 	await host.update({ [`${FLAG_PATH}.status`]: CAMP_STATUS.CANCELLED }, { stonetopLedger: true });
+	return true;
 }
 
 /** The camps this client is settling right now, by id. */
 const settling = new Set();
+
+/**
+ * The `settleAsk` tokens this client wrote and has not heard back about. When the settling client
+ * cannot settle one, it writes `settleRefused` with the token, and only the client that asked says so.
+ */
+const myAsks = new Set();
+
+/**
+ * Whether this client may settle or break up a camp: a GM, or the host's own player. Owning the host
+ * is not enough, since a table that shares every sheet makes every player an owner of every character
+ * (playsCharacter).
+ */
+export function managesCamp(host, user = game.user) {
+	return !!host && !!user && (!!user.isGM || playsCharacter(host, user));
+}
 
 /**
  * Settle the camp: freeze the plan onto the host, then say what happened.
@@ -433,21 +523,28 @@ const settling = new Set();
  * and the client elected for each character pays that character's share from it
  * (applyCampShares), this one included.
  *
- * @returns {Promise<{ok: true, plan: object[]|null} | {ok: false, reason: string}>}  `plan` is null
- *          when the settle was handed to the elected client; `reason` is a SETTLE_REFUSAL
+ * @param {object} camp  `{campId, hostId}`
+ * @param {object} [o]
+ * @param {boolean} [o.asked]  settling from somebody else's `settleAsk`, whose client already asked
+ *        whether they may (managesCamp); the elected client need not play the host itself
+ * @returns {Promise<{ok: true, plan: object[]|null} | {ok: false, reason: string, busy?: true}>}  `plan`
+ *          is null when the settle was handed to the elected client; `reason` is a SETTLE_REFUSAL, and
+ *          `busy` says this client is already settling it
  */
-export async function settleCamp(camp) {
+export async function settleCamp(camp, { asked = false } = {}) {
 	const { campId, hostId } = camp ?? {};
 	const host = game.actors?.get(hostId);
 	if (!host || stateOfCamp(camp) !== CAMP_STATE.OPEN) return { ok: false, reason: SETTLE_REFUSAL.CLOSED };
-	if (!(game.user?.isGM || host.isOwner)) return { ok: false, reason: SETTLE_REFUSAL.NOT_YOURS };
+	if (!asked && !managesCamp(host)) return { ok: false, reason: SETTLE_REFUSAL.NOT_YOURS };
 	const ledger = campLedger(campMembers(campId, hostId));
 	if (!ledger.canSettle) return { ok: false, reason: SETTLE_REFUSAL.SHORT };
 	if (!isCampWriter(host)) {
-		await host.update({ [`${FLAG_PATH}.settleAsk`]: foundry.utils.randomID() }, { stonetopLedger: true });
+		const ask = foundry.utils.randomID();
+		myAsks.add(ask);
+		await host.update({ [`${FLAG_PATH}.settleAsk`]: ask, [`${FLAG_PATH}.settleRefused`]: null }, { stonetopLedger: true });
 		return { ok: true, plan: null };
 	}
-	if (settling.has(campId)) return { ok: false, reason: SETTLE_REFUSAL.CLOSED };
+	if (settling.has(campId)) return { ok: false, reason: SETTLE_REFUSAL.CLOSED, busy: true };
 	settling.add(campId);
 	try {
 		return await settleHere(camp, host, ledger);
@@ -462,20 +559,30 @@ async function settleHere(camp, host, ledger) {
 	// bedroll rolls in the log for a night that never happened.
 	const rolls  = [];
 	const breads = [];
+	const followerBreads = [];
 	for (const member of ledger.rows) {
 		if (rollsBedroll(member, ledger)) rolls.push({ member, roll: await new Roll("1d6").evaluate() });
 		// One meal, so one 1d8 each, however many at the fire hold Break Bread.
 		if (rollsBreakBread(member, ledger)) breads.push({ member, roll: await new Roll("1d8").evaluate() });
+		// And a 1d8 for each follower mouth they feed, when the followers share that proper meal: "each of
+		// you recovers 1d8 (extra) HP". One roll of Nd8, each die one follower's (camp-followers.js).
+		if (followersBreakBread(member, ledger)) {
+			followerBreads.push({ member, roll: await new Roll(`${count(member.record.followers)}d8`).evaluate() });
+		}
 	}
 	// Somebody else may have settled it, or broken it up, while the dice were out.
 	if (stateOfCamp(camp) !== CAMP_STATE.OPEN) return { ok: false, reason: SETTLE_REFUSAL.CLOSED };
 
 	const byActor = list => Object.fromEntries(list.map(({ member, roll }) => [member.actorId, roll.total]));
-	const plan = freezeCampPlan(ledger, { bedrolls: byActor(rolls), breads: byActor(breads) });
+	const eachDie = roll => (roll.dice?.[0]?.results ?? []).filter(r => r.active !== false).map(r => count(r.result));
+	const plan = freezeCampPlan(ledger, {
+		bedrolls: byActor(rolls), breads: byActor(breads),
+		followerBreads: Object.fromEntries(followerBreads.map(({ member, roll }) => [member.actorId, eachDie(roll)])),
+	});
 	await host.update({
 		[`${FLAG_PATH}.status`]:    CAMP_STATUS.SETTLED,
 		[`${FLAG_PATH}.plan`]:      plan,
-		[`${FLAG_PATH}.settledAt`]: Date.now(),
+		[`${FLAG_PATH}.settledAt`]: serverNow(),
 	}, { stonetopLedger: true });
 
 	// Each die is its own message in the log, the way the one-person camp always rolled it: a die the
@@ -484,6 +591,10 @@ async function settleHere(camp, host, ledger) {
 	const dice = [
 		...rolls.map(die => ({ ...die, flavor: rolledTotalCard(die.roll, "Bedroll", "extra HP") })),
 		...breads.map(die => ({ ...die, flavor: rolledTotalCard(die.roll, "Break Bread", "extra HP") })),
+		...followerBreads.map(die => ({
+			...die,
+			flavor: rolledTotalCard(die.roll, "Break Bread", "extra HP for their followers, 1d8 each", `One each: ${eachDie(die.roll).join(", ")}`),
+		})),
 	];
 	const messages = await Promise.all(dice.map(({ member, roll, flavor }) => roll.toMessage({
 		speaker: ChatMessage.getSpeaker({ actor: game.actors?.get(member.actorId) }),
@@ -516,25 +627,45 @@ export async function applyCampShares(host) {
 			const actor  = game.actors?.get(entry?.actorId);
 			const theirs = campRecordOf(actor);
 			// The flag first: the election tests every user's ownership, and most shares are long paid.
-			if (!theirs || theirs.id !== camp.id || theirs.applied || !isCampWriter(actor)) continue;
+			if (!theirs || theirs.id !== camp.id || theirs.applied || claimedElsewhere(theirs) || !isCampWriter(actor)) continue;
 			await payShare(actor, entry, camp.id);
 		}
 	}
 }
 
+/** Whether a user is logged in right now. */
+function userActive(userId) {
+	return !!asArray(game.users).find(u => u?.id === userId)?.active;
+}
+
+/**
+ * Whether another client has claimed this share and is still here to pay it (payShare). A claim by
+ * somebody who has since logged off is no claim: the share falls to whoever the election picks now.
+ */
+function claimedElsewhere(record) {
+	return !!record?.paidBy && record.paidBy !== game.user?.id && userActive(record.paidBy);
+}
+
+/**
+ * Pay one character's share, on the client elected for it.
+ *
+ * Two clients can each believe the election is theirs for a moment (a player connecting just as the
+ * camp settles, before the GM's client has heard they are back). So the share is CLAIMED first, with
+ * this user's id (`paidBy`), and paid only if that claim still stands once the followers are read.
+ * A claim from another client that is still logged in is passed over (claimedElsewhere). Two claims
+ * that cross on the wire can still both stand for a moment; this narrows that to one round trip, and
+ * the share's numbers are absolute, so a second payment writes the same values rather than doubling.
+ *
+ * What the pack holds and the HP are read only after that wait, right before the write: the share
+ * lands as absolute numbers, and a Recover or a blow during the wait must not be undone by it.
+ */
 async function payShare(actor, entry, campId) {
 	const key = `${campId}:${actor.id}`;
 	if (paying.has(key)) return;
 	paying.add(key);
 	try {
-		const character = actor.typedActor;
-		const { update, shortfall } = campShareUpdate(entry, {
-			resources:     actor.getFlag(SYSTEM_ID, "inventory.resources") ?? {},
-			hpValue:       actor.system?.attributes?.hp?.value,
-			resourceData:  (slug, count) => character.inventoryResourceData(slug, count),
-			advantageData: source => character.heldAdvantageData(source),
-			disadvantageData: source => character.heldDisadvantageData(source),
-		});
+		const me = game.user?.id ?? "";
+		await actor.update({ [`${FLAG_PATH}.paidBy`]: me }, { stonetopLedger: true });
 		// The followers the meal fed regain half their max HP in the same write (camp-followers.js). A
 		// card that can't be read costs them the heal, never the character's own share.
 		// Read only when the meal fed any of them: it looks up the playbook.
@@ -544,7 +675,24 @@ async function payShare(actor, entry, campId) {
 				console.warn(`Stonetop | Make Camp: could not read ${actor.name}'s followers`, err);
 				return { update: {}, rows: [] };
 			});
+		const claim = campRecordOf(actor);
+		if (!claim || claim.id !== campId || claim.applied || claim.paidBy !== me) return;
+		const character = actor.typedActor;
+		const { update, shortfall } = campShareUpdate(entry, {
+			resources:     packResources(actor, { carriedOnly: false }),
+			hpValue:       actor.system?.attributes?.hp?.value,
+			resourceData:  (slug, count) => character.inventoryResourceData(slug, count),
+			advantageData: source => character.heldAdvantageData(source),
+			disadvantageData: source => character.heldDisadvantageData(source),
+		});
 		await actor.update({ ...update, ...followers.update }, { stonetopMove: "Make Camp" });
+		// And a fed follower's NPC, whose HP is theirs while it exists, to its own max: here when this
+		// client can write it, else on the GM's client (follower-hp.js#setFollowerHp). The box mirrors it.
+		for (const heal of followers.npcHeals ?? []) {
+			await setFollowerHp(actor, { follower: heal.ftype, slug: heal.slug }, heal.to, {
+				moveName: "Make Camp", raiseOnly: true, link: () => heal.npc, noGmKey: "stonetop.camp.npcHealNoGm",
+			}).catch(err => console.warn(`Stonetop | Make Camp: could not heal ${heal.npc?.name}'s NPC`, err));
+		}
 		if (followers.rows.length) postMoveToChat(actor, "Make Camp", followers.rows);
 		if (shortfall > 0) {
 			ui.notifications?.warn?.(`By the time the camp was settled, ${actor.name}'s pack held ${shortfall} ${shortfall === 1 ? "use" : "uses"} less than was shared from it.`);
@@ -603,16 +751,43 @@ export function onUpdateActorCamp(actor, changes) {
 	if (!fields || "id" in fields || "status" in fields) refreshCampCards();
 	const record = campRecordOf(actor);
 	if (!record || record.host !== actor.id) return;
-	if (record.status === CAMP_STATUS.OPEN && fields && "settleAsk" in fields && isCampWriter(actor)) {
-		settleCamp({ campId: record.id, hostId: actor.id })
+	// The settling client could not settle what this client asked it to: say why, here only.
+	const refused = fields?.settleRefused;
+	if (refused?.ask && myAsks.delete(String(refused.ask))) {
+		ui.notifications?.warn?.(settleRefusalText(refused.reason));
+	}
+	const ask = fields && "settleAsk" in fields ? String(fields.settleAsk ?? "") : "";
+	if (record.status === CAMP_STATUS.OPEN && !isSettledRecord(record) && ask && isCampWriter(actor)) {
+		settleCamp({ campId: record.id, hostId: actor.id }, { asked: true })
+			.then(result => answerRefusedAsk(actor, ask, result))
 			.catch(err => console.error(`Stonetop | Make Camp: could not settle ${actor.name}'s camp`, err));
 	}
-	if (record.status === CAMP_STATUS.SETTLED) applyCampShares(actor);
+	if (isSettledRecord(record)) applyCampShares(actor);
+}
+
+/**
+ * Tell the client that asked for a settle why this one could not do it, on the host's record. Not
+ * when this client is already settling the camp, and not when the camp is over: that client's window
+ * closes and says so itself.
+ */
+async function answerRefusedAsk(host, ask, result) {
+	if (!ask || result?.ok || result?.busy || result?.reason === SETTLE_REFUSAL.CLOSED) return;
+	await host.update({ [`${FLAG_PATH}.settleRefused`]: { ask, reason: result.reason } }, { stonetopLedger: true });
+}
+
+/**
+ * A character deleted while seated: no updateActor says so, and the cards of the camp they hosted or
+ * sat at must stop offering it.
+ */
+export function onDeleteActorCamp(actor) {
+	if (actor?.type !== "character" || !campRecordOf(actor)) return;
+	refreshCampCards();
 }
 
 /** Registered once, at module scope in stonetop.js. */
 export function registerCampHooks() {
 	Hooks.on("updateActor", onUpdateActorCamp);
+	Hooks.on("deleteActor", onDeleteActorCamp);
 	// A share can be owed to a client that was not there when its camp settled: a player who dropped
 	// out mid-camp with no GM on to pay it for them. Their next login pays it.
 	Hooks.once("ready", () => { payPendingShares(); });

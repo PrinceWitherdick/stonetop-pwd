@@ -96,6 +96,13 @@ describe("the settled camp's card", () => {
 			.toBe("HP 4 → 12 (half max); bedroll rolled 5, HP 12 → 15; a peaceful night, so advantage is held for the next roll.");
 	});
 
+	it("says the fur-lined bedroll's advantage is held, beside a peaceful night's", () => {
+		const ledger = campLedger([aeliana({ carriesFurBedroll: true, choices: { offer: { supplies: 1 }, bedroll: true, peaceful: true } })]);
+		const plan = freezeCampPlan(ledger, { bedrolls: { aeliana: 2 } });
+		expect(campSummaryRows(ledger, plan).at(-1).value)
+			.toBe("HP 4 → 12 (half max); bedroll rolled 2, HP 12 → 14; a peaceful night, so advantage is held for the next roll; slept in the fur-lined bedroll, so advantage is held for the next roll.");
+	});
+
 	it("adds Break Bread after the bedroll, and names the proper meal", () => {
 		const ledger = campLedger([
 			aeliana({ breaksBread: true, carriesBedroll: true, choices: { offer: { supplies: 2 }, bedroll: true } }),
@@ -111,7 +118,8 @@ describe("the settled camp's card", () => {
 
 	it("names the hearth ash on its own row, and adds the home fires' HP to everyone who made camp", () => {
 		const ledger = campLedger([
-			aeliana({ breaksBread: true, choices: { offer: { supplies: 2 } } }),
+			// A follower eats with Aeliana, so her Break Bread has someone to be shared with.
+			aeliana({ breaksBread: true, choices: { offer: { supplies: 2 }, followers: 1 } }),
 			bram({ hearthCha: 2, choices: { eats: false } }),
 		]);
 		const rows = campSummaryRows(ledger, freezeCampPlan(ledger, { breads: { aeliana: 1 } }));
@@ -300,6 +308,23 @@ describe("the camp window's meal", () => {
 		const night = view([{ ...aeliana(), slowToHeal: true }]).rows[0].night;
 		// 4 of 15: half max would reach 12; Torment's Blessing recovers 4 of those 8.
 		expect(night).toMatchObject({ hpBefore: 4, hpAfter: 8, halvedText: "(halved: Torment's Blessing)" });
+	});
+
+	// The settle restores a dying character none of their own HP (camp-rules.js#freezeCampPlan), so
+	// their card must not promise the pick's HP, a bedroll's die or a peaceful night's advantage.
+	it("promises a dying character no HP from the pick, and offers no bedroll or peaceful night", () => {
+		const dying = { ...aeliana({ hp: 0, carriesBedroll: true, choices: { bedroll: true, peaceful: true } }), dying: true };
+		const row = view([dying]).rows[0];
+		expect(row.night).toMatchObject({ hpBefore: 0, hpAfter: 0, halvedText: "" });
+		expect(row.night.dyingText).toContain("Dying, so the night itself restores no HP");
+		expect(row.bedroll.carries).toBe(false);
+		expect(row.showPeaceful).toBe(false);
+		const read = view([dying], { editable: [] }).rows[0].says.join(" ");
+		expect(read).toContain("Dying, so the night itself restores no HP");
+		expect(read).not.toMatch(/Regaining HP|bedroll|peaceful/);
+		// Up and about, the same card promises all three.
+		const up = view([aeliana({ hp: 0, carriesBedroll: true })]).rows[0];
+		expect(up).toMatchObject({ night: { hpAfter: 8, dyingText: "" }, bedroll: { carries: true }, showPeaceful: true });
 	});
 
 	it("counts the followers apart from the people at the fire", () => {

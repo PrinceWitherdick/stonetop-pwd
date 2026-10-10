@@ -4,12 +4,12 @@ import { partyCharacters } from "../utils/playbook-actors.js";
 import { escHtml } from "../utils/strings.js";
 import { registerRestorableWindow } from "../utils/window-restore.js";
 import {
-	CAMP_BENEFIT, CAMP_FOLLOWERS_MAX, CAMP_STATE, HAD_ALL_ALONG, campLedger, count, coverTheRest, offerStep,
+	CAMP_BENEFIT, CAMP_STATE, HAD_ALL_ALONG, campLedger, count, coverTheRest, offerStep,
 } from "./camp-rules.js";
 import { campWindowView, closedCampNotice, departedCampNotice, settleRefusalText } from "./camp-view.js";
 import {
 	breakCamp, campActors, campMembers, campRecordOf, canCamp, haveWhatYouNeedAtCamp, isCampWriter, joinCamp,
-	playsCharacter, sendAwayFromCamp, setCampChoices, settleCamp, stateOfCamp, takenFromCamp, touchesCamp,
+	managesCamp, playsCharacter, sendAwayFromCamp, setCampChoices, settleCamp, stateOfCamp, takenFromCamp, touchesCamp,
 } from "./camp-store.js";
 import { askWithButtons, confirmLeavingOwnCamp } from "./camp-ask.js";
 
@@ -117,7 +117,8 @@ export class CampWindow extends StonetopDialog {
 			state:    stateOfCamp(this._camp),
 			hostName: host?.name ?? "",
 			ledger:   campLedger(members),
-			manages:  !!(user?.isGM || host?.isOwner),
+			// The host's own player or a GM, never every owner (camp-store.js#managesCamp).
+			manages:  managesCamp(host, user),
 			// One driver a row: the client that will pay that character's share. A player drives
 			// their own row, and a GM (who owns every character) gets controls only for the ones
 			// whose players are not there, rather than a second set of everybody's.
@@ -230,7 +231,7 @@ export class CampWindow extends StonetopDialog {
 					const { member } = this._seat(actorId);
 					if (!member || !actor) return;
 					const step = action === "followers-add" ? 1 : -1;
-					await setCampChoices(actor, { followers: count(member.record.followers + step, CAMP_FOLLOWERS_MAX) });
+					await setCampChoices(actor, { followers: count(member.record.followers + step) });
 				});
 			// Going without keeps the character at the fire: what they share still feeds everyone else,
 			// and their card stays in every reader's window, marked, with this same button to take it back.
@@ -373,8 +374,13 @@ export class CampWindow extends StonetopDialog {
 			if (moved && this._seated.has(actor.id) && takenFromCamp(actor, this._camp.campId, userId)) this._taken.add(actor.name);
 			this._scheduleRender();
 		};
+		// A character deleted while seated, the host above all, changes the camp with no update to say so.
+		const onDelete = actor => {
+			if (actor?.type === "character" && (actor.id === this._camp.hostId || this._seated.has(actor.id))) this._scheduleRender();
+		};
 		this._hooks = [
 			["updateActor",   Hooks.on("updateActor", onActor)],
+			["deleteActor",   Hooks.on("deleteActor", onDelete)],
 			["userConnected", Hooks.on("userConnected", () => this._scheduleRender())],
 		];
 	}

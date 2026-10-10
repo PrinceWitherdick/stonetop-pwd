@@ -140,14 +140,15 @@ function givePack(actor, { pool = 1, checked = {}, limit = 5 } = {}) {
 	applyUpdate(actor, { [`flags.${SYSTEM_ID}.inventory.regularPool`]: pool, [`flags.${SYSTEM_ID}.inventory.checked`]: checked });
 	Object.assign(actor.typedActor, {
 		getUsesPerSupply: () => limit,
-		toggleCarriedItem: vi.fn(async (slug, on, { weight }) => {
+		toggleCarriedItem: vi.fn(async (slug, on, { weight, uses }) => {
 			const inv = actor.flags[SYSTEM_ID].inventory;
 			applyUpdate(actor, {
 				[`flags.${SYSTEM_ID}.inventory.checked.${slug}`]: on,
 				[`flags.${SYSTEM_ID}.inventory.regularPool`]: inv.regularPool - weight,
+				...(uses === undefined ? {} : { [`flags.${SYSTEM_ID}.inventory.resources.${slug}`]: uses }),
 			});
 		}),
-		setInventoryResource: vi.fn(async (slug, n) => applyUpdate(actor, { [`flags.${SYSTEM_ID}.inventory.resources.${slug}`]: n })),
+		setInventoryResource: vi.fn(),
 	});
 }
 
@@ -163,11 +164,21 @@ describe("having it all along, on the documents", () => {
 	it("turns an undefined ◇ into a full supplies row, and tells the table", async () => {
 		const { bram: b, camp } = await atCamp();
 		expect(await haveWhatYouNeedAtCamp(b, HAD_ALL_ALONG.SUPPLIES)).toEqual({ ok: true, row: "supplies", uses: 5 });
-		expect(b.typedActor.toggleCarriedItem).toHaveBeenCalledWith("supplies", true, { weight: 1 });
+		expect(b.typedActor.toggleCarriedItem).toHaveBeenCalledWith("supplies", true, { weight: 1, uses: 5, stonetopMove: "Have What You Need" });
 		expect(b.flags[SYSTEM_ID].inventory.resources.supplies).toBe(5);
 		expect(ChatMessage.create).toHaveBeenCalledTimes(1);
 		const bramRow = campMembers(camp.campId, camp.hostId).find(m => m.actorId === "bram");
 		expect(bramRow.pack.undefinedMarks).toBe(0);
+	});
+
+	// A move-driven write names its move in the ledger (`{ stonetopMove }`).
+	it("writes the new uses under Have What You Need's name, for the ledger, in the mark's own write", async () => {
+		const { bram: b } = await atCamp();
+		await haveWhatYouNeedAtCamp(b, HAD_ALL_ALONG.SUPPLIES);
+		// The uses, the carried mark it ticks and the marks it draws are one write, and the move's.
+		expect(b.typedActor.toggleCarriedItem).toHaveBeenCalledTimes(1);
+		expect(b.typedActor.toggleCarriedItem.mock.calls[0][2]).toMatchObject({ uses: 5, stonetopMove: "Have What You Need" });
+		expect(b.typedActor.setInventoryResource).not.toHaveBeenCalled();
 	});
 
 	it("shares what it made into the meal, from the window's button", async () => {

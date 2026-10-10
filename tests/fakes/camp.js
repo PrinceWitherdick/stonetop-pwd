@@ -23,7 +23,7 @@ import { capitalizeFirst } from "../../module/utils/strings.js";
 export function seat({
 	id = "aeliana", name = "Aeliana", isHost = false, joinedAt = 1, img = "",
 	carried = { supplies: 4 }, hp = 4, maxHp = 15, marked = [], unliving = false,
-	carriesBedroll = false, carriesMessKit = false, choices = {},
+	carriesBedroll = false, carriesFurBedroll = false, carriesMessKit = false, choices = {},
 	undefinedMarks = 0, checked = {}, usesPerSupply = null, breaksBread = false, hearthCha = null, clearsTonight = [],
 } = {}) {
 	const debilities = marked.map(key => ({ key, name: capitalizeFirst(key) }));
@@ -36,7 +36,7 @@ export function seat({
 			id: "camp-1",
 			host: "aeliana",
 			joinedAt,
-			vitals: { maxHp, bedroll: carriesBedroll, messKit: carriesMessKit, debilities },
+			vitals: { maxHp, bedroll: carriesBedroll, furBedroll: carriesFurBedroll, messKit: carriesMessKit, debilities },
 			...choices,
 		}),
 		resources: carried,
@@ -90,6 +90,8 @@ const DEBILITY_NAMES = { weakened: "Weakened", dazed: "Dazed", miserable: "Miser
  * @param {object} o
  * @param {string[]} [o.owners]   user ids that own the character (a GM owns everything anyway)
  * @param {Array<{slug: string, checked: boolean}>} [o.outfit]  the outfit rows the sheet reports
+ * @param {Array<{name: string, carried: boolean}>} [o.gear]  write-ins and treasures on the sheet, as
+ *   StonetopCharacter#snapshotWithGear's `gear` answers them (each keyed by a made-up item id)
  * @param {"dead"|"ghost"|"revenant"|"thrall"|null} [o.pastDeath]
  * @param {string[]} [o.thrallMarks]  Mark slugs ticked, for a `pastDeath: "thrall"`
  * @param {Array<string|{name: string, learned: boolean}>} [o.moves]  the move Items on the sheet
@@ -100,8 +102,9 @@ const DEBILITY_NAMES = { weakened: "Weakened", dazed: "Dazed", miserable: "Miser
  */
 export function campCharacter({
 	id, name = id, owners = [], hp = 4, maxHp = 15, marked = [], carried = { supplies: 4 },
-	outfit = [], followers = {}, pastDeath = null, moves = [], cha = 0, background = null, thrallMarks = [],
+	outfit = [], gear = [], followers = {}, pastDeath = null, moves = [], cha = 0, background = null, thrallMarks = [],
 } = {}) {
+	const gearRecords = gear.map((g, at) => ({ slug: `item-${at}`, name: g.name, carried: !!g.carried }));
 	const actor = {
 		id,
 		name,
@@ -134,17 +137,24 @@ export function campCharacter({
 		testUserPermission: user => !!user?.isGM || owners.includes(user?.id),
 		get isOwner() { return actor.testUserPermission(globalThis.game?.user); },
 		typedActor: {
-			buildSnapshot: vi.fn(async () => ({
-				vitals:     { hp: { value: actor.system.attributes.hp.value, max: maxHp } },
-				inventory:  { outfit: { regularItems: outfit } },
-				debilities: Object.entries(DEBILITY_NAMES).map(([key, label]) => ({ key, name: label, active: marked.includes(key) })),
-				playbook:   background
-					? { background: { options: [{ selected: true, label: background.label, setupResources: background.setupResources ?? [] }] } }
-					: null,
+			// The sheet's snapshot and the gear picture it was built from, in one pass, as the model hands them.
+			snapshotWithGear: vi.fn(async () => ({
+				snapshot: {
+					vitals:     { hp: { value: actor.system.attributes.hp.value, max: maxHp } },
+					inventory:  { outfit: { regularItems: outfit } },
+					debilities: Object.entries(DEBILITY_NAMES).map(([key, label]) => ({ key, name: label, active: marked.includes(key) })),
+					playbook:   background
+						? { background: { options: [{ selected: true, label: background.label, setupResources: background.setupResources ?? [] }] } }
+						: null,
+				},
+				gear: {
+					items: gearRecords.map(({ slug, name: itemName }) => ({ slug, name: itemName })),
+					marks: Object.fromEntries(gearRecords.map(g => [g.slug, g.carried])),
+				},
 			})),
 			inventoryResourceData: (slug, count) => ({ [`flags.${SYSTEM_ID}.inventory.resources.${slug}`]: count }),
-			heldAdvantageData:     source => ({ [`flags.${SYSTEM_ID}.heldAdvantage`]: { source } }),
-			heldDisadvantageData:  source => ({ [`flags.${SYSTEM_ID}.heldDisadvantage`]: { source } }),
+			heldAdvantageData:     source => ({ [`flags.${SYSTEM_ID}.heldAdvantage`]: { sources: [source].flat() } }),
+			heldDisadvantageData:  source => ({ [`flags.${SYSTEM_ID}.heldDisadvantage`]: { sources: [source].flat() } }),
 		},
 	};
 	if (pastDeath === "dead") applyUpdate(actor, { [`flags.${SYSTEM_ID}.${DEATHS_DOOR_FLAG}`]: DEATHS_DOOR_STATE.DEAD });
