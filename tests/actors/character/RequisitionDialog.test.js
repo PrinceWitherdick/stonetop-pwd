@@ -184,6 +184,166 @@ describe("RequisitionDialog", () => {
 		}
 	});
 
+	// Book I p.308: "on a 6-, don't mark XP--you can take the asset with you, but if you do, reduce
+	// Fortunes by 1". The window's Take reads its last roll's card.
+	describe("taking on a 6-", () => {
+		const missCard = (flags = {}) => ({
+			rolls: [{ total: 5 }],
+			getFlag: vi.fn((scope, key) => flags[key]),
+			setFlag: vi.fn(async (scope, key, value) => { flags[key] = value; }),
+			unsetFlag: vi.fn(async (scope, key) => { delete flags[key]; }),
+		});
+		const ownedDialog = fortunes => {
+			const dialog = makeDialog([{ name: "A wagon", checked: true }]);
+			dialog._steadingActor.isOwner = true;
+			dialog._steadingActor.system = { stats: { fortunes: { value: fortunes } } };
+			dialog._steadingActor.update = vi.fn(async () => {});
+			return dialog;
+		};
+
+		it("asks, then pays 1 Fortunes and stamps the card so its button cannot charge it again", async () => {
+			vi.stubGlobal("ui", { notifications: { info: vi.fn(), warn: vi.fn() } });
+			try {
+				const dialog = ownedDialog(1);
+				const card = missCard();
+				dialog._lastRoll = { message: card, herdCount: 0 };
+				const ask = vi.fn(async () => "take");
+				expect(await dialog._payMissOnTake("A wagon", { ask })).toBe(true);
+				expect(ask).toHaveBeenCalledTimes(1);
+				const [data, options] = dialog._steadingActor.update.mock.calls[0];
+				expect(data["system.stats.fortunes.value"]).toBe(0);
+				expect(options).toEqual({ stonetopMove: "Requisition" });
+				expect(card.setFlag).toHaveBeenCalledWith("stonetop-pwd", "requisitionMissCostApplied", true);
+				// Paid once: a second Take off the same card asks nothing.
+				ask.mockClear();
+				expect(await dialog._payMissOnTake("A wagon", { ask })).toBe(true);
+				expect(ask).not.toHaveBeenCalled();
+			} finally {
+				vi.unstubAllGlobals();
+			}
+		});
+
+		// Latched first: a window that could pay but not write the card would leave the card's own button
+		// to charge the cost a second time.
+		it("stamps the card before it pays, and pays nothing when the card cannot be written", async () => {
+			const warn = vi.fn();
+			vi.stubGlobal("ui", { notifications: { info: vi.fn(), warn } });
+			vi.spyOn(console, "warn").mockImplementation(() => {});
+			try {
+				const dialog = ownedDialog(1);
+				const card = missCard();
+				let stampedFirst = null;
+				dialog._steadingActor.update = vi.fn(async () => { stampedFirst = card.setFlag.mock.calls.length === 1; });
+				dialog._lastRoll = { message: card, herdCount: 0 };
+				expect(await dialog._payMissOnTake("A wagon", { ask: async () => "take" })).toBe(true);
+				expect(stampedFirst).toBe(true);
+
+				const locked = ownedDialog(1);
+				const lockedCard = { ...missCard(), setFlag: vi.fn(async () => { throw new Error("no permission"); }) };
+				locked._lastRoll = { message: lockedCard, herdCount: 0 };
+				expect(await locked._payMissOnTake("A wagon", { ask: async () => "take" })).toBe(true);
+				expect(locked._steadingActor.update).not.toHaveBeenCalled();
+				expect(warn.mock.calls[0][0]).toContain("Take it on a miss");
+			} finally {
+				vi.restoreAllMocks();
+				vi.unstubAllGlobals();
+			}
+		});
+
+		it("takes the card's stamp back when the payment throws", async () => {
+			vi.stubGlobal("ui", { notifications: { info: vi.fn(), warn: vi.fn() } });
+			try {
+				const dialog = ownedDialog(1);
+				const card = missCard();
+				dialog._steadingActor.update = vi.fn(async () => { throw new Error("write failed"); });
+				dialog._lastRoll = { message: card, herdCount: 0 };
+				await expect(dialog._payMissOnTake("A wagon", { ask: async () => "take" })).rejects.toThrow("write failed");
+				expect(card.unsetFlag).toHaveBeenCalledWith("stonetop-pwd", "requisitionMissCostApplied");
+				expect(card.getFlag("stonetop-pwd", "requisitionMissCostApplied")).toBeUndefined();
+			} finally {
+				vi.unstubAllGlobals();
+			}
+		});
+
+		it("takes nothing when the player leaves it, and asks nothing after a hit", async () => {
+			const dialog = ownedDialog(1);
+			dialog._lastRoll = { message: missCard(), herdCount: 0 };
+			expect(await dialog._payMissOnTake("A wagon", { ask: async () => null })).toBe(false);
+			expect(dialog._steadingActor.update).not.toHaveBeenCalled();
+			dialog._lastRoll = { message: { ...missCard(), rolls: [{ total: 8 }] }, herdCount: 0 };
+			const ask = vi.fn();
+			expect(await dialog._payMissOnTake("A wagon", { ask })).toBe(true);
+			expect(ask).not.toHaveBeenCalled();
+		});
+
+		// Asked first, paid only once something was taken: a horse count closed, or an asset another
+		// window took meanwhile, costs nothing.
+		it("pays nothing when the take itself takes nothing", async () => {
+			const dialog = ownedDialog(1);
+			const card = missCard();
+			dialog._lastRoll = { message: card, herdCount: 0 };
+			const take = vi.fn(async () => false);
+			expect(await dialog._payMissOnTake("A wagon", { ask: async () => "take", take })).toBe(false);
+			expect(take).toHaveBeenCalledTimes(1);
+			expect(dialog._steadingActor.update).not.toHaveBeenCalled();
+			expect(card.setFlag).not.toHaveBeenCalled();
+			// Left, it is never taken at all.
+			take.mockClear();
+			expect(await dialog._payMissOnTake("A wagon", { ask: async () => null, take })).toBe(false);
+			expect(take).not.toHaveBeenCalled();
+		});
+
+		it("puts the 6- cost button on its own card", () => {
+			const src = fs.readFileSync(path.resolve(HERE, "../../../module/actors/character/dialogs/RequisitionDialog.js"), "utf8");
+			expect(src).toContain("tierActions: { failure: requisitionMissCostAction() }");
+			expect(src).toContain("this._lastRoll = { message: messageOfRoll(roll), herdCount: answers.herdCount }");
+		});
+	});
+
+	// Marked out on the steading first, so a take another window beat is refused; but an item that
+	// then cannot be added hands the asset back rather than leaving it out with nobody.
+	it("hands the asset back to the steading when the item cannot be added", async () => {
+		vi.stubGlobal("ui", { notifications: { info: vi.fn(), warn: vi.fn() } });
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			const dialog = makeDialog([{ name: "Plow", checked: true }]);
+			dialog.render = vi.fn();
+			dialog._steading.setAssetTaken = vi.fn(async () => true);
+			dialog._steading.returnAsset = vi.fn(async () => true);
+			dialog._character.addCustomInventoryItem = vi.fn(async () => { throw new Error("write failed"); });
+			expect(await dialog._takeAsset({ index: 0, name: "Plow" })).toBe(false);
+			expect(dialog._steading.returnAsset).toHaveBeenCalledWith(0);
+
+			// Refused on the steading: nothing added, nothing handed back.
+			dialog._steading.setAssetTaken = vi.fn(async () => false);
+			dialog._steading.returnAsset.mockClear();
+			dialog._character.addCustomInventoryItem = vi.fn(async () => {});
+			expect(await dialog._takeAsset({ index: 0, name: "Plow" })).toBe(false);
+			expect(dialog._character.addCustomInventoryItem).not.toHaveBeenCalled();
+			expect(dialog._steading.returnAsset).not.toHaveBeenCalled();
+		} finally {
+			vi.restoreAllMocks();
+			vi.unstubAllGlobals();
+		}
+	});
+
+	// The herd count the roll was made for is what "half the herd or less" was read against, so the
+	// take cannot go past it.
+	it("caps the herd take at the count the roll was made for", async () => {
+		vi.stubGlobal("ui", { notifications: { info: vi.fn(), warn: vi.fn() } });
+		try {
+			const dialog = makeDialog([]);
+			Object.assign(dialog._steadingActor.flags["stonetop-pwd"].steading, { improvements: { herdOfHorses: { completed: true } }, herd: { grown: 12 } });
+			dialog._steadingActor.update = vi.fn();
+			dialog._lastRoll = { message: null, herdCount: 4 };
+			const asked = stubAsk("none");
+			await dialog._takeFromHerd(makeRoot({}));
+			expect(asked.mock.calls[0][0].content).toContain(`max="4"`);
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
 	it("adds a lone animal as one follower under its plain name", async () => {
 		vi.stubGlobal("foundry", { utils: { randomID: () => "abc" } });
 		vi.stubGlobal("ui", { notifications: { info: vi.fn() } });

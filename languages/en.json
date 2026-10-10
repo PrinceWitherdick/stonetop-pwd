@@ -71,6 +71,17 @@
       "settlement": "Settlement",
       "settlementShowTooltip": "Show this settlement on the sheet",
       "settlementsAllHidden": "No settlements ticked. Use the pencil to choose which ones this steading tracks.",
+      "missXp": {
+        "button": "Mark XP",
+        "buttonTooltip": "On a miss, whoever made the move marks XP. Marks it for your own character.",
+        "pick": "Mark XP for someone else",
+        "pickTooltip": "Choose which character made the move and marks the XP.",
+        "pickTitle": "Who marks the XP?",
+        "pickPrompt": "<p>Who made this move? On a miss, they mark XP.</p>",
+        "marked": "{name} marked XP for this miss.",
+        "nobody": "There is no player character to mark the XP for.",
+        "refused": "That XP could not be marked: the card is no longer a miss, or its XP is already marked."
+      },
       "season": {
         "setTooltip": "Make the Seasons Change move (or just correct what the sheet says)"
       },

@@ -61,6 +61,18 @@ describe("a homefront roll, with what the steading has built", () => {
 		expect(lastRoll()[2]).toMatchObject({ rollMode: "normal", stonetopDebility: "Diminished" });
 	});
 
+	// "On a 6-, mark XP" unless the move says otherwise (Book I p.209): the miss card's "Mark XP" row, on every
+	// steading move but the three whose 6- says "don't mark XP" (`noXpOnMiss` on the move's entry).
+	it.each([
+		["Muster", "population", true], ["Pull Together", "population", true], ["Deploy", "defenses", true],
+		["Aurochs Hunt", "defenses", true], ["Heroic Reputation", "fortunes", true],
+		["Trade & Barter", "prosperity", false], ["Requisition", "fortunes", false], ["Seasons Change", "fortunes", false],
+	])("%s (+%s): a miss XP row on its 6- is %s", async (move, stat, earns) => {
+		await makeSheet()._onSteadingRoll(move, stat, {});
+		const failure = lastRoll()[2].tierActions?.failure ?? "";
+		expect(failure.includes("stonetop-steading-miss-xp")).toBe(earns);
+	});
+
 	it("nets winter's Trade & Barter disadvantage against the player's own advantage", async () => {
 		await makeSheet()._onSteadingRoll("Trade & Barter", "prosperity", { rollMode: "adv", winter: true });
 		expect(lastRoll()[2].rollMode).toBe("normal");
@@ -125,9 +137,22 @@ describe("a homefront roll, with what the steading has built", () => {
 
 	it("spends a held Rites of the Land advantage as one more source", async () => {
 		const sheet = makeSheet({ held: { source: "A sacrifice at the sacred rites" } });
-		await sheet._onSteadingRoll("Persuade", "fortunes", { rollMode: "dis" });
+		await sheet._onSteadingRoll("Heroic Reputation", "fortunes", { rollMode: "dis" });
 		expect(lastRoll()[2].rollMode).toBe("normal");
 		expect(sheet.actor.typedActor.clearFortunesAdvantage).toHaveBeenCalled();
+	});
+
+	// Book I p.209/p.560: a 6- marks the mover's XP unless the move says otherwise; only Trade & Barter,
+	// Requisition and Seasons Change do. The steading roll has no XP of its own, so the 6- offers a button.
+	it("puts a Mark XP button on the miss of a steading move that earns it, and only there", async () => {
+		for (const [move, stat] of [["Muster", "population"], ["Pull Together", "population"], ["Deploy", "defenses"], ["Heroic Reputation", "fortunes"]]) {
+			await makeSheet()._onSteadingRoll(move, stat, {});
+			expect(lastRoll()[2].tierActions?.failure, move).toContain("stonetop-steading-miss-xp");
+		}
+		for (const [move, stat] of [["Trade & Barter", "prosperity"], ["Requisition", "fortunes"], ["Seasons Change", "fortunes"]]) {
+			await makeSheet()._onSteadingRoll(move, stat, {});
+			expect(lastRoll()[2].tierActions?.failure ?? "", move).not.toContain("stonetop-steading-miss-xp");
+		}
 	});
 });
 

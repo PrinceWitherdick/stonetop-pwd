@@ -213,7 +213,7 @@ export { dieResultsText, multiDieFaces };
  * clicked it. Pass `alias` instead to speak the card under a fixed name, which then
  * heads it too (the Expedition Requisition card).
  */
-export async function rollSeasonsCard({ formula, title = "", alias = "", resultTable, resultLegend = "", missCountsAsPartial = "", countsAsMiss = "", conditionNotes = [], pickOptions = null, pickReference = null } = {}) {
+export async function rollSeasonsCard({ formula, title = "", alias = "", resultTable, resultLegend = "", missCountsAsPartial = "", countsAsMiss = "", conditionNotes = [], pickOptions = null, pickReference = null, tierActions = null, actor = null } = {}) {
 	const roll = await new Roll(formula).evaluate();
 	const rolled = classifyResult(roll.total).key;
 	// As rollStat's option of the same name: a 6- that a rule counts as a 7-9, said on the card.
@@ -243,11 +243,17 @@ export async function rollSeasonsCard({ formula, title = "", alias = "", resultT
 		resultLegend + reference,
 	// And rollStat's `conditionNotes`, in its pills: what put the roll at advantage (a held Rites
 	// of the Land advantage, say), so this card says why as a stat roll's does.
-	) + conditionsRowHtml(conditionNotePills(conditionNotes));
+	) + conditionsRowHtml(conditionNotePills(conditionNotes))
+		// And rollStat's `tierActions`, for the tier landed on only (this card has no Shift to reveal
+		// another): the Expedition Requisition's 6- cost button.
+		+ (tierActions?.[tier]
+			? `<div class="card-buttons stonetop-roll-tier-actions" data-active-tier="${escHtml(tier)}"><div class="stonetop-roll-tier-action" data-tier="${escHtml(tier)}">${tierActions[tier]}</div></div>`
+			: "");
 	// Titled even when spoken under an alias: the title row is what carries the "?" that brings a
 	// hidden description back, and without it a table that hides descriptions would lose the ladder.
+	// `actor` rides an aliased speaker so a card button can find what it acts on (speakerActor).
 	await roll.toMessage({
-		speaker: alias ? { alias } : ChatMessage.getSpeaker(),
+		speaker: alias ? { alias, ...(actor?.id ? { actor: actor.id } : {}) } : ChatMessage.getSpeaker(),
 		flavor:  stonetopChatCard(title || alias, body, "stonetop-spring-card", description ? DESC_TOGGLE_HTML : ""),
 	});
 	return { total: roll.total, tier, label: result.label };

@@ -30,6 +30,7 @@ import {MILITIA_SEASON_STEP, militiaTactics} from "./season-effects.js";
 import { inTurn } from "../../utils/turn-queue.js";
 import { deletionEntry } from "../../utils/foundry-compat.js";
 import { improvementCategoryKey } from "../../data/improvement-categories.js";
+import { steadingSystemValue } from "./steading-system-value.js";
 
 /** Which season's Inn roll ("whoever is friendliest rolls +Fortunes") has been handed to the table. */
 export const INN_ROLL_SEASON_STEP = "innRoll";
@@ -663,6 +664,8 @@ export const HERD_TIERS = [
 export const HERD_START = { grown: 12, yearlings: 0, foals: 0 };
 /** Winter: the herd consumes 1 Surplus for every this-many grown-or-yearling horses. */
 export const HERD_SURPLUS_PER = 6;
+/** The top of the steading's Fortunes and Defenses: they "can range from -1 to +3" (Book I p.508, p.512). */
+export const STEADING_STAT_MAX = 3;
 
 /** Lower-cased built-in improvement labels, used to reject custom dupes of a book improvement. */
 const BUILTIN_IMPROVEMENT_LABELS = new Set(IMPROVEMENT_DEFINITIONS.map(d => d.label.toLowerCase()));
@@ -782,17 +785,6 @@ const SYSTEM_DEFAULTS = {
 		},
 	},
 };
-
-function _getProperty(obj, path) {
-	return foundry.utils.getProperty(obj, path);
-}
-
-function _systemValue(actor, flags, path, defaultValue) {
-	const flagValue = _getProperty(flags, `system.${path}`);
-	if (flagValue !== undefined) return flagValue;
-	const actorValue = _getProperty(actor.system, path);
-	return actorValue !== undefined ? actorValue : defaultValue;
-}
 
 /**
  * Where `actor` sits on a Players roster, or -1. Uuid/id only.
@@ -920,8 +912,10 @@ export class StonetopSteading {
 		});
 	}
 
+	// The mirrored flag copy first, then system (steading-system-value.js). A stored null
+	// is this reader's answer, not a gap.
 	getSystemValue(path, defaultValue = 0) {
-		return _systemValue(this._actor, this._flags, path, defaultValue);
+		return steadingSystemValue(this._actor, path, { defaultValue });
 	}
 
 	async setSystemValue(path, value, options = {}) {
@@ -1879,22 +1873,48 @@ export class StonetopSteading {
 	 */
 	musterHold() {
 		const held = this._flags.musterHold ?? null;
-		if (!held?.season) return null;
+		if (!held) return null;
+		// A +1 Defenses still on the sheet keeps the muster showing until it is stood down, however
+		// the clock has moved: hidden, its give-back had no control left to press.
+		if (held.defenses) return held;
 		const now = seasonStampKey(readCurrentSeason(this._actor));
-		// Raised in a season the clock has since left: the muster lapsed with it.
-		if (now && now !== `${held.year}:${held.season}`) return null;
+		// Raised in a season the clock has since left: the muster lapsed with it. A muster raised
+		// before the clock was ever set has no season, and lapses once the clock reads one.
+		if (now && now !== (held.season ? `${held.year}:${held.season}` : "")) return null;
 		return held;
 	}
 
-	/** Raise the muster for the current season, optionally taking the +1 Defenses pick. */
+	/**
+	 * Raise the muster for the current season, optionally taking the +1 Defenses pick.
+	 *
+	 * Folds in a muster already held (one hold, one +1 at most): a +1 an earlier muster put on the
+	 * sheet is kept when this one takes the pick too, and given back when it does not, so the record
+	 * always says what is on the sheet. And Defenses "can range from -1 to +3" (Book I p.512): at +3
+	 * the pick adds nothing, and the hold records that it added nothing, so standing down takes
+	 * nothing back.
+	 * @returns {Promise<{defenses: boolean, capped: boolean}>} whether the hold carries a +1, and
+	 *   whether the pick was asked for but Defenses was already at +3
+	 */
 	async raiseMuster({ defenses = false } = {}) {
 		const { seasonId, year } = seasonStampParts(this._actor);
+		const prev = this._flags.musterHold ?? null;
+		const current = this.getStatValue("defenses");
+		let next = current;
+		let holding = false;
+		if (prev?.defenses) {
+			if (defenses) holding = true;
+			else next = current - 1;
+		} else if (defenses && current < STEADING_STAT_MAX) {
+			next = current + 1;
+			holding = true;
+		}
 		// The Defenses bump and the hold itself are one move, so they go out as one update:
 		// two would append the muster to the ledger twice and card the stat change on its own.
 		await this.applyChanges({
-			system: defenses ? { "stats.defenses.value": this.getStatValue("defenses") + 1 } : {},
-			flags: { musterHold: { year, season: seasonId, defenses: !!defenses } },
+			system: next !== current ? { "stats.defenses.value": next } : {},
+			flags: { musterHold: { year, season: seasonId, defenses: holding } },
 		}, { stonetopMove: "Muster" });
+		return { defenses: holding, capped: !!defenses && !holding };
 	}
 
 	/**
@@ -2635,15 +2655,22 @@ export class StonetopSteading {
 	 * walkthrough's Requisition step), or both. Whatever it holds, one helper words it for
 	 * every reader: see assetTakenLabel in utils/requisition-asset.js.
 	 *
+	 * Refused (false) for an asset already out, and for a row that no longer carries `name` when the
+	 * caller says which asset it meant: an index is a POSITION, and a row deleted above it since the
+	 * window was drawn makes the same index name a different asset. Read and written in the
+	 * steading's turn (editList), so two takes of one asset cannot both land.
+	 *
 	 * @param {number} index
 	 * @param {{name?: string, id?: string, expedition?: {id: string, title: string}}} takenBy
+	 * @param {{name?: string}} [expect]  the asset the caller meant, checked against the row
 	 */
-	async setAssetTaken(index, takenBy) {
-		const assets = foundry.utils.deepClone(this._flags.assets ?? STEADING_DEFAULTS.assets);
-		if (!assets[index]?.name) return false;
-		assets[index] = { ...assets[index], checked: false, takenBy };
-		await this.setFlags({ assets });
-		return true;
+	async setAssetTaken(index, takenBy, { name } = {}) {
+		return this.editList("assets", assets => {
+			const row = assets[index];
+			if (!row?.name || row.takenBy) return false;
+			if (name !== undefined && String(row.name).trim() !== String(name).trim()) return false;
+			assets[index] = { ...row, checked: false, takenBy };
+		});
 	}
 
 	/**
@@ -2670,35 +2697,38 @@ export class StonetopSteading {
 	 * @returns {Promise<number>} how many assets were re-labelled or sent home
 	 */
 	async reconcileHeldAssets(names) {
-		const assets = foundry.utils.deepClone(this._flags.assets ?? STEADING_DEFAULTS.assets);
 		let changed = 0;
-		assets.forEach((asset, i) => {
-			const exp = asset?.takenBy?.expedition;
-			if (!exp?.id) return;
-			if (!names?.has(exp.id)) {
-				// Home again. `checked` is the on-hand tick, exactly as `returnAsset` leaves it.
-				const { takenBy, ...rest } = asset;
-				assets[i] = { ...rest, checked: true };
+		// In the steading's turn, like every list write (editList): read outside it, a take landing
+		// meanwhile was written back over.
+		await this.editList("assets", assets => {
+			changed = 0;
+			assets.forEach((asset, i) => {
+				const exp = asset?.takenBy?.expedition;
+				if (!exp?.id) return;
+				if (!names?.has(exp.id)) {
+					// Home again. `checked` is the on-hand tick, exactly as `returnAsset` leaves it.
+					const { takenBy, ...rest } = asset;
+					assets[i] = { ...rest, checked: true };
+					changed += 1;
+					return;
+				}
+				const title = names.get(exp.id);
+				if (exp.title === title) return;
+				assets[i] = { ...asset, takenBy: { ...asset.takenBy, expedition: { ...exp, title } } };
 				changed += 1;
-				return;
-			}
-			const title = names.get(exp.id);
-			if (exp.title === title) return;
-			assets[i] = { ...asset, takenBy: { ...asset.takenBy, expedition: { ...exp, title } } };
-			changed += 1;
+			});
+			if (!changed) return false;
 		});
-		if (changed) await this.setFlags({ assets });
 		return changed;
 	}
 
 	/** Return a requisitioned asset to the steading: re-check it and clear the taken-by note. */
 	async returnAsset(index) {
-		const assets = foundry.utils.deepClone(this._flags.assets ?? STEADING_DEFAULTS.assets);
-		if (!assets[index]) return false;
-		const { takenBy, ...rest } = assets[index];
-		assets[index] = { ...rest, checked: true };
-		await this.setFlags({ assets });
-		return true;
+		return this.editList("assets", assets => {
+			if (!assets[index]) return false;
+			const { takenBy, ...rest } = assets[index];
+			assets[index] = { ...rest, checked: true };
+		});
 	}
 
 	async buildSnapshot() {

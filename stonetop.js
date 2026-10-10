@@ -133,6 +133,7 @@ import { belongsToMessage, wirePickedOptionButton, claimPickedOption, settlePick
 import { readOptionDamage } from "./module/utils/damage.js";
 import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
+import { withLateStampLatch } from "./module/utils/card-latch.js";
 import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
 import { registerCampHooks } from "./module/camp/camp-store.js";
 import { registerVitalsMirrorHooks } from "./module/actors/character/vitals-mirror.js";
@@ -152,6 +153,9 @@ import {
 } from "./module/actors/character/inspiration-flow.js";
 import { GIVE_ADVANTAGE_QUERY, handleGiveAdvantageQuery, wireGiveAdvantage } from "./module/actors/character/give-advantage-flow.js";
 import { wireWouldBeHeroCards } from "./module/actors/character/would-be-hero-cards.js";
+import { wireSteadingMissXp } from "./module/actors/steading/steading-miss-xp.js";
+import { REQUISITION_MISS_COST_FLAG, STEADING_FORTUNES_CARD_ACTIONS, assetFromButton, settleRequisitionMiss, takeRequisitionedAsset } from "./module/actors/steading/steading-card-actions.js";
+import { wireTradeItemCard } from "./module/actors/steading/steading-trade-card.js";
 import { UP_WITH_PEOPLE_QUERY, handleUpWithPeopleQuery } from "./module/actors/character/up-with-people.js";
 import {
 	DEATHS_DOOR_BOOST_QUERY, DEATHS_DOOR_CLAIM_QUERY, burnBrightlyOnDoorCard, handleDeathsDoorBoostQuery,
@@ -1805,21 +1809,24 @@ function _chatWireHolyRelics(message, html) {
  * is in flight, refuse politely without permission, go through StonetopSteading so the write
  * lands in BOTH `system.*` and the mirrored steading flag the sheet actually reads from (a raw
  * `actor.update` of `system.*` alone leaves the mirror stale and the change invisible), then
- * re-render the steading's open sheets and say what happened. Any throw puts the buttons back.
+ * re-render the steading's open sheets and say what happened. The card is latched BEFORE the work
+ * (card-latch.js#withLateStampLatch), so a client that can pay but cannot write the card never pays
+ * twice; any throw gives the latch and the buttons back.
  *
  * @param {ChatMessage} message
  * @param {HTMLElement[]} btns          the buttons; they enable and disable as one
  * @param {object} opts
  * @param {string} opts.flag            message flag that latches the card as used
- * @param {Function} opts.onSettled     (storedFlag, btns) => void, relabels an already-used card
+ * @param {Function} opts.onSettled     (storedFlag, btns) => void, relabels an already-used card;
+ *                                      `storedFlag` is `true` while the work is in flight
  * @param {string} opts.warn            what to say to someone without permission
  * @param {string} opts.errorNote       console context if the write throws
  * @param {Function} opts.run           (subject, btn) => {stamp?, notice?, abort?} — does the work
  * @param {string} [opts.actorType]     which actor subtype may press it; "stonetop" by default
  * @param {Function} [opts.subject]     actor => what `run` is handed; a StonetopSteading by default
  *
- * `abort: true` from `run` means it declined to do anything — the buttons come back and the card
- * is left unstamped, which is what a purse that emptied between render and click needs.
+ * `abort: true` from `run` means it declined to do anything: the buttons come back and the card's
+ * latch is taken off again, which is what a purse that emptied between render and click needs.
  */
 function _wireSteadingCardButtons(message, btns, {
 	flag, onSettled, warn, errorNote, run,
@@ -1837,22 +1844,16 @@ function _wireSteadingCardButtons(message, btns, {
 
 	for (const btn of btns) {
 		btn.addEventListener("click", async () => {
-			for (const b of btns) b.disabled = true;
 			try {
 				const actor = speakerActor(message);
 				if (!actor?.isOwner || actor.type !== actorType) {
 					ui.notifications.warn(warn);
-					for (const b of btns) b.disabled = false;
 					return;
 				}
-				const { stamp = true, notice, abort = false } = await run(subject(actor), btn) ?? {};
-				if (abort) {
-					for (const b of btns) b.disabled = false;
-					return;
-				}
-				await message.setFlag(SYSTEM_ID, flag, stamp);
+				const done = await withLateStampLatch(message, flag, btns, () => run(subject(actor), btn));
+				if (!done) return;
 				for (const sheet of Object.values(actor.apps ?? {})) sheet.render(false);
-				if (notice) ui.notifications.info(notice);
+				if (done.notice) ui.notifications.info(done.notice);
 			} catch (err) {
 				console.error(`Stonetop | ${errorNote}:`, err);
 				for (const b of btns) b.disabled = false;
@@ -1861,19 +1862,43 @@ function _wireSteadingCardButtons(message, btns, {
 	}
 }
 
+// Requisition's 6- take: its Fortunes through Meet with Disaster's floor, and the asset the card names
+// marked out (actors/steading/steading-card-actions.js). The 10+/7-9 take from the steading's own window
+// marks the asset out alone. A character's Requisition window stamps the same miss flag when its Take
+// pays the cost, so the card cannot charge it twice.
 function _chatWireRequisitionMissCost(message, html) {
 	const btn = html.querySelector(".stonetop-requisition-miss-cost");
 	_wireSteadingCardButtons(message, btn ? [btn] : [], {
-		flag: "requisitionMissCostApplied",
+		flag: REQUISITION_MISS_COST_FLAG,
 		onSettled: (_already, [b]) => { b.textContent = "Miss cost applied"; },
 		warn: "You need permission to update the steading's Fortunes.",
 		errorNote: "Error applying Requisition miss cost",
-		run: async steading => {
-			const newFortunes = Math.max(steading.getStatValue("fortunes") - 1, -1);
-			await steading.setSystemValue("stats.fortunes.value", newFortunes, { stonetopMove: "Requisition" });
-			return { notice: `Fortunes reduced to ${sign(newFortunes)}.` };
-		},
+		run: (steading, b) => settleRequisitionMiss(steading, { asset: assetFromButton(b) }),
 	});
+	const take = html.querySelectorAll(".stonetop-requisition-take-asset");
+	_wireSteadingCardButtons(message, [...take], {
+		flag: "requisitionAssetTaken",
+		onSettled: (_already, btns) => { for (const b of btns) b.textContent = "Taken"; },
+		warn: "You need permission to update the steading's assets.",
+		errorNote: "Error marking a requisitioned asset out",
+		run: (steading, b) => takeRequisitionedAsset(steading, { asset: assetFromButton(b) }),
+	});
+}
+
+// -- A STEADING MOVE'S FORTUNES, from its card --------------------
+// Muster's cost when it was left to the card, its pitch-in give-back, and Pull Together's 7-9
+// "reduce Fortunes by 1": one latch each, the writes in actors/steading/steading-card-actions.js.
+function _chatWireSteadingFortunes(message, html) {
+	for (const action of STEADING_FORTUNES_CARD_ACTIONS) {
+		const btns = [...html.querySelectorAll(action.selector)];
+		_wireSteadingCardButtons(message, btns, {
+			flag: action.flag,
+			onSettled: (_already, all) => { for (const b of all) b.textContent = action.settled; },
+			warn: action.warn,
+			errorNote: `Error settling ${action.flag}`,
+			run: action.run,
+		});
+	}
 }
 
 // -- MARK DIMINISHED from the roll card ----------------------------
@@ -1916,7 +1941,7 @@ function _chatWireAurochsHunt(message, html) {
 	const horses = html.querySelector(".stonetop-aurochs-horses");
 	_wireSteadingCardButtons(message, horses ? [horses] : [], {
 		flag: "aurochsHorses",
-		onSettled: (already, [b]) => { b.textContent = `${already.rolled} horses lamed or killed`; },
+		onSettled: (already, [b]) => { b.textContent = already.rolled ? `${already.rolled} horses lamed or killed` : "Horses lamed or killed"; },
 		warn: "You need permission to update the steading's herd.",
 		errorNote: "Error rolling the aurochs hunt's lost horses",
 		run: async steading => {
@@ -1962,18 +1987,22 @@ function _chatWireMusterRaise(message, html) {
 		flag: "musterRaised",
 		onSettled: (already, btns) => {
 			const chosen = btns.find(b => !!b.dataset.defenses === !!already.defenses) ?? btns[0];
-			chosen.textContent = already.defenses ? "Muster raised, +1 Defenses" : "Muster raised";
+			chosen.textContent = already.capped ? "Muster raised (Defenses already +3)"
+				: already.defenses ? "Muster raised, +1 Defenses" : "Muster raised";
 		},
 		warn: "You need permission to update the steading.",
 		errorNote: "Error raising the muster",
 		run: async (steading, btn) => {
 			const defenses = !!btn.dataset.defenses;
 			// Taking it through raiseMuster (rather than nudging the stat by hand) is what
-			// records that the +1 was taken, so standing the muster down gives it back.
-			await steading.raiseMuster({ defenses });
+			// records that the +1 was taken, so standing the muster down gives it back. At +3 it
+			// adds nothing (Defenses "can range from -1 to +3", p.512) and records as much.
+			const { capped = false } = await steading.raiseMuster({ defenses }) ?? {};
 			return {
-				stamp: { defenses },
-				notice: defenses
+				stamp: { defenses, capped },
+				notice: capped
+					? "The muster is up: Stonetop is alert. Defenses is already +3, so the muster adds nothing to it."
+					: defenses
 					? "The muster is up: Stonetop is alert, with +1 Defenses while it holds."
 					: "The muster is up: Stonetop is alert and ready for action.",
 			};
@@ -2486,6 +2515,8 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	// The Would-Be Hero's card buttons: Speak Truth to Power's "They refused: +1 Resolve", In Over Your
 	// Head's "Mark XP", Voice of Experience's "Ask it" (actors/character/would-be-hero-cards.js).
 	wireWouldBeHeroCards(message, html);
+	// A steading roll's miss: "Mark XP" for whoever made the move (actors/steading/steading-miss-xp.js).
+	wireSteadingMissXp(message, html);
 	// Same row, same reason: a spend that rewrites what the roll costs the player.
 	_chatWireHolyRelics(message, html);
 	// The XP receipt's own row, not the shared button row the two above claim — a card with no
@@ -2495,6 +2526,9 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	_chatWireDeployMarkDiminished(message, html);
 	_chatWireAurochsHunt(message, html);
 	_chatWireMusterRaise(message, html);
+	_chatWireSteadingFortunes(message, html);
+	// Trade & Barter's 10+/7-9: the special item handed over, once per card.
+	wireTradeItemCard(message, html);
 	_chatWireSpendStock(message, html);
 	_chatWireSeasonsRoll(message, html);
 	// The Seasons Change reminder card's "Reset logbook", for the Seeker's own player.

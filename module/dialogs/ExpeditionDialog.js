@@ -39,6 +39,7 @@ import { askHorsesFromHerd, herdHorsesLabel, herdHorsesIn, herdHorsesOnLine } fr
 import { openReturnTriumphant } from "../actors/steading/return-triumphant.js";
 import { STEADING_MOVE, improvementQuestions, askedAdvantageAnswers, herdCountAnswer } from "../actors/steading/improvement-rolls.js";
 import { settleSteadingRoll } from "../actors/steading/steading-roll.js";
+import { requisitionMissCostAction } from "../actors/steading/steading-card-actions.js";
 import { worldLogisticsNames } from "../actors/character/logistics.js";
 import { assetTakenLabel } from "../utils/requisition-asset.js";
 import { getPlayerCharacters } from "../utils/playbook-actors.js";
@@ -1806,6 +1807,10 @@ export class ExpeditionDialog extends StepperDialog {
 			resultTable: _REQ_RESULT,
 			missCountsAsPartial: terms.missAsPartial,
 			conditionNotes: terms.conditionNotes,
+			// The 6-'s "reduce Fortunes by 1", a button on the card like the steading's own Requisition
+			// (actors/steading/steading-card-actions.js), spoken for the steading so the button finds it.
+			tierActions: { failure: requisitionMissCostAction() },
+			actor: found?.actor ?? null,
 		});
 		// Spent once the roll it bought is made, and not before.
 		await terms.spend();
