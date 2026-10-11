@@ -1,4 +1,4 @@
-// THE AGES' STRIP: each Age a band laid OVER the timeline's foot (Across) or its right edge (Down),
+// THE AGES' STRIP: each Age a band laid OVER the timeline's foot (Across) or its left edge (Down),
 // under exactly the years it covers (user, 2026-10-07: "display along the bottom of the timeline
 // (over content in the timeline)").
 //
@@ -8,8 +8,8 @@
 // four shapes need no arithmetic of their own. One read of the layout per frame, however many scroll
 // events the frame brought, and a band whose place has not changed is not written.
 //
-// THE NAME STAYS ON SCREEN. A long Age scrolled half out of the view keeps its name at the visible
-// edge of the band, so the reader always knows which Age they are in.
+// THE NAME IS CENTRED (user, 2026-10-11) IN THE STRETCH OF THE BAND ON SCREEN, so a long Age scrolled
+// half out of the view keeps its name in view, and the reader always knows which Age they are in.
 //
 // NOTHING SETTLES (user, 2026-10-04, see timeline-scrub.js): the bands follow the column; they never
 // move it.
@@ -20,11 +20,10 @@ import { drawnScale } from "../utils/drawn-scale.js";
 /** Worn by a band with nothing to cover on screen (and by every band until it is first placed). */
 export const OFF_ATTR = "data-off";
 
-/** The breathing room, in pixels, between a band's visible edge and its name. */
-const NAME_PAD = 8;
-
 /**
- * Where one band goes along the strip, and how far its name is slid in to stay on screen. Pure, so
+ * Where one band goes along the strip, and how far its name is slid along it: to the middle of the
+ * band's stretch on screen, or, where that stretch is shorter than the name, to its near end. Never
+ * past the band's own ends. Pure, so
  * the tests drive it; every length is in pixels along the strip's own axis.
  *
  * @param {object} at
@@ -41,10 +40,14 @@ export function bandPlacement({ start, end, size, clip = 0, name = 0 }) {
 	if (!Number.isFinite(start) || !Number.isFinite(end) || end <= clip || start >= size || !length) {
 		return { hidden: true, pos: 0, length: 0, shift: 0 };
 	}
-	// The visible stretch of the band, and the name slid to its near end, held inside the band.
+	// The visible stretch of the band, and the name centred in it, held inside the band.
 	const visibleStart = Math.max(start, clip);
-	const room = Math.max(0, length - name - 2 * NAME_PAD);
-	const shift = Math.min(room, Math.max(0, visibleStart - start));
+	const visibleEnd = Math.min(end, size);
+	const room = Math.max(0, length - name);
+	const want = visibleEnd - visibleStart >= name
+		? (visibleStart + visibleEnd - name) / 2 - start
+		: visibleStart - start;
+	const shift = Math.min(room, Math.max(0, want));
 	return { hidden: false, pos: Math.round(start), length: Math.round(length), shift: Math.round(shift) };
 }
 
@@ -61,7 +64,7 @@ function put(el, prop, value) {
  *                              `.stonetop-timeline-age` per Age, each stamped `data-age-first` and
  *                              `data-age-last` with the stored years it runs between on screen.
  * @param {object} opts
- * @param {boolean} opts.horizontal  Across (the strip along the foot) or Down (along the right).
+ * @param {boolean} opts.horizontal  Across (the strip along the foot) or Down (along the left).
  * @param {string}  [opts.pinned]    Selector, inside the column, of a header pinned at the strip's
  *                                   start (the swimlanes' thread names, the board's lane names): the
  *                                   bands are hidden under it, not drawn over it.
@@ -87,10 +90,9 @@ export function wireAgeBands(scroll, layer, { horizontal = true, pinned = "" } =
 		const size = (horizontal ? strip.width : strip.height) / scale;
 		const head = pinned ? scroll.querySelector(pinned)?.getBoundingClientRect?.() : null;
 		const clip = head ? Math.max(0, ((horizontal ? head.right : head.bottom) - origin) / scale) : 0;
-		// The column's own scrollbar, where it shows one, is kept clear: the strip sits above it.
-		const bar = horizontal
-			? Math.max(0, scroll.offsetHeight - scroll.clientHeight - (scroll.clientTop || 0) * 2)
-			: Math.max(0, scroll.offsetWidth - scroll.clientWidth - (scroll.clientLeft || 0) * 2);
+		// The column's scrollbar along its foot, where it shows one, is kept clear: the strip sits above
+		// it, across, and stops short of it, down. The one down the right edge is never under the strip.
+		const bar = Math.max(0, scroll.offsetHeight - scroll.clientHeight - (scroll.clientTop || 0) * 2);
 		const placed = bands.map(({ band, nameEl }) => {
 			const first = spans.get(band.dataset.ageFirst);
 			const last = spans.get(band.dataset.ageLast);

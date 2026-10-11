@@ -50100,7 +50100,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 
 /* THE AGES (timeline/timeline-ages-band.js): named runs of years, a band each, laid OVER the column
    (user, 2026-10-07: "along the bottom of the timeline (over content in the timeline)"). Across, the
-   strip lies along the column's foot; Down, along its right edge (the user's call), the names read
+   strip lies along the column's foot; Down, along its left edge (user, 2026-10-11), the names read
    sideways. Overlapping Ages take a row each, `--age-row` 0 nearest the edge.
 
    ⚠ THE STRIP SHARES THE COLUMN'S GRID CELL, which is what puts it over the timeline without being
@@ -50113,7 +50113,16 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    hides the strip under the aggregate's pinned names, and `--timeline-ages-bar` lifts it off a
    scrollbar the column shows. */
 .stonetop-timeline {
-	--timeline-age-h: calc(1.75rem * var(--stonetop-font-scale, 1));
+	--timeline-age-h: calc(2.125rem * var(--stonetop-font-scale, 1));
+	/* The band's name, and the unseen copy of it that sizes its bare year (.stonetop-timeline-age-room). */
+	/* timeline-ages.js#AGE_FONT_REM is this size: it counts the years a long name needs. */
+	--timeline-age-font: calc(1.375rem * var(--stonetop-font-scale, 1));
+}
+
+/* Down, the bands are twice as thick (user, 2026-10-11): a strip down the left edge read thin beside
+   the column it marks. Every length the strip and the column's room for it take follows this one. */
+.stonetop-timeline:not(.stonetop-timeline--horizontal) {
+	--timeline-age-h: calc(4.25rem * var(--stonetop-font-scale, 1));
 }
 
 .stonetop-timeline > .stonetop-timeline-scroll {
@@ -50147,26 +50156,37 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	clip-path: inset(0 0 0 var(--timeline-ages-clip, 0px));
 }
 
+/* DOWN, ON PAPER. The column's left pad (below) is where the board's pinned Season column pins
+   beside it, so lanes dragged sideways would scroll visibly through the strip between two bands (the
+   strip the user turned down on 2026-10-03); the strip's own fill hides them. The fill reaches the
+   top corner too, so it is each BAND that is clipped under the pinned names, not the strip
+   (`--age-pos` is the band's top within the strip). */
 .stonetop-timeline:not(.stonetop-timeline--horizontal) > .stonetop-timeline-ages {
-	justify-self: end;
+	justify-self: start;
 	align-self: stretch;
 	width: var(--timeline-ages-size);
-	margin-right: var(--timeline-ages-bar, 0px);
-	clip-path: inset(var(--timeline-ages-clip, 0px) 0 0 0);
+	margin-bottom: var(--timeline-ages-bar, 0px);
+	background-color: var(--st-page);
 }
 
-/* Across, the column's foot gains the strip's height, so the last of the timeline can still be
-   scrolled up clear of it. Down needs none: the right edge already keeps its drag-off room. */
+/* The column gains the strip's room where it lies, so the timeline at rest is never under it: across,
+   at its foot, so the last of it can still be scrolled up clear; down, at its left, so the pinned
+   Season column and a thread's spine start beside it. */
 .stonetop-timeline--horizontal > .stonetop-timeline-scroll[data-age-rows] {
 	padding-bottom: calc(12px + var(--timeline-age-rows, 0) * var(--timeline-age-h));
 }
 
+.stonetop-timeline:not(.stonetop-timeline--horizontal) > .stonetop-timeline-scroll[data-age-rows] {
+	padding-left: calc(var(--timeline-age-rows, 0) * var(--timeline-age-h));
+}
+
 /* ONE BAND. Opaque paper under a wash of the Age's colour, so the cards it lies over do not show
-   through its name; the name and the leading edges in the colour itself. The colour is the four
+   through its name; the name and the edges in the colour itself. The colour is the four
    inline `--tl-tag-*` a custom tag wears (timeline-tags.js#customTagStyle), which
    `.stonetop-timeline-kind--custom` picks between per skin, each already walked until it reads on
-   that skin's paper under that same wash (timeline-colours.js#kindColourSet). The two leading edges
-   are an inset shadow, not borders, which the themed skin's button rule would overwrite.
+   that skin's paper under that same wash (timeline-colours.js#kindColourSet). Its edges, all but the
+   outer side, are an inset shadow, not borders, which the themed
+   skin's button rule would overwrite.
    ⚠ NO TRANSITION: core gives every button `transition: all 0.5s`, and the script moves these every
    scroll frame; animated, every band would trail half a second behind its years. */
 .stonetop-timeline-age {
@@ -50182,12 +50202,15 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	min-height: 0;
 	border: 0;
 	border-radius: 0;
-	box-shadow: inset 2px 2px 0 var(--tl-kind);
+	/* Its start, the side facing the timeline, and its end (user, 2026-10-11: the end had no edge). */
+	box-shadow: inset 2px 2px 0 var(--tl-kind), inset -2px 0 0 var(--tl-kind);
 	overflow: hidden;
 	white-space: nowrap;
 	pointer-events: auto;
 	font-family: var(--font-stonetop);
-	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
+	/* Bold and a size up (user, 2026-10-11): the band height above grew with it. */
+	font-size: var(--timeline-age-font);
+	font-weight: bold;
 	font-variant: small-caps;
 	letter-spacing: 0.03em;
 	line-height: 1;
@@ -50223,9 +50246,12 @@ button.stonetop-timeline-age:focus-visible {
 	outline-offset: -2px;
 }
 
+/* LOGICAL padding: the band's name runs along the band, top to bottom when it reads sideways
+   (Down), and a physical left/right pad left it no room at its start there. */
 .stonetop-timeline-age-name {
 	flex: 0 0 auto;
-	padding: 0 8px;
+	padding-block: 0;
+	padding-inline: 8px;
 }
 
 .stonetop-timeline--horizontal > .stonetop-timeline-ages .stonetop-timeline-age {
@@ -50242,9 +50268,12 @@ button.stonetop-timeline-age:focus-visible {
 .stonetop-timeline:not(.stonetop-timeline--horizontal) > .stonetop-timeline-ages .stonetop-timeline-age {
 	top: var(--age-pos, 0px);
 	height: var(--age-length, 0px);
-	right: calc(var(--age-row, 0) * var(--timeline-age-h));
+	left: calc(var(--age-row, 0) * var(--timeline-age-h));
 	width: var(--timeline-age-h);
 	writing-mode: vertical-rl;
+	/* Its start is its top, the side facing the timeline its right, and its end its bottom. */
+	box-shadow: inset -2px 2px 0 var(--tl-kind), inset 0 -2px 0 var(--tl-kind);
+	clip-path: inset(max(0px, var(--timeline-ages-clip, 0px) - var(--age-pos, 0px)) 0 0 0);
 }
 
 .stonetop-timeline:not(.stonetop-timeline--horizontal) > .stonetop-timeline-ages .stonetop-timeline-age-name {
@@ -50280,9 +50309,56 @@ html.stonetop-high-contrast .stonetop-timeline-ages {
 	min-height: 5.5rem;
 }
 
+/* ROOM FOR THE NAME (user, 2026-10-11: the book's Ages were cut off). Each of an Age's N bare years
+   carries its name unseen (timeline-view.js#withAgeMarks) in the band's own type at 1/N of its size
+   (`--age-room-share`), laid ALONG the axis and nothing across it: each year grows to 1/N of the
+   name's length, so the band over all N does to the whole of it, and nothing about a year's look
+   changes. Padded for the name's own 8px each side and half as much again. */
+.stonetop-timeline-age-room {
+	display: block;
+	flex: none;
+	overflow: hidden;
+	visibility: hidden;
+	pointer-events: none;
+	white-space: nowrap;
+	padding-inline: calc(24px * var(--age-room-share, 1));
+	font-family: var(--font-stonetop);
+	font-size: calc(var(--timeline-age-font) * var(--age-room-share, 1));
+	font-weight: bold;
+	font-variant: small-caps;
+	letter-spacing: 0.03em;
+	line-height: 1;
+}
+
+/* Across: as wide as the name, no height. In the single track's subgrid, with the spacer above. */
+.stonetop-timeline-hyear > .stonetop-timeline-age-room,
+.stonetop-timeline-swim-year > .stonetop-timeline-age-room {
+	height: 0;
+}
+
+.stonetop-timeline-hyear > .stonetop-timeline-age-room {
+	grid-row: 1;
+	grid-column: 1;
+}
+
+/* Down: the name reads down the band, so the copy does too, as tall as the name and no width. The
+   heading's gap would still add its 12px across, so a negative margin takes it back: a physical
+   left, as the copy's own inline axis runs down. */
+.stonetop-timeline-year > .stonetop-timeline-age-room {
+	writing-mode: vertical-rl;
+	width: 0;
+	margin-left: -12px;
+}
+
 /* THE GM'S AGES WINDOW (dialogs/TimelineAgesDialog.js): a row per Age, its colour as a swatch at
-   the front, then name, years, colour and Delete. */
+   the front, then name, years, colour and Delete.
+
+   Every control in a row is ONE height (`--st-ages-control-h`), so each field is the same label
+   line over the same box and the row sits evenly inside its border. Left to themselves the colour
+   well and the Delete button stood taller than the text boxes, which pushed the Colour label up
+   out of line and left more air over the row than under it. */
 .stonetop-timeline-ages-form {
+	--st-ages-control-h: var(--input-height, 28px);
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
@@ -50311,7 +50387,7 @@ html.stonetop-high-contrast .stonetop-timeline-ages {
 	grid-template-columns: 8px minmax(9em, 1fr) 6.5em 6.5em auto auto;
 	align-items: end;
 	gap: 8px;
-	padding: 6px 8px 6px 0;
+	padding: 8px 8px 8px 0;
 	border: 1px solid var(--st-card-rule);
 	border-radius: var(--st-radius-sm);
 }
@@ -50323,7 +50399,7 @@ html.stonetop-high-contrast .stonetop-timeline-ages {
 
 .stonetop-timeline-ages-sample {
 	align-self: stretch;
-	margin: -6px 0;
+	margin: -8px 0;
 	border-radius: var(--st-radius-sm) 0 0 var(--st-radius-sm);
 	background: var(--tl-kind);
 }
@@ -50337,6 +50413,7 @@ html.stonetop-high-contrast .stonetop-timeline-ages {
 
 .stonetop-timeline-ages-label {
 	font-size: var(--st-fs-xs);
+	line-height: 1.2;
 	color: var(--st-text-secondary);
 }
 
@@ -50344,25 +50421,69 @@ html.stonetop-high-contrast .stonetop-timeline-ages {
 .stonetop-timeline-ages-field input[type="number"] {
 	width: 100%;
 	min-width: 0;
+	height: var(--st-ages-control-h);
 }
 
 .stonetop-timeline-ages-field input[type="color"] {
 	width: 3em;
-	height: var(--input-height, 28px);
+	height: var(--st-ages-control-h);
 	padding: 0 2px;
 }
 
-.stonetop-timeline-ages-remove,
-.stonetop-timeline-ages-add {
-	width: auto;
-	flex: 0 0 auto;
-}
-
-.stonetop-timeline-ages-add {
-	align-self: flex-start;
+/* A square the height of the fields beside it, the glyph centred in it. Core's AppV1 button
+   carries `line-height: 28px` and side padding, and gives every `<i>` in a button a 3px right
+   margin, which leaves a lone icon off to the left; both go. */
+.stonetop-timeline-ages-remove {
 	display: inline-flex;
 	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: var(--st-ages-control-h);
+	height: var(--st-ages-control-h);
+	padding: 0;
+	line-height: 1;
+}
+
+.stonetop-timeline-ages-remove > i {
+	margin: 0;
+	font-size: 14px;
+}
+
+/* "Add an Age" is the system's quiet full-width dashed add bar (.steading-list-add,
+   .stonetop-prep-add-btn, .stonetop-add-custom-move), not a slate action button. The themed
+   window paints every body button slate at (0,4,1), hover (0,5,1), so this names the window. */
+:is(.application, .window-app).stonetop-themed.stonetop-timeline-ages-dialog .window-content button.stonetop-timeline-ages-add {
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	gap: 6px;
+	width: 100%;
+	margin: 0;
+	padding: 2px 8px;
+	line-height: 28px;
+	background: transparent;
+	border: 1px dashed var(--color-border-light, #ccc);
+	border-radius: var(--st-radius);
+	box-shadow: none;
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-body);
+	cursor: pointer;
+	transition: background 0.15s;
+}
+
+:is(.application, .window-app).stonetop-themed.stonetop-timeline-ages-dialog .window-content button.stonetop-timeline-ages-add:hover {
+	background: var(--st-on-dark-raised, hsl(210 10% 92%));
+	border-color: var(--color-border-light, #ccc);
+	color: var(--st-text-body);
+}
+
+/* The one-pixel drop every dashed add bar carries: Font Awesome 7 paints its glyph high in its
+   own box (see `.stonetop-prep-add-btn > i`). */
+.stonetop-timeline-ages-add > i {
+	position: relative;
+	top: 1px;
+	margin: 0;
 }
 
 .stonetop-timeline-ages-none {

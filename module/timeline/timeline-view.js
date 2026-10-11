@@ -305,6 +305,10 @@ function periodVM(period, entries, opts, seasonNotes = []) {
 		// A year with nothing written in it, opened only so an Age's band has its first or last year
 		// to lie under (`withAgeMarks`): its year chip is drawn, and no season after it.
 		ageMark:     !!period.ageMark,
+		// The name of an Age this bare year is in, drawn unseen at `ageRoomShare` of the band's size,
+		// so the Age's years together are as long as its name (`withAgeMarks`).
+		ageRoom:     period.ageRoom ?? "",
+		ageRoomShare: period.ageRoomShare ?? 1,
 		// The clock's season when nothing is written in it yet (`withGhostNow`): drawn faint, holding
 		// only its add slot, so the season the table is in always has somewhere to write.
 		ghost:       !!period.ghost,
@@ -348,23 +352,57 @@ function markYearsAndSides(periods) {
  * "show an age even without timeline entries"). Its key is its own, never a real period's, and it
  * ranks where a year-only period of that year would, before its Spring.
  *
+ * EVERY NAME FITS ITS BAND (user, 2026-10-11: the book's Ages were cut off). Each of an Age's N bare
+ * years carries the Age's name as `ageRoom` with `ageRoomShare` 1/N, and draws it as an unseen copy
+ * along the axis at 1/N of the band's type size: each year is then at least 1/N of the name long,
+ * so the band, which runs over all N of them, is at least the whole name. Shared out rather than
+ * piled on one year, so the years the Age was given in between (timeline-ages.js#ageFillYears) stay
+ * evenly spaced. A year inside two Ages carries the one that asks more of it.
+ *
+ * An Age with NO bare year (every year it covers has something written in it, and too few years
+ * apart to be given any between) shares its name over the first period of each of its written
+ * years instead, whose year separators then carry it. Only then: a written year's separator is a
+ * column of its own beside its seasons, so room there is room added, never room the seasons
+ * already had.
+ *
  * @param {Array<{year: number|null, rank: number}>} periods  Period facts, any order.
  * @param {number[]} years
+ * @param {Array<{from: number, to: number|null, name: string}>} [ages]  The Ages being drawn.
  * @returns {Array}  Sorted by rank, the marks holding no entries.
  */
-export function withAgeMarks(periods, years = []) {
+export function withAgeMarks(periods, years = [], ages = []) {
 	const have = new Set(periods.map(period => period.year).filter(year => year !== null));
-	const marks = [];
+	const marks = new Map();
 	for (const year of new Set(years)) {
 		if (!Number.isFinite(year) || have.has(year)) continue;
-		marks.push({
+		marks.set(year, {
 			key: `${year}:${AGE_MARK_PERIOD}`, year, season: "", yearOnly: false, ageMark: true,
 			rank: periodRank({ year, yearOnly: true }), entries: [],
 		});
 	}
 	// Sorted even with no marks: the full timeline hands in its periods in the order the tracks
 	// first met them, and leans on this for chronology.
-	return [...periods, ...marks].sort((a, b) => a.rank - b.rank);
+	const sorted = [...periods, ...marks.values()].sort((a, b) => a.rank - b.rank);
+	// The period that opens each year, and so draws its separator: the first of it in rank order.
+	const opening = new Map();
+	for (const period of sorted) {
+		if (period.year !== null && !opening.has(period.year)) opening.set(period.year, period);
+	}
+	const within = (age, year) => year >= age.from && (age.to === null || year <= age.to);
+	for (const age of ages ?? []) {
+		const name = String(age?.name ?? "");
+		if (!name || !Number.isFinite(age?.from)) continue;
+		let own = [...marks.values()].filter(mark => within(age, mark.year));
+		if (!own.length) own = [...opening.values()].filter(period => within(age, period.year));
+		if (!own.length) continue;
+		const share = 1 / own.length;
+		for (const period of own) {
+			if (name.length * share <= (period.ageRoom?.length ?? 0) * (period.ageRoomShare ?? 0)) continue;
+			period.ageRoom = name;
+			period.ageRoomShare = share;
+		}
+	}
+	return sorted;
 }
 
 /** The suffix on an Age's bare year's key ("-40:age"), apart from the year-only period's "year". */
@@ -399,10 +437,11 @@ export function withGhostNow(periods, now = null) {
  * toolbar's "N slain" chip came off at the user's request, 2026-10-03); it is kept for when it returns.
  *
  * @param {{trackId, name, entries, actor?}} track
- * @param {{canEdit?: boolean, hidden?: string[], tags?: Array, ageYears?: number[], ghostNow?: object}} [opts]
+ * @param {{canEdit?: boolean, hidden?: string[], tags?: Array, ageYears?: number[], ages?: Array, ghostNow?: object}} [opts]
  *        `tags` = the world's custom tags (timeline-tag-store.js#worldCustomTags); a typed row wearing
  *        one it cannot find wears none. `ageYears` = the stored years an Age starts or ends in, each given a bare
- *        year if nothing is written in it (timeline-ages.js#ageMarkYears). `ghostNow` = the clock's
+ *        year if nothing is written in it (timeline-ages.js#ageMarkYears), and `ages` the Ages, whose names size
+ *        those years (`withAgeMarks`). `ghostNow` = the clock's
  *        {season, year}, drawn as an empty ghost season for a writer when nothing is filed in it.
  */
 export function buildTrackVM(track, opts = {}) {
@@ -425,7 +464,7 @@ export function buildTrackVM(track, opts = {}) {
 	const sharedOpts = { canEdit: !!opts.steading?.canEdit, trackId: opts.steading?.trackId ?? "" };
 	const shared = allHidden ? [] : steadingNotesWithin(shown, opts.steading, sharedOpts, ghostNow);
 	const sharedIds = new Set(shared.map(e => e.id));
-	const periods = withAgeMarks(withGhostNow(groupByPeriod([...shown, ...shared]), ghostNow), opts.ageYears);
+	const periods = withAgeMarks(withGhostNow(groupByPeriod([...shown, ...shared]), ghostNow), opts.ageYears, opts.ages);
 	const hasGhost = periods.some(period => period.ghost);
 	const cardOpts = { ...opts, tags };
 	return {
@@ -475,8 +514,8 @@ export function buildTrackVM(track, opts = {}) {
  *
  * @param {Array<{trackId, name, entries, actor?}>} tracks
  * @param {{canEdit?: (trackId: string) => boolean, hidden?: string[], hiddenTracks?: string[],
- *          tags?: Array, ageYears?: number[], ghostNow?: object}} [opts]
- *        `ageYears` and `ghostNow` as buildTrackVM's.
+ *          tags?: Array, ageYears?: number[], ages?: Array, ghostNow?: object}} [opts]
+ *        `ageYears`, `ages` and `ghostNow` as buildTrackVM's.
  */
 export function buildAggregateVM(allTracks = [], opts = {}) {
 	const canEdit = opts.canEdit ?? (() => false);
@@ -532,7 +571,7 @@ export function buildAggregateVM(allTracks = [], opts = {}) {
 	const ghostNow = !allHidden && tracks.some(track => canEdit(track.trackId)) ? opts.ghostNow : null;
 	const withGhost = withGhostNow([...byKey.values()], ghostNow);
 	const hasGhost = withGhost.some(period => period.ghost);
-	const periods = markYearsAndSides(withAgeMarks(withGhost, opts.ageYears).map(period => {
+	const periods = markYearsAndSides(withAgeMarks(withGhost, opts.ageYears, opts.ages).map(period => {
 		// The season's own summary before its shortfall, whatever thread order says.
 		const notes = notesInOrder(notesByKey.get(period.key) ?? [], n => n.entry).map(n => n.note);
 		const block = periodVM(period, [], {}, notes);

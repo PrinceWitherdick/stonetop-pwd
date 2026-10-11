@@ -33,7 +33,11 @@ import { timelineNow } from "../timeline/timeline-record.js";
 /** The window's DOM id: one Ages editor at a time. */
 export const TIMELINE_AGES_DIALOG_ID = "stonetop-timeline-ages";
 
-/** One stored Age as a draft row: years as the TEXT the fields hold, so a half-typed year is kept. */
+/**
+ * One stored Age as a draft row: years as the TEXT the fields hold, so a half-typed year is kept.
+ * An Age with words for its `when` (the book's) keeps them, with the stored years they were given
+ * for: `whenAt`.
+ */
 function draftRow(age) {
 	return {
 		id: age.id,
@@ -41,12 +45,16 @@ function draftRow(age) {
 		fromText: String(displayYear(age.from)),
 		toText: age.to === null ? "" : String(displayYear(age.to)),
 		colour: age.colour,
+		...(age.when ? { when: age.when, whenAt: { from: age.from, to: age.to } } : {}),
 	};
 }
 
 /**
  * A draft row as an Age to store, or a reason it cannot be: "name" or "from". Pure, so the tests
  * drive it. `to` left blank is an Age still running.
+ *
+ * A book Age's words go with it only while its years are the ones they were given for: a GM who
+ * moves "Eons ago" to forty years back has dated it, and the band then says the years they chose.
  */
 export function readDraftRow(row, start = startYear()) {
 	const name = cleanAgeName(row?.name);
@@ -56,7 +64,9 @@ export function readDraftRow(row, start = startYear()) {
 	const from = clampYear(storedYear(fromTyped, start), 1, HISTORY_YEAR_BOUNDS);
 	const toTyped = typedYear(row?.toText);
 	const to = toTyped === null ? null : clampYear(storedYear(toTyped, start), from, HISTORY_YEAR_BOUNDS);
-	return { age: { id: row.id, name, from, to, colour: normalizeHex(row.colour) || "#705409" } };
+	const age = { id: row.id, name, from, to, colour: normalizeHex(row.colour) || "#705409" };
+	if (row.when && row.whenAt?.from === from && row.whenAt?.to === to) age.when = row.when;
+	return { age };
 }
 
 /**

@@ -1,4 +1,4 @@
-// THE AGES: named runs of years the GM lays over the timeline ("The Age of Embers", 1180 to 1246),
+// THE AGES: named runs of years the GM lays over the timeline ("The Time of the Barrow Builders", 1180 to 1246),
 // drawn as coloured bands along the foot of the view (user, 2026-10-07: "Group ranges of years
 // together into a named Age. Kind of like how D&D does that").
 //
@@ -27,9 +27,17 @@ export const AGES_CHANGED_HOOK = "stonetop.timelineAgesChanged";
 /** The longest name an Age keeps. A strip label, not a paragraph. */
 export const AGE_NAME_MAX = 60;
 
+/** The longest "when" an Age keeps: the book's own words for how long ago it was. */
+export const AGE_WHEN_MAX = 120;
+
 /** One Age's name, cleaned: one line, spaces collapsed, capped. "" for nothing at all. */
 export function cleanAgeName(name) {
 	return clipText(String(name ?? "").replace(/\s+/g, " ").trim(), AGE_NAME_MAX).trim();
+}
+
+/** An Age's "when", cleaned the way its name is. "" for none. */
+export function cleanAgeWhen(when) {
+	return clipText(String(when ?? "").replace(/\s+/g, " ").trim(), AGE_WHEN_MAX).trim();
 }
 
 /** A stored year, or null for a blank or unreadable one (an Age's end left open). */
@@ -43,7 +51,10 @@ function yearOrNull(value) {
  * An end before the start is the two typed the wrong way round, and is swapped rather than refused.
  * `to: null` is an Age still running: it reaches the last year the timeline shows.
  *
- * @returns {{id: string, name: string, from: number, to: number|null, colour: string}|null}
+ * `when`, kept only when there is one, is how long ago the Age was in words (the book's Ages,
+ * `BOOK_AGES`): the band's tooltip says it in place of the years, which for those only place it.
+ *
+ * @returns {{id: string, name: string, from: number, to: number|null, colour: string, when?: string}|null}
  */
 export function normalizeAge(raw, id = raw?.id) {
 	if (!raw || typeof raw !== "object") return null;
@@ -55,7 +66,8 @@ export function normalizeAge(raw, id = raw?.id) {
 	let to = yearOrNull(raw.to);
 	let start = from;
 	if (to !== null && to < start) [start, to] = [to, start];
-	return { id: key, name, from: start, to, colour };
+	const when = cleanAgeWhen(raw.when);
+	return when ? { id: key, name, from: start, to, colour, when } : { id: key, name, from: start, to, colour };
 }
 
 /**
@@ -142,14 +154,68 @@ export function stackAges(items = []) {
  * @param {Array} ages  From `normalizeAges`.
  * @returns {number[]}  Stored years, oldest first, each once.
  */
-export function ageMarkYears(ages = []) {
+export function ageMarkYears(ages = [], fill = null) {
 	const years = new Set();
 	for (const age of ages) {
 		years.add(age.from);
 		if (age.to !== null) years.add(age.to);
+		if (fill) for (const year of ageFillYears(age, fill)) years.add(year);
 	}
 	return [...years].sort((x, y) => x - y);
 }
+
+/** The band's type size, in rem at a font scale of 1 (`--timeline-age-font` in the stylesheet). */
+export const AGE_FONT_REM = 1.375;
+
+/**
+ * How far apart, in rem, two bare years are drawn along each axis: across, the separator's 10rem
+ * spacer and its padding; down, the heading's 5.5rem floor and its margin.
+ */
+export const AGE_YEAR_PITCH_REM = Object.freeze({ across: 11, down: 6.125 });
+
+/**
+ * Roughly how long an Age's name is drawn, in rem: bold small capitals average a little over half
+ * an em, and the name is padded each side. Only decides how many years an Age is given; whether the
+ * name fits is made sure of by the unseen copy (timeline-view.js#withAgeMarks).
+ */
+export function ageNameRem(name, fontScale = 1) {
+	return String(name ?? "").length * 0.58 * AGE_FONT_REM * fontScale + 2;
+}
+
+/**
+ * THE YEARS BETWEEN (user, 2026-10-11: "show more interceding years so that the ages can stretch
+ * enough to not have cutoff text"). An Age whose own first and last years are too few to carry its
+ * name along the axis is given years in between, evenly spaced and rounded to a round number of the
+ * years as the world CALLS them, so the band runs over years a reader can see. A still-running Age
+ * spreads them to the clock's year. None for an Age its own years already carry.
+ *
+ * @param {{from: number, to: number|null, name: string}} age
+ * @param {{pitch: number, fontScale?: number, nowYear?: number, start?: number}} fill
+ *        `pitch` = AGE_YEAR_PITCH_REM's for the layout; `start` = what stored year 1 is called.
+ * @returns {number[]}  Stored years strictly inside the Age.
+ */
+export function ageFillYears(age, { pitch, fontScale = 1, nowYear = 1, start = 1 } = {}) {
+	if (!age || !(pitch > 0)) return [];
+	const from = age.from;
+	const to = age.to ?? Math.max(nowYear, from);
+	const own = age.to === null ? 1 : 2;
+	const inner = Math.min(MAX_FILL_YEARS, Math.ceil(ageNameRem(age.name, fontScale) / pitch) - own);
+	if (inner < 1 || to - from < 2) return [];
+	const step = (to - from) / (inner + 1);
+	const unit = 10 ** Math.max(0, Math.floor(Math.log10(step)));
+	const offset = start - 1;
+	const years = new Set();
+	for (let i = 1; i <= inner; i++) {
+		const exact = from + step * i;
+		const round = Math.round((exact + offset) / unit) * unit - offset;
+		const year = round > from && round < to ? round : Math.round(exact);
+		if (year > from && year < to) years.add(year);
+	}
+	return [...years];
+}
+
+/** The most years an Age is given in between, whatever its name: a typo guard. */
+const MAX_FILL_YEARS = 12;
 
 /**
  * The strip the timeline draws: the Ages with a year on screen, each given its row.
@@ -161,6 +227,54 @@ export function ageMarkYears(ages = []) {
 export function ageStrip(ages = [], stops = []) {
 	const { items, rows } = stackAges(agesInView(ages, stops));
 	return { bands: items, rows };
+}
+
+/* ── The book's Ages ───────────────────────────────────────────────────── */
+
+/**
+ * THE WORLD'S AGES AS THE BOOK GIVES THEM (Book II, Appendix A, "Ages of the World", pp. 496-497),
+ * added to every world once (timeline-book-ages.js). The book dates none of them in years, only
+ * "eons ago", "millennia ago", "centuries ago", and leaves the order of its uncertain events to the
+ * table. So the years here are ROUND PLACINGS, stored (1 = the first year of play), in the book's
+ * order and as far back as it says, and each Age carries the book's own words as its `when`.
+ *
+ * "Recent memory" is the book's last heading, the decade or so before play. It lies inside the
+ * Current Age, so the strip gives it a second row, and it ends the year before play: the book's list
+ * is the world as play finds it.
+ *
+ * `key` names the Age's words in en.json (`stonetop.timeline.ages.book.<key>`).
+ */
+export const BOOK_AGES = Object.freeze([
+	Object.freeze({ id: "bookPrimordial",     key: "primordial",     from: -9999, to: -6001 }),
+	Object.freeze({ id: "bookMakers",         key: "makers",         from: -6000, to: -1201 }),
+	Object.freeze({ id: "bookCataclysm",      key: "cataclysm",      from: -1200, to: -1151 }),
+	Object.freeze({ id: "bookBarrowBuilders", key: "barrowBuilders", from: -1150, to: -401 }),
+	Object.freeze({ id: "bookCurrent",        key: "current",        from: -400,  to: null }),
+	Object.freeze({ id: "bookRecentMemory",   key: "recentMemory",   from: -9,    to: 0 }),
+]);
+
+/**
+ * The book's Ages a world does not have yet, each named and given its words by `text(key)` and a
+ * colour from the walk, and where the walk stands after them. An Age whose id the world already
+ * holds is left alone, whatever the GM has made of it. Pure.
+ *
+ * @param {{ages?: Array, seq?: number, text: (key: string) => {name: string, when: string}}} at
+ * @returns {{added: Array, seq: number}}
+ */
+export function bookAgesToAdd({ ages = [], seq = 0, text }) {
+	const held = new Set(ages.map(age => age.id));
+	const inUse = ages.map(age => age.colour);
+	const added = [];
+	let at = seq;
+	for (const book of BOOK_AGES) {
+		if (held.has(book.id)) continue;
+		const { hex, seq: next } = nextAgeColour({ seq: at, inUse });
+		at = next;
+		inUse.push(hex);
+		const age = normalizeAge({ ...text(book.key), id: book.id, from: book.from, to: book.to, colour: hex });
+		if (age) added.push(age);
+	}
+	return { added, seq: at };
 }
 
 /* ── Colours ────────────────────────────────────────────────────────────── */

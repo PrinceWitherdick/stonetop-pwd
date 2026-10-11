@@ -246,9 +246,9 @@ describe("the aggregate's columns", () => {
 	// User, 2026-10-03: the year rides in the shared year chip, at the heading's own size.
 	it("puts the vertical year heading in the year chip, full size", () => {
 		expect(readRepo("templates/dialogs/partials/timeline-period.hbs"))
-			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}>{{> stonetop.timeline-year-chip}}</h2>');
+			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}>{{> stonetop.timeline-year-chip}}');
 		expect(readRepo("templates/dialogs/timeline.hbs"))
-			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell">{{> stonetop.timeline-year-chip}}</span></h2>');
+			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell">{{> stonetop.timeline-year-chip}}</span>');
 		expect(value(".stonetop-timeline-year .stonetop-year-chip", "font-size")).toBe("inherit");
 	});
 

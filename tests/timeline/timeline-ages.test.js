@@ -6,8 +6,10 @@ import { readCss, readRepo } from "../fakes/css.js";
 
 const {
 	normalizeAge, normalizeAges, agesToStored, agesInView, stackAges, ageStrip,
-	nextAgeColour, ageColourAt, hexHue, hslHex, cleanAgeName, AGE_NAME_MAX,
+	nextAgeColour, ageColourAt, hexHue, hslHex, cleanAgeName, AGE_NAME_MAX, BOOK_AGES, bookAgesToAdd,
+	ageFillYears, AGE_YEAR_PITCH_REM, AGE_FONT_REM,
 } = await import("../../module/timeline/timeline-ages.js");
+const { MIN_HISTORY_YEAR } = await import("../../module/seasons/campaign-year.js");
 const { readDraftRow, suggestedStart, restartDraft, unseenAges } = await import("../../module/dialogs/TimelineAgesDialog.js");
 const { ageMarkYears } = await import("../../module/timeline/timeline-ages.js");
 const { buildAggregateVM, buildTrackVM, withAgeMarks } = await import("../../module/timeline/timeline-view.js");
@@ -155,6 +157,50 @@ describe("the editor's rows", () => {
 	});
 });
 
+describe("the book's Ages", () => {
+	const text = key => ({ name: `Name ${key}`, when: `When ${key}` });
+
+	it("are Book II's six, oldest first, back to back, the Current Age still running", () => {
+		const { added } = bookAgesToAdd({ text });
+		expect(added.map(age => age.id)).toEqual(BOOK_AGES.map(age => age.id));
+		const lasting = added.filter(age => age.id !== "bookRecentMemory");
+		lasting.slice(1).forEach((age, i) => expect(age.from).toBe(lasting[i].to + 1));
+		expect(added.find(age => age.id === "bookCurrent").to).toBeNull();
+		expect(added.find(age => age.id === "bookRecentMemory")).toMatchObject({ from: -9, to: 0 });
+		expect(added[0].from).toBe(MIN_HISTORY_YEAR);
+	});
+
+	it("carry the book's words, each its own colour from the walk", () => {
+		const { added, seq } = bookAgesToAdd({ text, seq: 3 });
+		expect(added[0]).toMatchObject({ name: "Name primordial", when: "When primordial" });
+		expect(new Set(added.map(age => age.colour)).size).toBe(added.length);
+		expect(seq).toBeGreaterThan(3 + added.length - 1);
+	});
+
+	it("leave alone one the world already holds, and the GM's own Ages", () => {
+		const ages = [{ id: "bookMakers", name: "Renamed", from: 1, to: 2, colour: "#111111" }];
+		const { added } = bookAgesToAdd({ ages, text });
+		expect(added.map(age => age.id)).not.toContain("bookMakers");
+		expect(added).toHaveLength(BOOK_AGES.length - 1);
+	});
+
+	it("are named and worded in en.json", () => {
+		const en = JSON.parse(readRepo("languages/en.json")).stonetop.timeline.ages;
+		for (const { key } of BOOK_AGES) {
+			expect(en.book[key].name).toBeTruthy();
+			expect(en.book[key].when).toBeTruthy();
+		}
+	});
+
+	it("keep their words through the editor while their years stay, and lose them once moved", () => {
+		const age = normalizeAge({ id: "bookCurrent", name: "The Current Age", from: -400, to: null, colour: "#111111", when: "Starting a few centuries ago" });
+		const [row] = unseenAges([age], new Set());
+		expect(readDraftRow(row).age.when).toBe("Starting a few centuries ago");
+		expect(readDraftRow({ ...row, fromText: "-40" }).age.when).toBeUndefined();
+		expect(readDraftRow({ ...row, toText: "5" }).age.when).toBeUndefined();
+	});
+});
+
 describe("the strip in the timeline", () => {
 	it("is drawn after the column, in its cell, and each band is placed by the script", () => {
 		const main = readRepo("templates/dialogs/timeline.hbs");
@@ -188,6 +234,96 @@ describe("an Age's bare years", () => {
 		const periods = withAgeMarks([{ key: "1:spring", year: 1, rank: 7 }, { key: "undated", year: null, rank: -Infinity }], [-40, 1]);
 		expect(periods.map(p => p.key)).toEqual(["undated", "-40:age", "1:spring"]);
 		expect(periods[1]).toMatchObject({ ageMark: true, entries: [] });
+	});
+
+	it("shares an Age's name out over every bare year inside it, the year asking most keeping its own", () => {
+		const written = [{ key: "1:spring", year: 1, rank: 7 }];
+		const ages = [
+			{ from: -40, to: -20, name: "The Time of the Barrow Builders" },
+			{ from: -40, to: null, name: "Short" },
+		];
+		const marks = withAgeMarks(written, [-40, -30, -20, -10], ages);
+		const at = year => marks.find(p => p.year === year && p.ageMark);
+		// The Barrow Builders over three years, a third each; "Short" over all four, a quarter each.
+		expect(at(-40)).toMatchObject({ ageRoom: "The Time of the Barrow Builders", ageRoomShare: 1 / 3 });
+		expect(at(-20)).toMatchObject({ ageRoom: "The Time of the Barrow Builders", ageRoomShare: 1 / 3 });
+		expect(at(-10)).toMatchObject({ ageRoom: "Short", ageRoomShare: 1 / 4 });
+	});
+
+	it("shares the name over the written years' separators only when an Age has no bare year", () => {
+		const written = [
+			{ key: "-41:winter", year: -41, rank: 20 },
+			{ key: "-40:spring", year: -40, rank: 31 },
+			{ key: "-40:winter", year: -40, rank: 34 },
+			{ key: "1:spring", year: 1, rank: 70 },
+		];
+		const ages = [
+			{ from: -41, to: -40, name: "The Long Winters" },
+			{ from: -50, to: null, name: "Bare" },
+		];
+		const periods = withAgeMarks(written, [-50], ages);
+		const at = key => periods.find(p => p.key === key);
+		// Two written years, a half each, on the period that opens each year; never on a later season.
+		expect(at("-41:winter")).toMatchObject({ ageRoom: "The Long Winters", ageRoomShare: 1 / 2 });
+		expect(at("-40:spring")).toMatchObject({ ageRoom: "The Long Winters", ageRoomShare: 1 / 2 });
+		expect(at("-40:winter").ageRoom).toBeUndefined();
+		// An Age with a bare year keeps its name there, off its written years.
+		expect(at("-50:age")).toMatchObject({ ageRoom: "Bare", ageRoomShare: 1 });
+		expect(at("1:spring").ageRoom).toBeUndefined();
+	});
+
+	it("draws the name unseen in the bare year's separator, at its share, in all four shapes", () => {
+		const vm = buildTrackVM({ trackId: "pc", entries: [entry()] }, { ageYears: [-40], ages: [{ from: -40, to: null, name: "The Current Age" }] });
+		expect(vm.periods[0]).toMatchObject({ ageMark: true, ageRoom: "The Current Age", ageRoomShare: 1 });
+		const room = `{{#if ageRoom}}<span class="stonetop-timeline-age-room" aria-hidden="true" style="--age-room-share: {{ageRoomShare}};">{{ageRoom}}</span>{{/if}}`;
+		const count = path => readRepo(path).split(room).length - 1;
+		expect(count("templates/dialogs/timeline.hbs")).toBe(2);
+		expect(count("templates/dialogs/partials/timeline-period.hbs")).toBe(1);
+		expect(count("templates/dialogs/partials/timeline-hperiod.hbs")).toBe(1);
+		const css = readCss();
+		const rule = selector => css.slice(css.indexOf(`${selector} {`)).split("}")[0];
+		expect(rule(".stonetop-timeline-age-room")).toContain("visibility: hidden;");
+		expect(rule(".stonetop-timeline-age-room")).toContain("font-size: calc(var(--timeline-age-font) * var(--age-room-share, 1));");
+		expect(rule(".stonetop-timeline-age")).toContain("font-size: var(--timeline-age-font);");
+		expect(css).toContain(`--timeline-age-font: calc(${AGE_FONT_REM}rem *`);
+	});
+
+	it("counts a bare year's pitch from the sizes the stylesheet draws it at", () => {
+		// AGE_YEAR_PITCH_REM is copied from these by hand: a restyle that moves one must move it too,
+		// or long names get too few in-between years again (or the timeline fills with empty ones).
+		const css = readCss();
+		const rule = selector => css.slice(css.indexOf(`${selector} {`)).split("}")[0];
+		const rem = text => Number(text.match(/([\d.]+)rem/)[1]);
+		const px = text => Number(text.match(/(\d+)px/)[1]) / 16;
+		const spacer = rem(rule(".stonetop-timeline-hyear[data-age-mark]::before").match(/width: [^;]+/)[0]);
+		const sidePad = px(rule(".stonetop-timeline-hyear").match(/padding: [^;]+/)[0]);
+		expect(AGE_YEAR_PITCH_REM.across).toBe(spacer + 2 * sidePad);
+		const floor = rem(rule(".stonetop-timeline-year[data-age-mark]").match(/min-height: [^;]+/)[0]);
+		const gap = px(rule(".stonetop-timeline-year").match(/margin: [^;]+/)[0]);
+		expect(AGE_YEAR_PITCH_REM.down).toBe(floor + gap);
+	});
+
+	it("gives a long-named Age years in between, round in the years as the world calls them", () => {
+		const age = { from: -9999, to: -6001, name: "The Time of the Barrow Builders" };
+		const years = ageFillYears(age, { pitch: AGE_YEAR_PITCH_REM.down, start: 1249 });
+		expect(years.length).toBeGreaterThan(0);
+		for (const year of years) {
+			expect(year).toBeGreaterThan(age.from);
+			expect(year).toBeLessThan(age.to);
+			expect(Math.abs((year + 1248) % 100)).toBe(0);
+		}
+		expect(ageMarkYears([age], { pitch: AGE_YEAR_PITCH_REM.down, start: 1249 })).toEqual([-9999, ...years.sort((a, b) => a - b), -6001]);
+	});
+
+	it("gives none where its own years carry the name, more as the type grows, and a running Age to the clock", () => {
+		const age = { from: -40, to: -20, name: "Short" };
+		expect(ageFillYears(age, { pitch: AGE_YEAR_PITCH_REM.across })).toEqual([]);
+		const long = { from: -400, to: null, name: "The Time of the Barrow Builders" };
+		const small = ageFillYears(long, { pitch: AGE_YEAR_PITCH_REM.down, nowYear: 1 });
+		const big = ageFillYears(long, { pitch: AGE_YEAR_PITCH_REM.down, nowYear: 1, fontScale: 2 });
+		expect(big.length).toBeGreaterThan(small.length);
+		for (const year of big) expect(year > -400 && year < 1).toBe(true);
+		expect(ageFillYears({ from: 1, to: 2, name: "x".repeat(60) }, { pitch: 1 })).toEqual([]);
 	});
 
 	it("gives a single thread a bare year that opens a year and takes no side", () => {

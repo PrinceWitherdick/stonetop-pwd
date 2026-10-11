@@ -3040,17 +3040,17 @@
       },
       "ages": {
         "open": "Ages",
-        "openTooltip": "Name runs of years as Ages, drawn as bands along the timeline for everyone in this world",
+        "openTooltip": "Name the long stretches of the world's history as Ages, drawn as bands along the timeline for everyone in this world",
         "title": "Timeline Ages",
-        "intro": "An Age is a named run of years, like the Age of Embers. Each one is drawn as a coloured band under its years on the timeline, for everyone at the table. Leave the last year blank for an Age that is still going.",
+        "intro": "An Age is a long stretch of the world's history, like the Time of the Makers or the Current Age. Book II names the world's Ages (Appendix A) but gives them no years, so where each one starts and ends is your table's call. Each Age is drawn as a coloured band under its years on the timeline, for everyone at the table. Leave the last year blank for an Age that is still going, as the Current Age is.",
         "name": "Name",
-        "namePlaceholder": "The Age of Embers",
+        "namePlaceholder": "The Current Age",
         "from": "First year",
         "to": "Last year",
         "toPlaceholder": "Still going",
         "colour": "Colour",
         "remove": "Delete this Age",
-        "none": "No Ages yet. Add one to name a run of years.",
+        "none": "No Ages yet. Add one to name a stretch of the world's history.",
         "add": "Add an Age",
         "save": "Save Ages",
         "cancel": "Cancel",
@@ -3061,6 +3061,33 @@
         },
         "ongoing": "now",
         "band": "{name}: {from} to {to}",
+        "bandWhen": "{name}: {when}",
+        "book": {
+          "primordial": {
+            "name": "The Primordial Age",
+            "when": "Eons ago, over a span beyond reckoning"
+          },
+          "makers": {
+            "name": "The Time of the Makers",
+            "when": "Millennia ago, over a span of centuries (at least)"
+          },
+          "cataclysm": {
+            "name": "The Time of Cataclysm",
+            "when": "Centuries ago, over a span of decades"
+          },
+          "barrowBuilders": {
+            "name": "The Time of the Barrow Builders",
+            "when": "Centuries ago, over a span of generations"
+          },
+          "current": {
+            "name": "The Current Age",
+            "when": "Starting a few centuries ago"
+          },
+          "recentMemory": {
+            "name": "Recent memory",
+            "when": "The last decade or so"
+          }
+        },
         "show": "Ages",
         "stripLabel": "Ages"
       },

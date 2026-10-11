@@ -31,6 +31,7 @@
 {{#if startsYear}}
 <li class="stonetop-timeline-hyear" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}>
 	<h2 class="stonetop-timeline-hyear-node">{{> stonetop.timeline-year-chip}}</h2>
+	{{#if ageRoom}}<span class="stonetop-timeline-age-room" aria-hidden="true" style="--age-room-share: {{ageRoomShare}};">{{ageRoom}}</span>{{/if}}
 </li>
 {{/if}}
 {{#unless ageMark}}

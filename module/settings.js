@@ -1761,6 +1761,15 @@ export function registerSettings() {
 		default: 0,
 	});
 
+	// WHETHER THE BOOK'S AGES HAVE BEEN ADDED to this world (timeline/timeline-book-ages.js). Once
+	// only, so an Age of the book's that the GM deletes stays deleted.
+	game.settings.register(SYSTEM_ID, "timelineBookAgesAdded", {
+		scope: "world",
+		config: false,
+		type: Boolean,
+		default: false,
+	});
+
 	// WHETHER THIS READER SEES THE AGES' BANDS. Per client, from the Filter menu: the bands lie over
 	// the timeline's foot, and a reader who wants every pixel of it back can have it.
 	game.settings.register(SYSTEM_ID, "timelineShowAges", {
@@ -2278,10 +2287,21 @@ export function applySheetFont(value) {
 	document.documentElement.style.setProperty("--st-caps-nudge", _FONT_CAPS_NUDGE[key]);
 }
 
-export function applySheetFontScale(value) {
+// A stored font scale as it is drawn: a positive number, or 1 (as drawn). The one sanitizer, so the
+// CSS variable and a reader sizing text in JS (getSheetFontScale) cannot disagree on a bad value.
+function _safeFontScale(value) {
 	const scale = Number(value);
-	const safe  = Number.isFinite(scale) && scale > 0 ? scale : 1;
-	document.documentElement.style.setProperty("--stonetop-font-scale", String(safe));
+	return Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
+/** This reader's sheet font scale (1 = as drawn), what `--stonetop-font-scale` is set from. */
+export function getSheetFontScale() {
+	try { return _safeFontScale(globalThis.game?.settings?.get?.(SYSTEM_ID, "sheetFontScale")); }
+	catch (_) { return 1; }
+}
+
+export function applySheetFontScale(value) {
+	document.documentElement.style.setProperty("--stonetop-font-scale", String(_safeFontScale(value)));
 }
 
 export function applyEditPencilRevealDelay(value) {
@@ -2602,6 +2622,16 @@ export function setTimelineAgeColourSeq(seq) {
 	const next = Math.trunc(Number(seq));
 	if (!Number.isFinite(next) || next <= getTimelineAgeColourSeq()) return null;
 	return globalThis.game?.settings?.set?.(SYSTEM_ID, "timelineAgeColourSeq", next);
+}
+
+/** Have the book's Ages been added to this world yet (timeline/timeline-book-ages.js)? */
+export function getTimelineBookAgesAdded() {
+	return getBooleanSetting("timelineBookAgesAdded", false);
+}
+
+/** Mark the book's Ages added, for good. World-scoped: only a GM's write is accepted. */
+export function setTimelineBookAgesAdded() {
+	return globalThis.game?.settings?.set?.(SYSTEM_ID, "timelineBookAgesAdded", true);
 }
 
 /** Does this reader see the Ages' bands? On unless they turned them off. */

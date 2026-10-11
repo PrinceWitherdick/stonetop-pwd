@@ -54,6 +54,7 @@ import { findVisibleJournal, SETTING_OVERVIEW_JOURNAL } from "../utils/seeded-jo
 import { getStonetopSteadingActor, getStonetopSteadingActorOrWarn } from "../utils/world.js";
 import { nextSeasonStamp, readCurrentSeason, readCurrentYear } from "../seasons/current-season.js";
 import { installCampaignYearSync, openCampaignYearDialog } from "../seasons/campaign-year-dialog.js";
+import { addBookAgesOnce } from "../timeline/timeline-book-ages.js";
 import { rollMoveFromUuid } from "./HotbarDrop.js";
 import { ensureThreatsEntry } from "../threats/threat-store.js";
 import { ensureHazardsEntry } from "../hazards/hazard-store.js";
@@ -488,6 +489,8 @@ export async function onReady() {
 	// Every client repaints its sheets when the GM renames the years; the primary GM renames the
 	// Seasons Change journal's year pages to match.
 	installCampaignYearSync();
+	// Book II's Ages of the World on the timeline, once per world (timeline/timeline-book-ages.js).
+	addBookAgesOnce();
 	// Compile the recorded Introductions + Spring Burst answers into the shared
 	// "Chronicle" journal and open it (GM-only). Callable from the Introductions
 	// dialog's "Let spring break forth!" finish, the Expedition dialog, a macro, or

@@ -261,7 +261,7 @@
 				<div class="stonetop-timeline-swim" style="--timeline-swim-cols: 15rem{{#each timeline.periods}}{{#if startsYear}} auto{{/if}}{{#unless ageMark}} minmax(min-content, 1fr){{/unless}}{{/each}};">
 					{{#each timeline.periods}}
 					{{#if startsYear}}
-					<h2 class="stonetop-timeline-swim-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}>{{> stonetop.timeline-year-chip}}</h2>
+					<h2 class="stonetop-timeline-swim-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}>{{> stonetop.timeline-year-chip}}{{#if ageRoom}}<span class="stonetop-timeline-age-room" aria-hidden="true" style="--age-room-share: {{ageRoomShare}};">{{ageRoom}}</span>{{/if}}</h2>
 					{{/if}}
 					{{!-- An Age's bare year (timeline-view.js#withAgeMarks) is its separator alone. --}}
 					{{#unless ageMark}}
@@ -307,7 +307,7 @@
 
 					{{#each timeline.periods}}
 					{{#if startsYear}}
-					<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell">{{> stonetop.timeline-year-chip}}</span></h2>
+					<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell">{{> stonetop.timeline-year-chip}}</span>{{#if ageRoom}}<span class="stonetop-timeline-age-room" aria-hidden="true" style="--age-room-share: {{ageRoomShare}};">{{ageRoom}}</span>{{/if}}</h2>
 					{{/if}}
 					{{!-- An Age's bare year is its heading alone. --}}
 					{{#unless ageMark}}
@@ -339,7 +339,7 @@
 	</div>
 
 	{{!-- THE AGES (timeline/timeline-ages-band.js): a band per Age laid OVER the column, along its
-	      foot when the timeline runs across and down its right edge when it runs down, each moved
+	      foot when the timeline runs across and down its left edge when it runs down, each moved
 	      under the years it covers as the column scrolls and zooms. In the column's own grid cell, so
 	      it covers the timeline without being part of what scrolls. Every band opens `data-off`
 	      until it is first placed. A GM presses one to edit its Age; a player reads its years off

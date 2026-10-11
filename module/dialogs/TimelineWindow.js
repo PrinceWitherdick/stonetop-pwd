@@ -48,7 +48,7 @@ import {
 } from "../timeline/timeline-core.js";
 import { SYSTEM_ID } from "../system-id.js";
 import {
-	getTimelineAges, getTimelineHiddenSources, getTimelineHiddenTracks, getTimelineOrientation, getTimelineShowAges,
+	getSheetFontScale, getTimelineAges, getTimelineHiddenSources, getTimelineHiddenTracks, getTimelineOrientation, getTimelineShowAges,
 	getTimelineThreadsChosen, isTimelineShown, refuseHiddenFeature,
 	setTimelineHiddenSources, setTimelineHiddenTracks, setTimelineOrientation, setTimelineShowAges, setTimelineThreadsChosen,
 } from "../settings.js";
@@ -56,7 +56,7 @@ import {
 	buildAggregateVM, buildTrackVM, defaultHiddenTracks, enrichTrackVM, kindMenu, threadMenu,
 } from "../timeline/timeline-view.js";
 import { timelineNow } from "../timeline/timeline-record.js";
-import { START_YEAR_CHANGED_HOOK } from "../seasons/campaign-year.js";
+import { START_YEAR_CHANGED_HOOK, startYear } from "../seasons/campaign-year.js";
 import { worldCustomTags } from "../timeline/timeline-tag-store.js";
 import { TimelineColoursDraft } from "../timeline/timeline-colours-menu.js";
 import { TIMELINE_TAGS_FLAG } from "../timeline/timeline-tags.js";
@@ -65,7 +65,7 @@ import { SCRUB_MAX, scrubTicks, wireYearScrubber, yearStops } from "../timeline/
 import { fitMenuToTimeline } from "../timeline/timeline-menu-room.js";
 import { wireToolbarWrap } from "../timeline/timeline-toolbar-wrap.js";
 import { onPaletteChange } from "../utils/palette.js";
-import { AGES_CHANGED_HOOK, ageMarkYears, ageStrip } from "../timeline/timeline-ages.js";
+import { AGES_CHANGED_HOOK, AGE_YEAR_PITCH_REM, ageMarkYears, ageStrip } from "../timeline/timeline-ages.js";
 import { wireAgeBands } from "../timeline/timeline-ages-band.js";
 import { customTagStyle } from "../timeline/timeline-tags.js";
 import { yearLabel } from "../seasons/seasons-chronicle.js";
@@ -361,13 +361,19 @@ export class TimelineWindow extends StonetopDialog {
 		// Age has a band to draw.
 		const worldAges = getTimelineAges();
 		const showAges = getTimelineShowAges();
-		const ageYears = showAges ? ageMarkYears(worldAges) : [];
+		// Each Age given years in between where its own are too few to carry its name along this
+		// layout's axis (timeline-ages.js#ageFillYears).
+		const ageYears = showAges ? ageMarkYears(worldAges, {
+			pitch: horizontal ? AGE_YEAR_PITCH_REM.across : AGE_YEAR_PITCH_REM.down,
+			fontScale: getSheetFontScale(), nowYear: now.year, start: startYear(),
+		}) : [];
+		const drawnAges = showAges ? worldAges : [];
 		const vm = single
 			? buildTrackVM(tracks[0], {
-				canEdit: this._canEdit(this._trackId), hidden, tags, ageYears, ghostNow: now,
+				canEdit: this._canEdit(this._trackId), hidden, tags, ageYears, ages: drawnAges, ghostNow: now,
 				steading: steadingNotesFor(this._trackId, id => this._canEdit(id)),
 			})
-			: buildAggregateVM(tracks, { canEdit: (id) => this._canEdit(id), hidden, hiddenTracks, tags, ageYears, ghostNow: now });
+			: buildAggregateVM(tracks, { canEdit: (id) => this._canEdit(id), hidden, hiddenTracks, tags, ageYears, ages: drawnAges, ghostNow: now });
 		const hiddenCount = hidden.length + hiddenTracks.length + (worldAges.length && !showAges ? 1 : 0);
 
 		// Enriched after the model is built rather than inside it, and by the shared walker rather
@@ -417,7 +423,7 @@ export class TimelineWindow extends StonetopDialog {
 
 	/**
 	 * The Ages' strip as the template draws it: the Ages with a year on screen, each in its row, named
-	 * with its years for the tooltip. Null when none has a year shown.
+	 * with its years for the tooltip (a book Age with its words). Null when none has a year shown.
 	 */
 	_ageStrip(worldAges, stops) {
 		const { bands, rows } = ageStrip(worldAges, stops);
@@ -432,11 +438,14 @@ export class TimelineWindow extends StonetopDialog {
 				last: band.last,
 				row: band.row,
 				style: customTagStyle(band.colour),
-				tooltip: format("stonetop.timeline.ages.band", {
-					name: band.name,
-					from: yearLabel(band.from),
-					to: band.to === null ? ongoing : yearLabel(band.to),
-				}),
+				// A book Age says when it was in the book's words; its years only place it.
+				tooltip: band.when
+					? format("stonetop.timeline.ages.bandWhen", { name: band.name, when: band.when })
+					: format("stonetop.timeline.ages.band", {
+						name: band.name,
+						from: yearLabel(band.from),
+						to: band.to === null ? ongoing : yearLabel(band.to),
+					}),
 			})),
 		};
 	}
