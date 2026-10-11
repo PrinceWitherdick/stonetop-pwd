@@ -8,8 +8,29 @@ import { readCss, readRepo } from "../fakes/css.js";
 
 const {
 	SCRUB_MAX, yearStops, scrubTicks, centredScroll, pictureRect, scrollForValue, valueForScroll,
-	tickShares, nearestStop, wireYearScrubber,
+	tickShares, nearestStop, wireYearScrubber, stopForYear,
 } = await import("../../module/timeline/timeline-scrub.js");
+
+describe("stopForYear (where a timeline opens)", () => {
+	const stops = [-9999, -400, 1, 2, 5].map(year => ({ year, label: String(year) }));
+
+	it("is the clock's year when it is drawn", () => {
+		expect(stopForYear(stops, 2)).toBe(3);
+	});
+
+	it("is the latest year before it when the clock's year is not drawn, the first when none is", () => {
+		expect(stopForYear(stops, 4)).toBe(3);
+		expect(stopForYear(stops, 99)).toBe(4);
+		expect(stopForYear(stops, -99999)).toBe(0);
+		expect(stopForYear([], 1)).toBe(-1);
+	});
+
+	it("is what a window the reader has not moved about opens on", () => {
+		const src = readRepo("module/dialogs/TimelineWindow.js");
+		expect(src).toContain("if (!this._lastView) this._openOnNow(scroll);");
+		expect(src).toContain("scrubToYear(scroll, this._scrubStops, timelineNow().year");
+	});
+});
 
 describe("yearStops", () => {
 	it("gives one stop per year, oldest first, and none for the undated block", () => {

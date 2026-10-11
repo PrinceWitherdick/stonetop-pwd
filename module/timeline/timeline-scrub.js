@@ -296,6 +296,35 @@ export function yearTargets(scroll, stops, { horizontal, inset = 0 } = {}) {
 export function scrubTo(scroll, stops, value, { horizontal, picture = null, inset = 0, targets = null } = {}) {
 	const main = scrollForValue(targets ?? yearTargets(scroll, stops, { horizontal, inset }), value);
 	if (main === null) return false;
+	return placeColumn(scroll, main, { horizontal, picture, inset });
+}
+
+/**
+ * The year a reader opening the timeline is shown (user, 2026-10-11: "default to focusing on the
+ * current time"): the clock's year, else the latest one before it, else the first. -1 for none.
+ */
+export function stopForYear(stops = [], year) {
+	let at = -1;
+	stops.forEach((stop, index) => { if (stop.year <= year) at = index; });
+	return stops.length ? Math.max(0, at) : -1;
+}
+
+/**
+ * Centre the column on `year` (`stopForYear`), and the timeline the other way as `scrubTo` does. The
+ * scrubber follows any scroll, so its thumb comes with it.
+ *
+ * @returns {boolean}  Whether it moved: false with no year drawn to centre on.
+ */
+export function scrubToYear(scroll, stops, year, { horizontal, picture = null, inset = 0 } = {}) {
+	const index = stopForYear(stops, year);
+	if (index < 0) return false;
+	const main = yearTargets(scroll, stops, { horizontal, inset })[index];
+	if (main === null || main === undefined) return false;
+	return placeColumn(scroll, main, { horizontal, picture, inset });
+}
+
+/** Put the column at `main` along the axis, and the timeline in the middle across it. */
+function placeColumn(scroll, main, { horizontal, picture = null, inset = 0 }) {
 	const view = viewRect(scroll);
 	const whole = pictureRect(picture);
 	const across = !whole ? null : horizontal

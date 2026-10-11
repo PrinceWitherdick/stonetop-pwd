@@ -61,7 +61,7 @@ import { worldCustomTags } from "../timeline/timeline-tag-store.js";
 import { TimelineColoursDraft } from "../timeline/timeline-colours-menu.js";
 import { TIMELINE_TAGS_FLAG } from "../timeline/timeline-tags.js";
 import { FINE_ZOOM_STEP } from "../utils/image-zoom.js";
-import { SCRUB_MAX, scrubTicks, wireYearScrubber, yearStops } from "../timeline/timeline-scrub.js";
+import { SCRUB_MAX, scrubTicks, scrubToYear, wireYearScrubber, yearStops } from "../timeline/timeline-scrub.js";
 import { fitMenuToTimeline } from "../timeline/timeline-menu-room.js";
 import { wireToolbarWrap } from "../timeline/timeline-toolbar-wrap.js";
 import { onPaletteChange } from "../utils/palette.js";
@@ -270,11 +270,36 @@ export class TimelineWindow extends StonetopDialog {
 		}
 		if (view) this._lastView = { ...view };
 		await super._render(force, options);
-		const scroll = view ? this._scrollColumn() : null;
+		const scroll = this._scrollColumn();
 		if (!scroll) return;
+		if (!view) {
+			// No place of the reader's own yet: open on now.
+			if (!this._lastView) this._openOnNow(scroll);
+			return;
+		}
 		const { x, y } = this._gutterOf(scroll);
 		if (Number.isFinite(view.left)) scroll.scrollLeft = x + view.left;
 		if (Number.isFinite(view.top)) scroll.scrollTop = y + view.top;
+	}
+
+	/**
+	 * A timeline the reader has not yet moved about opens on the present (user, 2026-10-11: "default
+	 * to focusing on the current time if the player has yet to focus on something else"), not on its
+	 * oldest year, which with the book's Ages is ten thousand years back. Their own place wins from the
+	 * first scroll on: `_lastView` is set by it (`_noteView`), and by a reload's `view`, and every
+	 * repaint after keeps the column where it stands (StonetopDialog#_keptScrollSelector).
+	 *
+	 * A column not on screen (a sheet tab the reader is not on) is left for its next render.
+	 */
+	_openOnNow(scroll) {
+		if (!isDrawn(scroll)) return;
+		const placed = scrubToYear(scroll, this._scrubStops, timelineNow().year, {
+			horizontal: getTimelineOrientation() === "horizontal",
+			picture: scroll.querySelector(".stonetop-timeline-canvas > *"),
+			// As the scrubber's (`activateListeners`).
+			inset: 12,
+		});
+		if (placed) this._noteView(scroll);
 	}
 
 	// ── reading ────────────────────────────────────────────────────────────────

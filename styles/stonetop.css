@@ -50665,6 +50665,15 @@ html.stonetop-high-contrast .stonetop-timeline-ages {
 	gap: 10px;
 }
 
+/* A READING WIDTH (user, 2026-10-11: "way wider than necessary"). Read down, a thread is exactly
+   the column's width, and a card is a block, so every card stretched to the window's far side however
+   short its words. The whole spine stops at a comfortable line length instead, so a longer note wraps
+   there and a year's red rule ends where the cards do. A maximum only: a narrow window or a big zoom
+   still fits it. The aggregate has no spine, so its lanes keep their width. */
+.stonetop-timeline-spine {
+	max-width: calc(38rem * var(--stonetop-font-scale, 1));
+}
+
 /* -- One entry ----------------------------------------------------------------- */
 
 .stonetop-timeline-card {
