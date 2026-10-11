@@ -106,7 +106,11 @@ describe("the two follower controls core would stretch", () => {
 		expect(decls).toBeTruthy();
 		expect(decls).toMatch(/justify-self:\s*start/);
 		// justify-self means nothing to a width:100% box: it fills the area wherever it is put.
-		expect(decls).toMatch(/width:\s*auto/);
+		// Its `width: auto` comes from the shared inline-button rule, through the class it carries.
+		expect(TAB).toMatch(/<button[^>]*class="stonetop-follower-gear-add stonetop-inline-btn"/);
+		expect(declarations(CSS, ":where(.stonetop-inline-btn, .stonetop-follower-order, .stonetop-daagon-btn)"))
+			.toMatch(/width:\s*auto/);
+		expect(decls).not.toMatch(/(?:^|[;{\s])width:/);
 	});
 });
 

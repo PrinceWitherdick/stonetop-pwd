@@ -12542,12 +12542,12 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 /* The way back from crossing off "Would-be" by mistake (actor-header.hbs). Edit mode alone: a hero who
    meant it should not carry an undo beside their name at the table. Two classes, because the shared
    `.stonetop-inline-btn` sets its display later in this file. On the big name's baseline, like the
-   retired playbook above, and `width: auto` against core's full-width buttons. */
+   retired playbook above; the shared :where(.stonetop-inline-btn) rule's `width: auto` keeps it off
+   core's full-width buttons. */
 .stonetop-playbook-row .stonetop-would-be-restore {
 	display: none;
 	align-self: flex-end;
 	flex: none;
-	width: auto;
 	margin-bottom: 4px;
 	font-size: var(--st-fs-sm);
 	white-space: nowrap;
@@ -26462,7 +26462,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
    so the shared chrome lives here and they override only the three colour declarations. */
 .stonetop-follower-order,
 .stonetop-daagon-btn {
-	display: inline-flex;          /* V13 core sets button{display:flex}; keep it from stretching */
+	display: inline-flex;          /* V13 core sets button{display:flex}; its width is the :where(.stonetop-inline-btn, …) rule's */
 	align-items: center;
 	gap: 6px;
 	padding: 3px 12px;
@@ -26665,15 +26665,12 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	min-width: var(--st-pip-track);
 	width: max-content;
 }
-/* Pay cost (Strengthen Your Bond) sits in the Loyalty row too; without this it took core's
-   full-width button and claimed a line of its own, pushing Spend under it. */
+/* The row's buttons, Pay cost (Strengthen Your Bond) included, sized to their labels by the shared
+   :where(.stonetop-inline-btn) rule and kept tight here. */
 .stonetop-follower-loyalty-row .stonetop-pay-cost,
 .stonetop-follower-loyalty-row .stonetop-spend-loyalty,
 .stonetop-follower-readiness-row .stonetop-spend-readiness {
 	margin-left: 0;
-	flex: 0 0 auto;
-	width: max-content !important;
-	max-width: max-content;
 	/* Tighter than .stonetop-inline-btn's 8px / 4px so Spend keeps its line on a narrow card. */
 	padding-left: 5px;
 	padding-right: 5px;
@@ -26785,13 +26782,6 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
    and the button sat on the card's bottom edge. Padded with the body's own gutter (12px
    sides, 11px under) so it lines up with Order above and has the body's room below. */
 .stonetop-daagon-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; padding: 0 12px 11px; }
-/* Remove (a broke-free batch here, a fallen follower's red strip above) is a small inline
-   button in a wrapping flex row; left to core's full-width button it claimed a line of its own. */
-.stonetop-follower-remove {
-	flex: 0 0 auto;
-	width: max-content !important;
-	max-width: max-content;
-}
 /* Blue overrides only; the rest of the chrome is shared with .stonetop-follower-order. */
 .stonetop-daagon-btn {
 	border-color: var(--st-blue-border);
@@ -26865,8 +26855,8 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	background: var(--st-blue-bg);
 	color: var(--st-blue-text);
 }
-/* Core v13 makes app buttons full width; this one sits at the end of the dice row. */
-.stonetop-call-up-dialog .stonetop-cu-reroll { flex: none; width: auto; margin-left: auto; }
+/* Sized by the shared :where(.stonetop-inline-btn) rule; this one sits at the end of the dice row. */
+.stonetop-call-up-dialog .stonetop-cu-reroll { flex: none; margin-left: auto; }
 .stonetop-call-up-dialog .stonetop-cu-die-value { font-size: var(--st-fs-md); font-weight: 700; }
 .stonetop-call-up-dialog .stonetop-cu-die-label { font-size: 0.7em; color: var(--st-text-muted); }
 .stonetop-call-up-dialog .stonetop-cu-aspects { display: flex; flex-direction: column; gap: 6px; }
@@ -27766,13 +27756,12 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
    TWO fixes, and the second is the one that actually matters: core sets
    `body.game .app button { width: 100% }` (v13, unlayered-beating specificity 0,2,1), so this
    button enters the row asking for the FULL row width and is then flex-shrunk down to whatever is
-   left — which is why its text wrapped rather than the button simply being too wide. `width: auto`
-   makes it ask for its content instead, and `flex: none` stops the row shrinking it below that.
-   Its neighbours in this row already each carry their own version of this (the crop pip and the
-   delete button both pin an explicit px width for the same reason). */
+   left — which is why its text wrapped rather than the button simply being too wide. The shared
+   :where(.stonetop-inline-btn) rule's `width: auto` makes it ask for its content instead, and
+   `flex: none` here stops the row shrinking it below that (the shared rule lets buttons shrink).
+   Its neighbours in this row each pin an explicit px width. */
 .stonetop-crew-name-member {
 	flex: none;
-	width: auto;
 	white-space: nowrap;
 }
 
@@ -28544,15 +28533,14 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 	line-height: 1;
 }
 
-/* `width: auto` is what makes `justify-self: start` mean anything: core's
-   `body.game .app button { width: 100% }` fills the whole 1 / -1 grid area no matter
-   where the box is placed in it, so this small "add a row" affordance was drawing as a
-   full-width bar the size of the card's Order button. See
+/* `justify-self: start` means something only because the shared :where(.stonetop-inline-btn)
+   rule sets `width: auto`: core's `body.game .app button { width: 100% }` fills the whole
+   1 / -1 grid area no matter where the box is placed in it, so this small "add a row"
+   affordance drew as a full-width bar the size of the card's Order button. See
    [[reference_app-button-core-width-100]]. */
 .stonetop-follower-gear-add {
 	grid-column: 1 / -1;
 	justify-self: start;
-	width: auto;
 	margin-top: 2px;
 }
 
@@ -28637,6 +28625,20 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 	font-size: var(--st-fs-xs);
 	cursor: pointer;
 	font-family: var(--font-stonetop);
+}
+/* Sized to its label, as are a follower's Order (and Clash / Let Fly) and the Ring of Daagon's
+   buttons; their own rule's inline-flex does not do it alone. Core gives every AppV1 button
+   `width: 100%`, and in a flex row that width is the button's basis, so each of these claimed a
+   line of its own; that was patched one button at a time (Pay cost, Remove, Spend). Core's rule is
+   layered, so this beats it at any specificity, and `:where()` keeps it at none: a button that pins
+   its own width (the crew steppers, the gear remove) or its own flex still does.
+   No `max-width`: it outranks even an `!important` width, so it squeezed those pinned px squares
+   down to their icon. And it may SHRINK (0 1, not 0 0): in a wrapping row it moves to the next line
+   long before that, but in a row that cannot wrap (a named crew member's "Order {name}") wrapping
+   its own label is what keeps it inside the card instead of clipped by the card's overflow. */
+:where(.stonetop-inline-btn, .stonetop-follower-order, .stonetop-daagon-btn) {
+	flex: 0 1 auto;
+	width: auto;
 }
 
 .stonetop-inline-btn:hover { background: var(--st-on-dark-raised, hsl(210 10% 92%)); }

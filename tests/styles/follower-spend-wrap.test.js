@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readCss, declarations, ownRule } from "../fakes/css.js";
+import { readCss, readRepo, declarations, ownRule } from "../fakes/css.js";
 
 /**
  * A follower's Loyalty and Readiness rows, and the Spend button at the end of each.
@@ -102,18 +102,35 @@ describe("a follower's Loyalty / Readiness row", () => {
 		}
 	});
 
-	it("sizes Pay cost to its content, so it does not take core's full-width button", () => {
-		// Left to core's `button { width: 100% }` it claimed a whole line of the Loyalty row
-		// and pushed Spend under it.
-		const d = declarations(CSS, ".stonetop-follower-loyalty-row .stonetop-pay-cost");
-		expect(d).toMatch(/width:\s*max-content\s*!important/);
-		expect(d).toMatch(/flex:\s*0\s+0\s+auto/);
+	// Left to core's `button { width: 100% }`, Pay cost claimed a whole line of the Loyalty row
+	// and pushed Spend under it, and Remove, Hand off, Order and every other inline action took a
+	// line of their own. One rule sizes them all; it is `:where()`, so a button that pins its own
+	// width (the crew steppers, the gear remove) still wins over it.
+	const SHARED = ":where(.stonetop-inline-btn, .stonetop-follower-order, .stonetop-daagon-btn)";
+
+	it("sizes every inline action, Order and the Daagon buttons to their labels, at no specificity", () => {
+		const d = declarations(CSS, SHARED);
+		expect(d).toMatch(/width:\s*auto/);
+		// May shrink: a named crew member's "Order {name}" sits in a row that cannot wrap, and
+		// wrapping its own label is what keeps it inside the card.
+		expect(d).toMatch(/flex:\s*0\s+1\s+auto/);
 	});
 
-	it("sizes the follower Remove button to its content in its wrapping flex rows", () => {
-		const d = declarations(CSS, ".stonetop-follower-remove");
-		expect(d).toMatch(/width:\s*max-content\s*!important/);
-		expect(d).toMatch(/flex:\s*0\s+0\s+auto/);
+	it("sets no max-width, which would beat the crew steppers' and gear remove's pinned !important widths", () => {
+		// max-width outranks width even when width is !important, so `max-width: max-content`
+		// shrank those px squares down to their one icon.
+		expect(declarations(CSS, SHARED)).not.toMatch(/max-width/);
+	});
+
+	it("reaches Pay cost, both Spends and every Remove through the class the shared rule names", () => {
+		// The row rules no longer size these buttons themselves, so dropping the class from the
+		// template would bring core's full width back and push Spend under Pay cost again.
+		const hbs = readRepo("templates/actor/partials/tab-followers.hbs");
+		for (const cls of ["stonetop-pay-cost", "stonetop-spend-loyalty", "stonetop-spend-readiness", "stonetop-follower-remove"]) {
+			const buttons = [...hbs.matchAll(new RegExp(`<button[^>]*class="[^"]*\\b${cls}\\b[^"]*"`, "g"))].map(m => m[0]);
+			expect(buttons.length, cls).toBeGreaterThan(0);
+			for (const b of buttons) expect(b, cls).toMatch(/\bstonetop-inline-btn\b/);
+		}
 	});
 
 	it("is not governed by a px container query, which no single number could get right", () => {
