@@ -1,5 +1,6 @@
-import { escHtml, sign } from "../../utils/strings.js";
-import { openDebilityPicker, openDisasterPicker, disasterFortunes, disasterOwedFlags } from "./steading-debilities.js";
+import { escHtml, sign, signed } from "../../utils/strings.js";
+import { parseSeasonStamp } from "../../seasons/campaign-year.js";
+import { openDebilityPicker, openDisasterPicker, disasterFortunes, disasterOwedFlags, noteShortfallOnTimeline } from "./steading-debilities.js";
 
 // ── Winter's second bite (Book I, "Seasons Change": winter) ──────────────────────
 // "7-9: the steading must consume 1d4+Population more Surplus before winter ends, or suffer
@@ -95,7 +96,7 @@ export function winterConsequencesHtml() {
  * @returns {{fortunes: number, population: number|null, disaster: boolean}} what it wrote, and
  *   whether the Meet with Disaster pick is still owed
  */
-export async function applyWinterShortfall(steading, consequenceId, { stonetopMove = WINTER_DEBT_MOVE, alsoFlags = {} } = {}) {
+export async function applyWinterShortfall(steading, consequenceId, { stonetopMove = WINTER_DEBT_MOVE, alsoFlags = {}, season = null } = {}) {
 	const { fortunes, disaster } = disasterFortunes(steading.getStatValue("fortunes"));
 	const population = consequenceId === "population"
 		? Math.max(steading.getStatValue("population") - 1, -1)
@@ -106,8 +107,9 @@ export async function applyWinterShortfall(steading, consequenceId, { stonetopMo
 			...(disaster ? {} : { "stats.fortunes.value": fortunes }),
 			...(population === null ? {} : { "attributes.population.value": population }),
 		},
-		// At −1 the pick is owed from this write on, so a picker shut unpicked leaves a glyph.
-		flags: { ...alsoFlags, ...(disaster ? disasterOwedFlags("winter's shortfall") : {}) },
+		// At −1 the pick is owed from this write on, so a picker shut unpicked leaves a glyph, and
+		// it keeps the winter it is owed for (`season`), whose shortfall note the pick goes on.
+		flags: { ...alsoFlags, ...(disaster ? disasterOwedFlags("winter's shortfall", season) : {}) },
 	}, { stonetopMove });
 	return { fortunes, population, disaster };
 }
@@ -120,21 +122,47 @@ export function shortfallNotice({ fortunes, population, disaster }) {
 		: `Shortfall: Surplus to 0, Fortunes to ${sign(fortunes)}${pop}.${population === null ? " Apply the narrative consequence." : ""}`;
 }
 
+/** The title of a winter's shortfall note on the timeline (timeline-season-entry.js). */
+export const WINTER_SHORTFALL_TITLE = "Winter's shortfall";
+
+/**
+ * What a shortfall did, as the winter's shortfall line on the timeline says it: the consequence
+ * picked, then what it cost. `late` for a debt refused (or unpayable) after winter ended.
+ */
+export function shortfallLine(consequenceId, { fortunes, population, disaster }, { late = false } = {}) {
+	const picked = WINTER_CONSEQUENCES.find(c => c.id === consequenceId)?.label ?? "";
+	const lead = late ? "Winter's debt went unpaid" : "The stores ran out";
+	const cost = [
+		"Surplus to 0",
+		population === null ? "" : `Population to ${signed(population)}`,
+		disaster ? "" : `Fortunes to ${signed(fortunes)}`,
+	].filter(Boolean).join(", ");
+	return `${lead}${picked ? `: ${picked}` : ""}. ${cost}.${disaster ? " Fortunes was already −1, so the steading Met with Disaster." : ""}`;
+}
+
 /**
  * The whole of a shortfall, as each window takes it: the write, the notice, and at Fortunes −1
  * the Meet with Disaster pick. No Cancel on that pick: the rule is not optional. A GM who closes
  * the window has only put it off: the write recorded the pick as owed, and the header glyph that
  * leaves behind reopens it (StonetopSteading#disasterOwed).
+ *
+ * `season` (`{seasonId, year}`, the WINTER it is owed for) puts it on that winter's shortfall
+ * line on the timeline, the disaster's pick with it (user, 2026-10-10). `late`: a debt settled
+ * after winter ended, which still belongs to that winter.
  */
-export async function sufferWinterShortfall(steading, consequenceId, { stonetopMove = WINTER_DEBT_MOVE, onApplied, alsoFlags } = {}) {
-	const out = await applyWinterShortfall(steading, consequenceId, { stonetopMove, alsoFlags });
+export async function sufferWinterShortfall(steading, consequenceId, { stonetopMove = WINTER_DEBT_MOVE, onApplied, alsoFlags, season = null, late = false } = {}) {
+	const where = season ? { ...season, title: WINTER_SHORTFALL_TITLE } : null;
+	const out = await applyWinterShortfall(steading, consequenceId, { stonetopMove, alsoFlags, season: where });
 	globalThis.ui?.notifications?.info?.(shortfallNotice(out));
+	if (where) await noteShortfallOnTimeline(where, shortfallLine(consequenceId, out, { late }));
 	if (out.disaster) {
 		openDisasterPicker(steading, {
 			introHtml: `<p><em>Winter's shortfall Meets with Disaster, and Fortunes cannot drop below −1.</em> The GM picks 1 instead:</p>`,
 			stonetopMove,
 			onApplied,
 			settlesOwed: true,
+			season: where,
+			cause: "winter's shortfall",
 		});
 	}
 	return out;
@@ -177,7 +205,10 @@ async function refuseWinterDebt(steading, stamp, consequenceId, { stonetopMove =
 		globalThis.ui?.notifications?.info?.(ALREADY_SETTLED);
 		return false;
 	}
-	await sufferWinterShortfall(steading, consequenceId, { stonetopMove, onApplied, alsoFlags: { winterDebt: null } });
+	await sufferWinterShortfall(steading, consequenceId, {
+		stonetopMove, onApplied, alsoFlags: { winterDebt: null },
+		season: parseSeasonStamp(stamp), late: true,
+	});
 	return true;
 }
 

@@ -1,7 +1,8 @@
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { escHtml } from "../../../utils/strings.js";
 import { TIER_LABELS } from "../../../utils/move-results.js";
-import { classifyResult, rollStat } from "../../../utils/roll-engine.js";
+import { classifyResult } from "../../../utils/roll-engine.js";
+import { promptRoll } from "../../../dialogs/RollDialog.js";
 import { format, localize } from "../../../utils/i18n.js";
 import { DEATHS_DOOR_STATE, FINAL_CONSEQUENCE, resolutionTier, resolvedHp } from "../deaths-door.js";
 import { gainableMarks, markableConsequences } from "../post-death-choices.js";
@@ -318,7 +319,8 @@ export class UndeathDialog extends StonetopDialog {
 		// _onFateFailed there): they roll their latch back and rethrow, and a click is fired and
 		// forgotten, so without one the rejection only reaches the console and the player is left
 		// looking at a window that appears to have ignored them.
-		html.find(".undeath-roll-btn").on("click", () => this._onRoll().catch(err => this._onApplyFailed(err)));
+		// Shift skips the pre-roll window, as it does on every other roll (RollDialog.js#promptRoll).
+		html.find(".undeath-roll-btn").on("click", (ev) => this._onRoll({ shiftKey: !!ev.shiftKey }).catch(err => this._onApplyFailed(err)));
 		html.find(".undeath-apply-btn").on("click", () => this._onApply().catch(err => this._onApplyFailed(err)));
 		html.find(".undeath-close-btn").on("click", () => this._onFinish());
 		html.find(".undeath-cancel-btn").on("click", () => this.close());
@@ -381,7 +383,7 @@ export class UndeathDialog extends StonetopDialog {
 		this._prunePicks();
 	}
 
-	async _onRoll() {
+	async _onRoll({ shiftKey = false } = {}) {
 		if (this._rolling) return;
 		this._rolling = true;
 		try {
@@ -394,12 +396,15 @@ export class UndeathDialog extends StonetopDialog {
 			// other roll of it.
 			const usesLore  = !!res.roll.loreCount;
 			const statValue = usesLore ? this._character.favor() : undefined;
-			const options   = usesLore
-				? { rollMode: "normal" }
-				: (this._character.applyDebilityRollMode?.(res.roll.stat, { rollMode: "normal" }) ?? { rollMode: "normal" });
 
-			const roll = await rollStat(usesLore ? "" : res.roll.stat, actor, {
-				...options,
+			// The pre-roll window every other roll gets, then the one path every direct roll takes
+			// (StonetopCharacter#onDirectStatRoll): the sticky mode or the window's, ongoing, what the next
+			// roll is owed (an Aid's advantage, +forward), and the debility a real stat brings. Aimed at nobody.
+			const prompted = await promptRoll({ title: this._moveName, shiftKey });
+			if (!prompted) return;
+			const roll = await this._character.onDirectStatRoll(usesLore ? "" : res.roll.stat, {
+				...prompted,
+				targets: [],
 				statValue,
 				moveName: this._moveName,
 				// Undying / Tethered / Dark Succor ARE Death's Door for a character who has already
@@ -408,6 +413,7 @@ export class UndeathDialog extends StonetopDialog {
 				noXpOnMiss: true,
 				moveDescription: `<p>${this._character.zeroHpMove.trigger}</p>`,
 			});
+			if (!roll) return;
 
 			this._rolledTotal = roll.total;
 			this._tierKey = classifyResult(roll.total).key;

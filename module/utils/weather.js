@@ -1,4 +1,5 @@
-import { stonetopCardShell, rollFormulaChip } from "./chat.js";
+import { stonetopCardShell, rollFormulaChip, whisperedAs } from "./chat.js";
+import { currentChatMode } from "./foundry-compat.js";
 import { fateDiceFormula } from "./die-of-fate.js";
 import { escHtml } from "./strings.js";
 
@@ -295,15 +296,13 @@ export async function postWeather(seasonKey, { row = null, roll = null, note = "
 
 	// A rolled result rides its own Roll message, so the dice are real ones the players can pick
 	// up and inspect; a chosen one has no roll to carry and goes out as a plain card. The roll
-	// mode reaches both — `toMessage` reads it for itself, and applyRollMode does the same job
+	// mode reaches both — `toMessage` reads it for itself, and chat.js#whisperedAs does the same job
 	// for the card, so a weather the GM chose while whispering is not the one thing in this
 	// window that goes out to the whole table anyway.
 	if (roll) {
 		await roll.toMessage({ speaker, flavor: card });
 	} else {
-		const data = { speaker, content: card };
-		ChatMessage.applyRollMode?.(data, game?.settings?.get?.("core", "rollMode"));
-		await ChatMessage.create(data);
+		await ChatMessage.create(whisperedAs({ speaker, content: card }, null, currentChatMode()));
 	}
 
 	return row;

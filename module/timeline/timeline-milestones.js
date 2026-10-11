@@ -16,9 +16,23 @@
 //   • A follower gained (a custom follower named, an animal companion named), or one breaking free.
 //     A follower's DEATH is recorded where it is decided (the fate dialog), not here: the companion
 //     and the initiates keep no stored record of dying for a diff to find.
+//   • DEEDS (user, 2026-10-10): a Would-Be Hero crossing off "Would-be", a Destined character's
+//     destiny fulfilled, a Judge's brand laid (Condemn) and an oath witnessed or broken (Binding
+//     Arbitration). Once each, and a brand lifted or an oath released leaves its row: it happened.
+//   • PAST THE LAST DOOR: a Terrible Purpose taken, a Consequence or a Mark marked, the master's task
+//     done. Each picked option once; its NAME is the insert's, looked up by the caller.
+//   • AN ARCANUM'S TRACK: its secrets unlocked, a Consequence box on its back marked. Read off the card's
+//     text, so the caller asks `arcanaTrackSlugs` which cards to look up and `detectArcanaTracks` the rest.
+//
+// UNDONE IS UNWRITTEN for the ones a mistaken click can make (`forget`): "Would-be" written back in, a
+// destiny unticked, an oath's broken tick taken off, an arcanum's box unticked. The caller takes those
+// rows back off by their key.
 //
 // EVERY MILESTONE CARRIES A KEY, so the same change seen twice -- two concurrent updates that both
 // started from the same snapshot, a GM correcting a level down and back up -- is one row.
+
+import { slugify } from "../utils/strings.js";
+import { coerceBroken } from "../actors/character/oath-broken.js";
 
 /** The update option a level-up sets to the move it learned (StonetopCharacter#applyLevelUp). */
 export const LEARNED_OPTION = "stonetopTimelineLearned";
@@ -29,7 +43,28 @@ export const LEVELUP_TITLE_KEY = "stonetop.timeline.milestone.levelup";
 
 /** The paths a milestone is read off. An update touching none of them is not looked at again. */
 const SYSTEM_PATHS = ["system.attributes.level", "system.attributes.wounds"];
-const FLAG_KEYS = ["deathsDoor", "postDeathInsert", "arcana", "customFollowers", "animalCompanion"];
+const FLAG_KEYS = [
+	"deathsDoor", "postDeathInsert", "postDeathLore", "arcana", "customFollowers", "animalCompanion",
+	"wbhBecameHero", "background", "condemned", "oaths",
+];
+
+/** The insert's lore sections whose picks are the story (never Favor, a track spent and refilled). */
+export const POST_DEATH_STORY_SECTIONS = ["terrible-purpose", "consequences", "marks"];
+
+/** The key a master's task done is kept under: one per task, by its words. */
+export function masterTaskKey(insert, task) {
+	return `postdeath:${insert}:task:${slugify(task).slice(0, 48)}`;
+}
+
+/** A standing list's rows (the Judge's brands and oaths), cut to what a milestone reads. */
+function rosterRows(raw, { broken = false } = {}) {
+	return (Array.isArray(raw) ? raw : [])
+		.filter(row => row && typeof row === "object" && row.id)
+		.map(row => ({
+			id: String(row.id), name: String(row.name ?? "").trim(), note: String(row.note ?? "").trim(),
+			...(broken ? { broken: coerceBroken(row.broken) } : {}),
+		}));
+}
 
 /**
  * Does an update touch anything a milestone is read off?
@@ -70,8 +105,18 @@ export function snapshotFrom({ system = {}, flags = {} } = {}) {
 		if (!card || typeof card !== "object") continue;
 		custom[id] = { name: String(card.name ?? "").trim(), dead: !!card.dead, brokenFree: !!card.brokenFree };
 	}
+	const lore = {};
+	for (const [key, count] of Object.entries(flags?.postDeathLore?.counts ?? {})) {
+		if (Number(count) > 0 && POST_DEATH_STORY_SECTIONS.includes(key.split(":")[0])) lore[key] = true;
+	}
 	return {
 		level:      Math.trunc(Number(system?.attributes?.level?.value) || 0),
+		hero:       flags?.wbhBecameHero === true,
+		destiny:    Number(flags?.background?.setupResources?.["destiny-fulfilled"]) > 0,
+		condemned:  rosterRows(flags?.condemned),
+		oaths:      rosterRows(flags?.oaths, { broken: true }),
+		lore,
+		task:       String(flags?.postDeathInsert?.task ?? "").trim(),
 		deathsDoor: flags?.deathsDoor ?? null,
 		insert:     flags?.postDeathInsert?.slug ?? null,
 		wounds:     (Array.isArray(system?.attributes?.wounds) ? system.attributes.wounds : []).map(w => ({
@@ -86,6 +131,9 @@ export function snapshotFrom({ system = {}, flags = {} } = {}) {
 			identified: slugs(flags?.arcana?.identified),
 			leads:      slugs(flags?.arcana?.leads),
 			major:      flags?.arcana?.major || null,
+			// The tracks an unlock and a Consequence are read off, by "slug:..." key (CharacterArcana).
+			unlock:     { ...(flags?.arcana?.unlock ?? {}) },
+			boxes:      { ...(flags?.arcana?.boxes ?? {}) },
 		},
 		followers: {
 			custom,
@@ -196,10 +244,113 @@ export function detectMilestones(before, after, { learned = "", markPlaceholder 
 		});
 	}
 
+	// Deeds. "Would-be" and the destiny can be put back (a mistaken tick), and then their row goes too.
+	const flip = (was, now, key, titleKey) => {
+		if (now && !was) out.push({ source: "deed", key, titleKey, data: {} });
+		if (was && !now) out.push({ forget: key });
+	};
+	flip(before.hero, after.hero, "deed:hero", "stonetop.timeline.milestone.becameHero");
+	flip(before.destiny, after.destiny, "deed:destiny", "stonetop.timeline.milestone.destinyFulfilled");
+
+	// A brand laid, an oath witnessed: once, with the reason written beside them. Lifting one does not
+	// unwrite it.
+	const branded = new Set((before.condemned ?? []).map(row => row.id));
+	for (const row of after.condemned ?? []) {
+		if (branded.has(row.id) || !row.name) continue;
+		out.push({ source: "deed", key: `condemn:${row.id}`, titleKey: "stonetop.timeline.milestone.condemned", data: { name: row.name }, body: row.note });
+	}
+	const sworn = new Map((before.oaths ?? []).map(row => [row.id, row]));
+	for (const row of after.oaths ?? []) {
+		const prior = sworn.get(row.id);
+		if (!prior && row.name) {
+			out.push({ source: "deed", key: `oath:${row.id}`, titleKey: "stonetop.timeline.milestone.oathWitnessed", data: { name: row.name }, body: row.note });
+		}
+		if (row.broken && !prior?.broken) {
+			out.push({ source: "deed", key: `oath:${row.id}:broken`, titleKey: "stonetop.timeline.milestone.oathBroken", data: { name: row.name || "" } });
+		}
+		if (prior?.broken && !row.broken) out.push({ forget: `oath:${row.id}:broken` });
+	}
+
+	// Past the Last Door: each story option newly marked on the insert being worn. Its printed name is
+	// the insert's, so the caller looks it up (`postDeath`).
+	const insert = after.insert ?? null;
+	if (insert && insert === before.insert) {
+		for (const key of Object.keys(after.lore ?? {})) {
+			if (before.lore?.[key]) continue;
+			const [section, option] = key.split(":");
+			out.push({ source: "death", key: `postdeath:${insert}:${key}`, postDeath: { insert, section, option } });
+		}
+		// The master's task done: the one way it is unset while the same insert is worn.
+		if (before.task && !after.task) {
+			out.push({
+				source: "death", key: masterTaskKey(insert, before.task),
+				titleKey: "stonetop.timeline.milestone.masterTaskDone", data: {}, body: before.task,
+			});
+		}
+	}
+
+	return out;
+}
+
+/**
+ * The cards whose unlock track or boxes this update touched, for the caller to look up before it asks
+ * `detectArcanaTracks`. Only cards the character owns: a lead's boxes are nobody's story yet.
+ */
+export function arcanaTrackSlugs(before, after) {
+	if (!before?.arcana || !after?.arcana) return [];
+	const owned = new Set(after.arcana.owned);
+	const touched = new Set();
+	for (const field of ["unlock", "boxes"]) {
+		const was = before.arcana[field] ?? {};
+		const now = after.arcana[field] ?? {};
+		for (const key of new Set([...Object.keys(was), ...Object.keys(now)])) {
+			if (!!was[key] !== !!now[key] || Number(was[key] ?? 0) !== Number(now[key] ?? 0)) touched.add(key.split(":")[0]);
+		}
+	}
+	return [...touched].filter(slug => owned.has(slug));
+}
+
+/**
+ * An arcanum's track, before and after: its secrets unlocked, and each box in the Consequences on its
+ * back newly marked (or unmarked, which takes its row back off). Pure; the card's two readings are
+ * handed in, since they need the card's text (CharacterArcana.js).
+ *
+ * @param {string} slug
+ * @param {object} before  snapshotFrom(...)
+ * @param {object} after   snapshotFrom(...)
+ * @param {object} reads
+ * @param {(unlock: object, boxes: object) => boolean} reads.unlocked  Is the card unlocked under these marks?
+ * @param {{from: number, to: number}|null} [reads.consequences]  Its back's Consequence boxes, by index.
+ * @param {(index: number) => string} [reads.consequenceLabel]  What the box at that index says.
+ */
+export function detectArcanaTracks(slug, before, after, { unlocked, consequences = null, consequenceLabel = () => "" } = {}) {
+	const out = [];
+	const was = unlocked(before.arcana.unlock, before.arcana.boxes);
+	const now = unlocked(after.arcana.unlock, after.arcana.boxes);
+	if (now && !was) out.push({ source: "arcana", key: `arcana:${slug}:unlocked`, titleKey: "stonetop.timeline.milestone.arcanaUnlocked", data: {}, arcanaSlug: slug });
+	if (was && !now) out.push({ forget: `arcana:${slug}:unlocked` });
+	if (consequences) {
+		for (let i = consequences.from; i < consequences.to; i++) {
+			const box = `${slug}:back:${i}`;
+			const key = `arcana:${slug}:consequence:${i}`;
+			if (after.arcana.boxes[box] && !before.arcana.boxes[box]) {
+				out.push({ source: "arcana", key, titleKey: "stonetop.timeline.milestone.arcanaConsequence", data: {}, arcanaSlug: slug, body: consequenceLabel(i) });
+			}
+			if (before.arcana.boxes[box] && !after.arcana.boxes[box]) out.push({ forget: key });
+		}
+	}
 	return out;
 }
 
 /** Milestones still worth writing while a character is being CREATED: the major arcanum only. */
 export function creationMilestones(milestones) {
 	return milestones.filter(m => m.key === "arcana:major");
+}
+
+/** The milestones to write, and the keys to take back off (`{forget}` entries), apart. */
+export function splitForgotten(found) {
+	return {
+		write:  found.filter(m => !m.forget),
+		forget: found.filter(m => m.forget).map(m => m.forget),
+	};
 }

@@ -37,9 +37,9 @@ export const defeatedStatusId = (config = globalThis.CONFIG) => config?.specialS
 
 /**
  * The hit points a committed diff wrote, or null when it did not touch them. Both spellings: a
- * sheet writes the dotted path, code building an update object writes the nested one.
+ * sheet writes the dotted path, code building an update object writes the nested one. PURE.
  */
-function writtenHp(changes = {}) {
+export function writtenHp(changes = {}) {
 	const nested = changes?.system?.attributes?.hp;
 	const raw = nested && typeof nested === "object" && "value" in nested
 		? nested.value

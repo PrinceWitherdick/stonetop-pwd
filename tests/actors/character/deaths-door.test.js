@@ -13,6 +13,7 @@ import {
 	deathsDoorRollOptions,
 	deathsDoorRollWatch,
 	effectiveDeathsDoorState,
+	hardToKillTradeOpen,
 	nextDeathsDoorState,
 	pastDeathClasses,
 	pastDeathKind,
@@ -429,9 +430,54 @@ describe("rolling Hard to Kill opens Death's Door instead", () => {
 		expect(globalThis.ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("not at Death's Door"));
 	});
 
+	// Audit DD-5: the 7-9's trade, once the Death's Door window that rolled it has gone (closed, or the GM's).
+	describe("Hard to Kill's 7-9 trade on the Death's Door card", () => {
+		beforeEach(() => { globalThis.ChatMessage = { create: vi.fn(async d => d), getSpeaker: () => ({}) }; });
+		afterEach(() => { delete globalThis.ChatMessage; });
+		const card = sheet => sheet._buildDeathsDoorData({ vitals: { hp: { value: 0, max: 20 } } });
+
+		it("offers each unmarked debility while the 7-9 left it open, and trades one for 1 HP", async () => {
+			const { sheet, char } = sheetFor({ hp: 0, state: DEATHS_DOOR_STATE.OUT_OF_ACTION });
+			expect(char.deathsDoorRollOptions().hardToKill).toBe(true);
+			await sheet.actor.setFlag("stonetop-pwd", "hardToKillTrade", true);
+
+			expect(card(sheet).hardToKillTrade.map(d => d.key)).toEqual(expect.arrayContaining(["weakened", "dazed", "miserable"]));
+
+			await sheet._onHardToKillTrade({ currentTarget: { dataset: { debility: "dazed" } } });
+
+			expect(sheet.actor.system.attributes.hp.value).toBe(1);
+			expect(sheet.actor.system.attributes.debilities.options.dazed.value).toBe(true);
+			expect(char.deathsDoorState).toBeNull();
+			expect(sheet.actor.getFlag("stonetop-pwd", "hardToKillTrade")).toBeFalsy();
+			expect(card(sheet).hardToKillTrade).toBeNull();
+		});
+
+		it("offers nothing out of the action that no 7-9 opened, and trades nothing from a stale card", async () => {
+			const { sheet } = sheetFor({ hp: 0, state: DEATHS_DOOR_STATE.OUT_OF_ACTION });
+			expect(card(sheet).hardToKillTrade).toBeNull();
+
+			await sheet._onHardToKillTrade({ currentTarget: { dataset: { debility: "dazed" } } });
+
+			expect(sheet.actor.system.attributes.hp.value).toBe(0);
+			expect(sheet.actor.system.attributes.debilities.options.dazed.value).toBe(false);
+		});
+	});
+
 	it("keeps no em dash in the move's own outcome lines", () => {
 		for (const tier of Object.values(sourceMovesFor("The Heavy").find(d => d.name === "Hard to Kill").system.moveResults)) {
 			expect(tier.value).not.toContain(String.fromCharCode(0x2014));
+		}
+	});
+});
+
+describe("hardToKillTradeOpen", () => {
+	it("is open only out of the action, latched by a 7-9, with Hard to Kill learned", () => {
+		const open = { state: DEATHS_DOOR_STATE.OUT_OF_ACTION, latched: true, hardToKill: true };
+		expect(hardToKillTradeOpen(open)).toBe(true);
+		expect(hardToKillTradeOpen({ ...open, latched: false })).toBe(false);
+		expect(hardToKillTradeOpen({ ...open, hardToKill: false })).toBe(false);
+		for (const state of [null, DEATHS_DOOR_STATE.DYING, DEATHS_DOOR_STATE.FATE_PENDING, DEATHS_DOOR_STATE.DEAD]) {
+			expect(hardToKillTradeOpen({ ...open, state }), String(state)).toBe(false);
 		}
 	});
 });

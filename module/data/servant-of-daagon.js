@@ -8,12 +8,40 @@
 // Foundry globals) so it unit-tests and is reused by CallUpDeepOnesDialog.
 
 import { buildCustomFollower, normalizeTags } from "./follower-build.js";
+import { arcanaSummon } from "./arcana-summons.js";
 
 // Stable identity markers shared with the arcana-summons registry: the Ring itself is
 // one follower, the Servants another. Call Up dedupes nothing (a fresh batch each time),
 // but the sheet uses these to link a Servant batch's Loyalty to the Ring's pool.
 export const RING_SOURCE_UUID    = "ring-of-daagon:the-ring";
 export const SERVANT_SOURCE_UUID = "ring-of-daagon:servant-of-daagon";
+// The Ring's arcanum slug: its summon is the one gated on the card's mysteries being unlocked
+// (its arcana-summons.js entry's `untilUnlocked`).
+export const RING_ARCANUM_SLUG   = "ring-of-daagon";
+
+/**
+ * The Ring of Daagon and its Servants share one Loyalty pool (Book II p.561). Find the Ring
+ * follower in a customFollowers map so a Servant batch's pips, Call Up and Send Them Back act on
+ * the Ring's track. Callers pass an in-hand map (getData) or a freshly read flag.
+ */
+export function findRingFollower(map = {}) {
+	const entry = Object.entries(map ?? {}).find(([, f]) => f?.sourceUuid === RING_SOURCE_UUID);
+	return {
+		id:      entry?.[0] ?? null,
+		name:    entry?.[1]?.name || "the Ring of Daagon",
+		loyalty: Math.max(0, Number(entry?.[1]?.loyalty) || 0),
+		hasRing: !!entry,
+	};
+}
+
+/**
+ * Whether an arcanum's "Add as follower" may manifest yet. A summon marked `untilUnlocked`
+ * (arcana-summons.js) waits on the card being unlocked: the Ring becomes a follower only "when you
+ * make the last mark" (Book II p.560). Every other summon is as it was.
+ */
+export function summonUnlocked(slug, unlocked) {
+	return !arcanaSummon(slug)?.untilUnlocked || !!unlocked;
+}
 
 // The five aspects, in the order the rulebook lists them. Each rolled d4 is assigned to
 // exactly one aspect; the assigned die's VALUE resolves that aspect.
@@ -69,7 +97,8 @@ export const SERVANT_TRAIT_OPTIONS = [
 ];
 
 // Moves aspect: the assigned die is HOW MANY of these to choose. The book's words
-// (Book II p.560), which become the batch's move lines as written.
+// (Book II p.561, the Mysteries side; p.560 is the Ring's front), which become the batch's move
+// lines as written.
 export const SERVANT_MOVE_OPTIONS = [
 	"Wriggle free of danger/restraint",
 	"Heal at a prodigious rate",

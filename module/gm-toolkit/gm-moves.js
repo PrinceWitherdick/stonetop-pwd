@@ -20,7 +20,7 @@
 //
 //  • `detail`   The book's descriptive paragraphs, in the book's words. An ARRAY, because the
 //               longer entries (Hurt someone, Advance towards impending doom) genuinely need
-//               three, and a single blob would render as one unreadable slab.
+//               several, and a single blob would render as one unreadable slab.
 //  • `hardness` The "As a hard move, ..." line where the book gives one, and the soft one where
 //               it gives that instead. Twelve of the thirty have one; the other eighteen are
 //               silent on it and carry no field rather than an invented guess. One field rather
@@ -164,10 +164,15 @@ export const BASIC_GM_MOVES = [
 		gloss: "A specific, problematic wound on a PC or on someone they care about.",
 		page:  184,
 		detail: [
-			"Inflict a specific, problematic injury or wound on a PC or an NPC they care about. Something more than just losing HP. Something painful, bloody, consequential, or all three. Using this move definitely means the victim takes damage, and against a PC it might also mean that they mark a debility. It definitely means that they've now got a problematic wound.",
-			"How badly you hurt them depends on the fiction, whether the harm came from a 7+ or a 6-, the damage rolled, and the tags on the damage (messy, forceful, etc.). Feel free to describe the general nature of the wound, then have the player roll damage, and modulate the injury based on the damage dealt.",
-			"As a rule, only inflict a permanent, disabling injury if you've warned them it's possible (explicitly or by telegraphing or demonstrating the danger), and either they rolled a 6- or they knowingly ignored the danger. Don't spring that stuff on them.",
-			"With that said: feel free to hurt NPCs more aggressively and brutally than you hurt the PCs. Taking a follower's arm is a great way to show that this thing's attacks are messy and terrible, raising the stakes without deprotagonizing the PCs.",
+			"Inflict a specific, problematic injury or wound on a PC or an NPC they care about. Something more than just losing HP. Something painful, bloody, consequential, or all three.",
+			"Using this move definitely means the victim takes damage, and against a PC it might also mean that they mark a debility. It definitely means that they've now got a problematic wound. It's a part of the fiction, something they have to deal with and something you can use as a basis for your GM moves.",
+			"How badly you hurt them depends on the fiction, whether the harm came from a 7+ or a 6-, the damage rolled, and the tags on the damage (messy, forceful, etc.). When you hurt them because they rolled a 7-9 to Clash with a guy with a club, and they only take 2 damage, that's going to look a lot different than a 6- against a rage drake dealing 12 messy damage.",
+			"Feel free to describe the general nature of the wound ('He stabs you in the thigh and you feel your leg buckle.'), then have the player roll damage ('Take d6+2 damage.') and modulate the injury based on the damage dealt ('3 damage? Okay, I think you drop to one knee and your leg is like on fire, but it'll still hold your weight,' versus 'Yikes, 8 damage? You still up? Well, your leg gives out under you and it's just gushing blood.')",
+			"As a rule, only inflict a permanent, disabling injury if you've warned them it's possible (explicitly or by telegraphing/demonstrating the danger), and either they rolled a 6- or they knowingly ignored the danger. Don't spring that stuff on them.",
+			"For example: if you say, 'that thing has 6-inch long teeth and jaws that can crush trees... if it gets you, you'll be missing bits, you sure you want to just stand there and swing at it?' and they reply 'Yeah, no guts no glory!' and then roll a 7-9 to Clash... well, you warned them. Say goodbye to that arm and hello to a fountain of blood.",
+			"On the other hand, if you've presented this thing as a threat but not, like, an arm-chomping-off threat, on a 7-9 you might say 'It chomps down, there's blood everywhere, and it starts to shake you around. There's this weird, calm part of your brain that's like \"Oh my arm is about to get torn off,\" but the rest of you just AAAGH. Take a d10+3 damage and mark weakened. What do you do?' Still a pretty hard move, I'd say, but one they might recover from. Taking their arm without warning? Not cool.",
+			"With that said: feel free to hurt NPCs more aggressively and brutally than you hurt the PCs. Taking a follower's arm (for example) is a great way to show that this thing's attacks are messy and terrible, raising the stakes without deprotagonizing the PCs. (Word of advice, though: don't brutalize an animal companion without warning; players get super precious with their pets.)",
+			"Once inflicted, a wound or injury is part of the fiction. It might cause the PC to Defy Danger to attempt something that wouldn't otherwise be dangerous. It might be the fictional justification for another move you make. It might prompt you to make moves that escalate the injury.",
 		],
 		examples: [
 			"It like reaches out towards Eira, its hand expanding like mist and clutching her chest, and she just starts moaning and convulsing and you see bits of her skin blackening. She takes 1d12 damage, ignoring armor. Is she still up? No? Okay, well it drops her and she just slumps to the ground. What do you do?",
@@ -229,6 +234,7 @@ export const BASIC_GM_MOVES = [
 			"If you do that, cool, but you won't have a chance to get clear. You'll be caught in the blast for sure. You do it?",
 			"Yeah, no. Your hands are shaking, your mouth is dry, you can't think about anything but that baleful, hateful eye. You want to take a shot, you're going to have to get it together first. What do you do?",
 			"Vahid, you can't make heads or tails of these runes, not right now at least. Maybe if you took a rubbing and had time to study them back home, with all your books and notes and everything. But not out here. What do you do?",
+			"That thing is made of solid stone. Your arrows aren't going to do squat, Rhianna. You want to hurt this thing, or even slow it down, you're going to need to hit it with something big and heavy.",
 		],
 	},
 	{
@@ -325,7 +331,8 @@ export const EXPLORATION_GM_MOVES = [
 		detail: [
 			"This is the claw-print in the mud, the wolves howling in the distance. This is the piles of sticks, strangely neat and tidy, sure sign that a hagr dwells nearby.",
 			"Use this move to foreshadow future dangers, to make the PCs nervous and to prompt them to investigate or take precautions. Or flee. They could also flee.",
-			"Here's a good twist on this move: instead of telling them what they find, ask them what they find that tells them ___ is afoot. You can also ask a question that gets them thinking about the danger without revealing any specific sign of it.",
+			"Here's a good twist on this move: instead of telling them what they find, ask them what they find that tells them ___ is afoot.",
+			"You can also ask a question that gets them thinking about the danger without revealing any specific sign of it. Like, 'Caradoc, what sort of experience do you have with feathered drakes?' Or, 'Vahid, what have you heard about the nosgolau, the night-lights that are said to haunt the Flats and lure travelers off the road?'",
 		],
 		examples: [
 			"Rhianna, you've all been quietly trudging for a couple hours through the snow when the hair on the back of your neck stands on end. What do you see or hear that tells you that you've entered crinwin territory?",
@@ -348,6 +355,7 @@ export const EXPLORATION_GM_MOVES = [
 		examples: [
 			"Okay, so you all creep towards the Stream. You hear the rush of water, and then you see it. It's huge, like a horse but stouter, pacing back and forth at an opening in the ice. Its snout darts into the water and pops up with one of those silvery, scaly slug-things that you sometimes see in the Stream, and it just gobbles it down. Ugh. What do you do?",
 			"Crunch crunch squeak. Huff huff huff. Crunch squeak. Rhianna, it takes you a bit to realize it, but you're hearing footsteps in the snow, and heavy breathing, and scrapes of the sleds... from the party, of course, but also coming from up in the trees, all around you. And just as you realize that, Eira pulls back on her bow and shoots. 'Crinwin!' she yells!",
+			"They're all gazing up at that nest, Caradoc, when you notice a pair of big pale eyes watching you from behind a tree at ground level. As soon as you register what you're seeing, the eyes are gone, and there's a scurrying up the tree. Then those eyes poke out, looking down at you. It seems... different... than the others. Curious, rather than angry. What do you do?",
 		],
 	},
 	{

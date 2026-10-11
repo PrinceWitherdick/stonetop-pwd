@@ -6,6 +6,7 @@ import {
 	removeEntry, sortEntries,
 	trackIdFromKey, trackKey, upsertByKey,
 } from "../../module/timeline/timeline-core.js";
+import { MIN_HISTORY_YEAR } from "../../module/seasons/campaign-year.js";
 
 // The timeline's pure half: dates, ordering and the list algebra. Nothing here touches a document,
 // so the sort order a reader sees is pinned without a Foundry global in sight.
@@ -62,10 +63,19 @@ describe("normalizeEntry", () => {
 		expect(normalizeEntry({}, 3).id).toBe("entry-3");
 	});
 
-	it("never lets a year fall below one", () => {
-		expect(normalizeEntry({ year: 0 }).year).toBe(1);
-		expect(normalizeEntry({ year: -4 }).year).toBe(1);
+	// A timeline holds the table's HISTORY: stored years below 1 are years before play began.
+	it("keeps a year from before play, and reads an unreadable year as the first", () => {
+		expect(normalizeEntry({ year: 0 }).year).toBe(0);
+		expect(normalizeEntry({ year: -9 }).year).toBe(-9);
 		expect(normalizeEntry({ year: "nonsense" }).year).toBe(1);
+		expect(normalizeEntry({ year: -99999 }).year).toBe(MIN_HISTORY_YEAR);
+	});
+
+	// A blank season WITH yearOnly is "some time that year"; yearOnly is dropped once a season is set.
+	it("carries yearOnly on a blank season only", () => {
+		expect(normalizeEntry({ season: "", yearOnly: true }).yearOnly).toBe(true);
+		expect(normalizeEntry({ season: "" }).yearOnly).toBe(false);
+		expect(normalizeEntry({ season: "summer", yearOnly: true }).yearOnly).toBe(false);
 	});
 });
 
@@ -88,8 +98,23 @@ describe("periodRank", () => {
 		expect(periodRank(entry({ year: 1, season: "winter" }))).toBeLessThan(periodRank(entry({ year: 2, season: "spring" })));
 	});
 
-	it("ranks an undated entry before every real season", () => {
-		expect(periodRank(entry({ season: "" }))).toBe(-1);
+	it("ranks an undated entry before every real season, history included", () => {
+		const undated = periodRank(entry({ season: "" }));
+		expect(undated).toBeLessThan(periodRank(entry({ year: 1, season: "spring" })));
+		expect(undated).toBeLessThan(periodRank(entry({ year: MIN_HISTORY_YEAR, season: "", yearOnly: true })));
+	});
+
+	it("ranks history before play, and a year-only period ahead of that year's spring", () => {
+		const yearOnly = periodRank(entry({ year: -9, season: "", yearOnly: true }));
+		expect(yearOnly).toBeLessThan(periodRank(entry({ year: -9, season: "spring" })));
+		expect(periodRank(entry({ year: -10, season: "winter" }))).toBeLessThan(yearOnly);
+		expect(periodRank(entry({ year: 0, season: "winter" }))).toBeLessThan(periodRank(entry({ year: 1, season: "spring" })));
+	});
+
+	it("files a year-only entry under its own period, apart from the undated block", () => {
+		expect(periodKey(entry({ year: -9, season: "", yearOnly: true }))).toBe("-9:year");
+		expect(periodKey(entry({ year: 0, season: "autumn" }))).toBe("0:autumn");
+		expect(periodKey(entry({ year: 3, season: "" }))).toBe(UNDATED_PERIOD_KEY);
 	});
 });
 

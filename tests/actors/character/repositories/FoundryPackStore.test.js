@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { FoundryPackStore } from "../../../../module/actors/character/repositories/FoundryPackStore.js";
-import { resetPackIndexFields } from "../../../../module/utils/pack-index.js";
+import { resetPackIndexFields, withoutCoveredFields } from "../../../../module/utils/pack-index.js";
 
 // -- Helpers ------------------------------------------------------------------
 
@@ -140,6 +140,92 @@ describe("FoundryPackStore", () => {
 			for (const call of pack.getIndex.mock.calls.slice(1)) {
 				expect(call[0].fields).toEqual(expect.arrayContaining(["system.slug", "system.moveType"]));
 			}
+		});
+
+		// The server projects with setProperty(field, 1) per field: `flags.stonetop` then
+		// `flags.stonetop.slug` threw "Cannot create property 'slug' on number '1'" and failed the
+		// items pack's index for every caller (move-refresh asks for the whole flag bag, the outfit
+		// repository for leaves of it). The ancestor alone returns the subtree.
+		it.each([
+			["the child first", ["flags.stonetop.slug", "system.moveType"], ["flags.stonetop", "flags.stonetopx"]],
+			["the ancestor first", ["flags.stonetop", "flags.stonetopx"], ["flags.stonetop.slug", "system.moveType"]],
+		])("drops a field an ancestor in the union already covers, %s", async (_, first, second) => {
+			const pack = makePack([ENTRY_A], {});
+			stubGame(pack);
+			await new FoundryPackStore("stonetop.test", first).getAll();
+			await new FoundryPackStore("stonetop.test", second).getAll();
+			const asked = pack.getIndex.mock.lastCall[0].fields;
+			expect(asked).toHaveLength(3);
+			expect(asked).toEqual(expect.arrayContaining(["system.moveType", "flags.stonetop", "flags.stonetopx"]));
+		});
+
+		// One request the server rejects used to stay in the union, so every later caller on the
+		// pack sent it again and failed too until reload.
+		it("rolls back the fields of a request the server rejects", async () => {
+			const pack = makePack([ENTRY_A], {});
+			pack.getIndex = vi.fn(async ({ fields }) => {
+				if (fields.includes("bad")) throw new Error("rejected");
+			});
+			stubGame(pack);
+			await new FoundryPackStore("stonetop.test", ["system.slug"]).getAll();
+			await expect(new FoundryPackStore("stonetop.test", ["bad"]).getAll()).rejects.toThrow("rejected");
+			await new FoundryPackStore("stonetop.test", ["system.moveType"]).getAll();
+			expect(pack.getIndex).toHaveBeenLastCalledWith({ fields: ["system.slug", "system.moveType"] });
+		});
+
+		// A caller's link sends the whole union, which already holds the fields of callers queued
+		// behind it, so a rejected field used to fail every valid caller ahead of it in a burst.
+		it("fails only the caller that asked for a rejected field, in a concurrent burst", async () => {
+			const pack = makePack([ENTRY_A], {});
+			pack.getIndex = vi.fn(async ({ fields }) => {
+				if (fields.includes("bad")) throw new Error("rejected");
+			});
+			stubGame(pack);
+			const [good, bad, later] = await Promise.allSettled([
+				new FoundryPackStore("stonetop.test", ["system.slug"]).getAll(),
+				new FoundryPackStore("stonetop.test", ["bad"]).getAll(),
+				new FoundryPackStore("stonetop.test", ["system.moveType"]).getAll(),
+			]);
+			expect(good.status).toBe("fulfilled");
+			expect(bad.status).toBe("rejected");
+			expect(later.status).toBe("fulfilled");
+			expect(pack.getIndex).toHaveBeenLastCalledWith({ fields: ["system.slug", "system.moveType"] });
+		});
+
+		// A failed request is retried narrowed to this caller's own fields before it gives up, so a
+		// one-off failure on the burst's union does not reject a caller whose fields were fine, and
+		// the next caller in the burst still asks for its own.
+		it("retries a failed union with only the caller's own fields", async () => {
+			const pack = makePack([ENTRY_A], {});
+			let failures = 1;
+			pack.getIndex = vi.fn(async () => {
+				if (failures-- > 0) throw new Error("socket timeout");
+			});
+			stubGame(pack);
+			const results = await Promise.allSettled([
+				new FoundryPackStore("stonetop.test", ["system.slug"]).getAll(),
+				new FoundryPackStore("stonetop.test", ["system.moveType"]).getAll(),
+			]);
+			expect(results.map(r => r.status)).toEqual(["fulfilled", "fulfilled"]);
+			expect(pack.getIndex.mock.calls.map(([{ fields }]) => fields)).toEqual([
+				["system.slug", "system.moveType"],
+				["system.slug"],
+				["system.slug", "system.moveType"],
+			]);
+		});
+
+		// Core adds `pack.indexFields` (its own and CONFIG[type].compendiumIndexFields) ahead of the
+		// caller's, so a caller's field under one of them would be projected onto its 1.
+		it("drops a field that one of core's own index fields already covers", async () => {
+			const pack = { ...makePack([ENTRY_A], {}), indexFields: new Set(["name", "system.moveType"]) };
+			stubGame(pack);
+			await new FoundryPackStore("stonetop.test", ["system.moveType.label", "name", "system", "system.slug"]).getAll();
+			expect(pack.getIndex).toHaveBeenLastCalledWith({ fields: ["system"] });
+		});
+
+		it("withoutCoveredFields keeps only the outermost of nested paths, matching whole segments", () => {
+			expect(withoutCoveredFields(["a.b.c", "a.b", "a", "ab.c", "x.y.z", "x.y.z.w", "q", "q"]))
+				.toEqual(["a", "ab.c", "x.y.z", "q"]);
 		});
 
 		it("keeps the field sets of different packs apart", async () => {

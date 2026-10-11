@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { Window } from "happy-dom";
 import { stubConfirm } from "../../fakes/confirm.js";
 import { createStonetopCharacterSheetClass, woundEditPatch } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { WoundDialog } from "../../../module/actors/character/dialogs/WoundDialog.js";
 import {FakeActorBuilder} from "../../fakes/FakeActorBuilder.js";
 import { DEATHS_DOOR_STATE, zeroHpMove, zeroHpResolution } from "../../../module/actors/character/deaths-door.js";
+import { supplyPursesFor } from "../../../module/actors/character/supply-cost.js";
 
 // The people picker Castigate asks "who did you Censure?" with. Replaced so a test can answer it (or
 // back out) without a window; the rest of the module is the real one.
@@ -88,6 +90,9 @@ function makeCharacterMock(actor) {
 		get canMarkBlessed() { return canMark; },
 		set canMarkBlessed(value) { canMark = !!value; },
 		get battleJoy() { return raging; },
+		// The real one is raging AND Battle Joy learned (battle-joy.js#ignoresDebilities); the
+		// learned half is `canEnterBattleJoy` here.
+		get ignoresDebilities() { return raging && canRage; },
 		// A METHOD, matching the real accessor's signature, for the reason headerGlyphOwnership
 		// below is one: a getter here would keep passing while the sheet called a function.
 		// `holdAdvantage` is the tests' knob rather than a setter of the same name, which cannot
@@ -149,6 +154,7 @@ function makeCharacterMock(actor) {
 		onRoll: vi.fn(async () => true),
 		ensureStartingMoves: vi.fn(),
 		ensurePossessionGrants: vi.fn(),
+		startAtFullHp: vi.fn(),
 		backgroundState: () => ({ slug: background.selectedSlug, setupChoices: {} }),
 		backgroundMovesDropped: vi.fn(async () => []),
 		settleBackgroundMoves: vi.fn(async () => {}),
@@ -177,6 +183,9 @@ function makeCharacterMock(actor) {
 		buildSnapshot: vi.fn(async () => ({})),
 		setInventoryResource: vi.fn(),
 		inventoryResourceData: vi.fn((slug, count) => ({ [`flags.stonetop-pwd.inventory.resources.${slug}`]: count })),
+		// The real one reaches only the purses being carried, each capped at its size
+		// (StonetopCharacter#supplyPurses, tested on the model). Here every stored use is in reach.
+		supplyPurses: vi.fn(purpose => supplyPursesFor(actor.getFlag("stonetop-pwd", "inventory.resources") ?? {}, purpose)),
 		// The live hit points and the COMPUTED max, as Recover and Convalesce read them at the press.
 		get hp() { return Number(actor.system?.attributes?.hp?.value) || 0; },
 		computedMaxHp: vi.fn(async () => Number(actor.system?.attributes?.hp?.max) || 0),
@@ -191,8 +200,10 @@ function makeCharacterMock(actor) {
 	};
 }
 
+// 4+Prosperity on the OUTFIT, where buildSnapshot puts it (InventorySnapshot is { outfit, ... }).
+// This mock used to carry it on the inventory itself, which pinned the sheet's wrong read in place.
 function recoverSnapshot({ hpValue = 4, hpMax = 8, smallItemLimit = 5 } = {}) {
-	return { vitals: { hp: { value: hpValue, max: hpMax } }, inventory: { smallItemLimit } };
+	return { vitals: { hp: { value: hpValue, max: hpMax } }, inventory: { outfit: { smallItemLimit } } };
 }
 
 function makeActor() {
@@ -226,7 +237,7 @@ function minimalSheetSnapshot(movelist) {
 		playbook: null,
 		movelist,
 		vitals: { armor: 0, xp: { value: 0, max: 8 }, hp: { value: 8, max: 8 }, damage: "d4" },
-		inventory: { smallItemLimit: null },
+		inventory: { outfit: { smallItemLimit: 4 } },
 		postDeathInsert: null,
 		crewBonuses: null,
 		companionBonuses: null,
@@ -632,16 +643,17 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		await sheet._stonetopCharacter.setBattleJoy(true);
 		expect(await header()).toMatchObject({
 			blessedMarks: { show: true, count: 1 },
-			battleJoy:    { show: true, raging: true },
+			battleJoy:    { show: true, raging: true, debilitiesIgnored: true },
 		});
 
 		// Both survive losing the moves while their state stands: marks so they can be lifted, and
-		// a rage because a stranded one would go on cancelling the character's debilities.
+		// a rage so it can be ended. But a stranded rage ignores nothing (the roll path's
+		// ignoresDebilities), so the debility boxes stop reading "ignored" with it (wave 4 DEB-1).
 		actor.typedActor.canMarkBlessed = false;
 		actor.typedActor.canEnterBattleJoy = false;
 		expect(await header()).toMatchObject({
 			blessedMarks: { show: true, count: 1 },
-			battleJoy:    { show: true, raging: true },
+			battleJoy:    { show: true, raging: true, debilitiesIgnored: false },
 		});
 	});
 
@@ -1170,6 +1182,65 @@ describe("StonetopCharacterSheet damage die editing", () => {
 		const context = await sheet.getData();
 		expect(context.system.attributes.damage.value).toBe("d8");
 	});
+
+	// Wave 4 HP-1: written into the live document, the mirrored numbers made the stored-vitals mirror
+	// compare equal on this client and store nothing, leaving the GM's Apply and token bar stale.
+	it("getData mirrors into a copy of system, never the live document", async () => {
+		installGetDataGlobals();
+		const actor = makeActor();
+		actor.typedActor.playbook = vi.fn(async () => null);
+		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.buildSnapshot = vi.fn(async () => {
+			const snap = minimalSheetSnapshot({});
+			snap.vitals.damage = "d8";
+			snap.vitals.armor = 3;
+			return snap;
+		});
+		const liveArmor = actor.system.attributes.armor?.value;
+		const liveDamage = actor.system.attributes.damage?.value;
+		const sheet = makeSheet(actor);
+
+		const context = await sheet.getData();
+		expect(context.system).not.toBe(actor.system);
+		expect(context.system.attributes.armor.value).toBe(3);
+		expect(actor.system.attributes.armor?.value).toBe(liveArmor);
+		expect(actor.system.attributes.damage?.value).toBe(liveDamage);
+	});
+});
+
+// Wave 4 HP-2: "your current HP can never go higher than your max" (Book I p.53).
+describe("StonetopCharacterSheet typed HP is capped at the max", () => {
+	function capSheet(submitted, computedMax) {
+		const update = vi.fn(async () => {});
+		const Base = class {
+			constructor() { this.object = { id: "a1", update }; }
+			get actor() { return { typedActor: {}, getFlag: () => undefined }; }
+			_getSubmitData() { return { ...submitted }; }
+			async _updateObject(_e, formData) { return update(formData); }
+		};
+		const sheet = new (createStonetopCharacterSheetClass(Base))();
+		sheet._computedMaxHp = computedMax;
+		return { sheet, update };
+	}
+
+	it("caps a typed HP over the computed max, and tags the write as a cap", async () => {
+		const { sheet, update } = capSheet({ "system.attributes.hp.value": 25, name: "Duv" }, 20);
+		const data = sheet._getSubmitData();
+		expect(data["system.attributes.hp.value"]).toBe(20);
+		await sheet._updateObject(null, data);
+		expect(update).toHaveBeenCalledWith(data, { stonetopHpCeiling: true });
+	});
+
+	it("leaves HP at or under the max alone, and a character with no playbook (no max) too", async () => {
+		const under = capSheet({ "system.attributes.hp.value": 12 }, 20);
+		const data = under.sheet._getSubmitData();
+		expect(data["system.attributes.hp.value"]).toBe(12);
+		await under.sheet._updateObject(null, data);
+		expect(under.update).toHaveBeenCalledWith(data);
+
+		const none = capSheet({ "system.attributes.hp.value": 25 }, 0);
+		expect(none.sheet._getSubmitData()["system.attributes.hp.value"]).toBe(25);
+	});
 });
 
 describe("StonetopCharacterSheet Details tab section visibility", () => {
@@ -1391,6 +1462,28 @@ describe("StonetopCharacterSheet._buildRecoverData", () => {
 		const data = sheet._buildRecoverData(recoverSnapshot({ hpValue: 8, hpMax: 8 }));
 		expect(data.canRecover).toBe(false);
 		expect(data.hint.icon).toBe("fa-heart");
+	});
+
+	// Book I p.328: "regain HP equal to 4+Prosperity". The sheet read 4+Prosperity off the inventory,
+	// which never carries it, so every Recover healed the fallback 4 whatever the steading's Prosperity.
+	// 4+0 when Prosperity can't be read is the snapshot's own answer (StonetopCharacter#getSmallItemLimit).
+	it("heals 4+Prosperity as the snapshot's outfit has it", () => {
+		const actor = new FakeActorBuilder().withFlag("inventory.resources", { supplies: 3 }).build();
+		actor.typedActor = makeCharacterMock(actor);
+		const sheet = makeSheet(actor);
+		expect(sheet._buildRecoverData(recoverSnapshot({ hpValue: 2, hpMax: 20, smallItemLimit: 6 })).healAmount).toBe(6);
+		expect(sheet._buildRecoverData(recoverSnapshot({ hpValue: 2, hpMax: 20, smallItemLimit: 3 })).healAmount).toBe(3);
+		expect(sheet._buildRecoverData(recoverSnapshot({ hpValue: 2, hpMax: 20, smallItemLimit: 4 })).healAmount).toBe(4);
+	});
+
+	// Only MARKED supplies can be spent: the card asks the character what it can reach, not the flag.
+	it("counts only the supplies the character is carrying", () => {
+		const actor = new FakeActorBuilder().withFlag("inventory.resources", { supplies: 3 }).build();
+		actor.typedActor = makeCharacterMock(actor);
+		actor.typedActor.supplyPurses = vi.fn(purpose => supplyPursesFor({ supplies: 3 }, purpose, { checked: {} }));
+		const data = makeSheet(actor)._buildRecoverData(recoverSnapshot({ hpValue: 4 }));
+		expect(data.suppliesLeft).toBe(0);
+		expect(data.canRecover).toBe(false);
 	});
 });
 
@@ -1883,6 +1976,8 @@ describe("StonetopCharacterSheet._onDropPlaybook", () => {
 		expect(actor.typedActor.ensureStartingMoves).toHaveBeenCalled();
 		// Its preselected possessions' gear arrives with the drop, not only through onboarding.
 		expect(actor.typedActor.ensurePossessionGrants).toHaveBeenCalled();
+		// And play starts at the real max HP (Book I p.53).
+		expect(actor.typedActor.startAtFullHp).toHaveBeenCalled();
 	});
 
 	it("still takes the three real inserts as inserts", async () => {
@@ -2361,5 +2456,57 @@ describe("StonetopCharacterSheet Post-Death tab controls", () => {
 		expect(char.markSectionOption).not.toHaveBeenCalled();
 		// The re-render is what redraws the box unticked.
 		expect(sheet.render).toHaveBeenCalledWith(false);
+	});
+});
+
+// A double-click on a move's title is ONE roll: the rollable click handler sits behind an in-flight guard,
+// keyed by what the rollable rolls (the sheet re-renders under the second click), so a second press of the
+// same rollable while the first is still asking or rolling is stopped and let go. Another move still rolls.
+describe("the rollable click guard", () => {
+	const doc = new Window().document;
+	function rollable(itemId, label) {
+		const li = doc.createElement("li");
+		li.className = "item";
+		li.dataset.itemId = itemId;
+		const title = doc.createElement("span");
+		title.className = "rollable";
+		title.dataset.roll = "wis";
+		title.textContent = label;
+		li.appendChild(title);
+		return title;
+	}
+	const click = target => ({ target, stopPropagation: vi.fn() });
+
+	it("lets the same rollable's second press go while the first is in flight, and takes it again after", async () => {
+		const sheet = makeSheet(makeActor());
+		let finish;
+		const handler = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+		const first = sheet._guardRollableClick(click(rollable("m1", "Seek Insight")), handler);
+		// The sheet re-rendered: a new element for the same move.
+		const second = click(rollable("m1", "Seek Insight"));
+		expect(sheet._guardRollableClick(second, handler)).toBeUndefined();
+		expect(second.stopPropagation).toHaveBeenCalled();
+		expect(handler).toHaveBeenCalledTimes(1);
+		finish();
+		await first;
+		sheet._guardRollableClick(click(rollable("m1", "Seek Insight")), handler);
+		expect(handler).toHaveBeenCalledTimes(2);
+	});
+
+	it("still rolls another move while the first is in flight", () => {
+		const sheet = makeSheet(makeActor());
+		const handler = vi.fn(() => new Promise(() => {}));
+		sheet._guardRollableClick(click(rollable("m1", "Seek Insight")), handler);
+		sheet._guardRollableClick(click(rollable("m2", "Defy Danger")), handler);
+		expect(handler).toHaveBeenCalledTimes(2);
+	});
+
+	it("lets the guard go when the press throws", async () => {
+		const sheet = makeSheet(makeActor());
+		const failing = vi.fn(async () => { throw new Error("no"); });
+		await expect(sheet._guardRollableClick(click(rollable("m1", "Seek Insight")), failing)).rejects.toThrow("no");
+		const handler = vi.fn(async () => {});
+		await sheet._guardRollableClick(click(rollable("m1", "Seek Insight")), handler);
+		expect(handler).toHaveBeenCalledTimes(1);
 	});
 });

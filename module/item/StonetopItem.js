@@ -11,6 +11,7 @@ import {newArcanumSlug, isArcanumData} from "./createArcanum.js";
 import {withMovePickBonuses} from "../actors/character/move-pick-bonuses.js";
 import {CARD_EMPOWERED_FLAG, CARD_INVOCATIONS_FLAG} from "../actors/character/invoke-consequences.js";
 import {moveRollOptions} from "../actors/character/move-roll-options.js";
+import {bookMoveName} from "../actors/character/owns-move.js";
 
 /**
  * Which world item owns each arcanum slug: `slug -> item id`.
@@ -298,9 +299,14 @@ export function createStonetopItemClass(BaseItem) {
 			// So is what was decided for THIS roll before the dice (an Invocation empowered for an
 			// extra consequence): the roll's pick context, handed in or held by the character model
 			// for the one roll it was set around (StonetopCharacter#withPickContext).
-			const pickContext = options.pickContext ?? actor?.typedActor?.pickContextFor?.(this.name) ?? null;
-			const cardDescription = withMovePickBonuses(moveCardBody(moveDescription, this.system?.moveResults,
-				{ pickable: options.pickable ?? !declaredPicks.length }), actor, this.name, pickContext) + signoff;
+			//
+			// All of that is keyed by the BOOK move's name, so a player's or GM's own move that happens
+			// to share one (a homebrew "Know Things") acts as itself and borrows none of it, the rule
+			// the guided-move and attack paths already keep (owns-move.js#bookMoveName: null for theirs).
+			const bookName = bookMoveName(this);
+			const pickContext = options.pickContext ?? (bookName == null ? null : actor?.typedActor?.pickContextFor?.(bookName)) ?? null;
+			const body = moveCardBody(moveDescription, this.system?.moveResults, { pickable: options.pickable ?? !declaredPicks.length });
+			const cardDescription = (bookName == null ? body : withMovePickBonuses(body, actor, bookName, pickContext)) + signoff;
 			// Which Invocation(s) an Invoke the Sun God roll is for, when the pick context names them:
 			// the card's consequences act on exactly those (actors/character/invoke-consequences.js).
 			// And whether they were empowered, which changes what an Invocation's own button offers
@@ -311,7 +317,7 @@ export function createStonetopItemClass(BaseItem) {
 			}
 			// What this move adds to its own card (Never at a Loss's deferred XP, Battle Joy's and
 			// Wielder's buttons, the speech's), its tier actions after any the roll brought.
-			const moveExtras = moveRollOptions(this.name, actor, options.tierActions);
+			const moveExtras = bookName == null ? null : moveRollOptions(bookName, actor, options.tierActions);
 
 			// "+Fortunes" is the STEADING's stat (a love letter's): a caller that did not hand its
 			// value in gets it read off the character's steading, not the character's own absent one.

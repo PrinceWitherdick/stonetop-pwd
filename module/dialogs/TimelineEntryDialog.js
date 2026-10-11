@@ -15,10 +15,15 @@
 // the same year field the GM already meets when the season turns, so "when did this happen" is
 // asked in the shape the table already reads. Its markup and its year field come from
 // season-picker.js; the only thing done differently here is that a card SELECTS rather than
-// commits, because the answer is not final until the entry is saved.
+// commits, because the answer is not final until the entry is saved -- and pressing the chosen
+// card again clears it, for a year whose season nobody remembers.
+//
+// AND THE TABLE'S HISTORY: unlike the clock, a timeline holds years from before play ("the Forest
+// Folk vanished ten years ago"), so this picker alone goes below the first year of play and has its
+// year chip say how many years ago a year was.
 
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
-import { seasonPickerHtml, wireSeasonPicker, clampYear } from "../seasons/season-picker.js";
+import { HISTORY_YEAR_BOUNDS, seasonPickerHtml, wireSeasonPicker, clampYear, readYearField } from "../seasons/season-picker.js";
 import { SEASON_IDS } from "../seasons/seasons-change-reminders.js";
 import { placeSuggestions } from "../timeline/timeline-places.js";
 import { wireDocumentDropZone } from "../utils/card-drop-zone.js";
@@ -39,10 +44,15 @@ export class TimelineEntryDialog extends StonetopDialog {
 	 * @param {object}  [opts]
 	 * @param {object}  [opts.entry]        The entry being edited; null to write a new one.
 	 * @param {string}  [opts.season]       The season a NEW entry opens on (the campaign clock's).
-	 * @param {number}  [opts.year]         The year a new entry opens on.
+	 * @param {number}  [opts.year]         The year a new entry opens on, and what "years ago" counts
+	 *                                      back from (the clock's, stored).
+	 * @param {boolean} [opts.yearOnly]     A NEW entry opens on "some time that year" (a season's add
+	 *                                      slot on a year-only block). An edit reads its entry's own.
+	 * @param {number}  [opts.nowYear]      The clock's stored year, when it is not `year` (an edit, or
+	 *                                      an add slot on an older season).
 	 * @param {string}  [opts.trackName]    Whose thread this is, for the window title.
 	 */
-	constructor({ entry = null, season = "", year = 1, trackName = "" } = {}, options = {}) {
+	constructor({ entry = null, season = "", year = 1, yearOnly = false, nowYear = year, trackName = "" } = {}, options = {}) {
 		super(options);
 		this._entry = entry;
 		this._trackName = trackName;
@@ -51,7 +61,11 @@ export class TimelineEntryDialog extends StonetopDialog {
 		// a field, and is read back off the form at save time by the picker's own reader.
 		this._season = SEASON_IDS.includes(entry?.season) ? entry.season
 			: (SEASON_IDS.includes(season) ? season : "");
-		this._year = clampYear(entry?.year ?? year, 1);
+		this._year = clampYear(entry?.year ?? year, 1, HISTORY_YEAR_BOUNDS);
+		// "Some time that year": no season picked, with a year. Only a blank season can be it. A blank
+		// season WITHOUT it is the undated block, which keeps that until a card is pressed.
+		this._yearOnly = !this._season && (entry ? entry.yearOnly === true : yearOnly === true);
+		this._nowYear = clampYear(nowYear, 1);
 		// The document the place IS, when one was dropped on the field. On the instance for the
 		// same reason the season is: there is no form control holding it, and the field beside it
 		// holds only the NAME. Cleared the moment that name is edited by hand -- see the input
@@ -99,6 +113,8 @@ export class TimelineEntryDialog extends StonetopDialog {
 				prompt:    localize("stonetop.timeline.dialog.whenHint"),
 				startYear: this._year,
 				selected:  this._season || null,
+				minYear:   HISTORY_YEAR_BOUNDS.min,
+				maxYear:   HISTORY_YEAR_BOUNDS.max,
 			}),
 			entryTitle: this._entry?.title ?? "",
 			place:      this._entry?.place ?? "",
@@ -130,22 +146,14 @@ export class TimelineEntryDialog extends StonetopDialog {
 		const root = html[0];
 
 		// The picker's own wiring gives us the year field for free. `onPick` fires on a card click,
-		// and here that SELECTS rather than commits: the mark is moved by hand because the picker
-		// draws it at render time only, and re-rendering to move it would throw away everything
-		// typed into the fields below.
+		// and here that SELECTS rather than commits (see `_pickSeason`).
 		wireSeasonPicker(root, {
 			startYear: this._year,
-			latestYear: this._year,
-			onPick: (season, year) => {
-				this._season = season;
-				this._year = year;
-				for (const card of root.querySelectorAll(".stonetop-season-card")) {
-					const chosen = card.dataset.season === season;
-					card.classList.toggle("is-selected", chosen);
-					if (chosen) card.setAttribute("aria-current", "true");
-					else card.removeAttribute("aria-current");
-				}
-			},
+			latestYear: Math.max(this._year, this._nowYear),
+			minYear:   HISTORY_YEAR_BOUNDS.min,
+			maxYear:   HISTORY_YEAR_BOUNDS.max,
+			agoFrom:   this._nowYear,
+			onPick: (season, year) => this._pickSeason(root, season, year),
 		});
 		// The place field is a datalist input, and a bare one falls back to the browser's own
 		// popup -- scrollbar-less in Chromium, which is the whole reason this helper exists. Every
@@ -161,6 +169,26 @@ export class TimelineEntryDialog extends StonetopDialog {
 			?.addEventListener("click", ev => this._guardBusy(ev, () => this._save(root)));
 		root.querySelector(".stonetop-timeline-entry-cancel")
 			?.addEventListener("click", () => this.close());
+	}
+
+	/**
+	 * A season card pressed: it is chosen, or, if it already was, cleared to the year alone ("some
+	 * time that year"). A toggle rather than a fifth "Season unknown" card, because no season is
+	 * what an unpicked row of seasons already says.
+	 *
+	 * The mark is moved by hand because the picker draws it at render time only, and re-rendering
+	 * to move it would throw away everything typed into the fields below.
+	 */
+	_pickSeason(root, season, year) {
+		this._season = season === this._season ? "" : season;
+		this._yearOnly = !this._season;
+		this._year = year;
+		for (const card of root?.querySelectorAll?.(".stonetop-season-card") ?? []) {
+			const chosen = card.dataset.season === this._season;
+			card.classList.toggle("is-selected", chosen);
+			if (chosen) card.setAttribute("aria-current", "true");
+			else card.removeAttribute("aria-current");
+		}
 	}
 
 	/**
@@ -341,7 +369,7 @@ export class TimelineEntryDialog extends StonetopDialog {
 	 */
 	_readYear(root) {
 		const field = root?.querySelector(".stonetop-season-year-input");
-		return field ? clampYear(field.value, this._year) : this._year;
+		return field ? readYearField(field, this._year, HISTORY_YEAR_BOUNDS) : this._year;
 	}
 
 	/**
@@ -361,6 +389,8 @@ export class TimelineEntryDialog extends StonetopDialog {
 		const result = {
 			season: this._season,
 			year:   this._readYear(root),
+			// Always sent, so an edit that gives a year-only row a season (or takes it away) lands.
+			yearOnly: !this._season && this._yearOnly,
 			title,
 			place,
 			// Dropped, never typed. An emptied field takes its link with it: a claim about a name

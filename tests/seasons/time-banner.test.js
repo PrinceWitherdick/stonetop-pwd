@@ -45,7 +45,8 @@ describe("the weather-and-season bar's view", () => {
 		);
 		expect(weather.value).toBe("snow");
 		expect(season.value).toBe("winter");
-		expect(year.value).toBe("3");
+		// By the year's NAME, so the GM renaming the years turns the part too.
+		expect(year.value).toBe("Year Three");
 	});
 
 	// The same sky class the steading header wears, and the same softening of a sun nobody chose.
@@ -137,10 +138,10 @@ describe("the season buttons under the bar", () => {
 		expect(nextSeasonStamp(null, 3)).toEqual({ season: "summer", year: 3 });
 	});
 
-	it("offers Next Season then Change Season, Next naming the season it would begin", () => {
+	it("offers Next Season, Change Season and Set the Year, Next naming the season it would begin", () => {
 		const items = seasonMenuItems({ season: "winter", year: 1 });
-		expect(items.map(item => item.move)).toEqual(["next", "change"]);
-		expect(items.map(item => item.label)).toEqual(["Next Season", "Change Season"]);
+		expect(items.map(item => item.move)).toEqual(["next", "change", "year"]);
+		expect(items.map(item => item.label)).toEqual(["Next Season", "Change Season", "Set the Year"]);
 		expect(items[0].hint).toContain("Spring, Year Two");
 	});
 
@@ -149,8 +150,10 @@ describe("the season buttons under the bar", () => {
 		const banner = read("module/seasons/time-banner.js");
 		expect(banner).toContain("game.stonetop?.openNextSeason?.()");
 		expect(banner).toContain("game.stonetop?.openSeasonsChange?.()");
+		expect(banner).toContain("game.stonetop?.openCampaignYear?.()");
 		const ready = read("module/hooks/Ready.js");
 		expect(ready).toMatch(/game\.stonetop\.openNextSeason\s*=/);
+		expect(ready).toMatch(/game\.stonetop\.openCampaignYear\s*=/);
 		expect(ready).toMatch(/nextSeasonStamp\(readCurrentSeason\(steading\), readCurrentYear\(steading\)\)/);
 		expect(ready).toContain("._showSeasonDialog(next.season, next.year)");
 	});

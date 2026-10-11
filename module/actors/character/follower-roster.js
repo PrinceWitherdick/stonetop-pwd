@@ -163,6 +163,9 @@ export function followerRoster(actor, sf, { playbookDoc = null, crewDef = null, 
 		push("beast", slug, { name: b?.name ?? slug, hpMax: Number(b?.hp) || 0, hpRaw: sf.beastHp?.[slug] });
 	}
 	for (const [id, c] of orderedCustomFollowers(sf)) {
+		// A Servant batch that broke free (Send Them Back 6-) is "no longer followers" (Book II p.561):
+		// its card stays until removed, but it neither camps, fights nor travels as one.
+		if (c?.brokenFree) continue;
 		const hpMax = Number(c?.hpMax) || 0;
 		push("custom", id, {
 			name: c?.name || "Follower", hpMax, hpRaw: c?.hpCurrent, dead: !!c?.dead,

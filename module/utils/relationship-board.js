@@ -650,8 +650,11 @@ const flightKey = (actor, id) => `${actor?.id ?? "?"}:${id}`;
 
 // ── Escape-to-cancel ─────────────────────────────────────────────────────────
 
-// Cancels the one drag currently in progress, or null when nothing is being dragged.
-let activeDragCancel = null;
+// The gestures Escape can cancel, latest last: `{ cancel, owns }`. A STACK and not one slot, because a
+// gesture can start while another holds Escape (a drag on the steading's map panel while a "Draw
+// lines" pick is up on the map window), and when the later one ends the earlier must get Escape back.
+// Cleared by the last one out, a pick left the key to core's dismiss, which closed the window.
+const cancellables = [];
 let escapeWatcherWired = false;
 
 // Escape must be SWALLOWED, not merely default-prevented. Foundry's KeyboardManager binds
@@ -671,38 +674,48 @@ function ensureEscapeWatcher() {
 	if (escapeWatcherWired || typeof window === "undefined") return;
 	escapeWatcherWired = true;
 	window.addEventListener("keydown", ev => {
-		if (ev.key !== "Escape" || !activeDragCancel) return;
+		if (ev.key !== "Escape") return;
+		// The latest gesture that claims this key. One that only claims an Escape aimed at its own
+		// window (a pick, held with no button down) lets one meant for somewhere else go by.
+		const i = cancellables.findLastIndex(entry => !entry.owns || entry.owns(ev));
+		if (i < 0) return;
 		ev.preventDefault();
 		ev.stopPropagation();
-		activeDragCancel();
+		const [{ cancel }] = cancellables.splice(i, 1);
+		cancel();
 	}, true);
 }
 
 /**
  * Arm Escape-to-cancel for the drag that is starting, wiring the watcher on first use.
  *
+ * `owns(ev)`, when given, narrows which Escapes are this gesture's: one it returns false for goes by
+ * untouched, to the next gesture down or to core. A drag (button held) leaves it out and takes any.
+ *
  * Exported because every pointer-drag surface in the system needs exactly this and the watcher
  * must be ONE listener: a second copy in another module is a second capture-phase Escape
  * swallower with its own idea of which drag is live, and the KeyboardManager discovery above
  * would then have to be re-made in every copy the next time core changes.
  */
-export function beginCancellableDrag(cancel) {
-	activeDragCancel = cancel;
+export function beginCancellableDrag(cancel, { owns = null } = {}) {
+	endCancellableDrag(cancel);
+	cancellables.push({ cancel, owns });
 	ensureEscapeWatcher();
 }
 
 /**
  * Disarm Escape-to-cancel. Safe to call when no drag is live, so it can sit in a shared exit.
  *
- * ⚠ ONLY THE DRAG IT IS HANDED, when it is handed one. There is one slot for the whole page and a
+ * ⚠ ONLY THE DRAG IT IS HANDED, when it is handed one. There is one stack for the whole page and a
  * board per surface that drags -- every standings board, the map window, the steading sheet's map
  * panel -- and every board's exit calls this, including the teardown a re-render runs. Cleared
  * unconditionally, a second board re-rendering mid-drag took Escape away from the drag under way on
  * the first, and that Escape went on to core's dismiss and closed every window.
  */
 export function endCancellableDrag(cancel = null) {
-	if (cancel && activeDragCancel !== cancel) return;
-	activeDragCancel = null;
+	if (!cancel) { cancellables.length = 0; return; }
+	const i = cancellables.findIndex(entry => entry.cancel === cancel);
+	if (i >= 0) cancellables.splice(i, 1);
 }
 
 // ── The expandable card note ─────────────────────────────────────────────────

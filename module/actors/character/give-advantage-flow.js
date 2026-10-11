@@ -18,12 +18,18 @@ import { canRewriteCard } from "../../utils/chat.js";
 import { belongsToMessage } from "../../utils/picked-option-button.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
 import { isPrimaryGM } from "../../utils/primary-gm.js";
-import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
+import { askGMClient, deletionEntry, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { withCardLatch } from "../../utils/card-latch.js";
+import { cardCountedTier, outcomeTier } from "../../utils/counted-tier.js";
+import { format } from "../../utils/i18n.js";
 
 /** The User query a gift of advantage goes through when this client cannot write the character. */
 export const GIVE_ADVANTAGE_QUERY = "stonetop.giveAdvantage";
-/** Message flag: who this card gave its advantage to, `{name, move}`. */
+/**
+ * Message flag: who this card gave its advantage to, `{name, move, uuid, source}`: the character's uuid and
+ * the name the promise is held under, so a card moved off the tier that gave it can take it back
+ * (reconcileGivenAdvantage). A card from before carries `{name, move}` only, and keeps its gift.
+ */
 export const GIVEN_FLAG = "advantageGiven";
 /**
  * Message flag: the user whose press is giving it (card-latch.js#withCardLatch), written before the
@@ -72,6 +78,47 @@ export async function handleGiveAdvantageQuery(data, context = {}, deps = {}) {
 }
 
 /**
+ * A roll card's total has moved (a Shift, a +1, Burn Brightly): a gift its tier gave is taken back once the
+ * card no longer stands on a tier that gives it (Everything Burns' 10+, Work With What You've Got's 7+,
+ * Resourceful's 6-), as the other things a tier holds are (tier-effects.js). The card forgets it gave
+ * anything, so its button is back should the card return to such a tier (unless the gift was already spent,
+ * below). Run where every rewrite's tier
+ * effects run (tier-effects.js#reconcileTierEffects), on the client that rewrote the card.
+ *
+ * Left as it is when this client cannot write the character who holds it, and for a card from before the
+ * gift's uuid was kept: a card that forgot a gift it could not take back would let it be given twice. For
+ * the same reason a gift already SPENT (used on a roll since) is not forgotten: the card marks it `spent`
+ * and keeps its readout, and its button never comes back.
+ * Whether it was taken back.
+ *
+ * @param {ChatMessage} message
+ * @param {number} total  the card's new total
+ */
+export async function reconcileGivenAdvantage(message, total, { scope = SYSTEM_ID, resolve = resolveSync } = {}) {
+	const given = message?.getFlag?.(scope, GIVEN_FLAG);
+	const tiers = GIVE_ADVANTAGE_MOVES[given?.move]?.tiers;
+	if (!given?.uuid || given.spent || !tiers?.length || !Number.isFinite(Number(total))) return false;
+	if (tiers.includes(outcomeTier(cardCountedTier(message, Number(total), scope)))) return false;
+	const target = resolve(given.uuid);
+	if (target && target.isOwner === false) {
+		console.warn(`Stonetop | this client cannot write ${target.name}, so the advantage their moved roll card gave was not taken back`);
+		return false;
+	}
+	const released = await target?.typedActor?.releaseHeldAdvantage?.(given.source ?? given.move);
+	// Nothing held to take back (spent on a roll since, or the character gone): the card keeps its record,
+	// marked spent, so a card brought back onto the tier does not give the same roll's advantage twice.
+	if (!released) {
+		await message.setFlag(scope, GIVEN_FLAG, { ...given, spent: true });
+		return false;
+	}
+	const update = Object.fromEntries([GIVEN_FLAG, GIVING_FLAG]
+		.filter(key => message.getFlag(scope, key) !== undefined && message.getFlag(scope, key) !== null)
+		.map(key => deletionEntry(`flags.${scope}.${key}`)));
+	if (Object.keys(update).length) await message.update(update);
+	return true;
+}
+
+/**
  * Ask who, give it, and write it on the card. Whether it was given. `stillMine`, from the card's
  * button, answers whether this client still holds the card's latch once someone is picked: when
  * another client pressed it too, the later press holds the card, and this one gives nothing and
@@ -103,7 +150,9 @@ export async function offerAdvantage(message, giver, moveName, {
 		globalThis.ui?.notifications?.warn?.(`${target.name} could not be given advantage: no GM is online to write it.`);
 		return false;
 	}
-	await message.setFlag(scope, GIVEN_FLAG, { name: target.name, move: moveName });
+	await message.setFlag(scope, GIVEN_FLAG, {
+		name: target.name, move: moveName, uuid: target.uuid ?? null, source: givenSource(moveName, giver, target),
+	});
 	globalThis.ui?.notifications?.info?.(`${target.name} has advantage on their next roll (${moveName}).`);
 	// Voice of Experience's advice given is a use of the starred move: the first crosses off "Would-be"
 	// (WouldBeHeroAsterisk.js). Never at the cost of the gift, which is already held and written.
@@ -134,7 +183,9 @@ export function wireGiveAdvantage(message, html, deps = {}) {
 			const doc = root.ownerDocument ?? globalThis.document;
 			const note = doc.createElement("span");
 			note.className = "stonetop-give-advantage-readout";
-			note.textContent = `${given.name} has advantage on their next roll.`;
+			note.textContent = given.spent
+				? format("stonetop.heldAdvantage.givenSpent", { name: given.name })
+				: `${given.name} has advantage on their next roll.`;
 			btn.replaceWith(note);
 			continue;
 		}

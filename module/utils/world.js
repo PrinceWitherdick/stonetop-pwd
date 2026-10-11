@@ -1,4 +1,4 @@
-import {resolvedFlagProperty} from "../actors/character/StonetopFlags.js";
+import {steadingSystemValue} from "../actors/steading/steading-system-value.js";
 import {escHtml} from "./strings.js";
 
 // Is this actor the steading? TWO ARMS, and both are load-bearing: the subtype is what a
@@ -72,10 +72,40 @@ export function addStonetopSteadingButton(html) {
 	header.insertBefore(btn, header.querySelector(".header-button.close, a.close"));
 }
 
+/**
+ * The "4+Prosperity" a character's numbers are built on when the steading's Prosperity can't be
+ * read (no steading, or a blank value): Prosperity is "+0 by default" (Book I p.88), so 4. ONE
+ * number for the small-item allotment, the uses in a ◆ of supplies, Recover's HP and a crew's
+ * supplies, which each used to guess their own (9, 6, 4 and 5). Applied at the source,
+ * StonetopCharacter#getSmallItemLimit / #getUsesPerSupply, so no reader keeps a fallback of its own.
+ */
+export const FALLBACK_FOUR_PLUS_PROSPERITY = 4;
+
+/**
+ * The Prosperity a character's gear works from: the steading's own, 1 lower while it is marked
+ * Lacking ("Treat Prosperity as if it's 1 lower than it is", Book I p.66 and p.513). The one reader
+ * for the four things Prosperity sets on the character side: the small-item allotment, the uses in
+ * a ◆ of supplies, Recover's 4+Prosperity HP and "x piercing". Null when there is no steading or
+ * its Prosperity can't be read: StonetopCharacter#getSmallItemLimit answers that with
+ * FALLBACK_FOUR_PLUS_PROSPERITY for every reader that needs a number, and the "x piercing" captions
+ * keep the literal x.
+ *
+ * @param {Actor|null} steading
+ * @returns {number|null}
+ */
+export function effectiveProsperity(steading) {
+	if (!steading) return null;
+	const raw = steadingSystemValue(steading, "attributes.prosperity.value", { nullIsMissing: true });
+	if (raw === undefined || raw === null || raw === "") return null;
+	const prosperity = Number(raw);
+	if (!Number.isFinite(prosperity)) return null;
+	const lacking = !!steadingSystemValue(steading, "attributes.debilities.options.lacking.value", { nullIsMissing: true });
+	return prosperity - (lacking ? 1 : 0);
+}
+
+// The world steading's Prosperity as gear sees it (effectiveProsperity: Lacking counts). Its one
+// reader is "x piercing" at damage time (damage.js#resolvePiercing), which has to agree with the
+// sheet's "1 piercing" caption, and that caption is built through effectiveProsperity too.
 export function getStonetopProsperity() {
-	const actor = getStonetopSteadingActor();
-	if (!actor) return null;
-	return resolvedFlagProperty(actor, "steading.system.attributes.prosperity.value")
-		?? actor.system?.attributes?.prosperity?.value
-		?? null;
+	return effectiveProsperity(getStonetopSteadingActor());
 }

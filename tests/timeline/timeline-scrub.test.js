@@ -8,8 +8,29 @@ import { readCss, readRepo } from "../fakes/css.js";
 
 const {
 	SCRUB_MAX, yearStops, scrubTicks, centredScroll, pictureRect, scrollForValue, valueForScroll,
-	tickShares, nearestStop, wireYearScrubber,
+	tickShares, nearestStop, wireYearScrubber, stopForYear,
 } = await import("../../module/timeline/timeline-scrub.js");
+
+describe("stopForYear (where a timeline opens)", () => {
+	const stops = [-9999, -400, 1, 2, 5].map(year => ({ year, label: String(year) }));
+
+	it("is the clock's year when it is drawn", () => {
+		expect(stopForYear(stops, 2)).toBe(3);
+	});
+
+	it("is the latest year before it when the clock's year is not drawn, the first when none is", () => {
+		expect(stopForYear(stops, 4)).toBe(3);
+		expect(stopForYear(stops, 99)).toBe(4);
+		expect(stopForYear(stops, -99999)).toBe(0);
+		expect(stopForYear([], 1)).toBe(-1);
+	});
+
+	it("is what a window the reader has not moved about opens on", () => {
+		const src = readRepo("module/dialogs/TimelineWindow.js");
+		expect(src).toContain("if (!this._lastView) this._openOnNow(scroll);");
+		expect(src).toContain("scrubToYear(scroll, this._scrubStops, timelineNow().year");
+	});
+});
 
 describe("yearStops", () => {
 	it("gives one stop per year, oldest first, and none for the undated block", () => {
@@ -234,6 +255,23 @@ describe("wireYearScrubber", () => {
 		expect(scroll.scrollLeft).toBe(-12);
 	});
 
+	it("measures in layout pixels when the window is drawn at a UI scale", () => {
+		// The same column drawn twice its size: every rect doubled, the scroll offsets not.
+		const x2 = (x, y, w, h) => () => rect(2 * (x - scroll.scrollLeft), 2 * (y - scroll.scrollTop), 2 * w, 2 * h);
+		Object.defineProperty(scroll, "offsetWidth", { value: 1000 });
+		scroll.getBoundingClientRect = () => rect(0, 0, 2000, 1200);
+		const [y1, y2, y3] = scroll.querySelectorAll("li");
+		y1.getBoundingClientRect = x2(0, 0, 400, 300);
+		y2.getBoundingClientRect = x2(400, 0, 400, 300);
+		y3.getBoundingClientRect = x2(800, 0, 1600, 300);
+		scroll.querySelector(".pic").getBoundingClientRect = x2(0, 0, 2400, 300);
+		unwire = wireYearScrubber(scroll, bar, { stops, horizontal: true, picture: ".pic" });
+		expect(ticks()).toEqual(["0", "0.125", "1"]);
+		slide(500);
+		expect(scroll.scrollLeft).toBe(400);
+		expect(scroll.scrollTop).toBe(-150);
+	});
+
 	it("wires nothing for fewer than two years", () => {
 		unwire = wireYearScrubber(scroll, bar, { stops: stops.slice(0, 1), horizontal: true });
 		slide(1000);
@@ -246,10 +284,10 @@ describe("the template", () => {
 
 	it("stamps a year on every period element in all four shapes", () => {
 		expect(read("partials/timeline-hperiod.hbs")).toMatch(/data-year="\{\{year\}\}"/);
-		expect(read("partials/timeline-period.hbs")).toMatch(/stonetop-timeline-period" data-period="\{\{key\}\}"\{\{#unless undated\}\} data-year/);
+		expect(read("partials/timeline-period.hbs")).toMatch(/stonetop-timeline-period(\{\{#if ghost\}\}[^"]*\{\{\/if\}\})?" data-period="\{\{key\}\}"\{\{#unless undated\}\} data-year/);
 		const main = read("timeline.hbs");
 		expect(main).toMatch(/stonetop-timeline-swim-head[^>]*data-year/);
-		expect(main).toMatch(/stonetop-timeline-row"[^>]*data-year/);
+		expect(main).toMatch(/stonetop-timeline-row(\{\{#if ghost\}\}[^"]*\{\{\/if\}\})?"[^>]*data-year/);
 	});
 
 	it("draws the scrubber only when there is something to slide between", () => {

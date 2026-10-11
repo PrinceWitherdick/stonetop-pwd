@@ -9,8 +9,10 @@
 // and the one payer). "Someone" includes the carer: a Blessed can tend their own Recover.
 //
 // WHO PAYS, AND WHO DECIDES. "If you also spend 1 Stock": the Stock is the CARER's, and so is the
-// choice to spend it. When the patient's player owns the carer too (their own Blessed, or the GM at
-// the keyboard) they are the one deciding, and the Stock is spent right there. When not, the patient's
+// choice to spend it. When the patient's player is the one who would be asked anyway (carerStockAnswerer:
+// the carer's assigned player, the GM with none of the carer's players online, or the only one there),
+// they are the one deciding, and the Stock is spent right there (spendsCarerStockDirectly). Merely owning
+// the carer is not enough, at a table where everyone owns every sheet. When not, the patient's
 // player can only ASK: a User query goes to the carer's own player (hooks/DeathsDoorPrompt.js#
 // autoOpenUserId over the carer's non-GM owners), who is shown who is asking and what it costs and
 // answers with their own purse, paid by their own StonetopCharacter#spendStock. With none of the
@@ -127,23 +129,52 @@ async function spendCarerStock(carer, sourceKey) {
 }
 
 /**
- * Who is asked to spend `carer`'s Stock when this client does not own the carer: one of the carer's
- * players who is online (the one it is assigned to first; DeathsDoorPrompt.js#autoOpenUserId), else
- * the primary GM. Null when nobody is there to answer.
+ * Who decides on `carer`'s Stock for `patient`'s Recover, pressed by `asker`: the carer's player, else the
+ * primary GM. Null when nobody is there to answer. The answerer may be the asker, who then spends it straight
+ * away (spendsCarerStockDirectly).
+ *
+ * The carer's players are those who PLAY her, not merely own her (playbook-actors.js#playsCharacter): whoever
+ * she is assigned to, or with nobody assigned, her owners with no character of their own. The asker is her
+ * player outright when assigned to her, when it is her own Recover, or when nobody else plays her. Otherwise
+ * one of her other players online is asked (the assigned one first; DeathsDoorPrompt.js#autoOpenUserId), then
+ * the GM, and the asker decides only with neither here: at a table where every player owns every sheet and
+ * nobody is assigned, owning the carer does not make the patient's player the one who decides on another
+ * player's Blessed's Stock (the same rule as asking a PC, pc-ask-flow.js).
  */
-export function carerStockAnswerer(carer, users = globalThis.game?.users) {
-	const playerId = autoOpenUserId(ownerUsers(carer).filter(u => !u.isGM));
-	return (playerId ? users?.get?.(playerId) : null) ?? users?.activeGM ?? null;
+export function carerStockAnswerer(carer, users = globalThis.game?.users, { asker = null, patient = null } = {}) {
+	if (!carer) return null;
+	const userOf = id => users?.get?.(id) ?? null;
+	const owners = ownerUsers(carer).filter(u => !u.isGM && u.id !== asker?.id);
+	const assigned = owners.filter(u => u.assigned);
+	const others = assigned.length ? assigned : owners.filter(u => !userOf(u.id)?.character);
+	const askerAssigned = !!asker?.character && asker.character.id === carer.id;
+	const askerPlays = !!asker && !asker.isGM
+		&& (askerAssigned || (!asker.character && !assigned.length && !!carer.testUserPermission?.(asker, "OWNER")));
+	if (askerPlays && (askerAssigned || !patient || patient.id === carer.id || !others.length)) return asker;
+	const playerId = autoOpenUserId(others);
+	if (playerId) return userOf(playerId);
+	return users?.activeGM ?? (askerPlays ? asker : null);
 }
 
-/** Can this client get the carer's Stock spent at all: by owning the carer, or by asking someone who does. */
-export function canReachCarerStock(carer, users = globalThis.game?.users) {
-	return !!carer?.isOwner || !!carerStockAnswerer(carer, users);
+/** Can this user get the carer's Stock spent at all: by deciding on it themselves, or by asking whoever does. */
+export function canReachCarerStock(carer, { user = globalThis.game?.user, users = globalThis.game?.users, patient = null } = {}) {
+	return !!carerStockAnswerer(carer, users, { asker: user, patient });
 }
 
 /**
- * Pay Healer's Arts' Stock for `patient`'s Recover out of `carer`'s purse. Here when this client owns
- * the carer; otherwise by asking the carer's player, or the GM (HEALERS_ARTS_QUERY, see the header).
+ * Does THIS user decide on the carer's Stock, and so spend it straight from the Recover window? Only when
+ * they are the one who would be asked (carerStockAnswerer): owning the carer is not enough, since at a table
+ * where every player owns every sheet the patient's player would spend another player's Blessed's Stock
+ * unasked. Everyone else asks.
+ */
+export function spendsCarerStockDirectly(carer, { user = globalThis.game?.user, users = globalThis.game?.users, patient = null } = {}) {
+	if (!carer?.isOwner || !user) return false;
+	return carerStockAnswerer(carer, users, { asker: user, patient })?.id === user.id;
+}
+
+/**
+ * Pay Healer's Arts' Stock for `patient`'s Recover out of `carer`'s purse. Here when this user decides
+ * for the carer (spendsCarerStockDirectly); otherwise by asking the carer's player, or the GM (HEALERS_ARTS_QUERY, see the header).
  *
  * @returns {Promise<object|null>} the receipt when the Stock was spent; `{declined: true}` when the
  *   carer's side said no or closed the window, plus `unanswered: true` when no answer came at all;
@@ -151,9 +182,9 @@ export function canReachCarerStock(carer, users = globalThis.game?.users) {
  */
 export async function payHealersArtsStock({ carer, patient, sourceKey = null }) {
 	if (!carer) return null;
-	if (carer.isOwner) return spendCarerStock(carer, sourceKey);
-	const answerer = carerStockAnswerer(carer);
-	if (!answerer) return null;
+	if (spendsCarerStockDirectly(carer, { patient })) return spendCarerStock(carer, sourceKey);
+	const answerer = carerStockAnswerer(carer, globalThis.game?.users, { asker: globalThis.game?.user ?? null, patient });
+	if (!answerer || answerer.id === globalThis.game?.user?.id) return null;
 	globalThis.ui?.notifications?.info?.(
 		`Asking ${answerer.isGM ? "the GM" : answerer.name} whether ${carer.name} spends ${HEALERS_ARTS_STOCK} Stock on ${patient?.name ? `${patient.name}'s` : "this"} Recover.`);
 	try {

@@ -48,23 +48,8 @@
 			    searchControl=true
 			    searchTitle=(localize "stonetop.inventory.searchLabel")
 			    searchPlaceholder=(localize "stonetop.inventory.searchPlaceholder")}}
-			<hr class="stonetop-inv-separator">
 			{{!-- Regular pool --}}
-			<div class="stonetop-supplies-pool">
-				<span class="stonetop-supplies-pool-label"><strong>{{localize "stonetop.inventory.regularUndefinedPoolLabel"}}</strong></span>
-				<span class="stonetop-supplies-pool-diamonds" data-pool-cap="{{stonetop.inventory.outfit.regularPoolCap}}">
-					{{#each (poolGroups stonetop.inventory.outfit.regularPool)}}
-					{{#unless @first}}<span class="stonetop-supplies-pool-gap"></span>{{/unless}}
-					{{#each this}}
-					<input type="checkbox"
-					       class="stonetop-inv-diamond stonetop-regular-pool-btn{{#if checked}} is-checked{{/if}}"
-					       data-index="{{index}}"
-					       {{#if checked}}checked{{/if}}>
-					{{/each}}
-					{{/each}}
-				</span>
-			</div>
-			<p class="stonetop-supplies-pool-note">{{{localize "stonetop.inventory.regularUndefinedPoolNote"}}}</p>
+			{{> "stonetop.inv-undefined-pool" pool=stonetop.inventory.outfit.regularPool cap=stonetop.inventory.outfit.regularPoolCap}}
 			<hr class="stonetop-inv-separator">
 			{{#each stonetop.inventory.outfit.regularSegments}}
 			{{#if isGrid}}
@@ -106,9 +91,7 @@
 			      Their weightless siblings sit under the matching heading in the small
 			      column. Marking one counts toward load. --}}
 			{{#if stonetop.inventory.outfit.arcanaRegular.length}}
-			<hr class="stonetop-inv-separator">
 			{{> "stonetop.section-heading" title=(localize "stonetop.inventory.arcanaItems") collapse="invArcanaRegular"}}
-			<hr class="stonetop-inv-separator">
 			{{#each stonetop.inventory.outfit.arcanaRegular}}
 			<div class="stonetop-inv-item{{#if checked}} is-checked{{/if}}">
 				<span class="stonetop-inv-diamonds">
@@ -131,9 +114,7 @@
 			      The ◇ ones sit here; their pocket-sized siblings are under the matching
 			      heading in the small column. Marking one still counts toward load. --}}
 			{{#if stonetop.inventory.outfit.treasureRegular.length}}
-			<hr class="stonetop-inv-separator">
 			{{> "stonetop.section-heading" title=(localize "stonetop.inventory.treasureItems") collapse="invTreasureRegular"}}
-			<hr class="stonetop-inv-separator">
 			{{#each stonetop.inventory.outfit.treasureRegular}}
 			{{> "stonetop.inv-item-regular" deletable=true treasure=true}}
 			{{/each}}
@@ -141,31 +122,20 @@
 		</div>
 
 		{{!-- Small items (right column) --}}
-		<div class="stonetop-inventory-small" data-small-allotment="{{stonetop.inventory.outfit.smallItemLimit}}">
+		<div class="stonetop-inventory-small" data-small-allotment="{{stonetop.inventory.outfit.smallPool.max}}">
 			{{> "stonetop.section-heading" title=(localize "stonetop.inventory.smallItems")
 			    collapse="invSmall"
 			    searchControl=true
 			    searchTitle=(localize "stonetop.inventory.searchSmallLabel")
 			    searchPlaceholder=(localize "stonetop.inventory.searchSmallPlaceholder")}}
-			{{#if stonetop.inventory.outfit.smallItemLimit}}
+			{{#if stonetop.inventory.outfit.prosperityKnown}}
 			<p class="stonetop-inv-section-note">{{{format "stonetop.inventory.smallItemsNoteWithLimit" limit=stonetop.inventory.outfit.smallItemLimit}}}</p>
 			{{else}}
 			<p class="stonetop-inv-section-note">{{{localize "stonetop.inventory.smallItemsNote"}}}</p>
 			{{/if}}
 			<hr class="stonetop-inv-separator">
 			{{!-- Small pool --}}
-			<div class="stonetop-supplies-pool">
-				<span class="stonetop-supplies-pool-label"><strong>{{localize "stonetop.inventory.smallUndefinedPoolLabel"}}</strong></span>
-				<span class="stonetop-supplies-pool-diamonds" data-pool-cap="{{stonetop.inventory.outfit.smallPoolCap}}">
-					{{#each (poolItems stonetop.inventory.outfit.smallPool)}}
-					<input type="checkbox"
-					       class="stonetop-inventory-item-check stonetop-small-pool-display{{#if checked}} is-checked{{/if}}"
-					       data-index="{{index}}"
-					       {{#if checked}}checked{{/if}}>
-					{{/each}}
-				</span>
-			</div>
-			<p class="stonetop-supplies-pool-note">{{{localize "stonetop.inventory.smallUndefinedPoolNote"}}}</p>
+			{{> "stonetop.inv-undefined-pool" pool=stonetop.inventory.outfit.smallPool cap=stonetop.inventory.outfit.smallPoolCap small=true}}
 			<hr class="stonetop-inv-separator">
 			{{#each stonetop.inventory.outfit.smallItems}}
 			{{#if breakBefore}}<hr class="stonetop-inv-separator">{{/if}}
@@ -195,9 +165,7 @@
 			      ◇0 arcanum has always been — so owning cards never eats the small-item
 			      allowance. --}}
 			{{#if stonetop.inventory.outfit.arcanaSmall.length}}
-			<hr class="stonetop-inv-separator">
 			{{> "stonetop.section-heading" title=(localize "stonetop.inventory.arcanaItems") collapse="invArcanaSmall"}}
-			<hr class="stonetop-inv-separator">
 			{{#each stonetop.inventory.outfit.arcanaSmall}}
 			<div class="stonetop-inv-item stonetop-inv-small stonetop-inv-static{{#if checked}} is-checked{{/if}}">
 				<span class="stonetop-inv-label">{{name}}
@@ -210,9 +178,7 @@
 			      half under Arcana in the regular column. Marking one still eats the small
 			      allowance. --}}
 			{{#if stonetop.inventory.outfit.treasureSmall.length}}
-			<hr class="stonetop-inv-separator">
 			{{> "stonetop.section-heading" title=(localize "stonetop.inventory.treasureItems") collapse="invTreasureSmall"}}
-			<hr class="stonetop-inv-separator">
 			{{#each stonetop.inventory.outfit.treasureSmall}}
 			{{> "stonetop.inv-item-small" deletable=true treasure=true}}
 			{{/each}}

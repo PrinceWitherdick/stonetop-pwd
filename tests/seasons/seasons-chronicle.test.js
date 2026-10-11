@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readRepo } from "../fakes/css.js";
-import { cardinalWord, yearLabel, mergeSeasonBlock } from "../../module/seasons/seasons-chronicle.js";
+import { cardinalWord, yearLabel, mergeSeasonBlock, recordedSeasonTier } from "../../module/seasons/seasons-chronicle.js";
 
 // Minimal stand-ins for the wrapped blocks recordSeasonsChange writes — only the
 // `<section data-season>` marker matters to the merge.
@@ -79,5 +79,24 @@ describe("mergeSeasonBlock", () => {
 
 	it("starts a fresh page from empty content", () => {
 		expect(mergeSeasonBlock("", "spring", block("spring"))).toBe(block("spring"));
+	});
+});
+
+describe("recordedSeasonTier", () => {
+	// What a re-record falls back to when the roll's card has left the chat log, so fixing a note
+	// does not drop how the roll went.
+	const tiered = (season, tier) => `<section class="stonetop-season-block" data-season="${season}" data-fortunes-tier="${tier}"><h2>${season}</h2></section>`;
+
+	it("reads the tier off that season's own block", () => {
+		const html = tiered("spring", "success") + tiered("autumn", "failure");
+		expect(recordedSeasonTier(html, "autumn")).toBe("failure");
+		expect(recordedSeasonTier(html, "spring")).toBe("success");
+	});
+
+	it("answers null for a season with no tier, no block, or an unknown tier", () => {
+		expect(recordedSeasonTier(block("autumn"), "autumn")).toBeNull();
+		expect(recordedSeasonTier(tiered("spring", "success"), "autumn")).toBeNull();
+		expect(recordedSeasonTier(tiered("autumn", "bogus"), "autumn")).toBeNull();
+		expect(recordedSeasonTier("", "autumn")).toBeNull();
 	});
 });

@@ -161,7 +161,7 @@ describe("Big Magic and the sacred pouch", () => {
 	const bigMagicId = () => blessed("Big Magic")._id;
 	const withTraits = (list, level = 3) => blessedAt(level, { flags: { "possessions.subChoices": { [POUCH]: list } } });
 
-	it("un-learning Big Magic takes back the trait it added, and leaves the pouch's flavour alone", async () => {
+	it("removing Big Magic takes back the trait it added, and leaves the pouch's flavour alone", async () => {
 		const { char, actor } = withTraits(["origin-heirloom", "trait-sealed", "material-fur"]);
 		const bm = await char.addMove(bigMagicId());
 		await char.selectSubChoice(POUCH, "trait-unclean");
@@ -188,6 +188,32 @@ describe("Big Magic and the sacred pouch", () => {
 		const first = await char.addMove(bigMagicId());
 		await char.addMove(bigMagicId());
 		await char.selectSubChoice(POUCH, "trait-unclean");
+
+		await char.removeMove(first._id);
+		expect(traits(actor)).toEqual(["trait-sealed", "trait-unclean"]);
+	});
+
+	// The user's ruling: un-LEARNING Big Magic keeps its trait; only removal trims it. The sheet's
+	// "learned" switch is the item flag (StonetopCharacter#setMoveLearned).
+	const unlearn = (actor, id) => actor.items.find(i => i._id === id).setFlag("stonetop-pwd", "learned", false);
+	it("un-learning Big Magic keeps the trait it added", async () => {
+		const { char, actor } = withTraits(["trait-sealed"]);
+		const bm = await char.addMove(bigMagicId());
+		await char.selectSubChoice(POUCH, "trait-unclean");
+		await unlearn(actor, bm._id);
+		expect(traits(actor)).toEqual(["trait-sealed", "trait-unclean"]);
+	});
+
+	// Removing one of two copies, the other un-learned, takes back only the removed copy's trait:
+	// the un-learned copy still on the sheet keeps the one it paid for.
+	it("removing one Big Magic leaves the trait an un-learned second copy still holds", async () => {
+		const { char, actor } = withTraits(["trait-sealed"]);
+		const first  = await char.addMove(bigMagicId());
+		const second = await char.addMove(bigMagicId());
+		await char.selectSubChoice(POUCH, "trait-unclean");
+		await char.selectSubChoice(POUCH, "trait-unnoticed");
+		await unlearn(actor, second._id);
+		expect(traits(actor)).toHaveLength(3);
 
 		await char.removeMove(first._id);
 		expect(traits(actor)).toEqual(["trait-sealed", "trait-unclean"]);

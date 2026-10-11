@@ -9,14 +9,15 @@ import { ZOOM_VAR, anchoredScroll, clampScale, wireWheelZoom } from "../../modul
  * A scroll box with a picture in it `gutter` pixels in from the scroll origin, as the timeline's
  * canvas pads its content. The picture's rect follows the offsets, as a browser's would.
  */
-function fakeBox({ w = 400, h = 300, gutter = 100 } = {}) {
+function fakeBox({ w = 400, h = 300, gutter = 100, ui = 1 } = {}) {
 	let fn = null;
 	const props = new Map();
 	const el = {
-		clientWidth: w, clientHeight: h, clientLeft: 0, clientTop: 0,
+		clientWidth: w, clientHeight: h, clientLeft: 0, clientTop: 0, offsetWidth: w,
 		scrollLeft: 0, scrollTop: 0,
 		style: { setProperty: (k, v) => props.set(k, v) },
-		getBoundingClientRect: () => ({ left: 50, top: 20 }),
+		// `ui`: the window drawn that many times its laid-out size, as a UI scale draws it.
+		getBoundingClientRect: () => ({ left: 50, top: 20, width: w * ui, height: h * ui }),
 		querySelector: () => picture,
 		addEventListener: (type, f) => { if (type === "wheel") fn = f; },
 		removeEventListener: () => { fn = null; },
@@ -29,7 +30,7 @@ function fakeBox({ w = 400, h = 300, gutter = 100 } = {}) {
 		get wired() { return fn !== null; },
 	};
 	const picture = {
-		getBoundingClientRect: () => ({ left: 50 + gutter - el.scrollLeft, top: 20 + gutter - el.scrollTop }),
+		getBoundingClientRect: () => ({ left: 50 + ui * (gutter - el.scrollLeft), top: 20 + ui * (gutter - el.scrollTop) }),
 	};
 	return el;
 }
@@ -93,6 +94,18 @@ describe("wireWheelZoom", () => {
 		// Across: 400px into the picture at 1x, 800 at 2x, so 100 + 800 - 200.
 		expect(el.scrollLeft).toBe(700);
 		// Down: 50px into the picture at 1x, 100 at 2x, so 100 + 100 - 50.
+		expect(el.scrollTop).toBe(150);
+	});
+
+	it("keeps the same speck under the cursor when the window is drawn at a UI scale", () => {
+		// The case above drawn twice its size: the cursor is 400 across and 100 down on screen, which
+		// is the same 200 and 50 laid out, and the scroll offsets are laid out either way.
+		const el = fakeBox({ gutter: 100, ui: 2 });
+		el.scrollLeft = 300;
+		el.scrollTop = 100;
+		wire(el);
+		el.wheel({ deltaY: -100, clientX: 450, clientY: 120 });
+		expect(el.scrollLeft).toBe(700);
 		expect(el.scrollTop).toBe(150);
 	});
 

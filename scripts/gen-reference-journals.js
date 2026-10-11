@@ -88,7 +88,10 @@ function makeJournal(name, existing, pages) {
 
 function moveHtml(doc) {
     const desc = doc.system?.description ?? "";
-    const roll = doc.system?.rollType ? `<p><em>Roll +${doc.system.rollType.toUpperCase()}</em></p>` : "";
+    // "ask" is not a stat: the stat depends on the approach or the steading (+Fortunes, +Defenses...),
+    // and each such move says which in its own text, so it gets no label rather than "Roll +ASK".
+    const type = doc.system?.rollType;
+    const roll = type && type !== "ask" ? `<p><em>Roll +${type.toUpperCase()}</em></p>` : "";
     return `${roll}${desc}`;
 }
 

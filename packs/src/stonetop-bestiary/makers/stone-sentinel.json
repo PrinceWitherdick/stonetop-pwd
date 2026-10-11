@@ -31,6 +31,8 @@
     "creatureType": "construct"
   },
   "prototypeToken": {
+    "width": 2,
+    "height": 2,
     "name": "Stone Sentinel",
     "actorLink": false,
     "disposition": -1,

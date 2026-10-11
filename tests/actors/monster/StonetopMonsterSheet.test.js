@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { stubConfirm } from "../../fakes/confirm.js";
+import { stubAsk, stubConfirm, fakeForm } from "../../fakes/confirm.js";
 import { createStonetopMonsterSheetClass } from "../../../module/actors/monster/StonetopMonsterSheet.js";
 import { SYSTEM_ID } from "../../../module/system-id.js";
 
@@ -153,7 +153,7 @@ describe("StonetopMonsterSheet", () => {
 		expect(st.displayTagsHtml).not.toMatch(/<span[^>]*>grumpy/);
 		expect(st.displayTagsHtml).toContain("grumpy");
 		// Organization and size resolve their own tooltips.
-		expect(st.organizationTooltip).toMatch(/large groups of 6/);
+		expect(st.organizationTooltip).toMatch(/large groups \(6 or more\)/);
 		expect(st.sizeTooltip).toMatch(/human child/);
 	});
 
@@ -804,21 +804,45 @@ describe("StonetopMonsterSheet", () => {
 		}
 	});
 
-	it("resets HP and damage die to the organization defaults", async () => {
+	it("works max HP out from organization, size and the ticked rows, keeping damage taken", async () => {
+		// An aurochs (group, large) down 4 of 14; the GM ticks "particularly tough". Book I p.396:
+		// 6 + 4 + 4 = 14 again, so it stays down 4. Its damage line is not touched.
 		const actor = {
-			system: { organization: "solitary", attributes: {} },
+			system: { organization: "group", size: "large", attributes: { hp: { value: 10, max: 14 }, damage: { value: "gore d8+5", rollFormula: "d8+5" } } },
 			items: makeItems([]),
 			update: vi.fn(),
 		};
-		const sheet = makeSheet(actor);
+		const wait = stubAsk("apply", fakeForm({ "hpMod-tough": { checked: true } }));
 
-		await sheet._resetOrganizationDefaults();
+		await makeSheet(actor)._resetOrganizationDefaults();
 
+		expect(wait).toHaveBeenCalledTimes(1);
 		expect(actor.update).toHaveBeenCalledWith({
-			"system.attributes.hp.value":           12,
-			"system.attributes.hp.max":             12,
-			"system.attributes.damage.rollFormula": "d10",
+			"system.attributes.hp.value": 10,
+			"system.attributes.hp.max":   14,
 		});
+	});
+
+	it("counts size even with nothing ticked, where the old reset dropped it", async () => {
+		const actor = {
+			system: { organization: "solitary", size: "huge", attributes: { hp: { value: 12, max: 12 } } },
+			items: makeItems([]),
+			update: vi.fn(),
+		};
+		stubAsk("apply", fakeForm({}));
+
+		await makeSheet(actor)._resetOrganizationDefaults();
+
+		expect(actor.update).toHaveBeenCalledWith({ "system.attributes.hp.value": 20, "system.attributes.hp.max": 20 });
+	});
+
+	it("writes nothing when the GM keeps the stat block as it is", async () => {
+		const actor = { system: { organization: "horde", attributes: { hp: { value: 3, max: 7 } } }, items: makeItems([]), update: vi.fn() };
+		stubAsk("keep");
+
+		await makeSheet(actor)._resetOrganizationDefaults();
+
+		expect(actor.update).not.toHaveBeenCalled();
 	});
 
 	it("ignores reset when the organization is unset", async () => {
@@ -827,11 +851,25 @@ describe("StonetopMonsterSheet", () => {
 			items: makeItems([]),
 			update: vi.fn(),
 		};
+		const wait = stubAsk("apply", fakeForm({}));
 		const sheet = makeSheet(actor);
 
 		await sheet._resetOrganizationDefaults();
 
+		expect(wait).not.toHaveBeenCalled();
 		expect(actor.update).not.toHaveBeenCalled();
+	});
+
+	it("rolls a hand-written formula when the damage line prints no die, as the fight ring does", async () => {
+		const bare = { system: { attributes: { damage: { value: "", rollFormula: "d8" } } }, items: makeItems([]) };
+		expect((await makeSheet(bare).getData()).stonetop.damageModes).toMatchObject([{ text: "d8", formula: "d8" }]);
+
+		const named = { system: { attributes: { damage: { value: "claws", rollFormula: "d6+1" } } }, items: makeItems([]) };
+		expect((await makeSheet(named).getData()).stonetop.damageModes).toMatchObject([{ text: "Claws", formula: "d6+1" }]);
+
+		// A printed die still wins: the formula is only the fallback.
+		const printed = { system: { attributes: { damage: { value: "bite d10", rollFormula: "d4" } } }, items: makeItems([]) };
+		expect((await makeSheet(printed).getData()).stonetop.damageModes).toMatchObject([{ formula: "d10" }]);
 	});
 
 	it("updates the qualities rich-text field", async () => {

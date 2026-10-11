@@ -269,7 +269,7 @@ describe("applyWinterShortfall", () => {
 		expect(out.disaster).toBe(true);
 		expect(written(s)).toEqual({ "attributes.surplus.value": 0 });
 		// Owed on the steading from this write on, so a pick shut unmade leaves a header glyph.
-		expect(s.applyChanges.mock.calls[0][0].flags).toEqual({ winterDebt: null, disasterOwed: { cause: "winter's shortfall" } });
+		expect(s.applyChanges.mock.calls[0][0].flags).toEqual({ winterDebt: null, disasterOwed: { cause: "winter's shortfall", season: null } });
 	});
 
 	it("owes no pick above the floor", async () => {

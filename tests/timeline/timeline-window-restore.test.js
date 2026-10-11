@@ -105,6 +105,34 @@ describe("the timeline window across a reload", () => {
 		expect(new TimelineWindow().restoreView).toBeNull();
 	});
 
+	// A sheet tab the reader has gone off hides the column, which then reads 0 both ways: less the
+	// gutter, the empty corner. It answers with where it last stood on screen instead.
+	it("saves where it last stood on screen, not what a hidden column reads", () => {
+		const app = new TimelineWindow({ trackId: "pc-ellis", trackKind: "character", name: "Ellis" });
+		const scroll = fakeScroll({ gutterX: 200, gutterY: 100, left: 650, top: 130 });
+		let drawn = true;
+		scroll.getClientRects = () => (drawn ? [{}] : []);
+		app.element = [fakeRoot(scroll)];
+		app._noteView();
+		drawn = false;
+		scroll.scrollLeft = 0;
+		scroll.scrollTop = 0;
+		expect(app.restoreView).toEqual({ zoom: 1, left: 450, top: 30 });
+	});
+
+	// The sheet tab's panel is built after the reload and its first paint is not there at once; a save
+	// taken in between keeps the view it was handed rather than dropping it.
+	it("keeps the view it was handed until its column is drawn", async () => {
+		const app = new TimelineWindow({ trackId: "pc-ellis", trackKind: "character", name: "Ellis" });
+		let seen;
+		const drawn = vi.spyOn(Object.getPrototypeOf(TimelineWindow.prototype), "_render")
+			.mockImplementation(async function () { seen = this.restoreView; });
+		try {
+			await app._render(true, { view: { zoom: 2, left: 450, top: 30 } });
+		} finally { drawn.mockRestore(); }
+		expect(seen).toEqual({ zoom: 2, left: 450, top: 30 });
+	});
+
 	it("reopens at the saved zoom and place, against the gutter it is drawn with now", async () => {
 		const app = new TimelineWindow();
 		const scroll = fakeScroll({ gutterX: 150, gutterY: 80 });

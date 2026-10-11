@@ -14,6 +14,7 @@ import { CONDENSED_MOVE_SLUG, condensedArcanumMove, findArcanumMove, markArcanum
 import { boxIndexBefore, centerArcanumTracks, injectGlyphCheckboxes } from "../../utils/glyphs.js";
 import { stonetopChatCard } from "../../utils/chat.js";
 import { prettifySlug } from "../../utils/ledger-core.js";
+import { clipText, stripHtmlToText } from "../../utils/strings.js";
 import { frontTaskTrack } from "./seeker-collection.js";
 
 // Some arcana "items" are a place, structure, or phenomenon rather than carried gear
@@ -56,6 +57,16 @@ function _isUnlocked(item, unlockCounts, arcanaBoxes, circleCount) {
 	const tasks = frontTaskTrack(item.front);
 	if (tasks) return tasks.markers.filter(m => arcanaBoxes[`${item.slug}:front:${m.index}`]).length >= tasks.needed;
 	return true;
+}
+
+/**
+ * Whether a card's unlock track is complete under these marks: the timeline's reading of a card
+ * before and after one update (timeline-milestones.js#detectArcanaTracks), with nothing but the card
+ * and the two flag maps in hand. The same test as isArcanumUnlocked.
+ */
+export function arcanumUnlockedUnder(item, unlockCounts = {}, arcanaBoxes = {}) {
+	if (!item?.front) return false;
+	return _isUnlocked(item, unlockCounts ?? {}, arcanaBoxes ?? {}, unlockCircleCount(item.front.unlock?.description));
 }
 
 /**
@@ -196,6 +207,31 @@ export function consequenceBoxRange(backDescription) {
 	if (!inside) return null;
 	const from = boxes(text.slice(0, section.start));
 	return { from, to: from + inside };
+}
+
+/**
+ * The text a back-side □ marks: what follows its run of □, up to the next □, list or item end,
+ * as plain text. "" when the index is past the last □. Read off the RAW back description, whose □
+ * are indexed as consequenceBoxRange counts them.
+ */
+export function consequenceLabel(backDescription, index) {
+	const html = String(backDescription ?? "");
+	let seen = -1;
+	for (const match of html.matchAll(/□/g)) {
+		if (++seen < index) continue;
+		const rest = html.slice(match.index).replace(/^□+/, "");
+		const end  = rest.search(/□|<ul\b|<\/li>/i);
+		return stripHtmlToText(end < 0 ? rest : rest.slice(0, end)).trim();
+	}
+	return "";
+}
+
+/**
+ * consequenceLabel, cut to fit the timeline's row when a Consequence box is marked ("Lose 1 max HP").
+ */
+export function consequenceBoxLabel(backDescription, index) {
+	const plain = consequenceLabel(backDescription, index);
+	return plain.length > 140 ? `${clipText(plain, 139).trimEnd()}…` : plain;
 }
 
 // Run a side description through the full marker pipeline: center standalone tracks, then
@@ -456,7 +492,7 @@ export class CharacterArcana {
 		// reveal, a 7-9's owed back) lets the owner read it, not roll it. It goes by the side's
 		// title when there is one, since its "name" is a whole trigger.
 		if (moveSlug === CONDENSED_MOVE_SLUG) {
-			const move = condensedArcanumMove(item.back?.move);
+			const move = condensedArcanumMove(item.back?.move, { backDescription: item.back?.description ?? "" });
 			if (!move) return null;
 			const cardTitle = item.back?.title ?? item.front?.title ?? "";
 			const learned = _backRealised(item, this.identifiedSlugs, this.unlockCounts, this._flags.getFlag("boxes") ?? {});
@@ -476,6 +512,13 @@ export class CharacterArcana {
 	async getArcanum(slug) {
 		const [item] = await this._arcanaRepo.findBySlugs([slug]);
 		return item ?? null;
+	}
+
+	/** Whether a card's unlock track is complete: its front's options, its ○ run and its □ tasks. */
+	async isArcanumUnlocked(slug) {
+		const item = await this.getArcanum(slug);
+		if (!item?.front) return false;
+		return _isUnlocked(item, this.unlockCounts, this.boxStates, unlockCircleCount(item.front.unlock?.description));
 	}
 
 	async addArcanum(slug) {

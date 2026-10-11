@@ -583,7 +583,7 @@ export function createStonetopGmToolkitSheetClass(Base) {
 		 * The SAME card, deliberately, and by the same function: a GM who picks "Hurt someone"
 		 * off the list and a GM who draws it are reading it for the same reason a beat later, and
 		 * two shapes for one move would mean the second one had to be learned. `postGmMove` also
-		 * owns who the card goes to (the whole table — see its header), which is the part that
+		 * owns who the card goes to (the GMs, until one presses Share with Players; see its header), which is the part that
 		 * must not be re-implemented here.
 		 *
 		 * Resolved from the row rather than from the render context: the tab does not re-render

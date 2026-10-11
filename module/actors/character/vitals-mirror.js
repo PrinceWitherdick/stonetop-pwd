@@ -1,8 +1,8 @@
-// ── Stored armor and max HP, kept current without the sheet ────────────────
-// A character's armor and max HP are derived (StonetopCharacter#computedVitals): gear in four stores,
-// the playbook and level, move bonuses, an insert's Marks and the hand-set deltas. Everything outside
-// the sheet reads the STORED fields instead: the token's HP bar, the Fight tab's vitals, Apply on a
-// damage card, the ledger. The sheet mirrors them after each render (StonetopCharacterSheet#
+// ── Stored armor, max HP and damage die, kept current without the sheet ───
+// A character's armor, max HP and damage die are derived (StonetopCharacter#computedVitals): gear in
+// four stores, the playbook and level, move bonuses, an insert's Marks and the hand-set deltas.
+// Everything outside the sheet reads the STORED fields instead: the token's HP bar, the Fight tab's
+// vitals, Apply on a damage card, another hero's pile-on, the ledger. The sheet mirrors them after each render (StonetopCharacterSheet#
 // _syncStoredDerived), which left them stale whenever the change came from somewhere the sheet was not
 // open: a shield handed over mid-fight, a level or a Mark taken with the sheet closed.
 //
@@ -24,6 +24,7 @@ import { INSPIRATION_FLAG } from "./inspiration.js";
 import { BLESSING_FLAG } from "./roll-boosts.js";
 import { NEEDS_SUN_FLAG, ONGOING_INVOCATION_FLAGS } from "./ongoing-invocation.js";
 import { MIRRORED_HP_PENALTY_FLAG } from "./StonetopFlags.js";
+import { DEATHS_DOOR_FLAG, DEATHS_DOOR_ROLLING_FLAG, UNSTOPPABLE_FIGHTING_FLAG } from "./deaths-door.js";
 
 // What the vitals are worked out from on the character document itself, outside its flags. Its items
 // have hooks of their own. HP, XP, wounds, the name and the portrait move nothing, and the mirror's own
@@ -41,7 +42,11 @@ const SYSTEM_INPUTS = [
 // the Invocations (the `invocations` bag and the running slots; NOT holyLight, which the Candle's armor
 // reads). Each is its owner's constant (tests/actors/character/vitals-mirror checks the spelling).
 export const FLAG_NOISE = new Set([
-	"readiness", "ledger", "camp", "campOwed", "deathsDoor",
+	"readiness", "ledger", "camp", "campOwed", "campHunger", DEATHS_DOOR_FLAG,
+	// The Death's Door roll in progress, written three to five times a roll (the claim, the dice, each boost, the end).
+	DEATHS_DOOR_ROLLING_FLAG,
+	// Unstoppable's "fighting on at 0 HP" stamp, laid with the drop and lifted when the fight ends.
+	UNSTOPPABLE_FIGHTING_FLAG,
 	CLASHED_FLAG, HARMED_BY_FLAG, KNOCKED_DOWN_FLAG, ALPHA_FLAG,
 	INSPIRATION_FLAG, BLESSING_FLAG, NEEDS_SUN_FLAG.split(".")[0], ...ONGOING_INVOCATION_FLAGS,
 	// The mirror's own bookkeeping, written in the same update as the max it describes.
@@ -96,9 +101,11 @@ export function mayMoveSteadingGear(changed) {
 	return touches(changed, STEADING_INPUT);
 }
 
+// Armor, max HP and the damage die, in ONE ledger-quiet update (StonetopCharacter#syncStoredVitals): the
+// die comes out of the same computedVitals pass, from the playbook and move bonuses it already worked out.
 function mirror(actor) {
 	return actor.typedActor?.syncStoredVitals?.()
-		.catch(err => console.error(`Stonetop | could not mirror ${actor.name}'s armor and max HP`, err));
+		?.catch(err => console.error(`Stonetop | could not mirror ${actor.name}'s armor, max HP and damage die`, err));
 }
 
 /** Re-mirror a character's vitals once the changes arriving now have settled. */

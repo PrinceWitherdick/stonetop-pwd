@@ -85,24 +85,28 @@ export const DAMAGE_RANGE_TAGS = [
 	{ id: "far",   label: "far",   hint: "Up to ~100 steps or more" },
 ];
 
+// The two piercing rows are printed WITH messy ("Can slice through thick hide: 1 piercing, messy",
+// Book I p.398), so picking one brings both tags. `piercing` is the row's armor-piercing value, which
+// "strikes deftly and precisely" adds to rather than prints beside (see computeMonster).
 export const DAMAGE_EFFECT_TAGS = [
 	{ id: "area",          label: "area",          hint: "Can hurt many foes at once" },
 	{ id: "grabby",        label: "grabby",        hint: "Latches on, pins, grapples" },
 	{ id: "messy",         label: "messy",         hint: "Rips foes and things apart" },
-	{ id: "1 piercing",    label: "1 piercing",    hint: "Slices through thick hide" },
-	{ id: "3 piercing",    label: "3 piercing",    hint: "Tears metal apart" },
+	{ id: "1 piercing",    label: "1 piercing, messy", hint: "Can slice through thick hide", piercing: 1, also: ["messy"] },
+	{ id: "3 piercing",    label: "3 piercing, messy", hint: "Can tear metal apart",         piercing: 3, also: ["messy"] },
 	{ id: "ignores armor", label: "ignores armor", hint: "Bypasses armor entirely" },
 	{ id: "crude",         label: "crude",         hint: "Prone to breakage" },
 ];
 
 // ── Step 6: damage modifiers that change the numbers/die (pick all that apply) ─
-// die: steps up/down the die ladder; damage: flat bonus; adv/dis: roll-twice.
+// die: steps up/down the die ladder; damage: flat bonus; adv/dis: roll-twice; piercing: ADDED to the
+// attack's piercing ("+1 piercing", Book I p.399), so 1 piercing plus deft is 2 piercing.
 export const DAMAGE_MODIFIERS = [
 	{ id: "weak",       label: "Small and weak",                     die: -1 },
 	{ id: "vicious",    label: "Vicious and obvious",                damage: 2 },
 	{ id: "relentless", label: "Relentless or overwhelming",         adv: 1 },
 	{ id: "strong",     label: "Impressively strong",                damage: 2, tag: "forceful" },
-	{ id: "deft",       label: "Strikes deftly and precisely",       tag: "1 piercing" },
+	{ id: "deft",       label: "Strikes deftly and precisely",       piercing: 1 },
 	{ id: "subtle",     label: "Physical injury isn't its worst danger", die: -1 },
 	{ id: "ancient",    label: "Ancient and noteworthy",             die: 1 },
 	{ id: "abhorrent",  label: "Abhors violence",                    dis: 1 },
@@ -167,18 +171,50 @@ function _cleanAttackName(input) {
  * change, which the live summary shows before anything is created.
  *
  * The creature-level advantage note rides along, since the picks that produce it ("Relentless or
- * overwhelming", "Abhors violence") describe the CREATURE and not one of its blows.
+ * overwhelming", "Abhors violence") describe the CREATURE and not one of its blows. So do the
+ * other damage modifiers' tags when the blow takes the creature's die: that die already carries
+ * "impressively strong"'s +2, so it carries its forceful too, and "strikes deftly" adds its +1
+ * piercing (Book I p.399). A blow with a die of its own was sized by the GM, and keeps its own tags.
  */
-function _renderExtraAttack(extra, { rollFormula, advStr }) {
+function _renderExtraAttack(extra, { rollFormula, advStr, modTags, piercingBonus }) {
 	const name = _cleanAttackName(extra?.name);
 	const typed = String(extra?.die ?? "").trim();
-	const tags = _joinTags(extra?.tags ?? []);
+	const ownDie = isWholeDamageDie(typed);
+	const picked = _joinTags(extra?.tags ?? []);
 	// An entry that says nothing is not a blow. Left in, it would print as the creature's own die
 	// with no name beside it — "claws d8 or d8" — which every reader of the line then counts as a
 	// second attack, and the GM gets a phantom button to press.
-	if (!name && !tags.length && !typed) return "";
-	const die = isWholeDamageDie(typed) ? typed.replace(/\s+/g, "") : rollFormula;
+	if (!name && !picked.length && !typed) return "";
+	const tags = _attackTagList(picked, ownDie ? {} : { modTags, piercingBonus });
+	const die = ownDie ? typed.replace(/\s+/g, "") : rollFormula;
 	return `${name ? `${name} ` : ""}${die}${advStr}${tags.length ? ` (${tags.join(", ")})` : ""}`;
+}
+
+/**
+ * One attack's tag list, in first-seen order: the picked tags, then the damage modifiers' own.
+ *
+ * Piercing is a NUMBER, not a tag to stack. A piercing row brings the messy printed beside it ("Can
+ * slice through thick hide: 1 piercing, messy", Book I p.398), and "strikes deftly and precisely"
+ * is "+1 piercing" (p.399): ADDED to the row's value, so thick hide plus deft is "2 piercing" and
+ * tearing metal plus deft is "4 piercing". Printed as one tag where the row was picked, or at the end
+ * when only deft gives any, because every reader of the line takes the first "N piercing" it finds.
+ */
+function _attackTagList(picked, { modTags = [], piercingBonus = 0 } = {}) {
+	const out = [];
+	let piercing = 0;
+	let slot = -1;
+	for (const tag of picked) {
+		const row = DAMAGE_EFFECT_TAGS.find(o => o.id === tag && o.piercing);
+		if (!row) { out.push(tag); continue; }
+		piercing = Math.max(piercing, row.piercing);
+		if (slot < 0) { slot = out.length; out.push(null); }
+		out.push(...(row.also ?? []));
+	}
+	out.push(...modTags);
+	const total = piercing + piercingBonus;
+	if (slot >= 0) out[slot] = `${total} piercing`;
+	else if (total > 0) out.push(`${total} piercing`);
+	return _joinTags(out);
 }
 
 // Join tags in first-seen order, dropping blanks and case-insensitive dupes.
@@ -225,7 +261,8 @@ export function computeMonster(sel = {}) {
 	let armorValue = armorBase.id;
 	const armorSources = [];
 	if (armorBase.source) armorSources.push(armorBase.source);
-	if (size.id === "tiny") { armorValue += 1; armorSources.push("small"); } // tiny → +1 armor
+	// "It's tiny: +1" (Book I p.397); Book II writes the source "(size)", as the Blue Magpie's is.
+	if (size.id === "tiny") { armorValue += 1; armorSources.push("size"); }
 	for (const id of sel.armorMods ?? []) {
 		const mod = _byId(ARMOR_MODIFIERS, id);
 		if (!mod) continue;
@@ -240,6 +277,7 @@ export function computeMonster(sel = {}) {
 	let damageBonus = size.damage;
 	let advCount = 0;
 	let disCount = 0;
+	let piercingBonus = 0;
 	const modTags = [];
 	for (const id of sel.damageMods ?? []) {
 		const mod = _byId(DAMAGE_MODIFIERS, id);
@@ -248,6 +286,7 @@ export function computeMonster(sel = {}) {
 		damageBonus += mod.damage ?? 0;
 		advCount += mod.adv ?? 0;
 		disCount += mod.dis ?? 0;
+		piercingBonus += mod.piercing ?? 0;
 		if (mod.tag) modTags.push(mod.tag);
 	}
 	const damageDie = stepDie(org.die, dieSteps);
@@ -257,7 +296,7 @@ export function computeMonster(sel = {}) {
 	// contributed by damage modifiers (forceful, deft's piercing). First-seen order.
 	const chosenRange  = (sel.damageTags ?? []).filter(t => DAMAGE_RANGE_TAGS.some(o => o.id === t));
 	const chosenEffect = (sel.damageTags ?? []).filter(t => DAMAGE_EFFECT_TAGS.some(o => o.id === t));
-	const damageTags = _joinTags([...chosenRange, ...chosenEffect, ...modTags]);
+	const damageTags = _attackTagList(_joinTags([...chosenRange, ...chosenEffect]), { modTags, piercingBonus });
 
 	const bonusStr = signedBonus(damageBonus);
 	const rollFormula = `${damageDie}${bonusStr}`;
@@ -276,7 +315,7 @@ export function computeMonster(sel = {}) {
 	// why the sheet gives each its own roll button and Clash asks which one struck.
 	const damageValue = joinAttackProse([
 		primary,
-		...(sel.extraAttacks ?? []).map(extra => _renderExtraAttack(extra, { rollFormula, advStr })),
+		...(sel.extraAttacks ?? []).map(extra => _renderExtraAttack(extra, { rollFormula, advStr, modTags, piercingBonus })),
 	]);
 
 	// ── Tag line (organization + size + nature + notable + custom) ──────────────
@@ -302,6 +341,27 @@ export function computeMonster(sel = {}) {
 		count: org.count,
 		rangeAdvice: size.range,
 	};
+}
+
+/**
+ * A stat block's max HP worked out again from the book's table, and its current HP after it.
+ *
+ * The same arithmetic the worksheet does (computeMonster): organization, plus size, plus each "what
+ * else applies?" row (Book I p.396). The rows are not stored on a stat block, so the caller asks
+ * which apply. Damage already taken stays taken: a crinwin down 1 of 3 is down 1 of the new max
+ * too, floored at 0 and never above the new max. Null when there is no organization to start from,
+ * since the base HP is the organization's.
+ *
+ * @param {{organization?: string, size?: string, hpMods?: string[], hpMax?: number, hpValue?: number}} o
+ * @returns {{max: number, value: number}|null}
+ */
+export function rederiveMonsterHp({ organization, size, hpMods = [], hpMax = 0, hpValue = 0 } = {}) {
+	const org = String(organization ?? "").trim().toLowerCase();
+	if (!_byId(ORGANIZATIONS, org)) return null;
+	const sizeId = String(size ?? "").trim().toLowerCase();
+	const max = computeMonster({ organization: org, size: _byId(SIZES, sizeId) ? sizeId : "medium", hpMods }).hp;
+	const taken = Math.max(0, (Number(hpMax) || 0) - (Number(hpValue) || 0));
+	return { max, value: Math.min(max, Math.max(0, max - taken)) };
 }
 
 // Shape a `monster` Actor creation payload from an already-derived, flat options object.
@@ -342,7 +402,21 @@ export function buildMonsterActorData({
 			actorLink: false,
 			disposition: globalThis.CONST?.TOKEN_DISPOSITIONS?.HOSTILE ?? -1,
 			texture: img ? { src: img } : undefined,
+			width:  monsterTokenSize(size),
+			height: monsterTokenSize(size),
 		},
 		items,
 	};
+}
+
+/**
+ * A creature's token footprint in grid squares, off its size tag: "Like a horse, cart, etc." takes
+ * two squares a side, "Like an elephant, or bigger" three (Book I p.395's size rows). Tiny and small
+ * stay a whole square rather than shrinking: a half-square token is too small a thing to click.
+ */
+const MONSTER_TOKEN_SIZES = Object.freeze({ large: 2, huge: 3 });
+
+/** Grid squares a side for a monster of `size` (its `system.size`); 1 for anything else. */
+export function monsterTokenSize(size) {
+	return MONSTER_TOKEN_SIZES[String(size ?? "").trim().toLowerCase()] ?? 1;
 }

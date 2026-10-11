@@ -135,7 +135,7 @@ describe("meetWithDisaster", () => {
 		expect(s.applyChanges).toHaveBeenCalledTimes(1);
 		expect(s.applyChanges.mock.calls[0][0]).toEqual({
 			system: {},
-			flags: { seasonSteps: { surplus: "1:autumn" }, disasterOwed: { cause: "a failed harvest" } },
+			flags: { seasonSteps: { surplus: "1:autumn" }, disasterOwed: { cause: "a failed harvest", season: null } },
 		});
 		expect(opened).toHaveLength(1);
 	});
@@ -184,7 +184,10 @@ describe("meetWithDisaster", () => {
 
 	it("is waiting on the header while it is owed", () => {
 		const owed = steadingWith({ steading: { disasterOwed: { cause: "winter's shortfall" } } });
-		expect(owed.disasterOwed()).toEqual({ cause: "winter's shortfall" });
+		expect(owed.disasterOwed()).toEqual({ cause: "winter's shortfall", season: null });
+		// The Seasons Change it was met in comes back with it, for the pick made later.
+		const season = { seasonId: "winter", year: 2, title: "Winter's shortfall" };
+		expect(steadingWith({ steading: { disasterOwed: { cause: "x", season } } }).disasterOwed().season).toEqual(season);
 		const row = owed.holdsView().find(r => r.key === "disasterOwed");
 		expect(row.action).toBe("meet-disaster-owed");
 		expect(row.tooltip).toContain("winter's shortfall");

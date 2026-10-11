@@ -71,17 +71,6 @@
         "rollFormula": ""
       },
       "_key": "!actors.items!F0SuxRtw6dqB6Nvh.i5IbNC2E5YFQMPED"
-    },
-    {
-      "_id": "HwT4Rew3fxkzRx6m",
-      "name": "Choke with sinewy fingers",
-      "type": "monsterMove",
-      "img": "icons/skills/wounds/injury-hand-blood-red.webp",
-      "system": {
-        "description": "<p>Clammy, too-cold fingers close around a throat. Claws, rocks, choking: d6 damage (hand).</p>",
-        "rollFormula": "d6"
-      },
-      "_key": "!actors.items!F0SuxRtw6dqB6Nvh.HwT4Rew3fxkzRx6m"
     }
   ],
   "effects": [],

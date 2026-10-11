@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { FakeActorBuilder } from "../../fakes/FakeActorBuilder.js";
 import { invokeWindowNotice, readInvocationState, resolveInvocationEnd } from "../../../module/actors/character/ongoing-invocation.js";
+import { auspiciousBirthChoice } from "../../../module/actors/character/invoke-consequences.js";
 import { confirmOutcome, askWithButtons } from "../../../module/utils/ask-with-buttons.js";
 
 // Re-consecrating asks first (R5); the answer is the test's to give.
@@ -96,6 +97,11 @@ function makeSheet({ moves = [], editable = true, ongoing = "", known = [], debi
 			{ key: "dazed",    name: "Dazed",    marked: false },
 			{ key: "miserable", name: "Miserable", marked: false },
 		],
+		// As StonetopCharacter#debilityMarkChoices: Auspicious Birth's circle first when that background is taken.
+		get debilityMarkChoices() {
+			const circle = auspiciousBirthChoice({ playbook, background, setupResources });
+			return circle ? [circle, ...this.debilityChoices] : this.debilityChoices;
+		},
 		markDebility: vi.fn(async () => true),
 		background: {
 			selectedSlug: background,

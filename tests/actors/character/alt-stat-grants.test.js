@@ -92,6 +92,20 @@ describe("the sheet's alternate-stat offer", () => {
 		expect(await sheetFor(off.char, off.actor)._altStatChoiceForRollable(rollableFor(clash2))).toBeNull();
 	});
 
+	// GUARD (wave 4): a move a player wrote under a book move's name acts as itself (owns-move.js#bookMoveName),
+	// on either side: a homebrew "Clash" is offered no +DEX, and a homebrew "Skill at Arms" grants none.
+	it("offers nothing on a player's own \"Clash\", and a player's own \"Skill at Arms\" grants nothing", async () => {
+		const custom = { "stonetop-pwd": { custom: true } };
+		const homebrewClash = makeLiveItem({ name: "Clash", type: "move", system: { moveType: "other", rollType: "str" }, flags: custom });
+		const one = buildLiveCharacter({ slug: "the-fox", name: "The Fox", seedStartingMoves: false, items: [homebrewClash, pbMove("Skill at Arms")] });
+		expect(await sheetFor(one.char, one.actor)._altStatChoiceForRollable(rollableFor(homebrewClash))).toBeNull();
+
+		const clash = basic("Clash", "str");
+		const homebrewSkill = makeLiveItem({ name: "Skill at Arms", type: "move", system: { moveType: "other" }, flags: custom });
+		const two = buildLiveCharacter({ slug: "the-fox", name: "The Fox", seedStartingMoves: false, items: [clash, homebrewSkill] });
+		expect(await sheetFor(two.char, two.actor)._altStatChoiceForRollable(rollableFor(clash))).toBeNull();
+	});
+
 	it("does not offer +CHA on a CON move for an un-learned Laugh at Danger", async () => {
 		const con = basic("Endure", "con");
 		const { char, actor } = buildLiveCharacter({ slug: "the-fox", name: "The Fox", seedStartingMoves: false, items: [con, pbMove("Laugh at Danger", { learned: false })] });

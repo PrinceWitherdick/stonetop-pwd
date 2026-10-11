@@ -15,7 +15,8 @@ import {
 import {
 	wireInvocationEffects, bathWindowContent, bathPatientView, chooseBathMember, BATH_FLAG, SHADOW_FLAG, BATH_OF_HEALING_LIGHT, GO_BACK_TO_THE_SHADOW,
 } from "../../../module/actors/character/invocation-apply.js";
-import { classifyResult, rollStat } from "../../../module/utils/roll-engine.js";
+import { rollStat } from "../../../module/utils/roll-engine.js";
+import { cardTierNow, rolledRecord, ROLLED_FLAG } from "../../../module/utils/counted-tier.js";
 import { moveCardBody } from "../../../module/utils/move-tiers.js";
 import { moveChatCard } from "../../../module/utils/chat.js";
 import { withMovePickBonuses } from "../../../module/actors/character/move-pick-bonuses.js";
@@ -168,10 +169,9 @@ function renderCard(message, parts) {
 	return root;
 }
 
-/** stonetop.js#_invokeCardMissed: a rolled card whose total is a 6-. */
+/** stonetop.js#_invokeCardMissed: a rolled card that COUNTS as a 6- (its total, bent by the rules on the card). */
 function missed(message) {
-	const roll = message.rolls?.at(0);
-	return !!roll && classifyResult(roll.total).key === "failure";
+	return cardTierNow(message, SCOPE) === "failure";
 }
 
 /** One consequence row, found by its printed words. */
@@ -208,6 +208,24 @@ describe("the chat render dispatch", () => {
 		expect(hook.indexOf("wireInvokeConsequences(message, html);")).toBeGreaterThan(picks);
 		expect(hook.indexOf("wireInvocationEffects(message, html, { missed: _invokeCardMissed(message) });")).toBeGreaterThan(picks);
 		expect(hook).toContain("wireWielderInvoke(message, html);");
+	});
+
+	// A card's 6- consequences and its Logbook offer both follow the tier the card COUNTS as: a rule stamped on it
+	// that counts a miss as a 7-9 lifts it off the miss, and one that counts a 7-9 as a 10+ leaves no Logbook to buy.
+	it("reads the Invoke miss and the Know Things upgrade off the card's counted tier, not its bare total", () => {
+		const src = fs.readFileSync(path.resolve("stonetop.js"), "utf8");
+		const body = name => src.slice(src.indexOf(`function ${name}(`), src.indexOf("\n}\n", src.indexOf(`function ${name}(`)));
+		expect(body("_invokeCardMissed")).toContain("cardTierNow(message, SYSTEM_ID)");
+		expect(body("_knowThingsCountsAsStrongHit")).toContain("cardTierNow(message, SYSTEM_ID)");
+		expect(body("_wireLogbook")).toContain("_knowThingsCountsAsStrongHit(message)");
+		expect(body("_upgradeKnowThings")).toContain("_knowThingsCountsAsStrongHit(message)");
+		expect(body("_wireLogbook")).not.toContain("roll.total");
+	});
+
+	it("counts a 6- the card lifts to a 7-9 as no miss", () => {
+		const flags = { [SCOPE]: { [ROLLED_FLAG]: rolledRecord("wis", { missCountsAsPartial: "Tower Eternal" }) } };
+		expect(missed(chatMessage({ flags, total: 6 }))).toBe(false);
+		expect(missed(chatMessage({ total: 6 }))).toBe(true);
 	});
 });
 

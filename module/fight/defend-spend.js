@@ -325,6 +325,22 @@ export async function spendOnBlow(message, kind, offer, { scope = SYSTEM_ID, str
 }
 
 /**
+ * Whether a damage card is being applied right now: its `applying` mark (combat/attack-flow.js#applyOwedDamage)
+ * names a user who is still connected. A mark left by someone who dropped mid-apply holds nothing. PURE apart
+ * from `users`.
+ *
+ * @param {object} damage  the card's damage flag
+ * @param {{get?: Function}} [users]
+ */
+export function beingApplied(damage, users = globalThis.game?.users) {
+	const by = damage?.applying;
+	if (!by) return false;
+	if (typeof by !== "string") return true;
+	const user = users?.get?.(by);
+	return user ? !!user.active : !users?.get;
+}
+
+/**
  * Record one spend on the card: the Readiness off the defender and the card's flag told. Run in the card's
  * turn on this client (utils/card-queue.js), behind any Apply or other spend already pressed, so each reads
  * what the other wrote: a halving that comes after the blow is applied is refused, not lost. Writes only
@@ -341,6 +357,9 @@ export function takeSpend(message, kind, offer, { scope = SYSTEM_ID } = {}) {
 	const take = async () => {
 		const now = message.getFlag(scope, "damage");
 		if (!now || (now.applied ?? []).some(a => a.uuid === offer.row.uuid)) return false;
+		// Being applied right now, perhaps on another client (combat/attack-flow.js#applyOwedDamage): the HP
+		// may already be written whole, so the Readiness would buy nothing.
+		if (beingApplied(now)) return false;
 		if (costsReadiness(kind) && heldReadiness(offer.defender) < Math.max(1, cost)) return false;
 		// The same option twice on one blow is refused (p.216: "each option once against any given attack").
 		// A sufferer's own move (I Get Knocked Down), so a stand-in may still take it on a blow whose ward took

@@ -100,6 +100,17 @@ describe("the lines of every move roll, on a roll with no move item", () => {
 		expect(notes(direct[0])).toContain("Constant Vigilance");
 	});
 
+	// Battle Joy (p.114): "you ignore ... the effects of debilities as long as you keep fighting". Dazed stops
+	// gating Constant Vigilance exactly while the dice ignore it: raging AND Battle Joy learned (wave 4 DEB-2).
+	it("offers Constant Vigilance to a dazed character in their Battle Joy, but not to a stranded rage", async () => {
+		const raging = roller({ slug: "the-heavy", name: "The Heavy", moves: ["Constant Vigilance", "Battle Joy"],
+			flags: { battleJoy: true }, dazed: true });
+		expect(await keysOf(raging.char, "Forage")).toEqual(["constant-vigilance"]);
+		const stranded = roller({ slug: "the-heavy", name: "The Heavy",
+			moves: ["Constant Vigilance", { name: "Battle Joy", learned: false }], flags: { battleJoy: true }, dazed: true });
+		expect(await keysOf(stranded.char, "Forage")).toEqual([]);
+	});
+
 	it("offers Underestimated the same way", async () => {
 		const { char } = roller({ slug: "the-would-be-hero", name: "The Would-Be Hero", moves: ["Underestimated"] });
 		expect(await keysOf(char, "Improvise")).toEqual(["underestimated"]);

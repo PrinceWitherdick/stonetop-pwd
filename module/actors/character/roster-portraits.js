@@ -26,8 +26,8 @@ import { PERSON_ROSTER_IMG } from "../../utils/person-portrait.js";
 
 /**
  * Where each kind of roster member keeps its face. The keys are the SAME strings the HP writer
- * uses for these rows (`_followerHpUpdate`: crew-individual / crew-member / custom-member), so a
- * roster row names itself one way for both of the things it stores.
+ * uses for these rows (follower-fate.js#followerFateHpPath: crew-individual / crew-member /
+ * custom-member), so a roster row names itself one way for both of the things it stores.
  *
  * Where the face actually sits differs by kind, which is why the crew's two stores are different
  * arrays rather than one:

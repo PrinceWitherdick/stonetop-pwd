@@ -1,0 +1,20 @@
+{{!-- A SEASON'S "+ ADD" SLOT: the last item in its list of cards, where an entry written into this
+      season lands (addEntry appends). Shown on hover or focus of its season (or its thread's cell on
+      the aggregate), and always on a touch screen and in the clock's ghost season. It keeps its
+      room while hidden, so revealing it never moves a card.
+
+      Glyph AND word: a reader on a magnifier must not have to guess what a bare "+" adds.
+
+      `data-season`/`data-year`/`data-year-only` are the date the entry dialog opens on; the lane's
+      `data-track-id` (or the window's own thread) is where it is written.
+
+      Context: an `add` view-model (timeline-view.js#addSlotVM). --}}
+<li class="stonetop-timeline-add-slot{{#if ghost}} stonetop-timeline-add-slot--ghost{{/if}}">
+	<button type="button" class="stonetop-timeline-add"
+	        data-season="{{season}}" data-year="{{year}}" data-year-only="{{yearOnly}}"
+	        data-timeline-focus="add-{{key}}{{#if trackId}}-{{trackId}}{{/if}}"
+	        aria-label="{{label}}" data-tooltip="{{label}}">
+		<i class="fas fa-plus" aria-hidden="true"></i>
+		<span>{{localize "stonetop.timeline.addShort"}}</span>
+	</button>
+</li>

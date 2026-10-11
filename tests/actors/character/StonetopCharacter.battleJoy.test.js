@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
 import { buildLiveCharacter, makeLiveItem, resetLiveIds } from "../../fakes/LiveCharacter.js";
 import { BATTLE_JOY } from "../../../module/actors/character/battle-joy.js";
 
@@ -36,6 +37,32 @@ describe("a marked debility, ordinarily", () => {
 
 	it("leaves a stat it does not touch alone", () => {
 		const { char } = heavy({ weakened: true });
+		expect(char.applyDebilityRollMode("int", { rollMode: "normal" })).toEqual({ rollMode: "normal" });
+	});
+
+	// The stats a debility touches are the book's (p.52), the ones the snapshot and the sheet show, never the
+	// stored `stat` array beside the box (wave 4 DEB-3).
+	// One copy of each debility's line, in languages/en.json: the roll card, the debility pickers and the
+	// stat block's tooltips all read `stonetop.debilities.<key>.description` (wave 4 DEB-4).
+	it("names the book's line on the card, read from en.json, the key the stat block localizes too", () => {
+		const { char } = heavy({ weakened: true });
+		const line = globalThis.game.i18n.localize("stonetop.debilities.weakened.description");
+		expect(line).toBe("Fatigued, tired, sluggish, shaky. Disadvantage on +STR or +DEX rolls.");
+		expect(char.applyDebilityRollMode("str", { rollMode: "normal" }).stonetopDebilityTooltip).toBe(line);
+		expect(char.debilityChoices.find(d => d.key === "weakened").description).toBe(line);
+		const block = readFileSync(new URL("../../../templates/actor/partials/stat-block.hbs", import.meta.url), "utf8");
+		for (const key of ["weakened", "dazed", "miserable"]) {
+			expect(block).toContain(`data-tooltip="{{localize "stonetop.debilities.${key}.description"}}"`);
+			expect(globalThis.game.i18n.localize(`stonetop.debilities.${key}.description`)).not.toContain("stonetop.");
+		}
+		expect(block).not.toContain("Disadvantage on +");
+	});
+
+	it("reads its stats off the book, not a drifted stored copy", () => {
+		const { char, actor } = heavy({ weakened: true });
+		actor.system.attributes.debilities.options.weakened.stat = [];
+		expect(char.applyDebilityRollMode("str", { rollMode: "normal" }).rollMode).toBe("dis");
+		actor.system.attributes.debilities.options.weakened.stat = ["int"];
 		expect(char.applyDebilityRollMode("int", { rollMode: "normal" })).toEqual({ rollMode: "normal" });
 	});
 });

@@ -3,6 +3,7 @@ import { SYSTEM_ID } from "../system-id.js";
 import { prefersReducedMotion } from "../utils/reduced-motion.js";
 import { getStonetopSteadingActor, isSteadingActor } from "../utils/world.js";
 import { currentSeasonView, nextSeasonStamp, readCurrentSeason, readCurrentYear } from "./current-season.js";
+import { START_YEAR_CHANGED_HOOK } from "./campaign-year.js";
 import { currentWeatherView, readCurrentWeather } from "./current-weather.js";
 import { seasonLabel } from "./seasons-change-reminders.js";
 import { yearLabel } from "./seasons-chronicle.js";
@@ -86,6 +87,13 @@ export function seasonMenuItems(stamp, fallbackYear = 1) {
 			label: "Change Season",
 			hint:  "Choose which season is beginning, or just correct what the sheet says",
 		},
+		{
+			// What the years are CALLED, not which one it is: every recorded year moves with it.
+			move:  "year",
+			icon:  "fa-solid fa-hourglass-half",
+			label: "Set the Year",
+			hint:  "Say what year it is in your campaign; every recorded year, history included, moves with it",
+		},
 	];
 }
 
@@ -101,7 +109,7 @@ export function seasonMenuItems(stamp, fallbackYear = 1) {
  * @param {{isGM?: boolean}} [opts]
  */
 export function timeBannerTabs(weather, season, { isGM = false } = {}) {
-	const seasonHint = isGM ? "Next Season or Change Season" : "";
+	const seasonHint = isGM ? "Next Season, Change Season or Set the Year" : "";
 	return [
 		{
 			part:    "weather",
@@ -128,7 +136,8 @@ export function timeBannerTabs(weather, season, { isGM = false } = {}) {
 		},
 		{
 			part:    "year",
-			value:   String(season.year),
+			// By its name, not its number: the GM renaming the years turns the part as a new year would.
+			value:   season.yearLabel,
 			label:   season.yearLabel,
 			tooltip: seasonHint,
 			glyph:   `stonetop-time-banner__icon ${YEAR_ICON}`,
@@ -227,6 +236,7 @@ function paint(tabs) {
 const SEASON_MOVES = Object.freeze({
 	next:   () => game.stonetop?.openNextSeason?.(),
 	change: () => game.stonetop?.openSeasonsChange?.(),
+	year:   () => game.stonetop?.openCampaignYear?.(),
 });
 
 /** The steading's clock as the season buttons read it, or the header's defaults with no steading. */
@@ -380,6 +390,11 @@ export function installTimeBanner() {
 	for (const hook of ["createActor", "deleteActor"]) {
 		Hooks.on(hook, (actor) => { if (isSteadingActor(actor)) refreshTimeBanner(); });
 	}
+	// The GM renaming the years: the year part says the new name, and Next Season's hover with it.
+	Hooks.on(START_YEAR_CHANGED_HOOK, () => {
+		refreshTimeBanner();
+		labelSeasonMenu();
+	});
 	// The per-browser switch, which core announces by key.
 	Hooks.on("clientSettingChanged", (key) => {
 		if (String(key ?? "") === `${SYSTEM_ID}.timeBannerShown`) refreshTimeBanner();

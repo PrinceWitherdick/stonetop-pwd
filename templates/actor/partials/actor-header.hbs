@@ -40,6 +40,12 @@
 					{{stonetop.playbook.name}}{{#if stonetop.playbook.instinct.badge}} <span class="stonetop-instinct-badge" data-tooltip="{{stonetop.playbook.instinct.badge.tooltip}}" data-tooltip-direction="DOWN">({{stonetop.playbook.instinct.badge.word}})</span>{{/if}}
 					{{else}}Drop a playbook here{{/if}}
 				</span>
+				{{!-- "Would-be" crossed off by mistake: written back in from edit mode (CSS shows it there
+				      alone), since nothing else on the sheet un-crosses it. --}}
+				{{#if stonetop.wouldBeRestorable}}{{#unless stonetop.postDeathInsert.activeInsert}}
+				<button type="button" class="stonetop-inline-btn stonetop-would-be-restore"
+				        data-tooltip="{{localize 'stonetop.wouldBeHero.restoreTooltip'}}" data-tooltip-direction="DOWN"><i class="fas fa-rotate-left" aria-hidden="true"></i> {{localize "stonetop.wouldBeHero.restoreButton"}}</button>
+				{{/unless}}{{/if}}
 				{{#if stonetop.postDeathInsert.activeInsert}}
 				{{#if stonetop.playbook.name}}
 				{{! The playbook goes grey the moment the insert lands — that identity IS replaced.
@@ -286,6 +292,12 @@
 		    Unwrap it and the word goes back to sitting high in the pill. }}
 		{{#if (or stonetop.playbook.appearance.summary stonetop.isDead stonetop.condemned.condemned)}}
 		<p class="stonetop-appearance-summary">{{stonetop.playbook.appearance.summary}}{{#if stonetop.isDead}}{{#if editable}}<button type="button" class="stonetop-dead-tag" data-tooltip="{{localize "stonetop.postDeath.deadTooltipAction"}}" data-tooltip-direction="UP"><i class="fas fa-skull"></i><span class="stonetop-dead-tag-text">{{localize "stonetop.postDeath.deadTag"}}</span></button>{{else}}<span class="stonetop-dead-tag" data-tooltip="{{localize "stonetop.postDeath.deadTooltip"}}" data-tooltip-direction="UP"><i class="fas fa-skull"></i><span class="stonetop-dead-tag-text">{{localize "stonetop.postDeath.deadTag"}}</span></span>{{/if}}{{/if}}{{#if stonetop.condemned.condemned}}{{> "stonetop.condemned-tag" byLabel=stonetop.condemned.byLabel}}{{/if}}</p>
+		{{/if}}
+		{{! What the table should keep in mind about them: the wearer tags on the gear they carry and
+		    the reminders typed on the Notes tab (gear-reminders.js). Under the appearance line, which
+		    says who they are; this says what they are carrying around with them right now. }}
+		{{#if stonetop.reminderChips.length}}
+		{{> "stonetop.reminder-chips" chips=stonetop.reminderChips}}
 		{{/if}}
 	</div>
 </div>

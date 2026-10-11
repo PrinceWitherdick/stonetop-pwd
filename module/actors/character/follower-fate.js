@@ -47,6 +47,7 @@ import { deletionEntry } from "../../utils/foundry-compat.js";
 import { markXpReceipt } from "../../utils/roll-engine.js";
 import { SYSTEM_ID } from "../../system-id.js";
 import { ownsLearnedMoveNamed } from "./owns-move.js";
+import { followerDetailBase } from "./follower-masters.js";
 import { STONETOP_SCOPE } from "./StonetopFlags.js";
 
 export const SIR_PERMISSION_TO_DIE = "Sir, Permission to Die, Sir";
@@ -66,7 +67,10 @@ export function isCustomMemberRow(follower) {
 	return follower === "custom-member";
 }
 
-/** The flag path (under the system scope) that holds this row's current HP, or null. */
+/**
+ * The flag path (under the system scope) that holds this row's current HP, or null: every HP input the
+ * Followers tab draws, a group's pooled box (`crew-group`, `custom-group`) among them.
+ */
 export function followerFateHpPath(follower, slug, index) {
 	switch (follower) {
 		case "animal-companion": return "animalCompanion.hpCurrent";
@@ -76,12 +80,55 @@ export function followerFateHpPath(follower, slug, index) {
 		case "crew-individual":  return `crew.individualsHp.${Number(index)}`;
 		case "crew-member":      return `crew.memberHp.${Number(index)}`;
 		case "custom-member":    return `customFollowers.${slug}.memberHp.${Number(index)}`;
+		case "crew-group":       return "crew.groupHp";
+		case "custom-group":     return `customFollowers.${slug}.groupHp`;
 		default:                 return null;
 	}
 }
 
 /** The rows whose HP store is an ARRAY, written whole; every other row's is an index- or slug-keyed map. */
 export const ARRAY_HP_ROWS = new Set(["crew-member", "custom-member"]);
+
+/**
+ * The actor update that sets one row's HP box to `value`: a slug- or index-keyed box by its dotted path,
+ * an array row's whole array with that slot changed, plus the revive a value above 0 makes
+ * (followerReviveUpdate). Empty for a row with no box. PURE. `flags` is the character's resolved flags.
+ * The box half of follower-hp.js#setFollowerHp, which every live write goes through; a caller batching
+ * several rows into one write of its own (Make Camp) builds them with this.
+ */
+export function followerHpWriteUpdate(flags, follower, slug, index, value) {
+	const path = followerFateHpPath(follower, slug, index);
+	if (!path) return {};
+	const update = {};
+	if (ARRAY_HP_ROWS.has(follower)) {
+		const store = path.slice(0, path.lastIndexOf("."));
+		const stored = foundry.utils.getProperty(flags ?? {}, store);
+		const list = Array.from(Array.isArray(stored) ? stored : [], v => v ?? null);
+		list[Number(index)] = value;
+		update[`flags.${SYSTEM_ID}.${store}`] = Array.from(list, v => v ?? null);
+	} else {
+		update[`flags.${SYSTEM_ID}.${path}`] = value;
+	}
+	return { ...update, ...(followerReviveUpdate(follower, slug, value, flags, index) ?? {}) };
+}
+
+/** The follower kinds that are ONE body with one HP box, and so can have an NPC of their own on the map. */
+export const SINGLE_HP_ROWS = new Set(["animal-companion", "initiate", "beast", "custom"]);
+
+/**
+ * The NPC that stands for a one-body follower (an actor made for the card, or the NPC they were recruited
+ * from), or null: a group, a roster row, or a card with no NPC. While there is one, ITS hit points are the
+ * follower's and the card's box mirrors them (wave 3 audit FOL-1, the user's ruling of 2026-10-09;
+ * fight/roster-fate.js#onUpdateActorFollowerHp; follower-hp.js#setFollowerHp writes it). `link` is
+ * follower-actors.js#followerActorFromLink.
+ */
+export function linkedFollowerNpc(flags, follower, slug, link) {
+	if (!SINGLE_HP_ROWS.has(follower) || typeof link !== "function") return null;
+	const base = followerDetailBase(follower, slug);
+	const details = base ? foundry.utils.getProperty(flags ?? {}, base) : null;
+	if (!details || (follower === "custom" && details.isGroup)) return null;
+	return link({ actorUuid: details.actorUuid, sourceUuid: details.sourceUuid }) ?? null;
+}
 
 /**
  * The HP row a roster member sits on, `{follower, index}` in this file's row types, or null: the one

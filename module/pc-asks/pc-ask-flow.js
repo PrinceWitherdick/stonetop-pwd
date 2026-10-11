@@ -1,11 +1,15 @@
 import { SYSTEM_ID } from "../system-id.js";
-import { getPlayerCharacters } from "../utils/playbook-actors.js";
+import { asArray, getPlayerCharacters, playsCharacter, whisperFor } from "../utils/playbook-actors.js";
 import { isOutOfPlay } from "../actors/character/deaths-door-actor.js";
 import { pickPersonOnMap } from "../dialogs/RelationshipLinkDialog.js";
 import { moveChatCard } from "../utils/chat.js";
 import { MOVE_TIERS_CLASS, TIER_KEYS } from "../utils/move-results.js";
 import { markXpReceipt } from "../utils/roll-engine.js";
+import { adjustXp } from "../utils/xp.js";
+import { XP_MARK_FLAG, XP_UNDONE_FLAG } from "../utils/undo-xp-mark.js";
+import { speakerActor } from "../utils/speaker-actor.js";
 import { escHtml } from "../utils/strings.js";
+import { currentChatMode } from "../utils/foundry-compat.js";
 import {
 	AID_MOVE, INTERFERE_MOVE, PERSUADE_PC_MOVE, PC_ANSWER_FLAG, PC_ASK_FLAG,
 	aidLead, answerCardBody, answerListHtml, answerRowHtml, askPill, findPcAnswer, heldSource,
@@ -41,7 +45,7 @@ export function aimableCharacters(actor) {
 	return getPlayerCharacters().filter(other => other.id !== actor?.id && !isOutOfPlay(other));
 }
 
-const allUsers = () => [...(game.users?.contents ?? game.users ?? [])];
+const allUsers = () => asArray(game.users);
 
 /** The player a character belongs to, as the picker's line under their name. */
 function playedBy(actor) {
@@ -49,9 +53,28 @@ function playedBy(actor) {
 	return player ? `Played by ${player.name}` : "";
 }
 
-/** Whether a player who owns this character is logged in, and so answers for them. */
-function playerHere(actor) {
-	return !!actor && allUsers().some(user => user.active && !user.isGM && actor.testUserPermission?.(user, "OWNER"));
+/** The user who made the move: the asking card's author. Null when the card does not say. */
+function askerOf(message) {
+	return message?.author?.id ?? null;
+}
+
+/**
+ * Whether a player who PLAYS this character is logged in, and so answers for them ("ask their player",
+ * p.226). Plays, not merely owns (playbook-actors.js#playsCharacter): at a table where every player owns every
+ * sheet, the one who made the move would otherwise answer for the character they aimed it at. The asker
+ * never answers their own question.
+ */
+function playerHere(actor, askerId = null) {
+	return !!actor && allUsers().some(user => user.active && !user.isGM && user.id !== askerId && playsCharacter(actor, user));
+}
+
+/**
+ * Whether the roller's chat mode keeps the card from the table (GM only, blind, or self), in either
+ * core's spelling (foundry-compat.js#currentChatMode). An in-character or public mode, or one that cannot
+ * be read, is not private.
+ */
+function chatModeIsPrivate() {
+	return ["gm", "blind", "self", "gmroll", "blindroll", "selfroll"].includes(currentChatMode());
 }
 
 /**
@@ -109,6 +132,10 @@ export async function aimPcAskRoll(actor, item) {
 		// Interfere answers in its own printed list, so the list stays prose on the card rather than
 		// becoming a row of tick boxes the foiled player could not tick (the card is not theirs).
 		...(move === INTERFERE_MOVE ? { pickable: false } : { tierActions: persuadeTierActions(ask) }),
+		// The question is the target's player's to answer (p.218, p.226), so a GM-only, blind or self roll
+		// still reaches them (roll-engine.js#rollStat's whisper); a public roll goes out as it always has.
+		// A private card goes to every GM, and whoever plays the character it is aimed at.
+		...(chatModeIsPrivate() ? { whisper: whisperFor(target) } : {}),
 	};
 }
 
@@ -149,10 +176,13 @@ function cardTier(html) {
 	return TIER_KEYS.find(tier => result.classList.contains(tier)) ?? null;
 }
 
-/** Whether this client's user may answer this card. */
-function userMayAnswer(ask) {
+/** Whether this client's user may answer this card: they play its target (and can write them), and did not ask it. */
+function userMayAnswer(ask, message) {
 	const target = game.actors?.get?.(ask.targetId) ?? null;
-	return mayAnswer(ask, { isGM: !!game.user?.isGM, ownsTarget: !!target?.isOwner, playerHere: playerHere(target) });
+	const me = game.user ?? null;
+	const asker = askerOf(message);
+	const playsTarget = !!target?.isOwner && !!me && me.id !== asker && playsCharacter(target, me);
+	return mayAnswer(ask, { isGM: !!me?.isGM, ownsTarget: playsTarget, playerHere: playerHere(target, asker) });
 }
 
 /**
@@ -164,7 +194,7 @@ export function wirePcAskCard(message, html) {
 	const ask = readAsk(message);
 	if (!ask || !pcAskFor(ask.move) || !html?.querySelector) return;
 	const answered = answerTo(message)?.choice ?? null;
-	const canAnswer = userMayAnswer(ask);
+	const canAnswer = userMayAnswer(ask, message);
 	const tier = cardTier(html);
 
 	// Aid and Interfere: the move's own printed list is where it is answered.
@@ -217,7 +247,7 @@ export async function answerPcAsk(message, choice, tier = null) {
 	const ask = readAsk(message);
 	if (!ask || !message?.id || answering.has(message.id)) return;
 	if (!offersChoice(ask.move, choice, tier)) return;
-	if (!userMayAnswer(ask)) return;
+	if (!userMayAnswer(ask, message)) return;
 	answering.add(message.id);
 	try {
 		// Another client may have answered while this card sat on screen.
@@ -267,6 +297,39 @@ function askedBy(answerMessage) {
 }
 
 /**
+ * A deleted answer withdraws what it gave. Deleting the answer is how a question is reopened, and an
+ * agreed Persuade's answer card IS its XP receipt, so leaving the XP behind would let the same
+ * question pay twice. The same goes for the advantage an Aid gave and the disadvantage an Interfere
+ * laid: taken back by the name they were held under, so a roll that already spent them, or another
+ * promise held beside them, is left alone. Run by the client that deleted it (`userId`), the one that
+ * could write either card; a receipt already undone has nothing left to hand back.
+ *
+ * ONLY WHILE THE QUESTION IS STILL ASKED. Clearing the chat log, or deleting the asking card along with
+ * its answer, is the history going, not the answer being taken back. Core removes every deleted card
+ * from the log before any delete hook runs, so the asking card's absence is what tells the two apart.
+ *
+ * @returns {Promise<object|null>} adjustXp's answer for an agreed Persuade, `{released}` for a held
+ *   mode, or null when there was nothing to take back
+ */
+export async function withdrawDeletedAnswer(message, userId) {
+	const answer = readAnswer(message);
+	if (!answer || userId !== game.user?.id) return null;
+	const asked = answer.to ? game.messages?.get?.(answer.to) ?? null : null;
+	if (!asked) return null;
+	const target = speakerActor(message);
+	if (target?.type !== "character") return null;
+	if (answer.choice === "advantage" || answer.choice === "anyway") {
+		const ask = readAsk(asked);
+		if (!ask) return null;
+		const release = answer.choice === "advantage" ? "releaseHeldAdvantage" : "releaseHeldDisadvantage";
+		return { released: !!(await target.typedActor?.[release]?.(heldSource(ask))) };
+	}
+	const marked = Number(message.getFlag?.(SYSTEM_ID, XP_MARK_FLAG) ?? 0);
+	if (!marked || message.getFlag(SYSTEM_ID, XP_UNDONE_FLAG)) return null;
+	return adjustXp(target, -marked, { move: `${PERSUADE_PC_MOVE} (answer withdrawn)` });
+}
+
+/**
  * On every client: an answer arriving (or being deleted, which reopens the question) redraws the
  * card it answers. Registered once, at module scope in stonetop.js.
  */
@@ -278,7 +341,11 @@ export function registerPcAskHooks() {
 		if (asked?.logged) redraw(asked);
 	};
 	Hooks.on("createChatMessage", redrawAsked);
-	Hooks.on("deleteChatMessage", redrawAsked);
+	Hooks.on("deleteChatMessage", (answerMessage, _options, userId) => {
+		redrawAsked(answerMessage);
+		withdrawDeletedAnswer(answerMessage, userId)
+			.catch(err => console.error("Stonetop | could not take back what a withdrawn answer gave:", err));
+	});
 	// A player logging in or out moves the answer between them and the GM (see mayAnswer), so the
 	// GM's open questions are redrawn with the buttons or without.
 	Hooks.on("userConnected", () => {

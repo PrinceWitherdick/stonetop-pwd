@@ -68,6 +68,13 @@ export class CharacterModel extends foundry.abstract.TypeDataModel {
 				}),
 				// Problematic / permanent wounds — the fictional-harm track (see fields.js).
 				wounds: woundsField(),
+				// DERIVED and mirrored with the armor: the wearer tags on the carried gear
+				// (cumbersome, warm…), each with the gear that carries it, for the roll card, the
+				// Fight tab and the steading to remind the GM by. See actors/character/gear-reminders.js.
+				gearTags: new fields.ArrayField(new fields.SchemaField({
+					tag:   new fields.StringField({ required: true, blank: false }),
+					items: new fields.ArrayField(new fields.StringField({ required: true, blank: true })),
+				})),
 			}),
 			playbook: new fields.SchemaField({
 				name: new fields.StringField({ required: true, blank: true }),
@@ -77,6 +84,10 @@ export class CharacterModel extends foundry.abstract.TypeDataModel {
 			// Free-form player notes (rich text), edited on the sheet's Notes tab.
 			// Additive/blank-default field, so it needs no world migration.
 			notes: new fields.HTMLField({ required: true, blank: true }),
+			// Short things the table wants kept in view ("reeks of smoke", "owes Gwen a favor"),
+			// typed on the Notes tab and shown beside the gear tags wherever those are. Additive,
+			// empty by default, so no migration.
+			reminders: new fields.ArrayField(new fields.StringField({ required: true, blank: true })),
 			// How this character feels about each of the OTHER player characters: a map
 			// of character actor id → { hearts (1-5), notes }. Same shape as the NPC
 			// sheet's relationships map (see utils/relationship-hearts.js), so both
@@ -85,4 +96,29 @@ export class CharacterModel extends foundry.abstract.TypeDataModel {
 			relationships: new fields.ObjectField({ required: true }),
 		};
 	}
+
+	/** Nobody owes XP: a negative total typed on the sheet is written as 0 (clampNegativeXp). */
+	async _preUpdate(changes, options, user) {
+		clampNegativeXp(changes);
+		return super._preUpdate?.(changes, options, user);
+	}
+}
+
+/**
+ * Write a negative XP total in an Actor update as 0, in place. The sheet's XP box is a typed number
+ * whose `min="0"` the browser does not enforce on a change-submit, and the schema has no floor (one
+ * now would fail validation on any world already holding a negative total). Left in, the next mark
+ * through utils/xp.js#adjustXp floors at 0 first, so a +1 from -3 reads as +4 in the ledger.
+ *
+ * Reads both shapes an update can arrive in: expanded, and with a dotted key.
+ *
+ * @param {object} changes  the update, as handed to _preUpdate
+ * @returns {object} the same object
+ */
+export function clampNegativeXp(changes) {
+	const DOTTED = "system.attributes.xp.value";
+	if (typeof changes?.[DOTTED] === "number" && changes[DOTTED] < 0) changes[DOTTED] = 0;
+	const xp = changes?.system?.attributes?.xp;
+	if (xp && typeof xp.value === "number" && xp.value < 0) xp.value = 0;
+	return changes;
 }

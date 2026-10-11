@@ -20,12 +20,12 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { filePicker } from "../utils/foundry-compat.js";
-import { RULEBOOKS, rulebookPath, saveRulebookPath } from "./rulebooks.js";
+import { RULEBOOKS, rulebookPath, saveRulebookPath, bookTitle } from "./rulebooks.js";
 import {
 	RULEBOOK_DIR, canBrowseRulebooks, canStoreRulebook, keepRulebook,
 } from "./book-store.js";
 import { openBookReader } from "./BookReaderWindow.js";
-import { localize } from "../utils/i18n.js";
+import { format, localize } from "../utils/i18n.js";
 
 const TEMPLATE = "systems/stonetop-pwd/templates/dialogs/rulebooks.hbs";
 const DIALOG_ID = "stonetop-rulebooks";
@@ -165,8 +165,18 @@ export class RulebooksDialog extends StonetopDialog {
 		this.renderIfOpen();
 	}
 
+	/**
+	 * Forget one book. A refused write is SAID: the Forget marker is what keeps a copy left in
+	 * stonetop-books/ from being picked up again next load (adopt-stored-rulebooks.js), so a Forget
+	 * that half-landed would quietly come undone.
+	 */
 	async _forget(book) {
-		await saveRulebookPath(book, "");
+		try {
+			await saveRulebookPath(book, "");
+		} catch (err) {
+			console.error("Stonetop | Could not forget a rulebook.", err);
+			ui.notifications?.error?.(format("stonetop.books.forgetFailed", { title: bookTitle(book) }));
+		}
 		this.renderIfOpen();
 	}
 }

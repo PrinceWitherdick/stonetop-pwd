@@ -61,3 +61,45 @@ describe("markDebility", () => {
 		expect(char.hp).toBe(4);
 	});
 });
+
+// The Lightbearer's Auspicious Birth: "When one of your moves has you mark a debility, you may mark this
+// background's circle instead, to no ill effect." Offered by every MOVE that marks one (Hard to Kill's trade,
+// Battle Joy's 6-), as Walk It Off is, but never on the plain list a hand tick or a "clear a debility" reads
+// (wave 4 DEB-5).
+describe("Auspicious Birth's circle", () => {
+	function lightbearer({ background = "auspicious-birth", circle = 0, hp = 0 } = {}) {
+		const { char, actor } = buildLiveCharacter({
+			slug: "the-lightbearer", name: "The Lightbearer", seedStartingMoves: false,
+			flags: { background: { selected: background, setupResources: { "auspicious-birth": circle } } },
+		});
+		actor.system.attributes.hp = { ...actor.system.attributes.hp, value: hp, max: 20 };
+		return { char, actor };
+	}
+
+	it("leads a move's choices while the circle is clear, and is not on the plain list", () => {
+		const { char } = lightbearer();
+		expect(char.debilityMarkChoices.map(d => d.key)).toEqual(["auspicious-birth", "weakened", "dazed", "miserable"]);
+		expect(char.debilityMarkChoices[0]).toMatchObject({ circle: true, standIn: true, marked: false });
+		expect(char.debilityChoices.map(d => d.key)).toEqual(["weakened", "dazed", "miserable"]);
+	});
+
+	it("is not offered without the background", () => {
+		expect(lightbearer({ background: "itinerant-mystic" }).char.debilityMarkChoices.map(d => d.key))
+			.toEqual(["weakened", "dazed", "miserable"]);
+	});
+
+	it("marks the circle instead, in the one write that carries the HP, and no debility", async () => {
+		const { char, actor } = lightbearer();
+		expect(await char.markDebility("auspicious-birth", { hp: 1, moveName: "Hard to Kill" })).toBe(true);
+		expect(char.background.setupResources["auspicious-birth"]).toBe(1);
+		expect(char.hp).toBe(1);
+		expect(char.debilityChoices.some(d => d.marked)).toBe(false);
+		expect(actor.update).toHaveBeenCalledTimes(1);
+		// Marked, it is no longer on offer.
+		expect(await char.markDebility("auspicious-birth")).toBe(false);
+	});
+
+	it("refuses the circle once it is marked", async () => {
+		expect(await lightbearer({ circle: 1 }).char.markDebility("auspicious-birth")).toBe(false);
+	});
+});

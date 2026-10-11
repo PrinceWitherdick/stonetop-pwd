@@ -1,8 +1,10 @@
 import { escHtml } from "../utils/strings.js";
-import { sign } from "../utils/roll-engine.js";
+import { sign, seasonsRollKey, seasonsRollTier } from "../utils/roll-engine.js";
+import { TIER_LABELS } from "../utils/move-results.js";
 import { ensureChronicleFolder, ensureChronicleJournal } from "../utils/chronicle-journals.js";
 import { seasonLabel, SEASON_IDS } from "./seasons-change-reminders.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { displayYear } from "./campaign-year.js";
 
 // ── Seasons Change chronicle ───────────────────────────────────────────────────
 // Records each Seasons Change move (the steading flow's "Done") into a "Seasons Change"
@@ -47,9 +49,30 @@ export function cardinalWord(n) {
  *
  * Pages named the old way are renamed on load — see module/migration/season-year-page-names.js.
  * That sweep reads THIS function, so the two cannot drift.
+ *
+ * `year` is a STORED year (1 = the first year of play) and the number printed is what the GM
+ * said that year is called (`displayYear`, campaign-year.js): "Year 1247" in a world that set its
+ * start year, "Year One" in one that never did. A year from before play in a world that never
+ * named its start reads "Ten Years Before Year One", never "Year -9".
  */
 export function yearLabel(year) {
-	return `Year ${cardinalWord(year)}`;
+	const { count, tail } = yearLabelParts(year);
+	return tail ? `${count} ${tail}` : count;
+}
+
+/**
+ * `yearLabel` in its two halves: the COUNT a reader scans for ("Four Years", "Year Seven") and the
+ * TAIL that only says which side of play it is on ("Before Year One"; empty for a year of play). The
+ * timeline's year chips print the tail small (user, 2026-10-10: the long name took up a lot of
+ * room), so they take the halves; everything else reads `yearLabel`, built from these, so the two
+ * cannot drift. `tailShort` is the tail cut to "BYO", for the chip in a season's own heading (user,
+ * 2026-10-10), where the year sits beside the season's name and room is tightest.
+ */
+export function yearLabelParts(year) {
+	const shown = displayYear(year);
+	if (shown >= 1) return { count: `Year ${cardinalWord(shown)}`, tail: "", tailShort: "" };
+	const before = 1 - shown;
+	return { count: `${cardinalWord(before)} ${before === 1 ? "Year" : "Years"}`, tail: "Before Year One", tailShort: "BYO" };
 }
 
 // Find (or create) the "Seasons Change" journal in the Chronicle folder, reusing the
@@ -67,20 +90,41 @@ async function ensureSeasonsJournal() {
 // net Surplus change (the harvest/bounty or winter consumption), and any notes. Wrapped
 // in a `<section data-season>` marker so re-recording a season can find and replace its
 // block rather than appending a duplicate (see mergeSeasonBlock).
-function _seasonBlock(seasonId, gainNames, fortunes, surplusChange, notes) {
+function _seasonBlock(seasonId, gainNames, fortunes, surplusChange, notes, fortunesTier = null) {
 	// CSS modifier matches the location pages' season classes ("autumn" art is "fall").
 	const seasonClass = `stonetop-season--${seasonId === "autumn" ? "fall" : seasonId}`;
 	const gainsHtml = gainNames.length
 		? `<p><strong>Seasonal gain${gainNames.length > 1 ? "s" : ""}:</strong> ${gainNames.map(escHtml).join(", ")}</p>`
 		: `<p><em>No seasonal gain.</em></p>`;
-	const fortunesHtml = Number.isFinite(fortunes) ? `<p><strong>Rolled:</strong> +Fortunes (${sign(fortunes)})</p>` : "";
+	// How the roll went, when its card can be found (seasonsRollTier): "7-9 on +Fortunes (+1)".
+	const tierLabel = TIER_LABELS[fortunesTier] ?? "";
+	const fortunesHtml = Number.isFinite(fortunes)
+		? `<p><strong>Rolled:</strong> ${tierLabel ? `${tierLabel} on ` : ""}+Fortunes (${sign(fortunes)})</p>`
+		: (tierLabel ? `<p><strong>Rolled:</strong> ${tierLabel} on +Fortunes</p>` : "");
 	const surplusHtml = Number.isFinite(surplusChange) && surplusChange !== 0
 		? `<p><strong>Surplus change:</strong> ${sign(surplusChange)}</p>`
 		: "";
 	const notesHtml = notes?.trim() ? `<div>${escHtml(notes.trim()).replace(/\n/g, "<br>")}</div>` : "";
-	return `<section class="stonetop-season-block" data-season="${seasonId}">`
+	// The tier rides on the block as well as in its prose, so a re-record whose roll card has left
+	// the chat log can carry it forward (recordedSeasonTier) instead of dropping it.
+	const tierAttr = tierLabel ? ` data-fortunes-tier="${escHtml(fortunesTier)}"` : "";
+	return `<section class="stonetop-season-block" data-season="${seasonId}"${tierAttr}>`
 		+ `<h2 class="stonetop-season-entry ${seasonClass}">${escHtml(seasonLabel(seasonId))}</h2>`
 		+ `${gainsHtml}${fortunesHtml}${surplusHtml}${notesHtml}</section>`;
+}
+
+/**
+ * The Fortunes tier an earlier recording of this season wrote onto its block, or null. Read only
+ * off the block's own `data-fortunes-tier` marker (_seasonBlock), never off its prose.
+ */
+export function recordedSeasonTier(html = "", seasonId) {
+	const re = /<section class="stonetop-season-block"[^>]*>/g;
+	for (const open of (String(html ?? "").match(re) ?? [])) {
+		if ((open.match(/data-season="([^"]+)"/) ?? [])[1] !== seasonId) continue;
+		const tier = (open.match(/data-fortunes-tier="([^"]+)"/) ?? [])[1];
+		return TIER_LABELS[tier] ? tier : null;
+	}
+	return null;
 }
 
 // Merge one season's block into a year page's existing HTML: if that season was already
@@ -117,9 +161,12 @@ export function mergeSeasonBlock(existingHtml = "", seasonId, block) {
  * @param {number|null}   [opts.fortunes]     The +Fortunes value at the time (for context).
  * @param {number}        [opts.surplusChange] Net Surplus change over the season (0 = omit).
  * @param {string}        [opts.notes]        Free-text notes (the omen, threat, or hook).
+ * @param {string|null}   [opts.fortunesTier] How the season's +Fortunes roll went ("success" /
+ *   "partial" / "failure"). Read off the season's own roll card when not given (seasonsRollTier);
+ *   null when no card was stamped for it, which leaves the line as it always read.
  * @returns {Promise<JournalEntry|null>}
  */
-export async function recordSeasonsChange({ seasonId, year = 1, gainNames = [], fortunes = null, surplusChange = 0, notes = "" } = {}) {
+export async function recordSeasonsChange({ seasonId, year = 1, gainNames = [], fortunes = null, surplusChange = 0, notes = "", fortunesTier } = {}) {
 	if (!game.user?.isGM) {
 		ui.notifications?.warn?.("Only the GM can record a Seasons Change.");
 		return null;
@@ -129,9 +176,15 @@ export async function recordSeasonsChange({ seasonId, year = 1, gainNames = [], 
 
 	const yr       = Number.isInteger(year) && year >= 1 ? year : 1;
 	const yearName = yearLabel(yr);
-	const block    = _seasonBlock(seasonId, gainNames, fortunes, surplusChange, notes);
+	const page     = (journal.pages ?? []).find(p => Number(p.getFlag?.(SYSTEM_ID, "chronicleYear")) === yr) ?? null;
+	// The roll's card first (a roll made again is the one the table went with); when the card has
+	// left the chat log, what the last recording of this season wrote, so a re-record to fix a note
+	// does not quietly drop how the roll went from the journal and the timeline both.
+	const tier     = fortunesTier !== undefined
+		? fortunesTier
+		: (seasonsRollTier(seasonsRollKey(yr, seasonId)) ?? recordedSeasonTier(page?.text?.content ?? "", seasonId));
+	const block    = _seasonBlock(seasonId, gainNames, fortunes, surplusChange, notes, tier);
 
-	const page = (journal.pages ?? []).find(p => Number(p.getFlag?.(SYSTEM_ID, "chronicleYear")) === yr) ?? null;
 	if (page) {
 		await page.update({ "text.content": mergeSeasonBlock(page.text?.content ?? "", seasonId, block) });
 	} else {
@@ -141,7 +194,9 @@ export async function recordSeasonsChange({ seasonId, year = 1, gainNames = [], 
 			type:  "text",
 			sort:  maxSort + 10,
 			text:  { content: block, format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML },
-			flags: { [SYSTEM_ID]: { chronicleYear: yr } },
+			// The name it was given, so a later start year can tell it from one a GM typed
+			// (migration/season-year-page-names.js#YEAR_PAGE_NAME_FLAG).
+			flags: { [SYSTEM_ID]: { chronicleYear: yr, yearPageName: yearName } },
 		}]);
 	}
 
@@ -163,7 +218,7 @@ export async function recordSeasonsChange({ seasonId, year = 1, gainNames = [], 
 	// in whichever of them the loader happens to enter first.
 	try {
 		const { recordSeasonOnTimeline } = await import("../timeline/timeline-season-entry.js");
-		await recordSeasonOnTimeline({ seasonId, year: yr, gainNames, surplusChange, notes });
+		await recordSeasonOnTimeline({ seasonId, year: yr, gainNames, surplusChange, notes, fortunesTier: tier });
 	} catch (err) {
 		console.error("Stonetop | could not add this season to the timeline", err);
 	}

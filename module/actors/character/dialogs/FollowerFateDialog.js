@@ -22,6 +22,11 @@ import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 // and Loyalty is held, and a pre-ticked "you let them go, mark XP" box that the Dead
 // outcome reads. `ctx.isCrewMember` words Dead as striking them off the roster, and
 // `ctx.isGroupMember` the same for a custom group's roster (and its shared Loyalty).
+//
+// AFTER A DEATH'S DOOR 6- (`ctx.door`): the follower "would die", so the same Dead and the same spare are
+// offered from the card's "Mark dead" (follower-deaths-door.js), and nothing else: Death's Door and Dying
+// are behind them. `ctx.onDismiss` is called when the window closes with nothing chosen, so the card can
+// give its button back.
 
 export class FollowerFateDialog extends StonetopDialog {
 	/**
@@ -74,7 +79,21 @@ export class FollowerFateDialog extends StonetopDialog {
 			// Only Dead reads the box, and Loyal to the End's set has no Dead to choose.
 			letGo:        !!sir.letGo && !loyalToTheEnd,
 			letGoLabel:   i18n.localize("stonetop.character.followers.fate.letGo"),
+			// A Death's Door 6-: Dead and the spare only, worded for the roll behind them.
+			door:         !!this._ctx.door && !loyalToTheEnd,
+			doorSub:      i18n.localize("stonetop.character.followers.door.fateSub"),
+			doorNote:     i18n.localize("stonetop.character.followers.door.fateNote"),
+			doorLater:    i18n.localize("stonetop.character.followers.door.fateLater"),
 		};
+	}
+
+	/** Closed with nothing chosen: say so (ctx.onDismiss), once. */
+	async close(options) {
+		if (!this._chosen && !this._dismissed) {
+			this._dismissed = true;
+			this._ctx.onDismiss?.();
+		}
+		return super.close(options);
 	}
 
 	activateListeners(html) {
@@ -83,6 +102,7 @@ export class FollowerFateDialog extends StonetopDialog {
 			const action = ev.currentTarget.dataset.action;
 			// Read at the click: the box is the player's to untick before choosing Dead.
 			const letGo = !!html.find(".stonetop-ff-let-go").prop("checked");
+			this._chosen = true;
 			this._onChoose?.(action, { letGo });
 			this.close();
 		});

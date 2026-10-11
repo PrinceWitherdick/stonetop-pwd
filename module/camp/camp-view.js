@@ -1,7 +1,7 @@
 import { escHtml, joinNames } from "../utils/strings.js";
 import { recoveredHpTo } from "../actors/character/deaths-door-actor.js";
 import {
-	CAMP_BENEFIT, CAMP_FOLLOWERS_MAX, CAMP_STATE, HAD_ALL_ALONG, HAD_ALL_ALONG_REFUSAL, SETTLE_REFUSAL, breakBreadOffered,
+	CAMP_BENEFIT, CAMP_STATE, HAD_ALL_ALONG, HAD_ALL_ALONG_REFUSAL, SETTLE_REFUSAL, breakBreadOffered,
 	CAMP_EXTRA, debilityToClear, eatsTonight, foodAfterTonight, healTo, homeFiresHp, homeFiresKeeper, homeFiresOffered, planExtras,
 	nightmaresWarded,
 	messKitAllAlong, messKitWouldHelp, provisionsAtFire, spareUses, suppliesAllAlong,
@@ -159,11 +159,12 @@ function outcomeLine(entry) {
 	const parts = [];
 	if (entry.benefit === CAMP_BENEFIT.DEBILITY) parts.push(`Cleared ${entry.debility?.name ?? "a debility"}`);
 	// Book I p.240 and p.245: dying, they can't save themselves; whoever tends them Aids the roll.
-	else if (entry.dying) parts.push("Dying, so the night restores no HP: someone who tends them Aids their roll at the Door instead");
+	else if (entry.dying) parts.push("Dying, so the night itself restores no HP: someone who tends them Aids their roll at the Door instead");
 	else if (entry.hpAfterPick > entry.hpBefore) parts.push(`HP ${entry.hpBefore} → ${entry.hpAfterPick} (half max)`);
 	else parts.push(`HP already full at ${entry.hpBefore}`);
 	parts.push(...after);
 	if (entry.peaceful) parts.push("a peaceful night, so advantage is held for the next roll");
+	if (entry.furBedroll) parts.push("slept in the fur-lined bedroll, so advantage is held for the next roll");
 	return `${parts.join("; ")}.`;
 }
 
@@ -343,8 +344,14 @@ export function hadAllAlongRows(what, { row, uses: n } = {}) {
 	];
 }
 
+/**
+ * What a dying member's row says under the night's pick: the pick, their own bedroll and a peaceful
+ * night restore them nothing (Book I p.240), while an ally's Break Bread or hearth ash still can.
+ */
+const DYING_ROW_TEXT = "Dying, so the night itself restores no HP. An ally's Break Bread or hearth ash still can, and whoever tends them Aids their roll at the Door.";
+
 /** What a row the reader cannot change says instead of its controls. */
-function rowSentences(member, offer, { eats, benefit, clearing, hpAfter }) {
+function rowSentences(member, offer, { eats, benefit, clearing, hpAfter, dying = false }) {
 	const { record } = member;
 	const says = [offer.total ? `Sharing ${shareLine(offer.purses)}.` : "Sharing no food yet."];
 	const others = record.followers
@@ -360,9 +367,10 @@ function rowSentences(member, offer, { eats, benefit, clearing, hpAfter }) {
 		says.push("Getting no real sleep, so no pick.");
 		return says;
 	}
-	says.push(benefit === CAMP_BENEFIT.DEBILITY
-		? `Clearing ${clearing?.name ?? "a debility"}.`
-		: `Regaining HP: ${member.hpValue} → ${hpAfter}${member.slowToHeal ? " (halved: Torment's Blessing)" : ""}.`);
+	if (benefit === CAMP_BENEFIT.DEBILITY) says.push(`Clearing ${clearing?.name ?? "a debility"}.`);
+	else if (dying) says.push(DYING_ROW_TEXT);
+	else says.push(`Regaining HP: ${member.hpValue} → ${hpAfter}${member.slowToHeal ? " (halved: Torment's Blessing)" : ""}.`);
+	if (dying) return says;
 	if (record.bedroll && record.vitals.bedroll) says.push("Sleeping in a bedroll for 1d6 extra HP.");
 	if (record.peaceful) says.push("Found the rest peaceful.");
 	return says;
@@ -375,7 +383,10 @@ function rowView(member, at, ledger, { canEdit, isMine, canOpenSheet }) {
 	const eats    = eatsTonight(member);
 	const marked  = member.activeDebilities;
 	// Torment's Blessing halves the pick's HP, rounded up; the settled card halves the whole night's.
-	const hpAfter = recoveredHpTo(member.hpValue, healTo(member.hpValue, Math.ceil(member.maxHp / 2), member.maxHp), !!member.slowToHeal);
+	// One dying at the fire takes no HP from the pick (camp-rules.js#freezeCampPlan), so none is promised.
+	const dying   = !!member.dying;
+	const hpAfter = dying ? member.hpValue
+		: recoveredHpTo(member.hpValue, healTo(member.hpValue, Math.ceil(member.maxHp / 2), member.maxHp), !!member.slowToHeal);
 	// A debility pick with nothing marked any more has only healing left to mean.
 	const benefit  = record.benefit === CAMP_BENEFIT.DEBILITY && !marked.length ? CAMP_BENEFIT.HP : record.benefit;
 	const clearing = debilityToClear(member);
@@ -417,7 +428,8 @@ function rowView(member, at, ledger, { canEdit, isMine, canOpenSheet }) {
 		goesWithout:     !member.unliving && !record.eats,
 		followers:       record.followers,
 		canTakeFollower: record.followers > 0,
-		canAddFollower:  record.followers < CAMP_FOLLOWERS_MAX,
+		// No most: every mouth in the party eats (camp-rules.js, beside CAMP_LEFT_MAX).
+		canAddFollower:  true,
 		messKit:         { carries: record.vitals.messKit, uses: record.messKit },
 		night: {
 			show:          eats,
@@ -427,11 +439,14 @@ function rowView(member, at, ledger, { canEdit, isMine, canOpenSheet }) {
 			none:          benefit === CAMP_BENEFIT.NONE,
 			hpBefore:      member.hpValue,
 			hpAfter,
-			halvedText:    member.slowToHeal ? "(halved: Torment's Blessing)" : "",
+			halvedText:    member.slowToHeal && !dying ? "(halved: Torment's Blessing)" : "",
+			dyingText:     dying ? DYING_ROW_TEXT : "",
 			hasDebilities: marked.length > 0,
 			debilities:    marked.map(d => ({ key: d.key, name: d.name, selected: d.key === clearing?.key })),
 		},
-		bedroll:   { carries: record.vitals.bedroll, uses: record.bedroll },
+		// Their own bedroll and a peaceful night do nothing for one dying at the fire, so neither is offered.
+		bedroll:   { carries: record.vitals.bedroll && !dying, uses: record.bedroll },
+		showPeaceful: !dying,
 		peaceful:  record.peaceful,
 		ready:     record.ready,
 		readyLabel: eats ? "Ready to eat and rest" : "Ready to settle in",
@@ -439,7 +454,7 @@ function rowView(member, at, ledger, { canEdit, isMine, canOpenSheet }) {
 		// ready tick to give; an Unliving host has nothing to go without either, and no foot.
 		showReady: !member.isHost,
 		showFoot:  !member.isHost || !member.unliving,
-		says:      canEdit ? [] : rowSentences(member, offer, { eats, benefit, clearing, hpAfter }),
+		says:      canEdit ? [] : rowSentences(member, offer, { eats, benefit, clearing, hpAfter, dying }),
 	};
 }
 

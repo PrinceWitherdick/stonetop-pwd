@@ -4,6 +4,7 @@ import {
 } from "./hazard-data.js";
 import { hazardDamageLine } from "./hazard-view.js";
 import { shapeHazardSystem, setHazardName } from "./hazard-store.js";
+import { htmlToPlainText, plainTextKeeper } from "../journal/card-vm.js";
 
 // ── CreateHazardDialog ───────────────────────────────────────────────────────
 // A walkthrough for "Preparing hazards" (Book I, Dangers, pp. 381-389), the
@@ -106,7 +107,9 @@ export class CreateHazardDialog extends StepperDialog {
 		const gmMoves = (sys.gmMoves ?? []).map(String);
 		return {
 			name: page.name ?? "",
-			description: String(sys.description ?? ""),
+			// The two prose fields are HTML on the page and plain text in this wizard's textareas,
+			// so they are read back as clean text (see _seed for the other direction).
+			description: htmlToPlainText(sys.description),
 			damageDie: sys.damageDie ?? "",
 			damageEffects: [...(sys.damageEffects ?? [])],
 			damageExtra: String(sys.damageExtra ?? ""),
@@ -116,7 +119,7 @@ export class CreateHazardDialog extends StepperDialog {
 			advanceTrigger: String(sys.advanceTrigger ?? ""),
 			grimPortents: (sys.grimPortents ?? []).map(p => ({ text: String(p?.text ?? ""), done: !!p?.done })),
 			impendingDoom: { text: String(sys.impendingDoom?.text ?? ""), done: !!sys.impendingDoom?.done },
-			playerMoves: (sys.customPlayerMoves ?? []).map(m => ({ label: String(m?.label ?? ""), text: String(m?.text ?? "") })),
+			playerMoves: (sys.customPlayerMoves ?? []).map(m => ({ label: String(m?.label ?? ""), text: htmlToPlainText(m?.text) })),
 		};
 	}
 
@@ -261,12 +264,18 @@ export class CreateHazardDialog extends StepperDialog {
 		});
 	}
 
-	// The collected seed, in the shape shapeHazardSystem / createHazard expect.
+	// The collected seed, in the shape shapeHazardSystem / createHazard expect. The textareas'
+	// prose goes into HTML fields, so it is stored as escaped paragraphs: the card keeps the GM's
+	// line breaks, and a "<" typed in the text stays a character rather than opening a tag. In
+	// edit mode a text left unedited keeps the page's own HTML (plainTextKeeper): its formatting
+	// and links survive changing the damage die.
 	_seed() {
 		const sel = this._sel;
+		const sys = this._page?.system ?? {};
+		const keep = plainTextKeeper([sys.description, ...(sys.customPlayerMoves ?? []).map(m => m?.text)]);
 		return {
 			name: sel.name.trim() || "New Hazard",
-			description: sel.description,
+			description: keep(sel.description),
 			damageDie: sel.damageDie,
 			damageEffects: sel.damageEffects,
 			damageExtra: sel.damageExtra,
@@ -276,7 +285,9 @@ export class CreateHazardDialog extends StepperDialog {
 			advanceTrigger: sel.advanceTrigger.trim(),
 			grimPortents: sel.grimPortents.filter(p => String(p.text).trim()),
 			impendingDoom: sel.impendingDoom,
-			customPlayerMoves: sel.playerMoves.filter(m => m.label.trim() || m.text.trim()),
+			customPlayerMoves: sel.playerMoves
+				.filter(m => m.label.trim() || m.text.trim())
+				.map(m => ({ label: m.label, text: keep(m.text) })),
 		};
 	}
 

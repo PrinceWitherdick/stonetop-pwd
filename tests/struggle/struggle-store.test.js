@@ -112,6 +112,18 @@ describe("calling a struggle", () => {
 		expect(result.struggle.id).toBe(ask.id);
 		expect(store.askOf(aeliana)).toBeNull();
 	});
+
+	// A GM who calls one of their own while a player's ask waits has answered it too, when that player is
+	// in it: left up, the ask opened a stale setup once the struggle ended, and its player heard a "no".
+	it("takes down the ask of anybody it calls on, and that player hears no 'no'", async () => {
+		const { bram, act } = party({ me: "player-2" });
+		await store.askForStruggle(bram, { danger: "Wolves" });
+		act("gm");
+		await store.startStruggle({ rows: rowsFor("aeliana", "bram") });
+		expect(store.askOf(bram)).toBeNull();
+		act("player-2");
+		expect(store.askTurnedDown(bram, { flags: { [SYSTEM_ID]: { "-=struggleAsk": null } } })).toBe(false);
+	});
 });
 
 describe("rolling", () => {
@@ -137,6 +149,21 @@ describe("rolling", () => {
 		expect(options.targets).toEqual([]);
 		expect(options.whisper.sort()).toEqual(["gm", "player-1"]);
 		expect(flagOf(aeliana, "struggleRoll").rolls.pc_aeliana).toMatchObject({ stat: "con", total: 5, dice: "3, 4", messageId: "m1" });
+	});
+
+	// Advantage and disadvantage cancel however many of each there are (p.230). The board's straight roll is
+	// handed over as the two sides that spoke, so the character's debility or held promise is folded with them
+	// instead of tipping a roll that was already straight.
+	it("hands the roll the board's sides, not only the straight mode they cancel to", async () => {
+		const world = party();
+		world.act("gm");
+		await store.startStruggle({ danger: "The mire", rows: [
+			{ kind: ROW_KIND.PC, actorId: "aeliana", name: "Aeliana", mode: "dis", aid: { by: "Bram", advantage: true } },
+		] });
+		world.act("player-1");
+		await store.rollRow("pc_aeliana", { stat: "str" });
+		const [, options] = world.aeliana.typedActor.onDirectStatRoll.mock.calls[0];
+		expect(options).toMatchObject({ rollMode: "normal", modeBase: "normal", modeSources: ["adv", "dis"] });
 	});
 
 	it("falls back to an allowed stat when handed one the GM did not allow", async () => {
@@ -171,6 +198,36 @@ describe("rolling", () => {
 		const [stat, actor, options] = vi.mocked(rollStat).mock.calls[0];
 		expect([stat, actor.id]).toEqual(["follower", "aeliana"]);
 		expect(options).toMatchObject({ statValue: 1, noXpOnMiss: true, moveName: "Crew: Struggle as One" });
+	});
+
+	// We Happy Few's shaken nerves are "disadvantage on ALL rolls", a follower's included, as Order Followers
+	// folds them; folded with the board's sides, so an Aid's advantage cancels them rather than being stepped over.
+	it("lays the character's shaken nerves on a follower's roll", async () => {
+		const world = party();
+		applyUpdate(world.aeliana, { [`flags.${SYSTEM_ID}.shakenNerves`]: true });
+		world.act("gm");
+		await store.startStruggle({ rows: [{ kind: ROW_KIND.FOLLOWER, actorId: "aeliana", ftype: "crew", slug: "", name: "Crew", bonus: 1, isGroup: true, mode: "adv" }] });
+		world.act("player-1");
+		await store.rollRow("fo_aeliana_crew_");
+		const [, , options] = vi.mocked(rollStat).mock.calls[0];
+		expect(options).toMatchObject({ rollMode: "normal", modeSources: ["adv", "dis"] });
+		expect(options.conditionNotes).toContain("Shaken nerves (We Happy Few)");
+	});
+
+	// A reload between the dice and the record left the row looking unrolled; its card in the log is its roll.
+	it("takes a roll card already in the log as the row's roll instead of rolling again", async () => {
+		const { aeliana, act } = await called();
+		const struggleId = store.currentStruggle().id;
+		const card = {
+			id: "m-before", rolls: [{ total: 11 }],
+			flags: { [SYSTEM_ID]: { struggleRoll: { id: struggleId, row: "pc_aeliana", nonce: "x" }, rolled: { stat: "con" } } },
+		};
+		card.getFlag = (scope, key) => card.flags[scope]?.[key];
+		game.messages.contents.push(card);
+		act("player-1");
+		expect(await store.rollRow("pc_aeliana", { stat: "str" })).toEqual({ ok: true });
+		expect(aeliana.typedActor.onDirectStatRoll).not.toHaveBeenCalled();
+		expect(flagOf(aeliana, "struggleRoll").rolls.pc_aeliana).toMatchObject({ stat: "con", total: 11, messageId: "m-before" });
 	});
 
 	it("names Stone Cold on the card when the GM ticked it", async () => {
@@ -208,7 +265,8 @@ describe("sharing, rescuing and ending", () => {
 	it("marks XP for a 6- nobody got out", async () => {
 		const { aeliana } = await shared();
 		expect(await store.endStruggle()).toBe(true);
-		expect(markMissXp).toHaveBeenCalledWith(aeliana, "Struggle as One");
+		// Out loud, and written as Aeliana's player so the receipt's Undo is hers, not the GM's.
+		expect(markMissXp).toHaveBeenCalledWith(aeliana, "Struggle as One", { rollMode: "publicroll", author: "player-1" });
 		expect(store.currentStruggle()).toMatchObject({ status: STRUGGLE_STATUS.CLOSED, xpMarked: ["pc_aeliana"] });
 	});
 
@@ -270,5 +328,24 @@ describe("asking", () => {
 		await store.clearAsk(aeliana);
 		act("player-1");
 		expect(store.askTurnedDown(aeliana, { flags: { [SYSTEM_ID]: { "-=struggleAsk": null } } })).toBe(true);
+	});
+});
+
+// At a table where every player owns every sheet, the receipt goes to the player who PLAYS the character
+// (playbook-actors.js#playsCharacter), not whoever owns it first in the list.
+describe("who a struggle's miss receipt is written as", () => {
+	const pc = { id: "pim", testUserPermission: user => !user.isGM };
+	const user = (id, over = {}) => ({ id, isGM: false, active: true, character: null, ...over });
+
+	it("picks the player whose assigned character it is, over another owner", () => {
+		const users = [user("bob", { character: { id: "cadi" } }), user("alice", { character: { id: "pim" } })];
+		expect(store.struggleReceiptAuthor(pc, users)).toBe("alice");
+	});
+
+	it("keeps its fallbacks: a logged-in player first, then any, then nobody", () => {
+		expect(store.struggleReceiptAuthor(pc, [user("bob", { active: false }), user("alice")])).toBe("alice");
+		expect(store.struggleReceiptAuthor(pc, [user("bob", { active: false })])).toBe("bob");
+		expect(store.struggleReceiptAuthor(pc, [user("gm", { isGM: true })])).toBeNull();
+		expect(store.struggleReceiptAuthor(pc, [user("bob", { character: { id: "cadi" } })])).toBeNull();
 	});
 });

@@ -160,6 +160,15 @@ describe("installBattleJoyOnHurt", () => {
 		expect(other).toEqual({});
 	});
 
+	// Wave 4 HP-3: HP taken down to a max that fell (or a typed number capped at it) is no blood spilled.
+	it("leaves alone HP a fallen max takes with it", () => {
+		const hooks = fakeHooks();
+		installBattleJoyOnHurt({ hooks });
+		const options = { stonetopHpCeiling: true };
+		hooks.fire("preUpdateActor", heavy(), { system: { attributes: { hp: { value: 6 } } } }, options);
+		expect(options[HP_LOST_OPTION]).toBeUndefined();
+	});
+
 	// Dropping to 0 HP ended it in the same write (hooks/DeathsDoorPrompt.js); the chat line is said
 	// once, by whoever made the change.
 	it("says a Heavy who dropped has come out of their Battle Joy, on the writer's client only", async () => {
@@ -265,10 +274,18 @@ describe("installBattleJoyEnd: the action stops", () => {
 	});
 
 	/** Put a table()'s Heavy down at 0 HP and dying, with Unstoppable learned if asked. */
-	function down(duvin, { unstoppable = false } = {}) {
+	// Down at 0 HP and dying; with Unstoppable, reduced there in battle (the drop's stamp) unless `inBattle: false`.
+	function down(duvin, { unstoppable = false, inBattle = true } = {}) {
 		duvin.system.attributes.hp.value = 0;
 		duvin.flags[SYSTEM_ID].deathsDoor = "dying";
 		if (unstoppable) duvin.items.push({ type: "move", name: "Unstoppable", flags: {} });
+		if (unstoppable && inBattle) duvin.flags[SYSTEM_ID].unstoppableFighting = true;
+		duvin.update = vi.fn(async changes => {
+			for (const key of Object.keys(changes)) {
+				const leaf = key.split(".").at(-1);
+				if (leaf.startsWith("-=")) delete duvin.flags[SYSTEM_ID][leaf.slice(2)];
+			}
+		});
 		return duvin;
 	}
 
@@ -298,6 +315,23 @@ describe("installBattleJoyEnd: the action stops", () => {
 		await vi.waitFor(() => expect(openDeathsDoor).toHaveBeenCalledWith(duvin));
 		expect(order).toEqual([["door", undefined]]);
 		expect(posted.map(p => p.content).join(" ")).toContain("time to roll Death&#x27;s Door");
+		// They have stopped fighting: the stamp laid at the drop is lifted, though the combat is long gone.
+		expect(duvin.update).toHaveBeenCalledWith({ [`flags.${SYSTEM_ID}.-=unstoppableFighting`]: null }, { stonetopMove: "Unstoppable" });
+		expect(duvin.flags[SYSTEM_ID].unstoppableFighting).toBeUndefined();
+	});
+
+	// "When you are reduced to 0 HP in battle" (Book I p.114): one who dropped outside battle and was later put
+	// in a fight never fought on, so its end asks nothing of them; their Door is the ordinary one, already offered.
+	it("asks nothing at the fight's end of a Heavy who dropped outside battle", async () => {
+		const openDeathsDoor = vi.fn(async () => {});
+		const duvin = down(table("p1", { raging: false }), { unstoppable: true, inBattle: false });
+		const hooks = hooksFake();
+		installBattleJoyEnd({ hooks, endBattleJoy: vi.fn(), openDeathsDoor });
+		globalThis.game.combats = [];
+		hooks.fire("deleteCombat", combat("f1", [duvin]));
+		await new Promise(r => setTimeout(r, 0));
+		expect(openDeathsDoor).not.toHaveBeenCalled();
+		expect(duvin.update).not.toHaveBeenCalled();
 	});
 
 	it("asks Death's Door of one fighting on who was never raging, and nothing of one on their feet", async () => {
@@ -363,7 +397,7 @@ describe("the Battle Joy roll card's buttons", () => {
 			computedMaxHp: async () => 12,
 			restoreHp: vi.fn(async to => { duvin.system.attributes.hp.value = to; return true; }),
 			markDebility: vi.fn(async key => !marked.includes(key)),
-			debilityChoices: [{ key: "weakened", name: "Weakened" }, { key: "dazed", name: "Dazed" }],
+			debilityMarkChoices: [{ key: "weakened", name: "Weakened" }, { key: "dazed", name: "Dazed" }],
 		};
 		globalThis.game.actors = { get: id => (id === duvin.id ? duvin : undefined) };
 		const message = {
@@ -402,6 +436,16 @@ describe("the Battle Joy roll card's buttons", () => {
 		const { duvin, message } = rolled({ hp: 11 });
 		await settleBattleJoyResult(message, duvin, "regain");
 		expect(duvin.typedActor.restoreHp).toHaveBeenCalledWith(12, "Battle Joy");
+	});
+
+	// A Thrall's Torment's Blessing halves the heal inside restoreHp (rounded up): the card reads the
+	// sheet back, so it says 7 → 9, not the 7 → 10 that was asked.
+	it("says what the sheet now holds when the heal is halved", async () => {
+		const { duvin, message } = rolled({ hp: 7 });
+		duvin.typedActor.restoreHp = vi.fn(async to => { duvin.system.attributes.hp.value = 7 + Math.ceil((to - 7) / 2); return true; });
+		await settleBattleJoyResult(message, duvin, "regain");
+		expect(duvin.typedActor.restoreHp).toHaveBeenCalledWith(10, "Battle Joy");
+		expect(posted.at(-1).flavor).toContain("HP 7 → 9");
 	});
 
 	it("the 6- marks the chosen debility, once, and says so", async () => {

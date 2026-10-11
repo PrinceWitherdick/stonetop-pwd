@@ -256,6 +256,19 @@ describe("Magnificent Specimen: 2 options per copy", () => {
 		expect((await char.buildSnapshot()).companionBonuses.traitPicks).toBe(0);
 	});
 
+	// Only REMOVAL trims: an un-learned copy still on the sheet keeps the 2 options it paid for, so removing
+	// the other copy trims to one copy's worth, not to none.
+	it("removing one copy keeps the options an un-learned second copy still pays for", async () => {
+		const { char, actor } = rangerAt(4, { animalCompanion: { type: "brute", traits: ["tough", ...FULL] } });
+		await char.addMove(ranger("Animal Companion")._id);
+		const first = await char.addMove(ranger(MS)._id);
+		const second = await char.addMove(ranger(MS)._id);
+		await second.setFlag(STONETOP_SCOPE, "learned", false);
+		expect(traitsOf(actor)).toHaveLength(8);
+		await char.removeMove(first._id);
+		expect(traitsOf(actor)).toEqual(["tough", "quick", "powerful", "fearless", "keen-nosed", "protective"]);
+	});
+
 	it("a player's own move named Magnificent Specimen gives no options", async () => {
 		const { char, actor } = rangerAt(2);
 		actor.items.push(makeLiveItem({ name: MS, type: "move", system: { moveType: "other" }, flags: { "stonetop-pwd": { custom: true } } }));
@@ -532,8 +545,10 @@ describe("Beast-Bonded on the companion card, and Lend it your strength (M8)", (
 		expect((await followerGroups(char, actor)).animalCompanion.bond).toMatchObject({ canLend: true, atFull: false });
 	});
 
-	it("the Ranger loses the whole roll; the card and the NPC regain it, each capped at its max", async () => {
-		const { actor } = await bonded(["lend-strength"], { "animalCompanion.hpCurrent": 14 });
+	// Its NPC's HP is the companion's while there is one, and the card's box mirrors it (follower-hp.js), so the
+	// NPC alone is raised; with none, the box is.
+	it("the Ranger loses the whole roll; the companion's NPC regains it, capped at its max, and the box is left to mirror it", async () => {
+		const { actor } = await bonded(["lend-strength"], { "animalCompanion.hpCurrent": 14, "animalCompanion.details": { actorUuid: "Actor.steed" } });
 		actor.system.attributes.hp.value = 8;
 		const npc = { isOwner: true, system: { attributes: { hp: { value: 10, max: 16 } } }, update: vi.fn(async u => { npc.system.attributes.hp.value = u["system.attributes.hp.value"]; }) };
 		const toMessage = vi.fn();
@@ -542,8 +557,10 @@ describe("Beast-Bonded on the companion card, and Lend it your strength (M8)", (
 			const out = await bond.lendStrength(actor, { npc, cardHp: async () => ({ max: 16, current: 14 }) });
 			expect(out.amount).toBe(5);
 			expect(actor.system.attributes.hp.value).toBe(3);
-			expect(actor.getFlag(STONETOP_SCOPE, "animalCompanion.hpCurrent")).toBe(16);
+			expect(actor.getFlag(STONETOP_SCOPE, "animalCompanion.hpCurrent")).toBe(14);
 			expect(npc.system.attributes.hp.value).toBe(15);
+			expect(npc.update).toHaveBeenCalledWith({ "system.attributes.hp.value": 15 }, { stonetopMove: "Lend it your strength" });
+			expect(out.card).toEqual({ gain: 5, from: 10, to: 15 });
 			expect(toMessage).toHaveBeenCalledOnce();
 			expect(toMessage.mock.calls[0][0].flavor).toContain("Lend it your strength");
 		} finally {
@@ -562,6 +579,37 @@ describe("Beast-Bonded on the companion card, and Lend it your strength (M8)", (
 		} finally {
 			vi.unstubAllGlobals();
 		}
+	});
+
+	// Audit PB3-1: an NPC this client cannot write, with no GM connected to write it, cannot be raised, so the
+	// Ranger is refused before the die rather than losing HP the companion never regains.
+	it("is refused before the die, with nothing lost, when the companion's NPC cannot be written from here", async () => {
+		const { actor } = await bonded(["lend-strength"], { "animalCompanion.hpCurrent": 10, "animalCompanion.details": { actorUuid: "Actor.steed" } });
+		actor.system.attributes.hp.value = 8;
+		const npc = { name: "Bran", isOwner: false, system: { attributes: { hp: { value: 10, max: 16 } } }, update: vi.fn() };
+		const evaluate = vi.fn();
+		const warn = vi.fn();
+		vi.stubGlobal("Roll", class { async evaluate() { evaluate(); this.total = 4; return this; } toMessage() {} });
+		vi.stubGlobal("ui", { notifications: { warn } });
+		try {
+			expect(await bond.lendStrength(actor, { npc, gm: null })).toBeNull();
+			expect(evaluate).not.toHaveBeenCalled();
+			expect(actor.system.attributes.hp.value).toBe(8);
+			expect(npc.update).not.toHaveBeenCalled();
+			expect(warn).toHaveBeenCalledOnce();
+			expect(warn.mock.calls[0][0]).toContain("Bran");
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
+	it("can be written with no NPC (the card's box), an NPC this client owns, or a GM connected to write it", async () => {
+		const { actor } = await bonded(["lend-strength"], { "animalCompanion.details": { actorUuid: "Actor.steed" } });
+		const theirs = { isOwner: false };
+		expect(bond.lendStrengthWritable(actor, null, null)).toBe(true);
+		expect(bond.lendStrengthWritable(actor, { isOwner: true }, null)).toBe(true);
+		expect(bond.lendStrengthWritable(actor, theirs, { id: "gm" })).toBe(true);
+		expect(bond.lendStrengthWritable(actor, theirs, null)).toBe(false);
 	});
 });
 

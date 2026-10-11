@@ -63,6 +63,14 @@ function _movesSection(description) {
 const _ROLL_RE = /\broll\s*\+\s*(str|dex|con|int|wis|cha|nothing)\b/i;
 
 /**
+ * A move whose 6- says "don't mark XP" (the Timeless Vault's runes, Book II p.518: "on a 6-, ... (and
+ * don't mark XP)"). Read off the printed text, since a card carries no field for it and a homebrew card
+ * says it the same way; the shipped arcana use the phrase for nothing else.
+ */
+const _NO_XP_RE = /\b(?:don['’]t|do not)\s+mark\s+XP\b/i;
+const _noXpOnMiss = html => _NO_XP_RE.test(stripHtmlToText(String(html ?? "")));
+
+/**
  * The options list a move offers — the first <ul> in its block, one entry per <li>.
  *
  * Through `firstOptionList` (utils/chat.js), which is where "what is a move's printed option
@@ -189,6 +197,7 @@ function _parseArcanumMoves(description) {
 				: null,
 			description: `<p>${tail}`,
 			roll:        _ROLL_RE.exec(stripHtmlToText(block))?.[1]?.toLowerCase() ?? null,
+			noXpOnMiss:  _noXpOnMiss(block),
 			picks,
 			picksLabel,
 			pickMax,
@@ -219,18 +228,24 @@ export const CONDENSED_MOVE_SLUG = "~condensed";
  * @param {{name?: string, rollType?: *, description?: string}|null} move  `back.move`
  * @returns {object|null}
  */
-export function condensedArcanumMove(move) {
+export function condensedArcanumMove(move, { backDescription = "" } = {}) {
 	if (!move || !(String(move.name ?? "").trim() || String(move.description ?? "").trim())) return null;
 	const description = String(move.description ?? "");
 	const roll = normalizeRollType(move.rollType)?.toLowerCase()
 		?? _ROLL_RE.exec(stripHtmlToText(description))?.[1]?.toLowerCase()
 		?? null;
+	// "Don't mark XP" from the move's own fields, its own text, or the back's full prose when that prose is this
+	// one move written out at length (no mysteries section): the Timeless Vault's condensed text leaves the
+	// clause out, and only its back says it.
+	const noXpOnMiss = move.noXpOnMiss === true || _noXpOnMiss(description)
+		|| (!!backDescription && !_movesSection(String(backDescription)) && _noXpOnMiss(backDescription));
 	return {
 		slug: CONDENSED_MOVE_SLUG,
 		name: String(move.name ?? "").trim(),
 		boxIndex: null,
 		description,
 		roll,
+		noXpOnMiss,
 		..._picksFrom(description),
 	};
 }

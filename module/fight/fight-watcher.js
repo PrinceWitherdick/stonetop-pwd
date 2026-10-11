@@ -19,10 +19,12 @@ const TOKEN_KEYS = ["x", "y", "width", "height", "hidden", "elevation", "level",
 /**
  * Actor fields that change how many bodies a token stands for, or the numbers a row shows: HP, armor,
  * a character's crew and custom followers, whose rosters say how many of a group are standing, and a
- * character's Defend Readiness.
+ * character's Defend Readiness, and the gear tags and typed reminders a character's row carries
+ * (actors/character/gear-reminders.js).
  */
 const ACTOR_PATHS = [
 	"system.attributes.hp", "system.attributes.armor", "system.count", "system.fightAsGroup", "system.organization",
+	"system.attributes.gearTags", "system.reminders",
 	`flags.${SYSTEM_ID}.crew`, `flags.${SYSTEM_ID}.customFollowers`, `flags.${SYSTEM_ID}.${READINESS_FLAG}`,
 ];
 

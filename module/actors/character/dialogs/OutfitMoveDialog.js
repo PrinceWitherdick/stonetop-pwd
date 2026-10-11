@@ -2,11 +2,18 @@ import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { getHoverDescriptionSetting } from "../../../settings.js";
 import { applyGearTermTooltips } from "../../../utils/gear-term-tooltips.js";
 import { wrapStonetopGlyphsInEl } from "../../../utils/glyphs.js";
-import { LOAD_LEVEL_LIMITS, deriveLoadLevel, loadBandLabels } from "../../../utils/load.js";
+import { wireTabSearch } from "../../../utils/tab-search.js";
+import { LOAD_LEVEL_LIMITS, deriveLoadLevel, loadBandLabels, poolCountFromClick, poolAtLimitKey } from "../../../utils/load.js";
+
+/** The window's id, one per character (perDocumentOptions). */
+export const OUTFIT_ID_PREFIX = "stonetop-outfit-dialog";
 
 export class OutfitMoveDialog extends StonetopDialog {
 	constructor(character, outfitSnapshot, onDone, options = {}) {
-		super(options);
+		// One window PER CHARACTER: a GM outfitting two PCs at once used to get the second one's
+		// rows painted into the first one's frame (see StonetopDialog.perDocumentOptions), and the
+		// confirm then wrote to whichever character the frame was last filled for.
+		super(StonetopDialog.perDocumentOptions(OUTFIT_ID_PREFIX, character?._actor?.id, options));
 		this._character      = character;
 		// Journal treasures render under their own heading on the sheet, but for Outfit
 		// they're just carried gear: fold them back into the column they weigh against, so
@@ -15,11 +22,14 @@ export class OutfitMoveDialog extends StonetopDialog {
 			...outfitSnapshot.regularSegments.flatMap(seg => seg.items),
 			...(outfitSnapshot.treasureRegular ?? []),
 		];
-		this._smallItems     = [
+		// The standard small items (catalog rows flagged smallGrid) draw as the sheet draws them,
+		// a two-column grid under the list; _smallItems is both halves, for everything that counts.
+		this._smallListItems = [
 			...outfitSnapshot.smallItems,
-			...(outfitSnapshot.smallGridItems ?? []),
 			...(outfitSnapshot.treasureSmall ?? []),
 		];
+		this._smallGridItems = outfitSnapshot.smallGridItems ?? [];
+		this._smallItems     = [...this._smallListItems, ...this._smallGridItems];
 		// The sheet now groups every arcanum under Arcana, split across the columns by
 		// weight; this dialog has always had its own Arcana section, so feed it both halves
 		// rather than letting the ◇ ones drift back into the regular list and disagree with
@@ -34,7 +44,10 @@ export class OutfitMoveDialog extends StonetopDialog {
 		// slug is the key its mark lives under, which applyOutfit routes to the right store.
 		this._possessionRegular = outfitSnapshot.possessionRegular ?? [];
 		this._possessionSmall   = outfitSnapshot.possessionSmall ?? [];
-		this._smallItemLimit = outfitSnapshot.smallItemLimit ?? null;
+		// 4+Prosperity, or 4+0 when it can't be read (StonetopCharacter#getSmallItemLimit); the limit
+		// line is printed only when it was read.
+		this._smallItemLimit  = outfitSnapshot.smallItemLimit;
+		this._prosperityKnown = !!outfitSnapshot.prosperityKnown;
 		// A move's loadBonus raises each load cap (Pack Horse by one); the snapshot carries
 		// the limits in effect so the thresholds and the regular ◇ ceiling here match the
 		// sheet, plus the name of whatever granted the bonus for the note below the bar.
@@ -62,8 +75,10 @@ export class OutfitMoveDialog extends StonetopDialog {
 			id: "stonetop-outfit-dialog",
 			template: "systems/stonetop-pwd/templates/dialogs/outfit-move.hbs",
 			title: game.i18n.localize("stonetop.specialMoves.outfit.title"),
-			width: 560,
-			height: 600,
+			// Big enough that both item lists show whole without scrolling. Foundry clamps
+			// the height to the viewport, so a shorter screen opens it to the bottom edge.
+			width: 850,
+			height: 1200,
 			resizable: true,
 			classes: ["stonetop", "stonetop-outfit-dialog"],
 		});
@@ -79,7 +94,8 @@ export class OutfitMoveDialog extends StonetopDialog {
 		// A regular row carries its weight too.
 		const regularRow = item => ({ ...smallRow(item), weight: item.weight });
 		const regularItems = this._regularItems.map(regularRow);
-		const smallItems = this._smallItems.map(smallRow);
+		const smallItems = this._smallListItems.map(smallRow);
+		const smallGridItems = this._smallGridItems.map(smallRow);
 
 		const arcanaItems = this._arcanaItems.map(item => ({
 			slug:    item.slug,
@@ -103,6 +119,7 @@ export class OutfitMoveDialog extends StonetopDialog {
 		return {
 			regularItems,
 			smallItems,
+			smallGridItems,
 			arcanaItems,
 			hasArcana:         arcanaItems.length > 0,
 			possessionRegular,
@@ -114,16 +131,19 @@ export class OutfitMoveDialog extends StonetopDialog {
 			loadLevelNone:     pools.loadLevel === null,
 			loadLevelLight:    pools.loadLevel === "light",
 			loadLevelNormal:   pools.loadLevel === "normal",
-			loadLevelHeavy:    pools.loadLevel === "heavy",
-			undefinedRegular:        pools.undefinedRegular,
-			canAddUndefinedRegular:  pools.undefinedRegular < pools.undefinedRegularMax,
-			canRemUndefinedRegular:  pools.undefinedRegular > 0,
-			undefinedSmall:          pools.undefinedSmall,
-			canAddUndefinedSmall:    pools.undefinedSmall < pools.undefinedSmallMax,
-			canRemUndefinedSmall:    pools.undefinedSmall > 0,
+			// Overloaded still lights the heavy band, as on the sheet, and says so beside the count.
+			loadLevelHeavy:    pools.loadLevel === "heavy" || pools.loadLevel === "overloaded",
+			loadLevelOverloaded: pools.loadLevel === "overloaded",
+			// The undefined reserves as the Inventory tab's tracks: the full heavy load and the
+			// full 4+Prosperity allowance as boxes, so none vanish as items are marked, with the
+			// room the marked items leave as the cap a click is held to.
+			regularPool:             { current: pools.undefinedRegular, max: this._loadLimits.heavy },
+			regularPoolCap:          pools.undefinedRegularMax,
+			smallPool:               { current: pools.undefinedSmall, max: this._smallItemLimit },
+			smallPoolCap:            pools.undefinedSmallMax,
 			totalSmallMarks:   pools.totalSmallMarks,
 			smallItemLimit,
-			hasSmallItemLimit: smallItemLimit !== null,
+			hasSmallItemLimit: this._prosperityKnown,
 			loadBonus:         this._loadBonus,
 			loadBonusFrom:     this._loadBonusFrom,
 			// The two objects themselves, under the names the gear tab's own load lines read
@@ -145,7 +165,7 @@ export class OutfitMoveDialog extends StonetopDialog {
 		const undefinedRegular     = Math.min(this._undefinedRegular, undefinedRegularMax);
 
 		const checkedSmallCount = [...this._smallItems, ...this._possessionSmall].filter(i => this._checked[i.slug]).length;
-		const undefinedSmallMax = Math.max(0, (this._smallItemLimit ?? 9) - checkedSmallCount);
+		const undefinedSmallMax = Math.max(0, this._smallItemLimit - checkedSmallCount);
 		const undefinedSmall    = Math.min(this._undefinedSmall, undefinedSmallMax);
 
 		const totalMarks = checkedRegularWeight + undefinedRegular;
@@ -175,21 +195,30 @@ export class OutfitMoveDialog extends StonetopDialog {
 		// spans (load badges, undefined-pool marks), so it only touches note text.
 		wrapStonetopGlyphsInEl(html[0]);
 
+		// Each list gets its own filter, as the Inventory tab's two columns do, matched on the
+		// row's name and note. Every mark re-renders the window, so the terms are held on the
+		// dialog and put back, rather than dropped on the first click.
+		const searchTerms = (this._searchTerms ??= {});
+		for (const section of [".stonetop-outfit-regular-section", ".stonetop-outfit-small-section"]) {
+			wireTabSearch(html[0].querySelector(section), {
+				itemSel: ".stonetop-outfit-item",
+				textFor: row => [".stonetop-outfit-item-name", ".stonetop-outfit-item-note"]
+					.map(sel => row.querySelector(sel)?.textContent ?? "").join(" "),
+				memory: searchTerms, key: section,
+			});
+		}
+
 		html.find(".stonetop-outfit-item-check").on("change", ev => {
 			this._checked[ev.currentTarget.dataset.slug] = ev.currentTarget.checked;
 			this.render(false);
 		});
 
-		html.find(".stonetop-outfit-undefined-btn").on("click", ev => {
-			const delta = Number(ev.currentTarget.dataset.dir);
-			// Step from the clamped display value so the buttons stay intuitive even
-			// when checked items have narrowed the room below the stored reserve.
-			const pools = this._resolvePools();
-			if (ev.currentTarget.dataset.pool === "regular") {
-				this._undefinedRegular = Math.max(0, pools.undefinedRegular + delta);
-			} else {
-				this._undefinedSmall = Math.max(0, pools.undefinedSmall + delta);
-			}
+		// The undefined tracks behave as on the Inventory tab (_onInventoryPoolEdit): clicking a
+		// box sets the reserve to it, clicking a filled one clears back to it, and a click past
+		// the room the marked items leave fills to that room, warning only when it was full.
+		html.find(".stonetop-regular-pool-btn, .stonetop-small-pool-display").on("change", ev => {
+			const el = ev.currentTarget;
+			this._setPoolFromClick(el.classList.contains("stonetop-small-pool-display"), Number(el.dataset.index), el.checked);
 			this.render(false);
 		});
 
@@ -197,6 +226,17 @@ export class OutfitMoveDialog extends StonetopDialog {
 			await this._applyOutfit();
 			this.close();
 		});
+	}
+
+	// A click on box `index` of an undefined track, which `checked` says it now is.
+	_setPoolFromClick(isSmall, index, checked) {
+		const pools  = this._resolvePools();
+		const cap    = isSmall ? pools.undefinedSmallMax : pools.undefinedRegularMax;
+		const before = isSmall ? pools.undefinedSmall : pools.undefinedRegular;
+		const { count, atLimit } = poolCountFromClick({ index, checked, cap, before });
+		if (atLimit) ui.notifications.warn(game.i18n.localize(poolAtLimitKey(isSmall)));
+		if (isSmall) this._undefinedSmall = count;
+		else this._undefinedRegular = count;
 	}
 
 	async _applyOutfit() {
@@ -213,9 +253,10 @@ export class OutfitMoveDialog extends StonetopDialog {
 			.reduce((sum, i) => sum + (i.weight ?? 0), 0);
 	}
 
+	// "overloaded" is kept, not folded into heavy: the sheet calls 10 ◇ or more overloaded (Book I
+	// p.327, "If they want to carry 10 ◇ or more..."), and the window that sets the load has to say
+	// the same before the player confirms it. getData lights the heavy band for it too.
 	_loadLevelFor(weight) {
-		// The Outfit bar has only three tiers, so fold "overloaded" back into heavy.
-		const level = deriveLoadLevel(weight, this._loadLimits);
-		return level === "overloaded" ? "heavy" : level;
+		return deriveLoadLevel(weight, this._loadLimits);
 	}
 }

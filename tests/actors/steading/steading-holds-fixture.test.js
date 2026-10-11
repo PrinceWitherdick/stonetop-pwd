@@ -176,10 +176,14 @@ describe("the test fixture's seeded tray", () => {
 
 	// The muster is stored against the season it was raised in, so a stamp from any other
 	// season reads as lapsed. The macro dates it to the clock it just stamped for that reason.
+	// Except a muster still holding its +1 Defenses: that stays lit until it is stood down, or the
+	// +1 would be stranded with no control left to give it back.
 	it("dates the muster to the seeded season, or it reads as already lapsed", () => {
 		const flags = fixtureSteadingFlags();
-		flags.musterHold = { year: 1, season: "winter", defenses: true };
+		flags.musterHold = { year: 1, season: "winter", defenses: false };
 		expect(keysFor(seededActor({ steadingFlags: flags }))).not.toContain("muster");
+		flags.musterHold = { year: 1, season: "winter", defenses: true };
+		expect(keysFor(seededActor({ steadingFlags: flags }))).toContain("muster");
 	});
 
 	it("dates Tor's blessing the same way", () => {
@@ -282,7 +286,8 @@ describe("re-running the fixture after the season turns", () => {
 	});
 
 	// Without the re-stamp, a re-run that only seeded ABSENT flags would find the spring seed
-	// present, leave it, and hand back a summer tray with the muster and the blessing dark.
+	// present, leave it, and hand back a summer tray with the blessing dark. (The seeded muster
+	// holds its +1 Defenses, so it stays lit until stood down, lapsed or not.)
 	it("would go dark on a re-run that only seeded what was absent", () => {
 		const sf = seedHolds({}, { season: "spring", year: 1 });
 		const seedIfAbsent = f => {
@@ -291,7 +296,8 @@ describe("re-running the fixture after the season turns", () => {
 			return f;
 		};
 		const keys = keysFor(seededActor({ season: "summer", steadingFlags: seedIfAbsent(sf) }));
-		for (const k of ["muster", "torsBlessing"]) expect(keys, k).not.toContain(k);
+		expect(keys).not.toContain("torsBlessing");
+		expect(keys).toContain("muster");
 	});
 
 	// The debt is the odd one: it is stamped for WINTER whatever season seeded it, so it
@@ -394,14 +400,16 @@ describe("the fixture macro itself", () => {
 
 	// Stored rather than derived, so nothing else would ever clear a stale seeded debt.
 	it("takes the seeded winter debt back down again on cleanup", () => {
-		expect(MACRO).toContain("-=winterDebt");
+		expect(MACRO).toContain("dropKey(`${holdBase}.winterDebt`)");
 		expect(MACRO).toContain("steadingFlags.winterDebt?.amount === TEST_HOLD_WINTER_DEBT");
 	});
 
 	// setFlag MERGES, so a sub-key dropped off the object it is handed survives untouched in
 	// the stored flags. The seasonal dues would then stay hidden on every re-run but the first.
+	// dropKey is the macro's one deletion: ForcedDeletion on v14, `-=key` before it.
 	it("clears the season-step markers with the deletion syntax, not with delete", () => {
-		expect(MACRO).toContain("steading.seasonSteps.-=");
+		expect(MACRO).toContain("dropKey(`flags.${FLAG_SCOPE}.steading.seasonSteps.${step}`)");
+		expect(MACRO).toContain("return { [`${keyPath.slice(0, i + 1)}-=${keyPath.slice(i + 1)}`]: null };");
 		expect(MACRO).not.toMatch(/delete sf\.seasonSteps/);
 	});
 

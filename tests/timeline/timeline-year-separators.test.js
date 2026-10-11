@@ -18,8 +18,8 @@ function render({ single, periods, tracks = [] }) {
 	hbs.registerPartial("stonetop.timeline-lane-head", "");
 	hbs.registerPartial("stonetop.timeline-period", "");
 	hbs.registerPartial("stonetop.timeline-hperiod", readRepo("templates/dialogs/partials/timeline-hperiod.hbs"));
+	hbs.registerPartial("stonetop.timeline-year-chip", readRepo("templates/dialogs/partials/timeline-year-chip.hbs"));
 	const html = hbs.compile(readRepo("templates/dialogs/timeline.hbs"))({
-		hasPage: true,
 		horizontal: true,
 		single,
 		timeline: {
@@ -39,9 +39,9 @@ function render({ single, periods, tracks = [] }) {
 
 const PERIODS = [
 	{ key: "u", undated: true, startsYear: false },
-	{ key: "1s", year: 1, yearLabel: "Year One", startsYear: true },
-	{ key: "1u", year: 1, yearLabel: "Year One", startsYear: false },
-	{ key: "2s", year: 2, yearLabel: "Year Two", startsYear: true },
+	{ key: "1s", year: 1, yearLabel: "Year One", yearCount: "Year One", yearTail: "", startsYear: true },
+	{ key: "1u", year: 1, yearLabel: "Year One", yearCount: "Year One", yearTail: "", startsYear: false },
+	{ key: "2s", year: 2, yearLabel: "Year Two", yearCount: "Year Two", yearTail: "", startsYear: true },
 ];
 
 /** The grid's column list, off the inline custom property the template writes. */
@@ -65,7 +65,7 @@ describe("year separators across the page", () => {
 		// One listed column per item, the separators' sized to their chip.
 		const cols = columns(track, "--timeline-hcols");
 		expect(cols).toHaveLength(items.length);
-		items.forEach((li, i) => expect(cols[i]).toBe(li.matches(".stonetop-timeline-hyear") ? "auto" : "minmax(15rem, 19rem)"));
+		items.forEach((li, i) => expect(cols[i]).toBe(li.matches(".stonetop-timeline-hyear") ? "auto" : "minmax(min-content, 19rem)"));
 	});
 
 	it("gives every swimlane row a rule cell under each year's chip", () => {
@@ -135,6 +135,64 @@ describe("the swimlanes' thread names scroll off with their lanes", () => {
 		const root = render({ single: false, periods: PERIODS, tracks: ["a"] });
 		expect(root.querySelector(".stonetop-timeline-swim-corner")).toBeNull();
 		expect(CSS).not.toContain("stonetop-timeline-swim-corner");
+	});
+});
+
+describe("a year before play's long name", () => {
+	// "Four Years Before Year One" (user, 2026-10-10): the season heading holding it is wider than a
+	// fixed 15rem column, and ran on over the next year's separator. Each Across column grows to its
+	// head instead, floored at 15rem by the item (a floor on the TRACK would win over the content);
+	// the Down board's fixed 170px column wraps the chip, and its year chip centres only when it fits.
+	it("never lets a season's head outgrow its column", () => {
+		expect(declarations(CSS, ".stonetop-timeline-hperiod")).toMatch(/min-width:\s*15rem/);
+		expect(declarations(CSS, ".stonetop-timeline-swim-head")).toMatch(/min-width:\s*15rem/);
+		const main = readRepo("templates/dialogs/timeline.hbs");
+		expect(main).not.toContain("minmax(15rem,");
+		expect(declarations(CSS, ".stonetop-timeline-row-head .stonetop-year-chip")).toMatch(/white-space:\s*normal/);
+		expect(declarations(CSS, ".stonetop-timeline-row-head .stonetop-year-chip")).toMatch(/max-width:\s*100%/);
+		expect(declarations(CSS, ".stonetop-timeline-year-cell")).toMatch(/justify-content:\s*safe center/);
+	});
+
+	// User, 2026-10-10: "keep the font size for 'Four Years' and make the 'Before Year One' much
+	// smaller but still readable". The count stays the chip's own text; the tail is a small of its own,
+	// half the chip's size but floored in rem, and a year of play has no tail at all.
+	it("prints the count at the chip's size and the tail small", () => {
+		const root = render({ single: true, periods: [
+			{ key: "-3s", year: -3, yearLabel: "Four Years Before Year One", yearCount: "Four Years", yearTail: "Before Year One", startsYear: true },
+			...PERIODS.slice(1),
+		] });
+		const [before, one] = root.querySelectorAll(".stonetop-timeline-hyear .stonetop-year-chip");
+		expect(before.textContent).toBe("Four Years Before Year One");
+		expect(before.querySelector(".stonetop-year-chip-tail").textContent).toBe("Before Year One");
+		expect(one.querySelector(".stonetop-year-chip-tail")).toBeNull();
+		const tail = declarations(CSS, ".stonetop-year-chip-tail");
+		expect(tail).toMatch(/font-size:\s*max\(0\.55em,\s*0\.8rem\)/);
+		expect(tail).toMatch(/white-space:\s*nowrap/);
+	});
+
+	it("splits every timeline year chip the same way", () => {
+		expect(readRepo("templates/dialogs/partials/timeline-year-chip.hbs"))
+			.toContain('<small class="stonetop-year-chip-tail">{{yearTail}}</small>');
+		for (const f of ["timeline.hbs", "partials/timeline-period.hbs", "partials/timeline-hperiod.hbs"]) {
+			const src = readRepo(`templates/dialogs/${f}`);
+			expect(src, f).not.toContain('<span class="stonetop-year-chip">');
+			expect(src, f).toContain("{{> stonetop.timeline-year-chip}}");
+		}
+	});
+
+	// User, 2026-10-10: in a season's own heading the tail is cut to "BYO", the whole of it on hover.
+	it("cuts the season heading's tail to BYO", () => {
+		const hb = Handlebars.create();
+		const head = hb.compile(readRepo("templates/dialogs/partials/timeline-period-head.hbs"));
+		const chip = (vm) => {
+			const root = document.createElement("div");
+			root.innerHTML = head({ seasonLabel: "Spring", seasonNotes: [], ...vm });
+			return root.querySelector(".stonetop-year-chip");
+		};
+		const before = chip({ yearCount: "Four Years", yearTail: "Before Year One", yearTailShort: "BYO" });
+		expect(before.textContent).toBe("Four Years BYO");
+		expect(before.querySelector(".stonetop-year-chip-tail abbr").dataset.tooltip).toBe("Before Year One");
+		expect(chip({ yearCount: "Year Two", yearTail: "", yearTailShort: "" }).textContent).toBe("Year Two");
 	});
 });
 

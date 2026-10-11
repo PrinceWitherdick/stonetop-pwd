@@ -128,7 +128,8 @@ describe("StonetopCharacter.applyLevelUp — cross-playbook threading", () => {
 		expect(char._applyForeignMoveChoice).not.toHaveBeenCalled();
 		expect(char._applyStatIncreaseChoice).not.toHaveBeenCalled();
 		// level 2 → 3; cost = 6 + 2*2 = 10, so xp 20 → 10.
-		expect(actor.update).toHaveBeenCalledWith({ "system.attributes.level.value": 3, "system.attributes.xp.value": 10 }, {});
+		// Named to the ledger as the move that spent the XP.
+		expect(actor.update).toHaveBeenCalledWith({ "system.attributes.level.value": 3, "system.attributes.xp.value": 10 }, { stonetopMove: "Level Up" });
 	});
 
 	// The timeline's level-up row reads the move learned off this update's options.
@@ -139,7 +140,7 @@ describe("StonetopCharacter.applyLevelUp — cross-playbook threading", () => {
 		await char.applyLevelUp("bmId", null, null, { moveName: "Big Magic" });
 		expect(actor.update).toHaveBeenCalledWith(
 			{ "system.attributes.level.value": 3, "system.attributes.xp.value": 10 },
-			{ stonetopTimelineLearned: "Big Magic" },
+			{ stonetopMove: "Level Up", stonetopTimelineLearned: "Big Magic" },
 		);
 	});
 });

@@ -118,8 +118,11 @@ describe("reading a fight", () => {
 			items: [{ type: "move", name: "Unstoppable", flags: learned ? {} : { [SYSTEM_ID]: { learned: false } } }],
 		});
 		const bodies = actor => combatantBodies(fakeCombatant({ id: "c", token: fakeToken({ id: "t", actor }), scene }));
-		expect(bodies(heavy({ deathsDoor: "dying" }))).toMatchObject({ bodies: 1, out: false });
-		expect(bodies(heavy({ deathsDoor: "dying" }, false)).out).toBe(true);
+		// Reduced to 0 HP in battle: the drop stamped it (`unstoppableFighting`, hooks/DeathsDoorPrompt.js).
+		expect(bodies(heavy({ deathsDoor: "dying", unstoppableFighting: true }))).toMatchObject({ bodies: 1, out: false });
+		expect(bodies(heavy({ deathsDoor: "dying", unstoppableFighting: true }, false)).out).toBe(true);
+		// Dropped outside battle and put in this fight since: down, not fighting on (Book I p.114).
+		expect(bodies(heavy({ deathsDoor: "dying" })).out).toBe(true);
 		expect(bodies(heavy({ deathsDoor: "out-of-action" })).out).toBe(true);
 	});
 });

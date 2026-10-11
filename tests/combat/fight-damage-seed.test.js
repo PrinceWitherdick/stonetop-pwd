@@ -5,7 +5,7 @@ import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection 
 // The fight's +N for several attackers (Book I p.414) on the incoming side of the attack flow, and
 // the "Leave off the +N" control every seeded damage card carries.
 
-const { sufferEnemyAttack, resolveSufferChoice, wireDamageSeed, wireApplyDamage, seedAdjustment, sufferArmorLine } =
+const { sufferEnemyAttack, resolveSufferChoice, wireDamageSeed, wireApplyDamage, seedAdjustment, sufferArmorLine, reRollOwnWarning } =
 	await import("../../module/combat/attack-flow.js");
 
 // The chat fakes take `game` down after each test, i18n with it; the seed's words need it back.
@@ -276,6 +276,24 @@ describe("leaving the +N off a damage card", () => {
 		expect(pim.system.attributes.hp.value).toBe(1);
 	});
 
+	it("warns to re-roll your own damage when the +N goes off a total rolled with another's die", async () => {
+		const flags = { damage: {
+			move: "Clash", applied: [], results: [{ uuid: "Scene.scene1.Token.tPim", name: "Crinwin", raw: 9, formula: "d8+1" }],
+			seed: { bonus: 1, pill: "+1", pillLeftOff: "+1, left off", applied: true, rolled: true, useBest: true, best: { name: "Bram", formula: "d8" } },
+		} };
+		const message = makeMessage(flags);
+		message.canUserModify = () => true;
+		const card = renderedCard(flags.damage);
+		wireDamageSeed(message, card.root);
+		await card.listeners.toggle[0]();
+		expect(flags.damage.seed.applied).toBe(false);
+		expect(globalThis.ui.notifications.warn).toHaveBeenCalledWith(expect.stringContaining("re-roll your own damage"));
+		expect(reRollOwnWarning(flags.damage.seed)).toContain("Bram's d8");
+		// Not while the +N is on, and not for a total rolled with the roller's own die.
+		expect(reRollOwnWarning({ ...flags.damage.seed, applied: true })).toBe("");
+		expect(reRollOwnWarning({ ...flags.damage.seed, useBest: false })).toBe("");
+	});
+
 	it("stops offering the toggle once the damage has been applied", async () => {
 		const { message, flags } = await seededCard();
 		flags.damage = { ...flags.damage, applied: [{ uuid: flags.damage.results[0].uuid, effective: 9 }] };
@@ -366,5 +384,91 @@ describe("leaving the +N off a damage card", () => {
 		wireDamageSeed(message, card.root);
 		expect(card.toggle.innerHTML).toBe("");
 		expect(card.number.textContent).toBe("9");
+	});
+});
+
+describe("Undaunted as the fight stood at the roll", () => {
+	async function applyRow(row, extra = {}) {
+		const pim = makePim();
+		fightAround(pim, []);
+		const flags = { damage: { move: "Blow", applied: [], results: [{ uuid: "Actor.pim", name: "Pim", raw: 4, formula: "d6", ...row }], ...extra } };
+		const message = makeMessage(flags);
+		message.canUserModify = () => true;
+		const card = renderedCard(flags.damage);
+		wireApplyDamage(message, card.root);
+		await card.listeners.apply[0]();
+		return 10 - pim.system.attributes.hp.value;
+	}
+
+	it("keeps the +1 armor the roll saw, whatever the applying client's scene shows now", async () => {
+		// The fight here shows nothing (the GM is looking at another scene): the stamp still holds.
+		expect(await applyRow({ undaunted: true })).toBe(3);
+	});
+
+	it("gives none where the roll saw none, unless the table ticked the card's box", async () => {
+		expect(await applyRow({ undaunted: false })).toBe(4);
+		expect(await applyRow({ undaunted: false }, { undauntedArmor: ["Actor.pim"] })).toBe(3);
+	});
+});
+
+describe("the marks an Apply leaves on its card", () => {
+	it("marks the card as being applied before any HP moves, and lets it go with the latch", async () => {
+		const pim = makePim();
+		fightAround(pim, []);
+		const flags = { damage: { move: "Blow", applied: [], results: [{ uuid: "Actor.pim", name: "Pim", raw: 4, formula: "d6" }] } };
+		const message = makeMessage(flags);
+		message.canUserModify = () => true;
+		const seen = [];
+		const update = pim.update;
+		pim.update = vi.fn(async function (changes) { seen.push(flags.damage.applying); return update.call(this, changes); });
+		const card = renderedCard(flags.damage);
+		wireApplyDamage(message, card.root);
+		await card.listeners.apply[0]();
+		// A Readiness spend recorded on another client meanwhile (fight/defend-spend.js#beingApplied) waits on this.
+		expect(seen).toEqual([globalThis.game.user.id]);
+		expect(flags.damage.applying).toBeNull();
+		expect(flags.damage.applied).toEqual([expect.objectContaining({ uuid: "Actor.pim", effective: 4 })]);
+		// And the ledger names the blow the HP went to.
+		expect(pim.update).toHaveBeenCalledWith({ "system.attributes.hp.value": 6 }, { stonetopMove: "Blow" });
+	});
+
+	it("whispers the applied card as the card it answers was whispered", async () => {
+		const pim = makePim();
+		fightAround(pim, []);
+		const flags = { damage: { move: "Blow", applied: [], results: [{ uuid: "Actor.pim", name: "Pim", raw: 4, formula: "d6" }] } };
+		const message = Object.assign(makeMessage(flags), { whisper: ["gm1"], blind: true, canUserModify: () => true });
+		const card = renderedCard(flags.damage);
+		wireApplyDamage(message, card.root);
+		await card.listeners.apply[0]();
+		expect(posted.at(-1)).toMatchObject({ whisper: ["gm1"], blind: true });
+	});
+
+	it("latches the rows already written when a later row fails, so a second press cannot take them twice", async () => {
+		const pim = makePim();
+		fightAround(pim, []);
+		const broken = { ...makePim(), uuid: "Actor.bad", name: "Bad", update: vi.fn(async () => { throw new Error("refused"); }) };
+		const resolve = globalThis.fromUuid;
+		globalThis.fromUuid = async uuid => (uuid === "Actor.bad" ? broken : resolve(uuid));
+		const flags = { damage: { move: "Blow", applied: [], results: [
+			{ uuid: "Actor.pim", name: "Pim", raw: 4, formula: "d6" },
+			{ uuid: "Actor.bad", name: "Bad", raw: 4, formula: "d6" },
+		] } };
+		const message = makeMessage(flags);
+		message.canUserModify = () => true;
+		const card = renderedCard(flags.damage);
+		const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+		wireApplyDamage(message, card.root);
+		await card.listeners.apply[0]();
+		quiet.mockRestore();
+		expect(pim.system.attributes.hp.value).toBe(6);
+		expect(flags.damage.applied).toEqual([expect.objectContaining({ uuid: "Actor.pim", effective: 4 })]);
+		expect(flags.damage.applying).toBeNull();
+		// Pressed again: Pim's row is latched and is not taken twice.
+		broken.update = vi.fn(async function (changes) { this.system.attributes.hp.value = changes["system.attributes.hp.value"]; });
+		const again = renderedCard(flags.damage);
+		wireApplyDamage(message, again.root);
+		await again.listeners.apply[0]();
+		expect(pim.system.attributes.hp.value).toBe(6);
+		expect(broken.system.attributes.hp.value).toBe(6);
 	});
 });

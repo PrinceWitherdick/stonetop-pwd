@@ -22,6 +22,14 @@ export const TIER_TEXT = Object.freeze({
 	[TIER.FAILURE]: "in a spot",
 });
 
+/**
+ * What "a spot" is, which the move never says. The book's own answer is the GM move "Put someone in
+ * a spot" (Book I p.181: "They've got to do something, now, or it'll get ugly"), with p.329's examples.
+ * The move's own text (packs/src/stonetop-items/expedition-moves/struggle-as-one.json) prints this same
+ * line, with the citation after it; tests/struggle/struggle-view.test.js holds the two together.
+ */
+export const SPOT_TEXT = "What's a spot? Trouble you have to deal with right now, or it gets ugly: you slip, fall behind, get spotted, get stuck. The GM describes it, or asks you to.";
+
 const TIER_BAND = Object.freeze({ [TIER.SUCCESS]: "10+", [TIER.PARTIAL]: "7-9", [TIER.FAILURE]: "6-" });
 
 function signed(n) {
@@ -319,6 +327,8 @@ export function struggleWindowView(struggle, board, reader, extra = {}) {
 		keepCompany: status !== STRUGGLE_STATUS.ROLLING && board.everyoneSevenPlus
 			? "Everyone got a 7+: a good moment to Keep Company."
 			: "",
+		// Only once the results are out and somebody has a 6-: before then it would give a result away.
+		spotHelp: status === STRUGGLE_STATUS.REVEALED && board.inSpot.length ? SPOT_TEXT : "",
 		rows,
 		gm,
 		hasGmTools: !!gm && !!(gm.canShare || gm.canCancel || gm.canEnd),
@@ -354,11 +364,29 @@ function summaryValue(row, board) {
 	return parts.join("; ");
 }
 
-/** The card a struggle posts when it ends: the danger, every roll, every rescue, and the XP. */
+/** A heading inside the summary card's list, over the rows that follow it. */
+function cardHeading(text) {
+	return `<li class="stonetop-struggle-chat-head">${escHtml(text)}</li>`;
+}
+
+/**
+ * The card a struggle posts when it ends: the danger, every roll, every rescue, and the XP. Those
+ * who came through (7+) are listed first, those who ended up in a spot (6-) under them, and anyone
+ * who never rolled last.
+ */
 export function struggleSummaryRows(struggle, board) {
 	const rows = [];
 	if (struggle.danger) rows.push(cardLine("The danger", struggle.danger));
-	for (const row of board.rows) rows.push(cardLine(row.name, summaryValue(row, board)));
+	const sections = [
+		["Came through", board.rows.filter(r => r.rolled && r.tier !== TIER.FAILURE)],
+		["In a spot", board.rows.filter(r => r.rolled && r.tier === TIER.FAILURE)],
+		["Never rolled", board.rows.filter(r => !r.rolled)],
+	];
+	for (const [heading, members] of sections) {
+		if (!members.length) continue;
+		rows.push(cardHeading(heading));
+		for (const row of members) rows.push(cardLine(row.name, summaryValue(row, board)));
+	}
 	if (board.everyoneSevenPlus) rows.push(`<li>Everyone got a 7+: a good moment to Keep Company.</li>`);
 	for (const row of board.rows) {
 		if (row.tier === TIER.SUCCESS && struggle.journey && row.owns.includes(MOVE.TRAILBLAZER)) {

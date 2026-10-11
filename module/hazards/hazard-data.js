@@ -57,6 +57,29 @@ export function resolveDamageEffects(effectIds = []) {
 	return { tags, bonus };
 }
 
+const _PIERCING = /^(\d+)\s+piercing$/i;
+
+/**
+ * At most ONE "N piercing" tag, the largest, in the place the first one stood.
+ *
+ * p. 383 is "choose all that apply", so a hazard that tears metal apart may also be ticked as
+ * slicing through leather/hide. Piercing is a single number, though, and a line reading
+ * "1 piercing, messy, 3 piercing" says nothing a reader can use: the larger value already covers
+ * the smaller. Applies to free-form extras too, so "2 piercing" typed beside a pick is folded in.
+ */
+export function onePiercingTag(tags = []) {
+	const values = tags.map(t => _PIERCING.exec(String(t).trim())).filter(Boolean).map(m => Number(m[1]));
+	if (values.length < 2) return [...tags];
+	const keep = `${Math.max(...values)} piercing`;
+	let placed = false;
+	const out = [];
+	for (const t of tags) {
+		if (!_PIERCING.test(String(t).trim())) { out.push(t); continue; }
+		if (!placed) { out.push(keep); placed = true; }
+	}
+	return out;
+}
+
 /**
  * The hazard's damage line as the book writes it, e.g. "1d10+2 (ignores armor,
  * forceful)". Certain death replaces the roll entirely (p. 383: straight to 0 HP
@@ -67,6 +90,6 @@ export function formatHazardDamage({ die = "", bonus = 0, tags = [], certainDeat
 	if (!die) return "";
 	const b = Number(bonus) || 0;
 	const formula = `1${die}${b > 0 ? `+${b}` : b < 0 ? `${b}` : ""}`;
-	const clean = tags.map(t => String(t).trim()).filter(Boolean);
+	const clean = onePiercingTag(tags.map(t => String(t).trim()).filter(Boolean));
 	return clean.length ? `${formula} (${clean.join(", ")})` : formula;
 }

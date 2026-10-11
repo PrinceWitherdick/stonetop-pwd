@@ -272,8 +272,8 @@ describe("the link and the trash on a portrait, which carry no labels either", (
 		// A disc: the width, the height and the 50% radius together. Any one of the three changed
 		// on its own turns the correction above into an offset of a different size.
 		for (const selector of [".stonetop-relmap-handle", ".stonetop-relmap-bin"]) {
-			expect(declared(selector, "width"), selector).toBe("22px");
-			expect(declared(selector, "height"), selector).toBe("22px");
+			expect(declared(selector, "width"), selector).toBe("30px");
+			expect(declared(selector, "height"), selector).toBe("30px");
 			expect(declared(selector, "border-radius"), selector).toBe("50%");
 			expect(declared(selector, "padding"), selector).toBe("0");
 			// ⚠ WHOLE PIXELS, WHICH IS WHY NO VERTICAL NUDGE IS NEEDED. A glyph sized in `em`
@@ -281,7 +281,7 @@ describe("the link and the trash on a portrait, which carry no labels either", (
 			// the offset then swings about and cannot be corrected by any one number (see the
 			// comment on `.stonetop-relmap-page-tool > i` in the stylesheet). Both of these are
 			// deaf to the setting in both quantities, so the rounding is the same every time.
-			expect(declared(selector, "font-size"), selector).toBe("11px");
+			expect(declared(selector, "font-size"), selector).toBe("14px");
 		}
 	});
 

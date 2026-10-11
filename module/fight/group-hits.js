@@ -114,7 +114,7 @@ export function memberHit({ hpMax, count, wound = 0 }, damage) {
  * @param {Actor|null} attacker
  * @param {Scene|null} scene  the scene the target stands on
  */
-function attackerIsGroup(attacker, scene) {
+export function attackerIsGroup(attacker, scene) {
 	if (!attacker || !scene) return false;
 	const combat = fightOnScene(scene);
 	const combatant = rollerCombatant(combat, scene, attacker);
@@ -125,11 +125,15 @@ function attackerIsGroup(attacker, scene) {
  * Whether damage from `attacker` onto `targetActor` is a lone blow into a group (see the note at the top):
  * the Fight tab on, the target a group token (a monster group, or a group follower with a roster), and
  * the attacker not a group.
+ *
+ * `attackerGroup` is that last answer as it stood when the blow was ROLLED (a damage card stamps it), which
+ * wins over the fight as it stands now: a group's blow applied after its fight ended is still a group's.
  */
-export function isLoneBlowOnGroup(targetActor, attacker, scene, { resolve } = {}) {
+export function isLoneBlowOnGroup(targetActor, attacker, scene, { resolve, attackerGroup = null } = {}) {
 	if (!isFightTabEnabled()) return false;
 	const group = !!groupTokenInfo(targetActor) || !!rosterGroupFor(targetActor, { resolve });
-	return group && !attackerIsGroup(attacker, scene);
+	if (!group) return false;
+	return !(typeof attackerGroup === "boolean" ? attackerGroup : attackerIsGroup(attacker, scene));
 }
 
 // ── A GROUP FOLLOWER'S ROSTER ───────────────────────────────────────────────────────────────────
@@ -191,7 +195,7 @@ export function rosterMemberHp(flags, { ftype, slug = "" }, key, hpMax) {
 
 /**
  * The actor update that writes roster members' HP: the same stores the character sheet's own HP boxes
- * write (StonetopCharacterSheet#_followerHpUpdate), a named crew member's by key, an anonymous one's or a
+ * write (follower-fate.js#followerHpWriteUpdate), a named crew member's by key, an anonymous one's or a
  * custom group member's as the whole array with that slot changed. PURE.
  *
  * @param {object} flags  the character's system flags, for the arrays the slots sit in
@@ -246,10 +250,14 @@ export function rosterFateArgs({ ftype, slug = "", key, name } = {}) {
 	return { follower: row.follower, slug: ftype === "custom" ? String(slug) : "", index: row.index, name: String(name ?? "") };
 }
 
-/** The update options for a roster write: the fate to ask when it drops a roster member, else none. */
-function rosterWriteOptions(roster, down) {
+/**
+ * The update options for a roster write: the fate to ask when it drops a roster member, and the move the
+ * blow came from (`stonetopMove`, which the character's ledger names the HP change by), else none.
+ */
+function rosterWriteOptions(roster, down, stonetopMove = "") {
 	const fate = down ? rosterFateArgs(roster) : null;
-	return fate ? { [ROSTER_FATE_OPTION]: fate } : null;
+	const options = { ...(fate ? { [ROSTER_FATE_OPTION]: fate } : {}), ...(stonetopMove ? { stonetopMove } : {}) };
+	return Object.keys(options).length ? options : null;
 }
 
 /** Write a roster update, with the fate option when it drops a roster member (rosterWriteOptions). */
@@ -268,11 +276,12 @@ function writeRoster(character, update, options) {
  *
  * @param {Actor} targetActor  the token's actor
  * @param {number} damage  after armor
- * @param {{memberKey?: string, resolve?: Function}} [options]
+ * @param {{memberKey?: string, resolve?: Function, stonetopMove?: string}} [options]  `stonetopMove` names
+ *   the blow's move on the character's ledger
  * @returns {Promise<null|{roster: object, down: boolean, harmed: boolean, before: number, after: number}>}
  *   `roster` is what the card records: whose roster, which member, and their HP before and after
  */
-export async function applyRosterHit(targetActor, damage, { memberKey = null, resolve } = {}) {
+export async function applyRosterHit(targetActor, damage, { memberKey = null, resolve, stonetopMove = "" } = {}) {
 	const group = rosterGroupFor(targetActor, { resolve });
 	if (!group) return null;
 	const member = (memberKey && group.members.find(m => m.key === memberKey)) || group.members[0];
@@ -286,7 +295,7 @@ export async function applyRosterHit(targetActor, damage, { memberKey = null, re
 	// A roster member dropped carries their fate with the write (ROSTER_FATE_OPTION).
 	if (newHp !== oldHp) {
 		await writeRoster(group.character, rosterHpUpdate(flags, card, { [member.key]: newHp }),
-			rosterWriteOptions({ ...card, key: member.key, name: member.name }, down));
+			rosterWriteOptions({ ...card, key: member.key, name: member.name }, down, stonetopMove));
 	}
 	const after = down ? group.standing - 1 : group.standing;
 	return {
@@ -305,11 +314,11 @@ export async function applyRosterHit(targetActor, damage, { memberKey = null, re
  * @param {object} roster  what applyRosterHit recorded
  * @param {string} toKey   the member who takes it now
  * @param {number} damage  what the blow dealt, after armor
- * @param {{resolve?: Function}} [options]
+ * @param {{resolve?: Function, stonetopMove?: string}} [options]  `stonetopMove` as for applyRosterHit
  * @returns {Promise<null|{roster: object, down: boolean, after: number, from: {name: string, hp: number}}>}
  *   null when either member or the character cannot be found, or `toKey` is the member who took it
  */
-export async function moveRosterHit(roster, toKey, damage, { resolve = globalThis.fromUuidSync } = {}) {
+export async function moveRosterHit(roster, toKey, damage, { resolve = globalThis.fromUuidSync, stonetopMove = "" } = {}) {
 	if (!roster?.characterUuid || !toKey || toKey === roster.key) return null;
 	let character = null;
 	try { character = resolve?.(roster.characterUuid, { strict: false }) ?? null; } catch { character = null; }
@@ -331,7 +340,7 @@ export async function moveRosterHit(roster, toKey, damage, { resolve = globalThi
 	const after = standing + (wasHp <= 0 && fromHp > 0 ? 1 : 0) - (down ? 1 : 0);
 	// The member who takes it now, if it drops them, is asked their fate (ROSTER_FATE_OPTION).
 	await writeRoster(character, rosterHpUpdate(flags, card, { [roster.key]: fromHp, [toKey]: newHp }),
-		rosterWriteOptions({ ...card, key: toKey, name: target.name }, down));
+		rosterWriteOptions({ ...card, key: toKey, name: target.name }, down, stonetopMove));
 	return {
 		roster: { ...roster, key: toKey, name: target.name, oldHp, newHp },
 		down,

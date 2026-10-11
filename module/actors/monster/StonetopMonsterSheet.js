@@ -1,5 +1,6 @@
 import { CREATURE_TYPE_CHOICES, creatureTypeIcon, creatureTypeLabel } from "../../bestiary/creature-types.js";
-import { confirmOutcome } from "../../utils/ask-with-buttons.js";
+import { askWithButtons, confirmOutcome } from "../../utils/ask-with-buttons.js";
+import { HP_MODIFIERS, ORGANIZATIONS, SIZES, rederiveMonsterHp } from "../../data/monster-builder.js";
 import { hasText } from "../bestiary/codex.js";
 import { rollDamageAt } from "../../combat/attack-flow.js";
 import { damageBlows } from "../../utils/damage.js";
@@ -20,12 +21,9 @@ import { stripJournalArt } from "../../book2-art/world-journal-art.js";
 import { condemnedContext } from "../character/condemn.js";
 import { SYSTEM_ID } from "../../system-id.js";
 
-// Per-organization combat budget (Book I, "Dangers", pp.396-398).
-const ORGANIZATION_DEFAULTS = {
-	horde:    { hp: 3,  die: "d6" },
-	group:    { hp: 6,  die: "d8" },
-	solitary: { hp: 12, die: "d10" },
-};
+// Per-organization damage die (Book I, "Dangers", pp.396-398), read off the worksheet's own table
+// so the sheet and the builder cannot disagree on it.
+const ORGANIZATION_DEFAULTS = Object.fromEntries(ORGANIZATIONS.map(o => [o.id, { die: o.die }]));
 
 const ORGANIZATION_CHOICES = {
 	horde:    "stonetop.monster.organizationHorde",
@@ -65,11 +63,19 @@ function _normalizeTag(value) {
  * @param {string} value
  * @returns {{ text: string, formula: string, rollMode: string, title: string, keywords: string, weapon: object|null }[]}
  */
-function _parseDamageModes(value) {
+function _parseDamageModes(value, rollFormula = "") {
 	// The blows read by the shared reader (utils/damage.js#damageBlows), the one the fight ring reads
 	// too. Each mode opens its own line on the sheet, so it opens with a capital, as the damage card's
 	// title does: "Antler of jagged bone d10+2 (close, messy, 1 piercing)". Display only.
-	return damageBlows(value).map(blow => ({ ...blow, text: capitalizeFirst(blow.text) }));
+	const modes = damageBlows(value).map(blow => ({ ...blow, text: capitalizeFirst(blow.text) }));
+	// A stat block written by hand may keep its die only in the formula field. The fight ring and
+	// Clash both roll it then (fight/fight-ring.js, utils/damage.js#parseMonsterAttacks), so the sheet
+	// does too: on the line the prose printed, or on a line of its own when there is no prose.
+	const fallback = String(rollFormula ?? "").replace(/\s+/g, "");
+	if (!fallback || modes.some(mode => mode.formula)) return modes;
+	if (modes.length) modes[0] = { ...modes[0], formula: fallback };
+	else modes.push({ text: fallback, formula: fallback, rollMode: "", title: "", keywords: "", weapon: null });
+	return modes;
 }
 
 // The creature's flavor/quality tags with the organization and size dropped
@@ -381,7 +387,7 @@ export function createStonetopMonsterSheetClass(Base) {
 			const writeUp  = this._resolveWriteUp();
 			const displayTags = _displayMonsterTags(system);
 			st.displayTags = displayTags.join(", ");
-			st.damageModes = _parseDamageModes(system?.attributes?.damage?.value);
+			st.damageModes = _parseDamageModes(system?.attributes?.damage?.value, system?.attributes?.damage?.rollFormula);
 			st.multiDamage = st.damageModes.length > 1;
 
 			// A Judge's Condemn brand. A stat block is a person often enough for this to matter —
@@ -609,7 +615,7 @@ export function createStonetopMonsterSheetClass(Base) {
 					// The blow's own armor clause (its piercing, "ignores armor"), for the Apply that takes
 					// a character's armor off it. Read from the line this button stands on.
 					const mode = "modeIndex" in dmgRoll.dataset
-						? _parseDamageModes(this.actor.system?.attributes?.damage?.value)[Number(dmgRoll.dataset.modeIndex)]
+						? _parseDamageModes(this.actor.system?.attributes?.damage?.value, this.actor.system?.attributes?.damage?.rollFormula)[Number(dmgRoll.dataset.modeIndex)]
 						: null;
 					// Aimed at whoever this monster is fighting on the map, or at the GM's own targets
 					// (fight/fight-targets.js), with a plain card as before when that is nobody.
@@ -719,14 +725,48 @@ export function createStonetopMonsterSheetClass(Base) {
 			});
 		}
 
+		/**
+		 * Work max HP out again from the book's table (Book I p.396): organization, plus size, plus
+		 * whichever "what else applies?" rows the GM ticks, since a stat block does not store them.
+		 * Through the worksheet's own arithmetic (rederiveMonsterHp), and behind a confirm, because it
+		 * overwrites a printed number. Damage already taken stays taken.
+		 *
+		 * The damage line is left alone. The die a stat block rolls is the one printed in that line
+		 * (utils/damage.js#damageBlows), and the worksheet's damage modifiers are not stored either, so
+		 * a die worked out from organization and size alone would quietly drop a "vicious" +2.
+		 */
 		async _resetOrganizationDefaults() {
-			const org = _normalizeTag(this.actor.system?.organization);
-			const def = ORGANIZATION_DEFAULTS[org];
-			if (!def) return;
+			const system = this.actor.system ?? {};
+			const org  = ORGANIZATIONS.find(o => o.id === _normalizeTag(system.organization));
+			if (!org) {
+				ui.notifications?.warn?.(localize("stonetop.monster.resetHpNoOrganization"));
+				return;
+			}
+			const size = SIZES.find(s => s.id === _normalizeTag(system.size)) ?? SIZES.find(s => s.id === "medium");
+			const boxes = HP_MODIFIERS.map(mod =>
+				`<label class="stonetop-monster-hp-mod"><input type="checkbox" class="stonetop-check" name="hpMod-${mod.id}"> ${escHtml(mod.label)} (+${mod.hp})</label>`).join("");
+			const hpMods = await askWithButtons({
+				title: localize("stonetop.monster.resetHpTitle"),
+				content: `<p>${escHtml(format("stonetop.monster.resetHpAsk", {
+					organization: org.label, orgHp: org.hp,
+					size: size.label, sizeHp: size.hp ? `${size.hp > 0 ? "+" : ""}${size.hp}` : "+0",
+				}))}</p><div class="stonetop-monster-hp-mods">${boxes}</div>`,
+				buttons: [
+					{ key: "apply", label: localize("stonetop.monster.resetHpApply"), icon: "fa-heart",
+						value: form => HP_MODIFIERS.filter(mod => form?.elements?.namedItem?.(`hpMod-${mod.id}`)?.checked).map(mod => mod.id) },
+					{ key: "keep", label: localize("stonetop.monster.resetHpKeep"), icon: "fa-xmark", value: false },
+				],
+				defaultKey: "keep",
+			});
+			if (!Array.isArray(hpMods)) return;
+			const hp = rederiveMonsterHp({
+				organization: org.id, size: size.id, hpMods,
+				hpMax: system.attributes?.hp?.max, hpValue: system.attributes?.hp?.value,
+			});
+			if (!hp) return;
 			await this.actor.update({
-				"system.attributes.hp.value":            def.hp,
-				"system.attributes.hp.max":              def.hp,
-				"system.attributes.damage.rollFormula":  def.die,
+				"system.attributes.hp.value": hp.value,
+				"system.attributes.hp.max":   hp.max,
 			});
 		}
 

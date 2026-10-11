@@ -336,6 +336,25 @@ describe("the aggregate laid across the page", () => {
 		expect(writable.periods[0].seasonNotes).toHaveLength(1);
 	});
 
+	// A season's shortfall is a second, keyed note; the season's own summary leads whichever was
+	// written first (a winter's stores run out before its summary is recorded).
+	it("prints a season's summary before its shortfall note", () => {
+		const vm = buildTrackVM({ trackId: "s", name: "Stonetop", entries: [
+			entry({ id: "short", source: "season", key: "shortfall:1:spring", title: "Winter's shortfall", body: "<p>Ran out.</p>", order: 0 }),
+			entry({ id: "sum", source: "season", title: "Spring", body: "<p>Gains</p>", order: 1 }),
+		] });
+		expect(vm.periods[0].seasonNotes.map(n => n.id)).toEqual(["sum", "short"]);
+	});
+
+	// The test macro keys the summaries it seeds ("test:season:<p>"): keyed is not shortfall.
+	it("tells a shortfall by its key's prefix, not by having a key", () => {
+		const vm = buildTrackVM({ trackId: "s", name: "Stonetop", entries: [
+			entry({ id: "short", source: "season", key: "shortfall:1:spring", title: "Winter's shortfall", body: "<p>Ran out.</p>", order: 0 }),
+			entry({ id: "sum", source: "season", key: "test:season:0", title: "Spring", body: "<p>Gains</p>", order: 1 }),
+		] });
+		expect(vm.periods[0].seasonNotes.map(n => n.id)).toEqual(["sum", "short"]);
+	});
+
 	// It has no Filter line any more, so a reader who hid "Seasons Change" before it moved must not
 	// lose it with no way back.
 	it("never filters a season's own row", () => {
@@ -403,5 +422,48 @@ describe("buildAggregateVM", () => {
 
 	it("reports empty for a world where nothing has been written yet", () => {
 		expect(buildAggregateVM([{ trackId: "s", name: "Stonetop", entries: [] }])).toMatchObject({ isEmpty: true });
+	});
+});
+
+// User, 2026-10-10: a character's thread reads the seasons turning between the things they did,
+// from Stonetop's own season notes, over the seasons that thread spans and no further.
+describe("Stonetop's season notes on a character's thread", () => {
+	const steadingEntries = [
+		entry({ id: "y1sp", year: 1, season: "spring", source: "season", title: "Spring", body: "<p>Gains Y1</p>" }),
+		entry({ id: "y2sp", year: 2, season: "spring", source: "season", title: "Spring", body: "<p>Gains Y2</p>" }),
+		entry({ id: "y2su", year: 2, season: "summer", source: "season", title: "Summer", body: "<p>Gains summer</p>" }),
+		entry({ id: "y2au", year: 2, season: "autumn", source: "season", title: "Autumn", body: "<p>Gains autumn</p>" }),
+		entry({ id: "card", year: 2, season: "summer", source: "hand", title: "Stonetop's own card" }),
+	];
+	const steading = { trackId: "steading", entries: steadingEntries, canEdit: false };
+	const pc = (rows) => ({ trackId: "pc1", name: "Aster", entries: rows });
+
+	it("prints them only over the seasons the character's thread spans", () => {
+		const vm = buildTrackVM(pc([
+			entry({ id: "a", year: 2, season: "spring" }),
+			entry({ id: "b", year: 2, season: "autumn" }),
+		]), { steading });
+		expect(vm.periods.map(p => p.key)).toEqual(["2:spring", "2:summer", "2:autumn"]);
+		expect(vm.periods.flatMap(p => p.seasonNotes.map(n => n.id))).toEqual(["y2sp", "y2su", "y2au"]);
+	});
+
+	it("never brings Stonetop's cards across, only its season notes", () => {
+		const vm = buildTrackVM(pc([
+			entry({ id: "a", year: 2, season: "spring" }),
+			entry({ id: "b", year: 2, season: "autumn" }),
+		]), { steading });
+		expect(vm.periods.flatMap(p => p.entries.map(e => e.id))).toEqual(["a", "b"]);
+	});
+
+	it("names Stonetop's thread on each note, so its Edit writes there", () => {
+		const vm = buildTrackVM(pc([entry({ id: "a", year: 2, season: "spring" })]),
+			{ canEdit: true, steading: { ...steading, canEdit: true } });
+		expect(vm.periods[0].seasonNotes[0]).toMatchObject({ id: "y2sp", trackId: "steading", canEdit: true });
+	});
+
+	it("prints none on a thread with nothing of its own", () => {
+		const vm = buildTrackVM(pc([]), { steading });
+		expect(vm.periods).toEqual([]);
+		expect(vm.blank).toBe(true);
 	});
 });

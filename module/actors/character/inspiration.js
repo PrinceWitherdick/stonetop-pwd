@@ -36,7 +36,7 @@ import { resolvedFlagProperty } from "./StonetopFlags.js";
 import { DEATHS_DOOR_FLAG, canFaceDeathsDoor, effectiveDeathsDoorState } from "./deaths-door.js";
 import { ownsLearnedMoveNamed } from "./owns-move.js";
 import { WE_HAPPY_FEW } from "./fight-states.js";
-import { each } from "../../fight/fight-state.js";
+import { inBattle } from "../../fight/in-battle.js";
 import { escHtml } from "../../utils/strings.js";
 import { format, localize } from "../../utils/i18n.js";
 
@@ -100,15 +100,8 @@ export async function refundInspiration(actor, scope = SYSTEM_ID) {
 	await actor.setFlag(scope, INSPIRATION_FLAG, inspirationHeld(actor, scope) + 1);
 }
 
-/**
- * "Once battle is joined": whether this character stands in any combat in the world. Read by actor id,
- * as a linked token's combatant carries it, and whether or not the Fight tab made the combat.
- */
-export function inBattle(actor, combats = globalThis.game?.combats) {
-	if (!actor?.id) return false;
-	return each(combats).some(combat => each(combat?.combatants)
-		.some(c => (c?.actor?.id ?? c?.actorId) === actor.id));
-}
+// "Once battle is joined": whether this character stands in any combat in the world (fight/in-battle.js).
+export { inBattle };
 
 /** The character's hit points, as the sheet reads them. */
 function hpOf(actor) {

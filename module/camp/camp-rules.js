@@ -67,14 +67,31 @@ export const CAMP_BENEFIT = Object.freeze({
  */
 export const CAMP_STALE_MS = 8 * 60 * 60 * 1000;
 
-/** The most extra mouths one character can bring to the fire. */
-export const CAMP_FOLLOWERS_MAX = 20;
+// The extra mouths a character brings to the fire have NO cap: "each member of the party" eats
+// (Book I p.79), and the book names no most. A cap billed a big crew short and then, with fewer fed
+// than travel with them, healed none of them (camp-followers.js#campFollowerShare).
 
 /** How many camps a character remembers breaking up, latest kept. Older ones read as simply gone. */
 export const CAMP_LEFT_MAX = 10;
 
 /** The held advantage a peaceful night leaves, named the way the sheet's chip shows it. */
 export const PEACEFUL_NIGHT = "A peaceful night's rest";
+
+/**
+ * The held advantage the fur-lined bedroll leaves (Book II, Spirits of the Wild): "When you Make Camp
+ * in the fur-lined bedroll, you regain 1d6 (extra) HP and gain advantage on your next roll." Its own
+ * name, so it is held beside a peaceful night's and never mistaken for it.
+ */
+export const FUR_LINED_BEDROLL = "A fur-lined bedroll";
+
+/**
+ * Whether a carried thing is the fur-lined bedroll. A dropped treasure lands on the sheet as a
+ * write-in keyed by its item id with no catalog slug, so its name is what says what it is (the way
+ * fine-whisky.js#isFineWhiskyName reads a skin).
+ */
+export function isFurLinedBedrollName(name) {
+	return /\bfur[\s-]*lined\s+bedroll\b/i.test(String(name ?? ""));
+}
 
 /**
  * The held disadvantage a Thrall's Quicksilver Dreams leaves on everyone else at the fire: "When you
@@ -140,7 +157,9 @@ function readVitals(raw) {
 		.map(d => ({ key: String(d.key), name: String(d.name ?? d.key) }));
 	return {
 		maxHp:      count(raw?.maxHp),
-		bedroll:    !!raw?.bedroll,
+		// Any bedroll, the fur-lined one included: it is a bedroll as well as a treasure.
+		bedroll:    !!raw?.bedroll || !!raw?.furBedroll,
+		furBedroll: !!raw?.furBedroll,
 		messKit:    !!raw?.messKit,
 		debilities: named(raw?.debilities),
 		clears:     named(raw?.clears),
@@ -164,7 +183,7 @@ export function readCampRecord(raw) {
 		openedAt:  count(raw.openedAt),
 		joinedAt:  count(raw.joinedAt),
 		offer,
-		followers: count(raw.followers, CAMP_FOLLOWERS_MAX),
+		followers: count(raw.followers),
 		eats:      raw.eats !== false,
 		messKit:   !!raw.messKit,
 		benefit:   Object.values(CAMP_BENEFIT).includes(raw.benefit) ? raw.benefit : CAMP_BENEFIT.HP,
@@ -187,6 +206,11 @@ export function readCampRecord(raw) {
 		// On a host: the latest press of Make Camp by someone whose client does not settle this camp,
 		// as a fresh token each time (camp-store.js#settleCamp).
 		settleAsk: String(raw.settleAsk ?? ""),
+		// On a host: the settling client's answer to a `settleAsk` it could not settle, as `{ask, reason}`,
+		// so the client that asked can say why (camp-store.js#onUpdateActorCamp). Null otherwise.
+		settleRefused: raw.settleRefused?.ask ? { ask: String(raw.settleRefused.ask), reason: String(raw.settleRefused.reason ?? "") } : null,
+		// The user whose client claimed this share to pay it (camp-store.js#payShare), "" before anyone has.
+		paidBy:    String(raw.paidBy ?? ""),
 		applied:   !!raw.applied,
 		// The unsettled camps this character was hosting when they sat down somewhere else instead,
 		// which those moves broke up (campState). Carried from record to record, latest last.
@@ -223,7 +247,7 @@ export function newCampRecord({
 		openedAt:  hosting ? count(now) : 0,
 		joinedAt:  count(now),
 		offer:     blankOffer(),
-		followers: count(followers, CAMP_FOLLOWERS_MAX),
+		followers: count(followers),
 		eats:      !unliving,
 		messKit:   read.messKit,
 		// Healing is the pick unless there is nothing to heal and a debility to clear instead.
@@ -239,6 +263,8 @@ export function newCampRecord({
 		plan:      null,
 		settledAt: 0,
 		settleAsk: "",
+		settleRefused: null,
+		paidBy:    "",
 		applied:   false,
 		leftCamps: readLeftCamps(leftCamps),
 	};
@@ -262,10 +288,21 @@ function readLeftCamps(raw) {
 export function campState(hostRecord, { campId, hostId }, now = 0) {
 	if (hostRecord?.leftCamps?.includes(campId)) return CAMP_STATE.CANCELLED;
 	if (!hostRecord || hostRecord.id !== campId || hostRecord.host !== hostId) return CAMP_STATE.GONE;
+	// A camp with a plan was eaten at, whatever its status says since: a Break up confirmed a moment
+	// after somebody else settled it lands on top of the settle, and must not unsay the meal.
+	if (isSettledRecord(hostRecord)) return CAMP_STATE.SETTLED;
 	if (hostRecord.status === CAMP_STATUS.OPEN) {
 		return now - hostRecord.openedAt > CAMP_STALE_MS ? CAMP_STATE.COLD : CAMP_STATE.OPEN;
 	}
 	return hostRecord.status ?? CAMP_STATE.GONE;
+}
+
+/**
+ * Whether a host's record is a settled camp: its plan is written. The plan, not the status, because
+ * only settling writes a plan and nothing takes one away but a fresh record.
+ */
+export function isSettledRecord(record) {
+	return !!record && (record.status === CAMP_STATUS.SETTLED || Array.isArray(record.plan));
 }
 
 /** Host first, then in the order people sat down, so the rows (and the trimming) never reshuffle. */
@@ -279,10 +316,21 @@ export function eatsTonight(member) {
 	return member.record.eats && !member.unliving;
 }
 
+/**
+ * The purses a member's pack can feed the camp from, in the order a meal eats them: PROVISIONS FIRST.
+ * "Provisions, though, are more likely to spoil or attract beasts than supplies are" (Book I p.89),
+ * and the book's own party eats "a use of provisions when you Make Camp rather than using up
+ * supplies". So Cover the rest reaches for the larder first, and an over-offer gives supplies back
+ * first (trimToBill runs this order backwards).
+ */
+function campPurses(resources) {
+	const { eligible } = supplyPursesFor(resources, SUPPLY_PURPOSE.CAMP);
+	return [...eligible.filter(p => p.slug === PROVISIONS_SLUG), ...eligible.filter(p => p.slug !== PROVISIONS_SLUG)];
+}
+
 /** What a member has offered, clamped purse by purse to what that purse still holds. */
 function offerFrom(member) {
-	const { eligible } = supplyPursesFor(member.resources, SUPPLY_PURPOSE.CAMP);
-	const purses = eligible.map(p => ({
+	const purses = campPurses(member.resources).map(p => ({
 		slug: p.slug, label: p.label, remaining: p.remaining,
 		n: Math.min(member.record.offer[p.slug] ?? 0, p.remaining),
 	}));
@@ -295,8 +343,8 @@ function offerFrom(member) {
  * Two people reaching for the same last use at once is ordinary, and so is a bill that shrinks
  * after the offers are in (somebody decides to go without), so offers can come to more than the
  * camp eats. Only the bill is spent. The latest to sit down gives back first, and within one pack
- * the larder goes back before the printed supplies rows: the same order a spend drains them, run
- * backwards, so what stays spent is what a single character's spend would have taken.
+ * the printed supplies rows go back before the larder: the same order a meal eats them (campPurses),
+ * run backwards, so the provisions that would spoil are what stays eaten.
  */
 function trimToBill(offers, bill) {
 	let excess = Math.max(0, offers.reduce((sum, o) => sum + o.total, 0) - bill);
@@ -386,11 +434,13 @@ export function campLedger(members = []) {
 		// Break Bread is "when you share a meal", so a holder who goes without (or cannot eat) brings
 		// nothing to it.
 		breadBreakers: rows.filter(m => m.breaksBread && eatsTonight(m)).map(m => m.name),
+		// The same holders by actor id, so one dying at the fire can tell another's meal from their own.
+		breadBreakerIds: rows.filter(m => m.breaksBread && eatsTonight(m)).map(m => m.actorId),
 		properMeal:    rows.find(m => m.isHost)?.record.properMeal ?? true,
 		// Keep the Home-Fires Burning is the fire's, not the meal's: a holder who goes without still
 		// sprinkles the ash.
 		hearthKeepers: rows.filter(m => m.hearthCha !== null && m.hearthCha !== undefined)
-			.map(m => ({ name: m.name, cha: Math.trunc(Number(m.hearthCha) || 0) })),
+			.map(m => ({ actorId: m.actorId, name: m.name, cha: Math.trunc(Number(m.hearthCha) || 0) })),
 		hearthAsh:     rows.find(m => m.isHost)?.record.hearthAsh ?? true,
 		// Quicksilver Dreams is the Thrall's, whether or not they eat or sleep: "When you Make Camp".
 		dreamers:      rows.filter(m => m.nightmarish).map(m => ({ actorId: m.actorId, name: m.name })),
@@ -450,21 +500,48 @@ export function rollsBedroll(member, ledger) {
 }
 
 /**
- * Whether Break Bread is on the table tonight: somebody eating at the fire has it learned, and the
- * meal is paid for. The host's "A proper meal" box shows exactly then.
+ * Whether this member sleeps in the fur-lined bedroll tonight, and so is owed its "advantage on your
+ * next roll". The same night the bedroll's 1d6 asks for (rollsBedroll): they rest, they are not dying,
+ * and their row is sleeping in a bedroll. Its 1d6 is that one 1d6, never a second beside a plain
+ * bedroll carried too; the advantage is its own, peaceful night or not.
+ */
+export function sleepsInFurBedroll(member, ledger) {
+	return rollsBedroll(member, ledger) && member.record.vitals.furBedroll;
+}
+
+/**
+ * Whether Break Bread is on the table tonight: somebody eating at the fire has it learned, the meal
+ * is paid for, and there is somebody to share it WITH ("When you share a proper meal with someone"):
+ * at least two mouths, a follower counting as one. The host's "A proper meal" box shows exactly then.
  */
 export function breakBreadOffered(ledger) {
-	return ledger.short === 0 && (ledger.breadBreakers?.length ?? 0) > 0;
+	return ledger.short === 0 && (ledger.breadBreakers?.length ?? 0) > 0 && count(ledger.mouths) >= 2;
 }
 
 /**
  * Whether Break Bread's "each of you recovers 1d8 (extra) HP" is owed to this member: it is on the
  * table, the host left the proper meal ticked, and this member eats. One meal, so one 1d8 each,
  * however many at the fire hold the move.
+ *
+ * One dying at the fire can't save themselves (Book I p.240), but an ally's healing still reaches
+ * them: somebody ELSE's Break Bread does, and their own does not.
  */
 export function rollsBreakBread(member, ledger) {
-	// Not for one dying at the fire, whose night restores no HP (freezeCampPlan): no die for nothing.
-	return breakBreadOffered(ledger) && ledger.properMeal !== false && eatsTonight(member) && !member.dying;
+	if (!breakBreadOffered(ledger) || ledger.properMeal === false || !eatsTonight(member)) return false;
+	if (!member.dying) return true;
+	const holders = ledger.breadBreakerIds ?? [];
+	return holders.some(id => id !== member.actorId);
+}
+
+/**
+ * Whether the followers this member feeds at the fire share Break Bread's proper meal, and so are owed
+ * its "each of you recovers 1d8 (extra) HP": a follower counts as somebody to share it with
+ * (breakBreadOffered), so it is one of the "each of you" too. One 1d8 per mouth, rolled when the camp
+ * settles (camp-store.js#settleHere); which of them it heals, and which are down at 0 HP and take
+ * nothing, is the followers' own camp heal's call (camp-followers.js#campFollowerHeals).
+ */
+export function followersBreakBread(member, ledger) {
+	return breakBreadOffered(ledger) && ledger.properMeal !== false && count(member?.record?.followers) > 0;
 }
 
 /**
@@ -494,11 +571,23 @@ export function homeFiresHp(ledger) {
 }
 
 /**
+ * The extra HP the home fires give THIS member: homeFiresHp, except for one dying at the fire, who
+ * can't save themselves (Book I p.240) but is still warmed by an ally's hearth. So their own ash
+ * gives them nothing, and the best of the OTHER holders' CHA counts instead (0 with none).
+ */
+export function homeFiresHpFor(member, ledger) {
+	if (!member?.dying) return homeFiresHp(ledger);
+	if (!homeFiresOffered(ledger) || ledger.hearthAsh === false) return 0;
+	const others = (ledger.hearthKeepers ?? []).filter(k => k.actorId !== member.actorId);
+	return others.length ? Math.max(0, ...others.map(k => k.cha)) : 0;
+}
+
+/**
  * Whether this member gets Keep the Home-Fires Burning's HP: "anyone who Makes Camp with you", the
  * holder too, and whether or not they eat. Not the Unliving, who "gain no benefit from ... Make Camp".
  */
 export function warmsAtHomeFires(member, ledger) {
-	return homeFiresHp(ledger) > 0 && !member.unliving;
+	return homeFiresHpFor(member, ledger) > 0 && !member.unliving;
 }
 
 /**
@@ -514,11 +603,12 @@ export function nightmaresWarded(ledger) {
  * The Thralls whose Quicksilver Dreams give this member nightmares tonight, by name: "When you Make
  * Camp, everyone with you suffers nightmares and has disadvantage on their next roll." Everyone WITH
  * the Thrall, so never the Thrall themselves (a second such Thrall at the fire still troubles the
- * first). Anyone at the fire, eating or not: the Mark asks only that they camp together. Empty with
- * none at the fire, or with the nightmares warded off (nightmaresWarded).
+ * first). Anyone at the fire, eating or not, sleeping or not: the Mark asks only that they camp
+ * together. Never a Ghost or a Revenant, who "need not eat nor drink nor sleep", so have no dreams to
+ * trouble. Empty with none at the fire, or with the nightmares warded off (nightmaresWarded).
  */
 export function nightmaresFor(member, ledger) {
-	if (nightmaresWarded(ledger)) return [];
+	if (member?.unliving || nightmaresWarded(ledger)) return [];
 	return (ledger.dreamers ?? []).filter(d => d.actorId !== member.actorId).map(d => d.name);
 }
 
@@ -534,7 +624,7 @@ export const CAMP_EXTRA = Object.freeze({ BEDROLL: "bedroll", BREAK_BREAD: "brea
 const CAMP_EXTRAS = [
 	{ source: CAMP_EXTRA.BEDROLL,     amount: (m, ledger, rolls) => (rollsBedroll(m, ledger) ? count(rolls.bedrolls?.[m.actorId]) : 0) },
 	{ source: CAMP_EXTRA.BREAK_BREAD, amount: (m, ledger, rolls) => (rollsBreakBread(m, ledger) ? count(rolls.breads?.[m.actorId]) : 0) },
-	{ source: CAMP_EXTRA.HOME_FIRES,  amount: (m, ledger) => (warmsAtHomeFires(m, ledger) ? homeFiresHp(ledger) : 0) },
+	{ source: CAMP_EXTRA.HOME_FIRES,  amount: (m, ledger) => (warmsAtHomeFires(m, ledger) ? homeFiresHpFor(m, ledger) : 0) },
 ];
 
 /** `[source, amount]` pairs healed in turn from `start`, as `[{source, amount, from, to}]`, the empty left out. */
@@ -603,8 +693,10 @@ export function debilityToClear(member) {
  * @param {object} [o]
  * @param {Object<string, number>} [o.bedrolls]  each bedroll's 1d6, by actor id
  * @param {Object<string, number>} [o.breads]    each eater's Break Bread 1d8, by actor id
+ * @param {Object<string, number[]>} [o.followerBreads]  the Break Bread 1d8s of each member's fed
+ *        followers, one per mouth, by actor id (followersBreakBread)
  */
-export function freezeCampPlan(ledger, { bedrolls = {}, breads = {} } = {}) {
+export function freezeCampPlan(ledger, { bedrolls = {}, breads = {}, followerBreads = {} } = {}) {
 	return ledger.rows.map((m, at) => {
 		const rests   = restsTonight(m, ledger);
 		const cleared = rests && m.record.benefit === CAMP_BENEFIT.DEBILITY ? debilityToClear(m) : null;
@@ -615,10 +707,12 @@ export function freezeCampPlan(ledger, { bedrolls = {}, breads = {} } = {}) {
 		const halfMax  = Math.ceil(maxHp / 2);
 		const hpBefore = count(m.hpValue);
 		// Dying at the fire (their 0-HP move still to face): they "can't save themselves" (Book I p.240),
-		// so the night restores none of their HP, pick or extras; whoever tends them Aids the roll (p.245).
+		// so the night's own HP (the pick, their bedroll, their own Break Bread or hearth) restores
+		// nothing; whoever tends them Aids the roll (p.245). An ally's healing still reaches them:
+		// somebody else's Break Bread or hearth ash (CAMP_EXTRAS ask rollsBreakBread and homeFiresHpFor).
 		const dying    = !!m.dying;
 		const picked   = benefit === CAMP_BENEFIT.HP && !dying ? healTo(hpBefore, halfMax, maxHp) : hpBefore;
-		const extras   = dying ? [] : healInTurn(picked, CAMP_EXTRAS.map(x => [x.source, x.amount(m, ledger, { bedrolls, breads })]), maxHp);
+		const extras   = healInTurn(picked, CAMP_EXTRAS.map(x => [x.source, x.amount(m, ledger, { bedrolls, breads })]), maxHp);
 		// What the night SHOULD heal, pick and extras alike; Torment's Blessing then halves the whole of
 		// it once (deaths-door-actor.js#recoveredHpTo). The steps above stay what they should have been,
 		// so the card can say what was halved.
@@ -643,7 +737,14 @@ export function freezeCampPlan(ledger, { bedrolls = {}, breads = {} } = {}) {
 			...(dying ? { dying: true } : {}),
 			// The mouths beside their own the meal fed, whose HP the night restores (camp-followers.js).
 			followersFed: ledger.short === 0 ? count(m.record.followers) : 0,
-			peaceful: rests && m.record.peaceful,
+			// Their Break Bread 1d8s, one per follower mouth, when the followers shared the proper meal.
+			...(followersBreakBread(m, ledger) && followerBreads[m.actorId]?.length
+				? { followerBreads: followerBreads[m.actorId].map(n => count(n)) } : {}),
+			// Not for one dying at the fire: a night spent at Death's Door is no peaceful rest, and the
+			// advantage would otherwise land on the roll at the Door.
+			peaceful: rests && m.record.peaceful && !dying,
+			// Slept in the fur-lined bedroll: advantage held for the next roll, beside any peaceful night's.
+			furBedroll: sleepsInFurBedroll(m, ledger),
 			// Whose Quicksilver Dreams trouble this member's night, as names; held disadvantage when any.
 			nightmares: nightmaresFor(m, ledger),
 			// Auspicious Birth's circle: "Clear it when you Make Camp", so whoever sits at the fire,
@@ -668,7 +769,7 @@ export function freezeCampPlan(ledger, { bedrolls = {}, breads = {} } = {}) {
  * @param {object} live.resources  the character's inventory.resources now
  * @param {number} live.hpValue    their HP now
  * @param {(slug: string, count: number) => object} live.resourceData  StonetopCharacter#inventoryResourceData
- * @param {(source: string) => object} live.advantageData             StonetopCharacter#heldAdvantageData
+ * @param {(source: string|string[]) => object} live.advantageData   StonetopCharacter#heldAdvantageData
  * @param {(source: string) => object} [live.disadvantageData]       StonetopCharacter#heldDisadvantageData
  * @returns {{update: object, shortfall: number}}  `shortfall` counts uses the pack no longer had
  */
@@ -693,7 +794,11 @@ export function campShareUpdate(entry, { resources = {}, hpValue = 0, resourceDa
 		}
 		// Held, not the sticky roll-modifier selector: "advantage on your next roll" is a promise
 		// about one roll. See StonetopCharacter#heldAdvantage.
-		if (entry.peaceful) Object.assign(update, advantageData(PEACEFUL_NIGHT));
+		// A peaceful night and the fur-lined bedroll are two promises, laid in ONE call with both
+		// names: heldAdvantageData lays its names beside what the sheet already holds, so a second
+		// call in the same update would overwrite the first.
+		const promises = [entry.peaceful && PEACEFUL_NIGHT, entry.furBedroll && FUR_LINED_BEDROLL].filter(Boolean);
+		if (promises.length) Object.assign(update, advantageData(promises));
 	}
 	// The extra HP, each on top of what came before (CAMP_EXTRAS), healed from their HP now.
 	for (const extra of planExtras(entry)) hp = healTo(hp, extra.amount, entry.maxHp);
@@ -746,7 +851,9 @@ function packOf(member) {
 /**
  * The printed supplies row an undefined ◇ would become: the first one not already marked, or null
  * when all three are. A marked row eaten empty stays marked and is not refilled: its ◇ already
- * counts toward the load, so filling it for one undefined ◇ would make a mark vanish.
+ * counts toward the load, so filling it for one undefined ◇ would make a mark vanish. The unmarked
+ * row it picks is packed fresh and full, as a tick on the sheet that draws an undefined ◇ packs it
+ * (supply-cost.js#suppliesUsesOnMark, one rule for both).
  */
 export function suppliesRowToMark(member) {
 	const { checked } = packOf(member);

@@ -245,7 +245,9 @@
 							</a>
 							{{/if}}
 						</div>
-						{{#if description}}<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>{{/if}}
+						{{!-- A custom move may state its outcomes only in its 10+/7-9/6- fields, with no
+						      description: its ladder still shows, as it does on the roll card. --}}
+						{{#if (or description moveResults)}}<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>{{/if}}
 						{{#if requiresLabel}}<p class="stonetop-move-note">Requires: {{requiresLabel}}</p>{{/if}}
 					</li>
 				{{/each}}

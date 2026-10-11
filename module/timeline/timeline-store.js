@@ -23,7 +23,7 @@ import { isSteadingActor, getStonetopSteadingActor } from "../utils/world.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { inTurn } from "../utils/turn-queue.js";
 import {
-	TIMELINE_TRACK_STEADING, entriesById, entriesDiff, isLeftover, trackKey, trackIdFromKey, readEntries, sortEntries,
+	TIMELINE_SEASON_SOURCE, TIMELINE_TRACK_STEADING, entriesById, entriesDiff, isLeftover, trackKey, trackIdFromKey, readEntries, sortEntries,
 } from "./timeline-core.js";
 import { deletionEntry, replacementEntry } from "../utils/foundry-compat.js";
 
@@ -87,12 +87,28 @@ export function worldTracks() {
 	return tracks.filter(Boolean);
 }
 
+/**
+ * The track a page belongs to, read off its flag (or its data, for a page minted without one). The
+ * one rule: the lanes, the writes and the GM's top-up all find a page by it, so a page one of them
+ * counts is never a page another misses and mints again.
+ */
+export function pageTrackId(page) {
+	return trackIdFromKey(page?.getFlag?.(SYSTEM_ID, "chronicleKey")) || page?.system?.trackId || "";
+}
+
+/** The journal's thread pages, whatever else it holds: what `pageTrackId` is read off. */
+function timelinePages(journal) {
+	return (journal?.pages ?? []).filter(p => p.type === TIMELINE_PAGE_TYPE);
+}
+
 /** The page holding one track's entries, or null. Creates nothing. */
 export function findTrackPage(trackId) {
 	const journal = findTimelineJournal();
-	if (!journal) return null;
-	const key = trackKey(trackId);
-	return (journal.pages ?? []).find(p => p.getFlag?.(SYSTEM_ID, "chronicleKey") === key) ?? null;
+	// Trimmed as `trackKey` trims it on the way into a page's key, so a stray space finds the page
+	// rather than reading as a track with none (and `ensureTrackPage` minting a second).
+	const id = String(trackId ?? "").trim();
+	if (!journal || !id) return null;
+	return timelinePages(journal).find(p => pageTrackId(p) === id) ?? null;
 }
 
 /** The actor a track belongs to, if any. The steading's own track resolves to the steading. */
@@ -126,6 +142,26 @@ export function readTrack(trackId) {
 		page,
 		entries: sortEntries(page?.system?.entries ?? []),
 	};
+}
+
+/**
+ * Stonetop's season notes, for a CHARACTER's thread to print in its headings (timeline-view.js
+ * #buildTrackVM, user 2026-10-10): the one home of that rule for the window, the tab and the journal
+ * page. Only the season rows, since they are all a character's thread draws of Stonetop's. Null on
+ * Stonetop's own thread, or with no season written yet.
+ *
+ * @param {string} trackId  The thread being drawn.
+ * @param {(trackId: string) => boolean} [canEdit]  Whether the reader may write Stonetop's page,
+ *   asked only when there are notes: a note's Edit names Stonetop's thread, so the write lands there.
+ */
+export function steadingNotesFor(trackId, canEdit = () => false) {
+	if (!trackId || trackId === TIMELINE_TRACK_STEADING) return null;
+	// A page stores its entries keyed by id; readEntries is what turns that into rows.
+	const entries = readEntries(findTrackPage(TIMELINE_TRACK_STEADING)?.system?.entries)
+		.filter(e => e.source === TIMELINE_SEASON_SOURCE);
+	return entries.length
+		? { trackId: TIMELINE_TRACK_STEADING, entries: sortEntries(entries), canEdit: !!canEdit(TIMELINE_TRACK_STEADING) }
+		: null;
 }
 
 /**
@@ -304,9 +340,8 @@ export function allTracks() {
 	// kept is the one `findTrackPage` answers (the first in the journal), which is the one every
 	// write goes to.
 	const seen = new Set();
-	return (journal.pages ?? [])
-		.filter(p => p.type === TIMELINE_PAGE_TYPE)
-		.map(page => ({ page, trackId: trackIdFromKey(page.getFlag?.(SYSTEM_ID, "chronicleKey")) || page.system?.trackId || "" }))
+	return timelinePages(journal)
+		.map(page => ({ page, trackId: pageTrackId(page) }))
 		.filter(({ trackId }) => !trackId || (!seen.has(trackId) && seen.add(trackId)))
 		.sort((a, b) => (a.page.sort ?? 0) - (b.page.sort ?? 0))
 		.map(({ page, trackId }) => {
@@ -346,8 +381,8 @@ export async function syncTrackPages() {
 		const journal = await ensureTimelineJournal();
 		if (!journal) return 0;
 
-		const have = new Set((journal.pages ?? []).map(p => p.getFlag?.(SYSTEM_ID, "chronicleKey")).filter(Boolean));
-		const missing = tracks.filter(t => !have.has(trackKey(t.trackId)));
+		const have = new Set(timelinePages(journal).map(pageTrackId).filter(Boolean));
+		const missing = tracks.filter(t => !have.has(t.trackId));
 		if (!missing.length) return 0;
 
 		let sort = maxSort(journal);

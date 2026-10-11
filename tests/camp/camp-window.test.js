@@ -59,6 +59,27 @@ describe("a face at the fire", () => {
 	});
 });
 
+// No updateActor says a character was deleted, so a window over a camp whose host was deleted stayed
+// up, open, until some other camp write happened along.
+describe("the window's watch", () => {
+	it("redraws (and so closes) when the host or anyone seated is deleted, and not for anyone else", () => {
+		const handlers = {};
+		vi.stubGlobal("Hooks", { on: (name, fn) => { handlers[name] = fn; return name; }, off: vi.fn() });
+		const win = campWindowWith({});
+		win._camp = { campId: "camp-1", hostId: "aeliana" };
+		win._seated = new Set(["aeliana", "bram"]);
+		win._hooks = null;
+		win._scheduleRender = vi.fn();
+		win._watch();
+		handlers.deleteActor({ type: "character", id: "aeliana" });
+		handlers.deleteActor({ type: "character", id: "bram" });
+		expect(win._scheduleRender).toHaveBeenCalledTimes(2);
+		handlers.deleteActor({ type: "character", id: "cora" });
+		handlers.deleteActor({ type: "npc", id: "aeliana" });
+		expect(win._scheduleRender).toHaveBeenCalledTimes(2);
+	});
+});
+
 /**
  * The GM's roster line: one list in two halves (not at the fire, at it), and a button for each. The
  * list and its buttons are stand-ins carrying only what the window reads off them.

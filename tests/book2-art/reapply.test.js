@@ -47,7 +47,7 @@ function makeWorldActor({ source, img, tokenSrc = img, legacy = false, fit = "co
 		img,
 		prototypeToken: { texture: { src: tokenSrc, fit } },
 		_stats: legacy ? {} : { compendiumSource: source },
-		getFlag: (scope, key) => (legacy && scope === "core" && key === "sourceId" ? source : undefined),
+		flags: legacy ? { core: { sourceId: source } } : {},
 		_writes: 0,
 	};
 	actor.update = async (upd) => { applyUpdate(actor, upd); actor._writes++; };

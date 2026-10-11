@@ -187,25 +187,48 @@ const listDir = async (FP, target) => {
  * it already happened to.
  */
 async function readDir(root, dir) {
-	const FP = filePicker();
 	// Both targets come from art-root.js rather than being spelled out here. It owns the
 	// `${root}/${out}` join and the prefix in front of it ("here and nowhere else", per its header)
 	// for the reason that applies with full force to a BROWSE: list the folder under one spelling
 	// and look the files up under another and every row misses, which republishes every index as
 	// empty on a world whose art is all present.
+	const prefix = book2ArtPrefix();
+	return listBothWays(
+		book2ArtSrcWith(root, dir),
+		// Nothing observed in front of the art on this world, so there is no second way to ask.
+		prefix ? book2ArtServedWith(root, dir, prefix) : null,
+	);
+}
+
+/**
+ * Any other top-level data folder, asked the same two ways, uncached.
+ *
+ * For the rulebook copies in `stonetop-books/` (books/adopt-stored-rulebooks.js), which sit beside
+ * the art folder and so behind the same host prefix: on The Forge `storeRulebookFile` leaves an
+ * EMPTY data-relative folder behind (its `ensureDataDir`) while the PDF goes to the Assets
+ * Library, which is exactly the "no files" answer `readDir` exists to see past. Uncached because
+ * it is asked once a load and only while a book is missing, and a cached "nothing" would hide a
+ * book kept later in the session.
+ */
+export function listDataDir(dir) {
+	const prefix = book2ArtPrefix();
+	return listBothWays(dir, prefix ? `${prefix}${dir}` : null);
+}
+
+/** One folder's listing under its data-relative spelling and, where there is one, its served one. */
+async function listBothWays(target, served) {
+	const FP = filePicker();
 	// TOGETHER, not one after the other: the prefix is known synchronously, so nothing about the
 	// first answer decides whether to ask the second, and awaiting in turn makes a hosted world
 	// pay two serial round trips on every one of the seven directories `browseArtDirs` sweeps.
 	// `listDir` answers null rather than throwing, so neither leg can reject the pair.
-	const prefix = book2ArtPrefix();
 	const [listed, viaPrefix] = await Promise.all([
-		listDir(FP, book2ArtSrcWith(root, dir)),
-		// Nothing observed in front of the art on this world, so there is no second way to ask.
-		prefix ? listDir(FP, book2ArtServedWith(root, dir, prefix)) : null,
+		listDir(FP, target),
+		served ? listDir(FP, served) : null,
 	]);
 	if (!viaPrefix?.files?.length) return listed;
-	// Served paths FIRST, so a picture that exists under both spellings resolves to the one the
-	// importer is actually writing today; `ArtInventory` files the first listing of a key and
+	// Served paths FIRST, so a file that exists under both spellings resolves to the one the
+	// host is actually writing today; `ArtInventory` files the first listing of a key and
 	// ignores an empty prefix, so this is also what lets it learn the prefix off a mixed listing.
 	return { ...viaPrefix, files: [...viaPrefix.files, ...(listed?.files ?? [])] };
 }

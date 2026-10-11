@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { halveDamage, defendOffers, defendNotes, spendOnBlow, spentOn, handleSpendQuery, SPEND_QUERY, takeSpend, rowToken, pickOne } from "../../module/fight/defend-spend.js";
+import { halveDamage, defendOffers, defendNotes, spendOnBlow, spentOn, handleSpendQuery, SPEND_QUERY, takeSpend, rowToken, pickOne, beingApplied } from "../../module/fight/defend-spend.js";
 import { stubAsk } from "../fakes/confirm.js";
 import { inCardTurn } from "../../module/utils/card-queue.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection } from "../fakes/fight.js";
@@ -472,6 +472,29 @@ describe("a spend beside an Apply on the same card", () => {
 		expect(await spend).toBe(false);
 		expect(bram.flags[SYSTEM_ID][READINESS_FLAG]).toBe(2);
 		expect(blow.flag.halvedBy).toBeUndefined();
+	});
+
+	it("refuses a halving while ANOTHER client is applying the card, unless that client has gone", async () => {
+		// The player is taking their own counter-attack on their client while the GM halves it on theirs:
+		// the card queue cannot order the two, so the card's `applying` mark does.
+		const prior = globalThis.game;
+		const users = new Map([["player1", { id: "player1", active: true }], ["left1", { id: "left1", active: false }]]);
+		globalThis.game = { ...prior, users };
+		try {
+			const bram = character("bram", 2);
+			const blow = card({ results: [{ uuid: "Token.bram", name: "Bram" }], applied: [], applying: "player1" });
+			expect(beingApplied(blow.flag, users)).toBe(true);
+			expect(await takeSpend(blow, "halve", { row: blow.flag.results[0], defender: bram, cost: 1 })).toBe(false);
+			expect(bram.flags[SYSTEM_ID][READINESS_FLAG]).toBe(2);
+			expect(blow.flag.halvedBy).toBeUndefined();
+
+			const stale = card({ results: [{ uuid: "Token.bram", name: "Bram" }], applied: [], applying: "left1" });
+			expect(beingApplied(stale.flag, users)).toBe(false);
+			expect(await takeSpend(stale, "halve", { row: stale.flag.results[0], defender: bram, cost: 1 })).toBe(true);
+			expect(beingApplied({ applying: null }, users)).toBe(false);
+		} finally {
+			globalThis.game = prior;
+		}
 	});
 
 	it("writes only its own list, so an applied row written from another client stays applied", async () => {

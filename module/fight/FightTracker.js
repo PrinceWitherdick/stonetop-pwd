@@ -36,7 +36,7 @@
 import { snapshotFight, combatantBodies, combatantSide, COUNT_FLAG, SIDE_FLAG } from "./fight-state.js";
 import { FIGHT_OVER, fightWindowPosition, noteFightWindowClosed, openFightWindow, rememberFightWindowPosition } from "./fight-window.js";
 import { fightTrackerView } from "./fight-view.js";
-import { canReadFoeVitals, combatantVitals, fightVitalsKey, followerRoster } from "./fight-vitals.js";
+import { canReadFoeVitals, combatantReminders, combatantVitals, fightVitalsKey, followerRoster } from "./fight-vitals.js";
 import { canSplit, mergeCandidates, mergeIntoGroup, splitGroup } from "./group-scale.js";
 import { otherSide, fightsAsGroup } from "./fight-sides.js";
 import { mayMove } from "./send-against.js";
@@ -191,6 +191,7 @@ export function createFightTrackerClass(Base) {
 				hidden: !!combatant.hidden,
 				defeated: !!combatant.isDefeated,
 				vitals: combatantVitals(combatant),
+				reminders: combatantReminders(combatant),
 				seesFoeVitals: canReadFoeVitals(combatant, user),
 				side: combatantSide(combatant),
 				canPing: onCanvas && !!user?.hasPermission?.("PING_CANVAS"),

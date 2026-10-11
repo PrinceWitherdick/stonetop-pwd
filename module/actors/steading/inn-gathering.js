@@ -1,4 +1,5 @@
 import { seasonLabel } from "../../seasons/seasons-change-reminders.js";
+import { yearLabel } from "../../seasons/seasons-chronicle.js";
 import { DEBILITIES, debilityPath, markedDebilities, openDebilityPicker } from "./steading-debilities.js";
 
 // ── The Inn: bringing folks together (Book I, the Inn improvement) ───────────────
@@ -82,8 +83,8 @@ export function openInnGathering({ steading, year = 1, seasonId = "", onApplied 
 		debilities: markedDebilities(steading).map(d => d.id),
 	});
 
-	// seasonLabel is the canonical id→name map; no escaping needed, it returns one of four literals.
-	const seasonLine = seasonId ? `${seasonLabel(seasonId)}, year ${year}` : "this season";
+	// seasonLabel and yearLabel are the canonical names; no escaping needed, neither takes free text.
+	const seasonLine = seasonId ? `${seasonLabel(seasonId)}, ${yearLabel(year)}` : "this season";
 
 	const trigger = `<p class="stonetop-inn-trigger"><em>Once per season (${seasonLine}). Folks gather at the inn to talk, to celebrate, to recuperate.</em></p>`;
 

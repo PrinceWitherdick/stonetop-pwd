@@ -183,7 +183,14 @@ export class InventorySegmentSnapshot {
  *           possession. Counted toward load exactly as the cards' rows are.
  * @property {{slug:string, name:string, note:string|null, weight:number, checked:boolean}[]} possessionSmall
  *           - The same for possession gear with no ◇; marking one eats the 4+Prosperity allowance.
- * @property {number|null} smallItemLimit - 4+Prosperity from the linked steading actor, or null if unavailable
+ * @property {number} smallItemLimit    - 4+Prosperity from the linked steading actor, 4+0 when its
+ *           Prosperity can't be read (StonetopCharacter#getSmallItemLimit)
+ * @property {number|null} prosperity    - The Prosperity gear works from (effectiveProsperity), null when
+ *           it can't be read: the "x piercing" captions then keep the literal x
+ * @property {boolean} prosperityKnown   - Whether it was read: the notes that print the limit print it
+ *           only then, and say the plain rule otherwise
+ * @property {number} usesPerSupply      - The uses in one ◆ of supplies (StonetopCharacter#getUsesPerSupply),
+ *           worked out once here for the readers that would otherwise ask again per render
  * @property {string|null} steadingName   - Name of the linked steading actor, or null if unavailable
  * @property {number} loadBonus           - Total ◇ the owned moves add to every load cap (0 for most)
  * @property {string[]} loadBonusMoves    - Names of the moves that granted it, in sheet order. The
@@ -217,7 +224,10 @@ export class OutfitSnapshot {
 		this.treasureSmall   = b._treasureSmall ?? [];
 		this.possessionRegular = b._possessionRegular ?? [];
 		this.possessionSmall   = b._possessionSmall ?? [];
-		this.smallItemLimit  = b._smallItemLimit ?? null;
+		this.smallItemLimit  = b._smallItemLimit;
+		this.prosperity      = b._prosperity ?? null;
+		this.prosperityKnown = this.prosperity !== null;
+		this.usesPerSupply   = b._usesPerSupply;
 		this.steadingName    = b._steadingName ?? null;
 		this.loadBonus       = b._loadBonus ?? 0;
 		this.loadBonusMoves  = b._loadBonusMoves ?? [];
@@ -244,6 +254,8 @@ export class OutfitSnapshotBuilder {
 	withPossessionRegular(v) { this._possessionRegular = v; return this; }
 	withPossessionSmall(v)   { this._possessionSmall   = v; return this; }
 	withSmallItemLimit(v)  { this._smallItemLimit  = v; return this; }
+	withProsperity(v)      { this._prosperity      = v; return this; }
+	withUsesPerSupply(v)   { this._usesPerSupply   = v; return this; }
 	withSteadingName(v)    { this._steadingName    = v; return this; }
 	withLoadBonus(v)       { this._loadBonus       = v; return this; }
 	withLoadBonusMoves(v)  { this._loadBonusMoves  = v; return this; }

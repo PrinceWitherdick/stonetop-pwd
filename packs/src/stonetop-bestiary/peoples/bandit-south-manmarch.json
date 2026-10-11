@@ -1,0 +1,81 @@
+{
+  "name": "Bandit (South Manmarch)",
+  "type": "monster",
+  "img": "systems/stonetop-pwd/assets/icons/bestiary/human-group.svg",
+  "system": {
+    "attributes": {
+      "hp": {
+        "value": 3,
+        "max": 3
+      },
+      "armor": {
+        "value": 1,
+        "source": "hides, shields (up to 2)"
+      },
+      "damage": {
+        "value": "spear d6 (close, thrown) or sling d6 (near, awkward, reload)",
+        "rollFormula": "d6"
+      },
+      "instinct": {
+        "value": "to survive at the expense of others"
+      }
+    },
+    "concept": "Motley crews who prey on merchants in the South Manmarch, where the Makers' Roads give no protection.",
+    "organization": "horde",
+    "size": "",
+    "tags": "horde, stealthy, cautious, devious",
+    "qualities": "",
+    "count": 6,
+    "entry": "Compendium.stonetop-pwd.stonetop-journal.JournalEntry.3aGN8PEsxue31FpR",
+    "notes": "",
+    "creatureType": "human-group"
+  },
+  "prototypeToken": {
+    "name": "Bandit (South Manmarch)",
+    "actorLink": false,
+    "disposition": -1,
+    "texture": {
+      "src": "systems/stonetop-pwd/assets/icons/bestiary/human-group.svg"
+    }
+  },
+  "items": [
+    {
+      "_id": "BndtMnmrchMove01",
+      "name": "Block passage, issue a blunt demand",
+      "type": "monsterMove",
+      "img": "icons/svg/sword.svg",
+      "system": {
+        "description": "",
+        "rollFormula": ""
+      },
+      "_key": "!actors.items!BanditManmarchHd.BndtMnmrchMove01"
+    },
+    {
+      "_id": "BndtMnmrchMove02",
+      "name": "Ambush under cover of darkness",
+      "type": "monsterMove",
+      "img": "icons/skills/movement/figure-running-gray.webp",
+      "system": {
+        "description": "",
+        "rollFormula": ""
+      },
+      "_key": "!actors.items!BanditManmarchHd.BndtMnmrchMove02"
+    },
+    {
+      "_id": "BndtMnmrchMove03",
+      "name": "Ransom the best, kill the rest",
+      "type": "monsterMove",
+      "img": "icons/svg/sword.svg",
+      "system": {
+        "description": "",
+        "rollFormula": ""
+      },
+      "_key": "!actors.items!BanditManmarchHd.BndtMnmrchMove03"
+    }
+  ],
+  "effects": [],
+  "flags": {},
+  "folder": "fIZNnlnThiDJnrj1",
+  "_id": "BanditManmarchHd",
+  "_key": "!actors!BanditManmarchHd"
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cardCountedTier, countedNote, countedResult, countedTier, outcomeTier, rolledRecord, totalTier, isStrongHit } from "../../module/utils/counted-tier.js";
+import { cardCountedTier, cardTierNow, countedNote, countedResult, countedTier, outcomeTier, rolledRecord, totalTier, isStrongHit } from "../../module/utils/counted-tier.js";
 
 describe("countedTier", () => {
 	it("is the total's own tier on a card that bends nothing", () => {
@@ -95,5 +95,31 @@ describe("cardCountedTier", () => {
 
 	it("keys a 12+ as the 10+ a move's outcomes are written under", () => {
 		expect(["critical", "success", "partial", "failure"].map(outcomeTier)).toEqual(["success", "success", "partial", "failure"]);
+	});
+});
+
+// What stonetop.js reads off an Invoke card (its 6- consequences) and a Know Things card (whether a Logbook use still
+// buys anything): the card's tier NOW, its shifted total bent by the rules stamped on it.
+describe("cardTierNow", () => {
+	const card = (total, rolled) => ({
+		rolls: total == null ? [] : [{ total }],
+		getFlag: (scope, key) => (scope === "stonetop-pwd" && key === "rolled" ? rolled : undefined),
+	});
+
+	it("lifts a 6- off the miss when the card counts a miss as a 7-9", () => {
+		const record = rolledRecord("con", { missCountsAsPartial: "Stone Cold" });
+		expect(cardTierNow(card(6, record), "stonetop-pwd")).toBe("partial");
+		expect(cardTierNow(card(6, undefined), "stonetop-pwd")).toBe("failure");
+	});
+
+	it("reads a 7-9 the card counts as a 10+ as a 10+, and a 12+ as its 10+", () => {
+		const record = rolledRecord("int", { partialCountsAsSuccess: "Let's Make a Deal" });
+		expect(cardTierNow(card(8, record), "stonetop-pwd")).toBe("success");
+		expect(cardTierNow(card(12, undefined), "stonetop-pwd")).toBe("success");
+		expect(cardTierNow(card(9, undefined), "stonetop-pwd")).toBe("partial");
+	});
+
+	it("is null for a card with no roll", () => {
+		expect(cardTierNow(card(null, undefined), "stonetop-pwd")).toBeNull();
 	});
 });

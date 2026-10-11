@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import {
-	CAMP_BENEFIT, CAMP_FOLLOWERS_MAX, CAMP_LEFT_MAX, CAMP_STALE_MS, CAMP_STATE, CAMP_STATUS, PEACEFUL_NIGHT,
-	blankOffer, breakBreadOffered, campLedger, campShareUpdate, campState, coverTheRest, freezeCampPlan,
-	homeFiresHp, homeFiresKeeper, homeFiresOffered, newCampRecord, planExtra, planExtras, CAMP_EXTRA, offerStep, readCampRecord, readOwedCamps, rollsBedroll, rollsBreakBread, spareUses,
+	CAMP_BENEFIT, CAMP_LEFT_MAX, CAMP_STALE_MS, CAMP_STATE, CAMP_STATUS, FUR_LINED_BEDROLL, PEACEFUL_NIGHT,
+	isFurLinedBedrollName, sleepsInFurBedroll,
+	blankOffer, breakBreadOffered, followersBreakBread, campLedger, campShareUpdate, campState, coverTheRest, freezeCampPlan,
+	homeFiresHp, homeFiresHpFor, homeFiresKeeper, homeFiresOffered, isSettledRecord, newCampRecord, planExtra, planExtras, CAMP_EXTRA, offerStep, readCampRecord, readOwedCamps, rollsBedroll, rollsBreakBread, spareUses,
 } from "../../module/camp/camp-rules.js";
 import { seat } from "../fakes/camp.js";
 
@@ -41,8 +42,10 @@ describe("a camp record", () => {
 	});
 
 	it("keeps its counts whole and inside their bounds", () => {
-		const record = readCampRecord({ id: "camp-1", followers: 99, offer: { supplies: -2, provisions: 2.7 }, benefit: "feast" });
-		expect(record.followers).toBe(CAMP_FOLLOWERS_MAX);
+		const record = readCampRecord({ id: "camp-1", followers: 25.6, offer: { supplies: -2, provisions: 2.7 }, benefit: "feast" });
+		// Every mouth eats (Book I p.79): no most on the followers.
+		expect(record.followers).toBe(25);
+		expect(readCampRecord({ id: "camp-1", followers: -3 }).followers).toBe(0);
 		expect(record.offer.supplies).toBe(0);
 		expect(record.offer.provisions).toBe(2);
 		expect(record.benefit).toBe(CAMP_BENEFIT.HP);
@@ -105,6 +108,14 @@ describe("where a camp stands", () => {
 		expect(campState(hostRecord({ status: "cancelled" }), camp, 2000)).toBe(CAMP_STATE.CANCELLED);
 	});
 
+	// A Break up confirmed just after somebody else settled the camp lands on top of the plan.
+	it("stays settled once it has a plan, whatever status lands on top of it", () => {
+		const eaten = hostRecord({ status: "cancelled", plan: [{ actorId: "aeliana" }] });
+		expect(isSettledRecord(eaten)).toBe(true);
+		expect(campState(eaten, camp, 2000)).toBe(CAMP_STATE.SETTLED);
+		expect(isSettledRecord(hostRecord({ status: "cancelled" }))).toBe(false);
+	});
+
 	// Only the host can say. A member's record goes on naming the camp they sat at long after it
 	// is over.
 	it("is gone once its host is at some other camp, or at none", () => {
@@ -137,6 +148,17 @@ describe("the meal's bill", () => {
 
 	it("feeds the followers too", () => {
 		expect(campLedger([host({ choices: { followers: 2 } })])).toMatchObject({ mouths: 3, bill: 3 });
+	});
+
+	// CAMP-11: "each member of the party" eats (Book I p.79), and the book names no most. A cap of 20
+	// billed 25 followers as 20, then fed fewer than travel with them and healed none.
+	it("bills every follower, however many, and feeds them all", () => {
+		expect(newCampRecord({ id: "camp-1", hostId: "aeliana", actorId: "aeliana", followers: 25 }).followers).toBe(25);
+		const short = campLedger([host({ carried: { supplies: 30 }, choices: { followers: 25, offer: { supplies: 21 } } })]);
+		expect(short).toMatchObject({ mouths: 26, bill: 26, short: 5, canSettle: false });
+		const fed = campLedger([host({ carried: { supplies: 30 }, choices: { followers: 25, offer: { supplies: 26 } } })]);
+		expect(fed).toMatchObject({ mouths: 26, bill: 26, short: 0, canSettle: true });
+		expect(freezeCampPlan(fed)[0].followersFed).toBe(25);
 	});
 
 	it("does not feed whoever goes without, or the Unliving", () => {
@@ -195,13 +217,18 @@ describe("the food shared", () => {
 		expect(ledger.spends.map(s => s.total)).toEqual([2, 1]);
 	});
 
-	// The order a spend drains a pack, run backwards: the larder goes back before the printed rows.
-	it("gives the larder back before the supplies rows", () => {
+	// Book I p.89: provisions "are more likely to spoil or attract beasts than supplies are", and the
+	// book's party eats "a use of provisions when you Make Camp rather than using up supplies". The
+	// order a meal eats a pack, run backwards, so supplies go back first and the provisions stay eaten.
+	it("eats provisions first, since they spoil, and gives the supplies rows back first (Book I p.89)", () => {
 		const ledger = campLedger([host({
 			carried: { supplies: 4, provisions: 5 },
 			choices: { offer: { supplies: 2, provisions: 1 }, followers: 1 },
 		})]);
-		expect(ledger.spends[0].spend).toEqual([{ slug: "supplies", label: "Supplies", n: 2 }]);
+		expect(ledger.spends[0].spend).toEqual([
+			{ slug: "provisions", label: "Provisions", n: 1 },
+			{ slug: "supplies", label: "Supplies", n: 1 },
+		]);
 	});
 });
 
@@ -214,11 +241,14 @@ describe("sharing food from a row", () => {
 		expect(offerStep(aeliana, "provisions", 1)).toBe(0);
 	});
 
-	it("covers what the meal is short, printed rows first", () => {
+	// Provisions spoil (Book I p.89), so they are what a meal reaches for first.
+	it("covers what the meal is short from the provisions first, then the printed rows", () => {
 		const aeliana = host({ carried: { supplies: 1, provisions: 5 } });
 		const ledger = campLedger([aeliana, bram({ carried: { supplies: 1 }, choices: { offer: { supplies: 1 } } }), cora()]);
 		expect(ledger.short).toBe(2);
-		expect(coverTheRest(ledger, aeliana)).toEqual({ ...blankOffer(), supplies: 1, provisions: 1 });
+		expect(coverTheRest(ledger, aeliana)).toEqual({ ...blankOffer(), provisions: 2 });
+		const light = host({ carried: { supplies: 1, provisions: 1 } });
+		expect(coverTheRest(campLedger([light, bram(), cora()]), light)).toEqual({ ...blankOffer(), supplies: 1, provisions: 1 });
 	});
 
 	it("covers as much as a light pack can", () => {
@@ -304,6 +334,69 @@ describe("the frozen plan", () => {
 	});
 });
 
+// Book II, Spirits of the Wild: "When you Make Camp in the fur-lined bedroll, you regain 1d6 (extra)
+// HP and gain advantage on your next roll." The user's ruling (CAMP-5): it is a bedroll for the 1d6,
+// under the bedroll's own gates, one 1d6 even beside a plain bedroll, and its advantage is held on
+// its own, peaceful night or not.
+describe("the fur-lined bedroll", () => {
+	const furNight = (choices = {}, over = {}) => campLedger([paying({ bedroll: true, ...choices }, { carriesFurBedroll: true, ...over })]);
+
+	it("knows the treasure by its name", () => {
+		expect(isFurLinedBedrollName("A fur-lined bedroll")).toBe(true);
+		expect(isFurLinedBedrollName("Fur lined bedroll")).toBe(true);
+		expect(isFurLinedBedrollName("Bedroll")).toBe(false);
+		expect(isFurLinedBedrollName("A wolf pelt")).toBe(false);
+	});
+
+	it("sits down as a bedroll, ticked for the night", () => {
+		const record = newCampRecord({ id: "camp-1", hostId: "aeliana", actorId: "aeliana", vitals: { maxHp: 15, furBedroll: true }, hpValue: 4 });
+		expect(record).toMatchObject({ bedroll: true, vitals: { bedroll: true, furBedroll: true } });
+	});
+
+	it("rolls the bedroll's one 1d6 and holds advantage for someone who rests in it", () => {
+		const ledger = furNight();
+		expect(rollsBedroll(ledger.rows[0], ledger)).toBe(true);
+		expect(sleepsInFurBedroll(ledger.rows[0], ledger)).toBe(true);
+		const [entry] = freezeCampPlan(ledger, { bedrolls: { aeliana: 2 } });
+		expect(entry).toMatchObject({ furBedroll: true, peaceful: false, hpAfter: 14 });
+		expect(entry.extras).toEqual([{ source: "bedroll", amount: 2, from: 12, to: 14 }]);
+	});
+
+	it("gives one 1d6, not two, beside a plain bedroll carried too", () => {
+		const ledger = furNight({}, { carriesBedroll: true });
+		const [entry] = freezeCampPlan(ledger, { bedrolls: { aeliana: 3 } });
+		expect(entry.extras.filter(x => x.source === CAMP_EXTRA.BEDROLL)).toEqual([{ source: "bedroll", amount: 3, from: 12, to: 15 }]);
+		expect(entry.furBedroll).toBe(true);
+	});
+
+	it("gives nothing to a member who does not rest in it", () => {
+		const sleepless = freezeCampPlan(furNight({ benefit: "none" }), { bedrolls: { aeliana: 6 } })[0];
+		expect(sleepless).toMatchObject({ furBedroll: false });
+		expect(planExtra(sleepless, CAMP_EXTRA.BEDROLL)).toBe(0);
+		// Went without food: they eat nothing and take nothing from the night.
+		expect(freezeCampPlan(furNight({ eats: false, followers: 1 }))[0].furBedroll).toBe(false);
+		// Their row left the bedroll unrolled.
+		expect(freezeCampPlan(furNight({ bedroll: false }))[0].furBedroll).toBe(false);
+		// Dying at the fire, they can't save themselves (Book I p.240).
+		const dying = campLedger([{ ...paying({ bedroll: true }, { carriesFurBedroll: true }), dying: true }]);
+		expect(freezeCampPlan(dying)[0].furBedroll).toBe(false);
+		// Somebody else at the fire, resting in a plain bedroll of their own.
+		const shared = campLedger([
+			paying({ bedroll: true, offer: { supplies: 2 } }, { carriesFurBedroll: true }),
+			bram({ choices: { bedroll: true }, carriesBedroll: true }),
+		]);
+		const [, bramEntry] = freezeCampPlan(shared, { bedrolls: { aeliana: 1, bram: 1 } });
+		expect(bramEntry.furBedroll).toBe(false);
+	});
+
+	it("is its own promise, not the peaceful night's", () => {
+		const [both] = freezeCampPlan(furNight({ peaceful: true }));
+		expect(both).toMatchObject({ furBedroll: true, peaceful: true });
+		const [plain] = freezeCampPlan(campLedger([paying({ bedroll: true, peaceful: true }, { carriesBedroll: true })]));
+		expect(plain).toMatchObject({ furBedroll: false, peaceful: true });
+	});
+});
+
 // The Judge's "When you share a proper meal with someone and each of you eats their fill, each of
 // you recovers 1d8 (extra) HP."
 describe("Break Bread at the fire", () => {
@@ -343,8 +436,8 @@ describe("Break Bread at the fire", () => {
 	});
 
 	it("gives nothing to whoever does not eat", () => {
-		const ledger = campLedger([paying({ offer: { supplies: 1 } }, { breaksBread: true }), bram({ choices: { eats: false } })]);
-		expect(ledger.rows.map(m => rollsBreakBread(m, ledger))).toEqual([true, false]);
+		const ledger = campLedger([paying({ offer: { supplies: 2 } }, { breaksBread: true }), bram({ choices: { eats: false } }), cora()]);
+		expect(ledger.rows.map(m => rollsBreakBread(m, ledger))).toEqual([true, false, true]);
 		const unliving = campLedger([paying({}, { breaksBread: true }), bram({ unliving: true })]);
 		expect(rollsBreakBread(unliving.rows[1], unliving)).toBe(false);
 	});
@@ -353,6 +446,32 @@ describe("Break Bread at the fire", () => {
 	it("still reaches someone who ate but got no real sleep", () => {
 		const ledger = supper({ breaksBread: true }, { choices: { benefit: "none" } });
 		expect(freezeCampPlan(ledger, { breads: { aeliana: 3, bram: 3 } })[1]).toMatchObject({ rests: false, extras: [{ source: "breakBread", amount: 3, from: 4, to: 7 }], hpAfter: 7 });
+	});
+
+	// "When you share a proper meal with someone": a holder eating alone shares it with nobody. A
+	// follower at the fire is somebody.
+	it("needs someone to share the meal with: a holder eating alone rolls nothing, and a follower counts", () => {
+		const alone = campLedger([paying({}, { breaksBread: true })]);
+		expect(breakBreadOffered(alone)).toBe(false);
+		expect(rollsBreakBread(alone.rows[0], alone)).toBe(false);
+		const withHound = campLedger([paying({ followers: 1, offer: { supplies: 2 } }, { breaksBread: true })]);
+		expect(breakBreadOffered(withHound)).toBe(true);
+		expect(rollsBreakBread(withHound.rows[0], withHound)).toBe(true);
+	});
+
+	// "each of you recovers 1d8 (extra) HP": the follower the meal is shared with is one of "each of you"
+	// (RAW re-check CX-1). One die per follower mouth, frozen on the plan for the followers' own heal.
+	it("gives a fed follower its own 1d8 too, frozen on the plan one die per mouth", () => {
+		const withHounds = campLedger([paying({ followers: 2, offer: { supplies: 3 } }, { breaksBread: true })]);
+		expect(followersBreakBread(withHounds.rows[0], withHounds)).toBe(true);
+		expect(freezeCampPlan(withHounds, { breads: { aeliana: 2 }, followerBreads: { aeliana: [3, 8] } })[0].followerBreads).toEqual([3, 8]);
+		// No proper meal, no Break Bread at the fire, or no followers: no follower dice on the plan.
+		const unticked = campLedger([paying({ followers: 2, offer: { supplies: 3 }, properMeal: false }, { breaksBread: true })]);
+		expect(followersBreakBread(unticked.rows[0], unticked)).toBe(false);
+		expect(freezeCampPlan(unticked, { followerBreads: { aeliana: [3, 8] } })[0].followerBreads).toBeUndefined();
+		const noHolder = campLedger([paying({ followers: 2, offer: { supplies: 3 } })]);
+		expect(followersBreakBread(noHolder.rows[0], noHolder)).toBe(false);
+		expect(followersBreakBread(supper({ breaksBread: true }).rows[1], supper({ breaksBread: true }))).toBe(false);
 	});
 
 	it("is one meal, so two holders at the fire still give one 1d8 each", () => {
@@ -443,7 +562,7 @@ describe("one character's share", () => {
 		resources:     { supplies: 4 },
 		hpValue:       4,
 		resourceData:  (slug, count) => ({ [resourcePath(slug)]: count }),
-		advantageData: source => ({ [HELD]: { source } }),
+		advantageData: source => ({ [HELD]: { sources: [source].flat() } }),
 		...over,
 	});
 	const share = (e, l) => campShareUpdate(entry(e), live(l));
@@ -496,7 +615,15 @@ describe("one character's share", () => {
 
 	// A HELD advantage, not the sticky roll-modifier selector: see StonetopCharacter#heldAdvantage.
 	it("holds the peaceful night's advantage for the next roll", () => {
-		expect(share({ peaceful: true }).update[HELD]).toEqual({ source: PEACEFUL_NIGHT });
+		expect(share({ peaceful: true }).update[HELD]).toEqual({ sources: [PEACEFUL_NIGHT] });
+	});
+
+	// One write, one held flag, both names: a second advantageData call would overwrite the first.
+	it("holds the fur-lined bedroll's advantage under its own name, beside a peaceful night's", () => {
+		expect(share({ furBedroll: true }).update[HELD]).toEqual({ sources: [FUR_LINED_BEDROLL] });
+		expect(share({ furBedroll: true, peaceful: true }).update[HELD]).toEqual({ sources: [PEACEFUL_NIGHT, FUR_LINED_BEDROLL] });
+		expect(share({ furBedroll: false, peaceful: false }).update).not.toHaveProperty([HELD]);
+		expect(share({ rests: false, benefit: null, furBedroll: true }).update).not.toHaveProperty([HELD]);
 	});
 
 	it("gives someone who did not rest nothing but their part of the bill", () => {
@@ -557,8 +684,8 @@ describe("a Thrall's Marks at the fire", () => {
 		resources:        { supplies: 4 },
 		hpValue:          4,
 		resourceData:     (slug, n) => ({ [`flags.${SYSTEM_ID}.inventory.resources.${slug}`]: n }),
-		advantageData:    source => ({ [`flags.${SYSTEM_ID}.heldAdvantage`]: { source } }),
-		disadvantageData: source => ({ [DIS]: { source } }),
+		advantageData:    source => ({ [`flags.${SYSTEM_ID}.heldAdvantage`]: { sources: [source].flat() } }),
+		disadvantageData: source => ({ [DIS]: { sources: [source].flat() } }),
 		...over,
 	});
 
@@ -581,12 +708,17 @@ describe("a Thrall's Marks at the fire", () => {
 	});
 
 	// Quicksilver Dreams: "When you Make Camp, everyone with you suffers nightmares and has
-	// disadvantage on their next roll." With you: never the Thrall themselves.
-	it("gives everyone but the Thrall nightmares, and holds disadvantage on their share", () => {
+	// disadvantage on their next roll." With you: never the Thrall themselves. Nor a Ghost or a
+	// Revenant, who "need not eat nor drink nor sleep" (the user's ruling, 2026-10-08); somebody who
+	// only got no real sleep tonight still camped with the Thrall, and still has them.
+	it("gives everyone but the Thrall and the Unliving nightmares, sleepless or not, and holds disadvantage on their share", () => {
 		const rook = { ...bram({ name: "Rook" }), nightmarish: true };
-		const plan = freezeCampPlan(campLedger([paying({ offer: { supplies: 3 } }), rook, cora({ unliving: true })]));
-		expect(plan.map(e => e.nightmares)).toEqual([["Rook"], [], ["Rook"]]);
-		expect(campShareUpdate(plan[0], live()).update[DIS]).toEqual({ source: "Nightmares (Quicksilver Dreams)" });
+		const dara = seat({ id: "dara", name: "Dara", joinedAt: 4, carried: {}, choices: { benefit: "none" } });
+		const plan = freezeCampPlan(campLedger([paying({ offer: { supplies: 4 } }), rook, cora({ unliving: true }), dara]));
+		expect(plan.map(e => e.nightmares)).toEqual([["Rook"], [], [], ["Rook"]]);
+		expect(campShareUpdate(plan[2], live()).update).not.toHaveProperty(DIS);
+		expect(campShareUpdate(plan[3], live()).update[DIS]).toEqual({ sources: ["Nightmares (Quicksilver Dreams)"] });
+		expect(campShareUpdate(plan[0], live()).update[DIS]).toEqual({ sources: ["Nightmares (Quicksilver Dreams)"] });
 		expect(campShareUpdate(plan[1], live()).update).not.toHaveProperty(DIS);
 	});
 
@@ -624,24 +756,56 @@ describe("a dying character at the fire, and the followers the meal fed", () => 
 		resources:        { supplies: 4 },
 		hpValue:          0,
 		resourceData:     (slug, n) => ({ [`flags.${SYSTEM_ID}.inventory.resources.${slug}`]: n }),
-		advantageData:    source => ({ [`flags.${SYSTEM_ID}.heldAdvantage`]: { source } }),
-		disadvantageData: source => ({ [`flags.${SYSTEM_ID}.heldDisadvantage`]: { source } }),
+		advantageData:    source => ({ [`flags.${SYSTEM_ID}.heldAdvantage`]: { sources: [source].flat() } }),
+		disadvantageData: source => ({ [`flags.${SYSTEM_ID}.heldDisadvantage`]: { sources: [source].flat() } }),
 		...over,
 	});
 	const dying = (choices = {}, over = {}) => ({ ...paying(choices, { hp: 0, ...over }), dying: true });
 
 	// Book I p.240: a PC out of the action "can't save themselves"; p.245: whoever tends them Aids the roll.
-	it("restores a dying character no HP, by the pick or by any extra", () => {
-		// The same character up and about rolls both, so it is the dying that stops them.
-		const up = campLedger([paying({ bedroll: true }, { hp: 0, carriesBedroll: true, breaksBread: true })]);
+	it("restores a dying character none of their own HP: not the pick, their bedroll, their own Break Bread or hearth", () => {
+		// The same character up and about rolls both, so it is the dying that stops them. A follower
+		// eats with them, so Break Bread has someone to be shared with.
+		const choices = { bedroll: true, followers: 1, offer: { supplies: 2 } };
+		const up = campLedger([paying(choices, { hp: 0, carriesBedroll: true, breaksBread: true, hearthCha: 2 })]);
 		expect(rollsBedroll(up.rows[0], up)).toBe(true);
 		expect(rollsBreakBread(up.rows[0], up)).toBe(true);
-		const ledger = campLedger([dying({ bedroll: true }, { carriesBedroll: true, breaksBread: true })]);
+		expect(homeFiresHpFor(up.rows[0], up)).toBe(2);
+		const ledger = campLedger([dying(choices, { carriesBedroll: true, breaksBread: true, hearthCha: 2 })]);
 		expect(rollsBedroll(ledger.rows[0], ledger)).toBe(false);
 		expect(rollsBreakBread(ledger.rows[0], ledger)).toBe(false);
+		expect(homeFiresHpFor(ledger.rows[0], ledger)).toBe(0);
 		const [entry] = freezeCampPlan(ledger, { bedrolls: { aeliana: 6 }, breads: { aeliana: 8 } });
 		expect(entry).toMatchObject({ dying: true, hpBefore: 0, hpAfterPick: 0, hpAfter: 0, extras: [] });
 		expect(campShareUpdate(entry, live()).update).not.toHaveProperty(HP);
+	});
+
+	// The user's ruling (2026-10-08): an ally's healing still works on one dying at the fire.
+	it("lets another character's Break Bread and hearth ash reach a dying character", () => {
+		const ledger = campLedger([dying({ offer: { supplies: 2 } }), bram({ breaksBread: true, hearthCha: 2 })]);
+		expect(rollsBreakBread(ledger.rows[0], ledger)).toBe(true);
+		expect(homeFiresHpFor(ledger.rows[0], ledger)).toBe(2);
+		const [entry] = freezeCampPlan(ledger, { breads: { aeliana: 3, bram: 4 } });
+		expect(entry).toMatchObject({
+			dying: true, hpAfterPick: 0, hpAfter: 5,
+			extras: [{ source: "breakBread", amount: 3, from: 0, to: 3 }, { source: "homeFires", amount: 2, from: 3, to: 5 }],
+		});
+		expect(campShareUpdate(entry, live()).update[HP]).toBe(5);
+	});
+
+	it("warms a dying holder at another holder's hearth, never at their own", () => {
+		const keepers = { hearthCha: 3 };
+		const ledger = campLedger([dying({ offer: { supplies: 3 } }, keepers), bram({ hearthCha: 1 }), cora()]);
+		expect(homeFiresHpFor(ledger.rows[0], ledger)).toBe(1);
+		expect(homeFiresHpFor(ledger.rows[2], ledger)).toBe(3);
+	});
+
+	// A night at Death's Door is no peaceful rest, and the advantage would land on the roll at the Door.
+	it("holds no peaceful-night advantage for a dying character", () => {
+		const [entry] = freezeCampPlan(campLedger([dying({ peaceful: true })]));
+		expect(entry.peaceful).toBe(false);
+		expect(campShareUpdate(entry, live()).update).not.toHaveProperty(`flags.${SYSTEM_ID}.heldAdvantage`);
+		expect(freezeCampPlan(campLedger([paying({ peaceful: true })]))[0].peaceful).toBe(true);
 	});
 
 	it("still clears the debility a dying character picked", () => {

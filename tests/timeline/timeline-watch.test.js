@@ -13,7 +13,7 @@ const { recordKills, recordMilestones } = await import("../../module/timeline/ti
 const { creationFlowOpen } = await import("../../module/actors/character/creation-flow.js");
 const {
 	APPLIED_BEFORE_OPTION, BEFORE_OPTION, FOLLOWER_DIED_HOOK, LEARNED_OPTION, onPreUpdateActor, onPreUpdateChatMessage,
-	onUpdateActor, onUpdateChatMessage, recordFollowerDeath,
+	onUpdateActor, onUpdateChatMessage, recordFollowerDeath, registerTimelineWatch, settleTimelineWrites,
 } = await import("../../module/timeline/timeline-watch.js");
 const { readRepo } = await import("../fakes/css.js");
 
@@ -66,8 +66,16 @@ describe("writing after an update", () => {
 		const [target, milestones] = recordMilestones.mock.calls[0];
 		expect(target).toBe(actor);
 		expect(milestones).toEqual([{
-			source: "levelup", key: "levelup:3", title: "Reached level 3", body: "Learned Seasoned Warrior.",
+			source: "levelup", key: "levelup:3", title: "Reached level 3", body: "<p>Learned Seasoned Warrior.</p>",
 		}]);
+	});
+
+	// A body is plain text a player typed (here, a move's name); an entry's body is HTML, so a "<"
+	// or "&" in it must read as itself rather than vanish as a tag.
+	it("escapes the body, which is plain text", async () => {
+		await levelled("me", { [LEARNED_OPTION]: "Pay <the debt> & more" });
+		const [, [milestone]] = recordMilestones.mock.calls[0];
+		expect(milestone.body).toBe("<p>Learned Pay &lt;the debt&gt; &amp; more.</p>");
 	});
 
 	// Every client hears every update. One row per connected player is the bug this prevents.
@@ -207,5 +215,31 @@ describe("kills off a damage card", () => {
 		const sheet = readRepo("module/actors/character/StonetopCharacterSheet.js");
 		expect(sheet).toContain(`Hooks.callAll("${FOLLOWER_DIED_HOOK}", this.actor,`);
 		expect(sheet).not.toMatch(/from\s+"\.\.\/\.\.\/timeline\/timeline-watch\.js"/);
+	});
+});
+
+// The test-fixtures macro moves the clock on between seasons, and a row reads the clock only when it
+// gets to the write, so the macro has to be able to wait for what the hooks have started.
+describe("waiting for the hooks' writes", () => {
+	it("resolves only once a write a hook started has landed", async () => {
+		const handlers = {};
+		const on = vi.spyOn(Hooks, "on").mockImplementation((name, fn) => { handlers[name] = fn; });
+		registerTimelineWatch();
+		on.mockRestore();
+		let land;
+		recordMilestones.mockImplementationOnce(() => new Promise(resolve => { land = resolve; }));
+		handlers[FOLLOWER_DIED_HOOK](character(), { follower: "custom", slug: "f1", name: "Wren" });
+
+		let settled = false;
+		const waiting = settleTimelineWrites().then(() => { settled = true; });
+		await new Promise(resolve => setTimeout(resolve, 0));
+		expect(settled).toBe(false);
+		land(null);
+		await waiting;
+		expect(settled).toBe(true);
+	});
+
+	it("resolves at once when nothing is being written", async () => {
+		await expect(settleTimelineWrites()).resolves.toBeUndefined();
 	});
 });

@@ -1,5 +1,5 @@
 import { escHtml, stripHtmlToText } from "../utils/strings.js";
-import { isPlayerAuthoredMove } from "../actors/character/owns-move.js";
+import { bookMoveName } from "../actors/character/owns-move.js";
 
 // Three basic moves are made BY one character and settled by SOMEONE ELSE:
 //
@@ -67,7 +67,8 @@ export const PC_ASKS = {
 		tiers: ["success", "partial"],
 		tierChoices: {
 			success: ["agree", "refuse"],
-			partial: ["agree", "counter"],
+			// "(but can refuse or make a counter-offer if they like)": two answers, neither marking XP.
+			partial: ["agree", "decline", "counter"],
 		},
 	},
 };
@@ -80,10 +81,10 @@ export function pcAskFor(moveName) {
 /**
  * Whether this item is one of the three, as the book prints it. A player's own custom move that
  * happens to share the name acts as itself, the rule the guided moves already follow (asked of the
- * custom-move flag, owns-move.js#isPlayerAuthoredMove, not of moveType "other").
+ * custom-move flag through owns-move.js#bookMoveName, not of moveType "other").
  */
 export function isPcAskMove(item) {
-	return item?.type === "move" && !isPlayerAuthoredMove(item) && !!pcAskFor(item?.name);
+	return item?.type === "move" && !!pcAskFor(bookMoveName(item));
 }
 
 /** Whether the question is open at this result. Aid is always open; a 6- asks nothing. */
@@ -165,7 +166,8 @@ export function choiceLabel(ask, choice) {
 	switch (choice) {
 		case "agree":   return "Do it, and mark XP";
 		case "refuse":  return `Refuse, and say how ${by} could convince you`;
-		case "counter": return "Refuse, or make a counter-offer";
+		case "decline": return "Refuse";
+		case "counter": return "Make a counter-offer";
 		default:        return choice;
 	}
 }
@@ -181,6 +183,8 @@ export function answerSentence(ask, choice) {
 		case "relent":    return `${target} relents, and ${by} foils their action.`;
 		case "agree":     return `${target} does what ${by} wanted, and marks XP.`;
 		case "refuse":    return `${target} refuses, and says how ${by} could convince them.`;
+		case "decline":   return `${target} refuses.`;
+		// Kept as it was first worded: answer cards posted before "decline" existed carry this sentence.
 		case "counter":   return `${target} refuses, or makes a counter-offer.`;
 		default:          return "";
 	}

@@ -25,13 +25,13 @@
 //  • THE HOOK COMES OFF ON CLOSE. It is a global journal hook, and a window closed without taking
 //    it off leaves it firing on every journal write at the table for the rest of the session.
 
-import { StonetopDialog } from "../utils/stonetop-dialog.js";
+import { isDrawn, StonetopDialog } from "../utils/stonetop-dialog.js";
 import { themedDialogClasses } from "../utils/window-theme.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { registerRestorableWindow } from "../utils/window-restore.js";
 import { openingSize } from "../utils/opening-size.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
-import { playbookTitle } from "../utils/playbook-actors.js";
+import { playbookTitle, playbookTitleChanged } from "../utils/playbook-actors.js";
 import { localize, format } from "../utils/i18n.js";
 import { promptForTimelineEntry } from "./TimelineEntryDialog.js";
 import { pickContentOption } from "./content-picker.js";
@@ -40,28 +40,36 @@ import { escHtml } from "../utils/strings.js";
 import { GUTTER_LEFT_VAR, GUTTER_TOP_VAR, GUTTER_X_VAR, GUTTER_Y_VAR, wireDragScroll } from "../utils/drag-scroll.js";
 import { clampScale, wireWheelZoom } from "../utils/wheel-zoom-scroll.js";
 import {
-	TIMELINE_JOURNAL_NAME, allTracks, findTimelineJournal, mutateTrack, readTrack, trackDisplayName,
+	TIMELINE_JOURNAL_NAME, allTracks, findTimelineJournal, findTrackPage, mutateTrack, pageTrackId, readTrack, steadingNotesFor, trackActor, trackDisplayName,
 	trackForActor,
 } from "../timeline/timeline-store.js";
 import {
-	TIMELINE_CARD_SOURCES, addEntry, moveEntry, patchEntry, removeEntry, trackIdFromKey,
+	TIMELINE_CARD_SOURCES, TIMELINE_SEASON_SOURCE, TIMELINE_TRACK_STEADING, addEntry, moveEntry, patchEntry, readEntries, removeEntry,
 } from "../timeline/timeline-core.js";
 import { SYSTEM_ID } from "../system-id.js";
 import {
-	getTimelineHiddenSources, getTimelineHiddenTracks, getTimelineOrientation, getTimelineThreadsChosen, isTimelineShown, refuseHiddenFeature,
-	setTimelineHiddenSources, setTimelineHiddenTracks, setTimelineOrientation, setTimelineThreadsChosen,
+	getSheetFontScale, getTimelineAges, getTimelineHiddenSources, getTimelineHiddenTracks, getTimelineOrientation, getTimelineShowAges,
+	getTimelineThreadsChosen, isTimelineShown, refuseHiddenFeature,
+	setTimelineHiddenSources, setTimelineHiddenTracks, setTimelineOrientation, setTimelineShowAges, setTimelineThreadsChosen,
 } from "../settings.js";
 import {
 	buildAggregateVM, buildTrackVM, defaultHiddenTracks, enrichTrackVM, kindMenu, threadMenu,
 } from "../timeline/timeline-view.js";
 import { timelineNow } from "../timeline/timeline-record.js";
+import { START_YEAR_CHANGED_HOOK, startYear } from "../seasons/campaign-year.js";
 import { worldCustomTags } from "../timeline/timeline-tag-store.js";
 import { TimelineColoursDraft } from "../timeline/timeline-colours-menu.js";
 import { TIMELINE_TAGS_FLAG } from "../timeline/timeline-tags.js";
 import { FINE_ZOOM_STEP } from "../utils/image-zoom.js";
-import { SCRUB_MAX, scrubTicks, wireYearScrubber, yearStops } from "../timeline/timeline-scrub.js";
+import { SCRUB_MAX, scrubTicks, scrubToYear, wireYearScrubber, yearStops } from "../timeline/timeline-scrub.js";
 import { fitMenuToTimeline } from "../timeline/timeline-menu-room.js";
+import { wireToolbarWrap } from "../timeline/timeline-toolbar-wrap.js";
 import { onPaletteChange } from "../utils/palette.js";
+import { AGES_CHANGED_HOOK, AGE_YEAR_PITCH_REM, ageMarkYears, ageStrip } from "../timeline/timeline-ages.js";
+import { wireAgeBands } from "../timeline/timeline-ages-band.js";
+import { customTagStyle } from "../timeline/timeline-tags.js";
+import { yearLabel } from "../seasons/seasons-chronicle.js";
+import { openTimelineAgesDialog } from "./TimelineAgesDialog.js";
 
 /**
  * How far past each edge the timeline can be dragged, as a share of the column it is seen in: three
@@ -115,6 +123,8 @@ export class TimelineWindow extends StonetopDialog {
 		this._trackKind = trackKind;
 		this._trackName = name;
 		this._syncHooks = [];
+		// The actors drawn on the last paint (a lane's name, portrait and playbook), for _wireSync.
+		this._drawnActorIds = new Set();
 		// Takes the grab-and-throw back off the scroll column a repaint is about to replace.
 		this._unwireDragScroll = null;
 		// The wheel's zoom, kept on the instance so a repaint (anyone's write at the table) leaves the
@@ -124,6 +134,10 @@ export class TimelineWindow extends StonetopDialog {
 		// The year scrubber along the bottom (timeline/timeline-scrub.js), and the stops getData found.
 		this._unwireScrubber = null;
 		this._scrubStops = [];
+		// The Ages' strip over the column's foot (timeline/timeline-ages-band.js).
+		this._unwireAgeBands = null;
+		// The toolbar's watch for wrapping onto a second line (timeline/timeline-toolbar-wrap.js).
+		this._unwireToolbarWrap = null;
 		this._unwireShowMenuDismiss = null;
 		// Whether this reader left the Filter menu open. Kept on the instance because every tick in it
 		// re-renders the window, and a menu that shut itself after each tick would be a menu you
@@ -140,6 +154,8 @@ export class TimelineWindow extends StonetopDialog {
 		this._repaintHeld = false;
 		// Where the reader was as the window went down; see `restoreView`.
 		this._viewAtMinimize = null;
+		// The view as it last stood with the column on screen; see `restoreView`.
+		this._lastView = null;
 	}
 
 	static get defaultOptions() {
@@ -192,14 +208,27 @@ export class TimelineWindow extends StonetopDialog {
 		// ⚠ A MINIMIZED WINDOW'S COLUMN IS HIDDEN and reads 0 down and across, which less the gutter
 		// is the empty corner. So it answers with where it was when it went down (`minimize`).
 		if (this._viewAtMinimize) return this._viewAtMinimize;
+		// ⚠ SO IS A SHEET TAB THE READER IS NOT ON, and a panel whose first paint has not landed yet
+		// has no column at all: both answer with the view as it last stood on screen (`_noteView`),
+		// or the one the reopening render was handed, so a reload taken from another tab keeps it.
 		const scroll = this._scrollColumn();
-		if (!scroll) return null;
+		if (!scroll || !isDrawn(scroll)) return this._lastView;
+		return this._viewOf(scroll);
+	}
+
+	/** The view in `scroll`, drawn: the zoom, and the offset counted past the drag gutter. */
+	_viewOf(scroll) {
 		const { x, y } = this._gutterOf(scroll);
 		return {
 			zoom: this._zoom,
 			left: Math.round(scroll.scrollLeft - x),
 			top:  Math.round(scroll.scrollTop - y),
 		};
+	}
+
+	/** Keep `_lastView` on wherever the reader leaves the column while it is on screen. */
+	_noteView(scroll = this._scrollColumn()) {
+		if (scroll && isDrawn(scroll)) this._lastView = this._viewOf(scroll);
 	}
 
 	/** The view is read while the column can still be measured, and kept until the window comes back. */
@@ -239,12 +268,38 @@ export class TimelineWindow extends StonetopDialog {
 		if (view && Number.isFinite(view.zoom)) {
 			this._zoom = clampScale(view.zoom, TIMELINE_ZOOM_MIN, TIMELINE_ZOOM_MAX);
 		}
+		if (view) this._lastView = { ...view };
 		await super._render(force, options);
-		const scroll = view ? this._scrollColumn() : null;
+		const scroll = this._scrollColumn();
 		if (!scroll) return;
+		if (!view) {
+			// No place of the reader's own yet: open on now.
+			if (!this._lastView) this._openOnNow(scroll);
+			return;
+		}
 		const { x, y } = this._gutterOf(scroll);
 		if (Number.isFinite(view.left)) scroll.scrollLeft = x + view.left;
 		if (Number.isFinite(view.top)) scroll.scrollTop = y + view.top;
+	}
+
+	/**
+	 * A timeline the reader has not yet moved about opens on the present (user, 2026-10-11: "default
+	 * to focusing on the current time if the player has yet to focus on something else"), not on its
+	 * oldest year, which with the book's Ages is ten thousand years back. Their own place wins from the
+	 * first scroll on: `_lastView` is set by it (`_noteView`), and by a reload's `view`, and every
+	 * repaint after keeps the column where it stands (StonetopDialog#_keptScrollSelector).
+	 *
+	 * A column not on screen (a sheet tab the reader is not on) is left for its next render.
+	 */
+	_openOnNow(scroll) {
+		if (!isDrawn(scroll)) return;
+		const placed = scrubToYear(scroll, this._scrubStops, timelineNow().year, {
+			horizontal: getTimelineOrientation() === "horizontal",
+			picture: scroll.querySelector(".stonetop-timeline-canvas > *"),
+			// As the scrubber's (`activateListeners`).
+			inset: 12,
+		});
+		if (placed) this._noteView(scroll);
 	}
 
 	// ── reading ────────────────────────────────────────────────────────────────
@@ -298,7 +353,7 @@ export class TimelineWindow extends StonetopDialog {
 		// Timeline entry and then its pages to find the track. The cache is cleared at the top of
 		// every getData, so ownership changing mid-session still shows up on the next repaint.
 		if (this._editCache?.has(trackId)) return this._editCache.get(trackId);
-		const page = readTrack(trackId).page;
+		const page = findTrackPage(trackId);
 		const answer = page
 			? !!page.isOwner
 			: !!(game.user?.isGM || findTimelineJournal()?.isOwner);
@@ -310,6 +365,7 @@ export class TimelineWindow extends StonetopDialog {
 		// Fresh per render; see `_canEdit`.
 		this._editCache = new Map();
 		const tracks = this._tracks();
+		this._drawnActorIds = new Set(tracks.map(t => t.actor?.id).filter(Boolean));
 		// The world's custom tags: what a typed row's tag chip is named and coloured by, and the lines
 		// after the kinds in the Filter menu. A hidden tag the world has since lost is dropped from
 		// the count like an unknown kind.
@@ -323,10 +379,27 @@ export class TimelineWindow extends StonetopDialog {
 		// The reader's filter is applied INSIDE the builders, before periods are formed, so a season
 		// holding nothing but hidden rows leaves no empty block or column behind. Totals (kills,
 		// counts) are of everything, hidden or not.
+		// The clock's season: the ghost a writer can add to when nothing is filed in it yet.
+		const now = timelineNow();
+		// The world's Ages, and whether this reader has their bands off: one more thing hidden. Each
+		// shown Age's first and last years are opened even with nothing written in them, so every
+		// Age has a band to draw.
+		const worldAges = getTimelineAges();
+		const showAges = getTimelineShowAges();
+		// Each Age given years in between where its own are too few to carry its name along this
+		// layout's axis (timeline-ages.js#ageFillYears).
+		const ageYears = showAges ? ageMarkYears(worldAges, {
+			pitch: horizontal ? AGE_YEAR_PITCH_REM.across : AGE_YEAR_PITCH_REM.down,
+			fontScale: getSheetFontScale(), nowYear: now.year, start: startYear(),
+		}) : [];
+		const drawnAges = showAges ? worldAges : [];
 		const vm = single
-			? buildTrackVM(tracks[0], { canEdit: this._canEdit(this._trackId), hidden, tags })
-			: buildAggregateVM(tracks, { canEdit: (id) => this._canEdit(id), hidden, hiddenTracks, tags });
-		const hiddenCount = hidden.length + hiddenTracks.length;
+			? buildTrackVM(tracks[0], {
+				canEdit: this._canEdit(this._trackId), hidden, tags, ageYears, ages: drawnAges, ghostNow: now,
+				steading: steadingNotesFor(this._trackId, id => this._canEdit(id)),
+			})
+			: buildAggregateVM(tracks, { canEdit: (id) => this._canEdit(id), hidden, hiddenTracks, tags, ageYears, ages: drawnAges, ghostNow: now });
+		const hiddenCount = hidden.length + hiddenTracks.length + (worldAges.length && !showAges ? 1 : 0);
 
 		// Enriched after the model is built rather than inside it, and by the shared walker rather
 		// than here: the view model is pure so the three hosts can share it, and enrichment is async
@@ -337,15 +410,17 @@ export class TimelineWindow extends StonetopDialog {
 		// The year scrubber's stops, kept for `activateListeners` to wire against; none under two.
 		this._scrubStops = yearStops(vm.periods);
 		const stops = this._scrubStops;
+		const ages = showAges ? this._ageStrip(worldAges, stops) : null;
 
 		return {
 			single,
 			timeline: vm,
 			trackId: this._trackId,
 			trackName: this._trackName,
-			// A missing page in single-track mode is a thread nobody can write in yet, which reads
-			// differently from an empty one: the first is waiting on a GM, the second on the reader.
-			hasPage: single ? !!tracks[0].page : true,
+			// A missing page in single-track mode reads as waiting on a GM only to a reader who cannot
+			// write it: one who can is offered the empty thread, and their first entry mints the page
+			// (_onNewEntry's `create`). Otherwise the invite would contradict the New Entry above it.
+			awaitingGm: single && !tracks[0].page && !this._canEdit(this._trackId),
 			canEdit: single ? this._canEdit(this._trackId) : tracks.some(t => this._canEdit(t.trackId)),
 			// The aggregate has nowhere further to go, so it does not offer the door to itself.
 			showOpenFull: single,
@@ -358,12 +433,45 @@ export class TimelineWindow extends StonetopDialog {
 			hiddenCount,
 			hiddenCountLabel: format("stonetop.timeline.show.hiddenCount", { count: hiddenCount }),
 			showMenuOpen: this._showMenuOpen,
+			ages,
+			// The GM's door to the Ages, and the reader's switch for their bands (only once there are any).
+			agesEditable: !!game.user?.isGM,
+			agesToggle: worldAges.length ? { shown: showAges } : null,
 			scrub: stops.length > 1
 				? { max: SCRUB_MAX, first: stops[0].label, last: stops.at(-1).label, ticks: scrubTicks(stops) }
 				: null,
 			scrollLabel: single
 				? format("stonetop.timeline.trackTitle", { name: this._trackName })
 				: localize("stonetop.timeline.windowTitle"),
+		};
+	}
+
+	/**
+	 * The Ages' strip as the template draws it: the Ages with a year on screen, each in its row, named
+	 * with its years for the tooltip (a book Age with its words). Null when none has a year shown.
+	 */
+	_ageStrip(worldAges, stops) {
+		const { bands, rows } = ageStrip(worldAges, stops);
+		if (!bands.length) return null;
+		const ongoing = localize("stonetop.timeline.ages.ongoing");
+		return {
+			rows,
+			bands: bands.map(band => ({
+				id: band.id,
+				name: band.name,
+				first: band.first,
+				last: band.last,
+				row: band.row,
+				style: customTagStyle(band.colour),
+				// A book Age says when it was in the book's words; its years only place it.
+				tooltip: band.when
+					? format("stonetop.timeline.ages.bandWhen", { name: band.name, when: band.when })
+					: format("stonetop.timeline.ages.band", {
+						name: band.name,
+						from: yearLabel(band.from),
+						to: band.to === null ? ongoing : yearLabel(band.to),
+					}),
+			})),
 		};
 	}
 
@@ -400,8 +508,8 @@ export class TimelineWindow extends StonetopDialog {
 		if (trackId === this._trackId) {
 			return { trackId, trackKind: this._trackKind, name: this._trackName || trackDisplayName(trackId) };
 		}
-		const actor = game.actors?.get(trackId);
-		return trackForActor(actor) ?? { trackId, trackKind: "", name: trackId };
+		// Stonetop's thread is keyed "steading", not by its actor's id (a character's tab edits its notes).
+		return trackForActor(trackActor(trackId)) ?? { trackId, trackKind: "", name: trackId };
 	}
 
 	/**
@@ -437,13 +545,23 @@ export class TimelineWindow extends StonetopDialog {
 		return this._writeNewEntry(target);
 	}
 
-	async _writeNewEntry(trackId) {
+	/**
+	 * Ask for one new entry on `trackId` and write it.
+	 *
+	 * @param {{season?: string, year?: number, yearOnly?: boolean}} [when]  The date the dialog opens
+	 *        on: a season's add slot hands its own, New Entry the clock's. "Years ago" always counts
+	 *        from the clock, never from an older season the reader pressed.
+	 */
+	async _writeNewEntry(trackId, when = null) {
 		// The clock's season -- the same "now" a milestone files under, so a row the reader types and
 		// a row the system writes in the same moment land in the same season.
 		const stamp = timelineNow();
+		const date = when ?? stamp;
 		const input = await promptForTimelineEntry({
-			season: stamp.season,
-			year:   stamp.year,
+			season:   date.season,
+			year:     date.year ?? stamp.year,
+			yearOnly: !!date.yearOnly,
+			nowYear:  stamp.year,
 			trackName: this._trackNameFor(trackId),
 		});
 		if (!input) return;
@@ -456,10 +574,27 @@ export class TimelineWindow extends StonetopDialog {
 		}, foundry.utils.randomID), { create: true });
 	}
 
+	/**
+	 * A season's add slot pressed: a new entry in that season, on the thread whose lane it sits in
+	 * (or this window's own), so the aggregate asks no "which thread". The slot is where the entry
+	 * lands, because `addEntry` appends to the season's end.
+	 */
+	async _onAddHere(slot) {
+		const trackId = slot.closest?.("[data-track-id]")?.dataset?.trackId || this._trackId;
+		if (!trackId) return;
+		const { season = "", year = "", yearOnly } = slot.dataset;
+		return this._writeNewEntry(trackId, {
+			season,
+			// "" for the undated block, which then opens on the clock's year with no season picked.
+			year: year === "" ? undefined : Number(year),
+			yearOnly: yearOnly === "true",
+		});
+	}
+
 	async _onEditEntry(trackId, entryId) {
 		const entry = readTrack(trackId).entries.find(e => e.id === entryId);
 		if (!entry) return;
-		const input = await promptForTimelineEntry({ entry, trackName: this._trackNameFor(trackId) });
+		const input = await promptForTimelineEntry({ entry, nowYear: timelineNow().year, trackName: this._trackNameFor(trackId) });
 		if (!input) return;
 		await this._mutate(trackId, entries => patchEntry(entries, entryId, input));
 	}
@@ -501,11 +636,6 @@ export class TimelineWindow extends StonetopDialog {
 	_trackNameFor(trackId) {
 		if (trackId === this._trackId) return this._trackName;
 		return trackDisplayName(trackId);
-	}
-
-	/** The track a changed page belongs to, for the sync gate. Reads the key, writes nothing. */
-	_pageTrackId(page) {
-		return trackIdFromKey(page?.getFlag?.(SYSTEM_ID, "chronicleKey")) || page?.system?.trackId || "";
 	}
 
 	// ── reading preferences (this reader only) ─────────────────────────────────
@@ -558,9 +688,16 @@ export class TimelineWindow extends StonetopDialog {
 		this.render(false);
 	}
 
-	/** Everything back: every kind, and on the aggregate every thread (a choice, so the default is spent). */
+	/** The Ages' bands on or off, for this reader. */
+	async _onShowAges(shown) {
+		await setTimelineShowAges(shown);
+		this.render(false);
+	}
+
+	/** Everything back: every kind, the Ages, and on the aggregate every thread (a choice, so the default is spent). */
 	async _onShowAll() {
 		await setTimelineHiddenSources([]);
+		if (!getTimelineShowAges()) await setTimelineShowAges(true);
 		if (!this.isSingleTrack) {
 			await setTimelineHiddenTracks([]);
 			await setTimelineThreadsChosen(true);
@@ -583,6 +720,9 @@ export class TimelineWindow extends StonetopDialog {
 			const add = target.closest?.(".stonetop-timeline-new");
 			if (add) return this._onNewEntry(add.dataset.trackId || this._trackId);
 
+			const addHere = target.closest?.(".stonetop-timeline-add");
+			if (addHere) return this._onAddHere(addHere);
+
 			const full = target.closest?.(".stonetop-timeline-open-full");
 			if (full) return openTimelineWindow();
 
@@ -592,6 +732,11 @@ export class TimelineWindow extends StonetopDialog {
 			if (target.closest?.(".stonetop-timeline-show-all")) return this._onShowAll();
 
 			if (target.closest?.(".stonetop-timeline-colours-menu")) return this._onColoursClick(target);
+
+			// The GM's Ages: the toolbar's door, or a band pressed to open on its own Age.
+			if (target.closest?.(".stonetop-timeline-ages-open")) return openTimelineAgesDialog();
+			const age = target.closest?.("button.stonetop-timeline-age");
+			if (age) return openTimelineAgesDialog({ focus: age.dataset.ageId });
 
 			const card = target.closest?.("[data-entry-id]");
 			const trackId = target.closest?.("[data-track-id]")?.dataset?.trackId || this._trackId;
@@ -620,7 +765,9 @@ export class TimelineWindow extends StonetopDialog {
 			const box = ev.target?.closest?.("[data-timeline-source]");
 			if (box) return this._onShowKind(box.dataset.timelineSource, !!box.checked);
 			const thread = ev.target?.closest?.("[data-timeline-thread]");
-			if (thread) this._onShowThread(thread.dataset.timelineThread, !!thread.checked);
+			if (thread) return this._onShowThread(thread.dataset.timelineThread, !!thread.checked);
+			const ages = ev.target?.closest?.("[data-timeline-ages]");
+			if (ages) this._onShowAges(!!ages.checked);
 		});
 
 		root.addEventListener("focusout", ev => {
@@ -642,6 +789,9 @@ export class TimelineWindow extends StonetopDialog {
 		this._watchColoursSkin(root.querySelector(".stonetop-timeline-colours-menu"));
 		// A menu drawn open (a tick in it repaints the timeline) is fitted now, not on a toggle.
 		for (const menu of root.querySelectorAll(TIMELINE_MENUS)) fitMenuToTimeline(menu);
+		// A toolbar wrapped onto two lines lays the second under the first (timeline/timeline-toolbar-wrap.js).
+		this._unwireToolbarWrap?.();
+		this._unwireToolbarWrap = wireToolbarWrap(root.querySelector(".stonetop-timeline-toolbar"));
 
 		// Drag the column about and throw it, as the relationship map's board is (utils/drag-scroll.js).
 		// A fresh column every repaint, so the old one's wiring (and any glide still running on it) goes.
@@ -651,20 +801,29 @@ export class TimelineWindow extends StonetopDialog {
 		// settles it afterwards (user, 2026-10-04: "the scrubber moves by itself after the sliding
 		// stops"; the column snap that eased the board is gone).
 		this._unwireDragScroll?.();
-		// No room above, left of or below the timeline to scroll into, in every shape; only the right
-		// keeps its drag-off room. The aggregate's two grids pin a header row to the top (the thread
-		// names read down, the season heads read across) and a column to the left (the board's season
-		// cells, the swimlanes' thread names), which would otherwise slide off those edges (user,
-		// 2026-10-03: "you can't scroll past the left most season header"); a single thread on a
-		// sheet's tab keeps the same edges as the pop-out does, and both stop at the timeline's foot
-		// (user, 2026-10-05). The stylesheet drops the aggregate's top inset and left pad to match
-		// (Down drops every left pad, the swimlanes' own rule covers Across).
+		// The aggregate has no room above, left of or below it to scroll into; only the right keeps its
+		// drag-off room. Its two grids pin a header row to the top (the thread names read down, the
+		// season heads read across) and a column to the left (the board's season cells, the swimlanes'
+		// thread names), which would otherwise slide off those edges (user, 2026-10-03: "you can't
+		// scroll past the left most season header"), and it stops at its foot (user, 2026-10-05). The
+		// stylesheet drops its top inset and left pad to match (Down drops every left pad, the
+		// swimlanes' own rule covers Across).
+		//
+		// A SINGLE THREAD (a sheet's tab) has one line and no pinned heads, and its line can be dragged
+		// to the middle of the view (user, 2026-10-07): room on both sides ACROSS the line (above and
+		// below it read across, left of it read down), none before its first season or past its foot
+		// read down, as before.
+		const readAcross = getTimelineOrientation() === "horizontal";
+		const roomAcrossLine = this.isSingleTrack;
 		this._unwireDragScroll = wireDragScroll(root.querySelector(".stonetop-timeline-scroll"), {
 			gutter: TIMELINE_DRAG_GUTTER,
-			pinTop: true,
-			pinLeft: true,
-			pinBottom: true,
+			pinTop: !(roomAcrossLine && readAcross),
+			pinLeft: !(roomAcrossLine && !readAcross),
+			pinBottom: !(roomAcrossLine && readAcross),
 		});
+		// Where the reader leaves it, kept for a reload (`restoreView`): read while it is on screen,
+		// since a sheet tab the reader has gone off hides it and it then reads 0 both ways.
+		root.querySelector(".stonetop-timeline-scroll")?.addEventListener("scroll", ev => this._noteView(ev.currentTarget), { passive: true });
 		// And the wheel zooms it about the cursor, as the map's wheel zooms the board
 		// (utils/wheel-zoom-scroll.js). The canvas's one child is the picture; the stylesheet spends
 		// the scale on it, and the gutter round it stays a window's worth whatever the size.
@@ -672,7 +831,7 @@ export class TimelineWindow extends StonetopDialog {
 		this._unwireWheelZoom = wireWheelZoom(root.querySelector(".stonetop-timeline-scroll"), {
 			content: ".stonetop-timeline-canvas > *",
 			get: () => this._zoom,
-			set: scale => { this._zoom = scale; },
+			set: scale => { this._zoom = scale; this._noteView(); },
 			step: TIMELINE_ZOOM_STEP,
 			min: TIMELINE_ZOOM_MIN,
 			max: TIMELINE_ZOOM_MAX,
@@ -685,11 +844,23 @@ export class TimelineWindow extends StonetopDialog {
 			root.querySelector(".stonetop-timeline-scrub"),
 			{
 				stops: this._scrubStops,
-				horizontal: getTimelineOrientation() === "horizontal",
+				horizontal: readAcross,
 				picture: ".stonetop-timeline-canvas > *",
 				// The first child's own top inset (`.stonetop-timeline-scroll > :first-child`), and the
 				// column's 12px left padding, kept when a year or a wide board is laid against an edge.
 				inset: 12,
+			},
+		);
+		// The Ages' bands, laid under their years wherever the column has them. Hidden under the
+		// aggregate's pinned names (the swimlanes' thread column, the board's lane-name row), never
+		// drawn over them.
+		this._unwireAgeBands?.();
+		this._unwireAgeBands = wireAgeBands(
+			root.querySelector(".stonetop-timeline-scroll"),
+			root.querySelector(".stonetop-timeline-ages"),
+			{
+				horizontal: readAcross,
+				pinned: this.isSingleTrack ? "" : (readAcross ? ".stonetop-timeline-swim-lane-head" : ".stonetop-timeline-lane-heads"),
 			},
 		);
 
@@ -798,13 +969,31 @@ export class TimelineWindow extends StonetopDialog {
 	 */
 	_wireSync() {
 		this._unwireSync();
-		const ours = (page) => page?.parent?.name === TIMELINE_JOURNAL_NAME
+		// A character's thread reads Stonetop's season notes too (steadingNotesFor), so it repaints
+		// for Stonetop's page as well as its own: but only when those notes MOVED. Stonetop's thread
+		// is the busiest at the table (kills shared with it, expeditions, improvements, disasters),
+		// and a write to one of its cards changes nothing a character's thread draws.
+		const seasonNotes = (page) => JSON.stringify(readEntries(page?.system?.entries).filter(e => e.source === TIMELINE_SEASON_SOURCE));
+		const readsSteadingNotes = this.isSingleTrack && this._trackId !== TIMELINE_TRACK_STEADING;
+		this._steadingNotesSeen = readsSteadingNotes ? seasonNotes(findTrackPage(TIMELINE_TRACK_STEADING)) : null;
+		// A page made or deleted is always news; only an update can leave the notes as they were.
+		const watches = (page, updated) => {
+			const trackId = pageTrackId(page);
+			if (trackId === this._trackId) return true;
+			if (!readsSteadingNotes || trackId !== TIMELINE_TRACK_STEADING) return false;
+			if (!updated) return true;
+			const now = seasonNotes(page);
+			if (now === this._steadingNotesSeen) return false;
+			this._steadingNotesSeen = now;
+			return true;
+		};
+		const ours = (page, updated) => page?.parent?.name === TIMELINE_JOURNAL_NAME
 			&& page.parent.id === findTimelineJournal()?.id
-			&& (!this.isSingleTrack || this._pageTrackId(page) === this._trackId);
-		const repaint = (page) => { if (ours(page)) this._syncRepaint(); };
+			&& (!this.isSingleTrack || watches(page, updated));
+		const repaint = (updated) => (page) => { if (ours(page, updated)) this._syncRepaint(); };
 
 		for (const hook of ["updateJournalEntryPage", "createJournalEntryPage", "deleteJournalEntryPage"]) {
-			const id = Hooks.on(hook, repaint);
+			const id = Hooks.on(hook, repaint(hook === "updateJournalEntryPage"));
 			this._syncHooks.push([hook, id]);
 		}
 
@@ -817,6 +1006,26 @@ export class TimelineWindow extends StonetopDialog {
 			if (journal?.id === findTimelineJournal()?.id) this._syncRepaint();
 		};
 		this._syncHooks.push(["updateJournalEntry", Hooks.on("updateJournalEntry", tagsChanged)]);
+
+		// The GM saving the Ages (timeline/timeline-ages.js): the strip is redrawn from the world's list.
+		this._syncHooks.push([AGES_CHANGED_HOOK, Hooks.on(AGES_CHANGED_HOOK, () => this._syncRepaint())]);
+
+		// The GM renaming the years (seasons/campaign-year.js): every heading and chip says a new name.
+		this._syncHooks.push([START_YEAR_CHANGED_HOOK, Hooks.on(START_YEAR_CHANGED_HOOK, () => this._syncRepaint())]);
+
+		// An actor drawn on the board renamed, re-pictured, or given a new playbook (or a Would-Be
+		// Hero crossing off "Would-be"): its lane says the old one until repainted. The page's own
+		// rename waits on the primary GM (timeline-watch.js), so it is no signal when none is online.
+		const actorChanged = (actor, changes = {}) => {
+			if (!this._drawnActorIds.has(actor?.id)) return;
+			// The thread's own name was handed in at construction and titles the window, its scroll
+			// label and the entry dialog: a repaint alone would draw the old one again.
+			if ("name" in changes && this.isSingleTrack && actor.id === this._trackActor()?.id) {
+				this._trackName = actor.name;
+			}
+			if ("name" in changes || "img" in changes || playbookTitleChanged(changes)) this._syncRepaint();
+		};
+		this._syncHooks.push(["updateActor", Hooks.on("updateActor", actorChanged)]);
 	}
 
 	/**
@@ -856,6 +1065,10 @@ export class TimelineWindow extends StonetopDialog {
 		this._unwireWheelZoom = null;
 		this._unwireScrubber?.();
 		this._unwireScrubber = null;
+		this._unwireAgeBands?.();
+		this._unwireAgeBands = null;
+		this._unwireToolbarWrap?.();
+		this._unwireToolbarWrap = null;
 		this._unwireShowMenuDismiss?.();
 		this._unwireColoursMenuDismiss?.();
 		this._unwireColoursSkinWatch?.();

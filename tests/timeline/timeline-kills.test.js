@@ -114,7 +114,8 @@ describe("what an applied row says fell", () => {
 
 describe("where the tally comes from", () => {
 	const SRC = readRepo("module/combat/attack-flow.js");
-	const start = SRC.indexOf("async function applyOwedDamage(");
+	// applyOwedDamage latches what landed; applyOwedRows writes each row.
+	const start = SRC.indexOf("async function applyOwedRows(");
 	const body = SRC.slice(start, SRC.indexOf("\n}\n", start));
 
 	// The damage path says what HAPPENED and nothing about whose timeline it goes on.

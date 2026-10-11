@@ -14,6 +14,7 @@
 // the doom-tick and delete helpers below are page-shape generic, so hazards reuse them
 // directly rather than duplicating.
 import { makeGmPrepPageStore } from "../journal/gm-prep-page-store.js";
+import { inTurn } from "../utils/turn-queue.js";
 import { DEFAULT_THREAT_TYPE, DEFAULT_PROXIMITY, normalizeThreatSeedExtras } from "./threat-types.js";
 
 /** Normalize a creation seed into the threat page's system data. The plain threat creator
@@ -55,19 +56,41 @@ export const createThreat = _store.create;
 /** Rename a threat everywhere its name is its identity: the page and its scene pins. */
 export const setThreatName = _store.setName;
 
-/** Tick / untick a grim portent's "come to pass" checkbox (full-array replace, since
- *  dotted array-index updates are unreliable on DataModel ArrayFields). */
-export async function setPortentDone(page, index, done) {
-	if (!page) return;
-	const arr = foundry.utils.deepClone(page.system?.grimPortents ?? []);
-	if (!Number.isInteger(index) || index < 0 || index >= arr.length) return;
-	arr[index] = { ...arr[index], done: !!done };
-	await page.update({ "system.grimPortents": arr });
+// Doom-track writes take turns, per page (turn-queue.js#inTurn). A portent tick replaces the WHOLE
+// array (see below), so two ticks fired inside one server round trip would each start from the same
+// stale copy and the second would silently untick the first. Taking turns makes every write start
+// only once the one before it has landed, and each one reads the array fresh at that moment rather
+// than when its click happened.
+function _queueDoomWrite(page, write) {
+	return inTurn(`doom:${page.uuid ?? page.id ?? ""}`, write);
 }
 
-/** Tick / untick the impending-doom checkbox. */
+/** Tick / untick a grim portent's "come to pass" checkbox (full-array replace, since
+ *  dotted array-index updates are unreliable on DataModel ArrayFields). Queued per page and
+ *  rebuilt from the page as it stands when the write runs. Resolves true when it wrote, false
+ *  when there was nothing to change (a stale checkbox, an index off the end). */
+export async function setPortentDone(page, index, done) {
+	if (!page) return false;
+	if (!Number.isInteger(index) || index < 0) return false;
+	return _queueDoomWrite(page, async () => {
+		const arr = foundry.utils.deepClone(page.system?.grimPortents ?? []);
+		if (index >= arr.length) return false;
+		if (!!arr[index]?.done === !!done) return false;
+		arr[index] = { ...arr[index], done: !!done };
+		await page.update({ "system.grimPortents": arr });
+		return true;
+	});
+}
+
+/** Tick / untick the impending-doom checkbox. Queued behind any portent write on the same page.
+ *  Resolves true when it wrote, false when the box already read that way. */
 export async function setDoomDone(page, done) {
-	if (page) await page.update({ "system.impendingDoom.done": !!done });
+	if (!page) return false;
+	return _queueDoomWrite(page, async () => {
+		if (!!page.system?.impendingDoom?.done === !!done) return false;
+		await page.update({ "system.impendingDoom.done": !!done });
+		return true;
+	});
 }
 
 /**

@@ -933,7 +933,7 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 			// OR check exactly, since either can be the pointer at our compendium actor.
 			const actorsBySource = new Map();
 			for (const a of game.actors) {
-				for (const s of new Set([a._stats?.compendiumSource, a.getFlag?.("core", "sourceId")])) {
+				for (const s of new Set([a._stats?.compendiumSource, a.flags?.core?.sourceId])) {
 					if (!s) continue;
 					if (!actorsBySource.has(s)) actorsBySource.set(s, []);
 					actorsBySource.get(s).push(a);

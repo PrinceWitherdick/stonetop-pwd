@@ -444,7 +444,8 @@ describe("Unstoppable on the damage card", () => {
 	const fightingOn = (id, name, marks = 1) => {
 		const actor = hero(id, name);
 		actor.system.attributes.hp.value = 0;
-		actor.flags = { "stonetop-pwd": { deathsDoor: "dying", moves: { backgroundChoices: { Unstoppable: marks } } } };
+		// Reduced to 0 HP in battle: the drop stamped `unstoppableFighting` (hooks/DeathsDoorPrompt.js).
+		actor.flags = { "stonetop-pwd": { deathsDoor: "dying", unstoppableFighting: true, moves: { backgroundChoices: { Unstoppable: marks } } } };
 		actor.items = [{ type: "move", name: "Unstoppable", system: { resource: { max: 5 } }, flags: {} }];
 		actor.getFlag = (scope, key) => key.split(".").reduce((v, k) => v?.[k], actor.flags[scope]);
 		actor.update = vi.fn(async function (changes) {

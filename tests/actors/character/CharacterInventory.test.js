@@ -222,6 +222,23 @@ describe("StonetopCharacter.toggleCarriedItem", () => {
 		expect(actor.getFlag("stonetop-pwd", "inventory.regularPool")).toBe(0);
 	});
 
+	// A move-driven write names its move in the ledger (`{ stonetopMove }`): Have What You Need at the fire.
+	it("names the move that ticked the item on every write it makes, for the ledger", async () => {
+		const actor = new FakeActorBuilder().withFlag("inventory.regularPool", 3).build();
+		const update = vi.spyOn(actor, "update");
+		await makeChar(actor).toggleCarriedItem("rope", true, { weight: 2, stonetopMove: "Have What You Need" });
+		// One write for the mark, the draw record and the pool: one diff for the ledger, one re-render.
+		expect(update).toHaveBeenCalledTimes(1);
+		expect(update.mock.calls[0][0]).toEqual({
+			"flags.stonetop-pwd.inventory.checked.rope": true,
+			"flags.stonetop-pwd.inventory.drawn.rope":   2,
+			"flags.stonetop-pwd.inventory.regularPool":  1,
+		});
+		expect(update.mock.calls[0][1]).toEqual({ stonetopMove: "Have What You Need" });
+		expect(actor.getFlag("stonetop-pwd", "inventory.checked")).toEqual({ rope: true });
+		expect(actor.getFlag("stonetop-pwd", "inventory.regularPool")).toBe(1);
+	});
+
 	it("marking then un-marking an item returns exactly what was drawn (a no-op on the pool)", async () => {
 		const actor = new FakeActorBuilder().withFlag("inventory.regularPool", 3).build();
 		const char = makeChar(actor);

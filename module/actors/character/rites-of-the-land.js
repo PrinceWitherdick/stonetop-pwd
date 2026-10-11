@@ -1,5 +1,6 @@
 import { escHtml } from "../../utils/strings.js";
 import { seasonLabel } from "../../seasons/seasons-change-reminders.js";
+import { yearLabel } from "../../seasons/seasons-chronicle.js";
 import { RITES_OF_THE_LAND } from "./stock-cost.js";
 import { DEBILITIES, clearDebility, markedDebilities, openDebilityPicker } from "../steading/steading-debilities.js";
 
@@ -102,8 +103,8 @@ export function openRitesOfTheLand({ character, steading, actorId = "", year = 1
 		debilities: markedDebilities(steading).map(d => d.id),
 	});
 
-	// seasonLabel is the canonical id→name map; no escaping needed, it returns one of four literals.
-	const seasonLine = seasonId ? `${seasonLabel(seasonId)}, year ${year}` : "this season";
+	// seasonLabel and yearLabel are the canonical names; no escaping needed, neither takes free text.
+	const seasonLine = seasonId ? `${seasonLabel(seasonId)}, ${yearLabel(year)}` : "this season";
 
 	// ── The rites ────────────────────────────────────────────────────────────────
 	const ritesBody = state.ritesDone

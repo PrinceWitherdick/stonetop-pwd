@@ -22,7 +22,7 @@
  */
 
 import { SYSTEM_ID } from "../../system-id.js";
-import { ownsLearnedMoveNamed } from "./owns-move.js";
+import { bookMoveName, ownsLearnedBookMoveNamed } from "./owns-move.js";
 import { learnedTrack } from "./MoveResources.js";
 import { asteriskMoveUsed, asteriskUseCounts } from "./WouldBeHeroAsterisk.js";
 import { markXpReceipt } from "../../utils/roll-engine.js";
@@ -77,9 +77,16 @@ export async function gainRefusedResolve(actor) {
 	return { added: held - track.held, held, max: track.max };
 }
 
-/** In Over Your Head's button, for the move's posted card: "" for any other move, or one not held learned. */
-export function inOverYourHeadCardHtml(actor, moveName) {
-	if (moveName !== IN_OVER_YOUR_HEAD || actor?.type !== "character" || !ownsLearnedMoveNamed(actor, IN_OVER_YOUR_HEAD)) return "";
+/**
+ * In Over Your Head's button, for the move's posted card: "" for any other move, or one not held learned.
+ * `item` is the move being posted, when there is one: a move a player wrote under the book's name acts as
+ * itself and marks nothing (owns-move.js#bookMoveName), nor does the book's own learned copy count for it,
+ * as giveAdvantageCardHtml beside it on the same posts.
+ */
+export function inOverYourHeadCardHtml(actor, moveName, item = null) {
+	if (moveName !== IN_OVER_YOUR_HEAD || actor?.type !== "character") return "";
+	if (item && bookMoveName(item, moveName) == null) return "";
+	if (!ownsLearnedBookMoveNamed(actor, IN_OVER_YOUR_HEAD)) return "";
 	return `<div class="card-buttons stonetop-roll-actions"><button type="button" class="stonetop-in-over-your-head-xp" `
 		+ `data-tooltip="${escHtml(localize("stonetop.wouldBeHero.rescuedTooltip"))}" data-tooltip-direction="UP">`
 		+ `<i class="fas fa-star"></i> ${escHtml(localize("stonetop.wouldBeHero.rescuedButton"))}</button></div>`;

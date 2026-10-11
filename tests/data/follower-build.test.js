@@ -400,6 +400,17 @@ describe("followerFromNpc", () => {
 		expect(followerFromNpc(statted, {}).img).toBe("");
 	});
 
+	// The square the roster already framed that face to rides along (wave 3 audit FOL-10): it was
+	// handed to buildCustomFollower and dropped there, so a recruited face came out freshly cropped.
+	it("carries the portrait's frame with the portrait, and no frame without one", () => {
+		const frame = { src: "art/people/elios.webp", rect: { x: 0.1, y: 0.05, w: 0.5, h: 0.5 } };
+		const flags = { "stonetop-pwd": { portraitFrame: frame } };
+		expect(followerFromNpc({ ...statted, img: "art/people/elios.webp", flags }, {}).portraitFrame).toEqual(frame);
+		expect(followerFromNpc({ ...statted, flags }, {})).not.toHaveProperty("portraitFrame");
+		const wolf = { name: "Wolf", system: { attributes: { hp: { max: 6 } } }, img: "art/beasts/wolf.webp", flags };
+		expect(followerFromMonster(wolf, {}).portraitFrame).toEqual(frame);
+	});
+
 	it("falls back to the able-bodied baseline (6 HP, 0 armor, no tags) for an unstatted NPC", () => {
 		const f = followerFromNpc(
 			{ name: "Andras", uuid: "Actor.andras1", system: { hasStats: false, pronouns: "he/him", instinct: "to impress Rhianna", tags: "ignored-when-unstatted" } },

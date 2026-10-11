@@ -125,12 +125,91 @@ export function hasRulebook(book) {
  * remove its row, or "no book" and "a book at nowhere" become two different empty states and
  * only one of them dims the header icon.
  */
-export async function saveRulebookPath(book, path) {
-	const next = { ...rulebookPaths() };
+export function saveRulebookPath(book, path) {
+	return queued(() => writeRulebookPath(book, path));
+}
+
+/**
+ * Record a copy found on the server, but only if this world STILL has no answer for the book.
+ * Answers whether it was recorded.
+ *
+ * The check is made inside the queue, not by the caller before it: adoption runs at ready
+ * without being awaited and browses first, and a GM who picks or Forgets the book in the
+ * meantime has given an answer that a check made before the browse never saw.
+ */
+export function adoptRulebookPath(book, path) {
+	return queued(async () => {
+		if (hasRulebook(book) || wasRulebookForgotten(book)) return false;
+		await writeRulebookPath(book, path);
+		return true;
+	});
+}
+
+/**
+ * Every write to the two records, one at a time.
+ *
+ * Each write rebuilds a WHOLE record from what it read (see above), so two that overlap both
+ * read the old one and the second drops the first's book. That stopped being theoretical when
+ * adoption began writing in the background at ready, alongside the macro's `keepRulebook` and
+ * the window's picks. One client's writes are what can overlap: only the primary GM adopts.
+ */
+let _writes = Promise.resolve();
+function queued(write) {
+	const run = _writes.then(write, write);
+	_writes = run.catch(() => {});
+	return run;
+}
+
+async function writeRulebookPath(book, path) {
 	const trimmed = String(path ?? "").trim();
+	// A Forget writes its marker FIRST and lets a failure throw: a Forget whose marker did not
+	// land is undone by the next load's adoption, so it must not look done. A pick clears the
+	// marker AFTER, and only logs a failure: a stale marker under a recorded path changes nothing
+	// until the book is forgotten again, which rewrites it.
+	if (!trimmed) await markRulebookForgotten(book, true);
+	const next = { ...rulebookPaths() };
 	if (trimmed) next[String(book)] = trimmed;
 	else delete next[String(book)];
-	return globalThis.game?.settings?.set?.(SYSTEM_ID, RULEBOOKS_SETTING, next);
+	const saved = await globalThis.game?.settings?.set?.(SYSTEM_ID, RULEBOOKS_SETTING, next);
+	if (trimmed) {
+		try { await markRulebookForgotten(book, false); }
+		catch (err) { console.error("Stonetop | Could not clear a forgotten rulebook.", err); }
+	}
+	return saved;
+}
+
+/**
+ * The books a GM has FORGOTTEN in this world, `{ [book]: true }`.
+ *
+ * A world with no path for a book picks up a copy already sitting in `stonetop-books/` when it
+ * loads (adopt-stored-rulebooks.js), which is what lets a second world open the books the first
+ * one kept. That would also undo a deliberate Forget on every reload, since forgetting a book
+ * deletes the pointer and leaves the file. So a Forget is written down here, separately from the
+ * paths, and only a later pick of that book clears it.
+ */
+export const FORGOTTEN_RULEBOOKS_SETTING = "rulebooksForgotten";
+
+function forgottenRulebooks() {
+	try {
+		const stored = globalThis.game?.settings?.get?.(SYSTEM_ID, FORGOTTEN_RULEBOOKS_SETTING);
+		return (stored && typeof stored === "object") ? stored : {};
+	} catch (_) { /* setting not registered in this world */ }
+	return {};
+}
+
+/** Did the GM forget this book in this world, rather than never having given one? */
+export function wasRulebookForgotten(book) {
+	return forgottenRulebooks()[String(book)] === true;
+}
+
+/** Write the Forget marker only when it changes, so an ordinary pick costs no second write. */
+async function markRulebookForgotten(book, forgotten) {
+	const key = String(book);
+	if (wasRulebookForgotten(book) === forgotten) return;
+	const next = { ...forgottenRulebooks() };
+	if (forgotten) next[key] = true;
+	else delete next[key];
+	await globalThis.game?.settings?.set?.(SYSTEM_ID, FORGOTTEN_RULEBOOKS_SETTING, next);
 }
 
 /** Foundry's bundled pdf.js viewer, as a path relative to the game route. */

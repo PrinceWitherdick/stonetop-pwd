@@ -31,6 +31,7 @@
  */
 
 const _fields  = new Map();
+const _indexed = new Map();
 const _pending = new Map();
 
 export async function ensurePackIndex(packName, fields = []) {
@@ -41,18 +42,73 @@ export async function ensurePackIndex(packName, fields = []) {
 	if (!wanted) _fields.set(packName, wanted = new Set());
 	for (const field of fields) wanted.add(field);
 
+	const index = async asked => {
+		await pack.getIndex({ fields: withoutCoveredFields(asked, pack.indexFields) });
+		_indexed.set(packName, new Set(asked));
+	};
+
 	// Spread inside the thunk, not here: by the time this link of the chain runs, a later caller
 	// may have widened the union, and asking for the wider set costs the same one request.
-	const run = (_pending.get(packName) ?? Promise.resolve())
-		.then(() => pack.getIndex({ fields: [...wanted] }));
+	const run = (_pending.get(packName) ?? Promise.resolve()).then(async () => {
+		// Re-added here because a failed link before this one may have taken a shared one out.
+		for (const field of fields) wanted.add(field);
+		const indexed = _indexed.get(packName) ?? new Set();
+		const asked = [...wanted];
+		try {
+			await index(asked);
+		} catch (firstErr) {
+			let err = firstErr;
+			// The union holds fields of callers still queued behind this one, and any of them may be
+			// the one the server rejects. Retried with only what last indexed plus this caller's own,
+			// so a bad field fails the caller that asked for it and nobody queued ahead of it.
+			const own = new Set([...indexed, ...fields]);
+			if (own.size < asked.length) {
+				try { return await index([...own]); }
+				catch (retryErr) { err = retryErr; }
+			}
+			// This caller's fields must not stay in the union, or every later caller sends them and
+			// fails too until reload. Only its own: a transient failure must not drop the fields of
+			// callers that are no longer queued, and the ones still queued re-add theirs above.
+			for (const field of fields) if (!indexed.has(field)) wanted.delete(field);
+			throw err;
+		}
+	});
 	// A failed index must not poison the chain for the next caller.
 	_pending.set(packName, run.catch(() => {}));
 	await run;
 	return pack;
 }
 
+/**
+ * The union with every field dropped that an ancestor already covers, whether the ancestor is in
+ * the union or among the fields core sends with every request anyway (`pack.indexFields`: the
+ * document's own plus `CONFIG[type].compendiumIndexFields`, which this system extends). The server
+ * builds its projection with `setProperty(projection, field, 1)` per field, so a request holding
+ * both `flags.stonetop` and `flags.stonetop.slug` sets the first to 1 and then throws on the
+ * second ("Cannot create property 'slug' on number '1'"), failing that pack's index for every
+ * caller. The ancestor alone returns the whole subtree, so nothing a child asked for is lost.
+ * Core's fields go first in the request, so a caller's field that is an ANCESTOR of one of them
+ * only overwrites it, which is safe, and is kept. PURE.
+ *
+ * @param {Iterable<string>} fields
+ * @param {Iterable<string>} [alsoSent]  Fields core adds to the request itself.
+ * @returns {string[]}
+ */
+export function withoutCoveredFields(fields, alsoSent = []) {
+	const all = new Set(fields);
+	const sent = new Set(alsoSent ?? []);
+	const covered = path => all.has(path) || sent.has(path);
+	return [...all].filter(field => {
+		if (sent.has(field)) return false;
+		const parts = field.split(".");
+		for (let i = 1; i < parts.length; i++) if (covered(parts.slice(0, i).join("."))) return false;
+		return true;
+	});
+}
+
 /** Forget every remembered field set. Tests only — a live session wants the union to accumulate. */
 export function resetPackIndexFields() {
 	_fields.clear();
+	_indexed.clear();
 	_pending.clear();
 }

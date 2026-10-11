@@ -6,23 +6,26 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import {
 	HEALERS_ARTS, HEALERS_ARTS_QUERY, HEALERS_ARTS_ASK_MS, recoverHeal, recoverBreakdown, healersArtsCarers,
-	payHealersArtsStock, handleHealersArtsQuery, carerStockAnswerer, canReachCarerStock,
+	payHealersArtsStock, handleHealersArtsQuery, carerStockAnswerer, canReachCarerStock, spendsCarerStockDirectly,
 } from "../../../module/actors/character/healers-arts.js";
 import { createStonetopCharacterSheetClass, GUIDED_CHARACTER_MOVES } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { buildLiveCharacter } from "../../fakes/LiveCharacter.js";
+import { supplyPursesFor } from "../../../module/actors/character/supply-cost.js";
 import { readRepo as read } from "../../fakes/css.js";
 
 const move = (name, learned = true) => ({ type: "move", name, flags: learned ? {} : { "stonetop-pwd": { learned: false } } });
 
 // A carer as the rules read one: a character document with its moves, its WIS and its purses.
-// `owners` are the user ids that own it (a GM owns every actor).
-function carer({ id = "gwynn", name = "Gwynn", wis = 2, owner = true, learned = true, purses = null, owners = [] } = {}) {
+// `owners` are the user ids that own it (a GM owns every actor); a carer this client owns is, by
+// default, owned by the user each test starts as (p-gwynn, who plays them).
+function carer({ id = "gwynn", name = "Gwynn", wis = 2, owner = true, learned = true, purses = null, owners = null } = {}) {
 	const sources = purses ?? [{ key: "stock", label: "Stock", remaining: 2, max: 3 }];
+	const ownerIds = owners ?? (owner ? ["p-gwynn"] : []);
 	return {
 		id, name, type: "character", isOwner: owner,
 		system: { stats: { wis: { value: wis } } },
 		items: [move(HEALERS_ARTS, learned)],
-		testUserPermission: (user, level) => level === "OWNER" && (!!user?.isGM || owners.includes(user?.id)),
+		testUserPermission: (user, level) => level === "OWNER" && (!!user?.isGM || ownerIds.includes(user?.id)),
 		typedActor: {
 			stockSources: vi.fn(async () => sources),
 			spendStock: vi.fn(async () => ({ lost: 0 })),
@@ -58,6 +61,8 @@ beforeEach(() => {
 	savedUi = global.ui;
 	global.ChatMessage = { create: vi.fn(async () => ({})), getSpeaker: ({ actor } = {}) => ({ actor: actor?.id }) };
 	global.ui = { notifications: { info: vi.fn(), warn: vi.fn() } };
+	// Each test starts as the player who plays the default carer, Gwynn.
+	global.game.user = { id: "p-gwynn", name: "Alex", isGM: false, character: null };
 });
 afterEach(() => {
 	Object.assign(global.game, savedGame);
@@ -138,6 +143,78 @@ describe("paying the carer's Stock", () => {
 		expect(wait).not.toHaveBeenCalled();
 	});
 
+	// "If you also spend 1 Stock" is the carer's call. At a table where every player owns every sheet,
+	// owning Gwynn does not make Bram's player the one who decides on her Stock: they ask her player.
+	it("asks the carer's player when this client only OWNS the carer, playing someone else", async () => {
+		const receipt = { key: "stock", label: "Stock", vessel: false, lost: 0, remaining: 1 };
+		const alex = player("p-gwynn", "Alex", { character: { id: "gwynn" }, query: vi.fn(async () => receipt) });
+		const robin = player("p-bram", "Robin", { character: { id: "bram" } });
+		global.game.users = usersOf([alex, robin], null);
+		global.game.user = robin;
+		const gwynn = carer({ owner: true, owners: ["p-gwynn", "p-bram"] });
+		expect(spendsCarerStockDirectly(gwynn)).toBe(false);
+		expect(await payHealersArtsStock({ carer: gwynn, patient: { id: "bram", name: "Bram" } })).toEqual(receipt);
+		expect(alex.query).toHaveBeenCalledWith(HEALERS_ARTS_QUERY, expect.objectContaining({ carerId: "gwynn", userId: "p-bram" }), { timeout: HEALERS_ARTS_ASK_MS });
+		expect(gwynn.typedActor.spendStock).not.toHaveBeenCalled();
+	});
+
+	// The same table with nobody assigned: every player owns every sheet, so ownership cannot say whose Blessed
+	// Gwynn is. The patient's player pressing the Recover is not her player while another of her players is here.
+	it("asks another of the carer's players when nobody is assigned and the patient's player only owns her", async () => {
+		const receipt = { key: "stock", label: "Stock", vessel: false, lost: 0, remaining: 1 };
+		const alex = player("p-gwynn", "Alex", { query: vi.fn(async () => receipt) });
+		const robin = player("p-bram", "Robin");
+		global.game.users = usersOf([alex, robin], null);
+		global.game.user = robin;
+		const gwynn = carer({ owner: true, owners: ["p-gwynn", "p-bram"] });
+		const bram = { id: "bram", name: "Bram" };
+		expect(spendsCarerStockDirectly(gwynn, { patient: bram })).toBe(false);
+		expect(await payHealersArtsStock({ carer: gwynn, patient: bram })).toEqual(receipt);
+		expect(alex.query).toHaveBeenCalled();
+		expect(gwynn.typedActor.spendStock).not.toHaveBeenCalled();
+
+		// Gwynn tending her own Recover is her player's call, whoever else owns her.
+		alex.query.mockClear();
+		global.game.user = alex;
+		expect(spendsCarerStockDirectly(gwynn, { patient: gwynn })).toBe(true);
+	});
+
+	// With none of the carer's other players and no GM here, the one pressing is the only one who can decide.
+	it("lets the patient's player decide only when nobody else who plays the carer, nor a GM, is here", () => {
+		const alex = player("p-gwynn", "Alex", { active: false });
+		const robin = player("p-bram", "Robin");
+		const gm = { id: "gm", name: "GM", isGM: true, active: true, query: vi.fn() };
+		global.game.users = usersOf([alex, robin], gm);
+		global.game.user = robin;
+		const gwynn = carer({ owner: true, owners: ["p-gwynn", "p-bram"] });
+		const bram = { id: "bram", name: "Bram" };
+		expect(carerStockAnswerer(gwynn, global.game.users, { asker: robin, patient: bram })).toBe(gm);
+		expect(spendsCarerStockDirectly(gwynn, { patient: bram })).toBe(false);
+		global.game.users = usersOf([alex, robin], null);
+		expect(spendsCarerStockDirectly(gwynn, { patient: bram })).toBe(true);
+		// Unless Robin plays someone else by assignment: then Gwynn is not Robin's to decide for at all.
+		robin.character = { id: "bram" };
+		expect(spendsCarerStockDirectly(gwynn, { patient: bram })).toBe(false);
+		expect(canReachCarerStock(gwynn, { patient: bram })).toBe(false);
+	});
+
+	it("has a GM ask the carer's player when one is online, and spend directly only when none is", async () => {
+		const gm = { id: "gm", name: "GM", isGM: true, active: true, character: null, query: vi.fn() };
+		const alex = player("p-gwynn", "Alex", { query: vi.fn(async () => ({ declined: true })) });
+		global.game.user = gm;
+		global.game.users = usersOf([gm, alex], gm);
+		const gwynn = carer({ owners: ["p-gwynn"] });
+		expect(spendsCarerStockDirectly(gwynn)).toBe(false);
+		expect(await payHealersArtsStock({ carer: gwynn, patient: { id: "bram", name: "Bram" }, sourceKey: "stock" })).toEqual({ declined: true });
+		expect(gwynn.typedActor.spendStock).not.toHaveBeenCalled();
+
+		alex.active = false;
+		expect(spendsCarerStockDirectly(gwynn)).toBe(true);
+		await payHealersArtsStock({ carer: gwynn, patient: { id: "bram", name: "Bram" }, sourceKey: "stock" });
+		expect(gwynn.typedActor.spendStock).toHaveBeenCalledTimes(1);
+		expect(gm.query).not.toHaveBeenCalled();
+	});
+
 	it("is registered as a query", () => {
 		expect(read("stonetop.js")).toContain("CONFIG.queries[HEALERS_ARTS_QUERY] = (data, context) => handleHealersArtsQuery(data, context)");
 	});
@@ -193,6 +270,17 @@ describe("asking the carer's player", () => {
 		vi.spyOn(console, "warn").mockImplementation(() => {});
 		const gwynn = carer({ owner: false, owners: ["p-gwynn"] });
 		expect(await payHealersArtsStock({ carer: gwynn, patient: bram })).toEqual({ declined: true, unanswered: true });
+	});
+
+	// The window's offer and the payment ask one rule: owning the carer, with her player away and no GM, does
+	// not offer a Stock that would then fail to be spent.
+	it("does not offer the Stock to an owner who does not play the carer, with her player away and no GM", async () => {
+		global.game.user = player("p-bram", "Robin", { character: { id: "bram" } });
+		global.game.users = usersOf([player("p-gwynn", "Alex", { active: false, character: { id: "gwynn" } }), global.game.user], null);
+		const gwynn = carer({ owner: true, owners: ["p-gwynn", "p-bram"] });
+		expect(canReachCarerStock(gwynn, { patient: bram })).toBe(false);
+		expect(await payHealersArtsStock({ carer: gwynn, patient: bram, sourceKey: "stock" })).toBeNull();
+		expect(gwynn.typedActor.spendStock).not.toHaveBeenCalled();
 	});
 
 	// The "no one can answer" disabled tick: nobody online owns the carer and no GM is connected.
@@ -347,6 +435,8 @@ describe("the Recover window", () => {
 				hp,
 				computedMaxHp: vi.fn(async () => max),
 				inventoryResourceData: vi.fn((slug, count) => ({ [`flags.stonetop-pwd.inventory.resources.${slug}`]: count })),
+				// What the patient can reach (StonetopCharacter#supplyPurses): every stored use, here.
+				supplyPurses: vi.fn(purpose => supplyPursesFor(flags["inventory.resources"], purpose)),
 				stabilizeOpenWoundsUpdate: vi.fn(() => ({ update: { "system.attributes.wounds": ["stabilized"] }, stabilized: [{ text: "Gashed arm" }] })),
 			},
 		};
@@ -394,6 +484,25 @@ describe("the Recover window", () => {
 		const { sheet, patient } = makeSheet();
 		await sheet._applyRecover({ purse, oldHp: 4, newHp: 8, care: care(gwynn, { stock: true, sourceKey: "stock" }) });
 		expect(patient.update).not.toHaveBeenCalled();
+	});
+
+	// A Vessel tending their own Recover pays the Stock in their own blood (2d4 HP), and that can drop them
+	// to 0 HP and onto Death's Door. "A character disabled this way can't save themselves" (Book I p.240):
+	// the Recover is refused there, and the Stock already spent is named.
+	it("refuses the Recover when paying a Vessel's Stock in HP left the patient dying", async () => {
+		const vessel = { key: "hp", label: "HP", vessel: true, remaining: Infinity };
+		const gwynn = carer({ purses: [vessel] });
+		global.game.actors = new Map([["gwynn", gwynn]]);
+		const { sheet, patient } = makeSheet();
+		gwynn.typedActor.spendStock = vi.fn(async () => {
+			patient.typedActor.canFaceDeathsDoor = true;
+			patient.typedActor.zeroHpMove = { name: "Death's Door" };
+			return { lost: 6 };
+		});
+		await sheet._applyRecover({ purse, care: care(gwynn, { stock: true, sourceKey: "hp" }) });
+		expect(gwynn.typedActor.spendStock).toHaveBeenCalledTimes(1);
+		expect(patient.update).not.toHaveBeenCalled();
+		expect(global.ui.notifications.warn.mock.calls.at(-1)[0]).toContain("Gwynn's Stock was already spent.");
 	});
 
 	it("lists the carers, this character included, with what each can pay", async () => {

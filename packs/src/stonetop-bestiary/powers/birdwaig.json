@@ -30,6 +30,8 @@
     "creatureType": "spirit"
   },
   "prototypeToken": {
+    "width": 2,
+    "height": 2,
     "name": "Birdwaig",
     "actorLink": false,
     "disposition": -1,

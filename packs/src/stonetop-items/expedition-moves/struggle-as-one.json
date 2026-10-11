@@ -3,7 +3,7 @@
   "type": "move",
   "system": {
     "moveType": "expedition",
-    "description": "<p>When you <strong><em>Defy Danger as a group</em></strong>, establish the party's approach and each roll +STAT (per Defy Danger): <strong>on a 6-</strong>, you find yourself in a spot, the GM will describe it or ask you to; <strong>on a 7-9</strong>, you pull your weight; <strong>on a 10+</strong>, you do well enough to get someone else out of a spot, if you can tell us how.</p><p>If you roll a 6- but someone saves you, don't mark XP.</p>",
+    "description": "<p>When you <strong><em>Defy Danger as a group</em></strong>, establish the party's approach and each roll +STAT (per Defy Danger): <strong>on a 6-</strong>, you find yourself in a spot, the GM will describe it or ask you to; <strong>on a 7-9</strong>, you pull your weight; <strong>on a 10+</strong>, you do well enough to get someone else out of a spot, if you can tell us how.</p><p>If you roll a 6- but someone saves you, don't mark XP.</p><p><em>What's a spot? Trouble you have to deal with right now, or it gets ugly: you slip, fall behind, get spotted, get stuck. The GM describes it, or asks you to. (The GM move \"Put someone in a spot\", Book I p.181.)</em></p>",
     "moveResults": {
       "success": {
         "label": "10+",

@@ -7,6 +7,7 @@
 	<label class="stonetop-inv-item-toggle">
 		<input type="checkbox" class="stonetop-inventory-item-check"
 		       data-slug="{{slug}}"
+		       {{#if deletable}}data-write-in="true" data-name="{{name}}"{{/if}}
 		       {{#if checked}}checked{{/if}}
 		       {{#if disabled}}disabled{{/if}}>
 		<span class="stonetop-inv-label">{{name}}</span>

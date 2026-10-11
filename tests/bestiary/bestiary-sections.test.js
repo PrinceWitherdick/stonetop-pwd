@@ -69,8 +69,8 @@ describe("bestiarySectionForFolder", () => {
 });
 
 describe("the shipped bestiary against the browser's facets", () => {
-	it("holds 212 monsters, every one of them in a known section", () => {
-		expect(monsters).toHaveLength(212);
+	it("holds 213 monsters, every one of them in a known section", () => {
+		expect(monsters).toHaveLength(213);
 		const unplaced = monsters
 			.filter(d => !bestiarySectionForFolder(folderNameFor(d)))
 			.map(d => d.name);
@@ -83,7 +83,7 @@ describe("the shipped bestiary against the browser's facets", () => {
 			const key = bestiarySectionForFolder(folderNameFor(d));
 			counts[key] = (counts[key] ?? 0) + 1;
 		}
-		expect(counts).toEqual({ peoples: 35, regions: 67, powers: 82, makers: 28 });
+		expect(counts).toEqual({ peoples: 36, regions: 67, powers: 82, makers: 28 });
 	});
 
 	it("uses only organization values the Numbers chips offer", () => {

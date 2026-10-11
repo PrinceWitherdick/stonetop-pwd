@@ -19,9 +19,9 @@ afterEach(() => {
 
 const load = () => import("../../module/utils/relationship-board.js");
 
-function escape() {
+function escape(target = null) {
 	const ev = {
-		key: "Escape", defaultPrevented: false, stopped: false,
+		key: "Escape", target, defaultPrevented: false, stopped: false,
 		preventDefault() { ev.defaultPrevented = true; },
 		stopPropagation() { ev.stopped = true; },
 	};
@@ -58,5 +58,45 @@ describe("Escape during a drag", () => {
 		endCancellableDrag(() => {});
 		escape();
 		expect(mine).toHaveBeenCalledTimes(1);
+	});
+
+	// A drag started while a "Draw lines" pick holds Escape, then ended: the pick must have it back.
+	it("hands Escape back to the gesture under a drag that has ended", async () => {
+		const { beginCancellableDrag, endCancellableDrag } = await load();
+		const pick = vi.fn();
+		const drag = vi.fn();
+		beginCancellableDrag(pick);
+		beginCancellableDrag(drag);
+		endCancellableDrag(drag);
+		const ev = escape();
+		expect(drag).not.toHaveBeenCalled();
+		expect(pick).toHaveBeenCalledTimes(1);
+		expect(ev.stopped).toBe(true);
+	});
+
+	it("cancels only the latest gesture, once", async () => {
+		const { beginCancellableDrag } = await load();
+		const pick = vi.fn();
+		const drag = vi.fn();
+		beginCancellableDrag(pick);
+		beginCancellableDrag(drag);
+		escape();
+		expect(drag).toHaveBeenCalledTimes(1);
+		expect(pick).not.toHaveBeenCalled();
+		escape();
+		expect(pick).toHaveBeenCalledTimes(1);
+	});
+
+	// A pick holds Escape with no button down; one pressed in another window is that window's.
+	it("lets an Escape go by that the gesture does not claim", async () => {
+		const { beginCancellableDrag } = await load();
+		const pick = vi.fn();
+		const elsewhere = {};
+		beginCancellableDrag(pick, { owns: ev => ev.target !== elsewhere });
+		const ev = escape(elsewhere);
+		expect(pick).not.toHaveBeenCalled();
+		expect(ev.stopped).toBe(false);
+		escape();
+		expect(pick).toHaveBeenCalledTimes(1);
 	});
 });

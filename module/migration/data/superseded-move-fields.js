@@ -126,6 +126,7 @@ export const SUPERSEDED = {
 	"EiXEgOB7s3xWaXJM": {"description":["d946ee9c650d92ba"]}, // Under Your Skin (The Fox)
 	"eKFhwqCpQe28C7S7": {"description":["6371cd805a3ff28c"]}, // Unfettered (The Heavy)
 	"elrB8OZc6zCdvJxq": {"description":["6b8530122bde9601"]}, // Bear Witness (The Judge)
+	"En9E3sIeWpuC2Ly6": {"description":["8dbdca7b7d60cd27"]}, // Struggle as One
 	"enq522wjZRL9OaYs": {"note":["2c1fc72e450b75d7"]}, // Mattock, iron
 	"EOOO0ZMBCnhzgSPQ": {"description":["94f2e7ebf18fa107"]}, // Radiant Countenance (The Lightbearer)
 	"EPoCAJqEoXuV5vYz": {"note":["762684dc50cfe432"]}, // A… spearhead (?), wedged deep into bedrock, shining with eternal starlight
@@ -558,7 +559,7 @@ export const CURRENT_FINGERPRINTS = {
 	"EiXEgOB7s3xWaXJM": "3979c40e5eb2074f",
 	"eKFhwqCpQe28C7S7": "b1ece11a16d016a3",
 	"elrB8OZc6zCdvJxq": "a35f5c169d21254b",
-	"En9E3sIeWpuC2Ly6": "83dfe3e30de91095",
+	"En9E3sIeWpuC2Ly6": "c6c4f7a7020ca248",
 	"eNdjIs9hVLXnGBB1": "5e24dc1170c951b3",
 	"eNo41eoPni6JDWYl": "a13dc3520fe79666",
 	"enq522wjZRL9OaYs": "d4cdfa3d384d365d",

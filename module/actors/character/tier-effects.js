@@ -5,7 +5,9 @@
 //  - Prepare a Welcome's 10+ regains 1 Surprise (combat/battle-holds.js).
 //  - Commune with Aratis's 10+ holds 2 Sanction (roll-boosts.js).
 //  - Wielder of the White Flame's 7+ lights the holy light; Luminous Shield's 6- snuffs it (holy-light.js).
-//  - Defend holds Readiness by tier (combat/defend-readiness.js).
+//  - Defend holds Readiness by tier (combat/defend-readiness.js), and so does a follower ORDERED to Defend
+//    (Book I p.469: "When a PC Orders Followers to Defend and gets a 7+, the follower holds Readiness"),
+//    on the follower's own track, which the order's card names in its record (followerReadiness below).
 //  - Alpha's 10+ has advantage on the next roll against the foes it was aimed at (fight/hero-moves.js).
 //  - Omens of Fate's 7+ loses all Omens, and its 6- holds +1 (destined.js).
 //
@@ -28,14 +30,43 @@ import { shakeNervesOnMiss, setFightState, WE_HAPPY_FEW } from "./fight-states.j
 import { regainSurpriseOnHit, takeBackSurprise, PREPARE_A_WELCOME } from "../../combat/battle-holds.js";
 import { holdSanctionOnHit, releaseSanction, sanctionTrack, COMMUNE_WITH_ARATIS } from "./roll-boosts.js";
 import { LUMINOUS_SHIELD, WIELDER_OF_THE_WHITE_FLAME } from "./holy-light.js";
-import { DEFEND_MOVE } from "../../combat/defend-readiness.js";
+import { DEFEND_MOVE, defendReadinessHold, readinessForTier } from "../../combat/defend-readiness.js";
+import { moveChatCard } from "../../utils/chat.js";
+import { escHtml } from "../../utils/strings.js";
 import { HERO_MOVES, foeKey, recordAlphaOver, forgetAlphaOver } from "../../fight/hero-moves.js";
 import { OMENS_OF_FATE, settleOmensTier } from "./destined.js";
+import { reconcileGivenAdvantage } from "./give-advantage-flow.js";
 
 /** The message flag holding what a roll's tier effects have done, keyed as TIER_EFFECTS is. */
 export const TIER_EFFECTS_FLAG = "tierEffects";
 
 const count = value => Math.max(0, Math.trunc(Number(value) || 0));
+
+/**
+ * A follower ordered to Defend (wave 3 audit FOL-5): bring the follower's Readiness track to what `tier`
+ * holds (1 on a 7-9, 3 on a 10+, none on a 6-; a shield's +1 stays the player's pip), given what this
+ * card raised it to so far. `done` is `{path, prior, set, name}`: the track's flag path under the system
+ * scope, what was held before the roll, and what this card's tier set. Readiness spent since stays spent
+ * (readinessForTier). Resolves to the card's new record. `announce` posts a note when a moved card raises
+ * the pool; the order's own roll posts its own.
+ */
+export async function settleFollowerReadiness(actor, tier, done, { announce = false, scope = SYSTEM_ID } = {}) {
+	if (!actor || !done?.path) return done ?? undefined;
+	const current = count(foundry.utils.getProperty(actor.flags?.[scope] ?? {}, done.path));
+	const prior = count(done.prior);
+	const { next, set } = readinessForTier({ prior, set: done.set ?? prior, current, hold: defendReadinessHold(tier) });
+	if (next !== current) {
+		await actor.update({ [`flags.${scope}.${done.path}`]: next }, { stonetopMove: DEFEND_MOVE });
+		if (announce && next > current) {
+			await globalThis.ChatMessage?.create?.({
+				content: moveChatCard("Defend: Readiness held",
+					`<p><strong>${escHtml(done.name || "Your follower")}</strong> holds <strong>${next}</strong> Readiness.</p>`),
+				speaker: globalThis.ChatMessage?.getSpeaker?.({ actor }),
+			});
+		}
+	}
+	return { ...done, prior, set };
+}
 
 /**
  * Each effect: the moves it belongs to, and `settle(actor, move, tier, done, character, {targets})`, which
@@ -84,6 +115,14 @@ const TIER_EFFECTS = {
 		moves: [WIELDER_OF_THE_WHITE_FLAME, LUMINOUS_SHIELD],
 		settle: (_actor, move, tier, done, character) => character?.settleHolyLightTier?.(move, tier, done) ?? done ?? false,
 	},
+	// A follower's order to Defend: matched by its RECORD, not a move name, since the card is titled for the
+	// follower ("Glaw: Defend"). Settled at the roll by the sheet (_maybeHoldReadinessOnDefend), and here
+	// whenever the card's total moves.
+	followerReadiness: {
+		moves: [],
+		recorded: true,
+		settle: (actor, _move, tier, done) => settleFollowerReadiness(actor, tier, done, { announce: true }),
+	},
 	// `{prior, set}`: the Readiness held before the roll, and what this card's tier raised it to.
 	readiness: {
 		moves: [DEFEND_MOVE],
@@ -129,7 +168,7 @@ export const TIER_EFFECT_MOVES = Object.freeze([...new Set(Object.values(TIER_EF
 export async function settleTierEffects(actor, move, tier, done = null, { character = actor?.typedActor, targets = [] } = {}) {
 	const record = {};
 	for (const [key, effect] of Object.entries(TIER_EFFECTS)) {
-		if (!effect.moves.includes(move)) continue;
+		if (!effect.moves.includes(move) && !(effect.recorded && done?.[key] != null)) continue;
 		const now = await effect.settle(actor, move, tier, done?.[key], character, { targets });
 		// An effect with nothing to keep (an Alpha aimed at nobody) leaves no trace on the card.
 		if (now !== undefined) record[key] = now;
@@ -160,6 +199,14 @@ export async function recordTierEffects(message, record, { scope = SYSTEM_ID } =
  * @param {Actor|null} [options.actor]  the roller (default: the card's speaker)
  */
 export async function reconcileTierEffects(message, total, { actor = undefined, scope = SYSTEM_ID } = {}) {
+	// A held advantage the card's tier gave someone (Everything Burns' 10+): taken back once the card is moved
+	// off that tier. Kept on the card apart from `tierEffects`, since it is pressed after the roll and may go
+	// to another character than the roller (give-advantage-flow.js#reconcileGivenAdvantage).
+	try {
+		await reconcileGivenAdvantage(message, total, { scope });
+	} catch (err) {
+		console.error("Stonetop | taking back the advantage a moved roll card gave failed", err);
+	}
 	const done = message?.getFlag?.(scope, TIER_EFFECTS_FLAG);
 	if (!done || typeof done !== "object" || !Number.isFinite(Number(total))) return false;
 	const roller = actor === undefined ? speakerActor(message) : actor;

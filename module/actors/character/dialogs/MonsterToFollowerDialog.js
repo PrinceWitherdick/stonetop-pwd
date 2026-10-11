@@ -76,7 +76,8 @@ export class MonsterToFollowerDialog extends ConvertToFollowerDialog {
 	async _finish() {
 		this._captureCommonFields(this.element?.[0]);
 		const data = followerFromMonster(
-			{ name: this._monster?.name, system: this._monster?.system, moves: this._monsterMoves(), uuid: this._monster?.uuid, img: this._monster?.img },
+			// `flags` carries the portrait's frame (documentPortraitFrame reads it there).
+			{ name: this._monster?.name, system: this._monster?.system, moves: this._monsterMoves(), uuid: this._monster?.uuid, img: this._monster?.img, flags: this._monster?.flags },
 			{
 				tags: this._addedTags, cost: this._cost, pronoun: this._pronoun,
 				isGroup: this._isGroup, size: this._buildGroupSize(),

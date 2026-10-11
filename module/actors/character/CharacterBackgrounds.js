@@ -49,6 +49,12 @@ export class CharacterBackgrounds {
 		await this._flags.setFlag("setupResources", { ...this.setupResources, [key]: value });
 	}
 
+	// setSetupResource as an `actor.update()` fragment, for a caller putting it in one write with other changes
+	// (StonetopCharacter#markDebility marking Auspicious Birth's circle beside the HP it buys).
+	setupResourceData(key, value) {
+		return this._flags.updateData("setupResources", { ...this.setupResources, [key]: value });
+	}
+
 	async markAction(slug) {
 		const current = this.markedActions;
 		if (current.includes(slug)) return;

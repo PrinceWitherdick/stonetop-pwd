@@ -6,12 +6,15 @@ import {
 	bathOfHealingChoices, bathPickCount, validateBathPicks, bathHealing, shadowDamageFormula, invocationEffectsFor,
 	bathPatientView, bathWindowContent, readBathForm, squareBathForm, chooseBathPatient, applyBath, healPatient,
 	handleBathQuery, bathResultHtml, settleBathOfHealingLight, settleShadowDamage, askBathPicks,
-	isBathPatient, bathHpOnly, partyFollowers, restoreActorHp, bathGroupFor, chooseBathMember,
+	isBathPatient, bathHpOnly, partyFollowers, restoreActorHp, restoreFollowerCardHp, bathGroupFor, chooseBathMember,
 } from "../../../module/actors/character/invocation-apply.js";
 import { rosterGroupFor } from "../../../module/fight/group-hits.js";
 import { stubAsk } from "../../fakes/confirm.js";
 import { invokeCardReduced, invokeCardChoosesConsequence } from "../../../module/actors/character/invoke-consequences.js";
 import { buildLiveCharacter } from "../../fakes/LiveCharacter.js";
+
+// Loaded at collection: the sheet's cold import is heavy enough to blow a test's 5s budget under a full parallel run.
+const { createStonetopCharacterSheetClass } = await import("../../../module/actors/character/StonetopCharacterSheet.js");
 
 // R7: the buttons two Invocations grow on the Invoke the Sun God card that names them. Bath of Healing
 // Light heals a patient, Go Back to the Shadow rolls at the spirits. And the holy relics on the Wielder
@@ -626,6 +629,37 @@ describe("a follower's card heals with their NPC", () => {
 		expect(kyra.update).toHaveBeenCalledWith({ "flags.stonetop-pwd.customFollowers.maeve.hpCurrent": 4 }, MOVE);
 	});
 
+	// Wave 3 audit FOL-1: while a follower has an NPC, its HP is theirs and the box mirrors it, so the
+	// card is never written beside it (follower-hp.js#setFollowerHp).
+	describe("a follower whose card is linked to an NPC", () => {
+		let savedResolve;
+		beforeEach(() => { savedResolve = globalThis.fromUuidSync; });
+		afterEach(() => { globalThis.fromUuidSync = savedResolve; });
+
+		it("heals the NPC once as the patient, and leaves the card's box to mirror it", async () => {
+			const kyra = master({ followers: { maeve: { name: "Maeve", actorUuid: "Actor.maeve" } }, box: { max: 4, current: 1 } });
+			const maeve = { ...npcPatient({ name: "Maeve", hp: 2, max: 6 }), documentName: "Actor" };
+			maeve.update = vi.fn(async changes => { maeve.system.attributes.hp.value = changes["system.attributes.hp.value"]; });
+			globalThis.fromUuidSync = uuid => (uuid === "Actor.maeve" ? maeve : null);
+			const out = await applyBath(maeve, [pick("hp5")], { cardFor: onCard(kyra) });
+			expect(maeve.update).toHaveBeenCalledTimes(1);
+			expect(maeve.update).toHaveBeenCalledWith({ "system.attributes.hp.value": 6 }, MOVE);
+			expect(kyra.update).not.toHaveBeenCalled();
+			expect(kyra.sheet.followerCardHp).not.toHaveBeenCalled();
+			expect(out).not.toHaveProperty("card");
+			expect(out.hp).toEqual({ gain: 5, from: 2, to: 6 });
+		});
+
+		it("heals the card's NPC, not its box, when the card's follower is raised from elsewhere", async () => {
+			const kyra = master({ followers: { maeve: { name: "Maeve", actorUuid: "Actor.maeve" } }, box: { max: 4, current: 1 } });
+			const maeve = npcPatient({ name: "Maeve", hp: 3, max: 6 });
+			const out = await restoreFollowerCardHp({ character: kyra, ftype: "custom", slug: "maeve" }, 5, { link: () => maeve });
+			expect(out).toEqual({ gain: 5, from: 3, to: 6 });
+			expect(maeve.update).toHaveBeenCalledWith({ "system.attributes.hp.value": 6 }, MOVE);
+			expect(kyra.update).not.toHaveBeenCalled();
+		});
+	});
+
 	it("heals here only when this client can write the character too, and otherwise asks the GM's client", async () => {
 		const mine = master();
 		const maeve = npcPatient({ name: "Maeve" });
@@ -677,7 +711,6 @@ describe("a follower's card heals with their NPC", () => {
 			activateListeners() {}
 			render = vi.fn();
 		};
-		const { createStonetopCharacterSheetClass } = await import("../../../module/actors/character/StonetopCharacterSheet.js");
 		actor.sheet = new (createStonetopCharacterSheetClass(Base))();
 		// An unset HP is a full box, as the tab draws it.
 		await expect(actor.sheet.followerCardHp("custom", "tovia")).resolves.toEqual({ max: 3, current: 3 });

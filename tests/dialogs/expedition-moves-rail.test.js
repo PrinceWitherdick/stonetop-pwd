@@ -465,13 +465,13 @@ describe("the rail's die, as it behaves", () => {
 		expect(lit()).toHaveLength(0);
 	});
 
-	// Public, to the whole table, the same as every other GM move card (see the header of
-	// gm-toolkit/random-gm-move.js). Asserted as the absence of the key, because that is what
-	// the poster must not start filling in again.
-	it("posts to the whole table, not to the GMs alone", async () => {
+	// Whispered to the GMs, the same as every other GM move card, with the button that shares it
+	// (see the header of gm-toolkit/random-gm-move.js).
+	it("whispers the card to the GMs, with a Share with Players button", async () => {
 		const { button } = fakeRail({ hidden: true });
 		await dialog()._drawExplorationMove(button);
-		expect(posted[0]).not.toHaveProperty("whisper");
+		expect(posted[0].whisper).toEqual(["gm1", "gm2"]);
+		expect(posted[0].content).toContain("stonetop-gm-move-share");
 	});
 
 	// Seven moves: "Bar the way" twice running is a one-in-seven event, not a curiosity, and it

@@ -74,6 +74,11 @@ export function escapeRegExp(v) {
  */
 export function sign(n) { return n >= 0 ? `+${n}` : `${n}`; }
 
+/** "+1", "−1", "+0": `sign` with a real minus (U+2212), as the steading's prose prints a figure. */
+export function signed(n) {
+	return `${n >= 0 ? "+" : "−"}${Math.abs(n)}`;
+}
+
 /**
  * A pattern that matches `word` ONLY as a whole word, under Unicode letter boundaries.
  *
@@ -112,6 +117,14 @@ export function joinNames(names) {
 	if (list.length <= 1) return list[0] ?? "";
 	if (list.length === 2) return `${list[0]} & ${list[1]}`;
 	return `${list.slice(0, -1).join(", ")} & ${list[list.length - 1]}`;
+}
+
+// joinNames undone: "A, B & C" back to ["A","B","C"], each part trimmed, blanks dropped ("" is []).
+// A name with its own ", " or " & " in it is cut there too, so nothing new should be stored joined
+// and read back with this: keep the list. Its one caller reads a held promise written before its
+// names were stored as a list (StonetopCharacter.js#heldSources).
+export function splitNames(text) {
+	return String(text ?? "").trim().split(/, | & /).map(part => part.trim()).filter(Boolean);
 }
 
 // Collapse rich text (an HTML / ProseMirror field) to a single plain-text line for a tooltip or

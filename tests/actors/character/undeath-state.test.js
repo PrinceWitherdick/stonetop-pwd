@@ -108,9 +108,11 @@ describe("isUndeathCard / isZeroHpMoveCard", () => {
 		expect(isZeroHpMoveCard(null)).toBe(false);
 	});
 
-	it("keeps Burn Brightly and the GM's Shift off an insert move's card", () => {
+	it("keeps Burn Brightly and the GM's Shift off every 0-HP move's card, Death's Door's included", () => {
 		const main = readRepo("stonetop.js");
-		expect(main).toMatch(/if \(!alreadyBurned && \(!canAfford \|\| isZeroHpMoveCard\(message\)\)\) return;/);
-		expect(main).toMatch(/const showShift = game\.user\.isGM && getSetting\("chatShiftButtons"\) && !isUndeathCard\(message\);/);
+		expect(main).toMatch(/if \(!alreadyBurned\) \{[^}]*?if \(isZeroHpMoveCard\(message\)\) return;/);
+		// Death's Door's window writes its tier the moment it lands and never reads the card again, so a GM's
+		// Shift there relabelled the card and left the sheet on the old tier (audit DD-2).
+		expect(main).toMatch(/const showShift = game\.user\.isGM && getSetting\("chatShiftButtons"\) && !isZeroHpMoveCard\(message\);/);
 	});
 });

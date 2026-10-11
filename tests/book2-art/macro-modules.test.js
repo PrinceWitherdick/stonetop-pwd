@@ -56,11 +56,35 @@ describe("the timeline the test-fixtures macro borrows", () => {
 		const loaded = await MACRO_MODULES.timeline();
 		expect(loaded.mutateTrack).toBe(timelineStore.mutateTrack);
 		for (const name of ["findTrackPage", "trackForActor", "readEntries", "upsertByKey", "patchEntry", "removeEntry",
-			"seasonLabel", "seasonEntryBody", "expeditionMilestone", "siteVisitMilestone"]) {
+			"seasonLabel", "seasonEntryBody", "expeditionMilestone", "siteVisitMilestone",
+			// A season's shortfall note, worded and keyed as the system writes one (user, 2026-10-10).
+			"isShortfallRow", "seasonShortfallKey", "shortfallParagraph", "shortfallLine", "disasterPickLine",
+			"consequenceBoxRange", "consequenceBoxLabel"]) {
 			expect(typeof loaded[name], name).toBe("function");
 		}
+		expect(loaded.WINTER_SHORTFALL_TITLE).toBe("Winter's shortfall");
 		// The cleanup keeps the journal holding the world's custom tags.
 		expect(loaded.TIMELINE_TAGS_FLAG).toBe("timelineTags");
+	});
+
+	// The seeded seasons carry their +Fortunes roll and two shortfall lines, through those builders.
+	it("seeds the seasons' rolls and shortfalls through the system's own builders", () => {
+		expect(FIXTURES).toContain("fortunesTier: t.roll");
+		expect(FIXTURES).toContain("tl.seasonShortfallKey(season, year)");
+		expect(FIXTURES).toContain("tl.shortfallLine(");
+		expect(FIXTURES).toContain("tl.disasterPickLine(");
+		expect(FIXTURES.split("shortfall: {").length - 1).toBe(2);
+		// And every new kind Stonetop and its characters record (user, 2026-10-10), keyed as the live recorders key them.
+		for (const source of ["improvement", "disaster", "threat", "treasure"]) expect(FIXTURES).toContain(`source: "${source}"`);
+		expect(FIXTURES).toContain("key: `threat:${threat.id}:portent:${m.portent.index}`");
+		// And a doom: the throwaway fourth threat's, ticked on its card.
+		expect(FIXTURES).toContain("key: `threat:${doomed.id}:doom`");
+		expect(FIXTURES).toMatch(/impendingDoom: \{ text: "The raiders come down[^"]*", done: true \}/);
+		// The deeds, picks and Consequences, MADE on the characters through their own writers, and every key
+		// shape the live recorders write.
+		for (const made of ["wbhBecameHero", "destiny-fulfilled", "witnessOath", "setOathBroken", "setArcanumBoxChecked", "sectionOptions"]) expect(FIXTURES, made).toContain(made);
+		for (const key of ["deed:hero", "deed:destiny", "condemn:", "oath:", ":broken", ":consequence:", "postdeath:", "improvement:${i.slug}:lost:"]) expect(FIXTURES, key).toContain(key);
+		expect(FIXTURES).toContain('background: "destined"');
 	});
 
 	it("is taken from macroModules rather than imported by path", () => {

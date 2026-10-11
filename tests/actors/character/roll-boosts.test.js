@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { Window } from "happy-dom";
 import {
-	boostOffers, takeBoost, handleBoostQuery, boostNote, actsForHelper, isBoostableRoll,
+	boostOffers, takeBoost, handleBoostQuery, boostNote, actsForHelper, isBoostableRoll, wireRollBoosts,
+	deathsDoorAwaitsPlusOnes, deathsDoorPlusOnes, onUpdateActorDoorPlusOnes,
 	blessingHeld, holdBlessing, shareBlessing, handleBlessingQuery,
 	BOOSTS_FLAG, BLESSING_FLAG, BLESSING_QUERY, CHRONICLER, COMMUNE_WITH_ARATIS, MANY_HANDS, PIETY,
 } from "../../../module/actors/character/roll-boosts.js";
@@ -119,11 +121,126 @@ describe("who sees which button", () => {
 		expect(isBoostableRoll(card())).toBe(true);
 	});
 
-	it("offers nothing on Death's Door's card: its window has already settled the tier", () => {
-		const message = card();
-		message.flags[SCOPE].rolled = { move: ZERO_HP_MOVES.null.name };
-		expect(isBoostableRoll(message)).toBe(false);
-		expect(offersFor({ message })).toEqual([]);
+	// PB2-1 (the user's ruling): Death's Door is a roll like any other (Book I p.245), so its card takes the +1s
+	// while its window still waits on the tier, which is exactly while the roller's marker names the card.
+	describe("Death's Door's card", () => {
+		let savedActors;
+		let dying;
+		const doorCard = () => {
+			const message = card();
+			message.flags[SCOPE].rolled = { move: ZERO_HP_MOVES.null.name };
+			message.speaker = { actor: "fox" };
+			message.logged = true;
+			return message;
+		};
+		const marker = (over = {}) => ({ userId: "u-fox", nonce: "n1", messageId: "msg1", total: 8, tier: "partial", ...over });
+		beforeEach(() => {
+			dying = { ...fox, flags: { [SCOPE]: { deathsDoorRolling: marker() } } };
+			savedActors = game.actors;
+			game.actors = { get: id => (id === "fox" ? dying : null), contents: [dying] };
+		});
+		afterEach(() => { game.actors = savedActors; });
+
+		it("takes Diligence and Many Hands while its window waits on the tier", () => {
+			const message = doorCard();
+			expect(deathsDoorAwaitsPlusOnes(message)).toBe(true);
+			expect(isBoostableRoll(message)).toBe(true);
+			expect(offersFor({ message, roller: dying })).toEqual(["diligence:Aeron", "manyHands:Aeron"]);
+		});
+
+		it("takes nothing once the tier has landed (no marker), on a 10+, or with the marker naming another card", () => {
+			const message = doorCard();
+			dying.flags[SCOPE] = {};
+			expect(isBoostableRoll(message)).toBe(false);
+			expect(offersFor({ message, roller: dying })).toEqual([]);
+			dying.flags[SCOPE] = { deathsDoorRolling: marker({ tier: "success" }) };
+			expect(isBoostableRoll(message)).toBe(false);
+			dying.flags[SCOPE] = { deathsDoorRolling: marker({ messageId: "other" }) };
+			expect(isBoostableRoll(message)).toBe(false);
+			// The window's own word covers the moment before its marker names the card.
+			expect(isBoostableRoll(message, SCOPE, { doorOpen: true })).toBe(true);
+		});
+
+		it("is open from the moment its card exists: the marker's nonce is the one the card is stamped with", () => {
+			const message = doorCard();
+			message.flags[SCOPE].deathsDoorRoll = "n1";
+			// Claimed, the dice down, the card posted, but the marker not yet naming it.
+			dying.flags[SCOPE] = { deathsDoorRolling: marker({ messageId: null, total: null, tier: null }) };
+			expect(deathsDoorAwaitsPlusOnes(message)).toBe(true);
+			// Another roll's nonce is another roll.
+			dying.flags[SCOPE] = { deathsDoorRolling: marker({ messageId: null, nonce: "n2", tier: null }) };
+			expect(deathsDoorAwaitsPlusOnes(message)).toBe(false);
+		});
+
+		it("is shut on a 10+ from the first, read off the card until the marker has the tier", () => {
+			const message = doorCard();
+			message.flags[SCOPE].deathsDoorRoll = "n1";
+			message.rolls = [{ total: 11, formula: "2d6+2" }];
+			dying.flags[SCOPE] = { deathsDoorRolling: marker({ messageId: null, total: null, tier: null }) };
+			expect(deathsDoorAwaitsPlusOnes(message)).toBe(false);
+		});
+
+		it("keeps drawing the +1s it took once its tier has landed", () => {
+			const message = doorCard();
+			message.flags[SCOPE][BOOSTS_FLAG] = [{ source: "diligence", by: "Actor.judge", name: "Aeron" }];
+			dying.flags[SCOPE] = {};   // landed: the marker is gone
+			const html = new Window().document.createElement("div");
+			// The card's own Conditions row is where the notes go (drawBoostNotes).
+			html.innerHTML = MOVE_CARD.replace("</section>", `<div class="cell--chat"></div></section>`);
+			wireRollBoosts(message, html, {}, { user: player("judge") });
+			expect(html.querySelectorAll(".stonetop-roll-boost-note")).toHaveLength(1);
+			expect(html.querySelector(".stonetop-roll-boost-btn")).toBeNull();
+		});
+
+		it("refuses a +1 pressed on a stale button once the tier has landed, and spends nothing", async () => {
+			const aeron = judge();
+			const message = doorCard();
+			dying.flags[SCOPE] = {};
+			const deps = { shiftRoll: vi.fn(), cardFlavor: vi.fn(f => f) };
+			expect(await takeBoost(message, { source: "diligence", helper: aeron }, deps)).toBe(false);
+			expect(aeron.tracks[CHRONICLER]).toBe(2);
+			expect(deps.shiftRoll).not.toHaveBeenCalled();
+		});
+
+		it("tells the window whether ANYONE could still add one, and which this user presses", () => {
+			const message = doorCard();
+			dying.flags[SCOPE] = {};   // before the marker names it: the window's own word is enough
+			const helpers = [judge()];
+			const theirs = deathsDoorPlusOnes(message, dying, { user: player("fox"), helpers, ownersOf: ownersOf() });
+			expect(theirs.any).toBe(true);
+			expect(theirs.mine).toEqual([]);
+			const mine = deathsDoorPlusOnes(message, dying, { user: player("judge"), helpers, ownersOf: ownersOf() });
+			expect(mine.mine.map(o => o.source)).toEqual(["diligence", "manyHands"]);
+			expect(deathsDoorPlusOnes(message, dying, { user: player("fox"), helpers: [], ownersOf: ownersOf() }).any).toBe(false);
+		});
+
+		// The window waits on a +1 only someone connected could press: the Judge's player, or a GM standing in.
+		it("does not wait on a helper nobody online can press for", () => {
+			const message = doorCard();
+			const helpers = [judge()];
+			const nobody = actor => [{ id: `u-${actor.id}`, isGM: false, active: false }, { id: "u-gm", isGM: true, active: false }];
+			expect(deathsDoorPlusOnes(message, dying, { user: player("fox"), helpers, ownersOf: nobody }).any).toBe(false);
+			// A GM online stands in for the absent player (actsForHelper), so the +1 can still be pressed.
+			expect(deathsDoorPlusOnes(message, dying, { user: player("fox"), helpers, ownersOf: ownersOf(false) }).any).toBe(true);
+		});
+
+		it("redraws that character's Door cards when the marker moves, and nothing else", () => {
+			const door = doorCard();
+			const other = card();
+			other.speaker = { actor: "fox" };
+			other.logged = true;
+			const undrawn = doorCard();
+			undrawn.logged = false;
+			const redraw = vi.fn();
+			onUpdateActorDoorPlusOnes(dying, { flags: { [SCOPE]: { deathsDoorRolling: marker() } } }, { messages: [other, undrawn, door], redraw });
+			expect(redraw.mock.calls.map(c => c[0])).toEqual([door]);
+			redraw.mockClear();
+			onUpdateActorDoorPlusOnes(dying, { flags: { [SCOPE]: { "-=deathsDoorRolling": null } } }, { messages: [door], redraw });
+			expect(redraw).toHaveBeenCalledTimes(1);
+			redraw.mockClear();
+			onUpdateActorDoorPlusOnes(dying, { system: { attributes: { hp: { value: 0 } } } }, { messages: [door], redraw });
+			expect(redraw).not.toHaveBeenCalled();
+		});
 	});
 
 	// B9: Undying's and Dark Succor's windows apply the tier the dice gave, so a +1 on the card afterwards
@@ -180,6 +297,25 @@ describe("taking a +1", () => {
 		const d = deps();
 		await takeBoost(message, { source: "diligence", helper: aeron }, d);
 		expect(await takeBoost(message, { source: "diligence", helper: aeron }, d)).toBe(false);
+		expect(aeron.tracks[CHRONICLER]).toBe(1);
+		expect(message.rolls[0].total).toBe(9);
+	});
+
+	// The pip is spent before the card is written; a write that never lands pays it back.
+	it("pays the Diligence back when the +1 never reaches the card", async () => {
+		const aeron = judge();
+		const message = card();
+		message.update = vi.fn(async () => { throw new Error("the card is gone"); });
+		await expect(takeBoost(message, { source: "diligence", helper: aeron }, deps())).rejects.toThrow("the card is gone");
+		expect(aeron.tracks[CHRONICLER]).toBe(2);
+	});
+
+	// But a +1 that landed keeps its spend, though something after the write (the tier effects) threw.
+	it("keeps the spend when the +1 landed and what follows it throws", async () => {
+		const aeron = judge();
+		const message = card();
+		const d = { ...deps(), afterShift: vi.fn(async () => { throw new Error("tier effects"); }) };
+		await expect(takeBoost(message, { source: "diligence", helper: aeron }, d)).rejects.toThrow("tier effects");
 		expect(aeron.tracks[CHRONICLER]).toBe(1);
 		expect(message.rolls[0].total).toBe(9);
 	});
@@ -291,6 +427,14 @@ describe("Piety's Blessing on a roll card", () => {
 		expect(offersFor({ message, roller: wren, helpers: [wren], user: player("fox") })).toEqual([]);
 		expect(offersFor({ roller: wren, helpers: [wren], user: player("fox") })).toEqual([]);
 		expect(await takeBoost(card(), { source: "blessing", helper: wren }, deps())).toBe(false);
+	});
+
+	it("gives the Blessing back when the +1 never reaches the card", async () => {
+		const wren = blessedFox();
+		const message = card();
+		message.update = vi.fn(async () => { throw new Error("the card is gone"); });
+		await expect(takeBoost(message, { source: "blessing", helper: wren }, deps())).rejects.toThrow("the card is gone");
+		expect(blessingHeld(wren, SCOPE)).toBe(1);
 	});
 
 	it("spends the Lightbearer's own Blessing off Piety's pip", async () => {

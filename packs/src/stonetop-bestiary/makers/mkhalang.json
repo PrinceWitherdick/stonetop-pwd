@@ -31,6 +31,8 @@
     "creatureType": "spirit-construct"
   },
   "prototypeToken": {
+    "width": 3,
+    "height": 3,
     "name": "Mkhalang",
     "actorLink": false,
     "disposition": -1,

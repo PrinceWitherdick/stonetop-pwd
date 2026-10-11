@@ -148,10 +148,16 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 		// Move" / Moves-tab flows use, so opening it from the sidebar reopens the editor
 		// pre-filled. Arcana and legacy non-custom stubs fall through to the normal readout.
 		// Editing writes back to this world Item via item.update.
+		//
+		// A WORLD item its viewer may write only, as the gear hand-off below: a player holding a world
+		// move at Observer reads its card instead of an editor whose Save would be refused, and a copy
+		// on a character is the sheet's to edit, behind the custom-move authoring gate.
 		_isCustomMoveHandoff() {
 			return this.item?.type === "move"
 				&& this.item?.system?.moveType !== "arcanum"
 				&& !!this.item?.flags?.[SYSTEM_ID]?.custom
+				&& !this.item.parent
+				&& !!this.item.isOwner
 				&& !isInCompendium(this.item);
 		}
 

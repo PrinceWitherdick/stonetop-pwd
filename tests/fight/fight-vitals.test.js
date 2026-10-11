@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { combatantVitals, vitalsLine, followerRoster, fightVitalsKey } from "../../module/fight/fight-vitals.js";
+import { combatantVitals, combatantReminders, vitalsLine, followerRoster, fightVitalsKey } from "../../module/fight/fight-vitals.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 
 // The numbers on a Fight tab row: HP, armor, and how many of a group follower are standing.
@@ -31,6 +31,23 @@ describe("fight row numbers", () => {
 		expect(followerRoster(crewToken({ characterUuid: "Actor.gone", ftype: "crew" }), { resolve })).toBeNull();
 		expect(followerRoster({ actor: { flags: {} } }, { resolve })).toBeNull();
 		expect(followerRoster(crewToken(), { resolve: () => { throw new Error("embedded"); } })).toBeNull();
+	});
+
+	it("carries a character's gear tags and reminders, and nobody else's", () => {
+		const hero = { id: "cHero", actor: { type: "character", system: { attributes: { hp: { value: 5, max: 10 }, armor: { value: 2 }, gearTags: [{ tag: "warm", items: ["Cloak"] }] }, reminders: ["Owes Gwen"] } } };
+		expect(combatantReminders(hero).map(c => c.label)).toEqual(["Warm", "Owes Gwen"]);
+		expect(combatantReminders({ actor: { type: "monster", system: { reminders: ["x"] } } })).toEqual([]);
+	});
+
+	it("changes its redraw key when a character's reminders change", () => {
+		const hero = { id: "cHero", actor: { type: "character", system: { attributes: { hp: { value: 5, max: 10 }, armor: { value: 2 }, gearTags: [] }, reminders: [] } } };
+		const combat = { combatants: [hero] };
+		const before = fightVitalsKey(combat, { resolve });
+		hero.actor.system.attributes.gearTags = [{ tag: "cumbersome", items: ["Hauberk"] }];
+		const withTag = fightVitalsKey(combat, { resolve });
+		expect(withTag).not.toBe(before);
+		hero.actor.system.reminders = ["Reeks of smoke"];
+		expect(fightVitalsKey(combat, { resolve })).not.toBe(withTag);
 	});
 
 	it("changes its redraw key when a crew member falls", () => {

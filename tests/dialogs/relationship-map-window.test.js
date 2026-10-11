@@ -1306,7 +1306,7 @@ describe("what a portrait says when it is rested on", () => {
 	// one. The two tooltips that already end in a full stop must not collect a second.
 	it("puts a full stop between the two, and only where there is not one already", () => {
 		expect(tooltips().nobody).toBe(
-			"The Miller. Right-click to see the delete button. Shift-click to select several people and move them together.",
+			"The Miller. Right-click to see the delete button. Shift-click to select several people and move them together. Alt-drag to draw a line from them.",
 		);
 		expect(tooltips().elena).not.toContain("..");
 	});
@@ -1316,6 +1316,13 @@ describe("what a portrait says when it is rested on", () => {
 	it("names the Shift-click beside it, and only to a reader who can edit", () => {
 		expect(tooltips().elena).toContain("Shift-click");
 		expect(tooltips({ isOwner: false }).elena).not.toContain("Shift-click");
+	});
+
+	// AND THE ALT-DRAG THAT DRAWS A LINE OUT OF A FACE (user, 2026-10-07), the same kind of hidden
+	// gesture, named to the same readers.
+	it("names the Alt-drag beside it, and only to a reader who can edit", () => {
+		expect(tooltips().elena).toContain("Alt-drag");
+		expect(tooltips({ isOwner: false }).elena).not.toContain("Alt-drag");
 	});
 
 	// AND NOT ON A BOARD THIS READER MAY ONLY LOOK AT, where the press does nothing: the trash can

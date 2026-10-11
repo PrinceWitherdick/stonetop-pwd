@@ -133,8 +133,28 @@ describe("StonetopSteading", () => {
 			  // No live actor resolves here, so the stored snapshot path stands in and there is
 			  // no frame to apply. imgStyle is present-and-empty rather than absent, so the
 			  // template's {{#if imgStyle}} has something definite to test.
-			  imgStyle: "" },
+			  imgStyle: "",
+			  // Nor any gear tags or typed reminders to keep in mind (gear-reminders.js).
+			  reminders: [] },
 		]);
+	});
+
+	it("carries a player's gear tags and typed reminders for the GM to keep in mind", async () => {
+		const hero = {
+			id: "hero", type: "character", name: "Wren",
+			system: { attributes: { gearTags: [{ tag: "cumbersome", items: ["Hauberk"] }] }, reminders: ["Owes Gwen a favor"] },
+		};
+		const prevActors = game.actors;
+		game.actors = { get: (id) => (id === "hero" ? hero : null), filter: (fn) => [hero].filter(fn) };
+		try {
+			const actor = makeSteadingActor({
+				steadingFlags: { players: [{ id: "hero", uuid: "Actor.hero", name: "Wren", img: "wren.webp", checked: true }] },
+			});
+			const snapshot = await new StonetopSteading(actor).buildSnapshot();
+			expect(snapshot.players[0].reminders.map(c => c.label)).toEqual(["Cumbersome", "Owes Gwen a favor"]);
+		} finally {
+			game.actors = prevActors;
+		}
 	});
 
 	it("names a player by their playbook, but keeps it out of the Occupation column", async () => {

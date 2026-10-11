@@ -39,6 +39,7 @@ import { askHorsesFromHerd, herdHorsesLabel, herdHorsesIn, herdHorsesOnLine } fr
 import { openReturnTriumphant } from "../actors/steading/return-triumphant.js";
 import { STEADING_MOVE, improvementQuestions, askedAdvantageAnswers, herdCountAnswer } from "../actors/steading/improvement-rolls.js";
 import { settleSteadingRoll } from "../actors/steading/steading-roll.js";
+import { requisitionMissCostAction } from "../actors/steading/steading-card-actions.js";
 import { worldLogisticsNames } from "../actors/character/logistics.js";
 import { assetTakenLabel } from "../utils/requisition-asset.js";
 import { getPlayerCharacters } from "../utils/playbook-actors.js";
@@ -946,7 +947,7 @@ export class ExpeditionDialog extends StepperDialog {
 	}
 
 	/**
-	 * Draw one exploration move at random, land the light on it, and post it to the table.
+	 * Draw one exploration move at random, land the light on it, and post it to the GMs.
 	 *
 	 * The rail lists the same seven moves off the same table as the GM Toolkit's Exploration
 	 * group, so it presses the same drawer (gm-move-drawer.js) — the beat order, the
@@ -955,9 +956,10 @@ export class ExpeditionDialog extends StepperDialog {
 	 * mostly is: the party has just walked into something, the table is looking at the GM, and
 	 * seven moves have gone to soup.
 	 *
-	 * WHISPERED, never public, for the reason written up in random-gm-move.js: naming the move
-	 * announces the trick before it is played. The card carries the move's gloss, one of the
-	 * book's examples and the page.
+	 * WHISPERED to the GMs until shared, for the reason written up in random-gm-move.js: naming
+	 * the move announces the trick before it is played, so the GM reads it first and its Share
+	 * with Players button makes it public. The card carries the move's gloss, one of the book's
+	 * examples and the page.
 	 *
 	 * The speaker is the USER's, not an actor's — a dialog speaks for whoever opened it, where
 	 * the toolkit speaks as the toolkit actor.
@@ -1806,6 +1808,10 @@ export class ExpeditionDialog extends StepperDialog {
 			resultTable: _REQ_RESULT,
 			missCountsAsPartial: terms.missAsPartial,
 			conditionNotes: terms.conditionNotes,
+			// The 6-'s "reduce Fortunes by 1", a button on the card like the steading's own Requisition
+			// (actors/steading/steading-card-actions.js), spoken for the steading so the button finds it.
+			tierActions: { failure: requisitionMissCostAction() },
+			actor: found?.actor ?? null,
 		});
 		// Spent once the roll it bought is made, and not before.
 		await terms.spend();

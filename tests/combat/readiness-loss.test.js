@@ -137,10 +137,11 @@ describe("droppedHoldingReadiness", () => {
 	});
 
 	// Unstoppable: "When you are reduced to 0 HP in battle, you can keep fighting." Still fighting is
-	// still defending, until they roll Death's Door.
+	// still defending, until they roll Death's Door. In battle: the drop stamped it (hooks/DeathsDoorPrompt.js).
 	it("not a Heavy who fights on at 0 HP with Unstoppable", () => {
 		const bram = hero("bram", 2, { hp: 0 });
 		bram.flags[SYSTEM_ID].deathsDoor = "dying";
+		bram.flags[SYSTEM_ID].unstoppableFighting = true;
 		bram.items = [{ type: "move", name: "Unstoppable", flags: {} }];
 		expect(droppedHoldingReadiness(bram, { system: { attributes: { hp: { value: 0 } } } })).toBe(false);
 		bram.items[0].flags = { [SYSTEM_ID]: { learned: false } };

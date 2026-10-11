@@ -1,4 +1,4 @@
-import {afterEach, describe, expect, it} from "vitest";
+import {afterEach, describe, expect, it, vi} from "vitest";
 import {CharacterSnapshot} from "../../../module/model/CharacterSnapshot.js";
 import {OutfitItemBuilder} from "../../../module/model/OutfitItem.js";
 import {FakePlaybookRepository} from "../../fakes/FakePlaybookRepository.js";
@@ -1013,9 +1013,30 @@ describe("buildSnapshot — inventory.outfit", () => {
 		const snap = await new TestCharacterBuilder(actor)
 			.withInventoryRepo(new FakeInventoryRepository([makeOutfitItem({slug: "big-load", weight: 6})]))
 			.build().buildSnapshot();
-		// The 9-◇ track never collapses: only 3 fit under the cap (so 3 stay filled), but
-		// the row still shows all 9 — the rest render as empty ◇ rather than vanishing.
-		expect(snap.inventory.outfit.regularPool).toMatchObject({current: 3, max: 9});
+		// The 9-◇ track never collapses, and the reserve reads as stored: weight gained on top of
+		// it is load past heavy, never undefined ◇ quietly swallowed (Book I p.327).
+		expect(snap.inventory.outfit.regularPool).toMatchObject({current: 7, max: 9});
+		expect(snap.inventory.outfit.load.totalMarks).toBe(13);
+		expect(snap.inventory.outfit.load.selected).toBe("overloaded");
+	});
+
+	// Book I p.327: "If they want to carry 10 ◇ or more...". Provisions marked in the field land on
+	// top of what was Outfitted; a reserve clamped under heavy used to eat them, so the sheet read
+	// heavy at 9 with 10 ◇ marked.
+	it("reads overloaded when field weight lands on a full Outfit with undefined ◇ left", async () => {
+		const actor = new FakeActorBuilder()
+			.withFlag("inventory.checked", {"big-load": true, "provisions": true})
+			.withFlag("inventory.regularPool", 3)
+			.build();
+		const snap = await new TestCharacterBuilder(actor)
+			.withInventoryRepo(new FakeInventoryRepository([
+				makeOutfitItem({slug: "big-load", weight: 6}),
+				makeOutfitItem({slug: "provisions", weight: 1}),
+			]))
+			.build().buildSnapshot();
+		expect(snap.inventory.outfit.load.totalMarks).toBe(10);
+		expect(snap.inventory.outfit.load.loadLevelOverloaded).toBe(true);
+		expect(snap.inventory.outfit.regularPool.current).toBe(3);
 	});
 
 	it("regularPool reserve drawn into an item shows as empty ◇, not a collapsed track", async () => {
@@ -1079,7 +1100,8 @@ describe("buildSnapshot — inventory.outfit", () => {
 		const snap = await new TestCharacterBuilder(actor)
 			.withInventoryRepo(new FakeInventoryRepository([makeOutfitItem({slug: "trinket", inventoryColumn: "small"})]))
 			.build().buildSnapshot();
-		expect(snap.inventory.outfit.smallPool.max).toBe(9); // default 4+Prosperity allotment
+		// No steading here: 4+0, Prosperity being "+0 by default" (Book I p.88). It used to guess 9.
+		expect(snap.inventory.outfit.smallPool.max).toBe(4);
 	});
 
 	it("pool caps report the room left under the load limit for the at-limit toast", async () => {
@@ -1091,13 +1113,37 @@ describe("buildSnapshot — inventory.outfit", () => {
 			.withInventoryRepo(new FakeInventoryRepository([makeOutfitItem({slug: "big-load", weight: 6})]))
 			.build().buildSnapshot();
 		expect(snap.inventory.outfit.regularPoolCap).toBe(3); // 9 heavy − 6 marked weight
-		expect(snap.inventory.outfit.smallPoolCap).toBe(9);   // no small items marked
+		expect(snap.inventory.outfit.smallPoolCap).toBe(4);   // no small items marked; 4+0 with no steading
 	});
 
 	it("smallPool has unified resource shape", async () => {
 		const actor = new FakeActorBuilder().withFlag("inventory.smallPool", 0).build();
 		const snap = await new TestCharacterBuilder(actor).build().buildSnapshot();
-		expect(snap.inventory.outfit.smallPool).toMatchObject({current: 0, max: 9, title: null, labels: []});
+		expect(snap.inventory.outfit.smallPool).toMatchObject({current: 0, max: 4, title: null, labels: []});
+	});
+
+	// A special small item the catalog flags `smallGrid` (a lantern, salt, a handful of silvers) was
+	// filtered out of the list for the flag and never put in the grid, which only holds standard
+	// items: bought through Trade & Barter, it was on the character and on no screen at all.
+	it("lists a special small grid item once it has been added", async () => {
+		const actor = new FakeActorBuilder()
+			.withFlag("inventory.addedSpecial", ["lantern"])
+			.withFlag("inventory.checked", {lantern: true})
+			.build();
+		const snap = await new TestCharacterBuilder(actor)
+			.withInventoryRepo(new FakeInventoryRepository([
+				makeOutfitItem({slug: "lantern", name: "Lantern", inventoryColumn: "small", smallGrid: true, special: true}),
+				makeOutfitItem({slug: "chalk", name: "Chalk", inventoryColumn: "small", smallGrid: true}),
+			]))
+			.build().buildSnapshot();
+		const lantern = snap.inventory.outfit.smallItems.find(i => i.slug === "lantern");
+		expect(lantern).toBeTruthy();
+		expect(lantern.isAddedSpecial).toBe(true);
+		expect(lantern.checked).toBe(true);
+		// The printed common items still sit in the grid.
+		expect(snap.inventory.outfit.smallGridItems.map(i => i.slug)).toEqual(["chalk"]);
+		// And it counts against the 4+Prosperity allowance like any marked small item.
+		expect(snap.inventory.outfit.smallPoolCap).toBe(3);
 	});
 
 	it("uses base load caps and names no load-bonus source when no move grants one", async () => {
@@ -1358,7 +1404,7 @@ describe("buildSnapshot — inventory: journal treasures", () => {
 		);
 		// The □ pool is clamped to the room left after checked small items, so a treasure
 		// eating one slot shows up as one fewer reservable box.
-		const limit = snap.inventory.outfit.smallItemLimit ?? 9;
+		const limit = snap.inventory.outfit.smallItemLimit ?? 4;
 		expect(snap.inventory.outfit.smallPoolCap).toBe(limit - 1);
 	});
 });
@@ -1567,9 +1613,72 @@ describe("buildSnapshot — inventory: possession-derived special items", () => 
 			expect((await usesWith(steading({ resources: [{ name: "Mill", checked: false }] }))).per).toBe(5);
 		});
 
+		// The 4+0 fallback is the Prosperity's, not the Mill's: a blank Prosperity still gets the extra use.
+		it("still counts the Mill when Prosperity cannot be read", async () => {
+			const blank = { ...steading({ improvements: { mill: { completed: true } } }), system: { attributes: { prosperity: { value: null } } } };
+			expect((await usesWith(blank)).per).toBe(5);
+		});
+
 		it("does not count a Mill still being built", async () => {
 			expect((await usesWith(steading({ improvements: { mill: { completed: false } } }))).per).toBe(5);
 		});
+
+		// Lacking: "Treat Prosperity as if it's 1 lower than it is" (Book I p.66, p.513). It reached
+		// nothing on the character: supplies, small items and Recover all read the raw Prosperity.
+		it("holds one fewer while the steading is Lacking, small items too", async () => {
+			const lacking = { ...steading(), system: { attributes: { prosperity: { value: 1 }, debilities: { options: { lacking: { value: true } } } } } };
+			expect(await usesWith(lacking)).toEqual({ max: 4, per: 4, small: 4 });
+		});
+
+		it("reads Lacking off the steading's mirrored flag copy too", async () => {
+			const lacking = steading({ system: { attributes: { debilities: { options: { lacking: { value: true } } } } } });
+			expect(await usesWith(lacking)).toEqual({ max: 4, per: 4, small: 4 });
+		});
+
+		// One answer at the source: 4+0 ("+0 by default", Book I p.88), so no reader keeps a fallback of
+		// its own. Only the captions that must know it was not read ask (OutfitSnapshot#prosperity).
+		it("holds 4 when there is no steading to read Prosperity from, small items too", async () => {
+			expect(await usesWith(null)).toEqual({ max: 4, per: 4, small: 4 });
+		});
+
+		it("tells the readers that print the limit whether Prosperity was read", async () => {
+			global.game.actors = { get: () => null, find: () => null };
+			const unread = (await new TestCharacterBuilder(makeHeavyActor()).build().buildSnapshot()).inventory.outfit;
+			expect(unread).toMatchObject({ smallItemLimit: 4, prosperity: null, prosperityKnown: false, usesPerSupply: 4 });
+			global.game.actors = { get: () => null, find: () => steading() };
+			const read = (await new TestCharacterBuilder(makeHeavyActor()).build().buildSnapshot()).inventory.outfit;
+			expect(read).toMatchObject({ smallItemLimit: 5, prosperity: 1, prosperityKnown: true, usesPerSupply: 5 });
+		});
+
+		// Make Camp needs the sheet's numbers and the gear they came from (camp-store.js#campVitalsFor).
+		it("hands back the gear picture the snapshot was built from, from the same pass", async () => {
+			global.game.actors = { get: () => null, find: () => steading() };
+			const char = new TestCharacterBuilder(makeHeavyActor())
+				.withInventoryRepo(new FakeInventoryRepository([supplies()]))
+				.build();
+			const gearSources = vi.spyOn(char, "_gearSources");
+			const { snapshot, gear } = await char.snapshotWithGear();
+			expect(gearSources).toHaveBeenCalledTimes(1);
+			expect(gear.items.map(i => i.slug)).toContain("supplies");
+			expect(snapshot.inventory.outfit.regularItems.map(i => i.slug)).toContain("supplies");
+		});
+	});
+
+	it("drops x piercing to crude while a +0 steading is Lacking", async () => {
+		global.game.actors = {
+			get: () => null,
+			find: () => ({
+				type: "stonetop",
+				system: { attributes: { prosperity: { value: 0 }, debilities: { options: { lacking: { value: true } } } } },
+				flags: {},
+			}),
+		};
+		const spear = makeOutfitItem({ slug: "spear", name: "Spear, iron", note: "<em>close</em>, x <em>piercing</em>" });
+		const snap = await new TestCharacterBuilder(makeHeavyActor())
+			.withInventoryRepo(new FakeInventoryRepository([spear]))
+			.build().buildSnapshot();
+		expect(snap.inventory.outfit.regularItems.find(i => i.slug === "spear").note).toContain("<em>crude</em>");
+		expect(snap.inventory.outfit.smallItemLimit).toBe(3);
 	});
 
 	it("keeps Weapons of War hidden until the steading improvement is earned", async () => {

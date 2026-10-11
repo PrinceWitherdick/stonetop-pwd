@@ -1,5 +1,5 @@
 // What Book I says about the "I wonder..." list (p.33), plus the two later chapters that send a
-// GM back to it (Sites p.381, p.418).
+// GM back to it (Sites, "Build up its story": pp.358-359).
 //
 // The GM playbook prints this as four lines beside a column of ruled ones: "Keep a running list
 // of open questions that either... you don't know how to answer yet, or... you want to answer via
@@ -24,7 +24,7 @@ export const GM_WONDER_GUIDE = [
 			"Open questions: things that you wonder about, but either you don't know how to answer yet, or you want to leave unanswered for now and see it get answered through play.",
 			"A threat your notes imply, when the threat's nature isn't entirely clear yet.",
 			"A connection between the setting and the PCs that you think might be true, but aren't sure about.",
-			"A question a site raised that you couldn't answer while writing it up, or that turned out to be the wrong question (p.418).",
+			"A question a site raised that you couldn't answer while writing it up, or that turned out to be the wrong question (p.359).",
 		],
 	},
 	{
@@ -33,7 +33,7 @@ export const GM_WONDER_GUIDE = [
 		items: [
 			"Update the questions. If a question has been answered, remove it. If a new question occurs to you, add it to the list.",
 			"Refer to them as you prepare. Use the list to help identify the adventure's central opportunity or threat, or to help write the setup questions that you'll ask the characters.",
-			"Read them again when you write up a site: the list is one of the places a site's own mysteries come from (p.381).",
+			"Read them again when you write up a site: the list is one of the places a site's own mysteries come from (p.358).",
 		],
 	},
 	{

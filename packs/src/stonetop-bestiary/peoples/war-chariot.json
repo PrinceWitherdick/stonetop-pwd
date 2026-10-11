@@ -31,6 +31,8 @@
     "creatureType": "human-group"
   },
   "prototypeToken": {
+    "width": 2,
+    "height": 2,
     "name": "War-chariot",
     "actorLink": false,
     "disposition": -1,

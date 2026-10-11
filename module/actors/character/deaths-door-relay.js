@@ -34,6 +34,7 @@ import { inTurn } from "../../utils/turn-queue.js";
 import { inCardTurn } from "../../utils/card-queue.js";
 import { writeCardRoll } from "../../utils/roll-card-writer.js";
 import { adjustXp } from "../../utils/xp.js";
+import { missXpTakenByLift } from "../../utils/undo-xp-mark.js";
 import { characterFullName } from "../../utils/playbook-actors.js";
 import { rollRewrite } from "../../utils/roll-rewrite.js";
 import {
@@ -204,9 +205,15 @@ export function burnBrightlyOnDoorCard(message, actor, { shiftRoll, cardFlavor, 
 		// right for one spend and wrong for two: a second Burn Brightly queued behind the first tested a total the
 		// first had not yet reduced, so a character with 9 XP could buy two +1s and end on 5, below the threshold
 		// that made either of them legal.
+		//
+		// Nor does it count the XP this card's own miss marked when the +1 lifts it off the miss: the burn takes
+		// that XP back (roll-engine.js#reconcileMissXp), so it was never there to spend. Counted, a hero one short
+		// bought the threshold with the miss, and a Driven hero with 1 XP paid 1 for the +1 (the take-back floored
+		// at 0). Without it, what is left after the take-back is never below 0.
+		const owedBack = missXpTakenByLift(message, (Number(message.rolls?.at?.(0)?.total) || 0) + 1);
 		const { applied, after: newXp, max: maxXp } = await adjustXp(actor, -BURN_BRIGHTLY_COST, {
 			move: "Burn Brightly",
-			require: (xp, level) => burnBrightlyAffordable(actor, xp, level),
+			require: (xp, level) => burnBrightlyAffordable(actor, xp - owedBack, level),
 		});
 		if (!applied) return null;
 		onSpent?.();

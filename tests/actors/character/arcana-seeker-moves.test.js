@@ -35,6 +35,7 @@ function seeker({ moves = [], conduit = 0, marked = [], cards = [] } = {}) {
 			setUses: vi.fn(async (name, value) => { resources[name] = value; }),
 		},
 		debilityChoices: ["weakened", "dazed", "miserable"].map(key => ({ key, name: key[0].toUpperCase() + key.slice(1), marked: marked.includes(key) })),
+		get debilityMarkChoices() { return this.debilityChoices; },
 		markDebility: vi.fn(async key => !marked.includes(key)),
 		background: { selectedSlug: null, setupResources: {} },
 		getArcanum: vi.fn(async slug => cards.find(c => c.slug === slug) ?? null),

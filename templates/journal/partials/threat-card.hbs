@@ -45,7 +45,7 @@
 	{{/if}}
 
 	{{#if hasNested}}
-	<p class="threat-nested"><span class="threat-label">Also</span>{{#each nested}}<span class="threat-nested__item">{{name}} <em>({{type}}{{#if instinct}}; {{instinct}}{{/if}})</em></span>{{/each}}</p>
+	<p class="threat-nested"><span class="threat-label">Also</span>{{#each nested}}<span class="threat-nested__item">{{name}}{{#if note}} <em>({{note}})</em>{{/if}}</span>{{/each}}</p>
 	{{/if}}
 
 	{{> "stonetop.card-player-moves"}}

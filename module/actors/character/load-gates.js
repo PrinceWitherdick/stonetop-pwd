@@ -45,28 +45,50 @@ export function overLoadGate(maxLoad, loadTier) {
 	return (LOAD_RANK[loadTier] ?? 0) > LOAD_RANK[maxLoad];
 }
 
-/**
- * The tag a move card wears while the character's CURRENT load is heavier than the move allows,
- * or null: "needs a light load", or for a move gated in one clause only, that clause
- * ("act with care: needs a light load").
- */
-export function loadGateNote(move, loadTier) {
-	if (!move?.owned || !overLoadGate(move.maxLoad, loadTier)) return null;
-	const load = localize(`stonetop.loadGate.load.${move.maxLoad}`);
-	const { partial, clause } = loadGatedClause(move.description);
-	return partial
-		? format("stonetop.loadGate.clause", { clause, load })
-		: format("stonetop.loadGate.whole", { load });
+/** Whether a move that needs its owner unarmored (`requiresUnarmored`) is switched off by armor worn. */
+export function armorGate(move, wornArmor) {
+	return !!move?.requiresUnarmored && (Number(wornArmor) || 0) > 0;
 }
 
 /**
- * Tag every owned, load-gated move in a snapshot's categories that `loadTier` switches off
- * (`loadGateNote`). In place, on the snapshots the Moves tab renders.
+ * The tag a move card wears while the character's CURRENT load is heavier than the move allows,
+ * or null: "needs a light load", or for a move gated in one clause only, that clause
+ * ("act with care: needs a light load"). A move that also needs its owner unarmored (Uncanny
+ * Reflexes: "When you are unarmored and carrying a normal or light load") says so while
+ * `wornArmor` (the worn-armor base, CharacterInventory#wornArmorBase) is above 0, the same two
+ * conditions the expedition readout switches it off on.
  */
-export function tagLoadGatedMoves(categories, loadTier) {
+export function loadGateNote(move, loadTier, wornArmor = 0) {
+	if (!move?.owned) return null;
+	const overLoad = overLoadGate(move.maxLoad, loadTier);
+	const armored  = armorGate(move, wornArmor);
+	if (!overLoad && !armored) return null;
+	const { partial, clause } = loadGatedClause(move.description);
+	if (!armored) {
+		const load = localize(`stonetop.loadGate.load.${move.maxLoad}`);
+		return partial
+			? format("stonetop.loadGate.clause", { clause, load })
+			: format("stonetop.loadGate.whole", { load });
+	}
+	const need = overLoad
+		? format("stonetop.loadGate.loadAndUnarmored", { load: localize(`stonetop.loadGate.load.${move.maxLoad}`) })
+		: localize("stonetop.loadGate.unarmored");
+	return partial ? format("stonetop.loadGate.clauseNeed", { clause, need }) : need;
+}
+
+/**
+ * Tag every owned, load-gated move in a snapshot's categories that `loadTier` (or, for a move that
+ * needs its owner unarmored, `wornArmor`) switches off (`loadGateNote`), with the hover saying which
+ * of the two did it. In place, on the snapshots the Moves tab renders.
+ */
+export function tagLoadGatedMoves(categories, loadTier, wornArmor = 0) {
 	for (const move of (categories ?? []).flatMap(c => c?.moves ?? [])) {
-		const note = loadGateNote(move, loadTier);
-		if (note) move.loadGateNote = note;
+		const note = loadGateNote(move, loadTier, wornArmor);
+		if (!note) continue;
+		move.loadGateNote = note;
+		move.loadGateTooltip = localize(overLoadGate(move.maxLoad, loadTier)
+			? "stonetop.loadGate.tooltip"
+			: "stonetop.loadGate.unarmoredTooltip");
 	}
 	return categories;
 }

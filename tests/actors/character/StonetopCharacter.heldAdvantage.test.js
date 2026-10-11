@@ -21,7 +21,7 @@ function camper({ held = null, sticky = "normal", weakened = false } = {}) {
 	return { char, actor };
 }
 
-const PEACEFUL = { source: "A peaceful night's rest" };
+const PEACEFUL = { sources: ["A peaceful night's rest"] };
 
 beforeEach(() => {
 	resetLiveIds();
@@ -109,7 +109,7 @@ describe("a held advantage", () => {
 // same way and spent the same way. Both sides can be held at once (a peaceful night, then someone
 // gets in the way), and advantage and disadvantage cancel (p.230).
 describe("a held disadvantage", () => {
-	const INTERFERED = { source: "Interfered with by Bram" };
+	const INTERFERED = { sources: ["Interfered with by Bram"] };
 
 	function interfered({ held = null, dis = INTERFERED, sticky = "normal" } = {}) {
 		const made = camper({ held, sticky });
@@ -166,21 +166,195 @@ describe("holding another promise", () => {
 	it("keeps both names when a second advantage is promised before the roll", async () => {
 		const { char } = camper({ held: PEACEFUL });
 		await char.holdAdvantage("Bram's Aid");
-		expect(char.heldAdvantage()).toEqual({ source: "A peaceful night's rest & Bram's Aid" });
+		expect(char.heldAdvantage()).toEqual({
+			sources: ["A peaceful night's rest", "Bram's Aid"], source: "A peaceful night's rest & Bram's Aid",
+		});
 	});
 
 	// The camp's one-write form, too: a peaceful night after an Aid keeps the Aid's name.
 	it("keeps the earlier name in the camp's update fragment", () => {
-		const { char } = camper({ held: { source: "Bram's Aid" } });
+		const { char } = camper({ held: { sources: ["Bram's Aid"] } });
 		expect(char.heldAdvantageData("A peaceful night's rest")).toEqual({
-			"flags.stonetop-pwd.heldAdvantage": { source: "Bram's Aid & A peaceful night's rest" },
+			"flags.stonetop-pwd.heldAdvantage": { sources: ["Bram's Aid", "A peaceful night's rest"] },
 		});
+		// Several names in one fragment: the camp's peaceful night and fur-lined bedroll.
+		expect(char.heldAdvantageData(["A peaceful night's rest", "A fur-lined bedroll"])).toEqual({
+			"flags.stonetop-pwd.heldAdvantage": { sources: ["Bram's Aid", "A peaceful night's rest", "A fur-lined bedroll"] },
+		});
+	});
+
+	// A gift taken back (its roll card moved off the tier that gave it) takes back its own name alone.
+	it("takes back one promise by name and keeps the other held beside it", async () => {
+		const { char } = camper({ held: PEACEFUL });
+		await char.holdAdvantage("Aeron's Everything Burns");
+		expect(await char.releaseHeldAdvantage("Aeron's Everything Burns")).toBe(true);
+		expect(char.heldAdvantage()).toMatchObject(PEACEFUL);
+		expect(await char.releaseHeldAdvantage("Aeron's Everything Burns")).toBe(false);
+		expect(await char.releaseHeldAdvantage("A peaceful night's rest")).toBe(true);
+		expect(char.heldAdvantage()).toBeNull();
+	});
+
+	// An Interfere's answer withdrawn takes back its own disadvantage, and nothing held beside it.
+	it("takes back one disadvantage by name and leaves the advantage and the other name alone", async () => {
+		const { char } = camper({ held: PEACEFUL });
+		await char.holdDisadvantage("Interfered with by Bram");
+		await char.holdDisadvantage("Interfered with by Cora");
+		expect(await char.releaseHeldDisadvantage("Interfered with by Bram")).toBe(true);
+		expect(char.heldDisadvantage()).toMatchObject({ sources: ["Interfered with by Cora"] });
+		expect(char.heldAdvantage()).toMatchObject(PEACEFUL);
+		expect(await char.releaseHeldDisadvantage("Interfered with by Bram")).toBe(false);
+		expect(await char.releaseHeldDisadvantage("Interfered with by Cora")).toBe(true);
+		expect(char.heldDisadvantage()).toBeNull();
 	});
 
 	it("does not repeat a name promised twice", async () => {
 		const { char } = camper();
 		await char.holdDisadvantage("Interfered with by Bram");
 		await char.holdDisadvantage("Interfered with by Bram");
-		expect(char.heldDisadvantage()).toEqual({ source: "Interfered with by Bram" });
+		expect(char.heldDisadvantage()).toEqual({ sources: ["Interfered with by Bram"], source: "Interfered with by Bram" });
+	});
+
+	// Stored as a list, so a name with its own ", " or " & " is held, shown and taken back whole.
+	it("takes back a name with its own separators whole, and shows the names as one line", async () => {
+		const { char } = camper();
+		await char.holdDisadvantage("Interfered with by Bram, son of Tor");
+		await char.holdDisadvantage("Interfered with by Rhys & Cora");
+		await char.holdDisadvantage("Interfered with by Wren");
+		expect(char.heldDisadvantage().source).toBe("Interfered with by Bram, son of Tor, Interfered with by Rhys & Cora & Interfered with by Wren");
+		expect(await char.releaseHeldDisadvantage("Interfered with by Rhys")).toBe(false);
+		expect(await char.releaseHeldDisadvantage("Interfered with by Rhys & Cora")).toBe(true);
+		expect(char.heldDisadvantage()).toMatchObject({ sources: ["Interfered with by Bram, son of Tor", "Interfered with by Wren"] });
+		expect(await char.releaseHeldDisadvantage("Interfered with by Bram, son of Tor")).toBe(true);
+		expect(char.heldDisadvantage()).toMatchObject({ sources: ["Interfered with by Wren"] });
+	});
+});
+
+// A world from before the list holds the names as the one line the card showed: `{source: "A & B"}`.
+describe("a held promise written before its names were a list", () => {
+	const OLD = { source: "A peaceful night's rest, Bram's Aid & Aeron's Everything Burns" };
+
+	it("reads the old line as its names, and shows the same line", () => {
+		const { char } = camper({ held: OLD });
+		expect(char.heldAdvantage()).toEqual({
+			sources: ["A peaceful night's rest", "Bram's Aid", "Aeron's Everything Burns"], source: OLD.source,
+		});
+	});
+
+	it("takes back one of its names, and writes what is left as a list", async () => {
+		const { char, actor } = camper({ held: OLD });
+		expect(await char.releaseHeldAdvantage("Bram's Aid")).toBe(true);
+		expect(actor.flags["stonetop-pwd"].heldAdvantage.sources).toEqual(["A peaceful night's rest", "Aeron's Everything Burns"]);
+		expect(char.heldAdvantage().source).toBe("A peaceful night's rest & Aeron's Everything Burns");
+	});
+
+	it("lays a new promise beside its names", () => {
+		const { char } = camper({ held: { source: "Bram's Aid" } });
+		expect(char.heldAdvantageData("A peaceful night's rest")).toEqual({
+			"flags.stonetop-pwd.heldAdvantage": { sources: ["Bram's Aid", "A peaceful night's rest"] },
+		});
+	});
+
+	// Foundry merges a flag object into the one stored, so the old line stays beside the new list.
+	it("reads the list over an old line left beside it", () => {
+		const { char } = camper({ held: { source: "Bram's Aid", sources: ["A peaceful night's rest"] } });
+		expect(char.heldAdvantage()).toEqual({ sources: ["A peaceful night's rest"], source: "A peaceful night's rest" });
+	});
+
+	it("still rolls at advantage and names it on the card", async () => {
+		const { char } = camper({ held: OLD });
+		await char.onDirectStatRoll("int");
+		expect(rolled[0].options.rollMode).toBe("adv");
+		expect(rolled[0].options.conditionNotes).toContain(OLD.source);
+		expect(char.heldAdvantage()).toBeNull();
+	});
+});
+
+// What the next roll is owed (the +forward, the held promises) is CLAIMED before the dice in one write, in the
+// character's roll turn, and put back when no dice are thrown. The dice here wait on the test, so two rolls can
+// be in flight at once, as a double-click or a second move rolled during the dice animation makes them.
+describe("claiming what the next roll is owed", () => {
+	let release;
+	let failNext;
+	beforeEach(async () => {
+		release = [];
+		failNext = false;
+		vi.doMock("../../../module/utils/roll-engine.js", () => ({
+			rollStat: vi.fn(async (stat, actor, options) => {
+				if (failNext) { failNext = false; throw new Error("the card could not be posted"); }
+				rolled.push({ stat, options });
+				await new Promise(resolve => release.push(resolve));
+				return { total: 7 };
+			}),
+		}));
+		// Loaded once before two rolls import it at the same moment, so both are handed the mock.
+		await import("../../../module/utils/roll-engine.js");
+	});
+
+	// Until `n` rolls are at their dice, waiting on the test.
+	const atDice = n => vi.waitFor(() => expect(release.length).toBe(n));
+	const releaseAll = () => { while (release.length) release.shift()(); };
+
+	function forwardOf(actor) { return actor.system.attributes.forward.value; }
+
+	// The second move is rolled while the first's dice are still rolling.
+	it("gives the +forward to the first of two overlapping rolls, not both", async () => {
+		const { char, actor } = camper();
+		actor.system.attributes.forward = { value: 1 };
+		const first = char.onDirectStatRoll("int");
+		await atDice(1);
+		const second = char.onDirectStatRoll("int");
+		await atDice(2);
+		releaseAll();
+		await Promise.all([first, second]);
+		expect(rolled.map(r => r.options.forward ?? 0)).toEqual([1, 0]);
+		expect(forwardOf(actor)).toBe(0);
+	});
+
+	it("spends a held advantage on the first of two overlapping rolls, not both", async () => {
+		const { char } = camper({ held: PEACEFUL });
+		const first = char.onDirectStatRoll("int");
+		await atDice(1);
+		const second = char.onDirectStatRoll("int");
+		await atDice(2);
+		releaseAll();
+		await Promise.all([first, second]);
+		expect(rolled.map(r => r.options.rollMode)).toEqual(["adv", "normal"]);
+	});
+
+	// Two claims at the same moment (a double-click) are taken one after the other: the second reads what the
+	// first left, which is nothing.
+	it("hands what is owed to one of two claims made at once", async () => {
+		const { char, actor } = camper({ held: PEACEFUL });
+		actor.system.attributes.forward = { value: 1 };
+		const claims = await Promise.all([char._claimNextRollOwed("Seek Insight"), char._claimNextRollOwed("Seek Insight")]);
+		expect(claims.map(c => c.forward)).toEqual([1, 0]);
+		expect(claims.map(c => c.held.adv?.sources ?? null)).toEqual([PEACEFUL.sources, null]);
+	});
+
+	// Cleared before the dice, so a +forward given while they are still rolling is the NEXT roll's, not wiped.
+	it("leaves a +forward given while the dice are rolling for the roll after", async () => {
+		const { char, actor } = camper();
+		actor.system.attributes.forward = { value: 1 };
+		const roll = char.onDirectStatRoll("int");
+		await atDice(1);
+		expect(forwardOf(actor)).toBe(0);
+		actor.system.attributes.forward.value = 2;
+		releaseAll();
+		await roll;
+		expect(rolled[0].options.forward).toBe(1);
+		expect(forwardOf(actor)).toBe(2);
+	});
+
+	// A roll that throws before its dice made no roll: the +forward and both promises are put back.
+	it("puts the +forward and the held promises back when the roll throws", async () => {
+		const { char, actor } = camper({ held: PEACEFUL });
+		actor.flags["stonetop-pwd"].heldDisadvantage = { sources: ["Interfered with by Bram, son of Tor", "Interfered with by Cora"] };
+		actor.system.attributes.forward = { value: 1 };
+		failNext = true;
+		await expect(char.onDirectStatRoll("int")).rejects.toThrow("the card could not be posted");
+		expect(forwardOf(actor)).toBe(1);
+		expect(char.heldAdvantage()).toMatchObject(PEACEFUL);
+		// Put back as the names they were, not as the one line the card shows.
+		expect(char.heldDisadvantage()).toMatchObject({ sources: ["Interfered with by Bram, son of Tor", "Interfered with by Cora"] });
 	});
 });

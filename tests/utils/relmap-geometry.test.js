@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
 	RELMAP_BOARD_ASPECT, RELMAP_BOARD_MAX, RELMAP_BOARD_WIDTH, RELMAP_CAPTION_PX, RELMAP_HEAD_PX,
-	boardMetrics,
+	bandPath, boardMetrics,
 	clampPct, clearanceBow,
 	RELMAP_LABEL_CLEAR_PX,
 	edgeArrowheads, edgeBow, edgeCurve, edgeLabelAnchor, fanBow, freeSpot, labelSize,
@@ -58,6 +58,42 @@ describe("fanning the links between one pair of people", () => {
 
 	it("treats rubbish as the straight first link rather than bowing off to NaN", () => {
 		for (const bad of [null, undefined, "x", -3, NaN]) expect(fanBow(bad)).toBe(0);
+	});
+});
+
+// THE HALF-DRAWN LINE (user, 2026-10-07: it "shouldn't go inside the first token at all - I see it
+// going almost halfway through it"). The band used to run from the centre of the face it came out of,
+// laid over that face for a whole radius.
+describe("the band a line is dragged out as", () => {
+	const r = nodeRadiusPct(72, 1200);
+	const from = { left: 40, top: 40 };
+
+	/** The two points of a straight `M x,y L x,y`. */
+	const ends = d => {
+		const [x0, y0, x1, y1] = d.match(/-?[\d.]+/g).map(Number);
+		return [{ left: x0, top: y0 }, { left: x1, top: y1 }];
+	};
+
+	it("leaves the face at its rim, whichever way it is dragged", () => {
+		for (const to of [{ left: 70, top: 40 }, { left: 40, top: 80 }, { left: 10, top: 5 }, { left: 65, top: 70 }]) {
+			const [start, end] = ends(bandPath({ from, to, aspect: ASPECT, r }));
+			// Seen distance, since the face is a circle on screen and an ellipse in percentages.
+			expect(seen(from, start)).toBeCloseTo(r, 1);
+			expect(end.left).toBeCloseTo(to.left, 1);
+			expect(end.top).toBeCloseTo(to.top, 1);
+		}
+	});
+
+	it("stops at the rim of the person it is over, where the line it becomes will end", () => {
+		const to = { left: 70, top: 55 };
+		const [, end] = ends(bandPath({ from, to, aspect: ASPECT, r, rTo: r }));
+		expect(seen(to, end)).toBeCloseTo(r, 1);
+	});
+
+	it("draws nothing while the pointer is still inside the face", () => {
+		expect(bandPath({ from, to: { left: 41, top: 40 }, aspect: ASPECT, r })).toBe("");
+		expect(bandPath({ from, to: from, aspect: ASPECT, r })).toBe("");
+		expect(bandPath({ from: null, to: from })).toBe("");
 	});
 });
 

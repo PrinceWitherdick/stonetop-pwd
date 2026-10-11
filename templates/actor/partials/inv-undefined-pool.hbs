@@ -1,0 +1,36 @@
+{{!-- An undefined reserve's track and its note: the ◇ one as the full heavy load in threes,
+      or (`small=true`) the □ one as the full 4+Prosperity allowance, so none vanish as items
+      are marked. Clicking a box sets the count; `cap` is the room the marked items leave,
+      which a click is held to. Drawn by the Inventory tab and the Outfit dialog alike, whose
+      handlers bind on these classes, so the two tracks can never drift. Context: `pool`
+      ({current, max}), `cap`, `small`. --}}
+{{#if small}}
+<div class="stonetop-supplies-pool">
+	<span class="stonetop-supplies-pool-label"><strong>{{localize "stonetop.inventory.smallUndefinedPoolLabel"}}</strong></span>
+	<span class="stonetop-supplies-pool-diamonds" data-pool-cap="{{cap}}">
+		{{#each (poolItems pool)}}
+		<input type="checkbox"
+		       class="stonetop-inventory-item-check stonetop-small-pool-display{{#if checked}} is-checked{{/if}}"
+		       data-index="{{index}}"
+		       {{#if checked}}checked{{/if}}>
+		{{/each}}
+	</span>
+</div>
+<p class="stonetop-supplies-pool-note">{{{localize "stonetop.inventory.smallUndefinedPoolNote"}}}</p>
+{{else}}
+<div class="stonetop-supplies-pool">
+	<span class="stonetop-supplies-pool-label"><strong>{{localize "stonetop.inventory.regularUndefinedPoolLabel"}}</strong></span>
+	<span class="stonetop-supplies-pool-diamonds" data-pool-cap="{{cap}}">
+		{{#each (poolGroups pool)}}
+		{{#unless @first}}<span class="stonetop-supplies-pool-gap"></span>{{/unless}}
+		{{#each this}}
+		<input type="checkbox"
+		       class="stonetop-inv-diamond stonetop-regular-pool-btn{{#if checked}} is-checked{{/if}}"
+		       data-index="{{index}}"
+		       {{#if checked}}checked{{/if}}>
+		{{/each}}
+		{{/each}}
+	</span>
+</div>
+<p class="stonetop-supplies-pool-note">{{{localize "stonetop.inventory.regularUndefinedPoolNote"}}}</p>
+{{/if}}

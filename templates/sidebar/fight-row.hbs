@@ -24,6 +24,7 @@
   <div class="stonetop-fight-row-text">
     <strong class="name stonetop-fight-name"{{#if row.readout}} data-tooltip-text="{{row.readout}}" aria-description="{{row.readout}}"{{/if}}>{{row.name}}</strong>
     {{#if row.vitals}}<span class="stonetop-fight-readout stonetop-fight-vitals">{{row.vitals}}</span>{{/if}}
+    {{#if row.reminders.length}}{{> "stonetop.reminder-chips" chips=row.reminders compact=true}}{{/if}}
     {{#if row.standing}}<span class="stonetop-fight-standing">{{row.standing}}</span>{{/if}}
     {{#if row.badge}}
     <span class="stonetop-fight-badge" role="img" aria-label="{{row.badge.label}}" data-tooltip-text="{{row.badge.label}}">&times;{{row.badge.count}}</span>

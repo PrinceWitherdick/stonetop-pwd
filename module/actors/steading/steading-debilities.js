@@ -1,4 +1,6 @@
-import { escHtml } from "../../utils/strings.js";
+import { escHtml, signed } from "../../utils/strings.js";
+import { format } from "../../utils/i18n.js";
+import { seasonStamp } from "../../seasons/campaign-year.js";
 
 // ── The steading's three debilities (Book I, "Homefront") ───────────────────────
 // ONE table, because three separate moves clear a debility and each used to carry its own
@@ -223,9 +225,22 @@ export function disasterChoices(steading) {
 	return DISASTER_CHOICES.filter(c => (c.id === "population" ? !floored : !marked.has(c.id)));
 }
 
-/** The flag a disaster met at −1 leaves until its pick is made (StonetopSteading#disasterOwed). */
-export function disasterOwedFlags(cause) {
-	return { disasterOwed: { cause: String(cause ?? "") } };
+/**
+ * The flag a disaster met at −1 leaves until its pick is made (StonetopSteading#disasterOwed).
+ * `season` (`{seasonId, year, title}`) is the Seasons Change it was met in, so a pick made later
+ * from the header glyph still goes on that season's shortfall note. Always written, null for none,
+ * so a flag left from an earlier disaster never lends this one its season.
+ */
+export function disasterOwedFlags(cause, season = null) {
+	return { disasterOwed: { cause: String(cause ?? ""), season: owedSeason(season) } };
+}
+
+/** An owed disaster's season as it is stored and read back: `{seasonId, year, title}`, or null. */
+export function owedSeason(season) {
+	const year = Number(season?.year);
+	return season?.seasonId && Number.isFinite(year)
+		? { seasonId: String(season.seasonId), year, title: String(season.title ?? "") }
+		: null;
 }
 
 /**
@@ -255,21 +270,89 @@ export function disasterFortunes(current) {
 }
 
 /**
+ * One line on a season's shortfall note on Stonetop's timeline (timeline-season-entry.js
+ * #noteSeasonShortfall). `season` is `{seasonId, year, title}`; none notes nothing.
+ *
+ * IMPORTED AT CALL TIME, as seasons-chronicle.js imports the season's own row: the timeline's
+ * writers reach the season clock, which this file's callers sit beside. Best-effort: a world that
+ * cannot write the timeline has still suffered the shortfall.
+ */
+export async function noteShortfallOnTimeline(season, line) {
+	if (!season?.seasonId || !line) return;
+	try {
+		const { noteSeasonShortfall } = await import("../../timeline/timeline-season-entry.js");
+		await noteSeasonShortfall({ ...season, line });
+	} catch (err) {
+		console.error("Stonetop | could not note the shortfall on the timeline", err);
+	}
+}
+
+/** What a disaster's pick took, as the shortfall note says it. Null for no pick (nothing left). */
+export function disasterPickLine(choice) {
+	return choice ? `Met with Disaster: ${disasterPickCost(choice)}.` : "Met with Disaster, with nothing left for it to take.";
+}
+
+/** What a disaster's pick cost, as its Disaster row's title says it: "marked Malcontent". */
+export function disasterPickCost(choice) {
+	return choice?.id === "population" ? "folks started to leave (Population −1)" : `marked ${choice?.label ?? ""}`;
+}
+
+/**
+ * A disaster's pick, onto Stonetop's timeline (user, 2026-10-10). Within a Seasons Change (`season`)
+ * it is a line on that season's shortfall note, beside what brought it; anywhere else (a Requisition's
+ * miss, the move itself on the Moves tab, an owed pick made at last) it is a Disaster row of its own,
+ * saying what brought it on. A pick with nothing left to take is a row of nothing, and is not written.
+ *
+ * IMPORTED AT CALL TIME, as noteShortfallOnTimeline is. Best-effort: the debility is marked either way.
+ */
+export async function recordDisasterPick(steading, choice, { season = null, cause = "" } = {}) {
+	if (season?.seasonId) return noteShortfallOnTimeline(season, disasterPickLine(choice));
+	if (!choice) return;
+	try {
+		const { recordMilestones, timelineNow } = await import("../../timeline/timeline-record.js");
+		const now = timelineNow(steading?._actor);
+		const why = String(cause ?? "").trim();
+		await recordMilestones(steading?._actor ?? steading, [{
+			source: "disaster",
+			// Each pick its own row: Population can be picked twice in one season, and a debility
+			// cleared and marked again is a second disaster, so a key per season and choice would
+			// leave the second one unwritten.
+			key:    `disaster:${seasonStamp(now.year, now.season)}:${choice.id}:${foundry.utils.randomID()}`,
+			title:  format("stonetop.timeline.milestone.disasterPicked", { cost: disasterPickCost(choice) }),
+			...(why ? { body: `<p>Brought on by ${escHtml(why)}.</p>` } : {}),
+		}], { now });
+	} catch (err) {
+		console.error("Stonetop | could not put the disaster on the timeline", err);
+	}
+}
+
+/**
  * Meet With Disaster, applied. For a rule that says "and the steading Meets with Disaster" with
  * no window of its own to ask in (a failed harvest, Book I p. 516). `alsoFlags` rides the same
  * write, so a step marker the disaster closes does not cost a second update.
  *
  * At −1 that write also records the pick as owed (`cause` names it on the header glyph), because
  * the marker has closed the step by then and the picker, which has no Cancel, can still be shut.
+ *
+ * `season` (`{seasonId, year, title, line}`) puts it on that season's shortfall line on the
+ * timeline: `line` says what happened, and what the disaster cost is added to it.
  * @returns {Promise<{fortunes: number, disaster: boolean}>} `disaster`: the pick window opened
  */
-export async function meetWithDisaster(steading, { stonetopMove = "Meet with Disaster", cause = "", introHtml, onApplied, alsoFlags = {} } = {}) {
+export async function meetWithDisaster(steading, { stonetopMove = "Meet with Disaster", cause = "", introHtml, onApplied, alsoFlags = {}, season = null } = {}) {
 	const out = disasterFortunes(steading.getStatValue("fortunes"));
+	const { line = "", ...where } = season ?? {};
 	await steading.applyChanges({
 		system: out.disaster ? {} : { "stats.fortunes.value": out.fortunes },
-		flags: { ...alsoFlags, ...(out.disaster ? disasterOwedFlags(cause) : {}) },
+		flags: { ...alsoFlags, ...(out.disaster ? disasterOwedFlags(cause, season ? where : null) : {}) },
 	}, { stonetopMove });
-	if (out.disaster) openDisasterPicker(steading, { introHtml, stonetopMove, onApplied, settlesOwed: true });
+	if (season) {
+		await noteShortfallOnTimeline(where, [line, out.disaster
+			? "Fortunes was already −1, so the steading Met with Disaster."
+			: `Fortunes to ${signed(out.fortunes)}.`].filter(Boolean).join(" "));
+	}
+	if (out.disaster) {
+		openDisasterPicker(steading, { introHtml, stonetopMove, onApplied, settlesOwed: true, season: season ? where : null, cause });
+	}
 	return out;
 }
 
@@ -285,6 +368,9 @@ export async function meetWithDisaster(steading, { stonetopMove = "Meet with Dis
  *                                     a winter shortfall does not, since the rule is not optional)
  * @param {Function} [opts.onApplied]  (choice) => void, after the write
  * @param {boolean} [opts.settlesOwed] the pick pays an owed disaster (see applyDisasterChoice)
+ * @param {{seasonId: string, year: number, title?: string}|null} [opts.season]  The Seasons Change
+ *   it was met in, whose shortfall line it goes on (recordDisasterPick); none is a Disaster row.
+ * @param {string} [opts.cause]  What brought it on, said on that row.
  */
 export function openDisasterPicker(steading, {
 	introHtml = `<p><em>Fortunes cannot drop below −1.</em> The GM picks 1:</p>`,
@@ -292,6 +378,8 @@ export function openDisasterPicker(steading, {
 	buttons = {},
 	onApplied,
 	settlesOwed = false,
+	season = null,
+	cause = "",
 } = {}) {
 	// All three marked and Population at −1: the book's list has nothing left to take, so there
 	// is no pick to make. Say so rather than open an empty window, and pay off an owed pick, or
@@ -304,6 +392,7 @@ export function openDisasterPicker(steading, {
 				.then(() => onApplied?.(null))
 				.catch(err => console.error("Stonetop | Could not settle the owed disaster:", err));
 		}
+		if (season?.seasonId) noteShortfallOnTimeline(season, disasterPickLine(null));
 		return null;
 	}
 	return openDebilityPicker({
@@ -316,6 +405,7 @@ export function openDisasterPicker(steading, {
 		buttons,
 		onApply: async choice => {
 			await applyDisasterChoice(steading, choice.id, stonetopMove, { settlesOwed });
+			await recordDisasterPick(steading, choice, { season, cause: cause || (stonetopMove !== "Meet with Disaster" ? stonetopMove : "") });
 			onApplied?.(choice);
 		},
 	});
@@ -334,5 +424,7 @@ export function openOwedDisasterPicker(steading, { onApplied } = {}) {
 		stonetopMove: "Meet with Disaster",
 		onApplied,
 		settlesOwed: true,
+		cause: owed.cause ?? "",
+		season: owed.season ?? null,
 	});
 }

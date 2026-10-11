@@ -31,6 +31,8 @@
     "creatureType": "spirit-construct"
   },
   "prototypeToken": {
+    "width": 2,
+    "height": 2,
     "name": "Base Archon",
     "actorLink": false,
     "disposition": -1,

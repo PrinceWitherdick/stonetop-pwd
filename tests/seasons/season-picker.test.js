@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readRepo as read, readCss, declarations } from "../fakes/css.js";
 import {
 	MAX_CAMPAIGN_YEAR, clampYear, seasonPickerHtml, wireSeasonPicker, openSeasonPicker,
@@ -73,8 +73,8 @@ function fakeEvent(type, props = {}) {
 }
 
 /** Render the real picker markup, scan it into stand-ins, and wire it as the dialog does. */
-function mount({ prompt = "Which season?", startYear = 1, latestYear = startYear, selected = null, note = "", altAction = null } = {}) {
-	const html  = seasonPickerHtml({ prompt, startYear, selected, note, altAction });
+function mount({ prompt = "Which season?", startYear = 1, latestYear = startYear, selected = null, note = "", altAction = null, extra = {} } = {}) {
+	const html  = seasonPickerHtml({ prompt, startYear, selected, note, altAction, ...extra });
 	const nodes = [...html.matchAll(/<([a-z]+)\b([^>]*)>/g)].map(([, tag, attrText]) => nodeFrom(tag, attrText));
 	const root  = {
 		querySelector:    sel => nodes.find(n => matches(n, sel)) ?? null,
@@ -87,6 +87,7 @@ function mount({ prompt = "Which season?", startYear = 1, latestYear = startYear
 		latestYear,
 		onPick: (season, year) => picked.push({ season, year }),
 		onAlt:  year => alted.push(year),
+		...extra,
 	});
 	return {
 		html,
@@ -229,6 +230,65 @@ describe("the season picker's year field", () => {
 		expect(html).toContain(`min="1"`);
 		expect(html).toContain(`max="${MAX_CAMPAIGN_YEAR}"`);
 		expect(html).toContain(`type="number"`);
+	});
+});
+
+// The GM names the campaign's first year (seasons/campaign-year.js). The field shows and takes the
+// year as the world CALLS it; everything behind it stays counted from the first year of play.
+describe("the year field in a world that named its start year", () => {
+	beforeEach(() => { globalThis.game = { settings: { get: () => 1247 } }; });
+	afterEach(() => { delete globalThis.game; });
+
+	it("shows the named year, and hands back the stored one", () => {
+		const ui = mount({ startYear: 3 });
+		expect(ui.input.value).toBe("1249");
+		expect(ui.name.textContent).toBe("Year 1249");
+		ui.type("1250");
+		ui.card("summer").click();
+		expect(ui.picked).toEqual([{ season: "summer", year: 4 }]);
+	});
+
+	it("bounds the input in named years, and still never below play's first", () => {
+		const ui = mount({ startYear: 1 });
+		expect(ui.html).toContain(`min="1247"`);
+		expect(ui.html).toContain(`max="${1246 + MAX_CAMPAIGN_YEAR}"`);
+		ui.type("1200");
+		ui.commit();
+		expect(ui.input.value).toBe("1247");
+	});
+});
+
+// The timeline's own entries hold history: years before play, and a chip that says how long ago a
+// year was. (A year with no season is the entry dialog's own toggle, not the picker's.)
+describe("the picker as the timeline entry asks it", () => {
+	const HISTORY = { minYear: -9999, maxYear: MAX_CAMPAIGN_YEAR, agoFrom: 3 };
+	// The chip's "years ago" is localized, so the English table stays on the stand-in game.
+	const { i18n } = globalThis.game;
+	beforeEach(() => { globalThis.game = { i18n, settings: { get: () => 1247 } }; });
+	afterEach(() => { delete globalThis.game; });
+
+	it("goes back before play, and says how long ago in the year chip", () => {
+		const ui = mount({ startYear: 3, extra: HISTORY });
+		expect(ui.name.textContent).toBe(`${yearLabel(3)} · this year`);
+		ui.step("-1").click();
+		expect(ui.name.textContent).toBe(`${yearLabel(2)} · 1 year ago`);
+		ui.type("1239");
+		expect(ui.name.textContent).toBe(`${yearLabel(-7)} · 10 years ago`);
+		ui.card("winter").click();
+		expect(ui.picked.at(-1)).toEqual({ season: "winter", year: -7 });
+	});
+
+	// Two inputs for one answer read as two questions: "how long ago" is a reading of the year, not
+	// a second field beside it.
+	it("asks for the year once, with no separate years-ago field", () => {
+		expect(mount({ startYear: 3, extra: HISTORY }).html).not.toContain("years ago");
+	});
+
+	it("names a year past the clock's, or on a picker with no clock to count from, alone", () => {
+		const ui = mount({ startYear: 3, extra: HISTORY });
+		ui.type("1250");
+		expect(ui.name.textContent).toBe(yearLabel(4));
+		expect(mount({ startYear: 3 }).name.textContent).toBe(yearLabel(3));
 	});
 });
 

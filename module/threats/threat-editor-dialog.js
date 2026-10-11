@@ -10,6 +10,7 @@ import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { THREAT_TYPES, THREAT_PROXIMITIES, threatType, DEFAULT_PROXIMITY } from "./threat-types.js";
 import { setThreatName } from "./threat-store.js";
 import { enrichHTML } from "../utils/foundry-compat.js";
+import { htmlToPlainText, plainTextKeeper } from "../journal/card-vm.js";
 
 const EMPTY_ROW = {
 	grimPortents: () => ({ text: "", done: false }),
@@ -104,7 +105,9 @@ export class ThreatEditorDialog extends StonetopDialog {
 			stakes: rows(sys.stakes),
 			gmMoves: rows(sys.gmMoves),
 			nested: (sys.nested ?? []).map((n, index) => ({ index, name: n?.name ?? "", type: n?.type ?? "", instinct: n?.instinct ?? "" })),
-			customPlayerMoves: (sys.customPlayerMoves ?? []).map((m, index) => ({ index, label: m?.label ?? "", text: m?.text ?? "" })),
+			// The move text is an HTMLField edited in a plain textarea: shown as clean text here,
+			// stored back as escaped paragraphs by _collectList.
+			customPlayerMoves: (sys.customPlayerMoves ?? []).map((m, index) => ({ index, label: m?.label ?? "", text: htmlToPlainText(m?.text) })),
 		};
 	}
 
@@ -163,11 +166,16 @@ export class ThreatEditorDialog extends StonetopDialog {
 		if (!listEl) return [];
 		const stringKind = listEl.dataset.kind === "string";
 		const val = (row, field) => row.querySelector(`[data-field="${field}"]`)?.value ?? "";
+		// A move's text left as it was keeps the page's own HTML (its formatting and links); an
+		// edited one is stored afresh as escaped paragraphs.
+		const keep = listName === "customPlayerMoves"
+			? plainTextKeeper((this.page.system?.customPlayerMoves ?? []).map(m => m?.text))
+			: null;
 		return [...listEl.querySelectorAll(".threat-list-row")].map(row => {
 			if (stringKind) return val(row, "value");
 			if (listName === "grimPortents") return { text: val(row, "text"), done: !!row.querySelector('[data-field="done"]')?.checked };
 			if (listName === "nested") return { name: val(row, "name"), type: val(row, "type"), instinct: val(row, "instinct") };
-			if (listName === "customPlayerMoves") return { label: val(row, "label"), text: val(row, "text") };
+			if (listName === "customPlayerMoves") return { label: val(row, "label"), text: keep(val(row, "text")) };
 			return {};
 		});
 	}
@@ -196,7 +204,9 @@ export class ThreatEditorDialog extends StonetopDialog {
 	async _addGmMove(text) {
 		const t = String(text ?? "").trim();
 		if (!t) return;
-		const cur = (this.page.system?.gmMoves ?? []).map(String);
+		// From the DOM, like _addListRow: a row edit whose `change` write is still in flight
+		// would otherwise be overwritten by a list built from the stored page.
+		const cur = this._currentList("gmMoves").map(String);
 		if (cur.some(m => m.trim() === t)) return;
 		await this.page.update({ "system.gmMoves": [...cur, t] });
 	}

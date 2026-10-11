@@ -31,6 +31,8 @@
     "creatureType": "maker"
   },
   "prototypeToken": {
+    "width": 2,
+    "height": 2,
     "name": "Rime Lord",
     "actorLink": false,
     "disposition": -1,

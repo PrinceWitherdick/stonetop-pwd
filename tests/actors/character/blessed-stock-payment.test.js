@@ -233,6 +233,23 @@ describe("Forage's pouch readout", () => {
 	});
 });
 
+// The chat card's Spend button latches the CARD before it pays (card-latch.js), and only the GM or
+// whoever posted a card may write it. A player pressing Spend on a card the GM posted from their
+// sheet had the latch throw silently; now they are told, before anything is written.
+describe("Spend on a card this player did not post", () => {
+	it("says who can press it, before the latch, rather than failing in the console", () => {
+		const src = readRepo("stonetop.js");
+		const wiring = src.slice(src.indexOf("function _wireSteadingCardButtons("));
+		const body = wiring.slice(0, wiring.indexOf("\n}\n"));
+		const check = body.indexOf("canUserWriteCard(message, game.user");
+		expect(check).toBeGreaterThan(-1);
+		expect(check).toBeLessThan(body.indexOf("withLateStampLatch("));
+		expect(body).toContain(`game.i18n.localize("stonetop.rollCard.notCardWriter")`);
+		expect(JSON.parse(readRepo("languages/en.json")).stonetop.rollCard.notCardWriter).toBe("Only the GM or whoever posted this card can use its buttons.");
+		expect(src.slice(src.indexOf("function _chatWireSpendStock("))).toContain("_wireSteadingCardButtons(message,");
+	});
+});
+
 // Borrow Power: "Store it in your pouch in place of 1 Stock."
 describe("Borrow Power's reminder", () => {
 	it("says the borrowed power takes a Stock's space, without gating the roll", () => {

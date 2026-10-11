@@ -5,20 +5,26 @@ import {
 	DEATHS_DOOR_FLAG,
 	DEATHS_DOOR_ROLLING_FLAG,
 	DEATHS_DOOR_STATE,
+	HARD_TO_KILL_TRADE_FLAG,
+	UNSTOPPABLE_FIGHTING_FLAG,
 	effectiveDeathsDoorState,
 	nextDeathsDoorState,
 	raisedFromDead,
 	zeroHpMove,
 } from "../actors/character/deaths-door.js";
 import {
-	UNSTOPPABLE_INSTEAD_OPTION, UNSTOPPABLE_REGAIN_OPTION, fightsOnWhenDropped, keepsFightingAtZero, regainInstead,
+	UNSTOPPABLE_INSTEAD_OPTION, UNSTOPPABLE_REGAIN_OPTION, clearCirclesUpdate, downOnUnstoppable, fightsOnWhenDropped,
+	keepsFightingAtZero, regainInstead, stopFightingUpdate,
 } from "../actors/character/unstoppable.js";
 import { BATTLE_JOY_DROPPED_OPTION, BATTLE_JOY_FLAG } from "../actors/character/battle-joy.js";
 import { canKeepOneHp } from "../actors/character/inspiration.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
-import { format } from "../utils/i18n.js";
+import { format, localize } from "../utils/i18n.js";
 import { getSetting } from "../settings.js";
 import { bringDialogToFront } from "../utils/front-on-open.js";
+
+// The dying card's strings in languages/en.json, beside the Death's Door window's own.
+const _I18N = "stonetop.specialMoves.deathsDoor";
 
 /**
  * Document-update option marking "this write took a dead character above 0 HP". Set by the
@@ -63,7 +69,17 @@ export function onPreUpdateActorDeathsDoor(actor, changes, options = {}) {
 	if (actor?.type !== "character") return;
 
 	const raw = foundry.utils.getProperty(changes, "system.attributes.hp.value");
-	if (raw === undefined) return;
+	if (raw === undefined) {
+		// Unstoppable's "fighting on" stamp goes with any write that names a state other than dying, hit
+		// points or not: the Door rolled (a 7-9 out of the action writes no HP), the GM's not-lethal ruling.
+		try {
+			const named = foundry.utils.getProperty(changes, `flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`);
+			if (named !== undefined && named !== DEATHS_DOOR_STATE.DYING) liftFightingStamp(actor, changes);
+		} catch (err) {
+			console.error("Stonetop | Error lifting Unstoppable's stamp:", err);
+		}
+		return;
+	}
 
 	// A throw out of a preUpdate hook aborts the document update, so a fault in here would
 	// stop HP being written at all — losing damage rather than merely losing the card. Nothing
@@ -111,15 +127,29 @@ export function onPreUpdateActorDeathsDoor(actor, changes, options = {}) {
 				const [key, value] = deletionEntry(`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_ROLLING_FLAG}`);
 				foundry.utils.setProperty(changes, key, value);
 			}
+			// So does a Hard to Kill trade left open by the last one's 7-9: a new brush is a new roll.
+			if (next === DEATHS_DOOR_STATE.DYING && resolvedFlagProperty(actor, HARD_TO_KILL_TRADE_FLAG)) {
+				const [key, value] = deletionEntry(`flags.${STONETOP_SCOPE}.${HARD_TO_KILL_TRADE_FLAG}`);
+				foundry.utils.setProperty(changes, key, value);
+			}
 		}
+
+		// Unstoppable: "When you are reduced to 0 HP IN BATTLE, you can keep fighting" (Book I p.114). Whether
+		// they were in a fight is read HERE, at the drop, and stamped (deaths-door.js#UNSTOPPABLE_FIGHTING_FLAG)
+		// for keepsFightingAtZero to read from now on. Only the HP write that drops them stamps it: a write that
+		// names the state itself (the GM's "Mark dying" on someone already out of the action) did not reduce them
+		// to 0 in battle. The stamp goes with them leaving dying (healed, the Door settled); a hit at 0 keeps it.
+		const dropped = next === DEATHS_DOOR_STATE.DYING && state !== DEATHS_DOOR_STATE.DYING;
+		const fightsOn = dropped && !settlesDoor && fightsOnWhenDropped(actor);
+		if (fightsOn) foundry.utils.setProperty(changes, `flags.${STONETOP_SCOPE}.${UNSTOPPABLE_FIGHTING_FLAG}`, true);
+		else if (dropped || next !== DEATHS_DOOR_STATE.DYING || newHp > 0) liftFightingStamp(actor, changes);
 
 		// The Heavy's Battle Joy lasts "as long as you keep fighting", and one who drops to 0 HP has
 		// stopped (the user's ruling): it ends in this same write, with no roll, so the Death's Door
 		// roll that follows takes their debilities again. Not for a Heavy whose Unstoppable keeps them
 		// fighting at 0: theirs ends when the fight does (combat/battle-joy-offer.js#actionStops). The
 		// committed half says so in chat, off the option.
-		if (next === DEATHS_DOOR_STATE.DYING && state !== DEATHS_DOOR_STATE.DYING
-			&& resolvedFlagProperty(actor, BATTLE_JOY_FLAG) && !fightsOnWhenDropped(actor)) {
+		if (dropped && resolvedFlagProperty(actor, BATTLE_JOY_FLAG) && !fightsOn) {
 			const [key, value] = deletionEntry(`flags.${STONETOP_SCOPE}.${BATTLE_JOY_FLAG}`);
 			foundry.utils.setProperty(changes, key, value);
 			options[BATTLE_JOY_DROPPED_OPTION] = true;
@@ -149,6 +179,11 @@ export function onPreUpdateActorDeathsDoor(actor, changes, options = {}) {
 	} catch (err) {
 		console.error("Stonetop | Error recording the dying state:", err);
 	}
+}
+
+/** Fold the lifting of Unstoppable's "fighting on" stamp into a pending write (nothing when none is laid). */
+function liftFightingStamp(actor, changes) {
+	for (const [key, value] of Object.entries(stopFightingUpdate(actor))) foundry.utils.setProperty(changes, key, value);
 }
 
 /**
@@ -392,15 +427,16 @@ export async function postDyingPrompt(actor) {
 	// card hands them that instead of a dialog that would say the wrong thing.
 	const button = move.dialog
 		? `<button type="button" class="stonetop-dying-btn stonetop-dying-open" data-actor="${escHtml(actor.uuid)}">
-				<i class="fas fa-door-open"></i> Face Death's Door
+				<i class="fas fa-door-open"></i> ${localize(`${_I18N}.button`)}
 			</button>`
 		: `<button type="button" class="stonetop-dying-btn stonetop-dying-move" data-actor="${escHtml(actor.uuid)}" data-move="${escHtml(move.name)}">
 				<i class="fas fa-skull"></i> ${escHtml(move.name)}
 			</button>`;
 
+	// Markup in the string, so what rides into it is escaped on the way in.
 	const lead = move.dialog
-		? `<p><strong>${who}</strong> is at 0 HP: they're <strong>dying</strong>.</p>`
-		: `<p><strong>${who}</strong> is at 0 HP. Death's Door is behind them: <strong>${escHtml(move.name)}</strong> triggers instead.</p>`;
+		? `<p>${format(`${_I18N}.dyingCard.lead`, { name: who })}</p>`
+		: `<p>${format(`${_I18N}.dyingCard.leadUndeath`, { name: who, move: escHtml(move.name) })}</p>`;
 	// Unstoppable keeps them in the fight, and the roll waits until they stop (see the auto-open above).
 	const fightsOn = keepsFightingAtZero(actor)
 		? `<p class="stonetop-dying-unstoppable">${escHtml(format("stonetop.unstoppable.fightsOnCard", { name: actor.name }))}</p>`
@@ -408,7 +444,7 @@ export async function postDyingPrompt(actor) {
 
 	return ChatMessage.create({
 		speaker: ChatMessage.getSpeaker({ actor }),
-		content: stonetopChatCard(move.dialog ? "Death's Door" : move.name, `<div class="card-content">
+		content: stonetopChatCard(move.dialog ? localize(`${_I18N}.title`) : move.name, `<div class="card-content">
 			${lead}
 			<p class="stonetop-dying-trigger">${move.trigger}</p>
 			${fightsOn}
@@ -422,9 +458,9 @@ export async function postDyingPrompt(actor) {
  * Wire the prompt card's button (dispatched from stonetop.js renderChatMessageHTML).
  * Non-owners see it disabled: whose brush with death this is matters.
  */
-export function wireDyingPrompt(message, html) {
+export function wireDyingPrompt(message, html, { user = globalThis.game?.user } = {}) {
 	const root = html?.[0] ?? html;
-	const btn = root.querySelector(".stonetop-dying-btn");
+	const btn = root.querySelector(".stonetop-dying-open, .stonetop-dying-move");
 	if (!btn) return;
 
 	const doc   = fromUuidSync(btn.dataset.actor);
@@ -432,4 +468,148 @@ export function wireDyingPrompt(message, html) {
 	if (!actor?.isOwner) { btn.disabled = true; return; }
 
 	btn.addEventListener("click", () => openZeroHpMove(actor));
+	if (user?.isGM) wireDyingGmButtons(root, actor);
+}
+
+/**
+ * The 0-HP moves whose trigger asks whether the blow could kill: Death's Door ("When a PC is reduced to 0 HP by
+ * an attack that could kill them, they're dying", p.245) and Dark Succor ("When you are dying or killed
+ * outright", p.152). Undying and Tethered trigger "When you are reduced to 0 HP" (p.150, p.148), lethal or not,
+ * so a GM's "not lethal" has nothing to call off for them.
+ */
+const LETHALITY_MOVES = new Set([zeroHpMove(null).name, zeroHpMove("thrall").name]);
+
+/**
+ * What the GM may rule from the dying card right now, off the character's hit points, Death's Door state and
+ * the 0-HP move they trigger (`insertSlug`, as zeroHpMove reads it). Pure. The card lives in the log long after
+ * the moment, so it is asked at every draw and again at the press.
+ *
+ *  • `notLethal` while they are dying, on a move that asks about lethality (LETHALITY_MOVES): "If the source
+ *    of damage isn't likely to kill anyone, then the PC is simply out of the action" (p.240). The hit points
+ *    dropped them, but whether it was lethal is the GM's call.
+ *  • `markDying` at 0 HP with nothing owed (out of the action, or nothing at all): "They might also be dying
+ *    because the fiction demands it" (p.245). A character already at 0 HP who takes a lethal blow writes no new
+ *    hit points, so nothing else can send them to the Door.
+ */
+export function dyingCardGmOptions({ hp = 0, state = null, insertSlug = null } = {}) {
+	return {
+		notLethal: state === DEATHS_DOOR_STATE.DYING && LETHALITY_MOVES.has(zeroHpMove(insertSlug).name),
+		markDying: (Number(hp) || 0) <= 0 && (state === null || state === DEATHS_DOOR_STATE.OUT_OF_ACTION),
+	};
+}
+
+/** The character's hit points, Death's Door state as it should be read, and insert, for dyingCardGmOptions. */
+function dyingCardFacts(actor) {
+	const insertSlug = resolvedFlagProperty(actor, "postDeathInsert.slug") ?? null;
+	return {
+		hp: Number(actor?.system?.attributes?.hp?.value) || 0,
+		state: effectiveDeathsDoorState({
+			state:      resolvedFlagProperty(actor, DEATHS_DOOR_FLAG) ?? null,
+			insertSlug,
+		}),
+		insertSlug,
+	};
+}
+
+/**
+ * The GM's ruling that what dropped them was not lethal: out of the action, and no Death's Door (or Dark Succor)
+ * to face (p.240). Refused for Undying and Tethered, which trigger on any drop to 0 HP (dyingCardGmOptions).
+ * One write, the state and the end of any roll in progress with it (a window still rolling lands nothing: it
+ * reads the character as no longer dying). The GM writes every actor, so it is written here. Whether it was.
+ */
+export async function markNotLethal(actor) {
+	const facts = dyingCardFacts(actor);
+	if (!dyingCardGmOptions(facts).notLethal) {
+		// Dying on Undying or Tethered: the move triggers on 0 HP however it came, so there is nothing to call off.
+		const move = zeroHpMove(facts.insertSlug);
+		ui.notifications?.info?.(facts.state === DEATHS_DOOR_STATE.DYING && !LETHALITY_MOVES.has(move.name)
+			? format(`${_I18N}.dyingCard.notLethalUndeath`, { name: actor?.name ?? "", move: move.name })
+			: format(`${_I18N}.dyingCard.notDying`, { name: actor?.name ?? "" }));
+		return false;
+	}
+	// A Heavy fighting on at 0 HP on Unstoppable's word has survived this: "If you survive, clear all your
+	// circles" (Book I p.114), and their Battle Joy, kept going at the drop, is over with them out of the
+	// action, with no roll (battle-joy.js#battleJoyEndsUnrolled). Both in the same write, so nothing stale
+	// (a circle charged against the next Death's Door, debilities ignored while unconscious) outlives the ruling.
+	const unstoppable = downOnUnstoppable(actor) ? clearCirclesUpdate(actor) : { marks: 0, update: {} };
+	const joyEnds = !!resolvedFlagProperty(actor, BATTLE_JOY_FLAG);
+	await actor.update({
+		[`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`]: DEATHS_DOOR_STATE.OUT_OF_ACTION,
+		...Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_ROLLING_FLAG}`)]),
+		...(joyEnds ? Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${BATTLE_JOY_FLAG}`)]) : {}),
+		...unstoppable.update,
+		// Out of the action, they have stopped fighting: the "fighting on" stamp goes too.
+		...stopFightingUpdate(actor),
+	}, { stonetopMove: localize(`${_I18N}.title`) });
+	const name = escHtml(actor.name);
+	const lines = [format(`${_I18N}.dyingCard.notLethalCard`, { name })];
+	if (unstoppable.marks === 1) lines.push(format(`${_I18N}.chat.unstoppableOne`, { name }));
+	else if (unstoppable.marks > 1) lines.push(format(`${_I18N}.chat.unstoppableMany`, { name, count: unstoppable.marks }));
+	if (joyEnds) lines.push(format("stonetop.battleJoy.endedDown", { name }));
+	await postDyingCard(actor, localize(`${_I18N}.title`), lines.map(line => `<p>${line}</p>`).join(""));
+	return true;
+}
+
+/**
+ * A card in the dying card's skin, `title` over `body` (markup, escaped by the caller), spoken as `actor` (or
+ * as whoever is speaking, with none): the GM's not-lethal ruling here, and the Death's Door window's own lines
+ * (dialogs/DeathsDoorDialog.js, Hard to Kill's trade among them).
+ */
+export async function postDyingCard(actor, title, body) {
+	await ChatMessage.create({
+		speaker: actor ? ChatMessage.getSpeaker({ actor }) : ChatMessage.getSpeaker(),
+		content: stonetopChatCard(title, `<div class="card-content">${body}</div>`, "stonetop-dying-card"),
+	});
+}
+
+/**
+ * The GM sending a character already at 0 HP to the Door, because the fiction demands it (p.245). Written as the
+ * hit points would have written it, so the same hooks answer: the dying card is posted and the walkthrough opens
+ * on their player's screen (onUpdateActorDeathsDoorCard, onUpdateActorDeathsDoorAutoOpen). Whether it was.
+ */
+export async function markDyingByFiat(actor) {
+	if (!dyingCardGmOptions(dyingCardFacts(actor)).markDying) {
+		ui.notifications?.info?.(format(`${_I18N}.dyingCard.cannotMarkDying`, { name: actor?.name ?? "" }));
+		return false;
+	}
+	// A new brush with death: whatever the last one's 7-9 left open for Hard to Kill goes with it, as on the HP path.
+	// And they were not "reduced to 0 HP in battle" by this ruling (Book I p.114): already down, they face the Door
+	// rather than fight on, so no Unstoppable stamp is laid, and any left over is lifted.
+	await actor.update({
+		[`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`]: DEATHS_DOOR_STATE.DYING,
+		...Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${HARD_TO_KILL_TRADE_FLAG}`)]),
+		...stopFightingUpdate(actor),
+	}, { stonetopMove: localize(`${_I18N}.title`) });
+	return true;
+}
+
+/**
+ * The GM's two buttons on the dying card, after the character's own: drawn on the GM's client only, on every
+ * dying card (one posted before they existed included), and each enabled only while its ruling still applies.
+ */
+function wireDyingGmButtons(root, actor) {
+	const row = root.querySelector(".stonetop-dying-actions");
+	if (!row || row.querySelector(".stonetop-dying-gm")) return;
+	const allowed = dyingCardGmOptions(dyingCardFacts(actor));
+	const make = (cls, icon, key, enabled, act) => {
+		const button = (root.ownerDocument ?? globalThis.document).createElement("button");
+		button.type = "button";
+		button.className = `stonetop-dying-btn stonetop-dying-gm ${cls}`;
+		button.innerHTML = `<i class="fas ${icon}"></i> ${escHtml(localize(`${_I18N}.dyingCard.${key}`))}`;
+		button.dataset.tooltip = localize(`${_I18N}.dyingCard.${key}Hint`);
+		button.disabled = !enabled;
+		button.addEventListener("click", async () => {
+			if (button.disabled) return;
+			button.disabled = true;
+			try {
+				await act(actor);
+			} catch (err) {
+				console.error("Stonetop | the GM's ruling on the dying card failed", err);
+				button.disabled = false;
+			}
+		});
+		row.appendChild(button);
+	};
+	make("stonetop-dying-not-lethal", "fa-bed", "notLethal", allowed.notLethal, markNotLethal);
+	make("stonetop-dying-mark", "fa-skull", "markDying", allowed.markDying, markDyingByFiat);
 }

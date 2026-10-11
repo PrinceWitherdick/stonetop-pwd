@@ -88,6 +88,11 @@
 								<i class="fas fa-times"></i>
 							</button>
 						</div>
+						{{!-- The character's gear tags and typed reminders (gear-reminders.js), read-only, on a
+						      line of their own across the whole row: every cell above is one line tall. --}}
+						{{#if reminders.length}}
+						<div class="steading-player-reminders">{{> "stonetop.reminder-chips" chips=reminders}}</div>
+						{{/if}}
 					</li>
 					{{/if}}
 					{{/each}}

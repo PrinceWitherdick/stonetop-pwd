@@ -40,7 +40,7 @@ describe("legacyYearName", () => {
 describe("planYearPageRenames", () => {
 	it("renames a page still wearing the old ordinal name", () => {
 		expect(planYearPageRenames([page("a", "First Year", 1), page("b", "Third Year", 3)]))
-			.toEqual([{ _id: "a", name: "Year One" }, { _id: "b", name: "Year Three" }]);
+			.toMatchObject([{ _id: "a", name: "Year One" }, { _id: "b", name: "Year Three" }]);
 	});
 
 	// The whole safety argument: it recognises a GENERATED name and writes one, so the second
@@ -107,7 +107,7 @@ describe("renameSeasonYearPages", () => {
 		expect(await renameSeasonYearPages(entry)).toBe(1);
 		expect(entry.calls).toEqual([{
 			type: "JournalEntryPage",
-			updates: [{ _id: "a", name: "Year One" }],
+			updates: [{ _id: "a", name: "Year One", flags: { [SYSTEM_ID]: { yearPageName: "Year One" } } }],
 		}]);
 	});
 

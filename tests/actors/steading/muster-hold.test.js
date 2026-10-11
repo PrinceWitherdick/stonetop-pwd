@@ -37,13 +37,16 @@ describe("raising the muster", () => {
 		// The latch itself lives in the shared card-button wiring; this card names the flag it
 		// latches on and stamps WHICH button was pressed, so a re-render can relabel it.
 		expect(body).toContain(`flag: "musterRaised"`);
-		expect(body).toContain("stamp: { defenses }");
+		// Which button, and whether Defenses was already at +3 so the pick added nothing.
+		expect(body).toContain("stamp: { defenses, capped }");
 		expect(body).toContain("raiseMuster({ defenses })");
 		const wiring = MAIN.indexOf("function _wireSteadingCardButtons");
 		expect(wiring).toBeGreaterThan(-1);
 		const shared = MAIN.slice(wiring, wiring + 1400);
 		expect(shared).toContain("message.getFlag(SYSTEM_ID, flag)");
-		expect(shared).toContain("message.setFlag(SYSTEM_ID, flag, stamp)");
+		// Latched BEFORE the work, then restamped with what the work answered (card-latch.js).
+		expect(shared).toContain("withLateStampLatch(message, flag, btns,");
+		expect(read("module/utils/card-latch.js")).toContain("await message.setFlag(SYSTEM_ID, flag, stamp)");
 		expect(MAIN).toContain("_chatWireMusterRaise(message, html);");
 	});
 });

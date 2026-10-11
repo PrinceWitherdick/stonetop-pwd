@@ -89,7 +89,9 @@ export function giveItAllTarget(total, record = null) {
  */
 export function offersGiveItAll(message, actor) {
 	if (!actorTookBackground(actor, IMPETUOUS_YOUTH)) return false;
-	if (!isBoostableRoll(message)) return false;
+	// Asked here, not left to isBoostableRoll: that one opens a Door card to a +1 while its window waits,
+	// and the Door's give it your all is its window's own (giveItAllAtDeathsDoor).
+	if (isDeathsDoorCard(message) || !isBoostableRoll(message)) return false;
 	if (message.getFlag?.(SYSTEM_ID, GAVE_IT_ALL_FLAG)) return false;
 	if (!canRewriteCard(message, actor)) return false;
 	const record = message.getFlag?.(SYSTEM_ID, ROLLED_FLAG) ?? null;

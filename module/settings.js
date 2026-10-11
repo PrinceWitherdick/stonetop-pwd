@@ -1,13 +1,15 @@
 import { DEFAULT_ROOT as DEFAULT_BOOK2_ART_ROOT } from "./book2-art/art-root.js";
-import { RULEBOOKS_SETTING } from "./books/rulebooks.js";
+import { RULEBOOKS_SETTING, FORGOTTEN_RULEBOOKS_SETTING } from "./books/rulebooks.js";
 import { POSTER_MAPS, posterMapSlugOf } from "./book2-art/poster-map-catalog.js";
 import { SYSTEM_ID } from "./system-id.js";
+import { START_YEAR_CHANGED_HOOK, forgetStartYear } from "./seasons/campaign-year.js";
 import { WEATHER_FX_PARTS, WEATHER_FX_SETTING } from "./seasons/weather-fx-parts.js";
 import { isPrimaryGM } from "./utils/primary-gm.js";
 import { localize } from "./utils/i18n.js";
 import { PALETTE_HOOK } from "./utils/palette.js";
 import { MIN_MAP_BRIGHTNESS } from "./hooks/map-brightness.js";
 import { applyTimelineKindColours, normalizeKindColours } from "./timeline/timeline-colours.js";
+import { AGES_CHANGED_HOOK, agesToStored, normalizeAges } from "./timeline/timeline-ages.js";
 
 /**
  * A weather-effect setting changed, so the canvas has to catch up with it: unticking Fog must
@@ -489,6 +491,17 @@ export function registerSettings() {
 		default: false
 	});
 
+	// The last End of Session group award, `{at, xp, ids}` (dialogs/EndOfSessionDialog.js): when, how
+	// much, and to whom. World-scoped so a second GM, or the same GM reopening the window, is asked
+	// before the session's XP is handed out again.
+	game.settings.register(SYSTEM_ID, "lastEndOfSession", {
+		name: "Last End of Session Award",
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {}
+	});
+
 	// Whether the "(TEST ONLY) Populate World" dev macro has been seeded into the
 	// world's Macro Directory (see hooks/Ready.js _ensureTestPopulateMacro). Set true
 	// after the first GM load so it's added exactly once — a GM who later deletes it
@@ -659,8 +672,23 @@ export function registerSettings() {
 	// One record rather than a key per book: `book: 3` is already a number this codebase cites
 	// (the free GM playbook, see gm-toolkit/book-ref.js), so a third book should be a row in
 	// RULEBOOKS and nothing else.
+	//
+	// Redraws the open sheets on every client because their book icons are drawn at render: a book
+	// picked up at ready (books/adopt-stored-rulebooks.js), or kept or forgotten by the GM, would
+	// otherwise leave an open GM Toolkit dimmed and a player's sheet without its icon.
 	game.settings.register(SYSTEM_ID, RULEBOOKS_SETTING, {
 		name: "Your Rulebook PDFs",
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {},
+		onChange: () => _rerenderActorSheets(),
+	});
+
+	// The books the GM has Forgotten in this world, so a copy left in stonetop-books/ is not
+	// picked up again on the next load (see books/adopt-stored-rulebooks.js).
+	game.settings.register(SYSTEM_ID, FORGOTTEN_RULEBOOKS_SETTING, {
+		name: "Forgotten Rulebook PDFs",
 		scope: "world",
 		config: false,
 		type: Object,
@@ -1544,6 +1572,22 @@ export function registerSettings() {
 		onChange: value => applyEditPencilRevealDelay(value),
 	});
 
+	// What the campaign's first year of play is CALLED ("Year 1247"), for the whole table. Every year
+	// the system stores is counted from play's first year, and every label reads this to name it
+	// (seasons/campaign-year.js), so a GM who changes it moves everything recorded at once, history
+	// included, with nothing rewritten. 1 is the old "Year One". Set from the time banner's Set the
+	// Year and from the session-zero walkthrough's first spring, never from the settings window.
+	game.settings.register(SYSTEM_ID, "campaignStartYear", {
+		scope: "world",
+		config: false,
+		type: Number,
+		default: 1,
+		onChange: value => {
+			forgetStartYear();
+			globalThis.Hooks?.callAll?.(START_YEAR_CHANGED_HOOK, value);
+		},
+	});
+
 	// The weather, the season and the year hung from the top of the screen (seasons/time-banner.js).
 	// Per browser: it sits over the map for everybody, and a player who finds it in the way takes
 	// it down for themselves without asking the GM to take it down for the table. No onChange: the
@@ -1707,6 +1751,47 @@ export function registerSettings() {
 		type: Object,
 		default: {},
 		onChange: value => applyTimelineKindColours(value),
+	});
+
+	// THE WORLD'S AGES: named runs of years laid over the timeline as bands along its foot
+	// (timeline/timeline-ages.js), keyed by id, years STORED. World-scoped and so GM-only to write,
+	// as the campaign's year is: an Age is how the whole table reads its history. Set from the
+	// timeline toolbar's Ages window, so `config: false`. onChange fires on every client, which is
+	// what repaints every open timeline the moment the GM saves.
+	game.settings.register(SYSTEM_ID, "timelineAges", {
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {},
+		onChange: () => globalThis.Hooks?.callAll?.(AGES_CHANGED_HOOK),
+	});
+
+	// WHERE THE AGES' COLOUR WALK HAS GOT TO (timeline-ages.js#nextAgeColour). Only ever moves on, so a
+	// colour once given to an Age is never given to another, even after the first is deleted
+	// (user, 2026-10-07). World-scoped with the Ages themselves.
+	game.settings.register(SYSTEM_ID, "timelineAgeColourSeq", {
+		scope: "world",
+		config: false,
+		type: Number,
+		default: 0,
+	});
+
+	// WHETHER THE BOOK'S AGES HAVE BEEN ADDED to this world (timeline/timeline-book-ages.js). Once
+	// only, so an Age of the book's that the GM deletes stays deleted.
+	game.settings.register(SYSTEM_ID, "timelineBookAgesAdded", {
+		scope: "world",
+		config: false,
+		type: Boolean,
+		default: false,
+	});
+
+	// WHETHER THIS READER SEES THE AGES' BANDS. Per client, from the Filter menu: the bands lie over
+	// the timeline's foot, and a reader who wants every pixel of it back can have it.
+	game.settings.register(SYSTEM_ID, "timelineShowAges", {
+		scope: "client",
+		config: false,
+		type: Boolean,
+		default: true,
 	});
 
 	// Reopen the document sheets (characters, steadings, monsters, NPCs, items, journals)
@@ -2217,10 +2302,21 @@ export function applySheetFont(value) {
 	document.documentElement.style.setProperty("--st-caps-nudge", _FONT_CAPS_NUDGE[key]);
 }
 
-export function applySheetFontScale(value) {
+// A stored font scale as it is drawn: a positive number, or 1 (as drawn). The one sanitizer, so the
+// CSS variable and a reader sizing text in JS (getSheetFontScale) cannot disagree on a bad value.
+function _safeFontScale(value) {
 	const scale = Number(value);
-	const safe  = Number.isFinite(scale) && scale > 0 ? scale : 1;
-	document.documentElement.style.setProperty("--stonetop-font-scale", String(safe));
+	return Number.isFinite(scale) && scale > 0 ? scale : 1;
+}
+
+/** This reader's sheet font scale (1 = as drawn), what `--stonetop-font-scale` is set from. */
+export function getSheetFontScale() {
+	try { return _safeFontScale(globalThis.game?.settings?.get?.(SYSTEM_ID, "sheetFontScale")); }
+	catch (_) { return 1; }
+}
+
+export function applySheetFontScale(value) {
+	document.documentElement.style.setProperty("--stonetop-font-scale", String(_safeFontScale(value)));
 }
 
 export function applyEditPencilRevealDelay(value) {
@@ -2515,6 +2611,52 @@ export function getTimelineKindColours() {
 /** Repaint the world's kinds. World-scoped: only a GM's write is accepted. */
 export function setTimelineKindColours(colours) {
 	return globalThis.game?.settings?.set?.(SYSTEM_ID, "timelineKindColours", normalizeKindColours(colours));
+}
+
+/** The world's Ages, cleaned and in order (timeline-ages.js#normalizeAges). */
+export function getTimelineAges() {
+	return normalizeAges(getObjectSetting("timelineAges"));
+}
+
+/**
+ * Replace the world's Ages, whole: a setting's value is stored as one JSON string, so an Age left out
+ * is gone. World-scoped: only a GM's write is accepted.
+ */
+export function setTimelineAges(ages) {
+	return globalThis.game?.settings?.set?.(SYSTEM_ID, "timelineAges", agesToStored(ages));
+}
+
+/** Where the Ages' colour walk stands: the next step to try. */
+export function getTimelineAgeColourSeq() {
+	const seq = Math.trunc(Number(globalThis.game?.settings?.get?.(SYSTEM_ID, "timelineAgeColourSeq")));
+	return Number.isFinite(seq) && seq > 0 ? seq : 0;
+}
+
+/** Move the colour walk on. Never back: a lower value than the world's is ignored. */
+export function setTimelineAgeColourSeq(seq) {
+	const next = Math.trunc(Number(seq));
+	if (!Number.isFinite(next) || next <= getTimelineAgeColourSeq()) return null;
+	return globalThis.game?.settings?.set?.(SYSTEM_ID, "timelineAgeColourSeq", next);
+}
+
+/** Have the book's Ages been added to this world yet (timeline/timeline-book-ages.js)? */
+export function getTimelineBookAgesAdded() {
+	return getBooleanSetting("timelineBookAgesAdded", false);
+}
+
+/** Mark the book's Ages added, for good. World-scoped: only a GM's write is accepted. */
+export function setTimelineBookAgesAdded() {
+	return globalThis.game?.settings?.set?.(SYSTEM_ID, "timelineBookAgesAdded", true);
+}
+
+/** Does this reader see the Ages' bands? On unless they turned them off. */
+export function getTimelineShowAges() {
+	return getBooleanSetting("timelineShowAges", true);
+}
+
+/** Show or hide the Ages' bands for this reader. */
+export function setTimelineShowAges(shown) {
+	return globalThis.game?.settings?.set?.(SYSTEM_ID, "timelineShowAges", !!shown);
 }
 
 /**

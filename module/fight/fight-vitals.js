@@ -13,6 +13,7 @@ import { SYSTEM_ID } from "../system-id.js";
 import { heldReadiness } from "../combat/defend-readiness.js";
 import { groupFollowerStanding } from "../utils/crew.js";
 import { readableFlags } from "../actors/character/StonetopFlags.js";
+import { reminderChips, chipLine } from "../actors/character/gear-reminders.js";
 
 /** A number, or null for anything that is not one. */
 const numberOr = value => (value === "" || value === null || value === undefined || !Number.isFinite(Number(value)) ? null : Number(value));
@@ -49,6 +50,15 @@ export function followerRoster(combatant, { resolve = globalThis.fromUuidSync } 
 	return groupFollowerStanding(readableFlags(character), origin);
 }
 
+/**
+ * What the table should keep in mind about a character in the fight: the wearer tags on their gear
+ * and their typed reminders, off the stored fields (actors/character/gear-reminders.js). Empty for
+ * anyone who is not a character. A hero's, so every reader sees them, as they see a hero's HP.
+ */
+export function combatantReminders(combatant) {
+	return reminderChips(combatant?.actor);
+}
+
 /** Whether `user` may read this combatant's numbers when it is a foe. */
 export function canReadFoeVitals(combatant, user = globalThis.game?.user) {
 	if (user?.isGM) return true;
@@ -73,14 +83,15 @@ export function vitalsLine({ hp = null, hpMax = null, armor = null, readiness = 
 
 /**
  * Every combatant's numbers as one string, so a redraw can be skipped when neither the engagements
- * nor anyone's HP, armor or group roster changed (fight-boot.js#refreshFightTab).
+ * nor anyone's HP, armor, group roster or reminders changed (fight-boot.js#refreshFightTab).
  */
 export function fightVitalsKey(combat, options) {
 	return [...(combat?.combatants ?? [])]
 		.map(combatant => {
 			const { hp, hpMax, armor, readiness } = combatantVitals(combatant);
 			const roster = followerRoster(combatant, options);
-			return `${combatant.id}:${hp}/${hpMax}/${armor}/${readiness}/${roster ? `${roster.standing}of${roster.size}` : ""}`;
+			const reminders = combatantReminders(combatant).map(chipLine).join(";");
+			return `${combatant.id}:${hp}/${hpMax}/${armor}/${readiness}/${roster ? `${roster.standing}of${roster.size}` : ""}/${reminders}`;
 		})
 		.join("|");
 }

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { wireUndoXpMark, XP_MARK_FLAG, XP_UNDONE_FLAG } from "../../module/utils/undo-xp-mark.js";
+import {
+	wireUndoXpMark, XP_MARK_FLAG, XP_UNDONE_FLAG, XP_MARK_FOR_FLAG, MISS_XP_FLAG, MISS_XP_STATE_FLAG,
+} from "../../module/utils/undo-xp-mark.js";
+import { reconcileMissXp } from "../../module/utils/roll-engine.js";
+import { inCardTurn } from "../../module/utils/card-queue.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 
 // The Undo on the XP receipt a miss posts.
@@ -231,5 +235,67 @@ describe("wireUndoXpMark shows the button only where it means something", () => 
 		expect(actor.update).not.toHaveBeenCalled();
 		expect(noticed[0]).toContain("no XP left to take back");
 		expect(btn.card.classList.classes.has("is-xp-undone")).toBe(true);
+	});
+});
+
+// A miss's receipt is undone on its roll card's writer, in the card's turn, where a rewrite that lifts the
+// card off the miss takes the same XP back. Undone on the pressing client, the two passed the same unset
+// latch and the XP went back twice; and the card did not learn it was waived, so a later rewrite that left
+// it on a miss marked the XP again.
+describe("undoing a miss's receipt", () => {
+	function missCard() {
+		const flags = { [MISS_XP_FLAG]: true, [MISS_XP_STATE_FLAG]: "marked" };
+		return {
+			id: "c1", flags, speaker: { actor: "a1" }, rolls: [{ total: 6 }],
+			getFlag: (scope, key) => (scope === SYSTEM_ID ? flags[key] : undefined),
+			setFlag: vi.fn(async (scope, key, value) => { flags[key] = value; }),
+			unsetFlag: vi.fn(async (scope, key) => { delete flags[key]; }),
+			canUserModify: () => true,
+		};
+	}
+	function receiptOf(card) {
+		const receipt = fakeMessage({ marked: 1 });
+		receipt.id = "r1";
+		receipt.flags[XP_MARK_FOR_FLAG] = card.id;
+		return receipt;
+	}
+	function inWorld(actor, ...log) {
+		actor.testUserPermission = () => true;
+		Object.assign(global.game, {
+			user: { id: "gm", isGM: true },
+			users: { activeGM: null },
+			messages: { contents: log, get: id => log.find(m => m.id === id) ?? null },
+		});
+	}
+
+	it("is undone once, and the card records the waiver", async () => {
+		const actor = world({ xp: 11 });
+		const card = missCard();
+		const receipt = receiptOf(card);
+		inWorld(actor, card, receipt);
+		const btn = fakeButton();
+		wireUndoXpMark(receipt, fakeHtml(btn));
+
+		await btn.click();
+
+		expect(actor.system.attributes.xp.value).toBe(10);
+		expect(card.flags[MISS_XP_STATE_FLAG]).toBe("waived");
+		expect(receipt.flags[XP_UNDONE_FLAG]).toBe(true);
+	});
+
+	it("takes the XP back once when a lift off the miss lands at the same moment", async () => {
+		const actor = world({ xp: 11 });
+		const card = missCard();
+		const receipt = receiptOf(card);
+		inWorld(actor, card, receipt);
+		const btn = fakeButton();
+		wireUndoXpMark(receipt, fakeHtml(btn));
+
+		await Promise.all([
+			btn.click(),
+			inCardTurn(card, () => reconcileMissXp(card, 7, { actor })),
+		]);
+
+		expect(actor.system.attributes.xp.value).toBe(10);
 	});
 });

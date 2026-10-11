@@ -67,6 +67,7 @@ export {
  * @property {ArcanaSnapshot} arcana
  * @property {PostDeathSectionSnapshot} postDeathInsert
  * @property {string} rollMode - "normal" | "adv" | "dis"
+ * @property {{tag: string, items: string[]}[]} gearTags - wearer tags on carried gear (gear-reminders.js)
  */
 export class CharacterSnapshot {
 	constructor(b) {
@@ -97,6 +98,9 @@ export class CharacterSnapshot {
 		// that passed `viewerIsGM` correctly and forgot the bolt-on would silently lose the
 		// controls. Defaults false, the safe way round.
 		this.isGM            = !!b._isGM;
+		// The wearer tags on the carried gear, `[{ tag, items }]` (actors/character/gear-reminders.js):
+		// what the header's reminder chips show, worked out from this render's gear.
+		this.gearTags        = b._gearTags ?? [];
 	}
 }
 
@@ -118,5 +122,6 @@ export class CharacterSnapshotBuilder {
 	withCompanionBonuses(v) { this._companionBonuses = v; return this; }
 	withCompanionDef(v)    { this._companionDef    = v; return this; }
 	withViewerIsGM(v)      { this._isGM            = v; return this; }
+	withGearTags(v)        { this._gearTags        = v; return this; }
 	build()                { return new CharacterSnapshot(this); }
 }

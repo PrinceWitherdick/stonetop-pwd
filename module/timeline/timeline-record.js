@@ -16,7 +16,7 @@
 //    write the page, a page mid-delete: the milestone is skipped with one console warning, and the
 //    thing that happened (the damage, the level, the death) goes ahead regardless.
 
-import { addKills, upsertByKey } from "./timeline-core.js";
+import { addKills, readEntries, removeEntry, upsertByKey } from "./timeline-core.js";
 import { mutateTrack, trackForActor } from "./timeline-store.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
 import { currentSeasonView, readCurrentSeason, readCurrentYear } from "../seasons/current-season.js";
@@ -65,10 +65,10 @@ function warnOnce(err) {
  * `strict` is for a caller that must tell "failed" from "nothing to write", which a null answers
  * for both: the backfill, which marks itself done only once every write has landed.
  */
-async function writeOnTrack(track, mutate, now, { strict = false } = {}) {
+async function writeOnTrack(track, mutate, now, { strict = false, create = true } = {}) {
 	try {
 		const meta = { now: now ?? timelineNow(), createdAt: Date.now(), authorId: globalThis.game?.user?.id ?? "" };
-		const done = await mutateTrack(track, stored => mutate(stored, meta), { create: true });
+		const done = await mutateTrack(track, stored => mutate(stored, meta), { create });
 		return done?.page ?? null;
 	} catch (err) {
 		if (strict) throw err;
@@ -109,6 +109,32 @@ export async function recordMilestones(target, milestones = [], { now, strict = 
 		}
 		return { entries, changed: moved };
 	}, now, { strict });
+}
+
+/**
+ * Take milestones back off a track, by key: the thing that wrote them was UNDONE (user, 2026-10-10)
+ * -- "Would-be" written back in, an oath's broken tick taken off, an improvement unticked in the
+ * season it was ticked. Only a row the system wrote under that key goes; a typed row has none. Mints
+ * no page: a track with none has nothing to forget.
+ *
+ * @param {Actor|{trackId: string}} target
+ * @param {string|string[]} keys
+ */
+export async function forgetMilestones(target, keys = []) {
+	const track = trackOf(target);
+	const wanted = new Set((Array.isArray(keys) ? keys : [keys]).filter(Boolean));
+	if (!track || !wanted.size) return null;
+	return writeOnTrack(track, (stored) => {
+		let entries = stored;
+		const gone = [];
+		for (const entry of readEntries(stored)) {
+			if (!entry.key || !wanted.has(entry.key)) continue;
+			const result = removeEntry(entries, entry.id);
+			entries = result.entries;
+			if (result.removed) gone.push(result.removed);
+		}
+		return { entries, removed: gone.length ? gone : null };
+	}, null, { create: false });
 }
 
 /**

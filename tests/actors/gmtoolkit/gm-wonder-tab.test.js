@@ -308,6 +308,16 @@ describe("the I wonder tab: context", () => {
 		expect(game.i18n.localize("stonetop.gmToolkit.wonder.guideNote")).toBe("Book I, p.33");
 	});
 
+	// The two Sites cross-references sit in "Build up its story": the connections list names
+	// "The questions on your "I wonder..." list" (p.358), and "Answer those questions" says to add a
+	// stumper to the list (p.359). p.381 and p.418 are the Dangers chapter and never mention it.
+	it("cites the Sites pages that actually send a GM back to the list", () => {
+		const items = GM_WONDER_GUIDE.flatMap(s => s.items).join("\n");
+		expect(items).toMatch(/wrong question \(p\.359\)/);
+		expect(items).toMatch(/mysteries come from \(p\.358\)/);
+		expect(items).not.toMatch(/p\.381|p\.418/);
+	});
+
 	// The guide is half questions, on the tab named for asking them. They only draw as questions
 	// if the swap is re-asserted INSIDE this list: the global `li.question-bullet::before` weighs
 	// the same as the list's own spiral default and loses to it on source order, so the items

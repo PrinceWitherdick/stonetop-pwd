@@ -865,6 +865,45 @@ describe("rollStat lasting-injury reminder", () => {
 	});
 });
 
+describe("rollStat keep-in-mind notice", () => {
+	function actorWith({ gearTags = [], reminders = [] } = {}) {
+		const actor = makeActor();
+		actor.system.attributes.gearTags = gearTags;
+		actor.system.reminders = reminders;
+		return actor;
+	}
+
+	it("puts the carried gear's tags and the typed reminders on one line", async () => {
+		rollTotal = 10;
+		await rollStat("dex", actorWith({
+			gearTags: [{ tag: "cumbersome", items: ["Hauberk"] }, { tag: "warm", items: ["Hauberk", "Cloak"] }],
+			reminders: ["Reeks of smoke"],
+		}), { moveName: "Defy Danger with DEX" });
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("stonetop-roll-reminders-notice");
+		expect(flavor).toContain("Keep in mind");
+		expect(flavor).toContain("Cumbersome (Hauberk) · Warm (Hauberk, Cloak) · Reeks of smoke");
+	});
+
+	it("escapes a typed reminder", async () => {
+		rollTotal = 10;
+		await rollStat("str", actorWith({ reminders: ["<b>loud</b>"] }), { moveName: "Clash" });
+		expect(rollMessages[0].flavor).toContain("&lt;b&gt;loud&lt;/b&gt;");
+	});
+
+	it("says nothing when there is nothing to keep in mind", async () => {
+		rollTotal = 10;
+		await rollStat("str", actorWith(), { moveName: "Clash" });
+		expect(rollMessages[0].flavor).not.toContain("stonetop-roll-reminders-notice");
+	});
+
+	it("is not on a follower's roll", async () => {
+		rollTotal = 10;
+		await rollStat("follower", actorWith({ reminders: ["Reeks of smoke"] }), { statValue: 1, moveName: "Order Followers" });
+		expect(rollMessages[0].flavor).not.toContain("stonetop-roll-reminders-notice");
+	});
+});
+
 describe("rollStat problematic-wound prompt", () => {
 	function actorWithWounds(wounds) {
 		const actor = makeActor();

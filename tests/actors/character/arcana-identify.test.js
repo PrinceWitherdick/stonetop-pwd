@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-	knowThingsRollChoices, withAdvantage, KNOW_THINGS_STAT, KNOW_THINGS_ADVANTAGE_MOVES,
+	knowThingsRollChoices, advantageRollOptions, KNOW_THINGS_STAT, KNOW_THINGS_ADVANTAGE_MOVES,
 } from "../../../module/actors/character/arcana-identify.js";
+import { layModes } from "../../../module/utils/roll-mode.js";
 
 describe("knowThingsRollChoices", () => {
 	it("gives a plain +INT roll and no dialog to a character with none of the moves", () => {
@@ -51,22 +52,31 @@ describe("knowThingsRollChoices", () => {
 	});
 });
 
-describe("withAdvantage", () => {
+// A claimed advantage folded into the roll mode the character already carries, as a roll's options, keeping
+// the sides that spoke: a cancelled pair must stay cancelled when a debility is laid on afterwards, since one
+// side each way cancels however many of each there are (p.230).
+describe("advantageRollOptions", () => {
 	// Book I p.230: "When you make a roll with both advantage and disadvantage, they cancel each
 	// other out" and "Advantage/disadvantage don't 'stack.' They're binary."
 	it("leaves the character's own roll mode alone when nothing is claimed", () => {
-		for (const mode of ["normal", "adv", "dis"]) expect(withAdvantage(mode, false)).toBe(mode);
+		for (const mode of ["normal", "adv", "dis"]) expect(advantageRollOptions(mode, false).rollMode).toBe(mode);
 	});
 
 	it("upgrades a normal roll", () => {
-		expect(withAdvantage("normal", true)).toBe("adv");
+		expect(advantageRollOptions("normal", true).rollMode).toBe("adv");
 	});
 
 	it("cancels against disadvantage rather than overriding it", () => {
-		expect(withAdvantage("dis", true)).toBe("normal");
+		expect(advantageRollOptions("dis", true).rollMode).toBe("normal");
 	});
 
 	it("does not stack on advantage the character already has", () => {
-		expect(withAdvantage("adv", true)).toBe("adv");
+		expect(advantageRollOptions("adv", true).rollMode).toBe("adv");
+	});
+
+	it("keeps a cancelled pair cancelled under a debility laid on after it", () => {
+		const options = advantageRollOptions("dis", true);
+		expect(options).toMatchObject({ rollMode: "normal", modeBase: "dis", modeSources: ["adv"] });
+		expect(layModes(options, ["dis"]).rollMode).toBe("normal");
 	});
 });

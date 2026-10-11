@@ -475,6 +475,24 @@ describe("the unticked lines a Ranger's moves bring", () => {
 		expect(rolledWith(defy).rollMode).toBe("adv");
 		expect(rolledWith(defy).conditionNotes).toContain("Constant Vigilance");
 	});
+
+	// GUARD (wave 4): a move a player wrote under a book move's name acts as itself (owns-move.js#bookMoveName).
+	// It is still a move rolled in their presence, so the rows of every move roll stay; no named row rides it,
+	// and the book's tier effects (Prepare a Welcome's Surprise, Commune's Sanction, ...) never settle off it.
+	it("gives a player's own \"Defy Danger\" only the rows of every move roll, and no tier effects", async () => {
+		const { char, actor, defy, roll } = rangerRoller({ moves: ["Home on the Range", "Constant Vigilance"], total: 10 });
+		const homebrew = { ...defy, _id: "homebrew-defy", flags: { [SCOPE]: { custom: true } }, roll: vi.fn(async () => ({ total: 10 })) };
+		actor.items.push(homebrew);
+		expect(await keysOf(char, defy)).toEqual(["home-on-the-range", "constant-vigilance"]);
+		expect(await keysOf(char, homebrew)).toEqual(["constant-vigilance"]);
+
+		const settle = vi.spyOn(char, "_settleRolledTierEffects").mockResolvedValue(undefined);
+		await roll(homebrew, {});
+		expect(homebrew.roll).toHaveBeenCalledTimes(1);
+		expect(settle).not.toHaveBeenCalled();
+		await roll(defy, {});
+		expect(settle).toHaveBeenCalledWith(expect.anything(), "Defy Danger", expect.anything(), expect.anything());
+	});
 });
 
 // Ranger audit M10, Alpha: "on a 10+, you also have advantage on your next roll against them." The Alpha's

@@ -177,7 +177,7 @@ export function normalizeHex(value) {
 /* ── The arithmetic ─────────────────────────────────────────────────────── */
 
 /** hsl -> rgb, per CSS Color 4. Hue in degrees, saturation and lightness as 0..1. */
-function hslToRgb(h, s, l) {
+export function hslToRgb(h, s, l) {
 	const c = (1 - Math.abs(2 * l - 1)) * s;
 	const hp = (((h % 360) + 360) % 360) / 60;
 	const x = c * (1 - Math.abs((hp % 2) - 1));
@@ -192,7 +192,7 @@ function hslToRgb(h, s, l) {
 }
 
 /** rgb -> hsl, with hue in degrees and the other two as 0..1. */
-function rgbToHsl([r, g, b]) {
+export function rgbToHsl([r, g, b]) {
 	const [rr, gg, bb] = [r / 255, g / 255, b / 255];
 	const max = Math.max(rr, gg, bb);
 	const min = Math.min(rr, gg, bb);
@@ -252,7 +252,7 @@ export function contrast(a, b) {
 }
 
 /** `[r, g, b]` as `#rrggbb`. */
-function rgbToHex(rgb) {
+export function rgbToHex(rgb) {
 	return `#${rgb.map(v => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, "0")).join("")}`;
 }
 
