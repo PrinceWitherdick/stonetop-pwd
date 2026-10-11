@@ -74,7 +74,10 @@ export function mountedPanelSlot({ field, tab, mountSel, build, openOptions = ()
 		const body = panel?.element?.[0];
 		if (body) {
 			panel.setHost(mount);
-			mount.replaceChildren(body);
+			// ⚠ ALREADY IN PLACE IS LEFT ALONE: the reader coming back to the tab. Taking the body out
+			// and putting it back would zero its scroll (see the header), and nothing was lifted to
+			// say where they were.
+			if (body.parentNode !== mount || mount.childNodes.length !== 1) mount.replaceChildren(body);
 			if (places.has(panel)) {
 				panel._restorePlace?.(places.get(panel));
 				places.delete(panel);

@@ -373,6 +373,29 @@ describe("the gutter to drag off into", () => {
 		off();
 	});
 
+	// A sheet tab the reader goes off hides the box (0x0, offsets reading 0). Sizing it then folded the
+	// gutter away, and the reader's return put it back as a whole gutter's shift on the kept offset.
+	it("leaves a hidden box's gutter alone, so the reader comes back where they were", () => {
+		const box = gutteredBox();
+		const off = wireDragScroll(box, { gutter: 0.75 });
+		box.scrollLeft = 333;
+		box.scrollTop = 444;
+		const gutter = { ...box.vars };
+		box.getClientRects = () => [];
+		box.clientWidth = 0;
+		box.clientHeight = 0;
+		observers[0].fn();
+		expect(box.vars).toEqual(gutter);
+		delete box.getClientRects;
+		box.clientWidth = 400;
+		box.clientHeight = 300;
+		observers[0].fn();
+		expect(box.vars).toEqual(gutter);
+		expect(box.scrollLeft).toBe(333);
+		expect(box.scrollTop).toBe(444);
+		off();
+	});
+
 	// A host whose top row is a sticky header (the aggregate timeline's names) has nothing above it to
 	// scroll into, so the row stays on the top edge; the other three sides keep their room.
 	it("leaves no room above the content when the top is pinned", () => {

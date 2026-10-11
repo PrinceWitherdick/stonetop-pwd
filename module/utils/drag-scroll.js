@@ -303,6 +303,10 @@ export function wireDragScroll(el, { controls = DRAG_SCROLL_CONTROLS, gutter: gu
 	const settle = (want, got) => (got === want ? null : { want, got });
 	const sizeGutter = () => {
 		if (el.isConnected === false) return;
+		// ⚠ A HIDDEN BOX IS NOT SIZED. A sheet tab the reader has gone off measures 0x0 and reads 0
+		// both ways: sized then, the gutter would fold away and come back on their return as a whole
+		// gutter's shift on top of the offset the browser kept for them.
+		if (typeof el.getClientRects === "function" && el.getClientRects().length === 0) return;
 		const win = el.ownerDocument?.defaultView ?? globalThis.window;
 		// The box's size is laid out and the browser window's is on screen: the cap is brought into
 		// the box's own pixels, so a scaled window's gutter still stops at a screenful.
