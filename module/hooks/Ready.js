@@ -33,6 +33,7 @@ import { SpringBurstDialog } from "../dialogs/SpringBurstDialog.js";
 import { pastWelcomeGuide, reopenOpenWalkthroughs } from "../dialogs/walkthrough-resume.js";
 import { reopenOpenBookReaders } from "../books/reader-resume.js";
 import { rulebookMacroApi } from "../books/rulebook-api.js";
+import { adoptStoredRulebooks } from "../books/adopt-stored-rulebooks.js";
 import { writeChronicle } from "../utils/chronicle.js";
 import { ExpeditionDialog } from "../dialogs/ExpeditionDialog.js";
 import { WeatherDialog } from "../dialogs/WeatherDialog.js";
@@ -618,6 +619,10 @@ export async function onReady() {
 	// illustrations cut out of it should not then be asked for Book I a second time to be able to
 	// READ it, which is what the two features did to them before this existed.
 	game.stonetop.rulebooks         = rulebookMacroApi();
+	// And a book an earlier world already kept in stonetop-books/ is picked up by this one, the way
+	// the book art is, so a new world's GM Toolkit opens the books without asking for them again
+	// (books/adopt-stored-rulebooks.js). Self-gated to the primary GM; not awaited, it is one browse.
+	adoptStoredRulebooks().catch(err => console.error("Stonetop | picking up kept rulebooks failed", err));
 
 	// A player settles their own characters' arcana marks on load rather than waiting for the GM's
 	// sweep (migration/tulpa-move-boxes.js), so the first client to show a moved card shows it

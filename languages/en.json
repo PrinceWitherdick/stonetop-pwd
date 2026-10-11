@@ -141,6 +141,9 @@
       "copied": "{title} is ready to read.",
       "copyFailed": "{title} could not be copied into this world. Your host may have refused the upload, or the file may be too large for it.",
       "keepFailed": "{title} was copied in, but this world would not record where it went, so the reader cannot open it yet. Ask your GM to keep this book.",
+      "adopted": "{books} was already on this server, in the stonetop-books folder, so this world's GM Toolkit opens it now. To stop that, forget it under Your rulebooks.",
+      "adoptedMany": "{books} were already on this server, in the stonetop-books folder, so this world's GM Toolkit opens them now. To stop that, forget them under Your rulebooks.",
+      "forgetFailed": "{title} could not be forgotten. This world would not save the change, so the book may come back the next time it loads.",
       "bookmarks": {
         "tab": "Your bookmarks",
         "add": "Bookmark this page",

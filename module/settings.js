@@ -1,5 +1,5 @@
 import { DEFAULT_ROOT as DEFAULT_BOOK2_ART_ROOT } from "./book2-art/art-root.js";
-import { RULEBOOKS_SETTING } from "./books/rulebooks.js";
+import { RULEBOOKS_SETTING, FORGOTTEN_RULEBOOKS_SETTING } from "./books/rulebooks.js";
 import { POSTER_MAPS, posterMapSlugOf } from "./book2-art/poster-map-catalog.js";
 import { SYSTEM_ID } from "./system-id.js";
 import { START_YEAR_CHANGED_HOOK, forgetStartYear } from "./seasons/campaign-year.js";
@@ -672,8 +672,23 @@ export function registerSettings() {
 	// One record rather than a key per book: `book: 3` is already a number this codebase cites
 	// (the free GM playbook, see gm-toolkit/book-ref.js), so a third book should be a row in
 	// RULEBOOKS and nothing else.
+	//
+	// Redraws the open sheets on every client because their book icons are drawn at render: a book
+	// picked up at ready (books/adopt-stored-rulebooks.js), or kept or forgotten by the GM, would
+	// otherwise leave an open GM Toolkit dimmed and a player's sheet without its icon.
 	game.settings.register(SYSTEM_ID, RULEBOOKS_SETTING, {
 		name: "Your Rulebook PDFs",
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {},
+		onChange: () => _rerenderActorSheets(),
+	});
+
+	// The books the GM has Forgotten in this world, so a copy left in stonetop-books/ is not
+	// picked up again on the next load (see books/adopt-stored-rulebooks.js).
+	game.settings.register(SYSTEM_ID, FORGOTTEN_RULEBOOKS_SETTING, {
+		name: "Forgotten Rulebook PDFs",
 		scope: "world",
 		config: false,
 		type: Object,
