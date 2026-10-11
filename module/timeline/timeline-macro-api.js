@@ -16,10 +16,18 @@
 // (book2-art/macro-modules.js), so a bundled release gives the macro the system's own instances, turn
 // queue and all, rather than second copies with a queue of their own.
 export { mutateTrack, findTrackPage, trackForActor } from "./timeline-store.js";
-export { readEntries, upsertByKey, patchEntry, removeEntry } from "./timeline-core.js";
+export { isShortfallRow, readEntries, upsertByKey, patchEntry, removeEntry } from "./timeline-core.js";
 export { TIMELINE_TAGS_FLAG } from "./timeline-tags.js";
 export { agesToStored, nextAgeColour, normalizeAges } from "./timeline-ages.js";
 export { seasonLabel } from "../seasons/seasons-change-reminders.js";
-export { seasonEntryBody } from "./timeline-season-entry.js";
+export { seasonEntryBody, seasonShortfallKey, shortfallParagraph } from "./timeline-season-entry.js";
+// The words a live shortfall and its disaster's pick are written in (seasonShortfallKey's note), so a
+// seeded one reads exactly as one the table suffered.
+export { shortfallLine, WINTER_SHORTFALL_TITLE } from "../actors/steading/winter-debt.js";
+export { disasterPickLine } from "../actors/steading/steading-debilities.js";
+// What an arcanum's Consequence box says, and which of its back's boxes are Consequences, so a seeded
+// Consequence row names what it cost exactly as the live one does (timeline-watch.js).
+export { consequenceBoxLabel, consequenceBoxRange } from "../actors/character/CharacterArcana.js";
+export { POST_DEATH_STORY_SECTIONS, masterTaskKey } from "./timeline-milestones.js";
 export { expeditionMilestone } from "./timeline-expedition.js";
 export { siteVisitMilestone, SITE_VISITS_FLAG } from "../sites/site-visits-core.js";

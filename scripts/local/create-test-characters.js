@@ -52,8 +52,16 @@
 //             GM drew by hand, holding two of the village's communal assets — which are struck
 //             through on the steading sheet and tagged with the trip that took them.
 //             Lays a THREE-YEAR history on the Timeline (Spring, Year One to Spring, Year
-//             Three): a Seasons Change for every season (gains, Surplus and notes, printed in
-//             the season's heading) and typed rows on Stonetop's own thread, and level-ups,
+//             Three): a Seasons Change for every season (how its +Fortunes roll went, gains,
+//             Surplus and notes, printed in the season's heading, with a failed harvest and a
+//             winter's shortfall each on a second line of their own; a character's thread prints
+//             them too, over its own seasons) and typed rows on Stonetop's own thread, with
+//             three improvements built and one lost, a Disaster's cost and a threat's portent
+//             come to pass; and on the characters' threads their deeds (Pim crossing off
+//             "Would-be" and fulfilling the destiny Pim is now Destined for, on the Max Level
+//             path; the Judge's brands and two witnessed oaths, one broken), an arcanum's
+//             Consequence marked, the Graveyard's post-death picks and the Thrall's task done;
+//             and level-ups,
 //             kills, the trip home, a site visit, a follower and the Graveyard's deaths on each
 //             character's, and moves the steading's clock on to Year Three to match (its season
 //             kept, and a clock already past Year Three left alone). Under it, HISTORY FROM
@@ -241,7 +249,9 @@
     marshal:         { name: "Coria",           instinctWord: "Caution",                                                                        stats: { str:  1, dex:  0, con:  1, int:  0, wis: -1, cha:  2 } },
     ranger:          { name: "Wren",            instinctWord: "Stewardship",                                                                    stats: { str:  0, dex:  2, con:  1, int:  0, wis:  1, cha: -1 } },
     seeker:          { name: "Maelis",          instinctWord: "Curiosity",                                                                      stats: { str: -1, dex:  1, con:  0, int:  2, wis:  1, cha:  0 } },
-    "would-be-hero": { name: "Pim",             instinct: "Glory",        instinctDesc: "To win a name that outlives you, whatever the cost.",  stats: { str:  1, dex:  0, con:  2, int:  0, wis:  1, cha: -1 } },
+    // Destined rather than the first background, so the timeline has a destiny to see fulfilled
+    // (and the Omens of Fate track a sheet to sit on).
+    "would-be-hero": { name: "Pim",             instinct: "Glory",        instinctDesc: "To win a name that outlives you, whatever the cost.",  stats: { str:  1, dex:  0, con:  2, int:  0, wis:  1, cha: -1 }, background: "destined" },
   };
 
   // Per-playbook demonstration notes (HTML), keyed by the SHORT playbook slug, seeded
@@ -1305,7 +1315,23 @@
   const ageYear = at => (at.ago != null ? TEST_TIMELINE_YEARS - at.ago : timelinePeriod(at.p).year);
 
   // Stonetop's own thread. `turned` is every Seasons Change, worded by the system's own
-  // seasonEntryBody, which the timeline prints in that season's HEADING rather than as a card. The
+  // seasonEntryBody, which the timeline prints in that season's HEADING rather than as a card.
+  // `roll` is how its +Fortunes roll went (a TIER: "success" 10+, "partial" 7-9, "failure" 6-),
+  // matching its gains: two on a 10+, one on a 7-9, none on a 6-. `shortfall` is the season's second
+  // line, as the system writes one when the stores run out or a harvest fails
+  // (timeline-season-entry.js#noteSeasonShortfall): the raid autumn's failed harvest, and the
+  // Elder's winter, whose consequence was the Important NPC who died and whose Disaster, at Fortunes
+  // −1 already, cost a Population (a debility would have to be marked on the sheet, and the one the
+  // fixture marks is the raid's, below). Every character's thread prints these notes over its own
+  // seasons.
+  //
+  // `milestones` are the rows Stonetop's own recorders write (user, 2026-10-10), keyed as they key
+  // them so a live one in that season is the same row: three of the improvements the hold tray seeds,
+  // built over the history (the Inn the first summer, the Stone Wall after the raid, the Greater
+  // Harvest the year of the best harvest); the raid's Disaster, whose cost is the debility the fixture
+  // marks (TEST_DEBILITY); the Crow-Mother's first grim portent, which her seeded card has ticked; and
+  // the Hillfolk Raiders' doom, the raid itself, on the throwaway threat whose doom is ticked.
+  // The
   // first is session zero's Let Spring Burst Forth, which records Spring of Year One the same way
   // (gains, and the GM's hook as its note). `gains` are SEASONAL_GAINS names
   // (dialogs/spring-burst-data.js) and agree with the story: none in the raid autumn, two in the
@@ -1315,25 +1341,37 @@
   // `rows` are what the table would have typed there.
   const TEST_TIMELINE_STEADING = {
     turned: [
-      { p: 0, surplus:  0, gains: ["Interesting news"],
+      { p: 0, surplus:  0, gains: ["Interesting news"], roll: "partial",
         notes: "A hawk took a crow over the standing stones at the thaw. Someone has half a map to the old barrow." },
-      { p: 1, surplus:  1, gains: ["Tor's blessing"],
+      { p: 1, surplus:  1, gains: ["Tor's blessing"], roll: "partial",
         notes: "The barley came up thick and the herds fattened on the high pasture." },
-      { p: 2, surplus: -1, gains: [],
-        notes: "Half the harvest was in before the raid. The rest was trampled." },
-      { p: 3, surplus: -1, gains: ["Valuable insight"],
+      { p: 2, surplus: -1, gains: [], roll: "failure",
+        notes: "Half the harvest was in before the raid. The rest was trampled.",
+        shortfall: { harvest: true } },
+      { p: 3, surplus: -1, gains: ["Valuable insight"], roll: "partial",
         notes: "A hungry winter. The well froze to the bottom, and nobody starved.\nThe raider we kept talked, come midwinter: they came for the barrow, not the barley." },
-      { p: 4, surplus:  1, gains: ["Trade opportunity"],
+      { p: 4, surplus:  1, gains: ["Trade opportunity"], roll: "partial",
         notes: "Seed corn traded up from Marshedge, and the fields went in on time." },
-      { p: 5, surplus:  1, gains: ["Interesting news", "Unexpected bounty"],
+      { p: 5, surplus:  1, gains: ["Interesting news", "Unexpected bounty"], roll: "success",
         notes: "A Steplands trader with word of standing stones at Blackwater Lake, and salt to pay for his keep." },
-      { p: 6, surplus:  2, gains: ["Tor's blessing", "Unexpected bounty"],
+      { p: 6, surplus:  2, gains: ["Tor's blessing", "Unexpected bounty"], roll: "success",
         notes: "The best harvest anyone remembers, and the expedition home before the frosts." },
-      { p: 7, surplus:  0, gains: [], title: "The Elder's winter",
-        notes: "Hafgan the Elder died in the deep of it." },
-      { p: 8, surplus:  1, gains: ["Population boom"],
+      { p: 7, surplus:  0, gains: [], roll: "failure", title: "The Elder's winter",
+        notes: "Hafgan the Elder died in the deep of it.",
+        shortfall: { winter: "npc", disaster: "population" } },
+      { p: 8, surplus:  1, gains: ["Population boom"], roll: "partial",
         notes: "The thaw, and singing from out on the Flats. Two Hillfolk families came down to settle by the mill." },
     ],
+    milestones: {
+      improvements: [{ p: 1, slug: "inn", label: "Inn" }, { p: 3, slug: "stoneWall", label: "Stone Wall" }, { p: 6, slug: "greaterHarvest", label: "Greater Harvest" }],
+      // Raised the first spring, and lost the Elder's winter for want of its upkeep. Not one the hold
+      // tray seeds, so the sheet agrees: it is not standing.
+      lost: [{ built: 0, lost: 7, slug: "palisade", label: "Palisade" }],
+      disaster: { p: 2, cause: "the raid" },
+      portent: { p: 4, threat: "The Crow-Mother", index: 0 },
+      // The throwaway fourth threat, whose doom IS the harvest raid.
+      doom: { p: 2, threat: "The Hillfolk Raiders" },
+    },
     rows: [
       { p: 0, title: "The first spring", place: "Stonetop",
         body: "<p>The thaw came late. The village named the ones who would go beyond the stones when going was needed.</p>" },
@@ -1442,14 +1480,19 @@
   const seedTimelineTrack = async (tl, track, rows, { spread = null } = {}) => {
     if (!track) return null;
     const seededKeys = new Set(rows.map(r => r.key).filter(Boolean));
+    // A build from before shortfall notes has no such rows to tell apart.
+    const isShortfall = e => tl.isShortfallRow?.(e) ?? false;
     const makeId = () => `${TEST_TIMELINE_ID}${foundry.utils.randomID(8)}`;
     const now = Date.now();
     const done = await tl.mutateTrack(track, (stored) => {
       let entries = tl.readEntries(stored);
       let moved = false;
       rows.forEach((row, i) => {
-        // A Seasons Change the table really recorded for this season stands in for ours.
-        if (row.source === "season" && entries.some(e => e.source === "season" && e.season === row.season && e.year === row.year)) return;
+        // A Seasons Change the table really recorded for this season stands in for ours. Summary for
+        // summary only: a shortfall note is the season's second line, matched by its key below.
+        const shortfall = row.source === "season" && isShortfall(row);
+        if (row.source === "season" && !shortfall && entries.some(e => e.source === "season" && !isShortfall(e)
+          && e.season === row.season && e.year === row.year)) return;
         const { refresh = [], ...fields } = row;
         const result = tl.upsertByKey(entries, { createdAt: now + i, authorId: game.user.id, ...fields }, { refresh, makeId });
         entries = result.entries;
@@ -1553,6 +1596,167 @@
     });
     const killRows = (kills, tag) => Object.entries(kills)
       .map(([p, foes]) => at(Number(p), { source: "kills", key: `test:kills:${tag}:${p}`, title: "", foes }));
+    // A season's shortfall note, worded by the system's own builders (the macro API) and keyed as the
+    // system keys it, so a live shortfall in that season appends to it rather than adding a second.
+    // None on a build from before shortfall notes.
+    const shortfallRow = t => {
+      if (!t.shortfall || !tl.seasonShortfallKey || !tl.shortfallLine) return null;
+      const { season, year } = timelinePeriod(t.p);
+      const lines = t.shortfall.harvest
+        ? ["No Surplus from it. Fortunes to +0."]
+        : [
+          tl.shortfallLine(t.shortfall.winter, { fortunes: -1, population: null, disaster: !!t.shortfall.disaster }),
+          ...(t.shortfall.disaster ? [tl.disasterPickLine(DISASTER_PICKS[t.shortfall.disaster])] : []),
+        ];
+      return at(t.p, {
+        source: "season", key: tl.seasonShortfallKey(season, year),
+        title: t.shortfall.harvest ? "The harvest failed" : tl.WINTER_SHORTFALL_TITLE,
+        body: lines.map(tl.shortfallParagraph).join(""),
+      });
+    };
+    const DISASTER_PICKS = { population: { id: "population", label: "Folks start to leave" } };
+    // Stonetop's own milestones (TEST_TIMELINE_STEADING.milestones), titled by the system's strings.
+    const fmt = (key, data) => game.i18n.format(`stonetop.timeline.milestone.${key}`, data);
+    const stampOf = p => { const { season, year } = timelinePeriod(p); return `${year}:${season}`; };
+    const steadingMilestoneRows = () => {
+      const m = TEST_TIMELINE_STEADING.milestones;
+      const rows = m.improvements.map(i => at(i.p, {
+        source: "improvement", key: `improvement:${i.slug}:built:${stampOf(i.p)}`, title: fmt("improvementBuilt", { name: i.label }),
+      }));
+      for (const i of m.lost) {
+        rows.push(at(i.built, { source: "improvement", key: `improvement:${i.slug}:built:${stampOf(i.built)}`, title: fmt("improvementBuilt", { name: i.label }) }));
+        rows.push(at(i.lost, { source: "improvement", key: `improvement:${i.slug}:lost:${stampOf(i.lost)}`, title: fmt("improvementLost", { name: i.label }) }));
+      }
+      const debility = TEST_DEBILITY.charAt(0).toUpperCase() + TEST_DEBILITY.slice(1);
+      rows.push(at(m.disaster.p, {
+        source: "disaster", key: `disaster:${stampOf(m.disaster.p)}:${TEST_DEBILITY}`,
+        title: fmt("disasterPicked", { cost: `marked ${debility}` }), body: `<p>Brought on by ${m.disaster.cause}.</p>`,
+      }));
+      const threatPage = name => game.journal.contents.flatMap(j => j.pages?.contents ?? [])
+        .find(page => page.type === "threat" && page.name === name);
+      const doomed = threatPage(m.doom.threat);
+      if (doomed?.system?.impendingDoom?.done) {
+        rows.push(at(m.doom.p, {
+          source: "threat", key: `threat:${doomed.id}:doom`,
+          title: fmt("doomCame", { name: doomed.name }), body: `<p>${doomed.system.impendingDoom.text}</p>`,
+        }));
+      }
+      const threat = threatPage(m.portent.threat);
+      const portent = threat?.system?.grimPortents?.[m.portent.index];
+      if (threat && portent?.done) {
+        rows.push(at(m.portent.p, {
+          source: "threat", key: `threat:${threat.id}:portent:${m.portent.index}`,
+          title: fmt("portentCame", { name: threat.name }), body: `<p>${portent.text}</p>`,
+        }));
+      }
+      return rows;
+    };
+    // Every deed, pick and Consequence the system now records, MADE on the characters through their
+    // own writers (so the sheets agree with the history) and answered as rows by actor id, keyed as
+    // the live recorders key them: a run that already recorded one re-dates it rather than doubling it.
+    const deedRows = new Map();
+    const addDeed = (actor, row) => deedRows.set(actor.id, [...(deedRows.get(actor.id) ?? []), row]);
+    const seedDeeds = async () => {
+      const bySlug = slug => pcs.find(a => pcSlugs.get(a.id) === slug);
+      // Pim: "Would-be" crossed off and the destiny fulfilled, on the Max Level path only. A 1st-level
+      // Pim keeps both ahead of them, which is the other half worth seeing.
+      const pim = bySlug("would-be-hero");
+      if (pim && maxLevel) {
+        await pim.setFlag(FLAG_SCOPE, "wbhBecameHero", true);
+        addDeed(pim, at(6, { source: "deed", key: "deed:hero", title: fmt("becameHero", {}), ...redate }));
+        const bg = pim.getFlag(FLAG_SCOPE, "background");
+        if (bg?.selected === "destined") {
+          await pim.update({ [`flags.${FLAG_SCOPE}.background.setupResources.destiny-fulfilled`]: 1 });
+          addDeed(pim, at(8, { source: "deed", key: "deed:destiny", title: fmt("destinyFulfilled", {}), ...redate }));
+        }
+      }
+      // The Judge: the brands seedCondemned laid, and two witnessed oaths, the second broken.
+      const judge = bySlug("judge");
+      const typedJudge = judge?.typedActor;
+      if (typedJudge) {
+        (judge.getFlag(FLAG_SCOPE, "condemned") ?? []).forEach((row, n) => {
+          if (row?.id && row.name) addDeed(judge, at(2 + 2 * (n % 3), {
+            source: "deed", key: `condemn:${row.id}`, title: fmt("condemned", { name: row.name }), body: row.note ?? "", ...redate,
+          }));
+        });
+        const kept = await typedJudge.witnessOath?.({ name: "Brakkos", note: "To keep a watch on the ford until the harvest is in." });
+        const broken = await typedJudge.witnessOath?.({ name: "Quill", note: "To make the village whole by the thaw." });
+        if (broken?.id) await typedJudge.setOathBroken(broken.id, true);
+        if (kept?.id) addDeed(judge, at(3, { source: "deed", key: `oath:${kept.id}`, title: fmt("oathWitnessed", { name: kept.name }), body: kept.note, ...redate }));
+        if (broken?.id) {
+          addDeed(judge, at(5, { source: "deed", key: `oath:${broken.id}`, title: fmt("oathWitnessed", { name: broken.name }), body: broken.note, ...redate }));
+          addDeed(judge, at(7, { source: "deed", key: `oath:${broken.id}:broken`, title: fmt("oathBroken", { name: broken.name }), ...redate }));
+        }
+      }
+      // One arcanum's Consequence marked: the first owned card, on any character, whose back prints
+      // a Consequences section.
+      if (tl.consequenceBoxRange) {
+        let marked = false;
+        for (const actor of pcs) {
+          const typed = actor.typedActor;
+          for (const slug of actor.getFlag(FLAG_SCOPE, "arcana")?.owned ?? []) {
+            const card = await typed?.getArcanum?.(slug);
+            const back = card?.back?.description ?? "";
+            const range = tl.consequenceBoxRange(back);
+            if (!range) continue;
+            await typed.setArcanumBoxChecked(slug, "back", range.from, true);
+            addDeed(actor, at(5, {
+              source: "arcana", key: `arcana:${slug}:consequence:${range.from}`,
+              title: fmt("arcanaConsequence", { name: card.front?.title || slug }), body: tl.consequenceBoxLabel(back, range.from), ...redate,
+            }));
+            marked = true;
+            break;
+          }
+          if (marked) break;
+        }
+        if (!marked) console.log("[TEST] No character holds an arcanum with Consequences, so none was marked.");
+      }
+      // The Graveyard: each story pick the insert's answers made (the insert's own names), and the
+      // Thrall's task, done. The pick rows land in the season they died, as the deaths do.
+      for (const actor of graves) {
+        const fate = GRAVEYARD.find(g => g.name === actor.name)?.fate;
+        const died = TEST_TIMELINE_GRAVES[actor.name]?.died;
+        if (!fate || fate === "dead" || died == null) continue;
+        const typed = actor.typedActor;
+        for (const section of tl.POST_DEATH_STORY_SECTIONS ?? []) {
+          for (const option of (await typed?.sectionOptions?.(section)) ?? []) {
+            if (!option.marked) continue;
+            addDeed(actor, at(died, {
+              source: "death", key: `postdeath:${fate}:${section}:${option.slug}`, ...redate,
+              title: fmt("postDeathPicked", { section: game.i18n.localize(`stonetop.timeline.postDeathSection.${section}`), option: option.label }),
+            }));
+          }
+        }
+        if (fate === "thrall" && tl.masterTaskKey) {
+          const task = "Bring the bell of the drowned chapel up out of the Lygos.";
+          addDeed(actor, at(died, {
+            source: "death", key: tl.masterTaskKey("thrall", task),
+            title: fmt("masterTaskDone", {}), body: task, ...redate,
+          }));
+        }
+      }
+    };
+    await seedDeeds();
+
+    // A character's own: the treasure the first one has worked out whole, and the minor arcanum the
+    // Seeker begins play with mastered. Keyed as the live recorders key them, and re-dated onto the
+    // history if the run already recorded them.
+    const characterMilestoneRows = (actor, slot) => {
+      const rows = [];
+      const known = actor.items.find(i => i.system?.identifyState === "known");
+      if (known) {
+        rows.push(at(2 + (slot % 3), {
+          source: "treasure", key: `artifact:${known.id}:known`, title: fmt("artifactIdentified", { name: known.name }), ...redate,
+        }));
+      }
+      const mastered = "arc-test-scroll-case";
+      if ((actor.getFlag(FLAG_SCOPE, "arcana")?.owned ?? []).includes(mastered)) {
+        const card = game.items.find(i => i.flags?.stonetop?.slug === mastered);
+        const name = card?.flags?.stonetop?.front?.title || card?.name || mastered;
+        rows.push(at(3, { source: "arcana", key: `arcana:${mastered}:unlocked`, title: fmt("arcanaUnlocked", { name }), ...redate }));
+      }
+      return rows;
+    };
     const byPeriod = list => list.sort((a, b) => (a.year - b.year)
       || (TEST_TIMELINE_SEASONS.indexOf(a.season) - TEST_TIMELINE_SEASONS.indexOf(b.season)));
     const redate = { refresh: ["season", "year"] };
@@ -1578,8 +1782,10 @@
       const rows = [
         ...TEST_TIMELINE_STEADING.turned.map(t => at(t.p, {
           source: "season", key: `test:season:${t.p}`, title: t.title ?? tl.seasonLabel(timelinePeriod(t.p).season),
-          body: tl.seasonEntryBody({ gainNames: t.gains, surplusChange: t.surplus, notes: t.notes }),
+          body: tl.seasonEntryBody({ gainNames: t.gains, surplusChange: t.surplus, notes: t.notes, fortunesTier: t.roll }),
         })),
+        ...TEST_TIMELINE_STEADING.turned.flatMap(t => shortfallRow(t) ?? []),
+        ...steadingMilestoneRows(),
         ...TEST_TIMELINE_HISTORY.map((r, n) => typed(r, `test:history:${n}`)),
         ...TEST_TIMELINE_STEADING.rows.map((r, n) => typed(r, `test:steading:${n}`)),
         ...(tripRow ? [tripRow] : []),
@@ -1615,6 +1821,8 @@
         ...levels,
         ...killRows(timelineKillsFor(slot), slot),
         ...followerRows(actor, 1 + (slot % 4)),
+        ...characterMilestoneRows(actor, slot),
+        ...(deedRows.get(actor.id) ?? []),
         ...(tripRow ? [tripRow] : []),
         ...(siteRow && siteParty.has(actor.id) ? [siteRow] : []),
       ];
@@ -1641,6 +1849,7 @@
         typed(grave.row, "test:grave:0"),
         ...killRows(grave.kills ?? {}, `grave${slot}`),
         ...followerRows(actor, Math.min(grave.row.p + 1, grave.died)),
+        ...(deedRows.get(actor.id) ?? []),
         at(grave.died, { source: "death", key: deathKey, title: game.i18n.localize("stonetop.timeline.milestone.death"), ...redate }),
         ...(fate && fate !== "dead" ? [at(grave.died, {
           source: "death", key: `insert:${fate}`, title: game.i18n.localize(`stonetop.timeline.milestone.insert.${fate}`), ...redate,
@@ -1658,15 +1867,18 @@
   };
 
   // ── Steading test threats (Book I, "Threats") ──────────────────────────
-  // Three demonstration threats seeded into the steading's Threats tab, so the GM Threats
+  // Four demonstration threats seeded into the steading's Threats tab, so the GM Threats
   // tab isn't empty on a test world and every card layout can be eyeballed at once. The
-  // three are deliberately STAGGERED so the cards fill out differently:
+  // first three are deliberately STAGGERED so the cards fill out differently:
   //   1. a maximal Villain that exercises every section (rich prose, doom track, stakes,
   //      GM moves, nested lesser threats, and two custom player moves);
   //   2. a doom-heavy Affliction that leans on the grim-portent track + stakes, with no
   //      nested/custom moves;
   //   3. a sparse Magical entity with just an instinct, a little prose and a few GM moves —
   //      the minimal card.
+  //   4. a THROWAWAY Rabble whose story is already over: the Hillfolk raiders of the harvest
+  //      raid, every portent and the impending doom ticked, so a threat that came to pass is
+  //      seen on its card and its doom has a row on Stonetop's timeline (the raid autumn).
   // Types span the accent palette (villain red / affliction brown / magical-entity violet)
   // and proximity covers all three trackers (nearby / homefront / distant), so the type
   // chips and tracker pips vary too.
@@ -1759,6 +1971,28 @@
         "Appear in glimpses, dreams, visions",
         "Offer service, secrets, power",
         "Demand an oath or sacrifice",
+      ],
+      nested: [],
+      customPlayerMoves: [],
+    },
+    {
+      name: "The Hillfolk Raiders",
+      type: "rabble",
+      proximity: "nearby",
+      instinct: "to take what the lowlands grow, and be gone before the snow",
+      description: `<p>A hungry season up in the high country, and a war-band that came down out of it to take the lowland harvest. They came in the grey hour before dawn, with the last of the barley barely in.</p>`
+                 + `<p>They are gone now, back over the ridge with what they could carry. What they left behind is a trampled field, a palisade with a gap in it, and a village that keeps a watch it never used to.</p>`,
+      grimPortents: [
+        { text: "Smoke on the high ridge, three nights running.", done: true },
+        { text: "A herder's dogs found dead at the edge of the upper pasture.", done: true },
+      ],
+      impendingDoom: { text: "The raiders come down on the harvest and carry off what they cannot burn.", done: true },
+      stakes: [
+        "Will they come back next harvest, now they know the way?",
+      ],
+      gmMoves: [
+        "Strike at dawn, and be gone by noon",
+        "Burn what they cannot carry",
       ],
       nested: [],
       customPlayerMoves: [],
@@ -3120,7 +3354,8 @@
 
     // Background
     const bgs    = f.backgrounds ?? [];
-    const selBg  = pick(bgs);
+    // A PRESET may name its background (the Would-Be Hero's Destined); otherwise the first, as ever.
+    const selBg  = (preset.background && bgs.find(b => b.slug === preset.background)) || pick(bgs);
     const bSlug  = selBg?.slug ?? "";
     // The background's move grants: its flat `moves` list plus whichever option a
     // move-applying `setup.choices` entry lands on (A Life of Crime grants Burgle OR
@@ -3592,9 +3827,26 @@
   // every field filled so the whole card shows: tags, HP, armor, damage, an instinct,
   // moves, a cost, gear (one item pre-checked), notes, and a Loyalty of 2. A single
   // (non-group) follower — the simplest case; group tooling has its own toggle.
-  const buildTestFollowerData = () => ({
-    name:         "Tamsin the Tester",
-    pronoun:      "she/her",
+  //
+  // Every character gets one, so each takes the NEXT name off this list rather than all of
+  // them hiring the same person: a roster of a dozen sheets each with "the same" follower read
+  // as a fixture, and the timeline's "gained a follower" milestones all said the same thing.
+  // The counter runs across BOTH rosters (living and graveyard are each indexed from 0, so a
+  // slot can't key it). Fourteen names covers 9 living + 4 graves with one to spare; past
+  // that it wraps. None of these names is used by a PC or NPC elsewhere in this macro.
+  const TEST_FOLLOWER_NAMES = [
+    ["Hedda",   "she/her"],  ["Osric",   "he/him"],   ["Lowri",   "she/her"],
+    ["Garreth", "he/him"],   ["Nessa",   "she/her"],  ["Dunstan", "he/him"],
+    ["Ilse",    "she/her"],  ["Merrick", "he/him"],   ["Ffion",   "they/them"],
+    ["Corwin",  "he/him"],   ["Elspeth", "she/her"],  ["Torvald", "he/him"],
+    ["Odile",   "she/her"],  ["Hollis",  "they/them"],
+  ];
+  let testFollowersSeeded = 0;
+  const buildTestFollowerData = () => {
+    const [name, pronoun] = TEST_FOLLOWER_NAMES[testFollowersSeeded++ % TEST_FOLLOWER_NAMES.length];
+    return { ...TEST_FOLLOWER_BODY, name, pronoun };
+  };
+  const TEST_FOLLOWER_BODY = {
     typeLabel:    "test follower",
     portraitIcon: "fas fa-user",
     tags:         ["brave", "observant", "sharp-eyed", "stubborn"],
@@ -3616,7 +3868,7 @@
     isGroup:      false,
     size:         0,
     sourceUuid:   null,
-  });
+  };
 
   // Add the test custom move (via the typed wrapper's authoring API, which does all the
   // shaping) and the test follower (mirroring StonetopCharacterSheet._applyCustomFollower:
@@ -5254,7 +5506,7 @@
     const existingNotes = typeof sf.notes === "string" ? sf.notes.trim() : "";
     const notesSeeded   = !existingNotes || sf.notes === TEST_STEADING_NOTES;
     if (notesSeeded) sf.notes = TEST_STEADING_NOTES;
-    // Seed the three demonstration threats as pages of the steading's Threats journal,
+    // Seed the four demonstration threats as pages of the steading's Threats journal,
     // recording the entry pointer on the steading flags (persisted by the setFlag below) so
     // the Threats tab can find them.
     const { entryId: threatsEntryId, pages: threatPages } = await seedTestThreats(steading, sf);
