@@ -28527,11 +28527,11 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
    choices aren't squeezed into the half-width column (Loyalty wraps below). */
 .stonetop-follower-statline--options { flex-basis: 100%; }
 
-/* Moves: PDF-style arrow markers, one move per fill line */
+/* Moves: PDF-style arrow markers, one move per fill line, indented under the Moves label */
 .stonetop-follower-moves-list {
 	list-style: none;
 	margin: 0;
-	padding: 0;
+	padding: 0 0 0 1em;
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
@@ -47594,12 +47594,17 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	box-shadow: 0 0 0 3px var(--st-page), 0 0 0 6px var(--relmap-group-ink, var(--st-accent-fill));
 }
 
-/* THE GROUP TOOL IS ARMED: the next drag on open paper draws a box, so the board says so. */
+/* THE GROUP TOOL IS ARMED: the next drag on open paper draws a box, so the board says so.
+
+   ⚠ THE INK IS SET HERE TOO. `.stonetop-relmap-tool[aria-pressed="true"]` above paints these white
+   for its slate fill; this rule swaps that fill for a 12% tint and, without its own `color`, left
+   the label white on near-white paper. */
 .stonetop-relmap.is-drawing-group .stonetop-relmap-view { cursor: crosshair; }
 .stonetop-relmap-grouptool[aria-pressed="true"],
 .stonetop-relmap-linetool[aria-pressed="true"] {
 	border-color: var(--st-btn-primary-border);
 	background: var(--st-slate-hover-bg);
+	color: var(--st-text);
 }
 
 /* THE GROUP'S BAR is the tie bar's shape (see `.stonetop-relmap-tiebar`, which it shares rules

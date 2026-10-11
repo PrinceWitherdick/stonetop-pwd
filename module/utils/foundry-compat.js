@@ -144,6 +144,17 @@ export function renderTemplate(path, data) {
 }
 
 /**
+ * Fetch, compile and register Handlebars templates, across the same v13 move as `renderTemplate`.
+ * @param {string[]|Record<string, string>} paths  a list of paths, or partial id -> path
+ * @returns {Promise<Function[]>}
+ */
+export function loadTemplates(paths) {
+	const handlebars = globalThis.foundry?.applications?.handlebars;
+	if (typeof handlebars?.loadTemplates === "function") return handlebars.loadTemplates(paths);
+	return globalThis.loadTemplates(paths);
+}
+
+/**
  * Enrich stored HTML for display (resolves `@UUID` links, inline rolls, etc.).
  * V13 moved TextEditor under `foundry.applications.ux`; on older cores (or before
  * it's ready) fall back to the raw value so callers always get a usable string.

@@ -33,6 +33,7 @@ import { RELMAP_SHEET_CLASS } from "./module/relmap/relmap-doc.js";
 import { ThreatBoard } from "./module/threats/threat-board.js";
 import { onReady } from "./module/hooks/Ready.js";
 import { registerPrecompiledTemplates } from "./module/utils/templates.js";
+import { loadTemplates } from "./module/utils/foundry-compat.js";
 import { handleImportedJournalArt, ART_INDEX_SETTINGS } from "./module/book2-art/reapply.js";
 import { clearArtBrowseCache, ART_BROWSE_INPUTS } from "./module/book2-art/browse.js";
 import { onRenderActorSheet } from "./module/hooks/RenderActorSheet.js";
