@@ -70,6 +70,16 @@ describe("the struggle window's template", () => {
 		expect(html).toContain("vahid &amp; caradoc are still in a spot, and each mark XP.");
 	});
 
+	it("says what a spot is once the results are shared and someone is in one, and not before", async () => {
+		const rows = [pc("vahid"), pc("rhianna")];
+		const totals = { pc_vahid: 4, pc_rhianna: 11 };
+		const before = await windowHtml(rows, { reader: gm, totals });
+		expect(before).not.toContain("stonetop-struggle-spot-help");
+		const after = await windowHtml(rows, { reader: vahid, status: STRUGGLE_STATUS.REVEALED, totals });
+		expect(after).toContain('<p class="stonetop-camp-note stonetop-struggle-spot-help">What');
+		expect(after).toContain("Trouble you have to deal with right now");
+	});
+
 	it("shows a Judge's Bundle of Sticks pick to their player", async () => {
 		const html = await windowHtml([pc("vahid", { owns: [MOVE.BUNDLE_OF_STICKS] }), pc("rhianna")], { reader: vahid });
 		expect(card(html, "pc_vahid")).toContain('data-struggle-field="bundle"');

@@ -1,9 +1,11 @@
+import fs from "fs";
+import path from "path";
 import { describe, expect, it } from "vitest";
 import {
 	MOVE, ROW_KIND, SPOTS, STRUGGLE_STATUS, newStruggleRecord, readStruggleRoll, struggleBoard,
 } from "../../module/struggle/struggle-rules.js";
 import {
-	bumpMatters, endPreviewLines, modeText, struggleCalledRows, struggleSummaryRows, struggleWindowView,
+	SPOT_TEXT, bumpMatters, endPreviewLines, modeText, struggleCalledRows, struggleSummaryRows, struggleWindowView,
 } from "../../module/struggle/struggle-view.js";
 
 /**
@@ -51,6 +53,26 @@ describe("who sees what, before the GM shares", () => {
 		const { struggle, board } = setUp(rows, { status: STRUGGLE_STATUS.REVEALED, totals: { pc_vahid: 5, pc_rhianna: 11 } });
 		const view = struggleWindowView(struggle, board, player("pc_vahid"));
 		expect(view.rows[1].result).toBe("11: does well enough to get someone else out of a spot");
+	});
+});
+
+describe("what a spot is", () => {
+	it("is said once the results are shared and someone has a 6-, and not before", () => {
+		const rolling = setUp([pc("vahid"), pc("rhianna")], { totals: { pc_vahid: 5, pc_rhianna: 11 } });
+		expect(struggleWindowView(rolling.struggle, rolling.board, gm).spotHelp).toBe("");
+		const shared = setUp([pc("vahid"), pc("rhianna")], { status: STRUGGLE_STATUS.REVEALED, totals: { pc_vahid: 5, pc_rhianna: 11 } });
+		expect(struggleWindowView(shared.struggle, shared.board, player("pc_rhianna")).spotHelp).toBe(SPOT_TEXT);
+		expect(SPOT_TEXT).toContain("right now, or it gets ugly");
+	});
+
+	it("says it in the move's own words", () => {
+		const move = JSON.parse(fs.readFileSync(path.join(__dirname, "../../packs/src/stonetop-items/expedition-moves/struggle-as-one.json"), "utf8"));
+		expect(move.system.description).toContain(SPOT_TEXT);
+	});
+
+	it("is left out when nobody is in a spot", () => {
+		const { struggle, board } = setUp([pc("vahid"), pc("rhianna")], { status: STRUGGLE_STATUS.REVEALED, totals: { pc_vahid: 8, pc_rhianna: 11 } });
+		expect(struggleWindowView(struggle, board, gm).spotHelp).toBe("");
 	});
 });
 
@@ -166,6 +188,31 @@ describe("the cards", () => {
 		expect(html).toContain("<strong>Caradoc:</strong> +WIS, 4: in a spot; marked XP");
 		expect(html).toContain("<strong>Vahid:</strong> +WIS, 5: in a spot; got out by Rhianna");
 		expect(html).toContain("got Vahid out");
+	});
+
+	it("lists who came through above who ended up in a spot, and anyone who never rolled last", () => {
+		const { struggle, board } = setUp([pc("caradoc"), pc("vahid"), pc("rhianna"), pc("blodwen")], {
+			status: STRUGGLE_STATUS.CLOSED, totals: { pc_caradoc: 4, pc_vahid: 8, pc_rhianna: 11 },
+		});
+		const html = struggleSummaryRows(struggle, board);
+		const at = s => html.indexOf(s);
+		expect(at("Came through")).toBeGreaterThan(-1);
+		expect(at("Came through")).toBeLessThan(at("<strong>Vahid:"));
+		expect(at("<strong>Vahid:")).toBeLessThan(at("In a spot</li>"));
+		expect(at("<strong>Rhianna:")).toBeLessThan(at("In a spot</li>"));
+		expect(at("In a spot</li>")).toBeLessThan(at("<strong>Caradoc:"));
+		expect(at("<strong>Caradoc:")).toBeLessThan(at("Never rolled"));
+		expect(at("Never rolled")).toBeLessThan(at("<strong>Blodwen:"));
+	});
+
+	it("leaves out a section nobody is in", () => {
+		const { struggle, board } = setUp([pc("vahid"), pc("rhianna")], {
+			status: STRUGGLE_STATUS.CLOSED, totals: { pc_vahid: 8, pc_rhianna: 11 },
+		});
+		const html = struggleSummaryRows(struggle, board);
+		expect(html).toContain("Came through");
+		expect(html).not.toContain("In a spot</li>");
+		expect(html).not.toContain("Never rolled");
 	});
 
 	it("escapes what the table typed", () => {

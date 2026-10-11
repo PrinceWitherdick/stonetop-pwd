@@ -9104,6 +9104,19 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 
 .stonetop-struggle-ask p { margin: 0; }
 
+/* The summary card's section headings ("Came through", "In a spot"): no spiral bullet, pulled back
+   to the list's edge, with a rule under them. */
+.stonetop-homestead-chat-list li.stonetop-struggle-chat-head {
+	margin: 8px 0 2px -14px;
+	padding: 0 0 1px;
+	border-bottom: 1px solid var(--st-rule-dark, rgba(0, 0, 0, 0.25));
+	font-weight: bold;
+	font-variant: small-caps;
+	letter-spacing: 0.04em;
+}
+
+.stonetop-homestead-chat-list li.stonetop-struggle-chat-head::before { content: none; }
+
 .stonetop-edit-mode .stonetop-inv-delete {
 	display: inline;
 	color: var(--st-red-text);
