@@ -13,7 +13,7 @@ const { recordKills, recordMilestones } = await import("../../module/timeline/ti
 const { creationFlowOpen } = await import("../../module/actors/character/creation-flow.js");
 const {
 	APPLIED_BEFORE_OPTION, BEFORE_OPTION, FOLLOWER_DIED_HOOK, LEARNED_OPTION, onPreUpdateActor, onPreUpdateChatMessage,
-	onUpdateActor, onUpdateChatMessage, recordFollowerDeath,
+	onUpdateActor, onUpdateChatMessage, recordFollowerDeath, registerTimelineWatch, settleTimelineWrites,
 } = await import("../../module/timeline/timeline-watch.js");
 const { readRepo } = await import("../fakes/css.js");
 
@@ -215,5 +215,31 @@ describe("kills off a damage card", () => {
 		const sheet = readRepo("module/actors/character/StonetopCharacterSheet.js");
 		expect(sheet).toContain(`Hooks.callAll("${FOLLOWER_DIED_HOOK}", this.actor,`);
 		expect(sheet).not.toMatch(/from\s+"\.\.\/\.\.\/timeline\/timeline-watch\.js"/);
+	});
+});
+
+// The test-fixtures macro moves the clock on between seasons, and a row reads the clock only when it
+// gets to the write, so the macro has to be able to wait for what the hooks have started.
+describe("waiting for the hooks' writes", () => {
+	it("resolves only once a write a hook started has landed", async () => {
+		const handlers = {};
+		const on = vi.spyOn(Hooks, "on").mockImplementation((name, fn) => { handlers[name] = fn; });
+		registerTimelineWatch();
+		on.mockRestore();
+		let land;
+		recordMilestones.mockImplementationOnce(() => new Promise(resolve => { land = resolve; }));
+		handlers[FOLLOWER_DIED_HOOK](character(), { follower: "custom", slug: "f1", name: "Wren" });
+
+		let settled = false;
+		const waiting = settleTimelineWrites().then(() => { settled = true; });
+		await new Promise(resolve => setTimeout(resolve, 0));
+		expect(settled).toBe(false);
+		land(null);
+		await waiting;
+		expect(settled).toBe(true);
+	});
+
+	it("resolves at once when nothing is being written", async () => {
+		await expect(settleTimelineWrites()).resolves.toBeUndefined();
 	});
 });

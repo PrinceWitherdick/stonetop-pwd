@@ -400,14 +400,16 @@ describe("the fixture macro itself", () => {
 
 	// Stored rather than derived, so nothing else would ever clear a stale seeded debt.
 	it("takes the seeded winter debt back down again on cleanup", () => {
-		expect(MACRO).toContain("-=winterDebt");
+		expect(MACRO).toContain("dropKey(`${holdBase}.winterDebt`)");
 		expect(MACRO).toContain("steadingFlags.winterDebt?.amount === TEST_HOLD_WINTER_DEBT");
 	});
 
 	// setFlag MERGES, so a sub-key dropped off the object it is handed survives untouched in
 	// the stored flags. The seasonal dues would then stay hidden on every re-run but the first.
+	// dropKey is the macro's one deletion: ForcedDeletion on v14, `-=key` before it.
 	it("clears the season-step markers with the deletion syntax, not with delete", () => {
-		expect(MACRO).toContain("steading.seasonSteps.-=");
+		expect(MACRO).toContain("dropKey(`flags.${FLAG_SCOPE}.steading.seasonSteps.${step}`)");
+		expect(MACRO).toContain("return { [`${keyPath.slice(0, i + 1)}-=${keyPath.slice(i + 1)}`]: null };");
 		expect(MACRO).not.toMatch(/delete sf\.seasonSteps/);
 	});
 

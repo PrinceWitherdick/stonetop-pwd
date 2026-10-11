@@ -291,7 +291,7 @@ export async function recordFollowerDeath(actor, { follower = "", slug = "", ind
 /** `createActor`: a new character gets a thread now, not at the next load. Primary GM only. */
 export function onCreateActor(actor) {
 	if (actor?.type !== "character" || !globalThis.game?.user?.isGM || !isPrimaryGM()) return;
-	syncTrackPages().catch(err => warn("could not make a timeline page for a new character", err));
+	watched(syncTrackPages(), "could not make a timeline page for a new character");
 }
 
 /** `updateActor`: a renamed character (or steading) renames their page. Primary GM only. */
@@ -299,7 +299,23 @@ export function onRenameActor(actor, changed) {
 	if (!("name" in (changed ?? {})) || !globalThis.game?.user?.isGM || !isPrimaryGM()) return;
 	const track = trackForActor(actor);
 	if (!track) return;
-	renameTrackPage(track.trackId, actor.name).catch(err => warn("could not rename a timeline page", err));
+	watched(renameTrackPage(track.trackId, actor.name), "could not rename a timeline page");
+}
+
+// Every write the hooks below have started and not yet finished. Foundry fires a hook and moves on,
+// so whoever made the change cannot await the row it makes; `settleTimelineWrites` is how a caller
+// that needs those rows to have landed waits for them (the test-fixtures macro, before it moves the
+// clock on to the next season: a row reads the clock only when it gets to the write).
+const inFlight = new Set();
+function watched(work, failure) {
+	const run = work.catch(err => warn(failure, err)).finally(() => inFlight.delete(run));
+	inFlight.add(run);
+	return run;
+}
+
+/** Resolves once every timeline write a hook here has started is done, including any started meanwhile. */
+export async function settleTimelineWrites() {
+	while (inFlight.size) await Promise.all([...inFlight]);
 }
 
 /** Wire every hook above. Called once, at module load of stonetop.js. */
@@ -307,18 +323,18 @@ export function registerTimelineWatch() {
 	Hooks.on("preUpdateActor", onPreUpdateActor);
 	Hooks.on("updateActor", (actor, changed, options, userId) => {
 		onRenameActor(actor, changed);
-		onUpdateActor(actor, changed, options, userId).catch(err => warn("could not record a milestone", err));
+		watched(onUpdateActor(actor, changed, options, userId), "could not record a milestone");
 	});
 	Hooks.on("createActor", onCreateActor);
 	Hooks.on("preUpdateItem", onPreUpdateItem);
 	Hooks.on("updateItem", (item, changed, options, userId) => {
-		onUpdateItem(item, changed, options, userId).catch(err => warn("could not record a treasure worked out", err));
+		watched(onUpdateItem(item, changed, options, userId), "could not record a treasure worked out");
 	});
 	Hooks.on("preUpdateChatMessage", onPreUpdateChatMessage);
 	Hooks.on("updateChatMessage", (message, changed, options, userId) => {
-		onUpdateChatMessage(message, changed, options, userId).catch(err => warn("could not add kills to the timeline", err));
+		watched(onUpdateChatMessage(message, changed, options, userId), "could not add kills to the timeline");
 	});
 	Hooks.on(FOLLOWER_DIED_HOOK, (actor, fate) => {
-		recordFollowerDeath(actor, fate).catch(err => warn("could not record a follower's death", err));
+		watched(recordFollowerDeath(actor, fate), "could not record a follower's death");
 	});
 }

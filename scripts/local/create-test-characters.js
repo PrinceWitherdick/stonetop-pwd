@@ -12,6 +12,14 @@
 //             origin, and a deterministic fill of the rest. "Max Level" additionally
 //             climbs each character through the real level-up engine until no move remains
 //             (level 20+), taking every reachable move / stat / invocation / mark.
+//             THE CAMPAIGN IS PLAYED FORWARD, not built in one moment: the characters are made
+//             in Spring of Year One, and the steading's clock is then walked through every
+//             season of the three-year history to the third spring. Each season, every character
+//             earns that season's XP and takes the levels it pays for (quickly at first, slowly
+//             later, as the XP curve has it, ending at the top in the last season), finds, works
+//             out and masters the arcana dealt to them in seasons of their own, and takes on a
+//             follower in theirs, so the system's own recorders date every row on their timeline
+//             where it happened. The clock is put back as the GM had it once the walk is done.
 //             Every character (either path) is also seeded with one custom follower, so the
 //             Followers tab's custom card is exercised on every sheet, and the FIRST character
 //             alone gets the filled-out player custom "Other" move ("This is a test") that
@@ -197,6 +205,9 @@
     return;
   }
   globalThis.__stonetopTestFixturesRunning = true;
+  // Puts the steading's clock back if the run dies while the campaign walk has it (see "The
+  // campaign, played forward"); cleared once the run has put it back itself.
+  let pendingClockRestore = null;
   try {
   // The active scope is the system id in system.json (module/system-id.js#SYSTEM_ID).
   // Older ids are read-only fallback rungs there (LEGACY_FLAG_SCOPES) — fixtures are
@@ -204,6 +215,16 @@
   const FLAG_SCOPE   = "stonetop-pwd";        // must be a registered system/module ID
   const LEGACY_SCOPES = ["stonetop_pwd", "stonetop"]; // read-only rungs, newest first
   const TEST_FLAG    = "isTestCharacter";     // key within that scope
+  // The update entry that DELETES `keyPath`, in whichever spelling the running core applies: a
+  // ForcedDeletion instance on v14+ (where the `-=` prefix still works but logs a deprecation per
+  // key), the `-=` prefix below it (where a nested ForcedDeletion silently no-ops). A copy of
+  // module/utils/foundry-compat.js#deletionEntry, since a pasted macro can't import it.
+  const dropKey = (keyPath) => {
+    const ForcedDeletion = foundry.data?.operators?.ForcedDeletion;
+    if (ForcedDeletion && Number(game.release?.generation) >= 14) return { [keyPath]: new ForcedDeletion() };
+    const i = keyPath.lastIndexOf(".");
+    return { [`${keyPath.slice(0, i + 1)}-=${keyPath.slice(i + 1)}`]: null };
+  };
   // The relationship map's stored shape (module/relmap/relmap-store.js RELMAP_VERSION). Declared
   // up here with the flag names rather than down with the rest of the map fixture because the
   // CLEANUP pass needs it too, and a `const` further down this same function is still in its dead
@@ -381,7 +402,7 @@
     return Math.max(0, mb.base + (mb.perExtra ?? 0) * (ownedCount - 1));
   };
 
-  // Climb a freshly-built character to "max level" by driving the REAL level-up engine
+  // Climb a freshly-built character by driving the REAL level-up engine
   // (actor.typedActor.getLevelUpData → applyLevelUp), exactly as the LevelUpDialog does.
   // Stonetop has no hard maximum level (Book I, "Playing the Game": "There is no maximum
   // level"), so max = climbing until no pickable move remains (each playbook exhausts in
@@ -391,45 +412,89 @@
   // move for cross-playbook moves, an invocation on even levels, or the mark allowance for
   // a budgeted move (Veteran Crew / Heroes to the Last / Beast of Legend / Well Versed).
   // Mirrors the climb integration test (tests/.../StonetopCharacter.levelToMax.test.js).
-  // Returns the number of levels gained.
-  const climbToMax = async (actor) => {
+  //
+  // TWO PIECES, because the Max Level path climbs SEASON BY SEASON (see the walk below the
+  // roster build): `levelOnce` takes one level and pays for it out of the XP the character
+  // already has; `climbWithXp` is one season's play, earning XP and spending it while it covers
+  // the next level, and in the last season topping the XP up per level so every character still
+  // ends at the top.
+
+  // A level costs 6 + 2×level XP (Book I p.528); applyLevelUp refuses without it and spends it.
+  const xpToLevelUp = level => 6 + 2 * level;
+
+  // One level, or why not. `{ applied, level, reason }`: `reason` is "exhausted" when no move is
+  // left to take, otherwise whatever applyLevelUp refused with ("xp" when the XP is short).
+  // `fromLevel` and `moveName` as the LevelUpDialog passes them, so the timeline's "Reached
+  // level N" row names the move.
+  // `data` is the getLevelUpData answer when the caller has just read it.
+  const levelOnce = async (actor, data = null) => {
     const typed = actor.typedActor;
-    if (!typed?.getLevelUpData || !typed?.applyLevelUp) return 0;
-    let climbed = 0;
+    const level = Number(actor.system?.attributes?.level?.value) || 1;
+    if (!typed?.getLevelUpData || !typed?.applyLevelUp) return { applied: false, level, reason: "exhausted" };
+    data ??= await typed.getLevelUpData();
+    if (!data?.availableMoves?.length) return { applied: false, level, reason: "exhausted" };
+
+    const pick       = data.availableMoves[0];
+    const invocation = data.needsInvocation ? (data.availableInvocations[0]?.slug ?? null) : null;
+
+    let choices = null;
+    if (pick.cap != null) {
+      // Improved/Superior Stat: raise the first stat still below this move's cap.
+      const stat = STAT_KEYS.find(k => (actor.system?.stats?.[k]?.value ?? 0) < pick.cap) ?? "str";
+      choices = { stat, cap: pick.cap };
+    } else if (pick.crossPlaybook) {
+      const foreign = await typed.getForeignMovesForLevelUp(pick.crossPlaybook, data.newLevel);
+      choices = {
+        crossPlaybook:    true,
+        foreignMoveId:    foreign[0]?.compendiumId ?? null,
+        grantsPossession: pick.crossPlaybook.grantsPossession ?? null,
+      };
+    } else if (pick.markOptions?.length) {
+      // A budgeted count-mark move just picked: spend this take's allowance on the first
+      // count options (skip stat-choice options — those belong to the stat picker).
+      const countOpts = pick.markOptions.filter(o => o.choice !== "stat");
+      const allowance = moveMarkBudget(pick.markBudget, (pick.ownedIds?.length ?? 0) + 1) ?? 0;
+      const picks     = countOpts.slice(0, allowance).map(o => ({ slug: o.slug }));
+      if (picks.length) choices = { marks: { moveName: pick.name, picks } };
+    }
+
+    const result = await typed.applyLevelUp(pick.compendiumId, invocation, choices, { fromLevel: level, moveName: pick.name });
+    if (result && !result.applied) return { applied: false, level, reason: result.reason ?? "refused" };
+    return { applied: true, level: level + 1, reason: null };
+  };
+
+  // One season's play: `income` XP earned, then every level it pays for. With `topUp` (the last
+  // season) each level's XP is handed over first, so nothing but running out of moves stops it.
+  // Leftover XP stays on the sheet, as it would at a table, EXCEPT on a character with no move left
+  // to take: XP at the bar lights the sheet's Level Up, which would open on an empty picker, so it
+  // goes back to 0 there. A refusal ends the climb rather than spinning the guard out. Answers
+  // `{ reached, exhausted }`: the levels reached, in order, and whether the character has run out
+  // of moves to take.
+  const climbWithXp = async (actor, income, { topUp = false } = {}) => {
+    const xpOf    = () => Number(actor.system?.attributes?.xp?.value) || 0;
+    const levelOf = () => Number(actor.system?.attributes?.level?.value) || 1;
+    await actor.update({ "system.attributes.xp.value": xpOf() + Math.max(0, Math.round(income)) });
+    const reached = [];
+    let exhausted = false;
     // Guard against a pathological non-shrinking availableMoves set (no real playbook
     // reaches this; the largest climb is ~30 levels).
     for (let guard = 0; guard < 400; guard++) {
-      const data = await typed.getLevelUpData();
-      if (!data.availableMoves?.length) break;
-
-      const pick       = data.availableMoves[0];
-      const invocation = data.needsInvocation ? (data.availableInvocations[0]?.slug ?? null) : null;
-
-      let choices = null;
-      if (pick.cap != null) {
-        // Improved/Superior Stat: raise the first stat still below this move's cap.
-        const stat = STAT_KEYS.find(k => (actor.system?.stats?.[k]?.value ?? 0) < pick.cap) ?? "str";
-        choices = { stat, cap: pick.cap };
-      } else if (pick.crossPlaybook) {
-        const foreign = await typed.getForeignMovesForLevelUp(pick.crossPlaybook, data.newLevel);
-        choices = {
-          crossPlaybook:    true,
-          foreignMoveId:    foreign[0]?.compendiumId ?? null,
-          grantsPossession: pick.crossPlaybook.grantsPossession ?? null,
-        };
-      } else if (pick.markOptions?.length) {
-        // A budgeted count-mark move just picked: spend this take's allowance on the first
-        // count options (skip stat-choice options — those belong to the stat picker).
-        const countOpts = pick.markOptions.filter(o => o.choice !== "stat");
-        const allowance = moveMarkBudget(pick.markBudget, (pick.ownedIds?.length ?? 0) + 1) ?? 0;
-        const picks     = countOpts.slice(0, allowance).map(o => ({ slug: o.slug }));
-        if (picks.length) choices = { marks: { moveName: pick.name, picks } };
+      const level = levelOf();
+      const cost  = xpToLevelUp(level);
+      if (!topUp && xpOf() < cost) break;
+      const data = await actor.typedActor?.getLevelUpData?.();
+      if (!data?.availableMoves?.length) { exhausted = true; break; }
+      if (xpOf() < cost) await actor.update({ "system.attributes.xp.value": cost });
+      const step = await levelOnce(actor, data);
+      if (!step.applied) {
+        exhausted = step.reason === "exhausted";
+        if (!exhausted) console.warn(`[TEST] ${actor.name}: level ${level + 1} refused (${step.reason}), so the climb stops there.`);
+        break;
       }
-
-      await typed.applyLevelUp(pick.compendiumId, invocation, choices);
-      climbed++;
+      reached.push(step.level);
     }
-    return climbed;
+    if (exhausted && xpOf() >= xpToLevelUp(levelOf())) await actor.update({ "system.attributes.xp.value": 0 });
+    return { reached, exhausted };
   };
 
   // Returns the minimum pick count from a lore section description.
@@ -1217,12 +1282,17 @@
   // trip home from Blackwater Lake, the Wandering Tower trip still out this spring, the Graveyard's
   // four deaths, and the notes on each character's sheet.
   //
+  // THE CHARACTERS' OWN STORY IS PLAYED, NOT BACKDATED: the campaign walk (see "The campaign, played
+  // forward" below) stamps the clock to each season while that season's levels, arcana and
+  // followers happen, so the system's recorders date those rows themselves.
+  //
   // WRITTEN THROUGH THE SYSTEM'S OWN STORE (macroModules.timeline), in turn with the system's own
   // writers, because the system is recording on the same pages while this runs: a level climbed, a
   // follower named, a death. Rows those writes already made carry the same KEY as the seeded one
   // (`levelup:4`, `death:mortal`, `follower:gain:<id>`) and are RE-DATED into the history rather than
-  // written twice; anything else the system recorded on a test character (an arcanum found on the Max
-  // Level path) is spread across the nine seasons, so no one season holds a pile of them.
+  // written twice (for the walk's own rows a no-op, a safety net for a write that landed late). Only
+  // a world with no steading, and so no clock to walk, has the rest of a character's rows spread
+  // across the nine seasons instead.
   //
   // EVERY ROW THIS WRITES HAS AN ID STARTING TEST_TIMELINE_ID. That is how the re-run takes the
   // history back off Stonetop's thread, which is the world's and is never deleted, while leaving every
@@ -1236,6 +1306,71 @@
   const timelinePeriod = p => ({
     season: TEST_TIMELINE_SEASONS[p % TEST_TIMELINE_SEASONS.length],
     year:   1 + Math.floor(p / TEST_TIMELINE_SEASONS.length),
+  });
+
+  // ── The campaign, played forward ──────────────────────────────────────
+  // The roster is not built in one moment and dated afterwards. The system writes a character's
+  // rows AS THINGS HAPPEN, stamped with the steading's clock (timeline-record.js#timelineNow), so a
+  // character climbed to the top in one go is a character who did everything in one season. So the
+  // clock is WALKED: stamped to Spring of Year One while the characters are made, then on through
+  // every season of the history, and each season's play (the levels its XP pays for, the arcana
+  // found, identified and mastered in it, a follower taken on) happens while the clock sits there.
+  // Every row the system records, including ones this macro never names, is then dated by the
+  // system itself. The keyed re-date in seedTestTimeline stays behind it as a safety net.
+  //
+  // THE CLOCK IS PUT BACK EXACTLY AS IT WAS before the hold-tray block reads it, so that block still
+  // decides the final season and year by its own rules (and the `finally` at the foot of the macro
+  // puts it back if the run dies halfway).
+  //
+  // WRITTEN AS THE TWO FLAGS, NOT THROUGH recordCurrentSeason: that writer also refreshes the posted
+  // weather on every step and appends to `seasonsLog`, the wall-clock record of when each season
+  // began, which these nine stamps a few seconds apart would only falsify.
+
+  // Max Level characters still end at the top (the last season's climb tops the XP up), but they get
+  // there at a table's shape: the same XP every season against a cost that rises with the level,
+  // so the early levels come quickly and the late ones slowly. The XP is pitched so that a
+  // character exhausting at TEST_LEVEL_ESTIMATE (playbooks top out in the low-to-mid 20s) has
+  // earned it all by the last season; each roster slot earns a little more or less, so the lanes
+  // do not step in time.
+  const TEST_LEVEL_ESTIMATE = 23;
+  const xpToReach   = level => 6 * (level - 1) + (level - 1) * level;
+  const seasonXpFor = slot => (xpToReach(TEST_LEVEL_ESTIMATE) / TEST_TIMELINE_LAST) * (0.85 + 0.075 * (slot % 5));
+  // The season each character takes on the demonstration follower.
+  const followerSeason = slot => 1 + (slot % 4);
+  // When each dealt arcanum is found, worked out, and (the first minor) mastered, as seasons of
+  // play: always in that order, spread over the history by card and slot.
+  const arcanaSchedule = (slot, majors, minors) => [...majors, ...minors].map((slug, i) => {
+    const found      = 1 + ((slot + i * 2) % (TEST_TIMELINE_LAST - 1));
+    const identified = Math.min(found + 1 + (i % 2), TEST_TIMELINE_LAST);
+    const mastered   = slug === minors[0] ? Math.min(identified + 1, TEST_TIMELINE_LAST) : null;
+    return { slug, major: i < majors.length, found, identified, mastered };
+  });
+  // The season the Seeker-style roles flag is written in: once every card it names as held is held
+  // (the major found, the "mastered" minor mastered, the "found" minor found). The schedule wraps,
+  // so that is not the season the character's first card is found. The "lead" minor is a card heard
+  // of rather than held, so the flag does not wait on it.
+  const rolesSeason = (plan, majors, minors) => {
+    const at   = slug => plan.find(c => c.slug === slug);
+    const held = [at(majors[0])?.found, at(minors[0])?.mastered ?? at(minors[0])?.found, at(minors[1])?.found]
+      .filter(Number.isFinite);
+    return held.length ? Math.max(...held) : (plan[0]?.found ?? null);
+  };
+
+  // The clock's two flags, read and written whole (seasons/current-season.js).
+  const snapshotClock = steading => ({
+    stamp:  steading.getFlag(FLAG_SCOPE, "seasonsCurrent") ?? null,
+    picker: steading.getFlag(FLAG_SCOPE, "seasonsCurrentYear") ?? null,
+  });
+  const stampClock = (steading, p) => {
+    const when = timelinePeriod(p);
+    return steading.update({
+      [`flags.${FLAG_SCOPE}.seasonsCurrent`]:     when,
+      [`flags.${FLAG_SCOPE}.seasonsCurrentYear`]: when.year,
+    });
+  };
+  const restoreClock = (steading, snap) => steading.update({
+    ...(snap.stamp  != null ? { [`flags.${FLAG_SCOPE}.seasonsCurrent`]: snap.stamp }      : dropKey(`flags.${FLAG_SCOPE}.seasonsCurrent`)),
+    ...(snap.picker != null ? { [`flags.${FLAG_SCOPE}.seasonsCurrentYear`]: snap.picker } : dropKey(`flags.${FLAG_SCOPE}.seasonsCurrentYear`)),
   });
 
   // ── Before play: the history the characters come with ─────────────────
@@ -1583,13 +1718,16 @@
    * The whole history: Stonetop's thread, every living character's, and the Graveyard's. Answers
    * how many tracks were written, or 0 when the system has no timeline to hand the macro.
    */
-  const seedTestTimeline = async ({ steading, pcs, pcSlugs, graves, trips, sitePages }) => {
+  const seedTestTimeline = async ({ steading, pcs, pcSlugs, graves, trips, sitePages, progression = null }) => {
     const tl = await game.stonetop?.macroModules?.timeline?.();
     if (!tl) {
       ui.notifications.warn("[TEST] This system build hands the macro no timeline, so no history was seeded.");
       return 0;
     }
     const at = (p, row) => ({ ...timelinePeriod(p), ...row });
+    // A live milestone the run already recorded is re-dated onto the history rather than doubled.
+    // Declared before seedDeeds, which spreads it.
+    const redate = { refresh: ["season", "year"] };
     // A typed row, dated by its `p`, or by `ago`/`undated` for history (timelineWhen).
     const typed = (row, key) => ({
       ...timelineWhen(row), source: "hand", key, title: row.title, place: row.place ?? "", body: row.body ?? "",
@@ -1759,7 +1897,6 @@
     };
     const byPeriod = list => list.sort((a, b) => (a.year - b.year)
       || (TEST_TIMELINE_SEASONS.indexOf(a.season) - TEST_TIMELINE_SEASONS.indexOf(b.season)));
-    const redate = { refresh: ["season", "year"] };
     const level = n => game.i18n.format("stonetop.timeline.milestone.levelup", { level: n });
 
     // Who went where, worked out once and put on every thread it touches.
@@ -1807,13 +1944,16 @@
 
     for (const [slot, actor] of pcs.entries()) {
       const slug = pcSlugs.get(actor.id);
-      // Level-ups spread evenly over the eight seasons after the first, so a maxed character reaches
-      // the top in the third spring and a 1st-level one simply has none.
+      // Each level in the season the campaign walk climbed it (progression.levelAt), where the
+      // system has already recorded it; the row is seeded only in case a write landed late. A
+      // level the walk has no record of (a build that could not walk) is spread evenly over the
+      // eight seasons after the first. A 1st-level character simply has none.
       const top = Math.trunc(Number(actor.system?.attributes?.level?.value) || 1);
+      const climbed = progression?.levelAt?.get(actor.id);
       const levels = [];
       for (let n = 2; n <= top; n++) {
-        levels.push(at(1 + Math.floor((n - 2) * (TEST_TIMELINE_LAST - 1) / Math.max(1, top - 2)),
-          { source: "levelup", key: `levelup:${n}`, title: level(n), ...redate }));
+        const p = climbed?.get(n) ?? (1 + Math.floor((n - 2) * (TEST_TIMELINE_LAST - 1) / Math.max(1, top - 2)));
+        levels.push(at(p, { source: "levelup", key: `levelup:${n}`, title: level(n), ...redate }));
       }
       const rows = [
         ...(TEST_TIMELINE_PC_HISTORY[slug] ?? []).map((r, n) => typed(r, `test:pc-history:${n}`)),
@@ -1826,10 +1966,13 @@
         ...(tripRow ? [tripRow] : []),
         ...(siteRow && siteParty.has(actor.id) ? [siteRow] : []),
       ];
-      // A Seeker's major arcanum is who they are from the first page; anything else the system
-      // recorded (the Max Level scatter's arcana) is dealt across the seasons by slot.
+      // Everything else the system recorded on them is already in the season the campaign walk
+      // played it in. Only when there was no walk (no steading, so no clock) does it all sit in
+      // one moment, and is then dealt across the seasons by slot; a Seeker's major arcanum is
+      // who they are from the first page either way.
       const page = await seedTimelineTrack(tl, tl.trackForActor(actor), byPeriod(rows), {
-        spread: (e, k) => (e.key === "arcana:major" ? 0 : 1 + ((slot + k * 3) % TEST_TIMELINE_LAST)),
+        spread: progression?.walked ? null
+          : (e, k) => (e.key === "arcana:major" ? 0 : 1 + ((slot + k * 3) % TEST_TIMELINE_LAST)),
       });
       await markPage(page);
       if (page) tracks++;
@@ -2958,7 +3101,7 @@
     // Note pins that point at them — pins key on entryId + pageId since siblings share the
     // entry, mirroring gm-prep-page-store.deleteGmPrepPage. Prep the GM wrote by hand is left
     // alone; if ours were the last pages, the emptied journal goes too and the steading's
-    // pointer with it (setFlag MERGES and can't drop a key, hence the "-=" deletion syntax).
+    // pointer with it (setFlag MERGES and can't drop a key, hence the explicit dropKey deletion).
     //
     // One sweep for both families, matching the one seeder above and the one store the system
     // builds both families out of.
@@ -2982,7 +3125,7 @@
       }
       if (!entry.pages?.size) {
         await entry.delete().catch(() => {});
-        await steadingThreats?.update({ [`flags.${FLAG_SCOPE}.steading.-=${entryFlagId}`]: null });
+        await steadingThreats?.update(dropKey(`flags.${FLAG_SCOPE}.steading.${entryFlagId}`));
       }
       return killPageIds.size;
     };
@@ -3015,7 +3158,7 @@
     //
     // ⚠ EMPTIED IN TWO WRITES, for the reason the fixture wrote them in two: an update MERGES, so
     // handing a board an empty graph leaves every node it had exactly where it was. The flag is
-    // dropped through the "-=" spelling first and then written back whole.
+    // dropped through dropKey first and then written back whole.
     //
     // AND A MAP THIS MACRO MADE ITSELF is deleted entry and all: the world had none when the
     // fixture ran, so that map is the fixture's and nothing of the table's was ever on it. The maps
@@ -3043,8 +3186,8 @@
         // The graph AND the fixture's own mark, both dropped rather than overwritten: a flag set
         // back to `false` is a key of ours left on the table's document for ever.
         await page.update({
-          [`flags.${FLAG_SCOPE}.-=relationshipMap`]: null,
-          [`flags.${FLAG_SCOPE}.-=${TEST_FLAG}`]: null,
+          ...dropKey(`flags.${FLAG_SCOPE}.relationshipMap`),
+          ...dropKey(`flags.${FLAG_SCOPE}.${TEST_FLAG}`),
         });
         const restore = { flags: { [FLAG_SCOPE]: { relationshipMap: emptiedGraph } } };
         // The village board's ledger is emptied with it, so the next open can seat the world's real
@@ -3131,24 +3274,24 @@
       // would leave the world's own history reading against a season it no longer admits to.
       // It is also a single control in the steading header for the GM to move.
       //
-      // setFlag can't drop a key, so each goes through the "-=" deletion syntax.
+      // setFlag can't drop a key, so each goes through an explicit deletion (dropKey).
       const holdKill = {};
       const holdBase = `flags.${FLAG_SCOPE}.steading`;
       if (steadingFlags.fortunesAdvantage?.source === TEST_HOLD_FORTUNES_SRC) {
-        holdKill[`${holdBase}.-=fortunesAdvantage`] = null;
+        Object.assign(holdKill, dropKey(`${holdBase}.fortunesAdvantage`));
       }
       const seededStamp = steadingDel.getFlag(FLAG_SCOPE, "seasonsCurrent");
       const seededKey   = seededStamp?.season
         ? `${Number(seededStamp.year) || 1}:${seededStamp.season}`
         : null;
       if (steadingFlags.torsBlessing && steadingFlags.torsBlessing === seededKey) {
-        holdKill[`${holdBase}.-=torsBlessing`] = null;
+        Object.assign(holdKill, dropKey(`${holdBase}.torsBlessing`));
       }
       const heldMuster = steadingFlags.musterHold;
       if (heldMuster?.defenses === true && seededStamp?.season
           && heldMuster.season === seededStamp.season
           && Number(heldMuster.year) === (Number(seededStamp.year) || 1)) {
-        holdKill[`${holdBase}.-=musterHold`] = null;
+        Object.assign(holdKill, dropKey(`${holdBase}.musterHold`));
         // The seeded muster took the +1 Defenses, so dropping it has to give that point back
         // the way standing it down would. Otherwise the cleanup leaves a stat one too high
         // with nothing left on the sheet to explain it.
@@ -3164,7 +3307,7 @@
       // rather than derived, so nothing else would ever clear it for them.
       if (steadingFlags.winterDebt?.amount === TEST_HOLD_WINTER_DEBT
           && String(steadingFlags.winterDebt?.stamp ?? "").endsWith(":winter")) {
-        holdKill[`${holdBase}.-=winterDebt`] = null;
+        Object.assign(holdKill, dropKey(`${holdBase}.winterDebt`));
       }
       // The fixture's own improvements, by their signature: completed, `applied: null` (it ran
       // no grants, so there are none to take back), and a requirement array of exactly the shape
@@ -3183,7 +3326,7 @@
         const entry = steadingFlags.improvements?.[slug];
         if (!entry?.completed || entry.applied !== null) continue;
         if (!fixtureR(slug, entry.r)) continue;
-        holdKill[`${holdBase}.improvements.-=${slug}`] = null;
+        Object.assign(holdKill, dropKey(`${holdBase}.improvements.${slug}`));
       }
       if (Object.keys(holdKill).length) await steadingDel.update(holdKill);
 
@@ -3192,14 +3335,14 @@
       // `system.relationships` and would otherwise outlive every cleanup. Same rule as the
       // Notes above: a slug is dropped only while it still holds EXACTLY what was seeded,
       // so a rating the GM has since moved (or a note they extended) is theirs and stays.
-      // An update MERGES, so a key is removed with the "-=" deletion syntax rather than by
+      // An update MERGES, so a key is removed with an explicit deletion (dropKey) rather than by
       // writing the object back without it.
       const relKill = {};
       for (const [slug, seed] of Object.entries(TEST_SETTLEMENT_RELS)) {
         const stored = steadingDel.system?.relationships?.[slug];
         if (stored === undefined) continue;
         if (!sameRelEntry(stored, buildRelEntry(seed))) continue;
-        relKill[`system.relationships.-=${slug}`] = null;
+        Object.assign(relKill, dropKey(`system.relationships.${slug}`));
       }
       if (Object.keys(relKill).length) await steadingDel.update(relKill);
 
@@ -3222,12 +3365,12 @@
       }
       // Legacy: the "<name> Threats" FOLDER an older version of this macro created, plus the
       // steading's stale pointer to it. Dropped once it's empty; setFlag MERGES (can't drop a
-      // key), so the pointer is cleared with the "-=" deletion syntax. Left intact when the GM
+      // key), so the pointer is cleared with an explicit deletion (dropKey). Left intact when the GM
       // has filed something of their own there.
       const threatsFolder = steadingFlags.threatsFolderId ? game.folders?.get(steadingFlags.threatsFolderId) : null;
       if (threatsFolder && !threatsFolder.contents.length) {
         await threatsFolder.delete().catch(() => {});
-        await steadingDel.update({ [`flags.${FLAG_SCOPE}.steading.-=threatsFolderId`]: null });
+        await steadingDel.update(dropKey(`flags.${FLAG_SCOPE}.steading.threatsFolderId`));
       }
     }
 
@@ -3294,7 +3437,7 @@
 
   // ── Ask: max out the created characters' level? ────────────────────────
   // Only reached on the CREATE path (the delete branch above returns first). Three
-  // outcomes: Max Level → climb every character to exhaustion; Level 1 → plain
+  // outcomes: Max Level → climb every character to exhaustion, season by season; Level 1 → plain
   // freshly-created characters; dismiss (X) → cancel without creating anything. Defaults
   // to "Level 1" so a stray Enter doesn't kick off the slower climb.
   const maxLevel = await new Promise((resolve) => {
@@ -3302,8 +3445,8 @@
     new Dialog({
       title: "Create Test Characters",
       content: `<p>Create one <strong>[TEST]</strong> character per playbook (9 total).</p>`
-             + `<p><strong>Max out their level?</strong> This drives the real level-up engine to climb each character until no move remains (level 20+), taking every reachable move, stat increase, invocation and mark along the way. It takes noticeably longer than a plain build.</p>`
-             + `<p>Each character is also dealt a random spread of arcana: the major arcana split evenly across the whole roster, plus 3 random minor arcana each.</p>`
+             + `<p><strong>Max out their level?</strong> This drives the real level-up engine to climb each character until no move remains (level 20+), taking every reachable move, stat increase, invocation and mark along the way. The climb is played out season by season over the three years of the timeline, quick at first and slower later, so each character reaches the top in the third spring with a history behind them. It takes noticeably longer than a plain build.</p>`
+             + `<p>Each character is also dealt a random spread of arcana, found and worked out over those years: the major arcana split evenly across the whole roster, plus 3 random minor arcana each.</p>`
              + `<p>Choose <em>Level 1</em> for plain, freshly-created characters.</p>`
              + `<p style="margin-top:8px; padding:8px 10px; border-left:3px solid #b58a3c; background:rgba(181,138,60,0.14); border-radius:3px;">`
              + `<i class="fas fa-triangle-exclamation" style="margin-right:6px; color:#b58a3c;"></i>`
@@ -5008,12 +5151,12 @@
     // A board, written whole. TWO WRITES AND NOT ONE, because a document update MERGES: setting the
     // graph over a board that already has people on it would leave every one of their nodes in
     // place under its own id, and the fixture's lines would be drawn across a board holding a
-    // crowd. So the flag is dropped outright first, through the "-=" spelling this macro uses
+    // crowd. So the flag is dropped outright first, through the dropKey deletion this macro uses
     // everywhere. The test flag rides along on every board this writes: it is what the cleanup pass
     // empties, and it is the only thing that tells the fixture's boards from the table's own.
     const writeBoard = async (page, graph, marks = {}) => {
       if (!page) return null;
-      await page.update({ [`flags.${FLAG_SCOPE}.-=relationshipMap`]: null });
+      await page.update(dropKey(`flags.${FLAG_SCOPE}.relationshipMap`));
       await page.update({ flags: { [FLAG_SCOPE]: { relationshipMap: graph, [TEST_FLAG]: true, ...marks } } });
       return page;
     };
@@ -5138,8 +5281,19 @@
 
   // ── Create one character per playbook ──────────────────────────────────
   ui.notifications.info(maxLevel
-    ? "[TEST] Creating test characters and maxing their level — this may take a moment…"
+    ? "[TEST] Creating test characters and playing them up to max level, season by season. This may take a moment…"
     : "[TEST] Creating test characters…");
+
+  // The clock the walk moves (see "The campaign, played forward"), found here rather than with the
+  // steading's own seeding further down because the characters are made in its first season. No
+  // steading means no clock to walk: everything then happens in the one moment, as it used to, and
+  // seedTestTimeline scatters the rows instead.
+  const walkSteading = game.actors.find(a => a.type === "stonetop" || a.system?.customType === "stonetop");
+  const clockBefore  = walkSteading ? snapshotClock(walkSteading) : null;
+  if (walkSteading) {
+    pendingClockRestore = () => restoreClock(walkSteading, clockBefore);
+    await stampClock(walkSteading, 0);
+  }
 
   // Find or create the "PCs" actor folder so test characters land there.
   let pcFolder = game.folders.find(f => f.type === "Actor" && f.name === "PCs");
@@ -5175,33 +5329,26 @@
     // than once is processed only once (ownedCount scales the budget instead).
     await applyStartingMoveMarks(actor);
 
-    // Optionally climb this character to max level (the modal above), driving the real
-    // level-up engine to exhaustion so the fixture exercises a fully advanced sheet.
-    if (maxLevel) {
-      const gained = await climbToMax(actor);
-      console.log(`[TEST] Created + maxed: ${actor.name} — +${gained} levels → level ${actor.system?.attributes?.level?.value ?? "?"}.`);
-    } else {
-      console.log(`[TEST] Created: ${actor.name}`);
-    }
-
-    // Seed the demonstration follower (torn down with the actor), this slot's share of the
-    // love letters, and on the first character only the demonstration custom move.
-    // created.length is the character's index in the roster, read before the push below.
-    await seedTestCustomContent(actor, created.length);
-
+    // Their levels, follower, love letters and (on the Max Level path) arcana come later, in the
+    // seasons the walk below plays them in. Created in Spring of Year One, at 1st level.
+    console.log(`[TEST] Created: ${actor.name}`);
     created.push(actor);
   }
 
   // ── Max Level: scatter arcana across the whole roster ──────────────────
   // Only on the Max-Level path. Deal EVERY major arcanum out evenly and at RANDOM
   // across the created characters (18 majors / 9 PCs ⇒ 2 each, every major used
-  // exactly once), and give each character 3 randomly drawn minor arcana. This is a
+  // exactly once), and give each character 3 randomly drawn minor arcana. DEALT here and
+  // PLAYED by the walk below (arcanaSchedule): each card found, worked out and the first minor
+  // mastered in seasons of its own, so a sheet's arcana have a history. This is a
   // deliberate exception to the macro's deterministic "first option" contract — the
   // point here is to spread the full set of arcana over the fixtures so the Arcana
   // tab is exercised on every sheet. Arcana are stored only as actor flags (owned/
   // identified/major/minorDraw/minorRoles), so the re-run's Actor.deleteDocuments
   // already tears them down — no separate cleanup needed. Uses Math.random directly
   // (this is a Foundry macro, not a workflow script).
+  // actor id → { majors, minors }: what the walk hands each character, and when.
+  const dealtArcana = new Map();
   if (maxLevel && created.length) {
     // Fisher–Yates shuffle → a new randomized copy (leaves the source array intact).
     const shuffle = (arr) => {
@@ -5245,27 +5392,11 @@
       }
       for (let i = 0; i < created.length; i++) {
         const actor = created[i];
-        const typed = actor.typedActor;
-        if (!typed?.addArcanum) continue;
+        if (!actor.typedActor?.addArcanum) continue;
         const majors = majorBins[i] ?? [];
         const minors = sampleN(i === seekerIdx ? minorSlugs.filter(s => !EXAMPLE_SLUGS.has(s)) : minorSlugs, 3);
-        // Own + identify each dealt card so it shows face-up on the Arcana tab.
-        for (const slug of [...majors, ...minors]) {
-          await typed.addArcanum(slug);
-          await typed.identifyArcanum(slug);
-        }
-        // The first minor begins play fully realized (mastered), exercising the
-        // unlocked-back rendering — mirroring the Seeker's mastered minor.
-        if (minors[0]) await typed.masterArcanum(minors[0]);
-        // Populate the Seeker-style onboarding arcana flags (major card + minor role
-        // assignments) so the arcana lore display reads coherently where it renders
-        // (the Seeker); setFlag MERGES, so this leaves owned/identified untouched.
-        await actor.setFlag(FLAG_SCOPE, "arcana", {
-          major:      majors[0] ?? "",
-          minorDraw:  minors,
-          minorRoles: { mastered: minors[0] ?? "", found: minors[1] ?? "", lead: minors[2] ?? "" },
-        });
-        console.log(`[TEST] Arcana → ${actor.name}: ${majors.length} major (${majors.join(", ") || "none"}), ${minors.length} minor.`);
+        dealtArcana.set(actor.id, { majors, minors });
+        console.log(`[TEST] Arcana dealt → ${actor.name}: ${majors.length} major (${majors.join(", ") || "none"}), ${minors.length} minor.`);
       }
     }
   }
@@ -5348,6 +5479,99 @@
   };
   const homebrewArcana = await seedHomebrewArcana();
 
+  // ── The walk: the campaign's seasons, played in order ─────────────────
+  // See "The campaign, played forward". Spring of Year One was the making of them. From the first
+  // summer to the third spring the clock is stamped to each season in turn, and every character
+  // plays it, in roster order:
+  //   • the demonstration follower, love letters (and on the first character the custom move and
+  //     the treasures) in the season followerSeason names;
+  //   • on the Max Level path, that season's XP and every level it pays for (climbWithXp), and in
+  //     the last season the XP topped up for the rest of the climb, so every character still ends
+  //     at the top; a character who runs out of moves early simply stops earning;
+  //   • on the Max Level path, the dealt arcana found, worked out and mastered in their seasons
+  //     (arcanaSchedule), the Seeker-style roles flag written once the cards it names are held
+  //     (rolesSeason).
+  // Before the clock moves on, the macro waits out every row the system's hooks are still writing
+  // (the timeline's settleTimelineWrites). The Graveyard and everything after it happen in the third spring, the
+  // end of the history, until the hold-tray block puts the clock back.
+  // `levelAt` (actor id → Map of level → season) is the record seedTestTimeline dates the level
+  // rows by. With no steading there is no clock: the seasons are still played in order, in one
+  // moment, and `walked` stays false so seedTestTimeline scatters the rows instead.
+  const progression = { walked: false, levelAt: new Map() };
+  {
+    const tl = walkSteading ? await game.stonetop?.macroModules?.timeline?.() : null;
+    const walking = Boolean(walkSteading && tl);
+    const topped = new Set();
+    const plans = new Map(created.map((actor, slot) => {
+      const dealt = dealtArcana.get(actor.id);
+      return [actor.id, dealt ? arcanaSchedule(slot, dealt.majors, dealt.minors) : []];
+    }));
+
+    // One character's season.
+    const playSeason = async (actor, slot, p) => {
+      const typed = actor.typedActor;
+      if (p === followerSeason(slot)) await seedTestCustomContent(actor, slot);
+      if (maxLevel && !topped.has(actor.id)) {
+        const last = p === TEST_TIMELINE_LAST;
+        const { reached, exhausted } = await climbWithXp(actor, seasonXpFor(slot), { topUp: last });
+        if (exhausted || last) topped.add(actor.id);
+        const at = progression.levelAt.get(actor.id) ?? new Map();
+        for (const level of reached) at.set(level, p);
+        progression.levelAt.set(actor.id, at);
+      }
+      const plan = plans.get(actor.id) ?? [];
+      if (plan.length && typed?.addArcanum) {
+        for (const card of plan.filter(c => c.found === p))      await typed.addArcanum(card.slug);
+        for (const card of plan.filter(c => c.identified === p)) await typed.identifyArcanum(card.slug);
+        for (const card of plan.filter(c => c.mastered === p))   await typed.masterArcanum(card.slug);
+        // The Seeker-style onboarding flags (major card + minor role assignments) so the arcana
+        // lore display reads coherently where it renders (the Seeker), written once the cards it
+        // names are held (rolesSeason); setFlag MERGES, so this leaves owned/identified untouched.
+        // Naming the major is itself a row (`arcana:major`).
+        const { majors, minors } = dealtArcana.get(actor.id);
+        if (rolesSeason(plan, majors, minors) === p) {
+          await actor.setFlag(FLAG_SCOPE, "arcana", {
+            major:      majors[0] ?? "",
+            minorDraw:  minors,
+            minorRoles: { mastered: minors[0] ?? "", found: minors[1] ?? "", lead: minors[2] ?? "" },
+          });
+        }
+      }
+    };
+
+    // Every row the system's hooks are still writing, waited out before the clock moves on: a row
+    // reads the clock only when it gets to the write (after looking an arcanum's name up, say), so
+    // moving it too soon would date the row a season late. The first wait covers the making of the
+    // characters and the homebrew arcana, the last one the third spring before anything else moves
+    // the clock.
+    const settle = () => (walking ? tl.settleTimelineWrites?.() : null);
+    for (let p = 1; p <= TEST_TIMELINE_LAST; p++) {
+      await settle();
+      if (walking) await stampClock(walkSteading, p);
+      for (const [slot, actor] of created.entries()) await playSeason(actor, slot, p);
+    }
+    await settle();
+    progression.walked = walking;
+
+    // What each character did when: "Summer Y1 →7, Autumn Y1 →10, … Spring Y3 →23".
+    const seasonName = p => {
+      const { season, year } = timelinePeriod(p);
+      return `${season.charAt(0).toUpperCase()}${season.slice(1)} Y${year}`;
+    };
+    for (const [slot, actor] of created.entries()) {
+      const topBySeason = new Map();
+      for (const [level, p] of progression.levelAt.get(actor.id) ?? []) topBySeason.set(p, Math.max(topBySeason.get(p) ?? 0, level));
+      const climb = [...topBySeason].sort((a, b) => a[0] - b[0]).map(([p, level]) => `${seasonName(p)} →${level}`).join(", ");
+      const cards = (plans.get(actor.id) ?? []).length;
+      console.log(`[TEST] ${actor.name}: ${climb || "1st level throughout"}${cards ? `; ${cards} arcana found over the history` : ""}; follower taken on ${seasonName(followerSeason(slot))}.`);
+    }
+    if (!walking && created.length) {
+      console.log(walkSteading
+        ? "[TEST] This system build hands the macro no timeline, so the seasons were played without moving the clock."
+        : "[TEST] No steading, so no clock to walk: the seasons were played in one moment and the timeline scatters them instead.");
+    }
+  }
+
   // ── The Graveyard: four characters past the Last Door ──────────────────
   // The living roster can't exercise any of this. SKIP_PLAYBOOKS keeps the three post-death
   // inserts out of it (they are `playbook` Items, but nobody STARTS as one), so without these
@@ -5361,7 +5585,7 @@
   //
   // ALWAYS 1st level, whichever way the modal was answered. A maxed sheet and a dead one are
   // two different things to look at, and stacking them buries the one these fixtures exist for
-  // under twenty levels of moves. `climbToMax` is simply never called on them.
+  // under twenty levels of moves. The climb is simply never run on them.
   const GRAVEYARD = [
     {
       slug: "the-heavy", fate: "revenant", name: "Duvin Ash-Hand",
@@ -5536,6 +5760,13 @@
     // that would date the campaign's own history in its future. A clock already past it is left
     // where it is. The picker's year moves by the same amount, so a winter the clock is in keeps
     // the year-ahead default a completed winter gives it (seasons/current-season.js).
+    //
+    // The campaign walk has had the clock until now (it is still on the third spring); it goes back
+    // to exactly what the GM had first, so everything below reads THEIR clock, as it always did.
+    if (pendingClockRestore) {
+      await pendingClockRestore();
+      pendingClockRestore = null;
+    }
     const stampedSeason = steading.getFlag(FLAG_SCOPE, "seasonsCurrent");
     const pickerYear    = Number(steading.getFlag(FLAG_SCOPE, "seasonsCurrentYear")) || 1;
     const clockSeeded   = !stampedSeason?.season;
@@ -5680,7 +5911,7 @@
     await steading.setFlag(FLAG_SCOPE, "steading", sf);
 
     // And clear this season's markers for the seasonal steps, so the dues read as unpaid.
-    // AFTER the setFlag and through the "-=" deletion syntax, not by deleting the keys off `sf`:
+    // AFTER the setFlag and through an explicit deletion (dropKey), not by deleting the keys off `sf`:
     // setFlag MERGES, so a sub-key dropped from the object it is handed survives in the stored
     // flags untouched — the same trap the threats-folder pointer in the cleanup above documents.
     //
@@ -5688,7 +5919,7 @@
     // precisely the state that hides a chip, and showing the tray is the point of the fixture.
     const stepKill = {};
     for (const step of [...TEST_HOLD_STEPS, ...TEST_SEASON_STEPS]) {
-      if (sf.seasonSteps?.[step] !== undefined) stepKill[`flags.${FLAG_SCOPE}.steading.seasonSteps.-=${step}`] = null;
+      if (sf.seasonSteps?.[step] !== undefined) Object.assign(stepKill, dropKey(`flags.${FLAG_SCOPE}.steading.seasonSteps.${step}`));
     }
     if (Object.keys(stepKill).length) await steading.update(stepKill);
 
@@ -5867,9 +6098,18 @@
     }
   } catch { /* no campaignStartYear in this build: the years stay "Year One" */ }
 
-  const timelineTracks = await seedTestTimeline({
-    steading, pcs: created, pcSlugs: createdSlugs, graves: buried, trips: examples, sitePages: testSitePages,
-  });
+  // A throw here is reported, not fatal: the Ages, the relationship map and the Chronicle below do
+  // not need the history, and losing them all to one bad row hides what actually broke.
+  let timelineTracks = 0;
+  try {
+    timelineTracks = await seedTestTimeline({
+      steading, pcs: created, pcSlugs: createdSlugs, graves: buried, trips: examples, sitePages: testSitePages,
+      progression,
+    });
+  } catch (err) {
+    console.error("[TEST] Seeding the timeline failed.", err);
+    ui.notifications.error(`[TEST] Seeding the timeline failed (${err?.message ?? err}). See the console; the rest of the fixtures carry on.`);
+  }
   if (timelineTracks) {
     console.log(`[TEST] Timeline: ${TEST_TIMELINE_YEARS} years of play (Spring of the first year to Spring of the third) plus ${TEST_TIMELINE_HISTORY.length} rows of history before play on Stonetop's thread, on ${timelineTracks} thread(s).${startYearNote} Open it with game.stonetop.openTimeline().`);
   }
@@ -5896,8 +6136,11 @@
   // is somehow run before onReady wires up the API.)
   await game.stonetop?.saveChronicle?.();
 
-  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (maxed to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+, arcana scattered)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items + ${TEST_TREASURES.length} treasures, ${homebrewArcana ? `${homebrewArcana} homebrew example arcana on the Seeker, ` : ""}${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites (both pinned on the books' maps), settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${expeditions ? `${expeditions.added} prepped expeditions (${expeditions.bound} bound to a logged trip), ` : ""}${timelineTracks ? `a ${TEST_TIMELINE_YEARS}-year timeline on ${timelineTracks} threads${testAges ? ` under ${testAges} Ages` : ""}, ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, ${relmap ? `a relationship map (${relmap.home.people} people and ${relmap.home.lines} lines on the village board, ${relmap.party.people} and ${relmap.party.lines} on the party board, ${relmap.test.people} and ${relmap.test.lines} on the hidden "Test" board), ` : ""} introductions answers, ${examples.length} example expeditions${tripKit.taken ? ` (${tripKit.taken} steading asset${tripKit.taken === 1 ? "" : "s"} requisitioned, ${tripKit.held} still out)` : ""}, and the compiled Chronicle.`);
+  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (played up to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+ over the three years, arcana found along the way)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items + ${TEST_TREASURES.length} treasures, ${homebrewArcana ? `${homebrewArcana} homebrew example arcana on the Seeker, ` : ""}${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites (both pinned on the books' maps), settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${expeditions ? `${expeditions.added} prepped expeditions (${expeditions.bound} bound to a logged trip), ` : ""}${timelineTracks ? `a ${TEST_TIMELINE_YEARS}-year timeline on ${timelineTracks} threads${testAges ? ` under ${testAges} Ages` : ""}, ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, ${relmap ? `a relationship map (${relmap.home.people} people and ${relmap.home.lines} lines on the village board, ${relmap.party.people} and ${relmap.party.lines} on the party board, ${relmap.test.people} and ${relmap.test.lines} on the hidden "Test" board), ` : ""} introductions answers, ${examples.length} example expeditions${tripKit.taken ? ` (${tripKit.taken} steading asset${tripKit.taken === 1 ? "" : "s"} requisitioned, ${tripKit.held} still out)` : ""}, and the compiled Chronicle.`);
   } finally {
+    if (pendingClockRestore) {
+      await pendingClockRestore().catch(err => console.error("[TEST] Could not put the steading's clock back.", err));
+    }
     globalThis.__stonetopTestFixturesRunning = false;
   }
 })();

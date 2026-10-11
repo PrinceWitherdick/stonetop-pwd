@@ -16,6 +16,9 @@
 // (book2-art/macro-modules.js), so a bundled release gives the macro the system's own instances, turn
 // queue and all, rather than second copies with a queue of their own.
 export { mutateTrack, findTrackPage, trackForActor } from "./timeline-store.js";
+// Waits out the rows the system's own hooks are still writing (timeline-watch.js), so the macro can move
+// the clock on without dating them a season late.
+export { settleTimelineWrites } from "./timeline-watch.js";
 export { isShortfallRow, readEntries, upsertByKey, patchEntry, removeEntry } from "./timeline-core.js";
 export { TIMELINE_TAGS_FLAG } from "./timeline-tags.js";
 export { agesToStored, nextAgeColour, normalizeAges } from "./timeline-ages.js";
