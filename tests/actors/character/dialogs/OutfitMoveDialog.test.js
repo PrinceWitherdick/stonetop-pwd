@@ -71,7 +71,7 @@ describe("OutfitMoveDialog: special-possession gear", () => {
 	it("holds the undefined small items to the snapshot's limit, and prints it only when Prosperity was read", () => {
 		const dialog = new OutfitMoveDialog({}, snapshot({ smallItemLimit: 4, prosperityKnown: false, possessionSmall: [] }), null);
 		dialog._undefinedSmall = 9;
-		expect(dialog.getData().undefinedSmall).toBe(4);
+		expect(dialog.getData().smallPool.current).toBe(4);
 		expect(dialog.getData().hasSmallItemLimit).toBe(false);
 		expect(new OutfitMoveDialog({}, snapshot(), null).getData()).toMatchObject({ smallItemLimit: 5, hasSmallItemLimit: true });
 	});
@@ -83,6 +83,51 @@ describe("OutfitMoveDialog: special-possession gear", () => {
 		expect(spy).toHaveBeenCalledWith(OUTFIT_ID_PREFIX, "pc-a", { classes: ["x"] });
 		expect(spy.mock.results[0].value.id).toBe("stonetop-outfit-dialog-pc-a");
 		spy.mockRestore();
+	});
+
+	// The undefined reserves are drawn as the Inventory tab's tracks: every box of the heavy load
+	// and of the small allowance, with the room the marked items leave as the click cap.
+	it("draws the undefined reserves as full tracks, capped by the room the marks leave", () => {
+		const dialog = new OutfitMoveDialog({}, snapshot(), null);
+		dialog._undefinedRegular = 2;
+		const data = dialog.getData();
+		expect(data.regularPool).toEqual({ current: 2, max: 9 });
+		expect(data.regularPoolCap).toBe(6);
+		expect(data.smallPool).toEqual({ current: 0, max: 5 });
+		expect(data.smallPoolCap).toBe(4);
+	});
+
+	it("sets a reserve from the box clicked, clears back to a filled one, and stops at the room left", () => {
+		const warn = vi.fn();
+		globalThis.ui = { notifications: { warn } };
+		globalThis.game = { ...globalThis.game, i18n: { localize: k => k } };
+		const dialog = new OutfitMoveDialog({}, snapshot(), null);
+		dialog._setPoolFromClick(false, 4, true);
+		expect(dialog._undefinedRegular).toBe(5);
+		dialog._setPoolFromClick(false, 2, false);
+		expect(dialog._undefinedRegular).toBe(2);
+		// 3 ◇ marked leaves room for 6: a click on the 9th box fills to 6, quietly.
+		dialog._setPoolFromClick(false, 8, true);
+		expect(dialog._undefinedRegular).toBe(6);
+		expect(warn).not.toHaveBeenCalled();
+		dialog._setPoolFromClick(false, 8, true);
+		expect(dialog._undefinedRegular).toBe(6);
+		expect(warn).toHaveBeenCalledWith("stonetop.inventory.regularPoolAtLimit");
+		dialog._setPoolFromClick(true, 1, true);
+		expect(dialog._undefinedSmall).toBe(2);
+	});
+
+	// The standard small items sit in a two-column grid under the list, as on the Inventory tab,
+	// and still count against the allowance like the rest.
+	it("hands the standard small items over apart from the list, still counting them", () => {
+		const dialog = new OutfitMoveDialog({}, snapshot({
+			smallGridItems: [{ slug: "awl", name: "Awl", checked: true }, { slug: "cup", name: "Cup", checked: false }],
+			treasureSmall: [{ slug: "coin", name: "Old coin", checked: false }],
+		}), null);
+		const data = dialog.getData();
+		expect(data.smallItems.map(r => r.slug)).toEqual(["chalk", "coin"]);
+		expect(data.smallGridItems.map(r => [r.slug, r.checked])).toEqual([["awl", true], ["cup", false]]);
+		expect(data.totalSmallMarks).toBe(2);
 	});
 
 	it("has no possession rows for a snapshot that carries none", () => {

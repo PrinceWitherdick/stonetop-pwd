@@ -9120,6 +9120,10 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	width: 100%;
 }
 
+/* Room before the Arcana / Treasures heading that follows the button. There's no
+   rule between them, and the heading itself carries no top margin. */
+.stonetop-inv-add-btn:not(:last-child) { margin-bottom: 12px; }
+
 /* Add Special Item picker */
 .stonetop-special-picker { padding: 4px 2px; }
 .stonetop-special-picker-intro { font-size: calc(0.9rem * var(--stonetop-font-scale, 1)); color: var(--color-text-dark-secondary); margin: 0 0 8px; }
@@ -13298,6 +13302,8 @@ button.stonetop-held-disadvantage:hover { color: var(--st-text-body); }
 .steading-improvement-filter > span,
 .stonetop-catalog-filter > span,
 .stonetop-invocation-chip-name,
+.stonetop-inspiration-chip-name,
+.stonetop-rapport-chip-name,
 .stonetop .create-monster .cm-move-suggestion > span,
 .stonetop-person-picker-chip-name,
 .stonetop-timeline-entry-linked-text,
@@ -13314,11 +13320,20 @@ button.stonetop-held-disadvantage:hover { color: var(--st-text-body); }
    as well, so a glyph at a fractional font-size wandered up to 1.4px about its chip's centre from
    one UI font size to the next. At a whole-pixel size it keeps to the ±0.6px of the grid, and
    centres to within 0.02em on average with no nudge. Where a chip's own icon rule already sized
-   the glyph, that rule rounds it in place, after a plain em size for a browser without round(). */
+   the glyph, that rule rounds it in place, after a plain em size for a browser without round().
+
+   The journey row's Put on scene button rounds only its eraser: its other glyph, the map pin,
+   draws LOW in its own box, and rounding pushed it further down (to 1.5px at a 24px UI font) where
+   at 1em it already sat within 0.7px. The timeline entry dialog's tags are not here either: that
+   chip is a pinned 26px, and a fixed glyph does better in it (see .stonetop-timeline-entry-tag > i). */
 .stonetop-order-followers-dialog .stonetop-of-tag i,
 .stonetop-follower-dead-badge i,
 .stonetop-timeline-entry-linked i,
-.stonetop .stonetop-moves-level-notice-dismiss i {
+.stonetop .stonetop-moves-level-notice-dismiss i,
+.stonetop-timeline-card-kind > i,
+.stonetop-timeline-colours-chip > i,
+.stonetop-journey .stonetop-journey-place-site > i,
+.stonetop-journey .stonetop-journey-to-scene > i.fa-eraser {
 	font-size: round(1em, 1px);
 }
 
@@ -14764,6 +14779,16 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	line-height: 1.4;
 }
 
+/* The prose ◇/□ marks (wrapStonetopGlyphsInEl) sat ~0.1em low here. The shared glyph rule places
+   its box by its BOTTOM edge (vertical-align: -0.125em, centring it on the cap band), but the
+   hidden ◇/□ character inside gives the inline-block a text baseline of its own, set by the
+   fallback symbol font, which dropped the box below that mark. overflow: hidden makes the box's
+   baseline its bottom edge, so the placement that rule computes is the one drawn. */
+.stonetop-outfit-dialog :is(.stonetop-glyph--diamond, .stonetop-glyph--diamond-selected,
+                            .stonetop-glyph--checkbox, .stonetop-glyph--checkbox-checked) {
+	overflow: hidden;
+}
+
 .stonetop-outfit-rule-note {
 	padding: 6px 8px;
 	border: 1px solid var(--color-border-light-2);
@@ -14868,11 +14893,6 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	background: center / contain no-repeat var(--stonetop-diamond-selected-icon);
 }
 
-.stonetop-outfit-weight-none {
-	color: var(--color-text-dark-secondary);
-	font-style: italic;
-}
-
 .stonetop-outfit-weight-count {
 	color: var(--color-text-dark-secondary);
 	font-size: var(--st-fs-sm);
@@ -14895,6 +14915,9 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .stonetop-outfit-small-section {
 	flex: 1;
 	overflow-y: auto;
+	/* Room for the heading's search box, which grows UPWARD when it opens
+	   (.stonetop-tab-search.is-open) and would otherwise be clipped by this scrollport. */
+	padding-top: calc(8px * var(--stonetop-font-scale, 1));
 }
 
 .stonetop-outfit-regular-section { flex: 1 1 55%; min-width: 0; }
@@ -14996,46 +15019,14 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	background: currentColor;
 }
 
-.stonetop-outfit-item-name { flex: 1 1 auto; }
+/* Bold upright, matching the Inventory tab's `.stonetop-inv-label`. */
+.stonetop-outfit-item-name { flex: 1 1 auto; font-weight: bold; font-style: normal; }
 
 .stonetop-outfit-item-note {
 	margin-left: auto;
 	text-align: right;
 	color: var(--color-text-dark-secondary);
 	font-size: var(--st-fs-base);
-}
-
-/* Undefined ◇/□ stepper — reserve carrying capacity without assigning an item. */
-.stonetop-outfit-undefined {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	margin-top: 6px;
-	padding-top: 6px;
-	border-top: 1px dashed var(--color-border-light-2, rgba(0,0,0,0.15));
-}
-.stonetop-outfit-undefined-label {
-	flex: 1;
-	font-style: italic;
-	color: var(--color-text-dark-secondary);
-}
-.stonetop-outfit-undefined-btn {
-	width: 22px;
-	height: 22px;
-	flex: 0 0 22px;
-	padding: 0;
-	line-height: 1;
-	font-weight: bold;
-	cursor: pointer;
-}
-.stonetop-outfit-undefined-btn:disabled {
-	opacity: 0.4;
-	cursor: default;
-}
-.stonetop-outfit-undefined-count {
-	min-width: 1.2em;
-	text-align: center;
-	font-variant-numeric: tabular-nums;
 }
 
 /* Footer */
@@ -22405,36 +22396,34 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 
 .stonetop-season-year-hint:empty { display: none; }
 
-/* ── History: the timeline entry's own extras (season-picker.js) ──────────────
-   A fifth card for a year whose season nobody remembers, across the whole row under the
-   four seasons because it is the odd one out, not a fifth season. No book art exists for
-   it, so the year's hourglass stands in, at the season glyphs' visual weight. */
-.stonetop-season-picker .stonetop-season-card--unknown {
-	grid-column: 1 / -1;
-	flex-direction: row;
-	padding: 8px;
+/* The timeline entry asks WHEN as one question among five, not as the whole dialog the way
+   Seasons Change does, so its four cards are a single compact row at a third of the glyph size.
+   No card at all is a year whose season nobody remembers (pressing the chosen card clears it;
+   TimelineEntryDialog#_pickSeason). Qualified by the dialog's class (four classes) so it outranks
+   the picker's own card and icon rules above. */
+.stonetop-timeline-entry-dialog .stonetop-season-picker .stonetop-season-cards {
+	grid-template-columns: repeat(4, 1fr);
+	gap: 6px;
 }
 
-.stonetop-season-icon--unknown {
-	font-size: 1.6em;
-	color: var(--st-text-muted);
+.stonetop-timeline-entry-dialog .stonetop-season-picker .stonetop-season-card {
+	gap: 4px;
+	padding: 6px 4px;
+	border-radius: var(--st-radius);
 }
 
-/* "or [ 10 ] years ago": the year field said the way history is told, under the year row.
-   Qualified past `.stonetop-season-picker p` for its margin, as the footnotes are. */
-.stonetop-season-picker p.stonetop-season-year-ago {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin: 8px 0 0;
+.stonetop-timeline-entry-dialog .stonetop-season-picker .stonetop-season-icon {
+	width: 28px;
+	height: 28px;
+}
+
+.stonetop-timeline-entry-dialog .stonetop-season-picker .stonetop-season-label {
 	font-size: var(--st-fs-sm);
 }
 
-.stonetop-season-year-ago-input {
-	width: 4.5em;
-	text-align: center;
-	font-family: var(--font-stonetop);
-	font-weight: 600;
+.stonetop-timeline-entry-dialog .stonetop-season-year {
+	margin-top: 10px;
+	padding-top: 10px;
 }
 
 /* ── Set the Year (seasons/campaign-year-dialog.js) and the first spring's ask ── */
@@ -26124,14 +26113,21 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
    edge — a flex row would shrink the h3 to its content and cut the line short. Nudge the
    icon to sit centered on the heading text and give it a little breathing room. */
 .stonetop-move-group-title > .stonetop-tab-search,
-.steading-residents-heading > .stonetop-tab-search {
+.steading-residents-heading > .stonetop-tab-search,
+.stonetop-outfit-section-heading > .stonetop-tab-search {
 	margin-left: 3px;
 	vertical-align: middle;
 	font-weight: normal;
 }
 .stonetop-move-group-title > .stonetop-tab-search .stonetop-tab-search-input,
-.steading-residents-heading > .stonetop-tab-search .stonetop-tab-search-input {
+.steading-residents-heading > .stonetop-tab-search .stonetop-tab-search-input,
+.stonetop-outfit-section-heading > .stonetop-tab-search .stonetop-tab-search-input {
 	font-weight: normal;
+}
+/* The Outfit window's headings are set in caps; what the reader types into one is not. */
+.stonetop-outfit-section-heading > .stonetop-tab-search {
+	text-transform: none;
+	letter-spacing: normal;
 }
 
 .stonetop-search-hidden {
@@ -26668,6 +26664,9 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	min-width: var(--st-pip-track);
 	width: max-content;
 }
+/* Pay cost (Strengthen Your Bond) sits in the Loyalty row too; without this it took core's
+   full-width button and claimed a line of its own, pushing Spend under it. */
+.stonetop-follower-loyalty-row .stonetop-pay-cost,
 .stonetop-follower-loyalty-row .stonetop-spend-loyalty,
 .stonetop-follower-readiness-row .stonetop-spend-readiness {
 	margin-left: 0;
@@ -26785,6 +26784,13 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
    and the button sat on the card's bottom edge. Padded with the body's own gutter (12px
    sides, 11px under) so it lines up with Order above and has the body's room below. */
 .stonetop-daagon-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; padding: 0 12px 11px; }
+/* Remove (a broke-free batch here, a fallen follower's red strip above) is a small inline
+   button in a wrapping flex row; left to core's full-width button it claimed a line of its own. */
+.stonetop-follower-remove {
+	flex: 0 0 auto;
+	width: max-content !important;
+	max-width: max-content;
+}
 /* Blue overrides only; the rest of the chrome is shared with .stonetop-follower-order. */
 .stonetop-daagon-btn {
 	border-color: var(--st-blue-border);
@@ -50611,8 +50617,77 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 .stonetop-timeline-card-actions button > i.fa-chevron-up   { top: 1px; }
 .stonetop-timeline-card-actions button > i.fa-chevron-down { top: -1px; }
 
+/* Above the line earlier is DOWN (the stack grows outward, see the hcards rule), so the move arrows
+   turn over to point where the card will go. Turned about the glyph's centre, FA's high-sitting up
+   chevron becomes a low-sitting down one, so the two nudges trade places too. */
+.stonetop-timeline-hperiod--above .stonetop-timeline-card-actions button > i.fa-chevron-up   { top: -1px; transform: rotate(180deg); }
+.stonetop-timeline-hperiod--above .stonetop-timeline-card-actions button > i.fa-chevron-down { top: 1px; transform: rotate(180deg); }
+
 :is(.stonetop-timeline-card-actions,
     :is(.application, .window-app).stonetop-themed .window-content .stonetop-timeline-card-actions) button:hover {
+	border-color: var(--st-slate-hover-border);
+	background: var(--st-slate-hover-bg);
+	color: var(--st-text);
+}
+
+/* -- A season's "+ Add" slot --------------------------------------------------------
+   The last item in a season's list of cards (thread's cell, on the aggregate): where an entry
+   written into that season lands, since it is appended (user, 2026-10-10). Revealed the way the
+   card controls are, on hover of its season or cell and on focus, and always where there is no
+   hover to reveal it (a touch screen) and in the clock's GHOST season, which holds nothing else.
+   OPACITY, never display: the slot keeps its room while hidden, so a hover never moves a card or
+   changes a season's height.
+   The `:is()` lifts the button over the pop-out's themed body-button rule, as the card controls'
+   does; colour-only transition for the same reason theirs is. Glyph AND word at full ink, for the
+   reader on a magnifier. */
+.stonetop-timeline-add-slot {
+	display: flex;
+	opacity: 0;
+	transition: opacity 120ms ease;
+}
+
+.stonetop-timeline-period:hover .stonetop-timeline-add-slot,
+.stonetop-timeline-hperiod:hover .stonetop-timeline-add-slot,
+.stonetop-timeline-lane:hover .stonetop-timeline-add-slot,
+.stonetop-timeline-add-slot:focus-within,
+.stonetop-timeline-add-slot--ghost {
+	opacity: 1;
+}
+
+@media (hover: none) {
+	.stonetop-timeline-add-slot { opacity: 1; }
+}
+
+:is(.stonetop-timeline-add-slot,
+    :is(.application, .window-app).stonetop-themed .window-content .stonetop-timeline-add-slot) .stonetop-timeline-add {
+	flex: 1 1 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	height: auto;
+	min-height: 28px;
+	margin: 0;
+	padding: 3px 10px;
+	border: 1px dashed var(--st-card-rule);
+	border-radius: var(--st-radius);
+	background: transparent;
+	color: var(--st-text);
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-sm);
+	line-height: 1;
+	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+/* Core gives every icon in an app button a 3px right margin; the gap spaces it here. */
+.stonetop-timeline-add > i {
+	margin: 0;
+	font-size: 12px;
+}
+
+:is(.stonetop-timeline-add-slot,
+    :is(.application, .window-app).stonetop-themed .window-content .stonetop-timeline-add-slot) .stonetop-timeline-add:is(:hover, :focus-visible) {
+	border-style: solid;
 	border-color: var(--st-slate-hover-border);
 	background: var(--st-slate-hover-bg);
 	color: var(--st-text);
@@ -50924,9 +50999,14 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	border-left: none;
 }
 
+/* A season ABOVE the line stacks its cards OUTWARD from it (user, 2026-10-10): the first nearest the
+   line, each later one on top, and the add slot (the list's last item) at the very top, the column's
+   far end, where the entry it writes will appear. The DOM keeps reading order, so the keyboard and a
+   screen reader still go node, oldest, newest, Add: away from the line, as the eye does. */
 .stonetop-timeline-hperiod--above .stonetop-timeline-hcards {
 	grid-row: 1;
 	align-self: end;
+	flex-direction: column-reverse;
 	padding: 0 0 16px;
 }
 
@@ -51083,6 +51163,16 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	border-radius: 999px;
 }
 
+/* The clock's GHOST season (nothing written in it yet): its heading dashed, on the plain panel, so
+   it reads as a place to write rather than a season with a record. The words keep full ink. */
+.stonetop-timeline-period--ghost .stonetop-timeline-period-head.stonetop-timeline-season,
+.stonetop-timeline-row--ghost .stonetop-timeline-row-head.stonetop-timeline-season,
+.stonetop-timeline-hperiod--ghost .stonetop-timeline-hhead.stonetop-timeline-season,
+.stonetop-timeline-swim-head--ghost.stonetop-timeline-season {
+	border-style: dashed;
+	background: var(--stonetop-bg);
+}
+
 /* The year chip keeps the plain panel under its words: its secondary ink loses too much on a tint. */
 .stonetop-timeline-season .stonetop-year-chip {
 	background: var(--stonetop-bg);
@@ -51203,14 +51293,6 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	padding: 4px 2px;
 }
 
-.stonetop-timeline-entry-legend {
-	margin: 0 0 4px;
-	border: none;
-	font-family: var(--font-stonetop);
-	font-size: var(--st-fs-md);
-	color: var(--st-text);
-}
-
 .stonetop-timeline-entry-what {
 	display: flex;
 	flex-direction: column;
@@ -51322,6 +51404,28 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 
 .stonetop-timeline-entry-tag i {
 	color: var(--tl-kind, var(--st-text-secondary));
+}
+
+/* Font Awesome 7 paints above the middle of its own box, by a fractional-size rounding lottery:
+   at 1em of the chip's type the glyphs sat 0.5-2px HIGH depending on the UI font size, never low.
+   A whole-pixel glyph in this fixed 26px chip takes the lottery out, and half a pixel puts back
+   what is left: within 0.4px at UI sizes 14-24 and device scales 1-2, on v13 and v14 (probe
+   timeline-tag-chip-centre.mjs in the verify harness). A transform, so the chip's height and the
+   word beside it do not move. */
+.stonetop-timeline-entry-tag > i,
+.stonetop-timeline-entry-tag-new > i {
+	font-size: 14px;
+	transform: translateY(0.5px);
+}
+
+/* The word trimmed to its capitals, as the status pills' are (see .stonetop-condemned-tag-text):
+   `align-items: center` centres the word's LINE BOX, which carries room for descenders under the
+   baseline, so a word with none ("Kills", "Death") read 1.5-1.9px high beside its glyph. Trimmed,
+   the box IS the caps and the flex centring centres them. */
+.stonetop-timeline-entry-tag > span,
+.stonetop-timeline-entry-tag-new > span {
+	text-box: trim-both cap alphabetic;
+	transform: translateY(var(--st-caps-trim-nudge, 0em));
 }
 
 .stonetop-timeline-entry-tag:hover {

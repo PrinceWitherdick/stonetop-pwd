@@ -263,10 +263,10 @@ describe("the template", () => {
 
 	it("stamps a year on every period element in all four shapes", () => {
 		expect(read("partials/timeline-hperiod.hbs")).toMatch(/data-year="\{\{year\}\}"/);
-		expect(read("partials/timeline-period.hbs")).toMatch(/stonetop-timeline-period" data-period="\{\{key\}\}"\{\{#unless undated\}\} data-year/);
+		expect(read("partials/timeline-period.hbs")).toMatch(/stonetop-timeline-period(\{\{#if ghost\}\}[^"]*\{\{\/if\}\})?" data-period="\{\{key\}\}"\{\{#unless undated\}\} data-year/);
 		const main = read("timeline.hbs");
 		expect(main).toMatch(/stonetop-timeline-swim-head[^>]*data-year/);
-		expect(main).toMatch(/stonetop-timeline-row"[^>]*data-year/);
+		expect(main).toMatch(/stonetop-timeline-row(\{\{#if ghost\}\}[^"]*\{\{\/if\}\})?"[^>]*data-year/);
 	});
 
 	it("draws the scrubber only when there is something to slide between", () => {

@@ -545,7 +545,8 @@ describe("the pop-out looks like the tabs", () => {
 	// an ink or a fill must have a rule under the themed scope saying the same thing.
 	const TEMPLATES = ["templates/dialogs/timeline.hbs", "templates/dialogs/partials/timeline-card.hbs",
 		"templates/dialogs/partials/timeline-period.hbs", "templates/dialogs/partials/timeline-period-head.hbs",
-		"templates/dialogs/partials/timeline-hperiod.hbs", "templates/dialogs/partials/timeline-lane-head.hbs"];
+		"templates/dialogs/partials/timeline-hperiod.hbs", "templates/dialogs/partials/timeline-lane-head.hbs",
+		"templates/dialogs/partials/timeline-add-slot.hbs"];
 	const TEXT = /^(p|label|h[1-4])$/;
 	const PALETTE = /stonetop-dark|stonetop-slate|stonetop-high-contrast|past-death/;
 	const STATE = /:(hover|focus|focus-visible|focus-within|active|disabled|checked)\b/;

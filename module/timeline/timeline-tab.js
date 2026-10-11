@@ -10,7 +10,13 @@
 //
 // The mount/move/detach/close lifecycle is `mountedPanelSlot` (utils/mounted-panel-slot.js), shared
 // with the relationship map's tab; the AppV1 traps it steps around are stated there. What is left
-// here is the timeline's own: which track, and where.
+// here is the timeline's own: which track, and where, and where the reader had got to in it.
+//
+// WHERE THEY HAD GOT TO SURVIVES A RELOAD. The pop-out is saved with its zoom and scroll by
+// utils/window-restore.js (TimelineWindow#restoreView), but a panel has no frame and is skipped there;
+// what comes back is its SHEET. So the sheet answers `restoreView` for its tab (`timelineTabView`),
+// the reopening render hands it back (`holdTimelineTabView`), and the panel's first render takes it,
+// whenever the reader next arrives on the tab.
 
 import { TimelinePanel } from "../dialogs/TimelinePanel.js";
 import { mountedPanelSlot } from "../utils/mounted-panel-slot.js";
@@ -21,6 +27,9 @@ export const TIMELINE_TAB = "timeline";
 
 /** Where the timeline is mounted inside that tab. */
 const MOUNT_SEL = "[data-stonetop-timeline]";
+
+/** The sheet field holding the view a reload handed back, until the tab's panel is built to take it. */
+const HELD_VIEW = "_timelineTabView";
 
 // NO `timelineTabContext` HERE, and there was one. The relationship map's tab needs a context
 // because its markup carries an invitation for a world with no map; this one does not, because the
@@ -42,8 +51,28 @@ const slot = mountedPanelSlot({
 			mount,
 		);
 	},
+	/** Its first render opens where a reload left it, and the view is the panel's from then on. */
+	openOptions: (sheet) => {
+		const view = sheet?.[HELD_VIEW];
+		if (sheet) sheet[HELD_VIEW] = null;
+		return view ? { view } : {};
+	},
 });
 
 export const syncTimelineTab = slot.sync;
 export const detachTimelineTab = slot.detach;
 export const closeTimelineTab = slot.close;
+
+/**
+ * The sheet's `restoreView`: the tab's zoom and scroll, or the view a reload handed back and nobody has
+ * opened the tab to take yet (a reader who reloads twice from another tab keeps it). Null for none.
+ */
+export function timelineTabView(sheet) {
+	const view = sheet?._timelinePanel?.restoreView ?? sheet?.[HELD_VIEW] ?? null;
+	return view ? { timeline: view } : null;
+}
+
+/** Keep the view a reopening render carried (`options.view`) for the tab's panel. Before `syncTimelineTab`. */
+export function holdTimelineTabView(sheet, view) {
+	if (sheet && view?.timeline && typeof view.timeline === "object") sheet[HELD_VIEW] = view.timeline;
+}

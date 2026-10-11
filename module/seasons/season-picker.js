@@ -17,16 +17,14 @@
 // wears. Picking a season here should look like editing the thing in the header.
 import { SEASON_IDS, seasonLabel, seasonIconSrc } from "./seasons-change-reminders.js";
 import { yearLabel } from "./seasons-chronicle.js";
-import { MIN_HISTORY_YEAR, displayYear, storedYear, typedYear } from "./campaign-year.js";
+import { MIN_HISTORY_YEAR, displayYear, storedYear, typedYear, yearsAgo } from "./campaign-year.js";
+import { localize, format } from "../utils/i18n.js";
 import { addStonetopSteadingButton } from "../utils/world.js";
 import { bringDialogToFront } from "../utils/front-on-open.js";
 import { escHtml } from "../utils/strings.js";
 
 /** Ties the year label to its input. One picker is open at a time, so a constant id will do. */
 const YEAR_INPUT_ID = "stonetop-season-year-input";
-
-/** Ties the "years ago" words to their input, on the pickers that offer one. */
-const AGO_INPUT_ID = "stonetop-season-year-ago-input";
 
 /**
  * The highest campaign year the field will hold.
@@ -90,17 +88,8 @@ export function readYearField(field, fallback, bounds = {}) {
  * Local: the year field is half of `seasonPickerHtml`, never a control on its own, and the
  * tests drive it through the whole picker for the reason given there.
  */
-function yearFieldHtml(startYear, { minYear = 1, maxYear = MAX_CAMPAIGN_YEAR, agoFrom = null } = {}) {
+function yearFieldHtml(startYear, { minYear = 1, maxYear = MAX_CAMPAIGN_YEAR } = {}) {
 	// The numbers in the field are DISPLAYED years: what the GM calls them, not what is stored.
-	// "Years ago" is only offered where a year can lie before play (the timeline's own entries):
-	// history is told that way ("the Forest Folk vanished ten years ago") far more often than by date.
-	const ago = agoFrom == null ? "" : `
-				<p class="stonetop-season-year-ago">
-					<label for="${AGO_INPUT_ID}">or</label>
-					<input id="${AGO_INPUT_ID}" class="stonetop-season-year-ago-input" type="number"
-						inputmode="numeric" min="0" step="1" value="" aria-describedby="${AGO_INPUT_ID}-words">
-					<span id="${AGO_INPUT_ID}-words">years ago</span>
-				</p>`;
 	return `<div class="stonetop-season-year">
 					<label class="stonetop-season-year-label" for="${YEAR_INPUT_ID}">Year</label>
 					<div class="stonetop-season-year-stepper">
@@ -110,7 +99,7 @@ function yearFieldHtml(startYear, { minYear = 1, maxYear = MAX_CAMPAIGN_YEAR, ag
 						<button type="button" class="stonetop-season-year-step" data-step="1" aria-label="A later year">+</button>
 					</div>
 					<span class="stonetop-season-year-name stonetop-year-chip" aria-live="polite"></span>
-				</div>${ago}
+				</div>
 				<p class="stonetop-season-year-hint" aria-live="polite"></p>`;
 }
 
@@ -126,7 +115,8 @@ function yearFieldHtml(startYear, { minYear = 1, maxYear = MAX_CAMPAIGN_YEAR, ag
  *   is either a mid-campaign table catching the sheet up or a slipped keystroke.
  * @param {number}  [opts.minYear]   The earliest stored year the field holds (1 unless it holds history).
  * @param {number}  [opts.maxYear]   The latest.
- * @param {number|null} [opts.agoFrom]  The stored year "years ago" counts back from; null for no such field.
+ * @param {number|null} [opts.agoFrom]  The stored year the chip counts "years ago" back from; null
+ *   for a chip that names the year alone.
  * @returns {() => number} The committed STORED year, clamped.
  *
  * Local, like `yearFieldHtml`: `wireSeasonPicker` is the only caller, and it is what the tests
@@ -136,7 +126,6 @@ function wireYearField(root, { fallback = 1, latestYear = fallback, minYear = 1,
 	const input  = root.querySelector(".stonetop-season-year-input");
 	const name   = root.querySelector(".stonetop-season-year-name");
 	const hint   = root.querySelector(".stonetop-season-year-hint");
-	const ago    = agoFrom == null ? null : root.querySelector(".stonetop-season-year-ago-input");
 	const bounds = { min: minYear, max: maxYear };
 	const read   = () => readYearField(input, fallback, bounds);
 
@@ -149,16 +138,17 @@ function wireYearField(root, { fallback = 1, latestYear = fallback, minYear = 1,
 	// to "12" back to 1 as it was typed. The label simply tells the truth in the meantime —
 	// a cleared field shows the fallback's name, because the fallback is what a click commits.
 	//
-	// The "years ago" field is the year field said another way, so each follows the other. It is
-	// left alone while it is being typed in, for the same reason the year field is not clamped on
-	// every keystroke; a year later than `agoFrom` is not "ago" at all, and leaves it blank.
+	// Where a year can lie before play (the timeline's own entries), the chip also says how long ago
+	// it was, because history is told that way ("the Forest Folk vanished ten years ago") far more
+	// often than by date: step the year back until the chip reads "10 years ago". This used to be a
+	// second "or [ N ] years ago" field beside the year, and two inputs for one answer read as two
+	// questions. A year later than `agoFrom` is not "ago" at all, and the chip names it alone.
 	const paint = () => {
 		const year = read();
-		if (name) name.textContent = yearLabel(year);
+		if (name) name.textContent = yearLabel(year) + agoSuffix(year, agoFrom);
 		if (hint) hint.textContent = year > latestYear
 			? `Nothing has been recorded past ${yearLabel(latestYear)} yet.`
 			: "";
-		if (ago && root.ownerDocument?.activeElement !== ago) ago.value = year <= agoFrom ? String(agoFrom - year) : "";
 	};
 
 	const nudge = (step) => {
@@ -173,15 +163,6 @@ function wireYearField(root, { fallback = 1, latestYear = fallback, minYear = 1,
 	input?.addEventListener("input", paint);
 	// Blur and Enter: the moment editing stops is the moment the field may be tidied up.
 	input?.addEventListener("change", () => { input.value = displayYear(read()); paint(); });
-	ago?.addEventListener("input", () => {
-		const typed = typedYear(ago.value);
-		const back = typed === null ? -1 : Math.trunc(typed);
-		if (!input || back < 0) return;
-		input.value = displayYear(clampYear(agoFrom - back, fallback, bounds));
-		paint();
-	});
-	ago?.addEventListener("change", paint);
-	ago?.addEventListener("keydown", (event) => { if (event.key === "Enter") event.preventDefault(); });
 	// Dialog's content sits inside a <form>, and this picker declares no buttons — so Enter
 	// would submit that form and take the window with it, discarding the pick instead of
 	// making it. There is nothing to submit here; a card click is the commit.
@@ -189,6 +170,16 @@ function wireYearField(root, { fallback = 1, latestYear = fallback, minYear = 1,
 
 	paint();
 	return read;
+}
+
+/** " · 2 years ago" after the year's name, " · this year" on `now` itself; nothing past it or without one. */
+function agoSuffix(year, now) {
+	if (now == null || year > now) return "";
+	const back = yearsAgo(year, now);
+	const ago = back === 0 ? localize("stonetop.timeline.thisYear")
+		: back === 1 ? localize("stonetop.timeline.yearAgo")
+		: format("stonetop.timeline.yearsAgo", { count: back });
+	return ` · ${ago}`;
 }
 
 /**
@@ -206,17 +197,12 @@ function wireYearField(root, { fallback = 1, latestYear = fallback, minYear = 1,
  * @param {string}  [parts.note]      A footnote under the year row; omitted when empty.
  * @param {{ask: string, label: string}} [parts.altAction]  The way out to the OTHER picker;
  *   omitted when absent. See `openSeasonPicker`.
- * @param {boolean} [parts.unknownCard]  Offer a fifth card, "Season unknown", which picks the year
- *   alone (season ""). Only the timeline's own entries do: history rarely keeps its season, while
- *   the clock always has one.
- * @param {boolean} [parts.unknownSelected]  Draw that card as already chosen.
  * @param {number}  [parts.minYear]  The earliest stored year the field holds. See `wireYearField`.
  * @param {number}  [parts.maxYear]
- * @param {number|null} [parts.agoFrom]  Add a "years ago" field counting back from this stored year.
  */
 export function seasonPickerHtml({
 	prompt, startYear, selected = null, note = "", altAction = null,
-	unknownCard = false, unknownSelected = false, minYear, maxYear, agoFrom = null,
+	minYear, maxYear,
 }) {
 	// No per-season colour: the four season inks are the steading header clock's alone, and a
 	// picker of four coloured names is what would stop that one coloured name meaning anything.
@@ -230,12 +216,7 @@ export function seasonPickerHtml({
 						data-season="${id}"${id === selected ? ` aria-current="true"` : ""}>
 						<img src="${seasonIconSrc(id)}" alt="" class="stonetop-season-icon">
 						<span class="stonetop-season-label">${escHtml(seasonLabel(id))}</span>
-					</button>`).join("") + (unknownCard ? `
-						<button type="button" class="stonetop-season-card stonetop-season-card--unknown${unknownSelected ? " is-selected" : ""}"
-							data-season=""${unknownSelected ? ` aria-current="true"` : ""}>
-							<i class="fa-solid fa-hourglass-half stonetop-season-icon--unknown" aria-hidden="true"></i>
-							<span class="stonetop-season-label">Season unknown</span>
-						</button>` : "");
+					</button>`).join("");
 
 	// The way out to the other picker, if this one has one. A question and then the answer as
 	// the thing you click, rather than a bare button: the two flows are told apart by INTENT
@@ -249,7 +230,7 @@ export function seasonPickerHtml({
 	return `<div class="stonetop-season-picker">
 				<p><em>${escHtml(prompt)}</em></p>
 				<div class="stonetop-season-cards">${cards}</div>
-				${yearFieldHtml(startYear, { minYear, maxYear, agoFrom })}
+				${yearFieldHtml(startYear, { minYear, maxYear })}
 				${note ? `<p class="stonetop-season-picker-note"><em>${escHtml(note)}</em></p>` : ""}${alt}
 			</div>`;
 }

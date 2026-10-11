@@ -211,7 +211,9 @@
 
 		{{!-- Nothing written yet reads the same in every shape, so it is asked ONCE, above the
 		      branch that picks between them. --}}
-		{{#if timeline.isEmpty}}
+		{{!-- `blank`, not `isEmpty`: a writer's empty thread is drawn as the clock's ghost season,
+		      whose add slot is the invitation. --}}
+		{{#if timeline.blank}}
 		<div class="stonetop-timeline-invite">
 			<p class="stonetop-timeline-invite-lead">{{localize "stonetop.timeline.empty.lead"}}</p>
 			{{#if canEdit}}
@@ -258,7 +260,7 @@
 					{{/if}}
 					{{!-- An Age's bare year (timeline-view.js#withAgeMarks) is its separator alone. --}}
 					{{#unless ageMark}}
-					<div class="stonetop-timeline-swim-head{{#if seasonClass}} {{seasonClass}}{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>
+					<div class="stonetop-timeline-swim-head{{#if seasonClass}} {{seasonClass}}{{/if}}{{#if ghost}} stonetop-timeline-swim-head--ghost{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>
 						{{~> "stonetop.timeline-period-head"}}
 					</div>
 					{{/unless}}
@@ -277,6 +279,7 @@
 					     data-track-id="{{trackId}}">
 						<ol class="stonetop-timeline-cards">
 							{{#each entries}}{{> "stonetop.timeline-card"}}{{/each}}
+							{{#if add}}{{> "stonetop.timeline-add-slot" add}}{{/if}}
 						</ol>
 					</div>
 					{{/unless}}
@@ -303,7 +306,7 @@
 					{{/if}}
 					{{!-- An Age's bare year is its heading alone. --}}
 					{{#unless ageMark}}
-					<div class="stonetop-timeline-row" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>
+					<div class="stonetop-timeline-row{{#if ghost}} stonetop-timeline-row--ghost{{/if}}" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>
 						<div class="stonetop-timeline-row-head{{#if seasonClass}} {{seasonClass}}{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}">
 							{{~> "stonetop.timeline-period-head"}}
 						</div>
@@ -313,6 +316,7 @@
 						     data-track-id="{{trackId}}">
 							<ol class="stonetop-timeline-cards">
 								{{#each entries}}{{> "stonetop.timeline-card"}}{{/each}}
+								{{#if add}}{{> "stonetop.timeline-add-slot" add}}{{/if}}
 							</ol>
 						</div>
 						{{/each}}

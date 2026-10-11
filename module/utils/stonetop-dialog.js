@@ -10,7 +10,7 @@ const PROGRESS_RENDER_MS = 150;
  * window, has no box: it reads 0 down and across while still HOLDING its offset, and an offset written
  * to it is dropped. A stand-in with no layout (the test suite's) counts as drawn.
  */
-function isDrawn(column) {
+export function isDrawn(column) {
 	return typeof column?.getClientRects !== "function" || column.getClientRects().length > 0;
 }
 

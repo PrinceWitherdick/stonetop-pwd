@@ -31,6 +31,23 @@ export function deriveLoadLevel(totalWeight, loadLimits = LOAD_LEVEL_LIMITS) {
 	return "overloaded";
 }
 
+// A click on box `index` of an undefined ◇/□ reserve track, which `checked` says it now
+// is: clicking a box sets the reserve to it, clicking a filled one clears back to it. The
+// track always shows the full capacity, so a click past `cap` (the room the marked items
+// leave) fills to the cap, and `atLimit` is set only when `before` (the reserve already
+// showing) was full, i.e. the click found truly no room. One rule for the Inventory tab's
+// tracks and the Outfit dialog's, so the two can never disagree.
+export function poolCountFromClick({ index, checked, cap, before }) {
+	const count = checked ? index + 1 : index;
+	if (!checked || count <= cap) return { count, atLimit: false };
+	return { count: cap, atLimit: before >= cap };
+}
+
+// The warning for a click that found no room on that reserve.
+export function poolAtLimitKey(isSmall) {
+	return isSmall ? "stonetop.inventory.smallPoolAtLimit" : "stonetop.inventory.regularPoolAtLimit";
+}
+
 // The "how many ◆" caption for each tier under the caps in effect: 3 / 4–6 / 7–9 by
 // default, 4 / 5–7 / 8–10 with a +1 load bonus. One source for where a band starts, so
 // the Outfit dialog's badges and the sheet's load lines can never disagree.

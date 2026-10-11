@@ -102,6 +102,20 @@ describe("a follower's Loyalty / Readiness row", () => {
 		}
 	});
 
+	it("sizes Pay cost to its content, so it does not take core's full-width button", () => {
+		// Left to core's `button { width: 100% }` it claimed a whole line of the Loyalty row
+		// and pushed Spend under it.
+		const d = declarations(CSS, ".stonetop-follower-loyalty-row .stonetop-pay-cost");
+		expect(d).toMatch(/width:\s*max-content\s*!important/);
+		expect(d).toMatch(/flex:\s*0\s+0\s+auto/);
+	});
+
+	it("sizes the follower Remove button to its content in its wrapping flex rows", () => {
+		const d = declarations(CSS, ".stonetop-follower-remove");
+		expect(d).toMatch(/width:\s*max-content\s*!important/);
+		expect(d).toMatch(/flex:\s*0\s+0\s+auto/);
+	});
+
 	it("is not governed by a px container query, which no single number could get right", () => {
 		// Scanned over the raw at-rule preludes rather than the flattened rules, because that is
 		// the shape the mistake takes: an `@container follower-card (max-width: N)` block that

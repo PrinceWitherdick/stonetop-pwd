@@ -405,6 +405,11 @@ Hooks.once("init", () => {
 		CONFIG.Item.compendiumIndexFields.push("system.moveType");
 	}
 
+	// V13 moved these off the global scope; the bare globals still resolve but log a deprecation
+	// warning on every load, and go away in V15.
+	const { ActorSheet, ItemSheet } = foundry.appv1.sheets;
+	const { Actors, Items }         = foundry.documents.collections;
+
 	const StonetopCharacterSheet = createStonetopCharacterSheetClass(ActorSheet);
 	Actors.registerSheet(SYSTEM_ID, StonetopCharacterSheet, {
 		types:       ["character"],
@@ -623,6 +628,7 @@ Hooks.once("init", () => {
 		"stonetop.inv-note":         "systems/stonetop-pwd/templates/actor/partials/inv-note.hbs",
 		"stonetop.inv-item-regular": "systems/stonetop-pwd/templates/actor/partials/inv-item-regular.hbs",
 		"stonetop.inv-item-small":   "systems/stonetop-pwd/templates/actor/partials/inv-item-small.hbs",
+		"stonetop.inv-undefined-pool": "systems/stonetop-pwd/templates/actor/partials/inv-undefined-pool.hbs",
 		"stonetop.inv-artifact":     "systems/stonetop-pwd/templates/actor/partials/inv-artifact.hbs",
 		"stonetop.choice-gear-row":  "systems/stonetop-pwd/templates/actor/partials/choice-gear-row.hbs",
 		"stonetop.steading-header-season":    "systems/stonetop-pwd/templates/actor/partials/steading-header-season.hbs",
@@ -693,6 +699,7 @@ Hooks.once("init", () => {
 		"stonetop.timeline-period-head":      "systems/stonetop-pwd/templates/dialogs/partials/timeline-period-head.hbs",
 		"stonetop.timeline-hperiod":          "systems/stonetop-pwd/templates/dialogs/partials/timeline-hperiod.hbs",
 		"stonetop.timeline-lane-head":        "systems/stonetop-pwd/templates/dialogs/partials/timeline-lane-head.hbs",
+		"stonetop.timeline-add-slot":         "systems/stonetop-pwd/templates/dialogs/partials/timeline-add-slot.hbs",
 		"stonetop.timeline-entry-tag":        "systems/stonetop-pwd/templates/dialogs/partials/timeline-entry-tag.hbs",
 		"stonetop.deaths-door-outcomes":      "systems/stonetop-pwd/templates/dialogs/partials/deaths-door-outcomes.hbs",
 		"stonetop.artifact-gm":              "systems/stonetop-pwd/templates/dialogs/artifact-gm.hbs",

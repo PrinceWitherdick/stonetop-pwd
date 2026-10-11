@@ -68,7 +68,7 @@ import {bindImagePopoutToActor, pointImagePopoutAt, usedActorPortraits} from "..
 import {openPortraitFrameEditor} from "../../utils/PortraitFrameDialog.js";
 import {localize} from "../../utils/i18n.js";
 import {closeRelmapTab, detachRelmapTab, makeFirstRelationshipMap, relmapTabContext, STEADING_RELMAP_TAB, syncRelmapTab} from "./steading-relmap-tab.js";
-import {closeTimelineTab, detachTimelineTab, syncTimelineTab, TIMELINE_TAB} from "../../timeline/timeline-tab.js";
+import {closeTimelineTab, detachTimelineTab, holdTimelineTabView, syncTimelineTab, TIMELINE_TAB, timelineTabView} from "../../timeline/timeline-tab.js";
 import {DIMINISHED_MOVES, PATHFINDER, STEADING_MOVE, improvementQuestions, rollAdjustments} from "./improvement-rolls.js";
 import {settleSteadingRoll} from "./steading-roll.js";
 import {applyGuideRail, guideRailStep} from "../../utils/guide-rail.js";
@@ -755,6 +755,14 @@ export function createStonetopSteadingSheetClass(Base) {
 			return "systems/stonetop-pwd/templates/actor/steading.hbs";
 		}
 
+		/**
+		 * Where the reader had got to in the Timeline tab, saved with this sheet by
+		 * utils/window-restore.js and handed back to `_render` as `options.view` after a reload.
+		 */
+		get restoreView() {
+			return timelineTabView(this);
+		}
+
 		async _render(force, options) {
 			// The hover preview is a document.body singleton, so a re-render while the cursor is
 			// over an avatar tears out the anchor without firing mouseleave — clear it up front so
@@ -768,6 +776,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			// Same for the timeline, and for the same reason: a re-render would rebuild the spine and
 			// throw away where the reader had scrolled to in it.
 			detachTimelineTab(this);
+			holdTimelineTabView(this, options?.view);
 			await super._render(force, options);
 			stampLayoutClass(this, "steading");
 			// Strip any PBTA-injected playbook controls and FoundryVTT chrome from the window header

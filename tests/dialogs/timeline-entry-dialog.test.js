@@ -61,13 +61,26 @@ describe("what it collects", () => {
 		});
 	});
 
-	// History rarely keeps its season: the "Season unknown" card is a blank season WITH a year.
+	// History rarely keeps its season: no season picked is a blank season WITH a year.
 	it("sends a year with no season as year-only, and clears it once a season is picked", () => {
 		const dialog = makeDialog({ season: "", year: -9 });
 		dialog._yearOnly = true;
 		expect(dialog._save(makeForm({ [TITLE]: "The Forest Folk vanish" }))).toMatchObject({ season: "", year: -9, yearOnly: true });
 		dialog._season = "winter";
 		expect(dialog._save(makeForm({ [TITLE]: "The Forest Folk vanish" }))).toMatchObject({ season: "winter", yearOnly: false });
+	});
+
+	// No fifth "Season unknown" card: pressing the chosen season again clears it to the year alone,
+	// and pressing a season from there picks it.
+	it("clears the chosen season when it is pressed again, leaving the year alone", () => {
+		const dialog = makeDialog({ season: "autumn", year: 2 });
+		dialog._yearOnly = false;
+		dialog._pickSeason(null, "autumn", -4);
+		expect(dialog._save(makeForm({ [TITLE]: "The flood" }))).toMatchObject({ season: "", year: -4, yearOnly: true });
+		dialog._pickSeason(null, "spring", -4);
+		expect(dialog._save(makeForm({ [TITLE]: "The flood" }))).toMatchObject({ season: "spring", yearOnly: false });
+		dialog._pickSeason(null, "summer", -4);
+		expect(dialog._season).toBe("summer");
 	});
 
 	it("trims what was typed, so a stray space is not stored as content", () => {

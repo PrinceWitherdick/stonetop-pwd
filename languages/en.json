@@ -633,7 +633,7 @@
       },
       "outfit": {
         "title": "Outfit",
-        "description": "When you <em><strong>prepare for an expedition in a friendly community</strong></em>, mark as many &loz; on your Inventory insert as you wish to carry, either on specific items or in \"undefined.\" Mark up to 3 &loz; for a light load (quick and quiet), 4-6 &loz; for a normal load, or 7-9 &loz; for a heavy load (noisy, slow, quick to tire). Also, mark a number of &#9633; in the Small items section equal to 4+Prosperity (on specific items or \"undefined\").",
+        "description": "When you <em><strong>prepare for an expedition in a friendly community</strong></em>, mark as many ◇ on your Inventory insert as you wish to carry, either on specific items or in \"undefined.\" Mark up to 3 ◇ for a light load (quick and quiet), 4-6 ◇ for a normal load, or 7-9 ◇ for a heavy load (noisy, slow, quick to tire).<br>Also, mark a number of &#9633; in the Small items section equal to 4+Prosperity (on specific items or \"undefined\").",
         "selectIntro": "You can select:",
         "selectPrinted": "Items printed on the Inventory insert",
         "selectCommon": "Other common, mundane items",
@@ -642,7 +642,6 @@
         "tellGm": "Tell the GM what you're bringing, and answer their questions about your gear and where you got it.",
         "regularItems": "Items",
         "smallItems": "Small Items",
-        "loadNone": "No items selected",
         "loadLight": "<strong>Light load</strong>: quick &amp; quiet",
         "loadNormal": "<strong>Normal load</strong>",
         "loadHeavy": "<strong>Heavy load</strong>: noisy, slow, quick to tire",
@@ -652,8 +651,7 @@
         "possessionItems": "Special possessions",
         "smallItemLimit": "Mark up to <strong>{limit}</strong> small items (4+Prosperity)",
         "confirm": "Confirm Outfit",
-        "totalWeight": "<span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span> marked",
-        "undefinedLabel": "Undefined"
+        "totalWeight": "<span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span> marked"
       },
       "recover": {
         "title": "Recover",
@@ -2899,10 +2897,14 @@
       "trackTitle": "{name}: the timeline",
       "beforeRecord": "Before the record",
       "seasonUnknown": "Season unknown",
+      "thisYear": "this year",
       "yearAgo": "1 year ago",
       "yearsAgo": "{count} years ago",
       "newEntry": "New Entry",
       "newEntryTooltip": "Write down something that happened, and when",
+      "addShort": "Add",
+      "addHere": "Add an entry to {when}",
+      "addHereThread": "Add an entry to {name}'s thread, {when}",
       "openFull": "Open the full timeline",
       "openFullTooltip": "Every thread on one timeline: Stonetop and each character",
       "editEntry": "Edit this entry",
@@ -2924,9 +2926,8 @@
       "dialog": {
         "titleNew": "New timeline entry",
         "titleEdit": "Edit timeline entry",
-        "when": "When",
-        "whenHint": "The season and year this happened in.",
-        "entryTitle": "What happened",
+        "whenHint": "The season and year this event happened in.",
+        "entryTitle": "Title",
         "entryTitlePlaceholder": "A line to remember it by",
         "place": "Where",
         "placePlaceholder": "A place, named however your table names it",
@@ -2949,7 +2950,7 @@
           "colour": "That colour could not be read. Pick another.",
           "journal": "The Timeline journal is missing or you cannot write to it, so the tag was not made. Ask your GM."
         },
-        "body": "The account",
+        "body": "Details",
         "bodyPlaceholder": "As much or as little as you want to write down.",
         "save": "Save the entry",
         "cancel": "Cancel"

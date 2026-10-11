@@ -25,7 +25,7 @@
 //  • THE HOOK COMES OFF ON CLOSE. It is a global journal hook, and a window closed without taking
 //    it off leaves it firing on every journal write at the table for the rest of the session.
 
-import { StonetopDialog } from "../utils/stonetop-dialog.js";
+import { isDrawn, StonetopDialog } from "../utils/stonetop-dialog.js";
 import { themedDialogClasses } from "../utils/window-theme.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { registerRestorableWindow } from "../utils/window-restore.js";
@@ -154,6 +154,8 @@ export class TimelineWindow extends StonetopDialog {
 		this._repaintHeld = false;
 		// Where the reader was as the window went down; see `restoreView`.
 		this._viewAtMinimize = null;
+		// The view as it last stood with the column on screen; see `restoreView`.
+		this._lastView = null;
 	}
 
 	static get defaultOptions() {
@@ -206,14 +208,27 @@ export class TimelineWindow extends StonetopDialog {
 		// ⚠ A MINIMIZED WINDOW'S COLUMN IS HIDDEN and reads 0 down and across, which less the gutter
 		// is the empty corner. So it answers with where it was when it went down (`minimize`).
 		if (this._viewAtMinimize) return this._viewAtMinimize;
+		// ⚠ SO IS A SHEET TAB THE READER IS NOT ON, and a panel whose first paint has not landed yet
+		// has no column at all: both answer with the view as it last stood on screen (`_noteView`),
+		// or the one the reopening render was handed, so a reload taken from another tab keeps it.
 		const scroll = this._scrollColumn();
-		if (!scroll) return null;
+		if (!scroll || !isDrawn(scroll)) return this._lastView;
+		return this._viewOf(scroll);
+	}
+
+	/** The view in `scroll`, drawn: the zoom, and the offset counted past the drag gutter. */
+	_viewOf(scroll) {
 		const { x, y } = this._gutterOf(scroll);
 		return {
 			zoom: this._zoom,
 			left: Math.round(scroll.scrollLeft - x),
 			top:  Math.round(scroll.scrollTop - y),
 		};
+	}
+
+	/** Keep `_lastView` on wherever the reader leaves the column while it is on screen. */
+	_noteView(scroll = this._scrollColumn()) {
+		if (scroll && isDrawn(scroll)) this._lastView = this._viewOf(scroll);
 	}
 
 	/** The view is read while the column can still be measured, and kept until the window comes back. */
@@ -253,6 +268,7 @@ export class TimelineWindow extends StonetopDialog {
 		if (view && Number.isFinite(view.zoom)) {
 			this._zoom = clampScale(view.zoom, TIMELINE_ZOOM_MIN, TIMELINE_ZOOM_MAX);
 		}
+		if (view) this._lastView = { ...view };
 		await super._render(force, options);
 		const scroll = view ? this._scrollColumn() : null;
 		if (!scroll) return;
@@ -339,7 +355,9 @@ export class TimelineWindow extends StonetopDialog {
 		// holding nothing but hidden rows leaves no empty block or column behind. Totals (kills,
 		// counts) are of everything, hidden or not.
 		// The clock's year, which history counts "N years ago" from.
-		const nowYear = timelineNow().year;
+		// The clock's season is also the ghost a writer can add to when nothing is filed in it yet.
+		const now = timelineNow();
+		const nowYear = now.year;
 		// The world's Ages, and whether this reader has their bands off: one more thing hidden. Each
 		// shown Age's first and last years are opened even with nothing written in them, so every
 		// Age has a band to draw.
@@ -347,8 +365,8 @@ export class TimelineWindow extends StonetopDialog {
 		const showAges = getTimelineShowAges();
 		const ageYears = showAges ? ageMarkYears(worldAges) : [];
 		const vm = single
-			? buildTrackVM(tracks[0], { canEdit: this._canEdit(this._trackId), hidden, tags, nowYear, ageYears })
-			: buildAggregateVM(tracks, { canEdit: (id) => this._canEdit(id), hidden, hiddenTracks, tags, nowYear, ageYears });
+			? buildTrackVM(tracks[0], { canEdit: this._canEdit(this._trackId), hidden, tags, nowYear, ageYears, ghostNow: now })
+			: buildAggregateVM(tracks, { canEdit: (id) => this._canEdit(id), hidden, hiddenTracks, tags, nowYear, ageYears, ghostNow: now });
 		const hiddenCount = hidden.length + hiddenTracks.length + (worldAges.length && !showAges ? 1 : 0);
 
 		// Enriched after the model is built rather than inside it, and by the shared walker rather
@@ -492,13 +510,23 @@ export class TimelineWindow extends StonetopDialog {
 		return this._writeNewEntry(target);
 	}
 
-	async _writeNewEntry(trackId) {
+	/**
+	 * Ask for one new entry on `trackId` and write it.
+	 *
+	 * @param {{season?: string, year?: number, yearOnly?: boolean}} [when]  The date the dialog opens
+	 *        on: a season's add slot hands its own, New Entry the clock's. "Years ago" always counts
+	 *        from the clock, never from an older season the reader pressed.
+	 */
+	async _writeNewEntry(trackId, when = null) {
 		// The clock's season -- the same "now" a milestone files under, so a row the reader types and
 		// a row the system writes in the same moment land in the same season.
 		const stamp = timelineNow();
+		const date = when ?? stamp;
 		const input = await promptForTimelineEntry({
-			season: stamp.season,
-			year:   stamp.year,
+			season:   date.season,
+			year:     date.year ?? stamp.year,
+			yearOnly: !!date.yearOnly,
+			nowYear:  stamp.year,
 			trackName: this._trackNameFor(trackId),
 		});
 		if (!input) return;
@@ -509,6 +537,23 @@ export class TimelineWindow extends StonetopDialog {
 			createdAt: Date.now(),
 			authorId:  game.user?.id ?? "",
 		}, foundry.utils.randomID), { create: true });
+	}
+
+	/**
+	 * A season's add slot pressed: a new entry in that season, on the thread whose lane it sits in
+	 * (or this window's own), so the aggregate asks no "which thread". The slot is where the entry
+	 * lands, because `addEntry` appends to the season's end.
+	 */
+	async _onAddHere(slot) {
+		const trackId = slot.closest?.("[data-track-id]")?.dataset?.trackId || this._trackId;
+		if (!trackId) return;
+		const { season = "", year = "", yearOnly } = slot.dataset;
+		return this._writeNewEntry(trackId, {
+			season,
+			// "" for the undated block, which then opens on the clock's year with no season picked.
+			year: year === "" ? undefined : Number(year),
+			yearOnly: yearOnly === "true",
+		});
 	}
 
 	async _onEditEntry(trackId, entryId) {
@@ -640,6 +685,9 @@ export class TimelineWindow extends StonetopDialog {
 			const add = target.closest?.(".stonetop-timeline-new");
 			if (add) return this._onNewEntry(add.dataset.trackId || this._trackId);
 
+			const addHere = target.closest?.(".stonetop-timeline-add");
+			if (addHere) return this._onAddHere(addHere);
+
 			const full = target.closest?.(".stonetop-timeline-open-full");
 			if (full) return openTimelineWindow();
 
@@ -738,6 +786,9 @@ export class TimelineWindow extends StonetopDialog {
 			pinLeft: !(roomAcrossLine && !readAcross),
 			pinBottom: !(roomAcrossLine && readAcross),
 		});
+		// Where the reader leaves it, kept for a reload (`restoreView`): read while it is on screen,
+		// since a sheet tab the reader has gone off hides it and it then reads 0 both ways.
+		root.querySelector(".stonetop-timeline-scroll")?.addEventListener("scroll", ev => this._noteView(ev.currentTarget), { passive: true });
 		// And the wheel zooms it about the cursor, as the map's wheel zooms the board
 		// (utils/wheel-zoom-scroll.js). The canvas's one child is the picture; the stylesheet spends
 		// the scale on it, and the gutter round it stays a window's worth whatever the size.
@@ -745,7 +796,7 @@ export class TimelineWindow extends StonetopDialog {
 		this._unwireWheelZoom = wireWheelZoom(root.querySelector(".stonetop-timeline-scroll"), {
 			content: ".stonetop-timeline-canvas > *",
 			get: () => this._zoom,
-			set: scale => { this._zoom = scale; },
+			set: scale => { this._zoom = scale; this._noteView(); },
 			step: TIMELINE_ZOOM_STEP,
 			min: TIMELINE_ZOOM_MIN,
 			max: TIMELINE_ZOOM_MAX,

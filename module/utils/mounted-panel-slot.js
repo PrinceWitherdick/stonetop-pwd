@@ -42,9 +42,11 @@ function activeTab(sheet) {
  * @param {(sheet: object, mount: HTMLElement) => object|null} options.build
  *        Construct the panel, UNRENDERED. The slot assigns it to the sheet and then renders, in
  *        that order, so anything the panel calls back into finds the sheet already holding it.
+ * @param {(sheet: object) => object} [options.openOptions]
+ *        The options for the panel's FIRST render, read once as it is built: where a reload left it.
  * @returns {{sync: Function, detach: Function, close: Function}}
  */
-export function mountedPanelSlot({ field, tab, mountSel, build }) {
+export function mountedPanelSlot({ field, tab, mountSel, build, openOptions = () => ({}) }) {
 	// Where each panel's reader was when `detach` lifted it out, until `sync` puts it back.
 	const places = new WeakMap();
 
@@ -91,7 +93,7 @@ export function mountedPanelSlot({ field, tab, mountSel, build }) {
 		const made = build(sheet, mount);
 		if (!made) return;
 		sheet[field] = made;
-		made.render(true);
+		made.render(true, openOptions(sheet));
 	}
 
 	/**

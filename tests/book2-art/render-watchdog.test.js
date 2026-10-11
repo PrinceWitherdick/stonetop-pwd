@@ -83,6 +83,17 @@ describe("the page-render watchdog", () => {
 		expect(COMMAND).toContain("task.promise?.catch?.(() => {})");
 	});
 
+	// The budget was never the real problem. A later run lost all four regional maps at the full
+	// ~252s, for renders that take ~0.1s in front: pdf.js continues a DISPLAY render on
+	// requestAnimationFrame, and a hidden tab or a minimised window fires no frames, so a GM who
+	// looked away mid-import got renders that stopped dead. The print intent continues on a
+	// microtask instead, with byte-identical pixels.
+	it("renders with the print intent, so a hidden tab cannot freeze it", () => {
+		expect(COMMAND).toContain(`const task = p.render({ ...opts, intent: "print" });`);
+		// renderPage is the only way into a region render; a second raw call would dodge it.
+		expect(COMMAND.match(/\bp\.render\(/g)).toHaveLength(1);
+	});
+
 	it("releases the half-drawn sheet when a pair render fails", () => {
 		// ~17 MB at 300 dpi, on the way out of a loop with hundreds of pictures left to do. The
 		// success path already zeroes it; the throw path used to walk past it.

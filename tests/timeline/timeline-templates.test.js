@@ -20,6 +20,7 @@ const TEMPLATES = [
 	"templates/dialogs/partials/timeline-period-head.hbs",
 	"templates/dialogs/partials/timeline-hperiod.hbs",
 	"templates/dialogs/partials/timeline-lane-head.hbs",
+	"templates/dialogs/partials/timeline-add-slot.hbs",
 	"templates/dialogs/partials/timeline-entry-tag.hbs",
 	"templates/actor/partials/tab-timeline.hbs",
 	"templates/actor/partials/steading-tab-timeline.hbs",

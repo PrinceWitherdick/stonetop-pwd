@@ -240,12 +240,38 @@ export function agoLabel(year, nowYear) {
 	return back === 1 ? localize("stonetop.timeline.yearAgo") : format("stonetop.timeline.yearsAgo", { count: back });
 }
 
+/**
+ * The "+ Add" slot at the foot of one season's cards (timeline-add-slot.hbs): where an entry written
+ * into that season lands, since `addEntry` appends. It hands the season back to the window's
+ * listener, which opens the entry dialog on it; on the aggregate it names its thread too, and the
+ * lane it sits in says which thread to write on, so no chooser is asked.
+ *
+ * @param {{key, season, year, yearOnly, ghost}} period
+ * @param {{trackId?: string, name?: string}} [thread]  The lane's thread, on the aggregate.
+ * @param {string} [when]  The period's label, worked out once per season by the caller.
+ */
+function addSlotVM(period, { trackId = "", name = "" } = {}, when = periodLabel(period)) {
+	return {
+		key:      period.key,
+		season:   period.season ?? "",
+		year:     period.year ?? "",
+		yearOnly: !!period.yearOnly,
+		// In the clock's ghost season the slot is all there is, so it shows without a hover.
+		ghost:    !!period.ghost,
+		trackId,
+		label: trackId
+			? format("stonetop.timeline.addHereThread", { name, when })
+			: format("stonetop.timeline.addHere", { when }),
+	};
+}
+
 /** One period block, with whatever it holds. `startsYear` and `above` are set by the builders. */
 function periodVM(period, entries, opts, seasonNotes = []) {
 	const undated = period.key === UNDATED_PERIOD_KEY;
+	const label = periodLabel(period);
 	return {
 		key:         period.key,
-		label:       periodLabel(period),
+		label,
 		// A year whose season nobody remembers says so where the season's name would be.
 		seasonLabel: period.season ? seasonLabel(period.season)
 			: (period.yearOnly ? localize("stonetop.timeline.seasonUnknown") : ""),
@@ -257,6 +283,11 @@ function periodVM(period, entries, opts, seasonNotes = []) {
 		// A year with nothing written in it, opened only so an Age's band has its first or last year
 		// to lie under (`withAgeMarks`): its year chip is drawn, and no season after it.
 		ageMark:     !!period.ageMark,
+		// The clock's season when nothing is written in it yet (`withGhostNow`): drawn faint, holding
+		// only its add slot, so the season the table is in always has somewhere to write.
+		ghost:       !!period.ghost,
+		// A single thread's add slot, where its reader may write. The aggregate's are on its lanes.
+		add:         opts.canEdit && !period.ageMark ? addSlotVM(period, {}, label) : null,
 		glyphClass:  seasonGlyphClass(period.season),
 		seasonClass: seasonColourClass(period.season),
 		undated,
@@ -318,6 +349,26 @@ export function withAgeMarks(periods, years = []) {
 const AGE_MARK_PERIOD = "age";
 
 /**
+ * The periods with the clock's own season added, empty, when nothing shown is filed in it (user,
+ * 2026-10-10): a ghost that holds only an add slot, so the season the table is playing in can be
+ * written into without first picking it in the dialog. Its key is the real period's, so the first
+ * entry written there turns it into that period on the next draw.
+ *
+ * Added BEFORE an Age's bare years are, so a year the ghost opens is not also opened bare.
+ *
+ * @param {Array<{key: string, rank: number}>} periods  Period facts, any order.
+ * @param {{season?: string, year?: number}|null} now   The clock (timeline-record.js#timelineNow);
+ *        null, or a clock with no season, adds nothing.
+ * @returns {Array}  Sorted by rank.
+ */
+export function withGhostNow(periods, now = null) {
+	if (!now || !SEASON_IDS.includes(now.season) || !Number.isFinite(now.year)) return periods;
+	const facts = periodFacts({ season: now.season, year: now.year });
+	if (periods.some(period => period.key === facts.key)) return periods;
+	return [...periods, { ...facts, ghost: true, entries: [] }].sort((a, b) => a.rank - b.rank);
+}
+
+/**
  * One track as its own timeline: every period it has anything in, oldest first.
  *
  * `count` and `killTotal` are of the WHOLE track, before the reader's filter: hiding kills must not
@@ -326,11 +377,12 @@ const AGE_MARK_PERIOD = "age";
  * toolbar's "N slain" chip came off at the user's request, 2026-10-03); it is kept for when it returns.
  *
  * @param {{trackId, name, entries, actor?}} track
- * @param {{canEdit?: boolean, hidden?: string[], tags?: Array, nowYear?: number, ageYears?: number[]}} [opts]
+ * @param {{canEdit?: boolean, hidden?: string[], tags?: Array, nowYear?: number, ageYears?: number[], ghostNow?: object}} [opts]
  *        `tags` = the world's custom tags (timeline-tag-store.js#worldCustomTags); a typed row wearing
  *        one it cannot find wears none. `nowYear` = the clock's stored year, which history's "N years
  *        ago" counts from. `ageYears` = the stored years an Age starts or ends in, each given a bare
- *        year if nothing is written in it (timeline-ages.js#ageMarkYears).
+ *        year if nothing is written in it (timeline-ages.js#ageMarkYears). `ghostNow` = the clock's
+ *        {season, year}, drawn as an empty ghost season for a writer when nothing is filed in it.
  */
 export function buildTrackVM(track, opts = {}) {
 	const all = readEntries(track?.entries ?? []);
@@ -343,14 +395,22 @@ export function buildTrackVM(track, opts = {}) {
 	const shown = all.filter(e => isSeasonRow(e)
 		? noteHasRoom(seasonNoteVM(e, noteOpts))
 		: !off.has(filterKey(e, tags)));
-	const periods = withAgeMarks(groupByPeriod(shown), opts.ageYears);
+	const allHidden = all.length > 0 && !shown.length;
+	// The clock's season, for a reader who may write here, unless the Filter menu has emptied the
+	// thread: that reads as filtered, with its own way back, not as a season waiting to be written.
+	const ghostNow = opts.canEdit && !allHidden ? opts.ghostNow : null;
+	const periods = withAgeMarks(withGhostNow(groupByPeriod(shown), ghostNow), opts.ageYears);
+	const hasGhost = periods.some(period => period.ghost);
 	const cardOpts = { ...opts, tags };
 	return {
 		trackId:   track?.trackId ?? "",
 		name:      track?.name ?? "",
 		portrait:  track?.actor?.img ?? "",
 		isEmpty:   !all.length,
-		allHidden: all.length > 0 && !shown.length,
+		// Nothing written AND nowhere drawn to write it: the empty thread's invite. A writer's empty
+		// thread draws the ghost season instead, its add slot being the invitation.
+		blank:     !all.length && !hasGhost,
+		allHidden,
 		count:     all.length,
 		killTotal: killTotal(all),
 		periods:   markYearsAndSides(periods.map(p => periodVM(
@@ -388,7 +448,8 @@ export function buildTrackVM(track, opts = {}) {
  *
  * @param {Array<{trackId, name, entries, actor?}>} tracks
  * @param {{canEdit?: (trackId: string) => boolean, hidden?: string[], hiddenTracks?: string[],
- *          tags?: Array, nowYear?: number, ageYears?: number[]}} [opts]  `ageYears` as buildTrackVM's.
+ *          tags?: Array, nowYear?: number, ageYears?: number[], ghostNow?: object}} [opts]
+ *        `ageYears` and `ghostNow` as buildTrackVM's.
  */
 export function buildAggregateVM(allTracks = [], opts = {}) {
 	const canEdit = opts.canEdit ?? (() => false);
@@ -439,20 +500,31 @@ export function buildAggregateVM(allTracks = [], opts = {}) {
 	// Whether anything written is SHOWN, asked before an Age's bare years are added: a board of
 	// nothing but those is still a board the Filter menu has emptied.
 	const written = byKey.size;
-	const periods = markYearsAndSides(withAgeMarks([...byKey.values()], opts.ageYears).map(period => ({
-		...periodVM(period, [], { nowYear: opts.nowYear }, notesByKey.get(period.key) ?? []),
-		// The lane, not the block, holds the cards here: a row of this table is one season across
-		// every thread, and each cell is what that thread did in it.
-		lanes: tracks.map(track => {
-			const entries = laneBuckets.get(track.trackId)?.get(period.key) ?? [];
-			return {
-				trackId: track.trackId,
-				name:    track.name,
-				isEmpty: !entries.length,
-				entries: entries.map(e => cardVM(e, { canEdit: canEdit(track.trackId), tags })),
-			};
-		}),
-	})));
+	const allHidden = total > 0 && !written;
+	// The clock's season, when some shown thread may be written on (each lane says which).
+	const ghostNow = !allHidden && tracks.some(track => canEdit(track.trackId)) ? opts.ghostNow : null;
+	const withGhost = withGhostNow([...byKey.values()], ghostNow);
+	const hasGhost = withGhost.some(period => period.ghost);
+	const periods = markYearsAndSides(withAgeMarks(withGhost, opts.ageYears).map(period => {
+		const block = periodVM(period, [], { nowYear: opts.nowYear }, notesByKey.get(period.key) ?? []);
+		return {
+			...block,
+			// The lane, not the block, holds the cards here: a row of this table is one season across
+			// every thread, and each cell is what that thread did in it.
+			lanes: tracks.map(track => {
+				const entries = laneBuckets.get(track.trackId)?.get(period.key) ?? [];
+				const writable = canEdit(track.trackId);
+				return {
+					trackId: track.trackId,
+					name:    track.name,
+					isEmpty: !entries.length,
+					entries: entries.map(e => cardVM(e, { canEdit: writable, tags })),
+					// This thread's add slot in this season, empty cells included.
+					add:     writable && !period.ageMark ? addSlotVM(period, track, block.label) : null,
+				};
+			}),
+		};
+	}));
 
 	// Read across, a cell opens the year its season does: the swimlanes draw that year's rule before it.
 	for (const period of periods) {
@@ -476,7 +548,8 @@ export function buildAggregateVM(allTracks = [], opts = {}) {
 		periods,
 		swimlanes: heads.map((head, index) => ({ ...head, cells: periods.map(period => period.lanes[index]) })),
 		isEmpty:   total === 0,
-		allHidden: total > 0 && !written,
+		blank:     total === 0 && !hasGhost,
+		allHidden,
 	};
 }
 

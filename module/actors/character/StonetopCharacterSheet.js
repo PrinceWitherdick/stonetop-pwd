@@ -56,7 +56,7 @@ import {CharacterLedger} from "./CharacterLedger.js";
 import {wireTabSearch} from "../../utils/tab-search.js";
 import {createPacker, fitColumns, makeColumns, packShortest, wireMasonry} from "../../utils/masonry.js";
 import {mountTabRail} from "../../utils/tab-rail.js";
-import { closeTimelineTab, detachTimelineTab, syncTimelineTab, TIMELINE_TAB } from "../../timeline/timeline-tab.js";
+import { closeTimelineTab, detachTimelineTab, holdTimelineTabView, syncTimelineTab, TIMELINE_TAB, timelineTabView } from "../../timeline/timeline-tab.js";
 import {buildPreferenceGroups} from "../../utils/sheet-preferences.js";
 import {showsPreferencesTab, withPreferencesTab} from "../../utils/preferences-tab.js";
 import {injectHeaderToggle} from "../../utils/sheet-chrome.js";
@@ -162,7 +162,7 @@ import {wireAvatarPreview, removeAvatarPreview} from "../../utils/avatar-preview
 import {relationshipViewContext, wireRelationshipBoard} from "../../utils/relationship-board.js";
 import {BEAST_CATALOG} from "../../data/beasts.js";
 import {parseFollowerArmor, buildCustomFollower, readinessCap, READINESS_SHIELD_BONUS, READINESS_SHIELD_WALL_BONUS, SHIELD_WALL_MOVE, wireFightingInNumbers, groupFightCardSummaries, nextFollowerOrder, crewGearCarried, crewGearArmor, applyTagEdits, editTagLayer, editTagList} from "../../data/follower-build.js";
-import {LOAD_LEVEL_LIMITS} from "../../utils/load.js";
+import {LOAD_LEVEL_LIMITS, poolCountFromClick, poolAtLimitKey} from "../../utils/load.js";
 import {arcanaSummonFollowers, summonAsks, summonChoiceGroups, summonPickTicks, summonPicksComplete, resolveSummonChoices} from "../../data/arcana-summons.js";
 import {ArcanaSummonDialog} from "./dialogs/ArcanaSummonDialog.js";
 import {offerSummonRepairs} from "./summon-repair.js";
@@ -1105,6 +1105,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			return "systems/stonetop-pwd/templates/actor/character.hbs";
 		}
 
+		/**
+		 * Where the reader had got to in the Timeline tab, saved with this sheet by
+		 * utils/window-restore.js and handed back to `_render` as `options.view` after a reload.
+		 */
+		get restoreView() {
+			return timelineTabView(this);
+		}
+
 		async _render(force, options) {
 			// Foundry replaces the whole window content on every render, so a fresh
 			// <img> portrait is built and the browser must re-fetch/decode it before
@@ -1139,6 +1147,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// reader had scrolled to in a campaign's worth of entries, on every write to this actor.
 			// See timeline/timeline-tab.js.
 			detachTimelineTab(this);
+			holdTimelineTabView(this, options?.view);
 			await super._render(force, options);
 			const newImg = portraitOf(this.element?.[0]);
 			if (oldImg && newImg
@@ -8115,16 +8124,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			// so the just-clicked box isn't counted yet), which tells us if there was room.
 			const cap = Number(track?.dataset.poolCap ?? Infinity);
 			const filledBefore = track?.querySelectorAll(".is-checked").length ?? 0;
-			let newCount = el.checked ? index + 1 : index;
-			if (el.checked && newCount > cap) {
-				newCount = cap;
-				// Only warn when the reserve was already maxed (truly no room); otherwise
-				// the click just filled the remaining room up to the cap.
-				if (filledBefore >= cap) {
-					ui.notifications.warn(game.i18n.localize(
-						isSmall ? "stonetop.inventory.smallPoolAtLimit" : "stonetop.inventory.regularPoolAtLimit"));
-				}
-			}
+			const { count: newCount, atLimit } = poolCountFromClick({ index, checked: el.checked, cap, before: filledBefore });
+			if (atLimit) ui.notifications.warn(game.i18n.localize(poolAtLimitKey(isSmall)));
 			if (isSmall) {
 				await this._stonetopCharacter.setInventorySmallPool(newCount);
 			} else {

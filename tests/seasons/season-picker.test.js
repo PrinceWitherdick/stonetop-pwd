@@ -91,7 +91,6 @@ function mount({ prompt = "Which season?", startYear = 1, latestYear = startYear
 	});
 	return {
 		html,
-		ago:   root.querySelector(".stonetop-season-year-ago-input"),
 		root,
 		picked,
 		alted,
@@ -259,40 +258,37 @@ describe("the year field in a world that named its start year", () => {
 	});
 });
 
-// The timeline's own entries hold history: years before play, a year with no season, "years ago".
+// The timeline's own entries hold history: years before play, and a chip that says how long ago a
+// year was. (A year with no season is the entry dialog's own toggle, not the picker's.)
 describe("the picker as the timeline entry asks it", () => {
-	const HISTORY = { unknownCard: true, minYear: -9999, maxYear: MAX_CAMPAIGN_YEAR, agoFrom: 3 };
-	beforeEach(() => { globalThis.game = { settings: { get: () => 1247 } }; });
+	const HISTORY = { minYear: -9999, maxYear: MAX_CAMPAIGN_YEAR, agoFrom: 3 };
+	// The chip's "years ago" is localized, so the English table stays on the stand-in game.
+	const { i18n } = globalThis.game;
+	beforeEach(() => { globalThis.game = { i18n, settings: { get: () => 1247 } }; });
 	afterEach(() => { delete globalThis.game; });
 
-	it("offers a fifth card that picks the year alone", () => {
+	it("goes back before play, and says how long ago in the year chip", () => {
 		const ui = mount({ startYear: 3, extra: HISTORY });
-		expect(ui.root.querySelectorAll(".stonetop-season-card")).toHaveLength(SEASON_IDS.length + 1);
-		expect(ui.html).toContain("Season unknown");
-		ui.card("").click();
-		expect(ui.picked).toEqual([{ season: "", year: 3 }]);
-	});
-
-	it("leaves the fifth card off every other picker", () => {
-		expect(mount().html).not.toContain("stonetop-season-card--unknown");
-	});
-
-	it("goes back before play, and says how long ago in years", () => {
-		const ui = mount({ startYear: 3, extra: HISTORY });
-		expect(ui.ago.value).toBe("0");
+		expect(ui.name.textContent).toBe(`${yearLabel(3)} · this year`);
+		ui.step("-1").click();
+		expect(ui.name.textContent).toBe(`${yearLabel(2)} · 1 year ago`);
 		ui.type("1239");
-		expect(ui.ago.value).toBe("10");
-		ui.card("").click();
-		expect(ui.picked.at(-1)).toEqual({ season: "", year: -7 });
-	});
-
-	it("takes 'years ago' as the year it means", () => {
-		const ui = mount({ startYear: 3, extra: HISTORY });
-		ui.ago.value = "10";
-		ui.ago.dispatchEvent(fakeEvent("input"));
-		expect(ui.input.value).toBe("1239");
+		expect(ui.name.textContent).toBe(`${yearLabel(-7)} · 10 years ago`);
 		ui.card("winter").click();
 		expect(ui.picked.at(-1)).toEqual({ season: "winter", year: -7 });
+	});
+
+	// Two inputs for one answer read as two questions: "how long ago" is a reading of the year, not
+	// a second field beside it.
+	it("asks for the year once, with no separate years-ago field", () => {
+		expect(mount({ startYear: 3, extra: HISTORY }).html).not.toContain("years ago");
+	});
+
+	it("names a year past the clock's, or on a picker with no clock to count from, alone", () => {
+		const ui = mount({ startYear: 3, extra: HISTORY });
+		ui.type("1250");
+		expect(ui.name.textContent).toBe(yearLabel(4));
+		expect(mount({ startYear: 3 }).name.textContent).toBe(yearLabel(3));
 	});
 });
 

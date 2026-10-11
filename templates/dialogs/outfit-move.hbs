@@ -31,24 +31,29 @@
 	<p class="stonetop-outfit-load-bonus-note">{{{format "stonetop.specialMoves.outfit.loadBonusNote" moves=loadBonusFrom bonus=loadBonus light=loadLimits.light normal=loadLimits.normal heavy=loadLimits.heavy}}}</p>
 	{{/if}}
 
-	{{!-- Running mark total (specific items + undefined) --}}
+	{{!-- Running mark total (specific items + undefined), shown once anything is marked --}}
+	{{#unless loadLevelNone}}
 	<div class="stonetop-outfit-weight-row">
 		<span class="stonetop-outfit-weight-diamonds">
 			{{!-- Empty spans: the icon is the background. A literal ◆ here would be re-skinned by
 			      wrapStonetopGlyphsInEl into a second diamond overlapping the first. --}}
 			{{#each (times totalMarks)}}<span class="stonetop-outfit-diamond-filled"></span>{{/each}}
-			{{#if loadLevelNone}}<span class="stonetop-outfit-weight-none">{{{localize "stonetop.specialMoves.outfit.loadNone"}}}</span>{{/if}}
 		</span>
-		{{#unless loadLevelNone}}
 		<span class="stonetop-outfit-weight-count">{{totalMarks}} {{{localize "stonetop.specialMoves.outfit.totalWeight"}}}{{#if loadLevelOverloaded}} <strong class="stonetop-outfit-overloaded">{{localize "stonetop.inventory.outfit.overloaded"}}</strong>{{/if}}</span>
-		{{/unless}}
 	</div>
+	{{/unless}}
 
 	<div class="stonetop-outfit-columns">
 
 		{{!-- Regular items --}}
 		<section class="stonetop-outfit-regular-section">
-			<h3 class="stonetop-outfit-section-heading">{{{localize "stonetop.specialMoves.outfit.regularItems"}}}</h3>
+			{{> "stonetop.section-heading" headingClass="stonetop-outfit-section-heading" title=(localize "stonetop.specialMoves.outfit.regularItems")
+			    searchControl=true
+			    searchTitle=(localize "stonetop.inventory.searchLabel")
+			    searchPlaceholder=(localize "stonetop.inventory.searchPlaceholder")}}
+			<hr class="stonetop-inv-separator">
+			{{!-- The undefined ◇ reserve, drawn as the Inventory tab draws it. --}}
+			{{> "stonetop.inv-undefined-pool" pool=regularPool cap=regularPoolCap}}
 			<hr class="stonetop-inv-separator">
 			{{#each regularItems}}
 			<label class="stonetop-outfit-item{{#if checked}} is-checked{{/if}}">
@@ -60,13 +65,6 @@
 				{{#if note}}<span class="stonetop-outfit-item-note">({{{note}}})</span>{{/if}}
 			</label>
 			{{/each}}
-			<div class="stonetop-outfit-undefined">
-				<span class="stonetop-outfit-undefined-label">{{localize "stonetop.specialMoves.outfit.undefinedLabel"}}</span>
-				<button type="button" class="stonetop-outfit-undefined-btn" data-pool="regular" data-dir="-1"{{#unless canRemUndefinedRegular}} disabled{{/unless}}>−</button>
-				<span class="stonetop-outfit-undefined-count">{{undefinedRegular}}</span>
-				<button type="button" class="stonetop-outfit-undefined-btn" data-pool="regular" data-dir="1"{{#unless canAddUndefinedRegular}} disabled{{/unless}}>+</button>
-				<span class="stonetop-glyph stonetop-glyph--diamond-selected">◆</span>
-			</div>
 
 			{{#if hasPossessionRegular}}
 			<h3 class="stonetop-outfit-section-heading stonetop-outfit-section-heading--possessions">{{{localize "stonetop.specialMoves.outfit.possessionItems"}}}</h3>
@@ -86,10 +84,16 @@
 
 		{{!-- Small items --}}
 		<section class="stonetop-outfit-small-section">
-			<h3 class="stonetop-outfit-section-heading">{{{localize "stonetop.specialMoves.outfit.smallItems"}}}</h3>
+			{{> "stonetop.section-heading" headingClass="stonetop-outfit-section-heading" title=(localize "stonetop.specialMoves.outfit.smallItems")
+			    searchControl=true
+			    searchTitle=(localize "stonetop.inventory.searchSmallLabel")
+			    searchPlaceholder=(localize "stonetop.inventory.searchSmallPlaceholder")}}
 			{{#if hasSmallItemLimit}}
 			<p class="stonetop-outfit-small-limit">{{{format "stonetop.specialMoves.outfit.smallItemLimit" limit=smallItemLimit}}}</p>
 			{{/if}}
+			<hr class="stonetop-inv-separator">
+			{{!-- The undefined □ reserve, as on the Inventory tab: the full 4+Prosperity allowance. --}}
+			{{> "stonetop.inv-undefined-pool" pool=smallPool cap=smallPoolCap small=true}}
 			<hr class="stonetop-inv-separator">
 			{{#each smallItems}}
 			<label class="stonetop-outfit-item stonetop-outfit-item-small{{#if checked}} is-checked{{/if}}">
@@ -99,13 +103,19 @@
 				{{#if note}}<span class="stonetop-outfit-item-note">({{{note}}})</span>{{/if}}
 			</label>
 			{{/each}}
-			<div class="stonetop-outfit-undefined">
-				<span class="stonetop-outfit-undefined-label">{{localize "stonetop.specialMoves.outfit.undefinedLabel"}}</span>
-				<button type="button" class="stonetop-outfit-undefined-btn" data-pool="small" data-dir="-1"{{#unless canRemUndefinedSmall}} disabled{{/unless}}>−</button>
-				<span class="stonetop-outfit-undefined-count">{{undefinedSmall}}</span>
-				<button type="button" class="stonetop-outfit-undefined-btn" data-pool="small" data-dir="1"{{#unless canAddUndefinedSmall}} disabled{{/unless}}>+</button>
-				<span class="stonetop-glyph stonetop-glyph--checkbox">□</span>
+			{{!-- The standard small items, two to a row and name only, as on the Inventory tab. --}}
+			{{#if smallGridItems.length}}
+			<hr class="stonetop-inv-separator">
+			<div class="stonetop-inv-grid">
+				{{#each smallGridItems}}
+				<label class="stonetop-outfit-item stonetop-outfit-item-small{{#if checked}} is-checked{{/if}}">
+					<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{slug}}" {{#if checked}}checked{{/if}}>
+					<span class="stonetop-outfit-square"></span>
+					<span class="stonetop-outfit-item-name">{{name}}</span>
+				</label>
+				{{/each}}
 			</div>
+			{{/if}}
 
 			{{#if hasPossessionSmall}}
 			<h3 class="stonetop-outfit-section-heading stonetop-outfit-section-heading--possessions">{{{localize "stonetop.specialMoves.outfit.possessionItems"}}}</h3>

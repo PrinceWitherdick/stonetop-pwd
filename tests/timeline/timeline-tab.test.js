@@ -37,8 +37,9 @@ class FakePanel {
 
 	static panelId(hostKey) { return `stonetop-timeline-panel-${hostKey}`; }
 
-	render() {
+	render(_force, options) {
 		this.rendered = true;
+		this.renderOptions = options;
 		// ⚠ AND NOT ALWAYS AT ONCE. The real panel's render awaits its own getData (which enriches
 		// every entry body) before core sets `_element`, so there is a stretch after `render()`
 		// returns during which the panel exists and has no element. `slow` is that stretch.
@@ -75,7 +76,7 @@ vi.mock("../../module/timeline/timeline-store.js", () => ({
 }));
 
 const {
-	closeTimelineTab, detachTimelineTab, syncTimelineTab, TIMELINE_TAB,
+	closeTimelineTab, detachTimelineTab, holdTimelineTabView, syncTimelineTab, TIMELINE_TAB, timelineTabView,
 } = await import("../../module/timeline/timeline-tab.js");
 
 // ── The smallest DOM these paths touch: a mount that can hold children, and a root that finds it.
@@ -267,6 +268,72 @@ describe("a panel with no element yet is still a panel", () => {
 
 		settle();
 		expect(second.mount.children[0]).toBe(built[0].element[0]);
+	});
+});
+
+// The pop-out comes back from a reload with its zoom and scroll (TimelineWindow#restoreView); a panel
+// has no frame and comes back with its SHEET, so the sheet saves the tab's view and hands it back.
+describe("where the reader had got to survives a reload", () => {
+	const VIEW = { zoom: 1.5, left: 450, top: 30 };
+
+	it("saves the tab's view with its sheet", () => {
+		const sheet = makeSheet();
+		syncTimelineTab(sheet, makeRoot());
+		sheet._timelinePanel.restoreView = VIEW;
+		expect(timelineTabView(sheet)).toEqual({ timeline: VIEW });
+	});
+
+	it("saves nothing for a sheet whose tab was never opened", () => {
+		expect(timelineTabView(makeSheet({ tab: "overview" }))).toBeNull();
+	});
+
+	it("opens the panel at the view the reopening render handed back", () => {
+		const sheet = makeSheet();
+		holdTimelineTabView(sheet, { timeline: VIEW });
+		syncTimelineTab(sheet, makeRoot());
+		expect(built[0].renderOptions).toEqual({ view: VIEW });
+	});
+
+	// A reader who reloaded on another tab gets their place when they next come to this one, and
+	// keeps it through a second reload taken before they do.
+	it("keeps the view for a tab not opened yet, through another reload", () => {
+		const sheet = makeSheet({ tab: "overview" });
+		holdTimelineTabView(sheet, { timeline: VIEW });
+		syncTimelineTab(sheet, makeRoot());
+		expect(timelineTabView(sheet)).toEqual({ timeline: VIEW });
+		sheet._tabs[0].active = TIMELINE_TAB;
+		syncTimelineTab(sheet, makeRoot());
+		expect(built[0].renderOptions).toEqual({ view: VIEW });
+	});
+
+	// Once only: the panel owns its view from then on, and a later rebuild (the tab dropped and put
+	// back) opens fresh rather than snapping to where the reload had been.
+	it("hands the view over once", () => {
+		const sheet = makeSheet();
+		holdTimelineTabView(sheet, { timeline: VIEW });
+		syncTimelineTab(sheet, makeRoot());
+		closeTimelineTab(sheet);
+		syncTimelineTab(sheet, makeRoot());
+		expect(built[1].renderOptions).toEqual({});
+	});
+
+	// Every other render of the sheet carries no view, and must not wipe the one being held.
+	it("ignores a render that carries no view", () => {
+		const sheet = makeSheet({ tab: "overview" });
+		holdTimelineTabView(sheet, { timeline: VIEW });
+		holdTimelineTabView(sheet, undefined);
+		holdTimelineTabView(sheet, { zoom: 2 });
+		expect(timelineTabView(sheet)).toEqual({ timeline: VIEW });
+	});
+
+	it("is what both sheets save and read back", async () => {
+		const { readRepo } = await import("../fakes/css.js");
+		for (const file of ["module/actors/character/StonetopCharacterSheet.js", "module/actors/steading/StonetopSteadingSheet.js"]) {
+			const src = readRepo(file);
+			expect(src).toMatch(/get restoreView\(\) \{\s*return timelineTabView\(this\);/);
+			// Before the sheet draws, so the foot of its `_render` finds the view when it builds the panel.
+			expect(src).toMatch(/holdTimelineTabView\(this, options\?\.view\);\s*await super\._render\(force, options\);/);
+		}
 	});
 });
 
