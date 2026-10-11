@@ -4,6 +4,7 @@ import {
 	touchesWatched,
 } from "../../module/timeline/timeline-milestones.js";
 import { arcanumUnlockedUnder, consequenceBoxLabel, consequenceBoxRange } from "../../module/actors/character/CharacterArcana.js";
+import { disasterPickCost } from "../../module/actors/steading/steading-debilities.js";
 import { threatMilestoneKey } from "../../module/threats/threat-view.js";
 import { TIMELINE_SOURCES, TIMELINE_CARD_SOURCES } from "../../module/timeline/timeline-core.js";
 import { KIND_META } from "../../module/timeline/timeline-view.js";
@@ -177,6 +178,11 @@ describe("consequenceBoxLabel", () => {
 });
 
 describe("Stonetop's rows", () => {
+	it("say what a Disaster's pick cost", () => {
+		expect(disasterPickCost({ id: "malcontent", label: "Malcontent" })).toBe("marked Malcontent");
+		expect(disasterPickCost({ id: "population", label: "Folks start to leave" })).toContain("Population −1");
+	});
+
 	it("key a threat's doom and each portent apart", () => {
 		expect(threatMilestoneKey("p1", { doom: true })).toBe("threat:p1:doom");
 		expect(threatMilestoneKey("p1", { index: 2 })).toBe("threat:p1:portent:2");

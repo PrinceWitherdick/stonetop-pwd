@@ -1,7 +1,7 @@
 import { StonetopSteading, IMPROVEMENT_CATEGORIES, STEADING_DEFAULTS, improvementRequirementsMet, HERD_SURPLUS_PER, WINTER_DEBT_STEP, SURPLUS_SEASON_STEP, REMINDER_SEASON_STEP, INN_ROLL_SEASON_STEP, isHerdAsset } from "./StonetopSteading.js";
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { flatRequirementItems, forceCompleteTicks } from "../../utils/improvement-def.js";
-import {rollStat, sign, postSeasonsRollPrompt, resultsLegendHtml, SEASONAL_GAIN_LIST} from "../../utils/roll-engine.js";
+import {rollStat, sign, postSeasonsRollPrompt, resultsLegendHtml, SEASONAL_GAIN_LIST, seasonsRollFlags, seasonsRollKey} from "../../utils/roll-engine.js";
 import {SteadingLedger} from "./SteadingLedger.js";
 import {TIER_KEYS} from "../../utils/move-results.js";
 import {moveTiersHtml} from "../../utils/move-tiers.js";
@@ -2959,6 +2959,8 @@ export function createStonetopSteadingSheetClass(Base) {
 							const opening = steading.openingFortunesFlags(year, seasonId);
 							await this._onSteadingRoll("Seasons Change", "fortunes", {
 								...prompted, ..._seasonRollOptions(seasonId, { winterAgain: winterAgainFormula }),
+								// Which season it is, on the card, so Record the season can say how it went.
+								messageFlags: seasonsRollFlags(seasonsRollKey(year, seasonId)),
 							});
 							await steading.setFlags({ ...opening, ...steading.seasonStepFlags("fortunesRoll", year, seasonId) });
 							refreshResetLock();
@@ -3016,6 +3018,7 @@ export function createStonetopSteadingSheetClass(Base) {
 								why: held?.source ?? "",
 								modifier: prompted.situational ?? 0,
 								countsAsMiss: tookOffer(stormMiss, prompted.takenOffers) ? "a terrible storm's curse" : "",
+								seasonKey: seasonsRollKey(year, seasonId),
 							});
 							await spend();
 							await steading.setFlags({ ...opening, ...steading.seasonStepFlags("fortunesRoll", year, seasonId) });
@@ -3503,6 +3506,8 @@ export function createStonetopSteadingSheetClass(Base) {
 										...seasonsMove,
 										onApplied: () => this.render(false),
 										alsoFlags: this._stonetopSteading.seasonStepFlags("consumption", year, seasonId),
+										// On this winter's shortfall line on the timeline.
+										season: { seasonId, year },
 									});
 									this.render(false);
 									hide("#stonetop-winter-step2");
@@ -4252,6 +4257,8 @@ export function createStonetopSteadingSheetClass(Base) {
 				const { fortunes, disaster } = await meetWithDisaster(steading, {
 					...seasonsMove,
 					cause: "a failed harvest",
+					// Its own line in the season's heading on the timeline, what it cost with it.
+					season: { seasonId, year, title: "The harvest failed", line: "No Surplus from it." },
 					introHtml: `<p><em>The harvest failed and the steading Meets with Disaster, but Fortunes cannot drop below −1.</em> The GM picks 1 instead:</p>`,
 					onApplied: () => this.render(false),
 					alsoFlags: marker(),

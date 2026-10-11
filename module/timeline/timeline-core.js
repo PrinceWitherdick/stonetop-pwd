@@ -66,6 +66,18 @@ export const TIMELINE_KILLS_SOURCE = "kills";
  */
 export const TIMELINE_SEASON_SOURCE = "season";
 
+/**
+ * A season's SHORTFALL note (timeline-season-entry.js#noteSeasonShortfall): a second season row in
+ * the same heading, keyed "shortfall:<year>:<season>". Told apart by its key's prefix, not by having
+ * a key at all: the test macro keys the season summaries it seeds, so "keyed" is not "shortfall".
+ */
+export const TIMELINE_SHORTFALL_KEY_PREFIX = "shortfall:";
+
+/** Is this row a season's shortfall note, rather than its summary? */
+export function isShortfallRow(entry) {
+	return String(entry?.key ?? "").startsWith(TIMELINE_SHORTFALL_KEY_PREFIX);
+}
+
 /** The sources that print as CARDS: every one but the season's, which prints in its heading. */
 export const TIMELINE_CARD_SOURCES = TIMELINE_SOURCES.filter(source => source !== TIMELINE_SEASON_SOURCE);
 

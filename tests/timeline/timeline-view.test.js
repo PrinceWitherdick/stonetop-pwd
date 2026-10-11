@@ -336,6 +336,25 @@ describe("the aggregate laid across the page", () => {
 		expect(writable.periods[0].seasonNotes).toHaveLength(1);
 	});
 
+	// A season's shortfall is a second, keyed note; the season's own summary leads whichever was
+	// written first (a winter's stores run out before its summary is recorded).
+	it("prints a season's summary before its shortfall note", () => {
+		const vm = buildTrackVM({ trackId: "s", name: "Stonetop", entries: [
+			entry({ id: "short", source: "season", key: "shortfall:1:spring", title: "Winter's shortfall", body: "<p>Ran out.</p>", order: 0 }),
+			entry({ id: "sum", source: "season", title: "Spring", body: "<p>Gains</p>", order: 1 }),
+		] });
+		expect(vm.periods[0].seasonNotes.map(n => n.id)).toEqual(["sum", "short"]);
+	});
+
+	// The test macro keys the summaries it seeds ("test:season:<p>"): keyed is not shortfall.
+	it("tells a shortfall by its key's prefix, not by having a key", () => {
+		const vm = buildTrackVM({ trackId: "s", name: "Stonetop", entries: [
+			entry({ id: "short", source: "season", key: "shortfall:1:spring", title: "Winter's shortfall", body: "<p>Ran out.</p>", order: 0 }),
+			entry({ id: "sum", source: "season", key: "test:season:0", title: "Spring", body: "<p>Gains</p>", order: 1 }),
+		] });
+		expect(vm.periods[0].seasonNotes.map(n => n.id)).toEqual(["sum", "short"]);
+	});
+
 	// It has no Filter line any more, so a reader who hid "Seasons Change" before it moved must not
 	// lose it with no way back.
 	it("never filters a season's own row", () => {

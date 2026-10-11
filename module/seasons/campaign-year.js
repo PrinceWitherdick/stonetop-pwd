@@ -93,6 +93,27 @@ export function storedYear(display, start = startYear()) {
 	return whole(display) - start + 1;
 }
 
+/** A campaign year as stored: a whole number, never below 1. */
+export function campaignYear(value) {
+	return Math.max(1, Math.trunc(Number(value)) || 1);
+}
+
+/**
+ * The "<year>:<season>" stamp a season is keyed by (the clock's `seasonStampKey`, a season's roll
+ * card, its shortfall note): "" with no season. HERE, in a module that imports nothing of the
+ * seasons, so the roll engine and the steading's writers can build it without closing the import
+ * ring current-season.js sits in (seasons-chronicle.js has the note on that ring).
+ */
+export function seasonStamp(year, season) {
+	return season ? `${campaignYear(year)}:${season}` : "";
+}
+
+/** `{seasonId, year}` from a `seasonStamp`, or null. */
+export function parseSeasonStamp(stamp) {
+	const [year, seasonId] = String(stamp ?? "").split(":");
+	return seasonId && Number.isFinite(Number(year)) ? { seasonId, year: Number(year) } : null;
+}
+
 /** A timeline entry's stored year: whole, no floor of 1, no earlier than MIN_HISTORY_YEAR. */
 export function historyYear(value) {
 	return Math.max(MIN_HISTORY_YEAR, whole(value));

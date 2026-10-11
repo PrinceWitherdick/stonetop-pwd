@@ -19,8 +19,9 @@ import { composeDamageFormula, seedBonus, extraTerm } from "./damage.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { getBooleanSetting } from "../settings.js";
 import { privateMessageModeOptions, deletionEntry } from "./foundry-compat.js";
-import { CRITICAL_TOTAL, ROLLED_FLAG, rolledRecord, countedNote, cardCountedTier } from "./counted-tier.js";
+import { CRITICAL_TOTAL, ROLLED_FLAG, rolledRecord, countedNote, cardCountedTier, cardTierNow, outcomeTier } from "./counted-tier.js";
 import { SEASONAL_GAINS } from "../dialogs/spring-burst-data.js";
+import { seasonStamp } from "../seasons/campaign-year.js";
 
 // What a miss is worth (Book I p.209: "a tick mark that raises your total by 1"). Named because
 // the mark and the Undo that takes it back have to agree, and a card stamped by one number and
@@ -213,7 +214,7 @@ export { dieResultsText, multiDieFaces };
  * clicked it. Pass `alias` instead to speak the card under a fixed name, which then
  * heads it too (the Expedition Requisition card).
  */
-export async function rollSeasonsCard({ formula, title = "", alias = "", resultTable, resultLegend = "", missCountsAsPartial = "", countsAsMiss = "", conditionNotes = [], pickOptions = null, pickReference = null, tierActions = null, actor = null } = {}) {
+export async function rollSeasonsCard({ formula, title = "", alias = "", resultTable, resultLegend = "", missCountsAsPartial = "", countsAsMiss = "", conditionNotes = [], pickOptions = null, pickReference = null, tierActions = null, actor = null, seasonKey = "" } = {}) {
 	const roll = await new Roll(formula).evaluate();
 	const rolled = classifyResult(roll.total).key;
 	// As rollStat's option of the same name: a 6- that a rule counts as a 7-9, said on the card.
@@ -255,8 +256,46 @@ export async function rollSeasonsCard({ formula, title = "", alias = "", resultT
 	await roll.toMessage({
 		speaker: alias ? { alias, ...(actor?.id ? { actor: actor.id } : {}) } : ChatMessage.getSpeaker(),
 		flavor:  stonetopChatCard(title || alias, body, "stonetop-spring-card", description ? DESC_TOGGLE_HTML : ""),
+		// A season's own +Fortunes roll says which season it was, and what it counted as: this card
+		// has no Shift, so the tier it lands on is the one it keeps (seasonsRollTier).
+		...(seasonKey ? { flags: seasonsRollFlags(seasonKey, outcomeTier(tier)) } : {}),
 	});
 	return { total: roll.total, tier, label: result.label };
+}
+
+/**
+ * WHICH SEASON a Seasons Change +Fortunes card was rolled for, stamped on the card so the season's
+ * record can say how the roll went (seasons-chronicle.js#recordSeasonsChange, user 2026-10-10). The
+ * roll itself tells the window nothing: it is posted to chat, can be Shifted there, and spring's is
+ * made by a player clicking a card the GM handed over.
+ *
+ * `key` is the season as "<year>:<season>". `tier` rides along only on a card that cannot be
+ * rewritten (rollSeasonsCard's); a rollStat card is read for the tier it counts as NOW.
+ */
+export const SEASONS_ROLL_FLAG = "seasonsRoll";
+
+/** The key a season's roll is stamped with. */
+export function seasonsRollKey(year, seasonId) {
+	return seasonStamp(year, seasonId);
+}
+
+/** The card flags that stamp one season's roll (`tier` for a card nothing can rewrite). */
+export function seasonsRollFlags(key, tier = "") {
+	return { [SYSTEM_ID]: { [SEASONS_ROLL_FLAG]: tier ? { key, tier } : { key } } };
+}
+
+/**
+ * How a season's +Fortunes roll went: "success", "partial" or "failure" (a 12+ is its 10+), off the
+ * LATEST card stamped for it, as it reads now (after any Shift); null when none was rolled. The latest
+ * because a roll made again (a lost card, a GM's do-over) is the one the table went with.
+ */
+export function seasonsRollTier(key, messages = globalThis.game?.messages?.contents ?? []) {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const stamp = messages[i]?.getFlag?.(SYSTEM_ID, SEASONS_ROLL_FLAG);
+		if (stamp?.key !== key) continue;
+		return stamp.tier || cardTierNow(messages[i], SYSTEM_ID);
+	}
+	return null;
 }
 
 /**
@@ -300,6 +339,9 @@ export function postSeasonsRollPrompt({
 	// who is asked, what the roll is for, and the ladder the answer is read against — comes off
 	// its entry in SEASONS_ROLL_TABLES, so a caller names the roll and nothing else.
 	table = "spring",
+	// The season this roll is FOR ("<year>:<season>"), carried to the result card (SEASONS_ROLL_FLAG)
+	// so the season's record can say how it went. Only the season's own roll: the Inn's has none.
+	seasonKey = "",
 } = {}) {
 	if (!globalThis.ChatMessage) return;
 	const { lead, asks, tail } = _seasonsRollEntry(table);
@@ -321,7 +363,7 @@ export function postSeasonsRollPrompt({
 		<p class="stonetop-seasons-prompt-text">${lead} ${who}, roll <strong>+Fortunes</strong> (${sign(fortunes)})${plus} ${tail}.</p>
 		${conditions}
 		<div class="card-buttons stonetop-card-buttons">
-			<button type="button" class="stonetop-seasons-roll-btn" data-fortunes="${fortunes}" data-mod="${mod}" data-counts-as-miss="${escHtml(countsAsMiss)}" data-alias="${escHtml(alias)}" data-roll-mode="${escHtml(rollMode)}" data-table="${escHtml(table)}">
+			<button type="button" class="stonetop-seasons-roll-btn" data-fortunes="${fortunes}" data-mod="${mod}" data-counts-as-miss="${escHtml(countsAsMiss)}" data-alias="${escHtml(alias)}" data-roll-mode="${escHtml(rollMode)}" data-table="${escHtml(table)}"${seasonKey ? ` data-season-key="${escHtml(seasonKey)}"` : ""}>
 				<i class="fas fa-dice-d6"></i> Roll +Fortunes (${sign(fortunes)})${plus}
 			</button>
 		</div>

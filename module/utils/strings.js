@@ -74,6 +74,11 @@ export function escapeRegExp(v) {
  */
 export function sign(n) { return n >= 0 ? `+${n}` : `${n}`; }
 
+/** "+1", "−1", "+0": `sign` with a real minus (U+2212), as the steading's prose prints a figure. */
+export function signed(n) {
+	return `${n >= 0 ? "+" : "−"}${Math.abs(n)}`;
+}
+
 /**
  * A pattern that matches `word` ONLY as a whole word, under Unicode letter boundaries.
  *

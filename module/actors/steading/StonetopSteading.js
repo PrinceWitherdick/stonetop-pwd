@@ -23,7 +23,7 @@ import {
 } from "../../utils/improvement-def.js";
 import {readCurrentSeason, seasonStampKey, seasonStampParts} from "../../seasons/current-season.js";
 import {seasonLabel} from "../../seasons/seasons-change-reminders.js";
-import {markedDebilities} from "./steading-debilities.js";
+import {markedDebilities, owedSeason} from "./steading-debilities.js";
 import {innGatheringState, INN_SEASON_STEP} from "./inn-gathering.js";
 import {steadingHolds} from "./steading-holds.js";
 import {MILITIA_SEASON_STEP, militiaTactics} from "./season-effects.js";
@@ -2241,7 +2241,8 @@ export class StonetopSteading {
 	}
 
 	/**
-	 * A Meet with Disaster the steading has met but not yet paid: `{ cause }`, or null.
+	 * A Meet with Disaster the steading has met but not yet paid: `{ cause, season }`, or null.
+	 * `season` is the Seasons Change it was met in (steading-debilities.js#disasterOwedFlags), or null.
 	 *
 	 * At Fortunes −1 the cost is the GM's pick, made in a window that opens AFTER the write that
 	 * caused it (a failed harvest's step marker, a winter shortfall's Surplus to 0). That write
@@ -2250,7 +2251,7 @@ export class StonetopSteading {
 	 */
 	disasterOwed() {
 		const held = this._flags.disasterOwed ?? null;
-		return held ? { cause: String(held.cause ?? "") } : null;
+		return held ? { cause: String(held.cause ?? ""), season: owedSeason(held.season) } : null;
 	}
 
 	/** Herd shaped for the improvement card: the three tiers (with labels/Values) plus total. */

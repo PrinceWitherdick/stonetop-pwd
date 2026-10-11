@@ -3,6 +3,7 @@ import { yearLabel } from "./seasons-chronicle.js";
 import { STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
 import { seasonLogUpdate } from "../timeline/timeline-seasons.js";
 import { localize } from "../utils/i18n.js";
+import { campaignYear, seasonStamp } from "./campaign-year.js";
 
 /**
  * What a season of the campaign is called, on the timeline and wherever else it is dated: the
@@ -44,10 +45,8 @@ export const CURRENT_SEASON_KEY = "seasonsCurrent";
 /** Flag key holding the year the season picker defaults to (advanced by each Winter). */
 export const CURRENT_YEAR_KEY = "seasonsCurrentYear";
 
-/** A campaign year as stored: a whole number, never below 1. */
-export function campaignYear(value) {
-	return Math.max(1, Math.trunc(Number(value)) || 1);
-}
+// The year's floor and the stamp's shape live in campaign-year.js, which the roll engine can import.
+export { campaignYear };
 
 /**
  * The campaign year the season picker defaults to. Advanced by one each time a Winter is
@@ -112,7 +111,7 @@ export function readCurrentSeason(actor) {
  * @returns {string} "" when nothing is stamped, which no stored marker can equal.
  */
 export function seasonStampKey(stamp) {
-	return stamp?.season ? `${campaignYear(stamp.year)}:${stamp.season}` : "";
+	return seasonStamp(stamp?.year, stamp?.season);
 }
 
 /**

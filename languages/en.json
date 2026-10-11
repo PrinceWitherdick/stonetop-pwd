@@ -3089,6 +3089,7 @@
         "artifactIdentified": "Worked out {name}",
         "improvementBuilt": "Built {name}",
         "improvementLost": "Lost {name}",
+        "disasterPicked": "Met with Disaster: {cost}",
         "doomCame": "{name}: the doom came to pass",
         "portentCame": "{name}: a grim portent came to pass"
       },

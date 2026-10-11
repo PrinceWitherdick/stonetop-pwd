@@ -77,7 +77,7 @@ describe("STD-1: every 'reduce Fortunes by 1' goes through Meet with Disaster", 
 		expect(out.disaster).toBe(true);
 		expect(out.notice).toMatch(/Meets with Disaster/);
 		expect(fortunesOf(actor)).toBe(-1);
-		expect(actor.flags["stonetop-pwd"].steading.disasterOwed).toEqual({ cause: "a Requisition taken on a miss" });
+		expect(actor.flags["stonetop-pwd"].steading.disasterOwed).toEqual({ cause: "a Requisition taken on a miss", season: null });
 		expect(lastUpdateOptions(actor)).toEqual({ stonetopMove: "Requisition" });
 		expect(dialogs.at(-1)?.data.title).toBe("Meet with Disaster");
 	});

@@ -22,7 +22,7 @@ import { localize, format } from "../utils/i18n.js";
 import { enrichHTML } from "../utils/foundry-compat.js";
 import {
 	TIMELINE_CARD_SOURCES, TIMELINE_KILLS_SOURCE, TIMELINE_SEASON_SOURCE, UNDATED_PERIOD_KEY, foeLines,
-	groupByPeriod, killTotal, periodFacts, periodKey, periodRank, readEntries, sortEntries,
+	groupByPeriod, isShortfallRow, killTotal, periodFacts, periodKey, periodRank, readEntries, sortEntries,
 } from "./timeline-core.js";
 import { customTagStyle, filterKey, indexCustomTags, isKindTag, liveTag } from "./timeline-tags.js";
 
@@ -230,6 +230,16 @@ function noteHasRoom(note) {
 }
 
 /**
+ * A season's notes in the order its heading prints them: the season's own summary first, then its
+ * shortfall note (timeline-season-entry.js#seasonShortfallKey), whichever was written first. A
+ * winter's stores run out before its summary is recorded, and the summary still leads.
+ * `entryOf` reads the row off each item, for a caller sorting something built from it.
+ */
+function notesInOrder(items, entryOf = item => item) {
+	return [...items].sort((a, b) => Number(isShortfallRow(entryOf(a))) - Number(isShortfallRow(entryOf(b))));
+}
+
+/**
  * The "+ Add" slot at the foot of one season's cards (timeline-add-slot.hbs): where an entry written
  * into that season lands, since `addEntry` appends. It hands the season back to the window's
  * listener, which opens the entry dialog on it; on the aggregate it names its thread too, and the
@@ -409,7 +419,8 @@ export function buildTrackVM(track, opts = {}) {
 			p,
 			p.entries.filter(e => !isSeasonRow(e)),
 			cardOpts,
-			p.entries.filter(isSeasonRow).map(e => seasonNoteVM(e, noteOpts)),
+			notesInOrder(p.entries.filter(isSeasonRow))
+				.map(e => seasonNoteVM(e, noteOpts)),
 		))),
 	};
 }
@@ -481,7 +492,7 @@ export function buildAggregateVM(allTracks = [], opts = {}) {
 			if (!byKey.has(key)) byKey.set(key, periodFacts(entry));
 			if (note) {
 				if (!notesByKey.has(key)) notesByKey.set(key, []);
-				notesByKey.get(key).push(note);
+				notesByKey.get(key).push({ note, entry });
 				continue;
 			}
 			if (!buckets.has(key)) buckets.set(key, []);
@@ -498,7 +509,9 @@ export function buildAggregateVM(allTracks = [], opts = {}) {
 	const withGhost = withGhostNow([...byKey.values()], ghostNow);
 	const hasGhost = withGhost.some(period => period.ghost);
 	const periods = markYearsAndSides(withAgeMarks(withGhost, opts.ageYears).map(period => {
-		const block = periodVM(period, [], {}, notesByKey.get(period.key) ?? []);
+		// The season's own summary before its shortfall, whatever thread order says.
+		const notes = notesInOrder(notesByKey.get(period.key) ?? [], n => n.entry).map(n => n.note);
+		const block = periodVM(period, [], {}, notes);
 		return {
 			...block,
 			// The lane, not the block, holds the cards here: a row of this table is one season across

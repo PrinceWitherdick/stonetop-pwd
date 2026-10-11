@@ -27,7 +27,9 @@
 // uses, *asterisks* around a move name, resolved to <em>. unformatImprovementText is the
 // way back out, for re-opening an improvement that already exists in the builder.
 
-import { decodeEntities, escHtml } from "./strings.js";
+import { decodeEntities, escHtml, signed } from "./strings.js";
+
+export { signed };
 
 /** Where each grantable steading stat lives, keyed by the name a grant uses. */
 export const GRANT_STAT_PATHS = {
@@ -455,11 +457,6 @@ export function summarizeImprovementGrants(grants, { improvementLabel = humanize
 	if (grants.markImprovements?.length) lines.push(`Also marks complete: ${grants.markImprovements.map(improvementLabel).join(", ")}`);
 	if (grants.completionNote) lines.push(`Reminder: ${grants.completionNote}`);
 	return lines;
-}
-
-/** "+1", "−1", "+0": a signed figure, the minus the same U+2212 statGrantLine prints. */
-export function signed(n) {
-	return `${n >= 0 ? "+" : "−"}${Math.abs(n)}`;
 }
 
 /** "spring", "spring and summer", "spring, summer, and autumn". */

@@ -2692,6 +2692,8 @@ function _chatWireSeasonsRoll(message, html) {
 			await rollSeasonsCard({
 				formula, title, resultTable: table, ...picks, countsAsMiss,
 				conditionNotes: mod ? [`Situational: ${sign(mod)}`] : [],
+				// The season the roll is for, so its record can say how it went (SEASONS_ROLL_FLAG).
+				seasonKey: btn.dataset.seasonKey || "",
 			});
 		} catch (err) {
 			console.error("Stonetop | Error rolling Seasons Change from chat:", err);
