@@ -6,6 +6,7 @@ import { buildMonsterActorData } from "../data/monster-builder.js";
 import { THEMES, ASPECTS, EMANATION_ORIGINS, rollOnTable, rollDistinct, themeLabels, aspectTexts, themeCheckboxes, aspectCheckboxes } from "../data/things-below-tables.js";
 import { GIFTS, MARKS, EMANATION_BASE, applyCorruption } from "../data/corruption-tables.js";
 import { BESTIARY_PACK } from "../system-id.js";
+import { ensurePackIndex } from "../utils/pack-index.js";
 
 // ── CorruptBeingDialog ───────────────────────────────────────────────────────
 // The lighter "corruption layer" wizard for two Book II flows:
@@ -141,8 +142,11 @@ export class CorruptBeingDialog extends StepperDialog {
 	 */
 	async _packMonsters() {
 		if (this._packSources) return this._packSources;
-		const pack = globalThis.game?.packs?.get?.(BESTIARY_PACK);
-		const index = pack ? await pack.getIndex() : [];
+		// Via ensurePackIndex, never `pack.getIndex()` direct: a fieldless call sets the pack's
+		// tracked fields back to core's, and every monster loaded after it loses the fields Start
+		// Fight indexes for (organization, count, max HP) from its index entry.
+		const pack = await ensurePackIndex(BESTIARY_PACK, ["type"]).catch(() => null);
+		const index = pack?.index ?? [];
 		const inWorld = new Set(this._sourceMonsters().map(m => m.name));
 		this._packSources = [...index]
 			.filter(e => (!e.type || e.type === "monster") && !inWorld.has(e.name))
