@@ -116,8 +116,10 @@
 				{{#if stonetop.hasArcana}}{{> "stonetop.tab-nav-item" tab="arcana" label=(localize "stonetop.sheet.tabs.arcana")}}{{/if}}
 				{{> "stonetop.tab-nav-item" tab="details"       label=(localize "stonetop.sheet.tabs.details")}}
 				{{> "stonetop.tab-nav-item" tab="special-moves" label=(localize "stonetop.sheet.tabs.specialMoves")}}
-				{{> "stonetop.tab-nav-item" tab="notes"         label=(localize "stonetop.sheet.tabs.notes")}}
 				{{#if stonetop.timelineShown}}{{#unless stonetop.classicLayout}}{{> "stonetop.tab-nav-item" tab="timeline" label=(localize "stonetop.sheet.tabs.timeline")}}{{/unless}}{{/if}}
+				{{!-- Notes is the last page about the character, always (user's call, 2026-10-10);
+				      PINNED_LAST_TABS holds it there against a saved order too. --}}
+				{{> "stonetop.tab-nav-item" tab="notes"         label=(localize "stonetop.sheet.tabs.notes")}}
 				{{!-- Last, and deliberately: it is the only tab that is not about the character.
 				      A player opens it once to set their text size and then rarely again, so it
 				      sits below everything they read every session.
@@ -141,8 +143,8 @@
 					{{#if stonetop.hasArcana}}{{> "stonetop.tab-arcana"}}{{/if}}
 					{{> "stonetop.tab-details"}}
 					{{> "stonetop.tab-special-moves"}}
+					{{#if stonetop.timelineShown}}{{#unless stonetop.classicLayout}}{{> "stonetop.tab-timeline"}}{{/unless}}{{/if}}
 					{{> "stonetop.tab-notes"}}
-				{{#if stonetop.timelineShown}}{{#unless stonetop.classicLayout}}{{> "stonetop.tab-timeline"}}{{/unless}}{{/if}}
 					{{#if stonetop.showPreferences}}{{> "stonetop.tab-preferences"}}{{/if}}
 				</section>
 

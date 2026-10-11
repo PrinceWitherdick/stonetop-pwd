@@ -932,12 +932,13 @@ function _parseFollowerDamage(str) {
 	};
 }
 
-// Tabs that sit at the foot of the rail whatever order a player dragged the rest into. Settings is
-// not about the character, so it stays below Notes and everything else (user's call, 2026-10-03).
-// A saved order is only a snapshot, and one saved before Settings existed would otherwise slot it
-// in after Timeline, wherever Timeline had been dragged. So the merge pins it, and it is neither
-// dragged nor dropped on.
-export const PINNED_LAST_TABS = Object.freeze(["preferences"]);
+// Tabs that sit at the foot of the rail, in this order, whatever order a player dragged the rest
+// into. Notes is the last page about the character (user's call, 2026-10-10), and Settings, which
+// is not about the character at all, stays below even that (user's call, 2026-10-03). A saved order
+// is only a snapshot: one saved after Timeline arrived holds Timeline below Notes, and one saved
+// before Settings existed would slot it in after Timeline, wherever Timeline had been dragged. So
+// the merge pins both, and neither is dragged nor dropped on.
+export const PINNED_LAST_TABS = Object.freeze(["notes", "preferences"]);
 
 export function createStonetopCharacterSheetClass(Base) {
 	// Details-tab sections (Background, Instinct, Appearance, Origin, Lore) each
@@ -6297,7 +6298,8 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * Conditional tabs (Arcana, Followers, Post-Death) drop in and out of the template
 		 * freely — a key in `savedOrder` with no tab rendered is simply skipped by the caller.
 		 *
-		 * PINNED_LAST_TABS (Settings) ignore both: whatever was saved, they go last.
+		 * PINNED_LAST_TABS (Notes, Settings) ignore both: whatever was saved, they go last, in
+		 * template order.
 		 *
 		 * @param {string[]} savedOrder   tab keys in the order the player last dragged them
 		 * @param {string[]} templateOrder tab keys as the template rendered them, in DOM order

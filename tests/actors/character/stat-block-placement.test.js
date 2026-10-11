@@ -128,40 +128,53 @@ describe("tab order merge", () => {
 		};
 		return new (createStonetopCharacterSheetClass(Base))();
 	};
-	const TEMPLATE = ["moves", "inventory", "details", "notes"];
+	const TEMPLATE = ["moves", "inventory", "details", "special-moves"];
 
 	// A saved order is a snapshot of the rail on the day it was dragged, so a tab added since
 	// is missing from it. Appending those at the end would bury every new page at the bottom
 	// of the rail for exactly the players who reorder.
 	it("drops a brand-new tab into its template position, not at the end", () => {
-		const saved = ["notes", "inventory", "details"]; // pre-Moves
-		expect(sheet()._mergeTabOrder(saved, TEMPLATE)).toEqual(["moves", "notes", "inventory", "details"]);
+		const saved = ["special-moves", "inventory", "details"]; // pre-Moves
+		expect(sheet()._mergeTabOrder(saved, TEMPLATE)).toEqual(["moves", "special-moves", "inventory", "details"]);
 	});
 
 	it("keeps a new tab beside the template neighbour above it", () => {
-		const saved = ["notes", "moves", "details"]; // no `inventory` yet
-		expect(sheet()._mergeTabOrder(saved, TEMPLATE)).toEqual(["notes", "moves", "inventory", "details"]);
+		const saved = ["special-moves", "moves", "details"]; // no `inventory` yet
+		expect(sheet()._mergeTabOrder(saved, TEMPLATE)).toEqual(["special-moves", "moves", "inventory", "details"]);
 	});
 
 	it("leaves a saved order that covers every tab alone", () => {
-		const saved = ["notes", "details", "inventory", "moves"];
+		const saved = ["special-moves", "details", "inventory", "moves"];
 		expect(sheet()._mergeTabOrder(saved, TEMPLATE)).toEqual(saved);
 	});
 
 	// Arcana, Followers and Post-Death come and go with the character.
 	it("drops keys whose tab is not rendered", () => {
-		const saved = ["arcana", "notes", "post-death", "moves"];
-		expect(sheet()._mergeTabOrder(saved, ["moves", "notes"])).toEqual(["notes", "moves"]);
+		const saved = ["arcana", "details", "post-death", "moves"];
+		expect(sheet()._mergeTabOrder(saved, ["moves", "details"])).toEqual(["details", "moves"]);
 	});
 
-	// Settings sits below Notes ALWAYS (user's call, 2026-10-03): not where it was dragged, and not
-	// after Timeline when a pre-Settings saved order put Timeline above Notes.
-	it("pins Settings last whatever the saved order says", () => {
-		const template = ["moves", "notes", "timeline", "preferences"];
+	// Notes is the last page about the character ALWAYS (user's call, 2026-10-10), and Settings sits
+	// below even Notes (user's call, 2026-10-03): not where either was dragged, and not under a
+	// Timeline that a saved order holds below Notes.
+	it("pins Notes, then Settings, last whatever the saved order says", () => {
+		const template = ["moves", "timeline", "notes", "preferences"];
 		expect(sheet()._mergeTabOrder(["preferences", "notes", "moves", "timeline"], template))
-			.toEqual(["notes", "moves", "timeline", "preferences"]);
-		expect(sheet()._mergeTabOrder(["timeline", "moves", "notes"], template))
+			.toEqual(["moves", "timeline", "notes", "preferences"]);
+		expect(sheet()._mergeTabOrder(["moves", "notes", "timeline"], template))
+			.toEqual(["moves", "timeline", "notes", "preferences"]);
+		expect(sheet()._mergeTabOrder(["timeline", "moves"], template))
 			.toEqual(["timeline", "moves", "notes", "preferences"]);
-		expect(sheet()._mergeTabOrder(["notes", "moves"], ["moves", "notes"])).toEqual(["notes", "moves"]);
+		expect(sheet()._mergeTabOrder(["notes", "moves"], ["moves", "notes"])).toEqual(["moves", "notes"]);
+	});
+
+	// The rail and the template agree: Timeline is written above Notes, so a fresh sheet needs no
+	// merge to read the same way.
+	it("writes Notes as the last character page in the template", () => {
+		const hbs = CHARACTER_HBS;
+		const navKeys = [...hbs.matchAll(/tab-nav-item" tab="([\w-]+)"/g)].map(m => m[1]);
+		expect(navKeys.slice(-2)).toEqual(["notes", "preferences"]);
+		const panels = [...hbs.matchAll(/\{\{> "stonetop\.tab-([\w-]+)"\}\}/g)].map(m => m[1]);
+		expect(panels.slice(-2)).toEqual(["notes", "preferences"]);
 	});
 });
