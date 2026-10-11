@@ -1076,7 +1076,11 @@ body {
    `vertical-align` follows from the size: the box is centred on the cap band (a cap height of
    ~0.70em, so a centre at 0.35em), which puts its bottom edge at height/2 − 0.35em below the
    baseline. That is where the old -0.04em came from at 0.78em, and -0.125em is the same
-   placement at 0.95em — change one and the other has to move with it. */
+   placement at 0.95em — change one and the other has to move with it.
+
+   `overflow: hidden` is what makes that bottom edge the box's BASELINE. Without it the hidden
+   ◇/□ character inside gives the inline-block a text baseline of its own, set by whichever
+   fallback symbol font drew it, and the box was placed ~0.1em below the mark it computes. */
 .stonetop-glyph--diamond,
 .stonetop-glyph--diamond-selected,
 .stonetop-glyph--arrow,
@@ -1087,6 +1091,7 @@ body {
 	height: 0.95em;
 	line-height: 1;
 	vertical-align: -0.125em;
+	overflow: hidden;
 	background: center / contain no-repeat;
 	color: transparent;
 	font-size: 1em;
@@ -1318,7 +1323,12 @@ figure.stonetop-map figcaption {
    that box (14px) rather than taken from the prose multiplier the base rule sets — the same
    thing the ○ block below has always done for the uses circle. Held apart from the multiplier
    on purpose: raising the prose glyph so it stops reading as a fallback-font ◇ is a decision
-   about running text, and it must not drag these marks off the controls they name. */
+   about running text, and it must not drag these marks off the controls they name.
+
+   Placed by the base rule's cap-band centring (bottom edge at 0.35em − height/2), worked from
+   the px box rather than written as a fixed em: the box is px and the font rem, so their ratio
+   moves with the UI Font Size, and the -0.04em above is that sum at a 16px root only (−0.10em at
+   14px). It holds because the base rule's `overflow: hidden` makes the bottom edge the baseline. */
 .tab-section--possessions [data-glyphs-wrapped] .stonetop-glyph--diamond,
 .tab-section--possessions [data-glyphs-wrapped] .stonetop-glyph--diamond-selected,
 .tab-section--possessions [data-glyphs-wrapped] .stonetop-glyph--checkbox,
@@ -1326,6 +1336,7 @@ figure.stonetop-map figcaption {
 .tab-section--possessions [data-glyphs-wrapped] .stonetop-glyph--arrow {
 	width:  calc(14px * var(--stonetop-font-scale, 1));
 	height: calc(14px * var(--stonetop-font-scale, 1));
+	vertical-align: calc(0.35em - 7px * var(--stonetop-font-scale, 1));
 }
 
 /* …except a ○, which is drawn as the uses circle it stands for rather than at the ◇ size.
@@ -14777,16 +14788,6 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	margin: 0;
 	font-size: var(--st-fs-base);
 	line-height: 1.4;
-}
-
-/* The prose ◇/□ marks (wrapStonetopGlyphsInEl) sat ~0.1em low here. The shared glyph rule places
-   its box by its BOTTOM edge (vertical-align: -0.125em, centring it on the cap band), but the
-   hidden ◇/□ character inside gives the inline-block a text baseline of its own, set by the
-   fallback symbol font, which dropped the box below that mark. overflow: hidden makes the box's
-   baseline its bottom edge, so the placement that rule computes is the one drawn. */
-.stonetop-outfit-dialog :is(.stonetop-glyph--diamond, .stonetop-glyph--diamond-selected,
-                            .stonetop-glyph--checkbox, .stonetop-glyph--checkbox-checked) {
-	overflow: hidden;
 }
 
 .stonetop-outfit-rule-note {
