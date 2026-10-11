@@ -175,11 +175,19 @@ export async function upsertPosterMapScene(map, img) {
 		const backdrop = hasLevels
 			? { levels: [{ name: map.name, background: { src: img.src, color: SCENE_BACKDROP }, textures: { fit: SCENE_FIT } }] }
 			: { background: { src: img.src, fit: SCENE_FIT }, backgroundColor: SCENE_BACKDROP };
+		// `active: false` said out loud, because leaving it out is not "inactive". In a world with
+		// no active Scene, core makes the first one created active and starts DRAWING it, without
+		// awaiting, and that draw sets the Scene viewed long before it makes the canvas's render
+		// queues: the poster texture is loaded in between. Every pin laid below then lands on a
+		// viewed Scene, core draws each one at once, and each throws reading the queue that is not
+		// there yet ("Cannot read properties of undefined (reading 'INTERFACE')"). Activation is
+		// done at the end instead, once the pins are down, so the draw finds them already there.
 		scene = await Scene.create({
 			name: map.name, navigation: true, navName: map.navName, navOrder: map.navOrder, sort: map.sort,
 			...backdrop,
 			width, height, padding: 0,
 			grid: { type: 0, size: 100 }, tokenVision: false,
+			active: false,
 			flags: { [SYSTEM_ID]: { posterMap: map.slug } },
 		});
 		created = true;
@@ -187,24 +195,43 @@ export async function upsertPosterMapScene(map, img) {
 		// One write on v13, where the background lives at the scene root; on v14 the artwork
 		// belongs to the level document and has to be its own update.
 		const level = hasLevels ? scene.levels?.contents?.[0] : null;
+		const redraws = scene.width !== width || scene.height !== height
+			|| ((hasLevels ? level : scene)?.background?.src ?? null) !== img.src;
 		await scene.update({
 			width, height, [`flags.${SYSTEM_ID}.posterMap`]: map.slug,
 			...(hasLevels ? {} : { "background.src": img.src }),
 		});
 		if (level) await level.update({ "background.src": img.src });
+		// The same race as the create above, for a Scene the GM is looking at: new geometry or
+		// artwork makes core redraw the viewed Scene without awaiting, and pins laid during that
+		// draw throw reading its render queues. Draws are queued one behind another, so awaiting
+		// one of our own waits out core's too.
+		if (redraws && scene.isView) await globalThis.canvas?.draw?.(scene);
 	}
 
 	// Two families, counted apart. Both the setup offer and the shipped macro report `pins` as
 	// the village map's lettered discs, which is all it has ever meant, so folding the markers
 	// into the same number would have a village map that carries eight pins reported as
 	// carrying fourteen.
-	const pins = await placeLetteredPins(scene, map, width, height);
-	const { created: markers } = await layMarkers(scene, map, width, height);
-	// Best-effort: a Scene with no thumbnail still works, it just looks bare in the sidebar.
+	let pins, markers;
 	try {
-		const thumb = await scene.createThumbnail();
-		if (thumb?.thumb) await scene.update({ thumb: thumb.thumb });
-	} catch (_) { /* thumbnails are cosmetic */ }
+		pins = await placeLetteredPins(scene, map, width, height);
+		({ created: markers } = await layMarkers(scene, map, width, height));
+		// Best-effort: a Scene with no thumbnail still works, it just looks bare in the sidebar.
+		try {
+			const thumb = await scene.createThumbnail();
+			if (thumb?.thumb) await scene.update({ thumb: thumb.thumb });
+		} catch (_) { /* thumbnails are cosmetic */ }
+	} finally {
+		// What core would have done at creation, done now that there is nothing left to write: a
+		// world with no active Scene opens on the first map built for it. See the create above.
+		// In a `finally` because core activated at creation whatever came after, and a later run
+		// finds this Scene already made and never gets here with `created` again.
+		if (created && !game.scenes?.active) {
+			try { await scene.activate(); }
+			catch (err) { error(`Poster maps: could not activate "${map.name}"`, err); }
+		}
+	}
 	return { created, pins, markers };
 }
 
