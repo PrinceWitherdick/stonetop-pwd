@@ -56,7 +56,8 @@ export async function ensurePackIndex(packName, fields = []) {
 		const asked = [...wanted];
 		try {
 			await index(asked);
-		} catch (err) {
+		} catch (firstErr) {
+			let err = firstErr;
 			// The union holds fields of callers still queued behind this one, and any of them may be
 			// the one the server rejects. Retried with only what last indexed plus this caller's own,
 			// so a bad field fails the caller that asked for it and nobody queued ahead of it.

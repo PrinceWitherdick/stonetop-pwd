@@ -13,6 +13,9 @@ import { stubAsk } from "../../fakes/confirm.js";
 import { invokeCardReduced, invokeCardChoosesConsequence } from "../../../module/actors/character/invoke-consequences.js";
 import { buildLiveCharacter } from "../../fakes/LiveCharacter.js";
 
+// Loaded at collection: the sheet's cold import is heavy enough to blow a test's 5s budget under a full parallel run.
+const { createStonetopCharacterSheetClass } = await import("../../../module/actors/character/StonetopCharacterSheet.js");
+
 // R7: the buttons two Invocations grow on the Invoke the Sun God card that names them. Bath of Healing
 // Light heals a patient, Go Back to the Shadow rolls at the spirits. And the holy relics on the Wielder
 // of the White Flame's "as a 10+" card.
@@ -708,7 +711,6 @@ describe("a follower's card heals with their NPC", () => {
 			activateListeners() {}
 			render = vi.fn();
 		};
-		const { createStonetopCharacterSheetClass } = await import("../../../module/actors/character/StonetopCharacterSheet.js");
 		actor.sheet = new (createStonetopCharacterSheetClass(Base))();
 		// An unset HP is a full box, as the tab draws it.
 		await expect(actor.sheet.followerCardHp("custom", "tovia")).resolves.toEqual({ max: 3, current: 3 });

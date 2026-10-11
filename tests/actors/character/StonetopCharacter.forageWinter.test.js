@@ -4,7 +4,10 @@
 // the player picked for the same winter does not count twice. Before this the player set it by hand.
 
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import { buildLiveCharacter } from "../../fakes/LiveCharacter.js";
+import { buildLiveCharacter, makeLiveItem } from "../../fakes/LiveCharacter.js";
+
+// Loaded at collection: the sheet's cold import is heavy enough to blow a test's 5s budget under a full parallel run.
+const { createStonetopCharacterSheetClass } = await import("../../../module/actors/character/StonetopCharacterSheet.js");
 
 // The steading as getStonetopSteadingActor finds it, with the clock stamped (or not).
 function steadingIn(season) {
@@ -144,8 +147,6 @@ describe("winter on On the Hoof", () => {
 	afterEach(() => { globalThis.Dialog = savedDialog; });
 
 	async function hoofWindow({ learned = true } = {}) {
-		const { createStonetopCharacterSheetClass } = await import("../../../module/actors/character/StonetopCharacterSheet.js");
-		const { makeLiveItem } = await import("../../fakes/LiveCharacter.js");
 		const { char, actor } = forager();
 		actor.items.push(makeLiveItem({ name: "On the Hoof", type: "move", system: { moveType: "playbook" }, flags: learned ? undefined : { "stonetop-pwd": { learned: false } } }));
 		actor.typedActor = char;
