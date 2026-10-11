@@ -698,6 +698,7 @@ Hooks.once("init", () => {
 		"stonetop.timeline-period":           "systems/stonetop-pwd/templates/dialogs/partials/timeline-period.hbs",
 		"stonetop.timeline-period-head":      "systems/stonetop-pwd/templates/dialogs/partials/timeline-period-head.hbs",
 		"stonetop.timeline-hperiod":          "systems/stonetop-pwd/templates/dialogs/partials/timeline-hperiod.hbs",
+		"stonetop.timeline-year-chip":        "systems/stonetop-pwd/templates/dialogs/partials/timeline-year-chip.hbs",
 		"stonetop.timeline-lane-head":        "systems/stonetop-pwd/templates/dialogs/partials/timeline-lane-head.hbs",
 		"stonetop.timeline-add-slot":         "systems/stonetop-pwd/templates/dialogs/partials/timeline-add-slot.hbs",
 		"stonetop.timeline-entry-tag":        "systems/stonetop-pwd/templates/dialogs/partials/timeline-entry-tag.hbs",

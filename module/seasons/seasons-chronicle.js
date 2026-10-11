@@ -55,10 +55,23 @@ export function cardinalWord(n) {
  * named its start reads "Ten Years Before Year One", never "Year -9".
  */
 export function yearLabel(year) {
+	const { count, tail } = yearLabelParts(year);
+	return tail ? `${count} ${tail}` : count;
+}
+
+/**
+ * `yearLabel` in its two halves: the COUNT a reader scans for ("Four Years", "Year Seven") and the
+ * TAIL that only says which side of play it is on ("Before Year One"; empty for a year of play). The
+ * timeline's year chips print the tail small (user, 2026-10-10: the long name took up a lot of
+ * room), so they take the halves; everything else reads `yearLabel`, built from these, so the two
+ * cannot drift. `tailShort` is the tail cut to "BYO", for the chip in a season's own heading (user,
+ * 2026-10-10), where the year sits beside the season's name and room is tightest.
+ */
+export function yearLabelParts(year) {
 	const shown = displayYear(year);
-	if (shown >= 1) return `Year ${cardinalWord(shown)}`;
+	if (shown >= 1) return { count: `Year ${cardinalWord(shown)}`, tail: "", tailShort: "" };
 	const before = 1 - shown;
-	return `${cardinalWord(before)} ${before === 1 ? "Year" : "Years"} Before Year One`;
+	return { count: `${cardinalWord(before)} ${before === 1 ? "Year" : "Years"}`, tail: "Before Year One", tailShort: "BYO" };
 }
 
 // Find (or create) the "Seasons Change" journal in the Chronicle folder, reusing the

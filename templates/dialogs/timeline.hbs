@@ -234,8 +234,11 @@
 		{{#if single}}
 			{{#if horizontal}}
 				{{!-- A column per season, and a narrow one before each season that opens a year for
-				      its separator (timeline-hperiod.hbs). --}}
-				<ol class="stonetop-timeline-htrack" style="--timeline-hcols:{{#each timeline.periods}}{{#if startsYear}} auto{{/if}}{{#unless ageMark}} minmax(15rem, 19rem){{/unless}}{{/each}};">
+				      its separator (timeline-hperiod.hbs). A season's column is never narrower than its
+				      own heading (`min-content`; the 15rem floor is the period's `min-width`): a year
+				      before play names itself at length ("Four Years Before Year One"), and a fixed
+				      15rem let that pill run on over the next year's separator (user, 2026-10-10). --}}
+				<ol class="stonetop-timeline-htrack" style="--timeline-hcols:{{#each timeline.periods}}{{#if startsYear}} auto{{/if}}{{#unless ageMark}} minmax(min-content, 19rem){{/unless}}{{/each}};">
 					{{#each timeline.periods}}{{> "stonetop.timeline-hperiod"}}{{/each}}
 				</ol>
 			{{else}}
@@ -252,11 +255,13 @@
 				      A YEAR SEPARATOR opens each year as the year heading does read down (user,
 				      2026-10-04): a narrow column of its own, the year's chip in the heads row and a red
 				      rule down through every thread. `--timeline-swim-cols` gives it the column, and each
-				      thread's row a rule cell in it, so the grid's columns stay one per cell. --}}
-				<div class="stonetop-timeline-swim" style="--timeline-swim-cols: 15rem{{#each timeline.periods}}{{#if startsYear}} auto{{/if}}{{#unless ageMark}} minmax(15rem, 1fr){{/unless}}{{/each}};">
+				      thread's row a rule cell in it, so the grid's columns stay one per cell.
+				      A season's column is never narrower than its head (`min-content`, floored at 15rem
+				      by the head's `min-width`), as on the single thread's line above. --}}
+				<div class="stonetop-timeline-swim" style="--timeline-swim-cols: 15rem{{#each timeline.periods}}{{#if startsYear}} auto{{/if}}{{#unless ageMark}} minmax(min-content, 1fr){{/unless}}{{/each}};">
 					{{#each timeline.periods}}
 					{{#if startsYear}}
-					<h2 class="stonetop-timeline-swim-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-year-chip">{{yearLabel}}</span></h2>
+					<h2 class="stonetop-timeline-swim-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}>{{> stonetop.timeline-year-chip}}</h2>
 					{{/if}}
 					{{!-- An Age's bare year (timeline-view.js#withAgeMarks) is its separator alone. --}}
 					{{#unless ageMark}}
@@ -302,7 +307,7 @@
 
 					{{#each timeline.periods}}
 					{{#if startsYear}}
-					<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell"><span class="stonetop-year-chip">{{yearLabel}}</span></span></h2>
+					<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell">{{> stonetop.timeline-year-chip}}</span></h2>
 					{{/if}}
 					{{!-- An Age's bare year is its heading alone. --}}
 					{{#unless ageMark}}

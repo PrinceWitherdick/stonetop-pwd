@@ -16,8 +16,7 @@
 // season-inks-exclusive.
 
 import { SEASON_IDS, seasonLabel } from "../seasons/seasons-change-reminders.js";
-import { yearLabel } from "../seasons/seasons-chronicle.js";
-import { yearsAgo } from "../seasons/campaign-year.js";
+import { yearLabel, yearLabelParts } from "../seasons/seasons-chronicle.js";
 import { periodLabel } from "../seasons/current-season.js";
 import { localize, format } from "../utils/i18n.js";
 import { enrichHTML } from "../utils/foundry-compat.js";
@@ -226,21 +225,6 @@ function noteHasRoom(note) {
 }
 
 /**
- * How long before now a period from BEFORE PLAY was: "10 years ago". Only history wears it (a stored
- * year below 1); a season the table played through is placed by its own date, and every one of them
- * saying how long ago it was would bury the headings in arithmetic.
- *
- * @param {number|null} year     The period's stored year; null for the undated block.
- * @param {number}      nowYear  The stored year the clock is in.
- */
-export function agoLabel(year, nowYear) {
-	if (year === null || year >= 1) return "";
-	// The clock never reads below 1, so a year from before play is always at least one year back.
-	const back = Math.max(1, yearsAgo(year, nowYear));
-	return back === 1 ? localize("stonetop.timeline.yearAgo") : format("stonetop.timeline.yearsAgo", { count: back });
-}
-
-/**
  * The "+ Add" slot at the foot of one season's cards (timeline-add-slot.hbs): where an entry written
  * into that season lands, since `addEntry` appends. It hands the season back to the window's
  * listener, which opens the entry dialog on it; on the aggregate it names its thread too, and the
@@ -269,6 +253,7 @@ function addSlotVM(period, { trackId = "", name = "" } = {}, when = periodLabel(
 function periodVM(period, entries, opts, seasonNotes = []) {
 	const undated = period.key === UNDATED_PERIOD_KEY;
 	const label = periodLabel(period);
+	const year = undated ? null : yearLabelParts(period.year);
 	return {
 		key:         period.key,
 		label,
@@ -276,7 +261,10 @@ function periodVM(period, entries, opts, seasonNotes = []) {
 		seasonLabel: period.season ? seasonLabel(period.season)
 			: (period.yearOnly ? localize("stonetop.timeline.seasonUnknown") : ""),
 		yearLabel:   undated ? "" : yearLabel(period.year),
-		agoLabel:    undated ? "" : agoLabel(period.year, opts.nowYear ?? 1),
+		// The chips print it in two halves, the tail ("Before Year One") small (yearLabelParts).
+		yearCount:   year?.count ?? "",
+		yearTail:    year?.tail ?? "",
+		yearTailShort: year?.tailShort ?? "",
 		// null for the undated block: 0 is a real year (the one before play began).
 		year:        undated ? null : period.year,
 		yearOnly:    !!period.yearOnly,
@@ -377,10 +365,9 @@ export function withGhostNow(periods, now = null) {
  * toolbar's "N slain" chip came off at the user's request, 2026-10-03); it is kept for when it returns.
  *
  * @param {{trackId, name, entries, actor?}} track
- * @param {{canEdit?: boolean, hidden?: string[], tags?: Array, nowYear?: number, ageYears?: number[], ghostNow?: object}} [opts]
+ * @param {{canEdit?: boolean, hidden?: string[], tags?: Array, ageYears?: number[], ghostNow?: object}} [opts]
  *        `tags` = the world's custom tags (timeline-tag-store.js#worldCustomTags); a typed row wearing
- *        one it cannot find wears none. `nowYear` = the clock's stored year, which history's "N years
- *        ago" counts from. `ageYears` = the stored years an Age starts or ends in, each given a bare
+ *        one it cannot find wears none. `ageYears` = the stored years an Age starts or ends in, each given a bare
  *        year if nothing is written in it (timeline-ages.js#ageMarkYears). `ghostNow` = the clock's
  *        {season, year}, drawn as an empty ghost season for a writer when nothing is filed in it.
  */
@@ -448,7 +435,7 @@ export function buildTrackVM(track, opts = {}) {
  *
  * @param {Array<{trackId, name, entries, actor?}>} tracks
  * @param {{canEdit?: (trackId: string) => boolean, hidden?: string[], hiddenTracks?: string[],
- *          tags?: Array, nowYear?: number, ageYears?: number[], ghostNow?: object}} [opts]
+ *          tags?: Array, ageYears?: number[], ghostNow?: object}} [opts]
  *        `ageYears` and `ghostNow` as buildTrackVM's.
  */
 export function buildAggregateVM(allTracks = [], opts = {}) {
@@ -506,7 +493,7 @@ export function buildAggregateVM(allTracks = [], opts = {}) {
 	const withGhost = withGhostNow([...byKey.values()], ghostNow);
 	const hasGhost = withGhost.some(period => period.ghost);
 	const periods = markYearsAndSides(withAgeMarks(withGhost, opts.ageYears).map(period => {
-		const block = periodVM(period, [], { nowYear: opts.nowYear }, notesByKey.get(period.key) ?? []);
+		const block = periodVM(period, [], {}, notesByKey.get(period.key) ?? []);
 		return {
 			...block,
 			// The lane, not the block, holds the cards here: a row of this table is one season across

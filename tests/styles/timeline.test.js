@@ -246,9 +246,9 @@ describe("the aggregate's columns", () => {
 	// User, 2026-10-03: the year rides in the shared year chip, at the heading's own size.
 	it("puts the vertical year heading in the year chip, full size", () => {
 		expect(readRepo("templates/dialogs/partials/timeline-period.hbs"))
-			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-year-chip">{{yearLabel}}</span></h2>');
+			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}>{{> stonetop.timeline-year-chip}}</h2>');
 		expect(readRepo("templates/dialogs/timeline.hbs"))
-			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell"><span class="stonetop-year-chip">{{yearLabel}}</span></span></h2>');
+			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell">{{> stonetop.timeline-year-chip}}</span></h2>');
 		expect(value(".stonetop-timeline-year .stonetop-year-chip", "font-size")).toBe("inherit");
 	});
 
@@ -257,7 +257,8 @@ describe("the aggregate's columns", () => {
 	it("centres the board's year chip over the season column", () => {
 		expect(value(".stonetop-timeline-year-cell", "position")).toBe("sticky");
 		expect(value(".stonetop-timeline-year-cell", "left")).toBe("0");
-		expect(value(".stonetop-timeline-year-cell", "justify-content")).toBe("center");
+		// SAFE: a chip wider than the cell (a year before play) starts at its left, never off-screen.
+		expect(value(".stonetop-timeline-year-cell", "justify-content")).toBe("safe center");
 		expect(value(".stonetop-timeline-year-cell", "width")).toBe(value(".stonetop-timeline-row-head", "width"));
 		expect(value(".stonetop-timeline-year-cell .stonetop-year-chip", "position")).toBe("static");
 	});

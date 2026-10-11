@@ -174,6 +174,7 @@ describe("every shape draws the slot", () => {
 	hbs.registerPartial("stonetop.timeline-lane-head", "");
 	hbs.registerPartial("stonetop.timeline-period", readRepo("templates/dialogs/partials/timeline-period.hbs"));
 	hbs.registerPartial("stonetop.timeline-hperiod", readRepo("templates/dialogs/partials/timeline-hperiod.hbs"));
+	hbs.registerPartial("stonetop.timeline-year-chip", readRepo("templates/dialogs/partials/timeline-year-chip.hbs"));
 	const window = hbs.compile(readRepo("templates/dialogs/timeline.hbs"));
 	const page = hbs.compile(readRepo("templates/journal/timeline-page.hbs"));
 

@@ -19,6 +19,7 @@ const TEMPLATES = [
 	"templates/dialogs/partials/timeline-period.hbs",
 	"templates/dialogs/partials/timeline-period-head.hbs",
 	"templates/dialogs/partials/timeline-hperiod.hbs",
+	"templates/dialogs/partials/timeline-year-chip.hbs",
 	"templates/dialogs/partials/timeline-lane-head.hbs",
 	"templates/dialogs/partials/timeline-add-slot.hbs",
 	"templates/dialogs/partials/timeline-entry-tag.hbs",
@@ -102,7 +103,7 @@ describe("a Seasons Change inside its season's heading", () => {
 		hb.registerHelper("localize", key => key);
 		return hb.compile(readRepo("templates/dialogs/partials/timeline-period-head.hbs"))(period);
 	};
-	const period = (notes) => ({ seasonLabel: "Spring", yearLabel: "Year One", glyphClass: "", seasonNotes: notes });
+	const period = (notes) => ({ seasonLabel: "Spring", yearLabel: "Year One", yearCount: "Year One", yearTail: "", glyphClass: "", seasonNotes: notes });
 
 	// On the aggregate the heading sits in no lane, so the note carries its own thread for the
 	// window's listener, and its own row id for Edit and Remove.

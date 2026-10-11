@@ -19,7 +19,7 @@
 
       Context: one period view-model (timeline-view.js#periodVM). --}}
 {{#if startsYear}}
-<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-year-chip">{{yearLabel}}</span></h2>
+<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}>{{> stonetop.timeline-year-chip}}</h2>
 {{/if}}
 {{#unless ageMark}}
 <section class="stonetop-timeline-period{{#if ghost}} stonetop-timeline-period--ghost{{/if}}" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>

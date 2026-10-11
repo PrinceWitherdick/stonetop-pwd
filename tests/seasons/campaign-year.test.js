@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
 	MIN_HISTORY_YEAR, displayYear, historyYear, normalizeStartYear, startYear, startYearFor, storedYear, yearsAgo,
 } from "../../module/seasons/campaign-year.js";
-import { yearLabel } from "../../module/seasons/seasons-chronicle.js";
+import { yearLabel, yearLabelParts } from "../../module/seasons/seasons-chronicle.js";
 import { periodLabel } from "../../module/seasons/current-season.js";
 import { campaignYearPreview } from "../../module/seasons/campaign-year-dialog.js";
 import { planYearPageRenames } from "../../module/migration/season-year-page-names.js";
-import { agoLabel, buildAggregateVM, buildTrackVM } from "../../module/timeline/timeline-view.js";
+import { buildAggregateVM, buildTrackVM } from "../../module/timeline/timeline-view.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { readRepo } from "../fakes/css.js";
 
@@ -58,6 +58,15 @@ describe("yearLabel", () => {
 	it("counts back from Year One for a year before play in an unnamed world", () => {
 		expect(yearLabel(0)).toBe("One Year Before Year One");
 		expect(yearLabel(-9)).toBe("Ten Years Before Year One");
+	});
+
+	// The timeline's chips print the tail small (user, 2026-10-10), so they take the label in halves.
+	it("splits the label into the count and the side of play it is on", () => {
+		expect(yearLabelParts(-3)).toEqual({ count: "Four Years", tail: "Before Year One", tailShort: "BYO" });
+		expect(yearLabelParts(0)).toEqual({ count: "One Year", tail: "Before Year One", tailShort: "BYO" });
+		expect(yearLabelParts(2)).toEqual({ count: "Year Two", tail: "", tailShort: "" });
+		worldStartingIn(1247);
+		expect(yearLabelParts(-9)).toEqual({ count: "Year 1237", tail: "", tailShort: "" });
 	});
 
 	it("names a timeline period whose season nobody knows by its year alone", () => {
@@ -153,26 +162,18 @@ describe("the timeline's history", () => {
 
 	beforeEach(() => worldStartingIn(1247));
 
-	it("says how long ago a year before play was, and only then", () => {
-		expect(agoLabel(-9, 3)).toBe("stonetop.timeline.yearsAgo");
-		expect(agoLabel(0, 1)).toBe("stonetop.timeline.yearAgo");
-		expect(agoLabel(2, 3)).toBe("");
-		expect(agoLabel(null, 3)).toBe("");
-	});
-
 	it("files history first, a year with no season under its own heading", () => {
 		const vm = buildTrackVM({ trackId: "s", name: "Stonetop", entries: [
 			entry({ id: "now" }),
 			entry({ id: "lost", year: -9, season: "", yearOnly: true, title: "The Forest Folk vanish" }),
 			entry({ id: "undated", season: "", title: "Nobody knows when" }),
-		] }, { nowYear: 1 });
+		] });
 		expect(vm.periods.map(p => p.key)).toEqual(["undated", "-9:year", "1:spring"]);
 		const lost = vm.periods[1];
 		expect(lost).toMatchObject({
 			yearLabel: "Year 1237", year: -9, yearOnly: true, startsYear: true, undated: false,
 			seasonLabel: "stonetop.timeline.seasonUnknown", glyphClass: "",
 		});
-		expect(lost.agoLabel).toBe("stonetop.timeline.yearsAgo");
 		expect(vm.periods[0]).toMatchObject({ year: null, undated: true, startsYear: false });
 	});
 
@@ -181,12 +182,16 @@ describe("the timeline's history", () => {
 		const vm = buildAggregateVM([{ trackId: "s", name: "Stonetop", entries: [
 			entry({ id: "a", year: 0, season: "winter" }),
 			entry({ id: "b", year: 1, season: "spring" }),
-		] }], { nowYear: 1 });
+		] }]);
 		expect(vm.periods.map(p => [p.year, p.startsYear])).toEqual([[0, true], [1, true]]);
-		expect(vm.periods[0].agoLabel).toBe("stonetop.timeline.yearAgo");
 	});
 
-	it("prints the ago note in the period's year chip", () => {
-		expect(readRepo("templates/dialogs/partials/timeline-period-head.hbs")).toContain("{{#if agoLabel}}");
+	// User, 2026-10-10: the season chips said "· 6 years ago" too; "we don't need that".
+	it("prints the year alone in the season's chip, with no years-ago note", () => {
+		const head = readRepo("templates/dialogs/partials/timeline-period-head.hbs");
+		expect(head).not.toContain("agoLabel");
+		expect(head).not.toContain("&middot;");
+		const vm = buildTrackVM({ trackId: "s", name: "Stonetop", entries: [entry({ year: -5, season: "spring" })] });
+		expect(vm.periods[0]).not.toHaveProperty("agoLabel");
 	});
 });

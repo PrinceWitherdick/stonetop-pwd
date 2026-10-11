@@ -30,7 +30,7 @@
       Context: one period view-model (timeline-view.js#periodVM). --}}
 {{#if startsYear}}
 <li class="stonetop-timeline-hyear" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}>
-	<h2 class="stonetop-timeline-hyear-node"><span class="stonetop-year-chip">{{yearLabel}}</span></h2>
+	<h2 class="stonetop-timeline-hyear-node">{{> stonetop.timeline-year-chip}}</h2>
 </li>
 {{/if}}
 {{#unless ageMark}}

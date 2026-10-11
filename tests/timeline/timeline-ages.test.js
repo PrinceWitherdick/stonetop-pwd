@@ -221,8 +221,8 @@ describe("an Age's bare years", () => {
 
 	it("draws the separator alone in all four shapes, and gives no bare year a season column", () => {
 		const main = readRepo("templates/dialogs/timeline.hbs");
-		expect(main).toContain("{{#if startsYear}} auto{{/if}}{{#unless ageMark}} minmax(15rem, 19rem){{/unless}}");
-		expect(main).toContain("{{#if startsYear}} auto{{/if}}{{#unless ageMark}} minmax(15rem, 1fr){{/unless}}");
+		expect(main).toContain("{{#if startsYear}} auto{{/if}}{{#unless ageMark}} minmax(min-content, 19rem){{/unless}}");
+		expect(main).toContain("{{#if startsYear}} auto{{/if}}{{#unless ageMark}} minmax(min-content, 1fr){{/unless}}");
 		expect(main.match(/\{\{#unless ageMark\}\}/g).length).toBeGreaterThanOrEqual(5);
 		expect(readRepo("templates/dialogs/partials/timeline-hperiod.hbs")).toMatch(/\{\{#unless ageMark\}\}\s*<li class="stonetop-timeline-hperiod/);
 		expect(readRepo("templates/dialogs/partials/timeline-period.hbs")).toMatch(/\{\{#unless ageMark\}\}\s*<section class="stonetop-timeline-period[{"]/);

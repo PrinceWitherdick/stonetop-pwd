@@ -354,10 +354,8 @@ export class TimelineWindow extends StonetopDialog {
 		// The reader's filter is applied INSIDE the builders, before periods are formed, so a season
 		// holding nothing but hidden rows leaves no empty block or column behind. Totals (kills,
 		// counts) are of everything, hidden or not.
-		// The clock's year, which history counts "N years ago" from.
-		// The clock's season is also the ghost a writer can add to when nothing is filed in it yet.
+		// The clock's season: the ghost a writer can add to when nothing is filed in it yet.
 		const now = timelineNow();
-		const nowYear = now.year;
 		// The world's Ages, and whether this reader has their bands off: one more thing hidden. Each
 		// shown Age's first and last years are opened even with nothing written in them, so every
 		// Age has a band to draw.
@@ -365,8 +363,8 @@ export class TimelineWindow extends StonetopDialog {
 		const showAges = getTimelineShowAges();
 		const ageYears = showAges ? ageMarkYears(worldAges) : [];
 		const vm = single
-			? buildTrackVM(tracks[0], { canEdit: this._canEdit(this._trackId), hidden, tags, nowYear, ageYears, ghostNow: now })
-			: buildAggregateVM(tracks, { canEdit: (id) => this._canEdit(id), hidden, hiddenTracks, tags, nowYear, ageYears, ghostNow: now });
+			? buildTrackVM(tracks[0], { canEdit: this._canEdit(this._trackId), hidden, tags, ageYears, ghostNow: now })
+			: buildAggregateVM(tracks, { canEdit: (id) => this._canEdit(id), hidden, hiddenTracks, tags, ageYears, ghostNow: now });
 		const hiddenCount = hidden.length + hiddenTracks.length + (worldAges.length && !showAges ? 1 : 0);
 
 		// Enriched after the model is built rather than inside it, and by the shared walker rather

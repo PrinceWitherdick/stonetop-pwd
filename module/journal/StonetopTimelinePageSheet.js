@@ -11,7 +11,6 @@
 import { buildTrackVM, enrichTrackVM } from "../timeline/timeline-view.js";
 import { sortEntries } from "../timeline/timeline-core.js";
 import { worldCustomTags } from "../timeline/timeline-tag-store.js";
-import { timelineNow } from "../timeline/timeline-record.js";
 import { adoptInlineViewRoot } from "./inline-page-view.js";
 import { isTimelineShown } from "../settings.js";
 
@@ -47,7 +46,7 @@ export function createStonetopTimelinePageSheetClass(Base) {
 				trackId: this.document.system?.trackId ?? "",
 				name:    this.document.name,
 				entries: sortEntries(this.document.system?.entries ?? []),
-			}, { tags: worldCustomTags(this.document.parent), nowYear: timelineNow().year });
+			}, { tags: worldCustomTags(this.document.parent) });
 
 			// Enriched in place rather than inside buildTrackVM, and by the same walker the window
 			// uses: the view model is pure so the tab and the window can build it without awaiting

@@ -50384,14 +50384,17 @@ html.stonetop-high-contrast .stonetop-timeline-ages {
 /* ON THE BOARD THE CHIP IS CENTRED OVER THE SEASON COLUMN (user, 2026-10-03: "center the year chip
    horizontally to the season names below"). It rides in a cell the season column's width (the
    gutter, below), and the CELL is what pins at the left, so the chip stays centred over the pinned
-   season cells while the board is dragged across. */
+   season cells while the board is dragged across.
+   SAFE centring: a year before play names itself at length ("Four Years Before Year One"), wider
+   than the cell, and plain centring spilled it off BOTH sides, half of it past the window's left
+   edge (2026-10-10). Too wide, it starts at the cell's left and runs on over the rule instead. */
 .stonetop-timeline-year-cell {
 	position: sticky;
 	left: 0;
 	/* In front of the names row, with the season cells (3, below). */
 	z-index: 3;
 	display: flex;
-	justify-content: center;
+	justify-content: safe center;
 }
 
 .stonetop-timeline-year-cell .stonetop-year-chip {
@@ -50810,6 +50813,15 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	color: var(--st-text);
 }
 
+/* The year chip WRAPS inside the cell. The column is a fixed 170px (the board's width is summed from
+   it), and a year before play names itself at length ("Four Years Before Year One"),
+   which ran out past the cell over the first lane (user, 2026-10-10). */
+.stonetop-timeline-row-head .stonetop-year-chip {
+	max-width: 100%;
+	white-space: normal;
+	text-wrap: balance;
+}
+
 /* THE SEASON COLUMN STAYS ON SCREEN (user, 2026-10-03). A board of many threads is wider than the
    window and is dragged across; pinned at the left, the season cell (and the blank corner above it
    in the names row) stays put while the lanes slide under, as the swimlanes' thread names do. So
@@ -50918,11 +50930,15 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	column-gap: 0;
 }
 
+/* The 15rem floor of the season's column. The column itself is `minmax(min-content, 19rem)` (the
+   template), so it grows past the floor only when its heading needs the room: a year before play
+   names itself at length, and a fixed column let that pill run on over the next year's separator
+   (user, 2026-10-10). */
 .stonetop-timeline-hperiod {
 	grid-row: 1 / -1;
 	display: grid;
 	grid-template-rows: subgrid;
-	min-width: 0;
+	min-width: 15rem;
 	padding: 0 8px;
 }
 
@@ -51073,10 +51089,13 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	grid-column-start: 2;
 }
 
+/* The 15rem floor of the season's column, which is `minmax(min-content, 1fr)` (the template): wider
+   only when this head needs it, as on the single thread's line (`.stonetop-timeline-hperiod`). */
 .stonetop-timeline-swim-head {
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	min-width: 15rem;
 	padding: 8px 10px;
 	border-radius: var(--st-radius);
 	background: linear-gradient(var(--st-warm-hover-bg), var(--st-warm-hover-bg)), var(--stonetop-bg);
@@ -51136,6 +51155,19 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	padding-inline: 0.55em;
 	font-size: inherit;
 	color: var(--st-text);
+}
+
+/* A YEAR BEFORE PLAY PRINTS ITS TAIL SMALL: "Four Years" at the chip's size, "Before Year One" much
+   smaller (user, 2026-10-10: the whole name at full size was long-winded and took up a lot of room).
+   Every timeline chip wears it (timeline-view.js#periodVM splits the label). Half the chip's size,
+   floored in rem so it stays readable where the chip is already small (the season heading's) and
+   grows with Foundry's Font Size setting; same ink as the count, for a reader on a magnifier. One
+   unbroken piece, so a chip that wraps (the aggregate's row head) drops the whole tail to a line. */
+.stonetop-year-chip-tail {
+	font-size: max(0.55em, 0.8rem);
+	font-weight: inherit;
+	color: inherit;
+	white-space: nowrap;
 }
 
 /* -- The season headings, each in its season's colour ---------------------------
