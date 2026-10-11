@@ -69,8 +69,20 @@ describe("threat doom track: ticks do not race each other", () => {
 
 	it("ignores an index off the end of the track", async () => {
 		const page = fakePage({ grimPortents: [{ text: "a", done: false }], impendingDoom: { text: "", done: false } });
-		await setPortentDone(page, 3, true);
-		await setPortentDone(page, -1, true);
+		expect(await setPortentDone(page, 3, true)).toBe(false);
+		expect(await setPortentDone(page, -1, true)).toBe(false);
 		expect(page.writes).toEqual([]);
+	});
+
+	// What the timeline prompt is gated on: a stale checkbox (another GM's window got there first)
+	// changes nothing, so it must not ask to put anything on the timeline.
+	it("says whether it wrote, and writes nothing for a box that already reads that way", async () => {
+		const page = fakePage({ grimPortents: [{ text: "a", done: true }], impendingDoom: { text: "b", done: true } });
+		expect(await setPortentDone(page, 0, true)).toBe(false);
+		expect(await setDoomDone(page, true)).toBe(false);
+		expect(page.writes).toEqual([]);
+		expect(await setPortentDone(page, 0, false)).toBe(true);
+		expect(await setDoomDone(page, false)).toBe(true);
+		expect(page.writes).toHaveLength(2);
 	});
 });

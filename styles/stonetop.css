@@ -516,6 +516,11 @@
 	--st-timeline-kind-wound:      #7c300a;
 	--st-timeline-kind-arcana:     #7b31a7;
 	--st-timeline-kind-follower:   #9a276a;
+	--st-timeline-kind-improvement:#2a6026;
+	--st-timeline-kind-deed:       #3e3fa0;
+	--st-timeline-kind-disaster:   #8b1d41;
+	--st-timeline-kind-treasure:   #5d5a10;
+	--st-timeline-kind-threat:     #3b4a55;
 	/* How much of its colour a kind's card and chip are washed with. Zero under the high-contrast
 	   skins, whose cards are bare paper. */
 	--st-timeline-card-wash: 5%;
@@ -50518,6 +50523,11 @@ html.stonetop-high-contrast .stonetop-timeline-ages {
 .stonetop-timeline-kind--wound      { --tl-kind: var(--st-timeline-kind-wound); }
 .stonetop-timeline-kind--arcana     { --tl-kind: var(--st-timeline-kind-arcana); }
 .stonetop-timeline-kind--follower   { --tl-kind: var(--st-timeline-kind-follower); }
+.stonetop-timeline-kind--improvement{ --tl-kind: var(--st-timeline-kind-improvement); }
+.stonetop-timeline-kind--deed       { --tl-kind: var(--st-timeline-kind-deed); }
+.stonetop-timeline-kind--disaster   { --tl-kind: var(--st-timeline-kind-disaster); }
+.stonetop-timeline-kind--treasure   { --tl-kind: var(--st-timeline-kind-treasure); }
+.stonetop-timeline-kind--threat     { --tl-kind: var(--st-timeline-kind-threat); }
 
 /* A CUSTOM TAG's colour, which the table chose and so no token holds. The element carries it as
    four custom properties, one per skin, each already walked to read on that skin's paper
@@ -51789,7 +51799,7 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	--st-warm-hover-bg: rgba(235, 228, 214, 0.08);
 
 	/* The timeline's kinds, lifted for the dark page (see their note in the first :root): the
-	   same eight hues, each walked up to 4.5:1 or past on the panel, a card and its chip's tint,
+	   same hues, each walked up to 4.5:1 or past on the panel, a card and its chip's tint,
 	   on Slate's papers as well as these (Slate wears this block). Death goes to ASH here, not the near-white its light-paper charcoal would invert to, which
 	   was the bone of the ink ramp and read as a row with no colour at all. */
 	--st-timeline-kind-levelup:    #dcaa20;
@@ -51800,6 +51810,11 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	--st-timeline-kind-wound:      #f2a46e;
 	--st-timeline-kind-arcana:     #bca8f4;
 	--st-timeline-kind-follower:   #f1bcdd;
+	--st-timeline-kind-improvement:#8fd17f;
+	--st-timeline-kind-deed:       #b0b3f5;
+	--st-timeline-kind-disaster:   #f59ab5;
+	--st-timeline-kind-treasure:   #d6cf62;
+	--st-timeline-kind-threat:     #a9bccb;
 
 	/* The timeline's seasons, lifted for the dark page (see their note in the first :root). */
 	--st-timeline-season-spring: #79bd63;
@@ -52237,6 +52252,11 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	--st-timeline-kind-wound:      #f2aa86;
 	--st-timeline-kind-arcana:     #c794e4;
 	--st-timeline-kind-follower:   #e6a8cc;
+	--st-timeline-kind-improvement:#8fd17f;
+	--st-timeline-kind-deed:       #b0b3f5;
+	--st-timeline-kind-disaster:   #f59ab5;
+	--st-timeline-kind-treasure:   #d6cf62;
+	--st-timeline-kind-threat:     #a9bccb;
 	--st-timeline-card-wash: 0%;
 	--st-timeline-chip-wash: 0%;
 	/* The timeline's seasons on the darker page, with a lighter tint: the edge does the work. */
@@ -52515,6 +52535,11 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	--st-timeline-kind-wound:      #772e0a;
 	--st-timeline-kind-arcana:     #7a30a5;
 	--st-timeline-kind-follower:   #972668;
+	--st-timeline-kind-improvement:#2a6026;
+	--st-timeline-kind-deed:       #3e3fa0;
+	--st-timeline-kind-disaster:   #8b1d41;
+	--st-timeline-kind-treasure:   #59560f;
+	--st-timeline-kind-threat:     #3b4a55;
 	--st-timeline-card-wash: 0%;
 	--st-timeline-chip-wash: 0%;
 	/* The timeline's seasons at 7:1 on white, under a lighter tint: the edge does the work. */

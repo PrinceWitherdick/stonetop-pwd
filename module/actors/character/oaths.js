@@ -27,6 +27,7 @@
 
 import { ownsMoveNamed, ownsAnyMoveNamed } from "./owns-move.js";
 import { createRoster, showStandingList } from "./marked-people.js";
+import { coerceBroken } from "./oath-broken.js";
 
 // Re-exported so the dialog and this move's tests keep reaching the predicate through the feature
 // module they already import.
@@ -34,15 +35,6 @@ export { ownsMoveNamed };
 
 export const OATHS_FLAG          = "oaths";
 export const BINDING_ARBITRATION = "Binding Arbitration";
-
-/**
- * A stored `broken`, as a hard boolean. Only an explicit yes reads as broken: this drives an
- * advantage claim, and a hand-edited world holding the string "false" must not read as "they broke
- * it" (a plain `!!raw` called that string true).
- */
-function coerceBroken(raw) {
-	return raw === true || raw === 1 || String(raw ?? "").trim().toLowerCase() === "true";
-}
 
 const roster = createRoster({
 	prefix: "oath",

@@ -48,7 +48,10 @@ const YEAR_ONLY_PERIOD = "year";
  * And a new source must be added HERE, or `normalizeEntry` files every row it writes as hand-typed.
  */
 export const TIMELINE_SOURCES = [
-	"hand", "season", "levelup", "kills", "expedition", "site", "death", "wound", "arcana", "follower",
+	"hand", "season", "levelup", "deed", "kills", "expedition", "site", "death", "wound", "arcana", "treasure", "follower",
+	// Stonetop's own (user, 2026-10-10): an improvement built or lost, a Disaster's cost, a threat's
+	// doom or portent come to pass.
+	"improvement", "disaster", "threat",
 ];
 
 /** The source of the one row per season that collects a character's kills. See `addKills`. */

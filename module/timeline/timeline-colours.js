@@ -30,7 +30,7 @@ import { isDarkPalette } from "../utils/palette.js";
  * ⚠ ORDER IS THE DIALOG'S ORDER, which is the Show menu's (TIMELINE_CARD_SOURCES, minus `hand`).
  */
 export const TIMELINE_COLOUR_KINDS = Object.freeze([
-	"levelup", "kills", "expedition", "site", "death", "wound", "arcana", "follower",
+	"levelup", "deed", "kills", "expedition", "site", "death", "wound", "arcana", "treasure", "follower", "improvement", "disaster", "threat",
 ]);
 
 /** The four skins a colour has to read on, in the order the generated CSS writes them. */
@@ -50,6 +50,11 @@ export const TIMELINE_KIND_PALETTE = Object.freeze({
 	wound:      Object.freeze({ light: "#7c300a", dark: "#f2a46e", lightHigh: "#772e0a", darkHigh: "#f2aa86" }),
 	arcana:     Object.freeze({ light: "#7b31a7", dark: "#bca8f4", lightHigh: "#7a30a5", darkHigh: "#c794e4" }),
 	follower:   Object.freeze({ light: "#9a276a", dark: "#f1bcdd", lightHigh: "#972668", darkHigh: "#e6a8cc" }),
+	improvement:Object.freeze({ light: "#2a6026", dark: "#8fd17f", lightHigh: "#2a6026", darkHigh: "#8fd17f" }),
+	deed:       Object.freeze({ light: "#3e3fa0", dark: "#b0b3f5", lightHigh: "#3e3fa0", darkHigh: "#b0b3f5" }),
+	disaster:   Object.freeze({ light: "#8b1d41", dark: "#f59ab5", lightHigh: "#8b1d41", darkHigh: "#f59ab5" }),
+	treasure:   Object.freeze({ light: "#5d5a10", dark: "#d6cf62", lightHigh: "#59560f", darkHigh: "#d6cf62" }),
+	threat:     Object.freeze({ light: "#3b4a55", dark: "#a9bccb", lightHigh: "#3b4a55", darkHigh: "#a9bccb" }),
 });
 
 /**

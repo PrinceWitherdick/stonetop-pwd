@@ -66,8 +66,16 @@ describe("writing after an update", () => {
 		const [target, milestones] = recordMilestones.mock.calls[0];
 		expect(target).toBe(actor);
 		expect(milestones).toEqual([{
-			source: "levelup", key: "levelup:3", title: "Reached level 3", body: "Learned Seasoned Warrior.",
+			source: "levelup", key: "levelup:3", title: "Reached level 3", body: "<p>Learned Seasoned Warrior.</p>",
 		}]);
+	});
+
+	// A body is plain text a player typed (here, a move's name); an entry's body is HTML, so a "<"
+	// or "&" in it must read as itself rather than vanish as a tag.
+	it("escapes the body, which is plain text", async () => {
+		await levelled("me", { [LEARNED_OPTION]: "Pay <the debt> & more" });
+		const [, [milestone]] = recordMilestones.mock.calls[0];
+		expect(milestone.body).toBe("<p>Learned Pay &lt;the debt&gt; &amp; more.</p>");
 	});
 
 	// Every client hears every update. One row per connected player is the bug this prevents.

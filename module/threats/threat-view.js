@@ -5,6 +5,10 @@
 import { threatType, threatProximity, THREAT_TYPE_IDS } from "./threat-types.js";
 import { setPortentDone, setDoomDone } from "./threat-store.js";
 import { hasText, stringList, buildDoomRows, buildImpending, buildCustomPlayerMoves, cardEnricher, asCardHtml } from "../journal/card-vm.js";
+import { getStonetopSteadingActor } from "../utils/world.js";
+import { format, localize } from "../utils/i18n.js";
+import { confirmOutcome } from "../utils/ask-with-buttons.js";
+import { escHtml } from "../utils/strings.js";
 
 /**
  * View-model for one threat page. Async because prose fields are enriched. Pass
@@ -93,9 +97,55 @@ export function wireThreatDoomChange(root, resolvePage) {
 		ev.stopPropagation();
 		const page = await resolvePage(chk);
 		if (!page) return;
-		if (chk.dataset.doom === "true") await setDoomDone(page, chk.checked);
-		else await setPortentDone(page, Number(chk.dataset.portentIndex), chk.checked);
+		const doom = chk.dataset.doom === "true";
+		const index = Number(chk.dataset.portentIndex);
+		const wrote = doom ? await setDoomDone(page, chk.checked) : await setPortentDone(page, index, chk.checked);
+		// Only a tick that changed the page: a stale checkbox (another GM's window got there
+		// first) must not ask, or write a row the page does not bear out.
+		if (wrote) await threatOnTimeline(page, { doom, index, done: chk.checked });
 	});
+}
+
+/** The timeline row a threat's doom (or one portent) coming to pass is kept under. */
+export function threatMilestoneKey(pageId, { doom = false, index = 0 } = {}) {
+	return doom ? `threat:${pageId}:doom` : `threat:${pageId}:portent:${index}`;
+}
+
+/**
+ * A threat's doom or grim portent come to pass, onto Stonetop's timeline: ASKED FIRST (user,
+ * 2026-10-10). A threat is GM prep, and every player can read Stonetop's timeline, so the GM says
+ * whether the table knows before anything is written there. Untick it and the row comes off again,
+ * unasked. Threats only: a hazard's track is the same markup, and not the steading's story.
+ */
+async function threatOnTimeline(page, { doom = false, index = 0, done = false } = {}) {
+	if (page?.type !== "threat" || !globalThis.game?.user?.isGM) return;
+	try {
+		const { forgetMilestones, recordMilestones } = await import("../timeline/timeline-record.js");
+		const steading = getStonetopSteadingActor();
+		if (!steading) return;
+		const key = threatMilestoneKey(page.id, { doom, index });
+		if (!done) {
+			await forgetMilestones(steading, key);
+			return;
+		}
+		const ask = "stonetop.timeline.threatAsk";
+		const yes = await confirmOutcome({
+			title:   localize(`${ask}.title`),
+			content: format(`${ask}.body`, { name: escHtml(page.name), what: localize(`${ask}.${doom ? "doom" : "portent"}`) }),
+			yes:     { label: localize(`${ask}.yes`), icon: "fa-check" },
+			no:      { label: localize(`${ask}.no`), icon: "fa-eye-slash" },
+		});
+		if (!yes) return;
+		const text = String((doom ? page.system?.impendingDoom?.text : page.system?.grimPortents?.[index]?.text) ?? "").trim();
+		await recordMilestones(steading, [{
+			source: "threat",
+			key,
+			title:  format(`stonetop.timeline.milestone.${doom ? "doomCame" : "portentCame"}`, { name: page.name }),
+			...(text ? { body: `<p>${escHtml(text)}</p>` } : {}),
+		}]);
+	} catch (err) {
+		console.error("Stonetop | could not put the threat on the timeline", err);
+	}
 }
 
 /**

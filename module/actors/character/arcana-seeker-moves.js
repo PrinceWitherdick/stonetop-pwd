@@ -25,7 +25,7 @@
 
 import { SYSTEM_ID } from "../../system-id.js";
 import { isMajorArcanumItem } from "../../arcana-icons.js";
-import { consequenceBoxRange } from "./CharacterArcana.js";
+import { consequenceBoxRange, consequenceLabel } from "./CharacterArcana.js";
 import { frontTaskTrack } from "./seeker-collection.js";
 import { ownedLearnedMove, ownsLearnedMoveNamed } from "./owns-move.js";
 import { learnedTrack } from "./MoveResources.js";
@@ -33,7 +33,7 @@ import { debilityPayments, payDebility } from "./invoke-consequences.js";
 import { askWithButtons } from "../../utils/ask-with-buttons.js";
 import { postMoveNote } from "../../utils/chat.js";
 import { withCardLatch, wireLatchedButtons } from "../../utils/card-latch.js";
-import { escHtml, stripHtmlToText } from "../../utils/strings.js";
+import { escHtml } from "../../utils/strings.js";
 import { localize } from "../../utils/i18n.js";
 import { STAT_KEYS } from "../../utils/roll-types.js";
 
@@ -340,21 +340,8 @@ async function markConduitInstead(actor, title) {
 export const MARK_CONSEQUENCE_FLAG = "arcanumConsequenceMarked";
 export const RING_OF_DAAGON = "ring-of-daagon";
 
-/**
- * The text a back-side □ marks: what follows its run of □, up to the next □, list or item end,
- * as plain text. "" when the index is past the last □.
- */
-export function consequenceLabel(backDescription, index) {
-	const html = String(backDescription ?? "");
-	let seen = -1;
-	for (const match of html.matchAll(/□/g)) {
-		if (++seen < index) continue;
-		const rest = html.slice(match.index).replace(/^□+/, "");
-		const end  = rest.search(/□|<ul\b|<\/li>/i);
-		return stripHtmlToText(end < 0 ? rest : rest.slice(0, end)).trim();
-	}
-	return "";
-}
+// consequenceLabel lives beside consequenceBoxRange (CharacterArcana.js); re-exported for its callers here.
+export { consequenceLabel };
 
 /**
  * For each □ printed inside a list item that sits in ANOTHER list item, the □ indices of that

@@ -44,6 +44,11 @@ export const KIND_META = {
 	wound:      { icon: "fa-bandage" },
 	arcana:     { icon: "fa-wand-sparkles" },
 	follower:   { icon: "fa-user-group" },
+	deed:        { icon: "fa-medal" },
+	treasure:    { icon: "fa-gem" },
+	improvement: { icon: "fa-hammer" },
+	disaster:    { icon: "fa-house-crack" },
+	threat:      { icon: "fa-hourglass-end" },
 };
 
 /** The chip on one card: its glyph and its name. */

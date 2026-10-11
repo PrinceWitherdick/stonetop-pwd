@@ -31,6 +31,7 @@ import { inTurn } from "../../utils/turn-queue.js";
 import { deletionEntry } from "../../utils/foundry-compat.js";
 import { improvementCategoryKey } from "../../data/improvement-categories.js";
 import { steadingSystemValue } from "./steading-system-value.js";
+import { format } from "../../utils/i18n.js";
 
 /** Which season's Inn roll ("whoever is friendliest rolls +Fortunes") has been handed to the table. */
 export const INN_ROLL_SEASON_STEP = "innRoll";
@@ -1387,6 +1388,9 @@ export class StonetopSteading {
 		data[`flags.${STONETOP_SCOPE}.steading.improvements`] = improvements;
 		this._foldSeasonStep(data, seasonStep);
 		await this._actor.update(data);
+		if (!!checked !== wasCompleted) {
+			await this._improvementOnTimeline(slug, def?.label ?? slug, checked ? "built" : clearEntries ? "lost" : "unticked");
+		}
 
 		// Each improvement it marks (or marked) is its OWN completion, run after this write so it
 		// reads the flags this one just wrote: its own grants, its own record, its own revert.
@@ -1400,6 +1404,40 @@ export class StonetopSteading {
 		}
 
 		return { label: def?.label ?? slug, summary, reverted };
+	}
+
+	/**
+	 * An improvement built, or lost for want of its upkeep, onto Stonetop's timeline (user, 2026-10-10):
+	 * the steading's own story beats, and the only way its Size moves. Every one is its own row, so one
+	 * built, lost and built again in the same season is three rows. Unticked by hand (not lost) in the
+	 * season it was ticked, it was a mistake, and the "Built" row that tick wrote comes off again: the
+	 * LATEST row this improvement has in this season, and only if that row is a "Built" one.
+	 *
+	 * IMPORTED AT CALL TIME: the timeline's writers reach the season clock, which this file imports
+	 * too. Best-effort: the improvement is built either way.
+	 */
+	async _improvementOnTimeline(slug, label, change) {
+		try {
+			const { forgetMilestones, recordMilestones, timelineNow } = await import("../../timeline/timeline-record.js");
+			const now = timelineNow(this._actor);
+			const stamp = seasonStampKey(now);
+			if (change === "unticked") {
+				const { readTrack, trackForActor } = await import("../../timeline/timeline-store.js");
+				const track = trackForActor(this._actor);
+				const mine = (track ? readTrack(track.trackId).entries : [])
+					.filter(e => e.year === now.year && e.season === now.season && String(e.key ?? "").startsWith(`improvement:${slug}:`));
+				const latest = mine.reduce((a, e) => (!a || (Number(e.createdAt) || 0) >= (Number(a.createdAt) || 0) ? e : a), null);
+				if (latest?.key?.startsWith(`improvement:${slug}:built:`)) await forgetMilestones(this._actor, latest.key);
+				return;
+			}
+			await recordMilestones(this._actor, [{
+				source: "improvement",
+				key:    `improvement:${slug}:${change}:${stamp}:${foundry.utils.randomID()}`,
+				title:  format(`stonetop.timeline.milestone.${change === "lost" ? "improvementLost" : "improvementBuilt"}`, { name: label }),
+			}], { now });
+		} catch (err) {
+			console.error("Stonetop | could not put the improvement on the timeline", err);
+		}
 	}
 
 	/**

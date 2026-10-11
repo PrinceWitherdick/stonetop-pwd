@@ -2978,7 +2978,12 @@
         "death": "Death",
         "wound": "Lasting wound",
         "arcana": "Arcanum",
-        "follower": "Follower"
+        "follower": "Follower",
+        "deed": "Deed",
+        "treasure": "Treasure",
+        "improvement": "Improvement",
+        "disaster": "Disaster",
+        "threat": "Threat"
       },
       "show": {
         "label": "Filter",
@@ -3071,13 +3076,40 @@
         "expeditionSetOut": "Set out in {when}.",
         "expeditionTriumphant": "Returned triumphant.",
         "expeditionParty": "With {names}.",
-        "site": "Visited {name}"
+        "site": "Visited {name}",
+        "becameHero": "Crossed off “Would-be”: a Hero",
+        "destinyFulfilled": "Fulfilled their destiny",
+        "condemned": "Condemned {name}",
+        "oathWitnessed": "Witnessed {name}'s oath",
+        "oathBroken": "{name} broke their oath",
+        "postDeathPicked": "{section}: {option}",
+        "masterTaskDone": "Completed the master's task",
+        "arcanaUnlocked": "Unlocked the secrets of {name}",
+        "arcanaConsequence": "{name} took its toll",
+        "artifactIdentified": "Worked out {name}",
+        "improvementBuilt": "Built {name}",
+        "improvementLost": "Lost {name}",
+        "doomCame": "{name}: the doom came to pass",
+        "portentCame": "{name}: a grim portent came to pass"
       },
       "expedition": {
         "recorded": "On the timeline: home in {when}, for everyone who went and for Stonetop.",
         "notYet": "Not on the timeline yet. It is written the first time you step in here with Next.",
         "record": "Record on the timeline",
         "again": "Record on the timeline again"
+      },
+      "threatAsk": {
+        "title": "Put this on the timeline?",
+        "body": "<p><strong>{name}</strong>: {what} came to pass.</p><p>Every player can read Stonetop's timeline. Add it there only if the table knows.</p>",
+        "doom": "the impending doom",
+        "portent": "a grim portent",
+        "yes": "Add it to the timeline",
+        "no": "Keep it to myself"
+      },
+      "postDeathSection": {
+        "terrible-purpose": "Terrible Purpose",
+        "consequences": "Consequence",
+        "marks": "Mark"
       }
     },
     "sites": {
