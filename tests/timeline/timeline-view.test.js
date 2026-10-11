@@ -424,3 +424,46 @@ describe("buildAggregateVM", () => {
 		expect(buildAggregateVM([{ trackId: "s", name: "Stonetop", entries: [] }])).toMatchObject({ isEmpty: true });
 	});
 });
+
+// User, 2026-10-10: a character's thread reads the seasons turning between the things they did,
+// from Stonetop's own season notes, over the seasons that thread spans and no further.
+describe("Stonetop's season notes on a character's thread", () => {
+	const steadingEntries = [
+		entry({ id: "y1sp", year: 1, season: "spring", source: "season", title: "Spring", body: "<p>Gains Y1</p>" }),
+		entry({ id: "y2sp", year: 2, season: "spring", source: "season", title: "Spring", body: "<p>Gains Y2</p>" }),
+		entry({ id: "y2su", year: 2, season: "summer", source: "season", title: "Summer", body: "<p>Gains summer</p>" }),
+		entry({ id: "y2au", year: 2, season: "autumn", source: "season", title: "Autumn", body: "<p>Gains autumn</p>" }),
+		entry({ id: "card", year: 2, season: "summer", source: "hand", title: "Stonetop's own card" }),
+	];
+	const steading = { trackId: "steading", entries: steadingEntries, canEdit: false };
+	const pc = (rows) => ({ trackId: "pc1", name: "Aster", entries: rows });
+
+	it("prints them only over the seasons the character's thread spans", () => {
+		const vm = buildTrackVM(pc([
+			entry({ id: "a", year: 2, season: "spring" }),
+			entry({ id: "b", year: 2, season: "autumn" }),
+		]), { steading });
+		expect(vm.periods.map(p => p.key)).toEqual(["2:spring", "2:summer", "2:autumn"]);
+		expect(vm.periods.flatMap(p => p.seasonNotes.map(n => n.id))).toEqual(["y2sp", "y2su", "y2au"]);
+	});
+
+	it("never brings Stonetop's cards across, only its season notes", () => {
+		const vm = buildTrackVM(pc([
+			entry({ id: "a", year: 2, season: "spring" }),
+			entry({ id: "b", year: 2, season: "autumn" }),
+		]), { steading });
+		expect(vm.periods.flatMap(p => p.entries.map(e => e.id))).toEqual(["a", "b"]);
+	});
+
+	it("names Stonetop's thread on each note, so its Edit writes there", () => {
+		const vm = buildTrackVM(pc([entry({ id: "a", year: 2, season: "spring" })]),
+			{ canEdit: true, steading: { ...steading, canEdit: true } });
+		expect(vm.periods[0].seasonNotes[0]).toMatchObject({ id: "y2sp", trackId: "steading", canEdit: true });
+	});
+
+	it("prints none on a thread with nothing of its own", () => {
+		const vm = buildTrackVM(pc([]), { steading });
+		expect(vm.periods).toEqual([]);
+		expect(vm.blank).toBe(true);
+	});
+});

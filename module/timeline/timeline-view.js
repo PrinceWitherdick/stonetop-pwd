@@ -240,6 +240,25 @@ function notesInOrder(items, entryOf = item => item) {
 }
 
 /**
+ * Stonetop's season notes, for a CHARACTER's thread (user, 2026-10-10): the seasons turning between
+ * the things that character did. Only over the seasons the thread itself spans, from its first dated
+ * row to its last (or the clock's season, for a writer who is drawn its ghost), so a character who
+ * joined in Year Three does not open on two years of a steading they were not part of. A season in
+ * that span with nothing of the character's in it still opens, under its notes: that is the point.
+ */
+function steadingNotesWithin(own, steading, noteOpts, ghostNow) {
+	if (!steading?.entries?.length) return [];
+	const ranks = own.map(periodRank).filter(Number.isFinite);
+	if (!ranks.length) return [];
+	const first = Math.min(...ranks);
+	const ghostRank = ghostNow?.season ? periodRank(ghostNow) : -Infinity;
+	const last = Math.max(...ranks, ghostRank);
+	return readEntries(steading.entries).filter(e => isSeasonRow(e)
+		&& periodRank(e) >= first && periodRank(e) <= last
+		&& noteHasRoom(seasonNoteVM(e, noteOpts)));
+}
+
+/**
  * The "+ Add" slot at the foot of one season's cards (timeline-add-slot.hbs): where an entry written
  * into that season lands, since `addEntry` appends. It hands the season back to the window's
  * listener, which opens the entry dialog on it; on the aggregate it names its thread too, and the
@@ -388,6 +407,7 @@ export function withGhostNow(periods, now = null) {
  */
 export function buildTrackVM(track, opts = {}) {
 	const all = readEntries(track?.entries ?? []);
+	// `opts.steading`: {trackId, entries, canEdit} of Stonetop's thread, on a character's (steadingNotesWithin).
 	const off = new Set(opts.hidden ?? []);
 	const tags = indexCustomTags(opts.tags);
 	// A season's own row is never filtered: it is no card, and it has no line in the Filter menu to
@@ -401,7 +421,11 @@ export function buildTrackVM(track, opts = {}) {
 	// The clock's season, for a reader who may write here, unless the Filter menu has emptied the
 	// thread: that reads as filtered, with its own way back, not as a season waiting to be written.
 	const ghostNow = opts.canEdit && !allHidden ? opts.ghostNow : null;
-	const periods = withAgeMarks(withGhostNow(groupByPeriod(shown), ghostNow), opts.ageYears);
+	// Never on a thread the Filter menu has emptied: that reads as filtered, not as Stonetop's seasons.
+	const sharedOpts = { canEdit: !!opts.steading?.canEdit, trackId: opts.steading?.trackId ?? "" };
+	const shared = allHidden ? [] : steadingNotesWithin(shown, opts.steading, sharedOpts, ghostNow);
+	const sharedIds = new Set(shared.map(e => e.id));
+	const periods = withAgeMarks(withGhostNow(groupByPeriod([...shown, ...shared]), ghostNow), opts.ageYears);
 	const hasGhost = periods.some(period => period.ghost);
 	const cardOpts = { ...opts, tags };
 	return {
@@ -420,7 +444,7 @@ export function buildTrackVM(track, opts = {}) {
 			p.entries.filter(e => !isSeasonRow(e)),
 			cardOpts,
 			notesInOrder(p.entries.filter(isSeasonRow))
-				.map(e => seasonNoteVM(e, noteOpts)),
+				.map(e => seasonNoteVM(e, sharedIds.has(e.id) ? sharedOpts : noteOpts)),
 		))),
 	};
 }

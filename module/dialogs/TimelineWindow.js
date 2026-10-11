@@ -40,11 +40,11 @@ import { escHtml } from "../utils/strings.js";
 import { GUTTER_LEFT_VAR, GUTTER_TOP_VAR, GUTTER_X_VAR, GUTTER_Y_VAR, wireDragScroll } from "../utils/drag-scroll.js";
 import { clampScale, wireWheelZoom } from "../utils/wheel-zoom-scroll.js";
 import {
-	TIMELINE_JOURNAL_NAME, allTracks, findTimelineJournal, mutateTrack, pageTrackId, readTrack, trackDisplayName,
+	TIMELINE_JOURNAL_NAME, allTracks, findTimelineJournal, findTrackPage, mutateTrack, pageTrackId, readTrack, steadingNotesFor, trackActor, trackDisplayName,
 	trackForActor,
 } from "../timeline/timeline-store.js";
 import {
-	TIMELINE_CARD_SOURCES, addEntry, moveEntry, patchEntry, removeEntry,
+	TIMELINE_CARD_SOURCES, TIMELINE_SEASON_SOURCE, TIMELINE_TRACK_STEADING, addEntry, moveEntry, patchEntry, readEntries, removeEntry,
 } from "../timeline/timeline-core.js";
 import { SYSTEM_ID } from "../system-id.js";
 import {
@@ -328,7 +328,7 @@ export class TimelineWindow extends StonetopDialog {
 		// Timeline entry and then its pages to find the track. The cache is cleared at the top of
 		// every getData, so ownership changing mid-session still shows up on the next repaint.
 		if (this._editCache?.has(trackId)) return this._editCache.get(trackId);
-		const page = readTrack(trackId).page;
+		const page = findTrackPage(trackId);
 		const answer = page
 			? !!page.isOwner
 			: !!(game.user?.isGM || findTimelineJournal()?.isOwner);
@@ -363,7 +363,10 @@ export class TimelineWindow extends StonetopDialog {
 		const showAges = getTimelineShowAges();
 		const ageYears = showAges ? ageMarkYears(worldAges) : [];
 		const vm = single
-			? buildTrackVM(tracks[0], { canEdit: this._canEdit(this._trackId), hidden, tags, ageYears, ghostNow: now })
+			? buildTrackVM(tracks[0], {
+				canEdit: this._canEdit(this._trackId), hidden, tags, ageYears, ghostNow: now,
+				steading: steadingNotesFor(this._trackId, id => this._canEdit(id)),
+			})
 			: buildAggregateVM(tracks, { canEdit: (id) => this._canEdit(id), hidden, hiddenTracks, tags, ageYears, ghostNow: now });
 		const hiddenCount = hidden.length + hiddenTracks.length + (worldAges.length && !showAges ? 1 : 0);
 
@@ -471,8 +474,8 @@ export class TimelineWindow extends StonetopDialog {
 		if (trackId === this._trackId) {
 			return { trackId, trackKind: this._trackKind, name: this._trackName || trackDisplayName(trackId) };
 		}
-		const actor = game.actors?.get(trackId);
-		return trackForActor(actor) ?? { trackId, trackKind: "", name: trackId };
+		// Stonetop's thread is keyed "steading", not by its actor's id (a character's tab edits its notes).
+		return trackForActor(trackActor(trackId)) ?? { trackId, trackKind: "", name: trackId };
 	}
 
 	/**
@@ -932,13 +935,31 @@ export class TimelineWindow extends StonetopDialog {
 	 */
 	_wireSync() {
 		this._unwireSync();
-		const ours = (page) => page?.parent?.name === TIMELINE_JOURNAL_NAME
+		// A character's thread reads Stonetop's season notes too (steadingNotesFor), so it repaints
+		// for Stonetop's page as well as its own: but only when those notes MOVED. Stonetop's thread
+		// is the busiest at the table (kills shared with it, expeditions, improvements, disasters),
+		// and a write to one of its cards changes nothing a character's thread draws.
+		const seasonNotes = (page) => JSON.stringify(readEntries(page?.system?.entries).filter(e => e.source === TIMELINE_SEASON_SOURCE));
+		const readsSteadingNotes = this.isSingleTrack && this._trackId !== TIMELINE_TRACK_STEADING;
+		this._steadingNotesSeen = readsSteadingNotes ? seasonNotes(findTrackPage(TIMELINE_TRACK_STEADING)) : null;
+		// A page made or deleted is always news; only an update can leave the notes as they were.
+		const watches = (page, updated) => {
+			const trackId = pageTrackId(page);
+			if (trackId === this._trackId) return true;
+			if (!readsSteadingNotes || trackId !== TIMELINE_TRACK_STEADING) return false;
+			if (!updated) return true;
+			const now = seasonNotes(page);
+			if (now === this._steadingNotesSeen) return false;
+			this._steadingNotesSeen = now;
+			return true;
+		};
+		const ours = (page, updated) => page?.parent?.name === TIMELINE_JOURNAL_NAME
 			&& page.parent.id === findTimelineJournal()?.id
-			&& (!this.isSingleTrack || pageTrackId(page) === this._trackId);
-		const repaint = (page) => { if (ours(page)) this._syncRepaint(); };
+			&& (!this.isSingleTrack || watches(page, updated));
+		const repaint = (updated) => (page) => { if (ours(page, updated)) this._syncRepaint(); };
 
 		for (const hook of ["updateJournalEntryPage", "createJournalEntryPage", "deleteJournalEntryPage"]) {
-			const id = Hooks.on(hook, repaint);
+			const id = Hooks.on(hook, repaint(hook === "updateJournalEntryPage"));
 			this._syncHooks.push([hook, id]);
 		}
 

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
 	TIMELINE_JOURNAL_NAME, TIMELINE_PAGE_TYPE,
-	allTracks, findTimelineJournal, findTrackPage, readTrack, syncTrackPages, trackForActor, worldTracks, writeEntries,
+	allTracks, findTimelineJournal, findTrackPage, readTrack, steadingNotesFor, syncTrackPages, trackForActor, worldTracks, writeEntries,
 } from "../../module/timeline/timeline-store.js";
-import { TIMELINE_TRACK_STEADING, trackKey } from "../../module/timeline/timeline-core.js";
+import { TIMELINE_SEASON_SOURCE, TIMELINE_TRACK_STEADING, trackKey } from "../../module/timeline/timeline-core.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 
 // The document half of the timeline: which actors get a track, how a track page is found, and what
@@ -160,6 +160,31 @@ describe("readTrack", () => {
 	it("answers an empty track rather than throwing when there is no page", () => {
 		world({ pages: [] });
 		expect(readTrack("pc-kefta")).toMatchObject({ page: null, entries: [] });
+	});
+});
+
+describe("steadingNotesFor", () => {
+	// A real page stores its entries KEYED BY ID, not as an array: reading them as an array threw
+	// and took every character's timeline down with it.
+	it("reads Stonetop's season rows off a page that stores them keyed by id", () => {
+		world({ pages: [fakePage({
+			key: trackKey(TIMELINE_TRACK_STEADING),
+			name: "Stonetop",
+			system: { entries: {
+				b: { id: "b", year: 2, season: "spring", order: 0, title: "Spring", source: TIMELINE_SEASON_SOURCE },
+				a: { id: "a", year: 1, season: "autumn", order: 0, title: "Autumn", source: TIMELINE_SEASON_SOURCE },
+				c: { id: "c", year: 1, season: "autumn", order: 1, title: "A kill" },
+			} },
+		})] });
+		const notes = steadingNotesFor("pc-ellis");
+		expect(notes.trackId).toBe(TIMELINE_TRACK_STEADING);
+		expect(notes.entries.map(e => e.id)).toEqual(["a", "b"]);
+	});
+
+	it("answers null on Stonetop's own thread and with no season rows", () => {
+		world({ pages: [fakePage({ key: trackKey(TIMELINE_TRACK_STEADING), name: "Stonetop", system: { entries: {} } })] });
+		expect(steadingNotesFor("pc-ellis")).toBeNull();
+		expect(steadingNotesFor(TIMELINE_TRACK_STEADING)).toBeNull();
 	});
 });
 

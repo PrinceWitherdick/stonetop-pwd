@@ -10,6 +10,7 @@
 // resolve here exactly as they do on the sheet.
 import { buildTrackVM, enrichTrackVM } from "../timeline/timeline-view.js";
 import { sortEntries } from "../timeline/timeline-core.js";
+import { steadingNotesFor } from "../timeline/timeline-store.js";
 import { worldCustomTags } from "../timeline/timeline-tag-store.js";
 import { adoptInlineViewRoot } from "./inline-page-view.js";
 import { isTimelineShown } from "../settings.js";
@@ -42,11 +43,15 @@ export function createStonetopTimelinePageSheetClass(Base) {
 				context.stonetop = { off: true };
 				return context;
 			}
+			const trackId = this.document.system?.trackId ?? "";
+			// A character's page prints Stonetop's season notes in its headings, as their tab does
+			// (timeline-store.js#steadingNotesFor). Read only, like everything here.
+			const steading = steadingNotesFor(trackId);
 			const vm = buildTrackVM({
-				trackId: this.document.system?.trackId ?? "",
+				trackId,
 				name:    this.document.name,
 				entries: sortEntries(this.document.system?.entries ?? []),
-			}, { tags: worldCustomTags(this.document.parent) });
+			}, { tags: worldCustomTags(this.document.parent), steading });
 
 			// Enriched in place rather than inside buildTrackVM, and by the same walker the window
 			// uses: the view model is pure so the tab and the window can build it without awaiting

@@ -23,7 +23,7 @@ import { isSteadingActor, getStonetopSteadingActor } from "../utils/world.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { inTurn } from "../utils/turn-queue.js";
 import {
-	TIMELINE_TRACK_STEADING, entriesById, entriesDiff, isLeftover, trackKey, trackIdFromKey, readEntries, sortEntries,
+	TIMELINE_SEASON_SOURCE, TIMELINE_TRACK_STEADING, entriesById, entriesDiff, isLeftover, trackKey, trackIdFromKey, readEntries, sortEntries,
 } from "./timeline-core.js";
 import { deletionEntry, replacementEntry } from "../utils/foundry-compat.js";
 
@@ -142,6 +142,26 @@ export function readTrack(trackId) {
 		page,
 		entries: sortEntries(page?.system?.entries ?? []),
 	};
+}
+
+/**
+ * Stonetop's season notes, for a CHARACTER's thread to print in its headings (timeline-view.js
+ * #buildTrackVM, user 2026-10-10): the one home of that rule for the window, the tab and the journal
+ * page. Only the season rows, since they are all a character's thread draws of Stonetop's. Null on
+ * Stonetop's own thread, or with no season written yet.
+ *
+ * @param {string} trackId  The thread being drawn.
+ * @param {(trackId: string) => boolean} [canEdit]  Whether the reader may write Stonetop's page,
+ *   asked only when there are notes: a note's Edit names Stonetop's thread, so the write lands there.
+ */
+export function steadingNotesFor(trackId, canEdit = () => false) {
+	if (!trackId || trackId === TIMELINE_TRACK_STEADING) return null;
+	// A page stores its entries keyed by id; readEntries is what turns that into rows.
+	const entries = readEntries(findTrackPage(TIMELINE_TRACK_STEADING)?.system?.entries)
+		.filter(e => e.source === TIMELINE_SEASON_SOURCE);
+	return entries.length
+		? { trackId: TIMELINE_TRACK_STEADING, entries: sortEntries(entries), canEdit: !!canEdit(TIMELINE_TRACK_STEADING) }
+		: null;
 }
 
 /**
