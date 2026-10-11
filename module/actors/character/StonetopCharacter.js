@@ -50,6 +50,7 @@ import {DEATHS_DOOR_FLAG, DEATHS_DOOR_STATE, FINAL_CONSEQUENCE, UNSTOPPABLE, UNS
 import {heroDisplayName, WBH_HERO_FLAG} from "./WouldBeHeroAsterisk.js";
 import {tookBackground} from "./took-background.js";
 import {AUSPICIOUS_BIRTH, auspiciousBirthChoice} from "./invoke-consequences.js";
+import {carriedGearTags, normalizeGearTags, sameGearTags, ARMORED_MOVE} from "./gear-reminders.js";
 import {ownedNamesOr, ownedLearnedMove, ownsLearnedMoveNamed, moveLearnedIn, switchedOffGranter, ownedMoveNames, ownsMoveNamed, bookMoveName} from "./owns-move.js";
 import {ANIMAL_COMPANION_MOVE, RANGER_SLUG, MAGNIFICENT_SPECIMEN_MOVE, COMPANION_TRAIT_PICKS_PER_SPECIMEN, companionTraitAllowance, trimCompanionTraits} from "./animal-companion.js";
 import {fineWhiskyOffer as fineWhiskyOfferFrom, isPersuadeMove, FINE_WHISKY_SOURCE} from "./fine-whisky.js";
@@ -1053,6 +1054,7 @@ export class StonetopCharacter {
 			.withCompanionBonuses(_buildCompanionBonuses(moveBonuses, ownedAllByName, this._actor.items))
 			.withCompanionDef(await this.companionSource(playbookData))
 			.withViewerIsGM(!!view.viewerIsGM)
+			.withGearTags(this.gearTagsFrom(gear))
 			.build();
 		return { snapshot, gear };
 	}
@@ -1110,6 +1112,9 @@ export class StonetopCharacter {
 			// five hours of oil, and the bows carry the printed "low ammo / all out" pair.
 			ammoMax: Number(src.resource?.max) || null,
 			ammoLabels: Array.isArray(src.resource?.labels) ? src.resource.labels : null,
+			// An artifact's identify state, which hides its tag line from the players until they work
+			// it out (Book I p.430): the gear-tag reminders must not tell them (gear-reminders.js).
+			artifactState: src.artifact?.state ?? null,
 			...over,
 		});
 		const outfit = allOutfitItems
@@ -4847,7 +4852,16 @@ export class StonetopCharacter {
 		]);
 		const { armor, unpierceable, conditional, conditionalSource } = this._armorFrom(gear, moveBonuses);
 		const damage = this.damageDieOverride ?? _derivedDamageDie(playbookData, moveBonuses);
-		return { armor, unpierceable, conditional, conditionalSource, maxHp: playbookData ? _hpFrom(this._actor, playbookData, moveBonuses, hpPenalty).hpMax : 0, hpPenalty, damage };
+		return { armor, unpierceable, conditional, conditionalSource, maxHp: playbookData ? _hpFrom(this._actor, playbookData, moveBonuses, hpPenalty).hpMax : 0, hpPenalty, damage, gearTags: this.gearTagsFrom(gear) };
+	}
+
+	/**
+	 * The wearer tags on what this character carries (gear-reminders.js#carriedGearTags), with
+	 * Armored's "ignore the cumbersome tag on any armor you wear" applied for a character who has
+	 * learned it.
+	 */
+	gearTagsFrom(gear) {
+		return carriedGearTags(gear, { ignoresCumbersomeArmor: ownsLearnedMoveNamed(this._actor, ARMORED_MOVE) });
 	}
 
 	/**
@@ -4941,6 +4955,12 @@ export class StonetopCharacter {
 		}
 		const die = String(worked.damage ?? "").trim();
 		if (die && die !== String(attrs.damage?.value ?? "").trim()) update["system.attributes.damage.value"] = die;
+		// The wearer tags on the carried gear (gear-reminders.js), for the roll card, the Fight tab and
+		// the steading to remind the GM by. Unlike the armor group, ABSENT means "not worked out here,
+		// leave it": a caller that hands in only the numbers must not wipe the list.
+		if (Array.isArray(worked.gearTags) && !sameGearTags(worked.gearTags, attrs.gearTags)) {
+			update["system.attributes.gearTags"] = normalizeGearTags(worked.gearTags);
+		}
 		if (!Object.keys(update).length) return false;
 		const hpBefore = Number(attrs.hp?.value) || 0;
 		const written = await this._actor.update(update, {

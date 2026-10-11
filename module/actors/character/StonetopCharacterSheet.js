@@ -186,6 +186,7 @@ import {barkskinMarks, wearsBarkskin, MOVE_ARMOR_BASE} from "./move-armor.js";
 import {CLEARS_ON, clearTracksData, snapshotTracksClearedBy} from "./background-tracks.js";
 import {askWalkItOffInstead, debilityData} from "./walk-it-off.js";
 import {STARTING_INVOCATIONS_FLAG, learnedInvocations, rerunInvocations, startingInvocations} from "./starting-invocations.js";
+import {chipsFrom, normalizeReminders} from "./gear-reminders.js";
 import {localize, format} from "../../utils/i18n.js";
 import {promptRaiseFromDead} from "../../hooks/DeathsDoorPrompt.js";
 
@@ -1693,6 +1694,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			// "the fiction says otherwise" tick box off a Barkskin'd character on every render.
 			this._computedConditional = Number(v.conditionalArmor) || 0;
 			this._computedConditionalSource = v.conditionalArmorSource ?? "";
+			// And the wearer tags on the carried gear, mirrored in the same write for the roll card,
+			// the Fight tab and the steading (./gear-reminders.js).
+			this._computedGearTags = Array.isArray(context.stonetop.gearTags) ? context.stonetop.gearTags : null;
 			// A permanent max-HP change (an arcanum's soul-wound, a Mark's boon) is otherwise
 			// invisible once applied — the field just shows a number that disagrees with the
 			// playbook. Marked and spelled out here so a GM reading the sheet months later can
@@ -2067,6 +2071,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			// anyone — Aratis does not exempt the party — and condemnersOf already skips self, so a
 			// Judge cannot brand themself into their own header.
 			context.stonetop.condemned = condemnedContext(this.actor);
+			// What the table should keep in mind about this character: the wearer tags on the gear
+			// they carry (a cumbersome hauberk, a warm cloak) and anything typed on the Notes tab
+			// (./gear-reminders.js). From THIS render's gear, not the mirrored copy, so a tick on the
+			// inventory shows here at once.
+			context.stonetop.reminders = normalizeReminders(this.actor.system?.reminders);
+			context.stonetop.reminderChips = chipsFrom(context.stonetop.gearTags, context.stonetop.reminders);
+			context.stonetop.gearReminderChips = context.stonetop.reminderChips.filter(c => c.kind === "gear");
 			// Book I, at the end of the playbook row, but ONLY once the GM has pointed this world
 			// at a copy. `readyRulebookIcon` answers null until then and the row draws nothing:
 			// a player cannot add the file, so the dimmed "press me to fix this" state the GM
@@ -4869,6 +4880,15 @@ export function createStonetopCharacterSheetClass(Base) {
 			// move-gated (Recover stabilizes, Convalesce heals); the edit dialog is the manual
 			// override. The row's data-wound-id resolves which record an action targets.
 			html.find(".stonetop-wound-add").on("click", this._onWoundAdd.bind(this));
+			// Notes tab: the reminders list (./gear-reminders.js). Enter in the box adds, as the button does.
+			html.find(".stonetop-reminder-add-btn").on("click", ev => this._onReminderAdd(ev));
+			html.find(".stonetop-reminder-input").on("keydown", ev => {
+				if (ev.key !== "Enter") return;
+				ev.preventDefault();
+				ev.stopPropagation();
+				this._onReminderAdd(ev);
+			});
+			html.find(".stonetop-reminder-remove").on("click", ev => this._onReminderRemove(ev));
 			html.find(".stonetop-wound-tend").on("click", ev => this._onWoundTend(this._woundIdFromEvent(ev)));
 			html.find(".stonetop-wound-edit").on("click", ev => this._onWoundEdit(this._woundIdFromEvent(ev)));
 			html.find(".stonetop-wound-remove").on("click", ev => this._onWoundRemove(this._woundIdFromEvent(ev)));
@@ -11864,7 +11884,36 @@ export function createStonetopCharacterSheetClass(Base) {
 				conditional: this._computedConditional,
 				conditionalSource: this._computedConditionalSource,
 				maxHp: this._computedMaxHp,
+				...(this._computedGearTags ? { gearTags: this._computedGearTags } : {}),
 			});
+		}
+
+		// ── Reminders (Notes tab) ──────────────────────────────────────────────────
+		// Short lines the table wants kept in view, shown beside the gear tags in the header, on roll
+		// cards, on the Fight tab and in the steading's PC table (./gear-reminders.js).
+		async _onReminderAdd(ev) {
+			const input = ev.currentTarget.closest(".stonetop-reminders")?.querySelector(".stonetop-reminder-input");
+			const text = String(input?.value ?? "").trim();
+			if (!text) return;
+			const list = [...normalizeReminders(this.actor.system?.reminders), text];
+			await this._saveReminders(list);
+		}
+
+		async _onReminderRemove(ev) {
+			const index = Number(ev.currentTarget.dataset.index);
+			const list = normalizeReminders(this.actor.system?.reminders);
+			if (!Number.isInteger(index) || index < 0 || index >= list.length) return;
+			list.splice(index, 1);
+			await this._saveReminders(list);
+		}
+
+		async _saveReminders(list) {
+			try {
+				await this.actor.update({ "system.reminders": list });
+			} catch (err) {
+				console.error("Stonetop | could not save the character's reminders", err);
+				ui.notifications?.error(game.i18n.localize("stonetop.reminders.saveFailed"));
+			}
 		}
 
 		// ── Wounds (4th harm track) ────────────────────────────────────────────────

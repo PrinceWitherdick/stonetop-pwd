@@ -12907,6 +12907,106 @@ button.stonetop-rapport-chip:focus-visible {
 	outline-offset: 2px;
 }
 
+/* ── Reminder chips ────────────────────────────────────────────────────────
+   What the table should keep in mind about a character: the wearer tags on the gear they carry and
+   the reminders typed on their Notes tab (actors/character/gear-reminders.js). One look in all three
+   places (the character header, a Fight tab row, the steading's PC table): a plain readout, never a
+   control. Ink and edge come from currentColor, so a chip reads on the paper sheet, in dark mode and
+   on the sidebar alike without a palette of its own. */
+.stonetop-reminder-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 6px;
+	margin: 4px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.stonetop-reminder-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4em;
+	min-width: 0;
+	max-width: 100%;
+	margin: 0;
+	padding: 1px 9px;
+	border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+	border-radius: 999px;
+	background: color-mix(in srgb, currentColor 6%, transparent);
+	font-size: var(--st-fs-xs);
+	font-style: normal;
+	line-height: 1.6;
+}
+
+.stonetop-reminder-chip i { font-size: 0.9em; font-size: round(0.9em, 1px); opacity: 0.8; }
+
+.stonetop-reminder-chip-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.stonetop-reminder-chip-detail { opacity: 0.8; }
+
+/* A Fight tab row is a wrapping flex line (name, vitals, standing): the chips take a line of their own
+   after the vitals. */
+.stonetop-fight-row-text .stonetop-reminder-chips {
+	flex: 1 0 100%;
+	order: 3;
+	margin-top: 2px;
+	color: var(--st-text-secondary);
+}
+
+/* The steading's PC table is a grid of one-line cells; the chips run under the row, across all of it. */
+.steading-player-reminders {
+	grid-column: 1 / -1;
+	padding: 0 5px 5px;
+}
+.steading-player-reminders .stonetop-reminder-chips { margin: 0; }
+
+/* The Notes tab's list of typed reminders, above the free notes. */
+.stonetop-reminders {
+	margin: 0 0 12px;
+}
+.stonetop-reminders-heading {
+	margin: 0 0 2px;
+	border: none;
+	font-size: var(--st-fs-md, 1.05em);
+}
+.stonetop-reminders-hint {
+	margin: 0 0 6px;
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-secondary);
+}
+.stonetop-reminders-list {
+	margin: 6px 0;
+	padding: 0;
+	list-style: none;
+}
+.stonetop-reminders-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 2px 0;
+}
+.stonetop-reminders-row > i { opacity: 0.7; }
+.stonetop-reminders-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.stonetop-reminders .stonetop-reminder-remove {
+	flex: 0 0 auto;
+	width: auto;
+	margin: 0;
+	padding: 2px 6px;
+	line-height: 1;
+}
+.stonetop-reminders-add {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+.stonetop-reminders-add .stonetop-reminder-input { flex: 1 1 auto; min-width: 0; }
+.stonetop-reminders-add .stonetop-reminder-add-btn { flex: 0 0 auto; width: auto; }
+
 /* What a We Happy Few card gave, and the die a damage card took: a line of the card's own text.
    So is who a "Give advantage to..." card gave it to (give-advantage-flow.js). */
 .stonetop-inspiration-readout,
@@ -13338,6 +13438,7 @@ button.stonetop-held-disadvantage:hover { color: var(--st-text-body); }
 .stonetop-invocation-chip-name,
 .stonetop-inspiration-chip-name,
 .stonetop-rapport-chip-name,
+.stonetop-reminder-chip-text,
 .stonetop .create-monster .cm-move-suggestion > span,
 .stonetop-person-picker-chip-name,
 .stonetop-timeline-entry-linked-text,

@@ -1,6 +1,7 @@
 import { maybeRemindPotentialForGreatness } from "../actors/character/WouldBeHeroAsterisk.js";
 import { WOUND_STATUS_LABEL } from "../actors/character/wound-display.js";
 import { normalizeWoundList } from "../actors/character/wound-record.js";
+import { reminderChips, chipLine } from "../actors/character/gear-reminders.js";
 import { escHtml, formatOutcomeDetail, stripHtmlToText, sign } from "./strings.js";
 import { pickLimitsFrom } from "./move-picks.js";
 import { pickLeadText, TIER_KEYS, TIER_LABELS } from "./move-results.js";
@@ -651,6 +652,21 @@ function _woundReminderHtml(actor, moveName) {
 	});
 }
 
+// What the table should keep in mind about the character rolling: the wearer tags on the gear they
+// carry (a cumbersome hauberk, a warm cloak) and the reminders typed on their Notes tab, read off the
+// stored fields (actors/character/gear-reminders.js). On every roll, because whether a tag bites is the
+// fiction's call and the GM is the one making it; ONE line, so it costs a card a row and no more.
+function _remindersNoticeHtml(actor) {
+	const chips = reminderChips(actor);
+	if (!chips.length) return "";
+	return cardNoticeHtml({
+		className: "stonetop-roll-reminders-notice",
+		icon: "fa-thumbtack",
+		title: escHtml(game.i18n.localize("stonetop.reminders.heading")),
+		items: [`<li>${chips.map(c => escHtml(chipLine(c))).join(" · ")}</li>`],
+	});
+}
+
 // Which wound statuses can still explain a bad roll. `problematic` is the book's own name for a
 // wound with live fictional consequences, and `permanent` is one that can never be dealt with --
 // the book's own example, a severed hand, is both. `stabilized` is the one that HAS been tended
@@ -981,7 +997,7 @@ export async function rollStat(statKey, actor, options = {}) {
 		// The wounds are the rolling CHARACTER's: a follower's roll (Order Followers, a Struggle as One
 		// follower row) is made on the PC's actor, but the PC's injuries neither hinder nor explain it.
 		noticesHtml: statKey === "follower" ? ""
-			: _woundReminderHtml(actor, moveName) + _woundJustifyHtml(actor, result.key),
+			: _woundReminderHtml(actor, moveName) + _remindersNoticeHtml(actor) + _woundJustifyHtml(actor, result.key),
 		buttons: true,
 		total: roll.total,
 		formula: roll.formula,

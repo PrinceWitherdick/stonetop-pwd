@@ -68,6 +68,13 @@ export class CharacterModel extends foundry.abstract.TypeDataModel {
 				}),
 				// Problematic / permanent wounds — the fictional-harm track (see fields.js).
 				wounds: woundsField(),
+				// DERIVED and mirrored with the armor: the wearer tags on the carried gear
+				// (cumbersome, warm…), each with the gear that carries it, for the roll card, the
+				// Fight tab and the steading to remind the GM by. See actors/character/gear-reminders.js.
+				gearTags: new fields.ArrayField(new fields.SchemaField({
+					tag:   new fields.StringField({ required: true, blank: false }),
+					items: new fields.ArrayField(new fields.StringField({ required: true, blank: true })),
+				})),
 			}),
 			playbook: new fields.SchemaField({
 				name: new fields.StringField({ required: true, blank: true }),
@@ -77,6 +84,10 @@ export class CharacterModel extends foundry.abstract.TypeDataModel {
 			// Free-form player notes (rich text), edited on the sheet's Notes tab.
 			// Additive/blank-default field, so it needs no world migration.
 			notes: new fields.HTMLField({ required: true, blank: true }),
+			// Short things the table wants kept in view ("reeks of smoke", "owes Gwen a favor"),
+			// typed on the Notes tab and shown beside the gear tags wherever those are. Additive,
+			// empty by default, so no migration.
+			reminders: new fields.ArrayField(new fields.StringField({ required: true, blank: true })),
 			// How this character feels about each of the OTHER player characters: a map
 			// of character actor id → { hearts (1-5), notes }. Same shape as the NPC
 			// sheet's relationships map (see utils/relationship-hearts.js), so both

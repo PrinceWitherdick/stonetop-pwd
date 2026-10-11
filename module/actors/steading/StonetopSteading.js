@@ -32,6 +32,7 @@ import { deletionEntry } from "../../utils/foundry-compat.js";
 import { improvementCategoryKey } from "../../data/improvement-categories.js";
 import { steadingSystemValue } from "./steading-system-value.js";
 import { format } from "../../utils/i18n.js";
+import { reminderChips } from "../character/gear-reminders.js";
 
 /** Which season's Inn roll ("whoever is friendliest rolls +Fortunes") has been handed to the table. */
 export const INN_ROLL_SEASON_STEP = "innRoll";
@@ -2833,8 +2834,12 @@ export class StonetopSteading {
 			// roster can't drift apart on separator or ordering. Falls back to the snapshot
 			// name for a row whose actor has gone.
 			const fullName = actor ? characterFullName(actor) : name;
+			// What the GM should keep in mind about them: their gear's wearer tags and their typed
+			// reminders, off the live character (actors/character/gear-reminders.js). Repainted with
+			// the rest of the row on any change to the character (steading-people.js#repaintOpenSteadingRosters).
+			const reminders = reminderChips(actor);
 			return { traits: "", relations: "", ...p, name, notes: p.notes ?? p.etc ?? "", resolvedOccupation, playbookName, fullName,
-				img: portrait.src, imgStyle: portrait.style };
+				img: portrait.src, imgStyle: portrait.style, reminders };
 		});
 
 		const mapImprovement = (rawDef, custom) => {

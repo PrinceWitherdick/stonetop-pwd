@@ -293,5 +293,11 @@
 		{{#if (or stonetop.playbook.appearance.summary stonetop.isDead stonetop.condemned.condemned)}}
 		<p class="stonetop-appearance-summary">{{stonetop.playbook.appearance.summary}}{{#if stonetop.isDead}}{{#if editable}}<button type="button" class="stonetop-dead-tag" data-tooltip="{{localize "stonetop.postDeath.deadTooltipAction"}}" data-tooltip-direction="UP"><i class="fas fa-skull"></i><span class="stonetop-dead-tag-text">{{localize "stonetop.postDeath.deadTag"}}</span></button>{{else}}<span class="stonetop-dead-tag" data-tooltip="{{localize "stonetop.postDeath.deadTooltip"}}" data-tooltip-direction="UP"><i class="fas fa-skull"></i><span class="stonetop-dead-tag-text">{{localize "stonetop.postDeath.deadTag"}}</span></span>{{/if}}{{/if}}{{#if stonetop.condemned.condemned}}{{> "stonetop.condemned-tag" byLabel=stonetop.condemned.byLabel}}{{/if}}</p>
 		{{/if}}
+		{{! What the table should keep in mind about them: the wearer tags on the gear they carry and
+		    the reminders typed on the Notes tab (gear-reminders.js). Under the appearance line, which
+		    says who they are; this says what they are carrying around with them right now. }}
+		{{#if stonetop.reminderChips.length}}
+		{{> "stonetop.reminder-chips" chips=stonetop.reminderChips}}
+		{{/if}}
 	</div>
 </div>

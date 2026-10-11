@@ -1,0 +1,15 @@
+{{!-- What the table should keep in mind about a character: the wearer tags on the gear they carry
+      (a cumbersome hauberk, a warm cloak) and the reminders typed on their Notes tab. One partial
+      for the three places that show them (the character header, a Fight tab row, the steading's PC
+      table), so a chip reads the same wherever the GM meets it.
+
+      Takes `chips` (actors/character/gear-reminders.js#chipsFrom / reminderChips). Each chip is a
+      plain readout: the gear tag's tooltip names the gear and quotes the book's gloss, a typed
+      reminder's tooltip is its own text (the chip may be cut short). data-tooltip-text, not
+      data-tooltip: core draws a plain data-tooltip as HTML, and these carry text a player typed. The gear's names ride the
+      chip itself unless `compact`, where only the tag shows. --}}
+<ul class="stonetop-reminder-chips{{#if compact}} stonetop-reminder-chips--compact{{/if}}" aria-label="{{localize "stonetop.reminders.listLabel"}}">
+	{{#each chips as |c|}}
+	<li class="stonetop-reminder-chip stonetop-reminder-chip--{{c.kind}}" data-tooltip-text="{{c.tooltip}}" data-tooltip-direction="UP"><i class="fas {{#if (eq c.kind "gear")}}fa-shirt{{else}}fa-thumbtack{{/if}}" aria-hidden="true"></i><span class="stonetop-reminder-chip-text">{{c.label}}{{#if c.detail}}{{#unless ../compact}} <span class="stonetop-reminder-chip-detail">({{c.detail}})</span>{{/unless}}{{/if}}</span></li>
+	{{/each}}
+</ul>

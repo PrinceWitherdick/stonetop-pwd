@@ -1,3 +1,10 @@
+// One gear record's worn-armor BASE, or null when it is not worn armor (a shield's `modifier`, a
+// cloak). The per-item half of CharacterInventory#wornArmorBase, exported so a reader that asks
+// "is this armor you wear?" one record at a time (gear-reminders.js, for Armored) asks the same thing.
+export function wornArmorBaseOf(item) {
+	return item?.armor?.base ?? null;
+}
+
 export class CharacterInventory {
 	constructor(flags) {
 		this._flags = flags;
@@ -192,8 +199,8 @@ export class CharacterInventory {
 	wornArmorBase(allItems, carried = null) {
 		const marks = carried ?? this.checked;
 		const bases = allItems
-			.filter(i => marks[i.slug] && i.armor?.base != null)
-			.map(i => i.armor.base);
+			.filter(i => marks[i.slug] && wornArmorBaseOf(i) != null)
+			.map(wornArmorBaseOf);
 		return bases.length > 0 ? Math.max(...bases) : 0;
 	}
 

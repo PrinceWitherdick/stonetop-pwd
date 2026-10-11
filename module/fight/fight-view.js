@@ -78,6 +78,8 @@ export function fightTrackerView({ snapshot, rows, isGM = false, format, cites, 
 			// so a monster on another map does not show its HP for want of one.
 			vitals: isGM || info.seesFoeVitals || (side ?? info.side ?? null) === HEROES ? vitalsLine(info.vitals, format) : "",
 			badge,
+			// A character's gear tags and typed reminders (actors/character/gear-reminders.js).
+			reminders: info.reminders ?? [],
 			standing: info.group && info.size
 				? (info.standing == null
 					? format("stonetop.fight.readout.together", { count: info.size })

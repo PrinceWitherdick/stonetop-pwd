@@ -567,6 +567,7 @@ Hooks.once("init", () => {
 		"stonetop.actor-header":     "systems/stonetop-pwd/templates/actor/partials/actor-header.hbs",
 		"stonetop.portrait-frame-pip": "systems/stonetop-pwd/templates/actor/partials/portrait-frame-pip.hbs",
 		"stonetop.condemned-tag":     "systems/stonetop-pwd/templates/actor/partials/condemned-tag.hbs",
+		"stonetop.reminder-chips":    "systems/stonetop-pwd/templates/actor/partials/reminder-chips.hbs",
 		"stonetop.actor-stats":      "systems/stonetop-pwd/templates/actor/partials/actor-stats.hbs",
 		"stonetop.actor-vitals":     "systems/stonetop-pwd/templates/actor/partials/actor-vitals.hbs",
 		"stonetop.stat-block":       "systems/stonetop-pwd/templates/actor/partials/stat-block.hbs",
