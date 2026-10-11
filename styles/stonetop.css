@@ -5991,7 +5991,8 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-startup-card__actions,
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-art-reminder__actions,
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-layout-offer__actions {
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-layout-offer__actions,
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-gm-move-card-actions {
 	display: flex;
 	justify-content: center;
 	padding-top: 6px;
@@ -5999,7 +6000,8 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-startup-open-welcome,
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-layout-switch,
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-import-art-open {
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-import-art-open,
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-gm-move-share {
 	width: auto;
 	padding: 5px 14px;
 	font-family: var(--font-stonetop);
@@ -6014,13 +6016,16 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-startup-open-welcome:hover,
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-layout-switch:hover,
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-import-art-open:hover { background: var(--st-btn-primary-bg-hover); }
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-import-art-open:hover,
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-gm-move-share:hover { background: var(--st-btn-primary-bg-hover); }
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-startup-open-welcome > i,
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-layout-switch > i,
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-import-art-open > i { margin-right: 4px; }
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-import-art-open > i,
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-gm-move-share > i { margin-right: 4px; }
 /* Pressed: the world is now on the layout this card offered, and the card posted underneath
    it is the live control. Keep it legible rather than greying it into the background. */
-:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-layout-switch:disabled {
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-layout-switch:disabled,
+:is(#chat, #chat-notifications, #chat-popout) .message .stonetop-gm-move-share:disabled {
 	opacity: 0.65;
 	cursor: default;
 }

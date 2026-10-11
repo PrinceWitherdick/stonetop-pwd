@@ -7,13 +7,13 @@
 // and the list has gone to soup. One move, named, with its gloss, is something to react to in
 // a way that thirty of them is not.
 //
-// PUBLIC, to the whole table, on every surface that posts one — the die's draw and the name a
-// GM clicks alike. This card used to be whispered to the GMs on the reasoning that a move lands
-// as fiction ("the bridge gives"), so naming the mechanism announces the trick before it is
-// played. That is a choice about how a table likes to play rather than a rule, and this one
-// plays it in the open: the card names the move, quotes the book on how it sounds, and the
-// table gets to see the machinery the GM is working with. Anything genuinely secret is not in
-// a move's NAME — it is in what the GM does with it, which is still theirs.
+// WHISPERED to the GMs, on every surface that posts one — the die's draw and the name a GM
+// clicks alike — with a "Share with Players" button on the card that makes it public. A move
+// lands as fiction ("the bridge gives"), so naming the mechanism first announces the trick
+// before it is played; but some tables like to see the machinery, and some moves are worth
+// showing once they have happened. So the GM reads it first and decides, card by card. The
+// share is core's own "Reveal to Everyone" (whisper emptied, blind cleared), on a button
+// rather than buried in the message's context menu.
 //
 // The pick is a pure function over an injectable `rng`, the way every other random pick in
 // this system is written (pickRandomPortrait, rollOnTable, rollTerrain), so the tests pin the
@@ -76,8 +76,18 @@ function gmMoveCardBody(move, rng) {
 	return parts.join("");
 }
 
+/** The card's share row. Hidden for a player, and for everyone once shared (wireGmMoveShare). */
+function shareRow() {
+	return `<div class="stonetop-gm-move-card-actions">
+		<button type="button" class="stonetop-gm-move-share">
+			<i class="fas fa-eye"></i> ${escHtml(localize("stonetop.gmToolkit.moves.share"))}
+		</button>
+	</div>`;
+}
+
 /**
- * Post a move to chat, for the whole table. Returns the move posted; null when nothing went out.
+ * Post a move to chat, whispered to the GMs, with a button that shares it with the table.
+ * Returns the move posted; null when nothing went out.
  *
  * Takes the move rather than drawing one, because the two are separated by the walk: the sheet
  * draws first (it needs the answer to know which row to land the light on), spins, and posts when
@@ -105,14 +115,48 @@ export async function postGmMove(sectionKey, move, { speaker, rng } = {}) {
 		// for the list, which is not what a GM reads a drawn move for.
 		content: stonetopChatCard(
 			localize(section.titleKey),
-			moveChatCard(move.name, gmMoveCardBody(move, rng)),
+			moveChatCard(move.name, gmMoveCardBody(move, rng)) + shareRow(),
 			"stonetop-gm-move-chat-card",
 		),
-		// No `whisper` key: a message carrying none goes to the whole table. An empty array says
-		// the same thing to Foundry, but it says it by negation — "whispered to nobody" — where
-		// an absent key simply IS a public message, and cannot be misread as a list that was
-		// meant to be filled in.
+		// Resolved at post time, every GM connected or not, so a co-GM sees the same card.
+		whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
 		speaker,
 	});
 	return move;
+}
+
+/**
+ * Share a whispered GM move card with the whole table: core's "Reveal to Everyone".
+ * @returns {Promise<boolean>} false when it was not a GM pressing, or it was already public.
+ */
+export async function shareGmMove(message) {
+	if (!game.user?.isGM || !message?.whisper?.length) return false;
+	await message.update({ whisper: [], blind: false });
+	return true;
+}
+
+/**
+ * Wire a GM move card's "Share with Players" (stonetop.js renderChatMessageHTML). Shown to a GM
+ * only, and only while the card is still whispered: the share re-renders the card on every
+ * client, and this pass then hides the button on the now-public card for GMs too.
+ */
+export function wireGmMoveShare(message, html) {
+	const btn = html.querySelector(".stonetop-gm-move-share");
+	if (!btn) return;
+	if (!game.user?.isGM || !message.whisper?.length) {
+		btn.closest(".stonetop-gm-move-card-actions")?.remove();
+		return;
+	}
+	btn.addEventListener("click", async () => {
+		if (btn.disabled) return;
+		btn.disabled = true;
+		let shared = false;
+		try {
+			shared = await shareGmMove(message);
+		} catch (err) {
+			console.error("Stonetop | sharing a GM move card failed", err);
+			ui.notifications.error(localize("stonetop.gmToolkit.moves.shareFailed"));
+		}
+		if (!shared) btn.disabled = false;
+	});
 }

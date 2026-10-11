@@ -947,7 +947,7 @@ export class ExpeditionDialog extends StepperDialog {
 	}
 
 	/**
-	 * Draw one exploration move at random, land the light on it, and post it to the table.
+	 * Draw one exploration move at random, land the light on it, and post it to the GMs.
 	 *
 	 * The rail lists the same seven moves off the same table as the GM Toolkit's Exploration
 	 * group, so it presses the same drawer (gm-move-drawer.js) — the beat order, the
@@ -956,9 +956,10 @@ export class ExpeditionDialog extends StepperDialog {
 	 * mostly is: the party has just walked into something, the table is looking at the GM, and
 	 * seven moves have gone to soup.
 	 *
-	 * WHISPERED, never public, for the reason written up in random-gm-move.js: naming the move
-	 * announces the trick before it is played. The card carries the move's gloss, one of the
-	 * book's examples and the page.
+	 * WHISPERED to the GMs until shared, for the reason written up in random-gm-move.js: naming
+	 * the move announces the trick before it is played, so the GM reads it first and its Share
+	 * with Players button makes it public. The card carries the move's gloss, one of the book's
+	 * examples and the page.
 	 *
 	 * The speaker is the USER's, not an actor's — a dialog speaks for whoever opened it, where
 	 * the toolkit speaks as the toolkit actor.

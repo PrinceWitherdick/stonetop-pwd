@@ -155,6 +155,7 @@ import { reconcileTierEffects } from "./module/actors/character/tier-effects.js"
 import {
 	INSPIRATION_QUERY, handleInspirationQuery, onUpdateActorInspirationAtZero, wireInspirationDamage, wireKeepOneHp, wireSpeechCard,
 } from "./module/actors/character/inspiration-flow.js";
+import { wireGmMoveShare } from "./module/gm-toolkit/random-gm-move.js";
 import { GIVE_ADVANTAGE_QUERY, handleGiveAdvantageQuery, wireGiveAdvantage } from "./module/actors/character/give-advantage-flow.js";
 import { wireWouldBeHeroCards } from "./module/actors/character/would-be-hero-cards.js";
 import { wireSteadingMissXp } from "./module/actors/steading/steading-miss-xp.js";
@@ -2623,6 +2624,9 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	// Aid, Interfere and Persuade (vs. PCs): the other person's answer, drawn where the move asks
 	// for it (pc-asks/pc-ask-flow.js).
 	wirePcAskCard(message, html);
+	// A GM move card, drawn or clicked off the GM Toolkit or the expedition rail: its "Share with
+	// Players", for a GM while the card is still whispered (gm-toolkit/random-gm-move.js).
+	wireGmMoveShare(message, html);
 });
 
 // -- MAKE CAMP, SHARED -----------------------------------------

@@ -799,7 +799,7 @@ describe("the move randomizer", () => {
 //
 // Silent failures throughout: a name that is not a button is a heading nobody thinks to click, a
 // button with no section key resolves no move and posts nothing at all, and a card that went out
-// to the GMs alone would look right from the only screen this is ever tested from.
+// to the whole table would look right from the only screen this is ever tested from.
 describe("posting a move by clicking its name", () => {
 	const posted = [];
 	beforeEach(() => {
@@ -862,9 +862,9 @@ describe("posting a move by clicking its name", () => {
 		expect(posted).toHaveLength(1);
 		expect(posted[0].content).toContain(escHtml(move.name));
 		expect(posted[0].content).toContain(escHtml(move.gloss));
-		// To the whole table. A card that quietly went back to whispering would look identical
-		// from the GM's own screen, which is the only screen this handler is ever tested from.
-		expect(posted[0]).not.toHaveProperty("whisper");
+		// To the GMs, the same as the die's card. A card that quietly went public would look
+		// identical from the GM's own screen, which is the only screen this handler is tested from.
+		expect(posted[0].whisper).toEqual(["gm1"]);
 	});
 
 	// Scoped to the section the button carries, not searched across all three: the card is FRAMED
