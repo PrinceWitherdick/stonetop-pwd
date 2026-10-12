@@ -42,6 +42,8 @@
         "improvedStonetop": "Did we make a lasting improvement to Stonetop, or tangible progress towards doing so?"
       },
       "tally": "+{xp} XP to each character ticked below.",
+      "mirrorTally": "+{xp} XP to each character at the table.",
+      "mirrorHint": "The GM ticks each question the table answers \"yes\". Their ticks show here as they make them.",
       "whoHeading": "Who marks it",
       "whoTag": "everyone at the table",
       "whoHint": "Ticked: the characters of players who are logged in. Untick anyone who was not at the table.",

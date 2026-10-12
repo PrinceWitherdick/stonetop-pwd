@@ -1,4 +1,4 @@
-<div class="stonetop-eos-body">
+<div class="stonetop-eos-body{{#if mirror}} stonetop-eos-body--mirror{{/if}}">
 
 	<div class="stonetop-eos-sections">
 
@@ -14,10 +14,13 @@
 		{{!-- ── Group XP ───────────────────────────────────────────────── --}}
 		<section class="stonetop-eos-section">
 			<h3 class="stonetop-eos-section-heading">{{localize "stonetop.endOfSession.groupHeading"}} <span class="stonetop-eos-section-tag">{{localize "stonetop.endOfSession.groupTag"}}</span></h3>
+			{{#if mirror}}
+			<p class="stonetop-eos-who-hint">{{localize "stonetop.endOfSession.mirrorHint"}}</p>
+			{{/if}}
 			<div class="stonetop-eos-question-list">
 				{{#each questions}}
 				<label class="stonetop-eos-question{{#if checked}} is-checked{{/if}}">
-					<input type="checkbox" class="stonetop-eos-group-check" data-key="{{key}}" {{#if checked}}checked{{/if}}>
+					<input type="checkbox" class="stonetop-eos-group-check" data-key="{{key}}" {{#if checked}}checked{{/if}}{{#if ../mirror}} disabled{{/if}}>
 					<span class="stonetop-eos-question-text">{{label}}</span>
 				</label>
 				{{/each}}
@@ -27,7 +30,8 @@
 			{{/if}}
 		</section>
 
-		{{!-- ── Who marks it: everyone at the table (Book I p.232) ────────── --}}
+		{{!-- ── Who marks it: everyone at the table (Book I p.232). The GM's to settle, so not on a player's copy. --}}
+		{{#unless mirror}}
 		<section class="stonetop-eos-section">
 			<h3 class="stonetop-eos-section-heading">{{localize "stonetop.endOfSession.whoHeading"}} <span class="stonetop-eos-section-tag">{{localize "stonetop.endOfSession.whoTag"}}</span></h3>
 			{{#if pcs.length}}
@@ -44,6 +48,7 @@
 			<p class="stonetop-eos-who-hint">{{localize "stonetop.endOfSession.nobody"}}</p>
 			{{/if}}
 		</section>
+		{{/unless}}
 
 		{{!-- ── Around the Table ────────────────────────────────────────── --}}
 		<section class="stonetop-eos-section">
@@ -58,7 +63,9 @@
 
 	<footer class="stonetop-eos-footer">
 		<button type="button" class="stonetop-eos-confirm-btn">
-			{{#if xpCount}}
+			{{#if mirror}}
+				{{localize "stonetop.endOfSession.close"}}
+			{{else if xpCount}}
 				{{awardLabel}}
 			{{else}}
 				{{localize "stonetop.endOfSession.close"}}

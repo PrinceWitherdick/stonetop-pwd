@@ -18258,6 +18258,19 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	flex: 1;
 }
 
+/* A player's read-only copy (end-of-session-broadcast.js): the GM's ticks, which the player
+   cannot change. Full strength rather than core's faded disabled look, because the ticks are
+   the point of the copy and a low-vision player has to be able to read them. */
+.stonetop-eos-body--mirror .stonetop-eos-question,
+.stonetop-eos-body--mirror .stonetop-eos-question input[type="checkbox"]:disabled {
+	cursor: default;
+	opacity: 1;
+}
+
+.stonetop-eos-body--mirror .stonetop-eos-question:not(.is-checked):hover {
+	background: rgba(0, 0, 0, 0.02);
+}
+
 .stonetop-eos-xp-tally {
 	margin: 0;
 	font-size: var(--st-fs-base);

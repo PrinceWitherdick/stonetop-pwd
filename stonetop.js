@@ -73,6 +73,7 @@ import { addJournalShareButton } from "./module/journal/share-journal.js";
 import { patchJournalImagePopoutTitles } from "./module/journal/journal-image-titles.js";
 import { onRenderPause } from "./module/hooks/RenderPause.js";
 import { registerBookBroadcast } from "./module/books/book-broadcast.js";
+import { registerEndOfSessionBroadcast } from "./module/dialogs/end-of-session-broadcast.js";
 import { onRenderCompendiumItemIcons } from "./module/hooks/CompendiumItemIcons.js";
 import { decoratePortraitRow, onUpdateActorPortraitFrame } from "./module/hooks/ActorDirectoryPortraits.js";
 import { decorateNameRow, onUpdateActorPlaybookName } from "./module/hooks/ActorDirectoryNames.js";
@@ -820,6 +821,9 @@ Hooks.once("ready", onReady);
 // throw on a half-migrated world, and a table should not lose the ability to be shown a page
 // because a portrait backfill failed. See module/books/book-broadcast.js.
 Hooks.once("ready", registerBookBroadcast);
+// The same for End of Session: a player's read-only copy of the GM's window, which follows the
+// GM's ticks. See module/dialogs/end-of-session-broadcast.js.
+Hooks.once("ready", registerEndOfSessionBroadcast);
 Hooks.once("ready", () => applyMoveDescriptionBodyClass(getSetting("showMoveDescriptionsInChat")));
 
 // -- THREAT BOARD (opt-in on-canvas threat cards) --------------

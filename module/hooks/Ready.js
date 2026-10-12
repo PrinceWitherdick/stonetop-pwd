@@ -456,7 +456,7 @@ export async function onReady() {
 	// The modules the Import Book Art macro borrows, so a bundled release hands it this system's own
 	// instances rather than second copies. See book2-art/macro-modules.js.
 	game.stonetop.macroModules = MACRO_MODULES;
-	game.stonetop.openEndOfSession  = () => new EndOfSessionDialog().render(true);
+	game.stonetop.openEndOfSession  = () => EndOfSessionDialog.open();
 	game.stonetop.openIntroductions = () => IntroductionsDialog.open();
 	// Cursor onChange dispatcher (registered on the introCursor world setting): opens/
 	// focuses/closes the Introductions dialog on the active player's client as the GM
