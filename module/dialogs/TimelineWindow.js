@@ -295,8 +295,8 @@ export class TimelineWindow extends StonetopDialog {
 		if (!isDrawn(scroll)) return;
 		const placed = scrubToYear(scroll, this._scrubStops, timelineNow().year, {
 			horizontal: getTimelineOrientation() === "horizontal",
-			picture: scroll.querySelector(".stonetop-timeline-canvas > *"),
-			// As the scrubber's (`activateListeners`).
+			// As the scrubber's (`activateListeners`): only a single thread is centred across its line.
+			picture: this.isSingleTrack ? scroll.querySelector(".stonetop-timeline-canvas > *") : null,
 			inset: 12,
 		});
 		if (placed) this._noteView(scroll);
@@ -837,7 +837,9 @@ export class TimelineWindow extends StonetopDialog {
 			max: TIMELINE_ZOOM_MAX,
 		});
 		// The year scrubber: slide and the column follows the thumb, free of any stop; move the
-		// column any other way and the thumb follows it.
+		// column any other way and the thumb follows it. Only a single thread (a sheet's tab) is put
+		// back in the middle across its line; the aggregate stays where the reader left it that way
+		// (user, 2026-10-11).
 		this._unwireScrubber?.();
 		this._unwireScrubber = wireYearScrubber(
 			root.querySelector(".stonetop-timeline-scroll"),
@@ -845,7 +847,7 @@ export class TimelineWindow extends StonetopDialog {
 			{
 				stops: this._scrubStops,
 				horizontal: readAcross,
-				picture: ".stonetop-timeline-canvas > *",
+				picture: this.isSingleTrack ? ".stonetop-timeline-canvas > *" : "",
 				// The first child's own top inset (`.stonetop-timeline-scroll > :first-child`), and the
 				// column's 12px left padding, kept when a year or a wide board is laid against an edge.
 				inset: 12,

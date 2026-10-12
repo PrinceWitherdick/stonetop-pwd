@@ -3,8 +3,10 @@
 // scrubbed, we should center the timeline in the view").
 //
 // Sliding it moves the column along the timeline's own axis (across for Horizontal, down for
-// Vertical), and puts the timeline back in the middle the other way too: the drag gutter lets a
-// reader haul it nearly out of sight, and a scrub is how they get it back. It follows the other way
+// Vertical), and, on a single thread (a sheet's tab), puts the timeline back in the middle the other
+// way too: the drag gutter lets a reader haul it nearly out of sight, and a scrub is how they get it
+// back. The aggregate gets no `picture`, so it stays where it was left across its axis (user,
+// 2026-10-11: center "only individual sheet's timelines"). It follows the other way
 // as well: drag, throw or zoom the column and the thumb moves to wherever the view is, so it always
 // says where the reader is.
 //
