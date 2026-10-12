@@ -129,12 +129,19 @@ export function pointerBoard({ nodes = ["n1", "n2"], edges = ["e1"], groups = []
 		cancelAnimationFrame: globalThis.cancelAnimationFrame,
 	};
 
-	// Only the two calls relmap-drag makes of the document: the rubber band it builds once, and
-	// the hit test that resolves a dropped line onto the portrait under the cursor.
+	// Only the calls relmap-drag makes of the document: the rubber band it builds once, the hit test
+	// that resolves a dropped line onto the portrait under the cursor, and the page's keys (Shift taken
+	// up or let go mid-resize).
 	let hits = [];
+	const pageKeys = [];
 	globalThis.document = {
 		createElementNS: () => boardEl(),
 		elementsFromPoint: () => hits,
+		addEventListener: (type, fn) => pageKeys.push({ type, fn }),
+		removeEventListener: (type, fn) => {
+			const at = pageKeys.findIndex(one => one.type === type && one.fn === fn);
+			if (at >= 0) pageKeys.splice(at, 1);
+		},
 	};
 	// `push` returns the new length, which is exactly the 1-based handle `cancel` indexes back with.
 	globalThis.requestAnimationFrame = fn => frames.push(fn);
@@ -205,16 +212,25 @@ export function pointerBoard({ nodes = ["n1", "n2"], edges = ["e1"], groups = []
 	// invisible wide one among them the only thing there a click can land on, and the NAME, a
 	// `div role="button"` on the board itself carrying the group's id. Only on a board asked for them.
 	const groupLayer = groups.length ? boardEl({ cls: ["stonetop-relmap-groups"], parent: board }) : null;
+	// The resize corners' own layer, over everything else, as the partial draws it.
+	const gripLayer = groups.length ? boardEl({ cls: ["stonetop-relmap-grips"], parent: board }) : null;
 	const outlines = {};
 	for (const id of groups) {
 		const g = boardEl({ cls: ["stonetop-relmap-group"], dataset: { relmapGroupShape: id }, parent: groupLayer });
 		g.hit = boardEl({ cls: ["stonetop-relmap-group-hit"], dataset: { relmapGroupHit: id }, parent: g });
+		// One of the four resize corners a held group wears, the south-east one, in that layer.
+		const set = boardEl({ cls: ["stonetop-relmap-gripset"], dataset: { relmapGripset: id }, parent: gripLayer });
+		g.grip = boardEl({ cls: ["stonetop-relmap-group-grip"], dataset: { relmapGrip: id, relmapCorner: "se" }, parent: set });
 		g.name = boardEl({ cls: ["stonetop-relmap-group-name"], dataset: { relmapGroup: id }, parent: board });
 		outlines[id] = g;
 	}
 
 	return {
 		root, view, board, portraits, captions, strokes, tiebar, outlines,
+		/** A key pressed (`keydown`) or let go (`keyup`) on the page, wherever the focus is. */
+		pageKey(type, key) {
+			for (const one of pageKeys.filter(listener => listener.type === type)) one.fn({ type, key });
+		},
 		/** Where `elementsFromPoint` will say the cursor is, topmost first. */
 		setHits(list) { hits = list; },
 		/** Run every frame queued so far, the way one paint would. */

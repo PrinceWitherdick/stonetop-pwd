@@ -5,7 +5,8 @@ import {
 	groupMembersPatch, groupPatch, normalizeGraph, relmapPath,
 } from "../../module/relmap/relmap-store.js";
 import {
-	RELMAP_CAPTION_PX, RELMAP_GROUP_PAD_PX, boardBounds, groupNestPx, groupOutline, groupShapes, groupsInside,
+	RELMAP_CAPTION_PX, RELMAP_GROUP_GROW_MAX, RELMAP_GROUP_MIN_H, RELMAP_GROUP_MIN_W, RELMAP_GROUP_PAD_PX, boardBounds, groupNestPx,
+	groupOutline, groupShapes, groupsInside, growFor, insideGroupShape, readGroupGrow, resizeRect,
 } from "../../module/utils/relmap-geometry.js";
 
 // NAMED GROUPS ON THE RELATIONSHIP MAP: "The hunters", "The elders", an outline round some people.
@@ -63,7 +64,10 @@ describe("reading a stored group back", () => {
 
 	it("keeps the name, the shape, the stroke and the ink, and every field even on a bare group", () => {
 		const got = normalizeGraph({ nodes: { a: { name: "A" } }, groups: { g: { members: { a: true } } } });
-		expect(got.groups.g).toEqual({ name: "", shape: "box", dash: "solid", ink: "slate", members: { a: true } });
+		expect(got.groups.g).toEqual({
+			name: "", shape: "box", dash: "solid", ink: "slate",
+			grow: { left: 0, top: 0, right: 0, bottom: 0 }, members: { a: true },
+		});
 	});
 
 	// SOLID UNLESS SOMEBODY CHOSE DASHES. Every group stored before the stroke was a choice has no
@@ -136,6 +140,7 @@ describe("the shape of a group write", () => {
 			[`${PREFIX}.groups.g1.shape`]: "box",
 			[`${PREFIX}.groups.g1.dash`]: "solid",
 			[`${PREFIX}.groups.g1.ink`]: "plum",
+			[`${PREFIX}.groups.g1.grow`]: { left: 0, top: 0, right: 0, bottom: 0 },
 			[`${PREFIX}.groups.g1.members.ordga`]: true,
 			[`${PREFIX}.groups.g1.members.pell`]: true,
 		});
@@ -385,5 +390,165 @@ describe("the outline round a group", () => {
 		const bounds = boardBounds([at(0, 0)], board, [outline]);
 		expect(bounds.left).toBeLessThanOrEqual(outline.left);
 		expect(bounds.top).toBeLessThanOrEqual(outline.top);
+	});
+});
+
+// RESIZING A GROUP (user, 2026-10-12: "select it and then drag to increase or shrink its size").
+// What is stored is how far each side sits past (or short of) the snug outline, never a size or a
+// place: the outline still follows its people. Shrunk across somebody, it takes them out (the window).
+describe("a group's extra room", () => {
+	const board = { width: 1200, height: 800 };
+	const one = [{ x: 50, y: 50 }];
+	const NONE = { left: 0, top: 0, right: 0, bottom: 0 };
+
+	it("reads whole pixels on all four sides, either way, within the cap", () => {
+		expect(readGroupGrow(undefined)).toEqual(NONE);
+		expect(readGroupGrow({ left: 12.6, top: -40, right: "30", bottom: "wide" }))
+			.toEqual({ left: 13, top: -40, right: 30, bottom: 0 });
+		expect(readGroupGrow({ right: 1e9, left: -1e9 })).toMatchObject({ right: RELMAP_GROUP_GROW_MAX, left: -RELMAP_GROUP_GROW_MAX });
+	});
+
+	it("writes all four sides as one field, through the same reading", () => {
+		expect(groupPatch("g1", { grow: { right: 40, top: -5 } }))
+			.toEqual({ [`${PREFIX}.groups.g1.grow`]: { left: 0, top: -5, right: 40, bottom: 0 } });
+	});
+
+	it("moves a box's sides out by exactly that much, and keeps the snug one under it", () => {
+		const snug = groupOutline(one, { board });
+		const grown = groupOutline(one, { board, grow: { left: 10, top: 20, right: 30, bottom: 40 } });
+		expect(grown.left).toBeCloseTo(snug.left - 10);
+		expect(grown.top).toBeCloseTo(snug.top - 20);
+		expect(grown.right).toBeCloseTo(snug.right + 30);
+		expect(grown.bottom).toBeCloseTo(snug.bottom + 40);
+		expect(grown.rect).toEqual({ left: grown.left, top: grown.top, right: grown.right, bottom: grown.bottom });
+	});
+
+	// The corners an oval is resized by are on its line, because it is drawn through them.
+	it("draws an oval through the corners of its grown rectangle", () => {
+		const oval = groupOutline(one, { board, shape: "oval", grow: { right: 120, bottom: 10 } });
+		for (const [x, y] of [["left", "top"], ["right", "top"], ["right", "bottom"], ["left", "bottom"]]) {
+			const dx = (oval.rect[x] - oval.cx) / oval.rx;
+			const dy = (oval.rect[y] - oval.cy) / oval.ry;
+			expect(dx * dx + dy * dy).toBeCloseTo(1);
+		}
+	});
+
+	it("puts a dragged corner under the pointer and keeps the opposite one where it was", () => {
+		const rect = { left: 100, top: 100, right: 400, bottom: 300 };
+		expect(resizeRect(rect, "se", { x: 450, y: 360 })).toEqual({ left: 100, top: 100, right: 450, bottom: 360 });
+		expect(resizeRect(rect, "nw", { x: 150, y: 120 })).toEqual({ left: 150, top: 120, right: 400, bottom: 300 });
+		expect(resizeRect(rect, "ne", { x: 420, y: 40 })).toEqual({ left: 100, top: 40, right: 420, bottom: 300 });
+	});
+
+	// ⚠ NO LONGER HELD AT THE SNUG OUTLINE: shrinking past people is how they are taken out.
+	// "we shouldn't be able to shrink a group down to smaller than a single token's size": the floor is
+	// the snug outline round one person, face and name.
+	it("shrinks past its people, but never below one person's outline, and never inside out", () => {
+		const rect = { left: 100, top: 100, right: 400, bottom: 300 };
+		const small = resizeRect(rect, "se", { x: 0, y: 0 });
+		expect(small).toEqual({ left: 100, top: 100, right: 100 + RELMAP_GROUP_MIN_W, bottom: 100 + RELMAP_GROUP_MIN_H });
+		const drawn = groupOutline(one, { board });
+		expect(drawn.rect.right - drawn.rect.left).toBeCloseTo(RELMAP_GROUP_MIN_W);
+		expect(drawn.rect.bottom - drawn.rect.top).toBeCloseTo(RELMAP_GROUP_MIN_H);
+		const two = groupOutline([{ x: 20, y: 50 }, { x: 60, y: 50 }], { board });
+		const shrunk = groupOutline([{ x: 20, y: 50 }, { x: 60, y: 50 }], {
+			board, grow: growFor(two.snug, { ...two.rect, right: two.rect.right - 60 }),
+		});
+		expect(shrunk.rect.right).toBeCloseTo(two.rect.right - 60);
+		// A lone person's outline will not shrink at all.
+		const lone = groupOutline(one, { board, grow: { right: -60, bottom: -60 } });
+		expect(lone.rect).toEqual(drawn.rect);
+		// Offsets that would cross the sides over are drawn at the floor instead.
+		const crossed = groupOutline(one, { board, grow: { left: -500, right: -500 } });
+		expect(crossed.rect.right - crossed.rect.left).toBeCloseTo(RELMAP_GROUP_MIN_W);
+	});
+
+	// Shift: "make all sides of the shape equal - perfect square, perfect circle".
+	it("makes all four sides equal with Shift, by the longer of the two the pointer asks for", () => {
+		const rect = { left: 100, top: 100, right: 300, bottom: 200 };
+		expect(resizeRect(rect, "se", { x: 400, y: 220 }, { square: true }))
+			.toEqual({ left: 100, top: 100, right: 400, bottom: 400 });
+		expect(resizeRect(rect, "nw", { x: 250, y: 0 }, { square: true }))
+			.toEqual({ left: 100, top: 0, right: 300, bottom: 200 });
+		const sq = resizeRect(rect, "sw", { x: 90, y: 150 }, { square: true });
+		expect(sq.right - sq.left).toBe(sq.bottom - sq.top);
+		expect(sq).toMatchObject({ right: 300, top: 100 });
+		// And a square rectangle draws a circle.
+		const drawn = groupOutline(one, { board, shape: "oval" });
+		const round = groupOutline(one, { board, shape: "oval", grow: growFor(drawn.snug, resizeRect(drawn.rect, "se", { x: 900, y: 0 }, { square: true })) });
+		expect(round.rx).toBeCloseTo(round.ry);
+	});
+
+	it("measures the offsets that put a snug rectangle on any other", () => {
+		expect(growFor({ left: 10, top: 10, right: 50, bottom: 50 }, { left: 0, top: 20, right: 70, bottom: 40 }))
+			.toEqual({ left: 10, top: -10, right: 20, bottom: -10 });
+	});
+
+	it("says whose face is inside a box, and inside an oval drawn on the same rectangle", () => {
+		const rect = { left: 0, top: 0, right: 200, bottom: 100 };
+		expect(insideGroupShape("box", rect, { x: 199, y: 99 })).toBe(true);
+		expect(insideGroupShape("box", rect, { x: 201, y: 50 })).toBe(false);
+		// The oval runs through the corners, so a corner is on it and a point just past the middle of a
+		// side, inside the box, is still inside the oval.
+		expect(insideGroupShape("oval", rect, { x: 200, y: 100 })).toBe(true);
+		expect(insideGroupShape("oval", rect, { x: 230, y: 50 })).toBe(true);
+		expect(insideGroupShape("oval", rect, { x: 260, y: 110 })).toBe(false);
+	});
+
+	it("keeps its room while its people move, and a group round it stands clear of the grown outline", () => {
+		const nodes = { a: { name: "A", x: 30, y: 40 }, b: { name: "B", x: 60, y: 40 } };
+		const plain = normalizeGraph({ nodes, groups: {
+			inner: { members: { a: true } }, outer: { members: { a: true, b: true } },
+		} });
+		const grown = normalizeGraph({ nodes, groups: {
+			inner: { members: { a: true }, grow: { left: 100 } }, outer: { members: { a: true, b: true } },
+		} });
+		const at = g => Object.fromEntries(groupShapes(g, board).map(shape => [shape.id, shape.outline]));
+		expect(at(grown).inner.left).toBeCloseTo(at(plain).inner.left - 100);
+		expect(at(grown).outer.left).toBeCloseTo(at(plain).outer.left - 100);
+		const moved = normalizeGraph({ ...grown, nodes: { ...nodes, a: { ...nodes.a, x: 20 } } });
+		expect(at(moved).inner.left).toBeCloseTo(at(grown).inner.left - 120);
+	});
+
+	// Its room is measured from its OWN people: a group inside it is laid round afterwards, so a shrink
+	// never cuts through one, and one shrunk back later never pulls this outline in past its people.
+	it("is never drawn through a group inside it, and keeps its people when that group shrinks back", () => {
+		const nodes = { a: { name: "A", x: 30, y: 40 }, b: { name: "B", x: 40, y: 40 }, c: { name: "C", x: 70, y: 40 } };
+		const make = (innerGrow, outerGrow) => normalizeGraph({ nodes, groups: {
+			inner: { members: { a: true, b: true }, grow: innerGrow },
+			outer: { members: { a: true, b: true, c: true }, grow: outerGrow },
+		} });
+		const at = g => Object.fromEntries(groupShapes(g, board).map(shape => [shape.id, shape.outline]));
+		const nest = groupNestPx();
+		// The inner group hauled out 300px on its right, then the outer one's right corner dragged in
+		// to just past A and B: its people-only outline would end well inside the inner one's.
+		const wide = at(make({ right: 300 }, null));
+		const shrunk = at(make({ right: 300 }, growFor(wide.outer.snug, { ...wide.outer.rect, right: wide.inner.rect.right - 200 })));
+		expect(shrunk.outer.rect.right).toBeGreaterThanOrEqual(shrunk.inner.right + nest - 0.01);
+		// The inner one shrunk back: the outer one still stands round A and B's own outline.
+		const back = at(make(null, growFor(wide.outer.snug, { ...wide.outer.rect, right: wide.inner.rect.right - 200 })));
+		expect(back.outer.rect.right).toBeGreaterThanOrEqual(back.inner.right + nest - 0.01);
+		expect(back.outer.snug.right).toBeCloseTo(at(make(null, null)).outer.snug.right);
+	});
+
+	it("takes a resize back in one step, to the snug outline on a group drawn before resizing existed", () => {
+		const before = graph();
+		const patch = groupPatch("hunt", { grow: { right: 60, bottom: 30 } });
+		const change = describeWrite(before, patch);
+		expect(change).not.toBeNull();
+		const after = afterPatch(before, patch);
+		expect(after.groups.hunt.grow).toEqual({ left: 0, top: 0, right: 60, bottom: 30 });
+		const back = afterPatch(after, stepPatch(after, change.back));
+		expect(back.groups.hunt.grow).toEqual(NONE);
+		const again = afterPatch(back, stepPatch(back, change.forward));
+		expect(again.groups.hunt.grow).toEqual(after.groups.hunt.grow);
+	});
+
+	it("puts a rubbed-out group back at the size it had", () => {
+		const before = afterPatch(graph(), groupPatch("hunt", { grow: { left: 44 } }));
+		const change = describeWrite(before, dropGroupPatch("hunt"));
+		const after = afterPatch(before, dropGroupPatch("hunt"));
+		const back = afterPatch(after, stepPatch(after, change.back));
+		expect(back.groups.hunt.grow).toEqual({ left: 44, top: 0, right: 0, bottom: 0 });
 	});
 });

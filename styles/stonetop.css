@@ -47525,6 +47525,36 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 
 .stonetop-relmap.is-readonly .stonetop-relmap-group-hit { cursor: default; }
 
+/* THE FOUR CORNERS A HELD GROUP IS RESIZED BY: paper discs ringed in the group's ink, on its line.
+   Only on the group the bar is holding; the template draws them only for somebody who may edit.
+   Their radius is written by the window so they stay one size on screen (`_paintGrips`).
+
+   IN A LAYER OVER THE NAMES AND FACES, which takes no clicks itself: a corner under the group's own
+   name could not be taken hold of. Under a portrait being carried (`is-dragging`, 4). */
+.stonetop-relmap-grips {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	overflow: visible;
+	z-index: 3;
+}
+
+.stonetop-relmap-group-grip {
+	display: none;
+	fill: var(--st-page);
+	stroke: var(--relmap-ink, var(--st-relmap-ink-slate));
+	stroke-width: 2.5px;
+	pointer-events: all;
+}
+
+.stonetop-relmap-gripset.is-picked .stonetop-relmap-group-grip { display: inline; }
+.stonetop-relmap-group-grip.is-nw,
+.stonetop-relmap-group-grip.is-se { cursor: nwse-resize; }
+.stonetop-relmap-group-grip.is-ne,
+.stonetop-relmap-group-grip.is-sw { cursor: nesw-resize; }
+
 /* Held by the group bar, or rested on: heavier, and solid, so on a broken outline the mark is a SHAPE
    change as well as a weight one. (A whole one has only the weight, and the name chip's ring beside
    it, which the rule after this paints.) */

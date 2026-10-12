@@ -18,7 +18,7 @@ import { deletionEntry } from "../utils/foundry-compat.js";
 import { clipText } from "../utils/strings.js";
 import {
 	RELMAP_BOARD_ASPECT, RELMAP_CAPTION_FLOOR_PX, RELMAP_CAPTION_PX, boardMetrics, clampReach,
-	freeSpot, ringsLayout,
+	freeSpot, readGroupGrow, ringsLayout,
 } from "../utils/relmap-geometry.js";
 import { normalizeHex } from "./relmap-ink.js";
 
@@ -552,6 +552,8 @@ export function normalizeGraph(raw) {
 			shape: readGroupShape(group.shape),
 			dash: readGroupDash(group.dash),
 			ink: readInk(group.ink),
+			// Extra room past its people, per side. Nothing on every group drawn before it could be resized.
+			grow: readGroupGrow(group.grow),
 			members,
 		};
 	}
@@ -622,6 +624,9 @@ const GROUP_GATES = Object.freeze({
 	shape: readGroupShape,
 	dash: readGroupDash,
 	ink: readInk,
+	// ALL FOUR SIDES IN ONE OBJECT, written whole every time, so a step of the undo can put a resize
+	// back with one field: the corner dragged moves two sides at once.
+	grow: readGroupGrow,
 });
 
 /**
@@ -761,12 +766,12 @@ export function groupMembersPatch(id, add = [], remove = []) {
  */
 export function addGroupPatch(id, {
 	name = "", shape = RELMAP_GROUP_SHAPE_DEFAULT, dash = RELMAP_GROUP_DASH_DEFAULT,
-	ink = RELMAP_INK_DEFAULT, members = [],
+	ink = RELMAP_INK_DEFAULT, grow = null, members = [],
 } = {}) {
 	if (!isSafeId(id)) return null;
 	const into = groupMembersPatch(id, members);
 	if (!into) return null;
-	return { ...groupPatch(id, { name, shape, dash, ink }), ...into };
+	return { ...groupPatch(id, { name, shape, dash, ink, grow }), ...into };
 }
 
 /** Rub out one group. The people in it stay exactly where they are. */

@@ -17,7 +17,8 @@
 
       IN BOARD PIXELS AND NOT THE LINES' STRETCHED 0-100 SPACE, so a rounded corner and an oval keep
       their shape. Worked out from where the members stand on every paint (`groupOutline`), never
-      stored, so an outline follows its people when they are dragged.
+      stored, so an outline follows its people when they are dragged. All that is stored is how
+      much room somebody dragged it out to past them (`grow`).
 
       ONLY THE STROKE TAKES A CLICK (`data-relmap-group-hit`, invisible and wide). The inside is
       paper: a press there pans the board, and the faces inside it are still clicked as faces.
@@ -291,3 +292,25 @@
       the layer above, still focusable, still says what it says. --}}
 <svg class="stonetop-relmap-labels-lit" viewBox="0 0 {{boardWidth}} {{boardHeight}}"
      aria-hidden="true" focusable="false"></svg>
+
+{{!-- THE FOUR CORNERS EACH GROUP IS RESIZED BY, shown only on the group the bar is holding
+      (`is-picked`) and only to somebody who may edit the map (`grips` is empty otherwise). Their
+      size on screen is the window's (`_paintGrips`), so they stay the same to aim at whatever the zoom.
+
+      ⚠ A LAYER OF THEIR OWN, LAST, AND NOT INSIDE THE OUTLINE'S. The outlines lie under everything, and
+      a corner drawn there was covered by the group's own name whenever the box was narrower than its
+      name -- which a group shrunk to one person always is. In board pixels, like the outlines. --}}
+{{#if groups.length}}
+<svg class="stonetop-relmap-grips" viewBox="0 0 {{boardWidth}} {{boardHeight}}"
+     aria-hidden="true" focusable="false">
+  {{#each groups}}
+  <g class="stonetop-relmap-gripset stonetop-relmap-ink--{{inkKey}}" data-relmap-gripset="{{id}}"
+     {{#if inkHex}}style="--relmap-ink-raw:{{inkHex}}"{{/if}}>
+    {{#each grips}}
+    <circle class="stonetop-relmap-group-grip is-{{corner}}" data-relmap-grip="{{id}}" data-relmap-corner="{{corner}}"
+            cx="{{x}}" cy="{{y}}" r="8" vector-effect="non-scaling-stroke"></circle>
+    {{/each}}
+  </g>
+  {{/each}}
+</svg>
+{{/if}}
