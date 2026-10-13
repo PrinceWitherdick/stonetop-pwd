@@ -3442,13 +3442,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 				within: preview.groupsWithin, only: preview.groupIds, wordScale: preview.scales?.word,
 			});
 			for (const { id, outline } of shapes) {
-				if (!preview.groupIds.has(id)) continue;
-				const parts = preview.groupParts.get(id);
-				for (const path of parts?.paths ?? []) path.setAttribute?.("d", outline.d);
-				if (parts?.name?.style) {
-					parts.name.style.left = `${outline.name.left}%`;
-					parts.name.style.top = `${outline.name.top}%`;
-				}
+				if (preview.groupIds.has(id)) redrawGroup(preview.groupParts.get(id), id, outline);
 			}
 		}
 	}
@@ -4452,18 +4446,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		for (const { id: shown, outline } of groupShapes(preview.graph, preview.board, {
 			within: preview.within, wordScale: preview.scales?.word,
 		})) {
-			const parts = preview.parts.get(shown);
-			if (!parts) continue;
-			for (const path of parts.paths) path.setAttribute?.("d", outline.d);
-			if (parts.name?.style) {
-				parts.name.style.left = `${outline.name.left}%`;
-				parts.name.style.top = `${outline.name.top}%`;
-			}
-			for (const { corner, x, y } of gripsOf(shown, outline)) {
-				const grip = parts.grips.find(el => el.dataset?.relmapCorner === corner);
-				grip?.setAttribute?.("cx", String(x));
-				grip?.setAttribute?.("cy", String(y));
-			}
+			redrawGroup(preview.parts.get(shown), shown, outline);
 		}
 		if (!resize) { this._lightGroup(this._litGroup); return; }
 		const root = this._root;
@@ -5711,6 +5694,25 @@ function indexGroupParts(board) {
 	});
 	board?.querySelectorAll?.("[data-relmap-group]")?.forEach?.(el => { partsFor(el.dataset.relmapGroup).name = el; });
 	return parts;
+}
+
+/**
+ * One group's outline, name and resize corners moved onto `outline` between two paints: a drag
+ * carrying its people, or a corner of it dragged. The corners too, or the held group's would be left
+ * behind where the last paint put them, and a press on one would start from the old shape.
+ */
+function redrawGroup(parts, id, outline) {
+	if (!parts) return;
+	for (const path of parts.paths ?? []) path.setAttribute?.("d", outline.d);
+	if (parts.name?.style) {
+		parts.name.style.left = `${outline.name.left}%`;
+		parts.name.style.top = `${outline.name.top}%`;
+	}
+	for (const { corner, x, y } of gripsOf(id, outline)) {
+		const grip = parts.grips?.find(el => el.dataset?.relmapCorner === corner);
+		grip?.setAttribute?.("cx", String(x));
+		grip?.setAttribute?.("cy", String(y));
+	}
 }
 
 /**

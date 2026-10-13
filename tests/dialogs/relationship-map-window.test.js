@@ -5386,6 +5386,22 @@ describe("groups on the map", () => {
 		expect(back.grow).toEqual({ left: 0, top: 0, right: 0, bottom: 0 });
 	});
 
+	// THE CORNERS GO WITH THE OUTLINE when the group's people are carried, or a press on one would
+	// start a resize from where the group used to be.
+	it("carries the held group's corners with its people", () => {
+		const { app, board } = windowFor({
+			...TWO_PEOPLE, groups: { g: { name: "Two", members: { elena: true, stefan: true } } },
+		});
+		const grips = ["nw", "ne", "se", "sw"].map(corner => {
+			const grip = { dataset: { relmapGrip: "g", relmapCorner: corner }, attrs: {} };
+			grip.setAttribute = (name, value) => { grip.attrs[name] = value; };
+			return grip;
+		});
+		board.all = { "[data-relmap-gripset]": [{ dataset: { relmapGripset: "g" }, querySelectorAll: () => grips }] };
+		app._previewMoves({ elena: { x: 20, y: 70 }, stefan: { x: 70, y: 70 } });
+		expect(Number(grips[2].attrs.cy)).toBeGreaterThan(0.7 * app._plan().board.height);
+	});
+
 	it("refuses a shrink that would leave nobody in the group, and says why", async () => {
 		const { entry, pages: [page] } = HUNTERS();
 		const { app, live } = windowFor(null, { entry, pageId: "p1" });
