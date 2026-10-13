@@ -463,6 +463,20 @@ describe("a group's extra room", () => {
 		expect(crossed.rect.right - crossed.rect.left).toBeCloseTo(RELMAP_GROUP_MIN_W);
 	});
 
+	// ⚠ THE FLOOR REACHED BY A CORNER STAYS UNDER THAT CORNER. The offsets are stored in whole pixels, so
+	// a corner dragged in to one person's size is kept a fraction under it; measured strictly, the
+	// outline jumped to the middle of everybody in the group ("suddenly it flips and moves to the right").
+	it("keeps a corner dragged in to the floor where it was dragged, not centred on everybody", () => {
+		const people = [{ x: 30.13, y: 40.27 }, { x: 45.71, y: 41.09 }];
+		const wide = { width: 2400, height: 1600 };
+		const drawn = groupOutline(people, { board: wide });
+		for (const [corner, point] of [["se", { x: 0, y: 0 }], ["nw", { x: 1e4, y: 1e4 }]]) {
+			const asked = resizeRect(drawn.rect, corner, point);
+			const shrunk = groupOutline(people, { board: wide, grow: growFor(drawn.snug, asked) });
+			for (const side of ["left", "top", "right", "bottom"]) expect(Math.abs(shrunk.rect[side] - asked[side])).toBeLessThan(1);
+		}
+	});
+
 	// Shift: "make all sides of the shape equal - perfect square, perfect circle".
 	it("makes all four sides equal with Shift, by the longer of the two the pointer asks for", () => {
 		const rect = { left: 100, top: 100, right: 300, bottom: 200 };
@@ -550,5 +564,22 @@ describe("a group's extra room", () => {
 		const after = afterPatch(before, dropGroupPatch("hunt"));
 		const back = afterPatch(after, stepPatch(after, change.back));
 		expect(back.groups.hunt.grow).toEqual({ left: 44, top: 0, right: 0, bottom: 0 });
+	});
+});
+
+// Stored in whole pixels, rounded OUTWARD: a stored outline always holds the one asked for, and an
+// offset already whole (the corner held still) never creeps out a pixel per drag.
+describe("growFor's rounding", () => {
+	it("never stores an outline smaller than the one asked for", () => {
+		const snug = { left: 100.4, top: 50.6, right: 200.2, bottom: 150.8 };
+		// Each a fraction past whole, which rounding to the nearest would have taken back off.
+		const asked = { left: 90.2, top: 40.3, right: 210.5, bottom: 160.9 };
+		expect(growFor(snug, asked)).toEqual({ left: 11, top: 11, right: 11, bottom: 11 });
+	});
+
+	it("leaves a whole offset where it is", () => {
+		const snug = { left: 100.4, top: 50.6, right: 200.2, bottom: 150.8 };
+		const rect = { left: 100.4 - 12, top: 50.6 - 7, right: 200.2 + 3, bottom: 150.8 - 4 };
+		expect(growFor(snug, rect)).toEqual({ left: 12, top: 7, right: 3, bottom: -4 });
 	});
 });
