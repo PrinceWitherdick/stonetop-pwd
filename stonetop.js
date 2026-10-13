@@ -31,7 +31,8 @@ import { createStonetopTimelinePageSheetClass } from "./module/journal/StonetopT
 import { createRelationshipMapEntrySheetClass } from "./module/journal/RelationshipMapEntrySheet.js";
 import { RELMAP_SHEET_CLASS } from "./module/relmap/relmap-doc.js";
 import { ThreatBoard } from "./module/threats/threat-board.js";
-import { onReady } from "./module/hooks/Ready.js";
+import { onReady, _reconcileSharedCharacterSheets } from "./module/hooks/Ready.js";
+import { CHARACTER_SHEETS_SHARED_HOOK } from "./module/actors/character/shared-sheets.js";
 import { registerPrecompiledTemplates } from "./module/utils/templates.js";
 import { loadTemplates } from "./module/utils/foundry-compat.js";
 import { handleImportedJournalArt, ART_INDEX_SETTINGS } from "./module/book2-art/reapply.js";
@@ -780,6 +781,11 @@ Hooks.on("renderDocumentDirectory", (app, element) => {
 	hideTimelineJournalRow(app, element);
 });
 Hooks.on(FEATURE_SWITCH_HOOK, onFeatureSwitched);
+
+// The GM's switch opening every character to the table, or closing them again. The handler is
+// self-gated to the primary GM. See module/actors/character/shared-sheets.js.
+Hooks.on(CHARACTER_SHEETS_SHARED_HOOK, () => _reconcileSharedCharacterSheets()
+	.catch(err => console.error("Stonetop | shared character sheet reconcile failed", err)));
 Hooks.on("updateActor", onUpdateActorPortraitFrame);
 Hooks.on("updateActor", onUpdateActorPlaybookName);
 

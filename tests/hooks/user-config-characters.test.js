@@ -27,7 +27,15 @@ const labels = select => all(select, "optgroup").map(g => g.label);
 
 beforeEach(() => {
 	const types = { pc1: "character", pc2: "character", npc1: "npc", mon1: "monster", home: "stonetop", gmt: "gmToolkit" };
-	global.game = { actors: { get: id => (types[id] ? { id, type: types[id] } : undefined) } };
+	// pc1 is owned by the player p1; every character is observable to everyone (shared-sheets.js).
+	const owners = { pc1: ["p1"] };
+	global.game = {
+		user: { id: "gm", isGM: true },
+		actors: { get: id => (types[id] ? {
+			id, type: types[id],
+			testUserPermission: (user, level) => level === "OWNER" && (owners[id] ?? []).includes(user?.id),
+		} : undefined) },
+	};
 });
 
 describe("User Configuration character choices", () => {
@@ -54,6 +62,21 @@ describe("User Configuration character choices", () => {
 		const { root, select } = userConfig({ Owner: ["pc1", "npc1", "mon1"] });
 		pruneCharacterChoices({ document: { character: { id: "npc1" } } }, root);
 		expect(values(select)).toEqual(["", "pc1", "npc1"]);
+	});
+
+	// Every player observes every character, and a player may set their own `character`.
+	it("offers a player choosing for themselves only the characters they own", () => {
+		global.game.user = { id: "p1", isGM: false };
+		const { root, select } = userConfig({ Owner: ["pc1"], Observer: ["pc2"] });
+		pruneCharacterChoices({ document: { id: "p1", character: null } }, root);
+		expect(values(select)).toEqual(["", "pc1"]);
+		expect(labels(select)).toEqual(["Owner"]);
+	});
+
+	it("offers a GM assigning a player every character", () => {
+		const { root, select } = userConfig({ Owner: ["pc1"], Observer: ["pc2"] });
+		pruneCharacterChoices({ document: { id: "p1", character: null } }, root);
+		expect(values(select)).toEqual(["", "pc1", "pc2"]);
 	});
 
 	it("leaves a window without the select alone", () => {

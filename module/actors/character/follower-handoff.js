@@ -22,6 +22,7 @@
 
 import { SYSTEM_ID } from "../../system-id.js";
 import { readableFlags } from "./StonetopFlags.js";
+import { followerOwnershipFrom } from "./shared-sheets.js";
 import { followerActorFromLink } from "./follower-actors.js";
 import { nextFollowerOrder } from "../../data/follower-build.js";
 import { askGMClient, deletionEntry, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
@@ -57,7 +58,7 @@ export function handOffPlan({ to, slug, newId, record, withOwnership = true }) {
 		source: { [delKey]: delVal },
 		npc: {
 			[`flags.${SYSTEM_ID}.followerOrigin`]: { characterUuid: to?.uuid ?? null, ftype: "custom", slug: newId },
-			...(withOwnership ? { ownership: foundry.utils.deepClone(to?.ownership ?? {}) } : {}),
+			...(withOwnership ? { ownership: followerOwnershipFrom(to) } : {}),
 		},
 	};
 }

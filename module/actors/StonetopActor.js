@@ -8,6 +8,8 @@ import {isDefaultImg} from "../utils/strings.js";
 import {PERSON_DEFAULT_IMG, isPersonPlaceholderImg} from "../utils/person-portrait.js";
 import {tokenFollowsPortrait} from "../utils/portrait-token-frame.js";
 import {GM_TOOLKIT_TYPE, theGmToolkit} from "./gmtoolkit/gm-toolkit-actor.js";
+import {sharedSheetCreateStamp, sharedSheetReleaseEntry} from "./character/shared-sheets.js";
+import {areCharacterSheetsShared} from "../settings.js";
 
 export function createStonetopActorClass(BaseActor) {
 	return class StonetopActor extends BaseActor {
@@ -152,6 +154,12 @@ export function createStonetopActorClass(BaseActor) {
 				&& foundry.utils.getProperty(data, "ownership.default") === undefined) {
 				patch["ownership.default"] = CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
 			}
+			// A character's default level is the GM's sheet-sharing switch's to move: OBSERVER to the
+			// whole table while it is on, so every player may read it. Only when the creation data
+			// said nothing about the default level, and flagged so the switch knows it is its own. A player making their own character may
+			// set this too: core lets a creator choose the default level (sanitizeDocumentOwnershipField).
+			// See actors/character/shared-sheets.js.
+			Object.assign(patch, sharedSheetCreateStamp(this.type, data, areCharacterSheetsShared()));
 			if (Object.keys(patch).length) this.updateSource(patch);
 		}
 
@@ -228,6 +236,10 @@ export function createStonetopActorClass(BaseActor) {
 		async _preUpdate(changed, options, user) {
 			const result = await super._preUpdate(changed, options, user);
 			this._syncPrototypeTokenImage(changed);
+			// A default level the GM set by hand is theirs: the sheet-sharing switch lets go of this
+			// character in the same write (actors/character/shared-sheets.js).
+			const release = sharedSheetReleaseEntry(this, changed, options);
+			if (release) changed[release[0]] = release[1];
 			if (!options?.stonetopLedger) {
 				// KEYED BY ACTOR ID. Core hands ONE options object to every document of a batched
 				// `Actor.updateDocuments`, to each `_preUpdate` and again to each `_onUpdate`, so a

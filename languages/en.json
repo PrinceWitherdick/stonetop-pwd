@@ -1019,6 +1019,10 @@
         "name": "Timeline",
         "hint": "When on (the default), the steading and every character have a Timeline tab, and the Chronicle folder holds the Timeline journal. Turn it off to take the tabs and the journal away for everyone. It goes on recording in the background while it is off, so nothing is missing when you turn it on again."
       },
+      "characterSheetsShared": {
+        "name": "Players See Every Character Sheet",
+        "hint": "When on (the default), every player can open every character's sheet to read it, but only its owner and the GM can change it. Turn it off to keep each sheet to its own player and the GM. A sheet you have shared or hidden yourself with Configure Ownership keeps what you set."
+      },
       "arcanaPlayersSeeBothSides": {
         "name": "Arcana: Players See Both Sides",
         "hint": "A player always sees the back of a card once they've unlocked it (filled every spot). That's their own achievement, no setting needed. This switch is a separate peek: when on, players may also open the back of a card they haven't unlocked yet, reading the whole card up front. Off by default for a more secretive table: an un-unlocked back stays hidden until you click \"Reveal back to player\" on that card (handy when a card must be read before it can be unlocked). Turn on to let players read cards up front. You always see both sides as the GM."

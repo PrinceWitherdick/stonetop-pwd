@@ -1213,3 +1213,28 @@ describe("CharacterLedger item batches", () => {
 		expect(entries.map(e => e.action)).toEqual(["Move renamed from Bulwark to Bulwark II", "Bulwark II edited: description"]);
 	});
 });
+
+// Older versions wrote a love letter's arrival to the ledger, and every player may now read every
+// character's (shared-sheets.js). A letter is for the one player it was written to.
+describe("CharacterLedger love letters already written", () => {
+	const letter = { id: "L1", name: "From Afar", type: "move", flags: { [SYSTEM_ID]: { loveLetter: true } } };
+	const move = { id: "M1", name: "Clash", type: "move", flags: {} };
+	const stored = {
+		a: { id: "a", timestamp: 3, category: "moves", action: "From Afar learned" },
+		b: { id: "b", timestamp: 2, category: "moves", subject: "From Afar", action: "From Afar edited: Description", merge: { kind: "edit", key: "item:L1" } },
+		c: { id: "c", timestamp: 1, category: "moves", action: "Clash learned" },
+	};
+	const ledgerOf = isOwner => ({
+		type: "character", isOwner,
+		items: new Map([[letter.id, letter], [move.id, move]]),
+		getFlag: (scope, key) => (key === "ledger" ? stored : undefined),
+	});
+
+	it("are left out for a reader who is not the owner", () => {
+		expect(CharacterLedger.getEntries(ledgerOf(false)).map(e => e.id)).toEqual(["c"]);
+	});
+
+	it("stay for the owner", () => {
+		expect(CharacterLedger.getEntries(ledgerOf(true)).map(e => e.id).sort()).toEqual(["a", "b", "c"]);
+	});
+});

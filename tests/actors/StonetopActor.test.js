@@ -88,8 +88,15 @@ describe("StonetopActor#_preCreate", () => {
 		expect(actor.applied.some(change => `ownership.${CREATOR_ID}` in change)).toBe(false);
 	});
 
+	// A character is the one other type with a default: OBSERVER to the whole table while the GM's
+	// `characterSheetsShared` switch is on, which it is unregistered too (actors/character/shared-sheets.js).
+	it("opens a new character to the table", async () => {
+		const actor = await precreate({ type: "character", img: FOUNDRY_DEFAULT });
+		expect(actor.applied.some(change => change["ownership.default"] === CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER)).toBe(true);
+	});
+
 	it("does not stamp ownership on any other actor type", async () => {
-		for (const type of ["character", "monster", "npc", "stonetop"]) {
+		for (const type of ["monster", "npc", "stonetop"]) {
 			const actor = await precreate({ type, img: FOUNDRY_DEFAULT });
 			expect(actor.applied.some(change => "ownership.default" in change), type).toBe(false);
 		}

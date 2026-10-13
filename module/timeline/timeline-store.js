@@ -25,7 +25,7 @@ import { inTurn } from "../utils/turn-queue.js";
 import {
 	TIMELINE_SEASON_SOURCE, TIMELINE_TRACK_STEADING, entriesById, entriesDiff, isLeftover, trackKey, trackIdFromKey, readEntries, sortEntries,
 } from "./timeline-core.js";
-import { deletionEntry, replacementEntry } from "../utils/foundry-compat.js";
+import { deletionEntry, ownershipLevels, replacementEntry } from "../utils/foundry-compat.js";
 
 /** The journal, inside The Chronicle folder. */
 export const TIMELINE_JOURNAL_NAME = "Timeline";
@@ -35,11 +35,6 @@ export const TIMELINE_PAGE_TYPE = "timeline";
 
 /** Spacing between page sort values, so a new track appends after the existing ones. */
 const SORT_STEP = 10;
-
-/** Core's ownership numbers, read through a function so this module imports cleanly outside Foundry. */
-function ownershipLevels() {
-	return globalThis.CONST?.DOCUMENT_OWNERSHIP_LEVELS ?? { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
-}
 
 /**
  * The Timeline journal if this world has one, or null. Creates NOTHING.
