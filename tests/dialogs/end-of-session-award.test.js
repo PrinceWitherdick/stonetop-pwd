@@ -278,6 +278,32 @@ describe("who marks the session's XP", () => {
 		expect(torwyn.update).not.toHaveBeenCalled();
 	});
 
+	// _guardBusy greys the button and puts it back only on a throw. Told not to award, the window
+	// neither closed nor redrew, and the GM was left with a dead button.
+	it("draws the window afresh when told not to award again, so its button is live", async () => {
+		roster.chars = [pc("Torwyn", 3)];
+		stored.lastEndOfSession = { at: Date.now() - 5 * 60000, xp: 2, ids: ["Torwyn"] };
+		asked.answer = false;
+		const { dialog, confirm } = opened(2);
+		dialog.rendered = true;
+		dialog.render = vi.fn();
+
+		await confirm({ currentTarget: { disabled: false } });
+
+		expect(dialog.render).toHaveBeenCalledWith(false);
+	});
+
+	it("draws the window afresh after a player's press, too", async () => {
+		globalThis.game.user = { id: "p", isGM: false };
+		const { dialog, confirm } = opened(0);
+		dialog.rendered = true;
+		dialog.render = vi.fn();
+
+		await confirm({ currentTarget: { disabled: false } });
+
+		expect(dialog.render).toHaveBeenCalledWith(false);
+	});
+
 	it("draws a tick box per character, the dead marked so, with every word from languages/en.json", async () => {
 		const { renderRoster } = await import("../fakes/hbs.js");
 		const { readRepo } = await import("../fakes/css.js");
@@ -371,5 +397,29 @@ describe("End of Session, a player's copy", () => {
 		expect(html).not.toContain("disabled");
 		expect(html).toContain(`data-pc="a" checked`);
 		expect(html).toContain("AWARD");
+	});
+});
+
+// A player's macro: the GM's window, as their read-only copy, never one of their own (its roster
+// and Award would only refuse, and the GM's copy arriving after would take over its frame).
+describe("End of Session opened by a player", () => {
+	it("asks the GM for their window instead of opening one, and says so when none comes", async () => {
+		const { _resetEndOfSessionBroadcast, EOS_ASK, EOS_ASK_WAIT_MS } = await import("../../module/dialogs/end-of-session-broadcast.js");
+		vi.useFakeTimers();
+		_resetEndOfSessionBroadcast();
+		globalThis.game.user = { id: "p", isGM: false };
+		globalThis.game.socket = { emit: vi.fn() };
+		const render = vi.spyOn(EndOfSessionDialog.prototype, "render");
+
+		expect(EndOfSessionDialog.open()).toBeNull();
+
+		expect(render).not.toHaveBeenCalled();
+		expect(globalThis.game.socket.emit).toHaveBeenCalledWith(expect.any(String), { action: EOS_ASK, userId: "p" });
+		// Not at once: a GM who has the window open answers within a moment.
+		expect(globalThis.ui.notifications.info).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(EOS_ASK_WAIT_MS);
+		expect(globalThis.ui.notifications.info).toHaveBeenCalledTimes(1);
+		vi.useRealTimers();
+		render.mockRestore();
 	});
 });

@@ -55,6 +55,7 @@
       "award": "Award +{xp} Group XP & Close",
       "close": "Close",
       "gmOnly": "Only the GM can award the session's XP.",
+      "playerAsk": "No GM has End of Session open yet. Your copy opens as soon as they do.",
       "againTitle": "Award the session's XP again?",
       "againPrompt": "<p>End of Session XP was already awarded {minutes} minutes ago: +{xp} XP to {count} characters. Award it again?</p>",
       "againYes": "Award it again",

@@ -15,6 +15,9 @@
 // opens a fresh window starts a new run, which does. A late arrival asks once at `ready`, and a GM
 // with the window open answers with where it stands.
 //
+// A player who runs the macro gets the same copy (requestEndOfSession): the window already up, or
+// the GM asked for theirs.
+//
 // GM-only at the source and checked again on arrival, as the book broadcast is: a socket is open
 // to anyone signed in. A GM's own client never mirrors: they have the real window, and a co-GM
 // opening theirs would only get two windows fighting.
@@ -33,6 +36,10 @@ let host = null;
 /** This player's copy, and the run they closed themselves (so it stays closed). */
 let mirror = null;
 let dismissedRun = null;
+/** This player's ask still waiting on a GM's answer (requestEndOfSession), or null. */
+let pendingAsk = null;
+/** How long a player's ask waits for a GM's copy before telling them none came. */
+export const EOS_ASK_WAIT_MS = 1500;
 /** Messages handled one at a time: two quick ticks must not each open a window. */
 let queue = Promise.resolve();
 
@@ -62,8 +69,43 @@ export function mirrorClosed(win) {
 	dismissedRun = win.run;
 }
 
+/**
+ * A player asked for End of Session themselves (the hotbar macro, or the macro dragged out of the
+ * compendium). The window is the GM's to open, so a player never gets one of their own: their own
+ * would carry the roster and an Award button that can only refuse, and the GM's copy arriving
+ * after it would take over its frame (both are the one DOM id, and core's V1 render adopts an
+ * element already standing under its id). So the copy already up is brought forward, or the GM is
+ * asked for it, even for a run this player closed: asking for it is taking that close back.
+ *
+ * `onNoAnswer` runs if no copy has arrived EOS_ASK_WAIT_MS after asking: no GM has the window open.
+ * Waited for rather than said at once, because a GM who has it open answers within a moment, and a
+ * notice saying the window is theirs to open would then sit over the copy that just opened.
+ *
+ * The copy brought forward, or null once asked (null on a GM's client, which asks nobody).
+ */
+export function requestEndOfSession({ onNoAnswer = null } = {}) {
+	if (isGM()) return null;
+	if (mirror?.rendered) {
+		// A minimized window is in front of nobody (utils/open-or-focus.js).
+		if (mirror.minimized ?? mirror._minimized) mirror.maximize?.();
+		mirror.bringToTop?.();
+		return mirror;
+	}
+	dismissedRun = null;
+	const ask = pendingAsk = { answered: false };
+	emit({ action: EOS_ASK });
+	if (onNoAnswer) {
+		setTimeout(() => {
+			if (pendingAsk === ask) pendingAsk = null;
+			if (!ask.answered) onNoAnswer();
+		}, EOS_ASK_WAIT_MS);
+	}
+	return null;
+}
+
 async function showMirror(payload) {
 	if (payload.run === dismissedRun) return;
+	if (pendingAsk) pendingAsk.answered = true;
 	if (mirror?.run === payload.run) { await mirror.showChecks(payload.checks); return; }
 	// A new run. Any copy still up is from a run whose close never reached us (the GM reloaded).
 	const stale = mirror;
@@ -112,5 +154,5 @@ export function registerEndOfSessionBroadcast() {
 
 /** Test seam: forget the module's state between cases. */
 export function _resetEndOfSessionBroadcast() {
-	host = null; mirror = null; dismissedRun = null; queue = Promise.resolve();
+	host = null; mirror = null; dismissedRun = null; pendingAsk = null; queue = Promise.resolve();
 }

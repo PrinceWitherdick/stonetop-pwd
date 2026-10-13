@@ -9,7 +9,7 @@ import { format, localize } from "../utils/i18n.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { getObjectSetting, setSetting } from "../settings.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
-import { sendEndOfSession, sendEndOfSessionClosed, mirrorClosed } from "./end-of-session-broadcast.js";
+import { sendEndOfSession, sendEndOfSessionClosed, mirrorClosed, requestEndOfSession } from "./end-of-session-broadcast.js";
 
 const KEY = "stonetop.endOfSession";
 
@@ -85,8 +85,17 @@ export class EndOfSessionDialog extends StonetopDialog {
 	/**
 	 * The hotbar macro's way in: the window already open is brought forward. A second window would be
 	 * a second run, and the players' copies would flip between the two on every tick.
+	 *
+	 * A player gets the GM's window as their read-only copy, never one of their own
+	 * (end-of-session-broadcast.js#requestEndOfSession). Told so when no copy comes: it arrives only
+	 * if a GM has the window open, and a press that seemed to do nothing would be pressed again.
 	 */
 	static open() {
+		if (!globalThis.game?.user?.isGM) {
+			return requestEndOfSession({
+				onNoAnswer: () => globalThis.ui?.notifications?.info?.(localize(`${KEY}.playerAsk`)),
+			});
+		}
 		return openOrFocus(this.defaultOptions.id, () => new this().render(true));
 	}
 
@@ -191,6 +200,16 @@ export class EndOfSessionDialog extends StonetopDialog {
 		});
 	}
 
+	/**
+	 * A press turned down without closing the window (the GM said not to award again, or a player
+	 * pressed): drawn afresh, so the button the press greyed is live again. StonetopDialog#_guardBusy
+	 * puts it back only on a throw, and counts on the caller to close or redraw otherwise; left
+	 * greyed, the GM could neither award nor end the session from it without ticking something first.
+	 */
+	_redrawButton() {
+		if (this.rendered) this.render(false);
+	}
+
 	/** The characters ticked to mark the session's XP. */
 	_tickedActors() {
 		return this._roster.filter(row => this._pcChecks[row.actor.id]).map(row => row.actor);
@@ -222,13 +241,13 @@ export class EndOfSessionDialog extends StonetopDialog {
 		// stop part-way through the table.
 		if (!globalThis.game?.user?.isGM) {
 			globalThis.ui?.notifications?.warn?.(localize(`${KEY}.gmOnly`));
-			return;
+			return this._redrawButton();
 		}
 		const xpToAward = Object.values(this._groupChecks).filter(Boolean).length;
 		const ticked = this._tickedActors();
 
 		if (ticked.length > 0 && xpToAward > 0) {
-			if (!(await this._confirmAgain())) return;
+			if (!(await this._confirmAgain())) return this._redrawButton();
 
 			// Through adjustXp (utils/xp.js) so the award queues behind anything else changing
 			// that character's XP and reads their total at the moment it writes. The end of a

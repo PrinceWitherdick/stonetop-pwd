@@ -32,7 +32,7 @@ vi.mock("../../module/dialogs/EndOfSessionDialog.js", () => ({
 
 import {
 	EOS_SOCKET, EOS_SHOW, EOS_CLOSE, EOS_ASK,
-	sendEndOfSession, sendEndOfSessionClosed, registerEndOfSessionBroadcast, _resetEndOfSessionBroadcast,
+	sendEndOfSession, sendEndOfSessionClosed, registerEndOfSessionBroadcast, requestEndOfSession, _resetEndOfSessionBroadcast, EOS_ASK_WAIT_MS,
 } from "../../module/dialogs/end-of-session-broadcast.js";
 
 let handler;
@@ -196,5 +196,70 @@ describe("a player's copy", () => {
 		await deliver(undefined);
 		await deliver({ action: EOS_SHOW, run: 7, userId: "gm" });
 		expect(opened).toHaveLength(0);
+	});
+});
+
+// A player who runs the macro: the GM's copy, never a window of their own.
+describe("a player asking for End of Session", () => {
+	const asks = () => game.socket.emit.mock.calls.filter(([, p]) => p.action === EOS_ASK).length;
+
+	it("brings the copy already up forward, and asks nobody", async () => {
+		asUser(false);
+		await deliver(show("r1"));
+		opened[0].bringToTop = vi.fn();
+		expect(requestEndOfSession()).toBe(opened[0]);
+		expect(opened[0].bringToTop).toHaveBeenCalled();
+		expect(asks()).toBe(1); // only the one at ready
+	});
+
+	it("restores a minimized copy before bringing it forward", async () => {
+		asUser(false);
+		await deliver(show("r1"));
+		Object.assign(opened[0], { minimized: true, maximize: vi.fn(), bringToTop: vi.fn() });
+		requestEndOfSession();
+		expect(opened[0].maximize).toHaveBeenCalled();
+	});
+
+	// The player closed their copy by mistake: asking again is taking that close back.
+	it("asks the GM again, and takes back a copy they closed themselves", async () => {
+		asUser(false);
+		await deliver(show("r1"));
+		await opened[0].close();
+		expect(requestEndOfSession()).toBeNull();
+		expect(asks()).toBe(2);
+		await deliver(show("r1"));
+		expect(opened).toHaveLength(2);
+		expect(opened[1].rendered).toBe(true);
+	});
+
+	// A GM with the window open answers within a moment; a notice saying it is theirs to open would
+	// then sit over the copy that just arrived.
+	it("tells the player only when no copy arrives in time", async () => {
+		// Real time still runs, for the window drawing as the copy arrives.
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		try {
+			asUser(false);
+			const answered = vi.fn();
+			requestEndOfSession({ onNoAnswer: answered });
+			await deliver(show("r1"));
+			vi.advanceTimersByTime(EOS_ASK_WAIT_MS);
+			expect(answered).not.toHaveBeenCalled();
+
+			_resetEndOfSessionBroadcast();
+			const unanswered = vi.fn();
+			requestEndOfSession({ onNoAnswer: unanswered });
+			vi.advanceTimersByTime(EOS_ASK_WAIT_MS - 1);
+			expect(unanswered).not.toHaveBeenCalled();
+			vi.advanceTimersByTime(1);
+			expect(unanswered).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("asks nothing from a GM's client", () => {
+		asUser(true);
+		expect(requestEndOfSession()).toBeNull();
+		expect(asks()).toBe(0);
 	});
 });
