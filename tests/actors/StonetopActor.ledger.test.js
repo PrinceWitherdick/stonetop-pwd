@@ -152,3 +152,27 @@ describe("edits to a character's items (#21b)", () => {
 		expect(actions(actor)).toEqual([]);
 	});
 });
+
+// A default level the GM sets by hand (core's Configure Ownership) takes the character off the
+// sheet-sharing switch in the same write (actors/character/shared-sheets.js).
+describe("StonetopActor#_preUpdate and the sheet-sharing switch", () => {
+	function sharedCharacter() {
+		const actor = makeActor({ id: "pc1", type: "character", name: "Bram" });
+		actor.ownership = { default: 2 };
+		actor.flags = { [LEDGER_SCOPE]: { sharedWithTable: true } };
+		return actor;
+	}
+	const dropsFlag = changed => Object.keys(changed).some(key => key.startsWith(`flags.${LEDGER_SCOPE}.`) && key.endsWith("sharedWithTable"));
+
+	it("lets go of the character when the GM moves its default level", async () => {
+		const changed = { ownership: { default: 0 } };
+		await sharedCharacter()._preUpdate(changed, {}, { id: ME });
+		expect(dropsFlag(changed)).toBe(true);
+	});
+
+	it("keeps hold through the switch's own write", async () => {
+		const changed = { "ownership.default": 0 };
+		await sharedCharacter()._preUpdate(changed, { stonetopSharedSheets: true }, { id: ME });
+		expect(dropsFlag(changed)).toBe(false);
+	});
+});

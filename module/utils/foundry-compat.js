@@ -369,6 +369,11 @@ export async function askGMClient(gm, query, data, { fallback = null, what = "an
 	}
 }
 
+/** Core's ownership numbers, read through a function so a module using them imports cleanly outside Foundry. */
+export function ownershipLevels() {
+	return globalThis.CONST?.DOCUMENT_OWNERSHIP_LEVELS ?? { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };
+}
+
 /** The running core's generation (13, 14...), or 0 when it cannot be read. */
 export function coreGeneration() {
 	return Number(globalThis.game?.release?.generation) || 0;

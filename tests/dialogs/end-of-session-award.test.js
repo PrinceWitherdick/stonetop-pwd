@@ -278,6 +278,32 @@ describe("who marks the session's XP", () => {
 		expect(torwyn.update).not.toHaveBeenCalled();
 	});
 
+	// _guardBusy greys the button and puts it back only on a throw. Told not to award, the window
+	// neither closed nor redrew, and the GM was left with a dead button.
+	it("draws the window afresh when told not to award again, so its button is live", async () => {
+		roster.chars = [pc("Torwyn", 3)];
+		stored.lastEndOfSession = { at: Date.now() - 5 * 60000, xp: 2, ids: ["Torwyn"] };
+		asked.answer = false;
+		const { dialog, confirm } = opened(2);
+		dialog.rendered = true;
+		dialog.render = vi.fn();
+
+		await confirm({ currentTarget: { disabled: false } });
+
+		expect(dialog.render).toHaveBeenCalledWith(false);
+	});
+
+	it("draws the window afresh after a player's press, too", async () => {
+		globalThis.game.user = { id: "p", isGM: false };
+		const { dialog, confirm } = opened(0);
+		dialog.rendered = true;
+		dialog.render = vi.fn();
+
+		await confirm({ currentTarget: { disabled: false } });
+
+		expect(dialog.render).toHaveBeenCalledWith(false);
+	});
+
 	it("draws a tick box per character, the dead marked so, with every word from languages/en.json", async () => {
 		const { renderRoster } = await import("../fakes/hbs.js");
 		const { readRepo } = await import("../fakes/css.js");
@@ -303,5 +329,97 @@ describe("who marks the session's XP", () => {
 		expect(torwyn.system.attributes.xp.value).toBe(6);
 		expect(stored.lastEndOfSession).toMatchObject({ xp: 3, ids: ["Torwyn"] });
 		expect(Date.now() - stored.lastEndOfSession.at).toBeLessThan(60000);
+	});
+});
+
+// A player's read-only copy (end-of-session-broadcast.js): the GM's ticks and the prompts, nothing to award.
+describe("End of Session, a player's copy", () => {
+	const mirrorHtml = async (context) => {
+		const { renderRoster } = await import("../fakes/hbs.js");
+		const { readRepo } = await import("../fakes/css.js");
+		return renderRoster(readRepo("templates/dialogs/end-of-session.hbs"), context);
+	};
+
+	it("takes only the four questions from a message, each as a plain yes or no", () => {
+		roster.chars = [pc("Torwyn")];
+		const dialog = new EndOfSessionDialog({ mirror: { run: "r1", checks: { learnedWorld: true, defeatedThreat: "yes", bogus: true } } });
+		expect(dialog.run).toBe("r1");
+		expect(dialog.groupChecks).toEqual({
+			learnedWorld: true, defeatedThreat: false, improvedStanding: false, improvedStonetop: false,
+		});
+		// No roster: whose XP it is is the GM's call.
+		expect(dialog._roster).toEqual([]);
+	});
+
+	it("wires only its Close, so nothing on it ticks or awards", () => {
+		const dialog = new EndOfSessionDialog({ mirror: { run: "r1", checks: {} } });
+		const { html, wired } = fakeHtml();
+		dialog.activateListeners(html);
+		expect(wired.map(w => w.sel)).toEqual([".stonetop-eos-confirm-btn"]);
+	});
+
+	it("follows the GM's ticks", () => {
+		const dialog = new EndOfSessionDialog({ mirror: { run: "r1", checks: {} } });
+		dialog.showChecks({ improvedStonetop: true });
+		expect(dialog.groupChecks.improvedStonetop).toBe(true);
+	});
+
+	it("gives each GM window its own run, and does not follow ticks itself", () => {
+		const a = new EndOfSessionDialog();
+		const b = new EndOfSessionDialog();
+		expect(a.run).toBeTruthy();
+		expect(a.run).not.toBe(b.run);
+		a.showChecks({ learnedWorld: true });
+		expect(a.groupChecks.learnedWorld).toBe(false);
+	});
+
+	it("draws the GM's ticks fixed, without the roster, and closes rather than awards", async () => {
+		const html = await mirrorHtml({
+			mirror: true, xpCount: 1, tally: "TALLY", awardLabel: "AWARD",
+			questions: [{ key: "learnedWorld", label: "Q", checked: true }],
+			pcs: [{ id: "a", name: "Here", checked: true, dead: false }],
+		});
+		expect(html).toContain("stonetop-eos-body--mirror");
+		expect(html).toContain(`data-key="learnedWorld" checked disabled`);
+		expect(html).toContain("stonetop.endOfSession.mirrorHint");
+		expect(html).not.toContain(`data-pc="a"`);
+		expect(html).not.toContain("AWARD");
+		expect(html).toContain("stonetop.endOfSession.close");
+	});
+
+	it("leaves the GM's own window as it was", async () => {
+		const html = await mirrorHtml({
+			xpCount: 1, tally: "TALLY", awardLabel: "AWARD",
+			questions: [{ key: "learnedWorld", label: "Q", checked: true }],
+			pcs: [{ id: "a", name: "Here", checked: true, dead: false }],
+		});
+		expect(html).not.toContain("--mirror");
+		expect(html).not.toContain("disabled");
+		expect(html).toContain(`data-pc="a" checked`);
+		expect(html).toContain("AWARD");
+	});
+});
+
+// A player's macro: the GM's window, as their read-only copy, never one of their own (its roster
+// and Award would only refuse, and the GM's copy arriving after would take over its frame).
+describe("End of Session opened by a player", () => {
+	it("asks the GM for their window instead of opening one, and says so when none comes", async () => {
+		const { _resetEndOfSessionBroadcast, EOS_ASK, EOS_ASK_WAIT_MS } = await import("../../module/dialogs/end-of-session-broadcast.js");
+		vi.useFakeTimers();
+		_resetEndOfSessionBroadcast();
+		globalThis.game.user = { id: "p", isGM: false };
+		globalThis.game.socket = { emit: vi.fn() };
+		const render = vi.spyOn(EndOfSessionDialog.prototype, "render");
+
+		expect(EndOfSessionDialog.open()).toBeNull();
+
+		expect(render).not.toHaveBeenCalled();
+		expect(globalThis.game.socket.emit).toHaveBeenCalledWith(expect.any(String), { action: EOS_ASK, userId: "p" });
+		// Not at once: a GM who has the window open answers within a moment.
+		expect(globalThis.ui.notifications.info).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(EOS_ASK_WAIT_MS);
+		expect(globalThis.ui.notifications.info).toHaveBeenCalledTimes(1);
+		vi.useRealTimers();
+		render.mockRestore();
 	});
 });

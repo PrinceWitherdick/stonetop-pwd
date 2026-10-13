@@ -8,11 +8,13 @@ import { escHtml } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { getObjectSetting, setSetting } from "../settings.js";
+import { openOrFocus } from "../utils/open-or-focus.js";
+import { sendEndOfSession, sendEndOfSessionClosed, mirrorClosed, requestEndOfSession } from "./end-of-session-broadcast.js";
 
 const KEY = "stonetop.endOfSession";
 
 /** The four group questions (Book I p.232); each "yes" is +1 XP for everyone. Words in languages/en.json. */
-const GROUP_QUESTIONS = ["learnedWorld", "defeatedThreat", "improvedStanding", "improvedStonetop"];
+export const GROUP_QUESTIONS = ["learnedWorld", "defeatedThreat", "improvedStanding", "improvedStonetop"];
 
 /** The world setting holding the last award, `{at, xp, ids}`. */
 export const LAST_AWARD_SETTING = "lastEndOfSession";
@@ -53,13 +55,91 @@ export function recentAwardMinutes(last, now = Date.now()) {
 	return Math.max(0, Math.round((now - at) / 60000));
 }
 
+/** Only the four questions, each true or false: what a player's copy takes from a message. */
+export function groupChecksFrom(checks) {
+	return Object.fromEntries(GROUP_QUESTIONS.map(key => [key, checks?.[key] === true]));
+}
+
+/**
+ * The GM's window, or (with `mirror: {run, checks}`) a player's read-only copy of it: the prompts
+ * and the GM's ticks, with no roster and nothing to award. See end-of-session-broadcast.js.
+ */
 export class EndOfSessionDialog extends StonetopDialog {
-	constructor(options = {}) {
+	constructor({ mirror, ...options } = {}) {
 		super(options);
-		this._groupChecks = Object.fromEntries(GROUP_QUESTIONS.map(key => [key, false]));
+		this._mirror = !!mirror;
+		this._groupChecks = groupChecksFrom(mirror?.checks);
+		if (this._mirror) {
+			this.run = mirror.run;
+			this._roster = [];
+			this._pcChecks = {};
+			return;
+		}
+		// The table's copies follow this window by this id (end-of-session-broadcast.js).
+		this.run = globalThis.foundry?.utils?.randomID?.() ?? String(Math.random()).slice(2);
 		// Whose XP it is, ticked as the table stands now; the GM corrects it before awarding.
 		this._roster = endOfSessionRoster();
 		this._pcChecks = Object.fromEntries(this._roster.map(row => [row.actor.id, row.ticked]));
+	}
+
+	/**
+	 * The hotbar macro's way in: the window already open is brought forward. A second window would be
+	 * a second run, and the players' copies would flip between the two on every tick.
+	 *
+	 * A player gets the GM's window as their read-only copy, never one of their own
+	 * (end-of-session-broadcast.js#requestEndOfSession). Told so when no copy comes: it arrives only
+	 * if a GM has the window open, and a press that seemed to do nothing would be pressed again.
+	 */
+	static open() {
+		if (!globalThis.game?.user?.isGM) {
+			return requestEndOfSession({
+				onNoAnswer: () => globalThis.ui?.notifications?.info?.(localize(`${KEY}.playerAsk`)),
+			});
+		}
+		return openOrFocus(this.defaultOptions.id, () => new this().render(true));
+	}
+
+	/** The group questions as ticked now. */
+	get groupChecks() { return { ...this._groupChecks }; }
+
+	/**
+	 * A player's copy: the GM ticked or unticked something. Drawn once any draw under way is over,
+	 * since core drops a render asked for while one is running and the tick would never show.
+	 */
+	async showChecks(checks) {
+		if (!this._mirror) return;
+		this._groupChecks = groupChecksFrom(checks);
+		await this.settled();
+		if (!this.rendered) return;
+		this.render(false);
+		await this.settled();
+	}
+
+	/**
+	 * Resolves once every draw asked for so far is over, however it ended. Core's `render` does not
+	 * wait for its own draw, and both a close and a redraw asked for in the middle of one are dropped
+	 * (Application#close answers only a window RENDERED or ERROR), so the broadcast waits on this.
+	 */
+	settled() { return this._drawing ?? Promise.resolve(); }
+
+	_render(force, options) {
+		const drawing = (async () => {
+			await super._render(force, options);
+			// Every draw, so each tick reaches the table. A player's client sends nothing.
+			if (!this._mirror) sendEndOfSession(this, this._groupChecks);
+		})();
+		// Chained, so a redraw asked for mid-draw (which core returns from at once) does not stand in
+		// for the draw still running.
+		this._drawing = Promise.allSettled([this._drawing, drawing]).then(() => {});
+		return drawing;
+	}
+
+	async close(options = {}) {
+		// After any draw under way, or core drops the close while the table is told it happened.
+		await this.settled();
+		if (this._mirror) mirrorClosed(this);
+		else sendEndOfSessionClosed(this);
+		return super.close(options);
 	}
 
 	static get defaultOptions() {
@@ -85,14 +165,20 @@ export class EndOfSessionDialog extends StonetopDialog {
 			id: actor.id, name: actor.name, dead, checked: !!this._pcChecks[actor.id],
 		}));
 		return {
-			questions, pcs, xpCount,
-			tally: format(`${KEY}.tally`, { xp: xpCount }),
+			questions, pcs, xpCount, mirror: this._mirror,
+			tally: format(`${KEY}.${this._mirror ? "mirrorTally" : "tally"}`, { xp: xpCount }),
 			awardLabel: format(`${KEY}.award`, { xp: xpCount }),
 		};
 	}
 
 	activateListeners(html) {
 		super.activateListeners(html);
+
+		// A player's copy reads; the GM's window is the one that ticks and awards.
+		if (this._mirror) {
+			html.find(".stonetop-eos-confirm-btn").on("click", () => this.close());
+			return;
+		}
 
 		html.find(".stonetop-eos-group-check[data-key]").on("change", ev => {
 			this._groupChecks[ev.currentTarget.dataset.key] = ev.currentTarget.checked;
@@ -112,6 +198,16 @@ export class EndOfSessionDialog extends StonetopDialog {
 			// everyone.
 			await this._guardBusy(ev, () => this._applyGroupXp());
 		});
+	}
+
+	/**
+	 * A press turned down without closing the window (the GM said not to award again, or a player
+	 * pressed): drawn afresh, so the button the press greyed is live again. StonetopDialog#_guardBusy
+	 * puts it back only on a throw, and counts on the caller to close or redraw otherwise; left
+	 * greyed, the GM could neither award nor end the session from it without ticking something first.
+	 */
+	_redrawButton() {
+		if (this.rendered) this.render(false);
 	}
 
 	/** The characters ticked to mark the session's XP. */
@@ -145,13 +241,13 @@ export class EndOfSessionDialog extends StonetopDialog {
 		// stop part-way through the table.
 		if (!globalThis.game?.user?.isGM) {
 			globalThis.ui?.notifications?.warn?.(localize(`${KEY}.gmOnly`));
-			return;
+			return this._redrawButton();
 		}
 		const xpToAward = Object.values(this._groupChecks).filter(Boolean).length;
 		const ticked = this._tickedActors();
 
 		if (ticked.length > 0 && xpToAward > 0) {
-			if (!(await this._confirmAgain())) return;
+			if (!(await this._confirmAgain())) return this._redrawButton();
 
 			// Through adjustXp (utils/xp.js) so the award queues behind anything else changing
 			// that character's XP and reads their total at the moment it writes. The end of a

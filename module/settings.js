@@ -5,6 +5,7 @@ import { SYSTEM_ID } from "./system-id.js";
 import { START_YEAR_CHANGED_HOOK, forgetStartYear } from "./seasons/campaign-year.js";
 import { WEATHER_FX_PARTS, WEATHER_FX_SETTING } from "./seasons/weather-fx-parts.js";
 import { isPrimaryGM } from "./utils/primary-gm.js";
+import { CHARACTER_SHEETS_SHARED_HOOK } from "./actors/character/shared-sheets.js";
 import { localize } from "./utils/i18n.js";
 import { PALETTE_HOOK } from "./utils/palette.js";
 import { MIN_MAP_BRIGHTNESS } from "./hooks/map-brightness.js";
@@ -381,6 +382,22 @@ export function registerSettings() {
 		type: Boolean,
 		default: true,
 		onChange: value => Hooks.callAll(FEATURE_SWITCH_HOOK, "timeline", value),
+	});
+
+	// Whether every player may open every character's sheet, read-only (actors/character/shared-sheets.js).
+	// On by default: Stonetop is played at one table and the playbooks are no secret. Moves each
+	// character's `ownership.default` between NONE and OBSERVER, but only while the switch still looks
+	// after it: a level the GM sets by hand in Configure Ownership takes that character off it for good.
+	// No reload: core re-renders the Actors sidebar and any open sheet when ownership changes. The writing is the
+	// primary GM's, in the hook's handler (hooks/Ready.js), so every client firing it is harmless.
+	game.settings.register(SYSTEM_ID, "characterSheetsShared", {
+		name: "stonetop.settings.characterSheetsShared.name",
+		hint: "stonetop.settings.characterSheetsShared.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: true,
+		onChange: value => Hooks.callAll(CHARACTER_SHEETS_SHARED_HOOK, value),
 	});
 
 	// Whether players may PEEK at a card's BACK before unlocking it. A card's OWNER always
@@ -2525,6 +2542,11 @@ export const FEATURE_SWITCH_HOOK = "stonetopFeatureSwitched";
 /** Is the relationship map on in this world? Defaults to yes, unregistered included. */
 export function isRelationshipMapShown() {
 	return getBooleanSetting("showRelationshipMap", true);
+}
+
+/** May every player open every character's sheet? Defaults to yes, unregistered included. */
+export function areCharacterSheetsShared() {
+	return getBooleanSetting("characterSheetsShared", true);
 }
 
 /** Is the timeline on in this world? Defaults to yes, unregistered included. */

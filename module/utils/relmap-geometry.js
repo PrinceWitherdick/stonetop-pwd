@@ -375,6 +375,133 @@ export function groupNestPx(wordScale = 1) {
 	const scale = Number(wordScale) > 0 ? Number(wordScale) : 1;
 	return GROUP_NEST_CLEAR_PX + (RELMAP_CAPTION_PX * scale * GROUP_NAME_CHIP_EM) / 2;
 }
+/**
+ * HOW FAR A GROUP'S OUTLINE STANDS PAST, OR SHORT OF, THE SNUG ONE ROUND ITS PEOPLE: board pixels on
+ * each side (user, 2026-10-12: "select it and then drag to increase or shrink its size").
+ *
+ * ⚠ AN OFFSET AND NEVER A SIZE. The outline is still worked out from where its people stand and this
+ * is only how far each side sits from that, so dragging a hunter still stretches "The hunters" and an
+ * outline can never be left behind on bare paper.
+ *
+ * ⚠ AND IT MAY BE LESS THAN NOTHING (user, same day: "allow the groups to be shrunk so that actors that
+ * were in the group to begin with might not be when they're done shrinking"). A corner dragged in
+ * across somebody takes them OUT of the group when it is let go (the window's `_resizeGroup`), and the
+ * room is then measured against the people still in it. Somebody still in a group can sit partly
+ * outside a shrunk outline: a face is in while its centre is (`insideGroupShape`).
+ */
+export const RELMAP_GROUP_SIDES = Object.freeze(["left", "top", "right", "bottom"]);
+export const RELMAP_GROUP_GROW_MAX = 4000;
+/**
+ * THE SMALLEST AN OUTLINE IS EVER DRAWN, however far it was shrunk, in board pixels: the snug outline
+ * round ONE person, their face and the name under it (user, 2026-10-12: "we shouldn't be able to
+ * shrink a group down to smaller than a single token's size"). So a group can always hold somebody.
+ */
+export const RELMAP_GROUP_MIN_W = 2 * (GROUP_REACH_X + RELMAP_GROUP_PAD_PX);
+export const RELMAP_GROUP_MIN_H = GROUP_REACH_TOP + GROUP_REACH_BOTTOM + 2 * RELMAP_GROUP_PAD_PX;
+
+/** One stored group's offsets, read safely: whole pixels, none missing, each within the cap either way. */
+export function readGroupGrow(value) {
+	const grow = {};
+	for (const side of RELMAP_GROUP_SIDES) {
+		const n = Math.round(Number(value?.[side]));
+		grow[side] = Number.isFinite(n) ? Math.min(Math.max(n, -RELMAP_GROUP_GROW_MAX), RELMAP_GROUP_GROW_MAX) : 0;
+	}
+	return grow;
+}
+
+/**
+ * THE FOUR CORNERS A GROUP IS RESIZED BY, and which two sides each one moves.
+ *
+ * CORNERS ONLY, for both shapes. A handle midway along the top would sit under the group's name,
+ * which is already what a press carries the group by; and the corners of the rectangle are where an
+ * oval passes too (it is drawn through them), so on either shape every handle lies on the line.
+ */
+export const RELMAP_GROUP_CORNERS = Object.freeze({
+	nw: Object.freeze({ x: "left", y: "top" }),
+	ne: Object.freeze({ x: "right", y: "top" }),
+	se: Object.freeze({ x: "right", y: "bottom" }),
+	sw: Object.freeze({ x: "left", y: "bottom" }),
+});
+
+/**
+ * The rectangle an outline is drawn on once one of its corners is dragged to `point` (board PIXELS).
+ * The OPPOSITE corner stays where it is, and the dragged one goes under the pointer, never closer to
+ * it than one person's outline (`RELMAP_GROUP_MIN_W` by `_H`) and never past it, so a corner dragged
+ * across turns nothing inside out.
+ *
+ * `square` (Shift held) makes all four sides equal: a box comes out square and an oval, drawn through
+ * the corners of its rectangle, a circle. The side is the longer of the two the pointer asks for, so
+ * the corner follows whichever way the hand went furthest.
+ *
+ * @param {{left: number, top: number, right: number, bottom: number}} rect  as drawn now.
+ * @param {string} corner  a key of RELMAP_GROUP_CORNERS.
+ * @param {{x: number, y: number}} point
+ * @param {object} [opts]
+ * @param {boolean} [opts.square]
+ */
+export function resizeRect(rect, corner, point, { square = false } = {}) {
+	const sides = RELMAP_GROUP_CORNERS[corner];
+	if (!sides || !rect || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return rect ? { ...rect } : null;
+	// Which way the dragged corner lies from the one held still: +1 right or down, -1 left or up.
+	const wayX = sides.x === "right" ? 1 : -1;
+	const wayY = sides.y === "bottom" ? 1 : -1;
+	const anchorX = rect[sides.x === "right" ? "left" : "right"];
+	const anchorY = rect[sides.y === "bottom" ? "top" : "bottom"];
+	let w = Math.max(RELMAP_GROUP_MIN_W, (point.x - anchorX) * wayX);
+	let h = Math.max(RELMAP_GROUP_MIN_H, (point.y - anchorY) * wayY);
+	if (square) w = h = Math.max(w, h);
+	const x = anchorX + w * wayX;
+	const y = anchorY + h * wayY;
+	return { left: Math.min(anchorX, x), right: Math.max(anchorX, x), top: Math.min(anchorY, y), bottom: Math.max(anchorY, y) };
+}
+
+/**
+ * The offsets that put an outline whose snug rectangle is `snug` on `rect`.
+ *
+ * ⚠ ROUNDED OUTWARD, every side. They are stored in whole pixels, and rounded to the nearest each
+ * side could lose half of one, so a corner dragged in to the floor (`resizeRect` never asks for less)
+ * was stored a fraction UNDER it, and `groupOutline` then drew it at the floor centred on everybody
+ * in the group instead of under the corner. Outward, the stored rectangle always holds the asked
+ * one. The hair off whole is float noise: an offset that is already whole (the corner held still)
+ * must not creep out a pixel per drag.
+ */
+export function growFor(snug, rect) {
+	if (!snug || !rect) return readGroupGrow(null);
+	// `|| 0`: a hair under zero rounds up to negative zero, which a stored offset must not be.
+	const outward = n => Math.ceil(n - 1e-6) || 0;
+	return readGroupGrow({
+		left: outward(snug.left - rect.left), top: outward(snug.top - rect.top),
+		right: outward(rect.right - snug.right), bottom: outward(rect.bottom - snug.bottom),
+	});
+}
+
+/** The rectangle offsets `grow` put an outline on whose snug rectangle is `snug`: `growFor` undone. */
+export function grownRect(snug, grow) {
+	const room = readGroupGrow(grow);
+	return {
+		left: snug.left - room.left, top: snug.top - room.top,
+		right: snug.right + room.right, bottom: snug.bottom + room.bottom,
+	};
+}
+
+/**
+ * Whether a point (board pixels) is inside a group's shape drawn on `rect`: the rectangle for a box,
+ * the ellipse through its corners for an oval. Asked of each member's FACE CENTRE when a resize is
+ * let go, which is what decides who is still in the group.
+ */
+export function insideGroupShape(shape, rect, point) {
+	if (!rect || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return false;
+	if (shape === "oval") {
+		const cx = (rect.left + rect.right) / 2;
+		const cy = (rect.top + rect.bottom) / 2;
+		const rx = ((rect.right - rect.left) / 2) * Math.SQRT2;
+		const ry = ((rect.bottom - rect.top) / 2) * Math.SQRT2;
+		if (!(rx > 0) || !(ry > 0)) return false;
+		return ((point.x - cx) / rx) ** 2 + ((point.y - cy) / ry) ** 2 <= 1;
+	}
+	return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
+}
+
 /** The corner of a box outline. */
 const GROUP_CORNER_PX = 22;
 /** How far in from a box's left corner its name sits. */
@@ -432,11 +559,19 @@ export function groupsInside(groups = {}) {
  * @param {Array<{left: number, top: number, right: number, bottom: number}>} [options.contain]
  *        outlines (board pixels) this one must stand clear round: the groups wholly inside it.
  * @param {number} [options.nestPx]  how far clear of them, from `groupNestPx`.
+ * @param {object} [options.grow]  extra room past (or short of) the members' own outline, per side
+ *        (`readGroupGrow`); `contain` still wins over it.
  * @returns {{shape: string, left: number, top: number, right: number, bottom: number,
  *   cx: number, cy: number, w: number, h: number, rx: number, ry: number,
- *   name: {left: number, top: number, align: string}}|null}  null with nobody to draw round.
+ *   rect: {left: number, top: number, right: number, bottom: number}, snug: object,
+ *   name: {left: number, top: number, align: string}}|null}  null with nobody to draw round. `rect`
+ *   is the rectangle the shape is drawn on, whose corners are the resize handles: the box itself,
+ *   or the four points an oval is drawn through. `snug` is the rectangle round the members alone,
+ *   before `grow` and before `contain`: what `grow` is measured from.
  */
-export function groupOutline(members = [], { board, shape = "box", contain = [], nestPx = groupNestPx() } = {}) {
+export function groupOutline(members = [], {
+	board, shape = "box", contain = [], nestPx = groupNestPx(), grow = null,
+} = {}) {
 	const width = Number(board?.width) || RELMAP_BOARD_WIDTH;
 	const height = Number(board?.height) || width / RELMAP_BOARD_ASPECT;
 	let left = Infinity; let top = Infinity; let right = -Infinity; let bottom = -Infinity;
@@ -451,7 +586,33 @@ export function groupOutline(members = [], { board, shape = "box", contain = [],
 	}
 	if (!Number.isFinite(left)) return null;
 	left -= RELMAP_GROUP_PAD_PX; right += RELMAP_GROUP_PAD_PX; top -= RELMAP_GROUP_PAD_PX; bottom += RELMAP_GROUP_PAD_PX;
-	// Round every group inside this one, a step clear of its line (and of the name sitting on it).
+	// HOWEVER FAR SOMEBODY DRAGGED IT OUT OR IN, measured from the snug outline round ITS OWN PEOPLE,
+	// so a corner handle (a corner of this rectangle) moves exactly as far as it was dragged. An oval
+	// is drawn through the corners of this rectangle.
+	//
+	// ⚠ NOT FROM THE GROUPS INSIDE IT, which are laid round it below. Measured from those, a group
+	// shrunk in past a nested one was drawn through it, and the nested one shrunk back later pulled
+	// this outline in past its own people (the offset was kept while what it was measured from moved).
+	const snug = { left, top, right, bottom };
+	if (grow) {
+		const room = readGroupGrow(grow);
+		left -= room.left; top -= room.top; right += room.right; bottom += room.bottom;
+		// SHRUNK BELOW ONE PERSON, which a shrunk outline can come to when its people walk in towards
+		// each other: drawn at the floor instead, centred on THEM (the snug outline), so a group of one
+		// is drawn round that one and never slides off them. Never inside out either.
+		// A corner dragged in to the floor is not this: `growFor` stores it a hair OVER the floor, so
+		// it stays under the corner. The tolerance is float noise only.
+		if (right - left < RELMAP_GROUP_MIN_W - 1e-6) {
+			const mid = (snug.left + snug.right) / 2;
+			left = mid - RELMAP_GROUP_MIN_W / 2; right = mid + RELMAP_GROUP_MIN_W / 2;
+		}
+		if (bottom - top < RELMAP_GROUP_MIN_H - 1e-6) {
+			const mid = (snug.top + snug.bottom) / 2;
+			top = mid - RELMAP_GROUP_MIN_H / 2; bottom = mid + RELMAP_GROUP_MIN_H / 2;
+		}
+	}
+	// AND ROUND EVERY GROUP INSIDE THIS ONE, LAST, a step clear of its line (and of the name sitting on
+	// it), however far this one was shrunk: an outline never cuts through one it holds.
 	for (const inner of contain ?? []) {
 		if (![inner?.left, inner?.top, inner?.right, inner?.bottom].every(Number.isFinite)) continue;
 		left = Math.min(left, inner.left - nestPx);
@@ -459,6 +620,7 @@ export function groupOutline(members = [], { board, shape = "box", contain = [],
 		top = Math.min(top, inner.top - nestPx);
 		bottom = Math.max(bottom, inner.bottom + nestPx);
 	}
+	const rect = { left, top, right, bottom };
 	const cx = (left + right) / 2;
 	const cy = (top + bottom) / 2;
 
@@ -466,7 +628,7 @@ export function groupOutline(members = [], { board, shape = "box", contain = [],
 		const rx = ((right - left) / 2) * Math.SQRT2;
 		const ry = ((bottom - top) / 2) * Math.SQRT2;
 		const oval = {
-			shape, cx, cy, rx, ry,
+			shape, cx, cy, rx, ry, rect, snug,
 			left: cx - rx, top: cy - ry, right: cx + rx, bottom: cy + ry, w: rx * 2, h: ry * 2,
 			// The top of the ellipse, centred: the one point on it a name can sit level on.
 			name: { left: (cx / width) * 100, top: ((cy - ry) / height) * 100, align: "centre" },
@@ -477,7 +639,7 @@ export function groupOutline(members = [], { board, shape = "box", contain = [],
 	const h = bottom - top;
 	const corner = Math.min(GROUP_CORNER_PX, w / 2, h / 2);
 	const box = {
-		shape: "box", cx, cy, rx: corner, ry: corner, left, top, right, bottom, w, h,
+		shape: "box", cx, cy, rx: corner, ry: corner, left, top, right, bottom, w, h, rect, snug,
 		name: {
 			left: ((left + Math.min(GROUP_NAME_INSET_PX, w / 4)) / width) * 100,
 			top: (top / height) * 100,
@@ -539,7 +701,7 @@ export function groupShapes(graph, board, { within, only, wordScale = 1 } = {}) 
 		const group = groups[id];
 		const members = Object.keys(group?.members ?? {}).filter(nodeId => graph.nodes?.[nodeId]).sort();
 		const outline = groupOutline(members.map(nodeId => graph.nodes[nodeId]), {
-			board, shape: group.shape, nestPx,
+			board, shape: group.shape, nestPx, grow: group.grow,
 			contain: within.get(id).map(inner => outlines.get(inner)).filter(Boolean),
 		});
 		if (!outline) continue;

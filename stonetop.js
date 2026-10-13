@@ -31,7 +31,8 @@ import { createStonetopTimelinePageSheetClass } from "./module/journal/StonetopT
 import { createRelationshipMapEntrySheetClass } from "./module/journal/RelationshipMapEntrySheet.js";
 import { RELMAP_SHEET_CLASS } from "./module/relmap/relmap-doc.js";
 import { ThreatBoard } from "./module/threats/threat-board.js";
-import { onReady } from "./module/hooks/Ready.js";
+import { onReady, _reconcileSharedCharacterSheets } from "./module/hooks/Ready.js";
+import { CHARACTER_SHEETS_SHARED_HOOK } from "./module/actors/character/shared-sheets.js";
 import { registerPrecompiledTemplates } from "./module/utils/templates.js";
 import { loadTemplates } from "./module/utils/foundry-compat.js";
 import { handleImportedJournalArt, ART_INDEX_SETTINGS } from "./module/book2-art/reapply.js";
@@ -73,6 +74,7 @@ import { addJournalShareButton } from "./module/journal/share-journal.js";
 import { patchJournalImagePopoutTitles } from "./module/journal/journal-image-titles.js";
 import { onRenderPause } from "./module/hooks/RenderPause.js";
 import { registerBookBroadcast } from "./module/books/book-broadcast.js";
+import { registerEndOfSessionBroadcast } from "./module/dialogs/end-of-session-broadcast.js";
 import { onRenderCompendiumItemIcons } from "./module/hooks/CompendiumItemIcons.js";
 import { decoratePortraitRow, onUpdateActorPortraitFrame } from "./module/hooks/ActorDirectoryPortraits.js";
 import { decorateNameRow, onUpdateActorPlaybookName } from "./module/hooks/ActorDirectoryNames.js";
@@ -779,6 +781,11 @@ Hooks.on("renderDocumentDirectory", (app, element) => {
 	hideTimelineJournalRow(app, element);
 });
 Hooks.on(FEATURE_SWITCH_HOOK, onFeatureSwitched);
+
+// The GM's switch opening every character to the table, or closing them again. The handler is
+// self-gated to the primary GM. See module/actors/character/shared-sheets.js.
+Hooks.on(CHARACTER_SHEETS_SHARED_HOOK, () => _reconcileSharedCharacterSheets()
+	.catch(err => console.error("Stonetop | shared character sheet reconcile failed", err)));
 Hooks.on("updateActor", onUpdateActorPortraitFrame);
 Hooks.on("updateActor", onUpdateActorPlaybookName);
 
@@ -820,6 +827,9 @@ Hooks.once("ready", onReady);
 // throw on a half-migrated world, and a table should not lose the ability to be shown a page
 // because a portrait backfill failed. See module/books/book-broadcast.js.
 Hooks.once("ready", registerBookBroadcast);
+// The same for End of Session: a player's read-only copy of the GM's window, which follows the
+// GM's ticks. See module/dialogs/end-of-session-broadcast.js.
+Hooks.once("ready", registerEndOfSessionBroadcast);
 Hooks.once("ready", () => applyMoveDescriptionBodyClass(getSetting("showMoveDescriptionsInChat")));
 
 // -- THREAT BOARD (opt-in on-canvas threat cards) --------------

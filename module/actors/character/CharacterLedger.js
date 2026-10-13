@@ -11,6 +11,7 @@ import {
 	prettifySlug, listMerge, scalarEntry, deltaEntry, numericMerge, editMerge, editAction,
 } from "../../utils/ledger-core.js";
 import { deletionTarget } from "../../utils/foundry-compat.js";
+import { isLoveLetter } from "./love-letters.js";
 
 const SYSTEM_PATH_LABELS = {
 	"name": "Name",
@@ -1272,6 +1273,15 @@ const itemBatchLabel = label =>
 	ITEM_BATCH_LABELS[label] ?? { plural: `${label}s`, gained: "added", category: "inventory" };
 
 /**
+ * A love letter never reaches the ledger. It is a move item, so it would read "<title> learned", and
+ * the ledger opens read-only for any player who can see the sheet, which is every player (see
+ * shared-sheets.js). A letter is for the one player it was written to.
+ */
+function withoutLoveLetters(items) {
+	return (items ?? []).filter(item => !isLoveLetter(item));
+}
+
+/**
  * One entry per created/deleted item, unless a batch is large enough to be a bulk grant — then
  * one summary entry per item-type ("Moves learned (21): Aid, Clash, Defend, and 18 more").
  * Batches stay split by item type so a playbook grant doesn't swallow the arcanum added with it.
@@ -1376,14 +1386,37 @@ function itemUpdateEntries(item, change) {
 	return entries;
 }
 
+/**
+ * Is this stored entry about one of the character's love letters? For the entries written before
+ * letters were kept out of the ledger (withoutLoveLetters): a letter's arrival ("<title> learned"),
+ * its removal, a rename or an edit. Known by the letter's item id where the entry carries one (an
+ * edit's or a rename's merge key), and by its title where it does not. A letter already deleted
+ * from the sheet cannot be recognised, and its "removed" line stays.
+ */
+function isLoveLetterEntry(entry, letters) {
+	const key = entry?.merge?.key;
+	return letters.some(({ id, name }) =>
+		(typeof key === "string" && (key === `item:${id}` || key.startsWith(`item:${id}:`)))
+		|| (!!name && (entry?.subject === name || entry?.action === `${name} learned` || entry?.action === `${name} removed`)));
+}
+
 export class CharacterLedger {
+	/**
+	 * The ledger as this viewer may read it. Anyone but the character's owner (and the GM, who owns
+	 * every sheet) reads it without the love-letter lines older versions wrote: every player can
+	 * open every character (shared-sheets.js), and a letter is for the one player it was written to.
+	 * Left in storage, not deleted, so the owner's own history keeps them.
+	 */
 	static getEntries(actor) {
-		return getLedgerEntries(actor);
+		const entries = getLedgerEntries(actor);
+		if (actor?.isOwner) return entries;
+		const letters = [...(actor?.items?.values?.() ?? [])].filter(isLoveLetter);
+		return letters.length ? entries.filter(entry => !isLoveLetterEntry(entry, letters)) : entries;
 	}
 
 	/** @param {{item: Item, change: object}[]} updates  each owned item with the update it is about to take */
 	static entriesForUpdatedItems(updates) {
-		return (updates ?? []).flatMap(({ item, change }) => (item ? itemUpdateEntries(item, change) : []));
+		return (updates ?? []).flatMap(({ item, change }) => (item && !isLoveLetter(item) ? itemUpdateEntries(item, change) : []));
 	}
 
 	static async append(actor, entries, options = {}) {
@@ -1401,10 +1434,10 @@ export class CharacterLedger {
 	}
 
 	static entriesForCreatedItems(items) {
-		return summariseItemBatch(items, createdItemAction);
+		return summariseItemBatch(withoutLoveLetters(items), createdItemAction);
 	}
 
 	static entriesForDeletedItems(items) {
-		return summariseItemBatch(items, deletedItemAction, { removed: true });
+		return summariseItemBatch(withoutLoveLetters(items), deletedItemAction, { removed: true });
 	}
 }

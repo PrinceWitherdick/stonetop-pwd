@@ -22,7 +22,7 @@ import { holdTravel } from "./relmap-geometry.js";
  * portrait's gesture, and one on a line is a line's.
  */
 const CLAIMED = "[data-relmap-node], [data-relmap-handle], [data-relmap-remove], [data-relmap-edge], "
-	+ "[data-relmap-hit], [data-relmap-action], [data-relmap-group], [data-relmap-group-hit]";
+	+ "[data-relmap-hit], [data-relmap-action], [data-relmap-group], [data-relmap-group-hit], [data-relmap-grip]";
 
 /** A group's name or its outline's click target, and the group it belongs to. */
 export function groupPressed(target) {
@@ -249,6 +249,16 @@ function clearTravel(el) {
  *                                      or Enter on its name. `from` is the element, for Escape to
  *                                      put the focus back on.
  * @param {Function} handlers.onRemoveGroup `id => void` — Delete on a group's name.
+ * @param {Function} handlers.onResizeMove `(id, corner, {left, top}, {square}) => void` — one of a held
+ *                                      group's corners (`[data-relmap-grip]`) is being dragged, and the
+ *                                      corner is HERE, in board percentages, once per painted frame: the
+ *                                      pointer, less where on the grip it was pressed.
+ *                                      `square` is Shift held: all four sides equal. What shape that
+ *                                      gives the group is the window's to work out.
+ * @param {Function} handlers.onResize  `(id, corner, {left, top}, {square}) => void` — and let go of there.
+ * @param {Function} handlers.onResizeEnd `(id, abandoned) => void` — that resize is over; `abandoned`
+ *                                      is true when nothing is going to be written, so the outlines
+ *                                      drawn frame by frame have to go back.
  * @param {Function} handlers.drawing   `() => boolean` — whether the group tool is armed, so that a
  *                                      plain press on open paper draws a box instead of panning.
  * @param {Function} handlers.onDrawn   `ids => void` — that box let go of, with who is inside it;
@@ -279,7 +289,8 @@ export function wireRelmapDrag(root, {
 	onPickNone, onRemove, onArm,
 	seatAt, onSeatMove, onSeat, onSeatEnd, onSeatNudge,
 	selected = () => [], onSelect, nodesIn, onGroupMove, onGroupDragMove, onGroupDragEnd, onGroupNudge,
-	groupMembers, onPickGroup, onRemoveGroup, drawing = () => false, onDrawn,
+	groupMembers, onPickGroup, onRemoveGroup, onResizeMove, onResize, onResizeEnd,
+	drawing = () => false, onDrawn,
 	linkBand, linking = () => false, onLinkPicked, onStopLinking,
 	canEdit = () => true,
 	canMove = canEdit,
@@ -602,6 +613,8 @@ export function wireRelmapDrag(root, {
 		if (finished.started && finished.kind === "seat") {
 			onSeatEnd?.(finished.id, committed ? null : finished.seat);
 		}
+		// AND A GROUP'S OUTLINE, redrawn at every frame of a resize, for the same reason.
+		if (finished.started && finished.kind === "resize") onResizeEnd?.(finished.id, !committed);
 		return finished;
 	}
 
@@ -675,6 +688,10 @@ export function wireRelmapDrag(root, {
 			// surface converts against the board as painted) and there is no `dragTranslation` here.
 			const at = surface.pointToPercent({ clientX: drag.clientX, clientY: drag.clientY });
 			if (at) onSeatMove?.(drag.id, at);
+		} else if (drag.kind === "resize") {
+			// The pointer's own place on the board too, less where on the grip it was pressed.
+			const at = cornerAt(drag, drag.clientX, drag.clientY);
+			if (at) onResizeMove?.(drag.id, drag.corner, at, { square: !!drag.square });
 		} else if (drag.kind === "link") {
 			// ⚠ BOTH READS BEFORE EITHER WRITE. Layout is clean at the top of a rAF callback and
 			// dirty the moment anything is written to the document, so a hit test taken after the band
@@ -801,6 +818,30 @@ export function wireRelmapDrag(root, {
 				before: [...(selected?.() ?? [])],
 				draws,
 				shown: null,
+				started: false,
+			};
+			swallowClick = false;
+			return;
+		}
+		// A HELD GROUP'S CORNER RESIZES IT, and is asked before the outline below: a corner sits ON the
+		// line, and a press there has aimed at the corner. A resize carries nobody, so it answers to
+		// `canEdit` (asked above) and not to `canMove`, as a caption's slide does.
+		const grip = ev.target.closest?.("[data-relmap-grip]");
+		if (grip) {
+			// PREVENTED, so the press never starts selecting the names' text on its way across the board.
+			ev.preventDefault?.();
+			drag = {
+				kind: "resize",
+				id: grip.dataset.relmapGrip,
+				corner: grip.dataset.relmapCorner,
+				// SHIFT FOR A SQUARE OR A CIRCLE, read off every pointer event, so it can be taken up
+				// or let go of halfway through the drag.
+				square: !!ev.shiftKey,
+				grab: gripOffset(grip, ev),
+				pointerId: ev.pointerId,
+				startX: ev.clientX, startY: ev.clientY,
+				clientX: ev.clientX, clientY: ev.clientY,
+				dx: 0, dy: 0,
 				started: false,
 			};
 			swallowClick = false;
@@ -950,6 +991,7 @@ export function wireRelmapDrag(root, {
 		drag.dy = ev.clientY - drag.startY;
 		drag.clientX = ev.clientX;
 		drag.clientY = ev.clientY;
+		if (drag.kind === "resize") drag.square = !!ev.shiftKey;
 		if (!drag.started) {
 			// ⚠ A PRESS WHOSE BUTTON IS NO LONGER DOWN WAS LET GO SOMEWHERE THIS BOARD NEVER HEARD. Nothing
 			// is captured while a press is merely armed (see pointerdown), so a release a pixel or two past
@@ -1026,6 +1068,13 @@ export function wireRelmapDrag(root, {
 		const commit = canEdit();
 		const finished = end(commit);
 		if (!finished || !commit) return;
+
+		if (finished.kind === "resize") {
+			// From the release position, for the reason the caption below gives.
+			const at = cornerAt(finished, dropX, dropY);
+			if (at) onResize?.(finished.id, finished.corner, at, { square: !!ev.shiftKey });
+			return;
+		}
 
 		if (finished.kind === "seat") {
 			// FROM THE RELEASE POSITION, like the link drop above it and for the same reason: the
@@ -1127,6 +1176,9 @@ export function wireRelmapDrag(root, {
 		// the board partial for why the painted stroke cannot take the click itself.
 		const stroke = ev.target.closest?.("[data-relmap-hit]");
 		if (stroke) { ev.preventDefault(); if (canEdit()) onPickEdge?.(stroke.dataset.relmapHit); return; }
+		// A HELD GROUP'S CORNER, pressed and not dragged, does nothing: above all it is not bare paper,
+		// which would let go of the very group it belongs to.
+		if (ev.target.closest?.("[data-relmap-grip]")) { ev.preventDefault(); return; }
 		// A GROUP'S NAME OR OUTLINE raises its bar. With Shift (or Ctrl, Cmd) it puts everybody in the
 		// group into the selection instead, which is the quick way to move "the hunters" somewhere
 		// AND keep them selected, or to start a second group from the first.
@@ -1444,7 +1496,43 @@ export function wireRelmapDrag(root, {
 		nudge(chosen.length > 1 && chosen.includes(id) ? chosen : [id]);
 	});
 
-	const teardown = () => { endAim(); end(); };
+	/**
+	 * HOW FAR THE PRESS LANDED FROM THE GRIP'S CENTRE, in board percentages, so the corner moves with
+	 * the hand from where it was taken hold of and does not jump that far to the pointer on the first
+	 * frame. Nothing for a grip with no size to measure (not laid out), which is taken at its centre.
+	 */
+	function gripOffset(grip, ev) {
+		const box = grip.getBoundingClientRect?.();
+		if (!(box?.width > 0) || !(box?.height > 0)) return null;
+		const centre = surface.pointToPercent?.({ clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 });
+		const pressed = surface.pointToPercent?.({ clientX: ev.clientX, clientY: ev.clientY });
+		if (!centre || !pressed) return null;
+		return { left: centre.left - pressed.left, top: centre.top - pressed.top };
+	}
+
+	/** Where a resize puts the corner for the pointer at (clientX, clientY): see `gripOffset`. */
+	function cornerAt(d, clientX, clientY) {
+		const at = surface.pointToPercent({ clientX, clientY });
+		if (!at || !d.grab) return at;
+		return { left: at.left + d.grab.left, top: at.top + d.grab.top };
+	}
+
+	// SHIFT TAKEN UP OR LET GO WITH THE HAND STILL, mid-resize. No pointer event comes for that, and
+	// the focus may be anywhere, so it is heard on the page; and only ever acts on a resize under way.
+	const squareKey = ev => {
+		if (ev.key !== "Shift" || drag?.kind !== "resize" || !drag.started) return;
+		drag.square = ev.type === "keydown";
+		schedule();
+	};
+	globalThis.document?.addEventListener?.("keydown", squareKey);
+	globalThis.document?.addEventListener?.("keyup", squareKey);
+
+	const teardown = () => {
+		endAim();
+		end();
+		globalThis.document?.removeEventListener?.("keydown", squareKey);
+		globalThis.document?.removeEventListener?.("keyup", squareKey);
+	};
 	// For the window, which stands the "Draw lines" tool down from its own footer, outside this board.
 	teardown.stopAiming = () => endAim();
 	return teardown;

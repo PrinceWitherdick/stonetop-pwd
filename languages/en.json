@@ -42,6 +42,8 @@
         "improvedStonetop": "Did we make a lasting improvement to Stonetop, or tangible progress towards doing so?"
       },
       "tally": "+{xp} XP to each character ticked below.",
+      "mirrorTally": "+{xp} XP to each character at the table.",
+      "mirrorHint": "The GM ticks each question the table answers \"yes\". Their ticks show here as they make them.",
       "whoHeading": "Who marks it",
       "whoTag": "everyone at the table",
       "whoHint": "Ticked: the characters of players who are logged in. Untick anyone who was not at the table.",
@@ -53,6 +55,7 @@
       "award": "Award +{xp} Group XP & Close",
       "close": "Close",
       "gmOnly": "Only the GM can award the session's XP.",
+      "playerAsk": "No GM has End of Session open yet. Your copy opens as soon as they do.",
       "againTitle": "Award the session's XP again?",
       "againPrompt": "<p>End of Session XP was already awarded {minutes} minutes ago: +{xp} XP to {count} characters. Award it again?</p>",
       "againYes": "Award it again",
@@ -1016,6 +1019,10 @@
       "showTimeline": {
         "name": "Timeline",
         "hint": "When on (the default), the steading and every character have a Timeline tab, and the Chronicle folder holds the Timeline journal. Turn it off to take the tabs and the journal away for everyone. It goes on recording in the background while it is off, so nothing is missing when you turn it on again."
+      },
+      "characterSheetsShared": {
+        "name": "Players See Every Character Sheet",
+        "hint": "When on (the default), every player can open every character's sheet to read it, but only its owner and the GM can change it. Turn it off to keep each sheet to its own player and the GM. A sheet you have shared or hidden yourself with Configure Ownership keeps what you set."
       },
       "arcanaPlayersSeeBothSides": {
         "name": "Arcana: Players See Both Sides",
@@ -2668,9 +2675,11 @@
         "added": "{count} put in the group.",
         "taken": "{count} taken out of the group.",
         "dropped": "The group has been deleted. Everyone in it is still on the map.",
+        "resizedOut": "{count} left the group when it was made smaller.",
+        "resizeEmpty": "That would leave nobody in the group, so it was not made that small. To delete the group, use the trash button on its bar.",
         "unnamed": "Unnamed group",
         "says": "{name}: {who}",
-        "edit": "{said}. Click to name, recolour or change who is in it. Drag to move everyone in it.",
+        "edit": "{said}. Click to name, recolour or change who is in it, or to drag its corners to resize it: hold Shift for a square or a circle, and shrink it past someone to take them out. Drag to move everyone in it.",
         "bar": "Group",
         "name": "Group name",
         "placeholder": "The hunters",
@@ -2831,6 +2840,7 @@
         "grouped": "drawing a group",
         "ungrouped": "deleting a group",
         "editedGroup": "changing a group",
+        "resizedGroup": "resizing a group",
         "groupMembers": "changing who is in a group",
         "backHint": "Take back {what}. Yours alone: it takes back what you did on this map, and never what anyone else at the table did. Ctrl+Z.",
         "forwardHint": "Do {what} again. Ctrl+Shift+Z.",

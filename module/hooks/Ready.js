@@ -9,7 +9,7 @@ import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
 import { repairAllChronicleFlagScopes } from "../migration/chronicle-flag-scope.js";
-import { oncePerVersion, forgetSweep } from "../migration/once-per-version.js";
+import { oncePerVersion, forgetSweep, sweepVersion } from "../migration/once-per-version.js";
 import { repairCharacterTokenLinks, applyLinkChoices } from "../migration/link-character-tokens.js";
 import { CharacterTokenLinkDialog } from "../dialogs/CharacterTokenLinkDialog.js";
 import { createArcanumItem, newArcanumSlug, isArcanumData } from "../item/createArcanum.js";
@@ -25,7 +25,7 @@ import { MACRO_MODULES } from "../book2-art/macro-modules.js";
 import { openProgressNotification } from "../utils/progress-notification.js";
 import { stonetopChatCard, whisperGm } from "../utils/chat.js";
 import { stampWorldLayoutBaseline } from "../utils/sheet-layout.js";
-import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyReduceMotion, applySheetContrast, splitLegacyHighContrast, watchFoundryTheme, applySheetTexture, applySheetTextureFade, applyNoItalics, getTimelineKindColours, refuseHiddenFeature, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown, adoptClassicLayoutScope, isFightTabEnabled, getArraySetting } from "../settings.js";
+import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyReduceMotion, applySheetContrast, splitLegacyHighContrast, watchFoundryTheme, applySheetTexture, applySheetTextureFade, applyNoItalics, getTimelineKindColours, refuseHiddenFeature, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown, adoptClassicLayoutScope, isFightTabEnabled, getArraySetting, areCharacterSheetsShared } from "../settings.js";
 import { applyTimelineKindColours } from "../timeline/timeline-colours.js";
 import { EndOfSessionDialog } from "../dialogs/EndOfSessionDialog.js";
 import { IntroductionsDialog } from "../dialogs/IntroductionsDialog.js";
@@ -61,6 +61,8 @@ import { ensureThreatsEntry } from "../threats/threat-store.js";
 import { ensureHazardsEntry } from "../hazards/hazard-store.js";
 import { STONETOP_SCOPE, ITEM_FLAG_SCOPE, resolvedFlagProperty, resolvedFlags } from "../actors/character/StonetopFlags.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
+import { SHARED_WITH_TABLE_FLAG, SHARED_SHEETS_ADOPTION_SWEEP, SHARED_SHEETS_UPDATE_OPTION, sharedSheetAdoptions, sharedSheetChanges, sharedSheetLevel } from "../actors/character/shared-sheets.js";
+import { inTurn } from "../utils/turn-queue.js";
 import { markPosterMapScenes } from "../book2-art/poster-maps.js";
 import { linkLandmarkNotes, refitLandmarkNotes, revealLandmarkNotesOnce } from "./PlaceOfInterestDrop.js";
 import { refitGmPrepPins } from "./ThreatNotePins.js";
@@ -228,6 +230,11 @@ export async function onReady() {
 	// (see _reconcileWorldGroupFights). Self-gated like the sweep above.
 	try { await _reconcileWorldGroupFights(); }
 	catch (err) { console.error("Stonetop | world Group fight reconcile failed", err); }
+	// Open each character to the table, or close it again, as the GM's switch says (see
+	// actors/character/shared-sheets.js). Every load rather than once, like the reconcile above: the
+	// switch can be thrown either way at any time. Self-gated the same way.
+	try { await _reconcileSharedCharacterSheets(); }
+	catch (err) { console.error("Stonetop | shared character sheet reconcile failed", err); }
 	await _migrateGmPrepPagesToSingleJournal();
 	// Convert each steading's plain-text Residents/Neighbors rows into linked NPC actors
 	// (idempotent; primary-GM only so two connected GMs can't double-create). Swept every
@@ -456,7 +463,7 @@ export async function onReady() {
 	// The modules the Import Book Art macro borrows, so a bundled release hands it this system's own
 	// instances rather than second copies. See book2-art/macro-modules.js.
 	game.stonetop.macroModules = MACRO_MODULES;
-	game.stonetop.openEndOfSession  = () => new EndOfSessionDialog().render(true);
+	game.stonetop.openEndOfSession  = () => EndOfSessionDialog.open();
 	game.stonetop.openIntroductions = () => IntroductionsDialog.open();
 	// Cursor onChange dispatcher (registered on the introCursor world setting): opens/
 	// focuses/closes the Introductions dialog on the active player's client as the GM
@@ -1632,11 +1639,12 @@ async function _migratePeoplePortraitsToWhole() {
 // individually saves everything that can be saved, exactly as flipPeoplePortraitsToWhole does; all
 // of these are idempotent, so whatever still fails is simply picked up next load.
 //
-// `what` names the job in the two warnings.
-async function _updateActorsBatched(actors, build, what) {
+// `what` names the job in the two warnings; `options`, when given, go to every update, batched or not.
+async function _updateActorsBatched(actors, build, what, options) {
 	if (!actors.length) return 0;
+	const withOptions = options ? [options] : [];
 	try {
-		await Actor.updateDocuments(actors.map(a => ({ _id: a.id, ...build(a) })));
+		await Actor.updateDocuments(actors.map(a => ({ _id: a.id, ...build(a) })), ...withOptions);
 		return actors.length;
 	} catch (err) {
 		console.warn(`Stonetop | bulk ${what} failed; retrying one actor at a time:`, err);
@@ -1644,7 +1652,7 @@ async function _updateActorsBatched(actors, build, what) {
 	let updated = 0;
 	for (const actor of actors) {
 		try {
-			await actor.update(build(actor));
+			await actor.update(build(actor), ...withOptions);
 			updated++;
 		} catch (err) {
 			console.warn(`Stonetop | could not ${what} on "${actor?.name}":`, err);
@@ -1786,6 +1794,41 @@ async function _restoreWorldGroupFights() {
 		: 0;
 	await setSetting("groupFightUnticked", []);
 	return wrote;
+}
+
+// Move every character the GM's `characterSheetsShared` switch looks after to where it says: OBSERVER
+// for the whole table while it is on, NONE while it is off. Which characters, and why only those, is
+// actors/character/shared-sheets.js; this is the writing.
+//
+// Run on every load and from the switch's onChange hook. PRIMARY-GM ONLY, like every other write
+// here, and batched with the same per-actor retry (see _updateActorsBatched). Every write carries
+// SHARED_SHEETS_UPDATE_OPTION, or StonetopActor#_preUpdate would take it for the GM's own hand and
+// drop the flag it is moving by.
+//
+// IN TURN, one run at a time. A GM flipping the switch on and straight off again starts a second
+// run while the first one's writes are still in flight; reading the same "before", the second would
+// find nothing to close, and the first's writes would then land and leave every sheet open under a
+// switch that reads off. Queued, each run reads what the last one wrote.
+export function _reconcileSharedCharacterSheets() {
+	if (!game.user?.isGM || !isPrimaryGM()) return Promise.resolve(0);
+	return inTurn("stonetop.sharedCharacterSheets", async () => {
+		const options = { [SHARED_SHEETS_UPDATE_OPTION]: true };
+		const flag = `flags.${STONETOP_SCOPE}.${SHARED_WITH_TABLE_FLAG}`;
+		const shared = areCharacterSheetsShared();
+		let wrote = 0;
+		// Once per world, never again: after this an unflagged character at NONE was hidden by hand.
+		// Checked for ANY stamp rather than this version's, which oncePerVersion alone would rerun.
+		if (!sweepVersion(SHARED_SHEETS_ADOPTION_SWEEP)) {
+			await oncePerVersion(SHARED_SHEETS_ADOPTION_SWEEP, async () => {
+				wrote += await _updateActorsBatched(sharedSheetAdoptions(game.actors),
+					() => ({ "ownership.default": sharedSheetLevel(shared), [flag]: true }), "character sheet adoption", options);
+			});
+		}
+		const { actors, level } = sharedSheetChanges(game.actors, shared);
+		wrote += await _updateActorsBatched(actors, () => ({ "ownership.default": level }),
+			shared ? "character sheet share" : "character sheet unshare", options);
+		return wrote;
+	});
 }
 
 // Give a slug to any arcanum card in the world that has none.

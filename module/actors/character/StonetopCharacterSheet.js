@@ -255,8 +255,11 @@ function _isSamePlaybook(current, doc) {
  * reminder's name list, and `_printedMoveSource`, which has to find a row's SOURCE text whether
  * or not that row is an owned item. A section added to the sheet and missed here goes quiet in
  * both — no reminder to attach a wound to, and a card that falls back to scraping the DOM.
+ *
+ * `loveLetters: false` leaves the letters out, for a reader who is not the sheet's owner: a letter
+ * is for the one player it was written to, and every player may read every sheet (shared-sheets.js).
  */
-function* _movelistMoves(movelist) {
+function* _movelistMoves(movelist, { loveLetters = true } = {}) {
 	if (!movelist) return;
 	yield* movelist.basicMoves ?? [];
 	yield* movelist.expeditionMoves ?? [];
@@ -265,7 +268,7 @@ function* _movelistMoves(movelist) {
 	yield* movelist.otherMoves ?? [];
 	for (const group of movelist.otherGroups ?? []) yield* group?.moves ?? [];
 	yield* movelist.postDeathGroup?.moves ?? [];
-	yield* movelist.loveLetters ?? [];
+	if (loveLetters) yield* movelist.loveLetters ?? [];
 }
 
 function _formatResultLine(text) {
@@ -966,8 +969,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			this._stonetopCharacter = this.actor.typedActor;
 
 			// Honor the "Open Sheets in Edit Mode" client setting on first open; the
-			// header wrench still toggles modes per-sheet afterward.
-			this._editMode = getOpenSheetsInEditMode();
+			// header wrench still toggles modes per-sheet afterward. Owners only, as on the NPC
+			// sheet: a player reading someone else's character (shared-sheets.js) has no wrench to
+			// leave edit mode with, and would be shown the owner's edit-only rows and buttons.
+			this._editMode = this.actor.isOwner ? getOpenSheetsInEditMode() : false;
 
 			// Reopen the collapsible crew sections (Inventory / Roster / Group Fight)
 			// in the state this user last left them — persisted per-actor, per-user.
@@ -1955,9 +1960,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			// affordances on a letter's card. Players read and resolve their own letters.
 			context.stonetop.canAuthorLoveLetters = game.user.isGM;
 			// A resolved letter is hidden, not deleted: the player no longer sees it, and the
-			// GM keeps it on the card list, dimmed, with a Resend.
+			// GM keeps it on the card list, dimmed, with a Resend. And a letter is for the one
+			// player it was written to: the rest of the table may read this sheet (see
+			// shared-sheets.js) but never sees its letters.
 			context.stonetop.loveLetters = (context.stonetop.movelist?.loveLetters ?? [])
-				.filter(letter => game.user.isGM || !letter.resolved);
+				.filter(letter => game.user.isGM || (this.actor.isOwner && !letter.resolved));
 			// Creating homebrew arcana can be restricted to the GM independently of
 			// custom moves (arcanaCreationGmOnly). When restricted, players don't see
 			// the per-tier "Create arcanum" buttons, but still edit cards they own.
@@ -3561,13 +3568,20 @@ export function createStonetopCharacterSheetClass(Base) {
 				ev.stopImmediatePropagation();
 				const data = this._getDragEventData(ev);
 				if (!data) return;
+				// A sheet this viewer may only read takes no drop: every branch below writes to the
+				// actor, and every player can open every character (shared-sheets.js), so dragging
+				// gear from one's own sheet onto a friend's is a natural slip. An ACTOR dropped on the
+				// relationships table is the exception, because that branch answers a read-only drop
+				// with a notice of its own; an item dropped there would still reach the writing below.
+				const onRelationships = !!ev.target.closest(".stonetop-character-relationships");
+				if (!this.isEditable && !(data?.type === "Actor" && onRelationships)) return;
 				if (data?.type === "Actor") {
 					const doc = await fromUuid(data.uuid);
 					// Dropped ON the Relationships section: put them on the list. Checked first
 					// and always consumed, because this same handler turns any NPC dropped
 					// elsewhere on the sheet into a follower — landing on the relationships
 					// table should never start that conversion instead.
-					if (ev.target.closest(".stonetop-character-relationships")) {
+					if (onRelationships) {
 						const result = await relationshipDropResult(this.actor, doc, this._buildRelationshipRows(), {
 							editable: this.isEditable,
 						});
@@ -3781,7 +3795,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				// rolling itself, and the Shift state is the real click's rather than one copied
 				// onto a MouseEvent by hand.
 				const rollable = li?.querySelector(".rollable");
-				if (guide && _guidedCharacterMoveHasAction(guide, rollable)) {
+				// Only on a sheet this viewer can write, as the arcanum guide is: the guide's buttons
+				// roll as this character and spend from it.
+				if (guide && this.isEditable && _guidedCharacterMoveHasAction(guide, rollable)) {
 					this._openGuidedCharacterMove({ name, guide }, rollable);
 					return;
 				}
@@ -9268,7 +9284,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (item?.system?.description) {
 				return { description: item.system.description, moveResults: item.system?.moveResults ?? null };
 			}
-			for (const m of _movelistMoves(this._renderedMovelist)) {
+			for (const m of _movelistMoves(this._renderedMovelist, { loveLetters: this.actor.isOwner })) {
 				if (m?.name === name && typeof m.description === "string") {
 					return { description: m.description, moveResults: m.moveResults ?? null };
 				}
@@ -11936,7 +11952,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		// that move is rolled (that's what the echo keys on).
 		_woundReminderMoveNames(snapshot) {
 			const names = new Set();
-			for (const m of _movelistMoves(snapshot?.movelist)) if (m?.name) names.add(m.name);
+			for (const m of _movelistMoves(snapshot?.movelist, { loveLetters: this.actor.isOwner })) if (m?.name) names.add(m.name);
 			return [...names].sort((a, b) => a.localeCompare(b));
 		}
 
@@ -12055,6 +12071,8 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		async _onNewCharacter(options = {}) {
+			// Rebuilds this character from scratch, so only for one this viewer may write.
+			if (!this.actor.isOwner) return;
 			// Launched from the player's first-session intro (CharacterCreationDialog),
 			// the sheet is still closed — `openSheetWhenDone` asks us to pop it open once
 			// the player lands at the end of the flow, so they never face an empty sheet.

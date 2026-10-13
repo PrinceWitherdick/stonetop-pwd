@@ -30,11 +30,12 @@ import { ZoomPanSurface } from "../utils/zoom-pan-surface.js";
 import { groupPressed, pressStartsBox, pressStartsDraw, wireRelmapDrag } from "../utils/relmap-drag.js";
 import {
 	RELMAP_BOARD_ASPECT, RELMAP_BOARD_WIDTH, RELMAP_CAPTION_FLOOR_PX, RELMAP_CAPTION_PX,
-	RELMAP_HEAD_PX,
+	RELMAP_GROUP_CORNERS, RELMAP_HEAD_PX,
 	ROUTE_HEAD_PATH, ROUTE_HEAD_VIEWBOX,
 	bandPath, boardBounds, boardMetrics,
 	captionRoomPx, captionSize, clampReach, clearanceBow, curveWithGap, edgeArrowheads, edgeBow,
-	edgeCurve, edgeLabelAnchor, freeSpot, groupShapes, groupsInside, nodeRadiusPct, seatAlong, spreadLabels,
+	edgeCurve, edgeLabelAnchor, freeSpot, groupShapes, groupsInside, growFor, insideGroupShape, nodeRadiusPct,
+	grownRect, resizeRect, seatAlong, spreadLabels,
 } from "../utils/relmap-geometry.js";
 import {
 	RELMAP_DASHES, RELMAP_DASH_DEFAULT, RELMAP_DIRS, RELMAP_FLAG, RELMAP_GROUP_DASHES, RELMAP_GROUP_SHAPES, RELMAP_INKS,
@@ -115,6 +116,9 @@ const RELMAP_ZOOM_STEP = FINE_ZOOM_STEP;
  */
 const CAPTION_READ_PX = 13;
 
+/** How wide a held group's resize corners are ON SCREEN, at any zoom. See `_paintGrips`. */
+const GROUP_GRIP_PX = 16;
+
 /**
  * How long after the last arrow key a nudge is written.
  *
@@ -158,7 +162,7 @@ const NUDGE_COMMIT_MS = 250;
 const BOARD_CONTROLS =
 	"[data-relmap-node], [data-relmap-handle], [data-relmap-remove], [data-relmap-edge], "
 	+ "[data-relmap-hit], [data-relmap-open], [data-relmap-action], .stonetop-relmap-tiebar, "
-	+ "[data-relmap-group], [data-relmap-group-hit], .stonetop-relmap-groupbar";
+	+ "[data-relmap-group], [data-relmap-group-hit], [data-relmap-grip], .stonetop-relmap-groupbar";
 
 /**
  * And which of them a RIGHT press must not start one from either.
@@ -409,6 +413,10 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this._groupBar = null;
 		this._litGroup = null;
 		this._pickedGroupParts = [];
+		// Its four resize corners, the size they were last drawn at, and one resize's worth of preview.
+		this._pickedGrips = [];
+		this._gripR = null;
+		this._resizePreview = null;
 		this._pendingGroupPick = "";
 		this._drawArmed = false;
 		// THE "DRAW LINES" TOOL, armed: every face is a handle until it is put down. See `_lineTool`.
@@ -1274,6 +1282,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 				nameLeft: outline.name.left, nameTop: outline.name.top,
 				tooltip: said,
 				ariaLabel: canEdit ? format("stonetop.relmap.groups.edit", { said }) : said,
+				// The corners it is resized by, for somebody who may: see `gripsOf`.
+				grips: canEdit ? gripsOf(id, outline) : [],
 			};
 		});
 
@@ -1521,6 +1531,11 @@ export class RelationshipMapWindow extends StonetopDialog {
 				returnTo: from ? () => this._groupNameEl(id) : null, focusName: keyboard,
 			}),
 			onRemoveGroup: id => this._dropGroup(id),
+			// AND A GROUP'S CORNERS, which resize it. The layer reports where the pointer is; how much
+			// room that gives the group is worked out here, against the outline as painted.
+			onResizeMove: (id, corner, at, opts) => this._previewResize(id, this._resizeUnder(id, corner, at, opts)),
+			onResize: (id, corner, at, opts) => this._resizeGroup(id, corner, at, opts),
+			onResizeEnd: (id, abandoned) => this._endResize(id, abandoned),
 			drawing: () => this._drawArmed,
 			onDrawn: ids => this._drewGroup(ids),
 			onRemove: id => this._removePerson(id),
@@ -1846,6 +1861,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this._surface?.setNaturalSize(plan.board.width, plan.board.height, this._boundsOf(plan));
 		// The lines and labels the preview was holding are gone with the markup.
 		this._preview = null;
+		this._resizePreview = null;
 		// So is every mark the highlight had put on them. The pointer is very likely still resting
 		// on the same face, and a repaint that quietly dropped the web it was lighting would look
 		// like the highlight failing at the moment somebody else touched the board.
@@ -3426,13 +3442,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 				within: preview.groupsWithin, only: preview.groupIds, wordScale: preview.scales?.word,
 			});
 			for (const { id, outline } of shapes) {
-				if (!preview.groupIds.has(id)) continue;
-				const parts = preview.groupParts.get(id);
-				for (const path of parts?.paths ?? []) path.setAttribute?.("d", outline.d);
-				if (parts?.name?.style) {
-					parts.name.style.left = `${outline.name.left}%`;
-					parts.name.style.top = `${outline.name.top}%`;
-				}
+				if (preview.groupIds.has(id)) redrawGroup(preview.groupParts.get(id), id, outline);
 			}
 		}
 	}
@@ -4339,14 +4349,167 @@ export class RelationshipMapWindow extends StonetopDialog {
 	_paintPickedGroup(id) {
 		for (const el of this._pickedGroupParts ?? []) el.classList?.remove("is-picked");
 		this._pickedGroupParts = [];
+		// Let go of the last group's corners first, whether or not there is a next: held, every frame
+		// of a pan or a zoom kept sizing circles a repaint may already have taken off the board.
+		this._pickedGrips = [];
+		this._gripR = null;
 		const board = id ? this._boardEl() : null;
 		if (!board) return;
 		const parts = indexGroupParts(board).get(id);
-		for (const el of [parts?.group, parts?.name]) {
+		for (const el of [parts?.group, parts?.name, parts?.gripset]) {
 			if (!el) continue;
 			el.classList?.add("is-picked");
 			this._pickedGroupParts.push(el);
 		}
+		this._pickedGrips = parts?.grips ?? [];
+		this._paintGrips();
+	}
+
+	/**
+	 * THE RESIZE CORNERS AT ONE SIZE ON SCREEN, whatever the zoom: board pixels chosen to come out at
+	 * `GROUP_GRIP_PX` across. Drawn in board pixels they shrank to specks on a board fitted into the
+	 * window, which is the zoom it opens at, and this board has a reader on a magnifier. Only the held
+	 * group's four, so a zoom step writes four attributes and not one per group. Written only when it
+	 * CHANGES, since this runs on every painted frame of a pan as well.
+	 */
+	_paintGrips() {
+		const grips = this._pickedGrips ?? [];
+		if (!grips.length) return;
+		const scale = Number(this._surface?.scale);
+		const r = Math.round(((GROUP_GRIP_PX / 2) / (scale > 0 ? scale : 1)) * 10) / 10;
+		if (r === this._gripR) return;
+		this._gripR = r;
+		for (const grip of grips) grip.setAttribute?.("r", String(r));
+	}
+
+	/**
+	 * A GROUP'S CORNER DRAGGED (user, 2026-10-12: "We should be able to select it and then drag to
+	 * increase or shrink its size"). The shape the group would have with that corner at `at` (board
+	 * percentages), and who would still be in it: worked out against the outline as last painted, since
+	 * the drag layer defers every repaint while it is busy and that paint is the one the corner was
+	 * picked up from.
+	 *
+	 * ⚠ SHRINKING CAN TAKE PEOPLE OUT (user, same day: "allow the groups to be shrunk so that actors that
+	 * were in the group to begin with might not be when they're done shrinking"). A member stays while
+	 * their face's centre is inside the shape (`insideGroupShape`), so a corner dragged in across them
+	 * leaves them out. `square` is Shift held: a square box, a round oval.
+	 *
+	 * @returns {{rect: object, grow: object, staying: string[], leaving: string[]}|null}
+	 */
+	_resizeUnder(id, corner, at, { square = false } = {}) {
+		const shape = this._drawn?.groups?.get(id);
+		const board = this._drawn?.board;
+		if (!shape || !board || !at) return null;
+		const px = spot => ({ x: (spot.x / 100) * board.width, y: (spot.y / 100) * board.height });
+		const asked = resizeRect(shape.outline.rect, corner, px({ x: at.left, y: at.top }), { square });
+		if (!asked) return null;
+		// HELD TO WHAT WILL BE STORED: the offsets are capped (`readGroupGrow`), and the rectangle who
+		// stays is judged against has to be the one the outline is drawn on once it is let go.
+		const grow = growFor(shape.outline.snug, asked);
+		const rect = grownRect(shape.outline.snug, grow);
+		const staying = [];
+		const leaving = [];
+		// The graph as painted, read ONCE: this runs every frame of the drag, and `_nodeAt` without one
+		// normalises the whole board again for every member.
+		const graph = this._drawn.graph ?? readGraph(this.boardDoc);
+		for (const member of shape.members) {
+			const spot = this._nodeAt(member, graph);
+			(spot && insideGroupShape(shape.group.shape, rect, px(spot)) ? staying : leaving).push(member);
+		}
+		return { rect, grow, staying, leaving };
+	}
+
+	/**
+	 * One frame of a resize: every outline redrawn with this group on its new rectangle. EVERY one and
+	 * not only this group's, since a group drawn round this one grows with it. The same builder as the
+	 * paint, so the drop lands exactly where the reader watched it settle. And the people who would
+	 * still be in it are RINGED in its colour, so a reader shrinking it sees who is about to leave
+	 * before letting go (the ring the pointer resting on a group puts on its people).
+	 *
+	 * `resize` null puts the board back as it is stored, for a resize abandoned or refused.
+	 */
+	_previewResize(id, resize) {
+		const board = this._boardEl();
+		if (!board) return;
+		let preview = this._resizePreview;
+		if (preview?.id !== id) {
+			const plan = this._plan(readGraph(this.boardDoc));
+			preview = this._resizePreview = {
+				id, graph: plan.graph, board: plan.board, scales: plan.scales,
+				within: groupsInside(plan.graph.groups ?? {}), parts: indexGroupParts(board),
+				stored: plan.graph.groups?.[id]?.grow ?? null,
+			};
+		}
+		const group = preview.graph.groups?.[id];
+		if (!group) return;
+		group.grow = resize?.grow ?? preview.stored;
+		for (const { id: shown, outline } of groupShapes(preview.graph, preview.board, {
+			within: preview.within, wordScale: preview.scales?.word,
+		})) {
+			redrawGroup(preview.parts.get(shown), shown, outline);
+		}
+		if (!resize) { this._lightGroup(this._litGroup); return; }
+		const root = this._root;
+		const { inkKey, inkHex } = inkPaint(group.ink);
+		root?.style?.setProperty?.("--relmap-group-ink", inkHex || `var(--st-relmap-ink-${inkKey})`);
+		const staying = new Set(resize.staying);
+		root?.querySelectorAll?.("[data-relmap-node]")?.forEach?.(el => {
+			el.classList?.toggle("is-in-group", staying.has(el.dataset.relmapNode));
+		});
+	}
+
+	/** That resize is over: put the outlines back when it was abandoned, and let the preview go. */
+	_endResize(id, abandoned) {
+		if (abandoned) this._previewResize(id, null);
+		else this._lightGroup(this._litGroup);
+		this._resizePreview = null;
+	}
+
+	/**
+	 * And let go of: the group keeps that shape, and anybody the corner was dragged in across leaves
+	 * it, in ONE write and one step of the undo.
+	 *
+	 * The offsets are measured again against the people STILL IN IT when anybody left, because the
+	 * snug outline is theirs now: measured against the old one, the outline would jump on the repaint.
+	 * A resize that would leave NOBODY in the group is refused, since an outline round nobody is
+	 * nothing and the group would vanish with it; the Delete on the bar is the way to do that.
+	 */
+	async _resizeGroup(id, corner, at, { square = false } = {}) {
+		const resize = this._resizeUnder(id, corner, at, { square });
+		if (!resize) return;
+		const graph = readGraph(this.boardDoc);
+		const group = graph.groups?.[id];
+		if (!group) return;
+		if (!resize.staying.length) {
+			this._previewResize(id, null);
+			this._resizePreview = null;
+			this._announce(localize("stonetop.relmap.groups.resizeEmpty"));
+			return;
+		}
+		let { grow } = resize;
+		if (resize.leaving.length) {
+			const after = foundry.utils.deepClone(graph);
+			after.groups[id].members = Object.fromEntries(resize.staying.map(member => [member, true]));
+			after.groups[id].grow = null;
+			const snug = groupShapes(after, this._drawn.board, {
+				only: new Set([id]), wordScale: this._drawn.scales?.word,
+			}).find(shape => shape.id === id)?.outline?.snug;
+			grow = growFor(snug, resize.rect);
+		}
+		const was = group.grow;
+		const same = Object.keys(grow).every(side => grow[side] === was?.[side]);
+		if (same && !resize.leaving.length) return;
+		await this._write({
+			...(same ? {} : groupPatch(id, { grow })),
+			...(groupMembersPatch(id, [], resize.leaving) ?? {}),
+		}, {
+			announce: resize.leaving.length
+				? format("stonetop.relmap.groups.resizedOut", { count: resize.leaving.length })
+				: "",
+			label: localize("stonetop.relmap.history.resizedGroup"),
+			onto: { kind: "groups", id },
+			graph,
+		});
 	}
 
 	/**
@@ -4950,6 +5113,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 			if (say) root.style?.setProperty?.("--relmap-say-px", say);
 			else root.style?.removeProperty?.("--relmap-say-px");
 		}
+		this._paintGrips();
 		this._paintLineGaps();
 	}
 
@@ -5507,15 +5671,15 @@ function indexEdgeParts(board) {
 }
 
 /**
- * Every group's markup, by id: the outline's three paths (fill, stroke, the wide click target) and
- * its name. Walked and read off `dataset`, never a selector built out of a stored id, for the reason
+ * Every group's markup, by id: the outline's three paths (fill, stroke, the wide click target), the
+ * corners it is resized by, and its name. Walked and read off `dataset`, never a selector built out of a stored id, for the reason
  * `indexEdgeParts` gives.
  */
 function indexGroupParts(board) {
 	const parts = new Map();
 	const partsFor = id => {
 		let found = parts.get(id);
-		if (!found) parts.set(id, found = { group: null, paths: [], name: null });
+		if (!found) parts.set(id, found = { group: null, paths: [], name: null, gripset: null, grips: [] });
 		return found;
 	};
 	board?.querySelectorAll?.("[data-relmap-group-shape]")?.forEach?.(el => {
@@ -5523,8 +5687,44 @@ function indexGroupParts(board) {
 		found.group = el;
 		found.paths = [...(el.querySelectorAll?.("path") ?? [])];
 	});
+	board?.querySelectorAll?.("[data-relmap-gripset]")?.forEach?.(el => {
+		const found = partsFor(el.dataset.relmapGripset);
+		found.gripset = el;
+		found.grips = [...(el.querySelectorAll?.("[data-relmap-grip]") ?? [])];
+	});
 	board?.querySelectorAll?.("[data-relmap-group]")?.forEach?.(el => { partsFor(el.dataset.relmapGroup).name = el; });
 	return parts;
+}
+
+/**
+ * One group's outline, name and resize corners moved onto `outline` between two paints: a drag
+ * carrying its people, or a corner of it dragged. The corners too, or the held group's would be left
+ * behind where the last paint put them, and a press on one would start from the old shape.
+ */
+function redrawGroup(parts, id, outline) {
+	if (!parts) return;
+	for (const path of parts.paths ?? []) path.setAttribute?.("d", outline.d);
+	if (parts.name?.style) {
+		parts.name.style.left = `${outline.name.left}%`;
+		parts.name.style.top = `${outline.name.top}%`;
+	}
+	for (const { corner, x, y } of gripsOf(id, outline)) {
+		const grip = parts.grips?.find(el => el.dataset?.relmapCorner === corner);
+		grip?.setAttribute?.("cx", String(x));
+		grip?.setAttribute?.("cy", String(y));
+	}
+}
+
+/**
+ * A group's four resize corners, in board pixels: the corners of the rectangle its outline is drawn
+ * on (`outline.rect`), which are the box's own corners and four points on an oval's line.
+ */
+function gripsOf(id, outline) {
+	const rect = outline?.rect;
+	if (!rect) return [];
+	return Object.entries(RELMAP_GROUP_CORNERS).map(([corner, sides]) => ({
+		id, corner, x: Math.round(rect[sides.x] * 10) / 10, y: Math.round(rect[sides.y] * 10) / 10,
+	}));
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";

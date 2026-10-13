@@ -30,6 +30,7 @@ import {
 import { ensureNamedActorFolder } from "../steading/steading-people.js";
 import { deletionEntry } from "../../utils/foundry-compat.js";
 import { resolvedFlags } from "./StonetopFlags.js";
+import { followerOwnershipFrom } from "./shared-sheets.js";
 import { rectEq, sameSrc } from "../../utils/portrait-frame.js";
 import { isDefaultImg } from "../../utils/strings.js";
 import { SYSTEM_ID } from "../../system-id.js";
@@ -115,7 +116,7 @@ export async function createFollowerActor(snapshot, character, { folder = null }
 		folder: folder ?? (await ensureFollowerFolder())?.id ?? null,
 		origin: { characterUuid: character.uuid ?? null, ftype: snapshot.ftype ?? null, slug: snapshot.slug ?? null },
 	});
-	data.ownership = foundry.utils.deepClone(character.ownership ?? {});
+	data.ownership = followerOwnershipFrom(character);
 	try {
 		return await Actor.create(data);
 	} catch (err) {
