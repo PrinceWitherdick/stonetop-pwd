@@ -1,4 +1,4 @@
-import { contentElement } from "../dialogs/content-picker.js";
+import { contentElement } from "../utils/dialogv2-content.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";

@@ -23,7 +23,7 @@ import { canRewriteCard, moveChatCard } from "../../utils/chat.js";
 import { inCardTurn } from "../../utils/card-queue.js";
 import { pressRollCard, writeCardRoll } from "../../utils/roll-card-writer.js";
 import { askWithButtons } from "../../utils/ask-with-buttons.js";
-import { contentElement } from "../../dialogs/content-picker.js";
+import { contentElement } from "../../utils/dialogv2-content.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
 import { ROLLED_FLAG, countedTier } from "../../utils/counted-tier.js";
 import { TIER_LABELS } from "../../utils/move-results.js";

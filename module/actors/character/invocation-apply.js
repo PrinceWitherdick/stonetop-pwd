@@ -75,7 +75,7 @@ import { groupFollowerStanding } from "../../utils/crew.js";
 import { healTo } from "../../camp/camp-rules.js";
 import { each } from "../../fight/fight-state.js";
 import { pickPersonOnMap } from "../../dialogs/RelationshipLinkDialog.js";
-import { contentElement } from "../../dialogs/content-picker.js";
+import { contentElement } from "../../utils/dialogv2-content.js";
 import { askWithButtons } from "../../utils/ask-with-buttons.js";
 import { canRewriteCard, moveChatCard } from "../../utils/chat.js";
 import { belongsToMessage } from "../../utils/picked-option-button.js";

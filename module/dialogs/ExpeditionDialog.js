@@ -18,7 +18,8 @@ import { wireAvatarPreview, removeAvatarPreview } from "../utils/avatar-preview.
 import { warn } from "../utils/logger.js";
 import { inTurn } from "../utils/turn-queue.js";
 import { CHART_GROUPS, HOME_GROUP, chartPicked, chartEntryText, chartGroupOf } from "./expedition-data.js";
-import { pickOrWriteOption, contentElement } from "./content-picker.js";
+import { pickOrWriteOption } from "./content-picker.js";
+import { contentElement } from "../utils/dialogv2-content.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { FATE_TABLES, fateTableList } from "../data/fate-tables.js";
 import { saveChronicleFromButton, findExpeditionChroniclePage, deleteExpeditionChroniclePage } from "../utils/chronicle.js";

@@ -55,7 +55,7 @@ import { escHtml, stripHtmlToText } from "../utils/strings.js";
 import { stonetopChatCard, firstOptionList } from "../utils/chat.js";
 import { damageRowActor } from "../utils/damage.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
-import { contentElement } from "../dialogs/content-picker.js";
+import { contentElement } from "../utils/dialogv2-content.js";
 import { heldReadiness, READINESS_FLAG } from "../combat/defend-readiness.js";
 import { ownsLearnedMoveNamed, ownedMove } from "../actors/character/owns-move.js";
 import { learnedTrack, takeBackHeld } from "../actors/character/MoveResources.js";

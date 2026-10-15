@@ -32419,6 +32419,59 @@ ul:has(> li.st-treasure-line:only-child) {
 	color: color-mix(in srgb, currentColor 75%, transparent);
 }
 
+/* The tabbed chooser (pickContentOption's `tabbed`): each heading's rows are a page behind the
+   shared left rail, so a long list (the settlement chooser) stays short. The pages share one grid
+   cell and the ones not showing are only invisible, so the window is as tall as its tallest page
+   and does not jump as the rail is clicked; `visibility` also takes their radios out of the tab
+   order. */
+.stonetop-content-picker--tabbed .stonetop-guide-toc {
+	width: max-content;
+	padding: 0 8px 0 0;
+	background: none;
+}
+/* One line per entry, the rail as wide as its longest, as the Welcome guide's. */
+.stonetop-content-picker--tabbed .stonetop-guide-toc-text { white-space: nowrap; }
+.stonetop-content-picker-pages {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: grid;
+	padding-left: 12px;
+}
+.stonetop-content-picker-page {
+	grid-area: 1 / 1;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	visibility: hidden;
+}
+.stonetop-content-picker-page.is-active { visibility: visible; }
+
+/* The window itself (ContentPickerDialog, AppV1). It opens hugging its rows, up to most of the
+   screen; past that the rows scroll and the Continue button stays put. The cap is on the frame
+   at two classes, so the "resized by hand" rule in this file still lifts it (see resizable-dialogs.js). */
+.stonetop-content-picker-dialog.window-app { max-height: 90vh; }
+.stonetop-content-picker-dialog .window-content {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+.stonetop-content-picker-form {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.stonetop-content-picker-form > .stonetop-content-picker {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+}
+.stonetop-content-picker-footer { flex: none; }
+/* Lone footer button: the slate `.stonetop-cta` (its fill, box and centred label), only full width.
+   Two classes, because the CTA's own one-class `width: auto` comes later in this file. */
+.stonetop-content-picker-footer > .stonetop-content-picker-confirm { width: 100%; }
+
 /* Rollable die in a random table's "Roll" header (module/utils/journal-roll-tables.js).
    Sits just before the "Roll" label; clicking it rolls the table and posts to chat. */
 
@@ -34214,6 +34267,8 @@ th:has(> .stonetop-roll-table-btn) {
    Ordered base → hover → active, so an active entry keeps its fill while hovered. */
 :is(.application, .window-app).stonetop-themed .window-content .stonetop-guide-toc .stonetop-guide-toc-btn {
 	justify-content: flex-start;
+	/* Core's V2 button is one fixed line tall; a two-line entry spilled onto the one below. */
+	height: auto;
 	background: transparent;
 	border-color: transparent;
 	color: inherit;

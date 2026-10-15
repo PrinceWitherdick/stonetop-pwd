@@ -23,7 +23,7 @@ import { themedDialogClasses } from "./window-theme.js";
  * @param {object} [o.position]  the window's position, for one that needs a width of its own
  * @param {(root: HTMLElement) => void} [o.render]  run once the window is on screen, with its element: a
  *   form whose controls answer each other (a cap on how many boxes may be ticked). Content handed in as
- *   an element keeps only its markup (dialogs/content-picker.js#contentElement), so a listener has to
+ *   an element keeps only its markup (utils/dialogv2-content.js#contentElement), so a listener has to
  *   be put on here, not before.
  */
 export async function askWithButtons({ title, content, buttons, defaultKey = null, classes = [], position = null, render = null }) {

@@ -22,7 +22,7 @@ import { heldOnTrack, learnedTrack, takeBackHeld } from "../actors/character/Mov
 import { answersFor } from "../hooks/DeathsDoorPrompt.js";
 import { postMoveNote } from "../utils/chat.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
-import { contentElement } from "../dialogs/content-picker.js";
+import { contentElement } from "../utils/dialogv2-content.js";
 import { escHtml, joinNames } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
 

@@ -22,7 +22,7 @@
 import { escHtml } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
 import { themedDialogClasses } from "../utils/window-theme.js";
-import { contentElement } from "../dialogs/content-picker.js";
+import { contentElement } from "../utils/dialogv2-content.js";
 import { HEROES, touching } from "./engagements.js";
 import { gridOf } from "./fight-state.js";
 import { rollerEngagement, asTarget } from "./damage-seed.js";

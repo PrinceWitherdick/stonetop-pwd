@@ -1,0 +1,10 @@
+{{!-- The shared chooser / one-line prompt (module/dialogs/content-picker.js#ContentPickerDialog).
+      `body` is markup the module built and escaped itself, hence the triple stash. One root, the
+      form: Confirm is its submit, so Enter confirms, and the dialog listens on it. The lone button
+      fills the footer, as every lone modal button here does. --}}
+<form class="stonetop-content-picker-form" autocomplete="off">
+	<div class="stonetop-content-picker{{#if bodyClass}} {{bodyClass}}{{/if}}">{{{body}}}</div>
+	<footer class="stonetop-content-picker-footer">
+		<button type="submit" class="stonetop-cta stonetop-content-picker-confirm"><i class="fas fa-check" aria-hidden="true"></i> {{buttonLabel}}</button>
+	</footer>
+</form>

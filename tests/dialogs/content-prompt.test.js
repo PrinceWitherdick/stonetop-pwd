@@ -1,110 +1,115 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { promptForText, pickContentOption } from "../../module/dialogs/content-picker.js";
+// @vitest-environment happy-dom
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// HOW A DialogV2 IS HANDED ITS CONTENT, which is a rule with no forgiveness in it.
-//
-// ⚠ WHAT THIS SUITE EXISTS TO STOP. Core's `DialogV2#_initializeApplicationOptions` (v13
-// client/applications/api/dialog.mjs) does three things to a content ELEMENT: it refuses anything
-// that is not a `<div>`, it refuses one carrying ANY attribute at all, and it then keeps only the
-// element's `innerHTML` and throws the element away. So the obvious way to write one of these —
-//
-//     const content = document.createElement("div");
-//     content.className = "stonetop";      // <- throws
-//     content.appendChild(field);
-//
-// is `Error: config.content element must have no attributes`, raised inside the DialogV2
-// constructor, which reaches the console as an unhandled rejection and reaches the READER as a
-// button that does nothing whatsoever. It shipped exactly that way twice: the GM Toolkit's "New
-// map" was dead from the day it landed, and the relationship map's "New page" was born dead
-// because its author copied the pattern from it.
-//
-// The assertions below are core's own two conditions, spelled out, run against the element our
-// helpers actually build. A stub `className` setter records an attribute the way a real element
-// does, so re-introducing the line above fails here rather than in somebody's game.
+// The shared chooser and the one-line prompt are one AppV1 window, ContentPickerDialog, on the
+// StonetopDialog base. The base is stood in for here (no Application in a test), with the two
+// things the window leans on: promise(), which opens it, and _resolveWith(), which settles it.
+// Everything ContentPickerDialog itself does (the markup, the wiring, the read, the opening focus)
+// runs for real against a form drawn into happy-dom.
 
-/** The little of an element these builders touch. `className` records an attribute, as a real one
- * does — that is the whole trap, and a stub that quietly did not would hide it. */
-function fakeElement(tag) {
-	const el = {
-		tagName: String(tag).toUpperCase(),
-		attributes: [],
-		innerHTML: "",
-		setAttribute(name, value) { el.attributes.push({ name, value }); },
-		appendChild() {},
-		querySelector: () => null,
-		set className(value) { el.attributes.push({ name: "class", value }); },
-		get className() { return el.attributes.find(a => a.name === "class")?.value ?? ""; },
-	};
-	return el;
-}
+const opened = [];
+vi.mock("../../module/utils/stonetop-dialog.js", () => ({
+	StonetopDialog: class {
+		constructor(options = {}) { this.options = options; }
+		static get defaultOptions() { return {}; }
+		activateListeners() {}
+		async _render() {}
+		promise() {
+			opened.push(this);
+			return new Promise(resolve => { this._settle = resolve; });
+		}
+		_resolveWith(value) { this._settle(value); }
+	},
+}));
 
-let asked;
-let priorDocument;
-let priorApplications;
+const { promptForText, pickContentOption, pickOrWriteOption, ContentPickerDialog } =
+	await import("../../module/dialogs/content-picker.js");
 
 beforeEach(() => {
-	asked = [];
-	priorDocument = globalThis.document;
-	globalThis.document = { createElement: fakeElement };
+	opened.length = 0;
 	globalThis.foundry ??= {};
-	priorApplications = globalThis.foundry.applications;
-	globalThis.foundry.applications = {
-		api: {
-			DialogV2: {
-				prompt: config => { asked.push(config); return Promise.resolve(null); },
-			},
-		},
-	};
+	globalThis.foundry.utils ??= {};
+	globalThis.foundry.utils.mergeObject ??= (a, b) => ({ ...a, ...b });
 });
 
-afterEach(() => {
-	globalThis.document = priorDocument;
-	globalThis.foundry.applications = priorApplications;
-});
-
-/** Core's own test, as core writes it. */
-function coreWouldAccept(content) {
-	if (content.tagName !== "DIV") return "config.content must be <div> element";
-	if (content.attributes.length) return "config.content element must have no attributes";
-	return null;
+/**
+ * Draw the window the way its template does, wire it as activateListeners does, and run its
+ * opening step as _render does. Returns the form.
+ */
+async function show(dialog) {
+	const { body, buttonLabel, bodyClass } = dialog.getData();
+	const frame = document.createElement("div");
+	frame.innerHTML = `<form class="stonetop-content-picker-form">
+		<div class="stonetop-content-picker ${bodyClass}">${body}</div>
+		<footer><button type="submit" class="stonetop-content-picker-confirm">${buttonLabel}</button></footer>
+	</form>`;
+	document.body.replaceChildren(frame);
+	dialog.element = [frame];
+	const form = frame.firstElementChild;
+	dialog.activateListeners([form]);
+	await dialog._render(true);
+	return form;
 }
 
-describe("the content element every prompt in this file builds", () => {
-	it("is a bare div core will accept, for the one-line text prompt", () => {
-		promptForText({ title: "Name the new page", buttonLabel: "New page" });
-		expect(coreWouldAccept(asked[0].content)).toBeNull();
+/** Press Confirm: the form's submit, as Enter or a click would fire it. */
+function confirm(form) {
+	form.dispatchEvent(new Event("submit", { cancelable: true }));
+}
+
+describe("the window", () => {
+	it("opens on the Stonetop skin, at the width the prompt asks for, titled", () => {
+		promptForText({ title: "Name the Settlement", buttonLabel: "Create", width: 380 });
+		const dialog = opened[0];
+		expect(dialog.options.title).toBe("Name the Settlement");
+		expect(dialog.options.width).toBe(380);
+		expect(dialog.constructor.defaultOptions.classes).toContain("stonetop");
+		expect(dialog.constructor.defaultOptions.template).toMatch(/templates\/dialogs\/content-picker\.hbs$/);
 	});
 
-	it("is a bare div core will accept, for the chooser beside it", () => {
-		pickContentOption({
-			title: "What do you want to make?",
-			options: [{ id: "a", label: "A", icon: "fa-user" }],
+	// Confirm is the form's SUBMIT, so Enter in the name box saves it and a click on the button does
+	// the same thing. The page must not navigate: the submit is prevented.
+	it("resolves to what the prompt reads off the form when it is confirmed", async () => {
+		const back = pickContentOption({ title: "t", options: [{ id: "a", label: "A", icon: "fa-user" }] });
+		const form = await show(opened[0]);
+		const event = new Event("submit", { cancelable: true });
+		form.dispatchEvent(event);
+		expect(event.defaultPrevented).toBe(true);
+		expect(await back).toBe("a");
+	});
+
+	it("is opened by ContentPickerDialog.ask, which resolves to what read takes off the form", async () => {
+		const back = ContentPickerDialog.ask({
+			title: "t", buttonLabel: "Go", bodyClass: "x-variant",
+			body: `<input type="text" name="n" value="kept">`,
+			read: form => form.querySelector('input[name="n"]').value,
 		});
-		expect(coreWouldAccept(asked[0].content)).toBeNull();
+		const dialog = opened[0];
+		expect(dialog).toBeInstanceOf(ContentPickerDialog);
+		expect(dialog.options.title).toBe("t");
+		const form = await show(dialog);
+		expect(form.querySelector(".stonetop-content-picker.x-variant")).not.toBeNull();
+		confirm(form);
+		expect(await back).toBe("kept");
 	});
 
-	// The classes still have to arrive, or the window comes up in Foundry's default chrome instead
-	// of the parchment skin. They ride INSIDE the markup, which is the half core keeps.
-	it("carries the skin one level in, where the innerHTML survives", () => {
-		promptForText({ title: "t", buttonLabel: "b" });
-		expect(asked[0].content.innerHTML).toContain("stonetop");
+	it("gives Confirm the focus as it opens, as the V2 prompt did", async () => {
+		pickContentOption({ title: "t", options: [{ id: "a", label: "A", icon: "fa-user" }] });
+		const form = await show(opened[0]);
+		expect(document.activeElement).toBe(form.querySelector(".stonetop-content-picker-confirm"));
 	});
 });
 
 describe("asking for one line of text", () => {
-	it("opens the box on the value it was given", () => {
+	it("opens the box on the value it was given", async () => {
 		promptForText({ title: "Rename this page", buttonLabel: "Rename it", value: "The Millers" });
-		expect(asked[0].content.innerHTML).toContain('value="The Millers"');
+		const form = await show(opened[0]);
+		expect(form.querySelector('input[name="stonetopText"]').value).toBe("The Millers");
 	});
 
 	// A page name is text somebody at this table typed, and both of these are printed as ATTRIBUTES.
 	it("escapes a value and a placeholder rather than trusting them", () => {
-		promptForText({
-			title: "t", buttonLabel: "b",
-			value: '" onfocus="alert(1)',
-			placeholder: "<script>",
-		});
-		const html = asked[0].content.innerHTML;
+		promptForText({ title: "t", buttonLabel: "b", value: '" onfocus="alert(1)', placeholder: "<script>" });
+		const html = opened[0].getData().body;
 		expect(html).not.toContain('onfocus="alert(1)"');
 		expect(html).toContain("&quot;");
 		expect(html).toContain("&lt;script&gt;");
@@ -112,34 +117,33 @@ describe("asking for one line of text", () => {
 
 	// ⚠ "" AND null ARE DIFFERENT ANSWERS, and every caller leans on it: "" means saved without
 	// typing anything, which a caller may substitute a default for, while null means never mind and
-	// must leave everything alone. `rejectClose: false` is what makes the dismissal a null rather
-	// than a rejected promise nobody catches.
-	it("resolves a saved box to trimmed text and a dismissal to null", async () => {
+	// must leave everything alone (StonetopDialog#close settles an unconfirmed window to null).
+	it("resolves a saved box to trimmed text", async () => {
 		const back = promptForText({ title: "t", buttonLabel: "b" });
-		const config = asked[0];
-		expect(config.rejectClose).toBe(false);
-		expect(await back).toBeNull();
-
-		const form = { elements: { namedItem: () => ({ value: "  The Millers  " }) } };
-		expect(config.ok.callback({}, { form })).toBe("The Millers");
+		const form = await show(opened[0]);
+		form.querySelector('input[name="stonetopText"]').value = "  The Millers  ";
+		confirm(form);
+		expect(await back).toBe("The Millers");
 	});
 
-	it("hands back an empty string, not a null, for a box saved blank", () => {
-		promptForText({ title: "t", buttonLabel: "b" });
-		const form = { elements: { namedItem: () => ({ value: "   " }) } };
-		expect(asked[0].ok.callback({}, { form })).toBe("");
+	it("hands back an empty string, not a null, for a box saved blank", async () => {
+		const back = promptForText({ title: "t", buttonLabel: "b" });
+		const form = await show(opened[0]);
+		form.querySelector('input[name="stonetopText"]').value = "   ";
+		confirm(form);
+		expect(await back).toBe("");
 	});
 
-	// The field takes focus and its text is selected once the window is up, which is what makes one
-	// prompt serve both "name this" and "rename this": a reader who meant to replace the name can
-	// simply type. `render` and not a wire step, because focusing a node that is not in a document
-	// yet is a silent no-op.
-	it("focuses and selects the field once the window is on screen", () => {
+	// The field takes the focus and its text is selected once the window is up, which is what makes
+	// one prompt serve both "name this" and "rename this": a reader who meant to replace the name can
+	// simply type.
+	it("focuses and selects the field once the window is on screen", async () => {
 		promptForText({ title: "t", buttonLabel: "b", value: "The Millers" });
-		const field = { focus: vi.fn(), select: vi.fn() };
-		asked[0].render({}, { element: { querySelector: () => field } });
-		expect(field.focus).toHaveBeenCalled();
-		expect(field.select).toHaveBeenCalled();
+		const form = await show(opened[0]);
+		const field = form.querySelector('input[name="stonetopText"]');
+		expect(document.activeElement).toBe(field);
+		expect(field.selectionStart).toBe(0);
+		expect(field.selectionEnd).toBe("The Millers".length);
 	});
 });
 
@@ -155,44 +159,144 @@ describe("which row the chooser opens on", () => {
 		{ id: "ring", label: "Ring", icon: "fa-circle-nodes" },
 		{ id: "clusters", label: "Clusters", icon: "fa-diagram-project" },
 	];
-	const checkedIn = html => html.match(/value="([^"]+)"[^>]* checked/)?.[1] ?? null;
+	const checkedIn = form => form.querySelector('input[name="contentType"]:checked')?.value ?? null;
 
-	it("opens on the first row when the caller names none", () => {
+	it("opens on the first row when the caller names none", async () => {
 		pickContentOption({ title: "t", options: ROWS });
-		expect(checkedIn(asked[0].content.innerHTML)).toBe("ring");
+		expect(checkedIn(await show(opened[0]))).toBe("ring");
 	});
 
-	it("opens on the row the caller named, without moving it", () => {
+	it("opens on the row the caller named, without moving it", async () => {
 		pickContentOption({ title: "t", options: ROWS, selected: "clusters" });
-		const html = asked[0].content.innerHTML;
-		expect(checkedIn(html)).toBe("clusters");
-		expect(html.indexOf('value="ring"')).toBeLessThan(html.indexOf('value="clusters"'));
+		const form = await show(opened[0]);
+		expect(checkedIn(form)).toBe("clusters");
+		expect([...form.querySelectorAll('input[name="contentType"]')].map(r => r.value)).toEqual(["ring", "clusters"]);
 	});
 
 	// ⚠ A DEFAULT THAT IS NOT THERE MUST NOT LEAVE THE GROUP EMPTY. A radio group with nothing
-	// checked is a confirm button that resolves to undefined, which no caller can tell from a
+	// checked is a confirm button that resolves to nothing, which no caller can tell from a
 	// dismissal -- so a name that matches no row falls back to the first, as if none was given.
 	// A heading is a caption, not a choice: no radio, and never the row a window opens on.
-	it("draws a heading without a radio and opens on the first real row", () => {
+	it("draws a heading without a radio and opens on the first real row", async () => {
 		pickContentOption({ title: "t", options: [{ heading: "Shapes" }, ...ROWS] });
-		const html = asked[0].content.innerHTML;
-		expect(html).toContain('class="stonetop-content-picker-heading">Shapes<');
-		expect(html.match(/type="radio"/g)).toHaveLength(2);
-		expect(checkedIn(html)).toBe("ring");
+		const form = await show(opened[0]);
+		expect(form.querySelector(".stonetop-content-picker-heading")?.textContent).toBe("Shapes");
+		expect(form.querySelectorAll('input[type="radio"]')).toHaveLength(2);
+		expect(checkedIn(form)).toBe("ring");
 	});
 
-	it("falls back to the first row when the named one is not on the list", () => {
+	it("falls back to the first row when the named one is not on the list", async () => {
 		pickContentOption({ title: "t", options: ROWS, selected: "spiral" });
-		expect(checkedIn(asked[0].content.innerHTML)).toBe("ring");
+		expect(checkedIn(await show(opened[0]))).toBe("ring");
 	});
 
 	// ⚠ AND THE PICKED ROW HAS TO BE ON SCREEN. Once the default can be anywhere in the list, one
-	// the reader has to scroll to find is a default they will not know is there. `scrollIntoView`
-	// and not focus: the confirm button keeps the focus a dialog opens with.
-	it("scrolls the picked row into view once the window is up", () => {
+	// the reader has to scroll to find is a default they will not know is there.
+	it("scrolls the picked row into view once the window is up", async () => {
 		pickContentOption({ title: "t", options: ROWS, selected: "clusters" });
-		const row = { scrollIntoView: vi.fn() };
-		asked[0].render({}, { element: { querySelector: () => ({ closest: () => row }) } });
-		expect(row.scrollIntoView).toHaveBeenCalled();
+		let scrolledRow = null;
+		const spy = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(function () { scrolledRow = this; });
+		const form = await show(opened[0]);
+		spy.mockRestore();
+		expect(scrolledRow).toBe(form.querySelector('input[value="clusters"]').closest("label"));
+	});
+
+	it("resolves to the row picked when it is confirmed", async () => {
+		const back = pickContentOption({ title: "t", options: ROWS });
+		const form = await show(opened[0]);
+		form.querySelector('input[value="clusters"]').checked = true;
+		confirm(form);
+		expect(await back).toBe("clusters");
+	});
+});
+
+// The tabbed chooser (the settlement list): one page per heading behind a left rail, still ONE radio
+// group, and it opens on the page holding the picked row so the default is on screen.
+describe("the tabbed chooser", () => {
+	const GROUPED = [
+		{ heading: "Places", icon: "fa-book" },
+		{ id: "delve", label: "Delve", icon: "fa-city" },
+		{ id: "marsh", label: "Marsh", icon: "fa-city" },
+		{ heading: "Your own", icon: "fa-pen" },
+		{ id: "blank", label: "Blank", icon: "fa-file-lines" },
+	];
+	const checkedIn = form => form.querySelector('input[name="contentType"]:checked')?.value ?? null;
+	const activePage = form => form.querySelector(".stonetop-content-picker-page.is-active")?.dataset.tab ?? null;
+
+	it("draws a rail entry and a page per heading, with every row in one radio group", async () => {
+		pickContentOption({ title: "t", options: GROUPED, tabbed: true });
+		const form = await show(opened[0]);
+		expect(form.querySelectorAll(".stonetop-guide-toc-btn")).toHaveLength(2);
+		expect(form.querySelectorAll(".stonetop-content-picker-page")).toHaveLength(2);
+		expect(form.querySelectorAll('input[name="contentType"]')).toHaveLength(3);
+		expect(form.querySelector(".stonetop-content-picker-heading")).toBeNull();
+		expect(checkedIn(form)).toBe("delve");
+		expect(activePage(form)).toBe("0");
+	});
+
+	it("opens on the page that holds the picked row", async () => {
+		pickContentOption({ title: "t", options: GROUPED, tabbed: true, selected: "blank" });
+		const form = await show(opened[0]);
+		expect(checkedIn(form)).toBe("blank");
+		expect(activePage(form)).toBe("1");
+	});
+
+	// ⚠ WHAT IS PICKED IS ALWAYS ON THE PAGE SHOWING, so Continue never makes something the reader
+	// cannot see.
+	it("picks a page's first row when the rail opens it", async () => {
+		const back = pickContentOption({ title: "t", options: GROUPED, tabbed: true });
+		const form = await show(opened[0]);
+		form.querySelector('.stonetop-content-picker-tab[data-tab="1"]').click();
+		expect(activePage(form)).toBe("1");
+		expect(checkedIn(form)).toBe("blank");
+		confirm(form);
+		expect(await back).toBe("blank");
+	});
+
+	it("turns the rail to the page of a row picked from the keyboard", async () => {
+		pickContentOption({ title: "t", options: GROUPED, tabbed: true });
+		const form = await show(opened[0]);
+		const blank = form.querySelector('input[value="blank"]');
+		blank.checked = true;
+		blank.dispatchEvent(new Event("change", { bubbles: true }));
+		expect(activePage(form)).toBe("1");
+	});
+
+	it("falls back to the plain stack when the list does not open on a heading", async () => {
+		pickContentOption({ title: "t", options: GROUPED.slice(1), tabbed: true });
+		const form = await show(opened[0]);
+		expect(form.querySelector(".stonetop-guide-toc")).toBeNull();
+		expect(form.querySelector(".stonetop-content-picker-heading")).not.toBeNull();
+	});
+});
+
+describe("picking a line off a menu, or writing one", () => {
+	const MENU = [{ id: "a", html: "Line A" }, { id: "b", html: "Line B" }];
+
+	it("resolves a picked line to its key", async () => {
+		const back = pickOrWriteOption({ title: "t", options: MENU });
+		const form = await show(opened[0]);
+		form.querySelector('input[name="pick"][value="b"]').checked = true;
+		confirm(form);
+		expect(await back).toEqual({ key: "b" });
+	});
+
+	// Typing is choosing: a GM who writes their own line and presses Add gets their words, not
+	// whichever authored line happened to be picked.
+	it("picks the write-your-own row as soon as something is typed in it", async () => {
+		const back = pickOrWriteOption({ title: "t", options: MENU });
+		const form = await show(opened[0]);
+		const custom = form.querySelector('input[name="custom"]');
+		custom.value = "  A ford nobody guards  ";
+		custom.dispatchEvent(new Event("input", { bubbles: true }));
+		confirm(form);
+		expect(await back).toEqual({ text: "A ford nobody guards" });
+	});
+
+	it("resolves the write row with nothing written to null", async () => {
+		const back = pickOrWriteOption({ title: "t", options: [] });
+		const form = await show(opened[0]);
+		confirm(form);
+		expect(await back).toBeNull();
 	});
 });

@@ -9,7 +9,7 @@
 // Changing it later moves EVERY recorded year, history included, because nothing stored changes:
 // the setting only renames stored years. What does need doing is the repaint, below.
 import { askWithButtons } from "../utils/ask-with-buttons.js";
-import { contentElement } from "../dialogs/content-picker.js";
+import { contentElement } from "../utils/dialogv2-content.js";
 import { escHtml } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
 import { getStonetopSteadingActor } from "../utils/world.js";

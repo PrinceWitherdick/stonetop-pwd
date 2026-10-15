@@ -16,7 +16,7 @@
 import { escHtml, escapeRegExp } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
 import { themedDialogClasses } from "../utils/window-theme.js";
-import { contentElement } from "../dialogs/content-picker.js";
+import { contentElement } from "../utils/dialogv2-content.js";
 import { overlapShare } from "./overlay-geometry.js";
 import { insideRect } from "./fight-state.js";
 

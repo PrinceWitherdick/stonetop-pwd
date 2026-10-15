@@ -35,7 +35,7 @@ export function applyGuideRail(root, {
 		btn.closest(".stonetop-guide-toc-item")?.classList.toggle("is-active", on);
 		if (on) btn.setAttribute("aria-current", "true"); else btn.removeAttribute("aria-current");
 	});
-	root.querySelectorAll(sectionSelector).forEach(sec => { sec.hidden = sec.dataset[dataKey] !== key; });
+	if (sectionSelector) root.querySelectorAll(sectionSelector).forEach(sec => { sec.hidden = sec.dataset[dataKey] !== key; });
 
 	if (iconSelector) {
 		const iconEl = root.querySelector(iconSelector);

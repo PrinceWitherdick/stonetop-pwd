@@ -35,7 +35,7 @@ import {
 import { actsForHelper } from "./roll-boosts.js";
 import { ownerUsers, answersFor, becameDyingInDiff, openZeroHpMove } from "../../hooks/DeathsDoorPrompt.js";
 import { pickPersonOnMap } from "../../dialogs/RelationshipLinkDialog.js";
-import { contentElement } from "../../dialogs/content-picker.js";
+import { contentElement } from "../../utils/dialogv2-content.js";
 import { partyCharacters } from "../../utils/playbook-actors.js";
 import { canRewriteCard, postMoveNote } from "../../utils/chat.js";
 import { belongsToMessage } from "../../utils/picked-option-button.js";
