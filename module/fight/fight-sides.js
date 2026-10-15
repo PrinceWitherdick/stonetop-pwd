@@ -4,6 +4,7 @@
 
 import { groupCasualties } from "../data/follower-build.js";
 import { HEROES, FOES } from "./engagements.js";
+import { PERSON_ACTOR_TYPES } from "../utils/actor-types.js";
 
 /** Core's TOKEN_DISPOSITIONS.FRIENDLY, which a pure module cannot reach through CONST. */
 const FRIENDLY = 1;
@@ -23,13 +24,18 @@ const FRIENDLY = 1;
  *  • any other NPC .......................................... foes, but listed apart as "others":
  *                                                             a bystander is not ticked into a
  *                                                             fight just for being on the map
- *  • the steading and the GM Toolkit ........................ never a combatant (null)
+ *  • anything that is not a person (utils/actor-types.js): . never a combatant (null)
+ *    the steading, a settlement, the GM Toolkit, and any
+ *    type a module adds
+ *
+ * NO type at all (a token whose actor is gone, a caller that knows none) is still a body on the
+ * map, so it falls through to the rules below and classifies as an NPC would.
  *
  * @param {{type?: string, hasPlayerOwner?: boolean, isFollower?: boolean, disposition?: number}} info
  * @returns {{side: "heroes"|"foes", list: "heroes"|"foes"|"others"}|null}
  */
 export function classifySide({ type = "", hasPlayerOwner = false, isFollower = false, disposition = null } = {}) {
-	if (type === "stonetop" || type === "gmToolkit") return null;
+	if (type && !PERSON_ACTOR_TYPES.has(type)) return null;
 	if (type === "character" || hasPlayerOwner) return { side: HEROES, list: HEROES };
 	if (isFollower || Number(disposition) === FRIENDLY) return { side: HEROES, list: HEROES };
 	if (type === "monster") return { side: FOES, list: FOES };

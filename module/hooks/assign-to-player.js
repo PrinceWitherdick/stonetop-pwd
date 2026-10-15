@@ -1,6 +1,7 @@
 import { contextMenuEntry, deletionEntry } from "../utils/foundry-compat.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { escHtml as esc } from "../utils/strings.js";
+import { PERSON_ACTOR_TYPES } from "../utils/actor-types.js";
 
 /**
  * "Assign to Player…" on an actor's right-click menu in the Actors sidebar, GM only.
@@ -15,9 +16,6 @@ import { escHtml as esc } from "../utils/strings.js";
  * who held the actor before is released, since one actor is one player's character: no longer
  * their character, and no longer an owner of it either, or they could still run it.
  */
-
-/** Actor types that are nobody's character: the shared steading and the GM's own toolkit. */
-const NOT_PLAYABLE = new Set(["stonetop", "gmToolkit"]);
 
 /** The users a GM can hand an actor to. */
 function players() {
@@ -36,7 +34,7 @@ export function assignToPlayerEntry() {
 		icon: "fa-solid fa-user-plus",
 		visible: target => {
 			const actor = actorOfRow(target);
-			return !!game.user.isGM && !!actor && !NOT_PLAYABLE.has(actor.type) && players().length > 0;
+			return !!game.user.isGM && !!actor && PERSON_ACTOR_TYPES.has(actor.type) && players().length > 0;
 		},
 		run: target => assignToPlayer(actorOfRow(target)),
 	});

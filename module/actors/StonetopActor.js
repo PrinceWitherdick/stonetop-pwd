@@ -11,6 +11,7 @@ import {GM_TOOLKIT_TYPE, theGmToolkit} from "./gmtoolkit/gm-toolkit-actor.js";
 import {SETTLEMENT_TYPE} from "./settlement/settlement-type.js";
 import {sharedSheetCreateStamp, sharedSheetReleaseEntry} from "./character/shared-sheets.js";
 import {areCharacterSheetsShared} from "../settings.js";
+import {GM_ONLY_ACTOR_TYPES} from "../utils/actor-types.js";
 
 /**
  * The default ownership level a new actor of each type gets, by CONST.DOCUMENT_OWNERSHIP_LEVELS
@@ -79,10 +80,10 @@ export function createStonetopActorClass(BaseActor) {
 				ok: { ...(options.ok ?? {}), label: title },
 			};
 			if (!options.types) {
-				// Monsters, NPCs and the GM Toolkit are GM content: players (who get Create-Actor
-				// on fresh worlds) only ever make their own character, so keep all three out of a
-				// non-GM's picker.
-				const GM_ONLY_TYPES = new Set(["monster", "npc", GM_TOOLKIT_TYPE]);
+				// Monsters, NPCs, settlements and the GM Toolkit are GM content: players (who get
+				// Create-Actor on fresh worlds) only ever make their own character, so keep them all
+				// out of a non-GM's picker (GM_ONLY_ACTOR_TYPES, utils/actor-types.js).
+				//
 				// The toolkit drops out the same way the steading does once the world HAS one:
 				// both are singletons blocked in preCreateActor, so offering either is a dead end
 				// that only ever warns. The difference is that the steading is auto-created on
@@ -94,7 +95,7 @@ export function createStonetopActorClass(BaseActor) {
 					t !== "stonetop"
 					&& t !== CONST.BASE_DOCUMENT_TYPE
 					&& !(t === GM_TOOLKIT_TYPE && haveToolkit)
-					&& (game.user?.isGM || !GM_ONLY_TYPES.has(t)));
+					&& (game.user?.isGM || !GM_ONLY_ACTOR_TYPES.has(t)));
 			}
 			return super.createDialog(data, createOptions, options, renderOptions);
 		}
