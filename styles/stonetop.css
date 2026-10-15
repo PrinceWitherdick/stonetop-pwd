@@ -4901,6 +4901,9 @@ input.stonetop-name-field {
    `pointer-events: none` (inputs, buttons, selects, labels) never reached in the first place. */
 .stonetop-readonly .stonetop-answer-character-questions-btn,
 .stonetop-readonly .steading-list-add,
+/* Other Settlements' "New settlement sheet" (GM only) makes a whole new actor; it edits nothing
+   on this steading, so the section's pencil has nothing to guard. */
+.stonetop-readonly .steading-settlement-new,
 /* NOTHING FROM THE GM-PREP TABS IS ON THIS LIST ANY MORE, and nothing should go back on.
    Seven lines used to live here — the add bar, the card pencil, a site's d20 roll, the collapse
    chevron, the threat-type disclosure and the two doom-track selectors — every one of them
@@ -20619,8 +20622,11 @@ button.stonetop-mark-sign-btn.is-active:hover {
 /* The shared full-width dashed "add a row" entry point — same rule the inventory
    tab's Add item (.stonetop-inv-add-btn) and this sheet's own Create improvement /
    Make a hazard (.steading-improvement-add-btn) use. Was a muted left-aligned
-   caption, which read as a different control from the ones beside it. */
-.steading-list-add {
+   caption, which read as a different control from the ones beside it.
+   Other Settlements' "New settlement sheet" wears it under its own class: the sheet delegates
+   every `.steading-list-add` click to its list-row adder. */
+.steading-list-add,
+.steading-settlement-new {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -20638,7 +20644,8 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	transition: background 0.15s;
 }
 
-.steading-list-add:hover {
+.steading-list-add:hover,
+.steading-settlement-new:hover {
 	background: var(--st-on-dark-raised, hsl(210 10% 92%));
 	color: var(--st-text-body);
 }

@@ -906,6 +906,13 @@ export function createStonetopSteadingSheetClass(Base) {
 			// Other Settlements rows that have a settlement sheet carry its uuid, so their names
 			// open it (and a picture the GM chose previews on hover).
 			wireRelationshipLinks(html[0]);
+			// The GM's "New settlement sheet" under that table: the sidebar's settlement chooser.
+			html[0].querySelectorAll(".steading-settlement-new").forEach(btn => btn.addEventListener("click", async ev => {
+				ev.preventDefault();
+				const { createSettlementSheet } = await import("../../dialogs/create-actor-dialog.js");
+				await createSettlementSheet();
+				this.render(false);
+			}));
 
 			// Residents / Neighbors faces, through the same shared preview the relationships
 			// component uses — a face previews identically wherever it appears.

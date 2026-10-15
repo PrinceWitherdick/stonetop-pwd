@@ -163,6 +163,7 @@
       "settlement": "Settlement",
       "settlementShowTooltip": "Show this settlement on the sheet",
       "settlementsAllHidden": "No settlements ticked. Use the pencil to choose which ones this steading tracks.",
+      "settlementNew": "New settlement sheet",
       "missXp": {
         "button": "Mark XP",
         "buttonTooltip": "On a miss, whoever made the move marks XP. Marks it for your own character.",

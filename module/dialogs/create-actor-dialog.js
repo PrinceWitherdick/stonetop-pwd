@@ -8,15 +8,20 @@
 //     home), filed on the steading's roster when it belongs there.
 //   • Monster → the Make-a-Monster worksheet (Book I, "Dangers"), one of the Things Below
 //     corruption wizards, or a blank stat block for a GM who'd rather type it in.
+//   • Settlement → another steading: a named place filled in from its Book II stat block, one of
+//     Book II's typical blocks (a Hillfolk band, a Manmarch hillfort), or a blank one.
 // Opened from StonetopActor.createDialog.
 
-import { pickContentOption, runPickedOption } from "./content-picker.js";
+import { pickContentOption, promptForText, runPickedOption } from "./content-picker.js";
 import { createCharacterForUser } from "../actors/character/create-character.js";
 import { charactersOwnedBy } from "../utils/playbook-actors.js";
 import { addPersonToSteading, createPersonNpc } from "../actors/steading/steading-people.js";
 import { buildMonsterActorData } from "../data/monster-builder.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { GM_TOOLKIT_TYPE, createGmToolkit, theGmToolkit } from "../actors/gmtoolkit/gm-toolkit-actor.js";
+import { SETTLEMENT_TYPE, blankSettlementData, createSettlement, settlementDataFromBook, settlementDataFromTemplate, settlementsBySlug } from "../actors/settlement/settlement-actor.js";
+import { SETTLEMENTS } from "../data/settlements.js";
+import { BOOK_SETTLEMENT_STATS, SETTLEMENT_TEMPLATES } from "../data/settlement-stats.js";
 
 // Sentinel for the "no player yet" row of the character-owner step. Never a real user id.
 const UNASSIGNED = "__unassigned__";
@@ -50,6 +55,13 @@ const ACTOR_OPTIONS = [
 		icon: "fa-dragon",
 		hint: "A stat block from the Dangers worksheet, a being or emanation corrupted by the Things Below, or a blank one you fill in yourself.",
 		create: (folder, name) => _createMonster(folder, name),
+	},
+	{
+		id: SETTLEMENT_TYPE,
+		label: "Settlement",
+		icon: "fa-city",
+		hint: "Another steading: Marshedge, Gordin's Delve, a Hillfolk band, or one of your own. Its stats roll Trade & Barter, Muster, Deploy and Pull Together there.",
+		create: (folder, name) => createSettlementSheet({ folder, name }),
 	},
 	{
 		id: GM_TOOLKIT_TYPE,
@@ -131,6 +143,46 @@ const MONSTER_KIND_OPTIONS = [
 		create: (folder, name) => _createBlankMonster(folder, name),
 	},
 ];
+
+/**
+ * The settlement chooser's rows: the named places the books print a stat block for (each until the
+ * world has a sheet for it), then Book II's typical blocks, then a blank sheet. Ids are prefixed by
+ * what they are, so one id can never be read as the other kind. Each heading is a page of the tabbed
+ * chooser, and its `icon` that page's rail entry.
+ *
+ * @param {(slug: string) => boolean} [made]  Does this world already hold a sheet for this place?
+ */
+export function settlementSourceOptions(made = () => false) {
+	const book = SETTLEMENTS
+		.filter(s => s.slug in BOOK_SETTLEMENT_STATS && !made(s.slug))
+		.map(s => ({
+			id: `book:${s.slug}`,
+			label: s.name,
+			icon: String(s.icon ?? "").replace(/^fa[srlb]? /, "") || "fa-city",
+			hint: `${s.blurb} (${BOOK_SETTLEMENT_STATS[s.slug].page})`,
+		}));
+	const typical = SETTLEMENT_TEMPLATES.map(t => ({
+		id: `template:${t.id}`,
+		label: t.label,
+		icon: t.icon,
+		hint: `${t.hint} (${t.page})`,
+	}));
+	return [
+		...(book.length ? [{ heading: "From the books", icon: "fa-book" }, ...book] : []),
+		{ heading: "Typical stat blocks", icon: "fa-table-list" },
+		...typical,
+		{ heading: "Your own", icon: "fa-pen" },
+		{ id: "blank", label: "Blank settlement", icon: "fa-file-lines", hint: "Name it and fill in its stats yourself." },
+	];
+}
+
+/** Creation data for a settlement chooser row id, or null. */
+export function settlementDataForChoice(choice) {
+	if (choice === "blank") return blankSettlementData();
+	if (choice?.startsWith("book:")) return settlementDataFromBook(choice.slice(5));
+	if (choice?.startsWith("template:")) return settlementDataFromTemplate(choice.slice(9));
+	return null;
+}
 
 /**
  * Which kinds a user may create. Players only ever make their own character: people and
@@ -235,6 +287,50 @@ async function _createGmToolkit(folder, name) {
 	// Both failure modes — a world launched before this subtype existed, and a create that
 	// throws — are handled inside createGmToolkit, which owns the notices.
 	const actor = await createGmToolkit({ name, folder });
+	actor?.sheet?.render(true);
+	return actor;
+}
+
+/**
+ * Settlement flow: pick where it comes from, name it (a named place keeps the book's name), and
+ * create it. GM only: preCreateActor refuses a player's too, but saying so here is kinder than a
+ * veto after the questions.
+ *
+ * Exported for Stonetop's Other Settlements card, whose "New settlement sheet" button runs the
+ * same chooser without the sidebar.
+ *
+ * @param {object} [options]
+ * @param {string|null} [options.folder]
+ * @param {string} [options.name]  A name supplied by the caller; the naming step opens on it.
+ * @returns {Promise<Actor|null>}
+ */
+export async function createSettlementSheet({ folder = null, name = "" } = {}) {
+	if (!game.user?.isGM) {
+		ui.notifications?.warn("Only the GM can create settlements.");
+		return null;
+	}
+	const made = settlementsBySlug();
+	const choice = await pickContentOption({
+		title: "Create a Settlement",
+		options: settlementSourceOptions(slug => made.has(slug)),
+		buttonLabel: "Continue",
+		// Thirteen rows stacked is taller than most screens; one page per heading is not.
+		tabbed: true,
+	});
+	if (!choice) return null;
+	const data = settlementDataForChoice(choice);
+	if (!data) return null;
+	if (!choice.startsWith("book:")) {
+		const typed = await promptForText({
+			title: "Name the Settlement",
+			buttonLabel: "Create Settlement",
+			value: name || (choice === "blank" ? "" : data.name),
+			placeholder: "Settlement name",
+		});
+		if (typed === null) return null;
+		data.name = typed || data.name;   // promptForText has trimmed it
+	}
+	const actor = await createSettlement(data, { folder });
 	actor?.sheet?.render(true);
 	return actor;
 }

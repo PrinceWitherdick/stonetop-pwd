@@ -17,7 +17,7 @@ vi.mock("../../module/actors/character/create-character.js", () => ({
 
 describe("actorOptionsFor", () => {
 	it("offers the GM every kind of actor", () => {
-		expect(actorOptionsFor(true).map(o => o.id)).toEqual(["character", "npc", "monster", "gmToolkit"]);
+		expect(actorOptionsFor(true).map(o => o.id)).toEqual(["character", "npc", "monster", "settlement", "gmToolkit"]);
 	});
 
 	it("offers a player only their own character", () => {
@@ -30,7 +30,7 @@ describe("actorOptionsFor", () => {
 	// launched before the subtype existed lands in: there the picker is the way to make it.
 	it("drops the GM Toolkit row once the world has one", () => {
 		expect(actorOptionsFor(true, { haveToolkit: true }).map(o => o.id))
-			.toEqual(["character", "npc", "monster"]);
+			.toEqual(["character", "npc", "monster", "settlement"]);
 	});
 
 	it("keeps offering it while the world has none", () => {
