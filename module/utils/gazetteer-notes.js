@@ -36,7 +36,7 @@
 import { error } from "./logger.js";
 import { compendiumRefTail } from "../migration/compat.js";
 import { compendiumSourceOf } from "./foundry-compat.js";
-import { SYSTEM_ID, LEGACY_FLAG_SCOPES } from "../system-id.js";
+import { SYSTEM_ID, LEGACY_FLAG_SCOPES, JOURNAL_PACK as JOURNAL_PACK_ID } from "../system-id.js";
 
 /** The one shipped journal pack every gazetteer entry lives in. */
 const JOURNAL_PACK = "stonetop-journal";
@@ -73,6 +73,14 @@ export function alreadyOpened(entry) {
  */
 export function gazetteerRefTail(journalId) {
 	return journalId ? `${JOURNAL_PACK}.JournalEntry.${journalId}` : null;
+}
+
+/**
+ * The compendium uuid of one gazetteer entry (`Compendium.<system>.<pack>.JournalEntry.<id>`), or
+ * null. WITH the package id, unlike gazetteerRefTail: this is a uuid to open, not an identity to match.
+ */
+export function gazetteerUuid(journalId) {
+	return journalId ? `Compendium.${JOURNAL_PACK_ID}.JournalEntry.${journalId}` : null;
 }
 
 /**

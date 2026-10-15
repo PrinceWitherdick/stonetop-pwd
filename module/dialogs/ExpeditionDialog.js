@@ -1,5 +1,6 @@
 import { StepperDialog } from "./StepperDialog.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
+import { gazetteerUuid } from "../utils/gazetteer-notes.js";
 import { TIER_LABELS } from "../utils/move-results.js";
 // `openOrFocus` cannot serve `openOnTrip`: it brings an already-open window to the front without
 // running the factory, and that window still has to be told which trip to switch to.
@@ -47,7 +48,7 @@ import { getPlayerCharacters } from "../utils/playbook-actors.js";
 // out wearing the name of whatever brought them back.
 import { actorPastDeathKind, isOutOfPlay } from "../actors/character/deaths-door-actor.js";
 import { deriveLoadLevel, LOAD_LEVEL_LIMITS } from "../utils/load.js";
-import { SYSTEM_ID, JOURNAL_PACK } from "../system-id.js";
+import { SYSTEM_ID } from "../system-id.js";
 import { renderTemplate } from "../utils/foundry-compat.js";
 import { EXPLORATION_GM_MOVES } from "../gm-toolkit/gm-moves.js";
 import { GmMoveDrawer } from "../gm-toolkit/gm-move-drawer.js";
@@ -1936,7 +1937,7 @@ export class ExpeditionDialog extends StepperDialog {
 
 	/** A place's gazetteer entry in the merged journal pack, when the books give it one. */
 	_journalUuid(place) {
-		return place?.journalId ? `Compendium.${JOURNAL_PACK}.JournalEntry.${place.journalId}` : null;
+		return gazetteerUuid(place?.journalId);
 	}
 
 	/**
