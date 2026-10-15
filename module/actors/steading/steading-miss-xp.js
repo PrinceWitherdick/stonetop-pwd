@@ -3,7 +3,7 @@
 // Book I p.209: "On a 6 or less, it's a miss. That means: They mark XP", and p.560: "Most moves don't
 // say what happens on 6-, which means that the player marks XP". Only Trade & Barter, Requisition and
 // Seasons Change say "don't mark XP" (p.77-83), and each carries `noXpOnMiss` on its entry in the
-// steading's move list (StonetopSteadingSheet.js), so Muster, Pull Together, Deploy, the improvements'
+// steading's move list (homestead-moves.js), so Muster, Pull Together, Deploy, the improvements'
 // own moves and any move added later earn it. But the roll is made on the STEADING, which has no XP, so nothing knows whose it
 // is: the miss's card carries a "Mark XP" button for the rolling user's own character, and a second to
 // choose somebody else (a GM, who plays nobody, always chooses).

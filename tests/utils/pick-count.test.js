@@ -154,7 +154,7 @@ describe("every move source reaches a tickable, tallied list", () => {
 	// The steading's homefront moves hand rollStat a pool per tier and state their count in the
 	// tier's result text, so they reach the same list and the same reader as everything else.
 	it("including the steading's homefront moves", () => {
-		const sheet = read("module/actors/steading/StonetopSteadingSheet.js");
+		const sheet = read("module/actors/steading/homestead-moves.js");
 		expect(sheet).toContain("pickOptions: flow.pickPools");
 		const engine = read("module/utils/roll-engine.js");
 		expect(engine).toContain("pickListsHtml(pickPools, result.key, tierPickCounts(moveResults))");

@@ -18,6 +18,18 @@ export const DEBILITIES = [
 	{ id: "malcontent", label: "Malcontent", detail: "Fortunes reset to +0 each season; folks need Persuading more often" },
 ];
 
+/**
+ * Lacking on a roll's options (`statValue` and the card's debility chip): "treat Prosperity as 1
+ * lower", so only a Prosperity roll is touched. Stonetop's rolls and another settlement's share it.
+ */
+export function applyLacking(options, statKey) {
+	if (statKey !== "prosperity") return options;
+	options.statValue -= 1;
+	options.stonetopDebility = "Lacking";
+	options.stonetopDebilityTooltip = "Treat Prosperity as 1 lower.";
+	return options;
+}
+
 /** Where one debility's checkbox lives on the steading's system data. */
 export function debilityPath(id) {
 	return `attributes.debilities.options.${id}.value`;

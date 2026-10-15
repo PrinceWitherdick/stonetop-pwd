@@ -95,7 +95,7 @@ describe("which steading moves offer it", () => {
 		expect(withSteadingMissXp(own, { noXpOnMiss: true })).toBe(own);
 	});
 
-	// Which moves those are lives on the moves themselves (StonetopSteadingSheet.js), so a new move earns it
+	// Which moves those are lives on the moves themselves (homestead-moves.js), so a new move earns it
 	// by default; improvement-moves.test.js rolls each one.
 	it("names no moves of its own", () => {
 		const src = fs.readFileSync(path.resolve(HERE, "../../../module/actors/steading/steading-miss-xp.js"), "utf8");

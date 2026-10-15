@@ -8,23 +8,25 @@ import { readRepo as read } from "../../fakes/css.js";
 
 const STEADING = read("module/actors/steading/StonetopSteading.js");
 const SHEET = read("module/actors/steading/StonetopSteadingSheet.js");
+// The homefront moves' flows (and Muster's card buttons with them), out of the steading sheet.
+const HOMESTEAD = read("module/actors/steading/homestead-moves.js");
 const MAIN = read("stonetop.js");
 
 describe("raising the muster", () => {
 	// On a 6- there is no muster to raise, and asking before the dice were read would be
 	// asking about an outcome nobody has yet. Same reasoning as Deploy's diminished button.
 	it("is offered from the card's 7+ tiers, not from the pre-roll dialog", () => {
-		const at = SHEET.indexOf("const MUSTER_RAISE_ACTIONS");
+		const at = HOMESTEAD.indexOf("const MUSTER_RAISE_ACTIONS");
 		expect(at).toBeGreaterThan(-1);
-		const flow = SHEET.slice(SHEET.indexOf("\tmuster: {"), SHEET.indexOf("\tdeploy: {"));
+		const flow = HOMESTEAD.slice(HOMESTEAD.indexOf("\tmuster: {"), HOMESTEAD.indexOf("\tdeploy: {"));
 		expect(flow).toContain("success: MUSTER_RAISE_ACTIONS");
 		expect(flow).toContain("partial: MUSTER_RAISE_ACTIONS");
 		expect(flow).not.toContain("failure: MUSTER_RAISE_ACTIONS");
 	});
 
 	it("offers the Defenses pick as its own button, since that half must be given back", () => {
-		const at = SHEET.indexOf("const MUSTER_RAISE_ACTIONS");
-		const block = SHEET.slice(at, at + 700);
+		const at = HOMESTEAD.indexOf("const MUSTER_RAISE_ACTIONS");
+		const block = HOMESTEAD.slice(at, at + 700);
 		expect(block.match(/data-action="muster-raise"/g) ?? []).toHaveLength(2);
 		expect(block).toContain('data-defenses="1"');
 	});

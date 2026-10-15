@@ -66,7 +66,7 @@ const ALLOWED = {
 const QUOTED = {
 	"module/actors/character/StonetopCharacterSheet.js": [
 		// The character sheet's own Return Triumphant guide was two entries here until its
-		// dialog turned out to be unreachable and the guide was dropped; the steading sheet's
+		// dialog turned out to be unreachable and the guide was dropped; the steading's
 		// copy of the same rules line, which a player really does read, is still waived below.
 		"\"6-: you find yourself in a spot — the GM will describe it or ask yo",
 		"quired. Stabilizing isn't healing — that takes Convalesce.</p>",
@@ -75,7 +75,7 @@ const QUOTED = {
 		"\"My body was completely destroyed — burnt to ash, ground to jelly\",",
 		"ss off a Mark that you don't have — you can never gain it\" },",
 	],
-	"module/actors/steading/StonetopSteadingSheet.js": [
+	"module/actors/steading/homestead-moves.js": [
 		"<div><strong>Winter</strong> — The <em>weariest</em> rolls 1d4+P",
 		"g>return home in triumph</strong> — having saved your fellows, put do",
 		"eat, seized the opportunity, etc. — clear one of the steading's debil",
