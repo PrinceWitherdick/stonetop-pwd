@@ -45,7 +45,8 @@
 				<span class="stonetop-rel-portrait stonetop-rel-portrait--empty"><i class="{{#if icon}}{{icon}}{{else}}fas fa-user{{/if}}"></i></span>
 				{{/if}}
 				{{!-- Actor-backed rows open their sheet; a slug-keyed row (the steading's
-				      settlements) has no uuid and no sheet, so it stays plain text. The <a>
+				      settlements) has a uuid only once that place has a settlement sheet,
+				      and until then stays plain text. The <a>
 				      carries no href — it is a delegated handler, and an href would make it
 				      natively draggable, which on the board would fight the card's own drag.
 				      An href is also what would have made it focusable and Enter-activatable,

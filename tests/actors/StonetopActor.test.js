@@ -88,6 +88,18 @@ describe("StonetopActor#_preCreate", () => {
 		expect(actor.applied.some(change => `ownership.${CREATOR_ID}` in change)).toBe(false);
 	});
 
+	// A settlement is the reverse: a place the whole table may read, so OBSERVER for everyone.
+	it("opens a new settlement to the table", async () => {
+		const actor = await precreate({ type: "settlement", img: FOUNDRY_DEFAULT });
+		const patch = actor.applied.find(change => "ownership.default" in change);
+		expect(patch?.["ownership.default"]).toBe(OWNERSHIP.OBSERVER);
+	});
+
+	it("leaves a settlement whose creator chose a level alone", async () => {
+		const actor = await precreate({ type: "settlement" }, { ownership: { default: OWNERSHIP.NONE } });
+		expect(actor.applied.some(change => "ownership.default" in change)).toBe(false);
+	});
+
 	// A character is the one other type with a default: OBSERVER to the whole table while the GM's
 	// `characterSheetsShared` switch is on, which it is unregistered too (actors/character/shared-sheets.js).
 	it("opens a new character to the table", async () => {

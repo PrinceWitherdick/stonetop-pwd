@@ -1,0 +1,42 @@
+{{!-- The settlement sheet's banner: Stonetop's own `.steading-header`, and like Stonetop's it
+      carries NO picture (the user's call, 2026-10-14): the actor's image (the place's map, or the
+      village icon; actors/settlement/settlement-portrait.js) is for the Actors sidebar, and is
+      changed from there or the token config. The name is set in the steading title's display face;
+      under it, the line of book facts that says what kind of place it is (kind, headcount). Size
+      lives in the stat bar below, where Stonetop keeps its own.
+
+      With the window header's wrench off (`editable` false) the banner's fields are disabled and
+      read as text, as they do for a player.
+
+      The two chips park at the banner's far end, where Stonetop's season clock sits. Plain named
+      inputs, submitted by core on change; a reader who cannot edit gets them disabled, which the
+      sheet's CSS draws as text. `stonetop-sheet-header` is what the tab rail measures to hang
+      itself below (utils/tab-rail.js). --}}
+<header class="steading-header stonetop-sheet-header stonetop-settlement-header">
+	<div class="steading-header-name stonetop-settlement-ident">
+		<input class="stonetop-settlement-name" type="text" name="name" value="{{actor.name}}"
+		       placeholder="{{localize "stonetop.settlement.namePlaceholder"}}" aria-label="{{localize "stonetop.settlement.name"}}"{{#unless editable}} disabled{{/unless}}>
+		<div class="stonetop-settlement-facts">
+			<input class="stonetop-settlement-kind" type="text" name="system.kind" value="{{system.kind}}"
+			       placeholder="{{localize "stonetop.settlement.kindPlaceholder"}}" aria-label="{{localize "stonetop.settlement.kind"}}"{{#unless editable}} disabled{{/unless}}>
+			<input class="stonetop-settlement-headcount" type="text" name="system.headcount" value="{{system.headcount}}"
+			       placeholder="{{localize "stonetop.settlement.headcountPlaceholder"}}" aria-label="{{localize "stonetop.settlement.headcount"}}"{{#unless editable}} disabled{{/unless}}>
+		</div>
+	</div>
+	<div class="stonetop-settlement-head-actions">
+		{{#if canGazetteer}}
+		<button type="button" class="stonetop-settlement-chip" data-action="openGazetteer" data-reader-ok
+		        data-tooltip="{{localize "stonetop.settlement.gazetteerTooltip"}}">
+			<i class="fa-solid fa-book-open" inert></i>
+			<span>{{localize "stonetop.settlement.gazetteer"}}{{#if sourcePage}} ({{sourcePage}}){{/if}}</span>
+		</button>
+		{{/if}}
+		{{#if isGM}}
+		<button type="button" class="stonetop-settlement-chip{{#if hidden}} stonetop-settlement-chip--off{{/if}}" data-action="toggleHidden"
+		        data-tooltip="{{localize "stonetop.settlement.visibilityTooltip"}}">
+			<i class="fa-solid {{#if hidden}}fa-eye-slash{{else}}fa-eye{{/if}}" inert></i>
+			<span>{{#if hidden}}{{localize "stonetop.settlement.hidden"}}{{else}}{{localize "stonetop.settlement.shown"}}{{/if}}</span>
+		</button>
+		{{/if}}
+	</div>
+</header>

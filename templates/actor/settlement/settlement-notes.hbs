@@ -1,0 +1,13 @@
+{{!-- Notes: the GM's own page about the place, its own tab as on Stonetop's sheet. The editor carries
+      no `name` (the sheet saves it on its own change) and is drawn for anyone who may write, with
+      or without the window header's wrench, as Stonetop's notes are; a reader gets the enriched text. The `.stonetop-settlement-notes` wrapper sits INSIDE the tab,
+      never on it, so its `display` cannot beat core's hidden-tab rule. --}}
+<div class="tab notes stonetop-settlement-tab" data-group="primary" data-tab="notes">
+	<section class="sheet-tab steading-notes stonetop-settlement-notes">
+		{{#if canWrite}}
+		<prose-mirror class="steading-notes-editor" value="{{system.notes}}" toggled data-document-uuid="{{actor.uuid}}">{{{enrichedNotes}}}</prose-mirror>
+		{{else}}
+		<div>{{{enrichedNotes}}}</div>
+		{{/if}}
+	</section>
+</div>

@@ -212,7 +212,7 @@ export function artImageUrl(src) {
 	return encodeURI(foundry.utils.getRoute(s.replace(/^\/+/, "")));
 }
 
-const WEBP_QUALITY = 0.85; // matches the importer's CONFIG.QUALITY
+export const WEBP_QUALITY = 0.85; // matches the importer's CONFIG.QUALITY
 
 /**
  * Do the rebuild. Returns { written, failed, skipped } — `skipped` is work that was planned but

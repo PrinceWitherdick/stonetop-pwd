@@ -21,6 +21,7 @@ Where our filename differs from the original, the game-icons.net source name is 
 | nerves.svg | worried-eyes | Lorc | https://lorcblog.blogspot.com |
 | pounce.svg | pounce | sbed | http://opengameart.org/content/95-game-icons |
 | scales.svg | scales | Lorc | https://lorcblog.blogspot.com |
+| settlement.svg | village | Delapouite | https://delapouite.com |
 | storm-rage.svg | lightning-storm | Lorc | https://lorcblog.blogspot.com |
 | triquetra.svg | triquetra | Delapouite | https://delapouite.com |
 | unseen.svg | hood | Lorc | https://lorcblog.blogspot.com |

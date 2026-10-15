@@ -209,3 +209,32 @@ describe("the steading's guards still hold", () => {
 		expect(hooks.preDelete(b, batch)).toBe(false);
 	});
 });
+
+describe("GM prep a player cannot create", () => {
+	// The Create-Actor picker hides these from players, but a macro, a duplicate or a drag-drop
+	// goes round the picker; preCreateActor is the one place every path passes.
+	it("vetoes a player's monster and settlement, each with its own warning", () => {
+		globalThis.game.user = { isGM: false };
+		const hooks = registerHooks();
+		expect(hooks.preCreate({ type: "monster" }, { type: "monster" }, {})).toBe(false);
+		expect(warn).toHaveBeenLastCalledWith("Only the GM can create monsters.");
+		expect(hooks.preCreate({ type: "settlement" }, { type: "settlement" }, {})).toBe(false);
+		expect(warn).toHaveBeenLastCalledWith("Only the GM can create settlements.");
+	});
+
+	// Players make NPCs legitimately: a follower's actor, and the relationship map's "New person".
+	it("lets a player's character and NPC through", () => {
+		globalThis.game.user = { isGM: false };
+		const hooks = registerHooks();
+		for (const type of ["character", "npc"]) {
+			expect(hooks.preCreate({ type }, { type }, {}), type).not.toBe(false);
+		}
+		expect(warn).not.toHaveBeenCalled();
+	});
+
+	it("lets the GM make a settlement", () => {
+		const hooks = registerHooks();
+		expect(hooks.preCreate({ type: "settlement" }, { type: "settlement" }, {})).not.toBe(false);
+		expect(warn).not.toHaveBeenCalled();
+	});
+});

@@ -7,6 +7,7 @@ import { createStonetopSteadingSheetClass } from "./module/actors/steading/Stone
 import { createStonetopMonsterSheetClass } from "./module/actors/monster/StonetopMonsterSheet.js";
 import { createStonetopNpcSheetClass } from "./module/actors/npc/StonetopNpcSheet.js";
 import { createStonetopGmToolkitSheetClass } from "./module/actors/gmtoolkit/StonetopGmToolkitSheet.js";
+import { createStonetopSettlementSheetClass } from "./module/actors/settlement/StonetopSettlementSheet.js";
 import { BestiaryPageModel } from "./module/journal/BestiaryPageModel.js";
 import { LocationPageModel } from "./module/journal/LocationPageModel.js";
 import { CharacterModel } from "./module/data-models/CharacterModel.js";
@@ -14,6 +15,7 @@ import { SteadingModel } from "./module/data-models/SteadingModel.js";
 import { MonsterModel } from "./module/data-models/MonsterModel.js";
 import { NpcModel } from "./module/data-models/NpcModel.js";
 import { GmToolkitModel } from "./module/data-models/GmToolkitModel.js";
+import { SettlementModel } from "./module/data-models/SettlementModel.js";
 import { MoveModel } from "./module/data-models/MoveModel.js";
 import { PlaybookModel } from "./module/data-models/PlaybookModel.js";
 import { NpcMoveModel } from "./module/data-models/NpcMoveModel.js";
@@ -394,6 +396,7 @@ Hooks.once("init", () => {
 	CONFIG.Actor.dataModels.monster   = MonsterModel;
 	CONFIG.Actor.dataModels.npc       = NpcModel;
 	CONFIG.Actor.dataModels.gmToolkit = GmToolkitModel;
+	CONFIG.Actor.dataModels.settlement = SettlementModel;
 	CONFIG.Item.dataModels.move        = MoveModel;
 	CONFIG.Item.dataModels.playbook    = PlaybookModel;
 	CONFIG.Item.dataModels.npcMove     = NpcMoveModel;
@@ -450,6 +453,15 @@ Hooks.once("init", () => {
 		types:       ["gmToolkit"],
 		makeDefault: true,
 		label:       "Stonetop GM Toolkit",
+	});
+
+	// A steading that is not Stonetop: Marshedge, the Delve, a Hillfolk band, a homebrew city.
+	// See module/actors/settlement/StonetopSettlementSheet.js.
+	const StonetopSettlementSheet = createStonetopSettlementSheetClass(ActorSheet);
+	Actors.registerSheet(SYSTEM_ID, StonetopSettlementSheet, {
+		types:       ["settlement"],
+		makeDefault: true,
+		label:       "Stonetop Settlement Sheet",
 	});
 
 	// Bestiary entry as a custom JournalEntryPage subtype.
@@ -615,6 +627,14 @@ Hooks.once("init", () => {
 		"stonetop.relationships-board": "systems/stonetop-pwd/templates/actor/partials/relationships-board.hbs",
 		"stonetop.relationships-view":  "systems/stonetop-pwd/templates/actor/partials/relationships-view.hbs",
 		"stonetop.relationships-viewbar": "systems/stonetop-pwd/templates/actor/partials/relationships-viewbar.hbs",
+		// The settlement sheet's banner and four tabs (templates/actor/settlement.hbs), and the list card
+		// two of the tabs share.
+		"stonetop.settlement-header":   "systems/stonetop-pwd/templates/actor/settlement/settlement-header.hbs",
+		"stonetop.settlement-overview": "systems/stonetop-pwd/templates/actor/settlement/settlement-overview.hbs",
+		"stonetop.settlement-people":   "systems/stonetop-pwd/templates/actor/settlement/settlement-people.hbs",
+		"stonetop.settlement-moves":    "systems/stonetop-pwd/templates/actor/settlement/settlement-moves.hbs",
+		"stonetop.settlement-list":     "systems/stonetop-pwd/templates/actor/settlement/settlement-list.hbs",
+		"stonetop.settlement-notes":    "systems/stonetop-pwd/templates/actor/settlement/settlement-notes.hbs",
 		// The clickable page citation, shared by every GM Toolkit surface that cites the book.
 		"stonetop.book-page-cite":  "systems/stonetop-pwd/templates/actor/partials/book-page-cite.hbs",
 		// The Fight tab's rows and its "What the book says" folds (module/fight/FightTracker.js).
@@ -669,6 +689,7 @@ Hooks.once("init", () => {
 		"stonetop.gm-prep-guide-items":       "systems/stonetop-pwd/templates/actor/partials/gm-prep-guide-items.hbs",
 		"stonetop.monster-sheet":             "systems/stonetop-pwd/templates/actor/monster.hbs",
 		"stonetop.npc-sheet":                 "systems/stonetop-pwd/templates/actor/npc.hbs",
+		"stonetop.settlement-sheet":          "systems/stonetop-pwd/templates/actor/settlement.hbs",
 		"stonetop.bestiary-line-list":        "systems/stonetop-pwd/templates/actor/partials/bestiary-line-list.hbs",
 		"stonetop.bestiary-page":             "systems/stonetop-pwd/templates/journal/bestiary.hbs",
 		"stonetop.location-page":             "systems/stonetop-pwd/templates/journal/location.hbs",

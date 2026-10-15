@@ -1,0 +1,26 @@
+{{!-- The settlement sheet (module/actors/settlement/StonetopSettlementSheet.js): a steading that is
+      not Stonetop, laid out the way Stonetop's own sheet is. Its banner, the four tabs, and the
+      tab rail. ONE root element, which every AppV1 template here must have: the sheet's listeners
+      hang off `html[0]`.
+
+      The same skeleton as templates/actor/steading.hbs, in the same order: the banner, the rail's
+      nav, then `.sheet-body` holding the tabs. The rail is rendered inside the form, where core's
+      Tabs controller finds and binds it; mountTabRail then lifts it onto the window frame, off the
+      sheet's right edge, the way Stonetop's is. --}}
+<form class="{{cssClass}} stonetop-settlement-form" autocomplete="off">
+	{{> "stonetop.settlement-header"}}
+
+	<nav class="sheet-tabs tabs stonetop-tab-rail" data-group="primary" aria-label="{{localize "stonetop.sheet.tabs.railLabel"}}">
+		{{> "stonetop.tab-rail-item" tab="overview" label=(localize "stonetop.settlement.tab.overview")}}
+		{{> "stonetop.tab-rail-item" tab="moves"    label=(localize "stonetop.settlement.tab.moves")}}
+		{{> "stonetop.tab-rail-item" tab="people"   label=(localize "stonetop.settlement.tab.people")}}
+		{{> "stonetop.tab-rail-item" tab="notes"    label=(localize "stonetop.settlement.tab.notes")}}
+	</nav>
+
+	<section class="sheet-body stonetop-settlement-body">
+		{{> "stonetop.settlement-overview"}}
+		{{> "stonetop.settlement-moves"}}
+		{{> "stonetop.settlement-people"}}
+		{{> "stonetop.settlement-notes"}}
+	</section>
+</form>

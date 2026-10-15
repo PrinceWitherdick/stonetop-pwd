@@ -19562,6 +19562,8 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .stonetop-tab-rail .item[data-tab="preferences"]   { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/settings-knobs.svg'); }
 .stonetop-tab-rail .item[data-tab="overview"]      { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/village.svg'); }
 .stonetop-tab-rail .item[data-tab="neighbors"]     { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/three-friends.svg'); }
+/* A settlement's People tab: its leaders and groups, the same glyph as Stonetop's own Neighbors. */
+.stonetop-tab-rail .item[data-tab="people"]        { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/three-friends.svg'); }
 .stonetop-tab-rail .item[data-tab="improvements"]  { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hammer-nails.svg'); }
 .stonetop-tab-rail .item[data-tab="relmap"]        { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/relationship-map.svg'); }
 .stonetop-tab-rail .item[data-tab="timeline"]      { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hourglass.svg'); }
@@ -19959,7 +19961,8 @@ button.stonetop-mark-sign-btn.is-active:hover {
    renders — and the drift that follows from keeping one. The pill lives only in the modern
    moves heading and in the pre-roll dialog. */
 
-.steading-sheet .sheet-tab {
+/* Every steading's sheet: Stonetop's and another settlement's (actors/settlement/). */
+:is(.steading-sheet, .stonetop-settlement-sheet) .sheet-tab {
 	padding: 12px;
 }
 
@@ -20461,7 +20464,9 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	flex-direction: column;
 }
 
-.steading-sheet .tab.notes.active {
+/* Another settlement's Notes tab (actors/settlement/) is the same flex column, filling its sheet as
+   this one does; its other tabs are hidden by its own `.stonetop-settlement-tab:not(.active)`. */
+:is(.steading-sheet, .stonetop-settlement-sheet) .tab.notes.active {
 	/* Flex-fill the floored body rather than `height: 100%`, which can't resolve against
 	   the indefinite height chain above — see the character-sheet note. */
 	flex: 1 1 auto;
@@ -20471,7 +20476,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	flex-direction: column;
 }
 
-.steading-sheet .tab.notes .sheet-tab {
+:is(.steading-sheet, .stonetop-settlement-sheet) .tab.notes .sheet-tab {
 	flex: 1;
 	min-height: 0;
 	display: flex;
@@ -20510,7 +20515,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	padding-bottom: 4px;
 }
 
-.steading-sheet .sheet-tab .steading-list-heading {
+:is(.steading-sheet, .stonetop-settlement-sheet) .sheet-tab .steading-list-heading {
 	font-family: var(--font-stonetop);
 	font-size: var(--st-fs-xl);
 	/* Match the title-case look of .steading-residents-heading ("Player
@@ -52021,6 +52026,401 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	margin-top: 4px;
 }
 
+
+/* ══ SETTLEMENT SHEETS: a steading that is not Stonetop ══════════════════════════════════════
+   Marshedge, Gordin's Delve, a Hillfolk band, a homebrew city (module/actors/settlement/). An
+   AppV1 sheet on the `.stonetop` parchment with the shared tab rail off its right edge, laid out
+   the way Stonetop's own sheet is and wearing ITS classes: the `.steading-header` banner, the
+   `.steading-stats-bar` slate tracks, the `.steading-overview-cards` grid of `.steading-card`
+   spiral lists with the dashed `.steading-list-add`, and the Moves tab's `.stonetop-item` cards.
+   So this block holds only what a settlement has and Stonetop does not (editable list rows, the
+   standing hearts) plus the few steading rules that are scoped to
+   `.steading-sheet` and are restated here for this sheet.
+
+   THE HEIGHT CHAIN. The banner stays put and only the active tab scrolls, so each tab keeps its
+   own scroll position: window-content, the form and the body are each a flex link with
+   `min-height: 0`, and the tab is the scrollport. Stonetop's frame does the same with the same
+   insets (`.pbta.sheet.actor`: an unpadded window-content, an 8px form, no inset at the bottom,
+   where the tab's scroll edge is).
+
+   THE BUTTONS. The roll chips and the banner chips are the slate primary; the row controls
+   (remove, link, dismiss, the hearts) are quiet. All of them restate `width`, because core's V1
+   skin makes a button fill its row.
+
+   A READER SEES TEXT. The templates draw list rows as text for someone who cannot edit, the way
+   Stonetop's lists read; the banner's own fields stay inputs, which core disables, and a disabled
+   well with a border looks broken rather than read-only, so here it loses the well. */
+.stonetop.sheet.actor.settlement .window-content {
+	display: flex;
+	flex-direction: column;
+	padding: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+.stonetop-settlement-form {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	padding: 8px 8px 0;
+}
+.stonetop-settlement-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+.stonetop-settlement-sheet .stonetop-settlement-tab:not(.active) { display: none; }
+.stonetop-settlement-sheet .stonetop-settlement-tab.active {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	scrollbar-width: none;
+	/* Stonetop's Overview grid reflows by the TAB's width (`@container steading-body`), so this
+	   sheet's tabs are that container too and its cards go 3 -> 2 -> 1 at the same widths. */
+	container-type: inline-size;
+	container-name: steading-body;
+}
+/* The inset and the card headings are Stonetop's own rules (`:is(.steading-sheet, …) .sheet-tab`). */
+.stonetop-settlement-sheet .sheet-tab {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+/* -- The banner -------------------------------------------------------------------------------
+   Stonetop's `.steading-header`, and like it, no picture. The name is an input set in
+   the title's own display face; it shows no well until it is hovered or focused, so the banner
+   reads as a title rather than a form. */
+.stonetop-settlement-header {
+	/* `.stonetop-sheet-header` (the rail's measuring anchor) brings a margin of its own; the banner
+	   sits flush on the tab below it, as Stonetop's does. */
+	margin-bottom: 0;
+	/* A narrow window drops the chips under the name rather than clipping the name. */
+	flex-wrap: wrap;
+	row-gap: 6px;
+}
+.stonetop-settlement-ident {
+	flex: 1 1 14em;
+	gap: 0;
+}
+.stonetop-settlement-sheet .window-content input.stonetop-settlement-name {
+	font-family: var(--font-avara);
+	font-size: var(--font-size-display);
+	font-weight: bold;
+	line-height: 1.15;
+	height: auto;
+	width: 100%;
+	padding: 0 4px;
+	margin: 0 0 0 -4px;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: var(--st-radius);
+	box-shadow: none;
+	color: var(--st-text);
+}
+.stonetop-settlement-facts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px 8px;
+}
+.stonetop-settlement-sheet .window-content :is(input.stonetop-settlement-kind, input.stonetop-settlement-headcount) {
+	/* As wide as what is written, so the two facts read as one line rather than two columns. */
+	field-sizing: content;
+	flex: 0 1 auto;
+	min-width: 4em;
+	max-width: 100%;
+	width: auto;
+	height: auto;
+	padding: 0 4px;
+	margin-left: -4px;
+	font-style: italic;
+	font-size: var(--st-fs-sm);
+	background: transparent;
+	border: 1px solid transparent;
+	box-shadow: none;
+	color: var(--st-text-secondary);
+}
+.stonetop-settlement-sheet .window-content :is(input.stonetop-settlement-name, input.stonetop-settlement-kind, input.stonetop-settlement-headcount, input.stonetop-settlement-region):not(:disabled):is(:hover, :focus) {
+	border-color: rgb(var(--st-ink-rgb) / 0.25);
+	background: rgb(var(--st-paper-rgb) / 0.6);
+}
+/* The banner's chips park at its far end, where Stonetop's season clock sits. */
+.stonetop-settlement-head-actions {
+	flex: 0 0 auto;
+	margin-left: auto;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 6px;
+}
+.stonetop-settlement-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--st-fs-sm);
+	padding: 2px 10px;
+	border-radius: 999px;
+	white-space: nowrap;
+}
+
+/* -- Overview ------------------------------------------------------------------------------ */
+.stonetop-settlement-setup {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 8px 10px;
+	border: 1px solid var(--st-gold-text);
+	border-radius: var(--st-radius-lg);
+	background: var(--st-gold-bg);
+	color: var(--st-text-body);
+}
+.stonetop-settlement-setup > p { flex: 1; margin: 0; }
+.stonetop-settlement-setup > i { color: var(--st-gold-text); margin-top: 3px; }
+
+/* The lacking note under Prosperity's track: the dice read one less than the box ticked. */
+.stonetop-settlement-stat-note {
+	display: block;
+	margin-top: 4px;
+	text-align: center;
+	font-size: var(--st-fs-2xs);
+	font-style: italic;
+	color: var(--st-danger-ink);
+}
+.stonetop-settlement-size-rule {
+	margin: -4px 0 0;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
+}
+.stonetop-settlement-hint,
+.stonetop-settlement-empty,
+.stonetop-settlement-feeling-notes {
+	font-size: var(--st-fs-xs);
+	font-style: italic;
+	color: var(--st-text-muted);
+	margin: 0;
+}
+.stonetop-settlement-empty { margin: 2px 0 6px; }
+
+/* Standing and Where, side by side under the cards, one column on a narrow tab. */
+.stonetop-settlement-bottom {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+	align-items: stretch;
+}
+@container steading-body (max-width: 500px) {
+	.stonetop-settlement-bottom { grid-template-columns: minmax(0, 1fr); }
+}
+.stonetop-settlement-bottom > .steading-card { margin: 0; }
+
+.stonetop-settlement-hearts { display: flex; gap: 2px; }
+.stonetop-settlement-heart { font-size: var(--st-fs-lg); }
+.stonetop-settlement-feeling { margin: 4px 0 0; font-size: var(--st-fs-sm); }
+.stonetop-settlement-blurb { margin: 6px 0 0; font-style: italic; font-size: var(--st-fs-sm); }
+.stonetop-settlement-region-text { margin: 0; font-size: var(--st-fs-sm); }
+.stonetop-settlement-sheet .window-content input.stonetop-settlement-region {
+	width: 100%;
+	height: auto;
+	padding: 1px 4px;
+	margin-left: -4px;
+	font-size: var(--st-fs-sm);
+	background: transparent;
+	border: 1px solid transparent;
+	box-shadow: none;
+}
+
+/* -- List rows -----------------------------------------------------------------------------
+   Stonetop's `.steading-list-item` grid (spiral | name | tools). A reader's row is text in its
+   `.steading-list-name`; an editor's middle cell is the row's fields side by side, borderless
+   until hovered or focused so the list still reads as a list. */
+.stonetop-settlement-row-title { font-weight: bold; }
+.stonetop-settlement-row-aside,
+.stonetop-settlement-row-count-text { color: var(--st-text-secondary); }
+.stonetop-settlement-row--lacking .stonetop-settlement-row-title,
+.stonetop-settlement-row--lacking input.stonetop-settlement-row-name { text-decoration: line-through; }
+.stonetop-settlement-lacking-tag {
+	margin-left: 4px;
+	font-size: var(--st-fs-2xs);
+	font-style: italic;
+	color: var(--st-danger-ink);
+}
+.stonetop-settlement-instinct-text {
+	display: block;
+	font-style: italic;
+	color: var(--st-text-secondary);
+}
+.stonetop-settlement-row-fields {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px 4px;
+	min-width: 0;
+}
+.stonetop-settlement-sheet .window-content .stonetop-settlement-row-fields > input[type=text] {
+	flex: 1 1 6em;
+	min-width: 0;
+	width: auto;
+	height: auto;
+	padding: 1px 4px;
+	font-size: var(--st-fs-sm);
+	line-height: 1.3;
+	background: transparent;
+	border: 1px solid transparent;
+	border-bottom-color: rgb(var(--st-ink-rgb) / 0.12);
+	border-radius: var(--st-radius-sm);
+	box-shadow: none;
+}
+.stonetop-settlement-sheet .window-content .stonetop-settlement-row-fields > input[type=text]:is(:hover, :focus) {
+	border-color: rgb(var(--st-ink-rgb) / 0.25);
+	background: rgb(var(--st-paper-rgb) / 0.6);
+}
+/* The name and the count are as wide as what is written (a three-up card is too narrow to give
+   every field a fixed share), and the detail takes the rest of the line, or a line of its own. */
+.stonetop-settlement-sheet .window-content .stonetop-settlement-row-fields > :is(input.stonetop-settlement-row-name, input.stonetop-settlement-row-count) {
+	field-sizing: content;
+	flex: 0 1 auto;
+	min-width: 3em;
+	max-width: 100%;
+}
+.stonetop-settlement-sheet .window-content .stonetop-settlement-row-fields > input.stonetop-settlement-row-name { font-weight: bold; }
+.stonetop-settlement-sheet .window-content .stonetop-settlement-row-fields > input.stonetop-settlement-row-detail { flex: 1 1 5em; }
+.stonetop-settlement-sheet .window-content .stonetop-settlement-row-fields > input.stonetop-settlement-instinct {
+	flex-basis: 100%;
+	font-style: italic;
+}
+.stonetop-settlement-row-tools {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 2px;
+}
+/* A person's row carries up to three tools (open, unlink, remove): hold the column at that width
+   so every row's fields line up whichever ones it has. */
+.stonetop-settlement-rows--people .stonetop-settlement-row-tools { min-width: 4.6em; }
+/* Stonetop's bullet sits level with a one-line name; an editor's row is an input's height, and a
+   person's row runs two lines, so the spiral rides with the FIRST line instead of the middle. */
+.stonetop-settlement-row { align-items: start; }
+.stonetop-settlement-row > .steading-list-bullet { margin-top: 0.45em; }
+.stonetop-settlement-row > .stonetop-settlement-row-tools { margin-top: 1px; }
+
+/* -- People -------------------------------------------------------------------------------- */
+.stonetop-settlement-sheet .window-content textarea.stonetop-settlement-government {
+	width: 100%;
+	min-height: 3.2em;
+	resize: vertical;
+	padding: 2px 4px;
+	font-size: var(--st-fs-sm);
+	background: rgb(var(--st-paper-rgb) / 0.5);
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.15);
+	border-radius: var(--st-radius-sm);
+	box-shadow: none;
+	color: var(--st-text-body);
+}
+.stonetop-settlement-government-text { margin: 0; font-size: var(--st-fs-sm); white-space: pre-line; }
+
+/* -- Homefront Moves ------------------------------------------------------------------------
+   Stonetop's move cards, from `.tab.moves`. What this sheet adds is the line saying what Size or
+   winter does to the roll, under the card's title. */
+.stonetop-settlement-moves-tab > .stonetop-move-group > .stonetop-settlement-hint { margin: 0 0 8px; }
+.stonetop-settlement-moves-tab .items-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.stonetop-settlement-move-notes {
+	display: flex;
+	flex-direction: column;
+	margin: 0 0 4px;
+	font-size: var(--st-fs-xs);
+	font-style: italic;
+	color: var(--st-text-secondary);
+}
+
+/* -- Notes ---------------------------------------------------------------------------------
+   Core pins a <prose-mirror>'s content box absolutely to fill the HOST, so the host's height must
+   come from outside it: with none, the editor is 0px tall, so there is no box to see and nothing
+   to hover for core's edit pencil. Stonetop's `.steading-notes prose-mirror.steading-notes-editor`
+   (which this editor also wears) is `flex: 1; min-height: 0`, which fills only a flex column that
+   has a height to give. So the Notes tab is that column, filling the window: Stonetop's own
+   `:is(.steading-sheet, .stonetop-settlement-sheet) .tab.notes.active` and `… .tab.notes .sheet-tab`
+   rules, which name this sheet too. What is this sheet's own is the editor's floor (same selector
+   weight, later in the file) for a short window. */
+.stonetop-settlement-notes prose-mirror.steading-notes-editor { flex: 1 1 auto; min-height: 12em; }
+
+/* -- Buttons ------------------------------------------------------------------------------- */
+/* The banner chips state the slate fill themselves rather than wear `.stonetop-cta`: that class's
+   fill is `!important`, which the `--off` chip's transparent fill would then have to out-shout, and
+   its 32px `min-height` and 600 weight are a footer button's, not a pill's. */
+.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-chip {
+	width: auto;
+	height: auto;
+	flex: none;
+	background: var(--st-btn-primary-bg);
+	border: 1px solid var(--st-btn-primary-border);
+	color: var(--st-btn-primary-text);
+	line-height: 1.6;
+}
+.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-chip:hover:not(:disabled) {
+	background: var(--st-btn-primary-bg-hover);
+	border-color: var(--st-btn-primary-border-hover);
+}
+.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-chip.stonetop-settlement-chip--off {
+	background: transparent;
+	color: var(--st-text-body);
+	border-color: rgb(var(--st-ink-rgb) / 0.3);
+}
+/* The "+STAT" chip is a <button> here (a reader can roll), worn exactly as Stonetop's <span>
+   chip: everything core's V1 button skin adds is taken back off. */
+.stonetop.stonetop-settlement-sheet .window-content button.stonetop-move-roll-chip {
+	flex: 0 0 auto;
+	width: auto;
+	min-height: 0;
+	margin: 0;
+	background: transparent;
+	box-shadow: none;
+	font-family: inherit;
+	font-weight: normal;
+}
+.stonetop.stonetop-settlement-sheet .window-content button.stonetop-move-roll-chip:hover {
+	background: var(--st-slate-hover-bg);
+	color: var(--st-text-body);
+}
+.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-quiet,
+.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-heart {
+	width: auto;
+	height: auto;
+	flex: none;
+	background: transparent;
+	border: 1px solid transparent;
+	color: var(--st-text-muted);
+	padding: 0 4px;
+	line-height: 1.6;
+}
+.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-quiet:hover,
+.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-heart:hover:not(:disabled) {
+	background: rgb(var(--st-ink-rgb) / 0.06);
+	border-color: rgb(var(--st-ink-rgb) / 0.15);
+	color: var(--st-text);
+}
+.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-heart.is-filled {
+	color: var(--st-danger-ink);
+}
+.stonetop.stonetop-settlement-sheet .window-content :is(input[type=text], input[type=number], select, textarea):disabled,
+.stonetop.stonetop-settlement-sheet .window-content textarea[readonly] {
+	background: transparent;
+	border-color: transparent;
+	box-shadow: none;
+	color: var(--st-text-body);
+	opacity: 1;
+	cursor: default;
+}
+/* A locked field with nothing in it is blank, not a prompt to type into a box that refuses. */
+.stonetop.stonetop-settlement-sheet .window-content input:disabled::placeholder { color: transparent; }
+/* The banner's name keeps its title ink when a reader's copy of it is disabled. */
+.stonetop.stonetop-settlement-sheet .window-content input.stonetop-settlement-name:disabled { color: var(--st-text); }
+.stonetop.stonetop-settlement-sheet .window-content :is(input.stonetop-settlement-kind, input.stonetop-settlement-headcount):disabled { color: var(--st-text-secondary); }
 
 /* ══ DARK PALETTE: "Lamplit" ════════════════════════════════════════════════════════════════
    Driven by the `sheetContrast` client setting (module/settings.js → applySheetContrast), which

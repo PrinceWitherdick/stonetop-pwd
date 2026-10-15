@@ -135,7 +135,8 @@
                                         "stonetop":  {},
                                         "monster":  {},
                                         "npc":  {},
-                                        "gmToolkit":  {}
+                                        "gmToolkit":  {},
+                                        "settlement":  {}
                                     },
                           "Item":  {
                                        "move":  {},

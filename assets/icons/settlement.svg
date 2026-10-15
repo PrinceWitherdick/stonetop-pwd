@@ -1,0 +1,16 @@
+<!-- A settlement actor's portrait, for any steading that is not Stonetop and has no map of its own:
+     a cluster of roofs, which is what a settlement is. The same drawing the steading's Overview tab
+     wears on the rail (assets/icons/tabs/village.svg), so a place reads as one of the steading family.
+
+     Sourced from game icons dot net ("village", by Delapouite), CC BY 3.0, artwork unchanged. Only
+     the ground under it is ours. Credited in this folder's ATTRIBUTION.md.
+
+     The house actor portrait recipe (see gm-toolkit.svg for the long form): a 1600 canvas centred on
+     (800, 800), a cream disc at r=723.45, a black field at r=712.60 (the 10.85 rim that keeps the
+     disc's edge on Foundry's dark sidebar), then the glyph in cream. The source's INK box, measured
+     with getBBox at 451.26 by 440.26, is fitted to the disc's inscribed square less 16 units
+     (1007.11), so scale 2.23178; the ink is already centred on (256, 256).
+
+     An XML comment may not hold two hyphens in a row: an SVG loaded through an img is parsed
+     strictly, and one stray pair breaks the whole file. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1600" width="200" height="200" role="img" aria-label="Settlement"><circle cx="800" cy="800" r="723.45" fill="#f0ece3"/><circle cx="800" cy="800" r="712.60" fill="#000"/><g transform="translate(800 800) scale(2.23178) translate(-256.00 -256.00)"><path fill="#f0ece3" d="M109.902 35.87l-71.14 59.284h142.28l-71.14-59.285zm288 32l-71.14 59.284h142.28l-71.14-59.285zM228.73 84.403l-108.9 90.75h217.8l-108.9-90.75zm-173.828 28.75v62h36.81l73.19-60.992v-1.008h-110zm23 14h16v18h-16v-18zm265 18v10.963l23 19.166v-16.13h16v18h-13.756l.104.087 19.098 15.914h-44.446v14h78v-39h18v39h14v-62h-110zm-194.345 48v20.08l24.095-20.08h-24.095zm28.158 0l105.1 87.582 27.087-22.574v-65.008H176.715zm74.683 14h35.735v34h-35.735v-34zm-76.714 7.74L30.37 335.153H319l-144.314-120.26zm198.046 13.51l-76.857 64.047 32.043 26.704H481.63l-108.9-90.75zm-23.214 108.75l.103.086 19.095 15.914h-72.248v77.467h60.435v-63.466h50v63.467h46v-93.466H349.516zm-278.614 16V476.13h126v-76.976h50v76.977h31.565V353.155H70.902zm30 30h50v50h-50v-50z"/></g></svg>

@@ -56,7 +56,9 @@ import {applySeasonalGains} from "./seasonal-gains.js";
 import {addStonetopSteadingButton} from "../../utils/world.js";
 import {createInlineActionsDialog} from "../../utils/inline-actions-dialog.js";
 import {SETTLEMENTS} from "../../data/settlements.js";
-import {relationshipRow, wireRelationshipTable} from "../../utils/relationship-hearts.js";
+import {customSettlementActors, settlementActors, settlementsBySlug} from "../settlement/settlement-actor.js";
+import {isSettlementPlaceholderImg} from "../settlement/settlement-portrait.js";
+import {relationshipRow, wireRelationshipLinks, wireRelationshipTable} from "../../utils/relationship-hearts.js";
 import {wireAvatarPreview, removeAvatarPreview} from "../../utils/avatar-preview.js";
 import {ACTOR_LINK_MISSING, openLinkedActorSheet, withLinkedActor} from "../../utils/actor-link.js";
 import {relationshipViewContext, wireRelationshipBoard} from "../../utils/relationship-board.js";
@@ -497,16 +499,39 @@ export function createStonetopSteadingSheetClass(Base) {
 			// Other Settlements: how this steading stands with the communities beyond it
 			// (module/data/settlements.js), on the same 1-5 hearts the NPC and character
 			// sheets use. Rows are the static roster, keyed by slug rather than actor id —
-			// the shared row builder only ever reads .id/.name/.img, so a plain object does.
+			// the shared row builder only ever reads .id/.name/.img/.uuid, so a plain object does.
 			// Nothing is stored until a heart moves, so the whole roster reads as neutral
 			// on a fresh steading. Under the pencil every settlement lists with a show/hide
 			// box; in play the unticked ones drop out.
+			//
+			// A place with a settlement SHEET (actors/settlement/) carries its uuid, so its name
+			// opens that sheet; the rating stays keyed by slug, which is the key the sheet reads
+			// too. Settlements made from a template or from scratch follow the roster, keyed by
+			// their actor id (settlement-actor.js#standingKey), so a homebrew city is rated here
+			// like a book one.
 			const settlementsEditing = context.stonetop.edit.settlements;
-			const settlementRows = SETTLEMENTS.map(s => ({
-				...relationshipRow(this.actor, { id: s.slug, name: s.name, img: null }, { defaultShown: true }),
-				icon:    s.icon,
-				tooltip: `${s.name}: ${s.blurb}`,
-			}));
+			const sheetImg = actor => (actor && !isSettlementPlaceholderImg(actor.img) ? actor.img : null);
+			// One pass over the world's actors for every row below.
+			const settlementSheets = settlementActors();
+			const sheetsBySlug = settlementsBySlug(settlementSheets);
+			const settlementRows = [
+				...SETTLEMENTS.map(s => {
+					// A sheet this user cannot see lends the row nothing: no picture, no link to a
+					// sheet core would only refuse to open. The row itself is the book's, so it stays.
+					const found = sheetsBySlug.get(s.slug);
+					const sheet = found?.visible ? found : null;
+					return {
+						...relationshipRow(this.actor, { id: s.slug, name: s.name, img: sheetImg(sheet), uuid: sheet?.uuid }, { defaultShown: true }),
+						icon:    s.icon,
+						tooltip: `${s.name}: ${s.blurb}`,
+					};
+				}),
+				...customSettlementActors(settlementSheets).filter(a => a.visible).map(a => ({
+					...relationshipRow(this.actor, { id: a.id, name: a.name, img: sheetImg(a), uuid: a.uuid }, { defaultShown: true }),
+					icon:    "fas fa-map-pin",
+					tooltip: [a.name, a.system?.kind].filter(Boolean).join(": "),
+				})),
+			];
 			context.stonetop.settlements    = settlementsEditing ? settlementRows : settlementRows.filter(r => r.shown);
 			context.stonetop.hasSettlements = context.stonetop.settlements.length > 0;
 			// Table or standings board, remembered per table in localStorage beside this
@@ -878,9 +903,9 @@ export function createStonetopSteadingSheetClass(Base) {
 			// live trackers.
 			wireRelationshipTable(html[0], this.actor, { editable: this.isEditable });
 			wireRelationshipBoard(html[0], this.actor, { editable: this.isEditable });
-			// No wireRelationshipLinks here: Other Settlements is keyed by slug, so no row
-			// carries a uuid or a portrait and neither handler would ever fire. Add the call
-			// if this sheet ever grows an actor-backed roster.
+			// Other Settlements rows that have a settlement sheet carry its uuid, so their names
+			// open it (and a picture the GM chose previews on hover).
+			wireRelationshipLinks(html[0]);
 
 			// Residents / Neighbors faces, through the same shared preview the relationships
 			// component uses — a face previews identically wherever it appears.

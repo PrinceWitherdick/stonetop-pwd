@@ -25,6 +25,11 @@ import { imagePopout } from "./foundry-compat.js";
 export const HEARTS_MAX     = 5;
 export const HEARTS_MIN     = 1;
 export const HEARTS_DEFAULT = 3;
+
+/** One entry per heart, `filled` up to the rating: what each hearts strip draws. */
+export function heartSlots(hearts) {
+	return Array.from({ length: HEARTS_MAX }, (_, i) => ({ position: i + 1, filled: i < hearts }));
+}
 // Falls back to NEUTRAL, not the minimum, for anything non-numeric: these ratings come
 // out of an ObjectField, which validates nothing, so a hand-edited or corrupted value
 // would otherwise read as NaN — silently emptying the hearts and indexing the feeling
@@ -130,11 +135,11 @@ export function relationshipRow(actor, other, { defaultShown = true } = {}) {
 	return {
 		id:   other.id,
 		name: other.name,
-		// What makes the name a link. Present on an Actor, absent on the plain {id, name}
-		// objects a slug-keyed roster passes (the steading's settlements) — and a settlement
-		// has no sheet to open, so "actor-backed" and "clickable" are the same question and
-		// this answers both. Kept beside `id`, which is the fallback lookup when a uuid stops
-		// resolving (a compendium re-import, say).
+		// What makes the name a link. Present on an Actor, and on a plain {id, name} row that
+		// carries one (a steading's settlement row with a settlement sheet behind it, which this
+		// user can see); absent on a row with no sheet to open, which therefore reads as plain
+		// text. Kept beside `id`, which is the fallback lookup when a uuid stops resolving (a
+		// compendium re-import, say).
 		uuid: other.uuid ?? null,
 		img:      portrait.src,
 		imgStyle: portrait.style,
@@ -147,7 +152,7 @@ export function relationshipRow(actor, other, { defaultShown = true } = {}) {
 		// the board is one localStorage flip away on any of the three sheets.
 		order,
 		feeling:    relationSummary(hearts, actor.name, other.name),
-		heartSlots: Array.from({ length: HEARTS_MAX }, (_, i) => ({ position: i + 1, filled: i < hearts })),
+		heartSlots: heartSlots(hearts),
 	};
 }
 

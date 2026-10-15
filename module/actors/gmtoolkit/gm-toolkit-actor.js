@@ -12,6 +12,7 @@
 // plain lookup rather than a question about ownership.
 
 import { SYSTEM_ID } from "../../system-id.js";
+import { isActorTypeAvailable } from "../../utils/foundry-compat.js";
 
 /** The Actor subtype. Written once; everything else imports it. */
 export const GM_TOOLKIT_TYPE = "gmToolkit";
@@ -64,24 +65,6 @@ export function theGmToolkit() {
 	return gmToolkitActors().at(0) ?? null;
 }
 
-/**
- * Is this world's launch aware of the subtype?
- *
- * `game.model` — which is what `Actor.TYPES` reads and what the document validator checks a
- * `type` against — is built by the SERVER from the system manifest at WORLD LAUNCH
- * (World#prepareDataModel), so a table that updated the system and pressed F5 is running new
- * code against an old type list. Creating against that list throws a DataModelValidationError
- * deep inside the document constructor, which surfaces as a stack trace and a "see the console"
- * toast: nothing that tells anyone the actual answer is to relaunch the world.
- *
- * Answers true when the list is unavailable (older cores, the unit-test environment), so this
- * only ever suppresses a create it is sure would fail.
- */
-function isGmToolkitTypeAvailable() {
-	const types = game.documentTypes?.Actor;
-	return !Array.isArray(types) || types.includes(GM_TOOLKIT_TYPE);
-}
-
 /** The message shown when the world predates the subtype. Stated once, shown by both flows. */
 const GM_TOOLKIT_RELAUNCH_WARNING =
 	"This world was launched before the GM Toolkit existed. Return to Setup and launch the world again, then try once more.";
@@ -97,7 +80,8 @@ const GM_TOOLKIT_RELAUNCH_WARNING =
  *   cannot make one yet should say nothing and try again next load.
  */
 export async function createGmToolkit({ name = "", folder = null, warn = true } = {}) {
-	if (!isGmToolkitTypeAvailable()) {
+	// A world launched before the subtype existed (utils/foundry-compat.js#isActorTypeAvailable).
+	if (!isActorTypeAvailable(GM_TOOLKIT_TYPE)) {
 		if (warn) ui.notifications?.warn?.(GM_TOOLKIT_RELAUNCH_WARNING, { permanent: true });
 		return null;
 	}
