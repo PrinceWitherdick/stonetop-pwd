@@ -86,12 +86,21 @@ const _browseCache = new Map();
  * browse found is only as fresh as the browse, and a GM who re-runs Import Book Art mid-session
  * gets one cleared and not the other — which is worse than either, because the two then disagree
  * about a file that is right there on disk.
+ *
+ * Each is filed with the folders it reads, or null for "any of them": forgetting a few folders
+ * (forgetArtBrowseDirs) forgets only the caches that could have read from one. Null is the
+ * default because it is the safe one; a cache that names its folders is spared the writes that
+ * cannot have touched it.
  */
-const _dependents = new Set();
+const _dependents = new Map();
 
-/** Have a cache of your own forgotten whenever the art browse is. */
-export function onArtBrowseCleared(forget) {
-	_dependents.add(forget);
+/**
+ * Have a cache of your own forgotten whenever the art browse is.
+ * @param {() => void} forget
+ * @param {{dirs?: string[]}} [opts]  the art dirs the cache reads files from; omitted, every one
+ */
+export function onArtBrowseCleared(forget, { dirs = null } = {}) {
+	_dependents.set(forget, dirs ? new Set(dirs) : null);
 }
 
 /**
@@ -99,11 +108,29 @@ export function onArtBrowseCleared(forget) {
  * folder. Three callers today: the crop rebuild does it directly, the Import Book Art macro is
  * caught by the settings hook in stonetop.js (publishing its art index is the last thing it
  * does), and `game.stonetop.reapplyBook2Art()` clears it for the by-hand case that nothing can
- * hook. A fourth writer must join them, or its files will not be seen this session.
+ * hook. A fourth writer must join them, or its files will not be seen this session — or, if it
+ * writes into folders it can name, call forgetArtBrowseDirs instead.
  */
 export function clearArtBrowseCache() {
 	_browseCache.clear();
-	for (const forget of _dependents) forget();
+	for (const forget of _dependents.keys()) forget();
+}
+
+/**
+ * Forget only these folders' listings under `root`, for a writer that knows where it wrote (the
+ * settlement portraits, actors/settlement/settlement-portrait.js). Every other folder's listing is
+ * still true and stays cached, so the next pass re-lists a handful of files rather than all seven
+ * durable folders.
+ *
+ * `dirs` must be spelled as browseArtDirs was asked with them (root-relative, no slashes at
+ * either end), since that spelling is the cache key. A dependent cache is forgotten too unless it
+ * named the folders it reads and none of them is among these.
+ */
+export function forgetArtBrowseDirs(root, dirs = []) {
+	for (const dir of dirs) _browseCache.delete(`${root}|${dir}`);
+	for (const [forget, reads] of _dependents) {
+		if (!reads || dirs.some(dir => reads.has(dir))) forget();
+	}
 }
 
 /**
