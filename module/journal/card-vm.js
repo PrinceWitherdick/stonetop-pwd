@@ -99,13 +99,21 @@ export function buildImpending(sys) {
 	};
 }
 
-/** Custom player-move cards with enriched prose; drops fully-blank rows. Async. */
+/**
+ * Custom player-move cards with enriched prose; drops fully-blank rows. Async.
+ *
+ * `index` is the row's place in the STORED list (blank rows dropped here still count), which is how
+ * the GM's "Give to players" button finds the move it was drawn under (threat-view.js
+ * #wireSharePlayerMoves). `canShare` draws that button, for a GM only: the players never see these
+ * cards, and the move it makes is a world Item only a GM may create.
+ */
 export async function buildCustomPlayerMoves(sys, enrich) {
 	const raw = Array.isArray(sys.customPlayerMoves) ? sys.customPlayerMoves : [];
+	const canShare = !!globalThis.game?.user?.isGM;
 	const out = [];
-	for (const m of raw) {
+	for (const [index, m] of raw.entries()) {
 		if (!hasText(m?.label) && !hasText(m?.text)) continue;
-		out.push({ label: String(m?.label ?? ""), text: await enrich(asCardHtml(m?.text)) });
+		out.push({ label: String(m?.label ?? ""), text: await enrich(asCardHtml(m?.text)), index, canShare });
 	}
 	return out;
 }

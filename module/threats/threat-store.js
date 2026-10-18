@@ -94,6 +94,23 @@ export async function setDoomDone(page, done) {
 }
 
 /**
+ * Cross a threat off the tracker, or put it back (Book I p.299: "if it's no longer a threat ...
+ * cross it off the threat tracker"). The page stays, with everything written on it, so a threat
+ * that comes back is a tick away. Resolves true when it wrote, false when it already read that way.
+ */
+export async function setThreatResolved(page, resolved) {
+	if (!page) return false;
+	if (!!page.system?.resolved === !!resolved) return false;
+	await page.update({ "system.resolved": !!resolved });
+	return true;
+}
+
+/** Whether a threat page has been crossed off. A page from before the field reads as active. */
+export function isThreatResolved(page) {
+	return !!page?.system?.resolved;
+}
+
+/**
  * Delete a threat: its page, and any scene Note pins linked to it.
  *
  * Nothing threat-specific about it — deleting is page-shaped, so it is `deleteGmPrepPage` in the

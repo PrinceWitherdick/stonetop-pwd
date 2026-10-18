@@ -318,6 +318,21 @@
         "missing": "This diagram is artwork from the GM playbook, so it isn't shipped with the system. Run Import Book Art and add your copy of the free GM playbook PDF on that window's own GM playbook page, not under Your rulebooks.",
         "import": "Import Book Art"
       },
+      "running": {
+        "agenda": "Your agenda",
+        "agendaNote": "Your goals when running Stonetop",
+        "principles": "Your principles",
+        "principlesNote": "The surest way to achieve your agenda",
+        "line": "The Line",
+        "lineNote": "Who is in charge of what",
+        "donts": "What not to do",
+        "dontsNote": "And what to do instead",
+        "firstAdventure": "First adventure prep",
+        "firstAdventureNote": "What to have ready after introductions",
+        "goals": "Goals",
+        "sceneMoves": "Homefront moves for the opening scene",
+        "hooks": "From the first Seasons Change to the hook"
+      },
       "wonder": {
         "intro": "Your running list of open questions (Book I, p.33): things you don't know the answer to yet, or want to leave for play to answer. Read it when you need something interesting to say; update it between sessions.",
         "add": "Add this question to the list",
@@ -480,6 +495,14 @@
         "hazardsIntro": "Environmental dangers: traps, treacherous terrain, weather (Book I, Dangers). They can't be fought, only avoided, endured, thwarted, or overcome.",
         "addHazard": "Make a hazard",
         "optional": "optional",
+        "resolve": "Cross off",
+        "resolveTip": "No longer a threat (dead, gone, resolved): cross it off the tracker. It stays here, greyed, and can be put back (Book I p.299)",
+        "restore": "Put back",
+        "restoreTip": "It's a threat again: put it back on its tracker",
+        "resolvedHeading": "Crossed off",
+        "resolvedNote": "Threats that are no longer threats (Book I p.299). Kept for reference, off the active board.",
+        "shareMove": "Give to players",
+        "shareMoveTip": "Make this a custom move the players can drag onto their sheets. You can add a roll before saving",
         "guide": {
           "writeup": "Writing a threat",
           "writeupNote": "Book I, p.282",

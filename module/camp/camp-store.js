@@ -196,8 +196,9 @@ async function rollHunger(actor, campId) {
  * left at home. An actor without its typed character reads as stored.
  * `carriedOnly: false` is for the write that pays an agreed share (StonetopCharacter#spendablePurseResources).
  * `usesPerSupply` is the size of a ◆ when the caller already read it (usesPerSupplyOf).
+ * Exported for the days on the road (dialogs/RoadRationsDialog.js), which feed from the same packs.
  */
-function packResources(actor, { carriedOnly = true, usesPerSupply = null } = {}) {
+export function packResources(actor, { carriedOnly = true, usesPerSupply = null } = {}) {
 	const stored = actor.getFlag?.(SYSTEM_ID, "inventory.resources") ?? {};
 	try {
 		return actor.typedActor?.spendablePurseResources?.({ carriedOnly, per: usesPerSupply ?? undefined }) ?? stored;
@@ -307,7 +308,9 @@ function carriesFurBedroll(gear) {
  * marked fallen eats nothing; one who is only down still eats). Only where the count starts; the
  * player changes it at the fire.
  *
- * Every kind of follower counts (follower-party.js): `followers` are the character's party followers
+ * Every kind of follower counts (follower-party.js) but an animal that feeds itself: pack animals graze
+ * and the Ranger's wolf fends for itself (Book I p.304, follower-party.js#followerFeedsItself), while a
+ * hound still eats. `followers` are the character's party followers
  * (follower-roster.js#partyFollowersOf), which reads which built-in followers a character
  * HAS. Without them (no sheet to read) the flags alone can still answer for custom followers and a
  * crew; the companion, initiates and beasts need the playbook to be known at all.

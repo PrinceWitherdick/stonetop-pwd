@@ -68,6 +68,12 @@ describe("followerInputFromBeast", () => {
 		expect(followerInputFromBeast(null)).toBeNull();
 	});
 
+	it("records which beast it was made from, for what the animal eats", () => {
+		expect(followerInputFromBeast(BEAST_CATALOG["dog-follower"]).beastSlug).toBe("dog-follower");
+		expect(followerInputFromBeast(BEAST_CATALOG.mule).beastSlug).toBe("mule");
+		expect(followerInputFromBeast({ ...BEAST_CATALOG.mule }).beastSlug).toBe("");
+	});
+
 	it("carries an open tag choice into the follower's notes", () => {
 		expect(followerInputFromBeast(BEAST_CATALOG["dog-follower"]).notes).toBe("Tags still to choose: pick 2 more.");
 		expect(followerInputFromBeast(BEAST_CATALOG.horse).notes).toBe("Tags still to choose: swift or hardy.");

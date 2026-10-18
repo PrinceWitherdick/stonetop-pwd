@@ -37567,6 +37567,34 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	.stonetop .create-threat .ct-suggested-list { flex-direction: column; }
 }
 
+/* --- days on the road (RoadRationsDialog, Book I p.89/p.304) ------------------- */
+.stonetop .road-rations {
+	display: flex;
+	flex-direction: column;
+	gap: 0.7rem;
+	padding: 0.4rem;
+	font-family: var(--font-stonetop);
+}
+.stonetop .road-rations p { margin: 0; }
+.stonetop .road-rations .road-intro,
+.stonetop .road-rations .road-hint,
+.stonetop .road-rations .road-holds { font-size: var(--st-fs-sm); color: var(--st-text-secondary); }
+.stonetop .road-rations .road-settings { display: flex; flex-direction: column; gap: 0.35rem; }
+.stonetop .road-rations .road-field { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.6rem; }
+.stonetop .road-rations .road-label { font-weight: 700; }
+.stonetop .road-rations .road-days { width: 4.5em; flex: 0 0 auto; }
+.stonetop .road-rations .road-check { display: flex; align-items: flex-start; gap: 0.4rem; }
+.stonetop .road-rations .road-table { width: 100%; border-collapse: collapse; margin: 0; }
+.stonetop .road-rations .road-table th { text-align: left; font-size: var(--st-fs-sm); }
+.stonetop .road-rations .road-table td { padding: 0.25rem 0.3rem; vertical-align: top; }
+.stonetop .road-rations .road-who { display: flex; flex-direction: column; }
+.stonetop .road-rations .road-followers,
+.stonetop .road-rations .road-pays { width: 4em; }
+.stonetop .road-rations .road-pays.is-changed { font-weight: 700; }
+.stonetop .road-rations .road-short { color: var(--st-danger-ink); font-weight: 700; }
+.stonetop .road-rations .road-footer { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.stonetop .road-rations .road-footer button { width: auto; flex: 0 0 auto; }
+
 /* --- retiring a PC, and a PC or follower become a threat (Book I p.584) --------- */
 .stonetop .retire-character,
 .stonetop .become-threat {
@@ -37595,6 +37623,58 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .retire-character .retire-footer button,
 .stonetop .become-threat .bt-footer button { width: auto; flex: 0 0 auto; }
 .stonetop .stonetop-levelup-away { color: var(--st-danger-ink); }
+/* --- a threat crossed off the tracker (Book I p.299) ---------------------------- */
+.stonetop .threat-card.is-resolved { opacity: 0.6; filter: grayscale(0.85); }
+.stonetop .threat-card.is-resolved .threat-name { text-decoration: line-through; }
+.stonetop .threat-card .threat-resolved { margin: 0.2rem 0; font-size: var(--st-fs-sm); font-style: italic; color: var(--st-text-secondary); }
+
+/* --- "Give to players" on a threat's or hazard's player move -------------------- */
+.stonetop .threat-player-move .threat-player-move__share {
+	width: auto; min-width: 0; height: auto; line-height: 1;
+	margin: 0 0 0 0.35rem; padding: 0.1rem 0.3rem;
+	font-size: var(--st-fs-sm); vertical-align: baseline;
+}
+
+/* --- running the game, on the GM Toolkit's Core Loop tab ------------------------- */
+.stonetop .stonetop-gm-running { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+/* Spiral bullets, the house prose-list marker (the site card's lists draw theirs the same way);
+   the numbered prep steps keep their numbers. */
+.stonetop .stonetop-gm-running-list,
+.stonetop .stonetop-hook-gains { list-style: none; margin: 0.2rem 0 0.4rem; padding-left: 0; }
+.stonetop .stonetop-gm-running-list > li,
+.stonetop .stonetop-hook-gains > li {
+	position: relative;
+	margin: 0.15rem 0;
+	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
+}
+.stonetop .stonetop-gm-running-list > li::before,
+.stonetop .stonetop-hook-gains > li::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0.2em;
+	width: var(--stonetop-bullet-size, 10px);
+	height: var(--stonetop-bullet-size, 10px);
+	background: var(--stonetop-spiral-icon) no-repeat center / contain;
+	opacity: 0.55;
+}
+.stonetop .stonetop-gm-running-steps { margin: 0.2rem 0 0.4rem; padding-left: 1.4rem; }
+.stonetop .stonetop-gm-running-steps > li { margin: 0.15rem 0; }
+.stonetop .stonetop-gm-running-name::after { content: "."; }
+.stonetop .stonetop-gm-running-cite,
+.stonetop .stonetop-gm-running-footer { margin: 0.2rem 0; font-size: var(--st-fs-sm); color: var(--st-text-secondary); }
+.stonetop .stonetop-gm-running-sub { margin: 0.5rem 0 0.1rem; font-weight: 700; }
+
+/* --- first adventure hook guide (toolkit Core Loop tab + Spring Burst walkthrough) - */
+.stonetop .stonetop-hook-guide { display: flex; flex-direction: column; gap: 0.5rem; }
+.stonetop .stonetop-hook-guide p { margin: 0.1rem 0; }
+.stonetop .stonetop-hook-tier-page { font-size: var(--st-fs-sm); color: var(--st-text-secondary); }
+.stonetop .stonetop-hook-gain.is-picked { font-weight: 700; }
+.stonetop .stonetop-hook-gain.is-picked::before { opacity: 1; }
+
+/* --- a site card's "Running it" fold (Book I p.348) ------------------------------- */
+.stonetop .site-running .site-running-note { margin: 0.3rem 0 0; font-style: italic; }
+
 /* --- guided "make a monster" worksheet (left-rail tabbed sheet) -------------- */
 .stonetop-create-monster-dialog.window-app { max-height: 92vh; }
 /* Full-bleed flex column: the rail + section split fills the space above a pinned

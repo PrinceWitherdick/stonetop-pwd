@@ -59,6 +59,11 @@ export class ThreatPageModel extends foundry.abstract.TypeDataModel {
 			})),
 			// Optional linked monster stat-block (to pull its moves / open on the scene).
 			linkedMonsterUuid: new fields.StringField({ required: true, blank: true, initial: "" }),
+			// Crossed off the tracker: "if it's no longer a threat (because it's dead, it's left, the
+			// conflict has been resolved, etc.), then cross it off the threat tracker" (Book I p.299).
+			// Kept, greyed and off the active board, and reversible. A page written before this field
+			// reads the initial, false: every existing threat is still active.
+			resolved: new fields.BooleanField({ required: true, initial: false }),
 		};
 	}
 }

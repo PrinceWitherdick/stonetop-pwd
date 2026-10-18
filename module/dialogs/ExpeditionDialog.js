@@ -78,6 +78,7 @@ import {
 import { hasStart, startEnd, startMark, startName, startTier } from "../utils/journey-start.js";
 import { resolveTravelMap, travelMapFile, browseTravelMapArt } from "../book2-art/travel-map-art.js";
 import { openTravelMap } from "./TravelMapWindow.js";
+import { RoadRationsDialog } from "./RoadRationsDialog.js";
 import {
 	JOURNEY_MARKS, JOURNEY_RIGHT_CLICK_MARKS,
 	bindJourneyControls, bindJourneySiteRemoval, bindJourneyUndo, journeyPick,
@@ -435,6 +436,9 @@ const _STEPS = [
 				   you&rsquo;re about to have everyone Defy Danger, you should probably use this move
 				   instead&rdquo; (p.328).</p>`,
 		struggle: true,
+		// The days the GM glosses still eat (Book I p.89, p.304): "N days pass" spends each one's
+		// supplies from the packs of the party on this trip (dialogs/RoadRationsDialog.js).
+		roadDays: true,
 		// What was charted, as the to-do list the book calls it (p.303), ticked off as each is dealt
 		// with (p.323). Read-only here apart from the tick: the words were settled on Chart a Course.
 		chartTodo: true,
@@ -817,6 +821,7 @@ export class ExpeditionDialog extends StepperDialog {
 		html.find(".stonetop-exp-fate-btn").on("click", () => this._rollFate());
 		// Called from the journey, so the struggle starts with "part of a journey" ticked.
 		html.find(".stonetop-exp-struggle-btn").on("click", () => callStruggleAsOne({ journey: true }));
+		html.find(".stonetop-exp-road-btn").on("click", () => this._openRoadDays());
 		// Collapse / expand the exploration moves rail. By class rather than by re-rendering,
 		// for the reason the character sheet's own handle gives: the step reclaims the freed
 		// width without a flicker, and a render here would rebuild the route step's map panel
@@ -1040,6 +1045,8 @@ export class ExpeditionDialog extends StepperDialog {
 			// The step's button onto Struggle as One, GM-only: the GM calls the move, and a player
 			// asks for one from their own sheet instead.
 			struggle:  step.struggle && game.user?.isGM ? gmStruggleCall() : null,
+			// "N days pass", GM-only: it writes every pack on the trip.
+			roadDays:  !!step.roadDays && !!game.user?.isGM,
 			// The headed aside below the body ("What to prep", on the intro step).
 			aside:     step.aside ?? null,
 			// The same, at the foot of the step rather than under its opening prose.
@@ -3760,6 +3767,24 @@ export class ExpeditionDialog extends StepperDialog {
 		// with whichever one they carry, and neither has to know about the other's field.
 		row.previewSub = row.sub || row.folTag || "";
 		return row;
+	}
+
+	/**
+	 * The PCs on this trip: everyone still in play whom the Outfit step has not toggled out. The
+	 * same reading the party-load readout makes (`_buildLoadReadout`).
+	 */
+	_tripParty() {
+		const out = this._currentExpedition()?.partyOut ?? {};
+		return charactersInPlay().filter(actor => !out[actor.id]);
+	}
+
+	/**
+	 * "N days pass" (Book I p.89, p.304): the window that spends the party's supplies for the days
+	 * the GM glosses, seeded with what the charted route says the trip takes.
+	 */
+	_openRoadDays() {
+		const routeDays = Number(chartBlankValue("days", this._journeyRoute())) || null;
+		return new RoadRationsDialog(this._tripParty(), { routeDays }).render(true);
 	}
 
 	// Toggle a PC in/out of the current trip's party (stored on the trip entry, so it's

@@ -1,10 +1,16 @@
 {{!-- The "Player moves" block shared by the threat and hazard cards. Invoked with the
-      card view-model as context; renders nothing when there are no custom player moves. --}}
+      card view-model as context; renders nothing when there are no custom player moves.
+
+      "Give to players" (GM-only, `canShare`) opens the custom-move editor filled in with this move,
+      and saving makes it a world move the players can drag onto their sheets (Book I p.294 for a
+      threat's player-facing moves; p.388 for a hazard's: "When the PCs encounter the hazard and the
+      move becomes relevant, share it with the players"). Wired by threat-view.js
+      #wireSharePlayerMoves in every host of the card. --}}
 {{#if hasCustomMoves}}
 <div class="threat-player-moves">
 	<span class="threat-label">Player moves</span>
 	{{#each customPlayerMoves}}
-	<div class="threat-player-move">{{#if label}}<strong class="threat-player-move__name">{{label}}</strong>{{/if}}<div class="threat-player-move__text">{{{text}}}</div></div>
+	<div class="threat-player-move">{{#if label}}<strong class="threat-player-move__name">{{label}}</strong>{{/if}}{{#if canShare}}<button type="button" class="threat-player-move__share" data-move-index="{{index}}" aria-label="{{localize "stonetop.gmToolkit.threats.shareMove"}}" data-tooltip="{{localize "stonetop.gmToolkit.threats.shareMoveTip"}}" data-tooltip-direction="UP"><i class="fas fa-share-from-square" aria-hidden="true"></i></button>{{/if}}<div class="threat-player-move__text">{{{text}}}</div></div>
 	{{/each}}
 </div>
 {{/if}}

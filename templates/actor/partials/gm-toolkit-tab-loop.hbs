@@ -84,5 +84,50 @@
 			{{/each}}
 		</div>
 
+		{{!-- RUNNING THE GAME, as reference (module/gm-toolkit/gm-agenda-text.js): the agenda and
+		      principles the loop above serves, the Line, what not to do, and the first adventure's
+		      prep. A name and one line each, the Moves tab's shape. Each section is its own
+		      `.stonetop-move-group` box so its fold caret claims only its own rows, and each starts
+		      shut: this is the glance-down, the flowcharts are the tab. --}}
+		<div class="stonetop-gm-running">
+			{{#each stonetop.running.sections}}
+			<div class="stonetop-move-group stonetop-gm-running-section">
+				{{> "stonetop.section-heading" title=title note=note collapse=collapseId startCollapsed=true}}
+				{{#if pageCites}}<p class="stonetop-gm-running-cite">{{> "stonetop.book-page-cite" cites=pageCites}}</p>{{/if}}
+				<ul class="stonetop-gm-running-list">
+					{{#each items}}
+					<li><strong class="stonetop-gm-running-name">{{name}}</strong> <span class="stonetop-gm-running-line">{{line}}</span>{{#if pageCites}} <span class="stonetop-gm-loop-page">{{> "stonetop.book-page-cite" cites=pageCites}}</span>{{/if}}</li>
+					{{/each}}
+				</ul>
+				{{#if footer}}<p class="stonetop-gm-running-footer">{{footer}}</p>{{/if}}
+			</div>
+			{{/each}}
+
+			{{#with stonetop.running.firstAdventure}}
+			<div class="stonetop-move-group stonetop-gm-running-section stonetop-gm-first-adventure">
+				{{> "stonetop.section-heading" title=title note=note collapse=collapseId startCollapsed=true}}
+				<p class="stonetop-gm-running-cite">{{> "stonetop.book-page-cite" cites=pageCites}}</p>
+				<p class="stonetop-gm-running-sub">{{goalsLabel}}</p>
+				<ul class="stonetop-gm-running-list stonetop-gm-running-list--plain">
+					{{#each goals}}<li>{{this}}</li>{{/each}}
+				</ul>
+				<ol class="stonetop-gm-running-steps">
+					{{#each steps}}
+					<li><strong class="stonetop-gm-running-name">{{name}}</strong> <span class="stonetop-gm-running-line">{{line}}</span>{{#if pageCites}} <span class="stonetop-gm-loop-page">{{> "stonetop.book-page-cite" cites=pageCites}}</span>{{/if}}</li>
+					{{/each}}
+				</ol>
+				<p class="stonetop-gm-running-sub">{{sceneLabel}}</p>
+				<ul class="stonetop-gm-running-list stonetop-gm-running-list--plain">
+					{{#each sceneMoves}}<li>{{this}}</li>{{/each}}
+				</ul>
+				<p class="stonetop-gm-running-footer">{{sceneCaution}}</p>
+				<p class="stonetop-gm-running-sub">{{hooksLabel}}</p>
+				{{!-- Built in JS (gm-agenda-view.js#firstAdventureHooksHtml), escaped there, because the
+				      Let Spring Burst Forth walkthrough draws the very same block. --}}
+				{{{hooksHtml}}}
+			</div>
+			{{/with}}
+		</div>
+
 	</section>
 </div>

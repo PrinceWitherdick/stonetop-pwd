@@ -72,11 +72,15 @@ export class CustomMoveDialog extends StonetopDialog {
 	 * @param {object}   [opts]
 	 * @param {Item}     [opts.item]    - existing custom move to edit; null = create
 	 * @param {Function} [opts.onSaved] - called after a successful save (to refresh the sheet)
+	 * @param {object}   [opts.seed]    - `{ name, system }` to fill a NEW move in with (a threat's or
+	 *                                    hazard's player move handed to the players, threat-view.js
+	 *                                    #wireSharePlayerMoves); saving still creates
 	 */
-	constructor(saver, { item = null, onSaved = null } = {}, options = {}) {
+	constructor(saver, { item = null, onSaved = null, seed = null } = {}, options = {}) {
 		super(options);
 		this._saver = saver;
 		this._item = item;
+		this._seed = item ? null : seed;
 		this._onSaved = onSaved;
 		// Which rail panel is showing. Switching is client-side (see _selectTab), so this
 		// only seeds the first render.
@@ -107,7 +111,9 @@ export class CustomMoveDialog extends StonetopDialog {
 	}
 
 	getData() {
-		const sys = this._item?.system ?? {};
+		// What the form opens on: the move being edited, else the seed a new one starts from.
+		const source = this._item ?? this._seed;
+		const sys = source?.system ?? {};
 		const rollType = normalizeRollType(sys.rollType) ?? "";
 		const mr = sys.moveResults ?? {};
 		const rollOptions = [
@@ -137,7 +143,7 @@ export class CustomMoveDialog extends StonetopDialog {
 			},
 			atFirst: activeIndex === 0,
 			atLast:  activeIndex === SECTIONS.length - 1,
-			name: this._item?.name ?? "",
+			name: source?.name ?? "",
 			description: customMoveDescriptionToPlainText(sys.description),
 			requires: sys.requirement?.note ?? "",
 			rollOptions,

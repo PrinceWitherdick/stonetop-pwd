@@ -322,8 +322,10 @@ export function eatsTonight(member) {
  * and the book's own party eats "a use of provisions when you Make Camp rather than using up
  * supplies". So Cover the rest reaches for the larder first, and an over-offer gives supplies back
  * first (trimToBill runs this order backwards).
+ *
+ * Exported for the days on the road (utils/road-rations.js), which eat in the same order.
  */
-function campPurses(resources) {
+export function campPurses(resources) {
 	const { eligible } = supplyPursesFor(resources, SUPPLY_PURPOSE.CAMP);
 	return [...eligible.filter(p => p.slug === PROVISIONS_SLUG), ...eligible.filter(p => p.slug !== PROVISIONS_SLUG)];
 }
@@ -755,6 +757,28 @@ export function freezeCampPlan(ledger, { bedrolls = {}, breads = {}, followerBre
 }
 
 /**
+ * The write that takes `spend` (`[{slug, n}]`) out of a pack, from what it holds NOW (`resources`):
+ * an absolute count per purse, so a use eaten elsewhere since the spend was agreed is not eaten
+ * twice. `shortfall` counts the uses the pack no longer had. Shared by a camp's shares and the days
+ * on the road (utils/road-rations.js), so one rule takes food out of a pack.
+ *
+ * @param {Array<{slug: string, n: number}>} spend
+ * @param {{resources: object, resourceData: (slug: string, count: number) => object}} live
+ * @returns {{update: object, shortfall: number}}
+ */
+export function purseSpendUpdate(spend, { resources = {}, resourceData }) {
+	const update = {};
+	let shortfall = 0;
+	for (const s of spend ?? []) {
+		const have = count(resources?.[s.slug]);
+		const paid = Math.min(have, count(s.n));
+		shortfall += count(s.n) - paid;
+		Object.assign(update, resourceData(s.slug, have - paid));
+	}
+	return { update, shortfall };
+}
+
+/**
  * One character's share of a settled camp, as a single update: the food out of their pack, then
  * the night's pick, the bedroll, Break Bread, the home fires, the peaceful night and any background
  * track the camp clears, and the mark that says it is done.
@@ -774,14 +798,7 @@ export function freezeCampPlan(ledger, { bedrolls = {}, breads = {}, followerBre
  * @returns {{update: object, shortfall: number}}  `shortfall` counts uses the pack no longer had
  */
 export function campShareUpdate(entry, { resources = {}, hpValue = 0, resourceData, advantageData, disadvantageData }) {
-	const update = {};
-	let shortfall = 0;
-	for (const s of entry.spend ?? []) {
-		const have = count(resources?.[s.slug]);
-		const paid = Math.min(have, count(s.n));
-		shortfall += count(s.n) - paid;
-		Object.assign(update, resourceData(s.slug, have - paid));
-	}
+	const { update, shortfall } = purseSpendUpdate(entry.spend, { resources, resourceData });
 	const before = count(hpValue);
 	let hp = before;
 	if (entry.rests) {

@@ -272,6 +272,9 @@ export function buildCustomFollower(input = {}) {
 		isGroup,
 		size,
 		sourceUuid:   input.sourceUuid ? String(input.sourceUuid) : null,
+		// The beast a follower was made from (data/beasts.js#followerInputFromBeast), which says whether it
+		// eats from a pack (follower-party.js#followerFeedsItself). Absent on one not made from a beast.
+		...(input.beastSlug ? { beastSlug: String(input.beastSlug) } : {}),
 	};
 }
 

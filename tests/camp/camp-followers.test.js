@@ -158,7 +158,8 @@ describe("the followers a camp fed", () => {
 });
 
 describe("a character's mouths at the fire", () => {
-	it("counts every party follower, built-in and custom alike", () => {
+	// But an animal that feeds itself (Book I p.304): the companion and a mule are no mouths, a dog is.
+	it("counts every party follower, built-in and custom alike, but an animal that feeds itself", () => {
 		const { aeliana } = campParty({ aeliana: { followers: { band: { party: true, isGroup: true, size: 3 } } } });
 		aeliana.flags[SYSTEM_ID].crew = { name: "The Wolves", size: 4 };
 		const cards = [
@@ -167,8 +168,23 @@ describe("a character's mouths at the fire", () => {
 			card({ ftype: "initiate", slug: "enfys" }),
 			card({ ftype: "custom", slug: "band" }),
 			card({ ftype: "beast", slug: "ox", party: false }),
+			card({ ftype: "beast", slug: "mule" }),
+			card({ ftype: "beast", slug: "dog-follower" }),
 		];
-		expect(partyFollowerMouths(aeliana, cards)).toBe(1 + 4 + 1 + 3);
+		expect(partyFollowerMouths(aeliana, cards)).toBe(4 + 1 + 3 + 1);
+	});
+
+	// The meal's Break Bread dice go to the mouths that ate it, not to the companion first in the roster.
+	it("hands no Break Bread die to an animal that feeds itself", () => {
+		const cards = [
+			card({ ftype: "animal-companion", name: "Wolf", hpMax: 10, hpCurrent: 9 }),
+			card({ ftype: "initiate", slug: "enfys", name: "Enfys", hpMax: 10, hpCurrent: 1 }),
+		];
+		const { healed } = campFollowerHeals({}, cards, { breads: [3] });
+		expect(healed).toEqual([
+			{ name: "Wolf", from: 9, to: 10 },
+			{ name: "Enfys", from: 1, to: 9, bread: 3 },
+		]);
 	});
 
 	// No sheet to read: the flags still know a crew (in by default) and the custom followers.

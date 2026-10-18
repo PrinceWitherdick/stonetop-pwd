@@ -9,6 +9,7 @@ import { hasText, stringList, cardEnricher } from "../journal/card-vm.js";
 import { keyedRows, pairKeys, tableRowRanges } from "./site-schema.js";
 import { SITE_VISITS_FLAG, visitedLabel } from "./site-visits-core.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { LAMP_OIL_NOTE, LIGHT_TAGS, SITE_CONSIDERATIONS, SITE_RUNNING_GROUP } from "./site-running.js";
 
 /** Card/pin accent for sites: weathered stone, distinct from the threat hues and hazard moss. */
 export const SITE_ACCENT = "#5a5f6b";
@@ -187,6 +188,12 @@ export async function buildSiteCardVM(page, { forOwner } = {}) {
 			timeline, questions, connections, denizens, dangers, discoveries,
 			outside, inside, areas, plans, randomTables,
 		}),
+		// A fold of reference, the same on every site and shut by default: what to keep in mind
+		// while they explore, and the light sources' tags (Book I p.348; sites/site-running.js).
+		// Beside `groups` rather than in it, since those are what THIS site has written up. Copied
+		// per card, since the GM Toolkit's tab writes each card's fold state onto it.
+		runGroup: { ...SITE_RUNNING_GROUP, holds: [...SITE_RUNNING_GROUP.holds] },
+		running: { considerations: SITE_CONSIDERATIONS, lightTags: LIGHT_TAGS, lampOil: LAMP_OIL_NOTE },
 		isOwner: forOwner ?? page.isOwner,
 	};
 }

@@ -186,6 +186,10 @@ export function followerInputFromBeast(beast, { name, chosenTraits = [] } = {}) 
 	if (!beast) return null;
 	const chosen = (chosenTraits ?? []).filter(Boolean);
 	return {
+		// Which beast it was made from, kept on the record so what the animal IS (whether it feeds
+		// itself, follower-party.js#followerFeedsItself) does not hang on a label or glyph the table
+		// can change. "" for a beast object that is not one of the catalog's.
+		beastSlug:    Object.keys(BEAST_CATALOG).find(slug => BEAST_CATALOG[slug] === beast) ?? "",
 		name:         name || beast.name,
 		typeLabel:    beast.follower ? "beast follower" : "livestock",
 		// Per-beast icon (a dog looks like a dog, not a horse); fall back to the same

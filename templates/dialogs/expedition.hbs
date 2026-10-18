@@ -223,6 +223,17 @@
     </div>
     {{/if}}
 
+    {{!-- "N days pass" (Book I p.89, p.304), GM-only: the glossed days of road still eat, and this
+          spends them out of the packs of the party on this trip (RoadRationsDialog). --}}
+    {{#if roadDays}}
+    <div class="stonetop-gm-struggle-bar stonetop-exp-road">
+      <button type="button" class="stonetop-exp-road-btn stonetop-spring-roll-btn">
+        <i class="fas fa-utensils" aria-hidden="true"></i> Days pass on the road&hellip;
+      </button>
+      <span class="stonetop-gm-struggle-hint">Glossing a few days of travel? Spend the supplies they eat: 1 use a head a day, a mess kit feeds four.</span>
+    </div>
+    {{/if}}
+
     {{!-- The charted list, on Running the journey: the to-do list Chart a Course made, with the
           book's advice for working through it. Only the tick is live; the words were settled on
           that step. --}}

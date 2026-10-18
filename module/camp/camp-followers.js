@@ -20,7 +20,7 @@ import { rosterHpUpdate, rosterMemberHp } from "../fight/group-hits.js";
 import { followerFateHpPath, followerHpWriteUpdate, linkedFollowerNpc } from "../actors/character/follower-fate.js";
 import { followerActorFromLink } from "../actors/character/follower-actors.js";
 import { readableFlags } from "../actors/character/StonetopFlags.js";
-import { partyFollowers } from "../actors/character/follower-party.js";
+import { followerFeedsItself, partyFollowers } from "../actors/character/follower-party.js";
 import { count, healTo } from "./camp-rules.js";
 
 /** A group: the crew, or a custom follower fought and counted as a group. */
@@ -29,7 +29,7 @@ function isGroup(follower, flags) {
 }
 
 /** One member's max HP in a group: the crew's per-member HP, a custom group's member HP. */
-function memberMax(follower) {
+export function memberMax(follower) {
 	return count(follower.ftype === "crew" ? (follower.memberHp ?? follower.hpMax) : (follower.groupMemberHp ?? follower.hpMax));
 }
 
@@ -70,7 +70,8 @@ export function campFollowerHeals(flags, followers = [], { npcFor = null, breads
 			const npcHp = npc?.system?.attributes?.hp ?? null;
 			const npcMax = count(npcHp?.max);
 			const npcFrom = Math.min(npcMax, count(npcHp?.value));
-			const bread = nextBread();
+			// An animal that feeds itself was no mouth at the meal (Book I p.304), so it takes no die of it.
+			const bread = followerFeedsItself(flags, fol) ? 0 : nextBread();
 			// While there is an NPC, its HP is theirs: one down there is down, whatever the box says.
 			if (from <= 0 || (npc && npcMax && npcFrom <= 0)) { down.push(name); continue; }
 			// And it is the NPC that heals, the box following it (fight/roster-fate.js).
