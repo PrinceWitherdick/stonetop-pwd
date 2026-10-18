@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { xpToLevelUp, adjustXp, withXpLock } from "../../module/utils/xp.js";
+import { xpToLevelUp, xpAfterLevelUp, xpRules, adjustXp, withXpLock, XP_RULE_SETTINGS } from "../../module/utils/xp.js";
 
 // The one place a character's XP total changes.
 //
@@ -35,6 +35,40 @@ function pc(xp = 0, level = 1, { uuid = "Actor.a1", delay = 1 } = {}) {
 describe("xpToLevelUp", () => {
 	it("is 6 + 2 x level", () => {
 		expect([1, 2, 3, 10].map(xpToLevelUp)).toEqual([8, 10, 12, 26]);
+	});
+});
+
+// Book I p.582, "Slowing the rate": the advancement variants a world can pick. The defaults are the book's
+// standard rule, so an unconfigured world (or one whose settings are missing) is unchanged.
+describe("the advancement variants (p.582)", () => {
+	const withRules = (values, fn) => {
+		const saved = global.game.settings;
+		global.game.settings = { get: (_scope, key) => values[key] };
+		try { return fn(); } finally { global.game.settings = saved; }
+	};
+
+	it("reads the book's rule when nothing is set, or the settings are not registered", () => {
+		expect(xpRules()).toEqual({ base: 6, perLevel: 2, resetOnLevelUp: false, alwaysBurn: false });
+		withRules({}, () => expect(xpToLevelUp(3)).toBe(12));
+		const saved = global.game.settings;
+		global.game.settings = { get: () => { throw new Error("not registered"); } };
+		try { expect(xpToLevelUp(3)).toBe(12); } finally { global.game.settings = saved; }
+	});
+
+	it("raises 6 to 10, and multiplies the level by 3 instead of 2", () => {
+		withRules({ [XP_RULE_SETTINGS.base]: 10 }, () => expect(xpToLevelUp(2)).toBe(14));
+		withRules({ [XP_RULE_SETTINGS.perLevel]: 3 }, () => expect(xpToLevelUp(5)).toBe(21));
+		withRules({ [XP_RULE_SETTINGS.base]: 10, [XP_RULE_SETTINGS.perLevel]: 3 }, () => expect([1, 2].map(xpToLevelUp)).toEqual([13, 16]));
+	});
+
+	it("ignores a stored value the settings never offered", () => {
+		withRules({ [XP_RULE_SETTINGS.base]: 99, [XP_RULE_SETTINGS.perLevel]: "x" }, () => expect(xpToLevelUp(1)).toBe(8));
+	});
+
+	it("subtracts the cost on Level Up, or resets XP to 0 where the world says so", () => {
+		// Blodwen, level 5 with 19 XP, loses 16 and keeps 3 (Book I p.529).
+		expect(xpAfterLevelUp(19, 5)).toBe(3);
+		withRules({ [XP_RULE_SETTINGS.resetOnLevelUp]: true }, () => expect(xpAfterLevelUp(19, 5)).toBe(0));
 	});
 });
 

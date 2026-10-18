@@ -8,6 +8,7 @@ import { getHoverDescriptionSetting } from "../../../settings.js";
 import { playbookIconPath } from "../../../utils/playbook-actors.js";
 import { INVOKE_THE_SUN_GOD } from "../holy-light.js";
 import { localize } from "../../../utils/i18n.js";
+import { levelUpAwayNote } from "../../../campaign/level-up-at-home.js";
 
 // Base width (overview, stat, marks). The move, foreign-move, and invocation steps
 // widen so their two-column masonry lists show both columns comfortably by default.
@@ -298,6 +299,8 @@ export class LevelUpDialog extends StonetopDialog {
 			playbookName:    d.playbookName,
 			playbookIcon:    playbookIconPath(d.playbookSlug),
 			newLevel:        d.newLevel,
+			// Level Up is made at home (Book I p.528): a reminder, never a block, while a trip they are on is underway.
+			awayWarning:     isOverview ? levelUpAwayNote(this._character?._actor) : "",
 			cost:            d.cost,
 			xpRemaining:     d.xpRemaining,
 			moves,

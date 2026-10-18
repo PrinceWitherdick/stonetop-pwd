@@ -12,7 +12,7 @@
 //
 // Pure: no Foundry global is touched.
 
-import { xpToLevelUp } from "../../utils/xp.js";
+import { xpRules, xpToLevelUp } from "../../utils/xp.js";
 import { actorTookBackground } from "./took-background.js";
 import { WBH_PLAYBOOK_NAME } from "./WouldBeHeroAsterisk.js";
 
@@ -28,15 +28,27 @@ export function burnsBrightlyDriven(actor) {
 }
 
 /**
+ * Which of the card button's tooltips (stonetop.specialMoves.burnBrightly.*) says the terms this character
+ * burns on: Driven's own, the world's "always" rule (p.582), or the move's. `rules`: xpRules(), when already read.
+ */
+export function burnBrightlyTooltipKey(actor, rules = xpRules()) {
+	if (burnsBrightlyDriven(actor)) return "drivenTooltip";
+	return rules.alwaysBurn ? "alwaysTooltip" : "tooltip";
+}
+
+/**
  * Whether `actor`, holding `xp` at `level`, may Burn Brightly now: at or above the level-up total, or, for a
  * Driven Would-Be Hero, holding the 2 XP it costs.
  *
  * @param {Actor} actor
  * @param {number} xp
  * @param {number} level
+ * @param {object} [rules]  xpRules(), when the caller already read them
  */
-export function burnBrightlyAffordable(actor, xp, level) {
-	const held = Number(xp) || 0;
-	if (burnsBrightlyDriven(actor)) return held >= BURN_BRIGHTLY_COST;
-	return held >= xpToLevelUp(Number(level) || 1);
+export function burnBrightlyAffordable(actor, xp, level, rules = xpRules()) {
+	const held  = Number(xp) || 0;
+	// Book I p.582's optional rule, "Let players always Burn Brightly, even if they lack the XP to
+	// Level Up": everyone on the Driven terms.
+	if (rules.alwaysBurn || burnsBrightlyDriven(actor)) return held >= BURN_BRIGHTLY_COST;
+	return held >= xpToLevelUp(Number(level) || 1, rules);
 }

@@ -92,7 +92,8 @@ import { moveBodyHtml, remarkRolledTier } from "./module/utils/move-tiers.js";
 import { hbsTruthy } from "./module/utils/hbs-truthy.js";
 import { rollSeasonsCard, sign, markMissXpByChoice, reconcileMissXp, pbtaDiceFormula, seasonsRollTable, seasonsRollPicks, syncCountedNotePill } from "./module/utils/roll-engine.js";
 import { countedResult, rolledRecord, cardCountedTier, cardTierNow } from "./module/utils/counted-tier.js";
-import { burnBrightlyAffordable, burnsBrightlyDriven } from "./module/actors/character/burn-brightly.js";
+import { burnBrightlyAffordable, burnBrightlyTooltipKey } from "./module/actors/character/burn-brightly.js";
+import { xpRules } from "./module/utils/xp.js";
 import { wireImpetuousYouth, giveItAll, GIVE_IT_ALL_ACTION, HURT_DAMAGE, IMPETUOUS_YOUTH } from "./module/actors/character/impetuous-youth.js";
 import { isZeroHpMoveCard } from "./module/actors/character/deaths-door.js";
 import { registerRollRewrite } from "./module/utils/roll-rewrite.js";
@@ -1367,6 +1368,8 @@ function _chatWireBurnBrightly(message, html) {
 	if (!actor || actor.type !== "character" || !actor.isOwner) return;
 
 	const alreadyBurned = message.getFlag(SYSTEM_ID, "burnBrightly") ?? false;
+	// The world's XP rules, read once: each read is four settings lookups, and this runs on every roll card's render.
+	const rules = xpRules();
 	if (!alreadyBurned) {
 		// Not on a 0-HP move's card while unspent: Death's Door's window offers Burn Brightly before it settles the
 		// tier, and Undying's and Dark Succor's apply the tier the dice gave, so a +1 here afterwards would relabel
@@ -1374,18 +1377,18 @@ function _chatWireBurnBrightly(message, html) {
 		if (isZeroHpMoveCard(message)) return;
 		const xp    = actor.system?.attributes?.xp?.value    ?? 0;
 		const level = actor.system?.attributes?.level?.value ?? 1;
-		if (!burnBrightlyAffordable(actor, xp, level)) return;
+		if (!burnBrightlyAffordable(actor, xp, level, rules)) return;
 		// Less the XP this card's own miss marked, when the +1 would lift it off the miss: that XP is taken back
 		// by the very burn it would pay for (undo-xp-mark.js#missXpTakenByLift). Asked last, as it can read the
 		// whole chat log, and on every render of every roll card.
 		const lifted = (Number(message.rolls?.at?.(0)?.total) || 0) + 1;
-		if (!burnBrightlyAffordable(actor, xp - missXpTakenByLift(message, lifted), level)) return;
+		if (!burnBrightlyAffordable(actor, xp - missXpTakenByLift(message, lifted), level, rules)) return;
 	}
 
 	const btn = document.createElement("button");
 	btn.className = "stonetop-burn-brightly-btn";
 	btn.innerHTML = `<span class="stonetop-burn-brightly-icon"></span> ${escHtml(game.i18n.localize(`${BURN_BRIGHTLY_KEY}.button`))}`;
-	btn.dataset.tooltip = game.i18n.localize(`${BURN_BRIGHTLY_KEY}.${burnsBrightlyDriven(actor) ? "drivenTooltip" : "tooltip"}`);
+	btn.dataset.tooltip = game.i18n.localize(`${BURN_BRIGHTLY_KEY}.${burnBrightlyTooltipKey(actor, rules)}`);
 	btn.dataset.tooltipDirection = "UP";
 	btn.disabled = alreadyBurned;
 

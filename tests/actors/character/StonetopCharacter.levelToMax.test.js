@@ -495,6 +495,22 @@ describe("StonetopCharacter.applyLevelUp — refuses a stale or unaffordable lev
 		expect(actor.system.attributes.xp.value).toBe(0);
 	});
 
+	// Book I p.582, "Reset XP to 0 on Level Up", and the slower curves, as world settings (utils/xp.js#xpRules).
+	it("follows the world's advancement variants: a dearer level, and XP reset to 0", async () => {
+		const saved = global.game.settings;
+		global.game.settings = { get: (_scope, key) => ({ xpLevelUpBase: 10, xpResetOnLevelUp: true })[key] };
+		try {
+			const short = buildLiveCharacter({ slug: "the-heavy", name: "The Heavy", level: 3, xp: 15 });
+			expect(await short.char.applyLevelUp(heavyMove("Berserker"), null, null, { fromLevel: 3 })).toEqual({ applied: false, reason: "xp" });
+			const { char, actor } = buildLiveCharacter({ slug: "the-heavy", name: "The Heavy", level: 3, xp: 20 });
+			expect(await char.applyLevelUp(heavyMove("Berserker"), null, null, { fromLevel: 3 })).toEqual({ applied: true });
+			expect(actor.system.attributes.level.value).toBe(4);
+			expect(actor.system.attributes.xp.value).toBe(0);
+		} finally {
+			global.game.settings = saved;
+		}
+	});
+
 	it("canLevelUp reads the 6 + 2×level threshold", () => {
 		expect(buildLiveCharacter({ slug: "the-heavy", name: "The Heavy", level: 3, xp: 11 }).char.canLevelUp).toBe(false);
 		expect(buildLiveCharacter({ slug: "the-heavy", name: "The Heavy", level: 3, xp: 12 }).char.canLevelUp).toBe(true);

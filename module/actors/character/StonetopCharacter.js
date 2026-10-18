@@ -94,7 +94,7 @@ import {foldModes, layModes} from "../../utils/roll-mode.js";
 import {fightStateActive, revealOnAttack, WE_HAPPY_FEW} from "./fight-states.js";
 import {spendSurpriseForRoll} from "../../combat/battle-holds.js";
 import {settleTierEffects, recordTierEffects, reconcileTierEffects} from "./tier-effects.js";
-import {xpToLevelUp, withXpLock} from "../../utils/xp.js";
+import {xpToLevelUp, xpAfterLevelUp, withXpLock} from "../../utils/xp.js";
 import {CharacterArcana} from "./CharacterArcana.js";
 import {seekerArcanaState, seekerArcanaChosen, seekerCardRoles, majorMarkBoxes, withMinorRole, seekerMajorSwitchPlan, seekerMajorOwed} from "./seeker-collection.js";
 import {CharacterLore} from "./CharacterLore.js";
@@ -6685,7 +6685,7 @@ export class StonetopCharacter {
 
 		return {
 			level, xp, cost, newLevel,
-			xpRemaining: xp - cost,
+			xpRemaining: xpAfterLevelUp(xp, level),
 			playbookName: playbookData?.name ?? null,
 			playbookSlug: playbookData?.slug ?? actor.system?.playbook?.slug ?? null,
 			availableMoves,
@@ -6804,7 +6804,7 @@ export class StonetopCharacter {
 			if (xp < xpToLevelUp(level)) return "xp";
 			const levelUp = {
 				"system.attributes.level.value": level + 1,
-				"system.attributes.xp.value":   xp - xpToLevelUp(level),
+				"system.attributes.xp.value":   xpAfterLevelUp(xp, level),
 			};
 			// The move learned rides on the update so the timeline's level-up row can name it
 			// (timeline/timeline-watch.js reads it back off the options), and the ledger names the

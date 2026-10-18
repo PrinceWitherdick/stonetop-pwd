@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { burnBrightlyAffordable, burnsBrightlyDriven, BURN_BRIGHTLY_COST, DRIVEN } from "../../../module/actors/character/burn-brightly.js";
+import { burnBrightlyAffordable, burnBrightlyTooltipKey, burnsBrightlyDriven, BURN_BRIGHTLY_COST, DRIVEN } from "../../../module/actors/character/burn-brightly.js";
 import { adjustXp } from "../../../module/utils/xp.js";
 
 // Burn Brightly: "When you have enough XP to Level Up, you may spend 2 XP after any roll you make to add +1".
@@ -39,6 +39,25 @@ describe("burnBrightlyAffordable", () => {
 		expect(burnsBrightlyDriven(other)).toBe(false);
 		expect(burnBrightlyAffordable(other, 2, 1)).toBe(false);
 		expect(DRIVEN).toMatchObject({ playbook: "The Would-Be Hero", slug: "driven" });
+	});
+});
+
+// Book I p.582: "Let players always Burn Brightly, even if they lack the XP to Level Up." A world setting.
+describe("the world's always-Burn-Brightly rule", () => {
+	it("lets anyone spend 2 XP below the level-up total, and says so on the button", () => {
+		const other = hero({ background: "impetuous-youth" });
+		expect(burnBrightlyAffordable(other, 2, 3)).toBe(false);
+		expect(burnBrightlyTooltipKey(other)).toBe("tooltip");
+		const saved = global.game.settings;
+		global.game.settings = { get: (_scope, key) => key === "burnBrightlyAlways" };
+		try {
+			expect(burnBrightlyAffordable(other, 2, 3)).toBe(true);
+			expect(burnBrightlyAffordable(other, 1, 3)).toBe(false);
+			expect(burnBrightlyTooltipKey(other)).toBe("alwaysTooltip");
+			expect(burnBrightlyTooltipKey(hero({ background: "driven" }))).toBe("drivenTooltip");
+		} finally {
+			global.game.settings = saved;
+		}
 	});
 });
 
