@@ -167,7 +167,7 @@ import { GIVE_ADVANTAGE_QUERY, handleGiveAdvantageQuery, wireFocusFire, wireGive
 import { wireWouldBeHeroCards } from "./module/actors/character/would-be-hero-cards.js";
 import { wireSteadingMissXp } from "./module/actors/steading/steading-miss-xp.js";
 import { REQUISITION_MISS_COST_FLAG, STEADING_FORTUNES_CARD_ACTIONS, assetFromButton, settleRequisitionMiss, takeRequisitionedAsset } from "./module/actors/steading/steading-card-actions.js";
-import { wireTradeItemCard } from "./module/actors/steading/steading-trade-card.js";
+import { wireTradeItemCard, wireTradePaymentRow } from "./module/actors/steading/steading-trade-card.js";
 import { UP_WITH_PEOPLE_QUERY, handleUpWithPeopleQuery } from "./module/actors/character/up-with-people.js";
 import {
 	DEATHS_DOOR_BOOST_QUERY, DEATHS_DOOR_CLAIM_QUERY, burnBrightlyOnDoorCard, handleDeathsDoorBoostQuery,
@@ -2612,6 +2612,8 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	_chatWireSteadingFortunes(message, html);
 	// Trade & Barter's 10+/7-9: the special item handed over, once per card.
 	wireTradeItemCard(message, html);
+	// ...and its payment row (Surplus, coin, an artifact), on every 10+ and 7-9 with or without a handout item.
+	wireTradePaymentRow(message, html);
 	_chatWireSpendStock(message, html);
 	_chatWireSeasonsRoll(message, html);
 	// The Seasons Change reminder card's "Reset logbook", for the Seeker's own player.

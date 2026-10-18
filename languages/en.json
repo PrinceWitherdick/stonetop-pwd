@@ -3789,20 +3789,24 @@
         "diligence": "Diligence: +1",
         "sanction": "Sanction: +1",
         "manyHands": "Many Hands: +1",
-        "blessing": "Blessing: +1"
+        "blessing": "Blessing: +1",
+        "preparation": "Preparation: +1"
       },
       "buttonFor": "{label} ({name})",
       "tip": {
         "diligence": "Chronicler of Stonetop: {name} spends 1 Diligence ({held} held) to add +1 to this roll.",
         "sanction": "Commune with Aratis: acting on Aratis's orders, {name} spends 1 Sanction ({held} held) to add +1 to this roll.",
         "manyHands": "Many Hands Make Light Work: {name} jumps in to help. Say how, and ask the GM what else it takes or what it will cost. If you accept, this roll gets +1.",
-        "blessing": "Piety: in pursuit of a righteous cause, {name} spends their Blessing from worship to Helior to add +1 to this roll."
+        "blessing": "Piety: in pursuit of a righteous cause, {name} spends their Blessing from worship to Helior to add +1 to this roll.",
+        "preparation": "Bolster: if the table agrees their efforts apply to this roll, {name} spends 1 Preparation ({held} held) to add +1 to it.",
+        "preparationFor": "Bolster: if the table agrees their efforts ({purpose}) apply to this roll, {name} spends 1 Preparation ({held} held) to add +1 to it."
       },
       "note": {
         "diligence": "+1 Diligence ({name})",
         "sanction": "+1 Sanction ({name})",
         "manyHands": "+1 Many Hands ({name})",
-        "blessing": "+1 Blessing ({name})"
+        "blessing": "+1 Blessing ({name})",
+        "preparation": "+1 Preparation ({name})"
       },
       "conditionsHeading": "Conditions Applied:",
       "refused": "The +1 was not added: it has already been used on this roll, the track is empty, or no GM is here to record it.",
@@ -3814,6 +3818,21 @@
         "namedCount": "Give {count} people a Blessing",
         "blessed": "1 Blessing held by each of: {names}.",
         "missed": "No GM is online to give {names} a Blessing. Use Piety again once one is."
+      },
+      "bolster": {
+        "title": "Bolster",
+        "lead": "Say how you prepare for what's coming or seek the favor of the gods, and answer the GM's questions. How much time do you devote?",
+        "duration": {
+          "week": "A week or so: hold 1 Preparation",
+          "month": "A month or so: hold 2 Preparation",
+          "season": "The better part of a season: hold 3 Preparation"
+        },
+        "replaces": "You hold {held} Preparation ({purpose}). Bolstering again replaces it.",
+        "noPurpose": "no purpose written down",
+        "purposeLabel": "What are you preparing for?",
+        "purposePlaceholder": "laying in extra stores for winter",
+        "confirm": "Hold the Preparation",
+        "held": "{name} holds {held} Preparation. Spend 1 for +1 on a roll your efforts apply to, from its card."
       }
     }
   }

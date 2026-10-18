@@ -20501,6 +20501,145 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	min-height: 0;
 }
 
+/* The steading's Notes tab carries the content guidelines (Book I p.66) and the Plans list (p.530) above
+   the free notes (steading-plans.js), so the tab scrolls as one column and the notes editor keeps a
+   usable height instead of being squeezed to nothing by the sections above it. */
+.steading-sheet .steading-notes {
+	overflow-y: auto;
+	gap: 10px;
+}
+.steading-sheet .steading-notes prose-mirror.steading-notes-editor {
+	flex: 1 0 auto;
+	min-height: 14em;
+}
+.steading-notes-heading {
+	margin: 0;
+	font-size: var(--font-size-14, 14px);
+	font-weight: 700;
+	border: none;
+}
+.steading-notes-hint {
+	margin: 2px 0 6px;
+	color: var(--st-text-secondary);
+	font-size: var(--font-size-12, 12px);
+}
+.steading-guidelines-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(14em, 1fr));
+	gap: 8px;
+}
+.steading-guideline {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.steading-guideline-label { font-weight: 700; }
+.steading-guideline-hint {
+	color: var(--st-text-secondary);
+	font-size: var(--font-size-12, 12px);
+}
+.steading-guideline textarea {
+	resize: vertical;
+	min-height: 3em;
+}
+.steading-plans-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 4px 10px;
+}
+.steading-plans-head .steading-plan-add { margin-left: auto; flex: 0 0 auto; width: auto; }
+.steading-plan {
+	border-top: 1px solid rgb(var(--st-ink-rgb) / 0.12);
+	padding: 6px 0 4px;
+}
+.steading-plan-head,
+.steading-plan-req,
+.steading-plan-new,
+.steading-plan-undone {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.steading-plan-name { flex: 1 1 auto; font-weight: 700; }
+.steading-plan-progress { color: var(--st-text-secondary); flex: 0 0 auto; }
+.steading-plan.is-done .steading-plan-progress { font-weight: 700; color: inherit; }
+.steading-plan-reqs {
+	list-style: none;
+	margin: 4px 0;
+	padding: 0 0 0 4px;
+}
+.steading-plan-req-text { flex: 1 1 auto; }
+.steading-plan-req.is-done .steading-plan-req-text { text-decoration: line-through; opacity: 0.7; }
+.steading-plan-remove,
+.steading-plan-req-remove {
+	flex: 0 0 auto;
+	width: auto;
+	line-height: 1;
+}
+.steading-plan-new input { flex: 1 1 auto; }
+.steading-plan-new button { flex: 0 0 auto; width: auto; }
+.steading-plan-undone { margin-top: 4px; color: var(--st-text-secondary); }
+.steading-plan-undone input { flex: 1 1 auto; }
+
+/* Seasons Change: the Threats step's portents (season-threats.js) and the trade opportunity gain's
+   neighbours (seasonal-gains.js). */
+.stonetop-season-threat-list {
+	list-style: none;
+	margin: 4px 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.stonetop-season-threat {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 0 8px;
+	align-items: center;
+}
+.stonetop-season-threat-name { font-weight: 700; grid-column: 1; }
+.stonetop-season-threat-portent { color: var(--st-text-secondary); grid-column: 1; }
+.stonetop-season-threat > .stonetop-season-btn,
+.stonetop-season-threat-done { grid-column: 2; grid-row: 1 / span 2; }
+.stonetop-season-threat-done { color: var(--st-text-secondary); font-style: italic; }
+.stonetop-season-trade-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin: 2px 0 4px 26px;
+}
+.stonetop-season-trade-links .stonetop-season-gains-hint { flex: 1 0 100%; }
+.stonetop-season-trade-link { flex: 0 0 auto; width: auto; padding: 1px 8px; }
+
+/* Trade & Barter's payment window and card row (steading-trade-card.js). */
+.stonetop-trade-pay-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.stonetop-trade-pay-direction {
+	display: flex;
+	gap: 12px;
+	border: none;
+	margin: 0 0 6px;
+	padding: 0;
+}
+.stonetop-trade-pay-field {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin: 2px 0;
+}
+.stonetop-trade-pay-field input { width: 4.5em; flex: 0 0 auto; }
+.stonetop-trade-pay-label small { color: var(--st-text-secondary); }
+.stonetop-trade-pay-coins { margin-top: 4px; }
+
+/* The Bolster window's "what for" box (actors/character/bolster.js). */
+.stonetop-bolster-purpose {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-top: 8px;
+}
+
 .steading-list-section {
 	background: rgba(0,0,0,0.04);
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);

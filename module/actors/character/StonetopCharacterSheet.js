@@ -127,9 +127,10 @@ import {CARD_EMPOWERED_FLAG, CARD_INVOCATIONS_FLAG, TEN_PLUS_FLAG, debilityPayme
 import {DANCING_LIGHT, invocationLabel, invocationLabels, invokeWindowNotice, readOngoing, resolveInvocationUse} from "./ongoing-invocation.js";
 import {INVOCATIONS_GRANTED_AT_FLAG, invocationCountCue} from "./invocation-count.js";
 import {showJudgeMarks, condemnedContext, CONDEMN, CENSURE, CASTIGATE} from "./condemn.js";
-import {PIETY, holdBlessing, shareBlessing} from "./roll-boosts.js";
+import {PIETY, BOLSTER, holdBlessing, shareBlessing} from "./roll-boosts.js";
 import {giveAdvantageCardHtml} from "./give-advantage.js";
 import {IRON_WILL, UNFETTERED, ironWill, unfettered} from "./will-and-restraint.js";
+import {openBolster} from "./bolster.js";
 import {inOverYourHeadCardHtml} from "./would-be-hero-cards.js";
 import {pickPersonOnMap} from "../../dialogs/RelationshipLinkDialog.js";
 import {readyRulebookIcon, openSharedRulebook} from "../../books/rulebook-icons.js";
@@ -432,6 +433,8 @@ const MOVE_USE_EFFECTS = {
 	// Piety's worship holds the Lightbearer 1 Blessing and 1 for each faithful PC who took part,
 	// which is a question only the player can answer, so using the move asks it.
 	[PIETY]:              sheet => sheet._piety(),
+	// Bolster (homefront, Book I p.524): how long they prepared, and so how much Preparation they hold.
+	[BOLSTER]:            sheet => sheet.isEditable && openBolster(sheet.actor),
 	// Iron Will's 1d4 at themselves, asked; Unfettered's debility, picked (will-and-restraint.js).
 	[IRON_WILL]:          sheet => sheet.isEditable && ironWill(sheet.actor),
 	[UNFETTERED]:         sheet => sheet.isEditable && unfettered(sheet.actor),

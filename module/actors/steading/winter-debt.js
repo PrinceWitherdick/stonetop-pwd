@@ -1,6 +1,12 @@
 import { escHtml, sign, signed } from "../../utils/strings.js";
 import { parseSeasonStamp } from "../../seasons/campaign-year.js";
-import { openDebilityPicker, openDisasterPicker, disasterFortunes, disasterOwedFlags, noteShortfallOnTimeline } from "./steading-debilities.js";
+import { openDebilityPicker, openDisasterPicker, disasterFortunes, disasterOwedFlags, noteShortfallOnTimeline, debilityPath } from "./steading-debilities.js";
+import { confirmOutcome } from "../../utils/ask-with-buttons.js";
+import { pickPersonOnMap } from "../../dialogs/RelationshipLinkDialog.js";
+import { npcStatusMeta } from "../../data-models/npc-status.js";
+import { charactersInPlay } from "../../utils/characters-in-play.js";
+import { openRetireDialog } from "../../campaign/retire-pc.js";
+import { stonetopChatCard } from "../../utils/chat.js";
 
 // ── Winter's second bite (Book I, "Seasons Change": winter) ──────────────────────
 // "7-9: the steading must consume 1d4+Population more Surplus before winter ends, or suffer
@@ -39,9 +45,10 @@ const DIALOG_OPTIONS = { width: 480, classes: ["dialog", "stonetop", "stonetop-w
  * one list of hand-written <li>s in the season dialog, which is the shape a second copy starts
  * from.
  *
- * `population` is the only one with a mechanical effect; the other three are the GM's to
- * narrate, and are listed rather than automated because what a lost cistern costs is a
- * conversation, not a number.
+ * `population` is the only one written straight off; the other three are the GM's to narrate,
+ * because what a lost cistern costs is a conversation, not a number. What each leaves on the
+ * sheet is then OFFERED (followUpWinterConsequence): a lost resource may leave the steading
+ * lacking, a dead NPC is marked dead, and a PC's going is a note for the group.
  */
 export const WINTER_CONSEQUENCES = [
 	{
@@ -52,19 +59,128 @@ export const WINTER_CONSEQUENCES = [
 	{
 		id: "resource",
 		label: "Important resource lost or damaged",
-		detail: "A horse, the cistern, etc.: lost or not maintained (narrative).",
+		detail: "A horse, the cistern, etc.: lost or not maintained. You'll be asked whether it leaves the steading lacking.",
 	},
 	{
 		id: "npc",
 		label: "Important NPC dies",
-		detail: "Their role unfilled: a narrative consequence.",
+		detail: "Their role unfilled. You'll be asked who, and they are marked dead.",
 	},
 	{
 		id: "pc",
 		label: "A PC dies, leaves, or retires",
-		detail: "A narrative consequence for the group to resolve.",
+		detail: "Their player gets an epilogue and makes a new PC between sessions. You'll be asked who, to write a leaving or retiring PC's epilogue.",
 	},
 ];
+
+// ── What a picked consequence leaves on the sheet (Book I pp.511, 517-518) ───────
+// Offered, never decided: the GM narrates the consequence first ("Name specific folks who die or leave
+// or grow infirm. Play out the scene where the granary's roof falls in", p.518), and only then is asked
+// what it leaves behind. Closing any of these leaves the sheet as it was.
+
+/**
+ * "An important resource (one of the horses, the cistern, etc.) is lost or not maintained" (p.517), and
+ * "Should Stonetop lose access to one or more of these resources for a season or so, then mark the lacking
+ * debility" (p.511). Whether this loss is one of those is the GM's call, so it is asked. Whether lacking
+ * was marked.
+ */
+export async function offerLackingForLostResource(steading, { confirm = confirmOutcome, stonetopMove = WINTER_DEBT_MOVE } = {}) {
+	if (steading?.getSystemValue?.(debilityPath("lacking"), false)) return false;
+	const yes = await confirm({
+		title: "An Important Resource Is Lost",
+		content: `<p>Should Stonetop lose access to one of its resources (farming, the cistern, its tradesfolk...) for a season or so, it is <strong>lacking</strong>: treat Prosperity as 1 lower (Book I p.511).</p><p>Does this loss leave the steading lacking?</p>`,
+		yes: { label: "Mark the steading lacking", icon: "fa-box-open" },
+		no: { label: "Not lacking" },
+	});
+	if (!yes) return false;
+	await steading.setSystemValue(debilityPath("lacking"), true, { stonetopMove });
+	globalThis.ui?.notifications?.info?.("Stonetop marked lacking.");
+	return true;
+}
+
+/** The NPCs a winter can take: every NPC actor in the world not already gone (dead or retired). PURE. */
+export function livingNpcs(actors = []) {
+	return [...actors].filter(a => a?.type === "npc" && !npcStatusMeta(a.system?.status).inactive);
+}
+
+/**
+ * "An important NPC dies, their role unfilled" (p.517): ask who, and mark them dead (npc-status.js). The
+ * people chooser, as every "which person" question asks it. The NPC marked dead, or null.
+ */
+export async function markNpcDeadForWinter({ actors = globalThis.game?.actors?.contents ?? [], pick = pickPersonOnMap } = {}) {
+	const npcs = livingNpcs(actors);
+	if (!npcs.length) {
+		globalThis.ui?.notifications?.info?.("No NPC in the world to mark dead. Note who died on the Residents list.");
+		return null;
+	}
+	const id = await pick({
+		options: npcs.map(actor => ({ id: actor.id, name: actor.name, actor })),
+		title: "Who dies this winter?",
+		hint: "An important NPC dies, their role unfilled. Who was it?",
+		icon: "fa-skull",
+		formatLabel: name => `${name} dies`,
+	});
+	const npc = id ? npcs.find(a => a.id === id) : null;
+	if (!npc) return null;
+	await npc.update({ "system.status": "dead" });
+	globalThis.ui?.notifications?.info?.(`${npc.name} is marked dead.`);
+	return npc;
+}
+
+/** The note a PC's going posts, for the whole table (p.518). PURE. */
+export function pcGoesNoteHtml() {
+	return stonetopChatCard("Winter's shortfall: a PC dies, leaves, or retires",
+		`<div class="card-content"><p>"If the player opts to have their PC die, leave, or retire, then let them have an epilogue (page 584) in this session or the next. Ask the player to make a new PC between sessions." (Book I p.518)</p></div>`);
+}
+
+/**
+ * "The weariest PC's player has them die, leave, or retire" (Book I p.584, of p.518): ask which PC, and open the
+ * retire window for them (campaign/retire-pc.js), where the player's epilogue is written down. Closing the chooser,
+ * as for a PC who dies instead, leaves everyone in play. Whether the window was opened.
+ */
+export async function offerRetireForWinter({
+	characters = charactersInPlay(), pick = pickPersonOnMap, retire = openRetireDialog,
+} = {}) {
+	if (!characters.length) return false;
+	const id = await pick({
+		options: characters.map(actor => ({ id: actor.id, name: actor.name, actor })),
+		title: "Who leaves or retires?",
+		hint: "The weariest PC's player has them die, leave, or retire. Pick them to write their epilogue, or close this if they die instead.",
+		icon: "fa-door-open",
+		formatLabel: name => `${name} leaves or retires`,
+	});
+	const actor = id ? characters.find(a => a.id === id) : null;
+	if (!actor) return false;
+	await retire(actor);
+	return true;
+}
+
+/** Run a follow-up, logging a failure: the shortfall already written stands either way. */
+async function followUpQuietly(followUp, steading, consequenceId) {
+	try { await followUp?.(steading, consequenceId); }
+	catch (err) { console.error("Stonetop | a winter consequence's follow-up failed", err); }
+}
+
+/**
+ * Offer what a picked winter consequence leaves on the sheet, once the shortfall is written. Population's is
+ * already written by the shortfall itself.
+ * @param {object} deps  injectable for tests: `confirm`, `pick`, `actors`, `post`
+ */
+export async function followUpWinterConsequence(steading, consequenceId, deps = {}) {
+	const { post = data => globalThis.ChatMessage?.create?.(data) } = deps;
+	if (consequenceId === "resource") return offerLackingForLostResource(steading, deps);
+	if (consequenceId === "npc") return markNpcDeadForWinter(deps);
+	if (consequenceId === "pc") {
+		const actor = steading?._actor;
+		await post({
+			content: pcGoesNoteHtml(),
+			speaker: actor ? { actor: actor.id, alias: actor.name } : undefined,
+		});
+		await offerRetireForWinter(deps);
+		return true;
+	}
+	return null;
+}
 
 /** The four choices as the markup both windows click on. Same classes and the same
  *  `data-consequence` hook, so one stylesheet rule and one listener shape serve both. */
@@ -150,12 +266,18 @@ export function shortfallLine(consequenceId, { fortunes, population, disaster },
  * line on the timeline, the disaster's pick with it (user, 2026-10-10). `late`: a debt settled
  * after winter ended, which still belongs to that winter.
  */
-export async function sufferWinterShortfall(steading, consequenceId, { stonetopMove = WINTER_DEBT_MOVE, onApplied, alsoFlags, season = null, late = false } = {}) {
+export async function sufferWinterShortfall(steading, consequenceId, {
+	stonetopMove = WINTER_DEBT_MOVE, onApplied, alsoFlags, season = null, late = false, followUp = followUpWinterConsequence,
+} = {}) {
 	const where = season ? { ...season, title: WINTER_SHORTFALL_TITLE } : null;
 	const out = await applyWinterShortfall(steading, consequenceId, { stonetopMove, alsoFlags, season: where });
 	globalThis.ui?.notifications?.info?.(shortfallNotice(out));
 	if (where) await noteShortfallOnTimeline(where, shortfallLine(consequenceId, out, { late }));
-	if (out.disaster) {
+	// Not awaited: the caller closes its step on the write, not when the GM gets round to the
+	// follow-up's windows (a retire dialog can stay open a long while). The disaster's pick still
+	// waits for them, so the two windows come one at a time.
+	void followUpQuietly(followUp, steading, consequenceId).then(() => {
+		if (!out.disaster) return;
 		openDisasterPicker(steading, {
 			introHtml: `<p><em>Winter's shortfall Meets with Disaster, and Fortunes cannot drop below −1.</em> The GM picks 1 instead:</p>`,
 			stonetopMove,
@@ -164,7 +286,7 @@ export async function sufferWinterShortfall(steading, consequenceId, { stonetopM
 			season: where,
 			cause: "winter's shortfall",
 		});
-	}
+	});
 	return out;
 }
 
@@ -262,7 +384,7 @@ export function winterDebtDialogHtml(state, { due = false } = {}) {
 			</div>
 			<p class="stonetop-season-note"><em>Or refuse, and take the consequences instead. That costs more, not less: Surplus still drops to <strong>0</strong>, ${disaster}, and one of these happens on top. Pick the one the steading suffers.</em></p>`
 			: `<p>⚠️ <strong>Not enough Surplus</strong> (${state.surplus} of ${state.owed}), so the debt cannot be paid. Surplus drops to <strong>0</strong>, ${disaster}, and one of these happens on top. Pick the one the steading suffers.</p>`}
-		<p class="stonetop-rites-note">Of these, only the first is written for you; the other three are the GM's to narrate.</p>`;
+		<p class="stonetop-rites-note">The first is written for you. The other three are the GM's to narrate; then you are asked what they leave on the sheet.</p>`;
 }
 
 /**

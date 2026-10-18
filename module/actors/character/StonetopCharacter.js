@@ -1433,6 +1433,11 @@ export class StonetopCharacter {
 		const expeditionCategory = _buildCompendiumMoveCategory(expeditionEntries, { key: "expedition", title: "Expedition Moves" }, ownedAllByName);
 		if (expeditionCategory) categories.push(expeditionCategory);
 
+		// The tracks, by move name, an owned move Item with its own `system.resource` draws (a playbook move's
+		// are kept the same way): Bolster's Preparation (actors/character/bolster.js), a homefront move held on
+		// the character, and Poltergeist's Fury (post-death-moves.js). Handed to every category below; an item
+		// with no track of its own draws none, so the background, special and follower moves are unchanged.
+		const ownedTracks = this._moveResources.getMoveResources();
 		for (const moveType of OTHER_MOVE_TYPES) {
 			const items = this._actor.items.filter(i => i.type === "move" && i.system?.moveType === moveType);
 			if (items.length > 0) {
@@ -1440,7 +1445,7 @@ export class StonetopCharacter {
 					.withKey(moveType)
 					.withTitle(capitalizeFirst(moveType) + " Moves")
 					.withNote(null)
-					.withMoves(items.map(i => _buildOwnedItemMoveSnapshot(i, { sourceType: moveType, isStarting: false })))
+					.withMoves(items.map(i => _buildOwnedItemMoveSnapshot(i, { sourceType: moveType, isStarting: false, resources: ownedTracks })))
 					.build()
 				);
 			}
@@ -1448,14 +1453,11 @@ export class StonetopCharacter {
 
 		const postDeathItems = this._actor.items.filter(isPostDeathMove);
 		if (postDeathItems.length > 0) {
-			// With their tracks: Poltergeist's Fury is a hold on its move, kept by name like a playbook
-			// move's (post-death-moves.js).
-			const resources = this._moveResources.getMoveResources();
 			categories.push(new MoveCategorySnapshotBuilder()
 				.withKey("post-death")
 				.withTitle("Post-Death Moves")
 				.withNote(null)
-				.withMoves(postDeathItems.map(i => _buildOwnedItemMoveSnapshot(i, { sourceType: "post-death", isStarting: true, resources })))
+				.withMoves(postDeathItems.map(i => _buildOwnedItemMoveSnapshot(i, { sourceType: "post-death", isStarting: true, resources: ownedTracks })))
 				.build()
 			);
 		}
@@ -7805,8 +7807,8 @@ function _buildMoveEntry(entry, source, moveResourcesMap, bgSlugs = new Set(), m
 // Build a MoveSnapshot for a plain owned move Item — the "other" move-type categories and the
 // post-death category, which differ only in their source type and whether the move is a starting
 // move. One home for this builder chain so a new MoveSnapshot field is added once, not per copy.
-// `resources` (the move-name-keyed track counts) draws the item's own `system.resource` track; without
-// it the card has none, which is how the "other" categories have always been drawn.
+// `resources` (the move-name-keyed track counts) draws the item's own `system.resource` track, for an
+// item that has one; without it the card has none.
 function _buildOwnedItemMoveSnapshot(item, { sourceType, isStarting, resources = null }) {
 	const resourceDef = resources ? item.system?.resource ?? null : null;
 	const resource = resourceDef?.max ? new ResourceBuilder()

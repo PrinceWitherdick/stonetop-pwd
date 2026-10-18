@@ -19,7 +19,8 @@ import {openReturnTriumphant} from "./return-triumphant.js";
 import {withSteadingMissXp} from "./steading-miss-xp.js";
 import {addTierActions, payFortunesCost, requisitionMissCostAction, requisitionTakeAction, withMusterCostActions} from "./steading-card-actions.js";
 import {RESULT, STEADING_MOVES, deployResults, homesteadFieldsHtml, homesteadFlowForMove, homesteadMoveCard, homesteadMoveFlow, moveResultsFromRows, resultsLegendFromRows, steadingMoveNoXpOnMiss, steadingStatChipLabel} from "./homestead-moves.js";
-import {tradeItemActions} from "./steading-trade-card.js";
+import {SEASON_FORTUNES, SEASON_TIER_LABELS, seasonFortunesRows, seasonLadderText, seasonResultLine} from "./season-fortunes.js";
+import {tradeItemActions, tradePaymentActions} from "./steading-trade-card.js";
 import {openInnGathering} from "./inn-gathering.js";
 import {openWinterDebtDialog, winterConsequencesHtml, sufferWinterShortfall, winterDebtState, winterDebtStepHtml, wireWinterDebtStep} from "./winter-debt.js";
 import {openDisasterPicker, openOwedDisasterPicker, meetWithDisaster, disasterFortunes, debilityPath, applyLacking} from "./steading-debilities.js";
@@ -52,7 +53,8 @@ import {readCurrentSeason, recordCurrentSeason, currentSeasonView, readCurrentYe
 import {readCurrentWeather, currentWeatherView} from "../../seasons/current-weather.js";
 import {openSeasonPicker} from "../../seasons/season-picker.js";
 import {SEASONAL_GAINS} from "../../dialogs/spring-burst-data.js";
-import {applySeasonalGains} from "./seasonal-gains.js";
+import {applySeasonalGains, tradeOpportunityLinksHtml, wireTradeOpportunityLinks} from "./seasonal-gains.js";
+import {contentGuidelinesView, plansView, planPromptsDatalistHtml, wireSteadingNotesTab} from "./steading-plans.js";
 import {addStonetopSteadingButton} from "../../utils/world.js";
 import {createInlineActionsDialog} from "../../utils/inline-actions-dialog.js";
 import {SETTLEMENTS} from "../../data/settlements.js";
@@ -182,29 +184,10 @@ export function improvementQuestionHtml(q) {
 
 // `winterAgain` is the second bite's formula as THIS steading rolls it (a hamlet's 1d2, a town's
 // 2d6), so the card names the dice the "roll what winter still wants" button is about to roll.
+// The lines are season-fortunes.js's, the table the window's ladder and Threats step read too.
+const _SEASON_RESULT_ROW = { success: RESULT.strong, partial: RESULT.weak, failure: RESULT.miss };
 function _seasonFortunesResultRows(seasonId, { winterAgain = "1d4+Population" } = {}) {
-	switch (seasonId) {
-		case "summer":
-			return [
-				RESULT.strong("pick 2 seasonal gains."),
-				RESULT.weak("pick 1 seasonal gain."),
-				RESULT.miss("a threat makes itself known or gets worse; don't mark XP."),
-			];
-		case "winter":
-			return [
-				RESULT.strong("winter is relatively mild; each player names a local NPC with whom their relationship improves."),
-				RESULT.weak(`the steading must consume ${winterAgain} more Surplus before winter ends, or suffer the consequences again.`),
-				RESULT.miss("as 7-9, plus threats abound; don't mark XP."),
-			];
-		case "spring":
-		case "autumn":
-		default:
-			return [
-				RESULT.strong("pick 1 seasonal gain."),
-				RESULT.weak("pick 1 seasonal gain, but a threat makes itself known or gets worse."),
-				RESULT.miss("threats abound; don't mark XP."),
-			];
-	}
+	return seasonFortunesRows(seasonId).map(row => _SEASON_RESULT_ROW[row.tier](seasonResultLine(row, { winterAgain })));
 }
 
 function _seasonRollOptions(seasonId, { winterAgain } = {}) {
@@ -468,6 +451,11 @@ export function createStonetopSteadingSheetClass(Base) {
 			// control that quietly changes rolls.
 			context.stonetop.showRollModeControl = !getAskRollModeEachRollSetting();
 			context.stonetop.enrichedNotes = await foundry.applications.ux.TextEditor.enrichHTML(context.stonetop.notes ?? "");
+			// The Notes tab's content guidelines (p.66) and Plans (p.530): steading-plans.js.
+			const notesFlags = this._stonetopSteading._flags;
+			context.stonetop.contentGuidelines = contentGuidelinesView(notesFlags.contentGuidelines);
+			context.stonetop.plans = plansView(notesFlags.plans);
+			context.stonetop.planPromptsDatalist = planPromptsDatalistHtml();
 			context.stonetop.editMode = this._editMode;
 			context.stonetop.canEdit = this.isEditable;
 			// Which layout this user reads this sheet in: the pre-rail one (stat band above the
@@ -939,6 +927,9 @@ export function createStonetopSteadingSheetClass(Base) {
 				STEADING_IMPROVEMENT_DRAG_TYPE, (data) => this._onDropSteadingImprovement(data.improvement));
 
 			if (!this.isEditable) return;
+
+			// The Notes tab's Plans and content guidelines (steading-plans.js).
+			wireSteadingNotesTab(html[0], this._stonetopSteading);
 
 			// Stat tracks use custom radio markup, so persist them explicitly.
 			html[0].addEventListener("change", ev => {
@@ -1586,6 +1577,9 @@ export function createStonetopSteadingSheetClass(Base) {
 				// advantage (a Township's), since the two cancel out.
 				winter: !!data.winter,
 				...(tradeItem ? { tradeItem } : {}),
+				// The Value the payment window quotes beside what is handed over (p.542); a field left
+				// blank quotes none, rather than "Value 0".
+				tradeValue: String(data.value ?? "").trim() === "" ? null : value,
 			};
 		}
 
@@ -1893,7 +1887,10 @@ export function createStonetopSteadingSheetClass(Base) {
 			// would lock in a mid-play figure. It is noted when the +Fortunes roll is made (or handed
 			// over), and failing that by the reset, whichever this window sees first.
 			const steading = this._stonetopSteading;
-			const reminded = steading.seasonStepApplied(REMINDER_SEASON_STEP, year, seasonId);
+			// The Threats step's module (season-threats.js), loaded for the GM only and only here: threats
+			// are GM prep kept on the GM Toolkit, and this sheet does not carry their modules itself.
+			const seasonThreats = game.user?.isGM ? await import("./season-threats.js") : null;
+			const reminded =steading.seasonStepApplied(REMINDER_SEASON_STEP, year, seasonId);
 			if (!reminded) postSeasonsChangeReminder(seasonId);
 			if (!reminded && this.actor.isOwner) {
 				await steading.setSeasonStepApplied(REMINDER_SEASON_STEP, year, seasonId);
@@ -2010,6 +2007,7 @@ export function createStonetopSteadingSheetClass(Base) {
 								<span class="stonetop-season-gain-text">${g.text}</span>
 							</span>
 						</label>
+						${g.key === "trade" ? tradeOpportunityLinksHtml() : ""}
 					</li>`).join("")}
 				</ul>
 				<p class="stonetop-season-note" data-season-gains-over hidden></p>
@@ -2193,9 +2191,11 @@ export function createStonetopSteadingSheetClass(Base) {
 
 			// The roll and the gains it lets them pick are ONE step: the ladder says how many to
 			// pick, so the checklist belongs directly under it rather than a click away.
-			const rollStep = (who, ladder, note) => step("roll", "Roll +Fortunes", "fa-dice-d6", `
-				<p>Whoever is the <strong>${who}</strong> rolls +Fortunes:</p>
-				<ul>${ladder.map(([tier, text]) => `<li><strong>${tier}:</strong> ${text}</li>`).join("")}</ul>
+			// Who rolls and what each result says are season-fortunes.js's, the table the roll card and
+			// the Threats step read too.
+			const rollStep = note => step("roll", "Roll +Fortunes", "fa-dice-d6", `
+				<p>Whoever is the <strong>${SEASON_FORTUNES[seasonId].who}</strong> rolls +Fortunes:</p>
+				<ul>${seasonFortunesRows(seasonId).map(row => `<li><strong>${SEASON_TIER_LABELS[row.tier]}:</strong> ${seasonLadderText(row)}</li>`).join("")}</ul>
 				<p class="stonetop-season-note">${note}</p>
 				${fortunesBtns}
 				${gainsRef}`);
@@ -2250,20 +2250,12 @@ export function createStonetopSteadingSheetClass(Base) {
 			let seasonSteps;
 			if (seasonId === "spring") {
 				seasonSteps = [
-					rollStep("most hopeful", [
-						["10+", "Pick 1 seasonal gain."],
-						["7–9", "Pick 1 seasonal gain, but a threat makes itself known or gets worse."],
-						["6−", "Threats abound. Don't mark XP."],
-					], "Whatever the result, reset Fortunes to +1."),
+					rollStep("Whatever the result, reset Fortunes to +1."),
 					step("brings", "What it brings", "fa-wheat-awn", joinBlocks([aurochsNote, yieldsBlock])),
 				];
 			} else if (seasonId === "summer") {
 				seasonSteps = [
-					rollStep("most content", [
-						["10+", "Pick 2 seasonal gains."],
-						["7–9", "Pick 1 seasonal gain."],
-						["6−", "A threat makes itself known or gets worse. Don't mark XP."],
-					], "Whatever the result, the steading generates 1d4−1 Surplus, then Fortunes resets to +1."),
+					rollStep("Whatever the result, the steading generates 1d4−1 Surplus, then Fortunes resets to +1."),
 					step("brings", "What it brings", "fa-wheat-awn", joinBlocks([
 						`<div class="stonetop-season-actions">
 							<button class="stonetop-season-btn" data-action="roll-surplus">
@@ -2275,11 +2267,7 @@ export function createStonetopSteadingSheetClass(Base) {
 				];
 			} else if (seasonId === "autumn") {
 				seasonSteps = [
-					rollStep("most determined", [
-						["10+", "Pick 1 seasonal gain."],
-						["7–9", "Pick 1 seasonal gain, but a threat makes itself known or gets worse."],
-						["6−", "Threats abound. Don't mark XP."],
-					], `Whatever the result, reset Fortunes to +1. When harvest is complete, the steading generates ${harvest.formula} Surplus.`),
+					rollStep(`Whatever the result, reset Fortunes to +1. When harvest is complete, the steading generates ${harvest.formula} Surplus.`),
 					step("brings", "What it brings", "fa-wheat-awn", joinBlocks([
 						// "When the harvest is complete, roll 1d4": the END of autumn ("that roll
 						// comes at the end of the season", p. 523). So it is not a thing to do on
@@ -2364,6 +2352,9 @@ export function createStonetopSteadingSheetClass(Base) {
 				winterEndStep,
 				step("start", "Start of the season", "fa-shield-halved", watchBlock),
 				...seasonSteps,
+				// The threat the roll may call for (season-threats.js), right after the roll. The GM's
+				// alone: threats are GM prep, and the board it opens is the GM Toolkit's.
+				seasonThreats ? step("threats", "Threats", "fa-skull", seasonThreats.seasonThreatsStepFor(this.actor, seasonId)) : null,
 				step("costs", "What it costs", "fa-coins", joinBlocks([herdFeedBlock, ...upkeepCostBlocks, militiaBlock])),
 				step("inn", "The Inn", "fa-beer-mug-empty", innRollBlock),
 				step("chronicle", "Chronicle", "fa-feather", notesBlock),
@@ -2480,6 +2471,11 @@ export function createStonetopSteadingSheetClass(Base) {
 					};
 					root.querySelectorAll(".stonetop-season-gain-check").forEach(cb =>
 						cb.addEventListener("change", refreshGainsCount));
+
+					// The threat step's board button and "It comes to pass" (season-threats.js).
+					seasonThreats?.wireSeasonThreats(root, this.actor);
+					// The trade opportunity gain's neighbours (seasonal-gains.js).
+					wireTradeOpportunityLinks(root);
 
 					// The rail's numbers follow the steading while the window is open.
 					if (statsHook !== null) Hooks.off("updateActor", statsHook);
@@ -3146,7 +3142,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			// `tradeItem` the special item a Trade & Barter is about: both become card buttons below,
 			// and neither is a roll option. `askedQuestions` are the window's questions those answers
 			// answer (improvementQuestions).
-			const { situational = 0, improvementAnswers: windowAnswers, askedQuestions = [], winter = false, musterCost, tradeItem, ...rest } = rollOptions;
+			const { situational = 0, improvementAnswers: windowAnswers, askedQuestions = [], winter = false, musterCost, tradeItem, tradeValue = null, ...rest } = rollOptions;
 			// What a taken answer costs (Stentorian's Command for an advantage to Deploy, Book I p.127),
 			// paid BEFORE the roll is adjusted, so a spend that fails gives no advantage.
 			const improvementAnswers = windowAnswers && await spendImprovementAnswers(askedQuestions, windowAnswers);
@@ -3197,6 +3193,12 @@ export function createStonetopSteadingSheetClass(Base) {
 			if (tradeItem) {
 				const trade = tradeItemActions(tradeItem);
 				if (trade) cardActions = addTierActions(cardActions, { success: trade, partial: trade });
+			}
+			// Every Trade & Barter's 10+ and 7-9, from its window or the bare roll chip: what the steading pays
+			// (or is paid) in Surplus and coin, and an artifact a character offers or sells (pp.540-542).
+			if (flow?.specialItems) {
+				const pay = tradePaymentActions(tradeValue);
+				cardActions = addTierActions(cardActions, { success: pay, partial: pay });
 			}
 			// The roll is the steading's, but its miss is the mover's XP: a button on the 6- marks it for them
 			// (./steading-miss-xp.js). Not on a move whose 6- says otherwise (`noXpOnMiss` on its entry).

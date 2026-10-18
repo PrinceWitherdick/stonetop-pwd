@@ -16,6 +16,13 @@
 //    that says who is offered it: the Lightbearer holds theirs on Piety's pip, and anyone who worshipped
 //    with them holds one as a flag (`blessing`) on their own character, Piety or not. One at most either
 //    way: worshipping again holds 1, never 2 (see holdBlessing and shareBlessing below).
+//  • BOLSTER (homefront, Book I p.524): "When you make any roll to which your efforts might apply, you may
+//    spend 1 Preparation to add +1 to that roll, after it is made (maximum +1 per roll)." Any PC can Bolster,
+//    so it is not the move that says who is offered it: the Preparation is held on the character's "Bolster"
+//    track whether or not the move is on their sheet (holdPreparation). Their OWN roll cards, and the
+//    steading's: "PCs can Bolster for a coming season and spend the Preparation on the roll(s)" (p.516). One
+//    Preparation per roll at most, whoever spends it. Whether the efforts apply is the table's to say (p.525),
+//    so pressing it says they do.
 //
 // ONE OF EACH PER ROLL PER HELPER. Diligence could in principle be spent twice on one roll; the card offers
 // each source once for each helper, so a Judge with 3 Diligence cannot turn a 7 into a 10 alone. Who used
@@ -48,6 +55,7 @@ import { holdForEach, shareHold } from "../../utils/share-hold.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
 import { cardTierNow } from "../../utils/counted-tier.js";
 import { asArray } from "../../utils/playbook-actors.js";
+import { STEADING_ACTOR_TYPES } from "../../utils/actor-types.js";
 import { ownerUsers } from "../../hooks/DeathsDoorPrompt.js";
 import { DEATHS_DOOR_ROLL_FLAG, DEATHS_DOOR_ROLLING_FLAG, isDeathsDoorCard, isUndeathCard } from "./deaths-door.js";
 import { deathsDoorRollMarker } from "./deaths-door-actor.js";
@@ -61,6 +69,20 @@ export const CHRONICLER = "Chronicler of Stonetop";
 export const COMMUNE_WITH_ARATIS = "Commune with Aratis";
 export const MANY_HANDS = "Many Hands Make Light Work";
 export const PIETY = "Piety";
+export const BOLSTER = "Bolster";
+
+/** The most Preparation Bolster holds: "The better part of a season: 3 Preparation" (Book I p.524). */
+export const PREPARATION_MAX = 3;
+
+/** The character flag naming what their Preparation is for ("laying in extra stores for winter", p.525). */
+export const PREPARATION_FOR_FLAG = "preparationFor";
+
+/** Bolster's three amounts of time and the Preparation each holds (Book I p.524), in the book's order. */
+export const BOLSTER_DURATIONS = Object.freeze([
+	{ key: "week",   hold: 1 },
+	{ key: "month",  hold: 2 },
+	{ key: "season", hold: 3 },
+]);
 
 /**
  * Each source of a +1: the move that gives it, what it costs off that move's track, and whose roll it may
@@ -68,12 +90,26 @@ export const PIETY = "Piety";
  *
  * A source with its own `held` and `spend` is offered to whoever holds it, whether or not they have the
  * move: Piety's Blessing is held by the faithful who worshipped beside a Lightbearer too.
+ *
+ * `onSteading`: offered on a steading's roll card as well, to anyone holding it. `onePerRoll`: once on a
+ * roll whoever takes it, not once per helper. `tip(offer)`: the button's own tooltip, when it says more than
+ * the source's stock one (boostButtonFace); falsy for the stock one.
  */
 const SOURCES = {
 	diligence: { move: CHRONICLER, cost: 1, on: "any" },
 	sanction:  { move: COMMUNE_WITH_ARATIS, cost: 1, on: "own" },
 	manyHands: { move: MANY_HANDS, cost: 0, on: "other", notInStruggle: true },
 	blessing:  { move: PIETY, cost: 1, on: "own", held: blessingHeld, spend: spendBlessing, refund: holdBlessing },
+	preparation: {
+		move: BOLSTER, cost: 1, on: "own", onSteading: true, onePerRoll: true,
+		held: preparationHeld, spend: spendPreparation, refund: refundPreparation,
+		// Says what it was laid in for, when the player wrote it down (p.525: "record their Preparation and
+		// its source"), since whether it applies to this roll is the table's question.
+		tip: offer => {
+			const purpose = preparationFor(offer.helper);
+			return purpose ? format(`${KEY}.tip.preparationFor`, { name: offer.helper.name, held: offer.held, purpose }) : "";
+		},
+	},
 };
 export const BOOST_SOURCES = Object.freeze(Object.keys(SOURCES));
 
@@ -189,7 +225,10 @@ export function actsForHelper(user, owners = []) {
  * @returns {{source: string, helper: Actor, cost: number, held: number}[]}
  */
 export function boostOffers({ message, roller, helpers = [], user, ownersOf = ownerUsers, scope = SYSTEM_ID, anyone = false, doorOpen = false }) {
-	if (roller?.type !== "character" || !isBoostableRoll(message, scope, { doorOpen })) return [];
+	// A steading's roll (Seasons Change, Trade & Barter...) is nobody's own: only a source that says it goes
+	// there (`onSteading`) is offered on it, to whoever holds it.
+	const steadingRoll = STEADING_ACTOR_TYPES.has(roller?.type);
+	if ((roller?.type !== "character" && !steadingRoll) || !isBoostableRoll(message, scope, { doorOpen })) return [];
 	const used = boostsOn(message, scope);
 	const struggle = isStruggleRoll(message, scope);
 	// This user's helpers first: on a player's client that is their own character, so the item scans
@@ -197,11 +236,13 @@ export function boostOffers({ message, roller, helpers = [], user, ownersOf = ow
 	const mine = helpers.filter(h => h?.type === "character" && (anyone ? ownersOf(h).some(o => o.active) : actsForHelper(user, ownersOf(h))));
 	const offers = [];
 	for (const source of BOOST_SOURCES) {
-		const { move, cost, on, held: holds, notInStruggle } = SOURCES[source];
+		const { move, cost, on, held: holds, notInStruggle, onSteading, onePerRoll } = SOURCES[source];
 		if (notInStruggle && struggle) continue;
+		if (steadingRoll && !onSteading) continue;
+		if (onePerRoll && used.some(b => b.source === source)) continue;
 		for (const helper of mine) {
 			const own = helper.id === roller.id;
-			if ((on === "own" && !own) || (on === "other" && own)) continue;
+			if (!steadingRoll && ((on === "own" && !own) || (on === "other" && own))) continue;
 			if (used.some(b => b.source === source && b.by === helper.uuid)) continue;
 			if (!holds && !ownsLearnedMoveNamed(helper, move)) continue;
 			const held = cost ? heldFor(helper, source, scope) : 0;
@@ -222,7 +263,8 @@ export function boostButtonFace(offer, offers = []) {
 	const twin  = offers.some(o => o !== offer && o.source === offer.source);
 	return {
 		label: twin ? format(`${KEY}.buttonFor`, { label, name: offer.helper.name }) : label,
-		tip:   format(`${KEY}.tip.${offer.source}`, { name: offer.helper.name, held: offer.held }),
+		tip:   SOURCES[offer.source]?.tip?.(offer)
+			|| format(`${KEY}.tip.${offer.source}`, { name: offer.helper.name, held: offer.held }),
 	};
 }
 
@@ -249,7 +291,7 @@ export function takeBoost(message, offer, { shiftRoll, cardFlavor, afterShift = 
 		const def = SOURCES[source];
 		if (!def || !helper) return false;
 		const used = boostsOn(message, scope);
-		if (used.some(b => b.source === source && b.by === helper.uuid)) return false;
+		if (used.some(b => b.source === source && (def.onePerRoll || b.by === helper.uuid))) return false;
 		// A Death's Door card whose tier has landed since the button was drawn: a +1 now would change nothing.
 		if (isDeathsDoorCard(message) && !deathsDoorAwaitsPlusOnes(message)) return false;
 		if (def.cost) {
@@ -541,4 +583,51 @@ export async function handleBlessingQuery(data, context = {}, deps = {}) {
 	const lightbearer = data?.lightbearerUuid ? resolve(data.lightbearerUuid) : null;
 	if (!user || !lightbearer?.testUserPermission?.(user, "OWNER") || !ownsLearnedMoveNamed(lightbearer, PIETY)) return [];
 	return holdForEach(lightbearer, data?.targetUuids, target => holdBlessing(target, scope), resolve);
+}
+
+// -- Bolster's Preparation -----------------------------------------------------------------------------
+// "Hold Preparation based on the amount of time you devote: a week or so: 1; a month or so: 2; the better
+// part of a season: 3" (Book I p.524). "Preparation lasts until it is spent, until it no longer applies or
+// makes sense, or until the PC Bolsters again" (p.525), so Bolstering SETS the hold rather than adding to it.
+// Kept on the character's "Bolster" track (MoveResources, by move name) whether or not the move is on their
+// sheet: every PC can Bolster, and the homefront moves are not put on a sheet by default.
+
+/** How much Preparation a character holds, 0..3. */
+export function preparationHeld(actor) {
+	return heldOnTrack(actor?.typedActor?.moveResources, BOLSTER, PREPARATION_MAX);
+}
+
+/** What a character's Preparation is for, as they wrote it when they Bolstered, or "". */
+export function preparationFor(actor, scope = SYSTEM_ID) {
+	return String(actor?.getFlag?.(scope, PREPARATION_FOR_FLAG) ?? "").trim();
+}
+
+/**
+ * Bolster: hold `amount` Preparation (clamped to 0..3) for `purpose`, replacing what was held before. ONE
+ * actor update, attributed to Bolster for the ledger. Whether anything was written.
+ */
+export async function holdPreparation(actor, amount, purpose = "", scope = SYSTEM_ID) {
+	const resources = actor?.typedActor?.moveResources;
+	if (actor?.type !== "character" || !resources) return false;
+	const hold = Math.min(PREPARATION_MAX, Math.max(0, Math.trunc(Number(amount) || 0)));
+	await actor.update({
+		...resources.usesUpdate(BOLSTER, hold),
+		[`flags.${scope}.${PREPARATION_FOR_FLAG}`]: String(purpose ?? "").trim(),
+	}, { stonetopMove: BOLSTER });
+	return true;
+}
+
+/** Spend 1 Preparation. Whether one was held. */
+export async function spendPreparation(actor) {
+	const held = preparationHeld(actor);
+	if (held <= 0) return false;
+	await actor.typedActor.moveResources.setUses(BOLSTER, held - 1, { stonetopMove: BOLSTER });
+	return true;
+}
+
+/** Give back the Preparation a +1 spent, for a +1 that never reached its card (see takeBoost). */
+async function refundPreparation(actor) {
+	const held = preparationHeld(actor);
+	if (held >= PREPARATION_MAX) return;
+	await actor.typedActor.moveResources.setUses(BOLSTER, held + 1, { stonetopMove: BOLSTER });
 }

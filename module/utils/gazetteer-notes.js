@@ -110,6 +110,21 @@ export function worldGazetteerEntry(journalId, index) {
 }
 
 /**
+ * Open one gazetteer entry: the world's seeded copy when there is one, the compendium's otherwise.
+ * The entry it opened, or null when neither was found, so the caller can say so in its own words.
+ * Shared by the settlement sheet's gazetteer link and the Seasons Change trade opportunity links.
+ *
+ * @param {string} journalId
+ * @param {{resolve?: (uuid: string) => Promise<object|null>}} [deps]  injectable for tests
+ */
+export async function openGazetteerEntry(journalId, { resolve = uuid => globalThis.fromUuid?.(uuid) } = {}) {
+	if (!journalId) return null;
+	const entry = worldGazetteerEntry(journalId, worldGazetteerIndex()) ?? await resolve(gazetteerUuid(journalId));
+	entry?.sheet?.render(true);
+	return entry ?? null;
+}
+
+/**
  * What this pass should write to these entries, once and never again.
  *
  * Pure, and separated from the writing so the decision can be checked without a world. Every

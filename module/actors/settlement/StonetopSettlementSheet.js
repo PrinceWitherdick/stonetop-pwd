@@ -39,7 +39,7 @@ import { sign } from "../../utils/roll-engine.js";
 import { getStonetopSteadingActor, isSteadingActor } from "../../utils/world.js";
 import { heartSlots, readRelationship, relationSummary, setRelationshipHearts } from "../../utils/relationship-hearts.js";
 import { ACTOR_LINK_MISSING, openLinkedActorSheet } from "../../utils/actor-link.js";
-import { gazetteerUuid, worldGazetteerEntry, worldGazetteerIndex } from "../../utils/gazetteer-notes.js";
+import { openGazetteerEntry } from "../../utils/gazetteer-notes.js";
 import { mountTabRail } from "../../utils/tab-rail.js";
 import { withSheetSizeMemory } from "../../utils/sheet-size.js";
 import { promptRoll } from "../../dialogs/RollDialog.js";
@@ -413,13 +413,7 @@ export function createStonetopSettlementSheetClass(Base) {
 		async _onOpenGazetteer() {
 			const journalId = this.actor.system.journalId;
 			if (!journalId) return;
-			const entry = worldGazetteerEntry(journalId, worldGazetteerIndex())
-				?? await fromUuid(gazetteerUuid(journalId));
-			if (!entry) {
-				ui.notifications?.warn?.(localize(`${KEY}.gazetteerMissing`));
-				return;
-			}
-			entry.sheet?.render(true);
+			if (!await openGazetteerEntry(journalId)) ui.notifications?.warn?.(localize(`${KEY}.gazetteerMissing`));
 		}
 
 		_onOpenActor(_event, target) {

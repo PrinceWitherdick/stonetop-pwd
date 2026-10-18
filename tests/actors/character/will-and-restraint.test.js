@@ -1,7 +1,7 @@
 // Coverage pass (2026-10-16): Iron Will ("you can take 1d4 damage (ignoring armor) to disregard its
 // influence", Book I p.138) and Unfettered ("you may mark a debility to immediately break free of that
 // restraint", p.115) were text only. Used from their posted card (StonetopCharacterSheet.js's
-// MOVE_USE_EFFECTS).
+// MOVE_USE_EFFECTS), as Bolster now is (bolster.js#openBolster).
 
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { Window } from "happy-dom";
@@ -67,10 +67,11 @@ describe("Unfettered", () => {
 	});
 });
 
-describe("their use from the posted card", () => {
+describe("their use, and Bolster's, from the posted card", () => {
 	it("are MOVE_USE_EFFECTS rows, gated on the sheet being editable", () => {
 		const sheet = readRepo("module/actors/character/StonetopCharacterSheet.js");
 		expect(sheet).toContain("[IRON_WILL]:          sheet => sheet.isEditable && ironWill(sheet.actor),");
 		expect(sheet).toContain("[UNFETTERED]:         sheet => sheet.isEditable && unfettered(sheet.actor),");
+		expect(sheet).toContain("[BOLSTER]:            sheet => sheet.isEditable && openBolster(sheet.actor),");
 	});
 });

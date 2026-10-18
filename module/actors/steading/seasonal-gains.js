@@ -1,4 +1,6 @@
-import { sign } from "../../utils/strings.js";
+import { escHtml, sign } from "../../utils/strings.js";
+import { openGazetteerEntry } from "../../utils/gazetteer-notes.js";
+import { BOOK_SETTLEMENT_STATS, settlementTemplate } from "../../data/settlement-stats.js";
 
 // ── The seasonal gains, applied ───────────────────────────────────────────────
 // Five gains a Seasons Change can hand out (Book I p.518), and three of them change the sheet:
@@ -75,4 +77,59 @@ export async function applySeasonalGains(steading, keys, { year, seasonId, also 
 		{ stonetopMove: SEASONAL_GAINS_MOVE });
 	for (const notice of [...gains.notices, ...(also.notices ?? [])]) globalThis.ui?.notifications?.info?.(notice);
 	return gains;
+}
+
+// ── "Trade opportunity": the neighbours' lists ────────────────────────────────
+// "If they pick a trade opportunity ... pick a community you'd like to feature (Barrier Pass, the Hillfolk,
+// etc.), look up their entry in Book II, and pick one of the listed Trade Opportunities for that group"
+// (Book I p.519). These are the gazetteer entries that print a "Trade opportunities" list, by their id in the
+// merged journal pack: the world's seeded copy opens when there is one, the compendium's otherwise.
+
+/**
+ * The communities whose Book II entry lists Trade Opportunities, in the order a GM would look. Each id is
+ * the one the settlement tables (data/settlement-stats.js) already carry for that place's gazetteer
+ * link: the named places' stat blocks, and for the Hillfolk and the Manmarch the typical band / hamlet
+ * the same entry prints.
+ */
+export const TRADE_OPPORTUNITY_SOURCES = Object.freeze([
+	{ name: "Marshedge",         journalId: BOOK_SETTLEMENT_STATS["marshedge"].journalId },
+	{ name: "Gordin's Delve",    journalId: BOOK_SETTLEMENT_STATS["gordins-delve"].journalId },
+	{ name: "Barrier Pass",      journalId: BOOK_SETTLEMENT_STATS["barrier-pass"].journalId },
+	{ name: "The Hillfolk",      journalId: settlementTemplate("hillfolk-band").journalId },
+	{ name: "North Manmarch",    journalId: settlementTemplate("manmarch-hamlet").journalId },
+	{ name: "Lygos & the South", journalId: BOOK_SETTLEMENT_STATS["lygos"].journalId },
+	// The Fae are no settlement, so neither table has them: their entry in stonetop-lore/factions.
+	{ name: "The Fae",           journalId: "Ej5WiMs30baKNXW3" },
+]);
+
+/** The links under the "Trade opportunity" gain: one button per community. PURE. */
+export function tradeOpportunityLinksHtml() {
+	return `<div class="stonetop-season-trade-links">
+		<span class="stonetop-season-gains-hint">Pick one of a community's listed Trade Opportunities (Book II):</span>
+		${TRADE_OPPORTUNITY_SOURCES.map(s => `<button type="button" class="stonetop-season-trade-link" data-action="open-trade-opportunities" data-journal-id="${escHtml(s.journalId)}">
+			<i class="fas fa-book-open" aria-hidden="true"></i> ${escHtml(s.name)}
+		</button>`).join("")}
+	</div>`;
+}
+
+/**
+ * Open one community's gazetteer entry, where its Trade Opportunities are listed. Whether it was found.
+ * @param {string} journalId
+ * @param {{resolve?: (uuid: string) => Promise<object|null>}} [deps]
+ */
+export async function openTradeOpportunities(journalId, deps = {}) {
+	if (await openGazetteerEntry(journalId, deps)) return true;
+	globalThis.ui?.notifications?.warn?.("That community's entry could not be found in the journals.");
+	return false;
+}
+
+/** Wire the links (the Seasons Change window's render). */
+export function wireTradeOpportunityLinks(root, deps = {}) {
+	for (const btn of root?.querySelectorAll?.("[data-action='open-trade-opportunities']") ?? []) {
+		btn.addEventListener("click", ev => {
+			ev?.preventDefault?.();
+			openTradeOpportunities(btn.dataset.journalId, deps)
+				.catch(err => console.error("Stonetop | could not open a community's Trade Opportunities", err));
+		});
+	}
 }
