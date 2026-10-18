@@ -7,6 +7,7 @@ import { hazardPageById, hazardsEntryId } from "../hazards/hazard-store.js";
 import { sitePageById, sitesEntryId } from "../sites/site-store.js";
 import { buildThreatCardVM } from "../threats/threat-view.js";
 import { buildHazardCardVM } from "../hazards/hazard-view.js";
+import { wireHazardDamage } from "../hazards/hazard-damage.js";
 import { buildSiteCardVM, wireSiteTableRoll } from "../sites/site-view.js";
 import { STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
 import { SYSTEM_ID } from "../system-id.js";
@@ -79,6 +80,8 @@ const GM_PREP_KINDS = {
 		pageById: hazardPageById, entryId: hazardsEntryId, noun: "Hazard",
 		cardTemplate: `${CARD_PARTIALS}/hazard-card.hbs`, cardVM: buildHazardCardVM,
 		pinIcon: THREAT_PIN_ICON_SUFFIX,
+		// The GM's Roll damage and Certain death on the damage line (Book I p.383).
+		wireCard: wireHazardDamage,
 	},
 	site: {
 		pageById: sitePageById, entryId: sitesEntryId, noun: "Site",

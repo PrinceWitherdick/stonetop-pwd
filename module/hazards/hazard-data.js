@@ -88,8 +88,19 @@ export function onePiercingTag(tags = []) {
 export function formatHazardDamage({ die = "", bonus = 0, tags = [], certainDeath = false } = {}) {
 	if (certainDeath) return "certain death (no damage roll; straight to Death's Door)";
 	if (!die) return "";
-	const b = Number(bonus) || 0;
-	const formula = `1${die}${b > 0 ? `+${b}` : b < 0 ? `${b}` : ""}`;
-	const clean = onePiercingTag(tags.map(t => String(t).trim()).filter(Boolean));
+	const formula = hazardFormula(die, bonus);
+	const clean = cleanHazardTags(tags);
 	return clean.length ? `${formula} (${clean.join(", ")})` : formula;
+}
+
+/** The die with its flat bonus, as Foundry rolls it and the book prints it: "1d10+2". "" with no die. */
+export function hazardFormula(die = "", bonus = 0) {
+	if (!die) return "";
+	const b = Number(bonus) || 0;
+	return `1${die}${b > 0 ? `+${b}` : b < 0 ? `${b}` : ""}`;
+}
+
+/** A hazard's tags trimmed, blanks dropped, and at most one piercing (onePiercingTag). */
+export function cleanHazardTags(tags = []) {
+	return onePiercingTag(tags.map(t => String(t).trim()).filter(Boolean));
 }

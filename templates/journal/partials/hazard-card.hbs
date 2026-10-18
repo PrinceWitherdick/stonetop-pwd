@@ -14,6 +14,19 @@
 	{{#if hasDamage}}
 	<p class="hazard-damage{{#if certainDeath}} hazard-damage--certain{{/if}}">
 		<span class="threat-label">Damage</span><strong>{{damage}}</strong>
+		{{!-- GM only (buildHazardCardVM): wired by hazards/hazard-damage.js#wireHazardDamage. --}}
+		{{#if canRollDamage}}
+		<button type="button" class="hazard-damage-btn hazard-damage-roll"
+		        data-tooltip="{{localize "stonetop.hazards.damage.rollTip"}}" data-tooltip-direction="UP">
+			<i class="fas fa-dice-d20" aria-hidden="true"></i> {{localize "stonetop.hazards.damage.roll"}}
+		</button>
+		{{/if}}
+		{{#if canCertainDeath}}
+		<button type="button" class="hazard-damage-btn hazard-certain-death"
+		        data-tooltip="{{localize "stonetop.hazards.damage.certainDeathTip"}}" data-tooltip-direction="UP">
+			<i class="fas fa-skull" aria-hidden="true"></i> {{localize "stonetop.hazards.damage.certainDeath"}}
+		</button>
+		{{/if}}
 	</p>
 	{{/if}}
 

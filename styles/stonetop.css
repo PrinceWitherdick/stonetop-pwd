@@ -37104,6 +37104,23 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	color: var(--tc-ink);
 }
 .stonetop .hazard-damage--certain strong { color: var(--st-on-dark-danger, #6e3b3b); }
+/* The GM's Roll damage / Certain death beside the line (hazards/hazard-damage.js). Skinned like a
+   site's table roll: a quiet outline in the card's accent, sized to its text, not core's full width. */
+.stonetop .hazard-damage-btn {
+	width: auto;
+	height: auto;
+	margin: 0 0 0 0.4rem;
+	padding: 0.1rem 0.4rem;
+	border: 1px solid color-mix(in srgb, var(--threat-accent, var(--tc-ink-soft)) 45%, transparent);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--tc-ink-soft);
+	font-size: 0.82rem;
+	line-height: 1.2;
+	vertical-align: baseline;
+	cursor: pointer;
+}
+.stonetop .hazard-damage-btn:hover { color: var(--threat-accent); border-color: var(--threat-accent); }
 .stonetop .hazard-advance {
 	margin: 0.45rem 0 0.15rem;
 	font-family: "IM Fell English", var(--font-stonetop);

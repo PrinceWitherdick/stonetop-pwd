@@ -3375,6 +3375,33 @@
         "marks": "Mark"
       }
     },
+    "hazards": {
+      "damage": {
+        "roll": "Roll damage",
+        "rollTip": "Roll this hazard's damage onto a damage card, for whoever you have targeted or pick next. Ignores armor, piercing and +2 ride the roll; you say whether it caught them off-guard or they took precautions (Book I p.383).",
+        "certainDeath": "Certain death",
+        "certainDeathTip": "This would definitely kill a normal person: no damage roll, whoever it catches is reduced to 0 HP and rolls Death's Door (Book I p.383).",
+        "offGuard": {
+          "label": "It caught them off-guard: roll with advantage (Book I p.383)",
+          "pill": "Off-guard"
+        },
+        "precautions": {
+          "label": "They knew or suspected, and took precautions: roll with disadvantage (Book I p.383)",
+          "pill": "Precautions taken"
+        },
+        "pickTitle": "Who does {name} catch?",
+        "pickHint": "Tick everyone it catches. You can also target their tokens before pressing the button.",
+        "pickRoll": "Roll damage",
+        "pickRollMany": "Roll damage against {count}",
+        "pickDeath": "Reduce to 0 HP",
+        "pickDeathMany": "Reduce {count} to 0 HP",
+        "deathTitle": "{name}: certain death",
+        "deathLine": "{name}: {from} → 0 HP, no damage roll (certain death, Book I p.383).",
+        "alreadyDown": "{name} is already at 0 HP.",
+        "noHp": "{name} has no HP to lose.",
+        "noOne": "There is nobody for {name} to catch: no one is targeted, and there are no characters or tokens to pick from."
+      }
+    },
     "sites": {
       "visit": {
         "button": "Mark visited",

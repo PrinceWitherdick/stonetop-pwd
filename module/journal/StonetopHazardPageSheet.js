@@ -7,6 +7,7 @@
 import { buildHazardCardVM } from "../hazards/hazard-view.js";
 import { CreateHazardDialog } from "../hazards/create-hazard-dialog.js";
 import { createStonetopGmPrepPageSheetClass } from "./gm-prep-page-sheet.js";
+import { gmPrepCardWiring } from "./gm-prep-page.js";
 
 export function createStonetopHazardPageSheetClass(Base) {
 	return createStonetopGmPrepPageSheetClass(Base, {
@@ -14,5 +15,8 @@ export function createStonetopHazardPageSheetClass(Base) {
 		buildCardVM: buildHazardCardVM,
 		editSelector: ".hazard-edit-start",
 		openEditor: (document) => new CreateHazardDialog({ page: document }).promise(),
+		// The damage line's Roll damage / Certain death (Book I p.383), from the same per-kind table the
+		// GM Toolkit and the canvas board wire from, as the site sheet does its table rolls.
+		wireExtras: (root, page) => gmPrepCardWiring("hazard")?.(root, () => page),
 	});
 }

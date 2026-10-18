@@ -1019,7 +1019,7 @@ function damageLabel(move, weapon) {
  *
  * `parry` marks a strike back as the one a Parry & Riposte bought (fight/hero-moves.js#blowOffers).
  */
-async function askDamageAdjustment(actor, { moveKey = "", weapon, extraDice = "", shiftKey = false, seed = null, formula = "", rollMode: noted = "", offers = null, defenders = null, attacker = "", targets = [], strikeBack = false, parry = false, attackAt = Date.now(), commit = null } = {}) {
+async function askDamageAdjustment(actor, { moveKey = "", weapon, extraDice = "", shiftKey = false, seed = null, formula = "", rollMode: noted = "", offers = null, defenders = null, attacker = "", targets = [], strikeBack = false, parry = false, attackAt = Date.now(), commit = null, ask = undefined } = {}) {
 	// A stat block's blow brings its own die and its own "w/disadvantage" (rollDamageAt); an attack
 	// move works both out from the character.
 	const base     = formula || await damageFormula(actor, weapon, extraDice);
@@ -1041,7 +1041,9 @@ async function askDamageAdjustment(actor, { moveKey = "", weapon, extraDice = ""
 		...defenderLines(known.offered),
 	];
 	// `attacker` names a follower swinging from their character's sheet (rollFollowerDamageAt).
-	const adjust   = await promptDamage({ attacker: attacker || actor?.name, formula: base, shiftKey, ...(rollMode ? { rollMode } : {}), seed, offers: lines });
+	// `ask` opens the window whatever the client setting says, for a roll whose lines are judgements the
+	// table owes every time (a hazard's off-guard or precautions, rollHazardDamage). Shift still skips it.
+	const adjust   = await promptDamage({ attacker: attacker || actor?.name, formula: base, shiftKey, ...(rollMode ? { rollMode } : {}), seed, offers: lines, ...(ask === undefined ? {} : { ask }) });
 	if (!adjust) return null;
 	// What the ticked lines cost and what they add beyond dice: a Resolve off the track, a tag on the blow.
 	const taken    = takenOffers(lines, adjust);
@@ -1569,7 +1571,11 @@ export function tagNoticesHtml(weapon) {
 // no-target Clash needed a whole extra branch here just to have somewhere to put that button.
 // The tier fires the counter itself now, straight after this returns (resolveAttackTier), and it
 // comes back through this same function as a damage card of its own (postIncomingDamage).
-async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignoresArmor = false, selfHarm = false, foeUuid = "", shots = true, groupBlow = false, followerBlow = false, own = true, spillsBlood = own, fx = null, counterOf = "" }) {
+//
+// A HAZARD'S BLOW (rollHazardDamage) has no actor behind it: `speaker` names the card instead, and the
+// results card is posted even with nobody to hit, since the plain card speaks for an actor. `byFoe: false`
+// says nobody struck it, so Undaunted's "+1 armor" against a foe is off unless the table ticks it.
+async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignoresArmor = false, selfHarm = false, foeUuid = "", shots = true, groupBlow = false, followerBlow = false, own = true, spillsBlood = own, fx = null, counterOf = "", speaker = null, byFoe = true }) {
 	// What the blow is swung WITH, for the animation (combat/attack-fx.js), taken before the lines
 	// below lay armor and fiction tags over it: those change what Apply does, not what a spear is.
 	const struckWith = weapon;
@@ -1609,24 +1615,28 @@ async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignores
 	const notices = tagNoticesHtml(weapon);
 
 	let results = [];
-	if (applyable.length === 0) {
+	if (applyable.length === 0 && !speaker) {
 		const roll = await rollDamage(base, actor, { label: damageLabel(move, weapon), rollMode, bonus, extraDice, seed, notices,
 			...(followerBlow ? { messageFlags: { [SCOPE]: { followerBlow: true } } } : {}) });
 		// The number the card shows, which never goes below 0 (a group's -N can take a d4 under it).
 		results = [{ raw: Math.max(0, roll.total), formula: roll.formula, faces: multiDieFaces(roll) }];
 	} else {
 		// One damage roll per target — independent, so evaluate them concurrently; they're
-		// aggregated into a single results card, and mapping by index preserves order.
-		const rolls   = await Promise.all(applyable.map(() => new Roll(formula).evaluate()));
-		results = applyable.map((t, i) => ({
-			uuid: t.uuid, name: t.name, actorId: t.actorId, disposition: t.disposition,
-			raw: rolls[i].total, formula: rolls[i].formula, faces: multiDieFaces(rolls[i]),
-			...undauntedStamp(t.uuid),
-		}));
+		// aggregated into a single results card, and mapping by index preserves order. Nobody to hit (a
+		// hazard's, see above) rolls once, for the number alone.
+		const rolls   = await Promise.all((applyable.length ? applyable : [null]).map(() => new Roll(formula).evaluate()));
+		results = applyable.length
+			? applyable.map((t, i) => ({
+				uuid: t.uuid, name: t.name, actorId: t.actorId, disposition: t.disposition,
+				raw: rolls[i].total, formula: rolls[i].formula, faces: multiDieFaces(rolls[i]),
+				...stampFor(t.uuid, byFoe),
+			}))
+			: [{ raw: Math.max(0, rolls[0].total), formula: rolls[0].formula, faces: multiDieFaces(rolls[0]) }];
 		// Whether the roller strikes as a group, as the fight stands NOW: Apply may come after the fight has
 		// ended or moved on, and a group's blow must not turn into a lone one then (fight/group-hits.js).
-		const attackerGroup = selfHarm ? null : attackerIsGroup(actor, resolveSync(applyable[0].uuid)?.parent ?? globalThis.canvas?.scene ?? null);
-		await postDamageResultsCard(actor, { move, weapon, ownPiercing, results, damage, selfHarm, notices, foeUuid, groupBlow, followerBlow, attackerGroup, counterOf });
+		// Nobody strikes a hazard's blow, so it says nothing either way.
+		const attackerGroup = selfHarm || !actor || !applyable.length ? null : attackerIsGroup(actor, resolveSync(applyable[0].uuid)?.parent ?? globalThis.canvas?.scene ?? null);
+		await postDamageResultsCard(actor, { move, weapon, ownPiercing, results, damage, selfHarm, notices, foeUuid, groupBlow, followerBlow, attackerGroup, counterOf, speaker });
 		// The blow on the map, as its card lands. `fx` is the caller saying this was a weapon's blow at
 		// all: a move's own number (rollOptionDamage, rollMoveDamageAt) passes none and draws nothing.
 		// Never awaited, and it cannot throw: everything before it is already spent.
@@ -1831,6 +1841,66 @@ export async function rollInvocationDamage(actor, { move, formula, offers = [], 
 }
 
 /**
+ * The two lines p.383 puts on a hazard's damage roll, as the damage window's offers: advantage when the
+ * hazard catches them off-guard, disadvantage when they knew (or suspected) it was there and took
+ * precautions. BOTH UNTICKED: which one holds, if either, is the fiction's call and so the GM's.
+ */
+function hazardModeLines() {
+	return [
+		{ key: "hazardOffGuard", mode: "adv", applied: false,
+			label: localize("stonetop.hazards.damage.offGuard.label"), pill: localize("stonetop.hazards.damage.offGuard.pill") },
+		{ key: "hazardPrecautions", mode: "dis", applied: false,
+			label: localize("stonetop.hazards.damage.precautions.label"), pill: localize("stonetop.hazards.damage.precautions.pill") },
+	];
+}
+
+/**
+ * A HAZARD's damage (Book I, Dangers p.383), rolled onto the shared damage card.
+ *
+ * The hazard's line is the book's worksheet: a die for the worst outcome to a normal person, "+2" if it
+ * is big, vicious or scary, and its tags (ignores armor, N piercing, messy, forceful). Those ride a
+ * NAMELESS WEAPON, as an option's do (rollOptionDamage), because that record is what Apply reads armor
+ * and piercing off and what the card's fine print and fiction notes read their tags off. So the card,
+ * the Apply button, a Defend spent on it and armor are all the ones every other blow already uses.
+ *
+ * THE DAMAGE WINDOW IS ALWAYS ASKED (Shift skips it), whatever the client setting says, because p.383
+ * puts a judgement on every hazard roll: advantage if it caught them off-guard, disadvantage if they took
+ * precautions. Those are its two unticked lines; the moves the people being hit carry (Never Gonna Keep
+ * Me Down's "any damage you take", Uncanny Reflexes) are folded in as they are for any blow.
+ *
+ * NOBODY STRIKES: the card carries no attacker, so no Payback, no kill tally and no strike back.
+ *
+ * @param {object} hazard
+ * @param {string} hazard.name        the hazard's name, the card's title and speaker
+ * @param {string} hazard.formula     "1d10+2"
+ * @param {boolean} [hazard.ignoresArmor]
+ * @param {number} [hazard.piercing]
+ * @param {string[]} [hazard.tags]    the hazard's whole tag list, as its card line prints it
+ * @param {object} [options]
+ * @param {object[]} [options.targets] who it hits (snapshotTargets' shape); none rolls the number alone
+ * @param {boolean} [options.shiftKey] skip the damage window
+ * @returns {Promise<object[]|null>}  the rolled totals, or null when there was nothing to roll or the window was cancelled
+ */
+export async function rollHazardDamage({ name = "", formula = "", ignoresArmor = false, piercing = 0, tags = [] } = {}, { targets = [], shiftKey = false } = {}) {
+	if (!formula) return null;
+	const weapon = { name: "", range: [], piercing, ignoresArmor, tags, keywords: tags.join(", ") };
+	const applyable = (targets ?? []).filter(t => t.hasActor !== false && t.uuid);
+	const defenders = await defenderModes(applyable);
+	// The window every blow asks through, with no actor behind it: `attacker` names the hazard and keeps
+	// every roller's own line (Dangerous, Focus Fire, a playbook's offers) out of it.
+	const damage = await askDamageAdjustment(null, {
+		formula, rollMode: "normal", seed: null, attacker: name, targets: applyable, defenders, shiftKey, ask: true,
+		offers: [...hazardModeLines(), ...defenderLines(defenders.offered)],
+	});
+	if (!damage) return null;
+	// Nobody's own blow and no shot at anyone: the hazard speaks the card under its own name, and strikes
+	// nobody's foe (rollAndPostDamage).
+	return rollAndPostDamage(null, {
+		move: name, weapon, targets: applyable, damage, own: false, shots: false, speaker: { alias: name }, byFoe: false,
+	});
+}
+
+/**
  * The acting character as a target of their own option.
  *
  * The ACTOR uuid, not a token's: a self-harming option is picked on a card, which may well be
@@ -1841,7 +1911,7 @@ export async function rollInvocationDamage(actor, { move, formula, offers = [], 
  * warning that you are about to hurt an ally by mistake, and this is the one damage row where
  * hurting the person named on it is the entire point.
  */
-function selfTarget(actor) {
+export function selfTarget(actor) {
 	return { uuid: actor.uuid, name: actor.name, actorId: actor.id, disposition: 0, hasActor: true };
 }
 
@@ -2001,6 +2071,16 @@ function undauntedStamp(uuid) {
 }
 
 /**
+ * undauntedStamp for a blow struck `byFoe` or not. Undaunted's +1 armor is against a foe, and a hazard is none
+ * (rollHazardDamage): on a character who has the move it is off unless the table ticks it, however the fight
+ * around them stands.
+ */
+function stampFor(uuid, byFoe) {
+	const stamp = undauntedStamp(uuid);
+	return byFoe || !("undaunted" in stamp) ? stamp : { undaunted: false };
+}
+
+/**
  * The rows a damage card's flag lists under `key`, as a Set: `armorOff`, whose conditional armor has been
  * ticked off (wireConditionalArmor); `unstoppableOff`, whose Unstoppable mark has been ticked off
  * (wireUnstoppableMark); `undauntedArmor`, whose Undaunted +1 armor the table has ticked ON (UNDAUNTED_ARMOR_BOX);
@@ -2046,7 +2126,7 @@ function appendRowBox(message, actions, { row, standIn, target, several, gate, d
 	});
 }
 
-function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, damage, selfHarm = false, notices = "", foeUuid = "", groupBlow = false, followerBlow = false, attackerGroup = null, counterOf = "" }) {
+function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, damage, selfHarm = false, notices = "", foeUuid = "", groupBlow = false, followerBlow = false, attackerGroup = null, counterOf = "", speaker = null }) {
 	// Several targets is the book's own rule now that the roller is asked who a blow hits
 	// (fight/fight-targets.js), so the note says when it applies rather than calling it an abstraction.
 	const multiWarn = results.length > 1 && !weapon?.area
@@ -2121,10 +2201,12 @@ function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, dama
 	// THE ROLLER'S CHAT MODE, as the no-target card (roll-engine.js#rollDamage) and the blow's animation
 	// (chatModeIsPublic) already honour it: a GM's blind or private damage roll stays theirs.
 	return ChatMessage.create(whisperedAs({
-		speaker: ChatMessage.getSpeaker({ actor }),
+		// A hazard has no actor to speak for it (rollHazardDamage): it names itself, and strikes as nobody.
+		speaker: speaker ?? ChatMessage.getSpeaker({ actor }),
 		content: stonetopChatCard(`${move}: damage`, body, "stonetop-attack-damage-card", damageBadge()),
 		flags: { [SCOPE]: { damage: {
-			move, attackerUuid: actor.uuid,
+			// No attacker for a hazard: nobody to strike back at, credit a kill to, or remember for Payback.
+			move, attackerUuid: actor?.uuid ?? "",
 			weapon: weapon ? { name: weapon.name, piercing: ownPiercing, ignoresArmor: weapon.ignoresArmor } : null,
 			// `applied` is an ARRAY, not a uuid-keyed object: a token uuid ("Scene.x.Token.y")
 			// used as a flag key would be dot-expanded into nested objects by setFlag, breaking

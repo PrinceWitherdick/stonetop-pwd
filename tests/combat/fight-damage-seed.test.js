@@ -191,12 +191,15 @@ describe("an attack's own damage windows", () => {
 		// An Invocation's own damage (Go Back to the Shadow, rollInvocationDamage) is the Invocation's
 		// number, not a blow anyone is piling on to.
 		const invocation = calls.filter(call => call.includes('rollMode: "normal", seed: null, offers'));
-		const aimed = calls.filter(call => !strikeBack.includes(call) && !unaimed.includes(call) && !invocation.includes(call));
-		expect(calls).toHaveLength(6);
+		// A hazard's damage (rollHazardDamage, Book I p.383) is nobody's blow at all: no actor, no pile-on.
+		const hazard = calls.filter(call => call.includes("askDamageAdjustment(null,") && call.includes("seed: null"));
+		const aimed = calls.filter(call => !strikeBack.includes(call) && !unaimed.includes(call) && !invocation.includes(call) && !hazard.includes(call));
+		expect(calls).toHaveLength(7);
 		expect(src).toContain("seeded = seeded && !striker;");
 		expect(strikeBack).toHaveLength(1);
 		expect(unaimed).toHaveLength(1);
 		expect(invocation).toHaveLength(1);
+		expect(hazard).toHaveLength(1);
 		expect(aimed).toHaveLength(3);
 		for (const call of aimed) expect(call).toContain("seedForTargets(actor, targets)");
 	});
