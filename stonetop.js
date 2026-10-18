@@ -130,6 +130,7 @@ import { makeDialogsResizable, enableAutoHeightVerticalResize } from "./module/u
 import { registerStonetopWindowTheme, registerStonetopLightTheme } from "./module/utils/window-theme.js";
 import { registerUserConfigCharacterFilter } from "./module/hooks/user-config-characters.js";
 import { registerAssignToPlayer } from "./module/hooks/assign-to-player.js";
+import { registerCampaignActorMenu } from "./module/campaign/campaign-actor-menu.js";
 import { installWindowRestore } from "./module/utils/window-restore.js";
 import { registerUuidRedirects } from "./module/migration/compat.js";
 import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
@@ -265,6 +266,8 @@ Hooks.once("init", () => {
 	// an NPC does it from the actor's right-click menu instead (Assign to Player…).
 	registerUserConfigCharacterFilter();
 	registerAssignToPlayer();
+	// Retire a PC, a PC or follower become a threat, and back into play (Book I p.584; module/campaign/).
+	registerCampaignActorMenu();
 
 	// Track open document sheets + their geometry and reopen them at the same spot on
 	// the next reload (per-client; toggled by the "Restore Open Windows on Reload"

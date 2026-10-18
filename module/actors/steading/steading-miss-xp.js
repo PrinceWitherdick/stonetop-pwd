@@ -19,7 +19,7 @@ import { inCardTurn } from "../../utils/card-queue.js";
 import { cardCountedTier, ROLLED_FLAG } from "../../utils/counted-tier.js";
 import { MISS_XP_ACTOR_FLAG } from "../../utils/undo-xp-mark.js";
 import { canUserWriteCard } from "../../utils/chat.js";
-import { getPlayerCharacters } from "../../utils/playbook-actors.js";
+import { charactersInPlay } from "../../utils/characters-in-play.js";
 import { isOutOfPlay } from "../character/deaths-door-actor.js";
 import { pickPersonOnMap } from "../../dialogs/RelationshipLinkDialog.js";
 import { addTierActions, wireChooseThenWrite } from "./steading-card-actions.js";
@@ -62,7 +62,7 @@ export function defaultSteadingXpActor(user) {
  * the player's own picked to start with. Null when closed or there is nobody to name.
  */
 export async function pickSteadingXpActor(user, pick = pickPersonOnMap) {
-	const people = getPlayerCharacters().filter(actor => !isOutOfPlay(actor));
+	const people = charactersInPlay();
 	if (!people.length) {
 		globalThis.ui?.notifications?.warn?.(localize(`${KEY}.nobody`));
 		return null;

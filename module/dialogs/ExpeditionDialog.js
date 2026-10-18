@@ -44,10 +44,10 @@ import { settleSteadingRoll } from "../actors/steading/steading-roll.js";
 import { requisitionMissCostAction } from "../actors/steading/steading-card-actions.js";
 import { worldLogisticsNames } from "../actors/character/logistics.js";
 import { assetTakenLabel } from "../utils/requisition-asset.js";
-import { getPlayerCharacters } from "../utils/playbook-actors.js";
+import { charactersInPlay } from "../utils/characters-in-play.js";
 // Who on the roster is past the Door: the dead don't outfit, and the three who came back set
 // out wearing the name of whatever brought them back.
-import { actorPastDeathKind, isOutOfPlay } from "../actors/character/deaths-door-actor.js";
+import { actorPastDeathKind } from "../actors/character/deaths-door-actor.js";
 import { deriveLoadLevel, LOAD_LEVEL_LIMITS } from "../utils/load.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { renderTemplate } from "../utils/foundry-compat.js";
@@ -3548,8 +3548,7 @@ export class ExpeditionDialog extends StepperDialog {
 		// the same two flags off the same actor a moment later.
 		// Who has left play is asked on its own (isOutOfPlay): the kind lets an insert win, so a Ghost lost
 		// to the Final Consequence read "ghost" there and was still offered a place on the trip.
-		const pcs = getPlayerCharacters()
-			.filter(actor => !isOutOfPlay(actor))
+		const pcs = charactersInPlay()
 			.map(actor => ({ actor, undeadKind: actorPastDeathKind(actor) }));
 		if (!pcs.length) return { chips: [], hasRows: false, rows: [], summary: null };
 

@@ -37567,6 +37567,34 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	.stonetop .create-threat .ct-suggested-list { flex-direction: column; }
 }
 
+/* --- retiring a PC, and a PC or follower become a threat (Book I p.584) --------- */
+.stonetop .retire-character,
+.stonetop .become-threat {
+	display: flex;
+	flex-direction: column;
+	gap: 0.7rem;
+	padding: 0.4rem;
+	font-family: var(--font-stonetop);
+}
+.stonetop .retire-character p,
+.stonetop .become-threat p { margin: 0; }
+.stonetop .retire-character .retire-intro,
+.stonetop .retire-character .retire-hint,
+.stonetop .become-threat .bt-intro,
+.stonetop .become-threat .bt-hint { font-size: var(--st-fs-sm); color: var(--st-text-secondary); }
+.stonetop .retire-character .retire-hows { display: flex; flex-direction: column; gap: 0.3rem; margin: 0; border: none; padding: 0; }
+.stonetop .retire-character .retire-label,
+.stonetop .become-threat .bt-label { font-weight: 700; }
+.stonetop .retire-character .retire-field,
+.stonetop .become-threat .bt-field { display: flex; flex-direction: column; gap: 0.25rem; }
+.stonetop .retire-character .retire-check,
+.stonetop .become-threat .bt-check { display: flex; align-items: flex-start; gap: 0.4rem; }
+.stonetop .retire-character .retire-epilogue { width: 100%; min-height: 7em; resize: vertical; }
+.stonetop .retire-character .retire-footer,
+.stonetop .become-threat .bt-footer { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.stonetop .retire-character .retire-footer button,
+.stonetop .become-threat .bt-footer button { width: auto; flex: 0 0 auto; }
+.stonetop .stonetop-levelup-away { color: var(--st-danger-ink); }
 /* --- guided "make a monster" worksheet (left-rail tabbed sheet) -------------- */
 .stonetop-create-monster-dialog.window-app { max-height: 92vh; }
 /* Full-bleed flex column: the rail + section split fills the space above a pinned

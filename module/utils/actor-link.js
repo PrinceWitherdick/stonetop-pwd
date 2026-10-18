@@ -13,6 +13,8 @@
  * being remembered separately at each call site.
  */
 
+import { escHtml } from "./strings.js";
+
 /** i18n keys for the "that person is gone" warning, by what the row lists. */
 export const ACTOR_LINK_MISSING = {
 	character: "stonetop.actorLink.gone",
@@ -49,4 +51,19 @@ export async function withLinkedActor(link, use, missing = ACTOR_LINK_MISSING.ch
 /** The common case: open the linked actor's sheet. */
 export function openLinkedActorSheet(link, missing = ACTOR_LINK_MISSING.character) {
 	return withLinkedActor(link, actor => actor.sheet?.render(true), missing);
+}
+
+/**
+ * An actor as journal text: a content link to it by uuid (`@UUID[...]{name}`, enriched where it is shown), or its
+ * name, escaped, when it has no uuid. For the notes and pages that say who someone once was (a retired PC's NPC,
+ * the threat a PC or follower became). PURE.
+ *
+ * The label is escaped too: the enricher reads it from the page's text, so a name with `<` in it would otherwise be
+ * markup. A name with a `}` in it can't be a label at all (the label ends at the first one), so that link goes
+ * without one and the enricher shows the actor's own name.
+ */
+export function actorLinkHtml(actor) {
+	const name = actor?.name ?? "";
+	if (!actor?.uuid) return escHtml(name);
+	return name && !name.includes("}") ? `@UUID[${actor.uuid}]{${escHtml(name)}}` : `@UUID[${actor.uuid}]`;
 }

@@ -19,9 +19,8 @@
 import { getSetting, setWorldSetting } from "../settings.js";
 import { currentExpedition, ensureCurrent, expeditionLabel, normalizeLog } from "../utils/expedition-log-core.js";
 import { findOpenApp } from "../utils/open-windows.js";
-import { getPlayerCharacters } from "../utils/playbook-actors.js";
+import { charactersInPlay } from "../utils/characters-in-play.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
-import { isOutOfPlay } from "../actors/character/deaths-door-actor.js";
 import { recordOnTracks, timelineNow } from "./timeline-record.js";
 import { expeditionMilestone, expeditionParty, tripBoundToName } from "./timeline-expedition.js";
 
@@ -86,7 +85,7 @@ export async function recordTrip({ triumphant = false, store = null, homeOnly = 
 	if (!store.newTrip && !currentExpedition(current)) return false;
 	const { log, entry: trip } = ensureCurrent(current, store.newTrip);
 	if (triumphant) trip.returnedTriumphant = true;
-	const party = expeditionParty(trip, getPlayerCharacters().filter(pc => !isOutOfPlay(pc)));
+	const party = expeditionParty(trip, charactersInPlay());
 	const milestone = expeditionMilestone({
 		tripId:     trip.id,
 		label:      expeditionLabel(trip, log.list.findIndex(e => e.id === trip.id)),

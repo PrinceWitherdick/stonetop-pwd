@@ -21,6 +21,7 @@ import { escHtml } from "../../utils/strings.js";
 import { STONETOP_SCOPE } from "./StonetopFlags.js";
 import { isMidCreation, progressFor } from "./onboarding-progress.js";
 import { isOutOfPlaySafe } from "./deaths-door-actor.js";
+import { hasLeftPlay } from "../../campaign/left-play.js";
 
 /**
  * Create a character, hand it to a player, and greet them with character creation.
@@ -172,7 +173,8 @@ function _askAboutExisting(user, existing, { canReplace = true, isSelf = false }
 			return ` (${escHtml(progressFor(a).text)}): still being created, so everything answered ` +
 				`so far goes with it${closesOn}`;
 		}
-		return isOutOfPlaySafe(a) ? " (dead)" : "";
+		if (!isOutOfPlaySafe(a)) return "";
+		return hasLeftPlay(a) ? " (out of play)" : " (dead)";
 	};
 	// One box per character. The living start ticked, the dead unticked (see createCharacterForUser).
 	const rows = existing.map(a =>

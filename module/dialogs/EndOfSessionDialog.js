@@ -38,8 +38,9 @@ export function playedByActivePlayer(actor, users = allUsers()) {
 }
 
 /**
- * Every player character, and whether it starts ticked: one an active player plays, and not dead. A
- * dead character (deaths-door-actor.js#isOutOfPlay) starts unticked whoever plays it.
+ * Every player character, and whether it starts ticked: one an active player plays, and still in play.
+ * One dead, retired, gone or turned threat (deaths-door-actor.js#isOutOfPlay) starts unticked whoever
+ * plays it; `dead` is that, and the template labels it "out of play".
  */
 export function endOfSessionRoster(users = allUsers()) {
 	return getPlayerCharacters().map(actor => {

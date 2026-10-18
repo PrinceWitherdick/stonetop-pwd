@@ -1,5 +1,6 @@
 import { describe, expect, it, afterEach } from "vitest";
 import { playbookSlug, getPlayerCharacters, playbookIconPath, hasOwnRingArt, playbookTitle, characterFullName } from "../../module/utils/playbook-actors.js";
+import { charactersInPlay } from "../../module/utils/characters-in-play.js";
 import { WBH_HERO_FLAG } from "../../module/actors/character/WouldBeHeroAsterisk.js";
 
 // Shared "player character" helpers. The logic worth guarding is the slug lookup
@@ -151,5 +152,25 @@ describe("getPlayerCharacters", () => {
 	it("is empty when there are no actors", () => {
 		global.game = { actors: {} };
 		expect(getPlayerCharacters()).toEqual([]);
+	});
+});
+
+describe("charactersInPlay", () => {
+	afterEach(() => { delete global.game; });
+
+	it("keeps the player characters not dead and not gone from play", () => {
+		const pc = (id, flags = {}) => ({ id, type: "character", system: { playbook: { slug: "the-fox" } }, flags });
+		const bram = pc("bram");
+		global.game = {
+			actors: {
+				contents: [
+					bram,
+					pc("eira", { "stonetop-pwd": { deathsDoor: "dead" } }),
+					pc("gwen", { "stonetop-pwd": { leftPlay: { how: "retired" } } }),
+					{ id: "blank", type: "character", system: {}, items: [] },
+				],
+			},
+		};
+		expect(charactersInPlay()).toEqual([bram]);
 	});
 });

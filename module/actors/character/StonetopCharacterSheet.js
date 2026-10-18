@@ -81,6 +81,7 @@ import {statApproaches} from "../../utils/stat-approaches.js";
 import {wirePickTally} from "../../utils/pick-tally.js";
 import {canPayStock, defaultStockSource, payableStockSources, mustAskStockSource, stockSourceChoiceLabel, stockReceipt, vesselHpFormula, stockCostFromDescription, RITES_OF_THE_LAND} from "./stock-cost.js";
 import {defaultSupplyPurse, SUPPLY_PURPOSE} from "./supply-cost.js";
+import {canRetire, openRetireDialog} from "../../campaign/retire-pc.js";
 import {openMakeCamp} from "../../camp/camp-flow.js";
 import {openStruggleAsOne} from "../../struggle/struggle-flow.js";
 import {beginAid} from "../../pc-asks/pc-ask-flow.js";
@@ -1360,6 +1361,13 @@ export function createStonetopCharacterSheetClass(Base) {
 					onclick: () => this._openChroniclePage(),
 				},
 			);
+			// Retiring is the owner's or the GM's call (Book I p.584; campaign/retire-pc.js).
+			if (canRetire(this.actor)) buttons.splice(steadingIdx + 3, 0, {
+				label:   "Retire",
+				class:   "stonetop-retire-button",
+				icon:    "fas fa-door-open",
+				onclick: () => openRetireDialog(this.actor),
+			});
 			return buttons;
 		}
 
