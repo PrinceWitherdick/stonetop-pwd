@@ -644,6 +644,28 @@ describe("a line that prints on a 12+ only", () => {
 	});
 });
 
+// Death's Door's 6-: "Make one last move as if you rolled a 12+" (Book I p.245). No dice: the total is
+// given, with nothing added to it, and the card reads as a 12 throughout, its 12+ line too.
+describe("a move made as if rolled", () => {
+	const hero = () => ({ type: "stonetop", name: "Wren", system: {} });
+	const NOTE = '<p class="stonetop-roll-offer-note">Turn the tables</p>';
+
+	it("rolls the given total, with no stat, modifier or advantage on it, and names why", async () => {
+		rollTotal = 12;
+		await rollStat("dex", hero(), {
+			statValue: 3, modifier: 2, ongoing: 2, rollMode: "dis", moveName: "Clash", noXpOnMiss: true,
+			asIfTotal: 12, conditionNotes: ["Death's Door: one last move, as if rolled 12+"], criticalActions: NOTE,
+		});
+		expect(rollInstances[0].formula).toBe("12");
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("result success");
+		expect(flavor).toContain("Turn the tables");
+		expect(flavor).toContain("one last move, as if rolled 12+");
+		expect(flavor).not.toContain("Disadvantage");
+		expect(flavor).not.toContain("Ongoing");
+	});
+});
+
 describe("rollDamage", () => {
 	it("posts damage rolls using the Stonetop card shell", async () => {
 		await rollDamage("d6+1", makeActor(), { label: "Hammer" });

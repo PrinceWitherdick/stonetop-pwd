@@ -10,11 +10,25 @@ import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { getObjectSetting, setSetting } from "../settings.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { sendEndOfSession, sendEndOfSessionClosed, mirrorClosed, requestEndOfSession } from "./end-of-session-broadcast.js";
+import { latestWish, wishesUpdate } from "../campaign/player-wishes.js";
 
 const KEY = "stonetop.endOfSession";
 
 /** The four group questions (Book I p.232); each "yes" is +1 XP for everyone. Words in languages/en.json. */
 export const GROUP_QUESTIONS = ["learnedWorld", "defeatedThreat", "improvedStanding", "improvedStonetop"];
+
+/**
+ * Each player's own two (Book I p.75): "point out how you demonstrated or struggled with your instinct. If
+ * you can, mark XP" and "say how your relationship with or opinion of a PC, NPC, or group has changed. If
+ * you can, mark XP." One XP each, per character, ticked by the GM as each player answers ("if you can":
+ * unticked until they do).
+ */
+export const PERSONAL_QUESTIONS = ["instinct", "relationship"];
+
+/** The personal XP a character's ticks earn. PURE. */
+export function personalXp(checks) {
+	return PERSONAL_QUESTIONS.filter(key => checks?.[key] === true).length;
+}
 
 /** The world setting holding the last award, `{at, xp, ids}`. */
 export const LAST_AWARD_SETTING = "lastEndOfSession";
@@ -74,6 +88,8 @@ export class EndOfSessionDialog extends StonetopDialog {
 			this.run = mirror.run;
 			this._roster = [];
 			this._pcChecks = {};
+			this._personal = {};
+			this._notes = {};
 			return;
 		}
 		// The table's copies follow this window by this id (end-of-session-broadcast.js).
@@ -81,6 +97,10 @@ export class EndOfSessionDialog extends StonetopDialog {
 		// Whose XP it is, ticked as the table stands now; the GM corrects it before awarding.
 		this._roster = endOfSessionRoster();
 		this._pcChecks = Object.fromEntries(this._roster.map(row => [row.actor.id, row.ticked]));
+		// Each character's instinct and relationship XP, unticked until their player answers (PERSONAL_QUESTIONS),
+		// and the praise and wish the GM notes down for them.
+		this._personal = {};
+		this._notes = {};
 	}
 
 	/**
@@ -162,13 +182,24 @@ export class EndOfSessionDialog extends StonetopDialog {
 			label:   localize(`${KEY}.questions.${key}`),
 			checked: this._groupChecks[key],
 		}));
-		const pcs = this._roster.map(({ actor, dead }) => ({
-			id: actor.id, name: actor.name, dead, checked: !!this._pcChecks[actor.id],
-		}));
+		const pcs = this._roster.map(({ actor, dead }) => {
+			const last = latestWish(actor);
+			return {
+				id: actor.id, name: actor.name, dead, checked: !!this._pcChecks[actor.id],
+				personal: PERSONAL_QUESTIONS.map(key => ({
+					key, label: localize(`${KEY}.personalTicks.${key}`), checked: this._personal[actor.id]?.[key] === true,
+				})),
+				note: this._notes[actor.id] ?? "",
+				lastWish: last ? last.text : "",
+			};
+		});
+		// Anything at all to award: the group's yeses, or one ticked character's own XP.
+		const anyPersonal = this._tickedActors().some(actor => personalXp(this._personal[actor.id]) > 0);
 		return {
 			questions, pcs, xpCount, mirror: this._mirror,
+			canAward: xpCount > 0 || anyPersonal,
 			tally: format(`${KEY}.${this._mirror ? "mirrorTally" : "tally"}`, { xp: xpCount }),
-			awardLabel: format(`${KEY}.award`, { xp: xpCount }),
+			awardLabel: xpCount > 0 ? format(`${KEY}.award`, { xp: xpCount }) : localize(`${KEY}.awardPersonal`),
 		};
 	}
 
@@ -188,6 +219,17 @@ export class EndOfSessionDialog extends StonetopDialog {
 		html.find(".stonetop-eos-group-check[data-pc]").on("change", ev => {
 			this._pcChecks[ev.currentTarget.dataset.pc] = ev.currentTarget.checked;
 			this.render(false);
+		});
+		// A character's own instinct and relationship XP.
+		html.find(".stonetop-eos-personal-check[data-pc]").on("change", ev => {
+			const { pc, xp } = ev.currentTarget.dataset;
+			if (!PERSONAL_QUESTIONS.includes(xp)) return;
+			this._personal[pc] = { ...(this._personal[pc] ?? {}), [xp]: ev.currentTarget.checked };
+			this.render(false);
+		});
+		// The praise and wish noted for them, kept as typed (no redraw, which would take the caret away).
+		html.find(".stonetop-eos-note[data-pc]").on("input", ev => {
+			this._notes[ev.currentTarget.dataset.pc] = ev.currentTarget.value;
 		});
 
 		html.find(".stonetop-eos-confirm-btn").on("click", async (ev) => {
@@ -214,6 +256,22 @@ export class EndOfSessionDialog extends StonetopDialog {
 	/** The characters ticked to mark the session's XP. */
 	_tickedActors() {
 		return this._roster.filter(row => this._pcChecks[row.actor.id]).map(row => row.actor);
+	}
+
+	/**
+	 * Write each note typed this session onto its character (wishesUpdate), ticked or not: a player who
+	 * was not paid still had their say. One failed write does not stop the rest.
+	 */
+	async _saveNotes(now = Date.now()) {
+		await Promise.all(this._roster.map(async ({ actor }) => {
+			const update = wishesUpdate(actor, this._notes[actor.id], now);
+			if (!Object.keys(update).length) return;
+			try {
+				await actor.update(update);
+			} catch (err) {
+				console.error(`Stonetop | End of Session could not keep ${actor.name}'s notes:`, err);
+			}
+		}));
 	}
 
 	/**
@@ -246,8 +304,13 @@ export class EndOfSessionDialog extends StonetopDialog {
 		}
 		const xpToAward = Object.values(this._groupChecks).filter(Boolean).length;
 		const ticked = this._tickedActors();
+		// What each ticked character marks: the group's yeses, and their own instinct and relationship.
+		const owed = ticked.map(actor => {
+			const personal = PERSONAL_QUESTIONS.filter(key => this._personal[actor.id]?.[key] === true);
+			return { actor, personal, xp: xpToAward + personal.length };
+		}).filter(row => row.xp > 0);
 
-		if (ticked.length > 0 && xpToAward > 0) {
+		if (owed.length > 0) {
 			if (!(await this._confirmAgain())) return this._redrawButton();
 
 			// Through adjustXp (utils/xp.js) so the award queues behind anything else changing
@@ -256,31 +319,42 @@ export class EndOfSessionDialog extends StonetopDialog {
 			// failed write does not stop the rest, and the card says who was and was not paid.
 			const paid = [];
 			const failed = [];
-			for (const actor of ticked) {
+			for (const row of owed) {
 				try {
-					await adjustXp(actor, xpToAward, { move: "End of Session" });
-					paid.push(actor);
+					await adjustXp(row.actor, row.xp, { move: "End of Session" });
+					paid.push(row);
 				} catch (err) {
-					console.error(`Stonetop | End of Session could not write ${actor.name}'s XP:`, err);
-					failed.push(actor);
+					console.error(`Stonetop | End of Session could not write ${row.actor.name}'s XP:`, err);
+					failed.push(row.actor);
 				}
 			}
 
-			await setSetting(LAST_AWARD_SETTING, { at: Date.now(), xp: xpToAward, ids: paid.map(a => a.id) });
+			await setSetting(LAST_AWARD_SETTING, { at: Date.now(), xp: xpToAward, ids: paid.map(r => r.actor.id) });
 
 			const names = list => list.map(a => `<strong>${escHtml(a.name)}</strong>`).join(", ");
 			const leftOut = this._roster.filter(row => !this._pcChecks[row.actor.id]).map(row => row.actor);
 			const yeses = GROUP_QUESTIONS.filter(key => this._groupChecks[key])
 				.map(key => `<li>${escHtml(localize(`${KEY}.questions.${key}`))}</li>`).join("");
+			// Everyone the same group XP: one line, as ever. Anyone's own XP on top: a line each, saying what for.
+			const anyPersonal = paid.some(r => r.personal.length);
+			const paidLines = !paid.length ? ""
+				: !anyPersonal ? `<p>${format(`${KEY}.cardPaid`, { names: names(paid.map(r => r.actor)), xp: xpToAward })}</p>`
+				: `<ul class="stonetop-eos-award-each">${paid.map(r => `<li>${format(`${KEY}.cardPaidEach`, {
+					name: escHtml(r.actor.name), xp: r.xp,
+					why: escHtml([
+						...(xpToAward ? [format(`${KEY}.cardWhyGroup`, { xp: xpToAward })] : []),
+						...r.personal.map(key => localize(`${KEY}.personalTicks.${key}`)),
+					].join(", ")),
+				})}</li>`).join("")}</ul>`;
 			const lines = [
-				paid.length ? `<p>${format(`${KEY}.cardPaid`, { names: names(paid), xp: xpToAward })}</p>` : "",
+				paidLines,
 				failed.length ? `<p>${format(`${KEY}.cardFailed`, { names: names(failed) })}</p>` : "",
 				leftOut.length ? `<p>${format(`${KEY}.cardLeftOut`, { names: names(leftOut) })}</p>` : "",
 			].join("");
 			const content = stonetopChatCard(
-				format(`${KEY}.cardTitle`, { xp: xpToAward }),
+				anyPersonal ? localize(`${KEY}.cardTitleAll`) : format(`${KEY}.cardTitle`, { xp: xpToAward }),
 				`<div class="card-content">
-					<ul class="stonetop-eos-award-list">${yeses}</ul>
+					${yeses ? `<ul class="stonetop-eos-award-list">${yeses}</ul>` : ""}
 					${lines}
 				</div>`,
 				"stonetop-eos-chat-card",
@@ -290,6 +364,9 @@ export class EndOfSessionDialog extends StonetopDialog {
 				globalThis.ui?.notifications?.warn?.(format(`${KEY}.failedWarn`, { names: failed.map(a => a.name).join(", ") }));
 			}
 		}
+
+		// The praise and wishes the GM noted, kept on each character for the next session's prep.
+		await this._saveNotes();
 
 		await resetOmenReminder();
 		// A new session gives back Never Gonna Keep Me Down's once-a-session 10+ at Death's Door.

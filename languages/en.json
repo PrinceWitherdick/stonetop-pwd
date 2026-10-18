@@ -142,6 +142,18 @@
       "praise": "<strong>Praise</strong> something about the session (in the fiction or around the table) that you enjoyed or appreciated.",
       "wish": "<strong>Wish</strong> for future sessions: more __, less __, a chance to __, handling __ in a different way, etc. Wishes can be about what happens in the fiction or around the table. The GM will take notes.",
       "award": "Award +{xp} Group XP & Close",
+      "awardPersonal": "Award XP & Close",
+      "personalTicks": {
+        "instinct": "Instinct (+1)",
+        "relationship": "Relationship (+1)"
+      },
+      "personalHint": "Tick each player's own XP as they answer, and note their praise and wish. Notes are kept on the character.",
+      "notePlaceholder": "Praise and wish, in their words",
+      "noteLabel": "{name}'s praise and wish",
+      "lastWish": "Last time:",
+      "cardTitleAll": "End of Session: XP",
+      "cardPaidEach": "<strong>{name}</strong> marked <strong>+{xp} XP</strong> ({why}).",
+      "cardWhyGroup": "group +{xp}",
       "close": "Close",
       "gmOnly": "Only the GM can award the session's XP.",
       "playerAsk": "No GM has End of Session open yet. Your copy opens as soon as they do.",
@@ -355,6 +367,9 @@
         "settled": "Answered",
         "settledNote": "Off the list, but decided",
         "guide": "Keeping the list",
+        "wishes": "Players' wishes",
+        "wishesNote": "From End of Session, newest first (Book I, pp.75, 581, 591)",
+        "wishesEmpty": "No wishes yet. Each player offers one at End of Session.",
         "guideNote": "Book I, p.33",
         "writeFailed": "Couldn't save the I wonder list. See the console for details."
       },
@@ -683,6 +698,14 @@
         "fate": {
           "title": "Refuse to Go",
           "intro": "The GM will ask why you refuse. Name the person, the task, or the reckoning you will not leave behind. That's your Terrible Purpose. Then say which way you stay."
+        },
+        "lastMove": {
+          "intro": "Make one last move as if you rolled a 12+, then step through the Last Door. You can't use that last move to avoid death.",
+          "pick": "Your last move",
+          "hint": "Its card is posted at 12+, with no dice. A move with no roll, or one made in the fiction, needs no card: step through.",
+          "make": "Make it at 12+, then step through",
+          "none": "Step through without a card",
+          "note": "Death's Door: one last move, as if rolled 12+"
         },
         "choices": {
           "railLabel": "What the {name} insert asks of you",

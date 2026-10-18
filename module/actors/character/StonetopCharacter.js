@@ -4662,7 +4662,7 @@ export class StonetopCharacter {
 	// #promptRoll, from rollOffers below): the keys left ticked. Null from a caller that asked no
 	// window, which takes none: a line the player never saw is never spent. `offered` is those lines
 	// as the window was handed them (the sheet's _promptRollOptions), so they are not worked out twice.
-	async onRoll(event, { statOverride = null, situational = 0, weaponSlug = null, rollMode = null, takenOffers = null, offered = null } = {}) {
+	async onRoll(event, { statOverride = null, situational = 0, weaponSlug = null, rollMode = null, takenOffers = null, offered = null, asIfTotal = null, conditionNotes = null } = {}) {
 		const itemId = event.currentTarget.closest(".item")?.dataset.itemId;
 		if (!itemId) return false;
 		const item = this._actor.items.get(itemId);
@@ -4724,13 +4724,22 @@ export class StonetopCharacter {
 			rollMode: normalizeRollMode(rollMode ?? this.rollMode),
 			// `forward` from what the roll is owed, added once it is claimed (_foldOwed).
 			modifier, forward: 0, ongoing, statOverride: stat, ...(attackExtra ?? {}), ...(aimed ?? {}),
+			// A move made "as if you rolled" a total (Death's Door's last move, deaths-door.js#makeLastMove):
+			// no dice, the total on the card (roll-engine.js#rollStat), and why, named. An "ask" move (Defy
+			// Danger) keeps its whole text and its own name then: no stat was picked, since none is added.
+			...(asIfTotal != null ? { asIfTotal, ...(stat === "ask" ? { statOverride: undefined } : {}) } : {}),
+			...(Array.isArray(conditionNotes) && conditionNotes.length ? { conditionNotes: [...conditionNotes] } : {}),
 		};
 
 		// A grudge this character is owed against the very foe they are attacking: Relentless on a Clash
 		// with someone who survived the last one, But I Get Up Again on whoever knocked them down. Folded
 		// in like a held advantage (see _foldOwed), before the debility pass, so a Weakened
 		// Heavy's advantage cancels rather than quietly outranking the debility, and NAMED on the card.
-		const grudge = attackExtra ? attackFoeAdvantage(this._actor, attackExtra) : null;
+		// None for a total given rather than rolled (a Death's Door last move): its mode is forced normal
+		// (roll-engine.js#rollStat), so an advantage folded in would be named on the card and spent below
+		// for a roll that never used it.
+		const asIf = asIfTotal != null;
+		const grudge = attackExtra && !asIf ? attackFoeAdvantage(this._actor, attackExtra) : null;
 		if (grudge) Object.assign(rollOptions, foldAdvantage(rollOptions, grudge));
 		// Every other roll aimed at someone owes what _foldAimedModes folds: Binding Arbitration's "advantage
 		// on all rolls against them" (the user's ruling), else But I Get Up Again's or Alpha's "advantage on
@@ -4743,7 +4752,7 @@ export class StonetopCharacter {
 		// But I Get Up Again's blow half is the damage window's (fight/hero-moves.js#blowOffers), spent on its own.
 		const aimedAt = attackExtra || descriptionOnly ? [] : this._rollTargets(aimed);
 		const foesTargeted = attackExtra ? attackExtra.messageFlags?.[STONETOP_SCOPE]?.attack?.targets ?? [] : aimedAt;
-		const aimedModes = this._foldAimedModes(rollOptions, foesTargeted, { grudged: !!attackExtra });
+		const aimedModes = this._foldAimedModes(rollOptions, asIf ? [] : foesTargeted, { grudged: !!attackExtra });
 		Object.assign(rollOptions, aimedModes.options);
 		const oathbreakerNamed = grudge === BINDING_ARBITRATION || aimedModes.oathbreaker;
 		// A background's standing advantage and a season's standing disadvantage on one move: the same fold.
@@ -4762,7 +4771,8 @@ export class StonetopCharacter {
 		// CLAIMED HERE, after the guards above, so reading a move's text or backing out of the weapon prompt
 		// never burns it; and in one write before the dice, so a second roll started while these dice still
 		// animate reads what this one left (_claimNextRollOwed). Put back when no dice are thrown.
-		const owed = descriptionOnly ? null : await this._claimNextRollOwed(item?.name);
+		// A total given rather than rolled takes nothing it is owed: the +forward is for a roll that adds it.
+		const owed = descriptionOnly || asIf ? null : await this._claimNextRollOwed(item?.name);
 		const promised = owed ? this._foldOwed(rollOptions, owed) : rollOptions;
 
 		let withSurprise = promised;

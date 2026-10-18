@@ -166,6 +166,29 @@
 		</div>
 		{{/if}}
 
+		{{!-- The players' wishes from End of Session (Book I p.75), read-only: "outstanding wishes" to keep in
+		      mind at the start of a session (p.581), and "player wishes yet to be granted" among the hanging
+		      threads when the game nears its end (p.591). No pencil: they are the players' words. --}}
+		<div class="stonetop-gm-wonder-section stonetop-gm-wishes">
+		{{> "stonetop.section-heading" title=(localize "stonetop.gmToolkit.wonder.wishes")
+		    note=(localize "stonetop.gmToolkit.wonder.wishesNote")
+		    collapse="gm-wonder-wishes"}}
+		{{#if stonetop.playerWishes.length}}
+		<ul class="stonetop-gm-wishes-list">
+			{{#each stonetop.playerWishes}}
+			<li class="stonetop-gm-wishes-who" data-actor-id="{{id}}">
+				<h4 class="stonetop-gm-wonder-guide-title">{{name}}</h4>
+				<ul class="stonetop-gm-wonder-guide-items">
+					{{#each wishes}}<li>{{text}}{{#if when}} <span class="stonetop-gm-wishes-when">({{when}})</span>{{/if}}</li>{{/each}}
+				</ul>
+			</li>
+			{{/each}}
+		</ul>
+		{{else}}
+		<p class="stonetop-gm-wonder-empty">{{localize "stonetop.gmToolkit.wonder.wishesEmpty"}}</p>
+		{{/if}}
+		</div>
+
 		{{!-- Book I p.33, which is the page the playbook's four lines are a summary of. Reference
 		      rather than content, but it still opens EXPANDED — the same treatment the Threats tab
 		      gives its prep reference.

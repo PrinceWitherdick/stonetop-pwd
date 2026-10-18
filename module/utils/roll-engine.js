@@ -848,9 +848,20 @@ export function messageOfRoll(roll) {
  *   choice made aloud and recorded elsewhere, like the seasonal gains.
  * @param {boolean} [options.pickable]  false keeps the move's printed list as prose, for a list someone
  *   other than the roller answers (Interfere aimed at a PC)
+ * @param {number} [options.asIfTotal]  a move made "as if you rolled" this total, with no dice: Death's
+ *   Door's "Make one last move as if you rolled a 12+" (Book I p.245). The card carries the total itself,
+ *   with no stat, modifier or advantage on it, and every tier-keyed part (a 12+'s criticalActions too)
+ *   reads it as rolled; the caller names why in `conditionNotes`
  * @returns {Promise<Roll>}
  */
 export async function rollStat(statKey, actor, options = {}) {
+	const asIfTotal  = options.asIfTotal != null && Number.isFinite(Number(options.asIfTotal))
+		? Math.trunc(Number(options.asIfTotal)) : null;
+	const forcedTotal = asIfTotal !== null;
+	// A total given rather than rolled has nothing to add to it and no dice to keep or drop.
+	if (forcedTotal) {
+		options = { ...options, rollMode: "normal", modifier: 0, forward: 0, ongoing: 0, stonetopDebility: null, stonetopDebilityTooltip: null };
+	}
 	const statValue  = options.statValue ?? actor.system?.stats?.[statKey]?.value ?? 0;
 	const statLabel  = _STAT_LABELS[statKey] ?? statKey.toUpperCase();
 	const rollMode   = options.rollMode ?? "normal";
@@ -875,7 +886,7 @@ export async function rollStat(statKey, actor, options = {}) {
 		stonetopDebilityTooltip: options.stonetopDebilityTooltip ?? null,
 	};
 
-	const roll   = await new Roll(_rollFormula(rollMode, modifier), rollData, rollOptions).evaluate();
+	const roll   = await new Roll(forcedTotal ? String(asIfTotal) : _rollFormula(rollMode, modifier), rollData, rollOptions).evaluate();
 	const total  = roll.total;
 	// A rule that turns a miss into a weak hit (Herd of Horses: "When you Requisition half the
 	// herd or less, treat a 6- as a 7-9") is applied to the TIER, so every tier-keyed part of the

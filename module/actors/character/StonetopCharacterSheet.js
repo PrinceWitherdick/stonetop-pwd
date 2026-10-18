@@ -73,6 +73,7 @@ import {defendReadinessHold} from "../../combat/defend-readiness.js";
 import {dieFromDamage, printedBlow} from "../../utils/damage.js";
 import {normalizeDamageDie} from "../../utils/damage-die.js";
 import {normalizeRollType} from "../../utils/roll-types.js";
+import {moveRollable} from "../../utils/move-rollable.js";
 import {escHtml, isDefaultImg, normalizePlaybookGlyphs, composeInstinct, stripHtmlToText} from "../../utils/strings.js";
 import {playbookIconPath, partyCharacters} from "../../utils/playbook-actors.js";
 import {postMoveToChat, moveChatCard, pickableMoveDescription, whisperedAs} from "../../utils/chat.js";
@@ -6790,26 +6791,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			return true;
 		}
 
-		// Build a detached DOM element that stands in for a move row's rollable title,
-		// carrying just the structure the rollable-dispatch helpers read: an ancestor
-		// `.item.stonetop-item` with the item id, a `.stonetop-item-name`, and the stat on
-		// the rollable's data-roll. Returns null for a move with no rollType (nothing to
-		// roll). Using a real (unattached) element means the helpers need no DOM-vs-object
-		// special-casing — they closest()/querySelector() over it exactly as on the sheet.
+		// The detached stand-in for a move row's rollable title (utils/move-rollable.js#moveRollable): null
+		// for a move with no rollType (nothing to roll).
 		_makeSyntheticRollable(item) {
-			const stat = normalizeRollType(item.system?.rollType);
-			if (!stat) return null;
-			const li = document.createElement("li");
-			li.className = "item stonetop-item";
-			li.dataset.itemId = item.id;
-			const name = document.createElement("strong");
-			name.className = "stonetop-item-name";
-			name.textContent = item.name;
-			const rollable = document.createElement("span");
-			rollable.className = "rollable move-rollable";
-			rollable.dataset.roll = stat;
-			li.append(name, rollable);
-			return rollable;
+			return moveRollable(item);
 		}
 
 		/**

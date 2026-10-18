@@ -295,6 +295,22 @@ describe("the I wonder tab: context", () => {
 		expect(context.stonetop.wonders.settled.map(w => w.id)).toEqual(["b"]);
 		expect(context.stonetop.wonderGuide).toBe(GM_WONDER_GUIDE);
 	});
+	// "Player wishes yet to be granted" are hanging threads too (Book I p.591): the End of Session wishes, read-only.
+	it("carries the players' wishes beside the questions, and the tab draws them", () => {
+		const { host } = makeHost([]);
+		const saved = global.game.actors;
+		global.game.actors = { contents: [{ id: "bw", name: "Blodwen", type: "character", system: { playbook: { slug: "the-blessed" } },
+			flags: { "stonetop-pwd": { sessionWishes: [{ at: 1, text: "See the Mighty Servant" }] } } }] };
+		try {
+			const context = { stonetop: {} };
+			host._addGmWonderContext(context);
+			expect(context.stonetop.playerWishes.map(r => r.name)).toEqual(["Blodwen"]);
+			expect(context.stonetop.playerWishes[0].wishes[0].text).toBe("See the Mighty Servant");
+		} finally {
+			global.game.actors = saved;
+		}
+		expect(WONDER_HBS).toContain("{{#each stonetop.playerWishes}}");
+	});
 
 	// The guidance is transcribed book text, so it cites the page it came off. Book I p.33 is the
 	// section; the two cross-references are the later chapters that send a GM back to the list.
@@ -562,10 +578,10 @@ describe("the I wonder tab: the edit pencils", () => {
 			);
 		}
 		const boxes = WONDER_HBS.match(/class="stonetop-gm-wonder-section[^"]*"/g) ?? [];
-		expect(boxes).toHaveLength(3);
+		expect(boxes).toHaveLength(4);
 		expect(boxes.filter(c => c.includes("steading-edit-section"))).toHaveLength(2);
-		// The guidance box is the third, and carries no pencil: there is nothing in it to edit.
-		expect(boxes.filter(c => !c.includes("steading-edit-section"))).toHaveLength(1);
+		// The players' wishes and the guidance carry no pencil: there is nothing in either for the GM to edit.
+		expect(boxes.filter(c => !c.includes("steading-edit-section"))).toHaveLength(2);
 	});
 
 	// The pencil is emitted AHEAD of its heading, which is not a style choice: the fold walk finds

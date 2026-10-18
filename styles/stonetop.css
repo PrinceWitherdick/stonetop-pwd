@@ -18299,6 +18299,58 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	cursor: pointer;
 }
 
+/* ── Death's Door: the last move, picked to post at 12+ ────────────────────────────────────────── */
+.deaths-door-last-move-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 6px 0;
+}
+
+.deaths-door-last-move-row select {
+	flex: 1;
+	min-width: 0;
+}
+
+/* ── End of Session: each character's own XP and notes ─────────────────────────────────────────── */
+.stonetop-eos-pc {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.stonetop-eos-pc-personal {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 14px;
+	padding-left: calc(32px * var(--stonetop-font-scale, 1));
+	font-size: var(--st-fs-base);
+}
+
+.stonetop-eos-pc-tick {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	cursor: pointer;
+}
+
+.stonetop-eos-note {
+	margin-left: calc(32px * var(--stonetop-font-scale, 1));
+	width: calc(100% - 32px * var(--stonetop-font-scale, 1));
+}
+
+.stonetop-eos-last-wish {
+	margin: 0 0 0 calc(32px * var(--stonetop-font-scale, 1));
+	font-size: var(--st-fs-base);
+	font-style: italic;
+}
+
+.stonetop-eos-award-each {
+	margin: 4px 0;
+	padding-left: 18px;
+}
+
+
 .stonetop-eos-footer {
 	display: flex;
 	justify-content: flex-end;
@@ -37779,6 +37831,11 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .retire-character .retire-footer button,
 .stonetop .become-threat .bt-footer button { width: auto; flex: 0 0 auto; }
 .stonetop .stonetop-levelup-away { color: var(--st-danger-ink); }
+/* The players' wishes on the GM Toolkit's "I wonder..." tab (campaign/player-wishes.js). */
+.stonetop .stonetop-gm-wishes-list { list-style: none; margin: 0; padding: 0; }
+.stonetop .stonetop-gm-wishes-who { margin: 0 0 0.5rem; }
+.stonetop .stonetop-gm-wishes-when { font-size: var(--st-fs-sm); color: var(--st-text-secondary); }
+
 /* --- a threat crossed off the tracker (Book I p.299) ---------------------------- */
 .stonetop .threat-card.is-resolved { opacity: 0.6; filter: grayscale(0.85); }
 .stonetop .threat-card.is-resolved .threat-name { text-decoration: line-through; }
