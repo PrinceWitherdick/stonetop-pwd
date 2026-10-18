@@ -71,10 +71,11 @@ import {openPortraitFrameEditor} from "../../utils/PortraitFrameDialog.js";
 import {localize} from "../../utils/i18n.js";
 import {closeRelmapTab, detachRelmapTab, makeFirstRelationshipMap, relmapTabContext, STEADING_RELMAP_TAB, syncRelmapTab} from "./steading-relmap-tab.js";
 import {closeTimelineTab, detachTimelineTab, holdTimelineTabView, syncTimelineTab, TIMELINE_TAB, timelineTabView} from "../../timeline/timeline-tab.js";
-import {DIMINISHED_MOVES, PATHFINDER, STEADING_MOVE, improvementQuestions, rollAdjustments} from "./improvement-rolls.js";
+import {DIMINISHED_MOVES, PATHFINDER, STEADING_MOVE, improvementQuestions, rollAdjustments, spendImprovementAnswers} from "./improvement-rolls.js";
 import {settleSteadingRoll} from "./steading-roll.js";
 import {applyGuideRail, guideRailStep} from "../../utils/guide-rail.js";
 import {worldLogisticsNames} from "../character/logistics.js";
+import {deployCommandOffers} from "../../combat/command-holders.js";
 import {worldLearnedHolderNames} from "../character/owns-move.js";
 
 /**
@@ -114,7 +115,7 @@ const SEASONS_SPEAKER = { alias: "Seasons Change" };
  */
 export function improvementCheckHtml(q) {
 	return `<label class="stonetop-homestead-field stonetop-homestead-field--check">
-		<input type="checkbox" class="stonetop-check" name="${_esc(q.name)}" value="yes"${q.checked ? " checked" : ""}>
+		<input type="checkbox" class="stonetop-check" name="${_esc(q.name)}" value="${_esc(q.value ?? "yes")}"${q.checked ? " checked" : ""}>
 		<span>${_esc(q.label)}</span>
 	</label>`;
 }
@@ -1440,6 +1441,9 @@ export function createStonetopSteadingSheetClass(Base) {
 			const questions = improvementQuestions(flow.label, flow.stat, {
 				rules, tactics: this._militiaTactics(), logistics: worldLogisticsNames(), pathfinder: worldLearnedHolderNames(PATHFINDER),
 				herd: this._herdForQuestions(),
+				// Stentorian's "You have advantage to ... Deploy" (Book I p.127), unticked: the Marshal who is
+				// Deploying (this user's own, else a pick among the ones they may write) while they hold Command.
+				command: deployCommandOffers(),
 			});
 			// Tor's blessing and the Size asked here as settleSteadingRoll asks them, so the window
 			// names what the card will add. With no answers yet, `notes` holds nothing that waits on one.
@@ -1498,6 +1502,7 @@ export function createStonetopSteadingSheetClass(Base) {
 							await this._onSteadingRoll(flow.label, flow.stat, {
 								...prompted, ...this._homesteadRollOptions(flow, html), ...before,
 								improvementAnswers: Object.fromEntries(questions.map(q => [q.name, data[q.name] ?? ""])),
+								askedQuestions: questions,
 							});
 						},
 					},
@@ -1705,6 +1710,7 @@ export function createStonetopSteadingSheetClass(Base) {
 							await this._onSteadingRoll("Requisition", "fortunes", {
 								...prompted,
 								improvementAnswers: Object.fromEntries(questions.map(q => [q.name, data[q.name] ?? ""])),
+								askedQuestions: questions,
 								moveResults: moveResultsFromRows(requisitionResults),
 								resultLegend: resultsLegendFromRows(requisitionResults),
 								// 10+ and 7-9 (once convinced): take it. 6-: take it anyway, at 1 Fortunes,
@@ -3138,8 +3144,12 @@ export function createStonetopSteadingSheetClass(Base) {
 			// without one (the Moves tab's roll chip).
 			// `musterCost` is how Muster's cost went before the roll (_applyHomesteadBeforeRoll) and
 			// `tradeItem` the special item a Trade & Barter is about: both become card buttons below,
-			// and neither is a roll option.
-			const { situational = 0, improvementAnswers, winter = false, musterCost, tradeItem, ...rest } = rollOptions;
+			// and neither is a roll option. `askedQuestions` are the window's questions those answers
+			// answer (improvementQuestions).
+			const { situational = 0, improvementAnswers: windowAnswers, askedQuestions = [], winter = false, musterCost, tradeItem, ...rest } = rollOptions;
+			// What a taken answer costs (Stentorian's Command for an advantage to Deploy, Book I p.127),
+			// paid BEFORE the roll is adjusted, so a spend that fails gives no advantage.
+			const improvementAnswers = windowAnswers && await spendImprovementAnswers(askedQuestions, windowAnswers);
 			// Every rule's advantage and disadvantage, netted against the player's mode, and a
 			// sacrifice's held +Fortunes advantage (Rites of the Land) applied, because this is the
 			// roll it was promised to (./steading-roll.js). Spent just before the dice, below. The player's mode is the caller's when

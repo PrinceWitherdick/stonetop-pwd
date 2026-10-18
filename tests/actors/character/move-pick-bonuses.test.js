@@ -234,6 +234,16 @@ describe("free questions", () => {
 		expect(withMovePickBonuses("<p>Know Things.</p>", seeker(move("Well Versed", { learned: false })), "Know Things")).toBe("<p>Know Things.</p>");
 		expect(movePickBonusesFor(seeker(move("Let's Make a Deal", { learned: false })), "Seek Insight")).toEqual([]);
 	});
+
+	// Coverage pass (2026-10-16): the Marshal's Like an Open Book (Book I p.127), "When you Take the Measure of
+	// someone who fears or respects you, your second question can be anything you want."
+	it("reads the Marshal's Like an Open Book on Take the Measure, for a LEARNED move only", () => {
+		const marshal = (...items) => character({ playbook: "The Marshal", items });
+		const measure = doc("playbook-moves/the-marshal/take-the-measure.json").system.description;
+		const html = withMovePickBonuses(pickableMoveDescription(measure), marshal(move("Like an Open Book")), "Take the Measure");
+		expect(stripHtmlToText(html)).toContain("Like an Open Book, when you Take the Measure of someone who fears or respects you: your second question can be anything you want.");
+		expect(withMovePickBonuses("<p>Take the Measure.</p>", marshal(move("Like an Open Book", { learned: false })), "Take the Measure")).toBe("<p>Take the Measure.</p>");
+	});
 });
 
 // The added options are the granting text's own words, retyped in the table. Pinned here so a
@@ -256,6 +266,7 @@ describe("MOVE_PICK_BONUSES quotes its sources", () => {
 		"Voice of Experience":   () => doc("playbook-moves/the-would-be-hero/voice-of-experience.json").system.description,
 		"Glorious Servant":      () => doc("playbook-moves/the-lightbearer/glorious-servant.json").system.description,
 		"Empowered Invocations": () => doc("playbook-moves/the-lightbearer/empowered-invocations.json").system.description,
+		"Like an Open Book":     () => doc("playbook-moves/the-marshal/like-an-open-book.json").system.description,
 	};
 	for (const b of MOVE_PICK_BONUSES) {
 		const key = b.ownsLearned ?? b.background.slug;
@@ -276,7 +287,8 @@ describe("MOVE_PICK_BONUSES quotes its sources", () => {
 				if (text.includes(`"${b.freeQuestion}"`)) expect(text).toContain(`"${b.freeQuestion}" for free, even on a 6-.`);
 				else {
 					expect(text).toContain(b.freeQuestion);
-					expect(text).toMatch(/even on a 6-/i);
+					// A line of its own (Like an Open Book's second question opened up) is no extra question.
+					if (!b.lineKey) expect(text).toMatch(/even on a 6-/i);
 				}
 				if (b.when) expect(text).toContain(`When you ${b.when},`);
 			}

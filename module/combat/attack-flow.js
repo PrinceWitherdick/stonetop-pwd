@@ -1036,7 +1036,7 @@ async function askDamageAdjustment(actor, { moveKey = "", weapon, extraDice = ""
 	// The character's own moves that add to this blow (fight/hero-moves.js#blowOffers). A follower's blow
 	// is not the character's, so it is offered none of them.
 	const lines    = offers ?? [
-		...(attacker ? [] : heroOffers(actor, { targets, weapon, strikeBack, parry, attackAt })),
+		...(attacker ? [] : heroOffers(actor, { targets, weapon, strikeBack, parry, attackAt, moveKey })),
 		// ...and what the people being hit bring to it, which is theirs to untick rather than the roller's.
 		...defenderLines(known.offered),
 	];
@@ -1975,6 +1975,14 @@ function undyingSufferer(actor) {
 	return actor?.type === "character" && !isOutOfPlay(actor) && actorPastDeathKind(actor) === "revenant";
 }
 
+/** Fire Within's "reduce that damage by 2" (Book I p.124). */
+const FIRE_WITHIN_REDUCTION = 2;
+
+/** A Lightbearer whose Fire Within is learned: "When you take damage from cold or fire, reduce that damage by 2." */
+function fireWithinSufferer(actor) {
+	return actor?.type === "character" && ownsLearnedMoveNamed(actor, HERO_MOVES.FIRE_WITHIN);
+}
+
 /**
  * Undaunted on a damage row, as the fight stands when the blow is ROLLED: `{undaunted: true}` where the fight
  * shows it holding, `{undaunted: false}` where the character has the move and the fight does not show it,
@@ -1995,13 +2003,14 @@ function undauntedStamp(uuid) {
 /**
  * The rows a damage card's flag lists under `key`, as a Set: `armorOff`, whose conditional armor has been
  * ticked off (wireConditionalArmor); `unstoppableOff`, whose Unstoppable mark has been ticked off
- * (wireUnstoppableMark); `undauntedArmor`, whose Undaunted +1 armor the table has ticked ON (wireUndauntedArmor);
- * `undyingOff`, whose Undying halving has been ticked off (wireUndyingHalf).
+ * (wireUnstoppableMark); `undauntedArmor`, whose Undaunted +1 armor the table has ticked ON (UNDAUNTED_ARMOR_BOX);
+ * `undyingOff`, whose Undying halving has been ticked off (UNDYING_BOX); `fireWithin`, whose Fire Within the
+ * table has ticked ON (FIRE_WITHIN_BOX).
  */
 const damageSet = (damage, key) => new Set(Array.isArray(damage?.[key]) ? damage[key] : []);
 
 /**
- * One tick box on a damage card's row, for wireConditionalArmor, wireUndauntedArmor and wireUnstoppableMark:
+ * One tick box on a damage card's row, for wireConditionalArmor, wireRowBoxes and wireUnstoppableMark:
  * `words` about the row, locked under the card's apply gate, and a tick that writes the row into or out of
  * the damage flag's `key` list (damageSet). `listed` is that list as the card was drawn, and `listsTicked`
  * which way it runs: true where it holds the rows ticked ON, false where it holds the rows ticked OFF.
@@ -3002,7 +3011,7 @@ async function applyOwedRows(message, damage, record) {
 		: attacker;
 	// Defend's Readiness, spent on a blow from this card (fight/defend-spend.js): halved before armor,
 	// or taken by a defender in the ward's place, against the defender's own armor.
-	const { halved, standIns, ignored, knockedDown, safetyFirst } = spentOn(current);
+	const { halved, standIns, voided, knockedDown, safetyFirst } = spentOn(current);
 	const lines = [];
 	// What each token does on the map once this press lands (combat/attack-fx.js#playHitReactions):
 	// on whoever actually took the blow, which is the stand-in when a Defend put one in the way.
@@ -3017,11 +3026,14 @@ async function applyOwedRows(message, damage, record) {
 		const rowName = defender ? format("stonetop.fight.defend.rowFor", { defender: defender.name, ward: r.name }) : r.name;
 		const struck = defender ? standIn.by : r.uuid;
 		if (!targetActor) { lines.push(`<li><strong>${escHtml(r.name)}</strong>: no longer on the map</li>`); continue; }
-		// A Mighty Rampart: "completely ignore the effects/damage of an attack that you suffer".
-		if (ignored.has(r.uuid)) {
+		// A spend that voids the blow outright (fight/defend-spend.js#spentOn): A Mighty Rampart's "completely
+		// ignore the effects/damage of an attack that you suffer", or Mirrorshield or Lightning Rod turning the
+		// magic aside. Either way it lands on nobody here, and the row says which.
+		const voidSpend = voided.get(r.uuid);
+		if (voidSpend) {
 			reactions.push({ uuid: struck, reaction: hitReaction({ ignored: true }) });
 			nextApplied.push({ uuid: r.uuid, effective: 0, ignored: true, ...(defender ? { by: standIn.by } : {}) });
-			lines.push(`<li><strong>${escHtml(rowName)}</strong>: ${escHtml(format("stonetop.fight.defend.ignoredLine", {}))}</li>`);
+			lines.push(`<li><strong>${escHtml(rowName)}</strong>: ${escHtml(format(voidSpend.lineKey, { move: voidSpend.move }))}</li>`);
 			continue;
 		}
 		// Undaunted: "+1 armor" while outnumbered or facing a foe bigger than them. Where the fight shows it,
@@ -3055,19 +3067,14 @@ async function applyOwedRows(message, damage, record) {
 		if (knockedDown.has(r.uuid)) raw = halveDamage(raw);
 		if (safetyFirst.has(r.uuid)) raw = halveDamage(raw);
 		const soaked = mitigateDamage(raw, { armor, piercing, unpierceable, ignoresArmor: current.weapon?.ignoresArmor });
-		// Undying (the Revenant): half of what gets through armor, rounded up, for a blow that cuts, stabs
-		// or crushes. On unless the table ticked the card's box off (wireUndyingHalf).
-		const undying = undyingSufferer(targetActor) && !damageSet(current, "undyingOff").has(r.uuid);
-		const effective = undying ? halveDamage(soaked) : soaked;
+		// Fire Within, then Undying, on what got through armor, each as the card's box was left (AFTER_ARMOR_BOXES).
+		const { effective, notes: pastArmor } = afterArmor(targetActor, current, r.uuid, soaked);
 		// Through `mitigationDetail`, the one place the subtraction is put into words: this
 		// used to restate `armor - piercing` inline, which stopped matching the moment
 		// mitigateDamage learned about an unpierceable floor, and printed armor the
 		// arithmetic had not applied.
 		const detail = mitigationDetail({ armor, piercing, unpierceable, ignoresArmor: current.weapon?.ignoresArmor });
 		const mitigated = soaked !== raw ? ` <span class="stonetop-damage-mitigated">(${raw}${detail})</span>` : "";
-		const undead = effective !== soaked
-			? ` <span class="stonetop-damage-mitigated">(${escHtml(format("stonetop.fight.undying.halvedNote", { soaked }))})</span>`
-			: "";
 		// ONE MEMBER OF A GROUP, for one attacker's blow: see fight/group-hits.js.
 		if (!current.selfHarm && !current.groupBlow && isLoneBlowOnGroup(targetActor, attacker, td?.parent ?? null, { attackerGroup: current.attackerGroup ?? null })) {
 			// A group follower's: the first member standing on its character's roster, which the card then
@@ -3141,7 +3148,7 @@ async function applyOwedRows(message, damage, record) {
 		const bare = gatedOff
 			? ` <span class="stonetop-damage-mitigated">(${escHtml(format(`stonetop.fight.heroMoves.armorGate.${gateWords?.noteKey ?? "note"}`, { move: worn.conditionalSource, ...gateWords?.params, armor: gatedOff }))})</span>`
 			: "";
-		lines.push(`<li><strong>${escHtml(rowName)}</strong>: ${effective} damage${back}${half}${mitigated}${brave}${bare}${undead}: ${t.oldHp} &rarr; ${t.newHp} HP${dead}${unstoppable}</li>`);
+		lines.push(`<li><strong>${escHtml(rowName)}</strong>: ${effective} damage${back}${half}${mitigated}${brave}${bare}${pastArmor}: ${t.oldHp} &rarr; ${t.newHp} HP${dead}${unstoppable}</li>`);
 	}
 	// Only the latch and the applying mark: a Readiness spend another client wrote meanwhile stays on the card.
 	await message.setFlag(SCOPE, "damage", { applied: nextApplied, applying: null });
@@ -3207,14 +3214,17 @@ export function wireConditionalArmor(message, html, gateFor = applyGateOnce(mess
 	// the same armor, drawn under the same gate. Here rather than beside its caller, so every damage card
 	// that asks about armor asks about this too.
 	const rows = { damage, pending, gate, done, several };
-	wireUndauntedArmor(message, actions, rows);
+	wireRowBoxes(message, actions, rows, UNDAUNTED_ARMOR_BOX);
 	// And a Revenant's Undying, which halves what gets past that armor: the next question down the same sum.
-	wireUndyingHalf(message, actions, rows);
+	wireRowBoxes(message, actions, rows, UNDYING_BOX);
+	// And a Lightbearer's Fire Within, which takes 2 off what gets past it for cold or fire.
+	wireRowBoxes(message, actions, rows, FIRE_WITHIN_BOX);
 }
 
 /**
  * A box (appendRowBox) on each pending row whose sufferer `qualifies`, listed on the damage flag under `key`
- * and worded by the i18n key `wordsKey`.
+ * and worded by the i18n key `wordsKey`. `listsTicked`: whether the flag lists the rows ticked ON (a box
+ * that opens unticked) or the rows ticked OFF (one that opens ticked).
  */
 function wireRowBoxes(message, actions, { damage, pending, gate, done, several }, { qualifies, className, wordsKey, key, listsTicked }) {
 	const listed = damageSet(damage, key);
@@ -3223,6 +3233,38 @@ function wireRowBoxes(message, actions, { damage, pending, gate, done, several }
 		appendRowBox(message, actions, { row, standIn, target, several, gate, done, className, words: format(wordsKey, {}), key, listed, listsTicked });
 	}
 }
+
+/**
+ * The UNTICKED box for Undaunted's "+1 armor" on a row whose sufferer has the move and the fight does not
+ * show it holding (fight/hero-moves.js#undauntedUnread): no fight on the map, the Fight tab off, or no
+ * large or huge foe on them and no numbers against them, when "bigger than you" may still be true. The
+ * user's ruling (2026-09-27): the table ticks it, and applyOwedDamage then adds the armor. Where the fight
+ * DOES show it, the armor is simply on, as it always was, and no box is drawn.
+ */
+const UNDAUNTED_ARMOR_BOX = Object.freeze({
+	// Read off the row's stamp (undauntedStamp) where it has one and nobody stood in, as Apply reads it.
+	qualifies: (target, row, standIn) => target?.type === "character"
+		&& (!standIn && typeof row?.undaunted === "boolean" ? row.undaunted === false : undauntedUnread(target)),
+	className: "stonetop-damage-armor-gate stonetop-damage-undaunted",
+	wordsKey: "stonetop.fight.heroMoves.undaunted.armorBox", key: "undauntedArmor", listsTicked: true,
+});
+
+// The boxes for the moves that act on what gets PAST armor. Each is also a step of Apply's sum (afterArmor):
+// `adjust` is what the move does to that number once its box is on, and `noteKey` the words the applied card
+// says it in, handed what reached the move as `soaked` (and `noteParams`).
+
+/**
+ * The UNTICKED box for a Lightbearer's Fire Within, "When you take damage from cold or fire, reduce that
+ * damage by 2" (Book I p.124), on a row whose sufferer has the move learned. Unticked, as Undaunted's is: cold
+ * and fire are the exception among blows, and only the table knows this one is either. Ticked, applyOwedDamage
+ * takes 2 off what gets past armor. Not armor, so piercing and "ignores armor" never reach it.
+ */
+const FIRE_WITHIN_BOX = Object.freeze({
+	qualifies: fireWithinSufferer, className: "stonetop-damage-armor-gate stonetop-damage-fire-within",
+	wordsKey: "stonetop.fight.heroMoves.fireWithin.box", key: "fireWithin", listsTicked: true,
+	adjust: dmg => Math.max(0, dmg - FIRE_WITHIN_REDUCTION),
+	noteKey: "stonetop.fight.heroMoves.fireWithin.note", noteParams: Object.freeze({ by: FIRE_WITHIN_REDUCTION }),
+});
 
 /**
  * The TICKED box for a Revenant's Undying, "When you take damage from cutting, stabbing, or crushing,
@@ -3235,28 +3277,39 @@ function wireRowBoxes(message, actions, { damage, pending, gate, done, several }
  * because being outnumbered or outsized is NOT the ordinary case.) Drawn per row against whoever takes
  * the blow, a Defend's stand-in included, and gated like the armor boxes.
  */
-function wireUndyingHalf(message, actions, rows) {
-	wireRowBoxes(message, actions, rows, {
-		qualifies: undyingSufferer, className: "stonetop-damage-armor-gate stonetop-damage-undying",
-		wordsKey: "stonetop.fight.undying.box", key: "undyingOff", listsTicked: false,
-	});
-}
+const UNDYING_BOX = Object.freeze({
+	qualifies: undyingSufferer, className: "stonetop-damage-armor-gate stonetop-damage-undying",
+	wordsKey: "stonetop.fight.undying.box", key: "undyingOff", listsTicked: false,
+	// Wrapped, not the import itself: read at Apply, never while the modules are still loading.
+	adjust: dmg => halveDamage(dmg),
+	noteKey: "stonetop.fight.undying.halvedNote", noteParams: Object.freeze({}),
+});
 
 /**
- * The UNTICKED box for Undaunted's "+1 armor" on a row whose sufferer has the move and the fight does not
- * show it holding (fight/hero-moves.js#undauntedUnread): no fight on the map, the Fight tab off, or no
- * large or huge foe on them and no numbers against them, when "bigger than you" may still be true. The
- * user's ruling (2026-09-27): the table ticks it, and applyOwedDamage then adds the armor. Where the fight
- * DOES show it, the armor is simply on, as it always was, and no box is drawn.
+ * In the order Apply takes them: Fire Within's 2 comes off what got through armor, and Undying halves what
+ * is left. A new move that acts on that number is one entry here and needs no edit to the sum.
  */
-function wireUndauntedArmor(message, actions, rows) {
-	wireRowBoxes(message, actions, rows, {
-		// Read off the row's stamp (undauntedStamp) where it has one and nobody stood in, as Apply reads it.
-		qualifies: (target, row, standIn) => target?.type === "character"
-			&& (!standIn && typeof row?.undaunted === "boolean" ? row.undaunted === false : undauntedUnread(target)),
-		className: "stonetop-damage-armor-gate stonetop-damage-undaunted",
-		wordsKey: "stonetop.fight.heroMoves.undaunted.armorBox", key: "undauntedArmor", listsTicked: true,
-	});
+const AFTER_ARMOR_BOXES = Object.freeze([FIRE_WITHIN_BOX, UNDYING_BOX]);
+
+/**
+ * What a row's sufferer takes of the `soaked` damage that got through armor, once AFTER_ARMOR_BOXES have each
+ * had their say as the card's box was left (`damage` is the card's flag), and the note each one that changed
+ * the number adds to the applied card's row.
+ *
+ * @returns {{effective: number, notes: string}}
+ */
+function afterArmor(sufferer, damage, uuid, soaked) {
+	let effective = soaked;
+	let notes = "";
+	for (const box of AFTER_ARMOR_BOXES) {
+		if (!box.qualifies(sufferer) || damageSet(damage, box.key).has(uuid) !== box.listsTicked) continue;
+		const next = box.adjust(effective);
+		if (next !== effective) {
+			notes += ` <span class="stonetop-damage-mitigated">(${escHtml(format(box.noteKey, { soaked: effective, ...box.noteParams }))})</span>`;
+		}
+		effective = next;
+	}
+	return { effective, notes };
 }
 
 /**

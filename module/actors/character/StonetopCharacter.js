@@ -82,7 +82,8 @@ import {CharacterInventory} from "./CharacterInventory.js";
 import {maybeBeginAttack, maybeCounterOnMiss, maybeMissFx, attackMoveFor, attackFoeAdvantage, recordClashedFoes, rollMoveDamageAt, snapshotTargets} from "../../combat/attack-flow.js";
 import {aimPcAskRoll} from "../../pc-asks/pc-ask-flow.js";
 import {INTERFERE_MOVE, PERSUADE_PC_MOVE, PC_ASK_FLAG} from "../../pc-asks/pc-ask-rules.js";
-import {brokenOaths, oathbreakerAgainst, alphaAgainst, spendAlphaOver, upAgainAgainst, spendUpAgainRoll, toughLoveAgainst, leapInOpen, HERO_MOVES} from "../../fight/hero-moves.js";
+import {GIVE_ADVANTAGE_ROLL_OPTIONS, moveRollOptions} from "./move-roll-options.js";
+import {brokenOaths, oathbreakerAgainst, alphaAgainst, spendAlphaOver, upAgainAgainst, spendUpAgainRoll, toughLoveAgainst, leapInOpen, commandHeld, HERO_MOVES} from "../../fight/hero-moves.js";
 import {defendReadinessHold, defendReadinessCap, readinessCount, readinessForTier, READINESS_FLAG, DEFEND_MOVE} from "../../combat/defend-readiness.js";
 import {settleReadinessOnAttack} from "../../combat/readiness-loss.js";
 import {messageOfRoll, CRITICAL_TOTAL} from "../../utils/roll-engine.js";
@@ -218,7 +219,8 @@ const SEASON_MOVE_DISADVANTAGE = [
  * as a 10+, "hitNote" buys no advantage but prints its `note` on the card's 10+ and 7-9 rows,
  * "successNote" the same on the 10+ row alone, and "criticalNote" on the 10+ row only when the total is
  * 12+ (roll-engine's `criticalActions`), calling its `onCritical(actor, message)` when it does. A row's
- * `tierActions()` adds its own buttons to the card's tier rows once taken, whatever its effect.
+ * `tierActions()` adds its own buttons to the card's tier rows once taken, whatever its effect, and its
+ * `critical` prints a note on a 12+ the same way, whatever its effect (Slippery's 6- as a 7-9 AND its 12+).
  */
 const FICTION_ROLL_OFFERS = [
 	{ key: "intimidating", moves: isPersuadeMove, ownsLearned: "Intimidating",
@@ -271,6 +273,21 @@ const FICTION_ROLL_OFFERS = [
 		source: "Disturbing", label: "stonetop.rollOffers.disturbing" },
 	{ key: "deathly-visage", moves: isPersuadeMove, postDeathLore: "consequences:deathly-visage",
 		source: "Deathly Visage", label: "stonetop.rollOffers.deathlyVisage" },
+	// The Blessed's Heed My Words (Book I p.106): "When you Persuade by talking sense or warning against
+	// foolishness, you have advantage."
+	{ key: "heed-my-words", moves: isPersuadeMove, ownsLearned: "Heed My Words",
+		source: "Heed My Words", label: "stonetop.rollOffers.heedMyWords" },
+	// The Fox's (Book I pp.110-111). Irresistible: "When you Persuade by using your considerable charms as
+	// leverage, you have advantage." Pants on Fire: "When you Defy Danger, Persuade, or Interfere by being
+	// deceitful, you have advantage." Slippery: "When you roll to escape being caught or controlled, treat a
+	// 6- as a 7-9. On a 12+, say how you turn the tables or use the circumstances to your advantage." Escaping
+	// is Defy Danger's, as Better Part of Valor's is; its 12+ line rides the 10+ row of a 12+ only (`critical`).
+	{ key: "irresistible", moves: isPersuadeMove, ownsLearned: "Irresistible",
+		source: "Irresistible", label: "stonetop.rollOffers.irresistible" },
+	{ key: "pants-on-fire", moves: name => name === "Defy Danger" || name === INTERFERE_MOVE || isPersuadeMove(name),
+		ownsLearned: "Pants on Fire", source: "Pants on Fire", label: "stonetop.rollOffers.pantsOnFire" },
+	{ key: "slippery", moves: name => name === "Defy Danger", ownsLearned: "Slippery",
+		source: "Slippery", label: "stonetop.rollOffers.slippery", effect: "missAsPartial", critical: "stonetop.rollOffers.slipperyNote" },
 ];
 
 /** The Ghost's and the Revenant's UNSTABLE, as its count is keyed in their lore (see _foldStandingNotes). */
@@ -362,6 +379,10 @@ function _foldTakenOffers(options, taken) {
 		else if (offer.effect === "criticalNote") Object.assign(folded, _withCriticalNote(folded, offer));
 		else Object.assign(folded, foldAdvantage(folded, offer.source));
 		if (offer.tierActions) Object.assign(folded, _withTierActions(folded, offer.tierActions));
+		// A 12+ line beside the row's own effect (Slippery): printed as a criticalNote's is, named once.
+		if (offer.critical) {
+			folded.criticalActions = `${folded.criticalActions ?? ""}<p class="stonetop-roll-offer-note">${offer.critical}</p>`;
+		}
 	}
 	return folded;
 }
@@ -2454,6 +2475,7 @@ export class StonetopCharacter {
 			offers.push({
 				key: row.key, label: _loc(row.label), applied: false, source: row.source,
 				...(row.effect ? { effect: row.effect } : {}), ...(row.note ? { note: _loc(row.note) } : {}),
+				...(row.critical ? { critical: _loc(row.critical) } : {}),
 				...(row.tierActions ? { tierActions: row.tierActions() } : {}),
 				...(row.onCritical ? { onCritical: message => row.onCritical(this._actor, message) } : {}),
 				// 1 held off the track (a hold pool counts what is HELD). Re-read, so a pip spent by hand
@@ -5637,6 +5659,11 @@ export class StonetopCharacter {
 			ongoing,
 			...rest,
 		};
+		// A giving move's button rides a roll with no item behind it as it rides an item's roll (move-roll-options.js):
+		// Seek Insight about an artifact, "either way, take advantage on your next move to act on the answers"
+		// (Book I p.228, give-advantage.js).
+		const given = moveRollOptions(rest.moveName, this._actor, null, GIVE_ADVANTAGE_ROLL_OPTIONS)?.tierActions;
+		if (given) Object.assign(base, _withTierActions(base, given));
 		// A guided move whose row has no rollable of its own rolls here by name, so the grudges a roll aimed
 		// at someone carries (Binding Arbitration, But I Get Up Again, Alpha, Tough Love) and its standing
 		// advantage and disadvantage are folded here as well as in onRoll.
@@ -5686,7 +5713,7 @@ export class StonetopCharacter {
 	 *   #orderFollowersModeSources), so the nerves are folded with each of them rather than with the net
 	 * @param {string} [opts.moveName]  - Card header, e.g. "Hari: Defy Danger"
 	 */
-	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", modeSources = null, moveName, shieldWall = false } = {}) {
+	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", modeSources = null, moveName, shieldWall = false, command = false } = {}) {
 		const { rollStat } = await import("../../utils/roll-engine.js");
 		// Return the roll so the caller can react to the result — e.g. auto-holding
 		// Readiness when a follower is ordered to Defend and rolls 7+ (p.469).
@@ -5694,18 +5721,24 @@ export class StonetopCharacter {
 		// without them (a caller that hands only the net), the net is the one side.
 		const sources = Array.isArray(modeSources) ? modeSources : [rollMode];
 		const nerves = fightStateActive(this._actor, "nerves");
+		// Stentorian's "Spend 1 Command ... You have advantage to Order Followers" (Book I p.127), ticked in the
+		// window (dialogs/OrderFollowersDialog.js): named on the card, and the Command paid once the dice land.
+		const shouted = !!command && commandHeld(this._actor) > 0;
 		// Where an advantage came from, when the Marshal's Shield Wall gave it, and a disadvantage.
 		const conditionNotes = [
 			...(shieldWall ? ["Shield Wall"] : []),
+			...(shouted ? [HERO_MOVES.STENTORIAN] : []),
 			...(nerves ? [format("stonetop.nerves.rollNote", { move: WE_HAPPY_FEW })] : []),
 		];
-		return rollStat("follower", this._actor, {
+		const roll = await rollStat("follower", this._actor, {
 			statValue: Math.trunc(Number(bonus) || 0),
 			rollMode:  foldModes(nerves ? [...sources, "dis"] : sources, "normal"),
 			moveName:  moveName || "Order Followers",
 			modifier:  0,
 			...(conditionNotes.length ? { conditionNotes } : {}),
 		});
+		if (roll && shouted) await takeBackHeld(this._actor, HERO_MOVES.STENTORIAN, 1);
+		return roll;
 	}
 
 	async onDropMove(itemData) {

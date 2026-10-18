@@ -42,7 +42,7 @@ describe("defendOffers", () => {
 
 	it("offers each option once against a blow, and nothing on a blow already applied", () => {
 		const taken = { ...damage, halvedBy: [{ uuid: "Token.bram", name: "bram", how: "halve" }], standIns:[{ uuid: "Token.bram", by: aeliana.uuid, name: "aeliana" }] };
-		const none = { halve: [], parry: [], standIn: [], ignore: [], knockedDown: [], safetyFirst: [] };
+		const none = { halve: [], parry: [], standIn: [], ignore: [], knockedDown: [], safetyFirst: [], redirect: [] };
 		expect(defendOffers(taken, () => ({ self: bram, allies: [aeliana] }), () => aeliana)).toEqual(none);
 		const applied = { ...damage, applied: [{ uuid: "Token.bram" }] };
 		expect(defendOffers(applied, () => ({ self: bram, allies: [aeliana] }))).toEqual(none);
@@ -173,6 +173,50 @@ describe("Safety First on the damage card", () => {
 	});
 });
 
+// Coverage pass (2026-10-16): Mirrorshield ("When you Defend with a shield, you can spend 1 Readiness to
+// intercept a magical force and redirect it to a different target (or none)", Book I p.119) and Lightning Rod
+// ("When you Defend while touching the earth, you can spend 1 Readiness to intercept a nearby magical attack
+// and redirect it harmlessly into the ground", p.106). A button: whether the blow is magical is the table's.
+describe("Mirrorshield and Lightning Rod on the damage card", () => {
+	const damage = { results: [{ uuid: "Token.bram", name: "Bram" }] };
+	const message = flag => ({
+		flag,
+		getFlag() { return this.flag; },
+		setFlag: vi.fn(async function (_scope, key, value) { const store = { damage: this.flag }; writeFlagPath(store, key, value); this.flag = store.damage; }),
+	});
+	const judge = (shield, readiness = 1) => Object.assign(character("judge", readiness, ["Mirrorshield"]), {
+		typedActor: { bearsShield: vi.fn(async () => shield) },
+	});
+
+	it("is offered to whoever could spend Readiness on the blow, holding either move, once per blow", () => {
+		const blessed = character("blessed", 1, ["Lightning Rod"]);
+		const offers = defendOffers(damage, () => ({ self: character("bram", 1), allies: [blessed, judge(true)] }));
+		expect(offers.redirect.map(o => [o.defender.name, o.move, o.cost])).toEqual([["blessed", "Lightning Rod", 1], ["judge", "Mirrorshield", 1]]);
+		const taken = { ...damage, redirectedBy: [{ uuid: "Token.bram", name: "blessed", how: "redirect", move: "Lightning Rod" }] };
+		expect(defendOffers(taken, () => ({ self: null, allies: [blessed] })).redirect).toEqual([]);
+		expect(defendOffers(damage, () => ({ self: character("plain", 1), allies: [] })).redirect).toEqual([]);
+	});
+
+	it("spends 1 Readiness, takes the blow off the row, and says whose move it was", async () => {
+		const blessed = character("blessed", 2, ["Lightning Rod"]);
+		const card = message({ results: [{ uuid: "Token.bram", name: "Bram" }] });
+		expect(await spendOnBlow(card, "redirect", { row: card.flag.results[0], defender: blessed, cost: 1, move: "Lightning Rod" })).toBe(true);
+		expect(blessed.flags[SYSTEM_ID][READINESS_FLAG]).toBe(1);
+		expect(spentOn(card.flag).voided.get("Token.bram")).toEqual({ lineKey: "stonetop.fight.defend.redirectedLine", move: "Lightning Rod" });
+		expect(defendNotes(card.flag)).toEqual(["blessed spent Readiness to redirect the magic aimed at Bram (Lightning Rod)."]);
+	});
+
+	it("refuses Mirrorshield to a Judge carrying no shield, and spends nothing", async () => {
+		const bare = judge(false, 2);
+		const card = message({ results: [{ uuid: "Token.bram", name: "Bram" }] });
+		expect(await spendOnBlow(card, "redirect", { row: card.flag.results[0], defender: bare, cost: 1, move: "Mirrorshield" })).toBe(false);
+		expect(bare.flags[SYSTEM_ID][READINESS_FLAG]).toBe(2);
+		expect(card.setFlag).not.toHaveBeenCalled();
+		const shielded = judge(true, 2);
+		expect(await spendOnBlow(card, "redirect", { row: card.flag.results[0], defender: shielded, cost: 1, move: "Mirrorshield" })).toBe(true);
+	});
+});
+
 describe("spendOnBlow", () => {
 	const message = flag => ({
 		flag,
@@ -238,7 +282,7 @@ describe("spendOnBlow", () => {
 		expect(heavy.setFlag).not.toHaveBeenCalled();
 		const judge = character("judge", 1, ["A Mighty Rampart"]);
 		expect(await spendOnBlow(card, "ignore", { row: card.flag.results[0], defender: judge, cost: 1 })).toBe(true);
-		expect([...spentOn(card.flag).ignored]).toEqual(["Token.bram"]);
+		expect([...spentOn(card.flag).voided]).toEqual([["Token.bram", { lineKey: "stonetop.fight.defend.ignoredLine", move: "" }]]);
 		expect(defendNotes(card.flag)).toEqual([
 			"heavy took the blow for Bram (Steadfast Guardian, no Readiness spent).",
 			"judge spent Readiness to ignore the blow (A Mighty Rampart).",
@@ -324,6 +368,18 @@ describe("spendOnBlow", () => {
 			expect(posted[0].content).toContain("also pick 1 option from the Ambush list");
 			expect(posted[0].content).toContain("without the +1d4 damage");
 			expect(posted[0].content).toContain("Slip away before they can react");
+		});
+
+		// Coverage pass (2026-10-16): the list's "Create an opportunity; you or an ally gains advantage on the next
+		// move to act on it" carries the same button an Ambush 7+ does.
+		it("carries Ambush's give-advantage button for the opportunity pick, and none once the d4 was the pick", async () => {
+			const card = message({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.bram", name: "Bram" }] });
+			await spendOnBlow(card, "parry", { row: card.flag.results[0], defender: fox(), cost: 1 }, { strikeBack: strikingWith([]) });
+			expect(posted[0].content).toContain('class="stonetop-give-advantage" data-move="Ambush"');
+			expect(posted[0].content).toContain("Create an opportunity");
+			const took = message({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.bram", name: "Bram" }] });
+			await spendOnBlow(took, "parry", { row: took.flag.results[0], defender: fox(), cost: 1 }, { strikeBack: strikingWith(["secondIntent"]) });
+			expect(posted[1].content).not.toContain("stonetop-give-advantage");
 		});
 	});
 });

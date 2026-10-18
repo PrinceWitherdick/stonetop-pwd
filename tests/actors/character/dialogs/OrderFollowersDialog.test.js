@@ -237,3 +237,29 @@ describe("OrderFollowersDialog, Shield Wall", () => {
 		expect(handed).toMatchObject({ rollMode: "normal", modeSources: ["adv", "dis"] });
 	});
 });
+
+// Coverage pass (2026-10-16): Stentorian's "Spend 1 Command ... You have advantage to Order Followers" (Book I
+// p.127). A box of its own, unticked, while the Marshal holds Command.
+describe("OrderFollowersDialog: Stentorian's Command", () => {
+	const marshal = held => ({
+		name: "Bryn",
+		items: [{ type: "move", name: "Stentorian", system: { resource: { max: 2 } }, flags: {} }],
+		typedActor: { moveResources: { getMoveResources: () => ({ Stentorian: held }) } },
+	});
+
+	it("offers the box only while Command is held, unticked", () => {
+		expect(new OrderFollowersDialog(marshal(2), { name: "Andalau" }, () => {}).getData()).toMatchObject({ commandHeld: 2, spendCommand: false, readout: "Roll 2d6 +0" });
+		expect(new OrderFollowersDialog(marshal(0), { name: "Andalau" }, () => {}).getData().commandHeld).toBe(0);
+		expect(makeDialog().getData().commandHeld).toBe(0);
+	});
+
+	it("ticked, it is advantage and the roll is told to spend it", async () => {
+		let answer = null;
+		const dialog = new OrderFollowersDialog(marshal(1), { name: "Andalau" }, async result => { answer = result; });
+		dialog.close = () => {};
+		dialog._command = true;
+		expect(dialog.getData().readout).toBe("Roll 3d6 (keep highest 2) +0, with advantage");
+		await dialog._finish();
+		expect(answer).toMatchObject({ rollMode: "adv", command: true });
+	});
+});

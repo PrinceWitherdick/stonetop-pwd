@@ -662,6 +662,37 @@ describe("Dangerous (the Heavy): \"When you deal your damage, you have advantage
 	});
 });
 
+// Coverage pass (2026-10-16): a Marshal's Focus Fire, "each ally has advantage on their next damage roll against
+// that foe" (Book I p.127), read where every damage roll's mode is settled, and answered by that roll.
+describe("Focus Fire on an ally's damage roll", () => {
+	it("rolls the ally's next damage at the named foe with advantage, once", async () => {
+		const flags = {};
+		const ash = Object.assign(hero("ash", "Ash"), {
+			typedActor: { carriedWeaponGear: async () => [{ slug: "sword", weaponSlug: "sword", catalog: true }], computedDamageDie: async () => "d8" },
+			getFlag: (_s, key) => flags[key],
+			setFlag: vi.fn(async (_s, key, value) => { flags[key] = value; }),
+		});
+		const { tokens } = fightInARow([["ash", ash], ["crin", crinwin("crinwin")]]);
+		const order = { id: "bryn.1", key: tokens.crin.uuid, name: "Crinwin", combat: null };
+		const bryn = Object.assign(hero("bryn", "Bryn"), {
+			items: [{ type: "move", name: "Focus Fire" }],
+			getFlag: (_s, key) => (key === "focusFire" ? [order] : undefined),
+		});
+		const savedActors = globalThis.game.actors;
+		globalThis.game.actors = collection([bryn, ash]);
+		try {
+			await rollCharacterDamageAt(ash, { label: "Damage", shiftKey: true });
+			expect(damageFlag().results[0].formula).toMatch(/^2d8kh/);
+			expect(flags.focusFireUsed).toEqual(["bryn.1"]);
+			posted.length = 0;
+			await rollCharacterDamageAt(ash, { label: "Damage", shiftKey: true });
+			expect(damageFlag().results[0].formula).not.toMatch(/kh/);
+		} finally {
+			globalThis.game.actors = savedActors;
+		}
+	});
+});
+
 describe("a character's own moves on the blow they deal", () => {
 	/** Bram with a sword and whichever moves the case is about. */
 	const heavy = (...moves) => Object.assign(hero("bram", "Bram"), {
@@ -1070,6 +1101,55 @@ describe("a Revenant's Undying on the damage card", () => {
 		box.checked = false;
 		await box.fire();
 		expect(message.getFlag(SCOPE, "damage").undyingOff).toEqual([tokens.wyn.uuid]);
+	});
+});
+
+// Coverage pass (2026-10-16): the Lightbearer's Fire Within, "When you take damage from cold or fire, reduce
+// that damage by 2" (Book I p.124). An UNTICKED box on the card: cold and fire are the exception, the table's
+// to say. And a blow Mirrorshield or Lightning Rod redirected (fight/defend-spend.js) lands on nobody here.
+describe("Fire Within and a redirected blow on the damage card", () => {
+	const lightbearer = () => Object.assign(hero("sol", "Sol"), { items: [{ type: "move", name: "Fire Within" }] });
+	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
+
+	it("takes 2 off what gets past armor only when the box was ticked, and says so", async () => {
+		const sol = lightbearer();
+		const { tokens } = fightInARow([["sol", sol]]);
+		const row = { uuid: tokens.sol.uuid, name: "Sol", raw: 7 };
+		await apply({ move: "Frost breath", weapon: null, results: [row], applied: [], fireWithin: [row.uuid] });
+		// 7 less 2 armor is 5, less 2 for Fire Within.
+		expect(sol.system.attributes.hp.value).toBe(7);
+		expect(posted.at(-1).content).toContain("reduced by 2: Fire Within");
+
+		const unticked = lightbearer();
+		const second = fightInARow([["sol", unticked]]);
+		await apply({ move: "Bite", weapon: null, results: [{ uuid: second.tokens.sol.uuid, name: "Sol", raw: 7 }], applied: [] });
+		expect(unticked.system.attributes.hp.value).toBe(5);
+	});
+
+	it("draws the box unticked for a Lightbearer with the move, writes it when ticked, and draws none for anyone else", async () => {
+		const sol = lightbearer();
+		const { tokens } = fightInARow([["sol", sol], ["pim", hero("pim", "Pim")]]);
+		globalThis.document = { createElement: element };
+		const actions = element("div");
+		const message = makeMessage({ damage: { move: "Frost breath", results: [{ uuid: tokens.sol.uuid, name: "Sol", raw: 6 }, { uuid: tokens.pim.uuid, name: "Pim", raw: 6 }], applied: [] } });
+		message.canUserModify = () => true;
+		wireConditionalArmor(message, { querySelector: sel => (sel === ".stonetop-attack-actions" ? actions : null) });
+		expect(actions.kids).toHaveLength(1);
+		const [box, words] = actions.kids[0].kids;
+		expect(box.checked).toBe(false);
+		expect(words.textContent).toBe("Sol: Fire Within: from cold or fire, so reduce the damage by 2");
+		box.checked = true;
+		await box.fire();
+		expect(message.getFlag(SCOPE, "damage").fireWithin).toEqual([tokens.sol.uuid]);
+	});
+
+	it("deals nothing to a row whose magic was redirected", async () => {
+		const pim = hero("pim", "Pim");
+		const { tokens } = fightInARow([["pim", pim]]);
+		const row = { uuid: tokens.pim.uuid, name: "Pim", raw: 9 };
+		await apply({ move: "Firebolt", weapon: null, results: [row], applied: [], redirectedBy: [{ uuid: row.uuid, name: "judge", how: "redirect", move: "Mirrorshield" }] });
+		expect(pim.system.attributes.hp.value).toBe(10);
+		expect(posted.at(-1).content).toContain("the magic was redirected (Mirrorshield), no damage");
 	});
 });
 

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
 	battleHoldsToFill, battleHoldsContent, askBattleHolds, offerBattleHolds, installBattleHolds,
-	spendSurpriseForRoll, regainSurpriseOnHit, PREPARE_A_WELCOME,
+	spendSurpriseForRoll, regainSurpriseOnHit, PREPARE_A_WELCOME, commandHolders, spendCommandForDeploy,
+	deployCommandOffers, deployCommandAnswers,
 } from "../../module/combat/battle-holds.js";
 import { refreshHeldMoves } from "../../module/migration/move-refresh.js";
 import { stubAsk } from "../fakes/confirm.js";
@@ -203,5 +204,65 @@ describe("a stale embedded copy with no track", () => {
 		expect(held[PREPARE_A_WELCOME]).toBe(2);
 		expect(await regainSurpriseOnHit(actor, { name: PREPARE_A_WELCOME }, "success")).toBe(true);
 		expect(held[PREPARE_A_WELCOME]).toBe(3);
+	});
+});
+
+// Coverage pass (2026-10-16): Stentorian's "advantage to ... Deploy" (Book I p.127) spends 1 Command off a
+// Marshal this user may write, as the steading's Deploy is rolled (StonetopSteadingSheet.js).
+// Rules fix (2026-10-17): "YOU have advantage to ... Deploy" is the Marshal's own, so the line names the Marshal
+// Deploying, the Command comes off THAT Marshal, and a spend that fails gives no advantage.
+describe("Command spent for a steading's Deploy", () => {
+	it("lists the Marshals this user may write who hold Command", () => {
+		const bryn = marshal({ held: { Stentorian: 2 }, id: "b" });
+		const empty = marshal({ held: { Stentorian: 0 }, id: "e" });
+		const theirs = marshal({ held: { Stentorian: 2 }, id: "t" });
+		theirs.actor.isOwner = false;
+		expect(commandHolders([empty.actor, theirs.actor, bryn.actor])).toEqual([bryn.actor]);
+	});
+
+	it("offers only the user's own Marshal when they hold Command, else every one they may write", () => {
+		const own = marshal({ held: { Stentorian: 1 }, id: "own" });
+		const other = marshal({ held: { Stentorian: 2 }, id: "other" });
+		other.actor.name = "Bryn";
+		const actors = [other.actor, own.actor];
+		expect(deployCommandOffers(actors, { character: own.actor })).toEqual([{ id: "own", name: "Maddoc" }]);
+		// A GM (no character), or a player whose own character holds none: a pick among the rest.
+		expect(deployCommandOffers(actors, { character: null })).toEqual([{ id: "other", name: "Bryn" }, { id: "own", name: "Maddoc" }]);
+		const spent = marshal({ held: { Stentorian: 0 }, id: "spent" });
+		expect(deployCommandOffers([...actors, spent.actor], { character: spent.actor }).map(o => o.id)).toEqual(["other", "own"]);
+	});
+
+	it("spends from the Marshal named, not the first holder found", async () => {
+		const first = marshal({ held: { Stentorian: 2 }, id: "first" });
+		const named = marshal({ held: { Stentorian: 2 }, id: "named" });
+		const actors = [first.actor, named.actor];
+		expect(await spendCommandForDeploy("named", actors)).toBe("Maddoc");
+		expect(named.tracks.Stentorian).toBe(1);
+		expect(first.tracks.Stentorian).toBe(2);
+		expect(await spendCommandForDeploy("nobody", actors)).toBeNull();
+		expect(await spendCommandForDeploy("", actors)).toBeNull();
+	});
+
+	it("clears the advantage when the Command cannot be spent", async () => {
+		const empty = marshal({ held: { Stentorian: 0 }, id: "e" });
+		const out = await deployCommandAnswers({ command: "e", strength: "yes" }, { actors: [empty.actor] });
+		expect(out).toEqual({ command: "", commandRefused: true, strength: "yes" });
+		const full = marshal({ held: { Stentorian: 1 }, id: "f" });
+		expect(await deployCommandAnswers({ command: "f" }, { actors: [full.actor] })).toEqual({ command: "Maddoc" });
+		expect(full.tracks.Stentorian).toBe(0);
+		const untouched = { strength: "" };
+		expect(await deployCommandAnswers(untouched, { actors: [full.actor] })).toBe(untouched);
+	});
+
+	it("is spent before the steading's Deploy is adjusted, from the window's own offer", async () => {
+		const { readRepo } = await import("../fakes/css.js");
+		const sheet = readRepo("module/actors/steading/StonetopSteadingSheet.js");
+		expect(sheet).toContain("command: deployCommandOffers(),");
+		// Generically: whichever taken answers' questions carry a `spend` (improvement-rolls.js).
+		const spend = sheet.indexOf("await spendImprovementAnswers(askedQuestions, windowAnswers)");
+		const adjust = sheet.indexOf("const adjusted = await settleSteadingRoll(");
+		expect(spend).toBeGreaterThan(0);
+		expect(spend).toBeLessThan(adjust);
+		expect(sheet).not.toContain("deployCommandAnswers");
 	});
 });

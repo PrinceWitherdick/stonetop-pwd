@@ -341,3 +341,26 @@ describe("StonetopItem.roll — the roller's own picks", () => {
 		expect(card).not.toContain("data-pick-max-failure");
 	});
 });
+
+// Coverage pass (2026-10-16): the Marshal's Like an Open Book, "When you Take the Measure of someone who fears
+// or respects you, your second question can be anything you want" (Book I p.127). Take the Measure is never
+// rolled, so its line rides the POSTED card, through the same seam a rolled card's picks do.
+describe("StonetopItem.roll: what the poster brings to a posted move", () => {
+	const realChatMessage = globalThis.ChatMessage;
+	beforeEach(() => { globalThis.ChatMessage = { create: vi.fn(async data => data), getSpeaker: vi.fn(() => ({})) }; });
+	afterEach(() => { globalThis.ChatMessage = realChatMessage; });
+	const MEASURE = { description: "<p>When you size someone up, ask their player one of the questions below.</p><ul><li>Can I trust them?</li><li>What do they intend to do?</li></ul>" };
+
+	it("puts Like an Open Book's line on Take the Measure's card, for a Marshal holding it learned", async () => {
+		const posted = await makeItem("Take the Measure", MEASURE, [move("Take the Measure"), { ...move("Like an Open Book"), flags: {} }]).roll();
+		expect(posted.content).toContain("your second question can be anything you want");
+	});
+
+	it("puts nothing on it for anyone else, or on a player's own move of that name", async () => {
+		const plain = await makeItem("Take the Measure", MEASURE, [move("Take the Measure")]).roll();
+		expect(plain.content).not.toContain("second question");
+		const homebrew = makeItem("Take the Measure", MEASURE, [{ ...move("Like an Open Book"), flags: {} }]);
+		homebrew.flags = { "stonetop-pwd": { custom: true } };
+		expect((await homebrew.roll()).content).not.toContain("second question");
+	});
+});

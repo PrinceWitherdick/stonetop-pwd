@@ -20,6 +20,7 @@
  * +1 Defenses, the herd's half-cost and its Requisition count.
  */
 import { rulesHas } from "./improvement-rules.js";
+import { HERO_MOVES } from "../../fight/hero-move-names.js";
 
 /** The steading moves these rules name, by the label their roll card carries. */
 export const STEADING_MOVE = Object.freeze({
@@ -119,6 +120,70 @@ function pathfinderLabel(holders) {
 }
 
 /**
+ * The Marshal's Stentorian (Book I p.127): "Spend 1 Command to shout an order or warning and pick 1: ... You
+ * have advantage to Order Followers or Deploy." Spending is the Marshal's choice, so the Deploy window asks
+ * UNTICKED, and only for a Marshal who holds Command (combat/command-holders.js#deployCommandOffers). The advantage
+ * applies only once the Command is spent: the question's `spend` takes it off that Marshal and clears `command`
+ * from the answers when it fails (combat/battle-holds.js#deployCommandAnswers), before they reach rollAdjustments
+ * (spendImprovementAnswers).
+ */
+const STENTORIAN = HERO_MOVES.STENTORIAN;
+
+/**
+ * Stentorian's spend: 1 Command off the Marshal the answer names. Loaded when it is spent, not with this
+ * module, so the windows that only ASK (and these rules' tests) do not pull in the fight code behind it.
+ */
+async function spendStentorianCommand(answers) {
+	const { deployCommandAnswers } = await import("../../combat/battle-holds.js");
+	const paid = await deployCommandAnswers(answers);
+	return paid.commandRefused
+		? { answers: paid, refused: "No Command was spent (that Marshal holds none, or you cannot update them), so the Deploy has no Stentorian advantage." }
+		: { answers: paid };
+}
+
+/** The Stentorian line, naming the Marshal it spends from, or asking which one when there are several. */
+function commandLabel(holders) {
+	return holders.length === 1
+		? `${STENTORIAN} (${holders[0].name}): spend 1 Command to shout an order or warning, advantage to Deploy`
+		: `${STENTORIAN}: the Marshal Deploying spends 1 Command to shout an order or warning, advantage to Deploy`;
+}
+
+/**
+ * Deploy's Stentorian question: a tick naming the one Marshal, or a pick among several. Its value is their id.
+ * It carries its `spend` (spendImprovementAnswers runs it when the answer is taken).
+ */
+function commandQuestion(holders, spend) {
+	const label = commandLabel(holders);
+	if (holders.length === 1) return { name: "command", type: "checkbox", value: holders[0].id, label, spend };
+	return {
+		name: "command", type: "select", label, spend,
+		options: [{ value: "", label: "No" }, ...holders.map(h => ({ value: h.id, label: h.name }))],
+	};
+}
+
+/**
+ * Pay for every answer the window took whose question costs something (a `spend` on its row: Stentorian's
+ * Command), in question order, BEFORE the roll is adjusted. A spend hands back the answers to roll by, with its
+ * own answer cleared when it could not be paid, so the roll gets no advantage it did not pay for; `refused`
+ * says why, and is passed to `warn`.
+ *
+ * @param {Array<{name: string, spend?: (answers: object) => Promise<{answers: object, refused?: string}>}>} questions
+ * @param {object} answers  the window's answers, by question name
+ * @param {{warn?: (message: string) => void}} [deps]
+ * @returns {Promise<object>} the answers to roll by
+ */
+export async function spendImprovementAnswers(questions, answers, { warn = msg => globalThis.ui?.notifications?.warn?.(msg) } = {}) {
+	let out = answers;
+	for (const q of questions ?? []) {
+		if (!q?.spend || !out?.[q.name]) continue;
+		const paid = await q.spend(out);
+		out = paid.answers;
+		if (paid.refused) warn(paid.refused);
+	}
+	return out;
+}
+
+/**
  * The questions a move's window asks because of what the steading has built, plus Deploy's own
  * "position of strength", which the move itself asks and Well-Trained Militia feeds.
  *
@@ -135,9 +200,16 @@ function pathfinderLabel(holders) {
  * @param {string[]} [o.pathfinder]  the names of the characters with Pathfinder learned; any at all
  *   asks the Pathfinder line, unticked, since beyond sight of home is the table's call
  * @param {{grown: number, total: number}} [o.herd]  the tracked herd, for Requisition's count
- * @returns {Array<{name: string, type: "checkbox"|"select", label: string, checked?: boolean, options?: Array<{value: string, label: string}>}>}
+ * @param {Array<{id: string, name: string}>} [o.command]  the Marshals Deploy's Stentorian line may spend
+ *   Command from (combat/command-holders.js#deployCommandOffers); one asks an unticked box naming them, several
+ *   a pick defaulting to "No". The answer is the Marshal's id.
+ * @param {Function} [o.spendCommand]  that question's `spend` (injectable for tests)
+ * @returns {Array<{name: string, type: "checkbox"|"select", label: string, checked?: boolean, options?: Array<{value: string, label: string}>, spend?: Function}>}
+ *   `spend`, on a question whose answer costs something, is run by spendImprovementAnswers.
  */
-export function improvementQuestions(moveName, statKey, { rules = [], tactics = [], logistics = [], pathfinder = [], herd = null } = {}) {
+export function improvementQuestions(moveName, statKey, {
+	rules = [], tactics = [], logistics = [], pathfinder = [], herd = null, command = [], spendCommand = spendStentorianCommand,
+} = {}) {
 	const has = rulesHas(rules);
 	const asks = [];
 	if (moveName === STEADING_MOVE.DEPLOY) {
@@ -178,6 +250,7 @@ export function improvementQuestions(moveName, statKey, { rules = [], tactics = 
 	if (PATHFINDER_MOVES.has(moveName) && pathfinder.length) {
 		asks.push({ name: "pathfinder", type: "checkbox", label: pathfinderLabel(pathfinder) });
 	}
+	if (moveName === STEADING_MOVE.DEPLOY && command.length) asks.push(commandQuestion(command, spendCommand));
 	return asks;
 }
 
@@ -231,6 +304,7 @@ export function rollAdjustments({
 	}
 	if (LOGISTICS_MOVES.has(moveName) && answers.logistics) adv.push(LOGISTICS);
 	if (PATHFINDER_MOVES.has(moveName) && answers.pathfinder) adv.push(PATHFINDER);
+	if (moveName === STEADING_MOVE.DEPLOY && answers.command) adv.push(STENTORIAN);
 	for (const rule of advantagesFor(rules, moveName, { asked: true })) {
 		if (answers[advantageQuestionName(rule.slug)]) adv.push(rule.label);
 	}

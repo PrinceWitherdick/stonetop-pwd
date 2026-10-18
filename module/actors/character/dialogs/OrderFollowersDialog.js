@@ -1,6 +1,7 @@
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { orderFollowersBonus, orderFollowersModeSources } from "../../../data/follower-build.js";
 import { sign } from "../../../utils/roll-engine.js";
+import { commandHeld } from "../../../fight/hero-moves.js";
 
 // ── OrderFollowersDialog ─────────────────────────────────────────────────────
 // Direct a follower to make a move (Book I, NPCs & Followers p.462: "Order
@@ -36,7 +37,12 @@ import { sign } from "../../../utils/roll-engine.js";
 // naming the move; unticked, it is an ordinary Defend. Its own box rather than the Advantage toggle, so
 // the card and the readout can say where the advantage came from.
 //
-// Hands { bonus, rollMode, moveName, moveKey, followerName, member, shieldWall } back to the
+// STENTORIAN (the Marshal, Book I p.127): "Spend 1 Command to shout an order or warning and pick 1: ...
+// You have advantage to Order Followers or Deploy." A Marshal holding Command gets a box of its own,
+// UNTICKED (spending is their choice), that is advantage and names the move; the Command comes off once the
+// dice land (StonetopCharacter#onOrderFollowersRoll, `command`).
+//
+// Hands { bonus, rollMode, moveName, moveKey, followerName, member, shieldWall, command } back to the
 // caller (which calls StonetopCharacter.onOrderFollowersRoll). `member` is the
 // picked member's key, or null for the whole group or a follower who is one person.
 
@@ -94,6 +100,8 @@ export class OrderFollowersDialog extends StonetopDialog {
 		this._disadvantage = false;
 		// Formed up in a shield wall: only asked when `follower.shieldWall` offers it and they Defend.
 		this._inWall       = true;
+		// Spending 1 Command on Stentorian's advantage: only asked while the Marshal holds some.
+		this._command      = false;
 	}
 
 	static get defaultOptions() {
@@ -155,9 +163,19 @@ export class OrderFollowersDialog extends StonetopDialog {
 		return this._offersWall() && this._inWall;
 	}
 
-	/** Advantage from either source: the player's toggle, or Shield Wall. */
+	/** How much Command the Marshal holds on Stentorian's track (0 without the move learned). */
+	_commandHeld() {
+		return commandHeld(this._actor);
+	}
+
+	/** Whether Stentorian's advantage is on this roll: Command held, and its box ticked. */
+	_commandAdvantage() {
+		return this._command && this._commandHeld() > 0;
+	}
+
+	/** Advantage from any source: the player's toggle, Shield Wall, or Command spent. */
 	_hasAdvantage() {
-		return this._advantage || this._wallAdvantage();
+		return this._advantage || this._wallAdvantage() || this._commandAdvantage();
 	}
 
 	// Live tallies the player's chip picks into the Order Followers result. Moves
@@ -246,6 +264,8 @@ export class OrderFollowersDialog extends StonetopDialog {
 			disadvantage: this._disadvantage,
 			shieldWall:   this._offersWall(),
 			inWall:       this._inWall,
+			commandHeld:  this._commandHeld(),
+			spendCommand: this._command,
 			modeNote,
 			readout:      `Roll ${dice} ${signedBonus}${readoutNote}`,
 		};
@@ -288,6 +308,7 @@ export class OrderFollowersDialog extends StonetopDialog {
 
 		html.find(".stonetop-of-adv").on("change", ev => { this._advantage    = ev.currentTarget.checked; this.render(false); });
 		html.find(".stonetop-of-wall").on("change", ev => { this._inWall      = ev.currentTarget.checked; this.render(false); });
+		html.find(".stonetop-of-command").on("change", ev => { this._command  = ev.currentTarget.checked; this.render(false); });
 		html.find(".stonetop-of-dis").on("change", ev => { this._disadvantage = ev.currentTarget.checked; this.render(false); });
 
 		html.find(".stonetop-of-roll").on("click", () => this._finish());
@@ -311,6 +332,7 @@ export class OrderFollowersDialog extends StonetopDialog {
 			bonus, rollMode, modeSources, moveName, moveKey: this._moveKey, followerName: name,
 			member: this._member()?.key ?? null,
 			shieldWall: this._wallAdvantage(),
+			...(this._commandAdvantage() ? { command: true } : {}),
 		});
 		this.close();
 	}

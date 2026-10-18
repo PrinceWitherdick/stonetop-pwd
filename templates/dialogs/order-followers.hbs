@@ -87,6 +87,14 @@
           In a shield wall (Shield Wall): Defend with advantage, and +2 Readiness on a 7+
         </label>
         {{/if}}
+        {{!-- Stentorian (the Marshal): spend 1 Command for advantage to Order Followers. Unticked: the
+              spend is theirs to choose, and it is paid once the dice land. --}}
+        {{#if commandHeld}}
+        <label class="stonetop-of-adv-row stonetop-of-command-row">
+          <input type="checkbox" class="stonetop-of-command" {{#if spendCommand}}checked{{/if}}>
+          Spend 1 Command (Stentorian, {{commandHeld}} held): advantage
+        </label>
+        {{/if}}
         <span class="stonetop-cf-chosen-label">Anything else swinging the roll? <span class="stonetop-of-tags-hint">(Stentorian, an Aid, an Interfere…)</span></span>
         <div class="stonetop-of-mode-row">
           <label class="stonetop-of-adv-row">

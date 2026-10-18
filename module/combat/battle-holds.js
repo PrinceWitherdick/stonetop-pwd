@@ -25,6 +25,8 @@ import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { contentElement } from "../utils/dialogv2-content.js";
 import { escHtml, joinNames } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
+import { HERO_MOVES } from "../fight/hero-moves.js";
+import { commandHolders, deployCommandOffers } from "./command-holders.js";
 
 const KEY = "stonetop.battleHolds";
 const FIELD = "stonetop-battle-hold";
@@ -145,6 +147,44 @@ export async function offerBattleHolds(actor, { ask = askBattleHolds } = {}) {
 	const held = joinNames(picked.map(hold => `${hold.max} ${hold.title}`));
 	await postMoveNote(actor, localize(`${KEY}.cardTitle`), format(`${KEY}.held`, { name: actor.name, held }));
 	return picked.map(hold => hold.move);
+}
+
+// ── STENTORIAN'S "ADVANTAGE TO ... DEPLOY" ─────────────────────────────────────────────────────────
+// "Spend 1 Command to shout an order or warning and pick 1: ... You have advantage to Order Followers or
+// Deploy" (Book I p.127). "You have advantage": the advantage is the Marshal's own, so it rides a Deploy only
+// that Marshal makes. Deploy is the STEADING's roll, so its window asks, UNTICKED, naming one Marshal: the
+// user's own character when they are a Marshal holding Command, or else a pick among the Marshals this user may
+// write who hold any (a GM, or a player rolling for someone else's Deploy). The Command comes off THAT Marshal
+// before the dice, and a spend that fails gives no advantage (deployCommandAnswers, which the Deploy window's
+// question runs as its `spend`: actors/steading/improvement-rolls.js). Order Followers' half is a
+// box in that window (OrderFollowersDialog.js).
+
+// Who holds Command lives in command-holders.js, light enough for the steading sheet to load; here for the
+// callers that already ask this module.
+export { commandHolders, deployCommandOffers };
+
+/**
+ * Spend 1 Command for a Deploy off the Marshal `marshalId` names, while this user may write them and they hold
+ * any. Answers their name, or null when it could not be spent.
+ */
+export async function spendCommandForDeploy(marshalId, actors = globalThis.game?.actors) {
+	const marshal = marshalId ? commandHolders(actors).find(actor => actor.id === marshalId) : null;
+	if (!marshal) return null;
+	return (await takeBackHeld(marshal, HERO_MOVES.STENTORIAN, 1)) ? marshal.name ?? "" : null;
+}
+
+/**
+ * Deploy's window answers with the Stentorian line taken: spend the Command off the Marshal it named, and hand
+ * back the answers the roll is adjusted by. A spend that fails clears `command`, so the roll gets no advantage
+ * it did not pay for, and `commandRefused` names why for the caller to say.
+ *
+ * @returns {Promise<object>} the answers, `command` cleared when nothing was spent
+ */
+export async function deployCommandAnswers(answers = {}, { actors = globalThis.game?.actors, spend = spendCommandForDeploy } = {}) {
+	if (!answers?.command) return answers;
+	const name = await spend(String(answers.command), actors);
+	if (name !== null && name !== undefined) return { ...answers, command: name || "yes" };
+	return { ...answers, command: "", commandRefused: true };
 }
 
 // Whose question is open on this client: two tokens for one Marshal join together.

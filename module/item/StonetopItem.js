@@ -214,7 +214,12 @@ export function createStonetopItemClass(BaseItem) {
 				// 10+ / 7-9 / 6- as labelled rows (utils/move-tiers.js), so a card that posted the
 				// book's run-on paragraph instead was the one surface still leaving the outcomes
 				// buried in the sentence.
-				const body = moveCardBody(this.system?.description ?? "", this.system?.moveResults);
+				// And what the POSTER brings to the move's printed list, as on a rolled card below: Like an Open
+				// Book's opened-up second question on Take the Measure, which is never rolled (move-pick-bonuses.js).
+				// Keyed by the BOOK move's name, so a player's own move of that name borrows none of it.
+				const printed = moveCardBody(this.system?.description ?? "", this.system?.moveResults);
+				const postedName = bookMoveName(this);
+				const body = postedName == null ? printed : withMovePickBonuses(printed, actor, postedName);
 
 				// A MONSTER's move is its name. The book prints each one as a single line ("Block their
 				// path"), and 723 of the 730 shipped moves carry no description, so a heading that named

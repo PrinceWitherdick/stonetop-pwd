@@ -41,13 +41,22 @@
 //  • NEVER GONNA KEEP ME DOWN (Would-Be Hero) at 5 HP or less, UNCANNY REFLEXES (Heavy) unarmored under a
 //    light or normal load, and BATTLEFIELD GRACE (Marshal) leading allies: each puts the damage THEY take
 //    at disadvantage, like locked eyes from the other side.
+//  • FOCUS FIRE (Marshal, Book I p.127): "You can spend 1 Command to order your allies to bring down a foe. If
+//    you do, each ally has advantage on their next damage roll against that foe." The order is kept on the
+//    Marshal (`focusFire`, one entry per foe named, for the fight it was given in), and each ally's damage roll
+//    against that foe reads it as a TICKED advantage line on their damage window (blowOffers) and, taken, marks
+//    it answered on THEMSELVES (`focusFireUsed`), the one actor their client may write. Ordered from Focus
+//    Fire's posted card (give-advantage-flow.js#wireFocusFire).
+//  • SET-UP STRIKE (Marshal, p.126): "When you Clash and get a 7+, you can choose to deal damage with
+//    disadvantage." An UNTICKED disadvantage line on the Clash's damage window; the Aid it buys is the Clash
+//    card's button (actors/character/give-advantage.js).
 // The Defend spends on the damage card (Parry & Riposte, Steadfast Guardian, A Mighty Rampart) are in
 // defend-spend.js.
 
 import { SYSTEM_ID } from "../system-id.js";
 import { format } from "../utils/i18n.js";
 import { ownsLearnedMoveNamed, ownedMove } from "../actors/character/owns-move.js";
-import { heldOnTrack } from "../actors/character/MoveResources.js";
+import { heldOnTrack, learnedTrack } from "../actors/character/MoveResources.js";
 import { characterBehind, followerCardFor } from "../actors/character/follower-masters.js";
 import { actorTookBackground } from "../actors/character/took-background.js";
 import { BLOOD_SOAKED_PAST } from "../data/alt-stat-grants.js";
@@ -63,37 +72,13 @@ import { resolveSync } from "../utils/foundry-compat.js";
 import { escHtml } from "../utils/strings.js";
 import { damageRowActor } from "../utils/damage.js";
 import { stonetopChatCard } from "../utils/chat.js";
+import { asArray } from "../utils/playbook-actors.js";
+import { HERO_MOVES } from "./hero-move-names.js";
 
-export const HERO_MOVES = Object.freeze({
-	PARRY: "Parry & Riposte",
-	SECOND_INTENT: "Second Intent",
-	STEADFAST: "Steadfast Guardian",
-	RAMPART: "A Mighty Rampart",
-	BIG_DAMN_HERO: "Big Damn Hero",
-	UNDAUNTED: "Undaunted",
-	DANGEROUS: "Dangerous",
-	MUSCLEBOUND: "Musclebound",
-	BERSERKER: "Berserker",
-	REMEMBER_ME: "Something to Remember Me By",
-	HUNGRY_FLAMES: "Hungry Flames",
-	BIG_GAME: "Big Game Hunter",
-	GIANT_SLAYER: "Giant Slayer",
-	NEMESIS: "Nemesis",
-	RELENTLESS: "Relentless",
-	PAYBACK: "Payback",
-	NEVER_GONNA: "Never Gonna Keep Me Down",
-	UNCANNY: "Uncanny Reflexes",
-	BATTLEFIELD_GRACE: "Battlefield Grace",
-	KNOCKED_DOWN: "I Get Knocked Down",
-	UP_AGAIN: "But I Get Up Again",
-	ANGER: "Anger is a Gift",
-	DOG_WITH_BONE: "Like a Dog with a Bone",
-	EVERYTHING_BLEEDS: "Everything Bleeds",
-	PREDATOR: "Predator",
-	ALPHA: "Alpha",
-	SAFETY_FIRST: "Safety First",
-	TOUGH_LOVE: "Tough Love",
-});
+export { HERO_MOVES };
+
+// How much Command a Marshal holds: in combat/command-holders.js, which the steading sheet loads without this.
+export { commandHeld } from "../combat/command-holders.js";
 
 /**
  * Which `stonetop.fight.heroMoves.<key>` a move's words live under, for the moves the people being hit
@@ -156,6 +141,101 @@ export function dangerousMode(actor, rollMode = "") {
 export function ownDamageMode(actor, rollMode = "") {
 	if (!fightStateActive(actor, "nerves")) return dangerousMode(actor, rollMode);
 	return foldModes([has(actor, HERO_MOVES.DANGEROUS) ? "adv" : "", "dis"], rollMode || "normal");
+}
+
+/** A Marshal's Focus Fire orders (see the head of this file), as `{id, key, name, combat}` on the Marshal. */
+export const FOCUS_FIRE_FLAG = "focusFire";
+
+/** The Focus Fire orders an ally's damage roll has answered, as their ids on the ally. */
+export const FOCUS_FIRE_USED_FLAG = "focusFireUsed";
+
+/**
+ * Focus Fire: the Marshal spends 1 Command off Stentorian's track (a hold pool, so 1 comes off what is HELD)
+ * and names `foe`. Null, with nothing spent, without the move learned, a foe to name, or Command held.
+ *
+ * @param {Actor} marshal
+ * @param {{uuid: string, name?: string}} foe
+ * @returns {Promise<{id: string, key: string, name: string, combat: string|null}|null>}
+ */
+export async function orderFocusFire(marshal, foe, { now = Date.now(), combat = globalThis.game?.combat ?? null, combats = globalThis.game?.combats } = {}) {
+	if (!has(marshal, HERO_MOVES.FOCUS_FIRE)) return null;
+	const key = foeKey(foe);
+	if (!key) return null;
+	const track = learnedTrack(marshal, HERO_MOVES.STENTORIAN);
+	if (!track || track.held <= 0) return null;
+	const entry = { id: `${marshal.id}.${now}`, key, name: foe?.name ?? "", combat: combat?.id ?? null };
+	// An order given in a fight that has since been deleted can never be answered (focusFireAgainst's `live`),
+	// so it is let go here rather than kept on the Marshal for good. Only where the fights can be read: with no
+	// list to ask, every order is kept as it was.
+	const kept = combats?.get ? listFlag(marshal, FOCUS_FIRE_FLAG).filter(order => liveOrder(order, combats)) : listFlag(marshal, FOCUS_FIRE_FLAG);
+	// The Command and the order in ONE write, attributed to Stentorian for the ledger as a spend off its track is.
+	await marshal.update({
+		...track.resources.usesUpdate(HERO_MOVES.STENTORIAN, track.held - 1),
+		[`flags.${SYSTEM_ID}.${FOCUS_FIRE_FLAG}`]: [...kept, entry],
+	}, { stonetopMove: HERO_MOVES.STENTORIAN });
+	return entry;
+}
+
+/** Whether a Focus Fire order can still be answered: given outside any fight, or in one that still exists. */
+const liveOrder = (order, combats) => !order?.combat || !!combats?.get?.(order.combat);
+
+/**
+ * The Focus Fire order this character's damage roll at `targets` answers, or null: another character's, with
+ * the move still learned, naming the foe every one of `targets` is, given in a fight that is still on (or
+ * outside any), and not yet answered by this character. "Each ally": never the Marshal's own blow.
+ */
+export function focusFireAgainst(actor, targets = [], { actors = globalThis.game?.actors, combats = globalThis.game?.combats } = {}) {
+	if (actor?.type !== "character" || !targets?.length) return null;
+	const used = new Set(listFlag(actor, FOCUS_FIRE_USED_FLAG));
+	const keys = targets.map(foeKey);
+	for (const marshal of focusFireMarshals(actor, actors)) {
+		const entry = listFlag(marshal, FOCUS_FIRE_FLAG)
+			.find(order => order?.id && !used.has(order.id) && liveOrder(order, combats) && keys.every(key => key && key === order.key));
+		if (entry) return entry;
+	}
+	return null;
+}
+
+/** The Marshals whose orders `actor` may answer: everyone else with Focus Fire learned. */
+function focusFireMarshals(actor, actors) {
+	return asArray(actors).filter(marshal => marshal && marshal !== actor && !(marshal.id && marshal.id === actor.id)
+		&& has(marshal, HERO_MOVES.FOCUS_FIRE));
+}
+
+/**
+ * Mark a Focus Fire order answered by this character's damage roll: it was for their NEXT one. The ids of
+ * orders that no Marshal still holds live (deleted, or given in a fight since deleted) are let go on the way,
+ * since focusFireAgainst could never match them again; only where the fights can be read.
+ */
+export async function spendFocusFire(actor, entry, { actors = globalThis.game?.actors, combats = globalThis.game?.combats } = {}) {
+	if (!entry?.id || typeof actor?.setFlag !== "function") return false;
+	const used = listFlag(actor, FOCUS_FIRE_USED_FLAG);
+	if (used.includes(entry.id)) return false;
+	let kept = used;
+	if (combats?.get) {
+		const live = new Set(focusFireMarshals(actor, actors)
+			.flatMap(marshal => listFlag(marshal, FOCUS_FIRE_FLAG).filter(order => liveOrder(order, combats)).map(order => order?.id)));
+		kept = used.filter(id => live.has(id));
+	}
+	await actor.setFlag(SYSTEM_ID, FOCUS_FIRE_USED_FLAG, [...kept, entry.id]);
+	return true;
+}
+
+/**
+ * Focus Fire as a line on this character's damage window (blowOffers): advantage, TICKED, against the foe a
+ * Marshal ordered their allies to bring down. Taking it marks the order answered: it was for the NEXT damage
+ * roll against that foe. Unticked, the order stands for the next one, as an unticked But I Get Up Again does.
+ * Null when no order is owed.
+ */
+function focusFireOffer(actor, targets) {
+	const order = focusFireAgainst(actor, targets);
+	if (!order) return null;
+	return {
+		key: "focusFire", mode: "adv", applied: true,
+		label: format(`${MOVE_KEY}.focusFire.label`, { foe: order.name }),
+		pill: format(`${MOVE_KEY}.focusFire.pill`, {}),
+		spend: hero => spendFocusFire(hero, order).catch(err => console.warn("Stonetop | could not mark Focus Fire answered", err)),
+	};
 }
 
 /** The foes a hero has locked eyes with (Big Damn Hero), as combatant ids on the hero's combatant. */
@@ -656,14 +736,27 @@ export function holyLightOffers(actor) {
  * @param {boolean} [options.parry]      that strike back is the one a Parry & Riposte bought, rather than
  *   the plain Defend option the fight ring's Strike back spends on (Second Intent rides only this one)
  * @param {number} [options.attackAt]    when the card this answers was written (see recordClash)
+ * @param {string} [options.moveKey]     the attack move's key ("clash": Set-Up Strike rides its damage)
  * @returns {Array<{key: string, dice: string, label: string, pill: string, applied?: boolean, tags?: string[], spend?: Function}>}
  */
-export function blowOffers(actor, { targets = [], weapon = null, strikeBack = false, parry = false, attackAt = Date.now() } = {}) {
+export function blowOffers(actor, { targets = [], weapon = null, strikeBack = false, parry = false, attackAt = Date.now(), moveKey = "" } = {}) {
 	if (actor?.type !== "character") return [];
 	const offers = [];
 	const undaunted = undauntedOffer(actor);
 	if (undaunted) offers.push(undaunted);
 	const add = (key, move, dice, options) => offers.push(offerLine(key, move, dice, options));
+	// Set-Up Strike: the damage of a Clash's 7+ (the attack card's Confirm), dealt with disadvantage by choice.
+	// A mode line, as the defenders' are, UNTICKED: whether they set the strike up is theirs to say.
+	if (moveKey === "clash" && !strikeBack && has(actor, HERO_MOVES.SET_UP_STRIKE)) {
+		offers.push({
+			key: "setUpStrike", mode: "dis", applied: false,
+			label: format(`${MOVE_KEY}.setUpStrike.label`, {}),
+			pill: format(`${MOVE_KEY}.setUpStrike.pill`, {}),
+		});
+	}
+	// Focus Fire: a Marshal's order to bring this foe down, advantage on this ally's next damage roll at it.
+	const focus = focusFireOffer(actor, targets);
+	if (focus) offers.push(focus);
 	if (strikeBack && has(actor, HERO_MOVES.REMEMBER_ME)) add("rememberMe", HERO_MOVES.REMEMBER_ME, "1d4");
 	// Second Intent: "When you Defend and spend 1 Readiness to Parry & Riposte, also pick 1 option from the
 	// Ambush list", and "Deal +1d4 damage" is on it. UNTICKED: the pick is the player's, and may be another

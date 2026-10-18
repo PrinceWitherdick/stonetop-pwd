@@ -14,14 +14,17 @@ import { GIVE_ADVANTAGE_MOVES, advantageRecipients, givenSource, mayReceive } fr
 import { asteriskMoveUsed } from "./WouldBeHeroAsterisk.js";
 import { pickPersonOnMap } from "../../dialogs/RelationshipLinkDialog.js";
 import { partyCharacters } from "../../utils/playbook-actors.js";
-import { canRewriteCard } from "../../utils/chat.js";
+import { canRewriteCard, stonetopChatCard } from "../../utils/chat.js";
+import { HERO_MOVES, commandHeld, orderFocusFire } from "../../fight/hero-moves.js";
 import { belongsToMessage } from "../../utils/picked-option-button.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
 import { isPrimaryGM } from "../../utils/primary-gm.js";
 import { askGMClient, deletionEntry, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { withCardLatch } from "../../utils/card-latch.js";
 import { cardCountedTier, outcomeTier } from "../../utils/counted-tier.js";
-import { format } from "../../utils/i18n.js";
+import { format, localize } from "../../utils/i18n.js";
+import { learnedTrack, takeBackHeld } from "./MoveResources.js";
+import { escHtml, joinNames } from "../../utils/strings.js";
 
 /** The User query a gift of advantage goes through when this client cannot write the character. */
 export const GIVE_ADVANTAGE_QUERY = "stonetop.giveAdvantage";
@@ -129,31 +132,48 @@ export async function reconcileGivenAdvantage(message, total, { scope = SYSTEM_I
 export async function offerAdvantage(message, giver, moveName, {
 	pick = pickPersonOnMap, party = partyCharacters, give = giveAdvantage, scope = SYSTEM_ID, stillMine = null,
 } = {}) {
-	const selfOnly = !!GIVE_ADVANTAGE_MOVES[moveName]?.selfOnly;
+	const rule = GIVE_ADVANTAGE_MOVES[moveName];
+	const selfOnly = !!rule?.selfOnly;
+	// A press paid for off a hold (Stentorian's Command): refused, and nothing asked, with none held.
+	if (rule?.spendHeld && !(learnedTrack(giver, rule.spendHeld)?.held > 0)) {
+		globalThis.ui?.notifications?.warn?.(format("stonetop.heldAdvantage.noneHeld", { move: rule.spendHeld }));
+		return false;
+	}
 	const recipients = advantageRecipients(giver, moveName, selfOnly ? [] : party({ exclude: giver?.id }));
 	if (!recipients.length) {
 		globalThis.ui?.notifications?.info?.("There is no other player character to give it to.");
 		return false;
 	}
-	const id = selfOnly ? giver?.id : await pick({
-		options: recipients.map(actor => ({ id: actor.id, name: actor.name, actor, hint: actor.id === giver?.id ? "You" : "" })),
+	const options = recipients.map(actor => ({ id: actor.id, name: actor.name, actor, hint: actor.id === giver?.id ? "You" : "" }));
+	// "PCs get advantage" (Stentorian): whoever heard, ticked in one window.
+	const ids = selfOnly ? [giver?.id] : [await pick({
+		options,
+		multiple: !!rule?.many,
 		title: `${moveName}: advantage on the next roll`,
-		hint: "Who gains advantage on their next roll?",
+		hint: rule?.many ? localize("stonetop.heldAdvantage.whoHeard") : "Who gains advantage on their next roll?",
 		icon: "fa-angles-up",
 		buttonLabel: "Choose someone",
 		formatLabel: name => `Give ${name} advantage`,
-	});
-	const target = recipients.find(actor => actor.id === id) ?? null;
-	if (!target) return false;
+		formatManyLabel: count => `Give ${count} of them advantage`,
+	})].flat();
+	const targets = recipients.filter(actor => ids.includes(actor.id));
+	if (!targets.length) return false;
 	if (stillMine && !stillMine()) return true;
-	if (!(await give(giver, target, moveName))) {
+	const gave = await Promise.all(targets.map(target => give(giver, target, moveName)));
+	const given = targets.filter((target, i) => gave[i]);
+	for (const target of targets.filter((target, i) => !gave[i])) {
 		globalThis.ui?.notifications?.warn?.(`${target.name} could not be given advantage: no GM is online to write it.`);
-		return false;
 	}
+	if (!given.length) return false;
+	// Paid once the advantage is held, so a press that gave nobody anything costs nothing.
+	if (rule?.spendHeld) await takeBackHeld(giver, rule.spendHeld, 1);
+	const [target] = given;
+	const names = joinNames(given.map(actor => actor.name));
 	await message.setFlag(scope, GIVEN_FLAG, {
-		name: target.name, move: moveName, uuid: target.uuid ?? null, source: givenSource(moveName, giver, target),
+		name: names, move: moveName, uuid: target.uuid ?? null, source: givenSource(moveName, giver, target),
+		...(given.length > 1 ? { several: true } : {}),
 	});
-	globalThis.ui?.notifications?.info?.(`${target.name} has advantage on their next roll (${moveName}).`);
+	globalThis.ui?.notifications?.info?.(`${names} ${given.length > 1 ? "have" : "has"} advantage on their next roll (${moveName}).`);
 	// Voice of Experience's advice given is a use of the starred move: the first crosses off "Would-be"
 	// (WouldBeHeroAsterisk.js). Never at the cost of the gift, which is already held and written.
 	await asteriskMoveUsed(giver, moveName).catch(err => console.warn(`Stonetop | could not note ${moveName}'s use`, err));
@@ -185,7 +205,7 @@ export function wireGiveAdvantage(message, html, deps = {}) {
 			note.className = "stonetop-give-advantage-readout";
 			note.textContent = given.spent
 				? format("stonetop.heldAdvantage.givenSpent", { name: given.name })
-				: `${given.name} has advantage on their next roll.`;
+				: `${given.name} ${given.several ? "have" : "has"} advantage on their next roll.`;
 			btn.replaceWith(note);
 			continue;
 		}
@@ -207,6 +227,70 @@ export function wireGiveAdvantage(message, html, deps = {}) {
 				console.error(`Stonetop | ${moveName}'s advantage could not be given`, err);
 			} finally {
 				_choosing.delete(message.id);
+			}
+		});
+	}
+}
+
+/** Message flag: the foe a Focus Fire card's order named, `{foe}`, so its button goes once pressed. */
+export const FOCUS_FIRE_CARD_FLAG = "focusFireOrdered";
+
+/** The tokens this user has targeted on the map. */
+const userTargets = () => [...(globalThis.game?.user?.targets ?? [])];
+
+/**
+ * Wire Focus Fire's button (give-advantage.js#focusFireCardHtml): pressed by whoever can write the card and
+ * the Marshal, at the ONE foe they have targeted, it spends 1 Command and gives the order
+ * (fight/hero-moves.js#orderFocusFire). The card then says whom, and the button goes. Wired on its own
+ * (stonetop.js renderChatMessageHTML), beside the giving moves' buttons on the same posted cards.
+ */
+export function wireFocusFire(message, html, deps = {}) {
+	const root = html?.[0] ?? html;
+	const buttons = [...(root?.querySelectorAll?.(".stonetop-focus-fire") ?? [])].filter(btn => belongsToMessage(btn, message));
+	if (!buttons.length) return;
+	const scope = deps.scope ?? SYSTEM_ID;
+	const marshal = deps.giver ?? speakerActor(message);
+	const ordered = message?.getFlag?.(scope, FOCUS_FIRE_CARD_FLAG) ?? null;
+	const usable = deps.usable ?? canRewriteCard(message, marshal);
+	const order = deps.order ?? orderFocusFire;
+	const targets = deps.targets ?? userTargets;
+	for (const btn of buttons) {
+		if (ordered?.foe) {
+			const doc = root.ownerDocument ?? globalThis.document;
+			const note = doc.createElement("span");
+			note.className = "stonetop-give-advantage-readout";
+			note.textContent = format("stonetop.fight.heroMoves.focusFire.readout", { foe: ordered.foe });
+			btn.replaceWith(note);
+			continue;
+		}
+		if (!usable || !marshal) { btn.remove(); continue; }
+		if (btn.dataset.focusWired === "1") continue;
+		btn.dataset.focusWired = "1";
+		btn.addEventListener("click", async () => {
+			if (btn.disabled) return;
+			const aimed = targets();
+			if (aimed.length !== 1) {
+				globalThis.ui?.notifications?.info?.(localize("stonetop.fight.heroMoves.focusFire.targetOne"));
+				return;
+			}
+			if (!commandHeld(marshal)) {
+				globalThis.ui?.notifications?.warn?.(format("stonetop.heldAdvantage.noneHeld", { move: HERO_MOVES.STENTORIAN }));
+				return;
+			}
+			btn.disabled = true;
+			try {
+				const [token] = aimed;
+				const foe = { uuid: token?.document?.uuid ?? token?.uuid ?? "", name: token?.name ?? token?.document?.name ?? "" };
+				const entry = await order(marshal, foe);
+				if (!entry) { btn.disabled = false; return; }
+				await message.setFlag(scope, FOCUS_FIRE_CARD_FLAG, { foe: entry.name || foe.name });
+				await globalThis.ChatMessage?.create?.({
+					content: stonetopChatCard(HERO_MOVES.FOCUS_FIRE, `<div class="card-content"><p>${escHtml(format("stonetop.fight.heroMoves.focusFire.card", { name: marshal.name, foe: entry.name || foe.name }))}</p></div>`, "stonetop-focus-fire-card"),
+					speaker: globalThis.ChatMessage?.getSpeaker?.({ actor: marshal }),
+				});
+			} catch (err) {
+				console.error("Stonetop | Focus Fire could not be ordered", err);
+				btn.disabled = false;
 			}
 		});
 	}

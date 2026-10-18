@@ -128,6 +128,7 @@ import {INVOCATIONS_GRANTED_AT_FLAG, invocationCountCue} from "./invocation-coun
 import {showJudgeMarks, condemnedContext, CONDEMN, CENSURE, CASTIGATE} from "./condemn.js";
 import {PIETY, holdBlessing, shareBlessing} from "./roll-boosts.js";
 import {giveAdvantageCardHtml} from "./give-advantage.js";
+import {IRON_WILL, UNFETTERED, ironWill, unfettered} from "./will-and-restraint.js";
 import {inOverYourHeadCardHtml} from "./would-be-hero-cards.js";
 import {pickPersonOnMap} from "../../dialogs/RelationshipLinkDialog.js";
 import {readyRulebookIcon, openSharedRulebook} from "../../books/rulebook-icons.js";
@@ -430,6 +431,9 @@ const MOVE_USE_EFFECTS = {
 	// Piety's worship holds the Lightbearer 1 Blessing and 1 for each faithful PC who took part,
 	// which is a question only the player can answer, so using the move asks it.
 	[PIETY]:              sheet => sheet._piety(),
+	// Iron Will's 1d4 at themselves, asked; Unfettered's debility, picked (will-and-restraint.js).
+	[IRON_WILL]:          sheet => sheet.isEditable && ironWill(sheet.actor),
+	[UNFETTERED]:         sheet => sheet.isEditable && unfettered(sheet.actor),
 };
 
 // The same idea for moves that ROLL: their use does not fall through to the post-it-to-chat tail,

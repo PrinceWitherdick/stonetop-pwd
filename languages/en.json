@@ -2145,7 +2145,12 @@
       "forceToBeReckonedWith": "Against something trying to harm or constrain you (A Force to Be Reckoned With): on a 12+, turn the tables",
       "forceToBeReckonedWithNote": "<strong>A Force to Be Reckoned With:</strong> on a 12+ you turn the tables on them. The GM will say how, or ask you to.",
       "disturbing": "Using intimidation and your disturbing presence (Disturbing): advantage",
-      "deathlyVisage": "Using intimidation and your sinister appearance (Deathly Visage): advantage"
+      "deathlyVisage": "Using intimidation and your sinister appearance (Deathly Visage): advantage",
+      "heedMyWords": "Talking sense or warning against foolishness (Heed My Words): advantage",
+      "irresistible": "Using your considerable charms as leverage (Irresistible): advantage",
+      "pantsOnFire": "Being deceitful (Pants on Fire): advantage",
+      "slippery": "Escaping being caught or controlled (Slippery): treat a 6- as a 7-9",
+      "slipperyNote": "<strong>Slippery:</strong> on a 12+, say how you turn the tables or use the circumstances to your advantage."
     },
     "postDeathMoves": {
       "unstableNote": "<strong>Unstable:</strong> on a 6-, the GM can choose to have you enter an unthinking, unfeeling rage (as per Breakdown).",
@@ -2352,6 +2357,7 @@
       "missFloor": "{n} even on a 6-",
       "joiner": ", and ",
       "freeQuestion": "Free question ({source}): {question}",
+      "openQuestion": "{source}: {question}. The GM might ask how you could possibly know this; tell them or ask something else.",
       "freeWhen": "{source}, when you {when}"
     },
     "artifact": {
@@ -2449,7 +2455,24 @@
       "releasePrompt": "Give up the advantage promised by {source}? Your next roll goes out as it otherwise would, and nothing records the promise afterwards.",
       "releaseConfirm": "Let it go",
       "releaseCancel": "Keep holding it",
-      "givenSpent": "{name} already used the advantage this roll gave."
+      "givenSpent": "{name} already used the advantage this roll gave.",
+      "noneHeld": "{move}: you hold none left to spend.",
+      "whoHeard": "Who heard your order or warning? Each gains advantage on their next roll to do as you say."
+    },
+    "willAndRestraint": {
+      "notNow": "Not now",
+      "ironWill": {
+        "ask": "Are you subject to mind control or magic that affects your feelings? You can take 1d4 damage (ignoring armor) to disregard its influence.",
+        "take": "Take 1d4 damage (ignores armor)"
+      },
+      "unfettered": {
+        "ask": "Are you subject to physical or mental restraint? Mark a debility to immediately break free of it.",
+        "none": "Unfettered: every debility is already marked, so there is none left to mark.",
+        "apply": "Mark a debility",
+        "applyFor": "Mark {debility} and break free",
+        "choices": "Debility to mark",
+        "note": "{name} marks {debility} and immediately breaks free of the restraint."
+      }
     },
     "heldDisadvantage": {
       "label": "Disadvantage held over your next roll",
@@ -3535,8 +3558,15 @@
         "safetyFirstOne": "{defender} halves it (Safety First, harmful magic: 1 Protection)",
         "safetyFirstChoice": "{defender} spends 1 Protection to halve the harmful magic on {ward}",
         "noteSafetyFirst": "{defender} spent 1 Protection to halve the harmful magic's damage (Safety First).",
+        "redirect": "Redirect the magic (Readiness)",
+        "redirectOne": "{defender} redirects it ({move}, if magical: 1 Readiness)",
+        "redirectChoice": "{defender} redirects the magic aimed at {ward} ({move})",
+        "redirectNoShield": "{defender} carries no shield: Mirrorshield needs one.",
+        "noteRedirect": "{defender} spent Readiness to redirect the magic aimed at {ward} ({move}).",
+        "redirectedLine": "the magic was redirected ({move}), no damage",
         "secondIntent": "{name} parried: also pick 1 option from the Ambush list. The strike back was rolled without the +1d4 damage.",
-        "secondIntentTookDie": "{name} parried and took +1d4 damage on the strike back: that is their pick from the Ambush list."
+        "secondIntentTookDie": "{name} parried and took +1d4 damage on the strike back: that is their pick from the Ambush list.",
+        "secondIntentOpportunity": "If you picked \"Create an opportunity\": you or an ally gains advantage on the next move to act on it."
       },
       "heroMoves": {
         "undaunted": {
@@ -3546,6 +3576,22 @@
           "pill": "Undaunted +1d6",
           "armorNote": "+1 armor, Undaunted",
           "armorBox": "Undaunted: +1 armor, if outnumbered or facing a foe bigger than them"
+        },
+        "fireWithin": {
+          "box": "Fire Within: from cold or fire, so reduce the damage by 2",
+          "note": "{soaked} after armor, reduced by {by}: Fire Within"
+        },
+        "setUpStrike": {
+          "label": "Set-Up Strike: deal it with disadvantage to create an opening for an ally, as if you provided Aid",
+          "pill": "Set-Up Strike"
+        },
+        "focusFire": {
+          "button": "Spend 1 Command: bring down the targeted foe",
+          "targetOne": "Target the one foe you order your allies to bring down, then press it again.",
+          "card": "{name} spends 1 Command and orders their allies to bring down {foe}: each ally has advantage on their next damage roll against them.",
+          "readout": "Allies have advantage on their next damage roll against {foe}.",
+          "label": "Focus Fire: advantage, ordered to bring down {foe}",
+          "pill": "Focus Fire"
         },
         "leapIn": {
           "button": "Leap in (Big Damn Hero)",

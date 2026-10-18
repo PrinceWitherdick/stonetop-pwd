@@ -165,3 +165,17 @@ describe("a row that names its move, on a roll with no move item", () => {
 		expect(char.moveResources.getMoveResources()["Safety First"]).toBe(1);
 	});
 });
+
+// Coverage pass (2026-10-16): Seek Insight's "either way, take advantage on your next move to act on the
+// answers" (Book I p.228) is a hold button on its 7+ rows (give-advantage.js). Seek Insight about an artifact
+// rolls with no move item behind it, so the button rides that roll card too.
+describe("a giving move's button on a roll with no move behind it", () => {
+	it("puts Seek Insight's hold on the 7+ rows of a direct Seek Insight, and nothing on another roll", async () => {
+		const { char } = roller({ slug: "the-fox", name: "The Fox", moves: ["Seek Insight"] });
+		await char.onDirectStatRoll("wis", { moveName: "Seek Insight" });
+		expect(Object.keys(direct[0].tierActions)).toEqual(["success", "partial"]);
+		expect(direct[0].tierActions.success).toContain('data-move="Seek Insight"');
+		await char.onDirectStatRoll("cha", { moveName: "Trade & Barter" });
+		expect(direct[1].tierActions).toBeUndefined();
+	});
+});

@@ -17,6 +17,15 @@ import { OMENS_OF_FATE, omensRollOptions } from "./destined.js";
 const named = name => moveName => moveName === name;
 
 /**
+ * "You or an ally gain advantage" on the tiers that print it: Everything Burns' 10+, Work With What
+ * You've Got's 7+ (give-advantage-flow.js#wireGiveAdvantage). And on another move's card where the
+ * rule says so: Resourceful's hold on Defy Danger's 6-. Its own slice too, for a roll with no move item
+ * behind it (moveRollOptions(name, actor, null, GIVE_ADVANTAGE_ROLL_OPTIONS)).
+ */
+export const GIVE_ADVANTAGE_ROLL_OPTIONS = Object.entries(GIVE_ADVANTAGE_MOVES).filter(([, rule]) => rule.tiers?.length)
+	.map(([name, rule]) => ({ matches: named(rule.on ?? name), build: giveAdvantageRollOptions(name) }));
+
+/**
  * `matches(moveName)`, and `build(actor)` answering `{noXpOnMiss?, statValue?, tierActions?}` or null when this
  * character's roll gets nothing (a move they do not hold learned).
  */
@@ -32,11 +41,8 @@ export const MOVE_ROLL_OPTIONS = [
 	{ matches: named(WE_HAPPY_FEW), build: speechRollOptions },
 	// The Destined's "roll +Omens": the Omens held are the number added, and a 6- marks no XP (destined.js).
 	{ matches: named(OMENS_OF_FATE), build: omensRollOptions },
-	// "You or an ally gain advantage" on the tiers that print it: Everything Burns' 10+, Work With What
-	// You've Got's 7+ (give-advantage-flow.js#wireGiveAdvantage). And on another move's card where the
-	// rule says so: Resourceful's hold on Defy Danger's 6-.
-	...Object.entries(GIVE_ADVANTAGE_MOVES).filter(([, rule]) => rule.tiers?.length)
-		.map(([name, rule]) => ({ matches: named(rule.on ?? name), build: giveAdvantageRollOptions(name) })),
+	// "You or an ally gain advantage" on the tiers that print it (GIVE_ADVANTAGE_ROLL_OPTIONS above).
+	...GIVE_ADVANTAGE_ROLL_OPTIONS,
 ];
 
 /**

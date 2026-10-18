@@ -161,7 +161,7 @@ import {
 	INSPIRATION_QUERY, handleInspirationQuery, onUpdateActorInspirationAtZero, wireInspirationDamage, wireKeepOneHp, wireSpeechCard,
 } from "./module/actors/character/inspiration-flow.js";
 import { wireGmMoveShare } from "./module/gm-toolkit/random-gm-move.js";
-import { GIVE_ADVANTAGE_QUERY, handleGiveAdvantageQuery, wireGiveAdvantage } from "./module/actors/character/give-advantage-flow.js";
+import { GIVE_ADVANTAGE_QUERY, handleGiveAdvantageQuery, wireFocusFire, wireGiveAdvantage } from "./module/actors/character/give-advantage-flow.js";
 import { wireWouldBeHeroCards } from "./module/actors/character/would-be-hero-cards.js";
 import { wireSteadingMissXp } from "./module/actors/steading/steading-miss-xp.js";
 import { REQUISITION_MISS_COST_FLAG, STEADING_FORTUNES_CARD_ACTIONS, assetFromButton, settleRequisitionMiss, takeRequisitionedAsset } from "./module/actors/steading/steading-card-actions.js";
@@ -2587,6 +2587,8 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	// "You or an ally gain advantage" (Everything Burns' 10+, Work With What You've Got's 7+, and the posted
 	// cards of Countermeasures and Sage Advice): who holds it, once per card.
 	wireGiveAdvantage(message, html);
+	// The Marshal's Focus Fire, on its own posted card: the order at the one foe targeted, once per card.
+	wireFocusFire(message, html);
 	// The Would-Be Hero's card buttons: Speak Truth to Power's "They refused: +1 Resolve", In Over Your
 	// Head's "Mark XP", Voice of Experience's "Ask it" (actors/character/would-be-hero-cards.js).
 	wireWouldBeHeroCards(message, html);

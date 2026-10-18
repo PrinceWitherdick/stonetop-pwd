@@ -85,6 +85,12 @@ export const MOVE_PICK_BONUSES = [
 		when: "Seek Insight about something magical" },
 	{ move: "Know Things",  ownsLearned: "Well Versed",          freeQuestion: "a follow-up question of your choice",
 		when: "Know Things about one of your topics" },
+	// The Marshal's Like an Open Book (Book I p.127): "When you Take the Measure of someone who fears or respects
+	// you, your second question can be anything you want. The GM might ask how you could possibly know this; tell
+	// them or ask something else." Not an extra question but the second one opened up, so its line says so
+	// (`lineKey`). Take the Measure is posted unrolled, so this rides its posted card.
+	{ move: "Take the Measure", ownsLearned: "Like an Open Book", freeQuestion: "your second question can be anything you want",
+		when: "Take the Measure of someone who fears or respects you", lineKey: "stonetop.pickBonus.openQuestion" },
 	// The Lightbearer's consequence list. Glorious Servant: "on a 10+, you need not choose a
 	// consequence; on a 7-9, you choose a consequence but the GM does not", so the 7-9's "you and
 	// the GM each choose 1" (2) is 1, and the 10+'s 1 stands as the most, taken or not. Empowered
@@ -189,7 +195,7 @@ export function pickBonusNotes(bonuses = []) {
 export function freeQuestionLines(bonuses = []) {
 	return bonuses.filter(b => b.freeQuestion).map(b => {
 		const source = b.when ? format("stonetop.pickBonus.freeWhen", { source: b.ownsLearned, when: b.when }) : b.ownsLearned;
-		const text = format("stonetop.pickBonus.freeQuestion", { source, question: b.freeQuestion });
+		const text = format(b.lineKey ?? "stonetop.pickBonus.freeQuestion", { source, question: b.freeQuestion });
 		return `<p class="stonetop-free-question" data-free-question="${escHtml(b.ownsLearned ?? "")}"><em>${escHtml(text)}</em></p>`;
 	}).join("");
 }

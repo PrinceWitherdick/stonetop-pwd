@@ -6,6 +6,7 @@ import {
 	TOUGH_LOVE_FLAG, toughLoveAgainst, toughLoveHeld, callOut, workedItOut,
 	muscleboundWeapon, berserkNow, blowOffers, defenderDisadvantage, dangerousMode, holyLightOffers,
 	ALPHA_FLAG, alphaAgainst, recordAlphaOver, forgetAlphaOver, spendAlphaOver,
+	FOCUS_FIRE_FLAG, FOCUS_FIRE_USED_FLAG, orderFocusFire, focusFireAgainst, spendFocusFire, ownDamageMode,
 } from "../../module/fight/hero-moves.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection } from "../fakes/fight.js";
@@ -524,5 +525,117 @@ describe("Tough Love", () => {
 		expect(await callOut(pim, bram)).toBe(false);
 		pim.flags[SYSTEM_ID][TOUGH_LOVE_FLAG] = [{ id: "bram", name: "bram" }];
 		expect(toughLoveAgainst(bram, [{ uuid: "Actor.pim", actorId: "pim" }])).toBeNull();
+	});
+});
+
+// Coverage pass (2026-10-16): the Marshal's Focus Fire, "You can spend 1 Command to order your allies to bring
+// down a foe. If you do, each ally has advantage on their next damage roll against that foe" (Book I p.127),
+// and Set-Up Strike, "When you Clash and get a 7+, you can choose to deal damage with disadvantage" (p.126).
+describe("Focus Fire", () => {
+	function marshal(held) {
+		const tracks = { Stentorian: held };
+		const m = hero("bryn", [
+			{ type: "move", name: "Focus Fire" },
+			{ type: "move", name: "Stentorian", system: { resource: { max: 2 } } },
+		]);
+		const uses = `flags.${SYSTEM_ID}.backgroundChoices.`;
+		m.typedActor = { moveResources: {
+			getMoveResources: () => tracks,
+			usesUpdate: (move, value) => ({ [`${uses}${move}`]: value }),
+		} };
+		// One write carries the track and the flag, as actor.update does.
+		m.update = vi.fn(async data => {
+			for (const [key, value] of Object.entries(data)) {
+				if (key.startsWith(uses)) tracks[key.slice(uses.length)] = value;
+				else if (key.startsWith(`flags.${SYSTEM_ID}.`)) m.flags[SYSTEM_ID][key.slice(`flags.${SYSTEM_ID}.`.length)] = value;
+			}
+		});
+		return Object.assign(m, { tracks });
+	}
+
+	it("spends 1 Command and names the foe in ONE write; nothing without Command held", async () => {
+		const t = mapWith([["crin", fakeActor({ id: "crin", name: "Crinwin", type: "monster" })]]);
+		const bryn = marshal(2);
+		const entry = await orderFocusFire(bryn, target(t.crin), { now: 5, combat: null });
+		expect(entry).toMatchObject({ key: t.crin.uuid, name: "Crinwin", combat: null });
+		expect(bryn.tracks.Stentorian).toBe(1);
+		expect(bryn.getFlag(SYSTEM_ID, FOCUS_FIRE_FLAG)).toHaveLength(1);
+		expect(bryn.update).toHaveBeenCalledTimes(1);
+		expect(bryn.update.mock.calls[0][1]).toEqual({ stonetopMove: "Stentorian" });
+		expect(bryn.setFlag).not.toHaveBeenCalled();
+		const empty = marshal(0);
+		expect(await orderFocusFire(empty, target(t.crin))).toBeNull();
+		expect(empty.update).not.toHaveBeenCalled();
+	});
+
+	it("lets go of orders given in a fight since deleted, when the next order is given", async () => {
+		const t = mapWith([["crin", fakeActor({ id: "crin", name: "Crinwin", type: "monster" })]]);
+		const bryn = marshal(2);
+		await orderFocusFire(bryn, target(t.crin), { now: 5, combat: { id: "gone" } });
+		await orderFocusFire(bryn, target(t.crin), { now: 6, combat: { id: "fight2" }, combats: collection([{ id: "fight2" }]) });
+		expect(bryn.getFlag(SYSTEM_ID, FOCUS_FIRE_FLAG).map(order => order.id)).toEqual(["bryn.6"]);
+	});
+
+	it("lets go of an ally's answered ids no Marshal still holds live, as the next one is answered", async () => {
+		const t = mapWith([["crin", fakeActor({ id: "crin", name: "Crinwin", type: "monster" })]]);
+		const bryn = marshal(2);
+		const ash = hero("ash", []);
+		ash.flags[SYSTEM_ID][FOCUS_FIRE_USED_FLAG] = ["bryn.1", "bryn.2"];
+		await orderFocusFire(bryn, target(t.crin), { now: 2, combat: null });
+		const order = await orderFocusFire(bryn, target(t.crin), { now: 3, combat: null });
+		await spendFocusFire(ash, order, { actors: [bryn, ash], combats: collection([]) });
+		// bryn.1 is held by nobody now; bryn.2 still is.
+		expect(ash.getFlag(SYSTEM_ID, FOCUS_FIRE_USED_FLAG)).toEqual(["bryn.2", "bryn.3"]);
+	});
+
+	it("gives each ally's next damage roll against that foe advantage, once each, and never the Marshal's own", async () => {
+		const t = mapWith([["crin", fakeActor({ id: "crin", name: "Crinwin", type: "monster" })], ["wolf", fakeActor({ id: "wolf", name: "Wolf", type: "monster" })]]);
+		const bryn = marshal(2);
+		await orderFocusFire(bryn, target(t.crin), { now: 5, combat: null });
+		const ash = hero("ash", []);
+		const bea = hero("bea", []);
+		const actors = [bryn, ash, bea];
+		const order = focusFireAgainst(ash, [target(t.crin)], { actors });
+		expect(order).toMatchObject({ key: t.crin.uuid });
+		expect(focusFireAgainst(ash, [target(t.wolf)], { actors })).toBeNull();
+		expect(focusFireAgainst(bryn, [target(t.crin)], { actors })).toBeNull();
+		await spendFocusFire(ash, order);
+		expect(focusFireAgainst(ash, [target(t.crin)], { actors })).toBeNull();
+		expect(focusFireAgainst(bea, [target(t.crin)], { actors })).not.toBeNull();
+	});
+
+	it("lapses with the fight it was given in", async () => {
+		const t = mapWith([["crin", fakeActor({ id: "crin", name: "Crinwin", type: "monster" })]]);
+		const bryn = marshal(2);
+		await orderFocusFire(bryn, target(t.crin), { now: 5, combat: { id: "fight1" } });
+		const ash = hero("ash", []);
+		expect(focusFireAgainst(ash, [target(t.crin)], { actors: [bryn, ash], combats: collection([{ id: "fight1" }]) })).not.toBeNull();
+		expect(focusFireAgainst(ash, [target(t.crin)], { actors: [bryn, ash], combats: collection([]) })).toBeNull();
+	});
+
+	it("is a TICKED advantage line on the ally's damage window, and taking it marks the order answered", async () => {
+		const t = mapWith([["crin", fakeActor({ id: "crin", name: "Crinwin", type: "monster" })]]);
+		const bryn = marshal(2);
+		await orderFocusFire(bryn, target(t.crin), { now: 5, combat: null });
+		const ash = hero("ash", []);
+		globalThis.game = { ...saved.game, actors: [bryn, ash], combats: undefined };
+		const line = blowOffers(ash, { targets: [target(t.crin)] }).find(offer => offer.key === "focusFire");
+		expect(line).toMatchObject({ mode: "adv", applied: true });
+		expect(blowOffers(bryn, { targets: [target(t.crin)] }).some(offer => offer.key === "focusFire")).toBe(false);
+		await line.spend(ash);
+		expect(blowOffers(ash, { targets: [target(t.crin)] }).some(offer => offer.key === "focusFire")).toBe(false);
+		// The roller's own mode is no longer where it rides.
+		expect(ownDamageMode(ash, "")).toBe("");
+	});
+});
+
+describe("Set-Up Strike", () => {
+	it("offers an unticked disadvantage line on a Clash's damage alone", () => {
+		const bryn = hero("bryn", ["Set-Up Strike"]);
+		const line = blowOffers(bryn, { moveKey: "clash" }).find(offer => offer.key === "setUpStrike");
+		expect(line).toMatchObject({ mode: "dis", applied: false });
+		expect(blowOffers(bryn, { moveKey: "let-fly" }).some(offer => offer.key === "setUpStrike")).toBe(false);
+		expect(blowOffers(bryn, { moveKey: "clash", strikeBack: true }).some(offer => offer.key === "setUpStrike")).toBe(false);
+		expect(blowOffers(hero("ash", []), { moveKey: "clash" }).some(offer => offer.key === "setUpStrike")).toBe(false);
 	});
 });

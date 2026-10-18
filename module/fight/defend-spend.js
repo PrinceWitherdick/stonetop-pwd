@@ -35,6 +35,13 @@
 //    suffers the blow while they hold Protection (the user's ruling, 2026-09-26), priced in Protection, not
 //    Readiness. Whether the blow is harmful magic is the table's to say, so the button says so. The
 //    advantage half is a roll-window line (StonetopCharacter.js's FICTION_ROLL_OFFERS).
+//  • MIRRORSHIELD (Judge, Book I p.119): "When you Defend with a shield, you can spend 1 Readiness to intercept
+//    a magical force and redirect it to a different target (or none)." LIGHTNING ROD (Blessed, p.106): "When
+//    you Defend while touching the earth, you can spend 1 Readiness to intercept a nearby magical attack and
+//    redirect it harmlessly into the ground." Offered to whoever could spend Readiness on the blow, as a
+//    halving is; the blow then lands on nobody here (where Mirrorshield sends it is the table's, and is rolled
+//    at them as its own blow). Whether the blow is magical, and whether the Blessed is touching the earth,
+//    is the table's to say, so the button says so; the shield is checked when the Judge presses it.
 //
 // WHO MAY DEFEND. The one hit, when they hold Readiness, can halve their own blow; any character in the
 // fight standing beside them (touching, or fighting the same foe) who holds Readiness can do either. "They
@@ -62,6 +69,7 @@ import { learnedTrack, takeBackHeld } from "../actors/character/MoveResources.js
 import { touching, HEROES } from "./engagements.js";
 import { engagementFor, fightOnScene, gridOf, isFight } from "./fight-state.js";
 import { HERO_MOVES, recordKnockedDownBy } from "./hero-moves.js";
+import { giveAdvantageButtonHtml } from "../actors/character/give-advantage.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { inCardTurn } from "../utils/card-queue.js";
 import { resolveSync, queryAsker } from "../utils/foundry-compat.js";
@@ -82,35 +90,50 @@ export const halveDamage = raw => Math.ceil(Math.max(0, Number(raw) || 0) / 2);
  * card's flag records one (spentOn reads them back), `free`, a kind that costs no Readiness (I
  * Get Knocked Down is paid for in the fiction; Safety First in Protection), and `bySufferer`, a kind
  * that is the sufferer's own move, so its spend says whose it was (`by`) and is once per blow PER
- * SPENDER (takeSpend). A new kind is one row here, its offers in defendOffers and its words in the
- * lang file.
+ * SPENDER (takeSpend). `voids` marks a kind that takes the whole blow off the row (spentOn's `voided`),
+ * naming the words Apply says it in, and `note` is the words the card says a spend in (defendNotes):
+ * a key under `stonetop.fight.defend`, or one picked by the spend. A new kind is one row here, its
+ * offers in defendOffers and its words in the lang file.
  */
 const SPEND_KINDS = {
-	halve:       { list: "halvedBy" },
-	parry:       { list: "halvedBy" },
-	standIn:     { list: "standIns" },
-	ignore:      { list: "ignoredBy" },
-	knockedDown: { list: "knockedDownBy", free: true, bySufferer: true },
-	safetyFirst: { list: "safetyFirstBy", free: true },
+	halve:       { list: "halvedBy", note: "noteHalve" },
+	parry:       { list: "halvedBy", note: "noteParry" },
+	standIn:     { list: "standIns", note: spend => (spend.free ? "noteStandInFree" : "noteStandIn") },
+	ignore:      { list: "ignoredBy", note: "noteIgnore", voids: "ignoredLine" },
+	knockedDown: { list: "knockedDownBy", note: "noteKnockedDown", free: true, bySufferer: true },
+	safetyFirst: { list: "safetyFirstBy", note: "noteSafetyFirst", free: true },
+	redirect:    { list: "redirectedBy", note: "noteRedirect", voids: "redirectedLine" },
 };
+
+/** The moves that turn a magical blow aside for 1 Readiness, in the order a defender holding both is offered them. */
+const REDIRECT_MOVES = [HERO_MOVES.MIRRORSHIELD, HERO_MOVES.LIGHTNING_ROD];
 const isSpendKind = kind => Object.hasOwn(SPEND_KINDS, kind);
 const costsReadiness = kind => !SPEND_KINDS[kind]?.free;
 
 /**
  * What the spends on a card have settled so far, by row uuid: the blows halved (a halving or a parry),
- * the ones a defender took in the ward's place, and the ones ignored. PURE.
+ * the ones a defender took in the ward's place, and the ones VOIDED, which land on nobody at all: A Mighty
+ * Rampart's ignored blow and Mirrorshield's or Lightning Rod's redirected magic, each with the words Apply
+ * says it in (`lineKey`) and the move that did it (`move`, for a redirect). PURE.
  *
  * @param {object} damage  the card's damage flag
- * @returns {{halved: Set<string>, standIns: Map<string, object>, ignored: Set<string>}}
+ * @returns {{halved: Set<string>, standIns: Map<string, object>, voided: Map<string, {lineKey: string, move: string}>}}
  */
 export function spentOn(damage) {
 	const spent = kind => (damage?.[SPEND_KINDS[kind].list] ?? []);
 	const uuids = kind => new Set(spent(kind).map(spend => spend.uuid));
 	const standIns = new Map(spent("standIn").map(spend => [spend.uuid, spend]));
+	const voided = new Map();
+	for (const [kind, { voids }] of Object.entries(SPEND_KINDS)) {
+		if (!voids) continue;
+		for (const spend of spent(kind)) {
+			if (!voided.has(spend.uuid)) voided.set(spend.uuid, { lineKey: `${KEY}.${voids}`, move: spend.move ?? "" });
+		}
+	}
 	return {
 		halved: uuids("halve"),
 		standIns,
-		ignored: uuids("ignore"),
+		voided,
 		// I Get Knocked Down halves as Readiness does, from its own list: it is a different move with a
 		// different price, and "each option once against any given attack" counts them apart. And only for
 		// whoever it was spent by, while they still take the blow: a ward who used it and then had someone
@@ -192,11 +215,19 @@ function defendersFor(uuid, { user = globalThis.game?.user } = {}) {
  */
 export function defendOffers(damage, defendersOf = defendersFor, resolveActor = uuid => damageRowActor(resolveSync(uuid))) {
 	const done = new Set((damage?.applied ?? []).map(a => a.uuid));
-	const { halved, standIns, ignored, knockedDown, safetyFirst } = spentOn(damage);
-	const offers = { halve: [], parry: [], standIn: [], ignore: [], knockedDown: [], safetyFirst: [] };
+	const { halved, standIns, voided, knockedDown, safetyFirst } = spentOn(damage);
+	const offers = { halve: [], parry: [], standIn: [], ignore: [], knockedDown: [], safetyFirst: [], redirect: [] };
 	const user = globalThis.game?.user;
+	// Which of the two redirecting moves each defender would spend, asked once per defender rather than once per
+	// row they stand by: this is drawn on every render of every card still owing damage.
+	const redirects = new Map();
+	const redirectOf = defender => {
+		const key = defender.uuid ?? defender;
+		if (!redirects.has(key)) redirects.set(key, REDIRECT_MOVES.find(name => ownsLearnedMoveNamed(defender, name)) ?? null);
+		return redirects.get(key);
+	};
 	for (const row of damage?.results ?? []) {
-		if (!row?.uuid || done.has(row.uuid) || ignored.has(row.uuid)) continue;
+		if (!row?.uuid || done.has(row.uuid) || voided.has(row.uuid)) continue;
 		const hit = resolveActor(row.uuid);
 		// Whoever will suffer the blow: the defender who took it, or the one it was aimed at.
 		const standIn = standIns.get(row.uuid);
@@ -212,6 +243,12 @@ export function defendOffers(damage, defendersOf = defendersFor, resolveActor = 
 			}
 		}
 		const { self, allies } = defendersOf(row.uuid);
+		// Mirrorshield and Lightning Rod, by whoever could spend Readiness on this blow: one offer per defender,
+		// under the first of the two moves they hold.
+		for (const defender of [self, ...allies].filter(Boolean)) {
+			const move = redirectOf(defender);
+			if (move) offers.redirect.push({ row, defender, cost: 1, move });
+		}
 		if (!halved.has(row.uuid)) {
 			for (const defender of [self, ...allies].filter(Boolean)) {
 				offers.halve.push({ row, defender, cost: 1 });
@@ -268,7 +305,7 @@ function pickOffer(offers, kind) {
 	return pickOne(offers, {
 		title: format(`${KEY}.${kind}`, {}),
 		question: format(`${KEY}.ask`, {}),
-		labelOf: offer => format(`${KEY}.${kind}Choice`, { defender: offer.defender.name, ward: offer.row.name }),
+		labelOf: offer => format(`${KEY}.${kind}Choice`, { defender: offer.defender.name, ward: offer.row.name, move: offer.move ?? "" }),
 	});
 }
 
@@ -304,6 +341,13 @@ export async function spendOnBlow(message, kind, offer, { scope = SYSTEM_ID, str
 		await postKnockedDown(offer.defender, cost1, foe);
 		if (foe) await recordKnockedDownBy(offer.defender, foe);
 		return true;
+	}
+	// Mirrorshield: "When you Defend WITH A SHIELD". The shield is read off their gear as they press it (the
+	// offer is drawn without it: the gear stores are read asynchronously), and its absence said, not hidden.
+	if (kind === "redirect" && offer.move === HERO_MOVES.MIRRORSHIELD
+		&& offer.defender?.typedActor?.bearsShield && !(await offer.defender.typedActor.bearsShield())) {
+		globalThis.ui?.notifications?.warn?.(format(`${KEY}.redirectNoShield`, { defender: offer.defender.name }));
+		return false;
 	}
 	if (kind !== "parry") return take();
 
@@ -376,6 +420,7 @@ export function takeSpend(message, kind, offer, { scope = SYSTEM_ID } = {}) {
 		// against whoever takes the blow now.
 		const entry = list === "standIns" ? { ...spend, by: offer.defender.uuid, free: cost === 0 }
 			: bySufferer ? { ...spend, by: offer.defender.uuid }
+			: offer.move ? { ...spend, move: offer.move }
 			: spend;
 		await message.setFlag(scope, `damage.${list}`, [...(now[list] ?? []), entry]);
 		return true;
@@ -467,30 +512,33 @@ async function postSecondIntent(actor, { dieTaken = false } = {}) {
 	const options = (firstOptionList(ambush?.system?.description)?.items ?? []).map(stripHtmlToText).filter(Boolean);
 	const list = !dieTaken && options.length ? `<ul>${options.map(o => `<li>${escHtml(o)}</li>`).join("")}</ul>` : "";
 	const said = format(`${KEY}.${dieTaken ? "secondIntentTookDie" : "secondIntent"}`, { name: actor.name });
+	// The list's "Create an opportunity; you or an ally gains advantage on the next move to act on it" (Ambush,
+	// Book I p.110): the same button an Ambush 7+ carries (actors/character/give-advantage.js), for that pick.
+	const opportunity = !dieTaken && ownsLearnedMoveNamed(actor, "Ambush")
+		? `<div class="card-buttons stonetop-roll-actions stonetop-give-advantage-row"><p class="stonetop-give-advantage-lead">${escHtml(localize(`${KEY}.secondIntentOpportunity`))}</p>${giveAdvantageButtonHtml("Ambush")}</div>`
+		: "";
 	return globalThis.ChatMessage?.create?.({
-		content: stonetopChatCard(HERO_MOVES.SECOND_INTENT, `<div class="card-content"><p>${escHtml(said)}</p>${list}</div>`, "stonetop-second-intent-card"),
+		content: stonetopChatCard(HERO_MOVES.SECOND_INTENT, `<div class="card-content"><p>${escHtml(said)}</p>${list}</div>${opportunity}`, "stonetop-second-intent-card"),
 		speaker: globalThis.ChatMessage?.getSpeaker?.({ actor }),
 	});
 }
 
-/** The line a card prints for each spend taken. PURE. */
+/**
+ * The line a card prints for each spend taken, list by list in SPEND_KINDS' order, each in its kind's `note`.
+ * A list two kinds share (a halving and a parry) says each spend in the words of the kind it records (`how`),
+ * and a spend that names none in the first kind's. PURE.
+ */
 export function defendNotes(damage) {
 	const notes = [];
 	const ward = spend => damage.results?.find(r => r.uuid === spend.uuid)?.name ?? "";
-	for (const spend of damage?.halvedBy ?? []) {
-		notes.push(format(`${KEY}.${spend.how === "parry" ? "noteParry" : "noteHalve"}`, { defender: spend.name, ward: ward(spend) }));
-	}
-	for (const spend of damage?.standIns ?? []) {
-		notes.push(format(`${KEY}.${spend.free ? "noteStandInFree" : "noteStandIn"}`, { defender: spend.name, ward: ward(spend) }));
-	}
-	for (const spend of damage?.ignoredBy ?? []) {
-		notes.push(format(`${KEY}.noteIgnore`, { defender: spend.name }));
-	}
-	for (const spend of damage?.knockedDownBy ?? []) {
-		notes.push(format(`${KEY}.noteKnockedDown`, { defender: spend.name }));
-	}
-	for (const spend of damage?.safetyFirstBy ?? []) {
-		notes.push(format(`${KEY}.noteSafetyFirst`, { defender: spend.name }));
+	const lists = [...new Set(Object.values(SPEND_KINDS).map(kind => kind.list))];
+	for (const list of lists) {
+		const first = Object.values(SPEND_KINDS).find(kind => kind.list === list);
+		for (const spend of damage?.[list] ?? []) {
+			const kind = isSpendKind(spend.how) && SPEND_KINDS[spend.how].list === list ? SPEND_KINDS[spend.how] : first;
+			const note = typeof kind.note === "function" ? kind.note(spend) : kind.note;
+			notes.push(format(`${KEY}.${note}`, { defender: spend.name, ward: ward(spend), move: spend.move ?? "" }));
+		}
 	}
 	return notes;
 }
@@ -533,7 +581,7 @@ export function wireDefendSpends(message, html, { scope = SYSTEM_ID, user = glob
 		// A Steadfast Guardian's stand-in says it is free, so nobody waits for a Readiness to come off.
 		const free = kind === "standIn" && one.cost === 0 ? "Free" : "";
 		const label = offers[kind].length === 1
-			? format(`${KEY}.${kind}${free}One`, { defender: one.defender.name, ward: one.row.name })
+			? format(`${KEY}.${kind}${free}One`, { defender: one.defender.name, ward: one.row.name, move: one.move ?? "" })
 			: format(`${KEY}.${kind}`, {});
 		button.innerHTML = `<i class="fa-solid fa-shield-halved"></i> ${escHtml(label)}`;
 		button.addEventListener("click", async () => {

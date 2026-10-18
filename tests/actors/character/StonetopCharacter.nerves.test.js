@@ -73,3 +73,44 @@ describe("shaken nerves on an Order Followers roll", () => {
 		expect(rolled.map(o => o.rollMode)).toEqual(["normal", "dis"]);
 	});
 });
+
+// Coverage pass (2026-10-16): Stentorian's "Spend 1 Command ... You have advantage to Order Followers" (Book I
+// p.127). The window's box (OrderFollowersDialog) hands `command` over; the roll names it and pays 1 Command.
+describe("Stentorian's Command on an Order Followers roll", () => {
+	let rolled;
+	beforeEach(() => {
+		rolled = [];
+		vi.doMock("../../../module/utils/roll-engine.js", () => ({
+			rollStat: vi.fn(async (stat, actor, options) => { rolled.push(options); return { total: 7 }; }),
+		}));
+	});
+	afterEach(() => vi.doUnmock("../../../module/utils/roll-engine.js"));
+
+	function shouter(held) {
+		const tracks = { Stentorian: held };
+		const { char, actor } = buildLiveCharacter({
+			slug: "the-marshal", name: "The Marshal", seedStartingMoves: false,
+			items: [makeLiveItem({ name: "Stentorian", type: "move", system: { moveType: "playbook", resource: { max: 2, title: "Command" } } })],
+		});
+		const setUses = vi.fn(async (move, value) => { tracks[move] = value; });
+		actor.typedActor = { moveResources: { getMoveResources: () => tracks, setUses } };
+		return { char, tracks, setUses };
+	}
+
+	it("names Stentorian on the card and pays 1 Command once the dice land", async () => {
+		const { char, tracks } = shouter(2);
+		await char.onOrderFollowersRoll({ rollMode: "adv", modeSources: ["adv"], command: true });
+		expect(rolled[0].conditionNotes).toContain("Stentorian");
+		expect(tracks.Stentorian).toBe(1);
+	});
+
+	it("pays nothing and names nothing without the box, or with no Command held", async () => {
+		const plain = shouter(2);
+		await plain.char.onOrderFollowersRoll({ rollMode: "normal", modeSources: [] });
+		expect(plain.setUses).not.toHaveBeenCalled();
+		const empty = shouter(0);
+		await empty.char.onOrderFollowersRoll({ rollMode: "adv", modeSources: ["adv"], command: true });
+		expect(empty.setUses).not.toHaveBeenCalled();
+		expect(rolled.every(o => !(o.conditionNotes ?? []).includes("Stentorian"))).toBe(true);
+	});
+});
