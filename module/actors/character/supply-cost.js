@@ -1,4 +1,5 @@
 import { PROVISIONS_SLUG } from "./provisions.js";
+import { asArray } from "../../utils/playbook-actors.js";
 
 /**
  * WHAT CAN PAY A USE OF SUPPLIES — and, just as importantly, what cannot, and why.
@@ -21,6 +22,11 @@ export const SUPPLY_PURPOSE = {
 	RECOVER: "recover",
 	/** Make Camp (p.248), and feeding yourself on the road: 1 use per person per day. */
 	CAMP: "camp",
+	/**
+	 * Have What You Need (Book I p.78): "expend a use of supplies to mark an additional small item/slot".
+	 * Supplies only: neither provisions nor Twisting Pine sap names this among the jobs it stands in for.
+	 */
+	HAVE_WHAT_YOU_NEED: "have-what-you-need",
 };
 
 // `purposes: null` means "every purpose" — the printed supplies rows, which are what all of this
@@ -179,6 +185,46 @@ export function supplyPursesFor(resources, purpose, limits = undefined) {
 		else ineligible.push({ ...row, reason: purse.reason });
 	}
 	return { eligible, ineligible, total: eligible.reduce((sum, p) => sum + p.remaining, 0) };
+}
+
+/**
+ * The other characters who could pay a use of supplies for `patient`, each with what can pay for
+ * `purpose`: Recover's "Each character who regains HP must expend 1 use of supplies, or someone else must
+ * expend a use on their behalf" (Book I p.246). Read through each character's own
+ * StonetopCharacter#supplyPurses, so what they carry and the size of each ◆ are theirs. Characters with
+ * nothing to pay are left out. PURE but for that read.
+ *
+ * The size of a ◆ (StonetopCharacter#getUsesPerSupply) is read from the steading, so it is read ONCE per
+ * steading the characters belong to rather than once per character: `usesPerSupply` when the caller
+ * already has it (the sheet's snapshot), else worked out for the first character of each steading.
+ *
+ * @param {Actor} patient
+ * @param {Iterable<Actor>} actors  the world's actors
+ * @param {string} purpose  one of SUPPLY_PURPOSE
+ * @param {{usesPerSupply?: number}} [options]
+ * @returns {Array<{id: string, name: string, actor: Actor, purses: {eligible: object[], total: number}}>}
+ */
+export function otherSupplyPayers(patient, actors, purpose, { usesPerSupply } = {}) {
+	const out = [];
+	const perSteading = new Map();
+	const perOf = character => {
+		if (usesPerSupply !== undefined || typeof character?.getUsesPerSupply !== "function") return usesPerSupply;
+		const steading = character.getSteadingActor?.() ?? null;
+		const key = steading?.id ?? null;
+		if (!perSteading.has(key)) perSteading.set(key, character.getUsesPerSupply(steading ?? undefined));
+		return perSteading.get(key);
+	};
+	for (const actor of asArray(actors)) {
+		if (actor?.type !== "character" || !actor.id || actor.id === patient?.id) continue;
+		let purses = null;
+		try {
+			const character = actor.typedActor;
+			purses = character?.supplyPurses?.(purpose, { usesPerSupply: perOf(character) }) ?? null;
+		} catch { purses = null; }
+		if (!purses?.total) continue;
+		out.push({ id: actor.id, name: actor.name ?? "", actor, purses });
+	}
+	return out;
 }
 
 /**

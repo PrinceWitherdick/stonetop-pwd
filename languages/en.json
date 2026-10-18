@@ -783,13 +783,31 @@
         "lockedHint": "You've already caught your breath — you can't gain this benefit again until you take more damage.",
         "noSuppliesHint": "You have no uses of supplies to expend.",
         "fullHpHint": "You're already at full HP.",
-        "unlivingHint": "Unliving: no benefit. A Ghost or Revenant gains nothing from Recover."
+        "unlivingHint": "Unliving: no benefit. A Ghost or Revenant gains nothing from Recover.",
+        "otherPayerNote": "Someone else can expend a use on your behalf. Their player is asked first when it is theirs to decide.",
+        "followersButton": "Recover the followers ticked",
+        "followersLegend": "Followers who Recover too (1 use of supplies each, +{heal} HP):",
+        "tendDebility": "Tend a debility",
+        "nothingPicked": "Tick at least one follower to Recover.",
+        "notEnoughSupplies": "That purse no longer holds the {uses} uses of supplies this Recover needs.",
+        "payerKept": "{name}'s supplies were not spent, so nothing was healed.",
+        "noDebility": "There is no debility marked to tend.",
+        "tend": {
+          "title": "Recover: tend to a debility",
+          "trigger": "When you tend to a debility, say how. The GM will either say that it's taken care of or tell you what's required to do so (Defying Danger, expending supplies or some other resource, finding something, Making Camp, etc.).",
+          "which": "Which debility:",
+          "gmNote": "Clear it only once the GM says it's taken care of. If they name something still required, close this window and come back once it's done.",
+          "spend": "The GM asked for a use of supplies",
+          "done": "It's taken care of: clear it",
+          "cleared": "Debility cleared"
+        }
       },
       "convalesce": {
         "title": "Convalesce",
         "button": "Convalesce",
         "summary": "When you <em><strong>rest for a few days, in safety and comfort</strong></em>, recover all your HP and clear all your debilities.",
         "nothingHint": "You're already at full HP with no debilities to clear.",
+        "followersLegend": "Followers who rest with you, back to full HP:",
         "unlivingHint": "Unliving: no benefit. A Ghost or Revenant gains nothing from Convalesce."
       },
       "dyingHint": "Dying: you can't save yourself. Someone who tends you Aids your {move} roll instead."
@@ -1038,6 +1056,16 @@
       "regularPoolAtLimit": "You're already carrying a full load, so there's no room to reserve more undefined ◇. Un-mark a carried item to free up room.",
       "smallPoolAtLimit": "You've used all your small-item slots, so there's no room to reserve more undefined □. Un-mark a small item to free up room.",
       "smallOverAllotment": "That's more small items than your Outfit allotment of {limit} (4+Prosperity). Expend a use of supplies to carry an extra small item, or check with your GM.",
+      "extraSmall": {
+        "title": "Have What You Need: an extra small item",
+        "body": "Your undefined small items are all used up, and {item} would be more than your allotment of {limit} (4+Prosperity). You can expend a use of supplies to have had it all along, or mark it as something found out here.",
+        "thisItem": "this item",
+        "noSupplies": "You have no supplies left to expend for it.",
+        "spend": "Expend 1 use of {purse} ({left} left)",
+        "found": "Found out here, no cost",
+        "cancel": "Don't mark it",
+        "receipt": "Expended 1 use for an extra small item, {item} ({left} left)"
+      },
       "writeInSource": {
         "title": "Where did this come from?",
         "intro": "<p>You are marking <strong>{name}</strong>. Did you have it with you all along, or is it something new you picked up out here?</p>",

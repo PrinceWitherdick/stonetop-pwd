@@ -81,7 +81,9 @@ import {statApproaches} from "../../utils/stat-approaches.js";
 import {wirePickTally} from "../../utils/pick-tally.js";
 import {canPayStock, defaultStockSource, payableStockSources, mustAskStockSource, stockSourceChoiceLabel, stockReceipt, vesselHpFormula, stockCostFromDescription, RITES_OF_THE_LAND} from "./stock-cost.js";
 import {defaultSupplyPurse, SUPPLY_PURPOSE} from "./supply-cost.js";
+import {supplyPayersFor, payOthersSupplies, spendPayerSupplies, ownSupplySpend, behalfSpendRow} from "./supply-payer.js";
 import {canRetire, openRetireDialog} from "../../campaign/retire-pc.js";
+import {hurtFollowerBodies, restFollowers, followerRestRow} from "./follower-rest.js";
 import {openMakeCamp} from "../../camp/camp-flow.js";
 import {openStruggleAsOne} from "../../struggle/struggle-flow.js";
 import {beginAid} from "../../pc-asks/pc-ask-flow.js";
@@ -150,7 +152,7 @@ import {
 	UP_WITH_PEOPLE, SOMEONE_ELSE, afterHeroPip, conversationPartners, converse, partnerSpendWords, rapportChips, rapportHeld,
 	spendPartnerRapport, toggleNpcRapport, upWithPeopleCard,
 } from "./up-with-people.js";
-import {promptForText} from "../../dialogs/content-picker.js";
+import {promptForText, ContentPickerDialog} from "../../dialogs/content-picker.js";
 import {
 	showBlessedMarks, BARKSKIN, TRACKLESS_STEP, SHARED_SOULS, AMULETS_TALISMANS, WARDS_BINDINGS,
 } from "./blessed-marks.js";
@@ -539,12 +541,15 @@ function _recoverHealBase(snapshot) {
  * Recover dialog wants to know why they are not on the list, and "they are not on the list" is
  * not an answer. See supply-cost.js for both directions of that rule.
  */
-function _supplyPurseFieldHtml(purses, legend) {
+function _supplyPurseFieldHtml(purses, legend, { others = [], note = "" } = {}) {
 	const { eligible, ineligible } = purses;
-	const body = eligible.length === 1
-		? `<p class="stonetop-supply-purse-only">${_esc(eligible[0].label)} <span class="stonetop-supply-purse-left">(${eligible[0].remaining} left)</span></p>`
-		: eligible.map((p, i) => `<label class="stonetop-supply-purse">
-				<input type="radio" name="supplyPurse" value="${_esc(p.slug)}"${i === 0 ? " checked" : ""}>
+	// `others` are further rows, `{value, label, remaining}`, that someone else pays from (_payWithFieldHtml):
+	// with any of them there is a choice, so even a lone purse of one's own is a radio.
+	const rows = [...eligible.map(p => ({ value: p.slug, label: p.label, remaining: p.remaining })), ...others];
+	const body = rows.length === 1 && !others.length
+		? `<p class="stonetop-supply-purse-only">${_esc(rows[0].label)} <span class="stonetop-supply-purse-left">(${rows[0].remaining} left)</span></p>`
+		: rows.map((p, i) => `<label class="stonetop-supply-purse">
+				<input type="radio" name="supplyPurse" value="${_esc(p.value)}"${i === 0 ? " checked" : ""}>
 				<span>${_esc(p.label)} <span class="stonetop-supply-purse-left">(${p.remaining} left)</span></span>
 			</label>`).join("");
 	const refused = ineligible.map(p => `<li><strong>${_esc(p.label)}</strong> (${p.remaining}): ${_esc(p.reason)}</li>`).join("");
@@ -552,13 +557,61 @@ function _supplyPurseFieldHtml(purses, legend) {
 		<p class="stonetop-homestead-subhead">${_esc(legend)}</p>
 		${body}
 		${refused ? `<ul class="stonetop-supply-purse-refused">${refused}</ul>` : ""}
+		${note ? `<p class="stonetop-homestead-note">${_esc(note)}</p>` : ""}
 	</div>`;
 }
 
-/** Which purse the player picked in that field, or null when the field offered no choice. */
-function _chosenSupplyPurse(html, purses) {
-	const slug = html?.find?.('input[name="supplyPurse"]:checked')?.val();
-	return purses.eligible.find(p => p.slug === slug) ?? null;
+/**
+ * The "Pay with" field when someone else could pay as well ("or someone else must expend a use on their
+ * behalf", Book I p.246): this character's own purses first, then each other character's
+ * (supply-payer.js#supplyPayersFor), one radio each, and what of their own cannot pay still listed with
+ * why. A payer's value is `id::slug`. With nobody else to pay it is the plain field above.
+ */
+function _payWithFieldHtml(purses, payers, legend) {
+	if (!payers?.length) return _supplyPurseFieldHtml(purses, legend);
+	const others = payers.flatMap(payer => payer.purses.eligible.map(p => ({
+		value: `${payer.id}::${p.slug}`, label: `${payer.name}'s ${p.label.toLowerCase()}`, remaining: p.remaining,
+	})));
+	return _supplyPurseFieldHtml(purses, legend, { others, note: game.i18n.localize("stonetop.specialMoves.recover.otherPayerNote") });
+}
+
+/**
+ * Which purse, and whose, the "Pay with" field answers: `{purse, payer}`, `payer` the paying character's
+ * entry from supplyPayersFor or null for this character's own. The first own purse (else the first
+ * payer's) when the field offered no choice. `html` is the window's jQuery, or its form element.
+ */
+function _chosenPayWith(html, purses, payers = []) {
+	const field = 'input[name="supplyPurse"]:checked';
+	const value = String((typeof html?.querySelector === "function" ? html.querySelector(field)?.value : html?.find?.(field)?.val()) ?? "");
+	const [id, slug] = value.includes("::") ? value.split("::") : [null, value];
+	if (id) {
+		const payer = payers.find(p => p.id === id) ?? null;
+		const purse = payer?.purses.eligible.find(p => p.slug === slug) ?? null;
+		if (payer && purse) return { purse, payer };
+	}
+	const own = purses.eligible.find(p => p.slug === slug) ?? defaultSupplyPurse(purses);
+	if (own) return { purse: own, payer: null };
+	const first = payers.find(p => p.purses.eligible.length) ?? null;
+	return first ? { purse: first.purses.eligible[0], payer: first } : { purse: null, payer: null };
+}
+
+/** The followers a Recover or Convalesce can take along: one unticked box per body below max (follower-rest.js). */
+function _restFollowersHtml(bodies, { legend, gain }) {
+	if (!bodies?.length) return "";
+	return `<div class="stonetop-rest-followers">
+		<p class="stonetop-homestead-subhead">${_esc(legend)}</p>
+		<ul class="stonetop-rest-follower-list">
+			${bodies.map(b => `<li><label class="stonetop-rest-follower">
+				<input type="checkbox" name="restFollower" value="${_esc(b.id)}">
+				<span>${_esc(b.name)} <span class="stonetop-supply-purse-left">(${b.from}/${b.max} HP &rarr; ${gain(b)})</span></span>
+			</label></li>`).join("")}
+		</ul>
+	</div>`;
+}
+
+/** The follower bodies ticked in that list. */
+function _chosenRestFollowers(html) {
+	return html?.find?.('input[name="restFollower"]:checked')?.map?.((_i, el) => el.value)?.get?.() ?? [];
 }
 
 /**
@@ -1987,8 +2040,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			const { xp } = context.stonetop.vitals;
 			context.stonetop.canLevelUp = xp.value >= xp.max;
 			context.stonetop.deathsDoor = this._buildDeathsDoorData(context.stonetop);
-			context.stonetop.recover = this._buildRecoverData(context.stonetop);
-			context.stonetop.convalesce = this._buildConvalesceData(context.stonetop);
+			// Followers who could Recover or Convalesce with them light those cards too (follower-rest.js; never
+			// throws). Read only when there are followers, and from the playbook, inserts and bonuses the
+			// Followers tab was just built from, so a render does not work them all out a second time.
+			const hurtFollowers = context.stonetop.hasFollowers
+				? (await hurtFollowerBodies(this.actor, { inputs: { playbookDoc, crewDef, companionDef, crewStats, companionBonuses } })).length
+				: 0;
+			context.stonetop.recover = this._buildRecoverData(context.stonetop, { hurtFollowers });
+			context.stonetop.convalesce = this._buildConvalesceData(context.stonetop, { hurtFollowers });
 			context.stonetop.woundsView = this._buildWoundsView(context.stonetop.wounds, context.editable);
 			// Which of the header glyphs this character has EARNED, all five from one walk of the
 			// items — asking each one separately is five to seven traversals of the collection per
@@ -2208,7 +2267,12 @@ export function createStonetopCharacterSheetClass(Base) {
 		// Recover (special move): expend 1 use of supplies, regain HP equal to
 		// 4+Prosperity. The benefit is locked after use until the character takes
 		// damage again (cleared by the preUpdateActor hook in stonetop.js).
-		_buildRecoverData(snapshot) {
+		//
+		// The same move tends a debility (Book I p.78, p.247), which neither the lock nor full HP nor
+		// supplies stand in the way of, and heals followers who are hurt (p.240, p.473), so the card opens
+		// for either even when this character's own HP can't be recovered. `hurtFollowers` counts the
+		// follower bodies below max (follower-rest.js#hurtFollowerBodies).
+		_buildRecoverData(snapshot, { hurtFollowers = 0 } = {}) {
 			const locked      = !!this.actor.getFlag(STONETOP_SCOPE, "recover.spent");
 			// Only what may actually pay for a Recover is counted: a pack full of provisions is
 			// not an answer to "can you Recover?" (supply-cost.js, Book I p.89), and counting it
@@ -2226,11 +2290,24 @@ export function createStonetopCharacterSheetClass(Base) {
 			const unliving    = isUnliving(this.actor);
 			const dyingHint   = this._dyingHint();
 
+			const able        = !unliving && !dyingHint;
+			// "Or someone else must expend a use on their behalf" (p.246): with nothing of their own, another
+			// character's supplies can still pay. Only asked when it could matter, and asked as the Recover
+			// window asks it (supply-payer.js#supplyPayersFor: in play, and someone here can answer for them),
+			// so the card never lights for a payer the window then leaves out.
+			const wantsUses   = (!locked && !atFullHp) || hurtFollowers > 0;
+			const othersPay   = able && suppliesLeft <= 0 && wantsUses
+				&& supplyPayersFor(this.actor, SUPPLY_PURPOSE.RECOVER).length > 0;
+			const canPay      = suppliesLeft > 0 || othersPay;
+			const canRecover  = able && !locked && canPay && !atFullHp;
+			const canTend     = able && (snapshot.debilities ?? []).some(d => d.active);
+			const followersCanRecover = able && hurtFollowers > 0 && canPay;
+
 			let hint = null;
 			if (unliving)               hint = { icon: "fa-ghost",               text: game.i18n.localize("stonetop.specialMoves.recover.unlivingHint") };
 			else if (dyingHint)         hint = dyingHint;
 			else if (locked)            hint = { icon: "fa-lock",                text: game.i18n.localize("stonetop.specialMoves.recover.lockedHint") };
-			else if (suppliesLeft <= 0) hint = { icon: "fa-triangle-exclamation", text: game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint") };
+			else if (!canPay)           hint = { icon: "fa-triangle-exclamation", text: game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint") };
 			else if (atFullHp)          hint = { icon: "fa-heart",               text: game.i18n.localize("stonetop.specialMoves.recover.fullHpHint") };
 
 			return {
@@ -2239,7 +2316,11 @@ export function createStonetopCharacterSheetClass(Base) {
 				healAmount,
 				atFullHp,
 				hint,
-				canRecover: !unliving && !dyingHint && !locked && suppliesLeft > 0 && !atFullHp,
+				canRecover,
+				canTend,
+				followersCanRecover,
+				// The card's button: anything at all this move can do for them now.
+				canOpen: canRecover || canTend || followersCanRecover,
 			};
 		}
 
@@ -2267,7 +2348,8 @@ export function createStonetopCharacterSheetClass(Base) {
 		// recover ALL HP and clear ALL debilities. Unlike Recover there's no supply
 		// cost and no once-per-damage lock — it's a downtime move, available whenever
 		// there's something to restore (HP below max or any debility marked).
-		_buildConvalesceData(snapshot) {
+		// `hurtFollowers`: follower bodies below max, who rest back to full alongside them (Book I p.240).
+		_buildConvalesceData(snapshot, { hurtFollowers = 0 } = {}) {
 			const hp               = snapshot.vitals.hp;
 			const atFullHp         = hp.value >= hp.max;
 			const activeDebilities = (snapshot.debilities ?? []).filter(d => d.active);
@@ -2284,7 +2366,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// A Ghost or a Revenant: "You gain no benefit from ... Convalesce", HP, debilities and wounds alike.
 			const unliving         = isUnliving(this.actor);
 			const dyingHint        = this._dyingHint();
-			const canConvalesce    = !unliving && !dyingHint && (!atFullHp || hasDebility || openWounds.length > 0 || markedTracks.length > 0);
+			const canConvalesce    = !unliving && !dyingHint && (!atFullHp || hasDebility || openWounds.length > 0 || markedTracks.length > 0 || hurtFollowers > 0);
 			let hint = null;
 			if (unliving)            hint = { icon: "fa-ghost", text: game.i18n.localize("stonetop.specialMoves.convalesce.unlivingHint") };
 			else if (dyingHint)      hint = dyingHint;
@@ -8009,32 +8091,95 @@ export function createStonetopCharacterSheetClass(Base) {
 				}
 				return;
 			}
-			if (small && el.checked && smallColumn) this._warnIfOverSmallAllotment(smallColumn);
+			// Past the allotment with no undefined □ left: the extra small item is paid for, found out here,
+			// or not marked at all (_haveExtraSmallItem). A closed window marks nothing.
+			let found = false;
+			if (small && el.checked && smallColumn) {
+				const extra = await this._haveExtraSmallItem(smallColumn, el.dataset.name ?? "");
+				if (extra === null) {
+					if (group) for (const box of group.querySelectorAll(".stonetop-inv-diamond")) box.checked = false;
+					el.checked = false;
+					el.closest(".stonetop-inv-item")?.classList.remove("is-checked");
+					this.render(false);
+					return;
+				}
+				found = extra === "found";
+			}
 			// One actor update (StonetopCharacter#toggleCarriedItem), whose re-render redraws the load.
 			await this._stonetopCharacter.toggleCarriedItem(el.dataset.slug, el.checked, {
 				small,
 				weight: Number(el.dataset.weight ?? 1),
 				// The provisions a Forage brought in are weight gained in the field, not something had
 				// all along: they draw nothing from the undefined pool (inv-item-*.hbs).
-				loot:   el.dataset.loot === "true",
+				loot:   found || el.dataset.loot === "true",
 			});
 		}
 
-		// Small items don't count toward load and have no hard limit (Book I p.84/326),
-		// so marking past the 4+Prosperity Outfit allotment is allowed — but flag it, so
-		// the player remembers to expend supplies or square it with the GM. The allotment is the
-		// □ track's own size, 4+Prosperity, or 4+0 when Prosperity can't be read.
-		_warnIfOverSmallAllotment(smallColumn) {
-			const raw = smallColumn.dataset.smallAllotment;
-			if (raw == null || raw === "") return;
-			const allotment = Number(raw);
-			if (!Number.isFinite(allotment)) return;
-			// The clicked box is already checked, so the live count includes it.
-			const checkedSmall = smallColumn.querySelectorAll(
-				".stonetop-inventory-item-check[data-slug]:checked").length;
-			if (checkedSmall > allotment) {
+		/**
+		 * HAVE WHAT YOU NEED, one small item past the allotment (Book I p.78): "Alternately, you can expend a
+		 * use of supplies to mark an additional small item/slot". Asked at the point the undefined □ are all
+		 * spent and this mark goes past the 4+Prosperity allotment: spend a use of supplies (supplies only:
+		 * supply-cost.js's HAVE_WHAT_YOU_NEED), or say it was found out here, loot that draws on nothing
+		 * ("Small items ... don't count against a character's load", p.326). With undefined □ still in hand
+		 * the mark is an ordinary one and only the old over-allotment warning is said.
+		 *
+		 * @returns {Promise<"ok"|"spent"|"found"|null>}  null: closed, or the use could not be spent; mark nothing
+		 */
+		async _haveExtraSmallItem(smallColumn, itemName = "") {
+			const allotment = this._smallAllotmentPassed(smallColumn);
+			if (allotment == null) return "ok";
+			if (this._stonetopCharacter.undefinedSmallMarks > 0) {
+				// Small items don't count toward load and have no hard limit (Book I p.84/326), so marking past
+				// the 4+Prosperity Outfit allotment is allowed, but flagged, so the player remembers to expend
+				// supplies or square it with the GM.
 				ui.notifications.warn(game.i18n.format("stonetop.inventory.smallOverAllotment", { limit: allotment }));
+				return "ok";
 			}
+			const purse = defaultSupplyPurse(this._stonetopCharacter.supplyPurses(SUPPLY_PURPOSE.HAVE_WHAT_YOU_NEED));
+			const key = "stonetop.inventory.extraSmall";
+			const answer = await askWithButtons({
+				title:   game.i18n.localize(`${key}.title`),
+				content: `<p>${game.i18n.format(`${key}.body`, { limit: allotment, item: _esc(itemName || game.i18n.localize(`${key}.thisItem`)) })}</p>`
+					+ (purse ? "" : `<p>${game.i18n.localize(`${key}.noSupplies`)}</p>`),
+				buttons: [
+					...(purse ? [{ key: "spend", label: game.i18n.format(`${key}.spend`, { purse: purse.label, left: purse.remaining }), value: "spend", icon: "fa-basket-shopping" }] : []),
+					{ key: "found", label: game.i18n.localize(`${key}.found`), value: "found" },
+					{ key: "cancel", label: game.i18n.localize(`${key}.cancel`), value: null },
+				],
+				defaultKey: purse ? "spend" : "found",
+			});
+			if (answer !== "spend") return answer ?? null;
+			return (await this._spendExtraSmallItemSupply(purse, itemName)) ? "spent" : null;
+		}
+
+		/** The use of supplies an extra small item costs, out of `purse` read live; false when it no longer holds one. */
+		async _spendExtraSmallItemSupply(purse, itemName = "") {
+			const paid = purse?.slug ? await spendPayerSupplies(this.actor, {
+				slug: purse.slug, purpose: SUPPLY_PURPOSE.HAVE_WHAT_YOU_NEED, moveName: "Have What You Need",
+			}) : null;
+			if (!paid) {
+				ui.notifications?.warn(game.i18n.localize("stonetop.inventory.extraSmall.noSupplies"));
+				return false;
+			}
+			postMoveToChat(this.actor, "Have What You Need", [{
+				label: paid.label,
+				value: game.i18n.format("stonetop.inventory.extraSmall.receipt", { item: itemName || game.i18n.localize("stonetop.inventory.extraSmall.thisItem"), left: paid.left }),
+			}]);
+			return true;
+		}
+
+		/**
+		 * The allotment this small-column mark has gone past, or null. The allotment is the □ track's own
+		 * size, 4+Prosperity, or 4+0 when Prosperity can't be read; the clicked box is already checked, so
+		 * the live count includes it.
+		 */
+		_smallAllotmentPassed(smallColumn) {
+			const raw = smallColumn?.dataset?.smallAllotment;
+			if (raw == null || raw === "") return null;
+			const allotment = Number(raw);
+			if (!Number.isFinite(allotment)) return null;
+			const checkedSmall = smallColumn.querySelectorAll(".stonetop-inventory-item-check[data-slug]:checked").length;
+			return checkedSmall > allotment ? allotment : null;
 		}
 
 		async _onInventoryResource(ev) {
@@ -11337,12 +11482,23 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (this._refuseIfDying()) return;
 			const snapshot = await this._stonetopCharacter.buildSnapshot();
 			const hp = snapshot.vitals.hp;
-			if (this.actor.getFlag(STONETOP_SCOPE, "recover.spent")) return;
-			if (hp.value >= hp.max) return;
+			const locked = !!this.actor.getFlag(STONETOP_SCOPE, "recover.spent");
 
 			const purses    = this._stonetopCharacter.supplyPurses(SUPPLY_PURPOSE.RECOVER);
-			const fallback  = defaultSupplyPurse(purses);
-			if (!fallback) return;
+			// "Or someone else must expend a use on their behalf" (Book I p.246): another character's
+			// supplies, whoever this user can reach to pay them (supply-payer.js).
+			const payers    = supplyPayersFor(this.actor, SUPPLY_PURPOSE.RECOVER);
+			const canPay    = purses.total > 0 || payers.length > 0;
+			// Their own HP: not once the Recover is spent, nor at full HP.
+			const self      = canPay && !locked && hp.value < hp.max;
+			// Followers who are hurt Recover too, a use each (p.240, p.473), whatever the PC's own HP.
+			const bodies    = canPay ? await hurtFollowerBodies(this.actor) : [];
+			const debilities = (snapshot.debilities ?? []).filter(d => d.active);
+			// Nothing to heal, only a debility to tend: straight to that (p.78), which needs none of the above.
+			if (!self && !bodies.length) {
+				if (debilities.length) this._onTendDebility();
+				return;
+			}
 
 			const healAmount = _recoverHealBase(snapshot);
 			// Torment's Blessing halves whatever the Recover would heal; the breakdown says so.
@@ -11351,38 +11507,51 @@ export function createStonetopCharacterSheetClass(Base) {
 			const guide      = GUIDED_CHARACTER_MOVES.Recover;
 			// Healer's Arts: whoever could be tending this Recover (healers-arts.js). None, and the
 			// window is the plain Recover it always was.
-			const carers     = await this._recoverCarers();
+			const carers     = self ? await this._recoverCarers() : [];
+			const selfRows = self
+				? `<li>Expend <strong>1 use of supplies</strong>.</li>
+					<li>Regain HP: <strong>${hp.value} &rarr; <span class="stonetop-recover-new-hp">${plain.newHp}</span></strong> (<span class="stonetop-recover-breakdown">${_esc(recoverBreakdown(plain))}</span>).</li>`
+				: `<li>${_esc(game.i18n.localize(locked ? "stonetop.specialMoves.recover.lockedHint" : "stonetop.specialMoves.recover.fullHpHint"))}</li>`;
+
+			const buttons = {
+				recover: {
+					label: self ? `Recover (+${plain.gained} HP)` : game.i18n.localize("stonetop.specialMoves.recover.followersButton"),
+					callback: (html) => {
+						// What the window SHOWED is not what is written: the HP, the purse and the
+						// lock are all read again when the button is pressed (see _applyRecover).
+						const { purse, payer } = _chosenPayWith(html, purses, payers);
+						return this._applyRecover({
+							purse, payer, self,
+							base:      healAmount,
+							slow,
+							care:      self ? _chosenRecoverCare(html, carers) : null,
+							followers: _chosenRestFollowers(html),
+						});
+					},
+				},
+			};
+			// A debility can be tended in the same breath (p.78): its own window, as a wound's is.
+			if (debilities.length) {
+				buttons.tend = { label: game.i18n.localize("stonetop.specialMoves.recover.tendDebility"), callback: () => this._onTendDebility() };
+			}
+			buttons.cancel = { label: "Cancel" };
 
 			new Dialog({
 				title: "Recover",
 				content: `<form class="stonetop-homestead-dialog stonetop-recover-dialog">
 					<p class="stonetop-homestead-trigger"><em>${_esc(guide.trigger)}</em></p>
 					<div class="stonetop-homestead-reference">
-						<ul>
-							<li>Expend <strong>1 use of supplies</strong>.</li>
-							<li>Regain HP: <strong>${hp.value} &rarr; <span class="stonetop-recover-new-hp">${plain.newHp}</span></strong> (<span class="stonetop-recover-breakdown">${_esc(recoverBreakdown(plain))}</span>).</li>
-						</ul>
+						<ul>${selfRows}</ul>
 					</div>
-					${_supplyPurseFieldHtml(purses, "Pay with")}
+					${_payWithFieldHtml(purses, payers, "Pay with")}
 					${carers.length ? _recoverCareHtml(carers) : ""}
+					${_restFollowersHtml(bodies, {
+						legend: game.i18n.format("stonetop.specialMoves.recover.followersLegend", { heal: healAmount }),
+						gain:   b => Math.min(b.max, b.from + healAmount),
+					})}
 					<p class="stonetop-homestead-note">${_esc(guide.note)} You can't gain this benefit again until you take more damage.</p>
 				</form>`,
-				buttons: {
-					cancel:  { label: "Cancel" },
-					recover: {
-						label: `Recover (+${plain.gained} HP)`,
-						callback: (html) => {
-							// What the window SHOWED is not what is written: the HP, the purse and the
-							// lock are all read again when the button is pressed (see _applyRecover).
-							return this._applyRecover({
-								purse:  _chosenSupplyPurse(html, purses) ?? fallback,
-								base:   healAmount,
-								slow,
-								care:   _chosenRecoverCare(html, carers),
-							});
-						},
-					},
-				},
+				buttons,
 				default: "recover",
 				render: html => {
 					bringDialogToFront(html);
@@ -11432,27 +11601,53 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * since. So the lock, the purse, the HP and the computed max are all read LIVE here, the
 		 * heal is worked out from them, and a Recover that can no longer be made spends nothing.
 		 * `base` is 4+Prosperity and `slow` is Torment's Blessing, as the window worked them out.
+		 *
+		 * `self` false is a Recover made only for `followers` (the follower bodies ticked, follower-rest.js):
+		 * the character's own HP, lock and wounds are left alone. Each body that regains HP costs a use
+		 * (Book I p.473), so the purse must hold one for the character and one per follower.
+		 * `payer` is another character paying "on their behalf" (p.246, supply-payer.js), whose uses are
+		 * spent FIRST, through their own player when it is theirs to decide: a "no" spends and heals nothing.
 		 */
-		async _applyRecover({ purse, base = 4, slow = false, care = null }) {
+		async _applyRecover({ purse, base = 4, slow = false, care = null, payer = null, self = true, followers = [] }) {
 			// Unliving since the window opened: nothing is spent for a Recover that does them no good.
 			if (isUnliving(this.actor)) return;
 			// Dying since the window opened: they can't save themselves (Book I p.240).
 			if (this._refuseIfDying()) return;
-			// Spent already, by a second window or a second press.
-			if (this.actor.getFlag(STONETOP_SCOPE, "recover.spent")) {
-				return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.lockedHint"));
-			}
-			const livePurse = () => this._stonetopCharacter.supplyPurses(SUPPLY_PURPOSE.RECOVER)
-				.eligible.find(p => p.slug === purse?.slug) ?? null;
-			if (!livePurse()) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint"));
+			const picked = Array.isArray(followers) ? followers.filter(Boolean) : [];
+			if (!self && !picked.length) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.nothingPicked"));
+			// The character's own part, read live: spent already (by a second window or a second press), or
+			// at full HP since the window opened. With followers ticked, the Recover goes ahead for them
+			// alone, the way a Recover opened for followers only does; without, nothing is spent.
 			const max = await this._stonetopCharacter.computedMaxHp();
-			if (this._stonetopCharacter.hp >= max) {
-				return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.fullHpHint"));
+			if (self) {
+				const selfBlocked = this.actor.getFlag(STONETOP_SCOPE, "recover.spent") ? "lockedHint"
+					: this._stonetopCharacter.hp >= max ? "fullHpHint" : null;
+				if (selfBlocked && !picked.length) return void ui.notifications?.warn(game.i18n.localize(`stonetop.specialMoves.recover.${selfBlocked}`));
+				if (selfBlocked) self = false;
+			}
+			// The followers still below their max now; one healed meanwhile is not paid for. Handed on to
+			// restFollowers as read, rather than read a second time.
+			const followerBodies = picked.length
+				? (await hurtFollowerBodies(this.actor)).filter(b => picked.includes(b.id))
+				: [];
+			const followerIds = followerBodies.map(b => b.id);
+			if (!self && !followerIds.length) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.nothingPicked"));
+			const uses = (self ? 1 : 0) + followerIds.length;
+			// Whose purse: this character's, or the payer's, read live either way.
+			const payerActor = payer ? (game.actors?.get?.(payer.id) ?? null) : null;
+			if (payer && !payerActor) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint"));
+			const purseOwner = payerActor?.typedActor ?? this._stonetopCharacter;
+			const livePurse = () => purseOwner.supplyPurses(SUPPLY_PURPOSE.RECOVER)
+				.eligible.find(p => p.slug === purse?.slug && p.remaining >= uses) ?? null;
+			if (!livePurse()) {
+				return void ui.notifications?.warn(uses > 1
+					? game.i18n.format("stonetop.specialMoves.recover.notEnoughSupplies", { uses })
+					: game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint"));
 			}
 			let paid = null;
 			let kept = null;
 			let wounds = { update: {}, stabilized: [] };
-			if (care) {
+			if (self && care) {
 				if (care.stock) {
 					const answer = await payHealersArtsStock({ carer: game.actors?.get(care.carer.id), patient: this.actor, sourceKey: care.sourceKey });
 					if (!answer) {
@@ -11474,9 +11669,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// second window may have spent the last use or the Recover itself meanwhile: checked again,
 			// so a Recover is never made for free. A Stock already paid is gone by then, so the warning
 			// says so for the table to settle.
-			if (!livePurse() || this.actor.getFlag(STONETOP_SCOPE, "recover.spent")) {
+			const stockGone = why => (paid ? `${why} ${care.carer.name}'s Stock was already spent.` : why);
+			if (!livePurse() || (self && this.actor.getFlag(STONETOP_SCOPE, "recover.spent"))) {
 				const why = livePurse() ? game.i18n.localize("stonetop.specialMoves.recover.lockedHint") : game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint");
-				ui.notifications?.warn(paid ? `${why} ${care.carer.name}'s Stock was already spent.` : why);
+				ui.notifications?.warn(stockGone(why));
 				return;
 			}
 			// A Vessel tending their own Recover can pay the Stock in their own blood (2d4 HP), and that can
@@ -11484,31 +11680,46 @@ export function createStonetopCharacterSheetClass(Base) {
 			// (Book I p.240), so the Recover the payment was for is refused now, the Stock already gone.
 			const dying = this._dyingHint();
 			if (dying) {
-				ui.notifications?.warn(paid ? `${dying.text} ${care.carer.name}'s Stock was already spent.` : dying.text);
+				ui.notifications?.warn(stockGone(dying.text));
 				return;
 			}
-			// Read after any Stock was paid, for the reasons above; the purse too, as it is now.
+			// Someone else's supplies (p.246), paid before anything here is written: through their own player
+			// when it is theirs to decide (supply-payer.js). Kept, unanswered or unpayable, nothing is healed.
+			// Otherwise this character's own, read as the purse is now, into the one write below.
+			const own = payerActor ? null : ownSupplySpend(this._stonetopCharacter, { slug: purse.slug, n: uses, purpose: SUPPLY_PURPOSE.RECOVER });
+			if (!payerActor && !own) return void ui.notifications?.warn(stockGone(game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint")));
+			const spentRow = payerActor
+				? await this._payOnBehalf(payerActor, { slug: purse.slug, n: uses, kept: stockGone })
+				: own.row;
+			if (!spentRow) return;
+			// Read after any Stock was paid, for the reasons above.
 			const oldHp = this._stonetopCharacter.hp;
-			const newHp = recoverHeal({
+			const newHp = self ? recoverHeal({
 				base, hp: oldHp, max, wis: care ? care.carer.wis : null, stock: !!paid, slow: !!slow,
-			}).newHp;
-			const remaining = livePurse()?.remaining ?? 0;
-			const left = Math.max(0, remaining - 1);
+			}).newHp : oldHp;
 
 			// One write, named for the ledger: the supply spent and the HP, lock and wounds alike ("via Recover").
-			await this.actor.update({
-				...this._stonetopCharacter.inventoryResourceData(purse.slug, left),
-				"system.attributes.hp.value": newHp,
-				"flags.stonetop-pwd.recover.spent": true,
-				...wounds.update,
-			}, { stonetopMove: "Recover" });
+			// A payer's uses were their own write; a Recover for followers alone leaves this character's HP be.
+			const update = {
+				...(own?.update ?? {}),
+				...(self ? {
+					"system.attributes.hp.value": newHp,
+					"flags.stonetop-pwd.recover.spent": true,
+					...wounds.update,
+				} : {}),
+			};
+			if (Object.keys(update).length) await this.actor.update(update, { stonetopMove: "Recover" });
+			// The followers, by the same 4+Prosperity, as read above (follower-rest.js: their boxes in one write).
+			const healed = followerIds.length
+				? await restFollowers(this.actor, followerIds, { heal: base, moveName: "Recover", bodies: followerBodies })
+				: [];
 
-			const rows = [
-				{ label: purse.label, value: `Expended 1 use (${left} left)` },
-				{ label: "HP", value: `${oldHp} → ${newHp} (+${newHp - oldHp})` },
-			];
-			if (newHp > oldHp && slowToHeal(this.actor)) rows.push({ label: "Torment's Blessing", value: "Slow to heal: only half the HP, rounded up" });
-			if (care) {
+			const rows = [spentRow];
+			if (self) rows.push({ label: "HP", value: `${oldHp} → ${newHp} (+${newHp - oldHp})` });
+			if (self && newHp > oldHp && slowToHeal(this.actor)) rows.push({ label: "Torment's Blessing", value: "Slow to heal: only half the HP, rounded up" });
+			const followerRow = followerRestRow(healed);
+			if (followerRow) rows.push(followerRow);
+			if (self && care) {
 				rows.push({ label: HEALERS_ARTS, value: `Under ${care.carer.name}'s care: +${Math.max(0, care.carer.wis)} HP (WIS)` });
 				if (paid) {
 					rows.push({ label: `${care.carer.name}'s Stock`, value: `${stockReceipt(paid, HEALERS_ARTS_STOCK, paid.lost)}: +${HEALERS_ARTS_STOCK_HP} HP` });
@@ -11528,6 +11739,101 @@ export function createStonetopCharacterSheetClass(Base) {
 			this.render(false);
 		}
 
+		/**
+		 * Recover, applied to a debility (Book I p.78, p.247): "When you tend to a debility or a problematic
+		 * wound, say how. The GM will either say that it's taken care of or tell you what's required to do
+		 * so (Defying Danger, expending supplies or some other resource, finding ___, Making Camp, etc.)."
+		 * The same shape as tending a wound (_onWoundTend): the "how" is said aloud, and the debility clears
+		 * only on the GM's "It's taken care of". Expending supplies is one requirement among many, so its box
+		 * starts UNTICKED and is ticked only when the GM asks for it; paid by this character or by someone on
+		 * their behalf (p.246). Neither the HP Recover's lock nor full HP stands in the way: that lock is on
+		 * regaining HP ("You can't gain this benefit again"), not on tending.
+		 */
+		async _onTendDebility() {
+			if (isUnliving(this.actor)) {
+				return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.unlivingHint"));
+			}
+			if (this._refuseIfDying()) return;
+			const marked = this._stonetopCharacter.debilityChoices.filter(d => d.marked);
+			if (!marked.length) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.noDebility"));
+			const purses = this._stonetopCharacter.supplyPurses(SUPPLY_PURPOSE.RECOVER);
+			const payers = supplyPayersFor(this.actor, SUPPLY_PURPOSE.RECOVER);
+			const canPay = purses.total > 0 || payers.length > 0;
+			const i18n = key => _esc(game.i18n.localize(`stonetop.specialMoves.recover.tend.${key}`));
+			const body = `<div class="stonetop-homestead-dialog stonetop-debility-tend-form">
+				<p class="stonetop-homestead-trigger"><em>${i18n("trigger")}</em></p>
+				<p class="stonetop-homestead-subhead">${i18n("which")}</p>
+				${marked.map((d, i) => `<label class="stonetop-supply-purse">
+					<input type="radio" name="tendDebility" value="${_esc(d.key)}"${i === 0 ? " checked" : ""}>
+					<span>${_esc(d.name)}</span>
+				</label>`).join("")}
+				<p class="stonetop-homestead-note">${i18n("gmNote")}</p>
+				${canPay ? `<label class="stonetop-camp-extra"><input type="checkbox" name="tendSpend"> <span>${i18n("spend")}</span></label>
+					${_payWithFieldHtml(purses, payers, "Pay with")}` : ""}
+			</div>`;
+			// The shared chooser window (dialogs/content-picker.js, a StonetopDialog): "It's taken care of" is
+			// its one button and closing it is the cancel. What was picked is read off the form at the press.
+			const answer = await ContentPickerDialog.ask({
+				title:       game.i18n.localize("stonetop.specialMoves.recover.tend.title"),
+				buttonLabel: game.i18n.localize("stonetop.specialMoves.recover.tend.done"),
+				width:       460,
+				classes:     this._pastDeathWindowClasses(["stonetop", "stonetop-content-picker-dialog", "stonetop-debility-tend-dialog"]),
+				body,
+				read: form => {
+					const spend = canPay && !!form.querySelector('[name="tendSpend"]')?.checked;
+					const { purse, payer } = spend ? _chosenPayWith(form, purses, payers) : { purse: null, payer: null };
+					return { key: form.querySelector('[name="tendDebility"]:checked')?.value ?? null, spend, purse, payer };
+				},
+			});
+			if (answer) return this._applyTendDebility(answer);
+		}
+
+		/**
+		 * Clear the tended debility `key`, and spend the use of supplies the GM asked for when `spend`: out of
+		 * this character's `purse` in the same write, or first out of `payer`'s (supply-payer.js), where a
+		 * "no" clears nothing. Everything is read again here, so a debility cleared meanwhile spends nothing.
+		 */
+		async _applyTendDebility({ key, spend = false, purse = null, payer = null }) {
+			if (isUnliving(this.actor) || this._refuseIfDying()) return;
+			const debility = this._stonetopCharacter.debilityChoices.find(d => d.key === key && d.marked);
+			if (!debility) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.noDebility"));
+			const update = debilityData(debility.key, false);
+			const rows = [{ label: game.i18n.localize("stonetop.specialMoves.recover.tend.cleared"), value: debility.name }];
+			if (spend) {
+				const payerActor = payer ? (game.actors?.get?.(payer.id) ?? null) : null;
+				if (payerActor) {
+					const row = await this._payOnBehalf(payerActor, { slug: purse?.slug ?? null, n: 1 });
+					if (!row) return;
+					rows.push(row);
+				} else {
+					const own = ownSupplySpend(this._stonetopCharacter, { slug: purse?.slug, n: 1, purpose: SUPPLY_PURPOSE.RECOVER });
+					if (!own) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint"));
+					Object.assign(update, own.update);
+					rows.push(own.row);
+				}
+			}
+			await this.actor.update(update, { stonetopMove: "Recover" });
+			postMoveToChat(this.actor, "Recover", rows);
+			this.render(false);
+		}
+
+		/**
+		 * `n` uses of `payerActor`'s supplies for this character's Recover or tended debility, "on their behalf"
+		 * (Book I p.246), paid before anything here is written: through the payer's own player when it is
+		 * theirs to decide (supply-payer.js#payOthersSupplies). The chat row that says so, or null when they
+		 * kept them, never answered or could not pay, which is said (`kept` adds what the warning must carry).
+		 */
+		async _payOnBehalf(payerActor, { slug = null, n = 1, kept = why => why } = {}) {
+			const answer = await payOthersSupplies({
+				payer: payerActor, patient: this.actor, slug, n, purpose: SUPPLY_PURPOSE.RECOVER, moveName: "Recover",
+			});
+			if (!answer || answer.declined) {
+				ui.notifications?.warn(kept(game.i18n.format("stonetop.specialMoves.recover.payerKept", { name: payerActor.name })));
+				return null;
+			}
+			return behalfSpendRow(payerActor.name, answer, this.actor.name);
+		}
+
 		async _onConvalesceOpen() {
 			// Locked on the card for the Unliving (_buildConvalesceData); refused here for any other way in.
 			if (isUnliving(this.actor)) return;
@@ -11544,7 +11850,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// The same "anything left to do" the card asks (_buildConvalesceData): a planned permanent
 			// injury is listed below for its note, but does not open the window on its own.
 			const outstanding = openWounds.filter(_woundKeepsConvalesceOpen);
-			if (hp.value >= hp.max && activeDebilities.length === 0 && outstanding.length === 0 && tracks.length === 0) return;
+			// Followers rest too: "A PC or follower regains HP when ... they have a few days of downtime and
+			// Convalesce" (Book I p.240). Offered unticked, since which of them rested with the PC is the table's to say.
+			const bodies = await hurtFollowerBodies(this.actor);
+			if (hp.value >= hp.max && activeDebilities.length === 0 && outstanding.length === 0 && tracks.length === 0 && !bodies.length) return;
 
 			// Torment's Blessing: "all your HP" is only half of what was missing, rounded up.
 			const slow  = slowToHeal(this.actor);
@@ -11605,6 +11914,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					<p class="stonetop-homestead-note"><em>When you rest for a few weeks under the care of a healer,</em> heal any problematic wounds that can heal. If you have suffered a permanent injury or impairment, either retire or Make a Plan to adapt to it.</p>
 					${healSection}
 					${permSection}
+					${_restFollowersHtml(bodies, { legend: game.i18n.localize("stonetop.specialMoves.convalesce.followersLegend"), gain: b => b.max })}
 				</form>`,
 				buttons: {
 					convalesce: {
@@ -11621,7 +11931,7 @@ export function createStonetopCharacterSheetClass(Base) {
 								if (next !== (w.planNote ?? "")) planNotes[w.id] = next;
 							}
 							// The HP is worked out again at the press, from the hit points then (see _applyConvalesce).
-							this._applyConvalesce({ debilities: activeDebilities, tracks, healable, healIds, planNotes });
+							this._applyConvalesce({ debilities: activeDebilities, tracks, healable, healIds, planNotes, followers: _chosenRestFollowers(html) });
 						},
 					},
 					cancel: { label: "Cancel" },
@@ -11636,7 +11946,8 @@ export function createStonetopCharacterSheetClass(Base) {
 		// The HP is read LIVE, with the computed max, at the press rather than when the window opened:
 		// a heal or a blow landing in between would otherwise be written over by a number worked out
 		// before it (and a Thrall's halved "all your HP" could then LOWER them).
-		async _applyConvalesce({ debilities, tracks = [], healable = [], healIds = [], planNotes = {} }) {
+		// `followers`: the follower bodies ticked to rest back to their max with them (follower-rest.js).
+		async _applyConvalesce({ debilities, tracks = [], healable = [], healIds = [], planNotes = {}, followers = [] }) {
 			// Unliving since the window opened: the rest does them no good at all.
 			if (isUnliving(this.actor)) return;
 			// Dying since the window opened: they can't save themselves (Book I p.240).
@@ -11665,6 +11976,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (debilities.length)   rows.push({ label: "Debilities cleared", value: debilities.map(d => d.name).join(", ") });
 			if (tracks.length)       rows.push({ label: "Cleared", value: tracks.map(t => t.name).join(", ") });
 			if (healedNames.length)  rows.push({ label: healedNames.length === 1 ? "Wound healed" : "Wounds healed", value: healedNames.join(", ") });
+			// The followers who rested with them, back to their max through the one follower HP writer.
+			const followerRow = followers?.length ? followerRestRow(await restFollowers(this.actor, followers, { moveName: "Convalesce" })) : null;
+			if (followerRow)         rows.push(followerRow);
 			if (!rows.length)        rows.push({ label: "Convalesce", value: "Rested in safety and comfort." });
 			postMoveToChat(this.actor, "Convalesce", rows);
 

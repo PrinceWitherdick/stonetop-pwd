@@ -2785,6 +2785,14 @@ export class StonetopCharacter {
 	 * as its own dotted sub-key so a second client's write to a sibling key is left standing. The
 	 * ledger still files a line per field, as it did when they were separate writes.
 	 */
+	/**
+	 * The undefined □ still in reserve for small items (Have What You Need, Book I p.78). At none, a further
+	 * small item is had by expending a use of supplies (StonetopCharacterSheet#_haveExtraSmallItem).
+	 */
+	get undefinedSmallMarks() {
+		return Math.max(0, Math.trunc(Number(this._inventory.smallPool) || 0));
+	}
+
 	async toggleCarriedItem(slug, isChecked, { small = false, weight = 1, loot = false, uses: setUses, stonetopMove } = {}) {
 		const writeOptions = stonetopMove ? { stonetopMove } : undefined;
 		const wasChecked = !!this._inventory.checked[slug];

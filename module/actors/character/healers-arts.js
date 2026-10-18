@@ -28,10 +28,8 @@
 import { learnedHolders, ownsLearnedMoveNamed } from "./owns-move.js";
 import { payableStockSources, mustAskStockSource } from "./stock-cost.js";
 import { askStockSource } from "./ask-stock-source.js";
-import { queryAsker } from "../../utils/foundry-compat.js";
-import { isPrimaryGM } from "../../utils/primary-gm.js";
 import { autoOpenUserId, ownerUsers } from "../../hooks/DeathsDoorPrompt.js";
-import { confirmOutcome } from "../../utils/ask-with-buttons.js";
+import { OWNER_ASK_MS, spendOrAskOwner, answerOwnerAsk, tooLate, gmAnswersNote } from "../../utils/owner-ask.js";
 import { escHtml } from "../../utils/strings.js";
 import { recoveredHpTo } from "./deaths-door-actor.js";
 
@@ -42,17 +40,8 @@ export const HEALERS_ARTS_STOCK = 1;
 export const HEALERS_ARTS_STOCK_HP = 5;
 /** The User query a patient's player sends when they do not own the carer (see the header). */
 export const HEALERS_ARTS_QUERY = "stonetop.healersArtsStock";
-/**
- * How long the patient's player waits for the carer's answer. A person is reading a question, so
- * it is minutes, not the seconds a GM's relay gets; and it has to be SOMETHING, because core's
- * server never answers a query whose recipient has left. No answer in time is read as a no.
- */
-export const HEALERS_ARTS_ASK_MS = 120000;
-/**
- * The answering side stops spending this long before the asker stops waiting, so a yes pressed at
- * the last moment can never pay for a Recover that has already gone ahead without it.
- */
-const LATE_MARGIN_MS = 10000;
+/** How long the patient's player waits for the carer's answer (utils/owner-ask.js, shared with supply-payer.js). */
+export const HEALERS_ARTS_ASK_MS = OWNER_ASK_MS;
 
 /** The characters who can tend a Recover: those with Healer's Arts LEARNED (owns-move.js). */
 export function healersArtsCarers(actors) {
@@ -174,7 +163,9 @@ export function spendsCarerStockDirectly(carer, { user = globalThis.game?.user, 
 
 /**
  * Pay Healer's Arts' Stock for `patient`'s Recover out of `carer`'s purse. Here when this user decides
- * for the carer (spendsCarerStockDirectly); otherwise by asking the carer's player, or the GM (HEALERS_ARTS_QUERY, see the header).
+ * for the carer (spendsCarerStockDirectly); otherwise by asking the carer's player, or the GM
+ * (HEALERS_ARTS_QUERY, see the header; the ask is utils/owner-ask.js#spendOrAskOwner's). No purse is
+ * sent: which one pays is the carer's side's to choose.
  *
  * @returns {Promise<object|null>} the receipt when the Stock was spent; `{declined: true}` when the
  *   carer's side said no or closed the window, plus `unanswered: true` when no answer came at all;
@@ -182,74 +173,58 @@ export function spendsCarerStockDirectly(carer, { user = globalThis.game?.user, 
  */
 export async function payHealersArtsStock({ carer, patient, sourceKey = null }) {
 	if (!carer) return null;
-	if (spendsCarerStockDirectly(carer, { patient })) return spendCarerStock(carer, sourceKey);
-	const answerer = carerStockAnswerer(carer, globalThis.game?.users, { asker: globalThis.game?.user ?? null, patient });
-	if (!answerer || answerer.id === globalThis.game?.user?.id) return null;
-	globalThis.ui?.notifications?.info?.(
-		`Asking ${answerer.isGM ? "the GM" : answerer.name} whether ${carer.name} spends ${HEALERS_ARTS_STOCK} Stock on ${patient?.name ? `${patient.name}'s` : "this"} Recover.`);
-	try {
-		// Who asked rides in the data: v14 names the asker in the query's context, v13 does not.
-		// No purse is sent: which one pays is the carer's side's to choose.
-		return (await answerer.query(HEALERS_ARTS_QUERY, {
-			carerId: carer.id, patientId: patient?.id ?? null,
-			userId: globalThis.game?.user?.id ?? null,
-		}, { timeout: HEALERS_ARTS_ASK_MS })) ?? null;
-	} catch (err) {
-		// Out of time, or they left: nobody said yes, so nothing was spent, and the Recover goes on.
-		console.warn("Stonetop | no answer came to Healer's Arts' Stock", err);
-		return { declined: true, unanswered: true };
-	}
+	return spendOrAskOwner({
+		owner: carer,
+		answerer: carerStockAnswerer(carer, globalThis.game?.users, { asker: globalThis.game?.user ?? null, patient }),
+		spend: () => spendCarerStock(carer, sourceKey),
+		query: HEALERS_ARTS_QUERY,
+		data: { carerId: carer.id, patientId: patient?.id ?? null },
+		whether: `${carer.name} spends ${HEALERS_ARTS_STOCK} Stock on ${patient?.name ? `${patient.name}'s` : "this"} Recover.`,
+		what: "Healer's Arts' Stock",
+	});
 }
 
 /**
  * The answering side of HEALERS_ARTS_QUERY, on the carer's player's client (or the GM's, when none of
- * them is online): for a player who owns the PATIENT, and a carer who really has Healer's Arts
- * learned, ASK whether to spend the Stock, and out of which purse when there is a choice, then pay
- * through the carer's own StonetopCharacter#spendStock. A GM answers only as the primary GM, so two
- * GMs are never both asked.
- *
- * WHO ASKED is foundry-compat.js#queryAsker's business: v13 names nobody in the context, so the id in
- * the data is read instead, and never taken for a GM's.
+ * them is online; utils/owner-ask.js#answerOwnerAsk keeps it to the primary GM and names the asker):
+ * for a player who owns the PATIENT, and a carer who really has Healer's Arts learned, ASK whether to
+ * spend the Stock, and out of which purse when there is a choice, then pay through the carer's own
+ * StonetopCharacter#spendStock.
  *
  * @returns {Promise<object|null>} as payHealersArtsStock
  */
 export async function handleHealersArtsQuery(data, context = {}, { actors = globalThis.game?.actors, users = globalThis.game?.users } = {}) {
-	const me = globalThis.game?.user;
-	if (me?.isGM && !isPrimaryGM()) return null;
-	const user = queryAsker(data, context, users);
 	const carer = actors?.get?.(data?.carerId);
 	const patient = actors?.get?.(data?.patientId);
-	if (!user || !carer || !patient) return null;
-	if (!carer.isOwner) return null;
-	if (!patient.testUserPermission?.(user, "OWNER")) return null;
-	if (!ownsLearnedMoveNamed(carer, HEALERS_ARTS)) return null;
-
-	const asked = Date.now();
-	const late = () => Date.now() - asked > HEALERS_ARTS_ASK_MS - LATE_MARGIN_MS;
-	const yes = await confirmOutcome({
-		title: `${HEALERS_ARTS}: ${patient.name}`,
-		content: `<p>${escHtml(user.name ?? "A player")} asks: <strong>${escHtml(patient.name)}</strong> is Recovering under `
-			+ `<strong>${escHtml(carer.name)}</strong>'s care. Spend ${HEALERS_ARTS_STOCK} of ${escHtml(carer.name)}'s Stock so `
-			+ `${escHtml(patient.name)} heals ${HEALERS_ARTS_STOCK_HP} more HP and their wounds are stabilized?</p>`
-			+ `<p>Kept, the Recover still goes ahead with ${escHtml(carer.name)}'s WIS.</p>`
-			+ (me?.isGM ? `<p>None of ${escHtml(carer.name)}'s players is here, so the GM answers.</p>` : ""),
-		yes: { label: `Spend ${HEALERS_ARTS_STOCK} Stock on ${patient.name}`, icon: "fa-mortar-pestle" },
-		no:  { label: me?.isGM ? `Keep ${carer.name}'s Stock` : "Keep my Stock" },
+	return answerOwnerAsk(data, context, {
+		users,
+		question: (user, me) => {
+			if (!carer || !patient || !carer.isOwner) return null;
+			if (!patient.testUserPermission?.(user, "OWNER")) return null;
+			if (!ownsLearnedMoveNamed(carer, HEALERS_ARTS)) return null;
+			return {
+				title: `${HEALERS_ARTS}: ${patient.name}`,
+				content: `<p>${escHtml(user.name ?? "A player")} asks: <strong>${escHtml(patient.name)}</strong> is Recovering under `
+					+ `<strong>${escHtml(carer.name)}</strong>'s care. Spend ${HEALERS_ARTS_STOCK} of ${escHtml(carer.name)}'s Stock so `
+					+ `${escHtml(patient.name)} heals ${HEALERS_ARTS_STOCK_HP} more HP and their wounds are stabilized?</p>`
+					+ `<p>Kept, the Recover still goes ahead with ${escHtml(carer.name)}'s WIS.</p>`
+					+ gmAnswersNote(me, carer.name),
+				yes: { label: `Spend ${HEALERS_ARTS_STOCK} Stock on ${patient.name}`, icon: "fa-mortar-pestle" },
+				no:  { label: me?.isGM ? `Keep ${carer.name}'s Stock` : "Keep my Stock" },
+			};
+		},
+		settle: async late => {
+			// Which purse, asked exactly as the chat card's Spend button asks it: only when there is a choice,
+			// and always when a Vessel's HP is one of them. Leaving it unpaid there is a no as well.
+			const payable = payableStockSources((await carer.typedActor?.stockSources?.()) ?? [], HEALERS_ARTS_STOCK);
+			if (!payable.length) {
+				globalThis.ui?.notifications?.warn?.(`${carer.name} has no Stock left to spend.`);
+				return null;
+			}
+			const source = mustAskStockSource(payable) ? await askStockSource(payable, HEALERS_ARTS_STOCK, HEALERS_ARTS) : payable[0];
+			if (!source) return { declined: true };
+			if (late()) return tooLate(`Too late: ${patient.name}'s Recover has already gone ahead without the Stock.`);
+			return spendCarerStock(carer, source.key);
+		},
 	});
-	if (!yes) return { declined: true };
-
-	// Which purse, asked exactly as the chat card's Spend button asks it: only when there is a choice,
-	// and always when a Vessel's HP is one of them. Leaving it unpaid there is a no as well.
-	const payable = payableStockSources((await carer.typedActor?.stockSources?.()) ?? [], HEALERS_ARTS_STOCK);
-	if (!payable.length) {
-		globalThis.ui?.notifications?.warn?.(`${carer.name} has no Stock left to spend.`);
-		return null;
-	}
-	const source = mustAskStockSource(payable) ? await askStockSource(payable, HEALERS_ARTS_STOCK, HEALERS_ARTS) : payable[0];
-	if (!source) return { declined: true };
-	if (late()) {
-		globalThis.ui?.notifications?.warn?.(`Too late: ${patient.name}'s Recover has already gone ahead without the Stock.`);
-		return { declined: true };
-	}
-	return spendCarerStock(carer, source.key);
 }

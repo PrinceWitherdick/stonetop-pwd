@@ -111,6 +111,7 @@ import { repeatBoxLocked } from "./module/actors/character/PlaybookMoveEntry.js"
 import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, wireUnstoppableMark, forgetBarkskinMarks, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery, wireRosterHitMove, ROSTER_MOVE_QUERY, handleRosterMoveQuery, reconcileClashCounter, registerCounterAvoidedHooks } from "./module/combat/attack-flow.js";
 import { wireDefendSpends, SPEND_QUERY, handleSpendQuery } from "./module/fight/defend-spend.js";
 import { HEALERS_ARTS_QUERY, handleHealersArtsQuery } from "./module/actors/character/healers-arts.js";
+import { SUPPLY_PAY_QUERY, handleSupplyPayQuery } from "./module/actors/character/supply-payer.js";
 import { markQuestionBullets } from "./module/utils/question-bullets.js";
 import { wrapGlyphTextContainers } from "./module/utils/glyphs.js";
 import { applyJournalSpiralBullets, resolveEntry } from "./module/utils/journal-spiral-bullets.js";
@@ -213,6 +214,9 @@ Hooks.once("init", () => {
 	// And Healer's Arts' Stock, asked for a patient's Recover out of a carer the player does not own.
 	// Answered by the carer's player, or the GM when none is online (actors/character/healers-arts.js).
 	if (CONFIG.queries) CONFIG.queries[HEALERS_ARTS_QUERY] = (data, context) => handleHealersArtsQuery(data, context);
+	// And another character's supplies, spent for a patient's Recover (or Tend a debility) out of a pack the
+	// player does not own. Answered by the payer's player, or the primary GM (actors/character/supply-payer.js).
+	if (CONFIG.queries) CONFIG.queries[SUPPLY_PAY_QUERY] = (data, context) => handleSupplyPayQuery(data, context);
 	// And a Judge's +1 (Diligence, Sanction, Many Hands) on another player's roll card (roll-boosts.js).
 	if (CONFIG.queries) CONFIG.queries[BOOST_QUERY] = (data, context) => handleBoostQuery(data, context, ROLL_BOOST_DEPS);
 	// And Piety's Blessing, given to a fellow worshipper the Lightbearer's player does not own (roll-boosts.js).

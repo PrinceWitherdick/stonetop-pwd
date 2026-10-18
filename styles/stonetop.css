@@ -18282,6 +18282,23 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	font-weight: bold;
 }
 
+/* ── Recover / Convalesce: the followers who rest too (follower-rest.js) ───────────────────────── */
+.stonetop-rest-follower-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+}
+
+.stonetop-rest-follower {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+}
+
 .stonetop-eos-footer {
 	display: flex;
 	justify-content: flex-end;
