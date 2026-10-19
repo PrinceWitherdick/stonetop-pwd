@@ -54,7 +54,8 @@ import {readCurrentWeather, currentWeatherView} from "../../seasons/current-weat
 import {openSeasonPicker} from "../../seasons/season-picker.js";
 import {SEASONAL_GAINS} from "../../dialogs/spring-burst-data.js";
 import {applySeasonalGains, tradeOpportunityLinksHtml, wireTradeOpportunityLinks} from "./seasonal-gains.js";
-import {contentGuidelinesView, plansView, wireSteadingNotesTab, planPromptsDatalistHtml} from "./steading-plans.js";
+import {contentGuidelinesView, plansView, wireSteadingNotesTab} from "./steading-plans.js";
+import {editSteadingPlan} from "./SteadingPlanDialog.js";
 import {addStonetopSteadingButton} from "../../utils/world.js";
 import {createInlineActionsDialog} from "../../utils/inline-actions-dialog.js";
 import {SETTLEMENTS} from "../../data/settlements.js";
@@ -456,7 +457,6 @@ export function createStonetopSteadingSheetClass(Base) {
 			const notesFlags = this._stonetopSteading._flags;
 			context.stonetop.contentGuidelines = contentGuidelinesView(notesFlags.contentGuidelines);
 			context.stonetop.plans = plansView(notesFlags.plans);
-			context.stonetop.planPromptsDatalist = planPromptsDatalistHtml();
 			context.stonetop.editMode = this._editMode;
 			context.stonetop.canEdit = this.isEditable;
 			// Which layout this user reads this sheet in: the pre-rail one (stat band above the
@@ -587,14 +587,16 @@ export function createStonetopSteadingSheetClass(Base) {
 				?.addEventListener("click", () => makeFirstRelationshipMap(this));
 
 			// Residents / Neighbors filters (see utils/tab-search.js). Each is scoped to its own
-			// section so it only hides that section's rows; a row matches on the text of every
-			// cell input (name, occupation, traits, relations, notes, home).
+			// section so it only hides that section's rows; a row matches on every field it shows,
+			// typed (edit mode's inputs) or drawn (read mode's text): name, occupation, traits,
+			// relations, notes, home. Not the field LABELS, or "notes" would match every row.
 			//
 			// `searchTerms` lives on the SHEET, not in the DOM, so a live filter survives the
 			// re-render that follows any write and the reader keeps their place (see
 			// utils/tab-search.js). One slot per box, so the two resident sections stay apart.
 			const searchTerms = (this._tabSearchTerms ??= {});
-			const residentRowText = row => [...row.querySelectorAll(".steading-resident-input")].map(i => i.value).join(" ");
+			const residentRowText = row => [...row.querySelectorAll(".steading-resident-input, .steading-person-text")]
+				.map(el => el.value ?? el.textContent).join(" ");
 			for (const sec of [".steading-residents-section--residents", ".steading-residents-section--neighbors"]) {
 				wireTabSearch(html[0].querySelector(sec), {
 					itemSel: ".steading-residents-row",
@@ -879,8 +881,9 @@ export function createStonetopSteadingSheetClass(Base) {
 				this._onListItemAdd(btn.dataset.list);
 			}, true);
 
-			// Drag-resizable columns on the player/resident/neighbor tables — useful in both edit and read-only modes.
-			// This loop also covers the Other Settlements relations table (it carries the same
+			// The player/resident/neighbor lists are header-less cards kept A-Z by name
+			// (`data-sort="name"`), so only the sort half has anything to do there; the resize
+			// util finds no header and leaves them be. This loop also covers the Other Settlements relations table (it carries the same
 			// classes); wireRelationshipTable below would wire it too, but both column utils
 			// are idempotent, so whichever gets there first wins and the other is a no-op.
 			html[0].querySelectorAll(".steading-residents-table[data-resize-key]").forEach(table => {
@@ -923,7 +926,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			if (!this.isEditable) return;
 
 			// The Notes tab's Plans and content guidelines (steading-plans.js).
-			wireSteadingNotesTab(html[0], this._stonetopSteading);
+			wireSteadingNotesTab(html[0], this._stonetopSteading, { editPlan: planId => editSteadingPlan(this._stonetopSteading, planId) });
 
 			// Stat tracks use custom radio markup, so persist them explicitly.
 			html[0].addEventListener("change", ev => {
@@ -1047,6 +1050,20 @@ export function createStonetopSteadingSheetClass(Base) {
 				if (!radio) return;
 				ev.stopPropagation();
 				this._stonetopSteading.setFlags({ size: radio.value });
+			}, true);
+
+			// The banner's subtitle: each half as typed, or "" to follow Size again. Typing exactly
+			// what Size already says (the placeholder) stores "" too: kept as typed, "Village" would
+			// stay "Village" after a Township made the place a town.
+			html[0].addEventListener("change", ev => {
+				const inp = ev.target.closest(".steading-subtitle-input");
+				if (!inp) return;
+				ev.stopPropagation();
+				const field = inp.dataset.field;
+				if (field !== "kind" && field !== "headcount") return;
+				const value = inp.value.trim();
+				const saysWhatSizeSays = value.toLowerCase() === inp.placeholder.trim().toLowerCase();
+				this._stonetopSteading.setFlags({ [field]: saysWhatSizeSays ? "" : value });
 			}, true);
 
 			// Currency

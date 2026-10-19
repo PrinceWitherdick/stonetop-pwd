@@ -42,6 +42,18 @@
 //             introductions, the steading's players or the example NPC's relationships. The
 //             living roster can't cover any of this: SKIP_PLAYBOOKS keeps the three inserts out
 //             of it, so without the Graveyard the Death's Door black has no fixture.
+//             A "Gone from Play" folder beside it holds three who left play ALIVE (Book I p.584):
+//             one retired after a lasting injury (her permanent wound on the ledger), one who
+//             left Stonetop, and one who turned villain, with the threat page he became among
+//             the steading's threats and each pointing at the other. Same rules as the Graveyard.
+//             The Heavy carries two wounds on the wound ledger: one untreated, one permanent
+//             with a Make-a-Plan list half ticked.
+//             The steading's Notes tab gets three Plans (one finished, one under way built from
+//             the book's prompts, one just named) and its four content-guideline boxes; the
+//             Hillfolk Raiders threat is crossed off; and an "Other Settlements" folder gets
+//             settlement sheets for Marshedge and Gordin's Delve (from their stat blocks, wearing
+//             the standings seeded on Stonetop) and a Hillfolk band made from Book II's typical
+//             block, with a standing of its own.
 //             The Seeker additionally gets the two arcana Book I works through as examples —
 //             the old scroll case that teaches Laoj Daveth's Galvanic Infusion (p.58) and
 //             Noruba's Ice Sphere (p.61) — authored as HOMEBREW world Items with their own
@@ -168,12 +180,13 @@
 //             the map is opened, which is the pass worth watching happen. The singleton actor itself is
 //             never created or deleted — only its test members (each tagged isTest) are added and
 //             later removed.
-// Re-run:     deletes everything this macro created (characters — the roster and the Graveyard
-//             alike, both carry the test flag — the resident/neighbor NPCs,
+// Re-run:     deletes everything this macro created (characters — the roster, the Graveyard and
+//             Gone from Play alike, all carry the test flag — the settlement sheets (and the
+//             band's standing on Stonetop), the resident/neighbor NPCs,
 //             and the test Introductions/Expedition data), strips the steading's test members
 //             (including any villager an older run left behind, whose isTest tag the people
 //             migration dropped when it rewrote the row),
-//             clears the seeded Notes, the seeded Other Settlements ratings, the seeded
+//             clears the seeded Notes, the seeded Plans (by id) and content guidelines, the seeded Other Settlements ratings, the seeded
 //             "I wonder..." questions (each only while
 //             it still holds exactly what the macro wrote) and the three seeded Encounters, deletes the seeded Threats and Sites
 //             (and their scene pins,
@@ -1132,6 +1145,19 @@
     "hillfolk":       { hearts: 1, notes: "Raiders out of the Steplands took the winter stores and left Brennan dead at the gate. Nobody here is ready to hear about the bands that had no part in it." },
   };
 
+  // The settlement SHEETS (type `settlement`, settlement-actor.js): two of the places rated above,
+  // from their books' stat blocks, and one band made from Book II's typical Hillfolk block and
+  // renamed, the way a GM makes a place the books never named. Only the band carries a standing of
+  // its own here; the two named places read theirs from TEST_SETTLEMENT_RELS by slug.
+  const TEST_SETTLEMENT_SHEETS = [
+    { book: "marshedge" },
+    { book: "gordins-delve" },
+    {
+      template: "hillfolk-band", name: "Clan Ardu's Band",
+      standing: { hearts: 4, notes: "The band that had no part in the raid, and came down at midwinter to say so with a cart of salt mutton. Coria believes them." },
+    },
+  ];
+
   // The steading's three debilities, and the one the fixtures mark. Ids out of
   // StonetopSteading's STEADING_DEFAULTS (`attributes.debilities.options`); the full list is
   // here because "is any of them marked?" is the question both the seed and the cleanup ask.
@@ -1265,6 +1291,61 @@
 <tr><td>6-</td><td>Hardship comes — mark a debility.</td></tr>
 </tbody>
 </table>`;
+
+  // The Notes tab's Plans (Book I p.530, Make a Plan) and content guidelines (p.66, with p.195's
+  // Line), stored on the steading flags as `plans` and `contentGuidelines` and read by
+  // module/actors/steading/steading-plans.js. Three plans, one per state the card draws:
+  //   1. finished: every requirement ticked, so the met count reads bold;
+  //   2. under way: two of five ticked, built from the book's prompts with their blanks filled,
+  //      one still holding a blank the GM has not named yet, and one stored the way a row typed
+  //      AFTER a picked prompt used to be ("___ the next new moon"), which the sheet shows filled;
+  //   3. just made: named, with nothing required yet and no "goes undone" line.
+  // Each plan's id carries TEST_PLAN_ID_PREFIX, which is how the cleanup tells ours from the
+  // table's; a plan the GM wrote has a random id and is never touched. Seeded alongside any plans
+  // already there, never over them.
+  const TEST_PLAN_ID_PREFIX = "testplan";
+  const TEST_PLANS = [
+    {
+      id: `${TEST_PLAN_ID_PREFIX}ford`,
+      name: "Shore up the old ford before the spring melt",
+      undone: "the spring ploughing",
+      requirements: [
+        { text: "You must find/locate/obtain enough seasoned oak for the pilings", done: true },
+        { text: "The steading must Pull Together 2 times, each requiring a dry week", done: true },
+        { text: "It'll take days/weeks/months/years", done: true },
+      ],
+    },
+    {
+      id: `${TEST_PLAN_ID_PREFIX}crossing`,
+      name: "Learn who showed the raiders the crossing",
+      undone: "the second hay cutting",
+      requirements: [
+        { text: "You must learn/know/decipher the watch roster for the night of the raid", done: true },
+        { text: "You'll need the help/support/approval of Old Bartholomew", done: true },
+        { text: "You must travel to the Hillfolk camps past the ridge", done: false },
+        { text: "You must wait until/for ___ the next new moon", done: false },
+        { text: "You'll risk ___", done: false },
+      ],
+    },
+    {
+      id: `${TEST_PLAN_ID_PREFIX}tower`,
+      name: "Answer the Singing Tower",
+      undone: "",
+      requirements: [],
+    },
+  ];
+  const TEST_CONTENT_GUIDELINES = {
+    excluded: "Harm to children, on camera or off. Sexual violence.",
+    veiled:   "Torture: it can happen, but the scene cuts away. Whatever the Crow-Mother does to a body.",
+    requests: "Spiders are fine, but please don't describe their legs. Keep the gore in a fight brief.",
+    line:     "Most of the table enjoys being asked about the world. Maelis's player would rather not, so ask them about their character instead.",
+  };
+  // Is the stored guidelines box set still exactly the seed? The seed is the tag, as for the Notes.
+  const sameGuidelines = (stored) => !!stored && typeof stored === "object"
+    && Object.keys(TEST_CONTENT_GUIDELINES).every(k => (stored[k] ?? "") === TEST_CONTENT_GUIDELINES[k])
+    && Object.keys(stored).every(k => k in TEST_CONTENT_GUIDELINES);
+  const guidelinesEmpty = (stored) => !stored || typeof stored !== "object"
+    || Object.values(stored).every(v => !String(v ?? "").trim());
 
   // ── A three-year timeline (Spring, Year One to Spring, Year Three) ─────
   // The Timeline (one `timeline` page per track in The Chronicle: Stonetop's own thread and one per
@@ -2022,6 +2103,11 @@
   //   4. a THROWAWAY Rabble whose story is already over: the Hillfolk raiders of the harvest
   //      raid, every portent and the impending doom ticked, so a threat that came to pass is
   //      seen on its card and its doom has a row on Stonetop's timeline (the raid autumn).
+  //      CROSSED OFF (`resolved`, Book I p.299: "if it's no longer a threat ... cross it off the
+  //      threat tracker"), so the Threats tab's greyed "Crossed off" heading and its Put back have
+  //      a card to show, and the trackers show one threat fewer than the tab holds.
+  // A fifth, the PC who became a threat, is added further down once that character exists (see
+  // "Gone from play"): its page has to name them, and the character's flag has to name it back.
   // Types span the accent palette (villain red / affliction brown / magical-entity violet)
   // and proximity covers all three trackers (nearby / homefront / distant), so the type
   // chips and tracker pips vary too.
@@ -2122,6 +2208,7 @@
       name: "The Hillfolk Raiders",
       type: "rabble",
       proximity: "nearby",
+      resolved: true,
       instinct: "to take what the lowlands grow, and be gone before the snow",
       description: `<p>A hungry season up in the high country, and a war-band that came down out of it to take the lowland harvest. They came in the grey hour before dawn, with the last of the barley barely in.</p>`
                  + `<p>They are gone now, back over the ridge with what they could carry. What they left behind is a trampled field, a palisade with a gap in it, and a village that keeps a watch it never used to.</p>`,
@@ -2485,6 +2572,8 @@
     customPlayerMoves: (seed.customPlayerMoves ?? []).map(m => ({
       label: String(m?.label ?? ""), text: String(m?.text ?? ""),
     })),
+    // Crossed off the tracker (ThreatPageModel's `resolved`): greyed, under its own heading.
+    resolved: !!seed.resolved,
   });
 
   // Shape one TEST_SITES seed into the `site` page's system data. Mirrors
@@ -3204,6 +3293,16 @@
     // Defensive: only delete ids that still exist, so a hand-deletion (or any race that
     // slips past the re-entrancy guard) can't throw "Actor id … does not exist".
     const liveIds = existing.map(a => a.id).filter(id => game.actors.has(id));
+    // A test settlement made from no roster row (the Hillfolk band) keeps Stonetop's standing with it
+    // under its own ACTOR ID, which would outlive the sheet: taken off here, while the id is still known.
+    const steadingRels = game.actors.find(a => a.type === "stonetop" || a.system?.customType === "stonetop");
+    const settlementRelKill = {};
+    for (const a of existing.filter(x => x.type === "settlement")) {
+      if (steadingRels?.system?.relationships?.[a.id] !== undefined) {
+        Object.assign(settlementRelKill, dropKey(`system.relationships.${a.id}`));
+      }
+    }
+    if (Object.keys(settlementRelKill).length) await steadingRels.update(settlementRelKill);
     if (liveIds.length) await Actor.deleteDocuments(liveIds);
 
     // Strip the steading's test Residents / Neighbors / Players (anything tagged isTest),
@@ -3256,6 +3355,11 @@
       // Clear the seeded formatted Notes only while they still hold this exact test
       // content (leave notes the GM has since edited alone).
       if (steadingFlags.notes === TEST_STEADING_NOTES) { steadingFlags.notes = ""; memberChanged = true; }
+      // The seeded Plans, by their id prefix (see TEST_PLANS): plans the table wrote stay, ticks and all.
+      if (Array.isArray(steadingFlags.plans)) {
+        const ownPlans = steadingFlags.plans.filter(pl => !String(pl?.id ?? "").startsWith(TEST_PLAN_ID_PREFIX));
+        if (ownPlans.length !== steadingFlags.plans.length) { steadingFlags.plans = ownPlans; memberChanged = true; }
+      }
       if (memberChanged) await steadingDel.setFlag(FLAG_SCOPE, "steading", steadingFlags);
 
       // Take the seeded hold tray back down. Each of the four held states goes only while it
@@ -3327,6 +3431,11 @@
         if (!entry?.completed || entry.applied !== null) continue;
         if (!fixtureR(slug, entry.r)) continue;
         Object.assign(holdKill, dropKey(`${holdBase}.improvements.${slug}`));
+      }
+      // The content guidelines, only while every box still holds exactly the seed: a table that
+      // has written its own lines into them has made them theirs.
+      if (sameGuidelines(steadingFlags.contentGuidelines)) {
+        Object.assign(holdKill, dropKey(`${holdBase}.contentGuidelines`));
       }
       if (Object.keys(holdKill).length) await steadingDel.update(holdKill);
 
@@ -5700,6 +5809,126 @@
     console.log(`[TEST] Graveyard: ${actor.name} — ${pbDoc.name}, ${entry.fate}.`);
   }
 
+  // ── Gone from play: three characters who left it alive ─────────────────
+  // Book I p.584, "Retiring PCs": besides the Last Door, a PC leaves play by retiring, by leaving
+  // Stonetop, or by crossing the line into villainy. All three are one `leftPlay` flag on the
+  // character (module/campaign/left-play.js, `{ how, at, npcUuid?, threatUuid? }`), which counts
+  // them out of every party list the way death does, and the sheet says which way they went.
+  //
+  // WRITTEN AS THE FLAG, not through retireCharacter / makeThreatOf. Those post the epilogue to
+  // chat and make the retired PC's NPC, and nothing a re-run cleans up reaches a chat message or
+  // a steading row it did not tag; the record is all the sheet, the party lists and Return to
+  // Play read. The villain's threat page IS made, as a fifth TEST_THREATS seed written with the
+  // other four, because the threat tracker is half of what turning villain looks like. Its page
+  // names the character (the book's own origin paragraph, as become-threat.js#threatOriginHtml
+  // writes it) and the character's `becameThreat` flag names the page back, once the page exists.
+  //
+  // Same rules as the Graveyard: 1st level always, their own folder, and kept OUT of `created`,
+  // because a character out of play is exactly what the introductions, the steading's player list
+  // and the arcana deal must not count.
+  const GONE_FROM_PLAY = [
+    {
+      slug: "the-blessed", how: "retired", name: "Gwenna Thorn",
+      notes: `<h2>Gwenna Thorn</h2><p>Retired after the bridge at the gorge, where her knee was broken in two places and set badly. She keeps the shrine at the edge of the fields now, and still walks the boundary stones every dawn, slowly.</p><blockquote><p>"Danu does not need me to run. She needs me to stay."</p></blockquote>`,
+      // "They retire after a lasting injury" (p.584): the injury that did it, permanent, on her ledger.
+      wound: { text: "Knee broken in two places, badly set", status: "permanent", mechanicalTag: "Can't run; Defy Danger with DEX at disadvantage", reminderMove: "Defy Danger", planNote: "Walk the boundary stones with a staff" },
+    },
+    {
+      slug: "the-lightbearer", how: "left", name: "Idris Vane",
+      notes: `<h2>Idris Vane</h2><p>Took Helior's flame south along the Maker's Road the spring after the fever, to find the temple his teacher spoke of. A letter came from Lygos at midsummer. Nothing since.</p>`,
+    },
+    {
+      slug: "the-marshal", how: "villain", name: "Corwen Hale",
+      notes: `<h2>Corwen Hale</h2><p>Took the crew up into the high country after the raid, to "settle it". They settled in instead. The raiders answer to him now, and the passes are his.</p>`,
+      threat: {
+        name: "Corwen Hale, Lord of the Passes",
+        instinct: "to take what Stonetop would not give him",
+        proximity: "nearby",
+        gmMoves: [
+          "Make a demand, backed by force",
+          "Turn a friend into a rival",
+          "Strike where it hurts, then withdraw",
+          "Reveal how much he still knows about the village",
+        ],
+        stakes: ["Will anyone from his old crew come home?"],
+      },
+    },
+  ];
+
+  const goneFolder = await ensureTestFolder("Actor", "Gone from Play");
+  const gone = [];
+  for (const entry of GONE_FROM_PLAY) {
+    const pbDoc = playbookDocs.find(d => d.system?.slug === entry.slug)
+      ?? playbookDocs[gone.length % playbookDocs.length];
+    if (!pbDoc) break;
+
+    const sel = { ...buildSelections(pbDoc), name: entry.name, notes: entry.notes };
+    const actor = await Actor.create({ name: sel.name, type: "character", folder: goneFolder.id });
+    await actor.setFlag(FLAG_SCOPE, TEST_FLAG, true);
+    await actor.sheet._applyPlaybookSelections(pbDoc, sel);
+    if (sel.notes) await actor.update({ "system.notes": sel.notes });
+    await applyStartingMoveMarks(actor);
+    if (entry.wound) {
+      await actor.update({ "system.attributes.wounds": [{
+        id: foundry.utils.randomID(), origin: "wound", requirementNote: "", planRequirements: [], healed: false,
+        planNote: "", mechanicalTag: "", reminderMove: "", ...entry.wound,
+      }] });
+    }
+    await actor.update({ [`flags.${FLAG_SCOPE}.leftPlay`]: { how: entry.how, at: Date.now(), npcUuid: null } });
+    if (entry.threat) {
+      const link = `@UUID[${actor.uuid}]{${foundry.utils.escapeHTML(actor.name)}}`;
+      TEST_THREATS.push({
+        ...entry.threat,
+        type: "villain",
+        description: `<p>Once a player character: ${link}. They crossed the line from protagonist to villain, and are now a threat under the GM's control (Book I p.584). Use their established moves, possessions, and abilities as inspiration; don't worry about replicating their playbook abilities exactly, and feel free to make them scarier than they were as a PC.</p>`,
+        grimPortents: [
+          { text: "Herders on the high pasture are told to pay a toll, in his name.", done: true },
+          { text: "One of his old crew comes home at night, asking after their family.", done: false },
+          { text: "He sends a rider to the Judge with terms.", done: false },
+        ],
+        impendingDoom: { text: "The passes close, and Stonetop trades with no one he has not allowed.", done: false },
+        nested: [], customPlayerMoves: [],
+        becameFrom: actor.id,
+      });
+    }
+    gone.push(actor);
+    console.log(`[TEST] Gone from play: ${actor.name} — ${pbDoc.name}, ${entry.how}.`);
+  }
+
+  // ── The wound ledger on a living character ─────────────────────────────
+  // The 3rd and 4th harm types the sheet tracks beside HP and debilities (Book I, "Harm & Healing"),
+  // which nothing else in this macro writes. Two on the Heavy, one per state that draws differently:
+  // an untreated wound with a lasting tag and a reminder on one move, and a permanent one with a
+  // Make-a-Plan list half ticked (p.530: "write the requirements down with tick boxes"). Written
+  // whole onto the character, so the re-run's actor sweep takes them with the sheet.
+  const woundedPc = created.find(a => createdSlugs.get(a.id) === "heavy") ?? created[0];
+  if (woundedPc) {
+    await woundedPc.update({ "system.attributes.wounds": [
+      {
+        id: foundry.utils.randomID(), origin: "wound", status: "problematic", healed: false,
+        text: "Cracked ribs from the crinwin's tail",
+        requirementNote: "Recover to stabilize it; Convalesce to heal it",
+        mechanicalTag: "Clash at disadvantage until it's stabilized",
+        reminderMove: "Clash",
+        planNote: "", planRequirements: [],
+      },
+      {
+        id: foundry.utils.randomID(), origin: "deaths-door", status: "permanent", healed: false,
+        text: "Two fingers gone from the shield hand",
+        requirementNote: "",
+        mechanicalTag: "Can't use a shield until adapted",
+        reminderMove: "*",
+        planNote: "Learn to fight with the shield strapped to the forearm",
+        planRequirements: [
+          { text: "Tobin forges a new strap and brace", done: true },
+          { text: "A season of practice in the yard", done: false },
+          { text: "Spar with Coria until she says it'll hold", done: false },
+        ],
+      },
+    ] });
+    console.log(`[TEST] Wound ledger: two wounds on ${woundedPc.name} (one untreated, one permanent with a plan).`);
+  }
+
   // ── Seed reusable world Moves / Items / Monsters ───────────────────────
   // Independent of the level choice and of the characters — draggable world content grouped
   // into "Moves" / "Items" (Item folders) and "Monster" (Actor folder). Torn down on re-run
@@ -5716,6 +5945,7 @@
   let testThreatPages = [];
   let testSitePages   = [];
   let testVillagers   = [];
+  let testSettlements = [];
   const steading = game.actors.find(a => a.type === "stonetop" || a.system?.customType === "stonetop");
   if (steading) {
     const sf = readSteadingFlags(steading);
@@ -5736,6 +5966,27 @@
     const { entryId: threatsEntryId, pages: threatPages } = await seedTestThreats(steading, sf);
     testThreatPages = threatPages;
     if (threatsEntryId) sf.threatsEntryId = threatsEntryId;
+    // The PC who became a threat, and the page they became, now name each other: the character's
+    // `becameThreat` and `leftPlay.threatUuid` are what become-threat.js writes, and what keeps the
+    // GM's "Becomes a Threat" from offering to make them a second one.
+    for (const seed of TEST_THREATS.filter(t => t.becameFrom)) {
+      const page  = threatPages.find(p => p.name === seed.name);
+      const actor = game.actors.get(seed.becameFrom);
+      if (!page || !actor) continue;
+      await actor.update({
+        [`flags.${FLAG_SCOPE}.becameThreat`]:        page.uuid,
+        [`flags.${FLAG_SCOPE}.leftPlay.threatUuid`]: page.uuid,
+      });
+    }
+
+    // The Notes tab's Plans and content guidelines (see TEST_PLANS). Plans go in beside the table's
+    // own, a prior run's copies replaced by id; the guidelines only into four empty boxes (or over
+    // a prior copy of this exact seed), on the Notes' never-clobber rule.
+    const ownPlans = (Array.isArray(sf.plans) ? sf.plans : [])
+      .filter(p => !String(p?.id ?? "").startsWith(TEST_PLAN_ID_PREFIX));
+    sf.plans = [...ownPlans, ...structuredClone(TEST_PLANS)];
+    const guidelinesSeeded = guidelinesEmpty(sf.contentGuidelines) || sameGuidelines(sf.contentGuidelines);
+    if (guidelinesSeeded) sf.contentGuidelines = { ...TEST_CONTENT_GUIDELINES };
     // The two demonstration sites, the same way: `site` pages of the steading's Sites journal,
     // its pointer recorded on the steading flags. Stored on the STEADING, read by the GM
     // Toolkit's Sites tab, which resolves the steading before every store call.
@@ -5936,6 +6187,42 @@
     }
     if (Object.keys(relUpdate).length) await steading.update(relUpdate);
 
+    // ── Settlement sheets: other steadings with sheets of their own ──────
+    // Two named places from their Book II stat blocks and one of Book II's typical blocks, made
+    // through the system's own settlement-actor.js (handed over on macroModules, like the timeline),
+    // so each sheet is exactly what the sidebar's Create Settlement makes. Marshedge and the Delve
+    // pick up the standings seeded just above, which are keyed by the same roster slug; the band
+    // is nobody's roster row, so its standing is keyed by its own actor id (settlement-actor.js
+    // #standingKey) and written here, and taken back off Stonetop by the cleanup.
+    //
+    // A named place the world already has a sheet for is LEFT ALONE: the chooser offers each place
+    // once, and a second Marshedge would split the table's notes across two sheets. A world launched
+    // before the subtype existed gets none (createSettlement warns and returns null).
+    try {
+      const settlementApi = await game.stonetop?.macroModules?.settlement?.();
+      if (settlementApi) {
+        const made = settlementApi.settlementsBySlug();
+        const settlementFolder = await ensureTestFolder("Actor", "Other Settlements");
+        for (const seed of TEST_SETTLEMENT_SHEETS) {
+          if (seed.book && made.has(seed.book)) continue;
+          const data = seed.book
+            ? settlementApi.settlementDataFromBook(seed.book)
+            : settlementApi.settlementDataFromTemplate(seed.template);
+          if (!data) continue;
+          if (seed.name) data.name = seed.name;
+          const sheetActor = await settlementApi.createSettlement(data, { folder: settlementFolder.id });
+          if (!sheetActor) break;   // the subtype is missing: one warning is enough
+          await sheetActor.setFlag(FLAG_SCOPE, TEST_FLAG, true);
+          if (seed.standing) {
+            await steading.update({ [`system.relationships.${settlementApi.standingKey(sheetActor)}`]: buildRelEntry(seed.standing) });
+          }
+          testSettlements.push(sheetActor);
+        }
+      }
+    } catch (err) {
+      console.error("[TEST] Seeding the settlement sheets failed.", err);
+    }
+
     // One marked debility, so RETURN TRIUMPHANT HAS SOMETHING TO CLEAR. The move is offered on
     // the last step of the expedition walkthrough (and off the steading's own move card), and
     // it has two quite different shapes: with nothing marked it simply raises Fortunes by 1,
@@ -5964,7 +6251,7 @@
       });
     }
 
-    console.log(`[TEST] Seeded steading "${steading.name}": ${people.residents.length} residents, ${people.neighbors.length} neighbors (as NPC actors), ${created.length} players${notesSeeded ? ", formatted Notes" : " (left existing Notes untouched)"}${threatsEntryId ? `, ${testThreatPages.length} threats` : ""}${sitesEntryId ? `, ${testSitePages.length} sites` : ""}, ${Object.keys(relUpdate).length}/${Object.keys(TEST_SETTLEMENT_RELS).length} settlement standings${debilitySeeded ? `, the "${TEST_DEBILITY}" debility marked` : " (left the debilities the GM had marked)"}.`);
+    console.log(`[TEST] Seeded steading "${steading.name}": ${people.residents.length} residents, ${people.neighbors.length} neighbors (as NPC actors), ${created.length} players${notesSeeded ? ", formatted Notes" : " (left existing Notes untouched)"}, ${TEST_PLANS.length} plans${guidelinesSeeded ? " and the content guidelines" : " (left the GM's content guidelines untouched)"}${threatsEntryId ? `, ${testThreatPages.length} threats` : ""}${sitesEntryId ? `, ${testSitePages.length} sites` : ""}, ${Object.keys(relUpdate).length}/${Object.keys(TEST_SETTLEMENT_RELS).length} settlement standings${debilitySeeded ? `, the "${TEST_DEBILITY}" debility marked` : " (left the debilities the GM had marked)"}.`);
     // The tray is only as full as the season allows, so say which case this world got rather
     // than leaving a missing chip to look like a bug. Five chips are seasonless; the rest are
     // the season's own, and autumn has none of them.
@@ -6136,7 +6423,7 @@
   // is somehow run before onReady wires up the API.)
   await game.stonetop?.saveChronicle?.();
 
-  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (played up to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+ over the three years, arcana found along the way)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items + ${TEST_TREASURES.length} treasures, ${homebrewArcana ? `${homebrewArcana} homebrew example arcana on the Seeker, ` : ""}${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_THREATS.length} threats + ${TEST_SITES.length} sites (both pinned on the books' maps), settlement standings, ` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${expeditions ? `${expeditions.added} prepped expeditions (${expeditions.bound} bound to a logged trip), ` : ""}${timelineTracks ? `a ${TEST_TIMELINE_YEARS}-year timeline on ${timelineTracks} threads${testAges ? ` under ${testAges} Ages` : ""}, ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, ${relmap ? `a relationship map (${relmap.home.people} people and ${relmap.home.lines} lines on the village board, ${relmap.party.people} and ${relmap.party.lines} on the party board, ${relmap.test.people} and ${relmap.test.lines} on the hidden "Test" board), ` : ""} introductions answers, ${examples.length} example expeditions${tripKit.taken ? ` (${tripKit.taken} steading asset${tripKit.taken === 1 ? "" : "s"} requisitioned, ${tripKit.held} still out)` : ""}, and the compiled Chronicle.`);
+  ui.notifications.info(`[TEST] Done: ${playbookDocs.length} characters${maxLevel ? " (played up to level " + (created[0]?.system?.attributes?.level?.value ?? "?") + "+ over the three years, arcana found along the way)" : ""}, ${buried.length} in the Graveyard (1st level, whatever the roster did), each with a test custom move + follower, ${gone.length} gone from play (retired, left Stonetop, turned threat), ${TEST_WORLD_MOVES.length} world moves, ${TEST_WORLD_ITEMS.length} world items + ${TEST_TREASURES.length} treasures, ${homebrewArcana ? `${homebrewArcana} homebrew example arcana on the Seeker, ` : ""}${TEST_MONSTERS.length} monsters and one example NPC, ${steading ? `${testVillagers.length} resident/neighbor NPCs, seeded steading members, Notes + ${TEST_PLANS.length} plans + content guidelines, ${TEST_THREATS.length} threats (one crossed off) + ${TEST_SITES.length} sites (both pinned on the books' maps), settlement standings, ${testSettlements.length ? `${testSettlements.length} settlement sheets, ` : ""}` : ""}${wonders ? `${wonders.added} "I wonder..." questions on the GM Toolkit, ` : ""}${encounters ? `${encounters.added} prepared encounters (${encounters.entries} collected rows), ` : ""}${expeditions ? `${expeditions.added} prepped expeditions (${expeditions.bound} bound to a logged trip), ` : ""}${timelineTracks ? `a ${TEST_TIMELINE_YEARS}-year timeline on ${timelineTracks} threads${testAges ? ` under ${testAges} Ages` : ""}, ` : ""}${relCount} relationship ratings, ${brandCount} Condemn brands on the Judge, ${relmap ? `a relationship map (${relmap.home.people} people and ${relmap.home.lines} lines on the village board, ${relmap.party.people} and ${relmap.party.lines} on the party board, ${relmap.test.people} and ${relmap.test.lines} on the hidden "Test" board), ` : ""} introductions answers, ${examples.length} example expeditions${tripKit.taken ? ` (${tripKit.taken} steading asset${tripKit.taken === 1 ? "" : "s"} requisitioned, ${tripKit.held} still out)` : ""}, and the compiled Chronicle.`);
   } finally {
     if (pendingClockRestore) {
       await pendingClockRestore().catch(err => console.error("[TEST] Could not put the steading's clock back.", err));

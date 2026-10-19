@@ -4,64 +4,56 @@
 		      start of each. module/actors/steading/steading-plans.js reads and writes them. --}}
 		<section class="steading-list-section steading-content-guidelines" aria-labelledby="steading-guidelines-title">
 			<h3 id="steading-guidelines-title" class="steading-notes-heading">Content guidelines</h3>
-			<p class="steading-notes-hint">Review these at the start of each session, and call "time out" whenever they are broken or need adding to (Book I p.66).</p>
+			<p class="steading-notes-hint">Review these at the start of each session, and call "time out" whenever they are broken or need adding to.</p>
 			<div class="steading-guidelines-grid">
 				{{#each stonetop.contentGuidelines as |g|}}
 				<label class="steading-guideline">
-					<span class="steading-guideline-label">{{g.label}}</span>
-					<span class="steading-guideline-hint">{{g.hint}}</span>
-					<textarea rows="2" data-guideline="{{g.key}}" {{#unless @root.stonetop.canEdit}}readonly{{/unless}}>{{g.value}}</textarea>
+					{{!-- The hint rides the label's tooltip (and the box's aria-description) so the four boxes line up. --}}
+					<span class="steading-guideline-label" data-tooltip="{{g.hint}}" data-tooltip-direction="UP">{{g.label}}</span>
+					<textarea rows="2" data-guideline="{{g.key}}" aria-description="{{g.hint}}" {{#unless @root.stonetop.canEdit}}readonly{{/unless}}>{{g.value}}</textarea>
 				</label>
 				{{/each}}
 			</div>
 		</section>
 
 		{{!-- Make a Plan (Book I p.530): what the PCs hope to achieve, and the requirements the GM named, each
-		      with a tick box. --}}
+		      with a tick box. Read here and ticked off here; written in its editor (SteadingPlanDialog.js), which
+		      the hover pencil and "New plan" open. --}}
 		<section class="steading-list-section steading-plans" aria-labelledby="steading-plans-title">
-			<div class="steading-plans-head">
-				<h3 id="steading-plans-title" class="steading-notes-heading">Plans</h3>
-				<span class="steading-notes-hint">Make a Plan: say what you hope to achieve; the GM says what it requires (Book I p.530).</span>
-				{{#if stonetop.canEdit}}
-				<button type="button" class="steading-plan-add" data-plan-action="add-plan"><i class="fas fa-plus" aria-hidden="true"></i> New plan</button>
-				{{/if}}
-			</div>
+			<h3 id="steading-plans-title" class="steading-notes-heading">Plans</h3>
+			<p class="steading-notes-hint">Make a Plan: say what you hope to achieve; the GM says what it requires (Book I p.530).</p>
 			{{#each stonetop.plans as |plan|}}
 			<article class="steading-plan{{#if plan.done}} is-done{{/if}}" data-plan-id="{{plan.id}}">
-				<div class="steading-plan-head">
-					<input type="text" class="steading-plan-name" data-plan-field="name" value="{{plan.name}}" placeholder="What do you hope to achieve?" aria-label="Plan" {{#unless @root.stonetop.canEdit}}readonly{{/unless}}>
-					<span class="steading-plan-progress" title="Requirements met">{{plan.doneCount}}/{{plan.total}}</span>
+				<header class="steading-plan-head">
+					<h4 class="steading-plan-name">{{#if plan.name}}{{plan.name}}{{else}}<span class="steading-plan-unnamed">An unnamed plan</span>{{/if}}</h4>
+					{{#if plan.total}}<span class="steading-plan-progress" data-tooltip="Requirements met">{{plan.doneCount}}/{{plan.total}}</span>{{/if}}
 					{{#if @root.stonetop.canEdit}}
-					<button type="button" class="steading-plan-remove" data-plan-action="remove-plan" data-tooltip="Remove this plan" aria-label="Remove this plan"><i class="fas fa-trash" aria-hidden="true"></i></button>
+					<span class="steading-plan-tools">
+						<button type="button" class="steading-plan-edit" data-plan-action="edit-plan" data-tooltip="Edit this plan" data-tooltip-direction="UP" aria-label="Edit this plan"><i class="fas fa-pen" aria-hidden="true"></i></button>
+						<button type="button" class="steading-plan-remove" data-plan-action="remove-plan" data-tooltip="Remove this plan" data-tooltip-direction="UP" aria-label="Remove this plan"><i class="fas fa-trash" aria-hidden="true"></i></button>
+					</span>
 					{{/if}}
-				</div>
+				</header>
+				{{#if plan.total}}
 				<ul class="steading-plan-reqs">
 					{{#each plan.requirements as |req|}}
 					<li class="steading-plan-req{{#if req.done}} is-done{{/if}}" data-req-index="{{@index}}">
-						<input type="checkbox" data-plan-tick {{#if req.done}}checked{{/if}} {{#unless @root.stonetop.canEdit}}disabled{{/unless}} aria-label="Done">
-						<input type="text" class="steading-plan-req-text" data-plan-req-text value="{{req.text}}" aria-label="Requirement" {{#unless @root.stonetop.canEdit}}readonly{{/unless}}>
-						{{#if @root.stonetop.canEdit}}
-						<button type="button" class="steading-plan-req-remove" data-plan-action="remove-req" aria-label="Remove this requirement"><i class="fas fa-xmark" aria-hidden="true"></i></button>
-						{{/if}}
+						<label>
+							<input type="checkbox" data-plan-tick {{#if req.done}}checked{{/if}} {{#unless @root.stonetop.canEdit}}disabled{{/unless}}>
+							<span class="steading-plan-req-text">{{req.text}}</span>
+						</label>
 					</li>
 					{{/each}}
 				</ul>
-				{{#if @root.stonetop.canEdit}}
-				<div class="steading-plan-new">
-					<input type="text" data-plan-new-req list="steading-plan-prompts" placeholder="Add a requirement: You must find/locate/obtain ___" aria-label="New requirement">
-					<button type="button" data-plan-action="add-req"><i class="fas fa-plus" aria-hidden="true"></i> Add</button>
-				</div>
 				{{/if}}
-				<label class="steading-plan-undone">
-					<span>Which means</span>
-					<input type="text" data-plan-field="undone" value="{{plan.undone}}" placeholder="what work goes undone meanwhile" {{#unless @root.stonetop.canEdit}}readonly{{/unless}}>
-					<span>goes undone.</span>
-				</label>
+				{{#if plan.undone}}<p class="steading-plan-undone">Which means <strong>{{plan.undone}}</strong> goes undone.</p>{{/if}}
 			</article>
 			{{else}}
 			<p class="steading-notes-hint steading-plans-empty">No plans yet.</p>
 			{{/each}}
-			{{{stonetop.planPromptsDatalist}}}
+			{{#if stonetop.canEdit}}
+			<button type="button" class="steading-plan-add" data-plan-action="add-plan"><i class="fas fa-plus" aria-hidden="true"></i> New plan</button>
+			{{/if}}
 		</section>
 
 		<prose-mirror class="steading-notes-editor" toggled value="{{stonetop.notes}}">

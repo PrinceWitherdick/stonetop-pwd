@@ -18,8 +18,10 @@
 // down beside them.
 //
 // Both live in the steading's flags (`plans`, `contentGuidelines`), written through its turn like every list.
+// The sheet only reads a plan (and ticks its boxes); SteadingPlanDialog.js is where one is written.
 
 import { escHtml } from "../../utils/strings.js";
+import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 
 /** The requirement prompts Make a Plan lists (Book I p.530), offered as suggestions when adding one. */
 export const PLAN_REQUIREMENT_PROMPTS = Object.freeze([
@@ -36,12 +38,41 @@ export const PLAN_REQUIREMENT_PROMPTS = Object.freeze([
 	"The steading must Pull Together ___ times, each requiring ___",
 ]);
 
+/** The blank a requirement prompt leaves for the GM's words. */
+export const PROMPT_BLANK = "___";
+
+/**
+ * A requirement with words typed AFTER a picked prompt moved into its first blank: "You must travel to ___
+ * the Ruined Tower" is "You must travel to the Ruined Tower". Text that doesn't start with a prompt, or adds
+ * nothing to it, comes back as it was (trimmed). PURE.
+ */
+export function fillPromptBlank(value) {
+	const words = text(value).trim();
+	for (const prompt of PLAN_REQUIREMENT_PROMPTS) {
+		if (!prompt.includes(PROMPT_BLANK) || !words.startsWith(prompt)) continue;
+		const extra = words.slice(prompt.length).trim();
+		if (extra) return prompt.replace(PROMPT_BLANK, extra);
+	}
+	return words;
+}
+
+/**
+ * Select the next blank in `input` at or after `from`, so what is typed next replaces the "___". False
+ * when there is none past it: it never wraps round, or Tab would be stuck in a field with a blank behind it.
+ */
+export function selectBlank(input, from = 0) {
+	const at = (input?.value ?? "").indexOf(PROMPT_BLANK, from);
+	if (at < 0) return false;
+	input.setSelectionRange?.(at, at + PROMPT_BLANK.length);
+	return true;
+}
+
 /** The content guidelines' four boxes: p.66's three, then p.195's Line. */
 export const CONTENT_GUIDELINE_FIELDS = Object.freeze([
 	{ key: "excluded", label: "Excluded content", hint: "Won't be part of the game at all, on-camera or off." },
 	{ key: "veiled",   label: "Veiled content",   hint: "Can be part of the game, but only off-camera." },
 	{ key: "requests", label: "Special requests", hint: "How certain content gets handled (\"Spiders are okay, but please don't describe their legs\")." },
-	{ key: "line",     label: "The Line",         hint: "How much the players like being asked to make up details about the world, rather than about their characters (Book I p.195)." },
+	{ key: "line",     label: "The Line",         hint: "How much the players like being asked to make up details about the world, rather than about their characters." },
 ]);
 
 const text = v => String(v ?? "");
@@ -49,7 +80,7 @@ const text = v => String(v ?? "");
 /** One stored plan, tidied for the sheet: its rows, how many are ticked, and whether all are. PURE. */
 export function planView(plan = {}) {
 	const requirements = (Array.isArray(plan.requirements) ? plan.requirements : [])
-		.map(r => ({ text: text(r?.text), done: !!r?.done }));
+		.map(r => ({ text: fillPromptBlank(r?.text), done: !!r?.done }));
 	const doneCount = requirements.filter(r => r.done).length;
 	return {
 		id: text(plan.id),
@@ -77,20 +108,52 @@ export function newPlan(id = globalThis.foundry?.utils?.randomID?.() ?? `plan${D
 	return { id, name: "", requirements: [], undone: "" };
 }
 
-/** Edit one plan in the steading's turn (StonetopSteading#editList). `edit` changes it in place; false writes nothing. */
-function editPlan(steading, planId, edit) {
-	return steading.editList("plans", plans => {
-		const plan = plans.find(p => p?.id === planId);
-		if (!plan) return false;
-		plan.requirements = Array.isArray(plan.requirements) ? plan.requirements : [];
-		return edit(plan);
+/**
+ * A plan as the editor hands it back, tidied for storing: names and the undone line trimmed, each
+ * requirement's blank filled (fillPromptBlank) and the emptied ones dropped. PURE.
+ */
+export function tidyPlan(draft = {}) {
+	return {
+		id: text(draft.id),
+		name: text(draft.name).trim(),
+		requirements: (Array.isArray(draft.requirements) ? draft.requirements : [])
+			.map(r => ({ text: fillPromptBlank(r?.text), done: !!r?.done }))
+			.filter(r => r.text),
+		undone: text(draft.undone).trim(),
+	};
+}
+
+/**
+ * The editor's rows with every tick it left alone read off the plan as it is now (`current`), so a box
+ * ticked or unticked on the Notes tab while the editor was open survives its save. A row is matched to the
+ * one it was opened from (`from`, its index in `base`, the plan the editor opened on) while that row still
+ * says the same; a tick the editor itself changed, and a row it added, keep the editor's. PURE.
+ */
+export function ticksSince(rows, base, current) {
+	return (Array.isArray(rows) ? rows : []).map(row => {
+		const from = row?.from == null || row.from === "" ? -1 : Number(row.from);
+		const was = base?.requirements?.[from];
+		const now = current?.requirements?.[from];
+		if (!was || !now || text(now.text) !== text(was.text) || !!row.done !== !!was.done) return row;
+		return { ...row, done: !!now.done };
 	});
 }
 
-/** Add an empty plan at the end. The new plan's id. */
-export async function addPlan(steading, plan = newPlan()) {
-	await steading.editList("plans", plans => { plans.push(plan); });
-	return plan.id;
+/**
+ * Write a plan from the editor: over the stored one with its id, or at the end when it is new. A new plan
+ * with nothing written in it writes nothing. `base` is the plan as the editor opened on it (ticksSince).
+ */
+export function savePlan(steading, draft, { base = null } = {}) {
+	const id = text(draft?.id) || newPlan().id;
+	return steading.editList("plans", plans => {
+		const at = plans.findIndex(p => p?.id === id);
+		const plan = tidyPlan({ ...draft, id, requirements: ticksSince(draft?.requirements, base, plans[at]) });
+		if (at >= 0) {
+			if (JSON.stringify(plans[at]) === JSON.stringify(plan)) return false;
+			plans[at] = plan;
+		} else if (plan.name || plan.requirements.length || plan.undone) plans.push(plan);
+		else return false;
+	});
 }
 
 /** Remove a plan. */
@@ -102,49 +165,27 @@ export function removePlan(steading, planId) {
 	});
 }
 
-/** Set a plan's name or its "goes undone" line. */
-export function setPlanField(steading, planId, field, value) {
-	if (!["name", "undone"].includes(field)) return Promise.resolve(false);
-	return editPlan(steading, planId, plan => {
-		if (plan[field] === value) return false;
-		plan[field] = value;
-	});
-}
-
-/** Add a requirement, unticked. Blank text adds nothing. */
-export function addRequirement(steading, planId, value) {
-	const words = text(value).trim();
-	if (!words) return Promise.resolve(false);
-	return editPlan(steading, planId, plan => { plan.requirements.push({ text: words, done: false }); });
-}
-
-/** Tick or untick one requirement. */
+/** Tick or untick one requirement, from the sheet. */
 export function setRequirementDone(steading, planId, index, done) {
-	return editPlan(steading, planId, plan => {
-		const row = plan.requirements[index];
+	return steading.editList("plans", plans => {
+		const row = plans.find(p => p?.id === planId)?.requirements?.[index];
 		if (!row || !!row.done === !!done) return false;
 		row.done = !!done;
 	});
 }
 
-/** Reword one requirement (p.531: "update the plan!"). Emptied, it is removed. */
-export function setRequirementText(steading, planId, index, value) {
-	return editPlan(steading, planId, plan => {
-		const row = plan.requirements[index];
-		if (!row) return false;
-		const words = text(value).trim();
-		if (!words) plan.requirements.splice(index, 1);
-		else if (row.text === words) return false;
-		else row.text = words;
+/** Ask before removing a plan, naming it; the plan goes only on a yes. */
+export async function confirmRemovePlan(steading, planId) {
+	const plan = (steading._flags?.plans ?? []).find(p => p?.id === planId);
+	if (!plan) return false;
+	const name = text(plan.name).trim();
+	const yes = await confirmOutcome({
+		title: "Remove this plan?",
+		content: `<p>Remove ${name ? `<strong>${escHtml(name)}</strong>` : "this plan"} and its requirements from the steading's plans?</p>`,
+		yes: { label: "Remove the plan", icon: "fa-trash" },
+		no: { label: "Keep it" },
 	});
-}
-
-/** Remove one requirement. */
-export function removeRequirement(steading, planId, index) {
-	return editPlan(steading, planId, plan => {
-		if (!plan.requirements[index]) return false;
-		plan.requirements.splice(index, 1);
-	});
+	return yes ? removePlan(steading, planId) : false;
 }
 
 /** Write one content guideline box. */
@@ -156,60 +197,38 @@ export async function setContentGuideline(steading, key, value) {
 	return true;
 }
 
-// The prompts are frozen, so each id's datalist is built once and handed back on every render after.
-const _promptsDatalists = new Map();
-
-/** The `<datalist>` of the book's requirement prompts, once per sheet. PURE. */
-export function planPromptsDatalistHtml(id = "steading-plan-prompts") {
-	let html = _promptsDatalists.get(id);
-	if (html === undefined) {
-		html = `<datalist id="${id}">${PLAN_REQUIREMENT_PROMPTS.map(p => `<option value="${escHtml(p)}"></option>`).join("")}</datalist>`;
-		_promptsDatalists.set(id, html);
-	}
-	return html;
-}
-
 /**
  * Wire the Notes tab's Plans and guidelines (the sheet's activateListeners, for a user who can edit the
- * steading). Delegated on the tab, so a re-render needs nothing re-bound per row. Each write re-renders the
- * sheet through the actor update.
+ * steading). Delegated on the tab, so a re-render needs nothing re-bound per row. A plan is read on the
+ * sheet and written in its editor: `editPlan(planId)` opens it (null for a new plan). Only the tick boxes
+ * write from the sheet itself, since ticking them off is the book's whole use of the list (p.530). Each
+ * write re-renders the sheet through the actor update.
  */
-export function wireSteadingNotesTab(root, steading) {
+export function wireSteadingNotesTab(root, steading, { editPlan = null } = {}) {
 	const tab = root?.querySelector?.(".steading-notes");
 	if (!tab) return;
 	const planOf = el => el.closest("[data-plan-id]")?.dataset.planId;
-	const rowOf = el => Number(el.closest("[data-req-index]")?.dataset.reqIndex);
 	tab.addEventListener("click", ev => {
 		const btn = ev.target.closest?.("[data-plan-action]");
 		if (!btn) return;
 		ev.preventDefault();
 		const planId = planOf(btn);
 		switch (btn.dataset.planAction) {
-			case "add-plan": return addPlan(steading);
-			case "remove-plan": return planId && removePlan(steading, planId);
-			case "remove-req": return planId && removeRequirement(steading, planId, rowOf(btn));
-			case "add-req": {
-				const input = btn.closest("[data-plan-id]")?.querySelector("[data-plan-new-req]");
-				return planId && addRequirement(steading, planId, input?.value);
-			}
+			case "add-plan": return editPlan?.(null);
+			case "edit-plan": return planId && editPlan?.(planId);
+			case "remove-plan": return planId && confirmRemovePlan(steading, planId);
 		}
-	});
-	tab.addEventListener("keydown", ev => {
-		const input = ev.target.closest?.("[data-plan-new-req]");
-		if (!input || ev.key !== "Enter") return;
-		ev.preventDefault();
-		addRequirement(steading, planOf(input), input.value);
 	});
 	tab.addEventListener("change", ev => {
 		const el = ev.target;
-		const planId = planOf(el);
 		if (el.matches?.("[data-guideline]")) {
 			ev.stopPropagation();
 			return setContentGuideline(steading, el.dataset.guideline, el.value);
 		}
-		if (!planId) return;
-		if (el.matches?.("[data-plan-field]")) { ev.stopPropagation(); return setPlanField(steading, planId, el.dataset.planField, el.value); }
-		if (el.matches?.("[data-plan-tick]")) { ev.stopPropagation(); return setRequirementDone(steading, planId, rowOf(el), el.checked); }
-		if (el.matches?.("[data-plan-req-text]")) { ev.stopPropagation(); return setRequirementText(steading, planId, rowOf(el), el.value); }
+		if (el.matches?.("[data-plan-tick]")) {
+			ev.stopPropagation();
+			const planId = planOf(el);
+			return planId && setRequirementDone(steading, planId, Number(el.closest("[data-req-index]")?.dataset.reqIndex), el.checked);
+		}
 	});
 }

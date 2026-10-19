@@ -765,9 +765,46 @@ export const STEADING_DEFAULTS = {
 	notes: "",
 	improvements: {},
 	size: "village",
+	// The banner's subtitle, as typed. Empty means "say what Size says" (steadingSubtitle).
+	kind: "",
+	headcount: "",
 	silver: { purses: 0, handfuls: 0, coins: 0 },
 	gold:   { purses: 0, handfuls: 0, coins: 0 },
 };
+
+/**
+ * How many live in a steading of each Size, for the banner's subtitle. The ranges are the Size
+ * tooltip's (Book I, Homefront), except a village, which says what Book II prints for Stonetop
+ * itself ("Size village (~300 souls)") rather than the 150-350 every village shares.
+ */
+export const SIZE_HEADCOUNTS = {
+	hamlet:  "under 50 souls",
+	village: "~300 souls",
+	town:    "~500 to 1500 souls",
+	city:    "2500+ souls",
+};
+
+/**
+ * The line under the steading's name ("Village · ~300 souls"), the way a settlement sheet carries
+ * one. Each half is whatever was typed, and follows Size while it is blank, so a Township turning
+ * the village into a town moves every half nobody has written over. Clearing a half hands it back.
+ * The `*Default` halves are what Size says, for the input's placeholder.
+ */
+export function steadingSubtitle({ size, kind, headcount } = {}) {
+	const s = String(size || STEADING_DEFAULTS.size);
+	const kindDefault = s.charAt(0).toUpperCase() + s.slice(1);
+	const headcountDefault = SIZE_HEADCOUNTS[s] ?? "";
+	const typedKind = String(kind ?? "").trim();
+	const typedHeadcount = String(headcount ?? "").trim();
+	return {
+		kind:      typedKind || kindDefault,
+		headcount: typedHeadcount || headcountDefault,
+		typedKind,
+		typedHeadcount,
+		kindDefault,
+		headcountDefault,
+	};
+}
 
 const SYSTEM_DEFAULTS = {
 	stats: {
@@ -2955,7 +2992,8 @@ export class StonetopSteading {
 			places:         f.places         ?? STEADING_DEFAULTS.places,
 			notes:          f.notes          ?? STEADING_DEFAULTS.notes,
 			size:           f.size           ?? STEADING_DEFAULTS.size,
-			silver:         f.silver         ?? STEADING_DEFAULTS.silver,
+			subtitle:       steadingSubtitle({ size: f.size, kind: f.kind, headcount: f.headcount }),
+			silver:        f.silver         ?? STEADING_DEFAULTS.silver,
 			gold:           f.gold           ?? STEADING_DEFAULTS.gold,
 			improvements,
 		};

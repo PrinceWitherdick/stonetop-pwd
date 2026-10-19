@@ -7,6 +7,7 @@ import * as journalSyncCore from "../../module/hooks/journal-sync-core.js";
 import * as worldJournalArt from "../../module/book2-art/world-journal-art.js";
 import * as posterMaps from "../../module/book2-art/poster-maps.js";
 import * as timelineStore from "../../module/timeline/timeline-store.js";
+import * as settlementActor from "../../module/actors/settlement/settlement-actor.js";
 
 // The Import Book Art macro borrows three system modules. In a bundled release, importing them by
 // path would load second copies with their own caches, so the system hands them over on
@@ -25,8 +26,8 @@ const BORROWED = [
 ];
 
 describe("the modules the Import Book Art macro borrows", () => {
-	it("are these three, beside the test-fixtures macro's timeline", () => {
-		expect(Object.keys(MACRO_MODULES).sort()).toEqual([...BORROWED.map((b) => b.key), "timeline"].sort());
+	it("are these three, beside the test-fixtures macro's timeline and settlements", () => {
+		expect(Object.keys(MACRO_MODULES).sort()).toEqual([...BORROWED.map((b) => b.key), "timeline", "settlement"].sort());
 	});
 
 	it.each(BORROWED)("$key loads the system's own copy of the module, with $name on it", async ({ key, name, module }) => {
@@ -90,5 +91,16 @@ describe("the timeline the test-fixtures macro borrows", () => {
 	it("is taken from macroModules rather than imported by path", () => {
 		expect(FIXTURES).toContain("game.stonetop?.macroModules?.timeline?.()");
 		expect(FIXTURES).not.toMatch(/import\(["'`][^"'`]*timeline/);
+	});
+});
+
+describe("the settlements the test-fixtures macro borrows", () => {
+	it("are made by the system's own settlement-actor.js, the sidebar's Create Settlement path", async () => {
+		const loaded = await MACRO_MODULES.settlement();
+		for (const name of ["settlementsBySlug", "settlementDataFromBook", "settlementDataFromTemplate", "createSettlement", "standingKey"]) {
+			expect(loaded[name], name).toBe(settlementActor[name]);
+		}
+		expect(FIXTURES).toContain("game.stonetop?.macroModules?.settlement?.()");
+		expect(FIXTURES).not.toMatch(/import\(["'`][^"'`]*settlement/);
 	});
 });

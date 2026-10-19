@@ -81,6 +81,7 @@ describe("text-only chips trim themselves", () => {
 		".stonetop-journey-canvas .stonetop-journey-tag",
 		".stonetop-rel-lane-count",
 		".stonetop-fight-badge",
+		".stonetop-steading-plan button.spe-prompt",
 	];
 
 	it.each(SELF)("%s trims and pads with both tokens", sel => {
@@ -173,6 +174,23 @@ describe("chips with an icon or a count trim their label element", () => {
 		const fn = chat.match(/export function rollKindBadge[\s\S]*?\n\}/)?.[0];
 		expect(fn, "rollKindBadge is gone from chat.js").toBeTruthy();
 		expect(fn).toContain('<span class="stonetop-chip-text">');
+	});
+});
+
+// An icon-and-label button with no trim centres its row by flex on the font's own balanced line box
+// (measured 10-19 with the text-centring audit: within 0.7px at 1x/1.25x/1.5x). What would break that is a
+// hand nudge, so each keeps flex centring and even top and bottom padding.
+describe("icon-and-label buttons centre by flex, unnudged", () => {
+	it.each([
+		".stonetop-steading-plan button.spe-req-add",
+		".steading-plan-add",
+	])("%s", sel => {
+		const body = declarations(MAIN, sel);
+		expect(body, `${sel} has no rule`).toBeTruthy();
+		expect(declared(body, "display")).toMatch(/flex/);
+		expect(declared(body, "align-items")).toBe("center");
+		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+		expect(bottom).toBe(top);
 	});
 });
 

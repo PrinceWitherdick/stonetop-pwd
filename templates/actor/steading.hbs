@@ -4,6 +4,24 @@
 		<div class="steading-header">
 			<div class="steading-header-name">
 				<h1 class="steading-title">Stonetop</h1>
+				{{!-- What kind of place it is and how many live here ("Village · ~300 souls"), the
+				      line a settlement sheet carries under its name. Each half follows Size until
+				      someone types over it, and clearing it hands it back (steadingSubtitle in
+				      module/actors/steading/StonetopSteading.js); what Size would say is the
+				      input's placeholder. Editable under the Size pencil, since Size is what it
+				      follows; plain text otherwise. --}}
+				<div class="steading-subtitle">
+					{{#if stonetop.edit.size}}
+					<input class="steading-subtitle-input steading-subtitle-kind" type="text" data-field="kind"
+					       value="{{stonetop.subtitle.typedKind}}" placeholder="{{stonetop.subtitle.kindDefault}}" aria-label="What kind of place">
+					<input class="steading-subtitle-input steading-subtitle-headcount" type="text" data-field="headcount"
+					       value="{{stonetop.subtitle.typedHeadcount}}" placeholder="{{stonetop.subtitle.headcountDefault}}" aria-label="Headcount">
+					{{/if}}
+					{{#unless stonetop.edit.size}}
+					<span class="steading-subtitle-kind">{{stonetop.subtitle.kind}}</span>
+					<span class="steading-subtitle-headcount">{{stonetop.subtitle.headcount}}</span>
+					{{/unless}}
+				</div>
 			</div>
 			{{!-- What the steading is still owed, and what it still owes: one glyph per
 			      unresolved thing, beside the title. The rule for what earns a place here is in

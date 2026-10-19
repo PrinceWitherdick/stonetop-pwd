@@ -19,4 +19,7 @@ export const MACRO_MODULES = Object.freeze({
 	// and clears a three-year timeline through it. Same reason, and a sharper one: the timeline's
 	// writes take turns per track, and a second copy of the store would bring a second queue.
 	timeline:        () => import("../timeline/timeline-macro-api.js"),
+	// The test-fixtures macro's settlement sheets: made by the same createSettlement the sidebar's
+	// Create Settlement uses, from the same stat blocks.
+	settlement:      () => import("../actors/settlement/settlement-actor.js"),
 });
