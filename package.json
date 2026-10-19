@@ -11,7 +11,9 @@
     "unpack": "node scripts/unpack.js",
     "gen:ai-signals": "node scripts/gen-ai-signals.js",
     "reorganize-packs": "node scripts/reorganize-playbook-moves.js",
-    "gen:superseded": "node scripts/gen-superseded-fields.js"
+    "gen:superseded": "node scripts/gen-superseded-fields.js",
+    "wiki:check": "node scripts/sync-wiki.js",
+    "wiki:publish": "node scripts/sync-wiki.js --publish"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

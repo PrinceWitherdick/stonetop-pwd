@@ -1,0 +1,71 @@
+# Death and Beyond
+
+When a character drops to 0 HP, the system walks the table through Death's Door, records how it marked them or what they chose, and, if they come back as a Ghost, Revenant or Thrall, adds that insert to their sheet. This page also covers retiring a character.
+
+## Dropping to 0 HP
+
+When a character reaches 0 HP, a card in chat says they're **dying**. If your GM has **Announce When a Character Is Dying** on (the default), everyone sees it. The GM can use **Not lethal: out of the action** when whatever dropped them wasn't likely to kill anyone, or **Mark dying** to put it back.
+
+If **Open the Dying Character's Move Automatically** is on (also the default), Death's Door opens on the dying player's screen. Otherwise open it from the card, or from **Face Death's Door** on the **Special Moves** tab.
+
+## The Death's Door window
+
+The window shows the move and all three results before you roll. Nothing is final until you click **Accept this result**.
+
+1. **Roll.** Death's Door adds no stat, so the button reads **Roll +nothing**. Some moves change this: a Heavy with Hard to Kill picks +CON or +nothing (the button then reads **Roll the dice**, and on a 7-9 they can mark a debility to regain 1 HP), a character with a once-per-session "don't roll" (such as Never Gonna Keep Me Down) can click **Don't roll: take a 10+**, and Destined or Unstoppable characters see their modifier explained.
+2. **Push it up, if you can.** Before accepting, you may be able to **Burn Brightly** (spend XP for +1) or, as a Would-Be Hero, give it your all (Impetuous Youth). Another player with Diligence, Many Hands, Sanction or a Blessing can still add +1.
+3. **Accept.**
+   - **10+**: back to 1 HP. Say how the brush with death marked you: pick a suggestion (**a nasty scar**, **a lost eye**, **visions of the Last Door**, **a murder of crows, always nearby**) or write your own. It's recorded on your sheet as a wound.
+   - **7-9**: no longer dying, but out of the action at 0 HP until the GM says otherwise.
+   - **6-**: choose your fate.
+
+**No rush:** **Not yet** closes the window. The book lets you hold off until the scene wraps up.
+
+![The Death's Door window: the move, its 10+, 7-9 and 6- results, and the Roll +nothing, Don't roll: take a 10+ and Not yet buttons](images/death-and-beyond-door.webp)
+
+> **Did you know?**
+> - If the dying player has stepped away, someone else can open Death's Door and click **Take over their roll** (or **Take over and roll** if nothing was rolled yet). Everyone else's window follows the roll as it happens.
+> - The 10+ mark lands on the sheet as a lasting wound, so it's there to bring up in play. See [The Character Sheet](The-Character-Sheet).
+
+## Choosing your fate (6-)
+
+The three fates are buttons:
+
+- **Make one last move as if you rolled a 12+, then step through the Last Door.** Pick the move and the card is made at 12+. The character is then dead; their sheet shows a **Dead** chip.
+- **Refuse to Go.** Name the person, task or reckoning you won't leave behind (your Terrible Purpose). You become a Revenant or a Ghost.
+- **Call on one of the Things Below** by name and beseech it to intercede: you gain the Thrall insert. Name your master; the GM chooses the Mark it leaves.
+
+Whatever the insert asks you to decide can be answered right away or later: anything left undecided waits on your **Post-Death** tab. If the table played the result out in conversation instead, the GM can **Clear the pending fate**.
+
+> **Did you know?**
+> - If a dead character's HP goes back above 0, the system asks **Is (name) being brought back?** Answer **Yes, they live again** and the sheet becomes theirs again; **No, they are still dead** leaves it as it was.
+
+## The Post-Death tab
+
+A Ghost, Revenant or Thrall gets a **Post-Death** tab. Their new name replaces the playbook name at the top of the sheet, with the old one struck through, and the playbook's Instinct is retired (it comes back if the insert is removed).
+
+The tab holds:
+
+- the insert's **Instinct**, **Granted Moves**, and your answers **In Your Own Words**;
+- for a Ghost, **Your Tether**; for a Thrall, **Your Master's Task** and their **Favor** pips;
+- **Outcomes** buttons for what the insert's moves do: **Regain all HP**, **Clear a debility**, **Mark a consequence**, **Pass through the Last Door**, and so on. Each says why it's greyed out when it can't apply;
+- the consequences you've marked, with the Final Consequence apart from the rest;
+- **Remove Insert** (in edit mode), for mistakes. Once no insert is left, **Remove Post-Death Tab** takes the tab off the sheet.
+
+At 0 HP an undead character doesn't face Death's Door again. Their insert's own move (Undying, Tethered or Dark Succor) opens instead and applies its costs to the sheet.
+
+![A Revenant's sheet in the dark post-death colours: Revenant (Denial) with The Heavy beside it, the Outcomes buttons, In Your Own Words and the granted moves](images/death-and-beyond-post-death.webp)
+
+> **Did you know?**
+> - Everything a Ghost, Revenant or Thrall says in chat is drawn on a black card.
+> - A dead character's sheet turns dark too, so the whole table can see at a glance who has passed.
+
+## Retiring a character
+
+To retire a character who's still alive, click **Retire** on the sheet's Special Moves tab (or right-click the character in the Actors sidebar). You say whether they retire nearby or leave Stonetop, write a short epilogue, and can have them become an NPC (a new resident or neighbor, or an NPC already on the steading). The GM can right-click a retired character and choose **Return to Play** to bring them back.
+
+## See also
+- [Rolling Moves and Chat Cards](Rolling-Moves-and-Chat-Cards)
+- [Playbook Notes](Playbook-Notes)
+- [The Timeline](The-Timeline)
+- [Running Fights](Running-Fights)
