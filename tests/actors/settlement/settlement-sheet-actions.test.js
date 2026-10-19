@@ -89,6 +89,69 @@ describe("the settlement Notes tab", () => {
 	it("floors the editor at the same weight as Stonetop's rule, and after it", () => {
 		const ours = CSS.indexOf(".stonetop-settlement-notes prose-mirror.steading-notes-editor {");
 		expect(ours).toBeGreaterThan(CSS.indexOf(".steading-notes prose-mirror.steading-notes-editor {"));
-		expect(CSS.slice(ours, CSS.indexOf("}", ours))).toMatch(/min-height: 12em/);
+		// Stonetop's own floor (`.steading-sheet .steading-notes prose-mirror.steading-notes-editor`).
+		expect(CSS.slice(ours, CSS.indexOf("}", ours))).toMatch(/min-height: 14em/);
+	});
+
+	// Stonetop's notes always sit in the bordered editor box; a settlement reader gets the same box.
+	it("gives a reader the editor's box", () => {
+		expect(read("templates/actor/settlement/settlement-notes.hbs"))
+			.toMatch(/class="steading-notes-editor stonetop-settlement-notes-read"><div class="editor-content">/);
+	});
+});
+
+// The People tab is Stonetop's Residents table, one table labelled "Residents" (the user's call,
+// 2026-10-19); who runs the place, its notable people and its groups moved to the Overview.
+describe("the settlement People tab", () => {
+	const people = read("templates/actor/settlement/settlement-people.hbs");
+	const overview = read("templates/actor/settlement/settlement-overview.hbs");
+
+	it("draws Stonetop's Residents table, and only that", () => {
+		expect(people).toMatch(/steading-residents-section--residents/);
+		expect(people).toMatch(/class="steading-residents-table steading-people-cards"/);
+		expect(people).not.toMatch(/steading-players-section|steading-residents-section--neighbors/);
+		expect(people).toMatch(/localize "stonetop\.settlement\.residents"/);
+	});
+
+	it("keeps who runs it, the notable people and the groups on the Overview", () => {
+		for (const list of ["leaders", "groups"]) {
+			expect(overview, list).toMatch(new RegExp(`data-list="${list}"`));
+			expect(people, list).not.toMatch(new RegExp(`data-list="${list}"`));
+		}
+		expect(overview).toMatch(/\{\{system\.government\}\}/);
+		expect(people).not.toMatch(/system\.government/);
+	});
+
+	// Resident cells write their NPC, never the form: a name would let core's submit try to.
+	it("gives the resident cells no form name", () => {
+		const cells = [...people.matchAll(/<input[^>]*data-resident-field[^>]*>/g)].map(m => m[0]);
+		expect(cells.length).toBeGreaterThan(0);
+		expect(cells.filter(cell => / name="/.test(cell))).toEqual([]);
+	});
+});
+
+// The Overview reads as Stonetop's does, in edit mode too (the user's call, 2026-10-19): every list
+// row is plain text, never a row of inputs; the wrench adds the red cross, and the row's text opens
+// a window to change it. Nothing on a list row is bold, as nothing on Stonetop's is.
+describe("the settlement Overview's rows", () => {
+	const overview = read("templates/actor/settlement/settlement-overview.hbs");
+	const list = read("templates/actor/settlement/settlement-list.hbs");
+	const CSS = read("styles/stonetop.css");
+
+	it("draws no inputs or textareas on the lists, in either mode", () => {
+		for (const [file, src] of [["overview", overview], ["list", list]]) {
+			expect(src, file).not.toMatch(/data-row-field|<textarea/);
+		}
+	});
+
+	it("opens a row or Who runs it to edit from its text, with the wrench on", () => {
+		expect(list).toMatch(/\{\{#if \.\.\/editable\}\} data-action="editRow"/);
+		expect(overview.match(/data-action="editRow"/g)?.length).toBe(3);
+		expect(overview).toMatch(/data-action="editGovernment"/);
+	});
+
+	it("never bolds a row's name", () => {
+		expect(CSS).not.toMatch(/\.stonetop-settlement-row-title\s*\{[^}]*font-weight:\s*bold/);
+		expect(overview + list).not.toMatch(/<strong>/);
 	});
 });

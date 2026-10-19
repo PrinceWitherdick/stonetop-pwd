@@ -1,10 +1,10 @@
 // The settlement sheet: a steading that is not Stonetop.
 //
 // What Book II prints for a place (Size, Population, Prosperity, Defenses, who it trades with, its
-// Resources and the Defenses list), the people who run it, the four homefront moves its stats are
-// for (Book I p.508), and a notes box. Stonetop's standing with the place is shown here too, but
-// STORED on Stonetop (`system.relationships`, actors/settlement/settlement-actor.js#standingKey),
-// so the hearts here and on Stonetop's Other Settlements table are one rating.
+// Resources and the Defenses list), the people who run it, its Residents (each an NPC, on Stonetop's
+// own Residents table), the four homefront moves its stats are for (Book I p.508), and a notes box. Stonetop's standing with the place is not shown here: it is
+// STORED on Stonetop (`system.relationships`, actors/settlement/settlement-actor.js#standingKey) and
+// rated on Stonetop's Other Settlements table alone (the user's call, 2026-10-19).
 //
 // IT LOOKS LIKE STONETOP'S SHEET, on purpose and by reuse rather than imitation: the templates wear
 // Stonetop's own classes (the `.steading-header` banner, the `.steading-stats-bar` slate tracks,
@@ -36,8 +36,7 @@ import { STEADING_SIZES } from "../../utils/improvement-def.js";
 import { rollAdjustments } from "../steading/improvement-rolls.js";
 import { localize } from "../../utils/i18n.js";
 import { sign } from "../../utils/roll-engine.js";
-import { getStonetopSteadingActor, isSteadingActor } from "../../utils/world.js";
-import { heartSlots, readRelationship, relationSummary, setRelationshipHearts } from "../../utils/relationship-hearts.js";
+import { getStonetopSteadingActor } from "../../utils/world.js";
 import { ACTOR_LINK_MISSING, openLinkedActorSheet } from "../../utils/actor-link.js";
 import { openGazetteerEntry } from "../../utils/gazetteer-notes.js";
 import { mountTabRail } from "../../utils/tab-rail.js";
@@ -48,11 +47,22 @@ import { getOpenSheetsInEditMode } from "../../settings.js";
 import { readCurrentSeason } from "../../seasons/current-season.js";
 import { homesteadFieldsHtml, homesteadMoveFlow, homesteadMoveText } from "../steading/homestead-moves.js";
 import { ContentPickerDialog } from "../../dialogs/content-picker.js";
-import { rosterSettlement, settlementsBySlug, standingKey } from "./settlement-actor.js";
+import { rosterSettlement, settlementsBySlug } from "./settlement-actor.js";
 import { SETTLEMENT_MOVES, rollSettlementMove, settlementIsLacking, settlementRolledStat } from "./settlement-rolls.js";
-import { isSettlementList, settlementRow } from "./settlement-rows.js";
+import { SETTLEMENT_LISTS, isSettlementList, settlementRow } from "./settlement-rows.js";
 import { escHtml } from "../../utils/strings.js";
-import { deletionEntry } from "../../utils/foundry-compat.js";
+import { deletionEntry, imagePopout } from "../../utils/foundry-compat.js";
+import { format } from "../../utils/i18n.js";
+import { AddSteadingMemberDialog } from "../../dialogs/AddSteadingMemberDialog.js";
+import { OCCUPATIONS, TRAITS } from "../../data/steading-members.js";
+import { createPersonNpc, ensureNamedActorFolder, personFieldPath, personRowActor, resolvePersonRow } from "../steading/steading-people.js";
+import { openNpcNotesDialog } from "../steading/npc-notes-dialog.js";
+import { withLinkedActor } from "../../utils/actor-link.js";
+import { wireTabSearch } from "../../utils/tab-search.js";
+import { makeColumnsResizable } from "../../utils/resizable-columns.js";
+import { makeColumnsSortable } from "../../utils/sortable-columns.js";
+import { wireAvatarPreview, removeAvatarPreview } from "../../utils/avatar-preview.js";
+import { displayPortraitSrc } from "../../book2-art/people-portraits.js";
 
 // Plain literals, not built from SYSTEM_ID: the template checks in tests find paths by searching
 // the source for them.
@@ -70,9 +80,35 @@ const ACTIONS = {
 	openActor:     "_onOpenActor",
 	dismissSetup:  "_onDismissSetup",
 	toggleHidden:  "_onToggleHidden",
-	setStanding:   "_onSetStanding",
 	unlinkLeader:  "_onUnlinkLeader",
+	addResident:   "_onAddResident",
+	editResidentNotes: "_onEditResidentNotes",
+	editRow:       "_onEditRow",
+	editGovernment: "_onEditGovernment",
 };
+
+/**
+ * The Overview lists' fields, as the row window asks for them: each column and its label's key
+ * under stonetop.settlement. The first is the row's name, which a row must have. A column left out
+ * (a trade partner's slug, a notable person's linked sheet) is kept as it is.
+ */
+const ROW_FIELDS = {
+	resources:      [["name", "resourcePlaceholder"], ["detail", "detailPlaceholder"], ["lacking", "lacking"]],
+	fortifications: [["name", "fortificationPlaceholder"], ["detail", "detailPlaceholder"]],
+	tradeWith:      [["partner", "partnerPlaceholder"], ["goods", "goodsPlaceholder"]],
+	groups:         [["name", "groupName"], ["count", "groupCount"], ["notes", "groupNotes"]],
+	leaders:        [["name", "personName"], ["role", "personRole"], ["instinct", "personInstinct"]],
+};
+
+/** The Actor folder a settlement's residents are filed in, like Stonetop's "Residents of Stonetop". */
+const RESIDENTS_FOLDER_COLOR = "#5c6b7a";
+
+/**
+ * A Residents row as steading-people.js reads one: the NPC's uuid and the cached name. Not the row
+ * itself, whose `id` is the row's own (the sheet addresses rows by it), where a Stonetop roster
+ * row's `id` is the NPC's and would be looked up as one.
+ */
+const residentPointer = row => ({ uuid: row?.uuid ?? "", name: row?.name ?? "" });
 
 /** A settlement's three stats. Fortunes and Surplus are Stonetop's alone (Book I p.508). */
 const STATS = ["population", "prosperity", "defenses"];
@@ -83,9 +119,6 @@ const STATS = ["population", "prosperity", "defenses"];
 export function createStonetopSettlementSheetClass(Base) {
 	// withSheetSizeMemory: reopen at the size this user last left a settlement sheet at.
 	return class StonetopSettlementSheet extends withSheetSizeMemory(Base) {
-		/** The `updateActor` hook that redraws Stonetop's hearts here, while this sheet is open. */
-		_stonetopStandingHook = null;
-
 		/**
 		 * The window header's wrench, as on every other Stonetop actor sheet (utils/sheet-chrome.js).
 		 * Off, an owner reads the sheet as a player does, with only the things that change in play
@@ -140,9 +173,6 @@ export function createStonetopSettlementSheetClass(Base) {
 				note: key === "prosperity" && lacking ? localize(`${KEY}.lackingNote`) : "",
 			}]));
 
-			const stonetop = getStonetopSteadingActor();
-			const key = standingKey(actor);
-			const standing = stonetop && key ? this.#standingContext(stonetop, key) : null;
 			const sheetsBySlug = settlementsBySlug();
 
 			Object.assign(context, {
@@ -152,9 +182,11 @@ export function createStonetopSettlementSheetClass(Base) {
 				canWrite,
 				isGM: !!game.user?.isGM,
 				hidden: this.#isHidden(),
-				sizes: STEADING_SIZES.map(id => ({ id, label: localize(`${KEY}.size.${id}`), selected: id === system.size })),
-				sizeLabel: localize(`${KEY}.size.${system.size}`),
-				sizeRule: localize(`${KEY}.sizeRule.${system.size}`),
+				// `option` is the radio's word, lower case as Stonetop's Size radios print it ("hamlet").
+				sizes: STEADING_SIZES.map(id => {
+					const label = localize(`${KEY}.size.${id}`);
+					return { id, label, option: label.toLocaleLowerCase(), selected: id === system.size };
+				}),
 				statsByKey,
 				resources:      system.resources ?? [],
 				fortifications: system.fortifications ?? [],
@@ -165,10 +197,14 @@ export function createStonetopSettlementSheetClass(Base) {
 				}),
 				groups:   system.groups ?? [],
 				leaders:  system.leaders ?? [],
-				standing,
-				stonetopName: stonetop?.name ?? "Stonetop",
+				// Each Residents row as Stonetop's table draws it, read live off its NPC. `rowId` is the
+				// row's own id, which edits and removals address it by; `id` is the NPC's. Resolved by
+				// uuid alone: a Stonetop row's `id` is the NPC's, and this row's is not.
+				residents: await Promise.all((system.residents ?? []).map(async row =>
+					({ ...await resolvePersonRow(residentPointer(row)), rowId: row.id }))),
+				occupationSuggestions: OCCUPATIONS,
+				traitSuggestions: TRAITS,
 				canGazetteer: !!system.journalId,
-				sourcePage: system.sourcePage ?? "",
 				blurb: rosterSettlement(system.sourceSlug)?.blurb ?? "",
 				moves: SETTLEMENT_MOVES.map(slug => this.#moveContext(slug, system)),
 				enrichedNotes: await foundry.applications.ux.TextEditor.implementation.enrichHTML(system.notes ?? "", {
@@ -178,43 +214,12 @@ export function createStonetopSettlementSheetClass(Base) {
 			return context;
 		}
 
-		/**
-		 * @inheritDoc: watch Stonetop. The standing shown here is stored there, so a heart moved on
-		 * Stonetop's own Other Settlements table must redraw this sheet too; core only redraws a sheet
-		 * for its OWN document's updates. Hooked on the first render, unhooked in close.
-		 */
+		/** @inheritDoc */
 		async _render(force, options) {
 			await super._render(force, options);
 			injectHeaderToggle(this, "settlement");
 			stripHeaderChrome(this);
 			this.element[0]?.classList.toggle("stonetop-edit-mode", this._editMode);
-			if (this._stonetopStandingHook === null && this.rendered) {
-				this._stonetopStandingHook = Hooks.on("updateActor", (doc, changed) => {
-					if (!isSteadingActor(doc)) return;
-					// Only this place's own row (written, or deleted as `-=key`), not every heart Stonetop moves.
-					const key = standingKey(this.actor);
-					const rels = changed?.system?.relationships;
-					if (key && rels && (key in rels || `-=${key}` in rels)) this.render(false);
-				});
-			}
-		}
-
-		/** @inheritDoc */
-		async close(options) {
-			if (this._stonetopStandingHook !== null) Hooks.off("updateActor", this._stonetopStandingHook);
-			this._stonetopStandingHook = null;
-			return super.close(options);
-		}
-
-		/** Stonetop's hearts for this place, on Stonetop's own row. */
-		#standingContext(stonetop, key) {
-			const { hearts, notes } = readRelationship(stonetop.system?.relationships?.[key]);
-			return {
-				notes,
-				canRate: !!stonetop.isOwner,
-				feeling: relationSummary(hearts, stonetop.name, this.actor.name),
-				slots: heartSlots(hearts),
-			};
 		}
 
 		/**
@@ -250,8 +255,32 @@ export function createStonetopSettlementSheetClass(Base) {
 			const root = html[0];
 			if (!root) return;
 
-			// A reader may still roll, read and follow links (see the head of this file).
-			if (!this.isEditable) for (const el of root.querySelectorAll("[data-reader-ok]")) el.disabled = false;
+			// A reader may still roll, read and follow links (see the head of this file), and filter the
+			// Residents: the search box is the shared partial, so it is named here rather than marked.
+			if (!this.isEditable) {
+				for (const el of root.querySelectorAll("[data-reader-ok], .stonetop-tab-search-toggle, .stonetop-tab-search-input")) el.disabled = false;
+			}
+
+			// The Residents table, wired as Stonetop's is (StonetopSteadingSheet#activateListeners): a
+			// filter whose term lives on the sheet so it outlasts the re-render every write makes,
+			// rows kept A-Z by name, and faces that preview on hover and open on a click.
+			wireTabSearch(root.querySelector(".steading-residents-section--residents"), {
+				itemSel: ".steading-residents-row",
+				textFor: row => [...row.querySelectorAll(".steading-resident-input, .steading-person-text")]
+					.map(el => el.value ?? el.textContent).join(" "),
+				memory: (this._tabSearchTerms ??= {}), key: "residents",
+			});
+			for (const table of root.querySelectorAll(".steading-residents-table[data-resize-key]")) {
+				makeColumnsResizable(table, table.dataset.resizeKey);
+				makeColumnsSortable(table, table.dataset.resizeKey);
+			}
+			wireAvatarPreview(root, ".steading-member-avatar-img");
+			root.addEventListener("click", event => {
+				const box = event.target.closest?.(".steading-member-avatar");
+				if (!box) return;
+				event.stopPropagation();
+				this.#openResidentPortrait(box);
+			}, true);
 
 			root.addEventListener("click", event => this.#dispatch(event, "[data-action]"));
 			// A move's NAME rolls it, as on Stonetop's Moves tab. It is a <strong role="button">, not a
@@ -286,6 +315,8 @@ export function createStonetopSettlementSheetClass(Base) {
 
 		/** @inheritDoc: list rows are written here, by id; everything else is core's submit. */
 		async _onChangeInput(event) {
+			const cell = event.target?.closest?.("[data-resident-field]");
+			if (cell) return this.#onResidentFieldChange(cell);
 			const input = event.target?.closest?.("[data-row-field]");
 			if (!input) return super._onChangeInput(event);
 			const row = input.closest("[data-row-id]");
@@ -320,11 +351,19 @@ export function createStonetopSettlementSheetClass(Base) {
 			return next;
 		}
 
-		/** @inheritDoc: an NPC or character dropped on the People tab joins its leaders. */
+		/**
+		 * @inheritDoc: an NPC dropped on the People tab becomes a resident, as on Stonetop's (open to
+		 * anyone who may write the sheet, wrench or no). An NPC or character dropped on the Overview's
+		 * Notable people card joins them, with the wrench on.
+		 */
 		async _onDropActor(event, data) {
-			if (!this.isEditable || !this._editMode) return false;
+			if (!this.isEditable) return false;
+			const onPeopleTab = !!event.target?.closest?.(".tab.people");
+			const onLeaders = !!event.target?.closest?.("[data-list='leaders']");
+			if (!onPeopleTab && !(onLeaders && this._editMode)) return false;
 			const actor = await getDocumentClass("Actor").fromDropData(data);
 			if (!actor || actor.id === this.actor.id) return false;
+			if (onPeopleTab) return this.#addResident(actor);
 			if (!["npc", "character"].includes(actor.type)) return false;
 			const onto = event.target?.closest?.("[data-list='leaders'] [data-row-id]")?.dataset.rowId;
 			await this.#editList("leaders", rows => {
@@ -341,12 +380,161 @@ export function createStonetopSettlementSheetClass(Base) {
 			return actor;
 		}
 
+		// ── Residents ───────────────────────────────────────────────────────────
+
+		/**
+		 * File an NPC on the Residents table, unless it is there already. A blank Home is set to this
+		 * place, as Stonetop seeds "Stonetop" on its own residents; a Home already written is theirs.
+		 */
+		async #addResident(actor, { quiet = false } = {}) {
+			if (actor?.type !== "npc") return false;
+			if ((this.actor.system.residents ?? []).some(r => r.uuid === actor.uuid)) {
+				ui.notifications?.info?.(format(`${KEY}.alreadyResident`, { name: actor.name }));
+				return false;
+			}
+			await this.#editList("residents", rows => {
+				if (rows.some(r => r.uuid === actor.uuid)) return false;
+				rows.push(settlementRow("residents", { uuid: actor.uuid, name: actor.name }));
+			});
+			if (!String(actor.system?.home ?? "").trim() && actor.isOwner) {
+				await actor.update({ "system.home": this.actor.name }).catch(err =>
+					console.warn("Stonetop | Could not set the resident's Home for", actor.name, err));
+			}
+			if (!quiet) ui.notifications?.info?.(format(`${KEY}.linkedResident`, { name: actor.name }));
+			return actor;
+		}
+
+		/**
+		 * A Residents cell, written to its NPC: the NPC is the row's source of truth, as on Stonetop's
+		 * table. A rename also refreshes the name the row keeps for a deleted NPC's row. Notes are not
+		 * a cell; they open in the pop-up editor (_onEditResidentNotes).
+		 */
+		async #onResidentFieldChange(cell) {
+			if (!this.isEditable) return;
+			const field = cell.dataset.residentField;
+			const path = personFieldPath("residents", field);
+			const rowId = cell.closest("[data-row-id]")?.dataset.rowId;
+			const row = (this.actor.system.residents ?? []).find(r => r.id === rowId);
+			const npc = row && personRowActor(residentPointer(row));
+			if (!path || field === "notes" || !npc) return;
+			await npc.update({ [path]: cell.value ?? "" });
+			if (field === "name") {
+				await this.#editList("residents", rows => {
+					const target = rows.find(r => r.id === rowId);
+					if (!target) return false;
+					target.name = cell.value ?? "";
+				});
+			}
+		}
+
+		/** A face: enlarged in core's image window, as Stonetop's roster opens one when read. */
+		#openResidentPortrait(box) {
+			removeAvatarPreview();
+			const src = box.querySelector(".steading-member-avatar-img")?.getAttribute("src");
+			if (!src) return;
+			imagePopout({ src: displayPortraitSrc(src), title: box.dataset.name ?? "" })?.render(true);
+		}
+
 		// ── Actions, called through ACTIONS (`this` is the sheet) ──────────────────
 
-		_onAddRow(_event, target) {
+		/**
+		 * Stonetop's Add Resident worksheet, with this place's name pool where the book prints one.
+		 * The NPC is made at once and filed in this place's own Residents folder, OBSERVER to the
+		 * table like Stonetop's residents, since this sheet shows them to everyone who can read it.
+		 */
+		async _onAddResident() {
+			if (!this.isEditable) return;
+			const data = await new AddSteadingMemberDialog("resident", { home: this.actor.name }).promise();
+			if (!data) return;
+			const folder = await ensureNamedActorFolder({
+				name: format(`${KEY}.residentsFolder`, { name: this.actor.name }),
+				color: RESIDENTS_FOLDER_COLOR,
+			});
+			const npc = await createPersonNpc(null, { ...data, home: this.actor.name }, { folder: folder?.id ?? null, shared: true });
+			if (npc) await this.#addResident(npc, { quiet: true });
+		}
+
+		_onEditResidentNotes(_event, target) {
+			return withLinkedActor(target, openNpcNotesDialog, ACTOR_LINK_MISSING.npc);
+		}
+
+		/** A list's Add button: the row window, empty; a row is added only if it is given a name. */
+		async _onAddRow(_event, target) {
 			const list = target.dataset.list;
-			if (!isSettlementList(list) || !this.isEditable) return;
-			return this.#editList(list, rows => { rows.push(settlementRow(list)); });
+			if (!ROW_FIELDS[list] || !this.isEditable) return;
+			const values = await this.#askRow(list, settlementRow(list), target.textContent.trim());
+			if (!values) return;
+			return this.#editList(list, rows => { rows.push(settlementRow(list, values)); });
+		}
+
+		/** A row's text, with the wrench on: the row window, filled in. Emptying its name removes nothing. */
+		async _onEditRow(_event, target) {
+			const list = target.closest("[data-list]")?.dataset.list;
+			const id = target.closest("[data-row-id]")?.dataset.rowId;
+			const row = id && (this.actor.system[list] ?? []).find(r => r.id === id);
+			if (!ROW_FIELDS[list] || !row || !this.isEditable) return;
+			const name = row[ROW_FIELDS[list][0][0]] || localize(`${KEY}.editRowTitle`);
+			const values = await this.#askRow(list, row, name);
+			if (!values) return;
+			return this.#editList(list, rows => {
+				const at = rows.find(r => r.id === id);
+				if (!at) return false;
+				Object.assign(at, values);
+			});
+		}
+
+		/**
+		 * The row window: one labelled field per column (ROW_FIELDS), Stonetop's Trade & Barter
+		 * window's field look. Resolves to the columns' values, or null when dismissed or nameless.
+		 */
+		#askRow(list, row, title) {
+			const fields = ROW_FIELDS[list];
+			const body = fields.map(([column, label]) => {
+				const text = escHtml(localize(`${KEY}.${label}`));
+				if (typeof SETTLEMENT_LISTS[list][column] === "boolean") {
+					return `<label class="stonetop-homestead-field stonetop-homestead-field--check">
+						<input type="checkbox" class="stonetop-check" name="${column}"${row[column] ? " checked" : ""}>
+						<span>${text}</span>
+					</label>`;
+				}
+				return `<label class="stonetop-homestead-field">
+					<span>${text}</span>
+					<input type="text" name="${column}" value="${escHtml(row[column] ?? "")}">
+				</label>`;
+			}).join("");
+			return ContentPickerDialog.ask({
+				title: `${this.actor.name}: ${title}`,
+				width: 420,
+				body: `<div class="stonetop-homestead-fields">${body}</div>`,
+				buttonLabel: localize(`${KEY}.saveRow`),
+				onShow: form => form.querySelector("input[type=text]")?.focus(),
+				read: form => {
+					const values = Object.fromEntries(fields.map(([column]) => {
+						const input = form.elements.namedItem(column);
+						return [column, input?.type === "checkbox" ? !!input.checked : String(input?.value ?? "").trim()];
+					}));
+					return values[fields[0][0]] ? values : null;
+				},
+			});
+		}
+
+		/** Who runs it, with the wrench on: its text in a window, as the rows are. */
+		async _onEditGovernment() {
+			if (!this.isEditable) return;
+			const label = localize(`${KEY}.government`);
+			const government = await ContentPickerDialog.ask({
+				title: `${this.actor.name}: ${label}`,
+				width: 460,
+				body: `<div class="stonetop-homestead-fields"><label class="stonetop-homestead-field">
+					<span>${escHtml(label)}</span>
+					<textarea name="government" rows="4" placeholder="${escHtml(localize(`${KEY}.governmentPlaceholder`))}">${escHtml(this.actor.system.government ?? "")}</textarea>
+				</label></div>`,
+				buttonLabel: localize(`${KEY}.saveRow`),
+				onShow: form => form.querySelector("textarea")?.focus(),
+				read: form => String(form.elements.namedItem("government")?.value ?? "").trim(),
+			});
+			if (government === null || government === undefined) return;
+			return this.actor.update({ "system.government": government });
 		}
 
 		_onDeleteRow(_event, target) {
@@ -443,15 +631,6 @@ export function createStonetopSettlementSheetClass(Base) {
 				update[key] = value;
 			}
 			return this.actor.update(update);
-		}
-
-		/** Stonetop's hearts for this place, written on Stonetop. */
-		async _onSetStanding(_event, target) {
-			const stonetop = getStonetopSteadingActor();
-			const position = Number(target.dataset.position);
-			const key = standingKey(this.actor);
-			if (!stonetop?.isOwner || !position || !key) return;
-			await setRelationshipHearts(stonetop, key, position);
 		}
 	};
 }

@@ -21,6 +21,10 @@ export const SETTLEMENT_LISTS = Object.freeze({
 	// Who runs things, with their Instinct when the book gives one. `uuid` links an NPC actor once
 	// the GM has made or dropped one; the row keeps its own name either way.
 	leaders:        Object.freeze({ name: "", role: "", instinct: "", uuid: "" }),
+	// The People tab's Residents table, Stonetop's own Residents component: each row points at an
+	// NPC actor, whose occupation, traits, relations and notes the table reads and writes live
+	// (steading-people.js#resolvePersonRow). The row caches the name for a deleted actor's row.
+	residents:      Object.freeze({ uuid: "", name: "" }),
 });
 
 /** Is `list` one of the settlement's lists? */

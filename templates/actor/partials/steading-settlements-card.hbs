@@ -33,11 +33,4 @@
 	{{else}}
 	<p class="stonetop-rel-empty">{{localize "stonetop.steading.settlementsAllHidden"}}</p>
 	{{/if}}
-	{{!-- A settlement SHEET (Marshedge's stats, a Hillfolk band, a homebrew city) is GM prep; once
-	      one exists, its row's name above opens it. --}}
-	{{#if stonetop.isGM}}
-	<button type="button" class="steading-settlement-new">
-		<i class="fas fa-city"></i> {{localize "stonetop.steading.settlementNew"}}
-	</button>
-	{{/if}}
 </div>

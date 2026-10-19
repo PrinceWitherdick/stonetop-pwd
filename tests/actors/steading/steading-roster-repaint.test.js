@@ -115,3 +115,26 @@ describe("repaintOpenSteadingRosters", () => {
 		expect(open.render).toHaveBeenCalledWith(false);
 	});
 });
+
+// Another settlement's Residents table reads its NPCs live too (StonetopSettlementSheet), so an
+// open settlement sheet listing the NPC repaints. Its rows match by uuid alone: a settlement row's
+// `id` is the row's own, and an NPC whose id happened to equal it is not that resident.
+describe("repaintOpenSteadingRosters on a settlement", () => {
+	const settlement = (residents, render = vi.fn()) => ({
+		id: "set1", type: "settlement", apps: { app1: { render } }, system: { residents }, render,
+	});
+
+	it("repaints an open settlement sheet listing the NPC", () => {
+		const marshedge = settlement([{ id: "row1", uuid: "Actor.npc1", name: "Brennan" }]);
+		steadings.push(marshedge);
+		repaintOpenSteadingRosters({ type: "npc", id: "npc1", uuid: "Actor.npc1", name: "Brennan" });
+		expect(marshedge.render).toHaveBeenCalledWith(false);
+	});
+
+	it("leaves it alone for an NPC it does not list, even one whose id is a row's", () => {
+		const marshedge = settlement([{ id: "npc2", uuid: "Actor.npc1", name: "Brennan" }]);
+		steadings.push(marshedge);
+		repaintOpenSteadingRosters({ type: "npc", id: "npc2", uuid: "Actor.npc2", name: "Ailen" });
+		expect(marshedge.render).not.toHaveBeenCalled();
+	});
+});

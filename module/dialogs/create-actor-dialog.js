@@ -296,9 +296,6 @@ async function _createGmToolkit(folder, name) {
  * create it. GM only: preCreateActor refuses a player's too, but saying so here is kinder than a
  * veto after the questions.
  *
- * Exported for Stonetop's Other Settlements card, whose "New settlement sheet" button runs the
- * same chooser without the sidebar.
- *
  * @param {object} [options]
  * @param {string|null} [options.folder]
  * @param {string} [options.name]  A name supplied by the caller; the naming step opens on it.

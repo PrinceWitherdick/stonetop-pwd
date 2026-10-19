@@ -1,119 +1,97 @@
-{{!-- People: who runs the place and who lives there, from each place's People section in Book II, on
-      Stonetop's card-and-spiral-list surfaces. The groups carry the book's headcounts ("~40"), which
-      is what a GM reaches for when the PCs Muster here. A leader row is the book's name, role and
-      Instinct; dropping an NPC onto the tab adds them, and dropping one onto a row links that row
-      to them.
+{{!-- People: the place's Residents, as Stonetop's own People tab draws its Residents of Stonetop
+      (templates/actor/partials/steading-tab-neighbors.hbs): the same card rows, the same classes,
+      so it keeps A-Z by name, filters and previews faces the same way. One table here, not Stonetop's
+      three: a settlement has no Player Characters roster and no Neighbors of its own.
 
-      An editor gets inputs; a reader gets each row as text, the way Stonetop's lists read. --}}
+      Each row is an NPC actor (`system.residents` holds {id, uuid, name} pointers; see
+      StonetopSettlementSheet#getData), and its cells read and write that NPC live. Who runs the
+      place, its notable people and its groups are on the Overview.
+
+      The cells open with the window header's wrench (`editable`); without it the section wears
+      `stonetop-readonly` and the row draws its fields as plain text, leaving out an empty one. Adding a resident and
+      dropping an NPC onto the tab stay open to anyone who may write the sheet, as Stonetop's do.
+      Row inputs carry `data-resident-field` and NO name, so core's form submit never sees them. --}}
 <div class="tab people stonetop-settlement-tab" data-group="primary" data-tab="people">
-	<section class="sheet-tab">
+	<section class="sheet-tab steading-neighbors-tab">
+		<datalist id="settlement-occupation-suggestions">
+			{{#each occupationSuggestions}}<option value="{{this}}"></option>{{/each}}
+		</datalist>
+		<datalist id="settlement-trait-suggestions">
+			{{#each traitSuggestions}}<option value="{{this}}"></option>{{/each}}
+		</datalist>
 
-	<div class="steading-card">
-		<h3 class="steading-list-heading">{{localize "stonetop.settlement.government"}}</h3>
-		{{#if editable}}
-		<textarea class="stonetop-settlement-government" name="system.government" rows="2"
-		          placeholder="{{localize "stonetop.settlement.governmentPlaceholder"}}" aria-label="{{localize "stonetop.settlement.government"}}">{{system.government}}</textarea>
-		{{else}}
-		{{#if system.government}}<p class="stonetop-settlement-government-text">{{system.government}}</p>{{else}}<p class="stonetop-settlement-empty">{{localize "stonetop.settlement.noGovernment"}}</p>{{/if}}
-		{{/if}}
-	</div>
-
-	<div class="steading-card" data-list="leaders">
-		<h3 class="steading-list-heading">{{localize "stonetop.settlement.leaders"}}
-			{{#if editable}}<span class="steading-list-heading-note">{{localize "stonetop.settlement.dropHint"}}</span>{{/if}}
-		</h3>
-		{{#if leaders.length}}
-		<ul class="steading-list stonetop-settlement-rows stonetop-settlement-rows--people">
-			{{#each leaders}}
-			<li class="steading-list-item stonetop-settlement-row" data-row-id="{{id}}">
-				<span class="steading-list-bullet" aria-hidden="true"></span>
-				{{#if ../editable}}
-				<span class="stonetop-settlement-row-fields">
-					<input type="text" class="stonetop-settlement-row-name" data-row-field="name" value="{{name}}"
-					       placeholder="{{localize "stonetop.settlement.personName"}}" aria-label="{{localize "stonetop.settlement.personName"}}">
-					<input type="text" class="stonetop-settlement-row-detail" data-row-field="role" value="{{role}}"
-					       placeholder="{{localize "stonetop.settlement.personRole"}}" aria-label="{{localize "stonetop.settlement.personRole"}}">
-					<input type="text" class="stonetop-settlement-row-detail stonetop-settlement-instinct" data-row-field="instinct" value="{{instinct}}"
-					       placeholder="{{localize "stonetop.settlement.personInstinct"}}" aria-label="{{localize "stonetop.settlement.personInstinct"}}">
-				</span>
-				{{else}}
-				<span class="steading-list-name">
-					<span class="stonetop-settlement-row-title">{{name}}</span>{{#if role}}, <span class="stonetop-settlement-row-aside">{{role}}</span>{{/if}}
-					{{#if instinct}}<span class="stonetop-settlement-instinct-text"><strong>{{localize "stonetop.settlement.personInstinct"}}:</strong> {{instinct}}</span>{{/if}}
-				</span>
-				{{/if}}
-				<span class="stonetop-settlement-row-tools">
-					{{#if uuid}}
-					<button type="button" class="stonetop-settlement-quiet" data-action="openActor" data-actor-uuid="{{uuid}}" data-reader-ok
-					        data-tooltip="{{localize "stonetop.settlement.openPerson" name=name}}" aria-label="{{localize "stonetop.settlement.openPerson" name=name}}">
-						<i class="fa-solid fa-id-card" inert></i>
-					</button>
-					{{#if ../editable}}
-					<button type="button" class="stonetop-settlement-quiet" data-action="unlinkLeader"
-					        data-tooltip="{{localize "stonetop.settlement.unlink"}}" aria-label="{{localize "stonetop.settlement.unlink"}}">
-						<i class="fa-solid fa-link-slash" inert></i>
-					</button>
-					{{/if}}
-					{{/if}}
-					{{#if ../editable}}
-					<button type="button" class="steading-list-delete" data-action="deleteRow"
-					        data-tooltip="{{localize "stonetop.settlement.remove"}}" aria-label="{{localize "stonetop.settlement.remove"}}">
-						<i class="fa-solid fa-xmark" inert></i>
-					</button>
-					{{/if}}
-				</span>
-			</li>
-			{{/each}}
-		</ul>
-		{{else}}
-		<p class="stonetop-settlement-empty">{{localize "stonetop.settlement.noLeaders"}}</p>
-		{{/if}}
-		{{#if editable}}
-		<button type="button" class="steading-list-add" data-action="addRow" data-list="leaders">
-			<i class="fa-solid fa-plus" inert></i> {{localize "stonetop.settlement.addPerson"}}
-		</button>
-		{{/if}}
-	</div>
-
-	<div class="steading-card" data-list="groups">
-		<h3 class="steading-list-heading">{{localize "stonetop.settlement.groups"}}</h3>
-		{{#if groups.length}}
-		<ul class="steading-list stonetop-settlement-rows">
-			{{#each groups}}
-			<li class="steading-list-item stonetop-settlement-row" data-row-id="{{id}}">
-				<span class="steading-list-bullet" aria-hidden="true"></span>
-				{{#if ../editable}}
-				<span class="stonetop-settlement-row-fields">
-					<input type="text" class="stonetop-settlement-row-name" data-row-field="name" value="{{name}}"
-					       placeholder="{{localize "stonetop.settlement.groupName"}}" aria-label="{{localize "stonetop.settlement.groupName"}}">
-					<input type="text" class="stonetop-settlement-row-count" data-row-field="count" value="{{count}}"
-					       placeholder="{{localize "stonetop.settlement.groupCount"}}" aria-label="{{localize "stonetop.settlement.groupCount"}}">
-					<input type="text" class="stonetop-settlement-row-detail" data-row-field="notes" value="{{notes}}"
-					       placeholder="{{localize "stonetop.settlement.groupNotes"}}" aria-label="{{localize "stonetop.settlement.groupNotes"}}">
-				</span>
-				<span class="stonetop-settlement-row-tools">
-					<button type="button" class="steading-list-delete" data-action="deleteRow"
-					        data-tooltip="{{localize "stonetop.settlement.remove"}}" aria-label="{{localize "stonetop.settlement.remove"}}">
-						<i class="fa-solid fa-xmark" inert></i>
-					</button>
-				</span>
-				{{else}}
-				<span class="steading-list-name">
-					<span class="stonetop-settlement-row-title">{{name}}</span>{{#if count}} <span class="stonetop-settlement-row-count-text">({{count}})</span>{{/if}}{{#if notes}} <span class="stonetop-settlement-row-aside">{{notes}}</span>{{/if}}
-				</span>
-				{{/if}}
-			</li>
-			{{/each}}
-		</ul>
-		{{else}}
-		<p class="stonetop-settlement-empty">{{localize "stonetop.settlement.noGroups"}}</p>
-		{{/if}}
-		{{#if editable}}
-		<button type="button" class="steading-list-add" data-action="addRow" data-list="groups">
-			<i class="fa-solid fa-plus" inert></i> {{localize "stonetop.settlement.addGroup"}}
-		</button>
-		{{/if}}
-	</div>
-
+		<div class="steading-residents-section steading-residents-section--residents{{#unless editable}} stonetop-readonly{{/unless}}" data-list="residents">
+			<h3 class="steading-residents-heading">{{localize "stonetop.settlement.residents"}} {{> "stonetop.tab-search-control" title=(localize "stonetop.settlement.residentsSearch") placeholder=(localize "stonetop.settlement.residentsFilter")}}</h3>
+			{{#if residents.length}}
+			<div class="steading-residents-table steading-people-cards" data-resize-key="settlement-residents" data-sort="name">
+				<ul class="steading-residents-list">
+					{{#each residents}}
+					<li class="steading-residents-row steading-person" data-row-id="{{rowId}}" data-sort-name="{{name}}">
+						<div class="steading-person-face">
+							{{!-- As on Stonetop's list: the drag attributes on the WRAPPER, the image
+							      undraggable, so Gecko hands over the Actor uuid and not a picture. --}}
+							<span class="steading-member-avatar stonetop-portrait-box" data-name="{{name}}"
+							     {{#if uuid}}draggable="true" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"{{/if}}><img class="steading-member-avatar-img" src="{{profileImg}}" alt="" draggable="false" data-name="{{name}}"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}></span>
+						</div>
+						<div class="steading-residents-col-name steading-person-who{{#if unresolved}} steading-member-unresolved{{/if}}">
+							{{#if @root.editable}}
+							<input type="text" class="steading-resident-input steading-person-name-input" data-resident-field="name"
+							       value="{{name}}" placeholder="{{localize "stonetop.settlement.col.name"}}" aria-label="{{localize "stonetop.settlement.col.name"}}">
+							<input type="text" class="steading-resident-input" data-resident-field="occupation" list="settlement-occupation-suggestions"
+							       value="{{occupation}}" placeholder="{{localize "stonetop.settlement.col.occupation"}}" aria-label="{{localize "stonetop.settlement.col.occupation"}}">
+							<input type="text" class="steading-resident-input" data-resident-field="traits" list="settlement-trait-suggestions"
+							       value="{{traits}}" placeholder="{{localize "stonetop.settlement.col.traits"}}" aria-label="{{localize "stonetop.settlement.col.traits"}}">
+							{{else}}
+							<div class="steading-person-name-line">
+								{{#if unresolved}}
+								<span class="steading-member-name-text steading-person-text">{{name}}</span>
+								{{else}}
+								{{!-- Labelled rather than tooltipped, as on Stonetop's list: no href to
+								      announce, and a hover bubble would cover the rows under it. --}}
+								<a data-action="openActor" class="steading-member-open steading-member-name-text steading-person-text{{#if statusInactive}} is-inactive{{/if}}" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
+								   draggable="true" aria-label="{{localize "stonetop.settlement.openPerson" name=name}}">{{name}}</a>
+								{{#if status}}<span class="stonetop-npc-status-badge stonetop-npc-status-badge--sm" data-status="{{status}}" data-tooltip="{{statusLabel}}"><span class="stonetop-npc-status-badge-text">{{statusLabel}}</span></span>{{/if}}
+								{{/if}}
+							</div>
+							{{#if occupation}}<div class="steading-person-role steading-person-text">{{occupation}}</div>{{/if}}
+							{{#if traits}}<div class="steading-person-traits steading-person-text">{{traits}}</div>{{/if}}
+							{{/if}}
+						</div>
+						<div class="steading-person-details">
+							{{#if @root.editable}}
+							<label class="steading-person-field"><span class="steading-person-label">{{localize "stonetop.settlement.col.relations"}}</span>
+								<input type="text" class="steading-resident-input" data-resident-field="relations"
+								       value="{{relations}}" placeholder="{{localize "stonetop.settlement.col.relations"}}"></label>
+							{{else if relations}}
+							<div class="steading-person-field"><span class="steading-person-label">{{localize "stonetop.settlement.col.relations"}}</span><span class="steading-person-value steading-person-text">{{relations}}</span></div>
+							{{/if}}
+							{{!-- The rich notes live on the NPC: a rendered preview here, clamped, and with
+							      the wrench on, a pencil that opens the shared pop-up editor. --}}
+							{{#if (or @root.editable notes)}}
+							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">{{localize "stonetop.settlement.col.notes"}}</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{notesHtml}}}</div>{{#if @root.editable}}{{#unless unresolved}}<button type="button" class="steading-member-notes-edit" data-action="editResidentNotes" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
+							        data-tooltip="{{localize "stonetop.settlement.editNotes"}}" aria-label="{{localize "stonetop.settlement.editNotes"}}" tabindex="-1"><i class="fas fa-pen" inert></i></button>{{/unless}}{{/if}}</div>
+							{{/if}}
+						</div>
+						<div class="steading-residents-col-actions">
+							{{#if @root.editable}}
+							<button type="button" class="steading-list-delete" data-action="deleteRow"
+							        data-tooltip="{{localize "stonetop.settlement.remove"}}" aria-label="{{localize "stonetop.settlement.remove"}}" tabindex="-1">
+								<i class="fas fa-times" inert></i>
+							</button>
+							{{/if}}
+						</div>
+					</li>
+					{{/each}}
+				</ul>
+			</div>
+			{{else}}
+			<p class="stonetop-settlement-empty">{{localize "stonetop.settlement.noResidents"}}</p>
+			{{/if}}
+			{{#if canWrite}}
+			<button type="button" class="steading-list-add" data-action="addResident">
+				<i class="fas fa-plus" inert></i> {{localize "stonetop.settlement.addResident"}}
+			</button>
+			{{/if}}
+		</div>
 	</section>
 </div>

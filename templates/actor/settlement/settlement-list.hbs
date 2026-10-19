@@ -3,15 +3,14 @@
       Defenses list. Each row is the book's name and its parenthetical, and Resources carry Book I's
       "lacking" tick.
 
-      Params: list (the system field), heading, rows, editable, lacking (show the tick),
-      namePlaceholder, detailPlaceholder, empty (what an empty list says).
+      Params: list (the system field), heading, rows, editable, addLabel, empty (what an empty list
+      says).
 
-      An editor gets inputs; a reader gets the row as text, the way Stonetop's lists read.
-
-      Row inputs carry `data-row-field` and NO name: the sheet writes the list whole, by row id
-      (StonetopSettlementSheet#_onChangeInput), because a form submit would rebuild each row from
-      its named inputs alone. Inside the #each, the partial's own params are read through `../`,
-      since the block's context is the row. --}}
+      Every row is TEXT, in edit mode too, as Stonetop's lists are: plain ink, "Farming (wheat,
+      hemp)", with the red cross to remove it once the header's wrench is on. With the wrench on, the
+      row's text opens it in a small window to change it (StonetopSettlementSheet#_onEditRow), and
+      the Add button opens the same window empty. Inside the #each, the partial's own params are read
+      through `../`, since the block's context is the row. --}}
 <div class="steading-card" data-list="{{list}}">
 	<h3 class="steading-list-heading">{{heading}}</h3>
 	{{#if rows.length}}
@@ -19,28 +18,15 @@
 		{{#each rows}}
 		<li class="steading-list-item stonetop-settlement-row{{#if lacking}} stonetop-settlement-row--lacking{{/if}}" data-row-id="{{id}}">
 			<span class="steading-list-bullet" aria-hidden="true"></span>
-			{{#if ../editable}}
-			<span class="stonetop-settlement-row-fields">
-				<input type="text" class="stonetop-settlement-row-name" data-row-field="name" value="{{name}}"
-				       placeholder="{{../namePlaceholder}}" aria-label="{{../namePlaceholder}}">
-				<input type="text" class="stonetop-settlement-row-detail" data-row-field="detail" value="{{detail}}"
-				       placeholder="{{../detailPlaceholder}}" aria-label="{{../detailPlaceholder}}">
-			</span>
-			<span class="stonetop-settlement-row-tools">
-				{{#if ../lacking}}
-				<input type="checkbox" class="stonetop-check stonetop-settlement-lacking" data-row-field="lacking"{{#if lacking}} checked{{/if}}
-				       aria-label="{{localize "stonetop.settlement.lacking"}}" data-tooltip="{{localize "stonetop.settlement.lackingTooltip"}}">
-				{{/if}}
-				<button type="button" class="steading-list-delete" data-action="deleteRow"
-				        data-tooltip="{{localize "stonetop.settlement.remove"}}" aria-label="{{localize "stonetop.settlement.remove"}}">
-					<i class="fa-solid fa-xmark" inert></i>
-				</button>
-			</span>
-			{{else}}
-			<span class="steading-list-name">
-				<span class="stonetop-settlement-row-title">{{name}}</span>{{#if detail}} <span class="stonetop-settlement-row-aside">({{detail}})</span>{{/if}}
+			<span class="steading-list-name"{{#if ../editable}} data-action="editRow" role="button" tabindex="0" data-tooltip="{{localize "stonetop.settlement.editRowTooltip"}}"{{/if}}>
+				<span class="stonetop-settlement-row-title">{{name}}</span>{{#if detail}} ({{detail}}){{/if}}
 				{{#if lacking}}<span class="stonetop-settlement-lacking-tag" data-tooltip="{{localize "stonetop.settlement.lackingTooltip"}}">{{localize "stonetop.settlement.lacking"}}</span>{{/if}}
 			</span>
+			{{#if ../editable}}
+			<button type="button" class="steading-list-delete" data-action="deleteRow"
+			        data-tooltip="{{localize "stonetop.settlement.remove"}}" aria-label="{{localize "stonetop.settlement.remove"}}">
+				<i class="fa-solid fa-xmark" inert></i>
+			</button>
 			{{/if}}
 		</li>
 		{{/each}}

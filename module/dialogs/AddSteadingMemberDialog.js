@@ -71,7 +71,8 @@ export class AddSteadingMemberDialog extends StonetopDialog {
 	 * @param {"resident"|"neighbor"} type  Which worksheet to show (neighbors also pick a Home).
 	 * @param {object} [options]  AppV1 options, plus `titleOverride` and `confirmLabel` for
 	 *   callers that use the worksheet outside the steading's rosters (the sidebar "Create
-	 *   Actor" picker builds an unaffiliated NPC with the neighbor fields).
+	 *   Actor" picker builds an unaffiliated NPC with the neighbor fields). A resident of another
+	 *   settlement passes `home` (its name), which picks the name pool a neighbor from there gets.
 	 */
 	constructor(type, options = {}) {
 		super(options);
@@ -113,7 +114,10 @@ export class AddSteadingMemberDialog extends StonetopDialog {
 
 	/** Names available depend on which "Home" is selected — see the Steading playbook's "Notable neighbors" reference. */
 	_namesForHome(home) {
-		if (this._type !== "neighbor") return STONETOP_NAMES;
+		if (this._type !== "neighbor") {
+			const settlement = this.options?.home;
+			return settlement ? (NEIGHBOR_NAMES_BY_HOME[settlement] ?? NEIGHBOR_NAMES) : STONETOP_NAMES;
+		}
 		return NEIGHBOR_NAMES_BY_HOME[home] ?? NEIGHBOR_NAMES;
 	}
 

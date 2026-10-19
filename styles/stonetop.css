@@ -4946,9 +4946,6 @@ input.stonetop-name-field {
    `pointer-events: none` (inputs, buttons, selects, labels) never reached in the first place. */
 .stonetop-readonly .stonetop-answer-character-questions-btn,
 .stonetop-readonly .steading-list-add,
-/* Other Settlements' "New settlement sheet" (GM only) makes a whole new actor; it edits nothing
-   on this steading, so the section's pencil has nothing to guard. */
-.stonetop-readonly .steading-settlement-new,
 /* NOTHING FROM THE GM-PREP TABS IS ON THIS LIST ANY MORE, and nothing should go back on.
    Seven lines used to live here — the add bar, the card pencil, a site's d20 roll, the collapse
    chevron, the threat-type disclosure and the two doom-track selectors — every one of them
@@ -53143,7 +53140,18 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
    `:is(.steading-sheet, .stonetop-settlement-sheet) .tab.notes.active` and `… .tab.notes .sheet-tab`
    rules, which name this sheet too. What is this sheet's own is the editor's floor (same selector
    weight, later in the file) for a short window. */
-.stonetop-settlement-notes prose-mirror.steading-notes-editor { flex: 1 1 auto; min-height: 12em; }
+.stonetop-settlement-notes prose-mirror.steading-notes-editor { flex: 1 1 auto; min-height: 14em; }
+/* A reader's notes: the editor's box without the editor, at the editor's size, scrolling inside it. */
+.stonetop-settlement-notes-read {
+	flex: 1 1 auto;
+	min-height: 14em;
+	display: flex;
+	flex-direction: column;
+}
+.stonetop-settlement-notes-read > .editor-content {
+	flex: 1 1 auto;
+	overflow-y: auto;
+}
 
 /* -- Buttons ------------------------------------------------------------------------------- */
 /* The banner chips state the slate fill themselves rather than wear `.stonetop-cta`: that class's
