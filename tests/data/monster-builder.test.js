@@ -366,8 +366,9 @@ describe("buildMonsterActorData", () => {
 
 	it("sizes the token to the creature: large 2x2, huge 3x3, anything smaller one square", () => {
 		const side = size => {
-			const { width, height } = buildMonsterActorData({ name: "X", size }).prototypeToken;
+			const { width, height, depth } = buildMonsterActorData({ name: "X", size }).prototypeToken;
 			expect(width).toBe(height);
+			expect(depth).toBe(width);
 			return width;
 		};
 		expect([side("tiny"), side("small"), side(""), side("large"), side("huge")]).toEqual([1, 1, 1, 2, 3]);

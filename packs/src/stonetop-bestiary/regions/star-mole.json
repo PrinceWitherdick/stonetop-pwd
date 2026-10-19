@@ -30,6 +30,9 @@
     "creatureType": "natural-beast"
   },
   "prototypeToken": {
+    "width": 1,
+    "height": 1,
+    "depth": 1,
     "name": "Star-Mole",
     "actorLink": false,
     "disposition": -1,

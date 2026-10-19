@@ -33,7 +33,7 @@ export function monsterTokenSizeUpdate(actor) {
 	const width = Number(token.width ?? 1);
 	const height = Number(token.height ?? 1);
 	if (width !== 1 || height !== 1) return null;
-	return { "prototypeToken.width": want, "prototypeToken.height": want };
+	return { "prototypeToken.width": want, "prototypeToken.height": want, "prototypeToken.depth": want };
 }
 
 /**

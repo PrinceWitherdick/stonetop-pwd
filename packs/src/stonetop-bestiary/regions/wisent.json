@@ -32,6 +32,7 @@
   "prototypeToken": {
     "width": 2,
     "height": 2,
+    "depth": 2,
     "name": "Wisent",
     "actorLink": false,
     "disposition": -1,

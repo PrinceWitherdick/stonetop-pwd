@@ -33,6 +33,7 @@
   "prototypeToken": {
     "width": 2,
     "height": 2,
+    "depth": 2,
     "name": "Pale Hunter",
     "actorLink": false,
     "disposition": -1,

@@ -31,6 +31,9 @@
     "creatureType": "fae"
   },
   "prototypeToken": {
+    "width": 1,
+    "height": 1,
+    "depth": 1,
     "name": "Grimstew",
     "actorLink": false,
     "disposition": -1,
