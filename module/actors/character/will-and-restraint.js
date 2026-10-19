@@ -10,6 +10,7 @@
  *    debility to immediately break free of that restraint." The shared pick-one window
  *    (steading/steading-debilities.js#openDebilityPicker) over the debilities a MOVE may mark
  *    (StonetopCharacter#debilityMarkChoices, Auspicious Birth's circle among them), then marked and said.
+ *    The same window (pickDebilityToMark) a ticked "(mark a debility)" option opens (option-debility.js).
  *
  * Whether the hero is under such magic, or the Heavy restrained, is the table's: nothing is applied unasked.
  */
@@ -54,33 +55,56 @@ export async function ironWill(actor, { ask = askWithButtons, roll = null } = {}
 }
 
 /**
+ * The window a move that has its character mark a debility opens: pick one of the debilities a MOVE may mark
+ * (StonetopCharacter#debilityMarkChoices, Auspicious Birth's circle among them) still unmarked; picked, it is
+ * marked for `moveName` and the table told. Closing the window marks nothing. Whether the window was opened
+ * (the picker is not awaited, as Rites of the Land's is not: a window closed by its corner answers nobody).
+ * Unfettered's, and a ticked "(mark a debility)" option's (option-debility.js: Mighty Thews' toll).
+ *
+ * `strings` is the i18n subtree holding the move's `ask`, `none`, `apply`, `applyFor` ({debility}),
+ * `choices` and `note` ({name}, {debility}). `latch(picked, mark)` wraps the marking, for a caller that
+ * has to record it somewhere first (a chat card's once-only latch); `mark()` answers whether it marked.
+ *
+ * @param {Actor} actor
+ * @param {{moveName: string, strings: string, latch?: Function}} spec
+ * @param {{pick?: Function, note?: Function}} [deps]  `pick` stands in for openDebilityPicker
+ */
+export function pickDebilityToMark(actor, { moveName, strings, latch = null }, { pick = openDebilityPicker, note = postMoveNote } = {}) {
+	const character = actor?.typedActor;
+	if (actor?.type !== "character" || !character) return false;
+	const open = (character.debilityMarkChoices ?? []).filter(d => !d.marked);
+	if (!open.length) {
+		globalThis.ui?.notifications?.info?.(localize(`${strings}.none`));
+		return false;
+	}
+	pick({
+		title: moveName,
+		introHtml: `<p>${escHtml(localize(`${strings}.ask`))}</p>`,
+		marked: open.map(d => ({ id: d.key, label: d.name, detail: d.description ?? "" })),
+		applyLabel: localize(`${strings}.apply`),
+		applyLabelFor: d => format(`${strings}.applyFor`, { debility: d.label }),
+		choicesLabel: localize(`${strings}.choices`),
+		buttons: { cancel: { label: localize(`${KEY}.notNow`) } },
+		onApply: async picked => {
+			const mark = async () => {
+				const marked = await character.markDebility(picked.id, { moveName });
+				if (marked) await note(actor, moveName, format(`${strings}.note`, { name: actor.name, debility: picked.label }));
+				return marked;
+			};
+			await (latch ? latch(picked, mark) : mark());
+		},
+	});
+	return true;
+}
+
+/**
  * Unfettered: open the window to pick a debility to mark; picked, it is marked and the table told they broke
- * free. Closing the window marks nothing. Whether the window was opened (the picker is not awaited, as Rites
- * of the Land's is not: a window closed by its corner answers nobody).
+ * free (pickDebilityToMark).
  *
  * @param {Actor} actor
  * @param {{pick?: Function, note?: Function}} [deps]  `pick` stands in for openDebilityPicker
  */
-export function unfettered(actor, { pick = openDebilityPicker, note = postMoveNote } = {}) {
-	const character = actor?.typedActor;
-	if (actor?.type !== "character" || !character || !ownsLearnedMoveNamed(actor, UNFETTERED)) return false;
-	const open = (character.debilityMarkChoices ?? []).filter(d => !d.marked);
-	if (!open.length) {
-		globalThis.ui?.notifications?.info?.(localize(`${KEY}.unfettered.none`));
-		return false;
-	}
-	pick({
-		title: UNFETTERED,
-		introHtml: `<p>${escHtml(localize(`${KEY}.unfettered.ask`))}</p>`,
-		marked: open.map(d => ({ id: d.key, label: d.name, detail: d.description ?? "" })),
-		applyLabel: localize(`${KEY}.unfettered.apply`),
-		applyLabelFor: d => format(`${KEY}.unfettered.applyFor`, { debility: d.label }),
-		choicesLabel: localize(`${KEY}.unfettered.choices`),
-		buttons: { cancel: { label: localize(`${KEY}.notNow`) } },
-		onApply: async picked => {
-			const marked = await character.markDebility(picked.id, { moveName: UNFETTERED });
-			if (marked) await note(actor, UNFETTERED, format(`${KEY}.unfettered.note`, { name: actor.name, debility: picked.label }));
-		},
-	});
-	return true;
+export function unfettered(actor, deps = {}) {
+	if (actor?.type !== "character" || !ownsLearnedMoveNamed(actor, UNFETTERED)) return false;
+	return pickDebilityToMark(actor, { moveName: UNFETTERED, strings: `${KEY}.unfettered` }, deps);
 }

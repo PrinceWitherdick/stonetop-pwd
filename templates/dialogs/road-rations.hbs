@@ -3,7 +3,7 @@
       button at the foot. Each control carries `data-road-focus` so the keyboard survives that
       redraw (StonetopDialog#_focusKeyAttribute). --}}
 <form class="stonetop road-rations" autocomplete="off">
-	<p class="road-intro">Each person eats 1 use of supplies a day; with a mess kit (fire and water) 1 use feeds up to four, so 2 for five to eight and 3 for nine to twelve. Provisions go first. Count only the days you gloss: a night they <strong>Make Camp</strong> is paid at the fire.</p>
+	<p class="road-intro">Each person eats 1 use of supplies a day; with a mess kit (fire and water) 1 use feeds up to four, so 2 for five to eight and 3 for nine to twelve. Provisions go first. A crew eats from its own supplies before anyone's pack. Count only the days you gloss: a night they <strong>Make Camp</strong> is paid at the fire.</p>
 
 	<div class="road-settings">
 		<label class="road-field">
@@ -32,6 +32,8 @@
 				<td class="road-who">
 					<strong>{{name}}</strong>
 					<span class="road-holds">carries {{holds}} to eat{{#if spend}}: {{spend}}{{/if}}</span>
+					{{!-- The crew's own supplies pay the crew's mouths by themselves (road-rations.js#crewRoadText), so no figure to set. --}}
+					{{#if crewText}}<span class="road-crew">Crew supplies ({{crewHeld}} left): {{crewText}}</span>{{/if}}
 				</td>
 				<td><input type="checkbox" class="road-eats" data-actor-id="{{actorId}}" data-road-focus="eats-{{actorId}}"
 				           aria-label="{{name}} eats"{{#if eats}} checked{{/if}}></td>

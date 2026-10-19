@@ -43,6 +43,8 @@ import { pcDamageDie, rollDamageAt, rollCharacterDamageAt, letFlyAmmoStatuses, c
 import { followerRingInfo, openFollowerOrder } from "./follower-fight.js";
 import { followerCardFor } from "../actors/character/follower-masters.js";
 import { heldReadiness } from "../combat/defend-readiness.js";
+import { readinessHeldBy } from "./follower-readiness.js";
+import { settleFollowerTokenReadinessOnAttack } from "../combat/readiness-loss.js";
 import { spendReadiness, pickOne } from "./defend-spend.js";
 import { HERO_MOVES, lockEyesCandidates, lockEyes, leapInOpen, leapIn } from "./hero-moves.js";
 import { ownsLearnedMoveNamed } from "../actors/character/owns-move.js";
@@ -130,7 +132,8 @@ const tidy = formula => String(formula ?? "").replace(/\s+/g, "");
  *   lookup (whose follower is this?), so it too is asked for by the caller
  * @param {object|null} [p.swarm]  for a group follower, fight/follower-fight.js#followerSwarm — the
  *   same lookup, which is why ringButtonsFor gets both from followerRingInfo at once
- * @param {number} [p.readiness]  a character's held Defend Readiness
+ * @param {number} [p.readiness]  a character's held Defend Readiness, or a follower's (p.469), read off
+ *   their card by ringButtonsFor
  * @param {boolean} [p.canLockEyes]  a foe in the fight they could lock eyes with (Big Damn Hero)
  * @param {boolean} [p.canLeapIn]  Big Damn Hero's leap still there to make in this fight
  * @param {{name: string, label: string, allOut: boolean}[]} [p.ammo]  a character's carried Let Fly
@@ -223,6 +226,15 @@ export function ringButtons(actor, { die = "", order = null, swarm = null, readi
 			const { title, keywords, weapon, rollMode: printedMode } = printedBlow(printed.value, formula);
 			const rollMode = printedMode || "normal";
 			damage.push({ run: "damage", label: title || damageText, formula, keywords, rollMode, weapon, icon: dieIcon(formula) });
+			// A follower ordered to Defend holds Readiness on Defend's terms (p.469), strike back among them:
+			// the same blow, with disadvantage, and one Readiness gone off their card.
+			if (order && readiness > 0 && canStrikeBack) {
+				damage.push({
+					run: "strikeBack", label: localize("stonetop.fight.ring.strikeBack"), formula, rollMode: "dis",
+					keywords, weapon, icon: STRIKE_BACK_ICON,
+					aria: format("stonetop.fight.ring.strikeBackAria", { formula, readiness }),
+				});
+			}
 			// And, for a group, all of them on one foe. BESIDE the plain die, not instead of it: one
 			// crewman's blow is still a blow, and it is what the group takes when the fight is run as
 			// the abstracted exchange. The blow is the same one, so its tags and armor clause ride along.
@@ -236,7 +248,7 @@ export function ringButtons(actor, { die = "", order = null, swarm = null, readi
 		}
 	}
 
-	return { moves, damage, readiness: actor?.type === "character" ? Math.max(0, Math.trunc(Number(readiness) || 0)) : 0 };
+	return { moves, damage, readiness: actor?.type === "character" || order ? Math.max(0, Math.trunc(Number(readiness) || 0)) : 0 };
 }
 
 /** An actor's ring, with the character's damage die, or a follower's character and roster, looked up. */
@@ -247,14 +259,15 @@ export async function ringButtonsFor(actor) {
 	// Both read the character's gear, and neither waits on the other.
 	const [die, ammo] = await Promise.all([isCharacter ? pcDamageDie(actor) : "", letFly ? letFlyAmmoStatuses(actor) : null]);
 	const { order, swarm } = followerRingInfo(actor);
-	const readiness = heldReadiness(actor);
+	// A follower's is kept on their card (fight/follower-readiness.js); only a follower who takes orders holds any.
+	const readiness = isCharacter ? heldReadiness(actor) : (order ? readinessHeldBy(actor) : 0);
 	// Working out their place in the fight takes the whole fight, so it is worked out at most once, and only
 	// for a button that needs it: locking eyes and striking back for someone who could spend on it.
 	let place;
 	const fight = () => (place === undefined ? (place = rollerEngagement(actor)) : place);
 	const bigDamnHero = isCharacter && ownsLearnedMoveNamed(actor, HERO_MOVES.BIG_DAMN_HERO);
 	const canLockEyes = bigDamnHero && readiness > 0 && lockEyesCandidates(actor, fight()).length > 0;
-	const canStrikeBack = isCharacter && readiness > 0 && hasAttacker(actor, { engagementOf: fight });
+	const canStrikeBack = (isCharacter || !!order) && readiness > 0 && hasAttacker(actor, { engagementOf: fight });
 	const canLeapIn = bigDamnHero && leapInOpen(actor, fight());
 	return ringButtons(actor, { die, order, swarm, readiness, canLockEyes, canLeapIn, canStrikeBack, ammo: ammo?.weapons ?? [], ammoOut: !!ammo?.allOut });
 }
@@ -314,7 +327,7 @@ export async function runRingButton(button, actor, { shiftKey = false } = {}) {
 	if (button.run === "leapIn") return leapIn(actor);
 	// Strike back is the damage button's roll, at its disadvantage, and costs a Readiness once it is rolled.
 	const strikeBack = button.run === "strikeBack";
-	if (strikeBack && heldReadiness(actor) < 1) return;
+	if (strikeBack && readinessHeldBy(actor) < 1) return;
 	// A character's own damage is dealt with the weapon in hand (asked as Clash asks), its +N, die, piercing
 	// and tags riding along; a strike back is one defender's blow, so no fight +N.
 	const rolled = actor.type === "character" ? await rollCharacterDamageAt(actor, {
@@ -325,6 +338,9 @@ export async function runRingButton(button, actor, { shiftKey = false } = {}) {
 		shiftKey,
 	}) : await rollFollowerOrFoeDamage(actor, button, { shiftKey });
 	if (strikeBack && rolled) await spendReadiness(actor);
+	// A follower's own blow is them going on the offense: one holding Readiness on their card is asked whether
+	// they keep it, as a character's Damage asks (combat/readiness-loss.js). A strike back spent its own.
+	else if (rolled && actor.type === "npc") await settleFollowerTokenReadinessOnAttack(actor, button.label || localize("stonetop.fight.ring.damage"));
 	return rolled;
 }
 

@@ -40,14 +40,18 @@
         </label>
         {{/each}}
       </div>
+      {{!-- The insert's three blank tag lines (p.144): each one written in spends a pick. --}}
+      {{#each crewData.customTags}}
       <label class="stonetop-onboarding-custom-label">
         <span>Custom tag</span>
         <input type="text" class="crew-setup-tag-custom"
-               value="{{crewData.customTag}}"
+               data-index="{{index}}"
+               value="{{value}}"
                aria-label="Custom tag"
                placeholder="Write your own…"
-               {{#if crewData.customTagDisabled}}disabled{{/if}}>
+               {{#if disabled}}disabled{{/if}}>
       </label>
+      {{/each}}
     </div>
 
     <div class="stonetop-onboarding-insert-section">

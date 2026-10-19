@@ -7,6 +7,7 @@ import {
 	muscleboundWeapon, berserkNow, blowOffers, defenderDisadvantage, dangerousMode, holyLightOffers,
 	ALPHA_FLAG, alphaAgainst, recordAlphaOver, forgetAlphaOver, spendAlphaOver,
 	FOCUS_FIRE_FLAG, FOCUS_FIRE_USED_FLAG, orderFocusFire, focusFireAgainst, spendFocusFire, ownDamageMode,
+	terrorOnTheFieldWords,
 } from "../../module/fight/hero-moves.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection } from "../fakes/fight.js";
@@ -129,6 +130,61 @@ describe("what a blow adds", () => {
 		expect(paybackEarned(bram, rows)).toBe(false);
 	});
 
+	// Heavy re-audit, the user's ruling (2026-10-18): grudges against NAMED foes outlast the fight.
+	it("keeps a Payback grudge against a linked foe when the fight ends, and lets a mook's token go", async () => {
+		const t = mapWith([["crin", fakeActor({ id: "crin", name: "Crinwin", type: "monster" })], ["chief", fakeActor({ id: "chief", name: "Chief", type: "monster" }), true]]);
+		const bram = hero("Bram", [HERO_MOVES.PAYBACK]);
+		globalThis.game = { ...saved.game, combats: collection([]), combat: null, settings: { get: () => true } };
+		globalThis.ui = { combat: {} };
+		globalThis.canvas = { scene: null };
+		await recordHarmedBy(bram, t.crin.actor);
+		await recordHarmedBy(bram, t.chief.actor);
+		expect(bram.getFlag(SYSTEM_ID, HARMED_BY_FLAG)).toEqual([t.crin.uuid, "Actor.chief"]);
+		expect(await clearHarmedBy(bram)).toBe(true);
+		expect(bram.getFlag(SYSTEM_ID, HARMED_BY_FLAG)).toEqual(["Actor.chief"]);
+		expect(paybackEarned(bram, [target(t.chief)])).toBe(true);
+		expect(paybackEarned(bram, [target(t.crin)])).toBe(false);
+		// Only named foes left: nothing to let go, and nothing written.
+		bram.setFlag.mockClear();
+		expect(await clearHarmedBy(bram)).toBe(false);
+		expect(bram.setFlag).not.toHaveBeenCalled();
+	});
+
+	it("reads an ally's grudges off the active Combat when the Fight tab is off", () => {
+		const crin = fakeActor({ id: "crin", name: "Crinwin", type: "monster" });
+		const bram = hero("Bram", [HERO_MOVES.PAYBACK]);
+		const cadi = hero("Cadi", []);
+		const hound = fakeActor({ id: "hound", name: "Hound", type: "npc" });
+		const ulf = hero("Ulf", []);
+		const t = mapWith([["crin", crin]]);
+		const rows = [target(t.crin)];
+		const token = (id, actor) => fakeToken({ id, actor });
+		const scene = fakeScene({ tokens: [] });
+		// Cadi is not in the fight; her hound is. Ulf is a character the GM moved onto the foes' side.
+		const combat = fakeCombat({ scene, flags: {}, combatants: [
+			fakeCombatant({ id: "cBram", token: token("tBram", bram), scene }),
+			fakeCombatant({ id: "cHound", token: token("tHound", hound), scene, side: "heroes" }),
+			fakeCombatant({ id: "cUlf", token: token("tUlf", ulf), scene, side: "foes" }),
+			fakeCombatant({ id: "cCrin", token: t.crin, scene }),
+		] });
+		globalThis.game = { ...saved.game, combats: collection([combat]), combat, settings: { get: (_s, key) => (key === "fightTab" ? false : undefined) } };
+		globalThis.ui = { combat: { viewed: combat } };
+		globalThis.canvas = { scene };
+		const cardFor = actor => (actor === hound ? { character: cadi, ftype: "animal-companion", slug: "" } : null);
+
+		cadi.flags[SYSTEM_ID][HARMED_BY_FLAG] = [t.crin.uuid];
+		expect(paybackEarned(bram, rows, { cardFor })).toBe(true);
+		cadi.flags[SYSTEM_ID][HARMED_BY_FLAG] = [];
+		// A foe-side combatant's grudges are not an ally's.
+		ulf.flags[SYSTEM_ID][HARMED_BY_FLAG] = [t.crin.uuid];
+		expect(paybackEarned(bram, rows, { cardFor })).toBe(false);
+		// Nor is a tokenless roster Combat's (the old Introductions'): nobody there is on a map.
+		cadi.flags[SYSTEM_ID][HARMED_BY_FLAG] = [t.crin.uuid];
+		const roster = fakeCombat({ flags: {}, combatants: [{ ...fakeCombatant({ id: "rCadi" }), actor: cadi }] });
+		globalThis.game.combat = roster;
+		expect(paybackEarned(bram, rows, { cardFor })).toBe(false);
+	});
+
 	it("offers the Ranger's weak spot UNTICKED, and only against something large or huge", () => {
 		const big = fakeActor({ id: "drake", name: "Drake", type: "monster", system: { size: "large" } });
 		const t = mapWith([["drake", big], ["crin", fakeActor({ id: "crin", name: "Crinwin", type: "monster", system: { size: "small" } })]]);
@@ -139,6 +195,26 @@ describe("what a blow adds", () => {
 		// Giant Slayer is "another +2 (+4 total)", not a second line.
 		const giant = hero("Wren", [HERO_MOVES.BIG_GAME, HERO_MOVES.GIANT_SLAYER]);
 		expect(blowOffers(giant, { targets: [target(t.drake)] }).filter(o => o.key === "bigGame")).toEqual([expect.objectContaining({ dice: "4" })]);
+	});
+
+	it("draws the weak spot UNTICKED with no target, and keeps it when a volley also catches something small", () => {
+		const t = mapWith([
+			["drake", fakeActor({ id: "drake", name: "Drake", type: "monster", system: { size: "large" } })],
+			["crin", fakeActor({ id: "crin", name: "Crinwin", type: "monster", system: { size: "small" } })],
+			["imp", fakeActor({ id: "imp", name: "Imp", type: "monster", system: { size: "small" } })],
+		]);
+		const wren = hero("Wren", [HERO_MOVES.BIG_GAME]);
+		// No stat block to read: the quarry may still be huge, so the player says.
+		expect(blowOffers(wren, { targets: [] }).find(o => o.key === "bigGame")).toMatchObject({ dice: "2", applied: false });
+		expect(blowOffers(wren, {}).find(o => o.key === "bigGame")).toMatchObject({ dice: "2", applied: false });
+		// A Blot Out the Sun volley over the drake and a Crinwin bystander.
+		expect(blowOffers(wren, { targets: [target(t.drake), target(t.crin)] }).find(o => o.key === "bigGame")).toMatchObject({ dice: "2", applied: false });
+		// Nothing big in the volley: no line.
+		expect(blowOffers(wren, { targets: [target(t.crin), target(t.imp)] }).map(o => o.key)).not.toContain("bigGame");
+		// Giant Slayer still folds into the one +4 line, targeted or not.
+		const giant = hero("Wren", [HERO_MOVES.BIG_GAME, HERO_MOVES.GIANT_SLAYER]);
+		expect(blowOffers(giant, {}).filter(o => o.key === "bigGame")).toEqual([expect.objectContaining({ dice: "4", applied: false })]);
+		expect(blowOffers(giant, { targets: [target(t.crin), target(t.drake)] }).filter(o => o.key === "bigGame")).toEqual([expect.objectContaining({ dice: "4", applied: false })]);
 	});
 
 	it("offers Anger is a Gift's strike hard untucked, and marks the Resolve off only when it is taken", async () => {
@@ -165,7 +241,10 @@ describe("what a blow adds", () => {
 		]);
 		const judge = hero("Hafgan", [HERO_MOVES.DOG_WITH_BONE]);
 		expect(blowOffers(judge, { targets: [target(t.thing)] }).find(o => o.key === "dogWithBone")).toMatchObject({ dice: "1d6", applied: true });
-		expect(blowOffers(judge, { targets: [target(t.bandit)] }).map(o => o.key)).not.toContain("dogWithBone");
+		// The user's ruling (2026-10-18): "something you KNOW to be tainted by chaos" is the Judge's knowledge, so a
+		// stat block without the tag draws the line UNTICKED rather than leaving it off.
+		expect(blowOffers(judge, { targets: [target(t.bandit)] }).find(o => o.key === "dogWithBone")).toMatchObject({ dice: "1d6", applied: false });
+		expect(blowOffers(judge, { targets: [target(t.thing), target(t.bandit)] }).find(o => o.key === "dogWithBone")).toMatchObject({ applied: false });
 
 		const seeker = hero("Maelis", [HERO_MOVES.EVERYTHING_BLEEDS]);
 		// Unticked: the stat block says it is unnatural; whether this blow exploited a weakness is theirs.
@@ -191,9 +270,25 @@ describe("what a blow adds", () => {
 		for (const key of ["human-individual", "human-group", "natural-beast", "untyped"]) expect(bleeds(key), key).toBe(false);
 
 		const judge = hero("Hafgan", [HERO_MOVES.DOG_WITH_BONE]);
-		const bone = key => blowOffers(judge, { targets: [target(t[key])] }).some(o => o.key === "dogWithBone");
+		const bone = key => blowOffers(judge, { targets: [target(t[key])] }).find(o => o.key === "dogWithBone")?.applied;
 		expect(bone("corrupted")).toBe(true);
 		expect(bone("maker")).toBe(false);
+	});
+
+	// Seeker re-audit (2026-10-18): with nothing targeted there is no stat block to read, and both bonuses
+	// used to vanish. The foe may still be corrupted or unnatural, so both are drawn UNTICKED for the player.
+	it("offers Everything Bleeds and Like a Dog with a Bone UNTICKED when nothing is targeted", () => {
+		const judge = hero("Hafgan", [HERO_MOVES.DOG_WITH_BONE]);
+		expect(blowOffers(judge, { targets: [] }).find(o => o.key === "dogWithBone")).toMatchObject({ dice: "1d6", applied: false });
+		expect(blowOffers(judge, {}).find(o => o.key === "dogWithBone")).toMatchObject({ applied: false });
+
+		const seeker = hero("Maelis", [HERO_MOVES.EVERYTHING_BLEEDS]);
+		expect(blowOffers(seeker, { targets: [] }).find(o => o.key === "everythingBleeds")).toMatchObject({ dice: "1d6", applied: false });
+
+		// Not learned, not offered, targets or no.
+		const wren = hero("Wren", [HERO_MOVES.PREDATOR]);
+		expect(blowOffers(wren, {}).map(o => o.key)).not.toContain("dogWithBone");
+		expect(blowOffers(wren, {}).map(o => o.key)).not.toContain("everythingBleeds");
 	});
 
 	it("keeps Predator a standing reminder whatever the foe", () => {
@@ -283,6 +378,9 @@ describe("what a blow adds", () => {
 		// Un-learned, it offers nothing.
 		const off = hero("Fox", [{ type: "move", name: HERO_MOVES.SECOND_INTENT, flags: { [SYSTEM_ID]: { learned: false } } }]);
 		expect(blowOffers(off, { strikeBack: true, parry: true }).map(o => o.key)).not.toContain("secondIntent");
+		// A player's own move of the name acts as itself (owns-move.js#bookMoveName).
+		const homebrew = hero("Fox", [{ type: "move", name: HERO_MOVES.SECOND_INTENT, flags: { [SYSTEM_ID]: { custom: true } } }]);
+		expect(blowOffers(homebrew, { strikeBack: true, parry: true }).map(o => o.key)).not.toContain("secondIntent");
 	});
 
 	it("adds Hungry Flames to a blow dealt with a holy light", () => {
@@ -381,21 +479,73 @@ describe("Musclebound", () => {
 		const bow = { name: "Bow & arrows", range: ["near"] };
 		expect(muscleboundWeapon(bram(), bow)).toBe(bow);
 	});
+
+	// Heavy re-audit (2026-10-18), the user's ruling: "If it would already be forceful and/or messy, it's even
+	// more so" said nothing; the weapon is marked with the tags it already had, for the card to say.
+	it("marks a weapon that was already forceful and/or messy as even more so", () => {
+		expect(muscleboundWeapon(bram(), { name: "Battleaxe", range: ["close"], tags: ["messy"] }).muscleboundMore).toEqual(["messy"]);
+		expect(muscleboundWeapon(bram(), { name: "Maul", range: ["close"], tags: ["forceful", "awkward"] }).muscleboundMore).toEqual(["forceful"]);
+		const both = muscleboundWeapon(bram(), { name: "Club", range: ["close"], tags: ["messy", "forceful"] });
+		expect(both.muscleboundMore).toEqual(["forceful", "messy"]);
+		expect(both.tags).toEqual(["messy", "forceful"]);
+		// Neither tag of its own: nothing more to say.
+		expect(muscleboundWeapon(bram(), { name: "Sword", range: ["close"] })).not.toHaveProperty("muscleboundMore");
+		// Without the move, or at range, the weapon is untouched.
+		const axe = { name: "Battleaxe", range: ["close"], tags: ["messy"] };
+		expect(muscleboundWeapon(hero("Pim", []), axe)).toBe(axe);
+		const sling = { name: "Sling", range: ["near"], tags: ["forceful"] };
+		expect(muscleboundWeapon(bram(), sling)).toBe(sling);
+	});
+});
+
+// Heavy re-audit (2026-10-18): "When you reduce a foe to 0 HP, describe how you take them out. If you fell
+// them in a particularly brutal or impressive manner, their allies are impressed, dismayed, or frightened and
+// respond accordingly." Nothing said it.
+describe("Terror on the Field", () => {
+	const crinwin = () => mapWith([["crin", fakeActor({ id: "crin", name: "Crinwin", type: "monster" })]]).crin.actor;
+
+	beforeEach(() => {
+		globalThis.game = { ...saved.game, combats: collection([]), settings: { get: () => true } };
+		globalThis.ui = { combat: {} };
+		globalThis.canvas = { scene: null };
+	});
+
+	it("names the move and its prompt when a Heavy who learned it fells a foe", () => {
+		const said = terrorOnTheFieldWords(hero("Bram", [HERO_MOVES.TERROR]), crinwin(), { foe: "Crinwin (2)", disposition: -1 });
+		expect(said).toContain("Bram felled Crinwin (2).");
+		expect(said).toContain("Terror on the Field: describe how you take them out.");
+		expect(said).toContain("impressed, dismayed, or frightened");
+	});
+
+	it("says nothing without the move learned", () => {
+		const off = { type: "move", name: HERO_MOVES.TERROR, flags: { [SYSTEM_ID]: { learned: false } } };
+		expect(terrorOnTheFieldWords(hero("Bram", [off]), crinwin(), { disposition: -1 })).toBe("");
+		expect(terrorOnTheFieldWords(hero("Bram", []), crinwin(), { disposition: -1 })).toBe("");
+		// A stat block is no Heavy, whatever its moves.
+		expect(terrorOnTheFieldWords({ ...fakeActor({ id: "m", type: "monster" }), items: [{ type: "move", name: HERO_MOVES.TERROR }] }, crinwin())).toBe("");
+	});
+
+	it("says nothing when the one felled was on the Heavy's own side (a Berserker's area blow)", () => {
+		const bram = hero("Bram", [HERO_MOVES.TERROR]);
+		expect(terrorOnTheFieldWords(bram, hero("Pim", []), { disposition: 1 })).toBe("");
+		const follower = fakeActor({ id: "hound", name: "Hound", type: "npc", flags: { [SYSTEM_ID]: { followerOrigin: { slug: "hound" } } } });
+		expect(terrorOnTheFieldWords(bram, follower, { disposition: 1 })).toBe("");
+	});
 });
 
 describe("the damage a character takes", () => {
 	it("IMPOSES Never Gonna Keep Me Down at 5 HP or less: the HP box is the whole condition", async () => {
 		const pim = hero("Pim", [HERO_MOVES.NEVER_GONNA]);
 		pim.system.attributes.hp.value = 6;
-		expect(await defenderDisadvantage(pim)).toEqual({ imposed: [], offered: [] });
+		expect(await defenderDisadvantage(pim)).toEqual({ imposed: [], offered: [], unread: [] });
 		pim.system.attributes.hp.value = 5;
-		expect(await defenderDisadvantage(pim)).toEqual({ imposed: [HERO_MOVES.NEVER_GONNA], offered: [] });
+		expect(await defenderDisadvantage(pim)).toEqual({ imposed: [HERO_MOVES.NEVER_GONNA], offered: [], unread: [] });
 	});
 
 	it("OFFERS Uncanny Reflexes while unarmored under a light load: the clause is about the blow", async () => {
 		const snapshot = { vitals: { wornArmor: 0 }, inventory: { outfit: { load: { selected: "light" } } } };
 		const bram = hero("Bram", [HERO_MOVES.UNCANNY], { typedActor: { buildSnapshot: async () => snapshot } });
-		expect(await defenderDisadvantage(bram)).toEqual({ imposed: [], offered: [HERO_MOVES.UNCANNY] });
+		expect(await defenderDisadvantage(bram)).toEqual({ imposed: [], offered: [HERO_MOVES.UNCANNY], unread: [] });
 		snapshot.vitals.wornArmor = 2;
 		expect((await defenderDisadvantage(bram)).offered).toEqual([]);
 		snapshot.vitals.wornArmor = 0;
@@ -404,7 +554,7 @@ describe("the damage a character takes", () => {
 	});
 
 	it("says nothing for a character with none of the moves", async () => {
-		expect(await defenderDisadvantage(hero("Pim", ["Undaunted"]))).toEqual({ imposed: [], offered: [] });
+		expect(await defenderDisadvantage(hero("Pim", ["Undaunted"]))).toEqual({ imposed: [], offered: [], unread: [] });
 	});
 });
 
@@ -633,7 +783,7 @@ describe("Set-Up Strike", () => {
 	it("offers an unticked disadvantage line on a Clash's damage alone", () => {
 		const bryn = hero("bryn", ["Set-Up Strike"]);
 		const line = blowOffers(bryn, { moveKey: "clash" }).find(offer => offer.key === "setUpStrike");
-		expect(line).toMatchObject({ mode: "dis", applied: false });
+		expect(line).toMatchObject({ mode: "dis", applied: false, ask: true });
 		expect(blowOffers(bryn, { moveKey: "let-fly" }).some(offer => offer.key === "setUpStrike")).toBe(false);
 		expect(blowOffers(bryn, { moveKey: "clash", strikeBack: true }).some(offer => offer.key === "setUpStrike")).toBe(false);
 		expect(blowOffers(hero("ash", []), { moveKey: "clash" }).some(offer => offer.key === "setUpStrike")).toBe(false);

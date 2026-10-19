@@ -103,6 +103,9 @@ export class InventoryItemSnapshot {
 		this.twoCol      = b._twoCol;
 		this.breakBefore = b._breakBefore;
 		this.isAddedSpecial = b._isAddedSpecial ?? false;
+		// Possession gear kept at home rather than carried (possession-grants.js#isStashedGrantItem):
+		// drawn without a mark, and never counted toward the small-item allowance.
+		this.stashed        = b._stashed ?? false;
 		this.artifact       = b._artifact ?? EMPTY_ARTIFACT;
 	}
 }
@@ -121,6 +124,7 @@ export class InventoryItemSnapshotBuilder {
 	withTwoCol(v)      { this._twoCol      = v; return this; }
 	withBreakBefore(v) { this._breakBefore = v; return this; }
 	withIsAddedSpecial(v) { this._isAddedSpecial = v; return this; }
+	withStashed(v)     { this._stashed     = v; return this; }
 	/**
 	 * Takes the whole concealed view from concealArtifactFields, and KEEPS it whole, so the row
 	 * cannot be built with a revealed write-up beside a hidden state by setting one and not the

@@ -619,28 +619,39 @@ describe("a 7-9 that counts as a 10+", () => {
 });
 
 // A Force to Be Reckoned With: "on a 12+ you turn the tables on them". Its note rides the 10+ row of a
-// roll that totals 12 or more, and a 10 or 11 (the same tier) says nothing more.
-describe("a line that prints on a 12+ only", () => {
+// roll that totals 12 or more, and a 10 or 11 (the same tier) shows nothing more. It FOLLOWS the final total
+// (the user's ruling, 2026-10-18), so it is on every card, hidden below 12, for a rewrite to show or hide
+// (force-final-total.test.js drives that).
+describe("a line that shows on a 12+ only", () => {
 	const hero = () => ({ type: "stonetop", name: "Wren", system: {} });
 	const NOTE = '<p class="stonetop-roll-offer-note">Turn the tables</p>';
+	const CRITICAL_ROW = /<div class="stonetop-roll-tier-action stonetop-roll-critical-action" data-tier="success" data-critical="true"( hidden="hidden")?>/;
 
-	it("prints on a 12, after the 10+ row's own actions", async () => {
+	it("shows on a 12, after the 10+ row's own actions", async () => {
 		rollTotal = 12;
 		await rollStat("dex", hero(), { statValue: 0, moveName: "Defy Danger", noXpOnMiss: true,
 			tierActions: { success: "<button>Own</button>" }, criticalActions: NOTE });
 		const flavor = rollMessages[0].flavor;
 		expect(flavor).toContain("Turn the tables");
+		expect(flavor.match(CRITICAL_ROW)[1]).toBeUndefined();
 		expect(flavor.indexOf("Own")).toBeLessThan(flavor.indexOf("Turn the tables"));
 	});
 
-	it("prints nothing on a 10 or an 11", async () => {
+	it("is kept hidden on a 10 or an 11", async () => {
 		for (const total of [10, 11]) {
 			rollMessages = [];
 			rollTotal = total;
 			await rollStat("dex", hero(), { statValue: 0, moveName: "Defy Danger", noXpOnMiss: true, criticalActions: NOTE });
 			expect(rollMessages[0].flavor).toContain("result success");
-			expect(rollMessages[0].flavor).not.toContain("Turn the tables");
+			expect(rollMessages[0].flavor.match(CRITICAL_ROW)[1]).toBe(' hidden="hidden"');
 		}
+	});
+
+	it("leaves a card with no 12+ line without the row", async () => {
+		rollTotal = 12;
+		await rollStat("dex", hero(), { statValue: 0, moveName: "Defy Danger", noXpOnMiss: true });
+		expect(rollMessages[0].flavor).not.toContain("stonetop-roll-critical-action");
+		expect(rollMessages[0].flavor).not.toContain("stonetop-roll-tier-actions");
 	});
 });
 

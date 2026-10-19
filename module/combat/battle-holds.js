@@ -37,6 +37,13 @@ export const PREPARE_A_WELCOME = "Prepare a Welcome";
 const HOLD_ROW_KEY = { "Stentorian": "stentorian", "Front Line Leader": "frontLine" };
 export const BATTLE_HOLD_MOVES = Object.keys(HOLD_ROW_KEY);
 
+/**
+ * Every hold that is for ONE battle: the two a battle fills, and the Surprise lain in wait for it. The fight
+ * ending clears them (clearFightHolds, run by combat/readiness-loss.js), so last fight's Command cannot buy
+ * advantage on a Deploy weeks later (the user's ruling, 2026-10-18).
+ */
+export const FIGHT_HOLD_MOVES = Object.freeze([...BATTLE_HOLD_MOVES, PREPARE_A_WELCOME]);
+
 // ── THE TRACK ITSELF ────────────────────────────────────────────────────────────────────────────
 // The held copy's `resource`. A copy taken before the pack gave these moves their tracks (2026-06-09)
 // is filled in once per version by migration/move-refresh.js.
@@ -46,21 +53,36 @@ const heldOn = learnedTrack;
 
 /**
  * Prepare a Welcome is being rolled: take the Surprise it spends. Returns the note the roll card should
- * carry, or null for any other move, a player's own move of that name among them (owns-move.js#bookMoveName).
+ * carry and whether a Surprise came off (a roll that spent none regains none on its 10+: tier-effects.js),
+ * or null for any other move, a player's own move of that name among them (owns-move.js#bookMoveName).
  *
- * @returns {Promise<string|null>}
+ * @returns {Promise<{note: string, spent: boolean}|null>}
  */
 export async function spendSurpriseForRoll(actor, item) {
 	if (bookMoveName(item) !== PREPARE_A_WELCOME) return null;
 	const track = heldOn(actor, PREPARE_A_WELCOME);
 	if (!track) return null;
-	if (track.held <= 0) return localize(`${KEY}.noSurprise`);
+	if (track.held <= 0) return { note: localize(`${KEY}.noSurprise`), spent: false };
 	await track.resources.setUses(PREPARE_A_WELCOME, track.held - 1, { stonetopMove: PREPARE_A_WELCOME });
-	return format(`${KEY}.spentSurprise`, { left: track.held - 1 });
+	return { note: format(`${KEY}.spentSurprise`, { left: track.held - 1 }), spent: true };
 }
 
 /**
- * Prepare a Welcome's 10+: "you've still got a few tricks up your sleeve, regain 1 Surprise".
+ * Put back the Surprise spendSurpriseForRoll took for a roll that then threw no dice (the roll failed or came to
+ * nothing): it was never spent. Never past the track. A roll that landed keeps it spent, a 6- included.
+ *
+ * @returns {Promise<boolean>} whether one went back on
+ */
+export async function refundSurpriseForRoll(actor) {
+	const track = heldOn(actor, PREPARE_A_WELCOME);
+	if (!track || track.held >= track.max) return false;
+	await track.resources.setUses(PREPARE_A_WELCOME, track.held + 1, { stonetopMove: PREPARE_A_WELCOME });
+	return true;
+}
+
+/**
+ * Prepare a Welcome's 10+: "you've still got a few tricks up your sleeve, regain 1 Surprise". Only for a
+ * roll that spent one: the caller (tier-effects.js) asks it only then.
  *
  * @returns {Promise<boolean>} whether one went back on
  */
@@ -80,6 +102,94 @@ export async function regainSurpriseOnHit(actor, item, tier) {
  */
 export function takeBackSurprise(actor, count) {
 	return takeBackHeld(actor, PREPARE_A_WELCOME, count);
+}
+
+// ── LYING IN WAIT ───────────────────────────────────────────────────────────────────────────────
+// "When you have your allies fortify a position and lie in wait for battle, hold 1 Surprise if you're rushed
+// or 2 Surprises if you can take your time" (Book I p.126). Two buttons on the learned move's card
+// (move-group.hbs, `stonetop.moveActions`): each SETS what is held to at least its number, never past 2, so
+// pressing one twice holds no more and Surprise already held is never lowered.
+
+/** Each button's action key and the Surprise it holds. */
+const LIE_IN_WAIT = Object.freeze({ lieInWaitRushed: 1, lieInWaitPrepared: 2 });
+const LIE_IN_WAIT_MAX = 2;
+
+/** Whether a move card's button is one of the lie-in-wait buttons (the sheet routes the rest elsewhere). */
+export const isLieInWaitAction = action => Object.hasOwn(LIE_IN_WAIT, action);
+
+/** What lying in wait with `n` would leave held: at least `n`, within 2 and the track, never less than now. */
+const surpriseAfterLyingInWait = (track, n) => Math.max(track.held, Math.min(n, LIE_IN_WAIT_MAX, track.max));
+
+/**
+ * The lie-in-wait buttons for the move cards on this character's sheet, keyed by move name as move-group.hbs
+ * looks them up: `{ label, icon, action, disabled, tooltip }` each. Only with Prepare a Welcome learned; a
+ * button that would hold no more is disabled.
+ */
+export function lieInWaitActionsFor(actor) {
+	const track = heldOn(actor, PREPARE_A_WELCOME);
+	if (!track) return {};
+	return {
+		[PREPARE_A_WELCOME]: Object.entries(LIE_IN_WAIT).map(([action, n]) => {
+			const disabled = surpriseAfterLyingInWait(track, n) <= track.held;
+			return {
+				action,
+				icon:    "fas fa-chess-rook",
+				label:   localize(`${KEY}.lieInWait.${action}.label`),
+				tooltip: disabled ? format(`${KEY}.lieInWait.full`, { held: track.held }) : localize(`${KEY}.lieInWait.${action}.tooltip`),
+				disabled,
+			};
+		}),
+	};
+}
+
+/**
+ * Lie in wait: hold the Surprise the button names, and say so in chat. Whether anything was held (nothing for a
+ * character without the move learned, or one already holding that much).
+ *
+ * @param {Actor} actor
+ * @param {string} action  a LIE_IN_WAIT key
+ * @returns {Promise<boolean>}
+ */
+export async function lieInWait(actor, action) {
+	const n = LIE_IN_WAIT[action];
+	if (!n || actor?.isOwner === false) return false;
+	const track = heldOn(actor, PREPARE_A_WELCOME);
+	if (!track) return false;
+	const next = surpriseAfterLyingInWait(track, n);
+	if (next <= track.held) return false;
+	await track.resources.setUses(PREPARE_A_WELCOME, next, { stonetopMove: PREPARE_A_WELCOME });
+	await postMoveNote(actor, PREPARE_A_WELCOME, format(`${KEY}.lieInWait.${action}.note`, { name: actor.name ?? "", held: next }));
+	return true;
+}
+
+// ── THE FIGHT ENDS ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The `actor.update()` data that empties this character's fight holds (FIGHT_HOLD_MOVES), each only when it
+ * holds any: `{}` when there is nothing to clear. Read off the stored tracks, learned or not, so a move
+ * switched off since the fight still lets its hold go. A player's own move keeps its track under its item
+ * id, not the book's name, so it is not touched.
+ */
+export function fightHoldsClearData(actor) {
+	const resources = actor?.typedActor?.moveResources;
+	const stored = resources?.getMoveResources?.() ?? {};
+	const data = {};
+	for (const move of FIGHT_HOLD_MOVES) {
+		if (Number(stored[move]) > 0) Object.assign(data, resources.usesUpdate(move, 0));
+	}
+	return data;
+}
+
+/**
+ * Clear a character's fight holds in ONE write. Whether there was anything to clear.
+ *
+ * @returns {Promise<boolean>}
+ */
+export async function clearFightHolds(actor) {
+	const data = fightHoldsClearData(actor);
+	if (!Object.keys(data).length) return false;
+	await actor.update(data);
+	return true;
 }
 
 /**

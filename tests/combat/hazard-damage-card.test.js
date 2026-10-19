@@ -76,6 +76,52 @@ describe("rollHazardDamage", () => {
 		expect(created).toHaveLength(0);
 	});
 
+	// Constant Vigilance (p.131): "Unless you're dazed, you're never caught off guard, not even when asleep
+	// or if you roll a 6-." The off-guard line is not drawn for a Ranger who has it, until they are dazed.
+	describe("against a Ranger with Constant Vigilance", () => {
+		const savedSync = globalThis.fromUuidSync;
+		afterEach(() => { globalThis.fromUuidSync = savedSync; });
+
+		const character = (id, name, moves = [], { dazed = false, ignoresDebilities = false } = {}) => ({
+			id, name, type: "character", documentName: "Actor",
+			items: moves.map(move => ({ type: "move", name: move })),
+			typedActor: { ignoresDebilities },
+			system: { attributes: { hp: { value: 10, max: 10 }, armor: { value: 0 }, debilities: { options: { dazed: { value: dazed } } } } },
+		});
+		const row = id => ({ uuid: `Actor.${id}`, name: id, actorId: id, disposition: 1, hasActor: true });
+
+		/** The damage window's content for a hazard catching `actors`, then closed. */
+		async function windowFor(actors) {
+			const byUuid = new Map(actors.map(a => [`Actor.${a.id}`, a]));
+			globalThis.fromUuidSync = uuid => byUuid.get(uuid) ?? null;
+			let data;
+			globalThis.Dialog = vi.fn(function (d) { data = d; this.render = vi.fn(); });
+			const pending = rollHazardDamage(NEST, { targets: actors.map(a => row(a.id)) });
+			await vi.waitFor(() => expect(globalThis.Dialog).toHaveBeenCalled());
+			data.close();
+			await pending;
+			return data.content;
+		}
+
+		it("never offers that the hazard caught a vigilant Ranger off-guard, but still offers precautions", async () => {
+			const content = await windowFor([character("wren", "Wren", ["Constant Vigilance"])]);
+			expect(content).not.toContain("offer-hazardOffGuard");
+			expect(content).toContain("offer-hazardPrecautions");
+		});
+
+		it("offers it again once the Ranger is dazed, unless a Battle Joy is ignoring the debility", async () => {
+			expect(await windowFor([character("wren", "Wren", ["Constant Vigilance"], { dazed: true })])).toContain("offer-hazardOffGuard");
+			expect(await windowFor([character("wren", "Wren", ["Constant Vigilance"], { dazed: true, ignoresDebilities: true })])).not.toContain("offer-hazardOffGuard");
+		});
+
+		it("offers it for anyone without the move, and when the hazard also catches one of them", async () => {
+			expect(await windowFor([character("bram", "Bram")])).toContain("offer-hazardOffGuard");
+			expect(await windowFor([character("wren", "Wren", ["Constant Vigilance"]), character("bram", "Bram")])).toContain("offer-hazardOffGuard");
+			// Two vigilant Rangers: nobody there can be caught off guard.
+			expect(await windowFor([character("wren", "Wren", ["Constant Vigilance"]), character("ula", "Ula", ["Constant Vigilance"])])).not.toContain("offer-hazardOffGuard");
+		});
+	});
+
 	it("rolls nothing without a formula", async () => {
 		expect(await rollHazardDamage({ name: "Fog" }, { targets: [VAHID], shiftKey: true })).toBeNull();
 		expect(created).toHaveLength(0);

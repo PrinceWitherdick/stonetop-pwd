@@ -184,6 +184,23 @@ describe("the camp window's template", () => {
 		expect(await render([aeliana({ choices: { offer: { supplies: 2 } } }), bram()])).not.toContain("Home-Fires");
 	});
 
+	// The Ranger's A Safe Place: the holder's own pick, on their own row, starting on hold 1.
+	it("gives a Safe Place holder a Precaution pick on their own row, and nobody else one", async () => {
+		const members = [aeliana({ safePlace: true }), bram()];
+		const html = await render(members);
+		const mine = row(html, "aeliana");
+		expect(mine).toContain("Prepared the camp site (A Safe Place)");
+		expect(mine).toMatch(/<input type="radio" class="stonetop-camp-radio" name="campPrecaution-aeliana" value="1" data-camp-field="precaution" data-actor-id="aeliana"[^>]* checked><span>Hold 1 Precaution<\/span>/);
+		expect(mine).toMatch(/value="2" data-camp-field="precaution"[^>]*><span>Hold 2 Precaution: well-versed with this area and its dangers<\/span>/);
+		expect(mine).toMatch(/value="0" data-camp-field="precaution"[^>]*><span>Did not prepare this site<\/span>/);
+		expect(row(html, "bram")).not.toContain("precaution");
+		expect(row(await render([aeliana(), bram()]), "aeliana")).not.toContain("A Safe Place");
+		// A reader who cannot change the row reads the pick instead.
+		const players = await render(members, { manages: false, editable: ["bram"], mine: ["bram"] });
+		expect(row(players, "aeliana")).not.toContain('data-camp-field="precaution"');
+		expect(row(players, "aeliana")).toContain("Prepared the camp site: holds 1 Precaution.");
+	});
+
 	it("says how a camp ended instead of drawing its rows", async () => {
 		const html = await render([aeliana()], { state: CAMP_STATE.CANCELLED });
 		expect(html).not.toContain('<li class="stonetop-camp-row');

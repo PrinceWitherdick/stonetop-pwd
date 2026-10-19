@@ -7,7 +7,7 @@ import { annotateInvocationEffects } from "../invocation-effects.js";
 import { getHoverDescriptionSetting } from "../../../settings.js";
 import { playbookIconPath } from "../../../utils/playbook-actors.js";
 import { INVOKE_THE_SUN_GOD } from "../holy-light.js";
-import { localize } from "../../../utils/i18n.js";
+import { localize, format } from "../../../utils/i18n.js";
 import { levelUpAwayNote } from "../../../campaign/level-up-at-home.js";
 
 // Base width (overview, stat, marks). The move, foreign-move, and invocation steps
@@ -68,8 +68,8 @@ export class LevelUpDialog extends StonetopDialog {
 		this._selectedMoveId         = null;
 		this._selectedStat           = null;
 		this._selectedInvocationSlug = null;
-		// Level-up mark step (Veteran Crew / Well Versed / … and Potential for Greatness):
-		// the picks made this take, each { slug, stat? } (stat only for a stat-choice option).
+		// Level-up mark step (Veteran Crew / Well Versed / …; never Potential for Greatness, which
+		// is marked in play): the picks made this take, each { slug, stat? }.
 		this._selectedMarks          = [];
 		// Beast-Bonded Ranger: the companion action slugs marked for the level being gained.
 		this._selectedCompanionActions = [];
@@ -301,6 +301,9 @@ export class LevelUpDialog extends StonetopDialog {
 			newLevel:        d.newLevel,
 			// Level Up is made at home (Book I p.528): a reminder, never a block, while a trip they are on is underway.
 			awayWarning:     isOverview ? levelUpAwayNote(this._character?._actor) : "",
+			// An even level grows a held sacred pouch, and the new room arrives EMPTY (the user's ruling;
+			// StonetopCharacter#applyLevelUp settles it), so the overview says where the Stock comes from.
+			pouchGrowthNote: isOverview && d.pouchGrowth > 0 ? format("stonetop.specialMoves.levelUp.pouchGrowth", { count: d.pouchGrowth }) : "",
 			cost:            d.cost,
 			xpRemaining:     d.xpRemaining,
 			moves,
@@ -412,8 +415,8 @@ export class LevelUpDialog extends StonetopDialog {
 
 	// Build the mark step for a just-picked budgeted move: its checkbox (count) options,
 	// what's already spent on prior copies, and the NEW picks this take grants (the move's
-	// repeat-scaling budget minus what's already spent). Stat-choice options are skipped —
-	// only Potential for Greatness has them, and it's served by its own precomputed step.
+	// repeat-scaling budget minus what's already spent). Stat-choice options are skipped:
+	// only Potential for Greatness has them, and it is marked in play, never here.
 	_buildPickedMoveMarkStep(entry) {
 		const ownedCountAfter = (entry.ownedIds?.length ?? 0) + 1; // this level-up adds one copy
 		const budgetMax = moveMarkBudget(entry.markBudget, ownedCountAfter);
@@ -649,9 +652,8 @@ export class LevelUpDialog extends StonetopDialog {
 			choices.foreignMoveId    = this._selectedForeignMoveId;
 			choices.grantsPossession = entry.crossPlaybook.grantsPossession ?? null;
 		}
-		// Mark-step picks (a budgeted move just taken, or the Would-Be Hero's Potential for
-		// Greatness). Threaded INDEPENDENTLY of the stat/cross branches above, so a Would-Be
-		// Hero who took Improved Stat or a cross-playbook move still records this level's mark.
+		// Mark-step picks for a budgeted move just taken (or the foreign move a cross-playbook
+		// pick chose). Threaded INDEPENDENTLY of the stat/cross branches above.
 		const markDesc = this._markStepDescriptor();
 		if (markDesc && this._selectedMarks.length) {
 			choices.marks = { moveName: markDesc.moveName, picks: this._selectedMarks };

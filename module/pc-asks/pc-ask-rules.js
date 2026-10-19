@@ -23,6 +23,12 @@ export const AID_MOVE = "Aid";
 export const INTERFERE_MOVE = "Interfere";
 export const PERSUADE_PC_MOVE = "Persuade (vs. PCs)";
 
+/**
+ * Whether a move is aimed at another player character, who is asked once the roll window closes: Interfere
+ * and Persuade (vs. PCs). A roll window's "against them" lines leave these to that question.
+ */
+export const aimedAtPc = moveName => moveName === INTERFERE_MOVE || moveName === PERSUADE_PC_MOVE;
+
 /** On the asking card: `{move, byId, byName, targetId, targetName}` (actor ids and names). */
 export const PC_ASK_FLAG = "pcAsk";
 /** On the answer card: `{to, choice}`, the asking card's message id and what was picked. */

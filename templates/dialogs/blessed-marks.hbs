@@ -55,6 +55,11 @@
 				      it quotes the move's effect without naming the move. --}}
 				<h3 class="stonetop-marks-group-heading">{{label}}</h3>
 				<p class="stonetop-marks-group-rule">{{rule}}</p>
+				{{!-- Trackless Step only: how many wear it against what 1 Stock covers (level + INT).
+				      A flag past the cap, never a block (blessed-marks.js#tracklessTally). --}}
+				{{#if tally}}
+				<p class="stonetop-marks-tally{{#if tally.over}} is-over{{/if}}">{{tally.text}}</p>
+				{{/if}}
 
 				{{#if hasRows}}
 				<ul class="stonetop-marks-list">
@@ -112,6 +117,10 @@
 					</span>
 					{{/unless}}{{/if}}
 					{{/if}}
+					{{!-- A charm crafted with Potent Workings: its second harm, or that a 10+ keeps it. --}}
+					{{#if potency}}
+					<span class="stonetop-mark-potency">{{potency}}</span>
+					{{/if}}
 					{{/"stonetop.roster-row"}}
 					{{/each}}
 				</ul>
@@ -119,6 +128,12 @@
 				{{!-- This kind alone, not the whole roster: the rail carries each kind's count, so
 				      the line only has to speak for the panel it is in. --}}
 				<p class="stonetop-marks-empty">{{localize "stonetop.blessedMarks.noneOfKind"}}</p>
+				{{/if}}
+
+				{{!-- The Potent Workings choice just paid for in the crafting window, waiting for the
+				      charm it belongs to: the next charm laid in this window carries it. --}}
+				{{#if pending}}
+				<p class="stonetop-marks-pending">{{pending}}</p>
 				{{/if}}
 
 				{{#if canAdd}}

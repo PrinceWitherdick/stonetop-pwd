@@ -12,6 +12,11 @@ describe("who can hold somebody to an oath", () => {
 		expect(canBindOaths(actorWith(move(BINDING_ARBITRATION)))).toBe(true);
 	});
 
+	// A switched-off Binding Arbitration witnesses no new oath (2026-10-18 Judge re-audit).
+	it("does NOT count a switched-off Binding Arbitration", () => {
+		expect(canBindOaths(actorWith({ ...move(BINDING_ARBITRATION), flags: { "stonetop-pwd": { learned: false } } }))).toBe(false);
+	});
+
 	// Truth or Consequences is its requirement and a different move: it makes somebody answer
 	// honestly once, on the spot, and leaves nothing behind to list.
 	it("does NOT count Truth or Consequences on its own", () => {

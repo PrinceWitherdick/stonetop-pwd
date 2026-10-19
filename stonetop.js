@@ -46,15 +46,21 @@ import { onDropFollower } from "./module/hooks/FollowerDrop.js";
 import { onPreUpdateActorDeathsDoor, onUpdateActorDeathsDoorAutoOpen, onUpdateActorDeathsDoorCard, onUpdateActorDeathsDoorRaised, wireDyingPrompt } from "./module/hooks/DeathsDoorPrompt.js";
 import { onUpdateActorUnstoppable } from "./module/actors/character/unstoppable.js";
 import { installBattleJoyOnHurt, installBattleJoyEnd, wireBattleJoyResult } from "./module/combat/battle-joy-offer.js";
-import { wireInvokeConsequences, wireWielderInvoke, invokeCardChoosesConsequence, invokeActionRow, TEN_PLUS_FLAG } from "./module/actors/character/invoke-consequences.js";
+import { wireInvokeConsequences, wireWielderInvoke, holyRelicOffers, settleHolyRelic, invokeActionRow, TEN_PLUS_FLAG } from "./module/actors/character/invoke-consequences.js";
+import { wireOptionDebility } from "./module/actors/character/option-debility.js";
+import { wireCensureEnraged } from "./module/actors/character/censure-enraged.js";
 import { wireLoyalToTheEnd } from "./module/actors/character/companion-bond.js";
 import { wireFollowerDeathsDoor } from "./module/actors/character/follower-deaths-door.js";
+import { wireFollowerOrderDamage } from "./module/fight/follower-order-attack.js";
+import { wireFollowerBalkCard, registerFollowerBalkHooks } from "./module/gm-toolkit/follower-balk.js";
 import { FOLLOWER_LOYALTY_QUERY, handleFollowerLoyaltyQuery } from "./module/actors/character/follower-bond.js";
 import { FOLLOWER_HANDOFF_QUERY, handleFollowerHandoffQuery } from "./module/actors/character/follower-handoff.js";
 import { wireImproviseCard, wireMarkConsequenceCard } from "./module/actors/character/arcana-seeker-moves.js";
 import { wireSendBackCard } from "./module/actors/character/send-them-back.js";
+import { wirePouchCards } from "./module/actors/character/sacred-pouch.js";
 import { wireInvocationEffects, BATH_QUERY, handleBathQuery } from "./module/actors/character/invocation-apply.js";
 import { installBattleHolds } from "./module/combat/battle-holds.js";
+import { installSituationalAwareness } from "./module/combat/situational-awareness.js";
 import { hideAttackFxForReducedMotion } from "./module/combat/attack-fx.js";
 import { deathDripStamp, markDeathDrip } from "./module/hooks/DeathChatDrip.js";
 import { installOutOfTheFight } from "./module/fight/out-of-the-fight.js";
@@ -100,10 +106,11 @@ import { registerRollRewrite } from "./module/utils/roll-rewrite.js";
 import { ROLL_CARD_QUERY, handleRollCardQuery, pressRollCard, registerRollCardAction, writeCardRoll } from "./module/utils/roll-card-writer.js";
 import { inCardTurn } from "./module/utils/card-queue.js";
 import { formatOutcomeDetail, escHtml } from "./module/utils/strings.js";
-import { moveChatCard, canRewriteCard, canUserWriteCard, rolledTotalCard } from "./module/utils/chat.js";
+import { moveChatCard, canRewriteCard, canUserWriteCard, rolledTotalCard, cardMoveName } from "./module/utils/chat.js";
 import { grantsWholeList, paintPickTally, pickLimitFor, releaseOverLimit, tierOffersPicks } from "./module/utils/pick-tally.js";
 import { wireUndoXpMark, missXpTakenByLift, missXpChoice, MISS_XP_CHOICE_FLAG } from "./module/utils/undo-xp-mark.js";
-import { isKnowThings, logbookUses, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
+import { isKnowThings, logbookUses, latestKnowThingsCard, LOGBOOK, STRONG_HIT_TOTAL } from "./module/actors/character/know-things.js";
+import { enigmaUses, spendEnigma, ENIGMA_KEY } from "./module/actors/character/enigma.js";
 import { possessionTrackUses, BOOKS_AND_SCROLLS, HOLY_RELICS } from "./module/actors/character/possession-tracks.js";
 import { INVOKE_THE_SUN_GOD } from "./module/actors/character/holy-light.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
@@ -139,10 +146,11 @@ import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
 import { StonetopFlags } from "./module/actors/character/StonetopFlags.js";
 import { payableStockSources, mustAskStockSource, stockReceipt } from "./module/actors/character/stock-cost.js";
 import { askStockSource } from "./module/actors/character/ask-stock-source.js";
+import { moveLearnedIn } from "./module/actors/character/owns-move.js";
 import { readProvisionsYield, rollProvisions, rollStock, withTrappingGear, TRAPPING_GEAR_SLUG } from "./module/actors/character/provisions.js";
 import { askWithButtons, confirmOutcome } from "./module/utils/ask-with-buttons.js";
-import { belongsToMessage, wirePickedOptionButton, claimPickedOption, settlePickedOption, releasePickedOption } from "./module/utils/picked-option-button.js";
-import { readOptionDamage } from "./module/utils/damage.js";
+import { belongsToMessage, optionLabelText, wirePickedOptionButton, claimPickedOption, settlePickedOption, releasePickedOption } from "./module/utils/picked-option-button.js";
+import { readOptionDamage, readOptionDamageChoices } from "./module/utils/damage.js";
 import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
 import { withLateStampLatch } from "./module/utils/card-latch.js";
@@ -164,8 +172,10 @@ import {
 	INSPIRATION_QUERY, handleInspirationQuery, onUpdateActorInspirationAtZero, wireInspirationDamage, wireKeepOneHp, wireSpeechCard,
 } from "./module/actors/character/inspiration-flow.js";
 import { wireGmMoveShare } from "./module/gm-toolkit/random-gm-move.js";
-import { GIVE_ADVANTAGE_QUERY, handleGiveAdvantageQuery, wireFocusFire, wireGiveAdvantage } from "./module/actors/character/give-advantage-flow.js";
+import { GIVE_ADVANTAGE_QUERY, handleGiveAdvantageQuery, wireFocusFire, wireGiveAdvantage, wireRapierWit, wireTruthOrConsequences, wireSpeakSoftly } from "./module/actors/character/give-advantage-flow.js";
+import { RAPIER_WIT_QUERY, handleRapierWitQuery, CENSURE_ENRAGED_QUERY, handleCensureEnragedQuery } from "./module/fight/hero-moves.js";
 import { wireWouldBeHeroCards } from "./module/actors/character/would-be-hero-cards.js";
+import { reconcileCriticalOffers } from "./module/actors/character/StonetopCharacter.js";
 import { wireSteadingMissXp } from "./module/actors/steading/steading-miss-xp.js";
 import { REQUISITION_MISS_COST_FLAG, STEADING_FORTUNES_CARD_ACTIONS, assetFromButton, settleRequisitionMiss, takeRequisitionedAsset } from "./module/actors/steading/steading-card-actions.js";
 import { wireTradeItemCard, wireTradePaymentRow } from "./module/actors/steading/steading-trade-card.js";
@@ -229,6 +239,10 @@ Hooks.once("init", () => {
 	// And "you or an ally gain advantage" (Countermeasures, Sage Advice, Everything Burns, Work With What
 	// You've Got), given to a PC the giver's player does not own (give-advantage-flow.js).
 	if (CONFIG.queries) CONFIG.queries[GIVE_ADVANTAGE_QUERY] = (data, context) => handleGiveAdvantageQuery(data, context);
+	// Rapier Wit's +1d4 spent off a Fox the striker's roller does not own (fight/hero-moves.js#spendRapierWitBlow).
+	if (CONFIG.queries) CONFIG.queries[RAPIER_WIT_QUERY] = (data, context) => handleRapierWitQuery(data, context);
+	// And a Censure's enraged advantage, spent off a Judge the roller's player does not own (fight/hero-moves.js#spendCensureEnraged).
+	if (CONFIG.queries) CONFIG.queries[CENSURE_ENRAGED_QUERY] = (data, context) => handleCensureEnragedQuery(data, context);
 	// And Up With People's Rapport, held by (or let go of by) a PC partner the hero's player does not own
 	// (actors/character/up-with-people.js).
 	if (CONFIG.queries) CONFIG.queries[UP_WITH_PEOPLE_QUERY] = (data, context) => handleUpWithPeopleQuery(data, context);
@@ -1167,6 +1181,8 @@ installBattleJoyOnHurt();
 installBattleJoyEnd();
 // The Marshal going into battle: Stentorian's Command and Front Line Leader's Presence, offered full.
 installBattleHolds();
+// The Heavy's Situational Awareness: a fight breaking out reminds them of the one question it lets them ask.
+installSituationalAwareness();
 
 // The other side of the same moment. A monster reduced to 0 HP has no move to face: it is out of
 // the fight, so the GM's client marks it there and then — core's own `defeated`, which is the skull
@@ -1545,11 +1561,20 @@ async function _resyncIdentification(message, actor, total) {
  * tier did to the roller (We Happy Few's nerves, Prepare a Welcome's Surprise, Commune with Aratis's
  * Sanction, the holy light, Defend's Readiness: actors/character/tier-effects.js), and, for a Would-Be Hero
  * whose card it lifts to a 10+ (as it now COUNTS), the Potential for Greatness reminder the roll itself would
- * have posted, once per card (WouldBeHeroAsterisk.js).
+ * have posted, once per card (WouldBeHeroAsterisk.js). And a 12+ line taken on the roll (A Force to Be
+ * Reckoned With): its hook runs on a card lifted onto a 12+, and is taken back on one dropped off it.
  */
 async function _resyncRewrittenTotal(message, actor, total) {
 	await _resyncIdentification(message, actor, total);
 	await reconcileTierEffects(message, total, { actor });
+	// "On a 12+ you turn the tables" follows the FINAL total, both ways (the user's ruling, 2026-10-18): the
+	// note shows with the total (_shiftRollCardFlavor), and its hook, the Would-be it crosses off included,
+	// follows here (StonetopCharacter.js#reconcileCriticalOffers).
+	try {
+		await reconcileCriticalOffers(message, actor, total);
+	} catch (err) {
+		console.error("Stonetop | Error matching a rewritten roll's 12+ lines:", err);
+	}
 	// "On a miss, mark XP" follows the total the card now shows (roll-engine.js#reconcileMissXp).
 	try {
 		await reconcileMissXp(message, total, { actor });
@@ -1598,7 +1623,8 @@ function _cardCharacterFor(message, user) {
 registerRollCardAction(BURN_BRIGHTLY_ACTION, ({ message, user }) => _burnBrightlyOnCard(message, user));
 registerRollCardAction(GIVE_IT_ALL_ACTION, async ({ message, user, data }) => {
 	const actor = _cardCharacterFor(message, user);
-	return !!actor && giveItAll(message, actor, data?.cost, IMPETUOUS_YOUTH_DEPS);
+	// No `hurt`: the presser rolls the 2d4 on their own client once this answers (impetuous-youth.js#rollGiveItAllHurt).
+	return !!actor && giveItAll(message, actor, data?.cost, { ...IMPETUOUS_YOUTH_DEPS, hurt: null });
 });
 registerRollCardAction(KNOW_THINGS_UPGRADE_ACTION, ({ message, user, data }) => _upgradeKnowThings(message, user, data?.source));
 
@@ -1679,19 +1705,26 @@ function _wireNeverAtALoss(message, html, actor) {
 // "expend a use ... treat the result as a 10+". Two things buy it: the Logbook move and the
 // books & scrolls possession, each offered while the card is still below a strong hit and its
 // track still has a use in it. Spending either settles the card, so both buttons go with it.
+// "A Know Things roll you JUST made": only on the character's newest Know Things card, never on
+// an old miss further up the log (_isLatestKnowThingsCard).
 function _wireLogbook(message, html, actor, card) {
 	if (message.getFlag(SYSTEM_ID, "knowThingsUpgrade")) return;
 	if (_knowThingsCountsAsStrongHit(message)) return;
+	// The tracks first: most characters hold none of them, and reading them is cheaper than walking the log.
+	const offers = _knowThingsUpgradeSources(actor)
+		.map(source => ({ source, uses: source.read() }))
+		.filter(({ uses }) => uses && uses.left > 0);
+	if (!offers.length) return;
+	if (!_isLatestKnowThingsCard(message)) return;
 
 	const cardButtons = card.querySelector(".stonetop-card-buttons");
 	if (!cardButtons) return;
-	for (const source of _knowThingsUpgradeSources(actor)) {
-		const uses = source.read();
-		if (!uses || uses.left <= 0) continue;
+	for (const { source, uses } of offers) {
 		const btn = document.createElement("button");
 		btn.className = "stonetop-logbook-btn";
 		btn.innerHTML = `<i class="fas ${source.icon}"></i> ${escHtml(source.button)}`;
-		btn.dataset.tooltip = `Expend a use (${uses.left} of ${uses.max} left) to ignore this roll and treat the result as a 10+.`;
+		btn.dataset.tooltip = source.tooltip?.(uses)
+			?? `Expend a use (${uses.left} of ${uses.max} left) to ignore this roll and treat the result as a 10+.`;
 		btn.dataset.tooltipDirection = "UP";
 		cardButtons.appendChild(btn);
 		cardButtons.style.display = "flex";
@@ -1699,9 +1732,39 @@ function _wireLogbook(message, html, actor, card) {
 	}
 }
 
+// Each speaker's newest Know Things roll card, as the log last said it: walked once per speaker, not once per
+// card drawn, which on a long log's load made every one of their cards walk the whole log again. A card made
+// or deleted forgets only its speaker's; an edit only when it could change the answer (its roll, its move
+// stamp, who spoke it), since card flags are written all the time and each clear meant a walk.
+const _latestKnowThings = new Map();
+for (const hook of ["createChatMessage", "deleteChatMessage"]) Hooks.on(hook, message => _latestKnowThings.delete(message.speaker?.actor));
+Hooks.on("updateChatMessage", (message, changes) => {
+	if ("speaker" in changes) return _latestKnowThings.clear();
+	if ("rolls" in changes || foundry.utils.hasProperty(changes, `flags.${SYSTEM_ID}.move`)) _latestKnowThings.delete(message.speaker?.actor);
+});
+
+/**
+ * Whether `message` is the newest Know Things roll card its speaker made (know-things.js#latestKnowThingsCard).
+ * Drawing reads the remembered answer; a card NEWER than the one remembered asks the log again, since a new
+ * card can draw before the hook that clears it. `fresh` always asks the log: the spend's own check.
+ */
+function _isLatestKnowThingsCard(message, { fresh = false } = {}) {
+	const actorId = message.speaker?.actor;
+	let latest = fresh ? undefined : _latestKnowThings.get(actorId);
+	if (latest === undefined || (message.timestamp ?? 0) > (latest?.timestamp ?? -Infinity)) {
+		// Read from the newest end, stopping at the first match: a copy of the references is cheaper than
+		// testing every card in a long log, and the card asked about is nearly always at the bottom.
+		latest = latestKnowThingsCard(game.messages?.contents ?? [], actorId) ?? null;
+		if (actorId) _latestKnowThings.set(actorId, latest);
+	}
+	return latest?.id === message.id;
+}
+
 /**
  * What can turn a Know Things roll into a 10+, each read and spent through the store it lives
- * in. Both tracks count uses SPENT, so expending one increments.
+ * in. The two use tracks count uses SPENT, so expending one increments; the Itinerant Mystic's
+ * Enigma is a count HELD (enigma.js), so its spend takes one off, and it says its own tooltip and
+ * chat line since it is not "a use" of anything.
  */
 function _knowThingsUpgradeSources(actor) {
 	return [
@@ -1720,6 +1783,18 @@ function _knowThingsUpgradeSources(actor) {
 			read:  () => possessionTrackUses(_possessionFlags(actor), BOOKS_AND_SCROLLS),
 			spend: now => actor.typedActor.possessions.setUses(BOOKS_AND_SCROLLS.slug, now.spent + 1),
 		},
+		// "Spend Enigma 1-for-1 to: ... Know Things as if you rolled a 10+, drawing on what you learned
+		// while away." Null (no button) for anyone but an Itinerant Mystic; none at 0 held.
+		{
+			key: ENIGMA_KEY, title: game.i18n.localize("stonetop.lightbearer.enigma.title"), icon: "fa-route",
+			button: game.i18n.localize("stonetop.lightbearer.enigma.knowThings.button"),
+			noun: "their wanderings", empty: game.i18n.localize("stonetop.lightbearer.enigma.knowThings.empty"),
+			read:  () => enigmaUses(actor),
+			spend: () => spendEnigma(actor),
+			tooltip: uses => game.i18n.format("stonetop.lightbearer.enigma.knowThings.tooltip", { held: uses.left }),
+			spentLine: now => game.i18n.format("stonetop.lightbearer.enigma.knowThings.spent",
+				{ name: escHtml(actor.name), held: now.left - 1 }),
+		},
 	];
 }
 
@@ -1735,7 +1810,8 @@ async function _spendKnowThingsUpgrade(message, actor, cardButtons, btn, source)
 		// On the card's writer, the GM's client while one is connected (_upgradeKnowThings below).
 		const done = await pressRollCard(message, KNOW_THINGS_UPGRADE_ACTION, { source: source.key });
 		if (!done?.upgraded) {
-			ui.notifications.warn(!done ? _writerSilent() : done.empty ? source.empty : "This roll is already a 10+.");
+			ui.notifications.warn(!done ? _writerSilent() : done.empty ? source.empty
+				: done.stale ? "Only the Know Things roll you just made can be treated as a 10+." : "This roll is already a 10+.");
 			// Only a press nobody answered can be tried again: a refusal is the card or the track saying no.
 			btn.disabled = !!done;
 			return;
@@ -1752,7 +1828,8 @@ async function _spendKnowThingsUpgrade(message, actor, cardButtons, btn, source)
 /**
  * A Know Things upgrade on the card's writer: in the card's turn, one use of `sourceKey` spent and the roll padded
  * to exactly 10, for the character speaking the card when `user` plays them. `{upgraded}`; `{empty}` when the
- * track has no use left; neither when the card is already settled at 10+.
+ * track has no use left; `{stale}` when a newer Know Things card of theirs has replaced it; none of them when the
+ * card is already settled at 10+.
  */
 async function _upgradeKnowThings(message, user, sourceKey) {
 	const actor = _cardCharacterFor(message, user);
@@ -1760,6 +1837,8 @@ async function _upgradeKnowThings(message, user, sourceKey) {
 	if (!source) return { upgraded: false };
 	return inCardTurn(message, async () => {
 		if (message.getFlag(SYSTEM_ID, "knowThingsUpgrade") || _knowThingsCountsAsStrongHit(message)) return { upgraded: false };
+		// A button left on a card a newer Know Things roll has since replaced: not the roll "you just made".
+		if (!_isLatestKnowThingsCard(message, { fresh: true })) return { upgraded: false, stale: true };
 		const now = source.read();
 		if (!now || now.left <= 0) return { upgraded: false, empty: true };
 		await source.spend(now);
@@ -1770,8 +1849,8 @@ async function _upgradeKnowThings(message, user, sourceKey) {
 		await writeCardRoll(message, async shifted => { while (shifted.total < STRONG_HIT_TOTAL) await _shiftRoll(shifted, 1); },
 			ROLL_BOOST_DEPS, { flags: { [SYSTEM_ID]: { knowThingsUpgrade: source.key } } });
 		await ChatMessage.create({
-			content: moveChatCard(source.title,
-				`<p><strong>${escHtml(actor.name)}</strong> consults ${source.noun} and expends a use`
+			content: moveChatCard(source.title, source.spentLine ? `<p>${source.spentLine(now)}</p>`
+				: `<p><strong>${escHtml(actor.name)}</strong> consults ${source.noun} and expends a use`
 				+ ` (${now.left - 1} of ${now.max} left), treating that roll as a 10+.</p>`),
 			speaker: ChatMessage.getSpeaker({ actor }),
 		});
@@ -1807,8 +1886,11 @@ function _possessionFlags(actor) {
  * The Lightbearer's holy relics (○○○ uses): "if you have one in inventory when you Invoke the Sun
  * God, you can mark a use in lieu of choosing a consequence." Invoke the Sun God's roll card lists
  * the consequences to choose on a 7+, so the relic is offered there, as the Logbook is on a Know
- * Things card. One per card: it stands in for the player's own choice, and the GM's pick on a 7-9
- * is still theirs to make. Settled on the message, so every client shows the same card.
+ * Things card. One use for each consequence the PLAYER owes (invoke-consequences.js#holyRelicOffers):
+ * their pick from the list on a 7+ (none on a Glorious Servant's 10+; the GM's pick on a 7-9 is still
+ * theirs to make), and the extra one Empowered Invocations chose before the roll, on any result, which
+ * a relic cancels. The card counts the uses it has had (HOLY_RELIC_FLAG), so every client shows the
+ * same card, and each button goes once what it stands in for is paid or the track is empty.
  *
  * Wielder of the White Flame's "Invoke the Sun God right now as if you rolled a 10+" posts a card with
  * the 10+'s list and no roll (invoke-consequences.js#invokeCardChoosesConsequence), so the relic goes
@@ -1820,10 +1902,12 @@ function _chatWireHolyRelics(message, html) {
 	const card = html.querySelector(tenPlus ? ".stonetop-chat-move" : ".stonetop-roll-card");
 	if (!card || _cardMoveName(message) !== INVOKE_THE_SUN_GOD) return;
 	if (card.querySelector(".stonetop-holy-relic-btn")) return;
-	if (message.getFlag(SYSTEM_ID, "holyRelicSpent")) return;
-	// A 6- has no consequence list for the player to choose from; the GM says what happens.
-	if (!invokeCardChoosesConsequence(message, { total: message.rolls?.at(0)?.total ?? null })) return;
 	const actor = speakerActor(message);
+	const total = message.rolls?.at(0)?.total ?? null;
+	// A 6- has no list for the player to choose from (the GM says what happens), but an Empowered
+	// consequence chosen before the roll is owed on it all the same.
+	const owed = holyRelicOffers(message, actor, { total });
+	if (!owed.list && !owed.prePick) return;
 	if (!canRewriteCard(message, actor)) return;
 	const relics = possessionTrackUses(_possessionFlags(actor), HOLY_RELICS);
 	if (!relics || relics.left <= 0) return;
@@ -1831,41 +1915,64 @@ function _chatWireHolyRelics(message, html) {
 	const cardButtons = tenPlus ? invokeActionRow(html) : card.querySelector(".stonetop-card-buttons");
 	if (!cardButtons) return;
 
-	const btn = document.createElement("button");
-	btn.className = "stonetop-logbook-btn stonetop-holy-relic-btn";
-	btn.innerHTML = `<i class="fas fa-sun"></i> Mark a holy relic`;
-	btn.dataset.tooltip = `If you have one in your inventory, mark a use (${relics.left} of ${relics.max} left) in lieu of choosing a consequence.`;
-	btn.dataset.tooltipDirection = "UP";
-	cardButtons.appendChild(btn);
+	const i18n = (key, data) => game.i18n.format(key, data);
+	// One button per kind still owed: the player's pick from the list, and the Empowered consequence.
+	const kinds = [...(owed.list > 0 ? [false] : []), ...(owed.prePick ? [true] : [])];
+	const buttons = kinds.map(prePick => {
+		const btn = document.createElement("button");
+		btn.className = "stonetop-logbook-btn stonetop-holy-relic-btn";
+		btn.dataset.prePick = prePick ? "1" : "";
+		btn.innerHTML = `<i class="fas fa-sun"></i> ${escHtml(i18n(prePick ? "stonetop.invocations.relicButtonEmpowered" : "stonetop.invocations.relicButton"))}`;
+		btn.dataset.tooltip = i18n(prePick ? "stonetop.invocations.relicTooltipEmpowered" : "stonetop.invocations.relicTooltip",
+			{ left: relics.left, max: relics.max });
+		btn.dataset.tooltipDirection = "UP";
+		cardButtons.appendChild(btn);
+		return btn;
+	});
 	cardButtons.style.display = "flex";
 
-	// The card-button skeleton: the latch on the message, the permission check, the re-render and the
-	// button put back on a throw. A spent card never draws the button, so there is nothing to relabel.
-	_wireSteadingCardButtons(message, [btn], {
-		flag: "holyRelicSpent",
-		onSettled: () => {},
-		warn: "You need permission to mark this character's holy relics.",
-		errorNote: "Error marking a holy relic",
-		actorType: "character",
-		subject: a => a,
-		run: async actor => {
-			// Re-read at click time: the track may have been marked elsewhere since this rendered.
-			const now = possessionTrackUses(_possessionFlags(actor), HOLY_RELICS);
-			if (!now || now.left <= 0) {
-				ui.notifications.warn("Your holy relics have no uses left.");
-				btn.remove();
-				return { abort: true };
+	for (const btn of buttons) {
+		const prePick = btn.dataset.prePick === "1";
+		btn.addEventListener("click", async () => {
+			const who = speakerActor(message);
+			// The count is a flag on the CARD, which only the GM or whoever posted it may write.
+			if (!who?.isOwner || who.type !== "character" || !canUserWriteCard(message, game.user, { whenUnknown: !!game.user?.isGM })) {
+				ui.notifications.warn(game.i18n.localize("stonetop.invocations.relicNoPermission"));
+				return;
 			}
-			await actor.typedActor.possessions.setUses(HOLY_RELICS.slug, now.spent + 1);
-			await ChatMessage.create({
-				content: moveChatCard("Holy Relics",
-					`<p><strong>${escHtml(actor.name)}</strong> marks a use of their holy relics`
-					+ ` (${now.left - 1} of ${now.max} left) in lieu of choosing a consequence.</p>`),
-				speaker: ChatMessage.getSpeaker({ actor }),
-			});
-			btn.remove();
-		},
-	});
+			for (const b of buttons) b.disabled = true;
+			// The track found empty at click time: nothing left to mark, so the buttons go rather than come back.
+			let usedUp = false;
+			try {
+				const done = await settleHolyRelic(message, who, { prePick, total, spend: async () => {
+					// Re-read at click time: the track may have been marked elsewhere since this rendered.
+					const now = possessionTrackUses(_possessionFlags(who), HOLY_RELICS);
+					if (!now || now.left <= 0) {
+						ui.notifications.warn(game.i18n.localize("stonetop.invocations.relicNone"));
+						usedUp = true;
+						return false;
+					}
+					await who.typedActor.possessions.setUses(HOLY_RELICS.slug, now.spent + 1);
+					await ChatMessage.create({
+						content: moveChatCard("Holy Relics", `<p>${i18n(prePick ? "stonetop.invocations.relicMarkedEmpowered" : "stonetop.invocations.relicMarked",
+							{ name: escHtml(who.name), left: now.left - 1, max: now.max })}</p>`),
+						speaker: ChatMessage.getSpeaker({ actor: who }),
+					});
+					return true;
+				} });
+				if (done) {
+					// The card re-renders off its own flag writes and draws whatever is still owed.
+					for (const b of buttons) b.remove();
+					for (const sheet of Object.values(who.apps ?? {})) sheet.render(false);
+					return;
+				}
+			} catch (err) {
+				console.error("Stonetop | Error marking a holy relic:", err);
+			}
+			if (usedUp) for (const b of buttons) b.remove();
+			else for (const b of buttons) b.disabled = false;
+		});
+	}
 }
 
 
@@ -2120,6 +2227,18 @@ function _chatWireSpendStock(message, html) {
 			const amount = Math.max(1, Number(button.dataset.amount) || 1);
 			const character = actor.typedActor;
 			const moveName = _cardMoveName(message) ?? html.querySelector(".stonetop-chat-move-name")?.textContent?.trim() ?? "";
+			// Offered only for a move this character owns and has learned (_stockSpendOffered), and asked
+			// again at the click: a move switched off, or taken off the sheet, since the card was posted was
+			// never made, so there is nothing to pay. A card from before the button carried its move's id has
+			// nothing to check against and pays as it always did.
+			const moveId = button.dataset.moveId;
+			if (moveId) {
+				const move = actor.items?.get?.(moveId);
+				if (!move || !moveLearnedIn(move, actor.items)) {
+					ui.notifications.warn(`${actor.name} no longer has ${moveName || "this move"} learned, so there is no Stock to spend for it.`);
+					return { abort: true };
+				}
+			}
 			// Read LIVE: the pouch's real max and whether it is held (preselected included), a
 			// learned Rites of the Land's Boon, and a Vessel's HP.
 			const payable = payableStockSources(await character.stockSources(), amount);
@@ -2462,9 +2581,7 @@ async function _onRollProvisions(message, btn, index, pick) {
  * button is where HP actually moves.
  */
 function _chatWireOptionDamage(message, html) {
-	const move = message.getFlag(SYSTEM_ID, "move")
-		|| html.querySelector(".stonetop-chat-move-name")?.textContent?.trim()
-		|| "";
+	const move = cardMoveName(message, html);
 
 	wirePickedOptionButton(message, html, {
 		flagKey:      "optionDamageRolled",
@@ -2482,6 +2599,79 @@ function _chatWireOptionDamage(message, html) {
 		readout: paid => _optionDamageDealtEl(paid.totals, paid.hpLoss),
 		onPress: (btn, index, dealt) => _onRollOptionDamage(message, btn, index, { move, dealt }),
 	});
+	_chatWireOptionDamageChoices(message, html, move);
+}
+
+/**
+ * A ticked option that deals damage but lets the fiction pick the die: Work With What You've Got's
+ * "Deal damage appropriate to the source (d4 for bruises/scrapes, d6 for bloodshed, d8 if it'd break
+ * bones, d10 if it'd kill a common person)" (utils/damage.js#readOptionDamageChoices). One button
+ * per die, and the bullet is still ONE option: the same `optionDamageRolled` stamp latches it, so
+ * rolling any of them retires them all.
+ *
+ * Runs after wirePickedOptionButton above and wears its classes, so that pass strips these buttons
+ * and readouts before it reads a row, and the stylesheet dresses them alike. That pass skips these
+ * rows (its reader finds no single die), which leaves the readout and the tick toggle to this one.
+ *
+ * Both readers here read the option's OWN WORDS (optionLabelText), never the row: by now the pass
+ * above has hung its live " Roll 1d6 damage" on a single-die row, and "It adds to the chaos: they
+ * take 1d6 damage Roll" is a bonus to readOptionDamage ("adds ... damage roll"), so the row read as
+ * owing nothing and the line below took that live button off.
+ */
+function _chatWireOptionDamageChoices(message, html, move) {
+	const items = [...html.querySelectorAll(".stonetop-picklist-item")]
+		.filter(item => belongsToMessage(item, message));
+	if (!items.length) return;
+	const done = message.getFlag(SYSTEM_ID, "optionDamageRolled") ?? {};
+
+	for (const item of items) {
+		const box = item.querySelector(".stonetop-picklist-check");
+		const words = optionLabelText(item);
+		// Only a line that says "damage" can offer a choice of dice (readOptionDamageChoices wants the word).
+		if (!box || !/damage/i.test(words) || readOptionDamage(words)) continue;
+		item.querySelectorAll(".stonetop-option-damage-roll, .stonetop-option-damage-dealt").forEach(el => el.remove());
+		const choices = readOptionDamageChoices(words);
+		if (!choices) continue;
+		const index = box.dataset.index;
+
+		const paid = done[index];
+		if (paid) {
+			item.appendChild(_optionDamageDealtEl(paid.totals, paid.hpLoss));
+			continue;
+		}
+
+		const buttons = choices.map(dealt => {
+			const btn = document.createElement("button");
+			btn.type = "button";
+			btn.className = "stonetop-option-damage-roll";
+			const glyph = document.createElement("i");
+			glyph.className = "fas fa-dice-d6";
+			btn.append(glyph, ` Roll ${dealt.formula} (${dealt.label})`);
+			btn.hidden = !box.checked;
+			item.appendChild(btn);
+			return { btn, dealt };
+		});
+
+		if (item.dataset.optionDamageChoicesWired !== "1") {
+			item.dataset.optionDamageChoicesWired = "1";
+			box.addEventListener("change", () => {
+				item.querySelectorAll(".stonetop-option-damage-roll").forEach(el => { el.hidden = !box.checked; });
+			});
+		}
+
+		for (const { btn, dealt } of buttons) {
+			btn.addEventListener("click", async () => {
+				// The others go quiet while this one rolls, so a second click cannot roll the bullet twice.
+				const others = buttons.map(b => b.btn).filter(b => b !== btn);
+				others.forEach(b => { b.disabled = true; });
+				await _onRollOptionDamage(message, btn, index, { move, dealt });
+				// Rolled: the readout replaced this button and the stamp retires the rest. Not rolled
+				// (no character, an error): all of them come back.
+				if (btn.isConnected) others.forEach(b => { b.disabled = false; });
+				else others.forEach(b => b.remove());
+			});
+		}
+	}
 }
 
 /** The static readout a rolled option wears from then on: what the blow came to, per target, or the HP lost. */
@@ -2528,6 +2718,11 @@ async function _onRollOptionDamage(message, btn, index, { move, dealt }) {
 			totals = [lost];
 		} else {
 			const results = await rollOptionDamage(actor, { move: move || "Damage", damage: dealt });
+			// Null: the damage window (a Marshal's Battlefield Grace) was closed, so nothing was rolled.
+			if (results === null) {
+				btn.disabled = false;
+				return;
+			}
 			totals = (results ?? []).map(r => r.raw);
 		}
 		btn.replaceWith(_optionDamageDealtEl(totals, dealt.hpLoss));
@@ -2584,6 +2779,8 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	wireLoyalToTheEnd(message, html);
 	// A follower's Death's Door card: the +nothing roll, then 10+ back to 1 HP or 6- dead (follower-deaths-door.js).
 	wireFollowerDeathsDoor(message, html);
+	wireFollowerOrderDamage(message, html);
+	wireFollowerBalkCard(message, html);
 	// Improvise, rolled from an un-learned mystery: its 7+'s "use it this once" and its 10+'s step.
 	wireImproviseCard(message, html);
 	// "Mark a consequence" as a move's cost (the Ring of Daagon's Call Up and Send Them Back):
@@ -2592,6 +2789,9 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	// Send Them Back (the Ring of Daagon's servants): the row of the tier the card ends on settles the
 	// batch, once per card.
 	wireSendBackCard(message, html);
+	// The sacred pouch's roll-card buttons: Suck the Poison Out's 10+ stores the malady, Borrow Power's 7-9
+	// loses the power, once per card (actors/character/sacred-pouch.js).
+	wirePouchCards(message, html);
 	// We Happy Few, every tier: who heard the speech holds its Inspiration, once per card.
 	wireSpeechCard(message, html);
 	// "You or an ally gain advantage" (Everything Burns' 10+, Work With What You've Got's 7+, and the posted
@@ -2599,6 +2799,12 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	wireGiveAdvantage(message, html);
 	// The Marshal's Focus Fire, on its own posted card: the order at the one foe targeted, once per card.
 	wireFocusFire(message, html);
+	// The Fox's Rapier Wit, on its own posted card: "They attack" at the NPC targeted, once per card.
+	wireRapierWit(message, html);
+	// The Judge's Truth or Consequences, on its own posted card: "They said Yes" and "I deceived them", each at whom.
+	wireTruthOrConsequences(message, html);
+	// The Marshal's Speak Softly, on its own posted card: "They refused", at whom.
+	wireSpeakSoftly(message, html);
 	// The Would-Be Hero's card buttons: Speak Truth to Power's "They refused: +1 Resolve", In Over Your
 	// Head's "Mark XP", Voice of Experience's "Ask it" (actors/character/would-be-hero-cards.js).
 	wireWouldBeHeroCards(message, html);
@@ -2626,6 +2832,10 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	// Invoke the Sun God's consequences: a ticked debility grows its buttons, the snuffing and the
 	// sun act on the Invocation the card names. After the picks pass, for the same reason as below.
 	wireInvokeConsequences(message, html);
+	// A ticked "(mark a debility)" option (Mighty Thews' toll) opens the debility window, and says what it marked.
+	wireOptionDebility(message, html);
+	// Censure's enraged reaction, ticked: who was Censured, so the next roll against them has advantage.
+	wireCensureEnraged(message, html);
 	// ...and the Invocation's own button (Bath of Healing Light's heal, Go Back to the Shadow's
 	// damage), which reads the Reduced tick the picks pass restored. A 6- grows none.
 	wireInvocationEffects(message, html, { missed: _invokeCardMissed(message) });
@@ -2700,6 +2910,7 @@ registerStruggleHooks();
 // -- AID, INTERFERE, PERSUADE (VS. PCS) -----------------------
 // On every client: an answer posted to one of these cards (or deleted) redraws the card it answers.
 registerPcAskHooks();
+registerFollowerBalkHooks();
 
 // -- CLASH: A COUNTER-ATTACK THE 10+ AVOIDED ------------------
 // On every client: a Clash card whose struck counter-attack turns avoided (or not) redraws that blow's
@@ -2869,7 +3080,10 @@ function _shiftRollCardFlavor(flavor, total, formula = null) {
 				// Set the VALUED attribute, not the `.hidden` property: this innerHTML is written back
 				// to the message's flavor (an HTMLField), and Foundry v14's sanitize-html strips
 				// valueless boolean attributes — a bare/empty `hidden` would vanish and reveal every tier.
-				if (row.dataset.tier === activeTier) row.removeAttribute("hidden");
+				// A 12+'s own row (`data-critical`, A Force to Be Reckoned With's note) shows on a 12+ alone,
+				// not on the 10 or 11 of the same tier (roll-engine.js#_rollCard).
+				const shown = row.dataset.tier === activeTier && (row.dataset.critical == null || result.key === "critical");
+				if (shown) row.removeAttribute("hidden");
 				else row.setAttribute("hidden", "hidden");
 			}
 		}

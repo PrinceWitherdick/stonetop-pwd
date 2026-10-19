@@ -1,6 +1,7 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { resetOmenReminder } from "../hooks/StonetopSingleton.js";
 import { isOutOfPlay, resetNeverGonnaKeepMeDown } from "../actors/character/deaths-door-actor.js";
+import { resetWildWays } from "../actors/character/wild-ways.js";
 import { asArray, getPlayerCharacters, playsCharacter } from "../utils/playbook-actors.js";
 import { adjustXp } from "../utils/xp.js";
 import { stonetopChatCard } from "../utils/chat.js";
@@ -11,6 +12,7 @@ import { getObjectSetting, setSetting } from "../settings.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { sendEndOfSession, sendEndOfSessionClosed, mirrorClosed, requestEndOfSession } from "./end-of-session-broadcast.js";
 import { latestWish, wishesUpdate } from "../campaign/player-wishes.js";
+import { REVIEW_ITEMS, REVIEW_LEAD } from "../gm-toolkit/follower-text.js";
 
 const KEY = "stonetop.endOfSession";
 
@@ -197,6 +199,9 @@ export class EndOfSessionDialog extends StonetopDialog {
 		const anyPersonal = this._tickedActors().some(actor => personalXp(this._personal[actor.id]) > 0);
 		return {
 			questions, pcs, xpCount, mirror: this._mirror,
+			// "Between sessions, review any followers that the PCs have" (Book I p.480), word for word, folded
+			// in the GM's window only: the session's end is when the book asks for it.
+			followerReview: { lead: REVIEW_LEAD, items: REVIEW_ITEMS },
 			canAward: xpCount > 0 || anyPersonal,
 			tally: format(`${KEY}.${this._mirror ? "mirrorTally" : "tally"}`, { xp: xpCount }),
 			awardLabel: xpCount > 0 ? format(`${KEY}.award`, { xp: xpCount }) : localize(`${KEY}.awardPersonal`),
@@ -371,6 +376,8 @@ export class EndOfSessionDialog extends StonetopDialog {
 		await resetOmenReminder();
 		// A new session gives back Never Gonna Keep Me Down's once-a-session 10+ at Death's Door.
 		await resetNeverGonnaKeepMeDown(this._roster.map(row => row.actor));
+		// And Raised by Wolves' once-a-session XP for the wild ways (wild-ways.js).
+		await resetWildWays(this._roster.map(row => row.actor));
 		this.close();
 	}
 }

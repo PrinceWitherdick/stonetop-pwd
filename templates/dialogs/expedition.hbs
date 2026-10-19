@@ -110,6 +110,14 @@
       {{!-- The Marshal's Logistics, ticked once any character has it learned. --}}
       <label class="stonetop-requisition-herd stonetop-requisition-logistics"><input type="checkbox" class="stonetop-check" name="logistics" checked><span>{{reqLogistics}}</span></label>
       {{/if}}
+      {{#if reqNerves}}
+      {{!-- We Happy Few's 6-: a shaken Marshal behind this roll has disadvantage. A tick for one, a pick for several. --}}
+      {{#if reqNerves.options}}
+      <label class="stonetop-requisition-herd stonetop-requisition-nerves"><span>{{reqNerves.label}}</span><select name="nerves">{{#each reqNerves.options}}<option value="{{value}}">{{label}}</option>{{/each}}</select></label>
+      {{else}}
+      <label class="stonetop-requisition-herd stonetop-requisition-nerves"><input type="checkbox" class="stonetop-check" name="nerves" value="{{reqNerves.value}}"{{#if reqNerves.checked}} checked{{/if}}><span>{{reqNerves.label}}</span></label>
+      {{/if}}
+      {{/if}}
       {{#each reqAdvantages}}
       {{!-- An improvement's asked advantage on Requisition: unticked, the table's call. --}}
       <label class="stonetop-requisition-herd stonetop-requisition-advantage"><input type="checkbox" class="stonetop-check" name="{{name}}"><span>{{label}}</span></label>

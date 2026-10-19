@@ -99,10 +99,33 @@ export function companionIsExceptional(character) {
 /** The follower types whose "exceptional" is a move's pick, and that move. */
 export const EXCEPTIONAL_FROM_MOVE = Object.freeze({ "crew": HEROES_TO_THE_LAST, "animal-companion": BEAST_OF_LEGEND });
 
+/**
+ * Whether the crew is inured to terror & horror: Heroes to the Last's "They are inured to terror &
+ * horror" pick, read the way crewIsExceptional reads its own (the move LEARNED, the pick marked).
+ * Nothing rolls off it: the crew card shows it, and the crew's Spend Loyalty "Overcome their fear"
+ * and the Order Followers window note it.
+ */
+export function crewIsInured(character) {
+	return learnedPickMarked(character, HEROES_TO_THE_LAST, "inured");
+}
+
+/** The note the crew's Spend Loyalty "Overcome their fear" and its Order window carry. */
+export const CREW_INURED_NOTE = "Inured to terror & horror";
+
+/** CREW_INURED_NOTE while the crew is inured (crewIsInured), else "". */
+export function crewInuredNote(character) {
+	return crewIsInured(character) ? CREW_INURED_NOTE : "";
+}
+
 // `moveName` is LEARNED (a book copy) and its "They are exceptional" pick is marked.
 function exceptionalPickMarked(character, moveName) {
+	return learnedPickMarked(character, moveName, "exceptional");
+}
+
+// `moveName` is LEARNED (a book copy) and its `optionSlug` pick is marked.
+function learnedPickMarked(character, moveName, optionSlug) {
 	if (!ownsLearnedBookMoveNamed(character, moveName)) return false;
-	const marked = readableFlags(character)?.moves?.moveMarks?.[moveName]?.exceptional;
+	const marked = readableFlags(character)?.moves?.moveMarks?.[moveName]?.[optionSlug];
 	return Array.isArray(marked) ? marked.length > 0 : Number(marked) > 0;
 }
 
@@ -219,13 +242,43 @@ export function followerCardFor(actor, { characters = null, resolve = globalThis
 	// Built on first use only: an actor made for a card names its character outright, and resolving
 	// that uuid answers without walking the world's actors at all.
 	let list = characters;
-	const searchable = () => {
-		if (!list) {
-			const world = globalThis.game?.actors;
-			list = typeof world?.[Symbol.iterator] === "function" ? [...world].filter(a => a?.type === "character") : [];
-		}
-		return list;
+	const searchable = () => (list ??= worldCharacters());
+	return cardForActor(actor, searchable, resolve, followerLinks);
+}
+
+/**
+ * followerCardFor for one pass over many actors (a Fight tab refresh): the world's characters are listed
+ * once, each character's follower links are walked once, and each actor's answer is kept. An NPC with no
+ * stamp may still be a recruited follower, so every one is searched; the memo only stops it being searched
+ * again. For a read that writes nothing between its lookups: a card changed mid-pass is not seen.
+ *
+ * @param {object} [p]  as followerCardFor's
+ * @returns {(actor: Actor) => ({character: Actor, ftype: string, slug: string}|null)}
+ */
+export function followerCardMemo({ characters = null, resolve = globalThis.fromUuidSync } = {}) {
+	let list = characters;
+	const searchable = () => (list ??= worldCharacters());
+	const links = new Map();
+	const linksOf = character => {
+		if (!links.has(character)) links.set(character, followerLinks(character));
+		return links.get(character);
 	};
+	const cards = new Map();
+	return actor => {
+		if (actor?.type !== "npc") return null;
+		if (!cards.has(actor)) cards.set(actor, cardForActor(actor, searchable, resolve, linksOf));
+		return cards.get(actor);
+	};
+}
+
+/** Every character in the world, or none when the world cannot be read. */
+function worldCharacters() {
+	const world = globalThis.game?.actors;
+	return typeof world?.[Symbol.iterator] === "function" ? [...world].filter(a => a?.type === "character") : [];
+}
+
+/** followerCardFor's search for an NPC, over `searchable()` characters whose links `linksOf` reads. */
+function cardForActor(actor, searchable, resolve, linksOf) {
 	const origin = actor.flags?.[SYSTEM_ID]?.followerOrigin;
 	if (origin?.characterUuid && origin.ftype) {
 		// Not strict: a character in a compendium, or one since deleted, must read as missing rather
@@ -245,7 +298,7 @@ export function followerCardFor(actor, { characters = null, resolve = globalThis
 	}
 	const uuids = linkUuidsFor(actor);
 	for (const character of searchable()) {
-		const links = followerLinks(character);
+		const links = linksOf(character);
 		for (const uuid of uuids) {
 			const card = links.get(uuid);
 			if (card) return { character, ftype: card.ftype, slug: card.slug };

@@ -29,7 +29,15 @@
 //    Readiness — its price is the pick, which is asked before the halving is written and said out loud on
 //    the card. With BUT I GET UP AGAIN it also writes down who dealt it, and that foe then owes the
 //    character advantage and +1d4 (fight/hero-moves.js). Offered to whoever takes the blow: a Would-Be
-//    Hero who stood in for someone may use it (the user's ruling), their ward may not.
+//    Hero who stood in for someone may use it (the user's ruling), their ward may not. NOT on a move's own
+//    price the character chose to pay (Iron Will's 1d4, combat/attack-flow.js#rollOptionDamage marks it
+//    `ownPrice`): that is no blow they tried to avoid.
+//  • NEVER GONNA KEEP ME DOWN (Would-Be Hero): "When you have 5 or fewer current HP, you impose disadvantage
+//    on any damage you take." The blow's roll was settled by whoever it was aimed at, so a Would-Be Hero who
+//    stands in for them afterwards (the user's ruling) is offered the disadvantage on the card: the row's
+//    own formula rolled again, the lower of the two kept (a row rolled at advantage is rolled again
+//    straight instead: the two cancel). Not on a row already rolled at disadvantage (its formula keeps the
+//    lowest, `kl`), once per row, and like I Get Knocked Down it costs no Readiness.
 //  • SAFETY FIRST (Seeker): "When you are affected by harmful magic, spend 1 Protection either to gain
 //    advantage on any roll to resist it or to halve its damage/effects." The halving is offered to whoever
 //    suffers the blow while they hold Protection (the user's ruling, 2026-09-26), priced in Protection, not
@@ -42,9 +50,15 @@
 //    halving is; the blow then lands on nobody here (where Mirrorshield sends it is the table's, and is rolled
 //    at them as its own blow). Whether the blow is magical, and whether the Blessed is touching the earth,
 //    is the table's to say, so the button says so; the shield is checked when the Judge presses it.
+//  • FRONT LINE LEADER (Marshal, Book I p.126): "Spend Presence ... as Readiness (as if you Defended them)".
+//    A blow on the Marshal's crew (the NPC that stands for their crew card) is offered to the Marshal to
+//    halve or to take for them, paid in Presence rather than Readiness (`purse: "presence"` on the offer and
+//    on the spend it records), while they hold any (actors/character/front-line-presence.js). The crew
+//    being led into battle is what put the Presence there, so no nearness is asked beyond that.
 //
 // WHO MAY DEFEND. The one hit, when they hold Readiness, can halve their own blow; any character in the
-// fight standing beside them (touching, or fighting the same foe) who holds Readiness can do either. "They
+// fight standing beside them (touching, or fighting the same foe) who holds Readiness can do either. So can
+// a follower holding Readiness from an ordered Defend (p.469), kept on their card. "They
 // can't interrupt an attack that they can't perceive, or strike back at a foe that's out of reach", which is
 // why it is the people standing there. Pressed by anyone who can record the spend on the card (its author,
 // or the one GM who acts), for a defender they may write: a player cannot spend another player's Readiness.
@@ -59,16 +73,20 @@ import { SYSTEM_ID } from "../system-id.js";
 import { isFightTabEnabled } from "../settings.js";
 import { format, localize } from "../utils/i18n.js";
 import { escHtml, stripHtmlToText } from "../utils/strings.js";
-import { stonetopChatCard, firstOptionList } from "../utils/chat.js";
+import { stonetopChatCard, firstOptionList, multiDieFaces } from "../utils/chat.js";
 import { damageRowActor } from "../utils/damage.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { contentElement } from "../utils/dialogv2-content.js";
-import { heldReadiness, READINESS_FLAG } from "../combat/defend-readiness.js";
-import { ownsLearnedMoveNamed, ownedMove } from "../actors/character/owns-move.js";
+import { spendHeldReadiness as spendReadiness, readinessHeldBy as heldReadiness } from "./follower-readiness.js";
+import { ownsLearnedMoveNamed, ownsLearnedBookMoveNamed, ownedLearnedBookMove } from "../actors/character/owns-move.js";
 import { learnedTrack, takeBackHeld } from "../actors/character/MoveResources.js";
+import { presenceKeeperFor, presenceHeld, spendPresence } from "../actors/character/front-line-presence.js";
+import { followerCardMemo } from "../actors/character/follower-masters.js";
 import { touching, HEROES } from "./engagements.js";
 import { engagementFor, fightOnScene, gridOf, isFight } from "./fight-state.js";
-import { HERO_MOVES, recordKnockedDownBy } from "./hero-moves.js";
+import { HERO_MOVES, recordKnockedDownBy, neverGonnaNow } from "./hero-moves.js";
+import { rolledAtDisadvantage, rolledAtAdvantage, straightFormula } from "../utils/roll-engine.js";
+import { DIE_FLAG as INSPIRATION_DIE_FLAG } from "../actors/character/inspiration-flow.js";
 import { giveAdvantageButtonHtml } from "../actors/character/give-advantage.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { inCardTurn } from "../utils/card-queue.js";
@@ -77,10 +95,10 @@ import { resolveSync, queryAsker } from "../utils/foundry-compat.js";
 const KEY = "stonetop.fight.defend";
 const HERO_KEY = "stonetop.fight.heroMoves";
 
-/** Take `cost` Readiness off a character, never below none. */
-export function spendReadiness(actor, cost = 1) {
-	return actor.setFlag(SYSTEM_ID, READINESS_FLAG, Math.max(0, heldReadiness(actor) - cost));
-}
+// spendReadiness (follower-readiness.js#spendHeldReadiness, for the fight ring too): take `cost` Readiness off a
+// character, or off a follower's card, never below none. A follower ordered to Defend spends on Defend's own
+// terms (p.469), so every spend here is theirs too. heldReadiness (readinessHeldBy): what a defender holds.
+export { spendReadiness };
 
 /** Halve a blow, rounded up (p.216; the book's halvings round up). */
 export const halveDamage = raw => Math.ceil(Math.max(0, Number(raw) || 0) / 2);
@@ -101,6 +119,7 @@ const SPEND_KINDS = {
 	standIn:     { list: "standIns", note: spend => (spend.free ? "noteStandInFree" : "noteStandIn") },
 	ignore:      { list: "ignoredBy", note: "noteIgnore", voids: "ignoredLine" },
 	knockedDown: { list: "knockedDownBy", note: "noteKnockedDown", free: true, bySufferer: true },
+	neverGonna:  { list: "neverGonnaBy", note: spend => (spend?.straight ? "noteNeverGonnaStraight" : "noteNeverGonna"), free: true },
 	safetyFirst: { list: "safetyFirstBy", note: "noteSafetyFirst", free: true },
 	redirect:    { list: "redirectedBy", note: "noteRedirect", voids: "redirectedLine" },
 };
@@ -109,6 +128,15 @@ const SPEND_KINDS = {
 const REDIRECT_MOVES = [HERO_MOVES.MIRRORSHIELD, HERO_MOVES.LIGHTNING_ROD];
 const isSpendKind = kind => Object.hasOwn(SPEND_KINDS, kind);
 const costsReadiness = kind => !SPEND_KINDS[kind]?.free;
+
+/** An offer (or a spend recorded off one) paid in Front Line Leader's Presence rather than Readiness. */
+const paysPresence = offer => offer?.purse === "presence";
+
+/** Whether the defender can still pay for this spend: Presence held for a Presence offer, else its Readiness. */
+function canPay(kind, offer, cost) {
+	if (paysPresence(offer)) return presenceHeld(offer.defender) > 0;
+	return !costsReadiness(kind) || heldReadiness(offer.defender) >= Math.max(1, cost);
+}
 
 /**
  * What the spends on a card have settled so far, by row uuid: the blows halved (a halving or a parry),
@@ -144,8 +172,14 @@ export function spentOn(damage) {
 			.map(spend => spend.uuid)),
 		// Safety First's halving the same way: its own move, paid in Protection.
 		safetyFirst: uuids("safetyFirst"),
+		// The rows a stand-in's Never Gonna Keep Me Down rolled again: once per row, its number already
+		// written onto the row (takeSpend), so nothing at apply time reads it.
+		neverGonna: uuids("neverGonna"),
 	};
 }
+
+/** Whether a formula has a die in it to roll again. PURE. */
+const hasDie = formula => /\d*d\d+/i.test(String(formula ?? ""));
 
 /**
  * The token a damage row's target stands as: its one token on the canvas scene, else the one it fights
@@ -171,12 +205,14 @@ export function rowToken(doc, { scene = globalThis.canvas?.scene ?? null, combat
  * Who could spend Readiness on the blow a row owes: the one hit, and the characters standing by them.
  *
  * @param {string} uuid  the row's target
+ * @param {object} [p]
+ * @param {Function} [p.cardFor]  finds a follower's card (defendOffers hands in one followerCardMemo per pass)
  * @returns {{self: Actor|null, allies: Actor[]}}  those holding Readiness this reader may write
  */
-function defendersFor(uuid, { user = globalThis.game?.user } = {}) {
+function defendersFor(uuid, { user = globalThis.game?.user, cardFor } = {}) {
 	const doc = resolveSync(uuid);
 	const target = damageRowActor(doc);
-	const writable = actor => !!actor && (user?.isGM || actor.isOwner) && heldReadiness(actor) > 0;
+	const writable = actor => !!actor && (user?.isGM || actor.isOwner) && heldReadiness(actor, { cardFor }) > 0;
 	const self = writable(target) ? target : null;
 	const allies = [];
 	const token = isFightTabEnabled() ? rowToken(doc) : null;
@@ -209,15 +245,22 @@ function defendersFor(uuid, { user = globalThis.game?.user } = {}) {
  * PURE apart from `defendersOf` and `resolveActor`.
  *
  * @param {object} damage  the card's damage flag
- * @param {(uuid: string) => {self: Actor|null, allies: Actor[]}} [defendersOf]
+ * @param {(uuid: string, p: {cardFor: Function}) => {self: Actor|null, allies: Actor[]}} [defendersOf]
  * @param {(uuid: string) => Actor|null} [resolveActor]  a stand-in's actor, from the uuid on the card
+ * @param {(actor: Actor, p: {cardFor: Function}) => Actor|null} [presenceOf]  whose Front Line Leader Presence guards the one hit
  * @returns {{halve: object[], parry: object[], standIn: object[], ignore: object[]}}
  */
-export function defendOffers(damage, defendersOf = defendersFor, resolveActor = uuid => damageRowActor(resolveSync(uuid))) {
+export function defendOffers(damage, defendersOf = defendersFor, resolveActor = uuid => damageRowActor(resolveSync(uuid)), presenceOf = presenceKeeperFor) {
 	const done = new Set((damage?.applied ?? []).map(a => a.uuid));
-	const { halved, standIns, voided, knockedDown, safetyFirst } = spentOn(damage);
-	const offers = { halve: [], parry: [], standIn: [], ignore: [], knockedDown: [], safetyFirst: [], redirect: [] };
+	const { halved, standIns, voided, knockedDown, safetyFirst, neverGonna } = spentOn(damage);
+	const offers = { halve: [], parry: [], standIn: [], ignore: [], knockedDown: [], neverGonna: [], safetyFirst: [], redirect: [] };
 	const user = globalThis.game?.user;
+	// Whose follower card each NPC is, searched once per NPC for the whole pass rather than once per row and
+	// question: the Readiness a follower holds and the Presence guarding a crew are both read off it.
+	const cardFor = followerCardMemo();
+	// "Despite your best efforts to avoid it": a move's own price the character chose to pay is not such a
+	// blow, so I Get Knocked Down is not offered on it. A counter-attack is selfHarm too, and keeps it.
+	const ownPrice = !!(damage?.selfHarm && damage?.ownPrice);
 	// Which of the two redirecting moves each defender would spend, asked once per defender rather than once per
 	// row they stand by: this is drawn on every render of every card still owing damage.
 	const redirects = new Map();
@@ -236,13 +279,19 @@ export function defendOffers(damage, defendersOf = defendersFor, resolveActor = 
 		// they hold any: the whole point of the move, and why it cannot come from `defendersFor`. "When YOU
 		// take damage": a Would-Be Hero who stood in for someone may use it (the user's ruling), and the
 		// ward they stood in for, who no longer takes the blow, may not.
-		if (!knockedDown.has(row.uuid)) {
+		if (!ownPrice && !knockedDown.has(row.uuid)) {
 			const sufferer = standIn ? stoodIn : hit;
 			if (sufferer && (user?.isGM || sufferer.isOwner || !user) && ownsLearnedMoveNamed(sufferer, HERO_MOVES.KNOCKED_DOWN)) {
 				offers.knockedDown.push({ row, defender: sufferer, cost: 0 });
 			}
 		}
-		const { self, allies } = defendersOf(row.uuid);
+		// Never Gonna Keep Me Down, to a Would-Be Hero who stood in at 5 or fewer current HP: the roll was the
+		// ward's, so the disadvantage they impose is owed now, once, on a row not already rolled at it.
+		if (stoodIn && !neverGonna.has(row.uuid) && !rolledAtDisadvantage(row) && hasDie(row.formula)
+			&& (user?.isGM || stoodIn.isOwner || !user) && neverGonnaNow(stoodIn)) {
+			offers.neverGonna.push({ row, defender: stoodIn, cost: 0 });
+		}
+		const { self, allies } = defendersOf(row.uuid, { cardFor });
 		// Mirrorshield and Lightning Rod, by whoever could spend Readiness on this blow: one offer per defender,
 		// under the first of the two moves they hold.
 		for (const defender of [self, ...allies].filter(Boolean)) {
@@ -252,15 +301,24 @@ export function defendOffers(damage, defendersOf = defendersFor, resolveActor = 
 		if (!halved.has(row.uuid)) {
 			for (const defender of [self, ...allies].filter(Boolean)) {
 				offers.halve.push({ row, defender, cost: 1 });
-				if (ownsLearnedMoveNamed(defender, HERO_MOVES.PARRY)) offers.parry.push({ row, defender, cost: 1 });
+				// The book's Parry & Riposte: a player's own move of that name acts as itself (owns-move.js#bookMoveName).
+				if (ownsLearnedBookMoveNamed(defender, HERO_MOVES.PARRY)) offers.parry.push({ row, defender, cost: 1 });
 			}
 		}
 		if (!standIns.has(row.uuid)) {
 			for (const defender of allies) offers.standIn.push({ row, defender, cost: ownsLearnedMoveNamed(defender, HERO_MOVES.STEADFAST) ? 0 : 1 });
 		}
+		// Front Line Leader: a blow on the crew, still theirs to take, and their Marshal holding Presence spends
+		// it as Readiness, as if they had Defended them: to halve it, or to take it in their place.
+		const keeper = !standIn && hit ? presenceOf(hit, { cardFor }) : null;
+		if (keeper && (user?.isGM || keeper.isOwner || !user)) {
+			if (!halved.has(row.uuid)) offers.halve.push({ row, defender: keeper, cost: 1, purse: "presence" });
+			offers.standIn.push({ row, defender: keeper, cost: 1, purse: "presence" });
+		}
 		const sufferer = standIn ? stoodIn : self;
 		const mayWrite = !!sufferer && (user?.isGM || sufferer.isOwner || !user);
-		if (mayWrite && heldReadiness(sufferer) > 0 && ownsLearnedMoveNamed(sufferer, HERO_MOVES.RAMPART)) {
+		// The move asked first: it is the cheaper question, and the one that is most often no.
+		if (mayWrite && ownsLearnedMoveNamed(sufferer, HERO_MOVES.RAMPART) && heldReadiness(sufferer, { cardFor }) > 0) {
 			offers.ignore.push({ row, defender: sufferer, cost: 1 });
 		}
 		// Safety First, to whoever suffers the blow while they hold Protection: no Readiness asked, so the
@@ -305,7 +363,7 @@ function pickOffer(offers, kind) {
 	return pickOne(offers, {
 		title: format(`${KEY}.${kind}`, {}),
 		question: format(`${KEY}.ask`, {}),
-		labelOf: offer => format(`${KEY}.${kind}Choice`, { defender: offer.defender.name, ward: offer.row.name, move: offer.move ?? "" }),
+		labelOf: offer => format(`${KEY}.${kind}${paysPresence(offer) ? "Presence" : ""}Choice`, { defender: offer.defender.name, ward: offer.row.name, move: offer.move ?? "" }),
 	});
 }
 
@@ -327,7 +385,7 @@ export async function spendOnBlow(message, kind, offer, { scope = SYSTEM_ID, str
 	const current = message.getFlag(scope, "damage");
 	if (!current || !offer) return false;
 	const cost = Number.isFinite(offer.cost) ? offer.cost : 1;
-	if (costsReadiness(kind) && heldReadiness(offer.defender) < Math.max(1, cost)) return false;
+	if (!canPay(kind, offer, cost)) return false;
 	// Written here, or by the GM's client for a card this reader cannot write (see the note at the top).
 	const take = relay ? () => askGMToSpend(message, kind, offer) : () => takeSpend(message, kind, offer, { scope });
 
@@ -362,7 +420,7 @@ export async function spendOnBlow(message, kind, offer, { scope = SYSTEM_ID, str
 		commit: async (keys = []) => { ticked = keys; return (taken = await take()); },
 	});
 	if (!taken) return false;
-	if (ownsLearnedMoveNamed(offer.defender, HERO_MOVES.SECOND_INTENT)) {
+	if (ownsLearnedBookMoveNamed(offer.defender, HERO_MOVES.SECOND_INTENT)) {
 		await postSecondIntent(offer.defender, { dieTaken: ticked.includes("secondIntent") });
 	}
 	return true;
@@ -393,7 +451,7 @@ export function beingApplied(damage, users = globalThis.game?.users) {
  *
  * @returns {Promise<boolean>} whether the spend was taken
  */
-export function takeSpend(message, kind, offer, { scope = SYSTEM_ID } = {}) {
+export function takeSpend(message, kind, offer, { scope = SYSTEM_ID, reroll = rollFormula } = {}) {
 	const cost = Number.isFinite(offer?.cost) ? offer.cost : 1;
 	// Each kept as a list of who spent what, which is all spentOn and defendNotes read.
 	const list = SPEND_KINDS[kind]?.list ?? "standIns";
@@ -404,7 +462,7 @@ export function takeSpend(message, kind, offer, { scope = SYSTEM_ID } = {}) {
 		// Being applied right now, perhaps on another client (combat/attack-flow.js#applyOwedDamage): the HP
 		// may already be written whole, so the Readiness would buy nothing.
 		if (beingApplied(now)) return false;
-		if (costsReadiness(kind) && heldReadiness(offer.defender) < Math.max(1, cost)) return false;
+		if (!canPay(kind, offer, cost)) return false;
 		// The same option twice on one blow is refused (p.216: "each option once against any given attack").
 		// A sufferer's own move (I Get Knocked Down), so a stand-in may still take it on a blow whose ward took
 		// it before they stepped in (spentOn: the ward's no longer counts).
@@ -412,10 +470,15 @@ export function takeSpend(message, kind, offer, { scope = SYSTEM_ID } = {}) {
 			? s => s.uuid === offer.row.uuid && (!s.by || s.by === offer.defender.uuid)
 			: s => s.uuid === offer.row.uuid;
 		if ((now[list] ?? []).some(again)) return false;
+		// Never Gonna Keep Me Down writes its number onto the row with its record, in one write.
+		if (kind === "neverGonna") return rollAgainKeepLower(message, now, offer, { scope, reroll });
 		// Safety First is paid in Protection, 1 off what is HELD, and refused with none left.
 		if (kind === "safetyFirst" && !await takeBackHeld(offer.defender, HERO_MOVES.SAFETY_FIRST, 1)) return false;
-		if (cost > 0) await spendReadiness(offer.defender, cost);
-		const spend = { uuid: offer.row.uuid, name: offer.defender.name, how: kind };
+		// Front Line Leader's Presence pays in Readiness's place, and is refused with none left.
+		if (paysPresence(offer)) {
+			if (!await spendPresence(offer.defender)) return false;
+		} else if (cost > 0) await spendReadiness(offer.defender, cost);
+		const spend = { uuid: offer.row.uuid, name: offer.defender.name, how: kind, ...(paysPresence(offer) ? { purse: "presence" } : {}) };
 		// A stand-in, and a sufferer's own move (a knock-down), say whose it was: spentOn reads the knock-down
 		// against whoever takes the blow now.
 		const entry = list === "standIns" ? { ...spend, by: offer.defender.uuid, free: cost === 0 }
@@ -428,6 +491,43 @@ export function takeSpend(message, kind, offer, { scope = SYSTEM_ID } = {}) {
 	return inCardTurn(message, take);
 }
 
+/** A damage formula rolled, as the card's own rows were (attack-flow.js#rollAndPostDamage). */
+async function rollFormula(formula) {
+	return new globalThis.Roll(formula).evaluate();
+}
+
+/**
+ * Never Gonna Keep Me Down on a blow a Would-Be Hero stood in for: the row's own formula rolled again, and the
+ * lower of the two totals kept ("roll damage twice, take the lower", Book I p.21). The new number goes onto the
+ * row, as an Inspiration die's does, so Apply, the halvings and the fight's +N all reckon from it, and the
+ * record says both totals. One write, so the row cannot be rolled again without its record, nor recorded
+ * without its number. Run in the card's turn (takeSpend), so nothing has applied the row meanwhile.
+ *
+ * The row's formula is what its dice were (the fight's +N in it when it was rolled in), so the second roll is
+ * the same blow. An Inspiration die added to the card afterwards stays on top of whichever total is kept.
+ *
+ * A row rolled WITH advantage: advantage and disadvantage cancel (Book I p.21), so the blow is rolled again
+ * straight (`straightFormula`) and that total stands, whether higher or lower.
+ */
+async function rollAgainKeepLower(message, now, offer, { scope = SYSTEM_ID, reroll = rollFormula } = {}) {
+	const row = (now.results ?? []).find(r => r.uuid === offer.row.uuid);
+	if (!row || !hasDie(row.formula) || rolledAtDisadvantage(row)) return false;
+	const straight = rolledAtAdvantage(row);
+	const again = await reroll(straight ? straightFormula(row.formula) : row.formula);
+	const total = Number(again?.total);
+	if (!Number.isFinite(total)) return false;
+	const extra = Math.trunc(Number(message.getFlag?.(scope, INSPIRATION_DIE_FLAG)?.amount) || 0);
+	const was = Number(row.raw) || 0;
+	const rolled = total + extra;
+	const replace = straight || rolled < was;
+	const kept = replace ? rolled : was;
+	const results = now.results.map(r => (r === row && replace ? { ...r, raw: kept, faces: multiDieFaces(again) } : r));
+	const list = SPEND_KINDS.neverGonna.list;
+	const entry = { uuid: row.uuid, name: offer.defender.name, how: "neverGonna", by: offer.defender.uuid, was, rolled, kept, ...(straight ? { straight: true } : {}) };
+	await message.update({ flags: { [scope]: { damage: { results, [list]: [...(now[list] ?? []), entry] } } } });
+	return true;
+}
+
 /** The User query a player's spend goes through on a card the GM wrote. */
 export const SPEND_QUERY = "stonetop.defendSpend";
 
@@ -437,7 +537,7 @@ async function askGMToSpend(message, kind, offer) {
 	if (!gm) return false;
 	try {
 		return !!(await gm.query(SPEND_QUERY, {
-			messageId: message.id, kind, rowUuid: offer.row.uuid, defenderUuid: offer.defender.uuid,
+			messageId: message.id, kind, rowUuid: offer.row.uuid, defenderUuid: offer.defender.uuid, ...(offer.purse ? { purse: offer.purse } : {}),
 			userId: globalThis.game?.user?.id ?? null,
 		}, { timeout: 10000 }));
 	} catch (err) {
@@ -463,7 +563,8 @@ export async function handleSpendQuery(data, context = {}, { messages = globalTh
 	const message = messages?.get?.(data?.messageId);
 	const damage = message?.getFlag?.(scope, "damage");
 	if (!user || !isSpendKind(kind) || !damage) return false;
-	const offer = (offersOf(damage)[kind] ?? []).find(o => o.row?.uuid === data.rowUuid && o.defender?.uuid === data.defenderUuid);
+	const offer = (offersOf(damage)[kind] ?? []).find(o => o.row?.uuid === data.rowUuid && o.defender?.uuid === data.defenderUuid
+		&& (o.purse ?? "") === (data.purse ?? ""));
 	if (!offer || !offer.defender.testUserPermission?.(user, "OWNER")) return false;
 	return takeSpend(message, kind, offer, { scope });
 }
@@ -508,13 +609,15 @@ async function postKnockedDown(actor, cost, foe) {
  * nobody reads "Deal +1d4 damage" on the list below as still to roll.
  */
 async function postSecondIntent(actor, { dieTaken = false } = {}) {
-	const ambush = ownedMove(actor, "Ambush");
+	// The BOOK's Ambush, learned: a player's own move of that name (owns-move.js#bookMoveName) has a list
+	// of its own words, and is not the one Second Intent points at.
+	const ambush = ownedLearnedBookMove(actor, "Ambush");
 	const options = (firstOptionList(ambush?.system?.description)?.items ?? []).map(stripHtmlToText).filter(Boolean);
 	const list = !dieTaken && options.length ? `<ul>${options.map(o => `<li>${escHtml(o)}</li>`).join("")}</ul>` : "";
 	const said = format(`${KEY}.${dieTaken ? "secondIntentTookDie" : "secondIntent"}`, { name: actor.name });
 	// The list's "Create an opportunity; you or an ally gains advantage on the next move to act on it" (Ambush,
 	// Book I p.110): the same button an Ambush 7+ carries (actors/character/give-advantage.js), for that pick.
-	const opportunity = !dieTaken && ownsLearnedMoveNamed(actor, "Ambush")
+	const opportunity = !dieTaken && ambush
 		? `<div class="card-buttons stonetop-roll-actions stonetop-give-advantage-row"><p class="stonetop-give-advantage-lead">${escHtml(localize(`${KEY}.secondIntentOpportunity`))}</p>${giveAdvantageButtonHtml("Ambush")}</div>`
 		: "";
 	return globalThis.ChatMessage?.create?.({
@@ -536,8 +639,15 @@ export function defendNotes(damage) {
 		const first = Object.values(SPEND_KINDS).find(kind => kind.list === list);
 		for (const spend of damage?.[list] ?? []) {
 			const kind = isSpendKind(spend.how) && SPEND_KINDS[spend.how].list === list ? SPEND_KINDS[spend.how] : first;
-			const note = typeof kind.note === "function" ? kind.note(spend) : kind.note;
-			notes.push(format(`${KEY}.${note}`, { defender: spend.name, ward: ward(spend), move: spend.move ?? "" }));
+			const own = typeof kind.note === "function" ? kind.note(spend) : kind.note;
+			// Paid in Front Line Leader's Presence: the same spend, said in its own words.
+			const note = paysPresence(spend) ? `${own}Presence` : own;
+			// A roll again's two totals and the one kept, never below 0 as the card shows them.
+			const shown = value => String(Math.max(0, Number(value) || 0));
+			notes.push(format(`${KEY}.${note}`, {
+				defender: spend.name, ward: ward(spend), move: spend.move ?? "",
+				was: shown(spend.was), rolled: shown(spend.rolled), kept: shown(spend.kept),
+			}));
 		}
 	}
 	return notes;
@@ -563,6 +673,18 @@ export function wireDefendSpends(message, html, { scope = SYSTEM_ID, user = glob
 		block.textContent = notes.join(" ");
 		list?.after?.(block);
 	}
+	// A row Never Gonna Keep Me Down rolled again carries its new number, which the card's own HTML was written
+	// before: redrawn from the rows, as an Inspiration die's is. With a fight's +N on the card,
+	// attack-flow.js#wireDamageSeed redraws them from the same rows.
+	if (damage[SPEND_KINDS.neverGonna.list]?.length && !damage.seed) {
+		for (const rowEl of root.querySelectorAll?.(".stonetop-damage-row[data-uuid]") ?? []) {
+			const result = damage.results.find(r => r.uuid === rowEl.dataset.uuid);
+			const number = rowEl.querySelector(".stonetop-roll-result-number");
+			if (!result || !number) continue;
+			number.textContent = String(Math.max(0, Number(result.raw) || 0));
+			if (result.faces) number.dataset.tooltip = result.faces;
+		}
+	}
 
 	const actions = root.querySelector(".stonetop-attack-actions");
 	if (!actions || !root.querySelector(".stonetop-apply-damage")) return;
@@ -579,7 +701,7 @@ export function wireDefendSpends(message, html, { scope = SYSTEM_ID, user = glob
 		button.className = `stonetop-attack-btn stonetop-damage-defend stonetop-damage-defend--${kind}`;
 		const [one] = offers[kind];
 		// A Steadfast Guardian's stand-in says it is free, so nobody waits for a Readiness to come off.
-		const free = kind === "standIn" && one.cost === 0 ? "Free" : "";
+		const free = paysPresence(one) ? "Presence" : kind === "standIn" && one.cost === 0 ? "Free" : "";
 		const label = offers[kind].length === 1
 			? format(`${KEY}.${kind}${free}One`, { defender: one.defender.name, ward: one.row.name, move: one.move ?? "" })
 			: format(`${KEY}.${kind}`, {});

@@ -47,7 +47,12 @@ function _moveNameFrom(inner) {
 // The "Moves" section of a back description: from its heading to the next heading (or the
 // end). Same slice rule the front-side Consequences lift uses, for the same reason — it keeps
 // nested lists intact without balanced-tag matching. Returns null when the card prints none.
-const _MOVES_HEADING_RE = /<h([1-6])\b[^>]*>\s*Moves\s*<\/h\1>/i;
+//
+// The heading is singular on a card that grants just one: the Hec'tumel Codex prints "Move" over
+// DARKSOME VESSEL, which a plural-only match left as unclickable prose. "Spells of the Codex" stays
+// out on purpose: its entries are cast through the front's Cast a Codex Spell, not moves of their
+// own, and their names are not SHOUTED, so the head walk would find nothing there anyway.
+const _MOVES_HEADING_RE = /<h([1-6])\b[^>]*>\s*Moves?\s*<\/h\1>/i;
 
 function _movesSection(description) {
 	if (!description) return null;
@@ -280,4 +285,206 @@ export function markArcanumMoveNames(description, arcanumSlug) {
 			+ `${inner.slice(at + move.name.length)}${close}`;
 	});
 	return head + body + tail;
+}
+
+// -- Front-side moves ---------------------------------------------------------------------------------
+
+/**
+ * The moves printed on a card's FRONT that roll a stat: "When you <strong><em>brandish the Azure Hand
+ * at a source of elemental energy</em></strong>, roll +CON: on a 10+ ...". Mind Over Magic reads "When
+ * you roll to study or use an arcanum, you can roll +INT instead of the stat you'd normally roll", and
+ * these are the rolls that USE one, so each gets a handle like a mystery's name: the same dialog, the
+ * printed stat's button, and Mind Over Magic's +INT beside it.
+ *
+ * A front move has no learned box. It is the card's to use as soon as its owner can read the front.
+ *
+ * Read off the same prose the back's mysteries are, in the house style the shipped fronts print:
+ *  - the ROLL is "roll +STAT" (or "rolling +STAT", the Makerglass Chime) anywhere outside a list item,
+ *    since a list item that rolls is one of a move's options (the Azure Hand's "Fling the energy,
+ *    rolling +INT to Let Fly"), not a move;
+ *  - the HANDLE is the last bold-italic trigger before the roll in its paragraph, or, when that
+ *    paragraph prints none, in the nearest paragraph before it (the Ice Sphere asks its question in
+ *    one paragraph and rolls in a later one); with no trigger at all (an unlock lead, a requirement
+ *    line) it is the "roll +STAT" itself;
+ *  - the NAME is a SHOUTED head opening the paragraph ("CAST A CODEX SPELL", "INFLAME"), else the
+ *    trigger, else `fallbackName` (the card's title);
+ *  - the TEXT runs from the move's paragraph to the next paragraph that opens with another trigger or
+ *    a bold head (an "On a 6-" head is the move's own), or the next heading, and stops after a later
+ *    paragraph that prints the move's 6- (the Mindgem goes on to its body's tasks after it).
+ *
+ * The handle wraps plain text only, so the □/○/◇ that the marker pass indexes are left exactly where
+ * they were, on either side.
+ */
+const _FRONT_ROLL_RE    = /\broll(?:s|ing)?\s*\+\s*(str|dex|con|int|wis|cha|nothing)\b/gi;
+const _FRONT_TRIGGER_RE = /<strong>\s*<em>([^<]+)<\/em>\s*<\/strong>/g;
+const _HAS_TRIGGER_RE   = /<strong>\s*<em>[^<]+<\/em>\s*<\/strong>/;
+const _PARA_OPEN_RE     = /<p\b[^>]*>/gi;
+
+// Whether `at` sits inside an <li> (more opened than closed before it).
+function _insideListItem(html, at) {
+	const before = html.slice(0, at);
+	return (before.match(/<li\b/gi) ?? []).length > (before.match(/<\/li>/gi) ?? []).length;
+}
+
+// Every paragraph's [start, end) in the html; text outside any <p> is one span of its own.
+function _paragraphs(html) {
+	const out = [];
+	_PARA_OPEN_RE.lastIndex = 0;
+	for (let m; (m = _PARA_OPEN_RE.exec(html)); ) {
+		const close = html.indexOf("</p>", m.index);
+		out.push({ start: m.index, end: close < 0 ? html.length : close + 4 });
+	}
+	return out;
+}
+
+// The last trigger printed in html[from, to), as {text, start, end} offsets of its plain text.
+function _lastTrigger(html, from, to) {
+	let found = null;
+	_FRONT_TRIGGER_RE.lastIndex = 0;
+	for (let m; (m = _FRONT_TRIGGER_RE.exec(html)); ) {
+		if (m.index < from) continue;
+		if (m.index + m[0].length > to) break;
+		const start = m.index + m[0].indexOf(m[1]);
+		found = { text: m[1].trim(), start, end: start + m[1].length };
+	}
+	return found;
+}
+
+// Where a front move's text ends: see parseArcanumFrontMoves.
+function _frontMoveEnd(html, paras, first) {
+	let end = html.length;
+	for (let i = first + 1; i < paras.length; i++) {
+		const p = html.slice(paras[i].start, paras[i].end);
+		const opensBold = /^<p\b[^>]*>\s*<strong>(?!\s*on a\b)/i.test(p);
+		if (opensBold || _HAS_TRIGGER_RE.test(p)) { end = paras[i].start; break; }
+	}
+	const heading = html.slice(paras[first].end, end).search(/<h[1-6]\b/i);
+	if (heading >= 0) end = paras[first].end + heading;
+	if (/6-/.test(html.slice(paras[first].start, paras[first].end))) return end;
+	for (let i = first + 1; i < paras.length && paras[i].start < end; i++) {
+		if (/6-/.test(html.slice(paras[i].start, paras[i].end))) return paras[i].end;
+	}
+	return end;
+}
+
+/**
+ * Every rolling move printed in one stretch of a card's front (its description, its unlock lead, or
+ * one unlock requirement's line), in card order.
+ *
+ * @param {string} html  the raw front text
+ * @param {{prefix?: string, fallbackName?: string}} [o]  `prefix` starts each slug (`${prefix}:${n}`),
+ *   which says which stretch of the front the move is in (FRONT_MOVE_PREFIX)
+ * @returns {{slug: string, name: string, boxIndex: null, description: string, roll: string,
+ *            front: true, handle: {start: number, end: number}}[]}  `handle` is the offsets of the
+ *   plain text the tab wraps
+ */
+export function parseArcanumFrontMoves(html, { prefix = FRONT_MOVE_PREFIX.front, fallbackName = "" } = {}) {
+	const text = String(html ?? "");
+	const key = `${prefix}\u0000${fallbackName}\u0000${text}`;
+	const hit = _MOVES_CACHE.get(key);
+	if (hit !== undefined) return hit;
+	const built = _parseArcanumFrontMoves(text, prefix, fallbackName);
+	if (_MOVES_CACHE.size >= _MOVES_CACHE_MAX) _MOVES_CACHE.clear();
+	_MOVES_CACHE.set(key, built);
+	return built;
+}
+
+function _parseArcanumFrontMoves(text, prefix, fallbackName) {
+	if (!text) return [];
+	let paras = _paragraphs(text);
+	// A stretch printed without paragraphs (an unlock lead, a requirement line) is one.
+	if (!paras.length) paras = [{ start: 0, end: text.length }];
+	const moves = [];
+	const usedParas = new Set();
+	_FRONT_ROLL_RE.lastIndex = 0;
+	for (let m; (m = _FRONT_ROLL_RE.exec(text)); ) {
+		if (_insideListItem(text, m.index)) continue;
+		let at = paras.findIndex(p => m.index >= p.start && m.index < p.end);
+		if (at < 0) continue;
+		let trigger = _lastTrigger(text, paras[at].start, m.index);
+		// No trigger in the roll's own paragraph: the move's trigger is the nearest one printed before
+		// it, as long as no other move's roll stands in between.
+		if (!trigger) {
+			for (let i = at - 1; i >= 0 && !usedParas.has(i); i--) {
+				const t = _lastTrigger(text, paras[i].start, paras[i].end);
+				if (t) { trigger = t; at = i; break; }
+			}
+		}
+		if (usedParas.has(at)) continue;
+		usedParas.add(at);
+		const para = text.slice(paras[at].start, paras[at].end);
+		const head = /^<p\b[^>]*>\s*<strong>([^<]*)<\/strong>/i.exec(para);
+		const shouted = head ? _moveNameFrom(head[1]) : "";
+		const end = _frontMoveEnd(text, paras, at);
+		const handle = trigger
+			? { start: trigger.start, end: trigger.end }
+			: { start: m.index, end: m.index + m[0].length };
+		const block = text.slice(paras[at].start, end);
+		moves.push({
+			slug:        `${prefix}:${moves.length}`,
+			name:        shouted || capitalizeFirst(trigger?.text ?? "") || String(fallbackName ?? "").trim() || "Arcanum move",
+			boxIndex:    null,
+			description: block,
+			roll:        m[1].toLowerCase(),
+			noXpOnMiss:  _noXpOnMiss(block),
+			front:       true,
+			handle,
+			..._picksFrom(block),
+		});
+	}
+	return moves;
+}
+
+/**
+ * Which stretch of a card's front a front move's slug points into: `~front:n` the description,
+ * `~unlock:n` the unlock lead, `~req:<option slug>:n` one unlock requirement. None can be minted by
+ * `slugify`, so a front move never shadows a mystery or the condensed move.
+ */
+export const FRONT_MOVE_PREFIX = Object.freeze({ front: "~front", unlock: "~unlock", req: "~req" });
+
+/** Whether a move slug is a front move's (FRONT_MOVE_PREFIX). */
+export function isArcanumFrontMoveSlug(moveSlug) {
+	return /^~(?:front|unlock|req):/.test(String(moveSlug ?? ""));
+}
+
+/**
+ * One front move by slug, off a card's `front`, or null.
+ *
+ * @param {{title?: string, description?: string, unlock?: {description?: string, requirements?: object[]}}} front
+ * @param {string} moveSlug
+ */
+export function findArcanumFrontMove(front, moveSlug) {
+	const slug = String(moveSlug ?? "");
+	if (!front || !isArcanumFrontMoveSlug(slug)) return null;
+	const fallbackName = front.title ?? "";
+	const find = (html, prefix) => parseArcanumFrontMoves(html, { prefix, fallbackName }).find(m => m.slug === slug) ?? null;
+	if (slug.startsWith(`${FRONT_MOVE_PREFIX.front}:`))  return find(front.description, FRONT_MOVE_PREFIX.front);
+	if (slug.startsWith(`${FRONT_MOVE_PREFIX.unlock}:`)) return find(front.unlock?.description, FRONT_MOVE_PREFIX.unlock);
+	for (const req of front.unlock?.requirements ?? []) {
+		if (req?.type !== "option" || !req.slug) continue;
+		const prefix = `${FRONT_MOVE_PREFIX.req}:${req.slug}`;
+		if (slug.startsWith(`${prefix}:`)) return find(req.description, prefix);
+	}
+	return null;
+}
+
+/**
+ * Wrap each front move's handle (parseArcanumFrontMoves) in the same clickable span a mystery's name
+ * gets, so the tab's one click handler opens either. Wraps plain text only: no glyph moves.
+ *
+ * @param {string} html  the raw front text
+ * @param {string} arcanumSlug
+ * @param {{prefix?: string, fallbackName?: string}} [o]  as parseArcanumFrontMoves
+ */
+export function markArcanumFrontMoves(html, arcanumSlug, o = {}) {
+	const moves = parseArcanumFrontMoves(html, o);
+	if (!moves.length) return html;
+	let out = String(html);
+	for (const move of [...moves].sort((a, b) => b.handle.start - a.handle.start)) {
+		const { start, end } = move.handle;
+		out = `${out.slice(0, start)}<span class="stonetop-arcanum-move-name"`
+			+ ` data-arcanum-slug="${escHtml(arcanumSlug)}" data-move-slug="${escHtml(move.slug)}"`
+			+ ` role="button" tabindex="0">${out.slice(start, end)}</span>${out.slice(end)}`;
+	}
+	return out;
 }

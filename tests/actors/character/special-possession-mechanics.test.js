@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { buildLiveCharacter, makeLiveItem, sourceMovesFor } from "../../fakes/LiveCharacter.js";
 import { possessionTrackUses, BOOKS_AND_SCROLLS, HOLY_RELICS } from "../../../module/actors/character/possession-tracks.js";
@@ -94,6 +94,50 @@ describe("more special possessions than the playbook's count", () => {
 	it("is not flagged at the count, nor below it", async () => {
 		expect((await snapWith("tannery", "distillery")).isOverLimit).toBe(false);
 		expect((await snapWith("tannery")).overBy).toBe(0);
+	});
+});
+
+// "______ (discuss with GM)" taken in on the sheet's Inventory tab (the user's ruling): it spends
+// a pick like a listed possession, and one too many is flagged, never refused.
+describe("a write-in possession added on the sheet", () => {
+	const fox = async (slugs, writeIns, fromBackground = new Set()) => {
+		const { char } = buildLiveCharacter({ slug: "the-fox", name: "The Fox" });
+		for (const slug of slugs) await char._possessions.select(slug);
+		for (const label of writeIns) await char.addCustomPossession(label);
+		return { char, snap: () => char._buildPossessionsSnapshot(playbookSource("the-fox"), {}, null, new Map(), new Map(), fromBackground) };
+	};
+
+	it("is stored and shows like an onboarding write-in", async () => {
+		const { char, snap } = await fox([], ["My grandmother's lockpicks"]);
+		expect(char._possessions.custom).toEqual([{ slug: "custom-1", label: "My grandmother's lockpicks" }]);
+		const row = snap().items.find(i => i.isCustom);
+		expect(row).toMatchObject({ slug: "custom-1", label: "My grandmother's lockpicks", checked: true, disabled: true });
+	});
+
+	it("counts toward the playbook's picks", async () => {
+		const { snap } = await fox(["tannery"], ["A forged writ"]);
+		expect(snap().isIncomplete).toBe(false);
+		expect(snap().isOverLimit).toBe(false);
+	});
+
+	it("one past the count is flagged, and kept", async () => {
+		const { char, snap } = await fox(["tannery", "distillery"], ["A forged writ"]);
+		expect(snap().isOverLimit).toBe(true);
+		expect(snap().overBy).toBe(1);
+		expect(char._possessions.custom).toHaveLength(1);
+	});
+
+	it("a background's possession still stays outside the count", async () => {
+		const { snap } = await fox(["hidden-stash", "tannery"], ["A forged writ"], new Set(["hidden-stash"]));
+		expect(snap().isOverLimit).toBe(false);
+		expect(snap().isIncomplete).toBe(false);
+	});
+
+	it("removing it gives the pick back", async () => {
+		const { char, snap } = await fox(["tannery", "distillery"], ["A forged writ"]);
+		await char.removeCustomPossession("custom-1");
+		expect(snap().isOverLimit).toBe(false);
+		expect(snap().items.some(i => i.isCustom)).toBe(false);
 	});
 });
 
@@ -199,5 +243,96 @@ describe("the Seeker's sacred pouch (Initiate of the Secret Arts)", () => {
 		char._actor.items.push(makeLiveItem({ name: bigMagic.name, type: "move", system: structuredClone(bigMagic.system) }));
 		expect(pouch().hasChoiceGroups).toBe(true);
 		expect(await char.possessionWithOpenChoiceFor("Big Magic")).toBe(POUCH);
+	});
+});
+
+// The Fox's Hidden stash: "(○○○ uses): each use produces valuables worth a purse of silvers
+// (Value 2)". Its track counts uses SPENT, so a tick is a use, and each use hands over a purse.
+describe("the Hidden stash produces a purse of silvers per use", () => {
+	const STASH = "hidden-stash";
+	let posted;
+	beforeEach(() => {
+		posted = [];
+		globalThis.ChatMessage = { create: vi.fn(async data => posted.push(data)), getSpeaker: () => ({}) };
+	});
+	afterEach(() => { delete globalThis.ChatMessage; });
+
+	const stashFox = (uses = {}) => buildLiveCharacter({
+		slug: "the-fox", name: "The Fox",
+		flags: { "possessions.selected": [STASH], "possessions.uses": uses },
+	});
+	const purses = actor => actor.items.filter(i => i.name === "Purse of silvers");
+
+	it("is data on the possession, naming the handout's purse", () => {
+		expect(option("the-fox", STASH)).toMatchObject({ produces: "purse-of-silvers", resource: { max: 3 } });
+		expect(option("the-fox", STASH).description).toBe("(○○○ uses): each use produces valuables worth a purse of silvers (Value 2)");
+	});
+
+	// The Gear tab draws the track itself, so the printed "(○○○ uses):" goes, colon and all.
+	it("reads on the Gear tab without the printed track", async () => {
+		const { char } = stashFox();
+		const row = char._buildPossessionsSnapshot(playbookSource("the-fox"), {}).items.find(i => i.slug === STASH);
+		expect(row.description).toBe("Each use produces valuables worth a purse of silvers (Value 2)");
+	});
+
+	it("spending one use adds one small purse, Value 2, and says so in chat once", async () => {
+		const { char, actor } = stashFox();
+		await char.setPossessionUses(STASH, 1);
+		expect(purses(actor)).toHaveLength(1);
+		expect(purses(actor)[0].system).toMatchObject({ moveType: "inventory-custom", inventoryColumn: "small" });
+		expect(purses(actor)[0].system.note).toContain("~10 handfuls");
+		expect(purses(actor)[0].system.note).toContain("Value 2");
+		expect(posted).toHaveLength(1);
+		expect(posted[0].content).toContain("Hidden stash");
+		expect(posted[0].content).toContain("purse of silvers");
+		expect(actor.getFlag("stonetop-pwd", "possessions.uses")[STASH]).toBe(1);
+	});
+
+	it("spending two at once adds two purses, in one chat line", async () => {
+		const { char, actor } = stashFox();
+		await char.setPossessionUses(STASH, 2);
+		expect(purses(actor)).toHaveLength(2);
+		expect(posted).toHaveLength(1);
+		expect(posted[0].content).toContain("2 lots of valuables");
+	});
+
+	it("unticking a use takes nothing back and posts nothing", async () => {
+		const { char, actor } = stashFox({ [STASH]: 2 });
+		await char.setPossessionUses(STASH, 1);
+		await char.setPossessionUses(STASH, 0);
+		expect(purses(actor)).toHaveLength(0);
+		expect(posted).toHaveLength(0);
+		expect(actor.getFlag("stonetop-pwd", "possessions.uses")[STASH]).toBe(0);
+	});
+
+	// A mis-click undone and ticked again is the same use: it was paid for the first time.
+	it("ticking a use again after unticking it adds no second purse", async () => {
+		const { char, actor } = stashFox();
+		await char.setPossessionUses(STASH, 1);
+		await char.setPossessionUses(STASH, 0);
+		await char.setPossessionUses(STASH, 1);
+		expect(purses(actor)).toHaveLength(1);
+		expect(posted).toHaveLength(1);
+		await char.setPossessionUses(STASH, 2);
+		expect(purses(actor)).toHaveLength(2);
+	});
+
+	it("picking the stash again starts its uses fresh", async () => {
+		const { char, actor } = stashFox();
+		await char.setPossessionUses(STASH, 1);
+		await char._possessions.deselect(STASH);
+		await char._possessions.select(STASH);
+		await char.setPossessionUses(STASH, 1);
+		expect(purses(actor)).toHaveLength(2);
+	});
+
+	it("a possession that produces nothing only records its count", async () => {
+		const { char, actor } = buildLiveCharacter({
+			slug: "the-blessed", name: "The Blessed", flags: { "possessions.selected": ["collected-offerings"] },
+		});
+		const before = actor.items.length;
+		await char.setPossessionUses("collected-offerings", 2);
+		expect(actor.items).toHaveLength(before);
+		expect(posted).toHaveLength(0);
 	});
 });

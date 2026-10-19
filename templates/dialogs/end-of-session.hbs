@@ -77,6 +77,16 @@
 			</ul>
 		</section>
 
+		{{!-- ── Updating followers (Book I p.480): the GM's between-session review, folded, never on a player's copy. --}}
+		{{#unless mirror}}
+		<details class="stonetop-eos-section stonetop-eos-follower-review">
+			<summary class="stonetop-eos-section-heading">{{localize "stonetop.endOfSession.followerReviewTitle"}} <span class="stonetop-eos-section-tag">{{localize "stonetop.endOfSession.followerReviewTag"}}</span></summary>
+			<p class="stonetop-eos-who-hint">{{followerReview.lead}}</p>
+			<ul class="stonetop-eos-personal-list">{{#each followerReview.items}}<li>{{this}}</li>{{/each}}</ul>
+			<p class="stonetop-eos-review-cite">{{localize "stonetop.endOfSession.followerReviewCite"}}</p>
+		</details>
+		{{/unless}}
+
 	</div>{{!-- /.stonetop-eos-sections --}}
 
 	<footer class="stonetop-eos-footer">

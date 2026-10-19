@@ -75,7 +75,10 @@
         {
           "slug": "the-prodigal-returned",
           "label": "The Prodigal Returned",
-          "description": "<p>You left long ago, travelling far and living by your wits. Why did you leave? What deeds do you boast of, and which do you regret?</p><p>You always longed to return to Stonetop, and return you have. You're a bit of a celebrity now, and you've got friends (or close enough) strewn about the known world.</p><p>When you <strong><em>declare that you know someone outside of Stonetop</em></strong>, someone who can help, name them and roll +CHA: <strong>on a 10+</strong>, yeah, they can help (tell us why they're willing); <strong>on a 7-9</strong>, they can help but pick 1 from the list below; <strong>on a 6-</strong>, the GM chooses 1 and then some.</p><ul><li>They still hold a grudge</li><li>They're going to need something from you first</li><li>They swore off this sort of thing long ago</li><li>You can't exactly, y'know, trust them</li></ul>"
+          "description": "<p>You left long ago, travelling far and living by your wits. Why did you leave? What deeds do you boast of, and which do you regret?</p><p>You always longed to return to Stonetop, and return you have. You're a bit of a celebrity now, and you've got friends (or close enough) strewn about the known world.</p><p>When you <strong><em>declare that you know someone outside of Stonetop</em></strong>, someone who can help, name them and roll +CHA: <strong>on a 10+</strong>, yeah, they can help (tell us why they're willing); <strong>on a 7-9</strong>, they can help but pick 1 from the list below; <strong>on a 6-</strong>, the GM chooses 1 and then some.</p><ul><li>They still hold a grudge</li><li>They're going to need something from you first</li><li>They swore off this sort of thing long ago</li><li>You can't exactly, y'know, trust them</li></ul>",
+          "moves": [
+            "Friends Far and Wide"
+          ]
         }
       ],
       "instincts": [
@@ -260,15 +263,6 @@
                 "column": "small"
               },
               {
-                "name": "Firkins",
-                "column": "regular",
-                "weight": 2
-              },
-              {
-                "name": "Barrels",
-                "column": "small"
-              },
-              {
                 "name": "Prybars",
                 "column": "regular",
                 "weight": 1
@@ -277,6 +271,15 @@
                 "name": "Saws",
                 "column": "regular",
                 "weight": 1
+              },
+              {
+                "name": "Firkins",
+                "column": "regular",
+                "weight": 2
+              },
+              {
+                "name": "Barrels",
+                "column": "small"
               }
             ]
           },
@@ -310,11 +313,13 @@
               },
               {
                 "name": "Stills",
-                "column": "small"
+                "column": "small",
+                "note": "immobile"
               },
               {
                 "name": "Barrels",
-                "column": "small"
+                "column": "small",
+                "note": "immobile"
               },
               {
                 "name": "Firkins",
@@ -326,7 +331,8 @@
           {
             "slug": "hidden-stash",
             "label": "Hidden stash",
-            "description": "○○○ uses: each use produces valuables worth a purse of silvers (Value 2)",
+            "description": "(○○○ uses): each use produces valuables worth a purse of silvers (Value 2)",
+            "produces": "purse-of-silvers",
             "resource": {
               "max": 3,
               "title": null,

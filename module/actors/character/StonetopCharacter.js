@@ -51,13 +51,14 @@ import {heroDisplayName, WBH_HERO_FLAG} from "./WouldBeHeroAsterisk.js";
 import {tookBackground} from "./took-background.js";
 import {AUSPICIOUS_BIRTH, auspiciousBirthChoice} from "./invoke-consequences.js";
 import {carriedGearTags, normalizeGearTags, sameGearTags, ARMORED_MOVE} from "./gear-reminders.js";
-import {ownedNamesOr, ownedLearnedMove, ownsLearnedMoveNamed, moveLearnedIn, switchedOffGranter, ownedMoveNames, ownsMoveNamed, bookMoveName} from "./owns-move.js";
+import {ownedNamesOr, ownedLearnedMove, ownsLearnedMoveNamed, ownsLearnedBookMoveNamed, moveLearnedIn, switchedOffGranter, ownedMoveNames, ownsMoveNamed, bookMoveName} from "./owns-move.js";
 import {ANIMAL_COMPANION_MOVE, RANGER_SLUG, MAGNIFICENT_SPECIMEN_MOVE, COMPANION_TRAIT_PICKS_PER_SPECIMEN, companionTraitAllowance, trimCompanionTraits} from "./animal-companion.js";
 import {fineWhiskyOffer as fineWhiskyOfferFrom, isPersuadeMove, FINE_WHISKY_SOURCE} from "./fine-whisky.js";
-import {tagLoadGatedMoves} from "./load-gates.js";
+import {tagLoadGatedMoves, overLoadGate} from "./load-gates.js";
 import {startOfPlayGear, START_GEAR_FLAG} from "./start-of-play-gear.js";
 import {RITES_OF_THE_LAND, SACRED_POUCH_SLUG, NO_POUCH_STOCK_NOTE, BLESSED_PLAYBOOK, isVessel, stockSourcesForFlags, stockCostFromDescription} from "./stock-cost.js";
 import {loseHpForStock} from "./provisions.js";
+import {readPouchSlots, pouchUsableMax, spentAfterStore, spentAfterFree, settledPouchSpent} from "./sacred-pouch.js";
 import {SUPPLY_SLUGS, supplyPursesFor, spendablePurseResources as _spendablePurseResources, suppliesUsesOnMark, suppliesGiveBack} from "./supply-cost.js";
 import {askWriteInSource, WRITE_IN_SOURCE} from "./write-in-source.js";
 import {HOLY_LIGHT_FLAG, canWieldHolyLight, INVOKE_THE_SUN_GOD, holyLightAfterRoll, LUMINOUS_SHIELD} from "./holy-light.js";
@@ -68,7 +69,7 @@ import {ONGOING_INVOCATION_FLAG, ONGOING_SECOND_FLAG, ONGOING_EMPOWERED_FLAG, ON
 	ONGOING_INVOCATION_FLAGS, readOngoing, readInvocationState, runningSlugs, resolveInvocationEnd, invocationEndings,
 	NEEDS_SUN_FLAG, readNeedsSun} from "./ongoing-invocation.js";
 import {INVOCATIONS_GRANTED_AT_FLAG} from "./invocation-count.js";
-import {CONDEMNED_FLAG, CASTIGATE, PROCLAMATION, canCondemn, readCondemned, addCondemned, removeCondemned, noteCondemned} from "./condemn.js";
+import {CONDEMNED_FLAG, CASTIGATE, CENSURE, PROCLAMATION, canCondemn, readCondemned, addCondemned, removeCondemned, noteCondemned} from "./condemn.js";
 import {OATHS_FLAG, BINDING_ARBITRATION, canBindOaths, readOaths, addOath, removeOath, noteOath, setOathBroken} from "./oaths.js";
 import {BLESSED_MARKS_FLAG, canMarkBlessed, readMarks, addMark, removeMark, noteMark, setMarkLoyalty, setMarkSign} from "./blessed-marks.js";
 import {BATTLE_JOY_FLAG, BATTLE_JOY, canEnterBattleJoy, ignoresDebilities} from "./battle-joy.js";
@@ -77,22 +78,22 @@ import {CharacterInstincts} from "./CharacterInstincts.js";
 import {CharacterAppearance} from "./CharacterAppearance.js";
 import {CharacterOrigin} from "./CharacterOrigin.js";
 import {CharacterPossessions} from "./CharacterPossessions.js";
-import {grantsToCreate, grantSourceMap, grantAdoptionKeys, itemGrantKey, grantOfTaggedItem, grantRepair} from "./possession-grants.js";
+import {grantsToCreate, grantSourceMap, grantAdoptionKeys, itemGrantKey, grantOfTaggedItem, grantRepair, isStashedGrantItem, producedItemsToCreate, producedSpecialItem} from "./possession-grants.js";
 import {CharacterInventory} from "./CharacterInventory.js";
 import {maybeBeginAttack, maybeCounterOnMiss, maybeMissFx, attackMoveFor, attackFoeAdvantage, recordClashedFoes, rollMoveDamageAt, snapshotTargets} from "../../combat/attack-flow.js";
 import {aimPcAskRoll} from "../../pc-asks/pc-ask-flow.js";
-import {INTERFERE_MOVE, PERSUADE_PC_MOVE, PC_ASK_FLAG} from "../../pc-asks/pc-ask-rules.js";
+import {INTERFERE_MOVE, PC_ASK_FLAG, aimedAtPc} from "../../pc-asks/pc-ask-rules.js";
 import {GIVE_ADVANTAGE_ROLL_OPTIONS, moveRollOptions} from "./move-roll-options.js";
-import {brokenOaths, oathbreakerAgainst, alphaAgainst, spendAlphaOver, upAgainAgainst, spendUpAgainRoll, toughLoveAgainst, leapInOpen, commandHeld, HERO_MOVES} from "../../fight/hero-moves.js";
+import {brokenOaths, oathbreakerAgainst, nextRollOwed, toughLoveAgainst, truthOwed, forgetTruth, speakSoftlyNamed, forgetSpeakSoftly, spendCensureEnraged, censureEnragedHeld, leapInOpen, commandHeld, debilityInEffect, HERO_MOVES} from "../../fight/hero-moves.js";
 import {defendReadinessHold, defendReadinessCap, readinessCount, readinessForTier, READINESS_FLAG, DEFEND_MOVE} from "../../combat/defend-readiness.js";
 import {settleReadinessOnAttack} from "../../combat/readiness-loss.js";
 import {messageOfRoll, CRITICAL_TOTAL} from "../../utils/roll-engine.js";
 import {cardCountedTier, cardTotal, countedTier, outcomeTier, rolledRecord, ROLLED_FLAG} from "../../utils/counted-tier.js";
-import {ANGER_IS_A_GIFT, A_FORCE_TO_BE_RECKONED_WITH, SPEAK_TRUTH_TO_POWER, forceTurnedTables, righteousAngerSubtitle, speakTruthRefusedActions} from "./would-be-hero-cards.js";
+import {ANGER_IS_A_GIFT, A_FORCE_TO_BE_RECKONED_WITH, SPEAK_TRUTH_TO_POWER, forceTablesUnturned, forceTurnedTables, righteousAngerSubtitle, speakTruthRefusedActions} from "./would-be-hero-cards.js";
 import {shippedRapportTrack} from "./up-with-people.js";
 import {foldModes, layModes} from "../../utils/roll-mode.js";
 import {fightStateActive, revealOnAttack, WE_HAPPY_FEW} from "./fight-states.js";
-import {spendSurpriseForRoll} from "../../combat/battle-holds.js";
+import {spendSurpriseForRoll, refundSurpriseForRoll} from "../../combat/battle-holds.js";
 import {settleTierEffects, recordTierEffects, reconcileTierEffects} from "./tier-effects.js";
 import {xpToLevelUp, xpAfterLevelUp, withXpLock} from "../../utils/xp.js";
 import {CharacterArcana} from "./CharacterArcana.js";
@@ -107,6 +108,8 @@ import {FoundryRepositoryFactory} from "./repositories/FoundryRepositoryFactory.
 import {capitalizeFirst, slugify, composeInstinct, escHtml, joinNames, splitNames, stripHtmlToText} from "../../utils/strings.js";
 import {splitFillBlank, fillBlank} from "../../utils/fill-blanks.js";
 import {localize as _loc, format} from "../../utils/i18n.js";
+import {orderedMoveName} from "../../data/follower-build.js";
+import {orderedAttackTierActions} from "../../fight/follower-order-attack.js";
 import {getStonetopSteadingActor, effectiveProsperity, FALLBACK_FOUR_PLUS_PROSPERITY} from "../../utils/world.js";
 import {readCurrentSeason} from "../../seasons/current-season.js";
 import {seasonLabel} from "../../seasons/seasons-change-reminders.js";
@@ -202,7 +205,7 @@ const SEASON_MOVE_DISADVANTAGE = [
  *
  * A row rides the moves its `moves(name)` answers for, by the name the roll is made under. A row with
  * `anyMove: true` instead rides every move roll ("whatever move you make": Constant Vigilance,
- * Underestimated), a roll with no move item behind it (a guided move, Improvise: directRollOffers) included,
+ * Underestimated, Free Running's "any move"), a roll with no move item behind it (a guided move, Improvise: directRollOffers) included,
  * but never a bare stat roll, which is no move. Those are the only rows a move a player wrote is offered: a
  * homebrew "Defy Danger" is not the book's, so it earns no Stone Cold, Safety First or A Force to Be Reckoned
  * With (owns-move.js#bookMoveName), but it is still a move rolled in their presence. Said by a field, not by
@@ -213,12 +216,19 @@ const SEASON_MOVE_DISADVANTAGE = [
  * `possessionChoice`, keyed `possession:choice` as the carry marks are, or has the worn insert's lore
  * option `postDeathLore` marked ("consequences:disturbing"); and never while the debility
  * `unlessDebility` is marked (unless Battle Joy has them ignoring it), nor while the learned move `whileHolding` holds nothing on its track
- * (Safety First's Protection). `spendHeld` names that track: taken, the line spends 1 of it after the
+ * (Safety First's Protection), nor while the load the Inventory tab derives is heavier than `whileLoad`
+ * (Free Running's "When you carry a light load"; nothing carried counts as light, load-gates.js#overLoadGate).
+ * `ownsLearned` means the BOOK's move of that name (ownsLearnedBookMoveNamed): a move a player wrote that
+ * shares the name acts as itself and grants none of the book's lines. `spendHeld` names that track: taken, the line spends 1 of it after the
  * dice. Taken, a line's `source` is folded in as advantage and named on the card, unless its `effect`
- * says otherwise (see _foldTakenOffers): "missAsPartial" counts a 6- as a 7-9 instead, "partialAsSuccess" a 7-9
+ * says otherwise (see _foldTakenOffers): "disadvantage" folds it in as disadvantage instead (Truth or
+ * Consequences after a lie, on a roll aimed at nobody), "missAsPartial" counts a 6- as a 7-9 instead, "partialAsSuccess" a 7-9
  * as a 10+, "hitNote" buys no advantage but prints its `note` on the card's 10+ and 7-9 rows,
  * "successNote" the same on the 10+ row alone, and "criticalNote" on the 10+ row only when the total is
- * 12+ (roll-engine's `criticalActions`), calling its `onCritical(actor, message)` when it does. A row's
+ * 12+ (roll-engine's `criticalActions`), calling its `onCritical(actor, message)` when it does. Its 12+
+ * follows the card's FINAL total, both ways (the user's ruling, 2026-10-18): a rewrite onto a 12+ calls
+ * `onCritical` then, and one off a 12+ calls `offCritical(actor, message)`, which takes back what that
+ * card's hook did (reconcileCriticalOffers). A row's
  * `tierActions()` adds its own buttons to the card's tier rows once taken, whatever its effect, and its
  * `critical` prints a note on a 12+ the same way, whatever its effect (Slippery's 6- as a 7-9 AND its 12+).
  */
@@ -265,7 +275,8 @@ const FICTION_ROLL_OFFERS = [
 		source: "Underestimated", label: "stonetop.rollOffers.underestimated" },
 	{ key: "force-to-be-reckoned-with", moves: name => name === "Defy Danger", ownsLearned: A_FORCE_TO_BE_RECKONED_WITH,
 		source: A_FORCE_TO_BE_RECKONED_WITH, label: "stonetop.rollOffers.forceToBeReckonedWith",
-		effect: "criticalNote", note: "stonetop.rollOffers.forceToBeReckonedWithNote", onCritical: forceTurnedTables },
+		effect: "criticalNote", note: "stonetop.rollOffers.forceToBeReckonedWithNote", onCritical: forceTurnedTables,
+		offCritical: forceTablesUnturned },
 	// Two Consequences of the dead: "When you use intimidation and your disturbing presence to Persuade, you
 	// have advantage" (the Ghost's Disturbing) and "...your sinister appearance to Persuade" (the Revenant's
 	// Deathly Visage). Asked of the worn insert's marked lore, `postDeathLore`, rather than of a move.
@@ -288,13 +299,42 @@ const FICTION_ROLL_OFFERS = [
 		ownsLearned: "Pants on Fire", source: "Pants on Fire", label: "stonetop.rollOffers.pantsOnFire" },
 	{ key: "slippery", moves: name => name === "Defy Danger", ownsLearned: "Slippery",
 		source: "Slippery", label: "stonetop.rollOffers.slippery", effect: "missAsPartial", critical: "stonetop.rollOffers.slipperyNote" },
+	// Free Running: "When you carry a light load and move with speed and grace, gain advantage on any move to
+	// surmount or bypass a physical obstacle." Any move, so it rides every move roll as Constant Vigilance's
+	// does, and only while the load is light (`whileLoad`); the obstacle is the table's to judge, so it is
+	// offered unticked.
+	{ key: "free-running", anyMove: true, ownsLearned: "Free Running", whileLoad: "light",
+		source: "Free Running", label: "stonetop.rollOffers.freeRunning" },
 ];
 
 /** The Ghost's and the Revenant's UNSTABLE, as its count is keyed in their lore (see _foldStandingNotes). */
 const UNSTABLE_LORE = "consequences:unstable";
 
+/** The Heavy's Bringer of Ruin, and the one move whose 12+ it rides (see _foldStandingNotes). */
+const BRINGER_OF_RUIN = "Bringer of Ruin";
+const CLASH_MOVE = "Clash";
+
+/**
+ * The notes a roll card prints whatever the player picks (see _foldStandingNotes), in the order they
+ * print. A row holds on the rolls its `moves` takes (every roll without one), for a character with its
+ * `postDeathLore` marked on the worn insert or its `ownsLearned` move learned; `tier` is the card row
+ * (a roll-engine tierActions key, or "critical" for the 10+ row of a 12+), `note` the line's i18n key.
+ */
+const STANDING_ROLL_NOTES = [
+	{ postDeathLore: UNSTABLE_LORE, tier: "failure", note: "stonetop.postDeathMoves.unstableNote" },
+	{ moves: name => name === CLASH_MOVE, ownsLearned: BRINGER_OF_RUIN, tier: "critical", note: "stonetop.rollOffers.bringerOfRuinNote" },
+];
+
 /** The card rows a taken note-only offer prints on, by its `effect` (see _withHitNote). */
 const NOTE_OFFER_TIERS = { hitNote: ["success", "partial"], successNote: ["success"] };
+
+/**
+ * An UNTICKED roll-window line for a "next roll against them" record no target can match
+ * (StonetopCharacter#_recordedFoeOffers, #_speakSoftlyNamedOffers): taken, `spend` uses the record up.
+ */
+function _recordedFoeOffer({ key, label, source, effect = null, spend }) {
+	return { key, applied: false, label, source, ...(effect ? { effect } : {}), spend };
+}
 
 /** Each tier's `html` added after whatever that tier row of the roll already carries. */
 function _withTierActions(options, actions) {
@@ -304,13 +344,25 @@ function _withTierActions(options, actions) {
 }
 
 /**
+ * Message flag: the keys of the "criticalNote" lines taken on a roll (FICTION_ROLL_OFFERS), stamped on its
+ * card as it is posted (_withCriticalNote), so a rewrite of the card's total can call or take back each
+ * line's 12+ hook as the total it ends on says (reconcileCriticalOffers).
+ */
+export const CRITICAL_OFFERS_FLAG = "criticalOffers";
+
+/**
  * A taken "criticalNote" roll offer (A Force to Be Reckoned With): no advantage, its `note` printed on the
- * 10+ row of a roll that totals 12+ (roll-engine's `criticalActions`), and the line named on the card.
+ * 10+ row of a roll that totals 12+ (roll-engine's `criticalActions`), and the line named on the card. Its
+ * key rides on the card (CRITICAL_OFFERS_FLAG), merged into whatever flags the roll already carries.
  */
 function _withCriticalNote(options, offer) {
+	const flags = options.messageFlags?.[STONETOP_SCOPE] ?? {};
 	return {
 		criticalActions: `${options.criticalActions ?? ""}<p class="stonetop-roll-offer-note">${offer.note ?? ""}</p>`,
 		conditionNotes: [...(options.conditionNotes ?? []), offer.source],
+		...(offer.key ? { messageFlags: { ...(options.messageFlags ?? {}), [STONETOP_SCOPE]: {
+			...flags, [CRITICAL_OFFERS_FLAG]: [...(flags[CRITICAL_OFFERS_FLAG] ?? []), offer.key],
+		} } } : {}),
 	};
 }
 
@@ -377,6 +429,7 @@ function _foldTakenOffers(options, taken) {
 		else if (offer.effect === "missAsPartial") folded.missCountsAsPartial = offer.source;
 		else if (offer.effect === "partialAsSuccess") folded.partialCountsAsSuccess = offer.source;
 		else if (offer.effect === "criticalNote") Object.assign(folded, _withCriticalNote(folded, offer));
+		else if (offer.effect === "disadvantage") Object.assign(folded, foldDisadvantage(folded, offer.source));
 		else Object.assign(folded, foldAdvantage(folded, offer.source));
 		if (offer.tierActions) Object.assign(folded, _withTierActions(folded, offer.tierActions));
 		// A 12+ line beside the row's own effect (Slippery): printed as a criticalNote's is, named once.
@@ -391,13 +444,38 @@ function _foldTakenOffers(options, taken) {
  * What the taken lines cost, paid once the dice have landed (a use of whisky marked, a Protection spent),
  * `moveName` being the move the ledger files it under. And a "criticalNote" line whose 12+ came up (A
  * Force to Be Reckoned With turned the tables): its hook, with the card (would-be-hero-cards.js#forceTurnedTables).
+ * The 12+ is read off the total the card shows by now: a rewrite landing while the dice still animated has
+ * settled the hook for its own total already (reconcileCriticalOffers), and each hook runs once per card.
  * Nothing for a roll that never happened.
  */
 async function _payTakenOffers(taken, roll, moveName) {
 	if (!roll) return;
 	for (const offer of taken) await offer.spend?.(moveName);
-	if (Number(roll.total) >= CRITICAL_TOTAL) {
-		for (const offer of taken) if (offer.effect === "criticalNote") await offer.onCritical?.(messageOfRoll(roll));
+	const message = messageOfRoll(roll);
+	if (Number(cardTotal(message) ?? roll.total) >= CRITICAL_TOTAL) {
+		for (const offer of taken) if (offer.effect === "criticalNote") await offer.onCritical?.(message);
+	}
+}
+
+/**
+ * A roll card's total was rewritten (stonetop.js#_resyncRewrittenTotal: a Shift, a +1, Burn Brightly,
+ * Impetuous Youth): each "criticalNote" line taken on it (CRITICAL_OFFERS_FLAG) follows the total it ends
+ * on, both ways (the user's ruling, 2026-10-18). Lifted onto a 12+, the line's `onCritical` runs as it would
+ * have at the roll; dropped off one, its `offCritical` takes back what this card's hook did, and only that
+ * (A Force to Be Reckoned With's "Would-be", crossed off by this card and no other). Each hook keeps its own
+ * record on the card, so a card moved within a 12+, or within 11 and below, changes nothing. The note
+ * itself is shown or hidden with the card's total (stonetop.js#_shiftRollCardFlavor). A card rolled before
+ * the flag was kept, or with no such line taken, is left alone.
+ */
+export async function reconcileCriticalOffers(message, actor, total) {
+	const keys = message?.getFlag?.(STONETOP_SCOPE, CRITICAL_OFFERS_FLAG);
+	if (!Array.isArray(keys) || !keys.length || !Number.isFinite(Number(total))) return;
+	if (actor?.type !== "character") return;
+	// The tier the card COUNTS as, which no bend makes a 12+ (utils/counted-tier.js#countedTier).
+	const critical = cardCountedTier(message, Number(total), STONETOP_SCOPE) === "critical";
+	for (const row of FICTION_ROLL_OFFERS) {
+		if (row.effect !== "criticalNote" || !keys.includes(row.key)) continue;
+		await (critical ? row.onCritical : row.offCritical)?.(actor, message);
 	}
 }
 
@@ -616,13 +694,14 @@ function _choiceGearText(row) {
 // Strip it — but only for possessions that actually have a track (onboarding shows
 // no track, so it keeps the raw description), and only circle-runs tied to the word
 // "use(s)". This leaves ◇ encumbrance markers and other counts ("○○○○○ hours",
-// "○○ firkins") untouched. Handles the three authoring shapes seen in the playbooks:
-// leading "(○○○ uses) …", leading bare "○○○ uses: …", and mid-text "(○○ uses, …)".
+// "○○ firkins") untouched. Handles the shapes seen in the playbooks: leading
+// "(○○○ uses) …" (the Fox's Hidden stash follows it with a colon, "(○○○ uses): each use
+// produces…", and the colon goes too), leading bare "○○○ uses: …", and mid-text "(○○ uses, …)".
 function _stripPossessionUsesAnnotation(desc, resourceDef) {
 	if (!desc || !resourceDef) return desc;
 	let out = desc;
 	let strippedLead = false;
-	const lead1 = out.replace(/^\s*\(\s*[○●◯]+\s*uses?\b\s*\)\s*/i, "");
+	const lead1 = out.replace(/^\s*\(\s*[○●◯]+\s*uses?\b\s*\)\s*:?\s*/i, "");
 	if (lead1 !== out) { out = lead1; strippedLead = true; }
 	const lead2 = out.replace(/^\s*[○●◯]+\s*uses?\b\s*:?\s*/i, "");
 	if (lead2 !== out) { out = lead2; strippedLead = true; }
@@ -766,28 +845,39 @@ export class StonetopCharacter {
 	// that box can't be marked again. A duplicate already stored is kept, never cleared.
 	async setCountMark(moveName, optionSlug, newCount) {
 		const allMarks = this._moveResources.getMarks();
-		const current  = markEntries(allMarks[moveName]?.[optionSlug]).length;
+		const count    = await this._clampedMarkCount(moveName, allMarks[moveName] ?? {}, optionSlug, newCount);
+		const entries = markEntries(allMarks[moveName]?.[optionSlug]);
+		while (entries.length < count) entries.push({ stat: "", level: this._characterLevel });
+		entries.length = Math.max(0, count);
+		await this._actor.update(this._moveResources.markUpdate(moveName, optionSlug, entries));
+	}
+
+	// The count setCountMark stores when `optionSlug` of `moveName` is set to `newCount`, its limits
+	// counted against `moveMarks` (the move's marks: the saved ones, or setCreationMarks' working
+	// copy). `lookups` keeps the move's definition and the background's boxes for a caller clamping
+	// several marks of one move, as neither changes with the marks.
+	async _clampedMarkCount(moveName, moveMarks, optionSlug, newCount, lookups = {}) {
+		const current = markEntries(moveMarks[optionSlug]).length;
 		// Clamp an INCREASE to the move's repeat-scaling pick budget (if any); a decrease
 		// is left as-is (budget null below), so a grandfathered over-budget mark clears.
 		let count = newCount;
-		const def = newCount > current ? await this._moveMarkDefinition(moveName) : null;
+		if (newCount > current && !("def" in lookups)) lookups.def = await this._moveMarkDefinition(moveName);
+		const def = newCount > current ? lookups.def : null;
 		const max = def ? moveMarkBudget(def.markBudget, def.ownedCount) : null;
 		if (max != null) {
-			const others    = _sumMarkPicks(allMarks[moveName] ?? {}, def.markOptions, optionSlug);
+			const others    = _sumMarkPicks(moveMarks, def.markOptions, optionSlug);
 			const remaining = Math.max(0, max - others);             // picks still free across the move's options
 			count = Math.min(newCount, Math.max(current, remaining)); // never below what's already checked
 		}
 		const opt = def?.markOptions.find(o => o.slug === optionSlug);
 		if (opt) {
 			// Only a move a background can answer with a box reads the playbook for it (Well Versed).
+			if (hasBackgroundMarkOptions(moveName)) lookups.background ??= await this.backgroundMarkOptions();
 			const fromBackground = hasBackgroundMarkOptions(moveName)
-				&& (await this.backgroundMarkOptions())[moveName] === optionSlug ? 1 : 0;
+				&& lookups.background[moveName] === optionSlug ? 1 : 0;
 			count = Math.min(count, Math.max(current, (opt.marks ?? 1) - fromBackground));
 		}
-		const entries = markEntries(allMarks[moveName]?.[optionSlug]);
-		while (entries.length < count) entries.push({ stat: "", level: this._characterLevel });
-		entries.length = Math.max(0, count);
-		await this._actor.update(this._moveResources.markUpdate(moveName, optionSlug, entries));
+		return count;
 	}
 
 	/**
@@ -798,20 +888,30 @@ export class StonetopCharacter {
 	 * marks carry the level gained (2 and up), so they are never it.
 	 */
 	creationMarkOption(moveName) {
-		return this._creationMarkEntry(moveName)?.slug ?? "";
+		return this.creationMarkOptions(moveName, 1)[0] ?? "";
 	}
 
-	// Where creationMarkOption's mark is stored: its option and its index there, or null.
-	_creationMarkEntry(moveName) {
+	/**
+	 * Every option of `moveName` onboarding marked, one slug per mark (Veteran Crew's "Go mark it
+	 * now", once for each copy creation gave): the entries stored with `creation`, else the ones
+	 * marked at 1st level, as creationMarkOption reads them. At most `limit`.
+	 */
+	creationMarkOptions(moveName, limit = Infinity) {
+		return this._creationMarkEntries(moveName, limit).map(e => e.slug);
+	}
+
+	// Where creationMarkOptions' marks are stored: each one's option and its index there, at most `limit`.
+	_creationMarkEntries(moveName, limit = Infinity) {
 		const marks = Object.entries(this._moveResources.getMarks()[moveName] ?? {})
 			.map(([slug, stored]) => [slug, markEntries(stored)]);
 		for (const test of [e => e.creation, e => e.level === 1]) {
+			const found = [];
 			for (const [slug, entries] of marks) {
-				const index = entries.findIndex(test);
-				if (index >= 0) return { slug, index };
+				entries.forEach((e, index) => { if (test(e)) found.push({ slug, index }); });
 			}
+			if (found.length) return found.slice(0, limit);
 		}
-		return null;
+		return [];
 	}
 
 	/**
@@ -822,19 +922,39 @@ export class StonetopCharacter {
 	 * only clears.
 	 */
 	async setCreationMark(moveName, optionSlug) {
-		const was = this._creationMarkEntry(moveName);
-		if (was) {
-			const entries = markEntries(this._moveResources.getMarks()[moveName]?.[was.slug]);
-			entries.splice(was.index, 1);
-			await this._actor.update(this._moveResources.markUpdate(moveName, was.slug, entries));
+		await this.setCreationMarks(moveName, optionSlug ? [optionSlug] : [], 1);
+	}
+
+	/**
+	 * Make `optionSlugs` onboarding's marks of `moveName`, one per copy creation gave (Veteran Crew's
+	 * "Go mark it now"): the marks creationMarkOptions reads (at most `replaceLimit` of them) go, every
+	 * other mark stays, and each new one is clamped as setCountMark clamps it and is stamped as
+	 * setCreationMark stamps its one. An empty list only clears.
+	 *
+	 * Worked out on a copy of the move's marks and written in ONE update: each pick's limits count
+	 * the marks taken off and picked before it, as they would once stored.
+	 */
+	async setCreationMarks(moveName, optionSlugs, replaceLimit = Infinity) {
+		const was = this._creationMarkEntries(moveName, replaceLimit);
+		const picks = (optionSlugs ?? []).filter(Boolean);
+		if (!was.length && !picks.length) return;
+		const moveMarks = { ...(this._moveResources.getMarks()[moveName] ?? {}) };
+		const changed = {};
+		const bySlug = new Map();
+		for (const { slug, index } of was) bySlug.set(slug, [...(bySlug.get(slug) ?? []), index]);
+		for (const [slug, indexes] of bySlug) {
+			const entries = markEntries(moveMarks[slug]);
+			for (const index of indexes.sort((a, b) => b - a)) entries.splice(index, 1);
+			moveMarks[slug] = changed[slug] = entries;
 		}
-		if (!optionSlug) return;
-		const current = markEntries(this._moveResources.getMarks()[moveName]?.[optionSlug]).length;
-		await this.setCountMark(moveName, optionSlug, current + 1);
-		const entries = markEntries(this._moveResources.getMarks()[moveName]?.[optionSlug]);
-		if (entries.length <= current) return;
-		entries[entries.length - 1] = { ...entries[entries.length - 1], level: 1, creation: true };
-		await this._actor.update(this._moveResources.markUpdate(moveName, optionSlug, entries));
+		const lookups = {};
+		for (const optionSlug of picks) {
+			const entries = markEntries(moveMarks[optionSlug]);
+			const count = await this._clampedMarkCount(moveName, moveMarks, optionSlug, entries.length + 1, lookups);
+			if (count > entries.length) entries.push({ stat: "", level: 1, creation: true });
+			moveMarks[optionSlug] = changed[optionSlug] = entries;
+		}
+		await this._actor.update(this._moveResources.marksUpdate(moveName, changed));
 	}
 
 	// A held move's markBudget and markOptions, off its pack definition first and its owned copy
@@ -1556,7 +1676,11 @@ export class StonetopCharacter {
 			const res = item.system?.resource ?? grant?.resource ?? null;
 			const legacyUsesSlug = grant?.legacyUsesFromPossession ? possessionSlug : null;
 			const currentUses = resources[item._id] ?? (legacyUsesSlug ? possessionUses[legacyUsesSlug] : 0);
-			const note = item.system?.sourcePossession
+			// Possession gear kept at home (the Distillery's stills and barrels, `immobile`): no mark,
+			// no small-item allowance, and its note shown so the card says why.
+			const stashed = !!possessionSlug && isStashedGrantItem(item);
+			const note = stashed ? item.system.note
+				: item.system?.sourcePossession
 				? null
 				: (item.system?.sourceLabel
 					? `from ${item.system.sourceLabel}`
@@ -1590,7 +1714,8 @@ export class StonetopCharacter {
 			// "from <possession>" note either.
 			.withNote(artifact.note)
 			.withWeight(weight)
-			.withChecked(checked[item._id] ?? false)
+			.withChecked(stashed ? false : (checked[item._id] ?? false))
+			.withStashed(stashed)
 			.withArtifact(artifact)
 			.withResource(shownRes ? new ResourceBuilder()
 				.withCurrent(Math.min(currentUses ?? 0, shownRes.max ?? 0))
@@ -1765,7 +1890,8 @@ export class StonetopCharacter {
 			.map(opt => [opt.slug, stripHtmlToText(opt.label ?? "")]));
 		const outfitPossessionRows = column => [...new Set([...possessionLabels.keys(), ...grantedByPossession.keys(), ...choiceGearByPossession.keys()])]
 			.flatMap(slug => [
-				...(grantedByPossession.get(slug)?.[column] ?? [])
+				// Not the gear kept at home (isStashedGrantItem): nobody packs the stills.
+				...(grantedByPossession.get(slug)?.[column] ?? []).filter(i => !i.stashed)
 					.map(i => ({ slug: i.slug, name: i.name, weight: i.weight, checked: i.checked })),
 				...(choiceGearByPossession.get(slug)?.[column] ?? [])
 					.map(r => ({ slug: `${slug}:${r.choiceSlug}`, name: _choiceGearText(r), weight: r.weight, checked: r.checked })),
@@ -1966,7 +2092,11 @@ export class StonetopCharacter {
 			// neither does one the background handed over ("in addition to your usual choice").
 			if (isSelected && !isPre && !opt.grantOnly && !fromBackground.has(opt.slug)) chosenCount++;
 			const maxUses = maxUsesMap[opt.slug] ?? opt.resource?.max ?? null;
-			const currentUses = isSelected ? (usesMap[opt.slug] ?? 0) : 0;
+			const storedUses = isSelected ? (usesMap[opt.slug] ?? 0) : 0;
+			// The sacred pouch's spent count can stand past its usable max (entries stored in a pouch
+			// with no empty space, Big Magic gone): DRAWN at the max, so it reads as 0 Stock left, and
+			// stored as it is (sacred-pouch.js).
+			const currentUses = opt.slug === SACRED_POUCH_SLUG && maxUses != null ? Math.min(storedUses, maxUses) : storedUses;
 			const resourceDef = opt.resource ?? null;
 			const grantedGear = grantedByPossession.get(opt.slug) ?? { regular: [], small: [] };
 			const hasGrantedGear = grantedGear.regular.length || grantedGear.small.length;
@@ -2438,7 +2568,7 @@ export class StonetopCharacter {
 	async directRollOffers(moveName, { except = [] } = {}) {
 		if (!moveName) {
 			const oathbreaker = this._oathbreakerOffer(null);
-			return oathbreaker ? [oathbreaker] : [];
+			return [...(oathbreaker ? [oathbreaker] : []), ...this._speakSoftlyNamedOffers(), ...this._recordedFoeOffers(null)];
 		}
 		const asked = new Set(except);
 		return (await this._rollOffersNamed(moveName)).filter(offer => !asked.has(offer.source));
@@ -2465,15 +2595,20 @@ export class StonetopCharacter {
 				},
 			});
 		}
+		let loadTier;
 		for (const row of FICTION_ROLL_OFFERS) {
 			if (!row.anyMove && (!book || !row.moves(moveName))) continue;
 			// "Unless you're dazed" (Constant Vigilance, p.131) reads the debility's EFFECT, which a raging Heavy
 			// ignores (Battle Joy, p.114: "the effects of debilities as long as you keep fighting"), so it gates
 			// nothing while the dice ignore it too (ignoresDebilities).
-			if (row.unlessDebility && !this.ignoresDebilities
-				&& this._actor.system?.attributes?.debilities?.options?.[row.unlessDebility]?.value) continue;
+			if (row.unlessDebility && this.debilityInEffect(row.unlessDebility)) continue;
 			if (row.whileHolding && !(learnedTrack(this._actor, row.whileHolding)?.held > 0)) continue;
 			if (!await this._earnsRollOffer(row)) continue;
+			// Asked last, and once per window: the load is a whole inventory build (currentLoadTier).
+			if (row.whileLoad) {
+				if (loadTier === undefined) loadTier = await this.currentLoadTier();
+				if (overLoadGate(row.whileLoad, loadTier)) continue;
+			}
 			offers.push({
 				key: row.key, label: _loc(row.label), applied: false, source: row.source,
 				...(row.effect ? { effect: row.effect } : {}), ...(row.note ? { note: _loc(row.note) } : {}),
@@ -2487,12 +2622,79 @@ export class StonetopCharacter {
 		}
 		const oathbreaker = this._oathbreakerOffer(moveName);
 		if (oathbreaker) offers.push(oathbreaker);
+		offers.push(...this._speakSoftlyNamedOffers(), ...this._recordedFoeOffers(moveName));
 		return offers;
+	}
+
+	/**
+	 * Truth or Consequences' and Censure's "next roll against them" records that no target can match: one
+	 * UNTICKED line each, as Speak Softly's named enemies get (_speakSoftlyNamedOffers), since only the player
+	 * can say the roll is against them. The Judge's own Truth lines (advantage after a "Yes", DISADVANTAGE
+	 * after a lie), and every Judge's enraged people on ANYONE's roll. Taken, the line is named on the card and
+	 * its record spent; left unticked, it stands for the next roll.
+	 *
+	 * Someone on the map is offered only on a roll aimed at nobody (a targeted roll reads the record itself,
+	 * _foldAimedModes); someone only named (Truth's typed name) on every roll. Not on Interfere or Persuade
+	 * (vs. PCs), which ask whom they are aimed at once the window closes and fold the record then, as
+	 * _oathbreakerOffer leaves them.
+	 */
+	_recordedFoeOffers(moveName) {
+		if (aimedAtPc(moveName)) return [];
+		const untargeted = !globalThis.game?.user?.targets?.size;
+		const offers = [];
+		for (const entry of truthOwed(this._actor)) {
+			if (!entry.named && !untargeted) continue;
+			const dis = entry.mode === "dis";
+			offers.push(_recordedFoeOffer({
+				key: `truth:${entry.mode}:${entry.key}`,
+				label: format(`stonetop.rollOffers.${dis ? "truthDisNamed" : "truthAdvNamed"}`, { name: entry.name }),
+				source: format("stonetop.rollOffers.recordedFoeSource", { move: HERO_MOVES.TRUTH, name: entry.name }),
+				effect: dis ? "disadvantage" : null,
+				spend: () => forgetTruth(this._actor, entry.key, entry.mode),
+			}));
+		}
+		if (!untargeted || this._actor?.type !== "character") return offers;
+		for (const entry of censureEnragedHeld()) {
+			offers.push(_recordedFoeOffer({
+				key: `censure-enraged:${entry.judge.id}:${entry.key}`,
+				label: format("stonetop.rollOffers.censureEnragedNamed", { name: entry.name, judge: entry.judge.name }),
+				source: format("stonetop.rollOffers.recordedFoeSource", { move: CENSURE, name: entry.name }),
+				spend: () => spendCensureEnraged(this._actor, [{ uuid: entry.key }]),
+			}));
+		}
+		return offers;
+	}
+
+	/**
+	 * Speak Softly's enemies with no token to aim at (fight/hero-moves.js#speakSoftlyNamed): one UNTICKED line
+	 * each on the Marshal's next rolls, "vs. <name>: Speak Softly advantage", since only the player can say a
+	 * roll is against them. Taken, it is advantage named on the card and the record is spent; left unticked,
+	 * it stands for the next roll. On every move roll and bare stat roll, as Binding Arbitration's line is.
+	 */
+	_speakSoftlyNamedOffers() {
+		return speakSoftlyNamed(this._actor).map(entry => _recordedFoeOffer({
+			key: `speak-softly:${entry.key}`,
+			label: format("stonetop.rollOffers.speakSoftlyNamed", { name: entry.name }),
+			source: format("stonetop.rollOffers.speakSoftlySource", { move: HERO_MOVES.SPEAK_SOFTLY, name: entry.name }),
+			spend: () => forgetSpeakSoftly(this._actor, [entry.key]),
+		}));
+	}
+
+	/**
+	 * The load tier the Inventory tab shows ("light", "normal", "heavy", "overloaded", or null for nothing
+	 * carried), derived from the ◇ marked exactly as buildSnapshot derives it, without the rest of the
+	 * snapshot: for a roll line that holds only under a load (Free Running's `whileLoad`).
+	 */
+	async currentLoadTier() {
+		const actorLevel = this._actor.system?.attributes?.level?.value ?? 1;
+		const [playbookData, arcanaCarried] = await Promise.all([this.playbook(), this._arcana.weightedInventoryItems()]);
+		const inventory = await this._buildInventorySection(playbookData, this._buildOwnedMovesMap(), actorLevel, {}, arcanaCarried);
+		return inventory?.outfit?.load?.selected ?? null;
 	}
 
 	/** Whether this character has what a FICTION_ROLL_OFFERS row asks for (see there). */
 	async _earnsRollOffer(row) {
-		if (row.ownsLearned) return ownsLearnedMoveNamed(this._actor, row.ownsLearned);
+		if (row.ownsLearned) return ownsLearnedBookMoveNamed(this._actor, row.ownsLearned);
 		// Marked on the insert they WEAR (CharacterPostDeath#wornMarked).
 		if (row.postDeathLore) return this._postDeath.wornMarked(row.postDeathLore);
 		if (row.background) {
@@ -2521,7 +2723,7 @@ export class StonetopCharacter {
 	 * are aimed at once the window closes, and onRoll asks that character's oath itself.
 	 */
 	_oathbreakerOffer(moveName) {
-		if (moveName === INTERFERE_MOVE || moveName === PERSUADE_PC_MOVE) return null;
+		if (aimedAtPc(moveName)) return null;
 		if (globalThis.game?.user?.targets?.size) return null;
 		const broken = brokenOaths(this._actor);
 		if (!broken.length) return null;
@@ -2565,7 +2767,8 @@ export class StonetopCharacter {
 	 * stack, so only the one that bought it is named), then Tough Love's disadvantage on a roll at the hero
 	 * who called this character on it, so the two sides cancel. Never a damage roll's: those do not come
 	 * through here. `grudged` is an attack, whose advantage onRoll has already folded as the foe's grudge
-	 * (combat/attack-flow.js#attackFoeAdvantage), so only Tough Love's disadvantage is folded here.
+	 * (combat/attack-flow.js#attackFoeAdvantage), so only the disadvantages (Tough Love's, Truth or
+	 * Consequences' after a lie) are folded here.
 	 *
 	 * Resolves `options` folded, and `spend`, which uses up the "next roll against them" advantages once the
 	 * dice have landed, named or not: this was the next roll against them. And `oathbreaker`, whether the
@@ -2574,17 +2777,17 @@ export class StonetopCharacter {
 	_foldAimedModes(options, targets, { grudged = false } = {}) {
 		if (!targets?.length) return { options, spend: async () => {}, oathbreaker: false };
 		const oathbreaker = grudged ? null : oathbreakerAgainst(this._actor, targets);
-		const upAgain = upAgainAgainst(this._actor, targets);
-		const alpha = alphaAgainst(this._actor, targets);
+		// The one-shot records (fight/hero-moves.js#nextRollOwed), in the order they are named: But I Get Up
+		// Again, Alpha, Rapier Wit (the NPC that answered the Fox's quip by attacking), Truth or Consequences (a
+		// "Yes" is advantage, a lie disadvantage), Speak Softly (the enemy who refused the Marshal's peace) and
+		// Censure's enraged (anyone's roll, the user's ruling).
+		const owed = nextRollOwed(this._actor, targets);
 		const toughLove = toughLoveAgainst(this._actor, targets);
-		const advantage = grudged ? null : oathbreaker ?? upAgain ?? alpha;
+		const advantage = grudged ? null : oathbreaker ?? owed.advantage;
 		let folded = advantage ? foldAdvantage(options, advantage) : options;
 		if (toughLove) folded = foldDisadvantage(folded, toughLove);
-		const spend = async () => {
-			if (alpha) await spendAlphaOver(this._actor, targets);
-			if (upAgain) await spendUpAgainRoll(this._actor, targets);
-		};
-		return { options: folded, spend, oathbreaker: !!oathbreaker };
+		for (const source of owed.disadvantages) folded = foldDisadvantage(folded, source);
+		return { options: folded, spend: owed.spend, oathbreaker: !!oathbreaker };
 	}
 
 	/**
@@ -2606,11 +2809,26 @@ export class StonetopCharacter {
 	 * on the 6- row (roll-engine's tierActions, so a GM's Shift onto or off the miss moves it too). A
 	 * reminder for the GM, not an automation: the choice is theirs. On the worn insert only, as the roll
 	 * window's post-death lines are (_earnsRollOffer).
+	 *
+	 * And what one move's card says, `moveName` being the move rolled: the Heavy's Bringer of Ruin, "When
+	 * you roll a 12+ to Clash and your foe survives, name something they possess ... Whatever you name, it
+	 * is broken, shattered, lost", on the 10+ row of a Clash that totals 12+ (roll-engine's
+	 * `criticalActions`, as A Force to Be Reckoned With's taken line prints). Not a line in the roll window:
+	 * the move asks nothing of the player before the dice, so a LEARNED Bringer of Ruin prints it always.
+	 * Both are rows of STANDING_ROLL_NOTES.
 	 */
-	_foldStandingNotes(options) {
-		if (!this._postDeath.wornMarked(UNSTABLE_LORE)) return options;
-		const note = `<p class="stonetop-roll-offer-note">${_loc("stonetop.postDeathMoves.unstableNote")}</p>`;
-		return { ...options, ..._withTierActions(options, { failure: note }) };
+	_foldStandingNotes(options, moveName = null) {
+		let folded = options;
+		for (const row of STANDING_ROLL_NOTES) {
+			if (row.moves && !row.moves(moveName)) continue;
+			if (row.postDeathLore && !this._postDeath.wornMarked(row.postDeathLore)) continue;
+			if (row.ownsLearned && !ownsLearnedMoveNamed(this._actor, row.ownsLearned)) continue;
+			const note = `<p class="stonetop-roll-offer-note">${_loc(row.note)}</p>`;
+			folded = row.tier === "critical"
+				? { ...folded, criticalActions: `${folded.criticalActions ?? ""}${note}` }
+				: { ...folded, ..._withTierActions(folded, { [row.tier]: note }) };
+		}
+		return folded;
 	}
 
 	/**
@@ -2650,6 +2868,120 @@ export class StonetopCharacter {
 			await this._possessions.setUses(SACRED_POUCH_SLUG, next);
 		}
 		return { lost: 0 };
+	}
+
+	// -- The sacred pouch's room (sacred-pouch.js) -------------------------------------------
+	//
+	// What it holds besides Stock (Suck the Poison Out's stored malady, Borrow Power's borrowed power),
+	// each in "the space of 1 Stock", and how the spent count follows the room when it changes. The
+	// arithmetic is sacred-pouch.js's; these write it.
+
+	/** The pouch's entries, normalised. */
+	get pouchSlots() {
+		return readPouchSlots(this._possessions.pouchSlots);
+	}
+
+	/** The turn every change to the pouch's entries waits in (inTurn), one per character. */
+	get _pouchTurn() {
+		return `pouch:${this._actor?.uuid ?? this._actor?.id ?? ""}`;
+	}
+
+	/**
+	 * The pouch as the store and refill windows ask about it: held, its usable max (room less entries),
+	 * the spent count clamped to it, and the Stock that leaves.
+	 */
+	async pouchRoom() {
+		const pb = await this.playbook();
+		const held = await this.holdsPossession(SACRED_POUCH_SLUG, pb);
+		const usable = (await this.sacredPouchMax(pb)) ?? 0;
+		const spent = Math.min(usable, Math.max(0, Math.trunc(Number(this._possessions.uses[SACRED_POUCH_SLUG]) || 0)));
+		return { held, usable, spent, remaining: usable - spent };
+	}
+
+	/**
+	 * Store a named entry ({kind, name}) in the pouch, into an empty space when there is one, else in
+	 * the place of 1 Stock (`displaced` on the answer). Never refused for room: the window said so
+	 * first. Answers the stored entry, or null with no pouch on the playbook.
+	 */
+	async storePouchSlot({ kind, name } = {}) {
+		const label = String(name ?? "").trim();
+		if (!label) return null;
+		return inTurn(this._pouchTurn, async () => {
+			const capacity = await this.sacredPouchMax(undefined, { capacity: true });
+			if (capacity == null) return null;
+			const slots = this.pouchSlots;
+			const { spent, displaced, overfull } = spentAfterStore(this._possessions.uses[SACRED_POUCH_SLUG], pouchUsableMax(capacity, slots.length));
+			const entry = { id: newRosterId(), kind, name: label };
+			await this._possessions.setPouchSlots(SACRED_POUCH_SLUG, [...slots, entry], spent);
+			return { ...entry, displaced, overfull };
+		});
+	}
+
+	/** Take an entry out; its space comes back EMPTY, so the Stock is unchanged. Answers it, or null. */
+	async removePouchSlot(id) {
+		return inTurn(this._pouchTurn, async () => {
+			const slots = this.pouchSlots;
+			const gone = slots.find(s => s.id === id);
+			if (!gone) return null;
+			const capacity = (await this.sacredPouchMax(undefined, { capacity: true })) ?? 0;
+			const spent = spentAfterFree(this._possessions.uses[SACRED_POUCH_SLUG],
+				pouchUsableMax(capacity, slots.length), pouchUsableMax(capacity, slots.length - 1));
+			await this._possessions.setPouchSlots(SACRED_POUCH_SLUG, slots.filter(s => s.id !== id), spent);
+			return gone;
+		});
+	}
+
+	/**
+	 * "When you have a few days of downtime in familiar terrain, you may replenish your Stock": nothing
+	 * spent, so the pouch holds its usable max (its entries keep their spaces). Answers whether it wrote.
+	 */
+	async replenishPouch() {
+		if (!(Number(this._possessions.uses[SACRED_POUCH_SLUG]) > 0)) return false;
+		await this._possessions.setUses(SACRED_POUCH_SLUG, 0);
+		return true;
+	}
+
+	/** The pouch's usable max while it is held, else null (a pouch gained or lost settles nothing). */
+	async _heldPouchMax() {
+		const pb = await this.playbook();
+		if (!(await this.holdsPossession(SACRED_POUCH_SLUG, pb))) return null;
+		return this.sacredPouchMax(pb);
+	}
+
+	/**
+	 * The pouch's max went from `before` to `after` (the user's ruling, 2026-10-18): new room arrives
+	 * EMPTY, so the spent count rises by the growth and the Stock in it is unchanged; a smaller pouch
+	 * clamps the spent count to its new max. Answers whether it wrote.
+	 */
+	async settlePouchMaxChange(before, after) {
+		const next = settledPouchSpent(this._possessions.uses[SACRED_POUCH_SLUG], before, after);
+		if (next == null || next === (this._possessions.uses[SACRED_POUCH_SLUG] ?? 0)) return false;
+		await this._possessions.setUses(SACRED_POUCH_SLUG, next);
+		return true;
+	}
+
+	/**
+	 * Run `fn`, a change that may move the pouch's max (a level-up, a move learned, un-learned or
+	 * removed), and settle the pouch once around it. Every call that overlaps another, nested (a
+	 * level-up that removes a move) or side by side (two moves ticked in quick succession, a level
+	 * typed while a toggle is in flight), joins ONE settle: the max read before the first of them
+	 * ran, against the max read after the last of them ended. Two settles would add the growth twice,
+	 * and a call that ran bare beside another could land after that one read its 'after'. Each `fn`
+	 * waits on the shared 'before' read, so none writes ahead of it. Onboarding never comes through
+	 * here, so a character made at any level starts with a full pouch.
+	 */
+	async withPouchSettled(fn) {
+		const settle = this._pouchSettle ??= { depth: 0, before: this._heldPouchMax() };
+		settle.depth += 1;
+		try {
+			await settle.before;
+			return await fn();
+		} finally {
+			if (--settle.depth === 0) {
+				this._pouchSettle = null;
+				await this.settlePouchMaxChange(await settle.before, await this._heldPouchMax());
+			}
+		}
 	}
 
 	/** "Hold N Boon" — the move SETS the track rather than adding to it. */
@@ -2791,6 +3123,11 @@ export class StonetopCharacter {
 	 */
 	get undefinedSmallMarks() {
 		return Math.max(0, Math.trunc(Number(this._inventory.smallPool) || 0));
+	}
+
+	/** The undefined ◇ still in reserve for regular items: what an Itinerant Mystic's Enigma stands in for at none (enigma.js). */
+	get undefinedRegularMarks() {
+		return Math.max(0, Math.trunc(Number(this._inventory.regularPool) || 0));
 	}
 
 	async toggleCarriedItem(slug, isChecked, { small = false, weight = 1, loot = false, uses: setUses, stonetopMove } = {}) {
@@ -3100,7 +3437,8 @@ export class StonetopCharacter {
 	async setMoveLearned(itemId, learned) {
 		const item = this._actor.items.get(itemId);
 		if (!item) return;
-		await item.setFlag(STONETOP_SCOPE, "learned", !!learned);
+		// A Big Magic switched on or off grows or shrinks the sacred pouch: settled around the write.
+		await this.withPouchSettled(() => item.setFlag(STONETOP_SCOPE, "learned", !!learned));
 	}
 
 	// A possession's `usesBonus` (playbook data) grows its max: the Blessed's pouch +1 each even level
@@ -3111,7 +3449,11 @@ export class StonetopCharacter {
 	// even level-up gains that level's +1 at once. A pouch granted before its level was recorded
 	// counts from `earliestGrant`, the first level Initiate can be taken at (it requires level 2);
 	// reading such a pouch flat would leave a level-8 Seeker at 3 Stock instead of 7.
-	computePossessionMaxUses(specialPossessions, ownedAllByName, level) {
+	//
+	// The sacred pouch's entry is its USABLE max: each malady or borrowed power stored in it takes "the
+	// space of 1 Stock" (sacred-pouch.js), so it comes off here, the one place every reader asks (the
+	// gear tab's track, stockSources and through it Forage). `withSlots: false` for the room itself.
+	computePossessionMaxUses(specialPossessions, ownedAllByName, level, { withSlots = true } = {}) {
 		const result = { ...this._possessions.maxUses };
 		for (const opt of (specialPossessions?.options ?? [])) {
 			const usesBonus = opt.usesBonus;
@@ -3130,6 +3472,9 @@ export class StonetopCharacter {
 			bonus += sumMoveBonus(usesBonus.moveBonus, n => (ownedAllByName.get(n) ?? []).filter(i => moveLearnedIn(i, this._actor.items)).length);
 			if (bonus > 0) result[opt.slug] = (opt.resource?.max ?? 0) + bonus;
 		}
+		const pouch = withSlots && (specialPossessions?.options ?? []).find(o => o.slug === SACRED_POUCH_SLUG);
+		const held = pouch ? this.pouchSlots.length : 0;
+		if (held) result[SACRED_POUCH_SLUG] = pouchUsableMax(result[SACRED_POUCH_SLUG] ?? pouch.resource?.max ?? 0, held);
 		return result;
 	}
 
@@ -3158,12 +3503,14 @@ export class StonetopCharacter {
 	// The sacred pouch's real max Stock, worked out now (for a caller with no snapshot, like
 	// the chat card's Spend button): the printed 3 plus even levels and Big Magic. Null when
 	// the playbook offers no pouch. `playbookData` for a caller that has already resolved it.
-	async sacredPouchMax(playbookData = undefined) {
+	// The USABLE max, less what the pouch holds besides Stock (computePossessionMaxUses); `capacity`
+	// for the room itself, entries and all.
+	async sacredPouchMax(playbookData = undefined, { capacity = false } = {}) {
 		const pb = playbookData === undefined ? await this.playbook() : playbookData;
 		const options = pb?.specialPossessions?.options ?? [];
 		const printed = options.find(o => o.slug === SACRED_POUCH_SLUG)?.resource?.max ?? null;
 		if (printed == null) return null;
-		const derived = this.computePossessionMaxUses(pb.specialPossessions, this._buildOwnedMovesMap(), this._characterLevel);
+		const derived = this.computePossessionMaxUses(pb.specialPossessions, this._buildOwnedMovesMap(), this._characterLevel, { withSlots: !capacity });
 		return derived[SACRED_POUCH_SLUG] ?? printed;
 	}
 
@@ -3381,32 +3728,65 @@ export class StonetopCharacter {
 	 * stacking on a hauberk, and read as armored by modifier alone, long after the grant said
 	 * `{base: 1}`. What is compared and what is left alone is possession-grants.js#grantRepair.
 	 *
-	 * Only TAGGED items (`sourcePossession`) are touched, and only one whose grant can be named
-	 * (grantOfTaggedItem): hand-written gear, and untagged legacy gear adopted by name, are the
-	 * player's to shape. The marks are never written. A stored track count is clamped only when
-	 * the track it counts on got smaller. Idempotent: a matching item produces no update, so a
-	 * second run writes nothing.
+	 * Only an item whose grant can be named is touched. A TAGGED item (`sourcePossession`) by its
+	 * tag (grantOfTaggedItem). An UNTAGGED one is first ADOPTED, when the shared column + name rule
+	 * (possession-grants.js#grantSourceMap, the one the gear tab and the select/deselect sync use)
+	 * gives it to exactly one grant of a possession the character holds: it is stamped with that
+	 * possession's tag, as grantsToCreate would have, and then repaired like any tagged item. That
+	 * is the gear made from 1.3.2 to 1.3.5.1, before MoveModel declared the tag and so while the tag
+	 * was stripped on the way in: the Tannery's `{modifier: 1}` cuirass, and the Distillery's
+	 * firkins at 1 ◇ where the book prints ◇◇. Untagged gear that matches no grant, or a key two
+	 * grants share (Carpenter's tools and the Distillery both grant firkins), is the player's and
+	 * is left alone; so is one whose grant a tagged item already stands for, a second copy the
+	 * player wrote in by hand. The marks are never written. A stored track count is clamped only
+	 * when the track it counts on got smaller. Idempotent: a matching item produces no update, so
+	 * a second run writes nothing.
 	 *
 	 * @param {object} [playbookData]  the resolved playbook, when the caller already has it
 	 * @returns {Promise<number>} how many items were rewritten
 	 */
 	async repairPossessionGrants(playbookData = undefined) {
-		// Bail before resolving the playbook when there is no tagged gear to compare.
-		const tagged = this._actor.items.filter(i => i.type === "move"
-			&& i.system?.moveType === "inventory-custom" && i.system?.sourcePossession);
-		if (!tagged.length) return 0;
+		// Bail before resolving the playbook when there is no custom gear to compare.
+		const gear = this._actor.items.filter(i => i.type === "move" && i.system?.moveType === "inventory-custom");
+		if (!gear.length) return 0;
 		const pb = playbookData === undefined ? await this.playbook() : playbookData;
-		const bySlug = new Map((pb?.specialPossessions?.options ?? []).map(o => [o.slug, o]));
+		const options = pb?.specialPossessions?.options ?? [];
+		const bySlug = new Map(options.map(o => [o.slug, o]));
 		if (!bySlug.size) return 0;
+		const held = new Set([...this._possessions.selected, ...(pb?.specialPossessions?.preselected ?? [])]);
+		const adoptable = grantSourceMap(options.filter(o => held.has(o.slug)));
+		// The grants a tagged item already stands for, so adoption never hands one grant a second copy.
+		const taggedGrants = new Set();
+		for (const item of gear) {
+			const slug = item.system?.sourcePossession;
+			if (!slug) continue;
+			const grant = grantOfTaggedItem(item, bySlug.get(slug));
+			if (grant) taggedGrants.add(grant);
+		}
 		const resources = this._inventory.resources;
 		const updates = [];
 		const clamps  = [];
-		for (const item of tagged) {
-			const repair = grantRepair(item, grantOfTaggedItem(item, bySlug.get(item.system.sourcePossession)));
-			if (!repair) continue;
-			updates.push({ _id: item._id, ...repair.update });
+		for (const item of gear) {
+			let grant = null;
+			let adopt = null;
+			if (item.system?.sourcePossession) {
+				grant = grantOfTaggedItem(item, bySlug.get(item.system.sourcePossession));
+			} else {
+				const source = adoptable.get(itemGrantKey(item));
+				if (!source || taggedGrants.has(source.grant)) continue;
+				grant = source.grant;
+				taggedGrants.add(grant);
+				adopt = {
+					"system.sourcePossession": source.slug,
+					"system.sourceKey":        grant.sourceKey ?? grant.name,
+					"system.sourceLabel":      stripHtmlToText(bySlug.get(source.slug)?.label ?? "") || null,
+				};
+			}
+			const repair = grantRepair(item, grant);
+			if (!repair && !adopt) continue;
+			updates.push({ _id: item._id, ...adopt, ...repair?.update });
 			const count = Number(resources[item._id]);
-			if (repair.resourceMax != null && count > repair.resourceMax) clamps.push([item._id, repair.resourceMax]);
+			if (repair?.resourceMax != null && count > repair.resourceMax) clamps.push([item._id, repair.resourceMax]);
 		}
 		// Quiet in the ledger: a repair to match the playbook's text, not an edit anybody made.
 		if (updates.length) await this._actor.updateEmbeddedDocuments("Item", updates, { stonetopLedger: true });
@@ -3438,8 +3818,35 @@ export class StonetopCharacter {
 		return data;
 	}
 	async setCustomPossessions(labels) { await this._possessions.setCustom(labels); }
+	// A write-in added from the sheet; it spends a pick like onboarding's (_buildPossessionsSnapshot).
+	async addCustomPossession(label) { return this._possessions.addCustom(label); }
 	async removeCustomPossession(slug) { await this._possessions.removeCustom(slug); }
-	async setPossessionUses(slug, count) { await this._possessions.setUses(slug, count); }
+	/**
+	 * Store how many of a possession's uses are SPENT. A possession that `produces` something
+	 * makes it as the uses go: the Fox's Hidden stash, "(○○○ uses): each use produces valuables
+	 * worth a purse of silvers (Value 2)". So a rise of n hands over n of the item it names
+	 * (possession-grants.js#producedItemsToCreate) and says so in chat; a fall (a box unticked, a
+	 * mis-click undone) takes nothing back, since the purse may already be spent. So a use is paid
+	 * once: only a rise past the furthest the track was ever ticked (possessions.produced) produces.
+	 */
+	async setPossessionUses(slug, count) {
+		const next = Math.max(0, Number(count) || 0);
+		const before = Math.max(0, Number(this._possessions.uses?.[slug]) || 0);
+		const opt = next !== before ? (await this.playbook())?.specialPossessions?.options?.find(o => o.slug === slug) : null;
+		if (!producedSpecialItem(opt)) return this._possessions.setUses(slug, count);
+		const paid = Math.max(before, Number(this._possessions.produced?.[slug]) || 0);
+		await this._possessions.setUses(slug, count, { produced: Math.max(paid, next) });
+		const spent = next - paid;
+		const made = producedItemsToCreate(opt, spent);
+		if (!made.length) return;
+		const possession = stripHtmlToText(opt.label ?? "");
+		await this._actor.createEmbeddedDocuments("Item", made, { stonetopMove: possession });
+		const special = producedSpecialItem(opt);
+		await postMoveNote(this._actor, possession, format(spent === 1 ? "stonetop.possessionProduces.one" : "stonetop.possessionProduces.many", {
+			name: this._actor.name, count: spent, possession: possession.toLowerCase(),
+			item: String(special.name).toLowerCase(), value: special.value,
+		}));
+	}
 
 	// The choiceGroups subgroup (if any) within `possessionSlug` that contains `choiceSlug`,
 	// so a sub-choice write can enforce that subgroup's cap. Null for radios / pick-N choices
@@ -4434,8 +4841,14 @@ export class StonetopCharacter {
 		return entry ? this.addMove(entry.id) : null;
 	}
 
+	// Removing a Big Magic shrinks the sacred pouch, so the removal is settled once around it
+	// (withPouchSettled); the work itself is _removeMoveNow.
 	async removeMove(ownedId) {
 		if (!ownedId) return;
+		return this.withPouchSettled(() => this._removeMoveNow(ownedId));
+	}
+
+	async _removeMoveNow(ownedId) {
 		// Snapshot the doc before it's deleted — an Improved/Superior Stat instance needs its
 		// recorded stat pick undone afterwards (see _revertStatIncreaseChoice), which reads
 		// the item's id + name.
@@ -4743,11 +5156,13 @@ export class StonetopCharacter {
 		if (grudge) Object.assign(rollOptions, foldAdvantage(rollOptions, grudge));
 		// Every other roll aimed at someone owes what _foldAimedModes folds: Binding Arbitration's "advantage
 		// on all rolls against them" (the user's ruling), else But I Get Up Again's or Alpha's "advantage on
-		// your next roll against them" (a Defy Danger or a Persuade aimed at that foe too; they do not stack),
-		// then Tough Love's "disadvantage on any rolls against you" at the Would-Be Hero who called this
-		// character on it. Aimed at the tokens targeted, or at the character an Interfere or a Persuade (vs.
-		// PCs) was just aimed at. An attack has had its advantage above, as a grudge, so it is folded
-		// `grudged`: Tough Love's disadvantage alone, an attack on that hero's token included. The "next roll"
+		// your next roll against them" (a Defy Danger or a Persuade aimed at that foe too; they do not stack;
+		// Rapier Wit's, Truth or Consequences' "Yes" and a Censure's enraged ride the same line), then Tough
+		// Love's "disadvantage on any rolls against you" at the Would-Be Hero who called this character on it,
+		// and Truth or Consequences' disadvantage after the Judge lied to them. Aimed at the tokens targeted,
+		// or at the character an Interfere or a Persuade (vs. PCs) was just aimed at. An attack has had its
+		// advantage above, as a grudge, so it is folded `grudged`: the disadvantages alone, an attack on that
+		// hero's token included. The "next roll"
 		// advantages are spent after the dice, below, either way, since this was the next roll against them.
 		// But I Get Up Again's blow half is the damage window's (fight/hero-moves.js#blowOffers), spent on its own.
 		const aimedAt = attackExtra || descriptionOnly ? [] : this._rollTargets(aimed);
@@ -4757,8 +5172,9 @@ export class StonetopCharacter {
 		const oathbreakerNamed = grudge === BINDING_ARBITRATION || aimedModes.oathbreaker;
 		// A background's standing advantage and a season's standing disadvantage on one move: the same fold.
 		if (!descriptionOnly) Object.assign(rollOptions, this._foldStandingModes(rollOptions, item.name));
-		// And what their card says on a miss whatever the move (a Ghost's Unstable).
-		if (!descriptionOnly) Object.assign(rollOptions, this._foldStandingNotes(rollOptions));
+		// And what their card says on a miss whatever the move (a Ghost's Unstable), or on a Clash's 12+ (Bringer
+		// of Ruin), an attack aimed at a foe on the map included: maybeBeginAttack above only adds to these options.
+		if (!descriptionOnly) Object.assign(rollOptions, this._foldStandingNotes(rollOptions, item.name));
 		// The lines the roll window offered and the player left ticked (rollOffers: a skin of fine
 		// whisky shared before a Persuade): the same fold, each paid for after the dice, below (the
 		// ONE fold and payment onDirectStatRoll shares, _foldTakenOffers and _payTakenOffers).
@@ -4776,17 +5192,27 @@ export class StonetopCharacter {
 		const promised = owed ? this._foldOwed(rollOptions, owed) : rollOptions;
 
 		let withSurprise = promised;
+		let surpriseSpent = false;
 		let roll;
 		try {
-			// Prepare a Welcome spends 1 Surprise to roll; the card says so, or that there was none to spend.
+			// Prepare a Welcome spends 1 Surprise to roll; the card says so, or that there was none to spend
+			// (and then its 10+ regains none: tier-effects.js, told below). Taken HERE, after every window the roll
+			// asks (the roll window is answered before onRoll is called, the guards above return first), and put
+			// back with the +forward when no dice are thrown after all. A 6- keeps it spent: the dice were thrown.
 			const surprise = descriptionOnly ? null : await spendSurpriseForRoll(this._actor, item);
-			if (surprise) withSurprise = { ...promised, conditionNotes: [...(promised.conditionNotes ?? []), surprise] };
+			surpriseSpent = !!surprise?.spent;
+			if (surprise) withSurprise = { ...promised, conditionNotes: [...(promised.conditionNotes ?? []), surprise.note] };
 			roll = await item.roll({ ...this.applyDebilityRollMode(stat, withSurprise), descriptionOnly });
 		} catch (err) {
 			await owed?.refund();
+			if (surpriseSpent) await refundSurpriseForRoll(this._actor);
 			throw err;
 		}
-		if (!roll) await owed?.refund();
+		if (!roll) {
+			await owed?.refund();
+			if (surpriseSpent) await refundSurpriseForRoll(this._actor);
+			surpriseSpent = false;
+		}
 
 		// What the taken lines cost, paid once the dice have landed, and a 12+'s "criticalNote" hook.
 		await _payTakenOffers(taken, roll, item.name);
@@ -4803,7 +5229,7 @@ export class StonetopCharacter {
 		// player wrote under a book move's name (owns-move.js#bookMoveName): a homebrew "Prepare a Welcome" spent
 		// no Surprise, so its 10+ regains none, and with no record on its card a later Shift brings nothing along.
 		const tierMove = bookMoveName(item);
-		if (!descriptionOnly && tierMove && Number.isFinite(roll?.total)) await this._settleRolledTierEffects(roll, tierMove, withSurprise, aimedAt);
+		if (!descriptionOnly && tierMove && Number.isFinite(roll?.total)) await this._settleRolledTierEffects(roll, tierMove, withSurprise, aimedAt, { surpriseSpent });
 
 		// Clash's 6-: "your maneuver fails and you suffer your enemy's attack". A flat consequence
 		// with nothing in the tier to decide, so it fires off the dice rather than off a button —
@@ -4836,15 +5262,17 @@ export class StonetopCharacter {
 	 *
 	 * The tier the roll COUNTS as, as its card reads: a taken line that treats a 7-9 as a 10+ (or a 6- as a
 	 * 7-9) settles the effects of the tier it counts as, the same one a later rewrite reads.
+	 *
+	 * `surpriseSpent`: whether this roll spent a Surprise (Prepare a Welcome), which its 10+ needs to regain one.
 	 */
-	async _settleRolledTierEffects(roll, moveName, options, targets) {
+	async _settleRolledTierEffects(roll, moveName, options, targets, { surpriseSpent = false } = {}) {
 		const card = messageOfRoll(roll);
 		const liveTotal = () => cardTotal(card) ?? roll.total;
 		const tierAt = total => outcomeTier(card?.getFlag?.(STONETOP_SCOPE, ROLLED_FLAG)
 			? cardCountedTier(card, total, STONETOP_SCOPE)
 			: countedTier(total, rolledRecord("", options)));
 		const tier = tierAt(liveTotal());
-		await recordTierEffects(card, await settleTierEffects(this._actor, moveName, tier, null, { character: this, targets }));
+		await recordTierEffects(card, await settleTierEffects(this._actor, moveName, tier, null, { character: this, targets, surpriseSpent }));
 		if (card && tierAt(liveTotal()) !== tier) await reconcileTierEffects(card, liveTotal(), { actor: this._actor });
 	}
 
@@ -5361,9 +5789,11 @@ export class StonetopCharacter {
 
 	/**
 	 * Run `run` (a roll of `moveName`) with `context` held as that roll's pick context: what was
-	 * decided before the dice that changes how many options its card allows (`{empowered,
-	 * burnTwice}` for Invoke the Sun God; see move-pick-bonuses.js), and which Invocations the roll is
-	 * for (`invocations`, stamped on the card for its consequences; invoke-consequences.js). Held in
+	 * decided before the dice that changes its card's options (`{empowered, empoweredConsequence,
+	 * burnTwice}` for Invoke the Sun God, `empoweredConsequence` the printed bullet Empowered
+	 * Invocations chose before the roll; see move-pick-bonuses.js), and which Invocations the roll is
+	 * for (`invocations`); the card is stamped with both for its consequences (invoke-consequences.js
+	 * #invokeCardFlags). Held in
 	 * memory, never written, and let go however the roll ends, so it can reach no other roll. It rides here rather than
 	 * through onRoll's options because the roll prompt, the stat ladder and onRoll all sit between
 	 * the invoke window that decided it and item/StonetopItem.js#roll that builds the card.
@@ -5592,6 +6022,14 @@ export class StonetopCharacter {
 	}
 
 	/**
+	 * Whether debility `key` ("dazed") is marked and doing something: not while a Battle Joy ignores the
+	 * effects of debilities (ignoresDebilities). What "unless you're dazed" reads (Constant Vigilance, p.131).
+	 */
+	debilityInEffect(key) {
+		return debilityInEffect(this._actor, key, this.ignoresDebilities);
+	}
+
+	/**
 	 * Returns true only when the flag actually changed, so a caller can skip a re-render. Entering
 	 * needs the move LEARNED (canEnterBattleJoy); leaving never needs anything, so a stranded rage
 	 * can always be put out.
@@ -5688,7 +6126,7 @@ export class StonetopCharacter {
 		// at someone carries (Binding Arbitration, But I Get Up Again, Alpha, Tough Love) and its standing
 		// advantage and disadvantage are folded here as well as in onRoll.
 		const aimed = this._foldAimedModes(base, targets ?? this._rollTargets(rest));
-		const standing = this._foldStandingNotes(this._foldStandingModes(aimed.options, rest.moveName));
+		const standing = this._foldStandingNotes(this._foldStandingModes(aimed.options, rest.moveName), rest.moveName);
 		// And the lines the window offered it that the player left ticked (Binding Arbitration's on a roll aimed
 		// at nobody, Constant Vigilance's on a guided move), folded and paid for as onRoll's are. Binding
 		// Arbitration's is dropped when the aim above has already named the oath.
@@ -5733,7 +6171,7 @@ export class StonetopCharacter {
 	 *   #orderFollowersModeSources), so the nerves are folded with each of them rather than with the net
 	 * @param {string} [opts.moveName]  - Card header, e.g. "Hari: Defy Danger"
 	 */
-	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", modeSources = null, moveName, shieldWall = false, command = false } = {}) {
+	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", modeSources = null, moveName, moveKey = null, followerName = "", shieldWall = false, command = false, loyaltySpent = null, presenceSpent = null, attack = null } = {}) {
 		const { rollStat } = await import("../../utils/roll-engine.js");
 		// Return the roll so the caller can react to the result — e.g. auto-holding
 		// Readiness when a follower is ordered to Defend and rolls 7+ (p.469).
@@ -5749,6 +6187,10 @@ export class StonetopCharacter {
 			...(shieldWall ? ["Shield Wall"] : []),
 			...(shouted ? [HERO_MOVES.STENTORIAN] : []),
 			...(nerves ? [format("stonetop.nerves.rollNote", { move: WE_HAPPY_FEW })] : []),
+			// They balked, and 1 Loyalty was spent so they do it anyway (p.464, p.466).
+			...(loyaltySpent ? [format("stonetop.character.followers.order.balkNote", { loyalty: loyaltySpent.to })] : []),
+			// Or 1 of Front Line Leader's Presence in the crew's Loyalty's place (actors/character/front-line-presence.js).
+			...(presenceSpent ? [format("stonetop.character.followers.order.balkPresenceNote", { presence: presenceSpent.to })] : []),
 		];
 		const roll = await rollStat("follower", this._actor, {
 			statValue: Math.trunc(Number(bonus) || 0),
@@ -5756,12 +6198,40 @@ export class StonetopCharacter {
 			moveName:  moveName || "Order Followers",
 			modifier:  0,
 			...(conditionNotes.length ? { conditionNotes } : {}),
+			...this._orderedMoveText(moveKey, followerName),
+			// An ordered Clash or Let Fly: the follower's damage button on a hit (fight/follower-order-attack.js).
+			...(attack ? { tierActions: orderedAttackTierActions({ ...attack, move: moveKey }) } : {}),
 		});
 		if (roll && shouted) await takeBackHeld(this._actor, HERO_MOVES.STENTORIAN, 1);
 		return roll;
 	}
 
+	/**
+	 * The text of the basic move a follower was ordered to make, for its card: "when you direct your
+	 * follower to do something that would trigger a player move, and they do it, they trigger the move"
+	 * (p.462), so the card reads the move's own text and 10+/7-9/6- the way the character's own roll of it
+	 * does, under a line naming who made it. Read off the character's own copy of the move; a custom order,
+	 * or a character without the move, gets no text (the card is the bare result it always was).
+	 */
+	_orderedMoveText(moveKey, followerName = "") {
+		const name = orderedMoveName(moveKey);
+		const item = name ? this._actor.items?.find?.(i => i.type === "move" && i.name === name) : null;
+		if (!item) return {};
+		const who = String(followerName ?? "").trim();
+		const lead = who ? `<p class="stonetop-order-lead"><em>${escHtml(format("stonetop.character.followers.order.lead", { name: who, move: name }))}</em></p>` : "";
+		return {
+			moveDescription: lead + (item.system?.description ?? ""),
+			moveResults:     item.system?.moveResults ?? null,
+		};
+	}
+
+	// Settled around the add (withPouchSettled), as a move ticked on the sheet is: a Big Magic dropped
+	// on grows the sacred pouch with EMPTY room.
 	async onDropMove(itemData) {
+		return this.withPouchSettled(() => this._dropMoveNow(itemData));
+	}
+
+	async _dropMoveNow(itemData) {
 		const alreadyOwned = !!this._actor.items.find(i => i.type === "move" && i.name === itemData.name);
 		if (alreadyOwned) return false;
 
@@ -6404,9 +6874,10 @@ export class StonetopCharacter {
 	 * debilityChoices for a MOVE that has this character mark a debility (Hard to Kill's 7-9 trade, Battle Joy's
 	 * 6-): Auspicious Birth's circle first when that background is taken, "When one of your moves has you mark a
 	 * debility, you may mark this background's circle instead, to no ill effect" (invoke-consequences.js
-	 * #auspiciousBirthChoice; Invoke the Sun God and Burn Twice as Bright offer it through debilityPayments). Not
-	 * for a hand tick on the sheet, which is the GM's "mark a debility" rather than one of the character's moves,
-	 * and never a list of things to clear: the circle clears only at camp and Convalesce.
+	 * #auspiciousBirthChoice; Invoke the Sun God and Burn Twice as Bright offer it through debilityPayments). A
+	 * hand tick on the sheet may be the GM's "mark a debility" rather than one of the character's moves, so the
+	 * sheet ASKS before it marks the circle (StonetopCharacterSheet#_onDebilityBoxTick). Never a list of things to
+	 * clear: the circle clears only at camp and Convalesce.
 	 */
 	get debilityMarkChoices() {
 		const circle = auspiciousBirthChoice({
@@ -6430,7 +6901,8 @@ export class StonetopCharacter {
 	 *
 	 * `key` can be Walk It Off's (walk-it-off.js) while debilityChoices lists it: the move's box is
 	 * marked instead, and no debility is. Or Auspicious Birth's circle while debilityMarkChoices lists it,
-	 * marked in the same write (the moves offering it are the only callers that hand that key in).
+	 * marked in the same write (the moves offering it, and the sheet's hand tick once the player says a move
+	 * had them mark it, are the only callers that hand that key in).
 	 *
 	 * `alsoUpdate`: a further fragment for the same write, as restoreHp's (Hard to Kill's trade closes its
 	 * latch in it).
@@ -6703,8 +7175,19 @@ export class StonetopCharacter {
 			if (allowance > 0) companionActions = { label: markable.label ?? "", allowance, options };
 		}
 
+		// Level Up step 4: "your new level is even, increase your max Stock by 1". How much the pouch held
+		// now grows by the new level alone (a Big Magic picked on this level-up adds its own on top), so
+		// the overview can say the new room arrives empty (the user's ruling). 0 with no pouch held.
+		let pouchGrowth = 0;
+		const pouch = playbookData?.specialPossessions?.options?.find(o => o.slug === SACRED_POUCH_SLUG);
+		if (pouch && await this.holdsPossession(SACRED_POUCH_SLUG, playbookData)) {
+			const maxAt = lvl => this.computePossessionMaxUses(playbookData.specialPossessions, ownedAllByName, lvl, { withSlots: false })[SACRED_POUCH_SLUG] ?? pouch.resource?.max ?? 0;
+			pouchGrowth = Math.max(0, maxAt(newLevel) - maxAt(level));
+		}
+
 		return {
 			level, xp, cost, newLevel,
+			pouchGrowth,
 			xpRemaining: xpAfterLevelUp(xp, level),
 			playbookName: playbookData?.name ?? null,
 			playbookSlug: playbookData?.slug ?? actor.system?.playbook?.slug ?? null,
@@ -6807,7 +7290,15 @@ export class StonetopCharacter {
 	// `"level"` — the character is no longer at `fromLevel`, the level the caller's choices
 	// were built for (the same level-up already applied from another window); `"xp"` — they
 	// no longer have the 6 + 2×level XP it costs (Book I p.528: the move needs that much).
-	async applyLevelUp(selectedMoveCompendiumId, selectedInvocationSlug, choices = null, { fromLevel = null, moveName = "" } = {}) {
+	//
+	// The sacred pouch is settled ONCE around the whole level-up (withPouchSettled): the even level's
+	// +1 and a Big Magic's +2 arrive as EMPTY room (the user's ruling), so the Stock in it is what it
+	// was. A pouch this level-up brings (a Seeker's Initiate) was not held before, so it starts full.
+	async applyLevelUp(...args) {
+		return this.withPouchSettled(() => this._applyLevelUpNow(...args));
+	}
+
+	async _applyLevelUpNow(selectedMoveCompendiumId, selectedInvocationSlug, choices = null, { fromLevel = null, moveName = "" } = {}) {
 		// Through the XP lock (utils/xp.js), not adjustXp: the level and the XP it cost move in
 		// ONE update, and splitting them would leave a moment where the character has the new
 		// level and has not paid for it. Both are therefore read inside the lock, so a mark that
@@ -6844,11 +7335,10 @@ export class StonetopCharacter {
 			await this._applyForeignMoveChoice(addedItem, choices.foreignMoveId ?? null, choices.grantsPossession ?? null);
 		}
 		// Mark-selection moves (Veteran Crew / Heroes to the Last / Beast of Legend / Well
-		// Versed) and the Would-Be Hero's Potential for Greatness collect their marks here.
-		// Keyed by move NAME — the same store the sheet writes — so this is NOT gated on
-		// `addedItem`: PfG's target is an already-owned move, not the one just picked. A
-		// budgeted move WAS added above, so its owned-count (and thus its repeat-scaling
-		// cap) already reflects this take when setCountMark clamps below.
+		// Versed) collect their marks here; Potential for Greatness is marked in play, never at
+		// level-up. Keyed by move NAME, the same store the sheet writes. A budgeted move WAS
+		// added above, so its owned-count (and thus its repeat-scaling cap) already reflects
+		// this take when setCountMark clamps below.
 		if (choices?.marks?.picks?.length) {
 			await this._applyMarkChoices(choices.marks.moveName, choices.marks.picks);
 		}

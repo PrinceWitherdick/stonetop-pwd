@@ -174,6 +174,94 @@ describe("_onArtifactIdentify — Seek Insight about an artifact", () => {
 		await sheet._onArtifactIdentify("item-1");
 		expect(sheet._postMoveCard).not.toHaveBeenCalled();
 	});
+
+	it("asks no stat for a character with nothing that bends the roll", async () => {
+		const seen = captureDialog("seek");
+		const { sheet } = makeSheet({ rollTotal: 10 });
+		await sheet._onArtifactIdentify("item-1");
+		expect(seen).toHaveLength(1);   // the move picker alone
+	});
+});
+
+// It is the roller's own Seek Insight, so what bends theirs bends this one. The Fox's The Natural:
+// "When you Seek Insight, you may roll +INT instead of +WIS and add 'What opportunity does no one
+// else see?' to the list of possible questions." Perceptive: "When you Seek Insight, you may ask 1
+// additional question. Even on a 6-, you can ask 1 question."
+describe("_onArtifactIdentify: Seek Insight bent by the roller's moves", () => {
+	// Answer each dialog in turn: the move picker with "seek", then the stat picker with `stat`.
+	function answerInTurn(...choices) {
+		const seen = [];
+		global.Dialog = vi.fn(function (d) {
+			seen.push(d);
+			const choice = choices[seen.length - 1];
+			this.render = vi.fn(() => {
+				if (choice === "close") d.close?.();
+				else d.buttons[choice]?.callback?.([{ querySelector: () => null }]);
+			});
+		});
+		return seen;
+	}
+
+	function naturalFox({ rollTotal = 10 } = {}) {
+		const actor = new FakeActorBuilder()
+			.withPlaybook("the-fox", "The Fox")
+			.withFlag("background.selected", "the-natural")
+			.withItems([KNOW_THINGS, SEEK_INSIGHT])
+			.build();
+		actor.id = "actor-1";
+		actor.isOwner = true;
+		actor.typedActor = { ...makeCharacterMock(rollTotal), background: { selectedSlug: "the-natural" } };
+		const Base = class {
+			constructor() { this._actor = actor; }
+			get actor() { return this._actor; }
+			get isEditable() { return true; }
+			async getData() { return {}; }
+			activateListeners() {}
+			render = vi.fn();
+		};
+		const sheet = new (createStonetopCharacterSheetClass(Base))();
+		sheet._postMoveCard = vi.fn(async () => {});
+		return { sheet, character: actor.typedActor };
+	}
+
+	it("offers The Natural's +INT beside +WIS, and rolls the stat picked", async () => {
+		const seen = answerInTurn("seek", "int");
+		const { sheet, character } = naturalFox();
+		await sheet._onArtifactIdentify("item-1");
+		expect(seen).toHaveLength(2);
+		expect(Object.keys(seen[1].buttons)).toEqual(["wis", "int", "cancel"]);
+		expect(seen[1].content).toContain("The Natural");
+		expect(character.onDirectStatRoll.mock.calls[0][0]).toBe("int");
+	});
+
+	it("rolls nothing when the stat picker is closed", async () => {
+		answerInTurn("seek", "close");
+		const { sheet, character } = naturalFox();
+		await sheet._onArtifactIdentify("item-1");
+		expect(character.onDirectStatRoll).not.toHaveBeenCalled();
+	});
+
+	it("posts The Natural's own question with the printed six", async () => {
+		answerInTurn("seek", "wis");
+		const { sheet } = naturalFox();
+		await sheet._onArtifactIdentify("item-1");
+		const questions = sheet._postMoveCard.mock.calls[0][1];
+		expect(questions).toMatch(/not what it appears to be/);
+		expect(questions).toMatch(/What opportunity does no one else see\?/);
+	});
+
+	it("counts Perceptive's extra question on every tier, and asks 1 on a 6-", async () => {
+		captureDialog("seek");
+		const perceptive = { type: "move", name: "Perceptive", system: { moveType: "playbook", description: "<p>Perceptive</p>" } };
+		const { sheet, character } = makeSheet({ rollTotal: 4, items: [KNOW_THINGS, SEEK_INSIGHT, perceptive] });
+		await sheet._onArtifactIdentify("item-1");
+		const { moveResults } = character.onDirectStatRoll.mock.calls[0][1];
+		expect(moveResults.success.value).toMatch(/Ask the GM 4 questions/);
+		expect(moveResults.partial.value).toMatch(/Ask the GM 2 questions/);
+		expect(moveResults.failure.value).toMatch(/Even so, you can ask the GM 1 question about/);
+		// The 6- still asks one, so the list goes to chat.
+		expect(sheet._postMoveCard).toHaveBeenCalledOnce();
+	});
 });
 
 describe("_onArtifactIdentify — guards", () => {

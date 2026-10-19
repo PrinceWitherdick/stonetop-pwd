@@ -7,7 +7,7 @@
 
 import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { applyPickBonuses, movePickBonusesFor, withMovePickBonuses, MOVE_PICK_BONUSES } from "../../../module/actors/character/move-pick-bonuses.js";
+import { applyPickBonuses, movePickBonusesFor, withMovePickBonuses, MOVE_PICK_BONUSES, MOVE_OPTION_TAGS } from "../../../module/actors/character/move-pick-bonuses.js";
 import { pickableMoveDescription, readPickListStamp } from "../../../module/utils/chat.js";
 import { moveCardBody } from "../../../module/utils/move-tiers.js";
 import { stripHtmlToText } from "../../../module/utils/strings.js";
@@ -79,6 +79,11 @@ describe("movePickBonusesFor", () => {
 		expect(movePickBonusesFor(character({ items: [move("Perceptive")] }), "Seek Insight")).toEqual([PERCEPTIVE]);
 		expect(movePickBonusesFor(character({ items: [move("Perceptive", { learned: false })] }), "Seek Insight")).toEqual([]);
 		expect(movePickBonusesFor(character({ items: [move("Perceptive")] }), "Know Things")).toEqual([]);
+	});
+
+	it("counts the BOOK's Perceptive only: a player's own move of that name acts as itself", () => {
+		const homebrew = { ...move("Perceptive"), flags: { [SCOPE]: { custom: true } } };
+		expect(movePickBonusesFor(character({ items: [homebrew] }), "Seek Insight")).toEqual([]);
 	});
 
 	it("gives The Natural's question to a Fox who took that background, and to no one else", () => {
@@ -296,9 +301,24 @@ describe("MOVE_PICK_BONUSES quotes its sources", () => {
 	}
 });
 
+// The tags a learned move adds to another's printed damage option (combat/attack-flow.js#optionMoveTags),
+// pinned against the granting move's own words.
+describe("MOVE_OPTION_TAGS quotes its sources", () => {
+	const SOURCES = {
+		"Nature's Wrath": () => doc("playbook-moves/the-blessed/natures-wrath.json").system.description,
+	};
+	for (const row of MOVE_OPTION_TAGS) {
+		it(`${row.ownsLearned} on ${row.move}`, () => {
+			const text = stripHtmlToText(SOURCES[row.ownsLearned]());
+			for (const tag of row.tags) expect(text).toContain(`${row.move} gains the ${tag} tag`);
+		});
+	}
+});
+
 // Lightbearer audit B3: Invoke the Sun God's consequence list. The book caps it 1 on a 10+ and 2 on a
 // 7-9 ("you and the GM each choose 1"). Empowered Invocations: "choose an extra consequence before you
-// roll"; Glorious Servant: "on a 7-9, you choose a consequence but the GM does not".
+// roll" (re-audit 10-18: chosen in the window, not an extra tick); Glorious Servant: "on a 10+, you need
+// not choose a consequence; on a 7-9, you choose a consequence but the GM does not".
 describe("Invoke the Sun God's consequence caps", () => {
 	const INVOKE = doc("playbook-moves/the-lightbearer/invoke-the-sun-god.json");
 	const card = () => pickableMoveDescription(INVOKE.system.description);
@@ -317,13 +337,32 @@ describe("Invoke the Sun God's consequence caps", () => {
 		expect(caps(card())).toEqual({ success: "1", partial: "2" });
 	});
 
-	it("adds 1 on each tier when THIS roll was empowered, and names it", () => {
+	// "you can choose an extra consequence BEFORE you roll": chosen in the invoke window, so it is no part
+	// of the list's count, comes off the list, and stands as a fixed line that a 6- does not hide.
+	const DEBILITY = "The effort taxes you; mark a debility";
+	const boxes = html => (html.match(/stonetop-picklist-check/g) ?? []).length;
+
+	it("takes the Empowered consequence chosen before the roll off the list, as a fixed line above it", () => {
 		const who = lb([move("Empowered Invocations")]);
-		const out = withMovePickBonuses(card(), who, "Invoke the Sun God", { empowered: true });
-		expect(caps(out)).toEqual({ success: "2", partial: "3" });
-		expect(stripHtmlToText(out)).toContain("Empowered");
-		// Learned, but not chosen for this roll: the book's caps stand.
-		expect(caps(withMovePickBonuses(card(), who, "Invoke the Sun God"))).toEqual({ success: "1", partial: "2" });
+		const out = withMovePickBonuses(card(), who, "Invoke the Sun God", { empowered: true, empoweredConsequence: DEBILITY });
+		// The book's counts stand: the extra one is paid off the list.
+		expect(caps(out)).toEqual({ success: "1", partial: "2" });
+		expect(boxes(out)).toBe(3);
+		const line = /<p class="stonetop-pre-pick" data-pre-pick="empoweredConsequence">([\s\S]*?)<\/p>/.exec(out);
+		expect(line).not.toBeNull();
+		expect(stripHtmlToText(line[1])).toMatch(/^Empowered, its extra consequence chosen before the roll .*: The effort taxes you; mark a debility$/);
+		expect(out.indexOf("stonetop-pre-pick")).toBeLessThan(out.indexOf('<ul class="stonetop-picklist"'));
+		// The options left keep their places, so saved ticks land where they were put.
+		expect([...out.matchAll(/data-index="(\d)"/g)].map(m => m[1])).toEqual(["0", "2", "3"]);
+		// No "+1" note any more: nothing about the list's count changed.
+		expect(out).not.toContain("stonetop-pick-bonus-note");
+	});
+
+	it("leaves the card as it was when the roll was not empowered, or named no consequence", () => {
+		const who = lb([move("Empowered Invocations")]);
+		expect(withMovePickBonuses(card(), who, "Invoke the Sun God")).toBe(card());
+		expect(withMovePickBonuses(card(), who, "Invoke the Sun God", { empowered: false, empoweredConsequence: DEBILITY })).toBe(card());
+		expect(withMovePickBonuses(card(), who, "Invoke the Sun God", { empowered: true })).toBe(card());
 	});
 
 	it("takes the GM's choice off the 7-9 with Glorious Servant learned, and only learned", () => {
@@ -333,10 +372,18 @@ describe("Invoke the Sun God's consequence caps", () => {
 			.toEqual({ success: "1", partial: "2" });
 	});
 
-	it("lowers first and adds after, with both: 2 and 2", () => {
+	// "on a 10+, you need not choose a consequence": the 10+'s 1 is the most, never a floor, and the note says so.
+	it("says a Glorious Servant's 10+ need not choose", () => {
+		const out = withMovePickBonuses(card(), lb([move("Glorious Servant")]), "Invoke the Sun God");
+		expect(stripHtmlToText(out)).toContain("Glorious Servant: on a 10+ you need not choose a consequence");
+	});
+
+	it("with both, the counts are Glorious Servant's and the Empowered one is the fixed line", () => {
 		const who = lb([move("Glorious Servant"), move("Empowered Invocations")]);
-		expect(caps(withMovePickBonuses(card(), who, "Invoke the Sun God", { empowered: true })))
-			.toEqual({ success: "2", partial: "2" });
+		const out = withMovePickBonuses(card(), who, "Invoke the Sun God", { empowered: true, empoweredConsequence: DEBILITY });
+		expect(caps(out)).toEqual({ success: "1", partial: "1" });
+		expect(out).toContain("stonetop-pre-pick");
+		expect(boxes(out)).toBe(3);
 	});
 
 	it("gates the Empowered row on the roll's own context", () => {

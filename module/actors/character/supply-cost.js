@@ -238,6 +238,68 @@ export function defaultSupplyPurse(purses) {
 }
 
 /**
+ * THE CREW'S OWN SUPPLIES (the Crew insert, Book I p.144: "Supplies (4+Prosperity uses per crew
+ * member)"). Stored on the keeper as `crew.supplies`, an array of use counts, one ◇ of supplies per
+ * member, which the Followers tab draws as one pip set per member and Restock fills. The user's
+ * ruling: the crew pays its own mouths at Make Camp, from these first, and only what they cannot
+ * cover falls to the keeper's own pack (camp-rules.js#campLedger). A purse of its own, not a row of
+ * PURSES above: it lives on the crew, not the Inventory insert, and feeds only the crew.
+ */
+export const CREW_SUPPLIES_SLUG = "crew-supplies";
+
+/** What the camp window and the settled card call the crew's purse. */
+export const CREW_SUPPLIES_LABEL = "Crew supplies";
+
+/** One member's set, as the sheet draws it: what is stored, capped at the size of a ◇ now. */
+function _crewSet(stored, at, perSet) {
+	return Math.min(Math.max(0, Math.trunc(Number(stored?.[at]) || 0)), perSet);
+}
+
+/**
+ * The uses the crew's supplies hold: the first `size` sets (the roster's, crew.js#effectiveCrewSize;
+ * a set past the roster is not drawn), each capped at `perSet` (4+Prosperity, getUsesPerSupply) as
+ * the grid caps its pips. PURE.
+ *
+ * @param {number[]|null} stored  `crew.supplies`
+ * @param {number} size    the crew's headcount
+ * @param {number} [perSet]  the uses in one ◇ of supplies now
+ */
+export function crewSuppliesHeld(stored, size, perSet = 4) {
+	const sets = Array.isArray(stored) ? stored : [];
+	const per = Math.max(0, Math.trunc(Number(perSet) || 0));
+	let held = 0;
+	for (let at = 0; at < Math.max(0, Math.trunc(Number(size) || 0)); at += 1) held += _crewSet(sets, at, per);
+	return held;
+}
+
+/**
+ * The crew's supplies once they hold only `left` uses: the uses eaten come out of the LAST member's
+ * set first, so the full ◇ stay at the head of the roster and only one set is ever part-eaten.
+ * Absolute, like every camp spend (camp-rules.js#purseSpendUpdate): `left` is what should remain,
+ * worked out from what the sets hold now. Sets past the roster are kept as they are. PURE.
+ *
+ * @param {number[]|null} stored  `crew.supplies`
+ * @param {number} size
+ * @param {number} perSet
+ * @param {number} left  the uses that should remain
+ * @returns {number[]}  the new `crew.supplies`
+ */
+export function crewSuppliesLeaving(stored, size, perSet, left) {
+	const sets = Array.isArray(stored) ? [...stored] : [];
+	const n = Math.max(0, Math.trunc(Number(size) || 0));
+	const per = Math.max(0, Math.trunc(Number(perSet) || 0));
+	while (sets.length < n) sets.push(0);
+	for (let at = 0; at < n; at += 1) sets[at] = _crewSet(sets, at, per);
+	let eat = Math.max(0, crewSuppliesHeld(sets, n, per) - Math.max(0, Math.trunc(Number(left) || 0)));
+	for (let at = n - 1; at >= 0 && eat > 0; at -= 1) {
+		const take = Math.min(sets[at], eat);
+		sets[at] -= take;
+		eat -= take;
+	}
+	return sets;
+}
+
+/**
  * What a night at camp costs to feed: 1 use per person, or 1 per four when a mess kit is going
  * (Book I p.334, "if you use a mess kit (requires fire & water), then 1 use can provide for up to
  * four people").

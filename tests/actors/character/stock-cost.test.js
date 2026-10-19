@@ -343,9 +343,9 @@ describe("the moves that spend at one trigger and roll at another", () => {
 	// One use of the move, paid for once. The dialog charges, so the card it posts must not carry
 	// the chat Spend button that would charge again.
 	it("posts a card that cannot charge a second time", () => {
-		const at = SHEET.indexOf("const paid = await this._spendStockCost(spend, html, name);");
+		const at = SHEET.indexOf("const paid = await this._spendStockCost(price, html, name);");
 		expect(at).toBeGreaterThan(-1);
-		const body = SHEET.slice(at, at + 900);
+		const body = SHEET.slice(at, at + 1100);
 		expect(body).toContain("if (!paid) return;");
 		// _postMoveCard leaves the button off unless asked (stockSpend defaults false).
 		expect(body).toContain("this._postMoveCard(name,");
@@ -353,7 +353,8 @@ describe("the moves that spend at one trigger and roll at another", () => {
 		// It says what it cost, out of the purse that was actually charged (and for a Vessel, the
 		// HP it took).
 		expect(body).toContain("stonetop-move-cost-receipt");
-		expect(body).toContain("${_esc(stockReceipt(paid, spend.amount, paid.lost))}");
+		// `price` is the spend plus any Potent Workings Stock bought with it.
+		expect(body).toContain("${_esc(stockReceipt(paid, price.amount, paid.lost))}");
 	});
 
 	// ⚠ AND WHAT MAKING THE MOVE DOES BEYOND THE CARD. Two of these three moves are the whole of
@@ -367,10 +368,12 @@ describe("the moves that spend at one trigger and roll at another", () => {
 		// The item is carried on the guide, because the effects table is keyed by the move's own
 		// name and a dialog has only the guide.
 		expect(guide.slice(0, 2000)).toMatch(/item:\s+item \?\? null,/);
-		const spend = SHEET.indexOf("const paid = await this._spendStockCost(spend, html, name);");
-		expect(SHEET.slice(spend, spend + 1600)).toContain("this._onMoveRolled(guide.item)");
+		// Each says which of the two moments it is, so Amulets & Talismans can lay a charm at the
+		// spend and use one up at the roll (MOVE_ROLL_EFFECTS).
+		const spend = SHEET.indexOf("const paid = await this._spendStockCost(price, html, name);");
+		expect(SHEET.slice(spend, spend + 1800)).toContain('this._onMoveRolled(guide.item, { phase: "spend", potency })');
 		const roll = SHEET.indexOf("await this._postGuidedCharacterMove(name, guide, html);");
-		expect(SHEET.slice(roll, roll + 600)).toContain("this._onMoveRolled(guide.item ?? null)");
+		expect(SHEET.slice(roll, roll + 1200)).toContain('this._onMoveRolled(guide.item ?? null, { phase: "roll", seen })');
 	});
 
 	// Which is why the spend hands the purse back rather than a bare true: "Spent 1 Boon" and
@@ -413,7 +416,7 @@ describe("Danu's Grasp, on the sheet", () => {
 		expect(at).toBeGreaterThan(-1);
 		const before = SHEET.slice(SHEET.lastIndexOf("callback: async html => {", at), at);
 		expect(before).toContain("_promptRollOptions");
-		expect(SHEET.slice(at, at + 400)).toContain("onRoll(");
+		expect(SHEET.slice(at, at + 800)).toContain("onRoll(");
 	});
 
 	// The purse is re-read at the moment of spending. This dialog is not modal, so the pouch can

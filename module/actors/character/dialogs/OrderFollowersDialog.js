@@ -1,5 +1,5 @@
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
-import { orderFollowersBonus, orderFollowersModeSources } from "../../../data/follower-build.js";
+import { orderFollowersBonus, orderFollowersModeSources, ORDER_FOLLOWER_MOVES } from "../../../data/follower-build.js";
 import { sign } from "../../../utils/roll-engine.js";
 import { commandHeld } from "../../../fight/hero-moves.js";
 
@@ -46,29 +46,29 @@ import { commandHeld } from "../../../fight/hero-moves.js";
 // caller (which calls StonetopCharacter.onOrderFollowersRoll). `member` is the
 // picked member's key, or null for the whole group or a follower who is one person.
 
-// The basic moves a follower can be ordered to trigger (the rollable ones from
-// packs/src/stonetop-items/basic-moves/). "Custom" reveals a free-text header for
-// anything else (a playbook move's effect, an improvised action, etc.).
-const _ORDER_MOVES = [
-	{ key: "defy-danger",   label: "Defy Danger" },
-	{ key: "clash",         label: "Clash" },
-	{ key: "let-fly",       label: "Let Fly" },
-	{ key: "defend",        label: "Defend" },
-	{ key: "aid",           label: "Aid" },
-	{ key: "interfere",     label: "Interfere" },
-	{ key: "seek-insight",  label: "Seek Insight" },
-	{ key: "know-things",   label: "Know Things" },
-	{ key: "persuade-npcs", label: "Persuade (vs. NPCs)" },
-	{ key: "custom",        label: "Custom / other…" },
-];
+// THEY BALK (p.466-467). Followers "might resist orders if ... the order goes against the follower's
+// instinct, tags, cost, or other traits", or freeze when scared; the GM says so, and the player can
+// "spend 1 Loyalty" (p.464) to have them do it anyway, or Persuade them. So the window shows their
+// instinct, cost and Loyalty beside the chips, and a box that spends the Loyalty with the order:
+// `loyalty` is what they hold (null for a follower with no track), `spendLoyalty` comes back ticked.
+//
+// FRONT LINE LEADER (the Marshal, p.126): "Spend Presence in lieu of your crew's Loyalty". For the crew,
+// `presence` is what the Marshal holds (actors/character/front-line-presence.js#presenceFor, 0 for anyone
+// else): the balk is offered on it alone at 0 Loyalty, and beside Loyalty as a "pay with Presence instead"
+// box, and `payWithPresence` comes back with `spendLoyalty` when it is the purse.
+
+// The basic moves a follower can be ordered to trigger (data/follower-build.js). "Custom" reveals a
+// free-text header for anything else.
+const _ORDER_MOVES = ORDER_FOLLOWER_MOVES;
 
 export class OrderFollowersDialog extends StonetopDialog {
 	/**
 	 * @param {Actor}    actor
 	 * @param {object}   follower  - { name, tags: string[], moves: string[], exceptional: bool,
-	 *   members?: Array<{key, name, tags: string[]}>, hinderingTags?: string[] }: `members` only for
-	 *   a group ordered as a whole, each with their OWN tags (utils/crew.js#groupFollowerMembers);
-	 *   `hinderingTags` start marked in the way
+	 *   members?: Array<{key, name, tags: string[]}>, hinderingTags?: string[], instinct?: string,
+	 *   cost?: string, loyalty?: ?number }: `members` only for a group ordered as a whole, each with
+	 *   their OWN tags (utils/crew.js#groupFollowerMembers); `hinderingTags` start marked in the way;
+	 *   `loyalty` is what they hold, or null with no track
 	 * @param {Function} onRoll    - async ({ bonus, rollMode, moveName, moveKey, followerName, member }) => void
 	 */
 	constructor(actor, follower, onRoll, options = {}) {
@@ -102,6 +102,32 @@ export class OrderFollowersDialog extends StonetopDialog {
 		this._inWall       = true;
 		// Spending 1 Command on Stentorian's advantage: only asked while the Marshal holds some.
 		this._command      = false;
+		// They balked and 1 Loyalty is spent so they do it anyway (p.464, p.466): only while they hold some.
+		this._spendLoyalty = false;
+		// Paying that balk with Front Line Leader's Presence instead: only while the crew's Marshal holds some.
+		this._payWithPresence = false;
+	}
+
+	/** The Presence that may pay a balk in Loyalty's place: the crew's Marshal's, else none. */
+	_presence() {
+		return Math.max(0, Math.trunc(Number(this._follower.presence) || 0));
+	}
+
+	/** Whether a balk can be paid at all: Loyalty held, or Presence to pay in its place. */
+	_canBalk() {
+		return (this._loyalty() ?? 0) > 0 || this._presence() > 0;
+	}
+
+	/** Whether a ticked balk is paid with Presence: asked for, or the only purse holding any. */
+	_balkPaidWithPresence() {
+		if (this._presence() <= 0) return false;
+		return this._payWithPresence || (this._loyalty() ?? 0) <= 0;
+	}
+
+	/** The Loyalty they hold, or null for a follower with no track (livestock never get here). */
+	_loyalty() {
+		const held = this._follower.loyalty;
+		return held == null ? null : Math.max(0, Math.trunc(Number(held) || 0));
 	}
 
 	static get defaultOptions() {
@@ -245,6 +271,8 @@ export class OrderFollowersDialog extends StonetopDialog {
 			who,
 			ownNote,
 			exceptional:  !!this._follower.exceptional,
+			// The crew's Heroes to the Last "inured to terror & horror", noted by the balk (the caller's words).
+			inuredNote:   String(this._follower.inuredNote ?? "").trim(),
 			moves:        _ORDER_MOVES.map(m => ({ ...m, selected: m.key === this._moveKey })),
 			isCustom:     this._moveKey === "custom",
 			customMove:   this._customMove,
@@ -266,6 +294,17 @@ export class OrderFollowersDialog extends StonetopDialog {
 			inWall:       this._inWall,
 			commandHeld:  this._commandHeld(),
 			spendCommand: this._command,
+			instinct:     String(this._follower.instinct ?? "").trim(),
+			cost:         String(this._follower.cost ?? "").trim(),
+			loyalty:      this._loyalty(),
+			hasLoyalty:   this._loyalty() != null,
+			canBalk:      this._canBalk(),
+			spendLoyalty: this._spendLoyalty && this._canBalk(),
+			presence:     this._presence(),
+			// At 0 Loyalty the balk is paid in Presence outright; beside Loyalty, it is a box of its own.
+			balkOnPresence: this._presence() > 0 && (this._loyalty() ?? 0) <= 0,
+			presenceChoice: this._presence() > 0 && (this._loyalty() ?? 0) > 0,
+			payWithPresence: this._payWithPresence,
 			modeNote,
 			readout:      `Roll ${dice} ${signedBonus}${readoutNote}`,
 		};
@@ -310,6 +349,8 @@ export class OrderFollowersDialog extends StonetopDialog {
 		html.find(".stonetop-of-wall").on("change", ev => { this._inWall      = ev.currentTarget.checked; this.render(false); });
 		html.find(".stonetop-of-command").on("change", ev => { this._command  = ev.currentTarget.checked; this.render(false); });
 		html.find(".stonetop-of-dis").on("change", ev => { this._disadvantage = ev.currentTarget.checked; this.render(false); });
+		html.find(".stonetop-of-balk").on("change", ev => { this._spendLoyalty = ev.currentTarget.checked; });
+		html.find(".stonetop-of-balk-presence").on("change", ev => { this._payWithPresence = ev.currentTarget.checked; });
 
 		html.find(".stonetop-of-roll").on("click", () => this._finish());
 		html.find(".stonetop-of-cancel").on("click", () => this.close());
@@ -333,6 +374,7 @@ export class OrderFollowersDialog extends StonetopDialog {
 			member: this._member()?.key ?? null,
 			shieldWall: this._wallAdvantage(),
 			...(this._commandAdvantage() ? { command: true } : {}),
+			...(this._spendLoyalty && this._canBalk() ? { spendLoyalty: true, ...(this._balkPaidWithPresence() ? { payWithPresence: true } : {}) } : {}),
 		});
 		this.close();
 	}

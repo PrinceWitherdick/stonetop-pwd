@@ -169,7 +169,7 @@ describe("who asks for ticks", () => {
 	// The receipts keep no way to ask for either. `_postMoveCard` posts a hand-built <p> for
 	// something that already happened, and a flag it could be handed would be an invitation.
 	it("and a receipt cannot ask for them at all", () => {
-		expect(SHEET).toContain("_postMoveCard(title, body, { stockSpend = false, actions = \"\" } = {})");
+		expect(SHEET).toContain("_postMoveCard(title, body, { stockSpend = null, actions = \"\" } = {})");
 		expect(SHEET).not.toContain("_postMoveCard(title, body, { pickable");
 	});
 

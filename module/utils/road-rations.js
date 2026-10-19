@@ -1,5 +1,5 @@
-import { campUsesNeeded } from "../actors/character/supply-cost.js";
-import { campPurses, count } from "../camp/camp-rules.js";
+import { CREW_SUPPLIES_LABEL, CREW_SUPPLIES_SLUG, campUsesNeeded } from "../actors/character/supply-cost.js";
+import { campPurses, count, crewMealUses } from "../camp/camp-rules.js";
 
 /**
  * DAYS ON THE ROAD: what feeding the party costs while the GM glosses the travel (Book I p.89,
@@ -21,6 +21,11 @@ import { campPurses, count } from "../camp/camp-rules.js";
  * of supplies or provisions"), so these are the days the GM glosses: "you don't need the move every
  * night while you're glossing days of road travel (just use up their supplies and move on)" (p.320).
  *
+ * THE CREW PAYS ITS OWN MOUTHS, on the road as at the fire (the user's ruling; the Crew insert, Book I
+ * p.144, gives the crew "Supplies (4+Prosperity uses per crew member)"): the crew's mouths come out of
+ * the crew's own supplies first, a day's meal at a time (camp-rules.js#crewMealUses), with no figure
+ * for the GM to set, and only what they cannot cover falls to the packs with everyone else's.
+ *
  * Pure. RoadRationsDialog reads the packs and writes the spend.
  */
 
@@ -30,6 +35,8 @@ import { campPurses, count } from "../camp/camp-rules.js";
  * @property {string}  name
  * @property {boolean} eats       a living mouth (a Ghost or Revenant need not eat)
  * @property {number}  followers  the party followers they feed besides themselves
+ * @property {number}  [crewMouths]  how many of `followers` are their crew's (camp-store.js#partyCrewMouths)
+ * @property {{held: number}} [crew]  what the crew's own supplies hold (camp-store.js#crewSuppliesOf)
  * @property {object}  resources  what their pack can spend (camp-store.js#packResources)
  */
 
@@ -86,14 +93,47 @@ export function drainPurses(purses, n) {
 }
 
 /**
- * The whole account for `days` on the road: the bill, and who pays what out of which purse.
+ * What each member's crew pays out of its own supplies for `days`, set on the rows: `crewBill` (what
+ * the crew eats, its meal a day at a time, camp-rules.js#crewMealUses), `crewHeld` and `crewPays`
+ * (as far as its supplies go). Nothing with a laden pack animal or cart, when nobody counts meals.
+ * Only two crews over one mess kit can come to more than the party's whole bill on their own; then
+ * the later rows' crews pay less, as Make Camp gives the crew's supplies back (camp-rules.js#trimToBill).
+ */
+function crewPayments(rows, { days, messKit, packAnimal, bill }) {
+	for (const r of rows) {
+		r.crewMouths = Math.min(count(r.crewMouths), count(r.followers));
+		r.crewBill = packAnimal ? 0 : crewMealUses(r.crewMouths, r.followers, messKit) * days;
+		r.crewHeld = count(r.crew?.held);
+		r.crewPays = Math.min(r.crewHeld, r.crewBill);
+	}
+	let over = rows.reduce((sum, r) => sum + r.crewPays, 0) - bill;
+	for (let i = rows.length - 1; i >= 0 && over > 0; i--) {
+		const back = Math.min(rows[i].crewPays, over);
+		rows[i].crewPays -= back;
+		rows[i].crewBill -= back;
+		over -= back;
+	}
+}
+
+/**
+ * The mouths a member's pack still feeds once the crew has paid: their own and their followers', less
+ * the share of the crew its supplies covered. The packs split what is left of the bill by these.
+ */
+function packMouths(r) {
+	return r.mouths - (r.crewBill ? (r.crewMouths * r.crewPays) / r.crewBill : 0);
+}
+
+/**
+ * The whole account for `days` on the road: the bill, and who pays what out of which purse. A crew's
+ * own supplies pay its mouths first (crewPayments, `crewSpend`); the packs share the rest by default
+ * (defaultRoadShares, `pays` and `spend`), and the GM's figure for a member is their pack's alone.
  *
  * @param {RoadMember[]} members
  * @param {object} [opts]
  * @param {number}  [opts.days=1]
  * @param {boolean} [opts.messKit]     someone cooks for the party with a mess kit
  * @param {boolean} [opts.packAnimal]  a pack animal or cart laden with 1 Surplus of supplies
- * @param {object}  [opts.paid]        actorId -> uses, the GM's own figure for that member
+ * @param {object}  [opts.paid]        actorId -> uses, the GM's own figure for that member's pack
  */
 export function roadLedger(members = [], { days = 1, messKit = false, packAnimal = false, paid = {} } = {}) {
 	const rows = members.map(m => {
@@ -104,20 +144,37 @@ export function roadLedger(members = [], { days = 1, messKit = false, packAnimal
 	const n = count(days);
 	const perDay = roadUsesPerDay(mouths, { messKit, packAnimal });
 	const bill = perDay * n;
-	const shares = defaultRoadShares(rows, bill);
+	crewPayments(rows, { days: n, messKit, packAnimal, bill });
+	const crewPaid = rows.reduce((sum, r) => sum + r.crewPays, 0);
+	const shares = defaultRoadShares(rows.map(r => ({ ...r, mouths: packMouths(r) })), bill - crewPaid);
 	for (const r of rows) {
 		const asked = paid?.[r.actorId];
 		r.suggested = shares[r.actorId] ?? 0;
 		r.pays = Math.min(r.holds, asked === undefined || asked === null ? r.suggested : count(asked));
 		r.spend = drainPurses(r.purses, r.pays);
+		r.crewSpend = r.crewPays ? [{ slug: CREW_SUPPLIES_SLUG, label: CREW_SUPPLIES_LABEL, n: r.crewPays }] : [];
 	}
-	const paidTotal = rows.reduce((sum, r) => sum + r.pays, 0);
+	const paidTotal = crewPaid + rows.reduce((sum, r) => sum + r.pays, 0);
 	return {
 		rows, days: n, mouths, messKit: !!messKit && !packAnimal, packAnimal: !!packAnimal,
-		perDay, bill, paid: paidTotal,
+		perDay, bill, crewPaid, paid: paidTotal,
 		short: Math.max(0, bill - paidTotal),
 		over:  Math.max(0, paidTotal - bill),
 	};
+}
+
+/**
+ * What a member's crew purse says in the window, in place of a figure to set (as Make Camp's does,
+ * camp-view.js#crewPurseText), or "" for a member whose crew eats nothing on this trip.
+ */
+export function crewRoadText(row) {
+	const bill = count(row?.crewBill);
+	if (!bill) return "";
+	const n = count(row.crewPays);
+	if (n >= bill) return `Feeds the crew first: ${usesWord(n)}, all the crew eats.`;
+	if (!n) return `Empty, so what the crew eats (${usesWord(bill)}) comes out of the packs.`;
+	const rest = bill - n;
+	return `Feeds the crew first: ${n} of the ${usesWord(bill)} the crew eats. The other ${rest} ${rest === 1 ? "comes" : "come"} out of the packs.`;
 }
 
 /** "2 provisions, 1 supplies": a spend in words. */
@@ -148,8 +205,14 @@ export function roadSummaryRows(ledger) {
 		value: `${days}, ${ledger.mouths} ${ledger.mouths === 1 ? "mouth" : "mouths"}${kit}: ${usesWord(ledger.perDay)} a day, ${usesWord(ledger.bill)} in all.`,
 	}];
 	for (const r of ledger.rows) {
-		if (!r.pays) continue;
-		rows.push({ label: r.name, value: `${usesWord(r.pays)} (${spendWords(r.spend)})` });
+		const pack = r.pays ? `${usesWord(r.pays)} (${spendWords(r.spend)})` : "";
+		// What the crew's own supplies paid is named apart from the pack, as Make Camp's card names it.
+		if (r.crewPays) {
+			const crew = `${usesWord(r.crewPays)} from the crew's own supplies`;
+			rows.push({ label: r.name, value: pack ? `${crew}; ${pack} from the pack` : crew });
+		} else if (pack) {
+			rows.push({ label: r.name, value: pack });
+		}
 	}
 	if (ledger.short) {
 		rows.push({

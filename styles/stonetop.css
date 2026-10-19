@@ -3034,8 +3034,10 @@ input.stonetop-name-field {
 	cursor: pointer;
 }
 
-/* The list is full ("choose 2 or 3" with 3 ticked): what is left cannot be ticked. */
-.stonetop-bg-choice-option.is-disabled {
+/* The list is full ("choose 2 or 3" with 3 ticked): what is left cannot be ticked. A playbook
+   lore list at its most ("choose 2, maybe 3") reads the same on the Details tab. */
+.stonetop-bg-choice-option.is-disabled,
+.stonetop-lore-option.is-disabled {
 	cursor: default;
 	opacity: 0.55;
 }
@@ -3091,6 +3093,19 @@ input.stonetop-name-field {
 
 .stonetop-bg-resource-row .stonetop-bg-choices-label {
 	margin: 0;
+}
+
+/* The Itinerant Mystic's Enigma buttons, under its track */
+.stonetop-bg-resource-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 2px 0 4px;
+}
+
+.stonetop-bg-resource-actions button {
+	flex: 0 0 auto;
+	width: auto;
 }
 
 /* Beast-Bonded "focus on your companion" markable actions */
@@ -3926,6 +3941,15 @@ input.stonetop-name-field {
 	color: var(--st-text);
 }
 
+/* Folded, that full-height strip runs flush to the window's right edge (below), right
+   under core's resize handle in the bottom-right corner. The handle is positioned with no
+   z-index and `.window-content` makes no stacking context, so the toggle's `z-index: 1`
+   painted over it and swallowed the drag: the sheet could not be resized at all while the
+   sidebar was collapsed. The handle goes back on top in any window that has the sidebar. */
+:is(.window-app, .application):has(.stonetop-moves-sidebar) > .window-resizable-handle {
+	z-index: 2;
+}
+
 .stonetop-moves-sidebar.is-collapsed .stonetop-sidebar-toggle-label {
 	display: block;
 	writing-mode: vertical-rl;
@@ -4240,6 +4264,27 @@ input.stonetop-name-field {
 	justify-items: center;
 	align-items: center;
 	gap: 2px 14px;
+}
+/* The heading over the adjustment row. It opens a new section of the window (everything above
+   it is how the blow is rolled; everything below is what the player adds), so it gets a rule and
+   real room above it rather than the shared prompt's flush top, and it is centred over the
+   centred row it heads. The examples sit on their own muted line under the heading, so the
+   heading reads at a glance and the parenthetical no longer wraps into it. */
+.stonetop-roll-form .stonetop-damage-adjust-prompt {
+	margin: 16px 0 10px;
+	padding-top: 12px;
+	border-top: 1px solid var(--st-quiet-ink, rgba(0, 0, 0, 0.3));
+	text-align: center;
+	font-weight: 600;
+	color: var(--st-text, #2f2a24);
+}
+.stonetop-damage-adjust-hint {
+	display: block;
+	margin-top: 2px;
+	font-size: var(--st-fs-sm);
+	font-weight: normal;
+	font-style: italic;
+	color: var(--st-text-muted, #6b6257);
 }
 .stonetop-damage-field-label {
 	font-size: var(--st-fs-sm);
@@ -4938,6 +4983,11 @@ input.stonetop-name-field {
    toggle and its input must stay clickable/typeable even in read-only sections. */
 .stonetop-readonly .stonetop-tab-search-toggle,
 .stonetop-readonly .stonetop-tab-search-input,
+/* A reminder's "+" chip (reminder-chips.hbs) is play: noting what the table should keep in mind, drawn
+   only where `reminderEditable` is passed (the character header, for whoever may edit the sheet). The
+   steading's Neighbours tab, which locks, shows the same row read-only and draws no "+"; this keeps any
+   place that does draw one from leaving it mouse-dead until a pencil is opened. */
+.stonetop-readonly .stonetop-reminder-chip--add,
 /* Relationship notes + show/hide boxes stay live outside edit mode: the hearts table
    is a play-time tracker (regard shifts at the table), and its own template already
    decides editability by rendering the input `disabled` when the viewer can't rate.
@@ -6576,10 +6626,9 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-reload .fa-hourglass-half { color: var(--st-on-dark-attack-reload, #45658c); }
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-dangerous { color: var(--st-on-dark-attack-dangerous, #6b3a10); }
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-attack-dangerous .fa-triangle-exclamation { color: var(--st-on-dark-attack-dangerous, #9c5715); }
-/* Dotted underline signals the hover description for "problematic wound". */
+/* Bold signals the hover description for "problematic wound". */
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-problematic-wound {
-	text-decoration: underline dotted;
-	text-underline-offset: 2px;
+	font-weight: bold;
 	cursor: help;
 }
 
@@ -8650,8 +8699,9 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-camp-part > :last-child { margin-bottom: 0; }
 
 /* The night's pick is a fieldset, so its radios are announced as one question. Core boxes a
-   fieldset and gaps its legend, and a part of a row wants neither. */
-.stonetop-camp-night {
+   fieldset and gaps its legend, and a part of a row wants neither. A Safe Place's pick is one too. */
+.stonetop-camp-night,
+.stonetop-camp-site {
 	min-width: 0;
 	padding: 0;
 	border: none;
@@ -9147,7 +9197,10 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	font-size: var(--st-fs-xs);
 }
 
-.stonetop-inv-add-btn {
+/* The Special Possessions' "+ Something else (discuss with GM)" write-in wears the same quiet
+   dashed add-a-row look as Add item. */
+.stonetop-inv-add-btn,
+.stonetop-possession-custom-add {
 	font-size: var(--st-fs-xs);
 	padding: 1px 6px;
 	margin-top: 4px;
@@ -10523,11 +10576,13 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	font-weight: bold;
 	color: var(--st-red-text);
 }
-/* What Let Fly's deplete row marked, once pressed. Plain ink: a cost paid, neither good news nor
-   a blow landed. Same place and size as the two readouts above. */
+/* What Let Fly's deplete row marked, once pressed, and the debility a ticked "(mark a debility)"
+   option marked (option-debility.js), and who a ticked Censure "enraged" left enraged
+   (censure-enraged.js). Plain ink: a cost paid, neither good news nor a blow landed.
+   Same place and size as the two readouts above. */
 :is(#chat, #chat-notifications, #chat-popout) .message
 	:is(.stonetop-roll-card-picklist, .stonetop-chat-move-description, .stonetop-roll-card-description)
-	.stonetop-ammo-depleted {
+	:is(.stonetop-ammo-depleted, .stonetop-option-debility-marked, .stonetop-censure-enraged-readout) {
 	display: block;
 	margin: 1px 0 4px 22px;
 	font-size: 0.85em;
@@ -11559,7 +11614,8 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 
 .stonetop-arcanum-backowed span { flex: 1; min-width: 8em; }
 
-.stonetop-arcanum-backowed-btn {
+.stonetop-arcanum-backowed-btn,
+.stonetop-arcanum-unlock-choice-btn {
 	width: auto;
 	flex: 0 0 auto;
 	font-size: var(--st-fs-2xs);
@@ -12938,12 +12994,22 @@ button.stonetop-rapport-chip:focus-visible {
 	background: color-mix(in srgb, currentColor 6%, transparent);
 	font-size: var(--st-fs-xs);
 	font-style: normal;
-	line-height: 1.6;
+	/* A whole-pixel line, 1.3 rather than the gold pills' 1.7: these sit in runs under a row and
+	   read as a note, so the chip is no taller than its label needs (the trimmed label below pads
+	   back to exactly this line, which still clears a descender in all three sheet faces). */
+	line-height: 1.3;
+	line-height: round(1.3em, 1px);
 }
 
 .stonetop-reminder-chip i { font-size: 0.9em; font-size: round(0.9em, 1px); opacity: 0.8; }
 
+/* Lifted 0.05em off the shared cap centring. These labels are mixed case ("Owes Barrow a favour"),
+   so most of their ink is the lowercase body under the cap band's middle: centred on its capitals,
+   the label's weight sat 1-1.6px low in all three sheet faces (pixel scan, UI 16-20px). `top`, not
+   padding, so the ink moves and the chip does not. */
 .stonetop-reminder-chip-text {
+	position: relative;
+	top: -0.05em;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -12951,6 +13017,69 @@ button.stonetop-rapport-chip:focus-visible {
 }
 
 .stonetop-reminder-chip-detail { opacity: 0.8; }
+
+/* The character header's "+" chip, ending the row for whoever may edit the sheet (reminder-chips.hbs).
+   The one chip that IS a control, so it is a button dressed as a chip: dashed, and faint until it is
+   pointed at, so it reads as room to write rather than as a reminder. Every property core's button
+   rule sets is stated, `width` and `height` above all, or it stretches across the row. The reset is
+   shared with a typed chip's x below. */
+.stonetop-reminder-chip-slot { display: flex; min-width: 0; margin: 0; }
+.stonetop-reminder-chips button.stonetop-reminder-chip--add,
+.stonetop-reminder-chip button.stonetop-reminder-chip-remove {
+	flex: none;
+	width: auto;
+	height: auto;
+	min-height: 0;
+	box-shadow: none;
+	color: inherit;
+	cursor: pointer;
+}
+.stonetop-reminder-chips button.stonetop-reminder-chip--add {
+	padding: 1px 9px;
+	border-style: dashed;
+	font-family: inherit;
+	opacity: 0.45;
+	transition: opacity 0.12s ease;
+}
+/* The chip's own line, not Font Awesome's `line-height: 1`: alone on an empty row it stood 5px
+   shorter than a worded chip. */
+.stonetop-reminder-chips button.stonetop-reminder-chip--add > i { margin: 0; opacity: 1; line-height: inherit; }
+.stonetop-reminder-chips button.stonetop-reminder-chip--add:is(:hover, :focus-visible) {
+	opacity: 1;
+	background: color-mix(in srgb, currentColor 6%, transparent);
+}
+/* A typed chip's x, on the header only: no box of its own, the chip's ink at half strength until it
+   is pointed at, as a follower tag's x is. */
+.stonetop-reminder-chip button.stonetop-reminder-chip-remove {
+	margin: 0 -3px 0 0;
+	padding: 0 2px;
+	border: 0;
+	background: none;
+	font-size: 0.9em;
+	line-height: inherit;
+	opacity: 0.5;
+}
+.stonetop-reminder-chip button.stonetop-reminder-chip-remove > i { margin: 0; line-height: inherit; opacity: 1; }
+.stonetop-reminder-chip button.stonetop-reminder-chip-remove:is(:hover, :focus-visible) { opacity: 1; }
+
+/* What the "+" turns into: a box of the chip's own shape, wide enough for a short line. The browser
+   draws an input's text centred on its line box, which in Libre Caslon Text sits 0.048em above the
+   cap band, so the typed words read high (1.4px at 1.5x, pixel scan). No text-box trim reaches an
+   input's text, so the 0.048em is spent as padding, as a <select>'s is: the box keeps its height. */
+.stonetop-reminder-chips input.stonetop-reminder-chip--input {
+	width: 16em;
+	height: auto;
+	min-height: 0;
+	padding: calc(1px + 0.048em) 9px calc(1px - 0.048em);
+	box-shadow: none;
+	outline: none;
+	color: inherit;
+	font-family: inherit;
+}
+.stonetop-reminder-chips input.stonetop-reminder-chip--input:focus {
+	border-color: color-mix(in srgb, currentColor 60%, transparent);
+	box-shadow: none;
+}
 
 /* A Fight tab row is a wrapping flex line (name, vitals, standing): the chips take a line of their own
    after the vitals. */
@@ -14197,6 +14326,27 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .stonetop-mark-sign.is-unset {
 	border-style: dashed;
 	border-color: var(--st-text-faint);
+}
+
+/* Trackless Step's head count against one Stock's level + INT, and the Potent Workings choice a
+   charm was crafted with (or is about to be). Small print under the rule line; the count turns to
+   the danger ink past the cap, a flag and never a block. */
+.stonetop-marks-tally,
+.stonetop-marks-pending {
+	margin: 0.25em 0 0;
+	font-size: var(--st-fs-2xs);
+	line-height: 1.35;
+	color: var(--st-text-secondary);
+}
+.stonetop-marks-tally.is-over {
+	color: var(--st-danger-ink, #a02020);
+	font-weight: 600;
+}
+.stonetop-mark-potency {
+	margin-left: 0.6em;
+	font-size: var(--st-fs-2xs);
+	font-style: italic;
+	color: var(--st-text-secondary);
 }
 
 
@@ -18182,6 +18332,24 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	font-style: italic;
 }
 
+/* The GM's between-session follower review (Book I p.480), folded. A <details>, so it keeps block
+   layout and its summary keeps the disclosure marker the section headings' flex would hide. */
+.stonetop-eos-follower-review {
+	display: block;
+}
+.stonetop-eos-follower-review > summary.stonetop-eos-section-heading {
+	display: list-item;
+	cursor: pointer;
+}
+.stonetop-eos-follower-review > summary .stonetop-eos-section-tag {
+	margin-left: 8px;
+}
+.stonetop-eos-review-cite {
+	margin: 0;
+	font-size: var(--st-fs-xs);
+	color: var(--color-text-dark-secondary);
+}
+
 .stonetop-eos-personal-list {
 	list-style: none;
 	margin: 0;
@@ -18512,6 +18680,53 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border: none;
 	position: relative;
 	top: 0.21em;
+}
+
+/* Stonetop's title has a subtitle under it now ("Village · ~300 souls"), so the banner centres
+   a two-line stack rather than one line of Avara, and the nudge above would only push the title
+   down onto its own subtitle. Leading as the settlement sheet's name input sets it. */
+.steading-header-name > .steading-title {
+	top: 0;
+	line-height: 1.15;
+}
+
+/* The subtitle: kind and headcount as one italic line, each as wide as what it says, the way
+   the settlement sheet's facts line reads (`.stonetop-settlement-facts`). The inputs exist only
+   under the Size pencil, so unlike the settlement sheet's they show their edges the whole time
+   they are there (user, 2026-10-19): an empty one holds only Size's greyed placeholder, and
+   without a visible box it read as text rather than as somewhere to type. */
+.steading-subtitle {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px 8px;
+	font-style: italic;
+	font-size: var(--st-fs-sm);
+	color: var(--st-text-secondary);
+}
+.app.steading .window-content input.steading-subtitle-input {
+	field-sizing: content;
+	flex: 0 1 auto;
+	min-width: 4em;
+	max-width: 100%;
+	width: auto;
+	height: auto;
+	padding: 0 4px;
+	margin-left: -4px;
+	font-style: italic;
+	font-size: var(--st-fs-sm);
+	background: rgb(var(--st-paper-rgb) / 0.6);
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.35);
+	border-radius: var(--st-radius);
+	box-shadow: none;
+	color: var(--st-text-secondary);
+}
+.app.steading .window-content input.steading-subtitle-input:hover {
+	border-color: rgb(var(--st-ink-rgb) / 0.55);
+}
+.app.steading .window-content input.steading-subtitle-input:focus {
+	outline: none;
+	border-color: slategrey;
+	box-shadow: none;
 }
 
 /* The campaign's clock at the far end of the header row — the season Stonetop is in over
@@ -20602,54 +20817,213 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	flex-direction: column;
 	gap: 2px;
 }
-.steading-guideline-label { font-weight: 700; }
-.steading-guideline-hint {
-	color: var(--st-text-secondary);
-	font-size: var(--font-size-12, 12px);
+/* The hint lives in the label's tooltip. */
+.steading-guideline-label {
+	align-self: flex-start;
+	font-weight: 700;
+	cursor: help;
 }
 .steading-guideline textarea {
 	resize: vertical;
 	min-height: 3em;
 }
-.steading-plans-head {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: baseline;
-	gap: 4px 10px;
-}
-.steading-plans-head .steading-plan-add { margin-left: auto; flex: 0 0 auto; width: auto; }
+/* A plan reads as text on the sheet: its name, its requirements as tick boxes (ticked off here, the
+   book's whole use of the list), and what goes undone. It is written in its editor (SteadingPlanDialog.js),
+   which the pencil opens; the pencil and trash wait out of sight until the plan is hovered or a control in
+   it has focus, and stay shown where there is no hover to find them by. "New plan" is the sheet's dashed
+   add bar, under the list (with .steading-list-add below). */
 .steading-plan {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
 	border-top: 1px solid rgb(var(--st-ink-rgb) / 0.12);
-	padding: 6px 0 4px;
+	padding: 8px 0 6px;
 }
-.steading-plan-head,
-.steading-plan-req,
-.steading-plan-new,
-.steading-plan-undone {
+.steading-plan-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 24px;
+}
+.steading-plan-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin: 0;
+	border: none;
+	font-size: var(--st-fs-sm);
+	font-weight: 700;
+	overflow-wrap: anywhere;
+}
+.steading-plan-unnamed { font-weight: normal; font-style: italic; color: var(--st-text-secondary); }
+.steading-plan-progress {
+	flex: 0 0 auto;
+	color: var(--st-text-secondary);
+	font-size: var(--st-fs-sm);
+	font-variant-numeric: tabular-nums;
+}
+.steading-plan.is-done .steading-plan-progress { font-weight: 700; color: inherit; }
+.steading-plan-tools {
+	flex: 0 0 auto;
+	display: inline-flex;
+	gap: 4px;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+}
+.steading-plan:is(:hover, :focus-within) .steading-plan-tools { opacity: 1; }
+@media (hover: none) { .steading-plan-tools { opacity: 1; } }
+.steading-plan-reqs {
+	list-style: none;
+	margin: 0;
+	padding: 0 0 0 2px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.steading-plan-req > label {
 	display: flex;
 	align-items: center;
 	gap: 6px;
+	cursor: pointer;
 }
-.steading-plan-name { flex: 1 1 auto; font-weight: 700; }
-.steading-plan-progress { color: var(--st-text-secondary); flex: 0 0 auto; }
-.steading-plan.is-done .steading-plan-progress { font-weight: 700; color: inherit; }
-.steading-plan-reqs {
-	list-style: none;
-	margin: 4px 0;
-	padding: 0 0 0 4px;
-}
-.steading-plan-req-text { flex: 1 1 auto; }
+.steading-plan-req input[type="checkbox"] { flex: 0 0 auto; margin: 0; }
+.steading-plan-req-text { flex: 1 1 auto; min-width: 0; font-size: var(--st-fs-sm); line-height: 1.35; overflow-wrap: anywhere; }
 .steading-plan-req.is-done .steading-plan-req-text { text-decoration: line-through; opacity: 0.7; }
-.steading-plan-remove,
-.steading-plan-req-remove {
-	flex: 0 0 auto;
-	width: auto;
-	line-height: 1;
+.steading-plan-undone { margin: 2px 0 0; font-size: var(--st-fs-sm); color: var(--st-text-secondary); }
+.steading-plan-undone strong { color: var(--st-text-body); }
+
+/* The plan editor (SteadingPlanDialog.js, templates/dialogs/steading-plan.hbs): the book's words in its
+   order, one column. Requirement rows are input-height throughout, their remove a quiet icon square; the
+   book's prompts are a wrap of pills under the list that each drop in a row. */
+.stonetop-steading-plan {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 4px 2px;
 }
-.steading-plan-new input { flex: 1 1 auto; }
-.steading-plan-new button { flex: 0 0 auto; width: auto; }
-.steading-plan-undone { margin-top: 4px; color: var(--st-text-secondary); }
-.steading-plan-undone input { flex: 1 1 auto; }
+.stonetop-steading-plan .spe-trigger {
+	margin: 0 0 4px;
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+	color: var(--st-text-secondary);
+}
+.stonetop-steading-plan .spe-label {
+	margin-top: 6px;
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-secondary);
+}
+.stonetop-steading-plan .spe-name { font-weight: 700; }
+.stonetop-steading-plan .spe-req-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.stonetop-steading-plan .spe-req-list.is-empty::before {
+	content: attr(data-empty);
+	display: block;
+	padding: 8px 10px;
+	border: 1px dashed rgb(var(--st-ink-rgb) / 0.25);
+	border-radius: var(--st-radius);
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+	color: var(--st-text-secondary);
+}
+.stonetop-steading-plan .spe-req {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+}
+.stonetop-steading-plan .spe-req input[type="checkbox"] { flex: 0 0 auto; margin: 0; }
+.stonetop-steading-plan :is(.spe-req-text, .spe-undone-input) {
+	flex: 1 1 auto;
+	min-width: 0;
+	width: auto;
+}
+.stonetop-steading-plan button.spe-req-remove {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--input-height, 2rem);
+	height: var(--input-height, 2rem);
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	line-height: 1;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	color: var(--st-text-faint);
+	cursor: pointer;
+}
+.stonetop-steading-plan button.spe-req-remove:is(:hover, :focus-visible) { color: var(--st-on-dark-danger, #8a3a3a); }
+/* The "+ Add" button and the prompt pills share core's button reset, sized to their words. */
+.stonetop-steading-plan button.spe-req-add,
+.stonetop-steading-plan button.spe-prompt {
+	width: auto;
+	height: auto;
+	min-height: 0;
+	font-size: var(--st-fs-xs);
+	cursor: pointer;
+}
+.stonetop-steading-plan button.spe-req-add {
+	align-self: flex-start;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin: 2px 0 0;
+	padding: 4px 10px;
+	line-height: 1.2;
+	background: transparent;
+	border: 1px dashed var(--st-btn-primary-border, #4f5b66);
+	border-radius: var(--st-radius);
+}
+.stonetop-steading-plan button.spe-req-add:hover { background: var(--st-on-dark-raised, hsl(210 10% 92%)); }
+.stonetop-steading-plan .spe-prompts {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+	margin-top: 6px;
+}
+.stonetop-steading-plan .spe-prompts-label {
+	flex: 1 0 100%;
+	font-size: var(--st-fs-xs);
+	color: var(--st-text-secondary);
+}
+.stonetop-steading-plan button.spe-prompt {
+	flex: 0 1 auto;
+	/* Trimmed to its cap band, height kept; see the Chip centring tokens in :root. A block, not core's
+	   flex button, or the trim never reaches the words. */
+	display: inline-block;
+	text-box: trim-both cap alphabetic;
+	margin: 0;
+	padding: calc(3px + var(--st-trim-top)) 9px calc(3px + var(--st-trim-bottom));
+	line-height: 1.3;
+	text-align: left;
+	white-space: normal;
+	background: rgb(var(--st-paper-rgb) / 0.5);
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.2);
+	border-radius: 999px;
+	color: var(--st-text-body);
+}
+.stonetop-steading-plan button.spe-prompt:hover { background: var(--st-on-dark-raised, hsl(210 10% 92%)); }
+.stonetop-steading-plan .spe-undone {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 8px 0 0;
+	color: var(--st-text-secondary);
+}
+.stonetop-steading-plan .spe-undone > span { flex: 0 0 auto; white-space: nowrap; }
+.stonetop-steading-plan .spe-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 10px;
+}
 
 /* Seasons Change: the Threats step's portents (season-threats.js) and the trade opportunity gain's
    neighbours (seasonal-gains.js). */
@@ -20831,8 +21205,8 @@ button.stonetop-mark-sign-btn.is-active:hover {
    tab's Add item (.stonetop-inv-add-btn) and this sheet's own Create improvement /
    Make a hazard (.steading-improvement-add-btn) use. Was a muted left-aligned
    caption, which read as a different control from the ones beside it.
-   Other Settlements' "New settlement sheet" wears it under its own class: the sheet delegates
-   every `.steading-list-add` click to its list-row adder. */
+   The Notes tab's "New plan" wears it under its own class, since the sheet delegates every
+   `.steading-list-add` click to its list-row adder. */
 .steading-list-add,
 .steading-settlement-new {
 	display: flex;
@@ -22014,6 +22388,8 @@ a.steading-player-open:hover {
 .steading-improvement-toggle:focus-visible,
 .steading-improvement-edit:focus-visible,
 .steading-improvement-remove:focus-visible,
+.steading-plan-edit:focus-visible,
+.steading-plan-remove:focus-visible,
 .steading-improvement-move-btn:focus-visible,
 .steading-inn-name-btn:focus-visible,
 .steading-inn-gathering-btn:focus-visible,
@@ -22055,7 +22431,9 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
    destructive half. Declared together and the destructive colours after, so the shared
    rule cannot win the tie (see the BEM ordering note). */
 .steading-improvement-edit,
-.steading-improvement-remove {
+.steading-improvement-remove,
+.steading-plan-edit,
+.steading-plan-remove {
 	flex-shrink: 0;
 	display: inline-flex;
 	align-items: center;
@@ -22074,16 +22452,19 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	cursor: pointer;
 }
 
-.steading-improvement-edit:hover {
+.steading-improvement-edit:hover,
+.steading-plan-edit:hover {
 	background: var(--st-text-secondary);
 	color: var(--st-page, #fff);
 }
 
-.steading-improvement-remove {
+.steading-improvement-remove,
+.steading-plan-remove {
 	color: var(--st-on-dark-danger, #8a3a3a);
 }
 
-.steading-improvement-remove:hover {
+.steading-improvement-remove:hover,
+.steading-plan-remove:hover {
 	background: #8a3a3a;
 	color: #fff;
 }
@@ -25500,7 +25881,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 
 /* Well Versed topic. The label carries the "known by most in Stonetop" summary as
    a hover tooltip so a new player learns what e.g. "the Things Below" means; a
-   dotted underline hints there's something to hover. It stays plain, selectable
+   bold label hints there's something to hover. It stays plain, selectable
    text (no journal link) so clicking it still picks the option. */
 .stonetop-onboarding-well-versed-topic {
 	font-weight: bold;
@@ -26726,11 +27107,41 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	flex-wrap: wrap;
 	margin-top: 6px;
 }
+/* The card's play buttons (Order, Have what they need, They balk, Use up their resources) share
+   each line they wrap onto instead of hugging the right edge: four of them always wrap, and right-
+   aligned they left a dead gap on the left of every line. Each grows from its own width, so a line
+   of two splits the card between them. */
+.stonetop-follower-order-row--actions > button {
+	flex: 1 1 auto;
+	justify-content: center;
+}
 /* A named crew member's own Order button (roster). */
 .stonetop-crew-individual-order {
 	display: flex;
 	justify-content: flex-end;
 	margin-top: 4px;
+}
+/* Use up their resources (follower-use-up.js): a choice's own count or item sits after its words. */
+.stonetop-spend-choice :is(.stonetop-use-up-count, .stonetop-use-up-item) {
+	margin-left: auto;
+}
+.stonetop-use-up-count {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	white-space: nowrap;
+}
+.stonetop-use-up-count input {
+	width: 4em;
+}
+.stonetop-use-up-item {
+	width: auto;
+	max-width: 50%;
+}
+.stonetop-use-up-how {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
 }
 /* Spend-Loyalty / Spend-Readiness chooser dialogs. */
 .stonetop-spend-form {
@@ -26843,6 +27254,27 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
+}
+/* Who they are, above the controls: instinct, cost, Loyalty and the balk rule (p.466). */
+.stonetop-order-followers-dialog .stonetop-of-about {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-bottom: 10px;
+	padding: 6px 8px;
+	border: 1px solid var(--st-card-rule);
+	border-radius: var(--st-radius-sm);
+	font-size: var(--st-fs-sm);
+}
+.stonetop-order-followers-dialog .stonetop-of-about-label {
+	font-weight: 700;
+	color: var(--st-text-muted);
+}
+.stonetop-order-followers-dialog .stonetop-of-about-note {
+	margin-top: 3px;
+	font-size: var(--st-fs-xs);
+	font-style: italic;
+	color: var(--st-text-muted);
 }
 .stonetop-order-followers-dialog .stonetop-of-tags-hint {
 	font-weight: normal;
@@ -27417,6 +27849,56 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	font-style: italic;
 }
 
+/* "with the party", under the type line: the type's size and ink, upright so it reads as a state
+   rather than more of the type. */
+.stonetop-follower-party-marker {
+	display: block;
+	font-size: var(--st-fs-sm);
+	color: var(--st-quiet-ink);
+}
+.stonetop-follower-party-marker i {
+	margin-right: 0.2em;
+}
+
+/* Under a follower's gear: what their last Outfit came to. */
+.stonetop-follower-outfit-line {
+	margin-top: 4px;
+	font-size: var(--st-fs-sm);
+	color: var(--st-quiet-ink);
+}
+.stonetop-follower-outfit {
+	margin-top: 4px;
+}
+
+/* Under the pencil: the three debilities a follower can be given as temporary tags (p.243). */
+.stonetop-follower-debility-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+	margin: 4px 0;
+}
+.stonetop-follower-debility-label {
+	font-size: var(--st-fs-sm);
+	color: var(--st-quiet-ink);
+}
+.stonetop-follower-debility-toggle {
+	cursor: pointer;
+}
+
+/* The instinct, the first line of the body: one italic line above the vitals band. */
+.stonetop-follower-instinct-line {
+	margin-bottom: 6px;
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+	color: var(--st-text-body);
+}
+.stonetop-follower-instinct-label {
+	font-style: normal;
+	font-weight: 700;
+	color: var(--st-quiet-ink);
+}
+
 .stonetop-follower-name-input {
 	font-weight: 700;
 	font-size: 1em;
@@ -27865,6 +28347,21 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 }
 
 .stonetop-crew-gear-item.is-checked { text-decoration: none; opacity: 1; }
+
+/* A written-in item's remove button (under the pencil) sits at the row's end. */
+.stonetop-crew-gear-item .stonetop-crew-gear-remove { margin-left: auto; flex: none; }
+
+/* The insert's blank inventory lines: a name, its weight, and the add button on one row. */
+.stonetop-crew-gear-add-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	min-width: 0;
+}
+.stonetop-crew-gear-add-row .stonetop-crew-gear-add-name { flex: 1 1 0; min-width: 0; width: auto; }
+.stonetop-crew-gear-add-row .stonetop-crew-gear-add-weight { flex: none; width: auto; }
+.stonetop-crew-gear-add-row .stonetop-crew-gear-add { flex: none; }
 
 .stonetop-crew-gear-pips {
 	display: flex;
@@ -30359,6 +30856,7 @@ li.question-bullet::before {
    wrapped by wrapLoreTerms(). A dotted underline signals the hover summary without
    forcing weight, since some sit inside an authored <strong> and some don't. */
 .stonetop-lore-term[data-tooltip] {
+	font-weight: bold;
 	cursor: help;
 	text-decoration: underline dotted;
 	text-underline-offset: 2px;
@@ -33506,7 +34004,7 @@ th:has(> .stonetop-roll-table-btn) {
 .stonetop-intros-place--now i,
 .stonetop-intros-place--done i { color: var(--st-green-border, rgba(40, 140, 70, 0.7)); }
 
-/* Final-step right-side button cluster (the "Let spring break forth!" finish, which
+/* Final-step right-side button cluster (the "Let spring burst forth!" finish, which
    also saves the Chronicle). */
 .stonetop-intros-done-actions {
 	display: inline-flex;
@@ -37803,7 +38301,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .road-rations p { margin: 0; }
 .stonetop .road-rations .road-intro,
 .stonetop .road-rations .road-hint,
-.stonetop .road-rations .road-holds { font-size: var(--st-fs-sm); color: var(--st-text-secondary); }
+.stonetop .road-rations .road-holds,
+.stonetop .road-rations .road-crew { font-size: var(--st-fs-sm); color: var(--st-text-secondary); }
 .stonetop .road-rations .road-settings { display: flex; flex-direction: column; gap: 0.35rem; }
 .stonetop .road-rations .road-field { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.6rem; }
 .stonetop .road-rations .road-label { font-weight: 700; }
@@ -40428,6 +40927,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop-npc-following-pc:hover { text-decoration: underline; }
 .stonetop-npc-following-pc i { font-size: 0.85em; opacity: 0.75; margin-right: 2px; }
+/* A follower's Loyalty and Readiness beside their leader, read off the card, then the Order window. */
+.stonetop-npc-follower-stat { color: var(--st-text-muted); }
+.stonetop-npc-following-list .stonetop-npc-order { padding: 0 8px; line-height: 1.6; }
 /* Pronouns / traits inputs. Each is sized to match the span it replaces in play
    mode (.stonetop-npc-pronouns-display / .stonetop-npc-traits-display) so toggling
    edit mode doesn't resize the line — pronouns used to shrink from 0.9rem to
@@ -44214,6 +44716,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	background: none;
 	font: inherit;
 	line-height: inherit;
+	font-weight: bold;
 	color: inherit;
 	text-align: left;
 	text-decoration: underline dotted;
@@ -52534,14 +53037,7 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	font-style: italic;
 	color: var(--st-danger-ink);
 }
-.stonetop-settlement-size-rule {
-	margin: -4px 0 0;
-	font-size: var(--st-fs-sm);
-	color: var(--st-text-secondary);
-}
-.stonetop-settlement-hint,
-.stonetop-settlement-empty,
-.stonetop-settlement-feeling-notes {
+.stonetop-settlement-empty {
 	font-size: var(--st-fs-xs);
 	font-style: italic;
 	color: var(--st-text-muted);
@@ -52549,21 +53045,9 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 }
 .stonetop-settlement-empty { margin: 2px 0 6px; }
 
-/* Standing and Where, side by side under the cards, one column on a narrow tab. */
-.stonetop-settlement-bottom {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 12px;
-	align-items: stretch;
-}
-@container steading-body (max-width: 500px) {
-	.stonetop-settlement-bottom { grid-template-columns: minmax(0, 1fr); }
-}
+/* Where, full width under the cards. */
 .stonetop-settlement-bottom > .steading-card { margin: 0; }
 
-.stonetop-settlement-hearts { display: flex; gap: 2px; }
-.stonetop-settlement-heart { font-size: var(--st-fs-lg); }
-.stonetop-settlement-feeling { margin: 4px 0 0; font-size: var(--st-fs-sm); }
 .stonetop-settlement-blurb { margin: 6px 0 0; font-style: italic; font-size: var(--st-fs-sm); }
 .stonetop-settlement-region-text { margin: 0; font-size: var(--st-fs-sm); }
 .stonetop-settlement-sheet .window-content input.stonetop-settlement-region {
@@ -52578,14 +53062,11 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 }
 
 /* -- List rows -----------------------------------------------------------------------------
-   Stonetop's `.steading-list-item` grid (spiral | name | tools). A reader's row is text in its
-   `.steading-list-name`; an editor's middle cell is the row's fields side by side, borderless
-   until hovered or focused so the list still reads as a list. */
-.stonetop-settlement-row-title { font-weight: bold; }
-.stonetop-settlement-row-aside,
-.stonetop-settlement-row-count-text { color: var(--st-text-secondary); }
-.stonetop-settlement-row--lacking .stonetop-settlement-row-title,
-.stonetop-settlement-row--lacking input.stonetop-settlement-row-name { text-decoration: line-through; }
+   Stonetop's own `.steading-list-item` rows (spiral | name | tools), and like Stonetop's, TEXT in
+   both modes: plain ink, no bold, the detail in the same ink as the name ("Farming (wheat, hemp)").
+   The wrench adds the red cross and makes the text open the row window; a pointer is all that says
+   so, since a bold cue would make every name bold in edit mode, which Stonetop's never are. */
+.stonetop-settlement-row--lacking .stonetop-settlement-row-title { text-decoration: line-through; }
 .stonetop-settlement-lacking-tag {
 	margin-left: 4px;
 	font-size: var(--st-fs-2xs);
@@ -52595,80 +53076,50 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 .stonetop-settlement-instinct-text {
 	display: block;
 	font-style: italic;
-	color: var(--st-text-secondary);
 }
-.stonetop-settlement-row-fields {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 2px 4px;
-	min-width: 0;
-}
-.stonetop-settlement-sheet .window-content .stonetop-settlement-row-fields > input[type=text] {
-	flex: 1 1 6em;
-	min-width: 0;
-	width: auto;
-	height: auto;
-	padding: 1px 4px;
-	font-size: var(--st-fs-sm);
-	line-height: 1.3;
-	background: transparent;
-	border: 1px solid transparent;
-	border-bottom-color: rgb(var(--st-ink-rgb) / 0.12);
-	border-radius: var(--st-radius-sm);
-	box-shadow: none;
-}
-.stonetop-settlement-sheet .window-content .stonetop-settlement-row-fields > input[type=text]:is(:hover, :focus) {
-	border-color: rgb(var(--st-ink-rgb) / 0.25);
-	background: rgb(var(--st-paper-rgb) / 0.6);
-}
-/* The name and the count are as wide as what is written (a three-up card is too narrow to give
-   every field a fixed share), and the detail takes the rest of the line, or a line of its own. */
-.stonetop-settlement-sheet .window-content .stonetop-settlement-row-fields > :is(input.stonetop-settlement-row-name, input.stonetop-settlement-row-count) {
-	field-sizing: content;
-	flex: 0 1 auto;
-	min-width: 3em;
-	max-width: 100%;
-}
-.stonetop-settlement-sheet .window-content .stonetop-settlement-row-fields > input.stonetop-settlement-row-name { font-weight: bold; }
-.stonetop-settlement-sheet .window-content .stonetop-settlement-row-fields > input.stonetop-settlement-row-detail { flex: 1 1 5em; }
-.stonetop-settlement-sheet .window-content .stonetop-settlement-row-fields > input.stonetop-settlement-instinct {
-	flex-basis: 100%;
-	font-style: italic;
-}
+.stonetop-settlement-sheet :is(.steading-list-name, .stonetop-settlement-government-text)[data-action] { cursor: pointer; }
 .stonetop-settlement-row-tools {
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
 	gap: 2px;
 }
-/* A person's row carries up to three tools (open, unlink, remove): hold the column at that width
-   so every row's fields line up whichever ones it has. */
-.stonetop-settlement-rows--people .stonetop-settlement-row-tools { min-width: 4.6em; }
-/* Stonetop's bullet sits level with a one-line name; an editor's row is an input's height, and a
-   person's row runs two lines, so the spiral rides with the FIRST line instead of the middle. */
+/* A person's row runs two lines (name, then Instinct), so the spiral rides with the FIRST line
+   instead of the middle: the bullet's box is that line, as tall as the name's line and pushed down
+   by its 1px padding, with the spiral centred in it at its usual size. */
 .stonetop-settlement-row { align-items: start; }
-.stonetop-settlement-row > .steading-list-bullet { margin-top: 0.45em; }
-.stonetop-settlement-row > .stonetop-settlement-row-tools { margin-top: 1px; }
-
-/* -- People -------------------------------------------------------------------------------- */
-.stonetop-settlement-sheet .window-content textarea.stonetop-settlement-government {
-	width: 100%;
-	min-height: 3.2em;
-	resize: vertical;
-	padding: 2px 4px;
-	font-size: var(--st-fs-sm);
-	background: rgb(var(--st-paper-rgb) / 0.5);
-	border: 1px solid rgb(var(--st-ink-rgb) / 0.15);
-	border-radius: var(--st-radius-sm);
-	box-shadow: none;
-	color: var(--st-text-body);
+.stonetop-settlement-row > .steading-list-bullet {
+	height: calc(var(--st-fs-sm) * 1.3);
+	margin-top: 1px;
+	background-size: calc(10px * var(--stonetop-font-scale, 1));
 }
-.stonetop-settlement-government-text { margin: 0; font-size: var(--st-fs-sm); white-space: pre-line; }
+.stonetop-settlement-row > :is(.stonetop-settlement-row-tools, .steading-list-delete) { margin-top: 1px; }
+
+/* -- Who runs it (the Overview's second row of cards) -------------------------------------
+   Read as a list row's text reads, in the row's ink and size. */
+.stonetop-settlement-government-text {
+	margin: 0;
+	padding: 1px 4px;
+	font-size: var(--st-fs-sm);
+	line-height: 1.3;
+	white-space: pre-line;
+	color: var(--color-text-dark-secondary);
+}
+
+/* -- People: the Residents table -----------------------------------------------------------
+   Stonetop's own table (`.steading-residents-*`), whose rules are unscoped and reach it as they
+   are. Stonetop's People tab is its own scrollport (`.steading-neighbors-tab`: full height, its
+   own overflow); here the tab around it already scrolls, so the section just takes its height. */
+.stonetop-settlement-sheet .steading-neighbors-tab {
+	height: auto;
+	overflow: visible;
+	/* Stonetop's own gap between its People sections, which the settlement's tab rule would make 12px. */
+	gap: 16px;
+}
 
 /* -- Homefront Moves ------------------------------------------------------------------------
    Stonetop's move cards, from `.tab.moves`. What this sheet adds is the line saying what Size or
    winter does to the roll, under the card's title. */
-.stonetop-settlement-moves-tab > .stonetop-move-group > .stonetop-settlement-hint { margin: 0 0 8px; }
 .stonetop-settlement-moves-tab .items-list {
 	list-style: none;
 	margin: 0;
@@ -52732,8 +53183,7 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	background: var(--st-slate-hover-bg);
 	color: var(--st-text-body);
 }
-.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-quiet,
-.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-heart {
+.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-quiet {
 	width: auto;
 	height: auto;
 	flex: none;
@@ -52743,14 +53193,10 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	padding: 0 4px;
 	line-height: 1.6;
 }
-.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-quiet:hover,
-.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-heart:hover:not(:disabled) {
+.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-quiet:hover {
 	background: rgb(var(--st-ink-rgb) / 0.06);
 	border-color: rgb(var(--st-ink-rgb) / 0.15);
 	color: var(--st-text);
-}
-.stonetop.stonetop-settlement-sheet .window-content button.stonetop-settlement-heart.is-filled {
-	color: var(--st-danger-ink);
 }
 .stonetop.stonetop-settlement-sheet .window-content :is(input[type=text], input[type=number], select, textarea):disabled,
 .stonetop.stonetop-settlement-sheet .window-content textarea[readonly] {

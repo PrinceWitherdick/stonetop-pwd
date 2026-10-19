@@ -13,7 +13,7 @@ export const SUPERSEDED = {
 	"10Wj109bGTru5eui": {"description":["4560d9853c0cce0b"],"hpBonus":["9b55e0da69fcb93a"]}, // Carved Out of Wood (The Heavy)
 	"16b6TyBeA1rOlKcQ": {"crossPlaybook":["9b55e0da69fcb93a"],"description":["6a9b1541244151d6"],"requirement":["9b55e0da69fcb93a"]}, // Worldly (The Ranger)
 	"18Y2bTu5X1YqWg21": {"weight":["ed2546d8e4fa6648"]}, // Long spear, iron
-	"1hoLIyWeaJT5Nwtl": {"description":["b6d10932afcd340a"]}, // Take the Measure (The Marshal)
+	"1hoLIyWeaJT5Nwtl": {"description":["378b27eaf11611e5","b6d10932afcd340a"]}, // Take the Measure (The Marshal)
 	"1MldFLfHyiXe6Vvv": {"crossPlaybook":["9b55e0da69fcb93a"],"description":["21dad3494793a5da"],"requirement":["9b55e0da69fcb93a"]}, // Dabbler (The Fox)
 	"1vuFnusfStLGlzF2": {"note":["b4a3630baf4cd302"]}, // A 1-inch cube of dark ice
 	"2LqULEz1AMm0Dn9p": {"description":["b5ebd9f37613132b"]}, // Crew (The Marshal)
@@ -62,7 +62,7 @@ export const SUPERSEDED = {
 	"aG2lARep6mTB5C1n": {"moveResults":["2fcad04ee692273d","9b55e0da69fcb93a","9c63f16b5725b703"],"moveResults.failure":["10379b2ae56c305e","966da6b534cadc41"],"moveResults.partial":["d250ce98c23bb971"],"moveResults.success":["7dce9b974bd6d354"],"rollType":["9b55e0da69fcb93a"]}, // Defy Danger
 	"aGHBpr0zIvFX5DLz": {"description":["c0d2384bfd608124"],"moveResults":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Amulets & Talismans (The Blessed)
 	"AgnpFjMQjutRPVS8": {"description":["21e9dd11cb0db805"]}, // Lamplighter (The Lightbearer)
-	"aIwjViWGSmhFXetV": {"description":["11afaffae979838d"],"moveResults":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Danu's Grasp (The Blessed)
+	"aIwjViWGSmhFXetV": {"description":["11afaffae979838d","bdffd85058631d98"],"moveResults":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Danu's Grasp (The Blessed)
 	"AJCGVWcg5Z6REi6r": {"note":["2f09103b8b587f35"]}, // A thumb-sized topaz, set in bronze on a… belt (?); fills you with dread to look at it
 	"AK0o8taBKJ2MNFiq": {"description":["bee63731ed5c5a2c"]}, // Into the Lion's Den (The Blessed)
 	"aLJEtNpDpcaOAhqV": {"description":["5f23ae26c31c7fa1"],"requirement":["9b55e0da69fcb93a"]}, // Glorious Servant (The Lightbearer)
@@ -90,11 +90,11 @@ export const SUPERSEDED = {
 	"bkeKpfWmmrNBiQeZ": {"description":["1f92aa569201dcd2","b829ece8a4520885","dc06c419668ff8dd"],"shieldLoadReduction":["9b55e0da69fcb93a"]}, // Armored (The Marshal)
 	"BLoC4JmoaeBjRsPa": {"description":["c7646ce2ad17e4e5"],"moveResults":["9b55e0da69fcb93a","a8d9d3fc7e23c758","ae7f38343d7acb79"],"moveResults.failure":["a4b9f3a121af46a8","dce9543be27aea8b"],"moveResults.partial":["c5035d8120a8bdbb","e27d1834ff12d598"],"moveResults.success":["6c3bfcfbe9eb504d","786796168f874420"],"noXpOnMiss":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Hard to Kill (The Heavy)
 	"BnD3XkfFNuYUPnmb": {"armor":["9b55e0da69fcb93a"],"weight":["ed2546d8e4fa6648"]}, // Thick hides
-	"BOqUT1pEWftUJjJt": {"description":["315e0a8fd664326a"],"requirement":["9b55e0da69fcb93a"]}, // Mighty Thews (The Heavy)
+	"BOqUT1pEWftUJjJt": {"description":["315e0a8fd664326a","9a24a7e7893b63a2"],"requirement":["9b55e0da69fcb93a"]}, // Mighty Thews (The Heavy)
 	"bs6OBMVJuPq78W7V": {"artifactLore":["9b55e0da69fcb93a"]}, // Self-burning lamp
 	"bUTwuyZY9GIiiajc": {"description":["bbc6833b74af2302"],"moveResults":["9b55e0da69fcb93a"],"requirement":["606a449125ea17d4","9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Alpha (The Ranger)
 	"C58T2Yy7kk1oYnp2": {"cap":["9b55e0da69fcb93a"],"description":["4dfb43e86d92d6b3"],"requirement":["9b55e0da69fcb93a"]}, // Superior Stat (The Lightbearer)
-	"C6V4HMUywhVEiFZ4": {"description":["b05de21d215f43ef"],"moveResults":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Spring's First Thaw (The Lightbearer)
+	"C6V4HMUywhVEiFZ4": {"description":["b05de21d215f43ef"],"moveResults":["9b55e0da69fcb93a","eddb59954a1c8403"],"moveResults.failure":["598ed0e225d798ad"],"rollType":["9b55e0da69fcb93a"]}, // Spring's First Thaw (The Lightbearer)
 	"C70UmxASoSAuVSF5": {"description":["ca5b252deb42c016"],"moveResults":["9b55e0da69fcb93a","abfd1af9034216bf"],"moveResults.success":["abcbe5173043c7ae"],"noXpOnMiss":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Battle Joy (The Heavy)
 	"CBfeTcDb9Qngxln8": {"artifactLore":["9b55e0da69fcb93a"],"note":["fc7c0fe665f76d32"]}, // A serpentine armband
 	"CiwIA2fMJ1GckHYZ": {"description":["3934e31fc74a76e6"]}, // Set-Up Strike (The Marshal)
@@ -118,11 +118,11 @@ export const SUPERSEDED = {
 	"do0cZuzren68K4Tu": {"armor":["63ff56ca08cf6783"],"armor.base":["9b55e0da69fcb93a"],"armor.modifier":["508c6d5b50db4c54"],"note":["0d7c36deb5b712ef"]}, // Hauberk/cuirass/scale, iron or bronze
 	"Do4Zez2vxT78gdtQ": {"description":["13d86026065dd7d7"]}, // Bulwark (The Judge)
 	"dqU1dFXy8VwidQqW": {"artifactLore":["9b55e0da69fcb93a"],"note":["d0915d582b3da441"]}, // An iron spider
-	"Ds3f9bqRWmAi9LIW": {"description":["27aabc3da22dd153","3af9e952f229b1db"],"requirement":["9b55e0da69fcb93a"]}, // Arcane Adept (The Seeker)
-	"DSnXoG3x4ONl6Xy4": {"description":["55b91c9bd7e33dc4"],"requirement":["9b55e0da69fcb93a"]}, // Constant Vigilance (The Ranger)
-	"dZzzlcBeLwrL3wDX": {"description":["d2b807c51199c3b3"]}, // On the Hoof (The Ranger)
+	"Ds3f9bqRWmAi9LIW": {"description":["27aabc3da22dd153","3af9e952f229b1db","b854a65278abe5f0"],"requirement":["9b55e0da69fcb93a"]}, // Arcane Adept (The Seeker)
+	"DSnXoG3x4ONl6Xy4": {"description":["45505a84b1b83e78","55b91c9bd7e33dc4"],"requirement":["9b55e0da69fcb93a"]}, // Constant Vigilance (The Ranger)
+	"dZzzlcBeLwrL3wDX": {"description":["d2b807c51199c3b3","f37b31d21d534880"]}, // On the Hoof (The Ranger)
 	"E0jVUUfpJ844ZPzj": {"description":["8ffcaad1d209af04"],"requirement":["9b55e0da69fcb93a"]}, // Proclamation (The Judge)
-	"EH3YkpP6LX9sCrW3": {"description":["4228572d3e18dede"],"moveResults":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Expert Tracker (The Ranger)
+	"EH3YkpP6LX9sCrW3": {"description":["4228572d3e18dede"],"moveResults":["9b55e0da69fcb93a","e58462a3984d72fe"],"moveResults.success":["3189f39de02acccd"],"rollType":["9b55e0da69fcb93a"]}, // Expert Tracker (The Ranger)
 	"EiXEgOB7s3xWaXJM": {"description":["d946ee9c650d92ba"]}, // Under Your Skin (The Fox)
 	"eKFhwqCpQe28C7S7": {"description":["6371cd805a3ff28c"]}, // Unfettered (The Heavy)
 	"elrB8OZc6zCdvJxq": {"description":["6b8530122bde9601"]}, // Bear Witness (The Judge)
@@ -133,7 +133,7 @@ export const SUPERSEDED = {
 	"eSjpyoVvJFzTfO8T": {"artifactLore":["9b55e0da69fcb93a"],"note":["6b5f86ce8419a325"]}, // Ever-burning ember
 	"f5RbDWq6MTNRB6Ka": {"description":["29366dde0cf386c9"]}, // Spirit Tongue (The Blessed)
 	"F6DL7kwC3pdZPBo4": {"description":["5380d48db8bb65ed"],"requirement":["9b55e0da69fcb93a"]}, // The Tower Eternal (The Judge)
-	"fa10ZgsDz0zcpg3H": {"description":["78e51a18c7196512"]}, // Healer's Arts (The Blessed)
+	"fa10ZgsDz0zcpg3H": {"description":["78e51a18c7196512","e3c324b7f66d182f"]}, // Healer's Arts (The Blessed)
 	"FbUvm1xB9h37bDSu": {"artifactLore":["9b55e0da69fcb93a"],"note":["a135501fd171ddae"]}, // A silken noose
 	"fbyPP4HHWXiLH386": {"description":["a766db4875a4b2d3"],"requirement":["9b55e0da69fcb93a"]}, // Hungry Flames (The Lightbearer)
 	"FctYtfhqMYQH3kSY": {"moveResults":["d23553a6b54940ed"],"moveResults.failure":["4e58f4327232a9b0"]}, // Pull Together
@@ -146,10 +146,10 @@ export const SUPERSEDED = {
 	"FWVLx9a3n0rOXPYQ": {"description":["7b1f45349dcc1da5"],"requirement":["9b55e0da69fcb93a"]}, // Castigate (The Judge)
 	"Fx27b50t4ryZYn9J": {"artifactLore":["9b55e0da69fcb93a"]}, // A map
 	"FZsIHmroLP9ZolZd": {"description":["39aaf89e44c34ed3"]}, // Denouement
-	"GBZbLNvtSFHNoZlI": {"description":["431bdae20b9d7187"],"requirement":["9b55e0da69fcb93a"]}, // Trailblazer (The Ranger)
+	"GBZbLNvtSFHNoZlI": {"description":["431bdae20b9d7187","4a2f47353d457bf3"],"requirement":["9b55e0da69fcb93a"]}, // Trailblazer (The Ranger)
 	"gfHFqhRArEVbHK8o": {"description":["7d8a7f8abae7953e"],"moveResults":["9b55e0da69fcb93a"],"requirement":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Eye on the Door (The Fox)
 	"GjhQj5mA8vxTE6bY": {"description":["1d0b612f4c8f0546"]}, // Chart a Course
-	"gkP4gna46JRes1hz": {"description":["bca8ca137a98e18d"]}, // Logistics (The Marshal)
+	"gkP4gna46JRes1hz": {"description":["203f951c95f1b034","bca8ca137a98e18d"]}, // Logistics (The Marshal)
 	"GoS1b7zbJJBX251i": {"artifactLore":["9b55e0da69fcb93a"],"note":["a135501fd171ddae"]}, // A fur-lined bedroll
 	"gQ5vKm8xNrPy3wTL": {"moveResults":["0ebc310ee7092183"],"moveResults.failure":["72f224a550bfdb14"],"moveResults.partial":["eaae21a362934de0"],"moveResults.success":["a8aed06dae6cd282"]}, // Urges (thrall)
 	"GUVuz9LxRSMwLUMi": {"artifactLore":["9b55e0da69fcb93a"]}, // A gold neck torc
@@ -225,6 +225,7 @@ export const SUPERSEDED = {
 	"Mo24cH3bCYVLBQAQ": {"description":["5fc470346b8d10b7"],"requirement":["9b55e0da69fcb93a"],"resource":["9b55e0da69fcb93a"]}, // Walk It Off (The Ranger)
 	"MOzUO2QGbfaRFQAT": {"description":["4131fba2932d85b2"]}, // Censure (The Judge)
 	"MwKVWwhhZJBqEbyl": {"description":["3e0b4f7661aa8052"]}, // In Over Your Head (The Would-Be Hero)
+	"MY4XeeKb79OIXVkI": {"resource":["9b55e0da69fcb93a"]}, // Bolster
 	"MyDxD5e0USjuy7eQ": {"description":["97eada97530893f3"]}, // Many Hands Make Light Work (The Judge)
 	"N3UcKa29JzFmOTZj": {"note":["b6d22d33cf16f5f1"]}, // A sacred pouch of rune-stitched drakeskin; when sealed, nothing within can be detected or found by magic, nor can anything within escape or affect the outside world
 	"ndKDbZu2HBCLBYlO": {"description":["79392f637c618a4e"],"resource":["063e87896b04f06c","9b55e0da69fcb93a"],"resource.spendOptions":["9b55e0da69fcb93a"]}, // Front Line Leader (The Marshal)
@@ -234,7 +235,7 @@ export const SUPERSEDED = {
 	"nEjSief73nqQ530K": {"cap":["9b55e0da69fcb93a"],"description":["5b85a2b845c10f51"]}, // Improved Stat (The Blessed)
 	"nejYNfn0HsBlKb9Q": {"artifactLore":["9b55e0da69fcb93a"],"note":["a135501fd171ddae"]}, // A tattered standard
 	"NEnTApDVxnz1IBX6": {"description":["e7b271ab5eaadade"],"maxLoad":["9b55e0da69fcb93a"]}, // Stalker (The Ranger)
-	"nGlaIZnRGe8UWy5X": {"description":["0ef7ce5aae25af6f","231c2059d82a6868"],"moveResults":["9b55e0da69fcb93a"],"requirement":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Improvise (The Seeker)
+	"nGlaIZnRGe8UWy5X": {"description":["0ef7ce5aae25af6f","231c2059d82a6868","b6176a14fdca1fb9"],"moveResults":["9b55e0da69fcb93a"],"requirement":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Improvise (The Seeker)
 	"NIzfTEDyTEujEV6M": {"description":["cdb87940e439e300"],"moveResults":["9b55e0da69fcb93a","a4c1c999bee5335a","f34e17437125ec0c"],"moveResults.failure":["1ead896994706904","f9081e938505b209"],"moveResults.partial":["0100cee476551cf5"],"moveResults.success":["d5b679e8f5e72003"],"rollType":["9b55e0da69fcb93a"]}, // Interfere
 	"nPFz46PDjqipVJIq": {"armor":["63ff56ca08cf6783"],"armor.base":["9b55e0da69fcb93a"],"armor.modifier":["508c6d5b50db4c54"]}, // Vest, brigandine, or fancy gambeson
 	"NtXeW4sxW5Emf6SM": {"description":["0791c4a8f60ffa68"],"requirement":["9b55e0da69fcb93a"]}, // Noble Mien (The Marshal)
@@ -275,7 +276,7 @@ export const SUPERSEDED = {
 	"RMiLpt70Zmh8Dx6K": {"cap":["9b55e0da69fcb93a"],"description":["5b85a2b845c10f51"]}, // Improved Stat (The Seeker)
 	"RSU9hi365AvbQklT": {"description":["99cb3e2672f81a4a"]}, // Pathfinder (The Ranger)
 	"rTiXmSsshKDN5Ngp": {"artifactLore":["9b55e0da69fcb93a"],"note":["7dd175f6ab7e07cd"]}, // A small black sphere
-	"RUVgl5y0aHLgsBY3": {"description":["439dea9075408879"],"moveResults":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // We Happy Few (The Marshal)
+	"RUVgl5y0aHLgsBY3": {"description":["439dea9075408879","b83d69004386c29d"],"moveResults":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // We Happy Few (The Marshal)
 	"s4llKpnGl7a1tMkH": {"description":["542fc9b95f6261e6","866255112227cff6"],"markBudget":["9b55e0da69fcb93a"],"markOptions":["9b55e0da69fcb93a"]}, // Well Versed (The Seeker)
 	"sDrBfbwodHRYgU6x": {"artifactLore":["9b55e0da69fcb93a"],"note":["372462cf987e0b3d"]}, // A flawless vase
 	"seBhScpyvpVBa1K7": {"description":["47ad5955f7e2ceb8"],"requirement":["9b55e0da69fcb93a"]}, // Peace Through Strength (The Marshal)
@@ -365,7 +366,7 @@ export const SUPERSEDED = {
 	"Zc9O0TiMFyiRsN0o": {"cap":["9b55e0da69fcb93a"],"description":["4dfb43e86d92d6b3"],"requirement":["9b55e0da69fcb93a"]}, // Superior Stat (The Heavy)
 	"zcdoSnbv2jqpy1kb": {"artifactLore":["9b55e0da69fcb93a"],"note":["a135501fd171ddae"],"resource":["27e991406bc00e4a"],"resource.title":["9b55e0da69fcb93a"]}, // The Red Pennant
 	"ZfP2OenimH3bb5PJ": {"description":["f69d11b3c57a8dd3"]}, // Payback (The Heavy)
-	"zGVGUYD0qCCYWtN4": {"description":["c9726ef8e9a21cc2"],"loadBonus":["9b55e0da69fcb93a"]}, // Pack Horse (The Ranger)
+	"zGVGUYD0qCCYWtN4": {"description":["c9726ef8e9a21cc2","e87944ad4d636d2c"],"loadBonus":["9b55e0da69fcb93a"]}, // Pack Horse (The Ranger)
 	"ZhoZIdWQAuCbz9YR": {"cap":["9b55e0da69fcb93a"],"description":["5b85a2b845c10f51"]}, // Improved Stat (The Fox)
 	"ZmGI9G0EiVXqtpP3": {"description":["607d4d930e5bafdd","f33fe702ccd1cf3e"],"moveResults":["05b4d7949d6af533","1b961783500a6239","9b55e0da69fcb93a"],"moveResults.failure":["44e87c86f692cdae","78cf56fb1d837ceb"],"moveResults.partial":["036734093ffc0b23"],"moveResults.success":["9019fc95b42f914c"],"rollType":["9b55e0da69fcb93a"]}, // Defend
 	"ZmhfrQdO9zqZDdWh": {"artifactLore":["9b55e0da69fcb93a"],"note":["b4f5296a3f26b8bd"]}, // Small clay jars
@@ -390,7 +391,7 @@ export const CURRENT_FINGERPRINTS = {
 	"10Wj109bGTru5eui": "46f1db8946c6cc59",
 	"16b6TyBeA1rOlKcQ": "f42e7a2e988340dc",
 	"18Y2bTu5X1YqWg21": "83abddc0cbe16659",
-	"1hoLIyWeaJT5Nwtl": "b4b981536c70ef79",
+	"1hoLIyWeaJT5Nwtl": "41fe89d7ece6c0b0",
 	"1MldFLfHyiXe6Vvv": "bdabb2b0cb79643a",
 	"1UUu8l0L7TPa5C94": "8105f43e6bc8d130",
 	"1vuFnusfStLGlzF2": "78d20af197527d03",
@@ -467,7 +468,7 @@ export const CURRENT_FINGERPRINTS = {
 	"aG2lARep6mTB5C1n": "5018aea756d80ba4",
 	"aGHBpr0zIvFX5DLz": "2c389b3987cfd95b",
 	"AgnpFjMQjutRPVS8": "ce89842eaa616ee8",
-	"aIwjViWGSmhFXetV": "ff4aba6301f94aef",
+	"aIwjViWGSmhFXetV": "a1ec57f8fb5b8a47",
 	"AJCGVWcg5Z6REi6r": "e9512817fa5e3621",
 	"AK0o8taBKJ2MNFiq": "cd4188ed07e1f456",
 	"aLJEtNpDpcaOAhqV": "1ad816ba8a203f94",
@@ -510,12 +511,12 @@ export const CURRENT_FINGERPRINTS = {
 	"blV7vY7AZQ3VZprk": "69f954274ec181d8",
 	"BmilQ2fXyyvk9gFR": "23c9edc20069ebac",
 	"BnD3XkfFNuYUPnmb": "eb3b666c8b83ac73",
-	"BOqUT1pEWftUJjJt": "166f0b7849eae90f",
+	"BOqUT1pEWftUJjJt": "855b6f91cb4b88a2",
 	"Bs5nKd9mWq3vLp6T": "198d1524e1357270",
 	"bs6OBMVJuPq78W7V": "fa147d443c6a8b74",
 	"bUTwuyZY9GIiiajc": "3a884f8916317716",
 	"C58T2Yy7kk1oYnp2": "40ecb288378dc47f",
-	"C6V4HMUywhVEiFZ4": "516f785ad1addfd9",
+	"C6V4HMUywhVEiFZ4": "b6dac2855cd7e12a",
 	"C70UmxASoSAuVSF5": "e5687a049f54ee87",
 	"CBfeTcDb9Qngxln8": "5696dda4dfea7b59",
 	"cgMBwUYuBMGhy5Km": "5e24dc1170c951b3",
@@ -545,16 +546,16 @@ export const CURRENT_FINGERPRINTS = {
 	"do0cZuzren68K4Tu": "65808b7be0b9cc3b",
 	"Do4Zez2vxT78gdtQ": "b954dc28d28eef94",
 	"dqU1dFXy8VwidQqW": "0851af2b7d183981",
-	"Ds3f9bqRWmAi9LIW": "e02776da15208895",
-	"DSnXoG3x4ONl6Xy4": "6b50ac63c0e451a5",
+	"Ds3f9bqRWmAi9LIW": "b7872771fdcd8459",
+	"DSnXoG3x4ONl6Xy4": "44b552dff9e77009",
 	"dvMCnNr9hsIEZrfc": "0afd7319ec76c030",
 	"DxlhTaPPfpzbYr0o": "1e6c3545b691596f",
 	"DxZGj9rzrlLQkuYo": "b4b3f5730adf1a23",
-	"dZzzlcBeLwrL3wDX": "b83580849b23e65e",
+	"dZzzlcBeLwrL3wDX": "25b01cfcfb0cdca3",
 	"E0jVUUfpJ844ZPzj": "dd4eb6f921bcecb1",
 	"ecQoXsf2o3gyrDO1": "9d4f61d02fc39449",
 	"EfvuP1uRr6YICtu8": "5e24dc1170c951b3",
-	"EH3YkpP6LX9sCrW3": "8f4d33e48da55216",
+	"EH3YkpP6LX9sCrW3": "083583ced9b5382a",
 	"eijjQ5rkPVBwjE1T": "8bda6143df062af5",
 	"EiXEgOB7s3xWaXJM": "3979c40e5eb2074f",
 	"eKFhwqCpQe28C7S7": "b1ece11a16d016a3",
@@ -570,7 +571,7 @@ export const CURRENT_FINGERPRINTS = {
 	"f5RbDWq6MTNRB6Ka": "e0b3b5a4f0668bfc",
 	"F6DL7kwC3pdZPBo4": "ce86bef6762d9176",
 	"f7ZJ69PqcUDO4lKN": "5e24dc1170c951b3",
-	"fa10ZgsDz0zcpg3H": "d8dd19249caed796",
+	"fa10ZgsDz0zcpg3H": "002c080b49937333",
 	"FbUvm1xB9h37bDSu": "544537f1ca3adb10",
 	"fbyPP4HHWXiLH386": "d277ab3e3bd59111",
 	"FctYtfhqMYQH3kSY": "7721434a34c83c30",
@@ -590,10 +591,10 @@ export const CURRENT_FINGERPRINTS = {
 	"fzaXA1kmS0UyFfmF": "d349b48d76376574",
 	"FZsIHmroLP9ZolZd": "795cbf36351870c0",
 	"gAACTP9gyv1plBAr": "ef3a2fa30c6ae4d5",
-	"GBZbLNvtSFHNoZlI": "9048726ef4e26563",
+	"GBZbLNvtSFHNoZlI": "c0ed34ce59fe5706",
 	"gfHFqhRArEVbHK8o": "1d09ec52df82e43f",
 	"GjhQj5mA8vxTE6bY": "1eee14565c0fafd8",
-	"gkP4gna46JRes1hz": "7e6bbda6a48b2d85",
+	"gkP4gna46JRes1hz": "d8acfc90059b8230",
 	"GoS1b7zbJJBX251i": "360fca111aa80891",
 	"GprQFnIiU74KKEpY": "fd599572601a331a",
 	"gQ5vKm8xNrPy3wTL": "91cf77fe38738049",
@@ -708,7 +709,7 @@ export const CURRENT_FINGERPRINTS = {
 	"Mo24cH3bCYVLBQAQ": "76614440a0433d46",
 	"MOzUO2QGbfaRFQAT": "9897a77bb67853ad",
 	"MwKVWwhhZJBqEbyl": "f37da7a59ebe29a4",
-	"MY4XeeKb79OIXVkI": "103f05d816dca52b",
+	"MY4XeeKb79OIXVkI": "575966c9d03d42c9",
 	"MyDxD5e0USjuy7eQ": "f4e4d500a7c32d3c",
 	"N3UcKa29JzFmOTZj": "7a7ff3aaa6b24aeb",
 	"NbrnTP3fAbnFbmOH": "295c124c7200d89c",
@@ -719,7 +720,7 @@ export const CURRENT_FINGERPRINTS = {
 	"nEjSief73nqQ530K": "fd26baa8f7fa7033",
 	"nejYNfn0HsBlKb9Q": "abcf923943fa15c9",
 	"NEnTApDVxnz1IBX6": "0c373cf415d1a313",
-	"nGlaIZnRGe8UWy5X": "16f4e38a63507437",
+	"nGlaIZnRGe8UWy5X": "97b18ffd57797d01",
 	"nGqi7w4e4pxskC1I": "fef3250c3d25ce5a",
 	"NIzfTEDyTEujEV6M": "e01f77e934bcb75a",
 	"nKYaXRvj7uff0LYT": "295c124c7200d89c",
@@ -793,7 +794,7 @@ export const CURRENT_FINGERPRINTS = {
 	"rsK9EjHvIHCtlRJo": "5e24dc1170c951b3",
 	"RSU9hi365AvbQklT": "f1ae5eb0c5294276",
 	"rTiXmSsshKDN5Ngp": "d1bf5a36c89f05d0",
-	"RUVgl5y0aHLgsBY3": "c27d947ecd91f0b1",
+	"RUVgl5y0aHLgsBY3": "6eb56c1f721fb65d",
 	"Rw2hFt8kQz5mNx4J": "54340c8c49612b6d",
 	"S3fldzk1NfCl6UMZ": "d4faea15307ae1a7",
 	"s4llKpnGl7a1tMkH": "45b2db79752a7e5a",
@@ -847,6 +848,7 @@ export const CURRENT_FINGERPRINTS = {
 	"uS7XpW0fGPrVfklW": "fa5a073977e038e3",
 	"uUcQjFQ0cXVXM1Nh": "1e658031a0e84883",
 	"UUeb7pJzGvgvwTtk": "1bba349df6905d7f",
+	"uuQBVifMufJzXkpi": "9083d4bdf0445298",
 	"UXaZl9wsxRd0enVl": "82bf6617a6fd69ae",
 	"V1Tu6v3njniLagvY": "453ee861c8171b07",
 	"V5pTwtPawmvd8w8a": "fdb95809e52de4d1",
@@ -892,6 +894,7 @@ export const CURRENT_FINGERPRINTS = {
 	"xkLSucumhX9wzjsP": "610ed16809f3c186",
 	"XkVfibXSYujc3JHK": "4ed7822688a40549",
 	"xkxwnQrS7RPeMOkI": "e66428deaefa7c07",
+	"xM4LHckX4YnHez8p": "580ac9340af8b385",
 	"XohqPOcGI4WlQc2c": "7a09d19d713f5e43",
 	"XuhN99cgZK0x7uRf": "82e7dd3bb8fd67ff",
 	"xzni4vWmpe9q0DS7": "962cf88e9662f484",
@@ -928,7 +931,7 @@ export const CURRENT_FINGERPRINTS = {
 	"zE79HRCdkVP0Gkup": "ea6abb641e36663e",
 	"zF9OHzlwUMVmI5BR": "5e24dc1170c951b3",
 	"ZfP2OenimH3bb5PJ": "b5542b804652e3be",
-	"zGVGUYD0qCCYWtN4": "bf615babab0c2611",
+	"zGVGUYD0qCCYWtN4": "e76be4ee144d6a7a",
 	"ZH3UDqpNVGMrerqt": "29a2c9695fad956a",
 	"ZhoZIdWQAuCbz9YR": "fd26baa8f7fa7033",
 	"zIsxcgaf6aucrYiC": "ba377e49cd59f7bf",

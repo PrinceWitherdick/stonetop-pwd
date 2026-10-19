@@ -200,7 +200,21 @@ describe("the card text", () => {
 	it("keeps Seek Insight's 3-and-1 question count", () => {
 		const r = seekInsightArtifactResults();
 		expect(r.success).toMatch(/3 questions/);
-		expect(r.partial).toMatch(/1 question/);
+		expect(r.partial).toMatch(/1 question\b/);
+		expect(r.failure).not.toMatch(/question/);
+	});
+
+	// Perceptive: "you may ask 1 additional question. Even on a 6-, you can ask 1 question."
+	it("counts the roller's Seek Insight bonuses: 4 and 2, and 1 on a 6-", () => {
+		const r = seekInsightArtifactResults([{ move: "Seek Insight", ownsLearned: "Perceptive", plus: 1, missFloor: 1 }]);
+		expect(r.success).toMatch(/Ask the GM 4 questions/);
+		expect(r.partial).toMatch(/Ask the GM 2 questions/);
+		expect(r.failure).toMatch(/Even so, you can ask the GM 1 question about the artifact/);
+	});
+
+	it("ignores a bonus that only adds to the list (The Natural)", () => {
+		const r = seekInsightArtifactResults([{ move: "Seek Insight", addOptions: ["What opportunity does no one else see?"] }]);
+		expect(r).toEqual(seekInsightArtifactResults());
 	});
 });
 

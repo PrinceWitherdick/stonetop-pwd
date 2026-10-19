@@ -7,7 +7,7 @@
     "playbook": "The Marshal",
     "moveType": "playbook",
     "isStartingMove": true,
-    "description": "<p>When you <strong><em>have a steading Muster or Pull Together, or when you Requisition</em></strong>, you have advantage.</p>"
+    "description": "<p>When you <strong><em>have a steading Muster or Pull Together</em></strong>, or when you <strong><em>Requisition</em></strong>, you have advantage.</p>"
   },
   "folder": "qYVW8ZbK0hIds2lt"
 }

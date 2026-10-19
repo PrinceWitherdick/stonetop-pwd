@@ -219,11 +219,13 @@
               },
               {
                 "name": "Stills",
-                "column": "small"
+                "column": "small",
+                "note": "immobile"
               },
               {
                 "name": "Barrels",
-                "column": "small"
+                "column": "small",
+                "note": "immobile"
               },
               {
                 "name": "Firkins",
@@ -331,7 +333,7 @@
                 },
                 {
                   "slug": "composite-bow",
-                  "label": "◇ <strong>Composite bow</strong> (<em>far</em>, +1 damage, x <em>piercing</em>, ○ low ammo, ○ all out)",
+                  "label": "◇ <strong>Composite bow</strong> (<em>far</em>, +1 damage, x <em>piercing</em>; ○ low ammo, ○ all out)",
                   "resource": {
                     "max": 2,
                     "title": null,

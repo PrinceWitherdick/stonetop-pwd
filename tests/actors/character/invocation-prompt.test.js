@@ -493,6 +493,64 @@ describe("the roll carries the empower choice", () => {
 		await posting;
 		expect(calls[1].roll.opts).toEqual({ shiftKey: false, pickContext: { empowered: true, burnTwice: false, invocations: ["blinding-flash"] } });
 	});
+
+	// Re-audit 10-18: "you can choose an extra consequence before you roll", so the window asks which.
+	it("asks which extra consequence, and hands the roll its printed bullet", async () => {
+		const dialog = installDialogStub();
+		const { sheet, calls } = makeSheet({ moves: BOTH_MOVES });
+		const posting = tap(sheet, "blinding-flash");
+		const radios = [...opened.content.matchAll(/name="empowerConsequence" value="([a-z]+)"/g)].map(m => m[1]);
+		expect(radios).toEqual(["reduced", "debility", "snuff", "sun"]);
+		expect(opened.content).toContain("You must bask in sunlight for an hour or so before using that Invocation again");
+		expect(opened.content).toMatch(/however the roll turns out, a 6- included/);
+		expect(opened.content).not.toMatch(/even on a 10\+\./);
+		dialog.press("roll", { empowerChecked: true, fields: { empowerConsequence: "debility" } });
+		await posting;
+		expect(calls[1].roll.opts.pickContext).toEqual({ empowered: true, empoweredConsequence: "The effort taxes you; mark a debility",
+			burnTwice: false, invocations: ["blinding-flash"] });
+		// The Invocation's own card names the price, not only the roll card.
+		expect(calls[0].card.body).toMatch(/stonetop-chat-empowered-note[\s\S]*<em>The effort taxes you; mark a debility<\/em>\./);
+	});
+
+	it("takes no extra consequence when Empower is not ticked, or nothing is rolled", async () => {
+		const dialog = installDialogStub();
+		const { sheet, calls } = makeSheet({ moves: BOTH_MOVES });
+		const posting = tap(sheet, "blinding-flash");
+		dialog.press("roll", { fields: { empowerConsequence: "debility" } });
+		await posting;
+		expect(calls[1].roll.opts.pickContext).not.toHaveProperty("empoweredConsequence");
+
+		const shown = makeSheet({ moves: BOTH_MOVES });
+		const showing = tap(shown.sheet, "blinding-flash");
+		dialog.press("no", { empowerChecked: true, fields: { empowerConsequence: "debility" } });
+		await showing;
+		expect(shown.calls.filter(c => c.roll)).toHaveLength(0);
+	});
+
+	it("offers no consequence choice where the window cannot roll", async () => {
+		installDialogStub();
+		const { sheet } = makeSheet({ moves: [move("Empowered Invocations")] });
+		const posting = tap(sheet, "blinding-flash");
+		expect(opened.content).toMatch(/name="empower"/);
+		expect(opened.content).not.toMatch(/name="empowerConsequence"/);
+		opened.close();
+		await posting;
+	});
+
+	// Glorious Servant: "on a 10+, you need not choose a consequence; on a 7-9, you choose a consequence but the GM does not".
+	it("leads with the counts this Lightbearer owes", async () => {
+		installDialogStub();
+		const plain = makeSheet({ moves: BOTH_MOVES });
+		const a = tap(plain.sheet, "blinding-flash");
+		expect(opened.content).toMatch(/On a 10\+ it works, and you choose 1 consequence; on a 7-9 it works, and you and the GM each choose 1\./);
+		opened.close();
+		await a;
+		const servant = makeSheet({ moves: [...BOTH_MOVES, move("Glorious Servant")] });
+		const b = tap(servant.sheet, "blinding-flash");
+		expect(opened.content).toMatch(/need not choose a consequence; on a 7-9 it works, and you choose 1 but the GM does not\./);
+		opened.close();
+		await b;
+	});
 });
 
 // "you can use another Invocation through the Dancing Light while it is ongoing" (R1).
@@ -602,8 +660,11 @@ describe("Burn Twice as Bright", () => {
 describe("re-consecrating a flame", () => {
 	afterEach(() => { confirmOutcome.mockReset(); confirmOutcome.mockResolvedValue(true); });
 
+	// Consecrated Flame itself owned and learned: using it is what lights (or relights) the flame,
+	// and a switched-off one lights nothing (the sheet's MOVE_USE_EFFECTS learned gate).
+	const FLAME_MOVES = [...BOTH_MOVES, move("Consecrated Flame")];
 	const lit = opts => {
-		const made = makeSheet({ moves: BOTH_MOVES, ...opts });
+		const made = makeSheet({ moves: FLAME_MOVES, ...opts });
 		made.actor.typedActor.holyLight = true;
 		return made;
 	};
@@ -637,7 +698,7 @@ describe("re-consecrating a flame", () => {
 	});
 
 	it("asks nothing when the old flame was out", async () => {
-		const { sheet, actor } = makeSheet({ moves: BOTH_MOVES, ongoing: "warmth-of-the-sun" });
+		const { sheet, actor } = makeSheet({ moves: FLAME_MOVES, ongoing: "warmth-of-the-sun" });
 		await sheet._consecrateFlame();
 		expect(confirmOutcome).not.toHaveBeenCalled();
 		expect(actor.typedActor.setHolyLight).toHaveBeenCalledWith(true);
@@ -778,14 +839,31 @@ describe("Invoking as a 10+", () => {
 		expect(posted[0].flags["stonetop-pwd"]).toEqual({ move: "Invoke the Sun God", invokeTenPlus: true, invocations: ["warmth-of-the-sun"] });
 	});
 
-	it("gives an Empowered Invocation its extra consequence on the list", async () => {
+	// Re-audit 10-18: the extra consequence is chosen in the window, before the "roll", and the card pays it
+	// as a fixed line; the list keeps the 10+'s 1.
+	it("gives an Empowered Invocation the extra consequence chosen in the window, off the list", async () => {
 		const dialog = installDialogStub();
 		const { sheet } = makeSheet({ moves: [...WIELDER, move("Empowered Invocations")] });
 		const posting = tap(sheet, "blinding-flash", { asTenPlus: true });
-		dialog.press("roll", { empowerChecked: true });
+		expect(opened.content).toMatch(/name="empowerConsequence" value="reduced" checked/);
+		dialog.press("roll", { empowerChecked: true, fields: { empowerConsequence: "snuff" } });
 		await posting;
-		expect(posted[0].content).toMatch(/data-pick-max-success="2"/);
-		expect(posted[0].flags["stonetop-pwd"].invokeEmpowered).toBe(true);
+		expect(posted[0].content).toMatch(/data-pick-max-success="1"/);
+		expect(posted[0].content).toMatch(/class="stonetop-pre-pick"/);
+		expect(posted[0].content.match(/stonetop-picklist-check/g)).toHaveLength(3);
+		expect(posted[0].flags["stonetop-pwd"]).toMatchObject({ invokeEmpowered: true, invokeEmpoweredConsequence: "snuff" });
+	});
+
+	// Glorious Servant: "on a 10+, you need not choose a consequence".
+	it("says a Glorious Servant need not choose, in the window and on the card", async () => {
+		const dialog = installDialogStub();
+		const { sheet } = makeSheet({ moves: [...WIELDER, move("Glorious Servant")] });
+		const posting = tap(sheet, "warmth-of-the-sun", { asTenPlus: true });
+		expect(opened.content).toMatch(/as a Glorious Servant you need not choose a consequence\./);
+		expect(opened.content).not.toMatch(/you choose 1 consequence/);
+		dialog.press("roll");
+		await posting;
+		expect(posted[0].content).toMatch(/you need not choose a consequence: take 1 from the list below, or none/);
 	});
 
 	it("answers null for Just show it, so the Wielder card's button is given back", async () => {

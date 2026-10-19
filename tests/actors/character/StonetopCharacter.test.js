@@ -317,7 +317,7 @@ describe("StonetopCharacter.buildSnapshot — playbook display fields", () => {
 		it("maps instincts with value field and none selected", async () => {
 			const data = await buildCharacterSnapshot();
 			expect(data.playbook.instinct.options).toHaveLength(5);
-			expect(data.playbook.instinct.options[0].value).toBe("Delight — To find beauty, in even the ugliest things.");
+			expect(data.playbook.instinct.options[0].value).toBe("Delight — To find beauty, in even the most ugly thing.");
 			expect(data.playbook.instinct.options.every(i => !i.selected)).toBe(true);
 		});
 
@@ -341,7 +341,7 @@ describe("StonetopCharacter.buildSnapshot — playbook display fields", () => {
 			const actor = new FakeActorBuilder()
 				.withPlaybook("the-blessed", "The Blessed")
 				.withFlag("background.selected", "vessel")
-				.withFlag("instinct.selected", "Delight — To find beauty, in even the ugliest things.")
+				.withFlag("instinct.selected", "Delight — To find beauty, in even the most ugly thing.")
 				.withFlag("appearance.selected", { 0: "gray & wizened" })
 				.withFlag("origin.selected", "Barrier Pass")
 				.build();
@@ -356,7 +356,7 @@ describe("StonetopCharacter.buildSnapshot — playbook display fields", () => {
 
 		it("marks the matching instinct as selected", async () => {
 			const data = await buildCtx();
-			expect(data.playbook.instinct.selected).toBe("Delight — To find beauty, in even the ugliest things.");
+			expect(data.playbook.instinct.selected).toBe("Delight — To find beauty, in even the most ugly thing.");
 			expect(data.playbook.instinct.options.find(i => i.word === "Delight").selected).toBe(true);
 		});
 

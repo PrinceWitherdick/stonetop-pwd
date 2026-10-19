@@ -22,7 +22,8 @@
 //  • DANGEROUS (Heavy): "When you deal your damage, you have advantage." Every roll of the character's own
 //    damage, in a fight or not; it meets a strike back's disadvantage and the two cancel.
 //  • MUSCLEBOUND (Heavy): "When you make a hand-to-hand or thrown attack, it's forceful and messy."
-//  • SOMETHING TO REMEMBER ME BY (Would-Be Hero): "+1d4" on a strike back bought with Readiness.
+//  • SOMETHING TO REMEMBER ME BY (Would-Be Hero): "+1d4" on a strike back bought with Readiness. A blow
+//    not rolled as a strike back, by a hero holding Readiness, is offered it UNTICKED at 1 Readiness.
 //  • SECOND INTENT (Fox): a Parry & Riposte also picks 1 from the Ambush list, and "Deal +1d4 damage" is
 //    one of them. Offered UNTICKED on the parry's strike back, since the pick may be another option.
 //  • HUNGRY FLAMES (Lightbearer): "+1d6" whenever the blow is dealt with a holy light.
@@ -35,7 +36,10 @@
 //  • PAYBACK (Heavy): "+1d4" against a foe that has harmed this character or an ally. Apply writes who hurt
 //    whom on the HARMED character (`harmedBy`), because Apply often runs on a player's client, which cannot
 //    write the Combat document. A follower is an ally too (the user's ruling): a blow on one is written on
-//    the character it follows.
+//    the character it follows. A grudge against a NAMED foe (a linked actor) outlasts the fight; a mook's
+//    token goes with it (the user's ruling, 2026-10-18).
+//  • TERROR ON THE FIELD (Heavy): "When you reduce a foe to 0 HP, describe how you take them out." Fiction,
+//    so it is a line on the applied damage card when the Heavy's blow fells a foe (`terrorOnTheFieldWords`).
 //  • BLOOD-SOAKED PAST (Heavy background): "When you fight to kill without mercy or hesitation, you deal
 //    +1d4 damage." Pure fiction, so a standing UNTICKED line, like Predator's.
 //  • NEVER GONNA KEEP ME DOWN (Would-Be Hero) at 5 HP or less, UNCANNY REFLEXES (Heavy) unarmored under a
@@ -46,17 +50,21 @@
 //    Marshal (`focusFire`, one entry per foe named, for the fight it was given in), and each ally's damage roll
 //    against that foe reads it as a TICKED advantage line on their damage window (blowOffers) and, taken, marks
 //    it answered on THEMSELVES (`focusFireUsed`), the one actor their client may write. Ordered from Focus
-//    Fire's posted card (give-advantage-flow.js#wireFocusFire).
+//    Fire's posted card (give-advantage-flow.js#wireFocusFire). A follower's or the crew's blow is an ally's
+//    too (followerFocusFireOffer), answered once per follower on the character they follow.
 //  • SET-UP STRIKE (Marshal, p.126): "When you Clash and get a 7+, you can choose to deal damage with
 //    disadvantage." An UNTICKED disadvantage line on the Clash's damage window; the Aid it buys is the Clash
-//    card's button (actors/character/give-advantage.js).
+//    card's button (actors/character/give-advantage.js), live once that damage was dealt with the line ticked
+//    (give-advantage.js#setUpStrikeGate).
 // The Defend spends on the damage card (Parry & Riposte, Steadfast Guardian, A Mighty Rampart) are in
 // defend-spend.js.
 
 import { SYSTEM_ID } from "../system-id.js";
 import { format } from "../utils/i18n.js";
-import { ownsLearnedMoveNamed, ownedMove } from "../actors/character/owns-move.js";
-import { heldOnTrack, learnedTrack } from "../actors/character/MoveResources.js";
+import { ownsLearnedMoveNamed, ownedLearnedMove, ownsLearnedBookMoveNamed } from "../actors/character/owns-move.js";
+import { heldOnTrack, learnedTrack, takeBackHeld } from "../actors/character/MoveResources.js";
+import { heldReadiness } from "../combat/defend-readiness.js";
+import { spendHeldReadiness } from "./follower-readiness.js";
 import { characterBehind, followerCardFor } from "../actors/character/follower-masters.js";
 import { actorTookBackground } from "../actors/character/took-background.js";
 import { BLOOD_SOAKED_PAST } from "../data/alt-stat-grants.js";
@@ -64,11 +72,14 @@ import { MELEE_RANGES } from "../data/weapons.js";
 import { betterMode, foldModes } from "../utils/roll-mode.js";
 import { fightStateActive, STORM_MARKINGS_NAME } from "../actors/character/fight-states.js";
 import { BINDING_ARBITRATION, OATHS_FLAG, readOaths, oathIndex, isBoundBy } from "../actors/character/oaths.js";
+import { CENSURE } from "../actors/character/condemn.js";
 import { asteriskMoveUsed } from "../actors/character/WouldBeHeroAsterisk.js";
 import { HEROES, touching } from "./engagements.js";
-import { fightOnScene, gridOf } from "./fight-state.js";
+import { combatantSide, each, fightOnScene, gridOf } from "./fight-state.js";
 import { rollerEngagement } from "./damage-seed.js";
-import { resolveSync } from "../utils/foundry-compat.js";
+import { struckFoe } from "./struck-foe.js";
+import { resolveSync, askGMClient, queryAsker } from "../utils/foundry-compat.js";
+import { isPrimaryGM } from "../utils/primary-gm.js";
 import { escHtml } from "../utils/strings.js";
 import { damageRowActor } from "../utils/damage.js";
 import { stonetopChatCard } from "../utils/chat.js";
@@ -115,6 +126,34 @@ export const LEAPT_IN_FLAG = "leaptIn";
 
 /** The foes an Alpha's 10+ asserted dominance over (Alpha), as `{key, name}` on the actor. */
 export const ALPHA_FLAG = "alphaOver";
+
+/**
+ * The NPCs who answered a Fox's Rapier Wit by attacking, as `{key, name, roll, blow}` on the Fox: `roll`
+ * while the advantage on the Fox's next roll against them is owed, `blow` while their +1d4 on their next
+ * hit on the Fox is. Each half is spent on its own, as But I Get Up Again's are.
+ */
+export const RAPIER_WIT_FLAG = "rapierWit";
+
+/** The User query a foe's +1d4 is spent through when this client cannot write the Fox. */
+export const RAPIER_WIT_QUERY = "stonetop.rapierWitBlow";
+
+/**
+ * What a Judge's Truth or Consequences owes on their next roll against someone, as `{key, name, mode}` on
+ * the Judge: `mode` "adv" where the answer to "Are you lying or hiding something from me?" was Yes, "dis"
+ * where the Judge lied to them or deceived them through words. One entry per person and mode, each spent by
+ * the Judge's next roll aimed at that person.
+ */
+export const TRUTH_FLAG = "truthOrConsequences";
+
+/**
+ * The people a Judge's Censure left enraged ("the next roll against them has advantage"), as `{key, name,
+ * message}` on the Judge, `message` being the Censure card whose tick wrote it. Read by EVERY character's
+ * next roll aimed at them, and spent by it.
+ */
+export const CENSURE_ENRAGED_FLAG = "censureEnraged";
+
+/** The User query an enraged entry is spent through when the roller's client cannot write the Judge. */
+export const CENSURE_ENRAGED_QUERY = "stonetop.censureEnraged";
 
 /**
  * A character's own damage roll's mode once Dangerous has had its say: advantage, or a straight roll
@@ -184,41 +223,75 @@ const liveOrder = (order, combats) => !order?.combat || !!combats?.get?.(order.c
  * the move still learned, naming the foe every one of `targets` is, given in a fight that is still on (or
  * outside any), and not yet answered by this character. "Each ally": never the Marshal's own blow.
  */
-export function focusFireAgainst(actor, targets = [], { actors = globalThis.game?.actors, combats = globalThis.game?.combats } = {}) {
+export function focusFireAgainst(actor, targets = [], { actors = globalThis.game?.actors, combats = globalThis.game?.combats, ally = "" } = {}) {
 	if (actor?.type !== "character" || !targets?.length) return null;
 	const used = new Set(listFlag(actor, FOCUS_FIRE_USED_FLAG));
 	const keys = targets.map(foeKey);
-	for (const marshal of focusFireMarshals(actor, actors)) {
+	// A follower's blow (`ally`) answers the orders of every Marshal, its own character's included: the crew are
+	// the Marshal's allies. A character's own blow never answers their own order.
+	for (const marshal of focusFireMarshals(actor, actors, { self: !!ally })) {
 		const entry = listFlag(marshal, FOCUS_FIRE_FLAG)
-			.find(order => order?.id && !used.has(order.id) && liveOrder(order, combats) && keys.every(key => key && key === order.key));
+			.find(order => order?.id && !used.has(answeredId(order.id, ally)) && liveOrder(order, combats) && keys.every(key => key && key === order.key));
 		if (entry) return entry;
 	}
 	return null;
 }
 
-/** The Marshals whose orders `actor` may answer: everyone else with Focus Fire learned. */
-function focusFireMarshals(actor, actors) {
-	return asArray(actors).filter(marshal => marshal && marshal !== actor && !(marshal.id && marshal.id === actor.id)
+/**
+ * How an answered order is written on the character: its id for their own blow, and its id with the follower
+ * named (`<id>@<ftype>:<slug>`) for a follower's, kept on the character they follow, so each follower (the
+ * crew as one) answers it once, as each PC does. PURE.
+ */
+const answeredId = (id, ally = "") => (ally ? `${id}@${ally}` : id);
+
+/** The Marshals whose orders `actor` may answer: everyone else with Focus Fire learned, and `actor` too with `self`. */
+function focusFireMarshals(actor, actors, { self = false } = {}) {
+	return asArray(actors).filter(marshal => marshal && (self || (marshal !== actor && !(marshal.id && marshal.id === actor.id)))
 		&& has(marshal, HERO_MOVES.FOCUS_FIRE));
 }
 
 /**
- * Mark a Focus Fire order answered by this character's damage roll: it was for their NEXT one. The ids of
- * orders that no Marshal still holds live (deleted, or given in a fight since deleted) are let go on the way,
- * since focusFireAgainst could never match them again; only where the fights can be read.
+ * Mark a Focus Fire order answered by this character's damage roll, or by their follower's (`ally`): it was
+ * for their NEXT one. The ids of orders that no Marshal still holds live (deleted, or given in a fight since
+ * deleted) are let go on the way, since focusFireAgainst could never match them again; only where the fights
+ * can be read.
  */
-export async function spendFocusFire(actor, entry, { actors = globalThis.game?.actors, combats = globalThis.game?.combats } = {}) {
+export async function spendFocusFire(actor, entry, { actors = globalThis.game?.actors, combats = globalThis.game?.combats, ally = "" } = {}) {
 	if (!entry?.id || typeof actor?.setFlag !== "function") return false;
 	const used = listFlag(actor, FOCUS_FIRE_USED_FLAG);
-	if (used.includes(entry.id)) return false;
+	const id = answeredId(entry.id, ally);
+	if (used.includes(id)) return false;
 	let kept = used;
 	if (combats?.get) {
-		const live = new Set(focusFireMarshals(actor, actors)
+		// Every Marshal's live orders, this character's own included: their followers' answers to them are kept here too.
+		const live = new Set(focusFireMarshals(actor, actors, { self: true })
 			.flatMap(marshal => listFlag(marshal, FOCUS_FIRE_FLAG).filter(order => liveOrder(order, combats)).map(order => order?.id)));
-		kept = used.filter(id => live.has(id));
+		kept = used.filter(one => live.has(String(one).split("@")[0]));
 	}
-	await actor.setFlag(SYSTEM_ID, FOCUS_FIRE_USED_FLAG, [...kept, entry.id]);
+	await actor.setFlag(SYSTEM_ID, FOCUS_FIRE_USED_FLAG, [...kept, id]);
 	return true;
+}
+
+/**
+ * Focus Fire on a FOLLOWER's blow (the crew's included): "each ally has advantage on their next damage roll
+ * against that foe", and a follower or the crew is an ally (Marshal re-audit, 2026-10-18). The same TICKED
+ * line a character's own damage window carries (focusFireOffer), answered once per follower, written on the
+ * character they follow. `actor` is the follower's own NPC (a token in the fight), or the character whose
+ * follower strikes from the sheet with `which` naming the card (`{ftype, slug}`). Null when no order is owed,
+ * or `actor` is nobody's follower.
+ */
+export function followerFocusFireOffer(actor, { targets = [], which = null, cardFor = followerCardFor } = {}) {
+	const card = which?.ftype && actor?.type === "character" ? { character: actor, ...which } : (actor?.type === "npc" ? cardFor(actor) : null);
+	if (!card?.character || !card.ftype) return null;
+	const ally = `${card.ftype}:${card.slug ?? ""}`;
+	const order = focusFireAgainst(card.character, targets, { ally });
+	if (!order) return null;
+	return {
+		key: "focusFire", mode: "adv", applied: true,
+		label: format(`${MOVE_KEY}.focusFire.label`, { foe: order.name }),
+		pill: format(`${MOVE_KEY}.focusFire.pill`, {}),
+		spend: () => spendFocusFire(card.character, order, { ally }).catch(err => console.warn("Stonetop | could not mark Focus Fire answered", err)),
+	};
 }
 
 /**
@@ -237,6 +310,13 @@ function focusFireOffer(actor, targets) {
 		spend: hero => spendFocusFire(hero, order).catch(err => console.warn("Stonetop | could not mark Focus Fire answered", err)),
 	};
 }
+
+/**
+ * Set-Up Strike's line on a Clash's damage window (blowOffers), and the attack flag's key that stamps whether
+ * that damage was dealt with it ticked (combat/attack-flow.js#SET_UP_STRIKE_STAMP), which the Clash card's Aid
+ * waits on (actors/character/give-advantage.js#setUpStrikeGate).
+ */
+export const SET_UP_STRIKE_KEY = "setUpStrike";
 
 /** The foes a hero has locked eyes with (Big Damn Hero), as combatant ids on the hero's combatant. */
 export const LOCKED_EYES_FLAG = "lockedEyes";
@@ -354,9 +434,52 @@ const listFlag = (actor, flag) => {
 /** Whether this character has a move to act on, and still has it switched on. */
 const has = (actor, name) => actor?.type === "character" && ownsLearnedMoveNamed(actor, name);
 
+/**
+ * Whether this character holds the BOOK's move of that name learned: a player's own move of the name acts as
+ * itself, not as the book's (owns-move.js#bookMoveName).
+ */
+const hasBook = (actor, name) => actor?.type === "character" && ownsLearnedBookMoveNamed(actor, name);
 
-/** That move as the Item itself, for the ones that carry a track (Anger is a Gift's Resolve). */
-const ownedLearned = (actor, name) => (has(actor, name) ? ownedMove(actor, name) ?? null : null);
+/** Foes to remember, as `{key, name}`: each given its key (foeKey's, unless it brings one), and none without one. */
+const freshFoes = foes => (foes ?? []).map(foe => ({ key: foe?.key ?? foeKey(foe), name: foe?.name ?? "" })).filter(foe => foe.key);
+
+/**
+ * freshFoes for a move whose people may have no token (Truth or Consequences, Speak Softly): one only named
+ * (`{name, named: true}`) is kept under the typed name (speakSoftlyNamedKey), and every name is trimmed.
+ */
+const freshNamedFoes = foes => (foes ?? []).map(foe => ({
+	key: foe?.named ? speakSoftlyNamedKey(foe.name) : (foe?.key ?? foeKey(foe)),
+	name: String(foe?.name ?? "").trim(),
+})).filter(foe => foe.key);
+
+/**
+ * Write `fresh` foe entries onto the actor's `flag`, after the `held` ones they do not replace: one held under
+ * a fresh key (and, with `also`, matching it) is written again rather than twice. Whether anything was written.
+ */
+async function replaceFoeEntries(actor, flag, held, fresh, also = () => true) {
+	if (!fresh.length) return false;
+	const keys = new Set(fresh.map(foe => foe.key));
+	await actor.setFlag(SYSTEM_ID, flag, [...held.filter(entry => !(keys.has(entry?.key) && also(entry))), ...fresh]);
+	return true;
+}
+
+/**
+ * Keep only the `held` entries `keep` answers true for on the actor's `flag`, written through `store`. Whether
+ * anything was let go: nothing is written when nothing was.
+ */
+async function keepEntries(actor, flag, held, keep, store = entries => entries) {
+	const kept = held.filter(keep);
+	if (kept.length === held.length) return false;
+	await actor.setFlag(SYSTEM_ID, flag, store(kept));
+	return true;
+}
+
+
+/**
+ * That move as the Item itself, for the ones that carry a track (Anger is a Gift's Resolve): the LEARNED
+ * copy, so a switched-off second copy of the same name cannot set the track's max.
+ */
+const ownedLearned = (actor, name) => (actor?.type === "character" ? ownedLearnedMove(actor, name) ?? null : null);
 
 /**
  * Write down the foes a Clash left standing, for Nemesis ("all of your future attacks against them do
@@ -564,22 +687,14 @@ export function alphaAgainst(actor, targets = []) {
  */
 export async function recordAlphaOver(actor, foes = []) {
 	if (!has(actor, HERO_MOVES.ALPHA)) return false;
-	const fresh = (foes ?? []).filter(foe => foe?.key);
-	if (!fresh.length) return false;
-	const keys = new Set(fresh.map(foe => foe.key));
-	const kept = listFlag(actor, ALPHA_FLAG).filter(entry => !keys.has(entry?.key));
-	await actor.setFlag(SYSTEM_ID, ALPHA_FLAG, [...kept, ...fresh.map(({ key, name }) => ({ key, name: name ?? "" }))]);
-	return true;
+	const fresh = (foes ?? []).filter(foe => foe?.key).map(({ key, name }) => ({ key, name: name ?? "" }));
+	return replaceFoeEntries(actor, ALPHA_FLAG, listFlag(actor, ALPHA_FLAG), fresh);
 }
 
 /** Forget the Alpha entries under these foe keys: a roll against them spent it, or a Shift took the 10+ back. */
 export async function forgetAlphaOver(actor, keys = []) {
 	const drop = new Set(keys ?? []);
-	const held = listFlag(actor, ALPHA_FLAG);
-	const kept = held.filter(entry => !drop.has(entry?.key));
-	if (kept.length === held.length) return false;
-	await actor.setFlag(SYSTEM_ID, ALPHA_FLAG, kept);
-	return true;
+	return keepEntries(actor, ALPHA_FLAG, listFlag(actor, ALPHA_FLAG), entry => !drop.has(entry?.key));
 }
 
 /** Spend Alpha's advantage once a roll against `targets` has been made: it was for the NEXT roll only. */
@@ -588,11 +703,457 @@ export async function spendAlphaOver(actor, targets = []) {
 	return forgetAlphaOver(actor, targets.map(foeKey));
 }
 
+// -- Rapier Wit ----------------------------------------------------------------
+//
+// The Fox's Rapier Wit: "When you pierce an NPC's pride with a well-placed quip, they must do 1 (their
+// choice): Attack, doing +1d4 damage if they hit but giving you advantage on your next roll against them /
+// Stoop to your level and respond in kind / Spend a few moments fuming, sputtering, or controlling their
+// temper". No roll: when the NPC chooses to attack, the posted card's "They attack" button
+// (actors/character/give-advantage-flow.js#wireRapierWit) writes the record on the FOX, the one actor both
+// the Fox's player and the GM pressing it can write. Its two halves are read from both ends: the Fox's
+// next roll aimed at that foe has advantage (rapierWitAgainst, beside Alpha's), and that foe's next blow
+// landing on the Fox does +1d4 (rapierWitOffers on the damage window, rapierWitBlowOwed on a
+// counter-attack's card: combat/attack-flow.js). Each is spent by the one roll it was for.
+
+/** The Fox's Rapier Wit entries still owing something, each half read. */
+function rapierWitEntries(actor) {
+	return listFlag(actor, RAPIER_WIT_FLAG)
+		.filter(entry => entry?.key && (entry.roll || entry.blow))
+		.map(entry => ({ key: entry.key, name: entry.name ?? "", roll: !!entry.roll, blow: !!entry.blow }));
+}
+
+/**
+ * The foes (`{key, name}`, or anything foeKey takes) chose to attack: both halves owed afresh, whatever an
+ * earlier quip at them left. Whether anything was written.
+ */
+export async function recordRapierWit(fox, foes = []) {
+	if (!hasBook(fox, HERO_MOVES.RAPIER_WIT)) return false;
+	const fresh = freshFoes(foes).map(foe => ({ ...foe, roll: true, blow: true }));
+	return replaceFoeEntries(fox, RAPIER_WIT_FLAG, rapierWitEntries(fox), fresh);
+}
+
+/** Spend `part` ("roll" or "blow") of the entries under these keys, letting go of one that owes neither. */
+async function spendRapierWit(fox, keys, part) {
+	const drop = new Set(keys ?? []);
+	let spent = false;
+	const rest = rapierWitEntries(fox).map(entry => {
+		if (!drop.has(entry.key) || !entry[part]) return entry;
+		spent = true;
+		return { ...entry, [part]: false };
+	}).filter(entry => entry.roll || entry.blow);
+	if (!spent) return false;
+	await fox.setFlag(SYSTEM_ID, RAPIER_WIT_FLAG, rest);
+	return true;
+}
+
+/**
+ * Forget the quips a fight leaves behind, once it is over (combat/readiness-loss.js), as Payback's grudges
+ * are (clearHarmedBy, the user's ruling, 2026-10-18): one at a NAMED foe (a linked actor's `Actor.<id>`) is
+ * kept until it is used, since that foe can meet the Fox again on the next map; one at an unlinked token is
+ * let go with its token. Whether anything was let go.
+ */
+export async function clearRapierWit(fox) {
+	return keepEntries(fox, RAPIER_WIT_FLAG, listFlag(fox, RAPIER_WIT_FLAG), entry => namedFoeKey(entry?.key));
+}
+
+/**
+ * Rapier Wit's "giving you advantage on your next roll against them": the source to name, or null. Every
+ * target has to be one of them, as for the other grudges here.
+ */
+export function rapierWitAgainst(actor, targets = []) {
+	if (!hasBook(actor, HERO_MOVES.RAPIER_WIT) || !targets?.length) return null;
+	const owed = new Set(rapierWitEntries(actor).filter(entry => entry.roll).map(entry => entry.key));
+	return targets.every(target => owed.has(foeKey(target))) ? HERO_MOVES.RAPIER_WIT : null;
+}
+
+/** Spend Rapier Wit's advantage once a roll against `targets` has been made: it was for the NEXT roll only. */
+export async function spendRapierWitRoll(actor, targets = []) {
+	if (!rapierWitAgainst(actor, targets)) return false;
+	return spendRapierWit(actor, targets.map(foeKey), "roll");
+}
+
+/** Whether `attacker`'s next hit on `fox` still owes Rapier Wit's +1d4. */
+export function rapierWitBlowOwed(fox, attacker) {
+	if (!hasBook(fox, HERO_MOVES.RAPIER_WIT)) return false;
+	const key = foeKey(attacker);
+	return !!key && rapierWitEntries(fox).some(entry => entry.key === key && entry.blow);
+}
+
+/**
+ * Spend the +1d4 `attacker` owed `fox`, once the blow that carried it is rolled. Written here when this
+ * client can write the Fox (the GM, or the Fox's player rolling a counter-attack); otherwise by the GM's
+ * client (RAPIER_WIT_QUERY). Whether it was spent.
+ */
+export async function spendRapierWitBlow(fox, attacker, {
+	gm = globalThis.game?.users?.activeGM ?? null, userId = globalThis.game?.user?.id ?? null,
+} = {}) {
+	if (!rapierWitBlowOwed(fox, attacker)) return false;
+	if (fox.isOwner !== false) return spendRapierWit(fox, [foeKey(attacker)], "blow");
+	return !!(await askGMClient(gm, RAPIER_WIT_QUERY, {
+		foxUuid: fox.uuid, attackerUuid: attacker?.uuid ?? "", userId,
+	}, { fallback: false, what: "spend Rapier Wit's +1d4" }));
+}
+
+/**
+ * The GM's side of RAPIER_WIT_QUERY, for the primary GM only: the asker must own the one who struck (it is
+ * their blow that was rolled), and the Fox still be owed that foe's +1d4. Whether it was spent.
+ */
+export async function handleRapierWitQuery(data, context = {}, { users = globalThis.game?.users, resolve = resolveSync } = {}) {
+	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	const user = queryAsker(data, context, users);
+	const fox = data?.foxUuid ? resolve(data.foxUuid) : null;
+	const attacker = data?.attackerUuid ? resolve(data.attackerUuid) : null;
+	if (!user || !fox || !attacker?.testUserPermission?.(user, "OWNER")) return false;
+	if (!rapierWitBlowOwed(fox, attacker)) return false;
+	return spendRapierWit(fox, [foeKey(attacker)], "blow");
+}
+
+/** The +1d4 as a damage roll's extra die, named for the move (utils/roll-engine.js#damageConditionPills). */
+export function rapierWitDie() {
+	return { key: "rapierWit", dice: "1d4", pill: format(`${MOVE_KEY}.rapierWit.pill`, { dice: "1d4", move: HERO_MOVES.RAPIER_WIT }) };
+}
+
+/**
+ * The damage window's line for a blow `attacker` aims at Foxes who quipped at it: ticked, since the NPC
+ * chose to attack and this is the hit. Every target has to be owed it, as one roll is made per card: a
+ * blow at the Fox and someone else does not get the Fox's +1d4 against both. Spent when it is taken; left
+ * standing when the table unticks it. [] when nothing is owed.
+ */
+export function rapierWitOffers(attacker, targets = [], { resolve = resolveSync } = {}) {
+	if (!attacker || !targets?.length) return [];
+	const foxes = targets.map(target => damageRowActor(target?.uuid ? resolve(target.uuid) : null));
+	if (!foxes.every(fox => rapierWitBlowOwed(fox, attacker))) return [];
+	const owed = [...new Set(foxes)];
+	return [{
+		...rapierWitDie(), applied: true, tags: [],
+		label: format(`${MOVE_KEY}.rapierWit.label`, { dice: "1d4", name: owed.map(fox => fox.name).join(", ") }),
+		spend: striker => Promise.all(owed.map(fox => spendRapierWitBlow(fox, striker ?? attacker))),
+	}];
+}
+
+// -- Truth or Consequences ------------------------------------------------------
+//
+// The Judge's Truth or Consequences (Book I p.119): "you can ask their player, 'Are you lying or hiding
+// something from me?' and get an honest answer. If the answer is 'Yes,' you have advantage on your next roll
+// against them. When you lie or otherwise deceive someone through words, you have disadvantage on your next
+// roll against them." No roll: the posted card's "They said Yes" and "I deceived them" buttons
+// (actors/character/give-advantage-flow.js#wireTruthOrConsequences) write a one-shot record on the JUDGE, as
+// Rapier Wit's does on the Fox (the user's ruling, 2026-10-18). The Judge's next roll aimed at that person
+// reads it (truthAgainst: StonetopCharacter#_foldAimedModes, and foeAdvantage for an attack's advantage) and
+// spends it. The two modes are separate entries, so a Yes and a lie at the same person cancel on that roll.
+
+const TRUTH_MODES = new Set(["adv", "dis"]);
+
+/** The Judge's Truth or Consequences entries, each with a key and a mode. */
+function truthEntries(actor) {
+	return listFlag(actor, TRUTH_FLAG)
+		.filter(entry => entry?.key && TRUTH_MODES.has(entry.mode))
+		.map(entry => ({ key: entry.key, name: entry.name ?? "", mode: entry.mode }));
+}
+
+/**
+ * Remember what the Judge's next roll against these people owes (`mode` "adv" or "dis"): `{key, name}` (or
+ * anything foeKey takes) for someone on the map, `{name, named: true}` for someone only named, kept under the
+ * typed name as Speak Softly's are (speakSoftlyNamedKey). A person already held under the same mode is written
+ * again rather than twice; the other mode's entry is left alone. Whether anything was written.
+ */
+export async function recordTruth(judge, foes = [], mode = "adv") {
+	if (!hasBook(judge, HERO_MOVES.TRUTH) || !TRUTH_MODES.has(mode)) return false;
+	const fresh = freshNamedFoes(foes).map(foe => ({ ...foe, mode }));
+	return replaceFoeEntries(judge, TRUTH_FLAG, truthEntries(judge), fresh, entry => entry.mode === mode);
+}
+
+/**
+ * What Truth or Consequences owes the Judge's roll at `targets` in `mode`: the source to name on the card,
+ * or null. Every target has to be held under that mode, as for the other grudges here.
+ */
+export function truthAgainst(actor, targets = [], mode = "adv") {
+	if (!hasBook(actor, HERO_MOVES.TRUTH) || !targets?.length || !TRUTH_MODES.has(mode)) return null;
+	const owed = new Set(truthEntries(actor).filter(entry => entry.mode === mode).map(entry => entry.key));
+	if (!targets.every(target => owed.has(foeKey(target)))) return null;
+	return format(`${MOVE_KEY}.truth.${mode}Source`, { move: HERO_MOVES.TRUTH });
+}
+
+/**
+ * Spend the Truth or Consequences entries a roll at `targets` was owed, in each of `modes`: they were for the
+ * NEXT roll against them. One write for both modes. Whether anything was spent.
+ */
+export async function spendTruth(actor, targets = [], modes = ["adv", "dis"]) {
+	const owed = (modes ?? []).filter(mode => truthAgainst(actor, targets, mode));
+	if (!owed.length) return false;
+	const keys = new Set(targets.map(foeKey));
+	return keepEntries(actor, TRUTH_FLAG, truthEntries(actor), entry => !(keys.has(entry.key) && owed.includes(entry.mode)));
+}
+
+/**
+ * Every Truth or Consequences entry the Judge holds, as `{key, name, mode, named}`, for the roll window's
+ * unticked lines (StonetopCharacter#_recordedFoeOffers): a roll aimed at nobody cannot be matched to a token,
+ * and someone only named never can, so only the player can say the roll is against them.
+ */
+export function truthOwed(actor) {
+	if (!hasBook(actor, HERO_MOVES.TRUTH)) return [];
+	return truthEntries(actor).map(entry => ({ ...entry, named: String(entry.key).startsWith(SPEAK_SOFTLY_NAMED) }));
+}
+
+/** Let one entry go (its unticked line was taken): the roll it was for has been made. Whether anything changed. */
+export async function forgetTruth(actor, key, mode) {
+	return keepEntries(actor, TRUTH_FLAG, truthEntries(actor), entry => !(entry.key === key && entry.mode === mode));
+}
+
+// -- Speak Softly ------------------------------------------------------------------
+//
+// The Marshal's Speak Softly (Book I p.127): "When you offer peace but your enemy refuses, gain advantage on
+// your next roll against them." No roll: the posted card's "They refused" button
+// (actors/character/give-advantage-flow.js#wireSpeakSoftly) names the enemy and writes a one-shot record on
+// the MARSHAL, as Truth or Consequences' does on the Judge (Marshal re-audit, 2026-10-18). An enemy on the
+// map is keyed by foeKey, and the Marshal's next roll aimed at them reads it (speakSoftlyAgainst:
+// StonetopCharacter#_foldAimedModes, and foeAdvantage for an attack's advantage) and spends it. An enemy
+// nobody could point at on the map is kept under the name the player typed (`named`), and is an UNTICKED
+// line on the Marshal's next rolls until one is made with it ticked (speakSoftlyNamed).
+
+/** A Speak Softly record kept under a typed name rather than a token: its key starts with this. */
+export const SPEAK_SOFTLY_NAMED = "named:";
+
+/** The Marshal's Speak Softly entries owing their advantage, as `{key, name, named}`. */
+export const SPEAK_SOFTLY_FLAG = "speakSoftly";
+
+function speakSoftlyEntries(actor) {
+	return listFlag(actor, SPEAK_SOFTLY_FLAG)
+		.filter(entry => entry?.key)
+		.map(entry => ({ key: entry.key, name: entry.name ?? "", named: String(entry.key).startsWith(SPEAK_SOFTLY_NAMED) }));
+}
+
+/** A Speak Softly entry as it is stored, `{key, name}`: `named` is read back off the key. */
+const storedSpeakSoftly = ({ key, name }) => ({ key, name });
+
+/** The key a typed name is kept under: the name itself, trimmed and lower-cased, so a second refusal by the same name replaces the first. PURE. */
+export function speakSoftlyNamedKey(name) {
+	const said = String(name ?? "").trim().toLowerCase();
+	return said ? `${SPEAK_SOFTLY_NAMED}${said}` : "";
+}
+
+/**
+ * Remember the enemies who refused the Marshal's peace: `{key, name}` (or anything foeKey takes) for one on
+ * the map, `{name, named: true}` for one only named. One already held is written again rather than twice.
+ * Whether anything was written.
+ */
+export async function recordSpeakSoftly(marshal, foes = []) {
+	if (!hasBook(marshal, HERO_MOVES.SPEAK_SOFTLY)) return false;
+	return replaceFoeEntries(marshal, SPEAK_SOFTLY_FLAG, speakSoftlyEntries(marshal).map(storedSpeakSoftly), freshNamedFoes(foes));
+}
+
+/** Let the entries under these keys go: the roll they were for has been made. Whether anything changed. */
+export async function forgetSpeakSoftly(marshal, keys = []) {
+	const drop = new Set(keys ?? []);
+	return keepEntries(marshal, SPEAK_SOFTLY_FLAG, speakSoftlyEntries(marshal), entry => !drop.has(entry.key), kept => kept.map(storedSpeakSoftly));
+}
+
+/**
+ * Speak Softly's "advantage on your next roll against them", on a roll aimed at `targets`: the source to name
+ * on the card, or null. Every target has to be one who refused, as for the other grudges here. A named entry
+ * is never matched here: it has no token to aim at (speakSoftlyNamed).
+ */
+export function speakSoftlyAgainst(actor, targets = []) {
+	if (!hasBook(actor, HERO_MOVES.SPEAK_SOFTLY) || !targets?.length) return null;
+	const owed = new Set(speakSoftlyEntries(actor).filter(entry => !entry.named).map(entry => entry.key));
+	return targets.every(target => owed.has(foeKey(target))) ? HERO_MOVES.SPEAK_SOFTLY : null;
+}
+
+/** Spend Speak Softly's advantage once a roll against `targets` has been made: it was for the NEXT roll only. */
+export async function spendSpeakSoftly(actor, targets = []) {
+	if (!speakSoftlyAgainst(actor, targets)) return false;
+	return forgetSpeakSoftly(actor, targets.map(foeKey));
+}
+
+/** The enemies only named (nobody on the map to point at), as `{key, name}`, for the roll window's unticked lines. */
+export function speakSoftlyNamed(actor) {
+	if (!hasBook(actor, HERO_MOVES.SPEAK_SOFTLY)) return [];
+	return speakSoftlyEntries(actor).filter(entry => entry.named).map(storedSpeakSoftly);
+}
+
+// -- Censure: enraged -------------------------------------------------------------
+//
+// Censure (Book I p.118): the denounced "pick 1: ... They are enraged, and lash out predictably (the next
+// roll against them has advantage)". ANYONE's next roll (the user's ruling, 2026-10-18), so the record is
+// kept on the Judge, written by the tick of that reaction on the posted Censure card
+// (actors/character/censure-enraged.js), and read by every character's next roll aimed at them
+// (censureEnragedAgainst, beside the other grudges). The roll that uses it spends it on the Judge, through
+// the GM's client when the roller cannot write the Judge (CENSURE_ENRAGED_QUERY).
+
+/** Whether this character holds Censure learned. */
+const censuring = actor => has(actor, CENSURE);
+
+/**
+ * Whether this actor holds anyone enraged, with Censure still learned. The flag is read first: every world actor
+ * is asked this on every aimed roll, and the move is an item scan.
+ */
+const holdsEnraged = actor => listFlag(actor, CENSURE_ENRAGED_FLAG).length > 0 && censuring(actor);
+
+/** A Judge's enraged entries, each with a key. */
+function enragedEntries(judge) {
+	return listFlag(judge, CENSURE_ENRAGED_FLAG)
+		.filter(entry => entry?.key)
+		.map(entry => ({ key: entry.key, name: entry.name ?? "", message: entry.message ?? null }));
+}
+
+/**
+ * Remember the people (`{key, name}`, or anything foeKey takes) a Censure left enraged, under the card whose
+ * tick said so. A person already held is written again rather than twice. Whether anything was written.
+ */
+export async function recordCensureEnraged(judge, foes = [], messageId = null) {
+	if (!censuring(judge)) return false;
+	const fresh = freshFoes(foes).map(foe => ({ ...foe, message: messageId }));
+	return replaceFoeEntries(judge, CENSURE_ENRAGED_FLAG, enragedEntries(judge), fresh);
+}
+
+/**
+ * Let enraged entries go: those under these `keys` (a roll against them spent it), or those the card
+ * `message` wrote (its tick was taken back before anyone used it). Whether anything changed.
+ */
+export async function forgetCensureEnraged(judge, { keys = null, message = null } = {}) {
+	const drop = keys ? new Set(keys) : null;
+	return keepEntries(judge, CENSURE_ENRAGED_FLAG, enragedEntries(judge),
+		entry => !((drop && drop.has(entry.key)) || (message && entry.message === message)));
+}
+
+/**
+ * Who a roll at `targets` finds enraged: `[{judge, key}]`, one per target, or null unless EVERY target is
+ * held enraged by some Judge with Censure still learned, as for the other grudges here.
+ */
+function enragedOwed(targets, actors) {
+	if (!targets?.length) return null;
+	const judges = asArray(actors).filter(holdsEnraged);
+	if (!judges.length) return null;
+	const owed = [];
+	for (const target of targets) {
+		const key = foeKey(target);
+		const judge = key ? judges.find(j => enragedEntries(j).some(entry => entry.key === key)) : null;
+		if (!judge) return null;
+		owed.push({ judge, key });
+	}
+	return owed;
+}
+
+/**
+ * Censure's "the next roll against them has advantage", asked by any character's roll: the source to name
+ * on the card ("Censure: enraged (Judge)"), or null.
+ */
+export function censureEnragedAgainst(roller, targets = [], { actors = globalThis.game?.actors } = {}) {
+	if (roller?.type !== "character") return null;
+	const owed = enragedOwed(targets, actors);
+	if (!owed) return null;
+	const judges = [...new Set(owed.map(entry => entry.judge))];
+	return format(`${MOVE_KEY}.censureEnraged.source`, { move: CENSURE, name: judges.map(judge => judge.name).join(", ") });
+}
+
+/**
+ * Everyone some Judge with Censure learned holds enraged, as `{judge, key, name}`, for the roll window's
+ * unticked lines on a roll aimed at nobody (StonetopCharacter#_recordedFoeOffers). Taken, a line is spent as
+ * a targeted roll's is (spendCensureEnraged with `{uuid: key}`, whose foeKey gives the same key back).
+ */
+export function censureEnragedHeld({ actors = globalThis.game?.actors } = {}) {
+	return asArray(actors).filter(holdsEnraged)
+		.flatMap(judge => enragedEntries(judge).map(entry => ({ judge, key: entry.key, name: entry.name })));
+}
+
+/**
+ * Spend Censure's advantage once a roll against `targets` has been made: it was for the NEXT roll. Written
+ * here on each Judge this client can write; otherwise by the GM's client (CENSURE_ENRAGED_QUERY). With no GM
+ * to ask, nothing is spent and a warning is logged: the entry then stands for one more roll. Whether every
+ * entry was spent.
+ */
+export async function spendCensureEnraged(roller, targets = [], {
+	actors = globalThis.game?.actors, gm = globalThis.game?.users?.activeGM ?? null, userId = globalThis.game?.user?.id ?? null,
+} = {}) {
+	// What censureEnragedAgainst asks, worked out once for the spend too.
+	const owed = roller?.type === "character" ? enragedOwed(targets, actors) : null;
+	if (!owed) return false;
+	const byJudge = new Map();
+	for (const { judge, key } of owed) byJudge.set(judge, [...(byJudge.get(judge) ?? []), key]);
+	let all = true;
+	for (const [judge, keys] of byJudge) {
+		if (judge.isOwner !== false) {
+			await forgetCensureEnraged(judge, { keys });
+			continue;
+		}
+		if (!gm) {
+			console.warn(`Stonetop | no GM is online to spend ${judge.name}'s Censure (enraged): it stands for another roll`);
+			all = false;
+			continue;
+		}
+		const spent = await askGMClient(gm, CENSURE_ENRAGED_QUERY, {
+			judgeUuid: judge.uuid, rollerUuid: roller?.uuid ?? "", keys, userId,
+		}, { fallback: false, what: "spend Censure's enraged advantage" });
+		if (!spent) all = false;
+	}
+	return all;
+}
+
+/**
+ * The GM's side of CENSURE_ENRAGED_QUERY, for the primary GM only: the asker must own the character who
+ * rolled, and only entries the Judge still holds are let go. Whether anything was spent.
+ */
+export async function handleCensureEnragedQuery(data, context = {}, { users = globalThis.game?.users, resolve = resolveSync } = {}) {
+	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
+	const user = queryAsker(data, context, users);
+	const judge = data?.judgeUuid ? resolve(data.judgeUuid) : null;
+	const roller = data?.rollerUuid ? resolve(data.rollerUuid) : null;
+	const keys = Array.isArray(data?.keys) ? data.keys.filter(key => typeof key === "string" && key) : [];
+	if (!user || !judge || !keys.length || !roller?.testUserPermission?.(user, "OWNER")) return false;
+	return forgetCensureEnraged(judge, { keys });
+}
+
+/**
+ * The one-shot "next roll against them" records, in the order a roll names them: their advantages (`adv`) do
+ * not stack, so the first that holds is the one named. Truth or Consequences' lie is a disadvantage (`dis`),
+ * folded beside the advantage rather than instead of it. `spend` uses up what a roll was owed, once its dice
+ * have landed: `modes` says which halves held ("adv", "dis"). Read by foeAdvantage (an attack's advantage)
+ * and nextRollOwed (any other roll's, StonetopCharacter#_foldAimedModes).
+ */
+const NEXT_ROLL_RECORDS = Object.freeze([
+	{ adv: upAgainAgainst, spend: spendUpAgainRoll },
+	{ adv: alphaAgainst, spend: spendAlphaOver },
+	{ adv: rapierWitAgainst, spend: spendRapierWitRoll },
+	{
+		adv: (actor, targets) => truthAgainst(actor, targets, "adv"),
+		dis: (actor, targets) => truthAgainst(actor, targets, "dis"),
+		spend: (actor, targets, modes) => spendTruth(actor, targets, modes),
+	},
+	{ adv: speakSoftlyAgainst, spend: spendSpeakSoftly },
+	{ adv: censureEnragedAgainst, spend: (actor, targets) => spendCensureEnraged(actor, targets) },
+]);
+
+/** The first advantage a "next roll against them" record owes a roll at `targets` (NEXT_ROLL_RECORDS), or null. */
+function nextRollAdvantage(actor, targets) {
+	for (const record of NEXT_ROLL_RECORDS) {
+		const source = record.adv(actor, targets);
+		if (source) return source;
+	}
+	return null;
+}
+
+/**
+ * What the "next roll against them" records owe a roll at `targets` that is not an attack's advantage
+ * (StonetopCharacter#_foldAimedModes): `advantage`, the first that holds (or null); `disadvantages`, every
+ * one that holds; and `spend`, which uses up every record that held when this was asked, named or not.
+ */
+export function nextRollOwed(actor, targets = []) {
+	const held = NEXT_ROLL_RECORDS
+		.map(record => ({ record, adv: record.adv(actor, targets), dis: record.dis?.(actor, targets) ?? null }))
+		.filter(hit => hit.adv || hit.dis);
+	return {
+		advantage: held.find(hit => hit.adv)?.adv ?? null,
+		disadvantages: held.map(hit => hit.dis).filter(Boolean),
+		spend: async () => {
+			for (const { record, adv, dis } of held) await record.spend(actor, targets, [adv ? "adv" : null, dis ? "dis" : null].filter(Boolean));
+		},
+	};
+}
+
 /** Whichever remembered foe gives this attack roll advantage, or null. One name, for the card's pill. */
 export function foeAdvantage(actor, targets = [], { clash = false } = {}) {
 	return (clash ? relentlessAgainst(actor, targets) : null)
-		?? upAgainAgainst(actor, targets)
-		?? alphaAgainst(actor, targets)
+		?? nextRollAdvantage(actor, targets)
 		?? oathbreakerAgainst(actor, targets);
 }
 
@@ -641,11 +1202,21 @@ export async function recordHarmedBy(actor, attacker, { cardFor = followerCardFo
 	return true;
 }
 
-/** Forget who has harmed a character: the fight they were hurt in is over (fight/fight-boot.js). */
+/**
+ * Whether a Payback grudge names a foe by its world actor (foeKey's `Actor.<id>`, a linked token or a
+ * sidebar actor) rather than by one token on one map (`Scene.<id>.Token.<id>`).
+ */
+const namedFoeKey = key => typeof key === "string" && key.startsWith("Actor.");
+
+/**
+ * Forget the grudges a fight leaves behind, once it is over (combat/readiness-loss.js): the mooks'.
+ * A grudge against a NAMED foe outlasts the fight (the user's ruling, 2026-10-18): the villain who hurt
+ * you last session is the same villain on the next map, and Payback is still owed against them. An
+ * unlinked token's key is let go, since that token goes with the fight and nothing could match it again.
+ * Whether anything was let go.
+ */
 export async function clearHarmedBy(actor) {
-	if (!listFlag(actor, HARMED_BY_FLAG).length) return false;
-	await actor.setFlag(SYSTEM_ID, HARMED_BY_FLAG, []);
-	return true;
+	return keepEntries(actor, HARMED_BY_FLAG, listFlag(actor, HARMED_BY_FLAG), namedFoeKey);
 }
 
 /**
@@ -653,14 +1224,25 @@ export async function clearHarmedBy(actor) {
  * follower fighting here brings the character it follows, whose flag holds the follower's grudges
  * (see recordHarmedBy), even when that character is not in the fight themselves.
  */
-function paybackParty(actor, { cardFor = followerCardFor } = {}) {
+function paybackParty(actor, { cardFor = followerCardFor, combat = globalThis.game?.combat ?? null } = {}) {
 	const party = [actor];
-	const place = rollerEngagement(actor);
-	for (const fighter of place?.fighters ?? []) {
-		if (fighter.side !== HEROES) continue;
-		const ally = place.combatants.get(fighter.id)?.actor ?? null;
+	const join = ally => {
 		const hero = characterBehind(ally, cardFor);
 		if (hero?.type === "character" && !party.includes(hero)) party.push(hero);
+	};
+	const place = rollerEngagement(actor);
+	if (place) {
+		for (const fighter of place.fighters ?? []) {
+			if (fighter.side === HEROES) join(place.combatants.get(fighter.id)?.actor ?? null);
+		}
+		return party;
+	}
+	// No fight to read them off (the GM's Fight tab off, or this character not placed in one): the allies
+	// are the heroes' side of the active Combat, as the fight would place them (fight-state.js#combatantSide:
+	// the side stamped on the combatant, else characters, player-owned and followers). Only combatants on a
+	// map, so a tokenless roster Combat (the old Introductions') does not make every PC an ally.
+	for (const combatant of each(combat?.combatants)) {
+		if (combatant?.tokenId && combatantSide(combatant) === HEROES) join(combatant.actor ?? null);
 	}
 	return party;
 }
@@ -672,7 +1254,30 @@ export function paybackEarned(actor, targets = [], { cardFor = followerCardFor }
 	return targets.every(target => grudges.has(foeKey(target)));
 }
 
+/**
+ * Terror on the Field: "When you reduce a foe to 0 HP, describe how you take them out. If you fell them
+ * in a particularly brutal or impressive manner, their allies are impressed, dismayed, or frightened and
+ * respond accordingly." All fiction, so the move's whole effect is being SAID at the moment it is owed:
+ * one line on the applied damage card (combat/attack-flow.js) when this character's blow felled `target`.
+ *
+ * Only a FOE, as the fight places it (fight/struck-foe.js, the kill tally's own test): a Berserker's area
+ * blow that drops an ally, or a follower, terrifies nobody. "" when nothing is owed.
+ *
+ * @param {Actor} striker  who dealt the blow
+ * @param {Actor} target   the struck row's actor
+ * @param {object} [options]
+ * @param {string} [options.foe]          the name the card shows for the row (the token's)
+ * @param {number} [options.disposition]  the token's disposition as the card froze it
+ */
+export function terrorOnTheFieldWords(striker, target, { foe = "", disposition } = {}) {
+	if (!has(striker, HERO_MOVES.TERROR) || !target || !struckFoe(target, disposition)) return "";
+	return format(`${MOVE_KEY}.terrorOnTheField`, { name: striker.name ?? "", foe: foe || target.name || "" });
+}
+
 // -- What a blow adds --------------------------------------------------------
+
+/** The tags Musclebound puts on a blow, in the order the book names them. */
+const MUSCLEBOUND_TAGS = Object.freeze(["forceful", "messy"]);
 
 /**
  * Musclebound: "When you make a hand-to-hand or thrown attack, it's forceful and messy. If it would
@@ -681,6 +1286,11 @@ export function paybackEarned(actor, targets = [], { cardFor = followerCardFor }
  * The weapon's own range says which attacks those are — melee (hand, close, reach) or thrown — and a
  * blow with nothing in hand is hand-to-hand by definition. A bow is neither, so it keeps its own tags.
  * Returns the weapon with the tags on, or the weapon it was given.
+ *
+ * "Even more so" is the table's to describe, but the card has to say it is owed: a weapon that was
+ * already forceful and/or messy comes back marked `muscleboundMore`, the tags it already had, and the
+ * damage card prints a line for it beside the tags' own notes (combat/attack-flow.js#tagNoticesHtml).
+ * Without it, a Heavy's axe read the same with the move as without.
  */
 export function muscleboundWeapon(actor, weapon) {
 	if (!has(actor, HERO_MOVES.MUSCLEBOUND)) return weapon;
@@ -688,8 +1298,11 @@ export function muscleboundWeapon(actor, weapon) {
 	if (!range.some(r => MELEE_RANGES.has(r) || r === "thrown")) return weapon;
 	const base = weapon ?? { name: "", range: ["hand"] };
 	const own = Array.isArray(base.tags) ? base.tags : [];
-	if (own.includes("forceful") && own.includes("messy")) return base;
-	return { ...base, tags: [...new Set([...own, "forceful", "messy"])] };
+	const more = MUSCLEBOUND_TAGS.filter(tag => own.includes(tag));
+	return {
+		...base, tags: [...new Set([...own, ...MUSCLEBOUND_TAGS])],
+		...(more.length ? { muscleboundMore: more } : {}),
+	};
 }
 
 /** Whether a blow is dealt with a holy light (Hungry Flames). */
@@ -747,9 +1360,10 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 	const add = (key, move, dice, options) => offers.push(offerLine(key, move, dice, options));
 	// Set-Up Strike: the damage of a Clash's 7+ (the attack card's Confirm), dealt with disadvantage by choice.
 	// A mode line, as the defenders' are, UNTICKED: whether they set the strike up is theirs to say.
+	// `ask`: the line opens the window whatever the client setting says (combat/attack-flow.js#askDamageAdjustment).
 	if (moveKey === "clash" && !strikeBack && has(actor, HERO_MOVES.SET_UP_STRIKE)) {
 		offers.push({
-			key: "setUpStrike", mode: "dis", applied: false,
+			key: SET_UP_STRIKE_KEY, mode: "dis", applied: false, ask: true,
 			label: format(`${MOVE_KEY}.setUpStrike.label`, {}),
 			pill: format(`${MOVE_KEY}.setUpStrike.pill`, {}),
 		});
@@ -757,11 +1371,24 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 	// Focus Fire: a Marshal's order to bring this foe down, advantage on this ally's next damage roll at it.
 	const focus = focusFireOffer(actor, targets);
 	if (focus) offers.push(focus);
+	// Something to Remember Me By on a strike back the ring (or a Parry & Riposte) rolled: ticked, since the
+	// Readiness it cost is already spent. The same move on a blow nothing marked as a strike back: those two
+	// are the only ways to say so, and with the Fight tab or the ring off a hero holding Readiness still
+	// strikes back from the sheet (the user's ruling, 2026-10-18). So while they hold any, it opens UNTICKED
+	// with the cost in its label, and the Readiness comes off only once it comes back ticked: re-read then,
+	// never below none, since a spend or a Defend in between may have changed it.
 	if (strikeBack && has(actor, HERO_MOVES.REMEMBER_ME)) add("rememberMe", HERO_MOVES.REMEMBER_ME, "1d4");
+	else if (!strikeBack && has(actor, HERO_MOVES.REMEMBER_ME) && heldReadiness(actor) > 0) {
+		add("rememberMeSpend", HERO_MOVES.REMEMBER_ME, "1d4", {
+			applied: false,
+			spend: hero => (heldReadiness(hero) > 0 ? spendHeldReadiness(hero, 1) : null),
+		});
+	}
 	// Second Intent: "When you Defend and spend 1 Readiness to Parry & Riposte, also pick 1 option from the
 	// Ambush list", and "Deal +1d4 damage" is on it. UNTICKED: the pick is the player's, and may be another
-	// option. Whether they took it here is what the Second Intent card then says (defend-spend.js).
-	if (strikeBack && parry && has(actor, HERO_MOVES.SECOND_INTENT)) add("secondIntent", HERO_MOVES.SECOND_INTENT, "1d4", { applied: false });
+	// option. Whether they took it here is what the Second Intent card then says (defend-spend.js). The book's
+	// Second Intent: a player's own move of the name acts as itself (owns-move.js#bookMoveName).
+	if (strikeBack && parry && hasBook(actor, HERO_MOVES.SECOND_INTENT)) add("secondIntent", HERO_MOVES.SECOND_INTENT, "1d4", { applied: false });
 	if (isHolyLight(weapon)) offers.push(...holyLightOffers(actor));
 	// Nemesis rides every attack after the Clash that earned it — never the Clash's own damage, which is
 	// what `since` against the card's age settles.
@@ -784,7 +1411,9 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 	// Anger is a Gift: "Strike hard (+1d4 damage, forceful)" is one of five things a Would-Be Hero's
 	// Resolve buys, so it opens UNTICKED with the cost in its label, and the pip comes off the move's own
 	// track only once the window comes back with it ticked. That track counts Resolve HELD
-	// (actors/character/MoveResources.js): "hold 2 Resolve" ticks two, and a spend unticks one.
+	// (actors/character/MoveResources.js): "hold 2 Resolve" ticks two, and a spend unticks one. The spend
+	// re-reads the track (takeBackHeld) rather than writing the count the window opened on, so Resolve
+	// gained or spent while it was open (Speak Truth's +1, a pip clicked by hand) is not written over.
 	const anger = ownedLearned(actor, HERO_MOVES.ANGER);
 	const angerMax = Number(anger?.system?.resource?.max) || 0;
 	const resources = actor.typedActor?.moveResources;
@@ -793,30 +1422,41 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 		if (held > 0) {
 			add("anger", HERO_MOVES.ANGER, "1d4", {
 				applied: false, tags: ["forceful"],
-				spend: hero => hero.typedActor?.moveResources?.setUses(HERO_MOVES.ANGER, held - 1, { stonetopMove: HERO_MOVES.ANGER }),
+				spend: hero => takeBackHeld(hero, HERO_MOVES.ANGER, 1),
 			});
 		}
 	}
 	// THE FICTION-GATED BONUSES. Each names a kind of foe the stat block can be read for, and a piece of
 	// fiction it cannot: whether this Judge KNOWS the thing is corrupted, whether this blow EXPLOITED the
 	// weakness, whether the Ranger is acting on what they learned. So the kind of foe decides whether the
-	// line is drawn at all, and the player decides whether it is ticked — except Like a Dog with a Bone,
-	// whose whole condition is the tag the stat block prints.
+	// line is drawn at all, and the player decides whether it is ticked. Like a Dog with a Bone is the one
+	// drawn whatever the stat block says: "something you KNOW to be tainted by chaos" is the Judge's
+	// knowledge, and a stat block that prints no corrupted tag (a cultist passing as a farmer) is no proof
+	// of innocence. So it opens TICKED when every target reads as corrupted, and UNTICKED otherwise, for
+	// the player to call (the user's ruling, 2026-10-18).
 	if (targets.length) {
-		if (has(actor, HERO_MOVES.DOG_WITH_BONE) && targets.every(isCorruptedFoe)) {
-			add("dogWithBone", HERO_MOVES.DOG_WITH_BONE, "1d6");
+		if (has(actor, HERO_MOVES.DOG_WITH_BONE)) {
+			add("dogWithBone", HERO_MOVES.DOG_WITH_BONE, "1d6", targets.every(isCorruptedFoe) ? {} : { applied: false });
 		}
 		if (has(actor, HERO_MOVES.EVERYTHING_BLEEDS) && targets.every(isUnnaturalFoe)) {
 			add("everythingBleeds", HERO_MOVES.EVERYTHING_BLEEDS, "1d6", { applied: false });
 		}
+	} else {
+		// NO TARGET, NO STAT BLOCK TO READ. The foe may still be corrupted or unnatural, so both lines are
+		// drawn UNTICKED and the player says whether this blow earned them, rather than the bonus vanishing.
+		if (has(actor, HERO_MOVES.DOG_WITH_BONE)) add("dogWithBone", HERO_MOVES.DOG_WITH_BONE, "1d6", { applied: false });
+		if (has(actor, HERO_MOVES.EVERYTHING_BLEEDS)) add("everythingBleeds", HERO_MOVES.EVERYTHING_BLEEDS, "1d6", { applied: false });
 	}
 	if (has(actor, HERO_MOVES.PREDATOR)) add("predator", HERO_MOVES.PREDATOR, "1d4", { applied: false });
 	// Blood-Soaked Past: "When you fight to kill without mercy or hesitation, you deal +1d4 damage." Nothing
 	// on the map says how this blow was meant, so it is a standing unticked line, as Predator's is.
 	if (actorTookBackground(actor, BLOOD_SOAKED_PAST)) add("withoutMercy", BLOOD_SOAKED_PAST.label, "1d4", { applied: false });
-	// The Ranger's weak spot: the fight knows the creature is large or huge, and the player says whether
-	// this blow found the spot — so these open UNTICKED.
-	if (has(actor, HERO_MOVES.BIG_GAME) && targets.length && targets.every(isBigQuarry)) {
+	// The Ranger's weak spot: "When you strike at the weak spot of a large or huge creature, you deal +2
+	// damage" (Giant Slayer: another +2). The fight can say the creature is large or huge, never whether this
+	// blow found the spot, so the line always opens UNTICKED. It is drawn when ANY target is big, so a Blot
+	// Out the Sun volley that also catches a normal-sized bystander keeps it for the drake. With NO target
+	// there is no stat block to read, and the quarry may still be huge, so it is drawn as Dog with a Bone's is.
+	if (has(actor, HERO_MOVES.BIG_GAME) && (!targets.length || targets.some(isBigQuarry))) {
 		const both = has(actor, HERO_MOVES.GIANT_SLAYER);
 		add("bigGame", both ? HERO_MOVES.GIANT_SLAYER : HERO_MOVES.BIG_GAME, both ? "4" : "2", { applied: false });
 	}
@@ -874,26 +1514,66 @@ function isUnnaturalFoe(target) {
  *    them — so each is a ticked box on the damage window, for the table to untick when the fiction
  *    says otherwise (combat/attack-flow.js#defenderOffers). Ticked, because the clause is the ordinary
  *    case; a blow rolled with no window keeps them for the same reason.
+ *  • UNREAD: Battlefield Grace where the fight cannot be read (the Fight tab off, no fight on the
+ *    viewed scene, or the Marshal not in it): nothing says whether they are leading allies, so it is an
+ *    UNTICKED box for the table to call, as Undaunted's is (undauntedUnread), rather than nothing. A blow
+ *    rolled with no window leaves it off, as an unticked box is.
  *
  * ASYNC for one of the three: a load is a whole inventory build, so it is only ever asked of a
  * character who has taken Uncanny Reflexes.
  *
- * @returns {Promise<{imposed: string[], offered: string[]}>}
+ * @returns {Promise<{imposed: string[], offered: string[], unread: string[]}>}
  */
 export async function defenderDisadvantage(actor) {
-	const modes = { imposed: [], offered: [] };
+	const modes = { imposed: [], offered: [], unread: [] };
 	if (actor?.type !== "character") return modes;
-	const hp = Number(actor.system?.attributes?.hp?.value);
-	if (has(actor, HERO_MOVES.NEVER_GONNA) && Number.isFinite(hp) && hp <= 5) modes.imposed.push(HERO_MOVES.NEVER_GONNA);
-	if (has(actor, HERO_MOVES.BATTLEFIELD_GRACE) && leadingAllies(actor)) modes.offered.push(HERO_MOVES.BATTLEFIELD_GRACE);
+	if (neverGonnaNow(actor)) modes.imposed.push(HERO_MOVES.NEVER_GONNA);
+	if (has(actor, HERO_MOVES.BATTLEFIELD_GRACE)) {
+		const leading = leadingAllies(actor);
+		if (leading === null) modes.unread.push(HERO_MOVES.BATTLEFIELD_GRACE);
+		else if (leading) modes.offered.push(HERO_MOVES.BATTLEFIELD_GRACE);
+	}
 	if (has(actor, HERO_MOVES.UNCANNY) && await unarmoredAndLight(actor)) modes.offered.push(HERO_MOVES.UNCANNY);
 	return modes;
 }
 
-/** Battlefield Grace: is this character leading allies in this fight — is anyone else on their side up? */
+/**
+ * Never Gonna Keep Me Down holds for this actor right now: the move learned, and 5 or fewer current HP. The HP
+ * box is the whole condition. Asked of the one a blow is aimed at (defenderDisadvantage), and of a Would-Be
+ * Hero who stood in for them afterwards (defend-spend.js#defendOffers).
+ */
+export function neverGonnaNow(actor) {
+	if (!ownsLearnedMoveNamed(actor, HERO_MOVES.NEVER_GONNA)) return false;
+	const hp = Number(actor.system?.attributes?.hp?.value);
+	return Number.isFinite(hp) && hp <= 5;
+}
+
+/**
+ * Constant Vigilance (Ranger): "Unless you're dazed, you're never caught off guard, not even when asleep
+ * or if you roll a 6-." So nothing that hurts them is offered as having caught them off-guard (a hazard's
+ * p.383 line, combat/attack-flow.js#hazardModeLines). "Unless you're dazed" reads the debility's EFFECT,
+ * which a raging Heavy ignores (StonetopCharacter#ignoresDebilities), as the move's roll line reads it.
+ */
+export function neverCaughtOffGuard(actor) {
+	if (!has(actor, HERO_MOVES.CONSTANT_VIGILANCE)) return false;
+	return !debilityInEffect(actor, "dazed");
+}
+
+/**
+ * Whether debility `key` ("dazed") is marked on `actor` and doing something: not while a Battle Joy
+ * ignores the effects of debilities. `ignores` is that (StonetopCharacter#ignoresDebilities), read off
+ * the actor's typed character when not given; an actor without one ignores nothing. The one rule
+ * behind StonetopCharacter#debilityInEffect and neverCaughtOffGuard.
+ */
+export function debilityInEffect(actor, key, ignores = actor?.typedActor?.ignoresDebilities) {
+	return !!actor?.system?.attributes?.debilities?.options?.[key]?.value && !ignores;
+}
+
+/** Battlefield Grace: is this character leading allies in this fight (is anyone else on their side up), or null where no fight reads? */
 function leadingAllies(actor) {
 	const place = rollerEngagement(actor);
-	if (!place) return false;
+	// Null where the fight cannot be read at all: the table's to call (defenderDisadvantage's UNREAD).
+	if (!place) return null;
 	return place.fighters.some(f => f.side === HEROES && f.id !== place.combatant.id && !f.out);
 }
 

@@ -4,6 +4,7 @@
 //  - We Happy Few's 6- shakes the Marshal's nerves (fight-states.js).
 //  - Prepare a Welcome's 10+ regains 1 Surprise (combat/battle-holds.js).
 //  - Commune with Aratis's 10+ holds 2 Sanction (roll-boosts.js).
+//  - Silver Tongued's 10+ holds 3 Nerve and its 7-9 holds 1 (nerveHeld below).
 //  - Wielder of the White Flame's 7+ lights the holy light; Luminous Shield's 6- snuffs it (holy-light.js).
 //  - Defend holds Readiness by tier (combat/defend-readiness.js), and so does a follower ORDERED to Defend
 //    (Book I p.469: "When a PC Orders Followers to Defend and gets a 7+, the follower holds Readiness"),
@@ -36,25 +37,60 @@ import { escHtml } from "../../utils/strings.js";
 import { HERO_MOVES, foeKey, recordAlphaOver, forgetAlphaOver } from "../../fight/hero-moves.js";
 import { OMENS_OF_FATE, settleOmensTier } from "./destined.js";
 import { reconcileGivenAdvantage } from "./give-advantage-flow.js";
+import { learnedTrack, takeBackHeld } from "./MoveResources.js";
 
 /** The message flag holding what a roll's tier effects have done, keyed as TIER_EFFECTS is. */
 export const TIER_EFFECTS_FLAG = "tierEffects";
 
+/** The Fox's Silver Tongued, whose roll holds Nerve on its own track. */
+export const SILVER_TONGUED = "Silver Tongued";
+
+/** "On a 10+, hold 3 Nerve; on a 7-9, hold 1 Nerve." Nothing on a 6-. */
+const NERVE_HOLD = Object.freeze({ success: 3, partial: 1 });
+
 const count = value => Math.max(0, Math.trunc(Number(value) || 0));
+
+/**
+ * Silver Tongued: "When you use words to avoid suspicion or trouble, roll +CHA: on a 10+, hold 3 Nerve; on
+ * a 7-9, hold 1 Nerve." Read as "you now hold 3" (or 1): the LEARNED copy's track (MoveResources.js#
+ * learnedTrack, which counts what is held) is raised to that, never lowered by the roll and never past
+ * its max. `added` is how many pips this card has put there so far (0 at the roll). What the track would
+ * hold without this card is what it holds now less those, so Nerve spent since stays spent and Nerve held
+ * before the roll is never taken back, as Defend's Readiness is settled (defend-readiness.js#
+ * readinessForTier). Resolves to how many this card has added now; undefined for a character without the
+ * move learned, so their card carries no record.
+ */
+async function settleNerve(actor, tier, added) {
+	const track = learnedTrack(actor, SILVER_TONGUED);
+	if (!track) return added === undefined ? undefined : count(added);
+	const done = count(added);
+	const hold = Math.min(track.max, NERVE_HOLD[tier] ?? 0);
+	const want = Math.max(0, hold - Math.max(0, track.held - done));
+	if (want > done) {
+		const next = Math.min(track.max, track.held + want - done);
+		if (next !== track.held) await track.resources.setUses(SILVER_TONGUED, next, { stonetopMove: SILVER_TONGUED });
+		return done + (next - track.held);
+	}
+	if (want < done) await takeBackHeld(actor, SILVER_TONGUED, done - want);
+	return want;
+}
 
 /**
  * A follower ordered to Defend (wave 3 audit FOL-5): bring the follower's Readiness track to what `tier`
  * holds (1 on a 7-9, 3 on a 10+, none on a 6-; a shield's +1 stays the player's pip), given what this
- * card raised it to so far. `done` is `{path, prior, set, name}`: the track's flag path under the system
- * scope, what was held before the roll, and what this card's tier set. Readiness spent since stays spent
- * (readinessForTier). Resolves to the card's new record. `announce` posts a note when a moved card raises
- * the pool; the order's own roll posts its own.
+ * card raised it to so far. `done` is `{path, prior, set, name, bonus?}`: the track's flag path under the
+ * system scope, what was held before the roll, what this card's tier set, and the Readiness a 7+ adds on its
+ * own (the Marshal's Shield Wall, +2 for a crew formed bearing shields: fight/shield-wall.js), kept on the
+ * record so a Shift or a +1 settles the same hold. Readiness spent since stays spent (readinessForTier).
+ * Resolves to the card's new record. `announce` posts a note when a moved card raises the pool; the order's
+ * own roll posts its own.
  */
 export async function settleFollowerReadiness(actor, tier, done, { announce = false, scope = SYSTEM_ID } = {}) {
 	if (!actor || !done?.path) return done ?? undefined;
 	const current = count(foundry.utils.getProperty(actor.flags?.[scope] ?? {}, done.path));
 	const prior = count(done.prior);
-	const { next, set } = readinessForTier({ prior, set: done.set ?? prior, current, hold: defendReadinessHold(tier) });
+	const hold = defendReadinessHold(tier) + (tier === "failure" ? 0 : count(done.bonus));
+	const { next, set } = readinessForTier({ prior, set: done.set ?? prior, current, hold });
 	if (next !== current) {
 		await actor.update({ [`flags.${scope}.${done.path}`]: next }, { stonetopMove: DEFEND_MOVE });
 		if (announce && next > current) {
@@ -85,15 +121,20 @@ const TIER_EFFECTS = {
 			return !!done;
 		},
 	},
-	// How many Surprise this card gave back (0 or 1).
+	// `{spent, regained}`: whether this card's roll spent a Surprise, and how many its 10+ gave back (0 or 1).
+	// "Spend 1 Surprise ... on a 10+ ... regain 1": a roll made holding none spent nothing, so it regains
+	// nothing, however its tier moves. Told at the roll (`surpriseSpent`, StonetopCharacter#onRoll's spend);
+	// a card from before this was kept carries the bare count, and is read as having spent one.
 	surpriseRegained: {
 		moves: [PREPARE_A_WELCOME],
-		async settle(actor, move, tier, done) {
-			const wants = tier === "success";
-			const n = count(done);
-			if (wants && !n) return (await regainSurpriseOnHit(actor, { name: move }, tier)) ? 1 : 0;
-			if (!wants && n) { await takeBackSurprise(actor, n); return 0; }
-			return n;
+		async settle(actor, move, tier, done, _character, { surpriseSpent = false } = {}) {
+			const legacy = done != null && typeof done !== "object";
+			const spent = done == null ? !!surpriseSpent : (legacy || !!done.spent);
+			const n = count(legacy ? done : done?.regained);
+			const wants = spent && tier === "success";
+			if (wants && !n) return { spent, regained: (await regainSurpriseOnHit(actor, { name: move }, tier)) ? 1 : 0 };
+			if (!wants && n) { await takeBackSurprise(actor, n); return { spent, regained: 0 }; }
+			return { spent, regained: n };
 		},
 	},
 	// How many Sanction this card filled.
@@ -109,6 +150,11 @@ const TIER_EFFECTS = {
 			if (!wants && n) { await releaseSanction(actor, n); return 0; }
 			return n;
 		},
+	},
+	// How many Nerve this card put on Silver Tongued's track (settleNerve).
+	nerveHeld: {
+		moves: [SILVER_TONGUED],
+		settle: (actor, _move, tier, done) => settleNerve(actor, tier, done),
 	},
 	// The holy light: true when this card lit it (Wielder), or what it snuffed (Luminous Shield).
 	holyLight: {
@@ -163,13 +209,15 @@ export const TIER_EFFECT_MOVES = Object.freeze([...new Set(Object.values(TIER_EF
  * @param {object} [options]
  * @param {StonetopCharacter} [options.character]  the actor's character model (default `actor.typedActor`)
  * @param {object[]} [options.targets]  the foes the roll was aimed at (at the roll itself; Alpha keeps them)
+ * @param {boolean} [options.surpriseSpent]  whether the roll spent a Surprise (at the roll itself; Prepare a
+ *   Welcome keeps it), combat/battle-holds.js#spendSurpriseForRoll
  * @returns {Promise<object>}
  */
-export async function settleTierEffects(actor, move, tier, done = null, { character = actor?.typedActor, targets = [] } = {}) {
+export async function settleTierEffects(actor, move, tier, done = null, { character = actor?.typedActor, targets = [], surpriseSpent = false } = {}) {
 	const record = {};
 	for (const [key, effect] of Object.entries(TIER_EFFECTS)) {
 		if (!effect.moves.includes(move) && !(effect.recorded && done?.[key] != null)) continue;
-		const now = await effect.settle(actor, move, tier, done?.[key], character, { targets });
+		const now = await effect.settle(actor, move, tier, done?.[key], character, { targets, surpriseSpent });
 		// An effect with nothing to keep (an Alpha aimed at nobody) leaves no trace on the card.
 		if (now !== undefined) record[key] = now;
 	}

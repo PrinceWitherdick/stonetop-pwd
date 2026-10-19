@@ -18,7 +18,7 @@ import { markFaqItems } from "../../../utils/faq-bullets.js";
 import { applyGearTermTooltips } from "../../../utils/gear-term-tooltips.js";
 import { StonetopAutocomplete } from "../../../utils/autocomplete.js";
 import { wellVersedTopicSummary, backgroundMarkOption, moveChoiceKey, WELL_VERSED_MOVE, WELL_VERSED_TOPICS } from "./well-versed-topics.js";
-import { localize } from "../../../utils/i18n.js";
+import { localize, format } from "../../../utils/i18n.js";
 import { LORE_TERM_TOOLTIPS } from "../../../utils/lore-terms.js";
 import { getHoverDescriptionSetting } from "../../../settings.js";
 import { moveGroupsForPlaybook, moveGroupKeys } from "./onboarding-move-groups.js";
@@ -28,10 +28,13 @@ import { playbookIconPath } from "../../../utils/playbook-actors.js";
 import { ensurePackIndex } from "../../../utils/pack-index.js";
 import { SYSTEM_ID } from "../../../system-id.js";
 import { crewSetupLimit } from "./CrewSetupDialog.js";
+import { crewWriteInTagBoxes, crewTagsWithWriteIns } from "../crew-write-ins.js";
+import { CREATION_MARK_MOVES, creationMarkCopies, creationMarkCrewTags, creationMarksComplete, creationMarkRadios } from "./creation-marks.js";
 import { neighborChoiceGroups, randomNeighborTrait } from "./BackgroundNeighborsDialog.js";
 import { INITIATE_BACKGROUND, choiceCountState } from "../initiates.js";
+import { lorePickMax, lorePickMin } from "../lore-pick-count.js";
 import { MAGNIFICENT_SPECIMEN_MOVE, companionKindOptions, companionTraitAllowance, trimCompanionTraits } from "../animal-companion.js";
-import { seekerMajorTrack, pickSeekerMajorMark, drawableMinorSlugs } from "../seeker-collection.js";
+import { seekerMajorTrack, pickSeekerMajorMark, drawableMinorSlugs, seekerMinorStepComplete } from "../seeker-collection.js";
 
 const SEEKER_ARCANA_SLUGS = ["collection", "arcana-major", "arcana-minor"];
 
@@ -229,6 +232,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			// non-empty it spends a pick like any listed option (Book I p.20: keep it
 			// setting-appropriate and on par with the other options).
 			customPossession: "",
+			// The write-ins the sheet's Inventory tab added after the first (a re-run restores them,
+			// CharacterPossessions.js#onboardingWriteIns): never shown here, kept by the apply as they
+			// are, and each one spends a pick, so the budget here is the sheet's.
+			keptWriteIns: [],
 			// Sub-choices for possessions that bundle a "pick N from this list" set
 			// (e.g. the Heavy's & Marshal's Weapons of war): possessionSlug → chosen
 			// sub-slugs. Mirrors the actor's possessions.subChoices flag shape.
@@ -271,6 +278,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			// Well Versed's "Mark 1 topic, in addition to the one noted in your Background" → the
 			// topic's markOption slug. Applied as the move's 1st-level mark (setCreationMark).
 			backgroundMoveMarks: {},
+			// The "pick 1" a move asks each time it is taken, for the copies creation gives (Veteran
+			// Crew's "Go mark it now", creation-marks.js), by move name: the slug picked for each copy,
+			// the background's first. Applied as the move's 1st-level marks (setCreationMarks).
+			creationMoveMarks: {},
 			backgroundSetup: { choices: {}, texts: {}, neighborTraits: {}, neighborPicks: {} },
 			// Slugs of the background's level-gated markable actions marked during
 			// creation (the Ranger's Beast-Bonded "focus on your companion" actions —
@@ -564,36 +575,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		}
 	}
 
-	// How many tales a section's count is for. The Fox's tall tales are "a couple of your more
-	// memorable adventures", and each list says "(choose 1 per tale)": `tales` on the section
-	// turns that into a count for the whole list. Every other section is one.
-	_loreTales(section) {
-		return Math.max(1, Math.floor(Number(section?.tales) || 1));
-	}
-
+	// The book's count, read the one way the Details tab's boxes read it too (lore-pick-count.js).
 	_parseLorePickMax(section) {
-		return this._parseLorePickMaxPerTale(section) * this._loreTales(section);
-	}
-
-	_parseLorePickMaxPerTale(section) {
-		const desc = String(section?.description ?? "").toLowerCase();
-		if (/answer\s+at\s+least/.test(desc)) return Infinity;
-		// "choose N–M" / "choose N-M" (en-dash U+2013 or regular hyphen)
-		const rangeM = desc.match(/(?:choose|pick)\s+(\d+)\s*[–-]\s*(\d+)/);
-		if (rangeM) return parseInt(rangeM[2], 10);
-		// "choose N or M"
-		const orM = desc.match(/(?:choose|pick)\s+(\d+)\s+or\s+(\d+)/);
-		if (orM) return parseInt(orM[2], 10);
-		// "choose N, maybe M"
-		const maybeM = desc.match(/(?:choose|pick)\s+(\d+)[,\s]+maybe\s+(\d+)/);
-		if (maybeM) return parseInt(maybeM[2], 10);
-		// "choose N"
-		const singleM = desc.match(/(?:choose|pick)\s+(\d+)/);
-		if (singleM) return parseInt(singleM[1], 10);
-		// fallback: if all options are pick-type with max 1, assume pick 1
-		const opts = section?.options ?? [];
-		if (opts.length > 0 && opts.every(o => !o.type && (o.max ?? 1) === 1)) return 1;
-		return Infinity;
+		return lorePickMax(section);
 	}
 
 	// Every tick counts, so an option taken twice (a tall tale's `max: 2`) is two of the section's.
@@ -643,9 +627,73 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		return (this._selections.crew?.tags ?? []).filter(t => t !== bgTag && t !== "group");
 	}
 
-	// How many crew tags the player picks: the playbook's count plus Veteran Crew's marked extras.
+	// How many crew tags the player picks: the playbook's count plus Veteran Crew's marked extras, those
+	// marked since (_crewTagBonus, which leaves creation's own out) and those picked here
+	// (_creationMarkPicks: "Select 2 new tags for your Crew").
 	_crewTagLimit() {
-		return crewSetupLimit(this._rawCrew, this._crewTagBonus);
+		const picked = Object.fromEntries(this._creationMarkCopies().map(({ move, copies }) => [move, this._creationMarkPicks(move, copies)]));
+		return crewSetupLimit(this._rawCrew, (this._crewTagBonus ?? 0) + creationMarkCrewTags(picked));
+	}
+
+	// A pick that lowered the limit (tags given up for the damage die) takes the newest crew tags with
+	// it, as a free Magnificent Specimen given back takes its companion options.
+	_trimCrewTagsToLimit() {
+		const tags = this._selections.crew?.tags;
+		if (!tags) return;
+		const extra = this._crewPickedTags().length - this._crewTagLimit();
+		if (extra <= 0) return;
+		const drop = new Set(this._crewPickedTags().slice(-extra));
+		this._selections.crew.tags = tags.filter(t => !drop.has(t));
+	}
+
+	// ── Creation marks ("Go mark it now") ─────────────────────────
+	// The moves of creation-marks.js this character starts with, and how many copies: the background's
+	// (the Scion's Veteran Crew) and each free pick of it. A copy taken at a level-up is not counted:
+	// its pick was the level-up's. The free picks are compendium ids once the move list loads, and
+	// names before (a re-run's restored picks), so both are read.
+	_creationMarkCopies() {
+		const bgMoves  = backgroundMoveNames(this._selectedBackground(), this._selections.backgroundSetup?.choices);
+		const idToName = new Map((this._movesCache ?? []).map(d => [d.id, d.name]));
+		return creationMarkCopies(bgMoves, (this._selections.moves ?? []).map(m => idToName.get(m) ?? m));
+	}
+
+	// The slug picked for each of `move`'s first `copies` copies ("" for one not picked yet).
+	_creationMarkPicks(move, copies) {
+		const picks = this._selections.creationMoveMarks?.[move] ?? [];
+		return Array.from({ length: copies }, (_, i) => picks[i] ?? "");
+	}
+
+	// Each copy creation gives has its pick (creation-marks.js#creationMarksComplete).
+	_creationMarksComplete() {
+		return this._creationMarkCopies().every(({ move, copies }) =>
+			creationMarksComplete(move, this._creationMarkPicks(move, copies), copies));
+	}
+
+	// A copy's pick made or changed. The tag limit follows it, so the crew's tags are trimmed to it.
+	_setCreationMark(move, copy, slug) {
+		if (!CREATION_MARK_MOVES[move]?.some(o => o.slug === slug)) return false;
+		this._selections.creationMoveMarks ??= {};
+		const picks = [...(this._selections.creationMoveMarks[move] ?? [])];
+		while (picks.length <= copy) picks.push("");
+		picks[copy] = slug;
+		this._selections.creationMoveMarks[move] = picks;
+		this._trimCrewTagsToLimit();
+		return true;
+	}
+
+	// Render-data for the crew step's picks: one "pick 1" radio group for each copy, the background's
+	// first. Drawn with the same radios as Well Versed's extra topic (character-onboarding.hbs).
+	_creationMarkData() {
+		return this._creationMarkCopies().flatMap(({ move, copies, fromBackground }) => {
+			const picks = this._creationMarkPicks(move, copies);
+			return Array.from({ length: copies }, (_, copy) => ({
+				move,
+				copy,
+				name:  `onboard-creation-mark-${move.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${copy}`,
+				label: format(fromBackground && copy === 0 ? "stonetop.onboarding.creationMarkFromBackground" : "stonetop.onboarding.creationMarkFromPick", { move }),
+				options: creationMarkRadios(move, picks, copy, copies),
+			}));
+		});
 	}
 
 	// A crew tag ticked or unticked in the picker. Refused (false) when ticking one past the limit;
@@ -819,6 +867,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 						label: topic.label,
 						summary: wellVersedTopicSummary(topic.label) ?? "",
 						fromBackground: topic.slug === fromBackground,
+						disabled: topic.slug === fromBackground,
 						selected: topic.slug === extraPick && topic.slug !== fromBackground
 							&& background?.slug === this._selections.backgroundSlug,
 					})),
@@ -1505,9 +1554,13 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	}
 
 	// Total possession picks spent: listed options plus the write-in, when filled.
-	// A filled write-in counts as one pick, so it shares the playbook's pick budget.
+	// A filled write-in counts as one pick, so it shares the playbook's pick budget. So
+	// does each write-in the sheet added beyond the first (keptWriteIns), which the apply
+	// keeps: counted here, a re-run's total is the one the sheet will count, and going
+	// over shows "3 / 2" here as the sheet flags it there, never refused.
 	_possessionPickTotal() {
-		return this._selections.possessions.length + (this._selections.customPossession?.trim() ? 1 : 0);
+		return this._selections.possessions.length + (this._selections.customPossession?.trim() ? 1 : 0)
+			+ (this._selections.keptWriteIns?.length ?? 0);
 	}
 
 	// A selected possession with a required "pick N" bundle isn't done until N
@@ -1631,7 +1684,8 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			case "appearance":     return this._rawAppearance.every((_, i) => !!this._selections.appearance[i]);
 			case "origin":         return !!this._selections.originRegion && !!this._selections.name?.trim();
 			case "stats":          return this._validateStats();
-			case "possession":     return this._possessionPickTotal() === (this._rawPossessions?.pickCount ?? 0) &&
+			// At the count or past it: one too many (a write-in the sheet added) is flagged, not a step left undone.
+			case "possession":     return this._possessionPickTotal() >= (this._rawPossessions?.pickCount ?? 0) &&
 			                              this._possessionSubChoicesComplete();
 			case "moves": {
 				const choicesComplete = this._rawMoveChoices.every((_, i) => !!this._selections.moveChoices[i]);
@@ -1656,24 +1710,34 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 				});
 			}
 			case "crew": {
-				return this._crewPickedTags().length >= this._crewTagLimit() &&
+				return this._creationMarksComplete() &&
+				       this._crewPickedTags().length >= this._crewTagLimit() &&
 				       !!this._selections.crew.instinct &&
 				       !!this._selections.crew.cost;
 			}
 			case "animalCompanion": {
 				if (!ac.type) return false;
 				const typeData = this._rawAnimalCompanion?.types?.find(t => t.slug === ac.type);
-				// Exactly the allowance: picks past it (a free Magnificent Specimen given back after its
-				// options were chosen) are flagged on the step for the player to untick, never trimmed.
+				// Exactly the allowance. A free Magnificent Specimen given back takes its 2 options with it
+				// (_trimCompanionPicksToLimit drops the newest), so Next mostly waits on a short list.
 				return !!typeData &&
 				       !!ac.kind?.trim() &&
 				       ac.traits.length === this._companionTraitLimit(typeData) &&
 				       !!ac.instinct && !!ac.cost;
 			}
+			// The mark, and "Answer at least 2 questions about it" (the same answered-check the lore
+			// pages use, so the "Where did you acquire it?" set gates Next as any other such page does).
 			case "seekerArcana":
-				return this._seekerMajorMarkDone();
+				return this._seekerMajorMarkDone() &&
+				       this._isLoreSectionAnswered(this._rawLore.find(s => s.slug === "arcana-major"));
+			// A role on each drawn card AND the questions under them (seekerMinorStepComplete). Next
+			// once counted only the roles while the resume also wanted the answers, so a player could
+			// click past blank answers and be put back on this page on every reopen.
 			case "seekerArcanaMinor":
-				return Object.values(this._selections.arcana.minorRoles).filter(Boolean).length === 3;
+				return seekerMinorStepComplete({
+					minorRoles:        this._selections.arcana.minorRoles,
+					questionsAnswered: this._isLoreSectionAnswered(this._rawLore.find(s => s.slug === "arcana-minor")),
+				});
 			default: {
 				// Lore steps gate Next on the same answered-check the resume flow uses,
 				// so a required section (e.g. the Ranger's "choose 1" wicked-threat page)
@@ -1691,22 +1755,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	// ── Resume helpers ───────────────────────────────────────────────
 
 	_parseLorePickMin(section) {
-		return this._parseLorePickMinPerTale(section) * this._loreTales(section);
-	}
-
-	_parseLorePickMinPerTale(section) {
-		const desc = String(section?.description ?? "").toLowerCase();
-		const rangeM = desc.match(/(?:choose|pick)\s+(\d+)\s*[\u2013-]\s*(\d+)/);
-		if (rangeM) return parseInt(rangeM[1], 10);
-		const orM = desc.match(/(?:choose|pick)\s+(\d+)\s+or\s+(\d+)/);
-		if (orM) return parseInt(orM[1], 10);
-		const maybeM = desc.match(/(?:choose|pick)\s+(\d+)[,\s]+maybe\s+(\d+)/);
-		if (maybeM) return parseInt(maybeM[1], 10);
-		const singleM = desc.match(/(?:choose|pick)\s+(\d+)/);
-		if (singleM) return parseInt(singleM[1], 10);
-		const opts = section?.options ?? [];
-		if (opts.length > 0 && opts.every(o => !o.type && (o.max ?? 1) === 1)) return 1;
-		return 0;
+		return lorePickMin(section);
 	}
 
 	// How many of a free-text section's prompts must be answered. These are "Answer at
@@ -1758,14 +1807,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		if (stepType === "origin") {
 			return !!this._selections.originRegion && !!this._selections.name?.trim();
 		}
-		if (stepType === "seekerArcana") {
-			const section = this._rawLore.find(s => s.slug === "arcana-major");
-			return this._isStepComplete(stepType) && this._isLoreSectionAnswered(section);
-		}
-		if (stepType === "seekerArcanaMinor") {
-			const section = this._rawLore.find(s => s.slug === "arcana-minor");
-			return this._isStepComplete(stepType) && this._isLoreSectionAnswered(section);
-		}
+		// The Seeker's two arcana pages carry their questions inside their own Next gate (the major's
+		// "at least 2", the minor's three via seekerMinorStepComplete), so the resume reads that same
+		// gate rather than a second, stricter copy of it that Next could disagree with.
 		return this._isStepComplete(stepType);
 	}
 
@@ -1908,6 +1952,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			}
 			case "crew": {
 				return {
+					creationMarksComplete: this._creationMarksComplete(),
 					requiredTags: this._crewTagLimit(),
 					selectedTags: this._crewPickedTags().length,
 					hasInstinct: !!this._selections.crew.instinct,
@@ -2366,6 +2411,14 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 		// ── Crew ──────────────────────────────────────────────────────
 		if (stepType === "crew") {
+			// A free-pick Veteran Crew is a compendium id until the move list is read (a resume can
+			// open straight on this step).
+			if (!this._movesCache && this._selections.moves?.length) {
+				this._movesCache = await this._loadPlaybookMoves();
+				this._reconcileMoveChoices();
+			}
+			// A free-pick Veteran Crew given back on the moves step takes its "Select 2 new tags" with it.
+			this._trimCrewTagsToLimit();
 			const raw    = this._rawCrew;
 			const bgTag  = this._crewBgTag();
 			// Picks only: a stored tag the background now grants is its auto tag, not a pick.
@@ -2384,12 +2437,17 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const isCustomInstinct = !!crewInstinct && !instinctValues.includes(crewInstinct);
 			const isCustomCost     = !!crewCost && !costValues.includes(crewCost);
 			crewData = {
+				// Veteran Crew's "Go mark it now", one pick for each copy creation gives.
+				creationMarks:      this._creationMarkData(),
+				creationMarkHint:   localize("stonetop.onboarding.creationMarkHint"),
 				name:               this._selections.crew.name,
 				bgTag:              this._normalizeOnboardingText(bgTag),
 				additionalTagCount: limit,
 				selectedTagCount:   chosen.size,
 				customTag,
 				customTagDisabled:  !customTag && atLimit,
+				// The insert's three write-in lines, one box each (crew-write-ins.js).
+				customTags:         crewWriteInTagBoxes(this._selections.crew.tags, raw, bgTag, limit),
 				tags: (raw.availableTags ?? []).map(tag => {
 					const isAuto     = tag === bgTag;
 					const isSelected = isAuto || chosen.has(tag);
@@ -3382,6 +3440,19 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find(".onboard-crew-name").on("input", ev => {
 			this._selections.crew.name = ev.currentTarget.value;
 		});
+		// Veteran Crew's "Go mark it now": the pick moves the tag limit, so the step is drawn again.
+		html.find(".stonetop-onboarding-creation-mark").on("click", ev => {
+			if (ev.target.type === "radio") return;
+			const radio = ev.currentTarget.querySelector("input[type='radio']");
+			if (radio && !radio.checked && !radio.disabled) {
+				radio.checked = true;
+				radio.dispatchEvent(new Event("change", { bubbles: true }));
+			}
+		});
+		html.find(".stonetop-onboarding-creation-mark input[type='radio']").on("change", ev => {
+			const { move, copy } = ev.currentTarget.dataset;
+			if (this._setCreationMark(move, Number(copy), ev.currentTarget.value)) this.render(false);
+		});
 
 		html.find("[name='onboard-crew-tag']").on("change", ev => {
 			if (!this._toggleCrewTag(ev.currentTarget.value, ev.currentTarget.checked)) {
@@ -3396,20 +3467,22 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			html.find("[name='onboard-crew-tag']:not([data-auto])").each((_, el) => {
 				if (!el.checked) el.disabled = atLimit;
 			});
-			const tagCustom = html.find(".onboard-crew-tag-custom");
-			tagCustom.prop("disabled", atLimit && !tagCustom.val().trim());
+			html.find(".onboard-crew-tag-custom").each((_, el) => { el.disabled = atLimit && !el.value.trim(); });
 			_refreshNextButton();
 		});
 		// Custom crew tag write-in: spends one of the "pick N" tag picks, same as the
 		// companion trait write-in. Re-derive tags as [listed picks] + this write-in.
-		html.find(".onboard-crew-tag-custom").on("input", ev => {
-			const value = ev.currentTarget.value.trim();
+		// The insert's three blank tag lines: every box is read, in order (crew-write-ins.js).
+		html.find(".onboard-crew-tag-custom").on("input", () => {
 			const known = new Set(this._rawCrew?.availableTags ?? []);
 			const limit = this._crewTagLimit();
 			const bgTag = this._crewBgTag();
-			const tags  = this._selections.crew.tags.filter(t => known.has(t) && t !== bgTag);
-			if (value && tags.length < limit) tags.push(value);
-			this._selections.crew.tags = tags;
+			const listed = this._selections.crew.tags.filter(t => known.has(t) && t !== bgTag);
+			const boxes  = html.find(".onboard-crew-tag-custom").toArray().map(el => el.value);
+			this._selections.crew.tags = crewTagsWithWriteIns(listed, boxes, limit);
+			html.find(".onboard-crew-tag-custom").each((_, el) => {
+				el.disabled = this._crewPickedTags().length >= limit && !el.value.trim();
+			});
 			const picked = this._crewPickedTags().length;
 			html.find(".stonetop-onboarding-crew-tag-count").text(picked);
 			html.find("[name='onboard-crew-tag']:not([data-auto]):not(:checked)").prop("disabled", picked >= limit);

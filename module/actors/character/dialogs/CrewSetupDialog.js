@@ -1,6 +1,7 @@
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { normalizePlaybookGlyphs } from "../../../utils/strings.js";
 import { STONETOP_SCOPE } from "../StonetopFlags.js";
+import { crewWriteInTags, crewWriteInTagBoxes, crewTagsWithWriteIns } from "../crew-write-ins.js";
 
 // ── CrewSetupDialog ──────────────────────────────────────────────────────────
 // Set up a crew the character is owed but has never been given: the Crew insert's tags, instinct,
@@ -13,7 +14,7 @@ import { STONETOP_SCOPE } from "../StonetopFlags.js";
 //
 // The picks are onboarding's, and so is the markup (the `stonetop-onboarding-*` classes the crew step
 // draws with): "plus 2 more of your choice" (Crew insert, p.144), raised by Veteran Crew's "Select 2
-// new tags" marks, with a write-in row for a tag, an instinct and a cost of the player's own. The
+// new tags" marks, with write-in rows for three tags, an instinct and a cost of the player's own. The
 // background's tag is shown locked on and never stored, as the card and onboarding keep it; a crew
 // borrowed by a non-Marshal has none (utils/crew.js#crewBackgroundTag).
 //
@@ -52,13 +53,15 @@ export function crewSetupToggleTag(sel, tag, checked, limit) {
 	return { ok: true, sel: { ...sel, tags: [...tags, tag] } };
 }
 
-/** The tag write-in: the listed picks, plus this one while there is room for it. */
-export function crewSetupCustomTag(sel, value, crewDef, limit) {
+/**
+ * A tag write-in box typed in (the insert's three blank tag lines, crew-write-ins.js): the listed
+ * picks, plus each box's text while there is room for it. `index` is the box (0 to 2).
+ */
+export function crewSetupCustomTag(sel, value, crewDef, limit, index = 0) {
 	const known = new Set(crewDef?.availableTags ?? []);
-	const tags = (sel.tags ?? []).filter(t => known.has(t));
-	const typed = String(value ?? "").trim();
-	if (typed && tags.length < limit) tags.push(typed);
-	return { ...sel, tags };
+	const boxes = crewWriteInTags(sel.tags, crewDef);
+	boxes[Math.max(0, Math.min(boxes.length - 1, Number(index) || 0))] = String(value ?? "");
+	return { ...sel, tags: crewTagsWithWriteIns((sel.tags ?? []).filter(t => known.has(t)), boxes, limit) };
 }
 
 /** Whether the crew can be made: every tag picked, an instinct and a cost. The name is optional. */
@@ -98,6 +101,8 @@ export function crewSetupView(crewDef, sel, { bgTag = null, limit = 2 } = {}) {
 		selectedTagCount:   chosen.size,
 		customTag,
 		customTagDisabled:  !customTag && atLimit,
+		// The insert's three write-in lines, one box each (crew-write-ins.js).
+		customTags:         crewWriteInTagBoxes(sel.tags, crewDef, bgTag, limit),
 		tags: (crewDef?.availableTags ?? []).map(tag => {
 			const isAuto     = tag === bgTag;
 			const isSelected = isAuto || chosen.has(tag);
@@ -150,8 +155,7 @@ export class CrewSetupDialog extends StonetopDialog {
 			const atLimit = picked >= this._limit;
 			html.find(".stonetop-onboarding-crew-tag-count").text(picked);
 			html.find("[name='crew-setup-tag']:not([data-auto])").each((_, el) => { if (!el.checked) el.disabled = atLimit; });
-			const custom = html.find(".crew-setup-tag-custom");
-			custom.prop("disabled", atLimit && !String(custom.val() ?? "").trim());
+			html.find(".crew-setup-tag-custom").each((_, el) => { el.disabled = atLimit && !String(el.value ?? "").trim(); });
 			html.find(".stonetop-crew-setup-create").prop("disabled", !crewSetupReady(this._sel, this._limit));
 		};
 
@@ -165,7 +169,7 @@ export class CrewSetupDialog extends StonetopDialog {
 			refresh();
 		});
 		html.find(".crew-setup-tag-custom").on("input", ev => {
-			this._sel = crewSetupCustomTag(this._sel, ev.currentTarget.value, this._crewDef, this._limit);
+			this._sel = crewSetupCustomTag(this._sel, ev.currentTarget.value, this._crewDef, this._limit, Number(ev.currentTarget.dataset.index) || 0);
 			refresh();
 		});
 

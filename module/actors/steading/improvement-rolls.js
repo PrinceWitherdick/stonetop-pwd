@@ -21,6 +21,8 @@
  */
 import { rulesHas } from "./improvement-rules.js";
 import { HERO_MOVES } from "../../fight/hero-move-names.js";
+import { WE_HAPPY_FEW } from "../character/fight-states.js";
+import { format } from "../../utils/i18n.js";
 
 /** The steading moves these rules name, by the label their roll card carries. */
 export const STEADING_MOVE = Object.freeze({
@@ -57,6 +59,17 @@ export function askedAdvantageAnswers(root) {
 	const out = {};
 	for (const box of root?.querySelectorAll?.('input[name^="advantage-"]') ?? []) out[box.name] = !!box.checked;
 	return out;
+}
+
+/**
+ * The We Happy Few answer a window's form gives (nervesQuestion): the shaken character's name when its
+ * tick is ticked or its pick names someone, else "". For the windows that draw their own controls.
+ */
+export function nervesAnswer(root) {
+	const field = root?.querySelector?.('[name="nerves"]');
+	if (!field) return "";
+	if (field.type === "checkbox") return field.checked ? String(field.value ?? "") : "";
+	return String(field.value ?? "");
 }
 
 /**
@@ -162,6 +175,40 @@ function commandQuestion(holders, spend) {
 }
 
 /**
+ * The Marshal's We Happy Few 6- (Book I p.127): "you have disadvantage on all rolls until you share your
+ * nagging doubts with someone else". A steading roll they are behind is one of those rolls, so their
+ * shaken nerves are one more source of disadvantage, and cancel against Logistics' advantage like any other
+ * pair. Asked on every move, because it is every roll: a tick naming the one shaken character (ticked when
+ * it is the user's own, who is the one rolling), or a pick among several. The answer is their name.
+ * Who is shaken is fight-states.js's (shakenNervesOffers); a window that knows its roller hands the
+ * answer in itself (ownShakenName).
+ */
+export const NERVES = "nerves";
+
+function nervesQuestion(shaken) {
+	if (shaken.length === 1) {
+		const [one] = shaken;
+		return {
+			name: NERVES, type: "checkbox", value: one.name, checked: !!one.own,
+			label: format("stonetop.nerves.steadingAsk", { name: one.name, move: WE_HAPPY_FEW }),
+		};
+	}
+	return {
+		name: NERVES, type: "select",
+		label: format("stonetop.nerves.steadingAskPick", { move: WE_HAPPY_FEW }),
+		options: [{ value: "", label: "No" }, ...shaken.map(s => ({ value: s.name, label: s.name }))],
+	};
+}
+
+/** The nerves as the card names them: whose, when the answer names someone. */
+export function nervesSource(answer) {
+	const name = typeof answer === "string" ? answer.trim() : "";
+	return name
+		? format("stonetop.nerves.steadingRollNote", { name, move: WE_HAPPY_FEW })
+		: format("stonetop.nerves.rollNote", { move: WE_HAPPY_FEW });
+}
+
+/**
  * Pay for every answer the window took whose question costs something (a `spend` on its row: Stentorian's
  * Command), in question order, BEFORE the roll is adjusted. A spend hands back the answers to roll by, with its
  * own answer cleared when it could not be paid, so the roll gets no advantage it did not pay for; `refused`
@@ -204,11 +251,14 @@ export async function spendImprovementAnswers(questions, answers, { warn = msg =
  *   Command from (combat/command-holders.js#deployCommandOffers); one asks an unticked box naming them, several
  *   a pick defaulting to "No". The answer is the Marshal's id.
  * @param {Function} [o.spendCommand]  that question's `spend` (injectable for tests)
+ * @param {Array<{name: string, own?: boolean}>} [o.nerves]  the characters whose nerves are shaken
+ *   (fight-states.js#shakenNervesOffers); any at all asks the We Happy Few line, on every move
  * @returns {Array<{name: string, type: "checkbox"|"select", label: string, checked?: boolean, options?: Array<{value: string, label: string}>, spend?: Function}>}
  *   `spend`, on a question whose answer costs something, is run by spendImprovementAnswers.
  */
 export function improvementQuestions(moveName, statKey, {
 	rules = [], tactics = [], logistics = [], pathfinder = [], herd = null, command = [], spendCommand = spendStentorianCommand,
+	nerves = [],
 } = {}) {
 	const has = rulesHas(rules);
 	const asks = [];
@@ -251,6 +301,7 @@ export function improvementQuestions(moveName, statKey, {
 		asks.push({ name: "pathfinder", type: "checkbox", label: pathfinderLabel(pathfinder) });
 	}
 	if (moveName === STEADING_MOVE.DEPLOY && command.length) asks.push(commandQuestion(command, spendCommand));
+	if (nerves.length) asks.push(nervesQuestion(nerves));
 	return asks;
 }
 
@@ -311,6 +362,8 @@ export function rollAdjustments({
 	if (held) adv.push(held);
 	if (diminished && DIMINISHED_MOVES.has(moveName)) dis.push("Diminished");
 	if (winter && moveName === STEADING_MOVE.TRADE_BARTER) dis.push("Winter");
+	// We Happy Few's 6-, on whoever is behind this roll: any move, the answer naming them.
+	if (answers[NERVES]) dis.push(nervesSource(answers[NERVES]));
 	if (statKey === "defenses" && has("standingWatch") && answers.watch) {
 		statBonus += 1;
 		notes.push("Standing watch: Defenses +1");

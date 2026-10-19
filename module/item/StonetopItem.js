@@ -9,7 +9,7 @@ import {stonetopThumbnail} from "../utils/item-icon.js";
 import {STONETOP_SCOPE, ITEM_FLAG_SCOPE} from "../actors/character/StonetopFlags.js";
 import {newArcanumSlug, isArcanumData} from "./createArcanum.js";
 import {withMovePickBonuses} from "../actors/character/move-pick-bonuses.js";
-import {CARD_EMPOWERED_FLAG, CARD_INVOCATIONS_FLAG} from "../actors/character/invoke-consequences.js";
+import {invokeCardFlags} from "../actors/character/invoke-consequences.js";
 import {moveRollOptions} from "../actors/character/move-roll-options.js";
 import {bookMoveName} from "../actors/character/owns-move.js";
 
@@ -315,10 +315,11 @@ export function createStonetopItemClass(BaseItem) {
 			// Which Invocation(s) an Invoke the Sun God roll is for, when the pick context names them:
 			// the card's consequences act on exactly those (actors/character/invoke-consequences.js).
 			// And whether they were empowered, which changes what an Invocation's own button offers
-			// (invocation-apply.js: Bath of Healing Light's empowered choices).
-			if (Array.isArray(pickContext?.invocations) && pickContext.invocations.length) {
-				messageFlags[STONETOP_SCOPE] = { ...messageFlags[STONETOP_SCOPE], [CARD_INVOCATIONS_FLAG]: [...pickContext.invocations],
-					...(pickContext.empowered ? { [CARD_EMPOWERED_FLAG]: true } : {}) };
+			// (invocation-apply.js: Bath of Healing Light's empowered choices), and the consequence
+			// Empowered took before the roll, which the card pays on every result.
+			const invokeFlags = invokeCardFlags(pickContext);
+			if (Object.keys(invokeFlags).length) {
+				messageFlags[STONETOP_SCOPE] = { ...messageFlags[STONETOP_SCOPE], ...invokeFlags };
 			}
 			// What this move adds to its own card (Never at a Loss's deferred XP, Battle Joy's and
 			// Wielder's buttons, the speech's), its tier actions after any the roll brought.

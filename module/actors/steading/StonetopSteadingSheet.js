@@ -54,7 +54,7 @@ import {readCurrentWeather, currentWeatherView} from "../../seasons/current-weat
 import {openSeasonPicker} from "../../seasons/season-picker.js";
 import {SEASONAL_GAINS} from "../../dialogs/spring-burst-data.js";
 import {applySeasonalGains, tradeOpportunityLinksHtml, wireTradeOpportunityLinks} from "./seasonal-gains.js";
-import {contentGuidelinesView, plansView, planPromptsDatalistHtml, wireSteadingNotesTab} from "./steading-plans.js";
+import {contentGuidelinesView, plansView, wireSteadingNotesTab, planPromptsDatalistHtml} from "./steading-plans.js";
 import {addStonetopSteadingButton} from "../../utils/world.js";
 import {createInlineActionsDialog} from "../../utils/inline-actions-dialog.js";
 import {SETTLEMENTS} from "../../data/settlements.js";
@@ -78,6 +78,7 @@ import {settleSteadingRoll} from "./steading-roll.js";
 import {applyGuideRail, guideRailStep} from "../../utils/guide-rail.js";
 import {worldLogisticsNames} from "../character/logistics.js";
 import {deployCommandOffers} from "../../combat/command-holders.js";
+import {shakenNervesOffers} from "../character/fight-states.js";
 import {worldLearnedHolderNames} from "../character/owns-move.js";
 
 /**
@@ -1435,6 +1436,8 @@ export function createStonetopSteadingSheetClass(Base) {
 				// Stentorian's "You have advantage to ... Deploy" (Book I p.127), unticked: the Marshal who is
 				// Deploying (this user's own, else a pick among the ones they may write) while they hold Command.
 				command: deployCommandOffers(),
+				// We Happy Few's 6-: a shaken Marshal behind this roll has disadvantage (fight-states.js).
+				nerves: shakenNervesOffers(),
 			});
 			// Tor's blessing and the Size asked here as settleSteadingRoll asks them, so the window
 			// names what the card will add. With no answers yet, `notes` holds nothing that waits on one.
@@ -1661,6 +1664,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			// And the Marshal's Logistics, ticked, once any character has it learned.
 			const questions = improvementQuestions(STEADING_MOVE.REQUISITION, "fortunes", {
 				rules: this._improvementRules(), logistics: worldLogisticsNames(), herd: this._herdForQuestions(),
+				nerves: shakenNervesOffers(),
 			});
 			const questionHtml = questions.map(improvementQuestionHtml).join("");
 

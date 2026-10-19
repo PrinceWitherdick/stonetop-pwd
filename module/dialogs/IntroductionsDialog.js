@@ -96,13 +96,13 @@ const _PHASES = [
 		getQuestions:   (pc) => _PLAYBOOK_DATA[playbookSlug(pc)]?.step6 ?? null,
 	},
 	{
-		kind: "final", title: "Let spring break forth", icon: "fa-seedling",
-		getInstruction: () => `<strong>Add each player's home</strong> to Stonetop's Places of Interest. When everyone is done, <strong>let spring break forth!</strong><span class="stonetop-intros-instruction-note">Players can reach the Stonetop playbook by hitting the <strong>Stonetop</strong> button in the navbar of their character sheet.</span>`,
+		kind: "final", title: "Let spring burst forth", icon: "fa-seedling",
+		getInstruction: () => `<strong>Add each player's home</strong> to Stonetop's Places of Interest. When everyone is done, <strong>let spring burst forth!</strong><span class="stonetop-intros-instruction-note">Players can reach the Stonetop playbook by hitting the <strong>Stonetop</strong> button in the navbar of their character sheet.</span>`,
 		getQuestions:   () => null,
 	},
 ];
 
-// The last real phase (the final "let spring break forth" screen).
+// The last real phase (the final "let spring burst forth" screen).
 const _LAST_PHASE = _PHASES.length - 1;
 
 // A round-robin phase goes around the table (narration + the two steps); only the
@@ -1076,7 +1076,7 @@ export class IntroductionsDialog extends StonetopDialog {
 		});
 	}
 
-	// "Let spring break forth!" — the final button now also commits everything
+	// "Let spring burst forth!"— the final button now also commits everything
 	// recorded to the Chronicle (GM only; there's no separate save step) before the
 	// dialog closes. Players just close. If the save errors, keep the dialog open so
 	// the GM can fix it and try again rather than losing the closing action.
@@ -1185,7 +1185,7 @@ export class IntroductionsDialog extends StonetopDialog {
 		}
 		this._unregisterRosterHooks();
 		this._unregisterIntroHooks();
-		// Closing on purpose (the X or "Let spring break forth!") clears the open flag
+		// Closing on purpose (the X or "Let spring burst forth!") clears the open flag
 		// so we don't auto-reopen on the next load; a browser reload skips close() and
 		// leaves it set. The saved round/turn stays, so a manual reopen still resumes.
 		patchWalkthroughResume(_RESUME_KEY, { open: false });

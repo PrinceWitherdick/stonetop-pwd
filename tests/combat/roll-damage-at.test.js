@@ -11,8 +11,8 @@ vi.mock("../../module/utils/roll-engine.js", async importOriginal => ({
 	rollDamage: vi.fn(async () => ({ total: 0 })),
 }));
 const { rollDamage: plainCard } = await import("../../module/utils/roll-engine.js");
-vi.mock("../../module/combat/readiness-loss.js", () => ({ settleReadinessOnAttack: vi.fn(async () => false) }));
-const { settleReadinessOnAttack } = await import("../../module/combat/readiness-loss.js");
+vi.mock("../../module/combat/readiness-loss.js", () => ({ settleReadinessOnAttack: vi.fn(async () => false), settleFollowerReadinessOnAttack: vi.fn(async () => false) }));
+const { settleReadinessOnAttack, settleFollowerReadinessOnAttack } = await import("../../module/combat/readiness-loss.js");
 vi.mock("../../module/combat/battle-joy-offer.js", () => ({ offerBattleJoyOnDamage: vi.fn(async () => false) }));
 const { offerBattleJoyOnDamage } = await import("../../module/combat/battle-joy-offer.js");
 const { rollDamageAt, maybeBeginAttack, wireApplyDamage, withSeedTags, rollCharacterDamageAt, strikeBackAt, rollFollowerDamageAt, wireAttackConfirm, rollMoveDamageAt, rollInvocationDamage, wireConditionalArmor, wireUnstoppableMark, rollOptionDamage } = await import("../../module/combat/attack-flow.js");
@@ -710,6 +710,24 @@ describe("a character's own moves on the blow they deal", () => {
 		expect(card.content).toContain("Messy.");
 	});
 
+	// Heavy re-audit (2026-10-18): "If it would already be forceful and/or messy, it's even more so."
+	it("says a Musclebound blow with an already messy weapon is even messier, and says nothing more for a sword", async () => {
+		const bram = Object.assign(heavy("Musclebound"), {
+			typedActor: { carriedWeaponGear: async () => [{ slug: "battleaxe", weaponSlug: "battleaxe", catalog: true }], computedDamageDie: async () => "d8" },
+		});
+		fightInARow([["bram", bram], ["crin", crinwin("crinwin")]]);
+		await rollCharacterDamageAt(bram, { label: "Damage", shiftKey: true });
+		const card = cardWithFlag(posted, "damage").content;
+		expect(card).toContain("Musclebound: it was already messy, so it is even messier.");
+		expect(card).toContain("Forceful.");
+
+		posted.length = 0;
+		const sworded = heavy("Musclebound");
+		fightInARow([["bram", sworded], ["crin", crinwin("crinwin")]]);
+		await rollCharacterDamageAt(sworded, { label: "Damage", shiftKey: true });
+		expect(cardWithFlag(posted, "damage").content).not.toContain("Musclebound:");
+	});
+
 	it("leaves a bow alone: Musclebound is hand-to-hand or thrown", async () => {
 		const bram = Object.assign(heavy("Musclebound"), {
 			typedActor: { carriedWeaponGear: async () => [{ slug: "bow-arrows", weaponSlug: "bow-arrows", catalog: true }], computedDamageDie: async () => "d8" },
@@ -1235,6 +1253,60 @@ describe("Blot Out the Sun", () => {
 		expect(wren.updates).toMatchObject({ "flags.stonetop-pwd.inventory.resources.bow-arrows": 1 });
 	});
 
+	/** Press the Let Fly card's Confirm, as the archer, skipping the damage window. */
+	async function confirmVolley(wren, attack) {
+		const listeners = [];
+		const btn = { disabled: false, title: "", innerHTML: "", dataset: {}, addEventListener: (type, fn) => listeners.push(fn) };
+		const root = { querySelectorAll: sel => (sel === ".stonetop-attack-confirm" ? [btn] : []), querySelector: () => null };
+		const message = makeMessage({ attack });
+		const byToken = globalThis.fromUuid;
+		globalThis.fromUuid = async uuid => (uuid === wren.uuid ? wren : byToken(uuid));
+		wireAttackConfirm(message, root);
+		await new Promise(resolve => setTimeout(resolve, 0));
+		await listeners[0]({ shiftKey: true });
+		return message;
+	}
+
+	// "Add the area tag to your attack": the tag rides the card's weapon, so a volley that falls on several
+	// is not told it "hit more than one" as though that were the exception.
+	it("tags the volley's weapon as area, so the damage card does not warn about hitting several", async () => {
+		const wren = ranger("area");
+		const { tokens } = fightInARow([["wren", wren], ["crin", crinwin("crinwin")], ["crin2", crinwin("crinwin2")]]);
+		answerWhoItHits([true, true]);
+		const begun = await maybeBeginAttack(wren, { name: "Let Fly" });
+		const attack = begun.messageFlags[SCOPE].attack;
+		expect(attack.weapon).toMatchObject({ slug: "bow-arrows", area: true });
+		expect(attack).toMatchObject({ area: true, areaAround: "targets" });
+		await confirmVolley(wren, attack);
+		expect(damageFlag().results.map(r => r.uuid)).toEqual([tokens.crin.uuid, tokens.crin2.uuid]);
+		expect(cardWithFlag(posted, "damage").content).not.toContain("hit more than one");
+	});
+
+	it("leaves the weapon untagged when the arrows bought advantage instead", async () => {
+		const wren = ranger("advantage");
+		fightInARow([["wren", wren], ["crin", crinwin("crinwin")]]);
+		const attack = (await maybeBeginAttack(wren, { name: "Let Fly" })).messageFlags[SCOPE].attack;
+		expect(attack.weapon.area).toBeFalsy();
+		expect(attack).not.toHaveProperty("area");
+	});
+
+	// Loosed with nobody in reach, then a foe closes before the Confirm: the volley is still a volley, so
+	// it asks who it falls on (crin, and crin2 beside it) rather than landing on the one foe in contact.
+	it("keeps the area pick through the Confirm when nobody was there at the roll", async () => {
+		const wren = ranger("area");
+		fightInARow([["wren", wren]]);
+		const begun = await maybeBeginAttack(wren, { name: "Let Fly" });
+		const attack = begun.messageFlags[SCOPE].attack;
+		expect(attack).toMatchObject({ targets: [], area: true, areaAround: "targets" });
+
+		posted.length = 0;
+		const { tokens } = fightInARow([["wren", wren], ["crin", crinwin("crinwin")], ["crin2", crinwin("crinwin2")]]);
+		const wait = answerWhoItHits([true, true]);
+		await confirmVolley(wren, attack);
+		expect(wait).toHaveBeenCalledTimes(1);
+		expect(damageFlag().results.map(r => r.uuid)).toEqual([tokens.crin.uuid, tokens.crin2.uuid]);
+	});
+
 	/** Answer each window in turn by the key it is pressed with; anything unlisted closes. */
 	function pressInTurn(answers) {
 		globalThis.Dialog = class {
@@ -1330,6 +1402,22 @@ describe("a follower's damage from their card", () => {
 		combat.combatants.get("chound").flags["stonetop-pwd"].side = "heroes";
 		expect(await rollFollowerDamageAt(pim, crewBlow({ fighter: tokenActor("hound"), label: "Gwyn attacks", attacker: "Gwyn" }))).toBe(true);
 		expect(damageFlag().results.map(r => r.uuid)).toEqual([tokens.crin2.uuid]);
+	});
+
+	// The Marshal's re-audit, the user's ruling (2026-10-18): a follower's blow is them going on the offense, so the
+	// crew holding Readiness is asked whether they keep it, once; a blow whose order already asked is not.
+	it("asks a follower holding Readiness whether they went on the offense, unless the order already asked", async () => {
+		const pim = hero("pim", "Pim");
+		globalThis.game.combats = collection([]);
+		const settle = vi.mocked(settleFollowerReadinessOnAttack);
+		settle.mockClear();
+		await rollFollowerDamageAt(pim, crewBlow({ which: { ftype: "crew", slug: "" }, offense: false }));
+		expect(settle).not.toHaveBeenCalled();
+		// No card named: nothing to ask about either.
+		await rollFollowerDamageAt(pim, crewBlow());
+		expect(settle).not.toHaveBeenCalled();
+		expect(await rollFollowerDamageAt(pim, crewBlow({ which: { ftype: "crew", slug: "" } }))).toBe(true);
+		expect(settle).toHaveBeenCalledWith(pim, { ftype: "crew", slug: "", name: "Pim's crew" }, "Damage");
 	});
 
 	it("is aimed by the character's fight when the follower is off the map, without the character's +N", async () => {
@@ -1504,5 +1592,92 @@ describe("a Clash confirmed after the dice", () => {
 		const frozen = { uuid: tokens.far.uuid, name: "Crinwin", actorId: "far", disposition: -1, hasActor: true };
 		await confirmClash(pim, [frozen]);
 		expect(damageFlag().results.map(r => r.uuid)).toEqual([tokens.far.uuid]);
+	});
+});
+
+// Heavy re-audit (2026-10-18): Terror on the Field ("When you reduce a foe to 0 HP, describe how you take
+// them out...") said nothing anywhere. It is a line on the applied card, under the row it felled.
+describe("Terror on the Field on the applied card", () => {
+	/** A crinwin whose HP Apply can write. */
+	const mortal = id => Object.assign(crinwin(id), {
+		update: vi.fn(async function (changes) { this.system.attributes.hp.value = changes["system.attributes.hp.value"]; }),
+	});
+	/** Bram, with `moves`, findable by his uuid as the card's attacker. */
+	const heavyIn = (moves, row) => {
+		const bram = Object.assign(hero("bram", "Bram"), { items: moves.map(name => ({ type: "move", name })) });
+		const fight = fightInARow([["bram", bram], ...row]);
+		const byToken = globalThis.fromUuid;
+		globalThis.fromUuid = async uuid => (uuid === bram.uuid ? bram : byToken(uuid));
+		return { bram, ...fight };
+	};
+	const said = () => posted.at(-1).content;
+
+	it("says it under a foe the Heavy's blow took to 0 HP", async () => {
+		const crin = mortal("crin");
+		const { bram, tokens } = heavyIn(["Terror on the Field"], [["crin", crin]]);
+		await apply({ move: "Clash", attackerUuid: bram.uuid, weapon: null, results: [{ uuid: tokens.crin.uuid, name: "Crinwin", raw: 9, disposition: -1 }], applied: [] });
+		expect(crin.system.attributes.hp.value).toBe(0);
+		expect(said()).toContain("stonetop-terror-on-the-field");
+		expect(said()).toContain("Bram felled Crinwin. Terror on the Field: describe how you take them out.");
+	});
+
+	it("says nothing for a blow that leaves the foe standing, or from a Heavy without the move", async () => {
+		const crin = mortal("crin");
+		const { bram, tokens } = heavyIn(["Terror on the Field"], [["crin", crin]]);
+		await apply({ move: "Clash", attackerUuid: bram.uuid, weapon: null, results: [{ uuid: tokens.crin.uuid, name: "Crinwin", raw: 2, disposition: -1 }], applied: [] });
+		expect(crin.system.attributes.hp.value).toBe(2);
+		expect(said()).not.toContain("Terror on the Field");
+
+		const other = mortal("other");
+		const second = heavyIn([], [["other", other]]);
+		await apply({ move: "Clash", attackerUuid: second.bram.uuid, weapon: null, results: [{ uuid: second.tokens.other.uuid, name: "Crinwin", raw: 9, disposition: -1 }], applied: [] });
+		expect(other.system.attributes.hp.value).toBe(0);
+		expect(said()).not.toContain("Terror on the Field");
+	});
+
+	it("says it for the foe a Berserker's area blow felled, and not for the ally it felled beside them", async () => {
+		const crin = mortal("crin");
+		const pim = hero("pim", "Pim");
+		const { bram, tokens } = heavyIn(["Terror on the Field"], [["crin", crin], ["pim", pim]]);
+		await apply({
+			move: "Clash", attackerUuid: bram.uuid, weapon: null, applied: [],
+			results: [{ uuid: tokens.crin.uuid, name: "Crinwin", raw: 9, disposition: -1 }, { uuid: tokens.pim.uuid, name: "Pim", raw: 20, disposition: 1 }],
+		});
+		expect(pim.system.attributes.hp.value).toBe(0);
+		expect(said().match(/Terror on the Field/g)).toHaveLength(1);
+		expect(said()).toContain("Bram felled Crinwin.");
+		expect(said()).not.toContain("Bram felled Pim.");
+	});
+
+	it("says it when a lone blow drops one member of a group", async () => {
+		const crowd = {
+			...fakeActor({ id: "horde", name: "Crinwin horde", type: "monster" }),
+			flags: {},
+			system: { organization: "horde", fightAsGroup: true, count: 12, attributes: { armor: { value: 1 }, hp: { value: 3, max: 3 } } },
+			update: vi.fn(async function (changes) {
+				if ("system.count" in changes) this.system.count = changes["system.count"];
+				if ("system.attributes.hp.value" in changes) this.system.attributes.hp.value = changes["system.attributes.hp.value"];
+			}),
+		};
+		const { bram, tokens } = heavyIn(["Terror on the Field"], [["horde", crowd]]);
+		await apply({ move: "Clash", attackerUuid: bram.uuid, weapon: null, results: [{ uuid: tokens.horde.uuid, name: "Crinwin horde", raw: 5, disposition: -1 }], applied: [] });
+		expect(crowd.system.count).toBe(11);
+		expect(said()).toContain("Bram felled Crinwin horde. Terror on the Field");
+	});
+
+	it("never costs the damage: a throw saying it still latches the row", async () => {
+		const crin = mortal("crin");
+		const { bram, tokens } = heavyIn(["Terror on the Field"], [["crin", crin]]);
+		// A broken sheet: reading its flags throws once the HP has been written.
+		Object.defineProperty(crin, "flags", { get() { if (crin.system.attributes.hp.value === 0) throw new Error("broken"); return {}; } });
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			await apply({ move: "Clash", attackerUuid: bram.uuid, weapon: null, results: [{ uuid: tokens.crin.uuid, name: "Crinwin", raw: 9, disposition: -1 }], applied: [] });
+		} finally {
+			warn.mockRestore();
+		}
+		expect(crin.system.attributes.hp.value).toBe(0);
+		expect(said()).toContain("damage applied");
+		expect(said()).not.toContain("Terror on the Field");
 	});
 });

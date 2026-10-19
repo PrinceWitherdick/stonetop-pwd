@@ -40,6 +40,8 @@ const PLAYBOOK = {
 						legacyUsesFromPossession: true,
 					},
 					{ name: "Firkins", column: "regular", weight: 1 },
+					// Kept at the still-house, not carried (the user's ruling, 2026-10-18).
+					{ name: "Stills", column: "small", note: "immobile" },
 				],
 			},
 			{ slug: "mastiffs", label: "Mastiffs" },
@@ -62,6 +64,7 @@ function grantedItem(overrides = {}) {
 	};
 	if (!overrides.untagged) system.sourcePossession = overrides.sourcePossession ?? "apiary";
 	if (overrides.resource) system.resource = overrides.resource;
+	if (overrides.note !== undefined) system.note = overrides.note;
 	return {
 		_id: overrides._id ?? "id-1",
 		type: "move",
@@ -458,6 +461,46 @@ describe("StonetopCharacter — possession gear renders in the card, not the col
 		expect(snap.inventory.outfit.smallItems.some(i => i.name === "Fine whisky (advantage to Persuade)")).toBe(false);
 	});
 
+	// The Distillery's stills are the still-house's (the user's ruling, 2026-10-18): drawn on the card
+	// with their `immobile` note and no mark, never eating the small allowance, and not in the Outfit.
+	it("draws gear kept at home unmarked with its note, outside the small allowance and the Outfit", async () => {
+		const build = checked => {
+			const actor = new FakeActorBuilder()
+				.withPlaybook("the-blessed", "The Blessed")
+				.withItems([
+					grantedItem({ _id: "stills", name: "Stills", sourcePossession: "distillery", note: "<em>immobile</em>" }),
+					grantedItem({ _id: "malt", name: "Malt", sourcePossession: "distillery" }),
+				])
+				.withFlag("possessions.selected", ["distillery"])
+				.withFlag("inventory.checked", checked)
+				.build();
+			return new TestCharacterBuilder(actor).addPlaybook(PLAYBOOK).build().buildSnapshot();
+		};
+		const bare = await build({});
+		// A mark stored before the ruling counts for nothing now.
+		const snap = await build({ stills: true });
+		const distillery = snap.inventory.possessions.items.find(p => p.slug === "distillery");
+		const stills = distillery.grantedSmall.find(i => i.slug === "stills");
+		expect(stills).toMatchObject({ stashed: true, checked: false, note: "<em>immobile</em>" });
+		expect(distillery.grantedSmall.find(i => i.slug === "malt")).toMatchObject({ stashed: false, note: null });
+		expect(snap.inventory.outfit.smallPoolCap).toBe(bare.inventory.outfit.smallPoolCap);
+		// The malt, carried, still does.
+		expect((await build({ malt: true })).inventory.outfit.smallPoolCap).toBe(bare.inventory.outfit.smallPoolCap - 1);
+		expect(snap.inventory.outfit.possessionSmall.map(r => r.slug)).toEqual(["malt"]);
+	});
+
+	it("makes the stills with their note when the Distillery is taken, and adds it to stills made before", async () => {
+		const fresh = makeCharacter();
+		await fresh.character.selectPossession("distillery");
+		const [, payload] = fresh.actor.createEmbeddedDocuments.mock.calls[0];
+		expect(payload.find(p => p.name === "Stills").system.note).toBe("<em>immobile</em>");
+
+		const old = makeCharacter([grantedItem({ _id: "stills", name: "Stills", sourcePossession: "distillery" })]);
+		expect(await old.character.repairPossessionGrants()).toBe(1);
+		expect(old.actor.items[0].system.note).toBe("<em>immobile</em>");
+		expect(await old.character.repairPossessionGrants()).toBe(0);
+	});
+
 	it("a checked ◇ gear item in the card still counts toward load", async () => {
 		const bare    = await buildWithApiary().buildSnapshot();
 		const carried = await buildWithApiary({ checked: { smoker: true } }).buildSnapshot();
@@ -696,12 +739,58 @@ describe("StonetopCharacter: repairPossessionGrants", () => {
 		expect(full.character._inventory.resources.lantern).toBe(5);
 	});
 
-	it("never touches gear with no possession tag, however much it looks like a grant", async () => {
-		const handMade = oldCuirass({ sourcePossession: null, sourceKey: null });
-		const { actor, character } = build([handMade]);
+	// 1.3.2 to 1.3.5.1 made the cuirass with no tag at all: MoveModel stripped `sourcePossession`.
+	it("adopts untagged gear that one held possession's grant answers to, then repairs it", async () => {
+		const legacy = oldCuirass({ sourcePossession: undefined, sourceKey: undefined });
+		const { actor, character } = build([legacy]);
+		expect(await character.repairPossessionGrants()).toBe(1);
+		expect(actor.items[0].system).toMatchObject({
+			armor: { base: 1 }, sourcePossession: "tannery", sourceKey: "Boiled leather cuirass (1 armor)", sourceLabel: "Tannery",
+		});
+		expect((await character.buildSnapshot()).vitals.armor).toBe(2);
+		// Tagged now, so the next run has nothing to write.
 		expect(await character.repairPossessionGrants()).toBe(0);
-		expect(actor.updateEmbeddedDocuments).not.toHaveBeenCalled();
-		expect(actor.items[0].system.armor).toEqual({ modifier: 1 });
+	});
+
+	it("leaves untagged gear alone that matches no grant, the wrong column, or a possession not held", async () => {
+		const stranger = oldCuirass({ sourcePossession: undefined, sourceKey: undefined });
+		const notMine  = build([{ ...stranger, name: "Studded jerkin" }]);
+		expect(await notMine.character.repairPossessionGrants()).toBe(0);
+		const small    = build([{ ...stranger, system: { ...stranger.system, inventoryColumn: "small" } }]);
+		expect(await small.character.repairPossessionGrants()).toBe(0);
+		const unheld   = build([stranger], { selected: ["burglars-kit"] });
+		expect(await unheld.character.repairPossessionGrants()).toBe(0);
+		for (const { actor } of [notMine, small, unheld]) {
+			expect(actor.updateEmbeddedDocuments).not.toHaveBeenCalled();
+			expect(actor.items[0].system.armor).toEqual({ modifier: 1 });
+		}
+	});
+
+	it("leaves an untagged name two held possessions both grant, and a hand-written second copy, alone", async () => {
+		const firkins = { name: "Firkins", column: "regular", weight: 2 };
+		const pb = {
+			...FOX,
+			specialPossessions: { options: [
+				...FOX.specialPossessions.options,
+				{ slug: "carpenters-tools", label: "Carpenter's tools", grantsItems: [firkins] },
+				{ slug: "distillery", label: "Distillery", grantsItems: [firkins] },
+			] },
+		};
+		const legacyFirkins = { _id: "firkins", type: "move", name: "Firkins", system: { moveType: "inventory-custom", inventoryColumn: "regular", weight: 1 } };
+		const both = build([structuredClone(legacyFirkins)], { selected: ["carpenters-tools", "distillery"] });
+		expect(await both.character.repairPossessionGrants(pb)).toBe(0);
+		expect(both.actor.items[0].system).toEqual(legacyFirkins.system);
+
+		// Held alone, the Distillery's 1 ◇ firkins is adopted and brought up to the book's ◇◇.
+		const alone = build([structuredClone(legacyFirkins)], { selected: ["distillery"] });
+		expect(await alone.character.repairPossessionGrants(pb)).toBe(1);
+		expect(alone.actor.items[0].system).toMatchObject({ weight: 2, sourcePossession: "distillery" });
+
+		// A tagged cuirass already stands for the grant: a hand-written second one stays the player's.
+		const copy = { ...oldCuirass({ sourcePossession: undefined, sourceKey: undefined }), _id: "copy" };
+		const twice = build([oldCuirass({ armor: { base: 1 } }), copy]);
+		expect(await twice.character.repairPossessionGrants()).toBe(0);
+		expect(twice.actor.items.find(i => i._id === "copy").system.armor).toEqual({ modifier: 1 });
 	});
 
 	it("runs as part of ensurePossessionGrants when that resolves the playbook", async () => {

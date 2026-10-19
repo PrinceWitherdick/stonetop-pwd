@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { undauntedNow, undauntedOffer, undauntedUnread, eyesLockedAgainst, lockEyes, lockEyesCandidates, dangerousMode, leapIn, leapInOpen, HERO_MOVES, LOCKED_EYES_FLAG, LEAPT_IN_FLAG } from "../../module/fight/hero-moves.js";
+import { undauntedNow, undauntedOffer, undauntedUnread, eyesLockedAgainst, lockEyes, lockEyesCandidates, dangerousMode, leapIn, leapInOpen, blowOffers, HERO_MOVES, LOCKED_EYES_FLAG, LEAPT_IN_FLAG } from "../../module/fight/hero-moves.js";
 import { asteriskMoveUsed } from "../../module/actors/character/WouldBeHeroAsterisk.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection } from "../fakes/fight.js";
@@ -239,5 +239,96 @@ describe("Dangerous", () => {
 		expect(dangerousMode(pim, "dis")).toBe("dis");
 		const brute = withMoves(fakeActor({ id: "m", name: "Brute", type: "monster" }), ["Dangerous"]);
 		expect(dangerousMode(brute, "")).toBe("");
+	});
+});
+
+/** A Would-Be Hero with `moves`, a flag store, and a Resolve track that `setUses` really writes. */
+function wouldBe(moves, { resolve = 0, readiness = 0 } = {}) {
+	const flags = { [SYSTEM_ID]: { readiness } };
+	const held = { [HERO_MOVES.ANGER]: resolve };
+	const actor = Object.assign(fakeActor({ id: "pim", name: "Pim", type: "character", flags }), {
+		items: moves.map(move => (typeof move === "string" ? { type: "move", name: move } : move)),
+		getFlag: (scope, key) => flags[scope]?.[key],
+		setFlag: vi.fn(async (scope, key, value) => { flags[scope][key] = value; }),
+	});
+	const setUses = vi.fn(async (name, value) => { held[name] = value; });
+	actor.typedActor = { moveResources: { getMoveResources: () => held, setUses } };
+	return { actor, held, flags, setUses };
+}
+
+const anger = (max = 2, extra = {}) => ({ type: "move", name: HERO_MOVES.ANGER, system: { resource: { max, title: "Resolve" } }, ...extra });
+
+describe("Anger is a Gift's strike hard", () => {
+	it("takes its Resolve off the count held when it is TAKEN, not the count the window opened on", async () => {
+		const { actor, held, setUses } = wouldBe([anger()], { resolve: 1 });
+		const offer = blowOffers(actor, {}).find(o => o.key === "anger");
+		expect(offer).toMatchObject({ dice: "1d4", applied: false, tags: ["forceful"] });
+		// Speak Truth's +1 lands while the damage window is open.
+		held[HERO_MOVES.ANGER] = 2;
+		await offer.spend(actor);
+		expect(setUses).toHaveBeenCalledWith(HERO_MOVES.ANGER, 1, { stonetopMove: HERO_MOVES.ANGER });
+		expect(held[HERO_MOVES.ANGER]).toBe(1);
+	});
+
+	it("writes nothing when the Resolve was spent by hand while the window was open", async () => {
+		const { actor, held, setUses } = wouldBe([anger()], { resolve: 1 });
+		const offer = blowOffers(actor, {}).find(o => o.key === "anger");
+		held[HERO_MOVES.ANGER] = 0;
+		await offer.spend(actor);
+		expect(setUses).not.toHaveBeenCalled();
+		expect(held[HERO_MOVES.ANGER]).toBe(0);
+	});
+
+	it("reads the track's max off the LEARNED copy, not a switched-off one listed first", async () => {
+		const off = anger(1, { flags: { [SYSTEM_ID]: { learned: false } } });
+		const { actor, held } = wouldBe([off, anger(2)], { resolve: 2 });
+		const offer = blowOffers(actor, {}).find(o => o.key === "anger");
+		await offer.spend(actor);
+		expect(held[HERO_MOVES.ANGER]).toBe(1);
+	});
+});
+
+// "When you spend Readiness (from Defend) to strike back at an attacker, you deal +1d4 damage and scar,
+// mark, or diminish them." The user's ruling (2026-10-18): with no fight ring to say a blow is a strike
+// back, a hero holding Readiness is offered it unticked, and ticking it spends the Readiness.
+describe("Something to Remember Me By, off the fight ring", () => {
+	const keys = (actor, options) => blowOffers(actor, options).map(o => o.key);
+
+	it("is offered unticked only to a hero with the move learned, holding Readiness, on a blow not rolled as a strike back", () => {
+		const { actor } = wouldBe([HERO_MOVES.REMEMBER_ME], { readiness: 2 });
+		expect(blowOffers(actor, {}).find(o => o.key === "rememberMeSpend")).toMatchObject({
+			dice: "1d4", applied: false,
+			label: "Something to Remember Me By, struck back (spend 1 Readiness): +1d4 damage, and you scar, mark or diminish them",
+			pill: "Something to Remember Me By +1d4",
+		});
+		expect(keys(wouldBe([HERO_MOVES.REMEMBER_ME], { readiness: 0 }).actor, {})).not.toContain("rememberMeSpend");
+		expect(keys(wouldBe([], { readiness: 2 }).actor, {})).not.toContain("rememberMeSpend");
+		const unlearned = { type: "move", name: HERO_MOVES.REMEMBER_ME, flags: { [SYSTEM_ID]: { learned: false } } };
+		expect(keys(wouldBe([unlearned], { readiness: 2 }).actor, {})).not.toContain("rememberMeSpend");
+	});
+
+	it("spends exactly 1 Readiness when it is taken, re-read then and never below none", async () => {
+		const { actor, flags } = wouldBe([HERO_MOVES.REMEMBER_ME], { readiness: 2 });
+		const offer = blowOffers(actor, {}).find(o => o.key === "rememberMeSpend");
+		expect(actor.setFlag).not.toHaveBeenCalled();
+		// A Defend's hold lands while the window is open: the spend comes off what is held now.
+		flags[SYSTEM_ID].readiness = 3;
+		await offer.spend(actor);
+		expect(actor.setFlag).toHaveBeenCalledTimes(1);
+		expect(actor.setFlag).toHaveBeenCalledWith(SYSTEM_ID, "readiness", 2);
+		// Spent elsewhere in the meantime: nothing is written.
+		flags[SYSTEM_ID].readiness = 0;
+		await offer.spend(actor);
+		expect(actor.setFlag).toHaveBeenCalledTimes(1);
+		expect(flags[SYSTEM_ID].readiness).toBe(0);
+	});
+
+	it("leaves the ring's strike back as it was: ticked, costing nothing more, and no second line", () => {
+		const { actor } = wouldBe([HERO_MOVES.REMEMBER_ME], { readiness: 2 });
+		const offers = blowOffers(actor, { strikeBack: true });
+		expect(offers.map(o => o.key)).not.toContain("rememberMeSpend");
+		const line = offers.find(o => o.key === "rememberMe");
+		expect(line).toMatchObject({ dice: "1d4", applied: true });
+		expect(line.spend).toBeUndefined();
 	});
 });

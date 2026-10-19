@@ -1,3 +1,6 @@
+import { SYSTEM_ID } from "../../system-id.js";
+import { resolvedFlagProperty } from "./StonetopFlags.js";
+
 /**
  * A background's setup tracks (`setup.resources`) that a move empties. The Lightbearer's Auspicious
  * Birth: "you may mark this background's circle instead, to no ill effect. Clear it when you Make
@@ -33,4 +36,16 @@ export function markedTracks(tracks, setupResources) {
 /** The update fragment that empties `tracks` on a character, for flag scope `scope`. */
 export function clearTracksData(tracks, scope) {
 	return Object.fromEntries((tracks ?? []).map(t => [`flags.${scope}.background.setupResources.${t.key}`, 0]));
+}
+
+/**
+ * Write one setup track's value (Enigma, Omens) through the character's own background store, which is
+ * where the Details tab's circles write (CharacterBackgrounds#setSetupResource). Without that store, the
+ * stored tracks are written back whole with this one changed.
+ */
+export async function writeSetupResource(actor, key, value, character = actor?.typedActor) {
+	const background = character?.background;
+	if (background?.setSetupResource) return background.setSetupResource(key, value);
+	const stored = resolvedFlagProperty(actor, "background.setupResources") ?? {};
+	return actor?.setFlag?.(SYSTEM_ID, "background.setupResources", { ...stored, [key]: value });
 }

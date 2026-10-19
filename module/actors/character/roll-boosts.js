@@ -24,10 +24,12 @@
 //    Preparation per roll at most, whoever spends it. Whether the efforts apply is the table's to say (p.525),
 //    so pressing it says they do.
 //
-// ONE OF EACH PER ROLL PER HELPER. Diligence could in principle be spent twice on one roll; the card offers
-// each source once for each helper, so a Judge with 3 Diligence cannot turn a 7 into a 10 alone. Who used
-// which is kept on the message (`rollBoosts`), which is what hides a button once it has been pressed, and
-// what the card reads to name each +1 ("+1 Diligence (Aeron)") in its Conditions row.
+// ONE OF EACH PER ROLL PER HELPER, except a source that `stacks`. Diligence and Sanction are spent "1 to add +1"
+// with no limit on the roll (Book I pp.117-118; user's ruling, 2026-10-18 Judge re-audit), so a Judge holding 3
+// Diligence CAN turn a 7 into a 10 alone: their button stays while they hold any. Many Hands, Blessing and
+// Preparation stay once. Who used which is kept on the message (`rollBoosts`), which is what hides a button
+// once it has been pressed, and what the card reads to name each +1 ("+1 Diligence (Aeron)") in its
+// Conditions row, one line per +1.
 //
 // THE SAME +1 THE GM'S SHIFT UP ADDS. The total moves through the roll's shift term and the card is redrawn
 // for the new total and tier (stonetop.js _shiftRoll and _shiftRollCardFlavor, handed in as `deps`), exactly
@@ -92,12 +94,13 @@ export const BOLSTER_DURATIONS = Object.freeze([
  * move: Piety's Blessing is held by the faithful who worshipped beside a Lightbearer too.
  *
  * `onSteading`: offered on a steading's roll card as well, to anyone holding it. `onePerRoll`: once on a
- * roll whoever takes it, not once per helper. `tip(offer)`: the button's own tooltip, when it says more than
- * the source's stock one (boostButtonFace); falsy for the stock one.
+ * roll whoever takes it, not once per helper. `stacks`: the same helper may take it again on the same roll,
+ * as long as they hold enough. `tip(offer)`: the button's own tooltip, when it says more than the source's
+ * stock one (boostButtonFace); falsy for the stock one.
  */
 const SOURCES = {
-	diligence: { move: CHRONICLER, cost: 1, on: "any" },
-	sanction:  { move: COMMUNE_WITH_ARATIS, cost: 1, on: "own" },
+	diligence: { move: CHRONICLER, cost: 1, on: "any", stacks: true },
+	sanction:  { move: COMMUNE_WITH_ARATIS, cost: 1, on: "own", stacks: true },
 	manyHands: { move: MANY_HANDS, cost: 0, on: "other", notInStruggle: true },
 	blessing:  { move: PIETY, cost: 1, on: "own", held: blessingHeld, spend: spendBlessing, refund: holdBlessing },
 	preparation: {
@@ -207,7 +210,7 @@ export function actsForHelper(user, owners = []) {
 
 /**
  * The +1s this card still offers `user`: one per helper and source, leaving out a source that helper has
- * already used on this roll, a track with nothing held, and a move not learned. PURE apart from reading the
+ * already used on this roll (unless it `stacks`), a track with nothing held, and a move not learned. PURE apart from reading the
  * actors (and `ownersOf`, which reads the world's users).
  *
  * @param {object} p
@@ -236,14 +239,14 @@ export function boostOffers({ message, roller, helpers = [], user, ownersOf = ow
 	const mine = helpers.filter(h => h?.type === "character" && (anyone ? ownersOf(h).some(o => o.active) : actsForHelper(user, ownersOf(h))));
 	const offers = [];
 	for (const source of BOOST_SOURCES) {
-		const { move, cost, on, held: holds, notInStruggle, onSteading, onePerRoll } = SOURCES[source];
+		const { move, cost, on, held: holds, notInStruggle, onSteading, onePerRoll, stacks } = SOURCES[source];
 		if (notInStruggle && struggle) continue;
 		if (steadingRoll && !onSteading) continue;
 		if (onePerRoll && used.some(b => b.source === source)) continue;
 		for (const helper of mine) {
 			const own = helper.id === roller.id;
 			if (!steadingRoll && ((on === "own" && !own) || (on === "other" && own))) continue;
-			if (used.some(b => b.source === source && b.by === helper.uuid)) continue;
+			if (!stacks && used.some(b => b.source === source && b.by === helper.uuid)) continue;
 			if (!holds && !ownsLearnedMoveNamed(helper, move)) continue;
 			const held = cost ? heldFor(helper, source, scope) : 0;
 			if (held < cost) continue;
@@ -276,8 +279,9 @@ export function boostNote(boost) {
 /**
  * Take one +1: its pip off the helper's track (none for Many Hands), the roll's total shifted by one, the
  * card redrawn, and the helper written on the message so the button goes. Run in the card's turn on this
- * client (utils/card-queue.js) and read again there, so two presses cannot both land. Refused when that
- * helper already used that source here, or the track has run dry since the button was drawn.
+ * client (utils/card-queue.js) and read again there, so two presses cannot both land on one pip. Refused when
+ * that helper already used that source here (unless it `stacks`), or the track has run dry since the button
+ * was drawn.
  *
  * @param {object} deps
  * @param {(roll: Roll, shift: number) => Promise<void>} deps.shiftRoll  stonetop.js#_shiftRoll
@@ -291,7 +295,10 @@ export function takeBoost(message, offer, { shiftRoll, cardFlavor, afterShift = 
 		const def = SOURCES[source];
 		if (!def || !helper) return false;
 		const used = boostsOn(message, scope);
-		if (used.some(b => b.source === source && (def.onePerRoll || b.by === helper.uuid))) return false;
+		if (used.some(b => b.source === source && (def.onePerRoll || (!def.stacks && b.by === helper.uuid)))) return false;
+		// How many of these this helper had on the card before this one: a refund below asks whether the card
+		// gained one, which for a stacking source is a count, not "any".
+		const takenBefore = used.filter(b => b.source === source && b.by === helper.uuid).length;
 		// A Death's Door card whose tier has landed since the button was drawn: a +1 now would change nothing.
 		if (isDeathsDoorCard(message) && !deathsDoorAwaitsPlusOnes(message)) return false;
 		if (def.cost) {
@@ -308,7 +315,7 @@ export function takeBoost(message, offer, { shiftRoll, cardFlavor, afterShift = 
 			// The pip is paid back when the +1 never reached the card (the card gone, the write refused). The +1
 			// and its name land in ONE write, so a card that names it took it, and a throw after that (the
 			// tier effects that follow a new total) keeps the spend.
-			if (def.cost && !boostsOn(message, scope).some(b => b.source === source && b.by === helper.uuid)) {
+			if (def.cost && boostsOn(message, scope).filter(b => b.source === source && b.by === helper.uuid).length <= takenBefore) {
 				await refundBoost(helper, source, scope).catch(e => console.error("Stonetop | could not pay back a +1's spend", e));
 			}
 			throw err;

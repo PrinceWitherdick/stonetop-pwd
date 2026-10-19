@@ -5,7 +5,7 @@ import {
 	provisionsAtFire, suppliesAllAlong, suppliesRowToMark,
 } from "../../module/camp/camp-rules.js";
 import { campWindowView, hadAllAlongRows } from "../../module/camp/camp-view.js";
-import { campMembers, haveWhatYouNeedAtCamp, hostCamp, joinCamp } from "../../module/camp/camp-store.js";
+import { campMembers, haveWhatYouNeedAtCamp, hostCamp, joinCamp, magpieReminderRows } from "../../module/camp/camp-store.js";
 import { CampWindow } from "../../module/camp/CampWindow.js";
 import { applyUpdate, campParty, restoreCampWorld, seat } from "../fakes/camp.js";
 
@@ -209,5 +209,32 @@ describe("having it all along, on the documents", () => {
 		applyUpdate(a, { [`flags.${SYSTEM_ID}.camp.status`]: "cancelled" });
 		expect((await haveWhatYouNeedAtCamp(b, HAD_ALL_ALONG.SUPPLIES)).ok).toBe(false);
 		expect(b.typedActor.toggleCarriedItem).not.toHaveBeenCalled();
+	});
+});
+
+// MAGPIE (the Seeker): "When you Have What You Need, you can produce something strange ... but if you
+// do, tell us where you got it and 2 of the following". The Have What You Need card points at the
+// move in one row; its list of 4 stays on the move (one list per card).
+describe("Magpie on the Have What You Need card", () => {
+	it("is one row for a character with Magpie learned, and none without it or with it switched off", () => {
+		const rows = magpieReminderRows({ items: [{ type: "move", name: "Magpie", flags: {} }] });
+		expect(rows).toHaveLength(1);
+		expect(rows[0].label).toBe("Magpie");
+		expect(rows[0].value).toContain("tell us where you got it and pick 2 from Magpie's list");
+		expect(rows[0].value).not.toContain("not quite right");
+		expect(magpieReminderRows({ items: [] })).toEqual([]);
+		expect(magpieReminderRows({ items: [{ type: "move", name: "Magpie", flags: { [SYSTEM_ID]: { learned: false } } }] })).toEqual([]);
+	});
+
+	it("rides on the card the fire posts", async () => {
+		const party = campParty({ aeliana: { carried: {} }, bram: { moves: ["Magpie"] } });
+		const camp = await hostCamp(party.aeliana);
+		await joinCamp(party.bram, camp);
+		givePack(party.bram);
+		ChatMessage.create.mockClear?.();
+		await haveWhatYouNeedAtCamp(party.bram, HAD_ALL_ALONG.SUPPLIES);
+		const content = ChatMessage.create.mock.calls.at(-1)[0].content;
+		expect(content).toContain("Magpie");
+		expect(content).toContain("Had all along");
 	});
 });

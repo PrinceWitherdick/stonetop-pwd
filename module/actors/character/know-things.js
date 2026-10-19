@@ -16,6 +16,7 @@
 // beside Burn Brightly, the existing post-roll card mutation.
 
 import { ownsLearnedMoveNamed, ownedLearnedMove, ownedMoveNames } from "./owns-move.js";
+import { SYSTEM_ID } from "../../system-id.js";
 
 // Re-exported so this module's tests keep reaching the helper through the feature module.
 export { ownedMoveNames };
@@ -81,4 +82,57 @@ export function neverAtALossActions() {
 export function knowThingsRollOptions(actor) {
 	if (!ownsLearnedMoveNamed(actor, NEVER_AT_A_LOSS)) return null;
 	return { noXpOnMiss: true, tierActions: neverAtALossActions() };
+}
+
+/**
+ * The newest card spoken by `actorId` whose `move` stamp (StonetopItem#roll) is `matchName`, or
+ * passes it when it is a function, or null. `rolled` passes over a card with no roll on it; a
+ * message in `seen` (a Set of ids) ends the search, so nothing at or before it is answered.
+ *
+ * An array is scanned from the END and stopped at the first match, since the card asked about is
+ * nearly always at the bottom. Any other iterable (game.messages itself) is walked forward in place
+ * rather than copied, keeping the last match after the last `seen` message, which is the same card.
+ * `speaker.actor` is the world Actor's id even for a token speaker (speaker-actor.js), so the
+ * comparison needs no token.
+ *
+ * @param {Iterable<ChatMessage>|ChatMessage[]} messages  the log, oldest first
+ * @param {string} actorId
+ * @param {string|((moveName: string|undefined) => boolean)} matchName
+ * @param {{seen?: Set<string>|null, rolled?: boolean}} [options]
+ * @returns {ChatMessage|null}
+ */
+export function latestMoveCard(messages, actorId, matchName, { seen = null, rolled = false } = {}) {
+	if (!actorId) return null;
+	const named = typeof matchName === "function" ? matchName : name => name === matchName;
+	const matches = m => m?.speaker?.actor === actorId && named(m.getFlag?.(SYSTEM_ID, "move")) && (!rolled || !!m.rolls?.length);
+	// A stand-in for the log that is not iterable is read through its `contents`, as findPcAnswer reads it.
+	const log = messages?.[Symbol.iterator] ? messages : messages?.contents ?? [];
+	if (Array.isArray(log)) {
+		for (let i = log.length - 1; i >= 0; i--) {
+			const m = log[i];
+			if (seen?.has(m?.id)) return null;
+			if (matches(m)) return m;
+		}
+		return null;
+	}
+	let found = null;
+	for (const m of log) {
+		if (seen?.has(m?.id)) found = null;
+		else if (matches(m)) found = m;
+	}
+	return found;
+}
+
+/**
+ * The newest Know Things roll card spoken by `actorId`, or null. The Logbook and books & scrolls
+ * turn "a Know Things roll you JUST made" into a 10+, so their buttons sit on this card only, not
+ * on every old miss further up the log (stonetop.js#_wireLogbook). A card with no roll has nothing
+ * to upgrade and is passed over.
+ *
+ * @param {Iterable<ChatMessage>|ChatMessage[]} messages  the log, oldest first (game.messages)
+ * @param {string} actorId
+ * @returns {ChatMessage|null}
+ */
+export function latestKnowThingsCard(messages, actorId) {
+	return latestMoveCard(messages, actorId, isKnowThings, { rolled: true });
 }

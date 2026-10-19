@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import {
-	CAMP_BENEFIT, CAMP_LEFT_MAX, CAMP_STALE_MS, CAMP_STATE, CAMP_STATUS, FUR_LINED_BEDROLL, PEACEFUL_NIGHT,
+	CAMP_BENEFIT, CAMP_LEFT_MAX, CAMP_STALE_MS, CAMP_STATE, CAMP_STATUS, FUR_LINED_BEDROLL, PEACEFUL_NIGHT, PRECAUTION_MAX, precautionTonight,
 	isFurLinedBedrollName, sleepsInFurBedroll,
 	blankOffer, breakBreadOffered, followersBreakBread, campLedger, campShareUpdate, campState, coverTheRest, freezeCampPlan,
 	homeFiresHp, homeFiresHpFor, homeFiresKeeper, homeFiresOffered, isSettledRecord, newCampRecord, planExtra, planExtras, CAMP_EXTRA, offerStep, readCampRecord, readOwedCamps, rollsBedroll, rollsBreakBread, spareUses,
@@ -521,6 +521,61 @@ describe("Keep the Home-Fires Burning at the fire", () => {
 		const ledger = supper({ breaksBread: true, hearthCha: 3 });
 		const [aeliana] = freezeCampPlan(ledger, { breads: { aeliana: 2, bram: 2 } });
 		expect(aeliana).toMatchObject({ hpAfterPick: 12, extras: [{ source: "breakBread", amount: 2, from: 12, to: 14 }, { source: "homeFires", amount: 3, from: 14, to: 15 }], hpAfter: 15 });
+	});
+});
+
+// The Ranger's A Safe Place: "When you select and prepare the party's camp site, hold 1 Precaution,
+// or 2 Precaution if you are well-versed with this area and its dangers." A new site, a new hold: the
+// settle SETS the track, so Precaution the last camp left unspent is gone.
+describe("A Safe Place at the fire", () => {
+	const TRACK = `flags.${SYSTEM_ID}.moves.backgroundChoices.A Safe Place`;
+	const live = (over = {}) => ({
+		resources:     { supplies: 4 },
+		hpValue:       4,
+		resourceData:  (slug, n) => ({ [`flags.${SYSTEM_ID}.inventory.resources.${slug}`]: n }),
+		advantageData: source => ({ [`flags.${SYSTEM_ID}.heldAdvantage`]: { sources: [source].flat() } }),
+		trackData:     (move, held) => ({ [`flags.${SYSTEM_ID}.moves.backgroundChoices.${move}`]: held }),
+		...over,
+	});
+
+	it("starts a camper on hold 1, and keeps a pick inside 0 to 2", () => {
+		expect(readCampRecord({ id: "camp-1" }).precaution).toBe(1);
+		expect(newCampRecord({ id: "camp-1", hostId: "aeliana", actorId: "bram" }).precaution).toBe(1);
+		expect(readCampRecord({ id: "camp-1", precaution: 0 }).precaution).toBe(0);
+		expect(readCampRecord({ id: "camp-1", precaution: 7 }).precaution).toBe(PRECAUTION_MAX);
+	});
+
+	it("is the holder's own: only a camper with the move learned gets a hold on their plan", () => {
+		const ledger = campLedger([paying({ offer: { supplies: 2 } }), bram({ safePlace: true, choices: { precaution: 2 } })]);
+		expect(precautionTonight(ledger.rows[0])).toBeNull();
+		const [aeliana, bramEntry] = freezeCampPlan(ledger);
+		expect(aeliana).not.toHaveProperty("precaution");
+		expect(bramEntry.precaution).toBe(2);
+	});
+
+	it("holds whatever the meal and the night did: preparing the site is the move's trigger", () => {
+		const ledger = campLedger([paying({}, { safePlace: true }), bram({ safePlace: true, choices: { eats: false } })]);
+		expect(freezeCampPlan(ledger).map(e => e.precaution)).toEqual([1, 1]);
+	});
+
+	it("fills the track to the pick on settle, replacing whatever was held before", () => {
+		const [entry] = freezeCampPlan(campLedger([paying({ precaution: 2 }, { safePlace: true })]));
+		expect(campShareUpdate(entry, live()).update[TRACK]).toBe(2);
+		const [once] = freezeCampPlan(campLedger([paying({}, { safePlace: true })]));
+		expect(campShareUpdate(once, live()).update[TRACK]).toBe(1);
+	});
+
+	it("empties the track when the site was not prepared, so last camp's Precaution does not carry over", () => {
+		const [entry] = freezeCampPlan(campLedger([paying({ precaution: 0 }, { safePlace: true })]));
+		expect(entry.precaution).toBe(0);
+		expect(campShareUpdate(entry, live()).update[TRACK]).toBe(0);
+	});
+
+	it("leaves the track alone for a camper without the move, or a plan frozen before the camp knew it", () => {
+		const [entry] = freezeCampPlan(campLedger([paying()]));
+		expect(Object.keys(campShareUpdate(entry, live()).update)).not.toContain(TRACK);
+		const [held] = freezeCampPlan(campLedger([paying({}, { safePlace: true })]));
+		expect(Object.keys(campShareUpdate(held, live({ trackData: undefined })).update)).not.toContain(TRACK);
 	});
 });
 

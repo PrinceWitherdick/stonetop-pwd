@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
 	FIGHT_STATES, fightStateOn, fightStateActive, setFightState, fightStateGlyph, fightStateForStem,
-	shakeNervesOnMiss, revealOnAttack, WE_HAPPY_FEW,
+	shakeNervesOnMiss, revealOnAttack, WE_HAPPY_FEW, ownShakenName, shakenNervesOffers,
 } from "../../../module/actors/character/fight-states.js";
 import { SYSTEM_ID } from "../../../module/system-id.js";
 
@@ -100,6 +100,30 @@ describe("We Happy Few's 6-", () => {
 		const shaken = hero({ moves: [WE_HAPPY_FEW], on: { nerves: true } });
 		expect(await shakeNervesOnMiss(shaken, item, "failure")).toBe(false);
 		expect(posted).toEqual([]);
+	});
+});
+
+// The steading's rolls the shaken Marshal is behind (actors/steading/improvement-rolls.js): who to ask about.
+describe("shaken nerves on a steading roll", () => {
+	const named = (id, name, on) => Object.assign(hero({ moves: [WE_HAPPY_FEW], on: { nerves: on } }), { id, name });
+
+	it("names a character whose nerves are shaken, and no one else", () => {
+		expect(ownShakenName(named("a", "Wren", true))).toBe("Wren");
+		expect(ownShakenName(named("a", "Wren", false))).toBe("");
+		expect(ownShakenName(Object.assign(named("a", "Wren", true), { type: "npc" }))).toBe("");
+		expect(ownShakenName(null)).toBe("");
+	});
+
+	it("offers the user's own character alone when it is shaken, else every shaken one", () => {
+		const wren = named("a", "Wren", true);
+		const ash = named("b", "Ash", true);
+		const calm = named("c", "Calm", false);
+		const world = [wren, ash, calm];
+		expect(shakenNervesOffers(world, { character: { id: "b" } })).toEqual([{ name: "Ash", own: true }]);
+		expect(shakenNervesOffers(world, { character: { id: "c" } })).toEqual([{ name: "Wren", own: false }, { name: "Ash", own: false }]);
+		expect(shakenNervesOffers(world, null)).toEqual([{ name: "Wren", own: false }, { name: "Ash", own: false }]);
+		expect(shakenNervesOffers(new Map([["a", wren]]).values(), null)).toEqual([{ name: "Wren", own: false }]);
+		expect(shakenNervesOffers([calm], null)).toEqual([]);
 	});
 });
 

@@ -2,9 +2,13 @@
  * The Seeker's moves that act on the arcana tab itself, rather than on a roll of their own.
  *
  *  - MIND OVER MAGIC: "When you roll to study or use an arcanum, you can roll +INT instead of the
- *    stat you'd normally roll." A mystery's dialog offers a second roll button, +INT, beside the
- *    printed stat (mindOverMagicRoll). Studying an arcanum is Know Things, which is +INT already.
- *    A mystery that rolls no stat ("roll +nothing") has nothing to swap.
+ *    stat you'd normally roll." Every arcanum move that rolls a stat offers a second roll button,
+ *    +INT, beside the printed stat (mindOverMagicRoll): a mystery on the back, a card's condensed
+ *    move, and the rolls printed on a card's FRONT (the Azure Hand's +CON, the Red Scepter's +CHA,
+ *    a cracked flute's +CHA practice), which are handles on the tab like a mystery's name
+ *    (data/arcana-moves.js#parseArcanumFrontMoves). A move that already rolls +INT (Cast a Codex
+ *    Spell) or rolls no stat ("roll +nothing") has nothing to swap. Studying a card to identify it
+ *    is the Know Things roll itself, which is +INT as the book prints it.
  *
  *  - IMPROVISE: "When you wish to use an arcanum's move or option without having unlocked it, ask the
  *    GM what fool risk(s) it requires and/or what consequence(s) you'll incur. If you go for it, roll
@@ -25,9 +29,11 @@
 
 import { SYSTEM_ID } from "../../system-id.js";
 import { isMajorArcanumItem } from "../../arcana-icons.js";
-import { consequenceBoxRange, consequenceLabel } from "./CharacterArcana.js";
+import { consequenceBoxRange, consequenceLabel, unlockChoiceState } from "./CharacterArcana.js";
 import { frontTaskTrack } from "./seeker-collection.js";
-import { ownedLearnedMove, ownsLearnedMoveNamed } from "./owns-move.js";
+import { bookMoveName, moveLearnedIn, ownedLearnedMove, ownsLearnedMoveNamed } from "./owns-move.js";
+import { readableFlags } from "./StonetopFlags.js";
+import { altStatGrantsFor } from "../../data/alt-stat-grants.js";
 import { learnedTrack } from "./MoveResources.js";
 import { debilityPayments, payDebility } from "./invoke-consequences.js";
 import { askWithButtons } from "../../utils/ask-with-buttons.js";
@@ -63,6 +69,40 @@ export function mindOverMagicRoll(actor, stat) {
 	return { stat: "int", label: `Roll +INT (${MIND_OVER_MAGIC})`, source: MIND_OVER_MAGIC };
 }
 
+/**
+ * Every stat a mystery's roll may be swapped for, one roll button each, in order: Mind Over Magic's
+ * +INT, then the blanket grants keyed to the printed stat (ALT_STAT_GRANTS' `whenDefaultStat` rows),
+ * which ask nothing of the move: the Fox's Laugh at Danger, "When you are about to roll +CON and you
+ * make a joke about the adversity you face, you can roll +CHA instead." A dozen minor arcana roll
+ * +CON, and the joke is the player's to make, so its button is named for the move as Mind Over
+ * Magic's is. Never the printed stat, never one stat twice; empty when nothing swaps.
+ *
+ * @param {Actor} actor
+ * @param {string|null} stat  the mystery's printed stat ("con"), "nothing", or null
+ * @returns {{stat: string, label: string, source: string}[]}
+ */
+export function arcanumAltRolls(actor, stat) {
+	const printed = String(stat ?? "").toLowerCase();
+	if (!STAT_KEYS.includes(printed)) return [];
+	const rolls = [];
+	const mom = mindOverMagicRoll(actor, printed);
+	if (mom) rolls.push(mom);
+	// The book's moves only, LEARNED, as the move roll's own picker reads them (StonetopCharacterSheet#_altStatChoiceForRollable).
+	const learned = (actor?.items ?? []).filter(i => i.type === "move" && bookMoveName(i) != null && moveLearnedIn(i, actor.items)).map(i => i.name);
+	const bag = readableFlags(actor);
+	const rows = altStatGrantsFor({ defaultStat: printed }, {
+		learnedMoveNames: learned,
+		playbook:   actor?.system?.playbook?.name ?? null,
+		background: bag?.background?.selected ?? bag?.["background.selected"] ?? null,
+	});
+	for (const g of rows) {
+		if (rolls.some(r => r.stat === g.altStat)) continue;
+		const source = g.ownsMove ?? g.background?.label ?? "";
+		rolls.push({ stat: g.altStat, label: `Roll +${g.altStat.toUpperCase()} (${source})`, source });
+	}
+	return rolls;
+}
+
 // -- Improvise ----------------------------------------------------------------------------------------
 
 /**
@@ -76,7 +116,9 @@ export function mindOverMagicRoll(actor, stat) {
  * @param {{editable?: boolean}} [o]
  */
 export function improviseOffer(actor, move, arcanumSlug, { editable = true } = {}) {
-	if (!move || move.learned || !editable || !arcanumSlug) return null;
+	// A move printed on the front is never locked ("without having unlocked it" does not apply): it
+	// is unusable only while the card is unread, and Improvise does not read cards.
+	if (!move || move.learned || move.front || !editable || !arcanumSlug) return null;
 	if (!ownsLearnedMoveNamed(actor, IMPROVISE)) return null;
 	return { arcanumSlug, moveSlug: move.slug, moveName: move.name, cardTitle: move.cardTitle ?? "" };
 }
@@ -151,7 +193,7 @@ export function askImproviseTask({ title, tasks }, { ask = askWithButtons } = {}
  * whose ○ are all marked says so and marks nothing: a □ on its front is some other track, not an
  * unlock step. Answers whether a step was marked.
  */
-export async function markImproviseStep(actor, arcanumSlug, { ask = askImproviseTask } = {}) {
+export async function markImproviseStep(actor, arcanumSlug, { ask = askImproviseTask, pick = askUnlockChoice } = {}) {
 	const character = actor?.typedActor;
 	const step = await character?.markNextArcanumUnlockStep?.(arcanumSlug, { stonetopMove: IMPROVISE });
 	if (!step) return false;
@@ -164,6 +206,8 @@ export async function markImproviseStep(actor, arcanumSlug, { ask = askImprovise
 	await postMoveNote(actor, IMPROVISE,
 		`${actor.name} marks a step towards unlocking ${step.title} (${step.index + 1} of ${step.count}).`
 		+ (last ? " That was the last mark: see the card for what unlocking it brings." : ""));
+	// A mark that buys a choice (the Hec'tumel Codex's spells) asks for it, as a mark ticked by hand does.
+	await chooseUnlockChoices(actor, arcanumSlug, { ask: pick });
 	return true;
 }
 
@@ -207,6 +251,57 @@ export function wireImproviseCard(message, html) {
 		act: (actor, btn, buttons) => settleImproviseUse(message, actor, btn.dataset, { buttons }) });
 	wireLatchedButtons(message, html, { selector: ".stonetop-improvise-step", flag: IMPROVISE_STEP_FLAG, what: IMPROVISE,
 		act: (actor, btn, buttons) => settleImproviseStep(message, actor, btn.dataset.arcanumSlug, { buttons }) });
+}
+
+// -- A mark that buys a choice ------------------------------------------------------------------------
+
+/**
+ * The Hec'tumel Codex: "○○○○ Each time you make a mark, choose one of the Codex Spells (see
+ * reverse)", and "you can now cast it". Not a Seeker move, but it rides the same box-tick seam: a newly
+ * marked unlock ○ on such a card (CharacterArcana.js#unlockChoiceState) asks which unchosen spell
+ * that mark buys and ticks its □ on the back, for a player who may never see the back. A mark made
+ * where no one could be asked (the Seeker's creation mark) or a pick that was closed leaves the
+ * card owing the choice, and the tab's cue on the front asks again (chooseUnlockChoices).
+ */
+export function askUnlockChoice({ title, name, choices }, { ask = askWithButtons } = {}) {
+	return ask({
+		title:   `${title}: choose one of the ${name}`,
+		content: `<p>Your mark on <strong>${escHtml(title)}</strong> lets you choose one of the ${escHtml(name)}. Which do you learn?</p>`,
+		buttons: [
+			...choices.map((c, n) => ({ key: `choice-${c.index}`, label: c.label || `Choice ${n + 1}`, icon: "fa-book-open", value: c })),
+			{ key: "none", label: "Choose later", icon: "fa-xmark", value: null },
+		],
+	});
+}
+
+/**
+ * Ask for every choice a card's unlock marks still owe, one at a time, ticking each one picked.
+ * Closing the ask (or "Choose later") stops, leaves the marks as they are and says where to choose
+ * later. Answers how many were chosen; 0 for a card that owes none.
+ *
+ * @param {Actor} actor
+ * @param {string} slug
+ * @param {{ask?: Function}} [o]  askUnlockChoice by default
+ */
+export async function chooseUnlockChoices(actor, slug, { ask = askUnlockChoice } = {}) {
+	const character = actor?.typedActor;
+	const card = slug ? await character?.getArcanum?.(slug) : null;
+	if (!card) return 0;
+	const title = card.front?.title ?? slug;
+	let chosen = 0;
+	for (;;) {
+		const state = unlockChoiceState(card, character.arcanaBoxStates ?? {});
+		if (!state?.owed) return chosen;
+		const picked = await ask({ title, name: state.name, choices: state.open });
+		if (!picked) {
+			globalThis.ui?.notifications?.info?.(`No ${state.name} chosen yet: the mark stays. `
+				+ `Choose one from the card on the Arcana tab when you're ready.`);
+			return chosen;
+		}
+		await character.setArcanumBoxChecked(slug, "back", picked.index, true);
+		await postMoveNote(actor, title, `${actor.name} chooses ${picked.label} from the ${state.name} (${title}).`);
+		chosen++;
+	}
 }
 
 // -- Conduit of Power / Overchannel -------------------------------------------------------------------
@@ -279,15 +374,16 @@ export async function askConsequenceDiversion({ title, diversions }, { ask = ask
 
 /**
  * A change on an arcanum card's □/○/◇, from the sheet. A tick of a major arcanum's Consequence
- * asks first when Conduit of Power or Overchannel gives a choice; everything else is written as
- * it stands. Answers "marked", "unticked", "diverted" (something else was marked and the box stays
- * clear), "cancelled" (nothing was marked), or null without a character.
+ * asks first when Conduit of Power or Overchannel gives a choice; a tick of an unlock ○ that buys a
+ * choice (the Hec'tumel Codex's spells) asks for it after the mark is written; everything else is
+ * written as it stands. Answers "marked", "unticked", "diverted" (something else was marked and the
+ * box stays clear), "cancelled" (nothing was marked), or null without a character.
  *
  * @param {Actor} actor
  * @param {{slug: string, context: string, index: number, checked: boolean}} box
- * @param {{ask?: Function}} [o]  askConsequenceDiversion by default
+ * @param {{ask?: Function, pick?: Function}} [o]  askConsequenceDiversion and askUnlockChoice by default
  */
-export async function settleArcanumBoxTick(actor, { slug, context, index, checked }, { ask = askConsequenceDiversion } = {}) {
+export async function settleArcanumBoxTick(actor, { slug, context, index, checked }, { ask = askConsequenceDiversion, pick = askUnlockChoice } = {}) {
 	const character = actor?.typedActor;
 	if (!character) return null;
 	const write = async () => {
@@ -295,6 +391,11 @@ export async function settleArcanumBoxTick(actor, { slug, context, index, checke
 		return checked ? "marked" : "unticked";
 	};
 	if (!checked) return write();
+	if (context === "unlock") {
+		const result = await write();
+		await chooseUnlockChoices(actor, slug, { ask: pick });
+		return result;
+	}
 	const card = await majorConsequenceCard(character, slug, context, index);
 	if (!card) return write();
 	const diversions = consequenceDiversions(actor);

@@ -7,7 +7,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Window } from "happy-dom";
 import {
 	GIVE_ADVANTAGE_MOVES, giveAdvantageRollOptions, giveAdvantageCardHtml, givenSource, advantageRecipients, SEEK_INSIGHT_QUESTIONS,
+	seekInsightQuestionsFor,
 } from "../../../module/actors/character/give-advantage.js";
+import { MOVE_PICK_BONUSES } from "../../../module/actors/character/move-pick-bonuses.js";
 import {
 	giveAdvantage, handleGiveAdvantageQuery, offerAdvantage, reconcileGivenAdvantage, wireGiveAdvantage, wireFocusFire, GIVE_ADVANTAGE_QUERY, GIVEN_FLAG, GIVING_FLAG, FOCUS_FIRE_CARD_FLAG,
 } from "../../../module/actors/character/give-advantage-flow.js";
@@ -446,8 +448,52 @@ describe("Seek Insight, Danger Sense, Ambush, Knowledge is Power, Frosty, Speak 
 		for (const question of SEEK_INSIGHT_QUESTIONS) expect(defy.tierActions.success).toContain(question);
 	});
 
-	it("puts Speak Softly's hold on its posted card", () => {
-		expect(giveAdvantageCardHtml(pc({ id: "m", moves: ["Speak Softly"] }), "Speak Softly")).toContain("Hold advantage (Speak Softly)");
+	// Heavy re-audit (the user's ruling of 2026-10-18): Frosty asks "a question that you could ask when Seeking
+	// Insight", and Situational Awareness adds three to that list, so a Heavy who learned it sees them on the
+	// line too. Resourceful asks "a question from Seek Insight", the same list.
+	it("lists Situational Awareness's questions on Frosty's and Resourceful's lines for a roller who learned it", () => {
+		const awareness = MOVE_PICK_BONUSES.find(row => row.ownsLearned === "Situational Awareness").addOptions;
+		expect(awareness).toHaveLength(3);
+		const lines = roller => [
+			moveRollOptions("Defy Danger", roller).tierActions.success,
+			moveRollOptions("Defy Danger", roller).tierActions.failure,
+		];
+		for (const line of lines(pc({ id: "h", moves: ["Frosty", "Resourceful", "Situational Awareness"] }))) {
+			for (const question of [...SEEK_INSIGHT_QUESTIONS, ...awareness]) expect(line).toContain(question);
+		}
+		for (const without of [pc({ id: "h", moves: ["Frosty", "Resourceful"] }),
+			pc({ id: "h", moves: ["Frosty", "Resourceful", "Situational Awareness"], unlearned: ["Situational Awareness"] })]) {
+			for (const line of lines(without)) {
+				for (const question of SEEK_INSIGHT_QUESTIONS) expect(line).toContain(question);
+				for (const question of awareness) expect(line).not.toContain(question);
+			}
+		}
+		expect(seekInsightQuestionsFor(null)).toEqual([...SEEK_INSIGHT_QUESTIONS]);
+	});
+
+	// Fox re-audit (2026-10-18): Burgle's "Ask a Seek Insight question about what you saw" is a pick on both
+	// hits, so the questions it may ask are printed on both, and on no other tier.
+	it("lists Seek Insight's questions on Burgle's 10+ and 7-9, The Natural's among them for a Fox who took it", () => {
+		const burgle = moveRollOptions("Burgle", pc({ id: "f", moves: ["Burgle"] }));
+		expect(Object.keys(burgle.tierActions)).toEqual(["success", "partial"]);
+		for (const tier of ["success", "partial"]) {
+			expect(burgle.tierActions[tier]).toContain("Ask a Seek Insight question about what you saw");
+			for (const question of SEEK_INSIGHT_QUESTIONS) expect(burgle.tierActions[tier]).toContain(question);
+			expect(burgle.tierActions[tier]).not.toContain("What opportunity does no one else see?");
+		}
+		const natural = { ...pc({ id: "f", moves: ["Burgle"] }), system: { playbook: { name: "The Fox" } },
+			flags: { [SCOPE]: { background: { selected: "the-natural" } } } };
+		expect(moveRollOptions("Burgle", natural).tierActions.success).toContain("What opportunity does no one else see?");
+	});
+
+	// Marshal re-audit (2026-10-18): "advantage on your next roll AGAINST THEM", so not a held advantage on
+	// whatever roll comes next, but a button of its own that names the enemy (tests/fight/marshal-reaudit.test.js).
+	it("puts Speak Softly's own \"They refused\" button on its posted card, not a held advantage", () => {
+		const html = giveAdvantageCardHtml(pc({ id: "m", moves: ["Speak Softly"] }), "Speak Softly");
+		expect(html).toContain("stonetop-speak-softly");
+		expect(html).not.toContain("Hold advantage");
+		expect(GIVE_ADVANTAGE_MOVES["Speak Softly"]).toBeUndefined();
+		expect(giveAdvantageCardHtml(pc({ id: "x" }), "Speak Softly")).toBe("");
 	});
 
 	it("puts Read the Land's hold on its posted card, and Shake It Off's gift to the ally on its 7-9 alone", () => {

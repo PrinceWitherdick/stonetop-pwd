@@ -517,7 +517,7 @@ export function pickReferenceHtml(pools, activeTier, { title = "", hint = "" } =
 	</div>`;
 }
 
-function _rollCard({ header, result = "", resultClass = "", resultDetail = "", keywords = "", resultOutcomes = null, resultLegend = "", pickList = "", pickTiers = [], tierActions = null, conditionsHtml = "", noticesHtml = "", buttons = false, actions = "", total = null, formula = "", description = "", dieResults = "", badge = "", sectionClass = "", damage = false, countsAs = null }) {
+function _rollCard({ header, result = "", resultClass = "", resultDetail = "", keywords = "", resultOutcomes = null, resultLegend = "", pickList = "", pickTiers = [], tierActions = null, criticalActions = "", critical = false, conditionsHtml = "", noticesHtml = "", buttons = false, actions = "", total = null, formula = "", description = "", dieResults = "", badge = "", sectionClass = "", damage = false, countsAs = null }) {
 	// Stash every tier's outcome on the row so a GM Shift Up/Down can swap the
 	// detail line to match the new tier (see _shiftRollCardFlavor in stonetop.js).
 	const outcomeAttrs = resultOutcomes
@@ -573,11 +573,17 @@ function _rollCard({ header, result = "", resultClass = "", resultDetail = "", k
 	// Foundry v14 runs through sanitize-html, which strips valueless boolean attributes — a bare
 	// `hidden` vanishes server-side and every tier renders visible (see _shiftRollCardFlavor).
 	const tierActionEntries = Object.entries(tierActions ?? {}).filter(([, html]) => html);
-	const tierActionsHtml = tierActionEntries.length
+	// A 12+'s own line (rollStat's `criticalActions`): a row of the 10+ that shows on a `critical` total
+	// alone, marked `data-critical` so a rewrite shows it on a 12+ and hides it below one, a 10 or 11
+	// included (stonetop.js#_shiftRollCardFlavor). After the tier's own row, so it reads under its actions.
+	const criticalRowHtml = criticalActions
+		? `<div class="stonetop-roll-tier-action stonetop-roll-critical-action" data-tier="success" data-critical="true"${critical && resultClass === "success" ? "" : ` hidden="hidden"`}>${criticalActions}</div>`
+		: "";
+	const tierActionsHtml = tierActionEntries.length || criticalRowHtml
 		? `<div class="card-buttons stonetop-roll-tier-actions" data-active-tier="${escHtml(resultClass)}">
 			${tierActionEntries.map(([tier, html]) =>
 				`<div class="stonetop-roll-tier-action" data-tier="${escHtml(tier)}"${tier === resultClass ? "" : ` hidden="hidden"`}>${html}</div>`
-			).join("")}
+			).join("")}${criticalRowHtml}
 		</div>`
 		: "";
 	const resultLegendHtml = resultLegend
@@ -986,12 +992,11 @@ export async function rollStat(statKey, actor, options = {}) {
 
 	const conditionsHtml = conditionsRowHtml(conditions);
 
-	// A 12+'s own line rides the 10+ row, and only a total that reached 12 carries it: a 10 or 11 is
-	// the same tier and says nothing more.
+	// A 12+'s own line rides the 10+ row, and only a total that reached 12 shows it: a 10 or 11 is the same
+	// tier and says nothing more. Kept on the card hidden below 12 (_rollCard), so a rewrite onto or off a
+	// 12+ shows or hides it with the total (A Force to Be Reckoned With follows the FINAL total).
 	const critical = String(options.criticalActions ?? "");
-	const tierActions = critical && roll.total >= CRITICAL_TOTAL
-		? { ...(options.tierActions ?? {}), success: `${options.tierActions?.success ?? ""}${critical}` }
-		: options.tierActions ?? null;
+	const tierActions = options.tierActions ?? null;
 
 	const flavor = _rollCard({
 		header,
@@ -1004,6 +1009,8 @@ export async function rollStat(statKey, actor, options = {}) {
 		pickTiers: pickedTierKeys,
 		countsAs: { missCountsAsPartial, partialCountsAsSuccess },
 		tierActions,
+		criticalActions: critical,
+		critical: roll.total >= CRITICAL_TOTAL,
 		conditionsHtml,
 		// The wounds are the rolling CHARACTER's: a follower's roll (Order Followers, a Struggle as One
 		// follower row) is made on the PC's actor, but the PC's injuries neither hinder nor explain it.
@@ -1330,6 +1337,21 @@ export function damageRollFormula(formula, rollMode) {
 		return n > 1 ? `{${n}d${faces},${n}d${faces}}${keep}` : `2d${faces}${keep}1`;
 	});
 }
+
+/** Whether a damage row was rolled at disadvantage: its formula keeps the lowest (damageRollFormula). PURE. */
+export const rolledAtDisadvantage = row => /kl/i.test(String(row?.formula ?? ""));
+
+/** Whether a damage row was rolled at advantage: its formula keeps the highest (damageRollFormula). PURE. */
+export const rolledAtAdvantage = row => /kh/i.test(String(row?.formula ?? ""));
+
+/**
+ * An advantaged damage formula as a straight roll: damageRollFormula's two shapes undone, "2d8kh1 + 2" to
+ * "1d8 + 2" and "{2d4,2d4}kh + 1" to "2d4 + 1" (a Never Gonna Keep Me Down on an advantaged row,
+ * fight/defend-spend.js). PURE.
+ */
+export const straightFormula = formula => String(formula ?? "")
+	.replace(/\{\s*(\d*d\d+)\s*,\s*\1\s*\}kh\d*/i, "$1")
+	.replace(/2d(\d+)kh1?(?!\d)/i, "1d$1");
 
 /**
  * Roll a character or monster damage formula using the same Stonetop chat card

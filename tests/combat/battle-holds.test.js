@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
 	battleHoldsToFill, battleHoldsContent, askBattleHolds, offerBattleHolds, installBattleHolds,
-	spendSurpriseForRoll, regainSurpriseOnHit, PREPARE_A_WELCOME, commandHolders, spendCommandForDeploy,
+	spendSurpriseForRoll, refundSurpriseForRoll, regainSurpriseOnHit, PREPARE_A_WELCOME, commandHolders, spendCommandForDeploy,
 	deployCommandOffers, deployCommandAnswers,
+	FIGHT_HOLD_MOVES, fightHoldsClearData, clearFightHolds, lieInWaitActionsFor, isLieInWaitAction, lieInWait,
 } from "../../module/combat/battle-holds.js";
 import { refreshHeldMoves } from "../../module/migration/move-refresh.js";
 import { stubAsk } from "../fakes/confirm.js";
@@ -130,13 +131,23 @@ describe("Prepare a Welcome's Surprise", () => {
 
 	it("spends 1 Surprise as it is rolled, and names it on the card", async () => {
 		const { actor, tracks } = planner(2);
-		expect(await spendSurpriseForRoll(actor, welcome)).toBe("Spent 1 Surprise (1 left)");
+		expect(await spendSurpriseForRoll(actor, welcome)).toEqual({ note: "Spent 1 Surprise (1 left)", spent: true });
 		expect(tracks[PREPARE_A_WELCOME]).toBe(1);
+	});
+
+	it("puts the Surprise back for a roll that threw no dice, never past the track", async () => {
+		const { actor, tracks } = planner(2);
+		await spendSurpriseForRoll(actor, welcome);
+		expect(await refundSurpriseForRoll(actor)).toBe(true);
+		expect(tracks[PREPARE_A_WELCOME]).toBe(2);
+		expect(await refundSurpriseForRoll(actor)).toBe(false);
+		expect(tracks[PREPARE_A_WELCOME]).toBe(2);
+		expect(await refundSurpriseForRoll(marshal({ moves: [] }).actor)).toBe(false);
 	});
 
 	it("still rolls with none held, and says so rather than blocking", async () => {
 		const { actor, tracks } = planner(0);
-		expect(await spendSurpriseForRoll(actor, welcome)).toBe("No Surprise held to spend");
+		expect(await spendSurpriseForRoll(actor, welcome)).toEqual({ note: "No Surprise held to spend", spent: false });
 		expect(tracks[PREPARE_A_WELCOME]).toBe(0);
 	});
 
@@ -152,6 +163,113 @@ describe("Prepare a Welcome's Surprise", () => {
 		const { actor } = planner(2);
 		expect(await spendSurpriseForRoll(actor, { name: "Clash" })).toBeNull();
 		expect(await regainSurpriseOnHit(actor, { name: "Clash" }, "success")).toBe(false);
+	});
+});
+
+// Prepare a Welcome: "When you have your allies fortify a position and lie in wait for battle, hold 1 Surprise
+// if you're rushed or 2 Surprises if you can take your time." Two buttons on the move's card.
+describe("lying in wait", () => {
+	const planner = (held, moves = [PREPARE_A_WELCOME]) => marshal({ moves, held: { [PREPARE_A_WELCOME]: held } });
+
+	it("offers both buttons on the learned move, the one that would hold no more disabled", () => {
+		const fresh = lieInWaitActionsFor(planner(0).actor)[PREPARE_A_WELCOME];
+		expect(fresh.map(a => [a.action, a.disabled])).toEqual([["lieInWaitRushed", false], ["lieInWaitPrepared", false]]);
+		expect(fresh.map(a => a.label)).toEqual(["Lie in wait: hold 1 (rushed)", "Lie in wait: hold 2 (time to prepare)"]);
+		const one = lieInWaitActionsFor(planner(1).actor)[PREPARE_A_WELCOME];
+		expect(one.map(a => a.disabled)).toEqual([true, false]);
+		expect(one[0].tooltip).toBe("You already hold 1 Surprise.");
+		expect(lieInWaitActionsFor(planner(2).actor)[PREPARE_A_WELCOME].every(a => a.disabled)).toBe(true);
+	});
+
+	it("offers nothing without the move", () => {
+		expect(lieInWaitActionsFor(planner(0, ["Stentorian"]).actor)).toEqual({});
+		const off = planner(0);
+		off.actor.items[0].flags = { "stonetop-pwd": { learned: false } };
+		expect(lieInWaitActionsFor(off.actor)).toEqual({});
+	});
+
+	it("knows its own buttons from the post-death ones", () => {
+		expect(isLieInWaitAction("lieInWaitRushed")).toBe(true);
+		expect(isLieInWaitAction("lieInWaitPrepared")).toBe(true);
+		expect(isLieInWaitAction("getAngry")).toBe(false);
+		expect(isLieInWaitAction("toString")).toBe(false);
+	});
+
+	it("sets the hold to at least the number named, and says so", async () => {
+		const { actor, tracks } = planner(0);
+		expect(await lieInWait(actor, "lieInWaitRushed")).toBe(true);
+		expect(tracks[PREPARE_A_WELCOME]).toBe(1);
+		expect(posted[0].content).toContain("in a hurry. Maddoc holds 1 Surprise.");
+		expect(await lieInWait(actor, "lieInWaitPrepared")).toBe(true);
+		expect(tracks[PREPARE_A_WELCOME]).toBe(2);
+		expect(posted[1].content).toContain("taking their time. Maddoc holds 2 Surprise.");
+	});
+
+	it("never lowers what is held, never adds past 2, and posts nothing when it holds no more", async () => {
+		const { actor, tracks } = planner(2);
+		expect(await lieInWait(actor, "lieInWaitRushed")).toBe(false);
+		expect(await lieInWait(actor, "lieInWaitPrepared")).toBe(false);
+		expect(tracks[PREPARE_A_WELCOME]).toBe(2);
+		expect(posted).toEqual([]);
+		// A longer track (a homebrewed max) still holds 2 at most from lying in wait.
+		const long = planner(0);
+		long.actor.items[0].system.resource.max = 3;
+		await lieInWait(long.actor, "lieInWaitPrepared");
+		expect(long.tracks[PREPARE_A_WELCOME]).toBe(2);
+	});
+
+	it("does nothing for a character this client cannot write, or an unknown button", async () => {
+		const { actor, tracks } = planner(0);
+		expect(await lieInWait(actor, "getAngry")).toBe(false);
+		actor.isOwner = false;
+		expect(await lieInWait(actor, "lieInWaitPrepared")).toBe(false);
+		expect(tracks[PREPARE_A_WELCOME]).toBe(0);
+	});
+
+	it("is wired on the move card's buttons by the sheet", async () => {
+		const { readRepo } = await import("../fakes/css.js");
+		const sheet = readRepo("module/actors/character/StonetopCharacterSheet.js");
+		expect(sheet).toContain("...lieInWaitActionsFor(this.actor)");
+		expect(sheet).toContain("if (isLieInWaitAction(btn.dataset.moveAction)) await lieInWait(this.actor, btn.dataset.moveAction);");
+	});
+});
+
+// The Marshal's battle holds are for ONE battle (the user's ruling, 2026-10-18): the fight ending clears them
+// (combat/readiness-loss.js runs clearFightHolds).
+describe("clearing the fight holds", () => {
+	const holder = held => {
+		const made = marshal({ moves: ["Stentorian", "Front Line Leader", PREPARE_A_WELCOME], held });
+		made.actor.typedActor.moveResources.usesUpdate = (move, value) => ({ [`flags.stonetop-pwd.backgroundChoices.${move}`]: value });
+		made.actor.update = vi.fn(async data => {
+			for (const [path, value] of Object.entries(data)) made.tracks[path.split(".").at(-1)] = value;
+		});
+		return made;
+	};
+
+	it("names Command, Presence and Surprise", () => {
+		expect(FIGHT_HOLD_MOVES).toEqual(["Stentorian", "Front Line Leader", PREPARE_A_WELCOME]);
+	});
+
+	it("empties every hold that holds any, in one write, and leaves the other tracks alone", async () => {
+		const { actor, tracks } = holder({ "Stentorian": 2, "Front Line Leader": 0, [PREPARE_A_WELCOME]: 1, "Logbook": 3 });
+		expect(fightHoldsClearData(actor)).toEqual({
+			"flags.stonetop-pwd.backgroundChoices.Stentorian": 0,
+			[`flags.stonetop-pwd.backgroundChoices.${PREPARE_A_WELCOME}`]: 0,
+		});
+		expect(await clearFightHolds(actor)).toBe(true);
+		expect(actor.update).toHaveBeenCalledTimes(1);
+		expect(tracks).toEqual({ "Stentorian": 0, "Front Line Leader": 0, [PREPARE_A_WELCOME]: 0, "Logbook": 3 });
+	});
+
+	it("clears a hold on a move switched off since, and writes nothing when none is held", async () => {
+		const off = holder({ "Stentorian": 1 });
+		off.actor.items.forEach(item => { item.flags = { "stonetop-pwd": { learned: false } }; });
+		expect(await clearFightHolds(off.actor)).toBe(true);
+		expect(off.tracks.Stentorian).toBe(0);
+		const empty = holder({});
+		expect(await clearFightHolds(empty.actor)).toBe(false);
+		expect(empty.actor.update).not.toHaveBeenCalled();
+		expect(await clearFightHolds({ type: "character" })).toBe(false);
 	});
 });
 
@@ -200,7 +318,7 @@ describe("a stale embedded copy with no track", () => {
 
 	it("spends and regains a Surprise, once refreshed", async () => {
 		const { actor, tracks: held } = await refreshed(stale({ moves: [PREPARE_A_WELCOME], held: { [PREPARE_A_WELCOME]: 3 } }));
-		expect(await spendSurpriseForRoll(actor, { name: PREPARE_A_WELCOME })).toBe("Spent 1 Surprise (2 left)");
+		expect(await spendSurpriseForRoll(actor, { name: PREPARE_A_WELCOME })).toEqual({ note: "Spent 1 Surprise (2 left)", spent: true });
 		expect(held[PREPARE_A_WELCOME]).toBe(2);
 		expect(await regainSurpriseOnHit(actor, { name: PREPARE_A_WELCOME }, "success")).toBe(true);
 		expect(held[PREPARE_A_WELCOME]).toBe(3);

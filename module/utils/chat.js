@@ -1,3 +1,4 @@
+import {SYSTEM_ID} from "../system-id.js";
 import {escHtml, stripHtmlToText, decodeEntities} from "./strings.js";
 import {isReferenceList, pickLimitsFrom, pickTiersFrom} from "./move-picks.js";
 import {MOVE_TIERS_CLASS, TIER_KEYS} from "./move-results.js";
@@ -661,6 +662,16 @@ export function moveChatCard(name, description, { pickable = false, actions = ""
 	// the card that rendered it.
 	return `<div class="stonetop-chat-move"><h3 class="stonetop-chat-move-name">${escHtml(name)}</h3>`
 		+ `<div class="stonetop-chat-move-description">${body}</div>${actions}</div>`;
+}
+
+/**
+ * The move a card is for: its `move` stamp (a rolled card, the hotbar's), else its moveChatCard heading
+ * (the Moves tab's), else `fallback`.
+ */
+export function cardMoveName(message, root, fallback = "") {
+	return message?.getFlag?.(SYSTEM_ID, "move")
+		|| root?.querySelector?.(".stonetop-chat-move-name")?.textContent?.trim()
+		|| fallback;
 }
 
 /** Post a one-line note spoken as `actor` (or as "Stonetop" without one), in the move-card shape. */

@@ -44,8 +44,8 @@ export const INTRO_PLAYBOOK_DATA = {
 		step3: `tell us about your <strong>history of violence</strong>, and what keeps you up at night.`,
 		step4: [
 			"Who is your closest kin?",
-			"Who is your lover, spouse, or betrothed?",
-			"Who most needs or deserves your protection?",
+			"Who is your lover/spouse/betrothed?",
+			"Who most needs/deserves your protection?",
 			"Whose forgiveness do you strive to earn?",
 		],
 		step6: [
@@ -59,7 +59,7 @@ export const INTRO_PLAYBOOK_DATA = {
 		step3: `describe <strong>the Chronicle</strong>. Then, tell us about <strong>Aratis and her shrine</strong>, and what she demands of her true disciples.`,
 		step4: [
 			"Who is your closest kin?",
-			"Who is your lover, spouse, or betrothed?",
+			"Who is your lover/spouse/betrothed?",
 			"Who is your apprentice?",
 			"Who is the wisest of the town elders?",
 		],
@@ -89,7 +89,7 @@ export const INTRO_PLAYBOOK_DATA = {
 		step3: `tell us <strong>the town's war stories</strong>, plus the answers to the questions you chose.`,
 		step4: [
 			"Who is your closest kin?",
-			"Who is your lover, spouse, or betrothed?",
+			"Who is your lover/spouse/betrothed?",
 			"Who is your lieutenant?",
 			"Whose kin is dead because of your decisions?",
 		],

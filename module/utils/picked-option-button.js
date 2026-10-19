@@ -42,6 +42,50 @@ export function belongsToMessage(el, message) {
 	return !owner || owner.dataset.messageId === message.id;
 }
 
+/** An option's own words: its label's text, not whatever a wire has hung on the row since. */
+export function optionLabelText(item) {
+	return (item.querySelector("label > span") ?? item.querySelector("label") ?? item).textContent ?? "";
+}
+
+/**
+ * Wire every option on one card whose own words `matches` (optionLabelText): a one-line readout under
+ * it, redrawn on every render, and a change listener on its checkbox, bound once per element. The
+ * tick-to-act options (option-debility.js, censure-enraged.js) share this; a button that pays out
+ * once is wirePickedOptionButton below.
+ *
+ * @param {ChatMessage} message
+ * @param {HTMLElement} root  The rendered card.
+ * @param {object} spec
+ * @param {(text: string) => boolean} spec.matches  Whether an option's words are one of these.
+ * @param {string} spec.readoutClass  Class for the readout line.
+ * @param {string} spec.wiredKey      `dataset` key marking a checkbox that is already bound.
+ * @param {(box: HTMLInputElement) => string|null} spec.readout  The readout's words, or null for none.
+ * @param {(box: HTMLInputElement) => any} spec.onChange
+ */
+export function wireOptionTicks(message, root, { matches, readoutClass, wiredKey, readout, onChange }) {
+	const rows = [...root.querySelectorAll(".stonetop-picklist-item")]
+		.filter(item => belongsToMessage(item, message) && matches(optionLabelText(item)));
+	if (!rows.length) return;
+	const doc = root.ownerDocument ?? globalThis.document;
+	for (const item of rows) {
+		const box = item.querySelector(".stonetop-picklist-check");
+		if (!box) continue;
+		// Ours out first: a re-render patches the same row.
+		item.querySelectorAll(`.${readoutClass}`).forEach(el => el.remove());
+		const words = readout(box);
+		if (words != null) {
+			const note = doc.createElement("p");
+			note.className = readoutClass;
+			note.textContent = words;
+			item.appendChild(note);
+		}
+		// Bound once per element: a message re-renders whenever its flag is written.
+		if (box.dataset[wiredKey] === "1") continue;
+		box.dataset[wiredKey] = "1";
+		box.addEventListener("change", () => onChange(box));
+	}
+}
+
 /**
  * Wire every ticked-option button on one chat card.
  *

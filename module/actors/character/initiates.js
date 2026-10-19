@@ -77,6 +77,47 @@ export function initiateMoves(det, opt) {
 }
 
 /**
+ * The Gear an initiate starts with, to write onto their card, or null when there is nothing to write.
+ * Olwin's insert line reads "Armor 1 (shield)", and the +1 Readiness a shield buys on a 7+ Defend
+ * (p.216) is read off a TICKED Gear row naming a shield on every follower card, so the playbook gives
+ * her that row rather than teaching each reader to parse her Armor text. Her Armor stays the printed
+ * 1: a follower's Gear never adds to their Armor.
+ *
+ * Seeded the way initiateMoves seeds Moves: only onto a card nobody has written Gear to. A stored
+ * list, even an empty one, is the player's (a Gear row removed stays removed).
+ *
+ * @param {object} det  the initiate's stored details
+ * @param {object} opt  the playbook's option for them
+ * @returns {Array<{label: string, checked: boolean}>|null}
+ */
+export function initiateGearSeed(det, opt) {
+	if (Array.isArray(det?.gear)) return null;
+	const gear = (Array.isArray(opt?.gear) ? opt.gear : [])
+		.map(g => ({ label: String(g?.label ?? "").trim(), checked: !!g?.checked }))
+		.filter(g => g.label);
+	return gear.length ? gear : null;
+}
+
+/**
+ * initiateGearSeed for the initiates named, as an `actor.update()` fragment (empty when none needs
+ * it). The one place a pick, onboarding or the Details tab's tick, and the sweep for characters
+ * made before the playbook carried the Gear (migration/follower-refresh.js) all seed it from.
+ *
+ * @param {object[]} backgrounds  the playbook's backgrounds
+ * @param {object} flags          the character's resolved flags
+ * @param {Iterable<string>} slugs the initiates to seed
+ * @param {string} scope          the flag scope to write under
+ */
+export function initiateGearSeedData(backgrounds, flags, slugs, scope) {
+	const data = {};
+	for (const slug of slugs ?? []) {
+		const gear = initiateGearSeed(flags?.initiateDetails?.[slug], initiateOption(backgrounds, slug));
+		if (gear) data[`flags.${scope}.initiateDetails.${slug}.gear`] = gear;
+	}
+	return data;
+}
+
+/**
  * The whole set of initiate picks, as a `background.choices` patch: true for each one picked and false
  * for every other initiate. The insert is a set, not a list to grow, so re-running onboarding without
  * Enfys crosses her off rather than leaving her ticked beside her replacement.

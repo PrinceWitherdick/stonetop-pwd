@@ -11,7 +11,8 @@
  *  - A Force to Be Reckoned With: "When you Defy Danger against something trying to harm or constrain
  *    you, on a 12+ you turn the tables on them." A roll-window line whose note prints on a 12+ alone
  *    (roll-engine.js `criticalActions`); `forceTurnedTables` is called when it does, and crosses off
- *    "Would-be" the first time (a starred move, WouldBeHeroAsterisk.js).
+ *    "Would-be" the first time (a starred move, WouldBeHeroAsterisk.js). The 12+ is the card's FINAL
+ *    total: a rewrite off it calls `forceTablesUnturned`, which writes back the "Would-be" this card took.
  *  - Voice of Experience: its free Seek Insight question gets an "Ask it" button, which is the starred
  *    move's use and crosses off "Would-be" the first time.
  *  - Anger is a Gift: the righteous angers picked on the Details tab ("What makes you burn with
@@ -24,7 +25,7 @@
 import { SYSTEM_ID } from "../../system-id.js";
 import { bookMoveName, ownsLearnedBookMoveNamed } from "./owns-move.js";
 import { learnedTrack } from "./MoveResources.js";
-import { asteriskMoveUsed, asteriskUseCounts } from "./WouldBeHeroAsterisk.js";
+import { asteriskMoveUsed, asteriskUseCounts, restoreWouldBe } from "./WouldBeHeroAsterisk.js";
 import { markXpReceipt } from "../../utils/roll-engine.js";
 import { withCardLatch, wireLatchedButtons } from "../../utils/card-latch.js";
 import { canRewriteCard } from "../../utils/chat.js";
@@ -51,6 +52,11 @@ export const RESCUED_FLAG = "inOverYourHeadXp";
  * starred move (forceTurnedTables).
  */
 export const FORCE_TURNED_TABLES_FLAG = "forceTurnedTables";
+/**
+ * Message flag: this card's turning the tables is the use that crossed off "Would-be", so a rewrite taking
+ * its 12+ away writes it back in (forceTablesUnturned). Never set when "Would-be" was gone already.
+ */
+export const FORCE_CROSSED_OFF_FLAG = "forceCrossedOffWouldBe";
 /** Message flag: Voice of Experience's free question was asked off this card (a use of the starred move). */
 export const VOICE_ASKED_FLAG = "voiceOfExperienceAsked";
 
@@ -109,14 +115,36 @@ export async function markRescuedXp(actor, { create = (...args) => globalThis.Ch
 
 /**
  * A Force to Be Reckoned With turned the tables: a Defy Danger with its line taken came up 12+
- * (StonetopCharacter#onRoll). Stamps the card with FORCE_TURNED_TABLES_FLAG and answers true.
+ * (StonetopCharacter#onRoll), or was rewritten onto one (StonetopCharacter.js#reconcileCriticalOffers).
+ * Stamps the card with FORCE_TURNED_TABLES_FLAG and answers true. Once per card: a card already stamped
+ * (a rewrite that landed while the dice still animated, a lift within the 12+) does nothing more.
  *
  * THE ASTERISK SEAM for this move: its first use crosses off "Would-be" (the user's ruling), for a
- * Would-Be Hero holding it learned (WouldBeHeroAsterisk.js#asteriskMoveUsed).
+ * Would-Be Hero holding it learned (WouldBeHeroAsterisk.js#asteriskMoveUsed). The card that did it says
+ * so (FORCE_CROSSED_OFF_FLAG), for forceTablesUnturned.
  */
 export async function forceTurnedTables(actor, message) {
+	if (message?.getFlag?.(SYSTEM_ID, FORCE_TURNED_TABLES_FLAG)) return true;
 	await message?.setFlag?.(SYSTEM_ID, FORCE_TURNED_TABLES_FLAG, true);
-	await asteriskMoveUsed(actor, A_FORCE_TO_BE_RECKONED_WITH);
+	if (await asteriskMoveUsed(actor, A_FORCE_TO_BE_RECKONED_WITH)) {
+		await message?.setFlag?.(SYSTEM_ID, FORCE_CROSSED_OFF_FLAG, true);
+	}
+	return true;
+}
+
+/**
+ * The other way: a card that turned the tables was rewritten off its 12+ (the user's ruling, 2026-10-18:
+ * A Force to Be Reckoned With follows the FINAL total). Its stamp comes off, and "Would-be" is written back
+ * in only when THIS card crossed it off (FORCE_CROSSED_OFF_FLAG); one crossed off by an earlier use, or by
+ * another starred move, stays crossed off. Whether the card had turned the tables.
+ */
+export async function forceTablesUnturned(actor, message) {
+	if (!message?.getFlag?.(SYSTEM_ID, FORCE_TURNED_TABLES_FLAG)) return false;
+	await message.setFlag(SYSTEM_ID, FORCE_TURNED_TABLES_FLAG, false);
+	if (message.getFlag(SYSTEM_ID, FORCE_CROSSED_OFF_FLAG)) {
+		await message.setFlag(SYSTEM_ID, FORCE_CROSSED_OFF_FLAG, false);
+		await restoreWouldBe(actor, { moveName: A_FORCE_TO_BE_RECKONED_WITH });
+	}
 	return true;
 }
 

@@ -25,7 +25,7 @@
  * Kept Foundry-free so the predicates can be tested without a world in sight.
  */
 
-import { ownsMoveNamed, ownsAnyMoveNamed } from "./owns-move.js";
+import { ownsMoveNamed, ownsLearnedMoveNamed } from "./owns-move.js";
 import { createRoster, showStandingList } from "./marked-people.js";
 import { coerceBroken } from "./oath-broken.js";
 
@@ -55,9 +55,13 @@ const roster = createRoster({
  * answer honestly ONCE, on the spot, and leaves nothing behind. Binding Arbitration is the one
  * that turns a promise into a standing question the Judge may ask forever, so it is the only one
  * that earns a row. Exactly the Censure/Condemn split in condemn.js.
+ *
+ * LEARNED, as canCondemn is: a switched-off Binding Arbitration witnesses no new oath. Oaths already
+ * sworn stay listed (showOaths reads the count); their advantage is learned-gated on its own
+ * (hero-moves.js#brokenOaths).
  */
-export function canBindOaths(actor, owned = null) {
-	return ownsAnyMoveNamed(actor, [BINDING_ARBITRATION], owned);
+export function canBindOaths(actor) {
+	return ownsLearnedMoveNamed(actor, BINDING_ARBITRATION);
 }
 
 /**

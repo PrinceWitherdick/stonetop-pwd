@@ -31,8 +31,27 @@ export class CharacterBackgrounds {
 		return this._flags.getFlag("markedActions") ?? [];
 	}
 
-	async selectBackground(slug) {
-		await this._flags.setFlag("selected", slug);
+	// With `setupChoices`, the picks made under the new background go in the SAME write as the
+	// background itself, so nothing settles between them: the picks (`{ key: value }`) are stored a
+	// key at a time and any stored key not among them is dropped (an update merges objects, so a
+	// whole-object write would leave a stale pick standing), and `{}` drops them all. Without it,
+	// the stored picks are left as they are.
+	async selectBackground(slug, { setupChoices } = {}) {
+		if (setupChoices === undefined) {
+			await this._flags.setFlag("selected", slug);
+			return;
+		}
+		const picks = Object.entries(setupChoices ?? {}).filter(([, value]) => value != null && value !== "");
+		const data = { ...this._flags.updateData("selected", slug) };
+		if (!picks.length) {
+			if (Object.keys(this.setupChoices).length) Object.assign(data, this._flags.deletionData("setupChoices"));
+		} else {
+			for (const [key, value] of picks) Object.assign(data, this._flags.subKeyData("setupChoices", key, value));
+			for (const key of Object.keys(this.setupChoices)) {
+				if (!picks.some(([k]) => k === key)) Object.assign(data, this._flags.subKeyDeletionData("setupChoices", key));
+			}
+		}
+		await this._flags.applyUpdateData(data);
 	}
 
 	async addChoice(choice) {

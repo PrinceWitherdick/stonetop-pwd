@@ -88,9 +88,25 @@ describe("parseArcanumMoves", () => {
 		expect(azure[2].description).not.toMatch(/Consequences/);
 	});
 
+	it("reads a section the card heads with a singular Move", () => {
+		// The Hec'tumel Codex grants one move and prints "Move" over it. The Spells of the Codex
+		// above it are not moves, and the Consequences below do not run into its text.
+		const [vessel, ...rest] = parseArcanumMoves(backOf("hectumel-codex"));
+		expect(rest).toEqual([]);
+		expect(vessel.name).toBe("DARKSOME VESSEL");
+		expect(vessel.slug).toBe("darksome-vessel");
+		// The four spell boxes come first on the back side, so its learned box is the fifth.
+		expect(vessel.boxIndex).toBe(4);
+		expect(vessel.description).toMatch(/^<p>When you <strong><em>cast a Codex spell/);
+		expect(vessel.description).not.toMatch(/Consequences/);
+		expect(markArcanumMoveNames(backOf("hectumel-codex"), "hectumel-codex"))
+			.toContain('data-move-slug="darksome-vessel" role="button" tabindex="0">DARKSOME VESSEL</span>');
+	});
+
 	it("finds a shipped move on every card the book gives mysteries to", () => {
-		const withMoves = DOCS.filter(d => /<h3>Moves<\/h3>/.test(d.flags?.stonetop?.back?.description ?? ""));
+		const withMoves = DOCS.filter(d => /<h3>Moves?<\/h3>/.test(d.flags?.stonetop?.back?.description ?? ""));
 		expect(withMoves.length).toBeGreaterThan(10);
+		expect(withMoves.map(d => d.flags.stonetop.slug)).toContain("hectumel-codex");
 		for (const doc of withMoves) {
 			const moves = parseArcanumMoves(doc.flags.stonetop.back.description);
 			expect(moves.length, doc.flags.stonetop.slug).toBeGreaterThan(0);

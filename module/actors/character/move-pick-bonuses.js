@@ -23,11 +23,12 @@
  * lands at the end of a Know Things card, which prints no list.
  */
 
-import { ownsLearnedMoveNamed } from "./owns-move.js";
+import { ownsLearnedBookMoveNamed } from "./owns-move.js";
 import { INVOKE_THE_SUN_GOD, EMPOWERED_INVOCATIONS } from "./holy-light.js";
+import { DANUS_GRASP, NATURES_WRATH } from "./blessed-marks.js";
 import { THE_NATURAL } from "../../data/alt-stat-grants.js";
 import { actorTookBackground } from "./took-background.js";
-import { pickListItem, pickListStampAttrs, readPickListStamp } from "../../utils/chat.js";
+import { optionKey, pickListItem, pickListStampAttrs, readPickListStamp } from "../../utils/chat.js";
 import { escHtml } from "../../utils/strings.js";
 import { TIER_KEYS } from "../../utils/move-results.js";
 import { format, localize } from "../../utils/i18n.js";
@@ -51,15 +52,21 @@ import { format, localize } from "../../utils/i18n.js";
  * adding a choice. `rollOption` gates a row on something decided for THIS roll rather than owned,
  * read from the roll's pick context (StonetopCharacter#withPickContext): an Invocation empowered
  * before the dice. `detailKey` replaces the note's generated "N more on a hit" with the move's own
- * words, where the count alone would misdescribe it. Rows apply in table order, which matters for
- * Invoke the Sun God: Glorious Servant's 7-9 of 1 is set before Empowered's +1 lands on it.
+ * words, where the count alone would misdescribe it.
+ *
+ * `prePick` names a pick-context key holding one of the list's options, as printed, that was chosen
+ * BEFORE the roll and is taken whatever it comes up, the 6- included (Empowered Invocations' extra
+ * consequence). It is no part of the list's count: it comes off the list, so it cannot be ticked
+ * again, and stands as a fixed line above it (`lineKey`, `{source}` the row's label), outside the
+ * tier hiding that keeps a 6- list out of sight.
  */
 export const MOVE_PICK_BONUSES = [
 	{ move: "Seek Insight", ownsLearned: "Perceptive", plus: 1, missFloor: 1 },
 	{ move: "Seek Insight", background: THE_NATURAL,
 		addOptions: ["What opportunity does no one else see?"] },
 	// The Heavy's Situational Awareness. Its "when a fight breaks out, ask the GM 1 question" half
-	// is the table's to honour: nothing is rolled there to hang a list on.
+	// is a card of its own as the character joins a fight (combat/situational-awareness.js), which
+	// lists these with the printed ones (give-advantage.js#seekInsightQuestionsFor).
 	{ move: "Seek Insight", ownsLearned: "Situational Awareness",
 		addOptions: ["Who or what here is the biggest threat?", "What is my enemy's true position?", "What here can I use as a weapon?"] },
 	// The Ranger's Predator. Its "deal an extra 1d4 damage" when acting on either answer rides the
@@ -93,19 +100,30 @@ export const MOVE_PICK_BONUSES = [
 		when: "Take the Measure of someone who fears or respects you", lineKey: "stonetop.pickBonus.openQuestion" },
 	// The Lightbearer's consequence list. Glorious Servant: "on a 10+, you need not choose a
 	// consequence; on a 7-9, you choose a consequence but the GM does not", so the 7-9's "you and
-	// the GM each choose 1" (2) is 1, and the 10+'s 1 stands as the most, taken or not. Empowered
-	// Invocations: "choose an extra consequence before you roll", on whichever tier comes up.
+	// the GM each choose 1" (2) is 1, and the 10+'s 1 stands as the most, optional (a list's cap is
+	// never a floor). Empowered Invocations: "you can choose an extra consequence before you roll",
+	// picked in the invoke window and taken on whichever tier comes up, so it is off the list's count.
 	{ move: INVOKE_THE_SUN_GOD, ownsLearned: "Glorious Servant", capTo: { partial: 1 },
 		detailKey: "stonetop.invocations.pickGloriousServant" },
-	{ move: INVOKE_THE_SUN_GOD, ownsLearned: EMPOWERED_INVOCATIONS, rollOption: "empowered", plus: 1,
-		label: "Empowered", detailKey: "stonetop.invocations.pickEmpowered" },
+	{ move: INVOKE_THE_SUN_GOD, ownsLearned: EMPOWERED_INVOCATIONS, rollOption: "empowered",
+		prePick: "empoweredConsequence", label: "Empowered", lineKey: "stonetop.invocations.prePickLine" },
+];
+
+/**
+ * The same shape for the DAMAGE a move's printed option deals rather than its list: while the roller holds
+ * `ownsLearned` LEARNED, the option's blow from `move` also carries `tags` (combat/attack-flow.js#
+ * optionMoveTags). Not a MOVE_PICK_BONUSES row, since it changes no list and no card's picks.
+ */
+export const MOVE_OPTION_TAGS = [
+	// The Blessed's Nature's Wrath (Book I p.106): "Danu's Grasp gains the area tag and can affect any creature."
+	{ move: DANUS_GRASP, ownsLearned: NATURES_WRATH, tags: ["area"] },
 ];
 
 /**
  * The MOVE_PICK_BONUSES rows `actor` brings to a roll of `moveName`, in table order. A character's
  * alone: a monster or NPC rolling a move brings nothing to it. `context` is the roll's pick context
- * (`{empowered, burnTwice}`, see StonetopCharacter#withPickContext): a `rollOption` row needs its
- * key set there as well as its move learned.
+ * (`{empowered, empoweredConsequence, burnTwice}`, see StonetopCharacter#withPickContext): a
+ * `rollOption` row needs its key set there as well as its move learned.
  */
 export function movePickBonusesFor(actor, moveName, context = null) {
 	if (actor?.type !== "character" || !moveName) return [];
@@ -113,9 +131,10 @@ export function movePickBonusesFor(actor, moveName, context = null) {
 	if (!rows.length) return [];
 	return rows.filter(b => {
 		if (b.rollOption && !context?.[b.rollOption]) return false;
+		// The BOOK's move of that name: a move a player wrote that shares it acts as itself (owns-move.js#bookMoveName).
 		return b.background
 			? actorTookBackground(actor, b.background)
-			: ownsLearnedMoveNamed(actor, b.ownsLearned);
+			: ownsLearnedBookMoveNamed(actor, b.ownsLearned);
 	});
 }
 
@@ -201,14 +220,40 @@ export function freeQuestionLines(bonuses = []) {
 }
 
 /**
+ * `html` with each `prePick` row's chosen option (read off `context`) taken off the first tickable
+ * list and set as a fixed line above it, or at the end of a card with no list. Each line carries its
+ * row's context key as `data-pre-pick`, for the card wiring that pays it
+ * (invoke-consequences.js#wireInvokeConsequences). The options left keep their `data-index`, so the
+ * saved ticks still land where they were put. Unchanged when nothing was chosen.
+ */
+export function applyPrePicks(html, bonuses = [], context = null) {
+	let src = String(html ?? "");
+	for (const b of bonuses) {
+		const chosen = b.prePick ? String(context?.[b.prePick] ?? "").trim() : "";
+		if (!chosen) continue;
+		const line = `<p class="stonetop-pre-pick" data-pre-pick="${escHtml(b.prePick)}"><em>`
+			+ `${escHtml(format(b.lineKey ?? "stonetop.pickBonus.prePick", { source: b.label ?? b.ownsLearned ?? "" }))}</em> `
+			+ `<span class="stonetop-pre-pick-text">${escHtml(chosen)}</span></p>`;
+		const open = _OPEN_RE.exec(src);
+		if (!open) { src += line; continue; }
+		const key = optionKey(chosen);
+		const kept = open[2].replace(/<li\b[^>]*>[\s\S]*?<\/li>/gi, li => (optionKey(li) === key ? "" : li));
+		src = src.slice(0, open.index) + line + `<ul class="stonetop-picklist"${open[1]}>${kept}</ul>` + src.slice(open.index + open[0].length);
+	}
+	return src;
+}
+
+/**
  * `applyPickBonuses` and its note, for `actor` rolling `moveName`: the one call a card builder makes.
  * The free questions go straight under the move's list, beside the questions they sit outside of,
- * or at the end of a card that has no list.
+ * or at the end of a card that has no list. An option chosen before the roll (`applyPrePicks`) goes
+ * above it.
  */
 export function withMovePickBonuses(html, actor, moveName, context = null) {
-	const src = String(html ?? "");
+	const original = String(html ?? "");
 	const bonuses = movePickBonusesFor(actor, moveName, context);
-	if (!bonuses.length) return src;
+	if (!bonuses.length) return original;
+	const src = applyPrePicks(original, bonuses, context);
 	const applied = applyPickBonuses(src, bonuses);
 	// No list to lay them over, no note: it would name a count nothing on the card shows.
 	const notes = applied === src ? "" : pickBonusNotes(bonuses);

@@ -15,7 +15,9 @@ import { asteriskMoveUsed } from "./WouldBeHeroAsterisk.js";
 import { pickPersonOnMap } from "../../dialogs/RelationshipLinkDialog.js";
 import { partyCharacters } from "../../utils/playbook-actors.js";
 import { canRewriteCard, stonetopChatCard } from "../../utils/chat.js";
-import { HERO_MOVES, commandHeld, orderFocusFire } from "../../fight/hero-moves.js";
+import { HERO_MOVES, commandHeld, orderFocusFire, recordRapierWit, recordTruth, recordSpeakSoftly, foeKey } from "../../fight/hero-moves.js";
+import { engagedOpponents, foesInFight } from "../../fight/fight-targets.js";
+import { promptForText } from "../../dialogs/content-picker.js";
 import { belongsToMessage } from "../../utils/picked-option-button.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
 import { isPrimaryGM } from "../../utils/primary-gm.js";
@@ -210,8 +212,13 @@ export function wireGiveAdvantage(message, html, deps = {}) {
 			continue;
 		}
 		const moveName = btn.dataset?.move;
-		if (!usable || !giver || !GIVE_ADVANTAGE_MOVES[moveName]) { btn.remove(); continue; }
-		btn.disabled = heldElsewhere;
+		const rule = GIVE_ADVANTAGE_MOVES[moveName];
+		if (!usable || !giver || !rule) { btn.remove(); continue; }
+		// A move whose button waits on its own card (`gate`): Set-Up Strike's Aid, on this Clash's damage being
+		// dealt with its disadvantage (give-advantage.js#setUpStrikeGate).
+		const gate = rule.gate?.(message, scope) ?? "open";
+		btn.disabled = heldElsewhere || gate !== "open";
+		showGateHint(btn, gate, rule.gateKey);
 		if (btn.dataset.giveWired === "1") continue;
 		btn.dataset.giveWired = "1";
 		// Latched on the card FIRST (card-latch.js), as every once-per-card button is: the GM and
@@ -230,6 +237,24 @@ export function wireGiveAdvantage(message, html, deps = {}) {
 			}
 		});
 	}
+}
+
+/**
+ * Say on the card why a gated button is greyed out (give-advantage.js's `gate`), in words beside it, not only
+ * a tooltip: `${gateKey}.${gate}`.
+ */
+function showGateHint(btn, gate, gateKey) {
+	const next = btn.nextElementSibling;
+	if (next?.classList?.contains("stonetop-give-advantage-gate")) next.remove();
+	btn.removeAttribute?.("data-tooltip");
+	if (gate === "open") return;
+	const words = localize(`${gateKey}.${gate}`);
+	btn.dataset.tooltip = words;
+	const doc = btn.ownerDocument ?? globalThis.document;
+	const note = doc.createElement("span");
+	note.className = "stonetop-give-advantage-readout stonetop-give-advantage-gate";
+	note.textContent = words;
+	btn.after(note);
 }
 
 /** Message flag: the foe a Focus Fire card's order named, `{foe}`, so its button goes once pressed. */
@@ -294,4 +319,325 @@ export function wireFocusFire(message, html, deps = {}) {
 			}
 		});
 	}
+}
+
+/** Message flag: the foe a Rapier Wit card's "They attack" named, `{foe}`, so its button goes once pressed. */
+export const RAPIER_WIT_CARD_FLAG = "rapierWitAttacked";
+
+/** A token this user has targeted, as a foe to name: `{uuid, name}`. */
+const targetedFoe = token => ({ uuid: token?.document?.uuid ?? token?.uuid ?? "", name: token?.document?.name ?? token?.name ?? "" });
+
+/** The picker's row for someone who is not on the map: the name is asked for next. */
+const SOMEONE_ELSE = "__someone-else__";
+
+/**
+ * Whom a no-roll move's button is about: the ONE token this user has targeted; else picked from the several
+ * targeted, or from the first of `pools` (each asked of `actor` in turn) that finds anyone.
+ *
+ * With `allowNamed` (Truth or Consequences, Speak Softly: said to people who may have no token at all), the
+ * picker carries a row for someone not on the map, and with nobody on the map to point at, a name is typed in.
+ * Without it (Rapier Wit), the one foe found is taken unasked, and targets naming no token find nobody.
+ * `{uuid, name}` for one on the map, `{name, named: true}` for one only named, or null when there is nobody
+ * or the question was put away.
+ *
+ * @param {Actor} actor
+ * @param {object} how
+ * @param {Array<(actor: Actor) => Array<{uuid: string, name: string}>>} how.pools
+ * @param {boolean} [how.allowNamed]
+ * @param {() => {pick: object, someoneElse?: string, name?: object}} how.words  asked only once they are shown:
+ *   the picker's title, hint, icon and buttonLabel; the "someone else" row's name; the name prompt's title,
+ *   buttonLabel and placeholder
+ */
+async function pickFoe(actor, { pools, allowNamed = false, words }, {
+	targets = userTargets, pick = pickPersonOnMap, askName = promptForText, resolve = resolveSync,
+} = {}) {
+	const aimed = targets().map(targetedFoe);
+	const onMap = aimed.filter(foe => foe.uuid);
+	if (onMap.length === 1) return onMap[0];
+	let candidates = onMap;
+	if (!candidates.length && (allowNamed || !aimed.length)) {
+		for (const pool of pools) {
+			candidates = pool(actor).filter(foe => foe?.uuid);
+			if (candidates.length) break;
+		}
+	}
+	const options = () => candidates.map(foe => ({ id: foe.uuid, name: foe.name, actor: resolve(foe.uuid)?.actor ?? null }));
+	if (!allowNamed) {
+		if (candidates.length <= 1) return candidates[0] ?? null;
+		const [id] = [await pick({ options: options(), ...words().pick })].flat();
+		return candidates.find(foe => foe.uuid === id) ?? null;
+	}
+	if (candidates.length) {
+		const said = words();
+		const [id] = [await pick({ options: [...options(), { id: SOMEONE_ELSE, name: said.someoneElse, actor: null }], ...said.pick })].flat();
+		if (!id) return null;
+		if (id !== SOMEONE_ELSE) return candidates.find(foe => foe.uuid === id) ?? null;
+	}
+	const name = await askName(words().name);
+	const said = String(name ?? "").trim();
+	return said ? { name: said, named: true } : null;
+}
+
+/**
+ * Wire a card's once-only "they did" button (Rapier Wit's "They attack", Speak Softly's "They refused"): pressed
+ * by whoever can write the card and the one who posted it (their player, or the GM), once per card. Once
+ * pressed, the card says whom (`flag`'s `{foe}`, in `readout`'s words), and the button goes. `press` records
+ * it and answers whether it did: a press that recorded nothing leaves the button live. `wired` is the button's
+ * dataset key, so a re-render wires it once.
+ */
+function wireRecordOnce(message, html, deps, { selector, flag, wired, readout, press, failed }) {
+	const root = html?.[0] ?? html;
+	const buttons = [...(root?.querySelectorAll?.(selector) ?? [])].filter(btn => belongsToMessage(btn, message));
+	if (!buttons.length) return;
+	const scope = deps.scope ?? SYSTEM_ID;
+	const actor = deps.giver ?? speakerActor(message);
+	const recorded = message?.getFlag?.(scope, flag) ?? null;
+	const usable = deps.usable ?? canRewriteCard(message, actor);
+	for (const btn of buttons) {
+		if (recorded?.foe) {
+			const doc = root.ownerDocument ?? globalThis.document;
+			const note = doc.createElement("span");
+			note.className = "stonetop-give-advantage-readout";
+			note.textContent = readout(recorded);
+			btn.replaceWith(note);
+			continue;
+		}
+		if (!usable || !actor) { btn.remove(); continue; }
+		if (btn.dataset[wired] === "1") continue;
+		btn.dataset[wired] = "1";
+		btn.addEventListener("click", async () => {
+			if (btn.disabled) return;
+			btn.disabled = true;
+			try {
+				if (!await press(message, actor, deps)) btn.disabled = false;
+			} catch (err) {
+				console.error(`Stonetop | ${failed}`, err);
+				btn.disabled = false;
+			}
+		});
+	}
+}
+
+/**
+ * Which NPC answered the quip by attacking: the one this user has targeted, else the one the Fox is fighting
+ * (fight/fight-targets.js#engagedOpponents), asked among several either way. Null when there is nobody to
+ * name, or the question was put away. `{uuid, name}`.
+ */
+function rapierWitFoe(fox, deps = {}) {
+	return pickFoe(fox, {
+		pools: [deps.engaged ?? engagedOpponents],
+		words: () => ({
+			pick: {
+				title: format("stonetop.fight.heroMoves.rapierWit.pickTitle", { name: fox.name }),
+				hint: localize("stonetop.fight.heroMoves.rapierWit.pickHint"),
+				icon: "fa-face-angry",
+				buttonLabel: localize("stonetop.fight.heroMoves.rapierWit.pickButton"),
+			},
+		}),
+	}, deps);
+}
+
+/**
+ * Rapier Wit's "Attack" choice, pressed: remember the NPC on the Fox, both halves owed (fight/hero-moves.js#
+ * recordRapierWit), write who on the card so its button goes, and tell the table. Whether it was recorded.
+ */
+export async function rapierWitAttack(message, fox, deps = {}) {
+	const scope = deps.scope ?? SYSTEM_ID;
+	const record = deps.record ?? recordRapierWit;
+	const foe = await rapierWitFoe(fox, deps);
+	if (!foe) {
+		globalThis.ui?.notifications?.info?.(localize("stonetop.fight.heroMoves.rapierWit.targetOne"));
+		return false;
+	}
+	if (!await record(fox, [{ key: foeKey(foe), name: foe.name }])) return false;
+	await message.setFlag(scope, RAPIER_WIT_CARD_FLAG, { foe: foe.name });
+	await globalThis.ChatMessage?.create?.({
+		content: stonetopChatCard(HERO_MOVES.RAPIER_WIT, `<div class="card-content"><p>${escHtml(format("stonetop.fight.heroMoves.rapierWit.card", { name: fox.name, foe: foe.name }))}</p></div>`, "stonetop-rapier-wit-card"),
+		speaker: globalThis.ChatMessage?.getSpeaker?.({ actor: fox }),
+	});
+	return true;
+}
+
+/**
+ * Wire Rapier Wit's "They attack" button (give-advantage.js#rapierWitCardHtml): pressed by whoever can write
+ * the card and the Fox (the Fox's player, or the GM), once per card. Once pressed, the card says who
+ * attacked, and the button goes. Wired on its own (stonetop.js renderChatMessageHTML).
+ */
+export function wireRapierWit(message, html, deps = {}) {
+	wireRecordOnce(message, html, deps, {
+		selector: ".stonetop-rapier-wit", flag: RAPIER_WIT_CARD_FLAG, wired: "rapierWired",
+		readout: attacked => format("stonetop.fight.heroMoves.rapierWit.readout", { foe: attacked.foe }),
+		press: rapierWitAttack, failed: "Rapier Wit's attack could not be recorded",
+	});
+}
+
+/** Message flag: who a Truth or Consequences card's buttons named, `[{mode, foe}]`, read back as its readout. */
+export const TRUTH_CARD_FLAG = "truthRecorded";
+
+/**
+ * The tokens on the scene this user is looking at, other than `actor`'s own, as targets: who a Judge may have
+ * looked in the eye with nobody targeted or fought. Hidden tokens only for a GM.
+ */
+function sceneTokens(actor) {
+	const scene = globalThis.canvas?.scene ?? globalThis.game?.scenes?.viewed ?? null;
+	const isGM = !!globalThis.game?.user?.isGM;
+	return [...(scene?.tokens ?? [])]
+		.filter(doc => doc?.actor && doc.actor.id !== actor?.id && (!doc.hidden || isGM))
+		.map(doc => ({ uuid: doc.uuid, name: doc.name ?? doc.actor?.name ?? "" }));
+}
+
+/**
+ * Whom the Judge's Truth or Consequences is about, as Rapier Wit's foe is found (rapierWitFoe): the ONE this
+ * user has targeted; else picked from the several targeted, the ones the Judge is fighting, or anyone on the
+ * scene (the move is not only for fights), with a row for someone not on the map; else, with nobody on the map
+ * to point at, a name typed in, as Speak Softly's enemy is (speakSoftlyFoe). The move is mostly said across a
+ * table or a counter, to someone who may have no token at all. `{uuid, name}` for one on the map,
+ * `{name, named: true}` for one only named, or null when the question was put away.
+ */
+function truthSubject(judge, mode, deps = {}) {
+	const key = "stonetop.fight.heroMoves.truth";
+	return pickFoe(judge, {
+		pools: [deps.engaged ?? engagedOpponents, deps.onScene ?? sceneTokens],
+		allowNamed: true,
+		words: () => ({
+			pick: {
+				title: localize(`${key}.${mode}PickTitle`),
+				hint: localize(`${key}.${mode}PickHint`),
+				icon: mode === "adv" ? "fa-eye" : "fa-masks-theater",
+				buttonLabel: localize(`${key}.pickButton`),
+			},
+			someoneElse: localize(`${key}.someoneElse`),
+			name: {
+				title: localize(`${key}.${mode}PickTitle`),
+				buttonLabel: localize(`${key}.pickButton`),
+				placeholder: localize(`${key}.namePlaceholder`),
+			},
+		}),
+	}, deps);
+}
+
+/**
+ * One of Truth or Consequences' buttons, pressed (`mode` "adv" for "They said Yes", "dis" for "I deceived
+ * them"): ask whom, remember them on the Judge for the Judge's next roll against them
+ * (fight/hero-moves.js#recordTruth), and write it on the card's readout. Whether it was recorded.
+ */
+export async function truthRecorded(message, judge, mode, deps = {}) {
+	const scope = deps.scope ?? SYSTEM_ID;
+	const record = deps.record ?? recordTruth;
+	const foe = await truthSubject(judge, mode, deps);
+	if (!foe) return false;
+	const entry = foe.named ? { name: foe.name, named: true } : { key: foeKey(foe), name: foe.name };
+	if (!await record(judge, [entry], mode)) return false;
+	const held = message?.getFlag?.(scope, TRUTH_CARD_FLAG);
+	const kept = (Array.isArray(held) ? held : []).filter(entry => !(entry?.mode === mode && entry?.foe === foe.name));
+	try {
+		await message.setFlag(scope, TRUTH_CARD_FLAG, [...kept, { mode, foe: foe.name, ...(foe.named ? { named: true } : {}) }]);
+	} catch (err) {
+		console.warn("Stonetop | Truth or Consequences was recorded, but the card could not say so", err);
+	}
+	return true;
+}
+
+/**
+ * Wire Truth or Consequences' "They said Yes" and "I deceived them" buttons (give-advantage.js#truthCardHtml):
+ * pressed by whoever can write the card and the Judge (the Judge's player, or the GM), as often as the
+ * fiction calls for. The card lists what each press recorded. Wired on its own (stonetop.js
+ * renderChatMessageHTML).
+ */
+export function wireTruthOrConsequences(message, html, deps = {}) {
+	const root = html?.[0] ?? html;
+	const buttons = [...(root?.querySelectorAll?.(".stonetop-truth") ?? [])].filter(btn => belongsToMessage(btn, message));
+	if (!buttons.length) return;
+	const scope = deps.scope ?? SYSTEM_ID;
+	const judge = deps.giver ?? speakerActor(message);
+	const usable = deps.usable ?? canRewriteCard(message, judge);
+	const doc = root.ownerDocument ?? globalThis.document;
+	// The readout: ours out first, since a re-render patches the same row, then one line per press.
+	const row = buttons[0].closest(".stonetop-truth-row") ?? buttons[0].parentElement;
+	row?.parentElement?.querySelectorAll?.(".stonetop-truth-readout").forEach(el => el.remove());
+	const held = message?.getFlag?.(scope, TRUTH_CARD_FLAG);
+	// Each laid straight after the buttons, so walked newest first to read oldest first.
+	for (const entry of (Array.isArray(held) ? [...held] : []).reverse()) {
+		if (entry?.mode !== "adv" && entry?.mode !== "dis") continue;
+		const note = doc.createElement("p");
+		note.className = "stonetop-give-advantage-readout stonetop-truth-readout";
+		note.textContent = format(`stonetop.fight.heroMoves.truth.${entry.mode}Readout${entry.named ? "Named" : ""}`, { foe: entry.foe ?? "" });
+		row?.after?.(note);
+	}
+	for (const btn of buttons) {
+		if (!usable || !judge) { btn.remove(); continue; }
+		if (btn.dataset.truthWired === "1") continue;
+		btn.dataset.truthWired = "1";
+		btn.addEventListener("click", async () => {
+			if (btn.disabled) return;
+			btn.disabled = true;
+			try {
+				await truthRecorded(message, judge, btn.dataset.truth === "dis" ? "dis" : "adv", deps);
+			} catch (err) {
+				console.error("Stonetop | Truth or Consequences could not be recorded", err);
+			} finally {
+				btn.disabled = false;
+			}
+		});
+	}
+}
+
+/** Message flag: the enemy a Speak Softly card's "They refused" named, `{foe}`, so its button goes once pressed. */
+export const SPEAK_SOFTLY_CARD_FLAG = "speakSoftlyRefused";
+
+/**
+ * Who refused the Marshal's peace: the ONE token this user has targeted; else picked from the several
+ * targeted, or from the foes in the Marshal's fight (fight/fight-targets.js#foesInFight), with a row for
+ * someone not on the map; else, with nobody on the map to point at, a name typed in. `{uuid, name}` for one on
+ * the map, `{name, named: true}` for one only named, or null when the question was put away.
+ */
+function speakSoftlyFoe(marshal, deps = {}) {
+	const key = "stonetop.fight.heroMoves.speakSoftly";
+	return pickFoe(marshal, {
+		pools: [deps.fight ?? foesInFight],
+		allowNamed: true,
+		words: () => ({
+			pick: {
+				title: localize(`${key}.pickTitle`),
+				hint: localize(`${key}.pickHint`),
+				icon: "fa-dove",
+				buttonLabel: localize(`${key}.pickButton`),
+			},
+			someoneElse: localize(`${key}.someoneElse`),
+			name: {
+				title: localize(`${key}.nameTitle`),
+				buttonLabel: localize(`${key}.pickButton`),
+				placeholder: localize(`${key}.namePlaceholder`),
+			},
+		}),
+	}, deps);
+}
+
+/**
+ * Speak Softly's "They refused", pressed: ask who, remember them on the Marshal for the Marshal's next roll
+ * against them (fight/hero-moves.js#recordSpeakSoftly), and write who on the card so its button goes.
+ * Whether it was recorded.
+ */
+export async function speakSoftlyRefused(message, marshal, deps = {}) {
+	const scope = deps.scope ?? SYSTEM_ID;
+	const record = deps.record ?? recordSpeakSoftly;
+	const foe = await speakSoftlyFoe(marshal, deps);
+	if (!foe) return false;
+	const entry = foe.named ? { name: foe.name, named: true } : { key: foeKey(foe), name: foe.name };
+	if (!await record(marshal, [entry])) return false;
+	await message.setFlag(scope, SPEAK_SOFTLY_CARD_FLAG, { foe: foe.name, ...(foe.named ? { named: true } : {}) });
+	return true;
+}
+
+/**
+ * Wire Speak Softly's "They refused" button (give-advantage.js#speakSoftlyCardHtml): pressed by whoever can
+ * write the card and the Marshal (the Marshal's player, or the GM), once per card. Once pressed, the card says
+ * who refused, and the button goes. Wired on its own (stonetop.js renderChatMessageHTML).
+ */
+export function wireSpeakSoftly(message, html, deps = {}) {
+	wireRecordOnce(message, html, deps, {
+		selector: ".stonetop-speak-softly", flag: SPEAK_SOFTLY_CARD_FLAG, wired: "speakSoftlyWired",
+		readout: refused => format(`stonetop.fight.heroMoves.speakSoftly.${refused.named ? "readoutNamed" : "readout"}`, { foe: refused.foe }),
+		press: speakSoftlyRefused, failed: "Speak Softly's refusal could not be recorded",
+	});
 }

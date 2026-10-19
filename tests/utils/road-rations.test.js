@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-	defaultRoadShares, drainPurses, roadLedger, roadMouths, roadSummaryRows, roadUsesPerDay,
+	crewRoadText, defaultRoadShares, drainPurses, roadLedger, roadMouths, roadSummaryRows, roadUsesPerDay,
 } from "../../module/utils/road-rations.js";
 import { campPurses } from "../../module/camp/camp-rules.js";
+import { CREW_SUPPLIES_SLUG } from "../../module/actors/character/supply-cost.js";
 
 /**
  * DAYS ON THE ROAD (Book I p.89, p.304): 1 use a head a day; a mess kit feeds four, so 2 a day for
@@ -89,6 +90,78 @@ describe("who pays", () => {
 	it("reads an unmarked supplies row as nothing to eat, since the pack is what was read", () => {
 		const ledger = roadLedger([pc("a", { supplies: 0, provisions: 3 })], { days: 2 });
 		expect(ledger.rows[0].spend).toEqual([{ slug: "provisions", label: "Provisions", n: 2 }]);
+	});
+});
+
+describe("the crew pays its own mouths (the Crew insert, Book I p.144)", () => {
+	/** A Marshal feeding a crew of `crew`, whose crew's supplies hold `held`. */
+	const marshal = (id, resources, { crew = 4, held = 0, ...over } = {}) => pc(id, resources, { followers: crew, crewMouths: crew, crew: { held }, ...over });
+
+	it("pays the crew from its own supplies first and leaves the packs only the rest", () => {
+		const ledger = roadLedger([marshal("Rook", { supplies: 4 }, { held: 20 }), pc("Bo", { supplies: 4 })], { days: 3 });
+		// Six mouths for three days: 18. The crew's 12 come out of its supplies; Rook and Bo eat 3 each.
+		expect(ledger.bill).toBe(18);
+		expect(ledger.crewPaid).toBe(12);
+		const [rook, bo] = ledger.rows;
+		expect(rook).toMatchObject({ crewBill: 12, crewPays: 12, pays: 3 });
+		expect(rook.crewSpend).toEqual([{ slug: CREW_SUPPLIES_SLUG, label: "Crew supplies", n: 12 }]);
+		expect(bo).toMatchObject({ crewPays: 0, pays: 3, crewSpend: [] });
+		expect(ledger.short).toBe(0);
+	});
+
+	it("bills what the crew's supplies cannot cover to the packs, the keeper's first", () => {
+		const ledger = roadLedger([marshal("Rook", { supplies: 10 }, { held: 6 }), pc("Bo", { supplies: 4 })], { days: 2 });
+		// 12 in all; the crew eats 8 and its supplies pay 6. Rook's pack pays Rook's 2 and the crew's other 2.
+		expect(ledger.rows.map(r => [r.crewPays, r.pays])).toEqual([[6, 4], [0, 2]]);
+		expect(ledger.paid).toBe(12);
+	});
+
+	it("has the pack feed the whole crew when the crew's supplies are empty", () => {
+		const ledger = roadLedger([marshal("Rook", { supplies: 10 }, { held: 0 })], { days: 1 });
+		expect(ledger.rows[0]).toMatchObject({ crewBill: 4, crewPays: 0, pays: 5, crewSpend: [] });
+	});
+
+	it("bills the crew's meal per day, a quarter of its mouths rounded up over a mess kit", () => {
+		const ledger = roadLedger([marshal("Rook", { supplies: 4 }, { crew: 6, held: 20 })], { days: 2, messKit: true });
+		// Seven mouths over a mess kit: 2 a day, 4 in all; the crew's 6 eat 2 a day, all of it.
+		expect(ledger.bill).toBe(4);
+		expect(ledger.rows[0]).toMatchObject({ crewBill: 4, crewPays: 4, pays: 0 });
+	});
+
+	it("never feeds more of the crew than the followers the GM left eating, and nothing over a laden cart", () => {
+		expect(roadLedger([marshal("Rook", {}, { held: 20, followers: 2 })]).rows[0].crewPays).toBe(2);
+		const cart = roadLedger([marshal("Rook", {}, { held: 20 })], { days: 3, packAnimal: true });
+		expect(cart.rows[0]).toMatchObject({ crewBill: 0, crewPays: 0 });
+	});
+
+	it("has two crews over one mess kit pay no more than the party's whole bill", () => {
+		const ledger = roadLedger([
+			marshal("Rook", {}, { crew: 1, held: 4, eats: false }),
+			marshal("Wren", {}, { crew: 1, held: 4, eats: false }),
+		], { messKit: true });
+		expect(ledger.bill).toBe(1);
+		expect(ledger.rows.map(r => r.crewPays)).toEqual([1, 0]);
+		expect(ledger.over).toBe(0);
+	});
+
+	it("leaves everyone without a crew paying as before", () => {
+		const before = roadLedger([pc("a", { supplies: 4 }), pc("b", { supplies: 4 })], { days: 2 });
+		expect(before.rows.map(r => r.pays)).toEqual([2, 2]);
+		expect(before.crewPaid).toBe(0);
+	});
+
+	it("says what the crew's supplies pay, in place of a figure to set", () => {
+		expect(crewRoadText({ crewBill: 0, crewPays: 0 })).toBe("");
+		expect(crewRoadText({ crewBill: 6, crewPays: 6 })).toBe("Feeds the crew first: 6 uses, all the crew eats.");
+		expect(crewRoadText({ crewBill: 6, crewPays: 5 })).toBe("Feeds the crew first: 5 of the 6 uses the crew eats. The other 1 comes out of the packs.");
+		expect(crewRoadText({ crewBill: 1, crewPays: 0 })).toBe("Empty, so what the crew eats (1 use) comes out of the packs.");
+	});
+
+	it("names on the card what came from the crew's supplies and what from the pack", () => {
+		const rows = roadSummaryRows(roadLedger([marshal("Rook", { supplies: 10 }, { held: 6 })], { days: 2 }));
+		expect(rows).toContainEqual({ label: "Rook", value: "6 uses from the crew's own supplies; 4 uses (4 supplies) from the pack" });
+		const crewOnly = roadSummaryRows(roadLedger([marshal("Rook", {}, { crew: 1, held: 4, eats: false })]));
+		expect(crewOnly).toContainEqual({ label: "Rook", value: "1 use from the crew's own supplies" });
 	});
 });
 

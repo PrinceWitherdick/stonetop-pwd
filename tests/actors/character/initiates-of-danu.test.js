@@ -7,7 +7,7 @@ import { loadPlaybookDefs } from "../../fakes/sourcePack.js";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import {
 	activeInitiateOptions, choiceCountState, initiateActive, initiateChoicePatch, initiateExceptional,
-	initiateMoves, initiateOption,
+	initiateGearSeed, initiateMoves, initiateOption,
 } from "../../../module/actors/character/initiates.js";
 import { CharacterBackgrounds } from "../../../module/actors/character/CharacterBackgrounds.js";
 import { dieFromDamage, printedBlow } from "../../../module/utils/damage.js";
@@ -249,6 +249,56 @@ describe("the Followers tab", () => {
 		} finally {
 			globalThis.game.actors = prior;
 		}
+	});
+});
+
+// Olwin's insert line is "HP 6; Armor 1 (shield)": the shield buys +1 Readiness on a 7+ Defend
+// (p.216), which every follower card reads off a ticked Gear row naming a shield.
+describe("Olwin's shield", () => {
+	it("is a ticked Shield row on the playbook, and her Armor stays the printed 1", () => {
+		expect(opt("olwin").gear).toEqual([{ label: "Shield", checked: true }]);
+		expect(opt("olwin").armor).toBe("1 (shield)");
+		expect(opt("enfys").gear).toBeUndefined();
+	});
+
+	it("is seeded only onto a card nobody has written Gear to", () => {
+		expect(initiateGearSeed(undefined, opt("olwin"))).toEqual([{ label: "Shield", checked: true }]);
+		expect(initiateGearSeed({ pronoun: "she" }, opt("olwin"))).toEqual([{ label: "Shield", checked: true }]);
+		// The player's own list, even one they emptied, stays theirs.
+		expect(initiateGearSeed({ gear: [] }, opt("olwin"))).toBeNull();
+		expect(initiateGearSeed({ gear: [{ label: "Shield", checked: false }] }, opt("olwin"))).toBeNull();
+		expect(initiateGearSeed(undefined, opt("enfys"))).toBeNull();
+	});
+
+	it("gives her Readiness a cap of 4 once onboarding picks her, and Enfys keeps 3", async () => {
+		const { char, actor } = buildLiveCharacter({ slug: "the-blessed", name: "The Blessed", flags: { "background.selected": "initiate" } });
+		const sheet = sheetFor(char, actor);
+		const playbookDoc = { name: "The Blessed", flags: { stonetop: { backgrounds: BACKGROUNDS } } };
+
+		await sheet._applyCommonSelections(playbookDoc, { backgroundSlug: "initiate", initiates: ["olwin", "enfys"] });
+
+		expect(actor.getFlag("stonetop-pwd", "initiateDetails.olwin.gear")).toEqual([{ label: "Shield", checked: true }]);
+		const bySlug = Object.fromEntries(sheet._buildFollowersData(BLESSED).initiates.map(c => [c.slug, c]));
+		expect(bySlug.olwin.readinessHasShield).toBe(true);
+		expect(bySlug.olwin.readinessPips).toHaveLength(4);
+		expect(bySlug.olwin.armorInput).toBe(1);
+		expect(bySlug.enfys.readinessHasShield).toBe(false);
+		expect(bySlug.enfys.readinessPips).toHaveLength(3);
+		expect(sheet._followerHasShield("initiate", "olwin")).toBe(true);
+	});
+
+	it("is seeded when she is ticked on the Details tab, and not again once her player drops it", async () => {
+		const { char, actor } = buildLiveCharacter({ slug: "the-blessed", name: "The Blessed", flags: { "background.selected": "initiate" } });
+		const sheet = sheetFor(char, actor);
+		const tick = checked => sheet._onBgChoiceChange({ currentTarget: { checked, dataset: { slug: "olwin" } } });
+
+		await tick(true);
+		expect(actor.getFlag("stonetop-pwd", "initiateDetails.olwin.gear")).toEqual([{ label: "Shield", checked: true }]);
+
+		await actor.setFlag("stonetop-pwd", "initiateDetails.olwin.gear", []);
+		await tick(false);
+		await tick(true);
+		expect(actor.getFlag("stonetop-pwd", "initiateDetails.olwin.gear")).toEqual([]);
 	});
 });
 

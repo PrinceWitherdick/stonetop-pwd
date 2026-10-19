@@ -1,3 +1,16 @@
+import { POUCH_SLOTS_KEY } from "./sacred-pouch.js";
+
+// The write-in labels an onboarding apply stores. Onboarding has the one "Something else" box,
+// opened on the FIRST stored write-in, so its answer replaces only that one (blank drops it); any
+// more the sheet's Inventory tab added after it are kept as they are, since the run never showed
+// them. A new playbook clears the whole possessions flag before this runs (clearPlaybookData).
+export function onboardingWriteIns(written, stored = []) {
+	return [
+		...(String(written ?? "").trim() ? [written] : []),
+		...(stored ?? []).slice(1).map(c => c?.label).filter(Boolean),
+	];
+}
+
 export class CharacterPossessions {
 	constructor(flags) {
 		this._flags = flags;
@@ -8,6 +21,9 @@ export class CharacterPossessions {
 	get maxUses()     { return this._flags.getFlag("maxUses") ?? {}; }
 	get subChoices()  { return this._flags.getFlag("subChoices") ?? {}; }
 	get choiceUses()  { return this._flags.getFlag("choiceUses") ?? {}; }
+	// How far a possession that `produces` something has been ticked, ever, keyed by slug: the
+	// uses already paid out, so a use unticked and ticked again pays nothing twice.
+	get produced()    { return this._flags.getFlag("produced") ?? {}; }
 	// The level a move-granted possession arrived at (the Seeker's sacred pouch), keyed by
 	// slug. Its Stock grows only from then on — see StonetopCharacter#computePossessionMaxUses.
 	get grantedAtLevel() { return this._flags.getFlag("grantedAtLevel") ?? {}; }
@@ -40,11 +56,24 @@ export class CharacterPossessions {
 		const deletes = {};
 		if (slug in this.uses)       deletes.uses       = [slug];
 		if (slug in this.subChoices) deletes.subChoices = [slug];
+		if (slug in this.produced)   deletes.produced   = [slug];
 		await this._flags.batch({ sets: { selected: [...s] }, deletes });
 	}
 
-	async setUses(slug, count) {
-		await this._flags.setFlag("uses", { ...this.uses, [slug]: count });
+	// `produced` (setPossessionUses) lands in the same write as the count it was read against.
+	async setUses(slug, count, { produced } = {}) {
+		if (produced == null) return this._flags.setFlag("uses", { ...this.uses, [slug]: count });
+		await this._flags.batch({ sets: { uses: { ...this.uses, [slug]: count }, produced: { ...this.produced, [slug]: produced } } });
+	}
+
+	// What the sacred pouch holds besides Stock (a stored malady, a borrowed power), raw as stored:
+	// see sacred-pouch.js for the shape. An ARRAY, so it is always written whole.
+	get pouchSlots() { return this._flags.getFlag(POUCH_SLOTS_KEY) ?? []; }
+
+	// The entries and the pouch's spent count in ONE write: an entry changes the room the count is
+	// read against, so the two must never land apart (sacred-pouch.js).
+	async setPouchSlots(pouchSlug, slots, spent) {
+		await this._flags.batch({ sets: { [POUCH_SLOTS_KEY]: [...slots], uses: { ...this.uses, [pouchSlug]: spent } } });
 	}
 
 	async addSubChoice(possessionSlug, choiceSlug) {
@@ -159,6 +188,21 @@ export class CharacterPossessions {
 			n++;
 		}
 		await this._flags.setFlag("custom", entries);
+	}
+
+	// One more write-in, added from the sheet's Inventory tab: "______ (discuss with GM)" is a
+	// line on every playbook's list, so it is open after onboarding too. Same { slug, label }
+	// shape onboarding stores, with the next `custom-N` no entry holds (so a removed one's slug
+	// is never handed to a second write-in). A blank label adds nothing. Returns the new entry,
+	// or null. Never refused for the pick count: going over is flagged on the sheet instead.
+	async addCustom(label) {
+		const trimmed = String(label ?? "").trim();
+		if (!trimmed) return null;
+		const current = this.custom;
+		const taken = current.map(c => Number(/^custom-(\d+)$/.exec(c?.slug ?? "")?.[1]) || 0);
+		const entry = { slug: `custom-${Math.max(0, ...taken) + 1}`, label: trimmed };
+		await this._flags.setFlag("custom", [...current, entry]);
+		return entry;
 	}
 
 	async removeCustom(slug) {

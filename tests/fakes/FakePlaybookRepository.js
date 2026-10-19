@@ -81,7 +81,7 @@ export const BLESSED_PLAYBOOK = {
 	"instincts": [
 		{
 			"word": "Delight",
-			"description": "To find beauty, in even the ugliest things."
+			"description": "To find beauty, in even the most ugly thing."
 		},
 		{
 			"word": "Detachment",
@@ -97,7 +97,7 @@ export const BLESSED_PLAYBOOK = {
 		},
 		{
 			"word": "Reverence",
-			"description": "To honor the spirits and give them their due."
+			"description": "To demand sacrifice to the spirits and Danu."
 		}
 	],
 	"appearance": [
@@ -220,7 +220,7 @@ export const BLESSED_PLAYBOOK = {
 			{
 				"slug": "sacred-pouch",
 				"label": "Sacred pouch",
-				"description": "<p>Doesn't take up space in your inventory. It can hold up to 3 Stock (sacred herbs, powders, stones, pigments, chalks, clay, and so forth). Each time you gain an even-numbered level, your pouch can hold +1 Stock. When anyone but you looks inside your sacred pouch and touches the materials therein, the Stock is ruined.</p><p>When you have a few days of downtime in familiar terrain, you may replenish your Stock.</p><p>When you Forage, you can produce Stock instead of provisions.</p>",
+				"description": "<p>Your sacred pouch (<em>magical</em>) doesn't take up space in your inventory. It can hold up to 3 Stock (sacred herbs, powders, stones, pigments, chalks, clay, and so forth). Each time you gain an even-numbered level, your pouch can hold +1 Stock. When anyone but you looks inside your sacred pouch and touches the materials therein, the Stock is ruined.</p><p>When you have a few days of downtime in familiar terrain, you may replenish your Stock.</p><p>When you Forage, you can produce Stock instead of provisions.</p>",
 				"usesBonus": {
 					"evenLevelBonus": 1,
 					"moveBonus": [

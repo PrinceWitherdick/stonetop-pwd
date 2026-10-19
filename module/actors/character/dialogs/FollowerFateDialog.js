@@ -21,7 +21,8 @@ import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 // #sirPermissionOffer) adds a "spend 1 Loyalty, they survive" option while it is learned
 // and Loyalty is held, and a pre-ticked "you let them go, mark XP" box that the Dead
 // outcome reads. `ctx.isCrewMember` words Dead as striking them off the roster, and
-// `ctx.isGroupMember` the same for a custom group's roster (and its shared Loyalty).
+// `ctx.isGroupMember` the same for a custom group's roster (and its shared Loyalty). For the crew, `sir.presence`
+// (Front Line Leader's Presence) adds the same spare paid with Presence instead ("sparePresence").
 //
 // AFTER A DEATH'S DOOR 6- (`ctx.door`): the follower "would die", so the same Dead and the same spare are
 // offered from the card's "Mark dead" (follower-deaths-door.js), and nothing else: Death's Door and Dying
@@ -64,6 +65,7 @@ export class FollowerFateDialog extends StonetopDialog {
 		// A custom GROUP's member: struck off that group's roster, spending the group's Loyalty.
 		const roster = isCrewMember ? "crew" : this._ctx.isGroupMember ? "group" : "";
 		const sir = this._ctx.sir ?? {};
+		const presence = Math.max(0, Number(sir.presence) || 0);
 		const i18n = game.i18n;
 		return {
 			followerName: this._ctx.name || "Your follower",
@@ -76,6 +78,10 @@ export class FollowerFateDialog extends StonetopDialog {
 			canSpare:     !!sir.canSpare && loyalty > 0,
 			spareLabel:   i18n.localize("stonetop.character.followers.fate.spareLabel"),
 			spareDesc:    i18n.format(`stonetop.character.followers.fate.${roster === "crew" ? "spareCrewDesc" : roster === "group" ? "spareGroupDesc" : "spareDesc"}`, { loyalty }),
+			// Front Line Leader: the same spare paid with the Marshal's Presence, for the crew (follower-fate.js).
+			canSparePresence: presence > 0,
+			sparePresenceLabel: i18n.localize("stonetop.character.followers.fate.sparePresenceLabel"),
+			sparePresenceDesc:  i18n.format("stonetop.character.followers.fate.sparePresenceDesc", { presence }),
 			// Only Dead reads the box, and Loyal to the End's set has no Dead to choose.
 			letGo:        !!sir.letGo && !loyalToTheEnd,
 			letGoLabel:   i18n.localize("stonetop.character.followers.fate.letGo"),

@@ -83,7 +83,7 @@ describe("the I wonder tab: wiring", () => {
 	// mismatch is invisible (the panels are shown one at a time).
 	it("sits directly above the Core Loop tab, in the rail and in the body", () => {
 		const order = ["homefront", "moves", "threats", "encounters", "expeditions", "wonder", "loop"];
-		// The rail carries one more after those seven: the shared Preferences tab, which is last
+		// The rail carries one more after those eight: the shared Preferences tab, which is last
 		// on this rail exactly as it is on the character sheet's. Its panel comes from
 		// "stonetop.tab-preferences", so it is not in the body list below.
 		const railOrder = [...SHEET_HBS.matchAll(/tab-rail-item"\s+tab="(\w+)"/g)].map(m => m[1]);

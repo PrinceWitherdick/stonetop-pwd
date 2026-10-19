@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	ONGOING_INVOCATION_FLAG, readOngoing, prettifySlug, invocationLabel,
 	resolveInvocationUse, resolveInvocationEnd, invokeNotice, readInvocationState, usesOngoing,
-	ONGOING_INVOCATION_FLAGS, EMPOWERED_MAKES_ONGOING,
+	ONGOING_INVOCATION_FLAGS, EMPOWERED_MAKES_ONGOING, REDUCED_IS_BRIEF, REDUCED_GM_CHOICE, reducedEndings,
 } from "../../../module/actors/character/ongoing-invocation.js";
 import { expectedInvocationCount, invocationCountCue } from "../../../module/actors/character/invocation-count.js";
 import { loadPlaybookDefs } from "../../fakes/sourcePack.js";
@@ -280,5 +280,38 @@ describe("the Invocations count cue", () => {
 		expect(invocationCountCue({ known: 5, optionCount: 10, startingCount: 2, level: 4 }))
 			.toEqual({ known: 5, expected: 4, shortfall: 0, overage: 1 });
 		expect(invocationCountCue({ known: 4, optionCount: 10, startingCount: 2, level: 4 })).toBeNull();
+	});
+});
+
+// Re-audit 10-18: a reduced Blinding Light "flares only for a moment", a reduced Cold Light of Day "lasts
+// only a few moments", and a reduced Moth to a Flame "lasts only briefly OR only some of the named
+// creatures are affected (GM's choice)". The first two give up their slot at once; the third is asked.
+describe("a reduced short-lived Invocation", () => {
+	it("names real, ongoing Invocations of the shipped playbook", () => {
+		const { byName } = loadPlaybookDefs();
+		const options = byName.get("The Lightbearer")?.invocations?.options ?? [];
+		for (const slug of [...REDUCED_IS_BRIEF, ...REDUCED_GM_CHOICE]) {
+			expect(options.find(o => o.slug === slug)?.ongoing, slug).toBe(true);
+		}
+		expect([...REDUCED_IS_BRIEF]).toEqual(["blinding-light", "cold-light-of-day"]);
+		expect([...REDUCED_GM_CHOICE]).toEqual(["moth-to-a-flame"]);
+	});
+
+	it("ends a running brief one, asks of Moth to a Flame, and leaves any other alone", () => {
+		expect(reducedEndings({ current: "blinding-light", slugs: ["blinding-light"] })).toEqual({ brief: ["blinding-light"], ask: [] });
+		expect(reducedEndings({ current: "moth-to-a-flame", slugs: ["moth-to-a-flame"] })).toEqual({ brief: [], ask: ["moth-to-a-flame"] });
+		expect(reducedEndings({ current: "warmth-of-the-sun", slugs: ["warmth-of-the-sun"] })).toEqual({ brief: [], ask: [] });
+	});
+
+	it("acts only on what is still running", () => {
+		expect(reducedEndings({ current: "", slugs: ["blinding-light"] })).toEqual({ brief: [], ask: [] });
+		expect(reducedEndings({ current: "warmth-of-the-sun", slugs: ["cold-light-of-day"] })).toEqual({ brief: [], ask: [] });
+	});
+
+	it("takes each half of a Burn Twice pair on its own", () => {
+		const current = { primary: "warmth-of-the-sun", second: "cold-light-of-day" };
+		expect(reducedEndings({ current, slugs: ["warmth-of-the-sun", "cold-light-of-day"] })).toEqual({ brief: ["cold-light-of-day"], ask: [] });
+		expect(reducedEndings({ current: { primary: "blinding-light", second: "moth-to-a-flame" }, slugs: ["blinding-light", "moth-to-a-flame"] }))
+			.toEqual({ brief: ["blinding-light"], ask: ["moth-to-a-flame"] });
 	});
 });

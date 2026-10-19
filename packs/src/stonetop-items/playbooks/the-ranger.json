@@ -98,7 +98,7 @@
               },
               {
                 "slug": "lend-strength",
-                "label": "Lend it your strength—lose 1d6 HP, and it regains an equal amount"
+                "label": "Lend it your strength: lose 1d6 HP, and it regains an equal amount"
               }
             ]
           }
@@ -270,11 +270,13 @@
               },
               {
                 "name": "Stills",
-                "column": "small"
+                "column": "small",
+                "note": "immobile"
               },
               {
                 "name": "Barrels",
-                "column": "small"
+                "column": "small",
+                "note": "immobile"
               },
               {
                 "name": "Firkins",
@@ -462,7 +464,7 @@
               "+1 armor (hide, scales, etc.)": { "armor": 1, "armorSource": "hide, scales, etc." },
               "Damage is +2 damage, forceful": { "damage": 2, "tags": ["forceful"] },
               "Damage is messy, 1 piercing": { "tags": ["messy"], "piercing": 1 },
-              "large (+4 HP, +1 damage, +close)": { "hp": 4, "damage": 1, "tags": ["close"] }
+              "large (+4 HP, +1 damage, +close)": { "isTag": true, "hp": 4, "damage": 1, "tags": ["close"] }
             },
             "aliases": {
               "Damage +2, forceful": "Damage is +2 damage, forceful",

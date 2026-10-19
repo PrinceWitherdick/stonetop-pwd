@@ -52,7 +52,7 @@ describe("the roll paths that bypass StonetopItem.roll", () => {
 
 	it("lay Know Things and Seek Insight about an arcanum or artifact out with their ladder", () => {
 		expect(SHEET).toContain("moveDescription: withMovePickBonuses(moveCardBody(owned?.system?.description");
-		expect(SHEET).toMatch(/moveDescription: moveCardBody\(owned\?\.system\?\.description\s*\?\? `<p>When you <strong><em>study a situation/);
+		expect(SHEET).toMatch(/moveDescription: withMovePickBonuses\(moveCardBody\(owned\?\.system\?\.description\s*\?\? `<p>When you <strong><em>study a situation/);
 	});
 
 	// Since rollStat lays every description out itself (move-tiers.js#rollCardBody), a roll path

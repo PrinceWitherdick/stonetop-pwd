@@ -165,7 +165,10 @@
       "cardPaid": "{names} each marked <strong>+{xp} XP</strong>.",
       "cardFailed": "Not paid, the XP could not be written: {names}.",
       "cardLeftOut": "Not at the table, not paid: {names}.",
-      "failedWarn": "Some of the session's XP could not be written: {names}. See the console."
+      "failedWarn": "Some of the session's XP could not be written: {names}. See the console.",
+      "followerReviewTitle": "Review followers",
+      "followerReviewTag": "GM, between sessions",
+      "followerReviewCite": "Book I p.480"
     },
     "camp": {
       "npcHealNoGm": "{name} was fed at the fire, but you don't own their token's actor and no GM is online to heal it. Ask the GM to raise its HP by hand."
@@ -757,6 +760,7 @@
         "xpCost": "XP Cost",
         "xpRemaining": "XP Remaining",
         "invocationAside": "Your new level is even, so you'll also choose a new Invocation on the next step.",
+        "pouchGrowth": "Your sacred pouch can hold +{count} Stock (the new space is empty: replenish with downtime or Forage).",
         "moveIntro": "Choose one new move from your playbook.",
         "noMoves": "No additional moves are available at this level.",
         "noMovesMatch": "No moves match this filter.",
@@ -984,6 +988,8 @@
       "backOwedText": "You've read the front. The back is owed you, once you've had time to study it or learn more.",
       "backOwedStudy": "Study it",
       "backOwedTitle": "Study it",
+      "unlockChoiceOwed": "Each mark on this card lets you choose one of the {name}. Marks still to choose for: {owed}.",
+      "unlockChoiceChoose": "Choose",
       "unidentifiedText": "This arcanum has not yet been identified. You can tell it's something, but not what.",
       "discover": "Arcana Discovered",
       "discoverTitle": "Arcanum Discovered",
@@ -1074,6 +1080,7 @@
       "resetNo": "Keep them",
       "regularUndefinedPoolLabel": "Undefined",
       "regularUndefinedPoolNote": "Click to reserve undefined <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>. When you <strong><em>Have What You Need</em></strong>, mark an item below. It draws from here.",
+      "magpieNote": "<strong>Magpie:</strong> what you produce can be strange, specific, maybe even valuable or a little bit magical. If it is, tell us where you got it and pick 2 from Magpie's list.",
       "smallUndefinedPoolLabel": "Undefined",
       "smallUndefinedPoolNote": "Click to reserve undefined <span class=\"stonetop-glyph stonetop-glyph--checkbox-checked\">■</span>. When you <strong><em>Have What You Need</em></strong>, mark a small item below. It draws from here.",
       "regularPoolAtLimit": "You're already carrying a full load, so there's no room to reserve more undefined ◇. Un-mark a carried item to free up room.",
@@ -1104,7 +1111,7 @@
       "choosePossessionsButton": "Choose Special Possessions",
       "possessionsOverLimitOne": "This character has 1 more special possession than the playbook lets you choose.",
       "possessionsOverLimitMany": "This character has {count} more special possessions than the playbook lets you choose.",
-      "possessionsOverLimitHint": "Turn on Edit and untick one, or leave it if your GM agreed to it.",
+      "possessionsOverLimitHint": "Turn on Edit and untick one (or remove a write-in), or leave it if your GM agreed to it.",
       "outfit": {
         "heading": "When you <em><strong>Outfit</strong></em>, mark a number of <span class=\"stonetop-glyph stonetop-glyph--diamond\">◇</span> below on specific items or as a group. Your load is whatever you've marked:",
         "currentLoad": "Carrying <strong>{count}</strong> <span class=\"stonetop-glyph stonetop-glyph--diamond-selected\">◆</span>.",
@@ -1464,6 +1471,11 @@
       "choose": "Choose this",
       "later": "Choose later"
     },
+    "backgroundSetup": {
+      "title": "{background}: Your Choice",
+      "lead": "Your Background lets you choose 1 of each, and gives you what you pick.",
+      "later": "Choose none"
+    },
     "seekerMajor": {
       "title": "{background}: Major Arcanum",
       "lead": "Your Background grants you 1 major arcanum. You've begun to unlock its mysteries: 1 mark goes on the front of its insert.",
@@ -1488,6 +1500,9 @@
     "onboarding": {
       "wellVersedExtra": "Well Versed: mark 1 more topic",
       "wellVersedFromBackground": "from your Background",
+      "creationMarkHint": "Go mark it now: each Veteran Crew you start with picks 1.",
+      "creationMarkFromBackground": "{move} (from your background): pick 1",
+      "creationMarkFromPick": "{move} (your free pick): pick 1",
       "saveButton": "Save",
       "savedTitle": "Selections Saved",
       "savedContent": "Your current character creation selections have been saved.",
@@ -1578,6 +1593,9 @@
       "instinctEmpty": "No instinct yet. Write one as “to [do something].”",
       "status": "Status",
       "following": "Following",
+      "followerLoyalty": "Loyalty {value}",
+      "followerReadiness": "Readiness {value}",
+      "order": "Order",
       "connections": "Connections",
       "motivations": "Motivations",
       "embodiment": "Embodiment",
@@ -1748,7 +1766,11 @@
       },
       "gear": {
         "specialPossessions": "Special Possessions",
-        "removePossession": "Remove this write-in possession"
+        "removePossession": "Remove this write-in possession",
+        "addPossession": "Something else (discuss with GM)",
+        "addPossessionTitle": "Something else (discuss with GM)",
+        "addPossessionButton": "Add it",
+        "addPossessionPlaceholder": "Describe your own special possession…"
       },
       "followers": {
         "searchLabel": "Search followers",
@@ -1759,6 +1781,10 @@
           "spareCrewDesc": "Spend 1 of the crew's shared Loyalty ({loyalty} held). They stay at 0 HP, out of the action, but alive.",
           "spareCard": "{name} survives: out of the action, but alive. 1 Loyalty spent, {loyalty} left.",
           "spareNone": "{name} holds no Loyalty to spend.",
+          "sparePresenceLabel": "Sir, Permission to Die, Sir: spend 1 Presence instead, they survive (out of the action)",
+          "sparePresenceDesc": "Front Line Leader: spend 1 Presence ({presence} held) in place of the crew's Loyalty. They stay at 0 HP, out of the action, but alive.",
+          "sparePresenceCard": "{name} survives: out of the action, but alive. 1 Presence spent in place of the crew's Loyalty (Front Line Leader), {presence} left.",
+          "sparePresenceNone": "You hold no Presence to spend.",
           "letGo": "Sir, Permission to Die, Sir: you let them go, mark XP (only if you choose Dead)",
           "letGoCard": "You let them go, and mark XP.",
           "crewDeadDesc": "Dead, immediately. They are struck off the crew roster.",
@@ -1810,12 +1836,41 @@
         "bond": {
           "button": "Pay cost",
           "tooltip": "Strengthen Your Bond: pay their cost, and if you haven't done so recently, they hold +1 Loyalty (max 3).",
+          "tooltipCost": "Strengthen Your Bond: pay their cost ({cost}), and if you haven't done so recently, they hold +1 Loyalty (max 3).",
+          "paidRecently": "Already paid since the last End of Session: the book asks for a significant scene \"on camera\" before Strengthening the Bond again (p.464).",
           "atMaxTooltip": "They hold 3 Loyalty: Strengthen Your Bond doesn't trigger.",
           "fallenTooltip": "They have fallen.",
           "atMax": "{name} holds 3 Loyalty already: Strengthen Your Bond doesn't trigger.",
           "card": "You pay {name}'s cost: they hold +1 Loyalty, {loyalty} in all.",
+          "radiantButton": "Radiant Countenance",
+          "radiantTooltip": "Radiant Countenance: give them your fond attention and Strengthen Your Bond as if you paid their cost. If you haven't done so recently, they hold +1 Loyalty (max 3).",
+          "radiantCard": "{actor} gives {name} their fond attention (Radiant Countenance): you Strengthen Your Bond as if you paid their cost; they hold +1 Loyalty, {loyalty} in all.",
           "cardCost": "(Their cost: {cost}.)",
           "recently": "The PC and/or follower should have a significant scene \"on camera\" before they can Strengthen Their Bond again."
+        },
+        "instinctLabel": "Instinct:",
+        "debilities": {
+          "label": "Debility (p.243):"
+        },
+        "outfit": {
+          "button": "Outfit",
+          "title": "Outfit {name}",
+          "load": "{load} load",
+          "regular": "{count} ◇ in reserve",
+          "small": "{count} □ in reserve"
+        },
+        "order": {
+          "lead": "{name} makes the move on your order ({move}, Order Followers p.462).",
+          "balkNote": "Balked: 1 Loyalty spent ({loyalty} left)",
+          "balkPresenceNote": "Balked: 1 Presence spent in place of their Loyalty (Front Line Leader, {presence} left)",
+          "balkFailed": "{name}'s Loyalty could not be spent; rolling the order anyway.",
+          "damageButton": "Roll {name}'s damage",
+          "noDamage": "{name} has no damage die on their card to roll.",
+          "tierMoved": "The card no longer reads as a hit, so there is no damage to roll."
+        },
+        "party": {
+          "marker": "with the party",
+          "markerTooltip": "Travels with the party: eats and rests at Make Camp."
         },
         "wholeParty": {
           "label": "Follows the party as a whole",
@@ -1844,6 +1899,52 @@
           "fateSub": "Death's Door, 6-: their time has come (p.244)",
           "fateNote": "One last move as if they rolled a 12+, then they're dead, unless you spare them. Close this to decide later: the card's Mark dead button waits.",
           "fateLater": "Decide later"
+        },
+        "balk": {
+          "button": "They balk",
+          "tooltip": "The GM says they won't do as they're told (p.466): pick why, and the card asks the player to spend Loyalty, Persuade them, or let it drop.",
+          "cancel": "Cancel",
+          "askTitle": "{name} balks",
+          "ask": "Why won't {name} do as they're told? The card shows the reason to the table, with the player's answers.",
+          "orderLabel": "The order (optional):",
+          "orderPlaceholder": "e.g. hold the bridge",
+          "reason": {
+            "scared": "Scared",
+            "overwhelmed": "Overwhelmed",
+            "unreasonable": "Unreasonable order",
+            "against": "Against their nature"
+          },
+          "title": "They balk",
+          "lead": "{name} doesn't want to do as {leader} says.",
+          "order": "The order: {order}",
+          "spend": "Spend 1 Loyalty ({loyalty} held)",
+          "persuade": "Persuade them",
+          "drop": "Let it drop",
+          "answerTitle": "The balk, answered",
+          "spent": "{leader} spends 1 of {name}'s Loyalty: they do it anyway ({loyalty} left).",
+          "persuading": "{leader} tries to Persuade {name}.",
+          "dropped": "{leader} lets it drop: {name} doesn't do it.",
+          "spendFailed": "{name}'s Loyalty could not be spent.",
+          "answered": "Answered: {choice}.",
+          "choice": {
+            "spend": "1 Loyalty spent",
+            "persuade": "Persuade",
+            "drop": "let it drop"
+          }
+        },
+        "useUp": {
+          "button": "Use up their resources",
+          "tooltip": "The GM move (p.182): they lose Loyalty, Supplies, ammo, or a piece of gear. Writes it to the sheet and tells the table.",
+          "title": "{name}: Use up their resources",
+          "lead": "What does {name} lose?",
+          "count": "How many uses:",
+          "howLabel": "How it shows (optional):",
+          "howPlaceholder": "e.g. a strap snaps and the waterskin is gone",
+          "confirm": "Use it up",
+          "cancel": "Cancel",
+          "nothing": "{name} has nothing left to use up.",
+          "loyalty": "1 Loyalty lost ({loyalty} left)",
+          "loyaltyFailed": "{name}'s Loyalty could not be changed."
         }
       },
       "moveTypes": {
@@ -2031,6 +2132,49 @@
       "tokenizerPip": "Open Tokenizer",
       "noTokenizeTarget": "Tokenizer works on the actor this follower was placed as, and that actor is gone. Drag the card onto a scene to place them again."
     },
+    "lightbearer": {
+      "enigma": {
+        "title": "Enigma",
+        "none": "You hold no Enigma to spend.",
+        "knowThings": {
+          "button": "Draw on your wanderings",
+          "empty": "You hold no Enigma to spend.",
+          "tooltip": "Spend 1 Enigma ({held} held) to Know Things as if you rolled a 10+, drawing on what you learned while away.",
+          "spent": "<strong>{name}</strong> draws on what they learned while away and spends 1 Enigma ({held} held), treating that roll as a 10+."
+        },
+        "item": {
+          "title": "Have What You Need: Enigma",
+          "body": "You have no {marks} left for {item}. You can spend 1 Enigma to produce it: an oddly specific yet mundane item of Value 1 or less.",
+          "smallMarks": "undefined small items",
+          "regularMarks": "undefined items",
+          "spend": "Spend 1 Enigma ({held} held)",
+          "skip": "Mark it without Enigma",
+          "receipt": "Spent 1 Enigma to produce {item} ({held} held)"
+        },
+        "return": {
+          "button": "Return when needed",
+          "tooltip": "Spend 1 Enigma to return from your wandering exactly when and where you are needed, fully Outfitted. Opens the Outfit window.",
+          "chat": "<strong>{name}</strong> spends 1 Enigma ({held} held) to return from their wandering exactly when and where they are needed, fully Outfitted."
+        },
+        "wander": {
+          "button": "Back from wandering",
+          "tooltip": "When you go off a-wandering, hold 1 Enigma if you're gone for days, 2 if you're gone for weeks, or 3 if you're gone for months.",
+          "title": "Back from wandering",
+          "body": "How long were you gone a-wandering? You hold {held} Enigma now.",
+          "days": "Days (+{gain} Enigma)",
+          "weeks": "Weeks (+{gain} Enigma)",
+          "months": "Months (+{gain} Enigma)",
+          "cancel": "Never mind",
+          "lengths": {
+            "days": "days",
+            "weeks": "weeks",
+            "months": "months"
+          },
+          "chat": "<strong>{name}</strong> went off a-wandering for {length} and holds {added} more Enigma ({held} held).",
+          "capped": "The track is full at {max}."
+        }
+      }
+    },
     "holyLight": {
       "litTooltip": "Wielding a holy light. Click to snuff it out.",
       "unlitTooltip": "No holy light. Click to light one, or use Consecrated Flame.",
@@ -2070,8 +2214,38 @@
       "burnTwiceCard": "Burn Twice as Bright: both at once, one roll, any consequences apply to both.",
       "burnTwicePaidCircle": "You mark your Auspicious Birth circle.",
       "burnTwicePaidDebility": "You mark {debility}.",
-      "pickEmpowered": "1 extra consequence",
       "pickGloriousServant": "on a 10+ you need not choose a consequence; on a 7-9 you choose one and the GM does not",
+      "empoweredNote": "Empowered: an <strong>extra consequence</strong>, chosen before the roll and taken whatever it comes up.",
+      "empoweredNoteChosen": "Empowered: its <strong>extra consequence</strong>, chosen before the roll and taken whatever it comes up: {consequence}.",
+      "prePickLine": "Empowered, its extra consequence chosen before the roll and taken whatever the result:",
+      "prePickRelic": "A holy relic was marked in its place, so this consequence is not taken. The Invocation is still empowered.",
+      "prePickReduced": "{invocations} has its reduced effect.",
+      "prePickReducedUnnamed": "The Invocation has its reduced effect.",
+      "reducedEndedBlindingLight": "Reduced: {invocation} flares only for a moment, so it is over.",
+      "reducedEndedColdLight": "Reduced: {invocation} lasts only a few moments, just long enough to glimpse the truth, so it is over.",
+      "reducedEnded": "Reduced: {invocation} lasts only a moment, so it is over.",
+      "reducedMothAsk": "Reduced: {invocation} lasts only briefly, or only some of the named creatures are affected. The GM chooses:",
+      "reducedMothEnd": "Only briefly (end it)",
+      "reducedMothKeep": "Only some are affected (keep it)",
+      "reducedMothEnded": "Reduced: {invocation} lasts only briefly, so it is over.",
+      "reducedMothKept": "Reduced: only some of the named creatures are affected, and {invocation} goes on.",
+      "reducedSnuffed": "{name}'s holy light is snuffed out as {invocations} ends, its fuel consumed.",
+      "prePickSnuffButton": "Snuff the light when the Invocation is complete",
+      "prePickSunButton": "Mark it as needing sun",
+      "invokeLead": "<em>Invoke the Sun God:</em> imbue your holy light with Helior's power and roll +WIS. On a 10+ it works, and you choose 1 consequence; on a 7-9 it works, and you and the GM each choose 1.",
+      "invokeLeadServant": "<em>Invoke the Sun God:</em> imbue your holy light with Helior's power and roll +WIS. On a 10+ it works, and as a Glorious Servant you need not choose a consequence; on a 7-9 it works, and you choose 1 but the GM does not.",
+      "empowerLabel": "Empower it: choose an extra consequence now, before you roll.",
+      "empowerWhich": "Your extra consequence:",
+      "empowerCost": "The extra consequence is the price of asking, not a penalty for failing: you take it however the roll turns out, a 6- included, on top of any the roll asks for.",
+      "empowerCostBoth": "Burned twice as bright, the one extra consequence applies to both Invocations.",
+      "relicButton": "Mark a holy relic",
+      "relicButtonEmpowered": "Mark a holy relic instead of the Empowered consequence",
+      "relicTooltip": "If you have one in your inventory, mark a use ({left} of {max} left) in lieu of choosing a consequence.",
+      "relicTooltipEmpowered": "If you have one in your inventory, mark a use ({left} of {max} left) in lieu of the extra consequence you chose to empower the Invocation. It stays empowered.",
+      "relicMarked": "<strong>{name}</strong> marks a use of their holy relics ({left} of {max} left) in lieu of choosing a consequence.",
+      "relicMarkedEmpowered": "<strong>{name}</strong> marks a use of their holy relics ({left} of {max} left) in lieu of the extra consequence that empowers the Invocation.",
+      "relicNone": "Your holy relics have no uses left.",
+      "relicNoPermission": "You need permission to mark this character's holy relics.",
       "countShortOne": "You know {known} of the {expected} Invocations your level brings: 1 still to choose.",
       "countShortMany": "You know {known} of the {expected} Invocations your level brings: {count} still to choose.",
       "countOver": "You know {known} Invocations, more than the {expected} your level brings. Fine if that's intended.",
@@ -2083,6 +2257,10 @@
       "consequenceTaken": "That is already marked. Choose another.",
       "consequenceDebilityMarked": "{name} marks {debility}: the effort of invoking the Sun God taxes them.",
       "consequenceCircleMarked": "{name} marks their Auspicious Birth circle instead of a debility, to no ill effect.",
+      "circleAskTitle": "Auspicious Birth",
+      "circleAsk": "Did one of your moves have you mark {debility}? If so, your <strong>Auspicious Birth</strong> lets you mark its circle instead, to no ill effect. It clears when you Make Camp or Convalesce.",
+      "circleAskYes": "Mark the circle instead",
+      "circleAskNo": "Mark the debility",
       "consequenceSnuffStamped": "The holy light goes out when {invocations} ends.",
       "consequenceSnuffedNote": "The holy light went out, its fuel consumed.",
       "consequenceSnuffed": "{name}'s holy light is snuffed out as the Invocation completes, its fuel consumed.",
@@ -2102,7 +2280,9 @@
       "wielderNoneKnown": "You know no Invocations to use.",
       "tenPlusTitle": "Invoke the Sun God (as a 10+)",
       "tenPlusLead": "Wielder of the White Flame: as if you rolled a 10+. It works as described, but you must choose 1 consequence from the list below.",
+      "tenPlusLeadServant": "Wielder of the White Flame: as if you rolled a 10+. It works as described, and as a Glorious Servant you need not choose a consequence: take 1 from the list below, or none.",
       "tenPlusWindow": "<em>Wielder of the White Flame:</em> Invoke the Sun God right now as if you rolled a 10+, with no roll. It works as described, and you choose 1 consequence.",
+      "tenPlusWindowServant": "<em>Wielder of the White Flame:</em> Invoke the Sun God right now as if you rolled a 10+, with no roll. It works as described, and as a Glorious Servant you need not choose a consequence.",
       "tenPlusButton": "Invoke as a 10+",
       "reducedTitle": "{name} (Reduced)",
       "empoweredTitle": "{name} (Empowered)",
@@ -2197,6 +2377,8 @@
       "castigateHint": "Your voice deals 1d4 damage to them (near, loud, ignores armor).",
       "castigateChoose": "Choose someone",
       "castigateNamed": "Castigate {name}",
+      "castigateNamedCount": "Castigate {count} people",
+      "castigateGroupHint": "Proclamation: pick every member of the group you denounced. Your voice deals 1d4 damage to each (near, loud, ignores armor).",
       "castigateNobody": "Castigate has nobody to hit. Target the person you Censured, or put their token on this scene."
     },
     "loadGate": {
@@ -2227,6 +2409,12 @@
       "soulOnFireNote": "<strong>Soul on Fire:</strong> aside from the usual effect, choose 1: your name and your message spread, or someone approaches you, now or later, eager to know more.",
       "bindingArbitration": "Against an oathbreaker (Binding Arbitration): advantage",
       "bindingArbitrationNamed": "Against an oathbreaker: {names} (Binding Arbitration): advantage",
+      "speakSoftlyNamed": "vs. {name}: Speak Softly advantage (they refused your peace; tick it if this roll is against them)",
+      "speakSoftlySource": "{move} (vs. {name})",
+      "truthAdvNamed": "vs. {name}: Truth or Consequences advantage (they said Yes; tick it if this roll is against them)",
+      "truthDisNamed": "vs. {name}: Truth or Consequences DISADVANTAGE (you deceived them; tick it if this roll is against them)",
+      "censureEnragedNamed": "vs. {name}: advantage, enraged by {judge}'s Censure (tick it if this roll is against them)",
+      "recordedFoeSource": "{move} (vs. {name})",
       "naturalist": "About beasts, natural environs or spirits of the wild (Naturalist): advantage",
       "homeOnTheRange": "A journey requires it (Home on the Range): treat a 6- as a 7-9",
       "trailblazer": "A journey causes it (Trailblazer): on a 10+, also learn something useful",
@@ -2247,7 +2435,9 @@
       "irresistible": "Using your considerable charms as leverage (Irresistible): advantage",
       "pantsOnFire": "Being deceitful (Pants on Fire): advantage",
       "slippery": "Escaping being caught or controlled (Slippery): treat a 6- as a 7-9",
-      "slipperyNote": "<strong>Slippery:</strong> on a 12+, say how you turn the tables or use the circumstances to your advantage."
+      "slipperyNote": "<strong>Slippery:</strong> on a 12+, say how you turn the tables or use the circumstances to your advantage.",
+      "freeRunning": "Surmounting or bypassing a physical obstacle with speed and grace (Free Running, light load): advantage",
+      "bringerOfRuinNote": "<strong>Bringer of Ruin:</strong> if your foe survives, name something they possess (their sword, their position, a limb, their dignity), but nothing that would kill them outright. It is broken, shattered, lost. Tell us how."
     },
     "postDeathMoves": {
       "unstableNote": "<strong>Unstable:</strong> on a 6-, the GM can choose to have you enter an unthinking, unfeeling rage (as per Breakdown).",
@@ -2353,6 +2543,7 @@
       "restoreNo": "Keep The Hero",
       "restoreCardTitle": "A Would-Be Hero Again",
       "heroRestored": "<strong>{name}</strong>'s &ldquo;Would-be&rdquo; was crossed off by mistake and has been written back in.",
+      "heroRestoredUsing": "<strong>{name}</strong>'s roll with <em>{move}</em> is no longer a 12+, so the &ldquo;Would-be&rdquo; it crossed off has been written back in.",
       "voiceAskButton": "Ask it",
       "voiceAskTooltip": "Voice of Experience: asking \"What is about to happen?\" is a use of the starred move, and crosses off \"Would-be\" the first time.",
       "heroCardTitle": "A Would-Be Hero No Longer",
@@ -2455,7 +2646,11 @@
       "joiner": ", and ",
       "freeQuestion": "Free question ({source}): {question}",
       "openQuestion": "{source}: {question}. The GM might ask how you could possibly know this; tell them or ask something else.",
-      "freeWhen": "{source}, when you {when}"
+      "freeWhen": "{source}, when you {when}",
+      "prePick": "{source}, chosen before the roll:"
+    },
+    "altStat": {
+      "penitentNote": "Penitent: the GM asks who you wronged back then, or who might still hold a grudge. Answer them now."
     },
     "artifact": {
       "identify": "Identify artifact",
@@ -2466,6 +2661,7 @@
       "knowThingsWhy": "Consult your accumulated knowledge (+INT). On a 7+ the GM tells you some combination of what it is, what it does, what it's worth, how to use it or sell it for full value. On a 10+, the write-up and any custom move in full.",
       "seekInsight": "Seek Insight",
       "seekInsightWhy": "Study it, looking to the GM for insight (+WIS). On a 7+ they answer your questions about it honestly and helpfully. It's the GM who decides how much that gave away.",
+      "seekInsightStatPrompt": "Which stat are you studying it with?",
       "insightTitle": "Seek Insight: {name}",
       "leadTitle": "{name}: how to learn more",
       "leadTooltip": "How you could learn more about this",
@@ -2554,7 +2750,11 @@
       "releaseCancel": "Keep holding it",
       "givenSpent": "{name} already used the advantage this roll gave.",
       "noneHeld": "{move}: you hold none left to spend.",
-      "whoHeard": "Who heard your order or warning? Each gains advantage on their next roll to do as you say."
+      "whoHeard": "Who heard your order or warning? Each gains advantage on their next roll to do as you say.",
+      "setUpStrike": {
+        "unrolled": "Roll your damage with Set-Up Strike first: tick its line in the damage window.",
+        "declined": "Your damage was rolled without Set-Up Strike's disadvantage, so there is no opening to give."
+      }
     },
     "willAndRestraint": {
       "notNow": "Not now",
@@ -2569,6 +2769,15 @@
         "applyFor": "Mark {debility} and break free",
         "choices": "Debility to mark",
         "note": "{name} marks {debility} and immediately breaks free of the restraint."
+      },
+      "optionDebility": {
+        "ask": "The option you ticked has you mark a debility. Which one?",
+        "none": "Every debility is already marked, so there is none left to mark.",
+        "apply": "Mark a debility",
+        "applyFor": "Mark {debility}",
+        "choices": "Debility to mark",
+        "note": "{name} marks {debility}.",
+        "marked": "Marked {debility}."
       }
     },
     "heldDisadvantage": {
@@ -2639,6 +2848,10 @@
       "yourCrew": "Your crew",
       "theirCrew": "their crew"
     },
+    "possessionProduces": {
+      "one": "{name} takes valuables worth a {item} (Value {value}) from their {possession}, now in their small items.",
+      "many": "{name} takes {count} lots of valuables, each worth a {item} (Value {value}), from their {possession}, now in their small items."
+    },
     "nerves": {
       "onLabel": "Shaken nerves",
       "offLabel": "Nerves steady",
@@ -2647,7 +2860,11 @@
       "readOnlyOn": "Shaken nerves: disadvantage on all rolls until they share their nagging doubts with someone else.",
       "readOnlyOff": "Nerves steady.",
       "shaken": "{name}'s nerves are shaken: disadvantage on all rolls until they share their nagging doubts with someone else.",
-      "rollNote": "Shaken nerves ({move})"
+      "rollNote": "Shaken nerves ({move})",
+      "steadingRollNote": "{name}'s shaken nerves ({move})",
+      "steadingAsk": "{name}'s nerves are shaken ({move}): they are the one behind this roll, disadvantage",
+      "steadingAskPick": "Shaken nerves ({move}): the one behind this roll, if it is one of them, has disadvantage",
+      "windowNote": "Your nerves are shaken ({move}): disadvantage on this roll, until you share your nagging doubts with someone else."
     },
     "inspiration": {
       "inspireButton": "Inspire who heard the speech ({amount} each)",
@@ -2711,7 +2928,24 @@
       "cardTitle": "Into battle",
       "held": "{name} goes into battle holding {held}.",
       "spentSurprise": "Spent 1 Surprise ({left} left)",
-      "noSurprise": "No Surprise held to spend"
+      "noSurprise": "No Surprise held to spend",
+      "lieInWait": {
+        "lieInWaitRushed": {
+          "label": "Lie in wait: hold 1 (rushed)",
+          "tooltip": "Your allies fortify a position and lie in wait for battle, but you are rushed: hold 1 Surprise.",
+          "note": "{name} and their allies fortify a position and lie in wait, in a hurry. {name} holds {held} Surprise."
+        },
+        "lieInWaitPrepared": {
+          "label": "Lie in wait: hold 2 (time to prepare)",
+          "tooltip": "Your allies fortify a position and lie in wait for battle, and you can take your time: hold 2 Surprise.",
+          "note": "{name} and their allies fortify a position and lie in wait, taking their time. {name} holds {held} Surprise."
+        },
+        "full": "You already hold {held} Surprise."
+      }
+    },
+    "situationalAwareness": {
+      "title": "Situational Awareness",
+      "lead": "A fight breaks out: ask the GM 1 question you could ask when Seeking Insight."
     },
     "expedition": {
       "fateMode": {
@@ -3660,6 +3894,12 @@
         "cancel": "Don't spend",
         "noteHalve": "{defender} spent Readiness to halve the blow on {ward}.",
         "noteStandIn": "{defender} spent Readiness to take the blow for {ward}.",
+        "halvePresenceOne": "{defender} halves it (1 Presence, Front Line Leader)",
+        "standInPresenceOne": "{defender} takes it for {ward} (1 Presence, Front Line Leader)",
+        "halvePresenceChoice": "{defender} spends 1 Presence to halve the blow on {ward}",
+        "standInPresenceChoice": "{defender} spends 1 Presence to take the blow for {ward}",
+        "noteHalvePresence": "{defender} spent 1 Presence as Readiness to halve the blow on {ward} (Front Line Leader).",
+        "noteStandInPresence": "{defender} spent 1 Presence as Readiness to take the blow for {ward} (Front Line Leader).",
         "rowFor": "{defender} (for {ward})",
         "halvedFrom": "halved from {rolled}",
         "parry": "Parry & riposte (Readiness)",
@@ -3678,6 +3918,11 @@
         "knockedDownOne": "{defender} gets knocked down (halve it)",
         "knockedDownChoice": "{defender} gets knocked down under the blow on {ward}",
         "noteKnockedDown": "{defender} got knocked down, halving the blow (I Get Knocked Down).",
+        "neverGonna": "Never Gonna: impose disadvantage",
+        "neverGonnaOne": "Never Gonna: impose disadvantage ({defender})",
+        "neverGonnaChoice": "{defender} imposes disadvantage on the blow they took for {ward}",
+        "noteNeverGonna": "{defender} rolled the blow they took for {ward} again and kept the lower: {was} and {rolled}, so {kept} (Never Gonna Keep Me Down).",
+        "noteNeverGonnaStraight": "{defender} rolled the blow they took for {ward} again: its advantage and their disadvantage cancel, so a straight roll of {rolled} replaces {was} (Never Gonna Keep Me Down).",
         "safetyFirst": "Halve it (Safety First, harmful magic)",
         "safetyFirstOne": "{defender} halves it (Safety First, harmful magic: 1 Protection)",
         "safetyFirstChoice": "{defender} spends 1 Protection to halve the harmful magic on {ward}",
@@ -3717,6 +3962,50 @@
           "label": "Focus Fire: advantage, ordered to bring down {foe}",
           "pill": "Focus Fire"
         },
+        "rapierWit": {
+          "button": "They attack",
+          "targetOne": "Target the NPC whose pride you pierced, then press it again.",
+          "pickTitle": "Who attacks {name}?",
+          "pickHint": "Which NPC answered the quip by attacking?",
+          "pickButton": "They attack",
+          "card": "{foe} answers {name}'s quip by attacking: +1d4 damage if they hit {name}, but {name} has advantage on their next roll against them.",
+          "readout": "{foe} attacked: +1d4 on their next hit on you, and advantage on your next roll against them.",
+          "label": "Rapier Wit: +{dice} damage, if this blow hits {name}, whose quip they answered by attacking",
+          "pill": "{move} +{dice}"
+        },
+        "truth": {
+          "advButton": "They said Yes",
+          "disButton": "I deceived them",
+          "advPickTitle": "Who is lying or hiding something?",
+          "advPickHint": "Their player answered Yes: you have advantage on your next roll against them.",
+          "disPickTitle": "Who did you deceive?",
+          "disPickHint": "You lied to them or deceived them through words: you have disadvantage on your next roll against them.",
+          "pickButton": "Choose",
+          "someoneElse": "Someone not on the map (type their name)",
+          "namePlaceholder": "Their name",
+          "advReadout": "{foe} is lying or hiding something: advantage on your next roll against them.",
+          "disReadout": "You deceived {foe}: disadvantage on your next roll against them.",
+          "advReadoutNamed": "{foe} is lying or hiding something: tick \"vs. {foe}\" in the roll window on your next roll against them for advantage.",
+          "disReadoutNamed": "You deceived {foe}: tick \"vs. {foe}\" in the roll window on your next roll against them (disadvantage).",
+          "advSource": "{move} (they said Yes)",
+          "disSource": "{move} (you deceived them)"
+        },
+        "speakSoftly": {
+          "button": "They refused my peace",
+          "pickTitle": "Who refused your peace?",
+          "pickHint": "You gain advantage on your next roll against them.",
+          "pickButton": "They refused",
+          "someoneElse": "Someone not on the map (type their name)",
+          "nameTitle": "Who refused your peace?",
+          "namePlaceholder": "Their name",
+          "readout": "{foe} refused your peace: advantage on your next roll against them.",
+          "readoutNamed": "{foe} refused your peace: tick \"vs. {foe}\" in the roll window on your next roll against them for advantage."
+        },
+        "censureEnraged": {
+          "source": "{move}: enraged ({name})",
+          "readout": "Enraged: the next roll against {names} has advantage.",
+          "nobody": "Nobody was named, so nobody is enraged. Untick it and tick it again to name them."
+        },
         "leapIn": {
           "button": "Leap in (Big Damn Hero)",
           "tooltip": "Big Damn Hero: the first time you leap into danger to protect someone, don't roll to Defend. It counts as a 10+. Once per fight.",
@@ -3737,6 +4026,10 @@
         },
         "rememberMe": {
           "label": "Something to Remember Me By: +{dice} damage, and you mark them",
+          "pill": "{move} +{dice}"
+        },
+        "rememberMeSpend": {
+          "label": "Something to Remember Me By, struck back (spend 1 Readiness): +{dice} damage, and you scar, mark or diminish them",
           "pill": "{move} +{dice}"
         },
         "secondIntent": {
@@ -3772,7 +4065,7 @@
           "pill": "{move} +{dice}"
         },
         "dogWithBone": {
-          "label": "Like a Dog with a Bone: +{dice} damage, against something tainted by chaos",
+          "label": "Like a Dog with a Bone: +{dice} damage, against something you know to be tainted by chaos",
           "pill": "{move} +{dice}"
         },
         "everythingBleeds": {
@@ -3803,6 +4096,7 @@
         },
         "battlefieldGrace": {
           "label": "{name}'s Battlefield Grace: roll with disadvantage, while they lead their allies in battle",
+          "unread": "{name}'s Battlefield Grace: roll with disadvantage, if they are leading their allies in battle",
           "pill": "Battlefield Grace"
         },
         "blotOut": {
@@ -3820,6 +4114,12 @@
           "impress": "You impress, embarrass or overawe your foes"
         },
         "muscleboundNote": "Musclebound: forceful and messy, and more so where it already was.",
+        "muscleboundMore": {
+          "forceful": "Musclebound: it was already forceful, so it is even more forceful.",
+          "messy": "Musclebound: it was already messy, so it is even messier.",
+          "both": "Musclebound: it was already forceful and messy, so it is even more forceful and messy."
+        },
+        "terrorOnTheField": "{name} felled {foe}. Terror on the Field: describe how you take them out. If it was particularly brutal or impressive, their allies are impressed, dismayed, or frightened, and respond accordingly.",
         "berserkerHint": "Berserker: in your Battle Joy you lash out at anyone nearby, friend and foe alike. Damage is rolled separately for each.",
         "volleyHint": "Your volley falls on everyone standing where the arrows land, friend and foe alike. Damage is rolled separately for each.",
         "knockedDown": {
@@ -3860,7 +4160,20 @@
       "lostOffense": "{name} goes on the offense ({move}) and loses all held Readiness.",
       "lostFightOver": "The fight is over: {names} let go of their Readiness.",
       "lostLeftFight": "{name} leaves the fight and loses their Readiness.",
-      "lostDown": "{name} is down and loses their Readiness."
+      "lostDown": "{name} is down and loses their Readiness.",
+      "follower": "Your follower"
+    },
+    "shieldWall": {
+      "title": "Shield Wall",
+      "theCrew": "The crew",
+      "askTitle": "{name} hold the shield wall",
+      "ask": "{name} stand in a shield wall holding {count} Readiness, and attack ({move}). As long as they keep formation they go on the offensive without losing it (p.126). Do they hold the wall, or break formation to charge?",
+      "lose": "Break formation: lose the Readiness",
+      "keep": "Hold the wall: keep it",
+      "kept": "Shield Wall: {name} hold formation and keep their {count} Readiness ({move}).",
+      "charged": "{name} break formation to charge ({move}): they lose all held Readiness, and the shield wall is gone.",
+      "formed": "Shield Wall: they hold formation, and can go on the offensive without losing Readiness.",
+      "broken": "{name} break formation: the shield wall is gone."
     },
     "rollBoosts": {
       "button": {

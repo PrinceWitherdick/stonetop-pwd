@@ -261,7 +261,7 @@ describe("isReferenceList", () => {
 		for (const lead of [
 			"On a 7-9, hold 1 Readiness (or 2 with a shield). You can spend Readiness 1-for-1 to:",
 			"You may spend Nerve, 1-for-1, to:",
-			"Your allies can spend their Inspiration at any time, 1-for-1 to:",
+			"Your allies can spend their Inspiration at any time, 1-for-1 to do the following:",
 			"Hold 2 Resolve. You can spend your Resolve 1-for-1 to:",
 			"Spend your follower's Loyalty 1-for-1 to have them:",
 			"Spend Guise, 1-for-1 to:",

@@ -130,6 +130,7 @@
         "title": "Sanction"
       },
       "requirement": {
+        "playbook": "The Judge",
         "note": "Prophet background"
       },
       "playbook": "The Judge"
@@ -540,7 +541,7 @@
         },
         "failure": {
           "label": "6-",
-          "value": "Their heart hardens and you can't use this move on them again."
+          "value": "Their heart hardens and, whatever else the GM says, you can't use this move on them again."
         }
       },
       "playbook": "The Lightbearer"
@@ -692,6 +693,7 @@
         }
       },
       "requirement": {
+        "playbook": "The Would-Be Hero",
         "note": "Destined background"
       },
       "playbook": "The Would-Be Hero"
@@ -701,6 +703,9 @@
       "description": "<p>Once per level, when you roll a stat and get a 10+, mark one of the following (note the level during which you marked it). You don't have to mark them in order.</p>",
       "rollType": null,
       "isStartingMove": true,
+      "requirement": {
+        "playbook": "The Would-Be Hero"
+      },
       "playbook": "The Would-Be Hero"
     },
     {
@@ -776,7 +781,8 @@
       "description": "<p>Choose a move from any other playbook, as long as you meet its requirements. You can pick from a different playbook each time. You can't take Improved Stat or Superior Stat.</p>",
       "rollType": null,
       "requirement": {
-        "level": 2
+        "level": 2,
+        "playbook": "The Would-Be Hero"
       },
       "repeatMax": 4,
       "playbook": "The Would-Be Hero"
@@ -883,7 +889,7 @@
     },
     {
       "name": "Constant Vigilance",
-      "description": "<p>Unless you're dazed, you're never caught off guard—not even when asleep or if you roll a 6-. When you <strong><em>intercept a sudden threat (to yourself or an ally)</em></strong>, you have advantage on whatever move you make.</p>",
+      "description": "<p>Unless you're dazed, you're never caught off guard, not even when asleep or if you roll a 6-. When you <strong><em>intercept a sudden threat (to yourself or an ally)</em></strong>, you have advantage on whatever move you make.</p>",
       "rollType": null,
       "requirement": {
         "level": 6
@@ -897,7 +903,7 @@
       "results": {
         "success": {
           "label": "10+",
-          "value": "Follow the trail to a significant change and ask a reasonable question about your quarry."
+          "value": "Follow the trail to a significant change and ask a reasonable question about your quarry and get a useful answer."
         },
         "partial": {
           "label": "7-9",
@@ -963,13 +969,13 @@
     },
     {
       "name": "On the Hoof",
-      "description": "<p>When you <strong><em>travel through the wilderness</em></strong>, you can procure 1d6 uses of provisions each day (roll with disadvantage in winter or barren terrain). Provisions can substitute for supplies when you Make Camp.</p>",
+      "description": "<p>When you <strong><em>travel through the wilderness</em></strong>, you can procure 1d6 uses of ◇ provisions each day (roll with disadvantage in winter or barren terrain). Provisions can substitute for supplies when you Make Camp.</p>",
       "rollType": null,
       "playbook": "The Ranger"
     },
     {
       "name": "Pack Horse",
-      "description": "<p>You can carry up to 4 weight with a light load, 7 weight with a normal load, and 10 weight with a heavy load.</p>",
+      "description": "<p>You can carry up to 4 ◆ with a light load, 7 ◆ with a normal load, and 10 ◆ with a heavy load.</p>",
       "rollType": null,
       "playbook": "The Ranger"
     },
@@ -1016,7 +1022,7 @@
     },
     {
       "name": "Trailblazer",
-      "description": "<p>When <strong><em>a journey causes you to Defy Danger or Struggle as One</em></strong>, <strong>on a 10+</strong> you also learn or discover something interesting and useful—ask the GM what.</p>",
+      "description": "<p>When <strong><em>a journey causes you to Defy Danger or Struggle as One</em></strong>, <strong>on a 10+</strong> you also learn or discover something interesting and useful: ask the GM what.</p>",
       "rollType": null,
       "requirement": {
         "level": 6,
@@ -1056,7 +1062,8 @@
       "description": "<p>Take a move from the Blessed, Fox, Heavy, Marshal, or Seeker playbooks, for which you otherwise qualify. You can pick from a different playbook each time. You can't pick Improved Stat or Superior Stat.</p>",
       "rollType": null,
       "requirement": {
-        "level": 2
+        "level": 2,
+        "playbook": "The Ranger"
       },
       "repeatMax": 2,
       "playbook": "The Ranger"
@@ -1153,7 +1160,8 @@
       "description": "<p>Each time you take this move, choose a move from the Heavy, Marshal, Ranger, or Seeker playbooks for which you otherwise qualify. (You can't take Improved Stat or Superior Stat.)</p>",
       "rollType": null,
       "requirement": {
-        "level": 2
+        "level": 2,
+        "playbook": "The Fox"
       },
       "repeatMax": 3,
       "playbook": "The Fox"
@@ -1207,6 +1215,30 @@
       "description": "<p>When you <strong><em>carry a light load and move with speed and grace</em></strong>, gain advantage on any move to surmount or bypass a physical obstacle.</p>",
       "rollType": null,
       "maxLoad": "light",
+      "playbook": "The Fox"
+    },
+    {
+      "name": "Friends Far and Wide",
+      "description": "<p>When you <strong><em>declare that you know someone outside of Stonetop</em></strong>, someone who can help, name them and roll +CHA: <strong>on a 10+</strong>, yeah, they can help (tell us why they're willing); <strong>on a 7-9</strong>, they can help but pick 1 from the list below; <strong>on a 6-</strong>, the GM chooses 1 and then some.</p><ul><li>They still hold a grudge</li><li>They're going to need something from you first</li><li>They swore off this sort of thing long ago</li><li>You can't exactly, y'know, trust them</li></ul>",
+      "rollType": "cha",
+      "results": {
+        "success": {
+          "label": "10+",
+          "value": "Yeah, they can help (tell us why they're willing)."
+        },
+        "partial": {
+          "label": "7-9",
+          "value": "They can help, but pick 1 from the list."
+        },
+        "failure": {
+          "label": "6-",
+          "value": "The GM chooses 1 from the list, and then some."
+        }
+      },
+      "requirement": {
+        "playbook": "The Fox",
+        "note": "The Prodigal Returned background"
+      },
       "playbook": "The Fox"
     },
     {
@@ -1425,7 +1457,7 @@
     },
     {
       "name": "Danu's Grasp",
-      "description": "<p>When you <strong><em>call on the world itself to bind a spirit or a perversion of nature</em></strong>, spend 1 Stock and roll +WIS: <strong><em>on a 7+</em></strong>, roots, vines, and earth pull at them, and they pick 1; <strong>on a 10+</strong>, as a 7-9, but both apply.</p><ul><li>They're restrained, unable to act freely until your focus slips or they tear their way free</li><li>They take 2d4 damage (ignores armor)</li></ul><p>If this brings them to 0 HP, they are pulled into the earth and bound in rune-etched stone.</p>",
+      "description": "<p>When you <strong><em>call on the world itself to bind a spirit or a perversion of nature</em></strong>, spend 1 Stock and roll +WIS: <strong>on a 7-9</strong>, roots, vines, and earth pull at them, and they pick 1; <strong>on a 10+</strong>, as a 7-9, but both apply.</p><ul><li>They're restrained, unable to act freely until your focus slips or they tear their way free</li><li>They take 2d4 damage (ignores armor)</li></ul><p>If this brings them to 0 HP, they are pulled into the earth and bound in rune-etched stone.</p>",
       "rollType": "wis",
       "results": {
         "success": {
@@ -1445,7 +1477,7 @@
     },
     {
       "name": "Healer's Arts",
-      "description": "<p>When <strong><em>someone Recovers under your care</em></strong>, they recover extra HP equal to your WIS. If you also spend 1 Stock, they heal an extra 5 HP and their wounds/injuries are stabilized.</p>",
+      "description": "<p>When <strong><em>someone Recovers under your care</em></strong>, they recover (extra) HP equal to your WIS. If you also spend 1 Stock, they heal an extra 5 HP and their wounds/injuries are stabilized.</p>",
       "rollType": null,
       "playbook": "The Blessed"
     },
@@ -1627,7 +1659,8 @@
       "description": "<p>Each time you take this move, gain a Ranger move of your choice for which you qualify. You can't pick Improved Stat or Superior Stat.</p>",
       "rollType": null,
       "requirement": {
-        "level": 2
+        "level": 2,
+        "playbook": "The Blessed"
       },
       "repeatMax": 2,
       "playbook": "The Blessed"
@@ -1636,7 +1669,7 @@
   "The Seeker": [
     {
       "name": "Arcane Adept",
-      "description": "<p>When you <strong><em>wish to invent a spell or magical effect</em></strong>, detail its workings with the GM and Make a Plan to invent it. If you like, pick one requirement and ask the GM to provide an alternative (for example \"first you must ___\" could become \"first you must ___, or it will take months\").</p>",
+      "description": "<p>When you <strong><em>wish to invent a spell or magical effect</em></strong>, detail its workings with the GM and Make a Plan to invent it. If you like, pick one requirement and ask the GM to provide an alternative (for example \"first you must ____\" could become \"first you must ____, or it will take months\").</p>",
       "rollType": null,
       "requirement": {
         "level": 6
@@ -1738,7 +1771,7 @@
     },
     {
       "name": "Improvise",
-      "description": "<p>When you <strong><em>wish to use an arcanum's move or option without having unlocked it</em></strong>, ask the GM what fool risk(s) it requires and/or what consequence(s) you'll incur. If you go for it, roll +INT: <strong><em>on a 7+</em></strong>, you get it to work this once—trigger the move or use the option as if you'd unlocked it; <strong>on a 10+</strong>, also mark one step towards unlocking the arcanum's mysteries.</p>",
+      "description": "<p>When you <strong><em>wish to use an arcanum's move or option without having unlocked it</em></strong>, ask the GM what fool risk(s) it requires and/or what consequence(s) you'll incur. If you go for it, roll +INT: <strong><em>on a 7+</em></strong>, you get it to work this once—trigger the move or use the option as if you'd unlocked it; and <strong>on a 10+</strong>, also mark one step towards unlocking the arcanum's mysteries.</p>",
       "rollType": "int",
       "results": {
         "success": {
@@ -1767,7 +1800,8 @@
       "description": "<p>You have a \"Sacred Pouch\" (3 Stock, magical), as per the Blessed, but with no remarkable traits. Each time you take this move, choose a Blessed move for which you otherwise qualify. (You can't take Improved Stat or Superior Stat.)</p>",
       "rollType": null,
       "requirement": {
-        "level": 2
+        "level": 2,
+        "playbook": "The Seeker"
       },
       "repeatMax": 3,
       "playbook": "The Seeker"
@@ -1928,6 +1962,7 @@
         }
       },
       "requirement": {
+        "playbook": "The Heavy",
         "note": "Sheriff background"
       },
       "playbook": "The Heavy"
@@ -1995,6 +2030,9 @@
       "description": "<p>When you <strong><em>deal your damage</em></strong>, you have advantage.</p>",
       "rollType": null,
       "isStartingMove": true,
+      "requirement": {
+        "playbook": "The Heavy"
+      },
       "playbook": "The Heavy"
     },
     {
@@ -2066,7 +2104,7 @@
     },
     {
       "name": "Mighty Thews",
-      "description": "<p>When you <strong><em>perform a feat of extraordinary strength (bursting chains, smashing through a wall, heaving a boulder, etc.)</em></strong>, you do it (OH YEAH!) but pick 1:</p><ul><li>It takes a while</li><li>You cause unwanted damage or harm</li><li>It takes a toll (mark a debility)</li></ul>",
+      "description": "<p>When you <strong><em>perform a feat of extraordinary strength</em></strong> (bursting chains, smashing through a wall, heaving a boulder, etc.), you do it (OH YEAH!) but pick 1:</p><ul><li>It takes a while</li><li>You cause unwanted damage or harm</li><li>It takes a toll (mark a debility)</li></ul>",
       "rollType": null,
       "requirement": {
         "level": 6,
@@ -2116,7 +2154,8 @@
       "description": "<p>Take a move from the Fox, Marshal, Ranger, or Seeker playbooks, for which you otherwise qualify. You can pick from a different playbook each time. (You can't pick Improved Stat or Superior Stat.)</p>",
       "rollType": null,
       "requirement": {
-        "level": 2
+        "level": 2,
+        "playbook": "The Heavy"
       },
       "repeatMax": 3,
       "playbook": "The Heavy"
@@ -2210,7 +2249,8 @@
       "description": "<p>Take a move from the Fox, Heavy, Judge, Ranger, or Seeker playbooks, for which you otherwise qualify. You can pick from a different playbook each time. You can't take Improved Stat or Superior Stat.</p>",
       "rollType": null,
       "requirement": {
-        "level": 2
+        "level": 2,
+        "playbook": "The Marshal"
       },
       "repeatMax": 2,
       "playbook": "The Marshal"
@@ -2291,7 +2331,7 @@
     },
     {
       "name": "Logistics",
-      "description": "<p>When you <strong><em>have a steading Muster or Pull Together, or when you Requisition</em></strong>, you have advantage.</p>",
+      "description": "<p>When you <strong><em>have a steading Muster or Pull Together</em></strong>, or when you <strong><em>Requisition</em></strong>, you have advantage.</p>",
       "rollType": null,
       "isStartingMove": true,
       "playbook": "The Marshal"
@@ -2418,7 +2458,7 @@
     },
     {
       "name": "Take the Measure",
-      "description": "<p>When you <strong><em>size someone up</em></strong>, ask their player one of the questions below and get an honest answer. If they fear or respect you (their call), you can ask another question. You can't use this move on them again until your relationship significantly changes.</p><ul><li>Can I trust them (to _____)?</li><li>What do they intend to do?</li><li>How are they most useful/dangerous?</li><li>What weakness of theirs can I exploit?</li></ul>",
+      "description": "<p>When you <strong><em>size someone up</em></strong>, ask their player one of the questions below and get an honest answer. If they <strong><em>fear or respect you</em></strong> (their call), you can ask another question. You can't use this move on them again until your relationship significantly changes.</p><ul><li>Can I trust them (to _____)?</li><li>What do they intend to do?</li><li>How are they most useful/dangerous?</li><li>What weakness of theirs can I exploit?</li></ul>",
       "rollType": null,
       "playbook": "The Marshal"
     },
@@ -2436,7 +2476,7 @@
     },
     {
       "name": "We Happy Few",
-      "description": "<p>When you <strong><em>give an inspiring speech to your allies before facing a dire threat</em></strong>, roll +CHA: <strong>on a 10+</strong>, each ally holds 2 Inspiration; <strong><em>on a 7-9</em></strong>, each ally holds 1 Inspiration; on a 6-, each ally holds 1, but you have disadvantage on all rolls until you share your nagging doubts with someone else.</p><p>Once battle is joined, your allies can spend their Inspiration at any time, 1-for-1 to:</p><ul><li>Act fearlessly in the face of terror or overwhelming odds</li><li>Keep 1 HP instead of being reduced to 0 HP</li><li>Add 1d6 to a damage roll they just made</li></ul>",
+      "description": "<p>When you <strong><em>give an inspiring speech to your allies before facing a dire threat</em></strong>, roll +CHA: <strong>on a 10+</strong>, each ally holds 2 Inspiration; <strong><em>on a 7-9</em></strong>, each ally holds 1 Inspiration; <strong>on a 6-</strong>, each ally holds 1, but you have disadvantage on all rolls until you share your nagging doubts with someone else.</p><p>Once battle is joined, your allies can spend their Inspiration at any time, 1-for-1 to do the following:</p><ul><li>Act fearlessly in the face of terror or overwhelming odds</li><li>Keep 1 HP instead of being reduced to 0 HP</li><li>Add 1d6 to a damage roll they just made</li></ul>",
       "rollType": "cha",
       "results": {
         "success": {

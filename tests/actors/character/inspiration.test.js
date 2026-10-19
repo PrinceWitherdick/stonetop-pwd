@@ -14,7 +14,7 @@ import { moveRollOptions } from "../../../module/actors/character/move-roll-opti
 
 // We Happy Few (the Marshal): "on a 10+, each ally holds 2 Inspiration; on a 7-9, each ally holds 1
 // Inspiration; on a 6-, each ally holds 1 ... Once battle is joined, your allies can spend their Inspiration
-// at any time, 1-for-1 to: act fearlessly / keep 1 HP instead of being reduced to 0 HP / add 1d6 to a damage
+// at any time, 1-for-1 to do the following: act fearlessly / keep 1 HP instead of being reduced to 0 HP / add 1d6 to a damage
 // roll they just made." Built on Piety's Blessing (roll-boosts.test.js).
 
 const SCOPE = "stonetop-pwd";

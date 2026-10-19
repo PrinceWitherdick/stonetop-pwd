@@ -6,7 +6,7 @@
 // Natural ("When you Seek Insight, you may roll +INT instead of +WIS") offered nothing at all.
 
 import { describe, it, expect, vi } from "vitest";
-import { altStatGrantsFor, altStatGrantForMove } from "../../../module/data/alt-stat-grants.js";
+import { altStatGrantsFor, altStatGrantForMove, altStatNotes } from "../../../module/data/alt-stat-grants.js";
 import { knowThingsRollChoices } from "../../../module/actors/character/arcana-identify.js";
 import { buildLiveCharacter, makeLiveItem } from "../../fakes/LiveCharacter.js";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
@@ -52,6 +52,30 @@ describe("knowThingsRollChoices reads the same table", () => {
 		expect(choices.stats).toEqual(["int", "str"]);
 		expect(choices.statGrants).toEqual(["Penitent"]);
 		expect(knowThingsRollChoices([], { playbook: "The Marshal", background: "luminary" }).hasChoice).toBe(false);
+	});
+
+	it("and owes the card the Penitent's question when +STR is picked, keyed by the stat", () => {
+		const choices = knowThingsRollChoices(["Well-Read"], { playbook: "The Marshal", background: "penitent" });
+		expect(choices.statNotes).toEqual({
+			str: ["Penitent: the GM asks who you wronged back then, or who might still hold a grudge. Answer them now."],
+		});
+		expect(knowThingsRollChoices(["Well-Read"], NATURAL).statNotes).toEqual({});
+	});
+});
+
+describe("altStatNotes: a row's card line", () => {
+	const rows = altStatGrantsFor({ moveName: "Know Things", defaultStat: "int" },
+		{ learnedMoveNames: ["Well-Read"], playbook: "The Marshal", background: "penitent" });
+
+	it("is the granting row's note, localized, for the stat it granted", () => {
+		expect(altStatNotes(rows, "str")).toEqual(["Penitent: the GM asks who you wronged back then, or who might still hold a grudge. Answer them now."]);
+	});
+
+	it("is nothing for the default stat, a row with no note, or no rows", () => {
+		expect(altStatNotes(rows, "int")).toEqual([]);
+		expect(altStatNotes(rows, "wis")).toEqual([]);
+		expect(altStatNotes([], "str")).toEqual([]);
+		expect(altStatNotes(undefined, "str")).toEqual([]);
 	});
 });
 
@@ -185,6 +209,33 @@ describe("the sheet's alternate-stat offer", () => {
 		expect(await sheetFor(scion.char, scion.actor)._altStatChoiceForRollable(rollableFor(know2))).toBeNull();
 	});
 
+	// Marshal re-audit (2026-10-18): "If you do, the GM will ask you who you wronged back then or who might
+	// still hold a grudge. Answer them now." Rolled +STR, nothing told the GM. The row's note rides the card.
+	it("puts the Penitent's question on a Know Things rolled +STR, and nothing on one rolled +INT", async () => {
+		const know = basic("Know Things", "int");
+		const { char, actor } = buildLiveCharacter({
+			slug: "the-marshal", name: "The Marshal", seedStartingMoves: false, items: [know],
+			flags: { "background.selected": "penitent" },
+		});
+		const sheet = sheetFor(char, actor);
+		const seen = [];
+		global.Dialog = vi.fn(function (d) { seen.push(d); this.render = vi.fn(); });
+		global.Handlebars = { helpers: { statLabel: k => k.toUpperCase() } };
+		sheet._promptRollOptions = vi.fn(async () => ({ situational: 0 }));
+		const rolled = vi.spyOn(char, "onRoll").mockResolvedValue(true);
+		const rollable = rollableFor(know);
+
+		const offer = await sheet._altStatChoiceForRollable(rollable);
+		sheet._promptStatChoice(offer.item, rollable, offer.stats, { grants: offer.grants, rows: offer.rows });
+		await seen[0].buttons.str.callback();
+		expect(rolled).toHaveBeenLastCalledWith({ currentTarget: rollable }, {
+			statOverride: "str", situational: 0,
+			conditionNotes: ["Penitent: the GM asks who you wronged back then, or who might still hold a grudge. Answer them now."],
+		});
+		await seen[0].buttons.int.callback();
+		expect(rolled).toHaveBeenLastCalledWith({ currentTarget: rollable }, { statOverride: "int", situational: 0 });
+	});
+
 	// Ranger audit M3: Wide Wanderer's "When you Know Things about the wider world, you can roll +WIS
 	// instead of +INT" offered nothing.
 	it("offers Wide Wanderer's +WIS on Know Things, quoting the background's rule, and not to a Mighty Hunter", async () => {
@@ -216,5 +267,47 @@ describe("the sheet's alternate-stat offer", () => {
 			flags: { "background.selected": "a-life-of-crime" },
 		});
 		expect(await sheetFor(char, actor)._altStatChoiceForRollable(rollableFor(seek))).toBeNull();
+	});
+});
+
+// The Fox's Laugh at Danger: "When you are about to roll +CON and you make a joke about the adversity
+// you face, you can roll +CHA instead." Every +CON roll, the stat block's bare one included.
+describe("the sheet's bare stat roll", () => {
+	const statRollable = stat => ({ dataset: { roll: stat }, closest: () => null, classList: { contains: () => false } });
+
+	it("offers Laugh at Danger's +CHA on a bare +CON, quoting the move, and nothing on another stat", async () => {
+		const { char, actor } = buildLiveCharacter({ slug: "the-fox", name: "The Fox", seedStartingMoves: false, items: [pbMove("Laugh at Danger")] });
+		const sheet = sheetFor(char, actor);
+		const offer = await sheet._bareStatAltChoice(statRollable("con"));
+		expect(offer.stats).toEqual(["con", "cha"]);
+		expect(offer.grants.map(g => g.name)).toEqual(["Laugh at Danger"]);
+		expect(await sheet._bareStatAltChoice(statRollable("dex"))).toBeNull();
+	});
+
+	it("offers nothing once Laugh at Danger is switched off, or on a move's own rollable", async () => {
+		const off = buildLiveCharacter({ slug: "the-fox", name: "The Fox", seedStartingMoves: false, items: [pbMove("Laugh at Danger", { learned: false })] });
+		expect(await sheetFor(off.char, off.actor)._bareStatAltChoice(statRollable("con"))).toBeNull();
+		const endure = basic("Endure", "con");
+		const on = buildLiveCharacter({ slug: "the-fox", name: "The Fox", seedStartingMoves: false, items: [endure, pbMove("Laugh at Danger")] });
+		const moveRollable = { dataset: { roll: "con" }, closest: () => ({ dataset: { itemId: endure._id } }) };
+		expect(await sheetFor(on.char, on.actor)._bareStatAltChoice(moveRollable)).toBeNull();
+	});
+
+	it("asks the stat on a bare +CON click and rolls the stat picked", async () => {
+		const { char, actor } = buildLiveCharacter({ slug: "the-fox", name: "The Fox", seedStartingMoves: false, items: [pbMove("Laugh at Danger")] });
+		const sheet = sheetFor(char, actor);
+		const seen = [];
+		global.Dialog = vi.fn(function (d) { seen.push(d); this.render = vi.fn(); });
+		global.Handlebars = { helpers: { statLabel: k => k.toUpperCase() } };
+		sheet._promptRollOptions = vi.fn(async () => ({ rollMode: "normal" }));
+		const rolled = vi.spyOn(char, "onDirectStatRoll").mockResolvedValue({ total: 9 });
+		const rollable = statRollable("con");
+
+		expect(await sheet._resolveMoveRollPrompts(rollable)).toBe("handled");
+		expect(Object.keys(seen[0].buttons)).toEqual(["con", "cha"]);
+		expect(seen[0].content).toContain("Laugh at Danger");
+		await seen[0].buttons.cha.callback();
+		expect(sheet._promptRollOptions).toHaveBeenCalledWith(expect.objectContaining({ rollable, title: "Roll +CHA" }));
+		expect(rolled).toHaveBeenCalledWith("cha", { rollMode: "normal" });
 	});
 });

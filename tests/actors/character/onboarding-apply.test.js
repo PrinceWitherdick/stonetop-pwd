@@ -12,7 +12,7 @@ import { createStonetopCharacterSheetClass } from "../../../module/actors/charac
 import { CREATION_PICK_FLAG } from "../../../module/actors/character/StonetopCharacter.js";
 import { moveArmor } from "../../../module/actors/character/move-armor.js";
 import { CharacterOnboardingDialog, combineNameChip } from "../../../module/actors/character/dialogs/CharacterOnboardingDialog.js";
-import { BackgroundAnswersDialog } from "../../../module/actors/character/dialogs/BackgroundAnswersDialog.js";
+import { BackgroundAnswersDialog, backgroundAnswerGroups, backgroundSetupAsks } from "../../../module/actors/character/dialogs/BackgroundAnswersDialog.js";
 
 const PACK = new Map(loadPlaybookPackDocs().map(doc => [doc.system.slug, doc]));
 const playbookDoc = slug => ({ ...structuredClone(PACK.get(slug)), uuid: `Compendium.test.${slug}` });
@@ -334,6 +334,154 @@ describe("changing background on the Details tab", () => {
 		});
 		expect(await char.backgroundMovesDropped(from, { slug: "vessel", setupChoices: {} })).toEqual([]);
 		expect(ownedMoveNames(actor)).toContain("Spirit Tongue");
+	});
+});
+
+// A Life of Crime: "You start with either Burgle or Light Fingers (your choice) as an extra move, and
+// either burglar tools or a hidden stash (your choice) as an additional special possession. Go mark
+// them now." Onboarding asks those on its background step; the Details tab's dropdown asks them too.
+describe("a background's setup choices on the Details tab (the Fox)", () => {
+	const fox = (flags = {}) => {
+		const made = buildLiveCharacter({ slug: "the-fox", name: "The Fox", flags });
+		return { ...made, sheet: sheetFor(made.char, made.actor) };
+	};
+	const choose = (sheet, slug) => sheet._onBackgroundChange({ currentTarget: { value: slug } });
+	const possessions = actor => flag(actor, "possessions.selected") ?? [];
+
+	it("a switch to A Life of Crime asks both choices first, and grants the move and the possession picked", async () => {
+		const { char, actor, sheet } = fox({ "background.selected": "the-natural" });
+		await char.ensureStartingMoves();
+		const ask = vi.spyOn(BackgroundAnswersDialog, "askSetup").mockResolvedValue({ extraMove: "Light Fingers", extraPossession: "hidden-stash" });
+		const settled = vi.spyOn(char, "settleBackgroundMoves");
+
+		await choose(sheet, "a-life-of-crime");
+
+		expect(ask).toHaveBeenCalledTimes(1);
+		const [background, asks] = ask.mock.calls[0];
+		expect(background.slug).toBe("a-life-of-crime");
+		expect(asks.map(a => a.key)).toEqual(["extraMove", "extraPossession"]);
+		expect(asks[0].options.map(o => o.value)).toEqual(["Burgle", "Light Fingers"]);
+		expect(asks[1].options.map(o => o.value)).toEqual(["burglars-kit", "hidden-stash"]);
+		expect(asks.every(a => a.value === null)).toBe(true);
+		// Asked before anything was settled.
+		expect(ask.mock.invocationCallOrder[0]).toBeLessThan(settled.mock.invocationCallOrder[0]);
+
+		expect(flag(actor, "background.selected")).toBe("a-life-of-crime");
+		expect(flag(actor, "background.setupChoices")).toEqual({ extraMove: "Light Fingers", extraPossession: "hidden-stash" });
+		expect(ownedMoveNames(actor)).toContain("Light Fingers");
+		expect(ownedMoveNames(actor)).not.toContain("Burgle");
+		expect(possessions(actor)).toContain("hidden-stash");
+	});
+
+	it("closed unanswered, records no choice and grants neither", async () => {
+		const { char, actor, sheet } = fox({ "background.selected": "the-natural" });
+		await char.ensureStartingMoves();
+		vi.spyOn(BackgroundAnswersDialog, "askSetup").mockResolvedValue(null);
+
+		await choose(sheet, "a-life-of-crime");
+
+		expect(flag(actor, "background.selected")).toBe("a-life-of-crime");
+		expect(flag(actor, "background.setupChoices") ?? {}).toEqual({});
+		expect(ownedMoveNames(actor)).not.toContain("Burgle");
+		expect(ownedMoveNames(actor)).not.toContain("Light Fingers");
+		expect(possessions(actor)).not.toContain("hidden-stash");
+		expect(possessions(actor)).not.toContain("burglars-kit");
+	});
+
+	// The warning about a move going comes before the picks: a player who stays answered nothing.
+	it("asks no setup choice of a player who declines the move-drop warning, and changes nothing", async () => {
+		const { char, actor, sheet } = fox({ "background.selected": "the-natural" });
+		await char.ensureStartingMoves();
+		const before = ownedMoveNames(actor);
+		vi.spyOn(char, "backgroundMovesDropped").mockResolvedValue([{ type: "move", name: "Held Move" }]);
+		const confirm = vi.spyOn(sheet, "_confirmBackgroundMovesDropped").mockResolvedValue(false);
+		const ask = vi.spyOn(BackgroundAnswersDialog, "askSetup").mockResolvedValue({ extraMove: "Burgle", extraPossession: "hidden-stash" });
+
+		await choose(sheet, "a-life-of-crime");
+
+		expect(confirm).toHaveBeenCalledTimes(1);
+		expect(ask).not.toHaveBeenCalled();
+		expect(flag(actor, "background.selected")).toBe("the-natural");
+		expect(flag(actor, "background.setupChoices") ?? {}).toEqual({});
+		expect(ownedMoveNames(actor)).toEqual(before);
+		expect(possessions(actor)).not.toContain("hidden-stash");
+	});
+
+	it("asks the setup choices after a player accepts the move-drop warning, and grants the picks", async () => {
+		const { char, actor, sheet } = fox({ "background.selected": "the-natural" });
+		await char.ensureStartingMoves();
+		vi.spyOn(char, "backgroundMovesDropped").mockResolvedValue([{ type: "move", name: "Held Move" }]);
+		const confirm = vi.spyOn(sheet, "_confirmBackgroundMovesDropped").mockResolvedValue(true);
+		const ask = vi.spyOn(BackgroundAnswersDialog, "askSetup").mockResolvedValue({ extraMove: "Burgle", extraPossession: "hidden-stash" });
+
+		await choose(sheet, "a-life-of-crime");
+
+		expect(confirm.mock.invocationCallOrder[0]).toBeLessThan(ask.mock.invocationCallOrder[0]);
+		expect(flag(actor, "background.selected")).toBe("a-life-of-crime");
+		expect(flag(actor, "background.setupChoices")).toEqual({ extraMove: "Burgle", extraPossession: "hidden-stash" });
+		expect(ownedMoveNames(actor)).toContain("Burgle");
+	});
+
+	it("a switch away drops the picks with the background, so switching back asks again rather than regranting", async () => {
+		const { char, actor, sheet } = fox({
+			"background.selected": "a-life-of-crime",
+			"background.setupChoices": { extraMove: "Burgle", extraPossession: "hidden-stash" },
+			"possessions.selected": ["hidden-stash"],
+		});
+		await char.ensureStartingMoves();
+		expect(ownedMoveNames(actor)).toContain("Burgle");
+		const ask = vi.spyOn(BackgroundAnswersDialog, "askSetup").mockResolvedValue(null);
+
+		await choose(sheet, "the-natural");
+		expect(ask).not.toHaveBeenCalled();
+		expect(flag(actor, "background.setupChoices") ?? {}).toEqual({});
+		expect(ownedMoveNames(actor)).not.toContain("Burgle");
+		expect(possessions(actor)).not.toContain("hidden-stash");
+
+		await choose(sheet, "a-life-of-crime");
+		expect(ask).toHaveBeenCalledTimes(1);
+		expect(ownedMoveNames(actor)).not.toContain("Burgle");
+		expect(possessions(actor)).not.toContain("hidden-stash");
+	});
+
+	it("re-choosing the background held now asks nothing and keeps the picks", async () => {
+		const { char, actor, sheet } = fox({
+			"background.selected": "a-life-of-crime",
+			"background.setupChoices": { extraMove: "Burgle", extraPossession: "hidden-stash" },
+		});
+		await char.ensureStartingMoves();
+		const ask = vi.spyOn(BackgroundAnswersDialog, "askSetup").mockResolvedValue(null);
+		await choose(sheet, "a-life-of-crime");
+		expect(ask).not.toHaveBeenCalled();
+		expect(flag(actor, "background.setupChoices")).toEqual({ extraMove: "Burgle", extraPossession: "hidden-stash" });
+		expect(ownedMoveNames(actor)).toContain("Burgle");
+	});
+});
+
+describe("backgroundSetupAsks", () => {
+	// The Fox's backgrounds as the character reads them off its playbook.
+	const foxBackground = async slug => ((await buildLiveCharacter({ slug: "the-fox", name: "The Fox" }).char.playbook())?.backgrounds ?? [])
+		.find(b => b.slug === slug);
+
+	it("asks each setup choice as the playbook prints it, the held pick pre-picked while on offer", async () => {
+		const asks = backgroundSetupAsks(await foxBackground("a-life-of-crime"), { extraMove: "Burgle", extraPossession: "a-stolen-crown" });
+		expect(asks).toEqual([
+			{ key: "extraMove", label: "Extra move", value: "Burgle",
+				options: [{ value: "Burgle", label: "Burgle" }, { value: "Light Fingers", label: "Light Fingers" }] },
+			{ key: "extraPossession", label: "Extra special possession", value: null,
+				options: [{ value: "burglars-kit", label: "Burglar's kit" }, { value: "hidden-stash", label: "Hidden stash" }] },
+		]);
+	});
+
+	it("asks nothing of a background with no setup choices", async () => {
+		expect(backgroundSetupAsks(await foxBackground("the-natural"))).toEqual([]);
+		expect(backgroundSetupAsks(null)).toEqual([]);
+	});
+
+	it("draws an option pair by its label, keeping its value", () => {
+		const [group] = backgroundAnswerGroups([{ key: "extraPossession", label: "Extra special possession",
+			options: [{ value: "hidden-stash", label: "Hidden stash" }], value: "hidden-stash" }]);
+		expect(group.options[0]).toMatchObject({ value: "hidden-stash", label: "Hidden stash", selected: true });
 	});
 });
 

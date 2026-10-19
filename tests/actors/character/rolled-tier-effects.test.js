@@ -72,4 +72,13 @@ describe("settling a roll's tier effects", () => {
 		await char._settleRolledTierEffects({ total: 11 }, "Commune with Aratis", {}, []);
 		expect(settleTierEffects.mock.calls[0][2]).toBe("success");
 	});
+
+	// Prepare a Welcome's 10+ regains a Surprise only for a roll that spent one (tier-effects.js#surpriseRegained).
+	it("tells the settle whether the roll spent a Surprise, none unless told", async () => {
+		const { char } = hero();
+		await char._settleRolledTierEffects({ total: 11, card: card(11) }, "Prepare a Welcome", {}, [], { surpriseSpent: true });
+		expect(settleTierEffects.mock.calls[0][4]).toMatchObject({ surpriseSpent: true });
+		await char._settleRolledTierEffects({ total: 11, card: card(11) }, "Prepare a Welcome", {}, []);
+		expect(settleTierEffects.mock.calls[1][4]).toMatchObject({ surpriseSpent: false });
+	});
 });

@@ -39,7 +39,8 @@ import {
 import { StonetopSteading, isHerdAsset } from "../actors/steading/StonetopSteading.js";
 import { askHorsesFromHerd, herdHorsesLabel, herdHorsesIn, herdHorsesOnLine } from "../actors/steading/herd-requisition.js";
 import { openReturnTriumphant } from "../actors/steading/return-triumphant.js";
-import { STEADING_MOVE, improvementQuestions, askedAdvantageAnswers, herdCountAnswer } from "../actors/steading/improvement-rolls.js";
+import { STEADING_MOVE, improvementQuestions, askedAdvantageAnswers, herdCountAnswer, nervesAnswer } from "../actors/steading/improvement-rolls.js";
+import { shakenNervesOffers } from "../actors/character/fight-states.js";
 import { settleSteadingRoll } from "../actors/steading/steading-roll.js";
 import { requisitionMissCostAction } from "../actors/steading/steading-card-actions.js";
 import { worldLogisticsNames } from "../actors/character/logistics.js";
@@ -1032,6 +1033,7 @@ export class ExpeditionDialog extends StepperDialog {
 			reqHerdCount:  reqQuestions?.herdCount ?? null,
 			reqLogistics:  reqQuestions?.logistics ?? "",
 			reqAdvantages: reqQuestions?.advantages ?? [],
+			reqNerves:     reqQuestions?.nerves ?? null,
 			reqHeld:       reqQuestions?.held ?? "",
 			// How the GM is rolling it.
 			reqMode:   step.roll === "requisition" ? this._requisitionMode() : null,
@@ -1802,11 +1804,12 @@ export class ExpeditionDialog extends StepperDialog {
 		const root = this.element?.[0];
 		const herdCount = herdCountAnswer(this.element?.[0]);
 		const logistics = !!root?.querySelector?.('[name="logistics"]')?.checked;
+		const nerves = nervesAnswer(root);
 		const terms = found
 			? await settleSteadingRoll(found.steading, {
 				moveName: STEADING_MOVE.REQUISITION, statKey: "fortunes",
 				chosenMode: this._requisitionMode(),
-				answers: { herdCount, logistics, ...askedAdvantageAnswers(root) },
+				answers: { herdCount, logistics, nerves, ...askedAdvantageAnswers(root) },
 				canSpend: !!found.actor.isOwner,
 			})
 			: { rollMode: this._requisitionMode(), missAsPartial: "", conditionNotes: [], spend: () => {} };
@@ -1835,6 +1838,8 @@ export class ExpeditionDialog extends StepperDialog {
 	 *  - `advantages`: an improvement's asked advantage (a `rollAdvantage` grant with an `ask`), unticked;
 	 *  - `logistics`: the Marshal's Logistics ("when you Requisition, you have advantage"), asked once
 	 *    anyone has it learned, or "";
+	 *  - `nerves`: We Happy Few's 6- ("disadvantage on all rolls"), the question itself, asked once anyone's
+	 *    nerves are shaken (a tick naming them, or a pick among several), or null;
 	 *  - `held`: the advantage the steading is holding for its next +Fortunes roll, which this spends.
 	 */
 	_requisitionQuestions() {
@@ -1843,12 +1848,14 @@ export class ExpeditionDialog extends StepperDialog {
 			rules: steading?.improvementRules() ?? [],
 			herd: steading?.improvementCompleted("herdOfHorses") ? steading.getHerd() : null,
 			logistics: worldLogisticsNames(),
+			nerves: shakenNervesOffers(),
 		});
 		const herd = steading ? questions.find(q => q.name === "herdCount") : null;
 		return {
 			herdCount: herd ? { label: herd.label, max: herd.max ?? 0 } : null,
 			advantages: questions.filter(q => q.name.startsWith("advantage-")).map(({ name, label }) => ({ name, label })),
 			logistics: questions.find(q => q.name === "logistics")?.label ?? "",
+			nerves: questions.find(q => q.name === "nerves") ?? null,
 			held: steading?.fortunesAdvantage?.()?.source ?? "",
 		};
 	}

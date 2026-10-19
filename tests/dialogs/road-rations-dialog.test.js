@@ -23,6 +23,13 @@ vi.mock("../../module/camp/camp-store.js", () => ({
 	isUnliving:          actor => !!actor.unliving,
 	packResources:       actor => ({ ...actor.pack }),
 	partyFollowerMouths: actor => actor.fed ?? 0,
+	partyCrewMouths:     actor => actor.crewFed ?? 0,
+	crewSuppliesOf:      actor => ({ held: actor.crewHeld ?? 0 }),
+	// The pack, and the crew's supplies beside it written to one stand-in path.
+	mealSpendTarget:     actor => ({
+		resources:    { ...actor.pack, "crew-supplies": actor.crewHeld ?? 0 },
+		resourceData: (slug, n) => (slug === "crew-supplies" ? { crewLeft: n } : actor.typedActor.inventoryResourceData(slug, n)),
+	}),
 }));
 vi.mock("../../module/actors/character/follower-roster.js", () => ({ partyFollowersOf: async () => [] }));
 
@@ -94,6 +101,33 @@ describe("the days-on-the-road window", () => {
 		expect(chat).toHaveLength(1);
 		expect(chat[0].content).toContain("Days on the road");
 		expect(chat[0].content).toContain("3 uses (1 provisions, 2 supplies)");
+	});
+
+	it("feeds a Marshal's crew from the crew's own supplies first, and only the rest from the packs", async () => {
+		// Rook, a crew of 4 and Bo for 2 days: 12 uses. The crew's 6 held pay 6 of its 8; Rook's pack pays
+		// Rook's 2 and the crew's other 2, and Bo's pays Bo's 2.
+		const rook = pc("Rook", { supplies: 8 }, { fed: 4, crewFed: 4, crewHeld: 6 });
+		const bo = pc("Bo", { supplies: 4 });
+		const d = new RoadRationsDialog([rook, bo], { days: 2 });
+		const data = await d.getData();
+		expect(data.bill).toBe(12);
+		expect(data.rows.map(r => r.pays)).toEqual([4, 2]);
+		expect(data.rows[0]).toMatchObject({ crewPays: 6, crewHeld: 6 });
+		expect(data.rows[0].crewText).toBe("Feeds the crew first: 6 of the 8 uses the crew eats. The other 2 come out of the packs.");
+		expect(data.rows[1].crewText).toBe("");
+		await d._apply();
+		expect(rook.updates[0].data).toEqual({ crewLeft: 0, [`flags.${SCOPE}.inventory.resources.supplies`]: 4 });
+		expect(bo.updates[0].data).toEqual({ [`flags.${SCOPE}.inventory.resources.supplies`]: 2 });
+		expect(chat[0].content).toContain("6 uses from the crew");
+		expect(chat[0].content).toContain("own supplies; 4 uses (4 supplies) from the pack");
+	});
+
+	it("draws the crew's supplies as a sentence, never a figure to set", async () => {
+		const rook = pc("Rook", { supplies: 4 }, { fed: 2, crewFed: 2, crewHeld: 8 });
+		const data = await new RoadRationsDialog([rook], { days: 1 }).getData();
+		const html = await renderTemplate("systems/stonetop-pwd/templates/dialogs/road-rations.hbs", data);
+		expect(html).toContain("Crew supplies (8 left): Feeds the crew first: 2 uses, all the crew eats.");
+		expect(html.match(/class="road-pays/g)).toHaveLength(1);
 	});
 
 	it("writes nothing for days with a laden pack animal, but still says the days went by", async () => {

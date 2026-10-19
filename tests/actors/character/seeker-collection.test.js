@@ -16,6 +16,7 @@ import { BackgroundAnswersDialog } from "../../../module/actors/character/dialog
 import {
 	seekerMajorTrack, pickSeekerMajorMark, minorArcanaHeldElsewhere, drawableMinorSlugs,
 	seekerMajorSwitchPlan, withMinorRole, seekerCardRoles, seekerMajorOwed, frontTaskMarkers, frontTaskTrack,
+	seekerMinorRolesAssigned, seekerMinorStepComplete,
 } from "../../../module/actors/character/seeker-collection.js";
 
 const PACK = new Map(loadPlaybookPackDocs().map(doc => [doc.system.slug, doc]));
@@ -172,6 +173,34 @@ describe("onboarding's apply of the Seeker's arcana", () => {
 	});
 });
 
+// The Laboratory's first d4-1 of naphtha is rolled when onboarding takes it (the user's ruling of
+// 2026-10-18), and a re-run that keeps it does not roll again.
+describe("onboarding's apply of the Laboratory", () => {
+	afterEach(() => { delete globalThis.Roll; });
+
+	it("rolls d4-1 once, and the naphtha track holds the roll (it counts SPENT)", async () => {
+		const toMessage = vi.fn(async () => {});
+		globalThis.Roll = class { constructor(f) { this.formula = f; this.total = 1; } async evaluate() { return this; } toMessage(d) { return toMessage(this.formula, d); } };
+		const { actor, sheet } = seeker();
+		await run(sheet, { ...CHOICE(), possessions: ["laboratory"] });
+		expect(toMessage).toHaveBeenCalledOnce();
+		expect(flag(actor, "inventory.resources")?.naphtha).toBe(2);
+		// A use spent, then a re-run that keeps the Laboratory: no second roll, the track as it was.
+		await actor.update({ "flags.stonetop-pwd.inventory.resources.naphtha": 3 });
+		await run(sheet, { ...CHOICE(), possessions: ["laboratory"] });
+		expect(toMessage).toHaveBeenCalledOnce();
+		expect(flag(actor, "inventory.resources")?.naphtha).toBe(3);
+	});
+
+	it("does not roll for a Seeker without the Laboratory", async () => {
+		const toMessage = vi.fn(async () => {});
+		globalThis.Roll = class { constructor(f) { this.formula = f; this.total = 1; } async evaluate() { return this; } toMessage(d) { return toMessage(this.formula, d); } };
+		const { sheet } = seeker();
+		await run(sheet, CHOICE());
+		expect(toMessage).not.toHaveBeenCalled();
+	});
+});
+
 describe("a change of playbook away from the Seeker", () => {
 	it("keeps the arcana held, drops the lead placeholder and the creation bookkeeping, and the backfill can't bring the lead back", async () => {
 		const { actor, sheet, char } = seeker();
@@ -308,8 +337,27 @@ describe("onboarding's major step: mark 1 ○ or □", () => {
 			slug, frontDescription: card(slug).front.description, unlockDescription: card(slug).front.unlock?.description ?? "",
 		})), minor: [] };
 		d._selections.arcana.major = major;
+		// "Answer at least 2 questions about it", so only the mark is in question below.
+		d._selections.lore.texts["arcana-major:where-acquired"] = "A barrow";
+		d._selections.lore.texts["arcana-major:who-else-wants"] = "The Hillfolk";
 		return d;
 	};
+
+	it("Next waits for 2 of the major's questions answered, as well as the mark", () => {
+		const d = dialog("hectumel-codex");
+		d._markSeekerMajor("unlock:0", true);
+		d._selections.lore.texts["arcana-major:who-else-wants"] = "  ";
+		// The unlock question stands beside the set and does not count toward the 2.
+		d._selections.lore.texts["arcana-major:when-unlocked"] = "Last winter";
+		expect(d._isStepComplete("seekerArcana")).toBe(false);
+		expect(d._isStepAnsweredForResume("seekerArcana")).toBe(false);
+		d._step = d._steps.length;
+		expect(d._skippedRequiredSteps().map(s => s.label)).toContain("Major Arcana");
+		d._selections.lore.texts["arcana-major:what-cost"] = "My brother";
+		expect(d._isStepComplete("seekerArcana")).toBe(true);
+		expect(d._isStepAnsweredForResume("seekerArcana")).toBe(true);
+		expect(d._skippedRequiredSteps().map(s => s.label)).not.toContain("Major Arcana");
+	});
 
 	it("a □ major gets no default mark and waits for one; a ○ major defaults to its first", () => {
 		const d = dialog("mindgem");
@@ -337,6 +385,7 @@ describe("onboarding's major step: mark 1 ○ or □", () => {
 
 	it("the unlock question doesn't count toward 'Answer at least 2'", () => {
 		const d = dialog("hectumel-codex");
+		d._selections.lore.texts = {};
 		const section = d._rawLore.find(s => s.slug === "arcana-major");
 		d._selections.lore.texts["arcana-major:where-acquired"] = "A barrow";
 		d._selections.lore.texts["arcana-major:when-unlocked"] = "Last winter";
@@ -348,6 +397,56 @@ describe("onboarding's major step: mark 1 ○ or □", () => {
 	it("reads the major's track the same way the Details-tab ask does", () => {
 		expect(seekerMajorTrack(card("mindgem").front).markers.map(m => `${m.context}:${m.index}`)).toEqual(["front:0", "front:1", "front:2", "front:3"]);
 		expect(seekerMajorTrack(card("hectumel-codex").front).kind).toBe("circle");
+	});
+});
+
+// The minor page ("Minor Arcana & Questions") asks for a role on each drawn card and the three
+// questions under them. Next and the reopen's first-unfinished-page both read seekerMinorStepComplete,
+// so whatever one says the other says too: a page Next let the player past is never the page a
+// reopen puts them back on.
+describe("onboarding's minor step: three roles and their questions", () => {
+	const ROLES = { mastered: "bow-with-no-string", found: "corroded-spearhead", lead: "giant-oak-leaf" };
+	const ANSWERS = {
+		"arcana-minor:mastered-location": "Under my bed",
+		"arcana-minor:found-location":    "A hollow tree",
+		"arcana-minor:sought-notes":      "The Giant Oak Leaf",
+	};
+	const dialog = ({ roles = ROLES, texts = ANSWERS } = {}) => {
+		const d = Object.create(CharacterOnboardingDialog.prototype);
+		d._initializeState(playbookDoc("the-seeker"), null, null);
+		d._selections.arcana.minorDraw  = Object.values(ROLES);
+		d._selections.arcana.minorRoles = { ...roles };
+		d._selections.lore.texts = { ...texts };
+		return d;
+	};
+	const agree = d => {
+		const next = d._isStepComplete("seekerArcanaMinor");
+		expect(d._isStepAnsweredForResume("seekerArcanaMinor")).toBe(next);
+		return next;
+	};
+
+	it("is done with every role given and every question answered", () => {
+		expect(agree(dialog())).toBe(true);
+	});
+
+	it("waits for all three roles", () => {
+		expect(agree(dialog({ roles: { ...ROLES, lead: "" } }))).toBe(false);
+	});
+
+	it("waits for every question: the section names no 'at least N', so a blank or spaces-only answer holds it", () => {
+		expect(agree(dialog({ texts: { ...ANSWERS, "arcana-minor:sought-notes": "" } }))).toBe(false);
+		expect(agree(dialog({ texts: { ...ANSWERS, "arcana-minor:found-location": "   " } }))).toBe(false);
+		expect(agree(dialog({ texts: {} }))).toBe(false);
+	});
+
+	it("a page skipped with blank answers is listed as unfinished and is where a reopen lands", () => {
+		const d = dialog({ texts: { ...ANSWERS, "arcana-minor:mastered-location": "" } });
+		d._step = d._steps.length;
+		expect(d._skippedRequiredSteps().map(s => s.label)).toContain("Minor Arcana");
+		const minorIndex = d._steps.indexOf("seekerArcanaMinor");
+		expect(d._firstIncompleteStepIndex()).toBeLessThanOrEqual(minorIndex);
+		d._selections.lore.texts["arcana-minor:mastered-location"] = "Under my bed";
+		expect(d._skippedRequiredSteps().map(s => s.label)).not.toContain("Minor Arcana");
 	});
 });
 
@@ -381,6 +480,22 @@ describe("pure helpers", () => {
 	it("withMinorRole moves a card out of any other role", () => {
 		expect(withMinorRole({ mastered: "x", found: "y", lead: "z" }, "lead", "x")).toEqual({ mastered: "", found: "y", lead: "x" });
 		expect(withMinorRole({ mastered: "x" }, "found", "")).toEqual({ mastered: "x", found: "", lead: "" });
+	});
+
+	it("seekerMinorRolesAssigned wants all three roles, each on a different card", () => {
+		expect(seekerMinorRolesAssigned({ mastered: "a", found: "b", lead: "c" })).toBe(true);
+		expect(seekerMinorRolesAssigned({ mastered: "a", found: "b", lead: "" })).toBe(false);
+		expect(seekerMinorRolesAssigned({ mastered: "a", found: "a", lead: "c" })).toBe(false);
+		expect(seekerMinorRolesAssigned({})).toBe(false);
+		expect(seekerMinorRolesAssigned(undefined)).toBe(false);
+	});
+
+	it("seekerMinorStepComplete wants the roles AND the questions", () => {
+		const roles = { mastered: "a", found: "b", lead: "c" };
+		expect(seekerMinorStepComplete({ minorRoles: roles, questionsAnswered: true })).toBe(true);
+		expect(seekerMinorStepComplete({ minorRoles: roles, questionsAnswered: false })).toBe(false);
+		expect(seekerMinorStepComplete({ minorRoles: { ...roles, found: "" }, questionsAnswered: true })).toBe(false);
+		expect(seekerMinorStepComplete()).toBe(false);
 	});
 
 	it("seekerCardRoles names each card creation gave", () => {

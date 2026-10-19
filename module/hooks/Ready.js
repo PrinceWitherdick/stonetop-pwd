@@ -89,6 +89,7 @@ import { refreshSteadingImprovements } from "../migration/improvement-refresh.js
 import { refreshSeededMonsters } from "../migration/bestiary-refresh.js";
 import { sizeMonsterTokens, MONSTER_TOKEN_SIZE_SWEEP } from "../migration/monster-token-size.js";
 import { refreshCatalogFollowers } from "../migration/follower-refresh.js";
+import { refreshInstincts } from "../migration/instinct-refresh.js";
 import { splitFollowerWholeParty, FOLLOWER_WHOLE_PARTY_SWEEP } from "../migration/follower-whole-party.js";
 
 const _EOS_MACRO_NAME   = "End of Session";
@@ -290,6 +291,10 @@ export async function onReady() {
 		// good dog's herder default and two summons' notes, wherever a card still holds the old value.
 		try { await oncePerVersion("followerRefresh", refreshCatalogFollowers); }
 		catch (err) { console.error("Stonetop | refreshing catalog followers failed", err); }
+		// And a chosen instinct still worded as an older playbook offered it (migration/instinct-refresh.js):
+		// the Blessed's Delight and Reverence, corrected to Book I's text.
+		try { await oncePerVersion("instinctRefresh", refreshInstincts); }
+		catch (err) { console.error("Stonetop | refreshing instincts failed", err); }
 		// A custom follower's old "Party follower" switch meant both travelling with the party and
 		// following it as a whole (p.464); now two switches, so one switched on gets both
 		// (migration/follower-whole-party.js). Once per WORLD, like the creation-finished stamp below.
@@ -503,7 +508,7 @@ export async function onReady() {
 	addBookAgesOnce();
 	// Compile the recorded Introductions + Spring Burst answers into the shared
 	// "Chronicle" journal and open it (GM-only). Callable from the Introductions
-	// dialog's "Let spring break forth!" finish, the Expedition dialog, a macro, or
+	// dialog's "Let spring burst forth!" finish, the Expedition dialog, a macro, or
 	// the console.
 	game.stonetop.saveChronicle     = () => writeChronicle().then(j => j?.sheet?.render(true));
 	game.stonetop.openExpedition    = () => ExpeditionDialog.open();

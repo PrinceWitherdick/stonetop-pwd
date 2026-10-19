@@ -7,7 +7,7 @@ import {
 	stateOfCamp, takenFromCamp,
 } from "../../module/camp/camp-store.js";
 import { settleRefusalText } from "../../module/camp/camp-view.js";
-import { campCharacter, campParty, restoreCampWorld } from "../fakes/camp.js";
+import { applyUpdate, campCharacter, campParty, restoreCampWorld } from "../fakes/camp.js";
 
 /**
  * The camp's documents: sitting down, the choices made at the fire, settling, and paying each
@@ -474,6 +474,36 @@ describe("settling the camp", () => {
 		const off = await readyToSettle({ aeliana: { moves: [{ name: "Keep the Home-Fires Burning", learned: false }], cha: 3 } });
 		await settleCamp(off.camp);
 		expect(campOf(off.aeliana).plan.map(entry => planExtra(entry, CAMP_EXTRA.HOME_FIRES))).toEqual([0, 0]);
+	});
+
+	// The Ranger's A Safe Place: the camper's own pick lands on their own Precaution track, set rather
+	// than added to, so the hold the last site left is gone; nobody without the move is touched.
+	it("fills a Safe Place holder's Precaution to their pick, clearing the last site's, on their own sheet", async () => {
+		const TRACK = `flags.${SYSTEM_ID}.moves.backgroundChoices.A Safe Place`;
+		const { aeliana, bram, camp, act } = await readyToSettle({ bram: { moves: ["A Safe Place"] } });
+		applyUpdate(bram, { [TRACK]: 2 });
+		expect(campMembers(camp.campId, camp.hostId).map(m => m.safePlace)).toEqual([false, true]);
+		expect(campOf(bram).precaution).toBe(1);
+		await settleCamp(camp);
+		expect(campOf(aeliana).plan.map(entry => entry.precaution)).toEqual([undefined, 1]);
+		expect(ChatMessage.create.mock.calls[0][0].content).toContain("holds 1 Precaution");
+
+		act("player-2");
+		await applyCampShares(aeliana);
+		expect(bram.flags[SYSTEM_ID].moves.backgroundChoices["A Safe Place"]).toBe(1);
+		act("player-1");
+		await applyCampShares(aeliana);
+		expect(aeliana.flags[SYSTEM_ID].moves).toBeUndefined();
+	});
+
+	it("empties a Safe Place holder's Precaution when they did not prepare this site", async () => {
+		const { aeliana, bram, camp, act } = await readyToSettle({ bram: { moves: ["A Safe Place"] } });
+		applyUpdate(bram, { [`flags.${SYSTEM_ID}.moves.backgroundChoices.A Safe Place`]: 1 });
+		await setCampChoices(bram, { precaution: 0 });
+		await settleCamp(camp);
+		act("player-2");
+		await applyCampShares(aeliana);
+		expect(bram.flags[SYSTEM_ID].moves.backgroundChoices["A Safe Place"]).toBe(0);
 	});
 
 	// Auspicious Birth: "Clear it when you Make Camp or Convalesce."

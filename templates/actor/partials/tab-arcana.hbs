@@ -123,6 +123,23 @@
 				{{/if}}
 				{{/each}}
 			</ul>
+			{{!-- A card whose unlock marks each buy a choice off its back (the Hec'tumel Codex's
+			      spells): a cue while a mark still owes one, and, in the front-only view, the
+			      choices already learned, so a hidden back still shows what you can cast. --}}
+			{{#if unlockChoice}}
+			{{#if (and unlockChoice.owed @root.stonetop.canEdit)}}
+			<div class="stonetop-arcanum-backowed stonetop-arcanum-unlock-choice-owed">
+				<i class="fas fa-book-open"></i>
+				<span>{{localize "stonetop.arcana.unlockChoiceOwed" name=unlockChoice.name owed=unlockChoice.owed}}</span>
+				<button type="button" class="stonetop-arcanum-unlock-choice-btn" data-slug="{{slug}}">
+					{{localize "stonetop.arcana.unlockChoiceChoose"}}
+				</button>
+			</div>
+			{{/if}}
+			{{#if unlockChoice.html}}{{#unless backVisible}}
+			<div class="stonetop-arcanum-unlock-choices">{{{unlockChoice.html}}}</div>
+			{{/unless}}{{/if}}
+			{{/if}}
 			{{!-- Consequences surfaced from the back for cards whose front references them
 			      ("mark a consequence (see reverse)"). Rendered only in the front-only view; the
 			      leading <h3>Consequences</h3> is folded behind a collapsible at render time

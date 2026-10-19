@@ -42,6 +42,7 @@ import { otherSide, fightsAsGroup } from "./fight-sides.js";
 import { mayMove } from "./send-against.js";
 import { clearShots, hasShots } from "./fight-shots.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { followerCardMemo } from "../actors/character/follower-masters.js";
 import { contextMenuEntry } from "../utils/foundry-compat.js";
 import { bookPageCites } from "../gm-toolkit/book-ref.js";
 import { followBookCite } from "../books/rulebook-icons.js";
@@ -172,16 +173,19 @@ export function createFightTrackerClass(Base) {
 			// Each row awaits core's thumbnail, which decodes video token art the first time it sees it.
 			// One at a time, the tab cannot paint until the last of them has finished.
 			const inFight = [...snapshot.combatants.values(), ...snapshot.elsewhere];
-			const rows = new Map(await Promise.all(inFight.map(async c => [c.id, await this._fightRow(c)])));
+			// One follower-card lookup per actor for the whole draw, rows and key alike.
+			const cardFor = followerCardMemo();
+			const rows = new Map(await Promise.all(inFight.map(async c => [c.id, await this._fightRow(c, { cardFor })])));
 			context.fight = fightTrackerView({
 				snapshot, rows, isGM: !!user?.isGM, format, cites: bookPageCites, openRules: this._openRules,
 			});
 			this.fightSignature = snapshot.result.signature;
-			this.fightVitals = fightVitalsKey(combat);
+			// The rows' own vitals, read again only for a combatant this reader has no row for.
+			this.fightVitals = fightVitalsKey(combat, { vitalsOf: c => rows.get(c.id)?.vitals ?? combatantVitals(c, { cardFor }) });
 		}
 
 		/** What one combatant's row needs beyond the engagements. */
-		async _fightRow(combatant) {
+		async _fightRow(combatant, { cardFor } = {}) {
 			const user = globalThis.game?.user;
 			const onCanvas = !!combatant.sceneId && combatant.sceneId === globalThis.canvas?.scene?.id;
 			const bodies = combatantBodies(combatant);
@@ -190,7 +194,7 @@ export function createFightTrackerClass(Base) {
 				img: await this._getCombatantThumbnail(combatant),
 				hidden: !!combatant.hidden,
 				defeated: !!combatant.isDefeated,
-				vitals: combatantVitals(combatant),
+				vitals: combatantVitals(combatant, { cardFor }),
 				reminders: combatantReminders(combatant),
 				seesFoeVitals: canReadFoeVitals(combatant, user),
 				side: combatantSide(combatant),

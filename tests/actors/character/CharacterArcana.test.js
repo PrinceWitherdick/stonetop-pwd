@@ -658,12 +658,13 @@ describe("CharacterArcana.buildSnapshot()", () => {
 			expect(store.leadBackfilled).toBe(true);
 		});
 
-		it("discoverArcanum drops the lead marker and identifies the slug", async () => {
+		it("discoverArcanum drops the lead marker and identifies and reveals the slug (a found card)", async () => {
 			const store = { owned: ["some-slug"], leads: ["some-slug"] };
 			const arcana = new CharacterArcana(makeFlags(store), new FakeArcanaRepository());
 			await arcana.discoverArcanum("some-slug");
 			expect(store.leads).toEqual([]);
 			expect(store.identified).toEqual(["some-slug"]);
+			expect(store.revealed).toEqual(["some-slug"]);
 			expect(store.owned).toEqual(["some-slug"]);
 		});
 

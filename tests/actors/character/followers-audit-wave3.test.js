@@ -302,7 +302,8 @@ describe("Strengthen Your Bond (FOL-8)", () => {
 		globalThis.ChatMessage = { create: vi.fn(), getSpeaker: () => ({ alias: "Cadi" }) };
 		const cadi = pc("cadi", { customFollowers: { abc: { loyalty: 1 } } });
 		expect(await strengthenBond(cadi, { ftype: "custom", slug: "abc", name: "Maeve", cost: "recognition" })).toEqual({ from: 1, to: 2 });
-		expect(cadi.update).toHaveBeenCalledWith({ [`flags.${S}.customFollowers.abc.loyalty`]: 2 }, { stonetopMove: "Strengthen Your Bond" });
+		// With the payment stamped beside it (follower-bond.js#COST_PAID_FLAG).
+		expect(cadi.update).toHaveBeenCalledWith(expect.objectContaining({ [`flags.${S}.customFollowers.abc.loyalty`]: 2, [`flags.${S}.followerCostPaid.custom:abc`]: expect.any(Number) }), { stonetopMove: "Strengthen Your Bond" });
 		expect(ChatMessage.create.mock.calls[0][0].content).toContain("Strengthen Your Bond");
 		const full = pc("full", { customFollowers: { abc: { loyalty: 3 } } });
 		expect(await strengthenBond(full, { ftype: "custom", slug: "abc" })).toBeNull();
@@ -519,6 +520,7 @@ describe("no Pay cost on a Servant of Daagon batch (FO-4)", () => {
 	it("draws Pay cost only on a card that is not a Servant batch, and keeps Spend", () => {
 		const hbs = read("templates/actor/partials/tab-followers.hbs");
 		expect(hbs).toMatch(/\{\{#unless isServant\}\}\s*<button type="button" class="stonetop-pay-cost/);
-		expect(hbs).toMatch(/stonetop-pay-cost[\s\S]*?<\/button>\s*\{\{\/unless\}\}\s*\{\{!-- Spend Loyalty/);
+		// Radiant Countenance's button rides inside the same gate (radiant-countenance-bond.test.js).
+		expect(hbs).toMatch(/stonetop-pay-cost[\s\S]*?<\/button>\s*\{\{!-- Radiant Countenance[\s\S]*?stonetop-radiant-bond[\s\S]*?<\/button>\s*\{\{\/if\}\}\s*\{\{\/unless\}\}\s*\{\{!-- Spend Loyalty/);
 	});
 });

@@ -3,7 +3,8 @@
       are marked. Clicking a box sets the count; `cap` is the room the marked items leave,
       which a click is held to. Drawn by the Inventory tab and the Outfit dialog alike, whose
       handlers bind on these classes, so the two tracks can never drift. Context: `pool`
-      ({current, max}), `cap`, `small`. --}}
+      ({current, max}), `cap`, `small`, and `magpie` (the Inventory tab's ◇ pool only, for a
+      character with Magpie learned: its Have What You Need reminder, said once). --}}
 {{#if small}}
 <div class="stonetop-supplies-pool">
 	<span class="stonetop-supplies-pool-label"><strong>{{localize "stonetop.inventory.smallUndefinedPoolLabel"}}</strong></span>
@@ -33,4 +34,5 @@
 	</span>
 </div>
 <p class="stonetop-supplies-pool-note">{{{localize "stonetop.inventory.regularUndefinedPoolNote"}}}</p>
+{{#if magpie}}<p class="stonetop-supplies-pool-note">{{{localize "stonetop.inventory.magpieNote"}}}</p>{{/if}}
 {{/if}}

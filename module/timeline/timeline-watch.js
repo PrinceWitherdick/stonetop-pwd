@@ -31,11 +31,10 @@ import {
 	LEARNED_OPTION, arcanaTrackSlugs, creationMilestones, detectArcanaTracks, detectMilestones, snapshotFrom,
 	splitForgotten, touchesWatched,
 } from "./timeline-milestones.js";
-import { creditsKills, felledBy, foeName, isFoe, newlyApplied } from "./timeline-kills.js";
-import { characterBehind } from "../actors/character/follower-masters.js";
-import { combatantSide, fightOnScene, sideInfoFor } from "../fight/fight-state.js";
-import { rollerCombatant } from "../fight/damage-seed.js";
-import { FOES } from "../fight/engagements.js";
+import { felledBy, foeName, newlyApplied } from "./timeline-kills.js";
+// Whose own blow it was, and whether the target was a foe as the fight places it: shared with Terror on
+// the Field's line.
+import { creditedStriker, struckFoe } from "../fight/struck-foe.js";
 import { damageRowActor } from "../utils/damage.js";
 import { prettifySlug } from "../utils/ledger-core.js";
 import { escHtml } from "../utils/strings.js";
@@ -213,25 +212,6 @@ export const APPLIED_BEFORE_OPTION = "stonetopKillsBefore";
 /** The hook a follower's death is announced on: `(actor, {follower, slug, index, name})`. */
 export const FOLLOWER_DIED_HOOK = "stonetop.followerDied";
 
-/**
- * Was a struck target on the other side, AS THE FIGHT PLACES IT? A side the Fight tab stamped on the
- * target's combatant wins (`combatantSide`), so an NPC the GM moved across counts for the side it
- * was moved to. Outside a fight, the side the actor implies, with the disposition the card saw.
- *
- * ⚠ NEVER A CHARACTER OR A FOLLOWER, WHATEVER THE STAMP SAYS (the user's ruling: a kill on your own
- * people is not a kill to count). The follower test is the wider of the two the system has: the
- * fight's own `followerOrigin` flag (`sideInfoFor`), or a character behind the NPC (`characterBehind`).
- */
-function struckFoe(target, cardDisposition) {
-	const info = sideInfoFor(target, target.token ?? null);
-	if (info.type === "character" || info.hasPlayerOwner) return false;
-	if (info.isFollower || (target.type === "npc" && characterBehind(target))) return false;
-	const scene = target.token?.parent ?? globalThis.canvas?.scene ?? null;
-	const combatant = rollerCombatant(fightOnScene(scene), scene, target);
-	if (combatant) return combatantSide(combatant) === FOES;
-	return isFoe({ ...info, disposition: cardDisposition ?? info.disposition });
-}
-
 /** `preUpdateChatMessage`: note which rows a damage card had applied, when its rows are changing. */
 export function onPreUpdateChatMessage(message, changed, options) {
 	if (!options) return;
@@ -257,11 +237,7 @@ export async function onUpdateChatMessage(message, changed, options, userId) {
 	const fresh = newlyApplied(damage?.applied, before).filter(row => felledBy(row) > 0);
 	if (!fresh.length) return;
 	const attacker = damage.attackerUuid ? await fromUuid(damage.attackerUuid).catch(() => null) : null;
-	const credited = creditsKills({
-		attackerType: attacker?.type, selfHarm: !!damage.selfHarm,
-		followerBlow: !!message.getFlag(STONETOP_SCOPE, "followerBlow"),
-	});
-	if (!credited) return;
+	if (!creditedStriker(message, damage, attacker)) return;
 	const slain = [];
 	for (const row of fresh) {
 		const result = (damage.results ?? []).find(r => r?.uuid === row.uuid);

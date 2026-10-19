@@ -109,7 +109,33 @@
 						{{/each}}
 					</span>
 				</div>
+				{{!-- The Itinerant Mystic's Enigma (enigma.js): the two things done with it away from a roll.
+				      "Return when needed" spends 1 and opens the Outfit window; "Back from wandering" asks how
+				      long and adds 1, 2 or 3. The Know Things and Have What You Need spends are on those moves. --}}
+				{{#if (eq key "enigma")}}
+				<div class="stonetop-bg-resource-actions">
+					<button type="button" class="stonetop-enigma-return"
+					        data-tooltip="{{localize 'stonetop.lightbearer.enigma.return.tooltip'}}"
+					        {{#unless current}}disabled{{/unless}}><i class="fas fa-route" aria-hidden="true"></i> {{localize "stonetop.lightbearer.enigma.return.button"}}</button>
+					<button type="button" class="stonetop-enigma-wander"
+					        data-tooltip="{{localize 'stonetop.lightbearer.enigma.wander.tooltip'}}"><i class="fas fa-person-hiking" aria-hidden="true"></i> {{localize "stonetop.lightbearer.enigma.wander.button"}}</button>
+				</div>
+				{{/if}}
 				{{/each}}
+			</div>
+			{{/if}}
+			{{!-- Raised by Wolves (wild-ways.js): "Once per session, when your wild ways offend or alienate you
+			      from someone, mark XP." Marked, it stays disabled until End of Session gives it back. --}}
+			{{#if @root.stonetop.wildWays}}
+			<div class="stonetop-bg-choices stonetop-bg-wild-ways">
+				<p class="stonetop-bg-choices-label">Once per session</p>
+				<div class="stonetop-bg-resource-actions">
+					<button type="button" class="stonetop-wild-ways-xp{{#if @root.stonetop.wildWays.marked}} is-checked{{/if}}"
+					        data-tooltip="When your wild ways offend or alienate you from someone, mark XP. Once per session; End of Session gives it back."
+					        {{#if (or @root.stonetop.wildWays.marked (not @root.stonetop.canEdit))}}disabled{{/if}}>
+						{{#if @root.stonetop.wildWays.marked}}<i class="fas fa-check" aria-hidden="true"></i> Wild ways XP marked this session{{else}}<i class="fas fa-star" aria-hidden="true"></i> My wild ways gave offence: mark XP{{/if}}
+					</button>
+				</div>
 			</div>
 			{{/if}}
 			{{#if markableActions}}

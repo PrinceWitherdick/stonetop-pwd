@@ -34,13 +34,24 @@
  * And Wielder of the White Flame's 10+, "you may Invoke the Sun God right now as if you rolled a
  * 10+": a button on its roll card, once per card, that opens the sheet's own invoke path with no
  * roll, which posts the Invocation and a card of these same consequences to choose 1 from.
+ *
+ * EMPOWERED INVOCATIONS: "you can choose an extra consequence before you roll. If you do, the
+ * Invocation has its empowered effect." The invoke window asks which, the roll's pick context carries
+ * it, and the card is stamped with it (EMPOWERED_CONSEQUENCE_FLAG). It is taken on EVERY result, a 6-
+ * included, so it is not a box on the list (hidden on a 6-) but a fixed line of its own
+ * (move-pick-bonuses.js takes it off the list), wired here with the same settles a ticked bullet uses
+ * under its own record key (PRE_PICK_RECORD). Burn Twice as Bright's pair takes it on both.
+ *
+ * HOLY RELICS: "mark a use in lieu of choosing a consequence", once for each consequence the PLAYER
+ * owes on the card (holyRelicOffers): their pick from the list, and the Empowered one. A relic marked
+ * for the Empowered one cancels it; the Invocation is still empowered.
  */
 
 import { SYSTEM_ID } from "../../system-id.js";
 import { INVOKE_THE_SUN_GOD, WIELDER_OF_THE_WHITE_FLAME } from "./holy-light.js";
 import { ownsLearnedMoveNamed } from "./owns-move.js";
 import { tookBackground } from "./took-background.js";
-import { invocationLabels, readNeedsSun } from "./ongoing-invocation.js";
+import { REDUCED_GM_CHOICE, invocationLabels, readNeedsSun, reducedEndings } from "./ongoing-invocation.js";
 import { withMovePickBonuses } from "./move-pick-bonuses.js";
 import { canRewriteCard, firstOptionList, optionKey, pickListItem, pickListStampAttrs, postMoveNote } from "../../utils/chat.js";
 import { belongsToMessage } from "../../utils/picked-option-button.js";
@@ -60,8 +71,42 @@ export const WIELDER_INVOKED_FLAG = "wielderInvoked";
 export const CARD_EMPOWERED_FLAG = "invokeEmpowered";
 /** Message flag: the card is Wielder of the White Flame's "as if you rolled a 10+", with no roll. */
 export const TEN_PLUS_FLAG = "invokeTenPlus";
+/** Message flag: the consequence an Empowered Invocation took before the roll (a CONSEQUENCE kind). */
+export const EMPOWERED_CONSEQUENCE_FLAG = "invokeEmpoweredConsequence";
+/** The CONSEQUENCES_FLAG key the Empowered consequence's record lives under (a bullet's is its index). */
+export const PRE_PICK_RECORD = "empowered";
+/** Message flag: what the reduced effect did to each short-lived Invocation, `{slug: "ended"|"kept"}`. */
+export const REDUCED_FLAG = "invokeReduced";
+/** Message flag: how many holy relic uses this card has had (a legacy `true` is one). */
+export const HOLY_RELIC_FLAG = "holyRelicSpent";
 
-export const CONSEQUENCE = Object.freeze({ DEBILITY: "debility", SNUFF: "snuff", SUN: "sun" });
+/** "When you Invoke the Sun God and roll a 10+, you need not choose a consequence; on a 7-9, you choose a consequence but the GM does not." */
+export const GLORIOUS_SERVANT = "Glorious Servant";
+
+export const CONSEQUENCE = Object.freeze({ REDUCED: "reduced", DEBILITY: "debility", SNUFF: "snuff", SUN: "sun" });
+
+/**
+ * The move's four bullets, word for word and in printed order, each with what it is. Pinned against
+ * the shipped move by tests/actors/character/invoke-consequences.test.js. The invoke window offers
+ * them as the Empowered consequence; the card matches its bullets against them.
+ */
+export const INVOKE_CONSEQUENCE_BULLETS = Object.freeze([
+	{ kind: CONSEQUENCE.REDUCED,  text: "The Invocation has its reduced effect" },
+	{ kind: CONSEQUENCE.DEBILITY, text: "The effort taxes you; mark a debility" },
+	{ kind: CONSEQUENCE.SNUFF,    text: "The light is snuffed out when the Invocation is complete, its fuel consumed" },
+	{ kind: CONSEQUENCE.SUN,      text: "You must bask in sunlight for an hour or so before using that Invocation again" },
+].map(Object.freeze));
+
+/** The printed bullet for a CONSEQUENCE kind, or null. */
+export function consequenceBullet(kind) {
+	return INVOKE_CONSEQUENCE_BULLETS.find(b => b.kind === kind)?.text ?? null;
+}
+
+/** Which consequence a bullet's text is, the reduced effect included; null for none of them. */
+export function consequenceKindOf(text) {
+	const key = optionKey(text);
+	return INVOKE_CONSEQUENCE_BULLETS.find(b => optionKey(b.text) === key)?.kind ?? null;
+}
 
 /** The Lightbearer's background whose circle can be marked instead of a debility. */
 export const AUSPICIOUS_BIRTH = Object.freeze({ playbook: "The Lightbearer", slug: "auspicious-birth" });
@@ -70,30 +115,66 @@ export const CIRCLE_CHOICE = "auspicious-birth";
 
 // Keyed by the bullet, word for word, through the card's one text normaliser (utils/chat.js#optionKey).
 // The tests hold each key against the shipped move, so a reword in the pack fails there.
-const BULLETS = new Map([
-	["The effort taxes you; mark a debility", CONSEQUENCE.DEBILITY],
-	["The light is snuffed out when the Invocation is complete, its fuel consumed", CONSEQUENCE.SNUFF],
-	["You must bask in sunlight for an hour or so before using that Invocation again", CONSEQUENCE.SUN],
-].map(([text, kind]) => [optionKey(text), kind]));
-
 /** Which consequence a bullet's text is, or null for one that writes nothing (the reduced effect). */
 export function invokeConsequenceKind(text) {
-	return BULLETS.get(optionKey(text)) ?? null;
+	const kind = consequenceKindOf(text);
+	return kind === CONSEQUENCE.REDUCED ? null : kind;
 }
-
-/** The one bullet that writes nothing but changes what the Invocation does. */
-const REDUCED_BULLET = optionKey("The Invocation has its reduced effect");
 
 /** Whether a bullet's text is "The Invocation has its reduced effect". */
 export function isReducedBullet(text) {
-	return optionKey(text) === REDUCED_BULLET;
+	return consequenceKindOf(text) === CONSEQUENCE.REDUCED;
+}
+
+/**
+ * The message flags an Invoke card is stamped with from its roll's pick context: which Invocation(s),
+ * whether they were empowered, and the consequence Empowered took before the roll (the context holds
+ * its printed bullet, the flag its kind). Empty for a context that names none of it.
+ */
+export function invokeCardFlags(context = null) {
+	const invocations = Array.isArray(context?.invocations) ? context.invocations.filter(Boolean) : [];
+	const kind = context?.empowered ? consequenceKindOf(context.empoweredConsequence ?? "") : null;
+	return {
+		...(invocations.length ? { [CARD_INVOCATIONS_FLAG]: [...invocations] } : {}),
+		...(invocations.length && context?.empowered ? { [CARD_EMPOWERED_FLAG]: true } : {}),
+		...(kind ? { [EMPOWERED_CONSEQUENCE_FLAG]: kind } : {}),
+	};
+}
+
+/** The consequence an Empowered Invocation took before the roll (a CONSEQUENCE kind), or null. */
+export function cardEmpoweredConsequence(message) {
+	const kind = message?.getFlag?.(SYSTEM_ID, EMPOWERED_CONSEQUENCE_FLAG);
+	return Object.values(CONSEQUENCE).includes(kind) ? kind : null;
+}
+
+/** Whether a holy relic was marked in place of the Empowered consequence, which cancels it. */
+export function prePickReplaced(message) {
+	return !!recordFor(message, PRE_PICK_RECORD).relic;
+}
+
+/** Whether the reduced effect was the Empowered consequence chosen before the roll, and no holy relic replaced it. */
+function reducedBeforeRoll(message) {
+	return cardEmpoweredConsequence(message) === CONSEQUENCE.REDUCED && !prePickReplaced(message);
+}
+
+/**
+ * Whether the Empowered consequence is still to be paid: there is one, no relic took its place, and
+ * nothing it writes has been written (a debility marked, the light stamped or snuffed, the sun cue set).
+ * The reduced effect writes nothing, so it stays open to a relic for as long as the card lasts.
+ */
+export function prePickPending(message) {
+	if (!cardEmpoweredConsequence(message)) return false;
+	const record = recordFor(message, PRE_PICK_RECORD);
+	return !record.relic && !record.marked && !record.snuffed && !("stamped" in record) && !("added" in record);
 }
 
 /**
  * Whether the reduced effect is ticked on this card, read off its boxes as they stand (the picks pass
- * restores each tick from the message before any of this is wired, so the DOM is the card's state).
+ * restores each tick from the message before any of this is wired, so the DOM is the card's state), or
+ * was the Empowered consequence chosen before the roll and not replaced by a holy relic.
  */
 export function invokeCardReduced(root, message) {
+	if (reducedBeforeRoll(message)) return true;
 	return [...(root?.querySelectorAll?.(".stonetop-picklist-item") ?? [])]
 		.filter(item => belongsToMessage(item, message))
 		.some(item => isReducedBullet((item.querySelector("label") ?? item).textContent ?? "")
@@ -118,6 +199,65 @@ export function invokeCardChoosesConsequence(message, { total = null } = {}) {
 	if (message?.getFlag?.(SYSTEM_ID, "move") !== INVOKE_THE_SUN_GOD) return false;
 	if (message.getFlag(SYSTEM_ID, TEN_PLUS_FLAG)) return true;
 	return Number.isFinite(total) && total >= 7;
+}
+
+/** How many holy relic uses a card has had: a count, or the old one-per-card `true` as one. */
+export function holyRelicsSpent(message) {
+	const spent = message?.getFlag?.(SYSTEM_ID, HOLY_RELIC_FLAG);
+	return spent === true ? 1 : Math.max(0, Math.trunc(Number(spent)) || 0);
+}
+
+/**
+ * What a holy relic can still stand in for on an Invoke card: `list`, how many of the player's own
+ * picks from the list are left to replace, and `prePick`, whether the Empowered consequence is still
+ * there to replace. The player owes 1 pick on a 10+ (the Wielder's card included) and 1 on a 7-9 (the
+ * GM's is the GM's); a Glorious Servant's 10+ owes none ("you need not choose a consequence"), and a
+ * 6- has no list. The Empowered consequence is owed on every result.
+ *
+ * @param {ChatMessage} message
+ * @param {Actor} actor  the card's speaker, asked whether Glorious Servant is learned
+ * @param {{total?: number|null}} [roll]  the card's (shifted) total, when it has one
+ * @returns {{list: number, prePick: boolean}}
+ */
+export function holyRelicOffers(message, actor, { total = null } = {}) {
+	if (message?.getFlag?.(SYSTEM_ID, "move") !== INVOKE_THE_SUN_GOD) return { list: 0, prePick: false };
+	const tenPlus = !!message.getFlag(SYSTEM_ID, TEN_PLUS_FLAG) || (Number.isFinite(total) && total >= 10);
+	const hit = tenPlus || (Number.isFinite(total) && total >= 7);
+	const owed = !hit ? 0 : tenPlus && ownsLearnedMoveNamed(actor, GLORIOUS_SERVANT) ? 0 : 1;
+	// The spent count covers both kinds; the one on the Empowered consequence is told by its record.
+	const onList = Math.max(0, holyRelicsSpent(message) - (prePickReplaced(message) ? 1 : 0));
+	return { list: Math.max(0, owed - onList), prePick: prePickPending(message) };
+}
+
+/**
+ * Mark one holy relic use on an Invoke card, for one of the player's picks from the list or (with
+ * `prePick`) for the Empowered consequence, which it cancels. One at a time per card, re-reading
+ * holyRelicOffers when its turn comes, and latched on the message FIRST (the count raised, and the
+ * Empowered record marked), so a second click or another client cannot spend the same one twice.
+ * `spend()` marks the use on the character and answers falsy when there was none left, which gives
+ * the card back, as a throw does. Answers whether a use was marked.
+ */
+export function settleHolyRelic(message, actor, { prePick = false, total = null, spend } = {}) {
+	return inCardTurn(message, async () => {
+		const offers = holyRelicOffers(message, actor, { total });
+		if (prePick ? !offers.prePick : offers.list <= 0) return false;
+		const before = holyRelicsSpent(message);
+		const giveBack = async () => {
+			await message.setFlag(SYSTEM_ID, HOLY_RELIC_FLAG, before);
+			// Written as `false`, not as an empty record: a flag write merges, and {} would keep the `true`.
+			if (prePick) await writeRecord(message, PRE_PICK_RECORD, { relic: false });
+		};
+		await message.setFlag(SYSTEM_ID, HOLY_RELIC_FLAG, before + 1);
+		if (prePick) await writeRecord(message, PRE_PICK_RECORD, { relic: true });
+		try {
+			if (await spend?.()) return true;
+		} catch (err) {
+			await giveBack().catch(e => console.error("Stonetop | could not give back the holy relic latch", e));
+			throw err;
+		}
+		await giveBack();
+		return false;
+	});
 }
 
 /**
@@ -286,6 +426,139 @@ export async function settleInvokeTick(message, actor, { index, kind, checked })
 	return false;
 }
 
+// -- The reduced effect of a short-lived Invocation -------------------------------------------------
+
+/** What the reduced effect did to `slug` on this card: "ended", "kept", or "" for nothing yet. */
+export function reducedOutcome(message, slug) {
+	const value = message?.getFlag?.(SYSTEM_ID, REDUCED_FLAG)?.[slug];
+	return value === "ended" || value === "kept" ? value : "";
+}
+
+/**
+ * Whether a LATER Invoke card of the same character names `slug`: then what is running is that card's
+ * Invocation, not this one's, and an old card's reduced effect must not end it. Reads the chat log in
+ * order (core keeps it in creation order); a card not found in it has nothing after it.
+ */
+export function laterCardNames(message, slug, messages = globalThis.game?.messages?.contents ?? []) {
+	const list = [...messages];
+	const at = list.findIndex(m => m?.id === message?.id);
+	if (at < 0) return false;
+	const actorId = message?.speaker?.actor;
+	return list.slice(at + 1).some(m => m?.speaker?.actor === actorId
+		&& m?.getFlag?.(SYSTEM_ID, "move") === INVOKE_THE_SUN_GOD && cardInvocations(m).includes(slug));
+}
+
+/** The card's Invocations its reduced effect can still act on (ongoing-invocation.js#reducedEndings). */
+function reducedPending(message, actor) {
+	const model = actor?.typedActor;
+	if (!model) return { brief: [], ask: [] };
+	const slugs = cardInvocations(message).filter(s => !reducedOutcome(message, s) && !laterCardNames(message, s));
+	return reducedEndings({ current: model.invocationState, slugs });
+}
+
+/**
+ * Record what the reduced effect did to one Invocation, latched on the card FIRST so a re-render, a
+ * second tick or another client cannot end it twice, and end it when that is the outcome. A "light is
+ * snuffed" stamp on it is paid as any ending pays it (StonetopCharacter#setInvocationState), and said.
+ */
+function settleReducedOutcome(message, actor, slug, outcome, buttons = []) {
+	return withCardLatch(message, `${REDUCED_FLAG}.${slug}`, outcome, buttons, async () => {
+		if (outcome !== "ended") return true;
+		const result = await actor.typedActor.endOngoingInvocation(slug);
+		if (result?.snuffed) {
+			await postMoveNote(actor, INVOKE_THE_SUN_GOD, format("stonetop.invocations.reducedSnuffed",
+				{ name: actor.name, invocations: labelsOf(result.ended?.length ? result.ended : [slug]) }));
+		}
+		return true;
+	});
+}
+
+/**
+ * The reduced effect, once it lands on a card (its bullet ticked, or the Empowered consequence chosen
+ * before the roll). A REDUCED_IS_BRIEF Invocation (Blinding Light, Cold Light of Day) still running
+ * from this card is over at once, so its slot is ended now rather than blocking the next Invocation
+ * until End it; only its own slot, so the other half of a Burn Twice, or the empowered Dancing Light
+ * it went through, keeps going (resolveInvocationEnd). A REDUCED_GM_CHOICE one waits on the card's
+ * buttons (settleReducedChoice). Unticking the bullet afterwards does NOT start the Invocation again:
+ * it is over, and using it again is a new Invocation. Answers whether anything ended.
+ */
+export async function settleReducedEffect(message, actor) {
+	let ended = false;
+	for (const slug of reducedPending(message, actor).brief) {
+		ended = (await settleReducedOutcome(message, actor, slug, "ended")) || ended;
+	}
+	return ended;
+}
+
+/**
+ * Moth to a Flame's reduced effect as the GM chose it: `end` ("it lasts only briefly") ends it, and
+ * otherwise ("only some of the named creatures are affected") it keeps going. Once per Invocation per
+ * card. Answers whether the choice was recorded.
+ */
+export async function settleReducedChoice(message, actor, slug, end, { buttons = [] } = {}) {
+	if (!reducedPending(message, actor).ask.includes(slug)) return false;
+	return settleReducedOutcome(message, actor, slug, end ? "ended" : "kept", buttons);
+}
+
+// The printed brevity of each REDUCED_IS_BRIEF Invocation, for the card's note.
+const REDUCED_ENDED_KEYS = Object.freeze({
+	"blinding-light": "stonetop.invocations.reducedEndedBlindingLight",
+	"cold-light-of-day": "stonetop.invocations.reducedEndedColdLight",
+});
+
+/** What the reduced effect did on this card, and the GM's two buttons while a choice is open. */
+function reducedPanel(doc, message, actor, usable, reduced) {
+	const els = [];
+	const { ask } = reduced ? reducedPending(message, actor) : { ask: [] };
+	const note = (key, invocation) => readout(doc, format(key, { invocation }), "stonetop-invoke-reduced");
+	for (const slug of cardInvocations(message)) {
+		const invocation = labelsOf([slug]);
+		const outcome = reducedOutcome(message, slug);
+		if (outcome === "kept") els.push(note("stonetop.invocations.reducedMothKept", invocation));
+		else if (outcome === "ended") {
+			els.push(note(REDUCED_GM_CHOICE.has(slug) ? "stonetop.invocations.reducedMothEnded"
+				: REDUCED_ENDED_KEYS[slug] ?? "stonetop.invocations.reducedEnded", invocation));
+		} else if (ask.includes(slug)) {
+			els.push(note("stonetop.invocations.reducedMothAsk", invocation));
+			// The debility row's skin: a row of small buttons under the line.
+			els.push(buttonPanel(doc, "stonetop-invoke-consequence stonetop-invoke-reduced stonetop-invoke-debility",
+				[["end", "stonetop.invocations.reducedMothEnd"], ["keep", "stonetop.invocations.reducedMothKeep"]].map(([choice, key]) => ({
+					className: "stonetop-invoke-debility-btn stonetop-invoke-reduced-btn", label: localize(key), data: { choice, slug },
+				})),
+				usable,
+				(btn, buttons) => inCardTurn(message, () => settleReducedChoice(message, actor, slug, btn.dataset.choice === "end", { buttons }))
+					.catch(err => console.error("Stonetop | settling the reduced Invocation failed", err))));
+		}
+	}
+	return els;
+}
+
+/**
+ * Draw the reduced effect's notes and buttons: on the Empowered consequence's line when that is what
+ * reduced it, else under the list's reduced bullet. Safe to call again on the same card: ours go first.
+ */
+function drawReduced(root, message, { doc, actor, usable }) {
+	const prePick = reducedBeforeRoll(message);
+	const lines = [...(root.querySelectorAll?.(".stonetop-pre-pick") ?? [])].filter(el => belongsToMessage(el, message));
+	const bullets = [...(root.querySelectorAll?.(".stonetop-picklist-item") ?? [])]
+		.filter(item => belongsToMessage(item, message) && isReducedBullet((item.querySelector("label") ?? item).textContent ?? ""));
+	for (const el of [...lines, ...bullets]) el.querySelectorAll(".stonetop-invoke-reduced").forEach(r => r.remove());
+	const targets = prePick && lines.length ? lines : bullets;
+	const reduced = invokeCardReduced(root, message);
+	for (const target of targets) {
+		for (const el of reducedPanel(doc, message, actor, usable, reduced)) target.appendChild(el);
+	}
+}
+
+/**
+ * The client that pays a reduced effect nobody ticked (the Empowered consequence chosen before the
+ * roll) on render: the card's author, the one who rolled it, so the table's other clients that may
+ * write the card do not race it. A message that cannot say is its own author.
+ */
+function authoredHere(message) {
+	return typeof message?.isAuthor === "boolean" ? message.isAuthor : true;
+}
+
 /** The consequence rows on one card: `{item, box, index, kind}`. */
 function consequenceRows(root, message) {
 	return [...(root?.querySelectorAll?.(".stonetop-picklist-item") ?? [])]
@@ -306,6 +579,91 @@ function readout(doc, text, extra = "") {
 }
 
 /**
+ * A row of small buttons in a `panelClass` div, one per `{className, label, data}` spec (`data` goes on
+ * its dataset), disabled unless `usable`, and then each click hands `onClick` the button and the row.
+ */
+function buttonPanel(doc, panelClass, specs, usable, onClick) {
+	const panel = doc.createElement("div");
+	panel.className = panelClass;
+	const buttons = specs.map(({ className, label, data }) => {
+		const btn = doc.createElement("button");
+		btn.type = "button";
+		btn.className = className;
+		Object.assign(btn.dataset, data);
+		btn.textContent = label;
+		btn.disabled = !usable;
+		return btn;
+	});
+	for (const btn of buttons) {
+		if (usable) btn.addEventListener("click", () => onClick(btn, buttons));
+		panel.appendChild(btn);
+	}
+	return panel;
+}
+
+/** The debility buttons for one record (a ticked bullet's, or the Empowered consequence's). */
+function debilityPanel(doc, message, actor, index, usable) {
+	return buttonPanel(doc, "stonetop-invoke-consequence stonetop-invoke-debility",
+		invokeDebilityChoices(actor).map(choice => ({ className: "stonetop-invoke-debility-btn", label: choice.label, data: { choice: choice.key } })),
+		usable,
+		(btn, buttons) => settleInvokeDebility(message, actor, index, btn.dataset.choice, { buttons })
+			.catch(err => console.error("Stonetop | marking the Invoke debility failed", err)));
+}
+
+/** What a debility record says was marked. */
+function markedReadout(doc, actor, record) {
+	const name = record.marked === CIRCLE_CHOICE
+		? localize("stonetop.invocations.consequenceCircleName")
+		: actor?.typedActor?.debilityChoices?.find(d => d.key === record.marked)?.name ?? record.marked;
+	return readout(doc, format("stonetop.invocations.consequenceMarked", { debility: name }));
+}
+
+/**
+ * The Empowered consequence's line (move-pick-bonuses.js's `.stonetop-pre-pick`), taken on every
+ * result: the debility's buttons, a button for the snuffing and for the sun (the settles a ticked
+ * bullet runs, under PRE_PICK_RECORD), the reduced effect said, or what a holy relic left of it.
+ */
+function wirePrePick(root, message, { doc, actor, usable, slugs }) {
+	const kind = cardEmpoweredConsequence(message);
+	const lines = [...(root.querySelectorAll?.(".stonetop-pre-pick") ?? [])].filter(el => belongsToMessage(el, message));
+	if (!kind || !lines.length) return;
+	const record = recordFor(message, PRE_PICK_RECORD);
+	for (const line of lines) {
+		line.querySelectorAll(".stonetop-invoke-consequence").forEach(el => el.remove());
+		if (record.relic) {
+			line.appendChild(readout(doc, localize("stonetop.invocations.prePickRelic")));
+			continue;
+		}
+		if (kind === CONSEQUENCE.REDUCED) {
+			line.appendChild(readout(doc, slugs.length
+				? format("stonetop.invocations.prePickReduced", { invocations: labelsOf(slugs) })
+				: localize("stonetop.invocations.prePickReducedUnnamed")));
+		} else if (kind === CONSEQUENCE.DEBILITY) {
+			line.appendChild(record.marked ? markedReadout(doc, actor, record) : debilityPanel(doc, message, actor, PRE_PICK_RECORD, usable));
+		} else if (kind === CONSEQUENCE.SNUFF && (record.snuffed || "stamped" in record)) {
+			line.appendChild(readout(doc, record.snuffed ? localize("stonetop.invocations.consequenceSnuffedNote")
+				: format("stonetop.invocations.consequenceSnuffStamped", { invocations: labelsOf(record.stamped ?? []) })));
+		} else if (kind === CONSEQUENCE.SUN && "added" in record) {
+			line.appendChild(readout(doc, format("stonetop.invocations.consequenceNeedsSun", { invocations: labelsOf(slugs) })));
+		} else if (!slugs.length) {
+			line.appendChild(readout(doc, localize("stonetop.invocations.consequenceUnnamed")));
+		} else {
+			const btn = doc.createElement("button");
+			btn.type = "button";
+			btn.className = "stonetop-invoke-consequence stonetop-invoke-pre-pick-btn";
+			btn.textContent = localize(kind === CONSEQUENCE.SNUFF ? "stonetop.invocations.prePickSnuffButton" : "stonetop.invocations.prePickSunButton");
+			btn.disabled = !usable;
+			if (usable) btn.addEventListener("click", () => {
+				btn.disabled = true;
+				inCardTurn(message, () => settleInvokeTick(message, actor, { index: PRE_PICK_RECORD, kind, checked: true }))
+					.catch(err => { btn.disabled = false; console.error("Stonetop | settling the Empowered consequence failed", err); });
+			});
+			line.appendChild(btn);
+		}
+	}
+}
+
+/**
  * Wire an Invoke the Sun God card's consequence bullets (dispatched from stonetop.js
  * renderChatMessageHTML, AFTER the picks pass that restores each box's tick). Whoever can write both
  * the card and the character acts (chat.js#canRewriteCard); everyone else sees what was done.
@@ -314,11 +672,23 @@ export function wireInvokeConsequences(message, html) {
 	const root = html?.[0] ?? html;
 	if (!root?.querySelectorAll || message?.getFlag?.(SYSTEM_ID, "move") !== INVOKE_THE_SUN_GOD) return;
 	const rows = consequenceRows(root, message);
-	if (!rows.length) return;
 	const doc = root.ownerDocument ?? globalThis.document;
 	const actor = speakerActor(message);
 	const usable = canRewriteCard(message, actor);
 	const slugs = cardInvocations(message);
+	wirePrePick(root, message, { doc, actor, usable, slugs });
+	const ctx = { doc, actor, usable };
+	drawReduced(root, message, ctx);
+	// Pay the reduced effect in the card's turn, then redraw its notes and buttons off what it wrote.
+	const settleReduced = () => inCardTurn(message, () => settleReducedEffect(message, actor))
+		.then(() => drawReduced(root, message, ctx))
+		.catch(err => console.error("Stonetop | settling the reduced Invocation failed", err));
+	// Reduced before the roll: nothing will be ticked, so the card's author pays it as the card is drawn.
+	// The latch (REDUCED_FLAG) makes every later render a no-op.
+	if (usable && authoredHere(message) && reducedBeforeRoll(message) && reducedPending(message, actor).brief.length) {
+		settleReduced();
+	}
+	if (!rows.length) return;
 
 	for (const { item, box, index, kind } of rows) {
 		// Ours out first: a re-render patches the same row.
@@ -326,31 +696,11 @@ export function wireInvokeConsequences(message, html) {
 		const record = recordFor(message, index);
 		if (kind === CONSEQUENCE.DEBILITY) {
 			if (record.marked) {
-				const name = record.marked === CIRCLE_CHOICE
-					? localize("stonetop.invocations.consequenceCircleName")
-					: actor?.typedActor?.debilityChoices?.find(d => d.key === record.marked)?.name ?? record.marked;
-				item.appendChild(readout(doc, format("stonetop.invocations.consequenceMarked", { debility: name })));
+				item.appendChild(markedReadout(doc, actor, record));
 				continue;
 			}
-			const panel = doc.createElement("div");
-			panel.className = "stonetop-invoke-consequence stonetop-invoke-debility";
+			const panel = debilityPanel(doc, message, actor, index, usable);
 			panel.hidden = !box.checked;
-			const buttons = invokeDebilityChoices(actor).map(choice => {
-				const btn = doc.createElement("button");
-				btn.type = "button";
-				btn.className = "stonetop-invoke-debility-btn";
-				btn.dataset.choice = choice.key;
-				btn.textContent = choice.label;
-				btn.disabled = !usable;
-				return btn;
-			});
-			for (const btn of buttons) {
-				if (usable) btn.addEventListener("click", () => {
-					settleInvokeDebility(message, actor, index, btn.dataset.choice, { buttons })
-						.catch(err => console.error("Stonetop | marking the Invoke debility failed", err));
-				});
-				panel.appendChild(btn);
-			}
 			item.appendChild(panel);
 		} else if (kind === CONSEQUENCE.SNUFF) {
 			if (record.snuffed) item.appendChild(readout(doc, localize("stonetop.invocations.consequenceSnuffedNote")));
@@ -378,6 +728,10 @@ export function wireInvokeConsequences(message, html) {
 				inCardTurn(message, () => settleInvokeTick(message, actor, { index: row.index, kind: row.kind, checked: row.box.checked }))
 					.catch(err => console.error("Stonetop | settling an Invoke consequence failed", err));
 			}
+			// The reduced effect: a short-lived Invocation ends now, Moth to a Flame's ask shows or hides.
+			// Unticked, nothing is undone (settleReducedEffect).
+			drawReduced(root, message, ctx);
+			if (usable && invokeCardReduced(root, message)) settleReduced();
 		});
 	}
 }
@@ -432,14 +786,16 @@ export function wireWielderInvoke(message, html) {
 
 /**
  * The body of the "as if you rolled a 10+" card: Invoke the Sun God's own consequence list, tickable,
- * choose 1 (the 10+'s count), with whatever the roller brings to that count laid over it (Empowered's
- * extra consequence, when `context.empowered`; move-pick-bonuses.js). `description` is the move's
- * printed text.
+ * choose 1 (the 10+'s count), with whatever the roller brings to it laid over it (Glorious Servant's
+ * "need not choose", and the Empowered consequence chosen before, `context.empoweredConsequence`, as a
+ * fixed line off the list; move-pick-bonuses.js). The lead says the count the card really asks for.
+ * `description` is the move's printed text.
  */
 export function invokeTenPlusCardBody(description, actor, context = null) {
-	const lead = `<p>${escHtml(localize("stonetop.invocations.tenPlusLead"))}</p>`;
+	const servant = ownsLearnedMoveNamed(actor, GLORIOUS_SERVANT);
+	const lead = `<p>${escHtml(localize(servant ? "stonetop.invocations.tenPlusLeadServant" : "stonetop.invocations.tenPlusLead"))}</p>`;
 	const list = firstOptionList(String(description ?? ""));
-	if (!list) return lead;
+	if (!list) return withMovePickBonuses(lead, actor, INVOKE_THE_SUN_GOD, context);
 	const items = list.items.map((inner, i) => pickListItem(inner, i)).join("");
 	return withMovePickBonuses(`${lead}<ul class="stonetop-picklist"${pickListStampAttrs({ success: 1 })}>${items}</ul>`,
 		actor, INVOKE_THE_SUN_GOD, context);

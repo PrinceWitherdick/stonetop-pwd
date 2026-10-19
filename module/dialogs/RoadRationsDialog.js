@@ -1,9 +1,11 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
-import { campVitalsFor, isUnliving, packResources, partyFollowerMouths } from "../camp/camp-store.js";
+import {
+	campVitalsFor, crewSuppliesOf, isUnliving, mealSpendTarget, packResources, partyCrewMouths, partyFollowerMouths,
+} from "../camp/camp-store.js";
 import { count, purseSpendUpdate } from "../camp/camp-rules.js";
 import { partyFollowersOf } from "../actors/character/follower-roster.js";
 import { postMoveToChat } from "../utils/chat.js";
-import { roadLedger, roadSummaryRows, spendWords, usesWord } from "../utils/road-rations.js";
+import { crewRoadText, roadLedger, roadSummaryRows, spendWords, usesWord } from "../utils/road-rations.js";
 
 /** The ledger's name for the write, so the character's history says where the food went. */
 const ON_THE_ROAD = "On the road";
@@ -57,7 +59,8 @@ export class RoadRationsDialog extends StonetopDialog {
 	/**
 	 * Each PC as road-rations.js reads them, from their sheet. Who carries a mess kit and how many
 	 * followers travel with them come from the same reads Make Camp makes (camp-store.js), so the
-	 * two never count a party two ways.
+	 * two never count a party two ways; so do how many of those followers are the crew's and what the
+	 * crew's own supplies hold, which pay the crew's mouths first (road-rations.js).
 	 */
 	async _readMembers() {
 		return Promise.all(this._actors.map(async actor => {
@@ -72,6 +75,8 @@ export class RoadRationsDialog extends StonetopDialog {
 				unliving:  isUnliving(actor),
 				messKit:   !!vitals?.messKit,
 				followers: partyFollowerMouths(actor, party),
+				crewMouths: partyCrewMouths(actor, party),
+				crew:      { held: crewSuppliesOf(actor).held },
 				resources: packResources(actor),
 			};
 		}));
@@ -108,6 +113,8 @@ export class RoadRationsDialog extends StonetopDialog {
 				...r,
 				changed: this._paid[r.actorId] !== undefined,
 				spend:   r.pays ? spendWords(r.spend) : "",
+				// The crew's own supplies pay the crew by themselves: a sentence, never a figure to set.
+				crewText: crewRoadText(r),
 			})),
 			bill:      ledger.bill,
 			billText:  ledger.packAnimal
@@ -134,22 +141,19 @@ export class RoadRationsDialog extends StonetopDialog {
 	}
 
 	/**
-	 * Spend what the ledger says, pack by pack, from what each pack holds NOW (camp-rules.js
-	 * #purseSpendUpdate), and tell the table. Days with a laden pack animal or cart cost nothing and
-	 * write nothing, but the card still says the days went by.
+	 * Spend what the ledger says, pack by pack and the crew's supplies with them, from what each holds
+	 * NOW (camp-rules.js#purseSpendUpdate, through the same target Make Camp pays from,
+	 * camp-store.js#mealSpendTarget), and tell the table. Days with a laden pack animal or cart cost
+	 * nothing and write nothing, but the card still says the days went by.
 	 */
 	async _apply() {
 		const ledger = this._ledger();
 		const byId = new Map(this._actors.map(a => [a.id, a]));
 		// Each pack is its own actor, so the writes go out together.
 		await Promise.all(ledger.rows.map(row => {
-			const actor = row.pays ? byId.get(row.actorId) : null;
-			const character = actor?.typedActor;
-			if (!character) return null;
-			const { update } = purseSpendUpdate(row.spend, {
-				resources:    packResources(actor, { carriedOnly: false }),
-				resourceData: (slug, n) => character.inventoryResourceData(slug, n),
-			});
+			const actor = row.pays || row.crewPays ? byId.get(row.actorId) : null;
+			if (!actor?.typedActor) return null;
+			const { update } = purseSpendUpdate([...row.crewSpend, ...row.spend], mealSpendTarget(actor));
 			return Object.keys(update).length ? actor.update(update, { stonetopMove: ON_THE_ROAD }) : null;
 		}));
 		postMoveToChat(null, "Days on the road", roadSummaryRows(ledger));
