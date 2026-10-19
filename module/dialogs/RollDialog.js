@@ -545,18 +545,19 @@ export function promptDamage({
 			title: attacker ? `Rolling damage for ${attacker}` : "Rolling damage",
 			content: `<form class="stonetop-roll-form stonetop-damage-form">
 				${modePickerHtml("How are you rolling this damage?", untouched.rollMode)}${seedLine}${offerLines}
-				<p class="stonetop-roll-prompt">Add to the damage (an arcanum's +1, a move's extra dice, a GM's call).</p>
+				<p class="stonetop-roll-prompt stonetop-damage-adjust-prompt">Add to the damage
+					<span class="stonetop-damage-adjust-hint">an arcanum's +1, a move's extra dice, a GM's call</span></p>
 				<!-- Two labels then two controls, in that order: the row is a 2x2 grid, so the labels
 				     share a line and the controls share a line whatever either one measures. The
 				     labels are spans with matching aria-labels on the controls, rather than real
 				     label elements, because two of these windows can be open at once (two sheets,
 				     two clicks) and the id a label points at would then be in the document twice. -->
 				<div class="stonetop-damage-adjust">
-					<span class="stonetop-damage-field-label">Damage</span>
 					<span class="stonetop-damage-field-label">Extra dice</span>
-					${stepperHtml("Damage")}
+					<span class="stonetop-damage-field-label">Damage</span>
 					<input type="text" name="extraDice" class="stonetop-damage-extra-dice" value="" placeholder="1d6"
 					       aria-label="Extra dice" autocomplete="off" spellcheck="false">
+					${stepperHtml("Damage")}
 				</div>
 				<p class="stonetop-damage-preview" aria-live="polite">Rolling <strong>${escHtml(previewFormula(formula, untouched))}</strong></p>
 			</form>`,

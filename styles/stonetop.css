@@ -13094,48 +13094,6 @@ button.stonetop-rapport-chip:focus-visible {
 }
 .steading-player-reminders .stonetop-reminder-chips { margin: 0; }
 
-/* The Notes tab's list of typed reminders, above the free notes. */
-.stonetop-reminders {
-	margin: 0 0 12px;
-}
-.stonetop-reminders-heading {
-	margin: 0 0 2px;
-	border: none;
-	font-size: var(--st-fs-md, 1.05em);
-}
-.stonetop-reminders-hint {
-	margin: 0 0 6px;
-	font-size: var(--st-fs-xs);
-	color: var(--st-text-secondary);
-}
-.stonetop-reminders-list {
-	margin: 6px 0;
-	padding: 0;
-	list-style: none;
-}
-.stonetop-reminders-row {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 2px 0;
-}
-.stonetop-reminders-row > i { opacity: 0.7; }
-.stonetop-reminders-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.stonetop-reminders .stonetop-reminder-remove {
-	flex: 0 0 auto;
-	width: auto;
-	margin: 0;
-	padding: 2px 6px;
-	line-height: 1;
-}
-.stonetop-reminders-add {
-	display: flex;
-	gap: 6px;
-	align-items: center;
-}
-.stonetop-reminders-add .stonetop-reminder-input { flex: 1 1 auto; min-width: 0; }
-.stonetop-reminders-add .stonetop-reminder-add-btn { flex: 0 0 auto; width: auto; }
-
 /* What a We Happy Few card gave, and the die a damage card took: a line of the card's own text.
    So is who a "Give advantage to..." card gave it to (give-advantage-flow.js). */
 .stonetop-inspiration-readout,
@@ -31041,23 +30999,18 @@ li.question-bullet::before {
 }
 
 /* God / lore proper nouns in the character-creation prompts (Introductions dialog),
-   wrapped by wrapLoreTerms(). A dotted underline signals the hover summary without
-   forcing weight, since some sit inside an authored <strong> and some don't. */
+   wrapped by wrapLoreTerms(). Bold signals the hover summary. */
 .stonetop-lore-term[data-tooltip] {
 	font-weight: bold;
 	cursor: help;
-	text-decoration: underline dotted;
-	text-underline-offset: 2px;
 }
 
 /* "debility" / "debilities" in move and prose text — applied via
-   markDebilityTooltips(). Bold draws the eye to the keyword; the dotted underline
-   signals the hover explanation of the three character debilities. */
+   markDebilityTooltips(). Bold signals the hover explanation of the three
+   character debilities. */
 .stonetop-debility-term[data-tooltip] {
 	font-weight: bold;
 	cursor: help;
-	text-decoration: underline dotted;
-	text-underline-offset: 2px;
 }
 
 /* Creature cross-links on bestiary sheets — hover for the concept, click to
@@ -44907,14 +44860,13 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-weight: bold;
 	color: inherit;
 	text-align: left;
-	text-decoration: underline dotted;
-	text-underline-offset: 2px;
+	text-decoration: none;
 	cursor: pointer;
 }
 
 /* Core paints a background on button hover, which on a run of text inside a paragraph
    reads as a highlighter mark. Taken back off, and the answer to the pointer is the
-   underline going solid and the ink coming up out of muted instead. */
+   ink coming up out of muted instead. */
 .stonetop .stonetop-book-cite:hover,
 .stonetop .stonetop-book-cite:focus,
 .stonetop-fight-tracker .stonetop-book-cite:hover,
@@ -44925,7 +44877,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .stonetop-book-cite:hover,
 .stonetop-fight-tracker .stonetop-book-cite:hover {
 	color: var(--st-text);
-	text-decoration: underline solid;
 }
 .stonetop .stonetop-book-cite:focus-visible,
 .stonetop-fight-tracker .stonetop-book-cite:focus-visible {
@@ -50638,7 +50589,14 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    RIGHT, the body's reserved `scrollbar-gutter`, for a bar this tab never draws (the tab clips and
    the panel scrolls). Dropped so the timeline meets the sidebar's rule. The sidebar's collapse
    handle is parked in that gutter (`left: -15px`), so it now sits over the toolbar's right end,
-   and the toolbar's end padding grows by the handle's 15px to keep the Down/Across pair clear. */
+   and the toolbar's end padding grows by the handle's 15px to keep the Down/Across pair clear.
+
+   ⚠ BUT THE TOOLBAR KEEPS THE GUTTER'S WIDTH, as padding (user, 2026-10-19). Every other tab is laid
+   out with the 10px strip in place, so with it gone the toolbar's row came out 10px wider than the
+   sheet it sits in reads everywhere else and its controls jumped sideways as the width changed on the
+   way in and out of the tab. Only the toolbar: the column under it still runs to the sidebar's rule.
+   10px is core's `scrollbar-width: thin` (every element, foundry2.css), the same strip the steading's
+   note measures; a literal because no CSS can read a gutter's width. */
 .pbta.sheet.actor.character .stonetop-sheet-layout:has(> .sheet-body > .tab.timeline.active) {
 	margin-left: -8px;
 }
@@ -50648,7 +50606,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 }
 
 .pbta.sheet.actor.character .tab.timeline .stonetop-timeline-toolbar {
-	padding-right: calc(12px + 15px);
+	padding-right: calc(12px + 15px + 10px);
 }
 
 /* ⚠ THE POP-OUT WINDOW HAS NO PADDING, as the relationship map's has none (user, 2026-10-03). Core's

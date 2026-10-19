@@ -6,7 +6,8 @@
 // steading's move list (homestead-moves.js), so Muster, Pull Together, Deploy, the improvements'
 // own moves and any move added later earn it. But the roll is made on the STEADING, which has no XP, so nothing knows whose it
 // is: the miss's card carries a "Mark XP" button for the rolling user's own character, and a second to
-// choose somebody else (a GM, who plays nobody, always chooses).
+// choose somebody else. A viewer with no character of their own (a GM, who plays nobody) gets the one
+// button, and it asks, since both would only ask.
 //
 // The mark is the ordinary miss receipt, Undo and all, tied to the card (roll-engine.js#markMissXpByChoice)
 // so a Shift that lifts the card off the miss takes it back and offers the buttons again. It is written on
@@ -98,7 +99,8 @@ registerRollCardAction(STEADING_MISS_XP_ACTION, handleSteadingMissXp);
 
 /**
  * Wire a steading miss's XP buttons (stonetop.js renderChatMessageHTML). Once marked, the row says for whom;
- * only the user who rolled, or a GM, gets the buttons. Safe on every render.
+ * only the user who rolled, or a GM, gets the buttons, and one with no character of their own gets only
+ * "Mark XP", which asks. Safe on every render.
  */
 export function wireSteadingMissXp(message, html, { pick = pickPersonOnMap } = {}) {
 	const root = html?.[0] ?? html;
@@ -112,6 +114,10 @@ export function wireSteadingMissXp(message, html, { pick = pickPersonOnMap } = {
 	}
 	const user = globalThis.game?.user;
 	if (!canUserWriteCard(message, user, { whenUnknown: !!user?.isGM })) { row.remove(); return; }
+	if (!defaultSteadingXpActor(user)) {
+		row.querySelector(`[data-steading-xp="pick"]`)?.remove();
+		row.querySelector(`[data-steading-xp="mine"]`)?.setAttribute("data-tooltip", localize(`${KEY}.askTooltip`));
+	}
 	wireChooseThenWrite([...row.querySelectorAll("[data-steading-xp]")], {
 		what: "Could not mark a steading miss's XP",
 		choose: async btn => (btn.dataset.steadingXp === "mine" ? defaultSteadingXpActor(user) : null)

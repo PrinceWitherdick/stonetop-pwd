@@ -22,6 +22,7 @@ import { escHtml } from "../../utils/strings.js";
 import { canRewriteCard, moveChatCard } from "../../utils/chat.js";
 import { inCardTurn } from "../../utils/card-queue.js";
 import { pressRollCard, writeCardRoll } from "../../utils/roll-card-writer.js";
+import { rollRewrite } from "../../utils/roll-rewrite.js";
 import { askWithButtons } from "../../utils/ask-with-buttons.js";
 import { contentElement } from "../../utils/dialogv2-content.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
@@ -141,11 +142,24 @@ export function giveItAllAtDeathsDoor(message, actor, costKey, deps = {}) {
 	});
 }
 
+/**
+ * "You get hurt"'s 2d4 at the hero, through `hurt` (attack-flow.js#rollOptionDamage). Run OUTSIDE the card's
+ * turn and on the client of whoever gave it their all: a Marshal's Battlefield Grace opens a damage window
+ * there, which would otherwise hold the card for every other press, and open on the GM's client for a player's
+ * press. That window closed rolls nothing (null), so it says the 2d4 is still owed.
+ */
+export async function rollGiveItAllHurt(actor, hurt = rollRewrite()?.hurt) {
+	if (!hurt) return;
+	if ((await hurt(actor)) === null) globalThis.ui?.notifications?.warn?.(localize(`${KEY}.hurtNotRolled`));
+}
+
 // The lift itself, for both of the above: `allowed` is asked in the card's turn, so two presses cannot both land.
-function liftInCardTurn(message, actor, costKey, { shiftRoll, cardFlavor, afterShift = null, hurt = null } = {}, allowed) {
+// The hurt cost's 2d4 is rolled once the turn is over (rollGiveItAllHurt), and only with a `hurt` to roll it:
+// a relay from another client passes none and leaves it to the presser.
+async function liftInCardTurn(message, actor, costKey, { shiftRoll, cardFlavor, afterShift = null, hurt = null } = {}, allowed) {
 	const cost = costOf(costKey);
-	if (!cost) return Promise.resolve(false);
-	return inCardTurn(message, async () => {
+	if (!cost) return false;
+	const given = await inCardTurn(message, async () => {
 		if (!allowed()) return false;
 		const record = message.getFlag?.(SYSTEM_ID, ROLLED_FLAG) ?? null;
 		const from = message.rolls.at(0).total;
@@ -162,9 +176,10 @@ function liftInCardTurn(message, actor, costKey, { shiftRoll, cardFlavor, afterS
 			speaker: globalThis.ChatMessage.getSpeaker?.({ actor }),
 			...(Array.isArray(message.whisper) && message.whisper.length ? { whisper: [...message.whisper] } : {}),
 		});
-		if (cost.key === "hurt") await hurt?.(actor);
 		return true;
 	});
+	if (given && cost.key === "hurt") await rollGiveItAllHurt(actor, hurt);
+	return given;
 }
 
 /**
@@ -203,6 +218,8 @@ export function wireImpetuousYouth(message, html) {
 			const cost = await askGiveItAllCost(actor);
 			const given = cost && await pressRollCard(message, GIVE_IT_ALL_ACTION, { cost }, { timeout: GIVE_IT_ALL_TIMEOUT_MS });
 			if (!given) button.disabled = false;
+			// The writer lifts the card and leaves the 2d4 to this client (stonetop.js's GIVE_IT_ALL_ACTION).
+			else if (cost === "hurt") await rollGiveItAllHurt(actor);
 		} catch (err) {
 			console.error("Stonetop | giving it your all failed", err);
 			button.disabled = false;

@@ -128,6 +128,9 @@ describe("chips with an icon or a count trim their label element", () => {
 		".steading-improvement-filter > span",
 		".stonetop-catalog-filter > span",
 		".stonetop-invocation-chip-name",
+		".stonetop-inspiration-chip-name",
+		".stonetop-rapport-chip-name",
+		".stonetop-reminder-chip-text",
 		".stonetop .create-monster .cm-move-suggestion > span",
 		".stonetop-person-picker-chip-name",
 		".stonetop-timeline-entry-linked-text",
@@ -167,6 +170,35 @@ describe("chips with an icon or a count trim their label element", () => {
 		const { count: found, bare } = everyChipWrapped(readRepo(file), chipClass, tag);
 		expect(found, `expected ${count} ${chipClass} in ${file}`).toBe(count);
 		expect(bare).toEqual([]);
+	});
+
+	it("wraps every reminder chip's label, and keeps the row a gap-spaced list with no entry margin", () => {
+		const src = readRepo("templates/actor/partials/reminder-chips.hbs");
+		const chips = [...src.matchAll(/<li class="stonetop-reminder-chip [^"]*"[^>]*>([\s\S]*?)<\/li>/g)];
+		expect(chips.length).toBe(1);
+		expect(chips[0][1]).toContain('<span class="stonetop-reminder-chip-text">');
+		const row = declarations(MAIN, ".stonetop-reminder-chips");
+		expect(declared(row, "display")).toBe("flex");
+		expect(declared(row, "gap")).toBeTruthy();
+		expect(declared(declarations(MAIN, ".stonetop-reminder-chip"), "margin")).toBe("0");
+		expect(declared(declarations(MAIN, ".stonetop-reminder-chip-slot"), "margin")).toBe("0");
+	});
+
+	// The "+" and a typed chip's x are icon-only buttons: no label to trim, so neither may carry the trim
+	// a flex box would ignore. Their glyphs are sized by the chip's own icon rule (whole pixels, below).
+	it("keeps the reminder row's icon-only buttons untrimmed", () => {
+		for (const sel of [".stonetop-reminder-chips button.stonetop-reminder-chip--add", ".stonetop-reminder-chip button.stonetop-reminder-chip-remove"]) {
+			const body = declarations(MAIN, sel);
+			expect(body, `${sel} has no rule`).toBeTruthy();
+			expect(body).not.toMatch(TRIM);
+		}
+	});
+
+	// The browser draws an input's text centred on its line box, which Libre Caslon Text sets 0.048em above
+	// its cap band; no trim reaches it, so the box's padding carries the lift (measured 1.4px high at 1.5x without).
+	it("lifts the reminder input's typed words onto the cap band with its padding", () => {
+		const body = declarations(MAIN, ".stonetop-reminder-chips input.stonetop-reminder-chip--input");
+		expect(declared(body, "padding")).toBe("calc(1px + 0.048em) 9px calc(1px - 0.048em)");
 	});
 
 	it("wraps the roll card's kind badge label where it is built", () => {
@@ -210,6 +242,7 @@ describe("chip icons sit at a whole-pixel size", () => {
 		".stonetop-follower-dead-badge i",
 		".stonetop-timeline-entry-linked i",
 		".stonetop .stonetop-moves-level-notice-dismiss i",
+		".stonetop-reminder-chip i",
 	];
 
 	it.each(ICONS)("%s rounds its font-size to 1px", sel => {

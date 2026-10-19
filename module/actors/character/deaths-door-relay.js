@@ -267,7 +267,8 @@ export async function handleDeathsDoorBoostQuery(data, context = {}, deps = {}) 
 		} else if (data.boost === "giveAll") {
 			if (message.getFlag?.(SYSTEM_ID, GAVE_IT_ALL_FLAG)) return { applied: false, spent: true };
 			if (!actorTookBackground(actor, IMPETUOUS_YOUTH)) return { applied: false };
-			if (!(await giveItAllAtDeathsDoor(message, actor, data.cost, rewrite))) return { applied: false };
+			// No `hurt`: the dying player's window rolls the 2d4 on their client (DeathsDoorDialog#_boostViaGM).
+			if (!(await giveItAllAtDeathsDoor(message, actor, data.cost, { ...rewrite, hurt: null }))) return { applied: false };
 		} else {
 			return { applied: false };
 		}

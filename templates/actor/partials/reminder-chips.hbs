@@ -7,9 +7,17 @@
       plain readout: the gear tag's tooltip names the gear and quotes the book's gloss, a typed
       reminder's tooltip is its own text (the chip may be cut short). data-tooltip-text, not
       data-tooltip: core draws a plain data-tooltip as HTML, and these carry text a player typed. The gear's names ride the
-      chip itself unless `compact`, where only the tag shows. --}}
+      chip itself unless `compact`, where only the tag shows.
+
+      `reminderEditable` (the character header, for whoever may edit the sheet) is the only place a
+      reminder is written or struck: each typed chip gets an x (its `index` in system.reminders,
+      added by the sheet), and the row ends with a faint "+" chip that becomes a box to type one into
+      (StonetopCharacterSheet#_onReminderChipAdd). Gear chips have no x: they come and go with the gear. --}}
 <ul class="stonetop-reminder-chips{{#if compact}} stonetop-reminder-chips--compact{{/if}}" aria-label="{{localize "stonetop.reminders.listLabel"}}">
 	{{#each chips as |c|}}
-	<li class="stonetop-reminder-chip stonetop-reminder-chip--{{c.kind}}" data-tooltip-text="{{c.tooltip}}" data-tooltip-direction="UP"><i class="fas {{#if (eq c.kind "gear")}}fa-shirt{{else}}fa-thumbtack{{/if}}" aria-hidden="true"></i><span class="stonetop-reminder-chip-text">{{c.label}}{{#if c.detail}}{{#unless ../compact}} <span class="stonetop-reminder-chip-detail">({{c.detail}})</span>{{/unless}}{{/if}}</span></li>
+	<li class="stonetop-reminder-chip stonetop-reminder-chip--{{c.kind}}" data-tooltip-text="{{c.tooltip}}" data-tooltip-direction="UP"><i class="fas {{#if (eq c.kind "gear")}}fa-shirt{{else}}fa-thumbtack{{/if}}" aria-hidden="true"></i><span class="stonetop-reminder-chip-text">{{c.label}}{{#if c.detail}}{{#unless ../compact}} <span class="stonetop-reminder-chip-detail">({{c.detail}})</span>{{/unless}}{{/if}}</span>{{#if ../reminderEditable}}{{#if (eq c.kind "note")}}<button type="button" class="stonetop-reminder-chip-remove" data-index="{{c.index}}" aria-label="{{localize "stonetop.reminders.remove" text=c.label}}" data-tooltip-text="{{localize "stonetop.reminders.remove" text=c.label}}" data-tooltip-direction="UP"><i class="fas fa-xmark" aria-hidden="true"></i></button>{{/if}}{{/if}}</li>
 	{{/each}}
+	{{#if reminderEditable}}
+	<li class="stonetop-reminder-chip-slot"><button type="button" class="stonetop-reminder-chip stonetop-reminder-chip--add" aria-label="{{localize "stonetop.reminders.addChip"}}" data-tooltip-text="{{localize "stonetop.reminders.addChip"}}" data-tooltip-direction="UP"><i class="fas fa-plus" aria-hidden="true"></i></button></li>
+	{{/if}}
 </ul>

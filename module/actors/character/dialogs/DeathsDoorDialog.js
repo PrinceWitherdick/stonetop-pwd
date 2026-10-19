@@ -28,7 +28,7 @@ import { rollCardRoute } from "../../../utils/roll-card-writer.js";
 import { moveRollable } from "../../../utils/move-rollable.js";
 import { boostButtonFace, boostNote, boostsOn, deathsDoorPlusOnes, pressBoost } from "../roll-boosts.js";
 import { BURN_BRIGHTLY_COST } from "../burn-brightly.js";
-import { GAVE_IT_ALL_FLAG, GIVE_IT_ALL_COSTS, IMPETUOUS_YOUTH, askGiveItAllCost, giveItAllAtDeathsDoor } from "../impetuous-youth.js";
+import { GAVE_IT_ALL_FLAG, GIVE_IT_ALL_COSTS, IMPETUOUS_YOUTH, askGiveItAllCost, giveItAllAtDeathsDoor, rollGiveItAllHurt } from "../impetuous-youth.js";
 
 // The move itself (name + trigger), from the 0-HP routing table that every other surface reads.
 // The trigger is a rule the player is being asked to act on, so the walkthrough, its roll card
@@ -1078,6 +1078,8 @@ export class DeathsDoorDialog extends StonetopDialog {
 		}
 		this._rolledTotal = answer.total;
 		if (answer.tierShift) this._tierShift = answer.tierShift;
+		// The GM lifted the card and left "you get hurt"'s 2d4 to this client (deaths-door-relay.js).
+		if (boost === "giveAll" && cost === "hurt") await rollGiveItAllHurt(this._character?._actor);
 		this._boostNotes.push(note(answer.total));
 		await this._afterBoost(answer.tier ?? null, answer.total);
 	}

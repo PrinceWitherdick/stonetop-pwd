@@ -458,7 +458,7 @@ describe("the damage window's own chrome", () => {
 		const order = [...row.slice(0, row.indexOf("stonetop-damage-preview")).matchAll(/stonetop-damage-field-label|stepperHtml\(|name="extraDice"/g)].map(m => m[0]);
 		expect(order).toEqual([
 			"stonetop-damage-field-label", "stonetop-damage-field-label",
-			"stepperHtml(", 'name="extraDice"',
+			'name="extraDice"', "stepperHtml(",
 		]);
 		// …and that helper still renders the stepper the CSS rule above is written against.
 		expect(ROLL_DIALOG_JS).toMatch(/function stepperHtml[\s\S]*?stonetop-roll-modifier-stepper/);

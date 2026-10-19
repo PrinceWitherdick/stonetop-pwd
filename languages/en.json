@@ -191,6 +191,7 @@
       "missXp": {
         "button": "Mark XP",
         "buttonTooltip": "On a miss, whoever made the move marks XP. Marks it for your own character.",
+        "askTooltip": "On a miss, whoever made the move marks XP. Choose which character made it.",
         "pick": "Mark XP for someone else",
         "pickTooltip": "Choose which character made the move and marks the XP.",
         "pickTitle": "Who marks the XP?",
@@ -845,6 +846,11 @@
         "nothingHint": "You're already at full HP with no debilities to clear.",
         "followersLegend": "Followers who rest with you, back to full HP:",
         "unlivingHint": "Unliving: no benefit. A Ghost or Revenant gains nothing from Convalesce."
+      },
+      "retire": {
+        "title": "Retire",
+        "button": "Retire",
+        "summary": "When your PC <em><strong>retires or leaves Stonetop</strong></em>, give them an epilogue: a scene or two to send them off and say goodbye. One who stays becomes an NPC."
       },
       "dyingHint": "Dying: you can't save yourself. Someone who tends you Aids your {move} roll instead."
     },
@@ -2567,6 +2573,7 @@
         "cancel": "Don't give it my all",
         "note": "<strong>{name}</strong> gives it their all: a {from} becomes a {to}.",
         "noteCost": "The cost: <strong>{cost}</strong>. The GM will fill in the details.",
+        "hurtNotRolled": "The damage window was closed, so the 2d4 for getting hurt was not rolled. Roll it yourself.",
         "costs": {
           "hurt": {
             "button": "I get hurt",
@@ -2800,11 +2807,10 @@
     },
     "reminders": {
       "heading": "Keep in mind",
-      "hint": "Short things the GM should remember about this character. They show under the name, on every roll, on the Fight tab and in the steading's list of player characters, with the tags on the gear you carry.",
       "listLabel": "Things to keep in mind",
       "inputLabel": "New reminder",
       "placeholder": "e.g. reeks of smoke, owes Gwen a favor",
-      "add": "Add",
+      "addChip": "Add something to keep in mind",
       "remove": "Remove \"{text}\"",
       "saveFailed": "That reminder could not be saved."
     },

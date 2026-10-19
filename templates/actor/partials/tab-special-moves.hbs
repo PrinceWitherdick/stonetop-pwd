@@ -118,6 +118,18 @@
 			</button>
 		</div>
 
+		{{! Only for whoever may retire them (owner or GM) while they are still in play: canRetire. }}
+		{{#if stonetop.canRetire}}
+		<div class="stonetop-special-move-card">
+			<h3 class="stonetop-special-move-name">{{localize "stonetop.specialMoves.retire.title"}}</h3>
+			<p class="stonetop-special-move-summary">{{{localize "stonetop.specialMoves.retire.summary"}}}</p>
+			<button type="button" class="stonetop-retire-open-btn">
+				<i class="fas fa-door-open"></i>
+				{{localize "stonetop.specialMoves.retire.button"}}
+			</button>
+		</div>
+		{{/if}}
+
 	</div>
 
 </div>

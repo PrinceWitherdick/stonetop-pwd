@@ -209,12 +209,13 @@ describe("how a citation is drawn", () => {
 
 	// Core paints a background on button hover, which over a run of text inside a paragraph reads
 	// as a highlighter mark.
-	it("answers the pointer with ink and an underline, not with a filled box", () => {
+	// Ink only, never an underline: clickable text is cued by its weight alone (the user's ruling, 2026-10-19).
+	it("answers the pointer with ink, not with a filled box or an underline", () => {
 		expect(rule(".stonetop .stonetop-book-cite:focus")).toContain("background: none");
 		const hover = rule(".stonetop .stonetop-book-cite:hover");
 		expect(hover).toContain("background: none");
 		expect(hover).toContain("color: var(--st-text)");
-		expect(hover).toContain("text-decoration: underline solid");
+		expect(hover).not.toContain("underline");
 	});
 
 	// It is reachable by keyboard, so it has to be visible when it is reached.

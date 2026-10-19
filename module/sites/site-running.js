@@ -33,5 +33,5 @@ export const LAMP_OIL_NOTE = "Lamp oil is useless as a weapon. It takes time and
 
 /** The card's fold for this panel, shut by default wherever the card is drawn. */
 export const SITE_RUNNING_GROUP = Object.freeze({
-	id: "run", label: "Running it (p.348)", holds: Object.freeze(["Light & tags", "Marching order"]), show: true, open: false,
+	id: "run", label: "Running it", holds: Object.freeze(["Light & tags", "Marching order"]), show: true, open: false,
 });

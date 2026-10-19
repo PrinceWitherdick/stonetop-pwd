@@ -1,40 +1,5 @@
 <div class="tab notes" data-group="primary" data-tab="notes">
 	<section class="sheet-tab character-notes">
-		{{!-- Short lines the table wants kept in view, shown with the gear tags on the header, on roll
-		      cards, on the Fight tab and in the steading's PC table (gear-reminders.js). The gear tags
-		      are listed here too, read-only, so the player can see what the GM is being reminded of
-		      and where it comes from. No `name` on the box: the sheet's form submit must not read it;
-		      the add button and Enter save it (StonetopCharacterSheet#_onReminderAdd). --}}
-		<section class="stonetop-reminders">
-			<h3 class="stonetop-reminders-heading">{{localize "stonetop.reminders.heading"}}</h3>
-			<p class="stonetop-reminders-hint">{{localize "stonetop.reminders.hint"}}</p>
-			{{#if stonetop.gearReminderChips.length}}
-			{{> "stonetop.reminder-chips" chips=stonetop.gearReminderChips}}
-			{{/if}}
-			{{#if stonetop.reminders.length}}
-			<ul class="stonetop-reminders-list">
-				{{#each stonetop.reminders as |text|}}
-				<li class="stonetop-reminders-row">
-					<i class="fas fa-thumbtack" aria-hidden="true"></i>
-					<span class="stonetop-reminders-text">{{text}}</span>
-					{{#if @root.editable}}
-					<button type="button" class="stonetop-reminder-remove" data-index="{{@index}}"
-					        aria-label="{{localize "stonetop.reminders.remove" text=text}}"
-					        data-tooltip-text="{{localize "stonetop.reminders.remove" text=text}}"><i class="fas fa-times" aria-hidden="true"></i></button>
-					{{/if}}
-				</li>
-				{{/each}}
-			</ul>
-			{{/if}}
-			{{#if editable}}
-			<div class="stonetop-reminders-add">
-				<input type="text" class="stonetop-reminder-input" maxlength="120"
-				       aria-label="{{localize "stonetop.reminders.inputLabel"}}"
-				       placeholder="{{localize "stonetop.reminders.placeholder"}}">
-				<button type="button" class="stonetop-reminder-add-btn">{{localize "stonetop.reminders.add"}}</button>
-			</div>
-			{{/if}}
-		</section>
 		<prose-mirror class="character-notes-editor" toggled value="{{stonetop.notes}}">
 			{{{stonetop.enrichedNotes}}}
 		</prose-mirror>

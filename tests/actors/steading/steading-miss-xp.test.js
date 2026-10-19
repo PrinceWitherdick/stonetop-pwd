@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Window } from "happy-dom";
 
 vi.mock("../../../module/utils/playbook-actors.js", () => ({ getPlayerCharacters: vi.fn(() => []) }));
 vi.mock("../../../module/actors/character/deaths-door-actor.js", () => ({ isOutOfPlay: vi.fn(actor => !!actor?.dead) }));
@@ -14,6 +15,7 @@ import { reconcileMissXp } from "../../../module/utils/roll-engine.js";
 import { deletionTarget } from "../../../module/utils/foundry-compat.js";
 import {
 	defaultSteadingXpActor, handleSteadingMissXp, pickSteadingXpActor, steadingMissXpButtons, withSteadingMissXp,
+	wireSteadingMissXp,
 } from "../../../module/actors/steading/steading-miss-xp.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -120,6 +122,41 @@ describe("whose XP", () => {
 		expect(await pickSteadingXpActor(game.user, pick)).toBe(actors.bram);
 		pick.mockResolvedValueOnce(null);
 		expect(await pickSteadingXpActor(game.user, pick)).toBeNull();
+	});
+});
+
+// A viewer with no character of their own would get two buttons that both ask, so they get one.
+describe("the buttons each viewer sees", () => {
+	function rendered() {
+		const doc = new Window().document;
+		const root = doc.createElement("div");
+		root.innerHTML = steadingMissXpButtons();
+		return root;
+	}
+	// The roller's own card, or a GM: both may write it.
+	const writable = () => Object.assign(card(), { canUserModify: () => true });
+	const faces = root => [...root.querySelectorAll("[data-steading-xp]")].map(b => b.dataset.steadingXp);
+
+	it("offers a player with a character both: their own, and someone else", () => {
+		const root = rendered();
+		wireSteadingMissXp(writable(), root);
+		expect(faces(root)).toEqual(["mine", "pick"]);
+	});
+
+	it("offers a GM, or a player with nobody to play, only Mark XP, which asks", async () => {
+		for (const user of [{ id: "gm", isGM: true }, { id: "p1", isGM: false, character: null },
+			{ id: "p1", isGM: false, character: { ...actors.wren, dead: true } }]) {
+			game.user = user;
+			const root = rendered();
+			const pick = vi.fn(async () => null);
+			getPlayerCharacters.mockReturnValue([actors.wren]);
+			wireSteadingMissXp(writable(), root, { pick });
+			expect(faces(root)).toEqual(["mine"]);
+			const btn = root.querySelector("[data-steading-xp]");
+			expect(btn.dataset.tooltip).toBe(game.i18n.localize("stonetop.steading.missXp.askTooltip"));
+			btn.click();
+			await vi.waitFor(() => expect(pick).toHaveBeenCalledOnce());
+		}
 	});
 });
 
