@@ -2943,6 +2943,17 @@ describe("buildSnapshot - homefront moves", () => {
 		expect(homefront.moves[0].rollType).toBe("ask");
 		expect(homefront.moves[0].rollLabel).toBe("Population");
 	});
+
+	// Bolster (Book I p.524) holds its Preparation on its own track, kept by name like a playbook move's.
+	it("draws an owned Bolster's Preparation pips from its track", async () => {
+		const actor = new FakeActorBuilder()
+			.addItem({ _id: "b1", type: "move", name: "Bolster", system: { moveType: "homefront", resource: { max: 3, title: "Preparation" } } })
+			.build();
+		actor.flags.stonetop["moves.backgroundChoices"] = { Bolster: 2 };
+		const snap = await new TestCharacterBuilder(actor).build().buildSnapshot();
+		const bolster = snap.moves.find(category => category.key === "homefront").moves[0];
+		expect(bolster.resource).toMatchObject({ current: 2, max: 3, title: "Preparation" });
+	});
 });
 
 // ── possession choices: move triggers, caps, open-slot detection ───────────────

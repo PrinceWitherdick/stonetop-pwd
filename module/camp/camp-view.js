@@ -1,9 +1,10 @@
 import { escHtml, joinNames } from "../utils/strings.js";
 import { recoveredHpTo } from "../actors/character/deaths-door-actor.js";
+import { CREW_SUPPLIES_LABEL, CREW_SUPPLIES_SLUG } from "../actors/character/supply-cost.js";
 import {
 	CAMP_BENEFIT, CAMP_STATE, HAD_ALL_ALONG, HAD_ALL_ALONG_REFUSAL, SETTLE_REFUSAL, breakBreadOffered,
 	CAMP_EXTRA, debilityToClear, eatsTonight, foodAfterTonight, healTo, homeFiresHp, homeFiresKeeper, homeFiresOffered, planExtras,
-	nightmaresWarded,
+	nightmaresWarded, precautionTonight, crewBill,
 	messKitAllAlong, messKitWouldHelp, provisionsAtFire, spareUses, suppliesAllAlong,
 } from "./camp-rules.js";
 
@@ -34,6 +35,32 @@ function shareLine(purses) {
 		.filter(p => p.n > 0)
 		.map((p, i) => `${p.n} ${i === 0 ? `${uses(p.n)} of ` : "of "}${p.label.toLowerCase()}`)
 		.join(", ");
+}
+
+/**
+ * What a row's crew purse says in place of a stepper (camp-rules.js#crewBill): the crew pays its own
+ * meal, and what its supplies cannot cover falls to the packs. `bill` is what the crew's meal costs.
+ */
+function crewPurseText(purse, bill) {
+	if (purse.n >= bill) return `Feeds the crew first: ${purse.n} ${uses(purse.n)} for the crew's meal.`;
+	const rest = bill - purse.n;
+	if (!purse.n) return `Empty, so the crew's meal (${bill} ${uses(bill)}) comes out of the packs at the fire.`;
+	return `Feeds the crew first: ${purse.n} ${uses(purse.n)} of the ${bill} its meal costs. The other ${rest} ${plural(rest, "comes", "come")} out of the packs at the fire.`;
+}
+
+/**
+ * Where one member's share of the meal came from, for the settled card, or null for nothing: the crew's
+ * own supplies named apart from the pack, "Crew supplies: 6 uses; Rook's pack: 1 use of supplies".
+ */
+function shareRow(entry) {
+	const spend = entry.spend ?? [];
+	const crew  = spend.filter(s => s.slug === CREW_SUPPLIES_SLUG).reduce((sum, s) => sum + s.n, 0);
+	const pack  = shareLine(spend.filter(s => s.slug !== CREW_SUPPLIES_SLUG));
+	if (!crew) return pack ? { label: `From ${entry.name}'s pack`, value: pack } : null;
+	const crewPart = `${CREW_SUPPLIES_LABEL}: ${crew} ${uses(crew)}`;
+	return pack
+		? { label: `From ${entry.name}'s crew and pack`, value: `${crewPart}; ${entry.name}'s pack: ${pack}` }
+		: { label: `From ${entry.name}'s crew`, value: crewPart };
 }
 
 // ── The cards ────────────────────────────────────────────────────────────────
@@ -189,11 +216,24 @@ export function campSummaryRows(ledger, plan) {
 	const dreams = nightmaresText(ledger);
 	if (dreams) rows.push({ label: "The night", value: dreams });
 	for (const entry of plan) {
-		const shared = shareLine(entry.spend ?? []);
-		if (shared) rows.push({ label: `From ${entry.name}'s pack`, value: shared });
+		const shared = shareRow(entry);
+		if (shared) rows.push(shared);
 	}
-	for (const entry of plan) rows.push({ label: entry.name, value: outcomeLine(entry) });
+	for (const entry of plan) {
+		const site = precautionLine(entry.precaution);
+		rows.push({ label: entry.name, value: site ? `${outcomeLine(entry)} ${site}` : outcomeLine(entry) });
+	}
 	return rows;
+}
+
+/**
+ * What A Safe Place left a member holding, as one sentence, or "" for a member without the move (no
+ * `precaution` on their plan entry). Said for 0 too: the Precaution the last site left is gone.
+ */
+function precautionLine(precaution) {
+	if (!Number.isFinite(precaution)) return "";
+	if (!precaution) return "Did not prepare this camp site (A Safe Place), so holds no Precaution.";
+	return `Prepared the camp site (A Safe Place): holds ${precaution} Precaution.`;
 }
 
 // ── The window ───────────────────────────────────────────────────────────────
@@ -296,6 +336,26 @@ function afterTonightText({ left, nights: more }) {
 	return `After tonight, ${left} ${uses(left)} of food ${plural(left, "stays", "stay")} in the packs at this fire: ${lasts}.`;
 }
 
+/**
+ * A Safe Place on a row the reader drives: "Prepared the camp site", hold 1, hold 2 (well-versed with
+ * this area and its dangers) or not prepared. Shown only for a member with the move learned, and
+ * whether or not they eat or sleep: preparing the site is the move's trigger, not the night's. On a
+ * row the reader cannot change, rowSentences says the pick instead.
+ */
+function safePlaceView(member) {
+	const held = precautionTonight(member);
+	if (held === null) return { show: false };
+	return {
+		show:      true,
+		radioName: `campPrecaution-${member.actorId}`,
+		options: [
+			{ value: 1, label: "Hold 1 Precaution", checked: held === 1 },
+			{ value: 2, label: "Hold 2 Precaution: well-versed with this area and its dangers", checked: held === 2 },
+			{ value: 0, label: "Did not prepare this site", checked: held === 0 },
+		],
+	};
+}
+
 const SUPPLY_ROW_LABELS = {
 	"supplies":           "Supplies",
 	"more-supplies":      "More supplies",
@@ -362,6 +422,9 @@ function rowSentences(member, offer, { eats, benefit, clearing, hpAfter, dying =
 	else if (!record.eats) { if (others) says.push(`${others} tonight.`); }
 	else says.push(others ? `Eating tonight, and ${others} too.` : "Eating tonight.");
 	if (record.messKit && record.vitals.messKit) says.push("Cooking with a mess kit.");
+	// A Safe Place asks nothing of the meal or the night, so it is said before either can end the list.
+	const site = precautionTonight(member);
+	if (site !== null) says.push(site ? `Prepared the camp site: holds ${site} Precaution.` : "Did not prepare this camp site.");
 	if (!eats) return says;
 	if (benefit === CAMP_BENEFIT.NONE) {
 		says.push("Getting no real sleep, so no pick.");
@@ -409,9 +472,12 @@ function rowView(member, at, ledger, { canEdit, isMine, canOpenSheet }) {
 			label:     p.label,
 			remaining: p.remaining,
 			n:         p.n,
-			canTake:   p.n > 0,
+			// The crew's supplies pay for the crew by themselves (camp-rules.js#crewBill): no stepper, a sentence.
+			auto:      !!p.auto,
+			autoText:  p.auto ? crewPurseText(p, crewBill(member, ledger.messKit)) : "",
+			canTake:   !p.auto && p.n > 0,
 			// Once the meal is paid for, more food is only more to give back.
-			canAdd:    p.n < p.remaining && ledger.short > 0,
+			canAdd:    !p.auto && p.n < p.remaining && ledger.short > 0,
 		})),
 		cover: {
 			show:  ledger.short > 0 && spare > 0,
@@ -431,6 +497,7 @@ function rowView(member, at, ledger, { canEdit, isMine, canOpenSheet }) {
 		// No most: every mouth in the party eats (camp-rules.js, beside CAMP_LEFT_MAX).
 		canAddFollower:  true,
 		messKit:         { carries: record.vitals.messKit, uses: record.messKit },
+		safePlace:       safePlaceView(member),
 		night: {
 			show:          eats,
 			radioName:     `campBenefit-${member.actorId}`,

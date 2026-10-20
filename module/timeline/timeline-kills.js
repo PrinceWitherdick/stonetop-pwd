@@ -14,14 +14,15 @@
 //  • A FOE: a monster, or an NPC the fight puts on the other side. Never another character, never
 //    a follower -- the fight's own answer to that question is reused rather than restated: the side
 //    stamped on the target's combatant, else `classifySide`, because disposition alone reads every
-//    character as hostile (timeline-watch.js#struckFoe).
+//    character as hostile (fight/struck-foe.js#struckFoe).
 //  • The blow that took it from standing to down. A foe already at 0 is not killed again.
 //
 // Only blows applied through the card count. A GM typing 0 into a monster's HP box, or core's skull
 // toggle, carries no attacker, and guessing one would credit the wrong player.
 
-import { classifySide } from "../fight/fight-sides.js";
-import { FOES } from "../fight/engagements.js";
+// Whose blow counts (creditsKills) and who is a foe (isFoe) are the fight's own rules, shared with Terror on
+// the Field's line on the damage card, which may not load the timeline.
+export { creditsKills, isFoe } from "../fight/struck-foe.js";
 
 /**
  * A foe as the table saw it: the TOKEN's name, with the number core or a split appended taken off
@@ -31,24 +32,6 @@ import { FOES } from "../fight/engagements.js";
  */
 export function foeName(name) {
 	return String(name ?? "").replace(/\s*\(\d+\)$/, "").trim();
-}
-
-/**
- * Can this card's blows be credited to anybody at all? Asked once per Apply.
- *
- * @param {{attackerType?: string, selfHarm?: boolean, followerBlow?: boolean}} card
- */
-export function creditsKills({ attackerType = "", selfHarm = false, followerBlow = false } = {}) {
-	return attackerType === "character" && !selfHarm && !followerBlow;
-}
-
-/**
- * Is the target on the other side of the fight?
- *
- * @param {{type?: string, hasPlayerOwner?: boolean, isFollower?: boolean, disposition?: number}} target
- */
-export function isFoe(target = {}) {
-	return classifySide(target)?.side === FOES;
 }
 
 /**

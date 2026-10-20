@@ -27,6 +27,7 @@ import { HISTORY_YEAR_BOUNDS, seasonPickerHtml, wireSeasonPicker, clampYear, rea
 import { SEASON_IDS } from "../seasons/seasons-change-reminders.js";
 import { placeSuggestions } from "../timeline/timeline-places.js";
 import { wireDocumentDropZone } from "../utils/card-drop-zone.js";
+import { actorLinkHtml } from "../utils/actor-link.js";
 import { StonetopAutocomplete } from "../utils/autocomplete.js";
 import { localize } from "../utils/i18n.js";
 import { TIMELINE_KILLS_SOURCE, foesToLines, linesToFoes } from "../timeline/timeline-core.js";
@@ -350,7 +351,9 @@ export class TimelineEntryDialog extends StonetopDialog {
 		wireDocumentDropZone(field, async (data) => {
 			const dropped = await this._resolveDropped(data);
 			if (!dropped) return;
-			const link = `@UUID[${dropped.uuid}]{${dropped.name}}`;
+			// The body is HTML, and a label ends at its first `}`: actorLinkHtml escapes the name, and
+			// leaves the label off a name that can't be one.
+			const link = actorLinkHtml(dropped);
 			const at = field.selectionStart ?? field.value.length;
 			const to = field.selectionEnd ?? at;
 			field.value = `${field.value.slice(0, at)}${link}${field.value.slice(to)}`;

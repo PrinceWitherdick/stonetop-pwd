@@ -17,7 +17,7 @@ vi.mock("../../module/combat/attack-fx.js", async importOriginal => {
 	};
 });
 const fx = await import("../../module/combat/attack-fx.js");
-vi.mock("../../module/combat/readiness-loss.js", () => ({ settleReadinessOnAttack: vi.fn(async () => false) }));
+vi.mock("../../module/combat/readiness-loss.js", () => ({ settleReadinessOnAttack: vi.fn(async () => false), settleFollowerReadinessOnAttack: vi.fn(async () => false) }));
 vi.mock("../../module/combat/battle-joy-offer.js", () => ({ offerBattleJoyOnDamage: vi.fn(async () => false) }));
 vi.mock("../../module/utils/logger.js", () => ({ warn: vi.fn(), info: vi.fn(), error: vi.fn() }));
 const { warn } = await import("../../module/utils/logger.js");

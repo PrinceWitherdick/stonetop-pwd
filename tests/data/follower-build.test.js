@@ -155,6 +155,14 @@ describe("normalizeTags", () => {
 });
 
 describe("buildCustomFollower", () => {
+	it("turns an \"exceptional\" tag into the flag Order Followers reads (p.462), never a chip", () => {
+		const f = buildCustomFollower({ name: "Halix", tags: ["spirit", "Exceptional", "devious"] });
+		expect(f.tags).toEqual(["spirit", "devious"]);
+		expect(f.exceptional).toBe(true);
+		expect(buildCustomFollower({ name: "Rex", tags: ["keen-nosed"] })).not.toHaveProperty("exceptional");
+		expect(buildCustomFollower({ name: "Rex", exceptional: true }).exceptional).toBe(true);
+	});
+
 	it("normalizes a walkthrough result into the stored shape", () => {
 		const f = buildCustomFollower({
 			name: "  Andras ", pronoun: "he", typeLabel: "apprentice hunter",

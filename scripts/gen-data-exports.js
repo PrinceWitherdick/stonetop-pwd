@@ -90,9 +90,12 @@ function cleanMove(doc) {
     }
     if (s.resource?.max) out.resource = cleanResource(s.resource);
     if (s.isStartingMove) out.isStartingMove = true;
-    if (s.requirement && (s.requirement.level > 1 || s.requirement.moves?.length || s.requirement.anyMoves?.length || s.requirement.note || s.requirement.stats || s.requirement.marks)) {
+    if (s.requirement && (s.requirement.level > 1 || s.requirement.moves?.length || s.requirement.anyMoves?.length || s.requirement.note || s.requirement.stats || s.requirement.marks || s.requirement.playbook)) {
         out.requirement = {};
         if (s.requirement.level > 1) out.requirement.level = s.requirement.level;
+        // A move only its own playbook may take (Book I: "No one but the Heavy can take
+        // Dangerous"): kept so the export still says "Requires the Heavy".
+        if (s.requirement.playbook) out.requirement.playbook = s.requirement.playbook;
         if (s.requirement.moves?.length) out.requirement.moves = s.requirement.moves;
         // Any ONE of these is enough (Alpha: "Wild Speech or Spirit Tongue").
         if (s.requirement.anyMoves?.length) out.requirement.anyMoves = s.requirement.anyMoves;

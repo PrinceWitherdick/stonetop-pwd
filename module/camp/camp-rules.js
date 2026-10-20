@@ -1,6 +1,8 @@
 import { SYSTEM_ID } from "../system-id.js";
 import { PROVISIONS_SLUG } from "../actors/character/provisions.js";
-import { SUPPLY_PURPOSE, SUPPLY_SLUGS, campUsesNeeded, supplyPurseSlugsFor, supplyPursesFor } from "../actors/character/supply-cost.js";
+import {
+	CREW_SUPPLIES_LABEL, CREW_SUPPLIES_SLUG, SUPPLY_PURPOSE, SUPPLY_SLUGS, campUsesNeeded, supplyPurseSlugsFor, supplyPursesFor,
+} from "../actors/character/supply-cost.js";
 import { clearTracksData } from "../actors/character/background-tracks.js";
 import { debilityData } from "../actors/character/walk-it-off.js";
 import { UNLIVING_KINDS, recoveredHpTo } from "../actors/character/deaths-door-actor.js";
@@ -115,6 +117,17 @@ export const BREAK_BREAD = "Break Bread";
  */
 export const HOME_FIRES = "Keep the Home-Fires Burning";
 
+/**
+ * The Ranger's move: "When you select and prepare the party's camp site, hold 1 Precaution, or 2
+ * Precaution if you are well-versed with this area and its dangers." Its hold is the move's own ○○
+ * track (MoveResources, keyed by the move's name, a ticked pip HELD), which a settled camp fills.
+ * Any character can hold it, through a pick from another playbook.
+ */
+export const A_SAFE_PLACE = "A Safe Place";
+
+/** The most Precaution A Safe Place holds: "2 Precaution if you are well-versed with this area". */
+export const PRECAUTION_MAX = 2;
+
 /** Why a press of Make Camp did not settle the camp. */
 export const SETTLE_REFUSAL = Object.freeze({
 	CLOSED:    "closed",
@@ -184,6 +197,9 @@ export function readCampRecord(raw) {
 		joinedAt:  count(raw.joinedAt),
 		offer,
 		followers: count(raw.followers),
+		// How many of `followers` are the crew's, counted on sitting down (camp-store.js#partyCrewMouths):
+		// the mouths its own supplies pay for first (crewBill). 0 for a record from before the crew paid.
+		crewMouths: count(raw.crewMouths),
 		eats:      raw.eats !== false,
 		messKit:   !!raw.messKit,
 		benefit:   Object.values(CAMP_BENEFIT).includes(raw.benefit) ? raw.benefit : CAMP_BENEFIT.HP,
@@ -197,6 +213,10 @@ export function readCampRecord(raw) {
 		// On a host: whether the fire is sprinkled with ash from a hearth, for Keep the Home-Fires
 		// Burning. Ticked unless the host unticked it, like the proper meal.
 		hearthAsh: raw.hearthAsh !== false,
+		// On a member with A Safe Place: the Precaution their preparing of the site holds, 0 when they
+		// did not prepare it. 1 unless they changed it, since selecting and preparing the site is what
+		// the Ranger at a fire ordinarily does; 2 is theirs to claim ("well-versed with this area").
+		precaution: raw.precaution === undefined || raw.precaution === null ? 1 : count(raw.precaution, PRECAUTION_MAX),
 		// A Ravenous Thrall's "extra 1d4 provisions or uses of supplies", rolled once when they sat
 		// down (camp-store.js#sitDown) so every reader's window shows the same bill. 0 for anyone else.
 		hunger:    count(raw.hunger, RAVENOUS_MAX),
@@ -234,7 +254,7 @@ export function readOwedCamps(raw) {
  * first.
  */
 export function newCampRecord({
-	id, hostId, actorId, now = 0, vitals = {}, followers = 0,
+	id, hostId, actorId, now = 0, vitals = {}, followers = 0, crewMouths = 0,
 	hpValue = 0, activeDebilityKeys = [], unliving = false, leftCamps = [], hunger = 0,
 }) {
 	const read    = readVitals(vitals);
@@ -248,6 +268,7 @@ export function newCampRecord({
 		joinedAt:  count(now),
 		offer:     blankOffer(),
 		followers: count(followers),
+		crewMouths: Math.min(count(crewMouths), count(followers)),
 		eats:      !unliving,
 		messKit:   read.messKit,
 		// Healing is the pick unless there is nothing to heal and a debility to clear instead.
@@ -258,6 +279,7 @@ export function newCampRecord({
 		ready:     false,
 		properMeal: true,
 		hearthAsh: true,
+		precaution: 1,
 		hunger:    count(hunger, RAVENOUS_MAX),
 		vitals:    read,
 		plan:      null,
@@ -322,18 +344,60 @@ export function eatsTonight(member) {
  * and the book's own party eats "a use of provisions when you Make Camp rather than using up
  * supplies". So Cover the rest reaches for the larder first, and an over-offer gives supplies back
  * first (trimToBill runs this order backwards).
+ *
+ * Exported for the days on the road (utils/road-rations.js), which eat in the same order.
  */
-function campPurses(resources) {
+export function campPurses(resources) {
 	const { eligible } = supplyPursesFor(resources, SUPPLY_PURPOSE.CAMP);
 	return [...eligible.filter(p => p.slug === PROVISIONS_SLUG), ...eligible.filter(p => p.slug !== PROVISIONS_SLUG)];
 }
 
-/** What a member has offered, clamped purse by purse to what that purse still holds. */
-function offerFrom(member) {
-	const purses = campPurses(member.resources).map(p => ({
+/**
+ * THE CREW PAYS ITS OWN MOUTHS (the user's ruling; the Crew insert, Book I p.144, gives the crew
+ * "Supplies (4+Prosperity uses per crew member)"). Of the followers a member feeds, the crew's
+ * (`record.crewMouths`, never more than the followers still eating) are paid out of the crew's own
+ * supplies first, with no stepper to press: what the crew needs, as far as its supplies go. Whatever
+ * they cannot cover is part of the camp's ordinary bill, which the packs at the fire share as always.
+ *
+ * What the crew's meal costs is the meal's own arithmetic over the crew's mouths: 1 use each, or 1 per
+ * four when somebody at the fire cooks with a mess kit.
+ */
+export function crewBill(member, messKit = false) {
+	return crewMealUses(member?.record?.crewMouths, member?.record?.followers, messKit);
+}
+
+/**
+ * One meal for a crew of `crewMouths`, never more of them than the `followers` still eating: crewBill's
+ * arithmetic, exported for the days on the road (utils/road-rations.js), where the crew pays its own
+ * mouths the same way, a day at a time.
+ */
+export function crewMealUses(crewMouths, followers, messKit = false) {
+	return campUsesNeeded(Math.min(count(crewMouths), count(followers)), messKit);
+}
+
+/**
+ * The crew's purse on a member's row, or null for a member whose crew does not eat tonight (no crew,
+ * none with the party, or every one of them gone): `{slug, label, remaining, n, auto: true}`, `n`
+ * being what the crew pays, set by crewBill rather than by the player. `member.crew.held` is what the
+ * crew's supplies hold, read live (camp-store.js#campMember).
+ */
+function crewPurse(member, messKit) {
+	const bill = crewBill(member, messKit);
+	if (!bill) return null;
+	const held = count(member.crew?.held);
+	return { slug: CREW_SUPPLIES_SLUG, label: CREW_SUPPLIES_LABEL, remaining: held, n: Math.min(held, bill), auto: true };
+}
+
+/**
+ * What a member has offered, clamped purse by purse to what that purse still holds, the crew's purse
+ * (crewPurse) at its head, paying for the crew before anything the player shares.
+ */
+function offerFrom(member, messKit = false) {
+	const crew = crewPurse(member, messKit);
+	const purses = [...(crew ? [crew] : []), ...campPurses(member.resources).map(p => ({
 		slug: p.slug, label: p.label, remaining: p.remaining,
 		n: Math.min(member.record.offer[p.slug] ?? 0, p.remaining),
-	}));
+	}))];
 	return { actorId: member.actorId, purses, total: purses.reduce((sum, p) => sum + p.n, 0) };
 }
 
@@ -345,6 +409,10 @@ function offerFrom(member) {
  * camp eats. Only the bill is spent. The latest to sit down gives back first, and within one pack
  * the printed supplies rows go back before the larder: the same order a meal eats them (campPurses),
  * run backwards, so the provisions that would spoil are what stays eaten.
+ *
+ * The crew's supplies go back LAST, after every pack's (two passes): the crew pays its own mouths
+ * first, so it is the packs' over-offer that is not eaten. Only two crews sharing one mess kit can
+ * come to more than the meal on their own.
  */
 function trimToBill(offers, bill) {
 	let excess = Math.max(0, offers.reduce((sum, o) => sum + o.total, 0) - bill);
@@ -352,16 +420,21 @@ function trimToBill(offers, bill) {
 		actorId: o.actorId,
 		spend:   o.purses.filter(p => p.n > 0).map(p => ({ slug: p.slug, label: p.label, n: p.n })),
 	}));
-	for (let i = spends.length - 1; i >= 0 && excess > 0; i--) {
-		const spend = spends[i].spend;
-		for (let j = spend.length - 1; j >= 0 && excess > 0; j--) {
-			const back = Math.min(spend[j].n, excess);
-			spend[j].n -= back;
-			excess -= back;
+	for (const crewPass of [false, true]) {
+		for (let i = spends.length - 1; i >= 0 && excess > 0; i--) {
+			const spend = spends[i].spend;
+			for (let j = spend.length - 1; j >= 0 && excess > 0; j--) {
+				if ((spend[j].slug === CREW_SUPPLIES_SLUG) !== crewPass) continue;
+				const back = Math.min(spend[j].n, excess);
+				spend[j].n -= back;
+				excess -= back;
+			}
 		}
-		spends[i].spend = spend.filter(s => s.n > 0);
 	}
-	for (const s of spends) s.total = s.spend.reduce((sum, x) => sum + x.n, 0);
+	for (const s of spends) {
+		s.spend = s.spend.filter(x => x.n > 0);
+		s.total = s.spend.reduce((sum, x) => sum + x.n, 0);
+	}
 	return spends;
 }
 
@@ -379,6 +452,8 @@ function trimToBill(offers, bill) {
  * @property {boolean} [breaksBread]  has Break Bread learned, read live
  * @property {number|null} [hearthCha]  CHA, when Keep the Home-Fires Burning is learned (read live);
  *   null without it
+ * @property {boolean} [safePlace]  has A Safe Place learned, read live
+ * @property {{held: number}} [crew]  what the crew's own supplies hold, read live (crewPurse)
  * @property {Array<{key: string, name: string}>} [clearsTonight]  the marked background tracks a
  *   Make Camp clears (Auspicious Birth's circle), read live
  * @property {object}  [pack]     what Have What You Need can draw on, read live: `undefinedMarks`
@@ -412,7 +487,7 @@ export function campLedger(members = []) {
 	const ravenous = rows.filter(m => m.ravenous && eatsTonight(m)).map(m => ({ actorId: m.actorId, name: m.name, uses: m.record.hunger }));
 	const hunger  = ravenous.reduce((sum, r) => sum + r.uses, 0);
 	const bill    = campUsesNeeded(mouths, messKit) + hunger;
-	const offers  = rows.map(offerFrom);
+	const offers  = rows.map(m => offerFrom(m, messKit));
 	const offered = offers.reduce((sum, o) => sum + o.total, 0);
 	const short   = Math.max(0, bill - offered);
 	return {
@@ -467,7 +542,8 @@ export function offerStep(member, slug, delta) {
 export function spareUses(ledger, member) {
 	const at = rowOf(ledger, member);
 	if (at < 0) return 0;
-	return ledger.offers[at].purses.reduce((sum, p) => sum + p.remaining - p.n, 0);
+	// The crew's supplies pay for the crew alone (crewPurse), so none of them is this pack's to share.
+	return ledger.offers[at].purses.filter(p => !p.auto).reduce((sum, p) => sum + p.remaining - p.n, 0);
 }
 
 /**
@@ -481,6 +557,7 @@ export function coverTheRest(ledger, member) {
 	let need = ledger.short;
 	for (const purse of ledger.offers[at].purses) {
 		if (need <= 0) break;
+		if (purse.auto) continue;
 		const add = Math.min(need, purse.remaining - purse.n);
 		if (add <= 0) continue;
 		next[purse.slug] = purse.n + add;
@@ -610,6 +687,17 @@ export function nightmaresWarded(ledger) {
 export function nightmaresFor(member, ledger) {
 	if (member?.unliving || nightmaresWarded(ledger)) return [];
 	return (ledger.dreamers ?? []).filter(d => d.actorId !== member.actorId).map(d => d.name);
+}
+
+/**
+ * The Precaution A Safe Place holds for this member once the camp settles, or null for a member
+ * without the move learned (whose track, if any, the camp leaves alone). It is the move's own
+ * trigger, not the night's, so it asks nothing of eating or sleeping: their row's pick, 0 when they
+ * did not prepare this site.
+ */
+export function precautionTonight(member) {
+	if (!member?.safePlace) return null;
+	return count(member.record?.precaution ?? 1, PRECAUTION_MAX);
 }
 
 // ── Extra HP ────────────────────────────────────────────────────────────────
@@ -750,14 +838,38 @@ export function freezeCampPlan(ledger, { bedrolls = {}, breads = {}, followerBre
 			// Auspicious Birth's circle: "Clear it when you Make Camp", so whoever sits at the fire,
 			// eating or not. Not the Unliving, whom Make Camp gives nothing.
 			clears:   m.unliving ? [] : (m.clearsTonight ?? []).map(t => ({ key: t.key, name: t.name })),
+			// A Safe Place: the Precaution this site holds (precautionTonight), left off without the move.
+			...(precautionTonight(m) !== null ? { precaution: precautionTonight(m) } : {}),
 		};
 	});
 }
 
 /**
+ * The write that takes `spend` (`[{slug, n}]`) out of a pack, from what it holds NOW (`resources`):
+ * an absolute count per purse, so a use eaten elsewhere since the spend was agreed is not eaten
+ * twice. `shortfall` counts the uses the pack no longer had. Shared by a camp's shares and the days
+ * on the road (utils/road-rations.js), so one rule takes food out of a pack.
+ *
+ * @param {Array<{slug: string, n: number}>} spend
+ * @param {{resources: object, resourceData: (slug: string, count: number) => object}} live
+ * @returns {{update: object, shortfall: number}}
+ */
+export function purseSpendUpdate(spend, { resources = {}, resourceData }) {
+	const update = {};
+	let shortfall = 0;
+	for (const s of spend ?? []) {
+		const have = count(resources?.[s.slug]);
+		const paid = Math.min(have, count(s.n));
+		shortfall += count(s.n) - paid;
+		Object.assign(update, resourceData(s.slug, have - paid));
+	}
+	return { update, shortfall };
+}
+
+/**
  * One character's share of a settled camp, as a single update: the food out of their pack, then
- * the night's pick, the bedroll, Break Bread, the home fires, the peaceful night and any background
- * track the camp clears, and the mark that says it is done.
+ * the night's pick, the bedroll, Break Bread, the home fires, the peaceful night, any background
+ * track the camp clears and A Safe Place's Precaution, and the mark that says it is done.
  *
  * What is carried and the current HP are read LIVE, by the caller, at the moment of writing, and
  * what lands is still an absolute count and an absolute HP. So the plan says how many uses and how
@@ -771,17 +883,11 @@ export function freezeCampPlan(ledger, { bedrolls = {}, breads = {}, followerBre
  * @param {(slug: string, count: number) => object} live.resourceData  StonetopCharacter#inventoryResourceData
  * @param {(source: string|string[]) => object} live.advantageData   StonetopCharacter#heldAdvantageData
  * @param {(source: string) => object} [live.disadvantageData]       StonetopCharacter#heldDisadvantageData
+ * @param {(move: string, held: number) => object} [live.trackData]  MoveResources#usesUpdate
  * @returns {{update: object, shortfall: number}}  `shortfall` counts uses the pack no longer had
  */
-export function campShareUpdate(entry, { resources = {}, hpValue = 0, resourceData, advantageData, disadvantageData }) {
-	const update = {};
-	let shortfall = 0;
-	for (const s of entry.spend ?? []) {
-		const have = count(resources?.[s.slug]);
-		const paid = Math.min(have, count(s.n));
-		shortfall += count(s.n) - paid;
-		Object.assign(update, resourceData(s.slug, have - paid));
-	}
+export function campShareUpdate(entry, { resources = {}, hpValue = 0, resourceData, advantageData, disadvantageData, trackData }) {
+	const { update, shortfall } = purseSpendUpdate(entry.spend, { resources, resourceData });
 	const before = count(hpValue);
 	let hp = before;
 	if (entry.rests) {
@@ -810,6 +916,13 @@ export function campShareUpdate(entry, { resources = {}, hpValue = 0, resourceDa
 	if (entry.nightmares?.length && disadvantageData) Object.assign(update, disadvantageData(QUICKSILVER_NIGHTMARES));
 	// Auspicious Birth's circle, cleared by making camp at all.
 	Object.assign(update, clearTracksData((entry.clears ?? []).filter(t => t?.key), SYSTEM_ID));
+	// A Safe Place: a new site is a new preparation, so the track is SET to tonight's hold, never added
+	// to. That clears whatever Precaution the last site left unspent and fills it for this one in one
+	// write; a site not prepared (0) leaves it empty. A plan with no `precaution` (no move, or frozen
+	// before the camp knew the move) leaves the track as it is.
+	if (Number.isFinite(entry.precaution) && trackData) {
+		Object.assign(update, trackData(A_SAFE_PLACE, count(entry.precaution, PRECAUTION_MAX)));
+	}
 	update[`flags.${SYSTEM_ID}.${CAMP_FLAG}.applied`] = true;
 	return { update, shortfall };
 }

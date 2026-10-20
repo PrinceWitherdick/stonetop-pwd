@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { readOptionDamage } from "../../module/utils/damage.js";
-import { rollOptionDamage, wireApplyDamage, handleApplyQuery, APPLY_QUERY } from "../../module/combat/attack-flow.js";
-import { firstOptionList } from "../../module/utils/chat.js";
+import { readOptionDamage, readOptionDamageChoices } from "../../module/utils/damage.js";
+import { rollOptionDamage, optionMoveTags, wireApplyDamage, handleApplyQuery, APPLY_QUERY } from "../../module/combat/attack-flow.js";
+import { firstOptionList, pickListItem } from "../../module/utils/chat.js";
+import { optionLabelText, wirePickedOptionButton } from "../../module/utils/picked-option-button.js";
+import { Window } from "happy-dom";
 import { writeFlagPath } from "../fakes/combat-chat.js";
 
 // The SHIPPED moves, not a paraphrase of them. Everything this feature does is decided by a
@@ -106,6 +108,91 @@ describe("readOptionDamage: the bullets that owe a damage roll", () => {
 	});
 });
 
+// Seeker re-audit (2026-10-18): Work With What You've Got deals "damage appropriate to the source" and
+// lists the dice to pick from. No die sits right before "damage", so the ticked bullet grew no button.
+describe("readOptionDamageChoices: a bullet that deals one of several dice", () => {
+	const WWWYG = packDescription("stonetop-items/playbook-moves/the-seeker/work-with-what-you-ve-got.json");
+
+	it("reads one choice per die off Work With What You've Got's shipped damage bullet", () => {
+		const bullets = bulletsOf(WWWYG);
+		const damage = bullets.find(b => /deal damage/i.test(b));
+		expect(damage).toBeTruthy();
+		// The single-die reader still finds nothing there, so the one path never doubles the other.
+		expect(readOptionDamage(damage)).toBeNull();
+		const choices = readOptionDamageChoices(damage);
+		expect(choices.map(c => [c.formula, c.label])).toEqual([
+			["1d4", "bruises/scrapes"],
+			["1d6", "bloodshed"],
+			["1d8", "if it'd break bones"],
+			["1d10", "if it'd kill a common person"],
+		]);
+		// Aimed at the foe, a roll each, nothing about armor printed.
+		for (const c of choices) expect(c).toMatchObject({ isRoll: true, self: false, ignoresArmor: false, piercing: 0 });
+		// The other two bullets owe no damage at all.
+		expect(bullets.filter(b => b !== damage).map(readOptionDamageChoices)).toEqual([null, null]);
+	});
+
+	it("refuses a stat line that names dice without anybody dealing them", () => {
+		expect(readOptionDamageChoices("Damage: d6 for a dog, d8 for a wolf, d10 for a bear")).toBeNull();
+	});
+
+	it("refuses a bonus on a roll already being made", () => {
+		expect(readOptionDamageChoices("Deal +1d4 damage if they're flat-footed, +1d6 if they're helpless")).toBeNull();
+		expect(readOptionDamageChoices("Deal 1d4 extra damage for a blade, 1d6 for an axe")).toBeNull();
+	});
+
+	// stonetop.js registers its hooks on import, so the wiring is read off the source: the choice buttons
+	// ride the single-die pass and share its one-roll latch (`optionDamageRolled`, via _onRollOptionDamage).
+	it("wires the choice buttons beside the single-die pass, latched by the same stamp", () => {
+		const src = fs.readFileSync(path.resolve("stonetop.js"), "utf8");
+		const body = name => src.slice(src.indexOf(`function ${name}(`), src.indexOf("\n}\n", src.indexOf(`function ${name}(`)));
+		expect(body("_chatWireOptionDamage")).toContain("_chatWireOptionDamageChoices(message, html, move);");
+		const choices = body("_chatWireOptionDamageChoices");
+		// The option's own words, not the row with the single-die pass's button in it (the test below).
+		expect(choices).toContain("const words = optionLabelText(item);");
+		expect(choices).toContain("readOptionDamage(words)");
+		expect(choices).toContain("readOptionDamageChoices(words)");
+		expect(choices).not.toContain("item.textContent");
+		expect(choices).toContain('message.getFlag(SYSTEM_ID, "optionDamageRolled")');
+		expect(choices).toContain("_onRollOptionDamage(message, btn, index, { move, dealt })");
+	});
+
+	// The single-die pass runs first and hangs " Roll 1d6 damage" on the row. Read off the ROW after that,
+	// "It adds to the chaos: they take 1d6 damage Roll" is "adds ... damage roll", a bonus, so the choices
+	// pass found nothing owed and took the live button off. The option's own words still owe the die.
+	it("reads a single-die option as owing its die once that pass's button hangs on the row", () => {
+		const doc = new Window().document;
+		const saved = globalThis.document;
+		globalThis.document = doc;
+		try {
+			const list = doc.body.appendChild(doc.createElement("ul"));
+			list.innerHTML = pickListItem("It adds to the chaos: they take 1d6 damage", 0);
+			wirePickedOptionButton({ id: "m", getFlag: () => ({}) }, list, {
+				flagKey: "optionDamageRolled", wiredKey: "optionDamageWired",
+				buttonClass: "stonetop-option-damage-roll", readoutClass: "stonetop-option-damage-dealt",
+				read: readOptionDamage, icon: () => "fas fa-dice-d6",
+				// stonetop.js#_chatWireOptionDamage's words for a die.
+				label: dealt => ` Roll ${dealt.formula} damage`,
+				readout: () => doc.createElement("span"), onPress: () => {},
+			});
+			const item = list.querySelector(".stonetop-picklist-item");
+			expect(item.querySelector(".stonetop-option-damage-roll")?.textContent).toBe(" Roll 1d6 damage");
+			expect(readOptionDamage(item.textContent)).toBeNull();
+			expect(optionLabelText(item)).toBe("It adds to the chaos: they take 1d6 damage");
+			expect(readOptionDamage(optionLabelText(item))).toMatchObject({ formula: "1d6", isRoll: true });
+		} finally {
+			globalThis.document = saved;
+		}
+	});
+
+	it("leaves a single die to readOptionDamage, and wants at least two choices", () => {
+		expect(readOptionDamageChoices("They take 2d4 damage (d6 if they're already bleeding)")).toBeNull();
+		expect(readOptionDamageChoices("Deal damage (d6 for bloodshed)")).toBeNull();
+		expect(readOptionDamageChoices("")).toBeNull();
+		expect(readOptionDamageChoices(null)).toBeNull();
+	});
+});
+
 // -- Rolling it onto the shared damage card -----------------------------------
 
 const SCOPE = "stonetop-pwd";
@@ -152,6 +239,7 @@ describe("rollOptionDamage: the card a printed option's damage lands on", () => 
 		// The armor clause travels ON the weapon record, because that is the one thing Apply reads.
 		expect(flag.weapon).toMatchObject({ ignoresArmor: true });
 		expect(flag.selfHarm).toBe(false);
+		expect(flag.ownPrice).toBeUndefined();
 		expect(created.at(-1).content).toContain("Apply damage");
 	});
 
@@ -165,9 +253,34 @@ describe("rollOptionDamage: the card a printed option's damage lands on", () => 
 		const flag = cardFlag();
 		expect(flag.results[0]).toMatchObject({ uuid: "Actor.pim", name: "Pim" });
 		expect(flag.selfHarm).toBe(true);
+		// A price the character chose to pay, so I Get Knocked Down is not offered on it (defend-spend.js#defendOffers).
+		expect(flag.ownPrice).toBe(true);
 		// "Apply damage" on a card aimed at your own character reads as work waiting on the GM.
 		expect(created.at(-1).content).toContain("Take this damage");
 		expect(created.at(-1).content).not.toContain("Apply damage");
+	});
+
+	// Nature's Wrath: "Danu's Grasp gains the area tag". Learned only, and only on Danu's Grasp.
+	it("carries the area tag on Danu's Grasp's 2d4 once Nature's Wrath is learned", async () => {
+		const wrathful = (learned) => ({ ...actor, items: [{ type: "move", name: "Nature's Wrath", flags: learned ? {} : { [SCOPE]: { learned: false } } }] });
+		const grasp = readOptionDamage("They take 2d4 damage (ignores armor)");
+		globalThis.game.user.targets = new Set([
+			{ document: { uuid: "Scene.s.Token.t", disposition: -1 }, actor: { name: "Coedwaig", id: "c" }, name: "Coedwaig" },
+		]);
+
+		// Printed in the target row's fine print beside the armor clause, as a stat block's tags are.
+		const areaShown = () => /ignores armor(<\/strong>)?, (<strong[^>]*>)?area\b/.test(created.at(-1).content);
+		expect(optionMoveTags(wrathful(true), "Danu's Grasp")).toEqual(["area"]);
+		await rollOptionDamage(wrathful(true), { move: "Danu's Grasp", damage: grasp });
+		expect(areaShown()).toBe(true);
+		// The armor clause still reaches Apply.
+		expect(cardFlag().weapon).toMatchObject({ ignoresArmor: true });
+
+		await rollOptionDamage(wrathful(false), { move: "Danu's Grasp", damage: grasp });
+		expect(areaShown()).toBe(false);
+		await rollOptionDamage(actor, { move: "Danu's Grasp", damage: grasp });
+		expect(areaShown()).toBe(false);
+		expect(optionMoveTags(wrathful(true), "Lightning Rod")).toEqual([]);
 	});
 
 	it("asks no damage window: a move's printed 2d4 is the move's number, not your die", async () => {

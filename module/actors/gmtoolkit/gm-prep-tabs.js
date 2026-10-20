@@ -20,9 +20,9 @@
 //
 // Storage staying on the steading is also correct on its own terms: a world has one set of
 // threats whoever is running it, and a second GM opening their own toolkit sees the same prep.
-import { listThreatPages, createThreat } from "../../threats/threat-store.js";
+import { listThreatPages, createThreat, setThreatResolved } from "../../threats/threat-store.js";
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
-import { buildThreatCardVM, wireThreatDoomChange, wireThreatCardDrag } from "../../threats/threat-view.js";
+import { buildThreatCardVM, wireGmPrepCard, wireThreatCardDrag } from "../../threats/threat-view.js";
 import { THREAT_PROXIMITIES, THREAT_TYPES } from "../../threats/threat-types.js";
 import { threatGuidanceSections } from "../../threats/threat-guidance.js";
 import { CreateThreatDialog } from "../../threats/create-threat-dialog.js";
@@ -154,7 +154,18 @@ const PREP_TOOLS = [
 	{ scope: ".steading-threats", kind: "threat",
 		edit: (sheet, page) => sheet._openThreatEditor(page),
 		// Threats are added per proximity band; the button says which.
-		add: (sheet, btn) => sheet._onCreateThreat(btn.dataset.proximity) },
+		add: (sheet, btn) => sheet._onCreateThreat(btn.dataset.proximity),
+		// Cross it off the tracker, or put it back (Book I p.299). `only` says which state of card
+		// wears the button, so one card never offers both (see `_cardVMsFor`). No render: the page
+		// write repaints the tab through the page-sync hook.
+		actions: [
+			{ cls: "threat-resolve", icon: "fa-check", only: "active",
+				label: "stonetop.gmToolkit.threats.resolve", tooltip: "stonetop.gmToolkit.threats.resolveTip",
+				run: page => setThreatResolved(page, true) },
+			{ cls: "threat-restore", icon: "fa-rotate-left", only: "resolved",
+				label: "stonetop.gmToolkit.threats.restore", tooltip: "stonetop.gmToolkit.threats.restoreTip",
+				run: page => setThreatResolved(page, false) },
+		] },
 	{ scope: ".steading-threats", kind: "hazard",
 		edit: (sheet, page) => sheet._onEditHazard(page),
 		add: sheet => sheet._onCreateHazard() },
@@ -358,13 +369,17 @@ export function withGmPrepTabs(Base) {
 				// The buttons this kind's card wears beside the pencil and trash, which the tools
 				// partial reads straight off the card it is drawn under (see PREP_TOOLS). An empty
 				// list for a kind with none, so the partial never has to ask which kind it is on.
-				vm.prepActions = PREP_CARD_ACTIONS[kind] ?? [];
+				// An action with `only` shows on the cards in that state alone (a threat's Cross off
+				// and Put back).
+				const state = vm.resolved ? "resolved" : "active";
+				vm.prepActions = (PREP_CARD_ACTIONS[kind] ?? []).filter(a => !a.only || a.only === state);
 				// A card whose body is drawn in named folds (sites) opens SHUT here, minus the
 				// folds this GM has opened. Mutated in place on the cached view-model's own group
 				// objects, exactly as `collapsed` above is re-applied to a cached card: what the
 				// cache holds is the expensive enriched prose, and this is the cheap chrome that
 				// has to be right for THIS render. Kinds with no folds simply have none to walk.
-				for (const group of Object.values(vm.groups ?? {})) {
+				// A site's "Running it" reference fold (runGroup) is remembered the same way.
+				for (const group of [...Object.values(vm.groups ?? {}), ...(vm.runGroup ? [vm.runGroup] : [])]) {
 					group.open = this._isCardGroupOpen(page.uuid, group.id);
 				}
 				return vm;
@@ -407,9 +422,12 @@ export function withGmPrepTabs(Base) {
 				// dialogs, so translating it is its own pass across all of them.
 				heading:  format("stonetop.gmToolkit.threats.proximityHeading", { proximity: p.label }),
 				addLabel: format("stonetop.gmToolkit.threats.addThreat", { proximity: p.label.toLowerCase() }),
-				threats: threats.filter(t => t.proximity.id === p.id),
+				// Only the live ones: a threat crossed off (Book I p.299) is off its tracker.
+				threats: threats.filter(t => t.proximity.id === p.id && !t.resolved),
 			}));
-			return { threatGroups, hazards };
+			// The crossed-off ones, together under their own heading, greyed and reversible.
+			const resolvedThreats = threats.filter(t => t.resolved);
+			return { threatGroups, resolvedThreats, hazards };
 		}
 
 		/**
@@ -449,6 +467,7 @@ export function withGmPrepTabs(Base) {
 			// Stated once, here, rather than as an empty-shape literal per builder that has to
 			// keep matching the keys this method reads back.
 			st.threatGroups = [];
+			st.resolvedThreats = [];
 			st.hazards      = [];
 			st.sites        = [];
 			if (!steading) return context;
@@ -458,6 +477,7 @@ export function withGmPrepTabs(Base) {
 				this._cardVMsFor("site", listSitePages(steading), buildSiteCardVM),
 			]);
 			st.threatGroups = threatsCtx.threatGroups;
+			st.resolvedThreats = threatsCtx.resolvedThreats;
 			st.hazards      = threatsCtx.hazards;
 			st.sites        = sites;
 			return context;
@@ -471,7 +491,9 @@ export function withGmPrepTabs(Base) {
 		_activateGmPrepListeners(root) {
 			if (!root) return;
 
-			wireThreatDoomChange(root, chk => fromUuid(chk.closest(".threat-card")?.dataset.pageUuid ?? ""));
+			// The doom tracks, a threat's or hazard's custom player move handed to the players as a custom
+			// move, and whatever controls each kind's own card carries (a site's random tables, Book I p.369).
+			wireGmPrepCard(root, target => fromUuid(target.closest(".threat-card")?.dataset.pageUuid ?? ""), wireGmPrepCardExtras);
 
 			// The prep tools themselves are one table, PREP_TOOLS above, read here and by the
 			// context builder alike.
@@ -563,9 +585,6 @@ export function withGmPrepTabs(Base) {
 				const uuid = fold.closest(".threat-card")?.dataset.pageUuid;
 				if (uuid && fold.dataset.group) this._setCardGroupOpen(uuid, fold.dataset.group, fold.open);
 			}, true);
-
-			// Whatever controls each kind's own card carries (a site's random tables, Book I p.369).
-			wireGmPrepCardExtras(root, target => fromUuid(target.closest(".threat-card")?.dataset.pageUuid ?? ""));
 
 			// The whole card is the drag handle (no separate grip): grab it anywhere to drop a
 			// pinned Note on a scene. A plain click still toggles collapse. Shares the one

@@ -1,4 +1,4 @@
-import { ownedMove, ownsLearnedMoveNamed } from "./owns-move.js";
+import { ownedLearnedMove } from "./owns-move.js";
 
 const key = "backgroundChoices";
 
@@ -12,12 +12,13 @@ export function heldOnTrack(resources, moveName, max) {
 
 /**
  * A learned move's hold track, `{held, max, resources}`, or null for a character without the move
- * learned or a move with no track. The max is the held copy's `resource` (a copy taken before the pack
- * gave it one is filled in by migration/move-refresh.js).
+ * learned or a move with no track. The max is the LEARNED copy's `resource` (a copy taken before the pack
+ * gave it one is filled in by migration/move-refresh.js), so a switched-off second copy cannot set it.
  */
 export function learnedTrack(actor, move) {
-	if (!ownsLearnedMoveNamed(actor, move)) return null;
-	const max = Math.trunc(Number(ownedMove(actor, move)?.system?.resource?.max) || 0);
+	const learned = ownedLearnedMove(actor, move);
+	if (!learned) return null;
+	const max = Math.trunc(Number(learned.system?.resource?.max) || 0);
 	const resources = actor?.typedActor?.moveResources;
 	if (!max || !resources) return null;
 	return { held: heldOnTrack(resources, move, max), max, resources };
@@ -111,6 +112,16 @@ export class MoveResources {
 		return this._flags.updateData("moveMarks", {
 			...current,
 			[moveName]: { ...(current[moveName] ?? {}), [optionSlug]: value },
+		});
+	}
+
+	// The same for several options of one move at once (`values` is option slug to value), so a
+	// caller that works out a run of marks in memory writes them in ONE update, not one per option.
+	marksUpdate(moveName, values) {
+		const current = this.getMarks();
+		return this._flags.updateData("moveMarks", {
+			...current,
+			[moveName]: { ...(current[moveName] ?? {}), ...values },
 		});
 	}
 }

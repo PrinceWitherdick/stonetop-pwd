@@ -4,6 +4,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import {
 	collectSeasonalReminders,
+	laboratoryNewlySelected,
+	naphthaSpentAfter,
+	offeringsRestoreUpdate,
+	rollForBezoar,
+	rollNaphthaYield,
+	BENDIS_ROOT_SLUG,
 	remindersForActor,
 	seasonsReminderCard,
 	wireSeasonsReminderResets,
@@ -135,7 +141,7 @@ describe("the Logbook's reset button", () => {
 
 	it("draws the button on the Logbook's row alone, naming the character", () => {
 		const html = seasonsReminderCard("spring", collectSeasonalReminders([
-			seeker(), fakeCharacter({ name: "Brother Hale", possessions: ["collected-offerings"] }),
+			seeker(), { ...fakeCharacter({ name: "Brother Hale", moves: ["Rites of the Land"] }), id: "hale1" },
 		]));
 		expect(html.match(/stonetop-seasons-reset-btn/g)).toHaveLength(1);
 		expect(html).toContain('data-reset="logbook" data-actor-id="seeker1"');
@@ -185,12 +191,17 @@ describe("the Logbook's reset button", () => {
 	});
 });
 
-// Seeker audit C1: the Laboratory's row rolls "d4-1 uses of naphtha" for its owner and sets the
-// naphtha item's track (inventory tracks count SPENT) to the rolled uses.
+// Seeker audit C1: the Laboratory's row rolls "d4-1 uses of naphtha" for its owner and ADDS the
+// rolled uses to what is left on the naphtha item's track (inventory tracks count SPENT; the user's
+// ruling of 2026-10-18), up to its ○○○.
 describe("the Laboratory's naphtha button", () => {
-	function rig(total) {
+	function rig(total, spent) {
 		const update = vi.fn(async () => {});
-		const actor = { ...fakeCharacter({ name: "Maelis", possessions: ["laboratory"] }), id: "seeker1", isOwner: true, update };
+		const base = fakeCharacter({ name: "Maelis", possessions: ["laboratory"] });
+		const getFlag = (scope, key) => key === "inventory.resources"
+			? (spent === undefined ? undefined : { naphtha: spent })
+			: base.getFlag(scope, key);
+		const actor = { ...base, getFlag, id: "seeker1", isOwner: true, update };
 		const listeners = {};
 		const btn = {
 			dataset: { reset: "naphtha", actorId: "seeker1" }, disabled: false, innerHTML: "",
@@ -209,8 +220,9 @@ describe("the Laboratory's naphtha button", () => {
 		expect(html).toContain("Roll d4-1 naphtha");
 	});
 
-	it("rolls d4-1 to chat and sets the naphtha track to the rolled uses (spent = 3 - uses)", async () => {
-		const { html, actors, update, toMessage, click, btn } = rig(2);
+	it("rolls d4-1 to chat and adds the rolled uses to what is left", async () => {
+		// 1 use left (2 spent), rolls 1: 2 uses, 1 spent.
+		const { html, actors, update, toMessage, click, btn } = rig(1, 2);
 		wireSeasonsReminderResets({ id: "msg2" }, html, { actors });
 		await click();
 		expect(toMessage).toHaveBeenCalledWith("1d4-1", expect.anything());
@@ -221,11 +233,35 @@ describe("the Laboratory's naphtha button", () => {
 		delete globalThis.Roll;
 	});
 
-	it("a 0 leaves the track all spent", async () => {
-		const { html, actors, update, click } = rig(0);
+	it("caps at the printed 3 uses", async () => {
+		const { html, actors, update, click } = rig(3, 1);
+		wireSeasonsReminderResets({ id: "msg3" }, html, { actors });
+		await click();
+		expect(update.mock.calls.at(-1)[0]["flags.stonetop-pwd.inventory.resources.naphtha"]).toBe(0);
+		delete globalThis.Roll;
+	});
+
+	it("a 0 keeps the leftovers as they were", async () => {
+		const { html, actors, update, click } = rig(0, 2);
+		wireSeasonsReminderResets({ id: "msg3" }, html, { actors });
+		await click();
+		expect(update.mock.calls.at(-1)[0]["flags.stonetop-pwd.inventory.resources.naphtha"]).toBe(2);
+		delete globalThis.Roll;
+	});
+
+	it("an all-spent track with a 0 stays all spent", async () => {
+		const { html, actors, update, click } = rig(0, 3);
 		wireSeasonsReminderResets({ id: "msg3" }, html, { actors });
 		await click();
 		expect(update.mock.calls.at(-1)[0]["flags.stonetop-pwd.inventory.resources.naphtha"]).toBe(3);
+		delete globalThis.Roll;
+	});
+
+	it("nothing stored reads as a full track, as the Items column reads it", async () => {
+		const { html, actors, update, click } = rig(2);
+		wireSeasonsReminderResets({ id: "msg3" }, html, { actors });
+		await click();
+		expect(update.mock.calls.at(-1)[0]["flags.stonetop-pwd.inventory.resources.naphtha"]).toBe(0);
 		delete globalThis.Roll;
 	});
 
@@ -259,6 +295,120 @@ describe("the Laboratory's naphtha button", () => {
 		expect(update.mock.calls.at(-1)[0]).toEqual({ "flags.stonetop-pwd.naphthaRollCard": null });
 		expect(btn.disabled).toBe(false);
 		delete globalThis.Roll;
+	});
+});
+
+// Blessed re-audit (2026-10-18), the season possessions' buttons: Collected offerings "Restore 1 use each
+// season", Goat herd "Each season, 1 in 4 chance of having a bezoar", Herb garden "Each spring, d4 uses of
+// bendis root" (SET to the roll: the crop replaces what is left).
+describe("the Blessed's season possession buttons", () => {
+	function rig(reset, { total = 1, flags = {} } = {}) {
+		const update = vi.fn(async () => {});
+		const getFlag = (scope, key) => (scope === "stonetop-pwd" ? flags[key] : undefined);
+		const actor = { name: "Brother Hale", type: "character", items: [], id: "hale1", isOwner: true, update, getFlag };
+		const listeners = {};
+		const btn = {
+			dataset: { reset, actorId: "hale1" }, disabled: false, innerHTML: "",
+			remove: vi.fn(), addEventListener: (type, fn) => { listeners[type] = fn; },
+		};
+		const toMessage = vi.fn(async () => {});
+		globalThis.Roll = class { constructor(f) { this.formula = f; this.total = total; } async evaluate() { return this; } toMessage(d) { return toMessage(this.formula, d); } };
+		return { btn, update, toMessage, html: { querySelectorAll: () => [btn] }, actors: { get: () => actor }, click: () => listeners.click?.() };
+	}
+
+	it("draws one button per possession row, each naming its kind", () => {
+		const html = seasonsReminderCard("spring", collectSeasonalReminders([{
+			...fakeCharacter({ name: "Brother Hale", possessions: ["collected-offerings", "goat-herd", "herb-garden"] }), id: "hale1",
+		}], "spring"));
+		expect(html.match(/stonetop-seasons-reset-btn/g)).toHaveLength(3);
+		expect(html).toContain('data-reset="offerings" data-actor-id="hale1"');
+		expect(html).toContain('data-reset="bezoar" data-actor-id="hale1"');
+		expect(html).toContain('data-reset="bendis" data-actor-id="hale1"');
+		expect(html).toContain("Restore 1 use");
+		expect(html).toContain("Roll for a bezoar (1 in 4)");
+		expect(html).toContain("Roll d4 bendis root");
+	});
+
+	it("Collected offerings: takes 1 off the spent uses, and notes the card", async () => {
+		const { html, actors, update, click, btn } = rig("offerings", { flags: { "possessions.uses": { "collected-offerings": 2 } } });
+		wireSeasonsReminderResets({ id: "m1" }, html, { actors });
+		await click();
+		expect(update).toHaveBeenCalledWith(
+			{ "flags.stonetop-pwd.possessions.uses.collected-offerings": 1, "flags.stonetop-pwd.offeringsRestoreCard": "m1" },
+			{ stonetopMove: "Collected offerings" });
+		expect(btn.innerHTML).toContain("Use restored");
+		delete globalThis.Roll;
+	});
+
+	it("Collected offerings: a full track stays full (never below 0 spent)", () => {
+		expect(offeringsRestoreUpdate({ getFlag: () => undefined })).toEqual({ "flags.stonetop-pwd.possessions.uses.collected-offerings": 0 });
+		expect(offeringsRestoreUpdate({ getFlag: () => ({ "collected-offerings": 0 }) })).toEqual({ "flags.stonetop-pwd.possessions.uses.collected-offerings": 0 });
+	});
+
+	it("Collected offerings: renders done once this card restored the use", () => {
+		const { html, actors, btn } = rig("offerings", { flags: { offeringsRestoreCard: "m1" } });
+		wireSeasonsReminderResets({ id: "m1" }, html, { actors });
+		expect(btn.disabled).toBe(true);
+		delete globalThis.Roll;
+	});
+
+	it("Goat herd: a 1 on the d4 adds the Bezoar special item", async () => {
+		const { html, actors, update, toMessage, click } = rig("bezoar", { total: 1, flags: { "inventory.addedSpecial": ["lantern"] } });
+		wireSeasonsReminderResets({ id: "m2" }, html, { actors });
+		await click();
+		expect(toMessage).toHaveBeenCalledWith("1d4", expect.anything());
+		expect(update.mock.calls.at(-1)).toEqual([
+			{ "flags.stonetop-pwd.inventory.addedSpecial": ["lantern", "bezoar"], "flags.stonetop-pwd.bezoarRollCard": "m2" },
+			{ stonetopMove: "Goat herd" }]);
+		delete globalThis.Roll;
+	});
+
+	it("Goat herd: a 2-4 adds nothing, but the card's roll is still made", async () => {
+		const { html, actors, update, click, btn } = rig("bezoar", { total: 3 });
+		wireSeasonsReminderResets({ id: "m3" }, html, { actors });
+		await click();
+		expect(update.mock.calls.at(-1)[0]).toEqual({ "flags.stonetop-pwd.bezoarRollCard": "m3" });
+		expect(btn.innerHTML).toContain("Bezoar rolled");
+		delete globalThis.Roll;
+	});
+
+	it("Goat herd: one bezoar is had, so a 1 while carrying one adds no second", async () => {
+		globalThis.Roll = class { constructor(f) { this.formula = f; this.total = 1; } async evaluate() { return this; } toMessage() {} };
+		expect(await rollForBezoar({ getFlag: () => ["bezoar"] })).toEqual({});
+		expect(await rollForBezoar({ getFlag: () => undefined })).toEqual({ "flags.stonetop-pwd.inventory.addedSpecial": ["bezoar"] });
+		delete globalThis.Roll;
+	});
+
+	it("Herb garden: the d4 SETS this spring's bendis root (its size and 0 spent)", async () => {
+		const { html, actors, update, toMessage, click } = rig("bendis", { total: 3, flags: { "inventory.resources": { "bendis-root": 1 } } });
+		wireSeasonsReminderResets({ id: "m4" }, html, { actors });
+		await click();
+		expect(toMessage).toHaveBeenCalledWith("1d4", expect.anything());
+		expect(update.mock.calls.at(-1)).toEqual([{
+			"flags.stonetop-pwd.inventory.resourceMax.bendis-root": 3,
+			"flags.stonetop-pwd.inventory.resources.bendis-root":   0,
+			"flags.stonetop-pwd.bendisRollCard": "m4",
+		}, { stonetopMove: "Herb garden" }]);
+		delete globalThis.Roll;
+	});
+
+	it("Herb garden: rolls once per card", async () => {
+		const { html, actors, toMessage, click } = rig("bendis", { total: 2 });
+		wireSeasonsReminderResets({ id: "m5" }, html, { actors });
+		await click();
+		await click();
+		expect(toMessage).toHaveBeenCalledOnce();
+		delete globalThis.Roll;
+	});
+
+	it("the Herb garden makes bendis root, an item with an acquired uses track (pack data)", () => {
+		const blessed = JSON.parse(fs.readFileSync(path.resolve(REPO, "packs/src/stonetop-items/playbooks/the-blessed.json"), "utf8"));
+		const garden = blessed.flags.stonetop.specialPossessions.options.find(o => o.slug === "herb-garden");
+		expect(garden.specialItems).toEqual([BENDIS_ROOT_SLUG]);
+		const item = JSON.parse(fs.readFileSync(path.resolve(REPO, "packs/src/stonetop-items/inventory-items/bendis-root.json"), "utf8"));
+		expect(item.name).toBe("Bendis root");
+		expect(item.flags.stonetop).toMatchObject({ slug: BENDIS_ROOT_SLUG, inventoryColumn: "small", special: true, resource: { max: 0 } });
+		expect(item.flags.stonetop.note).toMatch(/reach.*area.*burns ~1 hr, fumes repel perversions of nature/);
 	});
 });
 
@@ -339,5 +489,35 @@ describe("every seasonal rule the books print is registered", () => {
 			if (r.kind === "move") expect([...moveNames], r.name).toContain(r.name);
 			else expect([...slugs], r.slug).toContain(r.slug);
 		}
+	});
+});
+
+// The Laboratory's naphtha, by the user's ruling of 2026-10-18: a season's d4-1 is added to what is
+// left (3 at most), and a Laboratory taken at creation rolls its first d4-1 once.
+describe("the Laboratory's naphtha yield", () => {
+	it("adds the roll to the uses left, capped at 3 (the track counts SPENT)", () => {
+		expect(naphthaSpentAfter(2, 1)).toBe(1);
+		expect(naphthaSpentAfter(1, 3)).toBe(0);
+		expect(naphthaSpentAfter(2, 0)).toBe(2);
+		expect(naphthaSpentAfter(undefined, 1)).toBe(0);
+		expect(naphthaSpentAfter(3, 2)).toBe(1);
+	});
+
+	it("at creation the track holds the roll alone", async () => {
+		const toMessage = vi.fn(async () => {});
+		globalThis.Roll = class { constructor(f) { this.formula = f; this.total = 1; } async evaluate() { return this; } toMessage(d) { return toMessage(this.formula, d); } };
+		// Nothing stored (a full track) must not leak into a creation roll.
+		const actor = { getFlag: () => undefined };
+		expect(await rollNaphthaYield(actor, { addTo: false })).toEqual({ "flags.stonetop-pwd.inventory.resources.naphtha": 2 });
+		expect(toMessage).toHaveBeenCalledWith("1d4-1", expect.anything());
+		delete globalThis.Roll;
+	});
+
+	it("rolls only for a Laboratory this apply takes, never one a re-run kept", () => {
+		expect(laboratoryNewlySelected([], ["laboratory"])).toBe(true);
+		expect(laboratoryNewlySelected(["laboratory"], ["laboratory"])).toBe(false);
+		expect(laboratoryNewlySelected(["laboratory"], [])).toBe(false);
+		expect(laboratoryNewlySelected(["workshop"], ["workshop"])).toBe(false);
+		expect(laboratoryNewlySelected(new Set(["workshop"]), ["laboratory", "workshop"])).toBe(true);
 	});
 });

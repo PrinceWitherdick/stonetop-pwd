@@ -4,7 +4,7 @@
 // opens one), so "tick the doom track from the map" is: click the pin, tick a portent
 // right here. The card markup is shared, so threat-view's wiring (doom toggles,
 // drag-to-pin) applies to all three. The sheets differ only in the config values below.
-import { wireThreatDoomChange, wireThreatCardDrag } from "../threats/threat-view.js";
+import { wireGmPrepCard, wireThreatCardDrag } from "../threats/threat-view.js";
 import { adoptInlineViewRoot } from "./inline-page-view.js";
 
 /**
@@ -53,10 +53,10 @@ export function createStonetopGmPrepPageSheetClass(Base, { template, buildCardVM
 			// Drag the card onto a scene to drop a linked pin (native page payload). The whole
 			// card is the drag handle; fall back to this page's uuid if the markup lacks it.
 			wireThreatCardDrag(root, { fallbackUuid: this.document.uuid });
-			// Live doom-track checkboxes (owners only; players are disabled).
-			wireThreatDoomChange(root, () => this.document);
-			// Anything only this kind of card carries (a site's roll-on-my-table buttons).
-			wireExtras?.(root, this.document);
+			// Live doom-track checkboxes (owners only; players are disabled), "Give to players" on a threat's
+			// or hazard's custom player move (GM-only button), and anything only this kind of card carries
+			// (a site's roll-on-my-table buttons).
+			wireGmPrepCard(root, () => this.document, wireExtras && (el => wireExtras(el, this.document)));
 
 			root.addEventListener("click", async ev => {
 				if (!this.document.isOwner) return;

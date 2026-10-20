@@ -7,7 +7,7 @@
 // about the matter at hand"), so the dialog quotes the move and lets the player decide — the
 // same contract the inline stat picker already keeps for alt-stat grants.
 
-import { altStatGrantsFor } from "../../data/alt-stat-grants.js";
+import { altStatGrantsFor, altStatNotes } from "../../data/alt-stat-grants.js";
 import { layModes } from "../../utils/roll-mode.js";
 
 /** Know Things is +INT (Book I p.220); alt stats are grants layered on top. */
@@ -37,11 +37,48 @@ export function knowThingsRollChoices(ownedMoveNames = [], { playbook = null, ba
 	const rows = altStatGrantsFor({ moveName: "Know Things", defaultStat: KNOW_THINGS_STAT },
 		{ learnedMoveNames: owned, playbook, background });
 	const stats = [KNOW_THINGS_STAT, ...rows.map(g => g.altStat)];
-	// A background row is quoted by its label; the sheet's quote finds no move of that name and
-	// shows nothing, which is the same as a move row whose Item went missing.
+	// A background row is quoted by its label, and `grantBackgrounds` carries the row itself so the
+	// sheet can quote the background's own sentence about the move under that label.
 	const statGrants = rows.map(g => g.ownsMove ?? g.background.label);
 	const advantageMoves = KNOW_THINGS_ADVANTAGE_MOVES.filter(name => owned.has(name));
-	return { stats, statGrants, advantageMoves, hasChoice: stats.length > 1 || advantageMoves.length > 0 };
+	return { stats, statGrants, grantBackgrounds: _grantBackgrounds(rows), statNotes: _statNotes(rows), advantageMoves,
+		hasChoice: stats.length > 1 || advantageMoves.length > 0 };
+}
+
+/** Seek Insight is +WIS; alt stats are grants layered on top. */
+export const SEEK_INSIGHT_STAT = "wis";
+
+/**
+ * The stat options a character brings to a Seek Insight rolled about one thing (an artifact, p.430),
+ * in the shape knowThingsRollChoices hands the same picker: the Fox's The Natural ("When you Seek
+ * Insight, you may roll +INT instead of +WIS"), and any blanket grant keyed to +WIS, read from the
+ * one reader of ALT_STAT_GRANTS. No move grants advantage on it, so `advantageMoves` is always empty
+ * and `hasChoice` is false for everyone but a character with a grant.
+ */
+export function seekInsightRollChoices(ownedMoveNames = [], { playbook = null, background = null } = {}) {
+	const rows = altStatGrantsFor({ moveName: "Seek Insight", defaultStat: SEEK_INSIGHT_STAT },
+		{ learnedMoveNames: new Set(ownedMoveNames), playbook, background });
+	const stats = [SEEK_INSIGHT_STAT, ...rows.map(g => g.altStat)];
+	return { stats, statGrants: rows.map(g => g.ownsMove ?? g.background.label),
+		grantBackgrounds: _grantBackgrounds(rows), statNotes: _statNotes(rows), advantageMoves: [], hasChoice: stats.length > 1 };
+}
+
+/** The background rows among `rows`, by label: what the picker quotes a background grant from. */
+function _grantBackgrounds(rows) {
+	return rows.filter(g => !g.ownsMove && g.background).map(g => g.background);
+}
+
+/**
+ * The card lines each granted stat owes (alt-stat-grants.js#altStatNotes: Penitent's "the GM asks who you
+ * wronged"), by stat, for the stats that owe any: the roll passes `statNotes[picked]` as its conditionNotes.
+ */
+function _statNotes(rows) {
+	const out = {};
+	for (const g of rows) {
+		const notes = altStatNotes(rows, g.altStat);
+		if (notes.length) out[g.altStat] = notes;
+	}
+	return out;
 }
 
 /**

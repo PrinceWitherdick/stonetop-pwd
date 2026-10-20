@@ -83,7 +83,7 @@ describe("the I wonder tab: wiring", () => {
 	// mismatch is invisible (the panels are shown one at a time).
 	it("sits directly above the Core Loop tab, in the rail and in the body", () => {
 		const order = ["homefront", "moves", "threats", "encounters", "expeditions", "wonder", "loop"];
-		// The rail carries one more after those seven: the shared Preferences tab, which is last
+		// The rail carries one more after those eight: the shared Preferences tab, which is last
 		// on this rail exactly as it is on the character sheet's. Its panel comes from
 		// "stonetop.tab-preferences", so it is not in the body list below.
 		const railOrder = [...SHEET_HBS.matchAll(/tab-rail-item"\s+tab="(\w+)"/g)].map(m => m[1]);
@@ -294,6 +294,22 @@ describe("the I wonder tab: context", () => {
 		expect(context.stonetop.wonders.open.map(w => w.id)).toEqual(["a", "c"]);
 		expect(context.stonetop.wonders.settled.map(w => w.id)).toEqual(["b"]);
 		expect(context.stonetop.wonderGuide).toBe(GM_WONDER_GUIDE);
+	});
+	// "Player wishes yet to be granted" are hanging threads too (Book I p.591): the End of Session wishes, read-only.
+	it("carries the players' wishes beside the questions, and the tab draws them", () => {
+		const { host } = makeHost([]);
+		const saved = global.game.actors;
+		global.game.actors = { contents: [{ id: "bw", name: "Blodwen", type: "character", system: { playbook: { slug: "the-blessed" } },
+			flags: { "stonetop-pwd": { sessionWishes: [{ at: 1, text: "See the Mighty Servant" }] } } }] };
+		try {
+			const context = { stonetop: {} };
+			host._addGmWonderContext(context);
+			expect(context.stonetop.playerWishes.map(r => r.name)).toEqual(["Blodwen"]);
+			expect(context.stonetop.playerWishes[0].wishes[0].text).toBe("See the Mighty Servant");
+		} finally {
+			global.game.actors = saved;
+		}
+		expect(WONDER_HBS).toContain("{{#each stonetop.playerWishes}}");
 	});
 
 	// The guidance is transcribed book text, so it cites the page it came off. Book I p.33 is the
@@ -562,10 +578,10 @@ describe("the I wonder tab: the edit pencils", () => {
 			);
 		}
 		const boxes = WONDER_HBS.match(/class="stonetop-gm-wonder-section[^"]*"/g) ?? [];
-		expect(boxes).toHaveLength(3);
+		expect(boxes).toHaveLength(4);
 		expect(boxes.filter(c => c.includes("steading-edit-section"))).toHaveLength(2);
-		// The guidance box is the third, and carries no pencil: there is nothing in it to edit.
-		expect(boxes.filter(c => !c.includes("steading-edit-section"))).toHaveLength(1);
+		// The players' wishes and the guidance carry no pencil: there is nothing in either for the GM to edit.
+		expect(boxes.filter(c => !c.includes("steading-edit-section"))).toHaveLength(2);
 	});
 
 	// The pencil is emitted AHEAD of its heading, which is not a style choice: the fold walk finds

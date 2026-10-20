@@ -78,6 +78,17 @@ export function ritesOptions({ boonHeld = 0, boonMax = BOON_WITH_SURPLUS, surplu
 	};
 }
 
+/**
+ * How much Boon the rites can hold for this character: the track's own max, taken as it is. A
+ * max of 0 is 0, NOT the printed 4: it is what StonetopCharacter#ritesBoonMax answers for a Rites
+ * kept switched off, and reading it as "unknown" handed a switched-off move a full purse. Only a
+ * character with no such reader at all (an older stand-in) falls back to the book's 4.
+ */
+export function ritesBoonCapacity(character) {
+	if (typeof character?.ritesBoonMax !== "function") return BOON_WITH_SURPLUS;
+	return Math.max(0, Math.trunc(Number(character.ritesBoonMax()) || 0));
+}
+
 const DIALOG_OPTIONS = { classes: ["dialog", "stonetop", "stonetop-rites-dialog"] };
 
 /**
@@ -94,7 +105,11 @@ const DIALOG_OPTIONS = { classes: ["dialog", "stonetop", "stonetop-rites-dialog"
 export function openRitesOfTheLand({ character, steading, actorId = "", year = 1, seasonId = "", onApplied } = {}) {
 	if (!character) return;
 	const step = ritesSeasonStep(actorId);
-	const boonMax = Number(character.ritesBoonMax?.() ?? BOON_WITH_SURPLUS) || BOON_WITH_SURPLUS;
+	const boonMax = ritesBoonCapacity(character);
+	// No Boon track is a Rites of the Land kept switched off (ritesBoonMax reads only a LEARNED
+	// move): it holds nothing, so there is nothing to walk through. The sheet gates first; this is
+	// so no other caller can hand a switched-off Rites a 4-Boon purse.
+	if (boonMax <= 0) return;
 	const state = ritesOptions({
 		boonHeld: character.ritesBoonHeld?.() ?? 0,
 		boonMax,

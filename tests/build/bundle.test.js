@@ -78,10 +78,9 @@ describe("the release bundle", () => {
 		const keys = Object.keys(precompileTemplates());
 		expect(keys.length).toBeGreaterThan(150);
 		const id = JSON.parse(read("system.json")).id;
-		for (const key of keys) {
-			expect(key.startsWith(`systems/${id}/templates/`), key).toBe(true);
-			expect(code, key).toContain(JSON.stringify(key));
-		}
+		expect(keys.filter(key => !key.startsWith(`systems/${id}/templates/`))).toEqual([]);
+		// Gathered, then asserted once: an expect per key over a bundle this size costs seconds.
+		expect(keys.filter(key => !code.includes(JSON.stringify(key)))).toEqual([]);
 		// A checkout keeps compiling live: only the bundle's copy of the stand-in is filled.
 		expect(read(PRECOMPILED_TEMPLATES_MODULE)).toContain("export default null");
 	});

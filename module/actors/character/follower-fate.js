@@ -39,6 +39,10 @@
 // no mark of its own: the follower stays at 0 HP, and 0 HP is already out for the fight
 // (fight-sides.js#bodiesFor, the roster's standing count). Letting them go is a clause the sheet
 // cannot check, so it is a pre-ticked box beside "Dead" that marks the XP when that is chosen.
+//
+// FRONT LINE LEADER (Marshal): "Spend Presence in lieu of your crew's Loyalty". For a crew member, the
+// spare can be paid with the Marshal's Presence instead (front-line-presence.js), a second button beside
+// the Loyalty one, and offered even when the crew holds no Loyalty.
 
 import {
 	effectiveCrewSize, crewIndividualLabel, crewAnonMemberLabel, customGroupSize, customGroupMemberLabel, customMemberFallen,
@@ -47,6 +51,7 @@ import { deletionEntry } from "../../utils/foundry-compat.js";
 import { markXpReceipt } from "../../utils/roll-engine.js";
 import { SYSTEM_ID } from "../../system-id.js";
 import { ownsLearnedMoveNamed } from "./owns-move.js";
+import { presenceFor } from "./front-line-presence.js";
 import { followerDetailBase } from "./follower-masters.js";
 import { STONETOP_SCOPE } from "./StonetopFlags.js";
 
@@ -165,6 +170,27 @@ export function wasStanding(raw) {
 	return raw == null || raw === "" || Number(raw) !== 0;
 }
 
+// The single followers whose "Dead" is kept on their card's details: the animal companion, an initiate, a
+// beast. A custom follower keeps it on its own record; a roster row is struck off instead.
+const DETAIL_DEAD_TYPES = new Set(["animal-companion", "initiate", "beast"]);
+
+/**
+ * Where a follower marked "Dead" by the fate dialog is recorded, or null for a type that records it some
+ * other way (a crew or group member is struck off its roster). PURE.
+ */
+export function followerDeadPath(ftype, slug = "") {
+	if (ftype === "custom") return slug ? `customFollowers.${slug}.dead` : null;
+	if (!DETAIL_DEAD_TYPES.has(ftype)) return null;
+	const base = followerDetailBase(ftype, slug);
+	return base ? `${base}.dead` : null;
+}
+
+/** Whether a single follower is marked "Dead" on their card, off resolved flags. PURE. */
+export function followerMarkedDead(flags, ftype, slug = "") {
+	const path = followerDeadPath(ftype, slug);
+	return !!(path && foundry.utils.getProperty(flags, path));
+}
+
 /**
  * What raising a follower's HP above 0 clears: a custom follower marked "Dead" by the fate dialog
  * comes back as a normal card, the mirror of that outcome, and so does a custom group's member marked
@@ -173,10 +199,12 @@ export function wasStanding(raw) {
  * revive is one rule. `flags` is the character's resolved flags.
  */
 export function followerReviveUpdate(follower, slug, val, flags, index = null) {
-	if (!slug || !(Number(val) > 0)) return null;
-	if (follower === "custom") {
-		return flags?.customFollowers?.[slug]?.dead ? { [`flags.${SYSTEM_ID}.customFollowers.${slug}.dead`]: false } : null;
+	if (!(Number(val) > 0)) return null;
+	// A single follower marked "Dead" (a custom one's record, or a companion's, initiate's or beast's card).
+	if (follower === "custom" || DETAIL_DEAD_TYPES.has(follower)) {
+		return followerMarkedDead(flags, follower, slug ?? "") ? { [`flags.${SYSTEM_ID}.${followerDeadPath(follower, slug ?? "")}`]: false } : null;
 	}
+	if (!slug) return null;
 	// A custom group's member marked fallen at the group's floor (customMemberDeathUpdate): their slot
 	// in the parallel `memberDead` array cleared, the array written whole as memberHp is.
 	if (follower === "custom-member") {
@@ -207,12 +235,21 @@ export function customMemberFateName(index) {
 /**
  * What SIR, PERMISSION TO DIE, SIR offers for this follower right now.
  *
- * @returns {{canSpare: boolean, letGo: boolean}}
- *   `canSpare`: the spend button (learned and Loyalty held); `letGo`: the "mark XP" box beside Dead.
+ * @param {Actor}  actor
+ * @param {number} loyalty  what their Loyalty track holds
+ * @param {{ftype?: string}} [opts]  the Loyalty track's follower type (followerFateLoyaltyType): "crew" lets
+ *   Front Line Leader's Presence pay
+ * @returns {{canSpare: boolean, letGo: boolean, presence: number}}
+ *   `canSpare`: the spend button (learned and Loyalty held); `letGo`: the "mark XP" box beside Dead;
+ *   `presence`: the Presence that could pay the spare instead (0 for none, or for anyone but the crew).
  */
-export function sirPermissionOffer(actor, loyalty) {
+export function sirPermissionOffer(actor, loyalty, { ftype = "" } = {}) {
 	const learned = ownsLearnedMoveNamed(actor, SIR_PERMISSION_TO_DIE);
-	return { canSpare: learned && Math.max(0, Number(loyalty) || 0) > 0, letGo: learned };
+	return {
+		canSpare: learned && Math.max(0, Number(loyalty) || 0) > 0,
+		letGo:    learned,
+		presence: learned ? presenceFor(actor, ftype) : 0,
+	};
 }
 
 /**

@@ -27,14 +27,82 @@
 // Nor does it govern the XP INPUT on the character sheet. That is a person typing an absolute
 // number, not a delta, and last-write-wins is the correct behaviour for it.
 
+import { SYSTEM_ID } from "../system-id.js";
+
 /**
- * Stonetop's XP-to-level rule: the total needed to level up at a given level is 6 + 2 x level.
+ * The advancement variants Book I p.582 ("Slowing the rate") lists, as world settings
+ * (registered in settings.js). Each default is the book's standard rule, so a world that never
+ * touches them plays exactly as before:
+ *  - "Increase the XP requirement. The default requirement is 6 + (2 x level). Increase 6 to a 10
+ *    to add an extra session to most levels. Multiply their current level by 3 instead of 2 to
+ *    really slow the rate of advancement at higher levels." (`base`, `perLevel`)
+ *  - "Reset XP to 0 on Level Up." (`resetOnLevelUp`)
+ *  - "Let players always Burn Brightly, even if they lack the XP to Level Up." (`alwaysBurn`)
+ * The fourth variant there, stricter End of Session questions, is the GM's judgement at the table
+ * and has no switch.
+ */
+export const XP_RULE_SETTINGS = Object.freeze({
+	base:           "xpLevelUpBase",
+	perLevel:       "xpLevelUpPerLevel",
+	resetOnLevelUp: "xpResetOnLevelUp",
+	alwaysBurn:     "burnBrightlyAlways",
+});
+
+/** The book's standard advancement (Book I p.528): 6 + twice your current level, XP carried over. */
+export const STANDARD_XP_RULES = Object.freeze({ base: 6, perLevel: 2, resetOnLevelUp: false, alwaysBurn: false });
+
+/** The choices the two numeric settings offer: the book's default and the one alternative it names. */
+export const XP_BASE_CHOICES      = Object.freeze([6, 10]);
+export const XP_PER_LEVEL_CHOICES = Object.freeze([2, 3]);
+
+// A setting read that never throws: unregistered in a unit test or an older world, it is the
+// book's rule. A stored value outside the offered choices (hand-edited) is the default too.
+function _readRule(key, fallback, allowed = null) {
+	let value;
+	try { value = globalThis.game?.settings?.get?.(SYSTEM_ID, key); } catch { return fallback; }
+	if (allowed) {
+		const n = Number(value);
+		return allowed.includes(n) ? n : fallback;
+	}
+	return typeof value === "boolean" ? value : fallback;
+}
+
+const _rulesOr = rules => (rules && typeof rules === "object" ? rules : xpRules());
+
+/** This world's advancement rules, read now. */
+export function xpRules() {
+	return {
+		base:           _readRule(XP_RULE_SETTINGS.base, STANDARD_XP_RULES.base, XP_BASE_CHOICES),
+		perLevel:       _readRule(XP_RULE_SETTINGS.perLevel, STANDARD_XP_RULES.perLevel, XP_PER_LEVEL_CHOICES),
+		resetOnLevelUp: _readRule(XP_RULE_SETTINGS.resetOnLevelUp, STANDARD_XP_RULES.resetOnLevelUp),
+		alwaysBurn:     _readRule(XP_RULE_SETTINGS.alwaysBurn, STANDARD_XP_RULES.alwaysBurn),
+	};
+}
+
+/**
+ * Stonetop's XP-to-level rule: the total needed to level up at a given level is 6 + 2 x level
+ * (Book I p.528), or the slower curve the world picked (p.582, see XP_RULE_SETTINGS).
  *
  * The single owner of that curve. Every "N / max" readout and affordability check calls this
  * rather than re-deriving it, so a change to the curve lands in exactly one place.
+ *
+ * @param {number} level
+ * @param {object} [rules]  xpRules(); passed only by a caller that already read them. Anything else is
+ *                          ignored, so `levels.map(xpToLevelUp)` (an index in this slot) still reads the world.
  */
-export function xpToLevelUp(level) {
-	return 6 + level * 2;
+export function xpToLevelUp(level, rules = null) {
+	const r = _rulesOr(rules);
+	return r.base + level * r.perLevel;
+}
+
+/**
+ * What XP a character keeps after levelling up from `level` holding `xp`: the cost subtracted
+ * (Level Up step 1, p.528), or nothing at all where the world resets XP to 0 on Level Up (p.582).
+ */
+export function xpAfterLevelUp(xp, level, rules = null) {
+	const r = _rulesOr(rules);
+	if (r.resetOnLevelUp) return 0;
+	return Math.max(0, (Number(xp) || 0) - xpToLevelUp(level, r));
 }
 
 /**

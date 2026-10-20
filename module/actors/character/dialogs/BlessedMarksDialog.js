@@ -33,7 +33,7 @@
  */
 import { StonetopAutocomplete } from "../../../utils/autocomplete.js";
 import { openLinkedActorSheet, ACTOR_LINK_MISSING } from "../../../utils/actor-link.js";
-import { groupMarks, availableKinds, markKind, markSign, WARD_SIGNS, DEFAULT_WARD_SIGN } from "../blessed-marks.js";
+import { groupMarks, availableKinds, markKind, markSign, tracklessTally, charmPotencyText, WARD_SIGNS, DEFAULT_WARD_SIGN } from "../blessed-marks.js";
 import { playbookIconPath } from "../../../utils/playbook-actors.js";
 import { RosterDialog } from "./RosterDialog.js";
 
@@ -48,6 +48,12 @@ export class BlessedMarksDialog extends RosterDialog {
 	 */
 	constructor(actor, character, options = {}) {
 		super(actor, character, "stonetop-blessed-marks", options);
+		// Potent Workings' choice, paid for in the Amulets crafting window just before this opened
+		// (`{ extraHarm, retains }`, see the sheet's Amulets spend). It belongs to the charm being
+		// crafted, which is laid HERE, so the next charm laid in this window carries it and the
+		// window opens on the charm panel. Spent on that one charm, never on a second.
+		this._pendingCharm = options.pendingCharm ?? null;
+		if (this._pendingCharm) this._activeTab = "charm";
 	}
 
 	static get defaultOptions() {
@@ -121,6 +127,14 @@ export class BlessedMarksDialog extends RosterDialog {
 			// they had to make. It no longer has to be shown and hidden as a picker moves: it lives
 			// in the one panel it means anything in.
 			signs: def.signs ? WARD_SIGNS.map(s => ({ ...s, selected: s.key === defaultSign })) : null,
+			// Trackless Step's "1 Stock can mark a number of individuals up to your level+INT". The
+			// roster does not know which Stock paid for which names, so it says the count and the
+			// per-Stock cap, and flags past it (never blocks: the Blessed may have paid twice).
+			tally: def.key === "trackless" ? this._tracklessTally(stored) : null,
+			// The Potent Workings choice waiting for the charm it was bought for.
+			pending: def.key === "charm" && this._pendingCharm
+				? `Potent Workings, paid: the next charm laid here ${charmPotencyText(this._pendingCharm)}.`
+				: null,
 		}));
 
 		return {
@@ -166,6 +180,11 @@ export class BlessedMarksDialog extends RosterDialog {
 			// A ward laid before the toggle existed carries no answer, and the row says which one it
 			// is missing rather than looking merely undecorated.
 			signUnset: !!def.signs && !entry.sign,
+			// A charm crafted with Potent Workings says which of the two it was given. "" (falsy)
+			// on every other row, including a plain charm.
+			potency: entry.kind === "charm" && charmPotencyText(entry)
+				? `Potent Workings: ${charmPotencyText(entry)}`
+				: "",
 			// The note is the move's OTHER half — "describe who or what they affect (using no more
 			// words than your level)". It stopped having to carry repelled-or-trapped as well the
 			// moment the toggle did, so it now asks for exactly the half it holds.
@@ -173,6 +192,17 @@ export class BlessedMarksDialog extends RosterDialog {
 				? "Who or what the signs affect…"
 				: "What this mark is for…",
 		};
+	}
+
+	/** Trackless Step's line under its rule: N marked, against level + INT per Stock. */
+	_tracklessTally(stored) {
+		const { count, perStock, over } = tracklessTally(stored, {
+			level: this._actor?.system?.attributes?.level?.value ?? 1,
+			int:   this._actor?.system?.stats?.int?.value ?? 0,
+		});
+		const text = `${count} marked; 1 Stock covers up to ${perStock} (level + INT).`
+			+ (over ? " More than one Stock's worth: spend another, or lift some." : "");
+		return { count, perStock, over, text };
 	}
 
 	activateListeners(html) {
@@ -327,10 +357,16 @@ export class BlessedMarksDialog extends RosterDialog {
 	 * the player did not type (resolved a partial, or found nobody and stored a bare name).
 	 */
 	async _lay(entry, note = null, panel = null) {
-		const added = await this._character.layBlessedMark(entry);
+		// The charm the Potent Workings choice was paid for is the next one laid, so it rides this
+		// write and is then used up (a refused write keeps it for the next try).
+		const potent = entry.kind === "charm" && this._pendingCharm
+			? { extraHarm: String(this._pendingCharm.extraHarm ?? "").trim(), retains: this._pendingCharm.retains === true }
+			: null;
+		const added = await this._character.layBlessedMark(potent ? { ...entry, ...potent } : entry);
 		if (!added) return this._warn("stonetop.blessedMarks.already", {
 			name: entry.name, kind: (markKind(entry.kind)?.label ?? "mark").toLowerCase(),
 		});
+		if (potent) this._pendingCharm = null;
 		if (note) this._notify("info", note, { name: added.name });
 		// The ward's sign is deliberately left alone — warding three doorways against the same
 		// thing is one move being used once, and re-picking each time would be busywork. The kind

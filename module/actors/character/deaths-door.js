@@ -24,6 +24,8 @@
 import { destinyUnfulfilled, DESTINED_LABEL } from "./destined.js";
 import { SYSTEM_ID } from "../../system-id.js";
 import { ROLLED_FLAG, cardCountedTier, outcomeTier } from "../../utils/counted-tier.js";
+import { normalizeRollType } from "../../utils/roll-types.js";
+import { moveLearnedIn } from "./owns-move.js";
 
 // The state a character is in with respect to their current brush with death. Stored on the
 // actor (see DEATHS_DOOR_FLAG); absent/null is the ordinary living state.
@@ -601,4 +603,52 @@ export function deathsDoorRollOptions(moveNames = [], moveResources = {}, backgr
 		// printed and is a non-zero `modifier` as far as a `!== 0` test is concerned.
 		penalty: marks ? -marks : 0,
 	};
+}
+
+// -- THE LAST MOVE ------------------------------------------------------------------------------------
+
+/**
+ * Death's Door's first 6- fate: "Make one last move as if you rolled a 12+, then step through the Last
+ * Door" (Book I p.75, p.245). "They can make one last move, but after that they're dead. There's no saving
+ * them. They can't use that last move to avoid death."
+ */
+export const LAST_MOVE_TOTAL = 12;
+
+/**
+ * The moves a dying character could make as their last, as `{id, name}` sorted by name: their own moves
+ * that ROLL (a total of 12+ means nothing to one that doesn't) and are learned (owns-move.js#moveLearnedIn),
+ * one per name, never a 0-HP move (Death's Door itself, Undying, Tethered, Dark Succor). PURE.
+ *
+ * @param {Iterable<object>} items  the character's items
+ */
+export function lastMoveChoices(items) {
+	const list = Array.from(items ?? []);
+	const zeroHp = new Set(Object.values(ZERO_HP_MOVES).map(m => m?.name).filter(Boolean));
+	const seen = new Set();
+	const out = [];
+	for (const item of list) {
+		if (item?.type !== "move" || !item.id || !normalizeRollType(item.system?.rollType)) continue;
+		if (zeroHp.has(item.name) || seen.has(item.name) || !moveLearnedIn(item, list)) continue;
+		seen.add(item.name);
+		out.push({ id: item.id, name: item.name });
+	}
+	return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Make `item` as the last move, at LAST_MOVE_TOTAL: through the character's own roll path
+ * (StonetopCharacter#onRoll, so a Clash still asks its weapon and target and gets its damage), with the
+ * total given instead of rolled (roll-engine.js#rollStat's `asIfTotal`) and named on the card. `rollable`
+ * stands in for the move's row (StonetopCharacterSheet#_makeSyntheticRollable).
+ *
+ * @returns {Promise<boolean>}  whether the move was made (false: backed out of its prompts, or nothing to roll)
+ */
+export async function makeLastMove(character, item, { rollable = null, note = "" } = {}) {
+	if (!character?.onRoll || !item || !rollable) return false;
+	const made = await character.onRoll({ currentTarget: rollable }, {
+		asIfTotal: LAST_MOVE_TOTAL,
+		rollMode: "normal",
+		conditionNotes: note ? [note] : [],
+	});
+	return !!made && made !== "cancel";
 }

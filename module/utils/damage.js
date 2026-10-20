@@ -436,6 +436,54 @@ export function readOptionDamage(text) {
 	};
 }
 
+// One alternative in a list of them: a die, then "for" or "if" and what it is for, up to the next
+// comma, semicolon or closing parenthesis. "d4 for bruises/scrapes", "d8 if it'd break bones".
+const DAMAGE_CHOICE_RE = /(\d*\s*d\s*\d+(?:\s*[+-]\s*\d+)?)\s+(for|if)\s+([^,;)]+)/gi;
+
+/**
+ * A bullet that deals damage but leaves the die to the fiction, offering several to pick from:
+ * Work With What You've Got's "Deal damage appropriate to the source (d4 for bruises/scrapes, d6
+ * for bloodshed, d8 if it'd break bones, d10 if it'd kill a common person)". readOptionDamage
+ * finds nothing there (no die sits right before "damage"), so the ticked bullet grew no button.
+ *
+ * Read off the words rather than the move's name, so a homebrew bullet written the same way
+ * gets the same buttons. The refusals are readOptionDamage's: a bonus ("+1d4 if ...", "1d6 extra
+ * damage") rides a roll already being made, and without a verb nobody is striking anybody. A
+ * bullet readOptionDamage already reads is left to it, so the two never both offer a button.
+ *
+ * @param {string} text  one printed option's plain text
+ * @returns {Array<{formula: string, isRoll: true, label: string, self: boolean, ignoresArmor: boolean,
+ *            piercing: number, tags: string[]}>|null}
+ *   one entry per die, in printed order, each in readOptionDamage's shape plus `label` (what the
+ *   die is for: "bruises/scrapes", "if it'd break bones"). Null unless there are at least two.
+ */
+export function readOptionDamageChoices(text) {
+	const line = String(text ?? "");
+	if (!line || !/\bdamage\b/i.test(line)) return null;
+	if (BONUS_DAMAGE_RE.test(line) || !DAMAGE_VERB_RE.test(line)) return null;
+	if (readOptionDamage(line)) return null;
+
+	const them = /\b(?:they|them|their|its|the\s+target)\b/i.test(line);
+	const shared = {
+		isRoll: true,
+		self: !them && /\byou(?:r|rself)?\b/i.test(line),
+		ignoresArmor: IGNORES_ARMOR_RE.test(line),
+		piercing: Number(PIERCING_RE.exec(line)?.[1]) || 0,
+		tags: [],
+	};
+	const choices = [];
+	for (const match of line.matchAll(DAMAGE_CHOICE_RE)) {
+		// A sign in front is a bonus on another roll, as in readOptionDamage.
+		const before = line.slice(0, match.index).trimEnd();
+		if (before.endsWith("+") || before.endsWith("-")) continue;
+		const formula = match[1].replace(/\s+/g, "").replace(/^d/i, "1d");
+		const what = match[3].trim().replace(/[.:]+$/, "");
+		if (!what) continue;
+		choices.push({ ...shared, formula, label: match[2].toLowerCase() === "if" ? `if ${what}` : what });
+	}
+	return choices.length >= 2 ? choices : null;
+}
+
 /**
  * A line that loses HP rather than dealing damage (HP_LOSS_RE), in readOptionDamage's shape: the
  * reader's own, armor no object, `hpLoss` set so the button can say "Lose 2d4 HP" rather than offer

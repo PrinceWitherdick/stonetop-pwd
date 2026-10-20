@@ -1,0 +1,37 @@
+{{!-- RETIRE A CHARACTER (module/campaign/RetireCharacterDialog.js), Book I p.584. How they go, the
+      epilogue in the player's words ("Epilogues should skip game mechanics": no rolls here), and for
+      one who stays, the NPC they become. Nothing is written until the button at the foot. --}}
+<form class="stonetop retire-character" autocomplete="off">
+	<p class="retire-intro">{{name}} leaves play: no longer a PC, though not dead. Give them an epilogue, a scene or two to send them off and say goodbye. Their player can make a new PC between sessions.</p>
+
+	<fieldset class="retire-hows">
+		<legend class="retire-label">How do they go?</legend>
+		{{#each choices}}
+		<label class="retire-check">
+			<input type="radio" name="retire-how" class="retire-how" value="{{how}}" data-retire-focus="how-{{how}}"{{#if checked}} checked{{/if}}>
+			<span>{{label}}</span>
+		</label>
+		{{/each}}
+	</fieldset>
+
+	<label class="retire-field">
+		<span class="retire-label">The epilogue</span>
+		<span class="retire-hint">{{prompt}}</span>
+		<textarea class="retire-epilogue" rows="6" data-retire-focus="epilogue">{{epilogue}}</textarea>
+	</label>
+
+	{{#if staying}}
+	<label class="retire-field">
+		<span class="retire-label">The NPC they become</span>
+		<span class="retire-hint">By default the GM portrays them; if everyone agrees, their player can. They may advise and support the PCs, but shouldn't act as followers or solve the PCs' problems. They are marked Retired.</span>
+		<select class="retire-npc" data-retire-focus="npc">
+			{{#each npcOptions}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+		</select>
+	</label>
+	{{/if}}
+
+	<footer class="retire-footer">
+		<button type="button" class="retire-apply stonetop-guide-btn--primary"><i class="fas fa-door-open" aria-hidden="true"></i> Post the epilogue and retire them</button>
+		<button type="button" class="retire-cancel">Cancel</button>
+	</footer>
+</form>

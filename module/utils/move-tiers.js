@@ -694,7 +694,7 @@ export function stripTierProse(description, moveResults = null, alsoSaid = []) {
 		//   Clash keeps "…roll +STR:" and then loses "on a 10+, … pick 1:" from under it — a
 		//     trailing colon that now introduces the LADDER, not the list (`_trailingStop` leaves
 		//     it there for exactly that reason), so the colon alone must not hold the list here.
-		//   All is Illuminated loses "ask them 2 questions from the list below" out of the MIDDLE
+		//   All is Illuminated loses "ask them 1 question from the list" out of the MIDDLE
 		//     and keeps "In any case, they must answer truthfully." — its last clause survived, so
 		//     nothing was cut from the end, and yet the list above is stranded all the same.
 		return {

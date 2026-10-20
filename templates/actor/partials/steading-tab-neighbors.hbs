@@ -11,23 +11,22 @@
 		<datalist id="steading-home-suggestions">
 			{{#each stonetop.suggestions.homes}}<option value="{{this}}"></option>{{/each}}
 		</datalist>
+		{{!-- The three People lists are CARDS, not columns (user's call, 10-19): a row reads
+		      face | who they are (name, occupation, traits) | what to remember (Relations, Notes),
+		      with no header to sort by, because sorting on a sentence of traits or notes tells
+		      nobody anything. Rows stay A-Z by name (`data-sort="name"`, sortable-columns.js).
+		      Read mode draws plain wrapping text and leaves an empty field out; edit mode draws
+		      every field as an input. --}}
 		<div class="steading-players-section steading-edit-section{{#unless stonetop.edit.players}} stonetop-readonly{{/unless}}">
 			{{> "stonetop.steading-section-toggle" section="players" editing=stonetop.edit.players collapse="players"}}
 			<h3 class="steading-residents-heading">Player Characters</h3>
 			{{#if stonetop.players.length}}
-			<div class="steading-residents-table" data-resize-key="players">
-				<div class="steading-residents-header">
-					<div class="steading-residents-header-cell steading-residents-col-name"><span class="steading-residents-header-label">Name</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-occupation"><span class="steading-residents-header-label">Occupation</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-relations"><span class="steading-residents-header-label">Relations</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-notes"><span class="steading-residents-header-label">Notes</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-actions"></div>
-				</div>
+			<div class="steading-residents-table steading-people-cards" data-resize-key="players" data-sort="name">
 				<ul class="steading-residents-list">
 					{{#each stonetop.players}}
 					{{#if name}}
-					<li class="steading-residents-row">
-						<div class="steading-residents-col steading-residents-col-name steading-player-name-cell">
+					<li class="steading-residents-row steading-person" data-sort-name="{{name}}">
+						<div class="steading-person-face">
 							{{#if img}}
 							{{!-- No data-tooltip here: this portrait raises the shared hover preview
 							      (module/utils/avatar-preview.js), and a tooltip would open a second
@@ -47,49 +46,52 @@
 								<i class="fas fa-user"></i>
 							</span>
 							{{/if}}
-							{{!-- The playbook rides the name here — "Pim The Lightbearer" — as it does in
-							      the Actors sidebar and on a chat card's speaker. It sits INSIDE the name
-							      element so the cell's ellipsis truncates the pair as one name; the aria
-							      label and tooltip take the whole thing as a single string. --}}
-							{{#if uuid}}
-							{{!-- Labelled rather than tooltipped, for the same reason as the NPC rows
-							      below: no href to announce, and no room for a hover bubble. --}}
-							<a class="steading-player-name-text steading-player-open" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
-							   draggable="true" aria-label='{{localize "stonetop.relationships.open" name=fullName}}'>{{name}}{{#if playbookName}} <span class="stonetop-playbook-epithet">{{playbookName}}</span>{{/if}}</a>
-							{{else}}
-							<span class="steading-player-name-text" data-tooltip="{{fullName}}">{{name}}{{#if playbookName}} <span class="stonetop-playbook-epithet">{{playbookName}}</span>{{/if}}</span>
-							{{/if}}
 						</div>
-						<div class="steading-residents-col steading-residents-col-occupation" data-tooltip="{{#if @root.stonetop.edit.players}}{{occupation}}{{else}}{{resolvedOccupation}}{{/if}}">
+						<div class="steading-residents-col-name steading-person-who">
+							<div class="steading-person-name-line">
+								{{!-- The playbook rides the name here, "Pim The Lightbearer", as it does in
+								      the Actors sidebar and on a chat card's speaker. --}}
+								{{#if uuid}}
+								{{!-- Labelled rather than tooltipped, for the same reason as the NPC rows
+								      below: no href to announce, and no room for a hover bubble. --}}
+								<a class="steading-player-name-text steading-player-open steading-person-text" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
+								   draggable="true" aria-label='{{localize "stonetop.relationships.open" name=fullName}}'>{{name}}{{#if playbookName}} <span class="stonetop-playbook-epithet">{{playbookName}}</span>{{/if}}</a>
+								{{else}}
+								<span class="steading-player-name-text steading-person-text">{{name}}{{#if playbookName}} <span class="stonetop-playbook-epithet">{{playbookName}}</span>{{/if}}</span>
+								{{/if}}
+							</div>
+							{{#if @root.stonetop.edit.players}}
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="occupation" data-list="players" list="steading-occupation-suggestions"
-							       value="{{#if @root.stonetop.edit.players}}{{occupation}}{{else}}{{resolvedOccupation}}{{/if}}"
-							       {{#if @root.stonetop.edit.players}}placeholder="Occupation or Playbook"{{/if}}
-							       {{#unless @root.stonetop.edit.players}}disabled{{/unless}}>
+							       value="{{occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
+							{{else if resolvedOccupation}}
+							<div class="steading-person-role steading-person-text">{{resolvedOccupation}}</div>
+							{{/if}}
 						</div>
-						<div class="steading-residents-col steading-residents-col-relations" data-tooltip="{{relations}}">
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="relations" data-list="players"
-							       value="{{relations}}"
-							       {{#if @root.stonetop.edit.players}}placeholder="Relations"{{/if}}
-							       {{#unless @root.stonetop.edit.players}}disabled{{/unless}}>
+						<div class="steading-person-details">
+							{{#if @root.stonetop.edit.players}}
+							<label class="steading-person-field"><span class="steading-person-label">Relations</span>
+								<input type="text" class="steading-resident-input"
+								       data-index="{{@index}}" data-field="relations" data-list="players"
+								       value="{{relations}}" placeholder="Relations"></label>
+							<label class="steading-person-field"><span class="steading-person-label">Notes</span>
+								<input type="text" class="steading-resident-input"
+								       data-index="{{@index}}" data-field="notes" data-list="players"
+								       value="{{notes}}" placeholder="Notes"></label>
+							{{else}}
+							{{#if relations}}<div class="steading-person-field"><span class="steading-person-label">Relations</span><span class="steading-person-value steading-person-text">{{relations}}</span></div>{{/if}}
+							{{#if notes}}<div class="steading-person-field"><span class="steading-person-label">Notes</span><span class="steading-person-value steading-person-text">{{notes}}</span></div>{{/if}}
+							{{/if}}
 						</div>
-						<div class="steading-residents-col steading-residents-col-notes" data-tooltip="{{notes}}">
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="notes" data-list="players"
-							       value="{{notes}}"
-							       {{#if @root.stonetop.edit.players}}placeholder="Notes"{{/if}}
-							       {{#unless @root.stonetop.edit.players}}disabled{{/unless}}>
-						</div>
-						<div class="steading-residents-col steading-residents-col-actions">
+						<div class="steading-residents-col-actions">
 							<button type="button" class="steading-list-delete"
 							        data-list="players" data-index="{{@index}}"
 							        title="Remove" tabindex="-1">
 								<i class="fas fa-times"></i>
 							</button>
 						</div>
-						{{!-- The character's gear tags and typed reminders (gear-reminders.js), read-only, on a
-						      line of their own across the whole row: every cell above is one line tall. --}}
+						{{!-- The character's gear tags and typed reminders (gear-reminders.js), read-only,
+						      under the who/details pair. --}}
 						{{#if reminders.length}}
 						<div class="steading-player-reminders">{{> "stonetop.reminder-chips" chips=reminders}}</div>
 						{{/if}}
@@ -105,20 +107,12 @@
 		<div class="steading-residents-section steading-residents-section--residents steading-edit-section{{#unless stonetop.edit.residents}} stonetop-readonly{{/unless}}">
 			{{> "stonetop.steading-section-toggle" section="residents" editing=stonetop.edit.residents collapse="residents"}}
 			<h3 class="steading-residents-heading">Residents of Stonetop {{> "stonetop.tab-search-control" title="Search residents" placeholder="Filter residents…"}}</h3>
-			<div class="steading-residents-table" data-resize-key="residents">
-				<div class="steading-residents-header">
-					<div class="steading-residents-header-cell steading-residents-col-name"><span class="steading-residents-header-label">Name</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-occupation"><span class="steading-residents-header-label">Occupation</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-traits"><span class="steading-residents-header-label">Traits</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-relations"><span class="steading-residents-header-label">Relations</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-notes"><span class="steading-residents-header-label">Notes</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-actions"></div>
-				</div>
+			<div class="steading-residents-table steading-people-cards" data-resize-key="residents" data-sort="name">
 				<ul class="steading-residents-list">
 					{{#each stonetop.residents}}
 					{{#if name}}
-					<li class="steading-residents-row">
-						<div class="steading-residents-col steading-residents-col-name steading-member-name-cell{{#if unresolved}} steading-member-unresolved{{/if}}" data-tooltip="{{name}}">
+					<li class="steading-residents-row steading-person" data-sort-name="{{name}}">
+						<div class="steading-person-face">
 							{{!-- Behaviour attributes stay on the WRAPPER (it is what the click and
 							      drag handlers resolve with closest), and the inner image is
 							      explicitly undraggable so Gecko cannot hand over an image payload
@@ -126,63 +120,63 @@
 							<span class="steading-member-avatar stonetop-portrait-box" data-name="{{name}}"
 							     data-list="residents" data-index="{{@index}}"
 							     {{#if uuid}}draggable="true" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"{{/if}}><img class="steading-member-avatar-img" src="{{profileImg}}" alt="" draggable="false" data-name="{{name}}"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}></span>
-							{{#if @root.stonetop.edit.residents}}
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="name"
-							       value="{{name}}" placeholder="Name">
-							{{else}}{{#if uuid}}
-							{{!-- Labelled rather than tooltipped: no href, so nothing else tells a
-							      screen-reader user this name opens anything. The roster is a dense
-							      table and a hover bubble here would cover the rows under it. --}}
-							<a class="steading-member-open steading-member-name-text{{#if statusInactive}} is-inactive{{/if}}" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
-							   draggable="true" aria-label="Open {{name}}'s NPC sheet">{{name}}</a>
-							{{#if status}}<span class="stonetop-npc-status-badge stonetop-npc-status-badge--sm" data-status="{{status}}" data-tooltip="{{statusLabel}}"><span class="stonetop-npc-status-badge-text">{{statusLabel}}</span></span>{{/if}}
-							{{else}}
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="name"
-							       value="{{name}}" placeholder="Name" disabled>
-							{{/if}}{{/if}}
 						</div>
-						<div class="steading-residents-col steading-residents-col-occupation" data-tooltip="{{#if @root.stonetop.edit.residents}}{{occupation}}{{else}}{{resolvedOccupation}}{{/if}}">
+						<div class="steading-residents-col-name steading-person-who{{#if unresolved}} steading-member-unresolved{{/if}}">
+							{{#if @root.stonetop.edit.residents}}
+							<input type="text" class="steading-resident-input steading-person-name-input"
+							       data-index="{{@index}}" data-field="name"
+							       value="{{name}}" placeholder="Name" aria-label="Name">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="occupation" list="steading-occupation-suggestions"
-							       value="{{#if @root.stonetop.edit.residents}}{{occupation}}{{else}}{{resolvedOccupation}}{{/if}}"
-							       {{#if @root.stonetop.edit.residents}}placeholder="Occupation or Playbook"{{/if}}
-							       {{#unless @root.stonetop.edit.residents}}disabled{{/unless}}>
-						</div>
-						<div class="steading-residents-col steading-residents-col-traits" data-tooltip="{{traits}}">
+							       value="{{occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="traits" list="steading-trait-suggestions"
-							       value="{{traits}}"
-							       {{#if @root.stonetop.edit.residents}}placeholder="Traits"{{/if}}
-							       {{#unless @root.stonetop.edit.residents}}disabled{{/unless}}>
+							       value="{{traits}}" placeholder="Traits" aria-label="Traits">
+							{{else}}
+							<div class="steading-person-name-line">
+								{{#if uuid}}
+								{{!-- Labelled rather than tooltipped: no href, so nothing else tells a
+								      screen-reader user this name opens anything. --}}
+								<a class="steading-member-open steading-member-name-text steading-person-text{{#if statusInactive}} is-inactive{{/if}}" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
+								   draggable="true" aria-label="Open {{name}}'s NPC sheet">{{name}}</a>
+								{{#if status}}<span class="stonetop-npc-status-badge stonetop-npc-status-badge--sm" data-status="{{status}}" data-tooltip="{{statusLabel}}"><span class="stonetop-npc-status-badge-text">{{statusLabel}}</span></span>{{/if}}
+								{{else}}
+								<span class="steading-member-name-text steading-person-text">{{name}}</span>
+								{{/if}}
+							</div>
+							{{#if resolvedOccupation}}<div class="steading-person-role steading-person-text">{{resolvedOccupation}}</div>{{/if}}
+							{{#if traits}}<div class="steading-person-traits steading-person-text">{{traits}}</div>{{/if}}
+							{{/if}}
 						</div>
-						<div class="steading-residents-col steading-residents-col-relations" data-tooltip="{{relations}}">
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="relations"
-							       value="{{relations}}"
-							       {{#if @root.stonetop.edit.residents}}placeholder="Relations"{{/if}}
-							       {{#unless @root.stonetop.edit.residents}}disabled{{/unless}}>
-						</div>
-						<div class="steading-residents-col steading-residents-col-notes" data-tooltip="{{notes}}">
-							{{#if uuid}}
-							{{!-- Actor-backed row: the rich notes live on the NPC. Show a rendered
-							      preview; in edit mode a pencil opens the shared pop-up editor. --}}
-							<div class="steading-member-notes-preview stonetop-npc-rich-text">{{{notesHtml}}}</div>
+						<div class="steading-person-details">
 							{{#if @root.stonetop.edit.residents}}
-							<button type="button" class="steading-member-notes-edit" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
-							        title="Edit notes" tabindex="-1"><i class="fas fa-pen"></i></button>
+							<label class="steading-person-field"><span class="steading-person-label">Relations</span>
+								<input type="text" class="steading-resident-input"
+								       data-index="{{@index}}" data-field="relations"
+								       value="{{relations}}" placeholder="Relations"></label>
+							{{else if relations}}
+							<div class="steading-person-field"><span class="steading-person-label">Relations</span><span class="steading-person-value steading-person-text">{{relations}}</span></div>
+							{{/if}}
+							{{#if uuid}}
+							{{!-- Actor-backed row: the rich notes live on the NPC. A rendered preview,
+							      clamped; in edit mode a pencil opens the shared pop-up editor. --}}
+							{{#if (or @root.stonetop.edit.residents notes)}}
+							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">Notes</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{notesHtml}}}</div>{{#if @root.stonetop.edit.residents}}<button type="button" class="steading-member-notes-edit" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
+							        title="Edit notes" aria-label="Edit notes" tabindex="-1"><i class="fas fa-pen"></i></button>{{/if}}</div>
 							{{/if}}
 							{{else}}
 							{{!-- Legacy plain-text row (pre-migration): keep the inline input. --}}
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="notes"
-							       value="{{notes}}"
-							       {{#if @root.stonetop.edit.residents}}placeholder="Notes"{{/if}}
-							       {{#unless @root.stonetop.edit.residents}}disabled{{/unless}}>
+							{{#if @root.stonetop.edit.residents}}
+							<label class="steading-person-field"><span class="steading-person-label">Notes</span>
+								<input type="text" class="steading-resident-input"
+								       data-index="{{@index}}" data-field="notes"
+								       value="{{notes}}" placeholder="Notes"></label>
+							{{else if notes}}
+							<div class="steading-person-field"><span class="steading-person-label">Notes</span><span class="steading-person-value steading-person-text">{{notes}}</span></div>
+							{{/if}}
 							{{/if}}
 						</div>
-						<div class="steading-residents-col steading-residents-col-actions">
+						<div class="steading-residents-col-actions">
 							<button type="button" class="steading-list-delete"
 							        data-list="residents" data-index="{{@index}}"
 							        title="Remove" tabindex="-1">
@@ -192,33 +186,30 @@
 					</li>
 					{{else}}
 					{{#if @root.stonetop.edit.residents}}
-					<li class="steading-residents-row">
-						<div class="steading-residents-col steading-residents-col-name">
-							<input type="text" class="steading-resident-input"
+					<li class="steading-residents-row steading-person" data-sort-name="">
+						<div class="steading-person-face"><span class="steading-person-face-empty"></span></div>
+						<div class="steading-residents-col-name steading-person-who">
+							<input type="text" class="steading-resident-input steading-person-name-input"
 							       data-index="{{@index}}" data-field="name"
-							       value="{{name}}" title="{{name}}" placeholder="Name">
-						</div>
-						<div class="steading-residents-col steading-residents-col-occupation">
+							       value="{{name}}" placeholder="Name" aria-label="Name">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="occupation" list="steading-occupation-suggestions"
-							       value="{{occupation}}" title="{{occupation}}" placeholder="Occupation or Playbook">
-						</div>
-						<div class="steading-residents-col steading-residents-col-traits">
+							       value="{{occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="traits" list="steading-trait-suggestions"
-							       value="{{traits}}" title="{{traits}}" placeholder="Traits">
+							       value="{{traits}}" placeholder="Traits" aria-label="Traits">
 						</div>
-						<div class="steading-residents-col steading-residents-col-relations">
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="relations"
-							       value="{{relations}}" title="{{relations}}" placeholder="Relations">
+						<div class="steading-person-details">
+							<label class="steading-person-field"><span class="steading-person-label">Relations</span>
+								<input type="text" class="steading-resident-input"
+								       data-index="{{@index}}" data-field="relations"
+								       value="{{relations}}" placeholder="Relations"></label>
+							<label class="steading-person-field"><span class="steading-person-label">Notes</span>
+								<input type="text" class="steading-resident-input"
+								       data-index="{{@index}}" data-field="notes"
+								       value="{{notes}}" placeholder="Notes"></label>
 						</div>
-						<div class="steading-residents-col steading-residents-col-notes">
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="notes"
-							       value="{{notes}}" title="{{notes}}" placeholder="Notes">
-						</div>
-						<div class="steading-residents-col steading-residents-col-actions">
+						<div class="steading-residents-col-actions">
 							<button type="button" class="steading-list-delete"
 							        data-list="residents" data-index="{{@index}}"
 							        title="Remove" tabindex="-1">
@@ -241,90 +232,78 @@
 		<div class="steading-residents-section steading-residents-section--neighbors steading-edit-section{{#unless stonetop.edit.neighbors}} stonetop-readonly{{/unless}}">
 			{{> "stonetop.steading-section-toggle" section="neighbors" editing=stonetop.edit.neighbors collapse="neighbors"}}
 			<h3 class="steading-residents-heading">Neighbors of Stonetop {{> "stonetop.tab-search-control" title="Search neighbors" placeholder="Filter neighbors…"}}</h3>
-			<div class="steading-residents-table steading-neighbors-table" data-resize-key="neighbors">
-				<div class="steading-residents-header">
-					<div class="steading-residents-header-cell steading-residents-col-name"><span class="steading-residents-header-label">Name</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-home"><span class="steading-residents-header-label">Home</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-occupation"><span class="steading-residents-header-label">Occupation</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-traits"><span class="steading-residents-header-label">Traits</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-relations"><span class="steading-residents-header-label">Relations</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-notes"><span class="steading-residents-header-label">Notes</span></div>
-					<div class="steading-residents-header-cell steading-residents-col-actions"></div>
-				</div>
+			<div class="steading-residents-table steading-people-cards steading-neighbors-table" data-resize-key="neighbors" data-sort="name">
 				<ul class="steading-residents-list">
 					{{#each stonetop.neighbors}}
 					{{#if name}}
-					<li class="steading-residents-row">
-						<div class="steading-residents-col steading-residents-col-name steading-member-name-cell{{#if unresolved}} steading-member-unresolved{{/if}}" data-tooltip="{{name}}">
-							{{!-- See the residents table above: attributes on the wrapper, image
+					<li class="steading-residents-row steading-person" data-sort-name="{{name}}">
+						<div class="steading-person-face">
+							{{!-- See the residents list above: attributes on the wrapper, image
 							      explicitly undraggable. --}}
 							<span class="steading-member-avatar stonetop-portrait-box" data-name="{{name}}"
 							     data-list="neighbors" data-index="{{@index}}"
 							     {{#if uuid}}draggable="true" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"{{/if}}><img class="steading-member-avatar-img" src="{{profileImg}}" alt="" draggable="false" data-name="{{name}}"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}></span>
-							{{#if @root.stonetop.edit.neighbors}}
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="name" data-list="neighbors"
-							       value="{{name}}" placeholder="Name">
-							{{else}}{{#if uuid}}
-							{{!-- Labelled rather than tooltipped: no href, so nothing else tells a
-							      screen-reader user this name opens anything. The roster is a dense
-							      table and a hover bubble here would cover the rows under it. --}}
-							<a class="steading-member-open steading-member-name-text{{#if statusInactive}} is-inactive{{/if}}" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
-							   draggable="true" aria-label="Open {{name}}'s NPC sheet">{{name}}</a>
-							{{#if status}}<span class="stonetop-npc-status-badge stonetop-npc-status-badge--sm" data-status="{{status}}" data-tooltip="{{statusLabel}}"><span class="stonetop-npc-status-badge-text">{{statusLabel}}</span></span>{{/if}}
-							{{else}}
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="name" data-list="neighbors"
-							       value="{{name}}" placeholder="Name" disabled>
-							{{/if}}{{/if}}
 						</div>
-						<div class="steading-residents-col steading-residents-col-home" data-tooltip="{{home}}">
+						<div class="steading-residents-col-name steading-person-who{{#if unresolved}} steading-member-unresolved{{/if}}">
+							{{#if @root.stonetop.edit.neighbors}}
+							<input type="text" class="steading-resident-input steading-person-name-input"
+							       data-index="{{@index}}" data-field="name" data-list="neighbors"
+							       value="{{name}}" placeholder="Name" aria-label="Name">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="home" data-list="neighbors" list="steading-home-suggestions"
-							       value="{{home}}"
-							       {{#if @root.stonetop.edit.neighbors}}placeholder="Home"{{/if}}
-							       {{#unless @root.stonetop.edit.neighbors}}disabled{{/unless}}>
-						</div>
-						<div class="steading-residents-col steading-residents-col-occupation" data-tooltip="{{occupation}}">
+							       value="{{home}}" placeholder="Home" aria-label="Home">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="occupation" data-list="neighbors" list="steading-occupation-suggestions"
-							       value="{{occupation}}"
-							       {{#if @root.stonetop.edit.neighbors}}placeholder="Occupation or Playbook"{{/if}}
-							       {{#unless @root.stonetop.edit.neighbors}}disabled{{/unless}}>
-						</div>
-						<div class="steading-residents-col steading-residents-col-traits" data-tooltip="{{traits}}">
+							       value="{{occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="traits" data-list="neighbors" list="steading-trait-suggestions"
-							       value="{{traits}}"
-							       {{#if @root.stonetop.edit.neighbors}}placeholder="Traits"{{/if}}
-							       {{#unless @root.stonetop.edit.neighbors}}disabled{{/unless}}>
+							       value="{{traits}}" placeholder="Traits" aria-label="Traits">
+							{{else}}
+							<div class="steading-person-name-line">
+								{{#if uuid}}
+								{{!-- Labelled rather than tooltipped: no href, so nothing else tells a
+								      screen-reader user this name opens anything. --}}
+								<a class="steading-member-open steading-member-name-text steading-person-text{{#if statusInactive}} is-inactive{{/if}}" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
+								   draggable="true" aria-label="Open {{name}}'s NPC sheet">{{name}}</a>
+								{{#if status}}<span class="stonetop-npc-status-badge stonetop-npc-status-badge--sm" data-status="{{status}}" data-tooltip="{{statusLabel}}"><span class="stonetop-npc-status-badge-text">{{statusLabel}}</span></span>{{/if}}
+								{{else}}
+								<span class="steading-member-name-text steading-person-text">{{name}}</span>
+								{{/if}}
+							</div>
+							{{!-- Where they live rides the occupation line: "Trader · Marshedge". --}}
+							{{#if (or occupation home)}}<div class="steading-person-role steading-person-text">{{occupation}}{{#if (and occupation home)}} · {{/if}}{{#if home}}<span class="steading-person-home">{{home}}</span>{{/if}}</div>{{/if}}
+							{{#if traits}}<div class="steading-person-traits steading-person-text">{{traits}}</div>{{/if}}
+							{{/if}}
 						</div>
-						<div class="steading-residents-col steading-residents-col-relations" data-tooltip="{{relations}}">
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="relations" data-list="neighbors"
-							       value="{{relations}}"
-							       {{#if @root.stonetop.edit.neighbors}}placeholder="Relations"{{/if}}
-							       {{#unless @root.stonetop.edit.neighbors}}disabled{{/unless}}>
-						</div>
-						<div class="steading-residents-col steading-residents-col-notes" data-tooltip="{{notes}}">
-							{{#if uuid}}
-							{{!-- Actor-backed row: the rich notes live on the NPC. Show a rendered
-							      preview; in edit mode a pencil opens the shared pop-up editor. --}}
-							<div class="steading-member-notes-preview stonetop-npc-rich-text">{{{notesHtml}}}</div>
+						<div class="steading-person-details">
 							{{#if @root.stonetop.edit.neighbors}}
-							<button type="button" class="steading-member-notes-edit" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
-							        title="Edit notes" tabindex="-1"><i class="fas fa-pen"></i></button>
+							<label class="steading-person-field"><span class="steading-person-label">Relations</span>
+								<input type="text" class="steading-resident-input"
+								       data-index="{{@index}}" data-field="relations" data-list="neighbors"
+								       value="{{relations}}" placeholder="Relations"></label>
+							{{else if relations}}
+							<div class="steading-person-field"><span class="steading-person-label">Relations</span><span class="steading-person-value steading-person-text">{{relations}}</span></div>
+							{{/if}}
+							{{#if uuid}}
+							{{!-- Actor-backed row: the rich notes live on the NPC. A rendered preview,
+							      clamped; in edit mode a pencil opens the shared pop-up editor. --}}
+							{{#if (or @root.stonetop.edit.neighbors notes)}}
+							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">Notes</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{notesHtml}}}</div>{{#if @root.stonetop.edit.neighbors}}<button type="button" class="steading-member-notes-edit" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
+							        title="Edit notes" aria-label="Edit notes" tabindex="-1"><i class="fas fa-pen"></i></button>{{/if}}</div>
 							{{/if}}
 							{{else}}
 							{{!-- Legacy plain-text row (pre-migration): keep the inline input. --}}
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="notes" data-list="neighbors"
-							       value="{{notes}}"
-							       {{#if @root.stonetop.edit.neighbors}}placeholder="Notes"{{/if}}
-							       {{#unless @root.stonetop.edit.neighbors}}disabled{{/unless}}>
+							{{#if @root.stonetop.edit.neighbors}}
+							<label class="steading-person-field"><span class="steading-person-label">Notes</span>
+								<input type="text" class="steading-resident-input"
+								       data-index="{{@index}}" data-field="notes" data-list="neighbors"
+								       value="{{notes}}" placeholder="Notes"></label>
+							{{else if notes}}
+							<div class="steading-person-field"><span class="steading-person-label">Notes</span><span class="steading-person-value steading-person-text">{{notes}}</span></div>
+							{{/if}}
 							{{/if}}
 						</div>
-						<div class="steading-residents-col steading-residents-col-actions">
+						<div class="steading-residents-col-actions">
 							<button type="button" class="steading-list-delete"
 							        data-list="neighbors" data-index="{{@index}}"
 							        title="Remove" tabindex="-1">
@@ -334,38 +313,33 @@
 					</li>
 					{{else}}
 					{{#if @root.stonetop.edit.neighbors}}
-					<li class="steading-residents-row">
-						<div class="steading-residents-col steading-residents-col-name">
-							<input type="text" class="steading-resident-input"
+					<li class="steading-residents-row steading-person" data-sort-name="">
+						<div class="steading-person-face"><span class="steading-person-face-empty"></span></div>
+						<div class="steading-residents-col-name steading-person-who">
+							<input type="text" class="steading-resident-input steading-person-name-input"
 							       data-index="{{@index}}" data-field="name" data-list="neighbors"
-							       value="{{name}}" title="{{name}}" placeholder="Name">
-						</div>
-						<div class="steading-residents-col steading-residents-col-home">
+							       value="{{name}}" placeholder="Name" aria-label="Name">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="home" data-list="neighbors" list="steading-home-suggestions"
-							       value="{{home}}" title="{{home}}" placeholder="Home">
-						</div>
-						<div class="steading-residents-col steading-residents-col-occupation">
+							       value="{{home}}" placeholder="Home" aria-label="Home">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="occupation" data-list="neighbors" list="steading-occupation-suggestions"
-							       value="{{occupation}}" title="{{occupation}}" placeholder="Occupation or Playbook">
-						</div>
-						<div class="steading-residents-col steading-residents-col-traits">
+							       value="{{occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="traits" data-list="neighbors" list="steading-trait-suggestions"
-							       value="{{traits}}" title="{{traits}}" placeholder="Traits">
+							       value="{{traits}}" placeholder="Traits" aria-label="Traits">
 						</div>
-						<div class="steading-residents-col steading-residents-col-relations">
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="relations" data-list="neighbors"
-							       value="{{relations}}" title="{{relations}}" placeholder="Relations">
+						<div class="steading-person-details">
+							<label class="steading-person-field"><span class="steading-person-label">Relations</span>
+								<input type="text" class="steading-resident-input"
+								       data-index="{{@index}}" data-field="relations" data-list="neighbors"
+								       value="{{relations}}" placeholder="Relations"></label>
+							<label class="steading-person-field"><span class="steading-person-label">Notes</span>
+								<input type="text" class="steading-resident-input"
+								       data-index="{{@index}}" data-field="notes" data-list="neighbors"
+								       value="{{notes}}" placeholder="Notes"></label>
 						</div>
-						<div class="steading-residents-col steading-residents-col-notes">
-							<input type="text" class="steading-resident-input"
-							       data-index="{{@index}}" data-field="notes" data-list="neighbors"
-							       value="{{notes}}" title="{{notes}}" placeholder="Notes">
-						</div>
-						<div class="steading-residents-col steading-residents-col-actions">
+						<div class="steading-residents-col-actions">
 							<button type="button" class="steading-list-delete"
 							        data-list="neighbors" data-index="{{@index}}"
 							        title="Remove" tabindex="-1">

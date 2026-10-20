@@ -173,7 +173,7 @@ describe("openFollowerOrder", () => {
 		const info = { character: cadi, ftype: "initiate", slug: "enfys", follower: { name: "Enfys", tags: ["brave"], moves: [], exceptional: false } };
 		await openFollowerOrder(info, "clash");
 		expect(cadi.sheet.orderFollower).toHaveBeenCalledWith(
-			{ name: "Enfys", tags: ["brave"], moves: [], exceptional: false, moveKey: "clash" },
+			{ name: "Enfys", tags: ["brave"], moves: [], exceptional: false, moveKey: "clash", fromMap: true },
 			{ ftype: "initiate", slug: "enfys" },
 		);
 	});

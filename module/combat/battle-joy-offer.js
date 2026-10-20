@@ -43,7 +43,7 @@ import { canRewriteCard, postMoveNote, rolledTotalCard } from "../utils/chat.js"
 import { withCardLatch } from "../utils/card-latch.js";
 import { speakerActor } from "../utils/speaker-actor.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
-import { contentElement } from "../dialogs/content-picker.js";
+import { contentElement } from "../utils/dialogv2-content.js";
 import { escHtml } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
 

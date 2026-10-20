@@ -22,6 +22,8 @@ const { IMPROVEMENT_DEFINITIONS, builtInImprovementRules } = await import("../..
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const read = rel => fs.readFileSync(path.resolve(HERE, "../../..", rel), "utf8");
 const STEADING_JS = read("module/actors/steading/StonetopSteadingSheet.js");
+// The homefront moves' data and flows, out of the steading sheet.
+const HOMESTEAD_JS = read("module/actors/steading/homestead-moves.js");
 const STONETOP_JS = read("stonetop.js");
 const IMPROVEMENTS_HBS = read("templates/actor/partials/steading-tab-improvements.hbs");
 
@@ -158,8 +160,8 @@ describe("a homefront roll, with what the steading has built", () => {
 
 describe("the improvements that are moves", () => {
 	it("list the Aurochs Hunt and Heroic Reputation only once built", () => {
-		expect(STEADING_JS).toContain('requires: "aurochsHunting"');
-		expect(STEADING_JS).toContain('requires: "heroicReputation"');
+		expect(HOMESTEAD_JS).toContain('requires: "aurochsHunting"');
+		expect(HOMESTEAD_JS).toContain('requires: "heroicReputation"');
 		expect(STEADING_JS).toContain("STEADING_MOVES.filter(move => !move.requires || this._hasImprovement(move.requires))");
 	});
 
@@ -174,7 +176,7 @@ describe("the improvements that are moves", () => {
 
 	it("write the hunt's Surplus, lost horses and weak herd from its card", () => {
 		for (const cls of ["stonetop-aurochs-surplus", "stonetop-aurochs-horses", "stonetop-aurochs-weak"]) {
-			expect(STEADING_JS, cls).toContain(cls);
+			expect(HOMESTEAD_JS, cls).toContain(cls);
 			expect(STONETOP_JS, cls).toContain(`".${cls}"`);
 		}
 		expect(STONETOP_JS).toContain("_chatWireAurochsHunt(message, html);");
@@ -183,7 +185,9 @@ describe("the improvements that are moves", () => {
 
 describe("Deploy, as Book I has it", () => {
 	it("reads 10+ as well as can be expected, and a 7-9 as a consequence someone picks", () => {
-		const deploy = STEADING_JS.slice(STEADING_JS.indexOf('slug: "deploy"'), STEADING_JS.indexOf('slug: "deploy"') + 1200);
+		const at = HOMESTEAD_JS.indexOf('slug: "deploy"');
+		expect(at).toBeGreaterThan(-1);
+		const deploy = HOMESTEAD_JS.slice(at, at + 1200);
 		expect(deploy).toContain("it goes as well as can be expected");
 		expect(deploy).toContain("someone picks 1 from the list below");
 		expect(deploy).not.toMatch(/choose 2/);

@@ -68,6 +68,31 @@ export const DANCING_LIGHT = "dancing-light";
  */
 export const EMPOWERED_MAKES_ONGOING = new Set(["cleansing-light"]);
 
+/**
+ * Ongoing Invocations whose REDUCED effect is over almost at once, so a reduced one gives up its slot
+ * the moment it is reduced instead of blocking the next Invocation until End it. Blinding Light: "the
+ * light flares only for a moment". Cold Light of Day: "it lasts only a few moments, just long enough
+ * to glimpse the truth". Like EMPOWERED_MAKES_ONGOING, a rule of the book kept beside the slots.
+ */
+export const REDUCED_IS_BRIEF = new Set(["blinding-light", "cold-light-of-day"]);
+
+/**
+ * Ongoing Invocations whose reduced effect MAY be brief, at the GM's say. Moth to a Flame: "it lasts
+ * only briefly OR only some of the named creatures are affected (GM's choice)", so the card asks.
+ */
+export const REDUCED_GM_CHOICE = new Set(["moth-to-a-flame"]);
+
+/**
+ * What a reduced effect does to the ongoing slots, for the Invocations a card names (`slugs`, two
+ * under Burn Twice as Bright): `brief`, the running ones it ends at once, and `ask`, the running ones
+ * the GM decides. Only what is running counts: an Invocation already ended has no slot to give up.
+ */
+export function reducedEndings({ current, slugs } = {}) {
+	const running = new Set(runningSlugs(current));
+	const named = [...new Set((slugs ?? []).map(readOngoing))].filter(s => running.has(s));
+	return { brief: named.filter(s => REDUCED_IS_BRIEF.has(s)), ask: named.filter(s => REDUCED_GM_CHOICE.has(s)) };
+}
+
 /** The stored slug, normalised. "" means nothing is being concentrated on. */
 export function readOngoing(raw) {
 	return typeof raw === "string" ? raw.trim() : "";

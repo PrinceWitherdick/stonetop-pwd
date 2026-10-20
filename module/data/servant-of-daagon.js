@@ -35,6 +35,17 @@ export function findRingFollower(map = {}) {
 }
 
 /**
+ * The id whose Loyalty track a custom follower spends: the Ring's for a Servant batch still under
+ * its control (one shared pool, Book II p.561), else its own. A batch that broke free keeps its own
+ * id, which holds nothing. PURE.
+ */
+export function loyaltyOwnerId(map = {}, id = "") {
+	const follower = map?.[id];
+	if (follower?.sourceUuid !== SERVANT_SOURCE_UUID || follower?.brokenFree) return id;
+	return findRingFollower(map).id ?? id;
+}
+
+/**
  * Whether an arcanum's "Add as follower" may manifest yet. A summon marked `untilUnlocked`
  * (arcana-summons.js) waits on the card being unlocked: the Ring becomes a follower only "when you
  * make the last mark" (Book II p.560). Every other summon is as it was.

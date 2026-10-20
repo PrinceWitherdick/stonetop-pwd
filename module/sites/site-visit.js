@@ -6,8 +6,7 @@
 // GM-only: the page is GM prep, and so is the decision that the party has been there.
 
 import { pickPersonOnMap } from "../dialogs/RelationshipLinkDialog.js";
-import { getPlayerCharacters } from "../utils/playbook-actors.js";
-import { isOutOfPlay } from "../actors/character/deaths-door-actor.js";
+import { charactersInPlay } from "../utils/characters-in-play.js";
 import { tripLogStore } from "../timeline/timeline-expedition-record.js";
 import { currentExpedition } from "../utils/expedition-log-core.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
@@ -40,7 +39,7 @@ function askWhoWent(page, characters, party) {
  */
 export async function markSiteVisited(page) {
 	if (!game.user?.isGM || !page) return null;
-	const characters = getPlayerCharacters().filter(pc => !isOutOfPlay(pc));
+	const characters = charactersInPlay();
 	let went = [];
 	if (characters.length) {
 		const trip = currentExpedition(tripLogStore().read());

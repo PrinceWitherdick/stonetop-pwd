@@ -8,8 +8,36 @@ import {isDefaultImg} from "../utils/strings.js";
 import {PERSON_DEFAULT_IMG, isPersonPlaceholderImg} from "../utils/person-portrait.js";
 import {tokenFollowsPortrait} from "../utils/portrait-token-frame.js";
 import {GM_TOOLKIT_TYPE, theGmToolkit} from "./gmtoolkit/gm-toolkit-actor.js";
+import {SETTLEMENT_TYPE} from "./settlement/settlement-type.js";
 import {sharedSheetCreateStamp, sharedSheetReleaseEntry} from "./character/shared-sheets.js";
 import {areCharacterSheetsShared} from "../settings.js";
+import {GM_ONLY_ACTOR_TYPES} from "../utils/actor-types.js";
+
+/**
+ * The default ownership level a new actor of each type gets, by CONST.DOCUMENT_OWNERSHIP_LEVELS
+ * name (CONST is read at create time, not import time). Stamped only when the creator said nothing
+ * about `ownership.default`, so a GM who deliberately sets one keeps their choice. A character is
+ * not here: its default is the sheet-sharing switch's (actors/character/shared-sheets.js).
+ */
+const DEFAULT_OWNERSHIP_BY_TYPE = {
+	// The GM Toolkit is the GM's own sheet, so no player should even see that it exists.
+	// A world Actor is broadcast to every client and `ownership` is what gates the UI, so
+	// this is where "GM only" has to be said. Foundry's own default for a new document is
+	// already NONE, but that is a default a later core change or a module could move; the
+	// toolkit is not a thing to find out about by accident.
+	//
+	// No PER-USER ownership entry beside it, deliberately. One would only make sense if
+	// "whose toolkit is this" were a question worth asking, and it is not: the toolkit is
+	// a world singleton (hooks/StonetopSingleton.js), so every GM shares the one sheet.
+	// Recording a creator here would be a field nothing reads, sitting exactly where a
+	// later reader would take it for a permission that matters.
+	[GM_TOOLKIT_TYPE]: "NONE",
+	// A settlement is the reverse of the toolkit: a place the whole table may read (Book II's
+	// stats are no secret, and the players roll its moves), so OBSERVER for everyone. The GM
+	// hides one from its own header (StonetopSettlementSheet#onToggleHidden), and secrets stay
+	// in the GM's journals rather than on the sheet.
+	[SETTLEMENT_TYPE]: "OBSERVER",
+};
 
 export function createStonetopActorClass(BaseActor) {
 	return class StonetopActor extends BaseActor {
@@ -52,10 +80,10 @@ export function createStonetopActorClass(BaseActor) {
 				ok: { ...(options.ok ?? {}), label: title },
 			};
 			if (!options.types) {
-				// Monsters, NPCs and the GM Toolkit are GM content: players (who get Create-Actor
-				// on fresh worlds) only ever make their own character, so keep all three out of a
-				// non-GM's picker.
-				const GM_ONLY_TYPES = new Set(["monster", "npc", GM_TOOLKIT_TYPE]);
+				// Monsters, NPCs, settlements and the GM Toolkit are GM content: players (who get
+				// Create-Actor on fresh worlds) only ever make their own character, so keep them all
+				// out of a non-GM's picker (GM_ONLY_ACTOR_TYPES, utils/actor-types.js).
+				//
 				// The toolkit drops out the same way the steading does once the world HAS one:
 				// both are singletons blocked in preCreateActor, so offering either is a dead end
 				// that only ever warns. The difference is that the steading is auto-created on
@@ -67,7 +95,7 @@ export function createStonetopActorClass(BaseActor) {
 					t !== "stonetop"
 					&& t !== CONST.BASE_DOCUMENT_TYPE
 					&& !(t === GM_TOOLKIT_TYPE && haveToolkit)
-					&& (game.user?.isGM || !GM_ONLY_TYPES.has(t)));
+					&& (game.user?.isGM || !GM_ONLY_ACTOR_TYPES.has(t)));
 			}
 			return super.createDialog(data, createOptions, options, renderOptions);
 		}
@@ -138,21 +166,11 @@ export function createStonetopActorClass(BaseActor) {
 			if (this.type === "npc" && isDefaultImg(this.img) && !isPersonPlaceholderImg(this.img)) {
 				patch.img = PERSON_DEFAULT_IMG;
 			}
-			// The GM Toolkit is the GM's own sheet, so no player should even see that it exists.
-			// A world Actor is broadcast to every client and `ownership` is what gates the UI, so
-			// this is where "GM only" has to be said. Foundry's own default for a new document is
-			// already NONE, but that is a default a later core change or a module could move; the
-			// toolkit is not a thing to find out about by accident. Only stamped when the creator
-			// said nothing, so a GM who deliberately shares one keeps their choice.
-			//
-			// No PER-USER ownership entry beside it, deliberately. One would only make sense if
-			// "whose toolkit is this" were a question worth asking, and it is not: the toolkit is
-			// a world singleton (hooks/StonetopSingleton.js), so every GM shares the one sheet.
-			// Recording a creator here would be a field nothing reads, sitting exactly where a
-			// later reader would take it for a permission that matters.
-			if (this.type === GM_TOOLKIT_TYPE
-				&& foundry.utils.getProperty(data, "ownership.default") === undefined) {
-				patch["ownership.default"] = CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
+			// A per-type default level (the toolkit's NONE, a settlement's OBSERVER): see
+			// DEFAULT_OWNERSHIP_BY_TYPE at the top of this file.
+			const defaultLevel = DEFAULT_OWNERSHIP_BY_TYPE[this.type];
+			if (defaultLevel && foundry.utils.getProperty(data, "ownership.default") === undefined) {
+				patch["ownership.default"] = CONST.DOCUMENT_OWNERSHIP_LEVELS[defaultLevel];
 			}
 			// A character's default level is the GM's sheet-sharing switch's to move: OBSERVER to the
 			// whole table while it is on, so every player may read it. Only when the creation data

@@ -9,8 +9,8 @@ const { rollInvocationDamage } = vi.hoisted(() => ({ rollInvocationDamage: vi.fn
 vi.mock("../../../module/combat/attack-flow.js", async importOriginal => ({ ...(await importOriginal()), rollInvocationDamage }));
 
 import {
-	wireInvokeConsequences, wireWielderInvoke, wielderRollOptions, invokeTenPlusCardBody,
-	CONSEQUENCES_FLAG, WIELDER_INVOKED_FLAG, TEN_PLUS_FLAG, CARD_INVOCATIONS_FLAG,
+	wireInvokeConsequences, wireWielderInvoke, wielderRollOptions, invokeTenPlusCardBody, invokeCardFlags, settleHolyRelic,
+	CONSEQUENCES_FLAG, WIELDER_INVOKED_FLAG, TEN_PLUS_FLAG, CARD_INVOCATIONS_FLAG, PRE_PICK_RECORD,
 } from "../../../module/actors/character/invoke-consequences.js";
 import {
 	wireInvocationEffects, bathWindowContent, bathPatientView, chooseBathMember, BATH_FLAG, SHADOW_FLAG, BATH_OF_HEALING_LIGHT, GO_BACK_TO_THE_SHADOW,
@@ -76,11 +76,13 @@ async function settle() {
  * The Lightbearer, as a real character model over a stateful actor, with the Wielder move when asked.
  * `owner: false` is another player's client looking at the same character.
  */
-function lightbearer({ background = null, wielder = false, wielderLearned = true, owner = true } = {}) {
+function lightbearer({ background = null, wielder = false, wielderLearned = true, owner = true, moves = [] } = {}) {
 	const items = wielder ? [makeLiveItem({
 		name: WIELDER, type: "move", system: structuredClone(WIELDER_DOC.system),
 		flags: wielderLearned ? undefined : { [SCOPE]: { learned: false } },
 	})] : [];
+	// Other Lightbearer moves by name (Empowered Invocations, Glorious Servant), as the card reads them.
+	for (const name of moves) items.push(makeLiveItem({ name, type: "move", system: {} }));
 	const { char, actor } = buildLiveCharacter({
 		slug: "the-lightbearer", name: "The Lightbearer", items,
 		flags: background ? { "background.selected": background } : {},
@@ -115,12 +117,12 @@ function chatMessage({ id = "msg1", flags = {}, total = null, speaker = "seren",
  * The roll card for `move`, built the way StonetopItem#roll builds it: the move's own text through
  * moveCardBody (its list made tickable) and the roller's pick bonuses, handed to the roll engine.
  */
-async function rollCard(actor, { move = INVOKE, total = 10, flags = {}, options = {} } = {}) {
+async function rollCard(actor, { move = INVOKE, total = 10, flags = {}, options = {}, context = null } = {}) {
 	const doc = move === INVOKE ? INVOKE_DOC : WIELDER_DOC;
 	rollTotal = total;
 	await rollStat("wis", actor, {
 		moveName: move,
-		moveDescription: withMovePickBonuses(moveCardBody(doc.system.description, doc.system.moveResults, { pickable: true }), actor, move, null),
+		moveDescription: withMovePickBonuses(moveCardBody(doc.system.description, doc.system.moveResults, { pickable: true }), actor, move, context),
 		moveResults: doc.system.moveResults,
 		messageFlags: { [SCOPE]: { move, ...flags } },
 		noXpOnMiss: true,
@@ -190,8 +192,11 @@ const readouts = (root, words) => [...row(root, words).item.querySelectorAll(".s
 const marked = actor => Object.entries(actor.system.attributes.debilities.options).filter(([, d]) => d.value).map(([key]) => key);
 
 /** A rolled Invoke card for the Invocation(s) named, drawn and wired. */
-async function invokeCard(actor, { invocations = ["warmth-of-the-sun"], total = 10, empowered = false, id = "msg1", canModify = true } = {}) {
-	const card = await rollCard(actor, { total, flags: { [CARD_INVOCATIONS_FLAG]: invocations, ...(empowered ? { invokeEmpowered: true } : {}) } });
+async function invokeCard(actor, { invocations = ["warmth-of-the-sun"], total = 10, empowered = false, id = "msg1", canModify = true, prePick = null } = {}) {
+	// An Empowered consequence chosen before the roll rides the pick context to the card, as StonetopItem#roll hands it.
+	const context = prePick ? { empowered: true, empoweredConsequence: prePick, invocations } : null;
+	const flags = context ? invokeCardFlags(context) : { [CARD_INVOCATIONS_FLAG]: invocations, ...(empowered ? { invokeEmpowered: true } : {}) };
+	const card = await rollCard(actor, { total, flags, context });
 	const message = chatMessage({ id, flags: card.flags, total: card.total, canModify });
 	return { message, card, root: renderCard(message, { flavor: card.flavor }) };
 }
@@ -417,6 +422,77 @@ describe("ticking the sun", () => {
 		row(root, SUN).box.click();
 		await settle();
 		expect(sun).toHaveBeenCalledTimes(1);
+	});
+});
+
+// Re-audit 10-18, Empowered Invocations: "you can choose an extra consequence BEFORE you roll". Chosen in the
+// window, it is taken on every result, a 6- included: a fixed line off the list, paid by the same settles.
+describe("the Empowered consequence chosen before the roll", () => {
+	const EMPOWERED = ["Empowered Invocations"];
+	const line = root => root.querySelector(".stonetop-pre-pick");
+	const lineDebility = root => [...line(root).querySelectorAll(".stonetop-invoke-debility-btn")];
+	const lineButton = root => line(root).querySelector(".stonetop-invoke-pre-pick-btn");
+	const lineNotes = root => [...line(root).querySelectorAll(".stonetop-invoke-consequence-note")].map(el => el.textContent);
+	const DEBILITY_TEXT = "The effort taxes you; mark a debility";
+
+	it("stands off the list on a 6-, and its debility buttons mark one, once", async () => {
+		const { actor } = lightbearer({ moves: EMPOWERED });
+		const { root, message, card } = await invokeCard(actor, { total: 5, prePick: DEBILITY_TEXT });
+		expect(line(root)).not.toBeNull();
+		expect(line(root).closest(".stonetop-picklist")).toBeNull();
+		// Not on the list, so it cannot be ticked a second time.
+		expect([...root.querySelectorAll(".stonetop-picklist-item")].some(li => li.textContent.includes("mark a debility"))).toBe(false);
+		expect(lineDebility(root).map(b => b.textContent)).toEqual(["Mark Weakened", "Mark Dazed", "Mark Miserable"]);
+		lineDebility(root)[1].click();
+		lineDebility(root)[1].click();
+		await settle();
+		expect(marked(actor)).toEqual(["dazed"]);
+		expect(message.getFlag(SCOPE, CONSEQUENCES_FLAG)[PRE_PICK_RECORD]).toEqual({ marked: "dazed" });
+		root.remove();
+		const again = renderCard(message, { flavor: card.flavor });
+		expect(lineDebility(again)).toEqual([]);
+		expect(lineNotes(again)).toEqual(["Marked Dazed."]);
+	});
+
+	it("snuffs the light with the Invocation, and puts both of a Burn Twice pair on the sun list", async () => {
+		const { actor, char } = lightbearer({ moves: EMPOWERED });
+		await char.setHolyLight(true);
+		await char.setOngoingInvocation("warmth-of-the-sun");
+		const snuff = vi.spyOn(char, "markInvocationSnuff");
+		const snuffed = await invokeCard(actor, { total: 8, prePick: "The light is snuffed out when the Invocation is complete, its fuel consumed" });
+		lineButton(snuffed.root).click();
+		await settle();
+		expect(snuff).toHaveBeenCalledWith("warmth-of-the-sun", true);
+		snuffed.root.remove();
+		expect(lineNotes(renderCard(snuffed.message, { flavor: snuffed.card.flavor }))).toEqual(["The holy light goes out when Warmth of the Sun ends."]);
+
+		const pair = ["warmth-of-the-sun", "blinding-light"];
+		const sun = await invokeCard(actor, { id: "pair", total: 11, invocations: pair,
+			prePick: "You must bask in sunlight for an hour or so before using that Invocation again" });
+		lineButton(sun.root).click();
+		await settle();
+		expect(char.invocationsNeedingSun).toEqual(pair);
+	});
+
+	it("says a reduced effect chosen before the roll, and what a holy relic left of it", async () => {
+		const { actor } = lightbearer({ moves: EMPOWERED });
+		const { root, message, card } = await invokeCard(actor, { total: 10, prePick: "The Invocation has its reduced effect" });
+		expect(lineNotes(root)).toEqual(["Warmth of the Sun has its reduced effect."]);
+		await settleHolyRelic(message, actor, { total: 10, prePick: true, spend: async () => true });
+		root.remove();
+		const again = renderCard(message, { flavor: card.flavor });
+		expect(lineNotes(again)).toEqual([expect.stringMatching(/^A holy relic was marked in its place/)]);
+		expect(lineButton(again)).toBeNull();
+	});
+
+	it("offers no debility buttons once a holy relic took its place", async () => {
+		const { actor } = lightbearer({ moves: EMPOWERED });
+		const { root, message, card } = await invokeCard(actor, { total: 6, prePick: DEBILITY_TEXT });
+		await settleHolyRelic(message, actor, { total: 6, prePick: true, spend: async () => true });
+		root.remove();
+		const again = renderCard(message, { flavor: card.flavor });
+		expect(lineDebility(again)).toEqual([]);
+		expect(marked(actor)).toEqual([]);
 	});
 });
 
@@ -702,5 +778,114 @@ describe("the Bath's Which member? window", () => {
 		await expect(chooseBathMember({}, { group })).resolves.toEqual({ key: "member:1", name: "Member 2 of The Band" });
 		drawnDialog(async form => form.remove(), "cancel");
 		await expect(chooseBathMember({}, { group })).resolves.toBeNull();
+	});
+});
+
+// Re-audit 10-18: "Reduced: the light flares only for a moment" (Blinding Light), "it lasts only a few
+// moments" (Cold Light of Day): reduced, they give up the ongoing slot at once. Moth to a Flame's
+// "only briefly OR only some of the named creatures are affected (GM's choice)" is asked on the card.
+describe("a reduced short-lived Invocation", () => {
+	const reducedNotes = root => [...root.querySelectorAll(".stonetop-invoke-reduced.stonetop-invoke-consequence-note")].map(el => el.textContent);
+	const mothButtons = root => [...root.querySelectorAll(".stonetop-invoke-reduced-btn")];
+
+	it("ticked on a Blinding Light card, ends it at once and says so, once", async () => {
+		const { actor, char } = lightbearer();
+		await char.setOngoingInvocation("blinding-light");
+		const end = vi.spyOn(char, "endOngoingInvocation");
+		const { root, message, card } = await invokeCard(actor, { invocations: ["blinding-light"] });
+		row(root, REDUCED).box.click();
+		await settle();
+		expect(end).toHaveBeenCalledWith("blinding-light");
+		expect(char.ongoingInvocations).toEqual([]);
+		expect(readouts(root, REDUCED)).toEqual(["Reduced: Blinding Light flares only for a moment, so it is over."]);
+
+		// Invoked again later (a new card would be), the old card's untick and re-tick does not end it.
+		await char.setOngoingInvocation("blinding-light");
+		root.remove();
+		const again = renderCard(message, { flavor: card.flavor });
+		expect(readouts(again, REDUCED)).toEqual(["Reduced: Blinding Light flares only for a moment, so it is over."]);
+		row(again, REDUCED).box.click();
+		row(again, REDUCED).box.click();
+		await settle();
+		expect(end).toHaveBeenCalledTimes(1);
+		expect(char.ongoingInvocations).toEqual(["blinding-light"]);
+	});
+
+	it("ticked on another ongoing Invocation's card, ends nothing and says nothing", async () => {
+		const { actor, char } = lightbearer();
+		await char.setOngoingInvocation("warmth-of-the-sun");
+		const end = vi.spyOn(char, "endOngoingInvocation");
+		const { root } = await invokeCard(actor, { invocations: ["warmth-of-the-sun"] });
+		row(root, REDUCED).box.click();
+		await settle();
+		expect(end).not.toHaveBeenCalled();
+		expect(char.ongoingInvocations).toEqual(["warmth-of-the-sun"]);
+		expect(reducedNotes(root)).toEqual([]);
+	});
+
+	it("ticked on a Moth to a Flame card, asks the GM's choice; briefly ends it", async () => {
+		const { actor, char } = lightbearer();
+		await char.setOngoingInvocation("moth-to-a-flame");
+		const { root, message, card } = await invokeCard(actor, { invocations: ["moth-to-a-flame"] });
+		expect(mothButtons(root)).toEqual([]);
+		row(root, REDUCED).box.click();
+		await settle();
+		expect(char.ongoingInvocations).toEqual(["moth-to-a-flame"]);
+		expect(readouts(root, REDUCED)[0]).toMatch(/The GM chooses:$/);
+		expect(mothButtons(root).map(b => b.textContent)).toEqual(["Only briefly (end it)", "Only some are affected (keep it)"]);
+		mothButtons(root)[0].click();
+		mothButtons(root)[0].click();
+		await settle();
+		expect(char.ongoingInvocations).toEqual([]);
+		root.remove();
+		const again = renderCard(message, { flavor: card.flavor });
+		expect(mothButtons(again)).toEqual([]);
+		expect(readouts(again, REDUCED)).toEqual(["Reduced: Moth to a Flame lasts only briefly, so it is over."]);
+	});
+
+	it("on a Moth to a Flame card, only some affected keeps it going, and the ask is gone", async () => {
+		const { actor, char } = lightbearer();
+		await char.setOngoingInvocation("moth-to-a-flame");
+		const end = vi.spyOn(char, "endOngoingInvocation");
+		const { root, message, card } = await invokeCard(actor, { invocations: ["moth-to-a-flame"] });
+		row(root, REDUCED).box.click();
+		await settle();
+		mothButtons(root)[1].click();
+		await settle();
+		expect(end).not.toHaveBeenCalled();
+		expect(char.ongoingInvocations).toEqual(["moth-to-a-flame"]);
+		root.remove();
+		const again = renderCard(message, { flavor: card.flavor });
+		expect(mothButtons(again)).toEqual([]);
+		expect(readouts(again, REDUCED)).toEqual(["Reduced: only some of the named creatures are affected, and Moth to a Flame goes on."]);
+	});
+
+	it("chosen as the Empowered consequence before the roll, ends Cold Light of Day as the card is drawn, once", async () => {
+		const { actor, char } = lightbearer({ moves: ["Empowered Invocations"] });
+		await char.setOngoingInvocation("cold-light-of-day");
+		const end = vi.spyOn(char, "endOngoingInvocation");
+		const { root, message, card } = await invokeCard(actor, { total: 8, invocations: ["cold-light-of-day"], prePick: REDUCED });
+		await settle();
+		expect(end).toHaveBeenCalledWith("cold-light-of-day");
+		expect(char.ongoingInvocations).toEqual([]);
+		const notes = [...root.querySelector(".stonetop-pre-pick").querySelectorAll(".stonetop-invoke-consequence-note")].map(el => el.textContent);
+		expect(notes).toEqual(["Cold Light of Day has its reduced effect.",
+			"Reduced: Cold Light of Day lasts only a few moments, just long enough to glimpse the truth, so it is over."]);
+
+		await char.setOngoingInvocation("cold-light-of-day");
+		root.remove();
+		renderCard(message, { flavor: card.flavor });
+		await settle();
+		expect(end).toHaveBeenCalledTimes(1);
+		expect(char.ongoingInvocations).toEqual(["cold-light-of-day"]);
+	});
+
+	it("keeps the other half of a Burn Twice pair running", async () => {
+		const { actor, char } = lightbearer();
+		await char.setInvocationState({ primary: "warmth-of-the-sun", second: "blinding-light" });
+		const { root } = await invokeCard(actor, { invocations: ["warmth-of-the-sun", "blinding-light"] });
+		row(root, REDUCED).box.click();
+		await settle();
+		expect(char.ongoingInvocations).toEqual(["warmth-of-the-sun"]);
 	});
 });

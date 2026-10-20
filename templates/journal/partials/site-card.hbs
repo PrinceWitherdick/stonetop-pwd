@@ -178,4 +178,23 @@
 			{{/if}}
 
 	{{/"stonetop.site-group"}}
+
+	{{!-- Running it (Book I p.348): the same reference on every site, shut until opened. What to
+	      keep in mind while they explore, marching order among it, and the light sources' tags.
+	      From module/sites/site-running.js. --}}
+	{{#> "stonetop.site-group" group=runGroup}}
+
+			<div class="site-block site-running">
+				<span class="threat-label">Keep in mind</span>
+				<ul class="site-list site-running-list">
+					{{#each running.considerations}}<li><strong>{{name}}</strong> {{line}}</li>{{/each}}
+				</ul>
+				<span class="threat-label">Light sources &amp; tags</span>
+				<ul class="site-list site-running-list">
+					{{#each running.lightTags}}<li><strong>{{name}}</strong> {{line}}</li>{{/each}}
+				</ul>
+				<p class="site-running-note">{{running.lampOil}}</p>
+			</div>
+
+	{{/"stonetop.site-group"}}
 </article>

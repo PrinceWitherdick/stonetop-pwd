@@ -72,9 +72,10 @@ describe("the button", () => {
 		for (const kind of ["threat", "hazard"]) {
 			const html = await draw(kind);
 			expect(html, kind).not.toContain("site-visit");
-			// Just the pencil and the trash.
-			expect(html.match(/<button/g), kind).toHaveLength(2);
+			// The pencil and the trash, plus a live threat's own Cross off (Book I p.299).
+			expect(html.match(/<button/g), kind).toHaveLength(kind === "threat" ? 3 : 2);
 		}
+		expect(await draw("threat")).toContain('class="threat-resolve"');
 
 		// ...and no call site switches it on by hand any more.
 		expect(readRepo("templates/actor/partials/gm-toolkit-sites-section.hbs")).not.toContain("visit=");

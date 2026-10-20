@@ -75,7 +75,7 @@ import { groupFollowerStanding } from "../../utils/crew.js";
 import { healTo } from "../../camp/camp-rules.js";
 import { each } from "../../fight/fight-state.js";
 import { pickPersonOnMap } from "../../dialogs/RelationshipLinkDialog.js";
-import { contentElement } from "../../dialogs/content-picker.js";
+import { contentElement } from "../../utils/dialogv2-content.js";
 import { askWithButtons } from "../../utils/ask-with-buttons.js";
 import { canRewriteCard, moveChatCard } from "../../utils/chat.js";
 import { belongsToMessage } from "../../utils/picked-option-button.js";
@@ -92,6 +92,7 @@ import { readableFlags } from "./StonetopFlags.js";
 import { isUnliving } from "./deaths-door-actor.js";
 import { escHtml } from "../../utils/strings.js";
 import { format, localize } from "../../utils/i18n.js";
+import { PERSON_ACTOR_TYPES } from "../../utils/actor-types.js";
 
 const KEY = "stonetop.invocations";
 
@@ -124,12 +125,12 @@ const BATH_OPTIONS = Object.freeze([
 	{ key: BATH_PICK.AFFLICTION, max: 1, empowered: true },
 ]);
 
-/** The actor types a Bath can heal: a player character, and anyone else with HP (an NPC, a follower's, a monster). */
-const PATIENT_TYPES = new Set(["character", "npc", "monster"]);
-
-/** Whether `actor` can be the patient. */
+/**
+ * Whether `actor` can be the patient: a person (utils/actor-types.js), meaning a player character
+ * or anyone else with HP (an NPC, a follower's, a monster).
+ */
 export function isBathPatient(actor) {
-	return PATIENT_TYPES.has(actor?.type);
+	return PERSON_ACTOR_TYPES.has(actor?.type);
 }
 
 /** Whether only the HP choices reach this patient: anyone who is not a player character. */

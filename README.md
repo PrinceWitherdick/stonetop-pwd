@@ -4,6 +4,8 @@ An unofficial [Foundry VTT](https://foundryvtt.com) system for playing [Stonetop
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/V8L6287YU9)
 
+**📖 [Read the wiki](https://github.com/PrinceWitherdick/stonetop-pwd/wiki)** for a guide to every feature, for players and GMs, including the many that are easy to miss.
+
 ## 🤖 Created in collaboration with AI to facilitate rapid development. Absolutely no image generation was or will be used.
 
 ## Features

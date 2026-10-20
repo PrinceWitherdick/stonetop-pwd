@@ -1,0 +1,63 @@
+{{!-- DAYS ON THE ROAD (module/dialogs/RoadRationsDialog.js): what the party eats while the GM glosses
+      travel, Book I p.89 and p.304. Every control re-renders the window; nothing is spent until the
+      button at the foot. Each control carries `data-road-focus` so the keyboard survives that
+      redraw (StonetopDialog#_focusKeyAttribute). --}}
+<form class="stonetop road-rations" autocomplete="off">
+	<p class="road-intro">Each person eats 1 use of supplies a day; with a mess kit (fire and water) 1 use feeds up to four, so 2 for five to eight and 3 for nine to twelve. Provisions go first. A crew eats from its own supplies before anyone's pack. Count only the days you gloss: a night they <strong>Make Camp</strong> is paid at the fire.</p>
+
+	<div class="road-settings">
+		<label class="road-field">
+			<span class="road-label">Days that pass</span>
+			<input type="number" class="road-days" min="1" step="1" value="{{days}}" data-road-focus="days">
+			{{#if routeDays}}<span class="road-hint">The route: at least {{routeDays}} days.</span>{{/if}}
+		</label>
+		<label class="road-check">
+			<input type="checkbox" class="road-mess-kit" data-road-focus="mess-kit"{{#if messKit}} checked{{/if}}>
+			<span>Someone cooks with a mess kit{{#if cooks}} <em>(carried by {{cooks}})</em>{{/if}}</span>
+		</label>
+		<label class="road-check">
+			<input type="checkbox" class="road-pack-animal" data-road-focus="pack-animal"{{#if packAnimal}} checked{{/if}}>
+			<span>A pack animal or cart carries at least 1 Surplus of supplies <em>(no meals to count, p.304)</em></span>
+		</label>
+	</div>
+
+	{{#if hasMembers}}
+	<table class="road-table">
+		<thead>
+			<tr><th>Who</th><th>Eats</th><th>Followers fed</th><th>Pays</th></tr>
+		</thead>
+		<tbody>
+			{{#each rows}}
+			<tr class="road-row" data-actor-id="{{actorId}}">
+				<td class="road-who">
+					<strong>{{name}}</strong>
+					<span class="road-holds">carries {{holds}} to eat{{#if spend}}: {{spend}}{{/if}}</span>
+					{{!-- The crew's own supplies pay the crew's mouths by themselves (road-rations.js#crewRoadText), so no figure to set. --}}
+					{{#if crewText}}<span class="road-crew">Crew supplies ({{crewHeld}} left): {{crewText}}</span>{{/if}}
+				</td>
+				<td><input type="checkbox" class="road-eats" data-actor-id="{{actorId}}" data-road-focus="eats-{{actorId}}"
+				           aria-label="{{name}} eats"{{#if eats}} checked{{/if}}></td>
+				<td><input type="number" class="road-followers" min="0" step="1" value="{{followers}}"
+				           data-actor-id="{{actorId}}" data-road-focus="followers-{{actorId}}" aria-label="Followers {{name}} feeds"></td>
+				<td><input type="number" class="road-pays{{#if changed}} is-changed{{/if}}" min="0" max="{{holds}}" step="1" value="{{pays}}"
+				           data-actor-id="{{actorId}}" data-road-focus="pays-{{actorId}}" aria-label="Uses {{name}} pays"></td>
+			</tr>
+			{{/each}}
+		</tbody>
+	</table>
+	{{else}}
+	<p class="road-empty">Nobody is on this trip. Pick the party on the Outfit step.</p>
+	{{/if}}
+
+	<div class="road-summary" aria-live="polite">
+		<p class="road-bill">{{billText}}</p>
+		{{#if shortText}}<p class="road-short"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> {{shortText}}</p>{{/if}}
+		{{#if overText}}<p class="road-over">{{overText}}</p>{{/if}}
+	</div>
+
+	<footer class="road-footer">
+		<button type="button" class="road-apply stonetop-guide-btn--primary"><i class="fas fa-utensils" aria-hidden="true"></i> Spend it</button>
+		<button type="button" class="road-reset">Share it out again</button>
+		<button type="button" class="road-cancel">Cancel</button>
+	</footer>
+</form>

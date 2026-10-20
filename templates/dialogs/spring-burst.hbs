@@ -92,6 +92,16 @@
     </div>
     {{/if}}
 
+    {{!-- How the result becomes the first adventure's hook (Book I pp.255-259), with the ticked
+          gains' rows marked. Built and escaped in gm-toolkit/gm-agenda-view.js, which the GM
+          Toolkit's Core Loop tab draws the same block from. --}}
+    {{#if hookGuide}}
+    <details class="stonetop-guide-aside stonetop-spring-hook-guide">
+      <summary class="stonetop-guide-aside-head">Turning the result into a hook</summary>
+      <div class="stonetop-guide-aside-body stonetop-spring-body">{{{hookGuide}}}</div>
+    </details>
+    {{/if}}
+
     {{#if step.footer}}
     <div class="stonetop-spring-body stonetop-spring-footer">{{{step.footer}}}</div>
     {{/if}}

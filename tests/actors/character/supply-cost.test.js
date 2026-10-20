@@ -1,5 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { supplyPursesFor, defaultSupplyPurse, campUsesNeeded, spendablePurseResources, suppliesUsesOnMark, suppliesGiveBack, SUPPLY_PURPOSE, SUPPLY_SLUGS } from "../../../module/actors/character/supply-cost.js";
+import { supplyPursesFor, defaultSupplyPurse, campUsesNeeded, spendablePurseResources, suppliesUsesOnMark, suppliesGiveBack, SUPPLY_PURPOSE, SUPPLY_SLUGS, crewSuppliesHeld, crewSuppliesLeaving } from "../../../module/actors/character/supply-cost.js";
+
+// The crew's own supplies (the Crew insert, Book I p.144): one ◇ per member, as the Followers tab draws them.
+describe("crewSuppliesHeld / crewSuppliesLeaving", () => {
+	it("holds what the roster's sets hold, each capped at a ◇", () => {
+		expect(crewSuppliesHeld([4, 4, 2], 3, 4)).toBe(10);
+		expect(crewSuppliesHeld([9, 1], 2, 5)).toBe(6);
+		// A set past the roster is not drawn, and a set never stored is empty.
+		expect(crewSuppliesHeld([4, 4, 4], 2, 4)).toBe(8);
+		expect(crewSuppliesHeld([4], 3, 4)).toBe(4);
+		expect(crewSuppliesHeld(null, 6, 4)).toBe(0);
+		expect(crewSuppliesHeld([4, 4], 0, 4)).toBe(0);
+	});
+
+	it("eats from the last member's set first, down to what should remain", () => {
+		expect(crewSuppliesLeaving([4, 4, 4], 3, 4, 7)).toEqual([4, 3, 0]);
+		expect(crewSuppliesLeaving([4, 4, 0], 3, 4, 2)).toEqual([2, 0, 0]);
+		// Grown to the roster, capped at a ◇, and the sets past the roster kept as they are.
+		expect(crewSuppliesLeaving([9], 2, 4, 1)).toEqual([1, 0]);
+		expect(crewSuppliesLeaving([4, 4, 4], 2, 4, 8)).toEqual([4, 4, 4]);
+		// Never below empty, and never refilled by asking for more than is there.
+		expect(crewSuppliesLeaving([1, 1], 2, 4, 0)).toEqual([0, 0]);
+		expect(crewSuppliesLeaving([1, 1], 2, 4, 5)).toEqual([1, 1]);
+	});
+});
 
 const labels = rows => rows.map(r => r.label);
 

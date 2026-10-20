@@ -1,0 +1,32 @@
+{
+  "_id": "xM4LHckX4YnHez8p",
+  "_key": "!items!xM4LHckX4YnHez8p",
+  "name": "Friends Far and Wide",
+  "type": "move",
+  "system": {
+    "playbook": "The Fox",
+    "moveType": "playbook",
+    "description": "<p>When you <strong><em>declare that you know someone outside of Stonetop</em></strong>, someone who can help, name them and roll +CHA: <strong>on a 10+</strong>, yeah, they can help (tell us why they're willing); <strong>on a 7-9</strong>, they can help but pick 1 from the list below; <strong>on a 6-</strong>, the GM chooses 1 and then some.</p><ul><li>They still hold a grudge</li><li>They're going to need something from you first</li><li>They swore off this sort of thing long ago</li><li>You can't exactly, y'know, trust them</li></ul>",
+    "rollType": "cha",
+    "moveResults": {
+      "success": {
+        "label": "10+",
+        "value": "Yeah, they can help (tell us why they're willing)."
+      },
+      "partial": {
+        "label": "7-9",
+        "value": "They can help, but pick 1 from the list."
+      },
+      "failure": {
+        "label": "6-",
+        "value": "The GM chooses 1 from the list, and then some."
+      }
+    },
+    "requirement": {
+      "playbook": "The Fox",
+      "background": "the-prodigal-returned",
+      "note": "The Prodigal Returned background"
+    }
+  },
+  "folder": "cdhcHAxQ02WaH2Dm"
+}

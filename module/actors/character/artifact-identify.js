@@ -157,21 +157,33 @@ export function knowThingsArtifactResults() {
 	};
 }
 
-/** The three tiers of a Seek Insight aimed at an artifact (p.430). */
-export function seekInsightArtifactResults() {
+/**
+ * The three tiers of a Seek Insight aimed at an artifact (p.430), counted for the roller: `bonuses`
+ * are the MOVE_PICK_BONUSES rows they bring to Seek Insight (move-pick-bonuses.js#movePickBonusesFor),
+ * the same rows that lift the count on the move's own question list. Perceptive ("you may ask 1
+ * additional question. Even on a 6-, you can ask 1 question") reads 4 and 2, and asks 1 on a 6-.
+ * With no bonuses, the move's printed 3 and 1.
+ */
+export function seekInsightArtifactResults(bonuses = []) {
+	const plus = bonuses.reduce((sum, b) => sum + (Number(b?.plus) || 0), 0);
+	const floor = bonuses.reduce((most, b) => Math.max(most, Number(b?.missFloor) || 0), 0);
+	const questions = n => `${n} question${n === 1 ? "" : "s"} about the artifact from the list. They answer honestly and helpfully.`;
+	const act = "Take advantage on your next move to act on the answers.";
 	return {
-		success: "Ask the GM 3 questions about the artifact from the list. They answer honestly and helpfully. Take advantage on your next move to act on the answers.",
-		partial: "Ask the GM 1 question about the artifact from the list. They answer honestly and helpfully. Take advantage on your next move to act on the answers.",
-		failure: "You're interrupted or surprised as you study it, or trouble announces itself.",
+		success: `Ask the GM ${questions(3 + plus)} ${act}`,
+		partial: `Ask the GM ${questions(1 + plus)} ${act}`,
+		failure: "You're interrupted or surprised as you study it, or trouble announces itself."
+			+ (floor ? ` Even so, you can ask the GM ${questions(floor)}` : ""),
 	};
 }
 
 /**
  * The Seek Insight question list, exactly as the move prints it. p.430 resolves the move as
- * written rather than substituting an artifact-specific list — its worked example asks "What
- * should you be on the lookout for?" about the urn — so these are the move's own six questions,
- * read as questions about a thing rather than a place. Nothing is added to them: a question this
- * list doesn't carry is one the move never let the player ask.
+ * written rather than substituting an artifact-specific list (its worked example asks "What
+ * should you be on the lookout for?" about the urn), so these are the move's own six questions,
+ * read as questions about a thing rather than a place. What a roller's own moves add to the list
+ * (The Natural's "What opportunity does no one else see?", Predator's, and the rest) goes on after
+ * these, read per roller by give-advantage.js#seekInsightQuestionsFor.
  */
 export const ARTIFACT_INSIGHT_QUESTIONS = Object.freeze([
 	"What happened here recently?",

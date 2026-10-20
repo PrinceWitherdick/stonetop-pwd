@@ -24,7 +24,7 @@
         {
           "slug": "sheriff",
           "label": "Sheriff",
-          "description": "<p>You keep order in Stonetop and protect it from outside threats. It might not be anything official, but everyone knows you've got a cool head and the weight to back up your words.</p><p>When you <strong><em>bark an order or warning</em></strong>, roll +CHA: <strong>on a 7+</strong>, they must choose 1: <ul><li>Do what you say</li><li>Dig in/take cover/flee</li><li>Attack you</li></ul> <strong><em>On a 10+</em></strong>, you can sense which one they're about to do and act first if you like; gain advantage if you do.</p>",
+          "description": "<p>You keep order in Stonetop and protect it from outside threats. It might not be anything official, but everyone knows you've got a cool head and the weight to back up your words.</p><p>When you <strong><em>bark an order or warning</em></strong>, roll +CHA: <strong>on a 7+</strong>, they must choose 1:</p><ul><li>Do what you say</li><li>Dig in/take cover/flee</li><li>Attack you</li></ul><p><strong><em>On a 10+</em></strong>, you can sense which one they're about to do and act first if you like; gain advantage if you do.</p>",
           "moves": [
             "Bark an Order"
           ]
@@ -212,11 +212,13 @@
               },
               {
                 "name": "Stills",
-                "column": "small"
+                "column": "small",
+                "note": "immobile"
               },
               {
                 "name": "Barrels",
-                "column": "small"
+                "column": "small",
+                "note": "immobile"
               },
               {
                 "name": "Firkins",

@@ -36,12 +36,30 @@
 			<h3 class="stonetop-eos-section-heading">{{localize "stonetop.endOfSession.whoHeading"}} <span class="stonetop-eos-section-tag">{{localize "stonetop.endOfSession.whoTag"}}</span></h3>
 			{{#if pcs.length}}
 			<p class="stonetop-eos-who-hint">{{localize "stonetop.endOfSession.whoHint"}}</p>
+			<p class="stonetop-eos-who-hint">{{localize "stonetop.endOfSession.personalHint"}}</p>
 			<div class="stonetop-eos-question-list stonetop-eos-pc-list">
 				{{#each pcs}}
-				<label class="stonetop-eos-question{{#if checked}} is-checked{{/if}}">
-					<input type="checkbox" class="stonetop-eos-group-check" data-pc="{{id}}" {{#if checked}}checked{{/if}}>
-					<span class="stonetop-eos-question-text">{{name}}{{#if dead}} <em>({{localize "stonetop.endOfSession.dead"}})</em>{{/if}}</span>
-				</label>
+				<div class="stonetop-eos-pc">
+					<label class="stonetop-eos-question{{#if checked}} is-checked{{/if}}">
+						<input type="checkbox" class="stonetop-eos-group-check" data-pc="{{id}}" {{#if checked}}checked{{/if}}>
+						<span class="stonetop-eos-question-text">{{name}}{{#if dead}} <em>({{localize "stonetop.endOfSession.dead"}})</em>{{/if}}</span>
+					</label>
+					{{! Their own XP (Book I p.75): one each for instinct and relationship, ticked as they answer. }}
+					<div class="stonetop-eos-pc-personal">
+						{{#each personal}}
+						<label class="stonetop-eos-pc-tick">
+							<input type="checkbox" class="stonetop-eos-personal-check" data-pc="{{../id}}" data-xp="{{key}}" {{#if checked}}checked{{/if}}>
+							<span>{{label}}</span>
+						</label>
+						{{/each}}
+					</div>
+					<input type="text" class="stonetop-eos-note" data-pc="{{id}}" value="{{note}}"
+					       placeholder="{{localize "stonetop.endOfSession.notePlaceholder"}}"
+					       aria-label="{{localize "stonetop.endOfSession.noteLabel" name=name}}">
+					{{#if lastWish}}
+					<p class="stonetop-eos-last-wish"><strong>{{localize "stonetop.endOfSession.lastWish"}}</strong> {{lastWish}}</p>
+					{{/if}}
+				</div>
 				{{/each}}
 			</div>
 			{{else}}
@@ -59,13 +77,23 @@
 			</ul>
 		</section>
 
+		{{!-- ── Updating followers (Book I p.480): the GM's between-session review, folded, never on a player's copy. --}}
+		{{#unless mirror}}
+		<details class="stonetop-eos-section stonetop-eos-follower-review">
+			<summary class="stonetop-eos-section-heading">{{localize "stonetop.endOfSession.followerReviewTitle"}} <span class="stonetop-eos-section-tag">{{localize "stonetop.endOfSession.followerReviewTag"}}</span></summary>
+			<p class="stonetop-eos-who-hint">{{followerReview.lead}}</p>
+			<ul class="stonetop-eos-personal-list">{{#each followerReview.items}}<li>{{this}}</li>{{/each}}</ul>
+			<p class="stonetop-eos-review-cite">{{localize "stonetop.endOfSession.followerReviewCite"}}</p>
+		</details>
+		{{/unless}}
+
 	</div>{{!-- /.stonetop-eos-sections --}}
 
 	<footer class="stonetop-eos-footer">
 		<button type="button" class="stonetop-eos-confirm-btn">
 			{{#if mirror}}
 				{{localize "stonetop.endOfSession.close"}}
-			{{else if xpCount}}
+			{{else if canAward}}
 				{{awardLabel}}
 			{{else}}
 				{{localize "stonetop.endOfSession.close"}}

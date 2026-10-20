@@ -6,6 +6,7 @@ import { markQuestionBullets } from "../utils/question-bullets.js";
 import { markValueTooltips } from "../utils/value-tooltips.js";
 import { markDebilityTooltips } from "../utils/debility-tooltips.js";
 import { installDragSmoothing } from "../utils/drag-smoothing.js";
+import { STEADING_ACTOR_TYPES } from "../utils/actor-types.js";
 
 // Apply gear-term tooltips only to the containers we know hold gear-tag <em>
 // elements. Applying to html[0] wholesale reaches into PBTA system partials
@@ -38,10 +39,11 @@ export function onRenderActorSheet(sheet, html) {
 
 	const type = sheet?.actor?.type;
 	// Embolden + explain character debilities (Weakened/Dazed/Miserable) wherever
-	// "debility" appears in move/prose text. Skip the steading sheet (actor type
-	// "stonetop") — its own debilities (diminished/lacking/malcontent) are a
-	// different thing, and its "Debilities" section title shouldn't be tagged.
-	if (type !== "stonetop") markDebilityTooltips(root);
+	// "debility" appears in move/prose text. Skip the steading sheets (STEADING_ACTOR_TYPES:
+	// Stonetop and any settlement): their own debilities (diminished/lacking/malcontent) are a
+	// different thing, their "Debilities" section title shouldn't be tagged, and the homefront
+	// move text a settlement prints means the steading's debilities, not a character's.
+	if (!STEADING_ACTOR_TYPES.has(type)) markDebilityTooltips(root);
 
 	if (type === "monster") {
 		_enrichBestiarySheet(sheet, root);

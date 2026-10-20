@@ -1,4 +1,5 @@
 import { PROVISIONS_SLUG } from "./provisions.js";
+import { asArray } from "../../utils/playbook-actors.js";
 
 /**
  * WHAT CAN PAY A USE OF SUPPLIES — and, just as importantly, what cannot, and why.
@@ -21,6 +22,11 @@ export const SUPPLY_PURPOSE = {
 	RECOVER: "recover",
 	/** Make Camp (p.248), and feeding yourself on the road: 1 use per person per day. */
 	CAMP: "camp",
+	/**
+	 * Have What You Need (Book I p.78): "expend a use of supplies to mark an additional small item/slot".
+	 * Supplies only: neither provisions nor Twisting Pine sap names this among the jobs it stands in for.
+	 */
+	HAVE_WHAT_YOU_NEED: "have-what-you-need",
 };
 
 // `purposes: null` means "every purpose" — the printed supplies rows, which are what all of this
@@ -182,6 +188,46 @@ export function supplyPursesFor(resources, purpose, limits = undefined) {
 }
 
 /**
+ * The other characters who could pay a use of supplies for `patient`, each with what can pay for
+ * `purpose`: Recover's "Each character who regains HP must expend 1 use of supplies, or someone else must
+ * expend a use on their behalf" (Book I p.246). Read through each character's own
+ * StonetopCharacter#supplyPurses, so what they carry and the size of each ◆ are theirs. Characters with
+ * nothing to pay are left out. PURE but for that read.
+ *
+ * The size of a ◆ (StonetopCharacter#getUsesPerSupply) is read from the steading, so it is read ONCE per
+ * steading the characters belong to rather than once per character: `usesPerSupply` when the caller
+ * already has it (the sheet's snapshot), else worked out for the first character of each steading.
+ *
+ * @param {Actor} patient
+ * @param {Iterable<Actor>} actors  the world's actors
+ * @param {string} purpose  one of SUPPLY_PURPOSE
+ * @param {{usesPerSupply?: number}} [options]
+ * @returns {Array<{id: string, name: string, actor: Actor, purses: {eligible: object[], total: number}}>}
+ */
+export function otherSupplyPayers(patient, actors, purpose, { usesPerSupply } = {}) {
+	const out = [];
+	const perSteading = new Map();
+	const perOf = character => {
+		if (usesPerSupply !== undefined || typeof character?.getUsesPerSupply !== "function") return usesPerSupply;
+		const steading = character.getSteadingActor?.() ?? null;
+		const key = steading?.id ?? null;
+		if (!perSteading.has(key)) perSteading.set(key, character.getUsesPerSupply(steading ?? undefined));
+		return perSteading.get(key);
+	};
+	for (const actor of asArray(actors)) {
+		if (actor?.type !== "character" || !actor.id || actor.id === patient?.id) continue;
+		let purses = null;
+		try {
+			const character = actor.typedActor;
+			purses = character?.supplyPurses?.(purpose, { usesPerSupply: perOf(character) }) ?? null;
+		} catch { purses = null; }
+		if (!purses?.total) continue;
+		out.push({ id: actor.id, name: actor.name ?? "", actor, purses });
+	}
+	return out;
+}
+
+/**
  * The purse a spend should come out of unless the player says otherwise: the first eligible one
  * in table order, which drains the printed supplies rows left to right before touching anything
  * that stood in for them. A larder or a vial is the thing you have fewer of and the thing whose
@@ -189,6 +235,68 @@ export function supplyPursesFor(resources, purpose, limits = undefined) {
  */
 export function defaultSupplyPurse(purses) {
 	return purses?.eligible?.[0] ?? null;
+}
+
+/**
+ * THE CREW'S OWN SUPPLIES (the Crew insert, Book I p.144: "Supplies (4+Prosperity uses per crew
+ * member)"). Stored on the keeper as `crew.supplies`, an array of use counts, one ◇ of supplies per
+ * member, which the Followers tab draws as one pip set per member and Restock fills. The user's
+ * ruling: the crew pays its own mouths at Make Camp, from these first, and only what they cannot
+ * cover falls to the keeper's own pack (camp-rules.js#campLedger). A purse of its own, not a row of
+ * PURSES above: it lives on the crew, not the Inventory insert, and feeds only the crew.
+ */
+export const CREW_SUPPLIES_SLUG = "crew-supplies";
+
+/** What the camp window and the settled card call the crew's purse. */
+export const CREW_SUPPLIES_LABEL = "Crew supplies";
+
+/** One member's set, as the sheet draws it: what is stored, capped at the size of a ◇ now. */
+function _crewSet(stored, at, perSet) {
+	return Math.min(Math.max(0, Math.trunc(Number(stored?.[at]) || 0)), perSet);
+}
+
+/**
+ * The uses the crew's supplies hold: the first `size` sets (the roster's, crew.js#effectiveCrewSize;
+ * a set past the roster is not drawn), each capped at `perSet` (4+Prosperity, getUsesPerSupply) as
+ * the grid caps its pips. PURE.
+ *
+ * @param {number[]|null} stored  `crew.supplies`
+ * @param {number} size    the crew's headcount
+ * @param {number} [perSet]  the uses in one ◇ of supplies now
+ */
+export function crewSuppliesHeld(stored, size, perSet = 4) {
+	const sets = Array.isArray(stored) ? stored : [];
+	const per = Math.max(0, Math.trunc(Number(perSet) || 0));
+	let held = 0;
+	for (let at = 0; at < Math.max(0, Math.trunc(Number(size) || 0)); at += 1) held += _crewSet(sets, at, per);
+	return held;
+}
+
+/**
+ * The crew's supplies once they hold only `left` uses: the uses eaten come out of the LAST member's
+ * set first, so the full ◇ stay at the head of the roster and only one set is ever part-eaten.
+ * Absolute, like every camp spend (camp-rules.js#purseSpendUpdate): `left` is what should remain,
+ * worked out from what the sets hold now. Sets past the roster are kept as they are. PURE.
+ *
+ * @param {number[]|null} stored  `crew.supplies`
+ * @param {number} size
+ * @param {number} perSet
+ * @param {number} left  the uses that should remain
+ * @returns {number[]}  the new `crew.supplies`
+ */
+export function crewSuppliesLeaving(stored, size, perSet, left) {
+	const sets = Array.isArray(stored) ? [...stored] : [];
+	const n = Math.max(0, Math.trunc(Number(size) || 0));
+	const per = Math.max(0, Math.trunc(Number(perSet) || 0));
+	while (sets.length < n) sets.push(0);
+	for (let at = 0; at < n; at += 1) sets[at] = _crewSet(sets, at, per);
+	let eat = Math.max(0, crewSuppliesHeld(sets, n, per) - Math.max(0, Math.trunc(Number(left) || 0)));
+	for (let at = n - 1; at >= 0 && eat > 0; at -= 1) {
+		const take = Math.min(sets[at], eat);
+		sets[at] -= take;
+		eat -= take;
+	}
+	return sets;
 }
 
 /**

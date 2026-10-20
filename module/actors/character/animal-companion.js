@@ -54,6 +54,24 @@ export function canonicalCompanionTraits(typeData, traits) {
 }
 
 /**
+ * Whether an option is a stat option rather than a tag: one the type's `effects` map gives a change
+ * to the line ("+4 HP", "+1 armor (hide)", "Improved damage die (d6)", "Damage is messy, 1 piercing"),
+ * unless its entry says `isTag` (Brute "large (+4 HP, +1 damage, +close)" is the tag "large" that
+ * also changes the line). A stat option is drawn into the companion's numbers, so it is no tag to
+ * earn Order Followers' +1 (p.462). Every other option (cautious, keen-nosed, Steed "large", a
+ * write-in, a legacy pick) is a tag. Old spellings are read through the type's `aliases`.
+ */
+export function isCompanionStatOption(typeData, trait) {
+	const effect = typeData?.effects?.[canonicalCompanionTrait(typeData, trait)];
+	return !!effect && !effect.isTag;
+}
+
+/** The held options that are tags (isCompanionStatOption's complement), in the order given. */
+export function companionTagOptions(typeData, traits) {
+	return (traits ?? []).filter(t => !isCompanionStatOption(typeData, t));
+}
+
+/**
  * The picks that spend the allowance: everything held but the type's pre-ticked option, which is
  * free (Bird "tiny", Brute "tough", ...).
  */

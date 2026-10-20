@@ -76,6 +76,14 @@
         <div class="stonetop-camp-part">
           <p class="stonetop-camp-part-label">Sharing food</p>
           {{#each purses}}
+          {{#if auto}}
+          {{!-- The crew's own supplies pay the crew's meal by themselves (camp-rules.js#crewBill), so no stepper. --}}
+          <div class="stonetop-camp-line stonetop-camp-purse stonetop-camp-purse--crew">
+            <span class="stonetop-camp-line-label">{{label}} <span class="stonetop-camp-purse-left">({{remaining}} left)</span></span>
+            <span class="stonetop-camp-count">{{n}}</span>
+          </div>
+          <p class="stonetop-camp-note">{{autoText}}</p>
+          {{else}}
           <div class="stonetop-camp-line stonetop-camp-line--stepper stonetop-camp-purse">
             <span class="stonetop-camp-line-label">{{label}} <span class="stonetop-camp-purse-left">({{remaining}} left)</span></span>
             <span class="stonetop-camp-stepper">
@@ -84,6 +92,7 @@
               <button type="button" class="stonetop-camp-step" data-camp-action="offer-add" data-actor-id="{{../actorId}}" data-slug="{{slug}}" data-camp-focus="{{../actorId}}:add:{{slug}}" aria-label="Share one more use of {{label}}"{{#unless canAdd}} disabled{{/unless}}>+</button>
             </span>
           </div>
+          {{/if}}
           {{else}}
           <p class="stonetop-camp-says">Nothing to eat in this pack.</p>
           {{/each}}
@@ -121,6 +130,16 @@
           <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-camp-field="messKit" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:messKit"{{#if messKit.uses}} checked{{/if}}><span>Cook with the mess kit, so 1 use feeds 4 <em>(needs fire and water)</em></span></label>
           {{/if}}
         </div>
+
+        {{!-- A Safe Place (the Ranger): this character's own pick, filled onto the move's Precaution track when the camp settles. --}}
+        {{#if safePlace.show}}
+        <fieldset class="stonetop-camp-part stonetop-camp-site">
+          <legend class="stonetop-camp-part-label">Prepared the camp site (A Safe Place)</legend>
+          {{#each safePlace.options}}
+          <label class="stonetop-camp-check"><input type="radio" class="stonetop-camp-radio" name="{{../safePlace.radioName}}" value="{{value}}" data-camp-field="precaution" data-actor-id="{{../actorId}}" data-camp-focus="{{../actorId}}:precaution-{{value}}"{{#if checked}} checked{{/if}}><span>{{label}}</span></label>
+          {{/each}}
+        </fieldset>
+        {{/if}}
 
         {{#if night.show}}
         <fieldset class="stonetop-camp-part stonetop-camp-night">

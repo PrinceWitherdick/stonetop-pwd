@@ -329,16 +329,17 @@ export function canRestoreWouldBe(actor) {
 /**
  * Write "Would-be" back in, for a crossing-off made by mistake, and say so in chat as the crossing-off
  * was. The flag goes to false, not away (see the top of this file). The next starred move used crosses
- * it off again as usual. Whether it restored anything.
+ * it off again as usual. Whether it restored anything. `moveName` names the starred move whose use no
+ * longer stands (A Force to Be Reckoned With's card rewritten off its 12+: would-be-hero-cards.js#forceTablesUnturned).
  */
-export async function restoreWouldBe(actor) {
+export async function restoreWouldBe(actor, { moveName = "" } = {}) {
 	if (!canRestoreWouldBe(actor)) return false;
 	await actor.setFlag(STONETOP_SCOPE, WBH_HERO_FLAG, false);
 	const ChatMessage = globalThis.ChatMessage;
 	await ChatMessage?.create?.({
 		content: stonetopChatCard(localize(`${KEY}.restoreCardTitle`),
 			`<div class="stonetop-roll-card-description">
-				<p>${format(`${KEY}.heroRestored`, { name: escHtml(actor.name) })}</p>
+				<p>${format(`${KEY}.${moveName ? "heroRestoredUsing" : "heroRestored"}`, { name: escHtml(actor.name), move: escHtml(moveName) })}</p>
 			</div>`),
 		speaker: ChatMessage.getSpeaker?.({ actor }),
 	});

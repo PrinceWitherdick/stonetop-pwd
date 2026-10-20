@@ -3,10 +3,11 @@
 // Book I p.209: "On a 6 or less, it's a miss. That means: They mark XP", and p.560: "Most moves don't
 // say what happens on 6-, which means that the player marks XP". Only Trade & Barter, Requisition and
 // Seasons Change say "don't mark XP" (p.77-83), and each carries `noXpOnMiss` on its entry in the
-// steading's move list (StonetopSteadingSheet.js), so Muster, Pull Together, Deploy, the improvements'
+// steading's move list (homestead-moves.js), so Muster, Pull Together, Deploy, the improvements'
 // own moves and any move added later earn it. But the roll is made on the STEADING, which has no XP, so nothing knows whose it
 // is: the miss's card carries a "Mark XP" button for the rolling user's own character, and a second to
-// choose somebody else (a GM, who plays nobody, always chooses).
+// choose somebody else. A viewer with no character of their own (a GM, who plays nobody) gets the one
+// button, and it asks, since both would only ask.
 //
 // The mark is the ordinary miss receipt, Undo and all, tied to the card (roll-engine.js#markMissXpByChoice)
 // so a Shift that lifts the card off the miss takes it back and offers the buttons again. It is written on
@@ -19,7 +20,7 @@ import { inCardTurn } from "../../utils/card-queue.js";
 import { cardCountedTier, ROLLED_FLAG } from "../../utils/counted-tier.js";
 import { MISS_XP_ACTOR_FLAG } from "../../utils/undo-xp-mark.js";
 import { canUserWriteCard } from "../../utils/chat.js";
-import { getPlayerCharacters } from "../../utils/playbook-actors.js";
+import { charactersInPlay } from "../../utils/characters-in-play.js";
 import { isOutOfPlay } from "../character/deaths-door-actor.js";
 import { pickPersonOnMap } from "../../dialogs/RelationshipLinkDialog.js";
 import { addTierActions, wireChooseThenWrite } from "./steading-card-actions.js";
@@ -62,7 +63,7 @@ export function defaultSteadingXpActor(user) {
  * the player's own picked to start with. Null when closed or there is nobody to name.
  */
 export async function pickSteadingXpActor(user, pick = pickPersonOnMap) {
-	const people = getPlayerCharacters().filter(actor => !isOutOfPlay(actor));
+	const people = charactersInPlay();
 	if (!people.length) {
 		globalThis.ui?.notifications?.warn?.(localize(`${KEY}.nobody`));
 		return null;
@@ -98,7 +99,8 @@ registerRollCardAction(STEADING_MISS_XP_ACTION, handleSteadingMissXp);
 
 /**
  * Wire a steading miss's XP buttons (stonetop.js renderChatMessageHTML). Once marked, the row says for whom;
- * only the user who rolled, or a GM, gets the buttons. Safe on every render.
+ * only the user who rolled, or a GM, gets the buttons, and one with no character of their own gets only
+ * "Mark XP", which asks. Safe on every render.
  */
 export function wireSteadingMissXp(message, html, { pick = pickPersonOnMap } = {}) {
 	const root = html?.[0] ?? html;
@@ -112,6 +114,10 @@ export function wireSteadingMissXp(message, html, { pick = pickPersonOnMap } = {
 	}
 	const user = globalThis.game?.user;
 	if (!canUserWriteCard(message, user, { whenUnknown: !!user?.isGM })) { row.remove(); return; }
+	if (!defaultSteadingXpActor(user)) {
+		row.querySelector(`[data-steading-xp="pick"]`)?.remove();
+		row.querySelector(`[data-steading-xp="mine"]`)?.setAttribute("data-tooltip", localize(`${KEY}.askTooltip`));
+	}
 	wireChooseThenWrite([...row.querySelectorAll("[data-steading-xp]")], {
 		what: "Could not mark a steading miss's XP",
 		choose: async btn => (btn.dataset.steadingXp === "mine" ? defaultSteadingXpActor(user) : null)

@@ -3,7 +3,8 @@
 // theirs and the card's box MIRRORS them (fight/roster-fate.js#onUpdateActorFollowerHp). A box written
 // beside such an NPC would be overwritten by the mirror at the NPC's next HP change, so every writer of a
 // follower's HP comes through setFollowerHp: the Followers tab's HP box, Death's Door's 10+, Make Camp,
-// Bath of Healing Light and Lend it your strength (invocation-apply.js#restoreFollowerCardHp).
+// Bath of Healing Light, Lend it your strength (invocation-apply.js#restoreFollowerCardHp), and the
+// followers who Recover or Convalesce with their PC (follower-rest.js#restFollowers).
 //
 // It writes the NPC when there is one, on the primary GM's client when this one cannot write it
 // (FOLLOWER_NPC_HP_QUERY), the way a hand-off or a Loyalty change for another's follower goes; with no GM

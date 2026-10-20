@@ -33,6 +33,7 @@
   "prototypeToken": {
     "width": 3,
     "height": 3,
+    "depth": 3,
     "name": "The Crombil",
     "actorLink": false,
     "disposition": -1,

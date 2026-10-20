@@ -39,7 +39,7 @@
  * Kept Foundry-free so all of this can be tested without a world in sight.
  */
 
-import { ownsMoveNamed, ownedNamesOr } from "./owns-move.js";
+import { ownsMoveNamed, ownedNamesOr, moveLearnedIn } from "./owns-move.js";
 import { createRoster, showStandingList } from "./marked-people.js";
 
 // Re-exported so the dialog and this playbook's tests keep reaching the predicate through the
@@ -53,6 +53,11 @@ export const TRACKLESS_STEP      = "Trackless Step";
 export const SHARED_SOULS        = "Shared Souls";
 export const AMULETS_TALISMANS   = "Amulets & Talismans";
 export const WARDS_BINDINGS      = "Wards & Bindings";
+/** Amulets & Talismans' level-6 follow-up, which rides the crafting of a charm (see CHARM_POTENCY). */
+export const POTENT_WORKINGS     = "Potent Workings";
+/** Not marking moves, but the Blessed's, and read by both the sheet and the damage card. */
+export const DANUS_GRASP         = "Danu's Grasp";
+export const NATURES_WRATH       = "Nature's Wrath";
 
 /** Shared Souls' beast starts at 3 Loyalty and the mark ends when the last one is spent. */
 export const SHARED_SOULS_LOYALTY = 3;
@@ -186,9 +191,35 @@ function coerceSign(raw, row) {
 	return def.signs.some(s => s.key === key) ? key : "";
 }
 
+/**
+ * Potent Workings (Book I p.106): "When you craft a protective charm, you may spend 1 additional
+ * Stock to choose 1: Name an additional type of harm / On a 10+, the charm retains its potency."
+ *
+ * Two fields on a CHARM row and null on every other kind, the same null discipline as Loyalty and
+ * the ward's sign. `extraHarm` is the second harm the charm wards against ("" for a charm crafted
+ * without it); `retains` is whether a 10+ leaves the charm potent (false for a charm without it).
+ * Only one of the two is ever chosen, which the crafting window enforces: it is "choose 1".
+ */
+export const CHARM_POTENCY = [
+	{ key: "harm",    label: "Name an additional type of harm" },
+	{ key: "retains", label: "On a 10+, the charm retains its potency" },
+];
+
+const isCharmRow = row => coerceKind(row?.kind) === "charm";
+
+function coerceExtraHarm(raw, row) {
+	if (!isCharmRow(row)) return null;
+	return String(raw ?? "").trim();
+}
+
+function coerceRetains(raw, row) {
+	if (!isCharmRow(row)) return null;
+	return raw === true;
+}
+
 const roster = createRoster({
 	prefix: "mark",
-	fields: { kind: coerceKind, loyalty: coerceLoyalty, sign: coerceSign },
+	fields: { kind: coerceKind, loyalty: coerceLoyalty, sign: coerceSign, extraHarm: coerceExtraHarm, retains: coerceRetains },
 	// Duplicates are refused WITHIN A KIND, not across the roster. That is the rule the moves state:
 	// "one can benefit from only 1 charm at a time" is Amulets & Talismans' own sentence, while
 	// nothing stops the same woman wearing Barkskin and Trackless Step at once. Scope-blind dedupe
@@ -207,27 +238,70 @@ export function markSign(key) {
 }
 
 /**
- * The kinds this character can actually lay, in roster order. Empty for anyone who is not one.
+ * The kinds this character can actually lay NOW, in roster order. Empty for anyone who is not one.
  *
- * One pass over the items for all five kinds, not one pass each. The per-kind form short-circuits
- * on a hit, so a Blessed paid little — but everybody ELSE paid all five scans in full, and that is
- * most sheets in most worlds. Takes the sheet's one-pass Set when it has one, so the header glyphs
- * and the add form share a single walk instead of each paying for their own.
+ * LEARNED moves only. An un-learned move is kept on the sheet switched off, and laying a fresh
+ * mark is the move being used, so a switched-off Barkskin offers no new Barkskin. The marks it
+ * already laid are another matter: groupMarks keeps any kind with rows, so they still show and can
+ * still be lifted, they just get no add bar.
+ *
+ * One pass over the items for all five kinds, not one pass each: most sheets in most worlds are
+ * not a Blessed, and they should not pay five scans to learn so.
  */
-export function availableKinds(actor, owned = null) {
-	const names = ownedNamesOr(actor, owned);
-	return MARK_KINDS.filter(def => names.has(def.move));
+export function availableKinds(actor) {
+	const items = actor?.items;
+	const learned = new Set([...(items ?? [])]
+		.filter(i => i?.type === "move" && moveLearnedIn(i, items))
+		.map(i => i.name));
+	return MARK_KINDS.filter(def => learned.has(def.move));
 }
 
 /**
- * Whether this character can mark anybody at all — what earns the glyph in the header.
- *
- * Literally "is there a kind available", asked of `availableKinds` rather than of a second walk
- * of the same table: written twice, the glyph could light while the add form offered nothing, or
- * the reverse. Five entries, so building the list costs nothing worth short-circuiting past.
+ * Whether this character OWNS any of the five marking moves, learned or not: what earns the glyph
+ * in the header, and what keeps the stored roster through a playbook change (StonetopCharacter's
+ * MOVE_STATE). Owned rather than learned on purpose: a Blessed who switched Barkskin off still has
+ * marks to look after, and switching a move off must never be what wipes the list (owns-move.js
+ * on why the two questions differ). Takes the sheet's one-pass Set when it has one.
  */
 export function canMarkBlessed(actor, owned = null) {
-	return availableKinds(actor, owned).length > 0;
+	const names = ownedNamesOr(actor, owned);
+	return MARK_KINDS.some(def => names.has(def.move));
+}
+
+/**
+ * What a charm's Potent Workings choice says, as a lower-case phrase ("also wards against fire",
+ * "keeps its potency on a 10+"), or "" for a charm crafted without it. Reads either a stored row or
+ * the crafting window's `{ extraHarm, retains }`, which have the same two fields.
+ */
+export function charmPotencyText(potency) {
+	const harm = String(potency?.extraHarm ?? "").trim();
+	if (harm) return `also wards against ${harm}`;
+	if (potency?.retains === true) return "keeps its potency on a 10+";
+	return "";
+}
+
+/**
+ * Whether a charm row is used up once its bearer's Amulets & Talismans roll has resolved.
+ *
+ * "One can benefit from only 1 charm at a time, and it loses its potency after 1 use", unless
+ * Potent Workings' "On a 10+, the charm retains its potency" was bought for it and the roll was a
+ * 10+. A 12+ is a 10+ (`tier` is the card's tier as a move's outcomes are keyed, or "critical").
+ */
+export function charmSpentByRoll(row, tier) {
+	const hit10 = tier === "success" || tier === "critical";
+	return !(row?.retains === true && hit10);
+}
+
+/**
+ * Trackless Step's head count against its price: "1 Stock can mark a number of individuals up to
+ * your level+INT." The roster does not record which Stock paid for which marks, so this is the
+ * one honest sum: how many stand, how many one Stock covers, and whether the first exceeds the
+ * second. A warning, never a refusal (stat-like caps flag): the Blessed may have paid twice.
+ */
+export function tracklessTally(list, { level = 1, int = 0 } = {}) {
+	const count = readMarks(list).filter(m => m.kind === "trackless").length;
+	const perStock = Math.max(0, Math.trunc(Number(level) || 0) + Math.trunc(Number(int) || 0));
+	return { count, perStock, over: count > perStock };
 }
 
 /**

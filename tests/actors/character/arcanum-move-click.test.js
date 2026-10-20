@@ -140,10 +140,34 @@ describe("_onArcanumMoveName", () => {
 describe("the Seeker's moves on a mystery's dialog", () => {
 	it("Mind Over Magic offers +INT beside a learned mystery's printed stat", () => {
 		const { sheet } = makeSheet({ moves: ["Mind Over Magic"] });
-		expect(sheet._arcanumMoveGuide(FIRST_LIGHT).altRoll).toMatchObject({ stat: "int", label: "Roll +INT (Mind Over Magic)" });
+		expect(sheet._arcanumMoveGuide(FIRST_LIGHT).altRolls).toMatchObject([{ stat: "int", label: "Roll +INT (Mind Over Magic)" }]);
 		// Without the move, or on a mystery that cannot yet be rolled, there is nothing to swap.
-		expect(makeSheet().sheet._arcanumMoveGuide(FIRST_LIGHT).altRoll).toBeNull();
-		expect(sheet._arcanumMoveGuide({ ...FIRST_LIGHT, learned: false }).altRoll).toBeNull();
+		expect(makeSheet().sheet._arcanumMoveGuide(FIRST_LIGHT).altRolls).toEqual([]);
+		expect(sheet._arcanumMoveGuide({ ...FIRST_LIGHT, learned: false }).altRolls).toEqual([]);
+	});
+
+	// The Fox's Laugh at Danger: "When you are about to roll +CON ... you can roll +CHA instead."
+	it("Laugh at Danger offers +CHA beside a +CON mystery, after Mind Over Magic's +INT", () => {
+		const { sheet } = makeSheet({ moves: ["Mind Over Magic", "Laugh at Danger"] });
+		expect(sheet._arcanumMoveGuide(FIRST_LIGHT).altRolls.map(r => r.label))
+			.toEqual(["Roll +INT (Mind Over Magic)", "Roll +CHA (Laugh at Danger)"]);
+	});
+
+	it("the mystery's dialog carries a roll button for each swap", async () => {
+		const seen = [];
+		global.Dialog = vi.fn(function (d) { seen.push(d); this.render = vi.fn(); });
+		global.game.user = { isGM: false };
+		const { sheet } = makeSheet({ moves: ["Mind Over Magic", "Laugh at Danger"] });
+		sheet._stonetopCharacter.onDirectStatRoll = vi.fn(async () => ({ total: 8 }));
+		sheet._promptRollOptions = vi.fn(async () => ({ rollMode: "normal" }));
+		sheet._postGuidedCharacterMove = vi.fn(async () => {});
+		await sheet._openGuidedCharacterMove({ name: "FIRST LIGHT", guide: sheet._arcanumMoveGuide(FIRST_LIGHT) }, null);
+		const { buttons } = seen[0];
+		expect(buttons.roll.label).toBe("Roll +CON");
+		expect(buttons.rollAlt.label).toBe("Roll +INT (Mind Over Magic)");
+		expect(buttons.rollAlt1.label).toBe("Roll +CHA (Laugh at Danger)");
+		await buttons.rollAlt1.callback([{ querySelector: () => null }]);
+		expect(sheet._stonetopCharacter.onDirectStatRoll.mock.calls[0][0]).toBe("cha");
 	});
 
 	it("Improvise is offered on an un-learned mystery, and only there", () => {

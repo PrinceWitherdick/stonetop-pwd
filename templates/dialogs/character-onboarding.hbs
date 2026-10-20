@@ -1,5 +1,29 @@
 <div class="stonetop-onboarding-body">
 
+	{{!-- A move's "pick 1" mark boxes, as radios: Well Versed's extra topic beside the background's,
+	      and Veteran Crew's "Go mark it now" on the crew step. `optionClass` names each option for its
+	      handler; an option the background already holds is noted with `fromLabel`. The radios carry
+	      `backgroundSlug`/`choiceKey` (Well Versed) or `markMove`/`markCopy` (a creation mark) for it.
+	      Inside the each, the partial's own params are read through `../`. --}}
+	{{#*inline "stonetopCreationMarkRadios"}}
+	<div class="stonetop-onboarding-background-choice-options {{groupClass}}">
+		{{#each options}}
+		<span class="stonetop-onboarding-bg-option {{../optionClass}}{{#if selected}} is-selected{{/if}}{{#if fromBackground}} is-from-background{{/if}}{{#if disabled}} is-disabled{{/if}}">
+			<input type="radio"
+			       name="{{../name}}"
+			       value="{{slug}}"
+			       {{#if ../backgroundSlug}}data-background-slug="{{../backgroundSlug}}"{{/if}}
+			       {{#if ../choiceKey}}data-choice-key="{{../choiceKey}}"{{/if}}
+			       {{#if ../markMove}}data-move="{{../markMove}}" data-copy="{{../markCopy}}"{{/if}}
+			       {{#if selected}}checked{{/if}}
+			       {{#if disabled}}disabled{{/if}}>
+			<span{{#if ../labelClass}} class="{{../labelClass}}"{{/if}}{{#if summary}} data-tooltip="{{summary}}"{{/if}}>{{label}}</span>
+			{{#if fromBackground}}<em class="stonetop-onboarding-background-extra-mark-note">({{../fromLabel}})</em>{{/if}}
+		</span>
+		{{/each}}
+	</div>
+	{{/inline}}
+
 	{{!-- Header --}}
 	<div class="stonetop-onboarding-header">
 		{{#if playbookImg}}
@@ -73,21 +97,13 @@
 						{{!-- Well Versed: "Mark 1 topic, in addition to the one noted in your Background". --}}
 						{{#if extraMark}}
 						<p class="stonetop-onboarding-background-move-choice-label">{{extraMark.label}}</p>
-						<div class="stonetop-onboarding-background-choice-options stonetop-onboarding-background-extra-marks">
-							{{#each extraMark.options}}
-							<span class="stonetop-onboarding-bg-option stonetop-onboarding-background-extra-mark{{#if selected}} is-selected{{/if}}{{#if fromBackground}} is-from-background{{/if}}">
-								<input type="radio"
-								       name="onboard-background-extra-mark-{{../../slug}}-{{../key}}"
-								       value="{{slug}}"
-								       data-background-slug="{{../../slug}}"
-								       data-choice-key="{{../key}}"
-								       {{#if selected}}checked{{/if}}
-								       {{#if fromBackground}}disabled{{/if}}>
-								<span class="stonetop-onboarding-well-versed-topic"{{#if summary}} data-tooltip="{{summary}}"{{/if}}>{{label}}</span>
-								{{#if fromBackground}}<em class="stonetop-onboarding-background-extra-mark-note">({{../extraMark.fromBackgroundLabel}})</em>{{/if}}
-							</span>
-							{{/each}}
-						</div>
+						{{> stonetopCreationMarkRadios options=extraMark.options
+						      groupClass="stonetop-onboarding-background-extra-marks"
+						      optionClass="stonetop-onboarding-background-extra-mark"
+						      labelClass="stonetop-onboarding-well-versed-topic"
+						      name=(concat "onboard-background-extra-mark-" ../slug "-" key)
+						      backgroundSlug=../slug choiceKey=key
+						      fromLabel=extraMark.fromBackgroundLabel}}
 						{{/if}}
 					</div>
 					{{/each}}
@@ -667,6 +683,20 @@
 		<h3 class="stonetop-onboarding-step-title">Crew</h3>
 		<p class="stonetop-onboarding-step-hint">Your crew starts with the <em>group</em> tag{{#if crewData.bgTag}} and <em>{{crewData.bgTag}}</em> (from your background){{/if}}. Pick {{crewData.additionalTagCount}} more tags, an instinct, and a cost.</p>
 
+		{{!-- Veteran Crew's "Go mark it now" (Book I p.125): one pick for each copy creation gives.
+		      Picking "Select 2 new tags" raises the tag count below. --}}
+		{{#if crewData.creationMarks.length}}
+		<div class="stonetop-onboarding-insert-section stonetop-onboarding-creation-marks">
+			<p class="stonetop-onboarding-step-hint">{{crewData.creationMarkHint}}</p>
+			{{#each crewData.creationMarks}}
+			<p class="stonetop-onboarding-background-move-choice-label">{{label}}</p>
+			{{> stonetopCreationMarkRadios options=options
+			      optionClass="stonetop-onboarding-creation-mark"
+			      name=name markMove=move markCopy=copy}}
+			{{/each}}
+		</div>
+		{{/if}}
+
 		<div class="stonetop-onboarding-name-row">
 			<label class="stonetop-onboarding-name-label" for="onboard-crew-name">Crew name <em>(optional)</em></label>
 			<input id="onboard-crew-name" type="text" class="onboard-crew-name"
@@ -692,14 +722,18 @@
 				</label>
 				{{/each}}
 			</div>
+			{{!-- The insert's three blank tag lines (p.144): each one written in spends a pick. --}}
+			{{#each crewData.customTags}}
 			<label class="stonetop-onboarding-custom-label">
 				<span>Custom tag</span>
 				<input type="text" class="onboard-crew-tag-custom"
-				       value="{{crewData.customTag}}"
+				       data-index="{{index}}"
+				       value="{{value}}"
 				       aria-label="Custom tag"
 				       placeholder="Write your own…"
-				       {{#if crewData.customTagDisabled}}disabled{{/if}}>
+				       {{#if disabled}}disabled{{/if}}>
 			</label>
+			{{/each}}
 		</div>
 
 		<div class="stonetop-onboarding-insert-section">

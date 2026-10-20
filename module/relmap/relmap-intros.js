@@ -56,7 +56,7 @@ export const INTRO_STEPS = Object.freeze(["step4", "step6"]);
  * one of you has stayed my hand?" says the tie in its tail and spends its head on grammar the
  * arrow already provides: the line runs from the person who asked to the person they named.
  *
- * ⚠ LONGEST FIRST, and that is load-bearing rather than tidy: "Who is your lover, spouse, or
+ * ⚠ LONGEST FIRST, and that is load-bearing rather than tidy: "Who is your lover/spouse/
  * betrothed?" must lose "Who is your " and not "Who ", or the caption reads "is your lover".
  *
  * DELIBERATELY SHORT. Only the four openings that leave a clean phrase behind are here. "Whose

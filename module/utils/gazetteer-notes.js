@@ -36,7 +36,7 @@
 import { error } from "./logger.js";
 import { compendiumRefTail } from "../migration/compat.js";
 import { compendiumSourceOf } from "./foundry-compat.js";
-import { SYSTEM_ID, LEGACY_FLAG_SCOPES } from "../system-id.js";
+import { SYSTEM_ID, LEGACY_FLAG_SCOPES, JOURNAL_PACK as JOURNAL_PACK_ID } from "../system-id.js";
 
 /** The one shipped journal pack every gazetteer entry lives in. */
 const JOURNAL_PACK = "stonetop-journal";
@@ -76,6 +76,14 @@ export function gazetteerRefTail(journalId) {
 }
 
 /**
+ * The compendium uuid of one gazetteer entry (`Compendium.<system>.<pack>.JournalEntry.<id>`), or
+ * null. WITH the package id, unlike gazetteerRefTail: this is a uuid to open, not an identity to match.
+ */
+export function gazetteerUuid(journalId) {
+	return journalId ? `Compendium.${JOURNAL_PACK_ID}.JournalEntry.${journalId}` : null;
+}
+
+/**
  * Every world JournalEntry that came out of a compendium, keyed by that identity.
  *
  * Built once per pass rather than searched per pin: a seeded world holds a few hundred journal
@@ -99,6 +107,21 @@ export function worldGazetteerIndex(journals = globalThis.game?.journal ?? []) {
 export function worldGazetteerEntry(journalId, index) {
 	const tail = gazetteerRefTail(journalId);
 	return tail ? (index?.get(tail) ?? null) : null;
+}
+
+/**
+ * Open one gazetteer entry: the world's seeded copy when there is one, the compendium's otherwise.
+ * The entry it opened, or null when neither was found, so the caller can say so in its own words.
+ * Shared by the settlement sheet's gazetteer link and the Seasons Change trade opportunity links.
+ *
+ * @param {string} journalId
+ * @param {{resolve?: (uuid: string) => Promise<object|null>}} [deps]  injectable for tests
+ */
+export async function openGazetteerEntry(journalId, { resolve = uuid => globalThis.fromUuid?.(uuid) } = {}) {
+	if (!journalId) return null;
+	const entry = worldGazetteerEntry(journalId, worldGazetteerIndex()) ?? await resolve(gazetteerUuid(journalId));
+	entry?.sheet?.render(true);
+	return entry ?? null;
 }
 
 /**

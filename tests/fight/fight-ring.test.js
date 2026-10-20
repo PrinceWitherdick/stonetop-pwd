@@ -353,7 +353,7 @@ describe("runRingButton", () => {
 		const actor = fakeActor({ id: "crew", type: "npc" });
 		await runRingButton({ run: "order", moveKey: "let-fly", order }, actor, { shiftKey: true });
 		expect(sheet.orderFollower).toHaveBeenCalledWith(
-			{ name: "The Crew", tags: ["warrior"], moves: [], exceptional: true, moveKey: "let-fly" },
+			{ name: "The Crew", tags: ["warrior"], moves: [], exceptional: true, moveKey: "let-fly", fromMap: true },
 			{ ftype: "crew", slug: "" },
 		);
 		expect(rollDamageAt).not.toHaveBeenCalled();
@@ -378,6 +378,35 @@ describe("runRingButton", () => {
 		}
 		expect(crewBlow).toHaveBeenCalledWith(cadi, { label: "Damage", weapon: null, keywords: "" });
 		expect(rollDamageAt).toHaveBeenCalledWith(crew, { formula: "d6", label: "Damage: Spear", keywords: "", rollMode: "normal", weapon: spear, shiftKey: false });
+	});
+
+	// The Marshal's re-audit, the user's ruling (2026-10-18): a follower's own blow is them going on the offense.
+	it("asks a crew token holding Readiness whether they rushed in; its strike back asks nothing", async () => {
+		const cadi = fakeActor({ id: "cadi", type: "character", name: "Cadi", flags: { [SYSTEM_ID]: { crew: { readiness: 2 } } } });
+		cadi.uuid = "Actor.cadi";
+		cadi.update = vi.fn(async changes => { cadi.flags[SYSTEM_ID].crew.readiness = changes[`flags.${SYSTEM_ID}.crew.readiness`]; });
+		const crew = fakeActor({
+			id: "crew", type: "npc", name: "The Crew",
+			flags: { [SYSTEM_ID]: { followerOrigin: { characterUuid: "Actor.cadi", ftype: "crew", slug: "" } } },
+		});
+		const actors = globalThis.game.actors;
+		globalThis.game.actors = collection([cadi, crew]);
+		const answers = ["keep", "lose"];
+		const wait = vi.fn(async () => answers.shift());
+		globalThis.foundry.applications = { ...(globalThis.foundry.applications ?? {}), api: { DialogV2: { wait } } };
+		const { document, ChatMessage } = globalThis;
+		globalThis.document = { createElement: () => ({}) };
+		globalThis.ChatMessage = { create: vi.fn(async () => {}), getSpeaker: () => ({}) };
+		onTestFinished(() => { globalThis.document = document; globalThis.ChatMessage = ChatMessage; globalThis.game.actors = actors; });
+		await runRingButton({ run: "strikeBack", label: "Strike back", formula: "d6", rollMode: "dis", weapon: null }, crew);
+		expect(wait).not.toHaveBeenCalled();
+		expect(cadi.flags[SYSTEM_ID].crew.readiness).toBe(1);
+		await runRingButton({ run: "damage", label: "Damage", formula: "d6" }, crew);
+		expect(wait).toHaveBeenCalledTimes(1);
+		expect(wait.mock.calls[0][0].window.title).toBe("The Crew holds 1 Readiness");
+		expect(cadi.flags[SYSTEM_ID].crew.readiness).toBe(1);
+		await runRingButton({ run: "damage", label: "Damage", formula: "d6" }, crew);
+		expect(cadi.flags[SYSTEM_ID].crew.readiness).toBe(0);
 	});
 
 	it("rolls nothing when the crew's weapon is not chosen", async () => {

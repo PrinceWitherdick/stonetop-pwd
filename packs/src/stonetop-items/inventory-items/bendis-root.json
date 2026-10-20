@@ -1,0 +1,25 @@
+{
+  "_id": "uuQBVifMufJzXkpi",
+  "_key": "!items!uuQBVifMufJzXkpi",
+  "name": "Bendis root",
+  "type": "move",
+  "system": {
+    "moveType": "inventory"
+  },
+  "flags": {
+    "stonetop": {
+      "slug": "bendis-root",
+      "inventoryColumn": "small",
+      "sortOrder": 77,
+      "note": "<em>reach</em>, <em>area</em>, burns ~1 hr, fumes repel perversions of nature",
+      "resource": {
+        "max": 0,
+        "title": null,
+        "labels": []
+      },
+      "special": true,
+      "specialCategory": "Flora & Herbs"
+    }
+  },
+  "folder": "OL1lTSyCryWm3Xez"
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { CharacterPossessions } from "../../../module/actors/character/CharacterPossessions.js";
+import { CharacterPossessions, onboardingWriteIns } from "../../../module/actors/character/CharacterPossessions.js";
 
 function makeFlags(store = {}) {
 	return {
@@ -157,6 +157,58 @@ describe("CharacterPossessions — custom write-ins", () => {
 		const cp = new CharacterPossessions(makeFlags(store));
 		await cp.removeCustom("custom-1");
 		expect(store.custom).toEqual([{ slug: "custom-2", label: "B" }]);
+	});
+
+	// The sheet's "+ Something else (discuss with GM)": the same { slug, label } onboarding stores.
+	it("addCustom appends a trimmed write-in in onboarding's shape", async () => {
+		const store = { custom: [{ slug: "custom-1", label: "A locket" }] };
+		const cp = new CharacterPossessions(makeFlags(store));
+		const entry = await cp.addCustom("  Grandfather's blade ");
+		expect(entry).toEqual({ slug: "custom-2", label: "Grandfather's blade" });
+		expect(store.custom).toEqual([
+			{ slug: "custom-1", label: "A locket" },
+			{ slug: "custom-2", label: "Grandfather's blade" },
+		]);
+	});
+
+	it("addCustom never reuses a slug another write-in still holds", async () => {
+		const store = { custom: [{ slug: "custom-2", label: "B" }] };
+		const cp = new CharacterPossessions(makeFlags(store));
+		await cp.addCustom("C");
+		expect(store.custom.map(c => c.slug)).toEqual(["custom-2", "custom-3"]);
+	});
+
+	it("addCustom with a blank label adds nothing", async () => {
+		const flags = makeFlags({});
+		const cp = new CharacterPossessions(flags);
+		expect(await cp.addCustom("   ")).toBeNull();
+		expect(flags.setFlag).not.toHaveBeenCalled();
+	});
+
+	it("an added write-in removes like an onboarding one", async () => {
+		const store = {};
+		const cp = new CharacterPossessions(makeFlags(store));
+		const { slug } = await cp.addCustom("A map");
+		await cp.removeCustom(slug);
+		expect(store.custom).toEqual([]);
+	});
+});
+
+// Onboarding's one "Something else" box opens on the first stored write-in.
+describe("onboardingWriteIns (an onboarding re-run)", () => {
+	const stored = [{ slug: "custom-1", label: "A locket" }, { slug: "custom-2", label: "A map" }];
+
+	it("rewrites the first write-in and keeps the ones the sheet added after it", () => {
+		expect(onboardingWriteIns("A silver locket", stored)).toEqual(["A silver locket", "A map"]);
+	});
+
+	it("a cleared box drops only the first", () => {
+		expect(onboardingWriteIns("  ", stored)).toEqual(["A map"]);
+	});
+
+	it("matches the old one-box result when the sheet added nothing", () => {
+		expect(onboardingWriteIns("A locket", [stored[0]])).toEqual(["A locket"]);
+		expect(onboardingWriteIns("", [])).toEqual([]);
 	});
 });
 

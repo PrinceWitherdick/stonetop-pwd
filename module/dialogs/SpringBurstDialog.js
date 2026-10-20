@@ -16,6 +16,7 @@ import { displayYear, setStartYear } from "../seasons/campaign-year.js";
 import { campaignYearPreview } from "../seasons/campaign-year-dialog.js";
 import { timelineNow } from "../timeline/timeline-record.js";
 import { localize } from "../utils/i18n.js";
+import { firstAdventureHooksHtml } from "../gm-toolkit/gm-agenda-view.js";
 
 const ANSWERS_SETTING = "springBurstAnswers";
 
@@ -122,6 +123,9 @@ const _STEPS = [
 			prompt:      "What hook does it open, the thread for your first adventure?",
 			placeholder: "Opportunities or threats…",
 		},
+		// Under the hook field: how each result and gain becomes the first adventure's hook (Book I
+		// pp.255-259), the rows of the gains already ticked marked (gm-toolkit/gm-agenda-view.js).
+		hookGuide: true,
 		footer:   `<p>Note the result and update the steading playbook if needed, then <strong>start to wrap up</strong>. It'll be tempting to leap straight into play: <strong>don't</strong>; give yourself time to mull over everything the players handed you and to prepare the first expedition.</p>`,
 	},
 	{
@@ -245,7 +249,11 @@ export class SpringBurstDialog extends StepperDialog {
 		// Mark which seasonal gain(s) were picked. No re-render — the checkbox toggles
 		// natively and we just persist, so nothing on the step is lost.
 		html.find(".stonetop-season-gain-check").on("change", ev => {
-			this._saveGain(ev.currentTarget.dataset.gainKey, ev.currentTarget.checked);
+			const { gainKey } = ev.currentTarget.dataset;
+			// Mark that gain's rows in the hook guide too, in place, for the same reason.
+			html[0]?.querySelectorAll?.(`.stonetop-hook-gain[data-gain="${gainKey}"]`)
+				.forEach(row => row.classList.toggle("is-picked", ev.currentTarget.checked));
+			this._saveGain(gainKey, ev.currentTarget.checked);
 		});
 	}
 
@@ -264,6 +272,7 @@ export class SpringBurstDialog extends StepperDialog {
 			// moment the GM delegates the roll (and not before).
 			gains:     step.showGains && this._delegatedRoll ? this._gainsContext() : null,
 			qa:        this._qaContext(step.qa),
+			hookGuide: step.hookGuide ? firstAdventureHooksHtml({ picked: this._answers().gains ?? {} }) : null,
 			yearAsk:   step.askYear ? this._yearAskContext() : null,
 		};
 	}

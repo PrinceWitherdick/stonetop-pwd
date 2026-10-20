@@ -44,7 +44,7 @@ describe("forced light theme on Stonetop windows", () => {
 	});
 
 	it("marks a light-mode window too, so a mid-session switch to dark cannot reach it", () => {
-		const el = root("application", "stonetop-content-picker-dialog");
+		const el = root("application", "stonetop-fight-targets-app");
 		onRender(null, el);
 		expect(el.classList.contains("themed")).toBe(true);
 		expect(el.classList.contains("theme-light")).toBe(true);

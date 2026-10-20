@@ -262,6 +262,7 @@ export class CampWindow extends StonetopDialog {
 		// Choosing which debility is choosing to clear one: nobody picks from that list meaning HP.
 		const patch = key === "benefit" ? { benefit: field.value }
 			: key === "debility" ? { debility: field.value, benefit: CAMP_BENEFIT.DEBILITY }
+			: key === "precaution" ? { precaution: Math.trunc(Number(field.value) || 0) }
 			: { [key]: !!field.checked };
 		return this._queue("camp choice", () => setCampChoices(actor, patch));
 	}

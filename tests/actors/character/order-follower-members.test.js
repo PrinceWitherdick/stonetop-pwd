@@ -102,6 +102,76 @@ describe("orderFollower", () => {
 		await sheet.orderFollower({ name: "The Crew", tags: ["archers"] }, { ftype: "crew", slug: "" });
 		const result = { bonus: 1, rollMode: "normal", moveName: "Glaw: Let Fly", moveKey: "let-fly", followerName: "Glaw", member: "named:0" };
 		await opened[0].onRoll(result);
-		expect(actor.typedActor.onOrderFollowersRoll).toHaveBeenCalledWith(result);
+		// Nothing was spent on a balk, so the roll carries no Loyalty step.
+		expect(actor.typedActor.onOrderFollowersRoll).toHaveBeenCalledWith({ ...result, loyaltySpent: null, attack: { ftype: "crew", slug: "", name: "Glaw" } });
+	});
+});
+
+// They balk (p.466-467): the window's box spends 1 of the crew's Loyalty before the dice, and the roll is
+// handed the step so its card can say so. The window also opens on the Loyalty they hold.
+describe("orderFollower and a balk", () => {
+	it("opens on the Loyalty held, and spends 1 of it before the roll when the box was ticked", async () => {
+		const { sheet, actor } = makeSheet({ crew: { ...crewFlags.crew, loyalty: 2 } });
+		actor.update = vi.fn(async () => {});
+		await sheet.orderFollower({ name: "The Crew", tags: ["archers"] }, { ftype: "crew", slug: "" });
+		expect(opened[0].follower.loyalty).toBe(2);
+		await opened[0].onRoll({ bonus: 0, rollMode: "normal", moveKey: "defy-danger", followerName: "The Crew", spendLoyalty: true });
+		const written = actor.update.mock.calls.map(c => c[0]);
+		expect(written.some(u => Object.entries(u).some(([k, v]) => k.endsWith("crew.loyalty") && v === 1))).toBe(true);
+		expect(actor.typedActor.onOrderFollowersRoll.mock.calls[0][0].loyaltySpent).toEqual({ from: 2, to: 1 });
+	});
+
+	// Front Line Leader (Marshal, p.126): "Spend Presence in lieu of your crew's Loyalty".
+	it("hands the crew's window the Marshal's Presence, and pays a balk with it when asked, not with Loyalty", async () => {
+		const FLL = "Front Line Leader";
+		const { sheet, actor } = makeSheet({ crew: { ...crewFlags.crew, loyalty: 1 } });
+		actor.items = [{ type: "move", name: FLL, system: { resource: { max: 2, title: "Presence" } }, flags: {} }];
+		const tracks = { [FLL]: 2 };
+		actor.typedActor.moveResources = { getMoveResources: () => tracks, setUses: vi.fn(async (move, value) => { tracks[move] = value; }) };
+		actor.update = vi.fn(async () => {});
+		await sheet.orderFollower({ name: "The Crew", tags: [] }, { ftype: "crew", slug: "" });
+		expect(opened[0].follower.presence).toBe(2);
+		await opened[0].onRoll({ bonus: 0, rollMode: "normal", moveKey: "defy-danger", followerName: "The Crew", spendLoyalty: true, payWithPresence: true });
+		expect(tracks[FLL]).toBe(1);
+		expect(actor.update).not.toHaveBeenCalledWith(expect.objectContaining({ "flags.stonetop-pwd.crew.loyalty": 0 }), expect.anything());
+		const handed = actor.typedActor.onOrderFollowersRoll.mock.calls[0][0];
+		expect(handed.presenceSpent).toEqual({ from: 2, to: 1 });
+		expect(handed.loyaltySpent).toBe(null);
+	});
+
+	it("offers no Presence to a follower who is not the crew", async () => {
+		const { sheet, actor } = makeSheet({ customFollowers: { f1: { name: "Andras", loyalty: 0 } } });
+		actor.items = [{ type: "move", name: "Front Line Leader", system: { resource: { max: 2 } }, flags: {} }];
+		actor.typedActor.moveResources = { getMoveResources: () => ({ "Front Line Leader": 2 }), setUses: vi.fn() };
+		await sheet.orderFollower({ name: "Andras", tags: [] }, { ftype: "custom", slug: "f1" });
+		expect(opened[0].follower.presence).toBe(0);
+	});
+});
+
+// An ordered Clash or Let Fly carries on into the follower's damage (p.462), and a Clash that misses suffers
+// the enemy's attack at once (p.215), on the follower's own token (fight/follower-order-attack.js).
+describe("orderFollower and an attack", () => {
+	it("hands the roll a damage button for Clash and Let Fly, and none for any other move", async () => {
+		const { sheet, actor } = makeSheet(crewFlags);
+		await sheet.orderFollower({ name: "The Crew", tags: [] }, { ftype: "crew", slug: "" });
+		await opened[0].onRoll({ bonus: 0, rollMode: "normal", moveKey: "let-fly", followerName: "Glaw" });
+		await opened[0].onRoll({ bonus: 0, rollMode: "normal", moveKey: "defy-danger", followerName: "Glaw" });
+		const [first, second] = actor.typedActor.onOrderFollowersRoll.mock.calls.map(c => c[0]);
+		expect(first.attack).toEqual({ ftype: "crew", slug: "", name: "Glaw" });
+		expect(second).not.toHaveProperty("attack");
+	});
+
+	it("strikes the counter-blow when an ordered Clash misses, and not on a hit or another move", async () => {
+		const { sheet, actor } = makeSheet(crewFlags);
+		sheet._followerSuffersCounter = vi.fn(async () => true);
+		await sheet.orderFollower({ name: "The Crew", tags: [] }, { ftype: "crew", slug: "" });
+		actor.typedActor.onOrderFollowersRoll.mockResolvedValueOnce({ total: 5 });
+		await opened[0].onRoll({ moveKey: "clash", followerName: "The Crew" });
+		actor.typedActor.onOrderFollowersRoll.mockResolvedValueOnce({ total: 9 });
+		await opened[0].onRoll({ moveKey: "clash", followerName: "The Crew" });
+		actor.typedActor.onOrderFollowersRoll.mockResolvedValueOnce({ total: 4 });
+		await opened[0].onRoll({ moveKey: "let-fly", followerName: "The Crew" });
+		expect(sheet._followerSuffersCounter).toHaveBeenCalledTimes(1);
+		expect(sheet._followerSuffersCounter).toHaveBeenCalledWith({ ftype: "crew", slug: "" });
 	});
 });

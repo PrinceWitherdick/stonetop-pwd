@@ -69,7 +69,8 @@
 			{{/if}}
 		</div>
 
-		<div class="stonetop-special-move-card{{#unless stonetop.recover.canRecover}} is-locked{{/unless}}">
+		{{! Live for anything Recover can do now: their own HP, a debility to tend, or a hurt follower. }}
+		<div class="stonetop-special-move-card{{#unless stonetop.recover.canOpen}} is-locked{{/unless}}">
 			<h3 class="stonetop-special-move-name">{{localize "stonetop.specialMoves.recover.title"}}</h3>
 			<p class="stonetop-special-move-summary">{{{localize "stonetop.specialMoves.recover.summary"}}}</p>
 			{{#if stonetop.recover.hint}}
@@ -79,7 +80,7 @@
 			</p>
 			{{/if}}
 			<button type="button" class="stonetop-recover-open-btn"
-				{{#unless stonetop.recover.canRecover}}disabled{{/unless}}>
+				{{#unless stonetop.recover.canOpen}}disabled{{/unless}}>
 				<i class="fas fa-heart-circle-plus"></i>
 				{{localize "stonetop.specialMoves.recover.button"}}
 			</button>
@@ -116,6 +117,18 @@
 				{{localize "stonetop.specialMoves.convalesce.button"}}
 			</button>
 		</div>
+
+		{{! Only for whoever may retire them (owner or GM) while they are still in play: canRetire. }}
+		{{#if stonetop.canRetire}}
+		<div class="stonetop-special-move-card">
+			<h3 class="stonetop-special-move-name">{{localize "stonetop.specialMoves.retire.title"}}</h3>
+			<p class="stonetop-special-move-summary">{{{localize "stonetop.specialMoves.retire.summary"}}}</p>
+			<button type="button" class="stonetop-retire-open-btn">
+				<i class="fas fa-door-open"></i>
+				{{localize "stonetop.specialMoves.retire.button"}}
+			</button>
+		</div>
+		{{/if}}
 
 	</div>
 

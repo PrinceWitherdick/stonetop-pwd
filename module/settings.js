@@ -11,6 +11,7 @@ import { PALETTE_HOOK } from "./utils/palette.js";
 import { MIN_MAP_BRIGHTNESS } from "./hooks/map-brightness.js";
 import { applyTimelineKindColours, normalizeKindColours } from "./timeline/timeline-colours.js";
 import { AGES_CHANGED_HOOK, agesToStored, normalizeAges } from "./timeline/timeline-ages.js";
+import { STANDARD_XP_RULES, XP_RULE_SETTINGS } from "./utils/xp.js";
 
 /**
  * A weather-effect setting changed, so the canvas has to catch up with it: unticking Fog must
@@ -313,6 +314,50 @@ export function registerSettings() {
 		config: true,
 		type: Boolean,
 		default: true,
+	});
+
+	// Advancement variants (Book I p.582, "Slowing the rate"), owned and read by utils/xp.js#xpRules.
+	// Every default is the book's standard rule (p.528), so a world that never opens these plays as
+	// it always has. World-scoped: how fast the PCs advance is the table's call, made once. A change
+	// redraws the open sheets, whose XP max is drawn from the curve.
+	game.settings.register(SYSTEM_ID, XP_RULE_SETTINGS.base, {
+		name: "stonetop.settings.xpLevelUpBase.name",
+		hint: "stonetop.settings.xpLevelUpBase.hint",
+		scope: "world",
+		config: true,
+		type: Number,
+		// Keys spelled out (not built from XP_BASE_CHOICES) so the orphaned-strings scan can see them.
+		choices: { 6: "stonetop.settings.xpLevelUpBase.choice6", 10: "stonetop.settings.xpLevelUpBase.choice10" },
+		default: STANDARD_XP_RULES.base,
+		onChange: () => _rerenderActorSheets(),
+	});
+	game.settings.register(SYSTEM_ID, XP_RULE_SETTINGS.perLevel, {
+		name: "stonetop.settings.xpLevelUpPerLevel.name",
+		hint: "stonetop.settings.xpLevelUpPerLevel.hint",
+		scope: "world",
+		config: true,
+		type: Number,
+		choices: { 2: "stonetop.settings.xpLevelUpPerLevel.choice2", 3: "stonetop.settings.xpLevelUpPerLevel.choice3" },
+		default: STANDARD_XP_RULES.perLevel,
+		onChange: () => _rerenderActorSheets(),
+	});
+	game.settings.register(SYSTEM_ID, XP_RULE_SETTINGS.resetOnLevelUp, {
+		name: "stonetop.settings.xpResetOnLevelUp.name",
+		hint: "stonetop.settings.xpResetOnLevelUp.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: STANDARD_XP_RULES.resetOnLevelUp,
+		onChange: () => _rerenderActorSheets(),
+	});
+	game.settings.register(SYSTEM_ID, XP_RULE_SETTINGS.alwaysBurn, {
+		name: "stonetop.settings.burnBrightlyAlways.name",
+		hint: "stonetop.settings.burnBrightlyAlways.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: STANDARD_XP_RULES.alwaysBurn,
+		onChange: () => _rerenderActorSheets(),
 	});
 
 	// When on (the default), only the GM may author custom moves — players don't see
@@ -3392,6 +3437,8 @@ export function setWorldSetting(key, value) {
 
 function _rerenderActorSheets() {
 	for (const app of Object.values(globalThis.ui?.windows ?? {})) {
-		if (app?.actor) app.render(false);
+		// A sheet, or a character's own window (Death's Door, Level Up), which keeps its character as
+		// `_character` and reads what Burn Brightly costs as it draws.
+		if (app?.actor || app?._character) app.render(false);
 	}
 }

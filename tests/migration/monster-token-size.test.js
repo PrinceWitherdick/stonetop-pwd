@@ -9,11 +9,11 @@ const monster = (size, token = {}) => ({ type: "monster", name: size || "medium"
 
 describe("monsterTokenSizeUpdate", () => {
 	it("grows a large monster to 2x2 and a huge one to 3x3", () => {
-		expect(monsterTokenSizeUpdate(monster("large"))).toEqual({ "prototypeToken.width": 2, "prototypeToken.height": 2 });
-		expect(monsterTokenSizeUpdate(monster("huge"))).toEqual({ "prototypeToken.width": 3, "prototypeToken.height": 3 });
+		expect(monsterTokenSizeUpdate(monster("large"))).toEqual({ "prototypeToken.width": 2, "prototypeToken.height": 2, "prototypeToken.depth": 2 });
+		expect(monsterTokenSizeUpdate(monster("huge"))).toEqual({ "prototypeToken.width": 3, "prototypeToken.height": 3, "prototypeToken.depth": 3 });
 		// A token with no footprint recorded is the default 1x1.
 		expect(monsterTokenSizeUpdate({ type: "monster", system: { size: "huge" }, prototypeToken: {} }))
-			.toEqual({ "prototypeToken.width": 3, "prototypeToken.height": 3 });
+			.toEqual({ "prototypeToken.width": 3, "prototypeToken.height": 3, "prototypeToken.depth": 3 });
 	});
 
 	it("leaves tiny, small and medium creatures at one square", () => {
@@ -32,7 +32,7 @@ describe("sizeMonsterTokens", () => {
 		const big = { ...monster("huge"), update: vi.fn(async () => {}) };
 		const small = { ...monster("small"), update: vi.fn(async () => {}) };
 		expect(await sizeMonsterTokens({ actors: [big, small] })).toBe(1);
-		expect(big.update).toHaveBeenCalledWith({ "prototypeToken.width": 3, "prototypeToken.height": 3 });
+		expect(big.update).toHaveBeenCalledWith({ "prototypeToken.width": 3, "prototypeToken.height": 3, "prototypeToken.depth": 3 });
 		expect(small.update).not.toHaveBeenCalled();
 	});
 

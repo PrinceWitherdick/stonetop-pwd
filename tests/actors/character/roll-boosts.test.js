@@ -261,12 +261,15 @@ describe("who sees which button", () => {
 		expect(offersFor({ message })).toEqual(["diligence:Aeron"]);
 	});
 
-	it("hides a source once that helper has used it on this roll, and only that one", () => {
-		const message = card({ boosts: [{ source: "diligence", by: "Actor.judge", name: "Aeron" }] });
-		expect(offersFor({ message })).toEqual(["manyHands:Aeron"]);
+	it("hides a once-per-roll source once that helper has used it, but keeps Diligence while any is held", () => {
+		const message = card({ boosts: [{ source: "manyHands", by: "Actor.judge", name: "Aeron" }] });
+		expect(offersFor({ message })).toEqual(["diligence:Aeron"]);
+		// Diligence stacks (2026-10-18 ruling): spent once, still offered while the track holds more.
+		const spent = card({ boosts: [{ source: "diligence", by: "Actor.judge", name: "Aeron" }] });
+		expect(offersFor({ message: spent })).toEqual(["diligence:Aeron", "manyHands:Aeron"]);
 		// A second Judge has their own Diligence to spend on the same roll.
 		const other = judge({ id: "judge2", name: "Bryn" });
-		expect(offersFor({ message, helpers: [judge(), other], user: player("judge2") })).toEqual(["diligence:Bryn", "manyHands:Bryn"]);
+		expect(offersFor({ message: spent, helpers: [judge(), other], user: player("judge2") })).toEqual(["diligence:Bryn", "manyHands:Bryn"]);
 	});
 });
 
@@ -291,14 +294,38 @@ describe("taking a +1", () => {
 		expect(boostNote(message.getFlag(SCOPE, BOOSTS_FLAG)[0])).toBe("+1 Diligence (Aeron)");
 	});
 
-	it("refuses a second Diligence from the same Judge on the same roll", async () => {
+	// "Spend 1 Diligence at any time to add +1" sets no per-roll limit (2026-10-18 ruling): a Judge spends
+	// what they hold, then the track is dry and the next press is refused.
+	it("lets the same Judge spend Diligence twice on one roll, then refuses on an empty track", async () => {
 		const aeron = judge();
 		const message = card();
 		const d = deps();
-		await takeBoost(message, { source: "diligence", helper: aeron }, d);
+		expect(await takeBoost(message, { source: "diligence", helper: aeron }, d)).toBe(true);
+		expect(await takeBoost(message, { source: "diligence", helper: aeron }, d)).toBe(true);
+		expect(aeron.tracks[CHRONICLER]).toBe(0);
+		expect(message.rolls[0].total).toBe(10);
+		expect(message.getFlag(SCOPE, BOOSTS_FLAG).map(boostNote)).toEqual(["+1 Diligence (Aeron)", "+1 Diligence (Aeron)"]);
 		expect(await takeBoost(message, { source: "diligence", helper: aeron }, d)).toBe(false);
-		expect(aeron.tracks[CHRONICLER]).toBe(1);
+		expect(message.rolls[0].total).toBe(10);
+	});
+
+	it("still refuses a second Many Hands from the same Judge on the same roll", async () => {
+		const aeron = judge();
+		const message = card();
+		const d = deps();
+		await takeBoost(message, { source: "manyHands", helper: aeron }, d);
+		expect(await takeBoost(message, { source: "manyHands", helper: aeron }, d)).toBe(false);
 		expect(message.rolls[0].total).toBe(9);
+	});
+
+	// A second Diligence whose write fails is paid back, though the card already names the first.
+	it("pays back a second Diligence that never reaches the card", async () => {
+		const aeron = judge();
+		const message = card();
+		await takeBoost(message, { source: "diligence", helper: aeron }, deps());
+		message.update = vi.fn(async () => { throw new Error("the card is gone"); });
+		await expect(takeBoost(message, { source: "diligence", helper: aeron }, deps())).rejects.toThrow("the card is gone");
+		expect(aeron.tracks[CHRONICLER]).toBe(1);
 	});
 
 	// The pip is spent before the card is written; a write that never lands pays it back.
@@ -375,14 +402,19 @@ describe("whose client writes it", () => {
 			expect(message.rolls[0].total).toBe(9);
 		});
 
-		it("refuses someone who does not play the Judge, and a source already used", async () => {
+		it("refuses someone who does not play the Judge, a once-per-roll source already used, and a dry track", async () => {
 			const aeron = judge();
 			const message = card({ author: "u-fox" });
 			expect(await ask(message, aeron, "u-fox")).toBe(false);
 			expect(aeron.tracks[CHRONICLER]).toBe(2);
+			expect(await ask(message, aeron, "u-judge", "manyHands")).toBe(true);
+			expect(await ask(message, aeron, "u-judge", "manyHands")).toBe(false);
+			expect(message.rolls[0].total).toBe(9);
+			// Diligence stacks until the track is dry.
+			expect(await ask(message, aeron, "u-judge")).toBe(true);
 			expect(await ask(message, aeron, "u-judge")).toBe(true);
 			expect(await ask(message, aeron, "u-judge")).toBe(false);
-			expect(message.rolls[0].total).toBe(9);
+			expect(message.rolls[0].total).toBe(11);
 		});
 	});
 });

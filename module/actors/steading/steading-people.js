@@ -463,8 +463,10 @@ const DEFAULT_PERSON_NAMES = { residents: "New Resident", neighbors: "New Neighb
  * @param {object} data  { name, occupation, traits, relations, home, notes, img }
  * @param {object} [options]
  * @param {string|null} [options.folder]  Folder for a loose NPC; roster NPCs use their own.
+ * @param {boolean} [options.shared]  OBSERVER for everyone though it is on neither roster: a
+ *   resident of another settlement, listed on that (player-visible) settlement sheet.
  */
-export async function createPersonNpc(list, data = {}, { folder = null } = {}) {
+export async function createPersonNpc(list, data = {}, { folder = null, shared = false } = {}) {
 	const system = {
 		occupation: data.occupation ?? "",
 		traits:     data.traits ?? "",
@@ -494,7 +496,7 @@ export async function createPersonNpc(list, data = {}, { folder = null } = {}) {
 	// front of the whole table, and the default of NONE would leave everyone else double-clicking
 	// a face on a shared map and getting nothing. The creator still owns it outright: the server
 	// adds them as OWNER unless the data already names them.
-	if (list || !game.user?.isGM) createData.ownership = { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER };
+	if (list || shared || !game.user?.isGM) createData.ownership = { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER };
 	if (data.img && !isDefaultImg(data.img)) {
 		createData.img = data.img;
 		// Carry a legacy row's chosen frame onto the NPC it becomes. Without this,
@@ -702,6 +704,10 @@ export async function onSteadingPeopleUpdate(actor) {
  *
  * Additive only — it never suppresses a render, so it can't fight any other sync path.
  *
+ * Another settlement's Residents table (actors/settlement/) reads its NPCs live the same way, so an
+ * open settlement sheet listing this NPC repaints too. Its rows match by uuid alone: a settlement
+ * row's `id` is the row's own, not the NPC's.
+ *
  * @param {Actor} actor  the actor that just changed
  */
 export function repaintOpenSteadingRosters(actor) {
@@ -715,9 +721,15 @@ export function repaintOpenSteadingRosters(actor) {
 	// play (harm, XP, hold, roll mode…), so every one of them would otherwise build a second copy
 	// of the actor list before finding the one steading in it.
 	for (const steading of (game.actors?.contents ?? [])) {
-		if (steading.type !== "stonetop") continue;
+		if (steading.type !== "stonetop" && steading.type !== "settlement") continue;
 		const openApps = Object.values(steading.apps ?? {});
 		if (!openApps.length) continue;
+		if (steading.type === "settlement") {
+			if (!isPlayer && (steading.system?.residents ?? []).some(r => r?.uuid && r.uuid === uuid)) {
+				for (const app of openApps) app?.render?.(false);
+			}
+			continue;
+		}
 		const people = steading.flags?.[SYSTEM_ID]?.steading ?? {};
 		const rows = lists.flatMap(list => people[list] ?? []);
 		const listed = rows.some(r =>

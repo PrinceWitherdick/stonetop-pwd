@@ -1,0 +1,42 @@
+{{!-- One of a settlement's name-and-detail lists, drawn as Stonetop's own Overview cards draw theirs
+      (`.steading-card` > `.steading-list`, spiral bullets, the dashed Add row): Resources or the
+      Defenses list. Each row is the book's name and its parenthetical, and Resources carry Book I's
+      "lacking" tick.
+
+      Params: list (the system field), heading, rows, editable, addLabel, empty (what an empty list
+      says).
+
+      Every row is TEXT, in edit mode too, as Stonetop's lists are: plain ink, "Farming (wheat,
+      hemp)", with the red cross to remove it once the header's wrench is on. With the wrench on, the
+      row's text opens it in a small window to change it (StonetopSettlementSheet#_onEditRow), and
+      the Add button opens the same window empty. Inside the #each, the partial's own params are read
+      through `../`, since the block's context is the row. --}}
+<div class="steading-card" data-list="{{list}}">
+	<h3 class="steading-list-heading">{{heading}}</h3>
+	{{#if rows.length}}
+	<ul class="steading-list stonetop-settlement-rows">
+		{{#each rows}}
+		<li class="steading-list-item stonetop-settlement-row{{#if lacking}} stonetop-settlement-row--lacking{{/if}}" data-row-id="{{id}}">
+			<span class="steading-list-bullet" aria-hidden="true"></span>
+			<span class="steading-list-name"{{#if ../editable}} data-action="editRow" role="button" tabindex="0" data-tooltip="{{localize "stonetop.settlement.editRowTooltip"}}"{{/if}}>
+				<span class="stonetop-settlement-row-title">{{name}}</span>{{#if detail}} ({{detail}}){{/if}}
+				{{#if lacking}}<span class="stonetop-settlement-lacking-tag" data-tooltip="{{localize "stonetop.settlement.lackingTooltip"}}">{{localize "stonetop.settlement.lacking"}}</span>{{/if}}
+			</span>
+			{{#if ../editable}}
+			<button type="button" class="steading-list-delete" data-action="deleteRow"
+			        data-tooltip="{{localize "stonetop.settlement.remove"}}" aria-label="{{localize "stonetop.settlement.remove"}}">
+				<i class="fa-solid fa-xmark" inert></i>
+			</button>
+			{{/if}}
+		</li>
+		{{/each}}
+	</ul>
+	{{else}}
+	<p class="stonetop-settlement-empty">{{empty}}</p>
+	{{/if}}
+	{{#if editable}}
+	<button type="button" class="steading-list-add" data-action="addRow" data-list="{{list}}">
+		<i class="fa-solid fa-plus" inert></i> {{addLabel}}
+	</button>
+	{{/if}}
+</div>

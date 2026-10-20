@@ -49,7 +49,7 @@
 			    searchTitle=(localize "stonetop.inventory.searchLabel")
 			    searchPlaceholder=(localize "stonetop.inventory.searchPlaceholder")}}
 			{{!-- Regular pool --}}
-			{{> "stonetop.inv-undefined-pool" pool=stonetop.inventory.outfit.regularPool cap=stonetop.inventory.outfit.regularPoolCap}}
+			{{> "stonetop.inv-undefined-pool" pool=stonetop.inventory.outfit.regularPool cap=stonetop.inventory.outfit.regularPoolCap magpie=stonetop.magpie}}
 			<hr class="stonetop-inv-separator">
 			{{#each stonetop.inventory.outfit.regularSegments}}
 			{{#if isGrid}}
@@ -247,6 +247,36 @@
 					</span>
 				</div>
 				{{/if}}
+				{{!-- The sacred pouch: what it holds besides Stock (a malady stored by Suck the Poison
+				     Out, a power loaned through Borrow Power), each in the space of 1 Stock, so the
+				     track above is that much shorter; and the downtime refill ("When you have a few
+				     days of downtime in familiar terrain, you may replenish your Stock"). sacred-pouch.js. --}}
+				{{#if (and checked (eq slug @root.stonetop.sacredPouch.slug))}}
+				{{#if @root.stonetop.sacredPouch.hasSlots}}
+				<div class="stonetop-possession-choice-summary stonetop-pouch-slots">
+					{{#each @root.stonetop.sacredPouch.slots}}
+					<p class="stonetop-possession-choice-summary-line stonetop-pouch-slot">
+						<span class="stonetop-possession-choice-summary-heading">{{kindLabel}}:</span> {{name}}
+						{{#if @root.stonetop.sacredPouch.editable}}
+						<button type="button" class="stonetop-pouch-slot-remove stonetop-inline-btn" data-slot-id="{{id}}"
+						        data-tooltip="Take it out of the pouch (its space comes back empty)" data-tooltip-direction="UP"
+						        aria-label="Take {{name}} out of the pouch">
+							<i class="fas fa-times" aria-hidden="true"></i>
+						</button>
+						{{/if}}
+					</p>
+					{{/each}}
+				</div>
+				{{/if}}
+				{{#if @root.stonetop.sacredPouch.canReplenish}}
+				<div class="stonetop-possession-actions">
+					<button type="button" class="stonetop-pouch-replenish stonetop-inline-btn"
+					        data-tooltip="When you have a few days of downtime in familiar terrain, you may replenish your Stock." data-tooltip-direction="UP">
+						<i class="fas fa-seedling" aria-hidden="true"></i> Replenish (downtime)
+					</button>
+				</div>
+				{{/if}}
+				{{/if}}
 				{{#if choiceSummary}}
 				<div class="stonetop-possession-choice-summary">
 					{{#each choiceSummary}}
@@ -282,6 +312,15 @@
 					{{/each}}
 					{{#if (and grantedRegular.length grantedSmall.length)}}<hr class="stonetop-inv-separator stonetop-possession-gear-sep">{{/if}}
 					{{#each grantedSmall}}
+					{{#if stashed}}
+					{{!-- Kept at home, not carried (the Distillery's stills and barrels, tagged
+					     immobile): no mark, so it never eats the small-item allowance. --}}
+					<div class="stonetop-inv-item stonetop-inv-small stonetop-inv-static stonetop-possession-gear-item">
+						<span class="stonetop-inv-label">{{name}}
+							{{#if note}}<span class="stonetop-inv-note">({{{note}}})</span>{{/if}}
+						</span>
+					</div>
+					{{else}}
 					<div class="stonetop-inv-item stonetop-inv-small stonetop-possession-gear-item{{#if checked}} is-checked{{/if}}">
 						<label class="stonetop-inv-item-toggle">
 							<input type="checkbox" class="stonetop-inventory-item-check"
@@ -295,6 +334,7 @@
 						{{!-- No delete control: bundled gear belongs to its possession and is
 						     added/removed with the possession, not individually. --}}
 					</div>
+					{{/if}}
 					{{/each}}
 				</div>
 				{{/if}}
@@ -348,6 +388,14 @@
 			{{/if}}
 		{{/each}}
 		</ol>
+		{{!-- Every playbook's list ends "______ (discuss with GM)". Onboarding has its box; this
+		     takes one in afterwards. It spends a pick like any listed possession, so one too
+		     many raises the over-limit notice below rather than being refused. --}}
+		{{#if stonetop.possessionsEdit}}
+		<button type="button" class="stonetop-possession-custom-add">
+			<i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.character.gear.addPossession"}}
+		</button>
+		{{/if}}
 		{{#if stonetop.inventory.possessions.isIncomplete}}
 		<div class="stonetop-details-onboarding-actions">
 			<button type="button" class="stonetop-choose-possessions-btn" data-onboarding-start="possession">

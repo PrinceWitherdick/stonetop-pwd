@@ -17,6 +17,8 @@ import { STEADING_MOVE, improvementQuestions } from "../../steading/improvement-
 import { settleSteadingRoll } from "../../steading/steading-roll.js";
 import { askedAdvantageAnswers, herdCountAnswer } from "../../steading/improvement-rolls.js";
 import { ownLogisticsNames } from "../logistics.js";
+import { ownShakenName, WE_HAPPY_FEW } from "../fight-states.js";
+import { format } from "../../../utils/i18n.js";
 
 /**
  * The player-facing Requisition move. Lists the linked steading's on-hand assets
@@ -74,6 +76,9 @@ export class RequisitionDialog extends StonetopDialog {
 			herdQuestion: herdAsk ? { label: herdAsk.label, max: herdAsk.max ?? 0 } : null,
 			// The Marshal's Logistics: advantage when you Requisition.
 			logistics: questions.find(q => q.name === "logistics")?.label ?? "",
+			// We Happy Few's 6-: this character's shaken nerves are disadvantage on this roll too. Not asked:
+			// this window knows who is rolling, and a stated price is not an offer (fight-states.js).
+			nervesNote: ownShakenName(this._characterActor) ? format("stonetop.nerves.windowNote", { move: WE_HAPPY_FEW }) : "",
 			// An improvement's asked advantage on Requisition (a `rollAdvantage` grant with an `ask`),
 			// unticked: the table says whether the fiction reached for it.
 			advantageAsks: questions.filter(q => q.name.startsWith("advantage-")).map(({ name, label }) => ({ name, label })),
@@ -223,9 +228,12 @@ export class RequisitionDialog extends StonetopDialog {
 
 	/** The window's questions, as settleSteadingRoll reads them. */
 	_rollAnswers(root) {
+		// Read at the roll, not when the window drew: nerves shared meanwhile no longer bite.
+		const nerves = ownShakenName(this._characterActor);
 		return {
 			herdCount: herdCountAnswer(root),
 			logistics: !!root.querySelector('[name="logistics"]')?.checked,
+			...(nerves ? { nerves } : {}),
 			...askedAdvantageAnswers(root),
 		};
 	}

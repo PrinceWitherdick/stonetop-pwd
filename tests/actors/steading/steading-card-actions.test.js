@@ -24,6 +24,7 @@ const { openReturnTriumphant } = await import("../../../module/actors/steading/r
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const read = rel => fs.readFileSync(path.resolve(HERE, "../../..", rel), "utf8");
 const SHEET_JS = read("module/actors/steading/StonetopSteadingSheet.js");
+const HOMESTEAD_JS = read("module/actors/steading/homestead-moves.js");
 const STONETOP_JS = read("stonetop.js");
 
 function setPath(obj, dotted, value) {
@@ -112,7 +113,7 @@ describe("STD-5 and STD-12: the Fortunes buttons a card carries", () => {
 	});
 
 	it("pays Pull Together's 7-9 Fortunes from its card, through the same floor", async () => {
-		const flow = SHEET_JS.slice(SHEET_JS.indexOf("\tpullTogether: {"), SHEET_JS.indexOf("\tmuster: {"));
+		const flow = HOMESTEAD_JS.slice(HOMESTEAD_JS.indexOf("\tpullTogether: {"), HOMESTEAD_JS.indexOf("\tmuster: {"));
 		expect(flow).toContain("partial: PULL_TOGETHER_COST_ACTION");
 		expect(flow).not.toContain("failure: PULL_TOGETHER_COST_ACTION");
 		const action = STEADING_FORTUNES_CARD_ACTIONS.find(a => PULL_TOGETHER_COST_ACTION.includes(a.selector.slice(1)));
@@ -284,13 +285,15 @@ describe("STD-10: asset writes in the steading's turn", () => {
 
 describe("STD-7: the steading's Persuade is a reference card", () => {
 	it("rolls nothing, opens nothing and has no flow", () => {
-		const at = SHEET_JS.indexOf(`slug: "persuade"`);
-		const entry = SHEET_JS.slice(at, at + 900);
+		const at = HOMESTEAD_JS.indexOf(`slug: "persuade"`);
+		expect(at).toBeGreaterThan(-1);
+		const entry = HOMESTEAD_JS.slice(at, at + 900);
 		expect(entry).toContain("rollable: false");
 		expect(entry).toContain("interactive: false");
 		expect(entry).toContain("reference: true");
 		expect(entry).toContain("roll +CHA");
-		const flows = SHEET_JS.slice(SHEET_JS.indexOf("const HOMESTEAD_MOVE_FLOWS = {"), SHEET_JS.indexOf("const STEADING_EDIT_SECTIONS"));
+		const flows = HOMESTEAD_JS.slice(HOMESTEAD_JS.indexOf("const HOMESTEAD_MOVE_FLOWS = {"), HOMESTEAD_JS.indexOf("export function homesteadMoveFlow(slug)"));
+		expect(flows.length).toBeGreaterThan(0);
 		expect(flows).not.toContain("persuade: {");
 		expect(SHEET_JS).toContain("unowned: !move.rollable && !move.interactive && !move.reference");
 	});
@@ -414,11 +417,11 @@ describe("STD-2: a Seasons-style card carries its landed tier's button", () => {
 
 describe("STD-13: the moves' own words", () => {
 	it("prints Muster's, Requisition's and Pull Together's triggers and picks as Book I does", () => {
-		expect(SHEET_JS).toContain("When you press every able body into the defense of a steading, reduce Fortunes by 1 and roll +Population.");
-		expect(SHEET_JS).not.toContain("needs mustering against a threat");
-		expect(SHEET_JS).not.toContain("or otherwise put them at risk");
+		expect(HOMESTEAD_JS).toContain("When you press every able body into the defense of a steading, reduce Fortunes by 1 and roll +Population.");
+		expect(SHEET_JS + HOMESTEAD_JS).not.toContain("needs mustering against a threat");
+		expect(SHEET_JS + HOMESTEAD_JS).not.toContain("or otherwise put them at risk");
 		expect(SHEET_JS).toContain("When you borrow some of the steading's assets for an expedition (like the horses or a plow), roll +Fortunes.");
-		expect(SHEET_JS).toContain("<li>It gets done, but other work doesn't; reduce Fortunes by 1</li>");
-		expect(SHEET_JS).toContain(`"It gets done, but there's a consequence (bad blood, an injury, a threat unearthed, etc.)"`);
+		expect(HOMESTEAD_JS).toContain("<li>It gets done, but other work doesn't; reduce Fortunes by 1</li>");
+		expect(HOMESTEAD_JS).toContain(`"It gets done, but there's a consequence (bad blood, an injury, a threat unearthed, etc.)"`);
 	});
 });

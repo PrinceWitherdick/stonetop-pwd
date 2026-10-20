@@ -1,7 +1,8 @@
 import { SYSTEM_ID } from "../system-id.js";
 import { autoOpenUserId, ownerUsers } from "../hooks/DeathsDoorPrompt.js";
 import { THRALL_MARK, hasThrallMark, isOutOfPlay, isUnliving, slowToHeal } from "../actors/character/deaths-door-actor.js";
-import { crewExists } from "../utils/crew.js";
+import { crewExists, effectiveCrewSize } from "../utils/crew.js";
+import { CREW_SUPPLIES_SLUG, crewSuppliesHeld, crewSuppliesLeaving } from "../actors/character/supply-cost.js";
 import { readableFlags } from "../actors/character/StonetopFlags.js";
 import { followerInPartyFlags, followerMouths, partyFollowers, partyMouths } from "../actors/character/follower-party.js";
 import { partyFollowersOf } from "../actors/character/follower-roster.js";
@@ -12,7 +13,7 @@ import { asArray, playsCharacter } from "../utils/playbook-actors.js";
 import { postMoveToChat, rolledTotalCard } from "../utils/chat.js";
 import { capitalizeFirst } from "../utils/strings.js";
 import {
-	BREAK_BREAD, CAMP_FLAG, CAMP_OWED_FLAG, CAMP_STATE, CAMP_STATUS, HAD_ALL_ALONG, HOME_FIRES, SETTLE_REFUSAL,
+	A_SAFE_PLACE, BREAK_BREAD, CAMP_FLAG, CAMP_OWED_FLAG, CAMP_STATE, CAMP_STATUS, HAD_ALL_ALONG, HOME_FIRES, SETTLE_REFUSAL,
 	campLedger, campShareUpdate, campState, count, freezeCampPlan, isFurLinedBedrollName, isSettledRecord, messKitAllAlong, newCampRecord,
 	readCampRecord, readOwedCamps, rollsBedroll, rollsBreakBread, suppliesAllAlong, followersBreakBread,
 } from "./camp-rules.js";
@@ -58,11 +59,27 @@ const HUNGER_PATH = `flags.${SYSTEM_ID}.${CAMP_HUNGER_FLAG}`;
 /** Have What You Need's name in the ledger, for the marks and uses it moves at the fire. */
 const HAVE_WHAT_YOU_NEED = "Have What You Need";
 
+/**
+ * MAGPIE (the Seeker): "When you Have What You Need, you can produce something strange, specific, maybe
+ * even valuable or a little bit magical, but if you do, tell us where you got it and 2 of the following".
+ * One row for a Have What You Need card, for a character with Magpie learned: it points at the move
+ * and leaves its list of 4 on the move, where it is printed.
+ *
+ * @returns {{label: string, value: string}[]}  the row, or none
+ */
+export function magpieReminderRows(actor) {
+	if (!ownsLearnedMoveNamed(actor, "Magpie")) return [];
+	return [{
+		label: "Magpie",
+		value: "You can produce something strange, specific, maybe even valuable or a little bit magical. If you do, tell us where you got it and pick 2 from Magpie's list.",
+	}];
+}
+
 /** The message flag a camp's join card carries: `{campId, hostId}`, the camp its button leads to. */
 export const CAMP_CARD_FLAG = "campJoin";
 
 /** The fields a seated character may change on their own record. `offer` is a map by purse. */
-const CHOICE_FIELDS = new Set(["offer", "followers", "eats", "messKit", "benefit", "debility", "bedroll", "peaceful", "ready", "properMeal", "hearthAsh"]);
+const CHOICE_FIELDS = new Set(["offer", "followers", "eats", "messKit", "benefit", "debility", "bedroll", "peaceful", "ready", "properMeal", "hearthAsh", "precaution"]);
 
 /**
  * How far back through the chat log a camp's cards are looked for. A join card is posted the
@@ -154,6 +171,9 @@ export function campMember(actor, hostId) {
 		// Read live, like the debilities: a move learned or switched off mid-camp counts as it is now.
 		breaksBread:      ownsLearnedMoveNamed(actor, BREAK_BREAD),
 		hearthCha:        ownsLearnedMoveNamed(actor, HOME_FIRES) ? Math.trunc(Number(actor.system?.stats?.cha?.value) || 0) : null,
+		safePlace:        ownsLearnedMoveNamed(actor, A_SAFE_PLACE),
+		// The crew's own supplies, which pay its mouths first (camp-rules.js#crewBill), read live like the pack.
+		crew:             { held: crewSuppliesOf(actor, usesPerSupply).held },
 		// The tracks were named on sitting down (campVitalsFor); whether one is marked is read live.
 		clearsTonight:    markedTracks(record?.vitals.clears, actor.getFlag?.(SYSTEM_ID, "background.setupResources")),
 		pack:             packFor(actor, usesPerSupply),
@@ -196,14 +216,52 @@ async function rollHunger(actor, campId) {
  * left at home. An actor without its typed character reads as stored.
  * `carriedOnly: false` is for the write that pays an agreed share (StonetopCharacter#spendablePurseResources).
  * `usesPerSupply` is the size of a ◆ when the caller already read it (usesPerSupplyOf).
+ * Exported for the days on the road (dialogs/RoadRationsDialog.js), which feed from the same packs.
  */
-function packResources(actor, { carriedOnly = true, usesPerSupply = null } = {}) {
+export function packResources(actor, { carriedOnly = true, usesPerSupply = null } = {}) {
 	const stored = actor.getFlag?.(SYSTEM_ID, "inventory.resources") ?? {};
 	try {
 		return actor.typedActor?.spendablePurseResources?.({ carriedOnly, per: usesPerSupply ?? undefined }) ?? stored;
 	} catch {
 		return stored;
 	}
+}
+
+/**
+ * The crew's own supplies on a character (`crew.supplies`, one ◇ per member: the Crew insert, Book I
+ * p.144), as the Followers tab draws them: the roster's sets, each capped at the size of a ◇ now.
+ * `held` is what they hold, and `leaving(n)` the write that leaves them holding `n`
+ * (supply-cost.js#crewSuppliesLeaving). Read off the flags, so a crew drawn from a borrowed Crew
+ * insert (StonetopCharacter#crewSource) reads the same; whether that crew eats at all is the record's
+ * `crewMouths`, counted from the party on sitting down (partyCrewMouths).
+ * Exported for the days on the road (dialogs/RoadRationsDialog.js), where the crew pays its own mouths
+ * too; left out, `usesPerSupply` is read off the character (usesPerSupplyOf).
+ */
+export function crewSuppliesOf(actor, usesPerSupply = usesPerSupplyOf(actor)) {
+	const crew = readableFlags(actor ?? {})?.crew ?? null;
+	const named = Array.isArray(crew?.individuals) ? crew.individuals.length : 0;
+	const size = crew ? effectiveCrewSize(crew.size, named) : 0;
+	const perSet = count(usesPerSupply) || 4;
+	const stored = Array.isArray(crew?.supplies) ? crew.supplies : [];
+	return {
+		held:    crewSuppliesHeld(stored, size, perSet),
+		leaving: left => ({ [`flags.${SYSTEM_ID}.crew.supplies`]: crewSuppliesLeaving(stored, size, perSet, left) }),
+	};
+}
+
+/**
+ * Where a meal is paid from, for the write that pays it (camp-rules.js#purseSpendUpdate): every purse
+ * the pack holds (`carriedOnly: false`, packResources) with the crew's own supplies beside them, and
+ * the write for each, the crew's going to `crew.supplies` (crewSuppliesOf). Make Camp's share and the
+ * days on the road (dialogs/RoadRationsDialog.js) pay through this one place.
+ */
+export function mealSpendTarget(actor) {
+	const character = actor.typedActor;
+	const crewSupplies = crewSuppliesOf(actor, usesPerSupplyOf(actor));
+	return {
+		resources:    { ...packResources(actor, { carriedOnly: false }), [CREW_SUPPLIES_SLUG]: crewSupplies.held },
+		resourceData: (slug, n) => (slug === CREW_SUPPLIES_SLUG ? crewSupplies.leaving(n) : character.inventoryResourceData(slug, n)),
+	};
 }
 
 /** The uses in one ◆ of supplies for this character (StonetopCharacter#getUsesPerSupply), or null. */
@@ -307,7 +365,9 @@ function carriesFurBedroll(gear) {
  * marked fallen eats nothing; one who is only down still eats). Only where the count starts; the
  * player changes it at the fire.
  *
- * Every kind of follower counts (follower-party.js): `followers` are the character's party followers
+ * Every kind of follower counts (follower-party.js) but an animal that feeds itself: pack animals graze
+ * and the Ranger's wolf fends for itself (Book I p.304, follower-party.js#followerFeedsItself), while a
+ * hound still eats. `followers` are the character's party followers
  * (follower-roster.js#partyFollowersOf), which reads which built-in followers a character
  * HAS. Without them (no sheet to read) the flags alone can still answer for custom followers and a
  * crew; the companion, initiates and beasts need the playbook to be known at all.
@@ -321,6 +381,19 @@ export function partyFollowerMouths(actor, followers = null) {
 	const crew = crewExists(flags?.crew) && followerInPartyFlags(flags, "crew")
 		? followerMouths(flags, { ftype: "crew", slug: "" }) : 0;
 	return custom + crew;
+}
+
+/**
+ * How many of partyFollowerMouths are the crew's: the mouths the crew's own supplies pay for first
+ * (camp-rules.js#crewBill). Asked the same way, so the two can never disagree: off the party followers
+ * when they were read, where the crew is there only while its keeper has a Crew insert to draw it from
+ * (the Marshal's, or a learned Crew's, StonetopCharacter#crewSource); else off the flags. A crew with
+ * nobody left on its roster is no mouth (follower-party.js#followerMouths).
+ */
+export function partyCrewMouths(actor, followers = null) {
+	const flags = readableFlags(actor ?? {});
+	if (Array.isArray(followers)) return partyMouths(flags, partyFollowers(followers).filter(f => f.ftype === "crew"));
+	return crewExists(flags?.crew) && followerInPartyFlags(flags, "crew") ? followerMouths(flags, { ftype: "crew", slug: "" }) : 0;
 }
 
 /**
@@ -367,6 +440,7 @@ async function sitDown(actor, { campId, hostId }) {
 		now,
 		vitals,
 		followers:          partyFollowerMouths(actor, party),
+		crewMouths:         partyCrewMouths(actor, party),
 		hpValue:            actor.system?.attributes?.hp?.value,
 		activeDebilityKeys: markedDebilities(actor, vitals).map(d => d.key),
 		unliving:           isUnliving(actor),
@@ -464,7 +538,7 @@ export async function haveWhatYouNeedAtCamp(actor, what) {
 		await character.toggleCarriedItem(HAD_ALL_ALONG.MESS_KIT, true, { weight: 1, stonetopMove: HAVE_WHAT_YOU_NEED });
 		// Published on the record, like a mess kit packed before the camp began, and put to use.
 		await actor.update({ [`${FLAG_PATH}.vitals.messKit`]: true, [`${FLAG_PATH}.messKit`]: true }, { stonetopLedger: true });
-		postMoveToChat(actor, "Have What You Need", hadAllAlongRows(what));
+		postMoveToChat(actor, "Have What You Need", [...hadAllAlongRows(what), ...magpieReminderRows(actor)]);
 		return { ok: true };
 	}
 	const supplies = suppliesAllAlong(member);
@@ -472,7 +546,7 @@ export async function haveWhatYouNeedAtCamp(actor, what) {
 	// The row's uses ride on the same write as its mark, and are the move's too, so the ledger names
 	// it (`{ stonetopMove }`).
 	await character.toggleCarriedItem(supplies.row, true, { weight: 1, uses: supplies.uses, stonetopMove: HAVE_WHAT_YOU_NEED });
-	postMoveToChat(actor, "Have What You Need", hadAllAlongRows(what, supplies));
+	postMoveToChat(actor, "Have What You Need", [...hadAllAlongRows(what, supplies), ...magpieReminderRows(actor)]);
 	return { ok: true, row: supplies.row, uses: supplies.uses };
 }
 
@@ -678,12 +752,16 @@ async function payShare(actor, entry, campId) {
 		const claim = campRecordOf(actor);
 		if (!claim || claim.id !== campId || claim.applied || claim.paidBy !== me) return;
 		const character = actor.typedActor;
+		// The crew's own supplies are a purse beside the pack's (camp-rules.js#crewBill), written to the crew.
+		const { resources, resourceData } = mealSpendTarget(actor);
 		const { update, shortfall } = campShareUpdate(entry, {
-			resources:     packResources(actor, { carriedOnly: false }),
+			resources,
 			hpValue:       actor.system?.attributes?.hp?.value,
-			resourceData:  (slug, count) => character.inventoryResourceData(slug, count),
+			resourceData,
 			advantageData: source => character.heldAdvantageData(source),
 			disadvantageData: source => character.heldDisadvantageData(source),
+			// A Safe Place's Precaution, on the move's own track (MoveResources#usesUpdate).
+			trackData:     (move, held) => character.moveResources?.usesUpdate?.(move, held) ?? {},
 		});
 		await actor.update({ ...update, ...followers.update }, { stonetopMove: "Make Camp" });
 		// And a fed follower's NPC, whose HP is theirs while it exists, to its own max: here when this

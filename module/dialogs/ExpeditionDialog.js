@@ -1,5 +1,6 @@
 import { StepperDialog } from "./StepperDialog.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
+import { gazetteerUuid } from "../utils/gazetteer-notes.js";
 import { TIER_LABELS } from "../utils/move-results.js";
 // `openOrFocus` cannot serve `openOnTrip`: it brings an already-open window to the front without
 // running the factory, and that window still has to be told which trip to switch to.
@@ -17,7 +18,8 @@ import { wireAvatarPreview, removeAvatarPreview } from "../utils/avatar-preview.
 import { warn } from "../utils/logger.js";
 import { inTurn } from "../utils/turn-queue.js";
 import { CHART_GROUPS, HOME_GROUP, chartPicked, chartEntryText, chartGroupOf } from "./expedition-data.js";
-import { pickOrWriteOption, contentElement } from "./content-picker.js";
+import { pickOrWriteOption } from "./content-picker.js";
+import { contentElement } from "../utils/dialogv2-content.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { FATE_TABLES, fateTableList } from "../data/fate-tables.js";
 import { saveChronicleFromButton, findExpeditionChroniclePage, deleteExpeditionChroniclePage } from "../utils/chronicle.js";
@@ -37,17 +39,18 @@ import {
 import { StonetopSteading, isHerdAsset } from "../actors/steading/StonetopSteading.js";
 import { askHorsesFromHerd, herdHorsesLabel, herdHorsesIn, herdHorsesOnLine } from "../actors/steading/herd-requisition.js";
 import { openReturnTriumphant } from "../actors/steading/return-triumphant.js";
-import { STEADING_MOVE, improvementQuestions, askedAdvantageAnswers, herdCountAnswer } from "../actors/steading/improvement-rolls.js";
+import { STEADING_MOVE, improvementQuestions, askedAdvantageAnswers, herdCountAnswer, nervesAnswer } from "../actors/steading/improvement-rolls.js";
+import { shakenNervesOffers } from "../actors/character/fight-states.js";
 import { settleSteadingRoll } from "../actors/steading/steading-roll.js";
 import { requisitionMissCostAction } from "../actors/steading/steading-card-actions.js";
 import { worldLogisticsNames } from "../actors/character/logistics.js";
 import { assetTakenLabel } from "../utils/requisition-asset.js";
-import { getPlayerCharacters } from "../utils/playbook-actors.js";
+import { charactersInPlay } from "../utils/characters-in-play.js";
 // Who on the roster is past the Door: the dead don't outfit, and the three who came back set
 // out wearing the name of whatever brought them back.
-import { actorPastDeathKind, isOutOfPlay } from "../actors/character/deaths-door-actor.js";
+import { actorPastDeathKind } from "../actors/character/deaths-door-actor.js";
 import { deriveLoadLevel, LOAD_LEVEL_LIMITS } from "../utils/load.js";
-import { SYSTEM_ID, JOURNAL_PACK } from "../system-id.js";
+import { SYSTEM_ID } from "../system-id.js";
 import { renderTemplate } from "../utils/foundry-compat.js";
 import { EXPLORATION_GM_MOVES } from "../gm-toolkit/gm-moves.js";
 import { GmMoveDrawer } from "../gm-toolkit/gm-move-drawer.js";
@@ -76,6 +79,7 @@ import {
 import { hasStart, startEnd, startMark, startName, startTier } from "../utils/journey-start.js";
 import { resolveTravelMap, travelMapFile, browseTravelMapArt } from "../book2-art/travel-map-art.js";
 import { openTravelMap } from "./TravelMapWindow.js";
+import { RoadRationsDialog } from "./RoadRationsDialog.js";
 import {
 	JOURNEY_MARKS, JOURNEY_RIGHT_CLICK_MARKS,
 	bindJourneyControls, bindJourneySiteRemoval, bindJourneyUndo, journeyPick,
@@ -433,6 +437,9 @@ const _STEPS = [
 				   you&rsquo;re about to have everyone Defy Danger, you should probably use this move
 				   instead&rdquo; (p.328).</p>`,
 		struggle: true,
+		// The days the GM glosses still eat (Book I p.89, p.304): "N days pass" spends each one's
+		// supplies from the packs of the party on this trip (dialogs/RoadRationsDialog.js).
+		roadDays: true,
 		// What was charted, as the to-do list the book calls it (p.303), ticked off as each is dealt
 		// with (p.323). Read-only here apart from the tick: the words were settled on Chart a Course.
 		chartTodo: true,
@@ -815,6 +822,7 @@ export class ExpeditionDialog extends StepperDialog {
 		html.find(".stonetop-exp-fate-btn").on("click", () => this._rollFate());
 		// Called from the journey, so the struggle starts with "part of a journey" ticked.
 		html.find(".stonetop-exp-struggle-btn").on("click", () => callStruggleAsOne({ journey: true }));
+		html.find(".stonetop-exp-road-btn").on("click", () => this._openRoadDays());
 		// Collapse / expand the exploration moves rail. By class rather than by re-rendering,
 		// for the reason the character sheet's own handle gives: the step reclaims the freed
 		// width without a flicker, and a render here would rebuild the route step's map panel
@@ -1025,6 +1033,7 @@ export class ExpeditionDialog extends StepperDialog {
 			reqHerdCount:  reqQuestions?.herdCount ?? null,
 			reqLogistics:  reqQuestions?.logistics ?? "",
 			reqAdvantages: reqQuestions?.advantages ?? [],
+			reqNerves:     reqQuestions?.nerves ?? null,
 			reqHeld:       reqQuestions?.held ?? "",
 			// How the GM is rolling it.
 			reqMode:   step.roll === "requisition" ? this._requisitionMode() : null,
@@ -1038,6 +1047,8 @@ export class ExpeditionDialog extends StepperDialog {
 			// The step's button onto Struggle as One, GM-only: the GM calls the move, and a player
 			// asks for one from their own sheet instead.
 			struggle:  step.struggle && game.user?.isGM ? gmStruggleCall() : null,
+			// "N days pass", GM-only: it writes every pack on the trip.
+			roadDays:  !!step.roadDays && !!game.user?.isGM,
 			// The headed aside below the body ("What to prep", on the intro step).
 			aside:     step.aside ?? null,
 			// The same, at the foot of the step rather than under its opening prose.
@@ -1793,11 +1804,12 @@ export class ExpeditionDialog extends StepperDialog {
 		const root = this.element?.[0];
 		const herdCount = herdCountAnswer(this.element?.[0]);
 		const logistics = !!root?.querySelector?.('[name="logistics"]')?.checked;
+		const nerves = nervesAnswer(root);
 		const terms = found
 			? await settleSteadingRoll(found.steading, {
 				moveName: STEADING_MOVE.REQUISITION, statKey: "fortunes",
 				chosenMode: this._requisitionMode(),
-				answers: { herdCount, logistics, ...askedAdvantageAnswers(root) },
+				answers: { herdCount, logistics, nerves, ...askedAdvantageAnswers(root) },
 				canSpend: !!found.actor.isOwner,
 			})
 			: { rollMode: this._requisitionMode(), missAsPartial: "", conditionNotes: [], spend: () => {} };
@@ -1826,6 +1838,8 @@ export class ExpeditionDialog extends StepperDialog {
 	 *  - `advantages`: an improvement's asked advantage (a `rollAdvantage` grant with an `ask`), unticked;
 	 *  - `logistics`: the Marshal's Logistics ("when you Requisition, you have advantage"), asked once
 	 *    anyone has it learned, or "";
+	 *  - `nerves`: We Happy Few's 6- ("disadvantage on all rolls"), the question itself, asked once anyone's
+	 *    nerves are shaken (a tick naming them, or a pick among several), or null;
 	 *  - `held`: the advantage the steading is holding for its next +Fortunes roll, which this spends.
 	 */
 	_requisitionQuestions() {
@@ -1834,12 +1848,14 @@ export class ExpeditionDialog extends StepperDialog {
 			rules: steading?.improvementRules() ?? [],
 			herd: steading?.improvementCompleted("herdOfHorses") ? steading.getHerd() : null,
 			logistics: worldLogisticsNames(),
+			nerves: shakenNervesOffers(),
 		});
 		const herd = steading ? questions.find(q => q.name === "herdCount") : null;
 		return {
 			herdCount: herd ? { label: herd.label, max: herd.max ?? 0 } : null,
 			advantages: questions.filter(q => q.name.startsWith("advantage-")).map(({ name, label }) => ({ name, label })),
 			logistics: questions.find(q => q.name === "logistics")?.label ?? "",
+			nerves: questions.find(q => q.name === "nerves") ?? null,
 			held: steading?.fortunesAdvantage?.()?.source ?? "",
 		};
 	}
@@ -1936,7 +1952,7 @@ export class ExpeditionDialog extends StepperDialog {
 
 	/** A place's gazetteer entry in the merged journal pack, when the books give it one. */
 	_journalUuid(place) {
-		return place?.journalId ? `Compendium.${JOURNAL_PACK}.JournalEntry.${place.journalId}` : null;
+		return gazetteerUuid(place?.journalId);
 	}
 
 	/**
@@ -3546,8 +3562,7 @@ export class ExpeditionDialog extends StepperDialog {
 		// the same two flags off the same actor a moment later.
 		// Who has left play is asked on its own (isOutOfPlay): the kind lets an insert win, so a Ghost lost
 		// to the Final Consequence read "ghost" there and was still offered a place on the trip.
-		const pcs = getPlayerCharacters()
-			.filter(actor => !isOutOfPlay(actor))
+		const pcs = charactersInPlay()
 			.map(actor => ({ actor, undeadKind: actorPastDeathKind(actor) }));
 		if (!pcs.length) return { chips: [], hasRows: false, rows: [], summary: null };
 
@@ -3759,6 +3774,24 @@ export class ExpeditionDialog extends StepperDialog {
 		// with whichever one they carry, and neither has to know about the other's field.
 		row.previewSub = row.sub || row.folTag || "";
 		return row;
+	}
+
+	/**
+	 * The PCs on this trip: everyone still in play whom the Outfit step has not toggled out. The
+	 * same reading the party-load readout makes (`_buildLoadReadout`).
+	 */
+	_tripParty() {
+		const out = this._currentExpedition()?.partyOut ?? {};
+		return charactersInPlay().filter(actor => !out[actor.id]);
+	}
+
+	/**
+	 * "N days pass" (Book I p.89, p.304): the window that spends the party's supplies for the days
+	 * the GM glosses, seeded with what the charted route says the trip takes.
+	 */
+	_openRoadDays() {
+		const routeDays = Number(chartBlankValue("days", this._journeyRoute())) || null;
+		return new RoadRationsDialog(this._tripParty(), { routeDays }).render(true);
 	}
 
 	// Toggle a PC in/out of the current trip's party (stored on the trip entry, so it's

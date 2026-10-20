@@ -11,10 +11,20 @@ import { BATTLE_JOY, battleJoyRollOptions } from "./battle-joy.js";
 import { WIELDER_OF_THE_WHITE_FLAME } from "./holy-light.js";
 import { wielderRollOptions } from "./invoke-consequences.js";
 import { WE_HAPPY_FEW, speechRollOptions } from "./inspiration.js";
-import { GIVE_ADVANTAGE_MOVES, giveAdvantageRollOptions } from "./give-advantage.js";
+import { GIVE_ADVANTAGE_MOVES, giveAdvantageRollOptions, burgleRollOptions } from "./give-advantage.js";
 import { OMENS_OF_FATE, omensRollOptions } from "./destined.js";
+import { SUCK_THE_POISON_OUT, BORROW_POWER, suckThePoisonOutRollOptions, borrowPowerRollOptions } from "./sacred-pouch.js";
 
 const named = name => moveName => moveName === name;
+
+/**
+ * "You or an ally gain advantage" on the tiers that print it: Everything Burns' 10+, Work With What
+ * You've Got's 7+ (give-advantage-flow.js#wireGiveAdvantage). And on another move's card where the
+ * rule says so: Resourceful's hold on Defy Danger's 6-. Its own slice too, for a roll with no move item
+ * behind it (moveRollOptions(name, actor, null, GIVE_ADVANTAGE_ROLL_OPTIONS)).
+ */
+export const GIVE_ADVANTAGE_ROLL_OPTIONS = Object.entries(GIVE_ADVANTAGE_MOVES).filter(([, rule]) => rule.tiers?.length)
+	.map(([name, rule]) => ({ matches: named(rule.on ?? name), build: giveAdvantageRollOptions(name) }));
 
 /**
  * `matches(moveName)`, and `build(actor)` answering `{noXpOnMiss?, statValue?, tierActions?}` or null when this
@@ -32,11 +42,14 @@ export const MOVE_ROLL_OPTIONS = [
 	{ matches: named(WE_HAPPY_FEW), build: speechRollOptions },
 	// The Destined's "roll +Omens": the Omens held are the number added, and a 6- marks no XP (destined.js).
 	{ matches: named(OMENS_OF_FATE), build: omensRollOptions },
-	// "You or an ally gain advantage" on the tiers that print it: Everything Burns' 10+, Work With What
-	// You've Got's 7+ (give-advantage-flow.js#wireGiveAdvantage). And on another move's card where the
-	// rule says so: Resourceful's hold on Defy Danger's 6-.
-	...Object.entries(GIVE_ADVANTAGE_MOVES).filter(([, rule]) => rule.tiers?.length)
-		.map(([name, rule]) => ({ matches: named(rule.on ?? name), build: giveAdvantageRollOptions(name) })),
+	// Burgle's "Ask a Seek Insight question about what you saw": the questions it may ask, on both hits.
+	{ matches: named("Burgle"), build: burgleRollOptions },
+	// The sacred pouch's two named entries (sacred-pouch.js#wirePouchCards): Suck the Poison Out's 10+ "store
+	// it in your sacred pouch", and Borrow Power's 7-9 "you do it, but lose the power".
+	{ matches: named(SUCK_THE_POISON_OUT), build: suckThePoisonOutRollOptions },
+	{ matches: named(BORROW_POWER), build: borrowPowerRollOptions },
+	// "You or an ally gain advantage" on the tiers that print it (GIVE_ADVANTAGE_ROLL_OPTIONS above).
+	...GIVE_ADVANTAGE_ROLL_OPTIONS,
 ];
 
 /**

@@ -31,6 +31,9 @@
     "creatureType": "undead"
   },
   "prototypeToken": {
+    "width": 1,
+    "height": 1,
+    "depth": 1,
     "name": "Quiet Twin",
     "actorLink": false,
     "disposition": -1,

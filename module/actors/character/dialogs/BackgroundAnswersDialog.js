@@ -12,6 +12,11 @@ import { wellVersedTopicSummary } from "./well-versed-topics.js";
 // what comes back (StonetopCharacter#setBackgroundAnswer). One radio group per ask, the answer held
 // now pre-picked.
 //
+// The same window asks a background's SETUP choices on a Details-tab switch (askSetup): A Life of
+// Crime's "either Burgle or Light Fingers (your choice) as an extra move, and either burglar tools or
+// a hidden stash (your choice) as an additional special possession". There an option is a
+// `{ value, label }` pair, as the playbook stores it, rather than a bare string.
+//
 // Resolves (StonetopDialog's promise protocol) to `{ [askKey]: value }` on "Choose this", and to
 // null on "Choose later", Escape or the X.
 
@@ -20,13 +25,30 @@ export function backgroundAnswerGroups(asks = []) {
 	return asks.map(ask => ({
 		key:   ask.key,
 		label: normalizePlaybookGlyphs(ask.label ?? ask.key),
-		options: (ask.options ?? []).map(value => ({
-			value,
-			label:    normalizePlaybookGlyphs(value),
-			summary:  wellVersedTopicSummary(value) ?? "",
-			selected: ask.value === value,
-		})),
+		options: (ask.options ?? []).map(option => {
+			const value = typeof option === "object" && option ? String(option.value ?? "") : option;
+			const label = typeof option === "object" && option ? String(option.label ?? option.value ?? "") : option;
+			return {
+				value,
+				label:    normalizePlaybookGlyphs(label),
+				summary:  wellVersedTopicSummary(value) ?? "",
+				selected: ask.value === value,
+			};
+		}),
 	}));
+}
+
+/**
+ * The asks a background's `setup.choices` make, for askSetup: one per choice, its options as the
+ * playbook prints them, the pick held now (`held`, keyed by choice key) pre-picked when it is still
+ * on offer. Empty for a background with none.
+ */
+export function backgroundSetupAsks(background, held = {}) {
+	return (background?.setup?.choices ?? []).filter(choice => choice?.key && choice.options?.length).map(choice => {
+		const options = choice.options.map(o => ({ value: String(o?.value ?? ""), label: String(o?.label ?? o?.value ?? "") }));
+		const value = held?.[choice.key];
+		return { key: choice.key, label: choice.label ?? choice.key, options, value: options.some(o => o.value === value) ? value : null };
+	});
 }
 
 export class BackgroundAnswersDialog extends StonetopDialog {
@@ -34,6 +56,8 @@ export class BackgroundAnswersDialog extends StonetopDialog {
 		super(options);
 		this._background = background;
 		this._asks       = asks ?? [];
+		// The setup ask's own words (askSetup); the answers ask's when absent.
+		this._wording    = options.wording ?? null;
 	}
 
 	/**
@@ -43,6 +67,16 @@ export class BackgroundAnswersDialog extends StonetopDialog {
 	static ask(background, asks) {
 		if (!asks?.length) return Promise.resolve(null);
 		return new BackgroundAnswersDialog(background, asks).promise();
+	}
+
+	/**
+	 * Ask `background`'s setup choices (backgroundSetupAsks), worded as the setup's own ask rather
+	 * than a move's answer. Opens only when there is something to ask.
+	 * @returns {Promise<Record<string, string>|null>}
+	 */
+	static askSetup(background, asks) {
+		if (!asks?.length) return Promise.resolve(null);
+		return new BackgroundAnswersDialog(background, asks, { wording: "setup" }).promise();
 	}
 
 	static get defaultOptions() {
@@ -59,17 +93,19 @@ export class BackgroundAnswersDialog extends StonetopDialog {
 
 	get title() {
 		const background = stripHtmlToText(this._background?.label ?? "") || this._background?.slug || "";
+		if (this._wording === "setup") return format("stonetop.backgroundSetup.title", { background });
 		return format("stonetop.backgroundAnswers.title", { background, label: this._asks[0]?.label ?? "" });
 	}
 
 	get _autoHeight() { return true; }
 
 	getData() {
+		const setup = this._wording === "setup";
 		return {
-			lead:        localize("stonetop.backgroundAnswers.lead"),
+			lead:        localize(setup ? "stonetop.backgroundSetup.lead" : "stonetop.backgroundAnswers.lead"),
 			groups:      backgroundAnswerGroups(this._asks),
 			chooseLabel: localize("stonetop.backgroundAnswers.choose"),
-			laterLabel:  localize("stonetop.backgroundAnswers.later"),
+			laterLabel:  localize(setup ? "stonetop.backgroundSetup.later" : "stonetop.backgroundAnswers.later"),
 		};
 	}
 

@@ -5,7 +5,7 @@ import {
 	CONDUIT_OF_POWER, DIVERT, IMPROVISE, IMPROVISE_STEP_FLAG, IMPROVISE_USED_FLAG, MARK_CONSEQUENCE_FLAG, MIND_OVER_MAGIC, OVERCHANNEL,
 	RING_OF_DAAGON, askConsequenceDiversion, askConsequencePick, askImproviseTask, consequenceDiversions, consequenceLabel, improviseOffer,
 	improviseRollOptions, improviseTierActions, majorConsequenceCard, markArcanumConsequence, markConsequenceButton,
-	mindOverMagicRoll, settleArcanumBoxTick, settleImproviseStep, settleImproviseUse,
+	arcanumAltRolls, mindOverMagicRoll, settleArcanumBoxTick, settleImproviseStep, settleImproviseUse,
 	consequenceParents, settleMarkConsequence, unmarkedConsequences, unmarkedFrontTasks,
 } from "../../../module/actors/character/arcana-seeker-moves.js";
 import { CharacterArcana, consequenceBoxRange } from "../../../module/actors/character/CharacterArcana.js";
@@ -96,6 +96,36 @@ describe("Mind Over Magic: +INT instead of an arcanum roll's stat", () => {
 	it("needs the move learned", () => {
 		expect(mindOverMagicRoll(seeker().actor, "con")).toBeNull();
 		expect(mindOverMagicRoll(seeker({ moves: [move(MIND_OVER_MAGIC, { learned: false })] }).actor, "con")).toBeNull();
+	});
+});
+
+// The Fox's Laugh at Danger: "When you are about to roll +CON and you make a joke about the adversity
+// you face, you can roll +CHA instead." A dozen minor arcana roll +CON.
+describe("arcanumAltRolls: every swap a mystery's roll may take", () => {
+	const LAUGH = "Laugh at Danger";
+
+	it("offers Laugh at Danger's +CHA beside a printed +CON, named for the move", () => {
+		expect(arcanumAltRolls(seeker({ moves: [move(LAUGH)] }).actor, "con"))
+			.toEqual([{ stat: "cha", label: "Roll +CHA (Laugh at Danger)", source: LAUGH }]);
+	});
+
+	it("offers both swaps, Mind Over Magic's first, when both moves apply", () => {
+		const rolls = arcanumAltRolls(seeker({ moves: [move(MIND_OVER_MAGIC), move(LAUGH)] }).actor, "con");
+		expect(rolls.map(r => r.stat)).toEqual(["int", "cha"]);
+		expect(rolls.map(r => r.source)).toEqual([MIND_OVER_MAGIC, LAUGH]);
+	});
+
+	it("offers Laugh at Danger on +CON alone, and never re-offers the printed stat", () => {
+		const actor = seeker({ moves: [move(MIND_OVER_MAGIC), move(LAUGH)] }).actor;
+		expect(arcanumAltRolls(actor, "dex").map(r => r.stat)).toEqual(["int"]);
+		expect(arcanumAltRolls(actor, "cha").map(r => r.stat)).toEqual(["int"]);
+		expect(arcanumAltRolls(actor, "nothing")).toEqual([]);
+		expect(arcanumAltRolls(actor, null)).toEqual([]);
+	});
+
+	it("needs the move learned", () => {
+		expect(arcanumAltRolls(seeker({ moves: [move(LAUGH, { learned: false })] }).actor, "con")).toEqual([]);
+		expect(arcanumAltRolls(seeker().actor, "con")).toEqual([]);
 	});
 });
 

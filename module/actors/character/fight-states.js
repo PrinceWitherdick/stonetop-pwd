@@ -6,8 +6,8 @@
  *  - NERVES, the Marshal's We Happy Few 6-: "each ally holds 1, but you have disadvantage on all rolls
  *    until you share your nagging doubts with someone else". Switched on by the 6- itself (a stated consequence is
  *    not an offer), and off by a click once they have. Enforced: every roll the character makes
- *    (StonetopCharacter#applyDebilityRollMode, and their damage through `ownDamageMode` in
- *    fight/hero-moves.js), named on the card.
+ *    (StonetopCharacter#applyDebilityRollMode, their damage through `ownDamageMode` in
+ *    fight/hero-moves.js, and the steading's rolls they are behind, below), named on the card.
  *  - ROILING, the Storm Markings arcanum: "When you roil with anger, you do +1 damage until you calm
  *    down." Switched by the player either way; while on, the damage window offers the +1, ticked.
  *  - UNSEEN, the Fox's Catlike and the Ranger's Stalker: "you remain unseen until you draw attention
@@ -84,6 +84,29 @@ export function fightStateOn(actor, key) {
 /** Is it on AND still doing something? What the roll path and the damage window ask. */
 export function fightStateActive(actor, key) {
 	return actor?.type === "character" && fightStateOn(actor, key) && FIGHT_STATES[key].applies(actor);
+}
+
+/**
+ * We Happy Few's 6- on a roll the STEADING makes: "disadvantage on all rolls" is the Marshal's, so it
+ * bites a Requisition, a Muster or any homefront move they are the one behind. A window that knows who
+ * is rolling (a character's own Requisition) reads it off them with `ownShakenName`; the steading's own
+ * windows cannot tell, so they ask (improvement-rolls.js#improvementQuestions) about these.
+ */
+
+/** The character's name when their nerves are shaken, else "": the answer a window that knows its roller hands in. */
+export function ownShakenName(actor) {
+	return fightStateActive(actor, "nerves") ? String(actor.name ?? "") : "";
+}
+
+/**
+ * The characters whose nerves are shaken, as `{name, own}`: the user's own character alone when it is one
+ * of them (they are the one rolling), else every one of them (the table says whether one is behind it).
+ */
+export function shakenNervesOffers(actors = globalThis.game?.actors, user = globalThis.game?.user) {
+	const list = Array.isArray(actors) ? actors : [...(actors ?? [])];
+	const shaken = list.filter(actor => fightStateActive(actor, "nerves"));
+	const own = user?.character ? shaken.find(actor => actor.id === user.character.id) ?? null : null;
+	return (own ? [own] : shaken).map(actor => ({ name: String(actor.name ?? ""), own: actor === own }));
 }
 
 /** Switch it. Returns true only when the flag actually changed, so a caller can skip a re-render. */

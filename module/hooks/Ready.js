@@ -34,6 +34,9 @@ import { pastWelcomeGuide, reopenOpenWalkthroughs } from "../dialogs/walkthrough
 import { reopenOpenBookReaders } from "../books/reader-resume.js";
 import { rulebookMacroApi } from "../books/rulebook-api.js";
 import { adoptStoredRulebooks } from "../books/adopt-stored-rulebooks.js";
+import { adoptSettlementPortraits, reletterOnRename } from "../actors/settlement/settlement-portrait.js";
+import { redrawForSettlement } from "../actors/settlement/settlement-actor.js";
+import { isResidentsWriter, onCreateActorForResidents, onPreUpdateActorForResidents, onUpdateActorForResidents, sweepSettlementResidents } from "../actors/settlement/settlement-residents.js";
 import { writeChronicle } from "../utils/chronicle.js";
 import { ExpeditionDialog } from "../dialogs/ExpeditionDialog.js";
 import { WeatherDialog } from "../dialogs/WeatherDialog.js";
@@ -87,6 +90,7 @@ import { refreshSteadingImprovements } from "../migration/improvement-refresh.js
 import { refreshSeededMonsters } from "../migration/bestiary-refresh.js";
 import { sizeMonsterTokens, MONSTER_TOKEN_SIZE_SWEEP } from "../migration/monster-token-size.js";
 import { refreshCatalogFollowers } from "../migration/follower-refresh.js";
+import { refreshInstincts } from "../migration/instinct-refresh.js";
 import { splitFollowerWholeParty, FOLLOWER_WHOLE_PARTY_SWEEP } from "../migration/follower-whole-party.js";
 
 const _EOS_MACRO_NAME   = "End of Session";
@@ -288,6 +292,10 @@ export async function onReady() {
 		// good dog's herder default and two summons' notes, wherever a card still holds the old value.
 		try { await oncePerVersion("followerRefresh", refreshCatalogFollowers); }
 		catch (err) { console.error("Stonetop | refreshing catalog followers failed", err); }
+		// And a chosen instinct still worded as an older playbook offered it (migration/instinct-refresh.js):
+		// the Blessed's Delight and Reverence, corrected to Book I's text.
+		try { await oncePerVersion("instinctRefresh", refreshInstincts); }
+		catch (err) { console.error("Stonetop | refreshing instincts failed", err); }
 		// A custom follower's old "Party follower" switch meant both travelling with the party and
 		// following it as a whole (p.464); now two switches, so one switched on gets both
 		// (migration/follower-whole-party.js). Once per WORLD, like the creation-finished stamp below.
@@ -501,7 +509,7 @@ export async function onReady() {
 	addBookAgesOnce();
 	// Compile the recorded Introductions + Spring Burst answers into the shared
 	// "Chronicle" journal and open it (GM-only). Callable from the Introductions
-	// dialog's "Let spring break forth!" finish, the Expedition dialog, a macro, or
+	// dialog's "Let spring burst forth!" finish, the Expedition dialog, a macro, or
 	// the console.
 	game.stonetop.saveChronicle     = () => writeChronicle().then(j => j?.sheet?.render(true));
 	game.stonetop.openExpedition    = () => ExpeditionDialog.open();
@@ -630,6 +638,40 @@ export async function onReady() {
 	// the book art is, so a new world's GM Toolkit opens the books without asking for them again
 	// (books/adopt-stored-rulebooks.js). Self-gated to the primary GM; not awaited, it is one browse.
 	adoptStoredRulebooks().catch(err => console.error("Stonetop | picking up kept rulebooks failed", err));
+	// Settlement portraits (actors/settlement/settlement-portrait.js). A sheet still on an image of
+	// ours takes its square of book art when the art is on disk, else its letter: primary GM, every
+	// load, not awaited, one browse. And a sheet renamed while on its initials takes the new ones, on
+	// the GM client that made the rename (the disc is a file it writes).
+	Hooks.on("updateActor", reletterOnRename);
+	// Stonetop's Other Settlements table (and another settlement's trade links) draw from settlement
+	// sheets, and core redraws a sheet only for its own document (settlement-actor.js).
+	Hooks.on("createActor", actor => redrawForSettlement(actor));
+	Hooks.on("updateActor", (actor, changed) => redrawForSettlement(actor, changed));
+	Hooks.on("deleteActor", actor => redrawForSettlement(actor));
+	// A settlement's Residents follow each NPC's Home (settlement-residents.js): a new or re-homed NPC
+	// moves on the primary GM, a renamed settlement re-homes its people on the renaming client, and
+	// every load of the primary GM sweeps the world, which is how an old world's NPCs get filed. The
+	// first sweep a world sees also gives a listed NPC whose Home names no settlement the Home of the
+	// table they are on, as the old sheet listed people without touching their Home.
+	Hooks.on("preUpdateActor", onPreUpdateActorForResidents);
+	Hooks.on("createActor", onCreateActorForResidents);
+	Hooks.on("updateActor", onUpdateActorForResidents);
+	// A connected GM only (isResidentsWriter): with no GM, isPrimaryGM() is true on every player
+	// client, and each would sweep, and fail to stamp the world-scope version.
+	if (isResidentsWriter()) {
+		const adoptHomes = !sweepVersion("settlementResidentHomes");
+		sweepSettlementResidents({ adoptHomes })
+			.then(() => adoptHomes && oncePerVersion("settlementResidentHomes", () => {}))
+			.catch(err => console.error("Stonetop | filing settlement residents failed", err));
+	}
+	if (isPrimaryGM()) {
+		// An earlier build's poster map is replaced on the first pass a world sees and never after,
+		// so a GM who later picks that map on purpose keeps it (settlement-portrait.js).
+		const legacyMaps = !sweepVersion("settlementLegacyMaps");
+		adoptSettlementPortraits(undefined, { legacyMaps })
+			.then(() => legacyMaps && oncePerVersion("settlementLegacyMaps", () => {}))
+			.catch(err => console.error("Stonetop | settlement portraits failed", err));
+	}
 
 	// A player settles their own characters' arcana marks on load rather than waiting for the GM's
 	// sweep (migration/tulpa-move-boxes.js), so the first client to show a moved card shows it

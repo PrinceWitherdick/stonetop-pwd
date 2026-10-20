@@ -75,13 +75,51 @@ export function partyFollowers(followers) {
 	return (Array.isArray(followers) ? followers : []).filter(f => f?.ftype && f.party && !f.dead);
 }
 
+// ANIMALS THAT FEED THEMSELVES (Book I p.304): "Pack animals can graze or browse, and carry enough
+// extra feed to 'cover' themselves. Use your best judgement for other animals. The Ranger's pet wolf
+// can probably fend for itself, and small critters don't need much food, but well-heeled hounds
+// probably need to be fed from the party's supplies." So the animal companion and every beast but the
+// dog (the mule and horse, and the livestock that graze) eat nothing from a pack by default, and so
+// does a custom follower made from one of those beasts (data/beasts.js#followerInputFromBeast, known
+// by the `beastSlug` it records; one made before that is known by the type label and the beast's own
+// glyph it was given). A dog still eats. These are where the count STARTS: the GM's judgement moves it
+// at the fire or on the road.
+
+/** The beast that eats from the party's supplies: the hound (p.304). */
+const FED_BEAST_SLUG = "dog-follower";
+
+/** The glyph data/beasts.js gives a dog, by which a custom follower made from one is known. */
+const DOG_GLYPH = "fas fa-dog";
+
+/** The type labels data/beasts.js#followerInputFromBeast gives a custom follower made from a beast. */
+const BEAST_TYPE_LABELS = new Set(["beast follower", "livestock"]);
+
+/** Whether a follower is an animal that feeds itself (see above), eating nothing from a pack. PURE. */
+export function followerFeedsItself(flags, follower) {
+	switch (follower?.ftype) {
+		case "animal-companion": return true;
+		case "beast":            return (follower.slug ?? "") !== FED_BEAST_SLUG;
+		case "custom": {
+			const record = flags?.customFollowers?.[follower.slug];
+			if (!record || record.isGroup) return false;
+			// The beast it was made from, when it says; renaming it or changing its portrait changes nothing.
+			if (record.beastSlug) return record.beastSlug !== FED_BEAST_SLUG;
+			// Made before the record said (no migration): guessed from the type label and glyph it was given.
+			const label = String(record.typeLabel ?? "").trim().toLowerCase();
+			return BEAST_TYPE_LABELS.has(label) && String(record.portraitIcon ?? "").trim() !== DOG_GLYPH;
+		}
+		default: return false;
+	}
+}
+
 /**
  * How many mouths one party follower is: the crew is its roster (a member who is only down still
- * eats), a custom group the members still with it (one marked fallen eats nothing), anyone else one.
- * PURE.
+ * eats), a custom group the members still with it (one marked fallen eats nothing), an animal that
+ * feeds itself none (followerFeedsItself), anyone else one. PURE.
  */
 export function followerMouths(flags, follower) {
 	if (!follower?.ftype || follower.dead) return 0;
+	if (followerFeedsItself(flags, follower)) return 0;
 	if (follower.ftype === "crew") return groupFollowerMembers(flags, { ftype: "crew" }, { down: true }).length;
 	if (follower.ftype === "custom") {
 		const record = flags?.customFollowers?.[follower.slug];

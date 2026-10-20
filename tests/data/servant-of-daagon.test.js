@@ -3,7 +3,7 @@ import {
 	resolveServantBatch, buildServantFollower,
 	SERVANT_ASPECTS, SERVANT_BASE_TAGS, SERVANT_TAG_OPTIONS,
 	SERVANT_NUMBER_OPTIONS, SERVANT_SIZE_OPTIONS, SERVANT_TRAIT_OPTIONS, SERVANT_MOVE_OPTIONS,
-	SERVANT_SOURCE_UUID,
+	SERVANT_SOURCE_UUID, RING_SOURCE_UUID, loyaltyOwnerId,
 } from "../../module/data/servant-of-daagon.js";
 
 describe("Servant of Daagon aspect tables", () => {
@@ -124,4 +124,17 @@ describe("buildServantFollower", () => {
 		const input = resolveServantBatch({ aspectDie: { tags: 1, number: 2, size: 2, traits: 0, moves: 0 }, count: 3 });
 		expect(buildServantFollower(input).exceptional).toBe(false);
 	});
+});
+
+describe("loyaltyOwnerId (Book II p.561: Servants share the Ring's Loyalty)", () => {
+	const map = {
+		ring:  { sourceUuid: RING_SOURCE_UUID, loyalty: 2 },
+		batch: { sourceUuid: SERVANT_SOURCE_UUID },
+		free:  { sourceUuid: SERVANT_SOURCE_UUID, brokenFree: true },
+		dog:   { name: "Good dog" },
+	};
+	it("points a Servant batch at the Ring's track", () => expect(loyaltyOwnerId(map, "batch")).toBe("ring"));
+	it("leaves a batch that broke free on its own (empty) track", () => expect(loyaltyOwnerId(map, "free")).toBe("free"));
+	it("leaves every other follower on its own track", () => expect(loyaltyOwnerId(map, "dog")).toBe("dog"));
+	it("falls back to the batch's own id when no Ring is held", () => expect(loyaltyOwnerId({ batch: map.batch }, "batch")).toBe("batch"));
 });

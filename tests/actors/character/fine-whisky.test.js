@@ -491,7 +491,7 @@ describe("the unticked lines a Ranger's moves bring", () => {
 		expect(homebrew.roll).toHaveBeenCalledTimes(1);
 		expect(settle).not.toHaveBeenCalled();
 		await roll(defy, {});
-		expect(settle).toHaveBeenCalledWith(expect.anything(), "Defy Danger", expect.anything(), expect.anything());
+		expect(settle).toHaveBeenCalledWith(expect.anything(), "Defy Danger", expect.anything(), expect.anything(), { surpriseSpent: false });
 	});
 });
 
@@ -768,6 +768,8 @@ describe("the unticked lines a Would-Be Hero's moves bring", () => {
 		expect(options.conditionNotes).toContain("A Force to Be Reckoned With");
 		expect(options.criticalActions).toContain("turn the tables");
 		expect(options.tierActions).toBeUndefined();
+		// The line rides on the card, so a rewrite of its total can follow it (force-final-total.test.js).
+		expect(options.messageFlags?.[SCOPE]?.criticalOffers).toEqual(["force-to-be-reckoned-with"]);
 		// The 12+ came up: the asterisk wave's hook is called.
 		expect(turned).toHaveBeenCalledTimes(1);
 		expect(turned.mock.calls[0][0]).toBe(char._actor);
@@ -781,6 +783,114 @@ describe("the unticked lines a Would-Be Hero's moves bring", () => {
 		const unticked = heroRoller({ moves: ["A Force to Be Reckoned With"], total: 12 });
 		await unticked.roll(unticked.defy, { takenOffers: [] });
 		expect(rolledWith(unticked.defy).criticalActions).toBeUndefined();
+		expect(rolledWith(unticked.defy).messageFlags?.[SCOPE]?.criticalOffers).toBeUndefined();
 		expect(turned).not.toHaveBeenCalled();
+	});
+});
+
+// Coverage pass (2026-10-16): the Fox's Irresistible, Pants on Fire and Slippery and the Blessed's Heed My
+// Words were text only, while their siblings above are lines in the roll window (Book I pp.106, 110-111).
+function foxRoller({ slug = "the-fox", playbook = "The Fox", moves = [], total = 8, flags = {} } = {}) {
+	const rolled = (name, rollType = "cha") => ({ _id: `${name}-1`, name, type: "move", system: { rollType }, roll: vi.fn(async () => ({ total })) });
+	const knowThings = rolled("Know Things", "int");
+	const persuade = rolled("Persuade (vs. NPCs)");
+	const persuadePcs = rolled("Persuade (vs. PCs)");
+	const defy = rolled("Defy Danger", "dex");
+	const interfere = rolled("Interfere", "ask");
+	const made = buildLiveCharacter({
+		slug, name: playbook, seedStartingMoves: false, flags,
+		items: moves.map(m => makeLiveItem({ name: m.name ?? m, type: "move", system: { moveType: "playbook" },
+			flags: m.learned === false ? { [SCOPE]: { learned: false } } : m.custom ? { [SCOPE]: { custom: true } } : undefined })),
+	});
+	const items = [...made.actor.items, knowThings, persuade, persuadePcs, defy, interfere];
+	items.get = id => items.find(i => i._id === id) ?? null;
+	made.actor.items = items;
+	const roll = (item, prompted) => made.char.onRoll({
+		currentTarget: { closest: sel => (sel === ".item" ? { dataset: { itemId: item._id } } : null), getAttribute: () => null },
+	}, prompted);
+	return { ...made, knowThings, persuade, persuadePcs, defy, interfere, roll };
+}
+
+describe("the unticked lines the Fox's and the Blessed's moves bring", () => {
+	it("offers Heed My Words on either Persuade, for a LEARNED move only, and taken it is advantage", async () => {
+		const { char, persuade, persuadePcs, defy, roll } = foxRoller({ slug: "the-blessed", playbook: "The Blessed", moves: ["Heed My Words"] });
+		expect(await char.rollOffers(persuade)).toEqual([expect.objectContaining({ key: "heed-my-words", applied: false, source: "Heed My Words" })]);
+		expect(await keysOf(char, persuadePcs)).toEqual(["heed-my-words"]);
+		expect(await keysOf(char, defy)).toEqual([]);
+		const off = foxRoller({ moves: [{ name: "Heed My Words", learned: false }] });
+		expect(await keysOf(off.char, off.persuade)).toEqual([]);
+		await roll(persuade, { takenOffers: ["heed-my-words"] });
+		expect(rolledWith(persuade).rollMode).toBe("adv");
+		expect(rolledWith(persuade).conditionNotes).toContain("Heed My Words");
+	});
+
+	it("offers Irresistible on either Persuade alone, and taken it is advantage", async () => {
+		const { char, persuade, persuadePcs, defy, roll } = foxRoller({ moves: ["Irresistible"] });
+		expect(await char.rollOffers(persuade)).toEqual([expect.objectContaining({ key: "irresistible", applied: false, source: "Irresistible" })]);
+		expect(await keysOf(char, persuadePcs)).toEqual(["irresistible"]);
+		expect(await keysOf(char, defy)).toEqual([]);
+		await roll(persuade, { takenOffers: ["irresistible"] });
+		expect(rolledWith(persuade).rollMode).toBe("adv");
+	});
+
+	it("offers Pants on Fire on Defy Danger, either Persuade and Interfere, and nowhere else", async () => {
+		const { char, persuade, persuadePcs, defy, interfere, knowThings, roll } = foxRoller({ moves: ["Pants on Fire"] });
+		for (const item of [defy, persuade, persuadePcs, interfere]) expect(await keysOf(char, item)).toEqual(["pants-on-fire"]);
+		expect(await keysOf(char, knowThings)).toEqual([]);
+		const off = foxRoller({ moves: [{ name: "Pants on Fire", learned: false }] });
+		expect(await keysOf(off.char, off.defy)).toEqual([]);
+		await roll(defy, { takenOffers: ["pants-on-fire"] });
+		expect(rolledWith(defy).rollMode).toBe("adv");
+		expect(rolledWith(defy).conditionNotes).toContain("Pants on Fire");
+	});
+
+	it("offers Slippery on Defy Danger: taken, a 6- counts as a 7-9 and its 12+ line rides the card", async () => {
+		const { char, defy, persuade, roll } = foxRoller({ moves: ["Slippery"], total: 5 });
+		expect(await char.rollOffers(defy)).toEqual([expect.objectContaining({ key: "slippery", applied: false, source: "Slippery", effect: "missAsPartial" })]);
+		expect(await keysOf(char, persuade)).toEqual([]);
+		await roll(defy, { takenOffers: ["slippery"] });
+		const options = rolledWith(defy);
+		expect(options.missCountsAsPartial).toBe("Slippery");
+		expect(options.rollMode).toBe("normal");
+		expect(options.criticalActions).toContain("turn the tables");
+		const unticked = foxRoller({ moves: ["Slippery"] });
+		await unticked.roll(unticked.defy, { takenOffers: [] });
+		expect(rolledWith(unticked.defy).missCountsAsPartial).toBeUndefined();
+		expect(rolledWith(unticked.defy).criticalActions).toBeUndefined();
+	});
+
+	// Free Running (Book I p.110): "When you carry a light load and move with speed and grace, gain advantage on
+	// any move to surmount or bypass a physical obstacle." Every move roll, unticked, while the load is light.
+	it("offers Free Running on every move roll while the load is light, and taken it is advantage", async () => {
+		const { char, knowThings, persuade, defy, interfere, roll } = foxRoller({ moves: ["Free Running"] });
+		for (const item of [knowThings, persuade, defy, interfere]) {
+			expect(await char.rollOffers(item)).toEqual([expect.objectContaining({ key: "free-running", applied: false, source: "Free Running" })]);
+		}
+		// 3 ◇ marked is still light (Book I p.87).
+		const light = foxRoller({ moves: ["Free Running"], flags: { "inventory.regularPool": 3 } });
+		expect(await keysOf(light.char, light.defy)).toEqual(["free-running"]);
+		await roll(defy, { takenOffers: ["free-running"] });
+		expect(rolledWith(defy).rollMode).toBe("adv");
+		expect(rolledWith(defy).conditionNotes).toContain("Free Running");
+	});
+
+	it("offers Free Running nothing under a normal or heavy load, unlearned, or on a bare stat roll", async () => {
+		for (const pool of [4, 7, 9]) {
+			const loaded = foxRoller({ moves: ["Free Running"], flags: { "inventory.regularPool": pool } });
+			expect(await keysOf(loaded.char, loaded.defy)).toEqual([]);
+		}
+		const off = foxRoller({ moves: [{ name: "Free Running", learned: false }] });
+		expect(await keysOf(off.char, off.defy)).toEqual([]);
+		const { char } = foxRoller({ moves: ["Free Running"] });
+		expect(await char.directRollOffers(undefined)).toEqual([]);
+		expect((await char.directRollOffers("Forage")).map(o => o.key)).toEqual(["free-running"]);
+	});
+
+	// A move a player wrote under a book move's name acts as itself (owns-move.js#bookMoveName): it grants none
+	// of the book move's lines.
+	it("gives a player's own \"Irresistible\", \"Pants on Fire\", \"Slippery\" or \"Free Running\" none of the book's lines", async () => {
+		const { char, persuade, defy } = foxRoller({ moves: ["Irresistible", "Pants on Fire", "Slippery", "Free Running"].map(name => ({ name, custom: true })) });
+		expect(await keysOf(char, persuade)).toEqual([]);
+		expect(await keysOf(char, defy)).toEqual([]);
 	});
 });

@@ -1154,6 +1154,23 @@ describe("which cards grow the buttons", () => {
 		expect(invokeCardReduced(root([item("The Invocation has its reduced effect", false), item("The effort taxes you; mark a debility", true)]), card())).toBe(false);
 	});
 
+	// Re-audit 10-18: the reduced effect chosen before the roll as Empowered's extra consequence reduces it
+	// whatever is ticked, unless a holy relic was marked in its place.
+	it("reads a reduced effect chosen before the roll, and not once a holy relic replaced it", () => {
+		const root = { querySelectorAll: () => [] };
+		const prePicked = (record = null) => {
+			const message = card({ empowered: true });
+			message.flags[SCOPE].invokeEmpoweredConsequence = "reduced";
+			if (record) message.flags[SCOPE].invokeConsequences = { empowered: record };
+			return message;
+		};
+		expect(invokeCardReduced(root, prePicked())).toBe(true);
+		expect(invokeCardReduced(root, prePicked({ relic: true }))).toBe(false);
+		const debility = card({ empowered: true });
+		debility.flags[SCOPE].invokeEmpoweredConsequence = "debility";
+		expect(invokeCardReduced(root, debility)).toBe(false);
+	});
+
 	// B5/R7: the Wielder's "as a 10+" card has no roll, and a 10+'s list to choose 1 from.
 	it("offers the holy relics on a 7+ and on the 10+ card, never on a 6-", () => {
 		expect(invokeCardChoosesConsequence(card(), { total: 7 })).toBe(true);
@@ -1171,7 +1188,11 @@ describe("which cards grow the buttons", () => {
 		expect(src).toContain("CONFIG.queries[BATH_QUERY] = (data, context) => handleBathQuery(data, context)");
 		const at = src.indexOf("function _chatWireHolyRelics");
 		const relics = src.slice(at, src.indexOf("\n}\n", at));
-		expect(relics).toContain("invokeCardChoosesConsequence(message, { total: message.rolls?.at(0)?.total ?? null })");
+		// One use per consequence the player owes (re-audit 10-18), the Empowered one included.
+		expect(relics).toContain("const total = message.rolls?.at(0)?.total ?? null;");
+		expect(relics).toContain("holyRelicOffers(message, actor, { total })");
+		expect(relics).toContain("settleHolyRelic(message, who, { prePick, total,");
+		expect(relics).not.toContain('"holyRelicSpent"');
 		expect(relics).toContain("tenPlus ? invokeActionRow(html)");
 		expect(relics).not.toContain('_classifyShiftedTotal(roll.total).key === "failure"');
 	});

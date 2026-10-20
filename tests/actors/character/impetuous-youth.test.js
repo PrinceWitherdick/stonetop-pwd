@@ -129,6 +129,26 @@ describe("giveItAll", () => {
 		expect(HURT_DAMAGE).toMatchObject({ formula: "2d4", self: true });
 	});
 
+	// A Marshal's Battlefield Grace opens a damage window first; closed, it rolls nothing (null), and says so.
+	it("rolls the 2d4 once the card's turn is over, and says so when its damage window is closed", async () => {
+		const message = card({ total: 5 });
+		const d = deps();
+		const warn = vi.fn();
+		globalThis.ui = { notifications: { warn } };
+		d.hurt = vi.fn(async () => null);
+		expect(await giveItAll(message, hero(), "hurt", d)).toBe(true);
+		expect(message.rolls[0].total).toBe(7);
+		expect(warn).toHaveBeenCalledTimes(1);
+		delete globalThis.ui;
+	});
+
+	it("leaves the 2d4 to the presser when the writer is handed no hurt", async () => {
+		const message = card({ total: 5 });
+		const d = { ...deps(), hurt: null };
+		expect(await giveItAll(message, hero(), "hurt", d)).toBe(true);
+		expect(message.store[GAVE_IT_ALL_FLAG]).toMatchObject({ cost: "hurt" });
+	});
+
 	it("happens once per card", async () => {
 		const message = card({ total: 10 });
 		const d = deps();

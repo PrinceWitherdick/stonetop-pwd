@@ -1,0 +1,48 @@
+{{!-- BECOMES A THREAT (module/campaign/BecomeThreatDialog.js), Book I p.584 (a PC) and p.481 (a
+      follower). Starts the write-up: a threat page, and a monster stat block if ticked. The rest is
+      written in the threat editor that opens after. --}}
+<form class="stonetop become-threat" autocomplete="off">
+	{{#if isPc}}
+	<p class="bt-intro">When a PC descends into villainy and monstrosity, they stop being a PC and become a threat under your control. Write them up as both a threat and a monster, using their established moves, possessions, and abilities as inspiration, and feel free to make them scarier than they were as a PC (Book I p.584).</p>
+	{{else}}
+	<p class="bt-intro">If the breakup is messy, a follower might very well become a threat: a source of ongoing, active trouble for one of the PCs or the village at large (Book I p.481).</p>
+	{{/if}}
+
+	<label class="bt-field">
+		<span class="bt-label">The threat's name</span>
+		<input type="text" class="bt-name" value="{{state.name}}">
+	</label>
+	<label class="bt-field">
+		<span class="bt-label">Type</span>
+		<select class="bt-type">
+			{{#each types}}<option value="{{id}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+		</select>
+	</label>
+	<label class="bt-field">
+		<span class="bt-label">Tracker</span>
+		<select class="bt-proximity">
+			{{#each proximities}}<option value="{{id}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+		</select>
+	</label>
+	<label class="bt-field">
+		<span class="bt-label">Instinct</span>
+		<span class="bt-hint">To ... (what drives them now)</span>
+		<input type="text" class="bt-instinct" value="{{state.instinct}}">
+	</label>
+
+	<label class="bt-check">
+		<input type="checkbox" class="bt-monster"{{#if state.monster}} checked{{/if}}>
+		<span>Also write them up as a monster, starting from {{name}}'s HP, armor and damage</span>
+	</label>
+	{{#if isPc}}
+	<label class="bt-check">
+		<input type="checkbox" class="bt-out-of-play"{{#if state.outOfPlay}} checked{{/if}}>
+		<span>{{name}} is no longer a PC: take them out of play</span>
+	</label>
+	{{/if}}
+
+	<footer class="bt-footer">
+		<button type="button" class="bt-apply stonetop-guide-btn--primary"><i class="fas fa-skull" aria-hidden="true"></i> Write up the threat</button>
+		<button type="button" class="bt-cancel">Cancel</button>
+	</footer>
+</form>

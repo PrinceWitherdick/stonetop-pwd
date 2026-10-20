@@ -5,6 +5,7 @@ import { asArray, playbookIconPath } from "../../../utils/playbook-actors.js";
 import { ITEMS_PACK, STONETOP_SCOPE } from "../StonetopFlags.js";
 import { ensurePackIndex } from "../../../utils/pack-index.js";
 import { isOutOfPlaySafe } from "../deaths-door-actor.js";
+import { hasLeftPlay } from "../../../campaign/left-play.js";
 
 /**
  * The player a character belongs to: whoever holds it as their assigned character, else the
@@ -51,7 +52,7 @@ export function playbookHolders({ actors = [], users = [], excludeActorId = null
 		const dead = isOutOfPlaySafe(actor);
 		const entry = holders.get(slug) ?? { taken: [], dead: [] };
 		if (dead) {
-			entry.dead.push(game.i18n.format("stonetop.newCharacter.pickerDeadHolder", { name: actor.name }));
+			entry.dead.push(game.i18n.format(hasLeftPlay(actor) ? "stonetop.newCharacter.pickerLeftHolder" : "stonetop.newCharacter.pickerDeadHolder", { name: actor.name }));
 		} else {
 			entry.taken.push(game.i18n.format("stonetop.newCharacter.pickerHolder", { character: actor.name, player: player.name }));
 		}

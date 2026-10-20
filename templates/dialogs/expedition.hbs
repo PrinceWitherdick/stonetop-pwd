@@ -110,6 +110,14 @@
       {{!-- The Marshal's Logistics, ticked once any character has it learned. --}}
       <label class="stonetop-requisition-herd stonetop-requisition-logistics"><input type="checkbox" class="stonetop-check" name="logistics" checked><span>{{reqLogistics}}</span></label>
       {{/if}}
+      {{#if reqNerves}}
+      {{!-- We Happy Few's 6-: a shaken Marshal behind this roll has disadvantage. A tick for one, a pick for several. --}}
+      {{#if reqNerves.options}}
+      <label class="stonetop-requisition-herd stonetop-requisition-nerves"><span>{{reqNerves.label}}</span><select name="nerves">{{#each reqNerves.options}}<option value="{{value}}">{{label}}</option>{{/each}}</select></label>
+      {{else}}
+      <label class="stonetop-requisition-herd stonetop-requisition-nerves"><input type="checkbox" class="stonetop-check" name="nerves" value="{{reqNerves.value}}"{{#if reqNerves.checked}} checked{{/if}}><span>{{reqNerves.label}}</span></label>
+      {{/if}}
+      {{/if}}
       {{#each reqAdvantages}}
       {{!-- An improvement's asked advantage on Requisition: unticked, the table's call. --}}
       <label class="stonetop-requisition-herd stonetop-requisition-advantage"><input type="checkbox" class="stonetop-check" name="{{name}}"><span>{{label}}</span></label>
@@ -220,6 +228,17 @@
         <i class="fas fa-people-group" aria-hidden="true"></i> <span data-struggle-call-label>{{struggle.label}}</span>
       </button>
       <span class="stonetop-gm-struggle-hint" data-struggle-call-hint>{{struggle.hint}}</span>
+    </div>
+    {{/if}}
+
+    {{!-- "N days pass" (Book I p.89, p.304), GM-only: the glossed days of road still eat, and this
+          spends them out of the packs of the party on this trip (RoadRationsDialog). --}}
+    {{#if roadDays}}
+    <div class="stonetop-gm-struggle-bar stonetop-exp-road">
+      <button type="button" class="stonetop-exp-road-btn stonetop-spring-roll-btn">
+        <i class="fas fa-utensils" aria-hidden="true"></i> Days pass on the road&hellip;
+      </button>
+      <span class="stonetop-gm-struggle-hint">Glossing a few days of travel? Spend the supplies they eat: 1 use a head a day, a mess kit feeds four.</span>
     </div>
     {{/if}}
 

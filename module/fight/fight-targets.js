@@ -22,7 +22,7 @@
 import { escHtml } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
 import { themedDialogClasses } from "../utils/window-theme.js";
-import { contentElement } from "../dialogs/content-picker.js";
+import { contentElement } from "../utils/dialogv2-content.js";
 import { HEROES, touching } from "./engagements.js";
 import { gridOf } from "./fight-state.js";
 import { rollerEngagement, asTarget } from "./damage-seed.js";
@@ -52,6 +52,24 @@ export function engagedOpponents(actor, { scene = globalThis.canvas?.scene ?? nu
 }
 
 /**
+ * Everyone on the other side of the fight `actor` is in, engaged with them or not, still up, as targets:
+ * whom a move made at "your enemy" with nothing targeted could mean (Speak Softly). Those `actor` is engaged
+ * with come first. Empty where engagedOpponents is.
+ */
+export function foesInFight(actor, { scene = globalThis.canvas?.scene ?? null, engagement } = {}) {
+	const found = engagement === undefined ? rollerEngagement(actor, { scene }) : engagement;
+	if (!found) return [];
+	const self = found.fighters.find(f => f.id === found.combatant.id);
+	const near = engagedOpponents(actor, { engagement: found });
+	const seen = new Set(near.map(foe => foe.uuid));
+	const rest = found.fighters
+		.filter(f => f.id !== found.combatant.id && f.side !== self?.side && !f.out)
+		.map(f => found.combatants.get(f.id)).filter(c => c?.token).map(asTarget)
+		.filter(foe => !seen.has(foe.uuid));
+	return [...near, ...rest];
+}
+
+/**
  * The "Who does this hit?" window's words: a checkbox per opponent, the first ticked. PURE.
  *
  * AN AREA ATTACK TICKS THEM ALL, and says why. Two moves reach here on their own: Berserker ("add the
@@ -67,7 +85,7 @@ export function engagedOpponents(actor, { scene = globalThis.canvas?.scene ?? nu
 export function whoItHitsWindow({ roller, candidates, area = false, areaAround = "roller" }) {
 	const rows = candidates.map((candidate, index) => `<li>
 			<label class="stonetop-fight-targets-option">
-				<input type="checkbox" name="${TARGET_FIELD}" value="${index}"${area || index === 0 ? " checked" : ""}>
+				<input type="checkbox" class="stonetop-fight-targets-check" name="${TARGET_FIELD}" value="${index}"${area || index === 0 ? " checked" : ""}>
 				<span>${escHtml(candidate.name)}${candidate.ally ? ` <em>${escHtml(localize(`${KEY}.ally`))}</em>` : ""}</span>
 			</label>
 		</li>`).join("");

@@ -294,7 +294,7 @@ describe("the pre-roll damage window", () => {
 		const at = ATTACK_FLOW_JS.indexOf("export async function rollFollowerDamageAt");
 		expect(at, "rollFollowerDamageAt is gone").toBeGreaterThan(-1);
 		const follower = ATTACK_FLOW_JS.slice(at, ATTACK_FLOW_JS.indexOf("\n}\n", at));
-		expect(follower).toContain("striker: { name: attacker, group }");
+		expect(follower).toContain("striker: { name: attacker, group");
 		const from = ATTACK_FLOW_JS.indexOf("export async function rollDamageAt");
 		const body = ATTACK_FLOW_JS.slice(from, ATTACK_FLOW_JS.indexOf("\n}\n", from));
 		expect(body).toContain("const attacker = striker?.name");
@@ -458,7 +458,7 @@ describe("the damage window's own chrome", () => {
 		const order = [...row.slice(0, row.indexOf("stonetop-damage-preview")).matchAll(/stonetop-damage-field-label|stepperHtml\(|name="extraDice"/g)].map(m => m[0]);
 		expect(order).toEqual([
 			"stonetop-damage-field-label", "stonetop-damage-field-label",
-			"stepperHtml(", 'name="extraDice"',
+			'name="extraDice"', "stepperHtml(",
 		]);
 		// …and that helper still renders the stepper the CSS rule above is written against.
 		expect(ROLL_DIALOG_JS).toMatch(/function stepperHtml[\s\S]*?stonetop-roll-modifier-stepper/);

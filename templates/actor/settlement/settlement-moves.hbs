@@ -1,0 +1,38 @@
+{{!-- Homefront Moves: the four moves Book I p.508 says another steading's stats are for, drawn as
+      the cards Stonetop's own Moves tab draws (templates/actor/partials/steading-tab-moves.hbs): the
+      same `.stonetop-move-group` > `.items-list` > `.stonetop-item` shape and the same book text,
+      so they inherit the bordered card, the underlined title row and the columns from `.tab.moves`.
+
+      Each card rolls off THIS place's stats: the chip reads "+PRO" as Stonetop's does (its tooltip
+      gives what the stat is here), and a
+      line under the title says what this place's Size does to the roll. Clicking the name or the
+      chip rolls, for a player reading the sheet too: the name is not a control core disables, and
+      the chip is a button carrying `data-reader-ok`.
+
+      `.stonetop-settlement-moves-tab` stays on an INNER wrapper, as on Stonetop's sheet: an
+      unlayered `display` on a `.tab` beats core's `.tab { display: none }`. --}}
+<div class="tab moves stonetop-settlement-tab" data-group="primary" data-tab="moves">
+	<section class="sheet-tab steading-moves-tab stonetop-settlement-moves-tab">
+	<div class="stonetop-move-group">
+		<h3 class="stonetop-move-group-title">{{localize "stonetop.settlement.movesHeading"}}</h3>
+		<ol class="items-list">
+			{{#each moves}}
+			<li class="stonetop-item steading-move-card stonetop-settlement-move" data-move="{{slug}}">
+				<div class="stonetop-item-header">
+					<strong class="stonetop-item-name" data-action="rollMove" data-move="{{slug}}"
+					        role="button" tabindex="0">{{label}}</strong>
+					<button type="button" class="stonetop-move-roll-chip steading-move-stat-tag"
+					        data-action="rollMove" data-move="{{slug}}" data-reader-ok
+					        aria-label="{{localize "stonetop.settlement.rollStat" stat=statLabel value=statValue}}"
+					        data-tooltip="{{localize "stonetop.settlement.rollStat" stat=statLabel value=statValue}}">+{{statChipLabel}}</button>
+				</div>
+				{{#if notes.length}}
+				<p class="stonetop-settlement-move-notes">{{#each notes}}<span>{{this}}</span>{{/each}}</p>
+				{{/if}}
+				<div class="stonetop-item-description">{{{moveBody description}}}</div>
+			</li>
+			{{/each}}
+		</ol>
+	</div>
+	</section>
+</div>

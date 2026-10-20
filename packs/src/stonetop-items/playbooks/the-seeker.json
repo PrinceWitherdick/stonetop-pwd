@@ -334,11 +334,13 @@
               },
               {
                 "name": "Stills",
-                "column": "small"
+                "column": "small",
+                "note": "immobile"
               },
               {
                 "name": "Barrels",
-                "column": "small"
+                "column": "small",
+                "note": "immobile"
               },
               {
                 "name": "Firkins",

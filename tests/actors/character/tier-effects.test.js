@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
-	settleTierEffects, recordTierEffects, reconcileTierEffects, TIER_EFFECTS_FLAG, TIER_EFFECT_MOVES,
+	settleTierEffects, recordTierEffects, reconcileTierEffects, TIER_EFFECTS_FLAG, TIER_EFFECT_MOVES, SILVER_TONGUED,
 } from "../../../module/actors/character/tier-effects.js";
 import { FIGHT_STATES, fightStateOn, WE_HAPPY_FEW } from "../../../module/actors/character/fight-states.js";
 import { PREPARE_A_WELCOME } from "../../../module/combat/battle-holds.js";
@@ -16,13 +16,13 @@ import { ROLLED_FLAG, rolledRecord } from "../../../module/utils/counted-tier.js
 // GM's Shift, a +1 pressed on it). Each case rolls one tier, records what it did on a card, then moves the
 // card's total and checks the character followed, undoing only what that card did.
 
-/** A character with the moves named, their tracks (2 pips each, counting what is HELD) and their flags. */
-function hero({ moves = [], held = {}, nerves = false, isOwner = true } = {}) {
+/** A character with the moves named, their tracks (`max` pips each, 2 unless given, counting what is HELD) and their flags. */
+function hero({ moves = [], held = {}, nerves = false, isOwner = true, max = 2 } = {}) {
 	const tracks = { ...held };
 	const bag = nerves ? { [FIGHT_STATES.nerves.flag]: true } : {};
 	const actor = {
 		id: "h", name: "Hale", type: "character", isOwner,
-		items: moves.map(name => ({ type: "move", name, flags: {}, system: { resource: { max: 2, title: "Hold" } } })),
+		items: moves.map(name => ({ type: "move", name, flags: {}, system: { resource: { max, title: "Hold" } } })),
 		flags: { [SYSTEM_ID]: bag },
 		getFlag: (scope, path) => path.split(".").reduce((v, k) => v?.[k], actor.flags[scope]),
 		setFlag: vi.fn(async (scope, key, value) => { actor.flags[scope][key] = value; }),
@@ -48,9 +48,9 @@ function card(move) {
 }
 
 /** Roll `move` at `tier` for `actor`, and put what it did on a fresh card, as onRoll does. */
-async function rolled(actor, move, tier) {
+async function rolled(actor, move, tier, options = {}) {
 	const message = card(move);
-	await recordTierEffects(message, await settleTierEffects(actor, move, tier));
+	await recordTierEffects(message, await settleTierEffects(actor, move, tier, null, options));
 	return message;
 }
 
@@ -100,20 +100,23 @@ describe("We Happy Few's nerves", () => {
 });
 
 describe("Prepare a Welcome's Surprise", () => {
+	// The track as it stands AFTER the roll's own spend (StonetopCharacter#onRoll takes it before the dice).
+	const spent = { surpriseSpent: true };
+
 	it("is regained when a 9 is lifted to a 10, and taken back when lowered again", async () => {
 		const { actor, tracks } = hero({ moves: [PREPARE_A_WELCOME], held: { [PREPARE_A_WELCOME]: 1 } });
-		const partial = await rolled(actor, PREPARE_A_WELCOME, "partial");
+		const partial = await rolled(actor, PREPARE_A_WELCOME, "partial", spent);
 		expect(tracks[PREPARE_A_WELCOME]).toBe(1);
 		await shift(partial, actor, 10);
 		expect(tracks[PREPARE_A_WELCOME]).toBe(2);
-		expect(partial.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ surpriseRegained: 1 });
+		expect(partial.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ surpriseRegained: { spent: true, regained: 1 } });
 		await shift(partial, actor, 9);
 		expect(tracks[PREPARE_A_WELCOME]).toBe(1);
 	});
 
 	it("regained on a 10+ goes back when the card is lowered, never below none", async () => {
 		const { actor, tracks } = hero({ moves: [PREPARE_A_WELCOME], held: { [PREPARE_A_WELCOME]: 0 } });
-		const hit = await rolled(actor, PREPARE_A_WELCOME, "success");
+		const hit = await rolled(actor, PREPARE_A_WELCOME, "success", spent);
 		expect(tracks[PREPARE_A_WELCOME]).toBe(1);
 		// Spent since, on another roll: nothing left to take back.
 		tracks[PREPARE_A_WELCOME] = 0;
@@ -123,10 +126,36 @@ describe("Prepare a Welcome's Surprise", () => {
 
 	it("takes nothing back that a full track never gave", async () => {
 		const { actor, tracks } = hero({ moves: [PREPARE_A_WELCOME], held: { [PREPARE_A_WELCOME]: 2 } });
-		const hit = await rolled(actor, PREPARE_A_WELCOME, "success");
-		expect(hit.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ surpriseRegained: 0 });
+		const hit = await rolled(actor, PREPARE_A_WELCOME, "success", spent);
+		expect(hit.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ surpriseRegained: { spent: true, regained: 0 } });
 		await shift(hit, actor, 9);
 		expect(tracks[PREPARE_A_WELCOME]).toBe(2);
+	});
+
+	// Marshal re-audit (2026-10-18): "spend 1 Surprise ... on a 10+ ... regain 1 Surprise". A roll made holding
+	// none (allowed: the card says "No Surprise held to spend") spent nothing, so its 10+ makes none from nothing.
+	it("regains none on a 10+ of a roll that spent none, however its tier moves", async () => {
+		const { actor, tracks } = hero({ moves: [PREPARE_A_WELCOME], held: { [PREPARE_A_WELCOME]: 0 } });
+		const hit = await rolled(actor, PREPARE_A_WELCOME, "success", { surpriseSpent: false });
+		expect(tracks[PREPARE_A_WELCOME]).toBe(0);
+		expect(hit.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ surpriseRegained: { spent: false, regained: 0 } });
+		const partial = await rolled(actor, PREPARE_A_WELCOME, "partial");
+		await shift(partial, actor, 11);
+		expect(tracks[PREPARE_A_WELCOME]).toBe(0);
+		await shift(hit, actor, 8);
+		await shift(hit, actor, 12);
+		expect(tracks[PREPARE_A_WELCOME]).toBe(0);
+	});
+
+	it("reads a card from before the spend was kept as having spent one", async () => {
+		const { actor, tracks } = hero({ moves: [PREPARE_A_WELCOME], held: { [PREPARE_A_WELCOME]: 1 } });
+		const old = card(PREPARE_A_WELCOME);
+		old.flags[SYSTEM_ID][TIER_EFFECTS_FLAG] = { surpriseRegained: 1 };
+		await shift(old, actor, 8);
+		expect(tracks[PREPARE_A_WELCOME]).toBe(0);
+		expect(old.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ surpriseRegained: { spent: true, regained: 0 } });
+		await shift(old, actor, 10);
+		expect(tracks[PREPARE_A_WELCOME]).toBe(1);
 	});
 });
 
@@ -148,6 +177,80 @@ describe("Commune with Aratis's Sanction", () => {
 		expect(tracks[COMMUNE_WITH_ARATIS]).toBe(2);
 		await shift(hit, actor, 9);
 		expect(tracks[COMMUNE_WITH_ARATIS]).toBe(1);
+	});
+});
+
+// The Fox's Silver Tongued: "on a 10+, hold 3 Nerve; on a 7-9, hold 1 Nerve", on its ○○○ track. "Hold N" is
+// "you now hold N": never lowered by the roll, never past the track's max.
+describe("Silver Tongued's Nerve", () => {
+	const fox = held => hero({ moves: [SILVER_TONGUED], held: { [SILVER_TONGUED]: held }, max: 3 });
+
+	it("is a move whose tier does something to the roller", () => {
+		expect(TIER_EFFECT_MOVES).toContain(SILVER_TONGUED);
+	});
+
+	it("fills to 3 on a 10+ and to 1 on a 7-9, and holds nothing more on a 6-", async () => {
+		const hit = fox(0);
+		const card10 = await rolled(hit.actor, SILVER_TONGUED, "success");
+		expect(hit.tracks[SILVER_TONGUED]).toBe(3);
+		expect(card10.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 3 });
+
+		const partial = fox(0);
+		await rolled(partial.actor, SILVER_TONGUED, "partial");
+		expect(partial.tracks[SILVER_TONGUED]).toBe(1);
+
+		const miss = fox(1);
+		const card6 = await rolled(miss.actor, SILVER_TONGUED, "failure");
+		expect(miss.tracks[SILVER_TONGUED]).toBe(1);
+		// Still recorded, so a Shift up off the 6- can hold what the new tier asks.
+		expect(card6.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 0 });
+	});
+
+	it("does not lower 3 Nerve already held on a 7-9, nor take any of it back when the card is lowered", async () => {
+		const { actor, tracks } = fox(3);
+		const partial = await rolled(actor, SILVER_TONGUED, "partial");
+		expect(tracks[SILVER_TONGUED]).toBe(3);
+		expect(actor.typedActor.moveResources.setUses).not.toHaveBeenCalled();
+		await shift(partial, actor, 5);
+		expect(tracks[SILVER_TONGUED]).toBe(3);
+	});
+
+	it("tops up 1 held to 3 on a 10+, and takes back only the 2 it added", async () => {
+		const { actor, tracks } = fox(1);
+		const hit = await rolled(actor, SILVER_TONGUED, "success");
+		expect(tracks[SILVER_TONGUED]).toBe(3);
+		expect(hit.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 2 });
+		await shift(hit, actor, 6);
+		expect(tracks[SILVER_TONGUED]).toBe(1);
+	});
+
+	it("adds 2 more when a 7-9 is rewritten to a 10+, and the 10+ moved to a 6- takes back all it added", async () => {
+		const { actor, tracks } = fox(0);
+		const card = await rolled(actor, SILVER_TONGUED, "partial");
+		expect(tracks[SILVER_TONGUED]).toBe(1);
+		await shift(card, actor, 10);
+		expect(tracks[SILVER_TONGUED]).toBe(3);
+		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 3 });
+		await shift(card, actor, 6);
+		expect(tracks[SILVER_TONGUED]).toBe(0);
+		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 0 });
+	});
+
+	it("leaves Nerve spent since spent when the card is lowered, and lifts by the difference again", async () => {
+		const { actor, tracks } = fox(0);
+		const hit = await rolled(actor, SILVER_TONGUED, "success");
+		tracks[SILVER_TONGUED] = 1; // two spent to move about unchallenged
+		await shift(hit, actor, 8);
+		// Back by the 2 the 10+ added over the 7-9, never below none.
+		expect(tracks[SILVER_TONGUED]).toBe(0);
+		await shift(hit, actor, 10);
+		expect(tracks[SILVER_TONGUED]).toBe(2);
+	});
+
+	it("leaves no trace for a character without Silver Tongued learned", async () => {
+		const { actor } = hero({ moves: [] });
+		const card = await rolled(actor, SILVER_TONGUED, "success");
+		expect(card.setFlag).not.toHaveBeenCalled();
 	});
 });
 
@@ -331,15 +434,15 @@ describe("a rewritten card that bends its tier", () => {
 
 	it("settles a 6- lifted to a 7 as the 10+ it counts as", async () => {
 		const { actor, tracks } = hero({ moves: [PREPARE_A_WELCOME], held: { [PREPARE_A_WELCOME]: 1 } });
-		const miss = bent(await rolled(actor, PREPARE_A_WELCOME, "failure"), deal);
+		const miss = bent(await rolled(actor, PREPARE_A_WELCOME, "failure", { surpriseSpent: true }), deal);
 		await shift(miss, actor, 7);
 		expect(tracks[PREPARE_A_WELCOME]).toBe(2);
-		expect(miss.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ surpriseRegained: 1 });
+		expect(miss.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ surpriseRegained: { spent: true, regained: 1 } });
 	});
 
 	it("leaves a counted 10+ lifted within the 7-9 where it is, and takes it back below a 7", async () => {
 		const { actor, tracks } = hero({ moves: [PREPARE_A_WELCOME], held: { [PREPARE_A_WELCOME]: 0 } });
-		const hit = bent(await rolled(actor, PREPARE_A_WELCOME, "success"), deal);
+		const hit = bent(await rolled(actor, PREPARE_A_WELCOME, "success", { surpriseSpent: true }), deal);
 		expect(tracks[PREPARE_A_WELCOME]).toBe(1);
 		hit.setFlag.mockClear();
 		expect(await shift(hit, actor, 9)).toBe(false);
@@ -357,7 +460,7 @@ describe("a rewritten card that bends its tier", () => {
 
 	it("reads its total as always on a card with no record, or one that bends nothing", async () => {
 		const { actor, tracks } = hero({ moves: [PREPARE_A_WELCOME], held: { [PREPARE_A_WELCOME]: 1 } });
-		const plain = bent(await rolled(actor, PREPARE_A_WELCOME, "failure"), {});
+		const plain = bent(await rolled(actor, PREPARE_A_WELCOME, "failure", { surpriseSpent: true }), {});
 		await shift(plain, actor, 7);
 		expect(tracks[PREPARE_A_WELCOME]).toBe(1);
 		await shift(plain, actor, 12);

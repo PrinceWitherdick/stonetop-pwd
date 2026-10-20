@@ -2,7 +2,10 @@
 		{{! `caution` and `pdiMarkControl` are set only on a post-death insert's options, in
 		    edit mode (post-death-outcomes.js): a pick the rules can't account for, flagged and never
 		    blocked, and the GM's hand on a Thrall's Marks. A playbook's lore never carries them. }}
-		<div class="stonetop-lore-option{{#if (eq type 'text')}} stonetop-lore-option--text{{/if}}{{#if crossedOff}} is-crossed-off{{/if}}{{#if caution}} is-cautioned{{/if}}">
+		{{! `atCap` and `capDisabled` are set only on a playbook's own lore, on the Details tab
+		    (lore-pick-count.js#markLoreCaps): its list is at the book's most ("choose 2, maybe 3"),
+		    so the boxes not yet ticked are disabled and an option with none ticked is faded. }}
+		<div class="stonetop-lore-option{{#if (eq type 'text')}} stonetop-lore-option--text{{/if}}{{#if crossedOff}} is-crossed-off{{/if}}{{#if caution}} is-cautioned{{/if}}{{#if capDisabled}} is-disabled{{/if}}">
 			{{#if (eq type "text")}}
 			{{#if description}}<label class="stonetop-lore-option-desc">{{{description}}}</label>{{/if}}
 			{{#if arcanaPicker}}
@@ -25,7 +28,7 @@
 				       data-lore-slug="{{../../slug}}"
 				       data-option-slug="{{../slug}}"
 				       data-idx="{{@index}}"
-				       {{#if this}}checked{{/if}} {{#if ../crossedOff}}disabled{{/if}}>
+				       {{#if this}}checked{{/if}} {{#if ../crossedOff}}disabled{{else}}{{#unless this}}{{#if ../atCap}}disabled{{/if}}{{/unless}}{{/if}}>
 				{{/each}}
 			</span>
 			<span class="stonetop-lore-option-desc">{{#if hasBlank}}{{{fillBefore}}}<input type="text" class="stonetop-lore-option-text stonetop-lore-fill" data-lore-slug="{{../slug}}" data-option-slug="{{slug}}" value="{{fillValue}}" placeholder="…">{{{fillAfter}}}{{else}}{{{description}}}{{/if}}</span>

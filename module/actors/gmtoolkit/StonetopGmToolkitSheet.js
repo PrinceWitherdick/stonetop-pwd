@@ -40,6 +40,7 @@ import { withGmWonderTab } from "./gm-wonder-tab.js";
 import { withGmEncountersTab } from "./gm-encounters-tab.js";
 import { withGmExpeditionsTab } from "./gm-expeditions-tab.js";
 import { localizedHomefrontSections } from "../../gm-toolkit/homefront-view.js";
+import { localizedRunningReference } from "../../gm-toolkit/gm-agenda-view.js";
 import { readCurrentSeason, currentSeasonView, isCurrentSeasonChange } from "../../seasons/current-season.js";
 import { localize } from "../../utils/i18n.js";
 import { localizedOnce } from "../../utils/localized-once.js";
@@ -364,6 +365,9 @@ export function createStonetopGmToolkitSheetClass(Base) {
 			// can assert on it without Handlebars. A diagram with no `src` is one this world has
 			// not imported; the template draws a placeholder rather than the entry being dropped.
 			context.stonetop.diagrams = gmDiagrams();
+			// And under them, running the game as reference: agenda, principles, the Line, what not
+			// to do, and the first adventure's prep (module/gm-toolkit/gm-agenda-view.js).
+			context.stonetop.running = localizedRunningReference();
 
 			// What the shared `section-edit-toggle` partial reads. `editMode` is the GLOBAL edit
 			// wrench, which this sheet does not have: the partial hides every pencil while it is

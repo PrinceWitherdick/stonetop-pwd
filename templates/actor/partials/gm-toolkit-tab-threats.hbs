@@ -51,6 +51,22 @@
 		</div>
 		{{/each}}
 
+		{{!-- Threats crossed off the tracker (Book I p.299): off the three trackers above, greyed,
+		      each with a Put back button in its tools. Only drawn once there is one. --}}
+		{{#if stonetop.resolvedThreats.length}}
+		<div class="steading-threats-section steading-threats-resolved">
+			{{> "stonetop.section-heading" headingClass="steading-residents-heading" title=(localize "stonetop.gmToolkit.threats.resolvedHeading") note=(localize "stonetop.gmToolkit.threats.resolvedNote") collapse="threatsResolved"}}
+			<div class="steading-threats-grid">
+				{{#each stonetop.resolvedThreats}}
+				<div class="threat-card-wrap" data-page-uuid="{{uuid}}">
+					{{> "stonetop.threat-card" this}}
+					{{> "stonetop.gm-prep-card-tools" kind="threat" uuid=uuid}}
+				</div>
+				{{/each}}
+			</div>
+		</div>
+		{{/if}}
+
 		{{!-- Hazards: the environmental half of Book I "Dangers", one flat section after the
 		      proximity groups (hazards have no proximity; they belong to places and
 		      expeditions). Same card affordances as threats: drag-to-pin, collapse; the pen

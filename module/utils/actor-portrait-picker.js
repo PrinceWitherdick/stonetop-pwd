@@ -24,6 +24,7 @@ import { documentPortraitFrame, resolvePortrait } from "./portrait-frame.js";
 import { canOpenTokenizer, openTokenizer } from "./portrait-tokenizer.js";
 import { isDefaultImg } from "./strings.js";
 import { format, localize } from "./i18n.js";
+import { PERSON_ACTOR_TYPES } from "./actor-types.js";
 
 /**
  * Where the followers a player character keeps store their portraits.
@@ -42,12 +43,6 @@ const FOLLOWER_PORTRAIT_STORES = [
 	{ path: "beastDetails",            keyed: true },
 	{ path: "customFollowers",         keyed: true },
 ];
-
-/**
- * The actor types that wear a person's face — the three the gallery opens from. The fourth,
- * `stonetop`, is the steading, whose portrait is a picture of the place.
- */
-const PERSON_ACTOR_TYPES = new Set(["character", "npc", "monster"]);
 
 /** Hand every follower portrait `actor` keeps to `claim`, named as well as it can be. */
 function claimFollowerPortraits(actor, claim) {

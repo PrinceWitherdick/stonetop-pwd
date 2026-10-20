@@ -4,6 +4,9 @@
 	{{#if isOverview}}
 	<div class="stonetop-levelup-step">
 		<p class="stonetop-levelup-intro">{{{localize "stonetop.specialMoves.levelUp.overviewIntro"}}}</p>
+		{{#if awayWarning}}
+		<p class="stonetop-levelup-aside stonetop-levelup-away"><i class="fas fa-triangle-exclamation"></i> {{awayWarning}}</p>
+		{{/if}}
 
 		<div class="stonetop-levelup-summary">
 			<div class="stonetop-levelup-summary-row">
@@ -23,6 +26,9 @@
 
 		{{#if needsInvocation}}
 		<p class="stonetop-levelup-aside">{{{localize "stonetop.specialMoves.levelUp.invocationAside"}}}</p>
+		{{/if}}
+		{{#if pouchGrowthNote}}
+		<p class="stonetop-levelup-aside stonetop-levelup-pouch">{{pouchGrowthNote}}</p>
 		{{/if}}
 	</div>
 	{{/if}}

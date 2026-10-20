@@ -1,7 +1,28 @@
 <div class="tab notes" data-group="primary" data-tab="notes">
 	<section class="sheet-tab steading-notes">
+		{{!-- Make a Plan (Book I p.530): the shared Plans section (partials/steading-plans.hbs), which every
+		      other settlement's Notes tab draws too. The content guidelines sit last, under the notes. --}}
+		{{> "stonetop.steading-plans" plans=stonetop.plans canEdit=stonetop.canEdit titleId="steading-plans-title"}}
+
+		<h3 class="stonetop-move-group-title steading-notes-heading">{{localize "stonetop.steading.tabs.notes"}}</h3>
 		<prose-mirror class="steading-notes-editor" toggled value="{{stonetop.notes}}">
 			{{{stonetop.enrichedNotes}}}
 		</prose-mirror>
+
+		{{!-- Content guidelines (Book I p.66, and p.195's Line): settled at the first session, reviewed at the
+		      start of each. module/actors/steading/steading-plans.js reads and writes them. --}}
+		<section class="steading-list-section steading-content-guidelines" aria-labelledby="steading-guidelines-title">
+			<h3 id="steading-guidelines-title" class="stonetop-move-group-title steading-notes-heading">Content guidelines</h3>
+			<p class="steading-notes-hint">Review these at the start of each session, and call "time out" whenever they are broken or need adding to.</p>
+			<div class="steading-guidelines-grid">
+				{{#each stonetop.contentGuidelines as |g|}}
+				<label class="steading-guideline">
+					{{!-- The hint rides the label's tooltip (and the box's aria-description) so the four boxes line up. --}}
+					<span class="steading-guideline-label" data-tooltip="{{g.hint}}" data-tooltip-direction="UP">{{g.label}}</span>
+					<textarea rows="2" data-guideline="{{g.key}}" aria-description="{{g.hint}}" {{#unless @root.stonetop.canEdit}}readonly{{/unless}}>{{g.value}}</textarea>
+				</label>
+				{{/each}}
+			</div>
+		</section>
 	</section>
 </div>

@@ -286,8 +286,8 @@ describe("applyWinterShortfall", () => {
 	it("opens the Meet with Disaster pick from every window that takes a shortfall", () => {
 		const src = read("module/actors/steading/winter-debt.js");
 		const at = src.indexOf("export async function sufferWinterShortfall");
-		expect(src.slice(at, at + 700)).toContain("if (out.disaster)");
-		expect(src.slice(at, at + 700)).toContain("openDisasterPicker(");
+		expect(src.slice(at, at + 1400)).toContain("if (!out.disaster) return;");
+		expect(src.slice(at, at + 1400)).toContain("openDisasterPicker(");
 		expect(src).toContain("await sufferWinterShortfall(steading, consequenceId");
 		expect(read("module/actors/steading/StonetopSteadingSheet.js")).toContain("await sufferWinterShortfall(this._stonetopSteading");
 	});

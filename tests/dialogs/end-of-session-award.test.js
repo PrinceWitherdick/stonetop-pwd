@@ -375,7 +375,7 @@ describe("End of Session, a player's copy", () => {
 
 	it("draws the GM's ticks fixed, without the roster, and closes rather than awards", async () => {
 		const html = await mirrorHtml({
-			mirror: true, xpCount: 1, tally: "TALLY", awardLabel: "AWARD",
+			mirror: true, xpCount: 1, canAward: true, tally: "TALLY", awardLabel: "AWARD",
 			questions: [{ key: "learnedWorld", label: "Q", checked: true }],
 			pcs: [{ id: "a", name: "Here", checked: true, dead: false }],
 		});
@@ -389,13 +389,27 @@ describe("End of Session, a player's copy", () => {
 
 	it("leaves the GM's own window as it was", async () => {
 		const html = await mirrorHtml({
-			xpCount: 1, tally: "TALLY", awardLabel: "AWARD",
+			xpCount: 1, canAward: true, tally: "TALLY", awardLabel: "AWARD",
 			questions: [{ key: "learnedWorld", label: "Q", checked: true }],
 			pcs: [{ id: "a", name: "Here", checked: true, dead: false }],
 		});
 		expect(html).not.toContain("--mirror");
 		expect(html).not.toContain("disabled");
 		expect(html).toContain(`data-pc="a" checked`);
+		expect(html).toContain("AWARD");
+	});
+
+	it("draws each character's own ticks and note on the GM's window, and the last wish kept", async () => {
+		const html = await mirrorHtml({
+			xpCount: 0, canAward: true, tally: "TALLY", awardLabel: "AWARD",
+			questions: [],
+			pcs: [{ id: "a", name: "Here", checked: true, dead: false, note: "More dragons", lastWish: "Less sewers",
+				personal: [{ key: "instinct", label: "Instinct (+1)", checked: true }, { key: "relationship", label: "Relationship (+1)", checked: false }] }],
+		});
+		expect(html).toContain(`class="stonetop-eos-personal-check" data-pc="a" data-xp="instinct" checked`);
+		expect(html).toContain(`data-pc="a" data-xp="relationship" >`);
+		expect(html).toContain(`value="More dragons"`);
+		expect(html).toContain("Less sewers");
 		expect(html).toContain("AWARD");
 	});
 });
@@ -421,5 +435,68 @@ describe("End of Session opened by a player", () => {
 		expect(globalThis.ui.notifications.info).toHaveBeenCalledTimes(1);
 		vi.useRealTimers();
 		render.mockRestore();
+	});
+});
+
+// Each player's own XP (Book I p.75): "point out how you demonstrated or struggled with your instinct. If you
+// can, mark XP" and "say how your relationship ... has changed. If you can, mark XP". Then praise and a wish
+// for future sessions: "The GM will take notes", kept on the character and shown next time.
+describe("each character's own XP, and their praise and wish", () => {
+	it("marks a character's instinct and relationship XP on top of the group's", async () => {
+		const torwyn = pc("Torwyn", 3), bryn = pc("Bryn", 5);
+		roster.chars = [torwyn, bryn];
+		const { dialog, confirm } = opened(1);
+		dialog._personal.Torwyn = { instinct: true, relationship: true };
+		dialog._personal.Bryn = { instinct: false, relationship: true };
+
+		await confirm({ currentTarget: { disabled: false } });
+
+		expect(torwyn.update).toHaveBeenCalledTimes(1);
+		expect(torwyn.system.attributes.xp.value).toBe(6);
+		expect(bryn.system.attributes.xp.value).toBe(7);
+		const card = ChatMessage.create.mock.calls[0][0].content;
+		expect(card).toContain("<strong>Torwyn</strong> marked <strong>+3 XP</strong>");
+		expect(card).toContain("<strong>Bryn</strong> marked <strong>+2 XP</strong>");
+	});
+
+	it("pays a character's own XP when the table answered no to every group question", async () => {
+		const torwyn = pc("Torwyn", 3), bryn = pc("Bryn", 5);
+		roster.chars = [torwyn, bryn];
+		const { dialog, confirm } = opened(0);
+		dialog._personal.Torwyn = { instinct: true, relationship: false };
+		expect(dialog.getData()).toMatchObject({ canAward: true });
+
+		await confirm({ currentTarget: { disabled: false } });
+
+		expect(torwyn.system.attributes.xp.value).toBe(4);
+		expect(bryn.update).not.toHaveBeenCalled();
+	});
+
+	it("pays no one's own XP who is not ticked as at the table", async () => {
+		const torwyn = pc("Torwyn", 3);
+		roster.chars = [torwyn];
+		const { dialog, confirm } = opened(0);
+		dialog._pcChecks.Torwyn = false;
+		dialog._personal.Torwyn = { instinct: true, relationship: true };
+
+		await confirm({ currentTarget: { disabled: false } });
+
+		expect(torwyn.update).not.toHaveBeenCalled();
+	});
+
+	it("keeps each praise and wish on its character, and shows the last one next time", async () => {
+		const torwyn = Object.assign(pc("Torwyn", 3), {
+			flags: { "stonetop-pwd": { sessionWishes: [{ at: 1, text: "Less sewers" }] } },
+		});
+		roster.chars = [torwyn];
+		const { dialog, confirm } = opened(0);
+		expect(dialog.getData().pcs[0]).toMatchObject({ lastWish: "Less sewers", note: "" });
+		dialog._notes.Torwyn = "  More dragons, and Vahid's mother  ";
+
+		await confirm({ currentTarget: { disabled: false } });
+
+		expect(torwyn.update).toHaveBeenCalledWith({
+			"flags.stonetop-pwd.sessionWishes": [{ at: 1, text: "Less sewers" }, { at: expect.any(Number), text: "More dragons, and Vahid's mother" }],
+		});
 	});
 });

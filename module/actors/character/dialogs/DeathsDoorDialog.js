@@ -7,7 +7,7 @@ import { guideRailStep } from "../../../utils/guide-rail.js";
 import {
 	DEATHS_DOOR_FLAG, DEATHS_DOOR_ROLL_FLAG, DEATHS_DOOR_ROLL_STALE_MS, DEATHS_DOOR_STATE, HARD_TO_KILL,
 	HARD_TO_KILL_TRADE_FLAG, NEVER_GONNA_KEEP_ME_DOWN, deathsDoorCardTier, deathsDoorCardTierShift,
-	deathsDoorRollWatch, zeroHpMove,
+	deathsDoorRollWatch, lastMoveChoices, makeLastMove, zeroHpMove,
 } from "../deaths-door.js";
 import {
 	clearDeathsDoorRollMarker, deathsDoorRollCard, deathsDoorRollClock, deathsDoorRollMarker, deathsDoorRollPosted,
@@ -25,9 +25,10 @@ import { postDyingCard } from "../../../hooks/DeathsDoorPrompt.js";
 import { format, localize } from "../../../utils/i18n.js";
 import { rollRewrite } from "../../../utils/roll-rewrite.js";
 import { rollCardRoute } from "../../../utils/roll-card-writer.js";
+import { moveRollable } from "../../../utils/move-rollable.js";
 import { boostButtonFace, boostNote, boostsOn, deathsDoorPlusOnes, pressBoost } from "../roll-boosts.js";
 import { BURN_BRIGHTLY_COST } from "../burn-brightly.js";
-import { GAVE_IT_ALL_FLAG, GIVE_IT_ALL_COSTS, IMPETUOUS_YOUTH, askGiveItAllCost, giveItAllAtDeathsDoor } from "../impetuous-youth.js";
+import { GAVE_IT_ALL_FLAG, GIVE_IT_ALL_COSTS, IMPETUOUS_YOUTH, askGiveItAllCost, giveItAllAtDeathsDoor, rollGiveItAllHurt } from "../impetuous-youth.js";
 
 // The move itself (name + trigger), from the 0-HP routing table that every other surface reads.
 // The trigger is a rule the player is being asked to act on, so the walkthrough, its roll card
@@ -342,7 +343,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 		// Reopened on an unresolved 6-: the roll is spent, so resume at the fates rather than
 		// offering a fresh one. The GM asking "why do you refuse?" is exactly the pause that
 		// sends a player back out of this dialog and into the conversation.
-		this._step = this._fatePending ? "result" : "roll";   // "roll" | "result" | "fate" | "choices"
+		this._step = this._fatePending ? "result" : "roll";   // "roll" | "result" | "fate" | "lastMove" | "choices"
 		// What the insert asks for once one is taken. Loaded on the way into the "choices" step
 		// (it reaches the compendium), null everywhere else.
 		this._choices = null;
@@ -468,7 +469,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 	_mood() {
 		// Both post-6- steps are past the Door by definition — the fate fork, and the walkthrough
 		// of what the insert they took now asks of them.
-		if (this._step === "fate" || this._step === "choices" || this._fatePending) return _MOODS.door;
+		if (this._step === "fate" || this._step === "lastMove" || this._step === "choices" || this._fatePending) return _MOODS.door;
 		if (this._step !== "result") return _MOODS.dusk;
 		const key = this._landedTier();
 		if (key === "success") return _MOODS.returned;
@@ -548,6 +549,9 @@ export class DeathsDoorDialog extends StonetopDialog {
 			isResult:  !watch && this._step === "result",
 			isFate:    !watch && this._step === "fate",
 			isChoices: !watch && this._step === "choices",
+			// The last move before the Last Door: their own moves that roll, one to post at 12+.
+			isLastMove: !watch && this._step === "lastMove",
+			lastMoves:  this._lastMoves ?? [],
 
 			// Another owner's roll, while it is on the table: who, and the result so far. No dice here.
 			isWatching: !!watch,
@@ -686,6 +690,11 @@ export class DeathsDoorDialog extends StonetopDialog {
 			this._onChooseFate(ev.currentTarget.dataset.fate).catch(err => this._onFateFailed(err)));
 		html.find(".deaths-door-insert-btn").on("click", (ev) =>
 			this._onTakeInsert(ev.currentTarget.dataset.slug).catch(err => this._onFateFailed(err)));
+		// The last move, picked and made at 12+, or none (made in the fiction): either way, then the Door.
+		html.find(".deaths-door-last-move-btn").on("click", () =>
+			this._onMakeLastMove(html.find(".deaths-door-last-move-pick").val()).catch(err => this._onFateFailed(err)));
+		html.find(".deaths-door-step-through-btn").on("click", () =>
+			this._onStepThrough().catch(err => this._onFateFailed(err)));
 
 		// The rail down the side of the last step, and the pair of buttons that walk it. Navigation
 		// is this window's, not the chooser's: the rules table knows what the questions are, and
@@ -1069,6 +1078,8 @@ export class DeathsDoorDialog extends StonetopDialog {
 		}
 		this._rolledTotal = answer.total;
 		if (answer.tierShift) this._tierShift = answer.tierShift;
+		// The GM lifted the card and left "you get hurt"'s 2d4 to this client (deaths-door-relay.js).
+		if (boost === "giveAll" && cost === "hurt") await rollGiveItAllHurt(this._character?._actor);
 		this._boostNotes.push(note(answer.total));
 		await this._afterBoost(answer.tier ?? null, answer.total);
 	}
@@ -1707,8 +1718,49 @@ export class DeathsDoorDialog extends StonetopDialog {
 		if (fate.insert === "choice") { this._step = "fate"; this.render(true); return; }
 		if (fate.insert) return this._onTakeInsert(fate.insert);
 
-		// Step through the Last Door. Nothing on the sheet changes but the state — the last
-		// move is made in the fiction, at the table, as a 12+.
+		// "Make one last move as if you rolled a 12+, then step through the Last Door" (Book I p.75, p.245).
+		// The move first, picked from their own moves that roll and posted at 12+ (_onMakeLastMove); a
+		// move made in the fiction instead, or none at all, steps straight through (_onStepThrough).
+		// Nothing is written until one of those two: a window closed on the pick leaves the fate owed.
+		const moves = lastMoveChoices(this._character?._actor?.items ?? []);
+		if (moves.length) {
+			this._lastMoves = moves;
+			this._step = "lastMove";
+			this.render(true);
+			return;
+		}
+		return this._onStepThrough();
+	}
+
+	/**
+	 * The last move, at 12+ (deaths-door.js#makeLastMove), then the Last Door. "They can't use that last
+	 * move to avoid death": whatever the move does, they step through after it. Backed out of the move's
+	 * own prompts (a Clash's weapon, say), nothing is written and the pick stays open.
+	 */
+	async _onMakeLastMove(itemId) {
+		if (this._fateApplied || this._lastMoveMaking || this._noFateOwed()) return;
+		const actor = this._character?._actor;
+		const item = actor?.items?.get?.(itemId);
+		if (!item) return;
+		this._lastMoveMaking = true;
+		let made = false;
+		try {
+			made = await makeLastMove(this._character, item, {
+				rollable: moveRollable(item),
+				note: localize(`${_I18N}.lastMove.note`),
+			});
+		} finally {
+			this._lastMoveMaking = false;
+		}
+		if (!made) return this.renderIfOpen();
+		return this._onStepThrough();
+	}
+
+	/** Step through the Last Door: the state, and the card that says so. */
+	async _onStepThrough() {
+		if (this._fateApplied || this._noFateOwed()) return;
+		// Nothing on the sheet changes but the state. The last move, when there was one, is already
+		// on its own card at 12+ (_onMakeLastMove), or was made in the fiction.
 		//
 		// The latch is rolled back on a failed write, the same as _onTakeInsert below. Left set, a
 		// refused update (a player-owned actor whose permission the server declines, a dropped
@@ -1722,6 +1774,8 @@ export class DeathsDoorDialog extends StonetopDialog {
 			this._fateApplied = false;
 			throw err;
 		}
+		// Back to the result, which now says the fate is recorded.
+		if (this._step === "lastMove") this._step = "result";
 		await this._post(localize(`${_I18N}.chat.lastDoorTitle`), `<p>${format(`${_I18N}.chat.lastDoor`, { name: escHtml(this._actorName) })}</p>
 			<p class="stonetop-dying-trigger">${localize(`${_I18N}.chat.lastDoorRule`)}</p>`);
 		this.renderIfOpen();

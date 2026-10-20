@@ -161,7 +161,7 @@ describe("winter on On the Hoof", () => {
 		await sheet._onTheHoof();
 		return opened.at(-1)?.content ?? null;
 	}
-	const leanBox = html => /<input type="checkbox" name="lean"[^>]*>/.exec(html)?.[0] ?? "";
+	const leanBox = html => /<input type="checkbox"[^>]*name="lean"[^>]*>/.exec(html)?.[0] ?? "";
 
 	it("ticks the winter-or-barren box in winter, and leaves it to the player otherwise", async () => {
 		worldWith(steadingIn("winter"));

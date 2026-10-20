@@ -134,6 +134,10 @@ export class MinorArcanumSnapshot {
 		// sheet folds it behind a collapsible and shows it only when the front is the sole
 		// visible side (see showFrontConsequences).
 		this.consequences = b._consequences ?? null;
+		// A card whose unlock marks each buy a choice off its back (the Hec'tumel Codex's spells):
+		// `{name, owed, html}`, the list's name, the marks still owing a choice, and the learned
+		// choices' HTML for the front (null while none is learned). null for every other card.
+		this.unlockChoice = b._unlockChoice ?? null;
 		// The card is held (its slug is in `owned`) but no pack or world arcanum answers to it any
 		// more: a homebrew card the GM deleted. The tab draws a stub with Remove rather than nothing,
 		// or the held slug and its marks would linger with no way to clear them.
@@ -156,6 +160,7 @@ export class MinorArcanumSnapshotBuilder {
 	withSummonFollowers(v) { this._summonFollowers = v; return this; }
 	withGreaterConduit(v) { this._greaterConduit = v; return this; }
 	withConsequences(v) { this._consequences = v; return this; }
+	withUnlockChoice(v) { this._unlockChoice = v; return this; }
 	withMissing(v)     { this._missing    = v; return this; }
 	build()            { return new MinorArcanumSnapshot(this); }
 }

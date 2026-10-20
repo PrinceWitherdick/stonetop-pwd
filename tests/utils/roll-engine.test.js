@@ -619,28 +619,61 @@ describe("a 7-9 that counts as a 10+", () => {
 });
 
 // A Force to Be Reckoned With: "on a 12+ you turn the tables on them". Its note rides the 10+ row of a
-// roll that totals 12 or more, and a 10 or 11 (the same tier) says nothing more.
-describe("a line that prints on a 12+ only", () => {
+// roll that totals 12 or more, and a 10 or 11 (the same tier) shows nothing more. It FOLLOWS the final total
+// (the user's ruling, 2026-10-18), so it is on every card, hidden below 12, for a rewrite to show or hide
+// (force-final-total.test.js drives that).
+describe("a line that shows on a 12+ only", () => {
 	const hero = () => ({ type: "stonetop", name: "Wren", system: {} });
 	const NOTE = '<p class="stonetop-roll-offer-note">Turn the tables</p>';
+	const CRITICAL_ROW = /<div class="stonetop-roll-tier-action stonetop-roll-critical-action" data-tier="success" data-critical="true"( hidden="hidden")?>/;
 
-	it("prints on a 12, after the 10+ row's own actions", async () => {
+	it("shows on a 12, after the 10+ row's own actions", async () => {
 		rollTotal = 12;
 		await rollStat("dex", hero(), { statValue: 0, moveName: "Defy Danger", noXpOnMiss: true,
 			tierActions: { success: "<button>Own</button>" }, criticalActions: NOTE });
 		const flavor = rollMessages[0].flavor;
 		expect(flavor).toContain("Turn the tables");
+		expect(flavor.match(CRITICAL_ROW)[1]).toBeUndefined();
 		expect(flavor.indexOf("Own")).toBeLessThan(flavor.indexOf("Turn the tables"));
 	});
 
-	it("prints nothing on a 10 or an 11", async () => {
+	it("is kept hidden on a 10 or an 11", async () => {
 		for (const total of [10, 11]) {
 			rollMessages = [];
 			rollTotal = total;
 			await rollStat("dex", hero(), { statValue: 0, moveName: "Defy Danger", noXpOnMiss: true, criticalActions: NOTE });
 			expect(rollMessages[0].flavor).toContain("result success");
-			expect(rollMessages[0].flavor).not.toContain("Turn the tables");
+			expect(rollMessages[0].flavor.match(CRITICAL_ROW)[1]).toBe(' hidden="hidden"');
 		}
+	});
+
+	it("leaves a card with no 12+ line without the row", async () => {
+		rollTotal = 12;
+		await rollStat("dex", hero(), { statValue: 0, moveName: "Defy Danger", noXpOnMiss: true });
+		expect(rollMessages[0].flavor).not.toContain("stonetop-roll-critical-action");
+		expect(rollMessages[0].flavor).not.toContain("stonetop-roll-tier-actions");
+	});
+});
+
+// Death's Door's 6-: "Make one last move as if you rolled a 12+" (Book I p.245). No dice: the total is
+// given, with nothing added to it, and the card reads as a 12 throughout, its 12+ line too.
+describe("a move made as if rolled", () => {
+	const hero = () => ({ type: "stonetop", name: "Wren", system: {} });
+	const NOTE = '<p class="stonetop-roll-offer-note">Turn the tables</p>';
+
+	it("rolls the given total, with no stat, modifier or advantage on it, and names why", async () => {
+		rollTotal = 12;
+		await rollStat("dex", hero(), {
+			statValue: 3, modifier: 2, ongoing: 2, rollMode: "dis", moveName: "Clash", noXpOnMiss: true,
+			asIfTotal: 12, conditionNotes: ["Death's Door: one last move, as if rolled 12+"], criticalActions: NOTE,
+		});
+		expect(rollInstances[0].formula).toBe("12");
+		const flavor = rollMessages[0].flavor;
+		expect(flavor).toContain("result success");
+		expect(flavor).toContain("Turn the tables");
+		expect(flavor).toContain("one last move, as if rolled 12+");
+		expect(flavor).not.toContain("Disadvantage");
+		expect(flavor).not.toContain("Ongoing");
 	});
 });
 

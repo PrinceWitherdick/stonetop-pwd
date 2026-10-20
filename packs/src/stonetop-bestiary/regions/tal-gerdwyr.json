@@ -33,6 +33,7 @@
   "prototypeToken": {
     "width": 3,
     "height": 3,
+    "depth": 3,
     "name": "Tal Gerdwyr",
     "actorLink": false,
     "disposition": -1,

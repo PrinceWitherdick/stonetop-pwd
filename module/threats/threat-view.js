@@ -75,6 +75,8 @@ export async function buildThreatCardVM(page, { forOwner } = {}) {
 		hasCustomMoves: customPlayerMoves.length > 0,
 		nested,
 		hasNested: nested.length > 0,
+		// Crossed off the tracker (Book I p.299): drawn greyed, and kept off the active board.
+		resolved: !!sys.resolved,
 		isOwner: forOwner ?? page.isOwner,
 	};
 }
@@ -104,6 +106,60 @@ export function wireThreatDoomChange(root, resolvePage) {
 		// first) must not ask, or write a row the page does not bear out.
 		if (wrote) await threatOnTimeline(page, { doom, index, done: chk.checked });
 	});
+}
+
+/**
+ * Wire a card's "Give to players" buttons on a delegated `root` (card-player-moves.hbs): a threat's
+ * or hazard's custom player move, opened in the custom-move editor filled in with it, which saves it
+ * as a world move the players can drag onto their sheets. Book I p.294 (a threat's player-facing
+ * moves) and p.388 (a hazard's: "When the PCs encounter the hazard and the move becomes relevant,
+ * share it with the players").
+ *
+ * The CUSTOM MOVE flow rather than a love letter: a love letter is one roll put to one player, once
+ * (Book I p.568), while these moves are triggered whenever the fiction says so, by whoever meets
+ * them, which is what a move on the sheet is. The editor also lets the GM add the roll and the
+ * 10+/7-9/6- text so it rolls like any other move. Loaded on the click, so the card hosts do not
+ * pull the editor in to draw a card.
+ */
+export function wireSharePlayerMoves(root, resolvePage) {
+	root.addEventListener("click", async ev => {
+		const btn = ev.target.closest?.(".threat-player-move__share");
+		if (!btn || !globalThis.game?.user?.isGM) return;
+		ev.preventDefault();
+		ev.stopPropagation();
+		const page = await resolvePage(btn);
+		const move = page?.system?.customPlayerMoves?.[Number(btn.dataset.moveIndex)];
+		if (!move) return;
+		const { CustomMoveDialog, worldMoveSaver } = await import("../actors/character/dialogs/CustomMoveDialog.js");
+		new CustomMoveDialog(worldMoveSaver(), { seed: sharedMoveSeed(move, page.name) }).render(true);
+	});
+}
+
+/**
+ * What the editor opens filled in with: the move's label as its name (or "<threat>: player move"
+ * for one the GM never named), and its text as the description, which the editor reads back to
+ * plain text (custom-move-text.js#customMoveDescriptionToPlainText).
+ */
+export function sharedMoveSeed(move, ownerName = "") {
+	const name = String(move?.label ?? "").trim() || (ownerName ? `${ownerName}: player move` : "");
+	return { name, system: { description: String(move?.text ?? "") } };
+}
+
+/**
+ * Everything a GM-prep card (threat, hazard, site) does wherever it is drawn, on a delegated `root`, in ONE
+ * call per host: its doom track (wireThreatDoomChange), its "Give to players" buttons (wireSharePlayerMoves),
+ * and the controls only its kind carries, `wireExtras(root, resolvePage)`: one kind's `wireCard` on a page
+ * sheet, every kind's (journal/gm-prep-page.js#wireGmPrepCardExtras) on a host that draws them all. Each is
+ * guarded on its own markup, so a card without the control is untouched.
+ *
+ * @param {HTMLElement} root
+ * @param {(el:HTMLElement) => any} resolvePage  the page (or a promise of it) for a ticked or clicked element
+ * @param {(root:HTMLElement, resolvePage:Function) => void} [wireExtras]
+ */
+export function wireGmPrepCard(root, resolvePage, wireExtras = null) {
+	wireThreatDoomChange(root, resolvePage);
+	wireSharePlayerMoves(root, resolvePage);
+	wireExtras?.(root, resolvePage);
 }
 
 /** The timeline row a threat's doom (or one portent) coming to pass is kept under. */

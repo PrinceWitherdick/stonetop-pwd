@@ -11,6 +11,10 @@
 		{{!-- The Marshal's Logistics, ticked for a character who has it learned. --}}
 		<label class="stonetop-requisition-herd stonetop-requisition-logistics"><input type="checkbox" class="stonetop-check" name="logistics" checked><span>{{logistics}}</span></label>
 		{{/if}}
+		{{#if nervesNote}}
+		{{!-- We Happy Few's 6-: said, not asked; the roll takes the disadvantage on its own. --}}
+		<p class="stonetop-requisition-herd stonetop-requisition-nerves"><em>{{nervesNote}}</em></p>
+		{{/if}}
 		{{#each advantageAsks}}
 		{{!-- An improvement's asked advantage on Requisition: unticked, the table's call. --}}
 		<label class="stonetop-requisition-herd stonetop-requisition-advantage"><input type="checkbox" class="stonetop-check" name="{{name}}"><span>{{label}}</span></label>

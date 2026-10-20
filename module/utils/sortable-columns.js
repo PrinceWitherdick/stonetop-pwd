@@ -62,19 +62,25 @@ function elementUnderPointer() {
  * Clicking a column cycles: unsorted -> ascending -> descending -> ascending...
  * Clicking a different column starts it ascending.
  *
+ * A table with no header and `data-sort="name"` (the steading's People cards, whose rows
+ * are not columns any more) has nothing to click: its rows simply stay A-Z by name, with
+ * the same don't-move-under-the-pointer guard. Each row then names itself in
+ * `data-sort-name`, since its name sits deep inside the card rather than in a cell.
+ *
  * @param {HTMLElement} table       - the `.steading-residents-table` wrapper
  * @param {string}      storageKey  - unique key (e.g. "players", "residents", "neighbors")
  */
 export function makeColumnsSortable(table, storageKey) {
-	const grid = resolveResidentsGrid(table);
-	if (!grid) return;
-	const { header, list } = grid;
+	const byNameOnly = table?.dataset.sort === "name";
+	const header = byNameOnly ? null : resolveResidentsGrid(table)?.header;
+	const list = table?.querySelector(":scope > .steading-residents-list");
+	if (!list || (!byNameOnly && !header)) return;
 
 	// Sortable columns are every header cell that carries a label; the trailing
 	// actions column has none and is skipped.
-	const headerCells = Array.from(header.children)
-		.filter(cell => cell.querySelector(":scope > .steading-residents-header-label"));
-	if (!headerCells.length) return;
+	const headerCells = header ? Array.from(header.children)
+		.filter(cell => cell.querySelector(":scope > .steading-residents-header-label")) : [];
+	if (!headerCells.length && !byNameOnly) return;
 
 	// Idempotent, for the same reason makeColumnsResizable is: a table reachable by both a
 	// sheet's generic wiring loop and a shared component's own must not end up with two
@@ -93,12 +99,16 @@ export function makeColumnsSortable(table, storageKey) {
 
 	const storageId = `${STORAGE_PREFIX}${storageKey}`;
 	let state = null;
-	const saved = readStoredColumnState(storageId);
+	const saved = byNameOnly ? null : readStoredColumnState(storageId);
 	if (saved && typeof saved.col === "string" && (saved.dir === "asc" || saved.dir === "desc")) state = saved;
 
 	const persist = () => writeStoredColumnState(storageId, state);
 
+	const nameClass = "steading-residents-col-name";
+	if (byNameOnly) state = { col: nameClass, dir: "asc" };
+
 	const valueOf = (row, colClass) => {
+		if (colClass === nameClass && row.dataset.sortName !== undefined) return row.dataset.sortName.trim();
 		const cell = row.querySelector(`:scope > .${colClass}`);
 		if (!cell) return "";
 		// An editable cell sorts on what's typed in it — but only for value-carrying
@@ -109,8 +119,6 @@ export function makeColumnsSortable(table, storageKey) {
 		const raw = input ? input.value : cell.textContent;
 		return (raw ?? "").trim();
 	};
-
-	const nameClass = "steading-residents-col-name";
 
 	// Stable per-row identity across renders: the relationship tables key rows by actor id,
 	// the steading's by the row's index in the underlying flag array (sorting is purely

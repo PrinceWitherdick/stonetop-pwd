@@ -1114,9 +1114,14 @@ const SORTED_ENTRY_PREFIXES = Object.keys(PREFIX_ENTRIES).sort((a, b) => b.lengt
 // otherwise read "Initiate details set to eager" through initiateDetailEntry.
 // `party` / `initiatesParty` / `beastParty` are any follower card's "in the party" toggle
 // (follower-party.js): quiet on every card, as the custom card's always was.
-const BOOKKEEPING_KEY = /\.(?:-=)?(img|portraitFrame|actorUuid|extraTags|droppedTags|party|initiatesParty|beastParty)(\.|$)/;
+// `outfit` is what a follower's Outfit came to (follower-outfit.js), said on the card; `dead` a single
+// follower's Fallen mark (follower-fate.js#followerDeadPath), which the fate's chat card already records.
+// Both quiet, as a custom follower's own `dead` always was. A follower's `conditions` (follower-conditions.js)
+// are quiet too, except the animal companion's, whose Loyal to the End "injured" has its own line.
+const BOOKKEEPING_KEY = /\.(?:-=)?(img|portraitFrame|actorUuid|extraTags|droppedTags|party|initiatesParty|beastParty|outfit|dead|followerCostPaid)(\.|$)/;
+const QUIET_CONDITIONS = /\.(?:initiateDetails\.[^.]+|beastDetails\.[^.]+|customFollowers\.[^.]+|crew\.details)\.conditions(\.|$)/;
 const isBookkeepingPath = (path) =>
-	path.startsWith(`flags.${LEDGER_SCOPE}.`) && BOOKKEEPING_KEY.test(path);
+	path.startsWith(`flags.${LEDGER_SCOPE}.`) && (BOOKKEEPING_KEY.test(path) || QUIET_CONDITIONS.test(path));
 
 function granularEntriesForPath(path, oldValue, newValue, names, ctx) {
 	if (isBookkeepingPath(path)) return [];

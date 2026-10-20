@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { normalizeEntry, patchEntry } from "../../module/timeline/timeline-core.js";
 import { buildTrackVM } from "../../module/timeline/timeline-view.js";
 import { readRepo, stripComments } from "../fakes/css.js";
+import { actorLinkHtml } from "../../module/utils/actor-link.js";
 
 // TYING AN ENTRY BACK TO THE REST OF THE WORLD. Two halves, and they fail in different ways:
 //
@@ -185,7 +186,13 @@ describe("the account takes a drop too", () => {
 	// @UUID in one resolved; but the field is a plain textarea and nobody hand-types a document id.
 	it("builds an @UUID link from what was dropped", () => {
 		const source = stripComments(readRepo("module/dialogs/TimelineEntryDialog.js"));
-		expect(source, "the body drop does not build a UUID link").toContain("@UUID[");
+		expect(source, "the body drop does not build a UUID link").toContain("actorLinkHtml(dropped)");
+	});
+
+	// Written into HTML, and a label ends at its first `}`: the name is escaped, or left off.
+	it("writes a link a name can't break", () => {
+		expect(actorLinkHtml({ uuid: "Actor.x", name: "Bran {the Red}" })).toBe("@UUID[Actor.x]");
+		expect(actorLinkHtml({ uuid: "Actor.x", name: "A <b>" })).toBe("@UUID[Actor.x]{A &lt;b&gt;}");
 	});
 
 	// Inserted at the cursor rather than appended, or a drop mid-sentence lands at the end.

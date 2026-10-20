@@ -14,6 +14,22 @@ export function getDragEventData(ev) {
 }
 
 /**
+ * Is this world's launch aware of an Actor subtype?
+ *
+ * `game.model` (what `Actor.TYPES` reads and what the document validator checks a `type` against)
+ * is built by the SERVER from the system manifest at WORLD LAUNCH, so a table that updated the
+ * system and pressed F5 is running new code against an old type list, and a create throws a
+ * DataModelValidationError that says nothing about relaunching. True when the list is unavailable
+ * (older cores, the unit tests), so this only ever stops a create it is sure would fail.
+ * @param {string} type
+ * @returns {boolean}
+ */
+export function isActorTypeAvailable(type) {
+	const types = globalThis.game?.documentTypes?.Actor;
+	return !Array.isArray(types) || types.includes(type);
+}
+
+/**
  * Does this path point at a video rather than a still image? V13 moved VideoHelper under
  * `foundry.helpers.media`; fall back to the global, then to the extension list core itself
  * uses (which also covers a headless test with no Foundry globals at all).

@@ -567,7 +567,10 @@ describe("a site card folds its body into four", () => {
 	});
 
 	it("draws all four folds from the one registered partial", () => {
-		expect(CARD.match(/\{\{#> "stonetop\.site-group"/g)).toHaveLength(SITE_CARD_GROUP_IDS.length);
+		// The four written-up folds, and the "Running it" reference fold every site wears (Book I
+		// p.348, `runGroup`), which is drawn through the same partial.
+		expect(CARD.match(/\{\{#> "stonetop\.site-group"/g)).toHaveLength(SITE_CARD_GROUP_IDS.length + 1);
+		expect(CARD).toContain('{{#> "stonetop.site-group" group=runGroup}}');
 		expect(STONETOP_JS).toContain("stonetop.site-group");
 		expect(repoFileExists("templates/journal/partials/site-group.hbs")).toBe(true);
 		// The <details> and its body live in the partial, so the card never writes either.

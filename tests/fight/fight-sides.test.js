@@ -65,9 +65,20 @@ describe("classifySide", () => {
 		expect(classifySide({ type: "npc", disposition: NEUTRAL })).toEqual({ side: "foes", list: "others" });
 	});
 
-	it("never makes a combatant of the steading or the GM Toolkit", () => {
+	it("never makes a combatant of the steading, a settlement or the GM Toolkit", () => {
 		expect(classifySide({ type: "stonetop" })).toBeNull();
+		expect(classifySide({ type: "settlement" })).toBeNull();
 		expect(classifySide({ type: "gmToolkit", hasPlayerOwner: true })).toBeNull();
+	});
+
+	it("never makes a combatant of a type it does not know, such as one a module adds", () => {
+		expect(classifySide({ type: "vehicle", disposition: HOSTILE })).toBeNull();
+		expect(classifySide({ type: "vehicle", hasPlayerOwner: true })).toBeNull();
+	});
+
+	it("still places a body with no type at all, as an NPC would be", () => {
+		expect(classifySide({ disposition: HOSTILE })).toEqual({ side: "foes", list: "others" });
+		expect(classifySide({ type: "", hasPlayerOwner: true })).toEqual({ side: "heroes", list: "heroes" });
 	});
 
 	it("swaps sides", () => {

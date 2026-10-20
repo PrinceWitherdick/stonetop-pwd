@@ -7,13 +7,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Window } from "happy-dom";
 import {
 	GIVE_ADVANTAGE_MOVES, giveAdvantageRollOptions, giveAdvantageCardHtml, givenSource, advantageRecipients, SEEK_INSIGHT_QUESTIONS,
+	seekInsightQuestionsFor,
 } from "../../../module/actors/character/give-advantage.js";
+import { MOVE_PICK_BONUSES } from "../../../module/actors/character/move-pick-bonuses.js";
 import {
-	giveAdvantage, handleGiveAdvantageQuery, offerAdvantage, reconcileGivenAdvantage, wireGiveAdvantage, GIVE_ADVANTAGE_QUERY, GIVEN_FLAG, GIVING_FLAG,
+	giveAdvantage, handleGiveAdvantageQuery, offerAdvantage, reconcileGivenAdvantage, wireGiveAdvantage, wireFocusFire, GIVE_ADVANTAGE_QUERY, GIVEN_FLAG, GIVING_FLAG, FOCUS_FIRE_CARD_FLAG,
 } from "../../../module/actors/character/give-advantage-flow.js";
 import { reconcileTierEffects } from "../../../module/actors/character/tier-effects.js";
 import { ROLLED_FLAG, rolledRecord } from "../../../module/utils/counted-tier.js";
-import { moveRollOptions } from "../../../module/actors/character/move-roll-options.js";
+import { GIVE_ADVANTAGE_ROLL_OPTIONS, moveRollOptions } from "../../../module/actors/character/move-roll-options.js";
 import { buildLiveCharacter, makeLiveItem, sourceMovesFor } from "../../fakes/LiveCharacter.js";
 import { readRepo } from "../../fakes/css.js";
 
@@ -411,5 +413,216 @@ describe("a gift whose roll card moves off its tier", () => {
 			globalThis.fromUuidSync = was;
 		}
 		expect(b.typedActor.releaseHeldAdvantage).toHaveBeenCalledWith("s's Everything Burns");
+	});
+});
+
+// Coverage pass (2026-10-16): the same "advantage on your next roll" printed by a basic move and seven
+// playbook moves, each left as text while its siblings above held it (Book I pp.73, 110-127, 228).
+describe("Seek Insight, Danger Sense, Ambush, Knowledge is Power, Frosty, Speak Softly and Set-Up Strike", () => {
+	it("puts Seek Insight's own hold on both hitting tiers, for the roller alone", () => {
+		const roller = pc({ id: "r", moves: ["Seek Insight"] });
+		const options = moveRollOptions("Seek Insight", roller);
+		expect(Object.keys(options.tierActions)).toEqual(["success", "partial"]);
+		expect(options.tierActions.partial).toContain("Hold advantage (Seek Insight)");
+		expect(advantageRecipients(roller, "Seek Insight", [pc({ id: "b" })]).map(a => a.id)).toEqual(["r"]);
+	});
+
+	it("puts Danger Sense's hold on its 7+, and Ambush's opportunity (you or an ally) on its 7+", () => {
+		const fox = pc({ id: "f", moves: ["Danger Sense", "Ambush"] });
+		expect(Object.keys(moveRollOptions("Danger Sense", fox).tierActions)).toEqual(["success", "partial"]);
+		expect(moveRollOptions("Danger Sense", fox).tierActions.success).toContain("Hold advantage (Danger Sense)");
+		expect(Object.keys(moveRollOptions("Ambush", fox).tierActions)).toEqual(["success", "partial"]);
+		expect(moveRollOptions("Ambush", fox).tierActions.success).toContain("Give advantage to...");
+		expect(moveRollOptions("Ambush", pc({ id: "x" }))).toBeNull();
+	});
+
+	it("puts Knowledge is Power on Know Things' 10+ alone, and Frosty's question and hold on Defy Danger's 10+", () => {
+		const judge = pc({ id: "j", moves: ["Knowledge is Power"] });
+		const know = moveRollOptions("Know Things", judge);
+		expect(Object.keys(know.tierActions)).toEqual(["success"]);
+		expect(know.tierActions.success).toContain('data-move="Knowledge is Power"');
+		const heavy = pc({ id: "h", moves: ["Frosty"] });
+		const defy = moveRollOptions("Defy Danger", heavy);
+		expect(Object.keys(defy.tierActions)).toEqual(["success"]);
+		expect(defy.tierActions.success).toContain("Hold advantage (Frosty)");
+		for (const question of SEEK_INSIGHT_QUESTIONS) expect(defy.tierActions.success).toContain(question);
+	});
+
+	// Heavy re-audit (the user's ruling of 2026-10-18): Frosty asks "a question that you could ask when Seeking
+	// Insight", and Situational Awareness adds three to that list, so a Heavy who learned it sees them on the
+	// line too. Resourceful asks "a question from Seek Insight", the same list.
+	it("lists Situational Awareness's questions on Frosty's and Resourceful's lines for a roller who learned it", () => {
+		const awareness = MOVE_PICK_BONUSES.find(row => row.ownsLearned === "Situational Awareness").addOptions;
+		expect(awareness).toHaveLength(3);
+		const lines = roller => [
+			moveRollOptions("Defy Danger", roller).tierActions.success,
+			moveRollOptions("Defy Danger", roller).tierActions.failure,
+		];
+		for (const line of lines(pc({ id: "h", moves: ["Frosty", "Resourceful", "Situational Awareness"] }))) {
+			for (const question of [...SEEK_INSIGHT_QUESTIONS, ...awareness]) expect(line).toContain(question);
+		}
+		for (const without of [pc({ id: "h", moves: ["Frosty", "Resourceful"] }),
+			pc({ id: "h", moves: ["Frosty", "Resourceful", "Situational Awareness"], unlearned: ["Situational Awareness"] })]) {
+			for (const line of lines(without)) {
+				for (const question of SEEK_INSIGHT_QUESTIONS) expect(line).toContain(question);
+				for (const question of awareness) expect(line).not.toContain(question);
+			}
+		}
+		expect(seekInsightQuestionsFor(null)).toEqual([...SEEK_INSIGHT_QUESTIONS]);
+	});
+
+	// Fox re-audit (2026-10-18): Burgle's "Ask a Seek Insight question about what you saw" is a pick on both
+	// hits, so the questions it may ask are printed on both, and on no other tier.
+	it("lists Seek Insight's questions on Burgle's 10+ and 7-9, The Natural's among them for a Fox who took it", () => {
+		const burgle = moveRollOptions("Burgle", pc({ id: "f", moves: ["Burgle"] }));
+		expect(Object.keys(burgle.tierActions)).toEqual(["success", "partial"]);
+		for (const tier of ["success", "partial"]) {
+			expect(burgle.tierActions[tier]).toContain("Ask a Seek Insight question about what you saw");
+			for (const question of SEEK_INSIGHT_QUESTIONS) expect(burgle.tierActions[tier]).toContain(question);
+			expect(burgle.tierActions[tier]).not.toContain("What opportunity does no one else see?");
+		}
+		const natural = { ...pc({ id: "f", moves: ["Burgle"] }), system: { playbook: { name: "The Fox" } },
+			flags: { [SCOPE]: { background: { selected: "the-natural" } } } };
+		expect(moveRollOptions("Burgle", natural).tierActions.success).toContain("What opportunity does no one else see?");
+	});
+
+	// Marshal re-audit (2026-10-18): "advantage on your next roll AGAINST THEM", so not a held advantage on
+	// whatever roll comes next, but a button of its own that names the enemy (tests/fight/marshal-reaudit.test.js).
+	it("puts Speak Softly's own \"They refused\" button on its posted card, not a held advantage", () => {
+		const html = giveAdvantageCardHtml(pc({ id: "m", moves: ["Speak Softly"] }), "Speak Softly");
+		expect(html).toContain("stonetop-speak-softly");
+		expect(html).not.toContain("Hold advantage");
+		expect(GIVE_ADVANTAGE_MOVES["Speak Softly"]).toBeUndefined();
+		expect(giveAdvantageCardHtml(pc({ id: "x" }), "Speak Softly")).toBe("");
+	});
+
+	it("puts Read the Land's hold on its posted card, and Shake It Off's gift to the ally on its 7-9 alone", () => {
+		const marshal = pc({ id: "m", moves: ["Read the Land", "Shake It Off"] });
+		expect(giveAdvantageCardHtml(marshal, "Read the Land")).toContain("Hold advantage (Read the Land)");
+		const shake = moveRollOptions("Shake It Off", marshal);
+		expect(Object.keys(shake.tierActions)).toEqual(["partial"]);
+		expect(shake.tierActions.partial).toContain("Give advantage to another PC...");
+		expect(advantageRecipients(marshal, "Shake It Off", [marshal, pc({ id: "b" })]).map(a => a.id)).toEqual(["b"]);
+	});
+
+	it("puts Set-Up Strike's Aid on Clash's 7+, for another PC only", () => {
+		const marshal = pc({ id: "m", moves: ["Set-Up Strike"] });
+		const clash = moveRollOptions("Clash", marshal);
+		expect(Object.keys(clash.tierActions)).toEqual(["success", "partial"]);
+		expect(clash.tierActions.success).toContain("as if you provided Aid");
+		expect(advantageRecipients(marshal, "Set-Up Strike", [marshal, pc({ id: "b" })]).map(a => a.id)).toEqual(["b"]);
+	});
+
+	it("gives a roll with no item behind it the same buttons (Seek Insight about an artifact)", () => {
+		const roller = pc({ id: "r", moves: ["Seek Insight", "Frosty"] });
+		// The giving moves' own slice of the roll options (move-roll-options.js), which onDirectStatRoll asks.
+		const given = name => moveRollOptions(name, roller, null, GIVE_ADVANTAGE_ROLL_OPTIONS)?.tierActions ?? null;
+		expect(Object.keys(given("Seek Insight"))).toEqual(["success", "partial"]);
+		expect(given("Defy Danger").success).toContain('data-move="Frosty"');
+		expect(given("Persuade (vs. NPCs)")).toBeNull();
+		// The same buttons the item roll's full table gives those moves.
+		for (const name of ["Seek Insight", "Defy Danger"]) {
+			for (const [tier, html] of Object.entries(given(name))) expect(moveRollOptions(name, roller).tierActions[tier]).toContain(html);
+		}
+	});
+});
+
+// Stentorian (p.127): "Spend 1 Command to shout an order or warning and pick 1: PCs get advantage on their
+// next roll to do as you say". The posted card's button spends the Command and asks which PCs heard.
+describe("Stentorian's Command", () => {
+	function marshal(held) {
+		const m = pc({ id: "m", name: "Bryn", moves: ["Stentorian"] });
+		m.items[0].system = { resource: { max: 2, title: "Command" } };
+		const uses = { Stentorian: held };
+		m.typedActor.moveResources = {
+			getMoveResources: () => uses,
+			setUses: vi.fn(async (move, value) => { uses[move] = value; }),
+		};
+		return m;
+	}
+
+	it("is a button on its posted card", () => {
+		expect(giveAdvantageCardHtml(marshal(2), "Stentorian")).toContain("Spend 1 Command");
+	});
+
+	it("gives every PC ticked advantage and spends 1 Command once", async () => {
+		const m = marshal(2);
+		const a = pc({ id: "a", name: "Ash" });
+		const b = pc({ id: "b", name: "Bea" });
+		const card = message();
+		const pick = vi.fn(async () => ["a", "b"]);
+		expect(await offerAdvantage(card, m, "Stentorian", { pick, party: () => [a, b] })).toBe(true);
+		expect(pick.mock.calls[0][0].options.map(o => o.id)).toEqual(["a", "b"]);
+		expect(pick.mock.calls[0][0].multiple).toBe(true);
+		expect(a.typedActor.holdAdvantage).toHaveBeenCalledWith("Bryn's Stentorian");
+		expect(b.typedActor.holdAdvantage).toHaveBeenCalledWith("Bryn's Stentorian");
+		expect(m.typedActor.moveResources.setUses).toHaveBeenCalledWith("Stentorian", 1, { stonetopMove: "Stentorian" });
+		expect(card.getFlag(SCOPE, GIVEN_FLAG)).toMatchObject({ name: "Ash & Bea", several: true });
+	});
+
+	it("asks nothing and spends nothing with no Command held, or with nobody ticked", async () => {
+		const pick = vi.fn(async () => []);
+		const empty = marshal(0);
+		expect(await offerAdvantage(message(), empty, "Stentorian", { pick, party: () => [pc({ id: "a" })] })).toBe(false);
+		expect(pick).not.toHaveBeenCalled();
+		const m = marshal(2);
+		expect(await offerAdvantage(message(), m, "Stentorian", { pick, party: () => [pc({ id: "a" })] })).toBe(false);
+		expect(m.typedActor.moveResources.setUses).not.toHaveBeenCalled();
+	});
+});
+
+// Focus Fire (p.127): its posted card's button, pressed at the one foe targeted, gives the order.
+describe("Focus Fire's card", () => {
+	function rendered(flags = {}) {
+		const root = new Window().document.createElement("div");
+		root.innerHTML = giveAdvantageCardHtml(pc({ id: "m", moves: ["Focus Fire"] }), "Focus Fire");
+		return { root, card: message({ flags }), button: () => root.querySelector(".stonetop-focus-fire") };
+	}
+	const commandHeld = held => {
+		const m = pc({ id: "m", name: "Bryn", moves: ["Focus Fire", "Stentorian"] });
+		m.items[1].system = { resource: { max: 2 } };
+		m.typedActor.moveResources = { getMoveResources: () => ({ Stentorian: held }) };
+		return m;
+	};
+
+	it("is a button on Focus Fire's posted card, for a learned owner", () => {
+		expect(rendered().button()).not.toBeNull();
+		expect(giveAdvantageCardHtml(pc({ id: "x" }), "Focus Fire")).toBe("");
+	});
+
+	it("is wired on its own from the chat hook, not by the giving moves' wiring", () => {
+		expect(readRepo("stonetop.js")).toContain("wireFocusFire(message, html);");
+		const { root, card, button } = rendered();
+		wireGiveAdvantage(card, root, { giver: commandHeld(1), usable: true });
+		expect(button().dataset.focusWired).toBeUndefined();
+		wireFocusFire(card, [root], { giver: commandHeld(1), usable: true });
+		expect(button().dataset.focusWired).toBe("1");
+	});
+
+	it("orders the one targeted foe, writes it on the card, and asks for one target otherwise", async () => {
+		const savedChat = globalThis.ChatMessage;
+		globalThis.ChatMessage = { create: vi.fn(async () => ({})), getSpeaker: () => ({}) };
+		try {
+			const { root, card, button } = rendered();
+			const order = vi.fn(async (_m, foe) => ({ id: "m.1", key: foe.uuid, name: foe.name }));
+			let aimed = [];
+			wireFocusFire(card, root, { giver: commandHeld(1), usable: true, order, targets: () => aimed });
+			button().click();
+			expect(order).not.toHaveBeenCalled();
+			aimed = [{ name: "Crinwin", document: { uuid: "Scene.s.Token.c" } }];
+			button().click();
+			await vi.waitFor(() => expect(card.getFlag(SCOPE, FOCUS_FIRE_CARD_FLAG)).toEqual({ foe: "Crinwin" }));
+			expect(order.mock.calls[0][1]).toEqual({ uuid: "Scene.s.Token.c", name: "Crinwin" });
+		} finally {
+			globalThis.ChatMessage = savedChat;
+		}
+	});
+
+	it("orders nothing with no Command held", async () => {
+		const { root, card, button } = rendered();
+		const order = vi.fn();
+		wireFocusFire(card, root, { giver: commandHeld(0), usable: true, order, targets: () => [{ name: "Crinwin", document: { uuid: "u" } }] });
+		button().click();
+		expect(order).not.toHaveBeenCalled();
 	});
 });

@@ -9,7 +9,8 @@
 // `n.visible` is true. Threats/hazards are GM-only prep (the entry stays NONE-owned), so
 // a player never sees these pins and never gets a card; the overlay is effectively GM-only.
 import { getSetting } from "../settings.js";
-import { wireThreatDoomChange } from "./threat-view.js";
+import { wireGmPrepCard } from "./threat-view.js";
+import { isThreatResolved } from "./threat-store.js";
 import {
 	gmPrepCardTemplate, gmPrepCardVM, gmPrepPageById, isGmPrepDoc, wireGmPrepCardExtras,
 } from "../journal/gm-prep-page.js";
@@ -77,10 +78,9 @@ export class ThreatBoard {
 		const el = document.createElement("div");
 		el.className = "stonetop stonetop-threat-overlay";
 		parent.appendChild(el);
-		wireThreatDoomChange(el, chk => fromUuid(chk.closest(".threat-card")?.dataset.pageUuid ?? ""));
-		// Whatever controls each kind's own card carries (a site's random tables), so a pin of any
-		// kind behaves on the map exactly as it does in the journal.
-		wireGmPrepCardExtras(el, target => fromUuid(target.closest(".threat-card")?.dataset.pageUuid ?? ""));
+		// The doom track, "Give to players", and whatever controls each kind's own card carries (a site's
+		// random tables), so a pin of any kind behaves on the map exactly as it does in the journal.
+		wireGmPrepCard(el, target => fromUuid(target.closest(".threat-card")?.dataset.pageUuid ?? ""), wireGmPrepCardExtras);
 		this.layer = el;
 		return el;
 	}
@@ -100,7 +100,9 @@ export class ThreatBoard {
 		// (each page is independent) rather than serializing the enrichHTML calls.
 		const built = await Promise.all(this._threatNotes().map(async note => {
 			const page = this._pageFor(note);
-			if (!page) return null;
+			// A threat crossed off the tracker (Book I p.299) is off the active board: its pin may
+			// stay on the map, but its card no longer rides it.
+			if (!page || isThreatResolved(page)) return null;
 			const sig = this._cardSig(page);
 			const existing = this.cards.get(note.id);
 			if (existing && existing.sig === sig) return { note, sig, html: null }; // unchanged

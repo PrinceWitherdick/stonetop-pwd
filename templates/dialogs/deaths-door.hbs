@@ -249,6 +249,28 @@
 	</div>
 	{{/if}}
 
+	{{! "Make one last move as if you rolled a 12+, then step through the Last Door" (Book I p.245). }}
+	{{#if isLastMove}}
+	<div class="deaths-door-step deaths-door-step--last-move">
+		<p class="deaths-door-intro">{{localize "stonetop.specialMoves.deathsDoor.lastMove.intro"}}</p>
+		<label class="deaths-door-last-move-row">
+			<span class="deaths-door-roll-option-label">{{localize "stonetop.specialMoves.deathsDoor.lastMove.pick"}}</span>
+			<select class="deaths-door-last-move-pick">
+				{{#each lastMoves}}<option value="{{id}}">{{name}}</option>{{/each}}
+			</select>
+		</label>
+		<p class="deaths-door-roll-option-hint">{{localize "stonetop.specialMoves.deathsDoor.lastMove.hint"}}</p>
+		<div class="deaths-door-fates">
+			<button type="button" class="deaths-door-last-move-btn">
+				<span class="deaths-door-fate-label">{{localize "stonetop.specialMoves.deathsDoor.lastMove.make"}}</span>
+			</button>
+			<button type="button" class="deaths-door-step-through-btn">
+				<span class="deaths-door-fate-label">{{localize "stonetop.specialMoves.deathsDoor.lastMove.none"}}</span>
+			</button>
+		</div>
+	</div>
+	{{/if}}
+
 	{{#if isFate}}
 	<div class="deaths-door-step deaths-door-step--fate">
 		<h2 class="deaths-door-move-name">{{localize "stonetop.specialMoves.deathsDoor.fate.title"}}</h2>
@@ -385,7 +407,7 @@
 	{{/if}}
 	{{/if}}
 
-	{{#if isFate}}
+	{{#if (or isFate isLastMove)}}
 	<button class="deaths-door-cancel-btn" type="button">{{localize "stonetop.specialMoves.deathsDoor.buttons.cancel"}}</button>
 	{{/if}}
 

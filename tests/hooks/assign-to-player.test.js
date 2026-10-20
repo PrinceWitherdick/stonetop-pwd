@@ -28,6 +28,9 @@ beforeEach(() => {
 		pc: actor("pc", "character", ["wren"]),
 		home: actor("home", "stonetop"),
 		kit: actor("kit", "gmToolkit"),
+		town: actor("town", "settlement"),
+		mod: actor("mod", "vehicle"),
+		beast: actor("beast", "monster"),
 	};
 	users = [user("gm", { isGM: true }), user("wren", { character: actors.pc }), user("ash")];
 	global.game = {
@@ -51,12 +54,15 @@ describe("Assign to Player menu entry", () => {
 		expect(options.map(o => o.label)).toEqual(["SIDEBAR.Duplicate", "OWNERSHIP.Configure", "Assign to Player…", "SIDEBAR.Delete"]);
 	});
 
-	it("shows for a GM on an NPC or a character, not on the steading or the toolkit", () => {
+	it("shows for a GM on a person, not on the steading, a settlement, the toolkit or a module's type", () => {
 		const { visible } = assignToPlayerEntry();
 		expect(visible(row("npc"))).toBe(true);
 		expect(visible(row("pc"))).toBe(true);
+		expect(visible(row("beast"))).toBe(true);
 		expect(visible(row("home"))).toBe(false);
+		expect(visible(row("town"))).toBe(false);
 		expect(visible(row("kit"))).toBe(false);
+		expect(visible(row("mod"))).toBe(false);
 	});
 
 	it("is hidden from players", () => {

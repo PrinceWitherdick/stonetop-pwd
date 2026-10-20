@@ -69,6 +69,31 @@ export function withMinorRole(roles = {}, role, slug) {
 }
 
 /**
+ * Whether the minor roles are all given out: Mastered, Found and Lead each on a card, and no card
+ * in two of them (the book's "Choose one ... Choose another ... The third"). One half of
+ * onboarding's minor-arcana step; the other half is its three written questions (seekerMinorStepComplete).
+ */
+export function seekerMinorRolesAssigned(roles = {}) {
+	const s = seekerArcanaState({ minorRoles: roles }).minorRoles;
+	const slugs = SEEKER_MINOR_ROLES.map(role => s[role]).filter(Boolean);
+	return slugs.length === SEEKER_MINOR_ROLES.length && new Set(slugs).size === slugs.length;
+}
+
+/**
+ * Whether onboarding's "Minor Arcana & Questions" step is done. THE one rule, read both by the Next
+ * button (CharacterOnboardingDialog#_isStepComplete) and by the reopen that lands on the first
+ * unfinished page (#_isStepAnsweredForResume), so the two can't disagree. The page asks for two
+ * things: a role on each of the three drawn cards, and the answers under them ("Where is it now?
+ * How did you come to master it?", "Where is it? How did you find it?", the lead's note). The
+ * answers are counted by the same lore check every question page uses, passed in as
+ * `questionsAnswered`, since the "Minor Arcana" section states no "answer at least N" and so wants
+ * all three.
+ */
+export function seekerMinorStepComplete({ minorRoles = {}, questionsAnswered = false } = {}) {
+	return seekerMinorRolesAssigned(minorRoles) && !!questionsAnswered;
+}
+
+/**
  * The "mysteries" track on the front of a major arcanum's insert, which the Seeker has "begun to
  * unlock": a run of ○ on the unlock lead (most majors), or else the □ tasks in the front text (the
  * Mindgem, the Twisted Spear; see frontTaskTrack). Each marker carries the arcana box key it is

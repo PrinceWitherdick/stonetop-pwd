@@ -28,7 +28,7 @@
  */
 
 import { SYSTEM_ID } from "../../system-id.js";
-import { ownsMoveNamed, ownsAnyMoveNamed } from "./owns-move.js";
+import { ownsMoveNamed, ownsLearnedMoveNamed } from "./owns-move.js";
 import { createRoster, findNamedActor, actorMatchKeys, trailingActorId, showStandingList } from "./marked-people.js";
 
 // Re-exported so this playbook's tests and dialog keep reaching the predicates through the feature
@@ -63,9 +63,13 @@ const roster = createRoster({ prefix: "condemned", tokenScoped: true });
  * Proclamation widens Censure's reach to a whole group, and it requires Condemn, so in play a Judge
  * who can Proclaim can also brand; the gate still asks only Condemn, because Condemn is the only
  * move in the playbook that leaves a mark behind, so it is the only one that earns the icon.
+ *
+ * LEARNED, not just owned (2026-10-18 Judge re-audit): this is what lets a NEW brand be laid (the
+ * window's add form, and a Censure opening it), and a switched-off Condemn brands nobody. Brands
+ * already laid stay shown and dismissible either way (showCondemn reads the list's count).
  */
-export function canCondemn(actor, owned = null) {
-	return ownsAnyMoveNamed(actor, [CONDEMN], owned);
+export function canCondemn(actor) {
+	return ownsLearnedMoveNamed(actor, CONDEMN);
 }
 
 /**

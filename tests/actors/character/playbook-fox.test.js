@@ -23,6 +23,7 @@ import { CREATION_PICK_FLAG, STARTING_CHOICE_FLAG } from "../../../module/actors
 import { STONETOP_SCOPE } from "../../../module/actors/character/StonetopFlags.js";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { CharacterOnboardingDialog } from "../../../module/actors/character/dialogs/CharacterOnboardingDialog.js";
+import { loreTales } from "../../../module/actors/character/lore-pick-count.js";
 
 const SCOPE = "stonetop-pwd";
 const CLASH   = { key: "clash",   filter: isClashWeapon };
@@ -415,9 +416,20 @@ const FOX_RUN = (over = {}) => ({
 	...over,
 });
 
-// A Fox built the way onboarding builds one, from nothing.
+// A Fox built the way onboarding builds one, from nothing. The live harness's playbook leaves out the
+// starting-moves note on purpose (a climb's character never made its free pick, tests/fakes/LiveCharacter.js),
+// so its budget would be its level-ups alone and the free pick onboarding makes would read as one too many.
+// This Fox made that pick, so its playbook reads the note as the real one does (StonetopPlaybook#
+// startingMovesNote): "You start with Ambush OR Skill at Arms; Danger Sense OR Perceptive; and 1 of your choice."
 async function onboardedFox(run = FOX_RUN()) {
 	const made = buildLiveCharacter({ slug: "the-fox", name: "The Fox", level: 1, seedStartingMoves: false, stats: FOX_STATS });
+	const repo = made.char._playbookRepo;
+	const findBySlug = repo.findBySlug;
+	const startingMovesNote = PACK.get("the-fox").flags.stonetop.moves.startingMovesNote;
+	repo.findBySlug = async slug => {
+		const pb = await findBySlug(slug);
+		return pb ? { ...pb, startingMovesNote } : pb;
+	};
 	const sheet = sheetFor(made.char, made.actor);
 	await sheet._applyPlaybookSelections(pbDoc("the-fox"), run);
 	return { ...made, sheet };
@@ -562,6 +574,29 @@ describe("re-running onboarding keeps HP, and takes back an unticked possession"
 		expect(ownedMoveNames(actor)).toContain("Motley");
 		expect(ownedMoveNames(actor)).toContain("Picks");
 	});
+
+	// Fox re-audit (2026-10-18): the sheet takes in more write-ins than onboarding's one box, and a re-run
+	// keeps them (CharacterPossessions.js#onboardingWriteIns), so its pick total counts them as the sheet
+	// does. Over the count is flagged by the total, and the step still completes: never refused.
+	it("counts the write-ins the sheet added beyond the first, as the sheet does", async () => {
+		const { char, actor, sheet } = await onboardedFox(FOX_RUN({ possessions: ["tannery"], customPossession: "A forged writ" }));
+		const doc = pbDoc("the-fox");
+		const pickCount = doc.flags.stonetop.specialPossessions.pickCount;
+		expect(dialogFor("the-fox", sheet._readSelectionsFromActor(doc))._possessionPickTotal()).toBe(pickCount);
+
+		await char.addCustomPossession("A silver locket");
+		const sel = sheet._readSelectionsFromActor(doc);
+		expect(sel).toMatchObject({ customPossession: "A forged writ", keptWriteIns: ["A silver locket"] });
+		const d = dialogFor("the-fox", sel);
+		const overBy = char._buildPossessionsSnapshot(doc.flags.stonetop.specialPossessions, {}).overBy;
+		expect(overBy).toBe(1);
+		expect(d._possessionPickTotal()).toBe(pickCount + overBy);
+		expect(d._isStepComplete("possession")).toBe(true);
+
+		// Confirmed as read back, the re-run keeps both, so the sheet still counts what the dialog did.
+		await sheet._applyPlaybookSelections(doc, sel);
+		expect(actor.getFlag(STONETOP_SCOPE, "possessions.custom").map(c => c.label)).toEqual(["A forged writ", "A silver locket"]);
+	});
 });
 
 // ── Onboarding: the dialog ──────────────────────────────────────────────────────
@@ -627,7 +662,7 @@ describe("tall tales in onboarding", () => {
 
 	it("leaves a section with no `tales` alone", () => {
 		const d = dialogFor("the-blessed");
-		for (const s of d._rawLore) expect(d._loreTales(s)).toBe(1);
+		for (const s of d._rawLore) expect(loreTales(s)).toBe(1);
 	});
 
 	it("lets an option be taken twice, each take counting toward the section", () => {
@@ -689,9 +724,12 @@ describe("the Fox's playbook text, against the book", () => {
 	const st = PACK.get("the-fox").flags.stonetop;
 	const background = slug => st.backgrounds.find(b => b.slug === slug).description;
 
-	it("The Prodigal Returned lists what a 7-9 picks from", () => {
-		expect(background("the-prodigal-returned")).toContain("<ul><li>They still hold a grudge</li><li>They're going to need something from you first</li>"
-			+ "<li>They swore off this sort of thing long ago</li><li>You can't exactly, y'know, trust them</li></ul>");
+	it("The Prodigal Returned lists what a 7-9 picks from, and gives the move that rolls it", () => {
+		const list = "<ul><li>They still hold a grudge</li><li>They're going to need something from you first</li>"
+			+ "<li>They swore off this sort of thing long ago</li><li>You can't exactly, y'know, trust them</li></ul>";
+		expect(background("the-prodigal-returned")).toContain(list);
+		expect(st.backgrounds.find(b => b.slug === "the-prodigal-returned").moves).toEqual([FRIENDS]);
+		expect(fox(FRIENDS).system.description).toContain(list);
 	});
 
 	it("A Life of Crime asks who and what you DID leave behind", () => {
@@ -700,5 +738,51 @@ describe("the Fox's playbook text, against the book", () => {
 
 	it("a build 'like a whippin' stick'", () => {
 		expect(st.appearance.flat()).toContain("like a whippin' stick");
+	});
+});
+
+// ── The Prodigal Returned's move ────────────────────────────────────────────────
+// "When you declare that you know someone outside of Stonetop, someone who can help, name them and
+// roll +CHA: on a 10+, yeah, they can help (tell us why they're willing); on a 7-9, they can help but
+// pick 1 from the list below; on a 6-, the GM chooses 1 and then some." Given the way the Heavy's
+// Sheriff is given Bark an Order (tests/actors/character/heavy-creation.test.js).
+const FRIENDS = "Friends Far and Wide";
+
+describe("The Prodigal Returned's Friends Far and Wide", () => {
+	it("is a +CHA move the background gives, not a pick", async () => {
+		const { char, actor } = await onboardedFox(FOX_RUN({ backgroundSlug: "the-prodigal-returned" }));
+		const friends = itemNamed(actor, FRIENDS);
+		expect(friends.system.rollType).toBe("cha");
+		expect(Object.keys(friends.system.moveResults)).toEqual(["success", "partial", "failure"]);
+		expect(friends.system.requirement).toMatchObject({ playbook: "The Fox", background: "the-prodigal-returned" });
+		// Not counted against the level's budget: the book's start is exactly the two either/or picks and
+		// 1 of your choice, which this Fox made (Catlike), so it is neither short nor over.
+		const { movelist } = await char.buildSnapshot();
+		expect(movelist.levelMovesShortfall).toBe(0);
+		expect(movelist.levelMovesOverage).toBe(0);
+	});
+
+	it("a Fox onboarded without the background is exactly on budget too", async () => {
+		const { movelist } = await (await onboardedFox()).char.buildSnapshot();
+		expect(movelist.movesIncomplete).toBe(false);
+		expect(movelist.levelMovesShortfall).toBe(0);
+		expect(movelist.levelMovesOverage).toBe(0);
+	});
+
+	it("goes when the Fox gives up the background", async () => {
+		const { actor, sheet } = await onboardedFox(FOX_RUN({ backgroundSlug: "the-prodigal-returned" }));
+		const doc = pbDoc("the-fox");
+		const sel = sheet._readSelectionsFromActor(doc);
+		await sheet._applyPlaybookSelections(doc, { ...sel, backgroundSlug: "the-natural" });
+		expect(ownedMoveNames(actor)).not.toContain(FRIENDS);
+	});
+
+	it("is never given to another background, nor offered as a level-up pick", async () => {
+		const { actor } = await onboardedFox();
+		expect(ownedMoveNames(actor)).not.toContain(FRIENDS);
+		const { char } = buildLiveCharacter({ slug: "the-fox", name: "The Fox", flags: { "background.selected": "the-natural" } });
+		const data = await char.getLevelUpData();
+		expect(data.availableMoves.map(m => m.name)).not.toContain(FRIENDS);
+		expect(data.lockedMoves.map(m => m.name)).not.toContain(FRIENDS);
 	});
 });

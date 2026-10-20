@@ -6,9 +6,15 @@
 {{!-- When the host marks the card draggable the WHOLE card is the drag handle (no grip):
       grab it anywhere to drop a pinned Note on a scene. The dragstart is wired on the tab
       root in StonetopSteadingSheet._activateThreatsListeners. --}}
-<article class="threat-card threat-card--{{type.id}}{{#if collapsed}} is-collapsed{{/if}}{{#if canDrag}} is-draggable{{/if}}"
+<article class="threat-card threat-card--{{type.id}}{{#if collapsed}} is-collapsed{{/if}}{{#if canDrag}} is-draggable{{/if}}{{#if resolved}} is-resolved{{/if}}"
          data-threat-id="{{id}}" data-page-uuid="{{uuid}}" style="--threat-accent-raw:{{accent}};"{{#if canDrag}} draggable="true"{{/if}}>
 	{{> "stonetop.card-head" kind="threat" typeLabel=type.label}}
+
+	{{!-- Crossed off the tracker (Book I p.299). Said in words as well as the grey, since a faded
+	      card alone does not say why it is faded. --}}
+	{{#if resolved}}
+	<p class="threat-resolved"><i class="fas fa-check" aria-hidden="true"></i> Crossed off: no longer a threat</p>
+	{{/if}}
 
 	{{#if hasInstinct}}
 	<p class="threat-instinct"><span class="threat-label">Instinct</span><em>{{instinct}}</em></p>

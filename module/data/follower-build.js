@@ -244,6 +244,11 @@ export function buildCustomFollower(input = {}) {
 	// outnumber calculator); `size` is the headcount. A group is at least 2 strong.
 	const isGroup = !!input.isGroup;
 	const size = isGroup ? customGroupSize(input) : 0;
+	// "exceptional" is the card's flag, never a chip (p.462: +2 when a tag also applies). A list that
+	// spells it as a tag, a summon's or one typed in, sets the flag the Order dialog reads.
+	const isExceptionalTag = t => t.toLowerCase() === "exceptional";
+	const tagList = normalizeTags(input.tags);
+	const exceptional = !!input.exceptional || tagList.some(isExceptionalTag);
 	return {
 		name:         String(input.name ?? "").trim(),
 		pronoun:      String(input.pronoun ?? "").trim(),
@@ -257,7 +262,8 @@ export function buildCustomFollower(input = {}) {
 		// face cropped on the steading roster), kept only beside a portrait it was measured on.
 		...(String(input.img ?? "").trim() && input.portraitFrame && typeof input.portraitFrame === "object"
 			? { portraitFrame: input.portraitFrame } : {}),
-		tags:         normalizeTags(input.tags),
+		tags:         tagList.filter(t => !isExceptionalTag(t)),
+		...(exceptional ? { exceptional: true } : {}),
 		hpMax,
 		hpCurrent,
 		armor:        parseFollowerArmor(input.armor),
@@ -272,6 +278,9 @@ export function buildCustomFollower(input = {}) {
 		isGroup,
 		size,
 		sourceUuid:   input.sourceUuid ? String(input.sourceUuid) : null,
+		// The beast a follower was made from (data/beasts.js#followerInputFromBeast), which says whether it
+		// eats from a pack (follower-party.js#followerFeedsItself). Absent on one not made from a beast.
+		...(input.beastSlug ? { beastSlug: String(input.beastSlug) } : {}),
 	};
 }
 
@@ -285,6 +294,34 @@ export function buildCustomFollower(input = {}) {
  */
 function sourceActorImg(img) {
 	return isDefaultImg(img) ? "" : String(img ?? "").trim();
+}
+
+// The basic moves a follower can be ordered to trigger (the rollable ones from
+// packs/src/stonetop-items/basic-moves/), labelled with the moves' own names so the roll can find the
+// move's text on the character. "Custom" is anything else (a playbook move's effect, an improvised act).
+// `attack` marks the orders that are attacks (isOrderedAttack).
+export const ORDER_FOLLOWER_MOVES = Object.freeze([
+	{ key: "defy-danger",   label: "Defy Danger" },
+	{ key: "clash",         label: "Clash",   attack: true },
+	{ key: "let-fly",       label: "Let Fly", attack: true },
+	{ key: "defend",        label: "Defend" },
+	{ key: "aid",           label: "Aid" },
+	{ key: "interfere",     label: "Interfere" },
+	{ key: "seek-insight",  label: "Seek Insight" },
+	{ key: "know-things",   label: "Know Things" },
+	{ key: "persuade-npcs", label: "Persuade (vs. NPCs)" },
+	{ key: "custom",        label: "Custom / other…" },
+]);
+
+/** The basic move an order's key names, as the character's move is called, or null for "custom". */
+export function orderedMoveName(moveKey) {
+	if (!moveKey || moveKey === "custom") return null;
+	return ORDER_FOLLOWER_MOVES.find(m => m.key === moveKey)?.label ?? null;
+}
+
+/** Whether an order's key names an attack (Clash, Let Fly). */
+export function isOrderedAttack(moveKey) {
+	return !!ORDER_FOLLOWER_MOVES.find(m => m.key === moveKey)?.attack;
 }
 
 // ── Order Followers roll math (p.462) ────────────────────────────────────────
@@ -355,6 +392,19 @@ export const SHIELD_WALL_MOVE = "Shield Wall";
 export function crewGearCarried(item, flagVal) {
 	const weight = Number(item?.weight) || 1;
 	return typeof flagVal === "number" ? flagVal >= weight : !!flagVal;
+}
+
+/**
+ * Whether the crew bears its shield: the kit's "shield" row carried in full (crewGearCarried), so a shield
+ * with 1 of its 2 pips marked counts for neither the crew's armor nor its Readiness (+1, or Shield Wall's +2).
+ * No such row in the inventory, no shield. PURE.
+ *
+ * @param {object[]} inventory  the playbook's crew inventory rows
+ * @param {object}   gearFlags  crew.gear, slug -> filled pips (or boolean)
+ */
+export function crewBearsShield(inventory = [], gearFlags = {}) {
+	const row = (inventory ?? []).find(item => item?.slug === "shield");
+	return !!row && crewGearCarried(row, gearFlags?.shield);
 }
 
 /**

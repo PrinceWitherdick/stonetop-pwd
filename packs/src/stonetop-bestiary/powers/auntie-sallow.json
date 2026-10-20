@@ -33,6 +33,7 @@
   "prototypeToken": {
     "width": 2,
     "height": 2,
+    "depth": 2,
     "name": "Auntie Sallow",
     "actorLink": false,
     "disposition": -1,

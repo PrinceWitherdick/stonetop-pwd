@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
 	knowThingsRollChoices, advantageRollOptions, KNOW_THINGS_STAT, KNOW_THINGS_ADVANTAGE_MOVES,
+	seekInsightRollChoices, SEEK_INSIGHT_STAT,
 } from "../../../module/actors/character/arcana-identify.js";
 import { layModes } from "../../../module/utils/roll-mode.js";
 
@@ -49,6 +50,36 @@ describe("knowThingsRollChoices", () => {
 	it("takes plain names, so it never needs an actor", () => {
 		expect(() => knowThingsRollChoices()).not.toThrow();
 		expect(knowThingsRollChoices().hasChoice).toBe(false);
+	});
+
+	it("carries a background grant's row, so the picker can quote it (the Marshal's Penitent)", () => {
+		const choices = knowThingsRollChoices([], { playbook: "The Marshal", background: "penitent" });
+		expect(choices.grantBackgrounds).toEqual([{ playbook: "The Marshal", slug: "penitent", label: "Penitent" }]);
+		expect(knowThingsRollChoices(["Well-Read"]).grantBackgrounds).toEqual([]);
+	});
+});
+
+// The Fox's The Natural: "When you Seek Insight, you may roll +INT instead of +WIS".
+describe("seekInsightRollChoices", () => {
+	const NATURAL = { playbook: "The Fox", background: "the-natural" };
+
+	it("gives a plain +WIS roll and no dialog to most characters", () => {
+		const choices = seekInsightRollChoices(["Seek Insight", "Perceptive"], { playbook: "The Fox", background: "a-life-of-crime" });
+		expect(choices.stats).toEqual([SEEK_INSIGHT_STAT]);
+		expect(choices.hasChoice).toBe(false);
+	});
+
+	it("offers The Natural's +INT, quoted by the background", () => {
+		const choices = seekInsightRollChoices([], NATURAL);
+		expect(choices.stats).toEqual(["wis", "int"]);
+		expect(choices.statGrants).toEqual(["The Natural"]);
+		expect(choices.grantBackgrounds.map(b => b.slug)).toEqual(["the-natural"]);
+		expect(choices.advantageMoves).toEqual([]);
+		expect(choices.hasChoice).toBe(true);
+	});
+
+	it("is the Fox's alone", () => {
+		expect(seekInsightRollChoices([], { playbook: "The Ranger", background: "the-natural" }).hasChoice).toBe(false);
 	});
 });
 

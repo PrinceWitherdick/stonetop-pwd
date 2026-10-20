@@ -1,5 +1,5 @@
-// HP and Armor on a Fight tab row: "HP 7/10 · Armor 2", and a character's Defend Readiness while they
-// hold any ("· Readiness 2", p.216). And for a group follower, how many of its roster are still standing
+// HP and Armor on a Fight tab row: "HP 7/10 · Armor 2", and a character's or follower's Defend Readiness
+// while they hold any ("· Readiness 2", p.216, p.469; a follower's is read off their card). And for a group follower, how many of its roster are still standing
 // ("4 of 6 standing").
 //
 // READ FROM THE STORED FIELDS, the same ones the token bar and the damage button read. A character's
@@ -10,7 +10,8 @@
 // else at the table.
 
 import { SYSTEM_ID } from "../system-id.js";
-import { heldReadiness } from "../combat/defend-readiness.js";
+import { readinessHeldBy } from "./follower-readiness.js";
+import { followerCardMemo } from "../actors/character/follower-masters.js";
 import { groupFollowerStanding } from "../utils/crew.js";
 import { readableFlags } from "../actors/character/StonetopFlags.js";
 import { reminderChips, chipLine } from "../actors/character/gear-reminders.js";
@@ -19,17 +20,18 @@ import { reminderChips, chipLine } from "../actors/character/gear-reminders.js";
 const numberOr = value => (value === "" || value === null || value === undefined || !Number.isFinite(Number(value)) ? null : Number(value));
 
 /**
- * The HP and armor a combatant's actor carries, and a character's held Readiness (0 for anyone else).
+ * The HP and armor a combatant's actor carries, and the Readiness a character or follower holds (0 for
+ * anyone else). `cardFor` finds a follower's card (a pass over a whole fight hands in one followerCardMemo).
  * @returns {{hp: number|null, hpMax: number|null, armor: number|null, readiness: number}}
  */
-export function combatantVitals(combatant) {
+export function combatantVitals(combatant, { cardFor } = {}) {
 	const actor = combatant?.actor;
 	const attributes = actor?.system?.attributes ?? {};
 	return {
 		hp: numberOr(attributes.hp?.value),
 		hpMax: numberOr(attributes.hp?.max),
 		armor: numberOr(attributes.armor?.value),
-		readiness: heldReadiness(actor),
+		readiness: readinessHeldBy(actor, { cardFor }),
 	};
 }
 
@@ -84,12 +86,17 @@ export function vitalsLine({ hp = null, hpMax = null, armor = null, readiness = 
 /**
  * Every combatant's numbers as one string, so a redraw can be skipped when neither the engagements
  * nor anyone's HP, armor, group roster or reminders changed (fight-boot.js#refreshFightTab).
+ * `vitalsOf` answers a combatant's combatantVitals: a caller that has just read them for its rows hands them
+ * in rather than reading them twice. Follower cards are looked up once for the whole pass.
  */
-export function fightVitalsKey(combat, options) {
+export function fightVitalsKey(combat, options = {}) {
+	const { vitalsOf = null, ...rosterOptions } = options ?? {};
+	const cardFor = vitalsOf ? null : followerCardMemo();
+	const readVitals = vitalsOf ?? (combatant => combatantVitals(combatant, { cardFor }));
 	return [...(combat?.combatants ?? [])]
 		.map(combatant => {
-			const { hp, hpMax, armor, readiness } = combatantVitals(combatant);
-			const roster = followerRoster(combatant, options);
+			const { hp, hpMax, armor, readiness } = readVitals(combatant);
+			const roster = followerRoster(combatant, rosterOptions);
 			const reminders = combatantReminders(combatant).map(chipLine).join(";");
 			return `${combatant.id}:${hp}/${hpMax}/${armor}/${readiness}/${roster ? `${roster.standing}of${roster.size}` : ""}/${reminders}`;
 		})

@@ -1,3 +1,4 @@
+import {SYSTEM_ID} from "../system-id.js";
 import {escHtml, stripHtmlToText, decodeEntities} from "./strings.js";
 import {isReferenceList, pickLimitsFrom, pickTiersFrom} from "./move-picks.js";
 import {MOVE_TIERS_CLASS, TIER_KEYS} from "./move-results.js";
@@ -299,13 +300,18 @@ export function stonetopChatCard(title, innerHtml, sectionClass = "", titleBadge
  * @param {Actor}  actor
  * @param {string} title     Card header text (escaped by the shell).
  * @param {string} rowsHtml  Pre-built, already-escaped <li>…</li> rows.
+ * @param {object} [options]
+ * @param {object|null} [options.speaker]  A speaker of its own, for a card no actor speaks: a hazard
+ *   posts under its own name (hazards/hazard-damage.js).
+ * @param {string} [options.sectionClass]  The card's <section> class, when it is not a homestead note.
+ * @returns {Promise<ChatMessage>|undefined}  the message being created, or nothing when there is none to post
  */
-export function postListCard(actor, title, rowsHtml) {
-	if (!globalThis.ChatMessage || !rowsHtml) return;
+export function postListCard(actor, title, rowsHtml, { speaker = null, sectionClass = "stonetop-homestead-chat-card" } = {}) {
+	if (!globalThis.ChatMessage || !rowsHtml) return undefined;
 	const content = stonetopChatCard(title,
 		`<div class="card-content"><ul class="stonetop-homestead-chat-list">${rowsHtml}</ul></div>`,
-		"stonetop-homestead-chat-card");
-	ChatMessage.create({ content, speaker: ChatMessage.getSpeaker({ actor }) });
+		sectionClass);
+	return ChatMessage.create({ content, speaker: speaker ?? ChatMessage.getSpeaker({ actor }) });
 }
 
 /**
@@ -656,6 +662,16 @@ export function moveChatCard(name, description, { pickable = false, actions = ""
 	// the card that rendered it.
 	return `<div class="stonetop-chat-move"><h3 class="stonetop-chat-move-name">${escHtml(name)}</h3>`
 		+ `<div class="stonetop-chat-move-description">${body}</div>${actions}</div>`;
+}
+
+/**
+ * The move a card is for: its `move` stamp (a rolled card, the hotbar's), else its moveChatCard heading
+ * (the Moves tab's), else `fallback`.
+ */
+export function cardMoveName(message, root, fallback = "") {
+	return message?.getFlag?.(SYSTEM_ID, "move")
+		|| root?.querySelector?.(".stonetop-chat-move-name")?.textContent?.trim()
+		|| fallback;
 }
 
 /** Post a one-line note spoken as `actor` (or as "Stonetop" without one), in the move-card shape. */

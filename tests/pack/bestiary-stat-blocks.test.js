@@ -28,6 +28,19 @@ describe("bestiary stat blocks", () => {
 		expect(named("Aurochs").prototypeToken).toMatchObject({ width: 2, height: 2 });
 	});
 
+	// Foundry v14 migrates a pre-v14 token to depth = min(width, height): with no width or height
+	// recorded that is NaN, and the server rejects the record ("depth: must be a number") on every
+	// load. So every token states all three.
+	it("state every token's width, height and depth, depth being the smaller side", () => {
+		const wrong = monsters
+			.filter(({ doc }) => {
+				const { width, height, depth } = doc.prototypeToken ?? {};
+				return ![width, height, depth].every(Number.isFinite) || depth !== Math.min(width, height);
+			})
+			.map(({ file }) => file);
+		expect(wrong).toEqual([]);
+	});
+
 	it("give the Crinwin only the three moves the book prints (Book I p.391, Book II p.61)", () => {
 		expect(named("Crinwin").items.map(m => m.name)).toEqual([
 			"Mimic noises, words, cries for help",

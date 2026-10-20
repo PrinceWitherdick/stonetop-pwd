@@ -16,6 +16,12 @@
 	{{#if exceptionalAvailable}}{{#if exceptionalDerived}}{{#if (or exceptional edit.stats)}}<span class="stonetop-follower-tag stonetop-follower-tag--exceptional stonetop-follower-tag--derived{{#if exceptional}} is-selected{{else}} is-locked{{/if}}" data-tooltip="{{exceptionalHint}}" data-tooltip-direction="UP"><span class="stonetop-chip-text">exceptional</span>{{#unless exceptional}} <i class="fas fa-lock"></i>{{/unless}}</span>{{/if}}{{else if edit.stats}}<button type="button" class="stonetop-follower-tag stonetop-follower-tag--exceptional stonetop-exceptional-toggle{{#if exceptional}} is-selected{{/if}}" data-ftype="{{ftype}}" data-slug="{{slug}}"><span class="stonetop-chip-text">exceptional</span></button>{{else}}{{#if exceptional}}<span class="stonetop-follower-tag stonetop-follower-tag--exceptional">exceptional</span>{{/if}}{{/if}}{{/if}}
 	{{/inline}}
 
+	{{!-- The crew's "inured to terror & horror" chip: Heroes to the Last's pick, read-only, shown
+	      beside the exceptional chip once the pick is made (follower-masters.js#crewIsInured). --}}
+	{{#*inline "stonetopInuredChip"}}
+	{{#if inured}}<span class="stonetop-follower-tag stonetop-follower-tag--exceptional stonetop-follower-tag--derived stonetop-follower-tag--inured is-selected" data-tooltip="{{inuredHint}}" data-tooltip-direction="UP"><span class="stonetop-chip-text">inured to terror &amp; horror</span></span>{{/if}}
+	{{/inline}}
+
 	{{!-- One roster row's face: the crew's named individuals and anonymous members, and the
 	      members of a custom group follower. The same picture the follower CARD's portrait
 	      shows, one size down and circular — the small avatars in this system
@@ -219,6 +225,10 @@
 				</div>
 				{{/if}}{{/if}}
 				<span class="stonetop-follower-type">{{typeLabel}}</span>
+				{{!-- Who travels with the party (follower-party.js): set under the pencil, read here.
+				      Read in play by Make Camp, the expedition's load and Struggle as One, so a reader
+				      should not need the pencil to learn it. --}}
+				{{#if party}}{{#unless edit.card}}<span class="stonetop-follower-party-marker" data-tooltip="{{localize "stonetop.character.followers.party.markerTooltip"}}" data-tooltip-direction="UP"><i class="fas fa-campground" aria-hidden="true"></i> {{localize "stonetop.character.followers.party.marker"}}</span>{{/unless}}{{/if}}
 				{{#if dead}}<span class="stonetop-follower-dead-badge"><i class="fas fa-skull-crossbones"></i> <span class="stonetop-chip-text">Fallen</span></span>{{/if}}
 			</div>
 			<div class="stonetop-follower-hp-octagon">
@@ -248,17 +258,19 @@
 			{{#if (and tagOptions edit.stats)}}
 			{{!-- Edit mode (crew): pick from the playbook's tag list. One tag from
 			      your background is locked on; choose up to the limit more. --}}
-			<div class="stonetop-crew-tag-picker">
+			<div class="stonetop-crew-tag-picker" data-tag-limit="{{tagLimit}}">
 				<span class="stonetop-crew-tag-hint">Your crew starts with <em>group</em>{{#if tagAutoLabel}} and <em>{{tagAutoLabel}}</em>, a tag granted by your background{{/if}}. Pick {{tagLimit}} more:</span>
 				<div class="stonetop-follower-tags">
 					{{> stonetopExceptionalChip}}
+					{{> stonetopInuredChip}}
 					{{#each tagOptions}}
 					<label class="stonetop-follower-tag stonetop-crew-tag-choice{{#if isSelected}} is-selected{{/if}}{{#if isAuto}} is-auto{{/if}}{{#if disabled}} is-disabled{{/if}}">
 						<input type="checkbox" class="stonetop-crew-tag-option" value="{{value}}" {{#if isSelected}}checked{{/if}} {{#if disabled}}disabled{{/if}}>{{label}}
 					</label>
 					{{/each}}
 				</div>
-				<input type="text" class="stonetop-follower-text stonetop-crew-tag-custom" value="{{tagCustom}}" placeholder="custom tag…" {{#if tagCustomDisabled}}disabled{{/if}}>
+				{{!-- The insert's three blank tag lines (p.144), each spending a pick. --}}
+				{{#each tagCustoms}}<input type="text" class="stonetop-follower-text stonetop-crew-tag-custom" data-index="{{index}}" value="{{value}}" placeholder="custom tag…" {{#if disabled}}disabled{{/if}}>{{/each}}
 			</div>
 			{{else if (and edit.stats traitChoices)}}
 			{{!-- Edit mode (animal companion): pick the type's traits, up to the
@@ -305,7 +317,8 @@
 			{{#if (or exceptional tags.length (and edit.stats exceptionalAvailable))}}
 			<div class="stonetop-follower-tags">
 				{{> stonetopExceptionalChip}}
-				{{#each tags}}<span class="stonetop-follower-tag{{#if cls}} {{cls}}{{/if}}{{#if tooltip}} stonetop-follower-tag--tooltip{{/if}}"{{#if tooltip}} data-tooltip="{{tooltip}}" data-tooltip-direction="UP"{{/if}}>{{label}}{{#if removable}}{{#if @root.editable}} <button type="button" class="stonetop-follower-tag-remove" data-tag="{{label}}" aria-label="{{removeLabel}}" data-tooltip="{{removeLabel}}" data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>{{/if}}{{/if}}{{#if editRemovable}} <button type="button" class="stonetop-follower-tag-drop" data-ftype="{{../ftype}}" data-slug="{{../slug}}" data-tag="{{label}}" aria-label="{{editRemoveLabel}}" data-tooltip="{{editRemoveLabel}}" data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>{{/if}}</span>{{/each}}
+				{{> stonetopInuredChip}}
+				{{#each tags}}<span class="stonetop-follower-tag{{#if cls}} {{cls}}{{/if}}{{#if tooltip}} stonetop-follower-tag--tooltip{{/if}}"{{#if tooltip}} data-tooltip="{{tooltip}}" data-tooltip-direction="UP"{{/if}}>{{label}}{{#if removable}}{{#if @root.editable}} <button type="button" class="stonetop-follower-tag-remove" data-ftype="{{../ftype}}" data-slug="{{../slug}}" data-tag="{{label}}" aria-label="{{removeLabel}}" data-tooltip="{{removeLabel}}" data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>{{/if}}{{/if}}{{#if editRemovable}} <button type="button" class="stonetop-follower-tag-drop" data-ftype="{{../ftype}}" data-slug="{{../slug}}" data-tag="{{label}}" aria-label="{{editRemoveLabel}}" data-tooltip="{{editRemoveLabel}}" data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>{{/if}}</span>{{/each}}
 				{{#if traitsNote}}<span class="stonetop-follower-trait-note">{{traitsNote}}</span>{{/if}}
 			</div>
 			{{else}}{{#unless tagEdit}}<span class="stonetop-follower-fill-line"></span>{{/unless}}{{/if}}
@@ -318,6 +331,14 @@
 				{{#if tagEdit.added.length}}
 				<div class="stonetop-follower-tags">
 					{{#each tagEdit.added}}<span class="stonetop-follower-tag">{{label}} <button type="button" class="stonetop-follower-tag-drop" data-ftype="{{../ftype}}" data-slug="{{../slug}}" data-tag="{{label}}" aria-label="{{editRemoveLabel}}" data-tooltip="{{editRemoveLabel}}" data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button></span>{{/each}}
+				</div>
+				{{/if}}
+				{{!-- The debilities a follower can be given as temporary tags (p.243), each imposing
+				      disadvantage when it gets in the way of an order. --}}
+				{{#if debilityToggles}}
+				<div class="stonetop-follower-debility-row">
+					<span class="stonetop-follower-debility-label">{{localize "stonetop.character.followers.debilities.label"}}</span>
+					{{#each debilityToggles}}<button type="button" class="stonetop-follower-tag stonetop-follower-debility-toggle{{#if held}} is-selected{{/if}}" data-ftype="{{../ftype}}" data-slug="{{../slug}}" data-tag="{{tag}}" aria-pressed="{{#if held}}true{{else}}false{{/if}}">{{tag}}</button>{{/each}}
 				</div>
 				{{/if}}
 				<div class="stonetop-follower-tag-add-row">
@@ -351,6 +372,12 @@
 	      Loyalty and Readiness rows size their pip column from it, so their Spend
 	      buttons line up whatever each row's own count is. --}}
 	<div class="stonetop-follower-body"{{#if pipSlots}} style="--st-follower-pip-slots: {{pipSlots}};"{{/if}}>
+		{{!-- The instinct, above the band and so never folded away: "how they tend to cause trouble
+		      for you" (p.64), which the GM plays up (p.467) and the table is reminded of (p.581).
+		      Details keeps the field it is edited in, so under the pencil this line steps aside. --}}
+		{{#if instinct}}{{#unless edit.card}}
+		<div class="stonetop-follower-instinct-line"><span class="stonetop-follower-instinct-label">{{localize "stonetop.character.followers.instinctLabel"}}</span> {{instinct}}</div>
+		{{/unless}}{{/if}}
 		{{!-- Stat block: Max HP through Cost/Loyalty, edited as one section. The
 		      exceptional tag lives up in the chips row, not here. --}}
 		{{!-- The vitals band: what a fight touches — Armor, Damage, any ammo track, Loyalty,
@@ -446,16 +473,31 @@
 			<button type="button" class="stonetop-pay-cost stonetop-inline-btn"
 			        data-ftype="{{ftype}}" data-slug="{{loyaltySlug}}" data-follower-name="{{orderName}}" data-cost="{{cost}}"
 			        data-loyalty-value="{{loyaltyValue}}"{{#if wholeParty}} data-whole-party{{/if}}{{#if dead}} data-dead{{/if}}
-			        {{#if dead}}disabled data-tooltip="{{localize "stonetop.character.followers.bond.fallenTooltip"}}"{{else}}{{#if loyaltyAtMax}}disabled data-tooltip="{{localize "stonetop.character.followers.bond.atMaxTooltip"}}"{{else}}data-tooltip="{{localize "stonetop.character.followers.bond.tooltip"}}"{{/if}}{{/if}} data-tooltip-direction="UP">
-				<i class="fas fa-hand-holding-heart"></i> {{localize "stonetop.character.followers.bond.button"}}
+			        {{#if dead}}disabled data-tooltip="{{localize "stonetop.character.followers.bond.fallenTooltip"}}"{{else}}{{#if loyaltyAtMax}}disabled data-tooltip="{{localize "stonetop.character.followers.bond.atMaxTooltip"}}"{{else}}data-tooltip="{{#if costPaidRecently}}{{localize "stonetop.character.followers.bond.paidRecently"}} {{/if}}{{#if cost}}{{localize "stonetop.character.followers.bond.tooltipCost" cost=cost}}{{else}}{{localize "stonetop.character.followers.bond.tooltip"}}{{/if}}"{{/if}}{{/if}} data-tooltip-direction="UP">
+				{{!-- A check in place of the hand once the cost was paid since the last End of Session:
+				      same width, so the row does not shift, and seen without a hover (p.464). --}}
+				<i class="fas {{#if costPaidRecently}}fa-circle-check{{else}}fa-hand-holding-heart{{/if}}"></i> {{localize "stonetop.character.followers.bond.button"}}
 			</button>
+			{{!-- Radiant Countenance (the Lightbearer, learned): "If they are a follower, you can instead
+			      choose to Strengthen Your Bond (as if you paid their cost)". The same Loyalty and
+			      paid-recently stamp as Pay cost, on the same bounds; only the chat card differs
+			      (follower-bond.js#strengthenBond). The leader's own move, so it is not re-enabled for
+			      another player on a follower of the party as a whole. --}}
+			{{#if radiantCountenance}}
+			<button type="button" class="stonetop-radiant-bond stonetop-inline-btn"
+			        data-ftype="{{ftype}}" data-slug="{{loyaltySlug}}" data-follower-name="{{orderName}}"
+			        {{#if dead}}disabled data-tooltip="{{localize "stonetop.character.followers.bond.fallenTooltip"}}"{{else}}{{#if loyaltyAtMax}}disabled data-tooltip="{{localize "stonetop.character.followers.bond.atMaxTooltip"}}"{{else}}data-tooltip="{{#if costPaidRecently}}{{localize "stonetop.character.followers.bond.paidRecently"}} {{/if}}{{localize "stonetop.character.followers.bond.radiantTooltip"}}"{{/if}}{{/if}} data-tooltip-direction="UP">
+				<i class="fas fa-sun"></i> {{localize "stonetop.character.followers.bond.radiantButton"}}
+			</button>
+			{{/if}}
 			{{/unless}}
 			{{!-- Spend Loyalty (p.464): overcome fear / resist instinct / do something
-			      they'd rather not. Disabled when they hold none, and on a fallen follower. --}}
+			      they'd rather not. Disabled when they hold none (unless the Marshal holds Front Line
+      Leader's Presence for the crew, `presenceHeld`), and on a fallen follower. --}}
 			<button type="button" class="stonetop-spend-loyalty stonetop-inline-btn"
-			        data-ftype="{{ftype}}" data-slug="{{loyaltySlug}}" data-follower-name="{{orderName}}"
+			        data-ftype="{{ftype}}" data-slug="{{loyaltySlug}}" data-follower-name="{{orderName}}" data-instinct="{{instinct}}"
 			        data-loyalty-value="{{loyaltyValue}}"{{#if wholeParty}} data-whole-party{{/if}}{{#if dead}} data-dead{{/if}}
-			        {{#if dead}}disabled data-tooltip="{{localize "stonetop.character.followers.bond.fallenTooltip"}}" data-tooltip-direction="UP"{{else}}{{#unless loyaltyValue}}disabled data-tooltip="No Loyalty to spend." data-tooltip-direction="UP"{{else}}data-tooltip="Spend 1 Loyalty (overcome fear / resist instinct / do something they'd rather not)." data-tooltip-direction="UP"{{/unless}}{{/if}}>
+			        {{#if dead}}disabled data-tooltip="{{localize "stonetop.character.followers.bond.fallenTooltip"}}" data-tooltip-direction="UP"{{else}}{{#unless (or loyaltyValue presenceHeld)}}disabled data-tooltip="No Loyalty to spend." data-tooltip-direction="UP"{{else}}data-tooltip="Spend 1 Loyalty (overcome fear / resist instinct / do something they'd rather not).{{#if presenceHeld}} Or pay with Presence ({{presenceHeld}} held, Front Line Leader).{{/if}}" data-tooltip-direction="UP"{{/unless}}{{/if}}>
 				<i class="fas fa-hand-holding-hand"></i> Spend
 			</button>
 			{{/unless}}
@@ -476,11 +518,11 @@
 			</div>
 			<button type="button" class="stonetop-spend-readiness stonetop-inline-btn"
 			        data-ftype="{{readinessFollower}}" data-slug="{{readinessSlug}}" data-follower-name="{{orderName}}"
-			        {{#unless readinessValue}}disabled data-tooltip="No Readiness to spend." data-tooltip-direction="UP"{{else}}data-tooltip="Spend 1 Readiness (suffer an attack for a ward or draw all attention)." data-tooltip-direction="UP"{{/unless}}>
+			        {{#unless (or readinessValue presenceHeld)}}disabled data-tooltip="No Readiness to spend." data-tooltip-direction="UP"{{else}}data-tooltip="Spend 1 Readiness as Defend does (p.216): take or halve a blow, draw all attention, or strike back.{{#if presenceHeld}} Or spend Presence as Readiness, as if you Defended them ({{presenceHeld}} held, Front Line Leader).{{/if}}" data-tooltip-direction="UP"{{/unless}}>
 				<i class="fas fa-shield"></i> Spend
 			</button>
 		</div>
-		<div class="stonetop-follower-readiness-note">held when {{#if readinessIsPool}}the crew Defends{{else}}they Defend{{/if}}; spend to suffer an attack for a ward or draw all attention</div>
+		<div class="stonetop-follower-readiness-note">held when {{#if readinessIsPool}}the crew Defends{{else}}they Defend{{/if}}; spend to take or halve a blow, draw all attention, or strike back</div>
 		{{/unless}}{{/if}}
 		</div>{{!-- /stonetop-follower-stats-section --}}
 		{{!-- Order Followers (p.462): direct them to make a move. View mode only —
@@ -489,7 +531,7 @@
 		      and every other follower type. Gated on canOrder (a Loyalty track) so
 		      livestock — which can't be ordered — doesn't show it. --}}
 		{{#if canOrder}}{{#unless edit.stats}}
-		<div class="stonetop-follower-order-row">
+		<div class="stonetop-follower-order-row stonetop-follower-order-row--actions">
 			{{> stonetopOrderButton icon="fa-hand-point-right" caption="Order"}}
 			{{#if canHaveNeed}}
 			<button type="button" class="stonetop-follower-have-need stonetop-inline-btn"
@@ -498,6 +540,23 @@
 				<i class="fas fa-sack"></i> Have what they need
 			</button>
 			{{/if}}
+			{{!-- The GM's two levers on a follower, here on the card so the GM and the leader's player reach
+			      them in the same place (the toolkit's old Followers tab held them; it is gone). They balk
+			      (p.466): asks why, and the card puts the player's three answers on the table
+			      (gm-toolkit/follower-balk.js). Use up their resources (p.182): what this follower has to lose,
+			      written under the move's name (follower-use-up.js). Neither on the fallen. --}}
+			{{#unless dead}}
+			<button type="button" class="stonetop-follower-balk stonetop-inline-btn"
+			        data-ftype="{{ftype}}" data-slug="{{slug}}" data-loyalty-slug="{{loyaltySlug}}" data-follower-name="{{orderName}}"
+			        data-tooltip="{{localize "stonetop.character.followers.balk.tooltip"}}" data-tooltip-direction="UP">
+				<i class="fas fa-hand"></i> {{localize "stonetop.character.followers.balk.button"}}
+			</button>
+			<button type="button" class="stonetop-follower-use-up stonetop-inline-btn"
+			        data-ftype="{{ftype}}" data-slug="{{slug}}" data-follower-name="{{orderName}}"
+			        data-tooltip="{{localize "stonetop.character.followers.useUp.tooltip"}}" data-tooltip-direction="UP">
+				<i class="fas fa-box-open"></i> {{localize "stonetop.character.followers.useUp.button"}}
+			</button>
+			{{/unless}}
 		</div>
 		{{/unless}}{{/if}}
 
@@ -515,8 +574,8 @@
 				<i class="fas fa-caret-down stonetop-follower-section-caret"></i>
 			</summary>
 			<div class="stonetop-follower-details-body">
-			{{!-- Instinct --}}
-			{{#if (or instinct edit.stats)}}
+			{{!-- Instinct: edited here; read on the line above the vitals band, never folded. --}}
+			{{#if edit.stats}}
 			<div class="stonetop-follower-field-row{{#if (and edit.stats instinctOptions)}} stonetop-follower-field-row--block{{/if}}">
 				<span class="stonetop-follower-field-label">Instinct</span>
 				{{#if edit.stats}}
@@ -555,6 +614,7 @@
 
 			{{!-- Cost, a fill line of its own in the Details fold that reads like Instinct
 			      above it. Crew shows its playbook cost list as radio options in edit mode. --}}
+			{{#if (or cost edit.stats loyalty)}}
 			<div class="stonetop-follower-stat-row">
 				<div class="stonetop-follower-statline{{#if (and edit.stats costOptions)}} stonetop-follower-statline--options{{/if}}">
 					<span class="stonetop-follower-field-label">Cost</span>
@@ -577,6 +637,7 @@
 					{{/if}}
 				</div>
 			</div>
+			{{/if}}
 
 			{{!-- Butcher (livestock) --}}
 			{{#if butcher}}
@@ -609,6 +670,12 @@
 						{{#if edit.gear}}
 						<button type="button" class="stonetop-follower-gear-add stonetop-inline-btn" data-ftype="{{ftype}}" data-slug="{{slug}}"><i class="fas fa-plus"></i> Add gear</button>
 						{{else}}{{#unless gear.length}}<span class="stonetop-follower-empty">—</span>{{/unless}}{{/if}}
+						{{!-- What their last Outfit came to (load, ◇/□ held in reserve), and the window to Outfit
+						      them again: the character's own, over the village catalog (p.306). --}}
+						{{#if outfitLine}}<div class="stonetop-follower-outfit-line">{{outfitLine}}</div>{{/if}}
+						{{#if canOutfit}}{{#unless edit.gear}}
+						<button type="button" class="stonetop-follower-outfit stonetop-inline-btn" data-ftype="{{ftype}}" data-slug="{{slug}}" data-follower-name="{{orderName}}"><i class="fas fa-suitcase"></i> {{localize "stonetop.character.followers.outfit.button"}}</button>
+						{{/unless}}{{/if}}
 					</div>
 				</div>
 			</div>
@@ -659,7 +726,7 @@
 	{{!-- ── Animal Companion (Ranger) ──────────────────────────── --}}
 	{{#if stonetop.followers.animalCompanion}}
 	{{#with stonetop.followers.animalCompanion}}
-	<div class="stonetop-follower-card{{#if edit.card}} is-editing{{/if}}{{#if cardFolded}} is-collapsed{{/if}}" draggable="true" data-ftype="{{ftype}}" data-slug="{{slug}}" data-section="{{foldId}}">{{> stonetopFollowerCardBody}}
+	<div class="stonetop-follower-card{{#if dead}} is-dead{{/if}}{{#if edit.card}} is-editing{{/if}}{{#if cardFolded}} is-collapsed{{/if}}" draggable="true" data-ftype="{{ftype}}" data-slug="{{slug}}" data-section="{{foldId}}">{{> stonetopFollowerCardBody}}
 
 		{{!-- Beast-Bonded (the Ranger's background): the actions marked on the Details tab, listed
 		      read-only; "Lend it your strength" marked is a button (companion-bond.js). --}}
@@ -715,9 +782,24 @@
 						       {{#if filled}}checked{{/if}}>{{/each}}
 					</span>
 					<span class="stonetop-crew-gear-label">{{{label}}}</span>
+					{{!-- An item written in on the insert's blank lines (p.144) can be struck off, under
+					      the card's pencil like the rest of its editing, so a stray click cannot. --}}
+					{{#if writeIn}}{{#if ../edit.gear}}<button type="button" class="stonetop-crew-gear-remove stonetop-inline-btn stonetop-inline-btn--danger" data-slug="{{slug}}" title="Remove" aria-label="Remove"><i class="fas fa-times"></i></button>{{/if}}{{/if}}
 				</label>
 				{{/each}}
 			</div>
+			{{!-- The insert's six blank inventory lines (3 ◇, 3 ◇◇, p.144): write an item in and it
+			      loads the crew like the printed kit (crew-write-ins.js). --}}
+			{{#if @root.editable}}
+			<div class="stonetop-crew-gear-add-row">
+				<input type="text" class="stonetop-crew-gear-add-name" placeholder="Write in an item…" aria-label="New item">
+				<select class="stonetop-crew-gear-add-weight" aria-label="Its weight">
+					<option value="1">1 ◇</option>
+					<option value="2">2 ◇◇</option>
+				</select>
+				<button type="button" class="stonetop-crew-gear-add stonetop-inline-btn"><i class="fas fa-plus"></i> Add item</button>
+			</div>
+			{{/if}}
 			{{!-- Have What They Need, run for ONE member (p.472): what they produced is theirs,
 			      not the whole crew's, so it sits in its own list under the shared kit rather than
 			      as another diamond above. The label carries whose it is, the way the book writes
@@ -937,14 +1019,14 @@
 	{{!-- ── Initiates of Danu (Blessed) ───────────────────────── --}}
 	{{#if stonetop.followers.initiates.length}}
 	{{#each stonetop.followers.initiates}}
-	<div class="stonetop-follower-card stonetop-follower-card--initiate{{#if edit.card}} is-editing{{/if}}{{#if cardFolded}} is-collapsed{{/if}}" draggable="true" data-ftype="{{ftype}}" data-slug="{{slug}}" data-section="{{foldId}}">{{> stonetopFollowerCardBody}}
+	<div class="stonetop-follower-card stonetop-follower-card--initiate{{#if dead}} is-dead{{/if}}{{#if edit.card}} is-editing{{/if}}{{#if cardFolded}} is-collapsed{{/if}}" draggable="true" data-ftype="{{ftype}}" data-slug="{{slug}}" data-section="{{foldId}}">{{> stonetopFollowerCardBody}}
 	</div>
 	{{/each}}
 	{{/if}}
 
 	{{!-- ── Livestock & Beasts (added via the inventory's special items) ── --}}
 	{{#each stonetop.followers.beasts}}
-	<div class="stonetop-follower-card stonetop-follower-card--beast{{#unless isFollower}} stonetop-follower-card--livestock{{/unless}}{{#if edit.card}} is-editing{{/if}}{{#if cardFolded}} is-collapsed{{/if}}" draggable="true" data-ftype="{{ftype}}" data-slug="{{slug}}" data-section="{{foldId}}">{{> stonetopFollowerCardBody}}
+	<div class="stonetop-follower-card stonetop-follower-card--beast{{#unless isFollower}} stonetop-follower-card--livestock{{/unless}}{{#if dead}} is-dead{{/if}}{{#if edit.card}} is-editing{{/if}}{{#if cardFolded}} is-collapsed{{/if}}" draggable="true" data-ftype="{{ftype}}" data-slug="{{slug}}" data-section="{{foldId}}">{{> stonetopFollowerCardBody}}
 	</div>
 	{{/each}}
 

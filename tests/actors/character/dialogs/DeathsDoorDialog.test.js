@@ -404,7 +404,7 @@ describe("DeathsDoorDialog: Burn Brightly and giving it your all, before the tie
 			hurt:       vi.fn(async () => {}),
 		};
 		registerRollRewrite(deps);
-		// The cost picker's content is an element (content-picker.js#contentElement).
+		// The cost picker's content is an element (utils/dialogv2-content.js#contentElement).
 		if (!globalThis.document) {
 			globalThis.document = { createElement: () => ({}) };
 			madeDocument = true;

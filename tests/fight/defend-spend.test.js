@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { halveDamage, defendOffers, defendNotes, spendOnBlow, spentOn, handleSpendQuery, SPEND_QUERY, takeSpend, rowToken, pickOne, beingApplied } from "../../module/fight/defend-spend.js";
+import { halveDamage, defendOffers, defendNotes, spendOnBlow, spentOn, handleSpendQuery, SPEND_QUERY, takeSpend, rowToken, pickOne, beingApplied, wireDefendSpends } from "../../module/fight/defend-spend.js";
 import { stubAsk } from "../fakes/confirm.js";
 import { inCardTurn } from "../../module/utils/card-queue.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection } from "../fakes/fight.js";
@@ -42,7 +42,7 @@ describe("defendOffers", () => {
 
 	it("offers each option once against a blow, and nothing on a blow already applied", () => {
 		const taken = { ...damage, halvedBy: [{ uuid: "Token.bram", name: "bram", how: "halve" }], standIns:[{ uuid: "Token.bram", by: aeliana.uuid, name: "aeliana" }] };
-		const none = { halve: [], parry: [], standIn: [], ignore: [], knockedDown: [], safetyFirst: [] };
+		const none = { halve: [], parry: [], standIn: [], ignore: [], knockedDown: [], neverGonna: [], safetyFirst: [], redirect: [] };
 		expect(defendOffers(taken, () => ({ self: bram, allies: [aeliana] }), () => aeliana)).toEqual(none);
 		const applied = { ...damage, applied: [{ uuid: "Token.bram" }] };
 		expect(defendOffers(applied, () => ({ self: bram, allies: [aeliana] }))).toEqual(none);
@@ -56,6 +56,14 @@ describe("playbook moves on the card", () => {
 		const fox = character("fox", 1, ["Parry & Riposte"]);
 		const offers = defendOffers(damage, () => ({ self: null, allies: [fox] }));
 		expect(offers.parry.map(o => o.defender.name)).toEqual(["fox"]);
+		expect(offers.halve.map(o => o.defender.name)).toEqual(["fox"]);
+	});
+
+	it("offers no Parry & Riposte for a player's own move of that name, which acts as itself", () => {
+		const fox = character("fox", 1);
+		fox.items = [{ type: "move", name: "Parry & Riposte", flags: { [SYSTEM_ID]: { custom: true } } }];
+		const offers = defendOffers(damage, () => ({ self: null, allies: [fox] }));
+		expect(offers.parry).toEqual([]);
 		expect(offers.halve.map(o => o.defender.name)).toEqual(["fox"]);
 	});
 
@@ -73,6 +81,18 @@ describe("playbook moves on the card", () => {
 		const taken = { ...damage, knockedDownBy: [{ uuid: "Token.bram", name: "pim", how: "knockedDown" }] };
 		expect(defendOffers(taken, () => ({ self: null, allies: [] }), () => pim).knockedDown).toEqual([]);
 		expect(defendNotes(taken)).toEqual(["pim got knocked down, halving the blow (I Get Knocked Down)."]);
+	});
+
+	// WBH re-audit (2026-10-18): "When you take damage DESPITE YOUR BEST EFFORTS TO AVOID IT". A move's own price
+	// the character chose to pay (Iron Will's 1d4, rollOptionDamage marks it `ownPrice`) is not such a blow; a
+	// counter-attack is selfHarm too, with its foe or without one found, and keeps the move.
+	it("offers I Get Knocked Down on a counter-attack, and not on a move's own price the character chose to pay", () => {
+		const pim = character("pim", 0, ["I Get Knocked Down"]);
+		const self = { attackerUuid: "Actor.pim", selfHarm: true, results: [{ uuid: "Actor.pim", name: "Pim" }] };
+		const nobody = () => ({ self: null, allies: [] });
+		expect(defendOffers({ ...self, ownPrice: true }, nobody, () => pim).knockedDown).toEqual([]);
+		expect(defendOffers({ ...self, foeUuid: "Scene.s.Token.wolf" }, nobody, () => pim).knockedDown).toEqual([{ row: self.results[0], defender: pim, cost: 0 }]);
+		expect(defendOffers(self, nobody, () => pim).knockedDown).toEqual([{ row: self.results[0], defender: pim, cost: 0 }]);
 	});
 
 	// The user's ruling (WBH audit, 2026-09-27): "When you take damage", so a Would-Be Hero who stood in for
@@ -117,6 +137,166 @@ describe("playbook moves on the card", () => {
 		const stood = { ...damage, standIns: [{ uuid: "Token.bram", by: judge.uuid, name: "judge" }] };
 		expect(defendOffers(stood, () => ({ self: null, allies: [] }), () => judge).ignore.map(o => o.defender.name)).toEqual(["judge"]);
 		expect(defendOffers(damage, () => ({ self: character("plain", 1), allies: [] })).ignore).toEqual([]);
+	});
+});
+
+// WBH re-audit (2026-10-18), the user's ruling: Never Gonna Keep Me Down's "When you have 5 or fewer current HP,
+// you impose disadvantage on any damage you take" reaches a blow a Would-Be Hero stands in for after it was
+// rolled: the card offers to roll the row again and keep the lower, once (straight, if it had advantage).
+describe("Never Gonna Keep Me Down on a stand-in", () => {
+	const hero = (hp, { learned = true, owner = true } = {}) => ({
+		...character("pim", 1),
+		isOwner: owner,
+		system: { attributes: { hp: { value: hp } } },
+		items: [{ type: "move", name: "Never Gonna Keep Me Down", flags: learned ? {} : { [SYSTEM_ID]: { learned: false } } }],
+	});
+	const ward = character("bram", 0);
+	const row = (formula = "1d8+2", raw = 7) => ({ uuid: "Token.bram", name: "Bram", formula, raw });
+	const stood = (pim, extra = {}) => ({ results: [row()], standIns: [{ uuid: "Token.bram", by: pim.uuid, name: "pim" }], ...extra });
+	const nobody = () => ({ self: null, allies: [] });
+	const byUuid = pim => uuid => (uuid === pim.uuid ? pim : ward);
+	const offered = (damage, pim) => defendOffers(damage, nobody, byUuid(pim)).neverGonna;
+
+	it("is offered to a Would-Be Hero who stood in, with the move learned, at 5 or fewer current HP", () => {
+		const pim = hero(5);
+		const damage = stood(pim);
+		expect(offered(damage, pim)).toEqual([{ row: damage.results[0], defender: pim, cost: 0 }]);
+		expect(offered(stood(hero(1)), hero(1)).length).toBe(1);
+		const healthy = hero(6);
+		expect(offered(stood(healthy), healthy)).toEqual([]);
+		const unlearned = hero(3, { learned: false });
+		expect(offered(stood(unlearned), unlearned)).toEqual([]);
+	});
+
+	it("is not offered without a stand-in: the one hit had their say when the blow was rolled", () => {
+		const pim = hero(3);
+		expect(defendOffers({ results: [row()] }, nobody, () => pim).neverGonna).toEqual([]);
+	});
+
+	it("is not offered on a row already rolled at disadvantage, or one with no die to roll", () => {
+		const pim = hero(3);
+		for (const formula of ["2d8kl1 + 2", "{2d4,2d4}kl", "5"]) {
+			expect(offered(stood(pim, { results: [row(formula)] }), pim)).toEqual([]);
+		}
+		// Advantage is not disadvantage: the row may still be rolled again.
+		expect(offered(stood(pim, { results: [row("2d8kh1 + 2")] }), pim).length).toBe(1);
+	});
+
+	it("is offered once per row", () => {
+		const pim = hero(3);
+		const used = stood(pim, { neverGonnaBy: [{ uuid: "Token.bram", name: "pim", how: "neverGonna", by: pim.uuid, was: 7, rolled: 3, kept: 3 }] });
+		expect(offered(used, pim)).toEqual([]);
+	});
+
+	it("is offered only to the hero's owner or a GM", () => {
+		const prior = globalThis.game;
+		try {
+			const pim = hero(3, { owner: false });
+			globalThis.game = { ...prior, user: { id: "bob", isGM: false } };
+			expect(offered(stood(pim), pim)).toEqual([]);
+			globalThis.game = { ...prior, user: { id: "gm", isGM: true } };
+			expect(offered(stood(pim), pim).length).toBe(1);
+		} finally {
+			globalThis.game = prior;
+		}
+	});
+
+	describe("rolling again", () => {
+		const card = (flag, extra = {}) => ({
+			flag, extra,
+			getFlag(_scope, key) { return key === "damage" ? this.flag : this.extra[key]; },
+			setFlag: vi.fn(),
+			update: vi.fn(async function (data) { this.flag = { ...this.flag, ...data.flags[SYSTEM_ID].damage }; }),
+		});
+		const rolling = total => vi.fn(async () => ({ total, terms: [], dice: [] }));
+
+		it("keeps the lower of the two totals on the row, costs no Readiness, and says both", async () => {
+			const pim = hero(3);
+			const blow = card(stood(pim));
+			const offer = offered(blow.flag, pim)[0];
+			const reroll = rolling(3);
+			expect(await takeSpend(blow, "neverGonna", offer, { reroll })).toBe(true);
+			expect(reroll).toHaveBeenCalledWith("1d8+2");
+			expect(blow.flag.results[0]).toMatchObject({ uuid: "Token.bram", raw: 3 });
+			expect(blow.flag.neverGonnaBy).toEqual([{ uuid: "Token.bram", name: "pim", how: "neverGonna", by: pim.uuid, was: 7, rolled: 3, kept: 3 }]);
+			expect(pim.flags[SYSTEM_ID][READINESS_FLAG]).toBe(1);
+			expect(defendNotes(blow.flag)).toContain("pim rolled the blow they took for Bram again and kept the lower: 7 and 3, so 3 (Never Gonna Keep Me Down).");
+			expect([...spentOn(blow.flag).neverGonna]).toEqual(["Token.bram"]);
+			// Once: the second press rolls nothing.
+			expect(await takeSpend(blow, "neverGonna", offer, { reroll })).toBe(false);
+			expect(reroll).toHaveBeenCalledTimes(1);
+		});
+
+		it("keeps the first total when the second is higher, and still spends the use", async () => {
+			const pim = hero(3);
+			const blow = card(stood(pim));
+			expect(await takeSpend(blow, "neverGonna", offered(blow.flag, pim)[0], { reroll: rolling(9) })).toBe(true);
+			expect(blow.flag.results[0].raw).toBe(7);
+			expect(blow.flag.neverGonnaBy[0]).toMatchObject({ was: 7, rolled: 9, kept: 7 });
+			expect(offered(blow.flag, pim)).toEqual([]);
+		});
+
+		it("rolls an advantaged row again STRAIGHT and takes that total, higher or lower: the two cancel", async () => {
+			const pim = hero(3);
+			for (const [formula, straight] of [["2d8kh1 + 2", "1d8 + 2"], ["{2d4,2d4}kh + 1", "2d4 + 1"]]) {
+				const blow = card(stood(pim, { results: [row(formula, 7)] }));
+				const reroll = rolling(9);
+				expect(await takeSpend(blow, "neverGonna", offered(blow.flag, pim)[0], { reroll })).toBe(true);
+				expect(reroll).toHaveBeenCalledWith(straight);
+				expect(blow.flag.results[0].raw).toBe(9);
+				expect(blow.flag.neverGonnaBy[0]).toMatchObject({ was: 7, rolled: 9, kept: 9, straight: true });
+				expect(defendNotes(blow.flag)).toContain("pim rolled the blow they took for Bram again: its advantage and their disadvantage cancel, so a straight roll of 9 replaces 7 (Never Gonna Keep Me Down).");
+			}
+		});
+
+		it("keeps an Inspiration die added to the card on top of whichever total is kept", async () => {
+			const pim = hero(3);
+			// Rolled 7, then +2 from an Inspiration die (inspiration-flow.js#addInspirationDie).
+			const blow = card(stood(pim, { results: [row("1d8+2", 9)] }), { inspirationDie: { amount: 2 } });
+			expect(await takeSpend(blow, "neverGonna", offered(blow.flag, pim)[0], { reroll: rolling(4) })).toBe(true);
+			expect(blow.flag.results[0].raw).toBe(6);
+		});
+
+		it("refuses a row already applied, rolling nothing", async () => {
+			const pim = hero(3);
+			const blow = card(stood(pim, { applied: [{ uuid: "Token.bram", effective: 7 }] }));
+			const reroll = rolling(1);
+			expect(await takeSpend(blow, "neverGonna", { row: blow.flag.results[0], defender: pim, cost: 0 }, { reroll })).toBe(false);
+			expect(reroll).not.toHaveBeenCalled();
+			expect(blow.update).not.toHaveBeenCalled();
+		});
+
+		it("rolls the row's own formula with a Roll when pressed on the card", async () => {
+			const prior = globalThis.Roll;
+			const formulas = [];
+			globalThis.Roll = class { constructor(formula) { formulas.push(formula); } async evaluate() { return { total: 2, terms: [], dice: [] }; } };
+			try {
+				const pim = hero(3);
+				const blow = card(stood(pim));
+				expect(await spendOnBlow(blow, "neverGonna", offered(blow.flag, pim)[0])).toBe(true);
+				expect(formulas).toEqual(["1d8+2"]);
+				expect(blow.flag.results[0].raw).toBe(2);
+			} finally {
+				globalThis.Roll = prior;
+			}
+		});
+
+		it("redraws the row's total from the card's flag", async () => {
+			const priorDocument = globalThis.document;
+			globalThis.document = { createElement: () => ({}) };
+			try {
+				const pim = hero(3);
+				const blow = card(stood(pim));
+				await takeSpend(blow, "neverGonna", offered(blow.flag, pim)[0], { reroll: rolling(3) });
+				const number = { textContent: "7", dataset: {} };
+				const rowEl = { dataset: { uuid: "Token.bram" }, querySelector: () => number };
+				const root = { querySelector: () => null, querySelectorAll: () => [rowEl] };
+				wireDefendSpends(blow, root);
+				expect(number.textContent).toBe("3");
+			} finally {
+				globalThis.document = priorDocument;
+			}
+		});
 	});
 });
 
@@ -170,6 +350,50 @@ describe("Safety First on the damage card", () => {
 		const card = message({ results: [{ uuid: "Token.maelis", name: "Maelis" }] });
 		expect(await spendOnBlow(card, "safetyFirst", { row: card.flag.results[0], defender: maelis, cost: 0 })).toBe(false);
 		expect(card.setFlag).not.toHaveBeenCalled();
+	});
+});
+
+// Coverage pass (2026-10-16): Mirrorshield ("When you Defend with a shield, you can spend 1 Readiness to
+// intercept a magical force and redirect it to a different target (or none)", Book I p.119) and Lightning Rod
+// ("When you Defend while touching the earth, you can spend 1 Readiness to intercept a nearby magical attack
+// and redirect it harmlessly into the ground", p.106). A button: whether the blow is magical is the table's.
+describe("Mirrorshield and Lightning Rod on the damage card", () => {
+	const damage = { results: [{ uuid: "Token.bram", name: "Bram" }] };
+	const message = flag => ({
+		flag,
+		getFlag() { return this.flag; },
+		setFlag: vi.fn(async function (_scope, key, value) { const store = { damage: this.flag }; writeFlagPath(store, key, value); this.flag = store.damage; }),
+	});
+	const judge = (shield, readiness = 1) => Object.assign(character("judge", readiness, ["Mirrorshield"]), {
+		typedActor: { bearsShield: vi.fn(async () => shield) },
+	});
+
+	it("is offered to whoever could spend Readiness on the blow, holding either move, once per blow", () => {
+		const blessed = character("blessed", 1, ["Lightning Rod"]);
+		const offers = defendOffers(damage, () => ({ self: character("bram", 1), allies: [blessed, judge(true)] }));
+		expect(offers.redirect.map(o => [o.defender.name, o.move, o.cost])).toEqual([["blessed", "Lightning Rod", 1], ["judge", "Mirrorshield", 1]]);
+		const taken = { ...damage, redirectedBy: [{ uuid: "Token.bram", name: "blessed", how: "redirect", move: "Lightning Rod" }] };
+		expect(defendOffers(taken, () => ({ self: null, allies: [blessed] })).redirect).toEqual([]);
+		expect(defendOffers(damage, () => ({ self: character("plain", 1), allies: [] })).redirect).toEqual([]);
+	});
+
+	it("spends 1 Readiness, takes the blow off the row, and says whose move it was", async () => {
+		const blessed = character("blessed", 2, ["Lightning Rod"]);
+		const card = message({ results: [{ uuid: "Token.bram", name: "Bram" }] });
+		expect(await spendOnBlow(card, "redirect", { row: card.flag.results[0], defender: blessed, cost: 1, move: "Lightning Rod" })).toBe(true);
+		expect(blessed.flags[SYSTEM_ID][READINESS_FLAG]).toBe(1);
+		expect(spentOn(card.flag).voided.get("Token.bram")).toEqual({ lineKey: "stonetop.fight.defend.redirectedLine", move: "Lightning Rod" });
+		expect(defendNotes(card.flag)).toEqual(["blessed spent Readiness to redirect the magic aimed at Bram (Lightning Rod)."]);
+	});
+
+	it("refuses Mirrorshield to a Judge carrying no shield, and spends nothing", async () => {
+		const bare = judge(false, 2);
+		const card = message({ results: [{ uuid: "Token.bram", name: "Bram" }] });
+		expect(await spendOnBlow(card, "redirect", { row: card.flag.results[0], defender: bare, cost: 1, move: "Mirrorshield" })).toBe(false);
+		expect(bare.flags[SYSTEM_ID][READINESS_FLAG]).toBe(2);
+		expect(card.setFlag).not.toHaveBeenCalled();
+		const shielded = judge(true, 2);
+		expect(await spendOnBlow(card, "redirect", { row: card.flag.results[0], defender: shielded, cost: 1, move: "Mirrorshield" })).toBe(true);
 	});
 });
 
@@ -238,7 +462,7 @@ describe("spendOnBlow", () => {
 		expect(heavy.setFlag).not.toHaveBeenCalled();
 		const judge = character("judge", 1, ["A Mighty Rampart"]);
 		expect(await spendOnBlow(card, "ignore", { row: card.flag.results[0], defender: judge, cost: 1 })).toBe(true);
-		expect([...spentOn(card.flag).ignored]).toEqual(["Token.bram"]);
+		expect([...spentOn(card.flag).voided]).toEqual([["Token.bram", { lineKey: "stonetop.fight.defend.ignoredLine", move: "" }]]);
 		expect(defendNotes(card.flag)).toEqual([
 			"heavy took the blow for Bram (Steadfast Guardian, no Readiness spent).",
 			"judge spent Readiness to ignore the blow (A Mighty Rampart).",
@@ -324,6 +548,38 @@ describe("spendOnBlow", () => {
 			expect(posted[0].content).toContain("also pick 1 option from the Ambush list");
 			expect(posted[0].content).toContain("without the +1d4 damage");
 			expect(posted[0].content).toContain("Slip away before they can react");
+		});
+
+		// Coverage pass (2026-10-16): the list's "Create an opportunity; you or an ally gains advantage on the next
+		// move to act on it" carries the same button an Ambush 7+ does.
+		it("carries Ambush's give-advantage button for the opportunity pick, and none once the d4 was the pick", async () => {
+			const card = message({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.bram", name: "Bram" }] });
+			await spendOnBlow(card, "parry", { row: card.flag.results[0], defender: fox(), cost: 1 }, { strikeBack: strikingWith([]) });
+			expect(posted[0].content).toContain('class="stonetop-give-advantage" data-move="Ambush"');
+			expect(posted[0].content).toContain("Create an opportunity");
+			const took = message({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.bram", name: "Bram" }] });
+			await spendOnBlow(took, "parry", { row: took.flag.results[0], defender: fox(), cost: 1 }, { strikeBack: strikingWith(["secondIntent"]) });
+			expect(posted[1].content).not.toContain("stonetop-give-advantage");
+		});
+
+		it("posts no Second Intent card for a player's own move of that name, which acts as itself", async () => {
+			const actor = fox();
+			actor.items = actor.items.map(i => (i.name === "Second Intent" ? { ...i, flags: { [SYSTEM_ID]: { custom: true } } } : i));
+			const card = message({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.bram", name: "Bram" }] });
+			expect(await spendOnBlow(card, "parry", { row: card.flag.results[0], defender: actor, cost: 1 }, { strikeBack: strikingWith([]) })).toBe(true);
+			expect(posted).toEqual([]);
+		});
+
+		// Fox re-audit (2026-10-18): the list and the opportunity button are the BOOK's Ambush's, so a player's
+		// own move named "Ambush" supplies neither; the card still says what Second Intent asks.
+		it("reads neither the list nor the opportunity button off a player's own Ambush", async () => {
+			const actor = fox();
+			actor.items = actor.items.map(i => (i.name === "Ambush" ? { ...i, flags: { [SYSTEM_ID]: { custom: true } } } : i));
+			const card = message({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.bram", name: "Bram" }] });
+			expect(await spendOnBlow(card, "parry", { row: card.flag.results[0], defender: actor, cost: 1 }, { strikeBack: strikingWith([]) })).toBe(true);
+			expect(posted[0].content).toContain("also pick 1 option from the Ambush list");
+			expect(posted[0].content).not.toContain("Slip away");
+			expect(posted[0].content).not.toContain("stonetop-give-advantage");
 		});
 	});
 });
@@ -514,5 +770,73 @@ describe("rowToken", () => {
 		const doc = { ...bram, id: "bram", getActiveTokens: () => [] };
 		expect(rowToken(doc, { scene: { id: "elsewhere" }, combats: collection([combat]) })).toBe(token);
 		expect(rowToken(doc, { scene: { id: "elsewhere" }, combats: collection([{ ...combat, flags: {} }]) })).toBeNull();
+	});
+});
+
+// Marshal re-audit (2026-10-18): FRONT LINE LEADER's "Spend Presence ... as Readiness (as if you Defended
+// them)". A blow on the Marshal's crew is offered to the Marshal to halve or to take for them, paid in Presence.
+describe("Front Line Leader's Presence on a blow at the crew", () => {
+	const FLL = "Front Line Leader";
+	const marshal = (presence = 2, readiness = 0) => {
+		const tracks = { [FLL]: presence };
+		return {
+			...character("rhianna", readiness),
+			items: [{ type: "move", name: FLL, system: { resource: { max: 2, title: "Presence" } }, flags: {} }],
+			typedActor: { moveResources: {
+				getMoveResources: () => tracks,
+				setUses: vi.fn(async (move, value) => { tracks[move] = value; }),
+			} },
+			tracks,
+		};
+	};
+	const crew = { name: "The Wolves", type: "npc", uuid: "Actor.wolves", isOwner: true };
+	const damage = { results: [{ uuid: "Token.wolves", name: "The Wolves" }] };
+	const nobody = () => ({ self: null, allies: [] });
+	const message = flag => ({
+		flag,
+		getFlag() { return this.flag; },
+		setFlag: vi.fn(async function (_scope, key, value) { const store = { damage: this.flag }; writeFlagPath(store, key, value); this.flag = store.damage; }),
+	});
+
+	it("offers the Marshal a halving and a stand-in, priced in Presence, while they hold any", () => {
+		const rhianna = marshal(1);
+		const offers = defendOffers(damage, nobody, () => crew, hit => (hit === crew ? rhianna : null));
+		expect(offers.halve).toEqual([{ row: damage.results[0], defender: rhianna, cost: 1, purse: "presence" }]);
+		expect(offers.standIn).toEqual([{ row: damage.results[0], defender: rhianna, cost: 1, purse: "presence" }]);
+		// Nobody's Presence guards anyone else.
+		const elsewhere = defendOffers(damage, nobody, () => character("bram", 0), () => null);
+		expect(elsewhere.halve).toEqual([]);
+		expect(elsewhere.standIn).toEqual([]);
+	});
+
+	it("offers each once against the blow, and nothing once someone has taken it for them", () => {
+		const rhianna = marshal(2);
+		const halved = { ...damage, halvedBy: [{ uuid: "Token.wolves", name: "rhianna", how: "halve", purse: "presence" }] };
+		const offers = defendOffers(halved, nobody, () => crew, () => rhianna);
+		expect(offers.halve).toEqual([]);
+		expect(offers.standIn).toHaveLength(1);
+		const stoodIn = { ...damage, standIns: [{ uuid: "Token.wolves", by: "Actor.bram", name: "bram" }] };
+		const after = defendOffers(stoodIn, nobody, uuid => (uuid === "Token.wolves" ? crew : character("bram", 0)), () => rhianna);
+		expect(after.halve).toEqual([]);
+		expect(after.standIn).toEqual([]);
+	});
+
+	it("spends 1 Presence, not Readiness, and the card says so", async () => {
+		const rhianna = marshal(2, 3);
+		const card = message({ results: [{ uuid: "Token.wolves", name: "The Wolves" }] });
+		expect(await spendOnBlow(card, "standIn", { row: card.flag.results[0], defender: rhianna, cost: 1, purse: "presence" })).toBe(true);
+		expect(rhianna.tracks[FLL]).toBe(1);
+		expect(rhianna.typedActor.moveResources.setUses).toHaveBeenCalledWith(FLL, 1, { stonetopMove: FLL });
+		expect(rhianna.flags[SYSTEM_ID][READINESS_FLAG]).toBe(3);
+		expect(spentOn(card.flag).standIns.get("Token.wolves")).toMatchObject({ by: "Actor.rhianna", purse: "presence" });
+		expect(defendNotes(card.flag)).toEqual(["rhianna spent 1 Presence as Readiness to take the blow for The Wolves (Front Line Leader)."]);
+	});
+
+	it("is refused with no Presence left, whatever Readiness they hold", async () => {
+		const rhianna = marshal(0, 3);
+		const card = message({ results: [{ uuid: "Token.wolves", name: "The Wolves" }] });
+		expect(await spendOnBlow(card, "halve", { row: card.flag.results[0], defender: rhianna, cost: 1, purse: "presence" })).toBe(false);
+		expect(card.setFlag).not.toHaveBeenCalled();
+		expect(rhianna.flags[SYSTEM_ID][READINESS_FLAG]).toBe(3);
 	});
 });

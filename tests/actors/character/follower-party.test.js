@@ -13,7 +13,7 @@ import { loadPlaybookDefs } from "../../fakes/sourcePack.js";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { newSetupDraft } from "../../../module/struggle/struggle-setup.js";
 import {
-	FOLLOWER_PARTY_DEFAULTS, followerInPartyFlags, followerMouths, followerPartyPath, partyFollowers, partyMouths,
+	FOLLOWER_PARTY_DEFAULTS, followerFeedsItself, followerInPartyFlags, followerMouths, followerPartyPath, partyFollowers, partyMouths,
 } from "../../../module/actors/character/follower-party.js";
 
 const BLESSED = loadPlaybookDefs().byName.get("The Blessed");
@@ -75,7 +75,46 @@ describe("the party toggle's one reading", () => {
 		expect(followerMouths(flags, cards[0])).toBe(6);
 		expect(followerMouths(flags, cards[1])).toBe(2);
 		expect(partyFollowers(cards).map(c => c.ftype)).toEqual(["crew", "custom", "animal-companion"]);
-		expect(partyMouths(flags, partyFollowers(cards))).toBe(9);
+		// The companion travels but feeds itself (p.304), so it is no mouth.
+		expect(partyMouths(flags, partyFollowers(cards))).toBe(8);
+	});
+
+	// Book I p.304: "Pack animals can graze or browse ... The Ranger's pet wolf can probably fend for
+	// itself ... but well-heeled hounds probably need to be fed from the party's supplies."
+	it("counts no mouth for an animal that feeds itself, and one for a hound", () => {
+		const flags = {
+			customFollowers: {
+				nag:   { typeLabel: "beast follower", portraitIcon: "fas fa-horse" },
+				goat:  { typeLabel: "livestock", portraitIcon: "fas fa-wheat-awn" },
+				rex:   { typeLabel: "beast follower", portraitIcon: "fas fa-dog" },
+				guide: { typeLabel: "follower", portraitIcon: "fas fa-user" },
+			},
+		};
+		const mouths = c => followerMouths(flags, { party: true, ...c });
+		expect(mouths({ ftype: "animal-companion", slug: "" })).toBe(0);
+		expect(mouths({ ftype: "beast", slug: "mule" })).toBe(0);
+		expect(mouths({ ftype: "beast", slug: "horse" })).toBe(0);
+		expect(mouths({ ftype: "beast", slug: "dog-follower" })).toBe(1);
+		expect(mouths({ ftype: "custom", slug: "nag" })).toBe(0);
+		expect(mouths({ ftype: "custom", slug: "goat" })).toBe(0);
+		expect(mouths({ ftype: "custom", slug: "rex" })).toBe(1);
+		expect(mouths({ ftype: "custom", slug: "guide" })).toBe(1);
+		expect(mouths({ ftype: "initiate", slug: "enfys" })).toBe(1);
+		expect(followerFeedsItself(flags, { ftype: "beast", slug: "pig" })).toBe(true);
+		expect(followerFeedsItself(flags, { ftype: "crew", slug: "" })).toBe(false);
+	});
+
+	// A custom follower made from a beast records which one (data/beasts.js#followerInputFromBeast), so a hound
+	// renamed and given a horse's portrait still eats, and a mule relabelled "pack animal" still grazes.
+	it("reads the beast a custom follower was made from over its label and glyph", () => {
+		const flags = {
+			customFollowers: {
+				rex: { beastSlug: "dog-follower", typeLabel: "war beast", portraitIcon: "fas fa-horse" },
+				ned: { beastSlug: "mule", typeLabel: "pack animal", portraitIcon: "fas fa-dog" },
+			},
+		};
+		expect(followerFeedsItself(flags, { ftype: "custom", slug: "rex" })).toBe(false);
+		expect(followerFeedsItself(flags, { ftype: "custom", slug: "ned" })).toBe(true);
 	});
 });
 

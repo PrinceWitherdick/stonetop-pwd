@@ -214,6 +214,19 @@ function makeActor() {
 	return actor;
 }
 
+// Owned AND learned moves on the fixture: every MOVE_USE_EFFECTS handler acts only for a move the
+// character has learned (an un-learned one is kept on the sheet switched off and posts its text).
+// `off` names the ones kept switched off.
+function learn(actor, names, { off = [] } = {}) {
+	for (const name of names) {
+		actor.items.push({
+			type: "move", name, id: `move-${name}`,
+			flags: off.includes(name) ? { "stonetop-pwd": { learned: false } } : {},
+		});
+	}
+	return actor;
+}
+
 function installGetDataGlobals() {
 	global.foundry.utils.setProperty ??= (obj, path, value) => {
 		const parts = String(path).split(".");
@@ -500,7 +513,7 @@ describe("StonetopCharacterSheet holy light candle", () => {
 	});
 
 	it("lights up when Consecrated Flame is used", async () => {
-		const actor = makeActor();
+		const actor = learn(makeActor(), ["Consecrated Flame"]);
 		const sheet = makeSheet(actor);
 		await sheet._onDescriptionMoveUsed({ type: "move", name: "Consecrated Flame" });
 		expect(actor.typedActor.setHolyLight).toHaveBeenCalledWith(true);
@@ -509,8 +522,15 @@ describe("StonetopCharacterSheet holy light candle", () => {
 
 	// One slot: "until the flame goes out or until you consecrate another flame". The second
 	// consecration replaces the same light, so nothing is written and nothing repaints.
+	it("lights nothing for a Consecrated Flame kept switched off", async () => {
+		const actor = learn(makeActor(), ["Consecrated Flame"], { off: ["Consecrated Flame"] });
+		const sheet = makeSheet(actor);
+		await sheet._onDescriptionMoveUsed({ type: "move", name: "Consecrated Flame" });
+		expect(actor.typedActor.setHolyLight).not.toHaveBeenCalled();
+	});
+
 	it("doesn't repaint when the light is already burning", async () => {
-		const actor = makeActor();
+		const actor = learn(makeActor(), ["Consecrated Flame"]);
 		const sheet = makeSheet(actor);
 		await sheet._onDescriptionMoveUsed({ type: "move", name: "Consecrated Flame" });
 		sheet.render.mockClear();
@@ -952,7 +972,7 @@ describe("StonetopCharacterSheet ongoing Invocation", () => {
 // asserted is WHICH uses open the roster, not the window itself.
 describe("StonetopCharacterSheet Condemn roster on move use", () => {
 	function condemnSheet() {
-		const actor = makeActor();
+		const actor = learn(makeActor(), ["Censure", "Condemn", "Binding Arbitration"]);
 		const sheet = makeSheet(actor);
 		sheet._openCondemned = vi.fn(async () => {});
 		return { actor, sheet };
@@ -1014,8 +1034,8 @@ describe("StonetopCharacterSheet Castigate on Censure", () => {
 		global.game.scenes = savedScenes;
 	});
 
-	function censureSheet({ castigate = true, condemn = false, proclaim = false, targets = [], scene = [], editable = true } = {}) {
-		const actor = makeActor();
+	function censureSheet({ castigate = true, condemn = false, proclaim = false, targets = [], scene = [], editable = true, off = [] } = {}) {
+		const actor = learn(makeActor(), ["Censure", "Castigate"], { off });
 		Object.assign(actor.typedActor, {
 			canCastigate: castigate,
 			canProclaim: proclaim,
@@ -1108,6 +1128,15 @@ describe("StonetopCharacterSheet Castigate on Censure", () => {
 		await sheet._onDescriptionMoveUsed({ type: "move", name: "Castigate" });
 		expect(character.castigate).toHaveBeenCalledWith(bandit);
 		expect(sheet._openCondemned).toHaveBeenCalledTimes(1);
+	});
+
+	it("does nothing for a Censure or a Castigate kept switched off", async () => {
+		for (const name of ["Censure", "Castigate"]) {
+			const { character, sheet } = censureSheet({ condemn: true, targets: [bandit], off: [name] });
+			await sheet._onDescriptionMoveUsed({ type: "move", name });
+			expect(character.castigate, name).not.toHaveBeenCalled();
+			expect(sheet._openCondemned, name).not.toHaveBeenCalled();
+		}
 	});
 
 	it("rolls nothing from a sheet the viewer cannot edit, but still shows the roster", async () => {

@@ -81,9 +81,12 @@ export function planPosterMapScenes(present, root, scenes = []) {
 	});
 }
 
+/** The poster-map images' folder inside the art root. */
+export const POSTER_MAP_DIR = "assets/maps";
+
 /** Fully-qualified paths of the poster-map images currently on disk under `root`. GM-only. */
 export function browsePosterMapArt(root) {
-	return browseArtDirs(root, ["assets/maps"]);
+	return browseArtDirs(root, [POSTER_MAP_DIR]);
 }
 
 /**

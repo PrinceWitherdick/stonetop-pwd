@@ -10,7 +10,10 @@ import { OutfitItemBuilder } from "../../model/OutfitItem.js";
 import { majorArcanaImg, isMajorArcanumItem, arcanumCardImg } from "../../arcana-icons.js";
 import { arcanaSummonFollowers } from "../../data/arcana-summons.js";
 import { isCarriedArcanumItem } from "../../data/arcana-facets.js";
-import { CONDENSED_MOVE_SLUG, condensedArcanumMove, findArcanumMove, markArcanumMoveNames } from "../../data/arcana-moves.js";
+import {
+	CONDENSED_MOVE_SLUG, FRONT_MOVE_PREFIX, condensedArcanumMove, findArcanumFrontMove, findArcanumMove,
+	isArcanumFrontMoveSlug, markArcanumFrontMoves, markArcanumMoveNames,
+} from "../../data/arcana-moves.js";
 import { boxIndexBefore, centerArcanumTracks, injectGlyphCheckboxes } from "../../utils/glyphs.js";
 import { stonetopChatCard } from "../../utils/chat.js";
 import { prettifySlug } from "../../utils/ledger-core.js";
@@ -234,6 +237,85 @@ export function consequenceBoxLabel(backDescription, index) {
 	return plain.length > 140 ? `${clipText(plain, 139).trimEnd()}…` : plain;
 }
 
+// A card whose unlock track buys a choice off its BACK with every mark. The Hec'tumel Codex: "○○○○
+// Each time you make a mark, choose one of the Codex Spells (see reverse)", and "you can now cast
+// it". The spells are the □ of the back's "Spells of the Codex" section. Read off the text, as the
+// consequences are: the unlock line names the list ("choose one of the X (see reverse)") and the
+// back section is the one whose heading holds every word of X, so a homebrew card worded the same
+// way works with no table.
+const _UNLOCK_CHOICE_RE = /\bchoose\s+(?:one|1)\s+of\s+the\s+([^(<.]+?)\s*\(see reverse\)/i;
+const _HEADING_RE       = /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi;
+const _words = s => new Set(String(s ?? "").toLowerCase().match(/[a-z0-9'’]+/g) ?? []);
+
+/**
+ * The back section an unlock line's "choose one of the X (see reverse)" points at: `name` (X as the
+ * unlock prints it), `title` and raw `heading` of the section, and its `choices`, one per □, with
+ * `index` the back-side box index (`slug:back:i`, document order as _injectMarkers counts) and
+ * `label` the words the box marks up to the end of their bold run ("Call Up the Dead"). Null when the
+ * unlock prints no such line or the back no such section with a box in it.
+ */
+export function unlockChoiceSection(unlockDescription, backDescription) {
+	const m = _UNLOCK_CHOICE_RE.exec(stripHtmlToText(String(unlockDescription ?? "")));
+	if (!m) return null;
+	const wanted = [..._words(m[1])];
+	if (!wanted.length) return null;
+	const text = String(backDescription ?? "");
+	for (const h of text.matchAll(_HEADING_RE)) {
+		const title = stripHtmlToText(h[2]).trim();
+		const have = _words(title);
+		if (!wanted.every(w => have.has(w))) continue;
+		const start = h.index + h[0].length;
+		const after = text.slice(start);
+		const next = after.search(/<h[1-6]\b/i);
+		const body = next >= 0 ? after.slice(0, next) : after;
+		let index = (text.slice(0, start).match(/□/g) || []).length;
+		const choices = [];
+		for (const box of body.matchAll(/□/g)) {
+			const rest = body.slice(box.index + 1);
+			const stop = rest.search(/<\/strong>|<\/p>|<\/li>|<ul\b|□/i);
+			const label = stripHtmlToText(stop < 0 ? rest : rest.slice(0, stop)).trim().replace(/[.:]$/, "");
+			choices.push({ index: index++, label });
+		}
+		return choices.length ? { name: m[1].trim(), title, heading: h[0], choices } : null;
+	}
+	return null;
+}
+
+/**
+ * Where a card's unlock choices stand under these marks: unlockChoiceSection plus `marked` (the
+ * unlock ○ ticked), `learned` and `open` (the choices whose □ is ticked, and the rest), and `owed`,
+ * how many marks have bought no choice yet (never more than are left to choose). Null for a card
+ * with no unlock choice.
+ */
+export function unlockChoiceState(item, boxes = {}) {
+	const section = unlockChoiceSection(item?.front?.unlock?.description, item?.back?.description);
+	if (!section) return null;
+	const slug = item.slug;
+	const circles = unlockCircleCount(item.front?.unlock?.description);
+	let marked = 0;
+	for (let i = 0; i < circles; i++) if (boxes?.[`${slug}:unlock:${i}`]) marked++;
+	const learned = section.choices.filter(c => boxes?.[`${slug}:back:${c.index}`]);
+	const open    = section.choices.filter(c => !boxes?.[`${slug}:back:${c.index}`]);
+	return { ...section, marked, learned, open, owed: Math.max(0, Math.min(open.length, marked - learned.length)) };
+}
+
+// The learned choices' paragraphs (or list items), lifted out of the PROCESSED back so their □ keep
+// the back's own checkboxes, under the section's heading: what the front shows a player whose back
+// is still hidden ("you can now cast it"). The choices not yet learned stay hidden with the back.
+// Null when none is learned.
+function _extractLearnedChoices(processedBackHtml, state) {
+	const at = processedBackHtml?.indexOf(state.heading) ?? -1;
+	if (at < 0 || !state.learned.length) return null;
+	const after = processedBackHtml.slice(at + state.heading.length);
+	const next = after.search(/<h[1-6]\b/i);
+	const body = next >= 0 ? after.slice(0, next) : after;
+	const learned = new Set(state.learned.map(c => c.index));
+	const kept = [...body.matchAll(/<(p|li)\b[^>]*>[\s\S]*?<\/\1>/gi)]
+		.map(([block]) => block)
+		.filter(block => [...block.matchAll(/data-context="back" data-index="(\d+)"/g)].some(([, i]) => learned.has(Number(i))));
+	return kept.length ? state.heading + kept.join("") : null;
+}
+
 // Run a side description through the full marker pipeline: center standalone tracks, then
 // make ◇ / ○ tracks and □ boxes selectable. `side` ("front"/"back") keeps each side's
 // marker indices in their own context so they never collide. Returns the processed HTML.
@@ -343,19 +425,23 @@ export class CharacterArcana {
 		const fetchedItems = await this._arcanaRepo.findBySlugs([...ownedSlugs]);
 
 		const allItems = fetchedItems.map(item => {
+			// The front's own rolling moves get handles too (data/arcana-moves.js#parseArcanumFrontMoves):
+			// in its text, its unlock lead and each requirement line. The wrap adds no glyphs.
+			const fallbackName = item.front.title ?? "";
+			const frontMoves = (html, prefix) => markArcanumFrontMoves(html, item.slug, { prefix, fallbackName });
 			const unlockItems = (item.front.unlock?.requirements ?? []).map(li => {
 				if (li.type === "text") return new ArcanaUnlockTextItem(li.content);
 				const count = unlockCounts[`${item.slug}:${li.slug}`] ?? 0;
 				return new ArcanaUnlockOptionSnapshotBuilder()
 					.withSlug(li.slug)
-					.withDescription(li.description)
+					.withDescription(frontMoves(li.description, `${FRONT_MOVE_PREFIX.req}:${li.slug}`))
 					.withCount(count)
 					.withMax(li.max ?? 1)
 					.build();
 			});
 
-			const frontDesc = _processSideDescription(item.front.description, item.slug, "front", arcanaBoxes);
-			const { html: unlockDesc, count: circleCount } = _injectMarkers(centerArcanumTracks(item.front.unlock?.description ?? ""), item.slug, "unlock", arcanaBoxes, "stonetop-arcanum-circle", _UNLOCK_CIRCLE_RE);
+			const frontDesc = _processSideDescription(frontMoves(item.front.description, FRONT_MOVE_PREFIX.front), item.slug, "front", arcanaBoxes);
+			const { html: unlockDesc, count: circleCount } = _injectMarkers(centerArcanumTracks(frontMoves(item.front.unlock?.description ?? "", FRONT_MOVE_PREFIX.unlock)), item.slug, "unlock", arcanaBoxes, "stonetop-arcanum-circle", _UNLOCK_CIRCLE_RE);
 			const unlocked = _isUnlocked(item, unlockCounts, arcanaBoxes, circleCount);
 
 			const front = new MinorArcanumFrontSnapshotBuilder()
@@ -423,6 +509,15 @@ export class CharacterArcana {
 				? _extractConsequencesSection(backDesc)
 				: null;
 
+			// The Hec'tumel Codex's spells, chosen one per unlock mark (unlockChoiceState): the front
+			// carries the ones learned, since "you can now cast it" holds with the back still hidden,
+			// and how many marks still owe a choice (the tab's "choose" cue, for a mark made where no
+			// one could be asked, such as the Seeker's creation mark, or a pick that was closed).
+			const choiceState = unlockChoiceState(item, arcanaBoxes);
+			const unlockChoice = choiceState
+				? { name: choiceState.name, owed: choiceState.owed, html: _extractLearnedChoices(backDesc, choiceState) }
+				: null;
+
 			// Redwood Effigy: the two "potential" Conduit slots on the front stay locked until
 			// the Greater Conduit mystery (a □ on the back) is checked. Resolved by LABEL through
 			// the shared helper, which the armor unlocks use too.
@@ -452,6 +547,7 @@ export class CharacterArcana {
 				.withSummonFollowers(arcanaSummonFollowers(item))
 				.withGreaterConduit(greaterConduit)
 				.withConsequences(consequences)
+				.withUnlockChoice(unlockChoice)
 				.build();
 		});
 
@@ -497,6 +593,13 @@ export class CharacterArcana {
 			const cardTitle = item.back?.title ?? item.front?.title ?? "";
 			const learned = _backRealised(item, this.identifiedSlugs, this.unlockCounts, this._flags.getFlag("boxes") ?? {});
 			return { ...move, name: String(item.back?.title ?? "").trim() || move.name, cardTitle, learned };
+		}
+		// A move printed on the FRONT (parseArcanumFrontMoves) has no learned box: it is the card's to
+		// use once its owner can read the front, which is what identifying it gives.
+		if (isArcanumFrontMoveSlug(moveSlug)) {
+			const move = findArcanumFrontMove(item.front, moveSlug);
+			if (!move) return null;
+			return { ...move, cardTitle: item.front?.title ?? "", learned: this.identifiedSlugs.has(slug) };
 		}
 		const move = findArcanumMove(item.back?.description ?? "", moveSlug);
 		if (!move) return null;
@@ -657,19 +760,27 @@ export class CharacterArcana {
 		]);
 	}
 
-	// Discover a lead: the owner has recovered the arcanum, so drop the lead marker and
-	// identify it — it now renders as a normal (found) minor arcanum, exactly like a card
-	// acquired through the Found role.
+	// Discover a lead: the owner has recovered the arcanum, so drop the lead marker and give it
+	// as the Found role gives its card (StonetopCharacter#settleSeekerArcana): identified AND
+	// revealed, since a found card is one whose both sides the player has reviewed ("Draw 3 at
+	// random and review both sides", the 2026-09-27 ruling). Any back a 7-9 owed on it has arrived with it.
+	// One batched write, so the card turns over in one render.
 	async discoverArcanum(slug) {
 		const leads = this.leadSlugs;
 		if (!leads.has(slug)) return;
 		leads.delete(slug);
 		const identified = this.identifiedSlugs;
+		const revealed   = this.revealedSlugs;
+		const backOwed   = this.backOwedSlugs;
 		identified.add(slug);
-		await Promise.all([
-			this._flags.setFlag("leads", [...leads]),
-			this._flags.setFlag("identified", [...identified]),
-		]);
+		revealed.add(slug);
+		backOwed.delete(slug);
+		await this._flags.batch({ sets: {
+			leads:      [...leads],
+			identified: [...identified],
+			revealed:   [...revealed],
+			backOwed:   [...backOwed],
+		} });
 	}
 
 	// One-time backfill for Seekers created before the lead-card feature. Their onboarding

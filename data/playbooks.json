@@ -172,6 +172,12 @@
               "damage": "iron spear d6 (close, thrown)",
               "instinct": "to lack discretion",
               "cost": "tenderness, respect",
+              "gear": [
+                {
+                  "label": "Shield",
+                  "checked": true
+                }
+              ],
               "moves": [
                 "Perform a divination",
                 "Speak a (dire) prophecy",
@@ -284,7 +290,7 @@
     "instincts": [
       {
         "word": "Delight",
-        "description": "To find beauty, in even the ugliest things."
+        "description": "To find beauty, in even the most ugly thing."
       },
       {
         "word": "Detachment",
@@ -300,7 +306,7 @@
       },
       {
         "word": "Reverence",
-        "description": "To honor the spirits and give them their due."
+        "description": "To demand sacrifice to the spirits and Danu."
       }
     ],
     "appearance": [
@@ -427,7 +433,7 @@
           "slug": "sacred-pouch",
           "label": "Sacred pouch",
           "detailsSection": "Sacred Pouch",
-          "description": "<p>Doesn't take up space in your inventory. It can hold up to 3 Stock (sacred herbs, powders, stones, pigments, chalks, clay, and so forth). Each time you gain an even-numbered level, your pouch can hold +1 Stock. When <strong><em>anyone but you looks inside your sacred pouch and touches the materials therein</em></strong>, the Stock is ruined.</p><p>When you <strong><em>have a few days of downtime in familiar terrain</em></strong>, you may replenish your Stock.</p><p>When you <strong><em>Forage</em></strong>, you can produce Stock instead of provisions.</p>",
+          "description": "<p>Your sacred pouch (<em>magical</em>) doesn't take up space in your inventory. It can hold up to 3 Stock (sacred herbs, powders, stones, pigments, chalks, clay, and so forth). Each time you gain an even-numbered level, your pouch can hold +1 Stock. When <strong><em>anyone but you looks inside your sacred pouch and touches the materials therein</em></strong>, the Stock is ruined.</p><p>When you <strong><em>have a few days of downtime in familiar terrain</em></strong>, you may replenish your Stock.</p><p>When you <strong><em>Forage</em></strong>, you can produce Stock instead of provisions.</p>",
           "usesBonus": {
             "evenLevelBonus": 1,
             "moveBonus": [
@@ -630,6 +636,9 @@
           "label": "Herb garden",
           "description": "shears, mortars &amp; pestles, herbs, seeds, remedies, mild poisons, ◇ spades, etc. Each spring, d4 uses of bendis root (<em>reach, area</em>, burns ~1 hr, fumes repel perversions of nature).",
           "rulesNote": "Each spring, d4 uses of bendis root (<em>reach, area</em>, burns ~1 hr, fumes repel perversions of nature).",
+          "specialItems": [
+            "bendis-root"
+          ],
           "grantsItems": [
             {
               "name": "Shears",
@@ -701,46 +710,46 @@
         "slug": "danu-offerings",
         "title": "",
         "continuation": true,
-        "description": "<p>What do the folk of Stonetop leave as offerings to Danu? <em>(choose 2–3)</em></p>",
+        "description": "<p>What do the folk of Stonetop leave as offerings? <em>(choose 2–3)</em></p>",
         "options": [
           {
             "slug": "fruits-of-harvest",
-            "description": "Fruits of harvest",
+            "description": "fruits of harvest",
             "max": 1
           },
           {
             "slug": "figurines",
-            "description": "Figurines/effigies",
+            "description": "figurines/effigies",
             "max": 1
           },
           {
             "slug": "whisky",
-            "description": "Whisky/spirits",
+            "description": "whisky/spirits",
             "max": 1
           },
           {
             "slug": "salt",
-            "description": "Salt/crystals",
+            "description": "salt/crystals",
             "max": 1
           },
           {
             "slug": "rain-water",
-            "description": "Pure rain water",
+            "description": "pure rain water",
             "max": 1
           },
           {
             "slug": "metal-nails",
-            "description": "Metal nails/tools",
+            "description": "metal nails/tools",
             "max": 1
           },
           {
             "slug": "blood",
-            "description": "Blood/burnt flesh",
+            "description": "blood/burnt flesh",
             "max": 1
           },
           {
             "slug": "incense",
-            "description": "Incense/sage bark",
+            "description": "incense/sage bark",
             "max": 1
           }
         ]
@@ -805,7 +814,10 @@
       {
         "slug": "the-prodigal-returned",
         "label": "The Prodigal Returned",
-        "description": "<p>You left long ago, travelling far and living by your wits. Why did you leave? What deeds do you boast of, and which do you regret?</p><p>You always longed to return to Stonetop, and return you have. You're a bit of a celebrity now, and you've got friends (or close enough) strewn about the known world.</p><p>When you <strong><em>declare that you know someone outside of Stonetop</em></strong>, someone who can help, name them and roll +CHA: <strong>on a 10+</strong>, yeah, they can help (tell us why they're willing); <strong>on a 7-9</strong>, they can help but pick 1 from the list below; <strong>on a 6-</strong>, the GM chooses 1 and then some.</p><ul><li>They still hold a grudge</li><li>They're going to need something from you first</li><li>They swore off this sort of thing long ago</li><li>You can't exactly, y'know, trust them</li></ul>"
+        "description": "<p>You left long ago, travelling far and living by your wits. Why did you leave? What deeds do you boast of, and which do you regret?</p><p>You always longed to return to Stonetop, and return you have. You're a bit of a celebrity now, and you've got friends (or close enough) strewn about the known world.</p><p>When you <strong><em>declare that you know someone outside of Stonetop</em></strong>, someone who can help, name them and roll +CHA: <strong>on a 10+</strong>, yeah, they can help (tell us why they're willing); <strong>on a 7-9</strong>, they can help but pick 1 from the list below; <strong>on a 6-</strong>, the GM chooses 1 and then some.</p><ul><li>They still hold a grudge</li><li>They're going to need something from you first</li><li>They swore off this sort of thing long ago</li><li>You can't exactly, y'know, trust them</li></ul>",
+        "moves": [
+          "Friends Far and Wide"
+        ]
       }
     ],
     "instincts": [
@@ -990,15 +1002,6 @@
               "column": "small"
             },
             {
-              "name": "Firkins",
-              "column": "regular",
-              "weight": 2
-            },
-            {
-              "name": "Barrels",
-              "column": "small"
-            },
-            {
               "name": "Prybars",
               "column": "regular",
               "weight": 1
@@ -1007,6 +1010,15 @@
               "name": "Saws",
               "column": "regular",
               "weight": 1
+            },
+            {
+              "name": "Firkins",
+              "column": "regular",
+              "weight": 2
+            },
+            {
+              "name": "Barrels",
+              "column": "small"
             }
           ]
         },
@@ -1040,11 +1052,13 @@
             },
             {
               "name": "Stills",
-              "column": "small"
+              "column": "small",
+              "note": "immobile"
             },
             {
               "name": "Barrels",
-              "column": "small"
+              "column": "small",
+              "note": "immobile"
             },
             {
               "name": "Firkins",
@@ -1056,7 +1070,8 @@
         {
           "slug": "hidden-stash",
           "label": "Hidden stash",
-          "description": "○○○ uses: each use produces valuables worth a purse of silvers (Value 2)",
+          "description": "(○○○ uses): each use produces valuables worth a purse of silvers (Value 2)",
+          "produces": "purse-of-silvers",
           "resource": {
             "max": 3,
             "title": null,
@@ -1408,7 +1423,7 @@
       {
         "slug": "sheriff",
         "label": "Sheriff",
-        "description": "<p>You keep order in Stonetop and protect it from outside threats. It might not be anything official, but everyone knows you've got a cool head and the weight to back up your words.</p><p>When you <strong><em>bark an order or warning</em></strong>, roll +CHA: <strong>on a 7+</strong>, they must choose 1: <ul><li>Do what you say</li><li>Dig in/take cover/flee</li><li>Attack you</li></ul> <strong><em>On a 10+</em></strong>, you can sense which one they're about to do and act first if you like; gain advantage if you do.</p>",
+        "description": "<p>You keep order in Stonetop and protect it from outside threats. It might not be anything official, but everyone knows you've got a cool head and the weight to back up your words.</p><p>When you <strong><em>bark an order or warning</em></strong>, roll +CHA: <strong>on a 7+</strong>, they must choose 1:</p><ul><li>Do what you say</li><li>Dig in/take cover/flee</li><li>Attack you</li></ul><p><strong><em>On a 10+</em></strong>, you can sense which one they're about to do and act first if you like; gain advantage if you do.</p>",
         "moves": [
           "Bark an Order"
         ]
@@ -1596,11 +1611,13 @@
             },
             {
               "name": "Stills",
-              "column": "small"
+              "column": "small",
+              "note": "immobile"
             },
             {
               "name": "Barrels",
-              "column": "small"
+              "column": "small",
+              "note": "immobile"
             },
             {
               "name": "Firkins",
@@ -2643,7 +2660,7 @@
               "weight": 1
             },
             {
-              "name": "hats & veils",
+              "name": "Hats & veils",
               "column": "regular",
               "weight": 1
             }
@@ -2724,11 +2741,13 @@
             },
             {
               "name": "Stills",
-              "column": "small"
+              "column": "small",
+              "note": "immobile"
             },
             {
               "name": "Barrels",
-              "column": "small"
+              "column": "small",
+              "note": "immobile"
             },
             {
               "name": "Firkins",
@@ -3309,11 +3328,13 @@
             },
             {
               "name": "Stills",
-              "column": "small"
+              "column": "small",
+              "note": "immobile"
             },
             {
               "name": "Barrels",
-              "column": "small"
+              "column": "small",
+              "note": "immobile"
             },
             {
               "name": "Firkins",
@@ -3421,7 +3442,7 @@
               },
               {
                 "slug": "composite-bow",
-                "label": "◇ <strong>Composite bow</strong> (<em>far</em>, +1 damage, x <em>piercing</em>, ○ low ammo, ○ all out)",
+                "label": "◇ <strong>Composite bow</strong> (<em>far</em>, +1 damage, x <em>piercing</em>; ○ low ammo, ○ all out)",
                 "resource": {
                   "max": 2,
                   "title": null,
@@ -3771,7 +3792,7 @@
             },
             {
               "slug": "lend-strength",
-              "label": "Lend it your strength—lose 1d6 HP, and it regains an equal amount"
+              "label": "Lend it your strength: lose 1d6 HP, and it regains an equal amount"
             }
           ]
         }
@@ -3943,11 +3964,13 @@
             },
             {
               "name": "Stills",
-              "column": "small"
+              "column": "small",
+              "note": "immobile"
             },
             {
               "name": "Barrels",
-              "column": "small"
+              "column": "small",
+              "note": "immobile"
             },
             {
               "name": "Firkins",
@@ -4246,6 +4269,7 @@
               "piercing": 1
             },
             "large (+4 HP, +1 damage, +close)": {
+              "isTag": true,
               "hp": 4,
               "damage": 1,
               "tags": [
@@ -4707,11 +4731,13 @@
             },
             {
               "name": "Stills",
-              "column": "small"
+              "column": "small",
+              "note": "immobile"
             },
             {
               "name": "Barrels",
-              "column": "small"
+              "column": "small",
+              "note": "immobile"
             },
             {
               "name": "Firkins",

@@ -34,16 +34,13 @@ import { PERSON_ROSTER_IMG } from "../../../utils/person-portrait.js";
 import { findNamedActor } from "../marked-people.js";
 import { wireGrowableFields, refitGrowableFields } from "../../../utils/growable-fields.js";
 import { applyGuideRail } from "../../../utils/guide-rail.js";
+import { PERSON_ACTOR_TYPES } from "../../../utils/actor-types.js";
 
-/**
- * Actor types a roster row can name — the same three for all of them.
- *
- * A steading is a place rather than somebody who can be denounced, so it is not here. The list
- * matters more to the Blessed than to the Judge (a marked BEAST is very often a monster document,
- * and a warded threshold is very often nothing at all), but the answer came out the same both
- * times, so it is asked once.
- */
-export const ROSTER_ACTOR_TYPES = ["npc", "character", "monster"];
+// Actor types a roster row can name: PERSON_ACTOR_TYPES (utils/actor-types.js), the same three for
+// every roster. A steading is a place rather than somebody who can be denounced, so it is not
+// one. The list matters more to the Blessed than to the Judge (a marked BEAST is very often a
+// monster document, and a warded threshold is very often nothing at all), but the answer came
+// out the same both times, so it is asked once.
 
 /**
  * How tall a railed roster opens.
@@ -289,7 +286,7 @@ export class RosterDialog extends StonetopDialog {
 	 * Subclasses narrow it: the Judge's excludes the Judge.
 	 */
 	_rosterPool() {
-		return [...(game.actors ?? [])].filter(a => ROSTER_ACTOR_TYPES.includes(a.type));
+		return [...(game.actors ?? [])].filter(a => PERSON_ACTOR_TYPES.has(a.type));
 	}
 
 	/**
@@ -410,7 +407,7 @@ export class RosterDialog extends StonetopDialog {
 			if (data?.type !== "Actor") return;
 			const actor = await fromUuid(data.uuid);
 			if (!actor) return;
-			if (!ROSTER_ACTOR_TYPES.includes(actor.type)) return this._warn(wrongTypeKey, { name: actor.name });
+			if (!PERSON_ACTOR_TYPES.has(actor.type)) return this._warn(wrongTypeKey, { name: actor.name });
 			if (selfKey && actor.id === this._actor?.id) return this._warn(selfKey);
 			const fields = extra ? extra() : {};
 			if (!fields) return;   // the extra step refused, and has already said why

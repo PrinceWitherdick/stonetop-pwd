@@ -4,6 +4,7 @@ import {STONETOP_SCOPE} from "../actors/character/StonetopFlags.js";
 import {isPrimaryGM as _isPrimaryGM} from "../utils/primary-gm.js";
 import {STEADING_ACTOR_TYPE, STEADING_DEFAULT_IMG} from "../actors/steading/steading-portrait.js";
 import {isGmToolkitData, gmToolkitActors} from "../actors/gmtoolkit/gm-toolkit-actor.js";
+import {SETTLEMENT_TYPE} from "../actors/settlement/settlement-type.js";
 import {isDestined, rollOmensOfFate} from "../actors/character/destined.js";
 import {format, localize} from "../utils/i18n.js";
 
@@ -52,6 +53,12 @@ export async function ensureStonetopSingleton() {
 	});
 }
 
+/** Actor types only a GM may create, by any path, each with the warning a player gets. */
+const PLAYER_VETOED_TYPES = {
+	monster: "Only the GM can create monsters.",
+	[SETTLEMENT_TYPE]: "Only the GM can create settlements.",
+};
+
 export function registerStonetopSingletonHooks() {
 	Hooks.on("preCreateActor", (actor, data, options) => {
 		if (_isStonetopActorData(data ?? actor)) {
@@ -85,11 +92,17 @@ export function registerStonetopSingletonHooks() {
 			return false;
 		}
 
-		// Players can only ever create their own character. Even if a `monster` type slips
-		// past the Create-Actor picker (e.g. a macro), a non-GM must never create a monster
-		// stat block (that is GM content), so veto it outright.
-		if ((actor?.type ?? data?.type) === "monster" && !game.user?.isGM) {
-			ui.notifications?.warn("Only the GM can create monsters.");
+		// GM prep a player must never make, by any path: the Create-Actor picker already hides
+		// these from players, but a macro, a duplicate or a drag-drop goes round it, so veto it here.
+		//  • a monster: its stat block is GM content.
+		//  • a settlement: a player's would be theirs to edit, and its standing with Stonetop would
+		//    follow whatever they made of it.
+		// An `npc` is NOT vetoed although the picker hides it from players too: players make NPCs
+		// legitimately, as a follower's actor (character/follower-actors.js) and as the
+		// relationship map's "New person" (steading/steading-people.js).
+		const gmOnlyWarning = PLAYER_VETOED_TYPES[actor?.type ?? data?.type];
+		if (gmOnlyWarning && !game.user?.isGM) {
+			ui.notifications?.warn(gmOnlyWarning);
 			return false;
 		}
 

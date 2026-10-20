@@ -42,13 +42,18 @@ export const SEASONAL_REMINDERS = [
 		label:    "Collected offerings",
 		playbook: "The Blessed",
 		rule:     "Restore 1 use this season. (Expend a use to produce something valuable to a spirit of the wild.)",
+		// "Restore 1 use each season": a button that takes 1 off the possession's spent uses
+		// (REMINDER_RESETS.offerings), pressed by the Blessed's own player as the Logbook's is.
+		reset:    "offerings",
 	},
 	{
 		kind:     "possession",
 		slug:     "goat-herd",
 		label:    "Goat herd",
 		playbook: "The Blessed",
-		rule:     "Each season, there's a 1-in-4 chance your goat herd produces a bezoar: swallow it to cure poison. Roll to see if you have one.",
+		rule:     "Each season, there's a 1-in-4 chance your goat herd produces a bezoar: swallow it to cure poison. Roll a d4: on a 1, you have one.",
+		// A d4 to chat; a 1 adds the Bezoar small item (REMINDER_RESETS.bezoar).
+		reset:    "bezoar",
 	},
 	{
 		// Spring only, unlike its neighbours: "Each SPRING, d4 uses of bendis root."
@@ -57,7 +62,9 @@ export const SEASONAL_REMINDERS = [
 		label:    "Herb garden",
 		playbook: "The Blessed",
 		seasons:  ["spring"],
-		rule:     "Each spring, the garden yields d4 uses of bendis root (reach, area, burns ~1 hr, fumes repel perversions of nature). Roll this year's crop.",
+		rule:     "Each spring, the garden yields d4 uses of bendis root (reach, area, burns ~1 hr, fumes repel perversions of nature). Roll this year's crop: it replaces what is left.",
+		// A d4 to chat that SETS the bendis root's uses (REMINDER_RESETS.bendis).
+		reset:    "bendis",
 	},
 	{
 		// The only entry that RESETS something rather than producing it, and the only one whose
@@ -78,10 +85,10 @@ export const SEASONAL_REMINDERS = [
 		slug:     "laboratory",
 		label:    "Laboratory",
 		playbook: "The Seeker",
-		// A button that rolls the d4-1 and sets the Laboratory's naphtha track to it (see
+		// A button that rolls the d4-1 and adds it to the Laboratory's naphtha track (see
 		// REMINDER_RESETS), pressed by the Seeker's own player as the Logbook's is.
 		reset:    "naphtha",
-		rule:    "Every season, the laboratory produces d4−1 uses of naphtha (thrown, area, dangerous, ignores armor). Roll this season's yield.",
+		rule:    "Every season, the laboratory produces d4−1 uses of naphtha (thrown, area, dangerous, ignores armor). Roll this season's yield and add it to what's left (3 at most).",
 	},
 ];
 
@@ -167,8 +174,8 @@ const REMINDER_RESETS = {
 		update: actor => actor?.typedActor?.moveResources?.usesUpdate?.(LOGBOOK, 0) ?? null,
 	},
 	// The Laboratory: "Every season, produce d4-1 uses of ◇ naphtha." The roll goes to chat, and the
-	// naphtha item's track (an inventory track, which counts uses SPENT, like the whisky's) is set to
-	// the rolled uses: a 0 leaves it all spent. Its printed ○○○ is the cap.
+	// rolled uses are ADDED to what is left on the naphtha item's track (the user's ruling of
+	// 2026-10-18: a season's yield is produced, it does not wipe last season's): see rollNaphthaYield.
 	//
 	// `rolls`: a press is a public roll, so pressing twice is not harmless as a logbook reset is. The
 	// button is on ONE client (the character's player, else the GM: DeathsDoorPrompt.js#autoOpenUserId),
@@ -181,18 +188,141 @@ const REMINDER_RESETS = {
 		flag:   "naphthaRollCard",
 		move:   "Laboratory",
 		rolls:  true,
-		update: async actor => {
-			const roll = await new globalThis.Roll("1d4-1").evaluate();
-			await roll.toMessage?.({ speaker: globalThis.ChatMessage?.getSpeaker?.({ actor }), flavor: rolledTotalCard(roll, "Laboratory", "uses of naphtha this season") });
-			const uses = Math.max(0, Math.min(NAPHTHA_TRACK, Number(roll.total) || 0));
-			return { [`flags.${SYSTEM_ID}.inventory.resources.${NAPHTHA_SLUG}`]: NAPHTHA_TRACK - uses };
-		},
+		update: actor => rollNaphthaYield(actor),
+	},
+	// The Blessed's Collected offerings: "Restore 1 use each season." Not a roll, so a plain reset.
+	offerings: {
+		label:  "Restore 1 use",
+		done:   "Use restored",
+		flag:   "offeringsRestoreCard",
+		move:   "Collected offerings",
+		update: actor => offeringsRestoreUpdate(actor),
+	},
+	// The Blessed's Goat herd: "Each season, 1 in 4 chance of having a bezoar." A public d4 (a 1 is the
+	// bezoar), so it `rolls` like the naphtha's: see rollForBezoar.
+	bezoar: {
+		label:  "Roll for a bezoar (1 in 4)",
+		done:   "Bezoar rolled",
+		icon:   "fa-dice",
+		flag:   "bezoarRollCard",
+		move:   "Goat herd",
+		rolls:  true,
+		update: actor => rollForBezoar(actor),
+	},
+	// The Blessed's Herb garden: "Each spring, d4 uses of bendis root." See rollBendisRoot.
+	bendis: {
+		label:  "Roll d4 bendis root",
+		done:   "Bendis root rolled",
+		icon:   "fa-dice",
+		flag:   "bendisRollCard",
+		move:   "Herb garden",
+		rolls:  true,
+		update: actor => rollBendisRoot(actor),
 	},
 };
+
+// ── The Blessed's seasonal possessions ───────────────────────────────────────
+
+export const COLLECTED_OFFERINGS_SLUG = "collected-offerings";
+
+/**
+ * COLLECTED OFFERINGS: the update that restores 1 use, `flags.<id>.possessions.uses.collected-offerings`
+ * (a possession's track counts uses SPENT, so it goes down by 1). A full track (nothing spent) stays
+ * full: the season's use is simply not needed.
+ */
+export function offeringsRestoreUpdate(actor) {
+	const spent = Math.max(0, Math.trunc(Number(actor?.getFlag?.(SYSTEM_ID, "possessions.uses")?.[COLLECTED_OFFERINGS_SLUG]) || 0));
+	return { [`flags.${SYSTEM_ID}.possessions.uses.${COLLECTED_OFFERINGS_SLUG}`]: Math.max(0, spent - 1) };
+}
+
+// The Bezoar special small item (packs/src/stonetop-items/inventory-items/bezoar.json).
+export const BEZOAR_SLUG = "bezoar";
+
+/**
+ * GOAT HERD: roll the season's d4 to chat, where a 1 is the book's "1 in 4 chance of having a bezoar",
+ * and return the update that adds the Bezoar to the character's special items (`inventory.addedSpecial`,
+ * as the Add Special Item picker adds one; its ✕ is the bezoar swallowed). "Having a bezoar" is one:
+ * a character still carrying last season's gets no second, and a miss changes nothing. Never null, so a
+ * miss is still the card's roll made.
+ *
+ * @returns {Promise<object>}  the actor update, `{}` when nothing is added
+ */
+export async function rollForBezoar(actor) {
+	const roll = await new globalThis.Roll("1d4").evaluate();
+	const hit = Math.trunc(roll.total) === 1;
+	const added = actor?.getFlag?.(SYSTEM_ID, "inventory.addedSpecial") ?? [];
+	const already = Array.isArray(added) && added.includes(BEZOAR_SLUG);
+	const details = !hit ? "No bezoar this season (a 1 finds one)"
+		: already ? "A bezoar, but one is already carried"
+		: "A bezoar! Swallow it to cure poison";
+	await roll.toMessage?.({ speaker: globalThis.ChatMessage?.getSpeaker?.({ actor }), flavor: rolledTotalCard(roll, "Goat herd", "on a 1, a bezoar", details) });
+	if (!hit || already) return {};
+	return { [`flags.${SYSTEM_ID}.inventory.addedSpecial`]: [...(Array.isArray(added) ? added : []), BEZOAR_SLUG] };
+}
+
+// The bendis root special small item (packs/src/stonetop-items/inventory-items/bendis-root.json), shown
+// while the Herb garden is held (the possession's `specialItems`).
+export const BENDIS_ROOT_SLUG = "bendis-root";
+
+/**
+ * HERB GARDEN: roll "d4 uses of bendis root" to chat and return the update that makes this spring's
+ * crop the track. The item prints no number of uses (its `resource.max` is 0): the crop's size is
+ * ACQUIRED, stored per character in `inventory.resourceMax` as the provisions' larder is
+ * (CharacterInventory#resourceMax), with 0 spent. So a garden taken at creation shows no bendis root
+ * until its first spring (the book gives the root "each spring", nothing at the start), and each
+ * spring's crop REPLACES what is left: the book says nothing of last year's root keeping.
+ *
+ * @returns {Promise<object>}  the actor update: the track's size and its uses spent (0)
+ */
+export async function rollBendisRoot(actor) {
+	const roll = await new globalThis.Roll("1d4").evaluate();
+	const uses = Math.max(0, Math.trunc(Number(roll.total) || 0));
+	await roll.toMessage?.({ speaker: globalThis.ChatMessage?.getSpeaker?.({ actor }), flavor: rolledTotalCard(roll, "Herb garden", "uses of bendis root this spring") });
+	return {
+		[`flags.${SYSTEM_ID}.inventory.resourceMax.${BENDIS_ROOT_SLUG}`]: uses,
+		[`flags.${SYSTEM_ID}.inventory.resources.${BENDIS_ROOT_SLUG}`]:   0,
+	};
+}
 
 // The naphtha special item (packs/src/stonetop-items/inventory-items/naphtha.json): slug and ○○○.
 const NAPHTHA_SLUG  = "naphtha";
 const NAPHTHA_TRACK = 3;
+
+/**
+ * The naphtha track's uses SPENT after `rolled` new uses are produced (an inventory track counts uses
+ * spent, like the whisky's; nothing stored is 0 spent, a full ○○○, as the Items column reads it). The
+ * new uses go onto what is left, and the printed ○○○ is the cap: a 0 keeps the leftovers as they were.
+ */
+export function naphthaSpentAfter(spent, rolled) {
+	const was = Math.max(0, Math.min(NAPHTHA_TRACK, Number(spent) || 0));
+	return Math.max(0, was - Math.max(0, Math.trunc(Number(rolled) || 0)));
+}
+
+/**
+ * LABORATORY: roll "d4-1 uses of naphtha" to chat and return the naphtha track's update. `addTo`
+ * (the season's yield) adds the uses to what the character has left; off (a Laboratory just taken at
+ * creation, the user's ruling of 2026-10-18), the track starts from nothing, so it holds the roll.
+ *
+ * @returns {Promise<object>}  the actor update, `flags.<id>.inventory.resources.naphtha` = uses spent
+ */
+export async function rollNaphthaYield(actor, { addTo = true } = {}) {
+	const roll = await new globalThis.Roll("1d4-1").evaluate();
+	const what = addTo ? "uses of naphtha this season" : "uses of naphtha to start with";
+	await roll.toMessage?.({ speaker: globalThis.ChatMessage?.getSpeaker?.({ actor }), flavor: rolledTotalCard(roll, "Laboratory", what) });
+	const spent = addTo ? (actor?.getFlag?.(SYSTEM_ID, "inventory.resources")?.[NAPHTHA_SLUG] ?? 0) : NAPHTHA_TRACK;
+	return { [`flags.${SYSTEM_ID}.inventory.resources.${NAPHTHA_SLUG}`]: naphthaSpentAfter(spent, roll.total) };
+}
+
+/**
+ * Does this onboarding apply roll the Laboratory's first naphtha? Only when the Laboratory is taken by
+ * it: held before (a re-run, or a Save part-way, that kept it), it rolled then and does not again.
+ *
+ * @param {Iterable<string>} before  the possession slugs selected before the apply
+ * @param {Iterable<string>} after   the possession slugs the apply selects
+ */
+export function laboratoryNewlySelected(before, after) {
+	return new Set(after ?? []).has("laboratory") && !new Set(before ?? []).has("laboratory");
+}
 
 function resetButtonHtml(r) {
 	const reset = REMINDER_RESETS[r.reset];

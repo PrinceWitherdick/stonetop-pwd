@@ -19,7 +19,7 @@
 
 import { book2ArtRoot, book2ArtSrcWith } from "./art-root.js";
 import { onArtBrowseCleared, servedPath } from "./browse.js";
-import { browsePosterMapArt, probeImageSize } from "./poster-maps.js";
+import { POSTER_MAP_DIR, browsePosterMapArt, probeImageSize } from "./poster-maps.js";
 import { BOOK2_ART_APPLY_MANIFEST } from "./manifest.js";
 import { pageChain } from "./reapply.js";
 import { FULL_FRAME, frameFor, frameFitsImage } from "../data/travel-times.js";
@@ -78,7 +78,8 @@ export async function travelMapFile(map, present = null) {
  * of starting two. A rejected probe is dropped again, so a transient failure can be retried.
  */
 const _measured = new Map();
-onArtBrowseCleared(() => _measured.clear());
+// Only the maps' folder: a write anywhere else (a settlement's portrait) cannot change a map.
+onArtBrowseCleared(() => _measured.clear(), { dirs: [POSTER_MAP_DIR] });
 
 function measure(src) {
 	if (!_measured.has(src)) {

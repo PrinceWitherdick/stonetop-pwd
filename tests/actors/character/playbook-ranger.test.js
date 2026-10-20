@@ -12,6 +12,7 @@ import { CharacterOnboardingDialog } from "../../../module/actors/character/dial
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import {
 	companionStats, companionTraitAllowance, canonicalCompanionTraits, trimCompanionTraits,
+	isCompanionStatOption, companionTagOptions,
 } from "../../../module/actors/character/animal-companion.js";
 import { companionIsExceptional, followerExceptional } from "../../../module/actors/character/follower-masters.js";
 import { printedBlow } from "../../../module/utils/damage.js";
@@ -193,8 +194,40 @@ describe("the companion card", () => {
 		const { char, actor } = await companionRangerAt(1, { animalCompanion: { ...BRUTE } });
 		const card = await companionCard(char, actor);
 		expect(card).toMatchObject({ hpMax: 16, armor: "0", damage: "d6+3 (hand, forceful, messy, close, 1 piercing)", damageRoll: "d6+3", damageForm: "hand" });
-		expect(card.tags.map(t => t.label)).toContain("Damage is +2 damage, forceful");
+		// The damage options are in the line, not among the tags; "large" is a tag that also changes the line.
+		expect(card.tags.map(t => t.label)).toEqual(["tough", "large (+4 HP, +1 damage, +close)"]);
 		expect(card.traitsNote).toBeNull();
+	});
+
+	// Order Followers' +1 is for "at least one appropriate tag or move" (p.462): the insert's stat options
+	// ("+4 HP", "+1 armor (...)", "Improved damage die (d6)", "Damage is ...") change the companion's numbers
+	// and are no tags, so neither the card's chips nor the Order dialog's offer them.
+	it("chips only the tag options: stat options are left out, large / tiny / write-ins kept", async () => {
+		const orderChips = card => card.orderTagsCsv.split("|");
+		const bird = await companionRangerAt(1, { animalCompanion: { type: "bird", traits: ["Improved damage die (d6)", "+4 HP", "+1 armor (agility)", "cautious", "chatty"] } });
+		const birdCard = await companionCard(bird.char, bird.actor);
+		expect(birdCard).toMatchObject({ hpMax: 9, armor: "2 (size, agility)", damage: "d6 (hand)" });
+		expect(orderChips(birdCard)).toEqual(["tiny", "cautious", "chatty"]);
+		expect(birdCard.tags.map(t => t.label)).toEqual(["tiny", "cautious", "chatty"]);
+
+		const steed = await companionRangerAt(1, { animalCompanion: { type: "steed", traits: ["+4 HP", "+1 armor (hide)", "Damage +2, forceful", "calm"] } });
+		expect(orderChips(await companionCard(steed.char, steed.actor))).toEqual(["large", "calm"]);
+
+		const brute = await companionRangerAt(1, { animalCompanion: { ...BRUTE, traits: [...BRUTE.traits, "+1 armor (hide, scales, etc.)"] } });
+		const bruteCard = await companionCard(brute.char, brute.actor);
+		expect(orderChips(bruteCard)).toEqual(["tough", "large (+4 HP, +1 damage, +close)"]);
+		// The damage tags still reach the damage line.
+		expect(bruteCard.damage).toBe("d6+3 (hand, forceful, messy, close, 1 piercing)");
+	});
+
+	it("isCompanionStatOption reads the type's effects, old spellings included", () => {
+		expect(isCompanionStatOption(type("predator"), "+1 armor (hide)")).toBe(true);
+		expect(isCompanionStatOption(type("predator"), "Damage messy, 1 piercing")).toBe(true);
+		expect(isCompanionStatOption(type("brute"), "large (+4 HP, +1 damage, +close)")).toBe(false);
+		expect(isCompanionStatOption(type("steed"), "large")).toBe(false);
+		expect(isCompanionStatOption(type("critter"), "keen-nosed")).toBe(false);
+		expect(isCompanionStatOption(type("critter"), "a write-in")).toBe(false);
+		expect(companionTagOptions(type("bird"), ["+4 HP", "tiny", "Improved damage die (d6)", "mimic"])).toEqual(["tiny", "mimic"]);
 	});
 
 	it("exceptional is derived and read-only, from Beast of Legend's pick", async () => {

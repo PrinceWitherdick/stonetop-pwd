@@ -92,6 +92,28 @@ describe("RequisitionDialog", () => {
 		expect(dialog._rollAnswers(makeRoot({ '[name="logistics"]': { checked: false } }))).toEqual({ herdCount: 0, logistics: false });
 	});
 
+	// We Happy Few's 6- (Book I p.127): "disadvantage on all rolls until you share your nagging doubts". This
+	// window knows who is Requisitioning, so it is said and taken, not asked.
+	it("takes a shaken Marshal's nerves on the roll, says so in the window, and cancels them with Logistics", async () => {
+		const dialog = makeDialog([], [{ type: "move", name: "We Happy Few", flags: {} }, logistics()]);
+		dialog._characterActor.getFlag = (scope, key) => key === "shakenNerves";
+		expect(dialog.getData().nervesNote).toBe("Your nerves are shaken (We Happy Few): disadvantage on this roll, until you share your nagging doubts with someone else.");
+		const answers = dialog._rollAnswers(makeRoot({ '[name="logistics"]': { checked: true } }));
+		expect(answers).toEqual({ herdCount: 0, logistics: true, nerves: "Wren" });
+		const { settleSteadingRoll } = await import("../../../module/actors/steading/steading-roll.js");
+		const terms = await settleSteadingRoll({}, { moveName: "Requisition", statKey: "fortunes", answers });
+		expect(terms.rollMode).toBe("normal");
+		expect(terms.conditionNotes).toEqual(["Logistics: advantage", "Wren's shaken nerves (We Happy Few): disadvantage"]);
+		const alone = await settleSteadingRoll({}, { moveName: "Requisition", statKey: "fortunes", answers: { ...answers, logistics: false } });
+		expect(alone.rollMode).toBe("dis");
+
+		const hbs = fs.readFileSync(path.resolve(HERE, "../../../templates/dialogs/requisition-picker.hbs"), "utf8");
+		expect(hbs).toContain("{{nervesNote}}");
+		// Steady nerves: nothing said, nothing taken.
+		expect(makeDialog([]).getData().nervesNote).toBe("");
+		expect(makeDialog([])._rollAnswers(makeRoot({}))).toEqual({ herdCount: 0, logistics: false });
+	});
+
 	// Book I p. 157 (Herd of Horses): "When you Requisition half the herd or less, treat a 6- as a
 	// 7-9." Asked as a COUNT, capped at the grown horses, and read back for the roll.
 	it("asks how many horses come from the herd, and reads the count back for the roll", () => {

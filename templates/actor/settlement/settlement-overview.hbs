@@ -1,0 +1,238 @@
+{{!-- Overview: the place as Book II's sidebar prints it, laid out the way Stonetop's own Overview is.
+
+      First the stat bar, which is Stonetop's `.steading-stats-bar` markup: Size and Population
+      sharing a card, then Prosperity and Defenses as slate tracks from -1 to +3. No Fortunes,
+      Surplus or Debilities: those are Stonetop's alone (data-models/SettlementModel.js). A book
+      range ("Book: +1") rides where Stonetop's sheet puts its "Starts at" hint.
+
+      Then the cards row (Resources, Defenses, Trade with), as Stonetop's Resources, Fortifications
+      and Assets sit; a second row of the same cards for who runs the place, its notable people and
+      its groups; and under them where it lies. The Residents are on the People tab.
+
+      The stats and Size open only with the window header's wrench on (`editable`), like
+      Stonetop's per-section pencils; `stonetop-readonly` is what draws them in their calm
+      read-only fill rather than as dimmed inputs. A reader's controls are disabled by core either
+      way. Nothing in a readonly section is a button. --}}
+{{#*inline "settlement-track"}}
+<div class="steading-stat-block">
+	<div class="steading-stat-label-row">
+		<span class="steading-stat-label" data-steading-stat="{{stat.key}}">{{stat.label}}</span>
+		{{#if stat.range}}<span class="steading-stat-hint">{{localize "stonetop.settlement.bookRange" range=stat.range}}</span>{{/if}}
+	</div>
+	<div class="steading-track">
+		{{#each (steadingTrack stat.value 0)}}
+		<label class="steading-track-option {{#if checked}}is-selected{{/if}}">
+			<input type="radio" name="{{../stat.name}}" value="{{val}}" {{#if checked}}checked{{/if}}{{#unless @root.editable}} disabled{{/unless}}>
+			<span class="steading-track-label">{{label}}</span>
+		</label>
+		{{/each}}
+	</div>
+	{{#if stat.note}}<span class="stonetop-settlement-stat-note">{{stat.note}}</span>{{/if}}
+</div>
+{{/inline}}
+<div class="tab overview stonetop-settlement-tab" data-group="primary" data-tab="overview">
+	<section class="sheet-tab steading-overview">
+
+	{{#if system.setupNote}}
+	<div class="stonetop-settlement-setup" role="note">
+		<i class="fa-solid fa-scroll" inert></i>
+		<p>{{system.setupNote}}</p>
+		{{#if canWrite}}
+		<button type="button" class="stonetop-settlement-quiet" data-action="dismissSetup"
+		        data-tooltip="{{localize "stonetop.settlement.setupDismiss"}}" aria-label="{{localize "stonetop.settlement.setupDismiss"}}">
+			<i class="fa-solid fa-check" inert></i>
+		</button>
+		{{/if}}
+	</div>
+	{{/if}}
+
+	<div class="steading-stats-bar">
+		<div class="steading-statsbar-pair steading-statsbar-combo{{#unless editable}} stonetop-readonly{{/unless}}">
+			<div class="steading-combo-cell steading-combo-cell--left">
+				<div class="steading-stat-block">
+					<div class="steading-stat-label-row">
+						<span class="steading-stat-label" data-steading-stat="size">{{localize "stonetop.settlement.sizeLabel"}}</span>
+					</div>
+					<div class="steading-size-options">
+						{{#each sizes}}
+						<label class="steading-size-option">
+							<input type="radio" class="steading-size-radio" name="system.size" value="{{id}}"{{#if selected}} checked{{/if}}{{#unless @root.editable}} disabled{{/unless}}>
+							<span><em>{{option}}</em></span>
+						</label>
+						{{/each}}
+					</div>
+				</div>
+			</div>
+			<div class="steading-combo-cell">
+				{{> settlement-track stat=statsByKey.population}}
+			</div>
+		</div>
+
+		<div class="steading-statsbar-pair{{#unless editable}} stonetop-readonly{{/unless}}">
+			{{> settlement-track stat=statsByKey.prosperity}}
+		</div>
+
+		<div class="steading-statsbar-pair{{#unless editable}} stonetop-readonly{{/unless}}">
+			{{> settlement-track stat=statsByKey.defenses}}
+		</div>
+	</div>
+
+	<div class="steading-overview-cards">
+		{{> "stonetop.settlement-list" list="resources" heading=(localize "stonetop.settlement.resources")
+		    rows=resources editable=editable
+		    addLabel=(localize "stonetop.settlement.addResource")
+		    empty=(localize "stonetop.settlement.noResources")}}
+		{{> "stonetop.settlement-list" list="fortifications" heading=(localize "stonetop.settlement.fortifications")
+		    rows=fortifications editable=editable
+		    addLabel=(localize "stonetop.settlement.addFortification")
+		    empty=(localize "stonetop.settlement.noFortifications")}}
+
+		<div class="steading-card" data-list="tradeWith">
+			<h3 class="steading-list-heading">{{localize "stonetop.settlement.tradeWith"}}</h3>
+			{{#if tradeWith.length}}
+			<ul class="steading-list stonetop-settlement-rows">
+				{{#each tradeWith}}
+				<li class="steading-list-item stonetop-settlement-row" data-row-id="{{id}}">
+					<span class="steading-list-bullet" aria-hidden="true"></span>
+					<span class="steading-list-name"{{#if ../editable}} data-action="editRow" role="button" tabindex="0" data-tooltip="{{localize "stonetop.settlement.editRowTooltip"}}"{{/if}}>
+						<span class="stonetop-settlement-row-title">{{partner}}</span>{{#if goods}} ({{goods}}){{/if}}
+					</span>
+					<span class="stonetop-settlement-row-tools">
+						{{#if partnerUuid}}
+						<button type="button" class="stonetop-settlement-quiet" data-action="openActor" data-actor-uuid="{{partnerUuid}}" data-reader-ok
+						        data-tooltip="{{localize "stonetop.settlement.openPartner" name=partner}}" aria-label="{{localize "stonetop.settlement.openPartner" name=partner}}">
+							<i class="fa-solid fa-arrow-up-right-from-square" inert></i>
+						</button>
+						{{/if}}
+						{{#if ../editable}}
+						<button type="button" class="steading-list-delete" data-action="deleteRow"
+						        data-tooltip="{{localize "stonetop.settlement.remove"}}" aria-label="{{localize "stonetop.settlement.remove"}}">
+							<i class="fa-solid fa-xmark" inert></i>
+						</button>
+						{{/if}}
+					</span>
+				</li>
+				{{/each}}
+			</ul>
+			{{else}}
+			<p class="stonetop-settlement-empty">{{localize "stonetop.settlement.noTrade"}}</p>
+			{{/if}}
+			{{#if editable}}
+			<button type="button" class="steading-list-add" data-action="addRow" data-list="tradeWith">
+				<i class="fa-solid fa-plus" inert></i> {{localize "stonetop.settlement.addPartner"}}
+			</button>
+			{{/if}}
+		</div>
+	</div>
+
+	{{!-- Who runs the place, its notable people and its groups, from each place's People section in
+	      Book II, as a second row of the same cards. The groups carry the book's headcounts ("~40"),
+	      which is what a GM reaches for when the PCs Muster here. A notable person's row is the book's
+	      name, role and Instinct; dropping an NPC onto this card adds them, and dropping one onto a row
+	      links that row to them. --}}
+	<div class="steading-overview-cards stonetop-settlement-people-cards">
+		<div class="steading-card">
+			<h3 class="steading-list-heading">{{localize "stonetop.settlement.government"}}</h3>
+			{{#if system.government}}
+			<p class="stonetop-settlement-government-text"{{#if editable}} data-action="editGovernment" role="button" tabindex="0" data-tooltip="{{localize "stonetop.settlement.editRowTooltip"}}"{{/if}}>{{system.government}}</p>
+			{{else}}
+			<p class="stonetop-settlement-empty">{{localize "stonetop.settlement.noGovernment"}}</p>
+			{{#if editable}}
+			<button type="button" class="steading-list-add" data-action="editGovernment">
+				<i class="fa-solid fa-pen" inert></i> {{localize "stonetop.settlement.writeGovernment"}}
+			</button>
+			{{/if}}
+			{{/if}}
+		</div>
+
+		<div class="steading-card" data-list="leaders">
+			<h3 class="steading-list-heading">{{localize "stonetop.settlement.leaders"}}
+				{{#if editable}}<span class="steading-list-heading-note">{{localize "stonetop.settlement.dropHint"}}</span>{{/if}}
+			</h3>
+			{{#if leaders.length}}
+			<ul class="steading-list stonetop-settlement-rows stonetop-settlement-rows--people">
+				{{#each leaders}}
+				<li class="steading-list-item stonetop-settlement-row" data-row-id="{{id}}">
+					<span class="steading-list-bullet" aria-hidden="true"></span>
+					<span class="steading-list-name"{{#if ../editable}} data-action="editRow" role="button" tabindex="0" data-tooltip="{{localize "stonetop.settlement.editRowTooltip"}}"{{/if}}>
+						<span class="stonetop-settlement-row-title">{{name}}</span>{{#if role}}, {{role}}{{/if}}
+						{{#if instinct}}<span class="stonetop-settlement-instinct-text">{{localize "stonetop.settlement.personInstinct"}}: {{instinct}}</span>{{/if}}
+					</span>
+					<span class="stonetop-settlement-row-tools">
+						{{#if uuid}}
+						<button type="button" class="stonetop-settlement-quiet" data-action="openActor" data-actor-uuid="{{uuid}}" data-reader-ok
+						        data-tooltip="{{localize "stonetop.settlement.openPerson" name=name}}" aria-label="{{localize "stonetop.settlement.openPerson" name=name}}">
+							<i class="fa-solid fa-id-card" inert></i>
+						</button>
+						{{#if ../editable}}
+						<button type="button" class="stonetop-settlement-quiet" data-action="unlinkLeader"
+						        data-tooltip="{{localize "stonetop.settlement.unlink"}}" aria-label="{{localize "stonetop.settlement.unlink"}}">
+							<i class="fa-solid fa-link-slash" inert></i>
+						</button>
+						{{/if}}
+						{{/if}}
+						{{#if ../editable}}
+						<button type="button" class="steading-list-delete" data-action="deleteRow"
+						        data-tooltip="{{localize "stonetop.settlement.remove"}}" aria-label="{{localize "stonetop.settlement.remove"}}">
+							<i class="fa-solid fa-xmark" inert></i>
+						</button>
+						{{/if}}
+					</span>
+				</li>
+				{{/each}}
+			</ul>
+			{{else}}
+			<p class="stonetop-settlement-empty">{{localize "stonetop.settlement.noLeaders"}}</p>
+			{{/if}}
+			{{#if editable}}
+			<button type="button" class="steading-list-add" data-action="addRow" data-list="leaders">
+				<i class="fa-solid fa-plus" inert></i> {{localize "stonetop.settlement.addPerson"}}
+			</button>
+			{{/if}}
+		</div>
+
+		<div class="steading-card" data-list="groups">
+			<h3 class="steading-list-heading">{{localize "stonetop.settlement.groups"}}</h3>
+			{{#if groups.length}}
+			<ul class="steading-list stonetop-settlement-rows">
+				{{#each groups}}
+				<li class="steading-list-item stonetop-settlement-row" data-row-id="{{id}}">
+					<span class="steading-list-bullet" aria-hidden="true"></span>
+					<span class="steading-list-name"{{#if ../editable}} data-action="editRow" role="button" tabindex="0" data-tooltip="{{localize "stonetop.settlement.editRowTooltip"}}"{{/if}}>
+						<span class="stonetop-settlement-row-title">{{name}}</span>{{#if count}} ({{count}}){{/if}}{{#if notes}}: {{notes}}{{/if}}
+					</span>
+					{{#if ../editable}}
+					<button type="button" class="steading-list-delete" data-action="deleteRow"
+					        data-tooltip="{{localize "stonetop.settlement.remove"}}" aria-label="{{localize "stonetop.settlement.remove"}}">
+						<i class="fa-solid fa-xmark" inert></i>
+					</button>
+					{{/if}}
+				</li>
+				{{/each}}
+			</ul>
+			{{else}}
+			<p class="stonetop-settlement-empty">{{localize "stonetop.settlement.noGroups"}}</p>
+			{{/if}}
+			{{#if editable}}
+			<button type="button" class="steading-list-add" data-action="addRow" data-list="groups">
+				<i class="fa-solid fa-plus" inert></i> {{localize "stonetop.settlement.addGroup"}}
+			</button>
+			{{/if}}
+		</div>
+	</div>
+
+	<div class="stonetop-settlement-bottom">
+		<div class="steading-card">
+			<h3 class="steading-list-heading">{{localize "stonetop.settlement.region"}}</h3>
+			{{#if editable}}
+			<input class="stonetop-settlement-region" type="text" name="system.region" value="{{system.region}}"
+			       placeholder="{{localize "stonetop.settlement.regionPlaceholder"}}" aria-label="{{localize "stonetop.settlement.region"}}">
+			{{else}}
+			<p class="stonetop-settlement-region-text">{{system.region}}</p>
+			{{/if}}
+			{{#if blurb}}<p class="stonetop-settlement-blurb">{{blurb}}</p>{{/if}}
+		</div>
+	</div>
+
+	</section>
+</div>

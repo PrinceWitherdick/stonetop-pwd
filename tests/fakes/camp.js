@@ -25,6 +25,7 @@ export function seat({
 	carried = { supplies: 4 }, hp = 4, maxHp = 15, marked = [], unliving = false,
 	carriesBedroll = false, carriesFurBedroll = false, carriesMessKit = false, choices = {},
 	undefinedMarks = 0, checked = {}, usesPerSupply = null, breaksBread = false, hearthCha = null, clearsTonight = [],
+	safePlace = false,
 } = {}) {
 	const debilities = marked.map(key => ({ key, name: capitalizeFirst(key) }));
 	return {
@@ -46,6 +47,7 @@ export function seat({
 		unliving,
 		breaksBread,
 		hearthCha,
+		safePlace,
 		clearsTonight,
 		pack: { undefinedMarks, checked, usesPerSupply },
 	};
@@ -155,6 +157,10 @@ export function campCharacter({
 			inventoryResourceData: (slug, count) => ({ [`flags.${SYSTEM_ID}.inventory.resources.${slug}`]: count }),
 			heldAdvantageData:     source => ({ [`flags.${SYSTEM_ID}.heldAdvantage`]: { sources: [source].flat() } }),
 			heldDisadvantageData:  source => ({ [`flags.${SYSTEM_ID}.heldDisadvantage`]: { sources: [source].flat() } }),
+			// A move's hold track, at the path MoveResources writes it (StonetopFlags "moves" scope).
+			moveResources: {
+				usesUpdate: (move, held) => ({ [`flags.${SYSTEM_ID}.moves.backgroundChoices.${move}`]: held }),
+			},
 		},
 	};
 	if (pastDeath === "dead") applyUpdate(actor, { [`flags.${SYSTEM_ID}.${DEATHS_DOOR_FLAG}`]: DEATHS_DOOR_STATE.DEAD });

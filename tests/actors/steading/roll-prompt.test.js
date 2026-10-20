@@ -34,6 +34,8 @@ const CHARACTER_HBS = read("templates/actor/character.hbs");
 const SIDEBAR_HBS = read("templates/actor/partials/steading-moves-sidebar.hbs");
 const MOVES_HBS = read("templates/actor/partials/steading-tab-moves.hbs");
 const STEADING_JS = read("module/actors/steading/StonetopSteadingSheet.js");
+// The homefront moves' data and flows, kept out of the sheet so another steading's sheet shares them.
+const HOMESTEAD_JS = read("module/actors/steading/homestead-moves.js");
 const CHARACTER_SHEET_JS = read("module/actors/character/StonetopCharacterSheet.js");
 const CHARACTER_JS = read("module/actors/character/StonetopCharacter.js");
 const SETTINGS_JS = read("module/settings.js");
@@ -418,10 +420,11 @@ describe("what asks before it rolls", () => {
 	// used to carry stored nothing, so all they did was stand between the move and its dice. The
 	// only controls left are the two Trade & Barter's roll actually reads.
 	it("keeps no write-in fields in the homefront move dialogs", () => {
-		const flows = STEADING_JS.slice(
-			STEADING_JS.indexOf("const HOMESTEAD_MOVE_FLOWS = {"),
-			STEADING_JS.indexOf("const STEADING_EDIT_SECTIONS"),
+		const flows = HOMESTEAD_JS.slice(
+			HOMESTEAD_JS.indexOf("const HOMESTEAD_MOVE_FLOWS = {"),
+			HOMESTEAD_JS.indexOf("export function homesteadMoveFlow(slug)"),
 		);
+		expect(flows.length, "the HOMESTEAD_MOVE_FLOWS slice").toBeGreaterThan(0);
 		expect(flows).not.toMatch(/type: "text(area)?"/);
 		expect((flows.match(/\bfields: \[/g) ?? []).length).toBe(1);
 		expect(flows).toContain('{ name: "value", label: "Item Value", type: "number"');
@@ -433,22 +436,27 @@ describe("what asks before it rolls", () => {
 
 	// "On a 7-9, pick 1" is a choice the dice have to be thrown before anyone can make, so the
 	// list rides the RESULT card (roll-engine's per-tier pickOptions), not the dialog. Derived in
-	// _onSteadingRoll off the flow, so the bare roll button on the Moves tab gets the same card
-	// the dialog's Roll button does.
+	// _onSteadingRoll off the flow (through homesteadMoveCard, which another settlement's sheet
+	// shares), so the bare roll button on the Moves tab gets the same card the dialog's Roll
+	// button does. The tier BUTTONS write to Stonetop, so Stonetop's roll adds them itself and the
+	// shared card never carries them.
 	it("hands each move's pick lists to the roll card, per tier", () => {
 		const roll = STEADING_JS.slice(STEADING_JS.indexOf("async _onSteadingRoll(moveName, statKey"));
-		expect(roll.slice(0, 1200)).toContain("pickOptions: flow.pickPools");
-		expect(roll.slice(0, 1200)).toContain("tierActions: flow.tierActions");
+		expect(roll.slice(0, 1500)).toContain("homesteadMoveCard(moveName)");
+		expect(roll.slice(0, 1500)).toContain("tierActions: flow.tierActions");
+		const card = HOMESTEAD_JS.slice(HOMESTEAD_JS.indexOf("export function homesteadMoveCard(moveName)"));
+		expect(card.slice(0, 600)).toContain("pickOptions: flow.pickPools");
+		expect(card.slice(0, card.indexOf("\n}\n"))).not.toContain("tierActions");
 		// Deploy (Book I): "on a 7-9, it works but someone picks 1 from the list below". Its one
 		// list is the consequences, on the 7-9 alone; there is no list of good outcomes to choose.
-		const deploy = STEADING_JS.slice(STEADING_JS.indexOf("\tdeploy: {"), STEADING_JS.indexOf("\ttradeBarter: {"));
+		const deploy = HOMESTEAD_JS.slice(HOMESTEAD_JS.indexOf("\tdeploy: {"), HOMESTEAD_JS.indexOf("\ttradeBarter: {"));
 		expect(deploy).toContain("partial: DEPLOY_CONSEQUENCES");
-		expect(STEADING_JS).not.toContain("DEPLOY_CHOICES");
+		expect(HOMESTEAD_JS + STEADING_JS).not.toContain("DEPLOY_CHOICES");
 		// "Injuries abound; the steading marks diminished" is one of those consequences, so the
 		// button that applies it rides the card with them rather than the pre-roll dialog.
 		expect(deploy).toContain('markDiminishedAction("Deploy")');
-		expect(STEADING_JS).toContain("stonetop-deploy-mark-diminished");
-		expect(STEADING_JS).not.toContain("data-action='mark-diminished'");
+		expect(HOMESTEAD_JS).toContain("stonetop-deploy-mark-diminished");
+		expect(HOMESTEAD_JS + STEADING_JS).not.toContain("data-action='mark-diminished'");
 		expect(STONETOP_JS).toContain("function _chatWireDeployMarkDiminished");
 		expect(STONETOP_JS).toContain("_chatWireDeployMarkDiminished(message, html);");
 	});

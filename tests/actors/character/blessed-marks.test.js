@@ -43,8 +43,9 @@ describe("who can lay a mark", () => {
 		});
 	}
 
-	// The glyph and the add form answer the same question, so they must never disagree: a glyph
-	// that lights over an empty form is a button that opens onto nothing.
+	// For LEARNED moves the glyph and the add form agree: a glyph that lights over an empty form is a
+	// button that opens onto nothing. (An owned move kept switched off is the one place they part:
+	// the glyph stays for the marks it laid, the form offers no new one; blessed-reaudit.test.js.)
 	it("lights the glyph exactly when the form has something to offer", () => {
 		for (const actor of [blessed, actorWith(), actorWith(move("Big Magic")), actorWith(move(BARKSKIN))]) {
 			expect(canMarkBlessed(actor)).toBe(availableKinds(actor).length > 0);
@@ -84,7 +85,7 @@ describe("reading stored marks", () => {
 		const [row] = readMarks([{ id: "a", kind: "ward", name: "  the north gate ", note: " keeps them out " }]);
 		expect(row).toEqual({
 			id: "a", kind: "ward", name: "the north gate", uuid: "", note: "keeps them out",
-			loyalty: null, sign: "",
+			loyalty: null, sign: "", extraHarm: null, retains: null,
 		});
 	});
 

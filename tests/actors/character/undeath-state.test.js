@@ -80,7 +80,8 @@ describe("isOutOfPlay, and the party lists that ask it", () => {
 	it("is what the struggle, the expedition and the PC asks filter on", () => {
 		for (const file of ["module/struggle/StruggleSetupDialog.js", "module/dialogs/ExpeditionDialog.js", "module/pc-asks/pc-ask-flow.js"]) {
 			const src = readRepo(file);
-			expect(src, file).toMatch(/!isOutOfPlay\(/);
+			// ExpeditionDialog asks it through utils/characters-in-play.js, which is isOutOfPlay too.
+			expect(src, file).toMatch(/!isOutOfPlay\(|charactersInPlay\(/);
 			expect(src, file).not.toMatch(/actorPastDeathKind\([^)]*\)\s*!==\s*"dead"/);
 		}
 	});

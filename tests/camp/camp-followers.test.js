@@ -116,20 +116,21 @@ describe("the followers a camp fed", () => {
 	// RAW re-check CX-1: Break Bread's "each of you recovers 1d8 (extra) HP" reaches a follower who shared the
 	// meal, on top of the night's half and capped at the max; one down at 0 HP uses up its die and takes nothing.
 	it("adds Break Bread's 1d8 a body at a time, past the down, and the NPC by the same die", () => {
-		const npc = { name: "Wolf", system: { attributes: { hp: { value: 2, max: 12 } } } };
+		// A hound and a porter, who both eat from the packs (Book I p.304), so both share the meal's dice.
+		const npc = { name: "Hound", system: { attributes: { hp: { value: 2, max: 12 } } } };
 		const cards = [
 			card({ ftype: "custom", slug: "down", name: "Down", hpMax: 6, hpCurrent: 0 }),
-			card({ ftype: "animal-companion", name: "Wolf", hpMax: 10, hpCurrent: 2 }),
-			card({ ftype: "custom", slug: "mule", name: "Mule", hpMax: 6, hpCurrent: 4 }),
+			card({ ftype: "beast", slug: "dog-follower", name: "Hound", hpMax: 10, hpCurrent: 2 }),
+			card({ ftype: "custom", slug: "porter", name: "Porter", hpMax: 6, hpCurrent: 4 }),
 		];
-		const heals = campFollowerHeals({ customFollowers: { down: {}, mule: {} } }, cards,
-			{ npcFor: fol => (fol.ftype === "animal-companion" ? npc : null), breads: [8, 3, 5] });
+		const heals = campFollowerHeals({ customFollowers: { down: {}, porter: {} } }, cards,
+			{ npcFor: fol => (fol.ftype === "beast" ? npc : null), breads: [8, 3, 5] });
 		expect(heals.down).toEqual(["Down"]);
-		// The Wolf's NPC 2 + 6 (half its 12) + 3 = 11; the Mule 4 + 3 caps at 6, so nothing is left for its die.
-		expect(heals.healed).toEqual([{ name: "Wolf", from: 2, to: 11, bread: 3 }, { name: "Mule", from: 4, to: 6 }]);
-		expect(heals.npcHeals).toEqual([{ npc, ftype: "animal-companion", slug: "", from: 2, to: 11 }]);
-		expect(heals.update).not.toHaveProperty(`flags.${SYSTEM_ID}.animalCompanion.hpCurrent`);
-		expect(campFollowerRows(heals)[0].value).toBe("Half their max HP, rounded up, and Break Bread's 1d8 extra: Wolf 2 → 11 (Break Bread +3); Mule 4 → 6.");
+		// The Hound's NPC 2 + 6 (half its 12) + 3 = 11; the Porter 4 + 3 caps at 6, so nothing is left for its die.
+		expect(heals.healed).toEqual([{ name: "Hound", from: 2, to: 11, bread: 3 }, { name: "Porter", from: 4, to: 6 }]);
+		expect(heals.npcHeals).toEqual([{ npc, ftype: "beast", slug: "dog-follower", from: 2, to: 11 }]);
+		expect(heals.update).not.toHaveProperty([`flags.${SYSTEM_ID}.beastHp.dog-follower`]);
+		expect(campFollowerRows(heals)[0].value).toBe("Half their max HP, rounded up, and Break Bread's 1d8 extra: Hound 2 → 11 (Break Bread +3); Porter 4 → 6.");
 	});
 
 	it("deals Break Bread's dice to a group member by member", () => {
@@ -158,7 +159,8 @@ describe("the followers a camp fed", () => {
 });
 
 describe("a character's mouths at the fire", () => {
-	it("counts every party follower, built-in and custom alike", () => {
+	// But an animal that feeds itself (Book I p.304): the companion and a mule are no mouths, a dog is.
+	it("counts every party follower, built-in and custom alike, but an animal that feeds itself", () => {
 		const { aeliana } = campParty({ aeliana: { followers: { band: { party: true, isGroup: true, size: 3 } } } });
 		aeliana.flags[SYSTEM_ID].crew = { name: "The Wolves", size: 4 };
 		const cards = [
@@ -167,8 +169,23 @@ describe("a character's mouths at the fire", () => {
 			card({ ftype: "initiate", slug: "enfys" }),
 			card({ ftype: "custom", slug: "band" }),
 			card({ ftype: "beast", slug: "ox", party: false }),
+			card({ ftype: "beast", slug: "mule" }),
+			card({ ftype: "beast", slug: "dog-follower" }),
 		];
-		expect(partyFollowerMouths(aeliana, cards)).toBe(1 + 4 + 1 + 3);
+		expect(partyFollowerMouths(aeliana, cards)).toBe(4 + 1 + 3 + 1);
+	});
+
+	// The meal's Break Bread dice go to the mouths that ate it, not to the companion first in the roster.
+	it("hands no Break Bread die to an animal that feeds itself", () => {
+		const cards = [
+			card({ ftype: "animal-companion", name: "Wolf", hpMax: 10, hpCurrent: 9 }),
+			card({ ftype: "initiate", slug: "enfys", name: "Enfys", hpMax: 10, hpCurrent: 1 }),
+		];
+		const { healed } = campFollowerHeals({}, cards, { breads: [3] });
+		expect(healed).toEqual([
+			{ name: "Wolf", from: 9, to: 10 },
+			{ name: "Enfys", from: 1, to: 9, bread: 3 },
+		]);
 	});
 
 	// No sheet to read: the flags still know a crew (in by default) and the custom followers.
@@ -182,7 +199,7 @@ describe("a character's mouths at the fire", () => {
 });
 
 describe("a settled camp, paid", () => {
-	/** Aeliana hosting with her companion, Bram beside her, and Aeliana paying for all three mouths. */
+	/** Aeliana hosting with her follower, Bram beside her, and Aeliana paying for all three mouths. */
 	async function settledWith(cards) {
 		const party = campParty();
 		partyFollowersOf.mockImplementation(async actor => actor === party.aeliana ? cards : []);
@@ -195,16 +212,17 @@ describe("a settled camp, paid", () => {
 		return party;
 	}
 
-	it("feeds the companion at the fire, heals it in the character's own share, and posts the note", async () => {
-		const { aeliana } = await settledWith([card({ ftype: "animal-companion", name: "Wolf", hpMax: 8, hpCurrent: 1 })]);
+	// An initiate, who eats from the packs where the Ranger's wolf fends for itself (Book I p.304).
+	it("feeds a follower at the fire, heals them in the character's own share, and posts the note", async () => {
+		const { aeliana } = await settledWith([card({ ftype: "initiate", slug: "enfys", name: "Enfys", hpMax: 8, hpCurrent: 1 })]);
 		expect(aeliana.flags[SYSTEM_ID].camp.followers).toBe(1);
 		await applyCampShares(aeliana);
 		// One payment, after the claim that says whose client is paying (camp-store.js#payShare).
 		expect(aeliana.update.mock.calls.filter(([, options]) => options?.stonetopMove === "Make Camp")).toHaveLength(1);
 		expect(aeliana.update).toHaveBeenCalledWith(
-			expect.objectContaining({ [`flags.${SYSTEM_ID}.animalCompanion.hpCurrent`]: 5 }), { stonetopMove: "Make Camp" });
+			expect.objectContaining({ [`flags.${SYSTEM_ID}.initiatesHp.enfys`]: 5 }), { stonetopMove: "Make Camp" });
 		const note = globalThis.ChatMessage.create.mock.calls.map(c => c[0].content).join("");
-		expect(note).toContain("Wolf 1 → 5");
+		expect(note).toContain("Enfys 1 → 5");
 	});
 
 	it("restores no HP to a character dying at the fire, and says why on the card", async () => {
@@ -222,9 +240,10 @@ describe("a settled camp, paid", () => {
 	});
 
 	// CAMP-11: Book I p.79, each member of the party eats, and the book names no most. A cap of 20
-	// billed 25 as 20, and then, 20 fed of 25 travelling, healed none of them.
+	// billed 25 as 20, and then, 20 fed of 25 travelling, healed none of them. Initiates, because oxen
+	// graze and eat nothing from a pack (p.304).
 	it("bills all 25 mouths of a big following, and heals every one of them", async () => {
-		const cards = Array.from({ length: 25 }, (_, i) => card({ ftype: "beast", slug: `ox${i}`, name: `Ox ${i}`, hpMax: 8, hpCurrent: 1 }));
+		const cards = Array.from({ length: 25 }, (_, i) => card({ ftype: "initiate", slug: `i${i}`, name: `Initiate ${i}`, hpMax: 8, hpCurrent: 1 }));
 		const party = campParty({ aeliana: { carried: { supplies: 30 } } });
 		partyFollowersOf.mockImplementation(async actor => actor === party.aeliana ? cards : []);
 		const camp = await hostCamp(party.aeliana);
@@ -237,9 +256,9 @@ describe("a settled camp, paid", () => {
 		expect(plan[0].followersFed).toBe(25);
 		await applyCampShares(party.aeliana);
 		expect(party.aeliana.flags[SYSTEM_ID].inventory.resources.supplies).toBe(4);
-		const beastHp = party.aeliana.flags[SYSTEM_ID].beastHp;
-		expect(Object.keys(beastHp)).toHaveLength(25);
-		expect(Object.values(beastHp).every(hp => hp === 5)).toBe(true);
+		const initiatesHp = party.aeliana.flags[SYSTEM_ID].initiatesHp;
+		expect(Object.keys(initiatesHp)).toHaveLength(25);
+		expect(Object.values(initiatesHp).every(hp => hp === 5)).toBe(true);
 		const note = globalThis.ChatMessage.create.mock.calls.map(c => c[0].content).join("");
 		expect(note).not.toContain("were fed at the fire");
 	});

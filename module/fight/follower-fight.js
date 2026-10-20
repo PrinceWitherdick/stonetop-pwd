@@ -25,6 +25,7 @@
 // which is read from the character's flags.
 
 import { followerCardFor, followerExceptional } from "../actors/character/follower-masters.js";
+import { followerMarkedDead } from "../actors/character/follower-fate.js";
 import { readableFlags } from "../actors/character/StonetopFlags.js";
 import { isFightTabEnabled } from "../settings.js";
 import { fightOnScene } from "./fight-state.js";
@@ -39,7 +40,9 @@ import { BEAST_CATALOG } from "../data/beasts.js";
  * orderFollower all ask this. `flags` is the character's resolved flags. PURE.
  */
 export function customFollowerOutOfOrders(flags, ftype, slug) {
-	if (ftype !== "custom" || !slug) return false;
+	// A companion, initiate or beast marked "Dead" keeps their card as a record too (follower-fate.js).
+	if (ftype !== "custom") return followerMarkedDead(flags, ftype, slug ?? "");
+	if (!slug) return false;
 	const record = flags?.customFollowers?.[slug];
 	return !!(record?.dead || record?.brokenFree);
 }
@@ -119,7 +122,9 @@ export function followerOrderInfo(actor, card) {
 export async function openFollowerOrder(info, moveKey = null) {
 	const sheet = info?.character?.sheet;
 	if (typeof sheet?.orderFollower !== "function") return null;
-	return sheet.orderFollower({ ...info.follower, moveKey: moveKey || null }, { ftype: info.ftype, slug: info.slug });
+	// `fromMap`: the sheet reads the tags and moves off the card, which is what the token's are kept in
+	// step with, so an edit made on the NPC alone cannot give the two doors different chips.
+	return sheet.orderFollower({ ...info.follower, moveKey: moveKey || null, fromMap: true }, { ftype: info.ftype, slug: info.slug });
 }
 
 // ── THE SWARM DIE ───────────────────────────────────────────────────────────────────────────────

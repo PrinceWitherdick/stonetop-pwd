@@ -12,6 +12,32 @@
       </div>
     </div>
 
+    {{!-- Who they are, for the order: their instinct (the trouble they cause), cost and Loyalty, and
+          the book's rule for an order they would rather not follow (p.464, p.466). --}}
+    {{#if (or instinct cost hasLoyalty inuredNote)}}
+    <div class="stonetop-of-about">
+      {{#if instinct}}<div class="stonetop-of-about-row"><span class="stonetop-of-about-label">Instinct</span> <em>{{instinct}}</em></div>{{/if}}
+      {{#if cost}}<div class="stonetop-of-about-row"><span class="stonetop-of-about-label">Cost</span> {{cost}}</div>{{/if}}
+      {{#if hasLoyalty}}<div class="stonetop-of-about-row"><span class="stonetop-of-about-label">Loyalty</span> {{loyalty}} held</div>{{/if}}
+      {{!-- Heroes to the Last's "They are inured to terror & horror" (the crew's). --}}
+      {{#if inuredNote}}<div class="stonetop-of-about-row stonetop-of-inured"><span class="stonetop-of-about-label">Nerve</span> {{inuredNote}} (Heroes to the Last)</div>{{/if}}
+      <div class="stonetop-of-about-note">An order against their instinct, tags or cost, or one they're too scared to follow, they may balk at (p.466): spend 1 Loyalty, or Persuade them.</div>
+      {{#if canBalk}}
+      <label class="stonetop-of-adv-row stonetop-of-balk-row">
+        <input type="checkbox" class="stonetop-of-balk" {{#if spendLoyalty}}checked{{/if}}>
+        {{#if balkOnPresence}}They balk: spend 1 Presence (Front Line Leader, {{presence}} held) in place of their Loyalty so they do it anyway{{else}}They balk: spend 1 Loyalty so they do it anyway{{/if}}
+      </label>
+      {{!-- Front Line Leader: "Spend Presence in lieu of your crew's Loyalty" (p.126). --}}
+      {{#if presenceChoice}}
+      <label class="stonetop-of-adv-row stonetop-of-balk-row">
+        <input type="checkbox" class="stonetop-of-balk-presence" {{#if payWithPresence}}checked{{/if}}>
+        Pay with Presence instead ({{presence}} held, Front Line Leader)
+      </label>
+      {{/if}}
+      {{/if}}
+    </div>
+    {{/if}}
+
     <div class="stonetop-of-controls">
 
       {{!-- Who, for a group: the whole of it acting as one (p.470), or one member on the
@@ -85,6 +111,14 @@
         <label class="stonetop-of-adv-row stonetop-of-wall-row">
           <input type="checkbox" class="stonetop-of-wall" {{#if inWall}}checked{{/if}}>
           In a shield wall (Shield Wall): Defend with advantage, and +2 Readiness on a 7+
+        </label>
+        {{/if}}
+        {{!-- Stentorian (the Marshal): spend 1 Command for advantage to Order Followers. Unticked: the
+              spend is theirs to choose, and it is paid once the dice land. --}}
+        {{#if commandHeld}}
+        <label class="stonetop-of-adv-row stonetop-of-command-row">
+          <input type="checkbox" class="stonetop-of-command" {{#if spendCommand}}checked{{/if}}>
+          Spend 1 Command (Stentorian, {{commandHeld}} held): advantage
         </label>
         {{/if}}
         <span class="stonetop-cf-chosen-label">Anything else swinging the roll? <span class="stonetop-of-tags-hint">(Stentorian, an Aid, an Interfere…)</span></span>

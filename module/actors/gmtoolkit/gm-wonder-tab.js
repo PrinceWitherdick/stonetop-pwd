@@ -34,6 +34,8 @@ import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { escHtml } from "../../utils/strings.js";
 import { localize, format } from "../../utils/i18n.js";
 import { ActorListStore } from "./actor-list-store.js";
+import { playerWishesView } from "../../campaign/player-wishes.js";
+import { getPlayerCharacters } from "../../utils/playbook-actors.js";
 
 /**
  * The tab's two edit sections, one per list, each with its own pencil in its own corner.
@@ -184,6 +186,9 @@ export function withGmWonderTab(Base) {
 			// the agenda and the principles are not: it is transcribed book text, and translating
 			// it is a pass over the books rather than over the language file.
 			context.stonetop.wonderGuide = GM_WONDER_GUIDE;
+			// The players' End of Session wishes, read-only: hanging threads beside the questions (Book I p.581, p.591;
+			// campaign/player-wishes.js).
+			context.stonetop.playerWishes = playerWishesView(getPlayerCharacters());
 		}
 
 		/**

@@ -177,6 +177,12 @@
                 "damage": "iron spear d6 (close, thrown)",
                 "instinct": "to lack discretion",
                 "cost": "tenderness, respect",
+                "gear": [
+                  {
+                    "label": "Shield",
+                    "checked": true
+                  }
+                ],
                 "moves": [
                   "Perform a divination",
                   "Speak a (dire) prophecy",
@@ -289,7 +295,7 @@
       "instincts": [
         {
           "word": "Delight",
-          "description": "To find beauty, in even the ugliest things."
+          "description": "To find beauty, in even the most ugly thing."
         },
         {
           "word": "Detachment",
@@ -305,7 +311,7 @@
         },
         {
           "word": "Reverence",
-          "description": "To honor the spirits and give them their due."
+          "description": "To demand sacrifice to the spirits and Danu."
         }
       ],
       "appearance": [
@@ -432,7 +438,7 @@
             "slug": "sacred-pouch",
             "label": "Sacred pouch",
             "detailsSection": "Sacred Pouch",
-            "description": "<p>Doesn't take up space in your inventory. It can hold up to 3 Stock (sacred herbs, powders, stones, pigments, chalks, clay, and so forth). Each time you gain an even-numbered level, your pouch can hold +1 Stock. When <strong><em>anyone but you looks inside your sacred pouch and touches the materials therein</em></strong>, the Stock is ruined.</p><p>When you <strong><em>have a few days of downtime in familiar terrain</em></strong>, you may replenish your Stock.</p><p>When you <strong><em>Forage</em></strong>, you can produce Stock instead of provisions.</p>",
+            "description": "<p>Your sacred pouch (<em>magical</em>) doesn't take up space in your inventory. It can hold up to 3 Stock (sacred herbs, powders, stones, pigments, chalks, clay, and so forth). Each time you gain an even-numbered level, your pouch can hold +1 Stock. When <strong><em>anyone but you looks inside your sacred pouch and touches the materials therein</em></strong>, the Stock is ruined.</p><p>When you <strong><em>have a few days of downtime in familiar terrain</em></strong>, you may replenish your Stock.</p><p>When you <strong><em>Forage</em></strong>, you can produce Stock instead of provisions.</p>",
             "usesBonus": {
               "evenLevelBonus": 1,
               "moveBonus": [
@@ -635,6 +641,9 @@
             "label": "Herb garden",
             "description": "shears, mortars &amp; pestles, herbs, seeds, remedies, mild poisons, ◇ spades, etc. Each spring, d4 uses of bendis root (<em>reach, area</em>, burns ~1 hr, fumes repel perversions of nature).",
             "rulesNote": "Each spring, d4 uses of bendis root (<em>reach, area</em>, burns ~1 hr, fumes repel perversions of nature).",
+            "specialItems": [
+              "bendis-root"
+            ],
             "grantsItems": [
               {
                 "name": "Shears",
@@ -707,46 +716,46 @@
           "slug": "danu-offerings",
           "title": "",
           "continuation": true,
-          "description": "<p>What do the folk of Stonetop leave as offerings to Danu? <em>(choose 2–3)</em></p>",
+          "description": "<p>What do the folk of Stonetop leave as offerings? <em>(choose 2–3)</em></p>",
           "options": [
             {
               "slug": "fruits-of-harvest",
-              "description": "Fruits of harvest",
+              "description": "fruits of harvest",
               "max": 1
             },
             {
               "slug": "figurines",
-              "description": "Figurines/effigies",
+              "description": "figurines/effigies",
               "max": 1
             },
             {
               "slug": "whisky",
-              "description": "Whisky/spirits",
+              "description": "whisky/spirits",
               "max": 1
             },
             {
               "slug": "salt",
-              "description": "Salt/crystals",
+              "description": "salt/crystals",
               "max": 1
             },
             {
               "slug": "rain-water",
-              "description": "Pure rain water",
+              "description": "pure rain water",
               "max": 1
             },
             {
               "slug": "metal-nails",
-              "description": "Metal nails/tools",
+              "description": "metal nails/tools",
               "max": 1
             },
             {
               "slug": "blood",
-              "description": "Blood/burnt flesh",
+              "description": "blood/burnt flesh",
               "max": 1
             },
             {
               "slug": "incense",
-              "description": "Incense/sage bark",
+              "description": "incense/sage bark",
               "max": 1
             }
           ]

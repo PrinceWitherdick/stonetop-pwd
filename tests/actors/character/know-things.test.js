@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
-	isKnowThings, ownedMoveNames, logbookUses, knowThingsRollOptions, neverAtALossActions,
+	isKnowThings, ownedMoveNames, logbookUses, knowThingsRollOptions, neverAtALossActions, latestKnowThingsCard, latestMoveCard,
 	KNOW_THINGS, LOGBOOK, NEVER_AT_A_LOSS, STRONG_HIT_TOTAL,
 } from "../../../module/actors/character/know-things.js";
+import { SYSTEM_ID } from "../../../module/system-id.js";
 
 const move = (name, extra = {}) => ({ type: "move", name, system: extra });
 const actorWith = (...names) => ({ type: "character", items: names.map(n => (typeof n === "string" ? move(n) : n)) });
@@ -112,5 +115,98 @@ describe("neverAtALossActions", () => {
 describe("STRONG_HIT_TOTAL", () => {
 	it("is 10 — padding to exactly a strong hit keeps the card off the 12+ label", () => {
 		expect(STRONG_HIT_TOTAL).toBe(10);
+	});
+});
+
+// Seeker re-audit (2026-10-18), the user's ruling: "a Know Things roll you JUST made" is the character's
+// most recent Know Things card, so the Logbook and books & scrolls buttons sit on that card only.
+describe("latestKnowThingsCard", () => {
+	const card = (id, actor, move, rolled = true) => ({
+		id, speaker: { actor },
+		rolls: rolled ? [{ total: 7 }] : [],
+		getFlag: (scope, key) => (scope === SYSTEM_ID && key === "move" ? move : undefined),
+	});
+
+	it("is the newest Know Things roll card the character spoke, whatever came after it", () => {
+		const log = [
+			card("old", "maelis", KNOW_THINGS),
+			card("mid", "maelis", KNOW_THINGS),
+			card("other", "maelis", "Seek Insight"),
+			card("bram", "bram", KNOW_THINGS),
+		];
+		expect(latestKnowThingsCard(log, "maelis")?.id).toBe("mid");
+		expect(latestKnowThingsCard(log, "bram")?.id).toBe("bram");
+	});
+
+	it("passes over a Know Things card with no roll on it", () => {
+		const log = [card("rolled", "maelis", KNOW_THINGS), card("posted", "maelis", KNOW_THINGS, false)];
+		expect(latestKnowThingsCard(log, "maelis")?.id).toBe("rolled");
+	});
+
+	it("reads the chat log in place, or a stand-in through its contents, to the same card", () => {
+		const log = [card("old", "maelis", KNOW_THINGS), card("new", "maelis", KNOW_THINGS), card("bram", "bram", KNOW_THINGS)];
+		expect(latestKnowThingsCard(new Map(log.map(m => [m.id, m])).values(), "maelis")?.id).toBe("new");
+		expect(latestKnowThingsCard(new Set(log), "maelis")?.id).toBe("new");
+		expect(latestKnowThingsCard({ contents: log }, "maelis")?.id).toBe("new");
+	});
+
+	it("is null for a character with no Know Things card, or no character", () => {
+		expect(latestKnowThingsCard([card("x", "bram", KNOW_THINGS)], "maelis")).toBeNull();
+		expect(latestKnowThingsCard([card("x", undefined, KNOW_THINGS)], undefined)).toBeNull();
+		expect(latestKnowThingsCard(undefined, "maelis")).toBeNull();
+	});
+
+	// stonetop.js registers its hooks on import, so the wiring is read off the source.
+	it("gates both the Logbook buttons and the writer's spend on it", () => {
+		const src = fs.readFileSync(path.resolve("stonetop.js"), "utf8");
+		const body = name => src.slice(src.indexOf(`function ${name}(`), src.indexOf("\n}\n", src.indexOf(`function ${name}(`)));
+		// Read from the newest end (an array), so the walk stops at the bottom card rather than testing the whole log.
+		expect(body("_isLatestKnowThingsCard")).toContain("latestKnowThingsCard(game.messages?.contents ?? [], actorId)");
+		// Remembered per speaker: a card made or deleted forgets its speaker's, an edit only one that could change the
+		// answer (a card flag written is not one); the spend always asks the log afresh.
+		expect(src).toContain('for (const hook of ["createChatMessage", "deleteChatMessage"]) Hooks.on(hook, message => _latestKnowThings.delete(message.speaker?.actor));');
+		expect(src).toContain('if ("rolls" in changes || foundry.utils.hasProperty(changes, `flags.${SYSTEM_ID}.move`)) _latestKnowThings.delete(message.speaker?.actor);');
+		expect(src).toContain('if ("speaker" in changes) return _latestKnowThings.clear();');
+		expect(src).toContain("if (!_isLatestKnowThingsCard(message, { fresh: true })) return { upgraded: false, stale: true };");
+		expect(body("_wireLogbook")).toContain("if (!_isLatestKnowThingsCard(message)) return;");
+		// Only once a track has a use to offer: a character with none never walks the log.
+		const wire = body("_wireLogbook");
+		expect(wire.indexOf("if (!offers.length) return;")).toBeGreaterThan(-1);
+		expect(wire.indexOf("if (!offers.length) return;")).toBeLessThan(wire.indexOf("_isLatestKnowThingsCard(message)"));
+		expect(body("_upgradeKnowThings")).toContain("_isLatestKnowThingsCard(message, { fresh: true })");
+	});
+});
+
+describe("latestMoveCard", () => {
+	const card = (id, actor, move, rolled = true) => ({
+		id, speaker: { actor },
+		rolls: rolled ? [{ total: 7 }] : [],
+		getFlag: (scope, key) => (scope === SYSTEM_ID && key === "move" ? move : undefined),
+	});
+	const log = [
+		card("a1", "maelis", "Amulets & Talismans"),
+		card("seen", "maelis", "Seek Insight"),
+		card("a2", "maelis", "Amulets & Talismans", false),
+		card("bram", "bram", "Amulets & Talismans"),
+	];
+	const asIterable = list => new Set(list);
+
+	it("is the newest card the character spoke for a move named or matched, rolled or not", () => {
+		for (const messages of [log, asIterable(log)]) {
+			expect(latestMoveCard(messages, "maelis", "Amulets & Talismans")?.id).toBe("a2");
+			expect(latestMoveCard(messages, "maelis", "Amulets & Talismans", { rolled: true })?.id).toBe("a1");
+			expect(latestMoveCard(messages, "maelis", name => name === "Seek Insight")?.id).toBe("seen");
+			expect(latestMoveCard(messages, "maelis", "Forage")).toBeNull();
+			expect(latestMoveCard(messages, undefined, "Amulets & Talismans")).toBeNull();
+		}
+	});
+
+	it("stops at a message already seen, from the end and walked forward alike", () => {
+		for (const messages of [log, asIterable(log)]) {
+			expect(latestMoveCard(messages, "maelis", "Amulets & Talismans", { seen: new Set(["seen"]) })?.id).toBe("a2");
+			expect(latestMoveCard(messages, "maelis", "Amulets & Talismans", { seen: new Set(["seen"]), rolled: true })).toBeNull();
+			expect(latestMoveCard(messages, "maelis", "Seek Insight", { seen: new Set(["seen"]) })).toBeNull();
+			expect(latestMoveCard(messages, "bram", "Amulets & Talismans", { seen: new Set(["a1"]) })?.id).toBe("bram");
+		}
 	});
 });

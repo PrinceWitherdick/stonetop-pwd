@@ -4,20 +4,43 @@
 // (.threat-card wrapper, .threat-portent__check doom boxes), so threat-view's shared
 // wiring (doom toggles, drag-to-pin) works on hazard cards without a parallel set of
 // handlers.
-import { HAZARD_ACCENT, resolveDamageEffects, formatHazardDamage } from "./hazard-data.js";
+import { HAZARD_ACCENT, resolveDamageEffects, formatHazardDamage, hazardFormula, cleanHazardTags } from "./hazard-data.js";
 import { hasText, stringList, buildDoomRows, buildImpending, buildCustomPlayerMoves, cardEnricher, asCardHtml } from "../journal/card-vm.js";
+import { IGNORES_ARMOR_RE, PIERCING_RE } from "../utils/damage.js";
+
+/** The stored worksheet picks plus any free-form extras, as one die, bonus and tag list. */
+function hazardDamageParts(sys = {}) {
+	const { tags, bonus } = resolveDamageEffects(sys.damageEffects ?? []);
+	const extra = String(sys.damageExtra ?? "").split(",").map(t => t.trim()).filter(Boolean);
+	return { die: sys.damageDie ?? "", bonus, tags: [...tags, ...extra.filter(t => !tags.includes(t))] };
+}
 
 /** The hazard's book-style damage line ("1d10+2 (ignores armor, forceful)"), derived
  *  from the stored worksheet picks plus any free-form extras. */
 export function hazardDamageLine(sys = {}) {
-	const { tags, bonus } = resolveDamageEffects(sys.damageEffects ?? []);
-	const extra = String(sys.damageExtra ?? "").split(",").map(t => t.trim()).filter(Boolean);
-	return formatHazardDamage({
-		die: sys.damageDie ?? "",
-		bonus,
-		tags: [...tags, ...extra.filter(t => !tags.includes(t))],
-		certainDeath: !!sys.certainDeath,
-	});
+	return formatHazardDamage({ ...hazardDamageParts(sys), certainDeath: !!sys.certainDeath });
+}
+
+/**
+ * What the hazard's damage line ROLLS, for the shared damage card (combat/attack-flow.js#rollHazardDamage),
+ * or null when it rolls nothing: no die, or certain death, which p.383 says "shouldn't deal damage" at all.
+ *
+ * The p.383 effects mapped onto what Apply reads: "ignores armor" bypasses armor outright, "N piercing"
+ * takes N off it (one piercing only, the larger: cleanHazardTags), and "+2 damage" is already in the
+ * formula. Everything else (messy, forceful, a free-form "area") stays a tag, which the card prints in
+ * each row's fine print and turns into its fiction notes. Advantage and disadvantage are not stored:
+ * they are asked at the roll.
+ *
+ * @returns {{formula: string, ignoresArmor: boolean, piercing: number, tags: string[]}|null}
+ */
+export function hazardDamageRoll(sys = {}) {
+	if (sys.certainDeath) return null;
+	const { die, bonus, tags } = hazardDamageParts(sys);
+	const formula = hazardFormula(die, bonus);
+	if (!formula) return null;
+	const clean = cleanHazardTags(tags);
+	const piercing = Math.max(0, ...clean.map(t => Number(PIERCING_RE.exec(t)?.[1]) || 0));
+	return { formula, ignoresArmor: clean.some(t => IGNORES_ARMOR_RE.test(t)), piercing, tags: clean };
 }
 
 /**
@@ -35,6 +58,9 @@ export async function buildHazardCardVM(page, { forOwner } = {}) {
 	const customPlayerMoves = await buildCustomPlayerMoves(sys, enrich);
 
 	const damage = hazardDamageLine(sys);
+	// The GM's damage controls (hazards/hazard-damage.js): roll the line onto the damage card, or, for
+	// certain death, take whoever it catches straight to 0 HP. GM prep, and GM hands only.
+	const isGM = !!globalThis.game?.user?.isGM;
 
 	return {
 		id: page.id,
@@ -44,6 +70,8 @@ export async function buildHazardCardVM(page, { forOwner } = {}) {
 		damage,
 		hasDamage: hasText(damage),
 		certainDeath: !!sys.certainDeath,
+		canRollDamage: isGM && !!hazardDamageRoll(sys),
+		canCertainDeath: isGM && !!sys.certainDeath,
 		instinct: String(sys.instinct ?? ""),
 		hasInstinct: hasText(sys.instinct),
 		// Written in the wizard's textarea; a hazard saved before that text was stored as

@@ -15,8 +15,8 @@
 // (`requirement.background`): its Omens held stand in for the stat (move-roll-options.js), and what its tier
 // does to the track is settled like any other tier effect (tier-effects.js), so a Shift or a +1 moves it too.
 
-import { SYSTEM_ID } from "../../system-id.js";
 import { resolvedFlagProperty } from "./StonetopFlags.js";
+import { writeSetupResource } from "./background-tracks.js";
 import { actorTookBackground } from "./took-background.js";
 import { WBH_PLAYBOOK_NAME } from "./WouldBeHeroAsterisk.js";
 import { clampInt } from "../../utils/custom-move-data.js";
@@ -83,14 +83,6 @@ export function omensForTier(tier, prior, max = OMENS_MAX) {
 	return tier === "failure" ? Math.min(max, count(prior, max) + 1) : 0;
 }
 
-// Through the character's own background store, which is where the Details tab's circles write.
-async function writeOmens(actor, character, value) {
-	const background = character?.background;
-	if (background?.setSetupResource) return background.setSetupResource(OMENS_KEY, value);
-	const stored = resolvedFlagProperty(actor, "background.setupResources") ?? {};
-	return actor?.setFlag?.(SYSTEM_ID, "background.setupResources", { ...stored, [OMENS_KEY]: value });
-}
-
 /**
  * Bring the Omens to what `tier` asks of an Omens of Fate roll (tier-effects.js). `done` is this card's
  * record so far, `{prior, set}`: the Omens held before the dice and what its tier last asked for; null at
@@ -105,6 +97,6 @@ export async function settleOmensTier(actor, tier, done = null, character = acto
 	const was     = done ? count(done.set) : current;
 	const set     = omensForTier(tier, prior);
 	const next    = count(current + (set - was));
-	if (next !== current) await writeOmens(actor, character, next);
+	if (next !== current) await writeSetupResource(actor, OMENS_KEY, next, character);
 	return { prior, set };
 }

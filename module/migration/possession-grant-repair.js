@@ -5,6 +5,8 @@
 // every character who took it before: the Tannery's boiled leather cuirass was made as a
 // `{modifier: 1}` from 1.3.2 to 1.6.0, which stacks on top of a hauberk (3 armor with a base-2
 // hauberk) and reads as armored by modifier alone, long after the grant was fixed to `{base: 1}`.
+// The ones made from 1.3.2 to 1.3.5.1 carry no possession tag at all, so the repair first adopts
+// an untagged item that exactly one held possession's grant answers to.
 //
 // The rule, and everything it leaves alone (marks, track counts, hand-written gear), is
 // StonetopCharacter#repairPossessionGrants. This is only the sweep that reaches every character in

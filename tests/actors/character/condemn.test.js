@@ -15,6 +15,11 @@ describe("who can lay a brand", () => {
 		expect(canCondemn(actorWith(move(CONDEMN)))).toBe(true);
 	});
 
+	// A switched-off Condemn lays no new brand (2026-10-18 Judge re-audit).
+	it("does NOT count a switched-off Condemn", () => {
+		expect(canCondemn(actorWith({ ...move(CONDEMN), flags: { "stonetop-pwd": { learned: false } } }))).toBe(false);
+	});
+
 	// Censure alone resolves on the spot and marks nobody; Proclamation widens Condemn's reach but
 	// requires Censure rather than Condemn, so a Judge can own it with nothing to list.
 	it("does NOT count Censure or Proclamation on their own", () => {

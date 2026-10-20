@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { ArtInventory, browseArtDirs, clearArtBrowseCache, DURABLE_ART_DIRS, splitAtArtRoot } from "../../module/book2-art/browse.js";
+import {
+	ArtInventory, browseArtDirs, clearArtBrowseCache, DURABLE_ART_DIRS, forgetArtBrowseDirs, onArtBrowseCleared, splitAtArtRoot,
+} from "../../module/book2-art/browse.js";
 
 // The durable-art listing is cached for the session, which is only safe because every writer
 // clears it. These pin both halves of that bargain: the cache actually saves the round trips
@@ -95,6 +97,45 @@ describe("browseArtDirs", () => {
 		const browse = harness(Object.fromEntries(DURABLE_ART_DIRS.map(d => [d, []])));
 		await browseArtDirs(ROOT);
 		expect(browse).toHaveBeenCalledTimes(DURABLE_ART_DIRS.length);
+	});
+});
+
+// A writer that knows which folders it wrote (the settlement portraits) forgets just those, so the
+// rest of the session's listings are not thrown away with them.
+describe("forgetArtBrowseDirs", () => {
+	it("re-browses only the folders it names, under that root", async () => {
+		const files = { "assets/people": ["a.webp"], "assets/settlements": [], "assets/settlements/letters": [] };
+		const browse = harness(files);
+		const dirs = ["assets/people", "assets/settlements", "assets/settlements/letters"];
+		await browseArtDirs(ROOT, dirs);
+		await browseArtDirs("somewhere-else", ["assets/settlements"]);
+		expect(browse).toHaveBeenCalledTimes(4);
+
+		files["assets/settlements"].push("lygos.webp");
+		files["assets/settlements/letters"].push("MB-v1.svg");
+		forgetArtBrowseDirs(ROOT, ["assets/settlements", "assets/settlements/letters"]);
+		const present = await browseArtDirs(ROOT, dirs);
+		expect(present.has(`${ROOT}/assets/settlements/lygos.webp`)).toBe(true);
+		expect(present.has(`${ROOT}/assets/settlements/letters/MB-v1.svg`)).toBe(true);
+		await browseArtDirs("somewhere-else", ["assets/settlements"]);
+		// The two named folders again, and nothing else: not people, not the other root's.
+		expect(browse).toHaveBeenCalledTimes(6);
+	});
+
+	it("forgets a dependent cache that could have read those folders, and spares one that could not", () => {
+		const anyDir = vi.fn(), maps = vi.fn(), settlements = vi.fn();
+		onArtBrowseCleared(anyDir);
+		onArtBrowseCleared(maps, { dirs: ["assets/maps"] });
+		onArtBrowseCleared(settlements, { dirs: ["assets/settlements"] });
+
+		forgetArtBrowseDirs(ROOT, ["assets/settlements", "assets/settlements/letters"]);
+		expect(anyDir).toHaveBeenCalledTimes(1);
+		expect(maps).not.toHaveBeenCalled();
+		expect(settlements).toHaveBeenCalledTimes(1);
+
+		// The full clear still reaches every one of them.
+		clearArtBrowseCache();
+		expect(maps).toHaveBeenCalledTimes(1);
 	});
 });
 

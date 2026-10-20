@@ -1,0 +1,42 @@
+{{!-- Make a Plan (Book I p.530): what the PCs hope to achieve, and the requirements the GM named, each
+      with a tick box. Read here and ticked off here; written in its editor (SteadingPlanDialog.js), which
+      the hover pencil and "New plan" open. Shared by Stonetop's Notes tab and every other settlement's.
+      Params: `plans` (steading-plans.js#plansView), `canEdit`, `titleId` (the heading's id, one per window).
+      Inside the `each` blocks the params are read as `../canEdit` / `../../canEdit`: Foundry compiles
+      without compat mode, so a bare name there looks only on the plan or the requirement. --}}
+<section class="steading-list-section steading-plans" aria-labelledby="{{titleId}}">
+	<h3 id="{{titleId}}" class="stonetop-move-group-title steading-notes-heading">Plans</h3>
+	<p class="steading-notes-hint">Make a Plan: say what you hope to achieve; the GM says what it requires (Book I p.530).</p>
+	{{#each plans as |plan|}}
+	<article class="steading-plan{{#if plan.done}} is-done{{/if}}" data-plan-id="{{plan.id}}">
+		<header class="steading-plan-head">
+			<h4 class="steading-plan-name">{{#if plan.name}}{{plan.name}}{{else}}<span class="steading-plan-unnamed">An unnamed plan</span>{{/if}}</h4>
+			{{#if plan.total}}<span class="steading-plan-progress" data-tooltip="Requirements met">{{plan.doneCount}}/{{plan.total}}</span>{{/if}}
+			{{#if ../canEdit}}
+			<span class="steading-plan-tools">
+				<button type="button" class="steading-plan-edit" data-plan-action="edit-plan" data-tooltip="Edit this plan" data-tooltip-direction="UP" aria-label="Edit this plan"><i class="fas fa-pen" aria-hidden="true"></i></button>
+				<button type="button" class="steading-plan-remove" data-plan-action="remove-plan" data-tooltip="Remove this plan" data-tooltip-direction="UP" aria-label="Remove this plan"><i class="fas fa-trash" aria-hidden="true"></i></button>
+			</span>
+			{{/if}}
+		</header>
+		{{#if plan.total}}
+		<ul class="steading-plan-reqs">
+			{{#each plan.requirements as |req|}}
+			<li class="steading-plan-req{{#if req.done}} is-done{{/if}}" data-req-index="{{@index}}">
+				<label>
+					<input type="checkbox" class="steading-plan-check" data-plan-tick {{#if req.done}}checked{{/if}} {{#unless ../../canEdit}}disabled{{/unless}}>
+					<span class="steading-plan-req-text">{{req.text}}</span>
+				</label>
+			</li>
+			{{/each}}
+		</ul>
+		{{/if}}
+		{{#if plan.undone}}<p class="steading-plan-undone">Which means <strong>{{plan.undone}}</strong> goes undone.</p>{{/if}}
+	</article>
+	{{else}}
+	<p class="steading-notes-hint steading-plans-empty">No plans yet.</p>
+	{{/each}}
+	{{#if canEdit}}
+	<button type="button" class="steading-plan-add" data-plan-action="add-plan"><i class="fas fa-plus" aria-hidden="true"></i> New plan</button>
+	{{/if}}
+</section>

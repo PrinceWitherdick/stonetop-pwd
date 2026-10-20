@@ -404,6 +404,9 @@ export function buildMonsterActorData({
 			texture: img ? { src: img } : undefined,
 			width:  monsterTokenSize(size),
 			height: monsterTokenSize(size),
+			// Foundry v14's token depth, set as its own migration would (min of width and height), so a
+			// huge creature stands 3 tall rather than the schema's default 1.
+			depth:  monsterTokenSize(size),
 		},
 		items,
 	};

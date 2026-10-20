@@ -46,6 +46,13 @@
         <span class="stonetop-ff-option-desc">{{spareDesc}}</span>
       </button>
       {{/if}}
+      {{!-- Front Line Leader: the same spare, paid with the Marshal's Presence in the crew's Loyalty's place. --}}
+      {{#if canSparePresence}}
+      <button type="button" class="stonetop-ff-option stonetop-ff-option--save" data-action="sparePresence">
+        <span class="stonetop-ff-option-title"><i class="fas fa-flag"></i> {{sparePresenceLabel}}</span>
+        <span class="stonetop-ff-option-desc">{{sparePresenceDesc}}</span>
+      </button>
+      {{/if}}
     </div>
 
     {{!-- "If you let them go, mark XP": a clause the sheet can't check, so a pre-ticked

@@ -10,6 +10,48 @@
 // `sourceLabel` that drives the "from <possession>" note on the gear tab.
 
 import { deletionEntry } from "../../utils/foundry-compat.js";
+import { wrapGearNoteTerms } from "../../utils/gear-note.js";
+import { buildInventoryItemData, composeInventoryNote } from "../../utils/inventory-item-data.js";
+import { SPECIAL_ITEM_CATALOG } from "../../data/special-items.js";
+import { stripHtmlToText } from "../../utils/strings.js";
+
+/**
+ * The note a grant stamps on the item it makes: its authored tags (`note`, plain text as the book
+ * prints them), wrapped the way a write-in's note is saved (AddInventoryItemDialog#_save), so the
+ * gear terms read in italics with their tooltips. "" for a grant with no note, which is most.
+ */
+function grantNote(grant) {
+	return wrapGearNoteTerms(String(grant?.note ?? "").trim());
+}
+
+/**
+ * The note an item a grant made should carry: what it carries now, with any of the grant's tags it
+ * lacks added on the end, or null when it has them all. ADDITIVE only. The repair sweep adopts gear
+ * a player wrote by hand (StonetopCharacter#repairPossessionGrants), and that gear can have a note
+ * the player typed in the Add Item form ("Value 2, patched"); a tag the grant never authored is
+ * theirs and stays. Tags compare as plain text, case-blind, so "<em>immobile</em>" has "immobile".
+ */
+function repairedNote(itemNote, grant) {
+	const tags = String(grant?.note ?? "").split(",").map(t => t.trim()).filter(Boolean);
+	if (!tags.length) return null;
+	const have = String(itemNote ?? "");
+	const haveTags = new Set(stripHtmlToText(have).split(",").map(t => t.trim().toLowerCase()).filter(Boolean));
+	const missing = tags.filter(t => !haveTags.has(t.toLowerCase()));
+	if (!missing.length) return null;
+	const added = wrapGearNoteTerms(missing.join(", "));
+	return have.trim() ? `${have.trim()}, ${added}` : added;
+}
+
+/**
+ * Whether a possession's granted item is stashed equipment rather than gear carried on the person:
+ * its note says `immobile`, the tag a write-in or a dropped treasure carries for the same thing
+ * (arcana-facets.js#isImmobileArcanumItem reads it off an arcanum). The Distillery's stills and
+ * barrels (the user's ruling, 2026-10-18): they belong to the still-house, so the sheet draws them
+ * without a mark, and they never eat the small-item allowance or sit in the Outfit window.
+ */
+export function isStashedGrantItem(item) {
+	return /\bimmobile\b/i.test(String(item?.system?.note ?? ""));
+}
 
 /**
  * Every name one grant answers to, qualified by the column it lands in
@@ -120,8 +162,11 @@ function armorShape(armor) {
  * character took it stayed wrong on that character forever: the Tannery's cuirass was made as a
  * `{modifier: 1}` from 1.3.2 to 1.6.0 and still stacks on a hauberk in those worlds. Only what
  * the grant itself defines is compared, which is the gear's rules shape: `armor`, `weight` (a ◇
- * item's), `inventoryColumn` and the uses track's `max`. Never the name, the marks or the count
- * on the track, which are the player's; the caller clamps that count when `resourceMax` shrinks.
+ * item's), `inventoryColumn`, the uses track's `max` and the `note` (the Distillery's stills and
+ * barrels gained `immobile` in 2026-10, after characters had already taken them). Never the name,
+ * the marks or the count on the track, which are the player's; the caller clamps that count when
+ * `resourceMax` shrinks. The note only GAINS the grant's tags (repairedNote): what else it says
+ * may be the player's, typed on gear the sweep adopted.
  *
  * Armor keys the grant no longer has are DELETED rather than overwritten, because `system.armor`
  * is an object field and an update merges into it: writing `{base: 1}` over `{modifier: 1}`
@@ -141,6 +186,8 @@ export function grantRepair(item, grant) {
 		const weight = grant.weight ?? 1;
 		if (Number(sys.weight) !== weight) update["system.weight"] = weight;
 	}
+	const note = repairedNote(sys.note, grant);
+	if (note != null) update["system.note"] = note;
 	const want = armorShape(grant.armor);
 	const have = armorShape(sys.armor);
 	if (JSON.stringify(want) !== JSON.stringify(have)) {
@@ -163,6 +210,33 @@ export function grantRepair(item, grant) {
 		resourceMax = wantMax;
 	}
 	return Object.keys(update).length ? { update, resourceMax } : null;
+}
+
+/**
+ * What a possession's `produces` makes for each use spent off its track, as a special item off
+ * the handout list (module/data/special-items.js), or null. The Fox's Hidden stash: "(○○○ uses):
+ * each use produces valuables worth a purse of silvers (Value 2)".
+ */
+export function producedSpecialItem(opt) {
+	const slug = opt?.produces;
+	if (!slug) return null;
+	return SPECIAL_ITEM_CATALOG.flatMap(group => group.items ?? []).find(item => item.slug === slug) ?? null;
+}
+
+/**
+ * The create payloads for `count` of what a possession produces: small write-ins named as the
+ * handout names the item, its traits and Value in the note the way the Add Item form saves them
+ * ("~10 handfuls, Value 2"). One item per use, since each use makes its own purse. [] when the
+ * possession produces nothing or `count` is not positive. Pure.
+ */
+export function producedItemsToCreate(opt, count) {
+	const special = producedSpecialItem(opt);
+	const n = Math.floor(Number(count) || 0);
+	if (!special || n <= 0) return [];
+	const note = wrapGearNoteTerms(composeInventoryNote({ tags: special.traits ?? "", value: special.value }));
+	return Array.from({ length: n }, () => buildInventoryItemData({
+		name: special.name, column: "small", note, moveType: "inventory-custom",
+	}));
 }
 
 // Build the embedded-item create payloads for a possession's grants, skipping any
@@ -188,6 +262,10 @@ export function grantsToCreate(grantsItems = [], existingKeys = new Set(), { slu
 			// — i.e. when the character is actually wearing it.
 			if (g.armor) system.armor = g.armor;
 			if (g.resource) system.resource = g.resource;
+			// Authored tags ("immobile" on the Distillery's stills and barrels), saved as a
+			// write-in's note is (grantNote); isStashedGrantItem reads it back.
+			const note = grantNote(g);
+			if (note) system.note = note;
 			return { name: g.name, type: "move", system };
 		});
 }

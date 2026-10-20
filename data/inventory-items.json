@@ -41,6 +41,15 @@
     "tags": "recover 1d6 extra HP when you Make Camp"
   },
   {
+    "name": "Bendis root",
+    "slug": "bendis-root",
+    "column": "small",
+    "weight": 1,
+    "tags": "<em>reach</em>, <em>area</em>, burns ~1 hr, fumes repel perversions of nature",
+    "special": true,
+    "specialCategory": "Flora & Herbs"
+  },
+  {
     "name": "Bezoar",
     "slug": "bezoar",
     "column": "small",

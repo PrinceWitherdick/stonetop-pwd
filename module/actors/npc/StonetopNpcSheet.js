@@ -26,6 +26,11 @@ import { partyCharacters } from "../../utils/playbook-actors.js";
 import { mountTabRail } from "../../utils/tab-rail.js";
 import { withSheetSizeMemory, sizeOnceOnOpen } from "../../utils/sheet-size.js";
 import { followerCardFor } from "../character/follower-masters.js";
+import { followerLoyalty, followerLoyaltyPath } from "../character/follower-bond.js";
+import { loyaltyOwnerId } from "../../data/servant-of-daagon.js";
+import { readableFlags } from "../character/StonetopFlags.js";
+import { cardReadinessRef, readinessOnCard } from "../../fight/follower-readiness.js";
+import { followerOrderInfo, followerTakesOrders, openFollowerOrder } from "../../fight/follower-fight.js";
 
 // Rich-text (HTMLField) fields edited inline via prose-mirror on the sheet.
 const NPC_RICH_TEXT_FIELDS = [
@@ -327,6 +332,11 @@ export function createStonetopNpcSheetClass(Base) {
 			const card = followerCardFor(this.actor);
 			st.following = card ? [{ id: card.character.id, name: card.character.name }] : [];
 			st.isFollowing = st.following.length > 0;
+			// And what their card holds that a fight or an order reads: their Loyalty (a Servant of Daagon's is
+			// the Ring's, Book II p.561) and any Readiness from an ordered Defend (p.469), read off the card on
+			// the character they follow, never copied here. An Order button for whoever may order them: their
+			// character's owners and the GM, through the same window the card opens.
+			st.followerTrack = card ? this._followerTrack(card) : null;
 
 			// Relationships and Stats render conditionally (see npc.hbs), so either can vanish
 			// while it is the active tab — unticking "has game stats", or the last candidate
@@ -338,6 +348,24 @@ export function createStonetopNpcSheetClass(Base) {
 			if (activeTab && !tabExists[activeTab]) this._tabs[0].active = "details";
 
 			return context;
+		}
+
+		/**
+		 * A follower's Loyalty and Readiness, off their card, and whether this reader may order them. Null for
+		 * livestock, which holds neither and takes no orders.
+		 */
+		_followerTrack(card) {
+			const slug = card.ftype === "custom" ? loyaltyOwnerId(readableFlags(card.character)?.customFollowers ?? {}, card.slug) : card.slug;
+			// Livestock has a path on paper but no track (p.310: goats and sheep are not followers).
+			const hasLoyalty = followerTakesOrders(card) && !!followerLoyaltyPath(card.ftype, slug);
+			const order = followerOrderInfo(this.actor, card);
+			if (!hasLoyalty && !order) return null;
+			return {
+				hasLoyalty,
+				loyalty: hasLoyalty ? followerLoyalty(card.character, card.ftype, slug) : null,
+				readiness: readinessOnCard(cardReadinessRef(card.character, card.ftype, card.slug)),
+				canOrder: !!order && (!!game.user?.isGM || !!card.character.isOwner),
+			};
 		}
 
 		// Candidate rows for the Relationships tab: the player characters, plus anyone
@@ -447,6 +475,15 @@ export function createStonetopNpcSheetClass(Base) {
 						await item?.roll();
 					}
 				}
+			});
+
+			// Order this follower: the window their character's card opens (fight/follower-fight.js).
+			root.querySelectorAll(".stonetop-npc-order").forEach(el => {
+				el.addEventListener("click", ev => {
+					ev.preventDefault();
+					const info = followerOrderInfo(this.actor, followerCardFor(this.actor));
+					if (info) openFollowerOrder(info).catch(err => console.error("Stonetop | ordering a follower failed", err));
+				});
 			});
 
 			// "Following" chips: open the leading PC's sheet (a view action; both modes).

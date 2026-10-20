@@ -424,9 +424,9 @@ describe("SIR, PERMISSION TO DIE, SIR", () => {
 		const learned = fateSheet({ items: [sirMove()] }).actor;
 		const off     = fateSheet({ items: [sirMove({ learned: false })] }).actor;
 		const none    = fateSheet().actor;
-		expect(fate.sirPermissionOffer(learned, 2)).toEqual({ canSpare: true, letGo: true });
-		expect(fate.sirPermissionOffer(learned, 0)).toEqual({ canSpare: false, letGo: true });
-		expect(fate.sirPermissionOffer(off, 2)).toEqual({ canSpare: false, letGo: false });
+		expect(fate.sirPermissionOffer(learned, 2)).toEqual({ canSpare: true, letGo: true, presence: 0 });
+		expect(fate.sirPermissionOffer(learned, 0)).toEqual({ canSpare: false, letGo: true, presence: 0 });
+		expect(fate.sirPermissionOffer(off, 2)).toEqual({ canSpare: false, letGo: false, presence: 0 });
 		expect(fate.sirPermissionOffer(none, 2).canSpare).toBe(false);
 	});
 
@@ -533,6 +533,67 @@ describe("SIR, PERMISSION TO DIE, SIR", () => {
 		await sheet._resolveFollowerFate("dead", { name: "Andras", follower: "custom", slug: "f1", letGo: true });
 		expect(actor.flags["stonetop-pwd"].customFollowers.f1.dead).toBe(true);
 		expect(actor.system.attributes.xp.value).toBe(1);
+	});
+});
+
+// Marshal re-audit (2026-10-18), the user's ruling: FRONT LINE LEADER's "Spend Presence in lieu of your crew's
+// Loyalty" pays Sir, Permission to Die, Sir's spend too, for the crew only, even when the crew holds no Loyalty.
+describe("SIR, PERMISSION TO DIE, SIR paid with Front Line Leader's Presence", () => {
+	const FLL = "Front Line Leader";
+	const fllMove = () => ({ type: "move", name: FLL, system: { resource: { max: 2, title: "Presence" } }, flags: {} });
+	const presenceSheet = ({ presence = 2, flags = crewFlags(), items = [sirMove(), fllMove()] } = {}) => {
+		const built = fateSheet({ flags, items });
+		const tracks = { [FLL]: presence };
+		built.actor.typedActor = { moveResources: {
+			getMoveResources: () => tracks,
+			setUses: vi.fn(async (move, value) => { tracks[move] = value; }),
+		} };
+		return { ...built, tracks };
+	};
+
+	it("offers the Presence for the crew only, while Sir is learned", () => {
+		const { actor } = presenceSheet();
+		expect(fate.sirPermissionOffer(actor, 0, { ftype: "crew" })).toEqual({ canSpare: false, letGo: true, presence: 2 });
+		expect(fate.sirPermissionOffer(actor, 1, { ftype: "custom" }).presence).toBe(0);
+		expect(fate.sirPermissionOffer(presenceSheet({ items: [fllMove()] }).actor, 1, { ftype: "crew" }).presence).toBe(0);
+		expect(fate.sirPermissionOffer(presenceSheet({ presence: 0 }).actor, 1, { ftype: "crew" }).presence).toBe(0);
+	});
+
+	it("the dialog for a downed crew member at 0 Loyalty carries the Presence spare", async () => {
+		const { sheet } = presenceSheet({ flags: crewFlags({ loyalty: 0 }) });
+		const dialog = sheet._openFollowerFate({ follower: "crew-member", slug: "", index: 1, name: "Crew member 4" });
+		const data = dialog.getData();
+		expect(data).toMatchObject({ canSpare: false, canSparePresence: true });
+		const html = await renderTemplate("systems/stonetop-pwd/templates/dialogs/follower-fate.hbs", data);
+		expect(html).not.toMatch(/data-action="spare"/);
+		expect(html).toMatch(/data-action="sparePresence"/);
+		expect(html).toContain("spend 1 Presence (2 held) in place of the crew&#x27;s Loyalty");
+
+		const custom = presenceSheet({ flags: { customFollowers: { f1: { name: "Andras", loyalty: 0 } } } })
+			.sheet._openFollowerFate({ follower: "custom", slug: "f1", name: "Andras" });
+		expect(custom.getData().canSparePresence).toBe(false);
+	});
+
+	it("spending: 1 Presence off the Marshal, the crew's Loyalty left alone, they stay on the roster", async () => {
+		const chat = withChat();
+		const { sheet, actor, tracks } = presenceSheet();
+		await sheet._resolveFollowerFate("sparePresence", { name: "Eira", loyalty: 2, follower: "crew-individual", slug: "", index: 1 });
+		expect(tracks[FLL]).toBe(1);
+		expect(actor.typedActor.moveResources.setUses).toHaveBeenCalledWith(FLL, 1, { stonetopMove: FLL });
+		expect(actor.flags["stonetop-pwd"].crew.loyalty).toBe(2);
+		expect(actor.flags["stonetop-pwd"].crew.individuals).toHaveLength(2);
+		expect(chat.mock.calls[0][0].content).toMatch(/Eira<\/strong> survives: out of the action, but alive\. 1 Presence spent in place of the crew's Loyalty \(Front Line Leader\), 1 left\./);
+	});
+
+	it("nothing is spent with no Presence held, or for anyone but the crew", async () => {
+		const chat = withChat();
+		const broke = presenceSheet({ presence: 0 });
+		await broke.sheet._resolveFollowerFate("sparePresence", { name: "Eira", follower: "crew-individual", slug: "", index: 1 });
+		expect(broke.actor.typedActor.moveResources.setUses).not.toHaveBeenCalled();
+		const custom = presenceSheet({ flags: { customFollowers: { f1: { name: "Andras", loyalty: 0, hpCurrent: 0 } } } });
+		await custom.sheet._resolveFollowerFate("sparePresence", { name: "Andras", follower: "custom", slug: "f1" });
+		expect(custom.tracks[FLL]).toBe(2);
+		expect(chat).not.toHaveBeenCalled();
 	});
 });
 
@@ -643,6 +704,16 @@ describe("the crew card: armor from the kit they carry", () => {
 		expect(crewBuild.crewGearArmor(INV, { shield: true, "thick-hides": 2, cloak: 1 })).toBe(2);
 	});
 
+	// One rule for the shield's armor and its Readiness (the sheet's Defend reads crewBearsShield too).
+	it("crewBearsShield: the shield row carried in full, the same rule the armor reads", () => {
+		expect(crewBuild.crewBearsShield(INV, { shield: 1 })).toBe(false);
+		expect(crewBuild.crewBearsShield(INV, { shield: 2 })).toBe(true);
+		expect(crewBuild.crewBearsShield(INV, { shield: true })).toBe(true);
+		expect(crewBuild.crewBearsShield(INV, {})).toBe(false);
+		expect(crewBuild.crewBearsShield([], { shield: 2 })).toBe(false);
+		expect(crewBuild.crewBearsShield(null, { shield: 2 })).toBe(false);
+	});
+
 	it("the pack's crew inventory carries the numbers", () => {
 		const rows = PACK.get("the-marshal").flags.stonetop.crew.inventory;
 		expect(rows.find(r => r.slug === "thick-hides").armor).toBe(1);
@@ -659,12 +730,23 @@ describe("the crew card: armor from the kit they carry", () => {
 	});
 });
 
-describe("the crew card: Shield Wall counts only while learned", () => {
+describe("the crew card: Shield Wall counts only while learned and formed", () => {
 	it("an un-learned Shield Wall leaves the shield's +1 Readiness", async () => {
-		const { char, actor } = marshalAt(2, { flags: { crew: { ...CREW, gear: { shield: 2 } } } });
+		const { char, actor } = marshalAt(2, { flags: { crew: { ...CREW, gear: { shield: 2 }, readiness: 2, shieldWall: true } } });
 		const wall = await char.addMove(marshal("Shield Wall")._id);
-		expect((await crewCard(char, actor)).readinessShieldWall).toBe(true);
+		const formed = await crewCard(char, actor);
+		expect(formed.readinessShieldWall).toBe(true);
+		expect(formed.readinessPips).toHaveLength(5);
 		await wall.setFlag(STONETOP_SCOPE, "learned", false);
+		const card = await crewCard(char, actor);
+		expect(card.readinessShieldWall).toBe(false);
+		expect(card.readinessPips).toHaveLength(4);
+	});
+
+	// The Marshal's re-audit, the user's ruling (2026-10-18): the cap rises to 5 only while the wall stands.
+	it("a learned Shield Wall the crew has not formed keeps the cap at 4", async () => {
+		const { char, actor } = marshalAt(2, { flags: { crew: { ...CREW, gear: { shield: 2 }, readiness: 2 } } });
+		await char.addMove(marshal("Shield Wall")._id);
 		const card = await crewCard(char, actor);
 		expect(card.readinessShieldWall).toBe(false);
 		expect(card.readinessPips).toHaveLength(4);
@@ -719,6 +801,8 @@ describe("onboarding counts only real crew-tag picks", () => {
 		d._applyBackgroundChange("scion");
 		expect(d._crewPickedTags()).toEqual(["brave"]);
 		expect(d._isStepComplete("crew")).toBe(false);
+		// The Scion's Veteran Crew asks its "Go mark it now" pick; one that adds no tags.
+		d._setCreationMark("Veteran Crew", 0, "crew-hp");
 		// Room for the second pick, and no more.
 		expect(d._toggleCrewTag("cunning", true)).toBe(true);
 		expect(d._isStepComplete("crew")).toBe(true);
@@ -804,7 +888,7 @@ describe("a crew borrowed through a learned Crew", () => {
 		// A Heavy's background can never be "scion", but the tag is the Marshal's alone either way.
 		const { char, actor } = heavyWithCrew({ flags: { crew: { ...CREW }, "background.selected": "scion" } });
 		const { crew } = await followerGroups(char, actor);
-		expect(crew.tags.map(t => t.label)).toEqual(["brave"]);
+		expect(crew.tags.map(t => t.label)).toEqual(["group", "brave"]);   // p.144: every crew is a group
 		expect(crew.tagAutoLabel).toBeNull();
 		expect(crewBackgroundTag(await char.playbook(), MARSHAL_CREW, "scion")).toBeNull();
 		// The Marshal's own does.
@@ -1082,5 +1166,121 @@ describe("follower fate: a custom group's members are followers too", () => {
 		expect(band.loyalty).toBe(1);
 		expect(band.memberHp).toEqual([4, 0, 3, null]);
 		expect(band.size).toBe(4);
+	});
+});
+
+// ── Shield Wall in full, and followers lose Readiness on offense (re-audit, the user's ruling 2026-10-18) ──
+const { stubAsk: stubOffenseAsk } = await import("../../fakes/confirm.js");
+
+describe("the crew ordered on the offense, and the Marshal's shield wall", () => {
+	/** Open the crew's order, answer the window with `result`, and roll `total`. */
+	async function orderCrew(char, actor, result, total = 10) {
+		let onRoll = null;
+		const spy = vi.spyOn(crewDialogs.OrderFollowersDialog.prototype, "render").mockImplementation(function () { onRoll = this._onRoll; return this; });
+		try {
+			await crewCardSheet(char, actor).orderFollower({ name: "The Wolves", tags: [], moves: [], exceptional: false }, { ftype: "crew", slug: "" });
+		} finally {
+			spy.mockRestore();
+		}
+		char.onOrderFollowersRoll = vi.fn(async () => ({ total }));
+		await onRoll({ bonus: 1, rollMode: "normal", followerName: "The Wolves", ...result });
+		return char.onOrderFollowersRoll;
+	}
+	function stubWindow(answer) {
+		const { document } = globalThis;
+		const { applications } = globalThis.foundry;
+		globalThis.document = { createElement: () => ({}) };
+		const asked = stubOffenseAsk(answer);
+		return { asked, restore: () => { globalThis.document = document; globalThis.foundry.applications = applications; } };
+	}
+	const crewOf = actor => actor.getFlag(STONETOP_SCOPE, "crew");
+
+	it("a crew holding Readiness ordered to Clash is asked before the dice, and rushing in loses it", async () => {
+		const chat = withChat();
+		const { char, actor } = marshalAt(2, { flags: { crew: { ...CREW, readiness: 2 } } });
+		const { asked, restore } = stubWindow("lose");
+		try {
+			const rolled = await orderCrew(char, actor, { moveKey: "clash", moveName: "The Wolves: Clash" });
+			expect(asked).toHaveBeenCalledTimes(1);
+			expect(asked.mock.calls[0][0].window.title).toBe("The Wolves holds 2 Readiness");
+			expect(rolled).toHaveBeenCalled();
+		} finally {
+			restore();
+		}
+		expect(crewOf(actor).readiness).toBe(0);
+		expect(chat.mock.calls.map(c => c[0].content).join(" ")).toContain("The Wolves goes on the offense (Clash)");
+	});
+
+	it("a Shield Wall Defend forms the wall, and a shield-bearing crew's 10+ holds 5 on its own", async () => {
+		const chat = withChat();
+		const { char, actor } = marshalAt(2, { flags: { crew: { ...CREW, gear: { shield: 2 } } } });
+		await char.addMove(marshal("Shield Wall")._id);
+		await orderCrew(char, actor, { moveKey: "defend", moveName: "The Wolves: Defend", shieldWall: true }, 10);
+		expect(crewOf(actor)).toMatchObject({ readiness: 5, shieldWall: true });
+		const card = chat.mock.calls.map(c => c[0].content).join(" ");
+		expect(card).toContain("holds <strong>5</strong> Readiness (with the shield wall's +2)");
+		expect(card).toContain("Shield Wall: they hold formation, and can go on the offensive without losing Readiness.");
+		// The pips allow all 5 while formed.
+		expect((await crewCard(char, actor)).readinessPips).toHaveLength(5);
+	});
+
+	it("a 7-9 Shield Wall Defend holds 3; without shields the wall forms but adds nothing", async () => {
+		withChat();
+		const shields = marshalAt(2, { flags: { crew: { ...CREW, gear: { shield: 2 } } } });
+		await shields.char.addMove(marshal("Shield Wall")._id);
+		await orderCrew(shields.char, shields.actor, { moveKey: "defend", shieldWall: true }, 8);
+		expect(crewOf(shields.actor).readiness).toBe(3);
+		const bare = marshalAt(2, { flags: { crew: { ...CREW } } });
+		await bare.char.addMove(marshal("Shield Wall")._id);
+		await orderCrew(bare.char, bare.actor, { moveKey: "defend", shieldWall: true }, 8);
+		expect(crewOf(bare.actor)).toMatchObject({ readiness: 1, shieldWall: true });
+	});
+
+	it("a crew in formation ordered to Clash is asked to hold the wall, and holding keeps it; a plain Defend breaks the wall", async () => {
+		const chat = withChat();
+		const { char, actor } = marshalAt(2, { flags: { crew: { ...CREW, gear: { shield: 2 }, readiness: 5, shieldWall: true } } });
+		await char.addMove(marshal("Shield Wall")._id);
+		const { asked, restore } = stubWindow("keep");
+		try {
+			await orderCrew(char, actor, { moveKey: "clash" });
+			expect(asked).toHaveBeenCalledTimes(1);
+			expect(asked.mock.calls[0][0].window.title).toBe("The Wolves hold the shield wall");
+			expect(asked.mock.calls[0][0].buttons.find(b => b.default)?.action).toBe("keep");
+		} finally {
+			restore();
+		}
+		expect(crewOf(actor)).toMatchObject({ readiness: 5, shieldWall: true });
+		expect(chat.mock.calls.map(c => c[0].content).join(" ")).toContain("Shield Wall: The Wolves hold formation and keep their 5 Readiness (Clash).");
+		// Ordered to Defend without the wall: out of formation. The 5 held stays held (a Defend never lowers the
+		// pool), drawn as 5 pips, but the card no longer reads the wall.
+		await orderCrew(char, actor, { moveKey: "defend", shieldWall: false }, 10);
+		expect(crewOf(actor)).toMatchObject({ readiness: 5, shieldWall: false });
+		expect((await crewCard(char, actor)).readinessShieldWall).toBe(false);
+	});
+
+	// "As long as they maintain formation" (p.126): breaking it to charge is the player's choice, and it costs.
+	it("a crew in formation that breaks it to Clash loses its Readiness and the wall, and the wall stays broken", async () => {
+		const chat = withChat();
+		const { char, actor } = marshalAt(2, { flags: { crew: { ...CREW, gear: { shield: 2 }, readiness: 5, shieldWall: true } } });
+		await char.addMove(marshal("Shield Wall")._id);
+		const { restore } = stubWindow("lose");
+		let rolled;
+		try {
+			rolled = await orderCrew(char, actor, { moveKey: "clash" });
+		} finally {
+			restore();
+		}
+		expect(rolled).toHaveBeenCalled();
+		expect(crewOf(actor)).toMatchObject({ readiness: 0, shieldWall: false });
+		expect(chat.mock.calls.map(c => c[0].content).join(" ")).toContain("The Wolves break formation to charge (Clash): they lose all held Readiness, and the shield wall is gone.");
+	});
+
+	// The crew card's rule (follower-build.js#crewBearsShield): a shield counts once both its pips are marked.
+	it("a half-marked shield gives a Shield Wall Defend no +2", async () => {
+		withChat();
+		const { char, actor } = marshalAt(2, { flags: { crew: { ...CREW, gear: { shield: 1 } } } });
+		await char.addMove(marshal("Shield Wall")._id);
+		await orderCrew(char, actor, { moveKey: "defend", shieldWall: true }, 10);
+		expect(crewOf(actor)).toMatchObject({ readiness: 3, shieldWall: true });
 	});
 });

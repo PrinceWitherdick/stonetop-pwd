@@ -4,6 +4,7 @@ import {
 	DEATHS_DOOR_FLAG, DEATHS_DOOR_ROLL_FLAG, DEATHS_DOOR_ROLLING_FLAG, DEATHS_DOOR_STATE, NEVER_GONNA_KEEP_ME_DOWN,
 	effectiveDeathsDoorState, pastDeathKind,
 } from "./deaths-door.js";
+import { hasLeftPlay } from "../../campaign/left-play.js";
 
 // How far back through the chat log a roll's card is looked for by its nonce, when the marker never got as far
 // as naming it (the page went away while the dice were still in the air). The card is always among the latest.
@@ -150,9 +151,12 @@ export function actorPastDeathKind(actor) {
  * live party member while their sheet said they had become a monster under the GM's control. The same
  * for a Thrall lost to Unholy Vessel, and for a Ghost or Revenant who fulfilled their Terrible Purpose and
  * passed through the Last Door.
+ *
+ * Or alive and gone: retired, left Stonetop, or become a threat (Book I p.584; campaign/left-play.js). They
+ * are out of every party list the same as the dead, though nothing about their sheet says they died.
  */
 export function isOutOfPlay(actor) {
-	return !!actor && resolvedFlagProperty(actor, DEATHS_DOOR_FLAG) === DEATHS_DOOR_STATE.DEAD;
+	return !!actor && (resolvedFlagProperty(actor, DEATHS_DOOR_FLAG) === DEATHS_DOOR_STATE.DEAD || hasLeftPlay(actor));
 }
 
 /** `isOutOfPlay` for a roster read that must never throw: a sheet that can't say is not dead. */

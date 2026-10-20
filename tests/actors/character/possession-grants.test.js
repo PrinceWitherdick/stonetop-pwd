@@ -6,7 +6,9 @@ import {
 	itemGrantKey,
 	grantOfTaggedItem,
 	grantRepair,
+	isStashedGrantItem,
 } from "../../../module/actors/character/possession-grants.js";
+import { readRepo } from "../../fakes/css.js";
 
 const APIARY = [
 	{ name: "Beeswax", column: "small" },
@@ -254,5 +256,52 @@ describe("grantRepair", () => {
 	it("does nothing without both an item and a grant", () => {
 		expect(grantRepair(item({ inventoryColumn: "regular" }), null)).toBeNull();
 		expect(grantRepair(null, CUIRASS)).toBeNull();
+	});
+});
+
+// The Distillery's stills and barrels are the still-house's, not pocket items (the user's ruling,
+// 2026-10-18): the grant says `immobile` in a note, the item carries it, and the sheet reads it back.
+describe("a grant's note, and gear kept at home", () => {
+	const STILLS = { name: "Stills", column: "small", note: "immobile" };
+	const stills = system => ({ _id: "s", name: "Stills", system: { moveType: "inventory-custom", inventoryColumn: "small", sourcePossession: "distillery", sourceKey: "Stills", ...system } });
+
+	it("stamps the grant's note on the item it makes, wrapped as a write-in's note is saved", () => {
+		const [item] = grantsToCreate([STILLS], new Set(), { slug: "distillery", sourceLabel: "Distillery" });
+		expect(item.system.note).toBe("<em>immobile</em>");
+		expect(isStashedGrantItem(item)).toBe(true);
+		const [malt] = grantsToCreate([{ name: "Malt", column: "small" }], new Set(), { slug: "distillery" });
+		expect(malt.system).not.toHaveProperty("note");
+		expect(isStashedGrantItem(malt)).toBe(false);
+	});
+
+	it("brings an item made before the grant had a note up to it, and leaves a matching one alone", () => {
+		expect(grantRepair(stills({}), STILLS)).toEqual({ update: { "system.note": "<em>immobile</em>" }, resourceMax: null });
+		expect(grantRepair(stills({ note: "<em>immobile</em>" }), STILLS)).toBeNull();
+		expect(grantRepair(stills({ note: "" }), { name: "Stills", column: "small" })).toBeNull();
+	});
+
+	// The sweep adopts hand-written gear, whose note the player typed: the repair adds the grant's
+	// tags and never takes theirs away (and a grant with no note leaves any note alone).
+	it("keeps what the player wrote in the note, adding only the grant's missing tags", () => {
+		expect(grantRepair(stills({ note: "Value 2, patched" }), STILLS))
+			.toEqual({ update: { "system.note": "Value 2, patched, <em>immobile</em>" }, resourceMax: null });
+		expect(grantRepair(stills({ note: "patched, <em>Immobile</em>" }), STILLS)).toBeNull();
+		expect(grantRepair(stills({ note: "Value 2, patched" }), { name: "Stills", column: "small" })).toBeNull();
+	});
+
+	// Every playbook that offers the Distillery prints the same list (Book I): "copper tubes, malt,
+	// ◇◇ firkins, stills, barrels, etc." The names and columns stay (grant keys are `column:name`).
+	it("tags the stills and barrels immobile in every playbook's Distillery, and only them", () => {
+		const files = ["the-fox", "the-heavy", "the-lightbearer", "the-marshal", "the-ranger", "the-seeker"];
+		for (const file of files) {
+			const playbook = JSON.parse(readRepo(`packs/src/stonetop-items/playbooks/${file}.json`));
+			const distillery = playbook.flags.stonetop.specialPossessions.options.find(o => o.label === "Distillery");
+			const grants = Object.fromEntries(distillery.grantsItems.map(g => [g.name, g]));
+			expect(grants.Stills, file).toMatchObject({ column: "small", note: "immobile" });
+			expect(grants.Barrels, file).toMatchObject({ column: "small", note: "immobile" });
+			expect(grants.Firkins, file).toMatchObject({ column: "regular", weight: 2 });
+			expect(grants["Copper tubes"].note, file).toBeUndefined();
+			expect(grants.Malt.note, file).toBeUndefined();
+		}
 	});
 });

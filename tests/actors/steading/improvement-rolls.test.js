@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	STEADING_MOVE, herdShareMet, improvementQuestions, netRollMode, rollAdjustments, rollConditionNotes,
+	spendImprovementAnswers, nervesAnswer,
 } from "../../../module/actors/steading/improvement-rolls.js";
 import { builtInImprovementRules } from "../../../module/actors/steading/StonetopSteading.js";
 
@@ -88,6 +89,49 @@ describe("the Marshal's Logistics", () => {
 		expect(rollConditionNotes(rollAdjustments({ moveName: STEADING_MOVE.REQUISITION, statKey: "fortunes", answers: { logistics: true } })))
 			.toEqual(["Logistics: advantage"]);
 		expect(rollAdjustments({ moveName: STEADING_MOVE.TRADE_BARTER, statKey: "prosperity", answers: { logistics: "yes" } }).adv).toEqual([]);
+	});
+});
+
+// Marshal re-audit (2026-10-18), We Happy Few's 6-: "you have disadvantage on all rolls until you share your
+// nagging doubts with someone else". A steading roll the shaken Marshal is behind is one of them.
+describe("We Happy Few's shaken nerves", () => {
+	it("asks on every move once someone is shaken: ticked for the user's own, unticked for another", () => {
+		for (const move of [STEADING_MOVE.MUSTER, STEADING_MOVE.DEPLOY, STEADING_MOVE.REQUISITION, STEADING_MOVE.TRADE_BARTER]) {
+			const own = improvementQuestions(move, "x", { nerves: [{ name: "Wren", own: true }] }).find(q => q.name === "nerves");
+			expect(own, move).toMatchObject({ type: "checkbox", value: "Wren", checked: true });
+			expect(own.label).toBe("Wren's nerves are shaken (We Happy Few): they are the one behind this roll, disadvantage");
+			const other = improvementQuestions(move, "x", { nerves: [{ name: "Wren", own: false }] }).find(q => q.name === "nerves");
+			expect(other.checked, move).toBe(false);
+		}
+		expect(names(improvementQuestions(STEADING_MOVE.MUSTER, "population", { nerves: [] }))).not.toContain("nerves");
+	});
+
+	it("asks a pick among several, defaulting to no one", () => {
+		const ask = improvementQuestions(STEADING_MOVE.MUSTER, "population", { nerves: [{ name: "Wren" }, { name: "Ash" }] })
+			.find(q => q.name === "nerves");
+		expect(ask.type).toBe("select");
+		expect(ask.options).toEqual([{ value: "", label: "No" }, { value: "Wren", label: "Wren" }, { value: "Ash", label: "Ash" }]);
+	});
+
+	it("is disadvantage named for whoever it is, and cancels with Logistics' advantage", () => {
+		const req = answers => rollAdjustments({ moveName: STEADING_MOVE.REQUISITION, statKey: "fortunes", answers });
+		expect(req({ nerves: "Wren" }).dis).toEqual(["Wren's shaken nerves (We Happy Few)"]);
+		expect(req({ nerves: "" }).dis).toEqual([]);
+		expect(netRollMode("normal", req({ nerves: "Wren" }).adv, req({ nerves: "Wren" }).dis)).toBe("dis");
+		const both = req({ nerves: "Wren", logistics: "yes" });
+		expect(netRollMode("normal", both.adv, both.dis)).toBe("normal");
+		expect(rollConditionNotes(both)).toEqual(["Logistics: advantage", "Wren's shaken nerves (We Happy Few): disadvantage"]);
+		// A bare tick (no name) still bites, named by the move.
+		expect(req({ nerves: true }).dis).toEqual(["Shaken nerves (We Happy Few)"]);
+	});
+
+	it("reads a window's own control: a ticked box's name, a pick's value, or nothing", () => {
+		const root = field => ({ querySelector: () => field });
+		expect(nervesAnswer(root({ type: "checkbox", checked: true, value: "Wren" }))).toBe("Wren");
+		expect(nervesAnswer(root({ type: "checkbox", checked: false, value: "Wren" }))).toBe("");
+		expect(nervesAnswer(root({ type: "select-one", value: "Ash" }))).toBe("Ash");
+		expect(nervesAnswer(root(null))).toBe("");
+		expect(nervesAnswer(null)).toBe("");
 	});
 });
 
@@ -207,5 +251,59 @@ describe("advantage and disadvantage", () => {
 	it("say on the card where each came from, leaving Diminished to its debility pill", () => {
 		expect(rollConditionNotes({ adv: ["Township"], dis: ["Diminished", "Winter"], notes: ["Standing watch: Defenses +1"] }))
 			.toEqual(["Township: advantage", "Winter: disadvantage", "Standing watch: Defenses +1"]);
+	});
+});
+
+// Coverage pass (2026-10-16): Stentorian's "Spend 1 Command ... You have advantage to Order Followers or Deploy"
+// (Book I p.127). Spending is the Marshal's choice, so Deploy's window asks UNTICKED while a Marshal holds Command.
+describe("the Marshal's Stentorian on Deploy", () => {
+	it("asks an unticked line on Deploy alone, naming the one Marshal it spends from by id", () => {
+		const bryn = { id: "b1", name: "Bryn" };
+		const ask = improvementQuestions(STEADING_MOVE.DEPLOY, "defenses", { command: [bryn] }).find(q => q.name === "command");
+		expect(ask).toMatchObject({ type: "checkbox", value: "b1" });
+		expect(ask.checked).toBeFalsy();
+		expect(ask.label).toBe("Stentorian (Bryn): spend 1 Command to shout an order or warning, advantage to Deploy");
+		expect(names(improvementQuestions(STEADING_MOVE.DEPLOY, "defenses", { command: [] }))).not.toContain("command");
+		expect(names(improvementQuestions(STEADING_MOVE.MUSTER, "population", { command: [bryn] }))).not.toContain("command");
+	});
+
+	// Rules fix (2026-10-17): "YOU have advantage", so with several Marshals the window asks which one is Deploying.
+	it("asks which Marshal is Deploying when several hold Command, defaulting to none", () => {
+		const ask = improvementQuestions(STEADING_MOVE.DEPLOY, "defenses", {
+			command: [{ id: "b1", name: "Bryn" }, { id: "m1", name: "Maddoc" }],
+		}).find(q => q.name === "command");
+		expect(ask.type).toBe("select");
+		expect(ask.options).toEqual([{ value: "", label: "No" }, { value: "b1", label: "Bryn" }, { value: "m1", label: "Maddoc" }]);
+	});
+
+	// The question carries what its answer costs, and the sheet pays every taken answer's cost generically,
+	// before the roll is adjusted: a spend that fails clears its answer, so the roll gets no advantage.
+	it("carries its spend, which runs only for a taken answer and can take the advantage back", async () => {
+		const spendCommand = vi.fn(async answers => ({ answers: { ...answers, command: "" }, refused: "No Command" }));
+		const questions = improvementQuestions(STEADING_MOVE.DEPLOY, "defenses", { command: [{ id: "b1", name: "Bryn" }], spendCommand });
+		expect(questions.find(q => q.name === "command").spend).toBe(spendCommand);
+		expect(questions.find(q => q.name === "strength").spend).toBeUndefined();
+		const warn = vi.fn();
+		expect(await spendImprovementAnswers(questions, { strength: "yes", command: "" }, { warn })).toEqual({ strength: "yes", command: "" });
+		expect(spendCommand).not.toHaveBeenCalled();
+		const out = await spendImprovementAnswers(questions, { strength: "", command: "b1" }, { warn });
+		expect(spendCommand).toHaveBeenCalledWith({ strength: "", command: "b1" });
+		expect(out.command).toBe("");
+		expect(warn).toHaveBeenCalledWith("No Command");
+		expect(rollAdjustments({ moveName: STEADING_MOVE.DEPLOY, statKey: "defenses", answers: out }).adv).toEqual([]);
+	});
+
+	it("spends by default through the Marshal's Command (battle-holds.js), refusing when none can be spent", async () => {
+		const questions = improvementQuestions(STEADING_MOVE.DEPLOY, "defenses", { command: [{ id: "b1", name: "Bryn" }] });
+		const warn = vi.fn();
+		const out = await spendImprovementAnswers(questions, { command: "b1" }, { warn });
+		expect(out).toEqual({ command: "", commandRefused: true });
+		expect(warn).toHaveBeenCalledWith(expect.stringMatching(/no Stentorian advantage/));
+	});
+
+	it("gives advantage while ticked, named, on Deploy alone", () => {
+		expect(rollAdjustments({ moveName: STEADING_MOVE.DEPLOY, statKey: "defenses", answers: { command: "yes" } }).adv).toEqual(["Stentorian"]);
+		expect(rollAdjustments({ moveName: STEADING_MOVE.DEPLOY, statKey: "defenses", answers: { command: "" } }).adv).toEqual([]);
+		expect(rollAdjustments({ moveName: STEADING_MOVE.MUSTER, statKey: "population", answers: { command: "yes" } }).adv).toEqual([]);
 	});
 });
