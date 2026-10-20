@@ -289,7 +289,12 @@
 		    (templates/actor/partials/condemned-tag.hbs). The pill is a flex row whose two children
 		    need opposite vertical corrections — the caps ride high in their em box, the skull does
 		    not — so the label has to be something .stonetop-dead-tag-text can move on its own.
-		    Unwrap it and the word goes back to sitting high in the pill. }}
+		    Unwrap it and the word goes back to sitting high in the pill.
+
+		    The reminder chips share its row: they start after the line's last word and wrap chip by chip
+		    onto the lines below (.stonetop-appearance-row). }}
+		{{#if (or stonetop.playbook.appearance.summary stonetop.isDead stonetop.condemned.condemned stonetop.reminderChips.length editable)}}
+		<div class="stonetop-appearance-row">
 		{{#if (or stonetop.playbook.appearance.summary stonetop.isDead stonetop.condemned.condemned)}}
 		<p class="stonetop-appearance-summary">{{stonetop.playbook.appearance.summary}}{{#if stonetop.isDead}}{{#if editable}}<button type="button" class="stonetop-dead-tag" data-tooltip="{{localize "stonetop.postDeath.deadTooltipAction"}}" data-tooltip-direction="UP"><i class="fas fa-skull"></i><span class="stonetop-dead-tag-text">{{localize "stonetop.postDeath.deadTag"}}</span></button>{{else}}<span class="stonetop-dead-tag" data-tooltip="{{localize "stonetop.postDeath.deadTooltip"}}" data-tooltip-direction="UP"><i class="fas fa-skull"></i><span class="stonetop-dead-tag-text">{{localize "stonetop.postDeath.deadTag"}}</span></span>{{/if}}{{/if}}{{#if stonetop.condemned.condemned}}{{> "stonetop.condemned-tag" byLabel=stonetop.condemned.byLabel}}{{/if}}</p>
 		{{/if}}
@@ -298,6 +303,8 @@
 		    says who they are; this says what they are carrying around with them right now. }}
 		{{#if (or stonetop.reminderChips.length editable)}}
 		{{> "stonetop.reminder-chips" chips=stonetop.reminderChips reminderEditable=editable}}
+		{{/if}}
+		</div>
 		{{/if}}
 	</div>
 </div>

@@ -184,6 +184,23 @@ describe("chips with an icon or a count trim their label element", () => {
 		expect(declared(declarations(MAIN, ".stonetop-reminder-chip-slot"), "margin")).toBe("0");
 	});
 
+	// The character header runs the chips on after the appearance line's last word (measured 10-20 with the
+	// text-centring audit: chip caps 0.08px off the line's at 1x/1.25x/1.5x; `flex-start` put them 1.06px low).
+	it("runs the header's chips on the appearance line, centred and gap-spaced", () => {
+		const header = readRepo("templates/actor/partials/actor-header.hbs");
+		const row = header.match(/<div class="stonetop-appearance-row">([\s\S]*?)<\/div>/)?.[1];
+		expect(row, "the appearance row is gone from actor-header.hbs").toBeTruthy();
+		expect(row).toContain('<p class="stonetop-appearance-summary">');
+		expect(row).toContain('{{> "stonetop.reminder-chips"');
+		const body = declarations(MAIN, ".stonetop-appearance-row");
+		expect(declared(body, "display")).toBe("flex");
+		expect(declared(body, "flex-wrap")).toBe("wrap");
+		expect(declared(body, "align-items")).toBe("center");
+		expect(declared(body, "gap")).toBeTruthy();
+		expect(declared(declarations(MAIN, ".stonetop-appearance-row > .stonetop-reminder-chips"), "display")).toBe("contents");
+		expect(declared(declarations(MAIN, ".stonetop-appearance-row > .stonetop-appearance-summary"), "margin")).toBe("0");
+	});
+
 	// The "+" and a typed chip's x are icon-only buttons: no label to trim, so neither may carry the trim
 	// a flex box would ignore. Their glyphs are sized by the chip's own icon rule (whole pixels, below).
 	it("keeps the reminder row's icon-only buttons untrimmed", () => {

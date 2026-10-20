@@ -13166,6 +13166,23 @@ button.stonetop-rapport-chip:focus-visible {
 }
 .steading-player-reminders .stonetop-reminder-chips { margin: 0; }
 
+/* The character header: the chips start on the appearance line, after its last word, and wrap chip by
+   chip onto the lines below. The list's box steps aside (display: contents) so its chips are items of
+   this row beside the line itself; an appearance line too long for one line takes the row's whole
+   width and the chips start under it. The row takes the line's old place at the foot of the column.
+   The list states role="list" (reminder-chips.hbs), so a browser that drops a display: contents box's
+   semantics still announces the chips as the labelled reminders list. */
+.stonetop-appearance-row {
+	align-self: stretch;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 6px;
+	margin: auto 0 0;
+}
+.stonetop-appearance-row > .stonetop-appearance-summary { margin: 0; }
+.stonetop-appearance-row > .stonetop-reminder-chips { display: contents; }
+
 /* What a We Happy Few card gave, and the die a damage card took: a line of the card's own text.
    So is who a "Give advantage to..." card gave it to (give-advantage-flow.js). */
 .stonetop-inspiration-readout,
