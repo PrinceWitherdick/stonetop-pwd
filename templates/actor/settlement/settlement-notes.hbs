@@ -5,6 +5,10 @@
       never on it, so its `display` cannot beat core's hidden-tab rule. --}}
 <div class="tab notes stonetop-settlement-tab" data-group="primary" data-tab="notes">
 	<section class="sheet-tab steading-notes stonetop-settlement-notes">
+		{{!-- Stonetop's Plans (Make a Plan, Book I p.530), the same partial, kept in `system.plans`. Live for
+		      anyone who may write, wrench or no, as Stonetop's are. --}}
+		{{> "stonetop.steading-plans" plans=plans canEdit=canWrite titleId=(concat "settlement-plans-title-" actor.id)}}
+		<h3 class="stonetop-move-group-title steading-notes-heading">{{localize "stonetop.settlement.tab.notes"}}</h3>
 		{{#if canWrite}}
 		<prose-mirror class="steading-notes-editor" value="{{system.notes}}" toggled data-document-uuid="{{actor.uuid}}">{{{enrichedNotes}}}</prose-mirror>
 		{{else}}

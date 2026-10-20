@@ -53,7 +53,8 @@
 //             Hillfolk Raiders threat is crossed off; and an "Other Settlements" folder gets
 //             settlement sheets for Marshedge and Gordin's Delve (from their stat blocks, wearing
 //             the standings seeded on Stonetop) and a Hillfolk band made from Book II's typical
-//             block, with a standing of its own.
+//             block, with a standing of its own. Each sheet's Notes tab gets Plans of its own
+//             (finished, under way and just named between them).
 //             The Seeker additionally gets the two arcana Book I works through as examples —
 //             the old scroll case that teaches Laoj Daveth's Galvanic Infusion (p.58) and
 //             Noruba's Ice Sphere (p.61) — authored as HOMEBREW world Items with their own
@@ -1203,12 +1204,65 @@
   // from their books' stat blocks, and one band made from Book II's typical Hillfolk block and
   // renamed, the way a GM makes a place the books never named. Only the band carries a standing of
   // its own here; the two named places read theirs from TEST_SETTLEMENT_RELS by slug.
+  //
+  // Each sheet's Notes tab gets Plans (the settlement's `system.plans`, settlement-plans.js), in
+  // the same shape and the same three states as TEST_PLANS: Marshedge has one under way (one
+  // requirement still holding a blank) and one just named, the Delve one finished, the band one
+  // under way. They go in with the creation data, so they are on a sheet this macro made and leave
+  // with it; a sheet the GM already had is skipped whole, plans and all.
   const TEST_SETTLEMENT_SHEETS = [
-    { book: "marshedge" },
-    { book: "gordins-delve" },
+    {
+      book: "marshedge",
+      plans: [
+        {
+          id: "testplancauseway",
+          name: "Raise the causeway above the flood line",
+          undone: "the eel traps",
+          requirements: [
+            { text: "You must find/locate/obtain enough brushwood and stone to raise it a full stride", done: true },
+            { text: "You'll need the help/support/approval of Stonetop's hands at the autumn low water", done: false },
+            { text: "The steading must Pull Together 3 times, each requiring a dry fortnight", done: false },
+            { text: "You'll risk ___", done: false },
+          ],
+        },
+        {
+          id: "testplanlights",
+          name: "Find out what the lights on the fen want",
+          undone: "",
+          requirements: [],
+        },
+      ],
+    },
+    {
+      book: "gordins-delve",
+      plans: [
+        {
+          id: "testplanshaft",
+          name: "Shore up the flooded lower shaft",
+          undone: "the summer's ore",
+          requirements: [
+            { text: "You must find/locate/obtain a pump that will lift water forty feet", done: true },
+            { text: "You'll need the help/support/approval of the Delve's eldest miners", done: true },
+            { text: "It'll take days/weeks/months/years", done: true },
+          ],
+        },
+      ],
+    },
     {
       template: "hillfolk-band", name: "Clan Ardu's Band",
       standing: { hearts: 4, notes: "The band that had no part in the raid, and came down at midwinter to say so with a cart of salt mutton. Coria believes them." },
+      plans: [
+        {
+          id: "testplanraiders",
+          name: "Clear the clan's name of the harvest raid",
+          undone: "the move to the winter pastures",
+          requirements: [
+            { text: "You must learn/know/decipher which band rode under the red banner", done: true },
+            { text: "You must travel to Stonetop and speak before the whole village", done: false },
+            { text: "You must wait until/for the thaw opens the high passes", done: false },
+          ],
+        },
+      ],
     },
   ];
 
@@ -6285,6 +6339,7 @@
             : settlementApi.settlementDataFromTemplate(seed.template);
           if (!data) continue;
           if (seed.name) data.name = seed.name;
+          if (seed.plans) data.system = { ...data.system, plans: structuredClone(seed.plans) };
           const sheetActor = await settlementApi.createSettlement(data, { folder: settlementFolder.id });
           if (!sheetActor) break;   // the subtype is missing: one warning is enough
           await sheetActor.setFlag(FLAG_SCOPE, TEST_FLAG, true);

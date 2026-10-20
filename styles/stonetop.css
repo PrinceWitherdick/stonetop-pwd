@@ -20740,9 +20740,9 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	min-height: 0;
 }
 
-/* The steading's Notes tab carries the content guidelines (Book I p.66) and the Plans list (p.530) above
-   the free notes (steading-plans.js), so the tab scrolls as one column and the notes editor keeps a
-   usable height instead of being squeezed to nothing by the sections above it. */
+/* The steading's Notes tab carries the Plans list (Book I p.530) above the free notes and the content
+   guidelines (p.66) below them (steading-plans.js), so the tab scrolls as one column and the notes
+   editor keeps a usable height instead of being squeezed to nothing by the sections around it. */
 .steading-sheet .steading-notes {
 	overflow-y: auto;
 	gap: 10px;
@@ -20751,11 +20751,35 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	flex: 1 0 auto;
 	min-height: 14em;
 }
+/* The notes box is as tall as what is written in it, so the TAB scrolls and the box never grows a
+   scrollbar of its own. Core pins a <prose-mirror>'s content absolutely inside a clipping container
+   (`prose-mirror .editor-content { position: absolute; inset: 0; overflow: hidden auto }`), which sizes
+   the box to its host and scrolls the overflow; in flow, the content sizes the host instead, and still
+   fills the 14em floor while there is little in it. Core also caps every editor at its parent's height
+   and scrolls the rest (`body.game .app .editor { max-height: 100%; overflow: auto }`, and
+   `prose-mirror.inactive { overflow: hidden auto }`), which on Stonetop's definite-height tab is the
+   tab's height, so the host is uncapped too. The settlement sheet's Notes are the same editor. */
+:is(.steading-sheet, .stonetop-settlement-sheet) .steading-notes prose-mirror.steading-notes-editor {
+	max-height: none;
+	overflow: visible;
+}
+:is(.steading-sheet, .stonetop-settlement-sheet) .steading-notes prose-mirror.steading-notes-editor .editor-container {
+	overflow: visible;
+}
+:is(.steading-sheet, .stonetop-settlement-sheet) .steading-notes prose-mirror.steading-notes-editor .editor-content {
+	position: static;
+	flex: 1 0 auto;
+	overflow: visible;
+}
+/* The Notes tab's section headings (Content guidelines, Plans, Notes; the settlement sheet's Notes too).
+   Each is also a .stonetop-move-group-title in its template, so it wears the Moves tab's heading face
+   and weight from the same rules; this adds the Moves heading's 4px under the words and a red rule
+   beneath them (the ledger's date-header rule). No margin of its own: core's h3 margin-bottom would
+   sit on top of the tab's 10px gap, and the settlement sheet sets its 10px explicitly. */
 .steading-notes-heading {
 	margin: 0;
-	font-size: var(--font-size-14, 14px);
-	font-weight: 700;
-	border: none;
+	padding-bottom: 4px;
+	border-bottom: 1px solid var(--st-danger-ink);
 }
 .steading-notes-hint {
 	margin: 2px 0 6px;
@@ -20782,6 +20806,15 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	resize: vertical;
 	min-height: 3em;
 }
+/* Each box is as tall as what is written in it (the tab scrolls, never the box), and the 3em floor
+   keeps an empty one reading as two lines to write in. Behind `@supports`, as the GM Toolkit's
+   wonder answers are: Firefox has no `field-sizing` and keeps the draggable two-row box. */
+@supports (field-sizing: content) {
+	.steading-guideline textarea {
+		field-sizing: content;
+		resize: none;
+	}
+}
 /* A plan reads as text on the sheet: its name, its requirements as tick boxes (ticked off here, the
    book's whole use of the list), and what goes undone. It is written in its editor (SteadingPlanDialog.js),
    which the pencil opens; the pencil and trash wait out of sight until the plan is hovered or a control in
@@ -20800,16 +20833,22 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	gap: 8px;
 	min-height: 24px;
 }
+/* A plan's name wears the improvement cards' title (.steading-improvement-title): the same kind of
+   entry on the same sheet, a named goal over a checklist. Upper case and spaced so it reads as an entry
+   under the serif, red-ruled "Plans" heading rather than as a second heading. */
 .steading-plan-name {
 	flex: 1 1 auto;
 	min-width: 0;
 	margin: 0;
 	border: none;
-	font-size: var(--st-fs-sm);
+	font-size: var(--st-fs-base);
 	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	line-height: 1.2;
 	overflow-wrap: anywhere;
 }
-.steading-plan-unnamed { font-weight: normal; font-style: italic; color: var(--st-text-secondary); }
+.steading-plan-unnamed { font-weight: normal; font-style: italic; text-transform: none; letter-spacing: normal; color: var(--st-text-secondary); }
 .steading-plan-progress {
 	flex: 0 0 auto;
 	color: var(--st-text-secondary);
@@ -21043,6 +21082,14 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.12);
 	border-radius: var(--st-radius-lg);
 	padding: 8px 10px;
+}
+/* Content guidelines and Plans sit on the page itself, unboxed, under their red-ruled headings
+   (.steading-notes-heading). */
+.steading-list-section:is(.steading-content-guidelines, .steading-plans) {
+	background: transparent;
+	border: none;
+	border-radius: 0;
+	padding: 0;
 }
 
 .steading-list-heading {
@@ -53289,17 +53336,21 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
    `:is(.steading-sheet, .stonetop-settlement-sheet) .tab.notes.active` and `… .tab.notes .sheet-tab`
    rules, which name this sheet too. What is this sheet's own is the editor's floor (same selector
    weight, later in the file) for a short window. */
-.stonetop-settlement-notes prose-mirror.steading-notes-editor { flex: 1 1 auto; min-height: 14em; }
-/* A reader's notes: the editor's box without the editor, at the editor's size, scrolling inside it. */
+.stonetop-settlement-notes prose-mirror.steading-notes-editor { flex: 1 0 auto; min-height: 14em; }
+/* The notes grow with what is written in them (see the steading's `.editor-content` rule), so the
+   column grows with them and the tab (`.stonetop-settlement-tab.active`, overflow-y: auto) scrolls. */
+.stonetop-settlement-sheet .tab.notes .stonetop-settlement-notes { flex: 1 0 auto; }
+/* The "Notes" heading sits above the editor at Stonetop's 10px (its tab's `gap`, which this sheet lacks). */
+.stonetop-settlement-notes > .steading-notes-heading { margin-bottom: 10px; }
+/* A reader's notes: the editor's box without the editor, at the editor's size, as tall as the text. */
 .stonetop-settlement-notes-read {
-	flex: 1 1 auto;
+	flex: 1 0 auto;
 	min-height: 14em;
 	display: flex;
 	flex-direction: column;
 }
 .stonetop-settlement-notes-read > .editor-content {
-	flex: 1 1 auto;
-	overflow-y: auto;
+	flex: 1 0 auto;
 }
 
 /* -- Buttons ------------------------------------------------------------------------------- */

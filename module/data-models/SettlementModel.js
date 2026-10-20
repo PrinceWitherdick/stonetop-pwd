@@ -68,6 +68,18 @@ export class SettlementModel extends foundry.abstract.TypeDataModel {
 			sourcePage: text(),
 			// What the book asks the GM to pick when making one from a template. Shown until dismissed.
 			setupNote:  text(),
+			// The Notes tab's Plans (Make a Plan, Book I p.530), Stonetop's own list in the shape
+			// actors/steading/steading-plans.js#tidyPlan writes: a name, tick-box requirements, and
+			// what goes undone meanwhile.
+			plans: new fields.ArrayField(new fields.SchemaField({
+				id:     rowId(),
+				name:   text(),
+				requirements: new fields.ArrayField(new fields.SchemaField({
+					text: text(),
+					done: new fields.BooleanField({ required: true, initial: false }),
+				}), { required: false, initial: [] }),
+				undone: text(),
+			}), { required: false, initial: [] }),
 			// Names this place was renamed away from while some NPC's Home still said one: until they are
 			// re-homed, those people stay on its Residents (actors/settlement/settlement-residents.js).
 			formerNames: new fields.ArrayField(text(), { required: false, initial: [] }),

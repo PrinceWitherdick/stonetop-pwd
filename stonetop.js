@@ -690,6 +690,8 @@ Hooks.once("init", () => {
 		"stonetop.steading-tab-relmap":       "systems/stonetop-pwd/templates/actor/partials/steading-tab-relmap.hbs",
 		"stonetop.steading-tab-timeline":     "systems/stonetop-pwd/templates/actor/partials/steading-tab-timeline.hbs",
 		"stonetop.steading-tab-notes":        "systems/stonetop-pwd/templates/actor/partials/steading-tab-notes.hbs",
+		// The Notes tab's Plans, drawn by Stonetop's and every other settlement's.
+		"stonetop.steading-plans":            "systems/stonetop-pwd/templates/actor/partials/steading-plans.hbs",
 		"stonetop.gm-toolkit-tab-moves":      "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-moves.hbs",
 		"stonetop.gm-toolkit-tab-loop":       "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-loop.hbs",
 		"stonetop.gm-toolkit-tab-threats":    "systems/stonetop-pwd/templates/actor/partials/gm-toolkit-tab-threats.hbs",

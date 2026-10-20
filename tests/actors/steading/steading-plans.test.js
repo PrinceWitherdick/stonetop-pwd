@@ -18,6 +18,7 @@ import { stubConfirm } from "../../fakes/confirm.js";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "../../..");
 const TEMPLATE = fs.readFileSync(path.join(ROOT, "templates/actor/partials/steading-tab-notes.hbs"), "utf8");
+const PLANS_PARTIAL = fs.readFileSync(path.join(ROOT, "templates/actor/partials/steading-plans.hbs"), "utf8");
 const DIALOG_TEMPLATE = fs.readFileSync(path.join(ROOT, "templates/dialogs/steading-plan.hbs"), "utf8");
 const SHEET_JS = fs.readFileSync(path.join(ROOT, "module/actors/steading/StonetopSteadingSheet.js"), "utf8");
 
@@ -135,13 +136,13 @@ describe("the content guidelines", () => {
 });
 
 describe("the Notes tab", () => {
-	it("draws the guidelines and the plans above the free notes, as text with no fields, and the sheet wires the editor", () => {
-		expect(TEMPLATE.indexOf("data-guideline")).toBeGreaterThan(-1);
-		expect(TEMPLATE.indexOf("data-plan-tick")).toBeGreaterThan(TEMPLATE.indexOf("data-guideline"));
-		expect(TEMPLATE.indexOf("steading-notes-editor")).toBeGreaterThan(TEMPLATE.indexOf("data-plan-tick"));
-		const plans = TEMPLATE.slice(TEMPLATE.indexOf("steading-plans"), TEMPLATE.indexOf("steading-notes-editor"));
-		expect(plans).not.toContain('type="text"');
-		expect(plans).toContain('data-plan-action="edit-plan"');
+	it("draws the plans, then the free notes, then the guidelines, the plans as text with no fields, and the sheet wires the editor", () => {
+		const call = '{{> "stonetop.steading-plans" plans=stonetop.plans canEdit=stonetop.canEdit';
+		expect(TEMPLATE.indexOf(call)).toBeGreaterThan(-1);
+		expect(TEMPLATE.indexOf("steading-notes-editor")).toBeGreaterThan(TEMPLATE.indexOf(call));
+		expect(TEMPLATE.indexOf("data-guideline")).toBeGreaterThan(TEMPLATE.indexOf("steading-notes-editor"));
+		expect(PLANS_PARTIAL).not.toContain('type="text"');
+		expect(PLANS_PARTIAL).toContain('data-plan-action="edit-plan"');
 		expect(SHEET_JS).toContain("context.stonetop.plans = plansView(notesFlags.plans);");
 		expect(SHEET_JS).toContain("editPlan: planId => editSteadingPlan(this._stonetopSteading, planId)");
 	});
@@ -181,6 +182,33 @@ describe("the Notes tab", () => {
 		root.querySelector('[data-plan-action="remove-plan"]').click();
 		await vi.waitFor(() => expect(s._flags.plans).toEqual([]));
 		expect(asked.mock.calls[0][0].content).toContain("A palisade");
+	});
+
+	// The Plans partial reads its `canEdit` param inside two `each` blocks. Foundry compiles without
+	// compat mode, so a bare name there would read off the plan and render nothing: rendered here the
+	// same way, a fresh Handlebars with default options.
+	it("gives an editor the pencil, trash, New plan and live ticks, and a reader none of them", () => {
+		const hb = Handlebars.create();
+		hb.registerPartial("stonetop.steading-plans", PLANS_PARTIAL);
+		const render = canEdit => {
+			const doc = new Window().document;
+			doc.body.innerHTML = hb.compile('{{> "stonetop.steading-plans" plans=plans canEdit=canEdit titleId="t1"}}')({
+				canEdit,
+				plans: plansView([plan({ requirements: [{ text: "Cut timber", done: true }, { text: "Dig the ditch", done: false }], undone: "the harvest" })]),
+			});
+			return doc.body;
+		};
+		const editor = render(true);
+		expect(editor.querySelector("section.steading-plans").getAttribute("aria-labelledby")).toBe("t1");
+		expect(editor.querySelector("h3").id).toBe("t1");
+		expect(editor.querySelectorAll('[data-plan-action="edit-plan"], [data-plan-action="remove-plan"], [data-plan-action="add-plan"]')).toHaveLength(3);
+		expect([...editor.querySelectorAll("[data-plan-tick]")].map(t => [t.checked, t.disabled])).toEqual([[true, false], [false, false]]);
+		expect(editor.querySelector(".steading-plan-progress").textContent).toBe("1/2");
+		expect(editor.querySelector(".steading-plan-undone").textContent).toContain("the harvest");
+
+		const reader = render(false);
+		expect(reader.querySelectorAll("[data-plan-action]")).toHaveLength(0);
+		expect([...reader.querySelectorAll("[data-plan-tick]")].every(t => t.disabled)).toBe(true);
 	});
 });
 

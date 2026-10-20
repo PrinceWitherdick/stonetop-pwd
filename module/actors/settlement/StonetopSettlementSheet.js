@@ -2,7 +2,7 @@
 //
 // What Book II prints for a place (Size, Population, Prosperity, Defenses, who it trades with, its
 // Resources and the Defenses list), the people who run it, its Residents (each an NPC, on Stonetop's
-// own Residents table), the four homefront moves its stats are for (Book I p.508), and a notes box. Stonetop's standing with the place is not shown here: it is
+// own Residents table, following each NPC's Home: settlement-residents.js), the four homefront moves its stats are for (Book I p.508), and a Notes tab with Stonetop's Plans (Make a Plan, p.530) above a notes box. Stonetop's standing with the place is not shown here: it is
 // STORED on Stonetop (`system.relationships`, actors/settlement/settlement-actor.js#standingKey) and
 // rated on Stonetop's Other Settlements table alone (the user's call, 2026-10-19).
 //
@@ -67,6 +67,9 @@ import { makeColumnsResizable } from "../../utils/resizable-columns.js";
 import { makeColumnsSortable } from "../../utils/sortable-columns.js";
 import { wireAvatarPreview, removeAvatarPreview } from "../../utils/avatar-preview.js";
 import { displayPortraitSrc } from "../../book2-art/people-portraits.js";
+import { plansView, wireSteadingNotesTab } from "../steading/steading-plans.js";
+import { editSteadingPlan } from "../steading/SteadingPlanDialog.js";
+import { settlementPlanStore } from "./settlement-plans.js";
 
 // Plain literals, not built from SYSTEM_ID: the template checks in tests find paths by searching
 // the source for them.
@@ -211,6 +214,7 @@ export function createStonetopSettlementSheetClass(Base) {
 				canGazetteer: !!system.journalId,
 				blurb: rosterSettlement(system.sourceSlug)?.blurb ?? "",
 				moves: SETTLEMENT_MOVES.map(slug => this.#moveContext(slug, system)),
+				plans: plansView(system.plans),
 				enrichedNotes: await foundry.applications.ux.TextEditor.implementation.enrichHTML(system.notes ?? "", {
 					relativeTo: actor, secrets: actor.isOwner,
 				}),
@@ -298,6 +302,12 @@ export function createStonetopSettlementSheetClass(Base) {
 				if (!this.isEditable) return;
 				this.actor.update({ "system.notes": event.currentTarget.value ?? "" });
 			});
+
+			// The Notes tab's Plans, wired as Stonetop's are (steading-plans.js), for anyone who may write.
+			if (this.isEditable) {
+				const store = settlementPlanStore(this.actor);
+				wireSteadingNotesTab(root, store, { editPlan: planId => editSteadingPlan(store, planId) });
+			}
 		}
 
 		/** Run the ACTIONS method for the `selector` element the event came from, if it names one. */

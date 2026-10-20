@@ -1,9 +1,18 @@
 <div class="tab notes" data-group="primary" data-tab="notes">
 	<section class="sheet-tab steading-notes">
+		{{!-- Make a Plan (Book I p.530): the shared Plans section (partials/steading-plans.hbs), which every
+		      other settlement's Notes tab draws too. The content guidelines sit last, under the notes. --}}
+		{{> "stonetop.steading-plans" plans=stonetop.plans canEdit=stonetop.canEdit titleId="steading-plans-title"}}
+
+		<h3 class="stonetop-move-group-title steading-notes-heading">{{localize "stonetop.steading.tabs.notes"}}</h3>
+		<prose-mirror class="steading-notes-editor" toggled value="{{stonetop.notes}}">
+			{{{stonetop.enrichedNotes}}}
+		</prose-mirror>
+
 		{{!-- Content guidelines (Book I p.66, and p.195's Line): settled at the first session, reviewed at the
 		      start of each. module/actors/steading/steading-plans.js reads and writes them. --}}
 		<section class="steading-list-section steading-content-guidelines" aria-labelledby="steading-guidelines-title">
-			<h3 id="steading-guidelines-title" class="steading-notes-heading">Content guidelines</h3>
+			<h3 id="steading-guidelines-title" class="stonetop-move-group-title steading-notes-heading">Content guidelines</h3>
 			<p class="steading-notes-hint">Review these at the start of each session, and call "time out" whenever they are broken or need adding to.</p>
 			<div class="steading-guidelines-grid">
 				{{#each stonetop.contentGuidelines as |g|}}
@@ -15,49 +24,5 @@
 				{{/each}}
 			</div>
 		</section>
-
-		{{!-- Make a Plan (Book I p.530): what the PCs hope to achieve, and the requirements the GM named, each
-		      with a tick box. Read here and ticked off here; written in its editor (SteadingPlanDialog.js), which
-		      the hover pencil and "New plan" open. --}}
-		<section class="steading-list-section steading-plans" aria-labelledby="steading-plans-title">
-			<h3 id="steading-plans-title" class="steading-notes-heading">Plans</h3>
-			<p class="steading-notes-hint">Make a Plan: say what you hope to achieve; the GM says what it requires (Book I p.530).</p>
-			{{#each stonetop.plans as |plan|}}
-			<article class="steading-plan{{#if plan.done}} is-done{{/if}}" data-plan-id="{{plan.id}}">
-				<header class="steading-plan-head">
-					<h4 class="steading-plan-name">{{#if plan.name}}{{plan.name}}{{else}}<span class="steading-plan-unnamed">An unnamed plan</span>{{/if}}</h4>
-					{{#if plan.total}}<span class="steading-plan-progress" data-tooltip="Requirements met">{{plan.doneCount}}/{{plan.total}}</span>{{/if}}
-					{{#if @root.stonetop.canEdit}}
-					<span class="steading-plan-tools">
-						<button type="button" class="steading-plan-edit" data-plan-action="edit-plan" data-tooltip="Edit this plan" data-tooltip-direction="UP" aria-label="Edit this plan"><i class="fas fa-pen" aria-hidden="true"></i></button>
-						<button type="button" class="steading-plan-remove" data-plan-action="remove-plan" data-tooltip="Remove this plan" data-tooltip-direction="UP" aria-label="Remove this plan"><i class="fas fa-trash" aria-hidden="true"></i></button>
-					</span>
-					{{/if}}
-				</header>
-				{{#if plan.total}}
-				<ul class="steading-plan-reqs">
-					{{#each plan.requirements as |req|}}
-					<li class="steading-plan-req{{#if req.done}} is-done{{/if}}" data-req-index="{{@index}}">
-						<label>
-							<input type="checkbox" data-plan-tick {{#if req.done}}checked{{/if}} {{#unless @root.stonetop.canEdit}}disabled{{/unless}}>
-							<span class="steading-plan-req-text">{{req.text}}</span>
-						</label>
-					</li>
-					{{/each}}
-				</ul>
-				{{/if}}
-				{{#if plan.undone}}<p class="steading-plan-undone">Which means <strong>{{plan.undone}}</strong> goes undone.</p>{{/if}}
-			</article>
-			{{else}}
-			<p class="steading-notes-hint steading-plans-empty">No plans yet.</p>
-			{{/each}}
-			{{#if stonetop.canEdit}}
-			<button type="button" class="steading-plan-add" data-plan-action="add-plan"><i class="fas fa-plus" aria-hidden="true"></i> New plan</button>
-			{{/if}}
-		</section>
-
-		<prose-mirror class="steading-notes-editor" toggled value="{{stonetop.notes}}">
-			{{{stonetop.enrichedNotes}}}
-		</prose-mirror>
 	</section>
 </div>
