@@ -30,7 +30,8 @@ function npc(id, home, { isOwner = true } = {}) {
 	return doc;
 }
 
-const row = (uuid, name = uuid, id = `row-${uuid}`) => ({ id, uuid, name });
+/** A Residents row, caching its NPC's name (npc() names each NPC by its id). */
+const row = (uuid, name = uuid.replace(/^Actor./, ""), id = `row-${uuid}`) => ({ id, uuid, name });
 const uuids = s => s.system.residents.map(r => r.uuid);
 
 /** `game` as the module reads it: the actors, and which user this client is. */
@@ -109,6 +110,13 @@ describe("plannedResidents", () => {
 		const unwritten = npc("unwritten", "");
 		expect(plannedResidents([row(unwritten.uuid)], delve, [unwritten], all, { keep: new Set([unwritten.uuid]) })).toBeNull();
 	});
+
+	it("gives a kept row its NPC's name now, so a deleted NPC's row shows the last name they had", () => {
+		const bryn = npc("bryn", "Gordin's Delve");
+		bryn.name = "Bryn the Elder";
+		const planned = plannedResidents([row(bryn.uuid, "Bryn")], delve, [bryn], all);
+		expect(planned).toEqual([{ id: `row-${bryn.uuid}`, uuid: bryn.uuid, name: "Bryn the Elder" }]);
+	});
 });
 
 describe("syncResidentHome", () => {
@@ -118,6 +126,17 @@ describe("syncResidentHome", () => {
 		expect(await syncResidentHome(aled, { settlements: [delve] })).toBe(true);
 		expect(uuids(delve)).toEqual([aled.uuid]);
 		expect(delve.system.residents[0]).toMatchObject({ name: "aled" });
+	});
+
+	it("renames the row of an NPC renamed on their own sheet, and is a no-op the second time", async () => {
+		const aled = npc("aled", "Gordin's Delve");
+		const delve = settlement("d", "Gordin's Delve", [row(aled.uuid)]);
+		aled.name = "Aled Stonehand";
+		expect(await syncResidentHome(aled, { settlements: [delve] })).toBe(true);
+		expect(delve.system.residents).toEqual([{ id: `row-${aled.uuid}`, uuid: aled.uuid, name: "Aled Stonehand" }]);
+		delve.update.mockClear();
+		expect(await syncResidentHome(aled, { settlements: [delve] })).toBe(false);
+		expect(delve.update).not.toHaveBeenCalled();
 	});
 
 	it("moves someone whose Home changed, and is a no-op the second time", async () => {
@@ -290,6 +309,16 @@ describe("the hooks", () => {
 		onUpdateActorForResidents(a, { system: { home: "Marshedge" } }, {}, "me");
 		await flush();
 		expect(uuids(delve)).toEqual([]);
+	});
+
+	it("carry an NPC's new name onto their row", async () => {
+		const a = npc("a", "Gordin's Delve");
+		const delve = settlement("d", "Gordin's Delve", [row(a.uuid)]);
+		world([a, delve]);
+		a.name = "Aled";
+		onUpdateActorForResidents(a, { name: "Aled" }, {}, "someone");
+		await flush();
+		expect(delve.system.residents[0].name).toBe("Aled");
 	});
 
 	it("gather a new settlement's people", async () => {

@@ -96,7 +96,8 @@ export function isWorldNpc(actor) {
 	return actor?.type === "npc" && !actor.pack && !actor.isToken && !!actor.uuid;
 }
 
-const listsNpc = (settlement, npc) => (settlement?.system?.residents ?? []).some(r => r?.uuid === npc.uuid);
+const residentRow = (settlement, npc) => (settlement?.system?.residents ?? []).find(r => r?.uuid === npc.uuid) ?? null;
+const listsNpc = (settlement, npc) => !!residentRow(settlement, npc);
 
 // ── Writing a list ───────────────────────────────────────────────────────────────
 
@@ -120,8 +121,9 @@ export function editSettlementList(settlement, list, edit) {
 // ── Keeping them in step ─────────────────────────────────────────────────────────
 
 /**
- * Put one NPC on the Residents table their Home names, and off every other. Only settlements this
- * user may write are touched. Resolves to whether anything was written.
+ * Put one NPC on the Residents table their Home names, and off every other, their row carrying the
+ * name they go by now (the row's cached name is what the table shows once the NPC is gone). Only
+ * settlements this user may write are touched. Resolves to whether anything was written.
  */
 export async function syncResidentHome(npc, { settlements = settlementActors() } = {}) {
 	if (!isWorldNpc(npc)) return false;
@@ -135,10 +137,13 @@ export async function syncResidentHome(npc, { settlements = settlementActors() }
 			rows.splice(0, rows.length, ...kept);
 		}) || wrote;
 	}
-	if (home?.isOwner && !listsNpc(home, npc)) {
+	const listed = home ? residentRow(home, npc) : null;
+	if (home?.isOwner && (!listed || listed.name !== npc.name)) {
 		wrote = await editSettlementList(home, "residents", rows => {
-			if (rows.some(r => r?.uuid === npc.uuid)) return false;
-			rows.push(settlementRow("residents", { uuid: npc.uuid, name: npc.name }));
+			const row = rows.find(r => r?.uuid === npc.uuid);
+			if (!row) return void rows.push(settlementRow("residents", { uuid: npc.uuid, name: npc.name }));
+			if (row.name === npc.name) return false;
+			row.name = npc.name;
 		}) || wrote;
 	}
 	return wrote;
@@ -148,7 +153,7 @@ export async function syncResidentHome(npc, { settlements = settlementActors() }
  * `settlement`'s Residents `rows` as the world's Homes say they should be, or null when they already
  * are. Pure. A row whose NPC is gone keeps its place (the table shows its cached name, as Stonetop's
  * does), as does one whose uuid is in `keep` (a Home the sweep could not write), and the rows
- * already there keep their order and ids; newcomers go on the end. `homeOf`, each NPC's uuid to the
+ * already there keep their order and ids, each taking its NPC's name now; newcomers go on the end. `homeOf`, each NPC's uuid to the
  * settlement its Home names, is built here when not given.
  */
 export function plannedResidents(rows, settlement, npcs, settlements, { homeOf = null, keep = null } = {}) {
@@ -165,8 +170,12 @@ export function plannedResidents(rows, settlement, npcs, settlements, { homeOf =
 	const listed = new Set(kept.map(r => r?.uuid));
 	const added = npcs.filter(npc => belongs(npc) && !listed.has(npc.uuid))
 		.map(npc => settlementRow("residents", { uuid: npc.uuid, name: npc.name }));
-	if (!added.length && kept.length === rows.length) return null;
-	return [...kept.map(r => ({ ...r })), ...added];
+	const renamed = kept.some(r => { const npc = byUuid.get(r?.uuid); return npc && r.name !== npc.name; });
+	if (!added.length && !renamed && kept.length === rows.length) return null;
+	return [...kept.map(r => {
+		const npc = byUuid.get(r?.uuid);
+		return npc ? { ...r, name: npc.name } : { ...r };
+	}), ...added];
 }
 
 /**
@@ -298,7 +307,7 @@ export function onCreateActorForResidents(actor) {
 }
 
 /**
- * `updateActor`: a Home changed moves the NPC; a settlement renamed keeps its people, re-homed by
+ * `updateActor`: a Home changed moves the NPC, and a name changed follows onto their row; a settlement renamed keeps its people, re-homed by
  * the renaming client (for a GM-less session) and by the primary GM (for the NPCs a player can't
  * write). Both are idempotent. A rename onto a name an earlier settlement goes by tells the renaming
  * user why its people have not moved to the new name.
@@ -308,7 +317,7 @@ export function onUpdateActorForResidents(actor, changed, _options, userId) {
 	if (!has) return;
 	const mine = userId === globalThis.game?.user?.id;
 	let run = null;
-	if (isWorldNpc(actor) && has(changed, "system.home") && isResidentsWriter()) run = syncResidentHome(actor);
+	if (isWorldNpc(actor) && (has(changed, "system.home") || typeof changed?.name === "string") && isResidentsWriter()) run = syncResidentHome(actor);
 	else if (isSettlementActor(actor) && typeof changed?.name === "string" && (mine || isResidentsWriter())) {
 		if (mine && !ownsItsName(actor)) {
 			globalThis.ui?.notifications?.warn?.(format("stonetop.settlement.renameSharedName", { place: actor.name }));
