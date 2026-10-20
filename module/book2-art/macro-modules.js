@@ -22,4 +22,7 @@ export const MACRO_MODULES = Object.freeze({
 	// The test-fixtures macro's settlement sheets: made by the same createSettlement the sidebar's
 	// Create Settlement uses, from the same stat blocks.
 	settlement:      () => import("../actors/settlement/settlement-actor.js"),
+	// Its cleanup takes test NPCs off the GM's own sheets' Residents through the same per-settlement
+	// queue the system's own residents writes take turns in.
+	settlementResidents: () => import("../actors/settlement/settlement-residents.js"),
 });

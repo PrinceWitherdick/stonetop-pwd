@@ -8,6 +8,7 @@ import * as worldJournalArt from "../../module/book2-art/world-journal-art.js";
 import * as posterMaps from "../../module/book2-art/poster-maps.js";
 import * as timelineStore from "../../module/timeline/timeline-store.js";
 import * as settlementActor from "../../module/actors/settlement/settlement-actor.js";
+import * as settlementResidents from "../../module/actors/settlement/settlement-residents.js";
 
 // The Import Book Art macro borrows three system modules. In a bundled release, importing them by
 // path would load second copies with their own caches, so the system hands them over on
@@ -27,7 +28,7 @@ const BORROWED = [
 
 describe("the modules the Import Book Art macro borrows", () => {
 	it("are these three, beside the test-fixtures macro's timeline and settlements", () => {
-		expect(Object.keys(MACRO_MODULES).sort()).toEqual([...BORROWED.map((b) => b.key), "timeline", "settlement"].sort());
+		expect(Object.keys(MACRO_MODULES).sort()).toEqual([...BORROWED.map((b) => b.key), "timeline", "settlement", "settlementResidents"].sort());
 	});
 
 	it.each(BORROWED)("$key loads the system's own copy of the module, with $name on it", async ({ key, name, module }) => {
@@ -49,6 +50,14 @@ describe("the modules the Import Book Art macro borrows", () => {
 	it("leave the shipped macro a command that still parses", () => {
 		const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 		expect(() => new AsyncFunction(COMMAND)).not.toThrow();
+	});
+});
+
+describe("the residents queue the test-fixtures macro borrows", () => {
+	it("is the system's own editSettlementList, and the cleanup goes through it", async () => {
+		const loaded = await MACRO_MODULES.settlementResidents();
+		expect(loaded.editSettlementList).toBe(settlementResidents.editSettlementList);
+		expect(FIXTURES).toContain("residentsApi.editSettlementList(sheet, \"residents\", dropOurs)");
 	});
 });
 

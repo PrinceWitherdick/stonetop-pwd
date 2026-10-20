@@ -36,6 +36,7 @@ import { rulebookMacroApi } from "../books/rulebook-api.js";
 import { adoptStoredRulebooks } from "../books/adopt-stored-rulebooks.js";
 import { adoptSettlementPortraits, reletterOnRename } from "../actors/settlement/settlement-portrait.js";
 import { redrawForSettlement } from "../actors/settlement/settlement-actor.js";
+import { isResidentsWriter, onCreateActorForResidents, onPreUpdateActorForResidents, onUpdateActorForResidents, sweepSettlementResidents } from "../actors/settlement/settlement-residents.js";
 import { writeChronicle } from "../utils/chronicle.js";
 import { ExpeditionDialog } from "../dialogs/ExpeditionDialog.js";
 import { WeatherDialog } from "../dialogs/WeatherDialog.js";
@@ -647,6 +648,22 @@ export async function onReady() {
 	Hooks.on("createActor", actor => redrawForSettlement(actor));
 	Hooks.on("updateActor", (actor, changed) => redrawForSettlement(actor, changed));
 	Hooks.on("deleteActor", actor => redrawForSettlement(actor));
+	// A settlement's Residents follow each NPC's Home (settlement-residents.js): a new or re-homed NPC
+	// moves on the primary GM, a renamed settlement re-homes its people on the renaming client, and
+	// every load of the primary GM sweeps the world, which is how an old world's NPCs get filed. The
+	// first sweep a world sees also gives a listed NPC whose Home names no settlement the Home of the
+	// table they are on, as the old sheet listed people without touching their Home.
+	Hooks.on("preUpdateActor", onPreUpdateActorForResidents);
+	Hooks.on("createActor", onCreateActorForResidents);
+	Hooks.on("updateActor", onUpdateActorForResidents);
+	// A connected GM only (isResidentsWriter): with no GM, isPrimaryGM() is true on every player
+	// client, and each would sweep, and fail to stamp the world-scope version.
+	if (isResidentsWriter()) {
+		const adoptHomes = !sweepVersion("settlementResidentHomes");
+		sweepSettlementResidents({ adoptHomes })
+			.then(() => adoptHomes && oncePerVersion("settlementResidentHomes", () => {}))
+			.catch(err => console.error("Stonetop | filing settlement residents failed", err));
+	}
 	if (isPrimaryGM()) {
 		// An earlier build's poster map is replaced on the first pass a world sees and never after,
 		// so a GM who later picks that map on purpose keeps it (settlement-portrait.js).

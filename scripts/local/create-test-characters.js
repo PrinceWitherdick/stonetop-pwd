@@ -182,7 +182,8 @@
 //             later removed.
 // Re-run:     deletes everything this macro created (characters — the roster, the Graveyard and
 //             Gone from Play alike, all carry the test flag — the settlement sheets (and the
-//             band's standing on Stonetop), the resident/neighbor NPCs,
+//             band's standing on Stonetop), the resident/neighbor NPCs (and their rows on any
+//             settlement sheet of the GM's own, which would otherwise keep them as ghost rows),
 //             and the test Introductions/Expedition data), strips the steading's test members
 //             (including any villager an older run left behind, whose isTest tag the people
 //             migration dropped when it rewrote the row),
@@ -980,6 +981,59 @@
         { name: "Sael",  hearts: 1, notes: "Came up to the gate at dusk carrying an open flame and singing. They have not opened it to him since." },
         { name: "Aerin", hearts: 3, notes: "Asked after the winter stores before she asked after anything else. They will grant her that much." },
       ],
+    },
+    // More Homes, so each settlement sheet's Residents tab has people on it: an NPC whose Home
+    // names a settlement sheet is filed on that sheet's Residents (settlement-residents.js), and
+    // stays on Stonetop's Neighbors too. Marshedge gets three, the Delve three, Clan Ardu's Band
+    // (TEST_SETTLEMENT_SHEETS) two; North Manmarch is a roster place with no sheet, so Wenna,
+    // like Gwilm, Demetra and Rhys above, is on no settlement's table.
+    {
+      name: "Orla", home: "Marshedge", occupation: "Glassblower", traits: "proud; quick to laugh",
+      relations: "sold Stonetop the glass for the shrine's one window",
+      instinct: "to be asked for by name, in towns she has never seen",
+      notes: "A Guild woman, and never lets anyone forget it.",
+      rels: [
+        { name: "Maelis", hearts: 4, notes: "Wanted to know how the glass is made rather than what it costs. Orla talked for an hour." },
+      ],
+    },
+    {
+      name: "Hesketh", home: "Gordin's Delve", occupation: "Ironmonger", traits: "gruff; generous with advice",
+      relations: "forged the village's new plowshares",
+      instinct: "to see every tool he sells outlive the hand that bought it",
+      notes: "",
+      rels: [
+        { name: "Brakkos", hearts: 4, notes: "Bends a bar to test it and then pays full price for it. Hesketh likes him for both." },
+      ],
+    },
+    {
+      name: "Ysolde", home: "Gordin's Delve", occupation: "Mine-warden", traits: "superstitious; patient",
+      relations: "keeps the lower shafts closed to Stonetop folk",
+      instinct: "to keep what sleeps in the deep workings sleeping",
+      notes: "Trades news of the Ustrina for news of the Wood.",
+      rels: [],
+    },
+    {
+      name: "Tamsin", home: "Clan Ardu's Band", occupation: "Horse-trader", traits: "blunt; loyal to a fault",
+      relations: "drove the salt-mutton cart down at midwinter",
+      instinct: "to keep her clan clear of the raiders' blood-feud",
+      notes: "",
+      rels: [
+        { name: "Coria", hearts: 4, notes: "Believed her at the gate when nobody else would. Tamsin does not forget a thing like that." },
+      ],
+    },
+    {
+      name: "Kezia", home: "Clan Ardu's Band", occupation: "Scout", traits: "wary; quiet",
+      relations: "watches the Steplands trails for the raiders' riders",
+      instinct: "to see them coming first",
+      notes: "",
+      rels: [],
+    },
+    {
+      name: "Wenna", home: "North Manmarch", occupation: "Drover", traits: "cheerful; owes everyone money",
+      relations: "brings cattle up the Manmarch road each autumn",
+      instinct: "to sell the herd before anyone counts it",
+      notes: "",
+      rels: [],
     },
   ];
 
@@ -3303,6 +3357,27 @@
       }
     }
     if (Object.keys(settlementRelKill).length) await steadingRels.update(settlementRelKill);
+    // A settlement sheet of the GM's own (one this macro left alone, say their Marshedge) has the
+    // test neighbors on its Residents, filed there by their Home. A deleted NPC's row stays on the
+    // table under its cached name (settlement-residents.js#plannedResidents), so take ours off
+    // first, while their uuids are still known. The test sheets go with the actors below. Through
+    // the system's own editSettlementList where it is handed over, so this write takes its turn
+    // with a residents sync still in flight rather than landing on top of it.
+    const goneUuids = new Set(existing.map(a => a.uuid));
+    const residentsApi = await game.stonetop?.macroModules?.settlementResidents?.();
+    for (const sheet of game.actors.filter(a => a.type === "settlement" && !a.getFlag(FLAG_SCOPE, TEST_FLAG))) {
+      const dropOurs = rows => {
+        const kept = rows.filter(r => !goneUuids.has(r?.uuid));
+        if (kept.length === rows.length) return false;
+        rows.splice(0, rows.length, ...kept);
+      };
+      if (residentsApi?.editSettlementList) {
+        await residentsApi.editSettlementList(sheet, "residents", dropOurs);
+      } else {
+        const rows = (sheet.system?.residents ?? []).map(r => ({ ...r }));
+        if (dropOurs(rows) !== false) await sheet.update({ "system.residents": rows });
+      }
+    }
     if (liveIds.length) await Actor.deleteDocuments(liveIds);
 
     // Strip the steading's test Residents / Neighbors / Players (anything tagged isTest),

@@ -68,6 +68,9 @@ export class SettlementModel extends foundry.abstract.TypeDataModel {
 			sourcePage: text(),
 			// What the book asks the GM to pick when making one from a template. Shown until dismissed.
 			setupNote:  text(),
+			// Names this place was renamed away from while some NPC's Home still said one: until they are
+			// re-homed, those people stay on its Residents (actors/settlement/settlement-residents.js).
+			formerNames: new fields.ArrayField(text(), { required: false, initial: [] }),
 			notes: new fields.HTMLField({ required: true, blank: true }),
 		};
 	}

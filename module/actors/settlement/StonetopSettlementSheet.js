@@ -54,8 +54,12 @@ import { escHtml } from "../../utils/strings.js";
 import { deletionEntry, imagePopout } from "../../utils/foundry-compat.js";
 import { format } from "../../utils/i18n.js";
 import { AddSteadingMemberDialog } from "../../dialogs/AddSteadingMemberDialog.js";
-import { OCCUPATIONS, TRAITS } from "../../data/steading-members.js";
-import { createPersonNpc, ensureNamedActorFolder, personFieldPath, personRowActor, resolvePersonRow } from "../steading/steading-people.js";
+import { HOMES, OCCUPATIONS, TRAITS } from "../../data/steading-members.js";
+import { HOME_STONETOP, createPersonNpc, ensureNamedActorFolder, personFieldPath, personRowActor, resolvePersonRow } from "../steading/steading-people.js";
+import { editSettlementList, homeKey, isWorldNpc, ownsItsName, settlementForHome, settlementResolver, syncResidentHome } from "./settlement-residents.js";
+import { settlementActors } from "./settlement-type.js";
+import { confirmOutcome } from "../../utils/ask-with-buttons.js";
+import { StonetopAutocomplete } from "../../utils/autocomplete.js";
 import { openNpcNotesDialog } from "../steading/npc-notes-dialog.js";
 import { withLinkedActor } from "../../utils/actor-link.js";
 import { wireTabSearch } from "../../utils/tab-search.js";
@@ -331,24 +335,12 @@ export function createStonetopSettlementSheetClass(Base) {
 			});
 		}
 
-		/** The list writes in flight, one after another; see #editList. */
-		#listWrites = Promise.resolve();
-
 		/**
-		 * Read a list, change it, write it whole. `edit` returning false skips the write. The writes
-		 * queue: the document only takes a write in when the server answers, so a second edit read
-		 * while the first was still out would start from the old rows and write the first one away.
-		 * Each one reads the rows only once the one before it has landed.
+		 * Read a list, change it, write it whole; `edit` returning false skips the write. Queued per
+		 * settlement with the Residents sync's own writes (settlement-residents.js#editSettlementList).
 		 */
 		#editList(list, edit) {
-			const write = async () => {
-				const rows = (this.actor.system[list] ?? []).map(r => ({ ...r }));
-				if (edit(rows) === false) return;
-				await this.actor.update({ [`system.${list}`]: rows });
-			};
-			const next = this.#listWrites.then(write);
-			this.#listWrites = next.catch(() => {});
-			return next;
+			return editSettlementList(this.actor, list, edit);
 		}
 
 		/**
@@ -383,25 +375,140 @@ export function createStonetopSettlementSheetClass(Base) {
 		// ── Residents ───────────────────────────────────────────────────────────
 
 		/**
-		 * File an NPC on the Residents table, unless it is there already. A blank Home is set to this
-		 * place, as Stonetop seeds "Stonetop" on its own residents; a Home already written is theirs.
+		 * File an NPC here. The table follows Home (settlement-residents.js), so this sets their Home to
+		 * this place and lets the sync list them, and take them off any other settlement's table. A
+		 * blank Home is filled in without asking; a Home somewhere else is asked about first. Only a
+		 * world NPC has a Home the table can follow, and a place sharing its name with an earlier
+		 * settlement can't take anyone (the earlier one would).
 		 */
 		async #addResident(actor, { quiet = false } = {}) {
 			if (actor?.type !== "npc") return false;
-			if ((this.actor.system.residents ?? []).some(r => r.uuid === actor.uuid)) {
+			if (!isWorldNpc(actor)) {
+				ui.notifications?.warn?.(format(`${KEY}.residentNotInWorld`, { name: actor.name }));
+				return false;
+			}
+			if (!this.#takesResidents()) return false;
+			const home = String(actor.system?.home ?? "").trim();
+			const livesHere = settlementForHome(home) === this.actor;
+			if (livesHere && (this.actor.system.residents ?? []).some(r => r.uuid === actor.uuid)) {
 				ui.notifications?.info?.(format(`${KEY}.alreadyResident`, { name: actor.name }));
 				return false;
 			}
-			await this.#editList("residents", rows => {
-				if (rows.some(r => r.uuid === actor.uuid)) return false;
-				rows.push(settlementRow("residents", { uuid: actor.uuid, name: actor.name }));
-			});
-			if (!String(actor.system?.home ?? "").trim() && actor.isOwner) {
-				await actor.update({ "system.home": this.actor.name }).catch(err =>
-					console.warn("Stonetop | Could not set the resident's Home for", actor.name, err));
+			if (!livesHere) {
+				if (!actor.isOwner) {
+					ui.notifications?.warn?.(format(`${KEY}.cannotRehome`, { name: actor.name }));
+					return false;
+				}
+				if (home && !await this.#confirmMoveHere(actor, home)) return false;
+				if (!await this.#writeHome(actor, this.actor.name)) return false;
 			}
+			// The primary GM's hook files them too; the sync is queued and idempotent, so filing here as
+			// well puts them on the table before the toast says so.
+			await syncResidentHome(actor);
 			if (!quiet) ui.notifications?.info?.(format(`${KEY}.linkedResident`, { name: actor.name }));
 			return actor;
+		}
+
+		/**
+		 * Whether this place's own name finds it. One sharing its name with an earlier settlement can't
+		 * take anyone (a Home saying that name files them on the earlier one), and says so.
+		 */
+		#takesResidents() {
+			if (ownsItsName(this.actor)) return true;
+			ui.notifications?.warn?.(format(`${KEY}.residentSharedName`, { place: this.actor.name }));
+			return false;
+		}
+
+		/** An NPC who lives somewhere else, dropped here: move their Home? */
+		#confirmMoveHere(actor, home) {
+			const from = settlementForHome(home);
+			const name = escHtml(actor.name), here = escHtml(this.actor.name), there = escHtml(home);
+			const offTable = from ? " " + format(`${KEY}.moveHereOffTable`, { place: escHtml(from.name) }) : "";
+			return confirmOutcome({
+				title: format(`${KEY}.moveHereTitle`, { name: actor.name, place: this.actor.name }),
+				content: `<p>${format(`${KEY}.moveHereBody`, { name, from: there, to: here })}${offTable}</p>`,
+				yes: { label: format(`${KEY}.moveHereYes`, { place: this.actor.name }), icon: "fa-house-chimney" },
+				no: { label: format(`${KEY}.moveHereNo`, { place: home }) },
+				defaultYes: true,
+			});
+		}
+
+		/**
+		 * The remove cross on a Residents row. Someone who lives here leaves the table by moving away,
+		 * so this asks where they live now and writes that Home; the sync takes them off (and onto the
+		 * new place's table, when it has a sheet). A row whose NPC is gone, or whose Home is already
+		 * somewhere else, is just removed.
+		 */
+		async #removeResident(rowId) {
+			const row = (this.actor.system.residents ?? []).find(r => r.id === rowId);
+			if (!row) return;
+			const npc = personRowActor(residentPointer(row));
+			const dropRow = () => this.#editList("residents", rows => {
+				const at = rows.findIndex(r => r.id === rowId);
+				if (at < 0) return false;
+				rows.splice(at, 1);
+			});
+			if (!npc || settlementForHome(npc.system?.home) !== this.actor) return dropRow();
+			if (!npc.isOwner) {
+				ui.notifications?.warn?.(format(`${KEY}.cannotRehome`, { name: npc.name }));
+				return;
+			}
+			const home = await this.#askNewHome(npc);
+			if (!home || !await this.#writeHome(npc, home)) return;
+			await syncResidentHome(npc);
+		}
+
+		/** Write an NPC's Home, saying so if it can't be: resolves to whether it was written. */
+		#writeHome(npc, home) {
+			return npc.update({ "system.home": home }).then(() => true, err => {
+				console.warn("Stonetop | Could not change the Home of", npc.name, err);
+				ui.notifications?.error?.(format(`${KEY}.rehomeFailed`, { name: npc.name }));
+				return false;
+			});
+		}
+
+		/** Where does this resident live now? The Home choices the worksheet offers, and the other sheets. */
+		#askNewHome(npc) {
+			// "Here" is any Home that files them back on this table: its name, or a former name some
+			// NPC's Home still says (settlement-residents.js#settlementForHome).
+			const resolve = settlementResolver();
+			const isHere = place => resolve(place) === this.actor;
+			const seen = new Set();
+			const choices = [HOME_STONETOP, ...HOMES, ...settlementActors().map(s => s.name)]
+				.filter(place => {
+					const key = homeKey(place);
+					if (!key || isHere(place) || seen.has(key)) return false;
+					seen.add(key);
+					return true;
+				});
+			return ContentPickerDialog.ask({
+				title: format(`${KEY}.newHomeTitle`, { name: npc.name }),
+				width: 420,
+				body: `<p>${format(`${KEY}.newHomeBody`, { name: escHtml(npc.name), place: escHtml(this.actor.name) })}</p>
+					<div class="stonetop-homestead-fields"><label class="stonetop-homestead-field">
+						<span>${escHtml(localize(`${KEY}.newHomeLabel`))}</span>
+						<input type="text" name="home" autocomplete="off">
+					</label></div>`,
+				buttonLabel: localize(`${KEY}.newHomeSave`),
+				wire: form => {
+					const input = form.elements.namedItem("home");
+					StonetopAutocomplete.attach(input, choices);
+					// Bound before the window's own submit, so a blank Home, or this place again, keeps
+					// the window open and says why rather than closing it having done nothing.
+					form.addEventListener("submit", event => {
+						if (homeKey(input?.value) && !isHere(input.value)) return;
+						event.preventDefault();
+						event.stopImmediatePropagation();
+						ui.notifications?.warn?.(format(`${KEY}.newHomeSame`, { name: npc.name, place: this.actor.name }));
+						input?.focus();
+					});
+				},
+				onShow: form => form.querySelector("input[name=home]")?.focus(),
+				read: form => {
+					const home = String(form.elements.namedItem("home")?.value ?? "").trim();
+					return home && !isHere(home) ? home : null;
+				},
+			});
 		}
 
 		/**
@@ -444,8 +551,10 @@ export function createStonetopSettlementSheetClass(Base) {
 		 */
 		async _onAddResident() {
 			if (!this.isEditable) return;
+			// Before anything is made: a Home of this name would file the new NPC on an earlier sheet.
+			if (!this.#takesResidents()) return;
 			const data = await new AddSteadingMemberDialog("resident", { home: this.actor.name }).promise();
-			if (!data) return;
+			if (!data || !this.#takesResidents()) return;
 			const folder = await ensureNamedActorFolder({
 				name: format(`${KEY}.residentsFolder`, { name: this.actor.name }),
 				color: RESIDENTS_FOLDER_COLOR,
@@ -541,6 +650,7 @@ export function createStonetopSettlementSheetClass(Base) {
 			const list = target.closest("[data-list]")?.dataset.list;
 			const id = target.closest("[data-row-id]")?.dataset.rowId;
 			if (!isSettlementList(list) || !id || !this.isEditable) return;
+			if (list === "residents") return this.#removeResident(id);
 			return this.#editList(list, rows => {
 				const at = rows.findIndex(r => r.id === id);
 				if (at < 0) return false;
