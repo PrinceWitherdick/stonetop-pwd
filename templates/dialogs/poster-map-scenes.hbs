@@ -10,7 +10,7 @@
 	<ul class="stonetop-poster-maps-list">
 		{{#each rows}}
 			<li class="stonetop-poster-map{{#if this.hasScene}} has-scene{{/if}}">
-				<input type="checkbox" name="poster-map" value="{{this.index}}"{{#if this.checked}} checked{{/if}}>
+				<input type="checkbox" class="stonetop-poster-map-check" name="poster-map" value="{{this.index}}"{{#if this.checked}} checked{{/if}}>
 				<span class="stonetop-poster-map-body">
 					<span class="stonetop-poster-map-name">{{this.name}}</span>
 					<span class="stonetop-poster-map-note">

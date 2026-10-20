@@ -716,7 +716,7 @@ function _restFollowersHtml(bodies, { legend, gain }) {
 		<p class="stonetop-homestead-subhead">${_esc(legend)}</p>
 		<ul class="stonetop-rest-follower-list">
 			${bodies.map(b => `<li><label class="stonetop-rest-follower">
-				<input type="checkbox" name="restFollower" value="${_esc(b.id)}">
+				<input type="checkbox" class="stonetop-rest-follower-check" name="restFollower" value="${_esc(b.id)}">
 				<span>${_esc(b.name)} <span class="stonetop-supply-purse-left">(${b.from}/${b.max} HP &rarr; ${gain(b)})</span></span>
 			</label></li>`).join("")}
 		</ul>
@@ -8832,7 +8832,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				title: ON_THE_HOOF,
 				content: `<form class="stonetop-homestead-dialog">
 					<p class="stonetop-homestead-trigger"><em>When you travel through the wilderness, you can procure 1d6 uses of ◇ provisions each day.</em></p>
-					<label class="stonetop-camp-extra"><input type="checkbox" name="lean"${winter ? " checked" : ""}>
+					<label class="stonetop-camp-extra"><input type="checkbox" class="stonetop-camp-extra-check" name="lean"${winter ? " checked" : ""}>
 						<span>Winter, or barren terrain: roll with <strong>disadvantage</strong></span></label>
 				</form>`,
 				buttons: {
@@ -11013,7 +11013,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					+ `${game.i18n.format("stonetop.invocations.noticeNeedsSun", { name: escHtml(sunNotice) })}</p>`;
 				if (canEmpower) {
 					const loc = key => escHtml(game.i18n.localize(key));
-					content += `<label class="stonetop-invoke-empower"><input type="checkbox" name="empower"> `
+					content += `<label class="stonetop-invoke-empower"><input type="checkbox" class="stonetop-invoke-check" name="empower"> `
 						+ `<span>${loc("stonetop.invocations.empowerLabel")}</span></label>`
 						+ `<div class="stonetop-empower-effect">${empoweredHtml}</div>`;
 					// Which one, asked here because the move asks it here: only a roll pays it, so only
@@ -11035,7 +11035,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (canInvoke && partners.length) {
 					const loc = key => escHtml(game.i18n.localize(key));
 					const opts = list => list.map(o => `<option value="${escHtml(o.value)}">${escHtml(o.label)}</option>`).join("");
-					content += `<label class="stonetop-invoke-burn-twice"><input type="checkbox" name="burnTwice"${prices.length ? "" : " disabled"}> `
+					content += `<label class="stonetop-invoke-burn-twice"><input type="checkbox" class="stonetop-invoke-check" name="burnTwice"${prices.length ? "" : " disabled"}> `
 						+ `<span>${loc("stonetop.invocations.burnTwiceLabel")}</span></label>`;
 					content += prices.length
 						? `<div class="stonetop-burn-twice-fields">`
@@ -12862,7 +12862,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					<span>${_esc(d.name)}</span>
 				</label>`).join("")}
 				<p class="stonetop-homestead-note">${i18n("gmNote")}</p>
-				${canPay ? `<label class="stonetop-camp-extra"><input type="checkbox" name="tendSpend"> <span>${i18n("spend")}</span></label>
+				${canPay ? `<label class="stonetop-camp-extra"><input type="checkbox" class="stonetop-camp-extra-check" name="tendSpend"> <span>${i18n("spend")}</span></label>
 					${_payWithFieldHtml(purses, payers, "Pay with")}` : ""}
 			</div>`;
 			// The shared chooser window (dialogs/content-picker.js, a StonetopDialog): "It's taken care of" is
@@ -12970,7 +12970,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				? `<div class="stonetop-convalesce-wounds">
 						<p class="stonetop-homestead-subhead">Heal wounds that can heal (weeks under a healer):</p>
 						<ul class="stonetop-convalesce-wound-list">
-							${healable.map(w => `<li><label class="stonetop-convalesce-wound"><input type="checkbox" name="heal" value="${_esc(w.id)}"> <span>${_esc(w.text || "(unnamed wound)")}</span></label></li>`).join("")}
+							${healable.map(w => `<li><label class="stonetop-convalesce-wound"><input type="checkbox" class="stonetop-convalesce-wound-check" name="heal" value="${_esc(w.id)}"> <span>${_esc(w.text || "(unnamed wound)")}</span></label></li>`).join("")}
 						</ul>
 					</div>`
 				: "";

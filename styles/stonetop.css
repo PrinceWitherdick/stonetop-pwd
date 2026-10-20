@@ -4653,6 +4653,42 @@ input.stonetop-name-field {
 .stonetop-pdc-subpick,
 .stonetop-pdi-writein-pick,
 .stonetop-person-picker-check,
+.steading-plan-check,
+.spe-req-done,
+.bt-monster,
+.bt-out-of-play,
+.stonetop-cu-trait,
+.stonetop-cu-move,
+.stonetop-tb-theme,
+.stonetop-tb-aspect,
+.stonetop-tb-gift,
+.stonetop-tb-mark,
+.stonetop-tb-req,
+.stonetop-tb-bind,
+.stonetop-tb-move,
+.stonetop-cf-group-toggle,
+.stonetop-mf-group-toggle,
+.stonetop-nf-group-toggle,
+.stonetop-ch-damage-effect,
+.stonetop-ch-certain-death,
+.stonetop-eos-personal-check,
+.stonetop-ff-let-go,
+.stonetop-of-balk,
+.stonetop-of-balk-presence,
+.stonetop-of-wall,
+.stonetop-of-command,
+.stonetop-poster-map-check,
+.road-mess-kit,
+.road-pack-animal,
+.undeath-forced-miss,
+.undeath-tether-destroyed,
+.stonetop-identify-adv,
+.stonetop-rest-follower-check,
+.stonetop-camp-extra-check,
+.stonetop-invoke-check,
+.stonetop-convalesce-wound-check,
+.stonetop-battle-hold-check,
+.stonetop-fight-targets-check,
 .steading-list-check {
 	appearance: none !important;
 	-webkit-appearance: none !important;
@@ -4719,6 +4755,42 @@ input.stonetop-name-field {
 .stonetop-pdc-subpick:checked,
 .stonetop-pdi-writein-pick:checked,
 .stonetop-person-picker-check:checked,
+.steading-plan-check:checked,
+.spe-req-done:checked,
+.bt-monster:checked,
+.bt-out-of-play:checked,
+.stonetop-cu-trait:checked,
+.stonetop-cu-move:checked,
+.stonetop-tb-theme:checked,
+.stonetop-tb-aspect:checked,
+.stonetop-tb-gift:checked,
+.stonetop-tb-mark:checked,
+.stonetop-tb-req:checked,
+.stonetop-tb-bind:checked,
+.stonetop-tb-move:checked,
+.stonetop-cf-group-toggle:checked,
+.stonetop-mf-group-toggle:checked,
+.stonetop-nf-group-toggle:checked,
+.stonetop-ch-damage-effect:checked,
+.stonetop-ch-certain-death:checked,
+.stonetop-eos-personal-check:checked,
+.stonetop-ff-let-go:checked,
+.stonetop-of-balk:checked,
+.stonetop-of-balk-presence:checked,
+.stonetop-of-wall:checked,
+.stonetop-of-command:checked,
+.stonetop-poster-map-check:checked,
+.road-mess-kit:checked,
+.road-pack-animal:checked,
+.undeath-forced-miss:checked,
+.undeath-tether-destroyed:checked,
+.stonetop-identify-adv:checked,
+.stonetop-rest-follower-check:checked,
+.stonetop-camp-extra-check:checked,
+.stonetop-invoke-check:checked,
+.stonetop-convalesce-wound-check:checked,
+.stonetop-battle-hold-check:checked,
+.stonetop-fight-targets-check:checked,
 .steading-list-check:checked {
 	background: var(--stonetop-checkbox-checked-icon) no-repeat center / contain !important;
 }
@@ -20873,9 +20945,11 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	flex-direction: column;
 	gap: 2px;
 }
+/* flex-start, not center: the shared 15px tick then sits on the caps of the first line (centred, it
+   sat 1.5px low against Caslon's line box), and stays on that line when a requirement wraps. */
 .steading-plan-req > label {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: 6px;
 	cursor: pointer;
 }

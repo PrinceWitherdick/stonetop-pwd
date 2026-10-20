@@ -67,7 +67,7 @@ export function improvementPreviewHtml(def, { improvementLabel = humanizeSlug } 
 	// sections around the boxes are drawn by the emitter the journal card uses, so the
 	// two cannot drift apart.
 	body.push(requirementSectionsHtml(def.sections, item =>
-		`<li class="steading-req-item"><label><input type="checkbox" disabled><span>${item}</span></label></li>`));
+		`<li class="steading-req-item"><label><input type="checkbox" class="steading-improvement-req" disabled><span>${item}</span></label></li>`));
 
 	if (def.effect) body.push(`<div class="steading-improvement-effect">${def.effect}</div>`);
 
@@ -88,7 +88,7 @@ export function improvementPreviewHtml(def, { improvementLabel = humanizeSlug } 
 	// preview that has to be opened before it previews anything is a poor preview.
 	return `<div class="steading-improvement is-open stonetop-improvement-preview-card">`
 		+ `<div class="steading-improvement-header">`
-		+ `<label class="steading-improvement-complete-label"><input type="checkbox" disabled></label>`
+		+ `<label class="steading-improvement-complete-label"><input type="checkbox" class="steading-improvement-complete" disabled></label>`
 		+ `<div class="steading-improvement-summary">`
 		+ `<h4 class="steading-improvement-title">${escHtml(def.name)}</h4>`
 		+ (def.flavor ? `<p class="steading-improvement-flavor">${escHtml(def.flavor)}</p>` : "")

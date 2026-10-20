@@ -30,7 +30,8 @@ describe("improvementPreviewHtml", () => {
 
 	it("draws one check-off box per requirement, inert", () => {
 		const html = improvementPreviewHtml(DEF);
-		expect(html.match(/<input type="checkbox" disabled>/g)).toHaveLength(4); // 3 requirements + complete
+		expect(html.match(/<input type="checkbox" class="steading-improvement-req" disabled>/g)).toHaveLength(3);
+		expect(html.match(/<input type="checkbox" class="steading-improvement-complete" disabled>/g)).toHaveLength(1);
 		expect(html).toContain("<em>Pull Together</em> (1st)");
 		expect(html).toContain("<em>Pull Together</em> (2nd)");
 	});

@@ -216,7 +216,7 @@ export function battleHoldsToFill(actor) {
 /** The window's body: one ticked box per hold, each quoting its move's trigger. */
 export function battleHoldsContent(actor, holds) {
 	const rows = holds.map((hold, i) => `<label class="stonetop-battle-hold-row">
-		<input type="checkbox" name="${FIELD}" value="${i}" checked>
+		<input type="checkbox" class="stonetop-battle-hold-check" name="${FIELD}" value="${i}" checked>
 		<span><strong>${escHtml(hold.move)}:</strong> ${escHtml(format(`${KEY}.row.${HOLD_ROW_KEY[hold.move]}`, { max: hold.max, title: hold.title }))}</span>
 	</label>`).join("");
 	return `<p>${escHtml(format(`${KEY}.ask`, { name: actor.name }))}</p>${rows}`;

@@ -85,7 +85,7 @@ export function foesInFight(actor, { scene = globalThis.canvas?.scene ?? null, e
 export function whoItHitsWindow({ roller, candidates, area = false, areaAround = "roller" }) {
 	const rows = candidates.map((candidate, index) => `<li>
 			<label class="stonetop-fight-targets-option">
-				<input type="checkbox" name="${TARGET_FIELD}" value="${index}"${area || index === 0 ? " checked" : ""}>
+				<input type="checkbox" class="stonetop-fight-targets-check" name="${TARGET_FIELD}" value="${index}"${area || index === 0 ? " checked" : ""}>
 				<span>${escHtml(candidate.name)}${candidate.ally ? ` <em>${escHtml(localize(`${KEY}.ally`))}</em>` : ""}</span>
 			</label>
 		</li>`).join("");
