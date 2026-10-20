@@ -101,6 +101,13 @@ describe("paying", () => {
 		expect(wren.update).not.toHaveBeenCalled();
 	});
 
+	it("with no purse named, pays from the first one that holds enough, not a short first one", async () => {
+		const { actor: wren, resources } = character({ id: "wren", name: "Wren", supplies: 1 });
+		resources["more-supplies"] = 5;
+		expect(await spendPayerSupplies(wren, { n: 3 })).toEqual({ slug: "more-supplies", label: "More supplies", spent: 3, left: 2 });
+		expect(resources).toMatchObject({ supplies: 1, "more-supplies": 2 });
+	});
+
 	it("asks the payer's own player otherwise, and spends nothing here", async () => {
 		const alex = player("p-wren", "Alex", { query: vi.fn(async () => ({ declined: true })) });
 		const sam = player("p-bram", "Sam");
@@ -137,6 +144,28 @@ describe("the payer's side of the ask", () => {
 		expect(answer).toMatchObject({ spent: 1, left: 2 });
 		expect(resources.supplies).toBe(2);
 		expect(wren.update).toHaveBeenCalledTimes(1);
+	});
+
+	it("asks about the purse that can pay, with no purse named", async () => {
+		const { resources, actors } = world();
+		resources.supplies = 1;
+		resources["more-supplies"] = 5;
+		const confirm = vi.fn(async () => true);
+		const answer = await handleSupplyPayQuery({ payerId: "wren", patientId: "bram", n: 3, userId: "p-bram" }, {}, { actors, users: global.game.users, confirm });
+		expect(confirm.mock.calls[0][0].content).toContain("More supplies (5 left)");
+		expect(answer).toMatchObject({ slug: "more-supplies", spent: 3, left: 2 });
+	});
+
+	it("asks about a large Recover the same as a small one, and says so when the purse is short", async () => {
+		const { resources, actors } = world();
+		resources.supplies = 30;
+		const confirm = vi.fn(async () => true);
+		expect(await handleSupplyPayQuery({ payerId: "wren", patientId: "bram", n: 21, userId: "p-bram" }, {}, { actors, users: global.game.users, confirm }))
+			.toMatchObject({ spent: 21, left: 9 });
+		confirm.mockClear();
+		expect(await handleSupplyPayQuery({ payerId: "wren", patientId: "bram", n: 10, userId: "p-bram" }, {}, { actors, users: global.game.users, confirm })).toBeNull();
+		expect(confirm).not.toHaveBeenCalled();
+		expect(global.ui.notifications.warn).toHaveBeenCalledWith("Wren's Supplies holds 9, not the 10 uses asked for.");
 	});
 
 	it("keeps them on a no", async () => {

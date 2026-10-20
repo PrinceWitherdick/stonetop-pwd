@@ -27,8 +27,6 @@ import { escHtml } from "../../utils/strings.js";
 export const SUPPLY_PAY_QUERY = "stonetop.supplyPay";
 /** How long the asker waits for that answer (utils/owner-ask.js, shared with healers-arts.js). No answer reads as a no. */
 export const SUPPLY_PAY_ASK_MS = OWNER_ASK_MS;
-/** The most uses one ask may spend: a Recover for the patient and a handful of followers. */
-const MAX_USES = 20;
 
 const PURPOSES = new Set(Object.values(SUPPLY_PURPOSE));
 
@@ -63,6 +61,16 @@ export function ownSupplySpend(character, { slug, n = 1, purpose = SUPPLY_PURPOS
 	return { update: character.inventoryResourceData(live.slug, left), left, row: { label: live.label, value: `Expended ${usesText(n)} (${left} left)` } };
 }
 
+/**
+ * The purse `n` uses come out of: `slug` when one is named; otherwise the first eligible purse that holds
+ * `n`, falling back to the table-order default (supply-cost.js#defaultSupplyPurse) when none does, so
+ * a short first purse never refuses a spend another purse could pay. Null with none eligible.
+ */
+function payerPurse(purses, slug, n) {
+	if (slug) return purses?.eligible?.find(p => p.slug === slug) ?? null;
+	return purses?.eligible?.find(p => p.remaining >= n) ?? defaultSupplyPurse(purses);
+}
+
 /** The chat row for uses another character paid on `patientName`'s behalf, from payOthersSupplies' receipt. */
 export function behalfSpendRow(payerName, receipt, patientName) {
 	return {
@@ -72,7 +80,7 @@ export function behalfSpendRow(payerName, receipt, patientName) {
 }
 
 /**
- * Spend `n` uses out of `payer`'s purse `slug` (their first eligible one with none named), on THIS client,
+ * Spend `n` uses out of `payer`'s purse `slug` (their first eligible one holding `n` with none named), on THIS client,
  * read live: a purse that no longer holds `n` pays nothing.
  *
  * @returns {Promise<{slug: string, label: string, spent: number, left: number}|null>}
@@ -81,8 +89,8 @@ export async function spendPayerSupplies(payer, { slug = null, n = 1, purpose = 
 	const character = payer?.typedActor;
 	const purses = character?.supplyPurses?.(purpose);
 	if (!purses) return null;
-	const purse = slug ? purses.eligible.find(p => p.slug === slug) : defaultSupplyPurse(purses);
 	const uses = Math.max(1, Math.trunc(Number(n) || 1));
+	const purse = payerPurse(purses, slug, uses);
 	if (!purse || purse.remaining < uses) return null;
 	const { update } = purseSpendUpdate([{ slug: purse.slug, n: uses }], {
 		resources: character.spendablePurseResources?.({ carriedOnly: false }) ?? {},
@@ -133,10 +141,13 @@ export async function handleSupplyPayQuery(data, context = {}, { actors = global
 		question: (user, me) => {
 			if (!payer || !patient || payer.id === patient.id) return null;
 			if (!payer.isOwner || !patient.testUserPermission?.(user, "OWNER")) return null;
-			if (n < 1 || n > MAX_USES) return null;
-			purse = (payer.typedActor?.supplyPurses?.(purpose)?.eligible ?? []).find(p => !slug || p.slug === slug);
-			if (!purse) {
-				globalThis.ui?.notifications?.warn?.(`${payer.name} has no supplies left to spend.`);
+			// No cap beyond the purse itself: one that cannot hold `n` is said, never asked about.
+			if (n < 1) return null;
+			purse = payerPurse(payer.typedActor?.supplyPurses?.(purpose), slug, n);
+			if (!purse || purse.remaining < n) {
+				globalThis.ui?.notifications?.warn?.(purse
+					? `${payer.name}'s ${purse.label} holds ${purse.remaining}, not the ${usesText(n)} asked for.`
+					: `${payer.name} has no supplies left to spend.`);
 				return null;
 			}
 			const uses = usesText(n);

@@ -12719,8 +12719,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (selfBlocked && !picked.length) return void ui.notifications?.warn(game.i18n.localize(`stonetop.specialMoves.recover.${selfBlocked}`));
 				if (selfBlocked) self = false;
 			}
-			// The followers still below their max now; one healed meanwhile is not paid for. Handed on to
-			// restFollowers as read, rather than read a second time.
+			// The followers still below their max now; one healed meanwhile is not paid for. restFollowers
+			// reads them again at the heal, since a carer or payer may take minutes to answer in between.
 			const followerBodies = picked.length
 				? (await hurtFollowerBodies(this.actor)).filter(b => picked.includes(b.id))
 				: [];
@@ -12786,6 +12786,14 @@ export function createStonetopCharacterSheetClass(Base) {
 				? await this._payOnBehalf(payerActor, { slug: purse.slug, n: uses, kept: stockGone })
 				: own.row;
 			if (!spentRow) return;
+			// Asking the payer can take a while too, and a second window may have made this Recover meanwhile:
+			// checked again, so the lock is never bypassed. The uses are gone by then, so the warning says so,
+			// and any followers they paid for are still healed.
+			if (self && payerActor && this.actor.getFlag(STONETOP_SCOPE, "recover.spent")) {
+				ui.notifications?.warn(stockGone(`${game.i18n.localize("stonetop.specialMoves.recover.lockedHint")} ${payerActor.name}'s supplies were already spent.`));
+				if (!followerIds.length) return;
+				self = false;
+			}
 			// Read after any Stock was paid, for the reasons above.
 			const oldHp = this._stonetopCharacter.hp;
 			const newHp = self ? recoverHeal({
@@ -12805,7 +12813,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (Object.keys(update).length) await this.actor.update(update, { stonetopMove: "Recover" });
 			// The followers, by the same 4+Prosperity, as read above (follower-rest.js: their boxes in one write).
 			const healed = followerIds.length
-				? await restFollowers(this.actor, followerIds, { heal: base, moveName: "Recover", bodies: followerBodies })
+				? await restFollowers(this.actor, followerIds, { heal: base, moveName: "Recover" })
 				: [];
 
 			const rows = [spentRow];

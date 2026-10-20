@@ -108,9 +108,8 @@ describe("Recover with followers", () => {
 			"system.attributes.hp.value": 8,
 			"flags.stonetop-pwd.recover.spent": true,
 		}, { stonetopMove: "Recover" });
-		// The bodies just read, handed on rather than read a second time.
-		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1", "f2"], { heal: 4, moveName: "Recover", bodies: [{ id: "f1" }, { id: "f2" }] });
-		expect(followers.hurtFollowerBodies).toHaveBeenCalledTimes(1);
+		// Not handed the bodies read before any ask: restFollowers reads their HP again at the heal.
+		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1", "f2"], { heal: 4, moveName: "Recover" });
 		expect(global.ChatMessage.create.mock.calls[0][0].content).toContain("Hari 1 → 5; Glaw 2 → 6");
 	});
 
@@ -166,6 +165,33 @@ describe("someone else's supplies", () => {
 		expect(payers.payOthersSupplies).toHaveBeenCalledWith(expect.objectContaining({ payer: wren, patient, n: 1, purpose: SUPPLY_PURPOSE.RECOVER }));
 		expect(patient.update).toHaveBeenCalledWith({ "system.attributes.hp.value": 8, "flags.stonetop-pwd.recover.spent": true }, { stonetopMove: "Recover" });
 		expect(global.ChatMessage.create.mock.calls[0][0].content).toContain("Expended 1 use on Bram&#x27;s behalf (4 left)");
+	});
+
+	it("writes no second heal or lock when another window made the Recover while the payer was asked", async () => {
+		payer();
+		const { sheet, patient } = makeSheet({ supplies: 0 });
+		payers.payOthersSupplies.mockImplementation(async () => {
+			patient.getFlag = (_scope, key) => key === "recover.spent";
+			return { slug: "supplies", label: "Supplies", spent: 1, left: 4 };
+		});
+		await sheet._applyRecover({ purse: { slug: "supplies", label: "Supplies" }, payer: { id: "wren" }, base: 4 });
+		expect(patient.update).not.toHaveBeenCalled();
+		expect(global.ui.notifications.warn.mock.calls[0][0]).toContain("Wren's supplies were already spent");
+	});
+
+	it("still heals the followers the payer paid for when the character's own Recover was made meanwhile", async () => {
+		payer();
+		followers.hurtFollowerBodies.mockImplementation(async () => [{ id: "f1" }]);
+		followers.restFollowers.mockImplementation(async () => [{ name: "Hari", from: 1, to: 5 }]);
+		const { sheet, patient } = makeSheet({ supplies: 0 });
+		payers.payOthersSupplies.mockImplementation(async () => {
+			patient.getFlag = (_scope, key) => key === "recover.spent";
+			return { slug: "supplies", label: "Supplies", spent: 2, left: 3 };
+		});
+		await sheet._applyRecover({ purse: { slug: "supplies", label: "Supplies" }, payer: { id: "wren" }, base: 4, followers: ["f1"] });
+		expect(patient.update).not.toHaveBeenCalled();
+		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1"], { heal: 4, moveName: "Recover" });
+		expect(global.ChatMessage.create.mock.calls[0][0].content).toContain("Hari 1 → 5");
 	});
 
 	it("heals nothing when the payer keeps their supplies", async () => {
