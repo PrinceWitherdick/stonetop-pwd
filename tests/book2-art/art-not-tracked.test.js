@@ -125,8 +125,10 @@ describe("private art cannot reach this repository", () => {
 	it("tracks no raster image outside the directories that hold our own art", () => {
 		// Deliberately the exact set in use, not a roomier one that would be easier to keep
 		// green. Widening this list should be a decision someone makes on purpose, with the
-		// question "is this ours to publish?" in front of them.
-		const ALLOWED = ["assets/graphics/", "assets/icons/", ".github/screenshots/"];
+		// question "is this ours to publish?" in front of them. wiki/images/ was: the wiki's
+		// screenshots may show book art (the user's call, 2026-10-19), and release.yml zips a
+		// fixed list of directories that wiki/ is not in, so they never reach stonetop.zip.
+		const ALLOWED = ["assets/graphics/", "assets/icons/", ".github/screenshots/", "wiki/images/"];
 		const rasters = tracked(".").filter(f => /\.(webp|png|jpe?g|gif|avif|bmp|tiff?)$/i.test(f));
 
 		// A real floor, so the assertion cannot pass by matching nothing at all.
