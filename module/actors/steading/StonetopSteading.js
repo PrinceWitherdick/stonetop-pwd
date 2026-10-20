@@ -859,6 +859,11 @@ export class StonetopSteading {
 		this.type = "stonetop";
 	}
 
+	/** Whose plans these are, for the editor's window id (SteadingPlanDialog.js). */
+	get actorId() {
+		return this._actor?.id ?? "";
+	}
+
 	get _flags() {
 		return resolvedFlagProperty(this._actor, "steading") ?? {};
 	}

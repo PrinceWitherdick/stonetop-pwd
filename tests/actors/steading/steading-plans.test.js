@@ -213,6 +213,12 @@ describe("the Notes tab", () => {
 });
 
 describe("the plan editor", () => {
+	it("keys its window by whose plans they are, so two settlements' new plans open two windows", () => {
+		const ids = ["delve", "marsh"].map(ownerId => SteadingPlanDialog.windowId(null, ownerId));
+		expect(ids).toEqual(["stonetop-steading-plan-delve-new", "stonetop-steading-plan-marsh-new"]);
+		expect(SteadingPlanDialog.windowId({ id: "p1" })).toBe("stonetop-steading-plan-p1");
+	});
+
 	/** The real template, rendered and wired by the dialog's own listeners. */
 	function open(stored = null) {
 		const win = new Window();

@@ -12,6 +12,8 @@ import { editSettlementList } from "./settlement-residents.js";
  */
 export function settlementPlanStore(actor) {
 	return {
+		/** Whose plans these are, for the editor's window id (SteadingPlanDialog.js). */
+		actorId: actor.id,
 		get _flags() { return { plans: actor.system?.plans ?? [] }; },
 		editList: (list, edit) => editSettlementList(actor, list, edit),
 	};

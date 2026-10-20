@@ -9,7 +9,7 @@ import { removePlan, savePlan, setRequirementDone } from "../../../module/actors
 /** A settlement whose updates land in its system data, as the document's would. */
 function settlement(plans = []) {
 	const actor = {
-		uuid: "Actor.s1",
+		id: "s1", uuid: "Actor.s1",
 		system: { plans: structuredClone(plans) },
 		update: vi.fn(async changes => {
 			for (const [key, value] of Object.entries(changes)) actor.system[key.replace(/^system\./, "")] = value;
@@ -27,6 +27,8 @@ describe("a settlement's plans", () => {
 		await savePlan(store, { id: "p1", name: " A palisade ", requirements: [{ text: "Cut timber" }], undone: "" });
 		expect(actor.system.plans).toEqual([plan({ requirements: [{ text: "Cut timber", done: false }] })]);
 		expect(store._flags.plans).toBe(actor.system.plans);
+		// Whose plans they are, so the editor's window for a new one is this settlement's own.
+		expect(store.actorId).toBe(actor.id);
 
 		await setRequirementDone(store, "p1", 0, true);
 		expect(actor.system.plans[0].requirements).toEqual([{ text: "Cut timber", done: true }]);

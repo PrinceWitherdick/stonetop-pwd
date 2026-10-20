@@ -12,11 +12,18 @@ import { StonetopDialog } from "../../utils/stonetop-dialog.js";
 import { PLAN_REQUIREMENT_PROMPTS, PROMPT_BLANK, planView, savePlan, selectBlank } from "./steading-plans.js";
 
 export class SteadingPlanDialog extends StonetopDialog {
-	constructor({ plan = null } = {}, options = {}) {
-		// A per-plan window id, so editing two plans at once opens two windows rather than two apps
-		// fighting over one DOM id (AppV1 keys the element by `options.id`).
-		super({ id: `stonetop-steading-plan-${plan?.id || "new"}`, ...options });
+	constructor({ plan = null, ownerId = "" } = {}, options = {}) {
+		super({ id: SteadingPlanDialog.windowId(plan, ownerId), ...options });
 		this._plan = plan;
+	}
+
+	/**
+	 * A per-plan window id, so editing two plans at once opens two windows rather than two apps
+	 * fighting over one DOM id (AppV1 keys the element by `options.id`). Keyed by the steading or
+	 * settlement too: every settlement shares this editor, and each has its own "new" plan.
+	 */
+	static windowId(plan, ownerId = "") {
+		return `stonetop-steading-plan-${ownerId ? `${ownerId}-` : ""}${plan?.id || "new"}`;
 	}
 
 	static get defaultOptions() {
@@ -126,6 +133,6 @@ export async function editSteadingPlan(steading, planId = null) {
 	if (planId && !stored) return false;
 	// A copy of the plan as the editor opened on it, so a tick made on the sheet meanwhile is told apart.
 	const base = stored ? foundry.utils.deepClone(stored) : null;
-	const draft = await new SteadingPlanDialog({ plan: stored }).promise();
+	const draft = await new SteadingPlanDialog({ plan: stored, ownerId: steading.actorId ?? "" }).promise();
 	return draft ? savePlan(steading, draft, { base }) : false;
 }
