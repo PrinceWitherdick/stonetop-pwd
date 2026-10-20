@@ -135,4 +135,29 @@ describe("the balk card", () => {
 		expect(balkAnswerFor(message)).toBeTruthy();
 		expect(await answerFollowerBalk(message, "drop", cadi)).toBe(false);
 	});
+
+	it("takes its answer back and spends nothing when another answer reached the log first", async () => {
+		const message = { id: "m1", flags: { [SYSTEM_ID]: { [BALK_FLAG]: { characterUuid: "Actor.cadi", ftype: "crew", slug: "", loyaltySlug: "", name: "The Crew", reason: "scared" } } } };
+		const cadi = { name: "Cadi", isOwner: true, flags: { [SYSTEM_ID]: { crew: { loyalty: 2 } } }, update: vi.fn(async () => {}) };
+		const theirs = { id: "a1", flags: { [SYSTEM_ID]: { [BALK_ANSWER_FLAG]: { to: "m1", choice: "spend" } } } };
+		globalThis.game = { ...saved.game, messages: [] };
+		const mine = { id: "a2", delete: vi.fn(async () => {}) };
+		// Another owner's answer, posted a moment earlier, lands in the log ahead of this one's.
+		ChatMessage.create.mockImplementation(async data => {
+			globalThis.game.messages.push(theirs, { ...mine, flags: data.flags });
+			return mine;
+		});
+		expect(await answerFollowerBalk(message, "spend", cadi)).toBe(false);
+		expect(mine.delete).toHaveBeenCalledTimes(1);
+		expect(cadi.update).not.toHaveBeenCalled();
+	});
+
+	it("takes its answer back when the Loyalty could not be spent after all", async () => {
+		const message = { id: "m1", flags: { [SYSTEM_ID]: { [BALK_FLAG]: { characterUuid: "Actor.cadi", ftype: "crew", slug: "", loyaltySlug: "", name: "The Crew", reason: "scared" } } } };
+		const cadi = { name: "Cadi", isOwner: true, flags: { [SYSTEM_ID]: { crew: { loyalty: 0 } } }, update: vi.fn(async () => {}) };
+		globalThis.game = { ...saved.game, messages: [] };
+		expect(await answerFollowerBalk(message, "spend", cadi)).toBe(false);
+		expect(ChatMessage.create).not.toHaveBeenCalled();
+		expect(cadi.update).not.toHaveBeenCalled();
+	});
 });

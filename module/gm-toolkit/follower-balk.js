@@ -16,7 +16,12 @@
 // ANSWERED BY A NEW CARD, as Aid, Interfere and Persuade (vs. PCs) are (pc-asks/pc-ask-flow.js): a player
 // cannot update the GM's message, so the answer is a card of its own stamped `followerBalkAnswer.to`, and the
 // balk card reads whether it was answered off the log on every render. Deleting the answer reopens it.
-// Who may answer: the leader's owners, or the GM while none of them is logged in.
+// Who may answer: the leader's owners, or the GM while none of them is logged in. Two of them pressing at
+// once each post an answer, and the first in the log stands: the other takes theirs back before spending
+// anything, so one balk never costs two Loyalty.
+//
+// The Loyalty on the card is read LIVE on every draw, and again as the pointer reaches the buttons: it
+// can move after the card is posted (a rest, Strengthen Your Bond), and the card is never redrawn for it.
 
 import { SYSTEM_ID } from "../system-id.js";
 import { escHtml } from "../utils/strings.js";
@@ -113,6 +118,15 @@ export function mayAnswerBalk(character, user = globalThis.game?.user, users = g
 	return !playerHere;
 }
 
+/** The Spend button as the follower's Loyalty stands now: its count, and whether there is any to spend. */
+function refreshSpendButton(area, balk, character, may) {
+	const btn = area.querySelector('.stonetop-balk-answer[data-choice="spend"]');
+	if (!btn || !character || btn.dataset.busy === "1") return;
+	const loyalty = followerLoyalty(character, balk.ftype, balk.loyaltySlug ?? balk.slug ?? "");
+	btn.disabled = !may || loyalty <= 0;
+	btn.innerHTML = `<i class="fas fa-hand-holding-heart"></i> ${escHtml(format(`${KEY}.spend`, { loyalty }))}`;
+}
+
 /** Draw a balk card: answered, or its buttons live for whoever may answer. Called on every render. */
 export function wireFollowerBalkCard(message, html) {
 	const balk = readBalk(message);
@@ -133,45 +147,72 @@ export function wireFollowerBalkCard(message, html) {
 	let character = null;
 	try { character = resolveSync(balk.characterUuid); } catch { character = null; }
 	const may = mayAnswerBalk(character);
+	refreshSpendButton(area, balk, character, may);
+	if (may && area.dataset.wired !== "1") {
+		area.dataset.wired = "1";
+		area.addEventListener("pointerenter", () => refreshSpendButton(area, balk, character, mayAnswerBalk(character)));
+	}
 	for (const btn of area.querySelectorAll(".stonetop-balk-answer")) {
 		if (!may) { btn.disabled = true; continue; }
 		if (btn.dataset.wired === "1") continue;
 		btn.dataset.wired = "1";
 		btn.addEventListener("click", () => {
-			for (const b of area.querySelectorAll(".stonetop-balk-answer")) b.disabled = true;
+			for (const b of area.querySelectorAll(".stonetop-balk-answer")) { b.disabled = true; b.dataset.busy = "1"; }
 			answerFollowerBalk(message, btn.dataset.choice, character)
 				.catch(err => console.error("Stonetop | answering a follower's balk failed", err));
 		});
 	}
 }
 
+/** An answer card's markup, for one line. */
+const answerContent = line => stonetopChatCard(localize(`${KEY}.answerTitle`), `<div class="card-content"><p>${escHtml(line)}</p></div>`, "stonetop-balk-answer-card");
+
 /**
  * Answer a balk: spend 1 of the follower's Loyalty so they do it anyway, Persuade them (the leader's own
- * Persuade (vs. NPCs) roll, the move the book names), or let it drop. The answer is a card of its own.
- * Answers whether it was answered.
+ * Persuade (vs. NPCs) roll, the move the book names), or let it drop. The answer is a card of its own,
+ * posted FIRST as this user's claim on the balk: when another answer is already ahead of it in the log,
+ * it is taken back and nothing is spent or rolled. Answers whether it was answered.
  */
 export async function answerFollowerBalk(message, choice, character) {
 	const balk = readBalk(message);
 	if (!balk || !character || !BALK_CHOICES.includes(choice) || balkAnswerFor(message)) return false;
+	const ftype = balk.ftype;
+	const slug = balk.loyaltySlug ?? balk.slug ?? "";
+	const spendFailed = () => {
+		globalThis.ui?.notifications?.warn?.(format(`${KEY}.spendFailed`, { name: balk.name }));
+		redrawBalk(message);
+		return false;
+	};
 	let line;
 	if (choice === "spend") {
-		const step = await changeFollowerLoyalty(character, { ftype: balk.ftype, slug: balk.loyaltySlug ?? balk.slug, delta: -1, move: SPEND_LOYALTY });
-		if (!step) {
-			globalThis.ui?.notifications?.warn?.(format(`${KEY}.spendFailed`, { name: balk.name }));
-			redrawBalk(message);
-			return false;
-		}
-		line = format(`${KEY}.spent`, { leader: character.name, name: balk.name, loyalty: step.to });
+		const loyalty = followerLoyalty(character, ftype, slug);
+		if (loyalty <= 0) return spendFailed();
+		line = format(`${KEY}.spent`, { leader: character.name, name: balk.name, loyalty: loyalty - 1 });
 	} else if (choice === "persuade") {
 		line = format(`${KEY}.persuading`, { leader: character.name, name: balk.name });
 	} else {
 		line = format(`${KEY}.dropped`, { leader: character.name, name: balk.name });
 	}
-	await globalThis.ChatMessage?.create?.({
-		content: stonetopChatCard(localize(`${KEY}.answerTitle`), `<div class="card-content"><p>${escHtml(line)}</p></div>`, "stonetop-balk-answer-card"),
+	const mine = await globalThis.ChatMessage?.create?.({
+		content: answerContent(line),
 		speaker: globalThis.ChatMessage?.getSpeaker?.({ actor: character }),
 		flags: { [SYSTEM_ID]: { [BALK_ANSWER_FLAG]: { to: message.id, choice } } },
 	});
+	const first = balkAnswerFor(message);
+	if (mine?.id && first && first.id !== mine.id) {
+		await mine.delete?.();
+		return false;
+	}
+	if (choice === "spend") {
+		const step = await changeFollowerLoyalty(character, { ftype, slug, delta: -1, move: SPEND_LOYALTY });
+		if (!step) {
+			await mine?.delete?.();
+			return spendFailed();
+		}
+		// Moved again between the claim and the spend: the card says where it landed.
+		const landed = format(`${KEY}.spent`, { leader: character.name, name: balk.name, loyalty: step.to });
+		if (landed !== line) await mine?.update?.({ content: answerContent(landed) });
+	}
 	if (choice === "persuade") {
 		const item = character.items?.find?.(i => i.type === "move" && i.name === PERSUADE_MOVE);
 		const sheet = character.sheet;
