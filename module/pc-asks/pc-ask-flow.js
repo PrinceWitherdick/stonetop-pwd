@@ -237,11 +237,18 @@ function firstPrintedList(html) {
 /** Answers in flight on this client, by asking card, so a double click answers once. */
 const answering = new Set();
 
+/** The answers that give something (a held mode, XP), and so must be given once whoever presses. */
+const GIVING_CHOICES = new Set(["advantage", "anyway", "agree"]);
+
 /**
- * Answer an asking card: do what the answer does, then post the card that records it.
+ * Answer an asking card: post the card that records it, then do what the answer does.
  *
- * The effect is written FIRST. A held advantage or disadvantage, or the XP, is the thing the table
- * will act on; a card announcing a mode nobody holds would be worse than a mode held with no card.
+ * THE CARD IS THE CLAIM, posted FIRST (as follower-balk.js answers a balk). Two clients can answer at
+ * once (two owners of the target, or the GM and a player who just logged in), and neither can see the
+ * other's press. Whoever's card is first in the log stands; the other takes theirs back before giving
+ * anything, so one question never lays two advantages or marks XP twice. An answer that gives something
+ * is posted marked `claim` until it is given, so deleting a claim that lost (or one whose giving failed)
+ * takes nothing back (withdrawDeletedAnswer).
  */
 export async function answerPcAsk(message, choice, tier = null) {
 	const ask = readAsk(message);
@@ -249,6 +256,8 @@ export async function answerPcAsk(message, choice, tier = null) {
 	if (!offersChoice(ask.move, choice, tier)) return;
 	if (!userMayAnswer(ask, message)) return;
 	answering.add(message.id);
+	let mine = null;
+	let given = false;
 	try {
 		// Another client may have answered while this card sat on screen.
 		if (answerTo(message)) { redraw(message); return; }
@@ -257,9 +266,26 @@ export async function answerPcAsk(message, choice, tier = null) {
 			ui.notifications?.warn?.(`${ask.targetName || "That character"} is no longer in this world.`);
 			return;
 		}
-		const flags = { [PC_ANSWER_FLAG]: { to: message.id, choice } };
-		let content = moveChatCard(ask.move, answerCardBody(ask, choice));
+		const gives = GIVING_CHOICES.has(choice);
+		// No redraw here: `createChatMessage` fires on this client too, and registerPcAskHooks redraws.
+		mine = await ChatMessage.create({
+			content: moveChatCard(ask.move, answerCardBody(ask, choice)),
+			speaker: ChatMessage.getSpeaker({ actor: target }),
+			flags: { [SYSTEM_ID]: { [PC_ANSWER_FLAG]: { to: message.id, choice, ...(gives ? { claim: true } : {}) } } },
+		});
+		if (!mine?.id) {
+			ui.notifications?.warn?.("That answer could not be posted, so nothing was given.");
+			return;
+		}
+		const first = answerTo(message)?.message;
+		if (first && first.id !== mine.id) {
+			given = true; // the other answer stands: this one is deleted here, not again by the catch
+			await mine.delete?.();
+			return;
+		}
+		if (!gives) return;
 
+		const confirmed = { [`flags.${SYSTEM_ID}.${PC_ANSWER_FLAG}.claim`]: false };
 		if (choice === "advantage") {
 			await target.typedActor?.holdAdvantage?.(heldSource(ask));
 		} else if (choice === "anyway") {
@@ -268,19 +294,28 @@ export async function answerPcAsk(message, choice, tier = null) {
 			const receipt = await markXpReceipt(target, {
 				header: "Persuaded", move: PERSUADE_PC_MOVE, description: answerCardBody(ask, choice), amount: 1,
 			});
-			content = receipt.content;
-			Object.assign(flags, receipt.flags);
+			confirmed.content = receipt.content;
+			for (const [key, value] of Object.entries(receipt.flags ?? {})) confirmed[`flags.${SYSTEM_ID}.${key}`] = value;
 		}
-
-		// No redraw here: `createChatMessage` fires on this client too, and registerPcAskHooks redraws.
-		await ChatMessage.create({
-			content,
-			speaker: ChatMessage.getSpeaker({ actor: target }),
-			flags: { [SYSTEM_ID]: flags },
-		});
+		given = true;
+		try {
+			await mine.update?.(confirmed);
+		} catch (err) {
+			// Given, but the card still says `claim`, and deleting a claim takes nothing back
+			// (withdrawDeletedAnswer). So it is taken back now, and the card with it below, reopening the question.
+			try {
+				await takeBackGift(target, ask, choice, 1);
+				given = false;
+			} catch (undoErr) {
+				console.error("Stonetop | could not take back an unrecorded answer:", undoErr);
+			}
+			throw err;
+		}
 	} catch (err) {
 		console.error("Stonetop | could not answer that card:", err);
 		ui.notifications?.error?.("That answer could not be recorded. See the console for details.");
+		// A claim whose giving failed is taken back, reopening the question; it gave nothing to withdraw.
+		if (mine?.id && !given) await mine.delete?.().catch(e => console.error("Stonetop | could not take back a failed answer:", e));
 	} finally {
 		answering.delete(message.id);
 	}
@@ -314,6 +349,8 @@ function askedBy(answerMessage) {
 export async function withdrawDeletedAnswer(message, userId) {
 	const answer = readAnswer(message);
 	if (!answer || userId !== game.user?.id) return null;
+	// A claim never confirmed (one that lost to another answer, or whose giving failed) gave nothing.
+	if (answer.claim) return null;
 	const asked = answer.to ? game.messages?.get?.(answer.to) ?? null : null;
 	if (!asked) return null;
 	const target = speakerActor(message);
@@ -321,12 +358,24 @@ export async function withdrawDeletedAnswer(message, userId) {
 	if (answer.choice === "advantage" || answer.choice === "anyway") {
 		const ask = readAsk(asked);
 		if (!ask) return null;
-		const release = answer.choice === "advantage" ? "releaseHeldAdvantage" : "releaseHeldDisadvantage";
-		return { released: !!(await target.typedActor?.[release]?.(heldSource(ask))) };
+		return takeBackGift(target, ask, answer.choice);
 	}
 	const marked = Number(message.getFlag?.(SYSTEM_ID, XP_MARK_FLAG) ?? 0);
 	if (!marked || message.getFlag(SYSTEM_ID, XP_UNDONE_FLAG)) return null;
-	return adjustXp(target, -marked, { move: `${PERSUADE_PC_MOVE} (answer withdrawn)` });
+	return takeBackGift(target, null, answer.choice, marked);
+}
+
+/**
+ * Take back what an answer gave: the advantage or disadvantage, by the name it was held under (so a roll that
+ * spent it, or another promise held beside it, is left alone), or `xp` XP for an agreed Persuade.
+ */
+async function takeBackGift(target, ask, choice, xp = 0) {
+	if (choice === "advantage" || choice === "anyway") {
+		const release = choice === "advantage" ? "releaseHeldAdvantage" : "releaseHeldDisadvantage";
+		return { released: !!(await target.typedActor?.[release]?.(heldSource(ask))) };
+	}
+	if (choice === "agree" && xp) return adjustXp(target, -xp, { move: `${PERSUADE_PC_MOVE} (answer withdrawn)` });
+	return null;
 }
 
 /**
