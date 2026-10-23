@@ -5,6 +5,7 @@ const {
 	editSettlementList, onCreateActorForResidents, onUpdateActorForResidents, onPreUpdateActorForResidents,
 	settleRenames, settlementResolver, ownsItsName,
 } = await import("../../../module/actors/settlement/settlement-residents.js");
+const { settlementActors } = await import("../../../module/actors/settlement/settlement-type.js");
 
 const hasProperty = (o, k) => k.split(".").reduce((v, p) => (v && typeof v === "object" && p in v ? v[p] : undefined), o) !== undefined;
 const setProperty = (o, k, v) => {
@@ -68,6 +69,25 @@ describe("matching a Home to a settlement", () => {
 		expect(settlementForHome("Gordin's Delve", [deep])).toBe(deep);
 		const twin = settlement("d2", "Gordin's Delve");
 		expect(settlementForHome("Gordin's Delve", [deep, twin])).toBe(twin);
+	});
+
+	// ST-1: the world's actor list comes back in storage order (by id) after a reload, so "first" is
+	// the OLDEST sheet, by when it was made, then by id, whatever order the list hands them over in.
+	// settlementActors() puts them in that order for every lookup.
+	it("names the oldest of two same-named settlements, whatever order the world lists them in", () => {
+		const world = list => settlementActors(list);
+		const older = { ...settlement("zz", "Hillfolk band"), _stats: { createdTime: 1000 } };
+		const newer = { ...settlement("aa", "Hillfolk band"), _stats: { createdTime: 2000 } };
+		expect(settlementForHome("Hillfolk band", world([newer, older]))).toBe(older);
+		expect(settlementForHome("Hillfolk band", world([older, newer]))).toBe(older);
+		expect(ownsItsName(newer, world([newer, older]))).toBe(false);
+		expect(ownsItsName(older, world([newer, older]))).toBe(true);
+		// Made in the same instant, or before Foundry stamped creation times: by id.
+		const same = { ...settlement("b", "Marshedge"), _stats: { createdTime: 5 } };
+		const twin = { ...settlement("a", "Marshedge"), _stats: { createdTime: 5 } };
+		expect(settlementForHome("Marshedge", world([same, twin]))).toBe(twin);
+		const unstamped = settlement("0", "Marshedge");
+		expect(settlementForHome("Marshedge", world([unstamped, same]))).toBe(same);
 	});
 
 	it("answers the same through a resolver built once for many Homes", () => {
@@ -202,13 +222,25 @@ describe("sweepSettlementResidents (old worlds, and a settlement made after its 
 		expect(delve.update).toHaveBeenCalledTimes(1);
 	});
 
-	it("gives a listed resident with a blank Home this place's name rather than dropping them", async () => {
+	it("once per world, gives a listed resident with a blank Home this place's name rather than dropping them", async () => {
+		const blank = npc("blank", "");
+		const delve = settlement("d", "Gordin's Delve", [row(blank.uuid)]);
+		world([blank, delve]);
+		await sweepSettlementResidents({ adoptHomes: true });
+		expect(blank.system.home).toBe("Gordin's Delve");
+		expect(uuids(delve)).toEqual([blank.uuid]);
+	});
+
+	// ST-2: after the first pass a blank Home means Stonetop. A Home cleared while no GM was there to
+	// file it takes them off the table at the next sweep; it is never written back.
+	it("without adoptHomes, takes off a listed resident whose Home is blank and leaves the Home blank", async () => {
 		const blank = npc("blank", "");
 		const delve = settlement("d", "Gordin's Delve", [row(blank.uuid)]);
 		world([blank, delve]);
 		await sweepSettlementResidents();
-		expect(blank.system.home).toBe("Gordin's Delve");
-		expect(uuids(delve)).toEqual([blank.uuid]);
+		expect(blank.update).not.toHaveBeenCalled();
+		expect(blank.system.home).toBe("");
+		expect(uuids(delve)).toEqual([]);
 	});
 
 	it("fills a blank Home only from the settlement it was asked about", async () => {
@@ -216,7 +248,7 @@ describe("sweepSettlementResidents (old worlds, and a settlement made after its 
 		const delve = settlement("d", "Gordin's Delve", [row(blank.uuid)]);
 		const marsh = settlement("m", "Marshedge");
 		world([blank, delve, marsh]);
-		await sweepSettlementResidents({ only: marsh });
+		await sweepSettlementResidents({ only: marsh, adoptHomes: true });
 		expect(blank.update).not.toHaveBeenCalled();
 	});
 
@@ -249,7 +281,7 @@ describe("sweepSettlementResidents (old worlds, and a settlement made after its 
 		const delve = settlement("d", "Gordin's Delve", [row(blank.uuid)]);
 		world([blank, delve]);
 		vi.spyOn(console, "warn").mockImplementation(() => {});
-		await sweepSettlementResidents();
+		await sweepSettlementResidents({ adoptHomes: true });
 		expect(blank.system.home).toBe("");
 		expect(uuids(delve)).toEqual([blank.uuid]);
 	});
@@ -259,7 +291,7 @@ describe("sweepSettlementResidents (old worlds, and a settlement made after its 
 		const first = settlement("d1", "Gordin's Delve");
 		const second = settlement("d2", "Gordin's Delve", [row(blank.uuid)]);
 		world([blank, first, second]);
-		await sweepSettlementResidents();
+		await sweepSettlementResidents({ adoptHomes: true });
 		expect(blank.update).not.toHaveBeenCalled();
 		expect(uuids(second)).toEqual([blank.uuid]);
 		expect(uuids(first)).toEqual([]);
@@ -347,11 +379,11 @@ describe("the hooks", () => {
 		expect(rename(delve, "gordin’s delve").system).toBeUndefined();
 	});
 
-	it("re-home a renamed settlement's residents on the renaming client, then gather the new name's", async () => {
+	it("with no GM connected, re-home a renamed settlement's residents on the renaming client, then gather the new name's", async () => {
 		const a = npc("a", "Gordin's Delve");
 		const already = npc("already", "Deepdelve");
 		const delve = settlement("d", "Gordin's Delve", [row(a.uuid)]);
-		world([a, already, delve], { gm: false });
+		world([a, already, delve], { noGm: true });
 		const changed = rename(delve, "Deepdelve");
 		onUpdateActorForResidents(delve, changed, {}, "someone-else");
 		await flush();
@@ -366,7 +398,7 @@ describe("the hooks", () => {
 	it("keep the residents a renaming player can't write, until the primary GM re-homes them", async () => {
 		const theirs = npc("theirs", "Gordin's Delve", { isOwner: false });
 		const delve = settlement("d", "Gordin's Delve", [row(theirs.uuid)]);
-		world([theirs, delve], { gm: false });
+		world([theirs, delve], { noGm: true });
 		const changed = rename(delve, "Deepdelve");
 		onUpdateActorForResidents(delve, changed, {}, "me");
 		for (let i = 0; i < 5; i++) await flush();
@@ -381,6 +413,40 @@ describe("the hooks", () => {
 		expect(theirs.system.home).toBe("Deepdelve");
 		expect(uuids(delve)).toEqual([theirs.uuid]);
 		expect(delve.system.formerNames).toEqual([]);
+	});
+
+	// ST-7: with a GM connected the renamer's client leaves it to the primary GM, so every Home is
+	// written once and nobody's `formerNames` lands on top of the GM's.
+	it("leave a rename to the primary GM when one is connected, on the renaming player's client", async () => {
+		const mine = npc("mine", "Gordin's Delve");
+		const delve = settlement("d", "Gordin's Delve", [row(mine.uuid)]);
+		world([mine, delve], { gm: false });
+		const changed = rename(delve, "Deepdelve");
+		onUpdateActorForResidents(delve, changed, {}, "me");
+		for (let i = 0; i < 5; i++) await flush();
+		expect(mine.update).not.toHaveBeenCalled();
+		expect(delve.update).not.toHaveBeenCalled();
+		expect(delve.system.formerNames).toEqual(["Gordin's Delve"]);
+	});
+
+	// ST-3: a compendium's (or a token's) settlement answers to no Home, so nothing files it.
+	it("leave a compendium's or a token's settlement alone", async () => {
+		const a = npc("a", "Marshedge");
+		const packed = { ...settlement("p", "Marshedge", [row(a.uuid)]), pack: "world.places" };
+		const token = { ...settlement("t", "Marshedge", [row(a.uuid)]), isToken: true };
+		const real = settlement("m", "Marshedge", [row(a.uuid)]);
+		world([a, real]);
+		for (const copy of [packed, token]) {
+			onCreateActorForResidents(copy);
+			const changed = { name: "Marsh" };
+			onPreUpdateActorForResidents(copy, changed);
+			expect(changed.system).toBeUndefined();
+			onUpdateActorForResidents(copy, changed, {}, "me");
+		}
+		for (let i = 0; i < 5; i++) await flush();
+		expect(packed.update).not.toHaveBeenCalled();
+		expect(token.update).not.toHaveBeenCalled();
+		expect(a.update).not.toHaveBeenCalled();
 	});
 
 	it("re-home a player's rename on the primary GM as well", async () => {

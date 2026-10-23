@@ -7,8 +7,10 @@
       StonetopSettlementSheet#getData), and its cells read and write that NPC live. Who runs the
       place, its notable people and its groups are on the Overview.
 
-      The cells open with the window header's wrench (`editable`); without it the section wears
-      `stonetop-readonly` and the row draws its fields as plain text, leaving out an empty one. Adding a resident and
+      The cells open with the window header's wrench (`editable`), and only on a row whose NPC this
+      user may write (`cellsEditable`, StonetopSettlementSheet#getData; a deleted NPC's row never);
+      otherwise the row draws its fields as plain text, leaving out an empty one, and without the
+      wrench the section wears `stonetop-readonly`. Adding a resident and
       dropping an NPC onto the tab stay open to anyone who may write the sheet, as Stonetop's do.
       Row inputs carry `data-resident-field` and NO name, so core's form submit never sees them. --}}
 <div class="tab people stonetop-settlement-tab" data-group="primary" data-tab="people">
@@ -34,7 +36,7 @@
 							     {{#if uuid}}draggable="true" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"{{/if}}><img class="steading-member-avatar-img" src="{{profileImg}}" alt="" draggable="false" data-name="{{name}}"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}></span>
 						</div>
 						<div class="steading-residents-col-name steading-person-who{{#if unresolved}} steading-member-unresolved{{/if}}">
-							{{#if @root.editable}}
+							{{#if cellsEditable}}
 							<input type="text" class="steading-resident-input steading-person-name-input" data-resident-field="name"
 							       value="{{name}}" placeholder="{{localize "stonetop.settlement.col.name"}}" aria-label="{{localize "stonetop.settlement.col.name"}}">
 							<input type="text" class="steading-resident-input" data-resident-field="occupation" list="settlement-occupation-suggestions"
@@ -58,7 +60,7 @@
 							{{/if}}
 						</div>
 						<div class="steading-person-details">
-							{{#if @root.editable}}
+							{{#if cellsEditable}}
 							<label class="steading-person-field"><span class="steading-person-label">{{localize "stonetop.settlement.col.relations"}}</span>
 								<input type="text" class="steading-resident-input" data-resident-field="relations"
 								       value="{{relations}}" placeholder="{{localize "stonetop.settlement.col.relations"}}"></label>
@@ -67,9 +69,9 @@
 							{{/if}}
 							{{!-- The rich notes live on the NPC: a rendered preview here, clamped, and with
 							      the wrench on, a pencil that opens the shared pop-up editor. --}}
-							{{#if (or @root.editable notes)}}
-							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">{{localize "stonetop.settlement.col.notes"}}</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{notesHtml}}}</div>{{#if @root.editable}}{{#unless unresolved}}<button type="button" class="steading-member-notes-edit" data-action="editResidentNotes" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
-							        data-tooltip="{{localize "stonetop.settlement.editNotes"}}" aria-label="{{localize "stonetop.settlement.editNotes"}}" tabindex="-1"><i class="fas fa-pen" inert></i></button>{{/unless}}{{/if}}</div>
+							{{#if (or cellsEditable notes)}}
+							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">{{localize "stonetop.settlement.col.notes"}}</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{notesHtml}}}</div>{{#if cellsEditable}}<button type="button" class="steading-member-notes-edit" data-action="editResidentNotes" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
+							        data-tooltip="{{localize "stonetop.settlement.editNotes"}}" aria-label="{{localize "stonetop.settlement.editNotes"}}" tabindex="-1"><i class="fas fa-pen" inert></i></button>{{/if}}</div>
 							{{/if}}
 						</div>
 						<div class="steading-residents-col-actions">

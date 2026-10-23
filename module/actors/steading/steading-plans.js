@@ -142,11 +142,14 @@ export function ticksSince(rows, base, current) {
 /**
  * Write a plan from the editor: over the stored one with its id, or at the end when it is new. A new plan
  * with nothing written in it writes nothing. `base` is the plan as the editor opened on it (ticksSince).
+ * A plan removed while its editor was open stays removed: its save writes nothing, and says so.
  */
-export function savePlan(steading, draft, { base = null } = {}) {
+export async function savePlan(steading, draft, { base = null } = {}) {
 	const id = text(draft?.id) || newPlan().id;
-	return steading.editList("plans", plans => {
+	let removed = false;
+	const wrote = await steading.editList("plans", plans => {
 		const at = plans.findIndex(p => p?.id === id);
+		if (at < 0 && base) { removed = true; return false; }
 		const plan = tidyPlan({ ...draft, id, requirements: ticksSince(draft?.requirements, base, plans[at]) });
 		if (at >= 0) {
 			if (JSON.stringify(plans[at]) === JSON.stringify(plan)) return false;
@@ -154,6 +157,11 @@ export function savePlan(steading, draft, { base = null } = {}) {
 		} else if (plan.name || plan.requirements.length || plan.undone) plans.push(plan);
 		else return false;
 	});
+	if (removed) {
+		const name = text(draft?.name).trim();
+		globalThis.ui?.notifications?.warn?.(`${name ? `"${name}"` : "That plan"} was removed while you were editing it, so your changes were not saved.`);
+	}
+	return wrote;
 }
 
 /** Remove a plan. */

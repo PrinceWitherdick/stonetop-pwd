@@ -128,6 +128,8 @@
       "residentSharedName": "Another settlement is also called {place}, and its Residents take everyone whose Home says {place}. Rename one of them first.",
       "renameSharedName": "Another settlement is already called {place}. This sheet's residents keep their old Home, so they stay on its table, until it has a name of its own.",
       "rehomeFailed": "Couldn't change {name}'s Home.",
+      "cannotEditResident": "{name}'s sheet isn't yours to change, so their row can't be edited here.",
+      "residentNeedsName": "A resident needs a name. {name} keeps theirs.",
       "col": {
         "name": "Name",
         "occupation": "Occupation",
