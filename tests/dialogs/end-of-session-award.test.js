@@ -34,7 +34,7 @@ vi.mock("../../module/actors/character/deaths-door-actor.js", async importOrigin
 }));
 const asked = { answer: true, calls: 0 };
 vi.mock("../../module/utils/ask-with-buttons.js", () => ({
-	askWithButtons: async () => { asked.calls += 1; return asked.answer; },
+	askWithButtons: async spec => { asked.calls += 1; asked.spec = spec; return asked.answer; },
 }));
 // The AppV1 chrome the dialog inherits is not what is under test; this is the shell it needs.
 vi.mock("../../module/utils/stonetop-dialog.js", () => ({
@@ -482,6 +482,50 @@ describe("each character's own XP, and their praise and wish", () => {
 		await confirm({ currentTarget: { disabled: false } });
 
 		expect(torwyn.update).not.toHaveBeenCalled();
+	});
+
+	// Code review 10-22 (HC-9): told not to award again, the window still keeps what the GM noted, once.
+	it("keeps the notes when told not to award again, and keeps them once on a second press", async () => {
+		const torwyn = Object.assign(pc("Torwyn", 3), { flags: { "stonetop-pwd": {} } });
+		roster.chars = [torwyn];
+		stored.lastEndOfSession = { at: Date.now() - 5 * 60000, xp: 2, ids: ["Torwyn"] };
+		asked.answer = false;
+		const { dialog, confirm } = opened(1);
+		dialog._notes.Torwyn = "More dragons";
+		await confirm({ currentTarget: { disabled: false } });
+		expect(torwyn.update).toHaveBeenCalledTimes(1);
+		expect(torwyn.update.mock.calls[0][0]["flags.stonetop-pwd.sessionWishes"]).toEqual([{ at: expect.any(Number), text: "More dragons" }]);
+		await confirm({ currentTarget: { disabled: false } });
+		expect(torwyn.update).toHaveBeenCalledTimes(1);
+	});
+
+	it("asks about an earlier award of a character's own XP in words that fit it", async () => {
+		roster.chars = [pc("Torwyn", 3)];
+		stored.lastEndOfSession = { at: Date.now() - 5 * 60000, xp: 0, personal: true, ids: ["Torwyn"] };
+		asked.answer = false;
+		const { confirm } = opened(1);
+		await confirm({ currentTarget: { disabled: false } });
+		expect(asked.spec.content).toContain("some of it their own instinct or relationship XP");
+		expect(asked.spec.content).not.toContain("+0 XP");
+	});
+
+	// Two GMs: the second is asked as soon as the first starts paying, not only once the first is done.
+	it("stamps the award once, before paying, when everyone is paid, saying when it held their own XP", async () => {
+		const { setSetting } = await import("../../module/settings.js");
+		setSetting.mockClear();
+		const torwyn = pc("Torwyn", 3);
+		roster.chars = [torwyn];
+		let stampedBeforePaying = null;
+		torwyn.update.mockImplementationOnce(async data => {
+			stampedBeforePaying = { ...stored.lastEndOfSession };
+			torwyn.system.attributes.xp.value = data["system.attributes.xp.value"];
+		});
+		const { dialog, confirm } = opened(0);
+		dialog._personal.Torwyn = { instinct: true };
+		await confirm({ currentTarget: { disabled: false } });
+		expect(stampedBeforePaying).toMatchObject({ xp: 0, personal: true, ids: ["Torwyn"] });
+		expect(setSetting).toHaveBeenCalledTimes(1);
+		expect(stored.lastEndOfSession).toMatchObject({ xp: 0, personal: true, ids: ["Torwyn"] });
 	});
 
 	it("keeps each praise and wish on its character, and shows the last one next time", async () => {

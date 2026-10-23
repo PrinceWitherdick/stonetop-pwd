@@ -186,6 +186,7 @@
       "playerAsk": "No GM has End of Session open yet. Your copy opens as soon as they do.",
       "againTitle": "Award the session's XP again?",
       "againPrompt": "<p>End of Session XP was already awarded {minutes} minutes ago: +{xp} XP to {count} characters. Award it again?</p>",
+      "againPromptEach": "<p>End of Session XP was already awarded {minutes} minutes ago to {count} characters, some of it their own instinct or relationship XP. Award it again?</p>",
       "againYes": "Award it again",
       "againNo": "Don't award it",
       "cardTitle": "End of Session: Group XP (+{xp})",

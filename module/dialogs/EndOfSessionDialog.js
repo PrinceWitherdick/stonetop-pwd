@@ -103,6 +103,8 @@ export class EndOfSessionDialog extends StonetopDialog {
 		// and the praise and wish the GM notes down for them.
 		this._personal = {};
 		this._notes = {};
+		// What each note was when it was last kept, so a second press of the button keeps it once.
+		this._keptNotes = {};
 	}
 
 	/**
@@ -269,10 +271,14 @@ export class EndOfSessionDialog extends StonetopDialog {
 	 */
 	async _saveNotes(now = Date.now()) {
 		await Promise.all(this._roster.map(async ({ actor }) => {
-			const update = wishesUpdate(actor, this._notes[actor.id], now);
+			const text = String(this._notes[actor.id] ?? "").trim();
+			// Kept already by an earlier press of this window (one told not to award again, then pressed again).
+			if (text && this._keptNotes[actor.id] === text) return;
+			const update = wishesUpdate(actor, text, now);
 			if (!Object.keys(update).length) return;
 			try {
 				await actor.update(update);
+				this._keptNotes[actor.id] = text;
 			} catch (err) {
 				console.error(`Stonetop | End of Session could not keep ${actor.name}'s notes:`, err);
 			}
@@ -287,9 +293,11 @@ export class EndOfSessionDialog extends StonetopDialog {
 		const last = getObjectSetting(LAST_AWARD_SETTING);
 		const minutes = recentAwardMinutes(last, now);
 		if (minutes == null) return true;
+		// An award that held anyone's own instinct or relationship XP (or only that) is not one figure for everyone.
+		const each = !!last.personal || !(Number(last.xp) > 0);
 		return !!(await ask({
 			title:   localize(`${KEY}.againTitle`),
-			content: format(`${KEY}.againPrompt`, {
+			content: format(`${KEY}.${each ? "againPromptEach" : "againPrompt"}`, {
 				minutes, xp: Number(last.xp) || 0, count: Array.isArray(last.ids) ? last.ids.length : 0,
 			}),
 			buttons: [
@@ -316,7 +324,16 @@ export class EndOfSessionDialog extends StonetopDialog {
 		}).filter(row => row.xp > 0);
 
 		if (owed.length > 0) {
-			if (!(await this._confirmAgain())) return this._redrawButton();
+			if (!(await this._confirmAgain())) {
+				// Not paid again, but what the GM noted this session is still each player's say.
+				await this._saveNotes();
+				return this._redrawButton();
+			}
+			const personal = owed.some(row => row.personal.length > 0);
+			const stampAward = rows => setSetting(LAST_AWARD_SETTING, { at: Date.now(), xp: xpToAward, personal, ids: rows.map(r => r.actor.id) });
+			// Stamped BEFORE paying, so a second GM pressing their own window meanwhile is asked rather than
+			// paying the table a second time; written again below if anyone could not be paid.
+			await stampAward(owed);
 
 			// Through adjustXp (utils/xp.js) so the award queues behind anything else changing
 			// that character's XP and reads their total at the moment it writes. The end of a
@@ -334,7 +351,7 @@ export class EndOfSessionDialog extends StonetopDialog {
 				}
 			}
 
-			await setSetting(LAST_AWARD_SETTING, { at: Date.now(), xp: xpToAward, ids: paid.map(r => r.actor.id) });
+			if (failed.length) await stampAward(paid);
 
 			const names = list => list.map(a => `<strong>${escHtml(a.name)}</strong>`).join(", ");
 			const leftOut = this._roster.filter(row => !this._pcChecks[row.actor.id]).map(row => row.actor);
