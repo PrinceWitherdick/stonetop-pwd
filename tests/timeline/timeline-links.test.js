@@ -22,7 +22,8 @@ vi.mock("../../module/timeline/timeline-places.js", () => ({
 // belongs to the shared drop zone (utils/card-drop-zone.js), which every zone in the system goes
 // through, so what is left to test here is only what a uuid RESOLVES to.
 const dragged = { value: null };
-vi.mock("../../module/utils/foundry-compat.js", () => ({
+vi.mock("../../module/utils/foundry-compat.js", async importOriginal => ({
+	...(await importOriginal()),
 	getDragEventData: () => dragged.value,
 }));
 

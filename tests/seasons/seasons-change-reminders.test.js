@@ -7,6 +7,7 @@ import {
 	laboratoryNewlySelected,
 	naphthaSpentAfter,
 	offeringsRestoreUpdate,
+	postSeasonsChangeReminder,
 	rollForBezoar,
 	rollNaphthaYield,
 	BENDIS_ROOT_SLUG,
@@ -111,6 +112,30 @@ describe("collectSeasonalReminders", () => {
 			fakeCharacter({ name: "Eaglewise", moves: ["Consecrated Ground"], possessions: ["apiary"] }),
 		]);
 		expect(reminders).toEqual([]);
+	});
+});
+
+// Code review 10-22 (HC-9): the table's card is for the characters still in play, not the dead or retired.
+describe("postSeasonsChangeReminder", () => {
+	it("posts upkeep only for the characters still in play", () => {
+		const pc = (id, flags = {}) => ({
+			id, name: id, type: "character", items: [], system: { playbook: { slug: "the-blessed" } },
+			flags: { "stonetop-pwd": { "possessions": { selected: ["collected-offerings"] }, ...flags } },
+			getFlag: (scope, key) => (scope === "stonetop-pwd" && key === "possessions.selected" ? ["collected-offerings"] : undefined),
+		});
+		const saved = { actors: globalThis.game.actors, ChatMessage: globalThis.ChatMessage };
+		globalThis.game.actors = { contents: [pc("Hale"), pc("Gone", { deathsDoor: "dead" }), pc("Away", { leftPlay: { how: "retired" } })] };
+		globalThis.ChatMessage = { create: vi.fn() };
+		try {
+			postSeasonsChangeReminder("spring");
+			const content = globalThis.ChatMessage.create.mock.calls[0][0].content;
+			expect(content).toContain("Hale");
+			expect(content).not.toContain("Gone");
+			expect(content).not.toContain("Away");
+		} finally {
+			globalThis.game.actors = saved.actors;
+			globalThis.ChatMessage = saved.ChatMessage;
+		}
 	});
 });
 
@@ -343,6 +368,20 @@ describe("the Blessed's season possession buttons", () => {
 	it("Collected offerings: a full track stays full (never below 0 spent)", () => {
 		expect(offeringsRestoreUpdate({ getFlag: () => undefined })).toEqual({ "flags.stonetop-pwd.possessions.uses.collected-offerings": 0 });
 		expect(offeringsRestoreUpdate({ getFlag: () => ({ "collected-offerings": 0 }) })).toEqual({ "flags.stonetop-pwd.possessions.uses.collected-offerings": 0 });
+	});
+
+	// Code review 10-22 (HC-5): the GM and the player both get this button, and one's press does not redraw the
+	// other's card. Restoring counts down, so a second press from the same card must restore nothing.
+	it("Collected offerings: a press after another client restored the use from this card restores nothing", async () => {
+		const flags = { "possessions.uses": { "collected-offerings": 2 } };
+		const { html, actors, update, click, btn } = rig("offerings", { flags });
+		wireSeasonsReminderResets({ id: "m1" }, html, { actors });
+		flags.offeringsRestoreCard = "m1";
+		await click();
+		expect(update).not.toHaveBeenCalled();
+		expect(btn.disabled).toBe(true);
+		expect(btn.innerHTML).toContain("Use restored");
+		delete globalThis.Roll;
 	});
 
 	it("Collected offerings: renders done once this card restored the use", () => {
