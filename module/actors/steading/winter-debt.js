@@ -5,8 +5,11 @@ import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { pickPersonOnMap } from "../../dialogs/RelationshipLinkDialog.js";
 import { npcStatusMeta } from "../../data-models/npc-status.js";
 import { charactersInPlay } from "../../utils/characters-in-play.js";
-import { openRetireDialog } from "../../campaign/retire-pc.js";
+import { canRetire, openRetireDialog } from "../../campaign/retire-pc.js";
 import { stonetopChatCard } from "../../utils/chat.js";
+import { askGMClient, queryAsker } from "../../utils/foundry-compat.js";
+import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { getStonetopSteadingActor } from "../../utils/world.js";
 
 // ── Winter's second bite (Book I, "Seasons Change": winter) ──────────────────────
 // "7-9: the steading must consume 1d4+Population more Surplus before winter ends, or suffer
@@ -98,17 +101,34 @@ export async function offerLackingForLostResource(steading, { confirm = confirmO
 	return true;
 }
 
-/** The NPCs a winter can take: every NPC actor in the world not already gone (dead or retired). PURE. */
-export function livingNpcs(actors = []) {
-	return [...actors].filter(a => a?.type === "npc" && !npcStatusMeta(a.system?.status).inactive);
+/** Whether `user` may see this actor at all (Observer or better; a GM sees everyone). A fake with no permission test sees all. */
+const canSeeActor = (actor, user) => (typeof actor?.testUserPermission === "function" && user
+	? !!actor.testUserPermission(user, "OBSERVER") : true);
+
+/**
+ * The NPCs a winter can take: every NPC actor in the world not already gone (dead or retired) that `user` can
+ * see. Every world actor reaches every client, so the GM's hidden NPCs would otherwise be named to a player
+ * running the shortfall. PURE but for the permission test.
+ */
+export function livingNpcs(actors = [], user = globalThis.game?.user ?? null) {
+	return [...actors].filter(a => a?.type === "npc" && !npcStatusMeta(a.system?.status).inactive && canSeeActor(a, user));
 }
+
+/** The User query a player's client sends when the NPC winter takes is one they cannot write. */
+export const WINTER_NPC_DEAD_QUERY = "stonetop.winterNpcDead";
 
 /**
  * "An important NPC dies, their role unfilled" (p.517): ask who, and mark them dead (npc-status.js). The
- * people chooser, as every "which person" question asks it. The NPC marked dead, or null.
+ * people chooser, as every "which person" question asks it. A player who cannot write the NPC has the GM's
+ * client mark them (WINTER_NPC_DEAD_QUERY); with no GM here, they are told who can. The NPC marked dead, or null.
+ *
+ * @param {object} [deps]  injectable for tests: `actors`, `pick`, `user`, `gm`, `ask` (askGMClient's shape)
  */
-export async function markNpcDeadForWinter({ actors = globalThis.game?.actors?.contents ?? [], pick = pickPersonOnMap } = {}) {
-	const npcs = livingNpcs(actors);
+export async function markNpcDeadForWinter({
+	actors = globalThis.game?.actors?.contents ?? [], pick = pickPersonOnMap, user = globalThis.game?.user ?? null,
+	gm = globalThis.game?.users?.activeGM ?? null, ask = askGMClient,
+} = {}) {
+	const npcs = livingNpcs(actors, user);
 	if (!npcs.length) {
 		globalThis.ui?.notifications?.info?.("No NPC in the world to mark dead. Note who died on the Residents list.");
 		return null;
@@ -122,9 +142,40 @@ export async function markNpcDeadForWinter({ actors = globalThis.game?.actors?.c
 	});
 	const npc = id ? npcs.find(a => a.id === id) : null;
 	if (!npc) return null;
-	await npc.update({ "system.status": "dead" });
+	if (npc.isOwner === false) {
+		if (!gm) {
+			globalThis.ui?.notifications?.warn?.(`Only the GM can mark ${npc.name} dead, and no GM is here. Ask them to set ${npc.name}'s status to Dead on their sheet.`);
+			return null;
+		}
+		const done = await ask(gm, WINTER_NPC_DEAD_QUERY, { npcId: npc.id, userId: user?.id ?? null },
+			{ fallback: null, what: "mark the NPC winter took dead" });
+		if (!done) {
+			globalThis.ui?.notifications?.warn?.(`The GM's client could not mark ${npc.name} dead. Ask the GM to set ${npc.name}'s status to Dead on their sheet.`);
+			return null;
+		}
+	} else {
+		await npc.update({ "system.status": "dead" });
+	}
 	globalThis.ui?.notifications?.info?.(`${npc.name} is marked dead.`);
 	return npc;
+}
+
+/**
+ * The GM's side of WINTER_NPC_DEAD_QUERY, on the primary GM only: mark the NPC dead when the asker can see it
+ * and can write the steading whose winter it is (they are the one running the shortfall). Answers
+ * `{npcId}`, or null when refused.
+ */
+export async function handleWinterNpcDeadQuery(data, context = {}, {
+	users = globalThis.game?.users, actors = globalThis.game?.actors, steading = getStonetopSteadingActor(),
+} = {}) {
+	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return null;
+	const asker = queryAsker(data, context, users);
+	const npc = actors?.get?.(data?.npcId) ?? null;
+	if (!asker || npc?.type !== "npc" || npcStatusMeta(npc.system?.status).inactive) return null;
+	if (!npc.testUserPermission?.(asker, "OBSERVER")) return null;
+	if (!steading?.testUserPermission?.(asker, "OWNER")) return null;
+	await npc.update({ "system.status": "dead" });
+	return { npcId: npc.id };
 }
 
 /** The note a PC's going posts, for the whole table (p.518). PURE. */
@@ -139,9 +190,13 @@ export function pcGoesNoteHtml() {
  * as for a PC who dies instead, leaves everyone in play. Whether the window was opened.
  */
 export async function offerRetireForWinter({
-	characters = charactersInPlay(), pick = pickPersonOnMap, retire = openRetireDialog,
+	// Only those this user may retire (their own, or anyone for a GM): another player's PC would open nothing.
+	characters = charactersInPlay().filter(actor => canRetire(actor)), pick = pickPersonOnMap, retire = openRetireDialog,
 } = {}) {
-	if (!characters.length) return false;
+	if (!characters.length) {
+		globalThis.ui?.notifications?.info?.("None of the characters still in play is yours to retire. Their player or the GM can retire them from the character sheet.");
+		return false;
+	}
 	const id = await pick({
 		options: characters.map(actor => ({ id: actor.id, name: actor.name, actor })),
 		title: "Who leaves or retires?",

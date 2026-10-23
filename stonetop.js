@@ -119,6 +119,7 @@ import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wire
 import { wireDefendSpends, SPEND_QUERY, handleSpendQuery } from "./module/fight/defend-spend.js";
 import { HEALERS_ARTS_QUERY, handleHealersArtsQuery } from "./module/actors/character/healers-arts.js";
 import { SUPPLY_PAY_QUERY, handleSupplyPayQuery } from "./module/actors/character/supply-payer.js";
+import { WINTER_NPC_DEAD_QUERY, handleWinterNpcDeadQuery } from "./module/actors/steading/winter-debt.js";
 import { markQuestionBullets } from "./module/utils/question-bullets.js";
 import { wrapGlyphTextContainers } from "./module/utils/glyphs.js";
 import { applyJournalSpiralBullets, resolveEntry } from "./module/utils/journal-spiral-bullets.js";
@@ -258,6 +259,7 @@ Hooks.once("init", () => {
 	// cannot write, with the NPC that stands for them (p.480; actors/character/follower-handoff.js).
 	if (CONFIG.queries) CONFIG.queries[FOLLOWER_LOYALTY_QUERY] = (data, context) => handleFollowerLoyaltyQuery(data, context);
 	if (CONFIG.queries) CONFIG.queries[FOLLOWER_HANDOFF_QUERY] = (data, context) => handleFollowerHandoffQuery(data, context);
+	if (CONFIG.queries) CONFIG.queries[WINTER_NPC_DEAD_QUERY] = (data, context) => handleWinterNpcDeadQuery(data, context);
 
 	// Every window and modal in the system is drag-resizable; the ad-hoc
 	// Dialog popups we spawn from sheets default to resizable too. The companion
