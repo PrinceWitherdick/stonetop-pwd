@@ -123,12 +123,22 @@ export function wireTradeItemCard(message, html, { pick = pickPersonOnMap } = {}
 			const actor = id ? people.find(a => a.id === id) : null;
 			return actor ? { mode, actor } : null;
 		},
+		// Settled while the chooser was open (the card's other writer): said, and the buttons stay down.
 		write: ({ mode, actor }) => withCardLatch(message, TRADE_ITEM_FLAG, { mode, actorId: actor.id, name: actor.name }, buttons, async () => {
 			await settleTradeItem(actor, slug, mode);
 			globalThis.ui?.notifications?.info?.(settledLine({ mode, name: actor.name, item }));
 			return true;
-		}),
+		}, { onTaken: () => saySettledMeanwhile() }),
 	});
+}
+
+/**
+ * The words for a card the latch refused because it was settled while this user's window was open (the GM
+ * and whoever rolled can both write a Trade & Barter card). Answers true: the buttons stay down.
+ */
+function saySettledMeanwhile(notify = globalThis.ui?.notifications) {
+	notify?.info?.("Someone else settled this on the card while your window was open, so nothing more changes hands.");
+	return true;
 }
 
 // ── Paying for it: Surplus, coin, or an artifact (Book I pp.540-542) ─────────────
@@ -407,16 +417,22 @@ export async function payFromCard(message, button, row, { ask, notify = globalTh
 		notify?.warn?.("You need permission to update the steading's Surplus and coin.");
 		return null;
 	}
-	const payment = await ask({
-		title: "Trade & Barter: the payment",
-		buttonLabel: "Hand it over",
-		width: 460,
-		body: tradePaymentBodyHtml(heldStores(steading), row?.dataset?.itemValue ?? null),
-		read: readTradePaymentForm,
-	});
-	if (!payment || paymentIsEmpty(payment)) return null;
-	try {
-		return await withLateStampLatch(message, TRADE_PAY_FLAG, [button], async () => {
+	// Down while its window is open, so a second click opens no second window; up again only when
+	// nothing was settled.
+	return withButtonDown(message, TRADE_PAY_FLAG, button, {
+		notify,
+		what: "settle a Trade & Barter payment",
+		choose: async () => {
+			const payment = await ask({
+				title: "Trade & Barter: the payment",
+				buttonLabel: "Hand it over",
+				width: 460,
+				body: tradePaymentBodyHtml(heldStores(steading), row?.dataset?.itemValue ?? null),
+				read: readTradePaymentForm,
+			});
+			return payment && !paymentIsEmpty(payment) ? payment : null;
+		},
+		settle: async payment => {
 			const out = await settleTradePayment(steading, payment);
 			if (!out.done) {
 				notify?.warn?.(`The steading does not have enough to pay that: ${out.short.join(", ")}.`);
@@ -425,11 +441,29 @@ export async function payFromCard(message, button, row, { ask, notify = globalTh
 			const name = steading._actor?.name ?? "The steading";
 			notify?.info?.(paymentLine(payment, name));
 			return { stamp: { ...normalizePayment(payment), steading: name } };
-		});
-	} catch (err) {
-		console.error("Stonetop | Could not settle a Trade & Barter payment:", err);
-		button.disabled = false;
-		return null;
+		},
+	});
+}
+
+/**
+ * A card button's window, then its settle, with the button down throughout and up again afterwards only when
+ * the card's `flag` is still unset (nothing was settled, here or elsewhere). `choose` opens the window (null
+ * settles nothing); `settle(chosen)` runs under the card's latch (withLateStampLatch). A card settled while
+ * the window was open is said and left alone; a settle that throws is logged as "could not `what`".
+ */
+async function withButtonDown(message, flag, button, { choose, settle, what, notify }) {
+	button.disabled = true;
+	try {
+		const chosen = await choose();
+		if (!chosen) return null;
+		try {
+			return await withLateStampLatch(message, flag, [button], () => settle(chosen), { onTaken: () => saySettledMeanwhile(notify) });
+		} catch (err) {
+			console.error(`Stonetop | Could not ${what}:`, err);
+			return null;
+		}
+	} finally {
+		if (!message?.getFlag?.(SYSTEM_ID, flag)) button.disabled = false;
 	}
 }
 
@@ -446,28 +480,27 @@ export async function handOverArtifact(message, button, { pickArtifact = pickCon
 		return null;
 	}
 	const key = c => `${c.actor.id}.${c.item.id}`;
-	const id = await pickArtifact({
-		title: "Which artifact changes hands?",
-		buttonLabel: "Take it off them",
-		options: offered.map(c => ({
-			id: key(c),
-			label: `${c.item.name} (${c.actor.name})`,
-			icon: "fa-gem",
-			hint: c.hidden ? "Value not yet known" : `Value ${c.value}`,
-		})),
-	});
-	const chosen = id ? offered.find(c => key(c) === id) : null;
-	if (!chosen) return null;
-	try {
-		return await withLateStampLatch(message, TRADE_ARTIFACT_FLAG, [button], async () => {
+	return withButtonDown(message, TRADE_ARTIFACT_FLAG, button, {
+		notify,
+		what: "hand over an artifact",
+		choose: async () => {
+			const id = await pickArtifact({
+				title: "Which artifact changes hands?",
+				buttonLabel: "Take it off them",
+				options: offered.map(c => ({
+					id: key(c),
+					label: `${c.item.name} (${c.actor.name})`,
+					icon: "fa-gem",
+					hint: c.hidden ? "Value not yet known" : `Value ${c.value}`,
+				})),
+			});
+			return id ? offered.find(c => key(c) === id) ?? null : null;
+		},
+		settle: async chosen => {
 			// Taken off its character: it has changed hands.
 			await chosen.item.delete();
 			notify?.info?.(`${chosen.item.name} changes hands: taken off ${chosen.actor.name}.`);
 			return { stamp: { actorId: chosen.actor.id, name: chosen.actor.name, item: chosen.item.name } };
-		});
-	} catch (err) {
-		console.error("Stonetop | Could not hand over an artifact:", err);
-		button.disabled = false;
-		return null;
-	}
+		},
+	});
 }

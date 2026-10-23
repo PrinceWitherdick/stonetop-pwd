@@ -51,6 +51,31 @@ describe("withCardLatch", () => {
 		expect(message.flags[FLAG]).toBeUndefined();
 		expect(buttons.every(b => !b.disabled)).toBe(true);
 	});
+
+	// A caller that opens a window BEFORE latching (a picker, a payment form) can find the card settled by
+	// another client, or by itself in another window, by the time the window closes.
+	it("refuses a card already latched: no write, no work, the buttons left down", async () => {
+		const message = makeMessage();
+		message.flags[FLAG] = { by: "someone else" };
+		const buttons = makeButtons();
+		const work = vi.fn(async () => true);
+		expect(await withCardLatch(message, FLAG, true, buttons, work)).toBe(false);
+		expect(work).not.toHaveBeenCalled();
+		expect(message.setFlag).not.toHaveBeenCalled();
+		expect(message.unsetFlag).not.toHaveBeenCalled();
+		expect(message.flags[FLAG]).toEqual({ by: "someone else" });
+		expect(buttons.every(b => b.disabled)).toBe(true);
+	});
+
+	it("lets the caller say what counts as latched", async () => {
+		const message = makeMessage();
+		message.flags[FLAG] = "u-me";
+		const mine = held => !!held && held !== "u-me";
+		expect(await withCardLatch(message, FLAG, "u-me", makeButtons(), async () => true, { taken: mine })).toBe(true);
+		message.flags[FLAG] = "u-other";
+		expect(await withCardLatch(message, FLAG, "u-me", makeButtons(), async () => true, { taken: mine })).toBe(false);
+		expect(message.flags[FLAG]).toBe("u-other");
+	});
 });
 
 describe("withLateStampLatch", () => {
@@ -64,6 +89,15 @@ describe("withLateStampLatch", () => {
 		expect(duringWork).toBe(true);
 		expect(message.writes).toEqual([["set", FLAG, true], ["set", FLAG, { rolled: 3 }]]);
 		expect(done).toEqual({ stamp: { rolled: 3 }, notice: "Rolled 3." });
+	});
+
+	it("answers null and runs nothing on a card already latched", async () => {
+		const message = makeMessage();
+		message.flags[FLAG] = true;
+		const work = vi.fn(async () => ({ notice: "Paid." }));
+		expect(await withLateStampLatch(message, FLAG, makeButtons(), work)).toBeNull();
+		expect(work).not.toHaveBeenCalled();
+		expect(message.setFlag).not.toHaveBeenCalled();
 	});
 
 	it("writes once when the stamp is the plain latch", async () => {
