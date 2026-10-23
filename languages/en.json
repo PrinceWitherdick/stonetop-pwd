@@ -846,6 +846,8 @@
         "nothingPicked": "Tick at least one follower to Recover.",
         "notEnoughSupplies": "That purse no longer holds the {uses} uses of supplies this Recover needs.",
         "payerKept": "{name}'s supplies were not spent, so nothing was healed.",
+        "followerNeedsGm": "Only the GM can heal them (their HP is their NPC's), and no GM is here.",
+        "followersNeedGm": "Only the GM can heal {names} (their HP is their NPC's), and no GM is here, so they are left out of this Recover and nothing is spent on them.",
         "noDebility": "There is no debility marked to tend.",
         "tend": {
           "title": "Recover: tend to a debility",
@@ -854,7 +856,9 @@
           "gmNote": "Clear it only once the GM says it's taken care of. If they name something still required, close this window and come back once it's done.",
           "spend": "The GM asked for a use of supplies",
           "done": "It's taken care of: clear it",
-          "cleared": "Debility cleared"
+          "cleared": "Debility cleared",
+          "notTended": "Not tended",
+          "alreadyTended": "{debility} was tended meanwhile."
         }
       },
       "convalesce": {
@@ -1958,6 +1962,7 @@
           "persuading": "{leader} tries to Persuade {name}.",
           "dropped": "{leader} lets it drop: {name} doesn't do it.",
           "spendFailed": "{name}'s Loyalty could not be spent.",
+          "answerFailed": "The answer to {name}'s balk could not be posted, so nothing was spent or rolled.",
           "answered": "Answered: {choice}.",
           "choice": {
             "spend": "1 Loyalty spent",
@@ -2352,6 +2357,7 @@
       "bathNotNow": "Not now",
       "bathInvalid": "Pick 1 or 2 of the choices, as the Invocation allows.",
       "bathNoGm": "{name}'s sheet is not yours to write, and no GM is online to write it for you. Nothing was healed; try again when a GM is here.",
+      "bathNoAnswer": "The GM's client took this Bath for {name}, but its answer never came back. Check {name}'s sheet: the card is spent either way.",
       "bathCardLead": "{healer} cups their hands around their light and bathes {name} in it.",
       "bathCardHp": "{name} regains HP: {from} → {to}.",
       "bathCardHpNone": "{name}'s HP stays at {hp}.",
@@ -4004,7 +4010,8 @@
           "card": "{foe} answers {name}'s quip by attacking: +1d4 damage if they hit {name}, but {name} has advantage on their next roll against them.",
           "readout": "{foe} attacked: +1d4 on their next hit on you, and advantage on your next roll against them.",
           "label": "Rapier Wit: +{dice} damage, if this blow hits {name}, whose quip they answered by attacking",
-          "pill": "{move} +{dice}"
+          "pill": "{move} +{dice}",
+          "noGm": "No GM is connected to mark {name}'s {move} +1d4 as used, so it is still owed and may ride that foe's next blow too."
         },
         "truth": {
           "advButton": "They said Yes",
@@ -4062,9 +4069,11 @@
           "pill": "{move} +{dice}"
         },
         "rememberMeSpend": {
-          "label": "Something to Remember Me By, struck back (spend 1 Readiness): +{dice} damage, and you scar, mark or diminish them",
+          "label": "Something to Remember Me By, struck back with disadvantage (spend 1 Readiness): +{dice} damage, and you scar, mark or diminish them",
           "pill": "{move} +{dice}"
         },
+        "lineUnpaid": "{line} could no longer be paid for (spent elsewhere meanwhile), so this blow was not rolled.",
+        "moveDamageWhole": "{move} deals the move's own damage, so the bonus or dice typed in were left off.",
         "secondIntent": {
           "label": "Second Intent: +{dice} damage (your Ambush pick)",
           "pill": "{move} +{dice}"

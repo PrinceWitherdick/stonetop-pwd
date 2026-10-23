@@ -119,6 +119,7 @@ import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wire
 import { wireDefendSpends, SPEND_QUERY, handleSpendQuery } from "./module/fight/defend-spend.js";
 import { HEALERS_ARTS_QUERY, handleHealersArtsQuery } from "./module/actors/character/healers-arts.js";
 import { SUPPLY_PAY_QUERY, handleSupplyPayQuery } from "./module/actors/character/supply-payer.js";
+import { OWNER_ASK_VERIFY_QUERY, handleOwnerAskVerify } from "./module/utils/owner-ask.js";
 import { WINTER_NPC_DEAD_QUERY, handleWinterNpcDeadQuery } from "./module/actors/steading/winter-debt.js";
 import { markQuestionBullets } from "./module/utils/question-bullets.js";
 import { wrapGlyphTextContainers } from "./module/utils/glyphs.js";
@@ -150,7 +151,7 @@ import { askStockSource } from "./module/actors/character/ask-stock-source.js";
 import { moveLearnedIn } from "./module/actors/character/owns-move.js";
 import { readProvisionsYield, rollProvisions, rollStock, withTrappingGear, TRAPPING_GEAR_SLUG } from "./module/actors/character/provisions.js";
 import { askWithButtons, confirmOutcome } from "./module/utils/ask-with-buttons.js";
-import { belongsToMessage, optionLabelText, wirePickedOptionButton, claimPickedOption, settlePickedOption, releasePickedOption } from "./module/utils/picked-option-button.js";
+import { belongsToMessage, optionLabelText, wirePickedOptionButton, claimPickedOption, settlePickedOption, releasePickedOption, pickedOptionRecord } from "./module/utils/picked-option-button.js";
 import { readOptionDamage, readOptionDamageChoices } from "./module/utils/damage.js";
 import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
@@ -228,6 +229,8 @@ Hooks.once("init", () => {
 	// And another character's supplies, spent for a patient's Recover (or Tend a debility) out of a pack the
 	// player does not own. Answered by the payer's player, or the primary GM (actors/character/supply-payer.js).
 	if (CONFIG.queries) CONFIG.queries[SUPPLY_PAY_QUERY] = (data, context) => handleSupplyPayQuery(data, context);
+	// A v13 answerer of either ask above checks back with a GM the ask names (utils/owner-ask.js#answerOwnerAsk).
+	if (CONFIG.queries) CONFIG.queries[OWNER_ASK_VERIFY_QUERY] = data => handleOwnerAskVerify(data);
 	// And a Judge's +1 (Diligence, Sanction, Many Hands) on another player's roll card (roll-boosts.js).
 	if (CONFIG.queries) CONFIG.queries[BOOST_QUERY] = (data, context) => handleBoostQuery(data, context, ROLL_BOOST_DEPS);
 	// And Piety's Blessing, given to a fellow worshipper the Lightbearer's player does not own (roll-boosts.js).
@@ -1628,7 +1631,8 @@ registerRollCardAction(BURN_BRIGHTLY_ACTION, ({ message, user }) => _burnBrightl
 registerRollCardAction(GIVE_IT_ALL_ACTION, async ({ message, user, data }) => {
 	const actor = _cardCharacterFor(message, user);
 	// No `hurt`: the presser rolls the 2d4 on their own client once this answers (impetuous-youth.js#rollGiveItAllHurt).
-	return !!actor && giveItAll(message, actor, data?.cost, { ...IMPETUOUS_YOUTH_DEPS, hurt: null });
+	// `press` marks the card with this press, so a presser whose answer never came back can tell it landed.
+	return !!actor && giveItAll(message, actor, data?.cost, { ...IMPETUOUS_YOUTH_DEPS, hurt: null, press: data?.press ?? null });
 });
 registerRollCardAction(KNOW_THINGS_UPGRADE_ACTION, ({ message, user, data }) => _upgradeKnowThings(message, user, data?.source));
 
@@ -2508,7 +2512,6 @@ async function _onRollProvisions(message, btn, index, pick) {
 		const intoPouch = await _forageIntoPouch(message, actor, pick);
 		if (intoPouch === undefined) {
 			await releasePickedOption(message, PROVISIONS_FLAG, index);
-			claimed = false;
 			btn.disabled = false;
 			return;
 		}
@@ -2552,6 +2555,8 @@ async function _onRollProvisions(message, btn, index, pick) {
 		// Nothing landed: give the claim back so the option can be pressed again. A payout that
 		// DID land keeps its claim, so it is never offered twice.
 		if (claimed && !paid) await releasePickedOption(message, PROVISIONS_FLAG, index).catch(() => {});
+		// Paid but not stamped: this client keeps the claim (picked-option-button.js), so it is not offered again here.
+		else if (paid) ui.notifications.warn("The provisions were taken, but the card could not be marked. Don't take them again.");
 		btn.disabled = false;
 	}
 }
@@ -2585,9 +2590,15 @@ async function _onRollProvisions(message, btn, index, pick) {
  * button is where HP actually moves.
  */
 function _chatWireOptionDamage(message, html) {
+	// Most cards carry no options: skip the lookups below for them, since this runs on every chat render.
+	if (!html.querySelector(".stonetop-picklist-item")) return;
 	const move = cardMoveName(message, html);
+	// The roll is CLAIMED on the card before it is thrown (_onRollOptionDamage), so only a viewer who may
+	// rewrite the card (its author or the GM, owning its speaker) is offered the button at all.
+	const usable = _mayRollOptionDamage(message, speakerActor(message));
 
 	wirePickedOptionButton(message, html, {
+		usable,
 		flagKey:      "optionDamageRolled",
 		wiredKey:     "optionDamageWired",
 		buttonClass:  "stonetop-option-damage-roll",
@@ -2600,10 +2611,10 @@ function _chatWireOptionDamage(message, html) {
 		// it through the plain HP writer, with nothing a blow meets in between (post-death-actions.js#loseHp),
 		// once a confirmation naming them has been answered (_onRollOptionDamage).
 		label:   dealt => (dealt.hpLoss ? ` Lose ${dealt.formula} HP` : `${dealt.isRoll ? " Roll" : " Deal"} ${dealt.formula} damage`),
-		readout: paid => _optionDamageDealtEl(paid.totals, paid.hpLoss),
+		readout: paid => _optionDamageDealtEl(paid.totals, paid.hpLoss, paid.pending),
 		onPress: (btn, index, dealt) => _onRollOptionDamage(message, btn, index, { move, dealt }),
 	});
-	_chatWireOptionDamageChoices(message, html, move);
+	_chatWireOptionDamageChoices(message, html, move, { usable });
 }
 
 /**
@@ -2622,7 +2633,7 @@ function _chatWireOptionDamage(message, html) {
  * take 1d6 damage Roll" is a bonus to readOptionDamage ("adds ... damage roll"), so the row read as
  * owing nothing and the line below took that live button off.
  */
-function _chatWireOptionDamageChoices(message, html, move) {
+function _chatWireOptionDamageChoices(message, html, move, { usable = true } = {}) {
 	const items = [...html.querySelectorAll(".stonetop-picklist-item")]
 		.filter(item => belongsToMessage(item, message));
 	if (!items.length) return;
@@ -2638,11 +2649,13 @@ function _chatWireOptionDamageChoices(message, html, move) {
 		if (!choices) continue;
 		const index = box.dataset.index;
 
-		const paid = done[index];
+		const paid = pickedOptionRecord(message, OPTION_DAMAGE_FLAG, index, done);
 		if (paid) {
-			item.appendChild(_optionDamageDealtEl(paid.totals, paid.hpLoss));
+			item.appendChild(_optionDamageDealtEl(paid.totals, paid.hpLoss, paid.pending));
 			continue;
 		}
+		// A viewer who may not rewrite the card could not claim the roll, so is offered none.
+		if (!usable) continue;
 
 		const buttons = choices.map(dealt => {
 			const btn = document.createElement("button");
@@ -2678,17 +2691,41 @@ function _chatWireOptionDamageChoices(message, html, move) {
 	}
 }
 
-/** The static readout a rolled option wears from then on: what the blow came to, per target, or the HP lost. */
-function _optionDamageDealtEl(totals, hpLoss = false) {
+/**
+ * The static readout a rolled option wears from then on: what the blow came to, per target, or the HP lost.
+ * While the roll is CLAIMED but not yet in (`pending`), it says so, and nobody else is offered the button.
+ */
+function _optionDamageDealtEl(totals, hpLoss = false, pending = false) {
 	const el = document.createElement("span");
 	el.className = "stonetop-option-damage-dealt";
+	if (pending) {
+		el.textContent = "Being rolled…";
+		return el;
+	}
 	const nums = (Array.isArray(totals) ? totals : [totals]).filter(n => Number.isFinite(Number(n)));
 	el.textContent = `${nums.join(", ") || "0"} ${hpLoss ? "HP lost" : "damage"}`;
 	return el;
 }
 
+/** The message flag a ticked option's damage roll is claimed and stamped under, by the checkbox's index. */
+const OPTION_DAMAGE_FLAG = "optionDamageRolled";
+
+/**
+ * Whether this user may roll a card's option damage: own its speaker, and be able to write the card, which
+ * holds the claim. Any speaker, not only a character (canRewriteCard's rule): an NPC's or a follower's card
+ * owes its option damage too, rolled by the GM.
+ */
+function _mayRollOptionDamage(message, actor) {
+	return !!actor?.isOwner && canUserWriteCard(message, game.user, { whenUnknown: !!game.user?.isGM });
+}
+
 async function _onRollOptionDamage(message, btn, index, { move, dealt }) {
 	btn.disabled = true;
+	// CLAIM, PAY, SETTLE (picked-option-button.js): the roll is claimed on the card before any die is thrown,
+	// so a second press (here or on another screen) finds the claim, and a client that cannot write the card
+	// rolls nothing. A roll that ends up thrown keeps its claim; one that never was gives it back.
+	let claimed = false;
+	let paid = false;
 	try {
 		const actor = speakerActor(message);
 		if (!actor) {
@@ -2696,15 +2733,15 @@ async function _onRollOptionDamage(message, btn, index, { move, dealt }) {
 			btn.disabled = false;
 			return;
 		}
+		if (!_mayRollOptionDamage(message, actor)) {
+			ui.notifications.warn(dealt.hpLoss
+				? game.i18n.format("stonetop.optionHpLoss.notOwner", { name: actor.name })
+				: "Only the GM or whoever rolled this card can roll the damage it owes.");
+			btn.disabled = false;
+			return;
+		}
 
-		let totals;
 		if (dealt.hpLoss) {
-			// The HP comes off here and now, so only someone who may write the character presses it.
-			if (!actor.isOwner) {
-				ui.notifications.warn(game.i18n.format("stonetop.optionHpLoss.notOwner", { name: actor.name }));
-				btn.disabled = false;
-				return;
-			}
 			// The deliberate second click a damage card's Apply button gives a blow (utils/damage.js
 			// #readOptionDamage's two-click rule), asked up front since nothing here waits on a card.
 			const who = { name: escHtml(actor.name), formula: escHtml(dealt.formula) };
@@ -2718,32 +2755,38 @@ async function _onRollOptionDamage(message, btn, index, { move, dealt }) {
 				btn.disabled = false;
 				return;
 			}
+		}
+
+		claimed = await claimPickedOption(message, OPTION_DAMAGE_FLAG, index);
+		if (!claimed) {
+			btn.disabled = false;
+			return;
+		}
+
+		let totals;
+		if (dealt.hpLoss) {
 			const { lost } = await loseHp(actor, dealt.formula, { moveName: move });
 			totals = [lost];
 		} else {
 			const results = await rollOptionDamage(actor, { move: move || "Damage", damage: dealt });
 			// Null: the damage window (a Marshal's Battlefield Grace) was closed, so nothing was rolled.
 			if (results === null) {
+				await releasePickedOption(message, OPTION_DAMAGE_FLAG, index);
 				btn.disabled = false;
 				return;
 			}
 			totals = (results ?? []).map(r => r.raw);
 		}
+		paid = true;
 		btn.replaceWith(_optionDamageDealtEl(totals, dealt.hpLoss));
-
-		// Stamped last: the card that carries the blow is the thing that had to land, and a stamp
-		// written before it would lock out the retry if the post failed. A player who does not own
-		// the message still rolled it; the stamp simply does not stick for them, and the button
-		// comes back on the next render rather than the roll being lost.
-		const paid = { totals, formula: dealt.formula, ...(dealt.hpLoss ? { hpLoss: true } : {}) };
-		const done = { ...(message.getFlag(SYSTEM_ID, "optionDamageRolled") ?? {}), [index]: paid };
-		try {
-			await message.setFlag(SYSTEM_ID, "optionDamageRolled", done);
-		} catch (err) {
-			console.warn("Stonetop | could not record the option's damage roll on the card:", err);
-		}
+		await settlePickedOption(message, OPTION_DAMAGE_FLAG, index, { totals, formula: dealt.formula, ...(dealt.hpLoss ? { hpLoss: true } : {}) });
 	} catch (err) {
 		console.error("Stonetop | Error rolling a move option's damage:", err);
+		// Nothing thrown: give the claim back so the option can be pressed again. A roll that DID land keeps
+		// its claim, so it is never offered twice.
+		if (claimed && !paid) await releasePickedOption(message, OPTION_DAMAGE_FLAG, index).catch(() => {});
+		// Rolled but not stamped: this client keeps the claim (picked-option-button.js), so it is not offered again here.
+		else if (paid) ui.notifications.warn("The damage was rolled, but the card could not be marked. Don't roll it again.");
 		btn.disabled = false;
 	}
 }

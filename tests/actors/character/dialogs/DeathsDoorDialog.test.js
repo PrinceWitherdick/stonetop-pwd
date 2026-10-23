@@ -14,6 +14,8 @@ import { stubAsk } from "../../../fakes/confirm.js";
 import { readRepo } from "../../../fakes/css.js";
 import { escHtml } from "../../../../module/utils/strings.js";
 import { deletionEntry, deletionTarget } from "../../../../module/utils/foundry-compat.js";
+import { RELAY_GRACE_MS } from "../../../../module/utils/relay-landed.js";
+import { useFakeHooks } from "../../../fakes/hooks.js";
 
 // Only the roll itself is stood in for (the Battle Joy case below reads what it was handed), and the card it
 // was posted as (none, unless a test hands one over: the Burn Brightly / Impetuous Youth cases below).
@@ -1701,7 +1703,8 @@ describe("DeathsDoorDialog: a roll under way, seen from every owner's window", (
 			stubAsk("hurt");
 			await bea._onGiveItAll();
 			expect(card.rolls[0].total).toBe(7);
-			expect(card.store[GAVE_IT_ALL_FLAG]).toEqual({ cost: "hurt", from: 6, to: 7 });
+			// With the press that gave it marked on it, so a window whose answer never came back can tell (QY-6).
+			expect(card.store[GAVE_IT_ALL_FLAG]).toEqual({ cost: "hurt", from: 6, to: 7, press: expect.any(String) });
 			expect(stateOf(actor)).toBe(DEATHS_DOOR_STATE.OUT_OF_ACTION);
 			expect(rollingOn(actor)).toBeNull();
 			expect(bea.getData().tierNote).toBe("Burn Brightly: 5 → 6. Impetuous Youth: 6 → 7, and got hurt.");
@@ -1721,6 +1724,100 @@ describe("DeathsDoorDialog: a roll under way, seen from every owner's window", (
 			expect(card.rolls[0].total).toBe(6);
 			expect(actor.system.attributes.xp.value).toBe(6);
 			expect(win.getData()).toMatchObject({ boostsPending: true, rolledTotal: 6, canBurnBrightly: false });
+		});
+
+		// QY-6: the GM's client lifted the card, but its answer came after this window stopped waiting.
+		it("carries on from a lift the card shows was this press's, though no answer came in time", async () => {
+			const gm = withGM();
+			as("p1");
+			const { actor, character } = dyingHero();
+			const win = windowOn(character);
+			const card = await rollAt(win, 5);
+			const answered = gm.query.getMockImplementation();
+			gm.query.mockImplementationOnce(async (...args) => { await answered(...args); throw new Error("timed out"); });
+			stubAsk("lost");
+			await win._onGiveItAll();
+			expect(card.rolls[0].total).toBe(7);
+			expect(card.store[GAVE_IT_ALL_FLAG]).toMatchObject({ cost: "lost", from: 5, to: 7, press: expect.any(String) });
+			expect(win.getData().tierNote).toContain("Impetuous Youth: 5 → 7");
+			expect(stateOf(actor)).not.toBe("dying");
+		});
+
+		// The GM's lift was queued behind other writes to the card, so it lands after this window stopped waiting.
+		it("carries on from a lift that lands a moment after no answer came", async () => {
+			const hooks = useFakeHooks();
+			try {
+				const gm = withGM();
+				as("p1");
+				const { actor, character } = dyingHero();
+				const win = windowOn(character);
+				const card = await rollAt(win, 5);
+				const answered = gm.query.getMockImplementation();
+				let late = null;
+				gm.query.mockImplementationOnce(async (...args) => { late = args; throw new Error("timed out"); });
+				stubAsk("lost");
+				const watching = () => [...hooks.handlers.values()].filter(h => h.name === "updateChatMessage").length;
+				const before = watching();
+				const pressed = win._onGiveItAll();
+				await vi.waitFor(() => expect(watching()).toBe(before + 1));
+				await answered(...late);
+				hooks.fire("updateChatMessage", card);
+				await pressed;
+				expect(card.rolls[0].total).toBe(7);
+				expect(win.getData().tierNote).toContain("Impetuous Youth: 5 → 7");
+				expect(stateOf(actor)).not.toBe("dying");
+			} finally {
+				hooks.restore();
+			}
+		});
+
+		// A private card this client cannot read cannot be watched: the second press asks again with the SAME press,
+		// and the GM's client answers the lift that landed as landed, so its "you get hurt" is still paid.
+		it("asks again with the same press after an unanswered lift on a card it cannot read, and pays its cost then", async () => {
+			const gm = withGM();
+			as("p1");
+			const { character } = dyingHero();
+			const card = await rollAt(windowOn(character), 5, { onlyFor: ["p1", "gm"] });
+			world.users.get("p1").active = false;
+
+			as("p2");
+			const bea = windowOn(character);
+			await bea._onTakeOver();
+			const answered = gm.query.getMockImplementation();
+			gm.query.mockImplementationOnce(async (...args) => { await answered(...args); throw new Error("timed out"); });
+			stubAsk("hurt");
+			await bea._onGiveItAll();
+			expect(card.rolls[0].total).toBe(7);
+			const first = gm.query.mock.calls.at(-1)[1];
+			expect(bea.getData().tierNote ?? "").not.toContain("Impetuous Youth");
+
+			const asked = stubAsk("lost");
+			await bea._onGiveItAll();
+			// Not asked for a cost again: the lift that landed was paid for with "hurt".
+			expect(asked).not.toHaveBeenCalled();
+			expect(gm.query.mock.calls.at(-1)[1]).toMatchObject({ boost: "giveAll", press: first.press, cost: "hurt" });
+			expect(card.rolls[0].total).toBe(7);
+			expect(bea.getData().tierNote).toContain("Impetuous Youth: 5 → 7, and got hurt");
+		});
+
+		it("says the lift failed when no answer came and none lands in the wait", async () => {
+			const gm = withGM();
+			as("p1");
+			const { character } = dyingHero();
+			const win = windowOn(character);
+			const card = await rollAt(win, 5);
+			gm.query.mockImplementationOnce(async () => { throw new Error("timed out"); });
+			stubAsk("lost");
+			vi.useFakeTimers();
+			try {
+				const pressed = win._onGiveItAll();
+				await vi.advanceTimersByTimeAsync(RELAY_GRACE_MS);
+				await pressed;
+			} finally {
+				vi.useRealTimers();
+			}
+			expect(card.rolls[0].total).toBe(5);
+			expect(card.store[GAVE_IT_ALL_FLAG]).toBeUndefined();
 		});
 
 		it("with no GM connected, offers Accept only and says why", async () => {

@@ -27,6 +27,7 @@
 
 import { SYSTEM_ID } from "../../system-id.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
+import { NO_ANSWER } from "../../utils/relay-landed.js";
 import { format } from "../../utils/i18n.js";
 import { moveChatCard } from "../../utils/chat.js";
 import { isPrimaryGM } from "../../utils/primary-gm.js";
@@ -45,14 +46,14 @@ import {
 	setDeathsDoorRollMarker,
 } from "./deaths-door-actor.js";
 import { BURN_BRIGHTLY_COST, burnBrightlyAffordable } from "./burn-brightly.js";
-import { GAVE_IT_ALL_FLAG, IMPETUOUS_YOUTH, giveItAllAtDeathsDoor } from "./impetuous-youth.js";
+import { GAVE_IT_ALL_FLAG, IMPETUOUS_YOUTH, giveItAllAtDeathsDoor, givenByPress } from "./impetuous-youth.js";
 import { actorTookBackground } from "./took-background.js";
 
 /** Payload `{ actorId, actorUuid, nonce, takeOver, userId }`; answers `{ granted, marker }` or `{ granted: false, holder }`. */
 export const DEATHS_DOOR_CLAIM_QUERY = "stonetop.deathsDoorClaim";
 
 /**
- * Payload `{ actorId, actorUuid, nonce, messageId, boost: "burn"|"giveAll", cost, userId }`; answers
+ * Payload `{ actorId, actorUuid, nonce, messageId, boost: "burn"|"giveAll", cost, press?, userId }`; answers
  * `{ applied: true, from, total, tier, tierShift }` or `{ applied: false, reason?, spent? }`.
  */
 export const DEATHS_DOOR_BOOST_QUERY = "stonetop.deathsDoorBoost";
@@ -99,7 +100,7 @@ function boostsLeftOnCard(card, actor, tier) {
  * Put a query to the primary GM's client, or run its handler here when this client is that GM. Null when there is
  * no GM, or it could not answer: the caller then acts without a ruling.
  */
-async function askPrimaryGM(query, handler, data, { what, timeout }) {
+async function askPrimaryGM(query, handler, data, { what, timeout, noAnswer = null }) {
 	const game = globalThis.game;
 	const gm   = game?.users?.activeGM ?? null;
 	if (!gm) return null;
@@ -112,7 +113,7 @@ async function askPrimaryGM(query, handler, data, { what, timeout }) {
 			return null;
 		}
 	}
-	return askGMClient(gm, query, asked, { fallback: null, what, timeout });
+	return askGMClient(gm, query, asked, { fallback: noAnswer, what, timeout });
 }
 
 /**
@@ -125,11 +126,11 @@ export function askDeathsDoorClaim(actor, { nonce, takeOver = false }) {
 	}, { what: "claim the Death's Door roll" });
 }
 
-/** Ask the primary GM's client to spend a boost on a card this client cannot read. Its answer, or null. */
-export function askDeathsDoorBoost(actor, { nonce, messageId, boost, cost = null }) {
+/** Ask the primary GM's client to spend a boost on a card this client cannot read. Its answer, null, or NO_ANSWER when none came in time. */
+export function askDeathsDoorBoost(actor, { nonce, messageId, boost, cost = null, press = null }) {
 	return askPrimaryGM(DEATHS_DOOR_BOOST_QUERY, handleDeathsDoorBoostQuery, {
-		actorId: actor?.id ?? null, actorUuid: actor?.uuid ?? null, nonce, messageId, boost, cost,
-	}, { what: "change the Death's Door card", timeout: BOOST_TIMEOUT_MS });
+		actorId: actor?.id ?? null, actorUuid: actor?.uuid ?? null, nonce, messageId, boost, cost, ...(press ? { press } : {}),
+	}, { what: "change the Death's Door card", timeout: BOOST_TIMEOUT_MS, noAnswer: NO_ANSWER });
 }
 
 /**
@@ -255,6 +256,13 @@ export async function handleDeathsDoorBoostQuery(data, context = {}, deps = {}) 
 	const held = actorDeathsDoorState(actor) === DEATHS_DOOR_STATE.DYING && !!marker && marker.nonce === data?.nonce
 		&& marker.userId === user.id && message?.getFlag?.(SYSTEM_ID, DEATHS_DOOR_ROLL_FLAG) === marker.nonce;
 	if (!held) return { applied: false };
+	// A lift asked again by a window whose first answer never came back (DeathsDoorDialog#_boostViaGM): it landed,
+	// so it is answered as landed, and the window rolls its "you get hurt" then. Read before the tier, which that
+	// lift may have made a 10+.
+	if (data.boost === "giveAll" && givenByPress(message, data.press)) {
+		const total = message.rolls?.at?.(0)?.total;
+		return { applied: true, from: null, total, tier: deathsDoorCardTier(message, total), tierShift: deathsDoorCardTierShift(message) };
+	}
 	const from = message.rolls?.at?.(0)?.total;
 	if (from == null || deathsDoorCardTier(message, from) === "success") return { applied: false };
 	let spent = false;
@@ -268,7 +276,8 @@ export async function handleDeathsDoorBoostQuery(data, context = {}, deps = {}) 
 			if (message.getFlag?.(SYSTEM_ID, GAVE_IT_ALL_FLAG)) return { applied: false, spent: true };
 			if (!actorTookBackground(actor, IMPETUOUS_YOUTH)) return { applied: false };
 			// No `hurt`: the dying player's window rolls the 2d4 on their client (DeathsDoorDialog#_boostViaGM).
-			if (!(await giveItAllAtDeathsDoor(message, actor, data.cost, { ...rewrite, hurt: null }))) return { applied: false };
+			// `press` marks the card with the asking press, so a window whose answer never came back can tell it landed.
+			if (!(await giveItAllAtDeathsDoor(message, actor, data.cost, { ...rewrite, hurt: null, press: data.press }))) return { applied: false };
 		} else {
 			return { applied: false };
 		}

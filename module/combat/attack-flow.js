@@ -1066,11 +1066,33 @@ async function askDamageAdjustment(actor, { moveKey = "", weapon, extraDice = ""
 	const adjust   = await promptDamage({ attacker: attacker || actor?.name, formula: base, shiftKey, ...(rollMode ? { rollMode } : {}), seed, offers: lines, ...(asked === undefined ? {} : { ask: asked }) });
 	if (!adjust) return null;
 	// What the ticked lines cost and what they add beyond dice: a Resolve off the track, a tag on the blow.
-	const taken    = takenOffers(lines, adjust);
-	if (commit && !await commit(taken.map(offer => offer.key))) return null;
-	for (const offer of taken) await offer.spend?.(actor);
+	const ticked   = takenOffers(lines, adjust);
+	if (commit && !await commit(ticked.map(offer => offer.key))) return null;
+	// A line whose `spend` answers null could not be paid (Something to Remember Me By's Readiness, taken by a
+	// Defend spend while the window was open): it is not on the blow. One that changes how the blow is rolled (a
+	// mode, a strike back) stops the blow instead, since the player chose the roll with it; those are paid first,
+	// so nothing else has been spent when one stops it.
+	const reshapes = offer => !!(offer.mode || offer.strikeBack);
+	const unpaid   = new Set();
+	for (const offer of [...ticked.filter(reshapes), ...ticked.filter(offer => !reshapes(offer))]) {
+		if (await offer.spend?.(actor) !== null) continue;
+		if (reshapes(offer)) {
+			globalThis.ui?.notifications?.warn?.(format("stonetop.fight.heroMoves.lineUnpaid", { line: offer.pill ?? offer.label ?? offer.key }));
+			return null;
+		}
+		unpaid.add(offer.key);
+	}
+	const taken    = ticked.filter(offer => !unpaid.has(offer.key));
+	const answered = unpaid.size
+		? { ...adjust, extraDice: adjust.extraDice.filter(entry => !(entry && typeof entry === "object" && unpaid.has(entry.key))) }
+		: adjust;
 	const addTags  = taken.flatMap(offer => offer.tags ?? []);
-	return { base, ...adjust, ...(addTags.length ? { addTags } : {}) };
+	// A ticked line that makes this blow a STRIKE BACK (Something to Remember Me By's, struck from the sheet):
+	// "deal your damage, with disadvantage", one defender's blow, so no fight +N rides it (the ring's Strike
+	// back is unseeded too), and the answer says so for the caller, who then asks no "going on the offense?".
+	const struckBack = taken.some(offer => offer.strikeBack);
+	const { seed: _seed, ...unseeded } = answered;
+	return { base, ...(struckBack ? { ...unseeded, struckBack } : answered), ...(addTags.length ? { addTags } : {}) };
 }
 
 /** The attack flag's key saying whether a Clash's damage took Set-Up Strike's line (resolveAttackTier): the line's own key. */
@@ -1271,8 +1293,15 @@ function seedForTargets(actor, targets) {
  *   actor's +N, damage moves or shot record
  * @returns {Promise<boolean>} whether damage was rolled
  */
-export async function rollDamageAt(actor, { formula, label, keywords = "", description = "", rollMode = "", weapon = null, seeded = true, shiftKey = false, striker = null, strikeBack = false } = {}) {
+export async function rollDamageAt(actor, { formula, label, keywords = "", description = "", rollMode = "", weapon = null, seeded = true, shiftKey = false, striker = null, strikeBack = false, outcome = null } = {}) {
 	if (!actor || !formula) return false;
+	// `outcome`, when handed in, is told whether the window made this blow a strike back (a ticked line that
+	// does: askDamageAdjustment's `struckBack`), for a caller that asks something only of an attack.
+	const settled = damage => {
+		const { struckBack, ...rest } = damage;
+		if (struckBack && outcome) outcome.struckBack = true;
+		return rest;
+	};
 	const attacker = striker?.name ?? "";
 	seeded = seeded && !striker;
 	// Berserker: in their Battle Joy a Heavy's melee attacks gain the area tag, "lashing out at anyone
@@ -1295,7 +1324,7 @@ export async function rollDamageAt(actor, { formula, label, keywords = "", descr
 		// The fiction the weapon's tags owe, as a Clash with nobody targeted prints it (rollAndPostDamage).
 		// Worked out AFTER the window, because a tag a ticked line just bought owes its notice too.
 		const notices = tagNoticesHtml(withAddedTags(striker ? weapon : muscleboundWeapon(actor, weapon), damage.addTags));
-		const { base, addTags, ...adjust } = damage;
+		const { base, addTags, ...adjust } = settled(damage);
 		const roll = await rollDamage(base, actor, {
 			label, keywords, description, ...adjust,
 			...(notices ? { notices } : {}),
@@ -1329,7 +1358,7 @@ export async function rollDamageAt(actor, { formula, label, keywords = "", descr
 		// The tags ride the weapon to each row's fine print; nothing is stored from them (see damageRowDetail).
 		weapon: { ...(weapon ?? unarmedWeapon()), keywords },
 		targets,
-		damage,
+		damage: settled(damage),
 		shots: !striker,
 		groupBlow: !!striker?.group,
 		followerBlow: !!striker,
@@ -1376,8 +1405,11 @@ export async function rollCharacterDamageAt(actor, { label = "Damage", rollMode 
 	if (!actor) return false;
 	const blow = await characterBlow(actor, label);
 	if (!blow) return false;
-	const rolled = await rollDamageAt(actor, { formula: blow.formula, label: blow.move, rollMode, weapon: blow.weapon, seeded, shiftKey, strikeBack });
-	if (rolled && seeded) await settleReadinessOnAttack(actor, label);
+	const outcome = {};
+	const rolled = await rollDamageAt(actor, { formula: blow.formula, label: blow.move, rollMode, weapon: blow.weapon, seeded, shiftKey, strikeBack, outcome });
+	// A blow the window made a strike back (Something to Remember Me By's ticked line) spent its own Readiness:
+	// it is no going on the offense, so nothing is asked.
+	if (rolled && seeded && !outcome.struckBack) await settleReadinessOnAttack(actor, label);
 	return rolled;
 }
 
@@ -1873,7 +1905,15 @@ async function movesTakenDamage(targets, { formula, move = "", prompt = promptDa
 	const lines = defenderLines(known.offered.filter(grace), known.unread.filter(grace));
 	if (!lines.length) return { base: formula, rollMode, bonus: 0, extraDice: "" };
 	const adjust = await prompt({ attacker: move, formula, rollMode, offers: lines, ask: true });
-	return adjust ? { base: formula, ...adjust } : null;
+	if (!adjust) return null;
+	// The window was opened for the one line, so only its answer is taken: the mode, and the ticked line itself
+	// (its pill on the card). The number stays the move's, whole, so a bonus or dice typed into the window's
+	// own fields are left off, and the player is told so rather than finding the total short.
+	const dice = [adjust.extraDice].flat();
+	const ticked = dice.filter(entry => entry && typeof entry === "object");
+	const typed = !!Number(adjust.bonus) || dice.some(entry => typeof entry === "string" && entry.trim());
+	if (typed) globalThis.ui?.notifications?.info?.(format("stonetop.fight.heroMoves.moveDamageWhole", { move: move || localize("stonetop.fight.ring.damage") }));
+	return { base: formula, rollMode: adjust.rollMode ?? rollMode, bonus: 0, extraDice: ticked.length ? ticked : "" };
 }
 
 // Exported for the tests: the option-damage cards reach it only through rollOptionDamage and rollMoveDamageAt.

@@ -537,6 +537,62 @@ describe("a character's own damage, with the weapon in hand", () => {
 		expect(settleReadinessOnAttack).toHaveBeenCalledWith(pim, "Damage");
 	});
 
+	it("makes a blow a strike back when Something to Remember Me By's line is ticked: no +N, no offense question", async () => {
+		const pim = armed("sword");
+		pim.items = [{ type: "move", name: "Something to Remember Me By" }];
+		pim.flags = { [SCOPE]: { readiness: 2 } };
+		pim.getFlag = (scope, key) => pim.flags[scope]?.[key];
+		pim.setFlag = vi.fn(async (scope, key, value) => { pim.flags[scope][key] = value; });
+		fightInARow([["pim", pim], ["crin", crinwin("crinwin")]]);
+		globalThis.game.settings = { get: (scope, key) => (key === "fightTab" ? true : key === "promptDamageModifier" ? true : "roll") };
+		let offered = "";
+		// The window comes back with the line ticked (and, were there one, the fight's +N box left as it was).
+		globalThis.Dialog = class {
+			constructor(config) { this.config = config; offered = config.content; }
+			render() {
+				const root = {
+					querySelector: sel => (sel === '[name="offer-rememberMeSpend"]' ? { checked: true } : null),
+					querySelectorAll: () => [],
+				};
+				Promise.resolve().then(() => this.config.buttons.roll?.callback?.(root));
+			}
+		};
+		vi.mocked(settleReadinessOnAttack).mockClear();
+		expect(await rollCharacterDamageAt(pim, { label: "Damage" })).toBe(true);
+		expect(offered).toContain("offer-rememberMeSpend");
+		expect(pim.flags[SCOPE].readiness).toBe(1);
+		expect(damageFlag().seed ?? null).toBeNull();
+		expect(settleReadinessOnAttack).not.toHaveBeenCalled();
+	});
+
+	it("rolls nothing when Something to Remember Me By's Readiness was spent elsewhere while the window was open", async () => {
+		const pim = armed("sword");
+		pim.items = [{ type: "move", name: "Something to Remember Me By" }];
+		pim.flags = { [SCOPE]: { readiness: 1 } };
+		pim.getFlag = (scope, key) => pim.flags[scope]?.[key];
+		pim.setFlag = vi.fn(async (scope, key, value) => { pim.flags[scope][key] = value; });
+		fightInARow([["pim", pim], ["crin", crinwin("crinwin")]]);
+		globalThis.game.settings = { get: (scope, key) => (key === "fightTab" ? true : key === "promptDamageModifier" ? true : "roll") };
+		globalThis.ui.notifications.warn = vi.fn();
+		globalThis.Dialog = class {
+			constructor(config) { this.config = config; }
+			render() {
+				const root = {
+					querySelector: sel => (sel === '[name="offer-rememberMeSpend"]' ? { checked: true } : null),
+					querySelectorAll: () => [],
+				};
+				// A Defend spend on another card takes the last Readiness before the line comes back ticked.
+				pim.flags[SCOPE].readiness = 0;
+				Promise.resolve().then(() => this.config.buttons.roll?.callback?.(root));
+			}
+		};
+		vi.mocked(settleReadinessOnAttack).mockClear();
+		expect(await rollCharacterDamageAt(pim, { label: "Damage" })).toBeFalsy();
+		expect(pim.setFlag).not.toHaveBeenCalled();
+		expect(globalThis.ui.notifications.warn).toHaveBeenCalledTimes(1);
+		expect(settleReadinessOnAttack).not.toHaveBeenCalled();
+	});
+
 	it("offers the Battle Joy on the character's own blow, and never on a follower's or the enemy's", async () => {
 		const pim = armed("sword");
 		fightInARow([["pim", pim], ["crin", crinwin("crinwin")]]);

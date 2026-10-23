@@ -17,7 +17,7 @@ import { followerRoster, followerRosterOf } from "./follower-roster.js";
 import { followerFateHpPath, followerHpWriteUpdate, linkedFollowerNpc, rosterMemberRow } from "./follower-fate.js";
 import { followerActorFromLink } from "./follower-actors.js";
 import { readableFlags } from "./StonetopFlags.js";
-import { setFollowerHp } from "./follower-hp.js";
+import { npcHpWritable, setFollowerHp } from "./follower-hp.js";
 import { groupFollowerMembers } from "../../utils/crew.js";
 import { rosterHpUpdate, rosterMemberHp } from "../../fight/group-hits.js";
 import { count } from "../../camp/camp-rules.js";
@@ -30,12 +30,16 @@ import { memberMax } from "../../camp/camp-followers.js";
  *
  * @param {object} flags  the character's resolved flags
  * @param {object[]} followers  follower-roster.js#followerRoster's records
- * @param {{npcFor?: Function}} [options]  `npcFor(follower)`: the NPC standing for a one-body follower, or
- *   null (follower-fate.js#linkedFollowerNpc); while there is one, its HP is the follower's
+ * `healable: false` marks an NPC-held body this client cannot heal right now (follower-hp.js#npcHpWritable:
+ * not its owner, and no GM here to write it for them), which a window offers greyed out and a Recover
+ * leaves out before it spends a use on them.
+ *
+ * @param {{npcFor?: Function, gm?: User|null}} [options]  `npcFor(follower)`: the NPC standing for a one-body
+ *   follower, or null (follower-fate.js#linkedFollowerNpc); while there is one, its HP is the follower's
  * @returns {Array<{id: string, name: string, from: number, max: number, row: {follower: string, slug: string, index?: number},
- *   npcHeld?: boolean, card?: {ftype: string, slug: string}, key?: string}>}
+ *   npcHeld?: boolean, healable?: boolean, card?: {ftype: string, slug: string}, key?: string}>}
  */
-export function followerRestBodies(flags, followers = [], { npcFor = null } = {}) {
+export function followerRestBodies(flags, followers = [], { npcFor = null, gm = globalThis.game?.users?.activeGM ?? null } = {}) {
 	const out = [];
 	for (const fol of Array.isArray(followers) ? followers : []) {
 		if (!fol?.ftype || fol.dead) continue;
@@ -50,7 +54,10 @@ export function followerRestBodies(flags, followers = [], { npcFor = null } = {}
 			const max = linked ? count(npcHp.max) : count(fol.hpMax);
 			const from = Math.min(max, count(linked ? npcHp.value : fol.hpCurrent));
 			if (!max || from >= max) continue;
-			out.push({ id: `${fol.ftype}:${slug}`, name, from, max, row: { follower: fol.ftype, slug }, npcHeld: !!npc });
+			out.push({
+				id: `${fol.ftype}:${slug}`, name, from, max, row: { follower: fol.ftype, slug }, npcHeld: !!npc,
+				...(npc ? { healable: npcHpWritable(npc, { gm }) } : {}),
+			});
 			continue;
 		}
 		const max = memberMax(fol);

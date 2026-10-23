@@ -29,7 +29,8 @@ import { cardCountedTier, outcomeTier } from "../../utils/counted-tier.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
 import { shakeNervesOnMiss, setFightState, WE_HAPPY_FEW } from "./fight-states.js";
 import { regainSurpriseOnHit, takeBackSurprise, PREPARE_A_WELCOME } from "../../combat/battle-holds.js";
-import { holdSanctionOnHit, releaseSanction, sanctionTrack, COMMUNE_WITH_ARATIS } from "./roll-boosts.js";
+import { fillSanctionOnHit, releaseSanction, COMMUNE_WITH_ARATIS } from "./roll-boosts.js";
+import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { LUMINOUS_SHIELD, WIELDER_OF_THE_WHITE_FLAME } from "./holy-light.js";
 import { DEFEND_MOVE, defendReadinessHold, readinessForTier } from "../../combat/defend-readiness.js";
 import { moveChatCard } from "../../utils/chat.js";
@@ -61,18 +62,23 @@ const count = value => Math.max(0, Math.trunc(Number(value) || 0));
  * move learned, so their card carries no record.
  */
 async function settleNerve(actor, tier, added) {
-	const track = learnedTrack(actor, SILVER_TONGUED);
-	if (!track) return added === undefined ? undefined : count(added);
+	if (!learnedTrack(actor, SILVER_TONGUED)) return added === undefined ? undefined : count(added);
 	const done = count(added);
-	const hold = Math.min(track.max, NERVE_HOLD[tier] ?? 0);
-	const want = Math.max(0, hold - Math.max(0, track.held - done));
-	if (want > done) {
-		const next = Math.min(track.max, track.held + want - done);
-		if (next !== track.held) await track.resources.setUses(SILVER_TONGUED, next, { stonetopMove: SILVER_TONGUED });
-		return done + (next - track.held);
-	}
-	if (want < done) await takeBackHeld(actor, SILVER_TONGUED, done - want);
-	return want;
+	// Read and raised in the character's spending turn (utils/spender-queue.js); a take-back takes its own turn.
+	const { now, takeBack } = await inSpenderTurn(actor, async () => {
+		const track = learnedTrack(actor, SILVER_TONGUED);
+		if (!track) return { now: done, takeBack: 0 };
+		const hold = Math.min(track.max, NERVE_HOLD[tier] ?? 0);
+		const want = Math.max(0, hold - Math.max(0, track.held - done));
+		if (want > done) {
+			const next = Math.min(track.max, track.held + want - done);
+			if (next !== track.held) await track.resources.setUses(SILVER_TONGUED, next, { stonetopMove: SILVER_TONGUED });
+			return { now: done + (next - track.held), takeBack: 0 };
+		}
+		return { now: want, takeBack: done - want };
+	});
+	if (takeBack > 0) await takeBackHeld(actor, SILVER_TONGUED, takeBack);
+	return now;
 }
 
 /**
@@ -143,10 +149,7 @@ const TIER_EFFECTS = {
 		async settle(actor, move, tier, done) {
 			const wants = tier === "success";
 			const n = count(done);
-			if (wants && !n) {
-				const before = sanctionTrack(actor);
-				return before && await holdSanctionOnHit(actor, { name: move }, tier) ? before.max - before.held : 0;
-			}
+			if (wants && !n) return fillSanctionOnHit(actor, { name: move }, tier);
 			if (!wants && n) { await releaseSanction(actor, n); return 0; }
 			return n;
 		},

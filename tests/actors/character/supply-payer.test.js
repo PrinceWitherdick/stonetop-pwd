@@ -7,6 +7,7 @@ import {
 	SUPPLY_PAY_QUERY, supplyPayersFor, spendPayerSupplies, payOthersSupplies, handleSupplyPayQuery,
 } from "../../../module/actors/character/supply-payer.js";
 import { SUPPLY_PURPOSE, supplyPursesFor, otherSupplyPayers } from "../../../module/actors/character/supply-cost.js";
+import { OWNER_ASK_VERIFY_QUERY } from "../../../module/utils/owner-ask.js";
 import { readRepo as read } from "../../fakes/css.js";
 
 // A character as the payer rules read one: its purses (every stored use reachable, here), who owns it,
@@ -108,6 +109,48 @@ describe("paying", () => {
 		expect(resources).toMatchObject({ supplies: 1, "more-supplies": 2 });
 	});
 
+	// QY-4: the write is an absolute count, so two answers at once both read 3 and both wrote 2.
+	it("pays two asks answered at once one after the other, so neither use is lost", async () => {
+		const { actor: wren, resources } = character({ id: "wren", name: "Wren", supplies: 3 });
+		wren.uuid = "Actor.wren";
+		wren.update = vi.fn(async data => {
+			await new Promise(r => setTimeout(r, 5));
+			for (const [k, v] of Object.entries(data)) resources[k.split(".").at(-1)] = v;
+		});
+		const [a, b] = await Promise.all([spendPayerSupplies(wren, { n: 1 }), spendPayerSupplies(wren, { n: 1 })]);
+		expect([a.left, b.left]).toEqual([2, 1]);
+		expect(resources.supplies).toBe(1);
+	});
+
+	// The Recover a payer pays for can stop being possible while they decide: made in another window, or the
+	// patient put on Death's Door. Checked in the payer's turn, just before the purse is written.
+	it("pays nothing for a Recover the patient can no longer have", async () => {
+		const { actor: wren, resources } = character({ id: "wren", name: "Wren" });
+		const bram = character({ id: "bram", name: "Bram" }).actor;
+		bram.getFlag = (_scope, key) => key === "recover.spent";
+		const answer = await spendPayerSupplies(wren, { n: 1, patient: bram, recover: { self: true } });
+		expect(answer).toEqual({ refused: global.game.i18n.localize("stonetop.specialMoves.recover.lockedHint") });
+		expect(wren.update).not.toHaveBeenCalled();
+		expect(resources.supplies).toBe(3);
+	});
+
+	it("pays for the followers alone when only the patient's own Recover is refused", async () => {
+		const { actor: wren, resources } = character({ id: "wren", name: "Wren" });
+		const bram = character({ id: "bram", name: "Bram" }).actor;
+		bram.typedActor.canFaceDeathsDoor = true;
+		const answer = await spendPayerSupplies(wren, { n: 3, patient: bram, recover: { self: true } });
+		expect(answer).toMatchObject({ spent: 2, left: 1, refused: expect.any(String) });
+		expect(resources.supplies).toBe(1);
+	});
+
+	it("pays for a Recover the patient can still have", async () => {
+		const { actor: wren, resources } = character({ id: "wren", name: "Wren" });
+		const bram = character({ id: "bram", name: "Bram" }).actor;
+		bram.typedActor.debilityChoices = [{ key: "weakened", name: "Weakened", marked: true }];
+		expect(await spendPayerSupplies(wren, { n: 1, patient: bram, recover: { tend: "weakened" } })).toEqual({ slug: "supplies", label: "Supplies", spent: 1, left: 2 });
+		expect(resources.supplies).toBe(2);
+	});
+
 	it("asks the payer's own player otherwise, and spends nothing here", async () => {
 		const alex = player("p-wren", "Alex", { query: vi.fn(async () => ({ declined: true })) });
 		const sam = player("p-bram", "Sam");
@@ -119,6 +162,8 @@ describe("paying", () => {
 		global.game.users = usersOf([alex, sam]);
 		const answer = await payOthersSupplies({ payer: wren, patient: bram, slug: "supplies", n: 1, moveName: "Recover" });
 		expect(alex.query).toHaveBeenCalledWith(SUPPLY_PAY_QUERY, expect.objectContaining({ payerId: "wren", patientId: "bram", n: 1 }), expect.anything());
+		await payOthersSupplies({ payer: wren, patient: bram, n: 1, recover: { tend: "weakened" } });
+		expect(alex.query.mock.calls[1][1]).toMatchObject({ recover: { tend: "weakened" } });
 		expect(answer).toEqual({ declined: true });
 		expect(wren.update).not.toHaveBeenCalled();
 	});
@@ -168,11 +213,45 @@ describe("the payer's side of the ask", () => {
 		expect(global.ui.notifications.warn).toHaveBeenCalledWith("Wren's Supplies holds 9, not the 10 uses asked for.");
 	});
 
+	it("pays nothing on a yes when the debility was tended meanwhile, checked against the patient here", async () => {
+		const { wren, resources, actors } = world();
+		actors.get("bram").typedActor.debilityChoices = [{ key: "weakened", name: "Weakened", marked: false }];
+		const answer = await handleSupplyPayQuery({ payerId: "wren", patientId: "bram", n: 1, userId: "p-bram", recover: { tend: "weakened" } }, {}, { actors, users: global.game.users, confirm: async () => true });
+		expect(answer).toEqual({ refused: expect.stringContaining("Weakened") });
+		expect(wren.update).not.toHaveBeenCalled();
+		expect(resources.supplies).toBe(3);
+	});
+
 	it("keeps them on a no", async () => {
 		const { wren, actors } = world();
 		const answer = await handleSupplyPayQuery({ payerId: "wren", patientId: "bram", n: 1, userId: "p-bram" }, {}, { actors, users: global.game.users, confirm: async () => false });
 		expect(answer).toEqual({ declined: true });
 		expect(wren.update).not.toHaveBeenCalled();
+	});
+
+	// QY-1: v13 names nobody in the context, and the GM's id in the data used to be refused, so a GM's ask
+	// never reached the payer's player at all. A person still answers it here.
+	it("asks for a GM who names themselves in the data, as v13 leaves the context empty, once their client says it asked", async () => {
+		const { resources, actors } = world();
+		const gmQuery = vi.fn(async (name, data) => name === OWNER_ASK_VERIFY_QUERY && data.askId === "ask-1");
+		global.game.users.contents.push({ id: "gm", name: "GM", isGM: true, active: true, query: gmQuery });
+		const confirm = vi.fn(async () => true);
+		const answer = await handleSupplyPayQuery({ payerId: "wren", patientId: "bram", n: 1, userId: "gm", askId: "ask-1" }, { timeout: 120000 }, { actors, users: global.game.users, confirm });
+		expect(gmQuery).toHaveBeenCalledWith(OWNER_ASK_VERIFY_QUERY, { askId: "ask-1" }, expect.anything());
+		expect(confirm).toHaveBeenCalledTimes(1);
+		expect(confirm.mock.calls[0][0].content).toContain("GM asks");
+		expect(answer).toMatchObject({ spent: 1, left: 2 });
+		expect(resources.supplies).toBe(2);
+	});
+
+	it("refuses a player who names the GM in the data on v13: the GM's client never sent that ask", async () => {
+		const { resources, actors } = world();
+		global.game.users.contents.push({ id: "gm", name: "GM", isGM: true, active: true, query: vi.fn(async () => false) });
+		const confirm = vi.fn(async () => true);
+		const answer = await handleSupplyPayQuery({ payerId: "wren", patientId: "bram", n: 1, userId: "gm", askId: "forged" }, { timeout: 120000 }, { actors, users: global.game.users, confirm });
+		expect(answer).toBeNull();
+		expect(confirm).not.toHaveBeenCalled();
+		expect(resources.supplies).toBe(3);
 	});
 
 	it("refuses an asker who does not own the patient", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { claimPickedOption, releasePickedOption, settlePickedOption } from "../../module/utils/picked-option-button.js";
+import { claimPickedOption, pickedOptionRecord, releasePickedOption, settlePickedOption } from "../../module/utils/picked-option-button.js";
 
 /**
  * A Forage payout's latch: CLAIM, PAY, SETTLE (picked-option-button.js). It used to be stamped after
@@ -40,7 +40,7 @@ describe("claiming a card's payout", () => {
 	it("claims an option nobody has, and refuses it a second time", async () => {
 		const msg = message();
 		expect(await claimPickedOption(msg, "provisionsRolled", "1")).toBe(true);
-		expect(msg.store.provisionsRolled["1"]).toEqual({ pending: true });
+		expect(msg.store.provisionsRolled["1"]).toEqual({ pending: true, by: "" });
 		expect(await claimPickedOption(msg, "provisionsRolled", "1")).toBe(false);
 	});
 
@@ -54,7 +54,44 @@ describe("claiming a card's payout", () => {
 		const msg = message();
 		await claimPickedOption(msg, "provisionsRolled", "0");
 		await settlePickedOption(msg, "provisionsRolled", "0", { uses: 5, formula: "1d6" });
-		expect(msg.store.provisionsRolled["0"]).toEqual({ uses: 5, formula: "1d6", pending: false });
+		expect(msg.store.provisionsRolled["0"]).toMatchObject({ uses: 5, formula: "1d6", pending: false });
+	});
+
+	it("lets this user claim past their own claim left by a reload, never another user's or one still held here", async () => {
+		const saved = globalThis.game;
+		globalThis.game = { user: { id: "me" } };
+		try {
+			// Left by a reload: claimed by this user, held by no client here.
+			const reloaded = message({ flags: { provisionsRolled: { "0": { pending: true, by: "me" } } } });
+			reloaded.id = "reloaded";
+			expect(pickedOptionRecord(reloaded, "provisionsRolled", "0")).toBeNull();
+			expect(await claimPickedOption(reloaded, "provisionsRolled", "0")).toBe(true);
+			// Now held here: refused, and read as claimed.
+			expect(pickedOptionRecord(reloaded, "provisionsRolled", "0")).toMatchObject({ pending: true });
+			expect(await claimPickedOption(reloaded, "provisionsRolled", "0")).toBe(false);
+
+			const theirs = message({ flags: { provisionsRolled: { "0": { pending: true, by: "someone" } } } });
+			theirs.id = "theirs";
+			expect(pickedOptionRecord(theirs, "provisionsRolled", "0")).toMatchObject({ pending: true });
+			expect(await claimPickedOption(theirs, "provisionsRolled", "0")).toBe(false);
+		} finally {
+			globalThis.game = saved;
+		}
+	});
+
+	it("keeps a claim whose payout landed but whose settle failed, so this client never offers it twice", async () => {
+		const saved = globalThis.game;
+		globalThis.game = { user: { id: "me" } };
+		try {
+			const msg = message();
+			msg.id = "settle-fails";
+			expect(await claimPickedOption(msg, "provisionsRolled", "0")).toBe(true);
+			msg.setFlag.mockRejectedValueOnce(new Error("offline"));
+			await expect(settlePickedOption(msg, "provisionsRolled", "0", { uses: 2 })).rejects.toThrow("offline");
+			expect(pickedOptionRecord(msg, "provisionsRolled", "0")).toMatchObject({ pending: true });
+		} finally {
+			globalThis.game = saved;
+		}
 	});
 
 	it("gives a claim back, so an option nothing was paid for can be pressed again", async () => {

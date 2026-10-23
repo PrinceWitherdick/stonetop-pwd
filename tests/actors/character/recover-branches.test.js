@@ -138,6 +138,19 @@ describe("Recover with followers", () => {
 		expect(global.ui.notifications.warn).toHaveBeenCalledWith(global.game.i18n.localize("stonetop.specialMoves.recover.fullHpHint"));
 	});
 
+	// Code review 10-22 (HC-9): a follower whose HP is an NPC this client cannot write is healed by the GM's
+	// client. With no GM here, they are left out before anything is spent on them.
+	it("spends nothing on a follower only the absent GM could heal", async () => {
+		followers.hurtFollowerBodies.mockImplementation(async () => [
+			{ id: "f1", name: "Hari" }, { id: "f2", name: "Glaw", npcHeld: true, healable: false },
+		]);
+		const { sheet, patient } = makeSheet();
+		await sheet._applyRecover({ purse, base: 4, followers: ["f1", "f2"] });
+		expect(patient.update).toHaveBeenCalledWith(expect.objectContaining({ "flags.stonetop-pwd.inventory.resources.supplies": 1 }), { stonetopMove: "Recover" });
+		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1"], { heal: 4, moveName: "Recover" });
+		expect(global.ui.notifications.warn.mock.calls[0][0]).toContain("Glaw");
+	});
+
 	it("refuses when the purse cannot pay for everyone picked", async () => {
 		followers.hurtFollowerBodies.mockImplementation(async () => [{ id: "f1" }, { id: "f2" }, { id: "f3" }]);
 		const { sheet, patient } = makeSheet();
@@ -194,6 +207,45 @@ describe("someone else's supplies", () => {
 		expect(global.ChatMessage.create.mock.calls[0][0].content).toContain("Hari 1 → 5");
 	});
 
+	// Code review 10-22 (HC-3): a blow can land while the payer decides. "A character disabled this way can't
+	// save themselves" (Book I p.240), so the patient's own heal is refused then, as it is before the ask.
+	it("heals nothing of the patient's own when they went to Death's Door while the payer was asked", async () => {
+		payer();
+		const { sheet, patient } = makeSheet({ supplies: 0 });
+		payers.payOthersSupplies.mockImplementation(async () => {
+			patient.typedActor.canFaceDeathsDoor = true;
+			return { slug: "supplies", label: "Supplies", spent: 1, left: 4 };
+		});
+		await sheet._applyRecover({ purse: { slug: "supplies", label: "Supplies" }, payer: { id: "wren" }, base: 4 });
+		expect(patient.update).not.toHaveBeenCalled();
+		expect(global.ui.notifications.warn.mock.calls[0][0]).toContain("Wren's supplies were already spent");
+	});
+
+	// The payer's turn checks the Recover is still possible before it pays (supply-payer.js#spendPayerSupplies).
+	it("asks the payer's turn to check the patient's own Recover, and heals nothing it refused", async () => {
+		payer();
+		payers.payOthersSupplies.mockImplementation(async () => ({ refused: "Already recovered." }));
+		const { sheet, patient } = makeSheet({ supplies: 0 });
+		await sheet._applyRecover({ purse: { slug: "supplies", label: "Supplies" }, payer: { id: "wren" }, base: 4 });
+		expect(payers.payOthersSupplies).toHaveBeenCalledWith(expect.objectContaining({ n: 1, recover: { self: true } }));
+		expect(patient.update).not.toHaveBeenCalled();
+		expect(global.ui.notifications.warn).toHaveBeenCalledWith("Already recovered.");
+		expect(global.ChatMessage.create).not.toHaveBeenCalled();
+	});
+
+	it("heals the followers alone when the payer's turn paid for them and refused the patient's own part", async () => {
+		payer();
+		followers.hurtFollowerBodies.mockImplementation(async () => [{ id: "f1" }]);
+		followers.restFollowers.mockImplementation(async () => [{ name: "Hari", from: 1, to: 5 }]);
+		payers.payOthersSupplies.mockImplementation(async () => ({ slug: "supplies", label: "Supplies", spent: 1, left: 4, refused: "On Death's Door." }));
+		const { sheet, patient } = makeSheet({ supplies: 0 });
+		await sheet._applyRecover({ purse: { slug: "supplies", label: "Supplies" }, payer: { id: "wren" }, base: 4, followers: ["f1"] });
+		expect(payers.payOthersSupplies).toHaveBeenCalledWith(expect.objectContaining({ n: 2 }));
+		expect(patient.update).not.toHaveBeenCalled();
+		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1"], { heal: 4, moveName: "Recover" });
+		expect(global.ui.notifications.warn).toHaveBeenCalledWith("On Death's Door.");
+	});
+
 	it("heals nothing when the payer keeps their supplies", async () => {
 		payer();
 		payers.payOthersSupplies.mockImplementation(async () => ({ declined: true }));
@@ -243,10 +295,39 @@ describe("tending a debility", () => {
 		expect(global.ChatMessage.create.mock.calls[0][0].content).toContain("Expended 1 use on Bram&#x27;s behalf (4 left)");
 	});
 
+	it("asks the payer's turn to check the debility, and clears nothing it refused", async () => {
+		const wren = { id: "wren", name: "Wren", typedActor: { supplyPurses: purpose => supplyPursesFor({ supplies: 5 }, purpose) } };
+		global.game.actors = new Map([["wren", wren]]);
+		payers.payOthersSupplies.mockImplementation(async () => ({ refused: "Weakened was tended already." }));
+		const { sheet, patient } = makeSheet({ supplies: 0, debilities: ["weakened"] });
+		await sheet._applyTendDebility({ key: "weakened", spend: true, purse: { slug: "supplies" }, payer: { id: "wren" } });
+		expect(payers.payOthersSupplies).toHaveBeenCalledWith(expect.objectContaining({ recover: { tend: "weakened" } }));
+		expect(patient.update).not.toHaveBeenCalled();
+		expect(global.ChatMessage.create).not.toHaveBeenCalled();
+	});
+
 	it("clears nothing that is no longer marked", async () => {
 		const { sheet, patient } = makeSheet({ debilities: [] });
 		await sheet._applyTendDebility({ key: "weakened" });
 		expect(patient.update).not.toHaveBeenCalled();
+	});
+
+	// Code review 10-22 (HC-4): the payer can take minutes, and the debility can be tended meanwhile (a camp,
+	// the GM, another window). Read again once they have paid: the card says the use went and nothing was tended.
+	it("clears nothing, and says the payer's use went, when it was tended while the payer was asked", async () => {
+		const wren = { id: "wren", name: "Wren", typedActor: { supplyPurses: purpose => supplyPursesFor({ supplies: 5 }, purpose) } };
+		global.game.actors = new Map([["wren", wren]]);
+		const { sheet, patient } = makeSheet({ supplies: 0, debilities: ["weakened"] });
+		payers.payOthersSupplies.mockImplementation(async () => {
+			patient.typedActor.debilityChoices = [{ key: "weakened", name: "Weakened", marked: false }];
+			return { slug: "supplies", label: "Supplies", spent: 1, left: 4 };
+		});
+		await sheet._applyTendDebility({ key: "weakened", spend: true, purse: { slug: "supplies" }, payer: { id: "wren" } });
+		expect(patient.update).not.toHaveBeenCalled();
+		expect(global.ui.notifications.warn.mock.calls[0][0]).toContain("Wren's supplies were already spent");
+		const card = global.ChatMessage.create.mock.calls[0][0].content;
+		expect(card).toContain("Expended 1 use on Bram&#x27;s behalf (4 left)");
+		expect(card).toContain(global.game.i18n.localize("stonetop.specialMoves.recover.tend.notTended"));
 	});
 });
 

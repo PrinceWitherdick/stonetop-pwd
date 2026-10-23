@@ -6,6 +6,8 @@ import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection 
 import { heldReadiness, READINESS_FLAG } from "../../module/combat/defend-readiness.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { writeFlagPath } from "../fakes/combat-chat.js";
+import { RELAY_GRACE_MS } from "../../module/utils/relay-landed.js";
+import { useFakeHooks } from "../fakes/hooks.js";
 
 // Spending Defend's Readiness on a blow from its damage card (Book I p.216).
 
@@ -668,6 +670,48 @@ describe("a player's spend on a card the GM wrote", () => {
 		expect(query).toHaveBeenCalledWith(SPEND_QUERY, expect.objectContaining({ kind: "parry", defenderUuid: "Actor.fox" }), { timeout: 10000 });
 	});
 
+	// QY-6: the GM's client recorded the spend, but its answer came after the asker stopped waiting.
+	it("counts a spend the card shows as taken, though no answer came in time", async () => {
+		const fox = owned("fox", 2, "pim", ["Parry & Riposte"]);
+		const blow = card({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.fox", name: "Fox" }] });
+		const query = vi.fn(async () => {
+			blow.flag = { ...blow.flag, halvedBy: [{ uuid: "Token.fox", name: "fox", how: "parry" }] };
+			throw new Error("timed out");
+		});
+		globalThis.game = { user: PIM, users: { activeGM: { ...GM, query } } };
+		const strike = vi.fn(async (_d, _a, _l, { commit }) => commit());
+		expect(await spendOnBlow(blow, "parry", { row: blow.flag.results[0], defender: fox, cost: 1 }, { relay: true, strikeBack: strike })).toBe(true);
+		// And one that never lands is still a no, once the wait for it is over.
+		vi.useFakeTimers();
+		try {
+			const other = card({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.fox", name: "Fox" }] });
+			globalThis.game = { user: PIM, users: { activeGM: { ...GM, query: vi.fn(async () => { throw new Error("timed out"); }) } } };
+			const out = spendOnBlow(other, "parry", { row: other.flag.results[0], defender: fox, cost: 1 }, { relay: true, strikeBack: strike });
+			await vi.advanceTimersByTimeAsync(RELAY_GRACE_MS);
+			expect(await out).toBe(false);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	// The GM's write was queued behind others on the card, so it lands after the asker stopped waiting.
+	it("counts a spend the GM's client records a moment after no answer came", async () => {
+		const hooks = useFakeHooks();
+		try {
+			const fox = owned("fox", 2, "pim", ["Parry & Riposte"]);
+			const blow = card({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.fox", name: "Fox" }] });
+			globalThis.game = { user: PIM, users: { activeGM: { ...GM, query: vi.fn(async () => { throw new Error("timed out"); }) } } };
+			const strike = vi.fn(async (_d, _a, _l, { commit }) => commit());
+			const out = spendOnBlow(blow, "parry", { row: blow.flag.results[0], defender: fox, cost: 1 }, { relay: true, strikeBack: strike });
+			await vi.waitFor(() => expect(hooks.handlers.size).toBe(1));
+			blow.flag = { ...blow.flag, halvedBy: [{ uuid: "Token.fox", name: "fox", how: "parry" }] };
+			hooks.fire("updateChatMessage", blow);
+			expect(await out).toBe(true);
+		} finally {
+			hooks.restore();
+		}
+	});
+
 	describe("handleSpendQuery", () => {
 		function gmSide() {
 			const bram = owned("bram", 2, "pim");
@@ -751,6 +795,23 @@ describe("a spend beside an Apply on the same card", () => {
 		} finally {
 			globalThis.game = prior;
 		}
+	});
+
+	// QY-4: two cards are two lines, and both read the defender's last Readiness before either paid it.
+	it("pays one last Readiness once, though two cards ask for it at once", async () => {
+		const bram = character("bram", 1);
+		bram.setFlag = vi.fn(async function (scope, key, value) {
+			await new Promise(r => setTimeout(r, 5));
+			this.flags[scope][key] = value;
+		});
+		const one = card({ results: [{ uuid: "Token.bram", name: "Bram" }], applied: [] });
+		const two = { ...card({ results: [{ uuid: "Token.bram", name: "Bram" }], applied: [] }), id: "m-race-2" };
+		const results = await Promise.all([
+			takeSpend(one, "halve", { row: one.flag.results[0], defender: bram, cost: 1 }),
+			takeSpend(two, "halve", { row: two.flag.results[0], defender: bram, cost: 1 }),
+		]);
+		expect(results.filter(Boolean)).toHaveLength(1);
+		expect(bram.flags[SYSTEM_ID][READINESS_FLAG]).toBe(0);
 	});
 
 	it("writes only its own list, so an applied row written from another client stays applied", async () => {

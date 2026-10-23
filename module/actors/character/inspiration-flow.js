@@ -280,6 +280,7 @@ export function addInspirationDie(message, holder, {
 		if (damage && (damage.applied ?? []).length) return false;
 		if (inspirationHeld(holder, scope) <= 0) return false;
 		const amount = Math.trunc(Number(await rollDie()) || 0);
+		// Paid in the holder's spending turn (spendInspiration, utils/spender-queue.js).
 		if (!(await spendInspiration(holder, scope))) return false;
 		const record = { by: holder.uuid, name: holder.name, amount };
 		try {

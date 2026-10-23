@@ -40,6 +40,7 @@ import {appendLedgerEntries} from "../../utils/ledger-core.js";
 import {statRequirementsUnmet} from "./stat-requirement.js";
 import {effectiveRequiredMoves, requiredMovesUnmet, requirementLabel} from "./move-requirement.js";
 import {MoveResources, learnedTrack, takeBackHeld} from "./MoveResources.js";
+import { inSpenderTurn } from "../../utils/spender-queue.js";
 import {debilityData, walkItOffChoice} from "./walk-it-off.js";
 import {normalizeWound as _normalizeWound, normalizeWoundList} from "./wound-record.js";
 import {moveMarkBudget, markOptionCapNote} from "./move-mark-budget.js";
@@ -5542,7 +5543,13 @@ export class StonetopCharacter {
 		};
 	}
 
+	/** Set the held Readiness outright (a pip clicked), in the character's spending turn (utils/spender-queue.js). */
 	async setDefendReadiness(n) {
+		await inSpenderTurn(this._actor, () => this._writeDefendReadiness(n));
+	}
+
+	/** setDefendReadiness's write, for a caller already in the spending turn. */
+	async _writeDefendReadiness(n) {
 		const next = readinessCount(n);
 		if (next === this.defendReadiness) return;
 		await this._actor.setFlag(STONETOP_SCOPE, READINESS_FLAG, next);
@@ -6069,11 +6076,16 @@ export class StonetopCharacter {
 		// Resolved once: the note below must credit the shield on exactly the rolls the hold did.
 		const hasShield = await this.bearsShield();
 		const hold = defendReadinessHold(tier, { hasShield, hasGuardian: this.hasGuardianMove });
-		const existing = this.defendReadiness;
-		const prior = done ? readinessCount(done.prior) : existing;
-		const { next, set } = readinessForTier({ prior, set: done ? done.set : prior, current: existing, hold });
+		// Read and written in the character's spending turn (utils/spender-queue.js), so Readiness spent
+		// meanwhile on another card is not written back over.
+		const { existing, prior, next, set } = await inSpenderTurn(this._actor, async () => {
+			const existing = this.defendReadiness;
+			const prior = done ? readinessCount(done.prior) : existing;
+			const { next, set } = readinessForTier({ prior, set: done ? done.set : prior, current: existing, hold });
+			if (next !== existing) await this._writeDefendReadiness(next);
+			return { existing, prior, next, set };
+		});
 		if (next === existing) return { prior, set };
-		await this.setDefendReadiness(next);
 		if (next < existing) return { prior, set };
 		// The shield's +1 rides a 7+ hit only, so don't credit it on a 6- miss (where the
 		// hold comes solely from Guardian) — that would falsely imply the shield applied.

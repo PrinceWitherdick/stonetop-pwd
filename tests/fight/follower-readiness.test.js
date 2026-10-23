@@ -40,13 +40,13 @@ describe("a follower's Readiness, read off their card", () => {
 		expect(readinessHeldBy({ type: "monster" })).toBe(0);
 	});
 
-	it("spends from the card, never below none, and clears it", async () => {
+	it("spends from the card, refuses more than is held, and clears it", async () => {
 		const cadi = leader({ crew: { readiness: 2 } });
 		const options = { cardFor: cardFor(cadi, "crew") };
-		await spendHeldReadiness(npc("crew"), 1, options);
+		expect(await spendHeldReadiness(npc("crew"), 1, options)).toBe(true);
 		expect(cadi.flags[SYSTEM_ID].crew.readiness).toBe(1);
-		await spendHeldReadiness(npc("crew"), 5, options);
-		expect(cadi.flags[SYSTEM_ID].crew.readiness).toBe(0);
+		expect(await spendHeldReadiness(npc("crew"), 5, options)).toBeNull();
+		expect(cadi.flags[SYSTEM_ID].crew.readiness).toBe(1);
 		cadi.flags[SYSTEM_ID].crew.readiness = 3;
 		expect(await clearFollowerReadiness(npc("crew"), options)).toBe(true);
 		expect(cadi.flags[SYSTEM_ID].crew.readiness).toBe(0);

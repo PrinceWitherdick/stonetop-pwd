@@ -33,6 +33,7 @@ import { clearFightHolds } from "./battle-holds.js";
 import { contentElement } from "../utils/dialogv2-content.js";
 import { escHtml, joinNames } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
+import { inSpenderTurn } from "../utils/spender-queue.js";
 
 const KEY = "stonetop.readiness";
 
@@ -75,7 +76,8 @@ export async function settleReadinessOnAttack(actor, moveName, { ask = askGoingO
 		await postMoveNote(actor, localize(`${KEY}.keptTitle`), format(`${KEY}.kept`, { name: actor.name, move: moveName, count }));
 		return false;
 	}
-	await actor.setFlag(SYSTEM_ID, READINESS_FLAG, 0);
+	// In the spending turn (utils/spender-queue.js), so a Readiness spend under way lands before it, not over it.
+	await inSpenderTurn(actor, () => actor.setFlag(SYSTEM_ID, READINESS_FLAG, 0));
 	await postMoveNote(actor, localize(`${KEY}.lostTitle`), format(`${KEY}.lostOffense`, { name: actor.name, move: moveName }));
 	return true;
 }
@@ -259,7 +261,7 @@ export function droppedHoldingReadiness(actor, changes = {}) {
 async function loseAll(actors, noteKey, { cardFor = followerCardFor } = {}) {
 	if (!actors.length) return;
 	await Promise.all(actors.map(actor => (actor.type === "character"
-		? actor.setFlag(SYSTEM_ID, READINESS_FLAG, 0)
+		? inSpenderTurn(actor, () => actor.setFlag(SYSTEM_ID, READINESS_FLAG, 0))
 		: clearFollowerReadiness(actor, { cardFor }))));
 	const names = joinNames(actors.map(a => a.name));
 	await postMoveNote(actors.length === 1 ? actors[0] : null, localize(`${KEY}.lostTitle`), format(`${KEY}.${noteKey}`, { name: names, names }));

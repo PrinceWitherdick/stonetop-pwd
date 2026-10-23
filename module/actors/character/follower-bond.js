@@ -21,6 +21,7 @@ import { followsPartyAsWhole } from "./follower-party.js";
 import { readableFlags } from "./StonetopFlags.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { moveChatCard } from "../../utils/chat.js";
 import { escHtml } from "../../utils/strings.js";
 import { format } from "../../utils/i18n.js";
@@ -110,6 +111,19 @@ async function writeLoyalty(character, path, step, move, { ftype = "", slug = ""
 }
 
 /**
+ * Read a follower's Loyalty, step it and write it, in the leader's spending turn (spender-queue.js): two moves at
+ * once (two players' Spend Loyalty on a follower of the whole party, both relayed here) would otherwise both
+ * read 3 and both write 2, one point lost and both cards saying it was spent. Answers the step, or null.
+ */
+function stepLoyaltyInTurn(character, path, { ftype, slug = "", delta, move }) {
+	return inSpenderTurn(character, async () => {
+		const step = loyaltyStep(followerLoyalty(character, ftype, slug), delta);
+		if (step) await writeLoyalty(character, path, step, move, { ftype, slug });
+		return step;
+	});
+}
+
+/**
  * Move a follower's Loyalty by `delta` (+1 to Strengthen Your Bond, -1 to spend it), here when this
  * client can write the leader's character, else through the GM's client. Answers `{from, to}`, or null
  * when nothing moved (at the bound, not allowed, no GM to ask).
@@ -123,11 +137,7 @@ export async function changeFollowerLoyalty(character, { ftype, slug = "", delta
 	const path = followerLoyaltyPath(ftype, slug);
 	if (!character || !path) return null;
 	const moveName = move || (Number(delta) > 0 ? STRENGTHEN_YOUR_BOND : SPEND_LOYALTY);
-	if (character.isOwner) {
-		const step = loyaltyStep(followerLoyalty(character, ftype, slug), delta);
-		if (step) await writeLoyalty(character, path, step, moveName, { ftype, slug });
-		return step;
-	}
+	if (character.isOwner) return stepLoyaltyInTurn(character, path, { ftype, slug, delta, move: moveName });
 	if (!mayMoveLoyalty(character, ftype, slug, user)) return null;
 	const answer = await askGMClient(gm, FOLLOWER_LOYALTY_QUERY,
 		{ characterUuid: character.uuid, ftype, slug, delta, move: moveName, userId: user?.id ?? null },
@@ -148,9 +158,9 @@ export async function handleFollowerLoyaltyQuery(data, context = {}, deps = {}) 
 	const path = followerLoyaltyPath(data?.ftype, data?.slug ?? "");
 	if (character?.type !== "character" || !path || !delta) return null;
 	if (!mayMoveLoyalty(character, data.ftype, data.slug ?? "", asker, actors)) return null;
-	const step = loyaltyStep(followerLoyalty(character, data.ftype, data.slug ?? ""), delta);
-	if (step) await writeLoyalty(character, path, step, String(data?.move || (delta > 0 ? STRENGTHEN_YOUR_BOND : SPEND_LOYALTY)), { ftype: data.ftype, slug: data.slug ?? "" });
-	return step;
+	return stepLoyaltyInTurn(character, path, {
+		ftype: data.ftype, slug: data.slug ?? "", delta, move: String(data?.move || (delta > 0 ? STRENGTHEN_YOUR_BOND : SPEND_LOYALTY)),
+	});
 }
 
 /**

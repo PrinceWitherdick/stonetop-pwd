@@ -102,9 +102,11 @@ export function wireOptionTicks(message, root, { matches, readoutClass, wiredKey
  * @param {(pick: object) => string} spec.label   The button's words. It NAMES ITS OUTCOME.
  * @param {(paid: object) => HTMLElement} spec.readout  The static readout, from the stamped record.
  * @param {(btn: HTMLElement, index: string, pick: object) => any} spec.onPress
+ * @param {boolean} [spec.usable]  Whether this viewer may press it at all (a payout stamped on the card
+ *        wants someone who can rewrite the card). False draws no button; a paid readout still shows.
  */
 export function wirePickedOptionButton(message, html, spec) {
-	const { flagKey, wiredKey, buttonClass, readoutClass, read, icon, label, readout, onPress } = spec;
+	const { flagKey, wiredKey, buttonClass, readoutClass, read, icon, label, readout, onPress, usable = true } = spec;
 
 	const items = [...html.querySelectorAll(".stonetop-picklist-item")]
 		.filter(item => belongsToMessage(item, message));
@@ -121,11 +123,12 @@ export function wirePickedOptionButton(message, html, spec) {
 		const index = box.dataset.index;
 
 		// Already paid out: the card carries the result, not a second chance at it.
-		const paid = done[index];
+		const paid = pickedOptionRecord(message, flagKey, index, done);
 		if (paid) {
 			item.appendChild(readout(paid));
 			continue;
 		}
+		if (!usable) continue;
 
 		const btn = document.createElement("button");
 		btn.type = "button";
@@ -156,6 +159,31 @@ export function wirePickedOptionButton(message, html, spec) {
 // card pays nothing, and a second press finds the claim. A payout that then fails RELEASES the
 // claim, so the retry the old order protected is still there.
 
+// A claim names its user (`{pending, by}`). The claims this client holds are kept here, from the claim
+// until it is settled or released, so one of this user's own that is NOT held here was left by a reload
+// (the damage window or the pouch question open) and is theirs to press again. A claim whose payout
+// landed but whose settle write failed stays held here, so this client never offers it twice.
+const _held = new Set();
+const heldKey = (message, flagKey, index) => `${message?.id}:${flagKey}:${index}`;
+const currentUserId = () => globalThis.game?.user?.id ?? "";
+
+/**
+ * What option `index` stands at on the card: its stamped record, or null when it may be pressed (never
+ * claimed, or claimed by this user on a client since reloaded).
+ *
+ * @param {ChatMessage} message
+ * @param {string} flagKey
+ * @param {string} index
+ * @param {object} [done]  the flag, when already read
+ * @returns {object|null}
+ */
+export function pickedOptionRecord(message, flagKey, index, done = message?.getFlag?.(SYSTEM_ID, flagKey) ?? {}) {
+	const record = done?.[index];
+	if (!record) return null;
+	const stale = record.pending && record.by && record.by === currentUserId() && !_held.has(heldKey(message, flagKey, index));
+	return stale ? null : record;
+}
+
 /**
  * Claim option `index` before paying it out. False, having written nothing, when it is already
  * claimed or paid, or when this client may not write the card.
@@ -167,10 +195,13 @@ export function wirePickedOptionButton(message, html, spec) {
  */
 export async function claimPickedOption(message, flagKey, index) {
 	const done = message.getFlag(SYSTEM_ID, flagKey) ?? {};
-	if (done[index]) return false;
+	if (pickedOptionRecord(message, flagKey, index, done)) return false;
+	const key = heldKey(message, flagKey, index);
+	_held.add(key);
 	try {
-		await message.setFlag(SYSTEM_ID, flagKey, { ...done, [index]: { pending: true } });
+		await message.setFlag(SYSTEM_ID, flagKey, { ...done, [index]: { pending: true, by: currentUserId() } });
 	} catch (err) {
+		_held.delete(key);
 		console.warn("Stonetop | Could not claim a card's payout:", err);
 		return false;
 	}
@@ -181,10 +212,13 @@ export async function claimPickedOption(message, flagKey, index) {
 export async function settlePickedOption(message, flagKey, index, record) {
 	// Merged over the claim, so `pending` is written false rather than left behind.
 	await message.setFlag(SYSTEM_ID, flagKey, { [index]: { ...record, pending: false } });
+	_held.delete(heldKey(message, flagKey, index));
 }
 
 /** Take a claim back when nothing was paid, so the option can be pressed again. */
 export async function releasePickedOption(message, flagKey, index) {
+	// Let go here first: nothing was paid, so even a release that fails to write leaves it pressable.
+	_held.delete(heldKey(message, flagKey, index));
 	const [path, value] = deletionEntry(`flags.${SYSTEM_ID}.${flagKey}.${index}`);
 	await message.update({ [path]: value });
 }

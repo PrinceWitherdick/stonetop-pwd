@@ -1,4 +1,5 @@
 import { ownedLearnedMove } from "./owns-move.js";
+import { inSpenderTurn } from "../../utils/spender-queue.js";
 
 const key = "backgroundChoices";
 
@@ -27,15 +28,19 @@ export function learnedTrack(actor, move) {
 /**
  * Take up to `count` off what a learned move's track HOLDS: a spend (Safety First's Protection), or
  * what a 10+ put there taken back when the card is moved off it (tier-effects.js). Never below none,
- * so hold spent since is not taken twice. How many came off (0 = nothing held to take).
+ * so hold spent since is not taken twice. Read and written in the actor's spending turn
+ * (utils/spender-queue.js). How many came off (0 = nothing held to take).
  */
-export async function takeBackHeld(actor, move, count) {
+export function takeBackHeld(actor, move, count) {
 	const n = Math.max(0, Math.trunc(Number(count) || 0));
-	const track = n ? learnedTrack(actor, move) : null;
-	if (!track || track.held <= 0) return 0;
-	const next = Math.max(0, track.held - n);
-	await track.resources.setUses(move, next, { stonetopMove: move });
-	return track.held - next;
+	if (!n) return Promise.resolve(0);
+	return inSpenderTurn(actor, async () => {
+		const track = learnedTrack(actor, move);
+		if (!track || track.held <= 0) return 0;
+		const next = Math.max(0, track.held - n);
+		await track.resources.setUses(move, next, { stonetopMove: move });
+		return track.held - next;
+	});
 }
 
 export class MoveResources {
@@ -51,8 +56,9 @@ export class MoveResources {
 	 */
 	async add(moveResourceButton) {
 		const newValue = moveResourceButton.isChecked() ? moveResourceButton.index : moveResourceButton.index + 1;
-		const current = this.getMoveResources();
-		await this._addMoveResource(current, moveResourceButton.moveName, newValue);
+		// One track's sub-key, not the whole flag re-spread from a read: a spend on a sibling track that
+		// landed since would otherwise be written back over.
+		await this.setUses(moveResourceButton.moveName, newValue);
 	}
 
 	getMoveResources() {
@@ -80,10 +86,6 @@ export class MoveResources {
 	/** `setUses` as an actor.update() fragment, for a caller folding it into a write of its own. */
 	usesUpdate(moveName, value) {
 		return this._flags.subKeyData(key, moveName, value);
-	}
-
-	async _addMoveResource(current, moveName, newValue) {
-		await this._flags.setFlag(key, {...current, [moveName]: newValue});
 	}
 
 	/**

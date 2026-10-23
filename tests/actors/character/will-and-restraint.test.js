@@ -28,6 +28,12 @@ describe("Iron Will", () => {
 		expect(IRON_WILL_DAMAGE).toEqual({ formula: "1d4", self: true, ignoresArmor: true });
 	});
 
+	it("says the 1d4 was not taken when the damage window it opened was closed", async () => {
+		const roll = vi.fn(async () => null);
+		expect(await ironWill(character([IRON_WILL]), { ask: async () => true, roll })).toBe(false);
+		expect(roll).toHaveBeenCalledTimes(1);
+	});
+
 	it("rolls nothing when declined, or without the move learned", async () => {
 		const roll = vi.fn();
 		expect(await ironWill(character([IRON_WILL]), { ask: async () => false, roll })).toBe(false);

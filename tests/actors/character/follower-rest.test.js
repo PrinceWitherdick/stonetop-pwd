@@ -36,6 +36,21 @@ describe("which followers can rest", () => {
 		const bodies = followerRestBodies(flags, [roster[0]], { npcFor: () => npc });
 		expect(bodies).toEqual([expect.objectContaining({ from: 5, max: 10 })]);
 	});
+
+	// Code review 10-22 (HC-9): an NPC this client cannot write is healed by the GM's client; with no GM here a
+	// Recover leaves that follower out before it spends a use on them.
+	it("says which NPC-held bodies wait on a GM who is not here", () => {
+		const theirs = { isOwner: false, system: { attributes: { hp: { value: 5, max: 10 } } } };
+		const mine = { isOwner: true, system: { attributes: { hp: { value: 5, max: 10 } } } };
+		const [bran] = followerRestBodies(flags, [roster[0]], { npcFor: () => theirs, gm: null });
+		const [owned] = followerRestBodies(flags, [roster[0]], { npcFor: () => mine, gm: null });
+		const [boxed] = followerRestBodies(flags, [roster[0]], { gm: null });
+		const [withGm] = followerRestBodies(flags, [roster[0]], { npcFor: () => theirs, gm: { id: "gm" } });
+		expect(bran).toMatchObject({ npcHeld: true, healable: false });
+		expect(owned).toMatchObject({ npcHeld: true, healable: true });
+		expect(boxed.healable).toBeUndefined();
+		expect(withGm).toMatchObject({ npcHeld: true, healable: true });
+	});
 });
 
 describe("resting them", () => {

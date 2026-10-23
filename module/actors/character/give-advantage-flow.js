@@ -45,6 +45,9 @@ export const GIVING_FLAG = "advantageGiving";
 /** The cards this client is choosing on right now, by message id. */
 const _choosing = new Set();
 
+/** The once-only "they did" buttons this client is pressing right now (wireRecordOnce), by `${message id}:${flag}`. */
+const _recording = new Set();
+
 /**
  * Hold advantage on `target`'s next roll for `moveName`: written here when this client owns them,
  * otherwise by the GM's client. Whether it was held.
@@ -228,8 +231,10 @@ export function wireGiveAdvantage(message, html, deps = {}) {
 			const stillMine = () => message.getFlag(scope, GIVING_FLAG) === me;
 			_choosing.add(message.id);
 			try {
+				// This user's own latch (a reload mid-choice) is theirs to take again; another user's is not.
 				await withCardLatch(message, GIVING_FLAG, me, buttons,
-					() => offerAdvantage(message, giver, moveName, { ...deps, stillMine }));
+					() => offerAdvantage(message, giver, moveName, { ...deps, stillMine }),
+					{ taken: held => !!held && held !== me });
 			} catch (err) {
 				console.error(`Stonetop | ${moveName}'s advantage could not be given`, err);
 			} finally {
@@ -270,55 +275,46 @@ const userTargets = () => [...(globalThis.game?.user?.targets ?? [])];
  * (stonetop.js renderChatMessageHTML), beside the giving moves' buttons on the same posted cards.
  */
 export function wireFocusFire(message, html, deps = {}) {
-	const root = html?.[0] ?? html;
-	const buttons = [...(root?.querySelectorAll?.(".stonetop-focus-fire") ?? [])].filter(btn => belongsToMessage(btn, message));
-	if (!buttons.length) return;
-	const scope = deps.scope ?? SYSTEM_ID;
-	const marshal = deps.giver ?? speakerActor(message);
-	const ordered = message?.getFlag?.(scope, FOCUS_FIRE_CARD_FLAG) ?? null;
-	const usable = deps.usable ?? canRewriteCard(message, marshal);
 	const order = deps.order ?? orderFocusFire;
 	const targets = deps.targets ?? userTargets;
-	for (const btn of buttons) {
-		if (ordered?.foe) {
-			const doc = root.ownerDocument ?? globalThis.document;
-			const note = doc.createElement("span");
-			note.className = "stonetop-give-advantage-readout";
-			note.textContent = format("stonetop.fight.heroMoves.focusFire.readout", { foe: ordered.foe });
-			btn.replaceWith(note);
-			continue;
-		}
-		if (!usable || !marshal) { btn.remove(); continue; }
-		if (btn.dataset.focusWired === "1") continue;
-		btn.dataset.focusWired = "1";
-		btn.addEventListener("click", async () => {
-			if (btn.disabled) return;
+	wireRecordOnce(message, html, deps, {
+		selector: ".stonetop-focus-fire",
+		flag: FOCUS_FIRE_CARD_FLAG,
+		wired: "focusWired",
+		readout: ({ foe }) => format("stonetop.fight.heroMoves.focusFire.readout", { foe }),
+		failed: "Focus Fire could not be ordered",
+		// Checked before the card is claimed: the ONE foe targeted, and a Command to spend.
+		ready: marshal => {
 			const aimed = targets();
 			if (aimed.length !== 1) {
 				globalThis.ui?.notifications?.info?.(localize("stonetop.fight.heroMoves.focusFire.targetOne"));
-				return;
+				return null;
 			}
 			if (!commandHeld(marshal)) {
 				globalThis.ui?.notifications?.warn?.(format("stonetop.heldAdvantage.noneHeld", { move: HERO_MOVES.STENTORIAN }));
-				return;
+				return null;
 			}
-			btn.disabled = true;
+			return aimed[0];
+		},
+		// The card is claimed BEFORE the Command is spent, so a second press (here or on the GM's screen)
+		// finds the claim rather than spending another Command on a second order.
+		press: async (msg, marshal, { scope = SYSTEM_ID }, token) => {
+			const foe = { uuid: token?.document?.uuid ?? token?.uuid ?? "", name: token?.name ?? token?.document?.name ?? "" };
+			const entry = await order(marshal, foe);
+			if (!entry) return false;
+			// Given: the Command is spent, so the claim stays even if the card cannot say whom.
 			try {
-				const [token] = aimed;
-				const foe = { uuid: token?.document?.uuid ?? token?.uuid ?? "", name: token?.name ?? token?.document?.name ?? "" };
-				const entry = await order(marshal, foe);
-				if (!entry) { btn.disabled = false; return; }
-				await message.setFlag(scope, FOCUS_FIRE_CARD_FLAG, { foe: entry.name || foe.name });
+				await msg.setFlag(scope, FOCUS_FIRE_CARD_FLAG, { foe: entry.name || foe.name });
 				await globalThis.ChatMessage?.create?.({
 					content: stonetopChatCard(HERO_MOVES.FOCUS_FIRE, `<div class="card-content"><p>${escHtml(format("stonetop.fight.heroMoves.focusFire.card", { name: marshal.name, foe: entry.name || foe.name }))}</p></div>`, "stonetop-focus-fire-card"),
 					speaker: globalThis.ChatMessage?.getSpeaker?.({ actor: marshal }),
 				});
 			} catch (err) {
 				console.error("Stonetop | Focus Fire could not be ordered", err);
-				btn.disabled = false;
 			}
-		});
-	}
+			return true;
+		},
+	});
 }
 
 /** Message flag: the foe a Rapier Wit card's "They attack" named, `{foe}`, so its button goes once pressed. */
@@ -383,9 +379,14 @@ async function pickFoe(actor, { pools, allowNamed = false, words }, {
  * by whoever can write the card and the one who posted it (their player, or the GM), once per card. Once
  * pressed, the card says whom (`flag`'s `{foe}`, in `readout`'s words), and the button goes. `press` records
  * it and answers whether it did: a press that recorded nothing leaves the button live. `wired` is the button's
- * dataset key, so a re-render wires it once.
+ * dataset key, so a re-render wires it once. The card is CLAIMED before `press` runs (card-latch.js#withCardLatch),
+ * so a second press on another screen finds the claim rather than recording twice, and a press that recorded
+ * nothing gives the claim back. The claim names its user (`{pending, by}`): one of this user's own with nothing
+ * in flight here (a reload while the foe picker was open) is theirs to press again, as wireGiveAdvantage's is.
+ * `ready(actor)`, when given, is asked first: null stops the press before the claim, anything else is handed
+ * to `press` as its fourth argument.
  */
-function wireRecordOnce(message, html, deps, { selector, flag, wired, readout, press, failed }) {
+function wireRecordOnce(message, html, deps, { selector, flag, wired, readout, press, failed, ready = null }) {
 	const root = html?.[0] ?? html;
 	const buttons = [...(root?.querySelectorAll?.(selector) ?? [])].filter(btn => belongsToMessage(btn, message));
 	if (!buttons.length) return;
@@ -393,6 +394,10 @@ function wireRecordOnce(message, html, deps, { selector, flag, wired, readout, p
 	const actor = deps.giver ?? speakerActor(message);
 	const recorded = message?.getFlag?.(scope, flag) ?? null;
 	const usable = deps.usable ?? canRewriteCard(message, actor);
+	const me = deps.userId ?? globalThis.game?.user?.id ?? "";
+	const inFlight = `${message?.id}:${flag}`;
+	// Claimed by another user, or by this client still pressing: theirs. This user's own stale claim: not.
+	const claimedElsewhere = held => !!held?.pending && (held.by !== me || _recording.has(inFlight));
 	for (const btn of buttons) {
 		if (recorded?.foe) {
 			const doc = root.ownerDocument ?? globalThis.document;
@@ -403,16 +408,32 @@ function wireRecordOnce(message, html, deps, { selector, flag, wired, readout, p
 			continue;
 		}
 		if (!usable || !actor) { btn.remove(); continue; }
+		// Claimed on another screen, nothing recorded yet: nothing to press here meanwhile.
+		btn.disabled = claimedElsewhere(recorded);
 		if (btn.dataset[wired] === "1") continue;
 		btn.dataset[wired] = "1";
 		btn.addEventListener("click", async () => {
-			if (btn.disabled) return;
-			btn.disabled = true;
+			if (btn.disabled || _recording.has(inFlight)) return;
+			const readied = ready ? ready(actor) : true;
+			if (!readied) return;
+			// Given back only while nothing was recorded: a press that wrote its `{foe}` and then failed on
+			// its chat card has still recorded it.
+			const wrote = () => !!message.getFlag?.(scope, flag)?.foe;
+			_recording.add(inFlight);
 			try {
-				if (!await press(message, actor, deps)) btn.disabled = false;
+				await withCardLatch(message, flag, { pending: true, by: me }, [btn], async () => {
+					try {
+						return !!await press(message, actor, deps, readied) || wrote();
+					} catch (err) {
+						if (!wrote()) throw err;
+						console.error(`Stonetop | ${failed}`, err);
+						return true;
+					}
+				}, { scope, taken: held => !!held && (!!held.foe || held.by !== me) });
 			} catch (err) {
 				console.error(`Stonetop | ${failed}`, err);
-				btn.disabled = false;
+			} finally {
+				_recording.delete(inFlight);
 			}
 		});
 	}

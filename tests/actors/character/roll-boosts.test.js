@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Window } from "happy-dom";
 import {
-	boostOffers, takeBoost, handleBoostQuery, boostNote, actsForHelper, isBoostableRoll, wireRollBoosts,
+	boostOffers, takeBoost, pressBoost, handleBoostQuery, boostNote, actsForHelper, isBoostableRoll, wireRollBoosts,
 	deathsDoorAwaitsPlusOnes, deathsDoorPlusOnes, onUpdateActorDoorPlusOnes,
 	blessingHeld, holdBlessing, shareBlessing, handleBlessingQuery,
 	BOOSTS_FLAG, BLESSING_FLAG, BLESSING_QUERY, CHRONICLER, COMMUNE_WITH_ARATIS, MANY_HANDS, PIETY,
@@ -10,6 +10,8 @@ import { ZERO_HP_MOVES } from "../../../module/actors/character/deaths-door.js";
 import { rollCardRoute } from "../../../module/utils/roll-card-writer.js";
 import { buildLiveCharacter, sourceMovesFor } from "../../fakes/LiveCharacter.js";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
+import { RELAY_GRACE_MS } from "../../../module/utils/relay-landed.js";
+import { useFakeHooks } from "../../fakes/hooks.js";
 
 // +1 to a roll just made, from its card: Chronicler of Stonetop's Diligence (any PC's roll), the Prophet's
 // Sanction (their own roll), Many Hands Make Light Work (another PC's roll, free), and Piety's Blessing
@@ -347,6 +349,26 @@ describe("taking a +1", () => {
 		expect(message.rolls[0].total).toBe(9);
 	});
 
+	// QY-4: each card is its own line, and both read the Judge's last pip before either paid it.
+	it("pays a Judge's last Diligence once, though two cards ask for it at once", async () => {
+		const aeron = judge({ held: { [CHRONICLER]: 1 } });
+		aeron.typedActor.moveResources.setUses = vi.fn(async (move, value) => {
+			await new Promise(r => setTimeout(r, 5));
+			aeron.tracks[move] = value;
+		});
+		const one = card();
+		const two = card();
+		two.id = "msg2";
+		const d = deps();
+		const taken = await Promise.all([
+			takeBoost(one, { source: "diligence", helper: aeron }, d),
+			takeBoost(two, { source: "diligence", helper: aeron }, d),
+		]);
+		expect(taken.filter(Boolean)).toHaveLength(1);
+		expect(aeron.tracks[CHRONICLER]).toBe(0);
+		expect(one.rolls[0].total + two.rolls[0].total).toBe(17);
+	});
+
 	it("adds Many Hands for free, and refuses Diligence from an empty track", async () => {
 		const aeron = judge({ held: {} });
 		const message = card();
@@ -415,6 +437,55 @@ describe("whose client writes it", () => {
 			expect(await ask(message, aeron, "u-judge")).toBe(true);
 			expect(await ask(message, aeron, "u-judge")).toBe(false);
 			expect(message.rolls[0].total).toBe(11);
+		});
+	});
+
+	// QY-6: the GM's client wrote the +1, but its answer came after the asker stopped waiting.
+	describe("a relayed press whose answer never came", () => {
+		let saved;
+		beforeEach(() => { saved = { user: globalThis.game.user, users: globalThis.game.users }; });
+		afterEach(() => {
+			globalThis.game.user = saved.user;
+			globalThis.game.users = saved.users;
+		});
+
+		it("counts a +1 the card shows as taken, and a +1 it does not show as not taken", async () => {
+			const aeron = judge();
+			const message = card({ author: "u-fox" });
+			globalThis.game.user = player("judge");
+			const landed = vi.fn(async () => {
+				message.flags[SCOPE][BOOSTS_FLAG] = [{ source: "diligence", by: aeron.uuid, name: "Aeron" }];
+				throw new Error("timed out");
+			});
+			globalThis.game.users = { activeGM: { ...GM, query: landed } };
+			expect(await pressBoost(message, { source: "diligence", helper: aeron }, {}, { route: "relay" })).toBe(true);
+			vi.useFakeTimers();
+			try {
+				globalThis.game.users = { activeGM: { ...GM, query: vi.fn(async () => { throw new Error("timed out"); }) } };
+				const out = pressBoost(message, { source: "diligence", helper: aeron }, {}, { route: "relay" });
+				await vi.advanceTimersByTimeAsync(RELAY_GRACE_MS);
+				expect(await out).toBe(false);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		// The GM's write was queued behind others on the card, so it lands after the asker stopped waiting.
+		it("counts a +1 the GM's client writes a moment after no answer came", async () => {
+			const hooks = useFakeHooks();
+			try {
+				const aeron = judge();
+				const message = card({ author: "u-fox" });
+				globalThis.game.user = player("judge");
+				globalThis.game.users = { activeGM: { ...GM, query: vi.fn(async () => { throw new Error("timed out"); }) } };
+				const out = pressBoost(message, { source: "diligence", helper: aeron }, {}, { route: "relay" });
+				await vi.waitFor(() => expect(hooks.handlers.size).toBe(1));
+				message.flags[SCOPE][BOOSTS_FLAG] = [{ source: "diligence", by: aeron.uuid, name: "Aeron" }];
+				hooks.fire("updateChatMessage", message);
+				expect(await out).toBe(true);
+			} finally {
+				hooks.restore();
+			}
 		});
 	});
 });

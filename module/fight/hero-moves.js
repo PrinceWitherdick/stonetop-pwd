@@ -789,6 +789,11 @@ export async function spendRapierWitBlow(fox, attacker, {
 } = {}) {
 	if (!rapierWitBlowOwed(fox, attacker)) return false;
 	if (fox.isOwner !== false) return spendRapierWit(fox, [foeKey(attacker)], "blow");
+	// Nobody to write the Fox: the +1d4 stays owed and would ride this foe's next blow too, so the table is told.
+	if (!gm) {
+		globalThis.ui?.notifications?.warn?.(format(`${MOVE_KEY}.rapierWit.noGm`, { name: fox.name ?? "", move: HERO_MOVES.RAPIER_WIT }));
+		return false;
+	}
 	return !!(await askGMClient(gm, RAPIER_WIT_QUERY, {
 		foxUuid: fox.uuid, attackerUuid: attacker?.uuid ?? "", userId,
 	}, { fallback: false, what: "spend Rapier Wit's +1d4" }));
@@ -796,14 +801,17 @@ export async function spendRapierWitBlow(fox, attacker, {
 
 /**
  * The GM's side of RAPIER_WIT_QUERY, for the primary GM only: the asker must own the one who struck (it is
- * their blow that was rolled), and the Fox still be owed that foe's +1d4. Whether it was spent.
+ * their blow that was rolled) or the Fox (a counter-attack's card is struck on the Fox's side, at a foe the
+ * GM owns), and the Fox still be owed that foe's +1d4. Whether it was spent.
  */
 export async function handleRapierWitQuery(data, context = {}, { users = globalThis.game?.users, resolve = resolveSync } = {}) {
 	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const fox = data?.foxUuid ? resolve(data.foxUuid) : null;
 	const attacker = data?.attackerUuid ? resolve(data.attackerUuid) : null;
-	if (!user || !fox || !attacker?.testUserPermission?.(user, "OWNER")) return false;
+	if (!user || !fox || !attacker) return false;
+	const owns = doc => !!doc?.testUserPermission?.(user, "OWNER");
+	if (!owns(attacker) && !owns(fox)) return false;
 	if (!rapierWitBlowOwed(fox, attacker)) return false;
 	return spendRapierWit(fox, [foeKey(attacker)], "blow");
 }
@@ -1377,11 +1385,17 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 	// strikes back from the sheet (the user's ruling, 2026-10-18). So while they hold any, it opens UNTICKED
 	// with the cost in its label, and the Readiness comes off only once it comes back ticked: re-read then,
 	// never below none, since a spend or a Defend in between may have changed it.
+	// Ticked, it MAKES the blow a strike back (`strikeBack` on the line): "deal your damage, with
+	// disadvantage" (p.216), so it carries that mode, and the window's answer says so (attack-flow.js
+	// #askDamageAdjustment), which drops the fight's +N and asks no "going on the offense?" afterwards.
 	if (strikeBack && has(actor, HERO_MOVES.REMEMBER_ME)) add("rememberMe", HERO_MOVES.REMEMBER_ME, "1d4");
 	else if (!strikeBack && has(actor, HERO_MOVES.REMEMBER_ME) && heldReadiness(actor) > 0) {
-		add("rememberMeSpend", HERO_MOVES.REMEMBER_ME, "1d4", {
-			applied: false,
-			spend: hero => (heldReadiness(hero) > 0 ? spendHeldReadiness(hero, 1) : null),
+		offers.push({
+			...offerLine("rememberMeSpend", HERO_MOVES.REMEMBER_ME, "1d4", {
+				applied: false,
+				spend: hero => spendHeldReadiness(hero, 1),
+			}),
+			mode: "dis", strikeBack: true,
 		});
 	}
 	// Second Intent: "When you Defend and spend 1 Readiness to Parry & Riposte, also pick 1 option from the

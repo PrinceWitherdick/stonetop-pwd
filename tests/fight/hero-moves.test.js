@@ -296,9 +296,10 @@ describe("Something to Remember Me By, off the fight ring", () => {
 
 	it("is offered unticked only to a hero with the move learned, holding Readiness, on a blow not rolled as a strike back", () => {
 		const { actor } = wouldBe([HERO_MOVES.REMEMBER_ME], { readiness: 2 });
+		// Ticked, it makes the blow a strike back: "deal your damage, with disadvantage" (p.216).
 		expect(blowOffers(actor, {}).find(o => o.key === "rememberMeSpend")).toMatchObject({
-			dice: "1d4", applied: false,
-			label: "Something to Remember Me By, struck back (spend 1 Readiness): +1d4 damage, and you scar, mark or diminish them",
+			dice: "1d4", applied: false, mode: "dis", strikeBack: true,
+			label: "Something to Remember Me By, struck back with disadvantage (spend 1 Readiness): +1d4 damage, and you scar, mark or diminish them",
 			pill: "Something to Remember Me By +1d4",
 		});
 		expect(keys(wouldBe([HERO_MOVES.REMEMBER_ME], { readiness: 0 }).actor, {})).not.toContain("rememberMeSpend");

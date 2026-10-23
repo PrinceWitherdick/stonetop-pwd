@@ -313,7 +313,7 @@ describe("Defend's Readiness", () => {
 			hasGuardianMove: false,
 			defendReadiness: 0,
 			bearsShield: async () => false,
-			setDefendReadiness: vi.fn(async n => { self.defendReadiness = n; }),
+			_writeDefendReadiness: vi.fn(async n => { self.defendReadiness = n; }),
 		};
 		const settle = (tier, done) => StonetopCharacter.prototype.settleDefendReadinessTier.call(self, tier, done);
 		const done = await settle("partial");

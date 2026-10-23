@@ -354,15 +354,21 @@ export function resolveSync(uuid) {
  * is read instead. That id is the sender's OWN WORD, so it is never taken for a GM's: a player
  * claiming to be one would otherwise be handed a GM's authority over the thing being asked for.
  *
+ * `allowGm` takes a claimed GM's id all the same. Only for an ask a person still reads and answers yes or no
+ * before anything is spent (owner-ask.js#answerOwnerAsk): there, refusing it left a GM's ask on v13 refused
+ * without a word (a GM's Recover for a PC under another player's Blessed never got the Stock, nor another
+ * player's supplies).
+ *
  * @param {object} data  the query payload, carrying {userId} for v13
  * @param {{user?: object}} context  core's query context, naming who asked (v14 only)
  * @param {object} [users]  the users collection to resolve a claimed id against
- * @returns {object|null}  the asking non-GM user, or null
+ * @param {{allowGm?: boolean}} [options]
+ * @returns {object|null}  the asking user (non-GM unless `allowGm`), or null
  */
-export function queryAsker(data, context = {}, users = globalThis.game?.users) {
+export function queryAsker(data, context = {}, users = globalThis.game?.users, { allowGm = false } = {}) {
 	if (context?.user) return context.user;
 	const claimed = typeof data?.userId === "string" ? users?.get?.(data.userId) : null;
-	return claimed && !claimed.isGM ? claimed : null;
+	return claimed && (allowGm || !claimed.isGM) ? claimed : null;
 }
 
 /**

@@ -55,14 +55,20 @@ function followerNpcOf(character, ftype, slug) {
 }
 
 /**
- * Whether setFollowerHp could write this row's HP from this client: no NPC stands for it (its box is on the
- * leader), this client owns the NPC, or a GM is connected to write it for them (FOLLOWER_NPC_HP_QUERY). The
- * rule setFollowerHp itself follows, asked ahead by a move that pays before it heals (companion-bond.js's
+ * Whether setFollowerHp could write the HP of a follower whose NPC is `npc` (null: none, the box is on the
+ * leader) from this client: no NPC, this client owns it, or a GM is connected to write it for them
+ * (FOLLOWER_NPC_HP_QUERY). The rule setFollowerHp itself follows, for a caller that has the NPC already.
+ */
+export function npcHpWritable(npc, { gm = globalThis.game?.users?.activeGM ?? null } = {}) {
+	return !npc || !!npc.isOwner || !!gm;
+}
+
+/**
+ * npcHpWritable for a follower row, asked ahead by a move that pays before it heals (companion-bond.js's
  * Lend Strength), so nothing is paid for a heal that cannot land.
  */
 export function canSetFollowerHp(character, row, { link = followerActorFromLink, gm = globalThis.game?.users?.activeGM ?? null } = {}) {
-	const npc = linkedFollowerNpc(readableFlags(character), row?.follower, row?.slug ?? "", link);
-	return !npc || !!npc.isOwner || !!gm;
+	return npcHpWritable(linkedFollowerNpc(readableFlags(character), row?.follower, row?.slug ?? "", link), { gm });
 }
 
 /**

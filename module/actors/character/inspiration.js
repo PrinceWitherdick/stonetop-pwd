@@ -38,6 +38,7 @@ import { ownsLearnedMoveNamed } from "./owns-move.js";
 import { WE_HAPPY_FEW } from "./fight-states.js";
 import { inBattle } from "../../fight/in-battle.js";
 import { escHtml } from "../../utils/strings.js";
+import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { format, localize } from "../../utils/i18n.js";
 
 export { WE_HAPPY_FEW };
@@ -79,25 +80,33 @@ export function heldAfterSpeech(current, amount) {
  */
 export async function holdInspiration(actor, amount, scope = SYSTEM_ID) {
 	if (actor?.type !== "character") return false;
-	const current = inspirationHeld(actor, scope);
-	const next = heldAfterSpeech(current, amount);
-	if (next <= current) return false;
-	await actor.setFlag(scope, INSPIRATION_FLAG, next);
-	return true;
+	// In the holder's spending turn (utils/spender-queue.js), as a spend is, so neither writes over the other.
+	return inSpenderTurn(actor, async () => {
+		const current = inspirationHeld(actor, scope);
+		const next = heldAfterSpeech(current, amount);
+		if (next <= current) return false;
+		await actor.setFlag(scope, INSPIRATION_FLAG, next);
+		return true;
+	});
 }
 
-/** Spend 1 Inspiration. The flag goes altogether at 0. Whether there was one to spend. */
-export async function spendInspiration(actor, scope = SYSTEM_ID) {
-	const held = inspirationHeld(actor, scope);
-	if (held <= 0) return false;
-	if (held > 1) await actor.setFlag(scope, INSPIRATION_FLAG, held - 1);
-	else await actor.unsetFlag(scope, INSPIRATION_FLAG);
-	return true;
+/**
+ * Spend 1 Inspiration, in the holder's spending turn (utils/spender-queue.js). The flag goes altogether at 0.
+ * Whether there was one to spend.
+ */
+export function spendInspiration(actor, scope = SYSTEM_ID) {
+	return inSpenderTurn(actor, async () => {
+		const held = inspirationHeld(actor, scope);
+		if (held <= 0) return false;
+		if (held > 1) await actor.setFlag(scope, INSPIRATION_FLAG, held - 1);
+		else await actor.unsetFlag(scope, INSPIRATION_FLAG);
+		return true;
+	});
 }
 
-/** Give back 1 Inspiration spent on something that then did not happen. */
-export async function refundInspiration(actor, scope = SYSTEM_ID) {
-	await actor.setFlag(scope, INSPIRATION_FLAG, inspirationHeld(actor, scope) + 1);
+/** Give back 1 Inspiration spent on something that then did not happen, in the holder's spending turn. */
+export function refundInspiration(actor, scope = SYSTEM_ID) {
+	return inSpenderTurn(actor, () => actor.setFlag(scope, INSPIRATION_FLAG, inspirationHeld(actor, scope) + 1));
 }
 
 // "Once battle is joined": whether this character stands in any combat in the world (fight/in-battle.js).

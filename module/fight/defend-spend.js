@@ -90,13 +90,14 @@ import { DIE_FLAG as INSPIRATION_DIE_FLAG } from "../actors/character/inspiratio
 import { giveAdvantageButtonHtml } from "../actors/character/give-advantage.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { inCardTurn } from "../utils/card-queue.js";
-import { resolveSync, queryAsker } from "../utils/foundry-compat.js";
+import { askGMClient, resolveSync, queryAsker } from "../utils/foundry-compat.js";
+import { NO_ANSWER, relayOutcome } from "../utils/relay-landed.js";
 
 const KEY = "stonetop.fight.defend";
 const HERO_KEY = "stonetop.fight.heroMoves";
 
 // spendReadiness (follower-readiness.js#spendHeldReadiness, for the fight ring too): take `cost` Readiness off a
-// character, or off a follower's card, never below none. A follower ordered to Defend spends on Defend's own
+// character, or off a follower's card, refused when less is held. A follower ordered to Defend spends on Defend's own
 // terms (p.469), so every spend here is theirs too. heldReadiness (readinessHeldBy): what a defender holds.
 export { spendReadiness };
 
@@ -387,7 +388,7 @@ export async function spendOnBlow(message, kind, offer, { scope = SYSTEM_ID, str
 	const cost = Number.isFinite(offer.cost) ? offer.cost : 1;
 	if (!canPay(kind, offer, cost)) return false;
 	// Written here, or by the GM's client for a card this reader cannot write (see the note at the top).
-	const take = relay ? () => askGMToSpend(message, kind, offer) : () => takeSpend(message, kind, offer, { scope });
+	const take = relay ? () => askGMToSpend(message, kind, offer, { scope }) : () => takeSpend(message, kind, offer, { scope });
 
 	// I Get Knocked Down: the pick IS the price, so it is asked before anything is written, and backing
 	// out of it halves nothing. Then the foe is remembered for But I Get Up Again.
@@ -472,12 +473,13 @@ export function takeSpend(message, kind, offer, { scope = SYSTEM_ID, reroll = ro
 		if ((now[list] ?? []).some(again)) return false;
 		// Never Gonna Keep Me Down writes its number onto the row with its record, in one write.
 		if (kind === "neverGonna") return rollAgainKeepLower(message, now, offer, { scope, reroll });
-		// Safety First is paid in Protection, 1 off what is HELD, and refused with none left.
+		// Each pool re-reads itself in the defender's spending turn (utils/spender-queue.js) and refuses when it
+		// no longer holds enough, so the last point never pays twice.
+		// Safety First is paid in Protection, 1 off what is HELD.
 		if (kind === "safetyFirst" && !await takeBackHeld(offer.defender, HERO_MOVES.SAFETY_FIRST, 1)) return false;
-		// Front Line Leader's Presence pays in Readiness's place, and is refused with none left.
-		if (paysPresence(offer)) {
-			if (!await spendPresence(offer.defender)) return false;
-		} else if (cost > 0) await spendReadiness(offer.defender, cost);
+		// Front Line Leader's Presence pays in Readiness's place.
+		if (paysPresence(offer)) { if (!await spendPresence(offer.defender)) return false; }
+		else if (cost > 0 && !await spendReadiness(offer.defender, cost)) return false;
 		const spend = { uuid: offer.row.uuid, name: offer.defender.name, how: kind, ...(paysPresence(offer) ? { purse: "presence" } : {}) };
 		// A stand-in, and a sufferer's own move (a knock-down), say whose it was: spentOn reads the knock-down
 		// against whoever takes the blow now.
@@ -531,19 +533,29 @@ async function rollAgainKeepLower(message, now, offer, { scope = SYSTEM_ID, rero
 /** The User query a player's spend goes through on a card the GM wrote. */
 export const SPEND_QUERY = "stonetop.defendSpend";
 
-/** A player's spend on a card the GM wrote: the GM's client records it. Whether it was taken. */
-async function askGMToSpend(message, kind, offer) {
+/** How many of this defender's spends of `kind` on this blow the card records now. PURE but for the read. */
+function spendsRecorded(message, kind, offer, scope = SYSTEM_ID) {
+	const list = SPEND_KINDS[kind]?.list ?? "standIns";
+	const now = message?.getFlag?.(scope, "damage")?.[list] ?? [];
+	return now.filter(s => s?.uuid === offer?.row?.uuid && (s.how ?? kind) === kind
+		&& (s.by ? s.by === offer?.defender?.uuid : s.name === offer?.defender?.name)).length;
+}
+
+/**
+ * A player's spend on a card the GM wrote: the GM's client records it. Whether it was taken. An answer that never
+ * came (out of time) is not read as a no: the card is watched a while longer (relay-landed.js), and a spend the
+ * GM's client records all the same counts as taken, so a parry's strike back is not dropped for a Readiness paid.
+ */
+async function askGMToSpend(message, kind, offer, { scope = SYSTEM_ID } = {}) {
 	const gm = globalThis.game?.users?.activeGM;
 	if (!gm) return false;
-	try {
-		return !!(await gm.query(SPEND_QUERY, {
-			messageId: message.id, kind, rowUuid: offer.row.uuid, defenderUuid: offer.defender.uuid, ...(offer.purse ? { purse: offer.purse } : {}),
-			userId: globalThis.game?.user?.id ?? null,
-		}, { timeout: 10000 }));
-	} catch (err) {
-		console.warn("Stonetop | the GM's client could not record a Readiness spend", err);
-		return false;
-	}
+	const before = spendsRecorded(message, kind, offer, scope);
+	const grew = () => spendsRecorded(message, kind, offer, scope) > before;
+	const answer = await askGMClient(gm, SPEND_QUERY, {
+		messageId: message.id, kind, rowUuid: offer.row.uuid, defenderUuid: offer.defender.uuid, ...(offer.purse ? { purse: offer.purse } : {}),
+		userId: globalThis.game?.user?.id ?? null,
+	}, { fallback: NO_ANSWER, what: "record a Readiness spend" });
+	return !!await relayOutcome(message, answer, grew);
 }
 
 /**

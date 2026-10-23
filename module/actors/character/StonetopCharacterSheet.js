@@ -1,4 +1,5 @@
 import {MoveResourceButton} from "./elements/move-resource-button.js";
+import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { confirmOutcome, askWithButtons } from "../../utils/ask-with-buttons.js";
 import { parseMovePickCount, backgroundMoveNames, backgroundPossessionSlugs, splitMarkedActions } from "./StonetopCharacter.js";
 import {BackgroundInputChoice} from "./elements/background-input-choice.js";
@@ -116,7 +117,7 @@ import {readCurrentSeason, readCurrentYear} from "../../seasons/current-season.j
 import {laboratoryNewlySelected, rollNaphthaYield} from "../../seasons/seasons-change-reminders.js";
 import {markWildWaysXp, wildWaysState} from "./wild-ways.js";
 import {openRitesOfTheLand} from "./rites-of-the-land.js";
-import {HEALERS_ARTS, HEALERS_ARTS_STOCK, HEALERS_ARTS_STOCK_HP, healersArtsCarers, carerWis, recoverHeal, recoverBreakdown, canReachCarerStock, payHealersArtsStock, spendsCarerStockDirectly} from "./healers-arts.js";
+import {HEALERS_ARTS, HEALERS_ARTS_STOCK, HEALERS_ARTS_STOCK_HP, healersArtsCarers, carerWis, recoverHeal, recoverBreakdown, recoverRefusal, canReachCarerStock, payHealersArtsStock, spendsCarerStockDirectly} from "./healers-arts.js";
 import {isUnliving, recoveredHpTo, slowToHeal} from "./deaths-door-actor.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
 import {openPeoplePortraitPicker} from "../steading/PeopleGalleryDialog.js";
@@ -715,8 +716,8 @@ function _restFollowersHtml(bodies, { legend, gain }) {
 	return `<div class="stonetop-rest-followers">
 		<p class="stonetop-homestead-subhead">${_esc(legend)}</p>
 		<ul class="stonetop-rest-follower-list">
-			${bodies.map(b => `<li><label class="stonetop-rest-follower">
-				<input type="checkbox" class="stonetop-rest-follower-check" name="restFollower" value="${_esc(b.id)}">
+			${bodies.map(b => `<li><label class="stonetop-rest-follower"${b.healable === false ? ` data-tooltip="${_esc(game.i18n.localize("stonetop.specialMoves.recover.followerNeedsGm"))}"` : ""}>
+				<input type="checkbox" class="stonetop-rest-follower-check" name="restFollower" value="${_esc(b.id)}"${b.healable === false ? " disabled" : ""}>
 				<span>${_esc(b.name)} <span class="stonetop-supply-purse-left">(${b.from}/${b.max} HP &rarr; ${gain(b)})</span></span>
 			</label></li>`).join("")}
 		</ul>
@@ -8380,7 +8381,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			const button = new MoveResourceButton(ev);
 			// Up With People: a Rapport pip unticked is a question asked, so its four go to chat.
 			const rapport = button.moveName === UP_WITH_PEOPLE ? rapportHeld(this.actor) : null;
-			await this._stonetopCharacter.moveResources.add(button);
+			// In the character's spending turn (utils/spender-queue.js), so a pip clicked while a card spends from
+			// the same track lands after that spend rather than in the middle of it.
+			await inSpenderTurn(this.actor, () => this._stonetopCharacter.moveResources.add(button));
 			if (rapport !== null) await afterHeroPip(this.actor, rapport);
 		}
 
@@ -12721,9 +12724,16 @@ export function createStonetopCharacterSheetClass(Base) {
 			}
 			// The followers still below their max now; one healed meanwhile is not paid for. restFollowers
 			// reads them again at the heal, since a carer or payer may take minutes to answer in between.
-			const followerBodies = picked.length
+			const hurtPicked = picked.length
 				? (await hurtFollowerBodies(this.actor)).filter(b => picked.includes(b.id))
 				: [];
+			// A follower whose HP is an NPC this client cannot write needs the GM's client to heal them. With no
+			// GM here they are left out now, before a use is spent on a heal that could not land.
+			const waiting = hurtPicked.filter(b => b.healable === false);
+			if (waiting.length) {
+				ui.notifications?.warn(game.i18n.format("stonetop.specialMoves.recover.followersNeedGm", { names: waiting.map(b => b.name).join(", ") }));
+			}
+			const followerBodies = hurtPicked.filter(b => !waiting.includes(b));
 			const followerIds = followerBodies.map(b => b.id);
 			if (!self && !followerIds.length) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.nothingPicked"));
 			const uses = (self ? 1 : 0) + followerIds.length;
@@ -12782,17 +12792,27 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Otherwise this character's own, read as the purse is now, into the one write below.
 			const own = payerActor ? null : ownSupplySpend(this._stonetopCharacter, { slug: purse.slug, n: uses, purpose: SUPPLY_PURPOSE.RECOVER });
 			if (!payerActor && !own) return void ui.notifications?.warn(stockGone(game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint")));
-			const spentRow = payerActor
-				? await this._payOnBehalf(payerActor, { slug: purse.slug, n: uses, kept: stockGone })
-				: own.row;
+			// Asking the payer can take a while too, and meanwhile a second window may have made this Recover, or
+			// a blow may have put this character on Death's Door ("can't save themselves", Book I p.240). The payer's
+			// turn checks that just before it pays (recoverRefusal): refused, it pays for the followers alone.
+			const paidBy = payerActor
+				? await this._payOnBehalf(payerActor, { slug: purse.slug, n: uses, kept: stockGone, recover: { self } })
+				: null;
+			const spentRow = payerActor ? paidBy?.row : own.row;
 			if (!spentRow) return;
-			// Asking the payer can take a while too, and a second window may have made this Recover meanwhile:
-			// checked again, so the lock is never bypassed. The uses are gone by then, so the warning says so,
-			// and any followers they paid for are still healed.
-			if (self && payerActor && this.actor.getFlag(STONETOP_SCOPE, "recover.spent")) {
-				ui.notifications?.warn(stockGone(`${game.i18n.localize("stonetop.specialMoves.recover.lockedHint")} ${payerActor.name}'s supplies were already spent.`));
-				if (!followerIds.length) return;
+			if (paidBy?.refused) {
+				ui.notifications?.warn(stockGone(paidBy.refused));
 				self = false;
+			}
+			// Checked again here as well, for the moment the payer's answer took to come back. The uses are gone
+			// by then, so the warning says so, and any followers they paid for are still healed.
+			if (self && payerActor) {
+				const why = recoverRefusal(this.actor, { self: true });
+				if (why) {
+					ui.notifications?.warn(stockGone(`${why} ${payerActor.name}'s supplies were already spent.`));
+					if (!followerIds.length) return;
+					self = false;
+				}
 			}
 			// Read after any Stock was paid, for the reasons above.
 			const oldHp = this._stonetopCharacter.hp;
@@ -12904,8 +12924,19 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (spend) {
 				const payerActor = payer ? (game.actors?.get?.(payer.id) ?? null) : null;
 				if (payerActor) {
-					const row = await this._payOnBehalf(payerActor, { slug: purse?.slug ?? null, n: 1 });
+					// The payer can take minutes to answer: the debility may be tended meanwhile (a camp, the GM, another
+					// window), or this character put on Death's Door. The payer's turn checks that just before it pays.
+					const paidBy = await this._payOnBehalf(payerActor, { slug: purse?.slug ?? null, n: 1, recover: { tend: debility.key } });
+					const row = paidBy?.row;
 					if (!row) return;
+					// Read again for the moment the answer took to come back; the use is gone by then, so the card
+					// says it was spent and that nothing was tended.
+					const why = recoverRefusal(this.actor, { tend: debility.key });
+					if (why) {
+						ui.notifications?.warn(`${why} ${payerActor.name}'s supplies were already spent.`);
+						postMoveToChat(this.actor, "Recover", [row, { label: game.i18n.localize("stonetop.specialMoves.recover.tend.notTended"), value: why }]);
+						return;
+					}
 					rows.push(row);
 				} else {
 					const own = ownSupplySpend(this._stonetopCharacter, { slug: purse?.slug, n: 1, purpose: SUPPLY_PURPOSE.RECOVER });
@@ -12922,18 +12953,25 @@ export function createStonetopCharacterSheetClass(Base) {
 		/**
 		 * `n` uses of `payerActor`'s supplies for this character's Recover or tended debility, "on their behalf"
 		 * (Book I p.246), paid before anything here is written: through the payer's own player when it is
-		 * theirs to decide (supply-payer.js#payOthersSupplies). The chat row that says so, or null when they
-		 * kept them, never answered or could not pay, which is said (`kept` adds what the warning must carry).
+		 * theirs to decide (supply-payer.js#payOthersSupplies). `recover` is what they pay for, checked in the
+		 * payer's turn (healers-arts.js#recoverRefusal). Answers `{row, refused}`: the chat row that says what
+		 * was paid, and why the character's own part was refused when the uses paid for their followers alone.
+		 * Null when they kept them, never answered, could not pay, or nothing could be paid for, which is said
+		 * (`kept` adds what the warning must carry).
 		 */
-		async _payOnBehalf(payerActor, { slug = null, n = 1, kept = why => why } = {}) {
+		async _payOnBehalf(payerActor, { slug = null, n = 1, kept = why => why, recover = null } = {}) {
 			const answer = await payOthersSupplies({
-				payer: payerActor, patient: this.actor, slug, n, purpose: SUPPLY_PURPOSE.RECOVER, moveName: "Recover",
+				payer: payerActor, patient: this.actor, slug, n, purpose: SUPPLY_PURPOSE.RECOVER, moveName: "Recover", recover,
 			});
+			if (answer?.refused && !answer.spent) {
+				ui.notifications?.warn(kept(answer.refused));
+				return null;
+			}
 			if (!answer || answer.declined) {
 				ui.notifications?.warn(kept(game.i18n.format("stonetop.specialMoves.recover.payerKept", { name: payerActor.name })));
 				return null;
 			}
-			return behalfSpendRow(payerActor.name, answer, this.actor.name);
+			return { row: behalfSpendRow(payerActor.name, answer, this.actor.name), refused: answer.refused ?? null };
 		}
 
 		async _onConvalesceOpen() {

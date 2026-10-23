@@ -146,7 +146,7 @@ describe("readOptionDamageChoices: a bullet that deals one of several dice", () 
 	it("wires the choice buttons beside the single-die pass, latched by the same stamp", () => {
 		const src = fs.readFileSync(path.resolve("stonetop.js"), "utf8");
 		const body = name => src.slice(src.indexOf(`function ${name}(`), src.indexOf("\n}\n", src.indexOf(`function ${name}(`)));
-		expect(body("_chatWireOptionDamage")).toContain("_chatWireOptionDamageChoices(message, html, move);");
+		expect(body("_chatWireOptionDamage")).toContain("_chatWireOptionDamageChoices(message, html, move, { usable });");
 		const choices = body("_chatWireOptionDamageChoices");
 		// The option's own words, not the row with the single-die pass's button in it (the test below).
 		expect(choices).toContain("const words = optionLabelText(item);");
@@ -155,6 +155,52 @@ describe("readOptionDamageChoices: a bullet that deals one of several dice", () 
 		expect(choices).not.toContain("item.textContent");
 		expect(choices).toContain('message.getFlag(SYSTEM_ID, "optionDamageRolled")');
 		expect(choices).toContain("_onRollOptionDamage(message, btn, index, { move, dealt })");
+	});
+
+	// CLAIM, PAY, SETTLE (picked-option-button.js), as a Forage payout does: stamped after the roll, a player who
+	// could not write the card rolled it, failed to stamp, and was offered it again; two screens rolled it twice.
+	it("claims the roll on the card before throwing it, and offers it only to whoever may rewrite the card", () => {
+		const src = fs.readFileSync(path.resolve("stonetop.js"), "utf8");
+		const body = name => src.slice(src.indexOf(`function ${name}(`), src.indexOf("\n}\n", src.indexOf(`function ${name}(`)));
+		const wire = body("_chatWireOptionDamage");
+		// Any speaker its viewer owns, not only a character: an NPC's card owes its option damage too.
+		expect(wire).toContain("const usable = _mayRollOptionDamage(message, speakerActor(message));");
+		expect(body("_mayRollOptionDamage")).toContain("canUserWriteCard(message, game.user");
+		expect(body("_mayRollOptionDamage")).not.toContain("type");
+		expect(wire).toMatch(/wirePickedOptionButton\(message, html, \{\s*usable,/);
+		expect(body("_chatWireOptionDamageChoices")).toContain("if (!usable) continue;");
+		const press = body("_onRollOptionDamage");
+		const at = text => press.indexOf(text);
+		expect(at("_mayRollOptionDamage(message, actor)")).toBeGreaterThan(-1);
+		expect(at("claimPickedOption(message, OPTION_DAMAGE_FLAG, index)")).toBeGreaterThan(at("_mayRollOptionDamage(message, actor)"));
+		expect(at("rollOptionDamage(actor")).toBeGreaterThan(at("claimPickedOption("));
+		expect(at("loseHp(actor")).toBeGreaterThan(at("claimPickedOption("));
+		expect(at("settlePickedOption(message, OPTION_DAMAGE_FLAG, index")).toBeGreaterThan(at("rollOptionDamage(actor"));
+		expect(press).toContain("if (claimed && !paid) await releasePickedOption(message, OPTION_DAMAGE_FLAG, index)");
+		expect(press).not.toContain('message.setFlag(SYSTEM_ID, "optionDamageRolled"');
+	});
+
+	it("draws no button for a viewer who may not press it, and still shows what was paid", () => {
+		const doc = new Window().document;
+		const saved = globalThis.document;
+		globalThis.document = doc;
+		try {
+			const list = doc.body.appendChild(doc.createElement("ul"));
+			list.innerHTML = pickListItem("They take 2d4 damage", 0) + pickListItem("They take 1d6 damage", 1);
+			const spec = {
+				flagKey: "optionDamageRolled", wiredKey: "optionDamageWired",
+				buttonClass: "stonetop-option-damage-roll", readoutClass: "stonetop-option-damage-dealt",
+				read: readOptionDamage, icon: () => "fas fa-dice-d6", label: dealt => ` Roll ${dealt.formula} damage`,
+				readout: () => Object.assign(doc.createElement("span"), { className: "stonetop-option-damage-dealt" }), onPress: () => {},
+			};
+			wirePickedOptionButton({ id: "m", getFlag: () => ({ 1: { totals: [4] } }) }, list, { ...spec, usable: false });
+			expect(list.querySelectorAll(".stonetop-option-damage-roll")).toHaveLength(0);
+			expect(list.querySelectorAll(".stonetop-option-damage-dealt")).toHaveLength(1);
+			wirePickedOptionButton({ id: "m", getFlag: () => ({}) }, list, spec);
+			expect(list.querySelectorAll(".stonetop-option-damage-roll")).toHaveLength(2);
+		} finally {
+			globalThis.document = saved;
+		}
 	});
 
 	// The single-die pass runs first and hangs " Roll 1d6 damage" on the row. Read off the ROW after that,

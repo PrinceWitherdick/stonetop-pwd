@@ -50,9 +50,11 @@ import { SYSTEM_ID } from "../../system-id.js";
 import { format, localize } from "../../utils/i18n.js";
 import { escHtml } from "../../utils/strings.js";
 import { inCardTurn } from "../../utils/card-queue.js";
+import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { rollCardRoute, writeCardRoll } from "../../utils/roll-card-writer.js";
 import { isPrimaryGM } from "../../utils/primary-gm.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
+import { NO_ANSWER, relayOutcome } from "../../utils/relay-landed.js";
 import { holdForEach, shareHold } from "../../utils/share-hold.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
 import { cardTierNow } from "../../utils/counted-tier.js";
@@ -102,7 +104,7 @@ const SOURCES = {
 	diligence: { move: CHRONICLER, cost: 1, on: "any", stacks: true },
 	sanction:  { move: COMMUNE_WITH_ARATIS, cost: 1, on: "own", stacks: true },
 	manyHands: { move: MANY_HANDS, cost: 0, on: "other", notInStruggle: true },
-	blessing:  { move: PIETY, cost: 1, on: "own", held: blessingHeld, spend: spendBlessing, refund: holdBlessing },
+	blessing:  { move: PIETY, cost: 1, on: "own", held: blessingHeld, spend: spendBlessing, refund: holdBlessingNow },
 	preparation: {
 		move: BOLSTER, cost: 1, on: "own", onSteading: true, onePerRoll: true,
 		held: preparationHeld, spend: spendPreparation, refund: refundPreparation,
@@ -132,6 +134,11 @@ export const BLESSING_QUERY = "stonetop.pietyBlessing";
 export function boostsOn(message, scope = SYSTEM_ID) {
 	const list = message?.getFlag?.(scope, BOOSTS_FLAG);
 	return Array.isArray(list) ? list : [];
+}
+
+/** How many +1s of `source` the helper `uuid` has in `boosts`. PURE. */
+function countBoostsBy(boosts, source, uuid) {
+	return boosts.filter(b => b.source === source && b.by === uuid).length;
 }
 
 /**
@@ -246,7 +253,7 @@ export function boostOffers({ message, roller, helpers = [], user, ownersOf = ow
 		for (const helper of mine) {
 			const own = helper.id === roller.id;
 			if (!steadingRoll && ((on === "own" && !own) || (on === "other" && own))) continue;
-			if (!stacks && used.some(b => b.source === source && b.by === helper.uuid)) continue;
+			if (!stacks && countBoostsBy(used, source, helper.uuid)) continue;
 			if (!holds && !ownsLearnedMoveNamed(helper, move)) continue;
 			const held = cost ? heldFor(helper, source, scope) : 0;
 			if (held < cost) continue;
@@ -298,15 +305,10 @@ export function takeBoost(message, offer, { shiftRoll, cardFlavor, afterShift = 
 		if (used.some(b => b.source === source && (def.onePerRoll || (!def.stacks && b.by === helper.uuid)))) return false;
 		// How many of these this helper had on the card before this one: a refund below asks whether the card
 		// gained one, which for a stacking source is a count, not "any".
-		const takenBefore = used.filter(b => b.source === source && b.by === helper.uuid).length;
+		const takenBefore = countBoostsBy(used, source, helper.uuid);
 		// A Death's Door card whose tier has landed since the button was drawn: a +1 now would change nothing.
 		if (isDeathsDoorCard(message) && !deathsDoorAwaitsPlusOnes(message)) return false;
-		if (def.cost) {
-			const held = heldFor(helper, source, scope);
-			if (held < def.cost) return false;
-			if (def.spend) await def.spend(helper, scope);
-			else await helper.typedActor.moveResources.setUses(def.move, held - def.cost, { stonetopMove: def.move });
-		}
+		if (def.cost && !await payBoost(helper, source, scope)) return false;
 		try {
 			await writeCardRoll(message, roll => shiftRoll(roll, 1), { cardFlavor, afterShift }, {
 				flags: { [scope]: { [BOOSTS_FLAG]: [...used, { source, by: helper.uuid, name: helper.name }] } },
@@ -315,7 +317,7 @@ export function takeBoost(message, offer, { shiftRoll, cardFlavor, afterShift = 
 			// The pip is paid back when the +1 never reached the card (the card gone, the write refused). The +1
 			// and its name land in ONE write, so a card that names it took it, and a throw after that (the
 			// tier effects that follow a new total) keeps the spend.
-			if (def.cost && boostsOn(message, scope).filter(b => b.source === source && b.by === helper.uuid).length <= takenBefore) {
+			if (def.cost && countBoostsBy(boostsOn(message, scope), source, helper.uuid) <= takenBefore) {
 				await refundBoost(helper, source, scope).catch(e => console.error("Stonetop | could not pay back a +1's spend", e));
 			}
 			throw err;
@@ -324,19 +326,36 @@ export function takeBoost(message, offer, { shiftRoll, cardFlavor, afterShift = 
 	});
 }
 
-/** Give back the pip a +1 spent off its source, for a +1 that never reached the card (one that cost a pip: takeBoost asks). */
-async function refundBoost(helper, source, scope = SYSTEM_ID) {
+/** Pay a +1's pip off its source, in the helper's spending turn (utils/spender-queue.js). Whether it was paid. */
+function payBoost(helper, source, scope = SYSTEM_ID) {
 	const def = SOURCES[source];
-	if (def.refund) return def.refund(helper, scope);
-	await helper.typedActor.moveResources.setUses(def.move, heldFor(helper, source, scope) + def.cost, { stonetopMove: def.move });
+	return inSpenderTurn(helper, async () => {
+		const held = heldFor(helper, source, scope);
+		if (held < def.cost) return false;
+		if (def.spend) await def.spend(helper, scope);
+		else await helper.typedActor.moveResources.setUses(def.move, held - def.cost, { stonetopMove: def.move });
+		return true;
+	});
+}
+
+/** Give back the pip a +1 spent off its source, for a +1 that never reached the card (one that cost a pip: takeBoost asks). */
+function refundBoost(helper, source, scope = SYSTEM_ID) {
+	const def = SOURCES[source];
+	return inSpenderTurn(helper, async () => {
+		if (def.refund) return def.refund(helper, scope);
+		await helper.typedActor.moveResources.setUses(def.move, heldFor(helper, source, scope) + def.cost, { stonetopMove: def.move });
+	});
 }
 
 /** A player's +1 on a card they did not write: the GM's client records it. Whether it was taken. */
 async function askGMToBoost(message, offer) {
-	return !!(await askGMClient(globalThis.game?.users?.activeGM, BOOST_QUERY, {
+	const gm = globalThis.game?.users?.activeGM;
+	if (!gm) return false;
+	const answer = await askGMClient(gm, BOOST_QUERY, {
 		messageId: message.id, source: offer.source, helperUuid: offer.helper.uuid,
 		userId: globalThis.game?.user?.id ?? null,
-	}, { fallback: false, what: "add a +1 to a roll" }));
+	}, { fallback: NO_ANSWER, what: "add a +1 to a roll" });
+	return answer === NO_ANSWER ? answer : !!answer;
 }
 
 /**
@@ -375,7 +394,17 @@ function worldCharacters() {
  */
 export function pressBoost(message, offer, deps, { route = rollCardRoute(message, globalThis.game?.user), scope = SYSTEM_ID } = {}) {
 	if (!route || !offer) return Promise.resolve(false);
-	return route === "relay" ? askGMToBoost(message, offer) : takeBoost(message, offer, { ...deps, scope });
+	return route === "relay" ? relayBoost(message, offer, scope) : takeBoost(message, offer, { ...deps, scope });
+}
+
+/**
+ * askGMToBoost, with an answer that never came (out of time) read against the card (relay-landed.js): a +1 the
+ * GM's client writes all the same counts as taken, so the button is not offered again for a second press.
+ */
+async function relayBoost(message, offer, scope = SYSTEM_ID) {
+	const mine = () => countBoostsBy(boostsOn(message, scope), offer.source, offer.helper?.uuid);
+	const before = mine();
+	return !!await relayOutcome(message, await askGMToBoost(message, offer), () => mine() > before);
 }
 
 /**
@@ -479,11 +508,23 @@ export function wireRollBoosts(message, html, deps, { user = globalThis.game?.us
  * @returns {Promise<boolean>}
  */
 export async function holdSanctionOnHit(actor, item, tier) {
-	if (item?.name !== COMMUNE_WITH_ARATIS || tier !== "success") return false;
-	const track = sanctionTrack(actor);
-	if (!track || track.held >= track.max) return false;
-	await track.resources.setUses(COMMUNE_WITH_ARATIS, track.max, { stonetopMove: COMMUNE_WITH_ARATIS });
-	return true;
+	return (await fillSanctionOnHit(actor, item, tier)) > 0;
+}
+
+/**
+ * holdSanctionOnHit, answering how many Sanction it put on the track (0 for none), read and written in the
+ * character's spending turn (utils/spender-queue.js), so a Sanction +1 spent meanwhile is not filled over.
+ *
+ * @returns {Promise<number>}
+ */
+export function fillSanctionOnHit(actor, item, tier) {
+	if (item?.name !== COMMUNE_WITH_ARATIS || tier !== "success") return Promise.resolve(0);
+	return inSpenderTurn(actor, async () => {
+		const track = sanctionTrack(actor);
+		if (!track || track.held >= track.max) return 0;
+		await track.resources.setUses(COMMUNE_WITH_ARATIS, track.max, { stonetopMove: COMMUNE_WITH_ARATIS });
+		return track.max - track.held;
+	});
 }
 
 /** The Sanction track, `{held, max, resources}`, or null for a character without Commune with Aratis learned. */
@@ -524,7 +565,13 @@ export function blessingHeld(actor, scope = SYSTEM_ID) {
  * on the flag for anyone else. A character who holds one already holds 1 still: worshipping twice does
  * not stack. Whether anything was written.
  */
-export async function holdBlessing(actor, scope = SYSTEM_ID) {
+export function holdBlessing(actor, scope = SYSTEM_ID) {
+	if (actor?.type !== "character") return Promise.resolve(false);
+	return inSpenderTurn(actor, () => holdBlessingNow(actor, scope));
+}
+
+/** holdBlessing's read and write, for a caller already in the character's spending turn (refundBoost). */
+async function holdBlessingNow(actor, scope = SYSTEM_ID) {
 	if (actor?.type !== "character") return false;
 	const max = pietyMax(actor);
 	const resources = actor.typedActor?.moveResources;
@@ -540,7 +587,10 @@ export async function holdBlessing(actor, scope = SYSTEM_ID) {
 	return true;
 }
 
-/** Spend the Blessing: the pip unticked and the flag cleared, wherever it was held. Whether one was. */
+/**
+ * Spend the Blessing: the pip unticked and the flag cleared, wherever it was held. Whether one was. Run in the
+ * character's spending turn: payBoost, its one caller, holds it.
+ */
 export async function spendBlessing(actor, scope = SYSTEM_ID) {
 	let spent = false;
 	const max = pietyMax(actor);
@@ -617,14 +667,15 @@ export async function holdPreparation(actor, amount, purpose = "", scope = SYSTE
 	const resources = actor?.typedActor?.moveResources;
 	if (actor?.type !== "character" || !resources) return false;
 	const hold = Math.min(PREPARATION_MAX, Math.max(0, Math.trunc(Number(amount) || 0)));
-	await actor.update({
+	// In the character's spending turn, so a +1 spending Preparation meanwhile lands before or after it, not inside.
+	await inSpenderTurn(actor, () => actor.update({
 		...resources.usesUpdate(BOLSTER, hold),
 		[`flags.${scope}.${PREPARATION_FOR_FLAG}`]: String(purpose ?? "").trim(),
-	}, { stonetopMove: BOLSTER });
+	}, { stonetopMove: BOLSTER }));
 	return true;
 }
 
-/** Spend 1 Preparation. Whether one was held. */
+/** Spend 1 Preparation. Whether one was held. Run in the character's spending turn: payBoost, its one caller, holds it. */
 export async function spendPreparation(actor) {
 	const held = preparationHeld(actor);
 	if (held <= 0) return false;

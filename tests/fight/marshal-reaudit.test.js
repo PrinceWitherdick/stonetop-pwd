@@ -349,8 +349,31 @@ describe("Battlefield Grace: when the fight cannot be read", () => {
 		expect(plain).not.toHaveBeenCalled();
 	});
 
-	it("re-enables an option's damage button whose window was closed", () => {
-		expect(readRepo("stonetop.js")).toMatch(/rollOptionDamage\(actor, \{ move: move \|\| "Damage", damage: dealt \}\);\s*\/\/[^\n]*\n\s*if \(results === null\) \{\s*btn\.disabled = false;/);
+	it("re-enables an option's damage button whose window was closed, and gives its claim back", () => {
+		expect(readRepo("stonetop.js")).toMatch(/rollOptionDamage\(actor, \{ move: move \|\| "Damage", damage: dealt \}\);\s*\/\/[^\n]*\n\s*if \(results === null\) \{\s*await releasePickedOption\(message, OPTION_DAMAGE_FLAG, index\);\s*btn\.disabled = false;/);
+	});
+
+	it("keeps a move's own number whole: a bonus or dice typed into Battlefield Grace's window are left off, and said", async () => {
+		const bryn = Object.assign(fakeActor({ id: "bryn", name: "Bryn", type: "character" }), { documentName: "Actor", system: { attributes: { hp: { value: 20 } } }, items: [{ type: "move", name: HERO_MOVES.BATTLEFIELD_GRACE }] });
+		globalThis.fromUuidSync = uuid => (uuid === "Actor.bryn" ? bryn : null);
+		globalThis.game = { ...saved.game, settings: { get: () => false } };
+		const savedUi = globalThis.ui;
+		globalThis.ui = { notifications: { info: vi.fn() } };
+		try {
+			const line = { key: "battlefieldGrace", pill: "Battlefield Grace" };
+			const prompt = vi.fn(async () => ({ rollMode: "dis", bonus: 2, extraDice: ["1d6", line], seed: { bonus: 1 } }));
+			const rolled = await _movesTakenDamage([{ uuid: "Actor.bryn" }], { formula: "2d4", move: "Danu's Grasp", prompt });
+			expect(rolled).toEqual({ base: "2d4", rollMode: "dis", bonus: 0, extraDice: [line] });
+			expect(globalThis.ui.notifications.info).toHaveBeenCalledTimes(1);
+
+			// Nothing typed: nothing said.
+			globalThis.ui.notifications.info.mockClear();
+			const quiet = vi.fn(async () => ({ rollMode: "normal", bonus: 0, extraDice: "" }));
+			expect(await _movesTakenDamage([{ uuid: "Actor.bryn" }], { formula: "2d4", prompt: quiet })).toEqual({ base: "2d4", rollMode: "normal", bonus: 0, extraDice: "" });
+			expect(globalThis.ui.notifications.info).not.toHaveBeenCalled();
+		} finally {
+			globalThis.ui = savedUi;
+		}
 	});
 });
 

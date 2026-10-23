@@ -336,7 +336,7 @@ export async function runRingButton(button, actor, { shiftKey = false } = {}) {
 		seeded: !strikeBack,
 		strikeBack,
 		shiftKey,
-	}) : await rollFollowerOrFoeDamage(actor, button, { shiftKey });
+	}) : await rollFollowerOrFoeDamage(actor, button, { shiftKey, seeded: !strikeBack });
 	if (strikeBack && rolled) await spendReadiness(actor);
 	// A follower's own blow is them going on the offense: one holding Readiness on their card is asked whether
 	// they keep it, as a character's Damage asks (combat/readiness-loss.js). A strike back spent its own.
@@ -347,9 +347,10 @@ export async function runRingButton(button, actor, { shiftKey = false } = {}) {
 /**
  * A stat block's or a follower's damage button: its own die, tags and armor clause. The Marshal's crew
  * deals its blow with one of the weapons their card has ticked, asked first (combat/attack-flow.js#crewBlow),
- * so the weapon's piercing and tags ride the blow as they do from the card.
+ * so the weapon's piercing and tags ride the blow as they do from the card. `seeded` is off for a follower's
+ * strike back: one defender's blow, so no fight +N, as a character's is not.
  */
-async function rollFollowerOrFoeDamage(actor, button, { shiftKey = false, cardFor = followerCardFor } = {}) {
+async function rollFollowerOrFoeDamage(actor, button, { shiftKey = false, seeded = true, cardFor = followerCardFor } = {}) {
 	let { label, keywords, weapon } = button;
 	const card = actor?.type === "npc" ? cardFor(actor) : null;
 	if (card?.ftype === "crew") {
@@ -357,7 +358,7 @@ async function rollFollowerOrFoeDamage(actor, button, { shiftKey = false, cardFo
 		if (!blow) return false;
 		({ label, weapon, keywords } = blow);
 	}
-	return rollDamageAt(actor, { formula: button.formula, label, keywords, rollMode: button.rollMode, weapon, shiftKey });
+	return rollDamageAt(actor, { formula: button.formula, label, keywords, rollMode: button.rollMode, weapon, seeded, shiftKey });
 }
 
 /**

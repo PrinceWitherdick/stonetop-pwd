@@ -625,4 +625,28 @@ describe("Focus Fire's card", () => {
 		button().click();
 		expect(order).not.toHaveBeenCalled();
 	});
+
+	it("claims the card before the Command is spent, so a press on another screen orders nothing", async () => {
+		const { root, card, button } = rendered();
+		const seen = [];
+		const order = vi.fn(async () => { seen.push(card.getFlag(SCOPE, FOCUS_FIRE_CARD_FLAG)); return null; });
+		wireFocusFire(card, root, { giver: commandHeld(1), usable: true, order, targets: () => [{ name: "Crinwin", document: { uuid: "u" } }] });
+		button().click();
+		await vi.waitFor(() => expect(order).toHaveBeenCalledTimes(1));
+		// The claim stood while the order was being given; nothing given, it is handed back.
+		expect(seen).toEqual([{ pending: true, by: expect.any(String) }]);
+		await vi.waitFor(() => expect(card.getFlag(SCOPE, FOCUS_FIRE_CARD_FLAG)).toBeUndefined());
+		expect(button().disabled).toBe(false);
+
+		// Claimed elsewhere: drawn disabled, and a press that slipped through re-reads the card and orders nothing.
+		const other = rendered();
+		await other.card.setFlag(SCOPE, FOCUS_FIRE_CARD_FLAG, { pending: true });
+		const again = vi.fn();
+		wireFocusFire(other.card, other.root, { giver: commandHeld(1), usable: true, order: again, targets: () => [{ name: "Crinwin", document: { uuid: "u" } }] });
+		expect(other.button().disabled).toBe(true);
+		other.button().disabled = false;
+		other.button().click();
+		await vi.waitFor(() => expect(other.button().disabled).toBe(true));
+		expect(again).not.toHaveBeenCalled();
+	});
 });

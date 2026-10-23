@@ -45,6 +45,7 @@ function card({ flags = {} } = {}) {
 		id: "msg1", flags: data,
 		getFlag: (scope, key) => data[scope]?.[key],
 		setFlag: vi.fn(async (scope, key, value) => { (data[scope] ??= {})[key] = value; }),
+		unsetFlag: vi.fn(async (scope, key) => { delete data[scope]?.[key]; }),
 	};
 }
 
@@ -87,6 +88,51 @@ describe("the posted card's button", () => {
 		wireRapierWit(message, again.root, { giver: f, usable: true });
 		expect(again.button()).toBeNull();
 		expect(again.root.textContent).toContain("Ogre attacked");
+	});
+
+	it("claims the card before recording, and gives the claim back when nobody was named", async () => {
+		const f = fox();
+		const { root, button } = rendered(f);
+		const message = card();
+		const seen = [];
+		message.setFlag.mockImplementation(async (scope, key, value) => { seen.push(value); message.flags[scope][key] = value; });
+		wireRapierWit(message, root, { giver: f, usable: true, targets: () => [], engaged: () => [] });
+		button().click();
+		await vi.waitFor(() => expect(button().disabled).toBe(false));
+		// Claimed first, by this user, then given back.
+		expect(seen).toEqual([{ pending: true, by: "" }]);
+		expect(message.getFlag(SYSTEM_ID, RAPIER_WIT_CARD_FLAG)).toBeUndefined();
+		expect(f.setFlag).not.toHaveBeenCalled();
+	});
+
+	it("refuses a second press while another screen holds the claim", async () => {
+		const f = fox();
+		const { root, button } = rendered(f);
+		const message = card({ flags: { [RAPIER_WIT_CARD_FLAG]: { pending: true } } });
+		wireRapierWit(message, root, { giver: f, usable: true, targets: () => [{ name: "Ogre", document: { uuid: OGRE.uuid } }], engaged: () => [] });
+		expect(button().disabled).toBe(true);
+		// Pressed anyway (drawn before the claim landed here): the claim is read again, and nothing is recorded.
+		button().disabled = false;
+		button().click();
+		await vi.waitFor(() => expect(button().disabled).toBe(true));
+		expect(f.setFlag).not.toHaveBeenCalled();
+		expect(message.setFlag).not.toHaveBeenCalled();
+	});
+
+	it("lets this user press again past a claim of their own left by a reload, but not another user's", async () => {
+		const f = fox();
+		const targets = () => [{ name: "Ogre", document: { uuid: OGRE.uuid } }];
+		const mine = rendered(f);
+		const message = card({ flags: { [RAPIER_WIT_CARD_FLAG]: { pending: true, by: "me" } } });
+		wireRapierWit(message, mine.root, { giver: f, usable: true, userId: "me", targets, engaged: () => [] });
+		expect(mine.button().disabled).toBe(false);
+		mine.button().click();
+		await vi.waitFor(() => expect(message.getFlag(SYSTEM_ID, RAPIER_WIT_CARD_FLAG)).toEqual({ foe: "Ogre" }));
+
+		const theirs = rendered(f);
+		const other = card({ flags: { [RAPIER_WIT_CARD_FLAG]: { pending: true, by: "someone" } } });
+		wireRapierWit(other, theirs.root, { giver: f, usable: true, userId: "me", targets, engaged: () => [] });
+		expect(theirs.button().disabled).toBe(true);
 	});
 
 	it("is not offered to someone who cannot write the card and the Fox", () => {
@@ -203,6 +249,42 @@ describe("+1d4 on their next hit on the Fox", () => {
 			expect(rapierWitBlowOwed(f, ogre)).toBe(false);
 		} finally {
 			globalThis.game = saved;
+		}
+	});
+
+	it("the GM spends it too for whoever owns the Fox, as on a counter-attack struck at a foe the GM owns", async () => {
+		const saved = globalThis.game;
+		try {
+			const foxOwner = { id: "u1", isGM: false };
+			const stranger = { id: "u2", isGM: false };
+			const users = { get: id => ({ u1: foxOwner, u2: stranger })[id], activeGM: { id: "gm" } };
+			globalThis.game = { user: { id: "gm", isGM: true }, users };
+			const f = { ...fox(), testUserPermission: user => user === foxOwner };
+			f.flags[SYSTEM_ID][RAPIER_WIT_FLAG] = [{ key: OGRE.uuid, name: "Ogre", roll: true, blow: true }];
+			// The foe's token, which only the GM owns.
+			const ogreToken = { uuid: OGRE.uuid, name: "Ogre", documentName: "Token", actorLink: false, testUserPermission: () => false };
+			const resolve = uuid => ({ [f.uuid]: f, [OGRE.uuid]: ogreToken })[uuid] ?? null;
+			const data = { foxUuid: f.uuid, attackerUuid: OGRE.uuid };
+			expect(await handleRapierWitQuery({ ...data, userId: "u2" }, {}, { users, resolve })).toBe(false);
+			expect(rapierWitBlowOwed(f, ogreToken)).toBe(true);
+			expect(await handleRapierWitQuery({ ...data, userId: "u1" }, {}, { users, resolve })).toBe(true);
+			expect(rapierWitBlowOwed(f, ogreToken)).toBe(false);
+		} finally {
+			globalThis.game = saved;
+		}
+	});
+
+	it("says so, and spends nothing, when no GM is there to write a Fox this client cannot", async () => {
+		const saved = globalThis.ui;
+		globalThis.ui = { notifications: { warn: vi.fn() } };
+		try {
+			const f = fox({ owner: false });
+			f.flags[SYSTEM_ID][RAPIER_WIT_FLAG] = [{ key: OGRE.uuid, name: "Ogre", roll: true, blow: true }];
+			expect(await spendRapierWitBlow(f, striker(OGRE), { gm: null, userId: "u1" })).toBe(false);
+			expect(globalThis.ui.notifications.warn).toHaveBeenCalledTimes(1);
+			expect(owedTo(f, OGRE)).toMatchObject({ blow: true });
+		} finally {
+			globalThis.ui = saved;
 		}
 	});
 
