@@ -5,7 +5,7 @@ import {
 import { count, purseSpendUpdate } from "../camp/camp-rules.js";
 import { partyFollowersOf } from "../actors/character/follower-roster.js";
 import { postMoveToChat } from "../utils/chat.js";
-import { crewRoadText, roadLedger, roadSummaryRows, spendWords, usesWord } from "../utils/road-rations.js";
+import { crewRoadText, ledgerAsPaid, roadLedger, roadSummaryRows, spendWords, usesWord } from "../utils/road-rations.js";
 
 /** The ledger's name for the write, so the character's history says where the food went. */
 const ON_THE_ROAD = "On the road";
@@ -147,13 +147,17 @@ export class RoadRationsDialog extends StonetopDialog {
 	 * nothing and write nothing, but the card still says the days went by.
 	 */
 	async _apply() {
-		const ledger = this._ledger();
 		const byId = new Map(this._actors.map(a => [a.id, a]));
+		// The packs were read when the window opened: each purse pays what it holds NOW (ledgerAsPaid), so the
+		// card names only what was eaten, and what a pack no longer had is the party's shortfall.
+		const targets = new Map(this._actors.filter(a => a?.typedActor).map(a => [a.id, mealSpendTarget(a)]));
+		const ledger = ledgerAsPaid(this._ledger(), actorId => targets.get(actorId)?.resources ?? {});
 		// Each pack is its own actor, so the writes go out together.
 		await Promise.all(ledger.rows.map(row => {
 			const actor = row.pays || row.crewPays ? byId.get(row.actorId) : null;
-			if (!actor?.typedActor) return null;
-			const { update } = purseSpendUpdate([...row.crewSpend, ...row.spend], mealSpendTarget(actor));
+			const target = targets.get(row.actorId);
+			if (!actor || !target) return null;
+			const { update } = purseSpendUpdate([...row.crewSpend, ...row.spend], target);
 			return Object.keys(update).length ? actor.update(update, { stonetopMove: ON_THE_ROAD }) : null;
 		}));
 		postMoveToChat(null, "Days on the road", roadSummaryRows(ledger));
