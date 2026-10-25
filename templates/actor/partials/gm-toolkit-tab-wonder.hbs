@@ -179,7 +179,7 @@
 			<li class="stonetop-gm-wishes-who" data-actor-id="{{id}}">
 				<h4 class="stonetop-gm-wonder-guide-title">{{name}}</h4>
 				<ul class="stonetop-gm-wonder-guide-items">
-					{{#each wishes}}<li>{{text}}{{#if when}} <span class="stonetop-gm-wishes-when">({{when}})</span>{{/if}}</li>{{/each}}
+					{{#each wishes}}<li>{{text}}{{#if when}} <span class="stonetop-gm-wishes-when">({{this.when}})</span>{{/if}}</li>{{/each}}
 				</ul>
 			</li>
 			{{/each}}

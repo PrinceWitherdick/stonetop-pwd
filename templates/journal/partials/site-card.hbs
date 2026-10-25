@@ -53,7 +53,7 @@
 			<div class="site-block site-timeline">
 				<span class="threat-label">Timeline</span>
 				<ul class="site-list site-timeline-list">
-					{{#each timeline}}<li>{{#if when}}<strong class="site-when">{{when}}</strong>{{/if}}{{text}}</li>{{/each}}
+					{{#each timeline}}<li>{{#if when}}<strong class="site-when">{{this.when}}</strong>{{/if}}{{text}}</li>{{/each}}
 				</ul>
 			</div>
 			{{/if}}

@@ -15,7 +15,7 @@
 
 		{{#each stonetop.sections}}
 		{{#if (or visible editing)}}
-		{{#if groupStart}}<h2 class="stonetop-section-group stonetop-section-group--{{group}}">{{groupLabel}}</h2>{{/if}}
+		{{#if groupStart}}<h2 class="stonetop-section-group stonetop-section-group--{{this.group}}">{{groupLabel}}</h2>{{/if}}
 		<section class="stonetop-monster-field stonetop-monster-field--full{{#if danger}} stonetop-danger-section{{/if}}"
 		         data-section="{{index}}" data-section-index="{{index}}">
 

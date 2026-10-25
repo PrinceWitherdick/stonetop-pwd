@@ -158,6 +158,7 @@ import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
 import { withLateStampLatch } from "./module/utils/card-latch.js";
 import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
+import { reportForeignHelperClashes } from "./module/utils/foreign-helper-check.js";
 import { registerCampHooks } from "./module/camp/camp-store.js";
 import { registerVitalsMirrorHooks } from "./module/actors/character/vitals-mirror.js";
 import { registerBronzeLineHooks } from "./module/actors/character/bronze-lines.js";
@@ -890,6 +891,10 @@ Hooks.once("ready", () => {
 	game.stonetop ??= {};
 	game.stonetop.bootReport = bootReport;
 });
+// Does another module's Handlebars helper answer to a name our templates print bare? Put off to
+// the next task so the modules' own `ready` listeners, which run after ours, have registered theirs.
+// See utils/foreign-helper-check.js.
+Hooks.once("ready", () => setTimeout(() => reportForeignHelperClashes(), 0));
 Hooks.once("ready", onReady);
 // EVERY user, not just the GM: this is the listening half of "Show Players" on a rulebook
 // window, and a player who is not listening is the only person the feature is for. Its own
