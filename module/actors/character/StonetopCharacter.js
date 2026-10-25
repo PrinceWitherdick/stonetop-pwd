@@ -119,6 +119,7 @@ import {moveChatCard, postMoveNote} from "../../utils/chat.js";
 import {normalizeRollType} from "../../utils/roll-types.js";
 import {buildCustomMoveData, clampInt} from "../../utils/custom-move-data.js";
 import {buildInventoryItemData, readInventoryItemData, WRITEUP_EDITED_FLAG} from "../../utils/inventory-item-data.js";
+import { bronzeRowOf } from "./bronze-lines.js";
 import {ARTIFACT_STATE, concealArtifactFields, isArtifactUpgrade, normalizeArtifactState} from "./artifact-identify.js";
 import {isLoveLetter, isResolvedLoveLetter} from "./love-letters.js";
 import {deriveLoadLevel, loadLimitsFor} from "../../utils/load.js";
@@ -1275,7 +1276,9 @@ export class StonetopCharacter {
 			.filter(i => i.type === "move" && i.system?.moveType === "inventory-custom")
 			// Where each gear field actually lives — the flag or the system field — is
 			// readInventoryItemData's problem, not this method's, exactly as it is on the drop path.
-			.map(i => rec(i._id, { ...readInventoryItemData(i), name: i.name }));
+			// A second bronze weapon is a write-in standing for the handout's bronze row (bronze-lines.js): it is
+			// that row's weapon, asked once which one, under its own id.
+			.map(i => rec(i._id, { ...readInventoryItemData(i), name: i.name }, { weaponSlug: bronzeRowOf(i) }));
 		const arcana = arcanaCarried.map(i => rec(i.slug, i));
 		// Gear choices are the one store that is NOT inventory.checked, so their marks are
 		// collected alongside their items and unioned into `marks` below. Their weapon slug is

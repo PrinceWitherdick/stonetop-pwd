@@ -117,7 +117,7 @@ import { artifactStateForTier } from "./module/actors/character/artifact-identif
 import { repeatBoxLocked } from "./module/actors/character/PlaybookMoveEntry.js";
 import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, wireUnstoppableMark, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery, wireRosterHitMove, ROSTER_MOVE_QUERY, handleRosterMoveQuery, reconcileClashCounter, registerCounterAvoidedHooks, wireIgnoresArmorBox, SUFFER_CARD_QUERY, handleSufferCardQuery } from "./module/combat/attack-flow.js";
 import { forgetWorldMarkScans } from "./module/actors/character/blessed-marks.js";
-import { wireDefendSpends, SPEND_QUERY, handleSpendQuery } from "./module/fight/defend-spend.js";
+import { wireDefendSpends, SPEND_QUERY, handleSpendQuery, CHARM_QUERY, handleCharmQuery, CHARM_SETTLE_QUERY, handleCharmSettleQuery } from "./module/fight/defend-spend.js";
 import { HEALERS_ARTS_QUERY, handleHealersArtsQuery } from "./module/actors/character/healers-arts.js";
 import { SUPPLY_PAY_QUERY, handleSupplyPayQuery } from "./module/actors/character/supply-payer.js";
 import { OWNER_ASK_VERIFY_QUERY, handleOwnerAskVerify } from "./module/utils/owner-ask.js";
@@ -160,6 +160,7 @@ import { withLateStampLatch } from "./module/utils/card-latch.js";
 import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
 import { registerCampHooks } from "./module/camp/camp-store.js";
 import { registerVitalsMirrorHooks } from "./module/actors/character/vitals-mirror.js";
+import { registerBronzeLineHooks } from "./module/actors/character/bronze-lines.js";
 import { registerPostDeathMoveHooks } from "./module/actors/character/post-death-moves.js";
 import { loseHp, wirePostDeathMoveCards } from "./module/actors/character/post-death-actions.js";
 import { registerRosterFateHooks } from "./module/fight/roster-fate.js";
@@ -225,6 +226,10 @@ Hooks.once("init", () => {
 	if (CONFIG.queries) CONFIG.queries[APPLY_QUERY] = (data, context) => handleApplyQuery(data, context);
 	// And a player's Readiness spend on such a card (fight/defend-spend.js).
 	if (CONFIG.queries) CONFIG.queries[SPEND_QUERY] = (data, context) => handleSpendQuery(data, context);
+	// And a charm's roll asked of the Blessed's player from such a card, whichever tab runs (fight/defend-spend.js).
+	if (CONFIG.queries) CONFIG.queries[CHARM_QUERY] = (data, context) => handleCharmQuery(data, context);
+	// And using that charm up once the card has recorded it, on a client that can write the Blessed.
+	if (CONFIG.queries) CONFIG.queries[CHARM_SETTLE_QUERY] = (data, context) => handleCharmSettleQuery(data, context);
 	// And giving a blow a crew member took to another member of the crew (attack-flow.js#wireRosterHitMove).
 	if (CONFIG.queries) CONFIG.queries[ROSTER_MOVE_QUERY] = (data, context) => handleRosterMoveQuery(data, context);
 	// And the GM-only "Which attack?" / "Name the enemy's damage" cards, posted by the GM's client so no player
@@ -2959,6 +2964,8 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 registerCampHooks();
 // A character's stored armor and max HP, re-mirrored whenever they or their gear change, sheet open or not.
 registerVitalsMirrorHooks();
+// A bronze weapon's line deleted from the sheet takes its "which weapon?" answer with it.
+registerBronzeLineHooks();
 // And a character's post-death Consequence and Mark moves (Poltergeist, Red Wrath), kept to what is marked
 // on whichever client marked it, with Home to Vermin's follower offered there.
 registerPostDeathMoveHooks();
