@@ -16,11 +16,12 @@
 // Seeded from the LIVE steading, so a renamed or newly-named place gets its page on the
 // next pass. Keyed by LETTER rather than name — the letter is the slot, the name is what
 // the GM happens to be calling it this season — so renaming a place keeps its page and
-// everything written on it.
+// everything written on it, and retitles the page while it still wears the name we gave it
+// (a page the GM retitled in the journal keeps their title).
 
 import { escHtml } from "./strings.js";
 import { villagePlaceBlurb } from "../data/village-places.js";
-import { ensureChronicleFolder, ensureChronicleJournal, seedChroniclePages, findChronicleFolder } from "./chronicle-journals.js";
+import { ensureChronicleJournal, seedChroniclePages, findChronicleJournal } from "./chronicle-journals.js";
 import { getStonetopSteadingActor } from "./world.js";
 import { STEADING_DEFAULTS } from "../actors/steading/StonetopSteading.js";
 import { resolvedFlagProperty } from "../actors/character/StonetopFlags.js";
@@ -103,13 +104,12 @@ function villageJournalLink() {
 	return `<p>More about the village: <strong>@UUID[JournalEntry.${journal.id}]{${VILLAGE_JOURNAL_NAME}}</strong></p>`;
 }
 
-/** Find (or create) the "Places of Interest" journal in the Chronicle folder. GM-only. */
-async function ensurePlacesJournal() {
-	const folder = await ensureChronicleFolder();
-	if (!folder) return null;
-	return ensureChronicleJournal(
-		PLACES_JOURNAL_NAME, folder.id, CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER, { ensureObserver: true }
-	);
+/**
+ * Find (or create) the "Places of Interest" journal in the Chronicle folder. GM-only. Opens to
+ * players (OBSERVER) when it is created; after that its ownership is the GM's to set.
+ */
+function ensurePlacesJournal() {
+	return ensureChronicleJournal(PLACES_JOURNAL_NAME, CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER);
 }
 
 /**
@@ -118,8 +118,11 @@ async function ensurePlacesJournal() {
  * named places at all.
  *
  * Idempotent and cheap to re-run: seedChroniclePages creates only the keys that are
- * missing and refreshes only prose still untouched by the GM, so this can ride the ready
- * flow and every pin placement without ever undoing someone's writing.
+ * missing and refreshes only prose (and titles) still untouched by the GM, so this can ride
+ * the ready flow and every pin placement without ever undoing someone's writing.
+ *
+ * Two passes at once cannot both create the journal (ensureChronicleJournal) or a page
+ * (seedChroniclePages queues them per journal).
  */
 export async function writePlacesOfInterest() {
 	if (!game.user?.isGM) return null;
@@ -128,15 +131,13 @@ export async function writePlacesOfInterest() {
 
 	const journal = await ensurePlacesJournal();
 	if (!journal) return null;
-	await seedChroniclePages(journal, pages);
+	await seedChroniclePages(journal, pages, { followNames: true });
 	return journal;
 }
 
 /** The already-seeded Places of Interest journal, or null. Read-only — creates nothing. */
 export function findPlacesJournal() {
-	const folder = findChronicleFolder();
-	if (!folder) return null;
-	return (game.journal?.contents ?? []).find(j => j.folder?.id === folder.id && j.name === PLACES_JOURNAL_NAME) ?? null;
+	return findChronicleJournal(PLACES_JOURNAL_NAME);
 }
 
 /** The page in `journal` for the place at `letter`, matched by its stable key. */

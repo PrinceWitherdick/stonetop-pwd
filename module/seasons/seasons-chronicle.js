@@ -1,7 +1,7 @@
 import { escHtml } from "../utils/strings.js";
 import { sign, seasonsRollKey, seasonsRollTier } from "../utils/roll-engine.js";
 import { TIER_LABELS } from "../utils/move-results.js";
-import { ensureChronicleFolder, ensureChronicleJournal } from "../utils/chronicle-journals.js";
+import { ensureChronicleJournal, findChronicleJournal, withChronicleLock } from "../utils/chronicle-journals.js";
 import { seasonLabel, SEASON_IDS } from "./seasons-change-reminders.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { displayYear } from "./campaign-year.js";
@@ -75,13 +75,10 @@ export function yearLabelParts(year) {
 	return { count: `${cardinalWord(before)} ${before === 1 ? "Year" : "Years"}`, tail: "Before Year One", tailShort: "BYO" };
 }
 
-// Find (or create) the "Seasons Change" journal in the Chronicle folder, reusing the
-// shared folder/journal find-or-create so all of the Chronicle journals are built the
-// same way. Player-readable (OBSERVER) like the introductions journal.
-async function ensureSeasonsJournal() {
-	const folder = await ensureChronicleFolder();
-	if (!folder) return null;
-	return ensureChronicleJournal(SEASONS_JOURNAL_NAME, folder.id, CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER);
+// Find (or create) the "Seasons Change" journal in the Chronicle folder. Player-readable
+// (OBSERVER) like the introductions journal.
+function ensureSeasonsJournal() {
+	return ensureChronicleJournal(SEASONS_JOURNAL_NAME, CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER);
 }
 
 // One season's block within a year page: a heading for the season — carrying the
@@ -113,37 +110,74 @@ function _seasonBlock(seasonId, gainNames, fortunes, surplusChange, notes, fortu
 		+ `${gainsHtml}${fortunesHtml}${surplusHtml}${notesHtml}</section>`;
 }
 
+// One season block, however the journal's editor has since spelled its opening tag (attributes
+// reordered, more classes added). Each block is a `<section>` with no nested </section>, so the
+// non-greedy match pulls out one whole block at a time.
+const SEASON_BLOCK_RE = /<section\b[^>]*\bstonetop-season-block\b[^>]*>[\s\S]*?<\/section>/g;
+
+// Which season a block records: its `data-season` marker, else (an editor that dropped the
+// attribute) the season class on its heading, which _seasonBlock writes as well.
+function blockSeason(blockHtml) {
+	const marked = (blockHtml.match(/data-season="([^"]+)"/) ?? [])[1];
+	if (marked) return marked;
+	const cls = (blockHtml.match(/stonetop-season--(spring|summer|fall|autumn|winter)\b/) ?? [])[1];
+	return cls === "fall" ? "autumn" : (cls ?? null);
+}
+
+// Every season block on a page, where it sits and which season it is.
+function seasonBlocks(html) {
+	return [...String(html ?? "").matchAll(SEASON_BLOCK_RE)].map(m => ({
+		start:  m.index,
+		end:    m.index + m[0].length,
+		html:   m[0],
+		season: blockSeason(m[0]),
+	}));
+}
+
 /**
  * The Fortunes tier an earlier recording of this season wrote onto its block, or null. Read only
  * off the block's own `data-fortunes-tier` marker (_seasonBlock), never off its prose.
  */
 export function recordedSeasonTier(html = "", seasonId) {
-	const re = /<section class="stonetop-season-block"[^>]*>/g;
-	for (const open of (String(html ?? "").match(re) ?? [])) {
-		if ((open.match(/data-season="([^"]+)"/) ?? [])[1] !== seasonId) continue;
+	for (const found of seasonBlocks(html)) {
+		if (found.season !== seasonId) continue;
+		const open = found.html.slice(0, found.html.indexOf(">") + 1);
 		const tier = (open.match(/data-fortunes-tier="([^"]+)"/) ?? [])[1];
 		return TIER_LABELS[tier] ? tier : null;
 	}
 	return null;
 }
 
-// Merge one season's block into a year page's existing HTML: if that season was already
-// recorded, replace its block (so re-running a season overwrites rather than duplicates
-// it); otherwise add it. Either way the result is re-emitted in canonical season order.
-// Each block is a `<section data-season>` with no nested </section>, so the non-greedy
-// match below pulls out one whole block at a time. Pure, so the tests can drive it.
+/**
+ * Merge one season's block into a year page's existing HTML, leaving everything else on the page
+ * exactly as it was: a season already recorded has its block replaced where it stands (so
+ * re-running a season overwrites rather than duplicates it); a new one goes in before the first
+ * block of a later season, so a year still reads Spring to Winter, else at the end. Whatever the
+ * GM wrote around the blocks stays, byte for byte. Pure, so the tests can drive it.
+ */
 export function mergeSeasonBlock(existingHtml = "", seasonId, block) {
-	const blocks = {};
-	const re = /<section class="stonetop-season-block"[\s\S]*?<\/section>/g;
-	for (const m of (existingHtml.match(re) ?? [])) {
-		const season = (m.match(/data-season="([^"]+)"/) ?? [])[1];
-		if (season) blocks[season] = m;
-	}
-	blocks[seasonId] = block;
-	// SEASON_IDS is the canonical Spring→Winter order, so a year page always reads in
-	// order regardless of the order the GM happened to record the seasons in.
-	return SEASON_IDS.map(s => blocks[s]).filter(Boolean).join("");
+	const html  = String(existingHtml ?? "");
+	const found = seasonBlocks(html);
+	const same  = found.find(b => b.season === seasonId);
+	if (same) return html.slice(0, same.start) + block + html.slice(same.end);
+	const rank  = SEASON_IDS.indexOf(seasonId);
+	const later = found.find(b => SEASON_IDS.indexOf(b.season) > rank);
+	if (later) return html.slice(0, later.start) + block + html.slice(later.start);
+	return html + block;
 }
+
+/**
+ * Has this season of this year been recorded in the Seasons Change journal? Read-only.
+ */
+export function hasRecordedSeason(seasonId, year = 1) {
+	const journal = findChronicleJournal(SEASONS_JOURNAL_NAME);
+	const page = (journal?.pages ?? []).find(p => Number(p.getFlag?.(SYSTEM_ID, "chronicleYear")) === year) ?? null;
+	return !!page && seasonBlocks(page.text?.content ?? "").some(b => b.season === seasonId);
+}
+
+// Per-year-page flag: the hash of the timeline row each season last wrote, so a re-record
+// replaces that row only while it still says what we wrote (timeline-season-entry.js).
+const SEASON_TIMELINE_FLAG = "seasonTimeline";
 
 /**
  * Record one Seasons Change into the "Seasons Change" journal and return the journal
@@ -173,10 +207,16 @@ export async function recordSeasonsChange({ seasonId, year = 1, gainNames = [], 
 	}
 	const journal = await ensureSeasonsJournal();
 	if (!journal) return null;
+	// In the journal's page queue: two recordings at once would both find no year page and both make one.
+	return withChronicleLock(journal, () => recordSeasonsChangeNow(journal, { seasonId, year, gainNames, fortunes, surplusChange, notes, fortunesTier }));
+}
+
+async function recordSeasonsChangeNow(journal, { seasonId, year, gainNames, fortunes, surplusChange, notes, fortunesTier }) {
 
 	const yr       = Number.isInteger(year) && year >= 1 ? year : 1;
 	const yearName = yearLabel(yr);
-	const page     = (journal.pages ?? []).find(p => Number(p.getFlag?.(SYSTEM_ID, "chronicleYear")) === yr) ?? null;
+	const yearPage = () => (journal.pages ?? []).find(p => Number(p.getFlag?.(SYSTEM_ID, "chronicleYear")) === yr) ?? null;
+	const page     = yearPage();
 	// The roll's card first (a roll made again is the one the table went with); when the card has
 	// left the chat log, what the last recording of this season wrote, so a re-record to fix a note
 	// does not quietly drop how the roll went from the journal and the timeline both.
@@ -216,9 +256,17 @@ export async function recordSeasonsChange({ seasonId, year = 1, gainNames = [], 
 	// clock for `seasonRank`; and the timeline entry writer imports that core. Statically, the four
 	// form a ring, and the symptom is not a warning but a const read before its initializer runs,
 	// in whichever of them the loader happens to enter first.
+	//
+	// A row the GM has rewritten since we last wrote it stays theirs: the hash of what we wrote rides
+	// on the year page, and the row is replaced only while it still matches.
 	try {
 		const { recordSeasonOnTimeline } = await import("../timeline/timeline-season-entry.js");
-		await recordSeasonOnTimeline({ seasonId, year: yr, gainNames, surplusChange, notes, fortunesTier: tier });
+		const target   = yearPage();
+		const lastHash = target?.getFlag?.(SYSTEM_ID, SEASON_TIMELINE_FLAG)?.[seasonId];
+		const written  = await recordSeasonOnTimeline({ seasonId, year: yr, gainNames, surplusChange, notes, fortunesTier: tier, lastHash });
+		if (target && written?.hash && written.hash !== lastHash) {
+			await target.update({ [`flags.${SYSTEM_ID}.${SEASON_TIMELINE_FLAG}.${seasonId}`]: written.hash });
+		}
 	} catch (err) {
 		console.error("Stonetop | could not add this season to the timeline", err);
 	}

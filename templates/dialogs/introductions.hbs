@@ -90,6 +90,23 @@
     </div>
     {{/if}}
 
+    {{!-- Nobody's turn as far as this window can tell: everyone is done with this step, or the PC
+          whose turn it was has gone. A wait, not the first PC being up. --}}
+    {{#if waiting}}
+    <div class="stonetop-intros-place stonetop-intros-place--wait">
+      <i class="fas fa-hourglass-half"></i>
+      <span class="stonetop-intros-place-text">Waiting for the GM to move on to the next turn.</span>
+    </div>
+    {{/if}}
+
+    {{!-- A second GM: who is running the table, in place of the controls only they have. --}}
+    {{#if watchingNote}}
+    <div class="stonetop-intros-place stonetop-intros-place--watching">
+      <i class="fas fa-eye"></i>
+      <span class="stonetop-intros-place-text">{{watchingNote}}</span>
+    </div>
+    {{/if}}
+
     <div class="stonetop-intros-instruction">{{{instruction}}}</div>
 
     {{#if capture.isStep}}
@@ -103,12 +120,39 @@
       </p>
       <ul>
         {{#each capture.recorded}}
-        <li>
+        <li{{#if ../capture.canManage}} class="stonetop-intros-recorded-item--managed"{{/if}}>
+          <div class="stonetop-intros-recorded-body">
           {{#if this.question}}<span class="stonetop-intros-recorded-q">{{{this.question}}}</span>{{/if}}
+          {{#if this.editing}}
+          {{!-- The GM rewording a recorded answer in place. --}}
+          <textarea class="stonetop-intros-recorded-edit-field" rows="3" aria-label="{{this.editLabel}}">{{this.editText}}</textarea>
+          <span class="stonetop-intros-recorded-edit-actions">
+            <button type="button" class="stonetop-intros-recorded-cancel">Cancel</button>
+            <button type="button" class="stonetop-intros-recorded-save stonetop-guide-btn--primary">Save</button>
+          </span>
+          {{else}}
           <span class="stonetop-intros-recorded-a">{{this.answer}}</span>
+          {{/if}}
           {{!-- Who it was recorded as being about, where somebody picked. The only part of an
                 answer that is not in its own writing, so it is said back here. --}}
           {{#if this.about}}<span class="stonetop-intros-recorded-about"><i class="fas fa-arrow-right"></i> {{this.about}}</span>{{/if}}
+          </div>
+          {{#if ../capture.canManage}}{{#unless this.editing}}
+          {{!-- The GM's corrections to a recorded answer. Icon buttons, so each says what it does
+                to a screen reader (aria-label) and on hover (data-tooltip). --}}
+          <span class="stonetop-intros-recorded-tools">
+            <button type="button" class="stonetop-intros-recorded-edit"
+                    data-actor-id="{{../capture.actorId}}" data-step-key="{{../capture.stepKey}}" data-answer-index="{{this.index}}"
+                    aria-label="{{this.editLabel}}" data-tooltip="{{this.editLabel}}">
+              <i class="fas fa-pen" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="stonetop-intros-recorded-delete"
+                    data-actor-id="{{../capture.actorId}}" data-step-key="{{../capture.stepKey}}" data-answer-index="{{this.index}}"
+                    aria-label="{{this.deleteLabel}}" data-tooltip="{{this.deleteLabel}}">
+              <i class="fas fa-trash" aria-hidden="true"></i>
+            </button>
+          </span>
+          {{/unless}}{{/if}}
         </li>
         {{/each}}
       </ul>
@@ -118,6 +162,16 @@
     {{#if capture.passed}}
     <div class="stonetop-intros-passed">
       <i class="fas fa-check-circle"></i> <span>Passed: no more questions this step.</span>
+      {{#if capture.canManage}}
+      <button type="button" class="stonetop-intros-unpass" data-actor-id="{{capture.actorId}}" data-step-key="{{capture.stepKey}}"
+              data-tooltip="{{capture.unpassLabel}}: they can answer again" aria-label="{{capture.unpassLabel}}">Un-pass</button>
+      {{/if}}
+    </div>
+    {{else if capture.noQuestions}}
+    {{!-- A playbook the introductions have no questions for: nothing to pick, so nothing to wait on. --}}
+    <div class="stonetop-intros-place stonetop-intros-place--wait">
+      <i class="fas fa-circle-info"></i>
+      <span class="stonetop-intros-place-text">{{currentPc.name}}'s playbook has no questions for this step, so they sit this one out.</span>
     </div>
     {{else}}
 
@@ -206,8 +260,10 @@
                 placeholder="{{capture.placeholder}}">{{capture.answer}}</textarea>
     </div>
     {{else if capture.answer}}
+    {{!-- What the narrator has written so far. Their turn is still going, so it is labelled as
+          being written rather than as a finished record. --}}
     <div class="stonetop-intros-recorded">
-      <span class="stonetop-intros-recorded-label">Recorded</span>
+      <span class="stonetop-intros-recorded-label">{{#if currentPc.name}}{{currentPc.name}} is writing…{{else}}Being written…{{/if}}</span>
       <p class="stonetop-intros-recorded-text">{{capture.answer}}</p>
     </div>
     {{/if}}
@@ -231,15 +287,17 @@
 
     {{else if isDone}}
 
-    {{#if isGM}}<button class="stonetop-intros-back"><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>{{else}}<span class="stonetop-intros-turn-hint"></span>{{/if}}
+    {{#if isDriver}}<button class="stonetop-intros-back"><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>{{else}}<span class="stonetop-intros-turn-hint"></span>{{/if}}
     <span class="stonetop-intros-step-label">{{stepLabel}}</span>
     <span class="stonetop-intros-done-actions">
-      <button class="stonetop-intros-close stonetop-guide-btn--primary"{{#if isGM}} data-tooltip="Saves everyone's recorded answers to the Chronicle journal, then closes." data-tooltip-direction="UP"{{/if}}>{{#if isGM}}Save to Chronicle{{else}}Let spring burst forth!{{/if}}</button>
+      {{#unless watchingNote}}
+      <button class="stonetop-intros-close stonetop-guide-btn--primary"{{#if isDriver}} data-tooltip="Saves everyone's recorded answers to the Chronicle journal, then closes." data-tooltip-direction="UP"{{/if}}>{{#if isDriver}}Save to Chronicle{{else}}Let spring burst forth!{{/if}}</button>
+      {{/unless}}
     </span>
 
     {{else}}
 
-    {{#if isGM}}
+    {{#if isDriver}}
     <button class="stonetop-intros-back" {{#if isPrevDisabled}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
     {{else}}
     {{!-- Empty left-flank spacer: keeps the nav's 1fr/auto/1fr grid centring the step
@@ -250,8 +308,8 @@
     <span class="stonetop-intros-step-label">{{stepLabel}}</span>
     <span class="stonetop-intros-nav-actions">
       {{#if capture.canEdit}}{{#if capture.canPass}}<button class="stonetop-intros-pass">Pass</button>{{/if}}{{/if}}
-      {{#unless isGM}}{{#if capture.canEdit}}{{#if capture.isStep}}<button class="stonetop-intros-done stonetop-guide-btn--primary">Done</button>{{/if}}{{/if}}{{/unless}}
-      {{#if isGM}}<button class="stonetop-intros-next stonetop-guide-btn--primary">{{#if stepReady.all}}Everyone's done, continue{{else}}Next{{/if}}<span class="stonetop-nav-arrow"></span></button>{{/if}}
+      {{#if capture.canDone}}<button class="stonetop-intros-done stonetop-guide-btn--primary">Done</button>{{/if}}
+      {{#if isDriver}}<button class="stonetop-intros-next stonetop-guide-btn--primary">{{#if stepReady.all}}Everyone's done, continue{{else}}Next{{/if}}<span class="stonetop-nav-arrow"></span></button>{{/if}}
     </span>
 
     {{/if}}

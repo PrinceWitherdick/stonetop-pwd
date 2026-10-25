@@ -31,7 +31,7 @@ function makeActor(intro = {}) {
 			for (const part of parts) node = (node[part] ??= {});
 			node[leaf] = value;
 		}),
-		// Only the shape _commitStep writes: one dotted step field plus the `-=live` unset.
+		// Only the shape _commitStep writes: one dotted step field plus the draft unset.
 		update: vi.fn(async (changes) => {
 			for (const [path, value] of Object.entries(changes)) {
 				const parts = path.replace(`flags.${SCOPE}.`, "").split(".");
@@ -91,14 +91,14 @@ describe("IntroductionsDialog — capture flush", () => {
 	let actor, root, dialog;
 
 	beforeEach(() => {
-		actor  = makeActor({ live: { stepKey: "step6", q: 0, a: "" } });
+		actor  = makeActor({ drafts: { step6: { q: 0, a: "" } } });
 		root   = makeRoot({ text: "", pick: 2 });   // flag says q0, last render highlighted q2
 		dialog = makeDialog(actor, root);
 	});
 
 	it("keeps the pick the flag holds, not the one the last render highlighted", async () => {
 		await dialog._flushCaptureFromDom();
-		expect(actor.getFlag(SCOPE, `${FLAG}.live`).q).toBe(0);
+		expect(actor.getFlag(SCOPE, `${FLAG}.drafts.step6`).q).toBe(0);
 	});
 
 	it("does not consult the highlighted pick at all", async () => {
@@ -109,76 +109,76 @@ describe("IntroductionsDialog — capture flush", () => {
 	it("still saves text typed since the last write", async () => {
 		dialog.element = [makeRoot({ text: "half a sentence", pick: 2 })];
 		await dialog._flushCaptureFromDom();
-		expect(actor.getFlag(SCOPE, `${FLAG}.live`)).toMatchObject({ q: 0, a: "half a sentence" });
+		expect(actor.getFlag(SCOPE, `${FLAG}.drafts.step6`)).toMatchObject({ q: 0, a: "half a sentence" });
 	});
 
 	it("leaves a line with no pick unpicked rather than adopting a stale highlight", async () => {
-		actor  = makeActor({ live: { stepKey: "step6", q: null, a: "typing" } });
+		actor  = makeActor({ drafts: { step6: { q: null, a: "typing" } } });
 		dialog = makeDialog(actor, makeRoot({ text: "typing", pick: 3 }));
 		await dialog._flushCaptureFromDom();
-		expect(actor.getFlag(SCOPE, `${FLAG}.live`).q).toBeNull();
+		expect(actor.getFlag(SCOPE, `${FLAG}.drafts.step6`).q).toBeNull();
 	});
 });
 
 describe("IntroductionsDialog — flush after a commit", () => {
 	it("does not re-create the draft a commit just cleared", async () => {
-		// Recorded: the answer is in the step list and `live` is gone — but the field on
+		// Recorded: the answer is in the step list and the draft is gone, but the field on
 		// screen still shows it until the render that follows rebuilds it.
-		const actor = makeActor({ live: { stepKey: "step6", q: 2, a: "Test" } });
+		const actor = makeActor({ drafts: { step6: { q: 2, a: "Test" } } });
 		const dialog = makeDialog(actor, makeRoot({ text: "Test", pick: 2 }));
 
 		await dialog._commitStep(actor, "step6", "answers", [{ q: 2, a: "Test" }]);
-		expect(actor.getFlag(SCOPE, `${FLAG}.live`)).toBeUndefined();
+		expect(actor.getFlag(SCOPE, `${FLAG}.drafts.step6`)).toBeUndefined();
 
 		await dialog._flushCaptureFromDom();
-		expect(actor.getFlag(SCOPE, `${FLAG}.live`)).toBeUndefined();
+		expect(actor.getFlag(SCOPE, `${FLAG}.drafts.step6`)).toBeUndefined();
 		expect(actor.getFlag(SCOPE, `${FLAG}.step6.answers`)).toHaveLength(1);
 	});
 
 	it("suppresses one flush only — the next one writes normally", async () => {
-		const actor  = makeActor({ live: { stepKey: "step6", q: 1, a: "" } });
+		const actor  = makeActor({ drafts: { step6: { q: 1, a: "" } } });
 		const dialog = makeDialog(actor, makeRoot({ text: "", pick: 1 }));
 
 		await dialog._commitStep(actor, "step6", "passed", true);
 		await dialog._flushCaptureFromDom();          // suppressed
-		await actor.setFlag(SCOPE, `${FLAG}.live`, { stepKey: "step6", q: 3, a: "" });
+		await actor.setFlag(SCOPE, `${FLAG}.drafts.step6`, { q: 3, a: "" });
 		dialog.element = [makeRoot({ text: "a new answer", pick: 3 })];
 
 		await dialog._flushCaptureFromDom();
-		expect(actor.getFlag(SCOPE, `${FLAG}.live`)).toMatchObject({ q: 3, a: "a new answer" });
+		expect(actor.getFlag(SCOPE, `${FLAG}.drafts.step6`)).toMatchObject({ q: 3, a: "a new answer" });
 	});
 
 	// The one-shot lives on the instance that did the committing. Every OTHER open dialog —
 	// the player's, when the GM's Next commits their draft — re-renders off the updateActor
 	// hook with a field that still shows the recorded answer and no suppression of its own.
 	it("does not resurrect the draft on a client that did not do the committing", async () => {
-		const actor = makeActor({ step6: { answers: [{ q: 2, a: "Test" }] } }); // live already cleared
+		const actor = makeActor({ step6: { answers: [{ q: 2, a: "Test" }] } }); // draft already cleared
 		const watcher = makeDialog(actor, makeRoot({ text: "Test", pick: 2 }));
 
 		await watcher._flushCaptureFromDom();
-		expect(actor.getFlag(SCOPE, `${FLAG}.live`)).toBeUndefined();
+		expect(actor.getFlag(SCOPE, `${FLAG}.drafts.step6`)).toBeUndefined();
 	});
 
 	it("still rescues the first keystroke of a draft the flag has not seen yet", async () => {
-		const actor = makeActor();                       // no live buffer at all
+		const actor = makeActor();                       // no draft at all
 		const root  = makeRoot({ text: "half a sen" });   // typed, debounce still pending
 		const dialog = makeDialog(actor, root);
 
 		await withFocus(root.draftEl, () => dialog._flushCaptureFromDom());
-		expect(actor.getFlag(SCOPE, `${FLAG}.live`)).toMatchObject({ q: null, a: "half a sen" });
+		expect(actor.getFlag(SCOPE, `${FLAG}.drafts.step6`)).toMatchObject({ q: null, a: "half a sen" });
 	});
 
 	it("consumes the suppression even when there is no window to flush", async () => {
-		const actor  = makeActor({ live: { stepKey: "step6", q: 1, a: "" } });
+		const actor  = makeActor({ drafts: { step6: { q: 1, a: "" } } });
 		const dialog = makeDialog(actor, makeRoot());
 		await dialog._commitStep(actor, "step6", "passed", true);
 
 		dialog.element = null;
 		await dialog._flushCaptureFromDom();          // nothing to do, but the flag is spent
 
-		await actor.setFlag(SCOPE, `${FLAG}.live`, { stepKey: "step6", q: 3, a: "" });
+		await actor.setFlag(SCOPE, `${FLAG}.drafts.step6`, { q: 3, a: "" });
 		dialog.element = [makeRoot({ text: "later text", pick: 3 })];
 		await dialog._flushCaptureFromDom();
-		expect(actor.getFlag(SCOPE, `${FLAG}.live`)).toMatchObject({ q: 3, a: "later text" });
+		expect(actor.getFlag(SCOPE, `${FLAG}.drafts.step6`)).toMatchObject({ q: 3, a: "later text" });
 	});
 });

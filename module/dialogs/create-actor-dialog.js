@@ -14,7 +14,7 @@
 
 import { pickContentOption, promptForText, runPickedOption } from "./content-picker.js";
 import { createCharacterForUser } from "../actors/character/create-character.js";
-import { charactersOwnedBy } from "../utils/playbook-actors.js";
+import { charactersPlayedBy } from "../utils/playbook-actors.js";
 import { addPersonToSteading, createPersonNpc } from "../actors/steading/steading-people.js";
 import { buildMonsterActorData } from "../data/monster-builder.js";
 import { SYSTEM_ID } from "../system-id.js";
@@ -360,7 +360,9 @@ async function _pickOwner() {
 	if (!users.length) return UNASSIGNED;
 	return pickContentOption({
 		title: "Whose character is this?",
-		options: ownerOptions(users, charactersOwnedBy),
+		// The same list the add-or-replace question names (createCharacterForUser), so the hint
+		// under each player and that question agree about whose characters these are.
+		options: ownerOptions(users, charactersPlayedBy),
 		buttonLabel: "Create Character",
 	});
 }

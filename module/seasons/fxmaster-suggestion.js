@@ -45,7 +45,7 @@ export async function postFxMasterSuggestionOnce() {
 	if (!globalThis.game?.user?.isGM) return false;
 	if (getSetting(FXMASTER_SUGGESTION_SETTING)) return false;
 	// Mirrors _postBook2ArtReminderOnce's gate: past the guide means the GM ticked "Don't show
-	// this automatically", or finished both session-zero walkthroughs.
+	// this again", or finished both session-zero walkthroughs.
 	if (!pastWelcomeGuide()) return false;
 
 	let posted = false;

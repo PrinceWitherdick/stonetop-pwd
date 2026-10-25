@@ -100,3 +100,44 @@ describe("recordedSeasonTier", () => {
 		expect(recordedSeasonTier("", "autumn")).toBeNull();
 	});
 });
+
+// A year page is a journal page: the GM writes on it. Recording a season must leave every word of
+// theirs where it was (user, 2026-10-22: it used to rebuild the page from the blocks alone).
+describe("mergeSeasonBlock keeps the GM's writing", () => {
+	const gmTop = "<p>A hard year, all told.</p>";
+	const gmMid = "<p>Spring: the well ran dry for a week.</p>";
+
+	it("replaces a recorded season in place, leaving the rest byte for byte", () => {
+		const page = gmTop + block("spring", "<p>old</p>") + gmMid + block("summer");
+		const merged = mergeSeasonBlock(page, "spring", block("spring", "<p>new</p>"));
+		expect(merged).toBe(gmTop + block("spring", "<p>new</p>") + gmMid + block("summer"));
+	});
+
+	it("puts a new season before the first later season's block", () => {
+		const page = gmTop + block("spring") + gmMid + block("winter") + "<p>tail</p>";
+		const merged = mergeSeasonBlock(page, "autumn", block("autumn"));
+		expect(merged).toBe(gmTop + block("spring") + gmMid + block("autumn") + block("winter") + "<p>tail</p>");
+	});
+
+	it("appends after everything when no later season is on the page", () => {
+		const page = block("spring") + gmMid;
+		expect(mergeSeasonBlock(page, "summer", block("summer"))).toBe(page + block("summer"));
+	});
+
+	it("appends rather than wipes a page whose blocks lost their markers in an editor", () => {
+		const page = "<section><h2>Spring</h2><p>notes</p></section><p>The GM's own page.</p>";
+		expect(mergeSeasonBlock(page, "summer", block("summer"))).toBe(page + block("summer"));
+	});
+
+	it("still finds a block whose data-season was stripped, by its heading's season class", () => {
+		const stripped = "<section class=\"stonetop-season-block\"><h2 class=\"stonetop-season-entry stonetop-season--fall\">Autumn</h2><p>old</p></section>";
+		const merged = mergeSeasonBlock(gmTop + stripped, "autumn", block("autumn", "<p>new</p>"));
+		expect(merged).toBe(gmTop + block("autumn", "<p>new</p>"));
+	});
+
+	it("finds a block whose opening tag the editor rewrote", () => {
+		const rewritten = "<section data-season=\"spring\" class=\"stonetop-season-block extra\"><h2>spring</h2><p>old</p></section>";
+		const merged = mergeSeasonBlock(rewritten + gmMid, "spring", block("spring", "<p>new</p>"));
+		expect(merged).toBe(block("spring", "<p>new</p>") + gmMid);
+	});
+});

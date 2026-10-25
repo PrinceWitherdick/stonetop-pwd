@@ -15,7 +15,8 @@
 // its holder is core's own conveniences (the player-list entry, the C hotkey, the default
 // speaker), which is why an added character leaves an existing assignment where it is.
 
-import { charactersPlayedBy } from "../../utils/playbook-actors.js";
+import { assignedToAnother, charactersPlayedBy } from "../../utils/playbook-actors.js";
+import { isPrimaryGM } from "../../utils/primary-gm.js";
 import { bringDialogToFront } from "../../utils/front-on-open.js";
 import { escHtml } from "../../utils/strings.js";
 import { STONETOP_SCOPE } from "./StonetopFlags.js";
@@ -92,7 +93,9 @@ export async function createCharacterForUser(userId, { folder = null, name = "" 
 
 	let actor;
 	try {
-		actor = await getDocumentClass("Actor").create(createData);
+		// MINT_OPTION tells the preCreateActor guard (registerAutoOpenForCleanup) that this greeting
+		// flag is meant: any other create carrying one is a copy, and loses it.
+		actor = await getDocumentClass("Actor").create(createData, { [MINT_OPTION]: true });
 	} catch (err) {
 		console.error("Stonetop | failed to create character", err);
 		ui.notifications?.error?.(user
@@ -255,4 +258,71 @@ function _announce(actor, user) {
 	if (user.id === game.user?.id) return info(`Created “${actor.name}”. Starting character creation.`);
 	if (user.active) return info(`Created “${actor.name}” and started character creation on ${user.name}'s screen.`);
 	return info(`Created “${actor.name}” for ${user.name}. It'll be waiting when they log in.`);
+}
+
+/** The create option createCharacterForUser passes, so its greeting flag survives the guard below. */
+export const MINT_OPTION = "stonetopMint";
+
+/**
+ * Should `user` be greeted with character creation for `actor`? The one ownership test the
+ * greeting (hooks/Ready.js#_isMyCharacter) and the GM-side cleanup below share.
+ *
+ * The user has to OWN it: an ownership entry made out to them by name, or the character assigned
+ * to them AND owner-level access to it (which ownership.default can give). Assignment alone is not
+ * enough: the creation flow rebuilds the sheet, and a player who can't write it would be greeted
+ * with a button that does nothing. And it must not be another user's assigned character, however
+ * much this one may edit it (charactersPlayedBy asks the same).
+ */
+export function ownsForGreeting(actor, user, users = game.users) {
+	if (!actor?.id || !user?.id || user.isGM) return false;
+	const OWNER = globalThis.CONST?.DOCUMENT_OWNERSHIP_LEVELS?.OWNER ?? 3;
+	const byName = (actor.ownership?.[user.id] ?? 0) >= OWNER;
+	const assigned = user.character?.id === actor.id;
+	const canWrite = typeof actor.testUserPermission === "function"
+		? !!actor.testUserPermission(user, "OWNER")
+		: (user.id === game.user?.id && !!actor.isOwner);
+	if (!byName && !(assigned && canWrite)) return false;
+	return !assignedToAnother(actor, user.id, users);
+}
+
+/**
+ * Keep the `autoOpenFor` greeting flag pointing only at a player who can still be greeted.
+ *
+ * Only the named player's client clears the flag, after greeting them. If the GM hands the sheet
+ * to someone else first, that player's client may no longer write it (the unset is refused and
+ * swallowed), and the old greeting would be held for them on every load. So the primary GM drops
+ * it when ownership or assignment moves away from them, or when they are deleted.
+ *
+ * And a create that carries the flag without being a mint (the GM duplicating a sheet whose
+ * player hasn't logged in yet) would greet that player twice: the copy loses it on the way in.
+ * preCreateActor runs only on the creating client, so this half runs everywhere.
+ */
+export function registerAutoOpenForCleanup() {
+	Hooks.on("preCreateActor", (actor, data, options) => {
+		if (options?.[MINT_OPTION]) return;
+		if (!data?.flags?.[STONETOP_SCOPE]?.autoOpenFor) return;
+		actor.updateSource?.({ [`flags.${STONETOP_SCOPE}.autoOpenFor`]: null });
+	});
+	Hooks.on("updateActor", (actor, changes) => {
+		if (changes && "ownership" in changes) dropStaleAutoOpen(actor);
+	});
+	Hooks.on("updateUser", (_user, changes) => {
+		if (!changes || !("character" in changes)) return;
+		for (const actor of game.actors ?? []) dropStaleAutoOpen(actor);
+	});
+	Hooks.on("deleteUser", () => {
+		for (const actor of game.actors ?? []) dropStaleAutoOpen(actor);
+	});
+}
+
+/** Drop an actor's greeting flag if the player it names can no longer be greeted. Primary GM only. */
+export function dropStaleAutoOpen(actor) {
+	if (!game.user?.isGM || !isPrimaryGM()) return null;
+	if (actor?.type !== "character") return null;
+	const target = actor.getFlag?.(STONETOP_SCOPE, "autoOpenFor");
+	if (!target) return null;
+	const user = game.users?.get?.(target) ?? null;
+	if (user && ownsForGreeting(actor, user)) return null;
+	return actor.unsetFlag?.(STONETOP_SCOPE, "autoOpenFor")
+		?.catch?.(err => console.warn("Stonetop | could not clear a stale creation greeting", err));
 }

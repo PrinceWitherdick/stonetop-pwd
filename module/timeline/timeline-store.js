@@ -18,7 +18,7 @@
 // GM-load lane (`syncTrackPages`) and no player ever needs that right. Adding an entry is a page
 // UPDATE, which OWNER covers.
 
-import { ensureChronicleFolder, findChronicleFolder, ensureChronicleJournal } from "../utils/chronicle-journals.js";
+import { findChronicleJournal, ensureChronicleJournal } from "../utils/chronicle-journals.js";
 import { isSteadingActor, getStonetopSteadingActor } from "../utils/world.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { inTurn } from "../utils/turn-queue.js";
@@ -43,19 +43,13 @@ const SORT_STEP = 10;
  * asking, which a player resolving their own tab must never do (and may not do anyway).
  */
 export function findTimelineJournal() {
-	const folder = findChronicleFolder();
-	if (!folder) return null;
-	return (game.journal?.contents ?? [])
-		.find(j => j.folder?.id === folder.id && j.name === TIMELINE_JOURNAL_NAME) ?? null;
+	// By its stamp first, so a renamed or moved Timeline journal is still this one.
+	return findChronicleJournal(TIMELINE_JOURNAL_NAME);
 }
 
 /** Find or create the journal. GM-only in practice, since both halves need creation rights. */
-export async function ensureTimelineJournal() {
-	const existing = findTimelineJournal();
-	if (existing) return existing;
-	const folder = await ensureChronicleFolder();
-	if (!folder) return null;
-	return ensureChronicleJournal(TIMELINE_JOURNAL_NAME, folder.id, ownershipLevels().OWNER);
+export function ensureTimelineJournal() {
+	return ensureChronicleJournal(TIMELINE_JOURNAL_NAME, ownershipLevels().OWNER);
 }
 
 /**

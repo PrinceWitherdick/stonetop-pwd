@@ -98,10 +98,42 @@ export class PlaybookPickerDialog extends StonetopDialog {
 		});
 	}
 
+	// `_suppressOnClose` is set by creation-flow.js when the character being built is deleted or
+	// replaced: `onClose` opens that character's sheet, which by then would be a ghost of a
+	// deleted actor. The onboarding walkthrough honours the same switch.
 	async close(options = {}) {
+		this._unregisterHooks();
 		const result = await super.close(options);
-		this._onClose?.();
+		if (!this._suppressOnClose) this._onClose?.();
 		return result;
+	}
+
+	// Keep the cards' "Taken by" notes current while the picker is open: another player picking
+	// (or committing) a playbook, a character arriving or leaving, or a sheet changing hands.
+	// Debounced, since a player clicking through onboarding writes their progress on every page.
+	_registerHooks() {
+		if (this._hooks) return;
+		const refresh = foundry.utils.debounce(() => {
+			if (this.rendered && !this._picking) this.render(false);
+		}, 200);
+		const ifCharacter = actor => { if (actor?.type === "character") refresh(); };
+		this._hooks = [
+			["createActor", Hooks.on("createActor", ifCharacter)],
+			["deleteActor", Hooks.on("deleteActor", ifCharacter)],
+			["updateActor", Hooks.on("updateActor", (actor, changes) => {
+				if (actor?.type !== "character" || actor.id === this._actorId) return;
+				if ("ownership" in (changes ?? {}) || changes?.system?.playbook !== undefined) { refresh(); return; }
+				const stFlags = changes?.flags?.[STONETOP_SCOPE];
+				if (stFlags && Object.keys(stFlags).some(k => k.replace(/^-=/, "") === "onboardingProgress")) refresh();
+			})],
+			["updateUser", Hooks.on("updateUser", (_user, changes) => { if (changes && "character" in changes) refresh(); })],
+		];
+	}
+
+	_unregisterHooks() {
+		if (!this._hooks) return;
+		for (const [name, id] of this._hooks) Hooks.off(name, id);
+		this._hooks = null;
 	}
 
 	async getData() {
@@ -157,11 +189,14 @@ export class PlaybookPickerDialog extends StonetopDialog {
 
 	activateListeners(html) {
 		super.activateListeners(html);
+		// A live refresh (see _registerHooks) replaces the card a tooltip was pointing at.
+		this._removePickerTooltip();
 		html.find(".stonetop-playbook-picker-setting-overview").on("click", () => this._openSettingOverview());
 		html.find(".stonetop-playbook-picker-card")
 			.on("click", ev => this._pickPlaybook(ev.currentTarget.dataset.uuid))
 			.on("mouseenter", ev => this._showPickerTooltip(ev.currentTarget))
 			.on("mouseleave", () => this._removePickerTooltip());
+		this._registerHooks();
 	}
 
 	/**

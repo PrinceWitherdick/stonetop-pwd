@@ -159,7 +159,10 @@ export function merge3(base, mine, theirs) {
 		if (!others.length)          out += va;
 		else if (!ours.length)       out += vb;
 		else if (va.includes(vb))    out += va;         // the same, or mine already holds theirs
-		else if (vb.includes(va))    out += vb;         // theirs already holds mine
+		// Theirs already holds mine. NOT when mine is a deletion: every string "holds" the empty
+		// one, so this used to hand a word I deleted straight back whenever they had touched it.
+		// A deletion against their edit is a clash like any other, and mine wins.
+		else if (va && vb.includes(va)) out += vb;
 		else if (g.at === g.end)     out += va + _gap(va, vb) + vb;   // two additions at one point
 		else                         out += va;         // a real clash
 		pos = g.end;

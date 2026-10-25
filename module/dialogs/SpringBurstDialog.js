@@ -3,9 +3,9 @@ import { openOrFocus } from "../utils/open-or-focus.js";
 import { postSeasonsRollPrompt, SPRING_SEASONS_RESULT } from "../utils/roll-engine.js";
 import { escHtml } from "../utils/strings.js";
 import { getPlayerCharacters } from "../utils/playbook-actors.js";
-import { setWorldSetting } from "../settings.js";
 import { postSeasonsChangeReminder } from "../seasons/seasons-change-reminders.js";
-import { recordSeasonsChange } from "../seasons/seasons-chronicle.js";
+import { recordSeasonsChange, hasRecordedSeason } from "../seasons/seasons-chronicle.js";
+import { confirmOutcome } from "../utils/ask-with-buttons.js";
 import { readCurrentSeason, recordCurrentSeason, seasonRank } from "../seasons/current-season.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
 import { applySeasonalGains } from "../actors/steading/seasonal-gains.js";
@@ -168,12 +168,21 @@ export class SpringBurstDialog extends StepperDialog {
 		// resume record (see _resumeExtras) so a reload that resumes on the roll step
 		// doesn't hide the gains the GM already ticked.
 		this._delegatedRoll = false;
+		// Latches against a second click while the first is still running.
+		this._asking = false;
+		this._finishing = false;
 	}
 
 	get _steps() { return _STEPS; }
 	get _answersSetting() { return ANSWERS_SETTING; }
 
 	static open() {
+		// GM prep, and every write it makes is a world write only a GM may make. The macro that opens
+		// it is seeded in a GM-only block, but the API call is open to anyone with a console.
+		if (!game.user?.isGM) {
+			ui.notifications?.warn?.("Only the GM can run Let Spring Burst Forth.");
+			return null;
+		}
 		return openOrFocus("stonetop-spring-burst", () => {
 			const dialog = new SpringBurstDialog();
 			dialog._restoreStep();   // reopen on the step left off at before a reload
@@ -192,35 +201,74 @@ export class SpringBurstDialog extends StepperDialog {
 	// answers and the notes from this walkthrough — into the Chronicle, then closes.
 	// This is the session-zero flow's last save, so the Spring Burst page lands in the
 	// journal here. Keep the dialog open if the save errors so the GM can retry.
+	//
+	// Once only per press: the button stays disabled from the first click until the dialog
+	// closes (or something fails, when it comes back so the GM can try again).
 	async _finish(button) {
-		if (!(await saveChronicleFromButton(button, { context: "Let Spring Burst Forth" }))) return;
-		// The first spring is itself a Seasons Change move, so record it in the per-year
-		// "Seasons Change" journal (Year 1 → Spring) — the same log the steading flow keeps
-		// from Summer on, so the seasons history starts at this opening spring rather than a
-		// season later. Carries the gains the table ticked, this first spring's +Fortunes
-		// (+1), and the omen/hook the GM noted as the season's note.
-		const picked    = this._answers().gains ?? {};
-		const gainNames = SEASONAL_GAINS.filter(g => picked[g.key]).map(g => g.name);
+		if (this._finishing) return undefined;
+		this._finishing = true;
+		try {
+			await this._answersSettled();   // a tick still being written is part of what is finished
+			if (!(await saveChronicleFromButton(button, { context: "Let Spring Burst Forth", keepDisabled: true }))) return undefined;
+			await this._recordFirstSpring();
+			// Spring has burst forth: mark this walkthrough finished. With the Introductions
+			// also done, hooks/Ready.js stops auto-opening the Welcome guide (sessionZeroComplete).
+			// Drop the saved step + delegated flag so a manual reopen starts a fresh run.
+			markWalkthroughDone(RESUME_KEY, ["step", "stepKey", "delegated"]);
+			return await this.close();
+		} catch (err) {
+			console.error("Stonetop | Let Spring Burst Forth: could not finish", err);
+			ui.notifications?.error?.("Couldn't finish Let Spring Burst Forth.");
+			if (button) button.disabled = false;
+			return undefined;
+		} finally {
+			this._finishing = false;
+		}
+	}
+
+	// The first spring is itself a Seasons Change move, so record it in the per-year "Seasons
+	// Change" journal (Year 1, Spring): the same log the steading flow keeps from Summer on, so the
+	// seasons history starts at this opening spring rather than a season later. Carries the gains
+	// that took effect, this first spring's +Fortunes (+1), and the omen/hook the GM noted.
+	async _recordFirstSpring() {
+		const picked = this._answers().gains ?? {};
+		// Asked before the gains land: whether an earlier finish (or the steading's own Seasons
+		// Change) already wrote this spring down.
+		const alreadyRecorded = hasRecordedSeason("spring", 1);
 		// The gains take effect, not just get written down: a Tor's blessing, a Population boom
 		// or an Unexpected bounty ticked here holds exactly as one ticked at any later Seasons
 		// Change. Before the clock is stamped, so the blessing's stamp and the clock's agree.
-		await applySpringBurstGains(getStonetopSteadingActor(), picked);
-		await recordSeasonsChange({
-			seasonId: "spring",
-			year:     1,
-			gainNames,
-			fortunes: FIRST_SPRING_FORTUNES,
-			notes:    this._answers().hook ?? "",
-		});
+		const steadingActor = getStonetopSteadingActor();
+		const applied = await applySpringBurstGains(steadingActor, picked);
+		// Only what was granted is recorded. Nothing is when there is no steading to grant it to,
+		// or when this spring has already had its gains (a walkthrough finished twice, or re-run
+		// mid-campaign), and the record must not claim otherwise.
+		if (applied) this._grantedGainNames = SEASONAL_GAINS.filter(g => picked[g.key]).map(g => g.name);
+		// A retry after a press that granted the gains and then failed to write them down: the gains
+		// are granted, so the record names them. The names this window granted when it has them;
+		// after a reload, this walkthrough's own stamp says the resumed picks were the ones granted.
+		const grantedEarlier = !applied && !alreadyRecorded
+			&& !!steadingActor?.typedActor?.seasonStepApplied?.(SPRING_BURST_GAINS_STEP, FIRST_SPRING.year, FIRST_SPRING.season);
+		const gainNames = applied || grantedEarlier
+			? (this._grantedGainNames ?? SEASONAL_GAINS.filter(g => picked[g.key]).map(g => g.name))
+			: [];
+		if (alreadyRecorded && !applied) {
+			// A re-run. The record already says what this spring was; rewriting it would put the
+			// gains ticked now (never granted) over the ones that were.
+			ui.notifications?.info?.("Spring of Year One is already in the Seasons Change journal, so its record is left as it is.");
+		} else {
+			await recordSeasonsChange({
+				seasonId: "spring",
+				year:     1,
+				gainNames,
+				fortunes: FIRST_SPRING_FORTUNES,
+				notes:    this._answers().hook ?? "",
+			});
+		}
 		// …and set the steading's clock to it, so the sheet header opens on "Spring · First
 		// Year" from session zero rather than waiting for the second season to name one.
 		// advanceOnly so re-running this walkthrough mid-campaign can't rewind the clock.
 		await recordCurrentSeason(getStonetopSteadingActor(), "spring", 1, { advanceOnly: true });
-		// Spring has burst forth: mark this walkthrough finished. With the Introductions
-		// also done, hooks/Ready.js stops auto-opening the Welcome guide (sessionZeroComplete).
-		// Drop the saved step + delegated flag so a manual reopen starts a fresh run.
-		markWalkthroughDone(RESUME_KEY, ["step", "stepKey", "delegated"]);
-		return this.close();
 	}
 
 	static get defaultOptions() {
@@ -304,17 +352,16 @@ export class SpringBurstDialog extends StepperDialog {
 	// Persist a ticked/unticked seasonal gain. Stored as a presence map under `gains`
 	// so an unchecked one is dropped rather than left as `false`.
 	//
-	// Written through setWorldSetting: `springBurstAnswers` is WORLD-scoped, and only a GM may
-	// write one. The walkthrough is GM prep (its macro is seeded inside a GM-only block), so
-	// that only ever catches a stray call — but it catches it in one place, for every world
-	// write in the system, rather than here and in _saveAnswer and in markWalkthroughDone.
+	// Through _updateAnswers, which queues the writes and sends them through setWorldSetting
+	// (`springBurstAnswers` is WORLD-scoped; the walkthrough is GM prep, so that only ever
+	// catches a stray call).
 	async _saveGain(key, checked) {
-		if (!key) return;
-		const all   = { ...this._answers() };
-		const gains = { ...(all.gains ?? {}) };
-		if (checked) gains[key] = true; else delete gains[key];
-		all.gains = gains;
-		await setWorldSetting(ANSWERS_SETTING, all);
+		if (!key) return undefined;
+		return this._updateAnswers(all => {
+			const gains = all.gains ?? {};
+			if (checked) gains[key] = true; else delete gains[key];
+			all.gains = gains;
+		});
 	}
 
 	// Build the current step's Q&A field(s) for the template. `single` is one
@@ -338,24 +385,39 @@ export class SpringBurstDialog extends StepperDialog {
 	// Persist one answer without re-rendering (so the textarea keeps focus). `id`
 	// is set for per-PC answers (nested under the question key by actor id).
 	async _saveAnswer(key, value, id) {
-		if (!key) return;
-		const all = { ...this._answers() };
-		if (id) {
-			all[key] = { ...(all[key] ?? {}), [id]: value };
-		} else {
-			all[key] = value;
-		}
-		await setWorldSetting(ANSWERS_SETTING, all);
+		if (!key) return undefined;
+		return this._updateAnswers(all => {
+			if (id) all[key] = { ...(all[key] ?? {}), [id]: value };
+			else all[key] = value;
+		});
 	}
 
 	// Hand the roll to the table: post a chat card asking the most hopeful character's
 	// player to roll +Fortunes, with a button they click to do it (the result lands in
 	// chat). The dialog never sees the tier, so flag the roll as delegated and show the
 	// gains checklist.
-	_askToRoll() {
-		postSeasonsRollPrompt({ alias: "Seasons Change: Spring", fortunes: FIRST_SPRING_FORTUNES });
-		postSeasonsChangeReminder("spring");
-		this._delegatedRoll = true;
-		this.render(false);
+	//
+	// One card per spring: a second press while the first is posting does nothing, and once a
+	// card has been posted (this run, or before a reload) the GM is asked before another goes up.
+	async _askToRoll() {
+		if (this._asking) return;
+		this._asking = true;
+		try {
+			if (this._delegatedRoll) {
+				const again = await confirmOutcome({
+					title:   "Ask again?",
+					content: "<p>The roll prompt for this spring is already in chat. Post another one?</p>",
+					yes:     { label: "Post another" },
+					no:      { label: "Keep the one in chat" },
+				});
+				if (!again) return;
+			}
+			await postSeasonsRollPrompt({ alias: "Seasons Change: Spring", fortunes: FIRST_SPRING_FORTUNES });
+			await postSeasonsChangeReminder("spring");
+			this._delegatedRoll = true;
+			this.render(false);
+		} finally {
+			this._asking = false;
+		}
 	}
 }

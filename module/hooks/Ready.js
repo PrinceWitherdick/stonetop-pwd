@@ -46,10 +46,12 @@ import { postAttackFxSuggestionOnce } from "../combat/attack-fx-suggestion.js";
 import { WelcomeDialog } from "../dialogs/WelcomeDialog.js";
 import { FoundryBasicsDialog } from "../dialogs/FoundryBasicsDialog.js";
 import { CharacterCreationDialog } from "../actors/character/dialogs/CharacterCreationDialog.js";
-import { creationFlowOpen, holdCreationFlow, registerCreationFlowCleanup } from "../actors/character/creation-flow.js";
+import { creationFlowOpen, holdCreationFlow, holdGreetingUntilIdle, registerCreationFlowCleanup } from "../actors/character/creation-flow.js";
 import { isMidCreation, progressFor } from "../actors/character/onboarding-progress.js";
-import { readOnboardingResume, clearOnboardingResume } from "../actors/character/onboarding-resume.js";
-import { assignedToAnother, playbookSlug } from "../utils/playbook-actors.js";
+import { readOnboardingResume, clearOnboardingResume, resumeHasUnsavedWork, exitedSheetShown, markExitedSheetShown } from "../actors/character/onboarding-resume.js";
+import { ownsForGreeting, registerAutoOpenForCleanup } from "../actors/character/create-character.js";
+import { confirmOutcome } from "../utils/ask-with-buttons.js";
+import { playbookSlug } from "../utils/playbook-actors.js";
 import { rollDieOfFate } from "../utils/die-of-fate.js";
 import { LoveLetterDialog } from "../dialogs/LoveLetterDialog.js";
 import { StonetopArcanaInspireDialog } from "../item/StonetopArcanaInspireDialog.js";
@@ -63,7 +65,7 @@ import { rollMoveFromUuid } from "./HotbarDrop.js";
 import { ensureThreatsEntry } from "../threats/threat-store.js";
 import { ensureHazardsEntry } from "../hazards/hazard-store.js";
 import { STONETOP_SCOPE, ITEM_FLAG_SCOPE, resolvedFlagProperty, resolvedFlags } from "../actors/character/StonetopFlags.js";
-import { deletionEntry } from "../utils/foundry-compat.js";
+import { deletionEntry, hookOrTimeout } from "../utils/foundry-compat.js";
 import { SHARED_WITH_TABLE_FLAG, SHARED_SHEETS_ADOPTION_SWEEP, SHARED_SHEETS_UPDATE_OPTION, sharedSheetAdoptions, sharedSheetChanges, sharedSheetLevel } from "../actors/character/shared-sheets.js";
 import { inTurn } from "../utils/turn-queue.js";
 import { markPosterMapScenes } from "../book2-art/poster-maps.js";
@@ -100,7 +102,8 @@ const _EOS_HOTBAR_SLOT  = 10;
 
 // The Chronicle hotbar macro (slot 7): compiles the recorded Introductions + Spring
 // Burst answers and expedition log into the shared "The Chronicle" journal and opens it
-// (GM-only — saveChronicle is seed-once, so re-running it preserves inline edits). Sits
+// (GM-only; re-running it is safe: a section or Q&A pair edited in the journal is left as the
+// GM wrote it, and only what still matches what the compiler last wrote follows the source). Sits
 // straight after the _SYSTEM_MACROS a new world gets and, like End of Session, is handled
 // separately from that set and keyed on its command so it won't collide with a user macro
 // of the same name. It was slot 9 until the two legacy macros left new worlds' bars; a
@@ -522,13 +525,31 @@ export async function onReady() {
 	game.stonetop.refreshWeatherFx  = () => refreshWeatherFx();
 	game.stonetop.openWelcome       = () => WelcomeDialog.open();
 	game.stonetop.openFoundryBasics = () => FoundryBasicsDialog.open();
-	// Preview/test the player-facing creation intro for any character on demand
-	// (it normally only auto-pops on the owning player's client). Pass an actor, or
-	// it falls back to the current user's assigned character:
+	// Open the player-facing creation intro for any character on demand (it normally only
+	// auto-pops on the owning player's client). NOT a preview: its button runs the real creation
+	// flow on this client, which records the character's progress and, on Save or Finish,
+	// commits its playbook. So a GM opening it for a character a player owns is asked first.
+	// Pass an actor, or it falls back to the current user's assigned character:
 	//   game.stonetop.openCharacterCreation()
-	game.stonetop.openCharacterCreation = (actor = game.user.character) =>
-		actor ? CharacterCreationDialog.open(actor)
-		      : ui.notifications.warn("No character to start creation for.");
+	game.stonetop.openCharacterCreation = async (actor = game.user.character) => {
+		if (!actor) return ui.notifications.warn("No character to start creation for.");
+		const players = game.user.isGM
+			? (game.users?.filter?.(u => !u.isGM && ownsForGreeting(actor, u)) ?? [])
+			: [];
+		if (players.length) {
+			const names = players.map(u => foundry.utils.escapeHTML?.(u.name) ?? u.name).join(", ");
+			const ok = await confirmOutcome({
+				title: "Start creation for a player's character?",
+				content: `<p>This is ${names}'s character. The intro's <strong>Create Character</strong> button `
+					+ `runs the real creation flow here, on your screen: it changes their progress on the `
+					+ `Welcome guide and can replace their playbook and answers.</p>`,
+				yes: { label: "Open it anyway", icon: "fa-user-pen" },
+				no:  { label: "Leave it to them", icon: "fa-xmark" },
+			});
+			if (!ok) return null;
+		}
+		return CharacterCreationDialog.open(actor);
+	};
 	// Cut every picture this world could have out of the book art already on disk — the detail
 	// portraits, the square faces the small round pictures use, and the square a creature's token
 	// stands on — then point NPCs and creatures already in play at them. GM-only (it writes files).
@@ -811,6 +832,13 @@ export async function onReady() {
 	// it renders a beat later and would bury a resumed walkthrough — so when it's
 	// opening, reopen only once it's up (with a timeout fallback so a failed/absent
 	// Welcome render can't strand the resume).
+	//
+	// After the resume, the GM running the table gets the Introductions back if a session is
+	// still marked live (its tab was closed without closing the window), so it can be carried on
+	// or ended. After, so it joins the resumed copy rather than racing it.
+	const resumeWalkthroughs = () => reopenOpenWalkthroughs()
+		.catch(err => console.error("Stonetop | reopening walkthroughs failed", err))
+		.then(() => IntroductionsDialog.resumeRunningSession());
 	let welcomeDialog = null;
 	if (game.user.isGM && !pastWelcomeGuide()) {
 		let resumed = false;
@@ -833,7 +861,8 @@ export async function onReady() {
 	// A player logging in / reloading mid-introductions: rejoin the running session by
 	// opening the dialog whenever the GM has it open (following read-only until it's their
 	// turn). The onChange handler covers live changes; this covers the no-event initial
-	// load. No-op for the GM.
+	// load. Held while no GM is online (opened when one connects). For a GM it only sets up
+	// the cursor bookkeeping; the GM's own reopen is resumeRunningSession, above.
 	IntroductionsDialog.openForActiveSession();
 
 	// Fresh world: the gazetteer is still importing in the background. Once it lands, pop
@@ -1087,8 +1116,13 @@ function _localizedSettingText(value) {
 // once. This is race-free either way: a character created while the owner is
 // online fires `createActor` on their client, and one created while they're
 // offline is caught by the ready-time sweep when they next log in.
+//
+// The createActor hook passes who made it, which is how the greeting tells a GM's mint from
+// the player's own. At the ready sweep a still-flagged character can't be the player's own:
+// their client clears the flag as it greets them, so one still waiting was made by someone else.
 function _registerCharacterAutoOpen() {
-	Hooks.on("createActor", actor => _maybeOpenCharacterCreation(actor));
+	registerAutoOpenForCleanup();
+	Hooks.on("createActor", (actor, _options, userId) => _maybeOpenCharacterCreation(actor, { creatorId: userId }));
 	for (const actor of game.actors) _maybeOpenCharacterCreation(actor);
 }
 
@@ -1121,30 +1155,28 @@ export function _registerGmToolkitAdopt() {
 // one character (see actors/character/create-character.js): a second one is added without taking
 // the assignment, so an assignment test would never re-prompt it — reload mid-creation on your
 // second sheet and the resume never fires, leaving you on a blank sheet with an hour of answers
-// sitting in localStorage.
+// sitting in localStorage. Nor is assignment ENOUGH: the creation flow rebuilds the sheet, so a
+// player assigned a character they can't write would be greeted with a button that does nothing.
 //
 // Not `actor.isOwner` on its own either. That is also true of a sheet the whole table can edit
 // through `ownership.default`, and a world set up that way would ask every player to go and
 // finish somebody else's half-built character. The test is the ownership entry made out to me BY
-// NAME — the same one charactersOwnedBy reads and the mint stamps, so "do you already have
-// characters?" and "is this one of mine?" can never disagree.
+// NAME (the same one charactersOwnedBy reads and the mint stamps), or my assignment backed by
+// owner-level access.
 //
 // Finally, a character somebody ELSE has assigned is theirs, whoever else can edit it. That
 // leaves two co-owners of an UNassigned character both being prompted, which is the right answer
 // for a PC being built jointly, and is guarded per client by creationFlowOpen() regardless.
 //
+// All of that is ownsForGreeting, which the GM-side cleanup of a stale `autoOpenFor` asks too.
 // GMs are excluded outright: a GM owns every actor in the world.
 function _isMyCharacter(actor) {
 	if (game.user.isGM || !actor?.id) return false;
-	const mine = game.user.character?.id === actor.id
-		|| (actor.ownership?.[game.user.id] ?? 0) >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER;
-	if (!mine) return false;
-	// The same test createCharacterForUser lists a player's characters by (charactersPlayedBy).
-	return !assignedToAnother(actor, game.user.id);
+	return ownsForGreeting(actor, game.user);
 }
 
 // Greet a player with character creation, or resume an interrupted one:
-//   • a freshly GM-minted character (the `autoOpenFor` flag names its owner) gets
+//   • a freshly minted character (the `autoOpenFor` flag names its owner) gets
 //     the creation intro, once; and
 //   • the player's OWN character that still has no playbook is re-prompted every load
 //     until they actually pick one: with saved progress it resumes straight back into
@@ -1152,38 +1184,64 @@ function _isMyCharacter(actor) {
 //     re-pops the creation intro. Either way a player who reloaded before choosing a
 //     playbook lands back in creation rather than on a blank sheet they'd have to start
 //     onboarding from themselves.
-// A character that already has a playbook is finished (or was explicitly saved):
-// only a brand-new mint pops its sheet; a reload leaves a finished character alone.
-export function _maybeOpenCharacterCreation(actor) {
+//   • one saved part-way (a committed playbook, not finished) with answers in the resume
+//     snapshot that came AFTER that save resumes too: those answers exist nowhere else.
+// A finished character is left alone: only a brand-new mint pops its sheet.
+//
+// The flag only counts while I still own the character: a GM who hands it to someone else
+// before I log in has moved the greeting with it (and the primary GM drops the stale flag; see
+// registerAutoOpenForCleanup). `creatorId` is who created it, when this runs from createActor.
+export function _maybeOpenCharacterCreation(actor, { creatorId = null } = {}) {
 	if (actor?.type !== "character") return;
+	if (!_isMyCharacter(actor)) return;
 	const mintedForMe = actor.getFlag?.(STONETOP_SCOPE, "autoOpenFor") === game.user.id;
-	if (!mintedForMe && !_isMyCharacter(actor)) return;
 
 	// Someone on this screen is already mid-creation — the intro, the playbook picker or
 	// the onboarding walkthrough is up, for this character or another. Re-entering now
 	// would bury the flow they are in and, if they clicked through, restart them at the
-	// picker with their answers stranded behind it. Bail BEFORE clearing autoOpenFor: the
-	// mint's one-shot greeting is preserved rather than burnt on a prompt nobody saw, so
-	// it arrives on the next load instead.
-	if (creationFlowOpen()) return;
+	// picker with their answers stranded behind it. Bail BEFORE clearing autoOpenFor, and
+	// park the greeting (creation-flow.js): it runs again, this session, as soon as the
+	// open flow has closed, rather than waiting for a reload the GM was never told about.
+	if (creationFlowOpen()) {
+		const id = actor.id;
+		holdGreetingUntilIdle(id, () => {
+			const current = game.actors?.get?.(id);
+			if (current) _maybeOpenCharacterCreation(current, { creatorId });
+		});
+		return;
+	}
 
 	// Owner-only flag; drop it now so the mint greeting only ever fires once.
 	if (mintedForMe) actor.unsetFlag(STONETOP_SCOPE, "autoOpenFor").catch(() => {});
+	// A GM's mint, as opposed to one the player made for themselves (see _registerCharacterAutoOpen).
+	const startedByGM = mintedForMe && creatorId !== game.user.id;
 
 	if (playbookSlug(actor)) {
-		// A committed playbook — never re-enter creation. Clear any progress flag / resume
-		// snapshot an edit pass left behind on a FINISHED character, so the GM roster reads
+		// Saved and closed part-way through (a playbook, no `creationFinished`, a live
+		// progress flag: isMidCreation). The walkthrough's Save commits the playbook, and the
+		// player can carry on after it ("Continue editing"); every answer after that save lives
+		// only in this client's resume snapshot. Resume it when it holds anything the character
+		// does not, exactly as the no-playbook branch below does. A snapshot holding nothing
+		// newer is left for the sheet's "finish your character" button, which reads the sheet.
+		if (isMidCreation(actor)) {
+			const snap = readOnboardingResume(actor);
+			if (resumeHasUnsavedWork(snap)) {
+				holdCreationFlow(actor.id, actor.sheet._onNewCharacter({ openSheetWhenDone: true, resume: true }))
+					?.catch?.(err => console.error("Stonetop | failed to resume character creation", err));
+				return;
+			}
+			if (mintedForMe) actor.sheet.render(true);
+			return;
+		}
+		// A committed playbook on a FINISHED character: never re-enter creation. Clear any
+		// progress flag / resume snapshot an edit pass left behind, so the GM roster reads
 		// "Finished" rather than a stale "exited"/page note.
-		//
-		// NOT on one that was saved and closed part-way through (a playbook, no
-		// `creationFinished`, a live progress flag: isMidCreation). That flag is the only record
-		// the GM has that the character is half built, and what the replace warning reads.
 		//
 		// Only when there IS one: unsetFlag issues its update unconditionally, and this
 		// runs once per character of mine on every load. With a player able to run several,
 		// an unguarded call is a document write and a broadcast per finished sheet per
 		// login, all of them deleting a key that is already gone.
-		if (actor.getFlag?.(STONETOP_SCOPE, "onboardingProgress") && !isMidCreation(actor)) {
+		if (actor.getFlag?.(STONETOP_SCOPE, "onboardingProgress")) {
 			actor.unsetFlag?.(STONETOP_SCOPE, "onboardingProgress").catch(() => {});
 		}
 		clearOnboardingResume(actor);
@@ -1210,21 +1268,24 @@ export function _maybeOpenCharacterCreation(actor) {
 	} else if (!mintedForMe && progressFor(actor).status === "exited") {
 		// They have already been offered this and deliberately backed out, with nothing saved
 		// to resume. Re-modalling them on every load is nagging, and the modal is the thing
-		// they closed. Open the sheet instead: it carries its own "Create Character" button
-		// and the amber incomplete banner, so the way back in is right there whenever they
-		// want it — nobody is stranded, and nobody is pestered. A fresh mint always greets.
+		// they closed. Open the sheet instead, ONCE per character on this client: it carries
+		// its own "Create Character" button and the amber incomplete banner, so the way back in
+		// is right there whenever they want it. After that it is theirs to open. A fresh mint
+		// always greets.
+		if (exitedSheetShown(actor)) return;
+		markExitedSheetShown(actor);
 		actor.sheet.render(true);
 	} else {
 		// Fire-and-forget from a sync hook callback, so catch here: open() awaits a stale
 		// dialog's close, and an unhandled rejection would surface as a bare console error
 		// with no hint that a player simply never got greeted.
-		holdCreationFlow(actor.id, CharacterCreationDialog.open(actor))
+		holdCreationFlow(actor.id, CharacterCreationDialog.open(actor, { startedByGM }))
 			.catch(err => console.error("Stonetop | failed to open character creation", err));
 	}
 }
 
 // Pop the first-session Welcome guide for the GM until either they tick "Don't show
-// this automatically" (which sets gmWelcomeShown) or they finish both session-zero
+// this again" (which sets gmWelcomeShown) or they finish both session-zero
 // walkthroughs — the guided Introductions and Let Spring Burst Forth (sessionZeroComplete).
 // Until one of those, the guide keeps greeting the GM across the first few loads.
 function _openGmWelcomeGuide() {
@@ -1242,7 +1303,9 @@ async function _showOrientationAfterSeed(welcomeDialog) {
 	await _openSettingOverview();
 	if (!welcomeDialog) return;
 	if (!welcomeDialog.rendered) {
-		await new Promise(resolve => Hooks.once("renderWelcomeDialog", resolve));
+		// Bounded: a guide whose render failed (or that was closed before it drew) never fires the
+		// hook, and this would otherwise wait for it for the rest of the session.
+		await hookOrTimeout("renderWelcomeDialog", 5000);
 	}
 	if (welcomeDialog.rendered) {
 		await welcomeDialog.render(false);
@@ -1266,6 +1329,16 @@ async function _openSettingOverview() {
 
 	const needsOrientation = !game.user.isGM && !game.user.character;
 	if (!needsOrientation && getSettingOverviewShown()) return;
+
+	// Not over a character being built: opened on top, the journal buried the creation window a
+	// new player had just been greeted into. It waits until that flow has closed instead (the
+	// same queue the creation greeting itself waits in), and is shown then.
+	if (creationFlowOpen()) {
+		holdGreetingUntilIdle("setting-overview", () => {
+			_openSettingOverview().catch(err => console.error("Stonetop | opening the Setting Overview failed", err));
+		});
+		return;
+	}
 
 	overview.sheet.render(true);
 	if (!getSettingOverviewShown()) await markSettingOverviewShown();

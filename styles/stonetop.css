@@ -977,13 +977,18 @@ body {
    moving such a rule later in the file does not help it, and nothing is logged when it loses. So
    a per-dialog override of `display`, `align-items`, `justify-content`, `min-height` or
    `line-height` has to carry this same `.vtt .stonetop.dialog` scope to get above it.
-   tests/styles/dialog-button-specificity.test.js fails any that does not. */
+   tests/styles/dialog-button-specificity.test.js fails any that does not.
+
+   `line-height: normal` (1.23 in Libre Caslon Text) and not a number: the label is a bare text
+   node, so it cannot be trimmed, and any leading is split by Blink with the top half floored to a
+   whole pixel, which left one-line labels up to 1px high. With no leading the line box is the
+   font's own, which its @font-face centres on the capitals: within 0.4px at roots 12-24. */
 .vtt .stonetop.dialog .dialog-buttons button {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	min-height: 32px;
-	line-height: 1.25;
+	line-height: normal;
 }
 
 /* Strange Scene navigation bug fix */
@@ -4081,11 +4086,11 @@ input.stonetop-name-field {
 	cursor: pointer;
 	box-shadow: none;
 	margin: 0;
-	/* align-items: center lands the radio on the text's line-box center, which is a
-	   hair below the letterforms' optical center, so the label reads higher than the
-	   radio. Lift the radio slightly to meet the label. */
+	/* Level with the label: `align-items: center` puts the radio on the label's line box, which
+	   the Libre Caslon Text @font-face centres on the capitals (the old `top: -1px` now left it 1px
+	   high). `top: 0` because core drops radios 2px with `position: relative; top: 2px`. */
 	position: relative;
-	top: -1px;
+	top: 0;
 }
 
 .stonetop-roll-mode-option input:checked {
@@ -13131,10 +13136,12 @@ button.stonetop-rapport-chip:focus-visible {
 .stonetop-reminder-chip button.stonetop-reminder-chip-remove > i { margin: 0; line-height: inherit; opacity: 1; }
 .stonetop-reminder-chip button.stonetop-reminder-chip-remove:is(:hover, :focus-visible) { opacity: 1; }
 
-/* What the "+" turns into: a box of the chip's own shape, wide enough for a short line. The browser
-   draws an input's text centred on its line box, which in Libre Caslon Text sits 0.048em above the
-   cap band, so the typed words read high (1.4px at 1.5x, pixel scan). No text-box trim reaches an
-   input's text, so the 0.048em is spent as padding, as a <select>'s is: the box keeps its height. */
+/* What the "+" turns into: a box of the chip's own shape, wide enough for a short line. No text-box
+   trim reaches an input's text, so its padding carries the centring, unevenly and at no cost to the
+   height. Not for the font (the Libre Caslon Text @font-face centres its line box on the capitals):
+   the chip's whole-pixel line leaves about 1px of leading, Blink floors the half above the text to
+   a whole pixel, and the words sat 0.5-0.9px high (geometric, root 14-20px). This lowers them to
+   within 0.4px in Libre Caslon and Signika, and halves IM Fell English's error. */
 .stonetop-reminder-chips input.stonetop-reminder-chip--input {
 	width: 16em;
 	height: auto;
@@ -19587,6 +19594,11 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	display: block;
 	white-space: nowrap;
 	font-size: clamp(0.72rem, 12.5cqi, var(--font-size-16));
+	/* Centred on its capitals by trimming, as the chips are (Chip centring tokens in :root); the
+	   untrimmed line read up to 1.05px high where Blink floored its half-leading. Same height. */
+	text-box: trim-both cap alphabetic;
+	padding-top: var(--st-trim-top);
+	padding-bottom: var(--st-trim-bottom);
 }
 
 .pbta.sheet .sheet-tabs:not(.stonetop-tab-rail) .item:hover,
@@ -34236,6 +34248,91 @@ th:has(> .stonetop-roll-table-btn) {
 
 .stonetop-intros-passed i { color: var(--st-green-border, rgba(40, 140, 70, 0.7)); }
 
+/* The GM's corrections to a step: Un-pass on the Passed badge, edit / delete on each recorded
+   answer, and the Save / Cancel of an answer being edited in place. Content-sized buttons:
+   core's `button { display: flex; width: 100% }` would otherwise stretch each across the row. */
+.stonetop-intros-unpass,
+.stonetop-intros-recorded-edit,
+.stonetop-intros-recorded-delete,
+.stonetop-intros-recorded-save,
+.stonetop-intros-recorded-cancel {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: auto;
+	margin: 0;
+	line-height: 1;
+	cursor: pointer;
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.3);
+	border-radius: var(--st-radius-sm);
+	background: rgb(var(--st-paper-rgb) / 0.55);
+	color: inherit;
+	transition: background 0.15s;
+}
+
+/* Sized by padding round a normal line box, like the nav buttons, rather than squeezed into a fixed
+   height with `line-height: 1`, which left the words 1.4px high. */
+.stonetop-intros-unpass,
+.stonetop-intros-recorded-save,
+.stonetop-intros-recorded-cancel {
+	height: auto;
+	padding: 3px 10px;
+	line-height: normal;
+	font-family: var(--font-stonetop);
+	font-size: calc(0.8rem * var(--stonetop-font-scale, 1));
+}
+
+.stonetop-intros-unpass { margin-left: auto; }
+
+.stonetop-intros-recorded-edit,
+.stonetop-intros-recorded-delete {
+	min-width: 26px;
+	height: 24px;
+	padding: 0 6px;
+	font-size: calc(0.78rem * var(--stonetop-font-scale, 1));
+}
+
+/* Core spaces a button's icon from a label these buttons do not have. */
+.stonetop-intros-recorded-edit > i,
+.stonetop-intros-recorded-delete > i { margin: 0; }
+
+.stonetop-intros-unpass:hover,
+.stonetop-intros-recorded-edit:hover,
+.stonetop-intros-recorded-cancel:hover { background: var(--st-green-bg-hover); }
+
+.stonetop-intros-recorded-delete { color: var(--st-red-text); border-color: var(--st-red-border); }
+.stonetop-intros-recorded-delete:hover { background: var(--st-red-bg); }
+
+/* A recorded answer the GM may correct: the answer, then its two tools at the right. */
+.stonetop-intros-recorded-list li.stonetop-intros-recorded-item--managed {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: start;
+	gap: 8px;
+}
+
+.stonetop-intros-recorded-body { min-width: 0; }
+
+.stonetop-intros-recorded-tools {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.stonetop-intros-recorded-edit-field {
+	display: block;
+	width: 100%;
+	margin: 4px 0;
+	resize: vertical;
+}
+
+.stonetop-intros-recorded-edit-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+}
+
 /* GM-only "N of M done" tally on a step; turns green once everyone's ready. */
 .stonetop-intros-ready-tally {
 	display: flex;
@@ -34729,6 +34826,10 @@ th:has(> .stonetop-roll-table-btn) {
 }
 
 .stonetop-welcome-create {
+	/* A flex row so the label can be trimmed to its cap band and centred (it is a flex item, a
+	   block); see .stonetop-welcome-create-label. */
+	display: inline-flex;
+	align-items: center;
 	flex: 0 0 auto;
 	width: auto;
 	white-space: nowrap;
@@ -34746,6 +34847,13 @@ th:has(> .stonetop-roll-table-btn) {
 
 .stonetop-welcome-create:hover { background: var(--st-btn-primary-bg-hover); }
 .stonetop-welcome-create > i { margin-right: 4px; }
+/* Trimmed to its capitals and padded back to its line box, as every chip is (Chip centring tokens in
+   :root), so the words sit centred whatever Blink does with the line's half-leading. */
+.stonetop-welcome-create-label {
+	text-box: trim-both cap alphabetic;
+	padding-top: var(--st-trim-top);
+	padding-bottom: var(--st-trim-bottom);
+}
 
 /* No destructive variant of this button. It used to go red for a player who already had a
    character, because pressing it deleted that character; it now asks whether the new one

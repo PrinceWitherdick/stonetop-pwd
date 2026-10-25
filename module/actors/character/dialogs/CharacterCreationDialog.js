@@ -8,12 +8,16 @@
 // `openSheetWhenDone`). Until then, the player never sees an empty sheet.
 
 import { findOpenApp } from "../../../utils/open-windows.js";
-import { closeAndSettle, trackCreationFlow } from "../creation-flow.js";
+import { closeAndSettle, holdCreationFlow, trackCreationFlow } from "../creation-flow.js";
 
 export class CharacterCreationDialog extends Application {
 	constructor(actor, options = {}) {
-		super(options);
+		const { startedByGM = false, ...appOptions } = options;
+		super(appOptions);
 		this._actor = actor;
+		// Whether someone else (the GM) made this character for the player, which is all the
+		// greeting's first line changes on. See _maybeOpenCharacterCreation in hooks/Ready.js.
+		this._startedByGM = !!startedByGM;
 	}
 
 	/**
@@ -25,7 +29,7 @@ export class CharacterCreationDialog extends Application {
 	 * hook both reaching the same character, and the GM replacing a character while its
 	 * predecessor's greeting was still open.
 	 */
-	static async open(actor) {
+	static async open(actor, { startedByGM = false } = {}) {
 		const existing = findOpenApp(w => w instanceof CharacterCreationDialog);
 		// Already greeting them about this same character — surface it rather than stack. One
 		// still painting counts: it is about to be on screen, and a second would share its id.
@@ -43,7 +47,7 @@ export class CharacterCreationDialog extends Application {
 		// then found the old element by its id, drew into it, and vanished with it.
 		if (existing) await closeAndSettle(existing);
 		// Registered against its character so a delete takes it with them (see creation-flow.js).
-		return trackCreationFlow(new CharacterCreationDialog(actor), actor?.id).render(true);
+		return trackCreationFlow(new CharacterCreationDialog(actor, { startedByGM }), actor?.id).render(true);
 	}
 
 	static get defaultOptions() {
@@ -62,6 +66,7 @@ export class CharacterCreationDialog extends Application {
 		return {
 			playerName:    game.user?.name ?? "",
 			characterName: this._actor?.name ?? "",
+			startedByGM:   this._startedByGM,
 		};
 	}
 
@@ -77,10 +82,24 @@ export class CharacterCreationDialog extends Application {
 	//
 	// Once only. The button stays live through the intro's 200ms fade-out, so a double-click
 	// started the flow twice: two playbook pickers sharing one DOM id.
+	//
+	// Only for a player who may write the character: _onNewCharacter quietly does nothing for
+	// anyone else, and closing the intro on top of that left them with nothing at all. Say why
+	// and leave the intro up instead.
+	//
+	// Held (holdCreationFlow) until _onNewCharacter has opened its first window, so the moment
+	// between this intro closing and the picker registering doesn't read as "no flow open" and
+	// let a parked greeting (creation-flow.js) open beside it.
 	_onCreate() {
 		if (this._started) return;
+		const actor = this._actor;
+		if (!actor?.isOwner || typeof actor.sheet?._onNewCharacter !== "function") {
+			ui.notifications?.warn?.("You can't edit this character yet. Ask your GM to give you ownership of it, then try again.");
+			return;
+		}
 		this._started = true;
-		this._actor?.sheet?._onNewCharacter?.({ openSheetWhenDone: true });
+		Promise.resolve(holdCreationFlow(actor.id, actor.sheet._onNewCharacter({ openSheetWhenDone: true })))
+			.catch(err => console.error("Stonetop | could not start character creation", err));
 		this.close();
 	}
 }

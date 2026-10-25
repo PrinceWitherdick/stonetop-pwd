@@ -22,8 +22,10 @@
  * first, so anything that existed only on a duplicate survives and identical content collapses
  * instead of doubling. A page keeps that body in one of two places and this has to know both —
  * our own chronicle pages hold structured `system.sections`, while the Seasons Change journal is
- * made of core `text` pages whose whole record is `text.content` — so each goes through the
- * function that wrote it (mergeChronicleSections, mergeSeasonBlock).
+ * made of core `text` pages whose whole record is `text.content`. Sections fold through
+ * foldDuplicateSections, which never lets a duplicate's text replace the keeper's: a section the
+ * keeper lacks is added, missing Q&A pairs are added, and prose that differs is kept beside the
+ * keeper's under "<heading> (recovered copy)". Text pages fold by season (mergeSeasonBlock).
  *
  * Idempotent by construction — after a run no page carries the literal block, so there is nothing
  * left to match. It needs no once-per-world flag and is swept on every load.
@@ -31,7 +33,7 @@
 
 import { SYSTEM_ID } from "../system-id.js";
 import { mergeSeasonBlock } from "../seasons/seasons-chronicle.js";
-import { mergeChronicleSections } from "../utils/chronicle-core.js";
+import { cloneChronicleSection, normaliseChronicleHtml } from "../utils/chronicle-core.js";
 import { CHRONICLE_PROSE_FLAG } from "../utils/chronicle-journals.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
@@ -47,9 +49,9 @@ const seasonOf = block => (block.match(/data-season="([^"]+)"/) ?? [])[1] ?? "";
 /**
  * Is this body nothing BUT season blocks?
  *
- * The gate on using mergeSeasonBlock, which re-emits the blocks it finds and so would drop
- * anything a GM wrote around them. A year page nobody has typed into passes; one with a
- * paragraph of their own at the top falls through to the blunt append below, which keeps it.
+ * The gate on folding season by season. mergeSeasonBlock keeps whatever surrounds the blocks, but
+ * a page with a GM's own writing in it is one this cannot read the shape of, so it falls through
+ * to the blunt append below, which keeps every word of both.
  */
 function isSeasonBody(html) {
 	const text = String(html ?? "").trim();
@@ -91,6 +93,65 @@ export function mergeChronicleText(keeperHtml = "", doomedHtml = "") {
 	}
 
 	return { content: keeper ? `${keeper}${doomed}` : doomed, added: true };
+}
+
+/** The heading a duplicate's differing prose is kept under, beside the keeper's own. */
+export const RECOVERED_SUFFIX = " (recovered copy)";
+
+const sameSection = (a, b) => {
+	if (a?.kind === "prose" && b?.kind === "prose") {
+		return normaliseChronicleHtml(a.body) === normaliseChronicleHtml(b.body);
+	}
+	return JSON.stringify(a) === JSON.stringify(b);
+};
+
+/**
+ * Fold a doomed duplicate's sections into the keeper's, losing nothing and overwriting nothing.
+ *
+ * Never through mergeChronicleSections: that refreshes a "pristine" section from its source, and
+ * a duplicate is not a source. Fed one, it let a deleted copy's different prose replace the
+ * keeper's untouched prose and stamped it as ours (so a later save could overwrite a GM edit),
+ * and it threw away the deleted copy's prose whenever the keeper's had been edited.
+ *
+ *   • a heading the keeper lacks: the section is added as it stands;
+ *   • the same Q&A heading: pairs the keeper lacks (by prompt and answer) are added;
+ *   • the same heading with other text: the duplicate's section is kept beside the keeper's,
+ *     under "<heading> (recovered copy)", unless that exact copy is already there.
+ * Nothing added here is recorded as written by us, so no later save treats it as ours to change.
+ *
+ * @returns {{sections: Array<object>, added: boolean}}
+ */
+export function foldDuplicateSections(keeperSections = [], doomedSections = []) {
+	const sections = (keeperSections ?? []).map(cloneChronicleSection);
+	let added = false;
+	for (const dup of doomedSections ?? []) {
+		if (!dup) continue;
+		const match = sections.find(sec => sec.heading === dup.heading);
+		if (!match) {
+			sections.push(cloneChronicleSection(dup));
+			added = true;
+			continue;
+		}
+		if (match.kind === "qa" && dup.kind === "qa") {
+			match.pairs ??= [];
+			const sig = p => JSON.stringify([p?.prompt ?? "", p?.answer ?? ""]);
+			const have = new Set(match.pairs.map(sig));
+			for (const pair of dup.pairs ?? []) {
+				if (have.has(sig(pair))) continue;
+				match.pairs.push({ ...pair });
+				have.add(sig(pair));
+				added = true;
+			}
+			continue;
+		}
+		if (sameSection(match, dup)) continue;
+		const heading = `${dup.heading ?? ""}${RECOVERED_SUFFIX}`;
+		const recovered = { ...dup, heading };
+		if (sections.some(sec => sec.heading === heading && sameSection(sec, recovered))) continue;
+		sections.push(recovered);
+		added = true;
+	}
+	return { sections, added };
 }
 
 /**
@@ -147,17 +208,17 @@ export function planChronicleFlagRepair(pages, { scope = SYSTEM_ID } = {}) {
 		// bodies, since which of the two a page uses depends on its type and this repair groups
 		// structured chronicle pages and core text pages alike.
 		let sections = keeper.page?.system?.sections ?? [];
-		let proseManaged = keeper.page?.flags?.[scope]?.[CHRONICLE_PROSE_FLAG]
+		const proseManaged = keeper.page?.flags?.[scope]?.[CHRONICLE_PROSE_FLAG]
 			?? keeper.misfiled?.[CHRONICLE_PROSE_FLAG]
 			?? {};
 		let content = keeper.page?.text?.content ?? "";
 		let merged = false;
 		let textMerged = false;
 		for (const row of doomed) {
-			const result = mergeChronicleSections(sections, row.page?.system?.sections ?? [], { proseManaged });
+			// The keeper's prose hashes stand as they are: nothing folded in is ours.
+			const result = foldDuplicateSections(sections, row.page?.system?.sections ?? []);
 			if (result.added) merged = true;
 			sections = result.sections;
-			proseManaged = result.proseManaged;
 			const body = mergeChronicleText(content, row.page?.text?.content ?? "");
 			if (body.added) textMerged = true;
 			content = body.content;

@@ -75,3 +75,43 @@ describe("stepping back to the picker exactly once", () => {
 		expect(d._suppressOnClose).toBe(true);
 	});
 });
+
+// A commit that throws used to leave `_completed` set: the window stayed up with Finish dead.
+describe("a finish that fails", () => {
+	it("hands Finish back, says so, and keeps the window open", async () => {
+		const error = vi.fn();
+		const savedUi = global.ui;
+		global.ui = { notifications: { error, warn: vi.fn(), info: vi.fn() } };
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			const onComplete = vi.fn()
+				.mockRejectedValueOnce(new Error("server said no"))
+				.mockResolvedValueOnce(undefined);
+			const d = makeDialog({ onComplete });
+
+			await d._confirm();
+			expect(d._completed).toBe(false);
+			expect(d.close).not.toHaveBeenCalled();
+			expect(error).toHaveBeenCalledTimes(1);
+
+			await d._confirm();
+			expect(onComplete).toHaveBeenCalledTimes(2);
+			expect(d.close).toHaveBeenCalledTimes(1);
+		} finally {
+			global.ui = savedUi;
+			consoleError.mockRestore();
+		}
+	});
+
+	it("does the same for the last page's Skip", async () => {
+		const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			const d = makeDialog({ onComplete: vi.fn(async () => { throw new Error("nope"); }) });
+			await d._skip();
+			expect(d._completed).toBe(false);
+			expect(d.close).not.toHaveBeenCalled();
+		} finally {
+			consoleError.mockRestore();
+		}
+	});
+});

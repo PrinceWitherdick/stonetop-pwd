@@ -3820,9 +3820,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		this._clearPopups();
 		const next = this._step + 1;
 		if (next >= this._steps.length) {
-			this._completed = true;
-			if (this._onComplete) await this._onComplete(this._selections);
-			this.close();
+			await this._complete();
 			return;
 		}
 		this._step = next;
@@ -3857,14 +3855,31 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	async _confirm() {
 		if (this._completed) return;
 		if (!this._isStepComplete()) return;
+		await this._complete();
+	}
+
+	// The commit that Finish and the last page's Skip share. A commit that throws hands the
+	// window back: `_completed` goes false again so Finish answers the next click, and the
+	// player is told, rather than left looking at a window whose Finish silently does nothing.
+	// Their answers are still on screen (and in the resume snapshot), so trying again loses nothing.
+	async _complete() {
 		this._completed = true;
-		if (this._onComplete) await this._onComplete(this._selections);
+		try {
+			if (this._onComplete) await this._onComplete(this._selections);
+		} catch (err) {
+			this._completed = false;
+			console.error("Stonetop | could not finish character creation", err);
+			ui.notifications?.error?.("Couldn't save your character. Your answers are still here: try Finish again.");
+			return;
+		}
 		this.close();
 	}
 
 	async _saveProgress() {
 		this._clearPopups();
-		if (this._onSave) await this._onSave(this._selections);
+		// The page info rides along so the creation flow can mark its resume snapshot as saved
+		// (see onboarding-resume.js#resumeHasUnsavedWork).
+		if (this._onSave) await this._onSave(this._selections, this._progressInfo());
 		new Dialog({
 			title: game.i18n.localize("stonetop.onboarding.savedTitle"),
 			content: `<p>${game.i18n.localize("stonetop.onboarding.savedContent")}</p>`,

@@ -391,6 +391,26 @@ export async function askGMClient(gm, query, data, { fallback = null, what = "an
 	}
 }
 
+/**
+ * Resolve on the next `hook`, or after `ms` when it never fires (a render that failed, a window closed before it
+ * drew). Whichever comes first drops the other, so no listener is left waiting.
+ *
+ * @param {string} hook
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
+export function hookOrTimeout(hook, ms) {
+	return new Promise(resolve => {
+		const finish = () => {
+			Hooks.off(hook, hookId);
+			clearTimeout(timer);
+			resolve();
+		};
+		const hookId = Hooks.once(hook, finish);
+		const timer = setTimeout(finish, ms);
+	});
+}
+
 /** Core's ownership numbers, read through a function so a module using them imports cleanly outside Foundry. */
 export function ownershipLevels() {
 	return globalThis.CONST?.DOCUMENT_OWNERSHIP_LEVELS ?? { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 };

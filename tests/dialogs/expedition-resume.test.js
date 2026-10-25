@@ -27,6 +27,8 @@ beforeEach(() => {
 	opened  = [];
 	global.game = {
 		world:    { id: "world-a" },
+		// The walkthroughs are the GM's; a player's Introductions follows the cursor instead.
+		user:     { isGM: true },
 		stonetop: {
 			openExpedition:    () => { opened.push("expedition"); },
 			openIntroductions: () => { opened.push("introductions"); },
@@ -146,6 +148,16 @@ describe("reopenOpenWalkthroughs with an expedition", () => {
 		patchWalkthroughResume("expedition", { open: true, step: 4 });
 		await reopenOpenWalkthroughs();
 		expect(opened).toEqual(["introductions", "expedition"]);
+	});
+
+	// A player never reopens the Introductions from a saved record: they follow the session
+	// cursor, and a record of theirs reopened the window on a dead "Waiting for the GM" screen.
+	it("does not reopen the Introductions for a player", async () => {
+		global.game.user = { isGM: false };
+		patchWalkthroughResume("introductions", { open: true, phase: 2 });
+		patchWalkthroughResume("expedition", { open: true, step: 4 });
+		await reopenOpenWalkthroughs();
+		expect(opened).toEqual(["expedition"]);
 	});
 
 	it("does not mistake an expedition-only world record for the pre-world-keying flat shape", async () => {

@@ -542,7 +542,7 @@ export function registerSettings() {
 
 	// Whether the one-time "Welcome to Stonetop" fresh-start CHAT card has been posted in
 	// this world (hooks/Ready.js _postStartupWelcomeMessageOnce). Distinct from
-	// `gmWelcomeShown` above despite the similar name: that one records that the GM
+	// `gmWelcomeShown` (registered further down) despite the similar name: that one records that the GM
 	// dismissed the Welcome GUIDE's auto-pop-up, this one that the orientation card has
 	// been posted to chat. World-scoped — the card is public, and only the GM posts it.
 	game.settings.register(SYSTEM_ID, "startupWelcomeShown", {
@@ -995,7 +995,7 @@ export function registerSettings() {
 
 	// Whether the GM has dismissed the "first session" Welcome guide's automatic
 	// pop-up (see dialogs/WelcomeDialog.js). While false, the guide opens for the
-	// GM on every world load; ticking "Don't show this automatically" sets it true.
+	// GM on every world load; ticking "Don't show this again" sets it true.
 	game.settings.register(SYSTEM_ID, "gmWelcomeShown", {
 		name: "GM Welcome Guide Dismissed",
 		scope: "world",
@@ -1033,12 +1033,12 @@ export function registerSettings() {
 
 	// Answers recorded in the guided Character Introductions (see
 	// dialogs/IntroductionsDialog.js) — what each PC established about themselves and
-	// Stonetop. GM-written (only a GM can write a world setting): the GM types the
-	// narration rounds and HARVESTS each player's own `flags.stonetop-pwd.intro` flag
-	// (the player-driven answer/ask steps) into here for the Chronicle. Compiled into the
+	// Stonetop. GM-written (only a GM can write a world setting): the primary GM HARVESTS
+	// each PC's own `flags.stonetop-pwd.intro` flag (the narration rounds and the answer/ask
+	// steps, all written by the player, or by the GM with or for them) into here for the Chronicle. Compiled into the
 	// shared "Chronicle" journal (utils/chronicle.js). Shape, keyed by actor id:
 	//   { <actorId>: {
-	//       r1, r2, r3: "<text>",                    // narration rounds (GM-typed)
+	//       r1, r2, r3: "<text>",                    // narration rounds (harvested from intro.narration)
 	//       step4: { answers: [ { q: <questionIndex>, a: "<text>" }, … ], passed: <bool> },
 	//       step6: { answers: [ { q, a }, … ], passed: <bool> },   // ask step
 	//       r4..r7: { q, a }                          // LEGACY single-answer rounds, read-only

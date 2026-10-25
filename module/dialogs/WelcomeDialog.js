@@ -1,4 +1,4 @@
-import { getSetting, setSetting } from "../settings.js";
+import { setSetting } from "../settings.js";
 import { enrichHTML } from "../utils/foundry-compat.js";
 import { findVisibleJournal, settingOverviewPages, SETTING_OVERVIEW_JOURNAL } from "../utils/seeded-journals.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
@@ -6,7 +6,7 @@ import { ensurePackIndex } from "../utils/pack-index.js";
 import { applyGuideRail } from "../utils/guide-rail.js";
 import { applyLocationTooltips } from "../locations/location-tooltips.js";
 import { FoundryBasicsDialog } from "./FoundryBasicsDialog.js";
-import { charactersOwnedBy } from "../utils/playbook-actors.js";
+import { charactersPlayedBy } from "../utils/playbook-actors.js";
 import { createCharacterForUser } from "../actors/character/create-character.js";
 import { stonetopSteadingHeaderButton } from "../utils/world.js";
 import { runImportBookArtMacro } from "../book2-art/macro.js";
@@ -15,6 +15,8 @@ import { hasImportedBook2Art } from "../book2-art/reapply.js";
 // warning shown before that character is deleted can never disagree.
 import { progressFor } from "../actors/character/onboarding-progress.js";
 import { SYSTEM_ID, JOURNAL_PACK } from "../system-id.js";
+import { pastWelcomeGuide, sessionZeroComplete } from "./walkthrough-resume.js";
+import { confirmOutcome } from "../utils/ask-with-buttons.js";
 
 // ── WelcomeDialog ───────────────────────────────────────────────────────────
 // A GM-only "first session" guide. Walks the GM through the Book I "Getting
@@ -50,17 +52,18 @@ function premiseSource() {
 // The guide's panels, in order, driving the left rail (like Run an Expedition /
 // Make a Monster). `key` matches a `<section data-tab>` in the template and the
 // rail button's `data-tab`; `title` labels the rail entry and the banner; `icon`
-// is a Font Awesome 6 glyph. The overview is the landing panel; the six numbered
-// entries are Book I's "Getting Started" steps, and `step` drives the banner's
-// "Step N of 6" count (the overview has none).
+// is a Font Awesome 6 glyph. The overview is the landing panel. The five `step` entries
+// are Book I's "Getting Started" steps and drive the banner's "Step N of 5" count. Book
+// Art keeps its place in the rail but is not one of the book's steps: it has no `step`,
+// so its banner shows only the "optional" tag (the overview shows neither).
 const SECTIONS = [
 	{ key: "overview",     title: "Getting started",       icon: "fa-signs-post" },
-	{ key: "book-art",     title: "Import the book art",     icon: "fa-images",         step: 1, optional: true },
-	{ key: "setting",      title: "Review the setting",    icon: "fa-book-open",      step: 2 },
-	{ key: "expectations", title: "Set expectations",      icon: "fa-scale-balanced", step: 3 },
-	{ key: "characters",   title: "Create characters",     icon: "fa-user-plus",      step: 4 },
-	{ key: "introduce",    title: "Introduce the PCs",     icon: "fa-users",          step: 5 },
-	{ key: "spring",       title: "Let spring burst forth", icon: "fa-seedling",      step: 6 },
+	{ key: "book-art",     title: "Import the book art",     icon: "fa-images",         optional: true },
+	{ key: "setting",      title: "Review the setting",    icon: "fa-book-open",      step: 1 },
+	{ key: "expectations", title: "Set expectations",      icon: "fa-scale-balanced", step: 2 },
+	{ key: "characters",   title: "Create characters",     icon: "fa-user-plus",      step: 3 },
+	{ key: "introduce",    title: "Introduce the PCs",     icon: "fa-users",          step: 4 },
+	{ key: "spring",       title: "Let spring burst forth", icon: "fa-seedling",      step: 5 },
 ];
 const STEP_COUNT = SECTIONS.filter(s => s.step).length;
 
@@ -71,16 +74,15 @@ export class WelcomeDialog extends Application {
 		// Which rail panel is showing; preserved across the roster's live re-renders
 		// (see _registerHooks) so refreshing the player list doesn't snap back to the top.
 		this._activeTab = SECTIONS[0].key;
-		// Whether the durable art folder already holds imported book art. Resolved once and
-		// cached for the life of the window: it takes a handful of file-browse round trips,
-		// and this guide re-renders every time the roster changes. Invalidated after the
-		// import macro runs, which is the only thing that can change the answer.
-		this._bookArtImported = null;
-		// NB: the rebuildable-portrait count is deliberately NOT cached here. It is reachable from
-		// three places (this button, the chat card, game.stonetop.rebuildPortraits) and this guide
-		// is a session singleton, so a memo invalidated beside only one of them would leave the
-		// step offering work the other two had already done. It is cheap to re-ask: the walk is
-		// browseArtDirs, which owns a session cache every writer already busts (see browse.js).
+		// Players whose "Create character" press is still being answered (the add-or-replace
+		// question, the create, the assignment). Kept on the instance, not the button, because
+		// the roster re-renders under a press and draws a fresh, enabled button: the template
+		// reads this set to draw it disabled instead. A double-click otherwise minted two.
+		this._creatingFor = new Set();
+		// The same for "Build N more portraits": a re-render mid-run must not offer it again.
+		this._rebuilding = false;
+		// "Is book art imported?" and the rebuildable-portrait count are not cached here: both are cheap to re-ask
+		// (browseArtDirs keeps the session cache, busted by every writer) and both can change from elsewhere.
 	}
 
 	// GM-only, enforced HERE rather than at each caller. The guide mints characters for other
@@ -141,14 +143,19 @@ export class WelcomeDialog extends Application {
 				avatar: u.avatar,
 				active: u.active,
 				color:  String(u.color ?? ""),
-				characters: charactersOwnedBy(u.id)
+				// Mid-mint: draw the button disabled (see _creatingFor).
+				creating: this._creatingFor.has(u.id),
+				// The characters this player PLAYS, which is exactly the list the add-or-replace
+				// question behind the button names (createCharacterForUser), so the roster and
+				// that question can't disagree about whose characters these are.
+				characters: charactersPlayedBy(u.id)
 					.map(a => ({
 						id: a.id, name: a.name, img: a.img,
 						// Live creation progress, stamped by the player's creation flow (see
-						// _setOnboardingState in StonetopCharacterSheet); cleared once they
-						// finish, so a completed character shows no note.
-						// Read through progressFor, which also asks whether creation was really
-						// finished: a "Save & close" commits the playbook part-way through.
+						// _setOnboardingState in StonetopCharacterSheet). Every character has a
+						// note, "Finished" included. Read through progressFor, which also asks
+						// whether creation was really finished: a "Save & close" commits the
+						// playbook part-way through.
 						progress: progressFor(a),
 					})),
 			}));
@@ -156,27 +163,33 @@ export class WelcomeDialog extends Application {
 		const activeIndex = Math.max(0, SECTIONS.findIndex(s => s.key === this._activeTab));
 		const active = SECTIONS[activeIndex];
 
-		// A failed browse reads as "not imported" — the step then just offers the import,
-		// which is the harmless answer either way.
-		if (this._bookArtImported === null) {
-			this._bookArtImported = await hasImportedBook2Art().catch(() => false);
-		}
+		// A failed browse reads as "not imported" for this render only: the step then just offers
+		// the import, which is the harmless answer either way, and the next render asks again.
+		const bookArtImported = await hasImportedBook2Art().catch(() => false);
 
 		// How much could be cut from art already on disk without the PDFs — the detail portraits,
 		// the square faces and the creature token squares. Shown here because the one-time chat
 		// card that normally offers this latches the moment it is posted, so a GM who missed it has
 		// no other way back. Zero (the steady state) renders nothing at all.
 		const { countBookArtRebuilds } = await import("../book2-art/run-rebuild.js");
-		const rebuildableArt = this._bookArtImported ? await countBookArtRebuilds() : 0;
+		const rebuildableArt = bookArtImported ? await countBookArtRebuilds() : 0;
+
+		// The guide stops opening by itself once the GM ticks the box OR both session-zero
+		// walkthroughs are done (pastWelcomeGuide, the test the auto-open uses). Show what will
+		// actually happen: ticked in either case. With the walkthroughs done, unticking could not
+		// bring it back, so the box is shown ticked and locked, and says why.
+		const sessionDone = sessionZeroComplete();
 
 		return {
 			rebuildableArt,
+			rebuilding:    this._rebuilding,
 			players,
 			noPlayers:     players.length === 0,
 			// Drives the "you have already done this" state on the Book Art step, so a GM
 			// who imported in another world isn't told to go and find their PDFs again.
-			bookArtImported: this._bookArtImported,
-			dontShowAgain: !!getSetting("gmWelcomeShown"),
+			bookArtImported,
+			dontShowAgain: pastWelcomeGuide(),
+			dontShowLocked: sessionDone,
 			premiseHtml:   await enrichHTML(premiseSource()),
 			// Left rail + banner. Only the first-render active state comes from here;
 			// switching panels afterwards is client-side (see _selectTab), so the roster
@@ -189,9 +202,9 @@ export class WelcomeDialog extends Application {
 		};
 	}
 
-	// Banner "Step N of M" for the numbered steps; blank for the overview landing.
-	// N is the step's ordinal by position (not a stored number) so omitting the
-	// optional Book Art step doesn't leave a gap in the count.
+	// Banner "Step N of M" for Book I's five steps; blank for the overview landing and the
+	// optional, unnumbered Book Art panel. N is the step's ordinal by position (not a stored
+	// number), so the count can never skip or repeat.
 	_countLabel(index) {
 		if (!SECTIONS[index]?.step) return "";
 		const ordinal = SECTIONS.slice(0, index + 1).filter(s => s.step).length;
@@ -221,14 +234,16 @@ export class WelcomeDialog extends Application {
 		html.find('[data-action="import-book-art"]').on("click", () => this._runImportBookArt());
 		html.find('[data-action="rebuild-portraits"]').on("click", ev => this._rebuildPortraits(ev.currentTarget));
 		html.find(".stonetop-welcome-create").on("click", ev =>
-			this._onCreateCharacter(ev.currentTarget.dataset.userId));
+			this._onCreateCharacter(ev.currentTarget.dataset.userId, ev.currentTarget));
 		html.find(".stonetop-welcome-player-char").on("click", ev => {
 			const actor = game.actors.get(ev.currentTarget.dataset.actorId);
 			actor?.sheet?.render(true);
 		});
-		html.find(".stonetop-welcome-dontshow-input").on("change", ev =>
+		html.find(".stonetop-welcome-dontshow-input").on("change", ev => {
+			// Locked ticked once both walkthroughs are done (see getData): a disabled box fires no change.
 			setSetting("gmWelcomeShown", ev.currentTarget.checked)
-				.catch(err => console.error("Stonetop | could not save the welcome preference", err)));
+				.catch(err => console.error("Stonetop | could not save the welcome preference", err));
+		});
 
 		this._registerHooks();
 	}
@@ -309,9 +324,8 @@ export class WelcomeDialog extends Application {
 	// post-startup art reminder; see runImportBookArtMacro.
 	async _runImportBookArt() {
 		const result = await runImportBookArtMacro();
-		// The import is the one thing that can change "do I have book art on disk?", so drop
-		// the cached answer and redraw the step in its already-imported state.
-		this._bookArtImported = null;
+		// Redraw the step, which re-asks "is book art on disk?" (see the constructor's note), so
+		// it shows its already-imported state.
 		if (this.rendered) await this.render(false);
 		return result;
 	}
@@ -324,19 +338,39 @@ export class WelcomeDialog extends Application {
 	 * the offer permanently — and on an upgrade that means the new art silently never appears.
 	 */
 	async _rebuildPortraits(btn) {
-		const { runBookArtRebuildFromButton } = await import("../book2-art/run-rebuild.js");
-		// The disable, the counting spinner, the notification and the restore-on-error are the
-		// chat card's too, so they live in run-rebuild.js beside the work itself.
-		if (!await runBookArtRebuildFromButton(btn)) return;   // threw — the label is already back
-		// Re-render, which re-counts from disk rather than assuming it is now zero: a partial run
-		// leaves the remainder, and the button has to keep offering it.
+		// Once at a time. The button's own disabled state is not enough: a roster refresh mid-run
+		// replaces it with a fresh, enabled one (the template reads `_rebuilding` to prevent that).
+		if (this._rebuilding) return;
+		this._rebuilding = true;
+		let ok = false;
+		try {
+			const { runBookArtRebuildFromButton } = await import("../book2-art/run-rebuild.js");
+			// The disable, the counting spinner, the notification and the restore-on-error are the
+			// chat card's too, so they live in run-rebuild.js beside the work itself.
+			ok = !!await runBookArtRebuildFromButton(btn);
+		} finally {
+			this._rebuilding = false;
+		}
+		// Re-render either way: a failed run needs its button back, and a finished one re-counts
+		// from disk rather than assuming it is now zero (a partial run leaves the remainder, and
+		// the button has to keep offering it).
 		if (this.rendered) await this.render(false);
+		return ok;
 	}
 
-	// Jump to Foundry's core "Configure Players" screen — the same full-page route
-	// the gear-tab button uses. It navigates away from the game (the GM returns
-	// once they've added users), so there's nothing to re-render here.
-	_openPlayerConfig() {
+	// Jump to Foundry's core "Configure Players" screen, the same full-page route the gear-tab
+	// button uses. That leaves the game for everyone at this screen (the GM returns once they've
+	// added users), so ask first: a stray click mid-session would otherwise drop the GM out of it.
+	async _openPlayerConfig() {
+		const ok = await confirmOutcome({
+			title: "Leave the game to configure players?",
+			content: "<p>Foundry's <strong>Configure Players</strong> screen is a separate page: opening it "
+				+ "<strong>leaves this game</strong> on your screen. Your players stay connected, and you can "
+				+ "come back in once you've added them.</p>",
+			yes: { label: "Go to Configure Players", icon: "fa-users-gear" },
+			no:  { label: "Stay in the game", icon: "fa-xmark" },
+		});
+		if (!ok) return;
 		window.location.href = foundry.utils?.getRoute?.("players") ?? "/players";
 	}
 
@@ -345,13 +379,35 @@ export class WelcomeDialog extends Application {
 	// assignment, the greeting) is shared with the sidebar "Create Actor" picker — see
 	// createCharacterForUser — so the roster and the sidebar can't diverge. Only the GM
 	// ever sees this dialog, so we can assume permission to create.
-	async _onCreateCharacter(userId) {
-		const actor = await createCharacterForUser(userId);
-		if (actor) this.render(false);
+	//
+	// Once per player at a time (see _creatingFor): the add-or-replace question and the create
+	// both await, and a second press in that gap minted a second character or stacked a second
+	// replace confirmation. The button is disabled for the duration, and stays so across any
+	// roster refresh, because the template draws it from the same set.
+	async _onCreateCharacter(userId, btn = null) {
+		if (!userId || this._creatingFor.has(userId)) return null;
+		// The roster can be a moment behind a user being deleted elsewhere: say so rather than
+		// doing nothing (createCharacterForUser answers null for an unknown user).
+		if (!game.users?.get(userId)) {
+			ui.notifications?.warn?.("That player no longer exists in this world.");
+			if (this.rendered) this.render(false);
+			return null;
+		}
+		this._creatingFor.add(userId);
+		if (btn) btn.disabled = true;
+		let actor = null;
+		try {
+			actor = await createCharacterForUser(userId);
+		} finally {
+			this._creatingFor.delete(userId);
+			if (btn) btn.disabled = false;
+			if (this.rendered) this.render(false);
+		}
+		return actor;
 	}
 
-	// Keep the roster live while the dialog is open: players coming online/offline
-	// and characters being created/assigned should refresh the list.
+	// Keep the roster live while the dialog is open: players coming online/offline, being
+	// added, removed or changed, and characters being created/assigned should refresh the list.
 	_registerHooks() {
 		if (this._hooks) return;
 		// Debounced: a player clicking through onboarding writes the progress flag on
@@ -361,8 +417,21 @@ export class WelcomeDialog extends Application {
 		// The roster only reflects characters and their owners, so ignore actor
 		// churn (monsters, HP ticks, token moves) that can't change what we show.
 		const refreshIfCharacter = actor => { if (actor?.type === "character") refresh(); };
+		// The world settings the footer's "Don't show this again" box reflects (see getData), so
+		// a second GM ticking it, or finishing the last walkthrough, shows here too.
+		const welcomeKeys = new Set([`${SYSTEM_ID}.gmWelcomeShown`, `${SYSTEM_ID}.sessionZeroDone`]);
+		const refreshIfWelcomeSetting = setting => { if (welcomeKeys.has(setting?.key)) refresh(); };
 		this._hooks = [
 			["userConnected", Hooks.on("userConnected", refresh)],
+			// Players added, removed, renamed, recoloured or reassigned: all on the roster.
+			["createUser",    Hooks.on("createUser",    refresh)],
+			["deleteUser",    Hooks.on("deleteUser",    refresh)],
+			["updateUser",    Hooks.on("updateUser", (_user, changes) => {
+				if (!changes) return;
+				if (["name", "avatar", "color", "role", "character"].some(k => k in changes)) refresh();
+			})],
+			["createSetting", Hooks.on("createSetting", refreshIfWelcomeSetting)],
+			["updateSetting", Hooks.on("updateSetting", refreshIfWelcomeSetting)],
 			["createActor",   Hooks.on("createActor",   refreshIfCharacter)],
 			["deleteActor",   Hooks.on("deleteActor",   refreshIfCharacter)],
 			["updateActor",   Hooks.on("updateActor", (actor, changes) => {

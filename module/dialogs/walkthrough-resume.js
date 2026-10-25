@@ -1,4 +1,5 @@
 import { getSetting, setSetting, setWorldSetting, worldKey } from "../settings.js";
+import { hookOrTimeout } from "../utils/foundry-compat.js";
 
 // ── Walkthrough reload-resume ──────────────────────────────────────────────────
 // The GM walkthroughs — the session-zero pair (Character Introductions, Let Spring
@@ -21,9 +22,12 @@ const DONE_SETTING = "sessionZeroDone";
 // Every walkthrough that keeps a resume record, in the order reopenOpenWalkthroughs brings them
 // back: the session-zero pair first, then Run an Expedition, so the working window lands frontmost
 // in the rare case a session-zero walkthrough was left open behind it. `opener` is the game.stonetop
-// entry point and `renderHook` the hook that fires once it has actually drawn.
+// entry point and `renderHook` the hook that fires once it has actually drawn. `gmOnly`: reopened
+// for a GM only. A player follows the Introductions cursor instead, which is what says whether a
+// session is running at all; reopening from a record of theirs put them on a dead "Waiting for the
+// GM to begin" screen, and raced the cursor's own reopen (IntroductionsDialog.openForActiveSession).
 const WALKTHROUGHS = [
-	{ key: "introductions", opener: "openIntroductions", renderHook: "renderIntroductionsDialog" },
+	{ key: "introductions", opener: "openIntroductions", renderHook: "renderIntroductionsDialog", gmOnly: true },
 	{ key: "springBurst",   opener: "openSpringBurst",   renderHook: "renderSpringBurstDialog" },
 	{ key: "expedition",    opener: "openExpedition",    renderHook: "renderExpeditionDialog" },
 ];
@@ -105,7 +109,7 @@ export function sessionZeroComplete() {
 }
 
 // Has the Welcome guide stopped auto-opening? True once the GM ticked "Don't show this
-// automatically" (which sets gmWelcomeShown) or finished both session-zero walkthroughs.
+// again" (which sets gmWelcomeShown) or finished both session-zero walkthroughs.
 //
 // The gate every one-time GM nudge holds behind, stated once: while a fresh world is still
 // being greeted, a second card about art or an optional module is noise at the moment the GM
@@ -119,21 +123,10 @@ export function pastWelcomeGuide() {
 // is fire-and-forget (it returns `this`, not the render promise), so we listen for
 // its `render<ClassName>` hook; a safety timeout resolves anyway so the chain can
 // never hang if a render fails to fire.
-function openThenRendered(open, renderHook) {
-	return new Promise(resolve => {
-		let settled = false;
-		let hookId  = null;
-		const finish = () => {
-			if (settled) return;
-			settled = true;
-			if (hookId !== null) Hooks.off(renderHook, hookId);
-			clearTimeout(timer);
-			resolve();
-		};
-		hookId = Hooks.once(renderHook, finish);
-		const timer = setTimeout(finish, 3000);
-		Promise.resolve(open()).catch(() => finish());
-	});
+async function openThenRendered(open, renderHook) {
+	const rendered = hookOrTimeout(renderHook, 3000);
+	try { await open(); } catch { return; }
+	await rendered;
 }
 
 // One-time migration of the pre-world-keying flat shape. Records used to live at the top
@@ -171,7 +164,8 @@ export async function reopenOpenWalkthroughs() {
 	// Fold any pre-world-keying flat record under this world first, so an upgrade mid-session
 	// still finds its `open: true` (see migrateFlatWalkthroughResume).
 	await migrateFlatWalkthroughResume();
-	for (const { key, opener, renderHook } of WALKTHROUGHS) {
+	for (const { key, opener, renderHook, gmOnly } of WALKTHROUGHS) {
+		if (gmOnly && !game.user?.isGM) continue;
 		// getWalkthroughResume reads only THIS world's records (see worldKey), so a stray
 		// `open: true` left behind in another world can never reopen its dialog here.
 		if (getWalkthroughResume(key)?.open !== true) continue;

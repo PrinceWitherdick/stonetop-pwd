@@ -68,8 +68,8 @@ describe("seedChroniclePages flag scope", () => {
 			{ key: "hana",  name: "Hana",  sections: prose("<p>A fisher.</p>") },
 		];
 
-		expect(await seedChroniclePages(entry, pages)).toEqual({ created: 2, updated: 0 });
-		expect(await seedChroniclePages(entry, pages)).toEqual({ created: 0, updated: 0 });
+		expect(await seedChroniclePages(entry, pages)).toEqual({ created: 2, updated: 0, kept: 0 });
+		expect(await seedChroniclePages(entry, pages)).toEqual({ created: 0, updated: 0, kept: 0 });
 		expect(entry.pages).toHaveLength(2);
 	});
 
@@ -83,7 +83,7 @@ describe("seedChroniclePages flag scope", () => {
 			sections: [...prose("<p>A shepherd.</p>"), { heading: "What they carry", kind: "prose", body: "<p>A crook.</p>" }],
 		}]);
 
-		expect(result).toEqual({ created: 0, updated: 1 });
+		expect(result).toEqual({ created: 0, updated: 1, kept: 0 });
 		expect(entry.pages).toHaveLength(1);
 		// The update targets the page that already exists, by its id.
 		expect(entry.updateEmbeddedDocuments.mock.calls[0][1][0]._id).toBe("page-0");

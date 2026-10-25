@@ -40,7 +40,10 @@ export function progressLabel(p, playbook, finished = false) {
 		hasPlaybook && (finished || !p) ? { text: "Finished", status: "finished" } :
 		!p                   ? { text: "not started yet", status: "not-started" } :
 		p.state === "picker" ? { text: "on playbook picker", status: "picker" } :
-		p.state === "exited" ? { text: "exited onboarding", status: "exited" } :
+		// Both exits write "exited". Closing the playbook picker writes it bare, while leaving the
+		// walkthrough stamps the playbook being filled in, so no playbook at all means they only
+		// got as far as the picker.
+		p.state === "exited" ? { text: name ? "exited onboarding" : "closed the playbook picker", status: "exited" } :
 		// "onboarding" — or a legacy flag with just step/total and no state. A
 		// known page count reads "on page N of M"; otherwise (a partial/legacy flag
 		// with no usable total) still show the player as mid-creation rather than

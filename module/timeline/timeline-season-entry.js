@@ -22,7 +22,8 @@ import { mutateTrack, trackForActor } from "./timeline-store.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
 import { seasonLabel } from "../seasons/seasons-change-reminders.js";
 import { sign } from "../utils/roll-engine.js";
-import { escHtml } from "../utils/strings.js";
+import { escHtml, normaliseEditorText } from "../utils/strings.js";
+import { hashString } from "../hooks/journal-sync-core.js";
 import { TIER_LABELS } from "../utils/move-results.js";
 import { seasonStamp } from "../seasons/campaign-year.js";
 
@@ -64,18 +65,34 @@ function existingSeasonRow(entries, seasonId, year) {
 }
 
 /**
+ * The change-detection hash of a season row's title and body, spelled-out entities and runs of
+ * whitespace evened out first, so an editor re-saving the same words does not read as an edit.
+ */
+export function seasonRowHash(row) {
+	return hashString(`${normaliseEditorText(row?.title)}\n${normaliseEditorText(row?.body)}`);
+}
+
+/**
  * Put one Seasons Change on the steading's thread, replacing the row a re-record left.
  *
  * GM-only in practice, since only a GM reaches the move that calls it. Answers null rather than
  * throwing on a world with no steading or no page it may write, so its caller can treat this as the
  * footnote it is.
+ *
+ * `lastHash` is the seasonRowHash of the row as the last recording wrote it. When it is given and
+ * the row no longer matches it, the GM has rewritten the row and it is left as they wrote it.
+ * Without it (a row recorded before the hash was kept) the row is replaced, as it always was.
+ *
+ * @returns {Promise<{page: object|null, hash: string|null}|null>}  `hash` is what the row now
+ *   holds as we wrote it, or null when a GM's row was left alone.
  */
-export async function recordSeasonOnTimeline({ seasonId, year, gainNames = [], surplusChange = 0, notes = "", fortunesTier = null } = {}) {
+export async function recordSeasonOnTimeline({ seasonId, year, gainNames = [], surplusChange = 0, notes = "", fortunesTier = null, lastHash } = {}) {
 	const track = trackForActor(getStonetopSteadingActor());
 	if (!track) return null;
 
 	const body = seasonEntryBody({ gainNames, surplusChange, notes, fortunesTier });
 	const title = seasonLabel(seasonId);
+	let leftAlone = false;
 
 	// Through the store's own write path, which reads the page, skips a write that moves nothing,
 	// and mints the page when the steading has no thread yet. This used to be spelled out here, and
@@ -84,6 +101,10 @@ export async function recordSeasonOnTimeline({ seasonId, year, gainNames = [], s
 	const done = await mutateTrack(track, (stored) => {
 		const entries = sortEntries(stored);
 		const already = existingSeasonRow(entries, seasonId, year);
+		if (already && typeof lastHash === "string" && seasonRowHash(already) !== lastHash) {
+			leftAlone = true;
+			return { entries, changed: null };
+		}
 		return already
 			? patchEntry(entries, already.id, { title, body })
 			: addEntry(entries, {
@@ -97,7 +118,7 @@ export async function recordSeasonOnTimeline({ seasonId, year, gainNames = [], s
 			}, foundry.utils.randomID);
 	}, { create: true });
 
-	return done?.page ?? null;
+	return { page: done?.page ?? null, hash: leftAlone ? null : seasonRowHash({ title, body }) };
 }
 
 // A SEASON'S SHORTFALL, ON ITS OWN LINE (user, 2026-10-10).

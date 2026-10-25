@@ -6,12 +6,14 @@
 // everywhere: Foundry's designated activeGM when present, else the first active GM
 // user (and true when there's no active GM at all, so a lone client still acts).
 
-export function isPrimaryGM() {
-	const activeGM = game.users?.activeGM;
-	if (activeGM) return activeGM.id === game.user?.id;
+/** The primary GM user (activeGM, else the first active GM), or null when no GM is connected. */
+export function primaryGM() {
+	return game.users?.activeGM ?? game.users?.find(user => user.active && user.isGM) ?? null;
+}
 
-	const firstActiveGM = game.users?.find(user => user.active && user.isGM);
-	return !firstActiveGM || firstActiveGM.id === game.user?.id;
+export function isPrimaryGM() {
+	const gm = primaryGM();
+	return !gm || gm.id === game.user?.id;
 }
 
 /**
@@ -27,5 +29,5 @@ export function isPrimaryGM() {
  * and deliberately returns true with no GM present so a lone client still acts.
  */
 export function anyActiveGM() {
-	return !!(game.users?.activeGM ?? game.users?.find(user => user.active && user.isGM));
+	return !!primaryGM();
 }

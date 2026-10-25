@@ -54,7 +54,7 @@ import {ownDamageMode, toughLoveHeld, callOut, workedItOut, leapIn, HERO_MOVES} 
 import {ASTERISK_MOVES, asteriskUseCounts, asteriskMoveUsed, canRestoreWouldBe, restoreWouldBe} from "./WouldBeHeroAsterisk.js";
 import {followerInFight, customFollowerOutOfOrders} from "../../fight/follower-fight.js";
 import {altStatGrantsFor, altStatNotes} from "../../data/alt-stat-grants.js";
-import {readOnboardingResume, writeOnboardingResume, clearOnboardingResume} from "./onboarding-resume.js";
+import {readOnboardingResume, writeOnboardingResume, clearOnboardingResume, resumeHasUnsavedWork} from "./onboarding-resume.js";
 import {trackCreationFlow} from "./creation-flow.js";
 import {CREATION_FINISHED_FLAG, isMidCreation} from "./onboarding-progress.js";
 import {CharacterLedger} from "./CharacterLedger.js";
@@ -143,7 +143,7 @@ import { FOLLOWER_DEBILITIES, followerConditions, removeFollowerCondition, toggl
 import { CompanionSetupDialog, companionSetupUpdate } from "./dialogs/CompanionSetupDialog.js";
 import {GLORIOUS_SERVANT, INVOKE_CONSEQUENCE_BULLETS, TEN_PLUS_FLAG, consequenceBullet, debilityPayments, invokeCardFlags, invokeTenPlusCardBody, payDebility} from "./invoke-consequences.js";
 import {DANCING_LIGHT, invocationLabel, invocationLabels, invokeWindowNotice, readOngoing, resolveInvocationUse} from "./ongoing-invocation.js";
-import {INVOCATIONS_GRANTED_AT_FLAG, invocationCountCue} from "./invocation-count.js";
+import {invocationCountCue, INVOCATIONS_GRANTED_AT_FLAG} from "./invocation-count.js";
 import {showJudgeMarks, condemnedContext, CONDEMN, CENSURE, CASTIGATE} from "./condemn.js";
 import {PIETY, BOLSTER, holdBlessing, shareBlessing} from "./roll-boosts.js";
 import {giveAdvantageCardHtml, seekInsightQuestionsFor} from "./give-advantage.js";
@@ -13768,9 +13768,13 @@ export function createStonetopCharacterSheetClass(Base) {
 		_launchOnboarding(playbookDoc, { openSheetOnce, openPicker, initialSelections = null, startAtStep = null } = {}) {
 			const saveResume = info => writeOnboardingResume(this.actor, {
 				playbookUuid: playbookDoc.uuid,
-				stepType:     info.stepType,
-				selections:   info.selections,
-			});
+				stepType:     info?.stepType ?? null,
+				selections:   info?.selections,
+			}, { committed });
+		}
+
+		_launchOnboarding(playbookDoc, { openSheetOnce, openPicker, initialSelections = null, startAtStep = null } = {}) {
+			const saveResume = this._resumeSaver(playbookDoc);
 			// Tracked against the character being built (see openPicker, and creation-flow.js).
 			trackCreationFlow(new CharacterOnboardingDialog(
 				playbookDoc,
@@ -13798,8 +13802,9 @@ export function createStonetopCharacterSheetClass(Base) {
 					companionTraitBonus: this._companionTraitBonusBeyondCreation(playbookDoc),
 					heldMinorArcana: this._heldMinorArcana(),
 					onBack: openPicker,
-					onSave: async (selections) => {
+					onSave: async (selections, info) => {
 						await this._applyPlaybookSelections(playbookDoc, selections);
+						saveResume({ ...info, selections }, { committed: true });
 					},
 					// Finishing, saving-and-closing, or closing onboarding all land the
 					// player on their now-populated sheet. Back-navigation to the picker
@@ -13870,6 +13875,24 @@ export function createStonetopCharacterSheetClass(Base) {
 			// a character made before the stamp existed has none either, and is not being created.
 			const firstFinish = isMidCreation(this.actor);
 
+			// Part-way through, the walkthrough's answers after its last Save live only in this
+			// client's resume snapshot: a player who saved, carried on, then closed the window has
+			// more there than on the sheet. Pick up from the snapshot when it holds answers the
+			// character does not, for this same playbook; otherwise the sheet is the newer copy
+			// (it also carries anything edited on the sheet since). While unfinished, this pass
+			// keeps the snapshot current the way the first pass does, so a reload resumes it too.
+			let initialSelections = selections;
+			let startAtStep = options.startAtStep ?? null;
+			const saveResume = firstFinish ? this._resumeSaver(playbookDoc) : null;
+			if (firstFinish) {
+				const snap = readOnboardingResume(this.actor);
+				if (resumeHasUnsavedWork(snap) && snap.playbookUuid === playbookUuid) {
+					initialSelections = snap.selections;
+					startAtStep = snap.stepType ?? startAtStep;
+				}
+			}
+			const tracking = trackProgress || firstFinish;
+
 			// Note: _applyPlaybookSelections updates the prototype token image but not
 			// any already-placed tokens; those are left for the GM to sync manually.
 			//
@@ -13879,30 +13902,39 @@ export function createStonetopCharacterSheetClass(Base) {
 				playbookDoc,
 				async (sel) => {
 					await this._applyPlaybookSelections(playbookDoc, sel);
-					if (trackProgress || firstFinish) await this._clearOnboardingProgress();
+					if (tracking) await this._clearOnboardingProgress();
 					if (firstFinish) {
+						clearOnboardingResume(this.actor);
 						await this._addToSteadingRoster();
 						await this._markCreationFinished();
 					}
 				},
 				{
-					initialSelections: selections,
-					startAtStep: options.startAtStep ?? null,
+					initialSelections,
+					startAtStep,
 					ownedMoveCounts: this._ownedMoveCounts(),
 					retiredMoveNames: this._stonetopCharacter._retiredMoveNames(),
 					retiredCreationPicks: this._stonetopCharacter.retiredCreationPickCount(),
 					crewTagBonus: this._crewTagBonusBeyondCreation(),
 					companionTraitBonus: this._companionTraitBonusBeyondCreation(playbookDoc),
 					heldMinorArcana: this._heldMinorArcana(),
-					onSave: async (sel) => {
+					onSave: async (sel, info) => {
 						await this._applyPlaybookSelections(playbookDoc, sel);
+						saveResume?.({ ...info, selections: sel }, { committed: true });
 					},
-					...(trackProgress
+					...(tracking
 						? {
-							onProgress: info => this._setOnboardingState("onboarding", { step: info.step + 1, total: info.total }),
-							onExit: () => this._setOnboardingState("exited"),
+							onProgress: info => {
+								this._setOnboardingState("onboarding", { step: info.step + 1, total: info.total });
+								saveResume?.(info);
+							},
+							onExit: info => {
+								this._setOnboardingState("exited");
+								saveResume?.(info);
+							},
 						}
 						: {}),
+					...(saveResume ? { onLiveSave: saveResume } : {}),
 				},
 				// no onBack ? back button is hidden
 			), this.actor.id).render(true);

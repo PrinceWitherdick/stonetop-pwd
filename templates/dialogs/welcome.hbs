@@ -1,13 +1,13 @@
 {{!-- First-session guide, laid out as a left-rail tabbed sheet like Run an Expedition
       and Make a Monster: the rail (shared .stonetop-guide-toc) switches which step panel
       is shown, client-side, so the single window stays short and every panel keeps its
-      state. An "Overview" landing sits above the six Book I "Getting Started" steps. See
-      dialogs/WelcomeDialog.js. --}}
+      state. An "Overview" landing sits above an optional, unnumbered Book Art panel and the
+      five Book I "Getting Started" steps. See dialogs/WelcomeDialog.js. --}}
 <div class="stonetop-welcome">
 
   <div class="stonetop-guide-split stonetop-welcome-split">
 
-    {{!-- Step rail (jump between the overview + the six steps; shared journal-style list). --}}
+    {{!-- Step rail (jump between the overview, Book Art and the five steps; shared journal-style list). --}}
     <nav class="stonetop-guide-toc" aria-label="First-session steps">
       <ol class="stonetop-guide-toc-list">
         {{#each sections}}
@@ -64,7 +64,7 @@
         </div>
       </section>
 
-      {{!-- Step 1: import book art --}}
+      {{!-- Optional, unnumbered: import book art --}}
       <section class="stonetop-welcome-section" data-tab="book-art"{{#unless (eq activeTab "book-art")}} hidden{{/unless}}>
         <p>If you own the Stonetop PDFs, you can rebuild the monster and location illustrations right here in your world: portraits, tokens, and journal art all filled in from your own books. Nothing is uploaded anywhere; the pictures are reconstructed locally on your machine.</p>
         <p>The same window turns the five poster maps you own into ready-to-use Scenes, from either the separate map images or the single all-maps PDF. You can do that on its own, without supplying a book.</p>
@@ -86,7 +86,7 @@
               need no PDFs and no re-import. Normally offered once by a chat card; here as well,
               because that card is easy to miss and never comes back. --}}
         {{#if rebuildableArt}}
-        <button type="button" class="stonetop-welcome-action" data-action="rebuild-portraits">
+        <button type="button" class="stonetop-welcome-action" data-action="rebuild-portraits"{{#if rebuilding}} disabled{{/if}}>
           <i class="fas fa-crop-simple"></i> Build {{rebuildableArt}} more portraits from art you already have
         </button>
         {{/if}}
@@ -98,7 +98,7 @@
         </div>
       </section>
 
-      {{!-- Step 2: review the setting --}}
+      {{!-- Step 1: review the setting --}}
       <section class="stonetop-welcome-section" data-tab="setting"{{#unless (eq activeTab "setting")}} hidden{{/unless}}>
         <p>Open the Setting Overview together and give everyone 10&ndash;15 minutes with it, then field questions. Some things (like &ldquo;where did the Forest Folk go?&rdquo;) are mysteries to discover in play.</p>
         <button type="button" class="stonetop-welcome-action" data-action="setting-overview">
@@ -106,12 +106,12 @@
         </button>
       </section>
 
-      {{!-- Step 3: set expectations --}}
+      {{!-- Step 2: set expectations --}}
       <section class="stonetop-welcome-section" data-tab="expectations"{{#unless (eq activeTab "expectations")}} hidden{{/unless}}>
         <p>Share the players' agenda and principles (the Setting Overview's <button type="button" class="stonetop-welcome-textlink stonetop-welcome-textlink--inline" data-action="agenda-principles">Agenda &amp; Principles</button> tab), and talk through any content to exclude, veil, or handle with care.</p>
       </section>
 
-      {{!-- Step 4: create characters --}}
+      {{!-- Step 3: create characters --}}
       <section class="stonetop-welcome-section" data-tab="characters"{{#unless (eq activeTab "characters")}} hidden{{/unless}}>
         <p>Make characters together. Start one for each player below: it opens on their screen with a big <strong>Create Character</strong> button that walks them through choosing a playbook and filling it in. Wait until everyone has completed their character before moving on to the next step. You can find answers to common questions in the Setting Overview.</p>
 
@@ -143,8 +143,8 @@
             {{!-- Not styled as destructive for a player who already has one: the button now
                   asks whether the new character joins theirs or replaces it, and only the
                   second answer deletes anything. --}}
-            <button type="button" class="stonetop-welcome-create" data-user-id="{{id}}">
-              <i class="fas fa-user-plus"></i> {{#if characters.length}}Another Character{{else}}Create Character{{/if}}
+            <button type="button" class="stonetop-welcome-create" data-user-id="{{id}}"{{#if creating}} disabled{{/if}}>
+              <i class="fas fa-user-plus"></i> <span class="stonetop-welcome-create-label">{{#if characters.length}}Another Character{{else}}Create Character{{/if}}</span>
             </button>
           </li>
           {{/each}}
@@ -152,7 +152,7 @@
         {{/if}}
       </section>
 
-      {{!-- Step 5: introduce the PCs --}}
+      {{!-- Step 4: introduce the PCs --}}
       <section class="stonetop-welcome-section" data-tab="introduce"{{#unless (eq activeTab "introduce")}} hidden{{/unless}}>
         <p>Once the sheets are built, go around the table: introduce yourselves, add details, and ask &amp; answer questions about each other and Stonetop. The guided Introductions walk you through it round by round, ending as you add each character's home to the steading and <em>let spring burst forth</em>.</p>
         <button type="button" class="stonetop-welcome-action" data-action="introductions">
@@ -166,7 +166,7 @@
         </div>
       </section>
 
-      {{!-- Step 6: let spring burst forth --}}
+      {{!-- Step 5: let spring burst forth --}}
       <section class="stonetop-welcome-section" data-tab="spring"{{#unless (eq activeTab "spring")}} hidden{{/unless}}>
         <p>Once the Introductions wrap up with <em>let spring burst forth</em>, walk through <strong>Let Spring Burst Forth</strong>: the most hopeful character makes the season's first <strong>Seasons Change</strong> move, and its result sets up your opening hook.</p>
         <button type="button" class="stonetop-welcome-action" data-action="spring-burst">
@@ -186,9 +186,12 @@
   </div>
 
   <footer class="stonetop-guide-nav stonetop-welcome-nav">
-    <label class="stonetop-welcome-dontshow">
-      <input type="checkbox" class="stonetop-welcome-dontshow-input" {{#if dontShowAgain}}checked{{/if}}>
-      Don't show this again
+    {{!-- Ticked whenever the guide won't open by itself (WelcomeDialog getData). Once both
+          first-session walkthroughs are finished it can't be brought back by unticking, so the
+          box is locked and the label says why. --}}
+    <label class="stonetop-welcome-dontshow"{{#if dontShowLocked}} title="Both first-session walkthroughs are finished, so this guide no longer opens by itself. Reopen it any time from the signpost in your hotbar."{{/if}}>
+      <input type="checkbox" class="stonetop-welcome-dontshow-input" {{#if dontShowAgain}}checked{{/if}}{{#if dontShowLocked}} disabled{{/if}}>
+      {{#if dontShowLocked}}Won't show again: first session finished{{else}}Don't show this again{{/if}}
     </label>
     <span class="stonetop-welcome-nav-btns">
       <button type="button" class="stonetop-welcome-back"{{#if atFirst}} disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>

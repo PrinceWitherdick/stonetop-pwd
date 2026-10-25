@@ -86,3 +86,15 @@ describe("progressFor", () => {
 		expect(progressFor(actorWith({ state: "onboarding", step: 1, total: 5 })).text).toBe("on page 1 of 5");
 	});
 });
+
+// Closing the picker and leaving the walkthrough both write "exited"; only the walkthrough stamps
+// a playbook, so a bare one means the player only got as far as the picker.
+describe("the exited note", () => {
+	it("says the picker was closed when no playbook was ever chosen", () => {
+		expect(progressLabel({ state: "exited" }, null).text).toBe("closed the playbook picker");
+	});
+
+	it("says onboarding was exited once a playbook is in play", () => {
+		expect(progressLabel({ state: "exited", playbook: "The Fox" }, null).text).toBe("exited onboarding");
+	});
+});
