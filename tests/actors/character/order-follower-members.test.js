@@ -103,7 +103,7 @@ describe("orderFollower", () => {
 		const result = { bonus: 1, rollMode: "normal", moveName: "Glaw: Let Fly", moveKey: "let-fly", followerName: "Glaw", member: "named:0" };
 		await opened[0].onRoll(result);
 		// Nothing was spent on a balk, so the roll carries no Loyalty step.
-		expect(actor.typedActor.onOrderFollowersRoll).toHaveBeenCalledWith({ ...result, loyaltySpent: null, attack: { ftype: "crew", slug: "", name: "Glaw" } });
+		expect(actor.typedActor.onOrderFollowersRoll).toHaveBeenCalledWith({ ...result, loyaltySpent: null, attack: { ftype: "crew", slug: "", name: "Glaw", member: "named:0", memberName: "Glaw", usesAmmo: false } });
 	});
 });
 
@@ -157,7 +157,8 @@ describe("orderFollower and an attack", () => {
 		await opened[0].onRoll({ bonus: 0, rollMode: "normal", moveKey: "let-fly", followerName: "Glaw" });
 		await opened[0].onRoll({ bonus: 0, rollMode: "normal", moveKey: "defy-danger", followerName: "Glaw" });
 		const [first, second] = actor.typedActor.onOrderFollowersRoll.mock.calls.map(c => c[0]);
-		expect(first.attack).toEqual({ ftype: "crew", slug: "", name: "Glaw" });
+		// The whole crew, its card tracking no ammo (FOE-5, FOE-10).
+		expect(first.attack).toEqual({ ftype: "crew", slug: "", name: "Glaw", member: "", memberName: "", usesAmmo: false });
 		expect(second).not.toHaveProperty("attack");
 	});
 

@@ -283,14 +283,16 @@ describe("a crew member dropped by a lone blow is asked their fate", () => {
 		await handleApplyQuery({ messageId: "m1" }, { user: globalThis.game.users.get("pim") }, { messages: { get: () => message }, users: globalThis.game.users });
 		const [, options] = marshal.update.mock.calls.at(-1);
 
-		// Every client's updateActor sees the option; the Marshal's player's opens it, the GM's does not.
-		const open = vi.fn();
-		marshal.sheet = { _openFollowerFate: open };
+		// Every client's updateActor sees the option; the Marshal's player's notices it, the GM's does not, and
+		// it hands the fate to whoever picks it (follower-fate-pick.js#openFollowerFate: the GM, p.469, FOE-8).
+		const open = vi.fn(async () => "gm");
+		marshal.sheet = { _openFollowerFate: vi.fn() };
 		// Pim is the Marshal's player (DeathsDoorPrompt.js#answersFor picks them), so only Pim's client answers.
-		const onClient = clientId => ({ answers: () => clientId === "pim" });
+		const onClient = clientId => ({ answers: () => clientId === "pim", open });
 		expect(onUpdateActorRosterFate(marshal, {}, options, "gm", onClient("gm"))).toBe(false);
 		expect(onUpdateActorRosterFate(marshal, {}, options, "gm", onClient("pim"))).toBe(true);
-		expect(open).toHaveBeenCalledWith({ follower: "crew-member", slug: "", index: 0, name: "Crew member 2" });
+		expect(open).toHaveBeenCalledTimes(1);
+		expect(open).toHaveBeenCalledWith(marshal, { follower: "crew-member", slug: "", index: 0, name: "Crew member 2" });
 	});
 });
 

@@ -49,6 +49,8 @@ describe("registerFightTab", () => {
 		// The window over core's tracker is the one piece that survives the switch (fight-window.js).
 		expect(hooks.registered.has("createCombat")).toBe(true);
 		expect(hooks.registered.has("closeCombatTracker")).toBe(true);
+		// And the clean-up a fight's end owes (combat/readiness-loss.js): a core Combat is the fight then.
+		for (const name of ["deleteCombat", "deleteCombatant", "updateActor"]) expect(hooks.registered.has(name), name).toBe(true);
 		// Nothing else of ours: no stamps on what joins a combat, no watcher, no map overlay.
 		for (const name of ["preCreateCombat", "preCreateCombatant", "refreshToken", "targetToken", "canvasPan", "canvasTearDown"]) {
 			expect(hooks.registered.has(name)).toBe(false);

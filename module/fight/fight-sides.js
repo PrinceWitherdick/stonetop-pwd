@@ -66,7 +66,8 @@ export function fightsAsGroup({ type = "", fightAsGroup = false, organization = 
  *    has still standing; none left is routed. The roster is who is really up, and it falls as they
  *    do, so the group's bonuses shrink with its casualties (p.416 "Adjust the bonuses")
  *  • Anything else ............................................ the headcount the GM set on the
- *    combatant (a warband of plain NPCs), else one
+ *    combatant (a warband of plain NPCs), falling as its HP does like a monster group's (its HP is one
+ *    member's; routed at 0), else one
  *
  * @param {object} info
  * @param {boolean} [info.defeated]
@@ -111,8 +112,17 @@ export function bodiesFor({
 		}
 	}
 
+	const set = Math.trunc(Number(headcount) || 0);
+	// A headcount the GM set falls as its HP does, read the way a monster group's is (the user's ruling on
+	// p.416, "Damage represents casualties... Adjust the bonuses"): the token's HP is ONE member's, and the
+	// members still standing are the share of it left, to the nearest body. At 0 HP the lot are routed.
+	if (set > 1 && max > 0) {
+		const { standing, routed } = groupCasualties({ hpMax: max, hpCurrent: Number.isFinite(value) ? value : max, count: set });
+		if (routed) return { ...none, group: true, standing: 0, size: set, routed: true };
+		return { bodies: Math.max(1, standing), out: false, group: true, standing, size: set, routed: false };
+	}
+
 	if (max > 0 && Number.isFinite(value) && value <= 0 && !keepsFighting) return none;
 
-	const set = Math.trunc(Number(headcount) || 0);
 	return { bodies: set > 1 ? set : 1, out: false, group: set > 1, standing: null, size: set > 1 ? set : null, routed: false };
 }

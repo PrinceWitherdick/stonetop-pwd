@@ -112,6 +112,11 @@ export const GIVE_ADVANTAGE_MOVES = {
 	// act on the answer." Resourceful's shape on the 10+; whether they kept calm is the player's to say.
 	"Frosty":                    { tiers: ["success"], on: "Defy Danger", othersOnly: false, selfOnly: true,
 		lead: actor => `<strong>Frosty:</strong> if you kept calm and carried on, also ask the GM one of Seek Insight's questions: ${seekInsightQuestionsFor(actor).join(" / ")} You have advantage on your next move to act on the answer.` },
+	// The Heavy's Sheriff background, Bark an Order (p.114): "On a 10+, you can sense which one they're about to do
+	// and act first if you like; gain advantage if you do." The giver's own, on the 10+; whether they act first is
+	// theirs to say, so the button holds it only when pressed.
+	"Bark an Order":             { tiers: ["success"],              othersOnly: false, selfOnly: true,
+		lead: "<strong>Bark an Order:</strong> you sense which one they're about to do. If you act first, gain advantage." },
 	// The Marshal's Read the Land (p.126): "When you first take a moment to survey the terrain, ask the GM one of
 	// the following; gain advantage on your next roll to act on the answer." No roll: its posted card.
 	"Read the Land":             { tiers: null,                     othersOnly: false, selfOnly: true },

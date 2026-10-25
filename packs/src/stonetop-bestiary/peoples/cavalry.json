@@ -71,7 +71,7 @@
       "img": "icons/skills/movement/figure-running-gray.webp",
       "system": {
         "description": "",
-        "rollFormula": ""
+        "rollFormula": "d6+4"
       },
       "_key": "!actors.items!6N5pRiBkQwkblpAq.tlzXGSlnINDTPOJD"
     }

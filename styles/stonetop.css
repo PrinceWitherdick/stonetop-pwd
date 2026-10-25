@@ -6743,6 +6743,8 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-weapon-choice-dialog .stonetop-weapon-option:hover { background: rgba(159, 146, 117, 0.15); }
 .stonetop-weapon-choice-dialog .stonetop-weapon-name { font-weight: bold; }
 .stonetop-weapon-choice-dialog .stonetop-weapon-traits { font-size: 0.85em; opacity: 0.75; }
+/* An all-out weapon is still offered, and said so (Book I p.94): warned, never refused. */
+.stonetop-weapon-choice-dialog .stonetop-weapon-out { font-size: 0.85em; color: var(--st-on-dark-caution, #6b4400); }
 :is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-fiction {
 	font-style: italic;
 	opacity: 0.75;

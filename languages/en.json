@@ -1933,7 +1933,15 @@
           "balkFailed": "{name}'s Loyalty could not be spent; rolling the order anyway.",
           "damageButton": "Roll {name}'s damage",
           "noDamage": "{name} has no damage die on their card to roll.",
-          "tierMoved": "The card no longer reads as a hit, so there is no damage to roll."
+          "tierMoved": "The card no longer reads as a hit, so there is no damage to roll.",
+          "attacks": "{name} attacks",
+          "swarmLabel": "{name} attacks, all {count} at one foe (+{bonus})",
+          "strikeHardLabel": "{label}, striking hard (+1d6)",
+          "depleteButton": "Deplete {name}'s ammo",
+          "depleteMarked": "{name}'s ammo: {status}.",
+          "depleteAllOut": "{name} is already all out of ammo.",
+          "depleteTierMoved": "The card no longer reads 7-9, so there is no ammo to deplete.",
+          "groupAidLabel": "All of them at one foe: they effectively Aid themselves (advantage, p.414)"
         },
         "party": {
           "marker": "with the party",
@@ -3760,6 +3768,7 @@
         "aidsItself": "{name} outnumbers {against}: they aid themselves, and the GM picks advantage or more done",
         "groups": "Group against group, {heroes} to {foes}: +{bonus} damage and armor for {side}",
         "groupsEven": "Group against group, {heroes} to {foes}: neither side outnumbers the other",
+        "holdsOne": "{name} holds one of {group} out of the group fight",
         "sideHeroes": "the heroes",
         "sideFoes": "the foes"
       },
@@ -3918,7 +3927,8 @@
         "menuSplit": "Split into separate tokens",
         "merged": "{name}: {count} now fight as one group.",
         "split": "{name}: the group is now {count} separate tokens.",
-        "splitShort": "{name}: only room for {count} of the {wanted} still standing."
+        "splitShort": "{name}: only room for {count} of the {wanted} still standing.",
+        "splitPartly": "{name}: only room for {placed} more tokens; the other {kept} stay together as a group on the first token."
       },
       "seed": {
         "onFoeTwo": "+{bonus}: {names} are both fighting {target}",
@@ -3948,6 +3958,30 @@
         "label": "Avoided",
         "tooltip": "The Clash this attack answers ended on a 10+ that avoided, prevented, or countered it, so there is nothing to take. If that roll moves off the 10+, this button comes back."
       },
+      "attackNotes": {
+        "usesLeft": "{left} of {max} uses left",
+        "usesNone": "No uses left",
+        "bronzeAsk": "bronze: you'll be asked once which weapon it is",
+        "allOutPicker": "All out: you can't use it until you replenish your ammunition",
+        "usesOutPicker": "Used up: every use is marked",
+        "allOutToast": "{weapon} is all out: you can't use it until you replenish your ammunition (Book I p.94).",
+        "usesOutToast": "{weapon} is used up: every use is marked (Book I p.94).",
+        "noRangedToast": "{move} needs a ranged or thrown weapon, and none is carried (Book I p.73).",
+        "warningTitle": "About the weapon",
+        "allOutCard": "{weapon} was all out: \"you're out of ammo and can't use that weapon until you replenish your ammunition\" (Book I p.94).",
+        "usesOutCard": "{weapon} had no uses left: once they're all marked \"it's gone/useless\" (Book I p.94).",
+        "noRangedCard": "No ranged or thrown weapon was carried for this shot, which the move calls \"an easy shot with a ranged weapon\" (Book I p.73).",
+        "useSpentTitle": "{weapon}: a use marked",
+        "useSpent": "{name} uses up one of their {weapon}: {left} of {max} left.",
+        "useSpentLast": "{name} uses the last of their {weapon}.",
+        "useSpentNone": "{name}'s {weapon} had no uses left to mark.",
+        "otherConfirms": "{name} will press this",
+        "gmChoosing": "The GM is choosing which attack struck.",
+        "gmNaming": "The GM is naming what this blow costs.",
+        "cardTwinTaken": "This blow was already answered on another copy of its card.",
+        "ignoresArmorBox": "Ignores armor (the fiction says armor can't stop it)",
+        "ignoresArmorHint": "Book I p.239: apply \"ignores armor\" on the fly when the fiction dictates. Every row not yet applied takes the blow whole."
+      },
       "groupHit": {
         "down": "one of them goes down, {after} still standing",
         "hurt": "one of them is hurt ({memberHp} of {hpMax} HP left), {after} still standing",
@@ -3964,6 +3998,14 @@
       "undying": {
         "box": "Undying: from cutting, stabbing or crushing, so half damage after armor",
         "halvedNote": "halved from {soaked} after armor, Undying"
+      },
+      "disembodied": {
+        "box": "Disembodied: this harms spirits (silver, salt, or what harms spirits or ghosts)",
+        "unharmedNote": "{soaked} after armor comes to nothing: only silver, salt, or what harms spirits can harm a Ghost (Disembodied)"
+      },
+      "foeNotes": {
+        "row": "Its stat block also says (not applied): {notes}",
+        "rowFor": "{name}'s stat block also says (not applied): {notes}"
       },
       "defend": {
         "halve": "Halve it (Readiness)",
@@ -4015,6 +4057,22 @@
         "redirectNoShield": "{defender} carries no shield: Mirrorshield needs one.",
         "noteRedirect": "{defender} spent Readiness to redirect the magic aimed at {ward} ({move}).",
         "redirectedLine": "the magic was redirected ({move}), no damage",
+        "charm": "Charm: roll +INT (Amulets & Talismans)",
+        "charmOne": "{defender}'s charm on {ward}: roll +INT (if this is {harm})",
+        "charmChoice": "{defender}'s charm on {ward} (against {harm})",
+        "charmAnyHarm": "the harm it wards against",
+        "noteCharmIgnore": "{defender}'s charm turned the harm aside: {ward} ignores it entirely (Amulets & Talismans, 10+).",
+        "noteCharmHalve": "{defender}'s charm softened the harm: {ward} suffers only half the damage (Amulets & Talismans, 7-9).",
+        "noteCharmMiss": "{defender}'s charm failed: {ward} suffers the harm normally (Amulets & Talismans, 6-).",
+        "charmIgnoredLine": "the charm turned it aside ({move}), no damage",
+        "charmSpent": "{name}'s charm has lost its potency.",
+        "charmKept": "{name}'s charm retains its potency (Potent Workings, on a 10+).",
+        "charmNotLifted": "{name}'s charm was used, but it could not be taken off {defender}'s sheet: take it off by hand.",
+        "charmAskWhether": "{defender} rolls +INT for the charm on {ward}.",
+        "charmAskTitle": "Amulets & Talismans: {ward}",
+        "charmAskBody": "{asker} asks: {ward} would suffer harm while bearing {defender}'s charm against {harm}. Roll {defender}'s +INT? On a 10+ they ignore it, on a 7-9 they suffer half, and the charm loses its potency.",
+        "charmAskYes": "Roll +INT for the charm",
+        "charmAskNo": "Don't roll it",
         "secondIntent": "{name} parried: also pick 1 option from the Ambush list. The strike back was rolled without the +1d4 damage.",
         "secondIntentTookDie": "{name} parried and took +1d4 damage on the strike back: that is their pick from the Ambush list.",
         "secondIntentOpportunity": "If you picked \"Create an opportunity\": you or an ally gains advantage on the next move to act on it."

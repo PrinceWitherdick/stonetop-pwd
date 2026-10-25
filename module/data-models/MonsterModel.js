@@ -1,6 +1,8 @@
 // System data model for the "monster" Actor subtype — the lean stat block. The
 // codex prose (questions/lore/origins/discoveries/…) moved to the bestiary
 // JournalEntryPage, so this schema only carries what the stat block stores.
+import { monsterArmorGate } from "../data/monster-armor.js";
+
 const fields = foundry.data.fields;
 
 export class MonsterModel extends foundry.abstract.TypeDataModel {
@@ -14,6 +16,7 @@ export class MonsterModel extends foundry.abstract.TypeDataModel {
 				armor: new fields.SchemaField({
 					value:  new fields.NumberField({ required: true, integer: true, initial: 0 }),
 					source: new fields.StringField({ required: true, blank: true }),
+					// `conditional` / `conditionalSource` are DERIVED, not stored: see prepareDerivedData.
 				}),
 				damage: new fields.SchemaField({
 					value:       new fields.StringField({ required: true, blank: true }),
@@ -39,5 +42,19 @@ export class MonsterModel extends foundry.abstract.TypeDataModel {
 			// UUID of the bestiary codex JournalEntry/page this stat block belongs to.
 			entry:        new fields.StringField({ required: true, blank: true }),
 		};
+	}
+
+	/**
+	 * The stat block's printed armor exception ("Armor 0 vs. bronze", Book I p.397 "list any variants or
+	 * exceptions"), read off its own text (data/monster-armor.js) into the fields an NPC follower's
+	 * "2 (0 vs. iron)" is stored in (NpcModel): how much of `value` the named thing takes away, and what it
+	 * is ("vs. bronze"). The damage card offers it back with a ticked box (combat/attack-flow.js
+	 * #wireConditionalArmor). Derived on every prepare, so an edit to the qualities, the armor, its source
+	 * or an armor boost is read again at once, token copies included, and nothing has to keep it in sync.
+	 * @override
+	 */
+	prepareDerivedData() {
+		super.prepareDerivedData?.();
+		Object.assign(this.attributes.armor, monsterArmorGate(this));
 	}
 }

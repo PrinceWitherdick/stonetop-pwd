@@ -448,6 +448,17 @@ describe("Seek Insight, Danger Sense, Ambush, Knowledge is Power, Frosty, Speak 
 		for (const question of SEEK_INSIGHT_QUESTIONS) expect(defy.tierActions.success).toContain(question);
 	});
 
+	// Combat audit MOV-9 (2026-10-23): the Sheriff's Bark an Order, "On a 10+, you can sense which one they're about
+	// to do and act first if you like; gain advantage if you do" (Book I p.114).
+	it("puts Bark an Order's hold on its own 10+ alone, for the Sheriff who barked", () => {
+		const sheriff = pc({ id: "s", moves: ["Bark an Order"] });
+		const bark = moveRollOptions("Bark an Order", sheriff);
+		expect(Object.keys(bark.tierActions)).toEqual(["success"]);
+		expect(bark.tierActions.success).toContain("Hold advantage (Bark an Order)");
+		expect(bark.tierActions.success).toContain("If you act first, gain advantage.");
+		expect(moveRollOptions("Bark an Order", pc({ id: "x" }))).toBeNull();
+	});
+
 	// Heavy re-audit (the user's ruling of 2026-10-18): Frosty asks "a question that you could ask when Seeking
 	// Insight", and Situational Awareness adds three to that list, so a Heavy who learned it sees them on the
 	// line too. Resourceful asks "a question from Seek Insight", the same list.

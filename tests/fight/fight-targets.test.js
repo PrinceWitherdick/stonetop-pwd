@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { engagedOpponents, rollTargets, whoItHitsWindow, whoItHitsConfirm, askWhoItHits, TARGET_FIELD } from "../../module/fight/fight-targets.js";
+import { engagedOpponents, foesInFight, rollTargets, withoutDowned, whoItHitsWindow, whoItHitsConfirm, askWhoItHits, TARGET_FIELD } from "../../module/fight/fight-targets.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection } from "../fakes/fight.js";
 
 // Who a roll hits when nobody targeted anyone by hand: whoever the roller is fighting on the map.
@@ -7,7 +7,7 @@ import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection 
 let saved;
 let fightTabOn;
 beforeEach(() => {
-	saved = { game: globalThis.game, ui: globalThis.ui, canvas: globalThis.canvas, CONST: globalThis.CONST };
+	saved = { game: globalThis.game, ui: globalThis.ui, canvas: globalThis.canvas, CONST: globalThis.CONST, fromUuidSync: globalThis.fromUuidSync };
 	fightTabOn = true;
 	globalThis.CONST = { GRID_TYPES: { GRIDLESS: 0, SQUARE: 1 } };
 });
@@ -133,6 +133,40 @@ describe("rollTargets", () => {
 	it("calls the roll off when the question is backed out of", async () => {
 		const { cadiActor } = fight();
 		expect(await rollTargets(cadiActor, { ask: async () => null })).toBeNull();
+	});
+
+	// FGT-4: a target left up on a foe the fight has put down is not an aim. Kept, it aimed the next Clash at
+	// the corpse, and a 7-9 or a miss had the corpse strike back.
+	it("drops a hand target the fight has put down, and lets the engagement aim the blow", async () => {
+		const { cadiActor, combat, tokens } = fight();
+		globalThis.fromUuidSync = uuid => Object.values(tokens).find(t => t.uuid === uuid) ?? null;
+		const w1 = combat.combatants.get("cW1");
+		w1.isDefeated = true;
+		const ask = vi.fn();
+		const hand = [{ uuid: tokens.wolf1.uuid, name: "Wolf (1)" }];
+		expect(withoutDowned(hand)).toEqual([]);
+		// Wolf (1) is down: Cadi is fighting Wolf (2) alone now, so that is who the blow lands on, unasked.
+		expect(names(await rollTargets(cadiActor, { handTargets: hand, ask }))).toEqual(["Wolf (2)"]);
+		expect(ask).not.toHaveBeenCalled();
+		// A target still up, or one not in the fight at all, is kept as it was handed in.
+		const alive = [{ uuid: tokens.wolf2.uuid }, { uuid: "Actor.somebody" }];
+		expect(withoutDowned(alive)).toBe(alive);
+		// So is everything with the Fight tab off.
+		fightTabOn = false;
+		expect(withoutDowned(hand)).toBe(hand);
+	});
+});
+
+// FGT-3: the foe picker a player sees (Speak Softly's "They refused") never names a fighter the GM has hidden.
+describe("foesInFight", () => {
+	it("lists the foes in the fight a player can see, and leaves a GM-hidden one out", () => {
+		const { bramActor, tokens } = fight();
+		tokens.boar.hidden = true;
+		globalThis.game.user = { id: "p1", isGM: false };
+		expect(names(foesInFight(bramActor))).not.toContain("Boar");
+		expect(names(foesInFight(bramActor))).toEqual(["Crinwin", "Wolf (1)", "Wolf (2)"]);
+		globalThis.game.user = { id: "gm", isGM: true };
+		expect(names(foesInFight(bramActor))).toContain("Boar");
 	});
 });
 

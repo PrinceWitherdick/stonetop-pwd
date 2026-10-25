@@ -2,11 +2,12 @@
 // p.469), as one dropped from the sheet's own HP box does.
 //
 // The blow is written by whoever applies the damage card, which is the GM's client whenever a player's
-// press is relayed (combat/attack-flow.js#handleApplyQuery), and the fate is the Marshal's player's to
-// answer. So the roster write carries the fate as an update option (fight/group-hits.js
-// #ROSTER_FATE_OPTION; Foundry hands update options to every client with the update), and the one
-// client that answers for the Marshal opens it: their player, else any player who owns them, else the
-// GM (hooks/DeathsDoorPrompt.js#answersFor), the same rungs the dying walkthrough climbs.
+// press is relayed (combat/attack-flow.js#handleApplyQuery). So the roster write carries the fate as an
+// update option (fight/group-hits.js #ROSTER_FATE_OPTION; Foundry hands update options to every client
+// with the update), and the one client that answers for the Marshal notices it: their player, else any
+// player who owns them, else the GM (hooks/DeathsDoorPrompt.js#answersFor), the same rungs the dying
+// walkthrough climbs. Who then PICKS is p.469's answer, the GM, with the player keeping Loyal to the End
+// and Sir, Permission to Die, Sir (actors/character/follower-fate-pick.js, audit FOE-8).
 //
 // Not twice: the sheet's HP box opens the dialog itself and writes without the option, and only the
 // answering client acts on it.
@@ -16,10 +17,10 @@ import { answersFor } from "../hooks/DeathsDoorPrompt.js";
 import { followerCardFor } from "../actors/character/follower-masters.js";
 import { SINGLE_HP_ROWS, followerFateHpPath, followerReviveUpdate, wasStanding } from "../actors/character/follower-fate.js";
 import { readableFlags } from "../actors/character/StonetopFlags.js";
-import { FOLLOWER_NPC_HP_QUERY, handleFollowerNpcHpQuery } from "../actors/character/follower-hp.js";
 import { BEAST_CATALOG } from "../data/beasts.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { writtenHp } from "./out-of-the-fight.js";
+import { openFollowerFate } from "../actors/character/follower-fate-pick.js";
 
 /**
  * `updateActor`: open the fate dialog a roster write asked for, on the client that answers for the
@@ -32,14 +33,14 @@ import { writtenHp } from "./out-of-the-fight.js";
  * @param {{answers?: Function}} [deps]  for the tests
  * @returns {boolean}
  */
-export function onUpdateActorRosterFate(actor, _changes, options = {}, _userId = null, { answers = answersFor } = {}) {
+export function onUpdateActorRosterFate(actor, _changes, options = {}, _userId = null, { answers = answersFor, open = openFollowerFate } = {}) {
 	const fate = options?.[ROSTER_FATE_OPTION];
 	if (!fate || actor?.type !== "character") return false;
 	try {
 		if (!answers(actor)) return false;
-		const sheet = actor.sheet;
-		if (typeof sheet?._openFollowerFate !== "function") return false;
-		sheet._openFollowerFate(fate);
+		if (typeof actor.sheet?._openFollowerFate !== "function") return false;
+		// The GM's pick when a GM is connected, the player's otherwise (follower-fate-pick.js, FOE-8).
+		open(actor, fate).catch(err => console.error("Stonetop | Could not open the roster member's fate:", err));
 		return true;
 	} catch (err) {
 		console.error("Stonetop | Could not open the roster member's fate:", err);
@@ -97,14 +98,14 @@ export function followerHpMirror(actor, changes, { cardFor = followerCardFor } =
  * `updateActor`: mirror a one-body follower's NPC HP onto their card and, on a drop to 0, open the fate
  * dialog, on the client that answers for the character. Returns whether this client acted.
  */
-export async function onUpdateActorFollowerHp(actor, changes, options = {}, _userId = null, { answers = answersFor, cardFor = followerCardFor } = {}) {
+export async function onUpdateActorFollowerHp(actor, changes, options = {}, _userId = null, { answers = answersFor, cardFor = followerCardFor, open = openFollowerFate } = {}) {
 	try {
 		const plan = followerHpMirror(actor, changes, { cardFor });
 		if (!plan || !answers(plan.character)) return false;
 		if (Object.keys(plan.update).length) {
 			await plan.character.update(plan.update, options?.stonetopMove ? { stonetopMove: options.stonetopMove } : {});
 		}
-		if (plan.fate && typeof plan.character.sheet?._openFollowerFate === "function") plan.character.sheet._openFollowerFate(plan.fate);
+		if (plan.fate && typeof plan.character.sheet?._openFollowerFate === "function") await open(plan.character, plan.fate);
 		return true;
 	} catch (err) {
 		console.error("Stonetop | Could not mirror the follower's HP onto their card:", err);
@@ -116,8 +117,5 @@ export async function onUpdateActorFollowerHp(actor, changes, options = {}, _use
 export function registerRosterFateHooks() {
 	Hooks.on("updateActor", onUpdateActorRosterFate);
 	Hooks.on("updateActor", onUpdateActorFollowerHp);
-	// The GM's half of setting the HP of a follower's NPC the writing player cannot write (follower-hp.js).
-	Hooks.once("init", () => {
-		if (CONFIG.queries) CONFIG.queries[FOLLOWER_NPC_HP_QUERY] = (data, context) => handleFollowerNpcHpQuery(data, context);
-	});
+	// Their queries (follower NPC HP, follower fate) are registered with the others in stonetop.js's init.
 }

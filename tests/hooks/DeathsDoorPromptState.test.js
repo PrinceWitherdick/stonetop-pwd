@@ -110,7 +110,7 @@ describe("onPreUpdateActorDeathsDoor — the state a hit records", () => {
 /** Unstoppable works "in battle" (Book I p.114): put the character in a fight, read by actor id. */
 function inBattle(actor) {
 	actor.id ??= "heavy-1";
-	global.game.combats = [{ combatants: [{ actor: { id: actor.id } }] }];
+	global.game.combats = [{ combatants: [{ actor: { id: actor.id }, tokenId: "t-heavy" }] }];
 }
 
 /**

@@ -60,7 +60,7 @@ describe("letting a follower's Readiness go", () => {
 		const cadi = leader({ crew: { readiness: 2 } });
 		const a = npc("crew-1");
 		const b = npc("crew-2");
-		const ended = { id: "f1", flags: FIGHT, combatants: collection([{ id: "x", actor: a }, { id: "y", actor: b }]) };
+		const ended = { id: "f1", flags: FIGHT, combatants: collection([{ id: "x", tokenId: "t-x", actor: a }, { id: "y", tokenId: "t-y", actor: b }]) };
 		expect(holdersLeft(ended, [ended], { cardFor: cardFor(cadi, "crew") })).toEqual([a]);
 	});
 
@@ -68,11 +68,11 @@ describe("letting a follower's Readiness go", () => {
 	it("keeps it while one of their tokens fights on in another fight", () => {
 		const cadi = leader({ crew: { readiness: 3 } });
 		const options = { cardFor: cardFor(cadi, "crew") };
-		const ended = { id: "f1", flags: FIGHT, combatants: collection([{ id: "x", actor: npc("crew-1") }]) };
-		const other = { id: "f2", flags: FIGHT, combatants: collection([{ id: "y", actor: npc("crew-2") }]) };
+		const ended = { id: "f1", flags: FIGHT, combatants: collection([{ id: "x", tokenId: "t-x", actor: npc("crew-1") }]) };
+		const other = { id: "f2", flags: FIGHT, combatants: collection([{ id: "y", tokenId: "t-y", actor: npc("crew-2") }]) };
 		expect(holdersLeft(ended, [ended, other], options)).toEqual([]);
 		const otherPool = { ...leader({ crew: { readiness: 1 } }), id: "bram" };
-		const elsewhere = { id: "f3", flags: FIGHT, combatants: collection([{ id: "z", actor: { ...npc("crew-9"), owner: otherPool } }]) };
+		const elsewhere = { id: "f3", flags: FIGHT, combatants: collection([{ id: "z", tokenId: "t-z", actor: { ...npc("crew-9"), owner: otherPool } }]) };
 		const byOwner = actor => (actor?.type === "npc" ? { character: actor.owner ?? cadi, ftype: "crew", slug: "" } : null);
 		expect(holdersLeft(ended, [ended, elsewhere], { cardFor: byOwner })).toHaveLength(1);
 	});

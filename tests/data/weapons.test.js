@@ -11,7 +11,6 @@ describe("weaponMeta", () => {
 	});
 
 	it("returns null for tools / supplies / write-ins", () => {
-		expect(weaponMeta("mallet")).toBeNull();
 		expect(weaponMeta("supplies")).toBeNull();
 		expect(weaponMeta("my-homebrew-axe")).toBeNull();
 	});

@@ -59,7 +59,7 @@
       "img": "icons/svg/net.svg",
       "system": {
         "description": "",
-        "rollFormula": ""
+        "rollFormula": "d6"
       },
       "_key": "!actors.items!KE9WWwBJzaBe6tgx.NcXOu82AYCNas5Mb"
     },

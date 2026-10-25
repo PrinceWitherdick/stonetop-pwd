@@ -45,7 +45,8 @@ function pc({ id, name = id, held = 0, moves = [], unlearned = [], owner = true,
 	return actor;
 }
 
-const fighting = (...actors) => [{ combatants: actors.map(a => ({ actor: { id: a.id } })) }];
+// On a map: a combatant with no token is the old Introductions roster, not a fight (fight/in-battle.js).
+const fighting = (...actors) => [{ combatants: actors.map(a => ({ actor: { id: a.id }, tokenId: `t-${a.id}` })) }];
 const player = id => ({ id: `u-${id}`, isGM: false });
 const GM = { id: "u-gm", isGM: true };
 const ownersOf = (online = true) => actor => [

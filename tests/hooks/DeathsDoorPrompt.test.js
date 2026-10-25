@@ -134,7 +134,7 @@ describe("onUpdateActorDeathsDoorAutoOpen — opening the move on the dying play
 			return w;
 		};
 		const inFight = holding();
-		global.game.combats = [{ combatants: [{ actor: { id: "actor-1" } }] }];
+		global.game.combats = [{ combatants: [{ actor: { id: "actor-1" }, tokenId: "token-1" }] }];
 		onUpdateActorDeathsDoorAutoOpen(inFight.actor, becameDying);
 		expect(inFight.sheet.render).not.toHaveBeenCalled();
 

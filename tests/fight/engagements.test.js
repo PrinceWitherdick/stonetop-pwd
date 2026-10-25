@@ -215,7 +215,7 @@ describe("engage", () => {
 
 	it("offers the group abstraction only when both sides bring a group", () => {
 		const crewOnHorde = engage({ grid, fighters: [hero("crew", 0, 0, { bodies: 6 }), foe("horde", 1, 0, { bodies: 18 })] });
-		expect(crewOnHorde.clusters[0].groups).toEqual({ heroGroupBodies: 6, foeGroupBodies: 18, bigger: FOES, bonus: 2, individuals: false });
+		expect(crewOnHorde.clusters[0].groups).toEqual({ heroGroupBodies: 6, foeGroupBodies: 18, bigger: FOES, bonus: 2, individuals: false, held: [] });
 
 		const even = engage({ grid, fighters: [hero("crew", 0, 0, { bodies: 6 }), foe("pack", 1, 0, { bodies: 8 })] });
 		expect(even.clusters[0].groups).toMatchObject({ bigger: null, bonus: 0 });
@@ -225,11 +225,52 @@ describe("engage", () => {
 	});
 
 	it("counts only the groups, and says when individuals are in the scrum too (p.416)", () => {
+		// Bram stands against the horde, so he holds one of its twelve out of the exchange: 11 to 6, no bonus.
 		const result = engage({
 			grid,
 			fighters: [hero("crew", 0, 0, { bodies: 6 }), hero("bram", 1, 1), foe("horde", 1, 0, { bodies: 12 })],
 		});
-		expect(result.clusters[0].groups).toEqual({ heroGroupBodies: 6, foeGroupBodies: 12, bigger: FOES, bonus: 1, individuals: true });
+		expect(result.clusters[0].groups).toEqual({
+			heroGroupBodies: 6, foeGroupBodies: 11, bigger: null, bonus: 0, individuals: true, held: [{ group: "horde", by: "bram" }],
+		});
+	});
+
+	// The user's ruling on p.416's "less 5 occupied by PCs": each hero in contact with a foe group holds ONE of
+	// its members out of the group exchange. A token the GM gave a headcount is a group, and holds nobody.
+	it("takes one member of a foe group out of the ratio for each hero in contact with it", () => {
+		const twoOnHorde = engage({
+			grid,
+			fighters: [hero("crew", 0, 0, { bodies: 6 }), hero("bram", 2, 0), hero("cadi", 2, 1), foe("horde", 1, 0, { bodies: 20 })],
+		});
+		expect(twoOnHorde.clusters[0].groups).toMatchObject({
+			heroGroupBodies: 6, foeGroupBodies: 18, bigger: FOES, bonus: 2,
+			held: [{ group: "horde", by: "bram" }, { group: "horde", by: "cadi" }],
+		});
+
+		// A hero standing off it holds nobody, and a hero token that is a group of its own joins the ratio instead.
+		const apart = engage({
+			grid,
+			fighters: [hero("crew", 0, 0, { bodies: 6 }), hero("warband", 2, 0, { bodies: 3 }), hero("far", 9, 9), foe("horde", 1, 0, { bodies: 20 })],
+		});
+		expect(apart.clusters[0].groups).toMatchObject({ heroGroupBodies: 9, foeGroupBodies: 20, held: [] });
+
+		// Every member held: nobody is left to trade blows group to group.
+		const allHeld = engage({
+			grid,
+			fighters: [hero("crew", 0, 0, { bodies: 6 }), hero("bram", 2, 0), hero("cadi", 2, 1), foe("pair", 1, 0, { bodies: 2 })],
+		});
+		expect(allHeld.clusters[0].groups).toBeNull();
+	});
+
+	it("counts a hero touching two foe groups as holding one body, not one of each", () => {
+		const between = engage({
+			grid,
+			fighters: [hero("crew", 0, 0, { bodies: 6 }), foe("left", 1, 0, { bodies: 6 }), hero("bram", 2, 0), foe("right", 3, 0, { bodies: 6 })],
+		});
+		const groups = between.clusters[0].groups;
+		expect(groups.foeGroupBodies).toBe(11);
+		expect(groups.held).toHaveLength(1);
+		expect(groups.held[0].by).toBe("bram");
 	});
 
 	it("ignores fighters with no side, no id, or an id seen already", () => {

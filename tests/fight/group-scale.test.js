@@ -109,6 +109,18 @@ describe("merging into one group", () => {
 		expect(globalThis.ui.notifications.info).toHaveBeenCalledWith("Crinwin: 2 now fight as one group.");
 	});
 
+	// FGT-2: only a monster that comes in numbers can fight as one group token. Two bears merged were one bear
+	// counted once, the other deleted, and no Split to bring it back.
+	it("offers nothing to merge for a monster that does not come in numbers", async () => {
+		for (const organization of ["solitary", ""]) {
+			const { combat, tokens, get } = world();
+			for (const t of tokens) t.actor.system.organization = organization;
+			expect(mergeCandidates(combat, get("c1"))).toEqual([]);
+			expect(await mergeIntoGroup(combat, get("c1"))).toBe(0);
+			expect(combat.deleteEmbeddedDocuments).not.toHaveBeenCalled();
+		}
+	});
+
 	it("does nothing for a player, or with nothing to merge", async () => {
 		const { combat, get } = world({ group: true });
 		expect(await mergeIntoGroup(combat, get("c1"))).toBe(0);
@@ -135,6 +147,38 @@ describe("splitting a group", () => {
 		expect(type).toBe("Combatant");
 		expect(data.map(d => [d.tokenId, d.flags[SYSTEM_ID].side])).toEqual([["new0", "foes"], ["new1", "foes"], ["new2", "foes"]]);
 		expect(globalThis.ui.notifications.info).toHaveBeenCalledWith("Crinwin: the group is now 4 separate tokens.");
+	});
+
+	// FGT-8: the new tokens are placed first, and whoever finds no room stays on the group token, still a group.
+	it("keeps whoever finds no room together as a smaller group on the first token", async () => {
+		const { combat, tokens, placed, get } = world({ group: true });
+		// Room for two beside the group token (at 500,500) and no more.
+		globalThis.canvas.dimensions.sceneRect = { x: 400, y: 500, width: 300, height: 100 };
+		expect(await splitGroup(combat, get("c1"))).toBe(3);
+		expect(placed).toHaveLength(2);
+		// 4 standing, 2 placed: the group token is a group of the other 2, its pool full.
+		expect(tokens[0].actor.system).toMatchObject({ fightAsGroup: true, count: 2, attributes: { hp: { value: 3 } } });
+		expect(globalThis.ui.notifications.warn).toHaveBeenCalledWith("Crinwin: only room for 2 more tokens; the other 2 stay together as a group on the first token.");
+	});
+
+	// A prototype linked to the world actor places tokens that share it. The group token, unlinked, only
+	// inherits the switch from that world actor until its own delta says otherwise.
+	it("keeps the leftover group a group when the new tokens are linked to a world actor fighting as a group", async () => {
+		const { combat, tokens, get } = world({ group: true });
+		const shared = tokenActor({ organization: "horde", count: 6, fightAsGroup: true, attributes: { hp: { value: 3, max: 3 } } });
+		const group = tokens[0].actor;
+		let own;
+		delete group.system.fightAsGroup;
+		Object.defineProperty(group.system, "fightAsGroup", {
+			get: () => own ?? shared.system.fightAsGroup,
+			set: value => { if (value !== shared.system.fightAsGroup) own = value; },
+		});
+		globalThis.canvas.dimensions.sceneRect = { x: 400, y: 500, width: 300, height: 100 };
+		const drop = globalThis.canvas.tokens._onDropActorData;
+		globalThis.canvas.tokens._onDropActorData = vi.fn(async (...args) => Object.assign(await drop(...args), { actor: shared }));
+		expect(await splitGroup(combat, get("c1"))).toBe(3);
+		expect(shared.system.fightAsGroup).toBe(false);
+		expect(group.system).toMatchObject({ fightAsGroup: true, count: 2 });
 	});
 
 	it("does nothing for a player", async () => {

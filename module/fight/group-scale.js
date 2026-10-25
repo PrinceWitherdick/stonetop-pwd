@@ -25,7 +25,7 @@
 import { SYSTEM_ID } from "../system-id.js";
 import { format } from "../utils/i18n.js";
 import { placeActors } from "../utils/token-drop.js";
-import { combatantBodies, combatantSide, tokenRect, tokenLevel, sceneRectOf, gridOf, SIDE_FLAG } from "./fight-state.js";
+import { combatantBodies, combatantSide, controlledTokenIds, tokenRect, tokenLevel, sceneRectOf, gridOf, SIDE_FLAG } from "./fight-state.js";
 import { touching } from "./engagements.js";
 import { fightsAsGroup } from "./fight-sides.js";
 import { numberedNames, spotsAround } from "./group-size.js";
@@ -38,6 +38,12 @@ function workable(combatant, scene = globalThis.canvas?.scene) {
 	const token = combatant?.token;
 	return !!token && !!scene && combatant.sceneId === scene.id && !token.actorLink
 		&& combatant.actor?.type === "monster" && !combatantBodies(combatant).out;
+}
+
+/** Whether a combatant's monster is a group or a horde, so its token can fight as one group (p.416). */
+function comesInNumbers(combatant) {
+	const actor = combatant?.actor;
+	return fightsAsGroup({ type: actor?.type, fightAsGroup: true, organization: actor?.system?.organization });
 }
 
 /** Whether a combatant's token is fighting as a group (p.416). */
@@ -84,12 +90,16 @@ export async function makeGroupToken(token, size) {
  * The tokens a merge from `combatant`'s row would take in: every workable combatant of the same
  * monster in the fight, or only the GM's selected ones when two or more of them are selected (the
  * row's own always included). Individuals and groups alike: a group already there adds its standing.
+ *
+ * ONLY A MONSTER THAT COMES IN NUMBERS: a group or a horde, the organizations a group token can be fought
+ * at (fight-sides.js#fightsAsGroup). Two bears merged were one token fighting as one bear, the other bear
+ * deleted, and no Split to bring it back.
  */
 export function mergeCandidates(combat, combatant, { scene = globalThis.canvas?.scene, controlled = null } = {}) {
-	if (!workable(combatant, scene)) return [];
+	if (!workable(combatant, scene) || !comesInNumbers(combatant)) return [];
 	const same = [...(combat?.combatants ?? [])].filter(c => c.actorId === combatant.actorId && workable(c, scene)
-		&& combatantSide(c) === combatantSide(combatant));
-	const selected = new Set(controlled ?? (globalThis.canvas?.tokens?.controlled ?? []).map(t => t.document?.id ?? t.id));
+		&& comesInNumbers(c) && combatantSide(c) === combatantSide(combatant));
+	const selected = new Set(controlled ?? controlledTokenIds());
 	const picked = same.filter(c => selected.has(c.tokenId));
 	const chosen = picked.length >= 2 ? [...new Set([combatant, ...picked])] : same;
 	return chosen.length >= 2 ? chosen : [];
@@ -131,22 +141,36 @@ export async function splitGroup(combat, combatant, { scene = globalThis.canvas?
 	const standing = combatantBodies(combatant).bodies;
 	const token = combatant.token;
 	const actor = token.actor;
-	// The member a lone blow left hurt (fight/group-hits.js) is the token that stays: it keeps its wound.
-	const wound = groupWound(actor);
-	const hp = fullHp(actor);
-	if (wound && "system.attributes.hp.value" in hp) hp["system.attributes.hp.value"] = Math.max(1, hp["system.attributes.hp.value"] - wound);
-	await actor.update({ "system.fightAsGroup": false, ...hp, [`flags.${SYSTEM_ID}.${GROUP_WOUND_FLAG}`]: 0 });
 
 	// The members stay on whoever the group was fighting where there is room, so a split changes the scale
 	// and not the fight: gathered round the group token alone, one crinwin of five ended up out of reach.
+	//
+	// THE NEW TOKENS FIRST, THE SCALE AFTER. Switched to one creature before the others were placed, a map
+	// with room for only two more turned a group of six into three tokens, and the other three were simply
+	// gone. Now whoever could not be placed stays on the group token, which stays a group of what is left.
 	const level = tokenLevel(token);
 	const grid = gridOf(scene);
 	const foes = meleeFoes(combat, combatant, token, grid);
 	const prefer = foes.length ? at => foes.some(rect => touching({ rect: at, level }, { rect, level }, grid)) : null;
 	const more = await gatherAround(globalThis.canvas, scene, token, standing - 1, { prefer });
-	// A world actor switched to fight as a group hands that to every token made from it.
-	await Promise.all(more.tokens.filter(extra => extra.actor?.system?.fightAsGroup)
+	const kept = Math.max(1, standing - more.tokens.length);
+
+	// The member a lone blow left hurt (fight/group-hits.js) is on the token that stays, and keeps its wound:
+	// as one creature, its HP takes the wound; as a smaller group, the wound stays on the group.
+	const wound = groupWound(actor);
+	const hp = fullHp(actor);
+	// A world actor switched to fight as a group hands that to every token made from it. Switched off
+	// BEFORE the group token is written: a new token linked to the world actor switches the world actor,
+	// and a group token that only inherited the switch from it would stop being a group.
+	await Promise.all(more.tokens.filter(extra => extra.actor !== actor && extra.actor?.system?.fightAsGroup)
 		.map(extra => extra.actor.update({ "system.fightAsGroup": false })));
+	if (kept > 1) {
+		// The switch is written on the group token itself, so it holds whatever the world actor says.
+		await actor.update({ "system.fightAsGroup": true, "system.count": kept, ...hp, [`flags.${SYSTEM_ID}.${GROUP_SIZE_FLAG}`]: 0 });
+	} else {
+		if (wound && "system.attributes.hp.value" in hp) hp["system.attributes.hp.value"] = Math.max(1, hp["system.attributes.hp.value"] - wound);
+		await actor.update({ "system.fightAsGroup": false, ...hp, [`flags.${SYSTEM_ID}.${GROUP_WOUND_FLAG}`]: 0 });
+	}
 	const side = combatantSide(combatant);
 	const data = more.tokens.map(extra => ({
 		tokenId: extra.id, sceneId: scene.id, actorId: extra.actorId, hidden: !!token.hidden,
@@ -155,7 +179,8 @@ export async function splitGroup(combat, combatant, { scene = globalThis.canvas?
 	if (data.length) await combat.createEmbeddedDocuments("Combatant", data);
 	const count = 1 + more.tokens.length;
 	const name = baseName(combatant);
-	if (more.missed.length) notify?.warn?.(format(`${KEY}.splitShort`, { name, count, wanted: standing }));
+	if (kept > 1) notify?.warn?.(format(`${KEY}.splitPartly`, { name, placed: more.tokens.length, kept }));
+	else if (more.missed.length) notify?.warn?.(format(`${KEY}.splitShort`, { name, count, wanted: standing }));
 	else notify?.info?.(format(`${KEY}.split`, { name, count }));
 	return count;
 }

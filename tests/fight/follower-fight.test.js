@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { followerOrderInfo, openFollowerOrder, followerTakesOrders, followerTags, followerSwarm, followerRingInfo, followerInFight } from "../../module/fight/follower-fight.js";
+import { followerOrderInfo, openFollowerOrder, followerTakesOrders, followerTags, followerSwarm, followerRingInfo, followerInFight, atSingleFoe } from "../../module/fight/follower-fight.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { followerCardFor } from "../../module/actors/character/follower-masters.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection } from "../fakes/fight.js";
@@ -209,6 +209,27 @@ describe("followerSwarm", () => {
 
 	it("counts only who is still up, so a bloodied crew swarms for less", () => {
 		expect(followerSwarm(crewToken(), cardOf(crewToken(), [withCrew({ down: 4 })]))).toMatchObject({ formula: "d6+1", standing: 2 });
+	});
+
+	// FOE-6: "at a single foe" (p.473). Not at several, not at a group token, not in a group-against-group exchange,
+	// where the abstraction's own +N rides the plain die (p.416).
+	it("is offered only while the token fights one single-bodied foe, or the fight cannot place it", () => {
+		const place = (melee, fighters = [], clusters = []) => () => ({ combatant: { id: "crew" }, entry: { melee, shootingAt: [] }, fighters, result: { clusters } });
+		const at = (engagement, targets = []) => atSingleFoe({}, { engagement, targets });
+		expect(at(() => null)).toBe(true);
+		expect(at(place(["a"], [{ id: "a", bodies: 1 }]))).toBe(true);
+		expect(at(place(["a", "b"]))).toBe(false);
+		expect(at(place(["a"], [{ id: "a", bodies: 6 }]))).toBe(false);
+		const exchange = place(["a"], [{ id: "a", bodies: 1 }], [{ heroIds: ["crew"], foeIds: ["a"], groups: { heroGroupBodies: 6, foeGroupBodies: 20 } }]);
+		expect(at(exchange)).toBe(false);
+		// The roller's own targets say who the blow is at first (p.473), as an ordered attack reads them; inside a
+		// group-against-group exchange even one targeted foe is not "single" (p.416: the abstraction's +N counts the crew).
+		const foe = { actor: { type: "monster", system: {} } };
+		expect(at(place(["a", "b"]), [foe])).toBe(true);
+		expect(at(() => null, [foe, foe])).toBe(false);
+		expect(at(exchange, [foe])).toBe(false);
+		const card = cardOf(crewToken(), [withCrew()]);
+		expect(followerSwarm(crewToken(), card, { engagement: place(["a", "b"]) })).toBe(null);
 	});
 
 	it("folds its bonus into a die that already carries one", () => {

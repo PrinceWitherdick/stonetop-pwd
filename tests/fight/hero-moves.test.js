@@ -324,6 +324,13 @@ describe("Something to Remember Me By, off the fight ring", () => {
 		expect(flags[SYSTEM_ID].readiness).toBe(0);
 	});
 
+	// Combat audit MOV-8 (2026-10-23): an attack move's own damage is the attack, never a strike back.
+	it("is not offered on an attack move's damage window", () => {
+		const { actor } = wouldBe([HERO_MOVES.REMEMBER_ME], { readiness: 2 });
+		for (const moveKey of ["clash", "let-fly", "ambush"]) expect(keys(actor, { moveKey })).not.toContain("rememberMeSpend");
+		expect(keys(actor, {})).toContain("rememberMeSpend");
+	});
+
 	it("leaves the ring's strike back as it was: ticked, costing nothing more, and no second line", () => {
 		const { actor } = wouldBe([HERO_MOVES.REMEMBER_ME], { readiness: 2 });
 		const offers = blowOffers(actor, { strikeBack: true });

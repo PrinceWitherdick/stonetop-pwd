@@ -11,6 +11,12 @@
 // fight or go down to 0 HP. The GM's client clears those on its own (installReadinessLoss), once, and
 // says so. A character still fighting on another map keeps theirs.
 //
+// WHAT COUNTS AS A FIGHT. With the Fight tab on, every Combat is stamped a fight as it is made
+// (fight/fight-boot.js#stampFight), and only those count. With the tab off nothing is stamped, and a core
+// Combat is the only fight there is, so every Combat with somebody on a map counts (the user's ruling,
+// 2026-10-23; never the old Introductions' tokenless roster). The clean-up is installed either way
+// (fight-boot.js) and asks fight-state.js#countsAsFight, which reads the setting live.
+//
 // A FOLLOWER ordered to Defend holds Readiness on Defend's terms (p.469), kept on their card on the
 // character they follow (fight/follower-readiness.js), and lets it go the same ways: the fight ending,
 // their token going down, or going on the offense, asked of their character's player as a character is
@@ -21,7 +27,7 @@ import { SYSTEM_ID } from "../system-id.js";
 import { heldReadiness, READINESS_FLAG } from "./defend-readiness.js";
 import { readableFlags } from "../actors/character/StonetopFlags.js";
 import { crewInShieldWall, setShieldWall, shieldWallEmptied, SHIELD_WALL_FLAG } from "../fight/shield-wall.js";
-import { each, isFight } from "../fight/fight-state.js";
+import { countsAsFight, fightersOf, onMap } from "../fight/fight-state.js";
 import { clearHarmedBy, clearRapierWit } from "../fight/hero-moves.js";
 import { characterBehind, followerCardFor } from "../actors/character/follower-masters.js";
 import { keepsFightingAtZero } from "../actors/character/unstoppable.js";
@@ -139,9 +145,9 @@ export async function settleFollowerTokenReadinessOnAttack(actor, moveName, { ca
  */
 function fightingActorIds(combats, { exceptCombat = null, exceptCombatant = null, actorOf = actor => actor } = {}) {
 	const ids = new Set();
-	for (const combat of each(combats)) {
-		if (!isFight(combat) || (exceptCombat && combat.id === exceptCombat.id)) continue;
-		for (const c of each(combat.combatants)) {
+	for (const combat of combats ?? []) {
+		if (exceptCombat && combat.id === exceptCombat.id) continue;
+		for (const c of fightersOf(combat)) {
 			const who = c.actor && c.id !== exceptCombatant?.id ? actorOf(c.actor) : null;
 			if (who) ids.add(who.id);
 		}
@@ -156,7 +162,7 @@ function fightingActorIds(combats, { exceptCombat = null, exceptCombatant = null
 function charactersLeftBy(combat, combats, { actorOf = actor => actor, keeps = () => true } = {}) {
 	const stillFighting = fightingActorIds(combats, { exceptCombat: combat, actorOf });
 	const left = new Map();
-	for (const c of each(combat?.combatants)) {
+	for (const c of fightersOf(combat)) {
 		const who = c.actor ? actorOf(c.actor) : null;
 		if (who?.type === "character" && !stillFighting.has(who.id) && keeps(who)) left.set(who.id, who);
 	}
@@ -187,7 +193,7 @@ export function holdersLeft(combat, combats = globalThis.game?.combats, { cardFo
 	const holders = [];
 	// A group follower can stand as several tokens over ONE pool on its card: named once.
 	const pools = new Set();
-	for (const c of each(combat?.combatants)) {
+	for (const c of fightersOf(combat)) {
 		const actor = c.actor;
 		if (actor?.type === "character") {
 			if (heldReadiness(actor) <= 0 || stillFighting.has(actor.id) || holders.includes(actor)) continue;
@@ -306,8 +312,8 @@ export function installReadinessLoss({ hooks = globalThis.Hooks, cardFor = follo
 		}));
 		// The grudges are let go at the end of ANY Combat, since Payback and Rapier Wit record them in a plain
 		// core Combat too (the GM's Fight tab off, or a Combat begun from core's tracker). Readiness and the
-		// holds below are the Fight's own.
-		if (!isFight(combat)) return;
+		// holds below go with a fight (countsAsFight: with the tab off, any Combat with somebody on a map).
+		if (!countsAsFight(combat)) return;
 		// The Marshal's holds were for this battle (the user's ruling, 2026-10-18): Stentorian's Command, Front
 		// Line Leader's Presence and Prepare a Welcome's Surprise go with it, one write per character, unless
 		// they still fight elsewhere (the same rule as Readiness).
@@ -320,8 +326,8 @@ export function installReadinessLoss({ hooks = globalThis.Hooks, cardFor = follo
 	});
 	on("deleteCombatant", combatant => {
 		const combat = combatant?.parent;
-		// The whole fight going is deleteCombat's to say.
-		if (!isFight(combat) || !globalThis.game?.combats?.get?.(combat.id)) return;
+		// The whole fight going is deleteCombat's to say. Only one who stood on a map was fighting.
+		if (!onMap(combatant) || !countsAsFight(combat, { leaving: combatant }) || !globalThis.game?.combats?.get?.(combat.id)) return;
 		const actor = combatant.actor;
 		if (actor?.type !== "character" || heldReadiness(actor) <= 0) return;
 		// Still in this fight as another token, or in another fight.

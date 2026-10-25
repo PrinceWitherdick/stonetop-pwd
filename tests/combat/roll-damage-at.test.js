@@ -624,9 +624,41 @@ describe("a character's own damage, with the weapon in hand", () => {
 	it("rolls naphtha's own d8, ignoring armor", async () => {
 		const pim = armed("naphtha");
 		fightInARow([["pim", pim], ["crin", crinwin("crinwin")]]);
+		// Naphtha's own area tag asks who is caught, even with one foe in reach (ATK-6).
+		const wait = answerWhoItHits([true]);
 		await rollCharacterDamageAt(pim, { label: "Damage", shiftKey: true });
+		expect(wait).toHaveBeenCalledTimes(1);
 		expect(damageFlag().results[0].formula).toBe("d8");
 		expect(damageFlag().weapon).toMatchObject({ ignoresArmor: true });
+	});
+
+	// ATK-3: every own blow marks one use of a use-counted weapon, once, wherever it is dealt from: the use is
+	// marked inside rollAndPostDamage (and on the plain card), never by each caller around it.
+	it("marks one use of naphtha per blow, at a foe or at nobody, and never for a follower's blow", async () => {
+		const pim = armed("naphtha");
+		const usesWritten = () => pim.update.mock.calls.filter(([changes]) => `flags.${SCOPE}.inventory.resources.naphtha` in changes).length;
+		fightInARow([["pim", pim], ["crin", crinwin("crinwin")]]);
+		answerWhoItHits([true]);
+		await rollCharacterDamageAt(pim, { label: "Damage", shiftKey: true });
+		expect(usesWritten()).toBe(1);
+		globalThis.game.combats = collection([]);
+		await rollCharacterDamageAt(pim, { label: "Damage", shiftKey: true });
+		expect(usesWritten()).toBe(2);
+		await rollFollowerDamageAt(pim, { formula: "d6", label: "Pim's crew", attacker: "Pim's crew", weapon: { slug: "naphtha", name: "Naphtha", uses: true }, shiftKey: true });
+		expect(usesWritten()).toBe(2);
+	});
+
+	it("marks naphtha's use only once its damage is rolled: a roll that fails spends nothing", async () => {
+		const pim = armed("naphtha");
+		const usesWritten = () => pim.update.mock.calls.filter(([changes]) => `flags.${SCOPE}.inventory.resources.naphtha` in changes).length;
+		globalThis.game.combats = collection([]);
+		vi.mocked(plainCard).mockRejectedValueOnce(new Error("bad formula"));
+		await expect(rollCharacterDamageAt(pim, { label: "Damage", shiftKey: true })).rejects.toThrow("bad formula");
+		expect(usesWritten()).toBe(0);
+		await rollCharacterDamageAt(pim, { label: "Damage", shiftKey: true });
+		expect(usesWritten()).toBe(1);
+		// The use's line follows the damage roll.
+		expect(vi.mocked(plainCard).mock.invocationCallOrder.at(-1)).toBeLessThan(pim.update.mock.invocationCallOrder.at(-1));
 	});
 
 	it("prints the weapon's fiction on the plain card when there is nobody to hit, as Clash does", async () => {
@@ -715,6 +747,14 @@ describe("Dangerous (the Heavy): \"When you deal your damage, you have advantage
 		globalThis.game.combats = collection([]);
 		await rollCharacterDamageAt(bram, { label: "Damage", shiftKey: true });
 		expect(vi.mocked(plainCard).mock.calls[0][2].rollMode).toBe("adv");
+	});
+
+	// Combat audit MOV-2 (2026-10-23): folded once, not twice, so the two still cancel on the plain card.
+	it("rolls a strike back with nobody to hit straight on the plain card, not at advantage", async () => {
+		const bram = heavy();
+		globalThis.game.combats = collection([]);
+		await rollCharacterDamageAt(bram, { label: "Strike back", rollMode: "dis", seeded: false, strikeBack: true, shiftKey: true });
+		expect(vi.mocked(plainCard).mock.calls[0][2].rollMode).toBe("normal");
 	});
 });
 
@@ -999,6 +1039,22 @@ describe("a move's own damage at somebody it names (Castigate)", () => {
 		expect(flag.weapon).toMatchObject({ ignoresArmor: true });
 	});
 
+	// Combat audit MOV-10 (2026-10-23): harm dealt to someone else is going on the offense (p.216), asked as a
+	// Clash asks; a move's price on the character themselves never asks.
+	it("asks the going-on-the-offense question after a move's damage at someone else, and never on self-harm", async () => {
+		const judge = hero("judge", "Hafgan");
+		const bandit = hero("bandit", "Bandit");
+		fightInARow([["judge", judge], ["crin", crinwin("crinwin")]]);
+		vi.mocked(settleReadinessOnAttack).mockClear();
+		await rollMoveDamageAt(judge, bandit, { move: "Castigate", formula: "1d4" });
+		expect(settleReadinessOnAttack).toHaveBeenCalledWith(judge, "Castigate");
+		vi.mocked(settleReadinessOnAttack).mockClear();
+		await rollOptionDamage(judge, { move: "Iron Will", damage: { formula: "1d4", self: true, ignoresArmor: true } });
+		expect(settleReadinessOnAttack).not.toHaveBeenCalled();
+		await rollOptionDamage(judge, { move: "Danu's Grasp", damage: { formula: "2d4", ignoresArmor: true } });
+		expect(settleReadinessOnAttack).toHaveBeenCalledWith(judge, "Danu's Grasp");
+	});
+
 	it("rolls nothing without a target or a die", async () => {
 		const judge = hero("judge", "Hafgan");
 		expect(await rollMoveDamageAt(judge, null, { move: "Castigate", formula: "1d4" })).toBeNull();
@@ -1175,6 +1231,44 @@ describe("a Revenant's Undying on the damage card", () => {
 		box.checked = false;
 		await box.fire();
 		expect(message.getFlag(SCOPE, "damage").undyingOff).toEqual([tokens.wyn.uuid]);
+	});
+});
+
+// Combat audit MOV-4, the user's ruling (2026-10-23): a Ghost's Disembodied, "You can be harmed only by silver,
+// salt, or that which harms spirits or ghosts" (Book I p.148). An UNTICKED box: unticked, the blow does nothing.
+describe("a Ghost's Disembodied on the damage card", () => {
+	const ghost = () => Object.assign(hero("rhys", "Rhys"), { flags: { [SCOPE]: { postDeathInsert: { slug: "ghost" } } } });
+	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
+
+	it("takes nothing from a blow left unticked, and the whole of it once the table ticks that it harms spirits", async () => {
+		const rhys = ghost();
+		const { tokens } = fightInARow([["rhys", rhys]]);
+		await apply({ move: "Bite", weapon: null, results: [{ uuid: tokens.rhys.uuid, name: "Rhys", raw: 9 }], applied: [] });
+		expect(rhys.system.attributes.hp.value).toBe(10);
+		expect(posted.at(-1).content).toContain("only silver, salt, or what harms spirits can harm a Ghost");
+		const struck = ghost();
+		const second = fightInARow([["rhys", struck]]);
+		const row = { uuid: second.tokens.rhys.uuid, name: "Rhys", raw: 9 };
+		await apply({ move: "Silver blade", weapon: null, results: [row], applied: [], harmsSpirit: [row.uuid] });
+		// 9 less 2 armor.
+		expect(struck.system.attributes.hp.value).toBe(3);
+	});
+
+	it("draws the box unticked for a Ghost and none for anyone else, and writes it when ticked", async () => {
+		const rhys = ghost();
+		const { tokens } = fightInARow([["rhys", rhys], ["pim", hero("pim", "Pim")]]);
+		globalThis.document = { createElement: element };
+		const actions = element("div");
+		const message = makeMessage({ damage: { move: "Bite", results: [{ uuid: tokens.rhys.uuid, name: "Rhys", raw: 6 }, { uuid: tokens.pim.uuid, name: "Pim", raw: 6 }], applied: [] } });
+		message.canUserModify = () => true;
+		wireConditionalArmor(message, { querySelector: sel => (sel === ".stonetop-attack-actions" ? actions : null) });
+		expect(actions.kids).toHaveLength(1);
+		const [box, words] = actions.kids[0].kids;
+		expect(box.checked).toBe(false);
+		expect(words.textContent).toBe("Rhys: Disembodied: this harms spirits (silver, salt, or what harms spirits or ghosts)");
+		box.checked = true;
+		await box.fire();
+		expect(message.getFlag(SCOPE, "damage").harmsSpirit).toEqual([tokens.rhys.uuid]);
 	});
 });
 

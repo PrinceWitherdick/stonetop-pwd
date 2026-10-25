@@ -3,6 +3,7 @@ import {
 	askGoingOnOffense, settleReadinessOnAttack, holdersLeft, droppedHoldingReadiness, installReadinessLoss, charactersLeft,
 	settleFollowerReadinessOnAttack, settleFollowerTokenReadinessOnAttack, shieldWallsLeft,
 } from "../../module/combat/readiness-loss.js";
+import { countsAsFight } from "../../module/fight/fight-state.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { collection } from "../fakes/fight.js";
 import { stubAsk } from "../fakes/confirm.js";
@@ -38,7 +39,8 @@ function marshal(id, tracks = {}) {
 	});
 	return actor;
 }
-const combatant = (id, actor) => ({ id, actor });
+// Standing on a map, as a fight's combatants do (fight-state.js#onMap); the old Introductions' roster had none.
+const combatant = (id, actor, { tokenId = `t-${id}` } = {}) => ({ id, actor, tokenId });
 const fight = (id, combatants, flags = FIGHT) => {
 	const combat = { id, flags, combatants: collection(combatants) };
 	for (const c of combatants) c.parent = combat;
@@ -56,9 +58,13 @@ function fakeHooks() {
 
 let saved;
 let posted;
+// The world's Fight tab setting, read live by fight-state.js#countsAsFight.
+let fightTab;
 beforeEach(() => {
-	saved = { ChatMessage: globalThis.ChatMessage, user: globalThis.game.user, users: globalThis.game.users, combats: globalThis.game.combats };
+	saved = { ChatMessage: globalThis.ChatMessage, user: globalThis.game.user, users: globalThis.game.users, combats: globalThis.game.combats, settings: globalThis.game.settings };
 	posted = [];
+	fightTab = true;
+	globalThis.game.settings = { get: (_scope, key) => (key === "fightTab" ? fightTab : undefined) };
 	globalThis.ChatMessage = { create: vi.fn(async data => posted.push(data)), getSpeaker: ({ actor }) => ({ actor: actor.id }) };
 	const gm = { id: "gm", isGM: true, active: true };
 	globalThis.game.user = gm;
@@ -70,6 +76,7 @@ afterEach(() => {
 	globalThis.game.user = saved.user;
 	globalThis.game.users = saved.users;
 	globalThis.game.combats = saved.combats;
+	globalThis.game.settings = saved.settings;
 });
 
 describe("settleReadinessOnAttack", () => {
@@ -239,8 +246,8 @@ describe("installReadinessLoss", () => {
 		expect(bram.flags[SYSTEM_ID].harmedBy).toEqual(["Actor.villain", "Actor.witch"]);
 	});
 
-	// Payback and Rapier Wit record against a plain core Combat too (the Fight tab off), so its end lets the
-	// mooks go just the same; Readiness stays the Fight's own.
+	// Payback and Rapier Wit record against a plain core Combat too, so its end lets the mooks go just the same;
+	// with the Fight tab on, an unstamped Combat is no fight, and Readiness stays.
 	it("a plain Combat ending lets the mooks' grudges go but leaves Readiness alone", async () => {
 		const bram = hero("bram", 2);
 		bram.flags[SYSTEM_ID].harmedBy = ["Actor.villain", "Scene.s1.Token.crin"];
@@ -310,6 +317,83 @@ describe("installReadinessLoss", () => {
 		globalThis.game.combats = collection([ended, fight("f3", [combatant("c", maddoc)], {})]);
 		await hooks.fire("deleteCombat", ended);
 		expect(maddoc.tracks.Stentorian).toBe(0);
+	});
+
+	// The combat audit, the user's ruling (2026-10-23): with the Fight tab OFF nothing is stamped, and a core
+	// Combat is the fight. Its end lets Readiness and the battle holds go; leaving it does too.
+	describe("with the Fight tab off", () => {
+		it("a core Combat ending lets Readiness and the Marshal's holds go", async () => {
+			const hooks = fakeHooks();
+			fightTab = false;
+			installReadinessLoss({ hooks });
+			const bram = hero("bram", 2);
+			const maddoc = marshal("maddoc", { "Stentorian": 2 });
+			await hooks.fire("deleteCombat", fight("c1", [combatant("a", bram), combatant("m", maddoc)], {}));
+			expect(held(bram)).toBe(0);
+			expect(maddoc.tracks.Stentorian).toBe(0);
+		});
+
+		it("someone still in another core Combat keeps theirs, and leaving one goes as a fight's does", async () => {
+			const hooks = fakeHooks();
+			fightTab = false;
+			installReadinessLoss({ hooks });
+			const bram = hero("bram", 2);
+			const ended = fight("c1", [combatant("a", bram)], {});
+			globalThis.game.combats = collection([ended, fight("c2", [combatant("b", bram)], {})]);
+			await hooks.fire("deleteCombat", ended);
+			expect(held(bram)).toBe(2);
+			const going = fight("c3", [], {});
+			globalThis.game.combats = collection([going]);
+			const left = combatant("gone", bram);
+			left.parent = going;
+			await hooks.fire("deleteCombatant", left);
+			expect(held(bram)).toBe(0);
+		});
+
+		it("reads the setting live: the stamped Combats with the tab on, any with somebody on a map with it off", () => {
+			const plain = fight("c", [combatant("a", hero("bram"))], {});
+			expect(countsAsFight(plain)).toBe(false);
+			expect(countsAsFight(fight("f", []))).toBe(true);
+			fightTab = false;
+			expect(countsAsFight(plain)).toBe(true);
+			// Nobody on a map: no fight, unless the one just taken out of it stood on one.
+			expect(countsAsFight(fight("c", [], {}))).toBe(false);
+			expect(countsAsFight(fight("c", [], {}), { leaving: combatant("x", hero("bram")) })).toBe(true);
+		});
+
+		// The old Introductions left a tokenless roster Combat holding every PC, never deleted. Counted as a fight,
+		// every PC read as still fighting, so nothing ever let their Readiness or holds go.
+		it("the old Introductions' tokenless roster Combat is nobody's fight", async () => {
+			const hooks = fakeHooks();
+			fightTab = false;
+			installReadinessLoss({ hooks });
+			const bram = hero("bram", 2);
+			const maddoc = marshal("maddoc", { "Stentorian": 2 });
+			const roster = fight("roster", [combatant("r1", bram, { tokenId: null }), combatant("r2", maddoc, { tokenId: null })], {});
+			const ended = fight("c1", [combatant("a", bram), combatant("m", maddoc)], {});
+			globalThis.game.combats = collection([ended, roster]);
+			await hooks.fire("deleteCombat", ended);
+			expect(held(bram)).toBe(0);
+			expect(maddoc.tracks.Stentorian).toBe(0);
+			// Its own end lets nothing go, and leaving it is no leaving a fight.
+			const ana = hero("ana", 1);
+			await hooks.fire("deleteCombat", fight("roster", [combatant("r3", ana, { tokenId: null })], {}));
+			expect(held(ana)).toBe(1);
+			const left = combatant("r4", ana, { tokenId: null });
+			left.parent = fight("roster", [], {});
+			globalThis.game.combats = collection([left.parent]);
+			await hooks.fire("deleteCombatant", left);
+			expect(held(ana)).toBe(1);
+		});
+
+		it("a PC dropped tokenless into a fight still counts as left when it ends", () => {
+			fightTab = false;
+			const bram = hero("bram", 2);
+			const ended = fight("c1", [combatant("a", bram)], {});
+			const mixed = fight("c2", [combatant("w", hero("wolf", 0, { type: "monster" })), combatant("b", bram, { tokenId: null })], {});
+			expect(holdersLeft(ended, [ended, mixed])).toEqual([bram]);
+			expect(charactersLeft(ended, [ended, mixed])).toEqual([bram]);
+		});
 	});
 });
 

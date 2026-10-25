@@ -54,6 +54,11 @@ function followerNpcOf(character, ftype, slug) {
 	return linkedFollowerNpc(readableFlags(character), ftype, slug ?? "", followerActorFromLink);
 }
 
+// A one-body follower's tokens are LINKED (audit FOE-2), so writing the NPC reaches the map: a recruited
+// NPC's prototype is linked when it is dropped (hooks/FollowerDrop.js#linkRecruitedPrototype), any token of
+// one is linked as it is made (FollowerDrop.js#linkFollowerTokenOnCreate), and the tokens placed unlinked
+// before that were linked once (migration/link-follower-tokens.js).
+
 /**
  * Whether setFollowerHp could write the HP of a follower whose NPC is `npc` (null: none, the box is on the
  * leader) from this client: no NPC, this client owns it, or a GM is connected to write it for them
@@ -110,7 +115,7 @@ export async function setFollowerHp(character, row, value, options = {}) {
 		}
 		const done = await askGMClient(gm, FOLLOWER_NPC_HP_QUERY, {
 			characterUuid: character.uuid ?? null, npcUuid: npc.uuid ?? null, ftype: follower, slug,
-			to, raiseOnly: !!raiseOnly, moveName: moveName ?? null, userId: user?.id ?? null,
+			value: hpCount(value), raiseOnly: !!raiseOnly, moveName: moveName ?? null, userId: user?.id ?? null,
 		}, { fallback: null, what: "set a follower's NPC's HP" });
 		if (done) return "npc";
 		globalThis.ui?.notifications?.warn?.(format(noGmKey, { name: npc.name ?? "" }));
@@ -137,7 +142,7 @@ export async function handleFollowerNpcHpQuery(data, context = {}, deps = {}) {
 	const linked = npcOf(character, data.ftype, data.slug);
 	if (!linked || (linked.uuid ?? linked.id) !== (npc.uuid ?? npc.id)) return null;
 	const hp = npc.system?.attributes?.hp ?? {};
-	const to = followerNpcHpTarget(hp, hpCount(data.to), { raiseOnly: !!data.raiseOnly });
+	const to = followerNpcHpTarget(hp, hpCount(data.value), { raiseOnly: !!data.raiseOnly });
 	const moveName = typeof data.moveName === "string" && data.moveName ? data.moveName : null;
 	if (Number(hp.value) !== to) await updateWith(npc, { "system.attributes.hp.value": to }, moveName);
 	return { to };

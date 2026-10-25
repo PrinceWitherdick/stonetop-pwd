@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { FOLLOWER_DRAG_TYPE } from "../../module/data/follower-actor.js";
-import { onDropFollower, placeFollowerToken } from "../../module/hooks/FollowerDrop.js";
+import { SYSTEM_ID } from "../../module/system-id.js";
+import { onDropFollower, placeFollowerToken, oneBodyFollowerCard, linkFollowerTokenOnCreate } from "../../module/hooks/FollowerDrop.js";
 
 // Dragging a follower card onto the canvas: the card becomes (or re-uses) an Actor, and
 // core places its token. See module/hooks/FollowerDrop.js for the resolution order.
@@ -103,6 +104,28 @@ describe("placeFollowerToken", () => {
 
 		expect(globalThis.Actor.create).not.toHaveBeenCalled();
 		expect(layer._onDropActorData).toHaveBeenCalledWith({}, expect.objectContaining({ uuid: "Actor.elios" }));
+	});
+
+	// FOE-2: an unlinked token of a one-body follower kept its own HP, and a heal never reached it.
+	it("links a recruited NPC's prototype token before placing them, when they are one person", async () => {
+		const elios = { documentName: "Actor", type: "npc", uuid: "Actor.elios", isOwner: true, prototypeToken: { actorLink: false }, update: vi.fn(async () => {}) };
+		uuids.set("Actor.elios", elios);
+		await placeFollowerToken(makeCanvas(), { ...DROP, follower: { ...DROP.follower, sourceUuid: "Actor.elios" } }, {});
+		expect(elios.update).toHaveBeenCalledWith({ "prototypeToken.actorLink": true });
+		const order = [elios.update.mock.invocationCallOrder[0], layer._onDropActorData.mock.invocationCallOrder[0]];
+		expect(order[0]).toBeLessThan(order[1]);
+	});
+
+	it("leaves a group's prototype unlinked, and one nobody here may write", async () => {
+		const band = { documentName: "Actor", type: "npc", uuid: "Actor.band", isOwner: true, prototypeToken: { actorLink: false }, update: vi.fn(async () => {}) };
+		uuids.set("Actor.band", band);
+		await placeFollowerToken(makeCanvas(), { ...DROP, follower: { ...DROP.follower, sourceUuid: "Actor.band", isGroup: true } }, {});
+		expect(band.update).not.toHaveBeenCalled();
+		const theirs = { ...band, uuid: "Actor.theirs", isOwner: false, update: vi.fn(async () => {}) };
+		uuids.set("Actor.theirs", theirs);
+		await placeFollowerToken(makeCanvas(), { ...DROP, follower: { ...DROP.follower, sourceUuid: "Actor.theirs" } }, {});
+		expect(theirs.update).not.toHaveBeenCalled();
+		expect(layer._onDropActorData).toHaveBeenCalledTimes(2);
 	});
 
 	it("builds its own actor for a follower converted from a bestiary monster", async () => {
@@ -209,5 +232,35 @@ describe("placeFollowerToken", () => {
 		await placeFollowerToken(makeCanvas(), { ...DROP, follower: { ...DROP.follower, actorUuid: "Actor.old" } }, {});
 
 		expect(create).toHaveBeenCalledWith(token, { parent: scene });
+	});
+});
+
+// FOE-2: a one-body follower's NPC walks the map LINKED however its token is made, so HP written to the NPC is
+// the HP on the map (follower-hp.js writes the NPC alone).
+describe("a one-body follower's tokens are linked", () => {
+	const wolf = { type: "npc", uuid: "Actor.wolf", id: "wolf" };
+	const leader = { type: "character", flags: { [SYSTEM_ID]: { animalCompanion: { details: { actorUuid: "Actor.wolf" } }, customFollowers: { band: { isGroup: true, sourceUuid: "Actor.band" } } } } };
+	const deps = { cardFor: a => ({ wolf: { character: leader, ftype: "animal-companion", slug: "" }, band: { character: leader, ftype: "custom", slug: "band" } })[a.id] ?? null, link: ({ actorUuid, sourceUuid }) => ({ "Actor.wolf": wolf, "Actor.band": { type: "npc", uuid: "Actor.band" } })[actorUuid ?? sourceUuid] ?? null };
+
+	it("knows a one-body follower's NPC from a group's, a monster or a stranger", () => {
+		expect(oneBodyFollowerCard(wolf, deps)).toMatchObject({ ftype: "animal-companion" });
+		expect(oneBodyFollowerCard({ type: "npc", uuid: "Actor.band", id: "band" }, deps)).toBeNull();
+		expect(oneBodyFollowerCard({ type: "npc", uuid: "Actor.x", id: "x" }, deps)).toBeNull();
+		expect(oneBodyFollowerCard({ type: "monster", uuid: "Actor.wolf", id: "wolf" }, deps)).toBeNull();
+	});
+
+	it("links a new token of one before it is written, and leaves every other token alone", () => {
+		const token = (actor, actorLink = false) => ({ actorLink, baseActor: actor, updateSource: vi.fn() });
+		const mine = token(wolf);
+		linkFollowerTokenOnCreate(mine, {}, {}, "u", deps);
+		expect(mine.updateSource).toHaveBeenCalledWith({ actorLink: true });
+		const group = token({ type: "npc", uuid: "Actor.band", id: "band" });
+		linkFollowerTokenOnCreate(group, {}, {}, "u", deps);
+		expect(group.updateSource).not.toHaveBeenCalled();
+		const linked = token(wolf, true);
+		linkFollowerTokenOnCreate(linked, {}, {}, "u", deps);
+		expect(linked.updateSource).not.toHaveBeenCalled();
+		// A lookup that throws never stops core making the token.
+		expect(() => linkFollowerTokenOnCreate(token(wolf), {}, {}, "u", { cardFor: () => { throw new Error("boom"); } })).not.toThrow();
 	});
 });

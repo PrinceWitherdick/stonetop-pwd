@@ -38,6 +38,7 @@ import {MonsterToFollowerDialog} from "./dialogs/MonsterToFollowerDialog.js";
 import {NpcToFollowerDialog} from "./dialogs/NpcToFollowerDialog.js";
 import {OrderFollowersDialog} from "./dialogs/OrderFollowersDialog.js";
 import {FollowerFateDialog} from "./dialogs/FollowerFateDialog.js";
+import {openFollowerFate} from "./follower-fate-pick.js";
 import {CrewSetupDialog, crewSetupLimit, crewSetupUpdate} from "./dialogs/CrewSetupDialog.js";
 import {FOLLOWER_FATE_TYPES, followerDeadPath, SIR_PERMISSION_TO_DIE, isCrewMemberRow, isCustomMemberRow, followerFateHpPath, followerFateLoyaltyType, wasStanding, crewMemberFateName, customMemberFateName, sirPermissionOffer, crewIndividualRemovalUpdate, crewMemberDeathUpdate, customMemberDeathUpdate, customMemberStruckOff, postLetGoReceipt} from "./follower-fate.js";
 import {setFollowerHp} from "./follower-hp.js";
@@ -54,6 +55,7 @@ import {offerBattleJoyOnDamage, endBattleJoyUnrolled} from "../../combat/battle-
 import {ownDamageMode, toughLoveHeld, callOut, workedItOut, leapIn, HERO_MOVES} from "../../fight/hero-moves.js";
 import {ASTERISK_MOVES, asteriskUseCounts, asteriskMoveUsed, canRestoreWouldBe, restoreWouldBe} from "./WouldBeHeroAsterisk.js";
 import {followerInFight, customFollowerOutOfOrders} from "../../fight/follower-fight.js";
+import {orderedFoeBodies, orderedBlowFormula, followerUsesAmmo} from "../../fight/follower-order-attack.js";
 import {altStatGrantsFor, altStatNotes} from "../../data/alt-stat-grants.js";
 import {readOnboardingResume, writeOnboardingResume, clearOnboardingResume, resumeHasUnsavedWork} from "./onboarding-resume.js";
 import {trackCreationFlow} from "./creation-flow.js";
@@ -187,7 +189,7 @@ import {buildRelationshipRows, wireRelationshipTable, wireRelationshipLinks, rel
 import {wireAvatarPreview, removeAvatarPreview} from "../../utils/avatar-preview.js";
 import {relationshipViewContext, wireRelationshipBoard} from "../../utils/relationship-board.js";
 import {BEAST_CATALOG} from "../../data/beasts.js";
-import {parseFollowerArmor, buildCustomFollower, readinessCap, SHIELD_WALL_MOVE, wireFightingInNumbers, groupFightCardSummaries, nextFollowerOrder, crewGearArmor, crewBearsShield, applyTagEdits, editTagLayer, editTagList, orderedMoveName, isOrderedAttack} from "../../data/follower-build.js";
+import {parseFollowerArmor, followerArmorWithClause, buildCustomFollower, readinessCap, SHIELD_WALL_MOVE, wireFightingInNumbers, groupFightCardSummaries, nextFollowerOrder, crewGearArmor, crewBearsShield, applyTagEdits, editTagLayer, editTagList, orderedMoveName, isOrderedAttack} from "../../data/follower-build.js";
 import {crewReadinessCap, formedInShieldWall, settleShieldWallOnOrder, shieldWallDefendBonus} from "../../fight/shield-wall.js";
 import {settleFollowerReadinessOnAttack} from "../../combat/readiness-loss.js";
 import {LOAD_LEVEL_LIMITS, poolCountFromClick, poolAtLimitKey} from "../../utils/load.js";
@@ -3304,7 +3306,8 @@ export function createStonetopCharacterSheetClass(Base) {
 						dead:         !!c?.dead,
 						hpMax,
 						hpCurrent:    _clampHp(c?.hpCurrent, hpMax),
-						armor:        parseFollowerArmor(c?.armor),
+						// "4 (0 vs. bronze)" kept whole: the clause becomes their NPC's damage-card box (follower-build.js).
+						armor:        followerArmorWithClause(c?.armor),
 						damage,
 						..._parseFollowerDamage(damage),
 						damageKind:   "",
@@ -6634,7 +6637,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				this.render(false);
 				// Now that the 0 is committed, offer the fate choice (Loyal to the End /
 				// Death's Door / dying / dead) for a follower who just went down.
-				if (wasAlive) this._openFollowerFate({ follower, slug, index, name: fateName });
+				// The GM's pick when a GM is here, the player's otherwise (follower-fate-pick.js, FOE-8).
+				if (wasAlive) openFollowerFate(this.actor, { follower, slug, index, name: fateName }).catch(err => console.error("Stonetop | Could not open the follower's fate:", err));
 			}, true);
 
 			this._activateTabDragDrop(html);
@@ -11702,12 +11706,13 @@ export function createStonetopCharacterSheetClass(Base) {
 		// track, the crew's shared one for a crew member, the group's for a group member.
 		// `door`: opened from a Death's Door 6- card (_followerDoorDeath), Dead and the spare only; `onSettled`
 		// hears whether a fate was chosen (true, once it is applied) or the window closed without one (false).
-		_openFollowerFate({ follower, slug, index, name, door = false, onSettled = null } = {}) {
+		// `gmDead`: the GM picked Dead (follower-fate-pick.js), so the door window is worded for that and closing it lets them die.
+		_openFollowerFate({ follower, slug, index, name, door = false, gmDead = false, onSettled = null } = {}) {
 			const loyalty = this._followerFateLoyalty(follower, slug);
 			// Loyal to the End is the Ranger's animal-companion move (p.469 → p.143):
 			// it replaces the standard fate choice, and only the companion gets it.
 			const dialog = new FollowerFateDialog(this.actor, {
-				name, loyalty, door,
+				name, loyalty, door, gmDead,
 				isAnimalCompanion: follower === "animal-companion",
 				isCrewMember:      isCrewMemberRow(follower),
 				isGroupMember:     isCustomMemberRow(follower),
@@ -11740,13 +11745,13 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * as for any other fall; without it, Dead is written as before. Answers whether a fate was applied
 		 * (false gives the card its button back).
 		 */
-		async _followerDoorDeath({ follower, slug = "", index = null, name = "" } = {}) {
+		async _followerDoorDeath({ follower, slug = "", index = null, name = "", gmDead = false } = {}) {
 			const loyalty = this._followerFateLoyalty(follower, slug);
 			if (!sirPermissionOffer(this.actor, loyalty).letGo) {
 				await this._resolveFollowerFate("dead", { name, loyalty, follower, slug, index });
 				return true;
 			}
-			return new Promise(resolve => this._openFollowerFate({ follower, slug, index, name, door: true, onSettled: resolve }));
+			return new Promise(resolve => this._openFollowerFate({ follower, slug, index, name, door: true, gmDead, onSettled: resolve }));
 		}
 
 		// Apply the fate chosen for a follower that hit 0 HP (FollowerFateDialog).
@@ -12120,6 +12125,12 @@ export function createStonetopCharacterSheetClass(Base) {
 				// Front Line Leader's Presence, which pays a crew's balk in their Loyalty's place (p.126).
 				presence: this.actor.isOwner ? presenceFor(this.actor, ftype) : 0,
 			};
+			// A whole group at ONE foe "effectively Aid themselves" (p.414; p.473 "likely with advantage"): its
+			// Clash or Let Fly opens with that advantage ticked, removable (audit FOE-10).
+			const standing = groupFollowerStanding(resolvedFlags(this.actor), { ftype, slug })?.standing ?? 0;
+			if (standing > 1 && !follower.member) {
+				follower = { ...follower, groupAid: orderedFoeBodies({ character: this.actor, fighter: followerInFight(this.actor, { ftype, slug }) }) <= 1 };
+			}
 			new OrderFollowersDialog(this.actor, follower,
 				async (result) => {
 					// They balked and the player spends 1 Loyalty so they do it anyway, before the dice: or 1 of
@@ -12144,7 +12155,14 @@ export function createStonetopCharacterSheetClass(Base) {
 					const roll = await this._stonetopCharacter.onOrderFollowersRoll({
 						...result, loyaltySpent, ...(presenceSpent ? { presenceSpent } : {}),
 						// A Clash or Let Fly carries a damage button on its hit (fight/follower-order-attack.js).
-						...(attacking ? { attack: { ftype, slug, name: who } } : {}),
+						// One member ordered on their own strikes as one attacker (FOE-5); a card that tracks ammo gets Let
+						// Fly's 7-9 deplete button (FOE-10).
+						...(attacking ? { attack: {
+							ftype, slug, name: who,
+							member: result?.member || follower.member || "",
+							memberName: result?.member || follower.member ? who : "",
+							usesAmmo: followerUsesAmmo(resolvedFlags(this.actor), ftype, slug),
+						} } : {}),
 					});
 					// The crew's shield wall forms on a Shield Wall Defend, and breaks on any order made out of the line.
 					if (ftype === "crew" && roll) await settleShieldWallOnOrder(this.actor, result);
@@ -12170,7 +12188,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 *   move?: ?("clash"|"let-fly"), shiftKey?: boolean, offense?: boolean}} blow  `offense` false for a blow
 		 *   whose order already asked about the follower's Readiness (_rollOrderedFollowerDamage)
 		 */
-		async _rollFollowerCardDamage(which, { roll, baseRoll = roll, label, attacker, seeded = true, move = null, shiftKey = false, offense = true }) {
+		async _rollFollowerCardDamage(which, { roll, baseRoll = roll, label, attacker, seeded = true, move = null, shiftKey = false, offense = true, lone = false }) {
 			const printed = (await this._followerCardSnapshot(which.ftype, which.slug))?.follower?.damage ?? "";
 			const printedLine = printedBlow(printed, baseRoll);
 			const { rollMode } = printedLine;
@@ -12182,10 +12200,12 @@ export function createStonetopCharacterSheetClass(Base) {
 				({ label: blowLabel, weapon, keywords } = blow);
 			}
 			return !!(await rollFollowerDamageAt(this.actor, {
-				fighter: followerInFight(this.actor, which),
+				// `lone`: one member of a group ordered on their own (FOE-5). Not the group's token, which strikes as
+				// all of them, and not a group's blow: a lone attacker's, which hits one member of a group it lands on.
+				fighter: lone ? null : followerInFight(this.actor, which),
 				formula: roll, label: blowLabel, attacker,
 				keywords, weapon, rollMode, seeded,
-				group: (groupFollowerStanding(resolvedFlags(this.actor), which)?.standing ?? 0) > 1,
+				group: !lone && (groupFollowerStanding(resolvedFlags(this.actor), which)?.standing ?? 0) > 1,
 				shiftKey,
 				// Which follower strikes, so a Focus Fire order is answered once by them (the crew as one).
 				which: { ftype: which.ftype, slug: which.slug },
@@ -12196,22 +12216,33 @@ export function createStonetopCharacterSheetClass(Base) {
 
 		/**
 		 * An ordered Clash or Let Fly that hit: the follower deals their damage, from the button on the order's
-		 * card (fight/follower-order-attack.js), once the player has made the move's picks (Let Fly's 7-9 may
-		 * halve it). A Clash at 7-9 then suffers the enemy's attack, as the move says, on the follower's own
-		 * token; a follower with no token in the fight is the GM's to place, so nothing is struck for them.
-		 * Answers whether damage was rolled.
+		 * card (fight/follower-order-attack.js), once the player has made the move's picks. A Clash at 7-9, or a
+		 * 10+ that strikes hard (`extraDice` its 1d6), then suffers the enemy's attack, as the move says, on the
+		 * follower's own token; a follower with no token in the fight is the GM's to place, so nothing is struck
+		 * for them. A whole group at one foe rolls one attacker's die +1 for each other standing (p.473, FOE-3);
+		 * one `member` ordered on their own rolls their own blow (FOE-5). Answers whether damage was rolled.
 		 */
-		async _rollOrderedFollowerDamage(ftype, slug = "", { move = null, counter = false, shiftKey = false } = {}) {
+		async _rollOrderedFollowerDamage(ftype, slug = "", { move = null, counter = false, shiftKey = false, extraDice = [], member = "", memberName = "" } = {}) {
 			const which = { ftype, slug: slug ?? "" };
 			const card = (await this._followerCardSnapshot(ftype, slug))?.follower ?? null;
-			const roll = String(card?.damageRoll || "").trim();
-			if (!roll) {
+			const die = String(card?.damageRoll || "").trim();
+			if (!die) {
 				ui.notifications?.warn?.(format("stonetop.character.followers.order.noDamage", { name: card?.name || "This follower" }));
 				return false;
 			}
-			const attacker = card.name || `${this.actor.name}'s follower`;
-			// The order asked about their Readiness before the dice (orderFollower): one action, one question.
-			const rolled = await this._rollFollowerCardDamage(which, { roll, label: `${attacker} attacks`, attacker, move, shiftKey, offense: false });
+			const lone = !!member;
+			const attacker = (lone && memberName) || card.name || `${this.actor.name}'s follower`;
+			const standing = lone ? 1 : (groupFollowerStanding(resolvedFlags(this.actor), which)?.standing ?? 0);
+			const foes = standing > 1 ? orderedFoeBodies({ character: this.actor, fighter: followerInFight(this.actor, which) }) : 1;
+			const roll = orderedBlowFormula(die, { standing, foes, member: lone, extraDice });
+			const piled = standing > 1 && foes <= 1;
+			let label = piled
+				? format("stonetop.character.followers.order.swarmLabel", { name: attacker, count: standing, bonus: standing - 1 })
+				: format("stonetop.character.followers.order.attacks", { name: attacker });
+			if (extraDice.length) label = format("stonetop.character.followers.order.strikeHardLabel", { label });
+			// The order asked about their Readiness before the dice (orderFollower): one action, one question. The
+			// +N is in the die already, so the fight adds none of its own (seeded off).
+			const rolled = await this._rollFollowerCardDamage(which, { roll, baseRoll: die, label, attacker, move, shiftKey, offense: false, lone, seeded: !piled });
 			if (rolled && counter) await this._followerSuffersCounter(which);
 			return rolled;
 		}

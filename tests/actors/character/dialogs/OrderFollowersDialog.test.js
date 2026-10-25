@@ -263,3 +263,29 @@ describe("OrderFollowersDialog: Stentorian's Command", () => {
 		expect(answer).toMatchObject({ rollMode: "adv", command: true });
 	});
 });
+
+// A whole group at ONE foe "effectively Aid themselves" (p.414; p.473 "likely with advantage"): the window opens
+// with that advantage ticked, and it can be taken off (audit FOE-10).
+describe("OrderFollowersDialog, a whole group at one foe", () => {
+	const crew = (extra = {}) => new OrderFollowersDialog({ name: "Rhianna" }, {
+		name: "The Crew", tags: [], groupAid: true, moveKey: "let-fly",
+		members: [{ key: "named:0", name: "Glaw", tags: [] }], ...extra,
+	}, () => {});
+
+	it("opens a Clash or Let Fly with the Aid's advantage ticked", () => {
+		const dialog = crew();
+		expect(dialog.getData()).toMatchObject({ groupAid: true, groupAidOn: true });
+		expect(dialog.getData().readout).toContain("with advantage");
+	});
+
+	it("can be taken off, and is not offered for one member, another move, or several foes", () => {
+		const dialog = crew();
+		dialog._groupAid = false;
+		expect(dialog.getData().readout).not.toContain("advantage");
+		const glaw = crew();
+		glaw._who = "named:0";
+		expect(glaw.getData().groupAid).toBe(false);
+		expect(crew({ moveKey: "defy-danger" }).getData().groupAid).toBe(false);
+		expect(crew({ groupAid: false }).getData().groupAid).toBe(false);
+	});
+});

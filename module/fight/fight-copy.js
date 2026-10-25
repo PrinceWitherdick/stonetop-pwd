@@ -8,7 +8,7 @@
 // paraphrase of a rule is how a sheet ends up teaching the table something the book never said.
 
 import { joinNames } from "../utils/strings.js";
-import { HEROES, FOES } from "./engagements.js";
+import { HEROES, FOES, opponentsOf } from "./engagements.js";
 
 const KEY = "stonetop.fight";
 
@@ -91,6 +91,8 @@ export function clusterFacts(cluster, byFighter, nameOf, format, bodiesOf = () =
 		facts.push(groups.bonus > 0
 			? format(`${KEY}.fact.groups`, { ...data, side: format(`${KEY}.fact.${groups.bigger === HEROES ? "sideHeroes" : "sideFoes"}`, {}) })
 			: format(`${KEY}.fact.groupsEven`, data));
+		// Each hero in contact with a foe group keeps one of its members out of the ratio (engagements.js#groupExchange).
+		for (const { group, by } of groups.held ?? []) facts.push(format(`${KEY}.fact.holdsOne`, { name: nameOf(by), group: nameOf(group) }));
 	}
 	return facts;
 }
@@ -107,7 +109,7 @@ export function clusterFacts(cluster, byFighter, nameOf, format, bodiesOf = () =
  */
 export function aidsItselfAgainst(entry, bodies, bodiesOf) {
 	if (!entry || !(bodies > 1)) return null;
-	const against = [...new Set([...(entry.melee ?? []), ...(entry.shootingAt ?? [])])];
+	const against = opponentsOf(entry);
 	if (!against.length) return null;
 	const theirs = against.reduce((total, id) => total + (Number(bodiesOf(id)) || 0), 0);
 	return theirs === 1 || bodies >= 2 * theirs ? against : null;

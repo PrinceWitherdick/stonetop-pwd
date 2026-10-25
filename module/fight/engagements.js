@@ -35,6 +35,9 @@ import { pileOnBonus, outnumberBonus } from "../data/follower-build.js";
 export const HEROES = "heroes";
 export const FOES = "foes";
 
+/** Everyone a fighter is fighting, once each: in contact, then shooting at. `entry` is engage().byFighter[id]. */
+export const opponentsOf = entry => [...new Set([...(entry?.melee ?? []), ...(entry?.shootingAt ?? [])])];
+
 /**
  * @typedef {object} Fighter
  * @property {string} id                     the combatant's id
@@ -228,7 +231,7 @@ export function engage({ fighters = [], grid = {}, ranged = [] } = {}) {
 			const foeIds = members.filter(f => f.side === FOES).map(f => f.id);
 			return {
 				id, heroIds, foeIds,
-				groups: groupExchange(heroIds, foeIds, byId),
+				groups: groupExchange(heroIds, foeIds, byId, byFighter),
 			};
 		});
 
@@ -276,14 +279,37 @@ export function reachAround(fighter, grid = {}) {
  * ONLY THE GROUPS ARE COUNTED. "Foes that are engaged by individual PCs aren't really part of a
  * group," so a PC in the same scrum adds nothing to the ratio; `individuals` says one is there, so
  * the tab can quote that sentence where it applies.
+ *
+ * AND EACH HERO IN CONTACT WITH A FOE GROUP HOLDS ONE OF ITS MEMBERS OUT OF IT (the user's ruling on
+ * p.416: "the Marshal's crew of six would be left contending with only eight crinwin (20 to start, less 7
+ * dead from Letting Fly, less 5 occupied by PCs)"). How many a PC really keeps busy is the fiction's; one
+ * apiece is the tab's reading, said on the fact line (`held`) so the table can see where it went. A hero
+ * is an individual here when their token stands for one body: a token the GM gave a headcount is a group
+ * of its own, and joins the ratio as one rather than holding anybody out of it.
+ *
+ * @returns {null|{heroGroupBodies: number, foeGroupBodies: number, bigger: "heroes"|"foes"|null,
+ *   bonus: number, individuals: boolean, held: Array<{group: string, by: string}>}}
+ *   `held` is each hero holding one member of a foe group out of the exchange
  */
-function groupExchange(heroIds, foeIds, byId) {
+function groupExchange(heroIds, foeIds, byId, byFighter = {}) {
 	const groupIds = ids => ids.filter(id => bodiesOf(byId.get(id)) > 1);
 	const heroGroups = groupIds(heroIds);
 	const foeGroups = groupIds(foeIds);
 	if (!heroGroups.length || !foeGroups.length) return null;
+	const held = [];
+	// One apiece: a hero in contact with two foe groups holds one body, out of the first of them it reaches.
+	const busy = new Set();
+	for (const group of foeGroups) {
+		const holders = (byFighter[group]?.melee ?? []).filter(id => !busy.has(id) && byId.get(id)?.side === HEROES && bodiesOf(byId.get(id)) === 1);
+		for (const by of holders.slice(0, bodiesOf(byId.get(group)))) {
+			busy.add(by);
+			held.push({ group, by });
+		}
+	}
 	const heroGroupBodies = sum(heroGroups, byId);
-	const foeGroupBodies = sum(foeGroups, byId);
+	const foeGroupBodies = sum(foeGroups, byId) - held.length;
+	// Every member of the foes' groups held by somebody: nobody is left to trade blows group to group.
+	if (foeGroupBodies <= 0) return null;
 	const heroesAhead = outnumberBonus(heroGroupBodies, foeGroupBodies).bonus;
 	const foesAhead = outnumberBonus(foeGroupBodies, heroGroupBodies).bonus;
 	const bigger = heroesAhead > 0 ? HEROES : foesAhead > 0 ? FOES : null;
@@ -293,5 +319,6 @@ function groupExchange(heroIds, foeIds, byId) {
 		bigger,
 		bonus: Math.max(heroesAhead, foesAhead),
 		individuals: heroGroups.length < heroIds.length || foeGroups.length < foeIds.length,
+		held,
 	};
 }

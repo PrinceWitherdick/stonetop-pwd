@@ -71,7 +71,7 @@
       "img": "icons/magic/acid/dissolve-bone-white.webp",
       "system": {
         "description": "",
-        "rollFormula": ""
+        "rollFormula": "d4"
       },
       "_key": "!actors.items!WrXgtdFAMVIRlJ9G.ZuJuPQmVZBqimSRc"
     }

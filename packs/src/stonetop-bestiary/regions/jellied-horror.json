@@ -13,7 +13,7 @@
         "source": "lacks organs"
       },
       "damage": {
-        "value": "pseudopod d10+1 (reach, hand, grabby, messy, 1 piercing), engulf d10+3 w/advantage (hand, messy, ignores armor)",
+        "value": "pseudopod d10+1 (reach, hand, grabby, messy, 1 piercing)",
         "rollFormula": "d10+1"
       },
       "instinct": {

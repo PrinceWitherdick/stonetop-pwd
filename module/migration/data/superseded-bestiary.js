@@ -26,23 +26,23 @@ export const SUPERSEDED_BESTIARY = {
 	"6DnSbIHLqXCaV1vp": {"paths":{"system.entry":["68c3501965daa438"]},"items":{}}, // Legionary
 	"6dXBK2ZSWVk51wAp": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["9b55e0da69fcb93a","b0c9e21a592fa7e8"],"system.qualities":["3f9b715247e9e785"]},"items":{}}, // Singing Sword
 	"6jDwnqjA3VmyKZ9F": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["1d5c2a9e6fd75ae8","9b55e0da69fcb93a"],"system.qualities":["c9bb7a4524df2055"]},"items":{"SlZAgN9wco3qUuFQ":{"img":["7cf47f9b83df3cea"]}}}, // Cinderboar
-	"6N5pRiBkQwkblpAq": {"paths":{"system.entry":["5753ad2d495c0f39"]},"items":{}}, // Cavalry
+	"6N5pRiBkQwkblpAq": {"paths":{"system.entry":["5753ad2d495c0f39"]},"items":{"tlzXGSlnINDTPOJD":{"system.rollFormula":["9b55e0da69fcb93a"]}}}, // Cavalry
 	"6NAKPaUXIxy6zZl8": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["9b55e0da69fcb93a","b60cb39b7ea14c5a"],"system.qualities":["b1a78dcf8352abb0"]},"items":{}}, // The Ghostly Legion
 	"6RhD3Vrdb3B9GXTA": {"paths":{"system.entry":["3006ac987ac25de3","a53e29dd3296cd1a"]},"items":{"zVxOuTGRJSIL286Z":{"img":["7cf47f9b83df3cea"]}}}, // Hennain
 	"7asroHGGJFfVbq74": {"paths":{"system.entry":["fba6bbcd21fff89a"]},"items":{}}, // Adept
 	"7GtbWc7kafUVk6dI": {"paths":{"system.entry":["3006ac987ac25de3","a53e29dd3296cd1a"]},"items":{"BjlrTEzq1GqE1Z12":{"img":["7cf47f9b83df3cea"]}}}, // Glasbren
 	"7ID9ieGRtwH4QoE8": {"paths":{"system.entry":["4a04e91f73be7409"]},"items":{}}, // Spirit-talker
 	"89ZjFUUS1I9bP2MH": {"paths":{"system.entry":["00d88a5d34e6fd61","9b55e0da69fcb93a"]},"items":{"lVA2EfHmWqGlFK42":{"img":["ac42d357268b8d4d"]}}}, // Star-Mole
-	"8KHfTcPYblTJRpV1": {"paths":{"system.entry":["75dab4fdbd610800","9620a1797c77dea9"]},"items":{"EnGEGTq6bRl68aoM":{"img":["c7194771a342f89c"]},"XOMK2oWGB8J9seTb":{"img":["c7194771a342f89c"]}}}, // Earth Vortex
+	"8KHfTcPYblTJRpV1": {"paths":{"system.entry":["75dab4fdbd610800","9620a1797c77dea9"]},"items":{"EnGEGTq6bRl68aoM":{"img":["c7194771a342f89c"],"system.rollFormula":["9b55e0da69fcb93a"]},"XOMK2oWGB8J9seTb":{"img":["c7194771a342f89c"]}}}, // Earth Vortex
 	"8nNyWAoSsT3VXRx5": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["9b55e0da69fcb93a","fd8b4c03edaaa1f4"],"system.qualities":["0a3f814fc8db8d1d"]},"items":{"CMVWW4cSMZbLkOIO":{"img":["c7194771a342f89c"]}}}, // Kleztigr
 	"8T8jqS04adlc5107": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["7b9dd961837917b1","9b55e0da69fcb93a"],"system.qualities":["42d88afd2b727156"]},"items":{}}, // Phantom Rider
 	"9kcSzC3uPavigsyF": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["482b57815a9c50f7","9b55e0da69fcb93a"],"system.qualities":["bc2502e0a185a0c9"]},"items":{"CPfpYWGEdpl3PMxE":{"img":["7cf47f9b83df3cea"]},"fvN8MpkjzSZl2gE4":{"img":["c7194771a342f89c"]}}}, // Draventao
 	"9wN9UhM3IORfcw0J": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["9b55e0da69fcb93a","dbd484a1257d2efb"],"system.qualities":["321c42e9f70afc77"]},"items":{}}, // Anan Gllo
 	"aAknV9EMnUjJvRL3": {"paths":{"system.entry":["4942a825075c7a6d"]},"items":{}}, // Adventurer
-	"anJdI79iSTgmf0JB": {"paths":{"system.entry":["a0072e2fb72eeccd"]},"items":{}}, // War-chariot
+	"anJdI79iSTgmf0JB": {"paths":{"system.entry":["a0072e2fb72eeccd"]},"items":{"NH1CMIoYPmCFu2gG":{"system.rollFormula":["9b55e0da69fcb93a"]}}}, // War-chariot
 	"aQJLVwGdeHskspzS": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["4069be70ba40a127","9b55e0da69fcb93a"],"system.qualities":["ab29ed98ca13ce91"]},"items":{"vGLWF5dJCxzuJ4mQ":{"img":["c7194771a342f89c"]},"Xp1qUYvQXdhpjcfC":{"img":["7cf47f9b83df3cea"]}}}, // Prenysbyrd
 	"ASyoP5BXGukeIrG5": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["9b55e0da69fcb93a","d59248283d39b211"],"system.qualities":["562b6afd317c1ce6"]},"items":{"CE0aSf7ulgk2BpSe":{"img":["c7194771a342f89c"]}}}, // Mountain Ape
-	"aWbHPmGW9htXdyUN": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["33a0cfded72a9478","9b55e0da69fcb93a"],"system.qualities":["14f92c37db12b4fc"]},"items":{}}, // Jellied Horror
+	"aWbHPmGW9htXdyUN": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.attributes.damage.value":["60548986f6a653fc"],"system.entry":["33a0cfded72a9478","9b55e0da69fcb93a"],"system.qualities":["14f92c37db12b4fc"]},"items":{}}, // Jellied Horror
 	"B0W8jT7lRFLJK4ds": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["01dd87aae7d8b833","9b55e0da69fcb93a"],"system.qualities":["f9b293bd3e74f992"]},"items":{"BVGHREcQCmeVKfhh":{"img":["c7194771a342f89c"]}}}, // The Gwraig Wen
 	"baV7yiVwXMTKa49B": {"paths":{"system.entry":["75dab4fdbd610800","9620a1797c77dea9"]},"items":{}}, // Lightning Vortex
 	"BCA8xC2gsvHO43ou": {"paths":{"system.entry":["9b55e0da69fcb93a","dee7817fbe835dd1"]},"items":{"dh7kF2MB1qAzPUDh":{"img":["ac42d357268b8d4d"]},"Sd1ggc27CFuwgQpI":{"img":["c7194771a342f89c"]},"SfqeG9rO4CCQ0nEQ":{"img":["c7194771a342f89c"]}}}, // Servant of Daagon
@@ -63,7 +63,7 @@ export const SUPERSEDED_BESTIARY = {
 	"Cva7oGwmIwLEvo6S": {"paths":{"system.entry":["9b55e0da69fcb93a","e31885bd38311450"]},"items":{"qGTYZMfq3D85nS6b":{"img":["ac42d357268b8d4d"]}}}, // Beznpol
 	"cy5OhsU0kVFUoppF": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["22c0cf02c33357ee","9b55e0da69fcb93a"],"system.qualities":["0afb4b0861fc6b93"]},"items":{}}, // Mammoth
 	"cYSCUVhhHfpbgRPS": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["9b55e0da69fcb93a","d5a3397ef6e9203c"],"system.qualities":["4da2b2d53a7b5c80"]},"items":{"myhhPTrCobGt4ZYZ":{"img":["c7194771a342f89c"]}}}, // The Gliomor
-	"dfsDOpDS6JcOBnCe": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["11b17a78b6c3e73a","9b55e0da69fcb93a"],"system.qualities":["b510ce8b98087b10"]},"items":{}}, // Lightning Sconce
+	"dfsDOpDS6JcOBnCe": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["11b17a78b6c3e73a","9b55e0da69fcb93a"],"system.qualities":["b510ce8b98087b10"]},"items":{"gYFXx51yRpBjq5d4":{"system.rollFormula":["4cb6f7086b492b73"]}}}, // Lightning Sconce
 	"DHXlFUAc6mX5eEtp": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["9b55e0da69fcb93a","c938020139bcd739"],"system.qualities":["a556f649b16441fd"]},"items":{}}, // Screech Eel
 	"dLxI39zRgbt5baD5": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["7e5587a008c3c9cd","9b55e0da69fcb93a"],"system.qualities":["1b6b4099e4a53ef4"]},"items":{"PJwttgspFYwiJqDA":{"img":["c7194771a342f89c"]}}}, // Butcherbird
 	"EDaesIZe2McJdVG7": {"paths":{"system.entry":["ce0e84febb773737"]},"items":{}}, // Monk
@@ -103,7 +103,7 @@ export const SUPERSEDED_BESTIARY = {
 	"jd4L6VMQhTXba2r0": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["78b02682cc03bf9c","9b55e0da69fcb93a"],"system.qualities":["62736df415208c85"]},"items":{}}, // Blue Magpie
 	"JRoNGWPbEVDVTu1s": {"paths":{"system.entry":["75dab4fdbd610800","9620a1797c77dea9"]},"items":{"ImNrNhAOzFPbwd9v":{"img":["c7194771a342f89c"]}}}, // Wind Vortex
 	"k3PXbKdBREj0esro": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["0ab0f269b6ecd8ed","9b55e0da69fcb93a"],"system.qualities":["fdd55a8b1ed76bf1"]},"items":{}}, // Hand of Daagon
-	"KE9WWwBJzaBe6tgx": {"paths":{"system.entry":["9b55e0da69fcb93a","db24863f057a1cd4"]},"items":{"0yVb6M07Q53AquUa":{"img":["ac42d357268b8d4d"]},"3N7ss9gmNAAMc2Mw":{"img":["c7194771a342f89c"]},"NcXOu82AYCNas5Mb":{"img":["c7194771a342f89c"]}}}, // Klezln
+	"KE9WWwBJzaBe6tgx": {"paths":{"system.entry":["9b55e0da69fcb93a","db24863f057a1cd4"]},"items":{"0yVb6M07Q53AquUa":{"img":["ac42d357268b8d4d"]},"3N7ss9gmNAAMc2Mw":{"img":["c7194771a342f89c"]},"NcXOu82AYCNas5Mb":{"img":["c7194771a342f89c"],"system.rollFormula":["9b55e0da69fcb93a"]}}}, // Klezln
 	"KEv7LnXs4zQju3lp": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["6740ec611ecc1561","ff6f87339eda73fb"],"system.qualities":["c934d7e32f9edbc9"]},"items":{}}, // The Pale Hunter
 	"Kh5NQGe2zSAEV3BZ": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["95ee465fb8b02a0f","9b55e0da69fcb93a"],"system.qualities":["8a0beb803fa0c312"]},"items":{}}, // Nine-Fingered Stranger
 	"kjKV3SgkKh8gC8Y1": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["710e9fcd50dcd948","9b55e0da69fcb93a"],"system.qualities":["4f480655ef6c8e1f"]},"items":{}}, // Base Archon
@@ -116,6 +116,7 @@ export const SUPERSEDED_BESTIARY = {
 	"lUuc66QokgbxU7X2": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["66ec45f387f6785d","9b55e0da69fcb93a"],"system.qualities":["0f1f33cb4767afb6"]},"items":{}}, // Shade
 	"MFsosEI9EtAc7cbE": {"paths":{"system.entry":["1649bf7c09fcadcc","9b55e0da69fcb93a"]},"items":{}}, // Caribou
 	"mk4kCF2buJrsSlK2": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["35ce2ef54fb74837","9b55e0da69fcb93a"],"system.qualities":["2bc62963f74d0f39"]},"items":{}}, // Skittering Horror
+	"MlpaA0sFGZ3MDTSb": {"paths":{},"items":{"I57HGqIaHn76ZN52":{"system.rollFormula":["9b55e0da69fcb93a"]}}}, // The Spirit in the Cloak
 	"MmkSpS99xDX01jeC": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["af7c5a9297e10ebb","c3269b714c4e6442"],"system.qualities":["6de0162534a5b923"]},"items":{}}, // Horned Drake (Young)
 	"mRpMqY81O24lXlPG": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["8b58c06d29185a7b","9b55e0da69fcb93a"],"system.qualities":["220bc496c93afb11"]},"items":{}}, // Stone Sentinel
 	"MSt3ujyG670TKwEh": {"paths":{"system.entry":["5132be142846366f","c451f99f7a0a241e"]},"items":{}}, // Suarachan Singer
@@ -170,7 +171,7 @@ export const SUPERSEDED_BESTIARY = {
 	"W3OCTba3AGj13THE": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["46944c213c8735d5","9b55e0da69fcb93a"],"system.qualities":["01ec0c97691506dc","7169ad54857c0280"]},"items":{"xiXIvt7e86VInv1A":{"img":["7cf47f9b83df3cea"]}}}, // Blush-of-Dawn
 	"w4bnUheymDzA7cxr": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["4fe13a9efdec2532","9b55e0da69fcb93a"],"system.qualities":["00eb3a496d52086f"]},"items":{"HPx0HqyChCaPBSDl":{"img":["7cf47f9b83df3cea"]}}}, // Fire Drake
 	"W7YFeowcF0yptQC3": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["8e544f8909f2dc76","9b55e0da69fcb93a"],"system.qualities":["6b5ee683844c1667"]},"items":{}}, // Pack Drake
-	"WrXgtdFAMVIRlJ9G": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["256aacc3397db451","9b55e0da69fcb93a"],"system.qualities":["0d7c2bde6a29f29a"]},"items":{"z1E8UMosyiYM9bzr":{"img":["ac42d357268b8d4d"]}}}, // Hlomren
+	"WrXgtdFAMVIRlJ9G": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["256aacc3397db451","9b55e0da69fcb93a"],"system.qualities":["0d7c2bde6a29f29a"]},"items":{"z1E8UMosyiYM9bzr":{"img":["ac42d357268b8d4d"]},"ZuJuPQmVZBqimSRc":{"system.rollFormula":["9b55e0da69fcb93a"]}}}, // Hlomren
 	"WVBxp5Ii2Ahd6Xln": {"paths":{"system.entry":["9b55e0da69fcb93a","9bff723cfca333d1"]},"items":{"hlkRqiTadDAC0fFf":{"img":["7cf47f9b83df3cea"]}}}, // Mummified Servant
 	"x6X63ArQe1zZ3tBE": {"paths":{"system.entry":["b2d7c6601b8945ff"]},"items":{}}, // Assassin
 	"Xa6zaAxbSXE4EslL": {"paths":{"system.attributes.armor.source":["9b55e0da69fcb93a"],"system.entry":["5018404fd349acfd","9b55e0da69fcb93a"],"system.qualities":["017c35174d05e4fb"]},"items":{}}, // Tal Gerdwyr
@@ -210,7 +211,7 @@ export const BESTIARY_FINGERPRINTS = {
 	"6DnSbIHLqXCaV1vp": "3608d10fa70b0134",
 	"6dXBK2ZSWVk51wAp": "6b1baed62c8937e9",
 	"6jDwnqjA3VmyKZ9F": "c97cd82dfc80aa08",
-	"6N5pRiBkQwkblpAq": "ffc5b359f536fc34",
+	"6N5pRiBkQwkblpAq": "bf3f044e77470a56",
 	"6NAKPaUXIxy6zZl8": "e8321441fc13a3dc",
 	"6RhD3Vrdb3B9GXTA": "0ce396d428fe9b9d",
 	"7asroHGGJFfVbq74": "efc4115b0511ec3c",
@@ -220,7 +221,7 @@ export const BESTIARY_FINGERPRINTS = {
 	"7U161MCE7WecX9kF": "77106a3a37306a88",
 	"82BOSSkHFrbVJDtZ": "47cef2c278cf5afb",
 	"89ZjFUUS1I9bP2MH": "0ffc36692c3e3ca9",
-	"8KHfTcPYblTJRpV1": "82e0a57804a2b64d",
+	"8KHfTcPYblTJRpV1": "3dac49ab0e2974a0",
 	"8nNyWAoSsT3VXRx5": "f50c4dd4500c784a",
 	"8T8jqS04adlc5107": "9fee57c210050281",
 	"9cj95lduy9Oyl3AO": "58c2fefa205bc897",
@@ -229,10 +230,10 @@ export const BESTIARY_FINGERPRINTS = {
 	"9kcSzC3uPavigsyF": "91689a0267953ead",
 	"9wN9UhM3IORfcw0J": "facef06b4d931980",
 	"aAknV9EMnUjJvRL3": "251062a4402566e9",
-	"anJdI79iSTgmf0JB": "6c1add2a785b1472",
+	"anJdI79iSTgmf0JB": "cf5bf5bdb532487b",
 	"aQJLVwGdeHskspzS": "dc17388ed1844a13",
 	"ASyoP5BXGukeIrG5": "06376fbb63b18df0",
-	"aWbHPmGW9htXdyUN": "283af36b07261e68",
+	"aWbHPmGW9htXdyUN": "0a03c3f70be4365f",
 	"B0W8jT7lRFLJK4ds": "eea1bf2b9a5abb9a",
 	"b1nCTG0uwf7dLQmx": "78ff34d2decc8bd0",
 	"BanditManmarchHd": "23281c52efb397da",
@@ -256,7 +257,7 @@ export const BESTIARY_FINGERPRINTS = {
 	"Cva7oGwmIwLEvo6S": "1c6dbffc76363fb3",
 	"cy5OhsU0kVFUoppF": "2a35e78aab244e19",
 	"cYSCUVhhHfpbgRPS": "385494d9866ab9a9",
-	"dfsDOpDS6JcOBnCe": "75e27ec5566eef59",
+	"dfsDOpDS6JcOBnCe": "ff309a6da792dea2",
 	"DHXlFUAc6mX5eEtp": "cce98b11cfe9aa5a",
 	"DiCuCO7x8F1jVUk3": "65200c06cecb2591",
 	"dLxI39zRgbt5baD5": "31a886c75ea0e20a",
@@ -304,7 +305,7 @@ export const BESTIARY_FINGERPRINTS = {
 	"JRoNGWPbEVDVTu1s": "fdea13bbf551d848",
 	"k3PXbKdBREj0esro": "a070217f43daf4e6",
 	"kBd27BmqqB3KtFh3": "929e47c8ae451067",
-	"KE9WWwBJzaBe6tgx": "6216d786c0de6a9b",
+	"KE9WWwBJzaBe6tgx": "f8fd3061a7c97143",
 	"KEv7LnXs4zQju3lp": "b174db229996864f",
 	"Kh5NQGe2zSAEV3BZ": "31d8883078e7d543",
 	"kjKV3SgkKh8gC8Y1": "910b1efd87e83db8",
@@ -318,7 +319,7 @@ export const BESTIARY_FINGERPRINTS = {
 	"mB7CMIPDbB8gzHas": "3e0bd8050a23c2e1",
 	"MFsosEI9EtAc7cbE": "bcbeae6429ec1a18",
 	"mk4kCF2buJrsSlK2": "8354f1ebbbb10ed4",
-	"MlpaA0sFGZ3MDTSb": "4ed81a23ebb52515",
+	"MlpaA0sFGZ3MDTSb": "89c9fac57ceadbe7",
 	"MmkSpS99xDX01jeC": "600ef8c4b8159b6c",
 	"mRpMqY81O24lXlPG": "0dbcd24b162e2993",
 	"MSt3ujyG670TKwEh": "a55c6729b22c8692",
@@ -382,7 +383,7 @@ export const BESTIARY_FINGERPRINTS = {
 	"WDxLUbaRZWHqdHBi": "fa582f8d921926b3",
 	"wGv1A4P76nKagusT": "7ff1704440f548d9",
 	"WkvJgBl2JC3Ejluj": "2748bfd3001eee5f",
-	"WrXgtdFAMVIRlJ9G": "6cb02edb1d7f06de",
+	"WrXgtdFAMVIRlJ9G": "78cff6a9647adf6a",
 	"WVBxp5Ii2Ahd6Xln": "2474a98acefe99b4",
 	"x6X63ArQe1zZ3tBE": "a4b2c3cfef466abc",
 	"Xa6zaAxbSXE4EslL": "42d20736cd8e34b1",

@@ -6,7 +6,9 @@ import {
 	monsterGroupDefaults, orderFollowersBonus, readinessCap,
 	READINESS_SHIELD_BONUS, READINESS_SHIELD_WALL_BONUS,
 	applyTagEdits, editTagLayer, editTagList,
+	monsterFollowerArmor, followerArmorWithClause,
 } from "../../module/data/follower-build.js";
+import { followerActorFields } from "../../module/data/follower-actor.js";
 
 // The rules content + derivations behind the Create-a-Follower walkthrough and
 // the monster→follower conversion (Book I, NPCs & Followers, pp.474–479).
@@ -192,9 +194,11 @@ describe("buildCustomFollower", () => {
 		expect(f.hpCurrent).toBe(6);
 	});
 
-	it("keeps the leading number from book-format conditional armor (not 0)", () => {
+	it("keeps book-format conditional armor whole, so their NPC's damage-card box is built from it (FOE-1)", () => {
 		const f = buildCustomFollower({ name: "X", hp: 6, armor: "2 (0 vs. iron)" });
-		expect(f.armor).toBe(2);
+		expect(f.armor).toBe("2 (0 vs. iron)");
+		// Any other armor text is still its leading number.
+		expect(buildCustomFollower({ name: "X", armor: "2 (shield)" }).armor).toBe(2);
 	});
 
 	it("honors a starting loyalty (e.g. summoned spirits), flooring at 0", () => {
@@ -530,5 +534,31 @@ describe("hand-edited follower tags", () => {
 		expect(editTagList(["spirit", "tiny"], "add", "sly, Tiny")).toEqual(["spirit", "tiny", "sly"]);
 		expect(editTagList(["spirit", "tiny"], "remove", "TINY")).toEqual(["spirit"]);
 		expect(editTagList(undefined, "add", "")).toEqual([]);
+	});
+});
+
+// "Use its stats as-is" (p.475): a monster's printed armor exception survives its conversion into a follower,
+// in the conditional form the follower's NPC builds its damage-card box from (audit FOE-1).
+describe("a monster's armor exception, kept through the conversion", () => {
+	const wretch = { attributes: { armor: { value: 4, source: "resilience" }, hp: { value: 9, max: 9 } }, qualities: "<p>Armor 0 vs. bronze.</p>" };
+
+	it("writes it in the follower's conditional form, read off the monster's own text", () => {
+		expect(monsterFollowerArmor(wretch)).toBe("4 (0 vs. bronze)");
+		expect(monsterFollowerArmor({ attributes: { armor: { value: 6, source: "2 vs. iron" } } })).toBe("6 (2 vs. iron)");
+		expect(monsterFollowerArmor({ attributes: { armor: { value: 2 } } })).toBe(2);
+	});
+
+	it("is kept on the follower and reaches their NPC as the versus box", () => {
+		const follower = followerFromMonster({ name: "Wretch", system: wretch, moves: [] });
+		expect(follower.armor).toBe("4 (0 vs. bronze)");
+		const fields = followerActorFields(follower);
+		expect(fields).toMatchObject({ armor: 4, armorConditional: 4, armorConditionalSource: "vs. bronze" });
+	});
+
+	it("followerArmorWithClause keeps only a clause that takes armor away", () => {
+		expect(followerArmorWithClause(" 2 (0 vs. iron) ")).toBe("2 (0 vs. iron)");
+		expect(followerArmorWithClause("1 (shield)")).toBe(1);
+		expect(followerArmorWithClause(3)).toBe(3);
+		expect(followerArmorWithClause(undefined)).toBe(0);
 	});
 });

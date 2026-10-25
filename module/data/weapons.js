@@ -27,6 +27,7 @@
 //   ammo         Weapon tracks ammo statuses (low ammo / all out); gates Let Fly's
 //                "deplete your ammo" 7-9 pick.
 //   iron         Iron weapon (relevant to "x piercing = Prosperity" and some fiction).
+//   uses         The item's track counts USES, one marked each time it is thrown (naphtha), not ammo statuses.
 //   tags         Display-only flavour tags with no damage-number effect (forceful, messy,
 //                awkward, reload, dangerous, silver, grabby).
 //
@@ -47,6 +48,7 @@ export const M = (over = {}) => ({
 	area: false,
 	damageDie: null,
 	ammo: false,
+	uses: false,
 	iron: false,
 	tags: [],
 	...over,
@@ -70,16 +72,46 @@ export const WEAPON_META = {
 	"short-sword":        M({ name: "Short sword",        range: ["hand", "close"], iron: true }),
 	"sword":              M({ name: "Sword",              range: ["close"], iron: true, damageBonus: 1 }),
 	"warhammer":          M({ name: "Warhammer",          range: ["close"], iron: true, piercing: 2 }),
+	// "Mallet, iron or wood (hand)" (Book I p.94): nothing on the number, but a weapon all the same.
+	"mallet":             M({ name: "Mallet",             range: ["hand"] }),
 
 	// ---- Thrown / ranged (Let Fly) -------------------------------------------
-	"javelins":           M({ name: "Javelins",           range: ["thrown"], piercing: "prosperity", damageBonus: 1 }),
+	// "Javelins, a few, iron (thrown, x piercing, +1 damage, all out)": the one "all out" box is an ammo
+	// status, so Let Fly's "deplete your ammo" pick is theirs to take (Book I p.73, p.94).
+	"javelins":           M({ name: "Javelins",           range: ["thrown"], piercing: "prosperity", damageBonus: 1, ammo: true }),
 	// Its item prints the same "low ammo / all out" pair as the composite bow's.
 	"bow-arrows":         M({ name: "Bow & arrows",       range: ["near"], piercing: "prosperity", ammo: true }),
-	"sling":              M({ name: "Sling",              range: ["near"], tags: ["reload", "awkward"] }),
+	// "Sling (near, reload, awkward, low ammo, all out)" (Book I p.94).
+	"sling":              M({ name: "Sling",              range: ["near"], ammo: true, tags: ["reload", "awkward"] }),
 	"crossbow":           M({ name: "Crossbow",           range: ["far"], damageBonus: 1, piercing: "prosperity", ammo: true, tags: ["reload"] }),
 	"composite-bow":      M({ name: "Composite bow",      range: ["far"], damageBonus: 1, piercing: "prosperity", ammo: true }),
-	"naphtha":            M({ name: "Naphtha",            range: ["thrown"], area: true, ignoresArmor: true, damageDie: "d8", tags: ["dangerous"] }),
+	// "◇◇◇ uses": not an ammo status but a USE, marked each time it is thrown (Book I p.94 "uses: mark a ◇ each
+	// time you use it; it's gone/useless when they're all marked"). See combat/attack-flow.js#spendWeaponUse.
+	"naphtha":            M({ name: "Naphtha",            range: ["thrown"], area: true, ignoresArmor: true, damageDie: "d8", uses: true, tags: ["dangerous"] }),
 };
+
+/**
+ * BRONZE WEAPONS (Book I p.95): "Common weapons, bronze (spears, daggers, etc.)" and "Weapon of war, bronze (as
+ * the iron weapons of war, but no x piercing)". One catalog row stands for any of several weapons, so the
+ * character is asked ONCE which one theirs is (combat/attack-flow.js#bronzeCandidate, #settleBronzeWeapon), and it then deals that
+ * weapon's profile without "x piercing". Keyed by the bronze item's slug; the values are WEAPON_META keys.
+ */
+export const BRONZE_WEAPONS = Object.freeze({
+	"bronze-common-weapon": Object.freeze(["spear", "long-spear", "knife-dagger", "hatchet", "mattock", "maul"]),
+	"bronze-weapon-of-war": Object.freeze(["mace-or-flail", "battleaxe", "short-sword", "sword", "warhammer"]),
+});
+
+/**
+ * The profile of `slug` made of bronze: its own reach, tags and +N, with no "x piercing" (a fixed piercing such
+ * as the warhammer's 2 stays), no ammo track (the bronze row has none) and "Bronze" in its name. Null for a slug
+ * that is not a weapon.
+ */
+export function bronzeMeta(slug) {
+	const meta = WEAPON_META[slug];
+	if (!meta) return null;
+	const name = meta.name.charAt(0).toLowerCase() + meta.name.slice(1);
+	return { ...meta, name: `Bronze ${name}`, piercing: meta.piercing === "prosperity" ? 0 : meta.piercing, iron: false, ammo: false, bronze: true };
+}
 
 // Weapons a MOVE grants rather than the pack carries. The Lightbearer's holy light
 // "counts as a weapon (d10 damage, hand, close, area, 2 piercing)" under Purifying

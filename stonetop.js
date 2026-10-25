@@ -115,7 +115,8 @@ import { possessionTrackUses, BOOKS_AND_SCROLLS, HOLY_RELICS } from "./module/ac
 import { INVOKE_THE_SUN_GOD } from "./module/actors/character/holy-light.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
 import { repeatBoxLocked } from "./module/actors/character/PlaybookMoveEntry.js";
-import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, wireUnstoppableMark, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery, wireRosterHitMove, ROSTER_MOVE_QUERY, handleRosterMoveQuery, reconcileClashCounter, registerCounterAvoidedHooks, forgetBarkskinMarks } from "./module/combat/attack-flow.js";
+import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, wireUnstoppableMark, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery, wireRosterHitMove, ROSTER_MOVE_QUERY, handleRosterMoveQuery, reconcileClashCounter, registerCounterAvoidedHooks, wireIgnoresArmorBox, SUFFER_CARD_QUERY, handleSufferCardQuery } from "./module/combat/attack-flow.js";
+import { forgetWorldMarkScans } from "./module/actors/character/blessed-marks.js";
 import { wireDefendSpends, SPEND_QUERY, handleSpendQuery } from "./module/fight/defend-spend.js";
 import { HEALERS_ARTS_QUERY, handleHealersArtsQuery } from "./module/actors/character/healers-arts.js";
 import { SUPPLY_PAY_QUERY, handleSupplyPayQuery } from "./module/actors/character/supply-payer.js";
@@ -162,6 +163,9 @@ import { registerVitalsMirrorHooks } from "./module/actors/character/vitals-mirr
 import { registerPostDeathMoveHooks } from "./module/actors/character/post-death-moves.js";
 import { loseHp, wirePostDeathMoveCards } from "./module/actors/character/post-death-actions.js";
 import { registerRosterFateHooks } from "./module/fight/roster-fate.js";
+import { registerLevelUpClaimQuery } from "./module/actors/character/level-up-claim.js";
+import { FOLLOWER_NPC_HP_QUERY, handleFollowerNpcHpQuery } from "./module/actors/character/follower-hp.js";
+import { registerFollowerFateQueries } from "./module/actors/character/follower-fate-pick.js";
 import { wireCampCard } from "./module/camp/camp-flow.js";
 import { registerCampWindowRestore } from "./module/camp/CampWindow.js";
 import { registerTimelineWindowRestore } from "./module/dialogs/TimelineWindow.js";
@@ -223,6 +227,9 @@ Hooks.once("init", () => {
 	if (CONFIG.queries) CONFIG.queries[SPEND_QUERY] = (data, context) => handleSpendQuery(data, context);
 	// And giving a blow a crew member took to another member of the crew (attack-flow.js#wireRosterHitMove).
 	if (CONFIG.queries) CONFIG.queries[ROSTER_MOVE_QUERY] = (data, context) => handleRosterMoveQuery(data, context);
+	// And the GM-only "Which attack?" / "Name the enemy's damage" cards, posted by the GM's client so no player
+	// authors (and so reads) them (attack-flow.js#postGmOnlyCard).
+	if (CONFIG.queries) CONFIG.queries[SUFFER_CARD_QUERY] = (data, context) => handleSufferCardQuery(data, context);
 	// And Healer's Arts' Stock, asked for a patient's Recover out of a carer the player does not own.
 	// Answered by the carer's player, or the GM when none is online (actors/character/healers-arts.js).
 	if (CONFIG.queries) CONFIG.queries[HEALERS_ARTS_QUERY] = (data, context) => handleHealersArtsQuery(data, context);
@@ -263,6 +270,12 @@ Hooks.once("init", () => {
 	if (CONFIG.queries) CONFIG.queries[FOLLOWER_LOYALTY_QUERY] = (data, context) => handleFollowerLoyaltyQuery(data, context);
 	if (CONFIG.queries) CONFIG.queries[FOLLOWER_HANDOFF_QUERY] = (data, context) => handleFollowerHandoffQuery(data, context);
 	if (CONFIG.queries) CONFIG.queries[WINTER_NPC_DEAD_QUERY] = (data, context) => handleWinterNpcDeadQuery(data, context);
+	// And the HP of a follower's NPC the writing player cannot write (actors/character/follower-hp.js), and
+	// who picks a fallen follower's fate and where the GM's pick is settled (follower-fate-pick.js).
+	if (CONFIG.queries) CONFIG.queries[FOLLOWER_NPC_HP_QUERY] = (data, context) => handleFollowerNpcHpQuery(data, context);
+	registerFollowerFateQueries(CONFIG.queries);
+	// And two clients levelling the same character at once: the GM's client says which one takes the level.
+	registerLevelUpClaimQuery(CONFIG.queries);
 
 	// Every window and modal in the system is drag-resizable; the ad-hoc
 	// Dialog popups we spawn from sheets default to resizable too. The companion
@@ -1099,12 +1112,12 @@ Hooks.on("updateActor", (actor, changes) => {
 	if ("name" in (changes ?? {}) || changes?.system?.concept !== undefined) invalidateMonsterRefIndex();
 });
 
-// -- BARKSKIN MARKS --------------------------------------------
-// The damage cards keep one scan of the world's Barkskin marks (attack-flow.js#barkskinOnce). A
-// mark is a flag on the Blessed and counts only while Barkskin is learned, so any actor or move
-// made, changed or deleted drops the scan for the next card to take again.
+// -- BLESSED MARKS ---------------------------------------------
+// The damage cards keep one scan of the world's Barkskin marks and charm makers
+// (blessed-marks.js#worldMarkScan). A mark is a flag on the Blessed and counts only while its move
+// is learned, so any actor or move made, changed or deleted drops the scans for the next card to take again.
 for (const hook of ["createActor", "updateActor", "deleteActor", "createItem", "updateItem", "deleteItem"]) {
-	Hooks.on(hook, forgetBarkskinMarks);
+	Hooks.on(hook, forgetWorldMarkScans);
 }
 
 // -- CROSS-CLIENT RENDER SYNC ----------------------------------
@@ -2904,6 +2917,8 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	wireAttackConfirm(message, html);
 	const damageGate = applyGateOnce(message);
 	wireApplyDamage(message, html, damageGate);
+	// ...and the GM's "Ignores armor" tick beside it, for a blow the fiction says armor cannot stop (Book I p.239).
+	wireIgnoresArmorBox(message, html);
 	// ...and beside Apply, the fight's "Leave off the +N" for several attackers, which also repaints the
 	// card's totals from its flag on every client (attack-flow.js#wireDamageSeed).
 	wireDamageSeed(message, html, damageGate);
