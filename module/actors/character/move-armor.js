@@ -22,9 +22,8 @@
  * Kept Foundry-free so the rule can be tested with plain objects, like holy-light.js and condemn.js.
  */
 
-import { SYSTEM_ID } from "../../system-id.js";
 import { ownsLearnedMoveNamed } from "./owns-move.js";
-import { BARKSKIN, BLESSED_MARKS_FLAG, markKindKey } from "./blessed-marks.js";
+import { BARKSKIN, blessedMarkRows } from "./blessed-marks.js";
 import { actorMatchKeys, normalizeName, trailingActorId } from "./marked-people.js";
 
 export const CANDLE_AGAINST_THE_DARK = "A Candle Against the Dark";
@@ -145,25 +144,10 @@ export function moveArmor({ actor, holyLight = false, shield = false, markedWith
 export function barkskinMarks(actors = [], { except = null } = {}) {
 	const ids = new Set();
 	const names = new Set();
-	for (const blessed of actors ?? []) {
-		if (!blessed || blessed === except) continue;
-		// The flag read FIRST: it is one property lookup and nearly every actor in the world fails it,
-		// where `ownsLearnedMoveNamed` walks that actor's whole item list to answer.
-		//
-		// RAW, not `readMarks`: that is the roster's reader for SHOWING a list, and it drops rows with no
-		// name because there is nothing to render and nothing to dismiss. Here the uuid IS the answer — it
-		// names the person whether or not the row carries their name — so a nameless row still grants bark.
-		const rows = blessed.getFlag?.(SYSTEM_ID, BLESSED_MARKS_FLAG);
-		if (!Array.isArray(rows) || !rows.length) continue;
-		if (!ownsLearnedMoveNamed(blessed, BARKSKIN)) continue;
-		for (const row of rows) {
-			// The kind through the roster's OWN reader, so a row the window lists under Barkskin (an
-			// unknown or missing stored kind falls back there) is a row that grants it, and a raw
-			// spelling can never put the two out of step.
-			if (!row || markKindKey(row.kind) !== "barkskin") continue;
-			if (row.uuid) ids.add(trailingActorId(row.uuid));
-			else if (normalizeName(row.name)) names.add(normalizeName(row.name));
-		}
+	// A nameless row still grants bark: its uuid names the person (blessedMarkRows reads the flag raw).
+	for (const { row } of blessedMarkRows(actors, "barkskin", BARKSKIN, { except })) {
+		if (row.uuid) ids.add(trailingActorId(row.uuid));
+		else if (normalizeName(row.name)) names.add(normalizeName(row.name));
 	}
 	return { ids, names };
 }

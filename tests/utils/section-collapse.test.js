@@ -24,9 +24,22 @@ class FakeEl {
 		return sibs[sibs.indexOf(this) + 1] ?? null;
 	}
 	matches(selector) {
-		return selector.split(",").some(s => this.classes.has(s.trim().slice(1)));
+		return selector.split(",").map(s => s.trim()).some(s => (s.startsWith("[role=")
+			? this.attrs.role === s.slice(7, -2)
+			: s.startsWith(".") && this.classes.has(s.slice(1))));
 	}
 	setAttribute(name, value) { this.attrs[name] = value; }
+	getAttribute(name) { return this.attrs[name] ?? null; }
+	contains(node) {
+		for (let n = node; n; n = n.parentElement) if (n === this) return true;
+		return false;
+	}
+	// A press: the click bubbles to the root, where the mixin listens.
+	click() {
+		let root = this;
+		while (root.parentElement) root = root.parentElement;
+		root.fire("click", { target: this, preventDefault() {}, stopPropagation() {} });
+	}
 	closest(selector) {
 		for (let node = this; node; node = node.parentElement) if (node.matches(selector)) return node;
 		return null;
@@ -61,6 +74,7 @@ function buildSheetDom(ids) {
 		new FakeEl("stonetop-move-group-title", heading);
 		const caret = new FakeEl("stonetop-section-collapse", heading);
 		caret.dataset.section = id;
+		caret.setAttribute("role", "button");
 		bodies[id] = new FakeEl("stonetop-item", section);
 		carets[id] = caret;
 	}

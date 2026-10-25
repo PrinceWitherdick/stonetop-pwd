@@ -220,6 +220,7 @@ import {STARTING_INVOCATIONS_FLAG, learnedInvocations, rerunInvocations, startin
 import {chipsFrom, normalizeReminders} from "./gear-reminders.js";
 import {localize, format} from "../../utils/i18n.js";
 import {promptRaiseFromDead} from "../../hooks/DeathsDoorPrompt.js";
+import { wireKeyboardButtons } from "../../utils/keyboard-buttons.js";
 
 const _STAT_KEYS = new Set(["str", "dex", "con", "int", "wis", "cha"]);
 const _STAT_CHOICES = [..._STAT_KEYS].map(k => [k, k.toUpperCase()]);
@@ -1259,11 +1260,6 @@ export function createStonetopCharacterSheetClass(Base) {
 				onToggle?.(wrap, collapsed);
 			};
 			html.find(summarySel).on("click", ev => toggle(ev.currentTarget));
-			html.find(summarySel).on("keydown", ev => {
-				if (ev.key !== "Enter" && ev.key !== " ") return;
-				ev.preventDefault();
-				toggle(ev.currentTarget);
-			});
 		}
 
 		static get defaultOptions() {
@@ -3817,6 +3813,9 @@ export function createStonetopCharacterSheetClass(Base) {
 		activateListeners(html) {
 			super.activateListeners(html);
 
+			// Enter and Space press every role="button" on the sheet (utils/keyboard-buttons.js).
+			wireKeyboardButtons(html);
+
 			// Hang the tab rail off the window's right edge. Done first so everything below —
 			// notably _activateTabDragDrop — sees it in its final home rather than wiring the
 			// copy that is about to move. See module/utils/tab-rail.js.
@@ -4605,13 +4604,6 @@ export function createStonetopCharacterSheetClass(Base) {
 				ev.stopPropagation();
 				toggleArcanaFold(summary);
 			}, true);
-			html[0].addEventListener("keydown", ev => {
-				if (ev.key !== "Enter" && ev.key !== " ") return;
-				const summary = ev.target.closest(".stonetop-arcanum-foldable-summary");
-				if (!summary) return;
-				ev.preventDefault();
-				toggleArcanaFold(summary);
-			}, true);
 
 			// Three card grids, all packed by the shared masonry helper (utils/masonry.js): it
 			// owns the card capture, the per-width guard, the ResizeObserver and the teardown,
@@ -4825,14 +4817,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			// path are gated by one fact, in one place, and this call site needs no second check.
 			wireAvatarPreview(html[0], ".stonetop-follower-portrait-img");
 			const pickFollowerPortrait = ev => {
-				// Cheap test first: this is bound in capture phase on the whole sheet, so every
-				// keystroke into every field on it lands here. Deciding on `ev.key` before
-				// walking ancestors keeps typing free.
-				if (ev.type === "keydown" && ev.key !== "Enter" && ev.key !== " ") return;
 				const portrait = ev.target.closest?.(".stonetop-follower-portrait--editable");
 				if (!portrait) return;
-				// preventDefault covers the keydown too: Space would otherwise scroll the tab
-				// out from under the card while the gallery opens over it.
 				ev.preventDefault();
 				ev.stopPropagation();
 				// The two pips sit inside the portrait and do their own job instead of the
@@ -4854,7 +4840,6 @@ export function createStonetopCharacterSheetClass(Base) {
 				else this._onFollowerPortraitView(portrait);
 			};
 			html[0].addEventListener("click", pickFollowerPortrait, true);
-			html[0].addEventListener("keydown", pickFollowerPortrait, true);
 
 			// The same two things, for the faces on a group follower's ROSTER — the crew's named
 			// individuals and anonymous members, and a custom group's members. A separate wiring
@@ -4864,7 +4849,6 @@ export function createStonetopCharacterSheetClass(Base) {
 			// IS pooled, though — wireAvatarPreview joins selectors into one listener pair.
 			wireAvatarPreview(html[0], ".stonetop-roster-avatar-img");
 			const pickRosterAvatar = ev => {
-				if (ev.type === "keydown" && ev.key !== "Enter" && ev.key !== " ") return;
 				const avatar = ev.target.closest?.(".stonetop-roster-avatar--editable");
 				if (!avatar) return;
 				ev.preventDefault();
@@ -4873,7 +4857,6 @@ export function createStonetopCharacterSheetClass(Base) {
 				else this._onRosterAvatarView(avatar);
 			};
 			html[0].addEventListener("click", pickRosterAvatar, true);
-			html[0].addEventListener("keydown", pickRosterAvatar, true);
 
 			// Every follower on this sheet becomes an `npc` Actor, made here rather than at each of
 			// the dozen places a follower can arrive from (the walkthrough, a converted monster or
@@ -4974,7 +4957,6 @@ export function createStonetopCharacterSheetClass(Base) {
 			const openMovesEditFromHand = ev => {
 				const hand = ev.target.closest(".stonetop-move-choice-needed");
 				if (!hand) return;
-				if (ev.type === "keydown" && ev.key !== "Enter" && ev.key !== " ") return;
 				ev.preventDefault();
 				ev.stopPropagation();
 				if (this.isSectionEditable("moves")) return; // already editable — nothing to do
@@ -4983,7 +4965,6 @@ export function createStonetopCharacterSheetClass(Base) {
 				this.render(false);
 			};
 			html[0].addEventListener("click", openMovesEditFromHand, true);
-			html[0].addEventListener("keydown", openMovesEditFromHand, true);
 
 			// The stat-choice hand on an Improved/Superior Stat card whose stat was never
 			// chosen: open the +1 picker straight away for the first unfilled owned instance
@@ -4992,7 +4973,6 @@ export function createStonetopCharacterSheetClass(Base) {
 			const fillStatChoiceFromHand = async ev => {
 				const hand = ev.target.closest(".stonetop-move-stat-choice-needed");
 				if (!hand) return;
-				if (ev.type === "keydown" && ev.key !== "Enter" && ev.key !== " ") return;
 				ev.preventDefault();
 				ev.stopPropagation();
 				const itemId = hand.closest("[data-item-id]")?.dataset.itemId;
@@ -5004,20 +4984,17 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (unfilled) await this._promptFillStatIncrease(unfilled);
 			};
 			html[0].addEventListener("click", fillStatChoiceFromHand, true);
-			html[0].addEventListener("keydown", fillStatChoiceFromHand, true);
 
 			// The hand on a card whose background answer is the player's to pick and still empty
 			// (the Witch Hunter's Well Versed topic): ask it (_askBackgroundAnswers).
 			const askBackgroundAnswerFromHand = async ev => {
 				const hand = ev.target.closest(".stonetop-move-background-answer-needed");
 				if (!hand) return;
-				if (ev.type === "keydown" && ev.key !== "Enter" && ev.key !== " ") return;
 				ev.preventDefault();
 				ev.stopPropagation();
 				await this._askBackgroundAnswers();
 			};
 			html[0].addEventListener("click", askBackgroundAnswerFromHand, true);
-			html[0].addEventListener("keydown", askBackgroundAnswerFromHand, true);
 
 			// Followers tab: per-card, per-section edit pencils. Same per-section toggle
 			// mechanism, keyed on `follower-<section>:<ftype>:<slug>`; opening a text
@@ -6256,14 +6233,6 @@ export function createStonetopCharacterSheetClass(Base) {
 			html[0].addEventListener("click", ev => {
 				const handle = ev.target.closest(".stonetop-arcanum-move-name");
 				if (!handle) return;
-				ev.stopPropagation();
-				this._onArcanumMoveName(handle.dataset.arcanumSlug, handle.dataset.moveSlug);
-			}, true);
-			html[0].addEventListener("keydown", ev => {
-				if (ev.key !== "Enter" && ev.key !== " ") return;
-				const handle = ev.target.closest?.(".stonetop-arcanum-move-name");
-				if (!handle) return;
-				ev.preventDefault();
 				ev.stopPropagation();
 				this._onArcanumMoveName(handle.dataset.arcanumSlug, handle.dataset.moveSlug);
 			}, true);

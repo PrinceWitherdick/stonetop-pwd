@@ -1860,7 +1860,18 @@
           "spareGroupDesc": "Spend 1 of the group's shared Loyalty ({loyalty} held). They stay at 0 HP, out of the action, but alive.",
           "groupDeadDesc": "Dead, immediately. They are struck off the group's roster (a group keeps at least two).",
           "groupDeadCard": "They are struck off the group's roster.",
-          "groupFloorCard": "The group is down to two, the fewest a group keeps, so they stay on its roster at 0 HP, marked fallen."
+          "groupFloorCard": "The group is down to two, the fewest a group keeps, so they stay on its roster at 0 HP, marked fallen.",
+          "gmPickSub": "GM: their fate is in your hands (p.469)",
+          "gmPickNote": "Their player still gets Sir, Permission to Die, Sir if they have it, once you pick Dead.",
+          "gmDeadSub": "The GM says they die (p.469)",
+          "gmDeadNote": "Sir, Permission to Die, Sir is yours: spare them, or let them go and mark XP. Closing this lets them die.",
+          "gmDeadClose": "Let them die",
+          "pickSub": "Their fate is in your hands (p.469)",
+          "loyalSub": "Loyal to the End: roll for its fate (p.143)",
+          "notLethalNote": "If the blow wasn't lethal, just close this. They're out of the action until they Recover or you say otherwise.",
+          "notLethalClose": "Not lethal / decide later",
+          "deathsDoorDesc": "They trigger Death's Door: you roll for them.",
+          "gmDeathsDoorDesc": "They trigger Death's Door: their PC's player rolls for them."
         },
         "companion": {
           "fallbackName": "Your companion",

@@ -3,36 +3,23 @@ import { readCss, declarations, readRepo, stripComments } from "../fakes/css.js"
 
 // WHERE THE WORDS SIT INSIDE THE RELATIONSHIP MAP'S CONTROLS.
 //
-// ⚠ THEY USED TO BE A TOOLBAR, over the board; they are the footer's tool group now, under it.
-// Nothing about the measuring changed with the move -- the same buttons, the same face, the same
-// arithmetic -- but the token they spend is no longer declared on the row that holds them, and this
-// file is where that is held to.
+// Every tool button centres its label with `align-items: center`. That centred the label's LINE BOX,
+// and in Libre Caslon Text the line box sat above the capitals, so the words read high. It used to be
+// corrected here with a hand-measured `--st-relmap-ink-lift` (0.048em) on the label. Two things
+// replace it, and this file holds both:
 //
-// ⚠ WHY THIS FILE EXISTS. Every one of those controls centres a LINE BOX, and in Libre Caslon Text
-// the line box is not centred on the ink. The face carries an ascent of 0.958em over a descent of
-// 0.272em, so the middle of its line falls 0.343em above the baseline, while the middle of its
-// capitals (cap height 0.781em) falls 0.391em above it. The 0.048em between the two is enough to
-// read: measured on the real bar, a tool button was leaving about 1.3px more paper under its label
-// than over it, and a row of them looks like words sitting high in their boxes.
+//  - the font is fixed at the source: every Libre Caslon Text @font-face carries ascent/descent
+//    overrides that centre its line box on its capitals (tests/styles/caslon-metrics.test.js), so a
+//    lift on top of it would push the words LOW;
+//  - the label is trimmed to its cap band and padded back to its line box, as every chip is. Blink
+//    floors a line's half-leading to whole pixels, which no font metric can undo; trimmed, there is
+//    no leading left to floor. Measured offline (core + stonetop.css, roots 14/16/20, DPR 1/1.25/1.5):
+//    -0.31 to -0.45px, the same as every trimmed chip, where the font fix alone left up to -0.66px.
 //
-// The correction is one token, `--st-relmap-ink-lift`, declared on the WINDOW ROOT and spent by
-// the tool buttons' labels. On the root and not on the row that holds them, which is the whole
-// point of asserting it: the buttons have already moved once (the toolbar became the footer), and a
-// token declared on whichever row happens to carry them today goes silently missing the next time
-// one moves. Nothing about that fails loudly, and nothing renders differently enough for a
-// screenshot diff to catch, which is why it is asserted here.
-//
-// ⚠ AND THE ICONS ARE LEFT ALONE. A Font Awesome glyph in these buttons already sits within a
-// quarter-pixel of the centre; lifting it with the words would break what is right. So the button
-// rule reaches its label by `> span` rather than moving the whole button's padding, and this file
-// guards that too.
-//
-// Verified offline against core's own stylesheet at root 16, 20 and 24 (the harness is
-// `relmap-exact-geom.mjs`): -0.0476em before, under 0.005em after, at every one of them.
+// ⚠ THE ICONS ARE LEFT ALONE. A Font Awesome glyph in these buttons already sits within a quarter-pixel
+// of the centre, so the label is reached by `> span` and the button's own padding stays even.
 
 const CSS = readCss();
-
-const LIFT = "--st-relmap-ink-lift";
 
 /** The value one selector declares for one property, across every rule that names it. */
 function declared(selector, property) {
@@ -42,28 +29,26 @@ function declared(selector, property) {
 	return found.length ? found[found.length - 1][1].trim().replace(/\s+/g, " ") : null;
 }
 
-describe("the lift that centres the words on the relationship map's controls", () => {
-	it("is declared once, on the window root, in em", () => {
-		const value = declared(".stonetop-relmap", LIFT);
-		expect(value).toBeTruthy();
-		// ⚠ AND NOT ON A ROW INSIDE IT. It was the toolbar's; the toolbar is gone and the buttons
-		// it dressed are in the footer, so a token declared on a row is a token one more move loses.
-		expect(declared(".stonetop-relmap-bar", LIFT)).toBeNull();
-		expect(declared(".stonetop-relmap-foot", LIFT)).toBeNull();
-		// `em` and not `px`: the token is resolved against whatever element USES it, and the window
-		// carries two different anchors at once. Core anchors a button's font-size in pixels while
-		// the label beside it tracks the root, so a pixel lift would be right on one of them and
-		// wrong on the other at every font scale but the default.
-		expect(value).toMatch(/^0?\.0\d+em$/);
+describe("the words on the relationship map's tool buttons", () => {
+	it("carry no hand-measured lift any more", () => {
+		// The font now centres its own line box; the old 0.048em lift would be counted twice.
+		expect(CSS).not.toContain("--st-relmap-ink-lift");
+		expect(declared(".stonetop-relmap-tool > span", "top")).toBeNull();
 	});
 
-	it("brings the tool buttons' labels down, and not their icons", () => {
-		expect(declared(".stonetop-relmap-tool > span", "top")).toBe(`var(${LIFT}, 0)`);
-		expect(declared(".stonetop-relmap-tool > span", "position")).toBe("relative");
-		// The button itself keeps even padding: an uneven one would carry the icon down too.
-		const padding = declared(".stonetop-relmap-tool", "padding");
-		expect(padding).toBe("0.25em 0.7em");
+	it("are trimmed to their capitals and padded back to the line box they had", () => {
+		expect(declared(".stonetop-relmap-tool > span", "text-box")).toBe("trim-both cap alphabetic");
+		expect(declared(".stonetop-relmap-tool > span", "padding-top")).toBe("var(--st-trim-top)");
+		expect(declared(".stonetop-relmap-tool > span", "padding-bottom")).toBe("var(--st-trim-bottom)");
+		// A grid item is blockified, so the trim reaches it; a flex or grid BUTTON's bare text would not.
+		expect(declared(".stonetop-relmap-tool", "display")).toBe("inline-grid");
+	});
+
+	it("move without their icons", () => {
+		// The button itself keeps even padding: an uneven one would carry the icon too.
+		expect(declared(".stonetop-relmap-tool", "padding")).toBe("0.25em 0.7em");
 		expect(declared(".stonetop-relmap-tool > i", "top")).toBeNull();
+		expect(declared(".stonetop-relmap-tool > i", "text-box")).toBeNull();
 	});
 });
 // ── The two glyph-only buttons at the far end of the footer ─────────────────────────────────────────

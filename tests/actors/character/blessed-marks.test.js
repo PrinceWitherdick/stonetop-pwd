@@ -5,7 +5,9 @@ import {
 	BARKSKIN, TRACKLESS_STEP, SHARED_SOULS, AMULETS_TALISMANS, WARDS_BINDINGS,
 	canMarkBlessed, showBlessedMarks, availableKinds, markKind, markSign,
 	readMarks, addMark, removeMark, noteMark, setMarkLoyalty, setMarkSign, groupMarks,
+	blessedMarkRows, markIsOn,
 } from "../../../module/actors/character/blessed-marks.js";
+import { SYSTEM_ID } from "../../../module/system-id.js";
 
 const actorWith = (...items) => ({ items });
 const move = name => ({ type: "move", name });
@@ -300,5 +302,30 @@ describe("the names the gate matches on", () => {
 	it("keys the flag on blessedMarks, and every kind resolves", () => {
 		expect(BLESSED_MARKS_FLAG).toBe("blessedMarks");
 		for (const def of MARK_KINDS) expect(markKind(def.key), def.key).toBe(def);
+	});
+});
+
+// The one scan Barkskin (move-armor.js) and the charms on a damage card (fight/defend-spend.js) share.
+describe("blessedMarkRows and markIsOn", () => {
+	const marker = (id, moves, rows) => ({ id, items: moves.map(move), getFlag: (scope, key) => (scope === SYSTEM_ID && key === BLESSED_MARKS_FLAG ? rows : undefined) });
+
+	it("yields each row of the kind, from a Blessed with the move learned only, never `except`'s, nameless rows too", () => {
+		const rows = [{ id: "a", kind: "charm", uuid: "Actor.bram" }, { id: "b", kind: "barkskin", name: "Ana" }, { id: "c", kind: "charm" }];
+		const wren = marker("wren", [AMULETS_TALISMANS], rows);
+		const unlearned = marker("moss", [], rows);
+		const plain = { id: "pim", items: [], getFlag: () => undefined };
+		expect([...blessedMarkRows([plain, unlearned, wren], "charm", AMULETS_TALISMANS)]).toEqual([
+			{ blessed: wren, row: rows[0] }, { blessed: wren, row: rows[2] },
+		]);
+		expect([...blessedMarkRows([wren], "charm", AMULETS_TALISMANS, { except: wren })]).toEqual([]);
+	});
+
+	it("matches a document row by the trailing actor id, a name-only row by name unless byName is off", () => {
+		const bram = { id: "bram", uuid: "Actor.bram", name: "Bram" };
+		expect(markIsOn({ uuid: "Scene.s.Token.t.Actor.bram", name: "Someone" }, bram)).toBe(true);
+		expect(markIsOn({ uuid: "Actor.other", name: "Bram" }, bram)).toBe(false);
+		expect(markIsOn({ name: "  bram " }, bram)).toBe(true);
+		expect(markIsOn({ name: "Bram" }, bram, { byName: false })).toBe(false);
+		expect(markIsOn({}, bram)).toBe(false);
 	});
 });

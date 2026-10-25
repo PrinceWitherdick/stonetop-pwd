@@ -2336,7 +2336,10 @@ const _FONT_MAP = {
  * only the upper part of the em box and centring that box leaves the empty descender space pooling
  * underneath. The size of that gap is `(capHeight + descent - ascent) / 2`, which is a property of
  * the FACE — and these three disagree by a factor of ten. IM Fell English is an antique face with
- * a very deep descent and needs ~0.155em; Libre Caslon needs ~0.016em. A constant tuned on either
+ * a very deep descent and needs ~0.155em; Libre Caslon needs ~0.016em. (Caslon's gap is 0 since its
+ * @font-face overrides balanced ascent and descent on the capitals; what is left is Blink placing
+ * the line on whole pixels, re-measured 2026-10-24 on the Dead pill with text-box off, root 12-24px:
+ * 0.016em reads -0.32px mean against -0.37px for the trimmed pill.) A constant tuned on either
  * is visibly wrong on the other, which is exactly how the brand pill came to sit high for everyone
  * on the default font while measuring perfect against the one it had been tuned against.
  *

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
 	isFight, combatTouchesScene, fightOnScene, combatantSide, combatantBodies, gridOf, tokenRect,
-	fighterOf, userFighterId, rangedPairs, snapshotFight, engagementFor,
+	fighterOf, userFighterId, rangedPairs, snapshotFight, engagementFor, controlledTokenIds,
 } from "../../module/fight/fight-state.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, fakeUsers, collection } from "../fakes/fight.js";
@@ -286,5 +286,13 @@ describe("finding the fight", () => {
 		const onScene = fakeToken({ id: "stranger" });
 		onScene.parent = scene;
 		expect(engagementFor(onScene)).toBeNull();
+	});
+});
+
+// The selected tokens' ids, one helper for the roller's one token, the merge and the start window.
+describe("controlledTokenIds", () => {
+	it("reads a canvas Token's document id, else the id it carries, and skips what has none", () => {
+		expect(controlledTokenIds([{ document: { id: "a" }, id: "x" }, { id: "b" }, {}, null])).toEqual(["a", "b"]);
+		expect(controlledTokenIds(null)).toEqual([]);
 	});
 });

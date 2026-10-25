@@ -1,4 +1,5 @@
 import {getSheetSectionsCollapsed, setSheetSectionsCollapsed} from "../settings.js";
+import { wireKeyboardButtons } from "./keyboard-buttons.js";
 
 /**
  * Mixin for actor sheets that expose per-section edit pencils alongside the
@@ -192,14 +193,8 @@ export function withSectionEditing(Base) {
 				ev.stopPropagation();
 				toggle(caret);
 			}, true);
-			root.addEventListener("keydown", ev => {
-				if (ev.key !== "Enter" && ev.key !== " ") return;
-				const caret = ev.target.closest(".stonetop-section-collapse");
-				if (!caret) return;
-				ev.preventDefault();
-				ev.stopPropagation();
-				toggle(caret);
-			}, true);
+			// The caret is role="button": Enter and Space press it (utils/keyboard-buttons.js).
+			wireKeyboardButtons(root);
 		}
 	};
 }

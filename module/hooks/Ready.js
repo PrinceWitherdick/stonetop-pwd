@@ -94,6 +94,7 @@ import { sizeMonsterTokens, MONSTER_TOKEN_SIZE_SWEEP } from "../migration/monste
 import { refreshCatalogFollowers } from "../migration/follower-refresh.js";
 import { refreshInstincts } from "../migration/instinct-refresh.js";
 import { splitFollowerWholeParty, FOLLOWER_WHOLE_PARTY_SWEEP } from "../migration/follower-whole-party.js";
+import { linkFollowerTokens, LINK_FOLLOWER_TOKENS_SWEEP } from "../migration/link-follower-tokens.js";
 
 const _EOS_MACRO_NAME   = "End of Session";
 const _EOS_MACRO_IMG    = "systems/stonetop-pwd/assets/icons/macros/truce.svg";
@@ -304,6 +305,10 @@ export async function onReady() {
 		// (migration/follower-whole-party.js). Once per WORLD, like the creation-finished stamp below.
 		try { await oncePerVersion(FOLLOWER_WHOLE_PARTY_SWEEP, splitFollowerWholeParty); }
 		catch (err) { console.error("Stonetop | splitting the followers' party switch failed", err); }
+		// Link the tokens a one-body follower's NPC already has on the map, the card's HP kept, so HP written
+		// to the NPC reaches them (migration/link-follower-tokens.js).
+		try { await oncePerVersion(LINK_FOLLOWER_TOKENS_SWEEP, linkFollowerTokens); }
+		catch (err) { console.error("Stonetop | linking followers' tokens failed", err); }
 		// Keep a crossbow a character already carries on the sheet now that Weapons of War grants only
 		// the five weapons it names (migration/weapons-of-war-grandfather.js). GATED: it reads the
 		// outfit catalog and then every character's inventory flags, and it is legacy repair — the
@@ -841,13 +846,11 @@ export async function onReady() {
 		.then(() => IntroductionsDialog.resumeRunningSession());
 	let welcomeDialog = null;
 	if (game.user.isGM && !pastWelcomeGuide()) {
-		let resumed = false;
-		const resume = () => { if (resumed) return; resumed = true; reopenOpenWalkthroughs(); };
-		Hooks.once("renderWelcomeDialog", resume);
-		setTimeout(resume, 2500);
+		hookOrTimeout("renderWelcomeDialog", 2500).then(resumeWalkthroughs)
+			.catch(err => console.error("Stonetop | resuming walkthroughs failed", err));
 		welcomeDialog = _openGmWelcomeGuide();
 	} else {
-		reopenOpenWalkthroughs();
+		resumeWalkthroughs();
 	}
 
 	// Same idea, same evidence, for the rulebook readers: a plain Application does not survive a

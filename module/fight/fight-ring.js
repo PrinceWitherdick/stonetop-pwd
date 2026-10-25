@@ -258,13 +258,13 @@ export async function ringButtonsFor(actor) {
 	const letFly = isCharacter && itemsOf(actor).some(i => i?.type === "move" && i.name === "Let Fly");
 	// Both read the character's gear, and neither waits on the other.
 	const [die, ammo] = await Promise.all([isCharacter ? pcDamageDie(actor) : "", letFly ? letFlyAmmoStatuses(actor) : null]);
-	const { order, swarm } = followerRingInfo(actor);
-	// A follower's is kept on their card (fight/follower-readiness.js); only a follower who takes orders holds any.
-	const readiness = isCharacter ? heldReadiness(actor) : (order ? readinessHeldBy(actor) : 0);
 	// Working out their place in the fight takes the whole fight, so it is worked out at most once, and only
-	// for a button that needs it: locking eyes and striking back for someone who could spend on it.
+	// for a button that needs it: a group follower's swarm die, locking eyes, and striking back.
 	let place;
 	const fight = () => (place === undefined ? (place = rollerEngagement(actor)) : place);
+	const { order, swarm } = followerRingInfo(actor, { engagement: fight });
+	// A follower's is kept on their card (fight/follower-readiness.js); only a follower who takes orders holds any.
+	const readiness = isCharacter ? heldReadiness(actor) : (order ? readinessHeldBy(actor) : 0);
 	const bigDamnHero = isCharacter && ownsLearnedMoveNamed(actor, HERO_MOVES.BIG_DAMN_HERO);
 	const canLockEyes = bigDamnHero && readiness > 0 && lockEyesCandidates(actor, fight()).length > 0;
 	const canStrikeBack = (isCharacter || !!order) && readiness > 0 && hasAttacker(actor, { engagementOf: fight });

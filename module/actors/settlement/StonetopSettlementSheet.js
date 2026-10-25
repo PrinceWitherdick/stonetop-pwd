@@ -70,6 +70,7 @@ import { displayPortraitSrc } from "../../book2-art/people-portraits.js";
 import { plansView, wireSteadingNotesTab } from "../steading/steading-plans.js";
 import { editSteadingPlan } from "../steading/SteadingPlanDialog.js";
 import { settlementPlanStore } from "./settlement-plans.js";
+import { wireKeyboardButtons } from "../../utils/keyboard-buttons.js";
 
 // Plain literals, not built from SYSTEM_ID: the template checks in tests find paths by searching
 // the source for them.
@@ -298,10 +299,8 @@ export function createStonetopSettlementSheetClass(Base) {
 
 			root.addEventListener("click", event => this.#dispatch(event, "[data-action]"));
 			// A move's NAME rolls it, as on Stonetop's Moves tab. It is a <strong role="button">, not a
-			// <button> (core would disable that for a reader), so Enter and Space are wired by hand.
-			root.addEventListener("keydown", event => {
-				if (event.key === "Enter" || event.key === " ") this.#dispatch(event, "[role='button'][data-action]");
-			});
+			// <button> (core would disable that for a reader): Enter and Space press it (utils/keyboard-buttons.js).
+			wireKeyboardButtons(root);
 
 			// The notes: saved whole on the editor's own change (it carries no `name`).
 			root.querySelector(".stonetop-settlement-notes prose-mirror")?.addEventListener("change", event => {

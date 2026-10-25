@@ -445,7 +445,7 @@ describe("a follower's Death's Door 6- and SIR, PERMISSION TO DIE, SIR (FO-1)", 
 		sheet._resolveFollowerFate = vi.fn(async () => {});
 		const settled = sheet._followerDoorDeath(row);
 		const data = dialog.getData();
-		expect(data).toMatchObject({ door: true, canSpare: true, letGo: true });
+		expect(data).toMatchObject({ variant: "door", full: false, canSpare: true, letGo: true });
 		const html = await renderTemplate("systems/stonetop-pwd/templates/dialogs/follower-fate.hbs", data);
 		expect(html).toMatch(/data-action="dead"/);
 		expect(html).toMatch(/data-action="spare"/);

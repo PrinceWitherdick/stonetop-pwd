@@ -42,7 +42,7 @@ import { clearArtBrowseCache, ART_BROWSE_INPUTS } from "./module/book2-art/brows
 import { onRenderActorSheet } from "./module/hooks/RenderActorSheet.js";
 import { onHotbarDrop } from "./module/hooks/HotbarDrop.js";
 import { onDropPlaceOfInterest } from "./module/hooks/PlaceOfInterestDrop.js";
-import { onDropFollower } from "./module/hooks/FollowerDrop.js";
+import { onDropFollower, linkFollowerTokenOnCreate } from "./module/hooks/FollowerDrop.js";
 import { onPreUpdateActorDeathsDoor, onUpdateActorDeathsDoorAutoOpen, onUpdateActorDeathsDoorCard, onUpdateActorDeathsDoorRaised, wireDyingPrompt } from "./module/hooks/DeathsDoorPrompt.js";
 import { onUpdateActorUnstoppable } from "./module/actors/character/unstoppable.js";
 import { installBattleJoyOnHurt, installBattleJoyEnd, wireBattleJoyResult } from "./module/combat/battle-joy-offer.js";
@@ -923,6 +923,8 @@ Hooks.on("dropCanvasData", onDropPlaceOfInterest);
 // follower on the map: the card becomes (or re-uses) an `npc` Actor, and core places
 // its token.
 Hooks.on("dropCanvasData", onDropFollower);
+// A one-body follower's token is made linked however it is placed (FollowerDrop.js, audit FOE-2).
+Hooks.on("preCreateToken", linkFollowerTokenOnCreate);
 
 // -- BOOK II ART ON JOURNAL IMPORT -----------------------------
 // A GM dragging one of our journals in from the compendium mid-version would get an

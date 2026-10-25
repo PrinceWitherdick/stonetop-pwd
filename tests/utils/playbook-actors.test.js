@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { playbookSlug, getPlayerCharacters, playbookIconPath, hasOwnRingArt, playbookTitle, characterFullName } from "../../module/utils/playbook-actors.js";
+import { playbookSlug, getPlayerCharacters, playbookIconPath, hasOwnRingArt, playbookTitle, characterFullName, playerOf } from "../../module/utils/playbook-actors.js";
 import { charactersInPlay } from "../../module/utils/characters-in-play.js";
 import { WBH_HERO_FLAG } from "../../module/actors/character/WouldBeHeroAsterisk.js";
 
@@ -172,5 +172,37 @@ describe("charactersInPlay", () => {
 			},
 		};
 		expect(charactersInPlay()).toEqual([bram]);
+	});
+});
+
+// Who plays a PC, for the sheet's "new character" (made for that player) and the Introductions
+// turn (asked of that player, an online one first).
+describe("playerOf", () => {
+	const pc = { id: "pc", testUserPermission: (u, level) => level === "OWNER" && u.owns };
+	const gm      = { id: "gm", isGM: true, owns: true, active: true };
+	const watcher = { id: "w", owns: false, active: true, character: { id: "pc" } };
+	const lender  = { id: "l", owns: true, active: false };
+	const assigned = { id: "a", owns: true, active: false, character: { id: "pc" } };
+	const online  = { id: "o", owns: true, active: true };
+
+	it("is the owner it is assigned to, before any other owner", () => {
+		expect(playerOf(pc, { users: [gm, lender, assigned] })).toBe(assigned);
+	});
+
+	it("is the first non-GM owner when none has it assigned, and never a GM or a non-owner", () => {
+		expect(playerOf(pc, { users: [gm, watcher, lender] })).toBe(lender);
+		expect(playerOf(pc, { users: [gm, watcher] })).toBeNull();
+	});
+
+	it("with preferOnline, puts an online owner before an offline assigned one", () => {
+		const users = [assigned, online];
+		expect(playerOf(pc, { users })).toBe(assigned);
+		expect(playerOf(pc, { users, preferOnline: true })).toBe(online);
+		expect(playerOf(pc, { users: [assigned, lender], preferOnline: true })).toBe(assigned);
+	});
+
+	it("takes a world collection as well as an array", () => {
+		expect(playerOf(pc, { users: { contents: [lender] } })).toBe(lender);
+		expect(playerOf(null, { users: [lender] })).toBeNull();
 	});
 });
