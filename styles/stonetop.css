@@ -1,9 +1,20 @@
+/* LIBRE CASLON TEXT'S LINE BOX, CENTRED ON ITS CAPITALS. The files say ascent 970 and descent 260
+   (upm 1000; hhea and OS/2 typo agree, USE_TYPO_METRICS set) with an 'H' 781 tall, so a line box's
+   middle fell 0.036em above the middle of the capitals, and every button, input and icon row that
+   centres a line box showed its words high. The two overrides keep the sum (1.230em, so no
+   `line-height: normal` box changes height) and make ascent - descent = 0.78125em, the H's height:
+   (1.230 + 0.78125) / 2 = 1.005625, (1.230 - 0.78125) / 2 = 0.224375. Every Caslon face below
+   carries the same pair, the bracket-only italic ones included, or a line mixing them would
+   take the taller box. `text-box: trim-both cap alphabetic` reads the cap height and the
+   baseline, not these, so trimmed chips are untouched. Guarded by tests/styles/caslon-metrics.test.js. */
 @font-face {
 	font-family: "Libre Caslon Text";
 	src: url("../assets/fonts/libre-caslon-text/LibreCaslonText-Regular.ttf") format("truetype");
 	font-weight: normal;
 	font-style: normal;
 	font-display: swap;
+	ascent-override: 100.5625%;
+	descent-override: 22.4375%;
 }
 @font-face {
 	font-family: "Libre Caslon Text";
@@ -11,6 +22,8 @@
 	font-weight: bold;
 	font-style: normal;
 	font-display: swap;
+	ascent-override: 100.5625%;
+	descent-override: 22.4375%;
 }
 @font-face {
 	font-family: "Libre Caslon Text";
@@ -18,6 +31,8 @@
 	font-weight: normal;
 	font-style: italic;
 	font-display: swap;
+	ascent-override: 100.5625%;
+	descent-override: 22.4375%;
 }
 
 @font-face {
@@ -67,6 +82,8 @@
 	font-style: italic;
 	font-display: swap;
 	unicode-range: U+0028-0029, U+005B, U+005D;
+	ascent-override: 100.5625%;
+	descent-override: 22.4375%;
 }
 @font-face {
 	font-family: "Libre Caslon Text";
@@ -75,6 +92,8 @@
 	font-style: italic;
 	font-display: swap;
 	unicode-range: U+0028-0029, U+005B, U+005D;
+	ascent-override: 100.5625%;
+	descent-override: 22.4375%;
 }
 @font-face {
 	font-family: "IM Fell English";
@@ -17875,6 +17894,38 @@ button.stonetop-mark-sign-btn.is-active:hover {
 
 .stonetop-instinct-replaced-note i { margin-right: 5px; opacity: 0.75; }
 
+/* A temporary Instinct (until the next Level Up) sits over the chosen one, which is dimmed below
+   it. The badge's shape, type and trim are .stonetop-stat-boost-chip's (one rule, both selectors);
+   only its gold and its margin are set here. */
+.stonetop-instinct-temporary {
+	margin: 0 0 6px;
+	line-height: 1.6;
+}
+
+.stonetop-instinct-temporary-badge {
+	margin-right: 6px;
+	border-color: var(--st-gold-border, rgba(100,116,139,0.35));
+	background: var(--st-gold-bg, hsl(45 60% 90%));
+}
+
+.stonetop-instinct-readonly.is-overridden { opacity: 0.6; }
+
+.stonetop-instinct-temporary-row {
+	display: flex;
+	gap: 6px;
+	margin: 0 0 6px;
+}
+
+.stonetop-instinct-temporary-value,
+.stonetop-instinct-temporary-source {
+	box-sizing: border-box;
+	font-family: inherit;
+	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
+}
+
+.stonetop-instinct-temporary-value { flex: 1 1 auto; min-width: 0; }
+.stonetop-instinct-temporary-source { flex: 0 0 30%; }
+
 /* ── Choose Your Fate: the three inserts, as cards ────────────────── */
 
 /* One column rather than a row of three: the blurb is the book's trigger sentence, and three
@@ -25261,7 +25312,19 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 .stonetop-levelup-empty.is-filtered-out { display: none; }
 
 .stonetop-levelup-move-no-matches,
-.stonetop-levelup-foreign-no-matches { margin-top: 8px; }
+.stonetop-levelup-foreign-no-matches,
+.stonetop-levelup-agreed-no-matches { margin-top: 8px; }
+
+/* The move step's "Agreed with the table" card sits under the playbook's list, apart from it;
+   on the agreed step the custom-move card sits above the other playbooks' moves. */
+.stonetop-levelup-agreed-entry { margin-top: 8px; }
+.stonetop-levelup-agreed-custom { margin-bottom: 8px; }
+
+/* Option cards are picked from the keyboard too (role="button", tabindex): show where focus is. */
+.stonetop-levelup-pickable:focus-visible {
+	outline: 2px solid slategrey;
+	outline-offset: 1px;
+}
 
 /* Inline "+1 to which stat?" picker on a stat-increase move (the Would-Be Hero's
    Improved Stat). Hidden until the move card is selected, mirroring the initiate
@@ -28279,6 +28342,24 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 .stonetop-follower-tag--tooltip {
 	cursor: help;
 }
+
+/* Tags a crew is still owed (Veteran Crew): the blue "needs your input" cue, a flex chip whose
+   label is the trimmed .stonetop-chip-text, as the Fallen badge's is. */
+.stonetop-crew-tags-owed {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 1px 8px;
+	border: 1px solid var(--st-blue-border);
+	border-radius: 999px;
+	background: var(--st-blue-bg);
+	color: var(--st-blue-text);
+	font-size: var(--st-fs-sm);
+	cursor: pointer;
+}
+.stonetop-crew-tags-owed > i { font-size: round(1em, 1px); }
+.stonetop-crew-tags-owed:hover,
+.stonetop-crew-tags-owed:focus-visible { border-color: var(--st-blue-text); }
 
 .stonetop-follower-tag--trait,
 .stonetop-follower-tag--exceptional {
@@ -47468,11 +47549,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	white-space: nowrap;
 }
 
-/* THE LABEL COMES DOWN, and the icon beside it does not. `align-items: center` above has already
-   centred both, exactly and to the pixel; what it centred for the word is its line box, which
-   Libre Caslon Text does not centre on its own ink (the token's comment on `.stonetop-relmap` has
-   the metrics). A relative offset rather than padding, so the button's size, the row's height and
-   every neighbour in the footer stay exactly where they were. */
+/* The label is trimmed to its cap band and padded back to its line box, as every chip is (see the
+   Chip centring tokens in :root): Blink floors a line's half-leading to whole pixels, which left the
+   untrimmed words up to 0.7px high at some font sizes. The icon beside it is left alone. */
 .stonetop-relmap-tool > span {
 	position: relative;
 	top: var(--st-relmap-ink-lift, 0);

@@ -179,7 +179,25 @@
 				<i class="fas fa-skull"></i> {{localize "stonetop.postDeath.instinctRetired"}}
 			</p>
 			{{/if}}
+			{{! "Until you Level Up, your instinct becomes ..." (Book II p.370, p.523): it sits over the
+			    one chosen below, which is kept, and Level Up clears it. }}
+			{{#if stonetop.temporaryInstinct}}
+			<p class="stonetop-instinct-temporary">
+				<span class="stonetop-instinct-temporary-badge">{{localize "stonetop.character.selection.instinct.temporaryBadge"}}</span>
+				<span class="stonetop-instinct-temporary-text">{{stonetop.temporaryInstinct.value}}{{#if stonetop.temporaryInstinct.source}} ({{stonetop.temporaryInstinct.source}}){{/if}}</span>
+			</p>
+			{{/if}}
 			{{#if stonetop.detailsEdit.instinct}}
+			<div class="stonetop-instinct-temporary-row">
+				<input type="text" class="stonetop-instinct-temporary-value"
+				       value="{{stonetop.temporaryInstinct.value}}"
+				       aria-label="{{localize "stonetop.character.selection.instinct.temporaryLabel"}}"
+				       placeholder="{{localize "stonetop.character.selection.instinct.temporaryPlaceholder"}}">
+				<input type="text" class="stonetop-instinct-temporary-source"
+				       value="{{stonetop.temporaryInstinct.source}}"
+				       aria-label="{{localize "stonetop.character.selection.instinct.temporarySourceLabel"}}"
+				       placeholder="{{localize "stonetop.character.selection.instinct.temporarySourcePlaceholder"}}">
+			</div>
 			<div class="stonetop-instinct-custom-row">
 				<input type="text" class="stonetop-instinct-custom-word"
 				       value="{{stonetop.playbook.instinct.customWord}}"
@@ -206,9 +224,9 @@
 			{{/if}}
 			{{else}}
 			{{#if stonetop.postDeathInsert.activeInsert.instinct.selected}}
-			<p class="stonetop-instinct-readonly">{{stonetop.postDeathInsert.activeInsert.instinct.selected}}</p>
+			<p class="stonetop-instinct-readonly{{#if stonetop.temporaryInstinct}} is-overridden{{/if}}">{{stonetop.postDeathInsert.activeInsert.instinct.selected}}</p>
 			{{else if stonetop.playbook.instinct.selected}}
-			<p class="stonetop-instinct-readonly">{{stonetop.playbook.instinct.selected}}</p>
+			<p class="stonetop-instinct-readonly{{#if stonetop.temporaryInstinct}} is-overridden{{/if}}">{{stonetop.playbook.instinct.selected}}</p>
 			{{/if}}
 			{{/if}}
 		</div>

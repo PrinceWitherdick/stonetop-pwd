@@ -320,6 +320,8 @@
 				{{> stonetopInuredChip}}
 				{{#each tags}}<span class="stonetop-follower-tag{{#if cls}} {{cls}}{{/if}}{{#if tooltip}} stonetop-follower-tag--tooltip{{/if}}"{{#if tooltip}} data-tooltip="{{tooltip}}" data-tooltip-direction="UP"{{/if}}>{{label}}{{#if removable}}{{#if @root.editable}} <button type="button" class="stonetop-follower-tag-remove" data-ftype="{{../ftype}}" data-slug="{{../slug}}" data-tag="{{label}}" aria-label="{{removeLabel}}" data-tooltip="{{removeLabel}}" data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>{{/if}}{{/if}}{{#if editRemovable}} <button type="button" class="stonetop-follower-tag-drop" data-ftype="{{../ftype}}" data-slug="{{../slug}}" data-tag="{{label}}" aria-label="{{editRemoveLabel}}" data-tooltip="{{editRemoveLabel}}" data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>{{/if}}</span>{{/each}}
 				{{#if traitsNote}}<span class="stonetop-follower-trait-note">{{traitsNote}}</span>{{/if}}
+				{{!-- Tags the crew is still owed (Veteran Crew's "Select 2 new tags"): opens the tag picker. --}}
+				{{#if tagsOwed}}{{#if @root.editable}}<span class="stonetop-crew-tags-owed" role="button" tabindex="0" data-tooltip="{{localize "stonetop.character.followers.crewTagsOwed.tooltip"}}" data-tooltip-direction="UP"><i class="fas fa-hand-pointer" aria-hidden="true"></i><span class="stonetop-chip-text">{{#if (eq tagsOwed 1)}}{{localize "stonetop.character.followers.crewTagsOwed.labelOne"}}{{else}}{{localize "stonetop.character.followers.crewTagsOwed.label" count=tagsOwed}}{{/if}}</span></span>{{/if}}{{/if}}
 			</div>
 			{{else}}{{#unless tagEdit}}<span class="stonetop-follower-fill-line"></span>{{/unless}}{{/if}}
 			{{/if}}

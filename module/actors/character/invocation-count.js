@@ -16,9 +16,35 @@
  *
  * Pure: no Foundry global.
  */
+import { STONETOP_SCOPE } from "./StonetopFlags.js";
 
 /** Where the off-playbook taker's grant level is kept (under the `invocations` flag object). */
 export const INVOCATIONS_GRANTED_AT_FLAG = "invocations.grantedAtLevel";
+
+/**
+ * The count arguments (for expectedInvocationCount / invocationCountCue) read off `actor` against an
+ * Invocation `list` ({options, startingCount}, StonetopCharacter#invocationSource), the one way the
+ * level-up and the Invocations tab both read them. `known` counts only the list's own slugs, so a
+ * stale slug left in `invocations.selected` by an older list does not count.
+ *
+ * @param {object} actor
+ * @param {object} list
+ * @param {object} [opts]
+ * @param {boolean} [opts.borrowed]  the list is the Lightbearer's, drawn on through Invoke the Sun God
+ * @param {number} [opts.level]      the level weighed against (default: the actor's own)
+ */
+export function invocationCountArgs(actor, list, { borrowed = false, level = actor?.system?.attributes?.level?.value ?? 1 } = {}) {
+	const options = list?.options ?? [];
+	const selected = new Set(actor?.getFlag?.(STONETOP_SCOPE, "invocations.selected") ?? []);
+	return {
+		known:          options.filter(o => selected.has(o.slug)).length,
+		optionCount:    options.length,
+		startingCount:  borrowed ? 0 : (list?.startingCount ?? 2),
+		level,
+		borrowed,
+		grantedAtLevel: actor?.getFlag?.(STONETOP_SCOPE, INVOCATIONS_GRANTED_AT_FLAG) ?? null,
+	};
+}
 
 // How many even levels lie in [from, to], inclusive.
 function evenLevelsBetween(from, to) {

@@ -69,13 +69,14 @@ import {choiceCountState} from "./initiates.js";
 import {ONGOING_INVOCATION_FLAG, ONGOING_SECOND_FLAG, ONGOING_EMPOWERED_FLAG, ONGOING_SNUFF_FLAG, ONGOING_SECOND_SNUFF_FLAG,
 	ONGOING_INVOCATION_FLAGS, readOngoing, readInvocationState, runningSlugs, resolveInvocationEnd, invocationEndings,
 	NEEDS_SUN_FLAG, readNeedsSun} from "./ongoing-invocation.js";
-import {INVOCATIONS_GRANTED_AT_FLAG} from "./invocation-count.js";
+import {INVOCATIONS_GRANTED_AT_FLAG, expectedInvocationCount, invocationCountArgs} from "./invocation-count.js";
 import {CONDEMNED_FLAG, CASTIGATE, CENSURE, PROCLAMATION, canCondemn, readCondemned, addCondemned, removeCondemned, noteCondemned} from "./condemn.js";
 import {OATHS_FLAG, BINDING_ARBITRATION, canBindOaths, readOaths, addOath, removeOath, noteOath, setOathBroken} from "./oaths.js";
 import {BLESSED_MARKS_FLAG, canMarkBlessed, readMarks, addMark, removeMark, noteMark, setMarkLoyalty, setMarkSign} from "./blessed-marks.js";
 import {BATTLE_JOY_FLAG, BATTLE_JOY, canEnterBattleJoy, ignoresDebilities} from "./battle-joy.js";
 import {CharacterBackgrounds} from "./CharacterBackgrounds.js";
 import {CharacterInstincts} from "./CharacterInstincts.js";
+import {claimLevelUp, releaseLevelUp} from "./level-up-claim.js";
 import {CharacterAppearance} from "./CharacterAppearance.js";
 import {CharacterOrigin} from "./CharacterOrigin.js";
 import {CharacterPossessions} from "./CharacterPossessions.js";
@@ -125,7 +126,7 @@ import {maxDie, stepDie, normalizeDamageDie} from "../../utils/damage-die.js";
 import {WEAPONS_OF_WAR_COMMON, WEAPONS_OF_WAR_PIERCING, ALL_IN_THE_WRIST} from "../../data/weapons.js";
 import {X_PIERCING_MAX} from "../../utils/damage.js";
 import {healTo} from "../../camp/camp-rules.js";
-import {recoveredHpTo, slowToHeal} from "./deaths-door-actor.js";
+import {isOutOfPlaySafe, recoveredHpTo, slowToHeal} from "./deaths-door-actor.js";
 import {LEARNED_OPTION} from "../../timeline/timeline-milestones.js";
 import {inTurn} from "../../utils/turn-queue.js";
 import {isGear} from "../../migration/superseded-values.js";
@@ -809,9 +810,17 @@ export class StonetopCharacter {
 
 	get _characterLevel() { return this._actor.system?.attributes?.level?.value ?? 1; }
 
-	// Whether the character has the 6 + twice-their-level XP that Level Up costs right now.
+	// Whether the character can Level Up right now: they have the 6 + twice-their-level XP it
+	// costs, and they are still a PC. One who has left play (dead, a monster or threat in the GM's
+	// hands, retired) no longer levels up (Book I p.584). Dying or out of the action is still a PC.
 	get canLevelUp() {
-		return (this._actor.system?.attributes?.xp?.value ?? 0) >= xpToLevelUp(this._characterLevel);
+		return !this.levelUpBlockedOutOfPlay
+			&& (this._actor.system?.attributes?.xp?.value ?? 0) >= xpToLevelUp(this._characterLevel);
+	}
+
+	// Whether Level Up is shut because the character has left play (deaths-door-actor.js#isOutOfPlay).
+	get levelUpBlockedOutOfPlay() {
+		return isOutOfPlaySafe(this._actor);
 	}
 
 	// Potential-for-Greatness stat slot: choosing a stat writes +1 to that stored
@@ -1186,7 +1195,7 @@ export class StonetopCharacter {
 			// every render, not written once.
 			.withVitals(_buildVitalsSection(actor, playbookData, armor, moveBonuses, wornArmorBase, insertHpPenalty(postDeath.activeInsert?.lore), unpierceableArmor, armorBase, { value: conditionalArmor, source: conditionalSource }))
 			.withMoves(moves)
-			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters, playbookData?.name ?? null, this._retiredPickCount()))
+			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters, playbookData?.name ?? null, this._retiredPickCount(), this._levelPickCount()))
 			.withInventory(inventory)
 			.withArcana(await this._arcana.buildSnapshot(actor.system.stats ?? {}, this._inventory.checked, this._inventory.resources))
 			.withPostDeathInsert(postDeath)
@@ -1485,9 +1494,12 @@ export class StonetopCharacter {
 					// added by hand has no granter to name, so it wears its origin playbook alone
 					// rather than the old "Granted by —" placeholder, which read like a bug of its own.
 					const granters    = [...new Set(copies.map(c => c.flags?.[STONETOP_SCOPE]?.grantedBy?.move).filter(Boolean))];
+					const agreedAtLevelUp = copies.some(c => c.flags?.[STONETOP_SCOPE]?.[LEVEL_PICK_FLAG]);
 					const sourceLabel = granters.length
 						? `Granted by ${granters.join(", ")}${origin ? ` · ${origin}` : ""}`
-						: (origin ?? "Added directly");
+						: agreedAtLevelUp
+							? `${_loc("stonetop.specialMoves.levelUp.agreedSource")}${origin ? ` · ${origin}` : ""}`
+							: (origin ?? "Added directly");
 					// Full card fidelity: resource track + markOptions, keyed by move NAME (the
 					// same store playbook moves use), so e.g. a learned ammo/Marks track works.
 					const resourceDef = i.system?.resource ?? null;
@@ -3416,9 +3428,9 @@ export class StonetopCharacter {
 	// playbook moves that also land in "other"). It then rolls through the same
 	// engine as any move (StonetopItem.roll), no pack involvement, no rebuild.
 
-	async addCustomMove(input) {
-		const data = buildCustomMoveData(input);
-		data.type = "move";
+	// `flags`: more stonetop-scope item flags, written with the move rather than set after it.
+	async addCustomMove(input, { flags = null } = {}) {
+		const data = _withStonetopFlags({ ...buildCustomMoveData(input), type: "move" }, flags);
 		const created = await this._actor.createEmbeddedDocuments("Item", [data]);
 		return created?.[0] ?? null;
 	}
@@ -4770,12 +4782,13 @@ export class StonetopCharacter {
 	// holding the Marshal's Armored through Seasoned Warrior still gets their own when a re-run
 	// picks it (see buildMovelistContext). It passes over the copy a background gave as well
 	// (BACKGROUND_GRANT_FLAG): a Scion's free pick may be the second Veteran Crew.
-	async addMove(compendiumId, { skipIfOwned = false } = {}) {
+	// `flags`: more stonetop-scope item flags, written with the move rather than set after it.
+	async addMove(compendiumId, { skipIfOwned = false, flags = null } = {}) {
 		const doc = await this._moveRepo.getPlaybookMoveDocument(compendiumId);
 		if (!doc) return null;
 		if (skipIfOwned && this._actor.items.some(i => i.type === "move" && i.name === doc.name
 			&& !i.flags?.[STONETOP_SCOPE]?.grantedBy && !_isBackgroundGrant(i))) return null;
-		const created = await this._actor.createEmbeddedDocuments("Item", [doc.toObject()]);
+		const created = await this._actor.createEmbeddedDocuments("Item", [_withStonetopFlags(doc.toObject(), flags)]);
 		const added = created?.[0] ?? null;
 		if (added) await this._retireReplacedMove(added);
 		return added;
@@ -7169,7 +7182,13 @@ export class StonetopCharacter {
 			const list   = source ?? await this.lightbearerInvocations();
 			const selected = new Set(actor.getFlag(STONETOP_SCOPE, "invocations.selected") ?? []);
 			availableInvocations = (list?.options ?? []).filter(o => !selected.has(o.slug));
-			needsInvocation = !!source && availableInvocations.length > 0;
+			// Asked only while they know fewer than the new level expects (the Invocations tab's
+			// "N of M"), so a character already at or over it is not made to learn another.
+			// An unstamped borrower has no expectation (null) and is asked as before.
+			const borrowed = !playbookData?.invocations?.options?.length;
+			const count    = invocationCountArgs(actor, list, { borrowed, level: newLevel });
+			const expected = expectedInvocationCount(count);
+			needsInvocation = !!source && availableInvocations.length > 0 && (expected == null || count.known < expected);
 		}
 
 		// A Beast-Bonded Ranger marks another companion action at 3rd, 5th, 7th and 9th level
@@ -7201,6 +7220,10 @@ export class StonetopCharacter {
 			level, xp, cost, newLevel,
 			pouchGrowth,
 			xpRemaining: xpAfterLevelUp(xp, level),
+			// Step 6's review line: a temporary Instinct this level-up ends, and the insert whose
+			// Instinct replaced the playbook's (a Ghost, Revenant or Thrall), when there is one.
+			temporaryInstinct: this._instinct.temporary?.value ?? null,
+			insertInstinctName: await this._insertInstinctName(),
 			playbookName: playbookData?.name ?? null,
 			playbookSlug: playbookData?.slug ?? actor.system?.playbook?.slug ?? null,
 			availableMoves,
@@ -7301,7 +7324,8 @@ export class StonetopCharacter {
 	// Returns `{ applied: true }`, or `{ applied: false, reason }` when nothing was written:
 	// `"level"` — the character is no longer at `fromLevel`, the level the caller's choices
 	// were built for (the same level-up already applied from another window); `"xp"` — they
-	// no longer have the 6 + 2×level XP it costs (Book I p.528: the move needs that much).
+	// no longer have the 6 + 2×level XP it costs (Book I p.528: the move needs that much);
+	// `"outOfPlay"`: the character has left play (dead, lost to the GM, retired; Book I p.584).
 	//
 	// The sacred pouch is settled ONCE around the whole level-up (withPouchSettled): the even level's
 	// +1 and a Big Magic's +2 arrive as EMPTY room (the user's ruling), so the Stock in it is what it
@@ -7320,11 +7344,29 @@ export class StonetopCharacter {
 		// Only the write is held: the move additions below reach into compendia, and keeping
 		// every other XP change on this client waiting on a pack read would trade one rare bug
 		// for a common stall.
-		const refused = await withXpLock(this._actor, async () => {
+		//
+		// Why this level-up cannot be applied now, or null: read before the claim, so an Apply that would be
+		// refused anyway (a stale window) does not hold the level against everyone else for the claim's
+		// lifetime, and again inside the lock, against the values the write replaces.
+		const refusal = () => {
 			const level = this._actor.system?.attributes?.level?.value ?? 1;
 			const xp    = this._actor.system?.attributes?.xp?.value ?? 0;
+			// Left play since the window opened (died, became a monster, retired): no longer a PC.
+			if (this.levelUpBlockedOutOfPlay) return "outOfPlay";
 			if (fromLevel != null && level !== fromLevel) return "level";
 			if (xp < xpToLevelUp(level)) return "xp";
+			return null;
+		};
+		const early = refusal();
+		if (early) return { applied: false, reason: early };
+		// Then the GM's client says whether THIS client takes the level (level-up-claim.js): a GM
+		// and a player pressing Apply at once would otherwise both pass the level check below.
+		if (!(await claimLevelUp(this._actor, fromLevel))) return { applied: false, reason: "level" };
+		const refused = await withXpLock(this._actor, async () => {
+			const why = refusal();
+			if (why) return why;
+			const level = this._actor.system?.attributes?.level?.value ?? 1;
+			const xp    = this._actor.system?.attributes?.xp?.value ?? 0;
 			const levelUp = {
 				"system.attributes.level.value": level + 1,
 				"system.attributes.xp.value":   xpAfterLevelUp(xp, level),
@@ -7334,17 +7376,38 @@ export class StonetopCharacter {
 			// move that spent the XP, as every other automated write does (`stonetopMove`).
 			await this._actor.update(levelUp, { stonetopMove: "Level Up", ...(moveName ? { [LEARNED_OPTION]: moveName } : {}) });
 			return null;
-		});
-		if (refused) return { applied: false, reason: refused };
-		let addedItem = null;
-		if (selectedMoveCompendiumId) {
-			addedItem = await this.addMove(selectedMoveCompendiumId);
+		}).catch(async err => { await releaseLevelUp(this._actor, fromLevel); throw err; });
+		// A claim whose write did not happen is given back, so another client may take the level at
+		// once instead of being told, for the claim's lifetime, that it was already taken.
+		if (refused) {
+			await releaseLevelUp(this._actor, fromLevel);
+			return { applied: false, reason: refused };
 		}
+		// The level is paid for. Each pick after this is its own step: one that fails is logged and
+		// named in the answer (`failed`), and the rest still land, so nothing else is lost with it.
+		const failed = [];
+		const step = async (name, fn) => {
+			try { return await fn(); } catch (err) {
+				console.error(`Stonetop | Level Up: the ${name} could not be saved`, err);
+				failed.push(name);
+				return null;
+			}
+		};
+		// The picks that do not hang on this level's move go first: the Beast-Bonded Ranger's
+		// companion actions, and an Invocation for someone who already holds Invoke the Sun God.
+		if (choices?.companionActions?.length) {
+			await step("companion", () => this._background.setMarkedActions(new Set([...this._background.markedActions, ...choices.companionActions])));
+		}
+		const invocationWaitsOnMove = !!(choices?.crossPlaybook || choices?.agreed);
+		if (selectedInvocationSlug && !invocationWaitsOnMove) await step("invocation", () => this._learnInvocation(selectedInvocationSlug));
+		// "Until you Level Up, your instinct becomes ..." (Book II p.370, p.523): it ends now.
+		const endedInstinct = await step("instinct", () => this._instinct.clearTemporary());
+		const addedItem = await step("move", () => this._addLevelUpMove(selectedMoveCompendiumId, choices));
 		if (addedItem && choices?.stat) {
-			await this._applyStatIncreaseChoice(addedItem, choices.stat, choices.cap ?? null);
+			await step("stat", () => this._applyStatIncreaseChoice(addedItem, choices.stat, choices.cap ?? null));
 		}
 		if (addedItem && choices?.crossPlaybook) {
-			await this._applyForeignMoveChoice(addedItem, choices.foreignMoveId ?? null, choices.grantsPossession ?? null);
+			await step("foreign move", () => this._applyForeignMoveChoice(addedItem, choices.foreignMoveId ?? null, choices.grantsPossession ?? null));
 		}
 		// Mark-selection moves (Veteran Crew / Heroes to the Last / Beast of Legend / Well
 		// Versed) collect their marks here; Potential for Greatness is marked in play, never at
@@ -7352,20 +7415,50 @@ export class StonetopCharacter {
 		// added above, so its owned-count (and thus its repeat-scaling cap) already reflects
 		// this take when setCountMark clamps below.
 		if (choices?.marks?.picks?.length) {
-			await this._applyMarkChoices(choices.marks.moveName, choices.marks.picks);
+			await step("marks", () => this._applyMarkChoices(choices.marks.moveName, choices.marks.picks));
 		}
-		// The Beast-Bonded Ranger's companion actions for the level just reached.
-		if (choices?.companionActions?.length) {
-			await this._background.setMarkedActions(new Set([...this._background.markedActions, ...choices.companionActions]));
+		if (selectedInvocationSlug && invocationWaitsOnMove) await step("invocation", () => this._learnInvocation(selectedInvocationSlug));
+		return { applied: true, ...(failed.length ? { failed } : {}), ...(endedInstinct ? { endedInstinct } : {}) };
+	}
+
+	// The name of the post-death insert whose Instinct the character goes by, or null.
+	async _insertInstinctName() {
+		// Most characters wear no insert: skip building the whole post-death snapshot for them.
+		if (!this._postDeath.activeSlug) return null;
+		const active = (await this._postDeath.buildSnapshot())?.activeInsert ?? null;
+		return active?.instinct?.selected ? (active.name ?? null) : null;
+	}
+
+	// Once only: an Invocation already known (a replayed step, a stale dialog) is not learned twice.
+	async _learnInvocation(slug) {
+		const current = this._actor.getFlag(STONETOP_SCOPE, "invocations.selected") ?? [];
+		if (!current.includes(slug)) await this._actor.setFlag(STONETOP_SCOPE, "invocations.selected", [...current, slug]);
+	}
+
+	// The move a level-up learns: the playbook pick, or a move the table agreed on (Book I p.529:
+	// "If everyone (not just you) agrees, okay"; p.528 step 3's insert class), which is a move from
+	// another playbook (`choices.agreed.foreignMoveId`) or a custom one (`choices.agreed.customMove`,
+	// the custom move editor's input). An agreed move is stamped LEVEL_PICK_FLAG, in the same write
+	// that creates it, so the level move budget counts it (_buildMovelist).
+	async _addLevelUpMove(compendiumId, choices) {
+		if (compendiumId) return this.addMove(compendiumId);
+		const agreed = choices?.agreed ?? null;
+		const flags = { [LEVEL_PICK_FLAG]: true };
+		let item = null;
+		if (agreed?.foreignMoveId) item = await this.addMove(agreed.foreignMoveId, { flags });
+		else if (agreed?.customMove) item = await this.addCustomMove(agreed.customMove, { flags });
+		if (!item) return null;
+		// Invoke the Sun God from another playbook: Invocations from this level on (invocation-count.js).
+		if (item.name === INVOKE_THE_SUN_GOD && !agreed?.customMove
+			&& this._actor.getFlag(STONETOP_SCOPE, INVOCATIONS_GRANTED_AT_FLAG) == null) {
+			await this._actor.setFlag(STONETOP_SCOPE, INVOCATIONS_GRANTED_AT_FLAG, this._characterLevel);
 		}
-		// Once only: an Invocation already known (a replayed step, a stale dialog) is not learned twice.
-		if (selectedInvocationSlug) {
-			const current = this._actor.getFlag(STONETOP_SCOPE, "invocations.selected") ?? [];
-			if (!current.includes(selectedInvocationSlug)) {
-				await this._actor.setFlag(STONETOP_SCOPE, "invocations.selected", [...current, selectedInvocationSlug]);
-			}
-		}
-		return { applied: true };
+		return item;
+	}
+
+	// How many moves the table agreed on at a level-up (LEVEL_PICK_FLAG), for the level move budget.
+	_levelPickCount() {
+		return this._actor.items.filter(i => i.type === "move" && i.flags?.[STONETOP_SCOPE]?.[LEVEL_PICK_FLAG]).length;
 	}
 
 	// Record an Improved/Superior Stat pick: bump the stat by +1, clamped to the move's cap
@@ -7482,7 +7575,9 @@ export class StonetopCharacter {
 	// Seeker's Sacred Pouch — on first take; the grant is idempotent (skips if already owned).
 	async _applyForeignMoveChoice(crossItem, foreignMoveCompendiumId, grantsPossession) {
 		if (foreignMoveCompendiumId) {
-			const foreign = await this.addMove(foreignMoveCompendiumId);
+			// Settled around the add: a Big Magic learned through a later Initiate grows a pouch already
+			// held with EMPTY room, the same on the Moves tab as in a level-up (whose settle this joins).
+			const foreign = await this.withPouchSettled(() => this.addMove(foreignMoveCompendiumId));
 			if (foreign) {
 				await foreign.setFlag(STONETOP_SCOPE, "grantedBy", { move: crossItem.name, instanceId: crossItem.id });
 				// Invoke the Sun God taken off-playbook: its taker learns an Invocation at each even
@@ -7552,6 +7647,16 @@ export class StonetopCharacter {
 }
 
 // ── Snapshot helpers ──────────────────────────────────────────────────────────
+
+// Item flag: a move the table agreed on at a level-up, from another playbook or written custom
+// (StonetopCharacter#_addLevelUpMove). It counts as the level's pick in the move budget.
+export const LEVEL_PICK_FLAG = "levelPick";
+
+/** Item create data with `flags` merged into its stonetop scope (none: the data unchanged). */
+function _withStonetopFlags(data, flags) {
+	if (!flags) return data;
+	return { ...data, flags: { ...data.flags, [STONETOP_SCOPE]: { ...data.flags?.[STONETOP_SCOPE], ...flags } } };
+}
 
 // The playbook whose Invocations anyone with Invoke the Sun God learns from.
 const LIGHTBEARER_SLUG = "the-lightbearer";
@@ -8179,7 +8284,9 @@ function _buildMarkOptions(entry, markCounts, capState = {}, backgroundSlug = nu
 		const fromBackground = !!entry.owned && !!backgroundSlug && opt.slug === backgroundSlug;
 		// The option's own boxes: the background's box is not one of them, but a mark stored on
 		// top of it still shows, so it can be seen and unticked.
-		const ownBoxes = fromBackground ? Math.max(marks - 1, count) : marks;
+		// A mark stored past the option's boxes (Veteran Crew picked twice before its options became
+		// once each) is kept and shown, so it can be unticked.
+		const ownBoxes = fromBackground ? Math.max(marks - 1, count) : Math.max(marks, count);
 		return {
 			slug:   opt.slug,
 			label:  opt.label,
@@ -8410,7 +8517,7 @@ function _rollLabelForMove(name, rollType, data = {}) {
 	return ROLL_LABELS_BY_TYPE[normalizedRollType] ?? null;
 }
 
-function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, loveLetters = [], playbookName = null, retiredPicks = 0) {
+function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, loveLetters = [], playbookName = null, retiredPicks = 0, agreedPicks = 0) {
 	const playbookCat   = categories.find(c => c.key === "playbook");
 	const basicCat      = categories.find(c => c.key === "basic");
 	const expeditionCat = categories.find(c => c.key === "expedition");
@@ -8438,9 +8545,10 @@ function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, love
 	// A replacing move (A Mighty Rampart) gave up an earlier pick (Bulwark) to be taken,
 	// so each one it retired still counts: `retiredPicks`.
 	// A repeatable starting move taken again (the Seeker's Well Versed) spent a pick on each take
-	// past the first.
+	// past the first. A move the table agreed on at a level-up (another playbook's, or a custom
+	// one; LEVEL_PICK_FLAG) sits outside the playbook list but was that level's pick: `agreedPicks`.
 	const chosenInstances = (playbookCat?.moves ?? [])
-		.reduce((n, m) => n + Math.max(0, (m.ownedIds?.length ?? 0) - (m.isStarting ? 1 : 0)), 0) + retiredPicks;
+		.reduce((n, m) => n + Math.max(0, (m.ownedIds?.length ?? 0) - (m.isStarting ? 1 : 0)), 0) + retiredPicks + agreedPicks;
 	const expectedPicks = pickCount + Math.max(0, actorLevel - 1);
 	const levelMovesShortfall = Math.max(0, expectedPicks - chosenInstances);
 	const levelMovesOverage = Math.max(0, chosenInstances - expectedPicks);

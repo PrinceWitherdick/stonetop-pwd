@@ -2021,6 +2021,23 @@ describe("StonetopCharacterSheet._onDropPlaybook", () => {
 			expect(actor.update).not.toHaveBeenCalled();
 		}
 	});
+
+	// HP starts full only with a NEW playbook, as onboarding does: the same one dropped again
+	// must not heal a hurt PC, or stand a dying one up without their Death's Door roll.
+	it("leaves HP alone when the same playbook is dropped again", async () => {
+		const actor = makeActor();
+		actor.system.playbook = { slug: "the-heavy", name: "the-heavy" };
+		const sheet = makeSheet(actor);
+		actor.update = vi.fn(async () => {});
+
+		await sheet._onDropPlaybook(makePlaybookDoc("the-heavy"));
+
+		const write = actor.update.mock.calls[0][0];
+		expect(write["system.playbook"].slug).toBe("the-heavy");
+		expect(write).not.toHaveProperty(["system.attributes.hp.value"]);
+		expect(write).not.toHaveProperty(["system.attributes.hp.max"]);
+		expect(actor.typedActor.startAtFullHp).not.toHaveBeenCalled();
+	});
 });
 
 describe("StonetopCharacterSheet._onDropItemCreate", () => {

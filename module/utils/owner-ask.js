@@ -47,13 +47,48 @@ export function handleOwnerAskVerify(data) {
 }
 
 /** Whether `gm`'s client sent the ask `data` carries (OWNER_ASK_VERIFY_QUERY). No answer is a no. */
-async function sentBy(gm, data) {
+async function sentBy(gm, data, timeout = 10000) {
 	if (typeof data?.askId !== "string" || typeof gm?.query !== "function") return false;
 	try {
-		return (await gm.query(OWNER_ASK_VERIFY_QUERY, { askId: data.askId }, { timeout: 10000 })) === true;
+		return (await gm.query(OWNER_ASK_VERIFY_QUERY, { askId: data.askId }, { timeout })) === true;
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * Send a User query that a GM may send, stamped with a one-off `askId` this client vouches for until `send`
+ * settles (handleOwnerAskVerify), so a v13 answerer can tell this GM's ask from a player naming the GM.
+ *
+ * @param {(askId: string) => Promise<*>} send  sends the query with `askId` in its payload
+ */
+export async function sendVerifiable(send) {
+	const askId = newAskId();
+	_outstanding.add(askId);
+	try {
+		return await send(askId);
+	} finally {
+		_outstanding.delete(askId);
+	}
+}
+
+/**
+ * Who asked a query a GM may legitimately send (one sent through sendVerifiable), or null. v14 names the
+ * sender outright. On v13 a payload naming a player is taken as queryAsker takes it; one naming a GM is taken
+ * only once that GM's client says the ask is theirs, since a player could name the GM to get past checks a GM
+ * always passes. A claim to be this very client is never taken: nobody queries themselves.
+ *
+ * @param {object} data  the payload, with `userId` and `askId`
+ * @param {object} [context]  core's query context
+ * @param {object} [users]
+ * @param {{timeout?: number}} [o]  how long the check-back waits (ms); keep it under the sender's own wait
+ * @returns {Promise<User|null>}
+ */
+export async function verifiedAsker(data, context = {}, users = globalThis.game?.users, { timeout = 10000 } = {}) {
+	const asker = queryAsker(data, context, users, { allowGm: true });
+	if (!asker || !asker.isGM || context?.user) return asker ?? null;
+	if (asker.id === globalThis.game?.user?.id) return null;
+	return (await sentBy(asker, data, timeout)) ? asker : null;
 }
 
 /**
@@ -76,17 +111,15 @@ export async function spendOrAskOwner({ owner, answerer, spend, query, data = {}
 	// The one who decides is this user: spent here, by a user who can write the owner, or not at all.
 	if (answerer.id === user?.id) return owner.isOwner ? spend() : null;
 	globalThis.ui?.notifications?.info?.(`Asking ${answerer.isGM ? "the GM" : answerer.name} whether ${whether}`);
-	const askId = newAskId();
-	_outstanding.add(askId);
-	try {
-		return (await answerer.query(query, { ...data, userId: user?.id ?? null, askId }, { timeout: OWNER_ASK_MS })) ?? null;
-	} catch (err) {
-		// Out of time, or they left: nobody said yes, so nothing was spent.
-		console.warn(`Stonetop | no answer came about ${what}`, err);
-		return { declined: true, unanswered: true };
-	} finally {
-		_outstanding.delete(askId);
-	}
+	return sendVerifiable(async askId => {
+		try {
+			return (await answerer.query(query, { ...data, userId: user?.id ?? null, askId }, { timeout: OWNER_ASK_MS })) ?? null;
+		} catch (err) {
+			// Out of time, or they left: nobody said yes, so nothing was spent.
+			console.warn(`Stonetop | no answer came about ${what}`, err);
+			return { declined: true, unanswered: true };
+		}
+	});
 }
 
 /**
@@ -109,11 +142,10 @@ export async function spendOrAskOwner({ owner, answerer, spend, query, data = {}
 export async function answerOwnerAsk(data, context, { users = globalThis.game?.users, confirm = confirmOutcome, question, settle }) {
 	const me = globalThis.game?.user;
 	if (me?.isGM && !isPrimaryGM()) return null;
-	const asker = queryAsker(data, context, users, { allowGm: true });
+	// A GM named only by the payload (v13) is checked back with, since a player could name the GM to get past the
+	// move's ownership checks, which a GM always passes.
+	const asker = await verifiedAsker(data, context, users);
 	if (!asker) return null;
-	// A GM named only by the payload (v13): their client is asked whether the ask is theirs, since a player could
-	// name the GM to get past the move's ownership checks, which a GM always passes.
-	if (asker.isGM && !context?.user && !(await sentBy(asker, data))) return null;
 	const spec = await question(asker, me);
 	if (!spec) return null;
 	const asked = Date.now();

@@ -4,7 +4,8 @@ import {
 	resolveInvocationUse, resolveInvocationEnd, invokeNotice, readInvocationState, usesOngoing,
 	ONGOING_INVOCATION_FLAGS, EMPOWERED_MAKES_ONGOING, REDUCED_IS_BRIEF, REDUCED_GM_CHOICE, reducedEndings,
 } from "../../../module/actors/character/ongoing-invocation.js";
-import { expectedInvocationCount, invocationCountCue } from "../../../module/actors/character/invocation-count.js";
+import { expectedInvocationCount, invocationCountCue, invocationCountArgs, INVOCATIONS_GRANTED_AT_FLAG } from "../../../module/actors/character/invocation-count.js";
+import { STONETOP_SCOPE } from "../../../module/actors/character/StonetopFlags.js";
 import { loadPlaybookDefs } from "../../fakes/sourcePack.js";
 
 // The rules the Invocations tab has always printed and nothing ever enforced: one Invocation at
@@ -254,6 +255,23 @@ describe("what the invoke window warns about", () => {
 
 // B9: how many Invocations the level brings (module/actors/character/invocation-count.js).
 describe("the Invocations count cue", () => {
+	// The arguments the level-up and the Invocations tab both read off the character.
+	it("reads the count arguments off the actor: the list's own known slugs, start, level and grant", () => {
+		const flags = { "invocations.selected": ["a", "b", "gone"], [INVOCATIONS_GRANTED_AT_FLAG]: 4 };
+		const actor = {
+			system: { attributes: { level: { value: 5 } } },
+			getFlag: (scope, key) => (scope === STONETOP_SCOPE ? flags[key] : undefined),
+		};
+		const list = { options: [{ slug: "a" }, { slug: "b" }, { slug: "c" }], startingCount: 2 };
+		expect(invocationCountArgs(actor, list)).toEqual({
+			known: 2, optionCount: 3, startingCount: 2, level: 5, borrowed: false, grantedAtLevel: 4,
+		});
+		expect(invocationCountArgs(actor, list, { borrowed: true, level: 6 }))
+			.toMatchObject({ startingCount: 0, level: 6, borrowed: true });
+		expect(invocationCountArgs({ getFlag: () => undefined }, { options: [] }))
+			.toEqual({ known: 0, optionCount: 0, startingCount: 2, level: 1, borrowed: false, grantedAtLevel: null });
+	});
+
 	it("expects 2 + half the level for the Lightbearer, never more than the list", () => {
 		expect(expectedInvocationCount({ optionCount: 10, startingCount: 2, level: 1 })).toBe(2);
 		expect(expectedInvocationCount({ optionCount: 10, startingCount: 2, level: 7 })).toBe(5);

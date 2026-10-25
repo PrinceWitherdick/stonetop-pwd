@@ -25,6 +25,8 @@ describe("the level-up and onboarding move cards", () => {
 			expect(src, rel).not.toContain("{{{moveBody description}}}");
 			expect((src.match(/\{\{\{moveBody description moveResults\}\}\}/g) ?? []).length, rel).toBeGreaterThan(1);
 		}
+		// The agreed and cross-playbook steps' card, one partial for both.
+		expect(readRepo("templates/dialogs/partials/level-up-other-card.hbs")).toContain("{{{moveBody description moveResults}}}");
 	});
 
 	it("show Borrow Power's stored outcomes on a level-up card", () => {
@@ -38,6 +40,7 @@ describe("the level-up and onboarding move cards", () => {
 
 	it("carry the stored results into the cards' context", () => {
 		const levelUp = readRepo("module/actors/character/dialogs/LevelUpDialog.js");
+		// The move and locked cards, and the one mapper the agreed and foreign-move cards share.
 		expect((levelUp.match(/moveResults:\s+m\.moveResults \?\? null/g) ?? []).length).toBe(3);
 		const onboarding = readRepo("module/actors/character/dialogs/CharacterOnboardingDialog.js");
 		expect((onboarding.match(/moveResults: doc\.system\?\.moveResults \?\? null/g) ?? []).length).toBe(2);

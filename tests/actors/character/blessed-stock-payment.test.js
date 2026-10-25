@@ -12,6 +12,12 @@ import { NO_POUCH_STOCK_NOTE, stockCostFromDescription, stockSources } from "../
 import { restockPouch } from "../../../module/actors/character/provisions.js";
 import { readRepo } from "../../fakes/css.js";
 
+// The level-up's agreed step asks a world setting whether this user may write a custom move
+// (utils/authoring-gates.js); a world always has settings, so the tests give it some, all unset.
+let priorSettings;
+beforeEach(() => { priorSettings = game.settings; game.settings ??= { get: () => undefined }; });
+afterEach(() => { game.settings = priorSettings; });
+
 const POUCH = "sacred-pouch";
 const RITES = "Rites of the Land";
 const blessedMove = name => sourceMovesFor("The Blessed").find(d => d.name === name);
@@ -297,7 +303,7 @@ describe("the no-pouch note on foreign-move pickers", () => {
 		dlg._step = "foreignMove";
 		dlg._foreignMoves = [{ compendiumId: "f1", name: "Call the Spirits", playbook: "The Blessed", stockNote: NO_POUCH_STOCK_NOTE }];
 		expect(dlg.getData().foreignMoves[0].stockNote).toBe(NO_POUCH_STOCK_NOTE);
-		const template = fs.readFileSync(path.join(process.cwd(), "templates", "dialogs", "level-up.hbs"), "utf8");
+		const template = fs.readFileSync(path.join(process.cwd(), "templates", "dialogs", "partials", "level-up-other-card.hbs"), "utf8");
 		expect(template).toContain("{{#if stockNote}}<p class=\"stonetop-levelup-move-note\">{{stockNote}}</p>{{/if}}");
 		const sheet = readRepo("module/actors/character/StonetopCharacterSheet.js");
 		const picker = sheet.slice(sheet.indexOf("async _maybePromptForeignMove(addedItem) {"));

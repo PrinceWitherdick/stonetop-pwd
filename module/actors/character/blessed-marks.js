@@ -39,14 +39,49 @@
  * Kept Foundry-free so all of this can be tested without a world in sight.
  */
 
-import { ownsMoveNamed, ownedNamesOr, moveLearnedIn } from "./owns-move.js";
-import { createRoster, showStandingList } from "./marked-people.js";
+import { SYSTEM_ID } from "../../system-id.js";
+import { ownsMoveNamed, ownsLearnedMoveNamed, ownedNamesOr, moveLearnedIn } from "./owns-move.js";
+import { actorMatchKeys, createRoster, normalizeName, showStandingList, trailingActorId } from "./marked-people.js";
 
 // Re-exported so the dialog and this playbook's tests keep reaching the predicate through the
 // feature module they already import.
 export { ownsMoveNamed };
 
 export const BLESSED_MARKS_FLAG = "blessedMarks";
+
+/**
+ * Every row of one kind on the rosters of the Blessed among `actors` who have `move` LEARNED, as `{blessed, row}`:
+ * the Barkskin anyone wears (move-armor.js), the charms on a bearer (fight/defend-spend.js).
+ *
+ * The flag is read FIRST: one property lookup that nearly every actor fails, where ownsLearnedMoveNamed walks the
+ * actor's whole item list. And RAW, not `readMarks`: that reader is for SHOWING a list, and drops a row with no
+ * name, where here the uuid alone names the person. The kind goes through the roster's own reader (markKindKey),
+ * so a row the window lists under a kind is a row of that kind here.
+ *
+ * @param {Iterable<Actor>} actors
+ * @param {string} kind  a MARK_KINDS key
+ * @param {string} move  the move that makes the kind count
+ * @param {{except?: Actor|null}} [opts]  an actor whose own rows do not count (nobody marks themselves)
+ */
+export function* blessedMarkRows(actors, kind, move, { except = null } = {}) {
+	for (const blessed of actors ?? []) {
+		if (!blessed || blessed === except) continue;
+		const rows = blessed.getFlag?.(SYSTEM_ID, BLESSED_MARKS_FLAG);
+		if (!Array.isArray(rows) || !rows.length || !ownsLearnedMoveNamed(blessed, move)) continue;
+		for (const row of rows) if (row && markKindKey(row.kind) === kind) yield { blessed, row };
+	}
+}
+
+/**
+ * Whether a mark row lies on `who`: a row naming a document by that document (the trailing actor id, as
+ * marked-people.js#actorMatchKeys folds it), a row laid on a name alone by that name (unless `byName` is off).
+ * A row naming a document never matches somebody who merely shares its spelling.
+ */
+export function markIsOn(row, who, { byName = true } = {}) {
+	if (row?.uuid) return actorMatchKeys(who).has(trailingActorId(row.uuid));
+	const name = normalizeName(row?.name);
+	return byName && !!name && name === normalizeName(who?.name);
+}
 
 export const BARKSKIN            = "Barkskin";
 export const TRACKLESS_STEP      = "Trackless Step";
@@ -304,6 +339,22 @@ export function tracklessTally(list, { level = 1, int = 0 } = {}) {
 	return { count, perStock, over: count > perStock };
 }
 
+/** How many words a note holds: runs of non-space, so "Fae-touched folk" is 2. */
+export function noteWordCount(text) {
+	return String(text ?? "").trim().split(/\s+/).filter(Boolean).length;
+}
+
+/**
+ * Wards & Bindings: "describe who or what they affect (using no more words than your level)". The
+ * limit is the level, read when asked, and `over` lists the wards whose note says more. A flag,
+ * never a refusal, as the Trackless Step tally is.
+ */
+export function wardWordTally(list, { level = 1 } = {}) {
+	const limit = Math.max(0, Math.trunc(Number(level) || 0));
+	const over = readMarks(list).filter(m => m.kind === "ward" && noteWordCount(m.note) > limit);
+	return { limit, over };
+}
+
 /**
  * Whether to render the glyph at all.
  *
@@ -395,4 +446,34 @@ export function groupMarks(list, { include = [] } = {}) {
 	return MARK_KINDS
 		.map(def => ({ def, rows: rows.filter(m => m.kind === def.key) }))
 		.filter(group => group.rows.length || kept.has(group.def.key));
+}
+
+// ── The world's mark scans, kept between renders ─────────────────────────────
+// Every damage card in the log re-renders on scroll, on update and on another client's Apply, and each
+// asked for the world's Barkskin marks (combat/attack-flow.js) and charm makers (fight/defend-spend.js)
+// by walking game.actors afresh, though nearly always nobody has laid one. One scan per kind is kept
+// here instead, dropped by forgetWorldMarkScans whenever an actor or item is made, changed or deleted
+// (stonetop.js): a mark laid or lifted, or the move behind it learned or forgotten.
+const worldScans = new Map();
+
+/** Drop every kept scan, so the next to ask scans again. */
+export function forgetWorldMarkScans() {
+	worldScans.clear();
+}
+
+/**
+ * `scan(actors)` for the world's actors, from the kept copy for `kind`. Any other list (a test's, a
+ * caller's own) is read anew, as is a swapped actors collection.
+ *
+ * @param {string} kind
+ * @param {(actors: Iterable<Actor>) => any} scan
+ * @param {Iterable<Actor>} [actors]
+ */
+export function worldMarkScan(kind, scan, actors = globalThis.game?.actors ?? []) {
+	if (!actors || actors !== globalThis.game?.actors) return scan(actors ?? []);
+	const kept = worldScans.get(kind);
+	if (kept?.actors === actors) return kept.value;
+	const value = scan(actors);
+	worldScans.set(kind, { actors, value });
+	return value;
 }

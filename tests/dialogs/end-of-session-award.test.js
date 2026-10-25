@@ -63,6 +63,7 @@ vi.mock("../../module/utils/stonetop-dialog.js", () => ({
 }));
 
 const { EndOfSessionDialog } = await import("../../module/dialogs/EndOfSessionDialog.js");
+const { xpToLevelUp } = await import("../../module/utils/xp.js");
 
 /** Just enough jQuery for `html.find(sel).on(type, fn)`, collecting what gets wired. */
 function fakeHtml() {
@@ -89,6 +90,10 @@ function pc(name, xp = 3) {
 			await new Promise(resolve => setTimeout(resolve, 0));
 			actor.system.attributes.xp.value = data["system.attributes.xp.value"];
 		}),
+		// The character's own answer, which the card reads (StonetopCharacter#canLevelUp).
+		typedActor: {
+			get canLevelUp() { return actor.system.attributes.xp.value >= xpToLevelUp(actor.system.attributes.level.value); },
+		},
 	};
 	return actor;
 }
@@ -134,6 +139,31 @@ describe("End of Session group XP", () => {
 
 		expect(torwyn.update).toHaveBeenCalledTimes(1);
 		expect(torwyn.system.attributes.xp.value).toBe(5);
+	});
+
+	// Book I p.528: "any PC who gets enough XP from the End of Session move should Level Up
+	// between sessions". The card says who now can.
+	it("names on the card who now has the XP to Level Up", async () => {
+		roster.chars = [pc("Ready", 6), pc("NotYet", 3)];
+		const { confirm } = opened(2);
+
+		await confirm({ currentTarget: { disabled: false } });
+
+		const card = ChatMessage.create.mock.calls[0][0].content;
+		expect(card).toContain("Enough XP to Level Up: <strong>Ready</strong>.");
+		expect(card).not.toContain("<strong>NotYet</strong>.");
+	});
+
+	// The character answers, not the XP alone: a PC out of play cannot Level Up however much XP they hold.
+	it("does not name a PC whose character says they cannot Level Up, whatever their XP", async () => {
+		const gone = pc("Gone", 6);
+		gone.typedActor = { canLevelUp: false };
+		roster.chars = [gone];
+		const { confirm } = opened(2);
+
+		await confirm({ currentTarget: { disabled: false } });
+
+		expect(ChatMessage.create.mock.calls[0][0].content).not.toContain("Enough XP to Level Up");
 	});
 
 	it("ignores a second press while the first award is still writing", async () => {

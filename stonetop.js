@@ -115,7 +115,7 @@ import { possessionTrackUses, BOOKS_AND_SCROLLS, HOLY_RELICS } from "./module/ac
 import { INVOKE_THE_SUN_GOD } from "./module/actors/character/holy-light.js";
 import { artifactStateForTier } from "./module/actors/character/artifact-identify.js";
 import { repeatBoxLocked } from "./module/actors/character/PlaybookMoveEntry.js";
-import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, wireUnstoppableMark, forgetBarkskinMarks, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery, wireRosterHitMove, ROSTER_MOVE_QUERY, handleRosterMoveQuery, reconcileClashCounter, registerCounterAvoidedHooks } from "./module/combat/attack-flow.js";
+import { wireAttackConfirm, applyGateOnce, wireApplyDamage, wireDamageSeed, wireConditionalArmor, wireUnstoppableMark, wireSufferAmount, wireSufferChoice, rollOptionDamage, APPLY_QUERY, handleApplyQuery, wireRosterHitMove, ROSTER_MOVE_QUERY, handleRosterMoveQuery, reconcileClashCounter, registerCounterAvoidedHooks, forgetBarkskinMarks } from "./module/combat/attack-flow.js";
 import { wireDefendSpends, SPEND_QUERY, handleSpendQuery } from "./module/fight/defend-spend.js";
 import { HEALERS_ARTS_QUERY, handleHealersArtsQuery } from "./module/actors/character/healers-arts.js";
 import { SUPPLY_PAY_QUERY, handleSupplyPayQuery } from "./module/actors/character/supply-payer.js";
@@ -631,6 +631,8 @@ Hooks.once("init", () => {
 		"stonetop.move-group":           "systems/stonetop-pwd/templates/actor/partials/move-group.hbs",
 		"stonetop.tab-search-control":   "systems/stonetop-pwd/templates/actor/partials/tab-search-control.hbs",
 		"stonetop.catalog-shell":        "systems/stonetop-pwd/templates/dialogs/partials/catalog-shell.hbs",
+		// One other playbook's move, on the level-up's agreed and cross-playbook steps alike.
+		"stonetop.level-up-other-card":  "systems/stonetop-pwd/templates/dialogs/partials/level-up-other-card.hbs",
 		"stonetop.relationship-map":       "systems/stonetop-pwd/templates/dialogs/relationship-map.hbs",
 		"stonetop.relationship-map-board": "systems/stonetop-pwd/templates/dialogs/partials/relationship-map-board.hbs",
 		"stonetop.intro-match":            "systems/stonetop-pwd/templates/dialogs/intro-match.hbs",

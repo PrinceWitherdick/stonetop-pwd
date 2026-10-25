@@ -33,7 +33,8 @@
  */
 import { StonetopAutocomplete } from "../../../utils/autocomplete.js";
 import { openLinkedActorSheet, ACTOR_LINK_MISSING } from "../../../utils/actor-link.js";
-import { groupMarks, availableKinds, markKind, markSign, tracklessTally, charmPotencyText, WARD_SIGNS, DEFAULT_WARD_SIGN } from "../blessed-marks.js";
+import { groupMarks, availableKinds, markKind, markSign, tracklessTally, wardWordTally, charmPotencyText, WARD_SIGNS, DEFAULT_WARD_SIGN } from "../blessed-marks.js";
+import { format } from "../../../utils/i18n.js";
 import { playbookIconPath } from "../../../utils/playbook-actors.js";
 import { RosterDialog } from "./RosterDialog.js";
 
@@ -130,7 +131,10 @@ export class BlessedMarksDialog extends RosterDialog {
 			// Trackless Step's "1 Stock can mark a number of individuals up to your level+INT". The
 			// roster does not know which Stock paid for which names, so it says the count and the
 			// per-Stock cap, and flags past it (never blocks: the Blessed may have paid twice).
-			tally: def.key === "trackless" ? this._tracklessTally(stored) : null,
+			// Wards & Bindings' "no more words than your level" rides the same line: the limit, and
+			// the wards whose note says more (a flag, never a block).
+			tally: def.key === "trackless" ? this._tracklessTally(stored)
+				: def.key === "ward" ? this._wardWordTally(stored) : null,
 			// The Potent Workings choice waiting for the charm it was bought for.
 			pending: def.key === "charm" && this._pendingCharm
 				? `Potent Workings, paid: the next charm laid here ${charmPotencyText(this._pendingCharm)}.`
@@ -189,9 +193,22 @@ export class BlessedMarksDialog extends RosterDialog {
 			// words than your level)". It stopped having to carry repelled-or-trapped as well the
 			// moment the toggle did, so it now asks for exactly the half it holds.
 			notePlaceholder: def.subject === "place"
-				? "Who or what the signs affect…"
+				? format("stonetop.blessedMarks.wardNotePlaceholder", { limit: this._level })
 				: "What this mark is for…",
 		};
+	}
+
+	/** The character's level now, for the two level-scaled marks. */
+	get _level() {
+		return this._actor?.system?.attributes?.level?.value ?? 1;
+	}
+
+	/** Wards & Bindings' line under its rule: the word limit (the level), and any ward past it. */
+	_wardWordTally(stored) {
+		const { limit, over } = wardWordTally(stored, { level: this._level });
+		const text = format("stonetop.blessedMarks.wardWords", { limit })
+			+ (over.length ? ` ${format("stonetop.blessedMarks.wardWordsOver", { limit, names: over.map(m => m.name).join(", ") })}` : "");
+		return { limit, over: over.length > 0, text };
 	}
 
 	/** Trackless Step's line under its rule: N marked, against level + INT per Stock. */

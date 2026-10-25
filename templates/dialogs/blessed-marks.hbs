@@ -55,8 +55,9 @@
 				      it quotes the move's effect without naming the move. --}}
 				<h3 class="stonetop-marks-group-heading">{{label}}</h3>
 				<p class="stonetop-marks-group-rule">{{rule}}</p>
-				{{!-- Trackless Step only: how many wear it against what 1 Stock covers (level + INT).
-				      A flag past the cap, never a block (blessed-marks.js#tracklessTally). --}}
+				{{!-- Trackless Step: how many wear it against what 1 Stock covers (level + INT).
+				      Wards & Bindings: the word limit (level) and any ward past it. A flag past the cap,
+				      never a block (blessed-marks.js#tracklessTally, #wardWordTally). --}}
 				{{#if tally}}
 				<p class="stonetop-marks-tally{{#if tally.over}} is-over{{/if}}">{{tally.text}}</p>
 				{{/if}}

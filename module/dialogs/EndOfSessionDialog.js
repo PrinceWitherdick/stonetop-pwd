@@ -341,10 +341,15 @@ export class EndOfSessionDialog extends StonetopDialog {
 			// failed write does not stop the rest, and the card says who was and was not paid.
 			const paid = [];
 			const failed = [];
+			// Who now has the XP to Level Up (Book I p.528: "any PC who gets enough XP from the End
+			// of Session move should Level Up between sessions"), so the card can say so.
+			const canLevel = [];
 			for (const row of owed) {
 				try {
 					await adjustXp(row.actor, row.xp, { move: "End of Session" });
 					paid.push(row);
+					// The character's own answer, which also leaves out a PC out of play.
+					if (row.actor.typedActor?.canLevelUp) canLevel.push(row.actor);
 				} catch (err) {
 					console.error(`Stonetop | End of Session could not write ${row.actor.name}'s XP:`, err);
 					failed.push(row.actor);
@@ -372,6 +377,7 @@ export class EndOfSessionDialog extends StonetopDialog {
 				paidLines,
 				failed.length ? `<p>${format(`${KEY}.cardFailed`, { names: names(failed) })}</p>` : "",
 				leftOut.length ? `<p>${format(`${KEY}.cardLeftOut`, { names: names(leftOut) })}</p>` : "",
+				canLevel.length ? `<p>${format(`${KEY}.cardCanLevelUp`, { names: names(canLevel) })}</p>` : "",
 			].join("");
 			const content = stonetopChatCard(
 				anyPersonal ? localize(`${KEY}.cardTitleAll`) : format(`${KEY}.cardTitle`, { xp: xpToAward }),

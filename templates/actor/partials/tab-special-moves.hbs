@@ -89,12 +89,17 @@
 		<div class="stonetop-special-move-card{{#unless stonetop.canLevelUp}} is-locked{{/unless}}">
 			<h3 class="stonetop-special-move-name">{{localize "stonetop.specialMoves.levelUp.title"}}</h3>
 			<p class="stonetop-special-move-summary">{{{localize "stonetop.specialMoves.levelUp.summary"}}}</p>
-			{{#unless stonetop.canLevelUp}}
+			{{#if stonetop.levelUpOutOfPlay}}
+			<p class="stonetop-special-move-locked-hint">
+				<i class="fas fa-skull"></i>
+				{{localize "stonetop.specialMoves.levelUp.outOfPlayHint"}}
+			</p>
+			{{else}}{{#unless stonetop.canLevelUp}}
 			<p class="stonetop-special-move-locked-hint">
 				<i class="fas fa-lock"></i>
 				{{{localize "stonetop.specialMoves.levelUp.lockedHint"}}}
 			</p>
-			{{/unless}}
+			{{/unless}}{{/if}}
 			<button type="button" class="stonetop-levelup-open-btn"
 				{{#unless stonetop.canLevelUp}}disabled{{/unless}}>
 				<i class="fas fa-arrow-circle-up"></i>

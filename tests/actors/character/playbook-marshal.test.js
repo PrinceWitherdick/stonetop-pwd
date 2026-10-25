@@ -607,6 +607,8 @@ const crewMasters     = await import("../../../module/actors/character/follower-
 const crewBuild       = await import("../../../module/data/follower-build.js");
 const crewMarkBudget  = await import("../../../module/actors/character/move-mark-budget.js");
 const crewDialogs     = await import("../../../module/actors/character/dialogs/OrderFollowersDialog.js");
+const crewUtils       = await import("../../../module/utils/crew.js");
+const { readFileSync } = await import("node:fs");
 
 const HTL = "Heroes to the Last";
 const CREW = { name: "The Wolves", tags: ["brave"], instinct: "x", cost: "y" };
@@ -761,16 +763,17 @@ describe("a mark option whose target is at its cap is greyed (Heroes to the Last
 		expect(crewMarkBudget.markOptionCapNote({ crewHp: 4 }, { crewDamageDie: "d10" })).toBe(null);
 	});
 
-	it("the move card: at d10 the unticked box locks with the reason, the ticked one stays editable", async () => {
-		// d6, d8 from Veteran Crew, d10 from Heroes' first damage box. A second Heroes copy gives the budget room.
+	it("the move card: at d10 the ticked box stays editable, and a fully marked option shows no cap note", async () => {
+		// d6, d8 from Veteran Crew, d10 from Heroes' one damage box (options are once each, Book I p.127).
+		// A second Heroes copy gives the budget room.
 		const { char } = await marshalWithHeroes({ [VC]: { "crew-damage": [pick(2)] }, [HTL]: { "crew-damage": [pick(6)] } });
 		await char.addMove(marshal(HTL)._id);
 		const snap = await char.buildSnapshot();
 		expect(snap.crewBonuses.damageDie).toBe("d10");
 		const cards = snap.moves.flatMap(c => c.moves);
 		const damage = cards.find(m => m.name === HTL).markOptions.find(o => o.slug === "crew-damage");
-		expect(damage.capNote).toBe("Their damage die is already d10");
-		expect(damage.checks.map(c => c.disabled)).toEqual([false, true]);
+		expect(damage.capNote).toBe(null);
+		expect(damage.checks.map(c => c.disabled)).toEqual([false]);
 		expect(cards.find(m => m.name === HTL).markOptions.find(o => o.slug === "crew-hp").capNote).toBe(null);
 		// Veteran Crew's own d6-to-d8 box is ticked, so it stays editable.
 		const vcDamage = cards.find(m => m.name === VC).markOptions.find(o => o.slug === "crew-damage");
@@ -780,6 +783,75 @@ describe("a mark option whose target is at its cap is greyed (Heroes to the Last
 	it("the level-up data carries the crew's die for the mark step", async () => {
 		const { char } = await marshalWithHeroes({ [VC]: { "crew-damage": [pick(2)] }, [HTL]: { "crew-damage": [pick(6)] } });
 		expect((await char.getLevelUpData()).markCapState).toEqual({ crewDamageDie: "d10" });
+	});
+});
+
+// Level-up audit 2026-10-23 (PBB-3, the user's ruling J5): each option prints one box, so each is
+// picked once. A mark picked twice before that is kept (grandfathered), still counts, and shows.
+describe("Veteran Crew and Heroes to the Last options are once each (Book I p.126-127)", () => {
+	it("every option has one box, as printed", () => {
+		for (const name of [VC, HTL]) {
+			for (const opt of marshal(name).system.markOptions) expect(opt.marks, `${name} ${opt.slug}`).toBe(1);
+		}
+	});
+
+	it("a taken option can't be picked again; one picked twice before stays, counts, and can be unticked", async () => {
+		const { char, actor } = marshalAt(4, { flags: { "moves.moveMarks": { [VC]: { tags: [pick(2), pick(4)] } } } });
+		await char.addMove(marshal(VC)._id);
+		await char.addMove(marshal(VC)._id);
+		expect((await bonuses(char)).crewTags).toBe(4);
+		const card = (await char.buildSnapshot()).moves.flatMap(c => c.moves).find(m => m.name === VC);
+		expect(card.markOptions.find(o => o.slug === "tags").checks.map(c => c.checked)).toEqual([true, true]);
+		await char.setCountMark(VC, "tags", 1);
+		expect(marksOf(actor)[VC].tags).toHaveLength(1);
+		await char.setCountMark(VC, "tags", 2);
+		expect(marksOf(actor)[VC].tags).toHaveLength(1);
+	});
+});
+
+// Level-up audit 2026-10-23 (PBB-2): Veteran Crew's "Select 2 new tags" is asked for, as Magnificent
+// Specimen's options are: the crew card's tag picker opens, and the card cues while tags are owed.
+describe("the crew tags Veteran Crew owes", () => {
+	it("crewTagsOwed: the insert's picks plus Veteran Crew's, less the chosen; never the background's tag or group", () => {
+		const def = { additionalTagCount: 2 };
+		expect(crewUtils.crewTagsOwed({ name: "W", tags: ["brave", "respected"] }, def, 2)).toBe(2);
+		expect(crewUtils.crewTagsOwed({ name: "W", tags: ["group", "loyal", "brave", "respected"] }, def, 2, "loyal")).toBe(2);
+		expect(crewUtils.crewTagsOwed({ name: "W", tags: ["a", "b", "c", "d"] }, def, 2)).toBe(0);
+		// A crew never set up is the "Create your crew" offer's, and no crew insert owes nothing.
+		expect(crewUtils.crewTagsOwed({}, def, 2)).toBe(0);
+		expect(crewUtils.crewTagsOwed({ name: "W", tags: [] }, null, 2)).toBe(0);
+	});
+
+	it("the crew card carries the owed count for its cue", async () => {
+		const { char, actor } = marshalAt(2, { flags: { crew: { ...CREW, tags: ["brave", "respected"] }, "moves.moveMarks": { [VC]: { tags: [pick(2)] } } } });
+		await char.addMove(marshal(VC)._id);
+		expect((await crewCard(char, actor)).tagsOwed).toBe(2);
+		await actor.setFlag(STONETOP_SCOPE, "crew.tags", ["brave", "respected", "loyal", "skilled"]);
+		expect((await crewCard(char, actor)).tagsOwed).toBe(0);
+	});
+
+	it("opens the crew card's tag picker after Veteran Crew while tags are owed, and only then", async () => {
+		const { char, actor } = marshalAt(2, { flags: { crew: { ...CREW, tags: ["brave", "respected"] }, "moves.moveMarks": { [VC]: { tags: [pick(2)] } } } });
+		await char.addMove(marshal(VC)._id);
+		const sheet = crewCardSheet(char, actor);
+		sheet._stonetopCharacter = char;
+		expect(await sheet._maybeOpenCrewTagsForMarks("Logistics")).toBe(false);
+		expect(await sheet._maybeOpenCrewTagsForMarks(VC)).toBe(true);
+		expect(sheet._editingSections.has("follower-card:crew:")).toBe(true);
+		expect(sheet._activateTabOnRender).toBe("followers");
+		const settled = crewCardSheet(char, actor);
+		settled._stonetopCharacter = char;
+		await actor.setFlag(STONETOP_SCOPE, "crew.tags", ["brave", "respected", "loyal", "skilled"]);
+		expect(await settled._maybeOpenCrewTagsForMarks(VC)).toBe(false);
+	});
+
+	it("is wired after a level-up, after a ticked tags box, and on the card's cue", () => {
+		const src = readFileSync(new URL("../../../module/actors/character/StonetopCharacterSheet.js", import.meta.url), "utf8");
+		expect(src).toContain("this._maybeOpenCrewTagsForMarks(foreignMoveName ?? addedMoveName)");
+		expect(src).toContain("creationMarkCrewTags({ [moveName]: [markSlug] }) > 0");
+		expect(src).toContain(`html.find(".stonetop-crew-tags-owed")`);
+		const hbs = readFileSync(new URL("../../../templates/actor/partials/tab-followers.hbs", import.meta.url), "utf8");
+		expect(hbs).toContain("{{#if tagsOwed}}");
 	});
 });
 

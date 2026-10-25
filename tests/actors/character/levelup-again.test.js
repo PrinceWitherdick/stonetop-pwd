@@ -5,13 +5,13 @@ import { LevelUpDialog } from "../../../module/actors/character/dialogs/LevelUpD
 // Book I p.528: "If a PC has enough XP to Level Up twice, then they Level Up twice right
 // away." The sheet opens the next level-up as soon as one is applied, while XP remains.
 
-function makeSheet({ canLevelUp }) {
+function makeSheet({ canLevelUp, id = "actorA" }) {
 	const character = {
-		_actor: { id: "actorA" },
+		_actor: { id },
 		canLevelUp,
 		getLevelUpData: vi.fn(async () => ({ level: 3, newLevel: 4, availableMoves: [], lockedMoves: [], availableInvocations: [] })),
 	};
-	const actor = { id: "actorA", name: "Rhianna", typedActor: character };
+	const actor = { id, name: "Rhianna", typedActor: character };
 	const Base = class {
 		constructor() { this._actor = actor; }
 		get actor() { return this._actor; }
@@ -79,11 +79,48 @@ describe("levelling up twice", () => {
 
 	it("raises the window already open for that character instead of opening another", async () => {
 		const { sheet, character } = makeSheet({ canLevelUp: true });
-		const open = { id: "stonetop-levelup-dialog-actorA", bringToTop: vi.fn() };
+		const open = { id: "stonetop-levelup-dialog-actorA", rendered: true, bringToTop: vi.fn() };
 		global.ui.windows = { 3: open };
 		await sheet._onLevelUpOpen();
 		expect(open.bringToTop).toHaveBeenCalled();
 		expect(character.getLevelUpData).not.toHaveBeenCalled();
 		expect(opened).toHaveLength(0);
+	});
+});
+
+// One window per character (utils/open-or-focus.js): two windows would share one DOM id.
+describe("a second press while the level-up is still opening", () => {
+	it("opens nothing more while the level-up's data is still being read", async () => {
+		const { sheet, character } = makeSheet({ canLevelUp: false, id: "pcLoading" });
+		let release;
+		character.getLevelUpData = vi.fn(() => new Promise(r => { release = r; }));
+		const first = sheet._onLevelUpOpen();
+		const second = sheet._onLevelUpOpen();
+		release({ level: 3, newLevel: 4, availableMoves: [], lockedMoves: [], availableInvocations: [] });
+		await Promise.all([first, second]);
+		expect(character.getLevelUpData).toHaveBeenCalledTimes(1);
+		expect(opened).toHaveLength(1);
+	});
+
+	it("opens nothing more while the window is still drawing", async () => {
+		const { sheet, character } = makeSheet({ canLevelUp: false, id: "pcDrawing" });
+		LevelUpDialog.prototype.render.mockImplementation(function () {
+			this._state = Application.RENDER_STATES.RENDERING;
+			opened.push(this);
+			return this;
+		});
+		await sheet._onLevelUpOpen();
+		expect(await sheet._onLevelUpOpen()).toBe(opened[0]);
+		expect(character.getLevelUpData).toHaveBeenCalledTimes(1);
+		expect(opened).toHaveLength(1);
+	});
+
+	it("a failed read does not leave the button stuck", async () => {
+		const { sheet, character } = makeSheet({ canLevelUp: false, id: "pcFailed" });
+		const data = await character.getLevelUpData();
+		character.getLevelUpData = vi.fn().mockRejectedValueOnce(new Error("compendium")).mockResolvedValue(data);
+		await expect(sheet._onLevelUpOpen()).rejects.toThrow("compendium");
+		await sheet._onLevelUpOpen();
+		expect(opened).toHaveLength(1);
 	});
 });

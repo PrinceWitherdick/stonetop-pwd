@@ -9,6 +9,7 @@ import {
 	loadPlaybookMoveDocs, movesByPlaybook, loadPlaybookDefs, loadPlaybookPackDocs,
 	PLAYBOOKS, PLAYBOOK_NAMES, STAT_KEYS, CROSS_PLAYBOOK_MOVES,
 } from "../fakes/sourcePack.js";
+import { parseMovePickCount } from "../../module/actors/character/StonetopCharacter.js";
 
 const DOCS    = loadPlaybookMoveDocs();
 const BY_NAME = movesByPlaybook(DOCS);
@@ -215,5 +216,27 @@ describe("playbook advancement data", () => {
 				expect(inv, `${name} should not have invocations`).toBeFalsy();
 			}
 		}
+		// Book I p.146: "Lightbearer, you start knowing 2 Invocations", out of the ten printed.
+		const lightbearer = PB_DEFS.get("The Lightbearer").invocations;
+		expect(lightbearer.startingCount).toBe(2);
+		expect(lightbearer.options).toHaveLength(10);
+	});
+
+	// The Moves tab's level budget expects "N of your choice" + (level - 1) picks, N read off each
+	// playbook's printed starting-moves line. Moves from a background or an either/or are not picks.
+	it("reads each playbook's free picks off its printed starting-moves line", () => {
+		const EXPECTED = {
+			"The Blessed": 1,       // "Spirit Tongue, Call the Spirits, 1 from your Background, and 1 of your choice"
+			"The Fox": 1,           // "Ambush OR Skill at Arms; Danger Sense OR Perceptive; and 1 of your choice"
+			"The Heavy": 0,         // "Dangerous, Hard to Kill, and either Armored OR Uncanny Reflexes"
+			"The Judge": 2,         // "plus 2 more of your choice"
+			"The Lightbearer": 1,   // "plus 1 more of your choice"
+			"The Marshal": 1,       // "any moves from your Background, and 1 move of your choice"
+			"The Ranger": 1,        // "any moves from your Background, plus 1 of your choice"
+			"The Seeker": 0,        // "plus 1 from your Background"
+			"The Would-Be Hero": 2, // "and 2 other moves of your choice"
+		};
+		const got = Object.fromEntries(PB_PACK.map(pb => [pb.name, parseMovePickCount(pb.flags?.stonetop?.moves?.startingMovesNote)]));
+		expect(got).toEqual(EXPECTED);
 	});
 });
