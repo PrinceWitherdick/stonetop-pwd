@@ -6205,8 +6205,17 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!game.user.isGM) return;
 				const item = this.actor.items.get(ev.currentTarget.dataset.itemId);
 				if (!item) return;
-				ev.currentTarget.disabled = true;
-				await setLoveLetterResolved(item, false);
+				const button = ev.currentTarget;
+				button.disabled = true;
+				try {
+					await setLoveLetterResolved(item, false);
+				} catch (err) {
+					// The button comes back so the GM can try again, and is told the letter did not go.
+					console.error("Stonetop | Love letter: could not resend", err);
+					button.disabled = false;
+					ui.notifications.error(game.i18n.format("stonetop.character.moves.loveLetter.sendFailed", { name: this.actor.name }));
+					return;
+				}
 				ui.notifications.info(game.i18n.format("stonetop.character.moves.loveLetter.resent", { name: this.actor.name }));
 			});
 			// A draft's Send: it reaches the player now, envelope and all.

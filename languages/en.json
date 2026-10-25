@@ -2177,6 +2177,7 @@
           "resendButton": "Resend",
           "resendHint": "The player has resolved this letter, so they no longer see it. Resend puts it back on their Moves tab.",
           "resent": "Love letter sent back to {name}'s Moves tab.",
+          "sendFailed": "Couldn't send the love letter to {name}'s Moves tab. Try again.",
           "noticeOne": "A love letter has arrived",
           "noticeMany": "{count} love letters have arrived",
           "noticeFor": "{text} for {name}",
