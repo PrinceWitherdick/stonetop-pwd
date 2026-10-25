@@ -231,6 +231,16 @@ export class CreateThingDialog extends StepperDialog {
 
 	_onBeforeStepChange() { this._capture(this.element); this._captureCustomMoves(); }
 
+	// What the close-guard compares (utils/close-guard.js): the threat it would make.
+	_workState() {
+		this._onBeforeStepChange();
+		return { seed: this._seed(), customMoves: this._customMoves };
+	}
+
+	_discardCopy() {
+		return { title: "Discard this Thing?", body: "This Thing Below hasn't been made yet. Closing the window now loses what you've chosen and written." };
+	}
+
 	// Snapshot the focused-but-unblurred scalar fields on the active step.
 	_capture(html) {
 		const root = html?.jquery ? html[0] : (html ?? this.element?.[0]);

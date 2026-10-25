@@ -291,6 +291,17 @@ export class CreateFollowerDialog extends StepperDialog {
 		this._captureLiveFields();
 	}
 
+	// What the close-guard compares (utils/close-guard.js): every answer (HP, armor and damage are
+	// worked out from them).
+	_workState() {
+		this._captureLiveFields();
+		return this._sel;
+	}
+
+	_discardCopy() {
+		return { title: "Discard this follower?", body: "This follower hasn't been added yet. Closing the window now loses what you've written." };
+	}
+
 	// Pull current values out of any [data-field] inputs that haven't fired change
 	// yet (e.g. the player clicks Next without blurring). Belt-and-suspenders so a
 	// just-typed name/instinct/cost isn't lost on navigation.
@@ -331,7 +342,8 @@ export class CreateFollowerDialog extends StepperDialog {
 		});
 		await this._onApply?.(data);
 		ui.notifications?.info?.(`${data.name || "Follower"} added to your followers.`);
-		this.close();
+		// A finish: the close-guard has nothing to ask.
+		this.close({ discard: true });
 	}
 }
 

@@ -121,7 +121,7 @@ import {buildCustomMoveData, clampInt} from "../../utils/custom-move-data.js";
 import {buildInventoryItemData, readInventoryItemData, WRITEUP_EDITED_FLAG} from "../../utils/inventory-item-data.js";
 import { bronzeRowOf } from "./bronze-lines.js";
 import {ARTIFACT_STATE, concealArtifactFields, isArtifactUpgrade, normalizeArtifactState} from "./artifact-identify.js";
-import {isLoveLetter, isResolvedLoveLetter} from "./love-letters.js";
+import {isLoveLetter, isResolvedLoveLetter, isDraftLoveLetter} from "./love-letters.js";
 import {deriveLoadLevel, loadLimitsFor} from "../../utils/load.js";
 import {maxDie, stepDie, normalizeDamageDie} from "../../utils/damage-die.js";
 import {WEAPONS_OF_WAR_COMMON, WEAPONS_OF_WAR_PIERCING, ALL_IN_THE_WRIST} from "../../data/weapons.js";
@@ -1933,7 +1933,10 @@ export class StonetopCharacter {
 		const otherMoveItems = [];
 		for (const i of otherItems) (isLoveLetter(i) ? loveLetterItems : otherMoveItems).push(i);
 
+		// A draft is the GM's alone until it's sent: a player's snapshot leaves it out entirely.
+		const seesDrafts = !!globalThis.game?.user?.isGM;
 		const loveLetters = loveLetterItems
+			.filter(i => seesDrafts || !isDraftLoveLetter(i))
 			.map(i => new OtherItemSnapshotBuilder()
 				.withId(i._id)
 				.withName(i.name)
@@ -1944,6 +1947,7 @@ export class StonetopCharacter {
 				.withRollType(normalizeRollType(i.system?.rollType))
 				.withRollLabel(_rollLabelForMove(i.name, i.system?.rollType, i.system))
 				.withResolved(isResolvedLoveLetter(i))
+				.withDraft(isDraftLoveLetter(i))
 				.build());
 
 		const other = otherMoveItems

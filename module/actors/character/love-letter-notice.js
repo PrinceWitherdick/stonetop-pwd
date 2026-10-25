@@ -1,5 +1,5 @@
 import { STONETOP_SCOPE } from "./StonetopFlags.js";
-import { isLoveLetter, isResolvedLoveLetter, loveLetterArrivalKey } from "./love-letters.js";
+import { isLoveLetter, isResolvedLoveLetter, isDraftLoveLetter, loveLetterArrivalKey } from "./love-letters.js";
 import { TIME_BANNER_ID } from "../../seasons/time-banner.js";
 import { SYSTEM_ID } from "../../system-id.js";
 
@@ -72,7 +72,8 @@ export function ownedLoveLetters(actors, user) {
 	const rows = [];
 	for (const actor of ownedCharacters(actors, user)) {
 		for (const item of actor.items ?? []) {
-			if (!isLoveLetter(item) || isResolvedLoveLetter(item)) continue;
+			// A draft hasn't been sent, so it hasn't arrived.
+			if (!isLoveLetter(item) || isResolvedLoveLetter(item) || isDraftLoveLetter(item)) continue;
 			rows.push({ actor, item, token: letterToken(actor, item), key: loveLetterArrivalKey(item) });
 		}
 	}

@@ -1,4 +1,18 @@
 <form class="stonetop-custom-move-form stonetop-love-letter-form" autocomplete="off">
+	{{#if drafts.length}}
+	{{! Letters saved as drafts and not sent yet: open one to carry on writing it. }}
+	<div class="stonetop-custom-move-field stonetop-love-letter-drafts">
+		<label>{{localize "stonetop.character.moves.loveLetter.draftsLabel"}}</label>
+		<ul class="stonetop-love-letter-drafts-list">
+			{{#each drafts}}
+			<li><button type="button" class="stonetop-custom-move-cancel stonetop-love-letter-draft-open" data-actor-id="{{actorId}}" data-item-id="{{itemId}}">
+				<i class="fas fa-envelope" aria-hidden="true"></i> {{localize "stonetop.character.moves.loveLetter.draftRow" name=name recipient=recipient}}
+			</button></li>
+			{{/each}}
+		</ul>
+	</div>
+	{{/if}}
+
 	{{#if isEdit}}
 	<div class="stonetop-custom-move-field">
 		<label>{{localize "stonetop.character.moves.loveLetter.recipientLabel"}}</label>
@@ -118,10 +132,16 @@
 		       placeholder="{{localize 'stonetop.character.moves.loveLetter.signedPlaceholder'}}">
 	</div>
 
+	{{#if isDraft}}<p class="stonetop-custom-move-hint">{{localize "stonetop.character.moves.loveLetter.draftHint"}}</p>{{/if}}
 	<div class="stonetop-custom-move-actions">
 		<button type="button" class="stonetop-custom-move-save stonetop-love-letter-save">
-			<i class="fas fa-feather" aria-hidden="true"></i> {{localize "stonetop.character.moves.loveLetter.save"}}
+			<i class="fas fa-feather" aria-hidden="true"></i> {{#if canDraft}}{{localize "stonetop.character.moves.loveLetter.save"}}{{else}}{{localize "stonetop.character.moves.loveLetter.saveChanges"}}{{/if}}
 		</button>
+		{{#if canDraft}}
+		<button type="button" class="stonetop-custom-move-cancel stonetop-love-letter-draft">
+			<i class="fas fa-floppy-disk" aria-hidden="true"></i> {{localize "stonetop.character.moves.loveLetter.saveDraft"}}
+		</button>
+		{{/if}}
 		<button type="button" class="stonetop-custom-move-cancel stonetop-love-letter-cancel">{{localize "Cancel"}}</button>
 	</div>
 </form>

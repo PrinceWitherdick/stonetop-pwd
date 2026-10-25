@@ -39,7 +39,9 @@ A love letter is a short message to one character about what happened between se
 - **Dice roll**: a stat, the steading's Fortunes, or **No roll: read aloud only**;
 - **Roll results (optional)**: describe each outcome, or give a list to pick from with how many they pick on a 10+, 7-9 and 6-;
 - **Mark XP on a miss**, and a **Signed** line;
-- **Send the Letter**.
+- **Send the Letter**, or **Save as draft**.
+
+**Save as draft** keeps the letter without sending it, and the window stays open so you can carry on writing. The draft sits on that character's Moves tab marked **Draft**, where only you can see it: the player gets no envelope and no letter. To pick a draft back up, open **Write a Love Letter** and choose it under **Your drafts**, or click the pencil on its card. Send it with **Send the Letter** in its window, or **Send** on its card.
 
 The player gets a red envelope that drops in at the top of their screen, with a jingle, and the letter appears in a **Love Letters** section on their Moves tab. Once they've resolved it, the GM keeps a dimmed copy on that tab with **Edit this love letter**, **Delete this love letter** and a resend button. The player's side is on [Relationships, Notes and Reminders](Relationships-Notes-and-Reminders#love-letters).
 

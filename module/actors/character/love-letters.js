@@ -21,6 +21,9 @@ export const LOVE_LETTER_RESOLVED_FLAG = "loveLetterResolved";
 // edit. The arrival notice (love-letter-notice.js) compares it for EQUALITY only, so the GM's and
 // the player's clocks never have to agree.
 export const LOVE_LETTER_SENT_FLAG = "loveLetterSentAt";
+// A letter the GM saved without sending. It sits on the recipient's sheet where only the GM
+// sees it (no card, no arrival notice, no move name for the player) until the GM sends it.
+export const LOVE_LETTER_DRAFT_FLAG = "loveLetterDraft";
 
 // What a letter can roll: the six stats, or +Fortunes (the steading's, rolled by the PC the
 // way Requisition rolls it), for a letter about the steading rather than the hero.
@@ -42,6 +45,11 @@ export function isLoveLetter(item) {
 // True once the player has resolved the letter. Hidden from the player, kept for the GM.
 export function isResolvedLoveLetter(item) {
 	return !!item?.flags?.[STONETOP_SCOPE]?.[LOVE_LETTER_RESOLVED_FLAG];
+}
+
+// True for a letter the GM saved as a draft and hasn't sent yet.
+export function isDraftLoveLetter(item) {
+	return !!item?.flags?.[STONETOP_SCOPE]?.[LOVE_LETTER_DRAFT_FLAG];
 }
 
 // What tells one arrival of a letter from the next: its sent stamp, or for a letter written
@@ -114,11 +122,13 @@ export function buildLoveLetterData(input) {
 }
 
 // Create a love letter on the given recipient character. Returns the created item (or null).
-export async function createLoveLetter(actor, input) {
+// `draft: true` saves it unsent: no arrival stamp, and only the GM sees it until sendLoveLetter.
+export async function createLoveLetter(actor, input, { draft = false } = {}) {
 	if (!actor) return null;
 	const data = buildLoveLetterData(input);
 	// Stamped here, not in buildLoveLetterData, which edits reuse: an edit is not an arrival.
-	data.flags[STONETOP_SCOPE][LOVE_LETTER_SENT_FLAG] = Date.now();
+	if (draft) data.flags[STONETOP_SCOPE][LOVE_LETTER_DRAFT_FLAG] = true;
+	else data.flags[STONETOP_SCOPE][LOVE_LETTER_SENT_FLAG] = Date.now();
 	const created = await actor.createEmbeddedDocuments("Item", [data]);
 	return created?.[0] ?? null;
 }
@@ -129,6 +139,30 @@ export async function updateLoveLetter(item, input) {
 	// name/type/system/flags — the same shape create uses, so an edit fully re-derives
 	// the roll block (adding or clearing a roll as the GM changes it).
 	await item.update(buildLoveLetterData(input));
+}
+
+// Send a draft: it stops being a draft and arrives now, so the player's notice comes.
+export async function sendLoveLetter(item) {
+	if (!item) return;
+	await item.update({
+		[`flags.${STONETOP_SCOPE}.${LOVE_LETTER_DRAFT_FLAG}`]: false,
+		[`flags.${STONETOP_SCOPE}.${LOVE_LETTER_RESOLVED_FLAG}`]: false,
+		[`flags.${STONETOP_SCOPE}.${LOVE_LETTER_SENT_FLAG}`]: Date.now(),
+	});
+}
+
+// Every unsent draft in the world, for the writing window's "pick up a draft" list:
+// { actor, item } rows, newest first.
+export function loveLetterDrafts(actors = game.actors) {
+	const rows = [];
+	for (const actor of actors ?? []) {
+		if (actor?.type !== "character") continue;
+		for (const item of actor.items ?? []) {
+			if (isLoveLetter(item) && isDraftLoveLetter(item)) rows.push({ actor, item });
+		}
+	}
+	const when = (row) => Number(row.item?._stats?.modifiedTime ?? row.item?._stats?.createdTime) || 0;
+	return rows.sort((a, b) => when(b) - when(a));
 }
 
 // The character actors a love letter can be addressed to, for the recipient picker. Every

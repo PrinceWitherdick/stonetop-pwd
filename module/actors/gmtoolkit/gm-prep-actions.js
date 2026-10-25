@@ -26,11 +26,13 @@ export async function openSiteWizard(options) {
 
 /**
  * Run the walkthrough and file the result under `steading`.
+ * @param {object} [wizardOptions]  Passed to the dialog: `{ quietSave: true }` for a caller that
+ *   says where the site went itself.
  * @returns {Promise<JournalEntryPage|null>} The new page, or null if cancelled.
  */
-export async function createSiteFlow(steading) {
+export async function createSiteFlow(steading, wizardOptions = {}) {
 	if (!steading) return null;
-	const seed = await openSiteWizard();
+	const seed = await openSiteWizard(wizardOptions);
 	if (!seed) return null;
 	return createSite(steading, seed);
 }

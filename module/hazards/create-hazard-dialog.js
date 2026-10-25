@@ -1,4 +1,5 @@
 import { StepperDialog } from "../dialogs/StepperDialog.js";
+import { SaveForNow } from "../dialogs/save-for-now.js";
 import {
 	HAZARD_DAMAGE_DICE, HAZARD_DAMAGE_EFFECTS, HAZARD_DAMAGE_ADVICE, HAZARD_MOVE_PROMPTS,
 } from "./hazard-data.js";
@@ -16,10 +17,14 @@ import { htmlToPlainText, plainTextKeeper } from "../journal/card-vm.js";
 // and .stonetop-cf-* control styles).
 //
 // Two modes: created without a page it resolves the collected SEED via promise()
-// (the steading sheet then calls createHazard); created with `{ page }` it opens
+// (the GM Toolkit's Threats & Dangers tab then calls createHazard); created with `{ page }` it opens
 // pre-filled, the final button becomes "Save hazard", and it applies the update to
 // the page itself, resolving the page. This doubles as the hazard editor, so there
 // is no separate hazard-editor dialog.
+//
+// Every step but the last also has Save for now (Save, when editing), so the GM can stop
+// anywhere and pick it up from the hazard's pencil. Closing with unsaved answers asks first
+// (utils/close-guard.js).
 
 const _STEPS = [
 	{
@@ -68,7 +73,7 @@ const _STEPS = [
 // onto `_sel`; list-row fields are captured by their own classed handlers.
 const _TEXT_FIELDS = new Set(["name", "description", "damageExtra", "instinct", "advanceTrigger"]);
 
-export class CreateHazardDialog extends StepperDialog {
+export class CreateHazardDialog extends SaveForNow(StepperDialog) {
 	/** @param {{ page?: JournalEntryPage|null }} [config] pass a hazard page to edit it in place. */
 	constructor({ page = null } = {}, options = {}) {
 		// Editing gets a per-page window id so two hazards can be open side by side;
@@ -194,6 +199,7 @@ export class CreateHazardDialog extends StepperDialog {
 		this._bindStepNav(html);
 
 		html.find(".stonetop-ch-create").on("click", () => this._finish());
+		html.find(".stonetop-guide-save-for-now").on("click", () => this._saveForNow());
 
 		// Scalar text fields persist on blur (no re-render, so focus survives typing);
 		// the damage extras re-render for the live damage line.
@@ -242,6 +248,11 @@ export class CreateHazardDialog extends StepperDialog {
 	// or mutating a row list, so a just-typed value isn't lost.
 	_onBeforeStepChange() {
 		this._captureLiveFields();
+	}
+
+	// Save for now and the close-guard's question (dialogs/save-for-now.js).
+	get _saveCopy() {
+		return { noun: "hazard", keptAt: "on the GM Toolkit's Threats & Dangers tab" };
 	}
 
 	_captureLiveFields() {

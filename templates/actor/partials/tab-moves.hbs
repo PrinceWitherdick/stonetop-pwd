@@ -19,22 +19,29 @@
 		{{!-- Love letters (Book I p.568): single-use, GM-authored moves addressed to this
 		      PC. The section exists only while this user has a letter to see. Resolving one
 		      hides it from the player (it is never deleted); the GM still sees it, dimmed,
-		      with Resend to hand it back. Players read and resolve; only the GM sees the
-		      edit/delete/resend affordances. --}}
+		      with Resend to hand it back. A draft (saved, not sent) is the GM's alone, marked
+		      Draft, with Send. Players read and resolve; only the GM sees the
+		      edit/delete/resend/send affordances. --}}
 		{{#if stonetop.loveLetters.length}}
 		<div class="stonetop-move-group stonetop-love-letters-section">
 			{{> "stonetop.section-heading" title=(localize "stonetop.character.moves.loveLetter.sectionTitle") collapse="loveLetters"}}
 			<ol class="items-list">
 			{{#each stonetop.loveLetters}}
-				<li class="item stonetop-item stonetop-love-letter{{#if resolved}} is-resolved{{/if}}" data-item-id="{{ownedId}}">
+				<li class="item stonetop-item stonetop-love-letter{{#if resolved}} is-resolved{{/if}}{{#if draft}} is-draft{{/if}}" data-item-id="{{ownedId}}">
 					<div class="stonetop-item-header">
 						<strong class="stonetop-item-name">{{name}}</strong>
-						{{#if resolved}}<span class="stonetop-love-letter-resolved-badge">{{localize "stonetop.character.moves.loveLetter.resolvedBadge"}}</span>{{/if}}
+						{{#if draft}}<span class="stonetop-love-letter-resolved-badge">{{localize "stonetop.character.moves.loveLetter.draftBadge"}}</span>
+						{{else if resolved}}<span class="stonetop-love-letter-resolved-badge">{{localize "stonetop.character.moves.loveLetter.resolvedBadge"}}</span>{{/if}}
 						{{#if (and @root.stonetop.canAuthorLoveLetters rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
 					</div>
 					{{#if description}}<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>{{/if}}
 					<div class="stonetop-love-letter-actions">
-						{{#if resolved}}
+						{{#if draft}}
+						<button type="button" class="stonetop-love-letter-send" data-item-id="{{ownedId}}"
+						        title="{{localize 'stonetop.character.moves.loveLetter.sendHint'}}">
+							<i class="fas fa-paper-plane" aria-hidden="true"></i> {{localize "stonetop.character.moves.loveLetter.sendButton"}}
+						</button>
+						{{else if resolved}}
 						<button type="button" class="stonetop-love-letter-resend" data-item-id="{{ownedId}}"
 						        title="{{localize 'stonetop.character.moves.loveLetter.resendHint'}}">
 							<i class="fas fa-paper-plane" aria-hidden="true"></i> {{localize "stonetop.character.moves.loveLetter.resendButton"}}

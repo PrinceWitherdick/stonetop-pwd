@@ -9615,6 +9615,10 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	color: var(--color-text-dark-primary);
 }
 .stonetop-custom-move-cancel:hover { background: rgba(0, 0, 0, 0.06); }
+/* The Love Letter window's saved drafts, one outline button each, stacked. */
+.stonetop-love-letter-drafts-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.stonetop-love-letter-drafts-list > li { margin: 0; }
+.stonetop-love-letter-drafts-list .stonetop-love-letter-draft-open { width: 100%; justify-content: flex-start; font-weight: normal; text-align: left; }
 
 /* Moves-tab affordances for player-authored moves: the edit pencil mirrors the
    hover-revealed delete link, and owns the right-push so the two sit together. */
@@ -10131,7 +10135,8 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-love-letter:hover .stonetop-love-letter-delete { display: inline-flex; }
 .stonetop-love-letter-actions { display: flex; align-items: center; margin-top: 8px; }
 .stonetop-love-letter-read,
-.stonetop-love-letter-resend {
+.stonetop-love-letter-resend,
+.stonetop-love-letter-send {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
@@ -10147,10 +10152,13 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	transition: background 0.15s;
 }
 .stonetop-love-letter-read:hover,
-.stonetop-love-letter-resend:hover { background: #8f4a50; }
-/* A resolved letter is only on the GM's sheet: the paper fades, the actions stay crisp. */
+.stonetop-love-letter-resend:hover,
+.stonetop-love-letter-send:hover { background: #8f4a50; }
+/* A resolved letter or a draft is only on the GM's sheet: the paper fades, the actions stay crisp. */
 .tab.moves .stonetop-item.stonetop-love-letter.is-resolved .stonetop-item-name,
-.tab.moves .stonetop-item.stonetop-love-letter.is-resolved .stonetop-item-description { opacity: 0.6; }
+.tab.moves .stonetop-item.stonetop-love-letter.is-resolved .stonetop-item-description,
+.tab.moves .stonetop-item.stonetop-love-letter.is-draft .stonetop-item-name,
+.tab.moves .stonetop-item.stonetop-love-letter.is-draft .stonetop-item-description { opacity: 0.6; }
 .stonetop-love-letter-resolved-badge {
 	margin-left: 8px;
 	padding: 0 6px;
@@ -33728,6 +33736,14 @@ th:has(> .stonetop-roll-table-btn) {
 	   label can absorb the slack instead of pushing the buttons off-edge. */
 	min-width: 0;
 	border-top: 1px solid rgb(var(--st-ink-rgb) / 0.08);
+}
+
+/* Two buttons held together at one end of the row (a walkthrough's Save for now + Next). */
+.stonetop-guide-nav .stonetop-guide-nav-group {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-shrink: 0;
 }
 
 /* Right-align the buttons when there's no centre label (Share's Cancel / Save). */

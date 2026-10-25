@@ -75,7 +75,7 @@ const DANGER_OPTIONS = [
 		label: "Site",
 		icon: "fa-mountain-sun",
 		gmOnly: true,
-		hint: "Walk through Book I's Creating Sites process. The write-up lands on the GM Toolkit's Sites tab, ready to pin to a scene.",
+		hint: "Walk through Book I's Creating Sites process. The write-up lands at the foot of the GM Toolkit's Expeditions tab, ready to pin to a scene.",
 		create: () => openCreateSite(),
 	},
 	// Book II, The Things Below. Thing + corrupted site become draggable threat cards; corrupted
@@ -263,11 +263,12 @@ async function openCreateSite() {
 	// The same flow the Sites tab's own button runs. Any open GM Toolkit picks the new card up
 	// by watching its journal pages, so there is nothing to nudge from here.
 	const { createSiteFlow } = await import("../actors/gmtoolkit/gm-prep-actions.js");
-	const page = await createSiteFlow(steading);
+	// quietSave: this says where the site went, so the walkthrough's own Save for now notice would repeat it.
+	const page = await createSiteFlow(steading, { quietSave: true });
 	if (!page) return;
 	// Said HERE and not in the flow: creating from the tab shows you the card appear, but this
 	// path may leave the toolkit closed entirely, so it has to say where the site went.
-	ui.notifications?.info?.(`Added site: ${page.name}. It's on the GM Toolkit's Sites tab.`);
+	ui.notifications?.info?.(`Added site: ${page.name}. It's at the foot of the GM Toolkit's Expeditions tab.`);
 }
 
 /**

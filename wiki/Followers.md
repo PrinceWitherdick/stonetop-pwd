@@ -6,7 +6,7 @@ Hirelings, initiates, a crew, an animal companion, a summoned thing: everyone wh
 
 ## Getting a follower
 
-- **Create a follower** at the bottom of the tab makes a new one from scratch. When a move or possession of yours brings a particular follower, a button for it sits beside that one (Pim's sheet reads **Add Good dog**).
+- **Create a follower** at the bottom of the tab makes a new one from scratch. When a move or possession of yours brings a particular follower, a button for it sits beside that one (Pim's sheet reads **Add Good dog**). Closing **Create a follower** part way asks before throwing away what you've written.
 - Some moves and possessions bring followers with them (a Marshal's crew, a Blessed's initiates, a Ranger's companion). They're added when you take the move.
 - **Drag an NPC or a monster onto your sheet** and the system offers to turn it into your follower, with the stats it needs.
 - An arcanum that lets you summon something (Manifest) adds the summoned follower here, asking the picks from the card's back first. If an older follower is missing picks, a **Finish** prompt lets you complete it, or **Remind me later**.

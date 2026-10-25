@@ -40,7 +40,9 @@ With the world setting **Threats: Show Cards on the Map** turned on, each pinned
 
 ## Hazards
 
-**Make a hazard** walks through the book's hazard steps (Book I pp.381-389). A hazard's card has two buttons:
+**Make a hazard** walks through the book's hazard steps (Book I pp.381-389). **Save for now**, beside **Next** on every step, saves the hazard as it stands, and its card's pencil picks it back up. When you're editing one, that button reads **Save**, so a fix doesn't mean walking to the last step. Closing the window with unsaved answers asks first.
+
+A hazard's card has two buttons:
 
 - **Roll damage** rolls its damage onto the shared damage card, against whoever you have targeted (or pick when asked). Tick **It caught them off-guard** for advantage, or **They knew or suspected, and took precautions** for disadvantage. Hazard damage ignores armor.
 - **Certain death** is for something that would definitely kill a normal person: no damage roll, whoever it catches is reduced to 0 HP and goes to Death's Door.

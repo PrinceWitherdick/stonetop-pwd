@@ -11,7 +11,7 @@ import {CustomMoveDialog, characterMoveSaver} from "./dialogs/CustomMoveDialog.j
 import {AddInventoryItemDialog, characterInventoryItemSaver} from "./dialogs/AddInventoryItemDialog.js";
 import {LoveLetterDialog} from "../../dialogs/LoveLetterDialog.js";
 import {LoveLetterReadDialog} from "../../dialogs/LoveLetterReadDialog.js";
-import {isLoveLetter, setLoveLetterResolved} from "./love-letters.js";
+import {isLoveLetter, setLoveLetterResolved, sendLoveLetter} from "./love-letters.js";
 import {prefersReducedMotion} from "../../utils/reduced-motion.js";
 import {LevelUpDialog} from "./dialogs/LevelUpDialog.js";
 import {openOrFocus} from "../../utils/open-or-focus.js";
@@ -2180,8 +2180,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			// GM keeps it on the card list, dimmed, with a Resend. And a letter is for the one
 			// player it was written to: the rest of the table may read this sheet (see
 			// shared-sheets.js) but never sees its letters.
+			// A draft is the GM's until it's sent (the model already leaves it out for a player).
 			context.stonetop.loveLetters = (context.stonetop.movelist?.loveLetters ?? [])
-				.filter(letter => game.user.isGM || (this.actor.isOwner && !letter.resolved));
+				.filter(letter => game.user.isGM || (this.actor.isOwner && !letter.resolved && !letter.draft));
 			// Creating homebrew arcana can be restricted to the GM independently of
 			// custom moves (arcanaCreationGmOnly). When restricted, players don't see
 			// the per-tier "Create arcanum" buttons, but still edit cards they own.
@@ -6207,6 +6208,23 @@ export function createStonetopCharacterSheetClass(Base) {
 				ev.currentTarget.disabled = true;
 				await setLoveLetterResolved(item, false);
 				ui.notifications.info(game.i18n.format("stonetop.character.moves.loveLetter.resent", { name: this.actor.name }));
+			});
+			// A draft's Send: it reaches the player now, envelope and all.
+			html.find(".stonetop-love-letter-send").on("click", async ev => {
+				if (!game.user.isGM) return;
+				const item = this.actor.items.get(ev.currentTarget.dataset.itemId);
+				if (!item) return;
+				const button = ev.currentTarget;
+				button.disabled = true;
+				try {
+					await sendLoveLetter(item);
+				} catch (err) {
+					console.error("Stonetop | Love letter: could not send", err);
+					button.disabled = false;
+					ui.notifications.error(game.i18n.format("stonetop.character.moves.loveLetter.sendFailed", { name: this.actor.name }));
+					return;
+				}
+				ui.notifications.info(game.i18n.format("stonetop.character.moves.loveLetter.created", { name: this.actor.name }));
 			});
 
 			html[0].addEventListener("click", ev => {

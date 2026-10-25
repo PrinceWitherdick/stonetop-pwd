@@ -4,6 +4,7 @@ import { getSetting, setWorldSetting } from "../settings.js";
 import { warn } from "../utils/logger.js";
 import { inTurn } from "../utils/turn-queue.js";
 import { getWalkthroughResume, patchWalkthroughResume, saveWalkthroughPosition } from "./walkthrough-resume.js";
+import { mayClose, notePristineWork } from "../utils/close-guard.js";
 
 // ── StepperDialog ────────────────────────────────────────────────────────────
 // Shared scaffolding for the linear "walkthrough" dialogs (Spring Burst,
@@ -155,6 +156,8 @@ export class StepperDialog extends Application {
 		const recentre = this._autoHeight && stepChanged && this._renderedStep !== undefined ? holdCentre(this) : null;
 		try {
 			await super._render(force, options);
+			// What the wizard opened with, for the close-guard (utils/close-guard.js); a no-op after the first.
+			notePristineWork(this);
 			this._renderedStep = drawing;
 			this._frontOnOpen.apply();
 			// After super._render, which is where core writes the restored scroll offsets back.
@@ -188,11 +191,15 @@ export class StepperDialog extends Application {
 	_resolveWith(result) {
 		const resolve = this._resolve;
 		this._resolve = null;
-		this.close();
+		// A finish: the work was used, so the close-guard has nothing to ask.
+		this.close({ discard: true });
 		resolve?.(result);
 	}
 
 	async close(options = {}) {
+		// Ask before throwing away what was written, for a wizard that keeps its work (close-guard.js).
+		// First, before the side effects below, so Keep writing leaves the wizard exactly as it was.
+		if (!(await mayClose(this, options))) return;
 		this._frontOnOpen.stop();
 		// Closing on purpose clears the open flag (no auto-reopen next load); a reload skips
 		// close() entirely and leaves it set. The saved step stays either way, for a manual reopen.

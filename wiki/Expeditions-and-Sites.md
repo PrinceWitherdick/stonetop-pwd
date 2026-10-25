@@ -54,6 +54,7 @@ The last step asks the questions for the homecoming, runs Return Triumphant inli
 Sites are the places the party explores: a barrow, a ruined tower, a cave. They live at the foot of the GM Toolkit's **Expeditions** tab.
 
 - **Create a site** walks through Book I's process for creating sites in nine steps, with a list on the left to jump between them.
+- You don't have to finish it in one go. **Save for now**, beside **Next** on every step, saves the site as it stands; its card's pencil reopens the walkthrough with your answers in place. Closing the window with unsaved answers asks first: **Save for now**, **Discard what I wrote** or **Keep writing**.
 - Each site card has its tables (click a d20 table to roll it), a **Running it** reference (light sources, tags and marching order), and edit and delete buttons.
 - **Mark visited** asks **Who went to (site)?** and writes the visit onto their timelines and Stonetop's, where the players can read it.
 

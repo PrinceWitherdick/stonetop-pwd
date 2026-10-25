@@ -184,7 +184,11 @@
     {{#if isLast}}
     <button class="stonetop-cs-create stonetop-guide-btn--primary"><i class="fas {{#if isEdit}}fa-check{{else}}fa-mountain-sun{{/if}}"></i> {{#if isEdit}}Save site{{else}}Create site{{/if}}</button>
     {{else}}
-    <button class="stonetop-spring-next">Next<span class="stonetop-nav-arrow"></span></button>
+    {{!-- Save what's there from any step: a new site lands on the GM Toolkit to finish later; an edit is written. --}}
+    <span class="stonetop-guide-nav-group">
+      <button type="button" class="stonetop-guide-save-for-now"><i class="fas {{#if isEdit}}fa-check{{else}}fa-floppy-disk{{/if}}" aria-hidden="true"></i> {{#if isEdit}}Save{{else}}Save for now{{/if}}</button>
+      <button class="stonetop-spring-next">Next<span class="stonetop-nav-arrow"></span></button>
+    </span>
     {{/if}}
   </div>
 
