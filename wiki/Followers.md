@@ -74,10 +74,18 @@ When members fall, they're struck off the roster (a group keeps at least two).
 
 ## When a follower drops
 
-At 0 HP a follower faces their own Death's Door, rolled from the chat card. If you have **Sir, Permission to Die, Sir**, you can spend 1 of their Loyalty to keep them alive (at 0 HP and out of the action), or let them go and mark XP.
+At 0 HP a follower's fate is in the GM's hands (Book I p.469). A window opens on the GM's screen to pick **Dead**, **Death's Door** or **Dying**; closing it means the blow wasn't lethal. Death's Door is rolled by the follower's player from the chat card. A crew or group member who dies is struck off that roster.
+
+Two moves stay the player's:
+
+- **Loyal to the End** (the Ranger's animal companion) replaces the GM's pick and opens on the player's screen.
+- **Sir, Permission to Die, Sir**: when the GM picks Dead, the player's window opens first, so you can spend 1 of their Loyalty to keep them alive (at 0 HP and out of the action), or let them go and mark XP.
+
+With no GM online, the player picks the fate.
 
 ## See also
 - [Fights (for Players)](Fights-for-Players)
+- [Death and Beyond](Death-and-Beyond)
 - [Camp, Journeys and Group Moves](Camp-Journeys-and-Group-Moves)
 - [The GM Toolkit](The-GM-Toolkit)
 - [Playbook Notes](Playbook-Notes)

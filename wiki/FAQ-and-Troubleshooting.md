@@ -43,6 +43,9 @@ Stonetop has no initiative, so the system replaces Foundry's Combat tab with a *
 **A red notification says Stonetop "did not finish starting up".**
 Part of the system failed to load, usually because of a conflict with another module. Try disabling other modules to find the one that clashes. When reporting it, open the browser console (`F12`), run `game.stonetop.bootReport()`, and paste the result into your report.
 
+**A sheet or window looks wrong only in one world, or with a particular module on.**
+Modules share one set of Handlebars helpers, so a module's helper can clash with Stonetop's. If a module replaces one of Stonetop's own helpers, the browser console (`F12`) shows a warning from Stonetop naming it. Try that world with the module disabled, and mention the warning when you report it. (The GM Toolkit failing to open with **Battle Transitions** active was a clash of this kind, and is fixed.)
+
 **Portraits or tokens are cropped wrong, or missing after an update.**
 Use **Build N more portraits from art you already have** in the Welcome guide (it shows only when there is something to rebuild), or run `game.stonetop.rebuildPortraits()` in the console. See [Import Book Art](Import-Book-Art).
 

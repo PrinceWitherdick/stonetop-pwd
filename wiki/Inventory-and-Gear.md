@@ -28,6 +28,7 @@ Small items fit in a pocket, pouch or boot. You can carry 4 + Prosperity of them
 > - If a move stops working because your load is too heavy or you're wearing armor, the move says so on the Moves tab (**needs a light load**, **needs you unarmored**), with a tooltip explaining why.
 > - **Reset Inventory** clears every mark and the undefined pools in one go, ready for the next expedition. Uses (like supplies) are kept.
 > - Each column has a magnifying glass to filter it by name.
+> - A **bronze** weapon asks once which weapon it is, and fights as that weapon. Each one is its own item (Book I pp.93, 95): buying another through Trade & Barter adds a separate line with its own answer, and selling one when you hold several asks **Which one was sold?** Removing a bronze line forgets its answer; unticking it as carried doesn't, since left at home isn't gone.
 
 ## Adding items
 

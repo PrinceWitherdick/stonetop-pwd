@@ -10,7 +10,9 @@ Your XP box on the character sheet shows your XP and, beside it, the most XP you
 - the **Moves** tab gets an attention dot with the same label;
 - on the **Special Moves** tab, the **Level Up** card unlocks and its **Open Level Up** button becomes clickable. Until then the card is greyed out with a lock and explains what you still need.
 
-Click the level-up icon or **Open Level Up** to start.
+Click the level-up icon or **Open Level Up** to start. The GM's **End of Session** card also names who can now Level Up.
+
+A character who has left play (dead, lost to the GM, or retired) doesn't level up, and their Level Up card says why. A character at Death's Door, or carrying a Ghost, Revenant or Thrall insert, still levels up as normal. See [Death and Beyond](Death-and-Beyond).
 
 ![The top of Pim's sheet with XP at 52 of 52 and the green level-up arrow beside Level](images/leveling-up-ready.webp)
 
@@ -27,6 +29,7 @@ Steps that don't apply to you are skipped, so most level-ups are just the first 
 |---|---|---|
 | **Overview** | always | Shows the **XP Cost**, the **XP Remaining** afterwards, and your **New Level**. If your new level is even and you have Invocations, it says you'll choose a new Invocation too. |
 | **New move** | always | **Choose one new move from your playbook.** Type in **Filter moves…** or click the group chips to narrow the list. Tick **Show moves I don't qualify for yet** to see the rest, listed under **Requires conditions not yet met**. |
+| **Agreed with the table** | when you picked the **Agreed with the table** card on the New move step | **Choose the move the table agreed on: one from another playbook that you qualify for, or a custom move.** The book allows this only if everyone, not just you, agrees (Book I p.529). A custom move is written in the custom move editor, and the level is taken when you save it. In a world where only the GM writes custom moves, the GM can take this Level Up with you from your sheet. |
 | **Move from another playbook** | when the move you picked grants one | **Choose the move this grants you from another playbook (you must qualify for it).** Filter by text, or click a playbook chip (click it again to clear it). |
 | **Stat +1** | when the move you picked raises a stat | **Choose which stat to raise by +1.** Stats already at that move's maximum are greyed out. |
 | **Marks** | when the move you picked (or got from another playbook) has choices to mark | **Make this move's selection(s) for the level you're gaining.** Click an option to pick it; click it again to unpick. Options you already have from your background are shown as such. |
@@ -35,6 +38,8 @@ Steps that don't apply to you are skipped, so most level-ups are just the first 
 
 The last step ends with a reminder to review your Instinct and Appearance on the **Details** tab.
 
+The whole window works from the keyboard: **Tab** to a card and press **Enter** or **Space** to pick it.
+
 ![The Level Up window's first step, showing XP Cost -52, XP Remaining 0 and New Level 24, with the Next button](images/leveling-up-move-step.webp)
 
 ### What happens when you apply
@@ -42,11 +47,12 @@ The last step ends with a reminder to review your Instinct and Appearance on the
 - Your level goes up by one and the cost comes off your XP. (If your GM uses **Advancement: Reset XP to 0 on Level Up**, your XP empties instead.)
 - The new move, stat, marks, companion action and Invocation are added to your sheet.
 - The level-up is recorded on the character's timeline as **Reached level N**, naming the move you learned. See [The Timeline](The-Timeline).
-- Some moves have follow-up choices. For example, a move that frees another remarkable trait opens that picker right away.
+- Some moves have follow-up choices. For example, a move that frees another remarkable trait opens that picker right away, and Veteran Crew's two new tags show as a **Pick N more tags** chip on the crew's card on the Followers tab.
+- A **temporary Instinct** ends. Some things in the books say "until you Level Up, your instinct becomes..." (Book II pp.370, 523). Set one on the **Details** tab: turn on the Instinct section's edit, and fill in the temporary Instinct and where it came from. It shows over your own Instinct, marked **Until you Level Up**, and Level Up clears it.
 - **If you still have enough XP to level up again**, a notice says **You have enough XP to level up again, so here's the next one.** and the window opens again for the next level.
 
 > **Did you know?**
-> - If something changed while the window was open (another player already applied it, or the XP is no longer there), applying does nothing and a notice tells you why. Your sheet is never charged twice.
+> - If something changed while the window was open (another player already applied it, or the XP is no longer there), applying does nothing and a notice tells you why. Your sheet is never charged twice, even if you and the GM press Apply at the same moment.
 > - The level-up icon and the Special Moves card both open the same window.
 
 ## Leveling up away from home
