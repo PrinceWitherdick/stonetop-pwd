@@ -65,7 +65,7 @@ describe("rolling a move from its title", () => {
 			const rolling = titles.filter(t => t.includes("move-rollable"));
 			expect(rolling.length, `${what} has no rollable title`).toBeGreaterThan(0);
 			for (const title of rolling) {
-				expect(title, `${what} title carries no stat`).toContain('data-roll="{{rollType}}"');
+				expect(title, `${what} title carries no stat`).toContain('data-roll="{{this.rollType}}"');
 				// Both classes: `rollable` is what the sheet's handler finds, `move-rollable` is
 				// what tells the pre-roll ladder this is a 2d6 move rather than a raw formula.
 				expect(title, `${what} title is not a .rollable`).toMatch(/\brollable move-rollable\b/);

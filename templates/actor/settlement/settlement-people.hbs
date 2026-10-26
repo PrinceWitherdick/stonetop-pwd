@@ -28,49 +28,49 @@
 			<div class="steading-residents-table steading-people-cards" data-resize-key="settlement-residents" data-sort="name">
 				<ul class="steading-residents-list">
 					{{#each residents}}
-					<li class="steading-residents-row steading-person" data-row-id="{{rowId}}" data-sort-name="{{name}}">
+					<li class="steading-residents-row steading-person" data-row-id="{{this.rowId}}" data-sort-name="{{this.name}}">
 						<div class="steading-person-face">
 							{{!-- As on Stonetop's list: the drag attributes on the WRAPPER, the image
 							      undraggable, so Gecko hands over the Actor uuid and not a picture. --}}
-							<span class="steading-member-avatar stonetop-portrait-box" data-name="{{name}}"
-							     {{#if uuid}}draggable="true" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"{{/if}}><img class="steading-member-avatar-img" src="{{profileImg}}" alt="" draggable="false" data-name="{{name}}"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}></span>
+							<span class="steading-member-avatar stonetop-portrait-box" data-name="{{this.name}}"
+							     {{#if uuid}}draggable="true" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"{{/if}}><img class="steading-member-avatar-img" src="{{this.profileImg}}" alt="" draggable="false" data-name="{{this.name}}"{{#if imgStyle}} style="{{this.imgStyle}}"{{/if}}></span>
 						</div>
 						<div class="steading-residents-col-name steading-person-who{{#if unresolved}} steading-member-unresolved{{/if}}">
 							{{#if cellsEditable}}
 							<input type="text" class="steading-resident-input steading-person-name-input" data-resident-field="name"
-							       value="{{name}}" placeholder="{{localize "stonetop.settlement.col.name"}}" aria-label="{{localize "stonetop.settlement.col.name"}}">
+							       value="{{this.name}}" placeholder="{{localize "stonetop.settlement.col.name"}}" aria-label="{{localize "stonetop.settlement.col.name"}}">
 							<input type="text" class="steading-resident-input" data-resident-field="occupation" list="settlement-occupation-suggestions"
-							       value="{{occupation}}" placeholder="{{localize "stonetop.settlement.col.occupation"}}" aria-label="{{localize "stonetop.settlement.col.occupation"}}">
+							       value="{{this.occupation}}" placeholder="{{localize "stonetop.settlement.col.occupation"}}" aria-label="{{localize "stonetop.settlement.col.occupation"}}">
 							<input type="text" class="steading-resident-input" data-resident-field="traits" list="settlement-trait-suggestions"
-							       value="{{traits}}" placeholder="{{localize "stonetop.settlement.col.traits"}}" aria-label="{{localize "stonetop.settlement.col.traits"}}">
+							       value="{{this.traits}}" placeholder="{{localize "stonetop.settlement.col.traits"}}" aria-label="{{localize "stonetop.settlement.col.traits"}}">
 							{{else}}
 							<div class="steading-person-name-line">
 								{{#if unresolved}}
-								<span class="steading-member-name-text steading-person-text">{{name}}</span>
+								<span class="steading-member-name-text steading-person-text">{{this.name}}</span>
 								{{else}}
 								{{!-- Labelled rather than tooltipped, as on Stonetop's list: no href to
 								      announce, and a hover bubble would cover the rows under it. --}}
-								<a data-action="openActor" class="steading-member-open steading-member-name-text steading-person-text{{#if statusInactive}} is-inactive{{/if}}" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
-								   draggable="true" aria-label="{{localize "stonetop.settlement.openPerson" name=name}}">{{name}}</a>
-								{{#if status}}<span class="stonetop-npc-status-badge stonetop-npc-status-badge--sm" data-status="{{status}}" data-tooltip="{{statusLabel}}"><span class="stonetop-npc-status-badge-text">{{statusLabel}}</span></span>{{/if}}
+								<a data-action="openActor" class="steading-member-open steading-member-name-text steading-person-text{{#if statusInactive}} is-inactive{{/if}}" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"
+								   draggable="true" aria-label="{{localize "stonetop.settlement.openPerson" name=name}}">{{this.name}}</a>
+								{{#if status}}<span class="stonetop-npc-status-badge stonetop-npc-status-badge--sm" data-status="{{this.status}}" data-tooltip="{{this.statusLabel}}"><span class="stonetop-npc-status-badge-text">{{this.statusLabel}}</span></span>{{/if}}
 								{{/if}}
 							</div>
-							{{#if occupation}}<div class="steading-person-role steading-person-text">{{occupation}}</div>{{/if}}
-							{{#if traits}}<div class="steading-person-traits steading-person-text">{{traits}}</div>{{/if}}
+							{{#if occupation}}<div class="steading-person-role steading-person-text">{{this.occupation}}</div>{{/if}}
+							{{#if traits}}<div class="steading-person-traits steading-person-text">{{this.traits}}</div>{{/if}}
 							{{/if}}
 						</div>
 						<div class="steading-person-details">
 							{{#if cellsEditable}}
 							<label class="steading-person-field"><span class="steading-person-label">{{localize "stonetop.settlement.col.relations"}}</span>
 								<input type="text" class="steading-resident-input" data-resident-field="relations"
-								       value="{{relations}}" placeholder="{{localize "stonetop.settlement.col.relations"}}"></label>
+								       value="{{this.relations}}" placeholder="{{localize "stonetop.settlement.col.relations"}}"></label>
 							{{else if relations}}
-							<div class="steading-person-field"><span class="steading-person-label">{{localize "stonetop.settlement.col.relations"}}</span><span class="steading-person-value steading-person-text">{{relations}}</span></div>
+							<div class="steading-person-field"><span class="steading-person-label">{{localize "stonetop.settlement.col.relations"}}</span><span class="steading-person-value steading-person-text">{{this.relations}}</span></div>
 							{{/if}}
 							{{!-- The rich notes live on the NPC: a rendered preview here, clamped, and with
 							      the wrench on, a pencil that opens the shared pop-up editor. --}}
 							{{#if (or cellsEditable notes)}}
-							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">{{localize "stonetop.settlement.col.notes"}}</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{notesHtml}}}</div>{{#if cellsEditable}}<button type="button" class="steading-member-notes-edit" data-action="editResidentNotes" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
+							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">{{localize "stonetop.settlement.col.notes"}}</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{this.notesHtml}}}</div>{{#if cellsEditable}}<button type="button" class="steading-member-notes-edit" data-action="editResidentNotes" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"
 							        data-tooltip="{{localize "stonetop.settlement.editNotes"}}" aria-label="{{localize "stonetop.settlement.editNotes"}}" tabindex="-1"><i class="fas fa-pen" inert></i></button>{{/if}}</div>
 							{{/if}}
 						</div>

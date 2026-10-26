@@ -21,15 +21,15 @@
 			    wins over the "which move do I trigger" hint, which only matters while they're up. }}
 			{{#with stonetop.deathsDoor.hint}}
 			<p class="stonetop-special-move-locked-hint{{#if isState}} stonetop-deathsdoor-state{{/if}}">
-				<i class="fas {{icon}}"></i>
-				{{text}}
+				<i class="fas {{this.icon}}"></i>
+				{{this.text}}
 			</p>
 			{{/with}}
 
 			{{#with stonetop.deathsDoor.action}}
-			<button type="button" class="{{cls}}" {{#if disabled}}disabled{{/if}}>
-				<i class="fas {{icon}}"></i>
-				{{label}}
+			<button type="button" class="{{this.cls}}" {{#if disabled}}disabled{{/if}}>
+				<i class="fas {{this.icon}}"></i>
+				{{this.label}}
 			</button>
 			{{/with}}
 
@@ -41,8 +41,8 @@
 				{{{localize "stonetop.specialMoves.deathsDoor.result.debilityAsk"}}}
 			</p>
 			{{#each stonetop.deathsDoor.hardToKillTrade}}
-			<button type="button" class="stonetop-deathsdoor-htk-btn" data-debility="{{key}}" data-tooltip="{{description}}">
-				{{name}}
+			<button type="button" class="stonetop-deathsdoor-htk-btn" data-debility="{{this.key}}" data-tooltip="{{this.description}}">
+				{{this.name}}
 			</button>
 			{{/each}}
 			{{/if}}

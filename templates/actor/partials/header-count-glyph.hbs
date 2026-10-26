@@ -23,7 +23,7 @@
         count        the badge; falsy hides it
         countClass   the badge's class, which does not always follow the stem
         openLabelKey / tooltipKey   i18n keys, the latter picked in getData --}}
-<button type="button" class="{{stem}}{{#if active}} {{activeClass}}{{/if}}"
+<button type="button" class="{{this.stem}}{{#if active}} {{this.activeClass}}{{/if}}"
         aria-label="{{localize openLabelKey}}"
         data-tooltip="{{localize tooltipKey brands=brands oaths=oaths count=count}}"
-        data-tooltip-direction="UP"><span class="{{stem}}-icon" aria-hidden="true"></span>{{#if count}}<span class="{{countClass}}" aria-hidden="true">{{count}}</span>{{/if}}</button>
+        data-tooltip-direction="UP"><span class="{{this.stem}}-icon" aria-hidden="true"></span>{{#if count}}<span class="{{this.countClass}}" aria-hidden="true">{{this.count}}</span>{{/if}}</button>

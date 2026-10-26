@@ -27,35 +27,35 @@
 			{{> "stonetop.section-heading" title=(localize "stonetop.character.moves.loveLetter.sectionTitle") collapse="loveLetters"}}
 			<ol class="items-list">
 			{{#each stonetop.loveLetters}}
-				<li class="item stonetop-item stonetop-love-letter{{#if resolved}} is-resolved{{/if}}{{#if draft}} is-draft{{/if}}" data-item-id="{{ownedId}}">
+				<li class="item stonetop-item stonetop-love-letter{{#if resolved}} is-resolved{{/if}}{{#if draft}} is-draft{{/if}}" data-item-id="{{this.ownedId}}">
 					<div class="stonetop-item-header">
-						<strong class="stonetop-item-name">{{name}}</strong>
+						<strong class="stonetop-item-name">{{this.name}}</strong>
 						{{#if draft}}<span class="stonetop-love-letter-resolved-badge">{{localize "stonetop.character.moves.loveLetter.draftBadge"}}</span>
 						{{else if resolved}}<span class="stonetop-love-letter-resolved-badge">{{localize "stonetop.character.moves.loveLetter.resolvedBadge"}}</span>{{/if}}
-						{{#if (and @root.stonetop.canAuthorLoveLetters rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
+						{{#if (and @root.stonetop.canAuthorLoveLetters rollLabel)}}<span class="stonetop-move-roll-chip">+{{this.rollLabel}}</span>{{/if}}
 					</div>
 					{{#if description}}<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>{{/if}}
 					<div class="stonetop-love-letter-actions">
 						{{#if draft}}
-						<button type="button" class="stonetop-love-letter-send" data-item-id="{{ownedId}}"
+						<button type="button" class="stonetop-love-letter-send" data-item-id="{{this.ownedId}}"
 						        title="{{localize 'stonetop.character.moves.loveLetter.sendHint'}}">
 							<i class="fas fa-paper-plane" aria-hidden="true"></i> {{localize "stonetop.character.moves.loveLetter.sendButton"}}
 						</button>
 						{{else if resolved}}
-						<button type="button" class="stonetop-love-letter-resend" data-item-id="{{ownedId}}"
+						<button type="button" class="stonetop-love-letter-resend" data-item-id="{{this.ownedId}}"
 						        title="{{localize 'stonetop.character.moves.loveLetter.resendHint'}}">
 							<i class="fas fa-paper-plane" aria-hidden="true"></i> {{localize "stonetop.character.moves.loveLetter.resendButton"}}
 						</button>
 						{{else}}
-						<button type="button" class="stonetop-love-letter-read" data-item-id="{{ownedId}}">
+						<button type="button" class="stonetop-love-letter-read" data-item-id="{{this.ownedId}}">
 							<i class="fas fa-envelope-open-text" aria-hidden="true"></i> {{localize "stonetop.character.moves.loveLetter.readButton"}}
 						</button>
 						{{/if}}
 						{{#if @root.stonetop.canAuthorLoveLetters}}
-						<a class="stonetop-love-letter-edit" data-item-id="{{ownedId}}" title="{{localize 'stonetop.character.moves.loveLetter.editMove'}}">
+						<a class="stonetop-love-letter-edit" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.loveLetter.editMove'}}">
 							<i class="fas fa-pen"></i>
 						</a>
-						<a class="stonetop-love-letter-delete" data-item-id="{{ownedId}}" title="{{localize 'stonetop.character.moves.loveLetter.deleteMove'}}">
+						<a class="stonetop-love-letter-delete" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.loveLetter.deleteMove'}}">
 							<i class="fas fa-trash"></i>
 						</a>
 						{{/if}}
@@ -177,12 +177,12 @@
 						      (see move-group.hbs). Owned means learned, so they carry
 						      `is-checked` like any owned playbook move and survive the tab's
 						      "Hide un-learned moves" filter. --}}
-						<li class="item stonetop-item is-checked" data-item-id="{{ownedId}}">
+						<li class="item stonetop-item is-checked" data-item-id="{{this.ownedId}}">
 							<div class="stonetop-item-header">
-								<strong class="stonetop-item-name{{#if rollType}} rollable move-rollable{{/if}}"{{#if rollType}} data-roll="{{rollType}}" data-mod=""{{/if}}>{{name}}</strong>
-								{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
+								<strong class="stonetop-item-name{{#if rollType}} rollable move-rollable{{/if}}"{{#if rollType}} data-roll="{{this.rollType}}" data-mod=""{{/if}}>{{this.name}}</strong>
+								{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{this.rollLabel}}</span>{{/if}}
 								{{#if @root.stonetop.movesEdit}}
-								<a class="stonetop-other-move-delete" data-item-id="{{ownedId}}" title="{{localize 'stonetop.character.moves.removeMove'}}">
+								<a class="stonetop-other-move-delete" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.removeMove'}}">
 									<i class="fas fa-trash"></i>
 								</a>
 								{{/if}}
@@ -203,19 +203,19 @@
 					      marked, so the tab's "Hide un-learned moves" filter (which keys off
 					      `.stonetop-item:not(.is-checked)`) treats these the same: learned ones
 					      stay visible with the filter on, un-learned ones drop out. --}}
-					<li class="item stonetop-item{{#if learned}} is-checked{{else}} move-unlearned{{/if}}" data-item-id="{{ownedId}}">
+					<li class="item stonetop-item{{#if learned}} is-checked{{else}} move-unlearned{{/if}}" data-item-id="{{this.ownedId}}">
 						<div class="stonetop-item-header">
 							{{!-- The origin badge goes FIRST so its right float can claim the corner on
 							      line 1 — same DOM-order requirement as the playbook rows' "Starting
 							      move" badge; see the .stonetop-item-source float rules. Only set when
 							      the move came from a playbook that isn't this character's. --}}
-							{{#if sourceLabel}}<span class="stonetop-item-source">{{sourceLabel}}</span>{{/if}}
+							{{#if sourceLabel}}<span class="stonetop-item-source">{{this.sourceLabel}}</span>{{/if}}
 							{{!-- Every row here carries a "learned" checkbox (checked by default).
 							      Un-checking it in edit mode keeps the move on the sheet but inactive —
 							      not rollable, and its bonuses stop applying. Custom moves additionally
 							      answer to the authoring gate, exactly as the delete affordance does. --}}
 							<input type="checkbox" class="stonetop-item-check stonetop-other-move-learned"
-							       data-item-id="{{ownedId}}"
+							       data-item-id="{{this.ownedId}}"
 							       title="{{localize 'stonetop.character.moves.learnedTitle'}}"
 							       {{#if learned}}checked{{/if}}
 							       {{#unless (and @root.stonetop.movesEdit (or (not custom) @root.stonetop.canAuthorCustomMoves))}}disabled{{/unless}}>
@@ -223,8 +223,8 @@
 							      dice icon's `learned` gate used to do by vanishing: the name keeps
 							      its text (the move stays readable, and a click posts it to chat)
 							      and loses the `.rollable` that makes it roll. --}}
-							<strong class="stonetop-item-name{{#if (and rollType learned)}} rollable move-rollable{{/if}}"{{#if (and rollType learned)}} data-roll="{{rollType}}" data-mod=""{{/if}}>{{name}}</strong>
-							{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
+							<strong class="stonetop-item-name{{#if (and rollType learned)}} rollable move-rollable{{/if}}"{{#if (and rollType learned)}} data-roll="{{this.rollType}}" data-mod=""{{/if}}>{{this.name}}</strong>
+							{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{this.rollLabel}}</span>{{/if}}
 							{{#if (and resource learned)}}
 							{{!-- Right-pins the track while it shares the title's line; see
 							      .stonetop-item-header-spacer. --}}
@@ -236,18 +236,18 @@
 									<button type="button" class="stonetop-item-resource-check{{#if checked}} is-checked{{/if}}"
 									        data-move-name="{{../resourceKey}}"
 									        data-index="{{@index}}"></button>
-									{{#if label}}<span class="stonetop-resource-label">{{label}}</span>{{/if}}
+									{{#if label}}<span class="stonetop-resource-label">{{this.label}}</span>{{/if}}
 								</span>
 								{{/each}}
 							</span>
 							{{/if}}
 							{{#if (and custom @root.stonetop.movesEdit @root.stonetop.canAuthorCustomMoves)}}
-							<a class="stonetop-custom-move-edit" data-item-id="{{ownedId}}" title="{{localize 'stonetop.character.moves.custom.editMove'}}">
+							<a class="stonetop-custom-move-edit" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.custom.editMove'}}">
 								<i class="fas fa-pen"></i>
 							</a>
 							{{/if}}
 							{{#if (and @root.stonetop.movesEdit (or (not custom) @root.stonetop.canAuthorCustomMoves))}}
-							<a class="stonetop-other-move-delete" data-item-id="{{ownedId}}" title="{{localize 'stonetop.character.moves.removeMove'}}">
+							<a class="stonetop-other-move-delete" data-item-id="{{this.ownedId}}" title="{{localize 'stonetop.character.moves.removeMove'}}">
 								<i class="fas fa-trash"></i>
 							</a>
 							{{/if}}
@@ -255,7 +255,7 @@
 						{{!-- A custom move may state its outcomes only in its 10+/7-9/6- fields, with no
 						      description: its ladder still shows, as it does on the roll card. --}}
 						{{#if (or description moveResults)}}<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>{{/if}}
-						{{#if requiresLabel}}<p class="stonetop-move-note">Requires: {{requiresLabel}}</p>{{/if}}
+						{{#if requiresLabel}}<p class="stonetop-move-note">Requires: {{this.requiresLabel}}</p>{{/if}}
 					</li>
 				{{/each}}
 				</ol>

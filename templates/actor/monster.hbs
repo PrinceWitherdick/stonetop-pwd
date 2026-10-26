@@ -1,4 +1,4 @@
-<form class="{{cssClass}} stonetop-monster-sheet" autocomplete="off">
+<form class="{{this.cssClass}} stonetop-monster-sheet" autocomplete="off">
 	<div class="sheet-wrapper stonetop-monster-container">
 
 		<header class="sheet-header stonetop-sheet-header stonetop-monster-header{{#unless stonetop.showPortrait}} stonetop-monster-header--no-portrait{{/unless}}">
@@ -180,11 +180,11 @@
 						{{#each stonetop.damageModes}}
 						<li class="stonetop-monster-damage-mode">
 							{{#if formula}}
-							<a class="stonetop-monster-damage-roll" data-mode-index="{{@index}}" data-roll-formula="{{formula}}" data-roll-label="{{title}}" data-roll-keywords="{{keywords}}" data-roll-mode="{{rollMode}}" title="Roll damage ({{formula}})">
+							<a class="stonetop-monster-damage-roll" data-mode-index="{{@index}}" data-roll-formula="{{this.formula}}" data-roll-label="{{this.title}}" data-roll-keywords="{{this.keywords}}" data-roll-mode="{{this.rollMode}}" title="Roll damage ({{this.formula}})">
 								<i class="fas fa-dice-d6"></i>
 							</a>
 							{{/if}}
-							<span class="stonetop-monster-prose">{{text}}</span>
+							<span class="stonetop-monster-prose">{{this.text}}</span>
 						</li>
 						{{/each}}
 					</ul>
@@ -289,7 +289,7 @@
 							<span class="stonetop-monster-numbers-fields">
 								<span class="stonetop-monster-numbers-nowrap"><input class="stonetop-monster-swarm-count" data-numbers-count="attackers" type="number" min="1" value="{{stonetop.swarmCount}}" title="How many of them pile onto that one foe"> <span class="stonetop-outnumber-vs">attackers</span></span>
 								<span class="stonetop-monster-numbers-result" data-numbers-result data-numbers-clauses>{{#each stonetop.swarmClauses}}{{#unless @first}} {{/unless}}<span class="stonetop-numbers-clause">{{this}}</span>{{/each}}</span>
-								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.swarmFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{name}} (swarm)" title="Roll the swarm's damage against that foe"><i class="fas fa-dice-d6"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.swarmFormula}}</span></span>
+								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.swarmFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{this.name}} (swarm)" title="Roll the swarm's damage against that foe"><i class="fas fa-dice-d6"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.swarmFormula}}</span></span>
 							</span>
 						</span>
 
@@ -301,7 +301,7 @@
 							<span class="stonetop-monster-numbers-fields">
 								<span class="stonetop-monster-numbers-nowrap"><input class="stonetop-monster-outnumber-yours" data-numbers-count="yours" type="number" min="1" value="{{stonetop.swarmCount}}" title="How many of this group"> <span class="stonetop-outnumber-vs">vs</span> <input class="stonetop-monster-outnumber-theirs" data-numbers-count="theirs" type="number" min="1" value="1" title="How many they face"></span>
 								<span class="stonetop-monster-numbers-result" data-numbers-result data-numbers-clauses>{{#each stonetop.exchangeClauses}}{{#unless @first}} {{/unless}}<span class="stonetop-numbers-clause">{{this}}</span>{{/each}}</span>
-								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.exchangeFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{name}} (group)" title="Roll the group's damage in an abstracted exchange"><i class="fas fa-dice-d6"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.exchangeFormula}}</span></span>
+								<span class="stonetop-monster-numbers-nowrap"><a class="stonetop-monster-damage-roll stonetop-monster-group-dmg-roll" data-numbers-roll data-roll-formula="{{stonetop.exchangeFormula}}" data-base-formula="{{stonetop.baseDamageFormula}}" data-roll-label="{{this.name}} (group)" title="Roll the group's damage in an abstracted exchange"><i class="fas fa-dice-d6"></i></a> <span class="stonetop-monster-group-dmg-label" data-numbers-formula>{{stonetop.exchangeFormula}}</span></span>
 							</span>
 						</span>
 						{{/if}}
@@ -320,14 +320,14 @@
 				{{> "stonetop.section-heading" title=(localize "stonetop.monster.moves")}}
 				<ul class="stonetop-monster-moves-list{{#unless stonetop.editMode}} stonetop-monster-moves-list--cols{{/unless}}">
 					{{#each monsterMoves}}
-					<li class="stonetop-monster-move-item{{#if boostActive}} is-boost-active{{/if}}{{#if ../stonetop.editMode}} stonetop-monster-move-item--edit{{/if}}" data-item-id="{{id}}">
+					<li class="stonetop-monster-move-item{{#if boostActive}} is-boost-active{{/if}}{{#if ../stonetop.editMode}} stonetop-monster-move-item--edit{{/if}}" data-item-id="{{this.id}}">
 						<div class="stonetop-monster-move-body">
 							{{#if ../stonetop.editMode}}
 							{{!-- Edit mode: name, roll formula, and description are all edited
 							      inline on the stat block (like the rest of the sheet). --}}
 							<div class="stonetop-monster-move-head">
 								<input class="stonetop-monster-move-name-input stonetop-monster-move-field" type="text"
-								       data-field="name" value="{{name}}"
+								       data-field="name" value="{{this.name}}"
 								       placeholder='{{localize "stonetop.monster.moveNamePlaceholder"}}'>
 								<input class="stonetop-monster-move-formula-input stonetop-monster-move-field" type="text"
 								       data-field="system.rollFormula" value="{{system.rollFormula}}"
@@ -339,7 +339,7 @@
 								</span>
 							</div>
 							<prose-mirror class="stonetop-monster-rich-editor stonetop-monster-move-editor stonetop-monster-move-field"
-							              data-field="system.description" toggled value="{{system.description}}">{{{enrichedDescription}}}</prose-mirror>
+							              data-field="system.description" toggled value="{{system.description}}">{{{this.enrichedDescription}}}</prose-mirror>
 							{{else}}
 							<div class="stonetop-monster-move-head">
 								{{#if system.rollFormula}}
@@ -347,7 +347,7 @@
 									<i class="fas fa-dice-d6"></i>
 								</a>
 								{{/if}}
-								<span class="stonetop-monster-move-name"{{#if boostTooltip}} data-tooltip="{{boostTooltip}}" data-tooltip-direction="UP"{{/if}}>{{#if showBoostIcon}}<i class="fas fa-shield-halved stonetop-monster-move-boost-icon"></i> {{/if}}{{name}}</span>
+								<span class="stonetop-monster-move-name"{{#if boostTooltip}} data-tooltip="{{this.boostTooltip}}" data-tooltip-direction="UP"{{/if}}>{{#if showBoostIcon}}<i class="fas fa-shield-halved stonetop-monster-move-boost-icon"></i> {{/if}}{{this.name}}</span>
 							</div>
 							{{#if system.description}}
 							<div class="stonetop-monster-move-description">{{{moveBody system.description system.moveResults}}}</div>

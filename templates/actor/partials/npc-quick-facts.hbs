@@ -25,7 +25,7 @@
 	<section class="stonetop-npc-field stonetop-npc-following">
 		<strong class="stonetop-npc-stat-key">{{localize "stonetop.npc.following"}}</strong>
 		<span class="stonetop-npc-prose stonetop-npc-following-list">
-			{{#each stonetop.following}}<a class="stonetop-npc-following-pc" data-pc-id="{{id}}" aria-label='{{localize "stonetop.relationships.open" name=name}}'><i class="fas fa-user"></i> {{name}}</a>{{#unless @last}}, {{/unless}}{{/each}}
+			{{#each stonetop.following}}<a class="stonetop-npc-following-pc" data-pc-id="{{this.id}}" aria-label='{{localize "stonetop.relationships.open" name=name}}'><i class="fas fa-user"></i> {{this.name}}</a>{{#unless @last}}, {{/unless}}{{/each}}
 			{{!-- Their card's Loyalty and Readiness (read there, never stored here), and the Order window. --}}
 			{{#with stonetop.followerTrack}}
 			{{#if hasLoyalty}}<span class="stonetop-npc-follower-stat">{{localize "stonetop.npc.followerLoyalty" value=loyalty}}</span>{{/if}}

@@ -41,15 +41,15 @@
 			{{> "stonetop.section-heading" title=(localize "stonetop.postDeath.outcomes.title") collapse="postDeathOutcomes"}}
 			<p class="stonetop-pdi-hint">{{localize "stonetop.postDeath.outcomes.hint"}}</p>
 			{{#each stonetop.postDeathTab.outcomes.rows}}
-			<div class="stonetop-pdi-outcome-row" role="group" aria-label="{{title}}">
-				<p class="stonetop-pdi-outcome-title">{{title}}</p>
+			<div class="stonetop-pdi-outcome-row" role="group" aria-label="{{this.title}}">
+				<p class="stonetop-pdi-outcome-title">{{this.title}}</p>
 				<div class="stonetop-pdi-outcome-actions">
 					{{#each actions}}
 					<button type="button" class="stonetop-pdi-outcome-btn{{#if danger}} stonetop-pdi-outcome-btn--danger{{/if}}"
-					        data-pdi-action="{{action}}" data-source="{{source}}"
-					        {{#if disabled}}aria-disabled="true" data-tooltip="{{reason}}"{{/if}}>
-						<i class="fas {{icon}}" aria-hidden="true"></i>
-						<span>{{label}}</span>
+					        data-pdi-action="{{this.action}}" data-source="{{this.source}}"
+					        {{#if disabled}}aria-disabled="true" data-tooltip="{{this.reason}}"{{/if}}>
+						<i class="fas {{this.icon}}" aria-hidden="true"></i>
+						<span>{{this.label}}</span>
 					</button>
 					{{/each}}
 				</div>
@@ -66,8 +66,8 @@
 			<div class="stonetop-pdi-favor-row{{#if stonetop.postDeathTab.favor.caution}} is-cautioned{{/if}}" role="group" aria-label="{{localize "stonetop.postDeath.outcomes.favorTitle"}}">
 				{{#each stonetop.postDeathTab.favor.pips}}
 				<button type="button" class="stonetop-pdi-favor-pip{{#if filled}} is-filled{{/if}}"
-				        data-pdi-action="favor-pip" data-index="{{index}}"
-				        aria-pressed="{{#if filled}}true{{else}}false{{/if}}" aria-label="{{label}}"
+				        data-pdi-action="favor-pip" data-index="{{this.index}}"
+				        aria-pressed="{{#if filled}}true{{else}}false{{/if}}" aria-label="{{this.label}}"
 				        {{#unless @root.stonetop.postDeathTab.favor.canSet}}disabled{{/unless}}></button>
 				{{/each}}
 				<span class="stonetop-pdi-favor-count">{{stonetop.postDeathTab.favor.heldLabel}}</span>
@@ -110,7 +110,7 @@
 				{{! The option's own alternatives (STRANGE APPETITES' "Pick 1"), not free text — so
 				    the tab offers the same closed list the chooser did rather than inviting a
 				    sentence the healing trigger can't read. }}
-				<span class="stonetop-pdi-writein-label">{{label}}</span>
+				<span class="stonetop-pdi-writein-label">{{this.label}}</span>
 				<div class="stonetop-pdi-writein-picks">
 					{{#each picks}}
 					<label class="stonetop-pdi-writein-pick-label{{#if (eq this ../value)}} is-chosen{{/if}}">
@@ -126,14 +126,14 @@
 				{{! One span around the label, not a bare text node: a flex label splits inline text
 				    across its own tracks. }}
 				<label class="stonetop-pdi-writein-field">
-					<span class="stonetop-pdi-writein-label">{{label}}</span>
+					<span class="stonetop-pdi-writein-label">{{this.label}}</span>
 					<input type="text" class="stonetop-pdi-writein"
-					       data-section="{{section}}" data-option="{{option}}"
-					       value="{{value}}" placeholder="{{placeholder}}">
+					       data-section="{{this.section}}" data-option="{{this.option}}"
+					       value="{{this.value}}" placeholder="{{this.placeholder}}">
 				</label>
 				{{/if}}
 				{{else}}
-				<p class="stonetop-pdi-purpose-text"><strong>{{label}}</strong>: {{value}}</p>
+				<p class="stonetop-pdi-purpose-text"><strong>{{this.label}}</strong>: {{this.value}}</p>
 				{{/if}}
 			</div>
 			{{/each}}
@@ -166,7 +166,7 @@
 			<p class="stonetop-pdi-hint">{{localize "stonetop.postDeath.crossedOffHint"}}</p>
 			<ul class="stonetop-pdi-crossed-list">
 				{{#each stonetop.postDeathInsert.activeInsert.crossedOffMarks}}
-				<li><s>{{label}}</s></li>
+				<li><s>{{this.label}}</s></li>
 				{{/each}}
 			</ul>
 		</div>
@@ -224,11 +224,11 @@
 					<div class="stonetop-item-header">
 						<input type="radio" class="stonetop-item-check stonetop-pdi-instinct"
 						       name="stonetop-pdi-instinct-{{../stonetop.postDeathRadioGroup}}"
-						       value="{{value}}"
+						       value="{{this.value}}"
 						       {{#if selected}}checked{{/if}}>
-						<strong class="stonetop-item-name">{{word}}</strong>
+						<strong class="stonetop-item-name">{{this.word}}</strong>
 					</div>
-					<div class="stonetop-item-description">{{description}}</div>
+					<div class="stonetop-item-description">{{this.description}}</div>
 				</label>
 				{{/each}}
 			</div>
@@ -247,11 +247,11 @@
 			<p class="stonetop-pdi-hint">{{localize "stonetop.postDeath.chooseFateHint"}}</p>
 			<div class="stonetop-pdi-available">
 				{{#each stonetop.postDeathInsert.availableInserts}}
-				<button type="button" class="stonetop-pdi-activate" data-slug="{{slug}}">
-					{{#if img}}<img class="stonetop-pdi-activate-img" src="{{img}}" alt="">{{/if}}
+				<button type="button" class="stonetop-pdi-activate" data-slug="{{this.slug}}">
+					{{#if img}}<img class="stonetop-pdi-activate-img" src="{{this.img}}" alt="">{{/if}}
 					<span class="stonetop-pdi-activate-text">
-						<span class="stonetop-pdi-activate-name">{{name}}</span>
-						{{#if description}}<span class="stonetop-pdi-activate-blurb">{{{description}}}</span>{{/if}}
+						<span class="stonetop-pdi-activate-name">{{this.name}}</span>
+						{{#if description}}<span class="stonetop-pdi-activate-blurb">{{{this.description}}}</span>{{/if}}
 					</span>
 				</button>
 				{{/each}}

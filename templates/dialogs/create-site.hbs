@@ -19,7 +19,7 @@
           <div class="stonetop-guide-banner-title">{{step.title}}</div>
           <div class="stonetop-guide-banner-sub">{{#if isEdit}}Edit a site{{else}}Create a site{{/if}}</div>
         </div>
-        <div class="stonetop-guide-count">{{stepIndex}} / {{stepCount}}</div>
+        <div class="stonetop-guide-count">{{this.stepIndex}} / {{this.stepCount}}</div>
       </div>
 
       <div class="stonetop-spring-body">{{{step.body}}}</div>
@@ -46,10 +46,10 @@
         <label class="stonetop-cf-label">Manner of site
           <select class="stonetop-cf-input stonetop-cs-manner">
             <option value="">(choose a Book II entry)</option>
-            {{#each manners}}<option value="{{id}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+            {{#each manners}}<option value="{{this.id}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
           </select>
         </label>
-        {{#if mannerHint}}<p class="stonetop-cs-note">{{mannerHint}} <span class="stonetop-cs-page">{{mannerPage}}</span></p>{{/if}}
+        {{#if mannerHint}}<p class="stonetop-cs-note">{{this.mannerHint}} <span class="stonetop-cs-page">{{this.mannerPage}}</span></p>{{/if}}
 
         {{#if tables.length}}
         <button type="button" class="stonetop-cs-roll-all stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll the lot</button>
@@ -59,13 +59,13 @@
         <label class="stonetop-cf-label">Region
           <select class="stonetop-cf-input stonetop-cs-region">
             <option value="">(anywhere / not yet placed)</option>
-            {{#each regions}}<option value="{{id}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+            {{#each regions}}<option value="{{this.id}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
           </select>
         </label>
         {{#if terrainPick.slots.length}}
         {{> "stonetop.cs-pick-slots" terrainPick}}
         {{#each terrainTables}}{{> "stonetop.cs-pick-slots" this}}{{/each}}
-        {{#if regionNote}}<p class="stonetop-cs-note">{{regionNote}} <span class="stonetop-cs-page">{{regionPage}}</span></p>{{/if}}
+        {{#if regionNote}}<p class="stonetop-cs-note">{{this.regionNote}} <span class="stonetop-cs-page">{{this.regionPage}}</span></p>{{/if}}
         {{/if}}
         {{/if}}
 
@@ -119,23 +119,23 @@
         {{#each tableRows}}
         <div class="stonetop-cs-rtable">
           <div class="stonetop-cf-gear-row">
-            <input type="text" class="stonetop-cf-input stonetop-cs-table-caption" data-index="{{index}}" value="{{caption}}" placeholder="What the crinwin are up to">
-            <span class="stonetop-cs-die">{{die}}</span>
-            <button type="button" class="stonetop-cs-table-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{index}}"><i class="fas fa-times"></i></button>
+            <input type="text" class="stonetop-cf-input stonetop-cs-table-caption" data-index="{{this.index}}" value="{{this.caption}}" placeholder="What the crinwin are up to">
+            <span class="stonetop-cs-die">{{this.die}}</span>
+            <button type="button" class="stonetop-cs-table-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
           </div>
           {{#each rows}}
           <div class="stonetop-cf-gear-row stonetop-cs-trow-line">
-            <span class="stonetop-cs-roll-no">{{roll}}</span>
-            <input type="text" class="stonetop-cf-input stonetop-cs-trow" data-table="{{../index}}" data-index="{{rowIndex}}" value="{{text}}" placeholder="fighting over junk; mimicking the kids' songs…">
+            <span class="stonetop-cs-roll-no">{{this.roll}}</span>
+            <input type="text" class="stonetop-cf-input stonetop-cs-trow" data-table="{{../index}}" data-index="{{this.rowIndex}}" value="{{this.text}}" placeholder="fighting over junk; mimicking the kids' songs…">
             {{!-- How many faces of the die this row covers: the book's "1-3" row is 3. --}}
             <label class="stonetop-cs-trow-span-wrap" data-tooltip="How many faces of the die this result covers (a row the book prints as 1-3 covers 3)" data-tooltip-direction="UP">
               <span aria-hidden="true">&times;</span>
-              <input type="number" class="stonetop-cf-input stonetop-cs-trow-span" data-table="{{../index}}" data-index="{{rowIndex}}" min="1" max="{{@root.maxRowSpan}}" step="1" value="{{span}}" aria-label="Faces this result covers">
+              <input type="number" class="stonetop-cf-input stonetop-cs-trow-span" data-table="{{../index}}" data-index="{{this.rowIndex}}" min="1" max="{{@root.maxRowSpan}}" step="1" value="{{this.span}}" aria-label="Faces this result covers">
             </label>
-            <button type="button" class="stonetop-cs-trow-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-table="{{../index}}" data-index="{{rowIndex}}"><i class="fas fa-times"></i></button>
+            <button type="button" class="stonetop-cs-trow-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-table="{{../index}}" data-index="{{this.rowIndex}}"><i class="fas fa-times"></i></button>
           </div>
           {{/each}}
-          <button type="button" class="stonetop-cs-trow-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-table="{{index}}"><i class="fas fa-plus"></i> Add result</button>
+          <button type="button" class="stonetop-cs-trow-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-table="{{this.index}}"><i class="fas fa-plus"></i> Add result</button>
         </div>
         {{/each}}
         <button type="button" class="stonetop-cs-table-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add"><i class="fas fa-table-list"></i> Add a table</button>
@@ -145,23 +145,23 @@
         {{#with preview}}
         <div class="stonetop-cf-preview">
           <div class="stonetop-cf-preview-head">
-            <span class="stonetop-cf-preview-name">{{name}}</span>
+            <span class="stonetop-cf-preview-name">{{this.name}}</span>
             <span class="stonetop-cf-preview-type">Site</span>
           </div>
           {{#if foundation.length}}
           <div class="stonetop-cf-preview-line">{{#each foundation}}{{this}}{{#unless @last}} &middot; {{/unless}}{{/each}}</div>
           {{/if}}
-          {{#if why}}<div class="stonetop-cf-preview-line"><strong>Why it's here</strong> {{why}}</div>{{/if}}
-          {{#if description}}<div class="stonetop-cf-preview-line stonetop-cs-preview-desc">{{description}}</div>{{/if}}
+          {{#if why}}<div class="stonetop-cf-preview-line"><strong>Why it's here</strong> {{this.why}}</div>{{/if}}
+          {{#if description}}<div class="stonetop-cf-preview-line stonetop-cs-preview-desc">{{this.description}}</div>{{/if}}
           {{#if picks.length}}
-          <div class="stonetop-cf-preview-line">{{#each picks}}<strong>{{label}}</strong> {{value}}{{#unless @last}}; {{/unless}}{{/each}}</div>
+          <div class="stonetop-cf-preview-line">{{#each picks}}<strong>{{this.label}}</strong> {{this.value}}{{#unless @last}}; {{/unless}}{{/each}}</div>
           {{/if}}
           {{#if areas.length}}
           <div class="stonetop-cf-preview-line"><strong>Areas</strong> {{#each areas}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}</div>
           {{/if}}
           {{#if counts.length}}
           <div class="stonetop-cf-preview-stats">
-            {{#each counts}}<span><strong>{{label}}</strong> {{n}}</span>{{/each}}
+            {{#each counts}}<span><strong>{{this.label}}</strong> {{this.n}}</span>{{/each}}
           </div>
           {{/if}}
         </div>
@@ -180,7 +180,7 @@
 
   <div class="stonetop-guide-nav">
     <button class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
-    <span class="stonetop-spring-step-label">{{stepLabel}}</span>
+    <span class="stonetop-spring-step-label">{{this.stepLabel}}</span>
     {{#if isLast}}
     <button class="stonetop-cs-create stonetop-guide-btn--primary"><i class="fas {{#if isEdit}}fa-check{{else}}fa-mountain-sun{{/if}}"></i> {{#if isEdit}}Save site{{else}}Create site{{/if}}</button>
     {{else}}

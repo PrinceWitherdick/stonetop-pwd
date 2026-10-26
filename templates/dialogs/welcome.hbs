@@ -12,9 +12,9 @@
       <ol class="stonetop-guide-toc-list">
         {{#each sections}}
         <li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
-          <button type="button" class="stonetop-guide-toc-btn stonetop-welcome-tab" data-tab="{{key}}"{{#if selected}} aria-current="true"{{/if}}>
-            <i class="fas {{icon}} stonetop-guide-toc-icon"></i>
-            <span class="stonetop-guide-toc-text" data-label="{{title}}">{{title}}</span>
+          <button type="button" class="stonetop-guide-toc-btn stonetop-welcome-tab" data-tab="{{this.key}}"{{#if selected}} aria-current="true"{{/if}}>
+            <i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+            <span class="stonetop-guide-toc-text" data-label="{{this.title}}">{{this.title}}</span>
           </button>
         </li>
         {{/each}}
@@ -43,7 +43,7 @@
           <h2>Welcome to <span class="stonetop-welcome-logo">Stonetop</span>!</h2>
         </header>
 
-        <p class="stonetop-welcome-lead">{{{premiseHtml}}}</p>
+        <p class="stonetop-welcome-lead">{{{this.premiseHtml}}}</p>
 
         <p class="stonetop-welcome-intro">
           The first session is mostly about building the village and its heroes together. Work through these steps as a group; there are no wrong answers, only the world you make.
@@ -87,7 +87,7 @@
               because that card is easy to miss and never comes back. --}}
         {{#if rebuildableArt}}
         <button type="button" class="stonetop-welcome-action" data-action="rebuild-portraits"{{#if rebuilding}} disabled{{/if}}>
-          <i class="fas fa-crop-simple"></i> Build {{rebuildableArt}} more portraits from art you already have
+          <i class="fas fa-crop-simple"></i> Build {{this.rebuildableArt}} more portraits from art you already have
         </button>
         {{/if}}
         <div class="stonetop-welcome-notice stonetop-welcome-notice--info">
@@ -130,20 +130,20 @@
           {{#each players}}
           <li class="stonetop-welcome-player">
             <span class="stonetop-welcome-player-status {{#if active}}is-online{{else}}is-offline{{/if}}" title="{{#if active}}Online{{else}}Offline{{/if}}"></span>
-            <img class="stonetop-welcome-player-avatar" src="{{avatar}}" alt="">
+            <img class="stonetop-welcome-player-avatar" src="{{this.avatar}}" alt="">
             <div class="stonetop-welcome-player-info">
-              <span class="stonetop-welcome-player-name" style="color: {{color}};">{{name}}</span>
+              <span class="stonetop-welcome-player-name" style="color: {{this.color}};">{{this.name}}</span>
               {{#if characters.length}}
               <span class="stonetop-welcome-player-has">
                 has
-                {{#each characters}}<span class="stonetop-welcome-player-entry"><a class="stonetop-welcome-player-char" data-actor-id="{{id}}" title="Open this character sheet">{{name}}</a>{{#if progress.playbook}}<span class="stonetop-welcome-player-playbook" title="Selected playbook">{{progress.playbook}}</span>{{/if}}{{#if progress}}<span class="stonetop-welcome-player-progress stonetop-welcome-player-progress--{{progress.status}}" title="Character creation progress">{{progress.text}}</span>{{/if}}</span>{{/each}}
+                {{#each characters}}<span class="stonetop-welcome-player-entry"><a class="stonetop-welcome-player-char" data-actor-id="{{this.id}}" title="Open this character sheet">{{this.name}}</a>{{#if progress.playbook}}<span class="stonetop-welcome-player-playbook" title="Selected playbook">{{progress.playbook}}</span>{{/if}}{{#if progress}}<span class="stonetop-welcome-player-progress stonetop-welcome-player-progress--{{progress.status}}" title="Character creation progress">{{progress.text}}</span>{{/if}}</span>{{/each}}
               </span>
               {{/if}}
             </div>
             {{!-- Not styled as destructive for a player who already has one: the button now
                   asks whether the new character joins theirs or replaces it, and only the
                   second answer deletes anything. --}}
-            <button type="button" class="stonetop-welcome-create" data-user-id="{{id}}"{{#if creating}} disabled{{/if}}>
+            <button type="button" class="stonetop-welcome-create" data-user-id="{{this.id}}"{{#if creating}} disabled{{/if}}>
               <i class="fas fa-user-plus"></i> <span class="stonetop-welcome-create-label">{{#if characters.length}}Another Character{{else}}Create Character{{/if}}</span>
             </button>
           </li>

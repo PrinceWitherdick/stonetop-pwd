@@ -22,7 +22,7 @@
 
 	<header class="stonetop-timeline-toolbar">
 		{{#if canEdit}}
-		<button type="button" class="stonetop-cta stonetop-timeline-new" data-track-id="{{trackId}}"
+		<button type="button" class="stonetop-cta stonetop-timeline-new" data-track-id="{{this.trackId}}"
 		        data-timeline-focus="new"
 		        data-tooltip="{{localize "stonetop.timeline.newEntryTooltip"}}">
 			<i class="fas fa-feather-pointed" aria-hidden="true"></i>
@@ -72,16 +72,16 @@
 
 					<ul class="stonetop-timeline-colours-list">
 						{{#each colours.rows}}
-						<li class="stonetop-timeline-colours-row stonetop-timeline-kind--{{kind}}" data-kind="{{kind}}" style="--tl-kind: {{colour}};">
+						<li class="stonetop-timeline-colours-row stonetop-timeline-kind--{{this.kind}}" data-kind="{{this.kind}}" style="--tl-kind: {{this.colour}};">
 							<span class="stonetop-timeline-colours-chip">
-								<i class="fas {{icon}}" aria-hidden="true"></i>
-								<span>{{label}}</span>
+								<i class="fas {{this.icon}}" aria-hidden="true"></i>
+								<span>{{this.label}}</span>
 							</span>
-							<input type="color" class="stonetop-timeline-colours-pick" value="{{value}}"
-							       data-timeline-focus="colour-{{kind}}"
-							       aria-label="{{pickLabel}}" data-tooltip="{{pickLabel}}">
+							<input type="color" class="stonetop-timeline-colours-pick" value="{{this.value}}"
+							       data-timeline-focus="colour-{{this.kind}}"
+							       aria-label="{{this.pickLabel}}" data-tooltip="{{this.pickLabel}}">
 							<button type="button" class="stonetop-timeline-colours-reset"{{#unless repainted}} hidden{{/unless}}
-							        data-tooltip="{{resetLabel}}" aria-label="{{resetLabel}}">
+							        data-tooltip="{{this.resetLabel}}" aria-label="{{this.resetLabel}}">
 								<i class="fas fa-rotate-left" aria-hidden="true"></i>
 								<span>{{localize "stonetop.timeline.colours.reset"}}</span>
 							</button>
@@ -116,7 +116,7 @@
 				<summary class="stonetop-timeline-show-summary" data-timeline-focus="show-summary">
 					<i class="fas fa-filter" aria-hidden="true"></i>
 					<span>{{localize "stonetop.timeline.show.label"}}</span>
-					{{#if hiddenCount}}<span class="stonetop-timeline-show-count">{{hiddenCountLabel}}</span>{{/if}}
+					{{#if hiddenCount}}<span class="stonetop-timeline-show-count">{{this.hiddenCountLabel}}</span>{{/if}}
 				</summary>
 				<div class="stonetop-timeline-show-menu">
 					{{#if threads.length}}
@@ -125,10 +125,10 @@
 						<span class="stonetop-timeline-show-heading" aria-hidden="true">{{localize "stonetop.timeline.show.threads"}}</span>
 						{{#each threads}}
 						<label class="stonetop-timeline-show-kind stonetop-timeline-show-thread">
-							<input type="checkbox" class="stonetop-timeline-show-check" data-timeline-thread="{{trackId}}"
-							       data-timeline-focus="thread-{{trackId}}"{{#if shown}} checked{{/if}}>
-							<i class="fas {{icon}}" aria-hidden="true"></i>
-							<span>{{label}}</span>
+							<input type="checkbox" class="stonetop-timeline-show-check" data-timeline-thread="{{this.trackId}}"
+							       data-timeline-focus="thread-{{this.trackId}}"{{#if shown}} checked{{/if}}>
+							<i class="fas {{this.icon}}" aria-hidden="true"></i>
+							<span>{{this.label}}</span>
 						</label>
 						{{/each}}
 					</div>
@@ -136,11 +136,11 @@
 						<span class="stonetop-timeline-show-heading" aria-hidden="true">{{localize "stonetop.timeline.show.kinds"}}</span>
 					{{/if}}
 					{{#each kinds}}
-					<label class="stonetop-timeline-show-kind stonetop-timeline-kind--{{kind}}"{{#if style}} style="{{style}}"{{/if}}>
-						<input type="checkbox" class="stonetop-timeline-show-check" data-timeline-source="{{source}}"
-						       data-timeline-focus="show-{{source}}"{{#if shown}} checked{{/if}}>
-						<i class="fas {{icon}}" aria-hidden="true"></i>
-						<span>{{label}}</span>
+					<label class="stonetop-timeline-show-kind stonetop-timeline-kind--{{this.kind}}"{{#if style}} style="{{this.style}}"{{/if}}>
+						<input type="checkbox" class="stonetop-timeline-show-check" data-timeline-source="{{this.source}}"
+						       data-timeline-focus="show-{{this.source}}"{{#if shown}} checked{{/if}}>
+						<i class="fas {{this.icon}}" aria-hidden="true"></i>
+						<span>{{this.label}}</span>
 					</label>
 					{{/each}}
 					{{#if threads.length}}</div></div>{{/if}}
@@ -193,7 +193,7 @@
 
 	{{!-- Focusable, so a keyboard can scroll it -- across as well as down -- and named, so a screen
 	      reader says what it has landed in. --}}
-	<div class="stonetop-timeline-scroll" tabindex="0" role="region" aria-label="{{scrollLabel}}"{{#if ages}} data-age-rows style="--timeline-age-rows: {{ages.rows}};"{{/if}}>
+	<div class="stonetop-timeline-scroll" tabindex="0" role="region" aria-label="{{this.scrollLabel}}"{{#if ages}} data-age-rows style="--timeline-age-rows: {{ages.rows}};"{{/if}}>
 	{{!-- The CANVAS: everything below, padded on every side by the empty room the timeline can be
 	      dragged off into (utils/drag-scroll.js sizes it; the stylesheet spends it). Not re-indented
 	      under it, so the shapes below read as they always did. --}}
@@ -261,18 +261,18 @@
 				<div class="stonetop-timeline-swim" style="--timeline-swim-cols: 15rem{{#each timeline.periods}}{{#if startsYear}} auto{{/if}}{{#unless ageMark}} minmax(min-content, 1fr){{/unless}}{{/each}};">
 					{{#each timeline.periods}}
 					{{#if startsYear}}
-					<h2 class="stonetop-timeline-swim-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}>{{> stonetop.timeline-year-chip}}{{#if ageRoom}}<span class="stonetop-timeline-age-room" aria-hidden="true" style="--age-room-share: {{ageRoomShare}};">{{ageRoom}}</span>{{/if}}</h2>
+					<h2 class="stonetop-timeline-swim-year" data-year="{{this.year}}"{{#if ageMark}} data-age-mark{{/if}}>{{> stonetop.timeline-year-chip}}{{#if ageRoom}}<span class="stonetop-timeline-age-room" aria-hidden="true" style="--age-room-share: {{this.ageRoomShare}};">{{this.ageRoom}}</span>{{/if}}</h2>
 					{{/if}}
 					{{!-- An Age's bare year (timeline-view.js#withAgeMarks) is its separator alone. --}}
 					{{#unless ageMark}}
-					<div class="stonetop-timeline-swim-head{{#if seasonClass}} {{seasonClass}}{{/if}}{{#if ghost}} stonetop-timeline-swim-head--ghost{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>
+					<div class="stonetop-timeline-swim-head{{#if seasonClass}} {{this.seasonClass}}{{/if}}{{#if ghost}} stonetop-timeline-swim-head--ghost{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}" data-period="{{this.key}}"{{#unless undated}} data-year="{{this.year}}"{{/unless}}>
 						{{~> "stonetop.timeline-period-head"}}
 					</div>
 					{{/unless}}
 					{{/each}}
 
 					{{#each timeline.swimlanes}}
-					<div class="stonetop-timeline-lane-head stonetop-timeline-swim-lane-head" data-track-id="{{trackId}}">
+					<div class="stonetop-timeline-lane-head stonetop-timeline-swim-lane-head" data-track-id="{{this.trackId}}">
 						{{> "stonetop.timeline-lane-head"}}
 					</div>
 					{{#each cells}}
@@ -281,7 +281,7 @@
 					{{/if}}
 					{{#unless ageMark}}
 					<div class="stonetop-timeline-lane{{#if isEmpty}} stonetop-timeline-lane--empty{{/if}}"
-					     data-track-id="{{trackId}}">
+					     data-track-id="{{this.trackId}}">
 						<ol class="stonetop-timeline-cards">
 							{{#each entries}}{{> "stonetop.timeline-card"}}{{/each}}
 							{{#if add}}{{> "stonetop.timeline-add-slot" add}}{{/if}}
@@ -299,7 +299,7 @@
 					<div class="stonetop-timeline-lane-heads">
 						<span class="stonetop-timeline-lane-spacer" aria-hidden="true"></span>
 						{{#each timeline.tracks}}
-						<div class="stonetop-timeline-lane-head" data-track-id="{{trackId}}">
+						<div class="stonetop-timeline-lane-head" data-track-id="{{this.trackId}}">
 							{{> "stonetop.timeline-lane-head"}}
 						</div>
 						{{/each}}
@@ -307,18 +307,18 @@
 
 					{{#each timeline.periods}}
 					{{#if startsYear}}
-					<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell">{{> stonetop.timeline-year-chip}}</span>{{#if ageRoom}}<span class="stonetop-timeline-age-room" aria-hidden="true" style="--age-room-share: {{ageRoomShare}};">{{ageRoom}}</span>{{/if}}</h2>
+					<h2 class="stonetop-timeline-year" data-year="{{this.year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell">{{> stonetop.timeline-year-chip}}</span>{{#if ageRoom}}<span class="stonetop-timeline-age-room" aria-hidden="true" style="--age-room-share: {{this.ageRoomShare}};">{{this.ageRoom}}</span>{{/if}}</h2>
 					{{/if}}
 					{{!-- An Age's bare year is its heading alone. --}}
 					{{#unless ageMark}}
-					<div class="stonetop-timeline-row{{#if ghost}} stonetop-timeline-row--ghost{{/if}}" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>
-						<div class="stonetop-timeline-row-head{{#if seasonClass}} {{seasonClass}}{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}">
+					<div class="stonetop-timeline-row{{#if ghost}} stonetop-timeline-row--ghost{{/if}}" data-period="{{this.key}}"{{#unless undated}} data-year="{{this.year}}"{{/unless}}>
+						<div class="stonetop-timeline-row-head{{#if seasonClass}} {{this.seasonClass}}{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}">
 							{{~> "stonetop.timeline-period-head"}}
 						</div>
 
 						{{#each lanes}}
 						<div class="stonetop-timeline-lane{{#if isEmpty}} stonetop-timeline-lane--empty{{/if}}"
-						     data-track-id="{{trackId}}">
+						     data-track-id="{{this.trackId}}">
 							<ol class="stonetop-timeline-cards">
 								{{#each entries}}{{> "stonetop.timeline-card"}}{{/each}}
 								{{#if add}}{{> "stonetop.timeline-add-slot" add}}{{/if}}
@@ -350,15 +350,15 @@
 		{{#each ages.bands}}
 		{{#if @root.agesEditable}}
 		<button type="button" class="stonetop-timeline-age stonetop-timeline-kind--custom" data-off
-		        data-age-id="{{id}}" data-age-first="{{first}}" data-age-last="{{last}}"
-		        style="--age-row: {{row}}; {{style}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}">
-			<span class="stonetop-timeline-age-name">{{name}}</span>
+		        data-age-id="{{this.id}}" data-age-first="{{this.first}}" data-age-last="{{this.last}}"
+		        style="--age-row: {{this.row}}; {{this.style}}" data-tooltip="{{this.tooltip}}" aria-label="{{this.tooltip}}">
+			<span class="stonetop-timeline-age-name">{{this.name}}</span>
 		</button>
 		{{else}}
 		<span class="stonetop-timeline-age stonetop-timeline-kind--custom" data-off
-		      data-age-id="{{id}}" data-age-first="{{first}}" data-age-last="{{last}}"
-		      style="--age-row: {{row}}; {{style}}" data-tooltip="{{tooltip}}">
-			<span class="stonetop-timeline-age-name">{{name}}</span>
+		      data-age-id="{{this.id}}" data-age-first="{{this.first}}" data-age-last="{{this.last}}"
+		      style="--age-row: {{this.row}}; {{this.style}}" data-tooltip="{{this.tooltip}}">
+			<span class="stonetop-timeline-age-name">{{this.name}}</span>
 		</span>
 		{{/if}}
 		{{/each}}
@@ -377,7 +377,7 @@
 		      before they reach for the thumb. For the eye only: the slider already says each year. --}}
 		<div class="stonetop-timeline-scrub-track">
 			<ol class="stonetop-timeline-scrub-ticks" aria-hidden="true">
-				{{#each scrub.ticks}}<li class="stonetop-timeline-scrub-tick" style="--at: {{at}};"></li>{{/each}}
+				{{#each scrub.ticks}}<li class="stonetop-timeline-scrub-tick" style="--at: {{this.at}};"></li>{{/each}}
 			</ol>
 			<input type="range" class="stonetop-timeline-scrub-range" min="0" max="{{scrub.max}}" step="any" value="0"
 			       data-timeline-focus="scrub"

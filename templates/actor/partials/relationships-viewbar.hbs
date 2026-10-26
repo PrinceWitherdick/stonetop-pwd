@@ -24,7 +24,7 @@
 	     aria-label='{{localize "stonetop.relationships.view.label"}}'>
 		<button type="button"
 		        class="stonetop-segmented-picker-option stonetop-rel-view-btn{{#unless (eq view "board")}} is-active{{/unless}}"
-		        data-resize-key="{{resizeKey}}" data-rel-view="table"
+		        data-resize-key="{{this.resizeKey}}" data-rel-view="table"
 		        aria-pressed="{{#unless (eq view "board")}}true{{else}}false{{/unless}}"
 		        data-tooltip='{{localize "stonetop.relationships.view.tableTooltip"}}'>
 			<i class="fa-solid fa-table-list" aria-hidden="true"></i>
@@ -32,7 +32,7 @@
 		</button>
 		<button type="button"
 		        class="stonetop-segmented-picker-option stonetop-rel-view-btn{{#if (eq view "board")}} is-active{{/if}}"
-		        data-resize-key="{{resizeKey}}" data-rel-view="board"
+		        data-resize-key="{{this.resizeKey}}" data-rel-view="board"
 		        aria-pressed="{{#if (eq view "board")}}true{{else}}false{{/if}}"
 		        data-tooltip='{{localize "stonetop.relationships.view.boardTooltip"}}'>
 			<i class="fa-solid fa-table-columns" aria-hidden="true"></i>

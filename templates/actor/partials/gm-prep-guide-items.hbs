@@ -27,5 +27,5 @@
         rows           the group's item rows ({name, optional, gloss})
         optionalLabel  the localized "optional" tag --}}
 {{#each rows}}
-<li><strong>{{name}}</strong>{{#if optional}} <em class="steading-threats-guide-optional">{{../optionalLabel}}</em>{{/if}}<span>{{gloss}}</span></li>
+<li><strong>{{this.name}}</strong>{{#if optional}} <em class="steading-threats-guide-optional">{{../optionalLabel}}</em>{{/if}}<span>{{this.gloss}}</span></li>
 {{/each}}

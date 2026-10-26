@@ -15,13 +15,13 @@
 	<label class="bt-field">
 		<span class="bt-label">Type</span>
 		<select class="bt-type">
-			{{#each types}}<option value="{{id}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+			{{#each types}}<option value="{{this.id}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
 		</select>
 	</label>
 	<label class="bt-field">
 		<span class="bt-label">Tracker</span>
 		<select class="bt-proximity">
-			{{#each proximities}}<option value="{{id}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+			{{#each proximities}}<option value="{{this.id}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
 		</select>
 	</label>
 	<label class="bt-field">
@@ -32,12 +32,12 @@
 
 	<label class="bt-check">
 		<input type="checkbox" class="bt-monster"{{#if state.monster}} checked{{/if}}>
-		<span>Also write them up as a monster, starting from {{name}}'s HP, armor and damage</span>
+		<span>Also write them up as a monster, starting from {{this.name}}'s HP, armor and damage</span>
 	</label>
 	{{#if isPc}}
 	<label class="bt-check">
 		<input type="checkbox" class="bt-out-of-play"{{#if state.outOfPlay}} checked{{/if}}>
-		<span>{{name}} is no longer a PC: take them out of play</span>
+		<span>{{this.name}} is no longer a PC: take them out of play</span>
 	</label>
 	{{/if}}
 

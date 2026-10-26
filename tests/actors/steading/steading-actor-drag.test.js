@@ -29,7 +29,7 @@ describe("steading roster rows as Actor drag handles", () => {
 		const tag = tagWith(cls);
 		expect(tag).not.toBe("");
 		expect(tag).toContain('draggable="true"');
-		expect(tag).toContain('data-actor-uuid="{{uuid}}"');
+		expect(tag).toContain('data-actor-uuid="{{this.uuid}}"');
 	});
 
 	// One selector rather than a list of the four classes above: the handler matches on what a

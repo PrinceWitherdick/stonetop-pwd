@@ -8,11 +8,11 @@
 {{#if small}}
 <div class="stonetop-supplies-pool">
 	<span class="stonetop-supplies-pool-label"><strong>{{localize "stonetop.inventory.smallUndefinedPoolLabel"}}</strong></span>
-	<span class="stonetop-supplies-pool-diamonds" data-pool-cap="{{cap}}">
+	<span class="stonetop-supplies-pool-diamonds" data-pool-cap="{{this.cap}}">
 		{{#each (poolItems pool)}}
 		<input type="checkbox"
 		       class="stonetop-inventory-item-check stonetop-small-pool-display{{#if checked}} is-checked{{/if}}"
-		       data-index="{{index}}"
+		       data-index="{{this.index}}"
 		       {{#if checked}}checked{{/if}}>
 		{{/each}}
 	</span>
@@ -21,13 +21,13 @@
 {{else}}
 <div class="stonetop-supplies-pool">
 	<span class="stonetop-supplies-pool-label"><strong>{{localize "stonetop.inventory.regularUndefinedPoolLabel"}}</strong></span>
-	<span class="stonetop-supplies-pool-diamonds" data-pool-cap="{{cap}}">
+	<span class="stonetop-supplies-pool-diamonds" data-pool-cap="{{this.cap}}">
 		{{#each (poolGroups pool)}}
 		{{#unless @first}}<span class="stonetop-supplies-pool-gap"></span>{{/unless}}
 		{{#each this}}
 		<input type="checkbox"
 		       class="stonetop-inv-diamond stonetop-regular-pool-btn{{#if checked}} is-checked{{/if}}"
-		       data-index="{{index}}"
+		       data-index="{{this.index}}"
 		       {{#if checked}}checked{{/if}}>
 		{{/each}}
 		{{/each}}

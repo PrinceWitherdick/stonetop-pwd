@@ -15,4 +15,4 @@
 
       Emitted on ONE line, because every one of the four places that draws this puts it inside a
       run of prose where a stray newline is a stray space. --}}
-{{#each cites}}{{sep}}<button type="button" class="stonetop-book-cite" data-book="{{book}}" data-page="{{page}}" data-tooltip="{{tip}}">{{text}}</button>{{/each~}}
+{{#each cites}}{{this.sep}}<button type="button" class="stonetop-book-cite" data-book="{{this.book}}" data-page="{{this.page}}" data-tooltip="{{this.tip}}">{{this.text}}</button>{{/each~}}

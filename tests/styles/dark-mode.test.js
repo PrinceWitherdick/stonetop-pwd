@@ -620,7 +620,7 @@ describe("the threat cards' accent", () => {
 	it("is handed over raw, never as the property the rules read", () => {
 		for (const path of TEMPLATES) {
 			const src = readRepo(path);
-			expect(src, path).toMatch(/--threat-accent-raw:\s*\{\{accent\}\}/);
+			expect(src, path).toMatch(/--threat-accent-raw:\s*\{\{this\.accent\}\}/);
 			expect(src, path).not.toMatch(/--threat-accent:/);
 		}
 	});

@@ -131,7 +131,7 @@ describe("the tag a returned character sets out wearing", () => {
 
 	it("puts the row's kind on the row and the chip's on the chip", () => {
 		expect(PARTIAL).toContain("{{#if undead}} is-undead is-undead--{{undead.kind}}{{/if}}");
-		expect(PARTIAL).toContain("{{#if undeadKind}} is-undead is-undead--{{undeadKind}}{{/if}}");
+		expect(PARTIAL).toContain("{{#if undeadKind}} is-undead is-undead--{{this.undeadKind}}{{/if}}");
 		expect(PARTIAL).toContain('<span class="stonetop-exp-load-undead">{{undead.label}}</span>');
 	});
 

@@ -304,7 +304,7 @@ describe("the no-pouch note on foreign-move pickers", () => {
 		dlg._foreignMoves = [{ compendiumId: "f1", name: "Call the Spirits", playbook: "The Blessed", stockNote: NO_POUCH_STOCK_NOTE }];
 		expect(dlg.getData().foreignMoves[0].stockNote).toBe(NO_POUCH_STOCK_NOTE);
 		const template = fs.readFileSync(path.join(process.cwd(), "templates", "dialogs", "partials", "level-up-other-card.hbs"), "utf8");
-		expect(template).toContain("{{#if stockNote}}<p class=\"stonetop-levelup-move-note\">{{stockNote}}</p>{{/if}}");
+		expect(template).toContain("{{#if stockNote}}<p class=\"stonetop-levelup-move-note\">{{this.stockNote}}</p>{{/if}}");
 		const sheet = readRepo("module/actors/character/StonetopCharacterSheet.js");
 		const picker = sheet.slice(sheet.indexOf("async _maybePromptForeignMove(addedItem) {"));
 		expect(picker.slice(0, 3000)).toContain("m.stockNote");

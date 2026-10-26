@@ -16,7 +16,7 @@
           <div class="stonetop-guide-banner-title">{{step.title}}</div>
           <div class="stonetop-guide-banner-sub">{{#if isEdit}}Edit a hazard{{else}}Make a hazard{{/if}}</div>
         </div>
-        <div class="stonetop-guide-count">{{stepIndex}} / {{stepCount}}</div>
+        <div class="stonetop-guide-count">{{this.stepIndex}} / {{this.stepCount}}</div>
       </div>
 
       <div class="stonetop-spring-body">{{{step.body}}}</div>
@@ -38,9 +38,9 @@
           <div class="stonetop-cf-option-list">
             {{#each damageDice}}
             <label class="stonetop-cf-option{{#if selected}} is-selected{{/if}}">
-              <input type="radio" name="ch-damage-die" class="stonetop-ch-damage-die" value="{{id}}" {{#if selected}}checked{{/if}}{{#if ../certainDeath}} disabled{{/if}}>
-              <span class="stonetop-cf-option-text">{{label}}</span>
-              <span class="stonetop-cf-option-val">{{value}}</span>
+              <input type="radio" name="ch-damage-die" class="stonetop-ch-damage-die" value="{{this.id}}" {{#if selected}}checked{{/if}}{{#if ../certainDeath}} disabled{{/if}}>
+              <span class="stonetop-cf-option-text">{{this.label}}</span>
+              <span class="stonetop-cf-option-val">{{this.value}}</span>
             </label>
             {{/each}}
           </div>
@@ -50,9 +50,9 @@
           <div class="stonetop-cf-option-list">
             {{#each damageEffects}}
             <label class="stonetop-cf-option{{#if checked}} is-selected{{/if}}">
-              <input type="checkbox" class="stonetop-ch-damage-effect" value="{{id}}" {{#if checked}}checked{{/if}}{{#if ../certainDeath}} disabled{{/if}}>
-              <span class="stonetop-cf-option-text">{{label}}</span>
-              <span class="stonetop-cf-option-val">{{value}}</span>
+              <input type="checkbox" class="stonetop-ch-damage-effect" value="{{this.id}}" {{#if checked}}checked{{/if}}{{#if ../certainDeath}} disabled{{/if}}>
+              <span class="stonetop-cf-option-text">{{this.label}}</span>
+              <span class="stonetop-cf-option-val">{{this.value}}</span>
             </label>
             {{/each}}
           </div>
@@ -64,8 +64,8 @@
         <label class="stonetop-cf-label stonetop-cf-group-label stonetop-ch-certain-label">
           <span><input type="checkbox" class="stonetop-ch-certain-death" {{#if certainDeath}}checked{{/if}}> <strong>Certain death.</strong> It would definitely, absolutely kill a normal person: no damage roll, straight to 0 HP and Death's Door. Telegraph it very clearly.</span>
         </label>
-        <div class="stonetop-cf-total"><i class="fas fa-burst"></i> <strong>{{damagePreview}}</strong></div>
-        <p class="stonetop-ch-advice">{{damageAdvice}}</p>
+        <div class="stonetop-cf-total"><i class="fas fa-burst"></i> <strong>{{this.damagePreview}}</strong></div>
+        <p class="stonetop-ch-advice">{{this.damageAdvice}}</p>
         {{/if}}
 
         {{#if is_moves}}
@@ -73,8 +73,8 @@
           <div class="stonetop-cf-pick-label">GM moves</div>
           {{#each moveRows}}
           <div class="stonetop-cf-gear-row">
-            <input type="text" class="stonetop-cf-input stonetop-ch-move-input" data-index="{{index}}" value="{{text}}" placeholder="{{placeholder}}">
-            <button type="button" class="stonetop-ch-move-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{index}}"><i class="fas fa-times"></i></button>
+            <input type="text" class="stonetop-cf-input stonetop-ch-move-input" data-index="{{this.index}}" value="{{this.text}}" placeholder="{{this.placeholder}}">
+            <button type="button" class="stonetop-ch-move-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
           </div>
           {{/each}}
           <button type="button" class="stonetop-ch-move-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add GM move</button>
@@ -93,8 +93,8 @@
           {{#each portentRows}}
           <div class="stonetop-cf-gear-row">
             <span class="stonetop-ch-portent-glyph stonetop-glyph stonetop-glyph--circle" aria-hidden="true">○</span>
-            <input type="text" class="stonetop-cf-input stonetop-ch-portent-input" data-index="{{index}}" value="{{text}}" placeholder="pillar cracks and buckles, dirt pours down…">
-            <button type="button" class="stonetop-ch-portent-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{index}}"><i class="fas fa-times"></i></button>
+            <input type="text" class="stonetop-cf-input stonetop-ch-portent-input" data-index="{{this.index}}" value="{{this.text}}" placeholder="pillar cracks and buckles, dirt pours down…">
+            <button type="button" class="stonetop-ch-portent-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
           </div>
           {{/each}}
           <button type="button" class="stonetop-ch-portent-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add grim portent</button>
@@ -109,10 +109,10 @@
           {{#each playerMoveRows}}
           <div class="stonetop-ch-pm-row">
             <div class="stonetop-cf-gear-row">
-              <input type="text" class="stonetop-cf-input stonetop-ch-pm-label" data-index="{{index}}" value="{{label}}" placeholder="When you fall from the boughs of the tree…">
-              <button type="button" class="stonetop-ch-pm-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{index}}"><i class="fas fa-times"></i></button>
+              <input type="text" class="stonetop-cf-input stonetop-ch-pm-label" data-index="{{this.index}}" value="{{this.label}}" placeholder="When you fall from the boughs of the tree…">
+              <button type="button" class="stonetop-ch-pm-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
             </div>
-            <textarea class="stonetop-cf-textarea stonetop-ch-pm-text" data-index="{{index}}" rows="3" placeholder="…take 1d10+3 damage (ignores armor, forceful) and roll +CON: on a 10+…">{{text}}</textarea>
+            <textarea class="stonetop-cf-textarea stonetop-ch-pm-text" data-index="{{this.index}}" rows="3" placeholder="…take 1d10+3 damage (ignores armor, forceful) and roll +CON: on a 10+…">{{this.text}}</textarea>
           </div>
           {{/each}}
           <button type="button" class="stonetop-ch-pm-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add player move</button>
@@ -123,19 +123,19 @@
         {{#with preview}}
         <div class="stonetop-cf-preview">
           <div class="stonetop-cf-preview-head">
-            <span class="stonetop-cf-preview-name">{{name}}</span>
+            <span class="stonetop-cf-preview-name">{{this.name}}</span>
             <span class="stonetop-cf-preview-type">Hazard</span>
           </div>
           <div class="stonetop-cf-preview-stats">
-            <span><strong>Damage</strong> {{damage}}</span>
+            <span><strong>Damage</strong> {{this.damage}}</span>
           </div>
-          {{#if instinct}}<div class="stonetop-cf-preview-line"><strong>Instinct</strong> {{instinct}}</div>{{/if}}
-          {{#if description}}<div class="stonetop-cf-preview-line stonetop-ch-preview-desc">{{description}}</div>{{/if}}
+          {{#if instinct}}<div class="stonetop-cf-preview-line"><strong>Instinct</strong> {{this.instinct}}</div>{{/if}}
+          {{#if description}}<div class="stonetop-cf-preview-line stonetop-ch-preview-desc">{{this.description}}</div>{{/if}}
           {{#if gmMoves.length}}<div class="stonetop-cf-preview-line"><strong>GM moves</strong> {{#each gmMoves}}{{this}}{{#unless @last}}; {{/unless}}{{/each}}</div>{{/if}}
           {{#if portents.length}}
-          <div class="stonetop-cf-preview-line"><strong>Doom track</strong>{{#if advanceTrigger}} <em>(advance {{advanceTrigger}})</em>{{/if}} {{#each portents}}{{this}}{{#unless @last}}; {{/unless}}{{/each}}{{#if impendingDoom}}; <strong>doom:</strong> {{impendingDoom}}{{/if}}</div>
-          {{else}}{{#if impendingDoom}}<div class="stonetop-cf-preview-line"><strong>Impending doom</strong> {{impendingDoom}}</div>{{/if}}{{/if}}
-          {{#if playerMoves.length}}<div class="stonetop-cf-preview-line"><strong>Player moves</strong> {{#each playerMoves}}{{#if label}}{{label}}{{else}}(untitled){{/if}}{{#unless @last}}; {{/unless}}{{/each}}</div>{{/if}}
+          <div class="stonetop-cf-preview-line"><strong>Doom track</strong>{{#if advanceTrigger}} <em>(advance {{this.advanceTrigger}})</em>{{/if}} {{#each portents}}{{this}}{{#unless @last}}; {{/unless}}{{/each}}{{#if impendingDoom}}; <strong>doom:</strong> {{this.impendingDoom}}{{/if}}</div>
+          {{else}}{{#if impendingDoom}}<div class="stonetop-cf-preview-line"><strong>Impending doom</strong> {{this.impendingDoom}}</div>{{/if}}{{/if}}
+          {{#if playerMoves.length}}<div class="stonetop-cf-preview-line"><strong>Player moves</strong> {{#each playerMoves}}{{#if label}}{{this.label}}{{else}}(untitled){{/if}}{{#unless @last}}; {{/unless}}{{/each}}</div>{{/if}}
         </div>
         {{/with}}
         {{/if}}
@@ -148,7 +148,7 @@
 
   <div class="stonetop-guide-nav">
     <button class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
-    <span class="stonetop-spring-step-label">{{stepLabel}}</span>
+    <span class="stonetop-spring-step-label">{{this.stepLabel}}</span>
     {{#if isLast}}
     <button class="stonetop-ch-create stonetop-guide-btn--primary"><i class="fas {{#if isEdit}}fa-check{{else}}fa-triangle-exclamation{{/if}}"></i> {{#if isEdit}}Save hazard{{else}}Create hazard{{/if}}</button>
     {{else}}

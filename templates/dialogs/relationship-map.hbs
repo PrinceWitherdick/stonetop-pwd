@@ -34,7 +34,7 @@
       stroke opened, for writing of a size it is no longer set in. `_paintWeights` is the writer for
       every press after this one. See module/relmap/relmap-weights.js. --}}
 <div class="stonetop-relmap labels-all{{#if hideLabels}} captions-off{{/if}}{{#unless canEdit}} is-readonly{{/unless}}"
-     style="{{weightStyle}}">
+     style="{{this.weightStyle}}">
 
   {{!-- WHICH BOARD OF THIS MAP IS UP.
 
@@ -69,14 +69,14 @@
     {{!-- ⚠ A TAB LIST ONLY WHEN THERE ARE TABS. A collection with no maps in it has the plus beside
           this and nothing inside it, and an empty `tablist` is announced as a list of nothing. --}}
     <div class="stonetop-relmap-pages-strip"
-         {{#if hasPageTabs}}role="tablist" aria-label="{{pagesLabel}}"{{/if}}>{{{pageTabs}}}</div>
+         {{#if hasPageTabs}}role="tablist" aria-label="{{this.pagesLabel}}"{{/if}}>{{{this.pageTabs}}}</div>
     {{!-- HOW THE BOARDS ARE PUT IN AN ORDER, for the readers a `cursor: grab` never reaches. Read
           out when a tab takes focus (every tab that can be moved points at it; see `_pageTabs`) and
           invisible to everybody else, which is the only shape
           this can take: the row's whole job is to say WHICH BOARD IS UP, and a line of instructions
           printed across it would be competing with the answer. See `pageOrderHint`. --}}
     {{#if pageOrderHint}}
-    <p id="{{pageOrderHintId}}" class="stonetop-relmap-said">{{pageOrderHint}}</p>
+    <p id="{{this.pageOrderHintId}}" class="stonetop-relmap-said">{{this.pageOrderHint}}</p>
     {{/if}}
 
     {{!-- WHAT CAN BE DONE TO THE BOARDS, and all three are edits, so the whole lot is behind the
@@ -113,7 +113,7 @@
           whose tabs do not fill the row is exactly where the last tab ends. --}}
     <button type="button" class="stonetop-relmap-page-tool stonetop-relmap-page-tool--new"
             data-relmap-action="pagenew"
-            data-tooltip="{{pageNewHint}}" aria-label="{{pageNewHint}}">
+            data-tooltip="{{this.pageNewHint}}" aria-label="{{this.pageNewHint}}">
       <i class="fas fa-plus"></i>
     </button>
     {{/if}}
@@ -143,13 +143,13 @@
             other three tools. --}}
       <button type="button" class="stonetop-relmap-page-tool stonetop-relmap-page-tool--seen
               {{~#if pageHidden}} is-hidden-board{{/if}}" data-relmap-action="pagehide"
-              data-tooltip="{{pageHideHint}}" aria-label="{{pageHideHint}}"
+              data-tooltip="{{this.pageHideHint}}" aria-label="{{this.pageHideHint}}"
               {{#unless pageHideOn}}hidden{{/unless}}>
-        <i class="fas {{pageHideIcon}}"></i>
+        <i class="fas {{this.pageHideIcon}}"></i>
       </button>
 
       <button type="button" class="stonetop-relmap-page-tool" data-relmap-action="pagerename"
-              data-tooltip="{{pageRenameHint}}" aria-label="{{pageRenameHint}}">
+              data-tooltip="{{this.pageRenameHint}}" aria-label="{{this.pageRenameHint}}">
         <i class="fas fa-pen"></i>
       </button>
 
@@ -160,8 +160,8 @@
             already had two pages when the window last rendered — so a reader who adds a second
             page would have no way to remove it again until they reopened the window. --}}
       <button type="button" class="stonetop-relmap-page-tool stonetop-relmap-page-tool--drop"
-              data-relmap-action="pagedelete" data-tooltip="{{pageDeleteHint}}"
-              aria-label="{{pageDeleteHint}}" {{#unless canDropPage}}hidden{{/unless}}>
+              data-relmap-action="pagedelete" data-tooltip="{{this.pageDeleteHint}}"
+              aria-label="{{this.pageDeleteHint}}" {{#unless canDropPage}}hidden{{/unless}}>
         <i class="fas fa-trash"></i>
       </button>
     </div>
@@ -180,8 +180,8 @@
   {{!-- Not a tab panel on a collection whose maps have all been rubbed out, where there is no tab for it
         to be labelled by. --}}
   <div class="stonetop-relmap-view" {{#if hasPageTabs}}role="tabpanel"
-       aria-labelledby="{{pagePanelId}}"{{/if}}>
-    <div class="stonetop-relmap-board">{{{board}}}</div>
+       aria-labelledby="{{this.pagePanelId}}"{{/if}}>
+    <div class="stonetop-relmap-board">{{{this.board}}}</div>
 
     {{!-- Nobody on the map yet. Inside the viewport rather than instead of it, so the board is
           still there to be dropped onto — which is the other way somebody arrives.
@@ -199,8 +199,8 @@
           with everybody on it is exactly the crowding a second page exists to escape. What replaced
           it is "Add someone", which is what the hint beside it already told the reader to use. --}}
     <div class="stonetop-relmap-empty" {{#unless empty}}hidden{{/unless}}>
-      <p class="stonetop-relmap-empty-lead">{{emptyLead}}</p>
-      <p class="stonetop-relmap-empty-hint">{{emptyHint}}</p>
+      <p class="stonetop-relmap-empty-lead">{{this.emptyLead}}</p>
+      <p class="stonetop-relmap-empty-hint">{{this.emptyHint}}</p>
       {{!-- ALWAYS RENDERED AND HIDDEN: the window can only WRITE onto markup a repaint left
             standing, and whether there is a button here at all depends on whether the reader may
             edit — which can change without the render that would otherwise have to put it there. --}}
@@ -246,7 +246,7 @@
             No `placeholder` and no `list`: neither could be seen, and what a line with nothing
             written on it looks like is a bare stretch of stroke, which is the truth. --}}
       <input type="text" class="stonetop-relmap-tiebar-words" data-relmap-tie="words"
-             maxlength="{{maxLength}}" aria-label="{{labelField}}"
+             maxlength="{{this.maxLength}}" aria-label="{{this.labelField}}"
              autocomplete="off" spellcheck="false">
 
       {{!-- THE COLOUR, AS THE ANSWER ON THE BAR AND A PALETTE UNDER IT.
@@ -284,8 +284,8 @@
               DOM component with no globals and no i18n in it, so the words come in from the render
               -- the same way the arrow buttons get theirs, and for the same reason. --}}
         <button type="button" class="stonetop-relmap-tiebar-inkopen" data-relmap-tie="inkopen"
-                aria-haspopup="true" aria-expanded="false" aria-label="{{inkLabel}}"
-                data-relmap-said="{{inkNamed}}" data-tooltip="{{inkLabel}}">
+                aria-haspopup="true" aria-expanded="false" aria-label="{{this.inkLabel}}"
+                data-relmap-said="{{this.inkNamed}}" data-tooltip="{{this.inkLabel}}">
           <span class="stonetop-relmap-tiebar-inkmark stonetop-relmap-ink--slate"
                 data-relmap-tie-mark="ink" aria-hidden="true">
             <span class="stonetop-relmap-ink-swatch"></span>
@@ -317,8 +317,8 @@
                 holds all three grids rather than on any one of them. It has to be the width the
                 stylesheet actually paints -- see `RELMAP_INK_ACROSS` in relmap/relmap-ink.js, and
                 the test that holds the two together. --}}
-          <div class="stonetop-relmap-inkpop-choices" role="radiogroup" aria-label="{{inkLabel}}"
-               data-relmap-ink-across="{{inkAcross}}">
+          <div class="stonetop-relmap-inkpop-choices" role="radiogroup" aria-label="{{this.inkLabel}}"
+               data-relmap-ink-across="{{this.inkAcross}}">
             {{!-- THE EIGHT THIS SYSTEM SHIPS, and they stay at the head of the palette because they
                   are the ones that can do what a hex cannot: each is retuned under the high-contrast
                   skin and each carries a dash pattern of its own, so a reader who cannot resolve two
@@ -338,10 +338,10 @@
             <div class="stonetop-relmap-inkpop-grid">
               {{#each inks}}
               <button type="button"
-                      class="stonetop-relmap-inkpop-swatch stonetop-relmap-ink--{{key}}"
-                      data-relmap-tie="ink" data-relmap-tie-value="{{key}}"
-                      data-relmap-name="{{name}}" role="radio" aria-checked="false"
-                      tabindex="-1" aria-label="{{name}}" data-tooltip="{{name}}">
+                      class="stonetop-relmap-inkpop-swatch stonetop-relmap-ink--{{this.key}}"
+                      data-relmap-tie="ink" data-relmap-tie-value="{{this.key}}"
+                      data-relmap-name="{{this.name}}" role="radio" aria-checked="false"
+                      tabindex="-1" aria-label="{{this.name}}" data-tooltip="{{this.name}}">
                 <span class="stonetop-relmap-ink-swatch" aria-hidden="true"></span>
               </button>
               {{/each}}
@@ -370,11 +370,11 @@
               {{#each inkPresets}}
               <button type="button"
                       class="stonetop-relmap-inkpop-swatch stonetop-relmap-ink--custom"
-                      data-relmap-tie="ink" data-relmap-tie-value="{{hex}}"
-                      data-relmap-name="{{name}}" data-relmap-ink-preset="{{hex}}"
-                      style="--relmap-ink-raw:{{hex}}"
+                      data-relmap-tie="ink" data-relmap-tie-value="{{this.hex}}"
+                      data-relmap-name="{{this.name}}" data-relmap-ink-preset="{{this.hex}}"
+                      style="--relmap-ink-raw:{{this.hex}}"
                       role="radio" aria-checked="false" tabindex="-1"
-                      aria-label="{{name}}" data-tooltip="{{name}}">
+                      aria-label="{{this.name}}" data-tooltip="{{this.name}}">
                 <span class="stonetop-relmap-ink-swatch" aria-hidden="true"></span>
               </button>
               {{/each}}
@@ -390,7 +390,7 @@
                   markup a render left standing. The whole block goes away on a board with no
                   colours of its own on it, so a heading over an empty row never appears. --}}
             <div class="stonetop-relmap-inkpop-mine" data-relmap-tie-mine="ink" hidden>
-              <span class="stonetop-relmap-inkpop-heading">{{inkCustomHeading}}</span>
+              <span class="stonetop-relmap-inkpop-heading">{{this.inkCustomHeading}}</span>
               <div class="stonetop-relmap-inkpop-row">
                 {{#each inkCustomSlots}}
                 <button type="button"
@@ -425,10 +425,10 @@
           <div class="stonetop-relmap-inkpop-more">
             <button type="button" class="stonetop-relmap-inkpop-add" data-relmap-tie="inkmore">
               <i class="fas fa-plus" aria-hidden="true"></i>
-              <span>{{inkCustomField}}</span>
+              <span>{{this.inkCustomField}}</span>
             </button>
             <color-picker class="stonetop-relmap-tiebar-hex" data-relmap-tie="inkhex"
-                          aria-label="{{inkCustomField}}" data-tooltip="{{inkCustomField}}"
+                          aria-label="{{this.inkCustomField}}" data-tooltip="{{this.inkCustomField}}"
                           value="" hidden></color-picker>
           </div>
         </div>
@@ -443,12 +443,12 @@
             "towards Mike" on the same board a moment later. So the icons and the words are BOTH
             written on open, by `RelmapTieBar`, from where the two faces actually are. --}}
       <div class="stonetop-relmap-tiebar-group stonetop-relmap-tiebar-dirs" role="radiogroup"
-           aria-label="{{dirLabel}}">
+           aria-label="{{this.dirLabel}}">
         {{#each dirs}}
         <button type="button" class="stonetop-relmap-tiebar-btn" data-relmap-tie="dir"
-                data-relmap-tie-value="{{key}}" role="radio" aria-checked="false" tabindex="-1"
-                data-tooltip="{{name}}" aria-label="{{name}}">
-          <i class="fas {{icon}}"></i>
+                data-relmap-tie-value="{{this.key}}" role="radio" aria-checked="false" tabindex="-1"
+                data-tooltip="{{this.name}}" aria-label="{{this.name}}">
+          <i class="fas {{this.icon}}"></i>
         </button>
         {{/each}}
       </div>
@@ -476,8 +476,8 @@
               trigger is called, are both written by `RelmapTieBar` on open and on every pick:
               `solid` here only so the first paint is a line rather than a hole. --}}
         <button type="button" class="stonetop-relmap-tiebar-dashopen" data-relmap-tie="dashopen"
-                aria-haspopup="true" aria-expanded="false" aria-label="{{dashLabel}}"
-                data-relmap-said="{{dashNamed}}" data-tooltip="{{dashLabel}}">
+                aria-haspopup="true" aria-expanded="false" aria-label="{{this.dashLabel}}"
+                data-relmap-said="{{this.dashNamed}}" data-tooltip="{{this.dashLabel}}">
           <span class="stonetop-relmap-tiebar-rule stonetop-relmap-tiebar-rule--solid"
                 data-relmap-tie-mark="dash" aria-hidden="true"></span>
           <i class="fas fa-caret-down" aria-hidden="true"></i>
@@ -494,7 +494,7 @@
               A LIST AND NOT A GRID, which is why there is no `data-relmap-ink-across` on it: a row
               here is one button, and `_across` answering one is exactly the stride this wants. --}}
         <div class="stonetop-relmap-dashpop" data-relmap-tie-pop="dash" hidden>
-          <div class="stonetop-relmap-dashpop-choices" role="radiogroup" aria-label="{{dashLabel}}">
+          <div class="stonetop-relmap-dashpop-choices" role="radiogroup" aria-label="{{this.dashLabel}}">
             {{#each dashes}}
             {{!-- ⚠ A DRAWN RULE AND NOT AN ICON. This was Font Awesome's `fa-ellipsis` for dotted,
                   which is three dots in a row -- sitting two buttons away from `fa-ellipsis-vertical`,
@@ -507,13 +507,13 @@
                   without a word of i18n in it: it reads it off whichever row is set, exactly as it
                   reads a colour's name off its swatch. --}}
             <button type="button" class="stonetop-relmap-dashpop-row"
-                    data-relmap-tie="dash" data-relmap-tie-value="{{key}}"
-                    data-relmap-name="{{name}}"
+                    data-relmap-tie="dash" data-relmap-tie-value="{{this.key}}"
+                    data-relmap-name="{{this.name}}"
                     role="radio" aria-checked="false" tabindex="-1"
-                    data-tooltip="{{name}}" aria-label="{{name}}">
-              <span class="stonetop-relmap-tiebar-rule stonetop-relmap-tiebar-rule--{{key}}"
+                    data-tooltip="{{this.name}}" aria-label="{{this.name}}">
+              <span class="stonetop-relmap-tiebar-rule stonetop-relmap-tiebar-rule--{{this.key}}"
                     aria-hidden="true"></span>
-              <span class="stonetop-relmap-dashpop-word" aria-hidden="true">{{name}}</span>
+              <span class="stonetop-relmap-dashpop-word" aria-hidden="true">{{this.name}}</span>
             </button>
             {{/each}}
           </div>
@@ -548,11 +548,11 @@
               called are both written by `RelmapTieBar` on open and on every pick: the ordinary
               size is printed only so the first paint is a number rather than a hole. --}}
         <button type="button" class="stonetop-relmap-tiebar-sizeopen" data-relmap-tie="sizeopen"
-                aria-haspopup="true" aria-expanded="false" aria-label="{{sizeLabel}}"
-                data-relmap-said="{{sizeNamed}}" data-tooltip="{{sizeLabel}}">
+                aria-haspopup="true" aria-expanded="false" aria-label="{{this.sizeLabel}}"
+                data-relmap-said="{{this.sizeNamed}}" data-tooltip="{{this.sizeLabel}}">
           <i class="fas fa-text-height" aria-hidden="true"></i>
           <span class="stonetop-relmap-tiebar-sizeword" data-relmap-tie-mark="size"
-                aria-hidden="true">{{sizeBase}}</span>
+                aria-hidden="true">{{this.sizeBase}}</span>
           <i class="fas fa-caret-down" aria-hidden="true"></i>
         </button>
 
@@ -567,17 +567,17 @@
               A LIST AND NOT A GRID, so no `data-relmap-ink-across`: a row here is one button, and
               `_across` answering one is exactly the stride the arrow keys want. --}}
         <div class="stonetop-relmap-sizepop" data-relmap-tie-pop="size" hidden>
-          <div class="stonetop-relmap-sizepop-choices" role="radiogroup" aria-label="{{sizeLabel}}">
+          <div class="stonetop-relmap-sizepop-choices" role="radiogroup" aria-label="{{this.sizeLabel}}">
             {{#each sizes}}
             {{!-- `data-relmap-name` is how the bar puts this step's name on the trigger without a
                   word of i18n in it, exactly as the strokes and the swatches above do. --}}
             <button type="button" class="stonetop-relmap-sizepop-row"
-                    data-relmap-tie="size" data-relmap-tie-value="{{px}}"
-                    data-relmap-name="{{name}}"
+                    data-relmap-tie="size" data-relmap-tie-value="{{this.px}}"
+                    data-relmap-name="{{this.name}}"
                     role="radio" aria-checked="false" tabindex="-1"
-                    data-tooltip="{{name}}" aria-label="{{name}}">
-              <span class="stonetop-relmap-sizepop-sample" style="font-size: {{px}}px"
-                    aria-hidden="true">{{name}}</span>
+                    data-tooltip="{{this.name}}" aria-label="{{this.name}}">
+              <span class="stonetop-relmap-sizepop-sample" style="font-size: {{this.px}}px"
+                    aria-hidden="true">{{this.name}}</span>
             </button>
             {{/each}}
           </div>
@@ -596,10 +596,10 @@
                 as well so the spinner cannot walk out of them. What is TYPED is still held to
                 them on the way through: an input's `min` is not a promise. --}}
           <label class="stonetop-relmap-sizepop-own">
-            <span class="stonetop-relmap-sizepop-ownword">{{sizeOwnLabel}}</span>
+            <span class="stonetop-relmap-sizepop-ownword">{{this.sizeOwnLabel}}</span>
             <input type="number" class="stonetop-relmap-sizepop-num" data-relmap-tie="sizenum"
-                   min="{{sizeMin}}" max="{{sizeMax}}" step="1" inputmode="numeric"
-                   autocomplete="off" aria-label="{{sizeOwnField}}">
+                   min="{{this.sizeMin}}" max="{{this.sizeMax}}" step="1" inputmode="numeric"
+                   autocomplete="off" aria-label="{{this.sizeOwnField}}">
           </label>
         </div>
       </div>
@@ -625,15 +625,15 @@
           buttons carry a PATTERN (`data-relmap-said`) the bar fills the count into. --}}
     <div class="stonetop-relmap-groupbar" role="group" aria-label="{{groupBar.label}}" hidden>
       <input type="text" class="stonetop-relmap-groupbar-name" data-relmap-gbar="name"
-             maxlength="{{maxLength}}" aria-label="{{groupBar.name}}"
+             maxlength="{{this.maxLength}}" aria-label="{{groupBar.name}}"
              placeholder="{{groupBar.placeholder}}" autocomplete="off" spellcheck="false">
 
       <div class="stonetop-relmap-tiebar-group stonetop-relmap-groupbar-inks" role="radiogroup"
            aria-label="{{groupBar.ink}}">
         {{#each inks}}
-        <button type="button" class="stonetop-relmap-inkpop-swatch stonetop-relmap-ink--{{key}}"
-                data-relmap-gbar="ink" data-relmap-gbar-value="{{key}}" role="radio"
-                aria-checked="false" tabindex="-1" aria-label="{{name}}" data-tooltip="{{name}}">
+        <button type="button" class="stonetop-relmap-inkpop-swatch stonetop-relmap-ink--{{this.key}}"
+                data-relmap-gbar="ink" data-relmap-gbar-value="{{this.key}}" role="radio"
+                aria-checked="false" tabindex="-1" aria-label="{{this.name}}" data-tooltip="{{this.name}}">
           <span class="stonetop-relmap-ink-swatch" aria-hidden="true"></span>
         </button>
         {{/each}}
@@ -647,20 +647,20 @@
       <div class="stonetop-relmap-tiebar-group stonetop-relmap-groupbar-own">
         <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-groupbar-inkmore"
                 data-relmap-gbar="inkmore" aria-expanded="false"
-                aria-label="{{inkCustomField}}" data-tooltip="{{inkCustomField}}">
+                aria-label="{{this.inkCustomField}}" data-tooltip="{{this.inkCustomField}}">
           <i class="fas fa-plus"></i>
         </button>
         <color-picker class="stonetop-relmap-tiebar-hex" data-relmap-gbar="inkhex"
-                      aria-label="{{inkCustomField}}" data-tooltip="{{inkCustomField}}"
+                      aria-label="{{this.inkCustomField}}" data-tooltip="{{this.inkCustomField}}"
                       value="" hidden></color-picker>
       </div>
 
       <div class="stonetop-relmap-tiebar-group" role="radiogroup" aria-label="{{groupBar.shape}}">
         {{#each groupBar.shapes}}
         <button type="button" class="stonetop-relmap-tiebar-btn" data-relmap-gbar="shape"
-                data-relmap-gbar-value="{{key}}" role="radio" aria-checked="false" tabindex="-1"
-                aria-label="{{name}}" data-tooltip="{{name}}">
-          <i class="{{icon}}"></i>
+                data-relmap-gbar-value="{{this.key}}" role="radio" aria-checked="false" tabindex="-1"
+                aria-label="{{this.name}}" data-tooltip="{{this.name}}">
+          <i class="{{this.icon}}"></i>
         </button>
         {{/each}}
       </div>
@@ -668,9 +668,9 @@
       <div class="stonetop-relmap-tiebar-group" role="radiogroup" aria-label="{{groupBar.dash}}">
         {{#each groupBar.dashes}}
         <button type="button" class="stonetop-relmap-tiebar-btn" data-relmap-gbar="dash"
-                data-relmap-gbar-value="{{key}}" role="radio" aria-checked="false" tabindex="-1"
-                aria-label="{{name}}" data-tooltip="{{name}}">
-          <span class="stonetop-relmap-tiebar-rule stonetop-relmap-tiebar-rule--{{key}}" aria-hidden="true"></span>
+                data-relmap-gbar-value="{{this.key}}" role="radio" aria-checked="false" tabindex="-1"
+                aria-label="{{this.name}}" data-tooltip="{{this.name}}">
+          <span class="stonetop-relmap-tiebar-rule stonetop-relmap-tiebar-rule--{{this.key}}" aria-hidden="true"></span>
         </button>
         {{/each}}
       </div>
@@ -719,7 +719,7 @@
     {{#if canPopOut}}
     <button type="button" class="stonetop-relmap-tool stonetop-relmap-popout"
             data-relmap-action="popout"
-            data-tooltip="{{popOutLabel}}" aria-label="{{popOutLabel}}">
+            data-tooltip="{{this.popOutLabel}}" aria-label="{{this.popOutLabel}}">
       <i class="fas fa-expand"></i>
     </button>
     {{/if}}
@@ -754,10 +754,10 @@
         would want this — which is not obvious from two words, and is the whole reason the option
         exists. --}}
   <div class="stonetop-relmap-foot">
-    <label class="stonetop-relmap-foot-check" data-tooltip="{{labelsHint}}">
+    <label class="stonetop-relmap-foot-check" data-tooltip="{{this.labelsHint}}">
       <input type="checkbox" class="stonetop-check" data-relmap-action="hidelabels"
              {{#if hideLabels}}checked{{/if}}>
-      <span>{{labelsLabel}}</span>
+      <span>{{this.labelsLabel}}</span>
     </label>
 
     {{!-- HOW HEAVILY THIS BOARD IS DRAWN, FOR THIS READER: the arrowheads, the strokes and the
@@ -794,16 +794,16 @@
           ⚠ ONE HINT ON EACH DIAL AND A NAME ON EVERY BUTTON. Three tooltips each explaining that
           this belongs to the reader alone would be the same paragraph three times over on one line.
           What a dial has to say for itself is which of the three it is. --}}
-    <div class="stonetop-relmap-heft" role="group" aria-label="{{weightGroup}}">
+    <div class="stonetop-relmap-heft" role="group" aria-label="{{this.weightGroup}}">
       {{#each weights}}
-      <div class="stonetop-relmap-heft-dial" data-tooltip="{{hint}}">
-        <i class="stonetop-relmap-heft-mark {{icon}}" aria-hidden="true"></i>
+      <div class="stonetop-relmap-heft-dial" data-tooltip="{{this.hint}}">
+        <i class="stonetop-relmap-heft-mark {{this.icon}}" aria-hidden="true"></i>
         {{!-- LIGHTER ON THE LEFT AND HEAVIER ON THE RIGHT, with the number between them, because
               that is the order the value itself runs in and the order every stepper a reader has
               met is in. Dead at the ends rather than pressing to no effect. --}}
         <button type="button" class="stonetop-relmap-heft-step" data-relmap-action="weight"
-                data-relmap-weight="{{key}}" data-relmap-step="-1"
-                aria-label="{{down}}" {{#if atMin}}disabled{{/if}}>
+                data-relmap-weight="{{this.key}}" data-relmap-step="-1"
+                aria-label="{{this.down}}" {{#if atMin}}disabled{{/if}}>
           <i class="fas fa-minus" aria-hidden="true"></i>
         </button>
         {{!-- THE READOUT IS ALSO THE WAY BACK to a hundred per cent, which is what its own label
@@ -812,12 +812,12 @@
               `aria-disabled` and not `disabled` at the base, so a screen reader still meets the
               number -- some skip a disabled button entirely, and the number is the point. --}}
         <button type="button" class="stonetop-relmap-heft-now" data-relmap-action="weight"
-                data-relmap-weight="{{key}}" data-relmap-step="0"
-                data-tooltip="{{reset}}" aria-label="{{now}}"
-                aria-disabled="{{#if atBase}}true{{else}}false{{/if}}">{{pct}}%</button>
+                data-relmap-weight="{{this.key}}" data-relmap-step="0"
+                data-tooltip="{{this.reset}}" aria-label="{{this.now}}"
+                aria-disabled="{{#if atBase}}true{{else}}false{{/if}}">{{this.pct}}%</button>
         <button type="button" class="stonetop-relmap-heft-step" data-relmap-action="weight"
-                data-relmap-weight="{{key}}" data-relmap-step="1"
-                aria-label="{{up}}" {{#if atMax}}disabled{{/if}}>
+                data-relmap-weight="{{this.key}}" data-relmap-step="1"
+                aria-label="{{this.up}}" {{#if atMax}}disabled{{/if}}>
           <i class="fas fa-plus" aria-hidden="true"></i>
         </button>
       </div>
@@ -895,11 +895,11 @@
             saved copy of the board, and why the table does not share one stack. --}}
       <span class="stonetop-relmap-history">
         <button type="button" class="stonetop-relmap-tool" data-relmap-action="undo" disabled
-                data-tooltip-text="{{undoNothing}}" aria-label="{{undoNothing}}">
+                data-tooltip-text="{{this.undoNothing}}" aria-label="{{this.undoNothing}}">
           <i class="fas fa-rotate-left"></i>
         </button>
         <button type="button" class="stonetop-relmap-tool" data-relmap-action="redo" disabled
-                data-tooltip-text="{{redoNothing}}" aria-label="{{redoNothing}}">
+                data-tooltip-text="{{this.redoNothing}}" aria-label="{{this.redoNothing}}">
           <i class="fas fa-rotate-right"></i>
         </button>
       </span>
@@ -910,9 +910,9 @@
             written by `_paintGroupTool`. --}}
       <button type="button" class="stonetop-relmap-tool stonetop-relmap-grouptool"
               data-relmap-action="group" aria-pressed="false"
-              data-tooltip="{{groupHint}}" aria-label="{{groupHint}}">
+              data-tooltip="{{this.groupHint}}" aria-label="{{this.groupHint}}">
         <i class="fas fa-object-group"></i>
-        <span>{{groupLabel}}</span>
+        <span>{{this.groupLabel}}</span>
       </button>
 
       {{!-- DRAWING LINES FROM ANY FACE, not only the small handle on its rim. While it is pressed a
@@ -921,9 +921,9 @@
             `aria-pressed` is written by `_paintLineTool`. --}}
       <button type="button" class="stonetop-relmap-tool stonetop-relmap-linetool"
               data-relmap-action="lines" aria-pressed="false"
-              data-tooltip="{{lineHint}}" aria-label="{{lineHint}}">
+              data-tooltip="{{this.lineHint}}" aria-label="{{this.lineHint}}">
         <i class="fas fa-bezier-curve"></i>
-        <span>{{lineLabel}}</span>
+        <span>{{this.lineLabel}}</span>
       </button>
 
       {{!-- MAKING SOMEBODY NEW AND PUTTING THEM ON, for whoever may create actors, players included
@@ -936,9 +936,9 @@
       {{#if canCreatePerson}}
       <button type="button" class="stonetop-relmap-tool"
               data-relmap-action="create"
-              data-tooltip="{{createHint}}" aria-label="{{createHint}}">
+              data-tooltip="{{this.createHint}}" aria-label="{{this.createHint}}">
         <i class="fas fa-user-pen"></i>
-        <span>{{createLabel}}</span>
+        <span>{{this.createLabel}}</span>
       </button>
       {{/if}}
 
@@ -957,9 +957,9 @@
             there is a board to look at, and it stays whether the board is empty or full. --}}
       <button type="button" class="stonetop-relmap-tool stonetop-relmap-add"
               data-relmap-action="add"
-              data-tooltip="{{addHint}}" aria-label="{{addHint}}">
+              data-tooltip="{{this.addHint}}" aria-label="{{this.addHint}}">
         <i class="fas fa-user-plus"></i>
-        <span>{{addLabel}}</span>
+        <span>{{this.addLabel}}</span>
       </button>
     </div>
     {{/if}}

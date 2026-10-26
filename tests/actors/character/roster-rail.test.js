@@ -161,7 +161,7 @@ describe("the classes the rail is found by", () => {
 		// Looked up by the tab attribute the shared rail partial emits — NOT `data-step-index`,
 		// which is the linear walkthroughs' rail and is read by a different handler entirely.
 		expect(ROSTER_JS).toMatch(/dataKey: "tab"/);
-		expect(TABS_HBS).toContain('data-tab="{{key}}"');
+		expect(TABS_HBS).toContain('data-tab="{{this.key}}"');
 	});
 
 	for (const [name, hbs] of [["the Judge's", CONDEMNED_HBS], ["the Blessed's", MARKS_HBS]]) {

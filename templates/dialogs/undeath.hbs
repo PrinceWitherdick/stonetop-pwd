@@ -1,7 +1,7 @@
 <div class="undeath-dialog-content">
 
-	<h2 class="undeath-move-name">{{moveName}}</h2>
-	<p class="undeath-trigger">{{{trigger}}}</p>
+	<h2 class="undeath-move-name">{{this.moveName}}</h2>
+	<p class="undeath-trigger">{{{this.trigger}}}</p>
 
 	{{#if isRoll}}
 	<div class="undeath-step undeath-step--roll">
@@ -17,10 +17,10 @@
 		<p class="undeath-instruction">
 			Roll
 			<button type="button" class="undeath-roll-btn">
-				<span class="undeath-roll-chip">{{rollLabel}}</span>
+				<span class="undeath-roll-chip">{{this.rollLabel}}</span>
 				<i class="fas fa-dice-d6"></i>
 			</button>
-			{{#if favor}}<span class="undeath-favor-note">You hold <strong>{{favor}}</strong> Favor.</span>{{/if}}
+			{{#if favor}}<span class="undeath-favor-note">You hold <strong>{{this.favor}}</strong> Favor.</span>{{/if}}
 		</p>
 	</div>
 	{{/if}}
@@ -39,21 +39,21 @@
 		{{/if}}
 
 		{{#if rolledTotal}}
-		<p class="undeath-result-banner">You rolled <strong>{{rolledTotal}}</strong>, <strong>{{tierLabel}}</strong>.</p>
+		<p class="undeath-result-banner">You rolled <strong>{{this.rolledTotal}}</strong>, <strong>{{this.tierLabel}}</strong>.</p>
 		{{/if}}
 
 		{{#if hp}}
-		<p class="undeath-hp">You regain <strong>{{hp}} HP</strong>.</p>
+		<p class="undeath-hp">You regain <strong>{{this.hp}} HP</strong>.</p>
 		{{/if}}
 		{{#if hpNote}}
-		<p class="undeath-hint">{{hpNote}}</p>
+		<p class="undeath-hint">{{this.hpNote}}</p>
 		{{/if}}
 		{{#if disperses}}
 		{{#unless tetherDestroyed.on}}
 		<p class="undeath-hp">
 			Your essence disperses until the next sunset. You reform near
-			{{#if tether}}<strong>{{tether}}</strong>{{else}}your tether{{/if}}
-			with <strong>{{disperses}} HP</strong>. Reform from your Special Moves tab when you do.
+			{{#if tether}}<strong>{{this.tether}}</strong>{{else}}your tether{{/if}}
+			with <strong>{{this.disperses}} HP</strong>. Reform from your Special Moves tab when you do.
 		</p>
 		{{/unless}}
 
@@ -63,7 +63,7 @@
 		<div class="undeath-tether">
 			<p class="undeath-pick-label">What are you bound to?</p>
 			<p class="undeath-hint">Your mortal remains, the place where you died, an object of personal significance&hellip;</p>
-			<input type="text" class="undeath-tether-input" value="{{tether}}" placeholder="Name your tether">
+			<input type="text" class="undeath-tether-input" value="{{this.tether}}" placeholder="Name your tether">
 		</div>
 		{{/if}}
 		{{/if}}
@@ -98,7 +98,7 @@
 			{{#if allApply}}
 			All of these apply:
 			{{else}}
-			Choose {{pick}}, <span class="undeath-pick-count">{{pickedCount}} of {{pick}} taken</span>:
+			Choose {{this.pick}}, <span class="undeath-pick-count">{{this.pickedCount}} of {{this.pick}} taken</span>:
 			{{/if}}
 		</p>
 
@@ -106,23 +106,23 @@
 			{{#each effects}}
 			<div class="undeath-effect{{#if picked}} is-picked{{/if}}{{#if exhausted}} is-exhausted{{/if}}">
 				<label class="undeath-effect-label">
-					<input type="checkbox" class="undeath-effect-check" data-kind="{{kind}}"
+					<input type="checkbox" class="undeath-effect-check" data-kind="{{this.kind}}"
 					       {{#if picked}}checked{{/if}} {{#if exhausted}}disabled{{/if}}>
-					<span>{{label}}</span>
+					<span>{{this.label}}</span>
 				</label>
 
 				{{#if exhausted}}
 				<p class="undeath-hint">Nothing left to take here: they're all already marked.</p>
 				{{else if picked}}
 					{{#if (eq kind "task")}}
-					<input type="text" class="undeath-task-input" value="{{choice}}"
+					<input type="text" class="undeath-task-input" value="{{this.choice}}"
 					       placeholder="What does your master demand?">
 					{{#if ../standingTask}}<p class="undeath-hint">{{../standingTask}}</p>{{/if}}
 					{{else if options.length}}
-					<select class="undeath-effect-select" data-kind="{{kind}}">
+					<select class="undeath-effect-select" data-kind="{{this.kind}}">
 						<option value="">&mdash; choose &mdash;</option>
 						{{#each options}}
-						<option value="{{slug}}"{{#if (eq slug ../choice)}} selected{{/if}}>{{label}}</option>
+						<option value="{{this.slug}}"{{#if (eq slug ../choice)}} selected{{/if}}>{{this.label}}</option>
 						{{/each}}
 					</select>
 					{{/if}}
@@ -167,7 +167,7 @@
 	{{#if isResolve}}
 	<button class="undeath-cancel-btn" type="button">Cancel</button>
 	<button class="undeath-apply-btn is-primary" type="button" {{#unless canApply}}disabled{{/unless}}>
-		<i class="fas fa-check"></i> {{applyLabel}}
+		<i class="fas fa-check"></i> {{this.applyLabel}}
 	</button>
 	{{/if}}
 

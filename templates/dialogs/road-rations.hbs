@@ -8,12 +8,12 @@
 	<div class="road-settings">
 		<label class="road-field">
 			<span class="road-label">Days that pass</span>
-			<input type="number" class="road-days" min="1" step="1" value="{{days}}" data-road-focus="days">
-			{{#if routeDays}}<span class="road-hint">The route: at least {{routeDays}} days.</span>{{/if}}
+			<input type="number" class="road-days" min="1" step="1" value="{{this.days}}" data-road-focus="days">
+			{{#if routeDays}}<span class="road-hint">The route: at least {{this.routeDays}} days.</span>{{/if}}
 		</label>
 		<label class="road-check">
 			<input type="checkbox" class="road-mess-kit" data-road-focus="mess-kit"{{#if messKit}} checked{{/if}}>
-			<span>Someone cooks with a mess kit{{#if cooks}} <em>(carried by {{cooks}})</em>{{/if}}</span>
+			<span>Someone cooks with a mess kit{{#if cooks}} <em>(carried by {{this.cooks}})</em>{{/if}}</span>
 		</label>
 		<label class="road-check">
 			<input type="checkbox" class="road-pack-animal" data-road-focus="pack-animal"{{#if packAnimal}} checked{{/if}}>
@@ -28,19 +28,19 @@
 		</thead>
 		<tbody>
 			{{#each rows}}
-			<tr class="road-row" data-actor-id="{{actorId}}">
+			<tr class="road-row" data-actor-id="{{this.actorId}}">
 				<td class="road-who">
-					<strong>{{name}}</strong>
-					<span class="road-holds">carries {{holds}} to eat{{#if spend}}: {{spend}}{{/if}}</span>
+					<strong>{{this.name}}</strong>
+					<span class="road-holds">carries {{this.holds}} to eat{{#if spend}}: {{this.spend}}{{/if}}</span>
 					{{!-- The crew's own supplies pay the crew's mouths by themselves (road-rations.js#crewRoadText), so no figure to set. --}}
-					{{#if crewText}}<span class="road-crew">Crew supplies ({{crewHeld}} left): {{crewText}}</span>{{/if}}
+					{{#if crewText}}<span class="road-crew">Crew supplies ({{this.crewHeld}} left): {{this.crewText}}</span>{{/if}}
 				</td>
-				<td><input type="checkbox" class="road-eats" data-actor-id="{{actorId}}" data-road-focus="eats-{{actorId}}"
-				           aria-label="{{name}} eats"{{#if eats}} checked{{/if}}></td>
-				<td><input type="number" class="road-followers" min="0" step="1" value="{{followers}}"
-				           data-actor-id="{{actorId}}" data-road-focus="followers-{{actorId}}" aria-label="Followers {{name}} feeds"></td>
-				<td><input type="number" class="road-pays{{#if changed}} is-changed{{/if}}" min="0" max="{{holds}}" step="1" value="{{pays}}"
-				           data-actor-id="{{actorId}}" data-road-focus="pays-{{actorId}}" aria-label="Uses {{name}} pays"></td>
+				<td><input type="checkbox" class="road-eats" data-actor-id="{{this.actorId}}" data-road-focus="eats-{{this.actorId}}"
+				           aria-label="{{this.name}} eats"{{#if eats}} checked{{/if}}></td>
+				<td><input type="number" class="road-followers" min="0" step="1" value="{{this.followers}}"
+				           data-actor-id="{{this.actorId}}" data-road-focus="followers-{{this.actorId}}" aria-label="Followers {{this.name}} feeds"></td>
+				<td><input type="number" class="road-pays{{#if changed}} is-changed{{/if}}" min="0" max="{{this.holds}}" step="1" value="{{this.pays}}"
+				           data-actor-id="{{this.actorId}}" data-road-focus="pays-{{this.actorId}}" aria-label="Uses {{this.name}} pays"></td>
 			</tr>
 			{{/each}}
 		</tbody>
@@ -50,9 +50,9 @@
 	{{/if}}
 
 	<div class="road-summary" aria-live="polite">
-		<p class="road-bill">{{billText}}</p>
-		{{#if shortText}}<p class="road-short"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> {{shortText}}</p>{{/if}}
-		{{#if overText}}<p class="road-over">{{overText}}</p>{{/if}}
+		<p class="road-bill">{{this.billText}}</p>
+		{{#if shortText}}<p class="road-short"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> {{this.shortText}}</p>{{/if}}
+		{{#if overText}}<p class="road-over">{{this.overText}}</p>{{/if}}
 	</div>
 
 	<footer class="road-footer">

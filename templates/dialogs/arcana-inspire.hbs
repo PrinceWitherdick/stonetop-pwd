@@ -13,12 +13,12 @@
 		<div class="stonetop-guide-main">
 
 			<div class="stonetop-guide-banner">
-				<i class="fas {{stepIcon}} stonetop-guide-banner-icon"></i>
+				<i class="fas {{this.stepIcon}} stonetop-guide-banner-icon"></i>
 				<div class="stonetop-guide-banner-info">
-					<div class="stonetop-guide-banner-title">{{stepTitle}}</div>
+					<div class="stonetop-guide-banner-title">{{this.stepTitle}}</div>
 					<div class="stonetop-guide-banner-sub">Inspire an arcanum</div>
 				</div>
-				<div class="stonetop-guide-count">{{stepNum}} / {{stepTotal}}</div>
+				<div class="stonetop-guide-count">{{this.stepNum}} / {{this.stepTotal}}</div>
 			</div>
 
 			{{#if isReview}}
@@ -26,7 +26,7 @@
 			<div class="stonetop-inspire-review">
 				<div class="stonetop-inspire-field">
 					<label for="stonetop-inspire-name">Name</label>
-					<input type="text" id="stonetop-inspire-name" name="arcName" value="{{name}}" placeholder="Name your arcanum…">
+					<input type="text" id="stonetop-inspire-name" name="arcName" value="{{this.name}}" placeholder="Name your arcanum…">
 				</div>
 				<div class="stonetop-inspire-field">
 					<span class="stonetop-inspire-field-label">Tier</span>
@@ -38,7 +38,7 @@
 				<div class="stonetop-inspire-summary">
 					<p class="stonetop-inspire-summary-title">Your artifact so far</p>
 					<ul>
-						{{#each lines}}<li><strong>{{label}}:</strong> {{text}}</li>{{/each}}
+						{{#each lines}}<li><strong>{{this.label}}:</strong> {{this.text}}</li>{{/each}}
 					</ul>
 					<p class="stonetop-inspire-hint">These seed the card's front description. Edit or delete them in the card editor that opens.</p>
 				</div>
@@ -53,15 +53,15 @@
 
 			{{#each fields}}
 			<div class="stonetop-inspire-field{{#if followUp}} stonetop-inspire-field--follow{{/if}}">
-				<label for="stonetop-inspire-{{key}}">{{label}}{{#if page}}<span class="stonetop-inspire-page">p. {{page}}</span>{{/if}}</label>
+				<label for="stonetop-inspire-{{this.key}}">{{this.label}}{{#if page}}<span class="stonetop-inspire-page">p. {{this.page}}</span>{{/if}}</label>
 				<div class="stonetop-inspire-field-row">
-					<select id="stonetop-inspire-{{key}}" data-inspire-field="{{key}}">
+					<select id="stonetop-inspire-{{this.key}}" data-inspire-field="{{this.key}}">
 						<option value="" {{#unless chosen}}selected{{/unless}}>— pick or roll —</option>
 						{{#each options}}
-						<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+						<option value="{{this.value}}" {{#if selected}}selected{{/if}}>{{this.label}}</option>
 						{{/each}}
 					</select>
-					<button type="button" class="stonetop-inspire-roll" data-field="{{key}}" title="Roll 1d12">
+					<button type="button" class="stonetop-inspire-roll" data-field="{{this.key}}" title="Roll 1d12">
 						<i class="fas fa-dice-d20" aria-hidden="true"></i>
 					</button>
 				</div>

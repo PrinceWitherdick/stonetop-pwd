@@ -9,13 +9,13 @@
 
 	{{#each maps}}
 	<div class="form-group">
-		<label for="stonetop-map-pin-names-{{slug}}">{{name}}</label>
+		<label for="stonetop-map-pin-names-{{this.slug}}">{{this.name}}</label>
 		<div class="form-fields">
 			{{!-- Options come from MAP_PIN_NAME_CHOICES via mapPinNameRows, never spelled out
 			      here: a value that disagrees with the decoder makes every row read "follow", so
 			      saving the menu would wipe the world's overrides with nothing logged. --}}
-			<select id="stonetop-map-pin-names-{{slug}}" name="map.{{slug}}">
-				{{#each options}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{localize labelKey}}</option>{{/each}}
+			<select id="stonetop-map-pin-names-{{this.slug}}" name="map.{{this.slug}}">
+				{{#each options}}<option value="{{this.value}}" {{#if selected}}selected{{/if}}>{{localize labelKey}}</option>{{/each}}
 			</select>
 		</div>
 	</div>

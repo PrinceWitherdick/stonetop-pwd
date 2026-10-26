@@ -36,19 +36,19 @@
         suggestions  {value, hint} rows for the datalist — omitted by a bar whose list is
                      emitted elsewhere (the Blessed's five panels all offer the same world
                      actors, so they share one list rather than each carrying a copy of it) --}}
-<div class="{{prefix}}-add">
+<div class="{{this.prefix}}-add">
 	{{> @partial-block}}
-	<input type="text" class="stonetop-roster-add-name {{nameClass}}" list="{{listId}}"
-	       autocomplete="off" placeholder="{{placeholder}}">
+	<input type="text" class="stonetop-roster-add-name {{this.nameClass}}" list="{{this.listId}}"
+	       autocomplete="off" placeholder="{{this.placeholder}}">
 	{{!-- `label` is where a native datalist already means "the aside beside this option", and it
 	      is what StonetopAutocomplete renders as the dimmed second column. Only `value` is ever
 	      inserted into the field, so a picked "Brennan the Claw / Marshedge" types just the name
 	      and the search resolves it cleanly. --}}
 	{{#if suggestions}}
-	<datalist id="{{listId}}">
-		{{#each suggestions}}<option value="{{value}}"{{#if hint}} label="{{hint}}"{{/if}}></option>{{/each}}
+	<datalist id="{{this.listId}}">
+		{{#each suggestions}}<option value="{{this.value}}"{{#if hint}} label="{{this.hint}}"{{/if}}></option>{{/each}}
 	</datalist>
 	{{/if}}
-	<button type="button" class="stonetop-roster-add-btn {{addClass}}">{{addLabel}}</button>
+	<button type="button" class="stonetop-roster-add-btn {{this.addClass}}">{{this.addLabel}}</button>
 </div>
-<p class="{{prefix}}-hint">{{hint}}</p>
+<p class="{{this.prefix}}-hint">{{this.hint}}</p>

@@ -3,24 +3,24 @@
 	{{!-- ── Step 1: Overview ────────────────────────────────────────────── --}}
 	{{#if isOverview}}
 	<div class="stonetop-levelup-step">
-		<p class="stonetop-levelup-intro">{{{overviewIntro}}}</p>
+		<p class="stonetop-levelup-intro">{{{this.overviewIntro}}}</p>
 		{{#if awayWarning}}
-		<p class="stonetop-levelup-aside stonetop-levelup-away"><i class="fas fa-triangle-exclamation"></i> {{awayWarning}}</p>
+		<p class="stonetop-levelup-aside stonetop-levelup-away"><i class="fas fa-triangle-exclamation"></i> {{this.awayWarning}}</p>
 		{{/if}}
 
 		<div class="stonetop-levelup-summary">
 			<div class="stonetop-levelup-summary-row">
 				<span class="stonetop-levelup-summary-label">{{{localize "stonetop.specialMoves.levelUp.xpCost"}}}</span>
-				<span class="stonetop-levelup-summary-value stonetop-levelup-summary-value--cost">−{{cost}}</span>
+				<span class="stonetop-levelup-summary-value stonetop-levelup-summary-value--cost">−{{this.cost}}</span>
 			</div>
 			<div class="stonetop-levelup-summary-row stonetop-levelup-summary-row--highlight">
 				<span class="stonetop-levelup-summary-label">{{{localize "stonetop.specialMoves.levelUp.xpRemaining"}}}</span>
-				<span class="stonetop-levelup-summary-value">{{xpRemaining}}</span>
+				<span class="stonetop-levelup-summary-value">{{this.xpRemaining}}</span>
 			</div>
 			<div class="stonetop-levelup-summary-divider"></div>
 			<div class="stonetop-levelup-summary-row stonetop-levelup-summary-row--highlight">
 				<span class="stonetop-levelup-summary-label">{{{localize "stonetop.specialMoves.levelUp.newLevel"}}}</span>
-				<span class="stonetop-levelup-summary-value">{{newLevel}}</span>
+				<span class="stonetop-levelup-summary-value">{{this.newLevel}}</span>
 			</div>
 		</div>
 
@@ -28,7 +28,7 @@
 		<p class="stonetop-levelup-aside">{{{localize "stonetop.specialMoves.levelUp.invocationAside"}}}</p>
 		{{/if}}
 		{{#if pouchGrowthNote}}
-		<p class="stonetop-levelup-aside stonetop-levelup-pouch">{{pouchGrowthNote}}</p>
+		<p class="stonetop-levelup-aside stonetop-levelup-pouch">{{this.pouchGrowthNote}}</p>
 		{{/if}}
 	</div>
 	{{/if}}
@@ -52,7 +52,7 @@
 		{{#if moveGroups.length}}
 		<div class="stonetop-levelup-move-chips">
 			{{#each moveGroups}}
-			<button type="button" class="stonetop-levelup-move-chip" data-move-group="{{key}}" aria-pressed="false">{{label}}</button>
+			<button type="button" class="stonetop-levelup-move-chip" data-move-group="{{this.key}}" aria-pressed="false">{{this.label}}</button>
 			{{/each}}
 		</div>
 		{{/if}}
@@ -64,12 +64,12 @@
 			{{#each moves}}
 			<div class="stonetop-levelup-move-option stonetop-levelup-pickable{{#if selected}} is-selected{{/if}}"
 				role="button" tabindex="0" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"
-				data-compendium-id="{{compendiumId}}"
-				data-move-groups="{{groupsAttr}}">
+				data-compendium-id="{{this.compendiumId}}"
+				data-move-groups="{{this.groupsAttr}}">
 				<div class="stonetop-levelup-move-header">
-					<span class="stonetop-levelup-move-name">{{name}}</span>
+					<span class="stonetop-levelup-move-name">{{this.name}}</span>
 					{{#if requiresLabel}}
-					<span class="stonetop-levelup-move-req">{{requiresLabel}}</span>
+					<span class="stonetop-levelup-move-req">{{this.requiresLabel}}</span>
 					{{/if}}
 				</div>
 				{{#if description}}
@@ -83,11 +83,11 @@
 				<span>{{localize "stonetop.specialMoves.levelUp.lockedDivider"}}</span>
 			</div>
 			{{#each lockedMoves}}
-			<div class="stonetop-levelup-move-option is-locked" data-move-groups="{{groupsAttr}}">
+			<div class="stonetop-levelup-move-option is-locked" data-move-groups="{{this.groupsAttr}}">
 				<div class="stonetop-levelup-move-header">
-					<span class="stonetop-levelup-move-name">{{name}}</span>
+					<span class="stonetop-levelup-move-name">{{this.name}}</span>
 					{{#if requiresLabel}}
-					<span class="stonetop-levelup-move-req">{{requiresLabel}}</span>
+					<span class="stonetop-levelup-move-req">{{this.requiresLabel}}</span>
 					{{/if}}
 				</div>
 				{{#if description}}
@@ -109,11 +109,11 @@
 					<span>{{localize "stonetop.specialMoves.levelUp.lockedDivider"}}</span>
 				</div>
 				{{#each lockedMoves}}
-				<div class="stonetop-levelup-move-option is-locked" data-move-groups="{{groupsAttr}}">
+				<div class="stonetop-levelup-move-option is-locked" data-move-groups="{{this.groupsAttr}}">
 					<div class="stonetop-levelup-move-header">
-						<span class="stonetop-levelup-move-name">{{name}}</span>
+						<span class="stonetop-levelup-move-name">{{this.name}}</span>
 						{{#if requiresLabel}}
-						<span class="stonetop-levelup-move-req">{{requiresLabel}}</span>
+						<span class="stonetop-levelup-move-req">{{this.requiresLabel}}</span>
 						{{/if}}
 					</div>
 					{{#if description}}
@@ -133,7 +133,7 @@
 		      custom one (p.528 step 3's insert class). A move pick like the cards above. --}}
 		<div class="stonetop-levelup-move-option stonetop-levelup-agreed-entry stonetop-levelup-pickable{{#if agreedPicked}} is-selected{{/if}}"
 			role="button" tabindex="0" aria-pressed="{{#if agreedPicked}}true{{else}}false{{/if}}"
-			data-compendium-id="{{agreedId}}">
+			data-compendium-id="{{this.agreedId}}">
 			<div class="stonetop-levelup-move-header">
 				<span class="stonetop-levelup-move-name">{{localize "stonetop.specialMoves.levelUp.agreedTitle"}}</span>
 			</div>
@@ -149,7 +149,7 @@
 		{{#if customAllowed}}
 		<div class="stonetop-levelup-move-option stonetop-levelup-agreed-option stonetop-levelup-agreed-custom stonetop-levelup-pickable{{#if customSelected}} is-selected{{/if}}"
 			role="button" tabindex="0" aria-pressed="{{#if customSelected}}true{{else}}false{{/if}}"
-			data-compendium-id="{{customId}}">
+			data-compendium-id="{{this.customId}}">
 			<div class="stonetop-levelup-move-header">
 				<span class="stonetop-levelup-move-name">{{localize "stonetop.specialMoves.levelUp.agreedCustomTitle"}}</span>
 			</div>
@@ -196,7 +196,7 @@
 		{{#if foreignPlaybooks.length}}
 		<div class="stonetop-levelup-move-chips">
 			{{#each foreignPlaybooks}}
-			<button type="button" class="stonetop-levelup-move-chip stonetop-levelup-foreign-chip" data-playbook="{{key}}" aria-pressed="false">{{label}}</button>
+			<button type="button" class="stonetop-levelup-move-chip stonetop-levelup-foreign-chip" data-playbook="{{this.key}}" aria-pressed="false">{{this.label}}</button>
 			{{/each}}
 		</div>
 		{{/if}}
@@ -217,15 +217,15 @@
 	<div class="stonetop-levelup-step">
 		<p class="stonetop-levelup-intro">
 			{{{localize "stonetop.specialMoves.levelUp.statIntro"}}}
-			{{#if statMoveName}}<span class="stonetop-levelup-stat-cap-note">{{statMoveName}}: max +{{statCap}}</span>{{/if}}
+			{{#if statMoveName}}<span class="stonetop-levelup-stat-cap-note">{{this.statMoveName}}: max +{{this.statCap}}</span>{{/if}}
 		</p>
 		<div class="stonetop-levelup-stat-list">
 			{{#each statOptions}}
 			<div class="stonetop-levelup-stat-option stonetop-levelup-pickable{{#if selected}} is-selected{{/if}}{{#if atCap}} is-at-cap{{/if}}"
 				role="button" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"{{#if atCap}} aria-disabled="true"{{else}} tabindex="0"{{/if}}
-				data-stat-key="{{key}}">
-				<span class="stonetop-levelup-stat-name">{{name}}</span>
-				<span class="stonetop-levelup-stat-value">{{valueLabel}}{{#if atCap}} <em>(max)</em>{{/if}}</span>
+				data-stat-key="{{this.key}}">
+				<span class="stonetop-levelup-stat-name">{{this.name}}</span>
+				<span class="stonetop-levelup-stat-value">{{this.valueLabel}}{{#if atCap}} <em>(max)</em>{{/if}}</span>
 			</div>
 			{{/each}}
 		</div>
@@ -246,9 +246,9 @@
 			{{#each markStep.options}}
 			<div class="stonetop-levelup-stat-option stonetop-levelup-mark-option stonetop-levelup-pickable{{#if selected}} is-selected{{/if}}{{#if disabled}} is-at-cap{{/if}}"
 				role="button" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"{{#if disabled}} aria-disabled="true"{{else}} tabindex="0"{{/if}}
-				data-mark-slug="{{slug}}"{{#if tooltip}} data-tooltip="{{tooltip}}" data-tooltip-direction="UP"{{/if}}>
-				<span class="stonetop-levelup-stat-name">{{label}}</span>
-				{{#if existingLabel}}<span class="stonetop-levelup-stat-value">{{existingLabel}}</span>{{/if}}
+				data-mark-slug="{{this.slug}}"{{#if tooltip}} data-tooltip="{{this.tooltip}}" data-tooltip-direction="UP"{{/if}}>
+				<span class="stonetop-levelup-stat-name">{{this.label}}</span>
+				{{#if existingLabel}}<span class="stonetop-levelup-stat-value">{{this.existingLabel}}</span>{{/if}}
 			</div>
 			{{/each}}
 		</div>
@@ -266,9 +266,9 @@
 			{{#each companionStep.options}}
 			<div class="stonetop-levelup-stat-option stonetop-levelup-companion-option stonetop-levelup-pickable{{#if selected}} is-selected{{/if}}{{#if disabled}} is-at-cap{{/if}}"
 				role="button" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"{{#if disabled}} aria-disabled="true"{{else}} tabindex="0"{{/if}}
-				data-action-slug="{{slug}}">
-				<span class="stonetop-levelup-stat-name">{{label}}</span>
-				{{#if existingLabel}}<span class="stonetop-levelup-stat-value">{{existingLabel}}</span>{{/if}}
+				data-action-slug="{{this.slug}}">
+				<span class="stonetop-levelup-stat-name">{{this.label}}</span>
+				{{#if existingLabel}}<span class="stonetop-levelup-stat-value">{{this.existingLabel}}</span>{{/if}}
 			</div>
 			{{/each}}
 		</div>
@@ -279,7 +279,7 @@
 	{{#if isInvocation}}
 	<div class="stonetop-levelup-step">
 		<div class="stonetop-levelup-intro stonetop-levelup-intro--playbook">
-			{{#if playbookIcon}}<img class="stonetop-levelup-intro-icon" src="{{playbookIcon}}" alt="{{playbookName}}">{{/if}}
+			{{#if playbookIcon}}<img class="stonetop-levelup-intro-icon" src="{{this.playbookIcon}}" alt="{{this.playbookName}}">{{/if}}
 			<span>{{{localize "stonetop.specialMoves.levelUp.invocationIntro"}}}</span>
 		</div>
 
@@ -288,10 +288,10 @@
 			{{#each invocations}}
 			<div class="stonetop-levelup-invocation-option stonetop-levelup-pickable{{#if selected}} is-selected{{/if}}"
 				role="button" tabindex="0" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"
-				data-slug="{{slug}}">
-				<span class="stonetop-levelup-invocation-name">{{label}}</span>
+				data-slug="{{this.slug}}">
+				<span class="stonetop-levelup-invocation-name">{{this.label}}</span>
 				{{#if description}}
-				<div class="stonetop-levelup-invocation-description">{{{description}}}</div>
+				<div class="stonetop-levelup-invocation-description">{{{this.description}}}</div>
 				{{/if}}
 			</div>
 			{{/each}}
@@ -302,7 +302,7 @@
 
 	{{!-- Level Up step 6, on whichever step is last: review Instinct and Appearance. --}}
 	{{#if isLastStep}}
-	<p class="stonetop-levelup-aside stonetop-levelup-review">{{reviewLine}}</p>
+	<p class="stonetop-levelup-aside stonetop-levelup-review">{{this.reviewLine}}</p>
 	{{/if}}
 
 	{{!-- ── Footer ────────────────────────────────────────────────────── --}}
@@ -315,7 +315,7 @@
 		<button type="button" class="stonetop-levelup-next-btn"
 			{{#unless canContinue}}disabled{{/unless}}>
 			{{#if isLastStep}}
-				{{applyLabel}}
+				{{this.applyLabel}}
 			{{else}}
 				{{{localize "stonetop.specialMoves.levelUp.next"}}}
 			{{/if}}

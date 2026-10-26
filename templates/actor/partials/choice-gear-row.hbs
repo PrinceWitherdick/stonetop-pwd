@@ -12,8 +12,8 @@
 	<label class="stonetop-inv-item-toggle">
 		{{#if small}}
 		<input type="checkbox" class="stonetop-possession-choice-gear-check"
-		       data-possession-slug="{{possessionSlug}}"
-		       data-choice-slug="{{choiceSlug}}"
+		       data-possession-slug="{{this.possessionSlug}}"
+		       data-choice-slug="{{this.choiceSlug}}"
 		       {{#if checked}}checked{{/if}}>
 		{{else}}
 		<span class="stonetop-inv-diamonds">
@@ -25,7 +25,7 @@
 			{{/each}}
 		</span>
 		{{/if}}
-		<span class="stonetop-inv-label">{{#if hasBlank}}{{{fillBefore}}}<input type="text" class="stonetop-possession-sub-fill" data-possession-slug="{{possessionSlug}}" data-choice-slug="{{choiceSlug}}" value="{{fillValue}}" placeholder="…">{{{fillAfter}}}{{else}}{{{label}}}{{/if}}{{#if resourceInline}}<span class="stonetop-inv-resources stonetop-choice-gear-statuses">{{> "stonetop.resource-track" resource=resource btnClass="stonetop-item-resource-check" possessionSlug=possessionSlug choiceSlug=choiceSlug}}</span>{{{labelAfter}}}{{/if}}</span>
+		<span class="stonetop-inv-label">{{#if hasBlank}}{{{this.fillBefore}}}<input type="text" class="stonetop-possession-sub-fill" data-possession-slug="{{this.possessionSlug}}" data-choice-slug="{{this.choiceSlug}}" value="{{this.fillValue}}" placeholder="…">{{{this.fillAfter}}}{{else}}{{{this.label}}}{{/if}}{{#if resourceInline}}<span class="stonetop-inv-resources stonetop-choice-gear-statuses">{{> "stonetop.resource-track" resource=resource btnClass="stonetop-item-resource-check" possessionSlug=possessionSlug choiceSlug=choiceSlug}}</span>{{{this.labelAfter}}}{{/if}}</span>
 	</label>
 	{{#if (and resource (not resourceInline))}}
 	<span class="stonetop-item-resources">

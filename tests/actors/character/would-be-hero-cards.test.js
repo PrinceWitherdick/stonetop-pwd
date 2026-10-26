@@ -297,7 +297,7 @@ describe("Anger is a Gift's righteous angers", () => {
 		expect(moves.find(m => m.name === ANGER_IS_A_GIFT).subtitle).toBe("Burns with righteous anger at: Wanton cruelty and unnecessary suffering; Threats to your loved ones");
 		expect(moves.find(m => m.name === "Up With People").subtitle).toBeNull();
 		const hbs = readRepo("templates/actor/partials/move-group.hbs");
-		expect(hbs).toContain('{{#if subtitle}}<p class="stonetop-move-note stonetop-move-subtitle">{{subtitle}}</p>{{/if}}');
+		expect(hbs).toContain('{{#if subtitle}}<p class="stonetop-move-note stonetop-move-subtitle">{{this.subtitle}}</p>{{/if}}');
 	});
 });
 

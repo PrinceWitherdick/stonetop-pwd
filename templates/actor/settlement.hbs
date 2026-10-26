@@ -7,7 +7,7 @@
       nav, then `.sheet-body` holding the tabs. The rail is rendered inside the form, where core's
       Tabs controller finds and binds it; mountTabRail then lifts it onto the window frame, off the
       sheet's right edge, the way Stonetop's is. --}}
-<form class="{{cssClass}} stonetop-settlement-form" autocomplete="off">
+<form class="{{this.cssClass}} stonetop-settlement-form" autocomplete="off">
 	{{> "stonetop.settlement-header"}}
 
 	<nav class="sheet-tabs tabs stonetop-tab-rail" data-group="primary" aria-label="{{localize "stonetop.sheet.tabs.railLabel"}}">

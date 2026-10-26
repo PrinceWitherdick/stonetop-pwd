@@ -1,21 +1,21 @@
 <form class="stonetop-possession-choices stonetop-background-neighbors">
 	{{#if lead}}
-	<div class="stonetop-possession-choices-desc stonetop-item-description"><p>{{lead}}</p></div>
+	<div class="stonetop-possession-choices-desc stonetop-item-description"><p>{{this.lead}}</p></div>
 	{{/if}}
 
 	{{#if neighbors.length}}
 	<div class="stonetop-choice-group">
-		<p class="stonetop-choice-group-heading">{{traitsLead}}</p>
+		<p class="stonetop-choice-group-heading">{{this.traitsLead}}</p>
 		{{!-- Onboarding's neighbor rows (styles: .stonetop-onboarding-background-neighbor): name,
 		      free-type trait field, roll-a-trait die. --}}
 		{{#each neighbors}}
 		<label class="stonetop-onboarding-background-neighbor">
 			<span class="stonetop-onboarding-background-neighbor-name">
-				<strong>{{name}}</strong>{{#if origin}} <span>from {{origin}}</span>{{/if}}
+				<strong>{{this.name}}</strong>{{#if origin}} <span>from {{this.origin}}</span>{{/if}}
 			</span>
-			<input type="text" data-neighbor-trait="{{traitKey}}" value="{{trait}}" placeholder="{{traitLabel}}" autocomplete="off">
+			<input type="text" data-neighbor-trait="{{this.traitKey}}" value="{{this.trait}}" placeholder="{{this.traitLabel}}" autocomplete="off">
 			<button type="button" class="onboard-background-neighbor-random" data-action="roll-trait"
-			        title="Roll a trait at random" aria-label="Roll a random trait for {{name}}">
+			        title="Roll a trait at random" aria-label="Roll a random trait for {{this.name}}">
 				<i class="fas fa-dice-d6"></i>
 			</button>
 		</label>
@@ -25,12 +25,12 @@
 
 	{{#each groups}}
 	<div class="stonetop-choice-group">
-		<p class="stonetop-choice-group-heading">{{label}}</p>
-		<div class="stonetop-choice-subgroup" data-neighbor-choice="{{key}}" data-pick-max="{{count}}">
+		<p class="stonetop-choice-group-heading">{{this.label}}</p>
+		<div class="stonetop-choice-subgroup" data-neighbor-choice="{{this.key}}" data-pick-max="{{this.count}}">
 			{{#each options}}
 			<label class="stonetop-choice-option-label">
-				<input type="checkbox" class="stonetop-item-check" value="{{value}}" {{#if selected}}checked{{/if}}>
-				<span class="stonetop-pc-option-label"><strong>{{name}}</strong>{{#if origin}} <em>from {{origin}}</em>{{/if}}</span>
+				<input type="checkbox" class="stonetop-item-check" value="{{this.value}}" {{#if selected}}checked{{/if}}>
+				<span class="stonetop-pc-option-label"><strong>{{this.name}}</strong>{{#if origin}} <em>from {{this.origin}}</em>{{/if}}</span>
 			</label>
 			{{/each}}
 		</div>
@@ -38,7 +38,7 @@
 	{{/each}}
 
 	<footer class="stonetop-pc-footer">
-		<button type="button" class="stonetop-pc-done" data-action="add">{{addLabel}}</button>
-		<button type="button" class="stonetop-pc-done" data-action="skip">{{skipLabel}}</button>
+		<button type="button" class="stonetop-pc-done" data-action="add">{{this.addLabel}}</button>
+		<button type="button" class="stonetop-pc-done" data-action="skip">{{this.skipLabel}}</button>
 	</footer>
 </form>

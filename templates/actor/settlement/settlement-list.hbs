@@ -11,15 +11,15 @@
       row's text opens it in a small window to change it (StonetopSettlementSheet#_onEditRow), and
       the Add button opens the same window empty. Inside the #each, the partial's own params are read
       through `../`, since the block's context is the row. --}}
-<div class="steading-card" data-list="{{list}}">
-	<h3 class="steading-list-heading">{{heading}}</h3>
+<div class="steading-card" data-list="{{this.list}}">
+	<h3 class="steading-list-heading">{{this.heading}}</h3>
 	{{#if rows.length}}
 	<ul class="steading-list stonetop-settlement-rows">
 		{{#each rows}}
-		<li class="steading-list-item stonetop-settlement-row{{#if lacking}} stonetop-settlement-row--lacking{{/if}}" data-row-id="{{id}}">
+		<li class="steading-list-item stonetop-settlement-row{{#if lacking}} stonetop-settlement-row--lacking{{/if}}" data-row-id="{{this.id}}">
 			<span class="steading-list-bullet" aria-hidden="true"></span>
 			<span class="steading-list-name"{{#if ../editable}} data-action="editRow" role="button" tabindex="0" data-tooltip="{{localize "stonetop.settlement.editRowTooltip"}}"{{/if}}>
-				<span class="stonetop-settlement-row-title">{{name}}</span>{{#if detail}} ({{detail}}){{/if}}
+				<span class="stonetop-settlement-row-title">{{this.name}}</span>{{#if detail}} ({{this.detail}}){{/if}}
 				{{#if lacking}}<span class="stonetop-settlement-lacking-tag" data-tooltip="{{localize "stonetop.settlement.lackingTooltip"}}">{{localize "stonetop.settlement.lacking"}}</span>{{/if}}
 			</span>
 			{{#if ../editable}}
@@ -32,11 +32,11 @@
 		{{/each}}
 	</ul>
 	{{else}}
-	<p class="stonetop-settlement-empty">{{empty}}</p>
+	<p class="stonetop-settlement-empty">{{this.empty}}</p>
 	{{/if}}
 	{{#if editable}}
-	<button type="button" class="steading-list-add" data-action="addRow" data-list="{{list}}">
-		<i class="fa-solid fa-plus" inert></i> {{addLabel}}
+	<button type="button" class="steading-list-add" data-action="addRow" data-list="{{this.list}}">
+		<i class="fa-solid fa-plus" inert></i> {{this.addLabel}}
 	</button>
 	{{/if}}
 </div>

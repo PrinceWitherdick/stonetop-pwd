@@ -12,16 +12,16 @@
 <div class="stonetop-cs-table-pick">
   {{#each slots}}
   <div class="stonetop-cs-pick-slot{{#if extra}} stonetop-cs-pick-slot--extra{{/if}}">
-    <label class="stonetop-cf-label">{{label}}{{#if hint}} <span class="stonetop-cf-pick-hint">{{hint}}</span>{{/if}}
-      <select class="stonetop-cf-input stonetop-cs-pick" data-key="{{key}}" data-slot="{{slot}}">
+    <label class="stonetop-cf-label">{{this.label}}{{#if hint}} <span class="stonetop-cf-pick-hint">{{this.hint}}</span>{{/if}}
+      <select class="stonetop-cf-input stonetop-cs-pick" data-key="{{this.key}}" data-slot="{{this.slot}}">
         <option value="">(choose or roll)</option>
-        {{#each rows}}<option value="{{text}}"{{#if selected}} selected{{/if}}>{{text}}</option>{{/each}}
+        {{#each rows}}<option value="{{this.text}}"{{#if selected}} selected{{/if}}>{{this.text}}</option>{{/each}}
       </select>
     </label>
-    <button type="button" class="stonetop-cs-roll stonetop-cf-mini-btn" data-key="{{key}}" data-slot="{{slot}}" data-tooltip="{{rollTip}}" data-tooltip-direction="UP"><i class="fas fa-dice-d20"></i></button>
-    {{#if extra}}<button type="button" class="stonetop-cs-uncombine stonetop-cf-mini-btn" data-key="{{key}}" data-slot="{{slot}}" data-tooltip="Drop this one" data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>{{/if}}
+    <button type="button" class="stonetop-cs-roll stonetop-cf-mini-btn" data-key="{{this.key}}" data-slot="{{this.slot}}" data-tooltip="{{this.rollTip}}" data-tooltip-direction="UP"><i class="fas fa-dice-d20"></i></button>
+    {{#if extra}}<button type="button" class="stonetop-cs-uncombine stonetop-cf-mini-btn" data-key="{{this.key}}" data-slot="{{this.slot}}" data-tooltip="Drop this one" data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>{{/if}}
   </div>
   {{/each}}
-  {{#if canAdd}}<button type="button" class="stonetop-cs-combine stonetop-cf-mini-btn" data-key="{{key}}"><i class="fas fa-plus"></i> Combine another</button>{{/if}}
-  {{#if note}}<p class="stonetop-cs-note">{{note}}</p>{{/if}}
+  {{#if canAdd}}<button type="button" class="stonetop-cs-combine stonetop-cf-mini-btn" data-key="{{this.key}}"><i class="fas fa-plus"></i> Combine another</button>{{/if}}
+  {{#if note}}<p class="stonetop-cs-note">{{this.note}}</p>{{/if}}
 </div>

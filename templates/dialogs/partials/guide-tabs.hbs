@@ -18,14 +18,14 @@
       it: a Blessed clicking through five kinds to find which ones have marks out would be worse
       served by the rail than by the stack it replaced. Suppressed at zero by the caller, which
       passes no count at all for an empty list. --}}
-<nav class="stonetop-guide-toc" aria-label="{{ariaLabel}}">
+<nav class="stonetop-guide-toc" aria-label="{{this.ariaLabel}}">
 	<ol class="stonetop-guide-toc-list">
 		{{#each tabs}}
 		<li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
-			<button type="button" class="stonetop-guide-toc-btn {{../btnClass}}" data-tab="{{key}}"{{#if selected}} aria-current="true"{{/if}}>
-				<i class="fas {{icon}} stonetop-guide-toc-icon"></i>
-				<span class="stonetop-guide-toc-text">{{title}}</span>
-				{{#if count}}<span class="stonetop-guide-toc-count">{{count}}</span>{{/if}}
+			<button type="button" class="stonetop-guide-toc-btn {{../btnClass}}" data-tab="{{this.key}}"{{#if selected}} aria-current="true"{{/if}}>
+				<i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+				<span class="stonetop-guide-toc-text">{{this.title}}</span>
+				{{#if count}}<span class="stonetop-guide-toc-count">{{this.count}}</span>{{/if}}
 			</button>
 		</li>
 		{{/each}}

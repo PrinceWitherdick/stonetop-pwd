@@ -5,7 +5,7 @@
 		<label>{{localize "stonetop.character.moves.loveLetter.draftsLabel"}}</label>
 		<ul class="stonetop-love-letter-drafts-list">
 			{{#each drafts}}
-			<li><button type="button" class="stonetop-custom-move-cancel stonetop-love-letter-draft-open" data-actor-id="{{actorId}}" data-item-id="{{itemId}}">
+			<li><button type="button" class="stonetop-custom-move-cancel stonetop-love-letter-draft-open" data-actor-id="{{this.actorId}}" data-item-id="{{this.itemId}}">
 				<i class="fas fa-envelope" aria-hidden="true"></i> {{localize "stonetop.character.moves.loveLetter.draftRow" name=name recipient=recipient}}
 			</button></li>
 			{{/each}}
@@ -16,14 +16,14 @@
 	{{#if isEdit}}
 	<div class="stonetop-custom-move-field">
 		<label>{{localize "stonetop.character.moves.loveLetter.recipientLabel"}}</label>
-		<p class="stonetop-love-letter-recipient-fixed">{{recipientName}}</p>
+		<p class="stonetop-love-letter-recipient-fixed">{{this.recipientName}}</p>
 	</div>
 	{{else}}
 	<div class="stonetop-custom-move-field">
 		<label for="stonetop-love-letter-recipient">{{localize "stonetop.character.moves.loveLetter.recipientLabel"}}</label>
 		<select id="stonetop-love-letter-recipient" name="recipient" required>
 			{{#each recipients}}
-			<option value="{{id}}" {{#if selected}}selected{{/if}}>{{name}}</option>
+			<option value="{{this.id}}" {{#if selected}}selected{{/if}}>{{this.name}}</option>
 			{{/each}}
 		</select>
 	</div>
@@ -31,28 +31,28 @@
 
 	<div class="stonetop-custom-move-field">
 		<label for="stonetop-love-letter-name">{{localize "stonetop.character.moves.loveLetter.nameLabel"}}</label>
-		<input type="text" id="stonetop-love-letter-name" name="name" value="{{name}}"
+		<input type="text" id="stonetop-love-letter-name" name="name" value="{{this.name}}"
 		       placeholder="{{localize 'stonetop.character.moves.loveLetter.namePlaceholder'}}" required>
 	</div>
 
 	<div class="stonetop-custom-move-field">
 		<label for="stonetop-love-letter-desc">{{localize "stonetop.character.moves.loveLetter.descriptionLabel"}}</label>
 		<textarea id="stonetop-love-letter-desc" name="description" rows="7"
-		          placeholder="{{localize 'stonetop.character.moves.loveLetter.descriptionPlaceholder'}}">{{description}}</textarea>
+		          placeholder="{{localize 'stonetop.character.moves.loveLetter.descriptionPlaceholder'}}">{{this.description}}</textarea>
 	</div>
 
 	<div class="stonetop-custom-move-field">
 		<label for="stonetop-love-letter-roll">{{localize "stonetop.character.moves.loveLetter.rollLabel"}}</label>
 		<select id="stonetop-love-letter-roll" name="rollType">
 			{{#each rollOptions}}
-			<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+			<option value="{{this.value}}" {{#if selected}}selected{{/if}}>{{this.label}}</option>
 			{{/each}}
 		</select>
 		<p class="stonetop-custom-move-hint">{{localize "stonetop.character.moves.loveLetter.rollHint"}}</p>
 	</div>
 
 	<div class="stonetop-custom-move-results stonetop-love-letter-results{{#unless hasRoll}} is-hidden{{/unless}}"
-	     data-result-style="{{resultStyle}}">
+	     data-result-style="{{this.resultStyle}}">
 		<div class="stonetop-love-letter-results-head">
 			<h4 class="stonetop-custom-move-results-title">{{localize "stonetop.character.moves.loveLetter.resultsTitle"}}</h4>
 			<div class="stonetop-segmented-picker stonetop-love-letter-style-picker" role="radiogroup"
@@ -89,7 +89,7 @@
 			<div class="stonetop-custom-move-field">
 				<label for="stonetop-love-letter-options">{{localize "stonetop.character.moves.loveLetter.optionsLabel"}}</label>
 				<textarea id="stonetop-love-letter-options" name="options" rows="4"
-				          placeholder="{{localize 'stonetop.character.moves.loveLetter.optionsPlaceholder'}}">{{options}}</textarea>
+				          placeholder="{{localize 'stonetop.character.moves.loveLetter.optionsPlaceholder'}}">{{this.options}}</textarea>
 				<p class="stonetop-custom-move-hint">{{localize "stonetop.character.moves.loveLetter.optionsHint"}}</p>
 			</div>
 			<div class="stonetop-custom-move-field stonetop-love-letter-picks">
@@ -128,7 +128,7 @@
 
 	<div class="stonetop-custom-move-field">
 		<label for="stonetop-love-letter-signed">{{localize "stonetop.character.moves.loveLetter.signedLabel"}}</label>
-		<input type="text" id="stonetop-love-letter-signed" name="signed" value="{{signed}}"
+		<input type="text" id="stonetop-love-letter-signed" name="signed" value="{{this.signed}}"
 		       placeholder="{{localize 'stonetop.character.moves.loveLetter.signedPlaceholder'}}">
 	</div>
 

@@ -124,8 +124,8 @@ describe("the toggle on a built-in card", () => {
 	it("is drawn on every built-in card's body in edit mode, and on the custom card", () => {
 		const hbs = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../../templates/actor/partials/tab-followers.hbs"), "utf8");
 		const body = hbs.slice(hbs.indexOf('{{#*inline "stonetopFollowerCardBody"}}'), hbs.indexOf("{{/inline}}", hbs.indexOf('{{#*inline "stonetopFollowerCardBody"}}')));
-		expect(body).toMatch(/\{\{#if edit\.card\}\}\{\{#unless \(eq ftype "custom"\)\}\}[\s\S]*class="stonetop-follower-party-check" data-ftype="\{\{ftype\}\}" data-slug="\{\{slug\}\}"/);
-		expect(hbs).toContain('class="stonetop-follower-party-check" data-ftype="custom" data-slug="{{slug}}"');
+		expect(body).toMatch(/\{\{#if edit\.card\}\}\{\{#unless \(eq ftype "custom"\)\}\}[\s\S]*class="stonetop-follower-party-check" data-ftype="\{\{this\.ftype\}\}" data-slug="\{\{this\.slug\}\}"/);
+		expect(hbs).toContain('class="stonetop-follower-party-check" data-ftype="custom" data-slug="{{this.slug}}"');
 	});
 
 	const blessed = (flags = {}) => buildLiveCharacter({

@@ -6,13 +6,13 @@
       caller-defined — Expedition emits 0-based (read by StepperDialog._goTo), Introductions
       emits 1-based (read by _jumpToPhase). Each dialog binds its OWN handler to its own
       scheme, so don't route one dialog's rail through the other's handler. --}}
-<nav class="stonetop-guide-toc" aria-label="{{ariaLabel}}">
+<nav class="stonetop-guide-toc" aria-label="{{this.ariaLabel}}">
   <ol class="stonetop-guide-toc-list">
     {{#each steps}}
     <li class="stonetop-guide-toc-item{{#if isActive}} is-active{{/if}}">
-      <button type="button" class="stonetop-guide-toc-btn" data-step-index="{{index}}"{{#if isActive}} aria-current="step"{{/if}}>
-        <i class="fas {{icon}} stonetop-guide-toc-icon"></i>
-        <span class="stonetop-guide-toc-text">{{title}}</span>
+      <button type="button" class="stonetop-guide-toc-btn" data-step-index="{{this.index}}"{{#if isActive}} aria-current="step"{{/if}}>
+        <i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+        <span class="stonetop-guide-toc-text">{{this.title}}</span>
       </button>
     </li>
     {{/each}}

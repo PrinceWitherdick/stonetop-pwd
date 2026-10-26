@@ -14,14 +14,14 @@
 {{#if stonetop.canEdit}}
 {{#unless stonetop.editMode}}
 {{#if editing}}
-<a class="stonetop-section-done {{toggleClass}}" data-section="{{section}}" title="Done editing"><i class="fas fa-check"></i></a>
+<a class="stonetop-section-done {{this.toggleClass}}" data-section="{{this.section}}" title="Done editing"><i class="fas fa-check"></i></a>
 {{else}}
 {{#if (lookup stonetop.recentlyEdited section)}}
 {{!-- Just left edit mode: a non-interactive check that fades out, then a
      re-render swaps in the hover pencil below. --}}
-<a class="stonetop-section-done {{toggleClass}} steading-section-toggle-faded" tabindex="-1"><i class="fas fa-check"></i></a>
+<a class="stonetop-section-done {{this.toggleClass}} steading-section-toggle-faded" tabindex="-1"><i class="fas fa-check"></i></a>
 {{else}}
-<a class="stonetop-section-edit {{toggleClass}}" data-section="{{section}}" title="Edit: make this section editable"><i class="fas fa-pencil"></i></a>
+<a class="stonetop-section-edit {{this.toggleClass}}" data-section="{{this.section}}" title="Edit: make this section editable"><i class="fas fa-pencil"></i></a>
 {{/if}}
 {{/if}}
 {{/unless}}

@@ -1,58 +1,83 @@
-import { TEMPLATE_BARE_NAMES } from "./template-bare-names.js";
-
 /**
- * Has another module registered a Handlebars helper under a name our templates print bare?
+ * Has another module replaced one of the Handlebars helpers this system registers?
  *
- * Handlebars helpers are global, shared by every system and module in the world, and a bare
- * `{{when}}` asks for a helper called `when` BEFORE it reads `when` off the data. So the moment a
- * module registers a helper with that name, our template stops printing the value and calls the
- * module's function instead: at best the text goes blank, at worst the helper throws and the whole
- * sheet fails to open. That is how the GM Toolkit stopped opening for a GM running Battle
- * Transitions, whose `when` helper throws when given no arguments.
+ * Handlebars helpers are global, shared by every system and module in the world, and modules load
+ * after the system. So a module that registers its own `times`, `format` or `and` silently takes
+ * the name from us, and every sheet that calls `{{#each (times n)}}` or `{{format ...}}` gets the
+ * module's function instead of ours: at best the text is wrong, at worst the helper throws and the
+ * whole sheet fails to open. A sheet that comes up wrong in one GM's world and right in everyone
+ * else's is otherwise a very long bug report, so this names the helper.
  *
- * The templates that clash in the wild are fixed (`{{this.when}}` is always data), and
- * tests/templates/foreign-helper-names.test.js keeps the known names out. But there are hundreds of
- * bare names and any module can take any of them, so this checks the live world too and names the
- * clash. A sheet that comes up wrong in one GM's world and right in everyone else's is otherwise a
- * very long bug report.
+ * Our templates' DATA names are not at risk: they are all written `{{this.name}}`, which is always
+ * a data lookup and never a helper call (tests/templates/foreign-helper-names.test.js holds every
+ * template to that). That is how the GM Toolkit stopped opening for a GM running Battle
+ * Transitions: a bare `{{when}}` called its `when` helper, which throws with no arguments.
  *
  * Diagnosis only: it changes nothing. Another module's helper is that module's to keep.
  *
- * The list is generated from the templates (`npm run gen:template-names`), since the sources are
- * not to hand at runtime. It names no helper our system or core registers on purpose: the test
- * holds both lists against it.
+ * Console only, never on screen: modules often register their own `eq`, `and`, `or`, `not` or
+ * `times` that behave just like ours, and a notice in every such world would be noise. The console
+ * line is there for whoever is chasing a sheet that comes up wrong.
+ *
+ * When: a module can register a helper at any point, in `init`, after an `await` inside its
+ * `ready` listener, on `canvasReady` or on first render. So this does not look once; it watches
+ * `Handlebars.registerHelper` from the moment ours are in, and looks again once the world is
+ * ready for a helper assigned straight onto `Handlebars.helpers`. Nothing is reported before
+ * `ready`, while modules are still registering theirs: the ready sweep reports what came before it
+ * in one line.
  */
 
-/** The bare template names that some registered helper now answers to, sorted. */
-export function clashingHelpers(helpers = globalThis.Handlebars?.helpers ?? {}, names = TEMPLATE_BARE_NAMES) {
-	return names.filter(name => Object.hasOwn(helpers, name)).sort();
+/** Which of `own` (name -> our function) `helpers` no longer holds, sorted for a stable message. */
+export function replacedHelpers(helpers, own) {
+	return [...own].filter(([name, fn]) => helpers[name] !== fn).map(([name]) => name).sort();
 }
 
-/** The GM-facing message for a clash, or null when there is none. */
-export function clashMessage(clashes) {
-	if (!clashes.length) return null;
-	const list = clashes.map(n => `"${n}"`).join(", ");
-	const one = clashes.length === 1;
-	return `A module has added ${one ? "a template helper" : "template helpers"} named ${list}, `
-		+ `${one ? "a name" : "names"} Stonetop's sheets also use for their own text. Parts of some sheets may show the wrong text or fail to open. Turning modules off `
+/** The console message for these replaced helpers, or null when there are none. */
+export function replacedMessage(names) {
+	if (!names.length) return null;
+	const list = names.map(n => `"${n}"`).join(", ");
+	const one = names.length === 1;
+	return `A module has replaced Stonetop's template ${one ? "helper" : "helpers"} ${list} with its own. `
+		+ `Parts of some sheets may show the wrong text or fail to open. Turning modules off `
 		+ `one at a time finds the one responsible; please report it with this message.`;
 }
 
 /**
- * Warn about any clash. GM-only on screen (a player cannot act on it), console for everyone.
- * Run once all modules have loaded, so their helpers are there to be found.
+ * Watch the helpers named `names`, as registered right now, for a module replacing them.
+ *
+ * Call it straight after this system registers its helpers, so the functions it remembers are
+ * ours. Returns `check()`, which reports any replacement not reported yet (once the world is
+ * ready) and returns the names it reported; the boot calls it once on `ready`.
  */
-export function reportForeignHelperClashes({
-	helpers = globalThis.Handlebars?.helpers ?? {},
-	notifications = globalThis.ui?.notifications,
-	user = globalThis.game?.user,
+export function watchOwnHelpers(names, {
+	handlebars = globalThis.Handlebars,
+	isReady = () => globalThis.game?.ready === true,
+	defer = fn => setTimeout(fn, 0),
 } = {}) {
-	const clashes = clashingHelpers(helpers);
-	const message = clashMessage(clashes);
-	if (!message) return clashes;
-	console.warn(`Stonetop | Handlebars helper clash: ${clashes.join(", ")}\n${message}`);
-	// Permanent, like the boot report: a world that loads while the GM is away would otherwise
-	// dismiss the only explanation for a sheet that will not open.
-	if (user?.isGM) notifications?.warn?.(`Stonetop: ${message}`, { permanent: true });
-	return clashes;
+	const own = new Map(names.map(name => [name, handlebars.helpers[name]]));
+	const reported = new Set();
+
+	const check = () => {
+		if (!isReady()) return [];
+		const fresh = replacedHelpers(handlebars.helpers, own).filter(name => !reported.has(name));
+		const message = replacedMessage(fresh);
+		if (!message) return [];
+		for (const name of fresh) reported.add(name);
+		console.warn(`Stonetop | Handlebars helper replaced: ${fresh.join(", ")}\n${message}`);
+		return fresh;
+	};
+
+	// One look per burst: a module registering ten helpers in one go gets one message, not ten.
+	let pending = false;
+	const original = handlebars.registerHelper;
+	handlebars.registerHelper = function (...args) {
+		const result = original.apply(this, args);
+		if (!pending) {
+			pending = true;
+			defer(() => { pending = false; check(); });
+		}
+		return result;
+	};
+
+	return check;
 }

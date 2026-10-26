@@ -19,12 +19,12 @@
 	      toggles it. --}}
 	<button type="button" class="threat-collapse-btn"
 	        aria-expanded="{{#if collapsed}}false{{else}}true{{/if}}"
-	        aria-label="Collapse or expand this {{kind}}" tabindex="0">
+	        aria-label="Collapse or expand this {{this.kind}}" tabindex="0">
 		<i class="fas fa-chevron-down" aria-hidden="true"></i>
 	</button>
 	{{/if}}
 	<div class="threat-card__title">
-		<h3 class="threat-name">{{name}}</h3>
-		<span class="threat-type">{{typeLabel}}</span>
+		<h3 class="threat-name">{{this.name}}</h3>
+		<span class="threat-type">{{this.typeLabel}}</span>
 	</div>
 </header>

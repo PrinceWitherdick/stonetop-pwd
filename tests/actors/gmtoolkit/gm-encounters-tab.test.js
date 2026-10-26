@@ -891,8 +891,8 @@ describe("the Encounters tab: the breakdown on a shut card", () => {
 	// The badge is a number and a picture; without the tooltip the picture has no name, and the
 	// glyph itself is hidden from a screen reader precisely because the tooltip carries it.
 	it("wires each badge to a tooltip and hides the glyph from the reader", () => {
-		expect(CARD_MARKUP).toMatch(/class="stonetop-gm-encounter-tally[^"]*"[\s\S]{0,120}data-tooltip="\{\{tip\}\}"/);
-		expect(CARD_MARKUP).toMatch(/\{\{count\}\}<i class="\{\{icon\}\}" aria-hidden="true">/);
+		expect(CARD_MARKUP).toMatch(/class="stonetop-gm-encounter-tally[^"]*"[\s\S]{0,120}data-tooltip="\{\{this\.tip\}\}"/);
+		expect(CARD_MARKUP).toMatch(/\{\{this\.count\}\}<i class="\{\{this\.icon\}\}" aria-hidden="true">/);
 	});
 
 	// ONE GROUPING, READ TWICE: the badges on the shut head and the cards in the open body are the
@@ -918,7 +918,7 @@ describe("the Encounters tab: the breakdown on a shut card", () => {
 		expect(body).toMatch(/\{\{#each groups\}\}[\s\S]*?class="stonetop-gm-entry-card"/);
 		// The head says the kind once, which is what the rows below no longer repeat.
 		expect(body).toContain("stonetop-gm-entry-card-title");
-		expect(body).toMatch(/stonetop-gm-entry-card-title">\{\{title\}\}/);
+		expect(body).toMatch(/stonetop-gm-entry-card-title">\{\{this\.title\}\}/);
 		expect(body).toContain("stonetop-gm-entry-card-count");
 		// The rows of one card are one <ul>, which is exactly what alt+Arrow walks.
 		expect(body).toMatch(/stonetop-gm-entry-card[\s\S]*?<ul class="stonetop-gm-encounter-entries">/);
@@ -929,7 +929,7 @@ describe("the Encounters tab: the breakdown on a shut card", () => {
 	it("leaves a row its name, its note and its cross, and nothing that repeats the card", () => {
 		expect(CARD_MARKUP).not.toContain("stonetop-gm-encounter-entry-icon");
 		expect(CARD_MARKUP).not.toContain("stonetop-gm-encounter-entry-kind");
-		expect(CARD_MARKUP).not.toContain("{{typeLabel}}");
+		expect(CARD_MARKUP).not.toContain("{{this.typeLabel}}");
 		for (const cls of ["entry-open", "entry-remove", "entry-note"]) {
 			expect(CARD_MARKUP).toContain(`stonetop-gm-encounter-${cls}`);
 		}
@@ -1178,7 +1178,7 @@ describe("the Encounters tab: notes, used and delete", () => {
 	// both called "the bridge". The head of the note rides the row to tell them apart. Only
 	// while it is shut: open, the real note is two pixels below it.
 	it("rides the head of the note beside the name, and only while the row is shut", () => {
-		expect(CARD_MARKUP).toMatch(/stonetop-gm-encounter-peek"[^>]*>\{\{notesPeek\}\}/);
+		expect(CARD_MARKUP).toMatch(/stonetop-gm-encounter-peek"[^>]*>\{\{this\.notesPeek\}\}/);
 		const peek = declarations(CSS, ".stonetop-gm-encounter-peek");
 		expect(peek).toMatch(/display:\s*none/);
 		expect(peek).toMatch(/white-space:\s*nowrap/);

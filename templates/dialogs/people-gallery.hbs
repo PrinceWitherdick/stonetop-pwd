@@ -55,9 +55,9 @@
 		      square as a rect over that illustration — which is how the committed portrait still
 		      draws as a face on every small round surface — is read back out of `data-src`'s own
 		      filename at click time (PeopleGalleryDialog#_frameOf), so it needs no attribute. --}}
-		<button type="button" class="stonetop-people-pick{{#if isSquare}} is-square{{/if}}{{#if selected}} is-selected{{/if}}{{#if usedBy}} is-used{{/if}}" data-src="{{src}}" data-full="{{full}}" data-presenting="{{#if presenting}}{{presenting}}{{else}}unspecified{{/if}}" data-kid="{{#if kid}}kids{{else}}adults{{/if}}" data-used="{{#if usedBy}}used{{else}}unused{{/if}}" data-used-by="{{usedBy}}" title="{{name}}{{#if usedBy}} (already assigned to {{usedBy}}){{/if}}">
-			<img src="{{src}}" alt="{{name}}" loading="lazy">
-			<span class="stonetop-people-label">{{name}}</span>
+		<button type="button" class="stonetop-people-pick{{#if isSquare}} is-square{{/if}}{{#if selected}} is-selected{{/if}}{{#if usedBy}} is-used{{/if}}" data-src="{{this.src}}" data-full="{{this.full}}" data-presenting="{{#if presenting}}{{this.presenting}}{{else}}unspecified{{/if}}" data-kid="{{#if kid}}kids{{else}}adults{{/if}}" data-used="{{#if usedBy}}used{{else}}unused{{/if}}" data-used-by="{{this.usedBy}}" title="{{this.name}}{{#if usedBy}} (already assigned to {{this.usedBy}}){{/if}}">
+			<img src="{{this.src}}" alt="{{this.name}}" loading="lazy">
+			<span class="stonetop-people-label">{{this.name}}</span>
 		</button>
 		{{/each}}
 	</div>
@@ -83,13 +83,13 @@
 		<div class="stonetop-people-books">
 			{{#each empty.books}}
 			<label class="stonetop-people-book">
-				<span class="stonetop-people-book-name">{{title}} <span class="stonetop-people-book-hint">{{note}}</span></span>
-				<input type="file" name="stonetop-book-file-{{book}}" accept="application/pdf,.pdf">
+				<span class="stonetop-people-book-name">{{this.title}} <span class="stonetop-people-book-hint">{{this.note}}</span></span>
+				<input type="file" name="stonetop-book-file-{{this.book}}" accept="application/pdf,.pdf">
 				{{!-- Which edition, with the page count that settles it. Not a nicety: every page
 				      number the importer works from was measured on the spreads sheet, so the 1-up
 				      file is refused outright rather than half-imported, and a GM who hands one over
 				      without being warned first has spent a minute to be told no. --}}
-				<span class="stonetop-people-book-edition">{{edition}}</span>
+				<span class="stonetop-people-book-edition">{{this.edition}}</span>
 			</label>
 			{{/each}}
 		</div>

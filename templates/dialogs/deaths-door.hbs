@@ -32,15 +32,15 @@
 				    re-render on change, so a stamped class would go stale on the first click. }}
 				<label class="deaths-door-stat-choice-label">
 					<input type="radio" class="deaths-door-stat-choice" name="deaths-door-stat"
-					       value="{{stat}}" {{#if selected}}checked{{/if}}>
-					<span>{{label}}</span>
+					       value="{{this.stat}}" {{#if selected}}checked{{/if}}>
+					<span>{{this.label}}</span>
 				</label>
 				{{/each}}
 			</div>
 			{{#if statChoiceMoveDescription}}
 			{{! Raw: this is the move's own stored HTML, the same string its card and the playbook
 			    reference print. }}
-			<div class="deaths-door-roll-option-move">{{{statChoiceMoveDescription}}}</div>
+			<div class="deaths-door-roll-option-move">{{{this.statChoiceMoveDescription}}}</div>
 			{{/if}}
 		</div>
 		{{/if}}
@@ -128,7 +128,7 @@
 		<p class="deaths-door-result-banner">{{#if rolledBy}}{{{localize "stonetop.specialMoves.deathsDoor.result.rolledBy" name=(escapeHtml rolledBy) total=(escapeHtml rolledTotal)}}}{{else}}{{{localize "stonetop.specialMoves.deathsDoor.result.youRolled" total=(escapeHtml rolledTotal)}}}{{/if}}</p>
 		{{/if}}
 		{{#if tierNote}}
-		<p class="deaths-door-result-banner">{{tierNote}}</p>
+		<p class="deaths-door-result-banner">{{this.tierNote}}</p>
 		{{/if}}
 
 		{{! The same ladder the roll step previewed, with the tier that landed picked out, so the
@@ -150,7 +150,7 @@
 			{{#if privateBoostsNote}}
 			<p class="deaths-door-note">
 				<i class="fas fa-user-shield"></i>
-				<span>{{privateBoostsNote}}</span>
+				<span>{{this.privateBoostsNote}}</span>
 			</p>
 			{{/if}}
 		</div>
@@ -177,7 +177,7 @@
 					{{/each}}
 				</div>
 				<div class="deaths-door-mark-row">
-					<input type="text" class="deaths-door-mark-input" value="{{markText}}" placeholder="{{localize "stonetop.specialMoves.deathsDoor.mark.inputPlaceholder"}}">
+					<input type="text" class="deaths-door-mark-input" value="{{this.markText}}" placeholder="{{localize "stonetop.specialMoves.deathsDoor.mark.inputPlaceholder"}}">
 				</div>
 				{{#if markSeeded}}
 				<p class="deaths-door-mark-done">
@@ -210,8 +210,8 @@
 				<p class="deaths-door-mark-label">{{{localize "stonetop.specialMoves.deathsDoor.result.debilityAsk"}}}</p>
 				<div class="deaths-door-debility-choices">
 					{{#each debilityChoices}}
-					<button type="button" class="deaths-door-debility-btn" data-debility="{{key}}" title="{{description}}">
-						{{name}}
+					<button type="button" class="deaths-door-debility-btn" data-debility="{{this.key}}" title="{{this.description}}">
+						{{this.name}}
 					</button>
 					{{/each}}
 				</div>
@@ -237,9 +237,9 @@
 			{{else}}
 			<div class="deaths-door-fates">
 				{{#each fates}}
-				<button type="button" class="deaths-door-fate-btn" data-fate="{{key}}">
-					<span class="deaths-door-fate-label">{{label}}</span>
-					<span class="deaths-door-fate-hint">{{hint}}</span>
+				<button type="button" class="deaths-door-fate-btn" data-fate="{{this.key}}">
+					<span class="deaths-door-fate-label">{{this.label}}</span>
+					<span class="deaths-door-fate-hint">{{this.hint}}</span>
 				</button>
 				{{/each}}
 			</div>
@@ -256,7 +256,7 @@
 		<label class="deaths-door-last-move-row">
 			<span class="deaths-door-roll-option-label">{{localize "stonetop.specialMoves.deathsDoor.lastMove.pick"}}</span>
 			<select class="deaths-door-last-move-pick">
-				{{#each lastMoves}}<option value="{{id}}">{{name}}</option>{{/each}}
+				{{#each lastMoves}}<option value="{{this.id}}">{{this.name}}</option>{{/each}}
 			</select>
 		</label>
 		<p class="deaths-door-roll-option-hint">{{localize "stonetop.specialMoves.deathsDoor.lastMove.hint"}}</p>
@@ -279,9 +279,9 @@
 		</p>
 		<div class="deaths-door-fates">
 			{{#each refusalInserts}}
-			<button type="button" class="deaths-door-insert-btn" data-slug="{{slug}}">
-				<span class="deaths-door-fate-label">{{name}}</span>
-				<span class="deaths-door-fate-hint">{{hint}}</span>
+			<button type="button" class="deaths-door-insert-btn" data-slug="{{this.slug}}">
+				<span class="deaths-door-fate-label">{{this.name}}</span>
+				<span class="deaths-door-fate-hint">{{this.hint}}</span>
 			</button>
 			{{/each}}
 		</div>
@@ -300,9 +300,9 @@
 	{{#if isChoices}}
 	<div class="deaths-door-step deaths-door-step--choices">
 		<div class="deaths-door-choices-head">
-			<h2 class="deaths-door-move-name">{{insertName}}</h2>
+			<h2 class="deaths-door-move-name">{{this.insertName}}</h2>
 			{{! Told per fate — a Thrall didn't refuse anything, they called something up. }}
-			<p class="deaths-door-intro">{{choicesIntro}}</p>
+			<p class="deaths-door-intro">{{this.choicesIntro}}</p>
 		</div>
 
 		<div class="stonetop-guide-split">
@@ -313,9 +313,9 @@
 					{{#each choiceTabs}}
 					<li class="stonetop-guide-toc-item{{#if isActive}} is-active{{/if}}{{#if done}} is-answered{{/if}}">
 						<button type="button" class="stonetop-guide-toc-btn deaths-door-choice-tab"
-						        data-choice-step="{{key}}"{{#if isActive}} aria-current="true"{{/if}}>
-							<i class="fas {{icon}} stonetop-guide-toc-icon"></i>
-							<span class="stonetop-guide-toc-text">{{label}}</span>
+						        data-choice-step="{{this.key}}"{{#if isActive}} aria-current="true"{{/if}}>
+							<i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+							<span class="stonetop-guide-toc-text">{{this.label}}</span>
 							{{#if done}}<i class="fas fa-check deaths-door-choice-tab-done" aria-label="{{localize "stonetop.specialMoves.deathsDoor.choices.answered"}}"></i>{{/if}}
 						</button>
 					</li>
@@ -395,9 +395,9 @@
 	{{! The roll-card +1s this user presses for their own characters (Diligence, Sanction, Many Hands, a
 	    Blessing), labelled as the card labels them. Other players press theirs on the card. }}
 	{{#each plusOneButtons}}
-	<button class="deaths-door-boost-btn deaths-door-plus-one-btn" type="button" data-plus-one="{{key}}" title="{{title}}">
+	<button class="deaths-door-boost-btn deaths-door-plus-one-btn" type="button" data-plus-one="{{this.key}}" title="{{this.title}}">
 		<i class="fas fa-plus"></i>
-		<span>{{label}}</span>
+		<span>{{this.label}}</span>
 	</button>
 	{{/each}}
 	{{else}}
@@ -414,7 +414,7 @@
 	{{#if isChoices}}
 	{{! `title` because the line is clipped to one row now that it shares the footer with three
 	    buttons, and on a Thrall with nothing answered it names four steps. }}
-	{{#if outstandingLabel}}<span class="deaths-door-outstanding" title="{{outstandingLabel}}">{{outstandingLabel}}</span>{{/if}}
+	{{#if outstandingLabel}}<span class="deaths-door-outstanding" title="{{this.outstandingLabel}}">{{this.outstandingLabel}}</span>{{/if}}
 	{{! Back / Next walk the rail; Done leaves. A wizard keeps its forward action on the right (the
 	    one place our dialogs don't put the affirmative first), and Done sits past it because it is
 	    the way OUT of the walkthrough rather than the next step of it. }}

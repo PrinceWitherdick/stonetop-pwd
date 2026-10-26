@@ -158,7 +158,7 @@ describe("asteriskMoveUsed", () => {
 	it("the Moves tab offers the manual cross-off on a starred move's card, while it would still count", () => {
 		const hbs = readRepo("templates/actor/partials/move-group.hbs");
 		expect(hbs).toContain("{{#if (and owned (lookup @root.stonetop.asteriskUse name))}}");
-		expect(hbs).toMatch(/class="stonetop-inline-btn stonetop-asterisk-used" data-move-name="\{\{name\}\}"/);
+		expect(hbs).toMatch(/class="stonetop-inline-btn stonetop-asterisk-used" data-move-name="\{\{this\.name\}\}"/);
 		const sheet = readRepo("module/actors/character/StonetopCharacterSheet.js");
 		expect(sheet).toMatch(/context\.stonetop\.asteriskUse = this\.isEditable\s*\?\s*Object\.fromEntries\(ASTERISK_MOVES\.filter\(name => asteriskUseCounts\(this\.actor, name\)\)/);
 		expect(sheet).toMatch(/button\.stonetop-asterisk-used[\s\S]{0,900}asteriskMoveUsed\(this\.actor, moveName\)/);

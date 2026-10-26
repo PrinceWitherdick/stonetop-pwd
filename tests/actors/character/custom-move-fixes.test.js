@@ -180,6 +180,6 @@ describe("CUS-7: every field id in the authoring window is suffixed per window",
 		const hbs = read("templates/dialogs/custom-move.hbs");
 		const ids = [...hbs.matchAll(/(?:id|for)="(stonetop-custom-move-[^"]*)"/g)].map(m => m[1]);
 		expect(ids.length).toBeGreaterThan(20);
-		for (const id of ids) expect(id).toMatch(/-\{\{uid\}\}$/);
+		for (const id of ids) expect(id).toMatch(/-\{\{this\.uid\}\}$/);
 	});
 });

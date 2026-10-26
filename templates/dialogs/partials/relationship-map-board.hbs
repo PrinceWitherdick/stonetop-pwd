@@ -26,18 +26,18 @@
       ONLY ON A BOARD THAT HAS GROUPS: one with none is drawn exactly as it always was. Safe behind
       an `{{#if}}` because this whole partial is re-rendered on every change. --}}
 {{#if groups.length}}
-<svg class="stonetop-relmap-groups" viewBox="0 0 {{boardWidth}} {{boardHeight}}"
+<svg class="stonetop-relmap-groups" viewBox="0 0 {{this.boardWidth}} {{this.boardHeight}}"
      aria-hidden="true" focusable="false">
   {{#each groups}}
   {{!-- `stonetop-relmap-line--<ink>` as well, for the ink's own dash pattern, which the
         high-contrast skin draws the outline in so its colour is never the only thing saying it.
         `is-dashed` is the stroke somebody CHOSE for it; whole is the absence of the modifier. --}}
-  <g class="stonetop-relmap-group stonetop-relmap-ink--{{inkKey}} stonetop-relmap-line--{{inkKey}}{{#if dashed}} is-dashed{{/if}}"
-     data-relmap-group-shape="{{id}}"
-     {{#if inkHex}}style="--relmap-ink-raw:{{inkHex}}"{{/if}}>
-    <path class="stonetop-relmap-group-fill" d="{{d}}"></path>
-    <path class="stonetop-relmap-group-line" d="{{d}}" vector-effect="non-scaling-stroke"></path>
-    <path class="stonetop-relmap-group-hit" data-relmap-group-hit="{{id}}" d="{{d}}"
+  <g class="stonetop-relmap-group stonetop-relmap-ink--{{this.inkKey}} stonetop-relmap-line--{{this.inkKey}}{{#if dashed}} is-dashed{{/if}}"
+     data-relmap-group-shape="{{this.id}}"
+     {{#if inkHex}}style="--relmap-ink-raw:{{this.inkHex}}"{{/if}}>
+    <path class="stonetop-relmap-group-fill" d="{{this.d}}"></path>
+    <path class="stonetop-relmap-group-line" d="{{this.d}}" vector-effect="non-scaling-stroke"></path>
+    <path class="stonetop-relmap-group-hit" data-relmap-group-hit="{{this.id}}" d="{{this.d}}"
           vector-effect="non-scaling-stroke"></path>
   </g>
   {{/each}}
@@ -65,10 +65,10 @@
         is one -- a solid line is the absence of a modifier, which is what `.stonetop-relmap-line`
         already draws. The renderer decides which of the three this is; the stylesheet decides what
         each resolves to, as it does for the ink beside it. --}}
-  <path class="stonetop-relmap-line stonetop-relmap-line--{{inkKey}}{{#if broken}} is-{{broken}}{{/if}}"
-        data-relmap-line="{{id}}" d="{{d}}"
-        data-relmap-who="{{a}} {{b}}"
-        {{#if inkHex}}style="--relmap-ink-raw:{{inkHex}}"{{/if}}
+  <path class="stonetop-relmap-line stonetop-relmap-line--{{this.inkKey}}{{#if broken}} is-{{this.broken}}{{/if}}"
+        data-relmap-line="{{this.id}}" d="{{this.d}}"
+        data-relmap-who="{{this.a}} {{this.b}}"
+        {{#if inkHex}}style="--relmap-ink-raw:{{this.inkHex}}"{{/if}}
         vector-effect="non-scaling-stroke"></path>
   {{!-- WHAT THE CLICK ACTUALLY LANDS ON: the same curve again, invisible, and wide.
 
@@ -89,7 +89,7 @@
         from either of its two portraits, which are tab stops themselves. Eighty more stops between
         the bar and the board, most of them announced as an unnamed button, would cost every
         keyboard reader far more than it bought the one case. --}}
-  <path class="stonetop-relmap-hit" data-relmap-hit="{{id}}" d="{{hit}}"
+  <path class="stonetop-relmap-hit" data-relmap-hit="{{this.id}}" d="{{this.hit}}"
         aria-hidden="true" vector-effect="non-scaling-stroke"></path>
   {{/each}}
 </svg>
@@ -105,9 +105,9 @@
       expedition's two renderers draw the same shape from the same points, and a shape spelt out in
       three places is one that gets reshaped in two of them. --}}
 {{#each heads}}
-<svg class="stonetop-relmap-head stonetop-relmap-head--{{inkKey}}" viewBox="0 0 {{../headBox}} {{../headBox}}"
-     aria-hidden="true" focusable="false" data-relmap-head="{{id}}" data-relmap-end="{{end}}"
-     style="left:{{left}}%;top:{{top}}%;--relmap-turn:{{angle}}deg{{#if inkHex}};--relmap-ink-raw:{{inkHex}}{{/if}}">
+<svg class="stonetop-relmap-head stonetop-relmap-head--{{this.inkKey}}" viewBox="0 0 {{../headBox}} {{../headBox}}"
+     aria-hidden="true" focusable="false" data-relmap-head="{{this.id}}" data-relmap-end="{{this.end}}"
+     style="left:{{this.left}}%;top:{{this.top}}%;--relmap-turn:{{this.angle}}deg{{#if inkHex}};--relmap-ink-raw:{{this.inkHex}}{{/if}}">
   <path d="{{../headD}}"></path>
 </svg>
 {{/each}}
@@ -161,7 +161,7 @@
       A POINT AND A TURN, in ABSOLUTE board pixels, which is exactly the space this one viewBox is
       in. The words are centred on that point and rotated about it (`text-anchor`,
       `dominant-baseline` and this `transform`), so a caption is placed the way an arrowhead is. --}}
-<svg class="stonetop-relmap-labels" viewBox="0 0 {{boardWidth}} {{boardHeight}}" focusable="false">
+<svg class="stonetop-relmap-labels" viewBox="0 0 {{this.boardWidth}} {{this.boardHeight}}" focusable="false">
   {{!-- ⚠ A CUSTOM PROPERTY AND NOT A `font-size`, on the lines the reader has set a size on, and
         that is not a style preference. An inline `font-size` is the top of the cascade and would
         beat the two rules that have to be able to win over it: the held line's caption, which is
@@ -174,11 +174,11 @@
         line on every board drawn before a reader could ask for a bigger one, so the attribute is
         printed only where somebody actually chose. --}}
   {{#each labels}}
-  <g class="stonetop-relmap-label" data-relmap-edge="{{id}}" data-relmap-who="{{a}} {{b}}">
+  <g class="stonetop-relmap-label" data-relmap-edge="{{this.id}}" data-relmap-who="{{this.a}} {{this.b}}">
     <text class="stonetop-relmap-label-text" role="button" tabindex="0"
-          data-relmap-words="{{id}}" data-tooltip-text="{{tooltip}}" aria-label="{{ariaLabel}}"
-          {{#if px}}style="--relmap-caption-px: {{px}}px"{{/if}}
-          x="{{x}}" y="{{y}}" transform="rotate({{angle}} {{x}} {{y}})">{{text}}</text>
+          data-relmap-words="{{this.id}}" data-tooltip-text="{{this.tooltip}}" aria-label="{{this.ariaLabel}}"
+          {{#if px}}style="--relmap-caption-px: {{this.px}}px"{{/if}}
+          x="{{this.x}}" y="{{this.y}}" transform="rotate({{this.angle}} {{this.x}} {{this.y}})">{{this.text}}</text>
   </g>
   {{/each}}
 </svg>
@@ -192,12 +192,12 @@
       the arrow keys move everybody in it, Delete rubs the outline out (the people stay). An empty
       name still has a target, which says "Unnamed group" in italics. --}}
 {{#each groups}}
-<div class="stonetop-relmap-group-name stonetop-relmap-ink--{{inkKey}} is-{{align}}{{#unless name}} is-unnamed{{/unless}}"
-     data-relmap-group="{{id}}" role="button" tabindex="0"
-     style="left:{{nameLeft}}%;top:{{nameTop}}%{{#if inkHex}};--relmap-ink-raw:{{inkHex}}{{/if}}"
-     data-tooltip-text="{{tooltip}}" aria-label="{{ariaLabel}}">
+<div class="stonetop-relmap-group-name stonetop-relmap-ink--{{this.inkKey}} is-{{this.align}}{{#unless name}} is-unnamed{{/unless}}"
+     data-relmap-group="{{this.id}}" role="button" tabindex="0"
+     style="left:{{this.nameLeft}}%;top:{{this.nameTop}}%{{#if inkHex}};--relmap-ink-raw:{{this.inkHex}}{{/if}}"
+     data-tooltip-text="{{this.tooltip}}" aria-label="{{this.ariaLabel}}">
   <span class="stonetop-relmap-group-tab" aria-hidden="true"></span>
-  <span class="stonetop-relmap-group-words">{{#if name}}{{name}}{{else}}{{../unnamedGroup}}{{/if}}</span>
+  <span class="stonetop-relmap-group-words">{{#if name}}{{this.name}}{{else}}{{../unnamedGroup}}{{/if}}</span>
 </div>
 {{/each}}
 
@@ -222,25 +222,25 @@
       ours on these and lets the drawn one be the rim. --}}
 {{#each nodes}}
 <div class="stonetop-relmap-node{{#if missing}} is-missing{{/if}}{{#if ownRing}} is-own-ring{{/if}}"
-     data-relmap-node="{{id}}" style="left:{{left}}%;top:{{top}}%">
-  <button type="button" class="stonetop-relmap-face" data-relmap-open="{{id}}"
-          data-tooltip-text="{{tooltip}}" aria-label="{{tooltip}}">
+     data-relmap-node="{{this.id}}" style="left:{{this.left}}%;top:{{this.top}}%">
+  <button type="button" class="stonetop-relmap-face" data-relmap-open="{{this.id}}"
+          data-tooltip-text="{{this.tooltip}}" aria-label="{{this.tooltip}}">
     <span class="stonetop-relmap-portrait">
       {{#if img}}
-      <img src="{{img}}" alt="" draggable="false" style="{{imgStyle}}">
+      <img src="{{this.img}}" alt="" draggable="false" style="{{this.imgStyle}}">
       {{else}}
       <i class="fas fa-user"></i>
       {{/if}}
     </span>
   </button>
-  <span class="stonetop-relmap-name">{{name}}</span>
+  <span class="stonetop-relmap-name">{{this.name}}</span>
   {{!-- Focusable, and it does something on a plain CLICK as well as on a drag: dragging it to
         another portrait draws the line, and clicking it asks who to draw to. Drag is the quick way
         and not the only way, which is what keeps the board usable from a keyboard and on a touch
         screen where a precise drag between two small circles is unpleasant. --}}
   {{#if ../canEdit}}
-  <button type="button" class="stonetop-relmap-handle" data-relmap-handle="{{id}}"
-          data-tooltip="{{../linkHint}}" aria-label="{{linkLabel}}">
+  <button type="button" class="stonetop-relmap-handle" data-relmap-handle="{{this.id}}"
+          data-tooltip="{{../linkHint}}" aria-label="{{this.linkLabel}}">
     <i class="fas fa-link"></i>
   </button>
   {{!-- TAKING SOMEBODY OFF, and the only way to do it with a mouse. It used to be the Delete key
@@ -262,8 +262,8 @@
         THE PRESS IS NOT THE DELETION. It opens the same confirm the Delete key does, which names
         the person and counts the lines going with them -- see RelationshipMapWindow#_removePerson
         for why that one asks where rubbing out a LINE does not. --}}
-  <button type="button" class="stonetop-relmap-bin" data-relmap-remove="{{id}}"
-          data-tooltip-text="{{removeLabel}}" aria-label="{{removeLabel}}">
+  <button type="button" class="stonetop-relmap-bin" data-relmap-remove="{{this.id}}"
+          data-tooltip-text="{{this.removeLabel}}" aria-label="{{this.removeLabel}}">
     <i class="fas fa-trash"></i>
   </button>
   {{/if}}
@@ -290,7 +290,7 @@
 
       DECORATION: `aria-hidden`, no clicks, nothing to aim at. The caption it copies is still in
       the layer above, still focusable, still says what it says. --}}
-<svg class="stonetop-relmap-labels-lit" viewBox="0 0 {{boardWidth}} {{boardHeight}}"
+<svg class="stonetop-relmap-labels-lit" viewBox="0 0 {{this.boardWidth}} {{this.boardHeight}}"
      aria-hidden="true" focusable="false"></svg>
 
 {{!-- THE FOUR CORNERS EACH GROUP IS RESIZED BY, shown only on the group the bar is holding
@@ -301,14 +301,14 @@
       a corner drawn there was covered by the group's own name whenever the box was narrower than its
       name -- which a group shrunk to one person always is. In board pixels, like the outlines. --}}
 {{#if groups.length}}
-<svg class="stonetop-relmap-grips" viewBox="0 0 {{boardWidth}} {{boardHeight}}"
+<svg class="stonetop-relmap-grips" viewBox="0 0 {{this.boardWidth}} {{this.boardHeight}}"
      aria-hidden="true" focusable="false">
   {{#each groups}}
-  <g class="stonetop-relmap-gripset stonetop-relmap-ink--{{inkKey}}" data-relmap-gripset="{{id}}"
-     {{#if inkHex}}style="--relmap-ink-raw:{{inkHex}}"{{/if}}>
+  <g class="stonetop-relmap-gripset stonetop-relmap-ink--{{this.inkKey}}" data-relmap-gripset="{{this.id}}"
+     {{#if inkHex}}style="--relmap-ink-raw:{{this.inkHex}}"{{/if}}>
     {{#each grips}}
-    <circle class="stonetop-relmap-group-grip is-{{corner}}" data-relmap-grip="{{id}}" data-relmap-corner="{{corner}}"
-            cx="{{x}}" cy="{{y}}" r="8" vector-effect="non-scaling-stroke"></circle>
+    <circle class="stonetop-relmap-group-grip is-{{this.corner}}" data-relmap-grip="{{this.id}}" data-relmap-corner="{{this.corner}}"
+            cx="{{this.x}}" cy="{{this.y}}" r="8" vector-effect="non-scaling-stroke"></circle>
     {{/each}}
   </g>
   {{/each}}

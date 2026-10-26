@@ -22,7 +22,7 @@
 			      it is true of both lists; `flex: none`, because the panel below it takes the slack. --}}
 			<div class="stonetop-condemned-heading">
 				{{#if playbookImg}}
-				<img class="stonetop-condemned-mark" src="{{playbookImg}}" alt="" draggable="false">
+				<img class="stonetop-condemned-mark" src="{{this.playbookImg}}" alt="" draggable="false">
 				{{/if}}
 				<p class="stonetop-condemned-rule">{{localize "stonetop.condemn.windowRule"}}</p>
 			</div>
@@ -99,7 +99,7 @@
 					{{#if editable}}
 					<label class="stonetop-oath-broken-control"
 					       data-tooltip="{{localize "stonetop.oaths.brokenTooltip"}}" data-tooltip-direction="UP">
-						<input type="checkbox" class="stonetop-check stonetop-oath-broken" data-row-id="{{id}}"
+						<input type="checkbox" class="stonetop-check stonetop-oath-broken" data-row-id="{{this.id}}"
 						       {{#if broken}}checked{{/if}}>
 						<span class="stonetop-oath-broken-label">{{localize "stonetop.oaths.broken"}}</span>
 					</label>

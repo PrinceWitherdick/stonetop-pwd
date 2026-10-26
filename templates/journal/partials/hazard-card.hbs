@@ -4,16 +4,16 @@
       checkboxes) so the shared threat-view wiring and the card CSS apply unchanged;
       hazard-specific rows carry .hazard-* classes on top. --}}
 <article class="threat-card threat-card--hazard hazard-card{{#if collapsed}} is-collapsed{{/if}}{{#if canDrag}} is-draggable{{/if}}"
-         data-hazard-id="{{id}}" data-page-uuid="{{uuid}}" style="--threat-accent-raw:{{accent}};"{{#if canDrag}} draggable="true"{{/if}}>
+         data-hazard-id="{{this.id}}" data-page-uuid="{{this.uuid}}" style="--threat-accent-raw:{{this.accent}};"{{#if canDrag}} draggable="true"{{/if}}>
 	{{> "stonetop.card-head" kind="hazard" typeLabel="Hazard"}}
 
 	{{#if hasInstinct}}
-	<p class="threat-instinct"><span class="threat-label">Instinct</span><em>{{instinct}}</em></p>
+	<p class="threat-instinct"><span class="threat-label">Instinct</span><em>{{this.instinct}}</em></p>
 	{{/if}}
 
 	{{#if hasDamage}}
 	<p class="hazard-damage{{#if certainDeath}} hazard-damage--certain{{/if}}">
-		<span class="threat-label">Damage</span><strong>{{damage}}</strong>
+		<span class="threat-label">Damage</span><strong>{{this.damage}}</strong>
 		{{!-- GM only (buildHazardCardVM): wired by hazards/hazard-damage.js#wireHazardDamage. --}}
 		{{#if canRollDamage}}
 		<button type="button" class="hazard-damage-btn hazard-damage-roll"
@@ -31,11 +31,11 @@
 	{{/if}}
 
 	{{#if hasDescription}}
-	<div class="threat-desc">{{{description}}}</div>
+	<div class="threat-desc">{{{this.description}}}</div>
 	{{/if}}
 
 	{{#if hasAdvanceTrigger}}
-	<p class="hazard-advance"><span class="threat-label">Advance</span>{{advanceTrigger}}</p>
+	<p class="hazard-advance"><span class="threat-label">Advance</span>{{this.advanceTrigger}}</p>
 	{{/if}}
 
 	{{#if hasDoomTrack}}

@@ -11,23 +11,23 @@
 	<span class="stonetop-fight-ring-readiness-text">{{readiness.count}}</span>
 </div>
 {{/if}}
-<div class="col left stonetop-fight-ring-col" role="group" aria-label="{{ringLabel}}: {{movesLabel}}">
+<div class="col left stonetop-fight-ring-col" role="group" aria-label="{{this.ringLabel}}: {{this.movesLabel}}">
 	{{#each moves}}
-	<button type="button" class="stonetop-fight-ring-button" data-action="ringRoll" data-index="{{index}}"
-	        aria-label="{{aria}}" data-tooltip="{{aria}}" data-tooltip-direction="LEFT">
-		<i class="{{icon}}" inert></i>
-		<span class="stonetop-fight-ring-label">{{label}}</span>
-		{{#if ammo}}<span class="stonetop-fight-ring-ammo{{#if ammoOut}} is-out{{/if}}">{{ammo}}</span>{{/if}}
+	<button type="button" class="stonetop-fight-ring-button" data-action="ringRoll" data-index="{{this.index}}"
+	        aria-label="{{this.aria}}" data-tooltip="{{this.aria}}" data-tooltip-direction="LEFT">
+		<i class="{{this.icon}}" inert></i>
+		<span class="stonetop-fight-ring-label">{{this.label}}</span>
+		{{#if ammo}}<span class="stonetop-fight-ring-ammo{{#if ammoOut}} is-out{{/if}}">{{this.ammo}}</span>{{/if}}
 	</button>
 	{{/each}}
 </div>
-<div class="col right stonetop-fight-ring-col" role="group" aria-label="{{ringLabel}}: {{damageLabel}}">
+<div class="col right stonetop-fight-ring-col" role="group" aria-label="{{this.ringLabel}}: {{this.damageLabel}}">
 	{{#each damage}}
-	<button type="button" class="stonetop-fight-ring-button" data-action="ringRoll" data-index="{{index}}"
-	        aria-label="{{aria}}" data-tooltip="{{aria}}" data-tooltip-direction="RIGHT">
-		<i class="{{icon}}" inert></i>
-		<span class="stonetop-fight-ring-label">{{label}}</span>
-		<span class="stonetop-fight-ring-formula">{{formula}}</span>
+	<button type="button" class="stonetop-fight-ring-button" data-action="ringRoll" data-index="{{this.index}}"
+	        aria-label="{{this.aria}}" data-tooltip="{{this.aria}}" data-tooltip-direction="RIGHT">
+		<i class="{{this.icon}}" inert></i>
+		<span class="stonetop-fight-ring-label">{{this.label}}</span>
+		<span class="stonetop-fight-ring-formula">{{this.formula}}</span>
 	</button>
 	{{/each}}
 </div>

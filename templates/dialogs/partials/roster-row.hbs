@@ -27,18 +27,18 @@
       `data-row-id` is deliberately ONE attribute name for all three lists: three names meant three
       near-identical listeners in the host, and the pair that got updated together looked exactly
       like the pair that did not. --}}
-<li class="{{prefix}}-row{{#if rowClass}} {{rowClass}}{{/if}}{{#if broken}} is-broken{{/if}}" data-row-id="{{id}}">
-	<span class="{{prefix}}-portrait">
-		<img class="{{prefix}}-portrait-img" src="{{img}}" style="{{imgStyle}}" alt="" draggable="false">
+<li class="{{this.prefix}}-row{{#if rowClass}} {{this.rowClass}}{{/if}}{{#if broken}} is-broken{{/if}}" data-row-id="{{this.id}}">
+	<span class="{{this.prefix}}-portrait">
+		<img class="{{this.prefix}}-portrait-img" src="{{this.img}}" style="{{this.imgStyle}}" alt="" draggable="false">
 	</span>
 
-	<div class="{{prefix}}-text">
-		<div class="{{prefix}}-nameline">
+	<div class="{{this.prefix}}-text">
+		<div class="{{this.prefix}}-nameline">
 			{{#if linked}}
-			<a class="{{openClass}} {{prefix}}-name-text" data-actor-uuid="{{uuid}}"
-			   tabindex="0" aria-label="{{localize "stonetop.relationships.open" name=name}}">{{name}}</a>
+			<a class="{{this.openClass}} {{this.prefix}}-name-text" data-actor-uuid="{{this.uuid}}"
+			   tabindex="0" aria-label="{{localize "stonetop.relationships.open" name=name}}">{{this.name}}</a>
 			{{else}}
-			<span class="{{prefix}}-name-text">{{name}}</span>
+			<span class="{{this.prefix}}-name-text">{{this.name}}</span>
 			{{/if}}
 			{{> @partial-block}}
 		</div>
@@ -54,16 +54,16 @@
 		      must open flush against the tag: a newline straight after the opening tag is eaten by
 		      the parser, so a note beginning with a blank line would lose it on every render. --}}
 		{{#if editable}}
-		<textarea class="{{noteClass}}" data-row-id="{{id}}" rows="1"
-		          autocomplete="off" placeholder="{{notePlaceholder}}">{{note}}</textarea>
+		<textarea class="{{this.noteClass}}" data-row-id="{{this.id}}" rows="1"
+		          autocomplete="off" placeholder="{{this.notePlaceholder}}">{{this.note}}</textarea>
 		{{else}}{{#if note}}
-		<p class="{{noteTextClass}}">{{note}}</p>
+		<p class="{{this.noteTextClass}}">{{this.note}}</p>
 		{{/if}}{{/if}}
 	</div>
 
 	{{#if editable}}
-	<button type="button" class="{{removeClass}}" data-row-id="{{id}}"
-	        aria-label="{{removeLabel}}" data-tooltip="{{removeLabel}}"
+	<button type="button" class="{{this.removeClass}}" data-row-id="{{this.id}}"
+	        aria-label="{{this.removeLabel}}" data-tooltip="{{this.removeLabel}}"
 	        data-tooltip-direction="LEFT"><i class="fas fa-xmark"></i></button>
 	{{/if}}
 </li>

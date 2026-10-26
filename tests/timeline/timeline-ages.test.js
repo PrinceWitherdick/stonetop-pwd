@@ -205,7 +205,7 @@ describe("the strip in the timeline", () => {
 	it("is drawn after the column, in its cell, and each band is placed by the script", () => {
 		const main = readRepo("templates/dialogs/timeline.hbs");
 		expect(main).toMatch(/class="stonetop-timeline-ages"/);
-		expect(main).toMatch(/data-age-first="\{\{first\}\}" data-age-last="\{\{last\}\}"/);
+		expect(main).toMatch(/data-age-first="\{\{this\.first\}\}" data-age-last="\{\{this\.last\}\}"/);
 		const css = readCss();
 		expect(css).toMatch(/\.stonetop-timeline > \.stonetop-timeline-scroll \{\s*grid-row: 2;\s*grid-column: 1;/);
 		expect(css).toMatch(/\.stonetop-timeline-ages \{[^}]*grid-row: 2;[^}]*pointer-events: none;/);
@@ -275,7 +275,7 @@ describe("an Age's bare years", () => {
 	it("draws the name unseen in the bare year's separator, at its share, in all four shapes", () => {
 		const vm = buildTrackVM({ trackId: "pc", entries: [entry()] }, { ageYears: [-40], ages: [{ from: -40, to: null, name: "The Current Age" }] });
 		expect(vm.periods[0]).toMatchObject({ ageMark: true, ageRoom: "The Current Age", ageRoomShare: 1 });
-		const room = `{{#if ageRoom}}<span class="stonetop-timeline-age-room" aria-hidden="true" style="--age-room-share: {{ageRoomShare}};">{{ageRoom}}</span>{{/if}}`;
+		const room = `{{#if ageRoom}}<span class="stonetop-timeline-age-room" aria-hidden="true" style="--age-room-share: {{this.ageRoomShare}};">{{this.ageRoom}}</span>{{/if}}`;
 		const count = path => readRepo(path).split(room).length - 1;
 		expect(count("templates/dialogs/timeline.hbs")).toBe(2);
 		expect(count("templates/dialogs/partials/timeline-period.hbs")).toBe(1);

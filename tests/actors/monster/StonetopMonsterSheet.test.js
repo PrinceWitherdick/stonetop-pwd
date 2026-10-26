@@ -515,8 +515,8 @@ describe("StonetopMonsterSheet", () => {
 		const { readFileSync } = await import("node:fs");
 		const template = readFileSync(new URL("../../../templates/actor/monster.hbs", import.meta.url), "utf8");
 		const button = template.match(/<a class="stonetop-monster-damage-roll"[^>]*>/)?.[0] ?? "";
-		expect(button).toContain(`data-roll-label="{{title}}"`);
-		expect(button).toContain(`data-roll-keywords="{{keywords}}"`);
+		expect(button).toContain(`data-roll-label="{{this.title}}"`);
+		expect(button).toContain(`data-roll-keywords="{{this.keywords}}"`);
 
 		const handlers = [];
 		const root = {

@@ -6,7 +6,7 @@
   <summary class="stonetop-fight-rules-summary">{{localize "stonetop.fight.rules.summary"}}</summary>
   {{#each rules.quotes}}
   <blockquote class="stonetop-fight-quote">
-    <p class="stonetop-fight-quote-text">{{text}}</p>
+    <p class="stonetop-fight-quote-text">{{this.text}}</p>
     <footer class="stonetop-fight-quote-cite">{{> "stonetop.book-page-cite" cites=cites}}</footer>
   </blockquote>
   {{/each}}

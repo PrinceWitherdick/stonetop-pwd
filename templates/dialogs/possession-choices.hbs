@@ -1,30 +1,30 @@
 <form class="stonetop-possession-choices">
 	{{#if description}}
-	<div class="stonetop-possession-choices-desc stonetop-item-description">{{{description}}}</div>
+	<div class="stonetop-possession-choices-desc stonetop-item-description">{{{this.description}}}</div>
 	{{/if}}
 
 	{{#each groups}}
 	<div class="stonetop-choice-group">
-		<p class="stonetop-choice-group-heading">{{{heading}}}{{#if note}} <em>({{note}})</em>{{/if}}</p>
+		<p class="stonetop-choice-group-heading">{{{this.heading}}}{{#if note}} <em>({{this.note}})</em>{{/if}}</p>
 		{{#each subgroups}}
-		<div class="stonetop-pc-subgroup stonetop-choice-subgroup"{{#if max}} data-max="{{max}}"{{/if}}>
+		<div class="stonetop-pc-subgroup stonetop-choice-subgroup"{{#if max}} data-max="{{this.max}}"{{/if}}>
 			{{#if max}}
-			<span class="stonetop-pc-cap"><span class="stonetop-pc-count">{{selectedCount}}</span> / {{max}}</span>
+			<span class="stonetop-pc-cap"><span class="stonetop-pc-count">{{this.selectedCount}}</span> / {{this.max}}</span>
 			{{/if}}
 			{{#each options}}
 			<label class="stonetop-choice-option-label{{#if disabled}} is-disabled{{/if}}{{#if locked}} is-locked{{/if}}">
 				{{#if ../multiSelect}}
 				<input type="checkbox" class="stonetop-item-check stonetop-pc-sub-check"
-				       data-possession-slug="{{@root.possessionSlug}}" data-choice-slug="{{slug}}"
+				       data-possession-slug="{{@root.possessionSlug}}" data-choice-slug="{{this.slug}}"
 				       {{#if checked}}checked{{/if}} {{#if disabled}}disabled{{/if}}>
 				{{else}}
 				<input type="radio" class="stonetop-pc-sub-radio"
 				       name="pc-{{../groupId}}"
-				       data-possession-slug="{{@root.possessionSlug}}" data-choice-slug="{{slug}}"
+				       data-possession-slug="{{@root.possessionSlug}}" data-choice-slug="{{this.slug}}"
 				       data-sibling-slugs-csv="{{../slugsCsv}}"
 				       {{#if checked}}checked{{/if}}>
 				{{/if}}
-				<span class="stonetop-pc-option-label">{{{label}}}</span>
+				<span class="stonetop-pc-option-label">{{{this.label}}}</span>
 				{{#if locked}}<i class="fas fa-lock stonetop-pc-locked-icon" title="Already chosen"></i>{{/if}}
 			</label>
 			{{/each}}

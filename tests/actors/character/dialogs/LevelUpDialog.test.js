@@ -180,7 +180,7 @@ describe("LevelUpDialog cross-playbook step machine", () => {
 
 		const chip = TEMPLATE.match(/<button[^>]*stonetop-levelup-foreign-chip[^>]*>/);
 		expect(chip).not.toBeNull();
-		expect(chip[0]).toContain('data-playbook="{{key}}"');
+		expect(chip[0]).toContain('data-playbook="{{this.key}}"');
 		expect(chip[0]).not.toContain("data-move-group");
 
 		// And the cards the chips filter must expose the playbook the filter matches on.

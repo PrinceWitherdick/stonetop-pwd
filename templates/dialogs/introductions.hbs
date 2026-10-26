@@ -17,7 +17,7 @@
     <div class="stonetop-intros-notice stonetop-intros-notice--ok">
       <i class="fas fa-check-circle"></i>
       <div class="stonetop-intros-ok-body">
-        <p>All {{pcCount}} player characters are ready, in order:</p>
+        <p>All {{this.pcCount}} player characters are ready, in order:</p>
         {{!-- The order is the introductions' own setting (dialogs/introductions-order.js). A GM
               moves a name one place at a time; the arrow that would move it off either end is
               disabled rather than hidden, so every row's arrows line up. Labels carry the name,
@@ -26,15 +26,15 @@
           {{#each pcs}}
           <li class="stonetop-intros-order-item">
             <div class="stonetop-intros-order-row">
-              <span class="stonetop-intros-order-name">{{name}}</span>
+              <span class="stonetop-intros-order-name">{{this.name}}</span>
               {{#if ../canReorder}}
               <span class="stonetop-intros-order-moves">
-                <button type="button" class="stonetop-intros-move" data-actor-id="{{id}}" data-delta="-1"
-                        aria-label="{{upLabel}}" data-tooltip-text="{{upLabel}}"{{#if first}} disabled{{/if}}>
+                <button type="button" class="stonetop-intros-move" data-actor-id="{{this.id}}" data-delta="-1"
+                        aria-label="{{this.upLabel}}" data-tooltip-text="{{this.upLabel}}"{{#if first}} disabled{{/if}}>
                   <i class="fas fa-arrow-up" aria-hidden="true"></i>
                 </button>
-                <button type="button" class="stonetop-intros-move" data-actor-id="{{id}}" data-delta="1"
-                        aria-label="{{downLabel}}" data-tooltip-text="{{downLabel}}"{{#if last}} disabled{{/if}}>
+                <button type="button" class="stonetop-intros-move" data-actor-id="{{this.id}}" data-delta="1"
+                        aria-label="{{this.downLabel}}" data-tooltip-text="{{this.downLabel}}"{{#if last}} disabled{{/if}}>
                   <i class="fas fa-arrow-down" aria-hidden="true"></i>
                 </button>
               </span>
@@ -103,11 +103,11 @@
     {{#if watchingNote}}
     <div class="stonetop-intros-place stonetop-intros-place--watching">
       <i class="fas fa-eye"></i>
-      <span class="stonetop-intros-place-text">{{watchingNote}}</span>
+      <span class="stonetop-intros-place-text">{{this.watchingNote}}</span>
     </div>
     {{/if}}
 
-    <div class="stonetop-intros-instruction">{{{instruction}}}</div>
+    <div class="stonetop-intros-instruction">{{{this.instruction}}}</div>
 
     {{#if capture.isStep}}
     {{!-- ── Looping answer/ask step ─────────────────────────────────────────── --}}
@@ -186,12 +186,12 @@
         <li>
           <button type="button" class="stonetop-intros-question-pick{{#if isSelected}} is-selected{{/if}}{{#if isUsed}} is-used{{/if}}"
                   {{#if isUsed}}disabled data-tooltip="Already answered: pick a different one"{{/if}}
-                  data-actor-id="{{../capture.actorId}}" data-step-key="{{../capture.stepKey}}" data-q-index="{{index}}">
-            {{{html}}}
+                  data-actor-id="{{../capture.actorId}}" data-step-key="{{../capture.stepKey}}" data-q-index="{{this.index}}">
+            {{{this.html}}}
           </button>
         </li>
         {{else}}
-        <li class="stonetop-intros-question-static{{#if isSelected}} is-selected{{/if}}{{#if isUsed}} is-used{{/if}}">{{{html}}}</li>
+        <li class="stonetop-intros-question-static{{#if isSelected}} is-selected{{/if}}{{#if isUsed}} is-used{{/if}}">{{{this.html}}}</li>
         {{/if}}
         {{/each}}
       </ul>
@@ -288,7 +288,7 @@
     {{else if isDone}}
 
     {{#if isDriver}}<button class="stonetop-intros-back"><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>{{else}}<span class="stonetop-intros-turn-hint"></span>{{/if}}
-    <span class="stonetop-intros-step-label">{{stepLabel}}</span>
+    <span class="stonetop-intros-step-label">{{this.stepLabel}}</span>
     <span class="stonetop-intros-done-actions">
       {{#unless watchingNote}}
       <button class="stonetop-intros-close stonetop-guide-btn--primary"{{#if isDriver}} data-tooltip="Saves everyone's recorded answers to the Chronicle journal, then closes." data-tooltip-direction="UP"{{/if}}>{{#if isDriver}}Save to Chronicle{{else}}Let spring burst forth!{{/if}}</button>
@@ -305,7 +305,7 @@
           above carry whose turn it is and where the viewer sits in line). --}}
     <span class="stonetop-intros-turn-hint"></span>
     {{/if}}
-    <span class="stonetop-intros-step-label">{{stepLabel}}</span>
+    <span class="stonetop-intros-step-label">{{this.stepLabel}}</span>
     <span class="stonetop-intros-nav-actions">
       {{#if capture.canEdit}}{{#if capture.canPass}}<button class="stonetop-intros-pass">Pass</button>{{/if}}{{/if}}
       {{#if capture.canDone}}<button class="stonetop-intros-done stonetop-guide-btn--primary">Done</button>{{/if}}

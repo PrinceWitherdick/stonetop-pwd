@@ -52,7 +52,7 @@ describe("scrubTicks", () => {
 
 	it("draws the ticks behind the slider, half a thumb in from each end", () => {
 		const main = readRepo("templates/dialogs/timeline.hbs");
-		expect(main).toMatch(/\{\{#each scrub\.ticks\}\}<li class="stonetop-timeline-scrub-tick" style="--at: \{\{at\}\};">/);
+		expect(main).toMatch(/\{\{#each scrub\.ticks\}\}<li class="stonetop-timeline-scrub-tick" style="--at: \{\{this\.at\}\};">/);
 		expect(main).toMatch(/stonetop-timeline-scrub-ticks" aria-hidden="true"/);
 		const css = readCss();
 		expect(css).toContain("left: calc(var(--scrub-thumb) / 2 + (100% - var(--scrub-thumb)) * var(--at, 0));");
@@ -283,8 +283,8 @@ describe("the template", () => {
 	const read = (p) => readRepo(`templates/dialogs/${p}`);
 
 	it("stamps a year on every period element in all four shapes", () => {
-		expect(read("partials/timeline-hperiod.hbs")).toMatch(/data-year="\{\{year\}\}"/);
-		expect(read("partials/timeline-period.hbs")).toMatch(/stonetop-timeline-period(\{\{#if ghost\}\}[^"]*\{\{\/if\}\})?" data-period="\{\{key\}\}"\{\{#unless undated\}\} data-year/);
+		expect(read("partials/timeline-hperiod.hbs")).toMatch(/data-year="\{\{this\.year\}\}"/);
+		expect(read("partials/timeline-period.hbs")).toMatch(/stonetop-timeline-period(\{\{#if ghost\}\}[^"]*\{\{\/if\}\})?" data-period="\{\{this\.key\}\}"\{\{#unless undated\}\} data-year/);
 		const main = read("timeline.hbs");
 		expect(main).toMatch(/stonetop-timeline-swim-head[^>]*data-year/);
 		expect(main).toMatch(/stonetop-timeline-row(\{\{#if ghost\}\}[^"]*\{\{\/if\}\})?"[^>]*data-year/);

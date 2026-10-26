@@ -33,7 +33,7 @@
       `.is-collapsed`, so the caret toggles it in place: instant, and incapable of landing a
       re-render on a note box two rows down that happens to have focus. --}}
 <li class="stonetop-gm-encounter{{#if used}} is-used{{/if}}{{#unless open}} is-collapsed{{/unless}}"
-    data-encounter-id="{{id}}">
+    data-encounter-id="{{this.id}}">
 	<div class="stonetop-gm-encounter-head">
 		<span class="stonetop-gm-encounter-grip" draggable="true" aria-hidden="true"
 		      data-tooltip="{{localize "stonetop.gmToolkit.encounters.reorder"}}" data-tooltip-direction="UP">
@@ -44,7 +44,7 @@
 		      becomes "the ambush"), and a dialog for a one-line edit is a dialog nobody
 		      opens. alt+Up / alt+Down in this box reorders the encounter WITHIN ITS OWN
 		      LIST, which is the keyboard half of the grip to its left. --}}
-		<input type="text" class="stonetop-gm-encounter-name" value="{{name}}" maxlength="120"
+		<input type="text" class="stonetop-gm-encounter-name" value="{{this.name}}" maxlength="120"
 		       aria-label="{{localize "stonetop.gmToolkit.encounters.nameLabel"}}">
 		{{!-- The head of the note, riding on the row while it is shut (the CSS shows it only under
 		      .is-collapsed, where the body it belongs to is hidden). Two bundles both called "the
@@ -52,7 +52,7 @@
 		      cards otherwise says nothing at all. Plain text rather than the enriched HTML below:
 		      this is one clipped line, and a content link or a paragraph in it would fight the
 		      ellipsis. --}}
-		{{#if notesPeek}}<span class="stonetop-gm-encounter-peek">{{notesPeek}}</span>{{/if}}
+		{{#if notesPeek}}<span class="stonetop-gm-encounter-peek">{{this.notesPeek}}</span>{{/if}}
 		{{!-- WHAT IS IN IT, BY KIND, and the one thing on the shut row that is about the bundle
 		      rather than about the GM's own words. "12 gathered" said how MUCH was here and
 		      nothing about what: three monsters and a map read at a glance where twelve of
@@ -74,8 +74,8 @@
 		{{#if groups.length}}
 		<span class="stonetop-gm-encounter-count">
 			{{#each groups}}
-			<span class="stonetop-gm-encounter-tally stonetop-gm-encounter-tally--{{key}}"
-			      data-tooltip="{{tip}}" data-tooltip-direction="UP">{{count}}<i class="{{icon}}" aria-hidden="true"></i></span>
+			<span class="stonetop-gm-encounter-tally stonetop-gm-encounter-tally--{{this.key}}"
+			      data-tooltip="{{this.tip}}" data-tooltip-direction="UP">{{this.count}}<i class="{{this.icon}}" aria-hidden="true"></i></span>
 			{{/each}}
 		</span>
 		{{/if}}
@@ -128,7 +128,7 @@
 			      whichever of the two blocks below was drawn. Revealed on hover, as core reveals
 			      `<prose-mirror toggled>`'s own toggle. --}}
 			{{#if notesHtml}}
-			<div class="stonetop-gm-encounter-notes">{{{notesHtml}}}</div>
+			<div class="stonetop-gm-encounter-notes">{{{this.notesHtml}}}</div>
 			{{else}}
 			<p class="stonetop-gm-encounter-notes stonetop-gm-encounter-notes--empty">{{localize "stonetop.gmToolkit.encounters.notesEmpty"}}</p>
 			{{/if}}
@@ -159,10 +159,10 @@
 		      list to find the row above and below. Nest anything else that carries `data-entry-id`
 		      inside it and alt+Arrow starts counting rows the GM cannot see. --}}
 		{{#each groups}}
-		<section class="stonetop-gm-entry-card" data-entry-kind="{{key}}">
+		<section class="stonetop-gm-entry-card" data-entry-kind="{{this.key}}">
 			<div class="stonetop-gm-entry-card-head">
-				<i class="{{icon}}" aria-hidden="true"></i>
-				<span class="stonetop-gm-entry-card-title">{{title}}</span>
+				<i class="{{this.icon}}" aria-hidden="true"></i>
+				<span class="stonetop-gm-entry-card-title">{{this.title}}</span>
 				{{!-- PUT THEM ALL ON THE MAP, on the heading of the card that holds them. In the
 				      encounter's own head it was a dragon glyph two buttons from the trash, on a
 				      row that says nothing about whether there is anything to place: an encounter
@@ -199,25 +199,25 @@
 					<i class="fa-solid fa-swords" aria-hidden="true"></i>
 				</button>
 				{{/if}}
-				<span class="stonetop-gm-entry-card-count">{{count}}</span>
+				<span class="stonetop-gm-entry-card-count">{{this.count}}</span>
 			</div>
 			<ul class="stonetop-gm-encounter-entries">
 				{{#each entries}}
-				<li class="stonetop-gm-encounter-entry{{#if unresolved}} is-unresolved{{/if}}" data-entry-id="{{id}}">
+				<li class="stonetop-gm-encounter-entry{{#if unresolved}} is-unresolved{{/if}}" data-entry-id="{{this.id}}">
 					{{!-- A <button>, not an <a>: an href would make this natively draggable and
 					      fight the drag it already emits, and it is a delegated handler either
 					      way. See relationships-table.hbs, which says the same thing at
 					      length. --}}
 					<button type="button" class="stonetop-gm-encounter-entry-open"
 					        draggable="{{#if unresolved}}false{{else}}true{{/if}}"
-					        data-uuid="{{uuid}}" data-doc-type="{{type}}"
+					        data-uuid="{{this.uuid}}" data-doc-type="{{this.type}}"
 					        data-tooltip="{{#if unresolved}}{{localize "stonetop.gmToolkit.encounters.entryGoneTip"}}{{else}}{{localize "stonetop.gmToolkit.encounters.entryOpenTip"}}{{/if}}"
-					        data-tooltip-direction="UP">{{name}}</button>
+					        data-tooltip-direction="UP">{{this.name}}</button>
 					<button type="button" class="stonetop-gm-encounter-entry-remove"
 					        data-tooltip="{{localize "stonetop.gmToolkit.encounters.removeEntry"}}" data-tooltip-direction="UP">
 						<i class="fas fa-xmark"></i>
 					</button>
-					<input type="text" class="stonetop-gm-encounter-entry-note" value="{{note}}" maxlength="200"
+					<input type="text" class="stonetop-gm-encounter-entry-note" value="{{this.note}}" maxlength="200"
 					       placeholder="{{localize "stonetop.gmToolkit.encounters.entryNotePlaceholder"}}"
 					       aria-label="{{localize "stonetop.gmToolkit.encounters.entryNoteLabel"}}">
 				</li>

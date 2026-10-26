@@ -23,7 +23,7 @@
       `hideViewbar=true`, so the toggle sits on the heading's line rather than below it. Its
       click handler is delegated from the sheet root and finds its table from the button's
       own `data-resize-key`, which is what lets the toolbar move without the wiring moving. --}}
-<div class="stonetop-rel-views" data-resize-key="{{resizeKey}}" data-rel-view="{{view}}">
+<div class="stonetop-rel-views" data-resize-key="{{this.resizeKey}}" data-rel-view="{{this.view}}">
 	{{#unless hideViewbar}}
 	{{> "stonetop.relationships-viewbar" resizeKey=resizeKey view=view}}
 	{{/unless}}

@@ -20,7 +20,7 @@
       Sites tab has anything to add, and neither half is about making it open — it repacks its
       masonry columns and remembers the state across re-renders. --}}
 <article class="threat-card threat-card--site site-card{{#if collapsed}} is-collapsed{{/if}}{{#if canDrag}} is-draggable{{/if}}"
-         data-site-id="{{id}}" data-page-uuid="{{uuid}}" style="--threat-accent-raw:{{accent}};"{{#if canDrag}} draggable="true"{{/if}}>
+         data-site-id="{{this.id}}" data-page-uuid="{{this.uuid}}" style="--threat-accent-raw:{{this.accent}};"{{#if canDrag}} draggable="true"{{/if}}>
 	{{> "stonetop.card-head" kind="site" typeLabel="Site"}}
 
 	{{#if hasFoundation}}
@@ -29,20 +29,20 @@
 
 	{{!-- When the party was last here, once the GM has marked it (the flag on the card's tools). --}}
 	{{#if visitedLabel}}
-	<p class="site-visited"><i class="fas fa-flag" aria-hidden="true"></i> {{visitedLabel}}</p>
+	<p class="site-visited"><i class="fas fa-flag" aria-hidden="true"></i> {{this.visitedLabel}}</p>
 	{{/if}}
 
 	{{#if hasDescription}}
-	<div class="threat-desc">{{{description}}}</div>
+	<div class="threat-desc">{{{this.description}}}</div>
 	{{/if}}
 
 	{{#if hasWhy}}
-	<p class="site-why"><span class="threat-label">Why it's here</span>{{why}}</p>
+	<p class="site-why"><span class="threat-label">Why it's here</span>{{this.why}}</p>
 	{{/if}}
 
 	{{#if hasPicks}}
 	<div class="site-picks">
-		{{#each picks}}<p class="site-pick"><span class="threat-label">{{label}}</span>{{value}}</p>{{/each}}
+		{{#each picks}}<p class="site-pick"><span class="threat-label">{{this.label}}</span>{{this.value}}</p>{{/each}}
 	</div>
 	{{/if}}
 
@@ -53,7 +53,7 @@
 			<div class="site-block site-timeline">
 				<span class="threat-label">Timeline</span>
 				<ul class="site-list site-timeline-list">
-					{{#each timeline}}<li>{{#if when}}<strong class="site-when">{{this.when}}</strong>{{/if}}{{text}}</li>{{/each}}
+					{{#each timeline}}<li>{{#if when}}<strong class="site-when">{{this.when}}</strong>{{/if}}{{this.text}}</li>{{/each}}
 				</ul>
 			</div>
 			{{/if}}
@@ -64,8 +64,8 @@
 				<ul class="site-list site-question-list">
 					{{#each questions}}
 					<li{{#unless answer}} class="site-question--open"{{/unless}}>
-						{{#if prompt}}<span class="site-question-prompt">{{prompt}}</span>{{/if}}
-						{{#if answer}}<span class="site-question-answer">{{answer}}</span>{{/if}}
+						{{#if prompt}}<span class="site-question-prompt">{{this.prompt}}</span>{{/if}}
+						{{#if answer}}<span class="site-question-answer">{{this.answer}}</span>{{/if}}
 					</li>
 					{{/each}}
 				</ul>
@@ -88,7 +88,7 @@
 			<div class="site-block site-denizens">
 				<span class="threat-label">Denizens</span>
 				<ul class="site-list site-denizen-list">
-					{{#each denizens}}<li>{{#if name}}<strong>{{name}}</strong>{{/if}}{{#if notes}} {{notes}}{{/if}}</li>{{/each}}
+					{{#each denizens}}<li>{{#if name}}<strong>{{this.name}}</strong>{{/if}}{{#if notes}} {{this.notes}}{{/if}}</li>{{/each}}
 				</ul>
 			</div>
 			{{/if}}
@@ -130,10 +130,10 @@
 				<span class="threat-label">Areas</span>
 				{{#each areas}}
 				<div class="site-area">
-					<h4 class="site-area-title">{{title}}</h4>
-					{{#if hasDescription}}<div class="site-area-desc">{{{description}}}</div>{{/if}}
-					{{#if hasContents}}<div class="site-area-contents">{{{contents}}}</div>{{/if}}
-					{{#if hasExits}}<p class="site-area-exits"><span class="threat-label">Exits</span>{{exits}}</p>{{/if}}
+					<h4 class="site-area-title">{{this.title}}</h4>
+					{{#if hasDescription}}<div class="site-area-desc">{{{this.description}}}</div>{{/if}}
+					{{#if hasContents}}<div class="site-area-contents">{{{this.contents}}}</div>{{/if}}
+					{{#if hasExits}}<p class="site-area-exits"><span class="threat-label">Exits</span>{{this.exits}}</p>{{/if}}
 				</div>
 				{{/each}}
 			</div>
@@ -156,20 +156,20 @@
 			{{#if hasRandomTables}}
 			<div class="site-block site-tables">
 				{{#each randomTables}}
-				<div class="site-table" data-table-index="{{index}}">
+				<div class="site-table" data-table-index="{{this.index}}">
 					<p class="site-table-head">
-						<span class="threat-label">{{#if caption}}{{caption}}{{else}}Table{{/if}}</span>
+						<span class="threat-label">{{#if caption}}{{this.caption}}{{else}}Table{{/if}}</span>
 						{{#if hasRows}}
-						<span class="site-table-die">{{die}}</span>
-						<button type="button" class="site-table-roll" data-table-index="{{index}}"
-						        data-tooltip="Roll {{die}}" data-tooltip-direction="UP" aria-label="Roll {{die}} on this table">
+						<span class="site-table-die">{{this.die}}</span>
+						<button type="button" class="site-table-roll" data-table-index="{{this.index}}"
+						        data-tooltip="Roll {{this.die}}" data-tooltip-direction="UP" aria-label="Roll {{this.die}} on this table">
 							<i class="fas fa-dice-d20" aria-hidden="true"></i>
 						</button>
 						{{/if}}
 					</p>
 					{{#if hasRows}}
 					<ol class="site-list site-table-list">
-						{{#each rows}}<li data-from="{{from}}" data-to="{{to}}"><span class="site-table-roll-no">{{roll}}</span>{{text}}</li>{{/each}}
+						{{#each rows}}<li data-from="{{this.from}}" data-to="{{this.to}}"><span class="site-table-roll-no">{{this.roll}}</span>{{this.text}}</li>{{/each}}
 					</ol>
 					{{/if}}
 				</div>
@@ -187,11 +187,11 @@
 			<div class="site-block site-running">
 				<span class="threat-label">Keep in mind</span>
 				<ul class="site-list site-running-list">
-					{{#each running.considerations}}<li><strong>{{name}}</strong> {{line}}</li>{{/each}}
+					{{#each running.considerations}}<li><strong>{{this.name}}</strong> {{this.line}}</li>{{/each}}
 				</ul>
 				<span class="threat-label">Light sources &amp; tags</span>
 				<ul class="site-list site-running-list">
-					{{#each running.lightTags}}<li><strong>{{name}}</strong> {{line}}</li>{{/each}}
+					{{#each running.lightTags}}<li><strong>{{this.name}}</strong> {{this.line}}</li>{{/each}}
 				</ul>
 				<p class="site-running-note">{{running.lampOil}}</p>
 			</div>

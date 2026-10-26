@@ -34,10 +34,10 @@
       action and the hash parameters go with it. --}}
 <div class="threat-card-tools">
 	{{#each prepActions}}
-	<button type="button" class="{{cls}}" data-page-uuid="{{../uuid}}"
+	<button type="button" class="{{this.cls}}" data-page-uuid="{{../uuid}}"
 	        aria-label="{{localize label}}"
-	        data-tooltip="{{localize tooltip}}" data-tooltip-direction="UP"><i class="fas {{icon}}" aria-hidden="true"></i></button>
+	        data-tooltip="{{localize tooltip}}" data-tooltip-direction="UP"><i class="fas {{this.icon}}" aria-hidden="true"></i></button>
 	{{/each}}
-	<button type="button" class="stonetop-prep-edit-btn {{kind}}-edit-open" data-page-uuid="{{uuid}}" data-tooltip="Edit {{kind}}" data-tooltip-direction="UP"><i class="fas fa-pen"></i></button>
-	<button type="button" class="{{kind}}-remove" data-page-uuid="{{uuid}}" data-tooltip="Delete {{kind}}" data-tooltip-direction="UP"><i class="fas fa-trash"></i></button>
+	<button type="button" class="stonetop-prep-edit-btn {{this.kind}}-edit-open" data-page-uuid="{{this.uuid}}" data-tooltip="Edit {{this.kind}}" data-tooltip-direction="UP"><i class="fas fa-pen"></i></button>
+	<button type="button" class="{{this.kind}}-remove" data-page-uuid="{{this.uuid}}" data-tooltip="Delete {{this.kind}}" data-tooltip-direction="UP"><i class="fas fa-trash"></i></button>
 </div>

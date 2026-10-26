@@ -20,10 +20,10 @@
       <div class="stonetop-onboarding-tag-grid stonetop-onboarding-tag-grid--types">
         {{#each acData.types}}
         <label class="stonetop-onboarding-tag-option stonetop-onboarding-tag-option--type{{#if selected}} is-selected{{/if}}">
-          <input type="radio" name="companion-setup-type" value="{{slug}}" {{#if selected}}checked{{/if}}>
-          <span class="stonetop-onboarding-ac-type-name">{{label}}</span>
-          <span class="stonetop-onboarding-ac-type-stats">HP {{hp}} · Armor {{armor}} · {{damage}}</span>
-          <span class="stonetop-onboarding-ac-type-examples">{{examples}}</span>
+          <input type="radio" name="companion-setup-type" value="{{this.slug}}" {{#if selected}}checked{{/if}}>
+          <span class="stonetop-onboarding-ac-type-name">{{this.label}}</span>
+          <span class="stonetop-onboarding-ac-type-stats">HP {{this.hp}} · Armor {{this.armor}} · {{this.damage}}</span>
+          <span class="stonetop-onboarding-ac-type-examples">{{this.examples}}</span>
         </label>
         {{/each}}
       </div>
@@ -35,8 +35,8 @@
       <div class="stonetop-onboarding-ac-kind-options">
         {{#each acData.selectedType.kindOptions}}
         <label class="stonetop-onboarding-appearance-option{{#if selected}} is-selected{{/if}}">
-          <input type="radio" name="companion-setup-kind" value="{{value}}" {{#if selected}}checked{{/if}}>
-          <span>{{value}}</span>
+          <input type="radio" name="companion-setup-kind" value="{{this.value}}" {{#if selected}}checked{{/if}}>
+          <span>{{this.value}}</span>
         </label>
         {{/each}}
         <label class="stonetop-onboarding-appearance-option stonetop-onboarding-ac-kind-custom{{#if acData.selectedType.isCustomKind}} is-selected{{/if}}">
@@ -59,11 +59,11 @@
       <div class="stonetop-onboarding-tag-grid">
         {{#each acData.selectedType.traits}}
         <label class="stonetop-onboarding-tag-option{{#if isSelected}} is-selected{{/if}}{{#if isMandatory}} is-mandatory{{/if}}"{{#if isMandatory}} title="Always included; doesn't count toward your picks"{{/if}}>
-          <input type="checkbox" name="companion-setup-trait" value="{{slug}}"
+          <input type="checkbox" name="companion-setup-trait" value="{{this.slug}}"
                  {{#if isSelected}}checked{{/if}}
                  {{#if disabled}}disabled{{/if}}
                  {{#if isMandatory}}data-mandatory="true"{{/if}}>
-          {{label}}{{#if isMandatory}} <em class="stonetop-onboarding-ac-included">(included)</em>{{/if}}
+          {{this.label}}{{#if isMandatory}} <em class="stonetop-onboarding-ac-included">(included)</em>{{/if}}
         </label>
         {{/each}}
       </div>
@@ -84,9 +84,9 @@
         {{#each acData.instincts}}
         <label class="stonetop-onboarding-card stonetop-onboarding-card--compact{{#if selected}} is-selected{{/if}}">
           <div class="stonetop-onboarding-card-header">
-            <input type="radio" name="companion-setup-instinct" value="{{value}}"
+            <input type="radio" name="companion-setup-instinct" value="{{this.value}}"
                    {{#if selected}}checked{{/if}}>
-            <span class="stonetop-onboarding-card-inline-desc">{{value}}</span>
+            <span class="stonetop-onboarding-card-inline-desc">{{this.value}}</span>
           </div>
         </label>
         {{/each}}
@@ -106,9 +106,9 @@
         {{#each acData.costs}}
         <label class="stonetop-onboarding-card stonetop-onboarding-card--compact{{#if selected}} is-selected{{/if}}">
           <div class="stonetop-onboarding-card-header">
-            <input type="radio" name="companion-setup-cost" value="{{value}}"
+            <input type="radio" name="companion-setup-cost" value="{{this.value}}"
                    {{#if selected}}checked{{/if}}>
-            <span class="stonetop-onboarding-card-inline-desc">{{value}}</span>
+            <span class="stonetop-onboarding-card-inline-desc">{{this.value}}</span>
           </div>
         </label>
         {{/each}}

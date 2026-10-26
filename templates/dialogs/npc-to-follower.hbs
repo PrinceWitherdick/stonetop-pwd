@@ -9,7 +9,7 @@
     <div class="stonetop-guide-banner">
       <i class="fas fa-user-plus stonetop-guide-banner-icon"></i>
       <div class="stonetop-guide-banner-info">
-        <div class="stonetop-guide-banner-title">{{npcName}} <i class="fas fa-arrow-right stonetop-mf-arrow"></i> {{actorName}}'s follower</div>
+        <div class="stonetop-guide-banner-title">{{this.npcName}} <i class="fas fa-arrow-right stonetop-mf-arrow"></i> {{this.actorName}}'s follower</div>
         <div class="stonetop-guide-banner-sub">Make this NPC a follower</div>
       </div>
     </div>
@@ -24,17 +24,17 @@
             editable here, since an NPC may carry no combat stats to keep as-is. --}}
       <div class="stonetop-mf-stats">
         <label class="stonetop-cf-label stonetop-cf-label--narrow">HP
-          <input type="number" class="stonetop-cf-input stonetop-cf-input--num stonetop-nf-hp" value="{{hp}}" min="0" max="99">
+          <input type="number" class="stonetop-cf-input stonetop-cf-input--num stonetop-nf-hp" value="{{this.hp}}" min="0" max="99">
         </label>
         <label class="stonetop-cf-label stonetop-cf-label--narrow">Armor
-          <input type="number" class="stonetop-cf-input stonetop-cf-input--num stonetop-nf-armor" value="{{armor}}" min="0" max="9">
+          <input type="number" class="stonetop-cf-input stonetop-cf-input--num stonetop-nf-armor" value="{{this.armor}}" min="0" max="9">
         </label>
         <label class="stonetop-cf-label">Damage
-          <input type="text" class="stonetop-cf-input stonetop-nf-damage" value="{{damage}}" placeholder="e.g. knife d6 (hand)">
+          <input type="text" class="stonetop-cf-input stonetop-nf-damage" value="{{this.damage}}" placeholder="e.g. knife d6 (hand)">
         </label>
       </div>
 
-      {{#if instinct}}<div class="stonetop-cf-preview-line"><strong>Instinct</strong> {{instinct}}</div>{{/if}}
+      {{#if instinct}}<div class="stonetop-cf-preview-line"><strong>Instinct</strong> {{this.instinct}}</div>{{/if}}
       {{#if keptTags.length}}
       <div class="stonetop-mf-kept">
         <span class="stonetop-cf-chosen-label">Kept tags:</span>
@@ -67,23 +67,23 @@
         <span><input type="checkbox" class="stonetop-nf-group-toggle" {{#if isGroup}}checked{{/if}}> Treat as a group</span>
         {{#if isGroup}}
         <span class="stonetop-mf-group-size-row">of
-          <input type="number" class="stonetop-cf-input stonetop-cf-input--num stonetop-nf-group-size" value="{{groupSize}}" min="2" max="99"> members
+          <input type="number" class="stonetop-cf-input stonetop-cf-input--num stonetop-nf-group-size" value="{{this.groupSize}}" min="2" max="99"> members
         </span>
         {{/if}}
       </label>
 
       {{!-- Pronoun (prefilled from the NPC) --}}
       <label class="stonetop-cf-label stonetop-cf-label--narrow">Pronoun
-        <input type="text" class="stonetop-cf-input stonetop-nf-pronoun" value="{{pronoun}}" placeholder="she/he/they…" maxlength="12">
+        <input type="text" class="stonetop-cf-input stonetop-nf-pronoun" value="{{this.pronoun}}" placeholder="she/he/they…" maxlength="12">
       </label>
 
       {{!-- Cost (p.479): what keeps them following your lead --}}
       <label class="stonetop-cf-label">Cost
-        <input type="text" class="stonetop-cf-input stonetop-nf-cost-input" value="{{cost}}" placeholder="what keeps them following your lead…">
+        <input type="text" class="stonetop-cf-input stonetop-nf-cost-input" value="{{this.cost}}" placeholder="what keeps them following your lead…">
       </label>
       <div class="stonetop-cf-chips">
         {{#each costOptions}}
-        <button type="button" class="stonetop-cf-chip stonetop-nf-cost-ex{{#if selected}} is-selected{{/if}}" data-value="{{value}}">{{value}}</button>
+        <button type="button" class="stonetop-cf-chip stonetop-nf-cost-ex{{#if selected}} is-selected{{/if}}" data-value="{{this.value}}">{{this.value}}</button>
         {{/each}}
       </div>
 

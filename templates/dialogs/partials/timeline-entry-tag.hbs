@@ -1,5 +1,5 @@
 {{!-- One tag chip in the timeline entry dialog's Tag row: drawn by timeline-entry.hbs for each tag
       on offer, and rendered alone by TimelineEntryDialog.js for a tag made after the dialog opened,
       so the two can never come out different. --}}
-<button type="button" class="stonetop-timeline-entry-tag stonetop-timeline-kind--{{kind}}"
-        data-tag="{{id}}" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"{{#if style}} style="{{style}}"{{/if}}><i class="fas {{icon}}" aria-hidden="true"></i><span>{{label}}</span></button>
+<button type="button" class="stonetop-timeline-entry-tag stonetop-timeline-kind--{{this.kind}}"
+        data-tag="{{this.id}}" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"{{#if style}} style="{{this.style}}"{{/if}}><i class="fas {{this.icon}}" aria-hidden="true"></i><span>{{this.label}}</span></button>

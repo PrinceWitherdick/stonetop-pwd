@@ -6,9 +6,9 @@
 	{{#if isContinuation}}
 	{{#if columnBreak}}</div><div class="stonetop-lore-col">{{/if}}
 	<div class="stonetop-lore-entry">
-		{{#if title}}<p class="stonetop-lore-continuation-title{{#if subheader}} stonetop-lore-subheader{{/if}}">{{title}}</p>{{/if}}
+		{{#if title}}<p class="stonetop-lore-continuation-title{{#if subheader}} stonetop-lore-subheader{{/if}}">{{this.title}}</p>{{/if}}
 		{{#if description}}
-		<div class="stonetop-lore-description">{{{description}}}</div>
+		<div class="stonetop-lore-description">{{{this.description}}}</div>
 		{{/if}}
 		{{#if arcanaImage}}{{> "stonetop.lore-arcana-image" arcanaImage=arcanaImage}}{{/if}}
 		{{> "stonetop.lore-options-edit"}}
@@ -19,7 +19,7 @@
 	<div class="stonetop-lore-entry stonetop-lore-entry--section-head">
 		{{> "stonetop.section-heading" title=title}}
 		{{#if description}}
-		<div class="stonetop-lore-description">{{{description}}}</div>
+		<div class="stonetop-lore-description">{{{this.description}}}</div>
 		{{/if}}
 	</div>
 	<div class="stonetop-lore-col">
@@ -32,7 +32,7 @@
 	<div class="stonetop-lore-entry stonetop-lore-entry--section-head">
 		{{> "stonetop.section-heading" title=title}}
 		{{#if description}}
-		<div class="stonetop-lore-description">{{{description}}}</div>
+		<div class="stonetop-lore-description">{{{this.description}}}</div>
 		{{/if}}
 		{{> "stonetop.lore-options-edit"}}
 	</div>
@@ -50,9 +50,9 @@
 	{{#if readonlyColumnBreak}}</div><div class="stonetop-lore-col">{{/if}}
 	{{#if showInReadonly}}
 	<div class="stonetop-lore-entry">
-		{{#unless readonlyMerge}}{{#if title}}<p class="stonetop-lore-continuation-title{{#if subheader}} stonetop-lore-subheader{{/if}}">{{title}}</p>{{/if}}{{/unless}}
+		{{#unless readonlyMerge}}{{#if title}}<p class="stonetop-lore-continuation-title{{#if subheader}} stonetop-lore-subheader{{/if}}">{{this.title}}</p>{{/if}}{{/unless}}
 		{{#if readonlyDescription}}
-		<div class="stonetop-lore-description">{{{readonlyDescription}}}</div>
+		<div class="stonetop-lore-description">{{{this.readonlyDescription}}}</div>
 		{{/if}}
 		{{#if arcanaImage}}{{> "stonetop.lore-arcana-image" arcanaImage=arcanaImage}}{{/if}}
 		{{> "stonetop.lore-options-readonly"}}
@@ -63,7 +63,7 @@
 	<div class="stonetop-lore-entry stonetop-lore-entry--section-head">
 		{{> "stonetop.section-heading" title=title}}
 		{{#if readonlyDescription}}
-		<div class="stonetop-lore-description">{{{readonlyDescription}}}</div>
+		<div class="stonetop-lore-description">{{{this.readonlyDescription}}}</div>
 		{{/if}}
 	</div>
 	{{#if ../lore.hasReadonlyColumnBreak}}<div class="stonetop-lore-col">{{/if}}

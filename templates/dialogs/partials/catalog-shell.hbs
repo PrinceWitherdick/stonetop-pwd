@@ -24,10 +24,10 @@
 	<div class="stonetop-catalog-sources" role="tablist" aria-label="Choose a catalogue">
 		{{#each sources}}
 		<button type="button" class="stonetop-catalog-source{{#if active}} is-active{{/if}}"
-		        data-source="{{key}}" role="tab" aria-selected="{{#if active}}true{{else}}false{{/if}}">
-			<i class="{{icon}}" aria-hidden="true"></i>
-			<span>{{label}}</span>
-			{{#if hasCount}}<span class="stonetop-catalog-source-count">{{count}}</span>{{/if}}
+		        data-source="{{this.key}}" role="tab" aria-selected="{{#if active}}true{{else}}false{{/if}}">
+			<i class="{{this.icon}}" aria-hidden="true"></i>
+			<span>{{this.label}}</span>
+			{{#if hasCount}}<span class="stonetop-catalog-source-count">{{this.count}}</span>{{/if}}
 		</button>
 		{{/each}}
 	</div>
@@ -37,18 +37,18 @@
 		{{> "stonetop.tab-search-control" title=searchTitle placeholder=searchPlaceholder}}
 
 		{{#each groups}}
-		<div class="stonetop-catalog-filters" role="group" aria-label="Filter by {{label}}">
-			<span class="stonetop-catalog-filters-label">{{label}}</span>
+		<div class="stonetop-catalog-filters" role="group" aria-label="Filter by {{this.label}}">
+			<span class="stonetop-catalog-filters-label">{{this.label}}</span>
 
 			{{#if isSelect}}
 			{{!-- A group with more values than a chip row can carry. The empty option is the
 			      unfiltered state, which is the same "" this group's filter state uses, so a
 			      select needs none of the click-the-lit-chip-to-clear business. --}}
 			<select class="stonetop-catalog-select{{#if anyActive}} is-active{{/if}}"
-			        data-group="{{key}}" aria-label="Filter by {{label}}">
-				<option value="">{{allLabel}}</option>
+			        data-group="{{this.key}}" aria-label="Filter by {{this.label}}">
+				<option value="">{{this.allLabel}}</option>
 				{{#each chips}}
-				<option value="{{key}}"{{#if active}} selected{{/if}}>{{label}} ({{count}})</option>
+				<option value="{{this.key}}"{{#if active}} selected{{/if}}>{{this.label}} ({{this.count}})</option>
 				{{/each}}
 			</select>
 			{{else}}
@@ -58,12 +58,12 @@
 			      leave, so the count never has to compete with the label for room. --}}
 			{{#each chips}}
 			<button type="button"
-			        class="stonetop-catalog-filter{{#if mod}} stonetop-catalog-filter--{{mod}}{{/if}}{{#if active}} is-active{{/if}}"
-			        data-group="{{../key}}" data-key="{{key}}"
+			        class="stonetop-catalog-filter{{#if mod}} stonetop-catalog-filter--{{this.mod}}{{/if}}{{#if active}} is-active{{/if}}"
+			        data-group="{{../key}}" data-key="{{this.key}}"
 			        aria-pressed="{{#if active}}true{{else}}false{{/if}}"
-			        data-tooltip="{{hint}} ({{count}})" data-tooltip-direction="UP">
-				{{#if icon}}<i class="{{icon}}" aria-hidden="true"></i>{{/if}}
-				<span>{{label}}</span>
+			        data-tooltip="{{this.hint}} ({{this.count}})" data-tooltip-direction="UP">
+				{{#if icon}}<i class="{{this.icon}}" aria-hidden="true"></i>{{/if}}
+				<span>{{this.label}}</span>
 			</button>
 			{{/each}}
 			{{/if}}
@@ -72,14 +72,14 @@
 	</div>
 
 	{{!-- Live count, rewritten by _updateCount on every chip click and keystroke. --}}
-	<p class="stonetop-catalog-count">{{total}}</p>
+	<p class="stonetop-catalog-count">{{this.total}}</p>
 
 	<div class="stonetop-catalog-list">
 		{{#each rows}}
 		<div class="stonetop-catalog-row{{#if filtered}} stonetop-catalog-filtered{{/if}}{{#if marked}} is-marked{{/if}}{{#if inactive}} is-inactive{{/if}}"
-		     data-key="{{key}}" data-uuid="{{uuid}}" data-search="{{search}}"
-		     {{#if dragType}}draggable="true" data-drag-type="{{dragType}}" {{/if}}
-		     role="button" tabindex="0" aria-label="Open {{title}}">
+		     data-key="{{this.key}}" data-uuid="{{this.uuid}}" data-search="{{this.search}}"
+		     {{#if dragType}}draggable="true" data-drag-type="{{this.dragType}}" {{/if}}
+		     role="button" tabindex="0" aria-label="Open {{this.title}}">
 
 			{{!-- Always an image: an entry with no art of its own gets a category marker,
 			      dimmed by `is-placeholder` so real art still stands out.
@@ -89,32 +89,32 @@
 			      the grabbed node — so without this, grabbing a monster by its portrait would
 			      drag the image file's URL and drop nothing anywhere. --}}
 			<div class="stonetop-catalog-thumb">
-				<img src="{{img}}" alt="" loading="lazy" draggable="false"
+				<img src="{{this.img}}" alt="" loading="lazy" draggable="false"
 				     class="{{#if placeholderImg}}is-placeholder{{/if}}">
 			</div>
 
 			<div class="stonetop-catalog-main">
 				<div class="stonetop-catalog-titleline">
-					<span class="stonetop-catalog-title">{{title}}</span>
+					<span class="stonetop-catalog-title">{{this.title}}</span>
 					{{#each flags}}
-					<span class="stonetop-catalog-flag{{#if mod}} stonetop-catalog-flag--{{mod}}{{/if}}">{{label}}</span>
+					<span class="stonetop-catalog-flag{{#if mod}} stonetop-catalog-flag--{{this.mod}}{{/if}}">{{this.label}}</span>
 					{{/each}}
 				</div>
 
-				{{#if summary}}<p class="stonetop-catalog-summary">{{summary}}</p>{{/if}}
+				{{#if summary}}<p class="stonetop-catalog-summary">{{this.summary}}</p>{{/if}}
 
 				{{#if (or badges.length note)}}
 				<div class="stonetop-catalog-badges">
 					{{#each badges}}
-					<span class="stonetop-catalog-badge{{#if mod}} stonetop-catalog-badge--{{mod}}{{/if}}"
-					      {{#if hint}}data-tooltip="{{hint}}" data-tooltip-direction="UP"{{/if}}>
+					<span class="stonetop-catalog-badge{{#if mod}} stonetop-catalog-badge--{{this.mod}}{{/if}}"
+					      {{#if hint}}data-tooltip="{{this.hint}}" data-tooltip-direction="UP"{{/if}}>
 						{{!-- draggable="false" for the same reason as the thumb above: the
 						      creature-type disc is an <img>, and grabbing a row by it must
 						      still drag the row. --}}
-						{{#if img}}<img src="{{img}}" alt="" draggable="false">{{else}}{{#if icon}}<i class="{{icon}}" aria-hidden="true"></i>{{/if}}{{/if}}<span class="stonetop-chip-text">{{label}}</span>
+						{{#if img}}<img src="{{this.img}}" alt="" draggable="false">{{else}}{{#if icon}}<i class="{{this.icon}}" aria-hidden="true"></i>{{/if}}{{/if}}<span class="stonetop-chip-text">{{this.label}}</span>
 					</span>
 					{{/each}}
-					{{#if note}}<span class="stonetop-catalog-note">{{note}}</span>{{/if}}
+					{{#if note}}<span class="stonetop-catalog-note">{{this.note}}</span>{{/if}}
 				</div>
 				{{/if}}
 			</div>
@@ -122,6 +122,6 @@
 		{{/each}}
 	</div>
 
-	<p class="stonetop-catalog-empty">{{empty}}</p>
+	<p class="stonetop-catalog-empty">{{this.empty}}</p>
 
 </div>

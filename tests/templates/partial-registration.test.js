@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { readRepo as read } from "../fakes/css.js";
+import { systemPartials } from "../fakes/hbs.js";
 
 // Every `{{> "stonetop.x"}}` in the tree resolves to a real file, through a real loadTemplates
 // entry.
@@ -20,10 +21,7 @@ const ROOT = path.resolve(import.meta.dirname, "../..");
 const BOOT = read("stonetop.js");
 
 // The registration map: "stonetop.name" -> "systems/stonetop-pwd/templates/….hbs".
-const registered = new Map(
-	[...BOOT.matchAll(/"(stonetop\.[\w-]+)":\s*"(systems\/stonetop-pwd\/[^"]+\.hbs)"/g)]
-		.map(m => [m[1], m[2]]),
-);
+const registered = systemPartials();
 
 // Every partial invocation in every template, plain (`{{> "x"}}`) or block (`{{#> "x"}}`).
 function invocations() {

@@ -7,20 +7,20 @@
 		    so the boxes not yet ticked are disabled and an option with none ticked is faded. }}
 		<div class="stonetop-lore-option{{#if (eq type 'text')}} stonetop-lore-option--text{{/if}}{{#if crossedOff}} is-crossed-off{{/if}}{{#if caution}} is-cautioned{{/if}}{{#if capDisabled}} is-disabled{{/if}}">
 			{{#if (eq type "text")}}
-			{{#if description}}<label class="stonetop-lore-option-desc">{{{description}}}</label>{{/if}}
+			{{#if description}}<label class="stonetop-lore-option-desc">{{{this.description}}}</label>{{/if}}
 			{{#if arcanaPicker}}
 			<select class="stonetop-lore-arcana-select{{#if arcanaPicker.muted}} is-muted{{/if}}" data-role="{{arcanaPicker.role}}">
 				<option value="">— choose a card —</option>
 				{{#each arcanaPicker.options}}
-				<option value="{{slug}}"{{#if (eq slug ../arcanaPicker.selectedSlug)}} selected{{/if}}>{{name}}</option>
+				<option value="{{this.slug}}"{{#if (eq slug ../arcanaPicker.selectedSlug)}} selected{{/if}}>{{this.name}}</option>
 				{{/each}}
 			</select>
 			{{/if}}
 			<textarea class="stonetop-lore-option-text{{#if isName}} stonetop-lore-option-text--name{{/if}}"
 			          data-lore-slug="{{../slug}}"
-			          data-option-slug="{{slug}}"
+			          data-option-slug="{{this.slug}}"
 			          placeholder="To be written."
-			          >{{#if hasAnswer}}{{textValue}}{{/if}}</textarea>
+			          >{{#if hasAnswer}}{{this.textValue}}{{/if}}</textarea>
 			{{else}}
 			<span class="stonetop-lore-option-checks">
 				{{#each checks}}
@@ -31,10 +31,10 @@
 				       {{#if this}}checked{{/if}} {{#if ../crossedOff}}disabled{{else}}{{#unless this}}{{#if ../atCap}}disabled{{/if}}{{/unless}}{{/if}}>
 				{{/each}}
 			</span>
-			<span class="stonetop-lore-option-desc">{{#if hasBlank}}{{{fillBefore}}}<input type="text" class="stonetop-lore-option-text stonetop-lore-fill" data-lore-slug="{{../slug}}" data-option-slug="{{slug}}" value="{{fillValue}}" placeholder="…">{{{fillAfter}}}{{else}}{{{description}}}{{/if}}</span>
-			{{#if caution}}<i class="fas fa-triangle-exclamation stonetop-lore-option-caution" role="img" aria-label="{{caution}}" data-tooltip="{{caution}}" data-tooltip-direction="UP"></i>{{/if}}
+			<span class="stonetop-lore-option-desc">{{#if hasBlank}}{{{this.fillBefore}}}<input type="text" class="stonetop-lore-option-text stonetop-lore-fill" data-lore-slug="{{../slug}}" data-option-slug="{{this.slug}}" value="{{this.fillValue}}" placeholder="…">{{{this.fillAfter}}}{{else}}{{{this.description}}}{{/if}}</span>
+			{{#if caution}}<i class="fas fa-triangle-exclamation stonetop-lore-option-caution" role="img" aria-label="{{this.caution}}" data-tooltip="{{this.caution}}" data-tooltip-direction="UP"></i>{{/if}}
 			{{#if pdiMarkControl}}
-			<button type="button" class="stonetop-pdi-crossoff-btn" data-pdi-action="{{pdiMarkControl.action}}" data-slug="{{slug}}"
+			<button type="button" class="stonetop-pdi-crossoff-btn" data-pdi-action="{{pdiMarkControl.action}}" data-slug="{{this.slug}}"
 			        aria-label="{{pdiMarkControl.label}}" data-tooltip="{{pdiMarkControl.label}}">{{pdiMarkControl.text}}</button>
 			{{/if}}
 			{{/if}}

@@ -1,16 +1,16 @@
 {{!-- One move from another playbook, as the level-up's agreed step and cross-playbook step list it
       (LevelUpDialog.js#_otherPlaybookCard builds the context). `family` is "agreed" or "foreign": the
       card family the dialog's handlers select on, so the two lists never answer each other's clicks. --}}
-<div class="stonetop-levelup-move-option stonetop-levelup-{{family}}-option stonetop-levelup-pickable{{#if selected}} is-selected{{/if}}"
+<div class="stonetop-levelup-move-option stonetop-levelup-{{this.family}}-option stonetop-levelup-pickable{{#if selected}} is-selected{{/if}}"
 	role="button" tabindex="0" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"
-	data-compendium-id="{{compendiumId}}" data-playbook="{{playbook}}">
+	data-compendium-id="{{this.compendiumId}}" data-playbook="{{this.playbook}}">
 	<div class="stonetop-levelup-move-header">
-		<span class="stonetop-levelup-move-name">{{name}}</span>
-		<span class="stonetop-levelup-move-req">{{playbook}}</span>
+		<span class="stonetop-levelup-move-name">{{this.name}}</span>
+		<span class="stonetop-levelup-move-req">{{this.playbook}}</span>
 	</div>
 	{{#if description}}
 	<div class="stonetop-levelup-move-description">{{{moveBody description moveResults}}}</div>
 	{{/if}}
-	{{#if requiresLabel}}<p class="stonetop-levelup-move-note">{{localize "stonetop.specialMoves.levelUp.requiresPrefix"}} {{requiresLabel}}</p>{{/if}}
-	{{#if stockNote}}<p class="stonetop-levelup-move-note">{{stockNote}}</p>{{/if}}
+	{{#if requiresLabel}}<p class="stonetop-levelup-move-note">{{localize "stonetop.specialMoves.levelUp.requiresPrefix"}} {{this.requiresLabel}}</p>{{/if}}
+	{{#if stockNote}}<p class="stonetop-levelup-move-note">{{this.stockNote}}</p>{{/if}}
 </div>

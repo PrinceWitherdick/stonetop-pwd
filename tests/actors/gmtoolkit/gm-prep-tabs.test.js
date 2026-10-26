@@ -221,7 +221,7 @@ describe("the toolkit picked them up whole", () => {
 	//
 	// The markup is now two kind-agnostic partials rather than three hand-copied blocks, so the
 	// class WORDS are built from the `kind=` each tab passes. That is what makes this checkable
-	// in one place: the partials below emit all three suffixes off `{{kind}}`, and each tab has
+	// in one place: the partials below emit all three suffixes off `{{this.kind}}`, and each tab has
 	// only to hand in the right kind.
 	it.each([
 		["threat", THREATS_HBS], ["hazard", THREATS_HBS], ["site", SITES_HBS],
@@ -235,14 +235,14 @@ describe("the toolkit picked them up whole", () => {
 		// Two classes: the shared LOOK/gate word, then the per-kind handler hook. Both on one
 		// button. The pencil takes the same shape as the add bar below, so the readonly
 		// allow-list keys on one class instead of naming every kind.
-		expect(TOOLS_HBS).toContain('class="stonetop-prep-edit-btn {{kind}}-edit-open"');
+		expect(TOOLS_HBS).toContain('class="stonetop-prep-edit-btn {{this.kind}}-edit-open"');
 		// The trash carries the per-kind hook alone. That used to be load-bearing — no shared
 		// look-class meant no line on the readonly allow-list, which is how it was kept dead —
 		// and is now just the handler hook, since nothing gates it but its confirm dialog.
-		expect(TOOLS_HBS).toContain('class="{{kind}}-remove"');
+		expect(TOOLS_HBS).toContain('class="{{this.kind}}-remove"');
 		expect(TOOLS_HBS).not.toContain("data-readonly-gated");
 		expect(TOOLS_HBS).not.toContain("stonetop-prep-remove-btn");
-		expect(ADD_BAR_HBS).toContain('class="stonetop-prep-add-btn {{kind}}-add-btn"');
+		expect(ADD_BAR_HBS).toContain('class="stonetop-prep-add-btn {{this.kind}}-add-btn"');
 		// The scoping ancestors the handlers pair those with.
 		expect(stripComments(PREP_JS)).toContain('scope: ".steading-threats"');
 		expect(stripComments(PREP_JS)).toContain('scope: ".steading-sites"');

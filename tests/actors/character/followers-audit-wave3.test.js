@@ -274,7 +274,7 @@ describe("the two party switches (FOL-6)", () => {
 
 	it("draws both switches on the custom card, the travel one worded as travel", () => {
 		const hbs = read("templates/actor/partials/tab-followers.hbs");
-		expect(hbs).toContain('data-switch="wholeParty" data-ftype="custom" data-slug="{{slug}}"');
+		expect(hbs).toContain('data-switch="wholeParty" data-ftype="custom" data-slug="{{this.slug}}"');
 		expect(hbs).not.toContain("(any PC pays/spends its Loyalty)");
 		expect(hbs).toContain("{{#if wholeParty}}{{#unless edit.card}}");
 	});

@@ -1,12 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import Handlebars from "handlebars";
-import { describe, it, expect, vi } from "vitest";
-import { bareHelperLookups, templateFiles, templateBareNames, renderBareNamesModule }
-	from "../../scripts/lib/template-bare-names.js";
-import { TEMPLATE_BARE_NAMES } from "../../module/utils/template-bare-names.js";
-import { clashingHelpers, reportForeignHelperClashes } from "../../module/utils/foreign-helper-check.js";
+import { describe, it, expect, vi, afterEach, afterAll } from "vitest";
+import { readRepo as read, repoPath } from "../fakes/css.js";
+import { bareHelperLookups, systemHandlebars, templateSources } from "../fakes/hbs.js";
+import { replacedHelpers, replacedMessage, watchOwnHelpers } from "../../module/utils/foreign-helper-check.js";
 import { buildSiteCardVM } from "../../module/sites/site-view.js";
 import { shapeSiteSystem } from "../../module/sites/site-store.js";
 
@@ -21,48 +19,17 @@ import { shapeSiteSystem } from "../../module/sites/site-store.js";
 // with a player wish or a site timeline entry that has a "when" filled in, which is why it
 // looked like a clash rather than a bug.
 //
-// `{{this.when}}` is always a data lookup, never a helper call, so that is the spelling to use
-// for a bare value whose name someone else has taken. Three guards:
-//   • no template prints bare a name a helper is KNOWN to answer to (core's, ours, and the
-//     foreign ones found in the wild), checked here;
-//   • the list of every bare name, which the startup check holds against whatever helpers the
-//     GM's modules register (module/utils/foreign-helper-check.js), is current;
+// `{{this.when}}` is always a data lookup, never a helper call. Three guards:
+//   • no template prints ANY value bare, so no module can take a name from us, whatever helpers
+//     it registers (a block parameter is the one exception, and Handlebars never reads it as a
+//     helper);
+//   • the other way round, the startup watch names any module that replaces one of OUR helpers
+//     (module/utils/foreign-helper-check.js), and it knows every one of them;
 //   • the four templates that clashed render with Battle Transitions' helpers registered.
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(HERE, "../..");
-const TEMPLATES = path.join(ROOT, "templates");
-const read = rel => fs.readFileSync(path.join(ROOT, rel), "utf8");
-
-// Foundry core's helpers (client/applications/handlebars.mjs, v14) and HandlebarsIntl's, which it
-// registers alongside them.
-const CORE_HELPERS = ["checked", "disabled", "concat", "editor", "formInput", "formGroup", "formField",
-	"filePicker", "ifThen", "localize", "numberFormat", "numberInput", "object", "radioBoxes", "rangePicker",
-	"selectOptions", "timeSince", "eq", "ne", "lt", "gt", "lte", "gte", "not", "and", "or",
-	"intl", "intlGet", "formatDate", "formatTime", "formatRelative", "formatNumber", "formatMessage",
-	"formatHTMLMessage"];
-// Handlebars' own: the compiler treats these as known helpers outright.
-const BUILTIN_HELPERS = ["if", "unless", "each", "with", "log", "lookup", "helperMissing", "blockHelperMissing"];
-// Helpers other modules register that have clashed with ours. Add to it when a new clash turns up.
-const FOREIGN_HELPERS = {
-	"battle-transitions": ["switch", "case", "when", "json", "group", "formatDuration",
-		"stepDescription", "shouldConfigureStep", "stepName", "moduleTemplate"],
-};
-
-/** Every helper this system registers, read off the source so a new one is covered unasked. */
-function systemHelpers() {
-	const files = [path.join(ROOT, "stonetop.js")];
-	const walk = dir => {
-		for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-			const full = path.join(dir, e.name);
-			if (e.isDirectory()) walk(full);
-			else if (e.name.endsWith(".js")) files.push(full);
-		}
-	};
-	walk(path.join(ROOT, "module"));
-	return [...new Set(files.flatMap(f =>
-		[...fs.readFileSync(f, "utf8").matchAll(/registerHelper\(\s*["']([\w$]+)["']/g)].map(m => m[1])))];
-}
+// Helpers Battle Transitions registers: the module whose clash this file exists for.
+const BATTLE_TRANSITIONS = ["switch", "case", "when", "json", "group", "formatDuration",
+	"stepDescription", "shouldConfigureStep", "stepName", "moduleTemplate"];
 
 describe("finding the names Handlebars tries as a helper first", () => {
 	const names = src => bareHelperLookups(src).map(f => f.name);
@@ -73,8 +40,13 @@ describe("finding the names Handlebars tries as a helper first", () => {
 		expect(names("{{#if (switch)}}z{{/if}}")).toEqual(["switch"]);
 	});
 
+	// Handlebars looks the helper up by the segment inside the brackets.
+	it("names a bracketed segment by the helper it calls", () => {
+		expect(names("{{[when]}} {{{[group]}}}")).toEqual(["when", "group"]);
+	});
+
 	it("leaves out what is always data or always a helper call", () => {
-		expect(names("{{this.when}} {{../when}} {{@index}} {{a.b}} {{this}}")).toEqual([]);
+		expect(names("{{this.when}} {{../when}} {{@index}} {{a.b}} {{this}} {{this.[when]}}")).toEqual([]);
 		expect(names('{{localize "x"}} {{format k n=1}} {{#each rows}}{{/each}} {{#if (eq a b)}}{{/if}}')).toEqual([]);
 	});
 
@@ -91,63 +63,162 @@ describe("finding the names Handlebars tries as a helper first", () => {
 	});
 });
 
-describe("templates never print a bare value named after a helper", () => {
-	const taken = new Map([
-		...CORE_HELPERS.map(n => [n, "Foundry core"]),
-		...BUILTIN_HELPERS.map(n => [n, "Handlebars"]),
-		...systemHelpers().map(n => [n, "this system"]),
-		...Object.entries(FOREIGN_HELPERS).flatMap(([mod, list]) => list.map(n => [n, mod])),
-	]);
+describe("templates never print a bare value", () => {
+	const templates = templateSources();
 
-	it("reads this system's own helpers off the source", () => {
-		expect(taken.get("moveBody")).toBe("this system");
-		expect(taken.get("resourceChecks")).toBe("this system");
+	it("reads every template", () => {
+		expect(templates.length).toBeGreaterThan(150);
+		expect(templates.map(t => t.rel)).toContain("templates/actor/partials/gm-toolkit-tab-wonder.hbs");
 	});
 
-	it("uses `this.<name>` wherever the name is a known helper", () => {
-		const offenders = templateFiles(TEMPLATES).flatMap(file =>
-			bareHelperLookups(fs.readFileSync(file, "utf8"))
-				.filter(m => taken.has(m.name))
-				.map(m => `${path.relative(TEMPLATES, file)}:${m.line} ${m.name} (${taken.get(m.name)})`));
-		expect(offenders).toEqual([]);
-	});
-
-	// The startup check reads the generated list, because the template sources are not to hand in
-	// the browser. A stale list leaves a new bare name unwatched.
-	it("the generated list the startup check reads is current (npm run gen:template-names)", () => {
-		const fresh = templateBareNames(TEMPLATES);
-		expect(TEMPLATE_BARE_NAMES).toEqual(fresh);
-		expect(read("module/utils/template-bare-names.js").replace(/\r\n/g, "\n")).toBe(renderBareNamesModule(fresh));
+	// Any one-segment name with no arguments is a name some module can register a helper under,
+	// common ones (`name`, `label`, `max`, `range`, `text`) most of all. So none is written bare:
+	// `{{this.name}}` reads the same value and no helper can answer for it.
+	it("writes every value `{{this.<name>}}`", () => {
+		const offenders = templates.flatMap(({ rel, source }) =>
+			bareHelperLookups(source).map(m => `${rel}:${m.line} {{${m.name}}} -> {{this.${m.name}}}`));
+		expect(offenders, `\nBare values a module's helper could take:\n${offenders.join("\n")}\n`).toEqual([]);
 	});
 });
 
-describe("the startup check names a foreign helper that takes a bare name", () => {
-	it("finds only the names a registered helper answers to", () => {
-		expect(clashingHelpers({ name: () => {}, label: () => {}, unusedHere: () => {} }, ["id", "label", "name"]))
-			.toEqual(["label", "name"]);
-		expect(clashingHelpers({}, ["id"])).toEqual([]);
+describe("the startup watch knows every helper this system registers", () => {
+	const BOOT = read("stonetop.js");
+	const start = BOOT.indexOf("const helpersBeforeOurs");
+	const end = BOOT.indexOf("watchOwnHelpers(Object.keys");
+
+	/** Every `registerHelper(` call, string form or object form, in the system's own JS. */
+	const calls = (() => {
+		const found = [];
+		const walk = rel => {
+			for (const e of fs.readdirSync(repoPath(rel), { withFileTypes: true })) {
+				const child = `${rel}/${e.name}`;
+				if (e.isDirectory()) walk(child);
+				else if (e.name.endsWith(".js")) found.push(...scan(child, read(child)));
+			}
+		};
+		const scan = (rel, src) => [...src.matchAll(/\bregisterHelper\s*\(/g)]
+			.filter(m => !inComment(src, m.index)).map(m => ({ rel, index: m.index }));
+		found.push(...scan("stonetop.js", BOOT));
+		walk("module");
+		return found;
+	})();
+
+	function inComment(src, index) {
+		const lineStart = src.lastIndexOf("\n", index) + 1;
+		return /\/\/|^\s*\*/.test(src.slice(lineStart, index));
+	}
+
+	it("finds the bracket and the helpers inside it", () => {
+		expect(start).toBeGreaterThan(0);
+		expect(end).toBeGreaterThan(start);
+		expect(calls.filter(c => c.rel === "stonetop.js").length).toBeGreaterThan(10);
 	});
 
-	it("is silent on a world whose helpers are core's and ours", () => {
-		const helpers = Object.fromEntries([...CORE_HELPERS, ...BUILTIN_HELPERS, ...systemHelpers()].map(n => [n, () => {}]));
-		const notifications = { warn: vi.fn() };
-		expect(reportForeignHelperClashes({ helpers, notifications, user: { isGM: true } })).toEqual([]);
-		expect(notifications.warn).not.toHaveBeenCalled();
+	// A helper registered anywhere else is not in the watch's list, so a module replacing it would
+	// go unreported. module/utils/foreign-helper-check.js's own wrapper is the one exception.
+	it("registers every helper between the snapshot and the watch, and nowhere else", () => {
+		const outside = calls
+			.filter(c => !(c.rel === "stonetop.js" && c.index > start && c.index < end))
+			.filter(c => c.rel !== "module/utils/foreign-helper-check.js")
+			.map(c => `${c.rel} @${c.index}`);
+		expect(outside).toEqual([]);
+	});
+});
+
+describe("the startup watch names a module that replaces one of our helpers", () => {
+	const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+	afterEach(() => warn.mockClear());
+	afterAll(() => warn.mockRestore());
+
+	/** A fresh Handlebars with `times` and `eq` registered as ours, and a manual defer queue. */
+	function rig({ ready = true } = {}) {
+		const hb = Handlebars.create();
+		hb.registerHelper("times", n => n);
+		hb.registerHelper("eq", (a, b) => a === b);
+		const queue = [];
+		const state = { ready };
+		const check = watchOwnHelpers(["times", "eq"], {
+			handlebars: hb, isReady: () => state.ready, defer: fn => queue.push(fn),
+		});
+		const flush = () => { while (queue.length) queue.shift()(); };
+		return { hb, check, flush, state };
+	}
+
+	it("lists only the helpers no longer ours", () => {
+		const ours = () => {};
+		expect(replacedHelpers({ a: ours, b: () => {} }, new Map([["b", ours], ["a", ours]]))).toEqual(["b"]);
+		expect(replacedHelpers({}, new Map([["z", ours], ["a", ours]]))).toEqual(["a", "z"]);
+		expect(replacedMessage([])).toBeNull();
+		expect(replacedMessage(["times"])).toContain('helper "times"');
 	});
 
-	it("tells the GM, names the helper, and tells a player nothing", () => {
-		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+	it("is silent while every helper is still ours, and a module adding new ones is fine", () => {
+		const { hb, check, flush } = rig();
+		hb.registerHelper("when", () => "");
+		flush();
+		expect(check()).toEqual([]);
+		expect(warn).not.toHaveBeenCalled();
+	});
+
+	it("still registers what the module asked for", () => {
+		const { hb } = rig();
+		const theirs = () => "theirs";
+		hb.registerHelper("times", theirs);
+		expect(hb.helpers.times).toBe(theirs);
+	});
+
+	it("catches a replacement made long after ready, in either registerHelper form", () => {
+		const { hb, flush } = rig();
+		hb.registerHelper({ times: () => [], eq: () => true });
+		hb.registerHelper("times", () => []);
+		flush();
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining('"eq", "times"'));
+	});
+
+	it("waits for ready, then the ready sweep reports what came before", () => {
+		const { hb, check, flush, state } = rig({ ready: false });
+		hb.registerHelper("times", () => []);
+		flush();
+		expect(warn).not.toHaveBeenCalled();
+		state.ready = true;
+		expect(check()).toEqual(["times"]);
+		expect(warn).toHaveBeenCalledTimes(1);
+	});
+
+	it("catches a helper assigned straight onto Handlebars.helpers, at the ready sweep", () => {
+		const { hb, check } = rig();
+		hb.helpers.eq = () => false;
+		expect(check()).toEqual(["eq"]);
+	});
+
+	it("names each replacement once", () => {
+		const { hb, check, flush } = rig();
+		hb.registerHelper("times", () => []);
+		flush();
+		hb.registerHelper("times", () => [1]);
+		flush();
+		expect(check()).toEqual([]);
+		hb.registerHelper("eq", () => true);
+		flush();
+		expect(warn).toHaveBeenCalledTimes(2);
+		expect(warn.mock.calls[1][0]).toContain('helper "eq"');
+	});
+
+	// Modules often bring an `eq` or `times` that behaves just like ours, so an on-screen notice
+	// would be noise in many worlds. The console line is for whoever is chasing a broken sheet.
+	it("says it in the console only, never on screen", () => {
+		const notify = vi.fn();
+		const saved = globalThis.ui;
+		globalThis.ui = { notifications: { warn: notify, error: notify, info: notify } };
 		try {
-			const gm = { warn: vi.fn() };
-			const player = { warn: vi.fn() };
-			const helpers = { name: () => {} };
-			expect(reportForeignHelperClashes({ helpers, notifications: gm, user: { isGM: true } })).toEqual(["name"]);
-			expect(gm.warn).toHaveBeenCalledWith(expect.stringContaining('"name"'), { permanent: true });
-			reportForeignHelperClashes({ helpers, notifications: player, user: { isGM: false } });
-			expect(player.warn).not.toHaveBeenCalled();
-			expect(warn).toHaveBeenCalledTimes(2);
+			const { hb, flush } = rig();
+			hb.registerHelper("times", () => []);
+			flush();
+			expect(warn).toHaveBeenCalledWith(expect.stringContaining("times"));
+			expect(notify).not.toHaveBeenCalled();
 		} finally {
-			warn.mockRestore();
+			globalThis.ui = saved;
 		}
 	});
 });
@@ -159,7 +230,7 @@ describe("the templates that clashed render with Battle Transitions' helpers reg
 	 * that throws without arguments, which is what its `when` does. Every other helper renders empty.
 	 */
 	function hostileHandlebars() {
-		const hb = Handlebars.create();
+		const hb = systemHandlebars();
 		hb.registerHelper("helperMissing", () => "");
 		hb.registerHelper({
 			eq: (a, b) => a === b,
@@ -167,15 +238,11 @@ describe("the templates that clashed render with Battle Transitions' helpers reg
 			and: (...a) => a.slice(0, -1).every(Boolean),
 			or: (...a) => a.slice(0, -1).some(Boolean),
 		});
-		for (const name of FOREIGN_HELPERS["battle-transitions"]) {
+		for (const name of BATTLE_TRANSITIONS) {
 			hb.registerHelper(name, function (...args) {
 				if (args.length < 2) throw new Error(`${name} called with no arguments`);
 				return "";
 			});
-		}
-		const boot = read("stonetop.js");
-		for (const m of boot.matchAll(/"(stonetop\.[\w-]+)":\s*"systems\/stonetop-pwd\/([^"]+\.hbs)"/g)) {
-			hb.registerPartial(m[1], read(m[2]));
 		}
 		return hb;
 	}

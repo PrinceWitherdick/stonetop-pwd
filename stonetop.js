@@ -158,7 +158,7 @@ import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
 import { withLateStampLatch } from "./module/utils/card-latch.js";
 import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
-import { reportForeignHelperClashes } from "./module/utils/foreign-helper-check.js";
+import { watchOwnHelpers } from "./module/utils/foreign-helper-check.js";
 import { registerCampHooks } from "./module/camp/camp-store.js";
 import { registerVitalsMirrorHooks } from "./module/actors/character/vitals-mirror.js";
 import { registerBronzeLineHooks } from "./module/actors/character/bronze-lines.js";
@@ -317,6 +317,9 @@ Hooks.once("init", () => {
 	// setting). Registers its own render/close tracking hooks and a ready-time restore.
 	installWindowRestore();
 
+	// Every helper this system registers sits between here and watchOwnHelpers below, so the
+	// watch knows which functions are ours (tests/templates/foreign-helper-names.test.js checks).
+	const helpersBeforeOurs = { ...Handlebars.helpers };
 	Handlebars.registerHelper("format", (key, options) => game.i18n.format(String(key), options.hash));
 	// For the one shape Handlebars can't express on its own: a localised string that carries its
 	// own markup (so it has to be emitted with `{{{ }}}`) around a value that does not (so the
@@ -430,6 +433,12 @@ Hooks.once("init", () => {
 			return { val, label: (val >= 0 ? "+" : "") + val, checked: val === current };
 		});
 	});
+	// Does another module replace one of those helpers, now or at any point later? Looked at
+	// again once every module's own `ready` listener has run, for a helper assigned straight
+	// onto Handlebars.helpers. See utils/foreign-helper-check.js.
+	const checkOwnHelpers = watchOwnHelpers(Object.keys(Handlebars.helpers)
+		.filter(name => Handlebars.helpers[name] !== helpersBeforeOurs[name]));
+	Hooks.once("ready", () => setTimeout(checkOwnHelpers, 0));
 
 	CONFIG.Actor.documentClass = createStonetopActorClass(CONFIG.Actor.documentClass);
 	CONFIG.Item.documentClass  = createStonetopItemClass(CONFIG.Item.documentClass);
@@ -891,10 +900,6 @@ Hooks.once("ready", () => {
 	game.stonetop ??= {};
 	game.stonetop.bootReport = bootReport;
 });
-// Does another module's Handlebars helper answer to a name our templates print bare? Put off to
-// the next task so the modules' own `ready` listeners, which run after ours, have registered theirs.
-// See utils/foreign-helper-check.js.
-Hooks.once("ready", () => setTimeout(() => reportForeignHelperClashes(), 0));
 Hooks.once("ready", onReady);
 // EVERY user, not just the GM: this is the listening half of "Show Players" on a rulebook
 // window, and a player who is not listening is the only person the feature is for. Its own

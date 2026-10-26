@@ -9,18 +9,18 @@
 		{{/if}}
 		{{#if logistics}}
 		{{!-- The Marshal's Logistics, ticked for a character who has it learned. --}}
-		<label class="stonetop-requisition-herd stonetop-requisition-logistics"><input type="checkbox" class="stonetop-check" name="logistics" checked><span>{{logistics}}</span></label>
+		<label class="stonetop-requisition-herd stonetop-requisition-logistics"><input type="checkbox" class="stonetop-check" name="logistics" checked><span>{{this.logistics}}</span></label>
 		{{/if}}
 		{{#if nervesNote}}
 		{{!-- We Happy Few's 6-: said, not asked; the roll takes the disadvantage on its own. --}}
-		<p class="stonetop-requisition-herd stonetop-requisition-nerves"><em>{{nervesNote}}</em></p>
+		<p class="stonetop-requisition-herd stonetop-requisition-nerves"><em>{{this.nervesNote}}</em></p>
 		{{/if}}
 		{{#each advantageAsks}}
 		{{!-- An improvement's asked advantage on Requisition: unticked, the table's call. --}}
-		<label class="stonetop-requisition-herd stonetop-requisition-advantage"><input type="checkbox" class="stonetop-check" name="{{name}}"><span>{{label}}</span></label>
+		<label class="stonetop-requisition-herd stonetop-requisition-advantage"><input type="checkbox" class="stonetop-check" name="{{this.name}}"><span>{{this.label}}</span></label>
 		{{/each}}
 		<button type="button" class="stonetop-requisition-roll-btn">
-			<i class="fas fa-dice-d6"></i> Roll +Fortunes ({{fortunes}})
+			<i class="fas fa-dice-d6"></i> Roll +Fortunes ({{this.fortunes}})
 		</button>
 		<ul class="stonetop-requisition-results">
 			<li><strong>10+:</strong> go ahead, but bring it back safely.</li>
@@ -29,14 +29,14 @@
 		</ul>
 	</div>
 
-	<h3 class="stonetop-requisition-heading">{{steadingName}}&rsquo;s Assets</h3>
+	<h3 class="stonetop-requisition-heading">{{this.steadingName}}&rsquo;s Assets</h3>
 	<div class="stonetop-requisition-choice">
 		<label class="stonetop-requisition-choice-label" for="stonetop-requisition-asset">Asset</label>
 		<select id="stonetop-requisition-asset" class="stonetop-requisition-asset-select">
 			{{#each assets}}
-			<option value="{{index}}">{{name}}</option>
+			<option value="{{this.index}}">{{this.name}}</option>
 			{{/each}}
-			<option value="{{customAssetValue}}">Something else...</option>
+			<option value="{{this.customAssetValue}}">Something else...</option>
 		</select>
 		<input type="text" class="stonetop-requisition-custom-input" placeholder="Enter an asset or item" disabled hidden>
 		<button type="button" class="stonetop-requisition-take">
@@ -52,8 +52,8 @@
 	<ul class="stonetop-requisition-list stonetop-requisition-list--taken">
 		{{#each takenAssets}}
 		<li class="stonetop-requisition-item is-taken">
-			<span class="stonetop-requisition-item-name">{{name}}</span>
-			<span class="stonetop-requisition-taken-by">{{where}}</span>
+			<span class="stonetop-requisition-item-name">{{this.name}}</span>
+			<span class="stonetop-requisition-taken-by">{{this.where}}</span>
 		</li>
 		{{/each}}
 	</ul>

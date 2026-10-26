@@ -9,21 +9,21 @@
 	<div class="stonetop-playbook-picker-grid">
 		{{#each playbooks}}
 		<button type="button"
-			class="stonetop-playbook-picker-card stonetop-playbook-picker-card--{{slug}}{{#if taken}} is-taken{{/if}}"
-			data-uuid="{{uuid}}"
-			data-complexity="{{complexity}}"
-			data-description="{{description}}"
+			class="stonetop-playbook-picker-card stonetop-playbook-picker-card--{{this.slug}}{{#if taken}} is-taken{{/if}}"
+			data-uuid="{{this.uuid}}"
+			data-complexity="{{this.complexity}}"
+			data-description="{{this.description}}"
 		>
 			{{#if img}}
-			<img class="stonetop-playbook-picker-card-icon" src="{{img}}" alt="">
+			<img class="stonetop-playbook-picker-card-icon" src="{{this.img}}" alt="">
 			{{/if}}
-			<span class="stonetop-playbook-picker-card-name">{{name}}</span>
+			<span class="stonetop-playbook-picker-card-name">{{this.name}}</span>
 			{{!-- Flagged, never blocked: "No doubling up" (Book I p.49) is the table's to waive. --}}
 			{{#if takenBy}}
-			<span class="stonetop-playbook-picker-card-holders">{{takenBy}}</span>
+			<span class="stonetop-playbook-picker-card-holders">{{this.takenBy}}</span>
 			{{/if}}
 			{{#if deadHolders}}
-			<span class="stonetop-playbook-picker-card-holders stonetop-playbook-picker-card-holders--dead">{{deadHolders}}</span>
+			<span class="stonetop-playbook-picker-card-holders stonetop-playbook-picker-card-holders--dead">{{this.deadHolders}}</span>
 			{{/if}}
 		</button>
 		{{/each}}

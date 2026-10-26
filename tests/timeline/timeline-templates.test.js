@@ -130,7 +130,7 @@ describe("a Seasons Change inside its season's heading", () => {
 		const hosts = readRepo("templates/dialogs/timeline.hbs")
 			+ readRepo("templates/dialogs/partials/timeline-period.hbs")
 			+ readRepo("templates/dialogs/partials/timeline-hperiod.hbs");
-		const tags = hosts.match(/<[^>]*\{\{seasonClass\}\}[^>]*>/g) ?? [];
+		const tags = hosts.match(/<[^>]*\{\{this\.seasonClass\}\}[^>]*>/g) ?? [];
 		expect(tags).toHaveLength(4);
 		for (const tag of tags) expect(tag).toContain("{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}");
 		expect(readCss()).toContain(".stonetop-timeline-head--notes");
@@ -148,7 +148,7 @@ describe("a Seasons Change inside its season's heading", () => {
 		for (const call of calls) expect(call).toMatch(/^\{\{~>/);
 
 		const hb = Handlebars.create();
-		hb.registerPartial("head", "{{{body}}}");
+		hb.registerPartial("head", "{{{this.body}}}");
 		const host = (call) => hb.compile(`<header>\n\t\t${call}\n</header>`)({ body: "<pre>a\nb</pre>" });
 		expect(host("{{> head}}"), "the mechanism this guards against").toContain("<pre>a\n\t\tb</pre>");
 		expect(host("{{~> head}}")).toContain("<pre>a\nb</pre>");

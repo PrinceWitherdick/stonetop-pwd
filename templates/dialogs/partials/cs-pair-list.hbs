@@ -31,22 +31,22 @@
   {{#if inline}}
   <div class="stonetop-cf-gear-row">
     {{#each cells}}
-    <input type="text" class="stonetop-cf-input stonetop-cs-pair {{cls}}" data-list="{{list}}" data-index="{{index}}" data-key="{{key}}" value="{{value}}" placeholder="{{placeholder}}">
+    <input type="text" class="stonetop-cf-input stonetop-cs-pair {{this.cls}}" data-list="{{this.list}}" data-index="{{this.index}}" data-key="{{this.key}}" value="{{this.value}}" placeholder="{{this.placeholder}}">
     {{/each}}
-    <button type="button" class="stonetop-cs-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-list="{{list}}" data-index="{{index}}"><i class="fas fa-times"></i></button>
+    <button type="button" class="stonetop-cs-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-list="{{this.list}}" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
   </div>
   {{else}}
-  <div class="{{rowClass}}">
+  <div class="{{this.rowClass}}">
     {{#each cells}}
     {{#if first}}
     <div class="stonetop-cf-gear-row">
-      <input type="text" class="stonetop-cf-input stonetop-cs-pair {{cls}}" data-list="{{list}}" data-index="{{index}}" data-key="{{key}}" value="{{value}}" placeholder="{{placeholder}}">
-      <button type="button" class="stonetop-cs-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-list="{{list}}" data-index="{{index}}"><i class="fas fa-times"></i></button>
+      <input type="text" class="stonetop-cf-input stonetop-cs-pair {{this.cls}}" data-list="{{this.list}}" data-index="{{this.index}}" data-key="{{this.key}}" value="{{this.value}}" placeholder="{{this.placeholder}}">
+      <button type="button" class="stonetop-cs-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-list="{{this.list}}" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
     </div>
     {{else if multiline}}
-    <textarea class="stonetop-cf-textarea stonetop-cs-pair {{cls}}" data-list="{{list}}" data-index="{{index}}" data-key="{{key}}" rows="{{lines}}" placeholder="{{placeholder}}">{{value}}</textarea>
+    <textarea class="stonetop-cf-textarea stonetop-cs-pair {{this.cls}}" data-list="{{this.list}}" data-index="{{this.index}}" data-key="{{this.key}}" rows="{{this.lines}}" placeholder="{{this.placeholder}}">{{this.value}}</textarea>
     {{else}}
-    <input type="text" class="stonetop-cf-input stonetop-cs-pair {{cls}}" data-list="{{list}}" data-index="{{index}}" data-key="{{key}}" value="{{value}}" placeholder="{{placeholder}}">
+    <input type="text" class="stonetop-cf-input stonetop-cs-pair {{this.cls}}" data-list="{{this.list}}" data-index="{{this.index}}" data-key="{{this.key}}" value="{{this.value}}" placeholder="{{this.placeholder}}">
     {{/if}}
     {{/each}}
   </div>

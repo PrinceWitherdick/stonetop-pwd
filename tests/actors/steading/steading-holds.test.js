@@ -204,7 +204,7 @@ describe("how the tray is wired", () => {
 		expect(tips[0]).toBe(tips[1]);
 		expect(tips[0]).toContain("stonetop-hold-tip-name");
 		expect(tips[0]).toContain("stonetop-hold-tip-text");
-		expect(tips[0].indexOf("{{label}}")).toBeLessThan(tips[0].indexOf("{{tooltip}}"));
+		expect(tips[0].indexOf("{{this.label}}")).toBeLessThan(tips[0].indexOf("{{this.tooltip}}"));
 	});
 
 	// `data-tooltip` is offered to game.i18n.has() first, as though it might be a key. These are

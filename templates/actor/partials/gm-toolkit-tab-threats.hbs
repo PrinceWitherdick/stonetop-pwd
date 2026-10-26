@@ -40,7 +40,7 @@
 			{{#if threats.length}}
 			<div class="steading-threats-grid">
 				{{#each threats}}
-				<div class="threat-card-wrap" data-page-uuid="{{uuid}}">
+				<div class="threat-card-wrap" data-page-uuid="{{this.uuid}}">
 					{{> "stonetop.threat-card" this}}
 					{{> "stonetop.gm-prep-card-tools" kind="threat" uuid=uuid}}
 				</div>
@@ -58,7 +58,7 @@
 			{{> "stonetop.section-heading" headingClass="steading-residents-heading" title=(localize "stonetop.gmToolkit.threats.resolvedHeading") note=(localize "stonetop.gmToolkit.threats.resolvedNote") collapse="threatsResolved"}}
 			<div class="steading-threats-grid">
 				{{#each stonetop.resolvedThreats}}
-				<div class="threat-card-wrap" data-page-uuid="{{uuid}}">
+				<div class="threat-card-wrap" data-page-uuid="{{this.uuid}}">
 					{{> "stonetop.threat-card" this}}
 					{{> "stonetop.gm-prep-card-tools" kind="threat" uuid=uuid}}
 				</div>
@@ -77,7 +77,7 @@
 			{{#if stonetop.hazards.length}}
 			<div class="steading-threats-grid">
 				{{#each stonetop.hazards}}
-				<div class="threat-card-wrap" data-page-uuid="{{uuid}}">
+				<div class="threat-card-wrap" data-page-uuid="{{this.uuid}}">
 					{{> "stonetop.hazard-card" this}}
 					{{> "stonetop.gm-prep-card-tools" kind="hazard" uuid=uuid}}
 				</div>
@@ -110,10 +110,10 @@
 			{{#each stonetop.threatGuidance}}
 			<div class="steading-threats-section steading-threats-guide">
 				{{> "stonetop.section-heading" headingClass="steading-residents-heading" title=title note=note collapse=collapseId}}
-				{{#if caution}}<p class="steading-threats-intro">{{caution}}</p>{{/if}}
+				{{#if caution}}<p class="steading-threats-intro">{{this.caution}}</p>{{/if}}
 				{{#each groups}}
 				<div class="steading-threats-guide-group">
-					{{#if label}}<h4 class="steading-threats-guide-label">{{label}}</h4>{{/if}}
+					{{#if label}}<h4 class="steading-threats-guide-label">{{this.label}}</h4>{{/if}}
 					{{!-- Numbered only where the order is the point (the write-up steps). The
 					      `ordered` flag rides on the SECTION, so a group inherits it through the
 					      `../` walk out of this each. Only the LIST TAG differs between the two
@@ -151,12 +151,12 @@
 				    collapse="threatGuideTypes"}}
 				<ul class="steading-threats-guide-list steading-threat-type-list">
 					{{#each stonetop.threatTypeReference}}
-					<li style="--threat-accent-raw: {{accent}}">
+					<li style="--threat-accent-raw: {{this.accent}}">
 						<button type="button" class="steading-threat-type-toggle" aria-expanded="false"
 						        data-tooltip="{{../stonetop.threatTypeMovesLabel}}">
-							<strong>{{label}}</strong>
+							<strong>{{this.label}}</strong>
 						</button>
-						<span>{{blurb}}</span>
+						<span>{{this.blurb}}</span>
 						<ul class="steading-threat-type-moves" hidden>
 							{{#each moves}}
 							<li>{{this}}</li>

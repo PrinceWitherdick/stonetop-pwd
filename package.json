@@ -12,7 +12,6 @@
     "gen:ai-signals": "node scripts/gen-ai-signals.js",
     "reorganize-packs": "node scripts/reorganize-playbook-moves.js",
     "gen:superseded": "node scripts/gen-superseded-fields.js",
-    "gen:template-names": "node scripts/gen-template-bare-names.js",
     "wiki:check": "node scripts/sync-wiki.js",
     "wiki:publish": "node scripts/sync-wiki.js --publish"
   },

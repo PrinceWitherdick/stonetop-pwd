@@ -42,7 +42,7 @@
 			<div class="stonetop-gm-homefront-groups">
 				{{#each body.groups}}
 				<section class="stonetop-gm-homefront-group">
-					<h4 class="stonetop-gm-homefront-group-title">{{name}}</h4>
+					<h4 class="stonetop-gm-homefront-group-title">{{this.name}}</h4>
 					<ul class="stonetop-gm-homefront-items">
 						{{#each items}}<li>{{this}}</li>{{/each}}
 					</ul>
@@ -82,7 +82,7 @@
 			<div class="stonetop-gm-homefront-seasons">
 				{{#each body.seasons}}
 				<section class="stonetop-gm-homefront-season{{#if (eq key @root.stonetop.homefrontSeason)}} stonetop-gm-homefront-season--now{{/if}}">
-					<h4 class="stonetop-gm-homefront-season-title">{{name}}{{#if (eq key @root.stonetop.homefrontSeason)}}
+					<h4 class="stonetop-gm-homefront-season-title">{{this.name}}{{#if (eq key @root.stonetop.homefrontSeason)}}
 						<span class="stonetop-gm-homefront-now">{{localize "stonetop.gmToolkit.homefront.now"}}</span>{{/if}}</h4>
 					<ul class="stonetop-gm-homefront-items">
 						{{#each items}}<li>{{this}}</li>{{/each}}
@@ -106,7 +106,7 @@
 			<ol class="stonetop-gm-homefront-steps{{#unless body.numbered}} stonetop-gm-homefront-steps--unnumbered{{/unless}}">
 				{{#each body.steps}}
 				<li class="stonetop-gm-homefront-step">
-					<strong class="stonetop-gm-homefront-step-name">{{name}}</strong>{{#if detail}} <span class="stonetop-gm-homefront-step-detail">{{detail}}</span>{{/if}}{{#if pageCites}} <span class="stonetop-gm-homefront-step-page">{{> "stonetop.book-page-cite" cites=pageCites}}</span>{{/if}}
+					<strong class="stonetop-gm-homefront-step-name">{{this.name}}</strong>{{#if detail}} <span class="stonetop-gm-homefront-step-detail">{{this.detail}}</span>{{/if}}{{#if pageCites}} <span class="stonetop-gm-homefront-step-page">{{> "stonetop.book-page-cite" cites=pageCites}}</span>{{/if}}
 					{{#if items}}
 					<ul class="stonetop-gm-homefront-items">
 						{{#each items}}<li>{{this}}</li>{{/each}}

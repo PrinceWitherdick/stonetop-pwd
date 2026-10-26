@@ -115,7 +115,7 @@ describe("what makes it work at all", () => {
 	// drift apart.
 	it("says what it is, twice, from one string", () => {
 		const tag = HBS.match(/<button[^>]*data-relmap-action="popout"[\s\S]*?>/)[0];
-		expect(tag).toContain('data-tooltip="{{popOutLabel}}"');
-		expect(tag).toContain('aria-label="{{popOutLabel}}"');
+		expect(tag).toContain('data-tooltip="{{this.popOutLabel}}"');
+		expect(tag).toContain('aria-label="{{this.popOutLabel}}"');
 	});
 });

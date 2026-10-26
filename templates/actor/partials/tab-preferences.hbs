@@ -57,30 +57,30 @@
 		</p>
 
 		{{#each stonetop.preferences}}
-		<div class="stonetop-preference-group" data-preference-group="{{id}}">
+		<div class="stonetop-preference-group" data-preference-group="{{this.id}}">
 			{{> "stonetop.section-heading" title=title collapse=collapse}}
 
 			{{#each rows}}
-			<div class="stonetop-preference-row" data-preference-key="{{key}}">
+			<div class="stonetop-preference-row" data-preference-key="{{this.key}}">
 				{{#if isCheck}}
 				{{!-- The checkbox is INSIDE the label so the whole title line toggles it, which
 				      is how every other checklist on these sheets behaves. `.stonetop-check`
 				      takes the shared 15px glyph skin; core's own margin is left alone, which is
 				      what seats the glyph on the first line of the label. --}}
-				<label class="stonetop-preference-label" for="stonetop-pref-{{key}}">
-					<input id="stonetop-pref-{{key}}" type="checkbox" class="stonetop-check"
-					       data-pref="{{key}}"{{#if checked}} checked{{/if}}>
-					<span>{{label}}</span>
+				<label class="stonetop-preference-label" for="stonetop-pref-{{this.key}}">
+					<input id="stonetop-pref-{{this.key}}" type="checkbox" class="stonetop-check"
+					       data-pref="{{this.key}}"{{#if checked}} checked{{/if}}>
+					<span>{{this.label}}</span>
 				</label>
 				{{else}}
-				<label class="stonetop-preference-label" for="stonetop-pref-{{key}}">
-					<span>{{label}}</span>
+				<label class="stonetop-preference-label" for="stonetop-pref-{{this.key}}">
+					<span>{{this.label}}</span>
 				</label>
 
 				{{#if isChoice}}
-				<select id="stonetop-pref-{{key}}" class="stonetop-preference-select" data-pref="{{key}}">
+				<select id="stonetop-pref-{{this.key}}" class="stonetop-preference-select" data-pref="{{this.key}}">
 					{{#each choices}}
-					<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>
+					<option value="{{this.value}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>
 					{{/each}}
 				</select>
 				{{/if}}
@@ -93,10 +93,10 @@
 				      writes and onChange work for every value passed through on the way. (Arrow
 				      keys fire both per press, which is one press to one stored value anyway.) --}}
 				<div class="stonetop-preference-range">
-					<input id="stonetop-pref-{{key}}" type="range" data-pref="{{key}}"
-					       min="{{min}}" max="{{max}}" step="{{step}}" value="{{value}}">
+					<input id="stonetop-pref-{{this.key}}" type="range" data-pref="{{this.key}}"
+					       min="{{this.min}}" max="{{this.max}}" step="{{this.step}}" value="{{this.value}}">
 					<output class="stonetop-preference-range-value"
-					        for="stonetop-pref-{{key}}">{{display}}</output>
+					        for="stonetop-pref-{{this.key}}">{{this.display}}</output>
 				</div>
 				{{/if}}
 				{{/if}}
@@ -106,7 +106,7 @@
 				      ("Paper Texture" while Sheet Contrast was High) and the settings were
 				      uncoupled instead, which is the fix a row like that wants. See the note at
 				      the top of module/utils/sheet-preferences.js. --}}
-				{{#if hint}}<p class="notes">{{hint}}</p>{{/if}}
+				{{#if hint}}<p class="notes">{{this.hint}}</p>{{/if}}
 
 				{{!-- Whose setting this is. The intro above promises that nothing on this tab
 				      leaves this browser, and the one world-scoped row here breaks that promise

@@ -16,7 +16,7 @@
           <div class="stonetop-guide-banner-title">{{step.title}}</div>
           <div class="stonetop-guide-banner-sub">Create a Thing Below</div>
         </div>
-        <div class="stonetop-guide-count">{{stepIndex}} / {{stepCount}}</div>
+        <div class="stonetop-guide-count">{{this.stepIndex}} / {{this.stepCount}}</div>
       </div>
 
       <div class="stonetop-spring-body">{{{step.body}}}</div>
@@ -26,14 +26,14 @@
         {{#if is_concept}}
         <label class="stonetop-cf-label">Start from…
           <select class="stonetop-cf-input stonetop-tb-preset">
-            {{#each presets}}<option value="{{slug}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+            {{#each presets}}<option value="{{this.slug}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
           </select>
         </label>
         <label class="stonetop-cf-label">Name
-          <input type="text" class="stonetop-cf-input" data-field="name" value="{{name}}" placeholder="Hec'tumel, Daagon, Hlad…">
+          <input type="text" class="stonetop-cf-input" data-field="name" value="{{this.name}}" placeholder="Hec'tumel, Daagon, Hlad…">
         </label>
         <label class="stonetop-cf-label">Titles <span class="stonetop-cf-pick-hint">(one per line)</span>
-          <textarea class="stonetop-cf-textarea" data-field="titles" rows="3" placeholder="the Pale Serpent&#10;Slitherer in Darkness&#10;Death Is Its Eyes">{{titlesText}}</textarea>
+          <textarea class="stonetop-cf-textarea" data-field="titles" rows="3" placeholder="the Pale Serpent&#10;Slitherer in Darkness&#10;Death Is Its Eyes">{{this.titlesText}}</textarea>
         </label>
         <button type="button" class="stonetop-tb-roll-name stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll a name &amp; titles</button>
         <div class="stonetop-cf-pick">
@@ -41,8 +41,8 @@
           <div class="stonetop-cf-option-list stonetop-cf-option-list--row">
             {{#each proximities}}
             <label class="stonetop-cf-option{{#if selected}} is-selected{{/if}}">
-              <input type="radio" name="tb-proximity" class="stonetop-tb-proximity" value="{{id}}"{{#if selected}} checked{{/if}}>
-              <span class="stonetop-cf-option-text">{{label}}</span>
+              <input type="radio" name="tb-proximity" class="stonetop-tb-proximity" value="{{this.id}}"{{#if selected}} checked{{/if}}>
+              <span class="stonetop-cf-option-text">{{this.label}}</span>
             </label>
             {{/each}}
           </div>
@@ -51,12 +51,12 @@
 
         {{#if is_themes}}
         <div class="stonetop-cf-pick">
-          <div class="stonetop-cf-pick-label">Themes <span class="stonetop-cf-pick-hint">(pick 2 or more, {{themeCount}} chosen)</span></div>
+          <div class="stonetop-cf-pick-label">Themes <span class="stonetop-cf-pick-hint">(pick 2 or more, {{this.themeCount}} chosen)</span></div>
           <div class="stonetop-cf-option-list">
             {{#each themes}}
             <label class="stonetop-cf-option{{#if checked}} is-selected{{/if}}">
-              <input type="checkbox" class="stonetop-tb-theme" value="{{id}}"{{#if checked}} checked{{/if}}>
-              <span class="stonetop-cf-option-text">{{label}}<span class="stonetop-tb-note">{{note}}</span></span>
+              <input type="checkbox" class="stonetop-tb-theme" value="{{this.id}}"{{#if checked}} checked{{/if}}>
+              <span class="stonetop-cf-option-text">{{this.label}}<span class="stonetop-tb-note">{{this.note}}</span></span>
             </label>
             {{/each}}
           </div>
@@ -66,12 +66,12 @@
 
         {{#if is_aspects}}
         <div class="stonetop-cf-pick">
-          <div class="stonetop-cf-pick-label">Aspects <span class="stonetop-cf-pick-hint">(pick 2 or more, {{aspectCount}} chosen)</span></div>
+          <div class="stonetop-cf-pick-label">Aspects <span class="stonetop-cf-pick-hint">(pick 2 or more, {{this.aspectCount}} chosen)</span></div>
           <div class="stonetop-cf-option-list">
             {{#each aspects}}
             <label class="stonetop-cf-option{{#if checked}} is-selected{{/if}}">
-              <input type="checkbox" class="stonetop-tb-aspect" value="{{id}}"{{#if checked}} checked{{/if}}>
-              <span class="stonetop-cf-option-text">{{label}}</span>
+              <input type="checkbox" class="stonetop-tb-aspect" value="{{this.id}}"{{#if checked}} checked{{/if}}>
+              <span class="stonetop-cf-option-text">{{this.label}}</span>
             </label>
             {{/each}}
           </div>
@@ -85,15 +85,15 @@
           <div class="stonetop-cf-option-list">
             {{#each instincts}}
             <label class="stonetop-cf-option{{#if selected}} is-selected{{/if}}">
-              <input type="radio" name="tb-instinct" class="stonetop-tb-instinct" value="{{id}}"{{#if selected}} checked{{/if}}>
-              <span class="stonetop-cf-option-text">{{label}}</span>
+              <input type="radio" name="tb-instinct" class="stonetop-tb-instinct" value="{{this.id}}"{{#if selected}} checked{{/if}}>
+              <span class="stonetop-cf-option-text">{{this.label}}</span>
             </label>
             {{/each}}
           </div>
         </div>
         <button type="button" class="stonetop-tb-roll-instinct stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll</button>
         <label class="stonetop-cf-label">Or write your own
-          <input type="text" class="stonetop-cf-input" data-field="instinctCustom" value="{{instinctCustom}}" placeholder="to smother life, hope, and light…">
+          <input type="text" class="stonetop-cf-input" data-field="instinctCustom" value="{{this.instinctCustom}}" placeholder="to smother life, hope, and light…">
         </label>
         {{/if}}
 
@@ -103,8 +103,8 @@
           <div class="stonetop-cf-option-list">
             {{#each moveOptions}}
             <label class="stonetop-cf-option{{#if checked}} is-selected{{/if}}">
-              <input type="checkbox" class="stonetop-tb-move" value="{{text}}"{{#if checked}} checked{{/if}}>
-              <span class="stonetop-cf-option-text">{{text}}</span>
+              <input type="checkbox" class="stonetop-tb-move" value="{{this.text}}"{{#if checked}} checked{{/if}}>
+              <span class="stonetop-cf-option-text">{{this.text}}</span>
             </label>
             {{/each}}
           </div>
@@ -113,8 +113,8 @@
           <div class="stonetop-cf-pick-label">Add your own</div>
           {{#each customMoveRows}}
           <div class="stonetop-cf-gear-row">
-            <input type="text" class="stonetop-cf-input stonetop-tb-move-input" data-index="{{index}}" value="{{text}}" placeholder="a move of your own…">
-            <button type="button" class="stonetop-tb-move-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{index}}"><i class="fas fa-times"></i></button>
+            <input type="text" class="stonetop-cf-input stonetop-tb-move-input" data-index="{{this.index}}" value="{{this.text}}" placeholder="a move of your own…">
+            <button type="button" class="stonetop-tb-move-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
           </div>
           {{/each}}
           <button type="button" class="stonetop-tb-move-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add GM move</button>
@@ -125,13 +125,13 @@
         {{#with preview}}
         <div class="stonetop-cf-preview">
           <div class="stonetop-cf-preview-head">
-            <span class="stonetop-cf-preview-name">{{name}}</span>
+            <span class="stonetop-cf-preview-name">{{this.name}}</span>
             <span class="stonetop-cf-preview-type">Magical entity</span>
           </div>
           {{#if titles.length}}<div class="stonetop-cf-preview-line"><em>{{#each titles}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}</em></div>{{/if}}
           {{#if themes.length}}<div class="stonetop-cf-preview-line"><strong>Themes</strong> {{#each themes}}{{this}}{{#unless @last}}; {{/unless}}{{/each}}</div>{{/if}}
           {{#if aspects.length}}<div class="stonetop-cf-preview-line"><strong>Aspects</strong> {{#each aspects}}{{this}}{{#unless @last}}; {{/unless}}{{/each}}</div>{{/if}}
-          {{#if instinct}}<div class="stonetop-cf-preview-line"><strong>Instinct</strong> {{instinct}}</div>{{/if}}
+          {{#if instinct}}<div class="stonetop-cf-preview-line"><strong>Instinct</strong> {{this.instinct}}</div>{{/if}}
           {{#if gmMoves.length}}<div class="stonetop-cf-preview-line"><strong>GM moves</strong> {{#each gmMoves}}{{this}}{{#unless @last}}; {{/unless}}{{/each}}</div>{{/if}}
         </div>
         {{/with}}
@@ -145,7 +145,7 @@
 
   <div class="stonetop-guide-nav">
     <button class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
-    <span class="stonetop-spring-step-label">{{stepLabel}}</span>
+    <span class="stonetop-spring-step-label">{{this.stepLabel}}</span>
     {{#if isLast}}
     <button class="stonetop-tb-create stonetop-guide-btn--primary"><i class="fas fa-eye"></i> Create the Thing</button>
     {{else}}

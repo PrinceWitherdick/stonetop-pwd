@@ -480,7 +480,7 @@ describe("the Moves tab is a two-column reference list, not a card list", () => 
 	// / `display: block` to arrive at two lines of text, and left every future edit to the
 	// shared card free to leak a border or a fill in here with nothing failing.
 	it("dresses an entry as a reference line, not as an un-carded card", () => {
-		expect(MOVES_HBS).toContain('<li class="stonetop-gm-move" data-move="{{name}}">');
+		expect(MOVES_HBS).toContain('<li class="stonetop-gm-move" data-move="{{this.name}}">');
 		expect(MOVES_HBS).toContain('class="stonetop-gm-move-name"');
 		// Asserted against the emitted CLASS ATTRIBUTES, not the file text: the header comment
 		// above names the classes this tab used to wear, and a plain substring search would

@@ -39,7 +39,7 @@
 			      wrapStonetopGlyphsInEl into a second diamond overlapping the first. --}}
 			{{#each (times totalMarks)}}<span class="stonetop-outfit-diamond-filled"></span>{{/each}}
 		</span>
-		<span class="stonetop-outfit-weight-count">{{totalMarks}} {{{localize "stonetop.specialMoves.outfit.totalWeight"}}}{{#if loadLevelOverloaded}} <strong class="stonetop-outfit-overloaded">{{localize "stonetop.inventory.outfit.overloaded"}}</strong>{{/if}}</span>
+		<span class="stonetop-outfit-weight-count">{{this.totalMarks}} {{{localize "stonetop.specialMoves.outfit.totalWeight"}}}{{#if loadLevelOverloaded}} <strong class="stonetop-outfit-overloaded">{{localize "stonetop.inventory.outfit.overloaded"}}</strong>{{/if}}</span>
 	</div>
 	{{/unless}}
 
@@ -57,12 +57,12 @@
 			<hr class="stonetop-inv-separator">
 			{{#each regularItems}}
 			<label class="stonetop-outfit-item{{#if checked}} is-checked{{/if}}">
-				<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{slug}}" {{#if checked}}checked{{/if}}>
+				<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{this.slug}}" {{#if checked}}checked{{/if}}>
 				<span class="stonetop-outfit-item-diamonds">
 					{{#each (times weight)}}<span class="stonetop-outfit-diamond"></span>{{/each}}
 				</span>
-				<span class="stonetop-outfit-item-name">{{name}}</span>
-				{{#if note}}<span class="stonetop-outfit-item-note">({{{note}}})</span>{{/if}}
+				<span class="stonetop-outfit-item-name">{{this.name}}</span>
+				{{#if note}}<span class="stonetop-outfit-item-note">({{{this.note}}})</span>{{/if}}
 			</label>
 			{{/each}}
 
@@ -71,12 +71,12 @@
 			<hr class="stonetop-inv-separator">
 			{{#each possessionRegular}}
 			<label class="stonetop-outfit-item{{#if checked}} is-checked{{/if}}">
-				<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{slug}}" {{#if checked}}checked{{/if}}>
+				<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{this.slug}}" {{#if checked}}checked{{/if}}>
 				<span class="stonetop-outfit-item-diamonds">
 					{{#each (times weight)}}<span class="stonetop-outfit-diamond"></span>{{/each}}
 				</span>
-				<span class="stonetop-outfit-item-name">{{name}}</span>
-				{{#if note}}<span class="stonetop-outfit-item-note">({{note}})</span>{{/if}}
+				<span class="stonetop-outfit-item-name">{{this.name}}</span>
+				{{#if note}}<span class="stonetop-outfit-item-note">({{this.note}})</span>{{/if}}
 			</label>
 			{{/each}}
 			{{/if}}
@@ -97,10 +97,10 @@
 			<hr class="stonetop-inv-separator">
 			{{#each smallItems}}
 			<label class="stonetop-outfit-item stonetop-outfit-item-small{{#if checked}} is-checked{{/if}}">
-				<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{slug}}" {{#if checked}}checked{{/if}}>
+				<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{this.slug}}" {{#if checked}}checked{{/if}}>
 				<span class="stonetop-outfit-square"></span>
-				<span class="stonetop-outfit-item-name">{{name}}</span>
-				{{#if note}}<span class="stonetop-outfit-item-note">({{{note}}})</span>{{/if}}
+				<span class="stonetop-outfit-item-name">{{this.name}}</span>
+				{{#if note}}<span class="stonetop-outfit-item-note">({{{this.note}}})</span>{{/if}}
 			</label>
 			{{/each}}
 			{{!-- The standard small items, two to a row and name only, as on the Inventory tab. --}}
@@ -109,9 +109,9 @@
 			<div class="stonetop-inv-grid">
 				{{#each smallGridItems}}
 				<label class="stonetop-outfit-item stonetop-outfit-item-small{{#if checked}} is-checked{{/if}}">
-					<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{slug}}" {{#if checked}}checked{{/if}}>
+					<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{this.slug}}" {{#if checked}}checked{{/if}}>
 					<span class="stonetop-outfit-square"></span>
-					<span class="stonetop-outfit-item-name">{{name}}</span>
+					<span class="stonetop-outfit-item-name">{{this.name}}</span>
 				</label>
 				{{/each}}
 			</div>
@@ -122,10 +122,10 @@
 			<hr class="stonetop-inv-separator">
 			{{#each possessionSmall}}
 			<label class="stonetop-outfit-item stonetop-outfit-item-small{{#if checked}} is-checked{{/if}}">
-				<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{slug}}" {{#if checked}}checked{{/if}}>
+				<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{this.slug}}" {{#if checked}}checked{{/if}}>
 				<span class="stonetop-outfit-square"></span>
-				<span class="stonetop-outfit-item-name">{{name}}</span>
-				{{#if note}}<span class="stonetop-outfit-item-note">({{note}})</span>{{/if}}
+				<span class="stonetop-outfit-item-name">{{this.name}}</span>
+				{{#if note}}<span class="stonetop-outfit-item-note">({{this.note}})</span>{{/if}}
 			</label>
 			{{/each}}
 			{{/if}}
@@ -139,13 +139,13 @@
 			{{#each arcanaItems}}
 			<label class="stonetop-outfit-item{{#if inert}} stonetop-outfit-item-static{{/if}}{{#if checked}} is-checked{{/if}}">
 				{{#unless inert}}
-				<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{slug}}" {{#if checked}}checked{{/if}}>
+				<input type="checkbox" class="stonetop-outfit-item-check" data-slug="{{this.slug}}" {{#if checked}}checked{{/if}}>
 				{{/unless}}
 				<span class="stonetop-outfit-item-diamonds">
 					{{#each (times weight)}}<span class="stonetop-outfit-diamond"></span>{{/each}}
 				</span>
-				<span class="stonetop-outfit-item-name">{{name}}</span>
-				{{#if note}}<span class="stonetop-outfit-item-note">({{{note}}})</span>{{/if}}
+				<span class="stonetop-outfit-item-name">{{this.name}}</span>
+				{{#if note}}<span class="stonetop-outfit-item-note">({{{this.note}}})</span>{{/if}}
 			</label>
 			{{/each}}
 			{{/if}}

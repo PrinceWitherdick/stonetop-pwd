@@ -21,7 +21,7 @@
 					{{#if name}}
 					<li class="steading-list-item">
 						<span class="steading-list-bullet" aria-hidden="true"></span>
-						<span class="steading-list-name">{{name}}</span>
+						<span class="steading-list-name">{{this.name}}</span>
 						<button type="button" class="steading-list-delete"
 						        data-list="resources" data-index="{{@index}}"
 						        title="Remove" tabindex="-1">
@@ -46,7 +46,7 @@
 					{{#if name}}
 					<li class="steading-list-item">
 						<span class="steading-list-bullet" aria-hidden="true"></span>
-						<span class="steading-list-name">{{name}}</span>
+						<span class="steading-list-name">{{this.name}}</span>
 						<button type="button" class="steading-list-delete"
 						        data-list="fortifications" data-index="{{@index}}"
 						        title="Remove" tabindex="-1">
@@ -79,10 +79,10 @@
 						{{#if takenBy}}
 						<span class="steading-list-name steading-asset-name steading-asset-taken"
 						      data-index="{{@index}}"
-						      data-tooltip="{{takenTooltip}}"
-						      data-tooltip-direction="UP">{{name}}</span>
+						      data-tooltip="{{this.takenTooltip}}"
+						      data-tooltip-direction="UP">{{this.name}}</span>
 						{{else}}
-						<span class="steading-list-name steading-asset-name">{{name}}</span>
+						<span class="steading-list-name steading-asset-name">{{this.name}}</span>
 						{{/if}}
 						<button type="button" class="steading-list-delete"
 						        data-list="assets" data-index="{{@index}}"
@@ -161,12 +161,12 @@
 				<h3 class="steading-list-heading">Places of Interest</h3>
 				<div class="steading-places-grid">
 					{{#each stonetop.places}}
-					<div class="steading-place-item" data-letter="{{letter}}">
+					<div class="steading-place-item" data-letter="{{this.letter}}">
 						<span class="steading-place-letter{{#if name}} steading-place-drag{{/if}}"
-						      {{#if name}}draggable="true" title="Drag onto a scene to drop a map note"{{/if}}>{{letter}}</span>
+						      {{#if name}}draggable="true" title="Drag onto a scene to drop a map note"{{/if}}>{{this.letter}}</span>
 						<input type="text" class="steading-place-name"
 						       data-index="{{@index}}"
-						       value="{{name}}" placeholder="—" {{#unless @root.stonetop.edit.places}}disabled{{/unless}}>
+						       value="{{this.name}}" placeholder="—" {{#unless @root.stonetop.edit.places}}disabled{{/unless}}>
 					</div>
 					{{/each}}
 				</div>

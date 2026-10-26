@@ -8,7 +8,7 @@
         <div class="stonetop-guide-banner-title">{{step.title}}</div>
         <div class="stonetop-guide-banner-sub">Let spring burst forth</div>
       </div>
-      <div class="stonetop-guide-count">{{stepIndex}} / {{stepCount}}</div>
+      <div class="stonetop-guide-count">{{this.stepIndex}} / {{this.stepCount}}</div>
     </div>
 
     <div class="stonetop-spring-body">{{{step.body}}}</div>
@@ -38,8 +38,8 @@
     <ul class="stonetop-spring-tiers stonetop-spring-tiers--cards">
       {{#each tiers}}
       <li class="stonetop-spring-tier">
-        <span class="stonetop-spring-tier-label">{{{label}}}</span>
-        <span class="stonetop-spring-tier-text">{{{text}}}</span>
+        <span class="stonetop-spring-tier-label">{{{this.label}}}</span>
+        <span class="stonetop-spring-tier-text">{{{this.text}}}</span>
       </li>
       {{/each}}
     </ul>
@@ -52,10 +52,10 @@
         {{#each gains}}
         <li class="stonetop-season-gain">
           <label class="stonetop-season-gain-label">
-            <input type="checkbox" class="stonetop-season-gain-check" data-gain-key="{{key}}" {{#if checked}}checked{{/if}}>
+            <input type="checkbox" class="stonetop-season-gain-check" data-gain-key="{{this.key}}" {{#if checked}}checked{{/if}}>
             <span class="stonetop-season-gain-body">
-              <span class="stonetop-season-gain-name">{{name}}</span>
-              <span class="stonetop-season-gain-text">{{text}}</span>
+              <span class="stonetop-season-gain-name">{{this.name}}</span>
+              <span class="stonetop-season-gain-text">{{this.text}}</span>
             </span>
           </label>
         </li>
@@ -73,10 +73,10 @@
         <ul class="stonetop-spring-qa-list">
           {{#each qa.rows}}
           <li class="stonetop-spring-qa">
-            <p class="stonetop-spring-qa-prompt">{{{prompt}}}</p>
+            <p class="stonetop-spring-qa-prompt">{{{this.prompt}}}</p>
             <textarea class="stonetop-spring-qa-answer" rows="2"
-                      data-answer-key="{{../qa.key}}" data-answer-id="{{id}}"
-                      placeholder="{{../qa.placeholder}}">{{answer}}</textarea>
+                      data-answer-key="{{../qa.key}}" data-answer-id="{{this.id}}"
+                      placeholder="{{../qa.placeholder}}">{{this.answer}}</textarea>
           </li>
           {{/each}}
         </ul>
@@ -98,7 +98,7 @@
     {{#if hookGuide}}
     <details class="stonetop-guide-aside stonetop-spring-hook-guide">
       <summary class="stonetop-guide-aside-head">Turning the result into a hook</summary>
-      <div class="stonetop-guide-aside-body stonetop-spring-body">{{{hookGuide}}}</div>
+      <div class="stonetop-guide-aside-body stonetop-spring-body">{{{this.hookGuide}}}</div>
     </details>
     {{/if}}
 
@@ -110,7 +110,7 @@
 
   <div class="stonetop-guide-nav">
     <button class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
-    <span class="stonetop-spring-step-label">{{stepLabel}}</span>
+    <span class="stonetop-spring-step-label">{{this.stepLabel}}</span>
     {{#if isLast}}
     <button class="stonetop-spring-done stonetop-guide-btn--primary">Done ✦</button>
     {{else}}

@@ -22,7 +22,7 @@
 
 	{{#*inline "arcanumCard"}}
 	{{#if owned}}
-	<div class="stonetop-arcanum-card{{#if isSpread}} stonetop-arcanum-card--spread{{/if}}{{#if collapsed}} is-collapsed{{/if}}" data-slug="{{slug}}" data-section="{{slug}}"{{#if greaterConduit}} data-greater-conduit="true"{{/if}}>
+	<div class="stonetop-arcanum-card{{#if isSpread}} stonetop-arcanum-card--spread{{/if}}{{#if collapsed}} is-collapsed{{/if}}" data-slug="{{this.slug}}" data-section="{{this.slug}}"{{#if greaterConduit}} data-greater-conduit="true"{{/if}}>
 
 		{{!-- Corner toggle: clamp the whole card to just its title bar. Persisted per
 		      actor; the chevron rotates like the section headers (see stonetop.css). --}}
@@ -45,7 +45,7 @@
 		</div>
 		{{#if sectionEditable}}
 		<div class="stonetop-arcanum-footer">
-			<button type="button" class="stonetop-arcanum-delete" data-slug="{{slug}}"
+			<button type="button" class="stonetop-arcanum-delete" data-slug="{{this.slug}}"
 			        title="{{localize 'stonetop.arcana.removeArcanum'}}">
 				<i class="fas fa-trash"></i> Remove
 			</button>
@@ -63,11 +63,11 @@
 		      its back (back-only view). Always present in a spread. --}}
 		<div class="stonetop-arcanum-header">
 			{{#if img}}
-			<img class="stonetop-arcanum-thumb" src="{{img}}" data-name="{{front.title}}" alt="" title="{{front.title}}">
+			<img class="stonetop-arcanum-thumb" src="{{this.img}}" data-name="{{front.title}}" alt="" title="{{front.title}}">
 			{{/if}}
 			<div class="stonetop-arcanum-header-left">
 				<span class="stonetop-arcanum-title stonetop-arcanum-title--clickable"
-				      data-slug="{{slug}}" data-flipped="false">{{front.title}}</span>
+				      data-slug="{{this.slug}}" data-flipped="false">{{front.title}}</span>
 				{{#if front.item}}
 				<div class="stonetop-inv-item{{#if checked}} is-checked{{/if}}">
 					{{#if front.item.weight}}
@@ -96,7 +96,7 @@
 			<div class="stonetop-arcanum-backowed">
 				<i class="fas fa-hourglass-half"></i>
 				<span>{{localize "stonetop.arcana.backOwedText"}}</span>
-				<button type="button" class="stonetop-arcanum-backowed-btn" data-slug="{{slug}}">
+				<button type="button" class="stonetop-arcanum-backowed-btn" data-slug="{{this.slug}}">
 					{{localize "stonetop.arcana.backOwedStudy"}}
 				</button>
 			</div>
@@ -106,7 +106,7 @@
 			<ul class="stonetop-arcanum-unlock-list">
 				{{#each front.unlock.requirements}}
 				{{#if (eq type "text")}}
-				<li class="stonetop-arcanum-unlock-text">{{{content}}}</li>
+				<li class="stonetop-arcanum-unlock-text">{{{this.content}}}</li>
 				{{else}}
 				<li class="stonetop-arcanum-unlock-option">
 					<span class="stonetop-arcanum-unlock-checks">
@@ -118,7 +118,7 @@
 						       {{#if (lt @index ../count)}}checked{{/if}}>
 						{{/each}}
 					</span>
-					<span class="stonetop-arcanum-unlock-desc">{{{description}}}</span>
+					<span class="stonetop-arcanum-unlock-desc">{{{this.description}}}</span>
 				</li>
 				{{/if}}
 				{{/each}}
@@ -131,7 +131,7 @@
 			<div class="stonetop-arcanum-backowed stonetop-arcanum-unlock-choice-owed">
 				<i class="fas fa-book-open"></i>
 				<span>{{localize "stonetop.arcana.unlockChoiceOwed" name=unlockChoice.name owed=unlockChoice.owed}}</span>
-				<button type="button" class="stonetop-arcanum-unlock-choice-btn" data-slug="{{slug}}">
+				<button type="button" class="stonetop-arcanum-unlock-choice-btn" data-slug="{{this.slug}}">
 					{{localize "stonetop.arcana.unlockChoiceChoose"}}
 				</button>
 			</div>
@@ -145,7 +145,7 @@
 			      leading <h3>Consequences</h3> is folded behind a collapsible at render time
 			      (activateListeners), and the front text's "(see reverse)" becomes "(see below)". --}}
 			{{#if showFrontConsequences}}
-			{{{consequences}}}
+			{{{this.consequences}}}
 			{{/if}}
 		</div>
 		</div>
@@ -159,7 +159,7 @@
 		<div class="stonetop-arcanum-header">
 			<div class="stonetop-arcanum-header-left">
 				<span class="stonetop-arcanum-title stonetop-arcanum-title--clickable"
-				      data-slug="{{slug}}" data-flipped="true">{{back.title}}</span>
+				      data-slug="{{this.slug}}" data-flipped="true">{{back.title}}</span>
 				{{#if back.item}}
 				<div class="stonetop-inv-item{{#if checked}} is-checked{{/if}}">
 					{{#if back.item.weight}}
@@ -195,13 +195,13 @@
 			{{{back.description}}}
 			{{#if back.move}}
 			{{!-- The trigger is the move's handle: click it to roll or post it, as a mystery's name. --}}
-			<p class="stonetop-arcanum-move-trigger"><strong><em><span class="stonetop-arcanum-move-name" data-arcanum-slug="{{slug}}" data-move-slug="{{back.move.slug}}" role="button" tabindex="0">{{back.move.name}}</span></em></strong></p>
+			<p class="stonetop-arcanum-move-trigger"><strong><em><span class="stonetop-arcanum-move-name" data-arcanum-slug="{{this.slug}}" data-move-slug="{{back.move.slug}}" role="button" tabindex="0">{{back.move.name}}</span></em></strong></p>
 			{{{moveBody back.move.description}}}
 			{{/if}}
 			{{#if summon}}
 			<div class="stonetop-arcanum-summon">
 				<button type="button" class="stonetop-arcanum-summon-btn{{#if summon.added}} is-added{{/if}}"
-				        data-slug="{{slug}}"{{#if summon.added}} disabled{{/if}}>
+				        data-slug="{{this.slug}}"{{#if summon.added}} disabled{{/if}}>
 					<i class="fas {{#if summon.added}}fa-check{{else}}fa-user-plus{{/if}}"></i> {{summon.label}}
 				</button>
 			</div>
@@ -216,7 +216,7 @@
 		      back header on a back-only flip). Present only in the DOM; CSS reveals it while
 		      the card carries .is-collapsed. --}}
 		{{#if frontLead}}
-		<div class="stonetop-arcanum-collapsed-preview">{{{frontLead}}}</div>
+		<div class="stonetop-arcanum-collapsed-preview">{{{this.frontLead}}}</div>
 		{{/if}}
 
 		{{#if (or sectionEditable canToggleBoth)}}
@@ -226,7 +226,7 @@
 			      hides while the card is spread open (nothing to flip). Sits left of show-both. --}}
 			{{#if canFlip}}
 			<button type="button" class="stonetop-arcanum-flip-btn"
-			        data-slug="{{slug}}" data-show="{{showBack}}">
+			        data-slug="{{this.slug}}" data-show="{{this.showBack}}">
 				<i class="fas fa-rotate"></i>
 				{{#if showBack}}{{localize "stonetop.arcana.showFront"}}{{else}}{{localize "stonetop.arcana.showBack"}}{{/if}}
 			</button>
@@ -236,7 +236,7 @@
 			      can be opened/closed while reading in play mode. Reveal/Remove stay edit-only. --}}
 			{{#if canToggleBoth}}
 			<button type="button" class="stonetop-arcanum-showboth-btn{{#if showBoth}} is-active{{/if}}"
-			        data-slug="{{slug}}" data-show="{{showBoth}}">
+			        data-slug="{{this.slug}}" data-show="{{this.showBoth}}">
 				<i class="fas {{#if showBoth}}fa-book{{else}}fa-book-open{{/if}}"></i>
 				{{#if showBoth}}{{localize "stonetop.arcana.showFrontOnly"}}{{else}}{{localize "stonetop.arcana.showBothSides"}}{{/if}}
 			</button>
@@ -247,13 +247,13 @@
 			      Remove stays edit-only. --}}
 			{{#if canReveal}}
 			<button type="button" class="stonetop-arcanum-reveal-btn{{#if revealedToPlayers}} is-revealed{{/if}}"
-			        data-slug="{{slug}}" data-revealed="{{revealedToPlayers}}">
+			        data-slug="{{this.slug}}" data-revealed="{{this.revealedToPlayers}}">
 				<i class="fas {{#if revealedToPlayers}}fa-eye-slash{{else}}fa-eye{{/if}}"></i>
 				{{#if revealedToPlayers}}{{localize "stonetop.arcana.hideFromPlayers"}}{{else}}{{localize "stonetop.arcana.revealToPlayers"}}{{/if}}
 			</button>
 			{{/if}}
 			{{#if sectionEditable}}
-			<button type="button" class="stonetop-arcanum-delete" data-slug="{{slug}}"
+			<button type="button" class="stonetop-arcanum-delete" data-slug="{{this.slug}}"
 			        title="{{localize 'stonetop.arcana.removeArcanum'}}">
 				<i class="fas fa-trash"></i> Remove
 			</button>
@@ -273,13 +273,13 @@
 		<div class="stonetop-arcanum-body stonetop-arcanum-lead-body">
 			<i class="fas fa-map-location-dot stonetop-arcanum-lead-icon"></i>
 			<p>{{localize "stonetop.arcana.leadText"}}</p>
-			<button type="button" class="stonetop-arcanum-discover-btn" data-slug="{{slug}}">
+			<button type="button" class="stonetop-arcanum-discover-btn" data-slug="{{this.slug}}">
 				{{localize "stonetop.arcana.discover"}}
 			</button>
 		</div>
 		{{#if sectionEditable}}
 		<div class="stonetop-arcanum-footer">
-			<button type="button" class="stonetop-arcanum-delete" data-slug="{{slug}}"
+			<button type="button" class="stonetop-arcanum-delete" data-slug="{{this.slug}}"
 			        title="{{localize 'stonetop.arcana.removeArcanum'}}">
 				<i class="fas fa-trash"></i> Remove
 			</button>
@@ -299,12 +299,12 @@
 			      to Know Things about the arcanum"); handing it over without one is the GM's
 			      move, so "Give the card" renders only for them. --}}
 			<div class="stonetop-arcanum-identify-row">
-				<button type="button" class="stonetop-arcanum-identify-btn" data-slug="{{slug}}"
+				<button type="button" class="stonetop-arcanum-identify-btn" data-slug="{{this.slug}}"
 				        title="{{localize 'stonetop.arcana.identifyHint'}}">
 					<i class="fas fa-dice-d6"></i> {{localize "stonetop.arcana.identify"}}
 				</button>
 				{{#if canGiveCard}}
-				<button type="button" class="stonetop-arcanum-givecard-btn" data-slug="{{slug}}"
+				<button type="button" class="stonetop-arcanum-givecard-btn" data-slug="{{this.slug}}"
 				        title="{{localize 'stonetop.arcana.giveCardHint'}}">
 					<i class="fas fa-hand-holding"></i> {{localize "stonetop.arcana.giveCard"}}
 				</button>
@@ -313,7 +313,7 @@
 		</div>
 		{{#if sectionEditable}}
 		<div class="stonetop-arcanum-footer">
-			<button type="button" class="stonetop-arcanum-delete" data-slug="{{slug}}"
+			<button type="button" class="stonetop-arcanum-delete" data-slug="{{this.slug}}"
 			        title="{{localize 'stonetop.arcana.removeArcanum'}}">
 				<i class="fas fa-trash"></i> Remove
 			</button>
