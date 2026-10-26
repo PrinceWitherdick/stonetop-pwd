@@ -80,8 +80,10 @@ import { askWithButtons } from "../../utils/ask-with-buttons.js";
 import { canRewriteCard, moveChatCard } from "../../utils/chat.js";
 import { belongsToMessage } from "../../utils/picked-option-button.js";
 import { withCardLatch } from "../../utils/card-latch.js";
+import { inCardTurn } from "../../utils/card-queue.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
+import { NO_ANSWER, relayOutcome } from "../../utils/relay-landed.js";
 import { isPrimaryGM } from "../../utils/primary-gm.js";
 import { partyCharacters } from "../../utils/playbook-actors.js";
 import { followerCardFor, followerMasterIndex } from "./follower-masters.js";
@@ -771,8 +773,8 @@ export async function healPatient(message, patient, picks, { reduced = false, me
 		if (patient?.isOwner && (!card || card.character.isOwner)) return applyBath(patient, picks, { cardFor: () => card });
 	}
 	const ask = { messageId: message?.id ?? null, patientUuid: patient?.uuid ?? null, picks, reduced, userId, ...(memberKey ? { memberKey } : {}) };
-	const out = await askGMClient(gm, BATH_QUERY, ask, { what: "heal with Bath of Healing Light" });
-	return out && typeof out === "object" ? out : null;
+	const out = await askGMClient(gm, BATH_QUERY, ask, { fallback: gm ? NO_ANSWER : null, what: "heal with Bath of Healing Light" });
+	return out === NO_ANSWER || (out && typeof out === "object") ? out : null;
 }
 
 /**
@@ -784,6 +786,14 @@ export async function healPatient(message, patient, picks, { reduced = false, me
  * same validated picks: the ask carries no amount and no card. For a group follower the ask names the
  * member by key, and that key must be one on the group's roster as this client reads it (bathGroupFor);
  * a key for anyone else, a fallen member's, or none for a group, is refused. Answers applyBath's record, or null.
+ *
+ * The reduced effect is read off the card when the card says so (an Empowered consequence picked before the
+ * roll); otherwise it is the asker's tick in the picks window, which the card does not store.
+ *
+ * THE CARD IS STAMPED SETTLED HERE, BEFORE THE HEAL, in the card's turn. The asker gives the card back when no
+ * answer reaches it (a slow answer, or a write that threw part-way), and a second press would then heal the
+ * patient twice. Stamped first, a second ask finds the card settled and is refused, and the asker, reading the
+ * stamp, keeps the card. A heal that wrote nothing (applyBath's null) puts the card back as it was asked.
  */
 export async function handleBathQuery(data, context = {}, deps = {}) {
 	const { users = globalThis.game?.users, messages = globalThis.game?.messages, resolve = resolveSync, apply = applyBath, groupFor = bathGroupFor } = deps;
@@ -793,21 +803,29 @@ export async function handleBathQuery(data, context = {}, deps = {}) {
 	const lightbearer = message ? speakerActor(message) : null;
 	if (!user || !lightbearer?.testUserPermission?.(user, "OWNER")) return null;
 	if (!cardInvocations(message).includes(BATH_OF_HEALING_LIGHT)) return null;
-	// Latched by the asking client before it asked, and not yet settled with a name.
-	if (message.getFlag(SYSTEM_ID, BATH_FLAG) !== true) return null;
 	const patient = typeof data?.patientUuid === "string" ? resolve(data.patientUuid) : null;
 	if (!isBathPatient(patient)) return null;
 	const picks = (Array.isArray(data?.picks) ? data.picks : [])
 		.map(pick => ({ key: String(pick?.key ?? ""), ...(pick?.ref ? { ref: String(pick.ref) } : {}) }));
 	const empowered = !!message.getFlag(SYSTEM_ID, CARD_EMPOWERED_FLAG);
+	const reduced = !!data?.reduced || invokeCardReduced(null, message);
 	// Whether the debility and wound choices can reach the patient is read off the patient, not the ask.
-	if (!validateBathPicks(picks, { reduced: !!data?.reduced, empowered, hpOnly: bathHpOnly(patient) }).ok) return null;
+	if (!validateBathPicks(picks, { reduced, empowered, hpOnly: bathHpOnly(patient) }).ok) return null;
 	// Which member of a group follower, checked against the roster itself, not taken off the ask; a
 	// member marked fallen is on the roster but not the light's to raise.
 	const memberKey = typeof data?.memberKey === "string" && data.memberKey ? data.memberKey : null;
 	const group = groupFor(patient, { resolve });
 	if (group?.kind === "roster" ? !group.members.some(m => m.key === memberKey && !m.dead) : memberKey) return null;
-	return memberKey ? apply(patient, picks, { memberKey }) : apply(patient, picks);
+	const stamp = (memberKey ? group.members.find(m => m.key === memberKey)?.name : null) || patient.name || String(patient.uuid ?? "patient");
+	return inCardTurn(message, async () => {
+		// Latched by the asking client before it asked, and not yet settled with a name (by this client either).
+		if (message.getFlag(SYSTEM_ID, BATH_FLAG) !== true) return null;
+		await message.setFlag(SYSTEM_ID, BATH_FLAG, stamp);
+		// A throw keeps the stamp: part of the heal may already be written, and it must not be pressed again.
+		const result = memberKey ? await apply(patient, picks, { memberKey }) : await apply(patient, picks);
+		if (!result) await message.setFlag(SYSTEM_ID, BATH_FLAG, true);
+		return result ?? null;
+	});
 }
 
 /** The result card's body: what was put on the sheet, and what is the table's to play out. */
@@ -864,7 +882,18 @@ export async function settleBathOfHealingLight(message, lightbearer, {
 			return false;
 		}
 		const result = await heal(message, patient, answer.picks, { reduced: answer.reduced, ...(member ? { memberKey: member.key } : {}) });
-		if (!result) {
+		if (!result || result === NO_ANSWER) {
+			// No answer reached us, but the GM's client may take the Bath all the same: it stamps the card settled
+			// before it heals (handleBathQuery). Read again, watched a while when no answer came (relay-landed.js),
+			// and a card it settled is kept, never given back for a second heal.
+			const stamped = () => {
+				const now = message.getFlag?.(SYSTEM_ID, BATH_FLAG);
+				return typeof now === "string" && now ? now : null;
+			};
+			if (await relayOutcome(message, result, stamped)) {
+				globalThis.ui?.notifications?.warn?.(format(`${KEY}.bathNoAnswer`, { name: stamped() }));
+				return true;
+			}
 			globalThis.ui?.notifications?.warn?.(format(`${KEY}.bathNoGm`, { name: patient.name }));
 			return false;
 		}
@@ -872,7 +901,9 @@ export async function settleBathOfHealingLight(message, lightbearer, {
 			content: moveChatCard(effectTitle(BATH_NAME, { reduced: answer.reduced, empowered }), bathResultHtml(lightbearer, result)),
 			speaker: globalThis.ChatMessage?.getSpeaker?.({ actor: lightbearer }),
 		});
-		await message.setFlag(SYSTEM_ID, BATH_FLAG, member?.name ?? patient.name);
+		// Already stamped with this name when the GM's client took the Bath (handleBathQuery).
+		const settled = member?.name ?? patient.name;
+		if (message.getFlag?.(SYSTEM_ID, BATH_FLAG) !== settled) await message.setFlag(SYSTEM_ID, BATH_FLAG, settled);
 		return true;
 	});
 }

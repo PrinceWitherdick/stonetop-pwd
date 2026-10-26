@@ -107,8 +107,14 @@ export function useUpUpdate(card, flags, pick, scope) {
 		if (kind === "detail") {
 			const base = followerDetailBase(card.ftype, card.slug ?? "");
 			const list = followerDetailFlags(flags, card.ftype, card.slug ?? "").gear;
-			const i = Number(id);
-			if (!Array.isArray(list) || !list[i]) return null;
+			if (!Array.isArray(list)) return null;
+			// The index is the card's, drawn when the window opened; the list is read now. A row added, removed
+			// or moved since would put another item under that index, so the row is found again by its label
+			// (the one the window named), and one no longer carried is not lost twice.
+			const named = g => !!g?.checked && (!label || stripHtmlToText(g?.label ?? "") === label);
+			const at = Number(id);
+			const i = named(list[at]) ? at : list.findIndex(named);
+			if (i < 0) return null;
 			// Unticked, not struck off: it stays on the list to be re-Outfitted, as a dropped tick always has.
 			const next = list.map((g, j) => (j === i ? { ...g, checked: false } : g));
 			return { update: { [`flags.${scope}.${base}.gear`]: next }, what: `${label || "an item"} lost` };

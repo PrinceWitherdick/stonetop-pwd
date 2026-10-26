@@ -12,7 +12,7 @@
       <i class="fas fa-people-group stonetop-guide-banner-icon" aria-hidden="true"></i>
       <div class="stonetop-guide-banner-info">
         <div class="stonetop-guide-banner-title">Call for Struggle as One</div>
-        <div class="stonetop-guide-banner-sub">{{#if askerName}}{{askerName}}'s player asks for a Struggle as One. {{/if}}Say the danger and the stakes, then who rolls what. Everyone rolls at once; each result goes to its player and you until you share them.</div>
+        <div class="stonetop-guide-banner-sub">{{#if askerName}}{{this.askerName}}'s player asks for a Struggle as One. {{/if}}Say the danger and the stakes, then who rolls what. Everyone rolls at once; each result goes to its player and you until you share them.</div>
       </div>
     </div>
 
@@ -20,10 +20,10 @@
 
     <section class="stonetop-struggle-brief">
       <label class="stonetop-struggle-field"><span class="stonetop-camp-part-label">The danger, and the stakes</span>
-        <textarea name="danger" rows="2" placeholder="The crinwin notice you, and the party is caught in the open.">{{danger}}</textarea>
+        <textarea name="danger" rows="2" placeholder="The crinwin notice you, and the party is caught in the open.">{{this.danger}}</textarea>
       </label>
       <label class="stonetop-struggle-field"><span class="stonetop-camp-part-label">The party's approach</span>
-        <textarea name="approach" rows="2" placeholder="Single file, weapons out. Rhianna leads and picks the firmest ground.">{{approach}}</textarea>
+        <textarea name="approach" rows="2" placeholder="Single file, weapons out. Rhianna leads and picks the firmest ground.">{{this.approach}}</textarea>
       </label>
       {{#if showJourney}}
       <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" name="journey"{{#if journey}} checked{{/if}}><span>This is part of a journey (for Home on the Range and Trailblazer)</span></label>
@@ -36,11 +36,11 @@
 
     <ol class="stonetop-camp-rows stonetop-struggle-rows">
       {{#each pcs}}
-      <li class="stonetop-camp-row stonetop-struggle-setup-row{{#unless include}} is-left-out{{/unless}}" data-pc="{{actorId}}">
+      <li class="stonetop-camp-row stonetop-struggle-setup-row{{#unless include}} is-left-out{{/unless}}" data-pc="{{this.actorId}}">
         <header class="stonetop-camp-row-head">
-          {{#if img}}<img class="stonetop-camp-portrait" src="{{img}}" alt="">{{/if}}
-          <label class="stonetop-camp-check stonetop-struggle-include"><input type="checkbox" class="stonetop-check" data-pc="{{actorId}}" data-field="include"{{#if include}} checked{{/if}}><span class="stonetop-camp-name">{{name}}</span></label>
-          {{#if loadText}}<span class="stonetop-camp-state">{{loadText}}</span>{{/if}}
+          {{#if img}}<img class="stonetop-camp-portrait" src="{{this.img}}" alt="">{{/if}}
+          <label class="stonetop-camp-check stonetop-struggle-include"><input type="checkbox" class="stonetop-check" data-pc="{{this.actorId}}" data-field="include"{{#if include}} checked{{/if}}><span class="stonetop-camp-name">{{this.name}}</span></label>
+          {{#if loadText}}<span class="stonetop-camp-state">{{this.loadText}}</span>{{/if}}
         </header>
 
         {{#if include}}
@@ -48,7 +48,7 @@
           <legend class="stonetop-camp-part-label">Rolls (none picked: their choice)</legend>
           <div class="stonetop-struggle-chips">
             {{#each stats}}
-            <label class="stonetop-struggle-chip"><input type="checkbox" class="stonetop-struggle-chip-input" data-pc="{{../actorId}}" data-field="stat" value="{{key}}"{{#if checked}} checked{{/if}}><span>+{{label}}</span></label>
+            <label class="stonetop-struggle-chip"><input type="checkbox" class="stonetop-struggle-chip-input" data-pc="{{../actorId}}" data-field="stat" value="{{this.key}}"{{#if checked}} checked{{/if}}><span>+{{this.label}}</span></label>
             {{/each}}
           </div>
         </fieldset>
@@ -56,25 +56,25 @@
         <div class="stonetop-camp-part">
           <div class="stonetop-struggle-fields">
             <label><span>Rolls with</span>
-              <select data-pc="{{actorId}}" data-field="mode">{{#each modes}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</select>
+              <select data-pc="{{this.actorId}}" data-field="mode">{{#each modes}}<option value="{{this.value}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}</select>
             </label>
             <label><span>Outside aid</span>
-              <select class="stonetop-struggle-aid" data-pc="{{actorId}}" data-field="aidPick">
+              <select class="stonetop-struggle-aid" data-pc="{{this.actorId}}" data-field="aidPick">
                 <option value="">Nobody</option>
                 {{#each aid.groups}}
-                <optgroup label="{{label}}">{{#each options}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</optgroup>
+                <optgroup label="{{this.label}}">{{#each options}}<option value="{{this.value}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}</optgroup>
                 {{/each}}
                 <option value="other"{{#if aid.isOther}} selected{{/if}}>Someone else</option>
               </select>
             </label>
             {{#if aid.isOther}}
             <label><span>Who</span>
-              <input type="text" data-pc="{{actorId}}" data-field="aidOther" value="{{aid.other}}" placeholder="Their name">
+              <input type="text" data-pc="{{this.actorId}}" data-field="aidOther" value="{{aid.other}}" placeholder="Their name">
             </label>
             {{/if}}
             {{#if aid.picked}}
             <label><span>Aid gives</span>
-              <select data-pc="{{actorId}}" data-field="aidAdv">{{#each aid.gives}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</select>
+              <select data-pc="{{this.actorId}}" data-field="aidAdv">{{#each aid.gives}}<option value="{{this.value}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}</select>
             </label>
             {{/if}}
           </div>
@@ -84,7 +84,7 @@
         {{#if ticks.length}}
         <div class="stonetop-camp-part">
           {{#each ticks}}
-          <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-pc="{{../actorId}}" data-field="tick" value="{{name}}"{{#if checked}} checked{{/if}}><span>{{label}}</span></label>
+          <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-pc="{{../actorId}}" data-field="tick" value="{{this.name}}"{{#if checked}} checked{{/if}}><span>{{this.label}}</span></label>
           {{/each}}
         </div>
         {{/if}}
@@ -96,17 +96,17 @@
 
         {{#if followers.length}}
         <div class="stonetop-camp-part stonetop-struggle-followers">
-          <p class="stonetop-camp-part-label">Followers (roll through {{name}})</p>
+          <p class="stonetop-camp-part-label">Followers (roll through {{this.name}})</p>
           {{#each followers}}
-          <div class="stonetop-struggle-follower" data-follower="{{fkey}}">
-            <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-follower="{{fkey}}" data-field="include"{{#if include}} checked{{/if}}><span>{{name}}{{#if isGroup}} (rolls once for the whole group){{/if}}</span></label>
+          <div class="stonetop-struggle-follower" data-follower="{{this.fkey}}">
+            <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-follower="{{this.fkey}}" data-field="include"{{#if include}} checked{{/if}}><span>{{this.name}}{{#if isGroup}} (rolls once for the whole group){{/if}}</span></label>
             {{#if include}}
             <div class="stonetop-struggle-follower-body">
-              <p class="stonetop-camp-note">{{tagsText}}</p>
-              <select class="stonetop-struggle-bonus" aria-label="Rolls" data-follower="{{fkey}}" data-field="bonus">{{#each bonuses}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</select>
+              <p class="stonetop-camp-note">{{this.tagsText}}</p>
+              <select class="stonetop-struggle-bonus" aria-label="Rolls" data-follower="{{this.fkey}}" data-field="bonus">{{#each bonuses}}<option value="{{this.value}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}</select>
               <div class="stonetop-struggle-fields">
                 <label><span>Rolls with</span>
-                  <select data-follower="{{fkey}}" data-field="mode">{{#each modes}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</select>
+                  <select data-follower="{{this.fkey}}" data-field="mode">{{#each modes}}<option value="{{this.value}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}</select>
                 </label>
               </div>
             </div>
@@ -125,7 +125,7 @@
   </div>
 
   <div class="stonetop-guide-nav">
-    <button type="button" class="stonetop-guide-btn--primary" data-setup-action="call"{{#unless canCall}} disabled data-tooltip="{{callBlocked}}" data-tooltip-direction="UP"{{/unless}}><i class="fas fa-dice" aria-hidden="true"></i> Call for rolls</button>
+    <button type="button" class="stonetop-guide-btn--primary" data-setup-action="call"{{#unless canCall}} disabled data-tooltip="{{this.callBlocked}}" data-tooltip-direction="UP"{{/unless}}><i class="fas fa-dice" aria-hidden="true"></i> Call for rolls</button>
     <button type="button" data-setup-action="dismiss">{{#if askerName}}Don't call it{{else}}Cancel{{/if}}</button>
   </div>
 

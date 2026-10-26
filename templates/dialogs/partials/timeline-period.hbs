@@ -19,11 +19,11 @@
 
       Context: one period view-model (timeline-view.js#periodVM). --}}
 {{#if startsYear}}
-<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}>{{> stonetop.timeline-year-chip}}{{#if ageRoom}}<span class="stonetop-timeline-age-room" aria-hidden="true" style="--age-room-share: {{ageRoomShare}};">{{ageRoom}}</span>{{/if}}</h2>
+<h2 class="stonetop-timeline-year" data-year="{{this.year}}"{{#if ageMark}} data-age-mark{{/if}}>{{> stonetop.timeline-year-chip}}{{#if ageRoom}}<span class="stonetop-timeline-age-room" aria-hidden="true" style="--age-room-share: {{this.ageRoomShare}};">{{this.ageRoom}}</span>{{/if}}</h2>
 {{/if}}
 {{#unless ageMark}}
-<section class="stonetop-timeline-period{{#if ghost}} stonetop-timeline-period--ghost{{/if}}" data-period="{{key}}"{{#unless undated}} data-year="{{year}}"{{/unless}}>
-	<header class="stonetop-timeline-period-head{{#if seasonClass}} {{seasonClass}}{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}">
+<section class="stonetop-timeline-period{{#if ghost}} stonetop-timeline-period--ghost{{/if}}" data-period="{{this.key}}"{{#unless undated}} data-year="{{this.year}}"{{/unless}}>
+	<header class="stonetop-timeline-period-head{{#if seasonClass}} {{this.seasonClass}}{{/if}}{{#if seasonNotes.length}} stonetop-timeline-head--notes{{/if}}">
 		{{~> "stonetop.timeline-period-head"}}
 	</header>
 

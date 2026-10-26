@@ -12,9 +12,9 @@
 <div class="stonetop-exp-load-pick">
   <span class="stonetop-exp-load-picklab">On this trip:</span>
   {{#each loadReadout.chips}}
-  <button type="button" class="stonetop-exp-load-chip{{#unless on}} is-out{{/unless}}{{#if undeadKind}} is-undead is-undead--{{undeadKind}}{{/if}}" data-actor-id="{{id}}"
+  <button type="button" class="stonetop-exp-load-chip{{#unless on}} is-out{{/unless}}{{#if undeadKind}} is-undead is-undead--{{this.undeadKind}}{{/if}}" data-actor-id="{{this.id}}"
           aria-pressed="{{#if on}}true{{else}}false{{/if}}">
-    <span class="tick" aria-hidden="true">✓</span> <span class="stonetop-chip-text">{{name}}</span>
+    <span class="tick" aria-hidden="true">✓</span> <span class="stonetop-chip-text">{{this.name}}</span>
   </button>
   {{/each}}
 </div>
@@ -30,25 +30,25 @@
 </div>
 
 {{#each loadReadout.rows}}
-<div class="stonetop-exp-load-row {{levelClass}}{{#if isFollower}} is-follower{{/if}}{{#if undead}} is-undead is-undead--{{undead.kind}}{{/if}}">
+<div class="stonetop-exp-load-row {{this.levelClass}}{{#if isFollower}} is-follower{{/if}}{{#if undead}} is-undead is-undead--{{undead.kind}}{{/if}}">
   {{!-- `stonetop-portrait-box` marks the CLIPPING box a hover preview measures itself against,
         so a hand-framed portrait raises its enlarged card beside the face and not off where the
         oversized image really sits (module/utils/avatar-preview.js). --}}
-  <span class="stonetop-exp-load-ava stonetop-portrait-box{{#if img}} stonetop-exp-load-ava--photo{{/if}}">{{#if img}}<img class="stonetop-exp-load-ava-img" src="{{img}}" alt="" draggable="false" data-name="{{name}}"{{#if previewSub}} data-subtitle="{{previewSub}}"{{/if}}{{#if imgStyle}} style="{{imgStyle}}"{{/if}}>{{else}}{{initial}}{{/if}}</span>
-  <span class="stonetop-exp-load-name">{{name}}{{#if sub}} <em>{{sub}}</em>{{/if}}{{#if folTag}} <span class="stonetop-exp-load-fol">{{folTag}}</span>{{/if}}{{#if undead}} <span class="stonetop-exp-load-undead">{{undead.label}}</span>{{/if}}</span>
+  <span class="stonetop-exp-load-ava stonetop-portrait-box{{#if img}} stonetop-exp-load-ava--photo{{/if}}">{{#if img}}<img class="stonetop-exp-load-ava-img" src="{{this.img}}" alt="" draggable="false" data-name="{{this.name}}"{{#if previewSub}} data-subtitle="{{this.previewSub}}"{{/if}}{{#if imgStyle}} style="{{this.imgStyle}}"{{/if}}>{{else}}{{this.initial}}{{/if}}</span>
+  <span class="stonetop-exp-load-name">{{this.name}}{{#if sub}} <em>{{this.sub}}</em>{{/if}}{{#if folTag}} <span class="stonetop-exp-load-fol">{{this.folTag}}</span>{{/if}}{{#if undead}} <span class="stonetop-exp-load-undead">{{undead.label}}</span>{{/if}}</span>
   <span class="stonetop-exp-load-track">
     {{#each bands}}<span class="stonetop-exp-load-band">{{#each pips}}<i class="stonetop-exp-load-pip{{#if on}} on{{/if}}"></i>{{/each}}</span>{{/each}}
-    {{#if overflow}}<span class="stonetop-exp-load-over">+{{overflow}}</span>{{/if}}
+    {{#if overflow}}<span class="stonetop-exp-load-over">+{{this.overflow}}</span>{{/if}}
   </span>
-  <span class="stonetop-exp-load-pill {{pillClass}}">{{levelLabel}}</span>
-  <span class="stonetop-exp-load-count"><b>{{marks}}</b>/{{cap}}</span>
+  <span class="stonetop-exp-load-pill {{this.pillClass}}">{{this.levelLabel}}</span>
+  <span class="stonetop-exp-load-count"><b>{{this.marks}}</b>/{{this.cap}}</span>
   {{#if gated.length}}
   <span class="stonetop-exp-load-gated">
-    {{#each gated}}<span class="stonetop-exp-load-move {{#if active}}on{{else}}off{{/if}}"><span class="ic">{{#if active}}✓{{else}}✕{{/if}}</span> <span class="nm">{{name}}</span> <span class="rq">{{req}}</span></span>{{/each}}
+    {{#each gated}}<span class="stonetop-exp-load-move {{#if active}}on{{else}}off{{/if}}"><span class="ic">{{#if active}}✓{{else}}✕{{/if}}</span> <span class="nm">{{this.name}}</span> <span class="rq">{{this.req}}</span></span>{{/each}}
   </span>
   {{/if}}
   {{#if loadBonus}}<span class="stonetop-exp-load-note"><span class="mod">▲ {{loadBonus.from}}</span> {{loadBonus.caps}}</span>{{/if}}
-  {{#if note}}<span class="stonetop-exp-load-note{{#if noteDanger}} danger{{/if}}">{{#if noteDanger}}⚠ {{/if}}{{note}}</span>{{/if}}
+  {{#if note}}<span class="stonetop-exp-load-note{{#if noteDanger}} danger{{/if}}">{{#if noteDanger}}⚠ {{/if}}{{this.note}}</span>{{/if}}
 </div>
 {{/each}}
 {{else}}

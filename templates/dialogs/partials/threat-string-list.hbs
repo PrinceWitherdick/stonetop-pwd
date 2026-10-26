@@ -5,12 +5,12 @@
 
 	Params: key (data-list name), rows ([{index, value}]), placeholder, addLabel.
 --}}
-<div class="threat-list" data-list="{{key}}" data-kind="string">
+<div class="threat-list" data-list="{{this.key}}" data-kind="string">
 	{{#each rows}}
-	<div class="threat-list-row" data-index="{{index}}">
-		<input type="text" class="threat-list-text" data-field="value" value="{{value}}" placeholder="{{../placeholder}}">
-		<button type="button" class="threat-list-remove" data-list="{{../key}}" data-index="{{index}}" data-tooltip="Remove"><i class="fas fa-times"></i></button>
+	<div class="threat-list-row" data-index="{{this.index}}">
+		<input type="text" class="threat-list-text" data-field="value" value="{{this.value}}" placeholder="{{../placeholder}}">
+		<button type="button" class="threat-list-remove" data-list="{{../key}}" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-times"></i></button>
 	</div>
 	{{/each}}
-	<button type="button" class="threat-list-add" data-list="{{key}}"><i class="fas fa-plus"></i> {{addLabel}}</button>
+	<button type="button" class="threat-list-add" data-list="{{this.key}}"><i class="fas fa-plus"></i> {{this.addLabel}}</button>
 </div>

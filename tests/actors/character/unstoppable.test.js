@@ -43,7 +43,7 @@ function heavy({ hp = 0, state = DEATHS_DOOR_STATE.DYING, marks = 0, learned = t
 	const built = buildLiveCharacter({ slug: "the-heavy", name: "The Heavy", items: [unstoppable], flags });
 	built.actor.system.attributes.hp = { value: hp, max: 20 };
 	built.actor.id = "heavy-1";
-	globalThis.game.combats = inBattle ? [{ combatants: [{ actorId: built.actor.id }] }] : [];
+	globalThis.game.combats = inBattle ? [{ combatants: [{ actorId: built.actor.id, tokenId: "t-heavy" }] }] : [];
 	return built.actor;
 }
 
@@ -86,8 +86,10 @@ describe("keepsFightingAtZero", () => {
 	it("asks at the drop whether they stand in a fight, by actor id, from a linked token's combatant too", () => {
 		const actor = heavy({ hp: 5, state: null, fighting: false, inBattle: false });
 		expect(fightsOnWhenDropped(actor)).toBe(false);
-		expect(fightsOnWhenDropped(actor, { combats: [{ combatants: [{ actor: { id: actor.id } }] }] })).toBe(true);
-		expect(fightsOnWhenDropped(actor, { combats: [{ combatants: [{ actorId: "someone-else" }] }] })).toBe(false);
+		expect(fightsOnWhenDropped(actor, { combats: [{ combatants: [{ actor: { id: actor.id }, tokenId: "t-heavy" }] }] })).toBe(true);
+		expect(fightsOnWhenDropped(actor, { combats: [{ combatants: [{ actorId: "someone-else", tokenId: "t-other" }] }] })).toBe(false);
+		// The old Introductions roster: every character added by actor alone, on no map. Not a fight (FGT-5).
+		expect(fightsOnWhenDropped(actor, { combats: [{ combatants: [{ actorId: actor.id, tokenId: null }] }] })).toBe(false);
 		expect(fightsOnWhenDropped(heavy({ hp: 5, state: null, learned: false }))).toBe(false);
 	});
 

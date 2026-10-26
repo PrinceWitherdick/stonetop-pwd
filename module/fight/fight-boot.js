@@ -10,6 +10,10 @@
 // says nothing about how Stonetop fights. So with the tab off, `installCombatWindow` opens and closes
 // core's pop-out on the same rules and the same `fightWindowAuto` switch (fight-window.js).
 //
+// AND THE CLEAN-UP A FIGHT'S END OWES (combat/readiness-loss.js): Readiness, the Marshal's battle holds, the
+// shield wall and the mooks' grudges go when a fight ends whichever tracker ran it, so it is installed either
+// way, told that with the tab off every Combat is the fight.
+//
 // Wired in stonetop.js right after the settings are registered (a setting cannot be read before).
 
 import { SYSTEM_ID } from "../system-id.js";
@@ -74,6 +78,9 @@ export function registerFightTab({ config = globalThis.CONFIG, hooks = globalThi
 	if (!isFightTabEnabled()) {
 		// The tab is core's, and so is everything in it; only the window is ours (see the head of this file).
 		installCombatWindow({ hooks });
+		// And the rules a fight ending keeps, which are Stonetop's however the tracker looks: a core Combat is
+		// the fight then, so its end lets Readiness, the Marshal's holds and the mooks' grudges go (p.216).
+		installReadinessLoss({ hooks });
 		return false;
 	}
 	const Base = foundryNs?.applications?.sidebar?.tabs?.CombatTracker;

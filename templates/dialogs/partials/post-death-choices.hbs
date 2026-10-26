@@ -14,14 +14,14 @@
 <div class="stonetop-pdc">
 	{{#each choices.steps}}
 	{{#if isActive}}
-	<section class="stonetop-pdc-step{{#if done}} is-done{{/if}}" data-step="{{key}}">
+	<section class="stonetop-pdc-step{{#if done}} is-done{{/if}}" data-step="{{this.key}}">
 		<h3 class="stonetop-pdc-step-title">
 			<span class="stonetop-pdc-step-mark">{{#if done}}<i class="fas fa-check"></i>{{else}}<i class="fas fa-circle-dot"></i>{{/if}}</span>
-			<span>{{title}}</span>
+			<span>{{this.title}}</span>
 		</h3>
-		{{#if hint}}<p class="stonetop-pdc-step-hint">{{hint}}</p>{{/if}}
+		{{#if hint}}<p class="stonetop-pdc-step-hint">{{this.hint}}</p>{{/if}}
 		{{#if gm}}
-		<p class="stonetop-pdc-gm"><i class="fas fa-user-pen"></i> {{gmNote}}</p>
+		<p class="stonetop-pdc-gm"><i class="fas fa-user-pen"></i> {{this.gmNote}}</p>
 		{{/if}}
 
 		{{!-- Radio `name`s are document-global, so every group below is suffixed with the window's
@@ -33,10 +33,10 @@
 			<label class="stonetop-pdc-option{{#if selected}} is-chosen{{/if}}">
 				<span class="stonetop-pdc-option-head">
 					<input type="radio" class="stonetop-pdc-instinct" name="stonetop-pdc-instinct-{{../../choices.group}}"
-					       value="{{value}}"{{#if selected}} checked{{/if}}>
-					<strong class="stonetop-pdc-option-name">{{word}}</strong>
+					       value="{{this.value}}"{{#if selected}} checked{{/if}}>
+					<strong class="stonetop-pdc-option-name">{{this.word}}</strong>
 				</span>
-				<span class="stonetop-pdc-option-body">{{description}}</span>
+				<span class="stonetop-pdc-option-body">{{this.description}}</span>
 			</label>
 			{{/each}}
 		</div>
@@ -62,26 +62,26 @@
 					{{!-- No `name`: these are independent, and grouping them as radios is what
 					      would make a second marked option hide the first. --}}
 					<input type="checkbox" class="stonetop-pdc-mark"
-					       data-section="{{../section}}" data-option="{{slug}}"
+					       data-section="{{../section}}" data-option="{{this.slug}}"
 					       {{#if marked}}checked{{/if}}{{#if locked}} disabled{{/if}}>
 					{{else}}
 					<input type="radio" class="stonetop-pdc-pick" name="stonetop-pdc-{{../key}}-{{../../choices.group}}"
-					       data-section="{{../section}}" data-option="{{slug}}"
+					       data-section="{{../section}}" data-option="{{this.slug}}"
 					       {{#if ../textOption}}data-writein="{{../textOption}}"{{/if}}
 					       {{#if marked}}checked{{/if}}{{#if locked}} disabled{{/if}}>
 					{{/if}}
-					<strong class="stonetop-pdc-option-name">{{label}}</strong>
+					<strong class="stonetop-pdc-option-name">{{this.label}}</strong>
 					{{#if crossedOff}}<span class="stonetop-pdc-option-tag">crossed off</span>{{/if}}
 					{{#if inflicted}}<span class="stonetop-pdc-option-tag">inflicted, never chosen</span>{{/if}}
 					{{#if carried}}<span class="stonetop-pdc-option-tag">{{localize "stonetop.postDeath.carriedOver"}}</span>{{/if}}
-					{{#if requiresLabel}}<span class="stonetop-pdc-option-tag">needs {{requiresLabel}}</span>{{/if}}
+					{{#if requiresLabel}}<span class="stonetop-pdc-option-tag">needs {{this.requiresLabel}}</span>{{/if}}
 				</span>
-				{{#if summary}}<span class="stonetop-pdc-option-body">{{{summary}}}</span>{{/if}}
+				{{#if summary}}<span class="stonetop-pdc-option-body">{{{this.summary}}}</span>{{/if}}
 				{{!-- The rest of what this option does to you. Held back until it's the one you
 				      took: you don't need four paragraphs of consequences to pick between three
 				      names, and you do need them the moment one is yours. --}}
 				{{#if marked}}{{#if detail}}
-				<span class="stonetop-pdc-option-detail">{{{detail}}}</span>
+				<span class="stonetop-pdc-option-detail">{{{this.detail}}}</span>
 				{{/if}}{{/if}}
 			</label>
 
@@ -110,8 +110,8 @@
 		      radio choices, it's an alternative to all of them. --}}
 		{{#if textOption}}
 		<input type="text" class="stonetop-pdc-text stonetop-pdc-writein"
-		       data-section="{{section}}" data-option="{{textOption}}"
-		       value="{{textValue}}" placeholder="{{textPlaceholder}}">
+		       data-section="{{this.section}}" data-option="{{this.textOption}}"
+		       value="{{this.textValue}}" placeholder="{{this.textPlaceholder}}">
 		{{/if}}
 
 		{{!-- "Name the person or persons you refuse to let go of." Only once there's something to
@@ -119,20 +119,20 @@
 		{{#if nameFor}}
 		{{#if chosenSlug}}
 		<input type="text" class="stonetop-pdc-name"
-		       data-section="{{section}}" data-option="{{chosenSlug}}"
-		       value="{{nameValue}}" placeholder="{{namePlaceholder}}">
+		       data-section="{{this.section}}" data-option="{{this.chosenSlug}}"
+		       value="{{this.nameValue}}" placeholder="{{this.namePlaceholder}}">
 		{{/if}}
 		{{/if}}
 		{{/if}}
 
 		{{#if (eq kind "text")}}
 		<input type="text" class="stonetop-pdc-text"
-		       data-section="{{section}}" data-option="{{option}}"
-		       value="{{value}}" placeholder="{{placeholder}}">
+		       data-section="{{this.section}}" data-option="{{this.option}}"
+		       value="{{this.value}}" placeholder="{{this.placeholder}}">
 		{{/if}}
 
 		{{#if (eq kind "tether")}}
-		<input type="text" class="stonetop-pdc-tether" value="{{value}}" placeholder="{{placeholder}}">
+		<input type="text" class="stonetop-pdc-tether" value="{{this.value}}" placeholder="{{this.placeholder}}">
 		{{/if}}
 	</section>
 	{{/if}}

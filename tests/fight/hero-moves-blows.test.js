@@ -114,6 +114,34 @@ describe("what a blow adds", () => {
 		expect(keys(2000)).toContain("nemesis");
 	});
 
+	// Combat audit MOV-3 (2026-10-23): the Clash card's `timestamp` is the server's, so the record is too. A
+	// roller whose clock ran behind the server read as a record older than its own Clash card.
+	it("dates the Clash record on the server's clock, so Nemesis never rides that Clash's own damage", async () => {
+		const { rows } = crinRows();
+		const bram = hero("Bram", [HERO_MOVES.NEMESIS]);
+		globalThis.game = { ...saved.game, time: { serverTime: 5_000_000 } };
+		await recordClash(bram, rows);
+		expect(bram.getFlag(SYSTEM_ID, CLASHED_FLAG)[0].since).toBe(5_000_000);
+		// The Clash card was stamped by the server a moment before the record.
+		const keys = at => blowOffers(bram, { targets: rows, attackAt: at }).map(o => o.key);
+		expect(keys(4_999_000)).not.toContain("nemesis");
+		expect(keys(5_060_000)).toContain("nemesis");
+	});
+
+	// Combat audit MOV-6: Resolve gone by the time the window is answered pays nothing, so nothing rides.
+	it("answers Anger is a Gift's spend null once no Resolve is left to take back", async () => {
+		const heldSoFar = { "Anger is a Gift": 1 };
+		const pim = hero("Pim", [{ type: "move", name: HERO_MOVES.ANGER, system: { resource: { max: 2, title: "Resolve" } } }], {
+			typedActor: { moveResources: { getMoveResources: () => heldSoFar, setUses: vi.fn(async (move, value) => { heldSoFar[move] = value; }) } },
+		});
+		const offer = blowOffers(pim, {}).find(o => o.key === "anger");
+		heldSoFar["Anger is a Gift"] = 0;
+		expect(await offer.spend(pim)).toBeNull();
+		heldSoFar["Anger is a Gift"] = 1;
+		expect(await offer.spend(pim)).toBe(true);
+		expect(heldSoFar["Anger is a Gift"]).toBe(0);
+	});
+
 	it("earns Payback from a foe that harmed the character, and forgets it when the fight ends", async () => {
 		const { t, rows } = crinRows();
 		const bram = hero("Bram", [HERO_MOVES.PAYBACK]);

@@ -7,17 +7,17 @@
 
 	<p class="spe-trigger">When you wish to accomplish some project but don't know how to go about it, tell the GM what you hope to achieve. They'll say what's required.</p>
 
-	<label class="spe-label" for="spe-name-{{#if id}}{{id}}{{else}}new{{/if}}">What do you hope to achieve?</label>
-	<input id="spe-name-{{#if id}}{{id}}{{else}}new{{/if}}" type="text" class="spe-name" value="{{name}}"
+	<label class="spe-label" for="spe-name-{{#if id}}{{this.id}}{{else}}new{{/if}}">What do you hope to achieve?</label>
+	<input id="spe-name-{{#if id}}{{this.id}}{{else}}new{{/if}}" type="text" class="spe-name" value="{{this.name}}"
 	       placeholder="Rebuild the mill before the snows">
 
-	<span class="spe-label" id="spe-reqs-label-{{#if id}}{{id}}{{else}}new{{/if}}">What it requires</span>
-	<ul class="spe-req-list" aria-labelledby="spe-reqs-label-{{#if id}}{{id}}{{else}}new{{/if}}"
+	<span class="spe-label" id="spe-reqs-label-{{#if id}}{{this.id}}{{else}}new{{/if}}">What it requires</span>
+	<ul class="spe-req-list" aria-labelledby="spe-reqs-label-{{#if id}}{{this.id}}{{else}}new{{/if}}"
 	    data-empty="Nothing yet. Pick one of the book's prompts below, or write your own.">
 		{{#each requirements}}
 		<li class="spe-req" data-req-from="{{@index}}">
 			<input type="checkbox" class="spe-req-done" aria-label="Done"{{#if done}} checked{{/if}}>
-			<input type="text" class="spe-req-text" value="{{text}}" aria-label="Requirement">
+			<input type="text" class="spe-req-text" value="{{this.text}}" aria-label="Requirement">
 			<button type="button" class="spe-req-remove" data-tooltip="Remove this requirement" aria-label="Remove this requirement"><i class="fas fa-xmark" aria-hidden="true"></i></button>
 		</li>
 		{{/each}}
@@ -34,7 +34,7 @@
 
 	<label class="spe-undone">
 		<span>Which means</span>
-		<input type="text" class="spe-undone-input" value="{{undone}}" placeholder="what work">
+		<input type="text" class="spe-undone-input" value="{{this.undone}}" placeholder="what work">
 		<span>goes undone.</span>
 	</label>
 

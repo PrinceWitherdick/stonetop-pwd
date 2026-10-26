@@ -110,7 +110,7 @@ describe("the Requisition outcome table", () => {
 
 	it("reads as one sentence per line, as a fate row does", () => {
 		// fateTableList writes "<strong>1-2</strong>: text"; this table says "10+: text".
-		expect(HBS).toMatch(/tier-label">\{\{\{label\}\}\}<\/span>: <span/);
+		expect(HBS).toMatch(/tier-label">\{\{\{this\.label\}\}\}<\/span>: <span/);
 
 		// Text flow, so nothing sits between the colon and the outcome: a card look would put
 		// the two in flex columns, with a label stop and a gap on top of it.

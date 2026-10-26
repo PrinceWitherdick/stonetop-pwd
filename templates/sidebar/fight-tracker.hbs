@@ -14,13 +14,13 @@
     {{#if fight.clusters.length}}
     <ol class="stonetop-fight-cards plain" aria-label="{{localize "stonetop.fight.aria.engagements"}}">
       {{#each fight.clusters}}
-      <li class="stonetop-fight-card" data-cluster-id="{{id}}">
+      <li class="stonetop-fight-card" data-cluster-id="{{this.id}}">
         <div class="stonetop-fight-pairs">
           {{#each pairs}}
           <div class="stonetop-fight-pair">
             <ul class="stonetop-fight-side stonetop-fight-side--heroes plain">{{> "stonetop.fight-row" row=hero gm=@root.fight.isGM}}</ul>
             {{#if foes.length}}
-            <ul class="stonetop-fight-side stonetop-fight-side--foes stonetop-fight-attached plain" aria-label="{{label}}">
+            <ul class="stonetop-fight-side stonetop-fight-side--foes stonetop-fight-attached plain" aria-label="{{this.label}}">
               {{#each foes}}{{> "stonetop.fight-row" row=this gm=@root.fight.isGM}}{{/each}}
             </ul>
             {{/if}}

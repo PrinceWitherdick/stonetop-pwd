@@ -40,7 +40,7 @@ The improvement builder lays out an improvement the way the book does: its requi
 
 - **Threat** opens the same guided write-up as the GM Toolkit's **Write up a ... threat** buttons.
 - **Site** runs the nine-step Creating Sites process.
-- The Things Below generators make a threat, a corrupted site, or a monster stat block.
+- The Things Below generators make a threat, a corrupted site, or a monster stat block. Closing one part way asks before throwing away your choices.
 
 Homebrew threat ideas can be kept as cards in a GM-only journal and dragged onto the Threats tab when they come into play. See [Threats and Hazards](Threats-and-Hazards) and [Expeditions and Sites](Expeditions-and-Sites#sites).
 

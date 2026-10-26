@@ -19,13 +19,12 @@
 //    only for the scene on screen, so a scene nobody is looking at has melee and recorded shots only.
 
 import { SYSTEM_ID } from "../system-id.js";
-import { each } from "./in-battle.js";
+import { each, isFight, FIGHT_FLAG, countsAsFight, fightersOf, onMap } from "./in-battle.js";
 import { engage, HEROES, FOES } from "./engagements.js";
 import { classifySide, bodiesFor } from "./fight-sides.js";
 import { followerRoster } from "./fight-vitals.js";
 import { keepsFightingAtZero } from "../actors/character/unstoppable.js";
 
-export const FIGHT_FLAG = "fight";
 export const SIDE_FLAG = "side";
 export const COUNT_FLAG = "count";
 /** The combatant ids a fighter was last seen shooting at (fight-shots.js). */
@@ -45,13 +44,9 @@ export const groupStartSize = actor => Math.max(0, Math.trunc(Number(actor?.flag
 const OWNER = 3;
 
 const ours = doc => doc?.flags?.[SYSTEM_ID] ?? {};
-// A collection as an array (in-battle.js, a leaf, so the character rules can share it).
-export { each };
-
-/** Whether a Combat was started (or claimed) as a Stonetop fight. */
-export function isFight(combat) {
-	return !!ours(combat)[FIGHT_FLAG];
-}
+// A collection as an array, and what counts as a fight, live from the Fight tab setting (countsAsFight,
+// fightersOf): in-battle.js, a leaf, so the character rules can share them.
+export { each, isFight, FIGHT_FLAG, countsAsFight, fightersOf, onMap };
 
 /** Whether a combat is fought on this scene: linked to it, or unlinked with someone standing on it. */
 export function combatTouchesScene(combat, scene) {
@@ -90,6 +85,14 @@ export function combatOnScene(scene, counts = isFight) {
  */
 export function fightOnScene(scene) {
 	return combatOnScene(scene, isFight);
+}
+
+/**
+ * The ids of the tokens this reader has selected (canvas Tokens or their documents), for the questions that
+ * settle "which of them" by the selection: the roller's one token, the tokens to merge, the start window's ticks.
+ */
+export function controlledTokenIds(controlled = globalThis.canvas?.tokens?.controlled) {
+	return [...(controlled ?? [])].map(t => t?.document?.id ?? t?.id).filter(Boolean);
 }
 
 /** What classifySide needs to know about an actor and its token. */

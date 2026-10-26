@@ -25,6 +25,7 @@
 import { SYSTEM_ID } from "../../system-id.js";
 import { bookMoveName, ownsLearnedBookMoveNamed } from "./owns-move.js";
 import { learnedTrack } from "./MoveResources.js";
+import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { asteriskMoveUsed, asteriskUseCounts, restoreWouldBe } from "./WouldBeHeroAsterisk.js";
 import { markXpReceipt } from "../../utils/roll-engine.js";
 import { withCardLatch, wireLatchedButtons } from "../../utils/card-latch.js";
@@ -74,13 +75,16 @@ export function speakTruthRefusedActions() {
  * Add Speak Truth to Power's +1 to Anger is a Gift's Resolve, held at its max (2). What happened:
  * `{added, held, max}`, `added` 0 when already holding the max, or null with no learned Anger is a Gift.
  */
-export async function gainRefusedResolve(actor) {
-	const track = learnedTrack(actor, ANGER_IS_A_GIFT);
-	if (!track) return null;
-	const held = Math.min(track.max, track.held + 1);
-	if (held === track.held) return { added: 0, held, max: track.max };
-	await track.resources.setUses(ANGER_IS_A_GIFT, held, { stonetopMove: SPEAK_TRUTH_TO_POWER });
-	return { added: held - track.held, held, max: track.max };
+export function gainRefusedResolve(actor) {
+	// In the character's spending turn (utils/spender-queue.js), as Anger is a Gift's spend is.
+	return inSpenderTurn(actor, async () => {
+		const track = learnedTrack(actor, ANGER_IS_A_GIFT);
+		if (!track) return null;
+		const held = Math.min(track.max, track.held + 1);
+		if (held === track.held) return { added: 0, held, max: track.max };
+		await track.resources.setUses(ANGER_IS_A_GIFT, held, { stonetopMove: SPEAK_TRUTH_TO_POWER });
+		return { added: held - track.held, held, max: track.max };
+	});
 }
 
 /**

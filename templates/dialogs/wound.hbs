@@ -12,9 +12,9 @@
 			<ol class="stonetop-guide-toc-list">
 				{{#each sections}}
 				<li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
-					<button type="button" class="stonetop-guide-toc-btn wd-tab" data-tab="{{key}}"{{#if selected}} aria-current="true"{{/if}}>
-						<i class="fas {{icon}} stonetop-guide-toc-icon"></i>
-						<span class="stonetop-guide-toc-text">{{title}}</span>
+					<button type="button" class="stonetop-guide-toc-btn wd-tab" data-tab="{{this.key}}"{{#if selected}} aria-current="true"{{/if}}>
+						<i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+						<span class="stonetop-guide-toc-text">{{this.title}}</span>
 					</button>
 				</li>
 				{{/each}}
@@ -36,7 +36,7 @@
 						<span class="wd-summary-status">{{summary.status}}</span>
 					</div>
 				</div>
-				<div class="stonetop-guide-count wd-banner-count">{{active.index}} / {{sectionCount}}</div>
+				<div class="stonetop-guide-count wd-banner-count">{{active.index}} / {{this.sectionCount}}</div>
 			</div>
 
 			{{!-- The wound: what it is, how bad, where it came from --}}
@@ -45,7 +45,7 @@
 
 				<label class="wd-field">
 					<span class="wd-label">Wound</span>
-					<input type="text" name="text" value="{{text}}" placeholder="e.g. Twisted ankle, can't bear weight">
+					<input type="text" name="text" value="{{this.text}}" placeholder="e.g. Twisted ankle, can't bear weight">
 				</label>
 
 				<div class="wd-field">
@@ -53,9 +53,9 @@
 					<div class="wd-tile-grid">
 						{{#each statusOptions}}
 						<label class="wd-tile">
-							<input type="radio" name="status" value="{{value}}"{{#if selected}} checked{{/if}}>
-							<span class="wd-tile-name">{{label}}</span>
-							<span class="wd-tile-hint">{{hint}}</span>
+							<input type="radio" name="status" value="{{this.value}}"{{#if selected}} checked{{/if}}>
+							<span class="wd-tile-name">{{this.label}}</span>
+							<span class="wd-tile-hint">{{this.hint}}</span>
 						</label>
 						{{/each}}
 					</div>
@@ -65,7 +65,7 @@
 					<span class="wd-label">Origin</span>
 					<select name="origin">
 						{{#each originOptions}}
-						<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>
+						<option value="{{this.value}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>
 						{{/each}}
 					</select>
 				</label>
@@ -84,7 +84,7 @@
 
 				<label class="wd-field">
 					<span class="wd-label">Note / requirement</span>
-					<input type="text" name="requirementNote" value="{{requirementNote}}" placeholder="What's needed to treat it (optional)">
+					<input type="text" name="requirementNote" value="{{this.requirementNote}}" placeholder="What's needed to treat it (optional)">
 					<span class="wd-hint">If the GM says tending it isn't enough yet, write down what else it takes.</span>
 				</label>
 
@@ -104,14 +104,14 @@
 
 				<label class="wd-field">
 					<span class="wd-label">Lasting tag</span>
-					<input type="text" name="mechanicalTag" value="{{mechanicalTag}}" placeholder="e.g. Let Fly at disadvantage until practiced">
+					<input type="text" name="mechanicalTag" value="{{this.mechanicalTag}}" placeholder="e.g. Let Fly at disadvantage until practiced">
 				</label>
 
 				<label class="wd-field">
 					<span class="wd-label">Remind on</span>
 					<select name="reminderMove">
 						{{#each reminderOptions}}
-						<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>
+						<option value="{{this.value}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>
 						{{/each}}
 					</select>
 					<span class="wd-hint">The tag rides along on this move's roll card as a reminder.</span>
@@ -124,7 +124,7 @@
 
 				<label class="wd-field">
 					<span class="wd-label">Make-a-Plan goal</span>
-					<input type="text" name="planNote" value="{{planNote}}" placeholder="e.g. Learn to shoot left-handed">
+					<input type="text" name="planNote" value="{{this.planNote}}" placeholder="e.g. Learn to shoot left-handed">
 				</label>
 
 				<div class="wd-field">
@@ -133,7 +133,7 @@
 						{{#each planRequirements}}
 						<li class="wd-req">
 							<label class="checkbox"><input type="checkbox" class="stonetop-check wd-req-done"{{#if done}} checked{{/if}}></label>
-							<input type="text" class="wd-req-text" value="{{text}}" placeholder="e.g. months of practice">
+							<input type="text" class="wd-req-text" value="{{this.text}}" placeholder="e.g. months of practice">
 							<button type="button" class="wd-req-remove" data-tooltip="Remove" aria-label="Remove this requirement"><i class="fas fa-xmark"></i></button>
 						</li>
 						{{/each}}
@@ -157,7 +157,7 @@
 
 	<div class="stonetop-guide-nav wd-footer">
 		<span class="wd-footer-actions">
-			<button type="button" class="wd-save stonetop-guide-btn--primary"><i class="fas fa-droplet"></i> {{saveLabel}}</button>
+			<button type="button" class="wd-save stonetop-guide-btn--primary"><i class="fas fa-droplet"></i> {{this.saveLabel}}</button>
 			<button type="button" class="wd-cancel">Cancel</button>
 		</span>
 		<span class="wd-footer-nav">

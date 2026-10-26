@@ -39,6 +39,7 @@ Whatever the insert asks you to decide can be answered right away or later: anyt
 
 > **Did you know?**
 > - If a dead character's HP goes back above 0, the system asks **Is (name) being brought back?** Answer **Yes, they live again** and the sheet becomes theirs again; **No, they are still dead** leaves it as it was.
+> - A dead character no longer levels up. Choosing a playbook on their sheet asks **Make a New Character?** and makes a fresh level-1 character on a new sheet (Book I p.53), so the dead one stays as the record of their story.
 
 ## The Post-Death tab
 

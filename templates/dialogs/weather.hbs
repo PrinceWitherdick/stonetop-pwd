@@ -19,7 +19,7 @@
   {{#if rollHint}}
   <p class="stonetop-weather-clock stonetop-weather-blessing">
     <i class="fas fa-sun"></i>
-    {{rollHint}}
+    {{this.rollHint}}
   </p>
   {{/if}}
 
@@ -28,7 +28,7 @@
     {{!-- `is-off-clock` only ever rides along with `is-active`: it is the selection going red
           because the season chosen is not the one the steading's clock is in. --}}
     <button type="button" class="stonetop-weather-season{{#if isActive}} is-active{{/if}}{{#if isOffClock}} is-off-clock{{/if}}"
-            data-season="{{key}}">{{label}}</button>
+            data-season="{{this.key}}">{{this.label}}</button>
     {{/each}}
   </div>
 
@@ -45,9 +45,9 @@
   <div class="stonetop-weather-rows">
     {{#each rows}}
     <button type="button" class="stonetop-weather-row{{#if isPicked}} is-picked{{/if}}{{#if isOffered}} is-offered{{/if}}"
-            data-index="{{index}}" aria-pressed="{{#if isPicked}}true{{else}}false{{/if}}">
-      <span class="stonetop-weather-row-range">{{range}}</span>
-      <span class="stonetop-weather-row-text">{{text}}{{#if reroll}} <em class="stonetop-weather-row-reroll">(roll again later with disadvantage)</em>{{/if}}</span>
+            data-index="{{this.index}}" aria-pressed="{{#if isPicked}}true{{else}}false{{/if}}">
+      <span class="stonetop-weather-row-range">{{this.range}}</span>
+      <span class="stonetop-weather-row-text">{{this.text}}{{#if reroll}} <em class="stonetop-weather-row-reroll">(roll again later with disadvantage)</em>{{/if}}</span>
     </button>
     {{/each}}
   </div>

@@ -37,18 +37,18 @@
 {{#each path.arrows}}
 <svg class="stonetop-journey-arrowhead{{#if waypoint}} stonetop-journey-arrowhead--waypoint{{/if}}"
      viewBox="0 0 10 10" aria-hidden="true" focusable="false"
-     style="left:{{left}}%;top:{{top}}%;transform:translate(-50%,-50%) rotate({{angle}}deg)">
+     style="left:{{this.left}}%;top:{{this.top}}%;transform:translate(-50%,-50%) rotate({{this.angle}}deg)">
   <path d="{{../path.headD}}"></path>
 </svg>
 {{/each}}
 
 {{#each spots}}
-<button type="button" data-slug="{{slug}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"
-    style="left:{{left}}%;top:{{top}}%"
-    class="stonetop-journey-pick stonetop-journey-spot h-{{anchorH}} v-{{anchorV}}{{#if isOrigin}} is-origin{{/if}}{{#if isStop}} is-stop{{/if}}{{#if isChosen}} is-chosen{{/if}}">
+<button type="button" data-slug="{{this.slug}}" data-tooltip="{{this.tooltip}}" aria-label="{{this.tooltip}}"
+    style="left:{{this.left}}%;top:{{this.top}}%"
+    class="stonetop-journey-pick stonetop-journey-spot h-{{this.anchorH}} v-{{this.anchorV}}{{#if isOrigin}} is-origin{{/if}}{{#if isStop}} is-stop{{/if}}{{#if isChosen}} is-chosen{{/if}}">
   <span class="stonetop-journey-dot"></span>
   {{#if showLabel}}
-  <span class="stonetop-journey-tag">{{name}}{{#if time}} <em>{{time}}</em>{{/if}}</span>
+  <span class="stonetop-journey-tag">{{this.name}}{{#if time}} <em>{{this.time}}</em>{{/if}}</span>
   {{/if}}
 </button>
 {{/each}}
@@ -99,21 +99,21 @@
       like on a map built out of imported book art. The monument is one silhouette, it holds at
       pin size, and a menhir is the mark you would actually pencil onto a map of Stonetop. --}}
 {{#each sites}}
-<button type="button" data-site-uuid="{{uuid}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"
-    style="left:{{left}}%;top:{{top}}%;--site-accent:{{accent}}"
-    class="stonetop-journey-pick stonetop-journey-site h-{{anchorH}} v-{{anchorV}}">
+<button type="button" data-site-uuid="{{this.uuid}}" data-tooltip="{{this.tooltip}}" aria-label="{{this.tooltip}}"
+    style="left:{{this.left}}%;top:{{this.top}}%;--site-accent:{{this.accent}}"
+    class="stonetop-journey-pick stonetop-journey-site h-{{this.anchorH}} v-{{this.anchorV}}">
   <span class="stonetop-journey-sitemark"><i class="fas fa-monument"></i></span>
-  <span class="stonetop-journey-tag">{{name}}</span>
+  <span class="stonetop-journey-tag">{{this.name}}</span>
 </button>
 {{/each}}
 
 {{!-- The edge arrows. Each moves out a tier; the three that name one place pick it too. --}}
 {{#each exits}}
-<button type="button" data-slug="{{node}}" data-tier="{{to}}" data-tooltip="{{tooltip}}" aria-label="{{tooltip}}"
-    style="left:{{left}}%;top:{{top}}%"
-    class="stonetop-journey-pick stonetop-journey-exit h-{{anchorH}} v-{{anchorV}}{{#if isStop}} is-stop{{/if}}{{#if isChosen}} is-chosen{{/if}}">
+<button type="button" data-slug="{{this.node}}" data-tier="{{this.to}}" data-tooltip="{{this.tooltip}}" aria-label="{{this.tooltip}}"
+    style="left:{{this.left}}%;top:{{this.top}}%"
+    class="stonetop-journey-pick stonetop-journey-exit h-{{this.anchorH}} v-{{this.anchorV}}{{#if isStop}} is-stop{{/if}}{{#if isChosen}} is-chosen{{/if}}">
   <span class="stonetop-journey-arrow"><i class="fas fa-angles-right"></i></span>
-  <span class="stonetop-journey-tag">{{label}}{{#if time}} <em>{{time}}</em>{{/if}}</span>
+  <span class="stonetop-journey-tag">{{this.label}}{{#if time}} <em>{{this.time}}</em>{{/if}}</span>
 </button>
 {{/each}}
 
@@ -143,5 +143,5 @@
       over both, at 3. --}}
 {{#each marks}}
 <span class="stonetop-journey-mark{{#if isEnd}} is-end{{/if}}"
-      style="left:{{left}}%;top:{{top}}%" aria-hidden="true">{{mark}}</span>
+      style="left:{{this.left}}%;top:{{this.top}}%" aria-hidden="true">{{this.mark}}</span>
 {{/each}}

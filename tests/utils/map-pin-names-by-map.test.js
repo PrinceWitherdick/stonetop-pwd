@@ -253,12 +253,12 @@ describe("the menu's rows and what saving them stores", () => {
 	});
 
 	it("renders the option values from the row rather than restating them", () => {
-		expect(TEMPLATE).toContain('<option value="{{value}}"');
+		expect(TEMPLATE).toContain('<option value="{{this.value}}"');
 		expect(TEMPLATE).not.toMatch(/<option value="(on|off)"/);
 	});
 
 	it("matches the template's field name to the one the decoder reads", () => {
-		expect(TEMPLATE).toContain('name="map.{{slug}}"');
+		expect(TEMPLATE).toContain('name="map.{{this.slug}}"');
 	});
 
 	// The menu's chrome is two shared partials now, and a partial that fails to register renders

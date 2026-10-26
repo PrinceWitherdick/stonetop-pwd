@@ -12,9 +12,9 @@
 			<ol class="stonetop-guide-toc-list">
 				{{#each sections}}
 				<li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
-					<button type="button" class="stonetop-guide-toc-btn cm-tab" data-tab="{{key}}"{{#if selected}} aria-current="true"{{/if}}>
-						<i class="fas {{icon}} stonetop-guide-toc-icon"></i>
-						<span class="stonetop-guide-toc-text">{{title}}</span>
+					<button type="button" class="stonetop-guide-toc-btn cm-tab" data-tab="{{this.key}}"{{#if selected}} aria-current="true"{{/if}}>
+						<i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+						<span class="stonetop-guide-toc-text">{{this.title}}</span>
 					</button>
 				</li>
 				{{/each}}
@@ -35,7 +35,7 @@
 						<span class="cm-stat">Damage <b class="cm-summary-damage">{{summary.damage}}</b></span>
 					</div>
 				</div>
-				<div class="stonetop-guide-count cm-banner-count">{{active.index}} / {{sectionCount}}</div>
+				<div class="stonetop-guide-count cm-banner-count">{{active.index}} / {{this.sectionCount}}</div>
 			</div>
 
 			<div class="cm-glance">
@@ -53,14 +53,14 @@
 				<div class="cm-row">
 					<label class="cm-field cm-grow">
 						<span class="cm-label">Name</span>
-						<input type="text" name="name" value="{{name}}" placeholder="e.g. butcherbird">
+						<input type="text" name="name" value="{{this.name}}" placeholder="e.g. butcherbird">
 					</label>
 					<label class="cm-field">
 						<span class="cm-label">Type</span>
 						<select name="creatureType">
 							<option value="">&mdash;</option>
 							{{#each creatureTypes}}
-							<option value="{{slug}}">{{label}}</option>
+							<option value="{{this.slug}}">{{this.label}}</option>
 							{{/each}}
 						</select>
 					</label>
@@ -75,10 +75,10 @@
 					<span class="cm-label">How does it hunt or fight?</span>
 					<div class="cm-tile-grid">
 						{{#each organizations}}
-						<label class="cm-tile" data-tooltip="{{hint}}" data-tooltip-direction="UP">
-							<input type="radio" name="organization" value="{{id}}"{{#if selected}} checked{{/if}}>
-							<span class="cm-tile-name">{{label}}</span>
-							<span class="cm-tile-hint">{{hint}}</span>
+						<label class="cm-tile" data-tooltip="{{this.hint}}" data-tooltip-direction="UP">
+							<input type="radio" name="organization" value="{{this.id}}"{{#if selected}} checked{{/if}}>
+							<span class="cm-tile-name">{{this.label}}</span>
+							<span class="cm-tile-hint">{{this.hint}}</span>
 						</label>
 						{{/each}}
 					</div>
@@ -88,9 +88,9 @@
 					<span class="cm-label">How big is it?</span>
 					<div class="cm-tile-grid cm-tile-grid--size">
 						{{#each sizes}}
-						<label class="cm-tile" data-tooltip="{{hint}}" data-tooltip-direction="UP">
-							<input type="radio" name="size" value="{{id}}"{{#if selected}} checked{{/if}}>
-							<span class="cm-tile-name">{{label}}</span>
+						<label class="cm-tile" data-tooltip="{{this.hint}}" data-tooltip-direction="UP">
+							<input type="radio" name="size" value="{{this.id}}"{{#if selected}} checked{{/if}}>
+							<span class="cm-tile-name">{{this.label}}</span>
 						</label>
 						{{/each}}
 					</div>
@@ -100,9 +100,9 @@
 					<span class="cm-label">What is its nature? <em>(all that apply)</em></span>
 					<div class="cm-chip-grid">
 						{{#each natureTags}}
-						<label class="cm-chip" data-tooltip="{{hint}}" data-tooltip-direction="UP">
-							<input type="checkbox" name="nature" value="{{id}}">
-							<span>{{label}}</span>
+						<label class="cm-chip" data-tooltip="{{this.hint}}" data-tooltip-direction="UP">
+							<input type="checkbox" name="nature" value="{{this.id}}">
+							<span>{{this.label}}</span>
 						</label>
 						{{/each}}
 					</div>
@@ -112,9 +112,9 @@
 					<span class="cm-label">What is it notable for? <em>(all that apply)</em></span>
 					<div class="cm-chip-grid">
 						{{#each notableTags}}
-						<label class="cm-chip" data-tooltip="{{hint}}" data-tooltip-direction="UP">
-							<input type="checkbox" name="notable" value="{{id}}">
-							<span>{{label}}</span>
+						<label class="cm-chip" data-tooltip="{{this.hint}}" data-tooltip-direction="UP">
+							<input type="checkbox" name="notable" value="{{this.id}}">
+							<span>{{this.label}}</span>
 						</label>
 						{{/each}}
 					</div>
@@ -132,8 +132,8 @@
 				<div class="cm-check-list">
 					{{#each hpModifiers}}
 					<label class="cm-check">
-						<input type="checkbox" class="stonetop-cm-check" name="hpMod" value="{{id}}">
-						<span>{{label}} <span class="cm-mod">+{{hp}}</span></span>
+						<input type="checkbox" class="stonetop-cm-check" name="hpMod" value="{{this.id}}">
+						<span>{{this.label}} <span class="cm-mod">+{{this.hp}}</span></span>
 					</label>
 					{{/each}}
 				</div>
@@ -147,8 +147,8 @@
 					<div class="cm-radio-list">
 						{{#each armorBases}}
 						<label class="cm-radio">
-							<input type="radio" class="stonetop-cm-radio" name="armorBase" value="{{id}}"{{#if selected}} checked{{/if}}>
-							<span>{{label}} <span class="cm-mod">{{id}}</span></span>
+							<input type="radio" class="stonetop-cm-radio" name="armorBase" value="{{this.id}}"{{#if selected}} checked{{/if}}>
+							<span>{{this.label}} <span class="cm-mod">{{this.id}}</span></span>
 						</label>
 						{{/each}}
 					</div>
@@ -158,8 +158,8 @@
 					<div class="cm-check-list">
 						{{#each armorModifiers}}
 						<label class="cm-check">
-							<input type="checkbox" class="stonetop-cm-check" name="armorMod" value="{{id}}">
-							<span>{{label}} <span class="cm-mod">+{{armor}}</span></span>
+							<input type="checkbox" class="stonetop-cm-check" name="armorMod" value="{{this.id}}">
+							<span>{{this.label}} <span class="cm-mod">+{{this.armor}}</span></span>
 						</label>
 						{{/each}}
 					</div>
@@ -181,9 +181,9 @@
 					<span class="cm-label">Range <em>(all that apply)</em></span>
 					<div class="cm-chip-grid">
 						{{#each damageRangeTags}}
-						<label class="cm-chip" data-tooltip="{{hint}}" data-tooltip-direction="UP">
-							<input type="checkbox" name="damageTag" value="{{id}}">
-							<span>{{label}}</span>
+						<label class="cm-chip" data-tooltip="{{this.hint}}" data-tooltip-direction="UP">
+							<input type="checkbox" name="damageTag" value="{{this.id}}">
+							<span>{{this.label}}</span>
 						</label>
 						{{/each}}
 					</div>
@@ -192,9 +192,9 @@
 					<span class="cm-label">Attack tags <em>(all that apply)</em></span>
 					<div class="cm-chip-grid">
 						{{#each damageEffectTags}}
-						<label class="cm-chip" data-tooltip="{{hint}}" data-tooltip-direction="UP">
-							<input type="checkbox" name="damageTag" value="{{id}}">
-							<span>{{label}}</span>
+						<label class="cm-chip" data-tooltip="{{this.hint}}" data-tooltip-direction="UP">
+							<input type="checkbox" name="damageTag" value="{{this.id}}">
+							<span>{{this.label}}</span>
 						</label>
 						{{/each}}
 					</div>
@@ -204,8 +204,8 @@
 					<div class="cm-check-list cm-check-list--two">
 						{{#each damageModifiers}}
 						<label class="cm-check">
-							<input type="checkbox" class="stonetop-cm-check" name="damageMod" value="{{id}}">
-							<span>{{label}}</span>
+							<input type="checkbox" class="stonetop-cm-check" name="damageMod" value="{{this.id}}">
+							<span>{{this.label}}</span>
 						</label>
 						{{/each}}
 					</div>
@@ -231,15 +231,15 @@
 						</div>
 						<div class="cm-chip-grid">
 							{{#each damageRangeTags}}
-							<label class="cm-chip" data-tooltip="{{hint}}" data-tooltip-direction="UP">
-								<input type="checkbox" class="cm-attack-tag" value="{{id}}">
-								<span>{{label}}</span>
+							<label class="cm-chip" data-tooltip="{{this.hint}}" data-tooltip-direction="UP">
+								<input type="checkbox" class="cm-attack-tag" value="{{this.id}}">
+								<span>{{this.label}}</span>
 							</label>
 							{{/each}}
 							{{#each damageEffectTags}}
-							<label class="cm-chip" data-tooltip="{{hint}}" data-tooltip-direction="UP">
-								<input type="checkbox" class="cm-attack-tag" value="{{id}}">
-								<span>{{label}}</span>
+							<label class="cm-chip" data-tooltip="{{this.hint}}" data-tooltip-direction="UP">
+								<input type="checkbox" class="cm-attack-tag" value="{{this.id}}">
+								<span>{{this.label}}</span>
 							</label>
 							{{/each}}
 						</div>
@@ -267,8 +267,8 @@
 					<span class="cm-label">Book prompts <em>(tap to add &amp; edit)</em></span>
 					<div class="cm-move-suggestions">
 						{{#each moveSuggestions}}
-						<button type="button" class="cm-move-suggestion" data-suggestion="{{id}}" data-tooltip="{{description}}" data-tooltip-direction="UP">
-							<i class="fas fa-plus"></i><span>{{name}}</span>
+						<button type="button" class="cm-move-suggestion" data-suggestion="{{this.id}}" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
+							<i class="fas fa-plus"></i><span>{{this.name}}</span>
 						</button>
 						{{/each}}
 					</div>

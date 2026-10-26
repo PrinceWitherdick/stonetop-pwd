@@ -68,7 +68,7 @@ describe("the size the writing on a line is set in", () => {
 	// ⚠ A PROPERTY AND NOT A `font-size`, so the two rules that have to out-rank a line's own size
 	// still can. See the head of this file.
 	it("hands a chosen size to the sheet as a property rather than as type", () => {
-		expect(BOARD).toMatch(/--relmap-caption-px:\s*\{\{px\}\}px/);
+		expect(BOARD).toMatch(/--relmap-caption-px:\s*\{\{this\.px\}\}px/);
 		expect(BOARD).not.toMatch(/style="font-size/);
 	});
 

@@ -89,14 +89,14 @@
 				      actually changes. An unplaced card renders an EMPTY order, never a 0,
 				      which is a real position. --}}
 				<li class="stonetop-rel-card{{#unless rated}} stonetop-rel-card--unrated{{/unless}}{{#unless shown}} stonetop-rel-card--hidden{{/unless}}"
-				    data-rel-id="{{id}}" data-rel-hearts="{{hearts}}" data-rel-name="{{name}}"
+				    data-rel-id="{{this.id}}" data-rel-hearts="{{this.hearts}}" data-rel-name="{{this.name}}"
 				    data-rel-rated="{{#if rated}}true{{else}}false{{/if}}"
-				    data-rel-index="{{laneIndex}}" data-rel-order="{{order}}"
+				    data-rel-index="{{this.laneIndex}}" data-rel-order="{{this.order}}"
 				    {{#if board.canRate}}tabindex="0"{{/if}}
-				    aria-label="{{feeling}}">
+				    aria-label="{{this.feeling}}">
 					<div class="stonetop-rel-card-head">
 						{{#if board.canToggle}}
-						<input type="checkbox" class="stonetop-rel-show-check" data-rel-id="{{id}}"
+						<input type="checkbox" class="stonetop-rel-show-check" data-rel-id="{{this.id}}"
 						       {{#if shown}}checked{{/if}}
 						       data-tooltip='{{#if board.showTooltip}}{{board.showTooltip}}{{else}}{{localize "stonetop.relationships.showTooltip"}}{{/if}}'
 						       aria-label='{{#if board.showTooltip}}{{board.showTooltip}}{{else}}{{localize "stonetop.relationships.showTooltip"}}{{/if}}'>
@@ -107,11 +107,11 @@
 						      wireRelationshipLinks. --}}
 						{{!-- .stonetop-rel-portrait is the CLIPPING BOX and appears exactly once
 						      per card: the glyph span below already IS the box. --}}
-						<span class="stonetop-rel-portrait stonetop-portrait-box"><img class="stonetop-rel-portrait-img" src="{{img}}" alt="" draggable="false" data-name="{{name}}"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}></span>
+						<span class="stonetop-rel-portrait stonetop-portrait-box"><img class="stonetop-rel-portrait-img" src="{{this.img}}" alt="" draggable="false" data-name="{{this.name}}"{{#if imgStyle}} style="{{this.imgStyle}}"{{/if}}></span>
 						{{else}}
 						{{!-- A settlement wears its own icon; only a person gets the silhouette.
 						      No image, so no hover preview. --}}
-						<span class="stonetop-rel-portrait stonetop-rel-portrait--empty"><i class="{{#if icon}}{{icon}}{{else}}fas fa-user{{/if}}"></i></span>
+						<span class="stonetop-rel-portrait stonetop-rel-portrait--empty"><i class="{{#if icon}}{{this.icon}}{{else}}fas fa-user{{/if}}"></i></span>
 						{{/if}}
 						{{!-- Actor-backed names open their sheet. wireLaneDrag already refuses to arm
 						      on an `a`, so the link is a click target inside a draggable card without
@@ -128,11 +128,11 @@
 						      because the cards are packed tight enough that one would cover the
 						      neighbours — the same call the note caret makes. --}}
 						{{#if uuid}}
-						<a class="stonetop-rel-card-name stonetop-rel-open" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
+						<a class="stonetop-rel-card-name stonetop-rel-open" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"
 						   role="link" tabindex="0"
-						   aria-label='{{localize "stonetop.relationships.open" name=name}}'>{{name}}</a>
+						   aria-label='{{localize "stonetop.relationships.open" name=name}}'>{{this.name}}</a>
 						{{else}}
-						<span class="stonetop-rel-card-name" data-tooltip-text="{{#if tooltip}}{{tooltip}}{{else}}{{name}}{{/if}}">{{name}}</span>
+						<span class="stonetop-rel-card-name" data-tooltip-text="{{#if tooltip}}{{this.tooltip}}{{else}}{{this.name}}{{/if}}">{{this.name}}</span>
 						{{/if}}
 						{{!-- One heart with the rating inside it, at the far right of the name's line,
 						      instead of the table's five-slot strip. Five 18px slots ate a whole row
@@ -142,8 +142,8 @@
 						      aria-label already reads the full sentence ("Vera loves Aldric"), so
 						      exposing the numeral too would say it twice. Exact values are set by
 						      dragging onto a zone or by the arrow keys. --}}
-						<span class="stonetop-rel-heart-badge" data-tooltip-text="{{feeling}}" aria-hidden="true">
-							<span class="stonetop-rel-heart-badge-value">{{hearts}}</span>
+						<span class="stonetop-rel-heart-badge" data-tooltip-text="{{this.feeling}}" aria-hidden="true">
+							<span class="stonetop-rel-heart-badge-value">{{this.hearts}}</span>
 						</span>
 					</div>
 
@@ -182,13 +182,13 @@
 						<button type="button"
 						        class="stonetop-segmented-picker-option stonetop-rel-lane-btn{{#if isCurrent}} is-active{{/if}}"
 						        {{#if dir}}
-						        data-rel-dir="{{dir}}"{{#if disabled}} disabled="disabled"{{else}} data-rel-step="{{hearts}}"{{/if}}
+						        data-rel-dir="{{this.dir}}"{{#if disabled}} disabled="disabled"{{else}} data-rel-step="{{this.hearts}}"{{/if}}
 						        {{else}}
-						        data-rel-lane="{{laneKey}}" aria-pressed="{{#if isCurrent}}true{{else}}false{{/if}}"
+						        data-rel-lane="{{this.laneKey}}" aria-pressed="{{#if isCurrent}}true{{else}}false{{/if}}"
 						        {{/if}}
 						        data-tooltip="{{localize labelKey target=(localize targetLabelKey)}}"
 						        aria-label="{{localize labelKey target=(localize targetLabelKey)}}">
-							<i class="{{icon}}" aria-hidden="true"></i>
+							<i class="{{this.icon}}" aria-hidden="true"></i>
 						</button>
 						{{/each}}
 					</div>
@@ -212,9 +212,9 @@
 					      <input> strips CR/LF out of its own value, so a line break typed here would
 					      vanish the first time someone touched the note there. --}}
 					<div class="stonetop-rel-card-note-wrap">
-						<textarea class="stonetop-rel-note-input stonetop-rel-card-note" data-rel-id="{{id}}"
+						<textarea class="stonetop-rel-note-input stonetop-rel-card-note" data-rel-id="{{this.id}}"
 						          rows="1" placeholder='{{localize "stonetop.relationships.notePlaceholder"}}'
-						          {{#unless board.canRate}}disabled{{/unless}}>{{notes}}</textarea>
+						          {{#unless board.canRate}}disabled{{/unless}}>{{this.notes}}</textarea>
 						{{!-- The collapsed note's visible text, and the ONLY reason it exists is the
 						      ellipsis: `text-overflow` is inert on a <textarea> in both Chromium and
 						      Gecko, so a clipped note ends mid-word with nothing to say it was cut.
@@ -232,7 +232,7 @@
 
 						      aria-hidden: the textarea below still holds the same string and is what a
 						      screen reader announces. Without this the note would be read twice. --}}
-						<span class="stonetop-rel-note-clip" aria-hidden="true">{{notes}}</span>
+						<span class="stonetop-rel-note-clip" aria-hidden="true">{{this.notes}}</span>
 						{{!-- On every card, and shown on every card — including one whose note is
 						      short enough to fit its line, or empty. A control that appeared only
 						      where there was something hidden had to be re-found on each card, and

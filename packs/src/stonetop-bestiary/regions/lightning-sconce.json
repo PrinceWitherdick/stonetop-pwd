@@ -49,7 +49,7 @@
       "img": "icons/magic/lightning/bolt-strike-blue.webp",
       "system": {
         "description": "",
-        "rollFormula": "d6+2"
+        "rollFormula": ""
       },
       "_key": "!actors.items!dfsDOpDS6JcOBnCe.gYFXx51yRpBjq5d4"
     }

@@ -73,14 +73,14 @@
 	{{/if}}
 </div>
 {{else}}
-	<ol class="items-list{{#if listClass}} {{listClass}}{{/if}}">
+	<ol class="items-list{{#if listClass}} {{this.listClass}}{{/if}}">
 	{{#each moves}}
 		{{!-- Every OWNED move is a draggable .item (so it can be dragged onto the macro
 		      hotbar — rollable moves make a roll macro, description-only ones a post-to-chat
 		      macro). Un-owned rows (the unpicked side of an either/or choice) stay
 		      non-draggable. Whether the title ROLLS is gated on rollType below. --}}
 		{{#if owned}}
-		<li class="item stonetop-item is-checked{{#if granterOff}} move-unlearned{{/if}}{{#if requirementsUnmet}} move-requirements-unmet{{/if}}{{#if (or markBudget.needsChoice statChoiceNeeded backgroundAnswerNeeded)}} move-needs-choice{{/if}}{{#if isStarting}} move-starting{{/if}}" data-item-id="{{ownedId}}">
+		<li class="item stonetop-item is-checked{{#if granterOff}} move-unlearned{{/if}}{{#if requirementsUnmet}} move-requirements-unmet{{/if}}{{#if (or markBudget.needsChoice statChoiceNeeded backgroundAnswerNeeded)}} move-needs-choice{{/if}}{{#if isStarting}} move-starting{{/if}}" data-item-id="{{this.ownedId}}">
 		{{else}}
 		<li class="stonetop-item{{#if (and locked (not owned))}} move-locked{{/if}}{{#if requirementsUnmet}} move-requirements-unmet{{/if}}{{#if (or markBudget.needsChoice statChoiceNeeded)}} move-needs-choice{{/if}}{{#if isStarting}} move-starting{{/if}}">
 		{{/if}}
@@ -90,13 +90,13 @@
 				      title / +stat chip flow around it (see the .stonetop-item-source
 				      float rules). A right float only reserves its corner on line 1 if it
 				      precedes the inline content in the DOM. --}}
-				{{#if sourceLabel}}<span class="stonetop-item-source">{{sourceLabel}}</span>{{/if}}
+				{{#if sourceLabel}}<span class="stonetop-item-source">{{this.sourceLabel}}</span>{{/if}}
 				{{#if repeatable}}
 				<span class="stonetop-repeat-checks">
 					{{#each (repeatChecks this)}}
 					<input type="checkbox" class="stonetop-item-check stonetop-repeat-check"
 					       data-compendium-id="{{../compendiumId}}"
-					       data-owned-id="{{ownedId}}"
+					       data-owned-id="{{this.ownedId}}"
 					       data-move-name="{{../name}}"
 					       {{#if checked}}checked{{/if}}
 					       {{#if (or disabled (not @root.stonetop.movesEdit))}}disabled{{/if}}>
@@ -104,9 +104,9 @@
 				</span>
 				{{else}}
 				<input type="checkbox" class="stonetop-item-check stonetop-move-check"
-				       data-compendium-id="{{compendiumId}}"
-				       data-owned-id="{{ownedId}}"
-				       data-move-name="{{name}}"
+				       data-compendium-id="{{this.compendiumId}}"
+				       data-owned-id="{{this.ownedId}}"
+				       data-move-name="{{this.name}}"
 				       {{#if owned}}checked{{/if}}
 				       {{!-- An owned starting move is locked (can't be dropped); an UNowned one
 				             — the unpicked side of an "either X OR Y" choice — stays pickable
@@ -130,15 +130,15 @@
 				      The "+STAT" chip follows the title rather than leading it, so the header
 				      line reads as a title with its stat beside it rather than a stat with a
 				      title trailing after. It rolls too — see the chip's own handler. --}}
-				<strong class="stonetop-item-name{{#if (and owned rollType (not granterOff))}} rollable move-rollable{{/if}}"{{#if (and owned rollType (not granterOff))}} data-roll="{{rollType}}" data-mod=""{{/if}}>{{name}}</strong>
-				{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
+				<strong class="stonetop-item-name{{#if (and owned rollType (not granterOff))}} rollable move-rollable{{/if}}"{{#if (and owned rollType (not granterOff))}} data-roll="{{this.rollType}}" data-mod=""{{/if}}>{{this.name}}</strong>
+				{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{this.rollLabel}}</span>{{/if}}
 				{{!-- The load on the sheet is heavier than this move's trigger allows (Catlike, Free
 				      Running), or the move needs its owner unarmored and they wear armor (Uncanny
 				      Reflexes). Display only: actors/character/load-gates.js. --}}
-				{{#if loadGateNote}}<span class="stonetop-move-load-tag" data-tooltip="{{loadGateTooltip}}" data-tooltip-direction="UP">{{loadGateNote}}</span>{{/if}}
-				{{#if requirementsUnmet}}<i class="fas fa-triangle-exclamation stonetop-move-req-warning" data-tooltip="You own this move but do not meet its requirement{{#if requiresLabel}} ({{requiresLabel}}){{/if}}. Add the missing prerequisite, or drop this move." data-tooltip-direction="UP" aria-hidden="true"></i>{{/if}}
+				{{#if loadGateNote}}<span class="stonetop-move-load-tag" data-tooltip="{{this.loadGateTooltip}}" data-tooltip-direction="UP">{{this.loadGateNote}}</span>{{/if}}
+				{{#if requirementsUnmet}}<i class="fas fa-triangle-exclamation stonetop-move-req-warning" data-tooltip="You own this move but do not meet its requirement{{#if requiresLabel}} ({{this.requiresLabel}}){{/if}}. Add the missing prerequisite, or drop this move." data-tooltip-direction="UP" aria-hidden="true"></i>{{/if}}
 				{{#if markBudget.needsChoice}}<i class="fas fa-hand-pointer stonetop-move-choice-needed" data-tooltip="This move has selections left to make ({{markBudget.used}} of {{markBudget.max}} chosen). Tap the hand to jump into the moves editor and choose the rest." data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
-				{{#if backgroundAnswerNeeded}}<i class="fas fa-hand-pointer stonetop-move-background-answer-needed" data-move-name="{{name}}" data-tooltip="{{backgroundAnswerNeeded.tooltip}}" data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
+				{{#if backgroundAnswerNeeded}}<i class="fas fa-hand-pointer stonetop-move-background-answer-needed" data-move-name="{{this.name}}" data-tooltip="{{backgroundAnswerNeeded.tooltip}}" data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
 				{{#if statChoiceNeeded}}<i class="fas fa-hand-pointer stonetop-move-stat-choice-needed" data-tooltip="You took this move but haven't chosen which stat to raise, so it isn't boosting anything yet. Tap the hand to pick a stat (+1, max +{{statChoiceNeeded.cap}})." data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
 				{{#if (and owned resource)}}
 				{{!-- Eats the header line's free space so the track sits at the right edge
@@ -152,7 +152,7 @@
 						<button type="button" class="stonetop-item-resource-check{{#if checked}} is-checked{{/if}}"
 						        data-move-name="{{../name}}"
 						        data-index="{{@index}}"></button>
-						{{#if label}}<span class="stonetop-resource-label">{{label}}</span>{{/if}}
+						{{#if label}}<span class="stonetop-resource-label">{{this.label}}</span>{{/if}}
 					</span>
 					{{/each}}
 				</span>
@@ -166,7 +166,7 @@
 			</div>
 			{{!-- This character's own answers the move leans on (Anger is a Gift: the righteous angers
 			      picked on the Details tab). MoveSnapshot#subtitle. --}}
-			{{#if subtitle}}<p class="stonetop-move-note stonetop-move-subtitle">{{subtitle}}</p>{{/if}}
+			{{#if subtitle}}<p class="stonetop-move-note stonetop-move-subtitle">{{this.subtitle}}</p>{{/if}}
 			<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>
 			{{!-- Tough Love (the Would-Be Hero): the PCs this hero has called on it, each until "we
 			      worked it out", and a button to call another. Their rolls against the hero are at
@@ -175,7 +175,7 @@
 			<div class="stonetop-tough-love">
 				{{#each held}}
 				<span class="stonetop-tough-love-held">{{localize "stonetop.fight.heroMoves.toughLove.held" other=name}}
-					<button type="button" class="stonetop-inline-btn stonetop-tough-love-clear" data-pc-id="{{id}}"
+					<button type="button" class="stonetop-inline-btn stonetop-tough-love-clear" data-pc-id="{{this.id}}"
 					        data-tooltip="{{localize 'stonetop.fight.heroMoves.toughLove.workedOutTooltip' other=name}}" data-tooltip-direction="UP">{{localize "stonetop.fight.heroMoves.toughLove.workedOutButton"}}</button>
 				</span>
 				{{/each}}
@@ -196,8 +196,8 @@
 				<span class="stonetop-item-resources stonetop-up-with-people-theirs-track">
 					<span class="stonetop-item-resource-entry">
 						<button type="button" class="stonetop-up-with-people-theirs{{#if theirs}} is-checked{{/if}}"
-						        aria-pressed="{{#if theirs}}true{{else}}false{{/if}}" aria-label="{{theirsTooltip}}"
-						        data-tooltip="{{theirsTooltip}}" data-tooltip-direction="UP"{{#unless editable}} disabled{{/unless}}></button>
+						        aria-pressed="{{#if theirs}}true{{else}}false{{/if}}" aria-label="{{this.theirsTooltip}}"
+						        data-tooltip="{{this.theirsTooltip}}" data-tooltip-direction="UP"{{#unless editable}} disabled{{/unless}}></button>
 						<span class="stonetop-resource-label">{{localize "stonetop.upWithPeople.theirsLabel"}}</span>
 					</span>
 				</span>
@@ -218,14 +218,14 @@
 			{{#if owned}}{{#with (lookup @root.stonetop.moveActions name)}}
 			<div class="stonetop-move-actions">
 				{{#each this}}
-				<button type="button" class="stonetop-inline-btn stonetop-move-action" data-move-action="{{action}}"
-				        data-tooltip="{{tooltip}}" data-tooltip-direction="UP"{{#if disabled}} disabled{{/if}}><i class="{{icon}}" aria-hidden="true"></i> {{label}}</button>
+				<button type="button" class="stonetop-inline-btn stonetop-move-action" data-move-action="{{this.action}}"
+				        data-tooltip="{{this.tooltip}}" data-tooltip-direction="UP"{{#if disabled}} disabled{{/if}}><i class="{{this.icon}}" aria-hidden="true"></i> {{this.label}}</button>
 				{{/each}}
 			</div>
 			{{/with}}{{/if}}
 			{{#if (and owned (lookup @root.stonetop.asteriskUse name))}}
 			<div class="stonetop-asterisk-use">
-				<button type="button" class="stonetop-inline-btn stonetop-asterisk-used" data-move-name="{{name}}"
+				<button type="button" class="stonetop-inline-btn stonetop-asterisk-used" data-move-name="{{this.name}}"
 				        data-tooltip="{{localize 'stonetop.wouldBeHero.asteriskTooltip'}}" data-tooltip-direction="UP">{{localize "stonetop.wouldBeHero.asteriskButton"}}</button>
 			</div>
 			{{/if}}
@@ -240,24 +240,24 @@
 				{{#each markOptions}}
 				<li class="stonetop-move-mark">
 					{{#if statSlots}}
-					<span class="stonetop-move-mark-label">{{label}}</span>
+					<span class="stonetop-move-mark-label">{{this.label}}</span>
 					<span class="stonetop-move-mark-slots">
 						{{#each statSlots}}
 						<span class="stonetop-move-mark-slot">
 							<select class="stonetop-move-mark-stat"
 							        data-move-name="{{../../name}}"
 							        data-mark-slug="{{../slug}}"
-							        data-idx="{{index}}"
+							        data-idx="{{this.index}}"
 							        {{#unless @root.stonetop.movesEdit}}disabled{{/unless}}>
-								{{#each options}}<option value="{{key}}"{{#if selected}} selected{{/if}}>{{abbr}}</option>{{/each}}
+								{{#each options}}<option value="{{this.key}}"{{#if selected}} selected{{/if}}>{{this.abbr}}</option>{{/each}}
 							</select>
 							{{> "stonetop.move-mark-level" moveName=../../name slug=../slug index=index level=level}}
-							{{#if levelCaution}}<i class="fas fa-triangle-exclamation stonetop-move-mark-level-caution" data-tooltip="{{levelCaution}}" data-tooltip-direction="UP" aria-label="{{levelCaution}}"></i>{{/if}}
+							{{#if levelCaution}}<i class="fas fa-triangle-exclamation stonetop-move-mark-level-caution" data-tooltip="{{this.levelCaution}}" data-tooltip-direction="UP" aria-label="{{this.levelCaution}}"></i>{{/if}}
 						</span>
 						{{/each}}
 					</span>
 					{{else}}
-					<span class="stonetop-move-mark-checks"{{#if capNote}} data-tooltip="{{capNote}}" data-tooltip-direction="UP"{{/if}}>
+					<span class="stonetop-move-mark-checks"{{#if capNote}} data-tooltip="{{this.capNote}}" data-tooltip-direction="UP"{{/if}}>
 						{{!-- The box the background fills: ticked, locked, outside the budget, never stored. --}}
 						{{#if background}}
 						<input type="checkbox" class="stonetop-move-mark-check stonetop-move-mark-check--background" checked disabled
@@ -267,15 +267,15 @@
 						<input type="checkbox" class="stonetop-move-mark-check"
 						       data-move-name="{{../../name}}"
 						       data-mark-slug="{{../slug}}"
-						       data-idx="{{index}}"
+						       data-idx="{{this.index}}"
 						       {{#if checked}}checked{{/if}}
 						       {{#if (or disabled (not @root.stonetop.movesEdit))}}disabled{{/if}}>
 						{{/each}}
 					</span>
-					<span class="stonetop-move-mark-label"{{#if capNote}} data-tooltip="{{capNote}}" data-tooltip-direction="UP"{{/if}}>{{label}}</span>
+					<span class="stonetop-move-mark-label"{{#if capNote}} data-tooltip="{{this.capNote}}" data-tooltip-direction="UP"{{/if}}>{{this.label}}</span>
 					{{#if background}}<span class="stonetop-move-mark-background" data-tooltip="{{background.tooltip}}" data-tooltip-direction="UP">{{background.label}}</span>{{/if}}
-					{{#if duplicateNote}}<i class="fas fa-triangle-exclamation stonetop-move-mark-duplicate" data-tooltip="{{duplicateNote}}" data-tooltip-direction="UP" aria-label="{{duplicateNote}}"></i>{{/if}}
-					{{#each checks}}{{#if checked}}{{> "stonetop.move-mark-level" moveName=../../name slug=../slug index=index level=level}}{{#if levelCaution}}<i class="fas fa-triangle-exclamation stonetop-move-mark-level-caution" data-tooltip="{{levelCaution}}" data-tooltip-direction="UP" aria-label="{{levelCaution}}"></i>{{/if}}{{/if}}{{/each}}
+					{{#if duplicateNote}}<i class="fas fa-triangle-exclamation stonetop-move-mark-duplicate" data-tooltip="{{this.duplicateNote}}" data-tooltip-direction="UP" aria-label="{{this.duplicateNote}}"></i>{{/if}}
+					{{#each checks}}{{#if checked}}{{> "stonetop.move-mark-level" moveName=../../name slug=../slug index=index level=level}}{{#if levelCaution}}<i class="fas fa-triangle-exclamation stonetop-move-mark-level-caution" data-tooltip="{{this.levelCaution}}" data-tooltip-direction="UP" aria-label="{{this.levelCaution}}"></i>{{/if}}{{/if}}{{/each}}
 					{{/if}}
 				</li>
 				{{/each}}
@@ -285,7 +285,7 @@
 			<div class="stonetop-stat-choices">
 				{{#each statChoices}}
 				{{#if statKey}}
-				<span class="stonetop-stat-boost-chip">+1 {{statAbbr}}</span>
+				<span class="stonetop-stat-boost-chip">+1 {{this.statAbbr}}</span>
 				{{/if}}
 				{{/each}}
 			</div>
@@ -295,9 +295,9 @@
 				{{backgroundAnswer.label}}: {{backgroundAnswer.value}}
 			</p>
 			{{/if}}
-			{{#if requiresLabel}}<p class="stonetop-move-note{{#if requirementsUnmet}} stonetop-move-note--unmet{{/if}}">Requires: {{requiresLabel}}{{#if requirementsUnmet}} (not met){{/if}}</p>{{/if}}
-			{{#if requiresPlaybook}}<p class="stonetop-move-note{{#if requirementsUnmet}} stonetop-move-note--unmet{{/if}}">Requires {{requiresPlaybook}} playbook</p>{{/if}}
-			{{#if minLevel}}<p class="stonetop-move-note{{#if requirementsUnmet}} stonetop-move-note--unmet{{/if}}">Level {{minLevel}}+</p>{{/if}}
+			{{#if requiresLabel}}<p class="stonetop-move-note{{#if requirementsUnmet}} stonetop-move-note--unmet{{/if}}">Requires: {{this.requiresLabel}}{{#if requirementsUnmet}} (not met){{/if}}</p>{{/if}}
+			{{#if requiresPlaybook}}<p class="stonetop-move-note{{#if requirementsUnmet}} stonetop-move-note--unmet{{/if}}">Requires {{this.requiresPlaybook}} playbook</p>{{/if}}
+			{{#if minLevel}}<p class="stonetop-move-note{{#if requirementsUnmet}} stonetop-move-note--unmet{{/if}}">Level {{this.minLevel}}+</p>{{/if}}
 			{{#if granterOff}}<p class="stonetop-move-note stonetop-move-note--granter-off">{{localize "stonetop.character.moves.granterOff" move=granterOff}}</p>{{/if}}
 			{{#if granterOffCopy}}<p class="stonetop-move-note stonetop-move-note--granter-off">{{localize "stonetop.character.moves.granterOffCopy" move=granterOffCopy}}</p>{{/if}}
 			{{#if replacedBy}}<p class="stonetop-move-note stonetop-move-note--replaced" data-tooltip="{{localize 'stonetop.character.moves.replacedByTooltip' move=replacedBy}}" data-tooltip-direction="UP">{{localize "stonetop.character.moves.replacedBy" move=replacedBy}}</p>{{/if}}

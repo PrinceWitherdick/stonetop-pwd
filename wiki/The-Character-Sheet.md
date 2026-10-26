@@ -61,7 +61,7 @@ The top line shows your playbook and, in brackets, your Instinct word (for examp
 
 Once your GM has set up Book I in the world, a book button appears at the right end of that line. Click it to open Book I in the [Rulebook Reader](The-Rulebook-Reader).
 
-Below your name sits your appearance line. If your character has died, a **Dead** tag rides at its end (see [Death and Beyond](Death-and-Beyond)). Under it, "Keep in mind" chips list the tags on the gear you carry and any reminders you added with the row's **+** chip (see [Relationships, Notes and Reminders](Relationships-Notes-and-Reminders)).
+Below your name sits your appearance line. If your character has died, a **Dead** tag rides at its end (see [Death and Beyond](Death-and-Beyond)). Running on after its last word, "Keep in mind" chips list the tags on the gear you carry and any reminders you added with the row's **+** chip (see [Relationships, Notes and Reminders](Relationships-Notes-and-Reminders)).
 
 ### State icons beside your name
 

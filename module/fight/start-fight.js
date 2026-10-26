@@ -38,7 +38,7 @@ import { compendiumRefTail } from "../migration/compat.js";
 import { HEROES, FOES } from "./engagements.js";
 import { classifySide } from "./fight-sides.js";
 import { followerMasterIndex } from "../actors/character/follower-masters.js";
-import { combatantBodies, combatantSide, fightOnScene, gridOf, isFight, sideInfoFor, sceneRectOf, tokenLevel, SIDE_FLAG } from "./fight-state.js";
+import { combatantBodies, combatantSide, controlledTokenIds, fightOnScene, gridOf, isFight, sideInfoFor, sceneRectOf, tokenLevel, SIDE_FLAG } from "./fight-state.js";
 import { fightWindowComing, fightWindowWillShow } from "./fight-window.js";
 import { askGroupSize, groupSizeQuestions } from "./group-size.js";
 import { gatherAround, makeGroupToken, settleNewcomers } from "./group-scale.js";
@@ -283,7 +283,7 @@ export async function openStartFight({ combat = null, preselect = null, preselec
 	const gathered = await gatherStartWindow(scene, combat);
 	const model = startWindowModel({
 		...gathered,
-		controlled: (canvas.tokens?.controlled ?? []).map(t => t.document?.id ?? t.id),
+		controlled: controlledTokenIds(),
 		preselect, preselectPcs, forceFoes, mode, format,
 	});
 	if (!model.groups.length) {

@@ -22,6 +22,7 @@ import { escHtml } from "../../utils/strings.js";
 import { canRewriteCard, moveChatCard } from "../../utils/chat.js";
 import { inCardTurn } from "../../utils/card-queue.js";
 import { pressRollCard, writeCardRoll } from "../../utils/roll-card-writer.js";
+import { NO_ANSWER, relayOutcome } from "../../utils/relay-landed.js";
 import { rollRewrite } from "../../utils/roll-rewrite.js";
 import { askWithButtons } from "../../utils/ask-with-buttons.js";
 import { contentElement } from "../../utils/dialogv2-content.js";
@@ -155,8 +156,9 @@ export async function rollGiveItAllHurt(actor, hurt = rollRewrite()?.hurt) {
 
 // The lift itself, for both of the above: `allowed` is asked in the card's turn, so two presses cannot both land.
 // The hurt cost's 2d4 is rolled once the turn is over (rollGiveItAllHurt), and only with a `hurt` to roll it:
-// a relay from another client passes none and leaves it to the presser.
-async function liftInCardTurn(message, actor, costKey, { shiftRoll, cardFlavor, afterShift = null, hurt = null } = {}, allowed) {
+// a relay from another client passes none and leaves it to the presser. `press` is the presser's own mark on the
+// card's flag, so a presser whose answer never came back can still tell its own lift from somebody else's.
+async function liftInCardTurn(message, actor, costKey, { shiftRoll, cardFlavor, afterShift = null, hurt = null, press = null } = {}, allowed) {
 	const cost = costOf(costKey);
 	if (!cost) return false;
 	const given = await inCardTurn(message, async () => {
@@ -167,7 +169,7 @@ async function liftInCardTurn(message, actor, costKey, { shiftRoll, cardFlavor, 
 		const fromTier = countedTier(from, record);
 		const lift = async roll => { while (roll.total < target) await shiftRoll(roll, 1); };
 		const roll = await writeCardRoll(message, lift, { cardFlavor, afterShift }, lifted => ({
-			flags: { [SYSTEM_ID]: { [GAVE_IT_ALL_FLAG]: { cost: cost.key, from, to: lifted.total } } },
+			flags: { [SYSTEM_ID]: { [GAVE_IT_ALL_FLAG]: { cost: cost.key, from, to: lifted.total, ...(typeof press === "string" && press ? { press } : {}) } } },
 		}));
 		await globalThis.ChatMessage?.create?.({
 			content: moveChatCard(IMPETUOUS_YOUTH.label,
@@ -180,6 +182,16 @@ async function liftInCardTurn(message, actor, costKey, { shiftRoll, cardFlavor, 
 	});
 	if (given && cost.key === "hurt") await rollGiveItAllHurt(actor, hurt);
 	return given;
+}
+
+/** Whether the card was given it your all by the press marked `press` (liftInCardTurn), read off the card now. PURE but for the read. */
+export function givenByPress(message, press) {
+	return !!press && message?.getFlag?.(SYSTEM_ID, GAVE_IT_ALL_FLAG)?.press === press;
+}
+
+/** A fresh mark for one press, which givenByPress later looks for on the card. */
+export function newPressId() {
+	return globalThis.foundry?.utils?.randomID?.() ?? `${Date.now()}-${Math.random()}`;
 }
 
 /**
@@ -216,7 +228,13 @@ export function wireImpetuousYouth(message, html) {
 		button.disabled = true;
 		try {
 			const cost = await askGiveItAllCost(actor);
-			const given = cost && await pressRollCard(message, GIVE_IT_ALL_ACTION, { cost }, { timeout: GIVE_IT_ALL_TIMEOUT_MS });
+			const press = newPressId();
+			// No answer in time, but the writer may lift the card all the same (relay-landed.js): the card's flag
+			// carries this press's mark when it did, and then the 2d4 is still this client's to roll.
+			const lifted = () => givenByPress(message, press);
+			const given = cost
+				? await relayOutcome(message, await pressRollCard(message, GIVE_IT_ALL_ACTION, { cost, press }, { timeout: GIVE_IT_ALL_TIMEOUT_MS, noAnswer: NO_ANSWER }), lifted)
+				: false;
 			if (!given) button.disabled = false;
 			// The writer lifts the card and leaves the 2d4 to this client (stonetop.js's GIVE_IT_ALL_ACTION).
 			else if (cost === "hurt") await rollGiveItAllHurt(actor);

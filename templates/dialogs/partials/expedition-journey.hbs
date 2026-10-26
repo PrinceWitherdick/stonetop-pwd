@@ -117,7 +117,7 @@
     {{#each journey.groups}}
     {{#if places.length}}
     <div class="stonetop-journey-group">
-      <div class="stonetop-journey-grouphead">{{label}}</div>
+      <div class="stonetop-journey-grouphead">{{this.label}}</div>
       <ul>
         {{#each places}}
         {{!-- THE BOOK TRAILS THE NAME, at the far end of the row, which is where it has always
@@ -126,17 +126,17 @@
               whatever space the name and time leave over, so the one place in eighteen the books
               give no entry keeps its column empty instead of letting its name run wide. --}}
         <li>
-          <button type="button" data-slug="{{slug}}"
+          <button type="button" data-slug="{{this.slug}}"
                   class="stonetop-journey-pick stonetop-journey-row{{#if isOrigin}} is-origin{{/if}}{{#if isChosen}} is-chosen{{/if}}">
-            <span class="j-name">{{name}}</span>
-            {{#if isOrigin}}<span class="j-here">setting out</span>{{else if time}}<span class="j-time">{{time}}</span>{{/if}}
+            <span class="j-name">{{this.name}}</span>
+            {{#if isOrigin}}<span class="j-here">setting out</span>{{else if time}}<span class="j-time">{{this.time}}</span>{{/if}}
           </button>
           {{#if uuid}}
           {{!-- `data-link` is what makes this open, NOT `.content-link`: core delegates its
                 content-link click (and drag) off `a[data-link]` and only paints the class. An
                 anchor with the class alone looks exactly like a link and does nothing. --}}
           <a class="content-link stonetop-journey-book" data-link draggable="true"
-             data-uuid="{{uuid}}" data-tooltip="Read the gazetteer" aria-label="Read about {{name}} in the gazetteer">
+             data-uuid="{{this.uuid}}" data-tooltip="Read the gazetteer" aria-label="Read about {{this.name}} in the gazetteer">
             <i class="fas fa-book-open" aria-hidden="true"></i>
           </a>
           {{/if}}

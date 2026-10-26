@@ -9,37 +9,37 @@
 
 	<ol class="stonetop-timeline-ages-list">
 		{{#each rows}}
-		<li class="stonetop-timeline-ages-row{{#if invalid}} is-invalid{{/if}}" data-age-id="{{id}}">
+		<li class="stonetop-timeline-ages-row{{#if invalid}} is-invalid{{/if}}" data-age-id="{{this.id}}">
 			{{!-- The band as the timeline will draw it, in this page's skin. --}}
-			<span class="stonetop-timeline-ages-sample stonetop-timeline-kind--custom" style="{{style}}" aria-hidden="true"></span>
+			<span class="stonetop-timeline-ages-sample stonetop-timeline-kind--custom" style="{{this.style}}" aria-hidden="true"></span>
 
 			<label class="stonetop-timeline-ages-field stonetop-timeline-ages-field--name">
 				<span class="stonetop-timeline-ages-label">{{localize "stonetop.timeline.ages.name"}}</span>
-				<input type="text" class="stonetop-timeline-ages-name" value="{{name}}" maxlength="{{@root.nameMax}}"
+				<input type="text" class="stonetop-timeline-ages-name" value="{{this.name}}" maxlength="{{@root.nameMax}}"
 				       placeholder="{{localize "stonetop.timeline.ages.namePlaceholder"}}"
-				       data-ages-focus="name-{{id}}">
+				       data-ages-focus="name-{{this.id}}">
 			</label>
 
 			<label class="stonetop-timeline-ages-field">
 				<span class="stonetop-timeline-ages-label">{{localize "stonetop.timeline.ages.from"}}</span>
-				<input type="number" class="stonetop-timeline-ages-from" value="{{fromText}}" step="1" inputmode="numeric"
-				       min="{{@root.minYear}}" max="{{@root.maxYear}}" data-ages-focus="from-{{id}}">
+				<input type="number" class="stonetop-timeline-ages-from" value="{{this.fromText}}" step="1" inputmode="numeric"
+				       min="{{@root.minYear}}" max="{{@root.maxYear}}" data-ages-focus="from-{{this.id}}">
 			</label>
 
 			<label class="stonetop-timeline-ages-field">
 				<span class="stonetop-timeline-ages-label">{{localize "stonetop.timeline.ages.to"}}</span>
-				<input type="number" class="stonetop-timeline-ages-to" value="{{toText}}" step="1" inputmode="numeric"
+				<input type="number" class="stonetop-timeline-ages-to" value="{{this.toText}}" step="1" inputmode="numeric"
 				       min="{{@root.minYear}}" max="{{@root.maxYear}}"
 				       placeholder="{{localize "stonetop.timeline.ages.toPlaceholder"}}"
-				       data-ages-focus="to-{{id}}">
+				       data-ages-focus="to-{{this.id}}">
 			</label>
 
 			<label class="stonetop-timeline-ages-field stonetop-timeline-ages-field--colour">
 				<span class="stonetop-timeline-ages-label">{{localize "stonetop.timeline.ages.colour"}}</span>
-				<input type="color" class="stonetop-timeline-ages-colour" value="{{colour}}" data-ages-focus="colour-{{id}}">
+				<input type="color" class="stonetop-timeline-ages-colour" value="{{this.colour}}" data-ages-focus="colour-{{this.id}}">
 			</label>
 
-			<button type="button" class="stonetop-timeline-ages-remove" data-ages-focus="remove-{{id}}"
+			<button type="button" class="stonetop-timeline-ages-remove" data-ages-focus="remove-{{this.id}}"
 			        aria-label="{{localize "stonetop.timeline.ages.remove"}}" data-tooltip="{{localize "stonetop.timeline.ages.remove"}}">
 				<i class="fas fa-trash" aria-hidden="true"></i>
 			</button>

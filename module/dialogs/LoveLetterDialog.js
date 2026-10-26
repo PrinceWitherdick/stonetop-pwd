@@ -2,7 +2,7 @@ import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { normalizeRollType } from "../utils/roll-types.js";
 import { customMoveDescriptionToPlainText } from "../utils/custom-move-text.js";
 import {
-	createLoveLetter, updateLoveLetter,
+	createLoveLetter, updateLoveLetter, sendLoveLetter, isDraftLoveLetter, loveLetterDrafts,
 	loveLetterRecipientOptions, loveLetterRollOptions,
 } from "../actors/character/love-letters.js";
 
@@ -12,6 +12,10 @@ import {
  * recipient) or from the pencil on a letter's card (edit mode: recipient is fixed). On
  * save it writes an embedded `move` item onto the recipient character; the shaping of that
  * document lives in love-letters.js so this dialog only gathers raw input.
+ *
+ * A letter can also be saved as a draft: it goes onto the recipient's sheet unsent, where only
+ * the GM sees it, and the window stays open on it. A blank window lists the saved drafts to pick
+ * one back up; a draft's window offers Send beside Save as draft.
  */
 export class LoveLetterDialog extends StonetopDialog {
 	/**
@@ -49,9 +53,13 @@ export class LoveLetterDialog extends StonetopDialog {
 	}
 
 	get title() {
-		return game.i18n.localize(this._item
-			? "stonetop.character.moves.loveLetter.editTitle"
-			: "stonetop.character.moves.loveLetter.createTitle");
+		const key = !this._item ? "createTitle" : (this._isDraft() ? "draftTitle" : "editTitle");
+		return game.i18n.localize(`stonetop.character.moves.loveLetter.${key}`);
+	}
+
+	// Is the letter in this window an unsent draft? (A blank window is not.)
+	_isDraft() {
+		return !!this._item && isDraftLoveLetter(this._item);
 	}
 
 	getData() {
@@ -69,8 +77,17 @@ export class LoveLetterDialog extends StonetopDialog {
 		const hasProse = !!(mr.success?.value || mr.partial?.value || mr.failure?.value);
 		const hasPicks = !!(mr.success?.pick || mr.partial?.pick || mr.failure?.pick);
 		const resultStyle = options.length > 0 ? "list" : (hasProse ? "prose" : (hasPicks ? "list" : "prose"));
+		const isDraft = this._isDraft();
+		// A blank window lists the drafts to pick back up, newest first.
+		const drafts = this._item ? [] : loveLetterDrafts().map(({ actor, item }) => ({
+			actorId: actor.id, itemId: item.id, name: item.name, recipient: actor.name,
+		}));
 		return {
 			isEdit: !!this._item,
+			isDraft,
+			// Save as draft is offered until the letter is sent; after that an edit just saves.
+			canDraft: !this._item || isDraft,
+			drafts,
 			recipients: this._item ? [] : loveLetterRecipientOptions(),
 			recipientName: this._actor?.name ?? "",
 			name: this._item?.name ?? "",
@@ -115,7 +132,22 @@ export class LoveLetterDialog extends StonetopDialog {
 		syncStyle();
 
 		root.querySelector(".stonetop-love-letter-save")?.addEventListener("click", () => this._save(root));
+		root.querySelector(".stonetop-love-letter-draft")?.addEventListener("click", () => this._save(root, { draft: true }));
 		root.querySelector(".stonetop-love-letter-cancel")?.addEventListener("click", () => this.close());
+		root.querySelectorAll(".stonetop-love-letter-draft-open").forEach(btn => btn.addEventListener("click", () => {
+			const item = game.actors.get(btn.dataset.actorId)?.items.get(btn.dataset.itemId);
+			if (item) this._showLetter(item);
+		}));
+	}
+
+	// Turn this window onto a saved letter (a draft just saved, or one picked from the list).
+	_showLetter(item) {
+		this._item = item;
+		this._actor = item.parent ?? this._actor;
+		this.render(false);
+		// A V1 re-render keeps the old header, so put the new title on it by hand.
+		const titleEl = this.element?.[0]?.querySelector?.(".window-title");
+		if (titleEl) titleEl.textContent = this.title;
 	}
 
 	// Which result style the GM has toggled on ("prose" | "list"); defaults to prose.
@@ -123,7 +155,11 @@ export class LoveLetterDialog extends StonetopDialog {
 		return root.querySelector("[name=resultStyle]:checked")?.value === "list" ? "list" : "prose";
 	}
 
-	async _save(root) {
+	/**
+	 * Save the window. Sending (the default) puts the letter in front of the player; `draft`
+	 * saves it unsent and keeps the window open on it.
+	 */
+	async _save(root, { draft = false } = {}) {
 		const val = (sel) => StonetopDialog.readValue(root, sel);
 
 		// Create mode needs a recipient; edit mode keeps the letter on its current actor.
@@ -138,8 +174,9 @@ export class LoveLetterDialog extends StonetopDialog {
 			}
 		}
 
+		// A draft can be untitled for now; it's named before it goes out.
 		const name = val("[name=name]").trim();
-		if (!name) {
+		if (!name && !draft) {
 			ui.notifications.warn(game.i18n.localize("stonetop.character.moves.loveLetter.nameRequired"));
 			root.querySelector("[name=name]")?.focus();
 			return;
@@ -176,8 +213,25 @@ export class LoveLetterDialog extends StonetopDialog {
 			},
 		};
 
-		if (this._item) await updateLoveLetter(this._item, input);
-		else {
+		if (draft) {
+			const item = this._item
+				? (await updateLoveLetter(this._item, input), this._item)
+				: await createLoveLetter(actor, input, { draft: true });
+			if (!item) return;
+			ui.notifications.info(game.i18n.format("stonetop.character.moves.loveLetter.draftSaved", { name: actor.name }));
+			this._onSaved?.();
+			this._showLetter(item);
+			return;
+		}
+
+		if (this._item) {
+			const wasDraft = this._isDraft();
+			await updateLoveLetter(this._item, input);
+			if (wasDraft) {
+				await sendLoveLetter(this._item);
+				ui.notifications.info(game.i18n.format("stonetop.character.moves.loveLetter.created", { name: actor.name }));
+			}
+		} else {
 			const created = await createLoveLetter(actor, input);
 			if (created) {
 				ui.notifications.info(game.i18n.format("stonetop.character.moves.loveLetter.created", { name: actor.name }));

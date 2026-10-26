@@ -17,7 +17,7 @@
         <i class="fas {{active.icon}} stonetop-guide-banner-icon stonetop-cu-banner-icon"></i>
         <div class="stonetop-guide-banner-info">
           <div class="stonetop-guide-banner-title stonetop-cu-banner-title">{{active.title}}</div>
-          <div class="stonetop-guide-banner-sub stonetop-cu-stat-line">{{statLine}}</div>
+          <div class="stonetop-guide-banner-sub stonetop-cu-stat-line">{{this.statLine}}</div>
         </div>
       </div>
 
@@ -26,9 +26,9 @@
         <p class="stonetop-cu-rule">Roll five d4s and assign each to a different aspect.</p>
         <div class="stonetop-cu-dice-row">
           {{#each dice}}
-          <span class="stonetop-cu-die{{#if assignedTo}} is-assigned{{/if}}" data-tooltip="{{label}}{{#if assignedTo}} → {{assignedTo}}{{/if}}" data-tooltip-direction="UP">
-            <span class="stonetop-cu-die-value">{{value}}</span>
-            <span class="stonetop-cu-die-label">{{label}}</span>
+          <span class="stonetop-cu-die{{#if assignedTo}} is-assigned{{/if}}" data-tooltip="{{this.label}}{{#if assignedTo}} → {{this.assignedTo}}{{/if}}" data-tooltip-direction="UP">
+            <span class="stonetop-cu-die-value">{{this.value}}</span>
+            <span class="stonetop-cu-die-label">{{this.label}}</span>
           </span>
           {{/each}}
           <button type="button" class="stonetop-cu-reroll stonetop-inline-btn" data-tooltip="Roll five fresh d4s. The table sees the re-roll in chat." data-tooltip-direction="UP">
@@ -40,13 +40,13 @@
           {{#each aspects}}
           <div class="stonetop-cu-aspect">
             <div class="stonetop-cu-aspect-name">
-              <span class="stonetop-cu-aspect-label">{{label}}</span>
-              <span class="stonetop-cu-aspect-hint">{{hint}}</span>
+              <span class="stonetop-cu-aspect-label">{{this.label}}</span>
+              <span class="stonetop-cu-aspect-hint">{{this.hint}}</span>
             </div>
-            <select class="stonetop-cu-input stonetop-cu-assign" data-aspect="{{key}}" data-cu-focus="assign-{{key}}" aria-label="Die for {{label}}">
-              {{#each options}}<option value="{{index}}" {{#if selected}}selected{{/if}} {{#if disabled}}class="is-used"{{/if}}>{{label}}</option>{{/each}}
+            <select class="stonetop-cu-input stonetop-cu-assign" data-aspect="{{this.key}}" data-cu-focus="assign-{{this.key}}" aria-label="Die for {{this.label}}">
+              {{#each options}}<option value="{{this.index}}" {{#if selected}}selected{{/if}} {{#if disabled}}class="is-used"{{/if}}>{{this.label}}</option>{{/each}}
             </select>
-            <span class="stonetop-cu-aspect-result">{{outcome}}</span>
+            <span class="stonetop-cu-aspect-result">{{this.outcome}}</span>
           </div>
           {{/each}}
         </div>
@@ -55,13 +55,13 @@
       {{!-- Traits: choose exactly as many as the Traits die --}}
       <section class="stonetop-cu-panel" data-tab="traits"{{#unless (eq activeTab "traits")}} hidden{{/unless}}>
         <p class="stonetop-cu-rule">Choose a number equal to the assigned die
-          <span class="stonetop-cu-picker-count{{#if traitsMet}} is-met{{/if}}">{{traitCount}} of {{traitLimit}}</span></p>
+          <span class="stonetop-cu-picker-count{{#if traitsMet}} is-met{{/if}}">{{this.traitCount}} of {{this.traitLimit}}</span></p>
         <div class="stonetop-cu-picker-options">
           {{#each traitOptions}}
           <label class="stonetop-cu-option{{#if checked}} is-checked{{/if}}{{#if disabled}} is-disabled{{/if}}">
-            <input type="checkbox" class="stonetop-cu-trait" value="{{key}}" data-cu-focus="trait-{{key}}" {{#if checked}}checked{{/if}} {{#if disabled}}disabled{{/if}}>
-            <span class="stonetop-cu-option-label">{{label}}</span>
-            <span class="stonetop-cu-option-detail">{{detail}}</span>
+            <input type="checkbox" class="stonetop-cu-trait" value="{{this.key}}" data-cu-focus="trait-{{this.key}}" {{#if checked}}checked{{/if}} {{#if disabled}}disabled{{/if}}>
+            <span class="stonetop-cu-option-label">{{this.label}}</span>
+            <span class="stonetop-cu-option-detail">{{this.detail}}</span>
           </label>
           {{/each}}
         </div>
@@ -70,12 +70,12 @@
       {{!-- Moves: choose exactly as many as the Moves die --}}
       <section class="stonetop-cu-panel" data-tab="moves"{{#unless (eq activeTab "moves")}} hidden{{/unless}}>
         <p class="stonetop-cu-rule">Choose a number equal to the assigned die
-          <span class="stonetop-cu-picker-count{{#if movesMet}} is-met{{/if}}">{{moveCount}} of {{moveLimit}}</span></p>
+          <span class="stonetop-cu-picker-count{{#if movesMet}} is-met{{/if}}">{{this.moveCount}} of {{this.moveLimit}}</span></p>
         <div class="stonetop-cu-picker-options">
           {{#each moveOptions}}
           <label class="stonetop-cu-option{{#if checked}} is-checked{{/if}}{{#if disabled}} is-disabled{{/if}}">
-            <input type="checkbox" class="stonetop-cu-move" value="{{label}}" data-cu-focus="move-{{@index}}" {{#if checked}}checked{{/if}} {{#if disabled}}disabled{{/if}}>
-            <span class="stonetop-cu-option-label">{{label}}</span>
+            <input type="checkbox" class="stonetop-cu-move" value="{{this.label}}" data-cu-focus="move-{{@index}}" {{#if checked}}checked{{/if}} {{#if disabled}}disabled{{/if}}>
+            <span class="stonetop-cu-option-label">{{this.label}}</span>
           </label>
           {{/each}}
         </div>
@@ -84,7 +84,7 @@
       {{!-- The batch: its name, what will manifest, and the price --}}
       <section class="stonetop-cu-panel" data-tab="summon"{{#unless (eq activeTab "summon")}} hidden{{/unless}}>
         <label class="stonetop-cf-label stonetop-cu-name-label">Name this batch
-          <input type="text" class="stonetop-cf-input stonetop-cu-name" data-cu-focus="name" value="{{name}}" placeholder="{{namePlaceholder}}">
+          <input type="text" class="stonetop-cf-input stonetop-cu-name" data-cu-focus="name" value="{{this.name}}" placeholder="{{this.namePlaceholder}}">
         </label>
 
         <div class="stonetop-cu-preview">
@@ -114,7 +114,7 @@
           <span class="stonetop-cu-cost-label">To call them up you must</span>
           <label class="stonetop-cu-cost-choice{{#if loyaltyDisabled}} is-disabled{{/if}}">
             <input type="radio" name="callup-cost" class="stonetop-cu-cost-input" data-cu-focus="cost-loyalty" value="loyalty" {{#if costLoyalty}}checked{{/if}} {{#if loyaltyDisabled}}disabled{{/if}}>
-            <span>Spend <strong>1 Loyalty</strong> from {{ringName}} <span class="stonetop-cu-cost-note">({{ringLoyalty}} held)</span></span>
+            <span>Spend <strong>1 Loyalty</strong> from {{this.ringName}} <span class="stonetop-cu-cost-note">({{this.ringLoyalty}} held)</span></span>
           </label>
           <label class="stonetop-cu-cost-choice">
             <input type="radio" name="callup-cost" class="stonetop-cu-cost-input" data-cu-focus="cost-consequence" value="consequence" {{#if costConsequence}}checked{{/if}}>
@@ -124,7 +124,7 @@
         {{/if}}
 
         {{#unless complete}}
-        <p class="stonetop-cu-missing"><i class="fas fa-circle-info" aria-hidden="true"></i> Still to choose: {{stillToChoose}}.</p>
+        <p class="stonetop-cu-missing"><i class="fas fa-circle-info" aria-hidden="true"></i> Still to choose: {{this.stillToChoose}}.</p>
         {{/unless}}
       </section>
 

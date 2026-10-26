@@ -98,11 +98,48 @@ describe("opening a window that may already be open", () => {
 		}
 	});
 
-	// An opener that hands back a promise rather than a window is not something to hand back twice.
-	it("opens again every time for an opener that returns no window", () => {
+	// An opener that reads its data before minting (the level-up window): a second press during the read
+	// gets the same promise, not a second read and a second window.
+	it("hands back an async opener's promise while it is still awaiting", async () => {
+		let resolve;
+		const win = new Win("async-wait", STATES.RENDERING);
+		const open = vi.fn(() => new Promise(r => { resolve = r; }));
+		const first = openOrFocus("async-wait", open);
+		expect(openOrFocus("async-wait", open)).toBe(first);
+		resolve(win);
+		expect(await first).toBe(win);
+		// The window it resolved to is still drawing, so it is the one handed back now.
+		expect(openOrFocus("async-wait", open)).toBe(win);
+		expect(open).toHaveBeenCalledTimes(1);
+	});
+
+	it("forgets an async opener that failed, so the next press tries again", async () => {
+		const open = vi.fn().mockRejectedValueOnce(new Error("read failed")).mockResolvedValue(null);
+		await expect(openOrFocus("async-fail", open)).rejects.toThrow("read failed");
+		await openOrFocus("async-fail", open);
+		expect(open).toHaveBeenCalledTimes(2);
+	});
+
+	// An opener whose read hangs (a pack that never answers) must not leave the button dead until a reload.
+	it("lets go of an async opener that never settles, after a while", () => {
+		vi.useFakeTimers();
+		try {
+			const open = vi.fn(() => new Promise(() => {}));
+			const first = openOrFocus("async-hang", open);
+			vi.advanceTimersByTime(5000);
+			expect(openOrFocus("async-hang", open)).toBe(first);
+			vi.advanceTimersByTime(30000);
+			expect(openOrFocus("async-hang", open)).not.toBe(first);
+			expect(open).toHaveBeenCalledTimes(2);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("opens again for an async opener that settled with no window", async () => {
 		const open = vi.fn(() => Promise.resolve(null));
-		openOrFocus("async", open);
-		openOrFocus("async", open);
+		await openOrFocus("async", open);
+		await openOrFocus("async", open);
 		expect(open).toHaveBeenCalledTimes(2);
 	});
 

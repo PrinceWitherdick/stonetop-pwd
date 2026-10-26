@@ -12,8 +12,8 @@
     "markOptions": [
       { "slug": "exceptional", "label": "They are exceptional (and roll +2 instead of +1)", "marks": 1, "crewRoll": 1 },
       { "slug": "inured", "label": "They are inured to terror & horror", "marks": 1 },
-      { "slug": "crew-hp", "label": "Increase their max HP by 4 each", "marks": 4, "crewHp": 4 },
-      { "slug": "crew-damage", "label": "Increase their damage die one size (max d10)", "marks": 2, "crewDamageStep": 1, "crewDamageCap": "d10" }
+      { "slug": "crew-hp", "label": "Increase their max HP by 4 each", "marks": 1, "crewHp": 4 },
+      { "slug": "crew-damage", "label": "Increase their damage die one size (max d10)", "marks": 1, "crewDamageStep": 1, "crewDamageCap": "d10" }
     ],
     "requirement": {
       "level": 6,

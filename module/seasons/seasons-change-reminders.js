@@ -1,6 +1,6 @@
 import { escHtml } from "../utils/strings.js";
 import { rolledTotalCard, stonetopCardShell } from "../utils/chat.js";
-import { getPlayerCharacters } from "../utils/playbook-actors.js";
+import { charactersInPlay } from "../utils/characters-in-play.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { moveLearnedIn } from "../actors/character/owns-move.js";
 import { LOGBOOK } from "../actors/character/know-things.js";
@@ -368,7 +368,15 @@ export function wireSeasonsReminderResets(message, html, {
 const noteCard = (reset, value) => ({ [`flags.${SYSTEM_ID}.${reset.flag}`]: value ?? null });
 
 async function pressReset(message, btn, reset, actor) {
+	if (btn.disabled) return;
 	btn.disabled = true;
+	// Read again at the press: the GM and the character's player both get the button, and the other client's
+	// press does not redraw this card. A reset that counts down (Collected offerings) would otherwise restore
+	// a second use from the same card.
+	if (message?.id && actor.getFlag?.(SYSTEM_ID, reset.flag) === message.id) {
+		markResetDone(btn, reset);
+		return;
+	}
 	try {
 		const update = await reset.update(actor);
 		if (!update) throw new Error(`${actor.name} has no ${reset.move} track to reset`);
@@ -411,7 +419,9 @@ async function pressRollingReset(message, btn, reset, actor) {
 // party carries seasonal upkeep (so off-season parties get no empty card).
 export function postSeasonsChangeReminder(season) {
 	if (!globalThis.ChatMessage) return;
-	const reminders = collectSeasonalReminders(getPlayerCharacters(), season);
+	// Only those still in play: the dead and those who retired, left or turned threat keep no upkeep, and a
+	// button on their row would roll for a character nobody plays.
+	const reminders = collectSeasonalReminders(charactersInPlay(), season);
 	if (!reminders.length) return;
 	ChatMessage.create({
 		speaker: { alias: "The Seasons Change" },

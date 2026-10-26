@@ -126,6 +126,18 @@ export function playsCharacter(actor, user = game.user) {
 	return !user.isGM && !!actor.testUserPermission?.(user, "OWNER");
 }
 
+/**
+ * The player of a PC: of the non-GM users who own it, the one it is assigned to (User#character),
+ * else the first. With `preferOnline`, an online owner comes before an offline one (assigned first
+ * among each). Null when no player owns it.
+ */
+export function playerOf(actor, { preferOnline = false, users = game.users } = {}) {
+	if (!actor) return null;
+	const owners = asArray(users).filter(u => u && !u.isGM && actor.testUserPermission?.(u, "OWNER"));
+	const pick = list => list.find(u => u.character?.id === actor.id) ?? list[0] ?? null;
+	return (preferOnline ? pick(owners.filter(u => u.active)) : null) ?? pick(owners);
+}
+
 /** Who a private card about this character goes to: every GM, and everyone who plays the character. */
 export function whisperFor(actor, users = game.users) {
 	return [...new Set(asArray(users).filter(u => u.isGM || playsCharacter(actor, u)).map(u => u.id))];

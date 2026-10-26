@@ -424,7 +424,7 @@ describe("the panel is wired to the step, and to the handler", () => {
 	// The row decides what its own click means (take, or send home) when it is built. The
 	// template has to pass that decision back, or every click would mean the same thing.
 	it("passes each row's index and meaning back to the handler", () => {
-		expect(HBS).toContain('data-asset-index="{{index}}" data-take="{{take}}"');
+		expect(HBS).toContain('data-asset-index="{{this.index}}" data-take="{{this.take}}"');
 		expect(HBS).toContain('class="stonetop-exp-asset-btn"');
 		expect(DIALOG_JS).toContain('html.find(".stonetop-exp-asset-btn").on("click"');
 		expect(DIALOG_JS).toContain('ev.currentTarget.dataset.take === "true"');

@@ -45,7 +45,8 @@ function pc({ id, name = id, held = 0, moves = [], unlearned = [], owner = true,
 	return actor;
 }
 
-const fighting = (...actors) => [{ combatants: actors.map(a => ({ actor: { id: a.id } })) }];
+// On a map: a combatant with no token is the old Introductions roster, not a fight (fight/in-battle.js).
+const fighting = (...actors) => [{ combatants: actors.map(a => ({ actor: { id: a.id }, tokenId: `t-${a.id}` })) }];
 const player = id => ({ id: `u-${id}`, isGM: false });
 const GM = { id: "u-gm", isGM: true };
 const ownersOf = (online = true) => actor => [
@@ -122,6 +123,19 @@ describe("how much a speech gives, and holding it", () => {
 		expect(await spendInspiration(wren)).toBe(true);
 		expect(wren.store[INSPIRATION_FLAG]).toBeUndefined();
 		expect(await spendInspiration(wren)).toBe(false);
+	});
+
+	// Both take the holder's spending turn (utils/spender-queue.js): a speech held while a spend is under way
+	// lands after it, rather than the spend writing its stale "none left" over the speech.
+	it("never loses a speech held while a spend is under way, or the spend", async () => {
+		const wren = pc({ id: "wren", held: 1 });
+		const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+		const set = wren.setFlag;
+		const unset = wren.unsetFlag;
+		wren.setFlag = async (...args) => { await tick(); return set(...args); };
+		wren.unsetFlag = async (...args) => { await tick(); return unset(...args); };
+		await Promise.all([holdInspiration(wren, 2), spendInspiration(wren)]);
+		expect(inspirationHeld(wren)).toBe(1);
 	});
 
 	it("reads an unreadable flag as none", () => {
@@ -342,6 +356,25 @@ describe("+1d6 on a damage roll they just made", () => {
 		const bryn = pc({ id: "wren", held: 1 });
 		expect(await addInspirationDie(applied, bryn, { rollDie: async () => 2, scope: SCOPE })).toBe(false);
 		expect(inspirationHeld(bryn)).toBe(1);
+	});
+
+	// QY-4: each card is its own line, and both read the holder's last Inspiration before either paid it.
+	it("pays a last Inspiration once, though two cards ask for it at once", async () => {
+		const wren = pc({ id: "wren", held: 1 });
+		wren.unsetFlag = vi.fn(async (scope, key) => {
+			await new Promise(r => setTimeout(r, 5));
+			delete wren.store[key];
+		});
+		const one = plainCard();
+		const two = plainCard();
+		two.id = "msg2";
+		const addDie = async (roll, n) => { roll.total += n; };
+		const added = await Promise.all([
+			addInspirationDie(one, wren, { rollDie: async () => 3, addDie, scope: SCOPE }),
+			addInspirationDie(two, wren, { rollDie: async () => 3, addDie, scope: SCOPE }),
+		]);
+		expect(added.filter(Boolean)).toHaveLength(1);
+		expect(inspirationHeld(wren)).toBe(0);
 	});
 
 	it("gives the Inspiration back when the card cannot take the die", async () => {

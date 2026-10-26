@@ -5,10 +5,10 @@
 	{{#each doomRows}}
 	<li class="threat-portent-row">
 		<label class="threat-portent">
-			<input type="checkbox" class="threat-portent__check" data-portent-index="{{index}}"
+			<input type="checkbox" class="threat-portent__check" data-portent-index="{{this.index}}"
 			       {{#if done}}checked{{/if}}{{#unless ../isOwner}} disabled{{/unless}}>
 			<span class="threat-portent__box" aria-hidden="true"></span>
-			<span class="threat-portent__txt">{{text}}</span>
+			<span class="threat-portent__txt">{{this.text}}</span>
 		</label>
 	</li>
 	{{/each}}

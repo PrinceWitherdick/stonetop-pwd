@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	crewRoadText, defaultRoadShares, drainPurses, roadLedger, roadMouths, roadSummaryRows, roadUsesPerDay,
+	crewRoadText, defaultRoadShares, drainPurses, ledgerAsPaid, roadLedger, roadMouths, roadSummaryRows, roadUsesPerDay,
 } from "../../module/utils/road-rations.js";
 import { campPurses } from "../../module/camp/camp-rules.js";
 import { CREW_SUPPLIES_SLUG } from "../../module/actors/character/supply-cost.js";
@@ -173,6 +173,21 @@ describe("the chat summary", () => {
 		expect(rows[1]).toEqual({ label: "Ash", value: "2 uses (1 provisions, 1 supplies)" });
 		expect(rows[2].label).toBe("Went short");
 		expect(rows[2].value).toContain("p.335");
+	});
+
+	// Code review 10-22 (HC-8): the window reads the packs once. A use eaten or found while it was open is
+	// not named on the card as paid: each purse pays what it holds now, and the rest is the shortfall.
+	it("pays only what each purse still holds, and counts the rest as short", () => {
+		const ledger = roadLedger([pc("Ash", { supplies: 2, provisions: 1 })], { days: 3 });
+		expect(ledger.short).toBe(0);
+		const paid = ledgerAsPaid(ledger, () => ({ provisions: 0, supplies: 1 }));
+		expect(paid.rows[0].spend).toEqual([{ slug: "supplies", label: expect.any(String), n: 1 }]);
+		expect(paid.rows[0].pays).toBe(1);
+		expect(paid.paid).toBe(1);
+		expect(paid.short).toBe(2);
+		expect(roadSummaryRows(paid).at(-1).label).toBe("Went short");
+		// Held as read: nothing changes.
+		expect(ledgerAsPaid(ledger, () => ({ provisions: 1, supplies: 2 })).short).toBe(0);
 	});
 
 	it("says nobody counts meals with a laden pack animal", () => {

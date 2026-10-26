@@ -448,6 +448,17 @@ describe("Seek Insight, Danger Sense, Ambush, Knowledge is Power, Frosty, Speak 
 		for (const question of SEEK_INSIGHT_QUESTIONS) expect(defy.tierActions.success).toContain(question);
 	});
 
+	// Combat audit MOV-9 (2026-10-23): the Sheriff's Bark an Order, "On a 10+, you can sense which one they're about
+	// to do and act first if you like; gain advantage if you do" (Book I p.114).
+	it("puts Bark an Order's hold on its own 10+ alone, for the Sheriff who barked", () => {
+		const sheriff = pc({ id: "s", moves: ["Bark an Order"] });
+		const bark = moveRollOptions("Bark an Order", sheriff);
+		expect(Object.keys(bark.tierActions)).toEqual(["success"]);
+		expect(bark.tierActions.success).toContain("Hold advantage (Bark an Order)");
+		expect(bark.tierActions.success).toContain("If you act first, gain advantage.");
+		expect(moveRollOptions("Bark an Order", pc({ id: "x" }))).toBeNull();
+	});
+
 	// Heavy re-audit (the user's ruling of 2026-10-18): Frosty asks "a question that you could ask when Seeking
 	// Insight", and Situational Awareness adds three to that list, so a Heavy who learned it sees them on the
 	// line too. Resourceful asks "a question from Seek Insight", the same list.
@@ -624,5 +635,29 @@ describe("Focus Fire's card", () => {
 		wireFocusFire(card, root, { giver: commandHeld(0), usable: true, order, targets: () => [{ name: "Crinwin", document: { uuid: "u" } }] });
 		button().click();
 		expect(order).not.toHaveBeenCalled();
+	});
+
+	it("claims the card before the Command is spent, so a press on another screen orders nothing", async () => {
+		const { root, card, button } = rendered();
+		const seen = [];
+		const order = vi.fn(async () => { seen.push(card.getFlag(SCOPE, FOCUS_FIRE_CARD_FLAG)); return null; });
+		wireFocusFire(card, root, { giver: commandHeld(1), usable: true, order, targets: () => [{ name: "Crinwin", document: { uuid: "u" } }] });
+		button().click();
+		await vi.waitFor(() => expect(order).toHaveBeenCalledTimes(1));
+		// The claim stood while the order was being given; nothing given, it is handed back.
+		expect(seen).toEqual([{ pending: true, by: expect.any(String) }]);
+		await vi.waitFor(() => expect(card.getFlag(SCOPE, FOCUS_FIRE_CARD_FLAG)).toBeUndefined());
+		expect(button().disabled).toBe(false);
+
+		// Claimed elsewhere: drawn disabled, and a press that slipped through re-reads the card and orders nothing.
+		const other = rendered();
+		await other.card.setFlag(SCOPE, FOCUS_FIRE_CARD_FLAG, { pending: true });
+		const again = vi.fn();
+		wireFocusFire(other.card, other.root, { giver: commandHeld(1), usable: true, order: again, targets: () => [{ name: "Crinwin", document: { uuid: "u" } }] });
+		expect(other.button().disabled).toBe(true);
+		other.button().disabled = false;
+		other.button().click();
+		await vi.waitFor(() => expect(other.button().disabled).toBe(true));
+		expect(again).not.toHaveBeenCalled();
 	});
 });

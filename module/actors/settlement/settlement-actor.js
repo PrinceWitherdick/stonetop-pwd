@@ -12,13 +12,14 @@
 // the GM Toolkit and the expeditions belong to", and a second answer would split every one of
 // them. A settlement is a separate type precisely so none of that has to learn which one is meant.
 
-import { isActorTypeAvailable } from "../../utils/foundry-compat.js";
+import { isActorTypeAvailable, ownershipLevels } from "../../utils/foundry-compat.js";
 import { SETTLEMENTS } from "../../data/settlements.js";
 import { settlementPortraitFor } from "./settlement-portrait.js";
 import { BOOK_SETTLEMENT_STATS, settlementTemplate } from "../../data/settlement-stats.js";
 import { STEADING_SIZES } from "../../utils/improvement-def.js";
-import { SETTLEMENT_TYPE, isSettlementActor, settlementActors } from "./settlement-type.js";
+import { SETTLEMENT_TYPE, isSettlementActor, isWorldSettlement, settlementActors } from "./settlement-type.js";
 import { settlementRow } from "./settlement-rows.js";
+import { homeKey } from "./settlement-residents.js";
 import { isSteadingActor } from "../../utils/world.js";
 import { openApplications } from "../../utils/open-windows.js";
 
@@ -45,8 +46,41 @@ export function standingKey(actor) {
 }
 
 /**
- * Every settlement by its `sourceSlug`, the first made winning: one pass over the world's actors
- * for a render that looks up several slugs.
+ * A Trade-with row's roster slug once its partner's name is `partner`, the row having been `was`
+ * (null for a new row). The slug is what links the partner's name to that place's sheet, so it
+ * follows the name: kept while the partner is not renamed, else the roster place the new name
+ * names, else none. A book row's partner text need not be the roster's spelling, which is why an
+ * edit that leaves the partner alone keeps the slug it came with. Pure.
+ */
+export function tradePartnerSlug(partner, was = null) {
+	if (was && homeKey(partner) === homeKey(was.partner)) return was.slug ?? "";
+	const key = homeKey(partner);
+	return (key && SETTLEMENTS.find(s => homeKey(s.name) === key)?.slug) || "";
+}
+
+/**
+ * Whether a settlement is hidden from the players, as the sheet's header chip shows it and
+ * StonetopSettlementSheet#_onToggleHidden sets it: no default level a player can see it by, and no
+ * player of their own seeing it (LIMITED or OBSERVER). A player who OWNS it is not asked: hiding
+ * leaves them owning it, so counting them would make a hidden place read as shown, and the chip
+ * could never show it again. Pure.
+ *
+ * @param {object} ownership  the actor's `ownership` (`default` and per-user levels)
+ * @param {Iterable<{id: string, isGM: boolean}>} users
+ */
+export function settlementHiddenFromPlayers(ownership = {}, users = []) {
+	const { LIMITED, OWNER } = ownershipLevels();
+	if ((ownership?.default ?? 0) >= LIMITED) return false;
+	return ![...users].some(user => {
+		if (!user || user.isGM) return false;
+		const level = ownership?.[user.id];
+		return typeof level === "number" && level >= LIMITED && level < OWNER;
+	});
+}
+
+/**
+ * Every settlement by its `sourceSlug`, the first winning: `settlements` in settlementActors()'s order
+ * (oldest first, so the same sheet on every load). One pass for a render that looks up several slugs.
  */
 export function settlementsBySlug(settlements = settlementActors()) {
 	const bySlug = new Map();
@@ -68,7 +102,8 @@ const DRAWN_ELSEWHERE = ["name", "img", "ownership", "system.sourceSlug", "syste
  * create or a delete, which always redraw.
  */
 export function redrawForSettlement(actor, changed = null) {
-	if (!isSettlementActor(actor)) return;
+	// A compendium's or a token's copy is on no other sheet.
+	if (!isWorldSettlement(actor)) return;
 	const hasProperty = globalThis.foundry?.utils?.hasProperty;
 	if (changed && hasProperty && !DRAWN_ELSEWHERE.some(key => hasProperty(changed, key))) return;
 	for (const app of openApplications()) {

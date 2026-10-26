@@ -87,9 +87,11 @@ export class IntroMatchDialog extends StonetopDialog {
 	/**
 	 * Save what is on screen, as picks against the rows this window was opened with.
 	 *
-	 * ⚠ ONLY WHAT CHANGED. A row left exactly as it was found is not a pick: writing every row back
-	 * would turn every guess this window offered into a recorded fact whether or not the reader
-	 * ever looked at it, which is the one thing the guess must never do by itself.
+	 * ⚠ ONLY WHAT DIFFERS FROM THE RECORD. A row whose control still shows the pick already recorded
+	 * (`row.who`) is not written again. A GUESS is different: the control opens on it while the
+	 * record is empty, so a guess left standing differs from the record and IS written. Saving is
+	 * the reader accepting what the window shows; a guess they disagree with is one they change
+	 * or clear, and Cancel writes nothing at all.
 	 */
 	_onButton(action, root) {
 		if (action !== "save") return this._resolveWith(null);

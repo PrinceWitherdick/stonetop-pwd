@@ -203,6 +203,36 @@ describe("wireHazardDamage", () => {
 		expect(btn.disabled).toBe(false);
 	});
 
+	// Code review 10-22 (HC-7): the button goes down before anything is awaited, and the hazard is held in
+	// flight by its card, so a second press (or a press on the fresh button a redraw puts there) rolls nothing.
+	it("rolls once for two quick presses on one hazard, even on a redrawn button", async () => {
+		globalThis.game.user = { isGM: true };
+		let release;
+		const d = deps({
+			handTargets: () => [{ uuid: "Actor.vahid", name: "Vahid", hasActor: true }],
+			rollHazardDamage: vi.fn(() => new Promise(resolve => { release = resolve; })),
+		});
+		wireHazardDamage(root, async () => page(CLIMB), d);
+		const card = { dataset: { pageUuid: "JournalEntry.j.JournalEntryPage.climb" } };
+		const press = () => {
+			const btn = { disabled: false, classList: { contains: c => c === "hazard-damage-roll" }, closest: () => card };
+			return { btn, ev: { target: { closest: () => btn }, preventDefault: vi.fn(), stopPropagation: vi.fn() } };
+		};
+		const first = press();
+		const running = listener(first.ev);
+		expect(first.btn.disabled).toBe(true);
+		await listener(first.ev);
+		await listener(press().ev);
+		await vi.waitFor(() => expect(d.rollHazardDamage).toHaveBeenCalledTimes(1));
+		release([{ raw: 7 }]);
+		await running;
+		expect(first.btn.disabled).toBe(false);
+		// Done: the next press rolls again.
+		d.rollHazardDamage.mockImplementation(async () => [{ raw: 3 }]);
+		await listener(press().ev);
+		expect(d.rollHazardDamage).toHaveBeenCalledTimes(2);
+	});
+
 	it("does nothing for a player", async () => {
 		globalThis.game.user = { isGM: false };
 		const d = deps({ handTargets: () => [{ uuid: "Actor.vahid", name: "Vahid", hasActor: true }] });

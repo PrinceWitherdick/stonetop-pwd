@@ -43,11 +43,11 @@
           half of a mixed answer the book stands behind. A leg with no time at all is one this map
           cannot place an end of; it still says where it runs. --}}
     <li{{#if estimated}} class="is-estimate"{{/if}}>
-      <span class="j-from">{{fromName}}</span>
+      <span class="j-from">{{this.fromName}}</span>
       <span class="j-arw">&rarr;</span>
-      <span class="j-to">{{toName}}</span>
-      {{#if time}}<b class="j-time">{{#if estimated}}~{{/if}}{{time}}</b>{{/if}}
-      {{#if via}}<em class="j-via">by {{via}}</em>{{/if}}
+      <span class="j-to">{{this.toName}}</span>
+      {{#if time}}<b class="j-time">{{#if estimated}}~{{/if}}{{this.time}}</b>{{/if}}
+      {{#if via}}<em class="j-via">by {{this.via}}</em>{{/if}}
     </li>
     {{/each}}
   </ol>

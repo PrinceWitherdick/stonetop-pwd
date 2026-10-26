@@ -1,8 +1,10 @@
 import { FrontOnOpen } from "../utils/front-on-open.js";
 import { holdCentre } from "../utils/hold-centre.js";
-import { getSetting } from "../settings.js";
+import { getSetting, setWorldSetting } from "../settings.js";
 import { warn } from "../utils/logger.js";
+import { inTurn } from "../utils/turn-queue.js";
 import { getWalkthroughResume, patchWalkthroughResume, saveWalkthroughPosition } from "./walkthrough-resume.js";
+import { mayClose, notePristineWork } from "../utils/close-guard.js";
 
 // ── StepperDialog ────────────────────────────────────────────────────────────
 // Shared scaffolding for the linear "walkthrough" dialogs (Spring Burst,
@@ -38,6 +40,37 @@ export class StepperDialog extends Application {
 	_answers() {
 		return (this._answersSetting ? getSetting(this._answersSetting) : null) ?? {};
 	}
+
+	/**
+	 * Change the stored answers: `mutate` gets a fresh copy of the blob to edit in place (or
+	 * returns a replacement), and the result is written back whole.
+	 *
+	 * Every write rewrites the WHOLE setting from what it reads, so two quick edits writing at
+	 * once would each read it before the other landed, and the later write would drop the earlier
+	 * edit. So they take turns, keyed by the setting: each reads only once the one before it has
+	 * been stored. A failed write is logged and does not stop the next one; its rejection still
+	 * reaches the caller.
+	 *
+	 * Through setWorldSetting, since these settings are world-scoped and only a GM may write one.
+	 */
+	_updateAnswers(mutate) {
+		const key = this._answersSetting;
+		if (!key) return Promise.resolve();
+		const run = inTurn(this._answersWriteKey, () => {
+			const all = structuredClone(this._answers());
+			return setWorldSetting(key, mutate(all) ?? all);
+		});
+		run.catch(err => console.error(`Stonetop | could not save an answer to ${key}`, err));
+		return run;
+	}
+
+	/** Resolves once every answers write queued so far has landed (or failed). */
+	_answersSettled() {
+		return this._answersSetting ? inTurn(this._answersWriteKey, () => {}) : Promise.resolve();
+	}
+
+	/** The turn-queue key the answers writes queue under (see _updateAnswers). */
+	get _answersWriteKey() { return `setting:${this._answersSetting}`; }
 
 	/** Override to true for a content-hugging window that re-fits its height each render. */
 	get _autoHeight() { return false; }
@@ -123,6 +156,8 @@ export class StepperDialog extends Application {
 		const recentre = this._autoHeight && stepChanged && this._renderedStep !== undefined ? holdCentre(this) : null;
 		try {
 			await super._render(force, options);
+			// What the wizard opened with, for the close-guard (utils/close-guard.js); a no-op after the first.
+			notePristineWork(this);
 			this._renderedStep = drawing;
 			this._frontOnOpen.apply();
 			// After super._render, which is where core writes the restored scroll offsets back.
@@ -156,11 +191,15 @@ export class StepperDialog extends Application {
 	_resolveWith(result) {
 		const resolve = this._resolve;
 		this._resolve = null;
-		this.close();
+		// A finish: the work was used, so the close-guard has nothing to ask.
+		this.close({ discard: true });
 		resolve?.(result);
 	}
 
 	async close(options = {}) {
+		// Ask before throwing away what was written, for a wizard that keeps its work (close-guard.js).
+		// First, before the side effects below, so Keep writing leaves the wizard exactly as it was.
+		if (!(await mayClose(this, options))) return;
 		this._frontOnOpen.stop();
 		// Closing on purpose clears the open flag (no auto-reopen next load); a reload skips
 		// close() entirely and leaves it set. The saved step stays either way, for a manual reopen.

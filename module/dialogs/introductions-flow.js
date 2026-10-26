@@ -37,6 +37,57 @@ export function firstActiveIndex(count, isDone) {
 	return -1;
 }
 
+// The nearest still-active PC index BEFORE `fromIndex`, walking back without wrapping, or -1
+// when every earlier PC is done. What Back steps to inside a looping step: a PC who has passed
+// or answered everything has no turn to go back to, and landing on one summoned their player
+// to a window with nothing for them to do.
+export function prevActiveIndex(fromIndex, isDone) {
+	for (let i = fromIndex - 1; i >= 0; i--) if (!isDone(i)) return i;
+	return -1;
+}
+
+// The last still-active PC index, or -1 when everyone is done. Where Back lands on stepping
+// into a looping step from the one after it.
+export function lastActiveIndex(count, isDone) {
+	for (let i = count - 1; i >= 0; i--) if (!isDone(i)) return i;
+	return -1;
+}
+
+// ── A step's recorded answers, rewritten whole ─────────────────────────────────
+// The list lives on an actor flag and is always written as a whole array (a flag merge cannot
+// drop an element), so each change is a pure function from the old list to the new one.
+
+// The list with one more answer recorded. An answer to a question that is ALREADY in the list
+// replaces that answer instead of joining it: a question is answered once per step (the picker
+// grays out a used one), so a second record for it can only be the first coming back, from a
+// draft write that landed just after the answer was recorded. Appending it is what double-
+// recorded answers. An answer with no question (null) is always appended.
+export function withRecordedAnswer(answers, entry) {
+	const list = Array.isArray(answers) ? [...answers] : [];
+	const at = Number.isInteger(entry?.q) ? list.findIndex(x => x?.q === entry.q) : -1;
+	if (at >= 0) list[at] = entry;
+	else list.push(entry);
+	return list;
+}
+
+// The list with the answer at `index` reworded (its question and who it is about kept), or
+// null when there is no such answer or the new wording is blank (that is a delete, not an edit).
+export function withAnswerEdited(answers, index, text) {
+	const list = Array.isArray(answers) ? [...answers] : [];
+	const a = String(text ?? "").trim();
+	if (!Number.isInteger(index) || !list[index] || !a) return null;
+	list[index] = { ...list[index], a };
+	return list;
+}
+
+// The list without the answer at `index`, or null when there is no such answer.
+export function withoutAnswer(answers, index) {
+	const list = Array.isArray(answers) ? [...answers] : [];
+	if (!Number.isInteger(index) || index < 0 || index >= list.length) return null;
+	list.splice(index, 1);
+	return list;
+}
+
 // ── Follower reaction to a cursor write ────────────────────────────────────────
 // The GM authors the world cursor; every other client reacts to it. Deciding WHAT to
 // do — open, repaint, raise, announce — is pure, so it lives here with the rest of the
@@ -47,8 +98,8 @@ export function firstActiveIndex(count, isDone) {
 //   • `nonce`/`showNonce` exist only to make an otherwise-identical write fire onChange
 //     at all, so they never mean the screen changed.
 //   • `pcOrder` is the ROSTER, not the turn. It churns on its own during session zero —
-//     _syncCursorFromLocal's no-op guard counts it, so every late PC joining the tracker
-//     rewrites the cursor — and none of that reaches the capture field the active player
+//     _syncCursorFromLocal's no-op guard counts it, so every PC added to or dropped from
+//     a running session rewrites the cursor, and none of that reaches the capture field the active player
 //     is writing in. Excluding it is what stops a roster reshuffle eating their sentence;
 //     their turn strip just refreshes on the next repaint instead.
 // `activeUserId` IS included: it decides who may edit, so a change there has to reach the

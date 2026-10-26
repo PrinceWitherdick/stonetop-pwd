@@ -24,11 +24,11 @@
 	<li class="stat cell--stat rollable" data-stat="{{@key}}" data-roll="{{@key}}">
 		<span class="cell__title">{{statLabel @key}}</span>
 		<div class="stonetop-stat-box{{#if (lookup @root.stonetop.statIssues @key)}} stonetop-stat-box--off-rules{{/if}}"
-		     {{~#with (lookup @root.stonetop.statIssues @key)}} data-tooltip="{{message}}" data-tooltip-direction="DOWN"{{/with}}>
+		     {{~#with (lookup @root.stonetop.statIssues @key)}} data-tooltip="{{this.message}}" data-tooltip-direction="DOWN"{{/with}}>
 			<div class="stonetop-stat-inner">
 				<input class="stat-value" type="number"
 				       name="system.stats.{{@key}}.value"
-				       value="{{value}}"
+				       value="{{this.value}}"
 				       {{#unless @root.stonetop.statsEdit}}readonly{{/unless}}>
 			</div>
 		</div>

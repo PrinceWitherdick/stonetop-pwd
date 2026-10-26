@@ -1,10 +1,10 @@
 {{#if moves.length}}
-<div class="stonetop-moves-collapsible{{#unless open}} is-collapsed{{/unless}}" data-section="{{sectionId}}">
+<div class="stonetop-moves-collapsible{{#unless open}} is-collapsed{{/unless}}" data-section="{{this.sectionId}}">
 <div class="stonetop-moves-summary" role="button" tabindex="0" aria-expanded="{{#if open}}true{{else}}false{{/if}}">{{> "stonetop.section-heading" title=(localize titleKey)}}</div>
 <ol class="items-list">
 {{#each moves}}
 	{{#if (and owned rollType)}}
-	<li class="item stonetop-move-item" data-item-id="{{ownedId}}">
+	<li class="item stonetop-move-item" data-item-id="{{this.ownedId}}">
 	{{else}}
 	<li class="stonetop-move-item{{#unless owned}} move-unowned{{/unless}}">
 	{{/if}}
@@ -20,15 +20,15 @@
 		      own parameter. Written bare, the class came out empty and the sheet's expedition door
 		      (which keys off it) never opened Make Camp, Requisition or Outfit from this list. --}}
 		<span class="stonetop-move-name {{../openClass}}{{#if (and owned rollType)}} rollable move-rollable{{/if}}"
-		      {{#if (and owned rollType)}}data-roll="{{rollType}}" data-mod="" {{/if}}data-compendium-id="{{compendiumId}}">{{name}}</span>
-		{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{rollLabel}}</span>{{/if}}
+		      {{#if (and owned rollType)}}data-roll="{{this.rollType}}" data-mod="" {{/if}}data-compendium-id="{{this.compendiumId}}">{{this.name}}</span>
+		{{#if (and @root.stonetop.showRollStatChips rollLabel)}}<span class="stonetop-move-roll-chip">+{{this.rollLabel}}</span>{{/if}}
 		{{#if readiness}}
 		{{!-- Readiness circles (Defend, p.216): filled from a Defend roll's tier, lost when
 		      you go on the offense. Click a circle to set how much you hold; click the
 		      highest filled one to spend back down. --}}
 		<span class="stonetop-move-readiness" data-tooltip="Readiness (Defend, p.216). 10+: hold 3{{#if readiness.hasShield}} (4 with a shield){{/if}}. 7&ndash;9: hold 1{{#if readiness.hasShield}} (2 with a shield){{/if}}.{{#if readiness.hasGuardian}} Guardian: +1, and 1 even on a 6-.{{/if}} Filled when you Defend; lost when you go on the offense (Clash / Let Fly). Click a circle to set how much you hold. Spend it 1-for-1 to suffer an attack's damage/effects instead of your ward, halve an attack's effect or damage, draw all attention from your ward to yourself, or strike back at an attacker (deal your damage, with disadvantage)." data-tooltip-direction="UP">
 			{{#each readiness.pips}}
-			<button type="button" class="stonetop-readiness-pip stonetop-move-readiness-pip{{#if filled}} is-filled{{/if}}" data-index="{{index}}" title="Set Readiness"></button>
+			<button type="button" class="stonetop-readiness-pip stonetop-move-readiness-pip{{#if filled}} is-filled{{/if}}" data-index="{{this.index}}" title="Set Readiness"></button>
 			{{/each}}
 		</span>
 		{{!-- Big Damn Hero's leap: "don't roll to Defend. Instead, treat it as though you rolled a

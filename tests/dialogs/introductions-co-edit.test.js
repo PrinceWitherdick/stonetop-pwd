@@ -185,7 +185,7 @@ describe("IntroductionsDialog co-editing: the answer step's draft", () => {
 	let actor, field, about, picks, dialog;
 
 	beforeEach(() => {
-		actor = makeActor({ live: { stepKey: "step4", q: 0, a: "Olwin taught me", who: null } });
+		actor = makeActor({ drafts: { step4: { q: 0, a: "Olwin taught me", who: null } } });
 		field = makeField({ actorId: "pc", stepKey: "step4" }, "Olwin taught me");
 		about = { dataset: { actorId: "pc", stepKey: "step4" }, value: "" };
 		picks = [0, 1, 2, 3].map(makePick);
@@ -196,7 +196,7 @@ describe("IntroductionsDialog co-editing: the answer step's draft", () => {
 
 	it("merges the GM's words into the draft while the player types", () => {
 		field.value = "Olwin taught me to shoe horses";
-		actor.flags[SCOPE][FLAG].live = { stepKey: "step4", q: 0, a: "Olwin taught me. GM: she's dying.", who: null };
+		actor.flags[SCOPE][FLAG].drafts = { step4: { q: 0, a: "Olwin taught me. GM: she's dying.", who: null } };
 		dialog._absorbCaptureWrite(actor, "gm");
 		expect(field.value).toBe("Olwin taught me to shoe horses. GM: she's dying.");
 		// `who` comes off the select, as a keystroke's would: "" is its "nobody at this table".
@@ -204,23 +204,46 @@ describe("IntroductionsDialog co-editing: the answer step's draft", () => {
 	});
 
 	it("lights the question the GM picked, so clicking it doesn't toggle it back off", () => {
-		actor.flags[SCOPE][FLAG].live = { stepKey: "step4", q: 2, a: "Olwin taught me", who: null };
+		actor.flags[SCOPE][FLAG].drafts = { step4: { q: 2, a: "Olwin taught me", who: null } };
 		dialog._absorbCaptureWrite(actor, "gm");
 		expect(picks.map(p => p.classList.contains("is-selected"))).toEqual([false, false, true, false]);
 	});
 
 	it("shows who the GM said it's about, so the next keystroke doesn't put the old pick back", () => {
-		actor.flags[SCOPE][FLAG].live = { stepKey: "step4", q: 0, a: "Olwin taught me", who: "pc-2" };
+		actor.flags[SCOPE][FLAG].drafts = { step4: { q: 0, a: "Olwin taught me", who: "pc-2" } };
 		dialog._absorbCaptureWrite(actor, "gm");
 		expect(about.value).toBe("pc-2");
 	});
 
-	it("leaves the field alone when the draft is recorded, and saves nothing", () => {
-		delete actor.flags[SCOPE][FLAG].live;
+	// Recording ENDS the answer. The redraw that would empty the field is skipped while the caret is
+	// in it, so the field is emptied here instead: left showing the recorded answer, the next
+	// keystroke or flush wrote it back as a new draft with the question just used.
+	it("empties the field when the draft is recorded, even with the caret in it, and saves nothing", () => {
+		delete actor.flags[SCOPE][FLAG].drafts;
 		actor.flags[SCOPE][FLAG].step4 = { answers: [{ q: 0, a: "Olwin taught me" }] };
-		dialog._absorbCaptureWrite(actor, "gm");
-		expect(field.value).toBe("Olwin taught me");
+		expect(dialog._absorbCaptureWrite(actor, "gm")).toBe(true);
+		expect(field.value).toBe("");
 		expect(dialog.saved).toEqual([]);
+		expect(picks.some(p => p.classList.contains("is-selected"))).toBe(false);
+	});
+
+	it("keeps the player's draft when the GM edits an older answer", () => {
+		actor.flags[SCOPE][FLAG].step4 = { answers: [{ q: 1, a: "Reworded by the GM" }] };
+		expect(dialog._absorbCaptureWrite(actor, "gm")).toBe(false);
+		expect(field.value).toBe("Olwin taught me");
+		// And the flush still counts it as a draft against the record as it now stands.
+		expect(dialog._captureSeen.mark).toBe(dialog._commitMark("pc", "step4"));
+	});
+
+	it("leaves a field that showed no saved draft alone when the step changes", () => {
+		const fresh  = makeActor({});
+		const blank  = makeField({ actorId: "pc", stepKey: "step4" }, "");
+		const d      = makeDialog(fresh, makeRoot({ draft: blank, picks: [] }), 4);
+		d._noteCaptureShown();
+		blank.value = "first words";                              // typed, not saved yet
+		fresh.flags[SCOPE][FLAG].step4 = { passed: false, answers: [{ q: 2, a: "an older answer" }] };
+		expect(d._absorbCaptureWrite(fresh, "gm")).toBe(false);
+		expect(blank.value).toBe("first words");
 	});
 });
 

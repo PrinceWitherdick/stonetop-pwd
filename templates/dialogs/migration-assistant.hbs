@@ -4,7 +4,7 @@
 		Stonetop is changing the ID it uses to store your campaign. Your world, its name, its
 		folder and everything in it stay exactly where they are. Only the label Foundry uses
 		to connect this world to the system changes, from
-		<code>{{oldId}}</code> to <code>{{newId}}</code>.
+		<code>{{this.oldId}}</code> to <code>{{this.newId}}</code>.
 	</p>
 
 	{{#if isBlocked}}
@@ -51,7 +51,7 @@
 			{{#if isHosted}}
 				<p class="stonetop-migration-note">
 					Nothing is deleted and nothing is moved. This world still runs on
-					<code>{{oldId}}</code> when it finishes, so stopping here leaves you exactly
+					<code>{{this.oldId}}</code> when it finishes, so stopping here leaves you exactly
 					where you started. Take a backup or Save Point first all the same.
 				</p>
 			{{else}}
@@ -68,7 +68,7 @@
 			<h3>Ready when you are</h3>
 			<p>
 				This cannot be undone from inside Foundry. Once it starts, this world is pointed
-				at <code>{{newId}}</code> and Foundry returns you to the setup screen.
+				at <code>{{this.newId}}</code> and Foundry returns you to the setup screen.
 			</p>
 			<p class="stonetop-migration-note">
 				If you have not taken a backup yet, choose Cancel and take one first.
@@ -99,14 +99,14 @@
 				<li>Export this world and save the zip.</li>
 				<li>Unzip it and open <code>world.json</code> inside.</li>
 				<li>
-					Change <code>"system": "{{oldId}}"</code> to <code>"system": "{{newId}}"</code>,
+					Change <code>"system": "{{this.oldId}}"</code> to <code>"system": "{{this.newId}}"</code>,
 					and save the file.
 				</li>
 				<li>Re-import that folder through your host's import wizard.</li>
 				<li>Launch it as GM. It finishes on its own; refresh the page once if it asks.</li>
 			</ol>
 			<p class="stonetop-migration-note">
-				Until you do all that, this world keeps running on <code>{{oldId}}</code> exactly as
+				Until you do all that, this world keeps running on <code>{{this.oldId}}</code> exactly as
 				it did before, and re-opening this window will simply tell you there is nothing
 				left to copy.
 			</p>
@@ -116,7 +116,7 @@
 	{{#if isFailed}}
 		<section class="stonetop-migration-panel is-blocked">
 			<h3>That did not finish</h3>
-			<p>{{error}}</p>
+			<p>{{this.error}}</p>
 		</section>
 	{{/if}}
 

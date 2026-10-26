@@ -198,8 +198,14 @@ export async function answerFollowerBalk(message, choice, character) {
 		speaker: globalThis.ChatMessage?.getSpeaker?.({ actor: character }),
 		flags: { [SYSTEM_ID]: { [BALK_ANSWER_FLAG]: { to: message.id, choice } } },
 	});
+	// No answer card (a hook refused it, or the create failed): no claim was made, so nothing is spent or rolled.
+	if (!mine?.id) {
+		globalThis.ui?.notifications?.warn?.(format(`${KEY}.answerFailed`, { name: balk.name }));
+		redrawBalk(message);
+		return false;
+	}
 	const first = balkAnswerFor(message);
-	if (mine?.id && first && first.id !== mine.id) {
+	if (first && first.id !== mine.id) {
 		await mine.delete?.();
 		return false;
 	}

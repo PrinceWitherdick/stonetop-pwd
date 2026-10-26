@@ -1,14 +1,14 @@
-<form class="stonetop threat-edit threat-editor" autocomplete="off" data-page-uuid="{{uuid}}">
+<form class="stonetop threat-edit threat-editor" autocomplete="off" data-page-uuid="{{this.uuid}}">
 
 	<div class="threat-edit__row">
 		<label class="threat-edit__field threat-edit__field--grow">
 			<span class="threat-edit__label">Name</span>
-			<input type="text" data-doc-field="name" value="{{name}}" placeholder="Threat name">
+			<input type="text" data-doc-field="name" value="{{this.name}}" placeholder="Threat name">
 		</label>
 		<label class="threat-edit__field">
 			<span class="threat-edit__label">Type</span>
 			<select data-doc-field="system.type">
-				{{#each typeOptions}}<option value="{{id}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}
+				{{#each typeOptions}}<option value="{{this.id}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
 			</select>
 		</label>
 	</div>
@@ -23,8 +23,8 @@
 		<div class="stonetop-segmented-picker threat-proximity-picker">
 			{{#each proximityOptions}}
 			<label class="stonetop-segmented-picker-option threat-proximity-option{{#if selected}} is-selected{{/if}}">
-				<input type="radio" name="threat-proximity-{{@root.id}}" data-doc-field="system.proximity" value="{{id}}"{{#if selected}} checked{{/if}}>
-				<span>{{label}}</span>
+				<input type="radio" name="threat-proximity-{{@root.id}}" data-doc-field="system.proximity" value="{{this.id}}"{{#if selected}} checked{{/if}}>
+				<span>{{this.label}}</span>
 			</label>
 			{{/each}}
 		</div>
@@ -35,17 +35,17 @@
 	      window re-renders on every page update, which would tear a live editor down mid-edit. --}}
 	<div class="threat-edit__field">
 		<span class="threat-edit__label">Description <em class="threat-edit__hint">who or what it is, how it became a problem, its ties to NPCs or other threats</em></span>
-		<prose-mirror class="threat-edit__rich" data-doc-field="system.description" toggled value="{{system.description}}">{{{descriptionEnriched}}}</prose-mirror>
+		<prose-mirror class="threat-edit__rich" data-doc-field="system.description" toggled value="{{system.description}}">{{{this.descriptionEnriched}}}</prose-mirror>
 	</div>
 
 	<div class="threat-edit__field">
 		<span class="threat-edit__label">Grim portents <em class="threat-edit__hint">the doom track</em></span>
 		<div class="threat-list" data-list="grimPortents">
 			{{#each grimPortents}}
-			<div class="threat-list-row threat-list-row--portent" data-index="{{index}}">
+			<div class="threat-list-row threat-list-row--portent" data-index="{{this.index}}">
 				<input type="checkbox" class="threat-list-done" data-field="done"{{#if done}} checked{{/if}} data-tooltip="Come to pass">
-				<input type="text" class="threat-list-text" data-field="text" value="{{text}}" placeholder="A concrete, observable milestone">
-				<button type="button" class="threat-list-remove" data-list="grimPortents" data-index="{{index}}" data-tooltip="Remove"><i class="fas fa-times"></i></button>
+				<input type="text" class="threat-list-text" data-field="text" value="{{this.text}}" placeholder="A concrete, observable milestone">
+				<button type="button" class="threat-list-remove" data-list="grimPortents" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-times"></i></button>
 			</div>
 			{{/each}}
 			<button type="button" class="threat-list-add" data-list="grimPortents"><i class="fas fa-plus"></i> Add portent</button>
@@ -87,10 +87,10 @@
 			<span class="threat-edit__label">GM moves</span>
 			{{#if suggestedMoves.length}}
 			<div class="threat-suggested">
-				<p class="threat-suggested__hint">Suggested for {{typeLabel}}. Click to add:</p>
+				<p class="threat-suggested__hint">Suggested for {{this.typeLabel}}. Click to add:</p>
 				<div class="threat-suggested__chips">
 					{{#each suggestedMoves}}
-					<button type="button" class="threat-suggested__chip{{#if used}} is-used{{/if}}" data-suggested-move="{{text}}">{{text}}</button>
+					<button type="button" class="threat-suggested__chip{{#if used}} is-used{{/if}}" data-suggested-move="{{this.text}}">{{this.text}}</button>
 					{{/each}}
 				</div>
 			</div>
@@ -102,14 +102,14 @@
 			<span class="threat-edit__label">Lesser threats</span>
 			<div class="threat-list" data-list="nested">
 				{{#each nested}}
-				<div class="threat-list-row threat-list-row--nested" data-index="{{index}}">
-					<input type="text" class="threat-list-text" data-field="name" value="{{name}}" placeholder="Name">
+				<div class="threat-list-row threat-list-row--nested" data-index="{{this.index}}">
+					<input type="text" class="threat-list-text" data-field="name" value="{{this.name}}" placeholder="Name">
 					<select class="threat-list-select" data-field="type">
 						<option value="">type</option>
-						{{#each @root.typeOptions}}<option value="{{id}}"{{#if (eq id ../type)}} selected{{/if}}>{{label}}</option>{{/each}}
+						{{#each @root.typeOptions}}<option value="{{this.id}}"{{#if (eq id ../type)}} selected{{/if}}>{{this.label}}</option>{{/each}}
 					</select>
-					<input type="text" class="threat-list-text" data-field="instinct" value="{{instinct}}" placeholder="instinct">
-					<button type="button" class="threat-list-remove" data-list="nested" data-index="{{index}}" data-tooltip="Remove"><i class="fas fa-times"></i></button>
+					<input type="text" class="threat-list-text" data-field="instinct" value="{{this.instinct}}" placeholder="instinct">
+					<button type="button" class="threat-list-remove" data-list="nested" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-times"></i></button>
 				</div>
 				{{/each}}
 				<button type="button" class="threat-list-add" data-list="nested"><i class="fas fa-plus"></i> Add lesser threat</button>
@@ -120,10 +120,10 @@
 			<span class="threat-edit__label">Custom player moves</span>
 			<div class="threat-list" data-list="customPlayerMoves">
 				{{#each customPlayerMoves}}
-				<div class="threat-list-row threat-list-row--pmove" data-index="{{index}}">
-					<input type="text" class="threat-list-text" data-field="label" value="{{label}}" placeholder="Move name or trigger">
-					<textarea class="threat-list-textarea" data-field="text" rows="2" placeholder="The move text">{{text}}</textarea>
-					<button type="button" class="threat-list-remove" data-list="customPlayerMoves" data-index="{{index}}" data-tooltip="Remove"><i class="fas fa-times"></i></button>
+				<div class="threat-list-row threat-list-row--pmove" data-index="{{this.index}}">
+					<input type="text" class="threat-list-text" data-field="label" value="{{this.label}}" placeholder="Move name or trigger">
+					<textarea class="threat-list-textarea" data-field="text" rows="2" placeholder="The move text">{{this.text}}</textarea>
+					<button type="button" class="threat-list-remove" data-list="customPlayerMoves" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-times"></i></button>
 				</div>
 				{{/each}}
 				<button type="button" class="threat-list-add" data-list="customPlayerMoves"><i class="fas fa-plus"></i> Add player move</button>

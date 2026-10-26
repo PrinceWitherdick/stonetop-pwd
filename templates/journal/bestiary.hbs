@@ -1,4 +1,4 @@
-<form class="{{cssClass}} stonetop stonetop-bestiary-page stonetop-bestiary-sheet flexcol{{#if stonetop.isEditable}} stonetop-edit-mode{{/if}}" autocomplete="off">
+<form class="{{this.cssClass}} stonetop stonetop-bestiary-page stonetop-bestiary-sheet flexcol{{#if stonetop.isEditable}} stonetop-edit-mode{{/if}}" autocomplete="off">
 
 	{{!-- Book-art banner: the illustration sits above the page title (read mode only). --}}
 	{{#if stonetop.leadArt}}<div class="stonetop-journal-art-banner">{{{stonetop.leadArt}}}</div>{{/if}}
@@ -62,7 +62,7 @@
 		{{#each stonetop.qaSections}}
 		{{#if (or (lookup @root.stonetop.visible key) (lookup @root.stonetop.editing key))}}
 		<section class="stonetop-monster-field stonetop-monster-field--full stonetop-entry-qa-section"
-		         data-qa-field="{{key}}" data-section="{{key}}">
+		         data-qa-field="{{this.key}}" data-section="{{this.key}}">
 			{{> "stonetop.bestiary-section-head" key=key title=(localize label) inlineOwner=@root.stonetop.inlineOwner open=(lookup @root.stonetop.open key) sub=true}}
 			{{#if (lookup @root.stonetop.editing key)}}
 			<ul class="stonetop-entry-qa-list">
@@ -70,15 +70,15 @@
 				<li class="stonetop-entry-qa-row" data-qa-index="{{@index}}">
 					<div class="stonetop-entry-qa-edit">
 						<input type="text" class="stonetop-entry-qa-input stonetop-entry-qa-prompt"
-						       value="{{prompt}}" placeholder='{{localize "stonetop.bestiary.questionPlaceholder"}}'>
+						       value="{{this.prompt}}" placeholder='{{localize "stonetop.bestiary.questionPlaceholder"}}'>
 						<textarea class="stonetop-entry-qa-input stonetop-entry-qa-answer"
-						          placeholder='{{localize "stonetop.bestiary.answerPlaceholder"}}'>{{answer}}</textarea>
+						          placeholder='{{localize "stonetop.bestiary.answerPlaceholder"}}'>{{this.answer}}</textarea>
 						<a class="stonetop-entry-remove-qa" title="Remove"><i class="fas fa-trash"></i></a>
 					</div>
 				</li>
 				{{/each}}
 			</ul>
-			<button type="button" class="stonetop-entry-add-qa" data-field="{{key}}">
+			<button type="button" class="stonetop-entry-add-qa" data-field="{{this.key}}">
 				<i class="fas fa-plus"></i> {{localize "stonetop.bestiary.addQuestion"}}
 			</button>
 			{{else}}
@@ -87,9 +87,9 @@
 				{{#if (or prompt answer)}}
 				<li class="stonetop-entry-qa-row">
 					<div class="stonetop-entry-qa-read">
-						{{#if lead}}<p class="stonetop-entry-qa-lead-text">{{lead}}</p>{{/if}}
-						<p class="stonetop-entry-qa-prompt-text">{{{promptHtml}}}</p>
-						{{#if answer}}<p class="stonetop-entry-qa-answer-text">{{{answerHtml}}}</p>{{/if}}
+						{{#if lead}}<p class="stonetop-entry-qa-lead-text">{{this.lead}}</p>{{/if}}
+						<p class="stonetop-entry-qa-prompt-text">{{{this.promptHtml}}}</p>
+						{{#if answer}}<p class="stonetop-entry-qa-answer-text">{{{this.answerHtml}}}</p>{{/if}}
 					</div>
 				</li>
 				{{/if}}
@@ -104,14 +104,14 @@
 		{{#each stonetop.prepLineSections}}
 		{{#if (or (lookup @root.stonetop.visible key) (lookup @root.stonetop.editing key))}}
 		<section class="stonetop-monster-field stonetop-monster-line-section"
-		         data-line-field="{{key}}" data-section="{{key}}">
+		         data-line-field="{{this.key}}" data-section="{{this.key}}">
 			{{> "stonetop.bestiary-section-head" key=key title=(localize label) inlineOwner=@root.stonetop.inlineOwner open=(lookup @root.stonetop.open key) sub=true}}
 			{{#if (lookup @root.stonetop.editing key)}}
 			{{> "stonetop.bestiary-line-list" this editMode=true}}
 			{{else}}
-			{{#if intro}}<p class="stonetop-monster-line-intro">{{{introHtml}}}</p>{{/if}}
+			{{#if intro}}<p class="stonetop-monster-line-intro">{{{this.introHtml}}}</p>{{/if}}
 			<ul class="stonetop-monster-line-list">
-				{{#each lines}}{{#if text}}<li class="stonetop-monster-line"><span>{{{html}}}</span></li>{{/if}}{{/each}}
+				{{#each lines}}{{#if text}}<li class="stonetop-monster-line"><span>{{{this.html}}}</span></li>{{/if}}{{/each}}
 			</ul>
 			{{/if}}
 		</section>
@@ -154,12 +154,12 @@
 			</div>
 			<ul class="stonetop-entry-statblock-list">
 				{{#each stonetop.statBlocks}}
-				<li class="stonetop-entry-statblock" data-statblock-uuid="{{uuid}}" draggable="true"
+				<li class="stonetop-entry-statblock" data-statblock-uuid="{{this.uuid}}" draggable="true"
 				    title="Drag onto a scene to place a token">
-					{{#if hasImg}}<img class="stonetop-entry-statblock-img" src="{{img}}" alt="{{name}}">{{/if}}
+					{{#if hasImg}}<img class="stonetop-entry-statblock-img" src="{{this.img}}" alt="{{this.name}}">{{/if}}
 					<div class="stonetop-entry-statblock-body">
-						<span class="stonetop-entry-statblock-name">{{{link}}}</span>
-						<span class="stonetop-entry-statblock-meta">{{#if organization}}{{organization}} · {{/if}}HP {{hpValue}}/{{hpMax}}</span>
+						<span class="stonetop-entry-statblock-name">{{{this.link}}}</span>
+						<span class="stonetop-entry-statblock-meta">{{#if organization}}{{this.organization}} · {{/if}}HP {{this.hpValue}}/{{this.hpMax}}</span>
 					</div>
 				</li>
 				{{/each}}

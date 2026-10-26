@@ -127,6 +127,19 @@ describe("engagement lines", () => {
 		expect(clusterRuleKeys(even.clusters[0], even.byFighter)).not.toContain("groupOutnumbers");
 	});
 
+	// FGT-6: a hero in contact with the foes' group holds one of them out of the ratio, and the tab says so.
+	it("says which hero holds one of the foes' group out of the group fight", () => {
+		const result = engage({
+			grid,
+			fighters: [at("crew", HEROES, 0, 0, { bodies: 6 }), at("bram", HEROES, 2, 0), at("horde", FOES, 1, 0, { bodies: 20 })],
+		});
+		const facts = clusterFacts(result.clusters[0], result.byFighter, nameOf, format);
+		expect(facts.slice(-2)).toEqual([
+			"Group against group, 6 to 19: +2 damage and armor for the foes",
+			"Bram holds one of Crinwin horde out of the group fight",
+		]);
+	});
+
 	it("quotes p.416 on individuals when a PC is in the group scrum", () => {
 		const result = engage({
 			grid,

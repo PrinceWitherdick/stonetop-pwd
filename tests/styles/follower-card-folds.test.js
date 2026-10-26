@@ -112,7 +112,7 @@ describe("the Details fold", () => {
 		const fold = TPL.match(/<details class="[^"]*stonetop-follower-details-fold[^"]*"[^>]*>/)?.[0];
 		expect(fold).toBeTruthy();
 		expect(fold).toContain("stonetop-crew-collapsible");
-		expect(fold).toMatch(/data-section="details:\{\{foldId\}\}"/);
+		expect(fold).toMatch(/data-section="details:\{\{this\.foldId\}\}"/);
 	});
 
 	it("is not drawn at all on a card with none of those fields", () => {
@@ -124,9 +124,9 @@ describe("the Details fold", () => {
 describe("a closed section reports its own state", () => {
 	it("gives every fold a state line in its summary", () => {
 		// Inventory, the crew's Roster and Group Fight, and the custom group's pair.
-		expect(TPL).toContain('<span class="stonetop-follower-section-state">{{inventorySummary}}</span>');
-		expect(TPL.match(/\{\{rosterSummary\}\}/g)).toHaveLength(2);
-		expect(TPL.match(/\{\{groupFightSummary\}\}/g)).toHaveLength(2);
+		expect(TPL).toContain('<span class="stonetop-follower-section-state">{{this.inventorySummary}}</span>');
+		expect(TPL.match(/\{\{this\.rosterSummary\}\}/g)).toHaveLength(2);
+		expect(TPL.match(/\{\{this\.groupFightSummary\}\}/g)).toHaveLength(2);
 	});
 
 	it("except Details, whose summary is the word and the caret on one row", () => {

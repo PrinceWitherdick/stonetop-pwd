@@ -9,6 +9,7 @@ const { rollStat } = await import("../../../module/utils/roll-engine.js");
 const {
 	SETTLEMENT_TYPE, customSettlementActors, settlementDataFromBook, settlementDataFromTemplate,
 	redrawForSettlement, settlementsBySlug, settlementSystemFrom, standingKey,
+	tradePartnerSlug, settlementHiddenFromPlayers,
 } = await import("../../../module/actors/settlement/settlement-actor.js");
 const {
 	SETTLEMENT_MOVES, rollSettlementMove, settlementIsLacking, settlementRollOptions,
@@ -86,6 +87,57 @@ describe("Stonetop's standing with a settlement", () => {
 		expect(bySlug.get("lygos")).toBeUndefined();
 		expect(customSettlementActors(actors).map(a => a.id)).toEqual(["h1"]);
 	});
+
+	// ST-1: after a reload the world lists actors by id, not by when they were made.
+	it("keeps the oldest sheet for a place whatever order the world lists them in", async () => {
+		const older = actor("zz", { sourceSlug: "marshedge" }, { _stats: { createdTime: 100 } });
+		const newer = actor("aa", { sourceSlug: "marshedge" }, { _stats: { createdTime: 200 } });
+		const { settlementActors } = await import("../../../module/actors/settlement/settlement-type.js");
+		expect(settlementsBySlug(settlementActors([newer, older])).get("marshedge")).toBe(older);
+		expect(settlementsBySlug(settlementActors([older, newer])).get("marshedge")).toBe(older);
+	});
+});
+
+// ST-5: a Trade-with row's link follows its partner's name.
+describe("tradePartnerSlug", () => {
+	it("links a new row whose partner the roster knows, and none it doesn't", () => {
+		expect(tradePartnerSlug("Marshedge")).toBe("marshedge");
+		expect(tradePartnerSlug("gordin’s delve")).toBe("gordins-delve");
+		expect(tradePartnerSlug("Lowland traders")).toBe("");
+		expect(tradePartnerSlug("")).toBe("");
+	});
+
+	it("keeps a row's link while its partner keeps their name, however the book spelled it", () => {
+		const was = { partner: "Marshedge (by the Highway)", goods: "grain", slug: "marshedge" };
+		expect(tradePartnerSlug("Marshedge (by the Highway)", was)).toBe("marshedge");
+	});
+
+	it("moves the link to the place a renamed partner names, or drops it", () => {
+		const was = { partner: "Marshedge", goods: "grain", slug: "marshedge" };
+		expect(tradePartnerSlug("Gordin's Delve", was)).toBe("gordins-delve");
+		expect(tradePartnerSlug("Some homebrew city", was)).toBe("");
+	});
+});
+
+// ST-4: what the header chip shows and flips.
+describe("settlementHiddenFromPlayers", () => {
+	const gm = { id: "gm", isGM: true }, ann = { id: "ann", isGM: false }, bo = { id: "bo", isGM: false };
+
+	it("is shown while the default lets players see it, and hidden once it doesn't", () => {
+		expect(settlementHiddenFromPlayers({ default: 2 }, [gm, ann])).toBe(false);
+		expect(settlementHiddenFromPlayers({ default: 0 }, [gm, ann])).toBe(true);
+		expect(settlementHiddenFromPlayers({}, [gm, ann])).toBe(true);
+	});
+
+	it("is shown while a player has a seeing level of their own", () => {
+		expect(settlementHiddenFromPlayers({ default: 0, ann: 1 }, [gm, ann])).toBe(false);
+		expect(settlementHiddenFromPlayers({ default: 0, ann: -1 }, [gm, ann])).toBe(true);
+	});
+
+	it("leaves out a player who owns it, so a hidden place still reads hidden and can be shown again", () => {
+		expect(settlementHiddenFromPlayers({ default: 0, ann: 3 }, [gm, ann, bo])).toBe(true);
+		expect(settlementHiddenFromPlayers({ default: 2, ann: 3 }, [gm, ann, bo])).toBe(false);
+	});
 });
 
 describe("redrawForSettlement", () => {
@@ -120,6 +172,14 @@ describe("redrawForSettlement", () => {
 	it("ignores any other actor", () => {
 		const [home] = open(sheet(stonetop));
 		redrawForSettlement({ id: "n", type: "npc" });
+		expect(home.render).not.toHaveBeenCalled();
+	});
+
+	// ST-3: a compendium's or a token's copy is on no other sheet.
+	it("ignores a compendium's or a token's settlement", () => {
+		const [home] = open(sheet(stonetop));
+		redrawForSettlement({ ...marshedge, pack: "world.places" });
+		redrawForSettlement({ ...marshedge, isToken: true });
 		expect(home.render).not.toHaveBeenCalled();
 	});
 });

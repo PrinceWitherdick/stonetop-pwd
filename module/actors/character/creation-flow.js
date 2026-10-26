@@ -24,6 +24,8 @@ import { clearOnboardingResume } from "./onboarding-resume.js";
 
 // Application → the id of the character it is building.
 const _flowWindows = new Map();
+// Every window ever registered, so its close can be recognised after _live() has pruned it.
+const _everTracked = new WeakSet();
 
 /**
  * Is this window still one of ours to close?
@@ -128,6 +130,7 @@ export function trackCreationFlow(app, actorId) {
 		return app;
 	}
 	_flowWindows.set(app, actorId);
+	_everTracked.add(app);
 	return app;
 }
 
@@ -147,7 +150,10 @@ export function holdCreationFlow(actorId, promise) {
 	if (!actorId) return promise;
 	const token = {};
 	_pending.set(token, actorId);
-	const release = () => { _pending.delete(token); };
+	const release = () => {
+		_pending.delete(token);
+		_scheduleHeldGreetings();
+	};
 	Promise.resolve(promise).then(release).catch(release);
 	return promise;
 }
@@ -163,6 +169,66 @@ export function creationFlowOpen(actorId = null) {
 	const ids = [..._live().values(), ..._pending.values()];
 	if (!actorId) return ids.length > 0;
 	return ids.includes(actorId);
+}
+
+// ── Greetings held back while a flow is open ─────────────────────────────────
+// The greeting in hooks/Ready.js stands aside while this client is already in a creation flow,
+// rather than burying it. It used to wait for the NEXT LOAD, while the GM had just been told it
+// had started on the player's screen. Instead it is parked here and tried again as soon as the
+// last flow window has closed, this session. Keyed by character, so a second hold for the same
+// one replaces the first rather than greeting twice.
+const _heldGreetings = new Map();
+let _drainTimer = null;
+
+/** Park a greeting until this client has no creation flow open; `retry` re-runs it. */
+export function holdGreetingUntilIdle(actorId, retry) {
+	if (!actorId || typeof retry !== "function") return;
+	_heldGreetings.set(actorId, retry);
+}
+
+/** Is a greeting for this character (or any, with none given) parked? */
+export function greetingHeld(actorId = null) {
+	return actorId ? _heldGreetings.has(actorId) : _heldGreetings.size > 0;
+}
+
+/**
+ * Re-run parked greetings once no flow is open. Deferred a macrotask: a flow moving from one
+ * window to the next (intro to picker, picker to walkthrough, Back to the picker) registers the
+ * next window in the same task, or a microtask later, as the old one finishes closing. Each
+ * retry re-checks and parks itself again if a flow has opened meanwhile, so running them all
+ * at once still opens one flow at a time.
+ */
+function _scheduleHeldGreetings() {
+	if (!_heldGreetings.size || _drainTimer) return;
+	_drainTimer = setTimeout(() => {
+		_drainTimer = null;
+		runHeldGreetings();
+	}, 0);
+}
+
+/** Run every parked greeting now, if no flow is open. */
+function runHeldGreetings() {
+	if (!_heldGreetings.size || creationFlowOpen()) return;
+	const retries = [..._heldGreetings.values()];
+	_heldGreetings.clear();
+	for (const retry of retries) {
+		try {
+			retry();
+		} catch (err) {
+			console.error("Stonetop | a held character-creation greeting failed", err);
+		}
+	}
+}
+
+/**
+ * A tracked window has started closing: once it has gone, try the parked greetings. Waits out
+ * the fade, because the window still counts as open until then, and a flow's next window
+ * registers as the old one's close resolves.
+ */
+export async function flowWindowClosing(app) {
+	if (!app || !_everTracked.has(app)) return;
+	await _waitWhile(app, CLOSING);
+	_scheduleHeldGreetings();
 }
 
 /** Close every creation window building `actorId`. Returns how many were closed. */
@@ -187,6 +253,8 @@ export function closeCreationFlowFor(actorId) {
  * the replacement's own greeting arrives a moment later anyway.
  */
 export function registerCreationFlowCleanup() {
+	// Core fires close<Class> for every class in an AppV1 window's chain, so this hears all three flow windows.
+	Hooks.on("closeApplication", app => { flowWindowClosing(app); });
 	Hooks.on("deleteActor", actor => {
 		if (actor?.type !== "character") return;
 		// Drop the client-local resume snapshot first: it is keyed by actor id, and leaving

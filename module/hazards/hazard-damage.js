@@ -172,6 +172,9 @@ export async function hazardCertainDeath(page, deps = {}) {
 	return lines;
 }
 
+/** The hazard pages (by uuid) whose Roll damage or Certain death is under way on this client. */
+const hazardPressesInFlight = new Set();
+
 /**
  * The card's two buttons, delegated on `root` (a page sheet, the GM Toolkit's prep tab, the canvas
  * board): finds nothing where no hazard card is drawn, as every kind's `wireCard` must.
@@ -187,17 +190,23 @@ export function wireHazardDamage(root, resolvePage, deps = {}) {
 		ev.preventDefault();
 		ev.stopPropagation();
 		if (!globalThis.game?.user?.isGM || btn.disabled) return;
-		const page = await resolvePage(btn);
-		if (!page) return;
-		// One press at a time: a second while the picker or the damage window is open would roll twice.
+		// One press at a time: a second while the picker or the damage window is open would roll twice. The
+		// button goes down before anything is awaited, and the page is held in flight by its card, because the
+		// host redraws (a fresh, live button) while the picker is open.
+		const key = btn.closest?.(".threat-card")?.dataset?.pageUuid ?? "";
+		if (key && hazardPressesInFlight.has(key)) return;
 		btn.disabled = true;
+		if (key) hazardPressesInFlight.add(key);
 		try {
+			const page = await resolvePage(btn);
+			if (!page) return;
 			if (btn.classList.contains("hazard-certain-death")) await hazardCertainDeath(page, deps);
 			else await rollHazardFromCard(page, { shiftKey: !!ev.shiftKey }, deps);
 		} catch (err) {
 			console.error("Stonetop | hazard damage failed", err);
 		} finally {
 			btn.disabled = false;
+			if (key) hazardPressesInFlight.delete(key);
 		}
 	});
 }

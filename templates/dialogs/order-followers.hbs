@@ -7,7 +7,7 @@
     <div class="stonetop-guide-banner">
       <i class="fas fa-hand-point-right stonetop-guide-banner-icon"></i>
       <div class="stonetop-guide-banner-info">
-        <div class="stonetop-guide-banner-title">Order {{followerName}}</div>
+        <div class="stonetop-guide-banner-title">Order {{this.followerName}}</div>
         <div class="stonetop-guide-banner-sub">Direct them to make a move</div>
       </div>
     </div>
@@ -16,22 +16,22 @@
           the book's rule for an order they would rather not follow (p.464, p.466). --}}
     {{#if (or instinct cost hasLoyalty inuredNote)}}
     <div class="stonetop-of-about">
-      {{#if instinct}}<div class="stonetop-of-about-row"><span class="stonetop-of-about-label">Instinct</span> <em>{{instinct}}</em></div>{{/if}}
-      {{#if cost}}<div class="stonetop-of-about-row"><span class="stonetop-of-about-label">Cost</span> {{cost}}</div>{{/if}}
-      {{#if hasLoyalty}}<div class="stonetop-of-about-row"><span class="stonetop-of-about-label">Loyalty</span> {{loyalty}} held</div>{{/if}}
+      {{#if instinct}}<div class="stonetop-of-about-row"><span class="stonetop-of-about-label">Instinct</span> <em>{{this.instinct}}</em></div>{{/if}}
+      {{#if cost}}<div class="stonetop-of-about-row"><span class="stonetop-of-about-label">Cost</span> {{this.cost}}</div>{{/if}}
+      {{#if hasLoyalty}}<div class="stonetop-of-about-row"><span class="stonetop-of-about-label">Loyalty</span> {{this.loyalty}} held</div>{{/if}}
       {{!-- Heroes to the Last's "They are inured to terror & horror" (the crew's). --}}
-      {{#if inuredNote}}<div class="stonetop-of-about-row stonetop-of-inured"><span class="stonetop-of-about-label">Nerve</span> {{inuredNote}} (Heroes to the Last)</div>{{/if}}
+      {{#if inuredNote}}<div class="stonetop-of-about-row stonetop-of-inured"><span class="stonetop-of-about-label">Nerve</span> {{this.inuredNote}} (Heroes to the Last)</div>{{/if}}
       <div class="stonetop-of-about-note">An order against their instinct, tags or cost, or one they're too scared to follow, they may balk at (p.466): spend 1 Loyalty, or Persuade them.</div>
       {{#if canBalk}}
       <label class="stonetop-of-adv-row stonetop-of-balk-row">
         <input type="checkbox" class="stonetop-of-balk" {{#if spendLoyalty}}checked{{/if}}>
-        {{#if balkOnPresence}}They balk: spend 1 Presence (Front Line Leader, {{presence}} held) in place of their Loyalty so they do it anyway{{else}}They balk: spend 1 Loyalty so they do it anyway{{/if}}
+        {{#if balkOnPresence}}They balk: spend 1 Presence (Front Line Leader, {{this.presence}} held) in place of their Loyalty so they do it anyway{{else}}They balk: spend 1 Loyalty so they do it anyway{{/if}}
       </label>
       {{!-- Front Line Leader: "Spend Presence in lieu of your crew's Loyalty" (p.126). --}}
       {{#if presenceChoice}}
       <label class="stonetop-of-adv-row stonetop-of-balk-row">
         <input type="checkbox" class="stonetop-of-balk-presence" {{#if payWithPresence}}checked{{/if}}>
-        Pay with Presence instead ({{presence}} held, Front Line Leader)
+        Pay with Presence instead ({{this.presence}} held, Front Line Leader)
       </label>
       {{/if}}
       {{/if}}
@@ -45,7 +45,7 @@
       {{#if who}}
       <label class="stonetop-cf-label">Who
         <select class="stonetop-cf-input stonetop-of-who">
-          {{#each who}}<option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+          {{#each who}}<option value="{{this.key}}" {{#if selected}}selected{{/if}}>{{this.label}}</option>{{/each}}
         </select>
       </label>
       {{/if}}
@@ -53,12 +53,12 @@
       {{!-- Which move are they making? --}}
       <label class="stonetop-cf-label">Move
         <select class="stonetop-cf-input stonetop-of-move">
-          {{#each moves}}<option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+          {{#each moves}}<option value="{{this.key}}" {{#if selected}}selected{{/if}}>{{this.label}}</option>{{/each}}
         </select>
       </label>
       {{#if isCustom}}
       <label class="stonetop-cf-label stonetop-of-custom-label">What are they doing?
-        <input type="text" class="stonetop-cf-input stonetop-of-custom" value="{{customMove}}" placeholder="e.g. scale the wall…">
+        <input type="text" class="stonetop-cf-input stonetop-of-custom" value="{{this.customMove}}" placeholder="e.g. scale the wall…">
       </label>
       {{/if}}
 
@@ -70,15 +70,15 @@
           {{#each tags}}
           <button type="button"
                   class="stonetop-of-tag{{#if help}} is-help{{/if}}{{#if hinder}} is-hinder{{/if}}"
-                  data-tag="{{tag}}">
-            {{#if help}}<i class="fas fa-arrow-up"></i> {{/if}}{{#if hinder}}<i class="fas fa-arrow-down"></i> {{/if}}<span class="stonetop-chip-text">{{tag}}</span>
+                  data-tag="{{this.tag}}">
+            {{#if help}}<i class="fas fa-arrow-up"></i> {{/if}}{{#if hinder}}<i class="fas fa-arrow-down"></i> {{/if}}<span class="stonetop-chip-text">{{this.tag}}</span>
           </button>
           {{/each}}
         </div>
         {{else}}
         <span class="stonetop-cf-chosen-empty">No tags: they roll +0.</span>
         {{/if}}
-        {{#if ownNote}}<span class="stonetop-of-tags-hint stonetop-of-own-note">{{ownNote}}</span>{{/if}}
+        {{#if ownNote}}<span class="stonetop-of-tags-hint stonetop-of-own-note">{{this.ownNote}}</span>{{/if}}
 
         {{!-- Their moves count toward the same +1/+2 ("at least one appropriate tag
               or move", p.462), but can't put anything in the way, so these toggle
@@ -89,8 +89,8 @@
           {{#each followerMoves}}
           <button type="button"
                   class="stonetop-of-tag stonetop-of-move-chip{{#if help}} is-help{{/if}}"
-                  data-move="{{move}}">
-            {{#if help}}<i class="fas fa-arrow-up"></i> {{/if}}<span class="stonetop-chip-text">{{move}}</span>
+                  data-move="{{this.move}}">
+            {{#if help}}<i class="fas fa-arrow-up"></i> {{/if}}<span class="stonetop-chip-text">{{this.move}}</span>
           </button>
           {{/each}}
         </div>
@@ -107,6 +107,13 @@
       <div class="stonetop-of-mode-block">
         {{!-- Shield Wall (the Marshal): only for their crew, only on a Defend. Ticked, since the move
               is why the box is here; unticked when they have not formed up. --}}
+        {{!-- A whole group at one foe: "they effectively Aid themselves" (p.414). Ticked, removable. --}}
+        {{#if groupAid}}
+        <label class="stonetop-of-adv-row stonetop-of-group-aid-row">
+          <input type="checkbox" class="stonetop-of-group-aid" {{#if groupAidOn}}checked{{/if}}>
+          {{this.groupAidLabel}}
+        </label>
+        {{/if}}
         {{#if shieldWall}}
         <label class="stonetop-of-adv-row stonetop-of-wall-row">
           <input type="checkbox" class="stonetop-of-wall" {{#if inWall}}checked{{/if}}>
@@ -118,7 +125,7 @@
         {{#if commandHeld}}
         <label class="stonetop-of-adv-row stonetop-of-command-row">
           <input type="checkbox" class="stonetop-of-command" {{#if spendCommand}}checked{{/if}}>
-          Spend 1 Command (Stentorian, {{commandHeld}} held): advantage
+          Spend 1 Command (Stentorian, {{this.commandHeld}} held): advantage
         </label>
         {{/if}}
         <span class="stonetop-cf-chosen-label">Anything else swinging the roll? <span class="stonetop-of-tags-hint">(Stentorian, an Aid, an Interfere…)</span></span>
@@ -132,17 +139,17 @@
             Disadvantage
           </label>
         </div>
-        {{#if modeNote}}<div class="stonetop-of-mode-note">{{modeNote}}</div>{{/if}}
+        {{#if modeNote}}<div class="stonetop-of-mode-note">{{this.modeNote}}</div>{{/if}}
       </div>
 
-      <div class="stonetop-of-readout"><i class="fas fa-dice"></i> {{readout}}</div>
+      <div class="stonetop-of-readout"><i class="fas fa-dice"></i> {{this.readout}}</div>
 
     </div>
 
   </div>
 
   <div class="stonetop-guide-nav">
-    <button class="stonetop-of-roll stonetop-guide-btn--primary"><i class="fas fa-dice-d6"></i> Order {{followerName}}</button>
+    <button class="stonetop-of-roll stonetop-guide-btn--primary"><i class="fas fa-dice-d6"></i> Order {{this.followerName}}</button>
     <button class="stonetop-of-cancel">Cancel</button>
   </div>
 

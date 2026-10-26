@@ -109,6 +109,17 @@ describe("bodiesFor", () => {
 		expect(bodiesFor({ type: "npc", headcount: "junk" })).toMatchObject({ bodies: 1 });
 	});
 
+	// FGT-7, the user's ruling: a headcount falls as its HP does, read as a monster group's is (the HP is one
+	// member's; casualties to the nearest body; routed at 0).
+	it("drops a GM headcount's bodies as its HP falls, and routs it at 0", () => {
+		expect(bodiesFor({ type: "npc", headcount: 5, hp: { value: 6, max: 6 } })).toMatchObject({ bodies: 5, standing: 5, size: 5, out: false });
+		// Half the pool gone: half of the five (2.5) out, a half rounding up, so 2 still standing.
+		expect(bodiesFor({ type: "npc", headcount: 5, hp: { value: 3, max: 6 } })).toMatchObject({ bodies: 2, standing: 2, size: 5, group: true });
+		expect(bodiesFor({ type: "npc", headcount: 5, hp: { value: 0, max: 6 } })).toMatchObject({ bodies: 0, out: true, routed: true, size: 5 });
+		// With no HP pool to read, the headcount stands as set.
+		expect(bodiesFor({ type: "npc", headcount: 5 })).toMatchObject({ bodies: 5, out: false });
+	});
+
 	it("counts a group monster fighting as a group by the members still standing (p.416 casualties)", () => {
 		const full = bodiesFor({ type: "monster", organization: "horde", fightAsGroup: true, count: 6, hp: { value: 3, max: 3 } });
 		expect(full).toMatchObject({ bodies: 6, out: false, group: true, standing: 6, size: 6 });

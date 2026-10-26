@@ -25,10 +25,11 @@ import { postDyingCard } from "../../../hooks/DeathsDoorPrompt.js";
 import { format, localize } from "../../../utils/i18n.js";
 import { rollRewrite } from "../../../utils/roll-rewrite.js";
 import { rollCardRoute } from "../../../utils/roll-card-writer.js";
+import { NO_ANSWER, relayOutcome } from "../../../utils/relay-landed.js";
 import { moveRollable } from "../../../utils/move-rollable.js";
 import { boostButtonFace, boostNote, boostsOn, deathsDoorPlusOnes, pressBoost } from "../roll-boosts.js";
 import { BURN_BRIGHTLY_COST } from "../burn-brightly.js";
-import { GAVE_IT_ALL_FLAG, GIVE_IT_ALL_COSTS, IMPETUOUS_YOUTH, askGiveItAllCost, giveItAllAtDeathsDoor, rollGiveItAllHurt } from "../impetuous-youth.js";
+import { GAVE_IT_ALL_FLAG, GIVE_IT_ALL_COSTS, IMPETUOUS_YOUTH, askGiveItAllCost, giveItAllAtDeathsDoor, givenByPress, newPressId, rollGiveItAllHurt } from "../impetuous-youth.js";
 
 // The move itself (name + trigger), from the 0-HP routing table that every other surface reads.
 // The trigger is a rule the player is being asked to act on, so the walkthrough, its roll card
@@ -813,6 +814,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 			this._boostNotes = [];
 			this._burned = false;
 			this._gaveAll = false;
+			this._unansweredGiveAll = null;
 			this._readLanded();
 			this._step = "result";
 			// A fresh roll is a fresh brush with death: re-arm the per-result actions so a
@@ -1000,7 +1002,8 @@ export class DeathsDoorDialog extends StonetopDialog {
 		this._boosting = true;
 		try {
 			const actor = this._character._actor;
-			const cost  = await askGiveItAllCost(actor);
+			// A lift the GM's client never answered is pressed again at the cost it was asked at (_boostViaGM).
+			const cost  = this._unansweredGiveAll?.cost ?? await askGiveItAllCost(actor);
 			if (!cost) return;
 			const from  = this._rolledTotal;
 			const spent = GIVE_IT_ALL_COSTS.find(c => c.key === cost)?.spent ?? cost;
@@ -1065,9 +1068,25 @@ export class DeathsDoorDialog extends StonetopDialog {
 	 * all the same, the button.
 	 */
 	async _boostViaGM(boost, { cost = null, note }) {
-		const answer = await askDeathsDoorBoost(this._character?._actor, {
-			nonce: this._rollNonce, messageId: this._rollMessage?.id ?? this._privateCardId, boost, cost,
+		// Giving it your all marks the card with this press (impetuous-youth.js#givenByPress): an answer that never
+		// came back (out of time) is read against the card for a while (relay-landed.js), and a lift that lands all
+		// the same is carried on from. A private card this client cannot read cannot be watched, so the press is
+		// kept (`_unansweredGiveAll`) and a second press asks again with the SAME press id: the GM's client answers a
+		// lift that already landed as landed (deaths-door-relay.js#handleDeathsDoorBoostQuery), and its "you get
+		// hurt" is rolled here then.
+		const retry = boost === "giveAll" ? this._unansweredGiveAll : null;
+		const press = boost === "giveAll" ? (retry?.press ?? newPressId()) : null;
+		let answer = await askDeathsDoorBoost(this._character?._actor, {
+			nonce: this._rollNonce, messageId: this._rollMessage?.id ?? this._privateCardId, boost, cost, press,
 		});
+		const timedOut = answer === NO_ANSWER;
+		if (timedOut) answer = null;
+		const lifted = () => givenByPress(this._rollMessage, press);
+		if (!answer && press && await relayOutcome(this._rollMessage, timedOut ? NO_ANSWER : answer, lifted)) {
+			const total = this._cardTotal();
+			answer = { applied: true, total, tier: null };
+		}
+		if (press) this._unansweredGiveAll = timedOut && !answer ? { press, cost } : null;
 		if (answer?.applied || answer?.spent) {
 			if (boost === "burn") this._burned = true;
 			else this._gaveAll = true;

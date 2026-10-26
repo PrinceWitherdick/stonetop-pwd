@@ -151,10 +151,14 @@ export class CharacterInventory {
 	// Every key goes through `deletes` rather than a smaller object through `sets`: writing an
 	// object flag MERGES, so re-setting `checked` without the slug left the old `true` sitting
 	// there and a re-added item came back already marked as carried.
+	//
+	// A bronze row's "which weapon is it?" answer goes with it too (combat/attack-flow.js#settleBronzeWeapon), so a
+	// bronze weapon bought after one was sold or lost is asked about afresh rather than taking the old one's stats.
 	async removeSpecial(slug) {
+		const bronzeAs = this._flags.getFlag("bronzeAs") ?? {};
 		await this._flags.batch({
 			sets:    { addedSpecial: this.addedSpecial.filter(s => s !== slug) },
-			deletes: { checked: [slug], resources: [slug], resourceMax: [slug] },
+			deletes: { checked: [slug], resources: [slug], resourceMax: [slug], ...(slug in bronzeAs ? { bronzeAs: [slug] } : {}) },
 		});
 	}
 

@@ -72,7 +72,7 @@ describe("the timeline and the season inks", () => {
 			const src = readRepo(rel);
 			for (const cls of [classes].flat()) {
 				const tag = src.match(new RegExp(`class="${cls}[^"]*"`))?.[0] ?? "";
-				expect(tag, `${rel}: .${cls} does not wear seasonClass`).toContain("{{seasonClass}}");
+				expect(tag, `${rel}: .${cls} does not wear seasonClass`).toContain("{{this.seasonClass}}");
 				expect(declarations(CSS, `.${cls}.stonetop-timeline-season`), `.${cls} has no season rule`).toContain("var(--tl-season)");
 			}
 		}
@@ -246,9 +246,9 @@ describe("the aggregate's columns", () => {
 	// User, 2026-10-03: the year rides in the shared year chip, at the heading's own size.
 	it("puts the vertical year heading in the year chip, full size", () => {
 		expect(readRepo("templates/dialogs/partials/timeline-period.hbs"))
-			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}>{{> stonetop.timeline-year-chip}}');
+			.toContain('<h2 class="stonetop-timeline-year" data-year="{{this.year}}"{{#if ageMark}} data-age-mark{{/if}}>{{> stonetop.timeline-year-chip}}');
 		expect(readRepo("templates/dialogs/timeline.hbs"))
-			.toContain('<h2 class="stonetop-timeline-year" data-year="{{year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell">{{> stonetop.timeline-year-chip}}</span>');
+			.toContain('<h2 class="stonetop-timeline-year" data-year="{{this.year}}"{{#if ageMark}} data-age-mark{{/if}}><span class="stonetop-timeline-year-cell">{{> stonetop.timeline-year-chip}}</span>');
 		expect(value(".stonetop-timeline-year .stonetop-year-chip", "font-size")).toBe("inherit");
 	});
 
@@ -376,7 +376,7 @@ describe("telling the record from what the system wrote", () => {
 		expect(value(".stonetop-timeline-card--auto", "border-left-width"),
 			"an auto row is not marked out by its edge").toBeTruthy();
 		expect(readRepo("templates/dialogs/partials/timeline-card.hbs"))
-			.toContain("{{kindLabel}}");
+			.toContain("{{this.kindLabel}}");
 	});
 
 	it("keeps the kind chip readable", () => {
@@ -635,7 +635,7 @@ describe("a season's name centred in its heading", () => {
 	// the name its own span trimmed to its capitals, as every chip is centred.
 	it("wraps the name in a span of its own", () => {
 		expect(readRepo("templates/dialogs/partials/timeline-period-head.hbs"))
-			.toMatch(/<span class="stonetop-timeline-period-name">\{\{#if undated\}\}\{\{label\}\}\{\{else\}\}\{\{seasonLabel\}\}\{\{\/if\}\}<\/span>/);
+			.toMatch(/<span class="stonetop-timeline-period-name">\{\{#if undated\}\}\{\{this\.label\}\}\{\{else\}\}\{\{this\.seasonLabel\}\}\{\{\/if\}\}<\/span>/);
 	});
 
 	it("centres the glyph and the trimmed name on one flex line", () => {

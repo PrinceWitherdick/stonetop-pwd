@@ -12,9 +12,9 @@
 			<ol class="stonetop-guide-toc-list">
 				{{#each sections}}
 				<li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
-					<button type="button" class="stonetop-guide-toc-btn stonetop-improvement-builder-tab" data-tab="{{key}}"{{#if selected}} aria-current="true"{{/if}}>
-						<i class="fas {{icon}} stonetop-guide-toc-icon" aria-hidden="true"></i>
-						<span class="stonetop-guide-toc-text">{{title}}</span>
+					<button type="button" class="stonetop-guide-toc-btn stonetop-improvement-builder-tab" data-tab="{{this.key}}"{{#if selected}} aria-current="true"{{/if}}>
+						<i class="fas {{this.icon}} stonetop-guide-toc-icon" aria-hidden="true"></i>
+						<span class="stonetop-guide-toc-text">{{this.title}}</span>
 					</button>
 				</li>
 				{{/each}}
@@ -45,9 +45,9 @@
 					<select id="{{@root.uid}}-stonetop-improvement-source" class="stonetop-improvement-builder-source">
 						<option value="">A blank improvement</option>
 						{{#each sourceGroups}}
-						<optgroup label="{{label}}">
+						<optgroup label="{{this.label}}">
 							{{#each options}}
-							<option value="{{value}}">{{label}}</option>
+							<option value="{{this.value}}">{{this.label}}</option>
 							{{/each}}
 						</optgroup>
 						{{/each}}
@@ -69,7 +69,7 @@
 					<select id="{{@root.uid}}-stonetop-improvement-category" name="category">
 						<option value="">None (always shown)</option>
 						{{#each categories}}
-						<option value="{{key}}">{{label}}</option>
+						<option value="{{this.key}}">{{this.label}}</option>
 						{{/each}}
 					</select>
 					<p class="stonetop-improvement-builder-hint">Which filter chip it files under on the Improvements tab. An uncategorised improvement is shown whatever the filter.</p>
@@ -117,8 +117,8 @@
 					<div class="stonetop-improvement-builder-row">
 						{{#each statFields}}
 						<div class="stonetop-improvement-builder-field stonetop-improvement-builder-field--num">
-							<label for="{{@root.uid}}-stonetop-improvement-grant-{{key}}">{{label}}</label>
-							<input type="number" id="{{@root.uid}}-stonetop-improvement-grant-{{key}}" name="grant-{{key}}" step="1" placeholder="no change">
+							<label for="{{@root.uid}}-stonetop-improvement-grant-{{this.key}}">{{this.label}}</label>
+							<input type="number" id="{{@root.uid}}-stonetop-improvement-grant-{{this.key}}" name="grant-{{this.key}}" step="1" placeholder="no change">
 						</div>
 						{{/each}}
 					</div>
@@ -145,7 +145,7 @@
 							<select id="{{@root.uid}}-stonetop-improvement-grant-size" name="grant-size">
 								<option value="">Leave alone</option>
 								{{#each sizes}}
-								<option value="{{value}}">{{label}}</option>
+								<option value="{{this.value}}">{{this.label}}</option>
 								{{/each}}
 							</select>
 						</div>
@@ -187,7 +187,7 @@
 						<legend>Surplus it generates when the Seasons Change</legend>
 						<div class="stonetop-improvement-builder-checks" role="group" aria-label="Seasons it generates Surplus in">
 							{{#each seasons}}
-							<label class="stonetop-improvement-builder-check"><input type="checkbox" class="stonetop-check" name="grant-yield-seasons" value="{{value}}"> <span>{{label}}</span></label>
+							<label class="stonetop-improvement-builder-check"><input type="checkbox" class="stonetop-check" name="grant-yield-seasons" value="{{this.value}}"> <span>{{this.label}}</span></label>
 							{{/each}}
 						</div>
 						<div class="stonetop-improvement-builder-row">
@@ -235,7 +235,7 @@
 						<legend>Upkeep: pay it, or lose the improvement</legend>
 						<div class="stonetop-improvement-builder-checks" role="group" aria-label="Seasons the upkeep is owed in">
 							{{#each seasons}}
-							<label class="stonetop-improvement-builder-check"><input type="checkbox" class="stonetop-check" name="grant-upkeep-seasons" value="{{value}}"> <span>{{label}}</span></label>
+							<label class="stonetop-improvement-builder-check"><input type="checkbox" class="stonetop-check" name="grant-upkeep-seasons" value="{{this.value}}"> <span>{{this.label}}</span></label>
 							{{/each}}
 						</div>
 						<div class="stonetop-improvement-builder-row">
@@ -265,8 +265,8 @@
 						<div class="stonetop-improvement-builder-row">
 							{{#each statFields}}
 							<div class="stonetop-improvement-builder-field stonetop-improvement-builder-field--num">
-								<label for="{{@root.uid}}-stonetop-improvement-grant-lapse-{{key}}">{{label}}</label>
-								<input type="number" id="{{@root.uid}}-stonetop-improvement-grant-lapse-{{key}}" name="grant-lapse-{{key}}" step="1" placeholder="no change">
+								<label for="{{@root.uid}}-stonetop-improvement-grant-lapse-{{this.key}}">{{this.label}}</label>
+								<input type="number" id="{{@root.uid}}-stonetop-improvement-grant-lapse-{{this.key}}" name="grant-lapse-{{this.key}}" step="1" placeholder="no change">
 							</div>
 							{{/each}}
 						</div>
@@ -282,8 +282,8 @@
 						<div class="stonetop-improvement-builder-row">
 							{{#each statFields}}
 							<div class="stonetop-improvement-builder-field stonetop-improvement-builder-field--num">
-								<label for="{{@root.uid}}-stonetop-improvement-grant-condition-{{key}}">{{label}}</label>
-								<input type="number" id="{{@root.uid}}-stonetop-improvement-grant-condition-{{key}}" name="grant-condition-{{key}}" step="1" placeholder="no change">
+								<label for="{{@root.uid}}-stonetop-improvement-grant-condition-{{this.key}}">{{this.label}}</label>
+								<input type="number" id="{{@root.uid}}-stonetop-improvement-grant-condition-{{this.key}}" name="grant-condition-{{this.key}}" step="1" placeholder="no change">
 							</div>
 							{{/each}}
 						</div>
@@ -315,7 +315,7 @@
 	<footer class="stonetop-guide-nav stonetop-improvement-builder-nav">
 		<span class="stonetop-improvement-builder-nav-btns">
 			<button type="button" class="stonetop-improvement-builder-save stonetop-guide-btn--primary">
-				<i class="fas fa-check" aria-hidden="true"></i> {{submitLabel}}
+				<i class="fas fa-check" aria-hidden="true"></i> {{this.submitLabel}}
 			</button>
 			<button type="button" class="stonetop-improvement-builder-cancel">Cancel</button>
 		</span>
@@ -391,7 +391,7 @@
 				<span aria-hidden="true">&times;</span>
 				{{!-- `max` comes from MAX_REQUIREMENT_REPEAT, the same ceiling itemsFromRows
 				      clamps to, so the control and the rule cannot drift apart. --}}
-				<input type="number" class="stonetop-improvement-builder-req-count" min="1" max="{{maxRepeat}}" step="1" value="1" aria-label="How many boxes this requirement makes">
+				<input type="number" class="stonetop-improvement-builder-req-count" min="1" max="{{this.maxRepeat}}" step="1" value="1" aria-label="How many boxes this requirement makes">
 			</label>
 			<span class="stonetop-improvement-builder-req-btns">
 				<button type="button" class="stonetop-improvement-builder-req-up" data-tooltip="Move up" data-tooltip-direction="UP" aria-label="Move requirement up"><i class="fas fa-chevron-up" aria-hidden="true"></i></button>

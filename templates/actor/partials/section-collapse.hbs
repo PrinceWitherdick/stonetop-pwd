@@ -14,5 +14,5 @@
       The aria-expanded and title below are the un-wired defaults. Both are restated
       by `_wireSectionCollapse` at wire time, before paint, from the section's actual
       state, so a default-collapsed caret does not announce itself as expanded. --}}
-<a class="stonetop-section-collapse" data-section="{{collapse}}"{{#if defaultCollapsed}} data-default-collapsed="true"{{/if}} role="button" tabindex="0"
+<a class="stonetop-section-collapse" data-section="{{this.collapse}}"{{#if defaultCollapsed}} data-default-collapsed="true"{{/if}} role="button" tabindex="0"
    aria-expanded="true" title="Collapse section"><i class="fas fa-caret-down"></i></a>

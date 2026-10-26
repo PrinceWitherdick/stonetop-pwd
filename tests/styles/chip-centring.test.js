@@ -59,6 +59,7 @@ describe("the chip-centring tokens", () => {
 describe("text-only chips trim themselves", () => {
 	const SELF = [
 		".stonetop-stat-boost-chip",
+		".stonetop-instinct-temporary-badge",
 		".stonetop-move-roll-chip",
 		".stonetop-add-item-chip",
 		".deaths-door-mark-chip",
@@ -138,6 +139,11 @@ describe("chips with an icon or a count trim their label element", () => {
 		".stonetop-expedition-dialog .stonetop-exp-load-chip .tick",
 		".stonetop-people-gallery .stonetop-people-count",
 		".stonetop-arcanum-edit .stonetop-arc-chip-label",
+		// Button and tab labels beside an icon or in a padded box: once hand-lifted 0.048em for Libre
+		// Caslon's line box, now trimmed (the font fixes its own line box; Blink still floors leading).
+		".stonetop-welcome-create-label",
+		".stonetop-relmap-tool > span",
+		".pbta.sheet .sheet-tabs:not(.stonetop-tab-rail) .item .stonetop-tab-label",
 	];
 
 	it.each(LABELS)("%s trims and pads with both tokens", sel => {
@@ -165,6 +171,8 @@ describe("chips with an icon or a count trim their label element", () => {
 		// The fallen card's, and a custom group's roster row marked fallen at the group's floor.
 		["templates/actor/partials/tab-followers.hbs", "stonetop-follower-dead-badge", "span", 2],
 		["templates/actor/partials/tab-followers.hbs", "stonetop-exceptional-toggle", "button", 1],
+		// Veteran Crew's "tags owed" cue, a flex chip with a hand icon.
+		["templates/actor/partials/tab-followers.hbs", "stonetop-crew-tags-owed", "span", 1],
 		["templates/dialogs/partials/catalog-shell.hbs", "stonetop-catalog-badge", "span", 1],
 	])("wraps every label in %s (.%s)", (file, chipClass, tag, count) => {
 		const { count: found, bare } = everyChipWrapped(readRepo(file), chipClass, tag);
@@ -211,9 +219,11 @@ describe("chips with an icon or a count trim their label element", () => {
 		}
 	});
 
-	// The browser draws an input's text centred on its line box, which Libre Caslon Text sets 0.048em above
-	// its cap band; no trim reaches it, so the box's padding carries the lift (measured 1.4px high at 1.5x without).
-	it("lifts the reminder input's typed words onto the cap band with its padding", () => {
+	// No trim reaches an input's text. The Libre Caslon Text @font-face now centres its line box on the
+	// capitals, but the chip's whole-pixel line leaves ~1px of leading whose top half Blink floors to a
+	// whole pixel, so the padding still lowers the words: geometric -0.36/+0.09/-0.02px at roots 14/16/20
+	// with it, -0.90/-0.53/-0.79px without (Signika and IM Fell English improve with it too).
+	it("lowers the reminder input's typed words onto the cap band with its padding", () => {
 		const body = declarations(MAIN, ".stonetop-reminder-chips input.stonetop-reminder-chip--input");
 		expect(declared(body, "padding")).toBe("calc(1px + 0.048em) 9px calc(1px - 0.048em)");
 	});
@@ -233,6 +243,12 @@ describe("icon-and-label buttons centre by flex, unnudged", () => {
 	it.each([
 		".stonetop-steading-plan button.spe-req-add",
 		".steading-plan-add",
+		".stonetop-love-letter-send",
+		".stonetop-love-letter-resend",
+		// Text-only, on the same balanced line box: Introductions' Un-pass and an answer's Save / Cancel.
+		".stonetop-intros-unpass",
+		".stonetop-intros-recorded-save",
+		".stonetop-intros-recorded-cancel",
 	])("%s", sel => {
 		const body = declarations(MAIN, sel);
 		expect(body, `${sel} has no rule`).toBeTruthy();
@@ -260,6 +276,7 @@ describe("chip icons sit at a whole-pixel size", () => {
 		".stonetop-timeline-entry-linked i",
 		".stonetop .stonetop-moves-level-notice-dismiss i",
 		".stonetop-reminder-chip i",
+		".stonetop-crew-tags-owed > i",
 	];
 
 	it.each(ICONS)("%s rounds its font-size to 1px", sel => {

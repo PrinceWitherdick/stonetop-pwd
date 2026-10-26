@@ -12,7 +12,7 @@ import {
 	MARK_KINDS, BARKSKIN, TRACKLESS_STEP, AMULETS_TALISMANS, WARDS_BINDINGS,
 	NATURES_WRATH, DANUS_GRASP, CHARM_POTENCY,
 	availableKinds, canMarkBlessed, groupMarks, readMarks, addMark,
-	charmSpentByRoll, charmPotencyText, tracklessTally,
+	charmSpentByRoll, charmPotencyText, tracklessTally, wardWordTally, noteWordCount,
 } from "../../../module/actors/character/blessed-marks.js";
 import { ritesBoonCapacity, openRitesOfTheLand } from "../../../module/actors/character/rites-of-the-land.js";
 import { BlessedMarksDialog } from "../../../module/actors/character/dialogs/BlessedMarksDialog.js";
@@ -368,6 +368,39 @@ describe("Trackless Step: 1 Stock can mark up to your level+INT", () => {
 		// Still layable: the cap flags, it does not take the add bar away.
 		expect(panel.canAdd).toBe(true);
 		expect(MARK_KINDS.find(k => k.key === "trackless").move).toBe(TRACKLESS_STEP);
+	});
+});
+
+// -- Wards & Bindings' word limit ---------------------------------------------------
+
+// Book I p.107: "describe who or what they affect (using no more words than your level)".
+describe("Wards & Bindings: no more words than your level", () => {
+	const ward = (id, name, note) => ({ id, kind: "ward", name, note });
+
+	it("counts each ward's words against the level, and lists the ones past it", () => {
+		expect(noteWordCount("  undead   of the barrow ")).toBe(4);
+		expect(noteWordCount("")).toBe(0);
+		const list = [ward("w1", "North door", "the dead"), ward("w2", "Barrow", "undead creatures and spirits"),
+			{ id: "t1", kind: "trackless", name: "Ann", note: "one two three four five" }];
+		const { limit, over } = wardWordTally(list, { level: 2 });
+		expect(limit).toBe(2);
+		expect(over.map(m => m.name)).toEqual(["Barrow"]);
+		// The limit grows with the level, read when asked.
+		expect(wardWordTally(list, { level: 4 }).over).toEqual([]);
+	});
+
+	it("says the limit on the panel and in the note's placeholder, flags past it, and never blocks", () => {
+		const actor = { id: "a1", items: [move(WARDS_BINDINGS)], system: { attributes: { level: { value: 3 } }, stats: { int: { value: 0 } } } };
+		const dialog = new BlessedMarksDialog(actor, { blessedMarks: readMarks([ward("w1", "Barrow", "undead creatures and spirits")]) }, {});
+		dialog._suggestionRows = () => [];
+		dialog._rosterPool = () => [];
+		const panel = dialog.getData().groups.find(g => g.key === "ward");
+		expect(panel.tally.limit).toBe(3);
+		expect(panel.tally.over).toBe(true);
+		expect(panel.tally.text).toContain("up to 3 words");
+		expect(panel.tally.text).toContain("Barrow");
+		expect(panel.rows[0].notePlaceholder).toContain("up to 3 words");
+		expect(panel.canAdd).toBe(true);
 	});
 });
 

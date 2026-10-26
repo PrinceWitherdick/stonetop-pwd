@@ -42,7 +42,7 @@
       something to toggle, and that wrapper is boxless (`display: contents`) because the two
       belong to different lines of the row: see the CSS. --}}
 {{#if artifact.lore}}
-<div class="stonetop-inv-artifact-fold{{#unless artifact.loreExpanded}} is-collapsed{{/unless}}" data-section="{{ownedId}}">
+<div class="stonetop-inv-artifact-fold{{#unless artifact.loreExpanded}} is-collapsed{{/unless}}" data-section="{{this.ownedId}}">
 	<a class="stonetop-inv-lore-toggle" role="button" tabindex="0"
 	   aria-expanded="{{#if artifact.loreExpanded}}true{{else}}false{{/if}}"
 	   aria-label="{{localize 'stonetop.artifact.loreToggle'}}"
@@ -56,14 +56,14 @@
 </span>
 {{/if}}
 {{#if artifact.concealed}}
-<a class="stonetop-inv-artifact-identify" data-owned-id="{{ownedId}}"
+<a class="stonetop-inv-artifact-identify" data-owned-id="{{this.ownedId}}"
    data-tooltip="{{localize 'stonetop.artifact.identifyTooltip'}}">
 	<i class="fas fa-magnifying-glass"></i>
 </a>
 {{/if}}
 {{#if @root.stonetop.isGM}}
 <a class="stonetop-inv-artifact-gm{{#if artifact.isArtifact}} is-hidden-artifact{{/if}}"
-   data-owned-id="{{ownedId}}" data-state="{{artifact.state}}"
+   data-owned-id="{{this.ownedId}}" data-state="{{artifact.state}}"
    data-tooltip="{{localize 'stonetop.artifact.gmTooltip'}}">
 	<i class="fas fa-eye"></i>
 </a>

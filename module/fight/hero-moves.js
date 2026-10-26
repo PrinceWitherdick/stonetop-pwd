@@ -75,10 +75,10 @@ import { BINDING_ARBITRATION, OATHS_FLAG, readOaths, oathIndex, isBoundBy } from
 import { CENSURE } from "../actors/character/condemn.js";
 import { asteriskMoveUsed } from "../actors/character/WouldBeHeroAsterisk.js";
 import { HEROES, touching } from "./engagements.js";
-import { combatantSide, each, fightOnScene, gridOf } from "./fight-state.js";
+import { combatantSide, fightersOf, fightOnScene, gridOf } from "./fight-state.js";
 import { rollerEngagement } from "./damage-seed.js";
 import { struckFoe } from "./struck-foe.js";
-import { resolveSync, askGMClient, queryAsker } from "../utils/foundry-compat.js";
+import { resolveSync, askGMClient, queryAsker, serverNow } from "../utils/foundry-compat.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { escHtml } from "../utils/strings.js";
 import { damageRowActor } from "../utils/damage.js";
@@ -492,8 +492,12 @@ const ownedLearned = (actor, name) => (actor?.type === "character" ? ownedLearne
  * the card it answers is younger than the record (see `nemesisOffer`).
  *
  * An entry already there is left alone, so `since` stays the moment this foe first survived.
+ *
+ * ON THE SERVER'S CLOCK (foundry-compat.js#serverNow), because what it is compared with is a chat card's
+ * `timestamp`, which the server stamps. The roller's own clock running a second or two behind the server
+ * read as a record OLDER than the Clash card that wrote it, and Nemesis rode that Clash's own damage.
  */
-export async function recordClash(actor, targets = [], { now = Date.now() } = {}) {
+export async function recordClash(actor, targets = [], { now = serverNow() } = {}) {
 	if (!has(actor, HERO_MOVES.NEMESIS) && !has(actor, HERO_MOVES.RELENTLESS)) return false;
 	const held = listFlag(actor, CLASHED_FLAG);
 	const known = new Set(held.map(entry => entry?.key));
@@ -789,6 +793,11 @@ export async function spendRapierWitBlow(fox, attacker, {
 } = {}) {
 	if (!rapierWitBlowOwed(fox, attacker)) return false;
 	if (fox.isOwner !== false) return spendRapierWit(fox, [foeKey(attacker)], "blow");
+	// Nobody to write the Fox: the +1d4 stays owed and would ride this foe's next blow too, so the table is told.
+	if (!gm) {
+		globalThis.ui?.notifications?.warn?.(format(`${MOVE_KEY}.rapierWit.noGm`, { name: fox.name ?? "", move: HERO_MOVES.RAPIER_WIT }));
+		return false;
+	}
 	return !!(await askGMClient(gm, RAPIER_WIT_QUERY, {
 		foxUuid: fox.uuid, attackerUuid: attacker?.uuid ?? "", userId,
 	}, { fallback: false, what: "spend Rapier Wit's +1d4" }));
@@ -796,14 +805,17 @@ export async function spendRapierWitBlow(fox, attacker, {
 
 /**
  * The GM's side of RAPIER_WIT_QUERY, for the primary GM only: the asker must own the one who struck (it is
- * their blow that was rolled), and the Fox still be owed that foe's +1d4. Whether it was spent.
+ * their blow that was rolled) or the Fox (a counter-attack's card is struck on the Fox's side, at a foe the
+ * GM owns), and the Fox still be owed that foe's +1d4. Whether it was spent.
  */
 export async function handleRapierWitQuery(data, context = {}, { users = globalThis.game?.users, resolve = resolveSync } = {}) {
 	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
 	const user = queryAsker(data, context, users);
 	const fox = data?.foxUuid ? resolve(data.foxUuid) : null;
 	const attacker = data?.attackerUuid ? resolve(data.attackerUuid) : null;
-	if (!user || !fox || !attacker?.testUserPermission?.(user, "OWNER")) return false;
+	if (!user || !fox || !attacker) return false;
+	const owns = doc => !!doc?.testUserPermission?.(user, "OWNER");
+	if (!owns(attacker) && !owns(fox)) return false;
 	if (!rapierWitBlowOwed(fox, attacker)) return false;
 	return spendRapierWit(fox, [foeKey(attacker)], "blow");
 }
@@ -1239,10 +1251,10 @@ function paybackParty(actor, { cardFor = followerCardFor, combat = globalThis.ga
 	}
 	// No fight to read them off (the GM's Fight tab off, or this character not placed in one): the allies
 	// are the heroes' side of the active Combat, as the fight would place them (fight-state.js#combatantSide:
-	// the side stamped on the combatant, else characters, player-owned and followers). Only combatants on a
-	// map, so a tokenless roster Combat (the old Introductions') does not make every PC an ally.
-	for (const combatant of each(combat?.combatants)) {
-		if (combatant?.tokenId && combatantSide(combatant) === HEROES) join(combatant.actor ?? null);
+	// the side stamped on the combatant, else characters, player-owned and followers). Only a fight's fighters
+	// (fight-state.js#fightersOf), so a tokenless roster Combat (the old Introductions') makes no PC an ally.
+	for (const combatant of fightersOf(combat)) {
+		if (combatantSide(combatant) === HEROES) join(combatant.actor ?? null);
 	}
 	return party;
 }
@@ -1348,11 +1360,11 @@ export function holyLightOffers(actor) {
  * @param {boolean} [options.strikeBack] a Defend strike back (p.216)
  * @param {boolean} [options.parry]      that strike back is the one a Parry & Riposte bought, rather than
  *   the plain Defend option the fight ring's Strike back spends on (Second Intent rides only this one)
- * @param {number} [options.attackAt]    when the card this answers was written (see recordClash)
+ * @param {number} [options.attackAt]    when the card this answers was written, on the server's clock (see recordClash)
  * @param {string} [options.moveKey]     the attack move's key ("clash": Set-Up Strike rides its damage)
  * @returns {Array<{key: string, dice: string, label: string, pill: string, applied?: boolean, tags?: string[], spend?: Function}>}
  */
-export function blowOffers(actor, { targets = [], weapon = null, strikeBack = false, parry = false, attackAt = Date.now(), moveKey = "" } = {}) {
+export function blowOffers(actor, { targets = [], weapon = null, strikeBack = false, parry = false, attackAt = serverNow(), moveKey = "" } = {}) {
 	if (actor?.type !== "character") return [];
 	const offers = [];
 	const undaunted = undauntedOffer(actor);
@@ -1377,11 +1389,19 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 	// strikes back from the sheet (the user's ruling, 2026-10-18). So while they hold any, it opens UNTICKED
 	// with the cost in its label, and the Readiness comes off only once it comes back ticked: re-read then,
 	// never below none, since a spend or a Defend in between may have changed it.
+	// Ticked, it MAKES the blow a strike back (`strikeBack` on the line): "deal your damage, with
+	// disadvantage" (p.216), so it carries that mode, and the window's answer says so (attack-flow.js
+	// #askDamageAdjustment), which drops the fight's +N and asks no "going on the offense?" afterwards.
+	// Only on a blow that is no attack move's: a Clash's, a Let Fly's or an Ambush's damage is the attack itself,
+	// never a strike back at an attacker, so the spend line has no business on its window (`moveKey`).
 	if (strikeBack && has(actor, HERO_MOVES.REMEMBER_ME)) add("rememberMe", HERO_MOVES.REMEMBER_ME, "1d4");
-	else if (!strikeBack && has(actor, HERO_MOVES.REMEMBER_ME) && heldReadiness(actor) > 0) {
-		add("rememberMeSpend", HERO_MOVES.REMEMBER_ME, "1d4", {
-			applied: false,
-			spend: hero => (heldReadiness(hero) > 0 ? spendHeldReadiness(hero, 1) : null),
+	else if (!strikeBack && !moveKey && has(actor, HERO_MOVES.REMEMBER_ME) && heldReadiness(actor) > 0) {
+		offers.push({
+			...offerLine("rememberMeSpend", HERO_MOVES.REMEMBER_ME, "1d4", {
+				applied: false,
+				spend: hero => spendHeldReadiness(hero, 1),
+			}),
+			mode: "dis", strikeBack: true,
 		});
 	}
 	// Second Intent: "When you Defend and spend 1 Readiness to Parry & Riposte, also pick 1 option from the
@@ -1414,6 +1434,8 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 	// (actors/character/MoveResources.js): "hold 2 Resolve" ticks two, and a spend unticks one. The spend
 	// re-reads the track (takeBackHeld) rather than writing the count the window opened on, so Resolve
 	// gained or spent while it was open (Speak Truth's +1, a pip clicked by hand) is not written over.
+	// Nothing left to take back by then answers null, which the window reads as unpaid (combat/attack-flow.js
+	// #askDamageAdjustment): the +1d4 and its forceful are left off rather than given for free.
 	const anger = ownedLearned(actor, HERO_MOVES.ANGER);
 	const angerMax = Number(anger?.system?.resource?.max) || 0;
 	const resources = actor.typedActor?.moveResources;
@@ -1422,7 +1444,7 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 		if (held > 0) {
 			add("anger", HERO_MOVES.ANGER, "1d4", {
 				applied: false, tags: ["forceful"],
-				spend: hero => takeBackHeld(hero, HERO_MOVES.ANGER, 1),
+				spend: async hero => ((await takeBackHeld(hero, HERO_MOVES.ANGER, 1)) > 0 ? true : null),
 			});
 		}
 	}

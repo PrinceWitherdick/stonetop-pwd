@@ -86,14 +86,14 @@
 		{{#if stonetop.wonders.open.length}}
 		<ul class="stonetop-gm-wonder-list">
 			{{#each stonetop.wonders.open}}
-			<li class="stonetop-gm-wonder-item" data-wonder-id="{{id}}">
+			<li class="stonetop-gm-wonder-item" data-wonder-id="{{this.id}}">
 				<div class="stonetop-gm-wonder-head">
 					{{!-- The question itself is the input, not a label with a pencil beside it.
 					      It is one line of text that gets reworded as often as it gets answered
 					      ("maybe the question isn't how do the bandits keep the ghosts at bay,
 					      but which of the bandits have been possessed" — Book I p.418), and a
 					      dialog for a one-line edit is a dialog nobody opens. --}}
-					<input type="text" class="stonetop-gm-wonder-question" value="{{question}}" maxlength="300"
+					<input type="text" class="stonetop-gm-wonder-question" value="{{this.question}}" maxlength="300"
 					       aria-label="{{localize "stonetop.gmToolkit.wonder.questionLabel"}}">
 					<span class="stonetop-gm-wonder-tools">
 						<button type="button" class="stonetop-gm-wonder-settle"
@@ -112,7 +112,7 @@
 				      gets used when the answer is already final. --}}
 				<textarea class="stonetop-gm-wonder-answer" rows="2"
 				          aria-label="{{localize "stonetop.gmToolkit.wonder.answerLabel"}}"
-				          placeholder="{{localize "stonetop.gmToolkit.wonder.answerPlaceholder"}}">{{answer}}</textarea>
+				          placeholder="{{localize "stonetop.gmToolkit.wonder.answerPlaceholder"}}">{{this.answer}}</textarea>
 			</li>
 			{{/each}}
 		</ul>
@@ -145,9 +145,9 @@
 		    note=(localize "stonetop.gmToolkit.wonder.settledNote")}}
 		<ul class="stonetop-gm-wonder-list stonetop-gm-wonder-list--settled">
 			{{#each stonetop.wonders.settled}}
-			<li class="stonetop-gm-wonder-item" data-wonder-id="{{id}}">
+			<li class="stonetop-gm-wonder-item" data-wonder-id="{{this.id}}">
 				<div class="stonetop-gm-wonder-head">
-					<span class="stonetop-gm-wonder-question stonetop-gm-wonder-question--settled">{{question}}</span>
+					<span class="stonetop-gm-wonder-question stonetop-gm-wonder-question--settled">{{this.question}}</span>
 					<span class="stonetop-gm-wonder-tools">
 						<button type="button" class="stonetop-gm-wonder-reopen"
 						        data-tooltip="{{localize "stonetop.gmToolkit.wonder.reopen"}}" data-tooltip-direction="UP">
@@ -159,7 +159,7 @@
 						</button>
 					</span>
 				</div>
-				{{#if answer}}<p class="stonetop-gm-wonder-answer-text">{{answer}}</p>{{/if}}
+				{{#if answer}}<p class="stonetop-gm-wonder-answer-text">{{this.answer}}</p>{{/if}}
 			</li>
 			{{/each}}
 		</ul>
@@ -176,10 +176,10 @@
 		{{#if stonetop.playerWishes.length}}
 		<ul class="stonetop-gm-wishes-list">
 			{{#each stonetop.playerWishes}}
-			<li class="stonetop-gm-wishes-who" data-actor-id="{{id}}">
-				<h4 class="stonetop-gm-wonder-guide-title">{{name}}</h4>
+			<li class="stonetop-gm-wishes-who" data-actor-id="{{this.id}}">
+				<h4 class="stonetop-gm-wonder-guide-title">{{this.name}}</h4>
 				<ul class="stonetop-gm-wonder-guide-items">
-					{{#each wishes}}<li>{{text}}{{#if when}} <span class="stonetop-gm-wishes-when">({{when}})</span>{{/if}}</li>{{/each}}
+					{{#each wishes}}<li>{{this.text}}{{#if when}} <span class="stonetop-gm-wishes-when">({{this.when}})</span>{{/if}}</li>{{/each}}
 				</ul>
 			</li>
 			{{/each}}
@@ -203,7 +203,7 @@
 		<div class="stonetop-gm-wonder-guide">
 			{{#each stonetop.wonderGuide}}
 			<div class="stonetop-gm-wonder-guide-section">
-				<h4 class="stonetop-gm-wonder-guide-title">{{name}}</h4>
+				<h4 class="stonetop-gm-wonder-guide-title">{{this.name}}</h4>
 				<ul class="stonetop-gm-wonder-guide-items">
 					{{#each items}}<li>{{this}}</li>{{/each}}
 				</ul>

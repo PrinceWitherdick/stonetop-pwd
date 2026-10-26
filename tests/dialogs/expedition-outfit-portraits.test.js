@@ -78,8 +78,8 @@ describe("the party-load readout's faces", () => {
 	it("gives the thumbnail the caption data the shared preview reads", () => {
 		// `data-name` is the card's title and `data-subtitle` its quieter second line; without
 		// the first the preview opens captionless.
-		expect(PARTIAL).toContain('data-name="{{name}}"');
-		expect(PARTIAL).toContain('data-subtitle="{{previewSub}}"');
+		expect(PARTIAL).toContain('data-name="{{this.name}}"');
+		expect(PARTIAL).toContain('data-subtitle="{{this.previewSub}}"');
 	});
 
 	it("wires the shared preview from the dialog root, and takes it down on close", () => {

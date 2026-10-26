@@ -9,6 +9,8 @@ import { isDefaultImg } from "../utils/strings.js";
 import { customGroupSize } from "../utils/crew.js";
 import { addDamageBonus } from "../utils/damage-die.js";
 import { documentPortraitFrame } from "../utils/portrait-frame.js";
+import { followerArmorGate } from "../actors/character/move-armor.js";
+import { monsterArmorGate } from "./monster-armor.js";
 
 // ── Step 3: hit points (p.476–477) ───────────────────────────────────────────
 // "How resilient are they? (pick 1)" then "What else applies? (pick all)".
@@ -138,12 +140,36 @@ export function formatDamage(die, form) {
 // Extract a follower's numeric armor from a value that may already be a number,
 // a plain string ("2"), the book's conditional form ("2 (0 vs. iron)"), or a
 // placeholder ("—"). Returns the leading non-negative integer, or 0 when there's
-// no number. Followers don't model conditional armor, so the "(0 vs. iron)"
-// remainder is dropped here — keep it in a notes field if it matters.
+// no number. The "(0 vs. iron)" remainder is dropped here; a card that keeps it
+// (followerArmorWithClause) hands it to the NPC's damage-card box instead.
 export function parseFollowerArmor(raw) {
 	if (typeof raw === "number") return Number.isFinite(raw) ? Math.max(0, Math.trunc(raw)) : 0;
 	const m = String(raw ?? "").match(/-?\d+/);
 	return m ? Math.max(0, parseInt(m[0], 10)) : 0;
+}
+
+/**
+ * A custom follower's armor as its card keeps it: the book's conditional form ("4 (0 vs. bronze)") kept
+ * whole when it carries one, since that clause is what their NPC's damage-card box is built from
+ * (data/follower-actor.js#followerActorFields); any other value as its plain number (parseFollowerArmor).
+ */
+export function followerArmorWithClause(raw) {
+	return typeof raw === "string" && followerArmorGate(raw).conditional > 0 ? raw.trim() : parseFollowerArmor(raw);
+}
+
+/**
+ * A monster's armor in the follower's conditional form: "4 (0 vs. bronze)" for a stat block whose printed
+ * exception takes some of it away (read off its own text, data/monster-armor.js, so plain source data
+ * works as well as a live actor's), else the plain number. "Use its stats as-is" (p.475) keeps the
+ * exception. PURE.
+ *
+ * @param {object} system  the monster's `system`
+ */
+export function monsterFollowerArmor(system = {}) {
+	const value = parseFollowerArmor(system?.attributes?.armor?.value);
+	const gate = monsterArmorGate(system);
+	const lost = Math.min(value, Math.max(0, gate.conditional));
+	return lost > 0 ? `${value} (${value - lost} ${gate.conditionalSource})` : value;
 }
 
 // Normalize a free-text or array tag list into a clean, de-duplicated array of
@@ -266,7 +292,7 @@ export function buildCustomFollower(input = {}) {
 		...(exceptional ? { exceptional: true } : {}),
 		hpMax,
 		hpCurrent,
-		armor:        parseFollowerArmor(input.armor),
+		armor:        followerArmorWithClause(input.armor),
 		damage:       String(input.damage ?? "").trim(),
 		instinct:     String(input.instinct ?? "").trim(),
 		moves:        String(input.moves ?? "").trim(),
@@ -680,7 +706,8 @@ export function followerFromMonster(monster = {}, opts = {}) {
 		// only fills in when the monster has no current value. A `||` here would wrongly
 		// promote a monster sitting at 0 HP to full.
 		hpCurrent:    attrs.hp?.value ?? hpMax,
-		armor:        parseFollowerArmor(attrs.armor?.value),
+		// The stat block's printed exception rides along ("4 (0 vs. bronze)"): see monsterFollowerArmor.
+		armor:        monsterFollowerArmor(system),
 		damage,
 		instinct:     String(attrs.instinct?.value ?? "").trim(),
 		moves:        (Array.isArray(monster.moves) ? monster.moves : []).join("\n"),

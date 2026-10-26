@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
 	followUpWinterConsequence, offerLackingForLostResource, markNpcDeadForWinter, livingNpcs, sufferWinterShortfall,
-	offerRetireForWinter,
+	offerRetireForWinter, WINTER_NPC_DEAD_QUERY, handleWinterNpcDeadQuery,
 } from "../../../module/actors/steading/winter-debt.js";
 import { charactersInPlay } from "../../../module/utils/characters-in-play.js";
 
@@ -62,6 +62,78 @@ describe("an important NPC dies", () => {
 		expect(await markNpcDeadForWinter({ actors: [maeve], pick: async () => null })).toBeNull();
 		expect(maeve.update).not.toHaveBeenCalled();
 	});
+
+	// Code review 10-22 (HC-2): a player can run the shortfall. They are offered only the NPCs they can see, and
+	// one they cannot write is marked by the GM's client, or they are told who can.
+	describe("for a player", () => {
+		const player = { id: "p1", isGM: false };
+		const seen = (id, { owner = false, visible = true } = {}) => ({
+			...npc(id), isOwner: owner, testUserPermission: (_user, level) => (level === "OBSERVER" ? visible : owner),
+		});
+
+		it("offers only the NPCs they can see", () => {
+			const maeve = seen("Maeve");
+			const hidden = seen("Spy", { visible: false });
+			expect(livingNpcs([maeve, hidden], player).map(a => a.id)).toEqual(["Maeve"]);
+		});
+
+		it("has the GM's client mark one they cannot write", async () => {
+			const maeve = seen("Maeve");
+			const gm = { id: "gm" };
+			const ask = vi.fn(async () => ({ npcId: "Maeve" }));
+			expect(await markNpcDeadForWinter({ actors: [maeve], pick: async () => "Maeve", user: player, gm, ask })).toBe(maeve);
+			expect(maeve.update).not.toHaveBeenCalled();
+			expect(ask).toHaveBeenCalledWith(gm, WINTER_NPC_DEAD_QUERY, { npcId: "Maeve", userId: "p1" }, expect.any(Object));
+		});
+
+		it("says who can when no GM is here, and marks nothing", async () => {
+			const maeve = seen("Maeve");
+			const ask = vi.fn();
+			expect(await markNpcDeadForWinter({ actors: [maeve], pick: async () => "Maeve", user: player, gm: null, ask })).toBeNull();
+			expect(ask).not.toHaveBeenCalled();
+			expect(maeve.update).not.toHaveBeenCalled();
+			expect(globalThis.ui.notifications.warn).toHaveBeenCalledWith(expect.stringContaining("Only the GM can mark Maeve dead"));
+		});
+
+		it("writes one they own themselves", async () => {
+			const maeve = seen("Maeve", { owner: true });
+			const ask = vi.fn();
+			expect(await markNpcDeadForWinter({ actors: [maeve], pick: async () => "Maeve", user: player, gm: { id: "gm" }, ask })).toBe(maeve);
+			expect(maeve.update).toHaveBeenCalledWith({ "system.status": "dead" });
+			expect(ask).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("the GM's side of the ask", () => {
+		const asker = { id: "p1", isGM: false };
+		const users = { get: id => (id === "p1" ? asker : null) };
+		let saved;
+		beforeEach(() => {
+			saved = { user: globalThis.game.user, users: globalThis.game.users };
+			globalThis.game.user = { id: "gm", isGM: true };
+			globalThis.game.users = { activeGM: globalThis.game.user, get: users.get };
+		});
+		afterEach(() => { globalThis.game.user = saved.user; globalThis.game.users = saved.users; });
+
+		const target = (status = "", visible = true) => ({
+			...npc("Maeve", status), testUserPermission: (_user, level) => (level === "OBSERVER" ? visible : false),
+		});
+		const steadingOf = owner => ({ testUserPermission: () => owner });
+
+		it("marks the NPC dead for an asker who can see it and runs the steading", async () => {
+			const maeve = target();
+			const out = await handleWinterNpcDeadQuery({ npcId: "Maeve", userId: "p1" }, {}, { users, actors: { get: () => maeve }, steading: steadingOf(true) });
+			expect(out).toEqual({ npcId: "Maeve" });
+			expect(maeve.update).toHaveBeenCalledWith({ "system.status": "dead" });
+		});
+
+		it("refuses an NPC the asker cannot see, one already gone, or an asker who cannot write the steading", async () => {
+			for (const [maeve, owner] of [[target("", false), true], [target("dead"), true], [target(), false]]) {
+				expect(await handleWinterNpcDeadQuery({ npcId: "Maeve", userId: "p1" }, {}, { users, actors: { get: () => maeve }, steading: steadingOf(owner) })).toBeNull();
+				expect(maeve.update).not.toHaveBeenCalled();
+			}
+		});
+	});
 });
 
 describe("a PC dies, leaves, or retires", () => {
@@ -87,6 +159,31 @@ describe("a PC dies, leaves, or retires", () => {
 		const retire = vi.fn(async () => {});
 		await followUpWinterConsequence(steading(), "pc", { post: vi.fn(), characters: [bram], pick, retire });
 		expect(retire).toHaveBeenCalledWith(bram);
+	});
+
+	it("offers a player only the characters they may retire, and says so when there are none", async () => {
+		const pb = { playbook: { slug: "the-fox" } };
+		const mine = { id: "bram", name: "Bram", type: "character", system: pb, flags: {}, isOwner: true };
+		const theirs = { id: "eira", name: "Eira", type: "character", system: pb, flags: {}, isOwner: false };
+		const saved = { actors: globalThis.game.actors, user: globalThis.game.user };
+		globalThis.game.actors = { contents: [mine, theirs] };
+		globalThis.game.user = { id: "p1", isGM: false };
+		try {
+			const pick = vi.fn(async ({ options }) => {
+				expect(options.map(o => o.id)).toEqual(["bram"]);
+				return null;
+			});
+			await offerRetireForWinter({ pick, retire: vi.fn() });
+			expect(pick).toHaveBeenCalled();
+			globalThis.game.actors = { contents: [theirs] };
+			const none = vi.fn();
+			expect(await offerRetireForWinter({ pick: none, retire: vi.fn() })).toBe(false);
+			expect(none).not.toHaveBeenCalled();
+			expect(globalThis.ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("yours to retire"));
+		} finally {
+			globalThis.game.actors = saved.actors;
+			globalThis.game.user = saved.user;
+		}
 	});
 
 	it("retires nobody when the chooser is closed (the PC dies instead), or nobody is in play", async () => {

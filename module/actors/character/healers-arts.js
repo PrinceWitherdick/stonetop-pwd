@@ -31,7 +31,8 @@ import { askStockSource } from "./ask-stock-source.js";
 import { autoOpenUserId, ownerUsers } from "../../hooks/DeathsDoorPrompt.js";
 import { OWNER_ASK_MS, spendOrAskOwner, answerOwnerAsk, tooLate, gmAnswersNote } from "../../utils/owner-ask.js";
 import { escHtml } from "../../utils/strings.js";
-import { recoveredHpTo } from "./deaths-door-actor.js";
+import { isUnliving, recoveredHpTo } from "./deaths-door-actor.js";
+import { STONETOP_SCOPE } from "./StonetopFlags.js";
 
 export const HEALERS_ARTS = "Healer's Arts";
 /** The move's price: "If you also spend 1 Stock". */
@@ -77,6 +78,29 @@ export function recoverHeal({ base, hp, max, wis = null, stock = false, slow = f
 	const should = Math.max(now, Math.min(Math.trunc(Number(max) || 0), now + base + wisBonus + stockBonus));
 	const newHp = recoveredHpTo(now, should, slow);
 	return { base, wis, wisBonus, stockBonus, newHp, gained: newHp - now, halved: newHp < should };
+}
+
+/**
+ * Why `patient` can no longer have the Recover a use of supplies is about to pay for, or null. `self`: their
+ * own Recover, refused once it is spent. `tend`: the key of the debility being tended, refused once it is
+ * cleared. Either one is refused while they are dying ("can't save themselves", Book I p.240) or Unliving.
+ * A Recover for followers alone (neither) is never refused here.
+ *
+ * The sheet asks it, and so does a payer's spending turn (supply-payer.js#spendPayerSupplies), just before
+ * their purse is written, so no use is paid for a Recover that can no longer happen.
+ */
+export function recoverRefusal(patient, { self = false, tend = null } = {}) {
+	if (!patient || (!self && !tend)) return null;
+	const i18n = globalThis.game?.i18n;
+	const character = patient.typedActor;
+	if (self && patient.getFlag?.(STONETOP_SCOPE, "recover.spent")) return i18n?.localize("stonetop.specialMoves.recover.lockedHint");
+	if (tend) {
+		const debility = character?.debilityChoices?.find(d => d.key === tend);
+		if (!debility?.marked) return i18n?.format("stonetop.specialMoves.recover.tend.alreadyTended", { debility: debility?.name ?? tend });
+	}
+	if (character?.canFaceDeathsDoor) return i18n?.format("stonetop.specialMoves.dyingHint", { move: character.zeroHpMove?.name ?? "Death's Door" });
+	if (isUnliving(patient)) return i18n?.localize("stonetop.specialMoves.recover.unlivingHint");
+	return null;
 }
 
 /**

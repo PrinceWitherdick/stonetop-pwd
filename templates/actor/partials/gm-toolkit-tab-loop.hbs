@@ -20,8 +20,8 @@
 			{{#each stonetop.diagrams}}
 			<figure class="stonetop-gm-diagram">
 				<figcaption class="stonetop-gm-diagram-caption">
-					<strong class="stonetop-gm-diagram-title">{{caption}}</strong>
-					<span class="stonetop-gm-diagram-note">{{note}}</span>
+					<strong class="stonetop-gm-diagram-title">{{this.caption}}</strong>
+					<span class="stonetop-gm-diagram-note">{{this.note}}</span>
 				</figcaption>
 				{{#if src}}
 				{{!-- Click to open the zoom window (utils/image-zoom-window.js). The flowcharts are
@@ -32,10 +32,10 @@
 				      — and does it on middle-click and ctrl-click whatever the click handler says —
 				      which throws the GM out of the game to read a page of their own rulebook. The
 				      `src` rides along in a data attribute so the handler has the path without one. --}}
-				<button type="button" class="stonetop-gm-diagram-zoom" data-src="{{src}}"
-				        data-caption="{{caption}}" data-slug="{{slug}}"
+				<button type="button" class="stonetop-gm-diagram-zoom" data-src="{{this.src}}"
+				        data-caption="{{this.caption}}" data-slug="{{this.slug}}"
 				        data-tooltip="{{localize "stonetop.gmToolkit.loop.zoom"}}">
-					<img class="stonetop-gm-diagram-img" src="{{src}}" alt="{{caption}}">
+					<img class="stonetop-gm-diagram-img" src="{{this.src}}" alt="{{this.caption}}">
 				</button>
 				{{else}}
 				<div class="stonetop-gm-diagram-missing">
@@ -69,9 +69,9 @@
 					      `question-bullet`. That class is a picture swap only — see the note on
 					      it in stonetop.css — so a step wearing it lays out like any other. --}}
 					<li class="stonetop-gm-loop-step">
-						<strong class="stonetop-gm-loop-name">{{name}}</strong>
+						<strong class="stonetop-gm-loop-name">{{this.name}}</strong>
 						{{#if pageCites}}<span class="stonetop-gm-loop-page">{{> "stonetop.book-page-cite" cites=pageCites}}</span>{{/if}}
-						{{#if note}}<p class="stonetop-gm-loop-note">{{note}}</p>{{/if}}
+						{{#if note}}<p class="stonetop-gm-loop-note">{{this.note}}</p>{{/if}}
 						{{#if items}}
 						<ul class="stonetop-gm-loop-items">
 							{{#each items}}<li>{{this}}</li>{{/each}}
@@ -96,10 +96,10 @@
 				{{#if pageCites}}<p class="stonetop-gm-running-cite">{{> "stonetop.book-page-cite" cites=pageCites}}</p>{{/if}}
 				<ul class="stonetop-gm-running-list">
 					{{#each items}}
-					<li><strong class="stonetop-gm-running-name">{{name}}</strong> <span class="stonetop-gm-running-line">{{line}}</span>{{#if pageCites}} <span class="stonetop-gm-loop-page">{{> "stonetop.book-page-cite" cites=pageCites}}</span>{{/if}}</li>
+					<li><strong class="stonetop-gm-running-name">{{this.name}}</strong> <span class="stonetop-gm-running-line">{{this.line}}</span>{{#if pageCites}} <span class="stonetop-gm-loop-page">{{> "stonetop.book-page-cite" cites=pageCites}}</span>{{/if}}</li>
 					{{/each}}
 				</ul>
-				{{#if footer}}<p class="stonetop-gm-running-footer">{{footer}}</p>{{/if}}
+				{{#if footer}}<p class="stonetop-gm-running-footer">{{this.footer}}</p>{{/if}}
 			</div>
 			{{/each}}
 
@@ -107,24 +107,24 @@
 			<div class="stonetop-move-group stonetop-gm-running-section stonetop-gm-first-adventure">
 				{{> "stonetop.section-heading" title=title note=note collapse=collapseId startCollapsed=true}}
 				<p class="stonetop-gm-running-cite">{{> "stonetop.book-page-cite" cites=pageCites}}</p>
-				<p class="stonetop-gm-running-sub">{{goalsLabel}}</p>
+				<p class="stonetop-gm-running-sub">{{this.goalsLabel}}</p>
 				<ul class="stonetop-gm-running-list stonetop-gm-running-list--plain">
 					{{#each goals}}<li>{{this}}</li>{{/each}}
 				</ul>
 				<ol class="stonetop-gm-running-steps">
 					{{#each steps}}
-					<li><strong class="stonetop-gm-running-name">{{name}}</strong> <span class="stonetop-gm-running-line">{{line}}</span>{{#if pageCites}} <span class="stonetop-gm-loop-page">{{> "stonetop.book-page-cite" cites=pageCites}}</span>{{/if}}</li>
+					<li><strong class="stonetop-gm-running-name">{{this.name}}</strong> <span class="stonetop-gm-running-line">{{this.line}}</span>{{#if pageCites}} <span class="stonetop-gm-loop-page">{{> "stonetop.book-page-cite" cites=pageCites}}</span>{{/if}}</li>
 					{{/each}}
 				</ol>
-				<p class="stonetop-gm-running-sub">{{sceneLabel}}</p>
+				<p class="stonetop-gm-running-sub">{{this.sceneLabel}}</p>
 				<ul class="stonetop-gm-running-list stonetop-gm-running-list--plain">
 					{{#each sceneMoves}}<li>{{this}}</li>{{/each}}
 				</ul>
-				<p class="stonetop-gm-running-footer">{{sceneCaution}}</p>
-				<p class="stonetop-gm-running-sub">{{hooksLabel}}</p>
+				<p class="stonetop-gm-running-footer">{{this.sceneCaution}}</p>
+				<p class="stonetop-gm-running-sub">{{this.hooksLabel}}</p>
 				{{!-- Built in JS (gm-agenda-view.js#firstAdventureHooksHtml), escaped there, because the
 				      Let Spring Burst Forth walkthrough draws the very same block. --}}
-				{{{hooksHtml}}}
+				{{{this.hooksHtml}}}
 			</div>
 			{{/with}}
 		</div>

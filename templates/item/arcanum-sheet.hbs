@@ -31,7 +31,7 @@
 						{{#if simple.uses}}
 						<span class="stonetop-item-uses" data-tooltip="{{localize 'stonetop.itemSheet.usesTooltip'}}">
 							{{#if simple.uses.title}}<span class="stonetop-arcanum-resource-title">{{simple.uses.title}}</span>{{/if}}
-							{{#each simple.uses.marks}}<span class="stonetop-glyph stonetop-glyph--circle">○</span>{{#if label}}<span class="stonetop-resource-label">{{label}}</span>{{/if}}{{/each}}
+							{{#each simple.uses.marks}}<span class="stonetop-glyph stonetop-glyph--circle">○</span>{{#if label}}<span class="stonetop-resource-label">{{this.label}}</span>{{/if}}{{/each}}
 						</span>
 						{{/if}}
 						{{#if simple.armor}}<span class="stonetop-arcanum-note">{{simple.armor}}</span>{{/if}}
@@ -65,8 +65,8 @@
 {{else}}
 
 	{{!-- Front Side --}}
-	<div class="stonetop-arcanum-card stonetop-arcanum-sheet-side{{#if arcanaImg}} stonetop-arcanum-sheet-side--withart{{/if}}" data-slug="{{slug}}">
-		{{#if arcanaImg}}<img class="stonetop-arcanum-img" src="{{arcanaImg}}" alt="">{{/if}}
+	<div class="stonetop-arcanum-card stonetop-arcanum-sheet-side{{#if arcanaImg}} stonetop-arcanum-sheet-side--withart{{/if}}" data-slug="{{this.slug}}">
+		{{#if arcanaImg}}<img class="stonetop-arcanum-img" src="{{this.arcanaImg}}" alt="">{{/if}}
 		<div class="stonetop-arcanum-sheet-main">
 		<div class="stonetop-arcanum-header">
 			<div class="stonetop-arcanum-header-left">
@@ -87,10 +87,10 @@
 			<ul class="stonetop-arcanum-unlock-list stonetop-arcanum-unlock-list--readonly">
 				{{#each front.unlock.requirements}}
 				{{#if (eq type "text")}}
-				<li class="stonetop-arcanum-unlock-text">{{{content}}}</li>
+				<li class="stonetop-arcanum-unlock-text">{{{this.content}}}</li>
 				{{else}}
 				<li class="stonetop-arcanum-unlock-option stonetop-arcanum-unlock-option--readonly">
-					<span class="stonetop-arcanum-unlock-desc">{{{description}}}</span>
+					<span class="stonetop-arcanum-unlock-desc">{{{this.description}}}</span>
 				</li>
 				{{/if}}
 				{{/each}}

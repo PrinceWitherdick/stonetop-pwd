@@ -14,9 +14,9 @@
 			<ol class="stonetop-guide-toc-list">
 				{{#each sections}}
 				<li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
-					<button type="button" class="stonetop-guide-toc-btn stonetop-add-item-tab" data-tab="{{key}}"{{#if selected}} aria-current="true"{{/if}}>
-						<i class="fas {{icon}} stonetop-guide-toc-icon"></i>
-						<span class="stonetop-guide-toc-text">{{title}}</span>
+					<button type="button" class="stonetop-guide-toc-btn stonetop-add-item-tab" data-tab="{{this.key}}"{{#if selected}} aria-current="true"{{/if}}>
+						<i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+						<span class="stonetop-guide-toc-text">{{this.title}}</span>
 					</button>
 				</li>
 				{{/each}}
@@ -51,7 +51,7 @@
 					<label>{{localize "stonetop.inventory.addItemImage"}}</label>
 					<div class="stonetop-add-item-img-row">
 						<img class="stonetop-add-item-img-preview" alt="">
-						<input type="hidden" name="img" value="{{img}}">
+						<input type="hidden" name="img" value="{{this.img}}">
 						<button type="button" class="stonetop-add-item-img-choose">
 							<i class="fas fa-image" aria-hidden="true"></i> {{localize "stonetop.inventory.addItemImageChoose"}}
 						</button>
@@ -65,7 +65,7 @@
 					<label for="stonetop-add-item-column">{{localize "stonetop.inventory.addItemColumn"}}</label>
 					<select id="stonetop-add-item-column" name="column">
 						{{#each columns}}
-						<option value="{{key}}"{{#if selected}} selected{{/if}}>{{localize labelKey}}</option>
+						<option value="{{this.key}}"{{#if selected}} selected{{/if}}>{{localize labelKey}}</option>
 						{{/each}}
 					</select>
 					<p class="stonetop-custom-move-hint">{{localize "stonetop.inventory.addItemColumnHint"}}</p>
@@ -111,8 +111,8 @@
 					<p class="stonetop-custom-move-hint">{{localize "stonetop.inventory.addItemTagsHint"}}</p>
 					<div class="stonetop-add-item-chips">
 						{{#each chips}}
-						<button type="button" class="stonetop-add-item-chip stonetop-add-item-chip--{{group}}"
-						        data-insert="{{insert}}"{{#if tooltip}} data-tooltip="{{tooltip}}"{{/if}}>{{insert}}</button>
+						<button type="button" class="stonetop-add-item-chip stonetop-add-item-chip--{{this.group}}"
+						        data-insert="{{this.insert}}"{{#if tooltip}} data-tooltip="{{this.tooltip}}"{{/if}}>{{this.insert}}</button>
 						{{/each}}
 					</div>
 				</div>
@@ -171,7 +171,7 @@
 					{{!-- Always-on editor, harvested by name on Save (<prose-mirror> is form-associated).
 					      `value` is the raw HTML it edits; the body is the enriched copy it paints first. --}}
 					<prose-mirror id="stonetop-add-item-lore" class="stonetop-add-item-rich" name="lore"
-					              value="{{v.artifact.lore}}">{{{loreEnriched}}}</prose-mirror>
+					              value="{{v.artifact.lore}}">{{{this.loreEnriched}}}</prose-mirror>
 					<p class="stonetop-custom-move-hint">{{localize "stonetop.inventory.treasureLoreHint"}}</p>
 				</div>
 			</section>

@@ -20,13 +20,13 @@
 			<div class="stonetop-eos-question-list">
 				{{#each questions}}
 				<label class="stonetop-eos-question{{#if checked}} is-checked{{/if}}">
-					<input type="checkbox" class="stonetop-eos-group-check" data-key="{{key}}" {{#if checked}}checked{{/if}}{{#if ../mirror}} disabled{{/if}}>
-					<span class="stonetop-eos-question-text">{{label}}</span>
+					<input type="checkbox" class="stonetop-eos-group-check" data-key="{{this.key}}" {{#if checked}}checked{{/if}}{{#if ../mirror}} disabled{{/if}}>
+					<span class="stonetop-eos-question-text">{{this.label}}</span>
 				</label>
 				{{/each}}
 			</div>
 			{{#if xpCount}}
-			<p class="stonetop-eos-xp-tally">{{tally}}</p>
+			<p class="stonetop-eos-xp-tally">{{this.tally}}</p>
 			{{/if}}
 		</section>
 
@@ -41,23 +41,23 @@
 				{{#each pcs}}
 				<div class="stonetop-eos-pc">
 					<label class="stonetop-eos-question{{#if checked}} is-checked{{/if}}">
-						<input type="checkbox" class="stonetop-eos-group-check" data-pc="{{id}}" {{#if checked}}checked{{/if}}>
-						<span class="stonetop-eos-question-text">{{name}}{{#if dead}} <em>({{localize "stonetop.endOfSession.dead"}})</em>{{/if}}</span>
+						<input type="checkbox" class="stonetop-eos-group-check" data-pc="{{this.id}}" {{#if checked}}checked{{/if}}>
+						<span class="stonetop-eos-question-text">{{this.name}}{{#if dead}} <em>({{localize "stonetop.endOfSession.dead"}})</em>{{/if}}</span>
 					</label>
 					{{! Their own XP (Book I p.75): one each for instinct and relationship, ticked as they answer. }}
 					<div class="stonetop-eos-pc-personal">
 						{{#each personal}}
 						<label class="stonetop-eos-pc-tick">
-							<input type="checkbox" class="stonetop-eos-personal-check" data-pc="{{../id}}" data-xp="{{key}}" {{#if checked}}checked{{/if}}>
-							<span>{{label}}</span>
+							<input type="checkbox" class="stonetop-eos-personal-check" data-pc="{{../id}}" data-xp="{{this.key}}" {{#if checked}}checked{{/if}}>
+							<span>{{this.label}}</span>
 						</label>
 						{{/each}}
 					</div>
-					<input type="text" class="stonetop-eos-note" data-pc="{{id}}" value="{{note}}"
+					<input type="text" class="stonetop-eos-note" data-pc="{{this.id}}" value="{{this.note}}"
 					       placeholder="{{localize "stonetop.endOfSession.notePlaceholder"}}"
 					       aria-label="{{localize "stonetop.endOfSession.noteLabel" name=name}}">
 					{{#if lastWish}}
-					<p class="stonetop-eos-last-wish"><strong>{{localize "stonetop.endOfSession.lastWish"}}</strong> {{lastWish}}</p>
+					<p class="stonetop-eos-last-wish"><strong>{{localize "stonetop.endOfSession.lastWish"}}</strong> {{this.lastWish}}</p>
 					{{/if}}
 				</div>
 				{{/each}}
@@ -94,7 +94,7 @@
 			{{#if mirror}}
 				{{localize "stonetop.endOfSession.close"}}
 			{{else if canAward}}
-				{{awardLabel}}
+				{{this.awardLabel}}
 			{{else}}
 				{{localize "stonetop.endOfSession.close"}}
 			{{/if}}

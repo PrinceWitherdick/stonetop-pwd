@@ -29,6 +29,9 @@ import { followerMarkedDead } from "../actors/character/follower-fate.js";
 import { readableFlags } from "../actors/character/StonetopFlags.js";
 import { isFightTabEnabled } from "../settings.js";
 import { fightOnScene } from "./fight-state.js";
+import { rollerEngagement } from "./damage-seed.js";
+import { opponentsOf } from "./engagements.js";
+import { groupTokenInfo, rosterGroupFor } from "./group-hits.js";
 import { groupFollowerStanding } from "../utils/crew.js";
 import { normalizeTags, pileOnBonus } from "../data/follower-build.js";
 import { BEAST_CATALOG } from "../data/beasts.js";
@@ -149,15 +152,50 @@ export async function openFollowerOrder(info, moveKey = null) {
  * @param {{character: Actor, ftype: string, slug: string}|null} card  followerCardFor's answer
  * @returns {null|{formula: string, standing: number, bonus: number}}
  */
-export function followerSwarm(actor, card) {
+export function followerSwarm(actor, card, { engagement = rollerEngagement, targets } = {}) {
 	if (!card) return null;
 	const base = String(actor?.system?.attributes?.damage?.rollFormula ?? "").trim();
 	if (!base) return null;
 	const roster = groupFollowerStanding(readableFlags(card.character), card);
 	// Nobody to pile on with: a follower who is one person, or a group with one left standing.
 	if (!(Number(roster?.standing) > 1)) return null;
+	if (!atSingleFoe(actor, { engagement, targets })) return null;
 	const { bonus, rollFor } = pileOnBonus(roster.standing);
 	return { formula: rollFor(base), standing: roster.standing, bonus };
+}
+
+/**
+ * How many foes a follower's blow is aimed at, as far as can be told before the dice: the roller's own targets
+ * on the map, a group token counted as several (group-hits.js), else who the fighter is fighting, each counted
+ * as its bodies; 1 when nothing says otherwise (the table says who it hits). Inside a group-against-group
+ * exchange it is never one: the abstraction's own +N already counts the crew (p.416).
+ *
+ * @param {Actor} actor  the follower's token actor in the fight, else their character
+ * @param {object} [o]
+ * @param {Iterable<Token>} [o.targets]  this user's targets
+ * @param {Function} [o.engagement]  damage-seed.js#rollerEngagement (for the tests)
+ */
+export function foeBodiesAt(actor, { targets = globalThis.game?.user?.targets ?? [], engagement = rollerEngagement } = {}) {
+	const place = engagement(actor);
+	const self = place?.combatant?.id;
+	const inGroupExchange = !!self && (place.result?.clusters ?? [])
+		.some(c => c?.groups && (c.heroIds?.includes(self) || c.foeIds?.includes(self)));
+	const aimed = [...(targets ?? [])].filter(token => token?.actor);
+	let bodies = 1;
+	if (aimed.length) bodies = aimed.reduce((n, token) => n + (groupTokenInfo(token.actor) || rosterGroupFor(token.actor) ? 2 : 1), 0);
+	else if (place?.entry) {
+		const ids = opponentsOf(place.entry);
+		if (ids.length) bodies = ids.reduce((n, id) => n + Math.max(1, Number((place.fighters ?? []).find(f => f.id === id)?.bodies) || 1), 0);
+	}
+	return inGroupExchange ? Math.max(2, bodies) : bodies;
+}
+
+/**
+ * Whether a group follower's blow is "at a single foe" (p.473), and so rolls one attacker's die +1 for each other
+ * (audit FOE-3, FOE-6): the token's swarm die and an ordered Clash or Let Fly ask the same. See foeBodiesAt.
+ */
+export function atSingleFoe(actor, options = {}) {
+	return foeBodiesAt(actor, options) <= 1;
 }
 
 /**
@@ -166,13 +204,14 @@ export function followerSwarm(actor, card) {
  *
  * @param {Actor} actor  the token's actor
  * @param {object} [options]  passed through to followerCardFor (injectable for tests)
+ * @param {Function} [options.engagement]  the token's place in the fight, for the swarm die (the ring's cached one)
  * @returns {{order: object|null, swarm: object|null}}
  */
-export function followerRingInfo(actor, options = {}) {
+export function followerRingInfo(actor, { engagement = rollerEngagement, ...options } = {}) {
 	if (actor?.type !== "npc") return { order: null, swarm: null };
 	const card = followerCardFor(actor, options);
 	if (!card) return { order: null, swarm: null };
-	return { order: followerOrderInfo(actor, card), swarm: followerSwarm(actor, card) };
+	return { order: followerOrderInfo(actor, card), swarm: followerSwarm(actor, card, { engagement }) };
 }
 
 // ── THE CARD'S TOKEN ────────────────────────────────────────────────────────────────────────────

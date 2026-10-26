@@ -19,6 +19,7 @@
 
 import { bookMoveName, ownsLearnedMoveNamed, ownedMove } from "../actors/character/owns-move.js";
 import { heldOnTrack, learnedTrack, takeBackHeld } from "../actors/character/MoveResources.js";
+import { inSpenderTurn } from "../utils/spender-queue.js";
 import { answersFor } from "../hooks/DeathsDoorPrompt.js";
 import { postMoveNote } from "../utils/chat.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
@@ -60,11 +61,15 @@ const heldOn = learnedTrack;
  */
 export async function spendSurpriseForRoll(actor, item) {
 	if (bookMoveName(item) !== PREPARE_A_WELCOME) return null;
-	const track = heldOn(actor, PREPARE_A_WELCOME);
-	if (!track) return null;
-	if (track.held <= 0) return { note: localize(`${KEY}.noSurprise`), spent: false };
-	await track.resources.setUses(PREPARE_A_WELCOME, track.held - 1, { stonetopMove: PREPARE_A_WELCOME });
-	return { note: format(`${KEY}.spentSurprise`, { left: track.held - 1 }), spent: true };
+	// Every Surprise read-and-write below takes the character's spending turn (utils/spender-queue.js), as
+	// takeBackSurprise's does, so none writes over another.
+	return inSpenderTurn(actor, async () => {
+		const track = heldOn(actor, PREPARE_A_WELCOME);
+		if (!track) return null;
+		if (track.held <= 0) return { note: localize(`${KEY}.noSurprise`), spent: false };
+		await track.resources.setUses(PREPARE_A_WELCOME, track.held - 1, { stonetopMove: PREPARE_A_WELCOME });
+		return { note: format(`${KEY}.spentSurprise`, { left: track.held - 1 }), spent: true };
+	});
 }
 
 /**
@@ -73,11 +78,18 @@ export async function spendSurpriseForRoll(actor, item) {
  *
  * @returns {Promise<boolean>} whether one went back on
  */
-export async function refundSurpriseForRoll(actor) {
-	const track = heldOn(actor, PREPARE_A_WELCOME);
-	if (!track || track.held >= track.max) return false;
-	await track.resources.setUses(PREPARE_A_WELCOME, track.held + 1, { stonetopMove: PREPARE_A_WELCOME });
-	return true;
+export function refundSurpriseForRoll(actor) {
+	return addSurprise(actor);
+}
+
+/** One more Surprise, never past the track, in the character's spending turn. Whether one went on. */
+function addSurprise(actor) {
+	return inSpenderTurn(actor, async () => {
+		const track = heldOn(actor, PREPARE_A_WELCOME);
+		if (!track || track.held >= track.max) return false;
+		await track.resources.setUses(PREPARE_A_WELCOME, track.held + 1, { stonetopMove: PREPARE_A_WELCOME });
+		return true;
+	});
 }
 
 /**
@@ -88,10 +100,7 @@ export async function refundSurpriseForRoll(actor) {
  */
 export async function regainSurpriseOnHit(actor, item, tier) {
 	if (item?.name !== PREPARE_A_WELCOME || tier !== "success") return false;
-	const track = heldOn(actor, PREPARE_A_WELCOME);
-	if (!track || track.held >= track.max) return false;
-	await track.resources.setUses(PREPARE_A_WELCOME, track.held + 1, { stonetopMove: PREPARE_A_WELCOME });
-	return true;
+	return addSurprise(actor);
 }
 
 /**
@@ -153,11 +162,15 @@ export function lieInWaitActionsFor(actor) {
 export async function lieInWait(actor, action) {
 	const n = LIE_IN_WAIT[action];
 	if (!n || actor?.isOwner === false) return false;
-	const track = heldOn(actor, PREPARE_A_WELCOME);
-	if (!track) return false;
-	const next = surpriseAfterLyingInWait(track, n);
-	if (next <= track.held) return false;
-	await track.resources.setUses(PREPARE_A_WELCOME, next, { stonetopMove: PREPARE_A_WELCOME });
+	const next = await inSpenderTurn(actor, async () => {
+		const track = heldOn(actor, PREPARE_A_WELCOME);
+		if (!track) return null;
+		const raised = surpriseAfterLyingInWait(track, n);
+		if (raised <= track.held) return null;
+		await track.resources.setUses(PREPARE_A_WELCOME, raised, { stonetopMove: PREPARE_A_WELCOME });
+		return raised;
+	});
+	if (next === null) return false;
 	await postMoveNote(actor, PREPARE_A_WELCOME, format(`${KEY}.lieInWait.${action}.note`, { name: actor.name ?? "", held: next }));
 	return true;
 }
@@ -253,7 +266,9 @@ export async function offerBattleHolds(actor, { ask = askBattleHolds } = {}) {
 	const picked = await ask(actor, holds);
 	const resources = actor.typedActor?.moveResources;
 	if (!picked.length || !resources) return [];
-	for (const hold of picked) await resources.setUses(hold.move, hold.max, { stonetopMove: hold.move });
+	await inSpenderTurn(actor, async () => {
+		for (const hold of picked) await resources.setUses(hold.move, hold.max, { stonetopMove: hold.move });
+	});
 	const held = joinNames(picked.map(hold => `${hold.max} ${hold.title}`));
 	await postMoveNote(actor, localize(`${KEY}.cardTitle`), format(`${KEY}.held`, { name: actor.name, held }));
 	return picked.map(hold => hold.move);

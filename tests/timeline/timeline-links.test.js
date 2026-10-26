@@ -22,7 +22,8 @@ vi.mock("../../module/timeline/timeline-places.js", () => ({
 // belongs to the shared drop zone (utils/card-drop-zone.js), which every zone in the system goes
 // through, so what is left to test here is only what a uuid RESOLVES to.
 const dragged = { value: null };
-vi.mock("../../module/utils/foundry-compat.js", () => ({
+vi.mock("../../module/utils/foundry-compat.js", async importOriginal => ({
+	...(await importOriginal()),
 	getDragEventData: () => dragged.value,
 }));
 
@@ -170,14 +171,14 @@ describe("the link markup core will actually open", () => {
 		const anchor = card.match(/<a class="content-link"[^>]*>/)?.[0];
 		expect(anchor, "the card renders no content link at all").toBeTruthy();
 		expect(anchor, "without data-link the link is paint and does nothing on click").toContain("data-link");
-		expect(anchor).toContain('data-uuid="{{placeUuid}}"');
+		expect(anchor).toContain('data-uuid="{{this.placeUuid}}"');
 		expect(anchor).toContain('draggable="true"');
 	});
 
 	// And it is only rendered when there IS something to open. A link to nowhere reads as broken.
 	it("only draws a link for a place that has one", () => {
 		expect(stripComments(readRepo("templates/dialogs/partials/timeline-card.hbs")))
-			.toMatch(/\{\{#if placeLinked\}\}[\s\S]*content-link[\s\S]*\{\{else\}\}[\s\S]*<span>\{\{place\}\}<\/span>/);
+			.toMatch(/\{\{#if placeLinked\}\}[\s\S]*content-link[\s\S]*\{\{else\}\}[\s\S]*<span>\{\{this\.place\}\}<\/span>/);
 	});
 });
 

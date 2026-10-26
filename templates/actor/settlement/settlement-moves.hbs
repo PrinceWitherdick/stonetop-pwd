@@ -17,14 +17,14 @@
 		<h3 class="stonetop-move-group-title">{{localize "stonetop.settlement.movesHeading"}}</h3>
 		<ol class="items-list">
 			{{#each moves}}
-			<li class="stonetop-item steading-move-card stonetop-settlement-move" data-move="{{slug}}">
+			<li class="stonetop-item steading-move-card stonetop-settlement-move" data-move="{{this.slug}}">
 				<div class="stonetop-item-header">
-					<strong class="stonetop-item-name" data-action="rollMove" data-move="{{slug}}"
-					        role="button" tabindex="0">{{label}}</strong>
+					<strong class="stonetop-item-name" data-action="rollMove" data-move="{{this.slug}}"
+					        role="button" tabindex="0">{{this.label}}</strong>
 					<button type="button" class="stonetop-move-roll-chip steading-move-stat-tag"
-					        data-action="rollMove" data-move="{{slug}}" data-reader-ok
+					        data-action="rollMove" data-move="{{this.slug}}" data-reader-ok
 					        aria-label="{{localize "stonetop.settlement.rollStat" stat=statLabel value=statValue}}"
-					        data-tooltip="{{localize "stonetop.settlement.rollStat" stat=statLabel value=statValue}}">+{{statChipLabel}}</button>
+					        data-tooltip="{{localize "stonetop.settlement.rollStat" stat=statLabel value=statValue}}">+{{this.statChipLabel}}</button>
 				</div>
 				{{#if notes.length}}
 				<p class="stonetop-settlement-move-notes">{{#each notes}}<span>{{this}}</span>{{/each}}</p>

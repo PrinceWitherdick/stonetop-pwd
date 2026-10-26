@@ -32,11 +32,11 @@
       <div class="stonetop-onboarding-tag-grid">
         {{#each crewData.tags}}
         <label class="stonetop-onboarding-tag-option{{#if isSelected}} is-selected{{/if}}">
-          <input type="checkbox" name="crew-setup-tag" value="{{slug}}"
+          <input type="checkbox" name="crew-setup-tag" value="{{this.slug}}"
                  {{#if isSelected}}checked{{/if}}
                  {{#if disabled}}disabled{{/if}}
                  {{#if isAuto}}data-auto="true"{{/if}}>
-          {{label}}{{#if isAuto}} <em>(included)</em>{{/if}}
+          {{this.label}}{{#if isAuto}} <em>(included)</em>{{/if}}
         </label>
         {{/each}}
       </div>
@@ -45,8 +45,8 @@
       <label class="stonetop-onboarding-custom-label">
         <span>Custom tag</span>
         <input type="text" class="crew-setup-tag-custom"
-               data-index="{{index}}"
-               value="{{value}}"
+               data-index="{{this.index}}"
+               value="{{this.value}}"
                aria-label="Custom tag"
                placeholder="Write your own…"
                {{#if disabled}}disabled{{/if}}>
@@ -60,9 +60,9 @@
         {{#each crewData.instincts}}
         <label class="stonetop-onboarding-card stonetop-onboarding-card--compact{{#if selected}} is-selected{{/if}}">
           <div class="stonetop-onboarding-card-header">
-            <input type="radio" name="crew-setup-instinct" value="{{value}}"
+            <input type="radio" name="crew-setup-instinct" value="{{this.value}}"
                    {{#if selected}}checked{{/if}}>
-            <span class="stonetop-onboarding-card-inline-desc">{{value}}</span>
+            <span class="stonetop-onboarding-card-inline-desc">{{this.value}}</span>
           </div>
         </label>
         {{/each}}
@@ -82,9 +82,9 @@
         {{#each crewData.costs}}
         <label class="stonetop-onboarding-card stonetop-onboarding-card--compact{{#if selected}} is-selected{{/if}}">
           <div class="stonetop-onboarding-card-header">
-            <input type="radio" name="crew-setup-cost" value="{{value}}"
+            <input type="radio" name="crew-setup-cost" value="{{this.value}}"
                    {{#if selected}}checked{{/if}}>
-            <span class="stonetop-onboarding-card-inline-desc">{{value}}</span>
+            <span class="stonetop-onboarding-card-inline-desc">{{this.value}}</span>
           </div>
         </label>
         {{/each}}

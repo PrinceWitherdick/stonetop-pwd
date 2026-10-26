@@ -179,11 +179,13 @@ describe("sheetSeed", () => {
 			});
 		});
 
-		it("gives a group token its group seed whoever its roll hits, and never a pile-on", () => {
+		it("gives a group token its group seed for a blow at the other side's group, and never a pile-on", () => {
 			const { hordeActor } = groups();
 			const crew = { uuid: "Scene.scene1.Token.tCrew" };
 			expect(seedForRoll({ attacker: hordeActor, targets: [crew] })).toMatchObject({ bonus: 1, direction: "groupAhead" });
-			expect(seedForRoll({ attacker: hordeActor, targets: [crew, { uuid: "Scene.scene1.Token.other" }] })).toMatchObject({ bonus: 1 });
+			// Aimed at somebody who is not one of the groups too: not a blow in the exchange (FGT-1), and two
+			// targets carry no pile-on either.
+			expect(seedForRoll({ attacker: hordeActor, targets: [crew, { uuid: "Scene.scene1.Token.other" }] })).toBeNull();
 		});
 
 		it("counts a group's casualties, and offers nothing when neither side outnumbers the other", () => {
@@ -348,5 +350,80 @@ describe("rollerCombatant", () => {
 		expect(rollerCombatant(combat, scene, wolfActor)).toBeNull();
 		expect(rollerCombatant(combat, scene, fakeActor({ id: "nobody" }))).toBeNull();
 		expect(rollerCombatant(null, scene, wolfActor)).toBeNull();
+	});
+});
+
+// FGT-1: "Foes that are engaged by individual PCs aren't really part of a group" (p.416). A group in an
+// exchange takes the group seed only for a blow AT the other side's groups; at a lone hero it is a crowd on
+// an individual (a monster's pile-on), and a follower group's blow at a lone foe carries nothing.
+describe("a group's blow at an individual in its group exchange", () => {
+	const token = (id, col, row, a) => Object.assign(fakeToken({ id, col, row, actor: a }), { uuid: `Scene.scene1.Token.${id}`, documentName: "Token" });
+
+	/** The crew of 5 and a horde of 12 crinwin trading blows; Cadi in the horde's face; an ogre on the crew. */
+	function scrum() {
+		const hordeActor = fakeActor({ id: "horde", name: "Crinwin", type: "monster", system: { organization: "horde", fightAsGroup: true, count: 12, attributes: { hp: { value: 3, max: 3 } } } });
+		const tokens = {
+			crew: token("tCrew", 0, 0, fakeActor({ id: "crew", name: "Crew", type: "npc" })),
+			horde: token("tHorde", 1, 0, hordeActor),
+			cadi: token("tCadi", 2, 0, fakeActor({ id: "cadi", name: "Cadi", type: "character" })),
+			ogre: token("tOgre", 0, 1, fakeActor({ id: "ogre", name: "Ogre", type: "monster" })),
+		};
+		const scene = fakeScene({ tokens: Object.values(tokens) });
+		const combat = fakeCombat({ scene, combatants: [
+			fakeCombatant({ id: "cCrew", token: tokens.crew, scene, side: "heroes", count: 5 }),
+			fakeCombatant({ id: "cHorde", token: tokens.horde, scene }),
+			fakeCombatant({ id: "cCadi", token: tokens.cadi, scene }),
+			fakeCombatant({ id: "cOgre", token: tokens.ogre, scene }),
+		] });
+		globalThis.game = { ...saved.game, user: { id: "gm", isGM: true }, users: collection([]), combats: collection([combat]),
+			settings: { get: (scope, key) => (key === "fightTab" ? fightTabOn : undefined) } };
+		globalThis.ui = { combat: { viewed: combat } };
+		globalThis.canvas = { scene };
+		const byUuid = new Map(Object.values(tokens).map(t => [t.uuid, t]));
+		globalThis.fromUuidSync = uuid => byUuid.get(uuid) ?? null;
+		const own = key => ({ ...tokens[key].actor, token: tokens[key] });
+		return { tokens, horde: own("horde"), crew: own("crew"), cadi: tokens.cadi.actor };
+	}
+
+	it("piles the horde onto the lone hero it swings at, as her badge and counter-blow say", () => {
+		const { tokens, horde, cadi } = scrum();
+		// Twelve crinwin, eight of them able to reach her: +7, not the groups' +1.
+		expect(seedForRoll({ attacker: horde, targets: [{ uuid: tokens.cadi.uuid }] }))
+			.toMatchObject({ bonus: 7, count: 8, direction: "onHero", target: "Cadi" });
+		expect(incomingSeed({ pc: cadi })).toMatchObject({ bonus: 7, count: 8 });
+	});
+
+	it("keeps the group seed for the blows the groups trade, counted without the member Cadi holds", () => {
+		const { tokens, horde, crew } = scrum();
+		// 11 crinwin to 5 (Cadi holds one): the horde +1, the crew -1 for the horde's armor.
+		expect(seedForRoll({ attacker: horde, targets: [{ uuid: tokens.crew.uuid }] })).toMatchObject({ bonus: 1, direction: "groupAhead" });
+		expect(seedForRoll({ attacker: crew, targets: [{ uuid: tokens.horde.uuid }] })).toMatchObject({ bonus: -1, direction: "groupBehind" });
+	});
+
+	it("puts no group armor on a lone foe the crew strikes, and no seed on a horde's roll at a mixed crowd", () => {
+		const { tokens, horde, crew } = scrum();
+		expect(seedForRoll({ attacker: crew, targets: [{ uuid: tokens.ogre.uuid }] })).toBeNull();
+		// From its sheet, with nothing aimed: the crew and Cadi both, so neither the exchange nor a pile-on on one.
+		expect(sheetSeed({ actor: horde })).toBeNull();
+	});
+});
+
+// FGT-9: a linked actor with several tokens in the fight rolls from the one this reader has selected, which
+// is the token the fight ring was opened on.
+describe("an actor with several tokens, one of them selected", () => {
+	it("settles on the selected token's combatant, and gives up with none or both selected", () => {
+		const { combat, scene, tokens, wolfActor } = fight();
+		expect(rollerCombatant(combat, scene, wolfActor, { controlled: [{ document: { id: "tW1" } }] })?.id).toBe("cW1");
+		expect(rollerCombatant(combat, scene, wolfActor, { controlled: [] })).toBeNull();
+		expect(rollerCombatant(combat, scene, wolfActor, { controlled: [{ id: "tW1" }, { id: "tW2" }] })).toBeNull();
+		globalThis.canvas.tokens = { controlled: [{ document: tokens.wolf2 }] };
+		expect(rollerCombatant(combat, scene, wolfActor)?.id).toBe("cW2");
+	});
+
+	it("aims the stat block's roll from the selected token", () => {
+		const { tokens, wolfActor } = fight();
+		const many = { ...wolfActor, getActiveTokens: () => [tokens.wolf1, tokens.wolf2] };
+		globalThis.canvas.tokens = { controlled: [{ document: tokens.wolf1 }] };
+		expect(sheetSeed({ actor: many })).toMatchObject({ bonus: 1, direction: "onHero", target: "Cadi" });
 	});
 });

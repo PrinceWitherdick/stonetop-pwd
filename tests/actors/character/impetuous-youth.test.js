@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
-	giveItAllTarget, offersGiveItAll, giveItAll, askGiveItAllCost, wireImpetuousYouth,
+	giveItAllTarget, offersGiveItAll, giveItAll, givenByPress, askGiveItAllCost, wireImpetuousYouth,
 	GAVE_IT_ALL_FLAG, GIVE_IT_ALL_COSTS, HURT_DAMAGE, IMPETUOUS_YOUTH,
 } from "../../../module/actors/character/impetuous-youth.js";
 import { ROLLED_FLAG, rolledRecord } from "../../../module/utils/counted-tier.js";
 import { stubAsk } from "../../fakes/confirm.js";
+import { RELAY_GRACE_MS } from "../../../module/utils/relay-landed.js";
+import { useFakeHooks } from "../../fakes/hooks.js";
 
 // The Would-Be Hero's Impetuous Youth: "When you make a move and come up short, you can give it your all and
 // turn a 6- into a 7-9, a 7-9 into a 10+, and (if it matters), a 10-11 into a 12+. But if you do, pick 1".
@@ -166,6 +168,17 @@ describe("giveItAll", () => {
 	it("refuses an unknown cost", async () => {
 		expect(await giveItAll(card(), hero(), "nothing", deps())).toBe(false);
 	});
+
+	// QY-6: the press marks the card, so a presser whose answer never came back can tell its own lift.
+	it("marks the card with the press it was given by, and tells that press from another", async () => {
+		const message = card({ total: 8 });
+		expect(await giveItAll(message, hero(), "hurt", { ...deps(), hurt: null, press: "p1" })).toBe(true);
+		expect(message.store[GAVE_IT_ALL_FLAG]).toEqual({ cost: "hurt", from: 8, to: 10, press: "p1" });
+		expect(givenByPress(message, "p1")).toBe(true);
+		expect(givenByPress(message, "p2")).toBe(false);
+		expect(givenByPress(card(), "p1")).toBe(false);
+		expect(givenByPress(message, null)).toBe(false);
+	});
 });
 
 describe("asking the cost", () => {
@@ -209,6 +222,51 @@ describe("the card's button", () => {
 		const button = html.querySelector(".stonetop-give-it-all-btn");
 		expect(button.disabled).toBe(true);
 		expect(button.textContent).toBe("Gave it their all: got hurt");
+	});
+
+	// A player's press goes to the GM's client; its lift can land after the press stopped waiting for an answer.
+	describe("pressed through the GM's client, with no answer in time", () => {
+		let saved;
+		beforeEach(() => { saved = { user: globalThis.game.user, users: globalThis.game.users }; });
+		afterEach(() => { globalThis.game.user = saved.user; globalThis.game.users = saved.users; });
+		function pressed() {
+			const message = { ...card(), speaker: { actor: "wren" } };
+			speaking(hero());
+			let asked = null;
+			globalThis.game.user = { id: "p1", isGM: false };
+			globalThis.game.users = { activeGM: { id: "gm", query: vi.fn(async (_q, data) => { asked = data; throw new Error("timed out"); }) } };
+			stubAsk("lost");
+			const html = rendered(message);
+			wireImpetuousYouth(message, html);
+			const button = html.querySelector(".stonetop-give-it-all-btn");
+			button.click();
+			return { message, button, asked: () => asked };
+		}
+
+		it("keeps the button spent when the lift lands a moment later", async () => {
+			const hooks = useFakeHooks();
+			try {
+				const { message, button, asked } = pressed();
+				await vi.waitFor(() => expect(hooks.handlers.size).toBe(1));
+				message.store[GAVE_IT_ALL_FLAG] = { cost: "lost", from: 8, to: 10, press: asked().press };
+				hooks.fire("updateChatMessage", message);
+				await vi.waitFor(() => expect(hooks.handlers.size).toBe(0));
+				expect(button.disabled).toBe(true);
+			} finally {
+				hooks.restore();
+			}
+		});
+
+		it("gives the button back once the wait is over with no lift", async () => {
+			vi.useFakeTimers();
+			try {
+				const { button } = pressed();
+				await vi.advanceTimersByTimeAsync(RELAY_GRACE_MS);
+				expect(button.disabled).toBe(false);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
 	});
 
 	it("is not drawn for anyone else", () => {

@@ -311,7 +311,7 @@ describe("runRingButton", () => {
 		await runRingButton(bite, actor);
 		expect(rollDamageAt).toHaveBeenCalledWith(actor, {
 			formula: "d8+2", label: "Bite", keywords: "hand, grabby, forceful", rollMode: "normal",
-			weapon: weapon(["hand", "grabby", "forceful"]), shiftKey: false,
+			weapon: weapon(["hand", "grabby", "forceful"]), seeded: true, shiftKey: false,
 		});
 	});
 
@@ -377,7 +377,7 @@ describe("runRingButton", () => {
 			globalThis.game.actors = actors;
 		}
 		expect(crewBlow).toHaveBeenCalledWith(cadi, { label: "Damage", weapon: null, keywords: "" });
-		expect(rollDamageAt).toHaveBeenCalledWith(crew, { formula: "d6", label: "Damage: Spear", keywords: "", rollMode: "normal", weapon: spear, shiftKey: false });
+		expect(rollDamageAt).toHaveBeenCalledWith(crew, { formula: "d6", label: "Damage: Spear", keywords: "", rollMode: "normal", weapon: spear, seeded: true, shiftKey: false });
 	});
 
 	// The Marshal's re-audit, the user's ruling (2026-10-18): a follower's own blow is them going on the offense.
@@ -400,6 +400,8 @@ describe("runRingButton", () => {
 		onTestFinished(() => { globalThis.document = document; globalThis.ChatMessage = ChatMessage; globalThis.game.actors = actors; });
 		await runRingButton({ run: "strikeBack", label: "Strike back", formula: "d6", rollMode: "dis", weapon: null }, crew);
 		expect(wait).not.toHaveBeenCalled();
+		// One defender's blow: no fight +N on it, as a character's strike back has none.
+		expect(vi.mocked(rollDamageAt).mock.calls.at(-1)[1]).toMatchObject({ rollMode: "dis", seeded: false });
 		expect(cadi.flags[SYSTEM_ID].crew.readiness).toBe(1);
 		await runRingButton({ run: "damage", label: "Damage", formula: "d6" }, crew);
 		expect(wait).toHaveBeenCalledTimes(1);

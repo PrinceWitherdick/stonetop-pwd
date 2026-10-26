@@ -2,6 +2,7 @@ import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { wireTabSearch } from "../utils/tab-search.js";
 import { buildFacetGroups, isRowHidden, toggleChip } from "../utils/catalog-filters.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { wireKeyboardButtons } from "../utils/keyboard-buttons.js";
 
 /**
  * A window for looking THROUGH lists — currently the one that holds all of Stonetop's,
@@ -262,15 +263,8 @@ export class CatalogBrowserDialog extends StonetopDialog {
 			ev.dataTransfer.effectAllowed = "copy";
 		});
 
-		// The rows are role="button", so they owe a keyboard user the same opening. Space is
-		// swallowed rather than left to scroll the list out from under the focused row.
-		root.addEventListener("keydown", ev => {
-			if (ev.key !== "Enter" && ev.key !== " ") return;
-			const row = ev.target.closest(".stonetop-catalog-row");
-			if (!row) return;
-			ev.preventDefault();
-			this._openRow(row.dataset.uuid);
-		});
+		// The rows are role="button": Enter and Space press them (utils/keyboard-buttons.js).
+		wireKeyboardButtons(root);
 
 		this._updateCount(root);
 	}

@@ -9,9 +9,16 @@ import { playbookIconPath } from "../../../utils/playbook-actors.js";
 import { INVOKE_THE_SUN_GOD } from "../holy-light.js";
 import { localize, format } from "../../../utils/i18n.js";
 import { levelUpAwayNote } from "../../../campaign/level-up-at-home.js";
+import { CustomMoveDialog } from "./CustomMoveDialog.js";
+import { canAuthorCustomMoves } from "../../../utils/authoring-gates.js";
+import { xpRules } from "../../../utils/xp.js";
+import { wireKeyboardButtons, pressesRoleButton } from "../../../utils/keyboard-buttons.js";
 
 // Base width (overview, stat, marks). The move, foreign-move, and invocation steps
-// widen so their two-column masonry lists show both columns comfortably by default.
+// widen so their masonry lists show two columns by default. The grid allows three
+// (columns: var(--st-move-column-min) 3 in stonetop.css), so this width must stay
+// short of three --st-move-column-min columns: at ~900 the default would open on
+// three. tests/actors/character/move-card-columns.test.js checks it.
 // Heights are NOT fixed here: every step fits its own content (height:"auto"), and a
 // CSS `max-height` on `.stonetop-levelup-dialog` (stonetop.css) caps the tall steps —
 // the move grid and the invocation grid — so they scroll inside a comfortable window
@@ -19,15 +26,45 @@ import { levelUpAwayNote } from "../../../campaign/level-up-at-home.js";
 const LEVELUP_BASE_WIDTH = 520;
 const LEVELUP_MOVE_WIDTH = 860;
 
-// Steps whose two-column masonry card grids need the wider window. Anything else
+// Steps whose masonry card grids need the wider window. Anything else
 // (overview, stat, marks) shows at LEVELUP_BASE_WIDTH.
-const LEVELUP_WIDE_STEPS = ["move", "foreignMove", "invocation"];
+const LEVELUP_WIDE_STEPS = ["move", "agreed", "foreignMove", "invocation"];
 
 // The level-up wizard is a linear sequence; each optional step appears only when its
 // predicate fires (`overview` and `move` are always present). Next/Back navigation and the
 // "is this the final step?" check all derive from this single ordering via _adjacentStep —
 // keep this the one source of truth for step order + skip logic.
-const LEVELUP_STEPS = ["overview", "move", "foreignMove", "stat", "marks", "companion", "invocation"];
+const LEVELUP_STEPS = ["overview", "move", "agreed", "foreignMove", "stat", "marks", "companion", "invocation"];
+
+// The move step's "Agreed with the table" card (Book I p.529: a move from another playbook "If
+// everyone (not just you) agrees", or a custom one, p.528 step 3's insert class). Picking it is a
+// move pick like any other; the agreed step that follows says which move.
+const AGREED_ID = "__agreed__";
+const AGREED_CUSTOM = "__custom__";
+
+// This world's Level Up cost in words: the book's "6 + twice your current level" (p.528), or the
+// slower curve the world picked (p.582, utils/xp.js).
+function _xpRuleText() {
+	const { base, perLevel } = xpRules();
+	return format("stonetop.specialMoves.levelUp.xpRule", {
+		base,
+		times: localize(perLevel === 3 ? "stonetop.specialMoves.levelUp.xpRuleThrice" : "stonetop.specialMoves.levelUp.xpRuleTwice"),
+	});
+}
+
+// The selector that finds a pickable card again after the re-render its pick causes, so the
+// keyboard focus stays on it. Off the one data key each card family carries.
+const PICK_KEYS = ["compendiumId", "statKey", "markSlug", "actionSlug", "slug"];
+function _pickableSelector(el) {
+	const esc = v => (globalThis.CSS?.escape ? globalThis.CSS.escape(v) : String(v).replace(/["\\]/g, "\\$&"));
+	for (const key of PICK_KEYS) {
+		const value = el?.dataset?.[key];
+		if (value == null) continue;
+		const attr = key.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`);
+		return `.stonetop-levelup-pickable[data-${attr}="${esc(value)}"]`;
+	}
+	return null;
+}
 
 // One click on a step's pick list (the mark step, the companion step): a picked slug comes off, an
 // unpicked one goes on while the allowance has room, and a single-pick step swaps its lone pick.
@@ -48,12 +85,51 @@ function _togglePick(picks, slug, allowance) {
 // overwrite `_selectedMoveId` with the foreign move's id and level the character up with
 // the wrong move entirely. Select through these constants — each pairs the shared class
 // with the thing that tells the two families apart — rather than the bare class.
-const MOVE_CARD    = ".stonetop-levelup-move-option:not(.stonetop-levelup-foreign-option)";
+// The agreed step's cards (`.stonetop-levelup-agreed-option`) are a third family, kept out the same
+// way. The move step's own "Agreed with the table" card IS a move card (it is that step's pick), but
+// stays out of the move filter so a search never hides it.
+const MOVE_CARD    = ".stonetop-levelup-move-option:not(.stonetop-levelup-foreign-option):not(.stonetop-levelup-agreed-option)";
+const MOVE_FILTER_CARD = `${MOVE_CARD}:not(.stonetop-levelup-agreed-entry)`;
 const FOREIGN_CARD = ".stonetop-levelup-foreign-option";
+const AGREED_CARD  = ".stonetop-levelup-agreed-option";
 const MOVE_CHIP    = ".stonetop-levelup-move-chip[data-move-group]";
 const FOREIGN_CHIP = ".stonetop-levelup-foreign-chip";
 
 const LEVELUP_ID_PREFIX = "stonetop-levelup-dialog";
+
+// The two lists of other playbooks' moves (the agreed step's and the cross-playbook step's), each
+// card drawn by the one partial (templates/dialogs/partials/level-up-other-card.hbs) and wired by
+// _wireOtherPlaybookList. Each names its cards, its search box, its "nothing matches" line, and the
+// instance fields holding its pick, its query and (foreign only) its source-playbook chip.
+const OTHER_PLAYBOOK_LISTS = {
+	agreed: {
+		cards: AGREED_CARD, filtered: `${AGREED_CARD}:not(.stonetop-levelup-agreed-custom)`,
+		search: ".levelup-agreed-search", empty: ".stonetop-levelup-agreed-no-matches",
+		pickKey: "_selectedAgreedId", searchKey: "_agreedSearch",
+	},
+	foreign: {
+		cards: FOREIGN_CARD, filtered: FOREIGN_CARD,
+		search: ".levelup-foreign-search", empty: ".stonetop-levelup-foreign-no-matches",
+		pickKey: "_selectedForeignMoveId", searchKey: "_foreignSearch",
+		chips: FOREIGN_CHIP, chipKey: "_activeForeignPlaybook",
+	},
+};
+
+// One move from another playbook as a card, for the agreed step and the cross-playbook step alike.
+function _otherPlaybookCard(m, selectedId) {
+	return {
+		compendiumId:  m.compendiumId,
+		name:          m.name,
+		description:   m.description,
+		moveResults:   m.moveResults ?? null,
+		playbook:      m.playbook,
+		requiresLabel: m.requiresLabel ?? null,
+		// "Costs Stock; you have no sacred pouch", or null. Display only (see
+		// StonetopCharacter#getForeignMovesForLevelUp, which leaves it off an Initiate pick).
+		stockNote:     m.stockNote ?? null,
+		selected:      m.compendiumId === selectedId,
+	};
+}
 
 export class LevelUpDialog extends StonetopDialog {
 	constructor(character, levelUpData, onDone, options = {}) {
@@ -85,14 +161,21 @@ export class LevelUpDialog extends StonetopDialog {
 		this._foreignMovesForId      = null; // the move id _foreignMoves was loaded for (avoid re-fetch on Back/Next)
 		this._foreignSearch          = "";
 		this._activeForeignPlaybook  = null; // source-playbook chip filter ("The Fox" | … | null = all)
+		// "Agreed with the table": the qualifying moves of every other playbook (fetched when the
+		// step opens), the pick (a compendium id, or AGREED_CUSTOM), and its search filter.
+		this._agreedMoves            = [];
+		this._agreedLoaded           = false;
+		this._selectedAgreedId       = null;
+		this._agreedSearch           = "";
+		this._customEditor           = null;
+		this._customPicks            = null;
 		this._onDone = onDone;
 	}
 
-	// The level-up window already open for this actor, if any. A second press of the button
-	// raises it rather than opening another instance under the same id.
-	static openFor(actorId) {
-		const id = StonetopDialog.perDocumentOptions(LEVELUP_ID_PREFIX, actorId).id;
-		return Object.values(ui.windows ?? {}).find(w => w.id === id) ?? null;
+	// The window id for one actor's level-up. The sheet opens it through openOrFocus
+	// (utils/open-or-focus.js), which also holds it while the level-up's data is read and the window draws.
+	static idFor(actorId) {
+		return StonetopDialog.perDocumentOptions(LEVELUP_ID_PREFIX, actorId).id;
 	}
 
 	static get defaultOptions() {
@@ -145,6 +228,7 @@ export class LevelUpDialog extends StonetopDialog {
 		const d = this._data;
 		const isOverview    = this._step === "overview";
 		const isMove        = this._step === "move";
+		const isAgreed      = this._step === "agreed";
 		const isForeignMove = this._step === "foreignMove";
 		const isStat        = this._step === "stat";
 		const isMarks       = this._step === "marks";
@@ -189,21 +273,16 @@ export class LevelUpDialog extends StonetopDialog {
 			selected:    inv.slug === this._selectedInvocationSlug,
 		}));
 
+		// The move step's "Agreed with the table" pick, and the agreed step's list: every other
+		// playbook's qualifying moves, then "a custom move" where this user may write one.
+		const agreedPicked = this._selectedMoveId === AGREED_ID;
+		const customAllowed = canAuthorCustomMoves();
+		const agreedMoves = this._agreedMoves.map(m => _otherPlaybookCard(m, this._selectedAgreedId));
+
 		// Foreign-move picker (cross-playbook moves): the qualifying foreign moves, with a
-		// text filter. An empty list (nothing qualifies) still allows Continue — e.g. an
-		// Initiate take that grants only the Sacred Pouch.
-		const foreignMoves = this._foreignMoves.map(m => ({
-			compendiumId:  m.compendiumId,
-			name:          m.name,
-			description:   m.description,
-			moveResults:   m.moveResults ?? null,
-			playbook:      m.playbook,
-			requiresLabel: m.requiresLabel ?? null,
-			// "Costs Stock; you have no sacred pouch", or null. Display only (see
-			// StonetopCharacter#getForeignMovesForLevelUp, which leaves it off an Initiate pick).
-			stockNote:     m.stockNote ?? null,
-			selected:      m.compendiumId === this._selectedForeignMoveId,
-		}));
+		// text filter. An empty list (nothing qualifies) allows Continue only for a move that
+		// grants something else (Initiate's Sacred Pouch); any other would grant nothing.
+		const foreignMoves = this._foreignMoves.map(m => _otherPlaybookCard(m, this._selectedForeignMoveId));
 
 		// Source-playbook chips beside the foreign-move search. Derived from the moves
 		// actually offered (so a chip can never filter to nothing) rather than from the
@@ -223,9 +302,17 @@ export class LevelUpDialog extends StonetopDialog {
 		// opted for "require the pick" over deferring a budgeted move's marks to the sheet).
 		const marksComplete = !!markDesc && this._selectedMarks.length === markAllowance;
 
+		const selectedEntry = this._selectedMoveEntry();
+		// A cross-playbook move with nothing to learn and nothing else to give buys nothing, so the
+		// level can't be spent on it (the Moves tab un-ticks it in the same case).
+		// A possession already held gives nothing either (a second Initiate brings no new Pouch).
+		const foreignBlocked = isForeignMove && foreignMoves.length === 0
+			&& !(selectedEntry?.crossPlaybook?.grantsPossession && this._grantsNewPossession);
+
 		const canContinue = isOverview
 			|| (isMove && this._selectedMoveId !== null)
-			|| (isForeignMove && (this._selectedForeignMoveId !== null || foreignMoves.length === 0))
+			|| (isAgreed && this._selectedAgreedId !== null)
+			|| (isForeignMove && !foreignBlocked && (this._selectedForeignMoveId !== null || foreignMoves.length === 0))
 			|| (isStat && this._selectedStat !== null)
 			|| (isMarks && marksComplete)
 			|| (isCompanion && this._selectedCompanionActions.length === (d.companionActions?.allowance ?? 0))
@@ -250,7 +337,6 @@ export class LevelUpDialog extends StonetopDialog {
 
 		// Stat-increase step: the six stats, greying out any already at the chosen
 		// move's cap (+2 Improved / +3 Superior).
-		const selectedEntry = this._selectedMoveEntry();
 		const statCap = selectedEntry?.cap ?? null;
 		const statOptions = (d.stats ?? []).map(s => ({
 			...s,
@@ -285,15 +371,32 @@ export class LevelUpDialog extends StonetopDialog {
 		return {
 			isOverview,
 			isMove,
+			isAgreed,
 			isForeignMove,
 			isStat,
 			isMarks,
 			isCompanion,
 			isInvocation,
 			isLastStep,
+			// Level Up step 6 (Book I p.528), naming a temporary Instinct this level-up ends and an
+			// insert whose Instinct replaced the playbook's.
+			reviewLine:      isLastStep ? this._reviewLine() : "",
 			markStep,
 			companionStep,
 			canContinue,
+			overviewIntro:   format("stonetop.specialMoves.levelUp.overviewIntroRule", { rule: _xpRuleText() }),
+			agreedPicked,
+			agreedMoves,
+			hasAgreedMoves:  agreedMoves.length > 0,
+			agreedLoaded:    this._agreedLoaded,
+			customAllowed,
+			customSelected:  this._selectedAgreedId === AGREED_CUSTOM,
+			customId:        AGREED_CUSTOM,
+			agreedId:        AGREED_ID,
+			// Apply on a custom move opens the custom move editor; the level is taken when it saves.
+			applyLabel:      localize(isAgreed && this._selectedAgreedId === AGREED_CUSTOM
+				? "stonetop.specialMoves.levelUp.applyCustom"
+				: "stonetop.specialMoves.levelUp.apply"),
 			// Playbook avatar art, shown beside the intro of steps unique to one playbook
 			// (currently only the Lightbearer-only invocation step) to brand them.
 			playbookName:    d.playbookName,
@@ -323,6 +426,7 @@ export class LevelUpDialog extends StonetopDialog {
 			foreignPlaybooks,
 			hasForeignMoves: foreignMoves.length > 0,
 			foreignMovesEmpty: isForeignMove && foreignMoves.length === 0,
+			foreignBlocked,
 			foreignFromMoveName: selectedEntry?.name ?? null,
 			foreignGrantsPouch:  !!selectedEntry?.crossPlaybook?.grantsPossession && !!this._grantsNewPossession,
 		};
@@ -367,6 +471,11 @@ export class LevelUpDialog extends StonetopDialog {
 	// of Legend through Wild Soul picks its option here as a Ranger would. The foreign move carries
 	// its mark options and the copies already held (StonetopCharacter#getForeignMovesForLevelUp).
 	_markStepDescriptor() {
+		// A move agreed with the table asks its own marks, as a foreign pick does.
+		if (this._isAgreed()) {
+			const agreed = this._agreedForeign();
+			return agreed?.markOptions?.length ? this._buildPickedMoveMarkStep(agreed) : null;
+		}
 		const entry = this._selectedMoveEntry();
 		if (entry?.crossPlaybook) {
 			const foreign = this._foreignMoves.find(m => m.compendiumId === this._selectedForeignMoveId);
@@ -387,14 +496,45 @@ export class LevelUpDialog extends StonetopDialog {
 	_needsInvocationChoice() {
 		if (this._data?.needsInvocation) return true;
 		if (!this._data?.availableInvocations?.length) return false;
+		if (this._isAgreed()) return this._agreedForeign()?.name === INVOKE_THE_SUN_GOD;
 		const foreign = this._foreignMoves.find(m => m.compendiumId === this._selectedForeignMoveId);
 		return this._needsForeignMoveChoice() && foreign?.name === INVOKE_THE_SUN_GOD;
+	}
+
+	// Whether the move step's pick is "Agreed with the table".
+	_isAgreed() {
+		return this._selectedMoveId === AGREED_ID;
+	}
+
+	// The agreed step's pick when it is another playbook's move, or null (none yet, or custom).
+	_agreedForeign() {
+		if (!this._isAgreed() || !this._selectedAgreedId || this._selectedAgreedId === AGREED_CUSTOM) return null;
+		return this._agreedMoves.find(m => m.compendiumId === this._selectedAgreedId) ?? null;
+	}
+
+	// The qualifying moves of every other playbook, by the cross-playbook picker's own filters
+	// (no Improved/Superior Stat, no other cross move, nothing playbook-locked or already held).
+	// Fetched once, when the agreed step first opens.
+	async _loadAgreedMoves() {
+		if (this._agreedLoaded) return;
+		this._agreedMoves = await this._character.getForeignMovesForLevelUp({ playbooks: "any" }, this._data.newLevel);
+		this._agreedLoaded = true;
+	}
+
+	// Step 6's line: names a temporary Instinct this level-up ends, or the insert whose Instinct
+	// the character now goes by (a Ghost, Revenant or Thrall), else the book's plain reminder.
+	_reviewLine() {
+		const d = this._data ?? {};
+		if (d.temporaryInstinct) return format("stonetop.specialMoves.levelUp.reviewReminderTemporary", { instinct: d.temporaryInstinct });
+		if (d.insertInstinctName) return format("stonetop.specialMoves.levelUp.reviewReminderInsert", { insert: d.insertInstinctName });
+		return localize("stonetop.specialMoves.levelUp.reviewReminder");
 	}
 
 	// Whether a given step is part of THIS level-up; the optional steps appear only when
 	// their move-driven predicate fires (`overview`/`move` are always present).
 	_stepActive(step) {
 		switch (step) {
+			case "agreed":      return this._isAgreed();
 			case "foreignMove": return this._needsForeignMoveChoice();
 			case "stat":        return this._needsStatChoice();
 			case "marks":       return this._needsMarkChoice();
@@ -499,12 +639,45 @@ export class LevelUpDialog extends StonetopDialog {
 		});
 	}
 
+	// One list of other playbooks' moves (OTHER_PLAYBOOK_LISTS): a click picks a card, and the search
+	// box (plus source-playbook chips, where the list has them) filters by pure DOM show/hide. The
+	// state lives on the instance so a pick, which re-renders, keeps the query and the chip.
+	_wireOtherPlaybookList(html, { cards, filtered, search, empty, pickKey, searchKey, chips, chipKey }) {
+		html.find(cards).on("click", ev => {
+			const id = ev.currentTarget.dataset.compendiumId;
+			// A mark picked for the previous move is not this one's (_markStepDescriptor).
+			if (this[pickKey] !== id) this._selectedMarks = [];
+			this[pickKey] = id;
+			this.render(false);
+		});
+		const apply = () => {
+			const q = this[searchKey].trim().toLowerCase();
+			const playbook = chipKey ? this[chipKey] : null;
+			this._applyCardFilter(html, filtered, empty, el =>
+				(!q || el.textContent.toLowerCase().includes(q)) && (!playbook || el.dataset.playbook === playbook));
+		};
+		const input = html.find(search);
+		input.val(this[searchKey]);
+		input.on("input", ev => { this[searchKey] = ev.currentTarget.value; apply(); });
+		if (chips) {
+			html.find(chips).on("click", ev => {
+				const key = ev.currentTarget.dataset.playbook;
+				this[chipKey] = this[chipKey] === key ? null : key; // tap again to clear
+				this._paintChips(html, chips, "playbook", this[chipKey]);
+				apply();
+			});
+			// Restore the active-chip highlight after each render.
+			this._paintChips(html, chips, "playbook", this[chipKey]);
+		}
+		apply();
+	}
+
 	activateListeners(html) {
 		super.activateListeners(html);
 
 		// Move / invocation descriptions are enriched move HTML that can contain
 		// bulleted option lists; give them the same spiral bullets as the sheet.
-		for (const desc of html.find(".stonetop-levelup-move-description, .stonetop-levelup-invocation-description, .stonetop-levelup-foreign-description")) {
+		for (const desc of html.find(".stonetop-levelup-move-description, .stonetop-levelup-invocation-description")) {
 			markProseSpiralBullets(desc);
 		}
 
@@ -517,37 +690,26 @@ export class LevelUpDialog extends StonetopDialog {
 			this._foreignMoves = [];
 			this._foreignMovesForId = null;
 			this._selectedMarks = [];
+			this._selectedAgreedId = null;
 			this.render(false);
 		});
 
-		html.find(".stonetop-levelup-foreign-option").on("click", ev => {
-			// A mark picked for the previous foreign move is not this one's (_markStepDescriptor).
-			if (this._selectedForeignMoveId !== ev.currentTarget.dataset.compendiumId) this._selectedMarks = [];
-			this._selectedForeignMoveId = ev.currentTarget.dataset.compendiumId;
-			this.render(false);
+		// Agreed step (another playbook's move, or a custom one) and the cross-playbook step.
+		this._wireOtherPlaybookList(html, OTHER_PLAYBOOK_LISTS.agreed);
+		this._wireOtherPlaybookList(html, OTHER_PLAYBOOK_LISTS.foreign);
+
+		// Every pickable card answers Enter and Space as well as a click, so the window works from
+		// the keyboard and a screen reader (the cards carry role="button" and tabindex in the template):
+		// utils/keyboard-buttons.js presses it. The press redraws the window, so the card pressed is
+		// remembered first and focused again afterwards.
+		html.find(".stonetop-levelup-pickable").on("keydown", ev => {
+			if (pressesRoleButton(ev.originalEvent ?? ev) === ev.currentTarget) this._refocus = _pickableSelector(ev.currentTarget);
 		});
-		// Foreign-move search + source-playbook chips (pure DOM show/hide, mirroring the
-		// move step; state lives on the instance so a pick — which re-renders — keeps both).
-		const applyForeignFilter = () => {
-			const q = this._foreignSearch.trim().toLowerCase();
-			this._applyCardFilter(html, FOREIGN_CARD, ".stonetop-levelup-foreign-no-matches", el => {
-				const textMatch     = !q || el.textContent.toLowerCase().includes(q);
-				const playbookMatch = !this._activeForeignPlaybook || el.dataset.playbook === this._activeForeignPlaybook;
-				return textMatch && playbookMatch;
-			});
-		};
-		const foreignSearch = html.find(".levelup-foreign-search");
-		foreignSearch.val(this._foreignSearch);
-		foreignSearch.on("input", ev => { this._foreignSearch = ev.currentTarget.value; applyForeignFilter(); });
-		html.find(FOREIGN_CHIP).on("click", ev => {
-			const key = ev.currentTarget.dataset.playbook;
-			this._activeForeignPlaybook = this._activeForeignPlaybook === key ? null : key; // tap again to clear
-			this._paintChips(html, FOREIGN_CHIP, "playbook", this._activeForeignPlaybook);
-			applyForeignFilter();
-		});
-		// Restore the active-chip highlight and apply the current filter after each render.
-		this._paintChips(html, FOREIGN_CHIP, "playbook", this._activeForeignPlaybook);
-		applyForeignFilter();
+		wireKeyboardButtons(html);
+		if (this._refocus) {
+			html[0]?.querySelector?.(this._refocus)?.focus?.();
+			this._refocus = null;
+		}
 
 		html.find(".stonetop-levelup-stat-option:not(.is-at-cap)").on("click", ev => {
 			this._selectedStat = ev.currentTarget.dataset.statKey;
@@ -577,7 +739,7 @@ export class LevelUpDialog extends StonetopDialog {
 		// we re-apply it below on every render.
 		const applyMoveFilter = () => {
 			const query = this._moveSearch.trim().toLowerCase();
-			this._applyCardFilter(html, MOVE_CARD, ".stonetop-levelup-move-no-matches", el => {
+			this._applyCardFilter(html, MOVE_FILTER_CARD, ".stonetop-levelup-move-no-matches", el => {
 				const textMatch  = !query || el.textContent.toLowerCase().includes(query);
 				const groups     = (el.dataset.moveGroups ?? "").split(/\s+/).filter(Boolean);
 				const groupMatch = !this._activeMoveGroup || groups.includes(this._activeMoveGroup);
@@ -630,8 +792,9 @@ export class LevelUpDialog extends StonetopDialog {
 				if (!next) {
 					await this._apply(); // nothing left to ask — commit the level-up
 				} else {
-					// The foreign-move picker needs its qualifying list fetched before it shows.
+					// The foreign-move and agreed pickers need their lists fetched before they show.
 					if (next === "foreignMove") await this._loadForeignMoves();
+					if (next === "agreed") await this._loadAgreedMoves();
 					this._step = next;
 				}
 				this.render(false);
@@ -665,32 +828,88 @@ export class LevelUpDialog extends StonetopDialog {
 		// Versatile, chose an Invocation, then went Back and picked another move has a stale
 		// slug left over that must not be learned.
 		const invocationSlug = this._stepActive("invocation") ? this._selectedInvocationSlug : null;
+		// A move agreed with the table: another playbook's (added like any move) or a custom one,
+		// written in the custom move editor first; the level is taken only when that saves.
+		const agreedForeign = this._agreedForeign();
+		if (this._isAgreed()) {
+			if (this._selectedAgreedId === AGREED_CUSTOM) return this._openCustomEditor(choices, invocationSlug);
+			choices.agreed = { foreignMoveId: agreedForeign?.compendiumId ?? null };
+		}
+		// The foreign move a cross-playbook pick learned, for the timeline row and the sheet.
+		const foreignMoveName = choices.crossPlaybook
+			? this._foreignMoves.find(m => m.compendiumId === choices.foreignMoveId)?.name
+			: undefined;
+		const moveName = agreedForeign?.name ?? (foreignMoveName ? `${entry?.name} (${foreignMoveName})` : entry?.name ?? "");
 		// `fromLevel` pins the level these choices were built for, so a stale window (the same
 		// level-up already applied elsewhere, or XP spent meanwhile) writes nothing. `moveName`
 		// rides along to the timeline's "Reached level N" row ("Learned Seasoned Warrior.").
 		const result = await this._character.applyLevelUp(
-			this._selectedMoveId, invocationSlug,
+			this._isAgreed() ? null : this._selectedMoveId, invocationSlug,
 			Object.keys(choices).length ? choices : null,
-			{ fromLevel: this._data.level, moveName: entry?.name ?? "" },
+			{ fromLevel: this._data.level, moveName },
 		);
+		return this._finish(result, { addedMoveName: agreedForeign?.name ?? entry?.name ?? null, foreignMoveName });
+	}
+
+	// "A custom move" agreed with the table: the custom move editor opens, and saving it takes the
+	// level (StonetopCharacter#_addLevelUpMove writes the move and stamps it as the level's pick).
+	// Closing the editor without saving changes nothing; the level-up window stays open.
+	// The editor saves whatever picks the last Apply carried: the level-up window stays usable
+	// while the editor is open, so Back + a changed pick + Apply again must not be lost.
+	_openCustomEditor(choices, invocationSlug) {
+		this._customPicks = { choices, invocationSlug };
+		if (this._customEditor?.rendered) return this._customEditor.bringToTop();
+		const saver = {
+			create: async input => {
+				const { choices, invocationSlug } = this._customPicks;
+				const result = await this._character.applyLevelUp(null, invocationSlug,
+					{ ...choices, agreed: { customMove: input } },
+					{ fromLevel: this._data.level, moveName: input?.name ?? "" });
+				await this._finish(result, { addedMoveName: null });
+			},
+			update: async () => {},
+		};
+		this._customEditor = new CustomMoveDialog(saver, {
+			onSaved: () => this._character?._actor?.sheet?.render(false),
+		});
+		this._customEditor.render(true);
+	}
+
+	// Closing the level-up window closes a custom move editor it opened, so saving that editor
+	// later cannot take a level the player walked away from. Not while that save is finishing.
+	async close(options) {
+		const editor = this._customEditor;
+		this._customEditor = null;
+		if (editor?.rendered && !this._finishing) await editor.close();
+		return super.close(options);
+	}
+
+	// After an apply: close, say what happened, and hand back to the sheet.
+	async _finish(result, { addedMoveName = null, foreignMoveName } = {}) {
+		this._finishing = true;
 		// Closed BEFORE the sheet hears back: when there's XP for another level, the sheet
 		// opens the next level-up, and a window still closing under this id would be found by
-		// LevelUpDialog.openFor and raised instead.
+		// openOrFocus and raised instead.
 		await this.close();
 		if (result && !result.applied) {
-			ui.notifications?.warn(game.i18n.localize(result.reason === "level"
-				? "stonetop.specialMoves.levelUp.refusedLevel"
-				: "stonetop.specialMoves.levelUp.refusedXp"));
+			const refused = { outOfPlay: "refusedOutOfPlay", level: "refusedLevel" }[result.reason] ?? "refusedXp";
+			ui.notifications?.warn(game.i18n.localize(`stonetop.specialMoves.levelUp.${refused}`));
 			if (this._onDone) this._onDone(null, { applied: false });
 			return;
+		}
+		// A pick that could not be saved after the level was paid for: say which, so it is finished
+		// on the sheet rather than lost without a word (the console has the error).
+		if (result?.failed?.length) {
+			ui.notifications?.error(format("stonetop.specialMoves.levelUp.partlyFailed",
+				{ level: this._data.newLevel, parts: result.failed.join(", ") }));
+		}
+		if (result?.endedInstinct?.value) {
+			ui.notifications?.info(format("stonetop.specialMoves.levelUp.instinctEnded", { instinct: result.endedInstinct.value }));
 		}
 		// Hand back the chosen move's name so the sheet can auto-open the sacred-pouch
 		// editor when a Blessed levels into Big Magic (an additional remarkable trait). A
 		// cross-playbook pick hands back the foreign move it learned too: a Seeker who takes
 		// Big Magic through Initiate of the Secret Arts is owed that trait just the same.
-		const foreignMoveName = choices.crossPlaybook
-			? this._foreignMoves.find(m => m.compendiumId === choices.foreignMoveId)?.name
-			: undefined;
-		if (this._onDone) this._onDone(entry?.name ?? null, { applied: true, foreignMoveName });
+		if (this._onDone) this._onDone(addedMoveName, { applied: true, foreignMoveName });
 	}
 }

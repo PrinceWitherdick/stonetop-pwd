@@ -165,7 +165,7 @@ export const SUPERSEDED = {
 	"hdcwAAB2rz7Nf5Yg": {"artifactLore":["9b55e0da69fcb93a"],"note":["104553f91ea6a5c6"]}, // Bronze ring
 	"Hfpdz9YXksUfEBav": {"description":["2ec07f686c776455"],"moveResults":["8242f2b48bc8c277","9b55e0da69fcb93a","e5a59808f2eca6ed"],"moveResults.failure":["4e7ff338fcf752ab","86d3135f4e3dae97"],"moveResults.partial":["5198786ed03cfb2c"],"moveResults.success":["c3516a201d94c0ab"],"rollType":["9b55e0da69fcb93a"]}, // Persuade (vs. NPCs)
 	"HioRRdzHzmA4KR1V": {"note":["30b9afabdb66b8dd"]}, // Rushlight
-	"hj6cVWzgdltbxr6k": {"description":["aea02852ac522d9f","fa0be6177f5b301f"],"markBudget":["9b55e0da69fcb93a"],"markOptions":["9b55e0da69fcb93a","dc2e50159c97f43c"],"requirement":["9b55e0da69fcb93a"]}, // Heroes to the Last (The Marshal)
+	"hj6cVWzgdltbxr6k": {"description":["aea02852ac522d9f","fa0be6177f5b301f"],"markBudget":["9b55e0da69fcb93a"],"markOptions":["9b55e0da69fcb93a","e6826047b25d15fc"],"requirement":["9b55e0da69fcb93a"]}, // Heroes to the Last (The Marshal)
 	"hrckTmjSZ8Rna3w7": {"artifactLore":["9b55e0da69fcb93a"],"note":["c4135c651bbfeedc"]}, // A blackened splinter
 	"HrKAI6EucqaicITc": {"cap":["9b55e0da69fcb93a"],"description":["5b85a2b845c10f51"]}, // Improved Stat (The Would-Be Hero)
 	"hS6vKm9xNqRy4wTL": {"description":["f5dc2fea93e64d03"]}, // Dark Succor (thrall)
@@ -300,7 +300,7 @@ export const SUPERSEDED = {
 	"tr43tf4n1Uw4rwQn": {"artifactLore":["9b55e0da69fcb93a"],"note":["399b10081e2c8cd8"]}, // Storm-cloud potion
 	"tueXTjs3ajqeueb7": {"description":["8810f3d5158a7663"],"requirement":["9b55e0da69fcb93a"]}, // Voice of the Earth Mother (The Blessed)
 	"twimWuMSalss6cbe": {"description":["1680c1b4e9c91406","4f0e6497f7f41fe3"],"moveResults":["6fc6eeffb00efd30","b914df7b477aafbc"],"moveResults.failure":["b9f4c66d9d30ccbf"],"moveResults.partial":["c016b91d19905417"],"moveResults.success":["a9a42ce0ea187ba1"]}, // Seek Insight
-	"U0ROqji2xSlw9FH0": {"description":["4549b50c94c88e17","6f89bee9f1b2adb3"],"markBudget":["9b55e0da69fcb93a"],"markOptions":["9b55e0da69fcb93a","f50a5216b9968726"],"requirement":["9b55e0da69fcb93a"]}, // Veteran Crew (The Marshal)
+	"U0ROqji2xSlw9FH0": {"description":["4549b50c94c88e17","6f89bee9f1b2adb3"],"markBudget":["9b55e0da69fcb93a"],"markOptions":["9b55e0da69fcb93a","b14c9786f55bccd6","f50a5216b9968726"],"requirement":["9b55e0da69fcb93a"]}, // Veteran Crew (The Marshal)
 	"u1pWwmVhFAQKpk2w": {"description":["b5975fe18055a0f2"]}, // Read the Land (The Marshal)
 	"u2nkZprP7QB1WAK4": {"description":["5c875182cc3ebe6a"],"requirement":["9b55e0da69fcb93a"]}, // Burn Twice as Bright (The Lightbearer)
 	"uaci0Y9LpPjxDkVV": {"artifactLore":["9b55e0da69fcb93a"],"note":["a135501fd171ddae"]}, // A stone cup
@@ -614,7 +614,7 @@ export const CURRENT_FINGERPRINTS = {
 	"hdcwAAB2rz7Nf5Yg": "96f9bae764f85346",
 	"Hfpdz9YXksUfEBav": "1149df45f4418b59",
 	"HioRRdzHzmA4KR1V": "647ac72728e77cd7",
-	"hj6cVWzgdltbxr6k": "62f5ce24c3f8ec9a",
+	"hj6cVWzgdltbxr6k": "e1d626761acba140",
 	"hrckTmjSZ8Rna3w7": "8565f6e4ba031d15",
 	"HrKAI6EucqaicITc": "fd26baa8f7fa7033",
 	"hS6vKm9xNqRy4wTL": "193b8c72e620a2a2",
@@ -837,7 +837,7 @@ export const CURRENT_FINGERPRINTS = {
 	"tueXTjs3ajqeueb7": "953a3b86c1968b3e",
 	"twimWuMSalss6cbe": "9fbc1134900537a2",
 	"tzQPxC5HChpoevbL": "335514fd70a2b70a",
-	"U0ROqji2xSlw9FH0": "f3cf2b3dec549da2",
+	"U0ROqji2xSlw9FH0": "3ea10ec982b7f887",
 	"u1pWwmVhFAQKpk2w": "178a70a19e272a8b",
 	"u2nkZprP7QB1WAK4": "3f8598e439bb68b7",
 	"uaci0Y9LpPjxDkVV": "fc4f9dc7f67b14b8",

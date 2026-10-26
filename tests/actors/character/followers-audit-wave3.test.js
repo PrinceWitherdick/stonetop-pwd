@@ -274,7 +274,7 @@ describe("the two party switches (FOL-6)", () => {
 
 	it("draws both switches on the custom card, the travel one worded as travel", () => {
 		const hbs = read("templates/actor/partials/tab-followers.hbs");
-		expect(hbs).toContain('data-switch="wholeParty" data-ftype="custom" data-slug="{{slug}}"');
+		expect(hbs).toContain('data-switch="wholeParty" data-ftype="custom" data-slug="{{this.slug}}"');
 		expect(hbs).not.toContain("(any PC pays/spends its Loyalty)");
 		expect(hbs).toContain("{{#if wholeParty}}{{#unless edit.card}}");
 	});
@@ -338,6 +338,36 @@ describe("Strengthen Your Bond (FOL-8)", () => {
 		expect(await handleFollowerLoyaltyQuery({ characterUuid: "Actor.tied", ftype: "custom", slug: "abc", delta: 1, userId: "p2" }, {}, deps)).toBeNull();
 		expect(await handleFollowerLoyaltyQuery({ characterUuid: "Actor.cadi", ftype: "custom", slug: "abc", delta: -1, userId: "p2" }, {}, deps)).toEqual({ from: 1, to: 0 });
 		expect(shared.update).toHaveBeenCalledWith({ [`flags.${S}.customFollowers.abc.loyalty`]: 0 }, { stonetopMove: "Spend Loyalty" });
+	});
+
+	// QY-2: two spends relayed at once each read the Loyalty before the other's write came back, and one was lost.
+	it("takes two Loyalty moves arriving at once one after the other, so neither is lost", async () => {
+		const shared = pc("cadi", { customFollowers: { abc: { loyalty: 3, wholeParty: true } } }, { owner: false });
+		// The write lands a tick later, as a round trip to the server does.
+		shared.update = vi.fn(async data => {
+			await new Promise(r => setTimeout(r, 5));
+			shared.flags[S].customFollowers.abc.loyalty = data[`flags.${S}.customFollowers.abc.loyalty`];
+		});
+		globalThis.game = { ...realGame, user: { id: "gm", isGM: true }, users: { activeGM: { id: "gm" }, get: id => ({ id, isGM: false, owns: "dewi" }) } };
+		const deps = { resolve: () => shared, actors: [pc("dewi", {}, { owner: false })] };
+		const ask = userId => handleFollowerLoyaltyQuery({ characterUuid: "Actor.cadi", ftype: "custom", slug: "abc", delta: -1, userId }, {}, deps);
+		const [first, second] = await Promise.all([ask("p2"), ask("p3")]);
+		expect(first).toEqual({ from: 3, to: 2 });
+		expect(second).toEqual({ from: 2, to: 1 });
+		expect(shared.flags[S].customFollowers.abc.loyalty).toBe(1);
+	});
+
+	it("takes two of the leader's own Loyalty moves on this client one after the other", async () => {
+		const cadi = pc("cadi", { customFollowers: { abc: { loyalty: 1 } } });
+		cadi.update = vi.fn(async data => {
+			await new Promise(r => setTimeout(r, 5));
+			cadi.flags[S].customFollowers.abc.loyalty = data[`flags.${S}.customFollowers.abc.loyalty`];
+		});
+		const spend = () => changeFollowerLoyalty(cadi, { ftype: "custom", slug: "abc", delta: -1 });
+		const [first, second] = await Promise.all([spend(), spend()]);
+		expect(first).toEqual({ from: 1, to: 0 });
+		expect(second).toBeNull();
+		expect(cadi.update).toHaveBeenCalledTimes(1);
 	});
 });
 
@@ -415,7 +445,7 @@ describe("a follower's Death's Door 6- and SIR, PERMISSION TO DIE, SIR (FO-1)", 
 		sheet._resolveFollowerFate = vi.fn(async () => {});
 		const settled = sheet._followerDoorDeath(row);
 		const data = dialog.getData();
-		expect(data).toMatchObject({ door: true, canSpare: true, letGo: true });
+		expect(data).toMatchObject({ variant: "door", full: false, canSpare: true, letGo: true });
 		const html = await renderTemplate("systems/stonetop-pwd/templates/dialogs/follower-fate.hbs", data);
 		expect(html).toMatch(/data-action="dead"/);
 		expect(html).toMatch(/data-action="spare"/);

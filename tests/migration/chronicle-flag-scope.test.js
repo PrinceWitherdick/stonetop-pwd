@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-	planChronicleFlagRepair, repairChronicleFlagScope, LITERAL_SCOPE_KEY,
+	planChronicleFlagRepair, repairChronicleFlagScope, LITERAL_SCOPE_KEY, RECOVERED_SUFFIX, foldDuplicateSections,
 } from "../../module/migration/chronicle-flag-scope.js";
 import { CHRONICLE_PROSE_FLAG } from "../../module/utils/chronicle-journals.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
@@ -119,7 +119,8 @@ describe("planChronicleFlagRepair", () => {
 		expect(deleteIds).toEqual(["dup"]);
 		expect(updates).toHaveLength(1);
 		expect(updates[0]["system.sections"].map(s => s.heading)).toEqual(["Overview", "Rumours"]);
-		expect(updates[0][`flags.${SYSTEM_ID}.${CHRONICLE_PROSE_FLAG}`]).toHaveProperty("Rumours");
+		// Not stamped as ours: a duplicate is not a source, and a later save must not take it over.
+		expect(updates[0][`flags.${SYSTEM_ID}.${CHRONICLE_PROSE_FLAG}`] ?? {}).not.toHaveProperty("Rumours");
 	});
 
 	it("groups Seasons Change pages by their year", () => {
@@ -241,5 +242,48 @@ describe("repairChronicleFlagScope", () => {
 		const survivors = pages.filter(p => !deleteIds.includes(p._id));
 
 		expect(planChronicleFlagRepair(survivors)).toEqual({ updates: [], deleteIds: [] });
+	});
+});
+
+// A duplicate is not a source. Folding one in through the seed merge let a deleted copy's
+// different prose replace the keeper's untouched prose (and stamp it as ours), or threw it away
+// when the keeper had been edited. Now differing prose is kept beside the keeper's, and nothing
+// the duplicate brings is recorded as ours.
+describe("folding a duplicate's prose", () => {
+	it("never replaces the keeper's untouched prose with a duplicate's", () => {
+		const keeper = good("keep", "pc1", "<p>Ours.</p>", { [CHRONICLE_PROSE_FLAG]: { Overview: "whatever-hash" } });
+		const orphan = bad("dup", "pc1", "<p>A different copy.</p>");
+		const { updates } = planChronicleFlagRepair([keeper, orphan]);
+		const sections = updates[0]["system.sections"];
+		expect(sections[0]).toMatchObject({ heading: "Overview", body: "<p>Ours.</p>" });
+		expect(sections[1]).toMatchObject({ heading: `Overview${RECOVERED_SUFFIX}`, body: "<p>A different copy.</p>" });
+		// The keeper's record stands exactly as it was.
+		expect(updates[0][`flags.${SYSTEM_ID}.${CHRONICLE_PROSE_FLAG}`]).toEqual({ Overview: "whatever-hash" });
+	});
+
+	it("keeps a duplicate's prose when the keeper's was edited, rather than dropping it", () => {
+		const keeper = good("keep", "pc1", "<p>The GM rewrote this.</p>");
+		const orphan = bad("dup", "pc1", "<p>What we wrote.</p>");
+		const { updates } = planChronicleFlagRepair([keeper, orphan]);
+		expect(updates[0]["system.sections"].map(s => s.body)).toEqual(["<p>The GM rewrote this.</p>", "<p>What we wrote.</p>"]);
+	});
+
+	it("adds nothing for a duplicate whose prose is the same, and only one copy for several", () => {
+		const keeper = good("keep", "pc1", "<p>Same.</p>");
+		const twin = bad("dup1", "pc1", "<p>Same.</p>");
+		const other1 = bad("dup2", "pc1", "<p>Other.</p>");
+		const other2 = bad("dup3", "pc1", "<p>Other.</p>");
+		const { updates, deleteIds } = planChronicleFlagRepair([keeper, twin, other1, other2]);
+		expect(deleteIds).toEqual(["dup1", "dup2", "dup3"]);
+		expect(updates[0]["system.sections"].map(s => s.heading)).toEqual(["Overview", `Overview${RECOVERED_SUFFIX}`]);
+	});
+
+	it("folds in a duplicate's missing Q&A pairs without doubling the shared ones", () => {
+		const sections = foldDuplicateSections(
+			[{ kind: "qa", heading: "Bonds & ties", pairs: [{ prompt: "Q", answer: "A" }] }],
+			[{ kind: "qa", heading: "Bonds & ties", pairs: [{ prompt: "Q", answer: "A" }, { prompt: "R", answer: "B" }] }],
+		);
+		expect(sections.added).toBe(true);
+		expect(sections.sections[0].pairs).toEqual([{ prompt: "Q", answer: "A" }, { prompt: "R", answer: "B" }]);
 	});
 });

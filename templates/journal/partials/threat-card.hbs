@@ -7,7 +7,7 @@
       grab it anywhere to drop a pinned Note on a scene. The dragstart is wired on the tab
       root in StonetopSteadingSheet._activateThreatsListeners. --}}
 <article class="threat-card threat-card--{{type.id}}{{#if collapsed}} is-collapsed{{/if}}{{#if canDrag}} is-draggable{{/if}}{{#if resolved}} is-resolved{{/if}}"
-         data-threat-id="{{id}}" data-page-uuid="{{uuid}}" style="--threat-accent-raw:{{accent}};"{{#if canDrag}} draggable="true"{{/if}}>
+         data-threat-id="{{this.id}}" data-page-uuid="{{this.uuid}}" style="--threat-accent-raw:{{this.accent}};"{{#if canDrag}} draggable="true"{{/if}}>
 	{{> "stonetop.card-head" kind="threat" typeLabel=type.label}}
 
 	{{!-- Crossed off the tracker (Book I p.299). Said in words as well as the grey, since a faded
@@ -17,7 +17,7 @@
 	{{/if}}
 
 	{{#if hasInstinct}}
-	<p class="threat-instinct"><span class="threat-label">Instinct</span><em>{{instinct}}</em></p>
+	<p class="threat-instinct"><span class="threat-label">Instinct</span><em>{{this.instinct}}</em></p>
 	{{/if}}
 	{{#if hasThemes}}
 	<p class="threat-themes"><span class="threat-label">Themes</span>{{#each themes}}<span class="threat-themes__item">{{this}}</span>{{/each}}</p>
@@ -28,7 +28,7 @@
 	<p class="threat-proximity"><span class="threat-proximity__pip" aria-hidden="true"></span>{{proximity.label}} threat</p>
 
 	{{#if hasDescription}}
-	<div class="threat-desc">{{{description}}}</div>
+	<div class="threat-desc">{{{this.description}}}</div>
 	{{/if}}
 
 	{{#if hasDoomTrack}}
@@ -51,7 +51,7 @@
 	{{/if}}
 
 	{{#if hasNested}}
-	<p class="threat-nested"><span class="threat-label">Also</span>{{#each nested}}<span class="threat-nested__item">{{name}}{{#if note}} <em>({{note}})</em>{{/if}}</span>{{/each}}</p>
+	<p class="threat-nested"><span class="threat-label">Also</span>{{#each nested}}<span class="threat-nested__item">{{this.name}}{{#if note}} <em>({{this.note}})</em>{{/if}}</span>{{/each}}</p>
 	{{/if}}
 
 	{{> "stonetop.card-player-moves"}}

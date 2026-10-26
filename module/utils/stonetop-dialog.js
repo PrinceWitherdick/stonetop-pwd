@@ -1,4 +1,5 @@
 import { FrontOnOpen } from "./front-on-open.js";
+import { mayClose, notePristineWork } from "./close-guard.js";
 
 // Minimum gap between progress re-renders. A long job reports once per document — a seeded
 // world has several hundred — and each render is a full getData + template + setPosition;
@@ -97,7 +98,8 @@ export class StonetopDialog extends Application {
 	async _resolveWith(result) {
 		const resolve = this._resultResolve;
 		this._resultResolve = null;
-		try { await this.close(); }
+		// A finish: the work was used, so the close-guard has nothing to ask.
+		try { await this.close({ discard: true }); }
 		finally { resolve?.(result); }
 	}
 
@@ -265,6 +267,8 @@ export class StonetopDialog extends Application {
 	async _render(force, options) {
 		const place = this._readPlace();
 		await super._render(force, options);
+		// What the window opened with, for the close-guard (utils/close-guard.js); a no-op after the first.
+		notePristineWork(this);
 		this._frontOnOpen.apply();
 		this._settleContent();
 		// Auto-height dialogs re-fit their height after each render so the window hugs the
@@ -281,6 +285,8 @@ export class StonetopDialog extends Application {
 	}
 
 	async close(options = {}) {
+		// Ask before throwing away what was written, for a window that keeps its work (close-guard.js).
+		if (!(await mayClose(this, options))) return;
 		this._frontOnOpen.stop();
 		this._cancelThrottledRender();
 		this._offsetsWaiter?.disconnect();

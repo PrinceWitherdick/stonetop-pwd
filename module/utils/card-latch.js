@@ -15,23 +15,33 @@ import { speakerActor } from "./speaker-actor.js";
  * again). A throw gives it back too, and is rethrown. `release` is handed to `work` for an action that
  * happened but leaves the card usable again (a roll at nobody).
  *
+ * A card ALREADY latched is refused: no write, no work, the buttons left disabled, `false`. The flag is
+ * read again here, at the press, because many callers open a window first (a picker, a payment form) and
+ * the card may have been settled by another client, or by this one in another window, while it was open.
+ * `taken` says what counts as latched, for a flag that holds more than the latch (an Invoke bullet's
+ * record) or one this user may take over (their own latch left by a reload); by default, any truthy value.
+ * `onTaken(held)` runs on a refusal (to say why), and its answer is returned in place of `false`.
+ *
  * @param {ChatMessage} message
- * @param {string} flag  the message flag's key under the system scope (a dotted path is fine)
+ * @param {string} flag  the message flag's key under `scope` (a dotted path is fine)
  * @param {*} value
  * @param {Iterable<HTMLButtonElement>} buttons
  * @param {(release: () => Promise<void>) => Promise<boolean>} work
- * @returns {Promise<boolean>}  whether the action happened
+ * @param {{taken?: (held: *) => boolean, onTaken?: (held: *) => *, scope?: string}} [options]  `scope` defaults to the system's
+ * @returns {Promise<boolean>}  whether the action happened (or onTaken's answer on a refusal)
  */
-export async function withCardLatch(message, flag, value, buttons, work) {
+export async function withCardLatch(message, flag, value, buttons, work, { taken = held => !!held, onTaken = null, scope = SYSTEM_ID } = {}) {
 	for (const b of buttons) b.disabled = true;
+	const held = message?.getFlag?.(scope, flag);
+	if (taken(held)) return onTaken ? onTaken(held) : false;
 	let latched = false;
 	const release = async () => {
-		if (latched) await message.unsetFlag(SYSTEM_ID, flag);
+		if (latched) await message.unsetFlag(scope, flag);
 		latched = false;
 		for (const b of buttons) b.disabled = false;
 	};
 	try {
-		await message.setFlag(SYSTEM_ID, flag, value);
+		await message.setFlag(scope, flag, value);
 		latched = true;
 		if (await work(release)) return true;
 		await release();
@@ -48,15 +58,17 @@ export async function withCardLatch(message, flag, value, buttons, work) {
  * client that could do the work but not write the card never does it twice; then `work()` runs and
  * answers `{stamp, notice, abort}`. `abort` gives the card back. A `stamp` other than `true` replaces
  * the provisional one; if that second write fails the card stays latched with `true` (the work is
- * done), and a reader of the flag has to cope with `true` anyway, for a render in between.
+ * done), and a reader of the flag has to cope with `true` anyway, for a render in between. A card
+ * already latched runs nothing and answers null, as withCardLatch refuses it (`onTaken` is withCardLatch's).
  *
  * @param {ChatMessage} message
  * @param {string} flag
  * @param {Iterable<HTMLButtonElement>} buttons
  * @param {() => Promise<{stamp?: *, notice?: string, abort?: boolean}|void>} work
- * @returns {Promise<{stamp: *, notice?: string}|null>}  what the work answered, or null when it aborted
+ * @param {{onTaken?: (held: *) => *}} [options]
+ * @returns {Promise<{stamp: *, notice?: string}|null>}  what the work answered, or null when it aborted or was refused
  */
-export async function withLateStampLatch(message, flag, buttons, work) {
+export async function withLateStampLatch(message, flag, buttons, work, { onTaken = null } = {}) {
 	let done = null;
 	await withCardLatch(message, flag, true, buttons, async () => {
 		const { stamp = true, notice, abort = false } = await work() ?? {};
@@ -67,7 +79,7 @@ export async function withLateStampLatch(message, flag, buttons, work) {
 				.catch(err => console.warn(`Stonetop | could not record the ${flag} stamp; the card stays latched`, err));
 		}
 		return true;
-	});
+	}, { onTaken });
 	return done;
 }
 

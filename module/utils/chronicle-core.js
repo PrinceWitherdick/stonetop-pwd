@@ -12,8 +12,8 @@
 // of the others become editable prompt/answer pairs, like a location's "In Play"
 // questions). `group:"glance"` keeps the sheet from drawing act banners.
 
-import { escHtml, decodeEntities } from "./strings.js";
-import { step4Questions, step6Questions } from "../dialogs/introductions-data.js";
+import { escHtml, decodeEntities, normaliseEditorText } from "./strings.js";
+import { step4Questions, step6Questions, SUPERSEDED_INTRO_QUESTIONS } from "../dialogs/introductions-data.js";
 import { CHART_GROUPS, chartPicked, chartEntryText } from "../dialogs/expedition-data.js";
 import {
 	journeyRoute, routePhrase, routeLegLines, routeLine, fillChartBlank,
@@ -74,6 +74,18 @@ function proseSection(heading, bodyHtml) {
 	return bodyHtml ? { kind: "prose", heading, group: SECTION_GROUP, body: withSpiralBullets(bodyHtml) } : null;
 }
 
+// Every heading a page CAN have, with the section it has now or null: the sections that exist,
+// and the headings whose source is empty (`cleared`), which the merge takes off the page while
+// what is there is still ours to take (see mergeChronicleSections).
+const proseCandidate = (heading, bodyHtml) => [heading, proseSection(heading, bodyHtml)];
+const qaCandidate    = (heading, pairs) => [heading, qaSection(heading, pairs)];
+function sectionsAndCleared(candidates) {
+	return {
+		sections: candidates.map(([, section]) => section).filter(Boolean),
+		cleared:  candidates.filter(([, section]) => !section).map(([heading]) => heading),
+	};
+}
+
 // A Q&A section (prompt/answer pairs), or null when no pair has an answer.
 //
 // ⚠ PROJECTED DOWN TO THE TWO FIELDS A PAGE STORES, and deliberately. `introQaPairs` also carries
@@ -82,10 +94,61 @@ function proseSection(heading, bodyHtml) {
 // page has no field for it (LocationPageModel's pairs are prompt + answer), and the section
 // signature `mergeChronicleSections` dedupes on is built from the whole pair. Letting it ride
 // through would change every stored section's shape to carry something nothing here can show.
+//
+// `pairKeys` rides beside the pairs, one per pair, and is never stored: it is the STABLE source key
+// (`qaSourceKey`) mergeChronicleSections remembers each written pair by, so a pair the GM edited or
+// deleted in the journal is never written again (see mergeChronicleSections).
 function qaSection(heading, pairs) {
 	return pairs.length
-		? { kind: "qa", heading, group: SECTION_GROUP, pairs: pairs.map(({ prompt, answer }) => ({ prompt, answer })) }
+		? {
+			kind: "qa", heading, group: SECTION_GROUP,
+			pairs:    pairs.map(({ prompt, answer }) => ({ prompt, answer })),
+			pairKeys: pairs.map(({ q, answer }) => qaSourceKey(q, answer)),
+		}
 		: null;
+}
+
+// Whitespace-normalised plain text, the form every Q&A hash and key is taken over.
+const normText = value => String(value ?? "").replace(/\s+/g, " ").trim();
+
+/**
+ * The stable SOURCE key of one recorded answer: which question it answers (its stored index, or ""
+ * when none was chosen) and a hash of the answer itself. Deliberately not the question's TEXT, so
+ * a reworded question, or a playbook change that resolves the same index to other words, is the
+ * same pair with a new prompt rather than a new pair.
+ */
+export function qaSourceKey(q, answer) {
+	return `${Number.isInteger(q) ? q : ""}#${hashString(normText(answer))}`;
+}
+
+/** The hash of a Q&A pair's text as it stands, whitespace-normalised. */
+export function qaPairHash(pair) {
+	return hashString(JSON.stringify([normText(pair?.prompt), normText(pair?.answer)]));
+}
+
+// The question part of a source key: two keys with the same group answer the same question.
+const keyGroup = key => String(key ?? "").split("#")[0];
+
+/**
+ * The form a prose body is hashed in: entities decoded, line breaks spelled one way, whitespace
+ * collapsed. The journal's editor re-serialises what it saves (`&#x27;` comes back as `'`), and a
+ * hash of the raw string would read that as a GM edit and freeze the section after one open-and-save.
+ */
+export function normaliseChronicleHtml(html) {
+	return normaliseEditorText(html)
+		.replace(/<br\s*\/?>/gi, "<br>")
+		.replace(/>\s+</g, "><");
+}
+
+/** The change-detection hash a prose body is stamped with now. */
+export function chronicleBodyHash(html) {
+	return hashString(normaliseChronicleHtml(html));
+}
+
+// Is `stored` the hash of `html`? Accepts the normalised hash written now AND the raw hash pages
+// were stamped with before, so a page seeded by an older version keeps syncing.
+function bodyHashMatches(stored, html) {
+	return stored === chronicleBodyHash(html) || stored === hashString(String(html ?? ""));
 }
 
 // Build the prompt/answer pairs for the answer/ask step, from a flat list of { q, a }
@@ -111,7 +174,7 @@ function qaPairsFrom(entries, questions) {
 		const key = JSON.stringify([prompt, answer]);
 		if (seen.has(key)) continue;
 		seen.add(key);
-		pairs.push({ prompt, answer, who: whoOf(rec), at });
+		pairs.push({ prompt, answer, who: whoOf(rec), at, q: qIdx });
 	}
 	return pairs;
 }
@@ -163,10 +226,11 @@ const whoOf = rec => (typeof rec?.who === "string" && rec.who.trim() ? rec.who.t
 /**
  * What ONE player character answered during the introductions, as prompt/answer pairs per step.
  *
- * Each pair is `{ prompt, answer, who, at }`, where `who` is the player character the writer said
- * the answer is about (see `whoOf`) and is null far more often than not, and `at` is the slot the
- * answer is stored in (see `answerEntries`). The journal pages drop both at `qaSection`; the
- * relationship map reads the first and its matcher writes through the second.
+ * Each pair is `{ prompt, answer, who, at, q }`, where `who` is the player character the writer said
+ * the answer is about (see `whoOf`) and is null far more often than not, `at` is the slot the
+ * answer is stored in (see `answerEntries`), and `q` is the stored question index (or null). The
+ * journal pages drop all three at `qaSection`, keeping only `q` inside the pair's source key; the
+ * relationship map reads `who` and its matcher writes through `at`.
  *
  * ⚠ EXPORTED SO THAT NOTHING SPELLS THIS RULE TWICE. "What did they record" is four things at once,
  * and none of them is obvious: the player-driven flow keeps a LIST per step, the two legacy
@@ -286,127 +350,308 @@ function requisitionedList(taken) {
 // Compile one logged expedition into a Chronicle page, or null when it holds nothing
 // worth recording. The arriving-home list is GM prep — questions, not answers — and has
 // never been printed here; what came of Returning Triumphant is written on the steading.
-function buildExpeditionPage(exp, index) {
+function buildExpeditionPage(exp, index, { withEmpty = false } = {}) {
 	const chart = exp?.chart ?? {};
 	const home  = exp?.home ?? {};
 	// The plotted route joins the section it belongs to rather than opening a new heading:
 	// mergeChronicleSections matches on heading, so a brand-new one would churn every page that
 	// already exists. It leads, because it is the answer the GM's own prose then elaborates on.
 	const route = journeyRoute(exp?.journey);
-	const sections = [
-		proseSection("Destination & route", journeyProse(route) + journeyNote(chart, route)),
-		proseSection("The way ahead", chartedGroups(chart, route) + paragraphs(chart.notes)),
+	const { sections, cleared } = sectionsAndCleared([
+		proseCandidate("Destination & route", journeyProse(route) + journeyNote(chart, route)),
+		proseCandidate("The way ahead", chartedGroups(chart, route) + paragraphs(chart.notes)),
 		// LEGACY on the same terms as "Other preparations" below. The Outfit step's note box is
 		// gone — the live party-load readout there answers "who's carrying what" off the sheets
 		// themselves — so nothing writes `exp.outfit` any more. Trips logged while the box existed
 		// still carry what a GM typed, and it goes on printing under the heading it was written
 		// for. A trip logged since simply has no such heading.
-		proseSection("Outfit & supplies", paragraphs(exp?.outfit)),
+		proseCandidate("Outfit & supplies", paragraphs(exp?.outfit)),
 		// The ticked list is what fills this heading now: the Requisition step's note box is gone,
 		// so `exp.requisition` is LEGACY in the same way `exp.outfit` above is, still printed
 		// under the list for the trips that were logged with it.
-		proseSection("Requisitioned", requisitionedList(exp?.requisitioned) + paragraphs(exp?.requisition)),
+		proseCandidate("Requisitioned", requisitionedList(exp?.requisitioned) + paragraphs(exp?.requisition)),
 		// Written by the note under "Other preparations" at the foot of the Requisition step
 		// (ExpeditionDialog's _STEPS), the same `prep` field it had when it was a step of its own,
 		// so trips logged either side of that change print under the one heading. `proseSection`
 		// returns nothing for empty prose and the list is filtered, so a trip with no note simply
 		// has no such heading.
-		proseSection("Other preparations", paragraphs(exp?.prep)),
-		proseSection("The journey", paragraphs(exp?.running)),
+		proseCandidate("Other preparations", paragraphs(exp?.prep)),
+		proseCandidate("The journey", paragraphs(exp?.running)),
 		// LEGACY, like the three above. The arriving-home step's "Return Triumphant?" box is
 		// gone — that step offers the MOVE now, and making it clears a steading debility (or
 		// raises Fortunes), which the steading's own ledger records attributed to the move. So
 		// nothing writes `home.notes` any more; trips logged with the box keep printing theirs.
-		proseSection("Coming home", paragraphs(home.notes)),
-	].filter(Boolean);
-	if (!sections.length) return null;
+		proseCandidate("Coming home", paragraphs(home.notes)),
+	]);
+	if (!sections.length && !withEmpty) return null;
 
 	const title = String(exp?.title ?? "").trim();
 	const name  = title ? `Expedition: ${title}` : expeditionLabel(exp, index);
-	return { key: `${EXPEDITION_PAGE_KEY_PREFIX}${exp.id}`, name, sections };
+	return { key: `${EXPEDITION_PAGE_KEY_PREFIX}${exp.id}`, name, sections, cleared };
 }
+
+/** A copy of a stored section, its Q&A pairs copied too, so changing the copy leaves the record alone. */
+export const cloneChronicleSection = s => ({ ...s, ...(s?.pairs ? { pairs: [...s.pairs] } : {}) });
 
 /**
  * Merge freshly-compiled sections into a page's existing sections, folding in content
- * recorded since the page was first seeded while never clobbering a hand edit:
- *   • a section whose heading is new is appended;
- *   • a matching Q&A section gains any answer pairs it doesn't already have (matched on
- *     prompt+answer), so a question answered in a later round still lands;
- *   • a matching PROSE section is refreshed to the latest source text ONLY while it is
- *     still pristine — its stored body hashes to what we last wrote (tracked per heading
- *     in `proseManaged`). This is what lets a player's introduction fill the Chronicle in
- *     LIVE as they type: each background sync overwrites the previous auto-written prose.
- *     Once the GM edits that section in the journal its hash stops matching, so we leave
- *     it alone from then on and the edit sticks. A legacy page with no tracked hash is
- *     adopted (and thereafter kept in sync) only when its body already equals the freshly
- *     computed one — clearly still ours; otherwise it's assumed edited and frozen.
+ * recorded since the page was first seeded while never clobbering a hand edit. THE JOURNAL
+ * EDIT WINS: whatever we wrote once and the GM then changed or removed in the journal stays
+ * as the GM left it.
  *
- * `adoptLegacy` loosens that last rule for a page being AUTHORED right now (the PC whose
- * introduction is actively being typed in a live intro session): an UNTRACKED prose
- * section (no per-heading hash — the page predates hash tracking) is treated as ours and
- * refreshed to the live text, then stamped so it tracks from then on. Without this, a
- * page seeded before hash tracking existed would stay frozen forever, so re-running the
- * introductions for a reused character would never update its page. It only ever touches
- * UNTRACKED sections — a section already tracked-and-edited (hash present but not matching)
- * stays frozen even under adoptLegacy, so a genuine journal edit is never clobbered.
+ *   • PROSE is refreshed to the latest source text ONLY while it is still pristine: its stored
+ *     body hashes to what we last wrote (tracked per heading in `proseManaged`). This is what
+ *     lets a player's introduction fill the Chronicle in LIVE as they type. Once the GM edits
+ *     it the hash stops matching and the section freezes. A legacy section with no tracked
+ *     hash is adopted only when its body already equals the source (or under `adoptLegacy`,
+ *     below). A still-pristine section whose source was CLEARED (its heading is in `cleared`)
+ *     is removed; an edited one stays.
+ *   • Q&A pairs are remembered one by one in `qaManaged` (per heading: the pair's stable source
+ *     key, see `qaSourceKey`, mapped to the hash of the text we wrote). A pair written once is
+ *     never added again. While its journal copy is unchanged it follows the source: a reworded
+ *     question or an answer corrected in the Introductions dialog is rewritten in place, and an
+ *     answer deleted there is removed. Once the GM edits or deletes the journal copy, it is
+ *     theirs and left alone. A legacy section (no record yet) is seeded by matching each source
+ *     pair to an existing pair with the same answer, so a world whose questions were reworded
+ *     does not gain a second copy of every answer; existing pairs nothing matches are the GM's.
+ *     A copy that still wears a wording of its question an earlier release SHIPPED
+ *     (`SUPERSEDED_INTRO_QUESTIONS`) is ours, legacy or tracked, and is brought up to the current
+ *     wording; any other wording is a GM edit and stands.
+ *   • A SECTION the GM deleted (its heading was written before but is gone from the page) is not
+ *     recreated, unless a Q&A section gains a pair never written before; then it comes back with
+ *     only the new pairs.
+ *   • A section whose heading is new is appended.
+ *
+ * `adoptLegacy` loosens the legacy prose rule for a page being AUTHORED right now (the PC
+ * whose introduction is actively being typed in a live intro session): an UNTRACKED prose
+ * section is treated as ours and refreshed to the live text, then stamped so it tracks from
+ * then on. It only ever touches UNTRACKED sections: a tracked-and-edited one stays frozen.
  *
  * @param {Array<object>} existing   the page's current sections (plain data)
  * @param {Array<object>} computed   freshly-compiled sections from the recorded source
  * @param {object}  [opts]
  * @param {object}  [opts.proseManaged]  per-heading hash of the prose body we last wrote
+ * @param {object}  [opts.qaManaged]     per-heading { sourceKey: pairHash } of the pairs we wrote
+ * @param {string[]} [opts.cleared]      headings the source knows but has nothing for now
  * @param {boolean} [opts.adoptLegacy]   refresh an untracked prose section from the source
- *   (the actively-authored page in a live intro session); default false = conservative freeze
- * @returns {{ sections: Array<object>, added: number, proseManaged: object }}  the merged
- *   section list, the number of changes (new sections + new pairs + refreshed prose; 0
- *   when nothing changed), and the updated per-heading prose hashes to store back.
+ * @returns {{ sections: Array<object>, added: number, kept: number, proseManaged: object, qaManaged: object }}
+ *   the merged section list; `added`, the number of visible changes (0 when nothing changed);
+ *   `kept`, how many sections hold a GM edit the newer source would otherwise have changed; and
+ *   the updated records to store back.
  */
-export function mergeChronicleSections(existing = [], computed = [], { proseManaged = {}, adoptLegacy = false } = {}) {
+export function mergeChronicleSections(existing = [], computed = [], {
+	proseManaged = {}, qaManaged = {}, cleared = [], adoptLegacy = false,
+} = {}) {
 	// Copy so the caller's stored array (and each Q&A section's pairs) isn't mutated.
-	const merged      = (existing ?? []).map(s => ({ ...s, ...(s?.pairs ? { pairs: [...s.pairs] } : {}) }));
+	let merged        = (existing ?? []).map(cloneChronicleSection);
 	const byHeading   = new Map(merged.map(s => [s.heading, s]));
-	const nextManaged = { ...proseManaged };
+	const nextProse   = { ...(proseManaged ?? {}) };
+	const nextQa      = Object.fromEntries(Object.entries(qaManaged ?? {}).map(([h, rec]) => [h, { ...rec }]));
+	const dropped     = new Set();
 	let added = 0;
+	let kept  = 0;
+
 	for (const section of computed ?? []) {
-		const match = byHeading.get(section.heading);
+		const heading = section.heading;
+		const match   = byHeading.get(heading);
+
+		if (section.kind === "qa" && (!match || match.kind === "qa")) {
+			const result = mergeQaPairs(match ? match.pairs ?? [] : null, sourcePairs(section), qaManaged?.[heading]);
+			nextQa[heading] = result.managed;
+			added += result.changes;
+			if (result.kept) kept += 1;
+			if (match) {
+				match.pairs = result.pairs;
+				// Emptied by our own removals: the heading goes too, and comes back with a new answer.
+				if (!result.pairs.length && result.removed) dropped.add(match);
+			} else if (result.pairs.length) {
+				const fresh = storedSection(section, result.pairs);
+				merged.push(fresh);
+				byHeading.set(heading, fresh);
+			}
+			continue;
+		}
+
 		if (!match) {
-			merged.push(section);
-			byHeading.set(section.heading, section);
-			if (section.kind === "prose") nextManaged[section.heading] = hashString(section.body ?? "");
+			// Written before and gone now: the GM deleted it, and it stays deleted.
+			if (section.kind === "prose" && nextProse[heading] !== undefined) {
+				kept += 1;
+				continue;
+			}
+			const fresh = storedSection(section);
+			merged.push(fresh);
+			byHeading.set(heading, fresh);
+			if (section.kind === "prose") nextProse[heading] = chronicleBodyHash(section.body ?? "");
 			added += 1;
 			continue;
 		}
-		// Same-heading Q&A: append pairs we don't already have, so a question answered in
-		// a later round still lands. Dedupe on the (prompt, answer) tuple — JSON-encoded
-		// so neither field can bleed across the boundary and cause a false match.
-		if (match.kind === "qa" && section.kind === "qa") {
-			match.pairs ??= [];
-			const pairKey = p => JSON.stringify([p.prompt ?? "", p.answer ?? ""]);
-			const have = new Set(match.pairs.map(pairKey));
-			for (const pair of section.pairs ?? []) {
-				const sig = pairKey(pair);
-				if (!have.has(sig)) { match.pairs.push(pair); have.add(sig); added += 1; }
-			}
-			continue;
-		}
+
 		// Same-heading prose: refresh from the source while the stored body is still the
 		// one we last wrote (pristine); freeze once it's been edited in the journal.
 		if (match.kind === "prose" && section.kind === "prose") {
-			const prev    = proseManaged[section.heading];
-			const curHash  = hashString(match.body ?? "");
-			const newHash  = hashString(section.body ?? "");
+			const prev    = proseManaged?.[heading];
+			const same    = normaliseChronicleHtml(match.body) === normaliseChronicleHtml(section.body);
 			// Tracked (prev set): ours only if the stored body still matches our last write.
-			// Untracked (legacy page): ours if it already equals the source, OR — for the
-			// actively-authored page — if adoptLegacy lets the live text take it over.
-			const isOurs   = prev !== undefined ? curHash === prev : (adoptLegacy || curHash === newHash);
+			// Untracked (legacy page): ours if it already equals the source, OR (for the
+			// actively-authored page) if adoptLegacy lets the live text take it over.
+			const isOurs  = prev !== undefined ? bodyHashMatches(prev, match.body) : (adoptLegacy || same);
 			if (isOurs) {
-				if (curHash !== newHash) { match.body = section.body; added += 1; }
-				nextManaged[section.heading] = newHash;
+				if (!same) { match.body = section.body; added += 1; }
+				nextProse[heading] = chronicleBodyHash(match.body);
+			} else if (!same) {
+				// Hand-edited: leave the body, and keep `prev` (if any) as the tracked hash so a
+				// later revert to our exact text resumes syncing.
+				kept += 1;
 			}
-			// else: hand-edited — leave the body, and keep `prev` (if any) as the tracked
-			// hash so a later revert to our exact text resumes syncing.
 		}
 	}
-	return { sections: merged, added, proseManaged: nextManaged };
+
+	// A heading the source has nothing for any more: take away what is still exactly ours.
+	for (const heading of cleared ?? []) {
+		const match = byHeading.get(heading);
+		if (!match || dropped.has(match)) continue;
+		if (match.kind === "prose") {
+			const prev = proseManaged?.[heading];
+			if (prev !== undefined && bodyHashMatches(prev, match.body)) {
+				dropped.add(match);
+				delete nextProse[heading];
+				added += 1;
+			}
+		} else if (match.kind === "qa" && qaManaged?.[heading]) {
+			const result = mergeQaPairs(match.pairs ?? [], [], qaManaged[heading]);
+			nextQa[heading] = result.managed;
+			added += result.changes;
+			match.pairs = result.pairs;
+			if (!result.pairs.length && result.removed) dropped.add(match);
+		}
+	}
+
+	if (dropped.size) merged = merged.filter(s => !dropped.has(s));
+	return { sections: merged, added, kept, proseManaged: nextProse, qaManaged: nextQa };
+}
+
+// A compiled section as a page stores it: the source keys that ride beside a Q&A section's
+// pairs are the merge's business, not the page's.
+function storedSection(section, pairs = null) {
+	const { pairKeys: _keys, ...rest } = section;
+	if (rest.kind === "qa") rest.pairs = (pairs ?? rest.pairs ?? []).map(p => ({ prompt: p.prompt ?? "", answer: p.answer ?? "" }));
+	return rest;
+}
+
+// A compiled Q&A section's pairs, each with its source key. A section built without keys (a
+// test, a repair) falls back to a key made of its own text.
+function sourcePairs(section) {
+	const keys = Array.isArray(section?.pairKeys) ? section.pairKeys : [];
+	return (section?.pairs ?? []).map((p, i) => {
+		const pair = { prompt: p?.prompt ?? "", answer: p?.answer ?? "" };
+		return { key: keys[i] ?? `=${qaPairHash(pair)}`, pair, hash: qaPairHash(pair) };
+	});
+}
+
+/**
+ * One heading's Q&A pairs, merged by the rules in mergeChronicleSections' header.
+ *
+ * @param {Array<object>|null} current  the journal's pairs, or null when the section is absent
+ * @param {Array<{key, pair, hash}>} source  the compiled pairs with their source keys
+ * @param {object|undefined} record  { sourceKey: hash written } for this heading; undefined = legacy
+ * @returns {{pairs: Array<object>, managed: object, changes: number, removed: number, kept: boolean}}
+ */
+function mergeQaPairs(current, source, record) {
+	const pairs   = [...(current ?? [])];
+	const managed = { ...(record ?? {}) };
+	const claimed = new Set();
+	let changes = 0;
+	let kept    = false;
+	const claim = hash => {
+		const i = pairs.findIndex((p, j) => !claimed.has(j) && qaPairHash(p) === hash);
+		if (i >= 0) claimed.add(i);
+		return i;
+	};
+	// The journal copy of `s` written before its question was reworded: the same answer under a
+	// wording an earlier release shipped. A GM's own rewording matches none of them.
+	const claimOldWording = s => {
+		for (const old of SUPERSEDED_INTRO_QUESTIONS[normText(s.pair.prompt)] ?? []) {
+			const i = claim(qaPairHash({ prompt: old, answer: s.pair.answer }));
+			if (i >= 0) return i;
+		}
+		return -1;
+	};
+	const takeOver = (i, s) => { pairs[i] = s.pair; managed[s.key] = s.hash; changes += 1; };
+
+	// LEGACY: no record yet. Whatever already stands for a source pair (the same text, else the
+	// same answer under other wording) is taken as written; only the rest is added.
+	if (record === undefined) {
+		const unmatched = [];
+		for (const s of source) {
+			if (claim(s.hash) >= 0) managed[s.key] = s.hash;
+			else unmatched.push(s);
+		}
+		for (const s of unmatched) {
+			const old = claimOldWording(s);
+			if (old >= 0) { takeOver(old, s); continue; }
+			const answer = normText(s.pair.answer);
+			const i = pairs.findIndex((p, j) => !claimed.has(j) && normText(p.answer) === answer);
+			if (i >= 0) {
+				// Recorded as written with the SOURCE text, which this copy does not match: a GM's
+				// edit (a shipped older wording was taken over above). It stands, and is never
+				// written twice.
+				claimed.add(i);
+				managed[s.key] = s.hash;
+				continue;
+			}
+			pairs.push(s.pair);
+			managed[s.key] = s.hash;
+			changes += 1;
+		}
+		return { pairs, managed, changes, removed: 0, kept };
+	}
+
+	const sourceKeys = new Set(source.map(s => s.key));
+	const unwritten  = [];
+	// Written before: follow the source while the journal copy is still what we wrote.
+	for (const s of source) {
+		if (!(s.key in managed)) { unwritten.push(s); continue; }
+		const wrote = managed[s.key];
+		const i = claim(wrote);
+		if (i < 0) {
+			// Still in a shipped older wording of its question: ours, so it follows the source.
+			const old = claimOldWording(s);
+			if (old >= 0) { takeOver(old, s); continue; }
+			// The GM edited or deleted it. Theirs now.
+			if (s.hash !== wrote) kept = true;
+			continue;
+		}
+		if (s.hash !== wrote) takeOver(i, s);
+	}
+	// Written before and gone from the source (an answer deleted or corrected in the dialog).
+	const vanished = [];
+	for (const [key, wrote] of Object.entries(managed)) {
+		if (sourceKeys.has(key)) continue;
+		const i = claim(wrote);
+		// No unchanged copy: the GM changed it. The record stays, so it is never written again.
+		if (i >= 0) vanished.push({ key, index: i, used: false });
+	}
+	// New answers: a corrected answer takes its old pair's place, so the page keeps its order.
+	for (const s of unwritten) {
+		const old = vanished.find(v => !v.used && keyGroup(v.key) === keyGroup(s.key));
+		if (old) {
+			old.used = true;
+			pairs[old.index] = s.pair;
+			delete managed[old.key];
+		} else {
+			pairs.push(s.pair);
+		}
+		managed[s.key] = s.hash;
+		changes += 1;
+	}
+	const gone = new Set();
+	for (const v of vanished) {
+		if (v.used) continue;
+		gone.add(v.index);
+		delete managed[v.key];
+	}
+	changes += gone.size;
+	return { pairs: pairs.filter((_, i) => !gone.has(i)), managed, changes, removed: gone.size, kept };
 }
 
 /**
@@ -421,11 +666,14 @@ export function mergeChronicleSections(existing = [], computed = [], { proseMana
  * @param {object}  opts.springAnswers  `springBurstAnswers` blob ({ gains, hook, excites }).
  * @param {Array<object>} opts.expeditions  The expedition log (`expeditionAnswers.list`),
  *   oldest first; each trip with content becomes its own page.
- * @returns {Array<{key,name,sections}>}  One page per PC with recorded content, then a
+ * @param {boolean} [opts.withEmpty]  Also return the pages that have nothing recorded now (with no
+ *   sections), so a save can take cleared text off a page that already exists. Off by default.
+ * @returns {Array<{key,name,sections,cleared}>}  One page per PC with recorded content, then a
  *   party "Let Spring Burst Forth" page when there's Spring Burst content, then one
- *   page per logged expedition. Empty when nothing has been recorded.
+ *   page per logged expedition. Empty when nothing has been recorded. `cleared` names the
+ *   headings whose source is empty now.
  */
-export function buildChroniclePages({ pcs = [], introAnswers = {}, springAnswers = {}, expeditions = [] } = {}) {
+export function buildChroniclePages({ pcs = [], introAnswers = {}, springAnswers = {}, expeditions = [], withEmpty = false } = {}) {
 	const pages   = [];
 	const excites = springAnswers?.excites ?? {};
 
@@ -437,20 +685,20 @@ export function buildChroniclePages({ pcs = [], introAnswers = {}, springAnswers
 		// cannot come to disagree about what somebody recorded.
 		const said = introQaPairs(a, pc.slug);
 
-		const sections = [
-			proseSection("Introduction", paragraphs(a.r1)),
-			proseSection("Possessions & contribution", paragraphs(a.r2)),
-			proseSection("Their place in Stonetop", paragraphs(a.r3)),
-			qaSection("Bonds & ties", said.step4),
-			qaSection("Asked of the others", said.step6),
-			proseSection("What excites their player", paragraphs(excites[pc.id])),
-		].filter(Boolean);
+		const { sections, cleared } = sectionsAndCleared([
+			proseCandidate("Introduction", paragraphs(a.r1)),
+			proseCandidate("Possessions & contribution", paragraphs(a.r2)),
+			proseCandidate("Their place in Stonetop", paragraphs(a.r3)),
+			qaCandidate("Bonds & ties", said.step4),
+			qaCandidate("Asked of the others", said.step6),
+			proseCandidate("What excites their player", paragraphs(excites[pc.id])),
+		]);
 
-		// Skip PCs with nothing recorded yet — a page appears once they have content.
-		if (!sections.length) continue;
+		// Skip PCs with nothing recorded yet: a page appears once they have content.
+		if (!sections.length && !withEmpty) continue;
 
 		const name = pc.playbookName ? `${pc.name} — ${pc.playbookName}` : pc.name;
-		pages.push({ key: pc.id, name, sections });
+		pages.push({ key: pc.id, name, sections, cleared });
 	}
 
 	// Party-level Spring Burst page (the per-PC "what excites you" already folded
@@ -461,14 +709,14 @@ export function buildChroniclePages({ pcs = [], introAnswers = {}, springAnswers
 	const omenBody  =
 		(omenGains.length ? `<p><strong>${omenGains.length > 1 ? "Gains" : "Gain"} chosen:</strong> ${omenGains.join(", ")}</p>` : "")
 		+ paragraphs(springAnswers?.hook);
-	const spring = [
-		proseSection("The season's omen", omenBody),
-	].filter(Boolean);
-	if (spring.length) pages.push({ key: SPRING_PAGE_KEY, name: SPRING_PAGE_NAME, sections: spring });
+	const spring = sectionsAndCleared([
+		proseCandidate("The season's omen", omenBody),
+	]);
+	if (spring.sections.length || withEmpty) pages.push({ key: SPRING_PAGE_KEY, name: SPRING_PAGE_NAME, ...spring });
 
 	// One page per logged expedition, oldest first (a growing campaign log).
 	(expeditions ?? []).forEach((exp, i) => {
-		const page = buildExpeditionPage(exp, i);
+		const page = buildExpeditionPage(exp, i, { withEmpty });
 		if (page) pages.push(page);
 	});
 

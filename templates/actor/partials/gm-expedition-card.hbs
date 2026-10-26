@@ -26,20 +26,20 @@
       been run — everything gathered into it stays gathered, and one press of the arrow puts it
       back on the live list to be run again. --}}
 <li class="stonetop-gm-encounter{{#if used}} is-used{{/if}}{{#unless open}} is-collapsed{{/unless}}"
-    data-encounter-id="{{id}}">
+    data-encounter-id="{{this.id}}">
 	<div class="stonetop-gm-encounter-head">
 		<span class="stonetop-gm-encounter-grip" draggable="true" aria-hidden="true"
 		      data-tooltip="{{localize "stonetop.gmToolkit.expeditions.reorder"}}" data-tooltip-direction="UP">
 			<i class="fas fa-grip-vertical"></i>
 		</span>
-		<input type="text" class="stonetop-gm-encounter-name" value="{{name}}" maxlength="120"
+		<input type="text" class="stonetop-gm-encounter-name" value="{{this.name}}" maxlength="120"
 		       aria-label="{{localize "stonetop.gmToolkit.expeditions.nameLabel"}}">
-		{{#if notesPeek}}<span class="stonetop-gm-encounter-peek">{{notesPeek}}</span>{{/if}}
+		{{#if notesPeek}}<span class="stonetop-gm-encounter-peek">{{this.notesPeek}}</span>{{/if}}
 		{{#if groups.length}}
 		<span class="stonetop-gm-encounter-count">
 			{{#each groups}}
-			<span class="stonetop-gm-encounter-tally stonetop-gm-encounter-tally--{{key}}"
-			      data-tooltip="{{tip}}" data-tooltip-direction="UP">{{count}}<i class="{{icon}}" aria-hidden="true"></i></span>
+			<span class="stonetop-gm-encounter-tally stonetop-gm-encounter-tally--{{this.key}}"
+			      data-tooltip="{{this.tip}}" data-tooltip-direction="UP">{{this.count}}<i class="{{this.icon}}" aria-hidden="true"></i></span>
 			{{/each}}
 		</span>
 		{{/if}}
@@ -58,7 +58,7 @@
 	<div class="stonetop-gm-encounter-body">
 		<div class="stonetop-gm-encounter-notes-block">
 			{{#if notesHtml}}
-			<div class="stonetop-gm-encounter-notes">{{{notesHtml}}}</div>
+			<div class="stonetop-gm-encounter-notes">{{{this.notesHtml}}}</div>
 			{{else}}
 			<p class="stonetop-gm-encounter-notes stonetop-gm-encounter-notes--empty">{{localize "stonetop.gmToolkit.expeditions.notesEmpty"}}</p>
 			{{/if}}
@@ -69,31 +69,31 @@
 		</div>
 
 		{{#each groups}}
-		<section class="stonetop-gm-entry-card" data-entry-kind="{{key}}">
+		<section class="stonetop-gm-entry-card" data-entry-kind="{{this.key}}">
 			<div class="stonetop-gm-entry-card-head">
-				<i class="{{icon}}" aria-hidden="true"></i>
-				<span class="stonetop-gm-entry-card-title">{{title}}</span>
+				<i class="{{this.icon}}" aria-hidden="true"></i>
+				<span class="stonetop-gm-entry-card-title">{{this.title}}</span>
 				{{#if canDeploy}}
 				<button type="button" class="stonetop-gm-encounter-deploy"
 				        data-tooltip="{{localize "stonetop.gmToolkit.expeditions.deploy"}}" data-tooltip-direction="UP">
 					<span class="stonetop-gm-encounter-deploy-icon" aria-hidden="true"></span>
 				</button>
 				{{/if}}
-				<span class="stonetop-gm-entry-card-count">{{count}}</span>
+				<span class="stonetop-gm-entry-card-count">{{this.count}}</span>
 			</div>
 			<ul class="stonetop-gm-encounter-entries">
 				{{#each entries}}
-				<li class="stonetop-gm-encounter-entry{{#if unresolved}} is-unresolved{{/if}}" data-entry-id="{{id}}">
+				<li class="stonetop-gm-encounter-entry{{#if unresolved}} is-unresolved{{/if}}" data-entry-id="{{this.id}}">
 					<button type="button" class="stonetop-gm-encounter-entry-open"
 					        draggable="{{#if unresolved}}false{{else}}true{{/if}}"
-					        data-uuid="{{uuid}}" data-doc-type="{{type}}"
+					        data-uuid="{{this.uuid}}" data-doc-type="{{this.type}}"
 					        data-tooltip="{{#if unresolved}}{{localize "stonetop.gmToolkit.expeditions.entryGoneTip"}}{{else}}{{localize "stonetop.gmToolkit.expeditions.entryOpenTip"}}{{/if}}"
-					        data-tooltip-direction="UP">{{name}}</button>
+					        data-tooltip-direction="UP">{{this.name}}</button>
 					<button type="button" class="stonetop-gm-encounter-entry-remove"
 					        data-tooltip="{{localize "stonetop.gmToolkit.expeditions.removeEntry"}}" data-tooltip-direction="UP">
 						<i class="fas fa-xmark"></i>
 					</button>
-					<input type="text" class="stonetop-gm-encounter-entry-note" value="{{note}}" maxlength="200"
+					<input type="text" class="stonetop-gm-encounter-entry-note" value="{{this.note}}" maxlength="200"
 					       placeholder="{{localize "stonetop.gmToolkit.expeditions.entryNotePlaceholder"}}"
 					       aria-label="{{localize "stonetop.gmToolkit.expeditions.entryNoteLabel"}}">
 				</li>

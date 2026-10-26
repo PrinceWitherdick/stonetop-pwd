@@ -29,8 +29,8 @@ export function readRepo(rel) {
 	return fs.readFileSync(path.resolve(ROOT, rel), "utf8");
 }
 
-/** An absolute path to a repo file, by repo-relative path. Local: nothing outside needs one. */
-function repoPath(rel) {
+/** An absolute path to a repo file, by repo-relative path. */
+export function repoPath(rel) {
 	return path.resolve(ROOT, rel);
 }
 

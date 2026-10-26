@@ -24,9 +24,9 @@
 	{{#if searchPinned}}
 	<i class="fas fa-magnifying-glass stonetop-tab-search-glyph" aria-hidden="true"></i>
 	{{else}}
-	<button type="button" class="stonetop-tab-search-toggle" title="{{title}}" aria-label="{{title}}">
+	<button type="button" class="stonetop-tab-search-toggle" title="{{this.title}}" aria-label="{{this.title}}">
 		<i class="fas fa-magnifying-glass" aria-hidden="true"></i>
 	</button>
 	{{/if}}
-	<input type="search" class="stonetop-tab-search-input" placeholder="{{placeholder}}" aria-label="{{title}}">
+	<input type="search" class="stonetop-tab-search-input" placeholder="{{this.placeholder}}" aria-label="{{this.title}}">
 </span>

@@ -51,6 +51,9 @@ The map shows who's engaged with whom: solid lines for melee, dashed arrows for 
 
 - When several attack the same foe, damage rolls are pre-filled with the book's **+N** as its own ticked line in the damage window. On the damage card, **Leave off the +N** takes it back off.
 - The **Apply damage** button on a damage card appears for whoever owns the target, handles armor and piercing, and offers to spend Readiness from Defend. When a player presses it on something they don't own, the GM's Foundry makes the change.
+- Beside **Apply damage** the GM has an **Ignores armor** tick, for when the fiction says armor can't stop the blow (Book I p.239).
+- A monster whose armor depends on what hits it, like *Armor 4, 0 vs. bronze*, gets a ticked box on the damage card (**Not bronze: 4 armor, which bronze goes straight through**). Untick it when the blow is bronze. Weaknesses such as *+1d4 from bronze* show on the card as a reminder for the GM.
+- When a monster attacks, the **Which attack?** and **Name the enemy's damage** cards are made and posted by the GM's Foundry and are hidden from players.
 - A monster at 0 HP is marked out of the fight automatically, and the kill is noted on the timeline of whoever dealt it.
 - Defending heroes are asked whether they lose their Readiness when it's in question; it's never wiped without asking.
 - Hazards roll their damage onto the same card. See [Threats and Hazards](Threats-and-Hazards#hazards).

@@ -10,13 +10,13 @@
 	{{#*inline "itemFields"}}
 	<div class="stonetop-arc-subgrid">
 		<label class="stonetop-arc-row"><span>Item name</span>
-			<input type="text" class="stonetop-arc-input" data-arc-field="{{prefix}}.name" value="{{item.name}}"></label>
+			<input type="text" class="stonetop-arc-input" data-arc-field="{{this.prefix}}.name" value="{{item.name}}"></label>
 		<label class="stonetop-arc-row"><span>Weight</span>
-			<input type="number" class="stonetop-arc-input" data-arc-field="{{prefix}}.weight" data-arc-type="number" min="0" value="{{item.weight}}"></label>
+			<input type="number" class="stonetop-arc-input" data-arc-field="{{this.prefix}}.weight" data-arc-type="number" min="0" value="{{item.weight}}"></label>
 		<label class="stonetop-arc-row stonetop-arc-row--wide"><span>Tags / note</span>
-			<input type="text" class="stonetop-arc-input" data-arc-field="{{prefix}}.note" value="{{item.note}}" placeholder="close, magical"></label>
+			<input type="text" class="stonetop-arc-input" data-arc-field="{{this.prefix}}.note" value="{{item.note}}" placeholder="close, magical"></label>
 		<label class="stonetop-arc-row"><span>Column</span>
-			<select class="stonetop-arc-input" data-arc-field="{{prefix}}.inventoryColumn">
+			<select class="stonetop-arc-input" data-arc-field="{{this.prefix}}.inventoryColumn">
 				<option value="" {{#if (eq "" item.inventoryColumnValue)}}selected{{/if}}>(default)</option>
 				<option value="regular" {{#if (eq "regular" item.inventoryColumnValue)}}selected{{/if}}>Regular</option>
 				<option value="arcana" {{#if (eq "arcana" item.inventoryColumnValue)}}selected{{/if}}>Arcana</option>
@@ -31,18 +31,18 @@
 	{{#*inline "resourceFields"}}
 	<div class="stonetop-arc-subgrid">
 		<label class="stonetop-arc-row"><span>Track title</span>
-			<input type="text" class="stonetop-arc-input" data-arc-field="{{prefix}}.title" value="{{resource.title}}" placeholder="Charge"></label>
+			<input type="text" class="stonetop-arc-input" data-arc-field="{{this.prefix}}.title" value="{{resource.title}}" placeholder="Charge"></label>
 		<label class="stonetop-arc-row"><span>Max</span>
-			<input type="number" class="stonetop-arc-input" data-arc-field="{{prefix}}.max" data-arc-type="number" min="0" value="{{resource.max}}"></label>
+			<input type="number" class="stonetop-arc-input" data-arc-field="{{this.prefix}}.max" data-arc-type="number" min="0" value="{{resource.max}}"></label>
 		<label class="stonetop-arc-row"><span>Max = stat</span>
-			<select class="stonetop-arc-input" data-arc-field="{{prefix}}.maxStat">
+			<select class="stonetop-arc-input" data-arc-field="{{this.prefix}}.maxStat">
 				<option value="" {{#if (eq "" resource.maxStatValue)}}selected{{/if}}>— fixed max —</option>
 				{{#each statOptions}}
-				<option value="{{key}}" {{#if (eq key ../resource.maxStatValue)}}selected{{/if}}>{{abbr}}</option>
+				<option value="{{this.key}}" {{#if (eq key ../resource.maxStatValue)}}selected{{/if}}>{{this.abbr}}</option>
 				{{/each}}
 			</select></label>
 		<label class="stonetop-arc-row stonetop-arc-row--wide"><span>Circle labels (one line per circle; leave a line blank to skip one)</span>
-			<textarea class="stonetop-arc-input" data-arc-field="{{prefix}}.labels" data-arc-type="lines" rows="2" placeholder="&#10;low&#10;out">{{resource.labelsText}}</textarea></label>
+			<textarea class="stonetop-arc-input" data-arc-field="{{this.prefix}}.labels" data-arc-type="lines" rows="2" placeholder="&#10;low&#10;out">{{resource.labelsText}}</textarea></label>
 	</div>
 	{{/inline}}
 
@@ -53,9 +53,9 @@
 			<ol class="stonetop-guide-toc-list">
 				{{#each sections}}
 				<li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
-					<button type="button" class="stonetop-guide-toc-btn stonetop-arc-tab" data-arc-tab="{{key}}"{{#if selected}} aria-current="true"{{/if}}>
-						<i class="fas {{icon}} stonetop-guide-toc-icon"></i>
-						<span class="stonetop-guide-toc-text">{{title}}</span>
+					<button type="button" class="stonetop-guide-toc-btn stonetop-arc-tab" data-arc-tab="{{this.key}}"{{#if selected}} aria-current="true"{{/if}}>
+						<i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
+						<span class="stonetop-guide-toc-text">{{this.title}}</span>
 					</button>
 				</li>
 				{{/each}}
@@ -72,7 +72,7 @@
 					<div class="stonetop-guide-banner-title stonetop-arc-banner-title">{{active.title}}</div>
 					<div class="stonetop-guide-banner-sub stonetop-arc-banner-sub">{{active.sub}}</div>
 				</div>
-				<div class="stonetop-guide-count stonetop-arc-banner-count">{{active.index}} / {{sectionCount}}</div>
+				<div class="stonetop-guide-count stonetop-arc-banner-count">{{active.index}} / {{this.sectionCount}}</div>
 			</div>
 
 			{{!-- Glyph toolbar. Outside the sections and sticky, so it stays reachable while a
@@ -81,7 +81,7 @@
 			<div class="stonetop-arc-glyphbar"{{#unless active.rich}} hidden{{/unless}}>
 				<span class="stonetop-arc-glyphbar-label">Insert track:</span>
 				{{#each glyphs}}
-				<button type="button" class="stonetop-arc-glyph" data-glyph="{{ins}}" title="{{hint}}">{{label}}</button>
+				<button type="button" class="stonetop-arc-glyph" data-glyph="{{this.ins}}" title="{{this.hint}}">{{this.label}}</button>
 				{{/each}}
 				<span class="stonetop-arc-glyphbar-hint">Click into a description first. Tracks need 2+ glyphs (◇◇ / ○○); a lone glyph stays decorative.</span>
 			</div>
@@ -141,11 +141,11 @@
 								<option value="text" {{#if isText}}selected{{/if}}>Text</option>
 							</select>
 							{{#if isOption}}
-							<input type="text" class="stonetop-arc-req-input" data-req-prop="description" placeholder="A requirement to check off…" value="{{description}}">
-							<input type="text" class="stonetop-arc-req-slug" data-req-prop="slug" title="stable key: avoid changing once in use" value="{{slug}}">
-							<input type="number" class="stonetop-arc-req-max" data-req-prop="max" min="1" value="{{max}}" title="number of checkboxes">
+							<input type="text" class="stonetop-arc-req-input" data-req-prop="description" placeholder="A requirement to check off…" value="{{this.description}}">
+							<input type="text" class="stonetop-arc-req-slug" data-req-prop="slug" title="stable key: avoid changing once in use" value="{{this.slug}}">
+							<input type="number" class="stonetop-arc-req-max" data-req-prop="max" min="1" value="{{this.max}}" title="number of checkboxes">
 							{{else}}
-							<input type="text" class="stonetop-arc-req-input stonetop-arc-req-input--wide" data-req-prop="content" placeholder="Interstitial label (e.g. “And then…”)" value="{{content}}">
+							<input type="text" class="stonetop-arc-req-input stonetop-arc-req-input--wide" data-req-prop="content" placeholder="Interstitial label (e.g. “And then…”)" value="{{this.content}}">
 							{{/if}}
 							<button type="button" class="stonetop-arc-req-remove" title="Remove"><i class="fas fa-trash"></i></button>
 						</li>
@@ -201,7 +201,7 @@
 						<select class="stonetop-arc-input" data-arc-field="flags.stonetop.back.move.rollType">
 							<option value="" {{#if (eq "" edit.back.move.rollTypeValue)}}selected{{/if}}>— as the text says —</option>
 							{{#each statOptions}}
-							<option value="{{key}}" {{#if (eq key ../edit.back.move.rollTypeValue)}}selected{{/if}}>+{{abbr}}</option>
+							<option value="{{this.key}}" {{#if (eq key ../edit.back.move.rollTypeValue)}}selected{{/if}}>+{{this.abbr}}</option>
 							{{/each}}
 							<option value="ask" {{#if (eq "ask" edit.back.move.rollTypeValue)}}selected{{/if}}>Ask each time</option>
 						</select></label>
@@ -224,29 +224,29 @@
 						<li class="stonetop-arc-foll-row" data-foll-index="{{@index}}">
 							<div class="stonetop-arc-foll-grid">
 								<label class="stonetop-arc-row"><span>Name</span>
-									<input type="text" class="stonetop-arc-input" data-foll-prop="name" value="{{name}}"></label>
+									<input type="text" class="stonetop-arc-input" data-foll-prop="name" value="{{this.name}}"></label>
 								<label class="stonetop-arc-row"><span>Pronoun</span>
-									<input type="text" class="stonetop-arc-input" data-foll-prop="pronoun" value="{{pronoun}}"></label>
+									<input type="text" class="stonetop-arc-input" data-foll-prop="pronoun" value="{{this.pronoun}}"></label>
 								<label class="stonetop-arc-row"><span>Type</span>
-									<input type="text" class="stonetop-arc-input" data-foll-prop="typeLabel" value="{{typeLabel}}"></label>
+									<input type="text" class="stonetop-arc-input" data-foll-prop="typeLabel" value="{{this.typeLabel}}"></label>
 								<label class="stonetop-arc-row"><span>HP</span>
-									<input type="number" class="stonetop-arc-input" data-foll-prop="hp" value="{{hp}}"></label>
+									<input type="number" class="stonetop-arc-input" data-foll-prop="hp" value="{{this.hp}}"></label>
 								<label class="stonetop-arc-row"><span>Armor</span>
-									<input type="text" class="stonetop-arc-input" data-foll-prop="armor" value="{{armor}}"></label>
+									<input type="text" class="stonetop-arc-input" data-foll-prop="armor" value="{{this.armor}}"></label>
 								<label class="stonetop-arc-row"><span>Loyalty</span>
-									<input type="number" class="stonetop-arc-input" data-foll-prop="loyalty" value="{{loyalty}}"></label>
+									<input type="number" class="stonetop-arc-input" data-foll-prop="loyalty" value="{{this.loyalty}}"></label>
 								<label class="stonetop-arc-row stonetop-arc-row--wide"><span>Tags</span>
-									<input type="text" class="stonetop-arc-input" data-foll-prop="tags" value="{{tags}}" placeholder="spirit, tiny, naive"></label>
+									<input type="text" class="stonetop-arc-input" data-foll-prop="tags" value="{{this.tags}}" placeholder="spirit, tiny, naive"></label>
 								<label class="stonetop-arc-row stonetop-arc-row--wide"><span>Damage</span>
-									<input type="text" class="stonetop-arc-input" data-foll-prop="damage" value="{{damage}}" placeholder="d6 (hand)"></label>
+									<input type="text" class="stonetop-arc-input" data-foll-prop="damage" value="{{this.damage}}" placeholder="d6 (hand)"></label>
 								<label class="stonetop-arc-row stonetop-arc-row--wide"><span>Instinct</span>
-									<input type="text" class="stonetop-arc-input" data-foll-prop="instinct" value="{{instinct}}"></label>
+									<input type="text" class="stonetop-arc-input" data-foll-prop="instinct" value="{{this.instinct}}"></label>
 								<label class="stonetop-arc-row stonetop-arc-row--wide"><span>Cost</span>
-									<input type="text" class="stonetop-arc-input" data-foll-prop="cost" value="{{cost}}"></label>
+									<input type="text" class="stonetop-arc-input" data-foll-prop="cost" value="{{this.cost}}"></label>
 								<label class="stonetop-arc-row stonetop-arc-row--wide"><span>Moves</span>
-									<textarea class="stonetop-arc-input" data-foll-prop="moves" rows="2" placeholder="One move per line">{{moves}}</textarea></label>
+									<textarea class="stonetop-arc-input" data-foll-prop="moves" rows="2" placeholder="One move per line">{{this.moves}}</textarea></label>
 								<label class="stonetop-arc-row stonetop-arc-row--wide"><span>Notes</span>
-									<textarea class="stonetop-arc-input" data-foll-prop="notes" rows="2">{{notes}}</textarea></label>
+									<textarea class="stonetop-arc-input" data-foll-prop="notes" rows="2">{{this.notes}}</textarea></label>
 								<label class="stonetop-arc-check stonetop-arc-check--sub"><input type="checkbox" class="stonetop-check" data-foll-prop="repeatable" {{#if repeatable}}checked{{/if}}>
 									<span>Repeatable (can be summoned again each time)</span></label>
 							</div>
@@ -271,7 +271,7 @@
 			{{#if validation.length}}
 			<ul class="stonetop-arc-validation">
 				{{#each validation}}
-				<li class="stonetop-arc-issue stonetop-arc-issue--{{level}}"><i class="fas {{#if (eq level "error")}}fa-circle-exclamation{{else}}fa-triangle-exclamation{{/if}}"></i> <span>{{message}}</span></li>
+				<li class="stonetop-arc-issue stonetop-arc-issue--{{this.level}}"><i class="fas {{#if (eq level "error")}}fa-circle-exclamation{{else}}fa-triangle-exclamation{{/if}}"></i> <span>{{this.message}}</span></li>
 				{{/each}}
 			</ul>
 			{{/if}}

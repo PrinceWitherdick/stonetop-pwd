@@ -19,7 +19,7 @@
         <div class="stonetop-guide-banner-title">{{step.title}}</div>
         <div class="stonetop-guide-banner-sub">Create a follower</div>
       </div>
-      <div class="stonetop-guide-count">{{stepIndex}} / {{stepCount}}</div>
+      <div class="stonetop-guide-count">{{this.stepIndex}} / {{this.stepCount}}</div>
     </div>
 
     <div class="stonetop-spring-body">{{{step.body}}}</div>
@@ -64,10 +64,10 @@
       </div>
       {{#each tagGroups}}
       <div class="stonetop-cf-tag-group">
-        <div class="stonetop-cf-tag-group-label">{{label}}</div>
+        <div class="stonetop-cf-tag-group-label">{{this.label}}</div>
         <div class="stonetop-cf-tag-pool">
           {{#each tags}}
-          <button type="button" class="stonetop-cf-tag{{#if selected}} is-selected{{/if}}" data-tag="{{value}}">{{value}}</button>
+          <button type="button" class="stonetop-cf-tag{{#if selected}} is-selected{{/if}}" data-tag="{{this.value}}">{{this.value}}</button>
           {{/each}}
         </div>
       </div>
@@ -80,9 +80,9 @@
         <div class="stonetop-cf-option-list">
           {{#each hpBase}}
           <label class="stonetop-cf-option{{#if selected}} is-selected{{/if}}">
-            <input type="radio" name="cf-hp-base" class="stonetop-cf-hp-base" value="{{key}}" {{#if selected}}checked{{/if}}>
-            <span class="stonetop-cf-option-text">{{label}}</span>
-            <span class="stonetop-cf-option-val">{{hp}} HP</span>
+            <input type="radio" name="cf-hp-base" class="stonetop-cf-hp-base" value="{{this.key}}" {{#if selected}}checked{{/if}}>
+            <span class="stonetop-cf-option-text">{{this.label}}</span>
+            <span class="stonetop-cf-option-val">{{this.hp}} HP</span>
           </label>
           {{/each}}
         </div>
@@ -92,21 +92,21 @@
         <div class="stonetop-cf-option-list">
           {{#each hpMods}}
           <label class="stonetop-cf-option{{#if checked}} is-selected{{/if}}">
-            <input type="checkbox" class="stonetop-cf-hp-mod" value="{{key}}" {{#if checked}}checked{{/if}}>
-            <span class="stonetop-cf-option-text">{{label}}</span>
-            <span class="stonetop-cf-option-val">{{signed}}</span>
+            <input type="checkbox" class="stonetop-cf-hp-mod" value="{{this.key}}" {{#if checked}}checked{{/if}}>
+            <span class="stonetop-cf-option-text">{{this.label}}</span>
+            <span class="stonetop-cf-option-val">{{this.signed}}</span>
           </label>
           {{/each}}
         </div>
       </div>
-      <div class="stonetop-cf-total"><i class="fas fa-heart"></i> <strong>{{hpTotal}} HP</strong>{{#if isGroup}} <span class="stonetop-cf-pick-hint">each</span>{{/if}}</div>
+      <div class="stonetop-cf-total"><i class="fas fa-heart"></i> <strong>{{this.hpTotal}} HP</strong>{{#if isGroup}} <span class="stonetop-cf-pick-hint">each</span>{{/if}}</div>
       {{!-- Group follower (p.470): a warband/posse shares these stats, but every
             member tracks their own HP and the card gains the group-fight tools. --}}
       <label class="stonetop-cf-label stonetop-cf-group-label">
         <span><input type="checkbox" class="stonetop-cf-group-toggle" {{#if isGroup}}checked{{/if}}> This is a group of followers</span>
         {{#if isGroup}}
         <span class="stonetop-cf-group-size-row">of
-          <input type="number" class="stonetop-cf-input stonetop-cf-input--num stonetop-cf-group-size" value="{{groupSize}}" min="2" max="99"> members
+          <input type="number" class="stonetop-cf-input stonetop-cf-input--num stonetop-cf-group-size" value="{{this.groupSize}}" min="2" max="99"> members
         </span>
         {{/if}}
       </label>
@@ -118,9 +118,9 @@
         <div class="stonetop-cf-option-list">
           {{#each armorBase}}
           <label class="stonetop-cf-option{{#if selected}} is-selected{{/if}}">
-            <input type="radio" name="cf-armor-base" class="stonetop-cf-armor-base" value="{{key}}" {{#if selected}}checked{{/if}}>
-            <span class="stonetop-cf-option-text">{{label}}</span>
-            <span class="stonetop-cf-option-val">{{armor}}</span>
+            <input type="radio" name="cf-armor-base" class="stonetop-cf-armor-base" value="{{this.key}}" {{#if selected}}checked{{/if}}>
+            <span class="stonetop-cf-option-text">{{this.label}}</span>
+            <span class="stonetop-cf-option-val">{{this.armor}}</span>
           </label>
           {{/each}}
         </div>
@@ -130,14 +130,14 @@
         <div class="stonetop-cf-option-list">
           {{#each armorMods}}
           <label class="stonetop-cf-option{{#if checked}} is-selected{{/if}}">
-            <input type="checkbox" class="stonetop-cf-armor-mod" value="{{key}}" {{#if checked}}checked{{/if}}>
-            <span class="stonetop-cf-option-text">{{label}}</span>
-            <span class="stonetop-cf-option-val">{{signed}}</span>
+            <input type="checkbox" class="stonetop-cf-armor-mod" value="{{this.key}}" {{#if checked}}checked{{/if}}>
+            <span class="stonetop-cf-option-text">{{this.label}}</span>
+            <span class="stonetop-cf-option-val">{{this.signed}}</span>
           </label>
           {{/each}}
         </div>
       </div>
-      <div class="stonetop-cf-total"><i class="fas fa-shield-halved"></i> <strong>{{armorTotal}} Armor</strong></div>
+      <div class="stonetop-cf-total"><i class="fas fa-shield-halved"></i> <strong>{{this.armorTotal}} Armor</strong></div>
       {{/if}}
 
       {{#if is_damage}}
@@ -146,9 +146,9 @@
         <div class="stonetop-cf-option-list">
           {{#each damageOptions}}
           <label class="stonetop-cf-option{{#if selected}} is-selected{{/if}}">
-            <input type="radio" name="cf-damage" class="stonetop-cf-damage" value="{{key}}" {{#if selected}}checked{{/if}}>
-            <span class="stonetop-cf-option-text">{{label}}</span>
-            <span class="stonetop-cf-option-val">{{die}}</span>
+            <input type="radio" name="cf-damage" class="stonetop-cf-damage" value="{{this.key}}" {{#if selected}}checked{{/if}}>
+            <span class="stonetop-cf-option-text">{{this.label}}</span>
+            <span class="stonetop-cf-option-val">{{this.die}}</span>
           </label>
           {{/each}}
         </div>
@@ -169,15 +169,15 @@
       </div>
       {{#each tagGroups}}
       <div class="stonetop-cf-tag-group">
-        <div class="stonetop-cf-tag-group-label">{{label}}</div>
+        <div class="stonetop-cf-tag-group-label">{{this.label}}</div>
         <div class="stonetop-cf-tag-pool">
           {{#each tags}}
-          <button type="button" class="stonetop-cf-tag{{#if selected}} is-selected{{/if}}" data-tag="{{value}}">{{value}}</button>
+          <button type="button" class="stonetop-cf-tag{{#if selected}} is-selected{{/if}}" data-tag="{{this.value}}">{{this.value}}</button>
           {{/each}}
         </div>
       </div>
       {{/each}}
-      <div class="stonetop-cf-total"><i class="fas fa-burst"></i> <strong>{{damagePreview}}</strong></div>
+      <div class="stonetop-cf-total"><i class="fas fa-burst"></i> <strong>{{this.damagePreview}}</strong></div>
       {{/if}}
 
       {{#if is_instinct}}
@@ -186,7 +186,7 @@
       </label>
       <div class="stonetop-cf-chips">
         {{#each instinctExamples}}
-        <button type="button" class="stonetop-cf-chip stonetop-cf-instinct-ex{{#if selected}} is-selected{{/if}}" data-value="{{value}}">{{value}}</button>
+        <button type="button" class="stonetop-cf-chip stonetop-cf-instinct-ex{{#if selected}} is-selected{{/if}}" data-value="{{this.value}}">{{this.value}}</button>
         {{/each}}
       </div>
       {{/if}}
@@ -203,7 +203,7 @@
       </label>
       <div class="stonetop-cf-chips">
         {{#each costExamples}}
-        <button type="button" class="stonetop-cf-chip stonetop-cf-cost-ex{{#if selected}} is-selected{{/if}}" data-value="{{value}}">{{value}}</button>
+        <button type="button" class="stonetop-cf-chip stonetop-cf-cost-ex{{#if selected}} is-selected{{/if}}" data-value="{{this.value}}">{{this.value}}</button>
         {{/each}}
       </div>
       {{/if}}
@@ -213,7 +213,7 @@
         <div class="stonetop-cf-pick-label">Gear</div>
         {{#each sel.gear}}
         <div class="stonetop-cf-gear-row">
-          <input type="text" class="stonetop-cf-input stonetop-cf-gear-label" data-index="{{@index}}" value="{{label}}" placeholder="bow &amp; iron arrows, old cloak, supplies…">
+          <input type="text" class="stonetop-cf-input stonetop-cf-gear-label" data-index="{{@index}}" value="{{this.label}}" placeholder="bow &amp; iron arrows, old cloak, supplies…">
           <button type="button" class="stonetop-cf-gear-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{@index}}"><i class="fas fa-times"></i></button>
         </div>
         {{/each}}
@@ -223,17 +223,17 @@
       {{#with preview}}
       <div class="stonetop-cf-preview">
         <div class="stonetop-cf-preview-head">
-          <span class="stonetop-cf-preview-name">{{name}}{{#if pronoun}} <span class="stonetop-cf-preview-pronoun">({{pronoun}})</span>{{/if}}</span>
-          <span class="stonetop-cf-preview-type">{{typeLabel}}</span>
+          <span class="stonetop-cf-preview-name">{{this.name}}{{#if pronoun}} <span class="stonetop-cf-preview-pronoun">({{this.pronoun}})</span>{{/if}}</span>
+          <span class="stonetop-cf-preview-type">{{this.typeLabel}}</span>
         </div>
         {{#if tags.length}}<div class="stonetop-cf-preview-tags">{{#each tags}}<span class="stonetop-cf-preview-tag">{{this}}</span>{{/each}}</div>{{/if}}
         <div class="stonetop-cf-preview-stats">
-          <span><strong>HP</strong> {{hp}}</span>
-          <span><strong>Armor</strong> {{armor}}</span>
-          <span><strong>Damage</strong> {{damage}}</span>
+          <span><strong>HP</strong> {{this.hp}}</span>
+          <span><strong>Armor</strong> {{this.armor}}</span>
+          <span><strong>Damage</strong> {{this.damage}}</span>
         </div>
-        {{#if instinct}}<div class="stonetop-cf-preview-line"><strong>Instinct</strong> {{instinct}}</div>{{/if}}
-        {{#if cost}}<div class="stonetop-cf-preview-line"><strong>Cost</strong> {{cost}} <span class="stonetop-cf-preview-loyalty">(Loyalty <span class="stonetop-glyph stonetop-glyph--circle">○</span><span class="stonetop-glyph stonetop-glyph--circle">○</span><span class="stonetop-glyph stonetop-glyph--circle">○</span>)</span></div>{{/if}}
+        {{#if instinct}}<div class="stonetop-cf-preview-line"><strong>Instinct</strong> {{this.instinct}}</div>{{/if}}
+        {{#if cost}}<div class="stonetop-cf-preview-line"><strong>Cost</strong> {{this.cost}} <span class="stonetop-cf-preview-loyalty">(Loyalty <span class="stonetop-glyph stonetop-glyph--circle">○</span><span class="stonetop-glyph stonetop-glyph--circle">○</span><span class="stonetop-glyph stonetop-glyph--circle">○</span>)</span></div>{{/if}}
         {{#if moves.length}}<div class="stonetop-cf-preview-line"><strong>Moves</strong> {{#each moves}}{{this}}{{#unless @last}}; {{/unless}}{{/each}}</div>{{/if}}
         {{#if gear.length}}<div class="stonetop-cf-preview-line"><strong>Gear</strong> {{#each gear}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}</div>{{/if}}
       </div>
@@ -248,7 +248,7 @@
 
   <div class="stonetop-guide-nav">
     <button class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
-    <span class="stonetop-spring-step-label">{{stepLabel}}</span>
+    <span class="stonetop-spring-step-label">{{this.stepLabel}}</span>
     {{#if isLast}}
     <button class="stonetop-cf-create stonetop-guide-btn--primary"><i class="fas fa-user-plus"></i> Create follower</button>
     {{else}}

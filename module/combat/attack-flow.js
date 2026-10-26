@@ -26,8 +26,8 @@
 import {STONETOP_SCOPE, readableFlags} from "../actors/character/StonetopFlags.js";
 import {crewWeaponChoices} from "./crew-weapons.js";
 import {weaponMetaFromNote} from "../data/weapon-from-note.js";
-import {weaponMeta, isClashWeapon, isLetFlyWeapon, weaponTraitText, weaponArmorBits, grantedWeaponForMove, MOVE_GRANTED_WEAPONS, UNARMED_META, MELEE_RANGES, ALL_IN_THE_WRIST, withWristThrow} from "../data/weapons.js";
-import {escHtml, joinNames} from "../utils/strings.js";
+import {weaponMeta, isClashWeapon, isLetFlyWeapon, isMeleeWeapon, weaponTraitText, weaponArmorBits, grantedWeaponForMove, MOVE_GRANTED_WEAPONS, UNARMED_META, MELEE_RANGES, ALL_IN_THE_WRIST, withWristThrow, BRONZE_WEAPONS, bronzeMeta} from "../data/weapons.js";
+import {escHtml, joinNames, stripHtmlToText} from "../utils/strings.js";
 import {stonetopChatCard, rollFormulaChip, damageMark, damageBadge, damageKeywordsHtml, optionKey, whisperGm, cardNoticeHtml, canUserWriteCard, whisperedAs} from "../utils/chat.js";
 import {rollDamage, multiDieFaces, sign, damageRollFormula, damageConditionPills, conditionsRowHtml, classifyResult, messageOfRoll} from "../utils/roll-engine.js";
 import {cardCountedTier, outcomeTier, CRITICAL_TOTAL} from "../utils/counted-tier.js";
@@ -37,13 +37,13 @@ import {promptDamage} from "../dialogs/RollDialog.js";
 // answers null with the Fight tab off or no fight on the map, so none of this changes a roll then.
 import {incomingSeed, engagedFoeTargets, pcEngagement, seedForRoll, seedWithoutStriker, sheetSeed} from "../fight/damage-seed.js";
 // Who a roll hits when nobody targeted anyone by hand: whoever the roller is fighting on the map.
-import {rollTargets} from "../fight/fight-targets.js";
+import {rollTargets, withoutDowned} from "../fight/fight-targets.js";
 // A damage roll at somebody out of reach is a shot, kept on the roller's combatant; the hand targets it
 // used are let go once it is (fight/fight-shots.js).
 import {recordShots, releaseSpentTargets, shotOnRecordAt} from "../fight/fight-shots.js";
 // A lone attacker's blow on a token standing for a group hits one member of it (fight/group-hits.js).
 import {isLoneBlowOnGroup, attackerIsGroup, applyMemberHit, applyRosterHit, killsFromHit, moveRosterHit, rosterGroupFor} from "../fight/group-hits.js";
-import {halveDamage, spentOn} from "../fight/defend-spend.js";
+import {halveDamage, spentOn, strikeBackAim} from "../fight/defend-spend.js";
 // Playbook moves the fight turns on: Undaunted's +1 armor and +1d6, Big Damn Hero's locked eyes
 // (fight/hero-moves.js).
 import {undauntedNow, undauntedUnread, HERO_MOVES, SET_UP_STRIKE_KEY, eyesLockedAgainst, ownDamageMode, blowOffers as heroOffers, muscleboundWeapon, berserkNow, defenderDisadvantage, neverCaughtOffGuard, recordHarmedBy, recordClash, foeAdvantage, defenderMoveKey, terrorOnTheFieldWords, rapierWitOffers, rapierWitBlowOwed, rapierWitDie, spendRapierWitBlow, followerFocusFireOffer} from "../fight/hero-moves.js";
@@ -53,6 +53,8 @@ import {creditedStriker} from "../fight/struck-foe.js";
 import {asteriskMoveUsed} from "../actors/character/WouldBeHeroAsterisk.js";
 import {ownsLearnedMoveNamed, ownsLearnedBookMoveNamed, ownedLearnedBookMove, bookMoveName} from "../actors/character/owns-move.js";
 import {armorGateWords, barkskinMarks, wearsBarkskin, withBarkskinBase} from "../actors/character/move-armor.js";
+import {worldMarkScan} from "../actors/character/blessed-marks.js";
+import {appendMonsterDamageNotes} from "../actors/monster/monster-damage-notes.js";
 import {MOVE_OPTION_TAGS} from "../actors/character/move-pick-bonuses.js";
 import {keepsFightingAtZero, markUnstoppable} from "../actors/character/unstoppable.js";
 import {actorPastDeathKind, isOutOfPlay} from "../actors/character/deaths-door-actor.js";
@@ -60,7 +62,7 @@ import {format, localize} from "../utils/i18n.js";
 import {foldModes} from "../utils/roll-mode.js";
 import {bringDialogToFront} from "../utils/front-on-open.js";
 import {isPrimaryGM, anyActiveGM} from "../utils/primary-gm.js";
-import {resolveSync, queryAsker, chatModeIsPublic, currentChatMode} from "../utils/foundry-compat.js";
+import {resolveSync, queryAsker, chatModeIsPublic, currentChatMode, serverNow, askGMClient} from "../utils/foundry-compat.js";
 import {inCardTurn} from "../utils/card-queue.js";
 import {belongsToMessage, wirePickedOptionButton} from "../utils/picked-option-button.js";
 import {settleReadinessOnAttack, settleFollowerReadinessOnAttack} from "./readiness-loss.js";
@@ -203,7 +205,8 @@ const BLOT_OUT_THE_SUN = "Blot Out the Sun";
 /** The Fox's 12+ on a +DEX Clash (battleDancing). */
 const BATTLE_DANCER = "Battle Dancer";
 
-const AMMO_MAX = 2;
+/** The printed ammo track's length (◇ low ammo, ◇ all out); a follower card's too (follower-order-attack.js). */
+export const AMMO_MAX = 2;
 const AMMO_LABELS = ["Plenty", "Low ammo", "All out"];
 
 // The track a weapon record describes: its length, and the status the item prints against each
@@ -217,8 +220,9 @@ function ammoTrack(weapon) {
 // What to CALL the state of a track with `index` boxes marked. The item's own word for that box
 // wins — "running low" on the oil, "vial" on the twisting pine — since it is the word printed
 // beside the box the player just marked. Unlabelled boxes fall back to the ammo wording, where
-// only the last box is "all out"; nothing marked is always "plenty".
-function ammoStatusLabel(index, { max, labels }) {
+// only the last box is "all out"; nothing marked is always "plenty". With no track given, the printed
+// ammo pair's, as a follower card's ammo track words it (follower-order-attack.js#depleteFollowerAmmo).
+export function ammoStatusLabel(index, { max = AMMO_MAX, labels = [] } = {}) {
 	if (index <= 0) return AMMO_LABELS[0];
 	const printed = labels[index - 1];
 	if (printed) return printed.charAt(0).toUpperCase() + printed.slice(1);
@@ -273,7 +277,7 @@ export async function letFlyAmmoStatuses(actor) {
 	const weapons = [];
 	let loaded = 0;
 	for (const w of carried) {
-		if (!w.meta?.ammo) { loaded += 1; continue; }
+		if (!w.meta?.ammo && !w.meta?.uses) { loaded += 1; continue; }
 		const index = weaponAmmoIndex(actor, w);
 		const allOut = index >= ammoTrack(w).max;
 		if (!allOut) loaded += 1;
@@ -342,6 +346,12 @@ export async function carriedAttackWeapons(actor, move) {
 	// All in the Wrist: "Any knife or dagger gets the thrown tag in your hands" (data/weapons.js).
 	const wristThrow = ownsLearnedBookMoveNamed(actor, ALL_IN_THE_WRIST);
 	for (const g of gear) {
+		// A bronze weapon is one of several weapons, asked once (bronzeCandidate, settleBronzeWeapon).
+		if (BRONZE_WEAPONS[g.weaponSlug]) {
+			const bronze = bronzeCandidate(actor, g, move, wristThrow);
+			if (bronze) out.push(bronze);
+			continue;
+		}
 		// A catalog or gear-choice weapon is in the curated table; anything picked up in play
 		// states its own mechanics in its tag line instead.
 		//
@@ -352,7 +362,7 @@ export async function carriedAttackWeapons(actor, move) {
 		// asked which one they were attacking with. The book's equipment list is exactly what
 		// WEAPON_META was curated from, so a row it doesn't name is not a weapon.
 		const read = (g.weaponSlug ? weaponMeta(g.weaponSlug, { weaponsOfWar }) : null)
-			?? (g.catalog ? null : weaponMetaFromNote(g.name, g.note, { ammo: !!g.ammo }));
+			?? (g.catalog ? null : usesFromNote(g, weaponMetaFromNote(g.name, g.note, { ammo: !!g.ammo })));
 		const meta = read && wristThrow ? withWristThrow(read) : read;
 		if (!meta || !move.filter(meta)) continue;
 		const weapon = {
@@ -361,7 +371,7 @@ export async function carriedAttackWeapons(actor, move) {
 			ammoMax: g.ammoMax ?? null,
 			ammoLabels: g.ammoLabels ?? null,
 		};
-		out.push({ ...weapon, ammoLabel: meta.ammo ? weaponAmmoLabel(actor, weapon) : null });
+		out.push(withTrackState(actor, weapon));
 	}
 	for (const moveName of Object.keys(MOVE_GRANTED_WEAPONS)) {
 		// Through the accessor, so the weapon carries the stat the move actually grants for
@@ -379,9 +389,99 @@ export async function carriedAttackWeapons(actor, move) {
 			const resource = grantor.system?.resource ?? null;
 			Object.assign(weapon, { ammoMove: moveName, ammoMax: Number(resource?.max) || null, ammoLabels: Array.isArray(resource?.labels) ? resource.labels : null });
 		}
-		out.push({ ...weapon, ammoLabel: granted.meta.ammo ? weaponAmmoLabel(actor, weapon) : null });
+		out.push(withTrackState(actor, weapon));
 	}
 	return withUnarmedChoice(out);
+}
+
+/**
+ * A weapon record with what its track says now: `ammoLabel` (the status, or the uses left) and `allOut` when
+ * every box is marked. "When you mark 'all out,' you're out of ammo and can't use that weapon until you
+ * replenish your ammunition" (Book I p.94), and a use-counted item with every ◇ marked is "gone/useless": WARNED,
+ * never refused (the stat-rules ruling), so the picker and the damage card both say it (outOfAmmoNoticeHtml).
+ */
+function withTrackState(actor, weapon) {
+	const { meta } = weapon;
+	if (!meta.ammo && !meta.uses) return { ...weapon, ammoLabel: null };
+	const index = weaponAmmoIndex(actor, weapon);
+	const { max } = ammoTrack(weapon);
+	const allOut = index >= max;
+	const ammoLabel = meta.uses
+		? format(`stonetop.fight.attackNotes.${allOut ? "usesNone" : "usesLeft"}`, { left: Math.max(0, max - index), max })
+		: weaponAmmoLabel(actor, weapon);
+	return { ...weapon, ammoLabel, ...(allOut ? { allOut: true } : {}) };
+}
+
+/**
+ * A weapon picked up in play whose track is USES rather than ammo statuses: its tag line says "uses" (a treasure's
+ * "◇◇◇◇ uses, thrown, area"). Marked once per throw (spendWeaponUse) instead of offering Let Fly's deplete pick.
+ */
+function usesFromNote(gear, meta) {
+	if (!meta || !gear?.ammo || !/\buses\b/i.test(stripHtmlToText(gear.note ?? ""))) return meta;
+	return { ...meta, ammo: false, uses: true };
+}
+
+/**
+ * A carried BRONZE weapon (Book I p.95) as a candidate for `move`: the weapon it was once said to be, in bronze
+ * (data/weapons.js#bronzeMeta: no "x piercing"), or, never asked yet, an UNSET row the weapon prompt then settles
+ * (settleBronzeWeapon). Null when no weapon it could be fits the move: a bronze weapon of war is never thrown.
+ */
+function bronzeCandidate(actor, gear, move, wristThrow) {
+	const options = BRONZE_WEAPONS[gear.weaponSlug] ?? [];
+	const said = bronzeAnswer(actor, gear.slug);
+	const record = meta => ({ slug: gear.slug, meta, ammoStore: gear.ammoStore ?? "inventory", ammoMax: null, ammoLabels: null, ammoLabel: null });
+	if (said && options.includes(said)) {
+		const own = bronzeMeta(said);
+		const meta = own && wristThrow ? withWristThrow(own) : own;
+		return meta && move.filter(meta) ? record(meta) : null;
+	}
+	const fits = options.filter(slug => {
+		const meta = bronzeMeta(slug);
+		return meta && move.filter(wristThrow ? withWristThrow(meta) : meta);
+	});
+	if (!fits.length) return null;
+	// A name and no traits: what it is has not been said yet, and the prompt asks it before anything is rolled.
+	const meta = { ...UNARMED_META, name: String(gear.name || "Bronze weapon"), range: [] };
+	return { ...record(meta), bronzeUnset: true, bronzeOptions: fits, wristThrow: !!wristThrow };
+}
+
+/** Which weapon a carried bronze item was said to be, kept on the character under the item's slug. */
+function bronzeAnswer(actor, slug) {
+	const said = actor?.getFlag?.(SCOPE, "inventory.bronzeAs") ?? {};
+	return typeof said?.[slug] === "string" ? said[slug] : null;
+}
+
+/** The flag path a bronze item's answer is kept at (dot-free slugs, so a sub-key write is safe). */
+export const bronzeAnswerPath = slug => `flags.${SCOPE}.inventory.bronzeAs.${slug}`;
+
+/**
+ * A picked weapon, with a bronze one that has never been named asked about ONCE: "which weapon is it?", from the
+ * list its row stands for that fits this move. The answer is kept on the character when it was a real choice
+ * (more than one fitted), so the question is never asked again. Returns the picked candidate (unchanged when it
+ * is not an unset bronze row), or "cancel".
+ *
+ * Exported for the tests; the flow reaches it through maybeBeginAttack and chooseDamageWeapon.
+ */
+export async function settleBronzeWeapon(actor, candidate, title, { prompt = askWeaponChoice } = {}) {
+	if (!candidate?.bronzeUnset) return candidate;
+	const options = (candidate.bronzeOptions ?? []).map(slug => {
+		const own = bronzeMeta(slug);
+		return own ? { slug, meta: candidate.wristThrow ? withWristThrow(own) : own, ammoLabel: null } : null;
+	}).filter(Boolean);
+	if (!options.length) return null;
+	// The window's title is "<this>: which weapon?" (askWeaponChoice), which is the question being asked.
+	const picked = await prompt(options, candidate.meta?.name || title);
+	if (picked === "cancel") return "cancel";
+	const chosen = picked?.weapon ?? options[0];
+	if (options.length > 1) {
+		try {
+			await actor?.update?.({ [bronzeAnswerPath(candidate.slug)]: chosen.slug });
+		} catch (err) {
+			console.warn("Stonetop | could not keep which weapon a bronze item is", err);
+		}
+	}
+	const { bronzeUnset: _unset, bronzeOptions: _options, wristThrow: _wrist, ...rest } = candidate;
+	return { ...rest, meta: chosen.meta };
 }
 
 /**
@@ -404,7 +504,7 @@ export function withUnarmedChoice(candidates) {
 // The flattened, storable weapon record baked into the chat card (no functions). The ammo track's
 // shape rides along with the store it lives in: the card is what "deplete your ammo" is pressed
 // on, and by then the gear record it came from is long gone.
-function serializeWeapon({ slug, meta, ammoStore = "inventory", ammoMax = null, ammoLabels = null, ammoMove = null }) {
+function serializeWeapon({ slug, meta, ammoStore = "inventory", ammoMax = null, ammoLabels = null, ammoMove = null, allOut = false }) {
 	return {
 		slug, ammoStore, ammoMax, ammoLabels,
 		// Only for a track kept on a move (weaponAmmoIndex), so every other card stays as it was.
@@ -412,12 +512,26 @@ function serializeWeapon({ slug, meta, ammoStore = "inventory", ammoMax = null, 
 		name: meta.name, range: meta.range, damageBonus: meta.damageBonus,
 		piercing: meta.piercing, ignoresArmor: meta.ignoresArmor, area: meta.area,
 		damageDie: meta.damageDie, tags: meta.tags, ammo: meta.ammo,
+		// A use-counted item (naphtha): one ◇ marked per throw (spendWeaponUse).
+		...(meta.uses ? { uses: true } : {}),
+		// Every box already marked when it was picked up for this attack: said on the damage card.
+		...(allOut ? { allOut: true } : {}),
 	};
 }
 
 // -- Prompts ------------------------------------------------------------------
 
-// Ask which weapon is in hand. Returns { weapon } (possibly null — unarmed / no matching
+// Ask which weapon is in hand, and settle a bronze one never named (settleBronzeWeapon): every pick
+// goes through here, so none can skip that question. Returns { weapon } (possibly null: unarmed, no
+// matching weapon) or "cancel".
+async function promptWeaponChoice(actor, candidates, moveName, options = {}) {
+	const picked = await askWeaponChoice(candidates, moveName, options);
+	if (picked === "cancel") return "cancel";
+	const settled = await settleBronzeWeapon(actor, picked.weapon, moveName);
+	return settled === "cancel" ? "cancel" : { weapon: settled };
+}
+
+// The window itself. Returns { weapon } (possibly null — unarmed / no matching
 // weapon) or "cancel". The unarmed row (see withUnarmedChoice) is a choice, not a weapon: picking
 // it resolves to null, the same as having nothing that fits the move.
 //
@@ -430,7 +544,7 @@ function serializeWeapon({ slug, meta, ammoStore = "inventory", ammoMax = null, 
 //   0 or 1 candidate  there is no choice to make.
 // `preferSlug` does not skip the prompt; it pre-checks a candidate instead of the first, because
 // the stat the player rolled can IMPLY the weapon (+WIS on Clash means the holy light).
-function promptWeaponChoice(candidates, moveName, { preferSlug = null, forceSlug = null } = {}) {
+function askWeaponChoice(candidates, moveName, { preferSlug = null, forceSlug = null } = {}) {
 	const chosen = (c) => ({ weapon: c?.unarmed ? null : (c ?? null) });
 	const forced = forceSlug ? candidates.find(c => c.slug === forceSlug) : null;
 	if (forced) return Promise.resolve(chosen(forced));
@@ -442,7 +556,8 @@ function promptWeaponChoice(candidates, moveName, { preferSlug = null, forceSlug
 	const rows = candidates.map((c, i) => `<label class="stonetop-weapon-option">
 		<input type="radio" name="weapon" value="${escHtml(c.slug)}"${i === checkedIndex ? " checked" : ""}>
 		<span class="stonetop-weapon-name">${escHtml(c.meta.name)}${c.grantedBy ? ` <em>(${escHtml(c.grantedBy)})</em>` : ""}</span>
-		<span class="stonetop-weapon-traits">${escHtml(weaponTraitText(c.meta))}${c.ammoLabel ? ` · <em>${escHtml(c.ammoLabel.toLowerCase())}</em>` : ""}</span>
+		<span class="stonetop-weapon-traits">${escHtml(c.bronzeUnset ? localize("stonetop.fight.attackNotes.bronzeAsk") : weaponTraitText(c.meta))}${c.ammoLabel ? ` · <em>${escHtml(c.ammoLabel.toLowerCase())}</em>` : ""}</span>
+		${c.allOut ? `<span class="stonetop-weapon-out"><strong>${escHtml(localize(c.meta?.uses ? "stonetop.fight.attackNotes.usesOutPicker" : "stonetop.fight.attackNotes.allOutPicker"))}</strong></span>` : ""}
 	</label>`).join("");
 
 	return new Promise(resolve => {
@@ -671,7 +786,7 @@ export function pickedEffects(moveKey, labels) {
  * skipped: a card carries every tier's options so a GM's Shift Up/Down can reveal the right one,
  * and a tick sitting behind a tier this roll did not land on is not this roll's pick.
  */
-function pickedOptionLabels(root) {
+export function pickedOptionLabels(root) {
 	return Array.from(root?.querySelectorAll?.(".stonetop-picklist-check:checked") ?? [])
 		.filter(box => !box.closest("[hidden]"))
 		.map(pickedOptionText);
@@ -829,9 +944,15 @@ export async function maybeBeginAttack(actor, item, { stat = null, weaponSlug = 
 	const impliedSlug = candidates.find(c => c.whenStat && c.whenStat === stat)?.slug ?? null;
 	// Both "which weapon should be pre-checked" and "is there anything to ask at all" are the
 	// prompt's own call — see promptWeaponChoice.
-	const picked = await promptWeaponChoice(candidates, item.name, { preferSlug: impliedSlug, forceSlug: weaponSlug ?? impliedSlug });
+	// A bronze weapon never named is asked about there too, once, before anything else (settleBronzeWeapon).
+	const picked = await promptWeaponChoice(actor, candidates, item.name, { preferSlug: impliedSlug, forceSlug: weaponSlug ?? impliedSlug });
 	if (picked === "cancel") return "cancel";
 	const held = picked.weapon ? serializeWeapon(picked.weapon) : null;
+	// Said, never refused (the stat-rules ruling): a weapon with every box marked, and a shot with nothing to
+	// shoot. The damage card says the same (weaponWarningsHtml), since this toast is gone in a moment.
+	const noRangedWeapon = SHOOTING_MOVES.has(move.key) && !held;
+	if (held?.allOut) ui.notifications?.warn(format(`stonetop.fight.attackNotes.${held.uses ? "usesOutToast" : "allOutToast"}`, { weapon: held.name }));
+	if (noRangedWeapon) ui.notifications?.warn(format("stonetop.fight.attackNotes.noRangedToast", { move: item.name }));
 
 	// Who it hits: the foes targeted by hand, else whoever the character is fighting on the map, with
 	// "Who does this hit?" when that is more than one (fight/fight-targets.js). Frozen here like any
@@ -839,7 +960,9 @@ export async function maybeBeginAttack(actor, item, { stat = null, weaponSlug = 
 	// Blot Out the Sun, asked before the dice as the move says, and Berserker, which needs no asking.
 	const loosed = await askBlotOutTheSun(actor, move, held);
 	if (loosed === "cancel") return "cancel";
-	const area = loosed.area || (move.key === "clash" && berserkMelee(actor, held));
+	// A weapon's OWN area tag (naphtha, a holy light) widens it the same way: "area: affects everything in an
+	// area" (Book I p.94).
+	const area = loosed.area || !!held?.area || (move.key === "clash" && berserkMelee(actor, held));
 	// Both moves "add the area tag to your attack", so the tag goes ON the weapon record the card carries:
 	// the damage card reads it there, and without it a volley that rightly fell on three foes was told it
 	// "hit more than one" as if that were the exception (postDamageResultsCard). A Berserker with nothing in
@@ -847,8 +970,9 @@ export async function maybeBeginAttack(actor, item, { stat = null, weaponSlug = 
 	const weapon = area && held ? { ...held, area: true } : held;
 
 	// A Heavy's Battle Joy sweeps what stands around the HEAVY; a volley sweeps what stands around the
-	// foes it was loosed at, which is the other end of the shot (fight/fight-targets.js#bystanders).
-	const areaAround = loosed.area ? "targets" : "roller";
+	// foes it was loosed at, which is the other end of the shot (fight/fight-targets.js#bystanders). A weapon's
+	// own area sits where the blow lands: around the target for a throw or a shot, around the roller in melee.
+	const areaAround = loosed.area ? "targets" : areaPlacement(move.key, held);
 	const targets = await rollTargets(actor, { handTargets: snapshotTargets(), area, areaAround });
 	if (targets === null) return "cancel";
 	if (targets.length === 0 && !unrolled) {
@@ -865,7 +989,8 @@ export async function maybeBeginAttack(actor, item, { stat = null, weaponSlug = 
 		// roll damage from later, so its damage window is the final question — and a quiver emptied before
 		// a window the player then closed would be a volley that cost ammo and dealt nothing.
 		await loosed.spend?.(actor, weapon);
-		await rollAndPostDamage(actor, { move: item.name, weapon, targets, damage, fx: { moveKey: move.key } });
+		// A use-counted weapon (naphtha) is used up as it is thrown, on the same terms (rollAndPostDamage).
+		await rollAndPostDamage(actor, { move: item.name, weapon, targets, damage, fx: { moveKey: move.key }, noRangedWeapon });
 		return "handled";
 	}
 
@@ -881,8 +1006,69 @@ export async function maybeBeginAttack(actor, item, { stat = null, weaponSlug = 
 		// reached 12 is read off the card itself, so a GM's Shift Up/Down moves it (battleDancing).
 		// `area` and where it falls ride along for the same reason: a volley loosed with nobody to hit yet
 		// still has to be a volley when the Confirm asks who it falls on (resolveAttackTier).
-		messageFlags: attackFlagEnvelope({ move: item.name, moveKey: move.key, attackerUuid: actor.uuid, weapon, targets, ...(loosed.damageMode ? { damageMode: loosed.damageMode } : {}), ...(area ? { area: true, areaAround } : {}), ...(dancesAt(actor, move, stat) ? { battleDancer: true } : {}) }),
+		messageFlags: attackFlagEnvelope({ move: item.name, moveKey: move.key, attackerUuid: actor.uuid, weapon, targets, ...(loosed.damageMode ? { damageMode: loosed.damageMode } : {}), ...(area ? { area: true, areaAround } : {}), ...(dancesAt(actor, move, stat) ? { battleDancer: true } : {}), ...(noRangedWeapon ? { noRangedWeapon: true } : {}) }),
 	};
+}
+
+/** The moves that are a shot or a throw, and so need "a ranged weapon" (Book I p.73): Let Fly and Call the Shot. */
+const SHOOTING_MOVES = new Set(["let-fly", "call-the-shot"]);
+
+/**
+ * Where a weapon's own area lies (fight/fight-targets.js#rollTargets `areaAround`): around the TARGET for a shot
+ * or a throw, around the ROLLER for a blow in melee (the user's ruling). A shooting move always throws or shoots;
+ * any other blow is melee when the weapon has a melee reach, or nothing in hand at all. PURE.
+ *
+ * @param {string} moveKey
+ * @param {object|null} weapon  a serialized weapon or a stat block's blow record
+ * @returns {"roller"|"targets"}
+ */
+export function areaPlacement(moveKey, weapon) {
+	if (SHOOTING_MOVES.has(moveKey)) return "targets";
+	// A stat block's blow keeps its reach among its tags.
+	const reach = { range: [...(weapon?.range ?? []), ...(weapon?.tags ?? [])].map(r => String(r).toLowerCase()) };
+	return !isMeleeWeapon(reach) && isLetFlyWeapon(reach) ? "targets" : "roller";
+}
+
+/**
+ * Mark one USE of a use-counted weapon as it is thrown: naphtha's "◇◇◇ uses" (Book I p.94 "mark a ◇ each time you
+ * use it; it's gone/useless when they're all marked"), on the same track the equipment tab draws. A chat line
+ * says what is left. Nothing for any other weapon. Never throws: the throw has already been made.
+ *
+ * @returns {Promise<object|null>}  advanceWeaponAmmo's answer, or null when nothing was marked
+ */
+export async function spendWeaponUse(actor, weapon, moveName = null) {
+	if (!actor || !weapon?.uses || !weapon.slug) return null;
+	try {
+		const { max } = ammoTrack(weapon);
+		const already = weaponAmmoIndex(actor, weapon) >= max;
+		const spent = await advanceWeaponAmmo(actor, weapon, moveName);
+		const left = Math.max(0, max - spent.index);
+		await postAmmoCard(actor, format("stonetop.fight.attackNotes.useSpentTitle", { weapon: weapon.name ?? "" }),
+			escHtml(format(`stonetop.fight.attackNotes.${already ? "useSpentNone" : left ? "useSpent" : "useSpentLast"}`, { name: actor.name, weapon: weapon.name ?? "", left, max })));
+		return spent;
+	} catch (err) {
+		console.warn("Stonetop | could not mark a use of the weapon", err);
+		return null;
+	}
+}
+
+/**
+ * spendWeaponUse for a CHARACTER's own blow, the only blows whose weapon is theirs to use up: a follower's or a
+ * stat block's record never marks a character's track.
+ */
+function spendOwnWeaponUse(actor, weapon, moveName) {
+	return actor?.type === "character" && weapon?.uses ? spendWeaponUse(actor, weapon, moveName) : null;
+}
+
+/**
+ * The chat line a weapon's track being marked posts (a use spent, ammo depleted). No sheet render of its own:
+ * the track's write (advanceWeaponAmmo) is an actor update, which already redraws the sheet.
+ */
+function postAmmoCard(actor, title, bodyHtml) {
+	return ChatMessage.create({
+		content: stonetopChatCard(title, `<div class="card-content"><p>${bodyHtml}</p></div>`, "stonetop-attack-ammo-card"),
+		speaker: ChatMessage.getSpeaker({ actor }),
+	});
 }
 
 /** A bow, as Blot Out the Sun means it: not a sling, and not a crossbow. */
@@ -1030,7 +1216,7 @@ function damageLabel(move, weapon) {
  *
  * `parry` marks a strike back as the one a Parry & Riposte bought (fight/hero-moves.js#blowOffers).
  */
-async function askDamageAdjustment(actor, { moveKey = "", weapon, extraDice = "", shiftKey = false, seed = null, formula = "", rollMode: noted = "", offers = null, defenders = null, attacker = "", which = null, targets = [], strikeBack = false, parry = false, attackAt = Date.now(), commit = null, ask = undefined } = {}) {
+async function askDamageAdjustment(actor, { moveKey = "", weapon, extraDice = "", shiftKey = false, seed = null, formula = "", rollMode: noted = "", offers = null, defenders = null, attacker = "", which = null, targets = [], strikeBack = false, parry = false, attackAt = serverNow(), commit = null, ask = undefined } = {}) {
 	// A stat block's blow brings its own die and its own "w/disadvantage" (rollDamageAt); an attack
 	// move works both out from the character.
 	const base     = formula || await damageFormula(actor, weapon, extraDice);
@@ -1066,11 +1252,33 @@ async function askDamageAdjustment(actor, { moveKey = "", weapon, extraDice = ""
 	const adjust   = await promptDamage({ attacker: attacker || actor?.name, formula: base, shiftKey, ...(rollMode ? { rollMode } : {}), seed, offers: lines, ...(asked === undefined ? {} : { ask: asked }) });
 	if (!adjust) return null;
 	// What the ticked lines cost and what they add beyond dice: a Resolve off the track, a tag on the blow.
-	const taken    = takenOffers(lines, adjust);
-	if (commit && !await commit(taken.map(offer => offer.key))) return null;
-	for (const offer of taken) await offer.spend?.(actor);
+	const ticked   = takenOffers(lines, adjust);
+	if (commit && !await commit(ticked.map(offer => offer.key))) return null;
+	// A line whose `spend` answers null could not be paid (Something to Remember Me By's Readiness, taken by a
+	// Defend spend while the window was open): it is not on the blow. One that changes how the blow is rolled (a
+	// mode, a strike back) stops the blow instead, since the player chose the roll with it; those are paid first,
+	// so nothing else has been spent when one stops it.
+	const reshapes = offer => !!(offer.mode || offer.strikeBack);
+	const unpaid   = new Set();
+	for (const offer of [...ticked.filter(reshapes), ...ticked.filter(offer => !reshapes(offer))]) {
+		if (await offer.spend?.(actor) !== null) continue;
+		if (reshapes(offer)) {
+			globalThis.ui?.notifications?.warn?.(format("stonetop.fight.heroMoves.lineUnpaid", { line: offer.pill ?? offer.label ?? offer.key }));
+			return null;
+		}
+		unpaid.add(offer.key);
+	}
+	const taken    = ticked.filter(offer => !unpaid.has(offer.key));
+	const answered = unpaid.size
+		? { ...adjust, extraDice: adjust.extraDice.filter(entry => !(entry && typeof entry === "object" && unpaid.has(entry.key))) }
+		: adjust;
 	const addTags  = taken.flatMap(offer => offer.tags ?? []);
-	return { base, ...adjust, ...(addTags.length ? { addTags } : {}) };
+	// A ticked line that makes this blow a STRIKE BACK (Something to Remember Me By's, struck from the sheet):
+	// "deal your damage, with disadvantage", one defender's blow, so no fight +N rides it (the ring's Strike
+	// back is unseeded too), and the answer says so for the caller, who then asks no "going on the offense?".
+	const struckBack = taken.some(offer => offer.strikeBack);
+	const { seed: _seed, ...unseeded } = answered;
+	return { base, ...(struckBack ? { ...unseeded, struckBack } : answered), ...(addTags.length ? { addTags } : {}) };
 }
 
 /** The attack flag's key saying whether a Clash's damage took Set-Up Strike's line (resolveAttackTier): the line's own key. */
@@ -1231,7 +1439,7 @@ export async function strikeBackAt(actor, attackerUuid, label, { commit = async 
 	const targets = token ? [{ uuid: token.uuid, name: token.name ?? attacker.name, actorId: attacker?.id ?? null, disposition: token.disposition ?? 0, hasActor: true }] : [];
 	const damage = await askDamageAdjustment(actor, { formula: blow.formula, rollMode: "dis", seed: null, weapon: blow.weapon, targets, strikeBack: true, parry: true, commit });
 	if (!damage) return false;
-	await rollAndPostDamage(actor, { move: blow.move, weapon: blow.weapon, targets, damage, fx: {} });
+	await rollAndPostDamage(actor, { move: blow.move, weapon: blow.weapon, targets, damage, fx: {}, useMove: label });
 	return true;
 }
 
@@ -1269,16 +1477,38 @@ function seedForTargets(actor, targets) {
  * @param {{name: string, group: boolean}|null} [options.striker]  a follower off the map striking beside
  *   `actor`, who aims the blow (rollFollowerDamageAt): the windows name them, and the blow takes none of the
  *   actor's +N, damage moves or shot record
+ * @param {string} [options.useMove]  the move a use-counted weapon's use is marked for (spendWeaponUse); the label by default
  * @returns {Promise<boolean>} whether damage was rolled
  */
-export async function rollDamageAt(actor, { formula, label, keywords = "", description = "", rollMode = "", weapon = null, seeded = true, shiftKey = false, striker = null, strikeBack = false } = {}) {
+export async function rollDamageAt(actor, { formula, label, keywords = "", description = "", rollMode = "", weapon = null, seeded = true, shiftKey = false, striker = null, strikeBack = false, outcome = null, useMove = label } = {}) {
 	if (!actor || !formula) return false;
+	// `outcome`, when handed in, is told whether the window made this blow a strike back (a ticked line that
+	// does: askDamageAdjustment's `struckBack`), for a caller that asks something only of an attack.
+	const settled = damage => {
+		const { struckBack, ...rest } = damage;
+		if (struckBack && outcome) outcome.struckBack = true;
+		return rest;
+	};
 	const attacker = striker?.name ?? "";
 	seeded = seeded && !striker;
 	// Berserker: in their Battle Joy a Heavy's melee attacks gain the area tag, "lashing out at anyone
 	// nearby (friend and foe alike)", so the question lists everyone within reach rather than the foes.
-	const targets = await rollTargets(actor, { handTargets: snapshotTargets(), roller: attacker, area: !striker && berserkMelee(actor, weapon) });
+	// And a blow whose own weapon or stat line carries `area` (naphtha, a holy light, a Rime Lord's conjured ice):
+	// "affects everything in an area" (Book I p.94), around the target for a throw or a shot, around the
+	// roller in melee (areaPlacement).
+	const ownArea = !striker && !!(weapon?.area || weapon?.tags?.some?.(tag => String(tag).toLowerCase() === "area"));
+	const berserk = !striker && berserkMelee(actor, weapon);
+	let targets = await rollTargets(actor, {
+		handTargets: snapshotTargets(), roller: attacker, area: ownArea || berserk,
+		...(ownArea && !berserk ? { areaAround: areaPlacement("", weapon) } : {}),
+	});
 	if (targets === null) return false;
+	// A strike back with nobody targeted is at an ATTACKER (p.216), the archer shooting at them included, whom
+	// the opponents read above leave out (fight/defend-spend.js#strikeBackAim).
+	if (strikeBack && !striker && !targets.length) {
+		targets = await strikeBackAim(actor);
+		if (targets === null) return false;
+	}
 	if (!targets.some(t => t.hasActor !== false && t.uuid)) {
 		// Nobody to hit: the plain card, with the roller's own lines only — there is no target to bring any.
 		const offers = striker ? [] : heroOffers(actor, { targets, weapon, strikeBack });
@@ -1287,15 +1517,17 @@ export async function rollDamageAt(actor, { formula, label, keywords = "", descr
 		// took the offer's dice and nothing else, so a no-target Anger is a Gift rolled its +1d4 free
 		// every time, forever, and the forceful the Resolve bought never reached the table.
 		const damage = await askDamageAdjustment(actor, {
-			formula, offers, shiftKey, attacker, strikeBack,
-			rollMode: striker ? rollMode : ownDamageMode(actor, rollMode),
+			// The roll's own mode, as the targeted branch below hands it: askDamageAdjustment folds the character's
+			// Dangerous and nerves in once. Folded here as well, a strike back's disadvantage met Dangerous twice and
+			// came out at advantage.
+			formula, offers, shiftKey, attacker, strikeBack, rollMode,
 			seed: seeded ? sheetSeed({ actor }) : null,
 		});
 		if (!damage) return false;
 		// The fiction the weapon's tags owe, as a Clash with nobody targeted prints it (rollAndPostDamage).
 		// Worked out AFTER the window, because a tag a ticked line just bought owes its notice too.
 		const notices = tagNoticesHtml(withAddedTags(striker ? weapon : muscleboundWeapon(actor, weapon), damage.addTags));
-		const { base, addTags, ...adjust } = damage;
+		const { base, addTags, ...adjust } = settled(damage);
 		const roll = await rollDamage(base, actor, {
 			label, keywords, description, ...adjust,
 			...(notices ? { notices } : {}),
@@ -1305,7 +1537,10 @@ export async function rollDamageAt(actor, { formula, label, keywords = "", descr
 		});
 		// The Heavy spilling blood (combat/battle-joy-offer.js), and attacking ending a Fox's or Ranger's
 		// being unseen (actors/character/fight-states.js). A follower's blow is theirs, not the character's.
+		// The one own blow that skips rollAndPostDamage, so it marks a use-counted weapon's use (naphtha) itself,
+		// once its damage card is out: a roll that failed spends nothing.
 		if (!striker) {
+			await spendOwnWeaponUse(actor, weapon, useMove);
 			askBattleJoy(actor, label, [roll?.total]);
 			await revealOnAttack(actor, label);
 		}
@@ -1326,10 +1561,11 @@ export async function rollDamageAt(actor, { formula, label, keywords = "", descr
 	await rollAndPostDamage(actor, {
 		own: !striker,
 		move: label,
+		useMove,
 		// The tags ride the weapon to each row's fine print; nothing is stored from them (see damageRowDetail).
 		weapon: { ...(weapon ?? unarmedWeapon()), keywords },
 		targets,
-		damage,
+		damage: settled(damage),
 		shots: !striker,
 		groupBlow: !!striker?.group,
 		followerBlow: !!striker,
@@ -1352,7 +1588,7 @@ export async function rollDamageAt(actor, { formula, label, keywords = "", descr
 export async function chooseDamageWeapon(actor, title) {
 	if (actor?.type !== "character") return null;
 	const candidates = await carriedAttackWeapons(actor, { filter: isAnyAttackWeapon });
-	const picked = await promptWeaponChoice(candidates, title);
+	const picked = await promptWeaponChoice(actor, candidates, title);
 	if (picked === "cancel") return "cancel";
 	return picked.weapon ? serializeWeapon(picked.weapon) : null;
 }
@@ -1376,8 +1612,12 @@ export async function rollCharacterDamageAt(actor, { label = "Damage", rollMode 
 	if (!actor) return false;
 	const blow = await characterBlow(actor, label);
 	if (!blow) return false;
-	const rolled = await rollDamageAt(actor, { formula: blow.formula, label: blow.move, rollMode, weapon: blow.weapon, seeded, shiftKey, strikeBack });
-	if (rolled && seeded) await settleReadinessOnAttack(actor, label);
+	const outcome = {};
+	// Naphtha thrown from the sheet is a use of it like any other, marked as the blow is dealt (`useMove`).
+	const rolled = await rollDamageAt(actor, { formula: blow.formula, label: blow.move, rollMode, weapon: blow.weapon, seeded, shiftKey, strikeBack, outcome, useMove: label });
+	// A blow the window made a strike back (Something to Remember Me By's ticked line) spent its own Readiness:
+	// it is no going on the offense, so nothing is asked.
+	if (rolled && seeded && !outcome.struckBack) await settleReadinessOnAttack(actor, label);
 	return rolled;
 }
 
@@ -1463,7 +1703,7 @@ export async function crewBlow(character, { label, weapon = null, keywords = "",
 	// The Crew insert the crew is drawn from: the Marshal's own, or the one a learned Crew borrows.
 	try { inventory = (await character?.typedActor?.crewSource?.())?.inventory ?? null; } catch { inventory = null; }
 	const candidates = crewWeaponChoices(readableFlags(character)?.crew, inventory, { move });
-	const picked = await promptWeaponChoice(candidates, label);
+	const picked = await promptWeaponChoice(character, candidates, label);
 	if (picked === "cancel") return null;
 	if (!picked.weapon) return { label, weapon, keywords };
 	const chosen = serializeWeapon(picked.weapon);
@@ -1624,6 +1864,37 @@ function muscleboundMoreHtml(weapon) {
 	</li>`;
 }
 
+/**
+ * The warnings a blow's WEAPON owes, as a notice on the damage card itself, the same shape as the tag notes:
+ *   allOut          every box on its track was marked when it was picked up: "you're out of ammo and can't use
+ *                   that weapon until you replenish your ammunition", or a use-counted item "gone/useless"
+ *                   (Book I p.94). Warned, never refused: the stat-rules ruling.
+ *   noRangedWeapon  a Let Fly or Call the Shot with no ranged or thrown weapon carried: "When you take an easy
+ *                   shot with a ranged weapon" (Book I p.73).
+ * "" when there is nothing to say.
+ *
+ * @param {object|null} weapon
+ * @param {{noRangedWeapon?: boolean}} [options]
+ * @returns {string}
+ */
+export function weaponWarningsHtml(weapon, { noRangedWeapon = false } = {}) {
+	const items = [];
+	if (weapon?.allOut) {
+		const key = weapon.uses ? "usesOutCard" : "allOutCard";
+		items.push(`<li class="stonetop-attack-tag-note stonetop-attack-all-out"><i class="fas fa-triangle-exclamation"></i> <span>${escHtml(format(`stonetop.fight.attackNotes.${key}`, { weapon: weapon.name || "" }))}</span></li>`);
+	}
+	if (noRangedWeapon) {
+		items.push(`<li class="stonetop-attack-tag-note stonetop-attack-no-ranged"><i class="fas fa-triangle-exclamation"></i> <span>${escHtml(localize("stonetop.fight.attackNotes.noRangedCard"))}</span></li>`);
+	}
+	if (!items.length) return "";
+	return cardNoticeHtml({
+		className: "stonetop-attack-weapon-warning",
+		icon: "fa-triangle-exclamation",
+		title: escHtml(localize("stonetop.fight.attackNotes.warningTitle")),
+		items,
+	});
+}
+
 // Roll damage once per applyable target and post the results card. With no applyable
 // targets, fall back to a single plain damage roll (no Apply button). A tagged weapon prints its
 // fiction notes ON whichever of those two cards it got (tagNoticesHtml) rather than under it, so
@@ -1638,7 +1909,12 @@ function muscleboundMoreHtml(weapon) {
 // A HAZARD'S BLOW (rollHazardDamage) has no actor behind it: `speaker` names the card instead, and the
 // results card is posted even with nobody to hit, since the plain card speaks for an actor. `byFoe: false`
 // says nobody struck it, so Undaunted's "+1 armor" against a foe is off unless the table ticks it.
-async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignoresArmor = false, selfHarm = false, ownPrice = false, foeUuid = "", shots = true, groupBlow = false, followerBlow = false, own = true, spillsBlood = own, fx = null, counterOf = "", speaker = null, byFoe = true }) {
+//
+// THE CHARACTER'S OWN BLOW USES UP a use-counted weapon (naphtha): one use marked here once its damage is rolled
+// and its card posted (spendWeaponUse, named by `useMove`, else the move), for every own blow at once. A roll or
+// card that failed spends nothing, and the use's line follows the damage card in the log. And a MOVE'S OWN DAMAGE at
+// somebody else asks Clash's "going on the offense?" once it is rolled (`askOffense`, askOffenseForMoveDamage).
+async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignoresArmor = false, selfHarm = false, ownPrice = false, foeUuid = "", shots = true, groupBlow = false, followerBlow = false, own = true, spillsBlood = own, fx = null, counterOf = "", speaker = null, byFoe = true, noRangedWeapon = false, useMove = move, askOffense = false }) {
 	// What the blow is swung WITH, for the animation (combat/attack-fx.js), taken before the lines
 	// below lay armor and fiction tags over it: those change what Apply does, not what a spear is.
 	const struckWith = weapon;
@@ -1675,7 +1951,8 @@ async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignores
 	// fiction whether or not anyone was targeted, and a forceful blow that dealt nothing still owes
 	// it. Both cards have the same slot for it (roll-engine.js#_rollCard's `noticesHtml`, and the
 	// results card's own body), which is what lets the two paths say it identically.
-	const notices = tagNoticesHtml(weapon);
+	// ...and, beside it, what the weapon itself owes a warning for: every box marked, or nothing to shoot with.
+	const notices = tagNoticesHtml(weapon) + weaponWarningsHtml(weapon, { noRangedWeapon });
 
 	let results = [];
 	if (applyable.length === 0 && !speaker) {
@@ -1723,9 +2000,13 @@ async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignores
 		}
 	}
 
+	// The use it cost (naphtha), now the blow is dealt: `struckWith` is the weapon as picked, before the tags above.
+	if (own && !selfHarm) await spendOwnWeaponUse(actor, struckWith, useMove);
+
 	// The Heavy spilling blood (combat/battle-joy-offer.js): their own blow, or their move's harm to
 	// somebody else. Not the enemy's attack landing on them, and not a follower striking beside them.
 	if (!selfHarm && spillsBlood) askBattleJoy(actor, move, results.map(r => r.raw));
+	if (askOffense) await askOffenseForMoveDamage(actor, move, targets);
 
 	// The totals, for a caller that has to say on its own surface what the roll came to: the
 	// button on a ticked option turns into the number it dealt (stonetop.js#_chatWireOptionDamage).
@@ -1849,7 +2130,21 @@ export async function rollOptionDamage(actor, { move, damage }) {
 		// Keep Me Down's "disadvantage on ANY damage you take" at 5 HP or less, and a Marshal's Battlefield
 		// Grace, asked (movesTakenDamage, above).
 		damage: taken,
+		// Harm dealt to someone else is going on the offense, as a Clash is (p.216): asked of a character holding
+		// Readiness. A move's price on themselves never asks.
+		askOffense: !self,
 	});
+}
+
+/**
+ * A move's own damage dealt at someone other than the roller (Castigate, Danu's Grasp, an Invocation's): the
+ * "going on the offense?" question Clash asks (readiness-loss.js#settleReadinessOnAttack, which asks nothing of
+ * anyone holding no Readiness). Nobody targeted is still someone else ("they take"). Self-harm never asks.
+ */
+async function askOffenseForMoveDamage(actor, move, targets = []) {
+	if (actor?.type !== "character") return;
+	const atOthers = !targets.length || targets.some(target => damageRowActor(resolveSync(target?.uuid ?? "")) !== actor);
+	if (atOthers) await settleReadinessOnAttack(actor, move);
 }
 
 /**
@@ -1873,7 +2168,15 @@ async function movesTakenDamage(targets, { formula, move = "", prompt = promptDa
 	const lines = defenderLines(known.offered.filter(grace), known.unread.filter(grace));
 	if (!lines.length) return { base: formula, rollMode, bonus: 0, extraDice: "" };
 	const adjust = await prompt({ attacker: move, formula, rollMode, offers: lines, ask: true });
-	return adjust ? { base: formula, ...adjust } : null;
+	if (!adjust) return null;
+	// The window was opened for the one line, so only its answer is taken: the mode, and the ticked line itself
+	// (its pill on the card). The number stays the move's, whole, so a bonus or dice typed into the window's
+	// own fields are left off, and the player is told so rather than finding the total short.
+	const dice = [adjust.extraDice].flat();
+	const ticked = dice.filter(entry => entry && typeof entry === "object");
+	const typed = !!Number(adjust.bonus) || dice.some(entry => typeof entry === "string" && entry.trim());
+	if (typed) globalThis.ui?.notifications?.info?.(format("stonetop.fight.heroMoves.moveDamageWhole", { move: move || localize("stonetop.fight.ring.damage") }));
+	return { base: formula, rollMode: adjust.rollMode ?? rollMode, bonus: 0, extraDice: ticked.length ? ticked : "" };
 }
 
 // Exported for the tests: the option-damage cards reach it only through rollOptionDamage and rollMoveDamageAt.
@@ -1910,6 +2213,7 @@ export async function rollMoveDamageAt(actor, target, { move, formula, ignoresAr
 		targets,
 		damage,
 		shots: false,
+		askOffense: true,
 	});
 }
 
@@ -1940,7 +2244,7 @@ export async function rollInvocationDamage(actor, { move, formula, offers = [], 
 	const damage = await askDamageAdjustment(actor, { formula, rollMode: "normal", seed: null, offers, attacker: actor.name, targets, shiftKey });
 	if (!damage) return null;
 	return rollAndPostDamage(actor, {
-		move, targets, damage, ignoresArmor: true, own: false, spillsBlood: true, shots: false,
+		move, targets, damage, ignoresArmor: true, own: false, spillsBlood: true, shots: false, askOffense: true,
 		weapon: { name: "", range: [], piercing: 0, ignoresArmor: true, tags: [] },
 	});
 }
@@ -2113,25 +2417,11 @@ function wornArmor(actor, barkskin = barkskinOnce()) {
 
 /**
  * The world's Barkskin marks (actors/character/move-armor.js#barkskinMarks), scanned on first ask and
- * kept for the WORLD, not the card: every damage card in the log re-renders on scroll, on update and
- * on another client's Apply, and each used to walk game.actors afresh. Kept until something that
- * could change a mark does (forgetBarkskinMarks, on any actor or move being made, changed or
- * deleted; stonetop.js), or the actor collection itself is a different one. Only characters lay
- * marks, so no row needs itself left out of them.
+ * kept for the WORLD, not the card (actors/character/blessed-marks.js#worldMarkScan). Only characters
+ * lay marks, so no row needs itself left out of them.
  */
-let worldBarkskin = null;
-
-/** Drop the kept Barkskin marks, so the next card to ask scans again (see barkskinOnce). */
-export function forgetBarkskinMarks() {
-	worldBarkskin = null;
-}
-
 function barkskinOnce() {
-	return () => {
-		const actors = globalThis.game?.actors ?? [];
-		if (worldBarkskin?.actors !== actors) worldBarkskin = { actors, marks: barkskinMarks(actors) };
-		return worldBarkskin.marks;
-	};
+	return () => worldMarkScan("barkskin", barkskinMarks);
 }
 
 /**
@@ -2155,6 +2445,14 @@ function conditionalArmorOf(actor, barkskin) {
  */
 function undyingSufferer(actor) {
 	return actor?.type === "character" && !isOutOfPlay(actor) && actorPastDeathKind(actor) === "revenant";
+}
+
+/**
+ * A Ghost, whose Disembodied reads "You can be harmed only by silver, salt, or that which harms spirits or
+ * ghosts" (Book I p.148). One who has left play is no player's to spare, as for Undying above.
+ */
+function disembodiedSufferer(actor) {
+	return actor?.type === "character" && !isOutOfPlay(actor) && actorPastDeathKind(actor) === "ghost";
 }
 
 /** Fire Within's "reduce that damage by 2" (Book I p.122). */
@@ -2442,6 +2740,16 @@ export function wireAttackConfirm(message, html) {
 				btn.title = "Ask the GM to confirm this attack";
 				continue;
 			}
+			// ONE LIVE CONFIRM AT THE TABLE. A GM owns every character and every card, so their copy was live
+			// beside the player's, and the two presses each rolled the damage and struck the counter-attack. A
+			// player at the table who owns the attacker and can write the card is the one to press it; the
+			// other copies stand down, as Apply's do (electedApplier).
+			const confirmer = electedApplier([actor], message);
+			if (confirmer && confirmer !== game.user?.id) {
+				btn.disabled = true;
+				btn.title = format("stonetop.fight.attackNotes.otherConfirms", { name: game.users?.get?.(confirmer)?.name ?? "" });
+				continue;
+			}
 			btn.addEventListener("click", ev => resolveAttackTier(message, actor, btn, root, ev?.shiftKey === true));
 		}
 	}).catch(err => console.error("Stonetop | could not wire the attack card's Confirm buttons", err));
@@ -2451,8 +2759,23 @@ export function wireAttackConfirm(message, html) {
 // card resolved (locking every tier's Confirm) once the action actually completes, so a
 // cancelled damage prompt leaves the card clickable again. `shiftKey` is the Confirm click's
 // own modifier, which skips the damage window for this one roll.
+//
+// ONE PRESS AT A TIME ON THIS CLIENT, whatever the button: the card re-renders while its windows are open (a
+// tick, a tier effect written onto it), and the fresh copy of the button is live. `confirming` holds the card
+// while a press is under way, and the `resolved` latch is read again just before it is written.
+const confirming = new Set();
+
 async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
-	if (btn.disabled || message.getFlag(SCOPE, "attack")?.resolved) return;
+	if (btn.disabled || confirming.has(message.id) || message.getFlag(SCOPE, "attack")?.resolved) return;
+	confirming.add(message.id);
+	try {
+		await enactAttackTier(message, actor, btn, root, shiftKey);
+	} finally {
+		confirming.delete(message.id);
+	}
+}
+
+async function enactAttackTier(message, actor, btn, root, shiftKey) {
 	btn.disabled = true;
 	const attack = message.getFlag(SCOPE, "attack");
 	const frozen = attack.targets ?? [];
@@ -2521,6 +2844,8 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 	// Dancer's 12+) is marked avoided, which takes the "Take this damage" off its card (avoidedCounterOf).
 	// Which of the two it was is stamped, because they last differently (counterAvoided).
 	const avoids = dancing ? AVOIDS_BY_DANCE : fx.addons.includes(AVOID) ? AVOIDS_BY_PICK : null;
+	// Read again now the windows are answered: a press elsewhere may have resolved the card meanwhile.
+	if (message.getFlag(SCOPE, "attack")?.resolved) return;
 	await lockAttackCard(message, root, {
 		yourCall, targets,
 		...(counter ? { countered: true } : {}),
@@ -2535,10 +2860,12 @@ async function resolveAttackTier(message, actor, btn, root, shiftKey = false) {
 	// straight to the dice has still picked it, so the Confirm pays it for them; one the button
 	// already paid is not paid twice (depleteAmmoAndPost checks the card).
 	if (deplete) await depleteAmmoAndPost(message, actor, attack, depleteRowIndex(root, attack.moveKey));
+	// A use-counted weapon (naphtha) is used up as its damage is dealt (rollAndPostDamage).
 	await rollAndPostDamage(actor, {
 		move: attack.move, weapon: attack.weapon, targets, damage, ignoresArmor,
 		// The move is what says whether a spear was thrown or thrust (attack-fx-table.js#blowDelivery).
 		fx: { moveKey: attack.moveKey },
+		noRangedWeapon: !!attack.noRangedWeapon,
 	});
 
 	// AFTER the damage, because that is the order the tier states it in: "your maneuver works,
@@ -2581,7 +2908,7 @@ export async function maybeCounterOnMiss(actor, item, roll, attackExtra = null, 
 	// `game.user.targets` is theirs, which is the same latitude resolveAttackTier allows a hit.
 	const frozen = attackFlagsOf(attackExtra)?.targets;
 	await setAttackFlag(message, "countered", true, "latch the counter-attack on its card");
-	await sufferEnemyAttack(actor, { targets: frozen?.length ? frozen : snapshotTargets(), counterOf: message?.id ?? "" });
+	await sufferEnemyAttack(actor, { targets: frozen?.length ? frozen : withoutDowned(snapshotTargets()), counterOf: message?.id ?? "" });
 	return true;
 }
 
@@ -2639,7 +2966,11 @@ export async function reconcileClashCounter(message, actor, total) {
 		await setAttackFlag(message, "avoided", counterAvoided(attack, tier, Number(total)), "record whether the counter-attack was avoided");
 		return false;
 	}
-	if (tier !== "failure") return false;
+	// A 6- suffers it. So does a 7-9 ("you suffer your enemy's attack", p.70) on a card already CONFIRMED: a 10+
+	// that avoided the blow, or picked nothing, then moved down has no Confirm left to strike it from. One not yet
+	// confirmed strikes it from its own 7-9 Confirm, which tierCounters lets through.
+	const confirmedOntoPartial = !!attack.resolved && outcomeTier(tier) === "partial";
+	if (tier !== "failure" && !confirmedOntoPartial) return false;
 	await setAttackFlag(message, "countered", true, "latch the counter-attack on its card");
 	await sufferEnemyAttack(actor, { targets: attack.targets ?? [], counterOf: message.id });
 	return true;
@@ -2847,6 +3178,14 @@ async function onDepleteAmmo(message, attack, btn, index) {
 			btn.disabled = false;
 			return;
 		}
+		// The player at the table marks their own ammo, as they press the Confirm (wireAttackConfirm): two
+		// clients pressing at once would each mark a box.
+		const marker = electedApplier([pc], message);
+		if (marker && marker !== game.user?.id) {
+			ui.notifications.warn(format("stonetop.fight.attackNotes.otherConfirms", { name: game.users?.get?.(marker)?.name ?? "" }));
+			btn.disabled = false;
+			return;
+		}
 		// Its tick is locked first: once pressed, the row cannot be unticked for a different pick.
 		const item = btn.closest(".stonetop-picklist-item");
 		const status = await depleteAmmoAndPost(message, pc, attack, index);
@@ -2881,13 +3220,8 @@ export async function depleteAmmoAndPost(message, pc, attack, index) {
 	} finally {
 		depleting.delete(message.id);
 	}
-	await ChatMessage.create({
-		content: stonetopChatCard("Ammunition depleted",
-			`<div class="card-content"><p><strong>${escHtml(pc.name)}</strong>'s ${escHtml(attack.weapon.name)} is now <strong>${escHtml(status.label.toLowerCase())}</strong>.${status.allOut ? " It's out of ammunition." : ""}</p></div>`,
-			"stonetop-attack-ammo-card"),
-		speaker: ChatMessage.getSpeaker({ actor: pc }),
-	});
-	pc.sheet?.render(false);
+	await postAmmoCard(pc, "Ammunition depleted",
+		`<strong>${escHtml(pc.name)}</strong>'s ${escHtml(attack.weapon.name)} is now <strong>${escHtml(status.label.toLowerCase())}</strong>.${status.allOut ? " It's out of ammunition." : ""}`);
 	return status;
 }
 
@@ -3218,7 +3552,7 @@ async function applyOwedRows(message, damage, record) {
 		: attacker;
 	// Defend's Readiness, spent on a blow from this card (fight/defend-spend.js): halved before armor,
 	// or taken by a defender in the ward's place, against the defender's own armor.
-	const { halved, standIns, voided, knockedDown, safetyFirst } = spentOn(current);
+	const { halved, standIns, voided, knockedDown, safetyFirst, charmHalved } = spentOn(current);
 	const lines = [];
 	// What each token does on the map once this press lands (combat/attack-fx.js#playHitReactions):
 	// on whoever actually took the blow, which is the stand-in when a Defend put one in the way.
@@ -3289,6 +3623,8 @@ async function applyOwedRows(message, damage, record) {
 		let raw = halved.has(r.uuid) ? halveDamage(rolled) : rolled;
 		if (knockedDown.has(r.uuid)) raw = halveDamage(raw);
 		if (safetyFirst.has(r.uuid)) raw = halveDamage(raw);
+		// An Amulets & Talismans charm's 7-9: "they suffer only half the damage" (fight/defend-spend.js).
+		if (charmHalved?.has(r.uuid)) raw = halveDamage(raw);
 		const soaked = mitigateDamage(raw, { armor, piercing, unpierceable, ignoresArmor: current.weapon?.ignoresArmor });
 		// Fire Within, then Undying, on what got through armor, each as the card's box was left (AFTER_ARMOR_BOXES).
 		const { effective, notes: pastArmor } = afterArmor(targetActor, current, r.uuid, soaked);
@@ -3391,6 +3727,75 @@ async function applyOwedRows(message, damage, record) {
 	return nextApplied.length > before;
 }
 
+/** The damage flag's mark that the GM ticked "ignores armor" onto this blow (wireIgnoresArmorBox). */
+export const ARMOR_IGNORED_ON_THE_FLY = "armorIgnoredOnTheFly";
+
+/**
+ * "Ignores armor" ON THE FLY, a GM-only tick beside Apply: "Apply this tag on the fly when the fiction dictates:
+ * chainmail doesn't help when you're engulfed in flames, and no amount of physical armor protects you from a
+ * psychic assault" (Book I p.239). Ticked, it is written into the card's own weapon record, the one thing Apply
+ * reads armor from (applyOwedRows), so every row still owed takes the blow whole; unticked, it comes back off.
+ *
+ * Not drawn on a blow whose own words already ignore armor, nor for anyone but a GM (the primary one presses;
+ * another GM's copy is locked). Locked once any row has been applied: the HP already written is history.
+ */
+export function wireIgnoresArmorBox(message, html, { isGM = !!globalThis.game?.user?.isGM } = {}) {
+	if (!isGM) return;
+	const root = html?.[0] ?? html;
+	const damage = message.getFlag(SCOPE, "damage");
+	const actions = root?.querySelector?.(".stonetop-attack-actions");
+	if (!damage?.results?.some?.(r => r.uuid) || !actions) return;
+	const onTheFly = !!damage[ARMOR_IGNORED_ON_THE_FLY];
+	if (damage.weapon?.ignoresArmor && !onTheFly) return;
+
+	const label = document.createElement("label");
+	label.className = "stonetop-damage-armor-gate stonetop-damage-ignores-armor";
+	const box = document.createElement("input");
+	box.type = "checkbox";
+	box.className = "stonetop-check";
+	box.checked = onTheFly;
+	label.append(box, Object.assign(document.createElement("span"), { textContent: localize("stonetop.fight.attackNotes.ignoresArmorBox") }));
+	label.title = localize("stonetop.fight.attackNotes.ignoresArmorHint");
+	actions.append(label);
+
+	if ((damage.applied ?? []).length) {
+		box.disabled = true;
+		box.title = format("stonetop.fight.seed.alreadyApplied", {});
+		return;
+	}
+	if (!isPrimaryGM()) {
+		box.disabled = true;
+		box.title = "Another GM will apply this damage";
+		return;
+	}
+	box.addEventListener("change", async () => {
+		const on = box.checked;
+		box.disabled = true;
+		try {
+			await inCardTurn(message, () => setArmorIgnoredOnTheFly(message, on));
+		} catch (err) {
+			console.error("Stonetop | could not mark the blow as ignoring armor", err);
+			box.checked = !on;
+			box.disabled = false;
+		}
+	});
+}
+
+/**
+ * Write "ignores armor" on the fly onto a damage card's weapon, or take it back off: the card's own record, for
+ * Apply to read. Refused once any row has been applied. Returns whether it wrote. Exported for the tests.
+ */
+export async function setArmorIgnoredOnTheFly(message, on) {
+	const current = message?.getFlag?.(SCOPE, "damage");
+	if (!current || (current.applied ?? []).length) return false;
+	if (!!current[ARMOR_IGNORED_ON_THE_FLY] === !!on) return false;
+	// A blow whose own words ignore armor keeps them: only the GM's own tick comes back off.
+	if (!on && !current[ARMOR_IGNORED_ON_THE_FLY]) return false;
+	const weapon = { name: "", piercing: 0, ...(current.weapon ?? {}), ignoresArmor: !!on };
+	await message.setFlag(SCOPE, "damage", { weapon, [ARMOR_IGNORED_ON_THE_FLY]: !!on });
+	return true;
+}
+
 /**
  * The tick box for armor a move grants on a clause the sheet cannot check — Barkskin's "while touching
  * the earth", A Candle Against the Dark's "but go otherwise unarmed".
@@ -3429,6 +3834,8 @@ export function wireConditionalArmor(message, html, gateFor = applyGateOnce(mess
 	});
 
 	for (const { row, standIn, target } of pending) {
+		// A monster's printed weaknesses ("takes +1d4 damage from bronze"), reminded and never applied (FOE-1).
+		appendMonsterDamageNotes(actions, { row, target, several });
 		const gated = target ? conditionalArmorOf(target, barkskin) : null;
 		// No key means a `conditionalSource` this build does not know (a world written by a later one),
 		// which has no words to offer the armor back with (actors/character/move-armor.js#armorGateWords).
@@ -3448,6 +3855,8 @@ export function wireConditionalArmor(message, html, gateFor = applyGateOnce(mess
 	wireRowBoxes(message, actions, rows, UNDYING_BOX);
 	// And a Lightbearer's Fire Within, which takes 2 off what gets past it for cold or fire.
 	wireRowBoxes(message, actions, rows, FIRE_WITHIN_BOX);
+	// And a Ghost's Disembodied: nothing gets through unless this blow harms spirits.
+	wireRowBoxes(message, actions, rows, DISEMBODIED_BOX);
 }
 
 /**
@@ -3515,10 +3924,25 @@ const UNDYING_BOX = Object.freeze({
 });
 
 /**
- * In the order Apply takes them: Fire Within's 2 comes off what got through armor, and Undying halves what
- * is left. A new move that acts on that number is one entry here and needs no edit to the sum.
+ * The UNTICKED box for a Ghost's Disembodied, "You can be harmed only by silver, salt, or that which harms
+ * spirits or ghosts" (Book I p.148), on a row whose sufferer is a Ghost. Unticked, the blow does them nothing
+ * (the user's ruling, 2026-10-23): a sword or a bite harms no spirit, and the table ticks it for the silver
+ * blade, the salt or the spirit's claw that does. So this box ACTS while unticked (`whenUnticked`), the one of
+ * these that does.
  */
-const AFTER_ARMOR_BOXES = Object.freeze([FIRE_WITHIN_BOX, UNDYING_BOX]);
+const DISEMBODIED_BOX = Object.freeze({
+	qualifies: disembodiedSufferer, className: "stonetop-damage-armor-gate stonetop-damage-disembodied",
+	wordsKey: "stonetop.fight.disembodied.box", key: "harmsSpirit", listsTicked: true, whenUnticked: true,
+	adjust: () => 0,
+	noteKey: "stonetop.fight.disembodied.unharmedNote", noteParams: Object.freeze({}),
+});
+
+/**
+ * In the order Apply takes them: Fire Within's 2 comes off what got through armor, and Undying halves what
+ * is left; a Ghost unharmed takes none of it. A new move that acts on that number is one entry here and needs
+ * no edit to the sum.
+ */
+const AFTER_ARMOR_BOXES = Object.freeze([FIRE_WITHIN_BOX, UNDYING_BOX, DISEMBODIED_BOX]);
 
 /**
  * What a row's sufferer takes of the `soaked` damage that got through armor, once AFTER_ARMOR_BOXES have each
@@ -3531,7 +3955,9 @@ function afterArmor(sufferer, damage, uuid, soaked) {
 	let effective = soaked;
 	let notes = "";
 	for (const box of AFTER_ARMOR_BOXES) {
-		if (!box.qualifies(sufferer) || damageSet(damage, box.key).has(uuid) !== box.listsTicked) continue;
+		// The box as it was left: ticked, or not. Most act while ticked; one acts while unticked (`whenUnticked`).
+		const ticked = damageSet(damage, box.key).has(uuid) === box.listsTicked;
+		if (!box.qualifies(sufferer) || ticked === !!box.whenUnticked) continue;
 		const next = box.adjust(effective);
 		if (next !== effective) {
 			notes += ` <span class="stonetop-damage-mitigated">(${escHtml(format(box.noteKey, { soaked: effective, ...box.noteParams }))})</span>`;
@@ -4097,10 +4523,112 @@ export function sufferChoiceCardBody({ pcName, foeName, foeText, attacks, seed =
  * fires it — so the pick has only its own latch to keep.
  */
 async function postSufferChoiceCard({ pc, foeName, foeText, attacks, seed = null, counterOf = "" }) {
-	const body = sufferChoiceCardBody({ pcName: pc.name, foeName, foeText, attacks, seed });
-	return whisperGm(stonetopChatCard("Which attack?", body, "stonetop-suffer-choice-card"), {
-		flags: { [SCOPE]: { sufferChoice: { pcUuid: pc.uuid, foeName, foeText, attacks, chosen: null, ...(seed ? { seed } : {}), ...(counterOf ? { counterOf } : {}) } } },
-	});
+	return postGmOnlyCard(pc, sufferChoiceCardContent(pc, { foeName, foeText, attacks, seed }),
+		{ sufferChoice: { pcUuid: pc.uuid, foeName, foeText, attacks, chosen: null, nonce: sufferNonce(), ...(seed ? { seed } : {}), ...(counterOf ? { counterOf } : {}) } });
+}
+
+// -- The GM's cards, posted by the GM's client --------------------------------
+//
+// A WHISPER IS READ BY ITS AUTHOR. Foundry shows a whispered message to everyone it is whispered to AND to whoever
+// wrote it (ChatMessage#visible), so a "Which attack?" card created on the player's client, whose Clash fired it,
+// put the foe's whole stat line in front of that player. So the primary GM's client posts these two cards: the
+// player's client asks it to (SUFFER_CARD_QUERY), and only with no GM there to ask does the card go out from the
+// player's own client, with its body hidden from players when drawn (hideFromPlayers).
+
+/** The User query a player's client sends the GM's to post a GM-only card for it (postGmOnlyCard). */
+export const SUFFER_CARD_QUERY = "stonetop.postSufferCard";
+
+/** The "Which attack?" card whole, from what its flag carries. */
+function sufferChoiceCardContent(pc, { foeName, foeText, attacks, seed = null } = {}) {
+	const body = sufferChoiceCardBody({ pcName: pc?.name ?? "", foeName, foeText, attacks: Array.isArray(attacks) ? attacks : [], seed });
+	return stonetopChatCard("Which attack?", body, "stonetop-suffer-choice-card");
+}
+
+/**
+ * The two GM-only cards, by their flag, each drawn from its flag and the character it is about. The GM's client
+ * draws the card itself from these (handleSufferCardQuery), never from HTML a player's client sent.
+ */
+const GM_ONLY_CARDS = Object.freeze({
+	sufferChoice: (pc, card) => sufferChoiceCardContent(pc, card),
+	sufferAmount: (pc, card) => sufferAmountCardContent(pc, card),
+});
+const GM_ONLY_CARD_KEYS = Object.keys(GM_ONLY_CARDS);
+
+/** A key that names one blow's card, so a card posted twice (a GM's answer late past a timeout) is taken once. */
+function sufferNonce() {
+	return foundry.utils.randomID();
+}
+
+/**
+ * Post a GM-only card (whispered to the GMs) so that no player authors it: here when this client is a GM, or
+ * there is no GM to ask; else through the primary GM's client. A query that fails or times out posts here after
+ * all (hidden from players at render), since a counter-attack must not go unstruck; its `nonce` keeps a late
+ * second copy from being answered twice (otherCardTook).
+ *
+ * @param {Actor} pc
+ * @param {string} content
+ * @param {object} cardFlags  the system-scope flags: `{sufferChoice}` or `{sufferAmount}`
+ * @returns {Promise<ChatMessage|object|null>}
+ */
+async function postGmOnlyCard(pc, content, cardFlags) {
+	const flags = { [SCOPE]: cardFlags };
+	const gm = globalThis.game?.users?.activeGM ?? null;
+	if (globalThis.game?.user?.isGM || !gm) return whisperGm(content, { flags });
+	const id = await askGMClient(gm, SUFFER_CARD_QUERY, { flags: cardFlags, pcUuid: pc?.uuid ?? "", userId: globalThis.game?.user?.id ?? null },
+		{ what: "post the GM's card; posting it here" });
+	if (id) return globalThis.game?.messages?.get?.(id) ?? { id };
+	return whisperGm(content, { flags });
+}
+
+/**
+ * The GM's side of SUFFER_CARD_QUERY: post the card a player's client asked for, whispered to the GMs and authored
+ * here. Only the primary GM answers, only for a player who owns the character the card is about, and only for the
+ * two GM-only cards. The card is drawn here from its flag (GM_ONLY_CARDS): HTML in the ask is never posted, so a
+ * player cannot put words of their own on a card the GM authors. Answers the new message's id, or null.
+ *
+ * @param {{flags: object, pcUuid: string, userId?: string}} data
+ * @returns {Promise<string|null>}
+ */
+export async function handleSufferCardQuery(data, context = {}, { users = game.users, messages = game.messages, resolve = globalThis.fromUuid } = {}) {
+	if (!game.user?.isGM || !isPrimaryGM()) return null;
+	const user = queryAsker(data, context, users);
+	const flags = data?.flags ?? {};
+	const keys = Object.keys(flags);
+	if (!user || keys.length !== 1 || !GM_ONLY_CARD_KEYS.includes(keys[0])) return null;
+	const card = flags[keys[0]];
+	if (!card?.pcUuid || card.pcUuid !== data.pcUuid) return null;
+	let pc = null;
+	try { pc = await resolve?.(card.pcUuid); } catch { pc = null; }
+	const actor = pc?.actor ?? pc;
+	if (!actor?.testUserPermission?.(user, "OWNER")) return null;
+	// The same blow already has its card (the player's client posted one after a timeout): nothing twice.
+	if (card.nonce && cardsWithNonce(keys[0], card.nonce, messages).length) return null;
+	const posted = await whisperGm(GM_ONLY_CARDS[keys[0]](actor, card), { flags: { [SCOPE]: { [keys[0]]: card } } });
+	return posted?.id ?? null;
+}
+
+/** The chat cards whose `key` flag carries `nonce`: every copy of one blow's GM card. */
+function cardsWithNonce(key, nonce, messages) {
+	return (messages?.contents ?? Array.from(messages ?? [])).filter(m => m?.getFlag?.(SCOPE, key)?.nonce === nonce);
+}
+
+/** Another copy of this blow's GM card (the same `nonce`) that has already been answered. */
+function otherCardTook(message, key, answered, messages = globalThis.game?.messages) {
+	const nonce = message?.getFlag?.(SCOPE, key)?.nonce;
+	if (!nonce) return false;
+	return cardsWithNonce(key, nonce, messages).some(m => m.id !== message.id && answered(m.getFlag(SCOPE, key)));
+}
+
+/**
+ * A GM-only card drawn for a player (one posted from their own client, with no GM to ask): its body replaced
+ * with a line saying the GM is answering, so the stat line it carries is not read out on their screen.
+ */
+function hideFromPlayers(root, words) {
+	if (globalThis.game?.user?.isGM) return false;
+	const body = root?.querySelector?.(".card-content");
+	if (!body) return false;
+	body.innerHTML = `<p class="stonetop-suffer-hidden">${escHtml(words)}</p>`;
+	return true;
 }
 
 /**
@@ -4120,6 +4648,8 @@ export function wireSufferChoice(message, html) {
 	const root = html?.[0] ?? html;
 	const buttons = root.querySelectorAll(".stonetop-suffer-choice");
 	if (!buttons.length) return;
+	// A player reading a copy their own client had to post (no GM to ask): the stat line stays the GM's.
+	if (hideFromPlayers(root, localize("stonetop.fight.attackNotes.gmChoosing"))) return;
 
 	const choice = message.getFlag(SCOPE, "sufferChoice");
 	const settle = (label) => buttons.forEach(b => {
@@ -4168,6 +4698,11 @@ export async function resolveSufferChoice(message, index) {
 	const choice = message.getFlag(SCOPE, "sufferChoice");
 	const attack = choice?.attacks?.[index];
 	if (!choice || !attack || isChosen(choice)) return false;
+	// A second copy of the same blow's card (postGmOnlyCard) whose twin was already answered: one blow.
+	if (otherCardTook(message, "sufferChoice", isChosen)) {
+		ui.notifications?.warn(localize("stonetop.fight.attackNotes.cardTwinTaken"));
+		return false;
+	}
 
 	const pc = await actorFromUuid(choice.pcUuid);
 	if (!pc) { ui.notifications?.warn("That character is no longer available."); return false; }
@@ -4211,6 +4746,12 @@ export async function resolveSufferChoice(message, index) {
  * blow in this file — said out loud under the field, so the number is typed knowing it.
  */
 async function postSufferAmountCard({ pc, foeName, foeText, attack = null, seed = null, counterOf = "" }) {
+	return postGmOnlyCard(pc, sufferAmountCardContent(pc, { foeName, foeText, attack, seed }),
+		{ sufferAmount: { pcUuid: pc.uuid, foeName, foeText: foeText ?? "", attack, dealt: null, nonce: sufferNonce(), ...(seed ? { seed } : {}), ...(counterOf ? { counterOf } : {}) } });
+}
+
+/** The "Name the enemy's damage" card whole, from what its flag carries. */
+function sufferAmountCardContent(pc, { foeName, foeText = "", attack = null, seed = null } = {}) {
 	// The blow as its damage card will carry it (postIncomingDamage): the other foes' piercing rides it
 	// while their +N is on, and Undaunted adds its armor at Apply.
 	const incoming = seed ? seedWithoutStriker(seed, attack?.foeUuid ?? "") : null;
@@ -4235,9 +4776,7 @@ async function postSufferAmountCard({ pc, foeName, foeText, attack = null, seed 
 			</button>
 		</div>
 	</div>`;
-	return whisperGm(stonetopChatCard("Name the enemy's damage", body, "stonetop-suffer-amount-card"), {
-		flags: { [SCOPE]: { sufferAmount: { pcUuid: pc.uuid, foeName, attack, dealt: null, ...(seed ? { seed } : {}), ...(counterOf ? { counterOf } : {}) } } },
-	});
+	return stonetopChatCard("Name the enemy's damage", body, "stonetop-suffer-amount-card");
 }
 
 /**
@@ -4273,6 +4812,8 @@ export function wireSufferAmount(message, html) {
 	const root = html?.[0] ?? html;
 	const btn = root.querySelector(".stonetop-suffer-deal");
 	if (!btn) return;
+	// As the "Which attack?" card: a copy a player's own client had to post shows them none of it.
+	if (hideFromPlayers(root, localize("stonetop.fight.attackNotes.gmNaming"))) return;
 	const input = root.querySelector(".stonetop-suffer-amount");
 
 	const settle = (label) => {
@@ -4323,6 +4864,10 @@ function isDealt(state) {
 export async function dealSufferedAmount(message, amount) {
 	const state = message.getFlag(SCOPE, "sufferAmount");
 	if (!state || isDealt(state)) return false;
+	if (otherCardTook(message, "sufferAmount", isDealt)) {
+		ui.notifications?.warn(localize("stonetop.fight.attackNotes.cardTwinTaken"));
+		return false;
+	}
 
 	const pc = await actorFromUuid(state.pcUuid);
 	if (!pc) { ui.notifications?.warn("That character is no longer available."); return false; }

@@ -20,6 +20,12 @@ import { MOVE_ROLL_OPTIONS } from "../../../module/actors/character/move-roll-op
 import { createStonetopCharacterSheetClass, GUIDED_CHARACTER_MOVES } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { LevelUpDialog } from "../../../module/actors/character/dialogs/LevelUpDialog.js";
 
+// The level-up's agreed step asks a world setting whether this user may write a custom move
+// (utils/authoring-gates.js); a world always has settings, so the tests give it some, all unset.
+let priorSettings;
+beforeEach(() => { priorSettings = game.settings; game.settings ??= { get: () => undefined }; });
+afterEach(() => { game.settings = priorSettings; });
+
 const SCOPE = "stonetop-pwd";
 const POUCH = "sacred-pouch";
 const blessedMove = name => sourceMovesFor("The Blessed").find(d => d.name === name);

@@ -22,7 +22,10 @@ import { SYSTEM_ID } from "../system-id.js";
 // The folder and what making a follower's actor MEANS (its provenance stamp and its ownership)
 // are shared with the sweep that now makes them at the moment a follower is added, so a follower
 // placed by a drop and one made on the sheet cannot come out as two different kinds of NPC.
-import { createFollowerActor, ensureFollowerFolder } from "../actors/character/follower-actors.js";
+import { createFollowerActor, ensureFollowerFolder, followerActorFromLink } from "../actors/character/follower-actors.js";
+import { followerCardFor } from "../actors/character/follower-masters.js";
+import { linkedFollowerNpc } from "../actors/character/follower-fate.js";
+import { readableFlags } from "../actors/character/StonetopFlags.js";
 import { dropActorOnCanvas } from "../utils/token-drop.js";
 
 export { ensureFollowerFolder };
@@ -65,6 +68,55 @@ async function _rememberFollowerActor(data, actor) {
 }
 
 /**
+ * A recruited NPC who is one person walks the map LINKED (audit FOE-2). Foundry leaves an NPC's prototype
+ * token unlinked, so a token of them kept its own copy of their hit points: a blow on the map reached the
+ * card, but a heal written to the NPC never reached the token, and the next blow undid it. The follower is
+ * one individual (a group keeps its unlinked tokens, each its own body), so the prototype is linked before
+ * core places the token. Best-effort, and only by someone who may write the NPC (core refuses the drop to anyone
+ * else). Tokens made any other way are linked by linkFollowerTokenOnCreate, and those placed before either by
+ * migration/link-follower-tokens.js.
+ */
+export async function linkRecruitedPrototype(source, follower = {}) {
+	if (follower?.isGroup || !source?.isOwner || source.prototypeToken?.actorLink !== false) return false;
+	try {
+		await source.update({ "prototypeToken.actorLink": true });
+		return true;
+	} catch (err) {
+		console.warn("Stonetop | Couldn't link the recruited follower's token", err);
+		return false;
+	}
+}
+
+/**
+ * The card `actor` stands for when it is a ONE-BODY follower's NPC (follower-fate.js#linkedFollowerNpc names
+ * it, so its HP is the follower's), or null: a group, a roster row, a monster, anyone else.
+ *
+ * @returns {{character: Actor, ftype: string, slug: string}|null}
+ */
+export function oneBodyFollowerCard(actor, { cardFor = followerCardFor, link = followerActorFromLink } = {}) {
+	if (actor?.type !== "npc") return null;
+	const card = cardFor(actor);
+	if (!card?.character) return null;
+	const npc = linkedFollowerNpc(readableFlags(card.character), card.ftype, card.slug ?? "", link);
+	return npc && (npc.uuid ?? npc.id) === (actor.uuid ?? actor.id) ? card : null;
+}
+
+/**
+ * `preCreateToken`: a token of a one-body follower's NPC is made LINKED, however it is placed (a sidebar drag,
+ * a prototype nobody linked yet), so HP written to the NPC is the HP on the map (audit FOE-2). Runs only on the
+ * creating client, before the write.
+ */
+export function linkFollowerTokenOnCreate(token, _data, _options, _userId, deps = {}) {
+	try {
+		if (token?.actorLink !== false || typeof token.updateSource !== "function") return;
+		const actor = token.baseActor ?? globalThis.game?.actors?.get?.(token.actorId) ?? null;
+		if (oneBodyFollowerCard(actor, deps)) token.updateSource({ actorLink: true });
+	} catch (err) {
+		console.warn("Stonetop | Couldn't link a follower's new token", err);
+	}
+}
+
+/**
  * The Actor for a dropped follower — found or made (see the header). Returns null when the
  * follower has no actor yet and this user isn't allowed to create one, having warned them.
  */
@@ -80,7 +132,10 @@ async function _resolveFollowerActor(data) {
 	// follower is one individual with their own name, tags and hit points. Those build
 	// their own actor below.
 	const source = await _actorFromUuid(follower.sourceUuid);
-	if (source?.type === "npc") return source;
+	if (source?.type === "npc") {
+		await linkRecruitedPrototype(source, follower);
+		return source;
+	}
 
 	if (!Actor.canUserCreate(game.user)) {
 		ui.notifications.warn(`You don't have permission to create actors, so ${follower.name || "this follower"} can't be placed on the map. Ask your GM to place them.`);

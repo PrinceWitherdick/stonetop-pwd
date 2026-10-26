@@ -6,7 +6,8 @@
 //
 // Wears the same edit/lock header chrome as the monster/bestiary sheets (shared
 // sheet-chrome helpers) so it reads as one system.
-import { rollDamageAt } from "../../combat/attack-flow.js";
+import { rollDamageAt, crewBlow } from "../../combat/attack-flow.js";
+import { settleFollowerTokenReadinessOnAttack } from "../../combat/readiness-loss.js";
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { printedBlow } from "../../utils/damage.js";
 import { hideBrokenPortrait, stripHeaderChrome, injectHeaderToggle, fitDisplayName } from "../../utils/sheet-chrome.js";
@@ -447,17 +448,30 @@ export function createStonetopNpcSheetClass(Base) {
 					// the whole damage line: the die is already on the card's formula chip. The
 					// line may name more than one blow and this button rolls only the formula, so
 					// the attack printing that die is the one the card names.
-					const { title, keywords, weapon, rollMode } = printedBlow(damage?.value, formula);
+					const printed = printedBlow(damage?.value, formula);
+					let { title: label, keywords, weapon } = printed;
+					label ||= "Damage";
+					// A follower's NPC deals its blow the way its token's ring does (audit FOE-9): the Marshal's crew
+					// with one of the weapons its card has ticked (combat/attack-flow.js#crewBlow), so an iron
+					// weapon's x piercing reaches Apply, and a follower holding Readiness is asked whether that
+					// blow was them going on the offense.
+					const card = followerCardFor(this.actor);
+					if (card?.ftype === "crew") {
+						const blow = await crewBlow(card.character, { label, weapon, keywords });
+						if (!blow) return;
+						({ label, weapon, keywords } = blow);
+					}
 					// Aimed at whoever this NPC is fighting on the map, or the roller's own targets
 					// (fight/fight-targets.js), with that blow's armor clause for Apply, and the fight's +N
 					// for several attackers on one target (fight/damage-seed.js). A plain card, as before,
 					// when there is nobody to hit.
-					await rollDamageAt(this.actor, {
-						formula, label: title || "Damage", keywords, weapon,
+					const rolled = await rollDamageAt(this.actor, {
+						formula, label, keywords, weapon,
 						// The blow's own printed "w/disadvantage", as the monster sheet's buttons keep theirs.
-						rollMode,
+						rollMode: printed.rollMode,
 						shiftKey: ev.shiftKey,
 					});
+					if (rolled && card) await settleFollowerTokenReadinessOnAttack(this.actor, label);
 					return;
 				}
 				const moveRoll = ev.target.closest(".stonetop-npc-move-roll");

@@ -18,9 +18,9 @@
         {{!-- Past the opening step this reads "Expedition: <the trip's name>",
               which is where the read-only nameplate under the log bar used to say it.
               Truncated, because the name is whatever the table typed. --}}
-        <div class="stonetop-guide-banner-sub stonetop-guide-truncate">{{bannerSub}}</div>
+        <div class="stonetop-guide-banner-sub stonetop-guide-truncate">{{this.bannerSub}}</div>
       </div>
-      <div class="stonetop-guide-count">{{stepIndex}} / {{stepCount}}</div>
+      <div class="stonetop-guide-count">{{this.stepIndex}} / {{this.stepCount}}</div>
     </div>
 
     {{!-- Expedition-log bar: name the current trip, switch between logged trips, or
@@ -37,7 +37,7 @@
       {{#if expedition.hasMultiple}}
       <select class="stonetop-exp-switch" aria-label="Switch expedition">
         {{#each expedition.options}}
-        <option value="{{id}}" {{#if isCurrent}}selected{{/if}}>{{label}}</option>
+        <option value="{{this.id}}" {{#if isCurrent}}selected{{/if}}>{{this.label}}</option>
         {{/each}}
       </select>
       {{/if}}
@@ -78,8 +78,8 @@
     <ul class="stonetop-spring-tiers stonetop-spring-tiers--table">
       {{#each tiers}}
       <li class="stonetop-spring-tier{{#if isActive}} is-active{{/if}}"><span
-          class="stonetop-spring-tier-label">{{{label}}}</span>: <span
-          class="stonetop-spring-tier-text">{{{text}}}</span></li>
+          class="stonetop-spring-tier-label">{{{this.label}}}</span>: <span
+          class="stonetop-spring-tier-text">{{{this.text}}}</span></li>
       {{/each}}
     </ul>
     {{/if}}
@@ -97,7 +97,7 @@
       <div class="stonetop-exp-mode" data-mode-for="requisition">
         {{> "stonetop.roll-mode-strip" rollMode=reqMode labelKey="stonetop.rollMode.pickerLabel" tipKey="stonetop.rollMode"}}
         {{#if reqHeld}}
-        <p class="stonetop-exp-req-held"><i class="fas fa-angles-up" aria-hidden="true"></i> The steading holds advantage on its next +Fortunes roll ({{reqHeld}}). This roll spends it.</p>
+        <p class="stonetop-exp-req-held"><i class="fas fa-angles-up" aria-hidden="true"></i> The steading holds advantage on its next +Fortunes roll ({{this.reqHeld}}). This roll spends it.</p>
         {{/if}}
       </div>
       {{/if}}
@@ -108,19 +108,19 @@
       {{/if}}
       {{#if reqLogistics}}
       {{!-- The Marshal's Logistics, ticked once any character has it learned. --}}
-      <label class="stonetop-requisition-herd stonetop-requisition-logistics"><input type="checkbox" class="stonetop-check" name="logistics" checked><span>{{reqLogistics}}</span></label>
+      <label class="stonetop-requisition-herd stonetop-requisition-logistics"><input type="checkbox" class="stonetop-check" name="logistics" checked><span>{{this.reqLogistics}}</span></label>
       {{/if}}
       {{#if reqNerves}}
       {{!-- We Happy Few's 6-: a shaken Marshal behind this roll has disadvantage. A tick for one, a pick for several. --}}
       {{#if reqNerves.options}}
-      <label class="stonetop-requisition-herd stonetop-requisition-nerves"><span>{{reqNerves.label}}</span><select name="nerves">{{#each reqNerves.options}}<option value="{{value}}">{{label}}</option>{{/each}}</select></label>
+      <label class="stonetop-requisition-herd stonetop-requisition-nerves"><span>{{reqNerves.label}}</span><select name="nerves">{{#each reqNerves.options}}<option value="{{this.value}}">{{this.label}}</option>{{/each}}</select></label>
       {{else}}
       <label class="stonetop-requisition-herd stonetop-requisition-nerves"><input type="checkbox" class="stonetop-check" name="nerves" value="{{reqNerves.value}}"{{#if reqNerves.checked}} checked{{/if}}><span>{{reqNerves.label}}</span></label>
       {{/if}}
       {{/if}}
       {{#each reqAdvantages}}
       {{!-- An improvement's asked advantage on Requisition: unticked, the table's call. --}}
-      <label class="stonetop-requisition-herd stonetop-requisition-advantage"><input type="checkbox" class="stonetop-check" name="{{name}}"><span>{{label}}</span></label>
+      <label class="stonetop-requisition-herd stonetop-requisition-advantage"><input type="checkbox" class="stonetop-check" name="{{this.name}}"><span>{{this.label}}</span></label>
       {{/each}}
       {{#if roll}}
       <div class="stonetop-spring-roll-result stonetop-spring--{{roll.tier}}">
@@ -132,7 +132,7 @@
       </button>
       {{else}}
       <button type="button" class="stonetop-exp-roll-btn stonetop-spring-roll-btn stonetop-spring-roll-btn--primary">
-        <i class="fas fa-dice"></i> Roll +Fortunes ({{fortunesLabel}})
+        <i class="fas fa-dice"></i> Roll +Fortunes ({{this.fortunesLabel}})
       </button>
       {{/if}}
     </div>
@@ -167,18 +167,18 @@
         </p>
         <ul class="stonetop-exp-assets-list">
           {{#each assetPicker.rows}}
-          <li class="stonetop-exp-asset{{#if stateClass}} {{stateClass}}{{/if}}">
+          <li class="stonetop-exp-asset{{#if stateClass}} {{this.stateClass}}{{/if}}">
             {{!-- Where it went is printed under the row rather than hung off the button as a
                   tooltip: the button is disabled, and a disabled control fires no pointer
                   events, so a tooltip on it would never open. --}}
             <button type="button" class="stonetop-exp-asset-btn"
-                    data-asset-index="{{index}}" data-take="{{take}}"
+                    data-asset-index="{{this.index}}" data-take="{{this.take}}"
                     aria-pressed="{{#if ours}}true{{else}}false{{/if}}"
                     {{#if elsewhere}}disabled{{/if}}>
-              <span class="tick" aria-hidden="true">{{glyph}}</span>
-              <span class="nm">{{name}}</span>
+              <span class="tick" aria-hidden="true">{{this.glyph}}</span>
+              <span class="nm">{{this.name}}</span>
             </button>
-            {{#if elsewhere}}<span class="stonetop-exp-asset-where">{{where}}</span>{{/if}}
+            {{#if elsewhere}}<span class="stonetop-exp-asset-where">{{this.where}}</span>{{/if}}
           </li>
           {{/each}}
         </ul>
@@ -254,13 +254,13 @@
       </div>
       {{#if chartTodo.hasRows}}
       {{#each chartTodo.groups}}
-      <div class="stonetop-exp-checkgroup-label">{{label}}</div>
+      <div class="stonetop-exp-checkgroup-label">{{this.label}}</div>
       <ul class="stonetop-exp-todo-list">
         {{#each entries}}
-        <li class="stonetop-exp-todo-item{{#if done}} is-done{{/if}}" data-chart-id="{{id}}">
+        <li class="stonetop-exp-todo-item{{#if done}} is-done{{/if}}" data-chart-id="{{this.id}}">
           <label class="stonetop-camp-check">
             <input type="checkbox" class="stonetop-check stonetop-exp-todo-check" {{#if done}}checked{{/if}}>
-            <span class="stonetop-exp-todo-text">{{{line}}}{{#if said}}<span class="stonetop-exp-todo-said">: {{said}}</span>{{/if}}</span>
+            <span class="stonetop-exp-todo-text">{{{this.line}}}{{#if said}}<span class="stonetop-exp-todo-said">: {{this.said}}</span>{{/if}}</span>
           </label>
         </li>
         {{/each}}
@@ -291,10 +291,10 @@
       {{#if (eq qa.kind "questions")}}
         {{#each qa.groups}}
         <div class="stonetop-exp-checkgroup">
-          <div class="stonetop-exp-checkgroup-label">{{label}}</div>
+          <div class="stonetop-exp-checkgroup-label">{{this.label}}</div>
           <ul class="stonetop-exp-questions">
             {{#each items}}
-            <li>{{{text}}}</li>
+            <li>{{{this.text}}}</li>
             {{/each}}
           </ul>
         </div>
@@ -327,17 +327,17 @@
               binds are `.stonetop-exp-chart-*`. --}}
         {{#each qa.groups}}
         <div class="stonetop-exp-chartgroup">
-          <div class="stonetop-exp-checkgroup-label">{{label}}</div>
+          <div class="stonetop-exp-checkgroup-label">{{this.label}}</div>
           {{#if entries.length}}
           <ul class="stonetop-gm-wonder-list">
             {{#each entries}}
-            <li class="stonetop-gm-wonder-item" data-chart-id="{{id}}">
+            <li class="stonetop-gm-wonder-item" data-chart-id="{{this.id}}">
               <div class="stonetop-gm-wonder-head">
                 {{!-- A span, not an input: the wording is the book's (or, for a line the GM
                       wrote, what they already said), so there is nothing to reword in place.
                       Same treatment a settled question on the toolkit gets, at full strength —
                       this is the live list, not a filed one. --}}
-                <span class="stonetop-gm-wonder-question stonetop-gm-wonder-question--fixed">{{{text}}}</span>
+                <span class="stonetop-gm-wonder-question stonetop-gm-wonder-question--fixed">{{{this.text}}}</span>
                 <span class="stonetop-gm-wonder-tools">
                   <button type="button" class="stonetop-gm-wonder-remove stonetop-exp-chart-remove"
                           data-tooltip="Take this back off the list" data-tooltip-direction="UP"
@@ -350,16 +350,16 @@
                     its answer is the placeholder, so leaving the box alone still reads as the
                     map's figure and typing over it keeps yours. --}}
               <textarea class="stonetop-gm-wonder-answer stonetop-exp-chart-answer" rows="2"
-                        aria-label="{{plain}}" placeholder="{{hint}}">{{answer}}</textarea>
+                        aria-label="{{this.plain}}" placeholder="{{this.hint}}">{{this.answer}}</textarea>
             </li>
             {{/each}}
           </ul>
           {{else}}
-          <p class="stonetop-gm-wonder-empty">{{empty}}</p>
+          <p class="stonetop-gm-wonder-empty">{{this.empty}}</p>
           {{/if}}
           <button type="button" class="stonetop-gm-wonder-add-btn stonetop-exp-chart-add"
-                  data-chart-group="{{key}}">
-            <i class="fas fa-plus" aria-hidden="true"></i> {{addLabel}}
+                  data-chart-group="{{this.key}}">
+            <i class="fas fa-plus" aria-hidden="true"></i> {{this.addLabel}}
           </button>
         </div>
         {{/each}}
@@ -517,9 +517,9 @@
           {{!-- `data-move` is how the randomizer finds the row it just drew, the same way the
                 GM Toolkit's list is matched: by NAME, not by index, because the index would be
                 a position this template is free to reorder while the handler kept counting. --}}
-          <li class="stonetop-guide-move" data-move="{{name}}">
-            <span class="stonetop-guide-move-name">{{name}}</span>
-            <span class="stonetop-guide-move-gloss">{{gloss}}</span>
+          <li class="stonetop-guide-move" data-move="{{this.name}}">
+            <span class="stonetop-guide-move-name">{{this.name}}</span>
+            <span class="stonetop-guide-move-gloss">{{this.gloss}}</span>
           </li>
           {{/each}}
         </ol>
@@ -530,7 +530,7 @@
 
   <div class="stonetop-guide-nav">
     <button type="button" class="stonetop-spring-back" {{#if isFirst}}disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back" aria-hidden="true"></span>Back</button>
-    <span class="stonetop-spring-step-label">{{stepLabel}}</span>
+    <span class="stonetop-spring-step-label">{{this.stepLabel}}</span>
     {{#if isLast}}
     <span class="stonetop-exp-done-actions">
       {{#if isGM}}<button type="button" class="stonetop-exp-chronicle" data-tooltip="Compiles each logged trip into the Expeditions journal (in a &quot;The Chronicle&quot; folder), GM-only." data-tooltip-direction="UP"><i class="fas fa-feather" aria-hidden="true"></i> Save to the Chronicle</button>{{/if}}

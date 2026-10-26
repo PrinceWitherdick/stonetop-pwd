@@ -301,6 +301,18 @@ export class CreateMonsterDialog extends StonetopDialog {
 		form.querySelectorAll(".cm-attack-die").forEach(el => { el.placeholder = derived.rollFormula; });
 	}
 
+	// What the close-guard compares (utils/close-guard.js): the whole worksheet, read off the form
+	// (it lives only there; the window never redraws once open).
+	_workState() {
+		const root = this.element?.[0];
+		const form = root?.matches?.(".create-monster") ? root : root?.querySelector?.(".create-monster");
+		return form ? this._readSelections(form) : null;
+	}
+
+	_discardCopy() {
+		return { title: "Discard this monster?", body: "This monster hasn't been made yet. Closing the window now loses what you've written on the worksheet." };
+	}
+
 	/** Read the worksheet into the shape computeMonster() and _buildActorData() expect. */
 	_readSelections(form, { withMoves = true } = {}) {
 		const text   = name => (form.querySelector(`[name="${name}"]`)?.value ?? "").trim();

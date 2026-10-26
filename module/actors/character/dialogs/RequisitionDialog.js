@@ -287,7 +287,8 @@ export class RequisitionDialog extends StonetopDialog {
 			ui.notifications.warn(`You can't mark the Requisition card's miss cost paid: the GM pays it from the roll card's "Take it on a miss" button.`);
 			return true;
 		}
-		ui.notifications.info(notice);
+		// No notice: the card was settled meanwhile (its button, or another window), and the latch refused a second payment.
+		if (notice) ui.notifications.info(notice);
 		return true;
 	}
 

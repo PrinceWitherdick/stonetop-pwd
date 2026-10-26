@@ -87,17 +87,17 @@
 	<div class="stonetop-invocations-grid">
 		{{#each stonetop.invocations.options}}
 		<div class="stonetop-invocation-card{{#unless known}} is-unknown{{/unless}}{{#if active}} is-concentrating{{/if}}"
-		     data-slug="{{slug}}"{{#if ongoing}} data-ongoing="1"{{/if}}>
+		     data-slug="{{this.slug}}"{{#if ongoing}} data-ongoing="1"{{/if}}>
 			<div class="stonetop-invocation-header">
 				<input type="checkbox"
 				       class="stonetop-item-check stonetop-invocation-check"
-				       data-slug="{{slug}}"
+				       data-slug="{{this.slug}}"
 				       {{#if known}}checked{{/if}}
 				       {{#unless @root.stonetop.invocationsEdit}}disabled{{/unless}}>
 				{{!-- Both states are tappable: an un-learned Invocation still posts its text, it
 				      just isn't offered the roll (see the click handler). The tooltip is what
 				      says which of the two this tap will be. --}}
-				<span class="stonetop-invocation-name" role="button" tabindex="0" data-tooltip="{{#if known}}Use this Invocation{{else}}You haven't learned this Invocation: tap to read it out{{/if}}">{{label}}</span>
+				<span class="stonetop-invocation-name" role="button" tabindex="0" data-tooltip="{{#if known}}Use this Invocation{{else}}You haven't learned this Invocation: tap to read it out{{/if}}">{{this.label}}</span>
 				{{!-- The badge says what this Invocation IS until it says what it is DOING: a card
 				      that is visibly running doesn't also need telling that it's the running kind. --}}
 				{{#if active}}<span class="stonetop-item-source stonetop-invocation-active" data-tooltip="You are concentrating on this Invocation. It lasts until you end it, until you use another, or until your holy light goes out." data-tooltip-direction="UP">Concentrating</span>
@@ -109,13 +109,13 @@
 			<div class="stonetop-invocation-needs-sun">
 				<span class="stonetop-item-source stonetop-invocation-sun-badge" data-tooltip="{{localize "stonetop.invocations.needsSunTooltip"}}" data-tooltip-direction="UP"><i class="fas fa-cloud-sun" aria-hidden="true"></i> {{localize "stonetop.invocations.needsSunBadge"}}</span>
 				{{#if @root.editable}}
-				<button type="button" class="stonetop-invocation-basked" data-slug="{{slug}}"
+				<button type="button" class="stonetop-invocation-basked" data-slug="{{this.slug}}"
 				        data-tooltip="{{localize "stonetop.invocations.baskedTooltip"}}"
 				        data-tooltip-direction="UP">{{localize "stonetop.invocations.baskedLabel"}}</button>
 				{{/if}}
 			</div>
 			{{/if}}
-			<div class="stonetop-invocation-desc">{{{description}}}</div>
+			<div class="stonetop-invocation-desc">{{{this.description}}}</div>
 		</div>
 		{{/each}}
 	</div>

@@ -61,15 +61,15 @@
 		<ol class="items-list">
 			{{#each stonetop.moves}}
 			<li class="stonetop-item steading-move-card{{#if unowned}} move-unowned{{/if}}"
-			    data-move-slug="{{moveSlug}}" data-move-name="{{moveName}}" data-stat="{{stat}}">
+			    data-move-slug="{{this.moveSlug}}" data-move-name="{{this.moveName}}" data-stat="{{this.stat}}">
 				{{!-- The "+STAT" chip sits AFTER the name, which has `flex: 1` — so it rides the
 				      far right of the card's header line rather than crowding in front of the
 				      title. Same placement the character sheet's Other Moves list uses. It stays
 				      a click target: tapping the stat rolls the move, as tapping the name does. --}}
 				<div class="stonetop-item-header">
-					<strong class="stonetop-item-name stonetop-steading-move-open">{{label}}</strong>
+					<strong class="stonetop-item-name stonetop-steading-move-open">{{this.label}}</strong>
 					{{#if (and @root.stonetop.showRollStatChips statChipLabel)}}
-					<span class="stonetop-move-roll-chip steading-move-stat-tag">+{{statChipLabel}}</span>
+					<span class="stonetop-move-roll-chip steading-move-stat-tag">+{{this.statChipLabel}}</span>
 					{{/if}}
 				</div>
 				{{#if description}}<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>{{/if}}

@@ -51,7 +51,8 @@ describe("depleteAmmoAndPost", () => {
 		expect(card.flags.ammoDepleted).toEqual({ 0: { label: "Low ammo", allOut: false } });
 		expect(posted).toHaveLength(1);
 		expect(posted[0].content).toContain("low ammo");
-		expect(pc.rendered).toBe(1);
+		// No render of its own: the track's write is an actor update, which redraws the sheet already.
+		expect(pc.rendered).toBe(0);
 	});
 
 	it("says the weapon is out once the last box is marked", async () => {

@@ -10,10 +10,11 @@
 
 import { describe, it, expect, vi } from "vitest";
 import {
-	buildLiveCharacter, moveCount, ownedMoveNames, sourceMovesFor,
+	buildLiveCharacter, makeLiveItem, moveCount, ownedMoveNames, sourceMovesFor,
 } from "../../fakes/LiveCharacter.js";
 import { PLAYBOOKS, STAT_KEYS } from "../../fakes/sourcePack.js";
 import { moveMarkBudget } from "../../../module/actors/character/move-mark-budget.js";
+import { expectedInvocationCount } from "../../../module/actors/character/invocation-count.js";
 import { readRepo } from "../../fakes/css.js";
 
 
@@ -349,10 +350,12 @@ describe("StonetopCharacter level-up climb — per-rule guarantees", () => {
 		});
 
 		const chosen = [];
-		// Climb several levels; only even ones (newLevel 2,4,…) need an invocation.
-		for (let i = 0; i < 6; i++) {
+		// Climb to level 21; only even levels need an invocation, and none once all ten are known
+		// (2 + one per even level runs out at 16).
+		for (let i = 0; i < 20; i++) {
 			const data = await char.getLevelUpData();
 			const offered = data.availableInvocations.map(o => o.slug);
+			if (data.newLevel >= 18) expect(data.needsInvocation, `level ${data.newLevel}`).toBe(false);
 			if (data.needsInvocation) {
 				// Never re-offers a starting or previously-chosen invocation.
 				for (const s of [...seeded, ...chosen]) expect(offered).not.toContain(s);
@@ -362,16 +365,66 @@ describe("StonetopCharacter level-up climb — per-rule guarantees", () => {
 				const choices = move.cap != null ? { stat: "con", cap: move.cap } : null;
 				await char.applyLevelUp(move.compendiumId, pickInvo, choices);
 			} else {
-				expect(data.newLevel % 2).toBe(1); // odd levels never ask for an invocation
+				// Odd levels never ask, and nor do even ones once all ten are known.
+				expect(data.newLevel % 2 === 1 || data.newLevel >= 18, `level ${data.newLevel}`).toBe(true);
 				const move = data.availableMoves[0];
 				const choices = move.cap != null ? { stat: "con", cap: move.cap } : null;
 				await char.applyLevelUp(move.compendiumId, null, choices);
 			}
+			// The level-up gives exactly what the Invocations tab's "N of M" expects for the level.
+			const level = actor.system.attributes.level.value;
+			expect(actor.getFlag("stonetop-pwd", "invocations.selected").length, `known at level ${level}`)
+				.toBe(expectedInvocationCount({ optionCount: 10, startingCount: 2, level }));
 		}
 
 		const selected = actor.getFlag("stonetop-pwd", "invocations.selected");
 		expect(selected).toEqual([...seeded, ...chosen]);
-		expect(chosen.length).toBeGreaterThanOrEqual(3); // 3 even levels across 6 climbs
+		expect(chosen).toHaveLength(8); // levels 2, 4, ... 16
+	});
+
+	// A Lightbearer who already knows what the new level expects is not made to learn another (the
+	// user's ruling, PBA-1): a level typed down and back up, or an extra ticked on the tab.
+	it("Lightbearer: an even level asks for no Invocation when they already know enough", async () => {
+		const known = ["bath-of-healing-light", "blinding-light", "cleansing-light", "cold-light-of-day"];
+		const { char } = buildLiveCharacter({
+			slug: "the-lightbearer", name: "The Lightbearer", level: 3,
+			flags: { "invocations.selected": known },
+		});
+		const data = await char.getLevelUpData();
+		expect(data.newLevel).toBe(4);
+		expect(data.needsInvocation).toBe(false);
+		// One short, and it asks again.
+		const { char: short } = buildLiveCharacter({
+			slug: "the-lightbearer", name: "The Lightbearer", level: 3,
+			flags: { "invocations.selected": known.slice(0, 3) },
+		});
+		expect((await short.getLevelUpData()).needsInvocation).toBe(true);
+	});
+
+	// "1 from your Background, and 1 of your choice" (the Blessed): the background's move is not a
+	// pick, the free pick is, and each level-up after adds exactly one.
+	it("Blessed: a Vessel's Danu's Grasp is not a pick, and the budget holds through level-ups", async () => {
+		const blessed = sourceMovesFor("The Blessed");
+		const item = (name, flags) => makeLiveItem({ name, type: "move", system: structuredClone(blessed.find(d => d.name === name).system), flags });
+		const { char, actor } = buildLiveCharacter({
+			slug: "the-blessed", name: "The Blessed",
+			flags: { "background.selected": "vessel" },
+			items: [item("Danu's Grasp"), item("Healer's Arts", { "stonetop-pwd": { creationPick: true } })],
+		});
+		// The fake playbook keeps the printed line under movesNote; the engine reads it flat.
+		const repo = char._playbookRepo;
+		char._playbookRepo = { findBySlug: async slug => {
+			const pb = await repo.findBySlug(slug);
+			return pb && { ...pb, startingMovesNote: pb.movesNote?.startingMovesNote };
+		} };
+		vi.spyOn(char, "selectPossession").mockResolvedValue(undefined);
+		let { movelist } = await char.buildSnapshot();
+		expect(movelist.playbookMoves.find(m => m.name === "Danu's Grasp")).toMatchObject({ owned: true, isStarting: true });
+		expect([movelist.levelMovesShortfall, movelist.levelMovesOverage]).toEqual([0, 0]);
+		// levelUpOnce asserts shortfall and overage are 0 after each step.
+		for (let i = 0; i < 4; i++) expect(await levelUpOnce(char, actor)).toBeTruthy();
+		({ movelist } = await char.buildSnapshot());
+		expect(movelist.characterLevel).toBe(5);
 	});
 
 	it("Seeker: Initiate of the Secret Arts learns a Blessed move and grants the Sacred Pouch", async () => {
@@ -524,8 +577,9 @@ describe("Sacred pouch max Stock grows at even levels, the Seeker's included", (
 	// The Seeker's pouch as the pack prints it: its growth rule is playbook data, not code.
 	const seekerPouch = { options: JSON.parse(readRepo("packs/src/stonetop-items/playbooks/the-seeker.json"))
 		.flags.stonetop.specialPossessions.options.filter(o => o.slug === POUCH) };
-	const blessedPouch = { options: [{ slug: POUCH, resource: { max: 3 },
-		usesBonus: { evenLevelBonus: 1, moveBonus: [{ moveName: "Big Magic", perInstance: 2 }] } }] };
+	// The Blessed's too, so a pack edit that loses its growth rule fails here.
+	const blessedPouch = { options: JSON.parse(readRepo("packs/src/stonetop-items/playbooks/the-blessed.json"))
+		.flags.stonetop.specialPossessions.options.filter(o => o.slug === POUCH) };
 	const seekerAt = (grantedAt) => buildLiveCharacter({
 		slug: "the-seeker", name: "The Seeker",
 		flags: grantedAt == null ? {} : { "possessions.grantedAtLevel": { [POUCH]: grantedAt } },
@@ -536,6 +590,11 @@ describe("Sacred pouch max Stock grows at even levels, the Seeker's included", (
 	it("the Blessed's matches the book's Blodwen: level 6 holds 6", () => {
 		const { char } = buildLiveCharacter({ slug: "the-blessed", name: "The Blessed" });
 		expect(max(char, blessedPouch, 6)).toBe(6);
+		// "The sacred pouch can hold up to 3 Stock": 3 at level 1, +1 on each even level.
+		expect(max(char, blessedPouch, 1)).toBe(3);
+		expect(max(char, blessedPouch, 3)).toBe(4);
+		// Big Magic: "increase your max Stock by 2", each time it is taken.
+		expect(max(char, blessedPouch, 6, new Map([["Big Magic", [{}, {}]]]))).toBe(10);
 	});
 
 	it("the Seeker's starts at 3 and gains 1 at each even level from the one it arrived at", () => {

@@ -3,8 +3,8 @@
       form: Confirm is its submit, so Enter confirms, and the dialog listens on it. The lone button
       fills the footer, as every lone modal button here does. --}}
 <form class="stonetop-content-picker-form" autocomplete="off">
-	<div class="stonetop-content-picker{{#if bodyClass}} {{bodyClass}}{{/if}}">{{{body}}}</div>
+	<div class="stonetop-content-picker{{#if bodyClass}} {{this.bodyClass}}{{/if}}">{{{this.body}}}</div>
 	<footer class="stonetop-content-picker-footer">
-		<button type="submit" class="stonetop-cta stonetop-content-picker-confirm"><i class="fas fa-check" aria-hidden="true"></i> {{buttonLabel}}</button>
+		<button type="submit" class="stonetop-cta stonetop-content-picker-confirm"><i class="fas fa-check" aria-hidden="true"></i> {{this.buttonLabel}}</button>
 	</footer>
 </form>

@@ -1,14 +1,14 @@
 <form class="stonetop-possession-choices stonetop-background-answers">
-	<div class="stonetop-possession-choices-desc stonetop-item-description"><p>{{lead}}</p></div>
+	<div class="stonetop-possession-choices-desc stonetop-item-description"><p>{{this.lead}}</p></div>
 
 	{{#each groups}}
 	<div class="stonetop-choice-group">
-		<p class="stonetop-choice-group-heading">{{label}}</p>
-		<div class="stonetop-choice-subgroup" data-background-answer="{{key}}">
+		<p class="stonetop-choice-group-heading">{{this.label}}</p>
+		<div class="stonetop-choice-subgroup" data-background-answer="{{this.key}}">
 			{{#each options}}
-			<label class="stonetop-choice-option-label"{{#if summary}} data-tooltip="{{summary}}" data-tooltip-direction="UP"{{/if}}>
-				<input type="radio" class="stonetop-item-check" name="background-answer-{{../key}}" value="{{value}}" {{#if selected}}checked{{/if}}>
-				<span class="stonetop-pc-option-label"><strong>{{label}}</strong></span>
+			<label class="stonetop-choice-option-label"{{#if summary}} data-tooltip="{{this.summary}}" data-tooltip-direction="UP"{{/if}}>
+				<input type="radio" class="stonetop-item-check" name="background-answer-{{../key}}" value="{{this.value}}" {{#if selected}}checked{{/if}}>
+				<span class="stonetop-pc-option-label"><strong>{{this.label}}</strong></span>
 			</label>
 			{{/each}}
 		</div>
@@ -16,7 +16,7 @@
 	{{/each}}
 
 	<footer class="stonetop-pc-footer">
-		<button type="button" class="stonetop-pc-done" data-action="choose">{{chooseLabel}}</button>
-		<button type="button" class="stonetop-pc-done" data-action="later">{{laterLabel}}</button>
+		<button type="button" class="stonetop-pc-done" data-action="choose">{{this.chooseLabel}}</button>
+		<button type="button" class="stonetop-pc-done" data-action="later">{{this.laterLabel}}</button>
 	</footer>
 </form>

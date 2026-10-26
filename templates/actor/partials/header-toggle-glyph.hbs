@@ -14,14 +14,14 @@
         onClass   the modifier worn while it is ("is-lit")
         labelKey  / tooltipKey   i18n keys for this state, already picked --}}
 {{#if editable}}
-<button type="button" class="{{stem}}{{#if on}} {{onClass}}{{/if}}"
+<button type="button" class="{{this.stem}}{{#if on}} {{this.onClass}}{{/if}}"
         aria-pressed="{{#if on}}true{{else}}false{{/if}}"
         aria-label="{{localize labelKey}}"
         data-tooltip="{{localize tooltipKey}}"
-        data-tooltip-direction="UP"><span class="{{stem}}-icon" aria-hidden="true"></span></button>
+        data-tooltip-direction="UP"><span class="{{this.stem}}-icon" aria-hidden="true"></span></button>
 {{else}}
-<span class="{{stem}}{{#if on}} {{onClass}}{{/if}}"
+<span class="{{this.stem}}{{#if on}} {{this.onClass}}{{/if}}"
       aria-label="{{localize labelKey}}"
       data-tooltip="{{localize tooltipKey}}"
-      data-tooltip-direction="UP"><span class="{{stem}}-icon" aria-hidden="true"></span></span>
+      data-tooltip-direction="UP"><span class="{{this.stem}}-icon" aria-hidden="true"></span></span>
 {{/if}}

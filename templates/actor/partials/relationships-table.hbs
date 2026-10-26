@@ -9,9 +9,9 @@
       widths) stay identical whether or not the boxes are showing.
       `showTooltip` names what a row IS, so it has to come from the caller: the steading
       lists settlements here, not people. Falls back to the person wording. --}}
-<div class="steading-residents-table stonetop-rel-table" data-resize-key="{{resizeKey}}">
+<div class="steading-residents-table stonetop-rel-table" data-resize-key="{{this.resizeKey}}">
 	<div class="steading-residents-header">
-		<div class="steading-residents-header-cell steading-residents-col-name"><span class="steading-residents-header-label">{{nameLabel}}</span></div>
+		<div class="steading-residents-header-cell steading-residents-col-name"><span class="steading-residents-header-label">{{this.nameLabel}}</span></div>
 		{{!-- data-col-min: the hearts are five fixed 18px masks that can't shrink or wrap,
 		      so this column needs its own drag floor — below it the outer hearts clip out
 		      of reach and a 5-heart rating becomes unclickable. --}}
@@ -20,10 +20,10 @@
 	</div>
 	<ul class="steading-residents-list">
 		{{#each rows}}
-		<li class="steading-residents-row stonetop-rel-row" data-rel-id="{{id}}">
-			<div class="steading-residents-col steading-residents-col-name stonetop-rel-namecell{{#unless shown}} stonetop-rel-row--hidden{{/unless}}" data-tooltip-text="{{#if tooltip}}{{tooltip}}{{else}}{{name}}{{/if}}">
+		<li class="steading-residents-row stonetop-rel-row" data-rel-id="{{this.id}}">
+			<div class="steading-residents-col steading-residents-col-name stonetop-rel-namecell{{#unless shown}} stonetop-rel-row--hidden{{/unless}}" data-tooltip-text="{{#if tooltip}}{{this.tooltip}}{{else}}{{this.name}}{{/if}}">
 				{{#if ../canToggle}}
-				<input type="checkbox" class="stonetop-rel-show-check" data-rel-id="{{id}}"
+				<input type="checkbox" class="stonetop-rel-show-check" data-rel-id="{{this.id}}"
 				       {{#if shown}}checked{{/if}}
 				       data-tooltip='{{#if ../showTooltip}}{{../showTooltip}}{{else}}{{localize "stonetop.relationships.showTooltip"}}{{/if}}'
 				       aria-label='{{#if ../showTooltip}}{{../showTooltip}}{{else}}{{localize "stonetop.relationships.showTooltip"}}{{/if}}'>
@@ -37,12 +37,12 @@
 				      row, on the outermost element of whichever branch renders — the glyph span
 				      below already IS the box. Wrapping that one too would give two concentric
 				      bordered circles and a glyph centred in the wrong one. --}}
-				<span class="stonetop-rel-portrait stonetop-portrait-box"><img class="stonetop-rel-portrait-img" src="{{img}}" alt="" data-name="{{name}}"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}></span>
+				<span class="stonetop-rel-portrait stonetop-portrait-box"><img class="stonetop-rel-portrait-img" src="{{this.img}}" alt="" data-name="{{this.name}}"{{#if imgStyle}} style="{{this.imgStyle}}"{{/if}}></span>
 				{{else}}
 				{{!-- No portrait: a person icon for people, or the row's own icon for a
 				      place (a town shouldn't wear a silhouette). No hover preview either —
 				      there is no image to show a bigger version of. --}}
-				<span class="stonetop-rel-portrait stonetop-rel-portrait--empty"><i class="{{#if icon}}{{icon}}{{else}}fas fa-user{{/if}}"></i></span>
+				<span class="stonetop-rel-portrait stonetop-rel-portrait--empty"><i class="{{#if icon}}{{this.icon}}{{else}}fas fa-user{{/if}}"></i></span>
 				{{/if}}
 				{{!-- Actor-backed rows open their sheet; a slug-keyed row (the steading's
 				      settlements) has a uuid only once that place has a settlement sheet,
@@ -59,20 +59,20 @@
 				      names sit in a dense list where one would cover the rows underneath — the
 				      same call the note caret makes. --}}
 				{{#if uuid}}
-				<a class="stonetop-rel-name stonetop-rel-open" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
+				<a class="stonetop-rel-name stonetop-rel-open" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"
 				   role="link" tabindex="0"
-				   aria-label='{{localize "stonetop.relationships.open" name=name}}'>{{name}}</a>
+				   aria-label='{{localize "stonetop.relationships.open" name=name}}'>{{this.name}}</a>
 				{{else}}
-				<span class="stonetop-rel-name">{{name}}</span>
+				<span class="stonetop-rel-name">{{this.name}}</span>
 				{{/if}}
 			</div>
 			<div class="steading-residents-col steading-residents-col-feelings stonetop-rel-heartscell">
 				{{!-- Hidden numeric value the sort util reads (via textContent) to order by rating. --}}
-				<span class="stonetop-rel-hearts-sortkey" aria-hidden="true">{{hearts}}</span>
+				<span class="stonetop-rel-hearts-sortkey" aria-hidden="true">{{this.hearts}}</span>
 				<span class="stonetop-rel-hearts{{#unless ../canRate}} stonetop-rel-hearts--readonly{{/unless}}"
-				      role="img" aria-label="{{feeling}}" data-tooltip-text="{{feeling}}">
+				      role="img" aria-label="{{this.feeling}}" data-tooltip-text="{{this.feeling}}">
 					{{#each heartSlots}}
-					<span class="stonetop-rel-heart{{#if filled}} is-filled{{/if}}" data-position="{{position}}"></span>
+					<span class="stonetop-rel-heart{{#if filled}} is-filled{{/if}}" data-position="{{this.position}}"></span>
 					{{/each}}
 				</span>
 			</div>
@@ -80,8 +80,8 @@
 				{{!-- NOT .steading-resident-input: that class is a behaviour hook the steading
 				      sheet delegates on and stopPropagation()s, which would eat this field's
 				      change event. .stonetop-rel-note-input carries the full styling itself. --}}
-				<input type="text" class="stonetop-rel-note-input" data-rel-id="{{id}}"
-				       value="{{notes}}" placeholder='{{localize "stonetop.relationships.notePlaceholder"}}'
+				<input type="text" class="stonetop-rel-note-input" data-rel-id="{{this.id}}"
+				       value="{{this.notes}}" placeholder='{{localize "stonetop.relationships.notePlaceholder"}}'
 				       {{#unless ../canRate}}disabled{{/unless}}>
 			</div>
 		</li>

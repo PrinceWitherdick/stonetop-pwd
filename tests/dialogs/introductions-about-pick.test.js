@@ -9,7 +9,7 @@ import { IntroductionsDialog } from "../../module/dialogs/IntroductionsDialog.js
 // her outright and she only laughed" got a board with nobody joined to anybody.
 //
 // So the step now asks, beside the answer field, and stores the actor id as `who`. What has to
-// hold is that the pick survives the writing: the live draft buffer is written WHOLE on every
+// hold is that the pick survives the writing: each step's draft is written WHOLE on every
 // keystroke, so a handler that forgets to carry `who` rubs out the person the writer just chose,
 // one character later. That is the failure this suite exists for.
 //
@@ -33,7 +33,7 @@ function makeActor(intro = {}) {
 			for (const part of parts) node = (node[part] ??= {});
 			node[leaf] = value;
 		}),
-		// Only the shape _commitStep writes: one dotted step field plus the `-=live` unset.
+		// Only the shape _commitStep writes: one dotted step field plus the draft unset.
 		update: vi.fn(async (changes) => {
 			for (const [path, value] of Object.entries(changes)) {
 				const parts = path.replace(`flags.${SCOPE}.`, "").split(".");
@@ -80,14 +80,14 @@ function makeDialog(actor, root) {
 	return dialog;
 }
 
-const live = actor => actor.getFlag(SCOPE, `${FLAG}.live`);
+const draft = actor => actor.getFlag(SCOPE, `${FLAG}.drafts.step6`);
 const recorded = (actor, stepKey = "step6") => actor.getFlag(SCOPE, `${FLAG}.${stepKey}`).answers;
 
 describe("IntroductionsDialog — recording who an answer is about", () => {
 	let actor, dialog;
 
 	beforeEach(() => {
-		actor  = makeActor({ live: { stepKey: "step6", q: 0, a: "She only laughed.", who: "actor-2" } });
+		actor  = makeActor({ drafts: { step6: { q: 0, a: "She only laughed.", who: "actor-2" } } });
 		dialog = makeDialog(actor, makeRoot({ text: "She only laughed." }));
 	});
 
@@ -100,7 +100,7 @@ describe("IntroductionsDialog — recording who an answer is about", () => {
 	// introductions before this existed has no such key, so absent has to be the ordinary shape
 	// rather than a legacy one. The readers treat the two alike (see _normWho).
 	it("leaves the key off entirely when nobody was picked", async () => {
-		actor  = makeActor({ live: { stepKey: "step6", q: 1, a: "My sister Maeve." } });
+		actor  = makeActor({ drafts: { step6: { q: 1, a: "My sister Maeve." } } });
 		dialog = makeDialog(actor, makeRoot({ text: "My sister Maeve." }));
 		await dialog._recordDraft("actor-1", "step6");
 		expect(recorded(actor)).toEqual([{ q: 1, a: "My sister Maeve." }]);
@@ -109,52 +109,52 @@ describe("IntroductionsDialog — recording who an answer is about", () => {
 
 	// The whole point of the pick: the prose names nobody the board could find.
 	it("keeps a pick made about writing that names nobody", async () => {
-		actor  = makeActor({ live: { stepKey: "step6", q: 2, a: "I asked, and got a shrug.", who: "actor-3" } });
+		actor  = makeActor({ drafts: { step6: { q: 2, a: "I asked, and got a shrug.", who: "actor-3" } } });
 		dialog = makeDialog(actor, makeRoot({ text: "I asked, and got a shrug." }));
 		await dialog._recordDraft("actor-1", "step6");
 		expect(recorded(actor)[0].who).toBe("actor-3");
 	});
 
 	// Recording ends the draft, pick and all, so the next answer starts from nobody.
-	it("clears the live buffer, so the next answer starts unpicked", async () => {
+	it("clears the step's draft, so the next answer starts unpicked", async () => {
 		await dialog._recordDraft("actor-1", "step6");
-		expect(live(actor)).toBeUndefined();
+		expect(draft(actor)).toBeUndefined();
 		expect(dialog._stepDraft("actor-1", "step6")).toEqual({ q: null, a: "", who: null });
 	});
 });
 
 describe("IntroductionsDialog — a pick surviving the typing", () => {
-	// ⚠ THE ONE THAT BITES. `live` is written WHOLE on every keystroke (setFlag deep-merges, so a
+	// ⚠ THE ONE THAT BITES. The draft is written WHOLE on every keystroke (setFlag deep-merges, so a
 	// partial write would leave a stale sub-key behind after a step switch), which means a
 	// keystroke handler that does not carry `who` writes the buffer back with the pick missing.
 	// The writer chooses a person, types one more character, and the choice is gone with nothing
 	// on screen to say so.
 	it("does not rub out the pick when the next keystroke is flushed", async () => {
-		const actor  = makeActor({ live: { stepKey: "step6", q: 0, a: "She only", who: "actor-2" } });
+		const actor  = makeActor({ drafts: { step6: { q: 0, a: "She only", who: "actor-2" } } });
 		const dialog = makeDialog(actor, makeRoot({ text: "She only laughed." }));
 		await dialog._flushCaptureFromDom();
-		expect(live(actor)).toEqual({ stepKey: "step6", q: 0, a: "She only laughed.", who: "actor-2" });
+		expect(draft(actor)).toEqual({ q: 0, a: "She only laughed.", who: "actor-2" });
 	});
 
 	// Same buffer, the other two writers: the Next-time flush and a direct save.
 	it("carries the pick through the flush the GM's Next runs", async () => {
-		const actor  = makeActor({ live: { stepKey: "step6", q: 3, a: "Asked.", who: "actor-4" } });
+		const actor  = makeActor({ drafts: { step6: { q: 3, a: "Asked.", who: "actor-4" } } });
 		const dialog = makeDialog(actor, makeRoot({ text: "Asked outright." }));
 		await dialog._flushDraftFromDom(actor, { stepKey: "step6" });
-		expect(live(actor)).toMatchObject({ a: "Asked outright.", q: 3, who: "actor-4" });
+		expect(draft(actor)).toMatchObject({ a: "Asked outright.", q: 3, who: "actor-4" });
 	});
 
 	it("takes a pick back to nobody when it is cleared", async () => {
-		const actor  = makeActor({ live: { stepKey: "step6", q: 0, a: "Asked.", who: "actor-2" } });
+		const actor  = makeActor({ drafts: { step6: { q: 0, a: "Asked.", who: "actor-2" } } });
 		const dialog = makeDialog(actor, makeRoot());
 		await dialog._saveDraft("actor-1", "step6", { q: 0, a: "Asked.", who: "" });
-		expect(live(actor).who).toBeNull();
+		expect(draft(actor).who).toBeNull();
 	});
 
 	// A draft written before the picker existed reads as nobody picked, rather than as undefined
 	// leaking into the record on the next write.
 	it("reads a draft from before the pick existed as nobody picked", () => {
-		const actor  = makeActor({ live: { stepKey: "step6", q: 0, a: "Sela, of course." } });
+		const actor  = makeActor({ drafts: { step6: { q: 0, a: "Sela, of course." } } });
 		const dialog = makeDialog(actor, makeRoot());
 		expect(dialog._stepDraft("actor-1", "step6").who).toBeNull();
 	});
@@ -162,11 +162,11 @@ describe("IntroductionsDialog — a pick surviving the typing", () => {
 	// The no-op guard has to notice the pick too, or choosing somebody while the text and the
 	// question stand still would be swallowed as "nothing changed".
 	it("writes when only the pick changed", async () => {
-		const actor  = makeActor({ live: { stepKey: "step6", q: 0, a: "Asked.", who: "actor-2" } });
+		const actor  = makeActor({ drafts: { step6: { q: 0, a: "Asked.", who: "actor-2" } } });
 		const dialog = makeDialog(actor, makeRoot());
 		await dialog._saveDraft("actor-1", "step6", { q: 0, a: "Asked.", who: "actor-3" });
 		expect(actor.setFlag).toHaveBeenCalledTimes(1);
-		expect(live(actor).who).toBe("actor-3");
+		expect(draft(actor).who).toBe("actor-3");
 	});
 });
 
@@ -177,7 +177,7 @@ describe("IntroductionsDialog — reading the pick that is on screen", () => {
 	// writer had just made -- with nothing on screen to say so.
 	it("reads the pick off the control rather than the flag it is still being written to", () => {
 		// The flag is a write behind: it still says nobody was picked.
-		const actor  = makeActor({ live: { stepKey: "step6", q: 0, a: "She only" } });
+		const actor  = makeActor({ drafts: { step6: { q: 0, a: "She only" } } });
 		const dialog = makeDialog(actor, makeRoot({ text: "She only", about: "actor-2" }));
 		expect(dialog._aboutPicked("actor-1", "step6")).toBe("actor-2");
 	});

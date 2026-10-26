@@ -87,7 +87,7 @@ describe("setFollowerHp", () => {
 		expect(await setFollowerHp(aeliana, row, 7, { link: () => wolf, gm, user: { id: "p1" }, raiseOnly: true, moveName: "Make Camp" })).toBe("npc");
 		expect(gm.query).toHaveBeenCalledWith(FOLLOWER_NPC_HP_QUERY, {
 			characterUuid: "Actor.aeliana", npcUuid: "Actor.wolf", ftype: "animal-companion", slug: "",
-			to: 7, raiseOnly: true, moveName: "Make Camp", userId: "p1",
+			value: 7, raiseOnly: true, moveName: "Make Camp", userId: "p1",
 		}, expect.anything());
 		expect(wolf.update).not.toHaveBeenCalled();
 		expect(aeliana.update).not.toHaveBeenCalled();
@@ -119,7 +119,7 @@ describe("the GM's side of a follower's NPC HP", () => {
 			const npc = npcOf(true, { value: 2, max: 6 });
 			const resolve = uuid => ({ "Actor.aeliana": aeliana, "Actor.wolf": npc })[uuid] ?? null;
 			const ask = (userId, npcOf, extra = {}) => handleFollowerNpcHpQuery(
-				{ characterUuid: "Actor.aeliana", npcUuid: "Actor.wolf", ftype: "animal-companion", slug: "", to: 9, userId, ...extra },
+				{ characterUuid: "Actor.aeliana", npcUuid: "Actor.wolf", ftype: "animal-companion", slug: "", value: 9, userId, ...extra },
 				{}, { resolve, npcOf });
 			expect(await ask("p2", () => npc)).toBeNull();
 			expect(await ask("p1", () => ({ uuid: "Actor.other" }))).toBeNull();
@@ -127,17 +127,17 @@ describe("the GM's side of a follower's NPC HP", () => {
 			expect(await ask("p1", () => npc, { raiseOnly: true, moveName: "Make Camp" })).toEqual({ to: 6 });
 			expect(npc.update).toHaveBeenCalledWith({ "system.attributes.hp.value": 6 }, { stonetopMove: "Make Camp" });
 			// A heal asked twice, or late, never lowers it; a set does.
-			expect(await ask("p1", () => npc, { to: 3, raiseOnly: true })).toEqual({ to: 6 });
+			expect(await ask("p1", () => npc, { value: 3, raiseOnly: true })).toEqual({ to: 6 });
 			expect(npc.update).toHaveBeenCalledTimes(1);
-			expect(await ask("p1", () => npc, { to: 0 })).toEqual({ to: 0 });
+			expect(await ask("p1", () => npc, { value: 0 })).toEqual({ to: 0 });
 			expect(npc.update).toHaveBeenLastCalledWith({ "system.attributes.hp.value": 0 });
 		} finally {
 			globalThis.game = savedGame;
 		}
 	});
 
-	it("is registered beside the mirror", () => {
-		expect(read("module/fight/roster-fate.js"))
+	it("is registered with the other queries in the init block", () => {
+		expect(read("stonetop.js"))
 			.toContain("CONFIG.queries[FOLLOWER_NPC_HP_QUERY] = (data, context) => handleFollowerNpcHpQuery(data, context);");
 	});
 });

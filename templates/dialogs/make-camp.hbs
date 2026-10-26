@@ -18,7 +18,7 @@
     <div class="stonetop-guide-banner">
       <i class="fas fa-campground stonetop-guide-banner-icon" aria-hidden="true"></i>
       <div class="stonetop-guide-banner-info">
-        <div class="stonetop-guide-banner-title">{{title}}</div>
+        <div class="stonetop-guide-banner-title">{{this.title}}</div>
         <div class="stonetop-guide-banner-sub">Answer the GM's questions about the campsite, then share out the food and settle in.</div>
       </div>
     </div>
@@ -31,7 +31,7 @@
       {{#if meal.hungerText}}<p class="stonetop-camp-meal-line">{{meal.hungerText}}</p>{{/if}}
       {{#if meal.nightmaresText}}<p class="stonetop-camp-meal-line">{{meal.nightmaresText}}</p>{{/if}}
       {{#if meal.statusText}}<p class="stonetop-camp-meal-status">{{meal.statusText}}</p>{{/if}}
-      {{#if allAlongText}}<p class="stonetop-camp-meal-line">{{allAlongText}}</p>{{/if}}
+      {{#if allAlongText}}<p class="stonetop-camp-meal-line">{{this.allAlongText}}</p>{{/if}}
       {{#if meal.forageText}}<p class="stonetop-camp-meal-line">{{meal.forageText}}</p>{{/if}}
       {{#if meal.afterText}}<p class="stonetop-camp-meal-line">{{meal.afterText}}</p>{{/if}}
       {{#if meal.provisionsText}}<p class="stonetop-camp-meal-line stonetop-camp-meal-note">{{meal.provisionsText}}</p>{{/if}}
@@ -57,15 +57,15 @@
 
     <ol class="stonetop-camp-rows">
       {{#each rows}}
-      <li class="stonetop-camp-row{{#if isMine}} is-mine{{/if}}{{#unless canEdit}} is-readonly{{/unless}}{{#if goesWithout}} is-going-without{{/if}}" data-actor-id="{{actorId}}">
+      <li class="stonetop-camp-row{{#if isMine}} is-mine{{/if}}{{#unless canEdit}} is-readonly{{/unless}}{{#if goesWithout}} is-going-without{{/if}}" data-actor-id="{{this.actorId}}">
         <header class="stonetop-camp-row-head">
           {{#if img}}
           {{!-- data-tooltip-text, not data-tooltip: core draws a plain data-tooltip as HTML, and this one carries a name a player typed. --}}
-          {{#if canOpenSheet}}<button type="button" class="stonetop-camp-portrait-btn" data-camp-sheet="{{actorId}}" aria-label="{{sheetLabel}}" data-tooltip-text="{{sheetLabel}}"><img class="stonetop-camp-portrait" src="{{img}}" alt=""></button>
-          {{else}}<img class="stonetop-camp-portrait" src="{{img}}" alt="">{{/if}}
+          {{#if canOpenSheet}}<button type="button" class="stonetop-camp-portrait-btn" data-camp-sheet="{{this.actorId}}" aria-label="{{this.sheetLabel}}" data-tooltip-text="{{this.sheetLabel}}"><img class="stonetop-camp-portrait" src="{{this.img}}" alt=""></button>
+          {{else}}<img class="stonetop-camp-portrait" src="{{this.img}}" alt="">{{/if}}
           {{/if}}
-          <h4 class="stonetop-camp-name">{{name}}</h4>
-          <span class="stonetop-camp-state {{stateClass}}">{{stateText}}</span>
+          <h4 class="stonetop-camp-name">{{this.name}}</h4>
+          <span class="stonetop-camp-state {{this.stateClass}}">{{this.stateText}}</span>
         </header>
 
         {{#if goesWithout}}
@@ -79,17 +79,17 @@
           {{#if auto}}
           {{!-- The crew's own supplies pay the crew's meal by themselves (camp-rules.js#crewBill), so no stepper. --}}
           <div class="stonetop-camp-line stonetop-camp-purse stonetop-camp-purse--crew">
-            <span class="stonetop-camp-line-label">{{label}} <span class="stonetop-camp-purse-left">({{remaining}} left)</span></span>
-            <span class="stonetop-camp-count">{{n}}</span>
+            <span class="stonetop-camp-line-label">{{this.label}} <span class="stonetop-camp-purse-left">({{this.remaining}} left)</span></span>
+            <span class="stonetop-camp-count">{{this.n}}</span>
           </div>
-          <p class="stonetop-camp-note">{{autoText}}</p>
+          <p class="stonetop-camp-note">{{this.autoText}}</p>
           {{else}}
           <div class="stonetop-camp-line stonetop-camp-line--stepper stonetop-camp-purse">
-            <span class="stonetop-camp-line-label">{{label}} <span class="stonetop-camp-purse-left">({{remaining}} left)</span></span>
+            <span class="stonetop-camp-line-label">{{this.label}} <span class="stonetop-camp-purse-left">({{this.remaining}} left)</span></span>
             <span class="stonetop-camp-stepper">
-              <button type="button" class="stonetop-camp-step" data-camp-action="offer-take" data-actor-id="{{../actorId}}" data-slug="{{slug}}" data-camp-focus="{{../actorId}}:take:{{slug}}" aria-label="Take back one use of {{label}}"{{#unless canTake}} disabled{{/unless}}>&minus;</button>
-              <span class="stonetop-camp-count">{{n}}</span>
-              <button type="button" class="stonetop-camp-step" data-camp-action="offer-add" data-actor-id="{{../actorId}}" data-slug="{{slug}}" data-camp-focus="{{../actorId}}:add:{{slug}}" aria-label="Share one more use of {{label}}"{{#unless canAdd}} disabled{{/unless}}>+</button>
+              <button type="button" class="stonetop-camp-step" data-camp-action="offer-take" data-actor-id="{{../actorId}}" data-slug="{{this.slug}}" data-camp-focus="{{../actorId}}:take:{{this.slug}}" aria-label="Take back one use of {{this.label}}"{{#unless canTake}} disabled{{/unless}}>&minus;</button>
+              <span class="stonetop-camp-count">{{this.n}}</span>
+              <button type="button" class="stonetop-camp-step" data-camp-action="offer-add" data-actor-id="{{../actorId}}" data-slug="{{this.slug}}" data-camp-focus="{{../actorId}}:add:{{this.slug}}" aria-label="Share one more use of {{this.label}}"{{#unless canAdd}} disabled{{/unless}}>+</button>
             </span>
           </div>
           {{/if}}
@@ -97,20 +97,20 @@
           <p class="stonetop-camp-says">Nothing to eat in this pack.</p>
           {{/each}}
           {{#if cover.show}}
-          <button type="button" class="stonetop-camp-inline-btn" data-camp-action="cover" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:cover"><i class="fas fa-hand-holding-heart" aria-hidden="true"></i> {{cover.label}}</button>
+          <button type="button" class="stonetop-camp-inline-btn" data-camp-action="cover" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:cover"><i class="fas fa-hand-holding-heart" aria-hidden="true"></i> {{cover.label}}</button>
           {{/if}}
           {{#if allAlong.show}}
           {{!-- Have What You Need (Book I p.78): an undefined ◇ becomes something this character had all along. --}}
           <div class="stonetop-camp-all-along">
             {{#if allAlong.supplies.show}}
-            <button type="button" class="stonetop-camp-inline-btn" data-camp-action="had-supplies" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:had-supplies" data-tooltip="{{allAlong.supplies.tip}}"{{#unless allAlong.supplies.can}} disabled{{/unless}}><i class="fas fa-sack" aria-hidden="true"></i> {{allAlong.supplies.label}}</button>
+            <button type="button" class="stonetop-camp-inline-btn" data-camp-action="had-supplies" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:had-supplies" data-tooltip="{{allAlong.supplies.tip}}"{{#unless allAlong.supplies.can}} disabled{{/unless}}><i class="fas fa-sack" aria-hidden="true"></i> {{allAlong.supplies.label}}</button>
             {{/if}}
             {{#if allAlong.messKit.show}}
-            <button type="button" class="stonetop-camp-inline-btn" data-camp-action="had-mess-kit" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:had-mess-kit" data-tooltip="{{allAlong.messKit.tip}}"><i class="fas fa-bowl-food" aria-hidden="true"></i> Had a mess kit all along</button>
+            <button type="button" class="stonetop-camp-inline-btn" data-camp-action="had-mess-kit" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:had-mess-kit" data-tooltip="{{allAlong.messKit.tip}}"><i class="fas fa-bowl-food" aria-hidden="true"></i> Had a mess kit all along</button>
             {{/if}}
           </div>
           {{/if}}
-          {{#if givesBackText}}<p class="stonetop-camp-note">{{givesBackText}}</p>{{/if}}
+          {{#if givesBackText}}<p class="stonetop-camp-note">{{this.givesBackText}}</p>{{/if}}
         </div>
 
         <div class="stonetop-camp-part">
@@ -121,13 +121,13 @@
           <div class="stonetop-camp-line stonetop-camp-line--stepper">
             <span class="stonetop-camp-line-label">Followers eating too</span>
             <span class="stonetop-camp-stepper">
-              <button type="button" class="stonetop-camp-step" data-camp-action="followers-take" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:followers-take" aria-label="One fewer follower eating"{{#unless canTakeFollower}} disabled{{/unless}}>&minus;</button>
-              <span class="stonetop-camp-count">{{followers}}</span>
-              <button type="button" class="stonetop-camp-step" data-camp-action="followers-add" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:followers-add" aria-label="One more follower eating"{{#unless canAddFollower}} disabled{{/unless}}>+</button>
+              <button type="button" class="stonetop-camp-step" data-camp-action="followers-take" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:followers-take" aria-label="One fewer follower eating"{{#unless canTakeFollower}} disabled{{/unless}}>&minus;</button>
+              <span class="stonetop-camp-count">{{this.followers}}</span>
+              <button type="button" class="stonetop-camp-step" data-camp-action="followers-add" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:followers-add" aria-label="One more follower eating"{{#unless canAddFollower}} disabled{{/unless}}>+</button>
             </span>
           </div>
           {{#if messKit.carries}}
-          <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-camp-field="messKit" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:messKit"{{#if messKit.uses}} checked{{/if}}><span>Cook with the mess kit, so 1 use feeds 4 <em>(needs fire and water)</em></span></label>
+          <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-camp-field="messKit" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:messKit"{{#if messKit.uses}} checked{{/if}}><span>Cook with the mess kit, so 1 use feeds 4 <em>(needs fire and water)</em></span></label>
           {{/if}}
         </div>
 
@@ -136,7 +136,7 @@
         <fieldset class="stonetop-camp-part stonetop-camp-site">
           <legend class="stonetop-camp-part-label">Prepared the camp site (A Safe Place)</legend>
           {{#each safePlace.options}}
-          <label class="stonetop-camp-check"><input type="radio" class="stonetop-camp-radio" name="{{../safePlace.radioName}}" value="{{value}}" data-camp-field="precaution" data-actor-id="{{../actorId}}" data-camp-focus="{{../actorId}}:precaution-{{value}}"{{#if checked}} checked{{/if}}><span>{{label}}</span></label>
+          <label class="stonetop-camp-check"><input type="radio" class="stonetop-camp-radio" name="{{../safePlace.radioName}}" value="{{this.value}}" data-camp-field="precaution" data-actor-id="{{../actorId}}" data-camp-focus="{{../actorId}}:precaution-{{this.value}}"{{#if checked}} checked{{/if}}><span>{{this.label}}</span></label>
           {{/each}}
         </fieldset>
         {{/if}}
@@ -144,22 +144,22 @@
         {{#if night.show}}
         <fieldset class="stonetop-camp-part stonetop-camp-night">
           <legend class="stonetop-camp-part-label">The night: pick 1</legend>
-          <label class="stonetop-camp-check"><input type="radio" class="stonetop-camp-radio" name="{{night.radioName}}" value="hp" data-camp-field="benefit" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:benefit-hp"{{#if night.hp}} checked{{/if}}><span>Regain half your max HP: <span class="stonetop-camp-hp">{{night.hpBefore}} &rarr; {{night.hpAfter}}</span>{{#if night.halvedText}} <em>{{night.halvedText}}</em>{{/if}}</span></label>
+          <label class="stonetop-camp-check"><input type="radio" class="stonetop-camp-radio" name="{{night.radioName}}" value="hp" data-camp-field="benefit" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:benefit-hp"{{#if night.hp}} checked{{/if}}><span>Regain half your max HP: <span class="stonetop-camp-hp">{{night.hpBefore}} &rarr; {{night.hpAfter}}</span>{{#if night.halvedText}} <em>{{night.halvedText}}</em>{{/if}}</span></label>
           {{#if night.dyingText}}
           <p class="stonetop-camp-meal-line stonetop-camp-meal-note stonetop-camp-dying">{{night.dyingText}}</p>
           {{/if}}
           {{#if night.hasDebilities}}
           <div class="stonetop-camp-line">
-            <label class="stonetop-camp-check"><input type="radio" class="stonetop-camp-radio" name="{{night.radioName}}" value="debility" data-camp-field="benefit" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:benefit-debility"{{#if night.debility}} checked{{/if}}><span>Clear a debility:</span></label>
-            <select data-camp-field="debility" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:debility" aria-label="Which debility to clear">{{#each night.debilities}}<option value="{{key}}"{{#if selected}} selected{{/if}}>{{name}}</option>{{/each}}</select>
+            <label class="stonetop-camp-check"><input type="radio" class="stonetop-camp-radio" name="{{night.radioName}}" value="debility" data-camp-field="benefit" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:benefit-debility"{{#if night.debility}} checked{{/if}}><span>Clear a debility:</span></label>
+            <select data-camp-field="debility" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:debility" aria-label="Which debility to clear">{{#each night.debilities}}<option value="{{this.key}}"{{#if selected}} selected{{/if}}>{{this.name}}</option>{{/each}}</select>
           </div>
           {{/if}}
-          <label class="stonetop-camp-check"><input type="radio" class="stonetop-camp-radio" name="{{night.radioName}}" value="none" data-camp-field="benefit" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:benefit-none"{{#if night.none}} checked{{/if}}><span>No real sleep tonight, so no pick</span></label>
+          <label class="stonetop-camp-check"><input type="radio" class="stonetop-camp-radio" name="{{night.radioName}}" value="none" data-camp-field="benefit" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:benefit-none"{{#if night.none}} checked{{/if}}><span>No real sleep tonight, so no pick</span></label>
           {{#if bedroll.carries}}
-          <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-camp-field="bedroll" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:bedroll"{{#if bedroll.uses}} checked{{/if}}><span>Sleep in the bedroll: regain 1d6 extra HP</span></label>
+          <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-camp-field="bedroll" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:bedroll"{{#if bedroll.uses}} checked{{/if}}><span>Sleep in the bedroll: regain 1d6 extra HP</span></label>
           {{/if}}
           {{#if showPeaceful}}
-          <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-camp-field="peaceful" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:peaceful"{{#if peaceful}} checked{{/if}}><span>The rest was peaceful, comfortable or enjoyable: advantage on the next roll</span></label>
+          <label class="stonetop-camp-check"><input type="checkbox" class="stonetop-check" data-camp-field="peaceful" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:peaceful"{{#if peaceful}} checked{{/if}}><span>The rest was peaceful, comfortable or enjoyable: advantage on the next roll</span></label>
           {{/if}}
         </fieldset>
         {{/if}}
@@ -167,13 +167,13 @@
         {{#if showFoot}}
         <div class="stonetop-camp-row-foot">
           {{#if showReady}}
-          <label class="stonetop-camp-check stonetop-camp-ready"><input type="checkbox" class="stonetop-check" data-camp-field="ready" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:ready"{{#if ready}} checked{{/if}}><span>{{readyLabel}}</span></label>
+          <label class="stonetop-camp-check stonetop-camp-ready"><input type="checkbox" class="stonetop-check" data-camp-field="ready" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:ready"{{#if ready}} checked{{/if}}><span>{{this.readyLabel}}</span></label>
           {{/if}}
           {{#unless unliving}}
           {{#if goesWithout}}
-          <button type="button" class="stonetop-camp-inline-btn stonetop-camp-eating-btn" data-camp-action="eat" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:eats">Eat after all</button>
+          <button type="button" class="stonetop-camp-inline-btn stonetop-camp-eating-btn" data-camp-action="eat" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:eats">Eat after all</button>
           {{else}}
-          <button type="button" class="stonetop-camp-inline-btn stonetop-camp-eating-btn" data-camp-action="go-without" data-actor-id="{{actorId}}" data-camp-focus="{{actorId}}:eats">Go without</button>
+          <button type="button" class="stonetop-camp-inline-btn stonetop-camp-eating-btn" data-camp-action="go-without" data-actor-id="{{this.actorId}}" data-camp-focus="{{this.actorId}}:eats">Go without</button>
           {{/if}}
           {{/unless}}
         </div>
@@ -194,8 +194,8 @@
     {{#if roster.show}}
     <div class="stonetop-camp-roster">
       <select name="campRosterActor" aria-label="Someone to bring to the fire or send away from it">
-        {{#if add.show}}<optgroup label="Not at the fire">{{#each add.options}}<option value="{{id}}" data-camp-roster="add">{{name}}</option>{{/each}}</optgroup>{{/if}}
-        {{#if sendAway.show}}<optgroup label="At the fire">{{#each sendAway.options}}<option value="{{id}}" data-camp-roster="send-away">{{name}}</option>{{/each}}</optgroup>{{/if}}
+        {{#if add.show}}<optgroup label="Not at the fire">{{#each add.options}}<option value="{{this.id}}" data-camp-roster="add">{{this.name}}</option>{{/each}}</optgroup>{{/if}}
+        {{#if sendAway.show}}<optgroup label="At the fire">{{#each sendAway.options}}<option value="{{this.id}}" data-camp-roster="send-away">{{this.name}}</option>{{/each}}</optgroup>{{/if}}
       </select>
       {{#if add.show}}
       <button type="button" class="stonetop-camp-inline-btn" data-camp-action="add" data-camp-blocked="Pick someone not at the fire to bring them."><i class="fas fa-user-plus" aria-hidden="true"></i> Bring them</button>
@@ -206,7 +206,7 @@
     </div>
     {{/if}}
     {{else}}
-    <p class="stonetop-camp-closed">{{closedText}}</p>
+    <p class="stonetop-camp-closed">{{this.closedText}}</p>
     {{/if}}
 
   </div>

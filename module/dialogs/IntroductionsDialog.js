@@ -3,7 +3,7 @@ import { deletionEntry } from "../utils/foundry-compat.js";
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { shuffle } from "../utils/arrays.js";
 import { stonetopSteadingHeaderButton } from "../utils/world.js";
-import { playbookSlug, getPlayerCharacters, playbookIconPath } from "../utils/playbook-actors.js";
+import { playbookSlug, getPlayerCharacters, playbookIconPath, playerOf } from "../utils/playbook-actors.js";
 // The order the introductions go around the table in: a world setting of its own, never the
 // Combat tracker. See utils/introductions-order.js for why.
 import { introductionsRoster, adoptLegacyIntroOrder, writeIntroOrder, moveId, reshuffle } from "../utils/introductions-order.js";
@@ -15,12 +15,19 @@ import { saveChronicleFromButton, writeChronicle } from "../utils/chronicle.js";
 import { getSetting, setSetting } from "../settings.js";
 import { getWalkthroughResume, patchWalkthroughResume, markWalkthroughDone, saveWalkthroughPosition } from "./walkthrough-resume.js";
 // Pure round-robin/done logic for the looping answer/ask steps (unit-tested).
-import { stepPcDone, nextActiveIndex, firstActiveIndex, turnsUntilActive, cursorReaction, cursorPositionKey } from "./introductions-flow.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import {
+	stepPcDone, nextActiveIndex, firstActiveIndex, prevActiveIndex, lastActiveIndex, turnsUntilActive,
+	cursorReaction, cursorPositionKey, withRecordedAnswer, withAnswerEdited, withoutAnswer,
+} from "./introductions-flow.js";
+import { isPrimaryGM, anyActiveGM, primaryGM } from "../utils/primary-gm.js";
+
 import { escHtml } from "../utils/strings.js";
 import { findOpenApp } from "../utils/open-windows.js";
 import { merge3, diffHunks, mapIndex } from "../utils/text-rebase.js";
 import { SYSTEM_ID } from "../system-id.js";
+
+/** Whether this client runs the Introductions: the GM at the table (primary), the only one who writes it. */
+const runsIntroductions = () => !!game.user?.isGM && isPrimaryGM();
 
 // The player-authored answer/ask step data lives on the PC actor flag
 // flags.stonetop-pwd.intro. Scope MUST be the system id "stonetop-pwd" (not "stonetop",
@@ -123,6 +130,26 @@ const _normQ = (v) => (Number.isInteger(v) ? v : null);
 // for a name in the writing (relmap/relmap-intros.js), which is all it ever had before this.
 const _normWho = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
 
+// A step's unrecorded draft, or null. Each step keeps its own under intro.drafts, so recording or
+// passing one step never touches the other's. A session started before that kept ONE shared
+// `live` buffer (tagged with its stepKey) plus a `parked` slot for the other step; those are still
+// read here, and the next write for the step folds them into intro.drafts (_saveDraft, _commitStep).
+const _draftIn = (intro, stepKey) => {
+	const own = intro.drafts?.[stepKey];
+	if (own && typeof own === "object") return own;
+	if (intro.live?.stepKey === stepKey) return intro.live;
+	const parked = intro.parked?.[stepKey];
+	return parked && typeof parked === "object" ? parked : null;
+};
+
+// Update entries removing the old-shape copies of one step's draft (see _draftIn). Empty once folded.
+const _legacyDraftDeletions = (intro, stepKey, base) => {
+	const paths = [];
+	if (intro.live?.stepKey === stepKey) paths.push(`${base}.live`);
+	if (intro.parked?.[stepKey]) paths.push(`${base}.parked.${stepKey}`);
+	return Object.fromEntries(paths.map(path => deletionEntry(path)));
+};
+
 // ── IntroductionsDialog ───────────────────────────────────────────────────────
 
 export class IntroductionsDialog extends StonetopDialog {
@@ -156,9 +183,10 @@ export class IntroductionsDialog extends StonetopDialog {
 		const existing = IntroductionsDialog._current();
 		if (existing) { existing.bringToTop(); return existing; }
 		// Guard against two near-simultaneous open() calls racing before the first instance
-		// registers in ui.windows — on a player reload the ready hook fires both
-		// reopenOpenWalkthroughs and openForActiveSession, and without this both would see
-		// _current() null and stack two dialogs. Coalesce them onto one in-flight open.
+		// registers in ui.windows: a cursor write can land while the ready-time open is still in
+		// flight, and on a GM reload the walkthrough resume and resumeRunningSession can both
+		// open it. Without this each would see _current() null and stack two dialogs. Coalesce
+		// them onto one in-flight open.
 		if (IntroductionsDialog._opening) return IntroductionsDialog._opening;
 		IntroductionsDialog._opening = IntroductionsDialog._doOpen();
 		try { return await IntroductionsDialog._opening; }
@@ -175,14 +203,14 @@ export class IntroductionsDialog extends StonetopDialog {
 		} catch (err) {
 			console.error("Stonetop | Introductions: failed to carry over the old turn order", err);
 		}
-		if (game.user?.isGM) {
-			// A GM with no saved local position (a fresh browser/tab) but a live session must
-			// follow the running cursor, NOT reset to the pre-check — landing on phase 0 and
-			// re-rendering would otherwise tear the session down for everyone.
-			if (!dialog._restorePosition() && dialog._cursor().active) dialog._syncFromCursor();
-		} else {
-			dialog._syncFromCursor();
-		}
+		// A LIVE SESSION ALWAYS WINS over this browser's own saved spot, for a GM too. The saved
+		// spot is per browser and goes stale the moment the table moves on without it (a GM who
+		// reloads, or opens a second tab), and the first render writes this dialog's spot back
+		// into the cursor: preferring the saved one dragged every player back to wherever this
+		// GM had last been. The saved spot is only for reopening a session nobody is running.
+		if (dialog._cursor().active) dialog._syncFromCursor();
+		else if (game.user?.isGM) dialog._restorePosition();
+		else dialog._syncFromCursor();
 		return dialog.render(true);
 	}
 
@@ -191,6 +219,12 @@ export class IntroductionsDialog extends StonetopDialog {
 	// silently answering null would stack a second copy on every cursor write.
 	static _current() {
 		return findOpenApp(w => w instanceof IntroductionsDialog);
+	}
+
+	// The name of the GM running the table (the one isPrimaryGM answers yes for), for the note a
+	// second GM sees in place of the controls only the primary may use.
+	static _primaryGmName() {
+		return primaryGM()?.name || "Another GM";
 	}
 
 	// onChange handler for the world cursor (wired in Ready.js). Runs on every client.
@@ -205,7 +239,7 @@ export class IntroductionsDialog extends StonetopDialog {
 	// mid-sentence — repaint only when the screen is actually out of date, raise only on a
 	// real hand-off — live there with their reasoning.
 	static handleIntroCursor(cursor = {}) {
-		if (game.user?.isGM && isPrimaryGM()) return; // the author ignores its own writes
+		if (runsIntroductions()) return; // the author ignores its own writes
 		const dialog = IntroductionsDialog._current();
 		const act = cursorReaction({
 			cursor,
@@ -258,17 +292,55 @@ export class IntroductionsDialog extends StonetopDialog {
 	// force-show" rule still governs live cursor writes, so a player who deliberately closes
 	// their window mid-session isn't re-summoned on every keystroke nonce bump.
 	static openForActiveSession() {
-		if (game.user?.isGM) return;
 		const cursor = getSetting(_CURSOR_SETTING) ?? {};
 		// Baseline the show-nonce so a "Show players" click from BEFORE this load doesn't
-		// re-summon the dialog on every reload — only a live click after now force-opens it.
+		// re-summon the dialog on every reload: only a live click after now force-opens it.
+		// For a GM too: a secondary GM follows the cursor like a player, and without a baseline
+		// the first cursor write after its reload counted as a force-show.
 		IntroductionsDialog._lastShowNonce = Number.isInteger(cursor.showNonce) ? cursor.showNonce : -1;
+		IntroductionsDialog._watchGmPresence();
+		if (game.user?.isGM) return;
+		// No GM online, so nobody can run the session: a cursor left active by a GM who closed
+		// the tab without closing the window would otherwise summon the dialog on every login.
+		// Held instead, and opened when a GM connects (see _watchGmPresence).
+		if (cursor.active && !anyActiveGM()) { IntroductionsDialog._heldForGm = true; return; }
 		// Let handleIntroCursor run its turn toast / focus bookkeeping first (it opens on the
 		// player's turn); then, if a session is active but it isn't their turn, open the
 		// dialog anyway so the reload rejoins them. open()'s _current/_opening guards coalesce
-		// this with the reopen from the walkthrough resume, so it never stacks two dialogs.
+		// two near-simultaneous opens, so it never stacks two dialogs.
 		IntroductionsDialog.handleIntroCursor(cursor);
 		if (cursor.active && !IntroductionsDialog._current()) IntroductionsDialog.open();
+	}
+
+	// Ready-time, for the GM running the table: a session still marked live (the GM closed the
+	// browser tab, or reloaded in another browser that has no saved spot) reopens at the cursor,
+	// so it can be carried on or closed. Closing the window is what ends a session, and without
+	// this nothing on the GM's screen would say one was still running. Called from Ready.js after
+	// the walkthrough resume, so it coalesces with that reopen rather than stacking a second copy.
+	static resumeRunningSession() {
+		if (!runsIntroductions()) return null;
+		if (!getSetting(_CURSOR_SETTING)?.active) return null;
+		const existing = IntroductionsDialog._current();
+		if (existing) return existing;
+		return IntroductionsDialog.open();
+	}
+
+	// GMs coming and going, watched once per client. A player held back because no GM was online
+	// opens the running session when one connects. A GM client with the window open redraws, since
+	// who runs the table (and so who gets Back / Next) may just have changed hands.
+	static _watchGmPresence() {
+		if (IntroductionsDialog._presenceHook) return;
+		IntroductionsDialog._presenceHook = Hooks.on("userConnected", (user, connected) => {
+			if (!user?.isGM || user.id === game.user?.id) return;
+			if (game.user?.isGM) {
+				const open = IntroductionsDialog._current();
+				if (open?.rendered) open.render(false);
+				return;
+			}
+			if (!connected || !IntroductionsDialog._heldForGm) return;
+			IntroductionsDialog._heldForGm = false;
+			if (getSetting(_CURSOR_SETTING)?.active && !IntroductionsDialog._current()) IntroductionsDialog.open();
+		});
 	}
 
 	// onChange handler for the saved turn order (wired in Ready.js). Runs on every client,
@@ -287,7 +359,7 @@ export class IntroductionsDialog extends StonetopDialog {
 			// The PRIMARY GM gets a jump-to-step rail (see getData's `steps`), so seat it a
 			// little wider — matching the Expedition dialog's 640. Players and secondary GMs
 			// have no rail and keep the narrower single column.
-			width:     (game.user?.isGM && isPrimaryGM() ? 640 : 520),
+			width:     (runsIntroductions() ? 640 : 520),
 			height:    "auto",
 			resizable: true,
 			classes:   ["stonetop", "stonetop-introductions"],
@@ -303,8 +375,15 @@ export class IntroductionsDialog extends StonetopDialog {
 		// fire its blur `change`). Flushing here catches every re-render path, so a player's
 		// introduction survives the hand-off. Same-position cursor writes don't reach here at
 		// all while they type: cursorReaction defers those instead.
+		if (this._closing) return;
 		await this._flushCaptureFromDom();
 		await super._render(force, options);
+		// ONLY WHEN THIS RENDER ACTUALLY DREW. A render that began before close() (a flush was
+		// still awaiting) finds the window closing or closed, and core quietly skips it. The two
+		// writes below would still run, and the cursor one put `active: true` straight back after
+		// close() had ended the session, summoning every player again.
+		const states = Application.RENDER_STATES;
+		if (this._closing || (states && this._state !== states.RENDERED)) return;
 		this._noteCaptureShown();
 		// Record where we are + that we're open, so a reload can reopen here. Every
 		// render reflects the current round/turn (navigation always re-renders).
@@ -339,6 +418,12 @@ export class IntroductionsDialog extends StonetopDialog {
 	// session is running.
 	_showPlayers() {
 		if (!game.user?.isGM) return;
+		// The primary GM only. This is a read-modify-write of the whole cursor, so a second GM's
+		// copy, read a moment before the primary moved the turn on, put the turn back.
+		if (!isPrimaryGM()) {
+			ui.notifications?.info(`${IntroductionsDialog._primaryGmName()} is running the introductions, so only they can show them to the players.`);
+			return;
+		}
 		const cur = this._cursor();
 		if (!cur.active) {
 			ui.notifications?.info("Begin the introductions first, then you can show them to your players.");
@@ -363,6 +448,27 @@ export class IntroductionsDialog extends StonetopDialog {
 		html.find(".stonetop-intros-close").on("click", ev => this._finish(ev.currentTarget));
 		// GM sidebar: jump straight to a step (the shared TOC-rail chrome).
 		html.find(".stonetop-guide-toc-btn").on("click", ev => this._jumpToPhase(Number(ev.currentTarget.dataset.stepIndex)));
+
+		// The GM's corrections to a step already taken: un-pass a PC, and edit or delete one of
+		// their recorded answers. Each control carries the PC, the step and (for an answer) its
+		// place in the list, so nothing is read off this._pcIndex, which the cursor may move.
+		html.find(".stonetop-intros-unpass").on("click", ev => {
+			const { actorId, stepKey } = ev.currentTarget.dataset;
+			this._unpass(actorId, stepKey);
+		});
+		html.find(".stonetop-intros-recorded-edit").on("click", ev => {
+			const { actorId, stepKey, answerIndex } = ev.currentTarget.dataset;
+			this._startAnswerEdit(actorId, stepKey, Number(answerIndex));
+		});
+		html.find(".stonetop-intros-recorded-edit-field").on("input", ev => {
+			if (this._editingAnswer) this._editingAnswer.text = ev.currentTarget.value;
+		});
+		html.find(".stonetop-intros-recorded-save").on("click", () => this._saveAnswerEdit());
+		html.find(".stonetop-intros-recorded-cancel").on("click", () => this._cancelAnswerEdit());
+		html.find(".stonetop-intros-recorded-delete").on("click", ev => {
+			const { actorId, stepKey, answerIndex } = ev.currentTarget.dataset;
+			this._confirmDeleteAnswer(actorId, stepKey, Number(answerIndex));
+		});
 
 		// Narration rounds (1–3): the single plain-string answer, written near-live on input
 		// (debounced) so the GM watches the player type, and again on blur (change). Same
@@ -449,9 +555,22 @@ export class IntroductionsDialog extends StonetopDialog {
 	// draft so rapid successive saves — e.g. an answer textarea blurring just as a
 	// question button is clicked — compose synchronously instead of racing the async
 	// world-settings write; players read the persisted value fresh each render.
+	// Not StepperDialog's queued _updateAnswers: the harvest reads this copy synchronously inside
+	// the updateActor hook, and the copy must also be dropped when this GM becomes primary (below).
 	_answers() {
 		if (game.user?.isGM) return (this._draft ??= { ...(getSetting(_ANSWERS_SETTING) ?? {}) });
 		return getSetting(_ANSWERS_SETTING) ?? {};
+	}
+
+	// The in-memory copy above is only good for as long as this client is the one writing the
+	// setting. A GM that has just become primary (the one before it left) holds a copy from
+	// whenever it first read it, and harvesting into that would write the stale rest back over
+	// everything the previous primary recorded since. So it is dropped, and re-read, on the way in.
+	_refreshDraftIfNewPrimary() {
+		const primary = runsIntroductions();
+		if (primary && !this._wasPrimary) this._draft = null;
+		this._wasPrimary = primary;
+		return primary;
 	}
 
 	// ── Answer/ask step data: the player's own actor flag ──────────────────────
@@ -459,9 +578,11 @@ export class IntroductionsDialog extends StonetopDialog {
 	// flags.stonetop-pwd.intro (a write the owning player is always allowed to make —
 	// see Phase 3), so it survives reload and a momentarily-absent GM. The GM harvests
 	// it into the world-scoped introductionsAnswers (the Chronicle source) below. Shape:
-	//   intro = { step4:{answers:[{q,a,who}],passed}, step6:{…}, live:{stepKey,q,a,who}|null }
-	// where `live` is the single in-progress draft buffer (one step is active at a time) and `who`
-	// is the actor id of the player character the answer is about, where the writer picked one.
+	//   intro = { step4:{answers:[{q,a,who}],passed}, step6:{…},
+	//             drafts:{ step4?:{q,a,who}, step6?:{q,a,who} } }
+	// where each step's in-progress draft sits under its own key (an unrecorded draft of one step
+	// waits there while the GM runs the other) and `who` is the actor id of the player character
+	// the answer is about, where the writer picked one. Older sessions' `live`/`parked`: _draftIn.
 
 	_actor(actorId) {
 		return game.actors?.get(actorId) ?? null;
@@ -484,13 +605,17 @@ export class IntroductionsDialog extends StonetopDialog {
 		return { answers: Array.isArray(s?.answers) ? s.answers : [], passed: !!s?.passed };
 	}
 
-	// The in-progress draft ({ q, a, who }) for a step — the shared `live` buffer, but only
-	// when it currently belongs to this step.
+	// The in-progress draft ({ q, a, who }) for a step, or an empty one.
 	_stepDraft(actorId, stepKey) {
-		const live = this._intro(actorId).live;
-		return (live && live.stepKey === stepKey)
-			? { q: _normQ(live.q), a: typeof live.a === "string" ? live.a : "", who: _normWho(live.who) }
+		const draft = this._draftSource(actorId, stepKey);
+		return draft
+			? { q: _normQ(draft.q), a: typeof draft.a === "string" ? draft.a : "", who: _normWho(draft.who) }
 			: { q: null, a: "", who: null };
+	}
+
+	// The raw draft object behind _stepDraft, or null (see _draftIn).
+	_draftSource(actorId, stepKey) {
+		return _draftIn(this._intro(actorId), stepKey);
 	}
 
 	// Who the "Who is this about?" select on screen is showing, or undefined when this step has no
@@ -506,9 +631,8 @@ export class IntroductionsDialog extends StonetopDialog {
 		return el.value;
 	}
 
-	// Update the live draft for a step. Writes the whole live buffer (every key)
-	// so a step switch or a cleared field can't leave a stale sub-key behind (setFlag
-	// deep-merges). No-op without write permission (a non-owning player off-turn), and a
+	// Update the draft for a step. Writes the whole draft (every key) so a cleared field
+	// can't leave a stale sub-key behind (setFlag deep-merges). No-op without write permission (a non-owning player off-turn), and a
 	// no-op when nothing actually changed — so per-keystroke drafting (and the blur `change`
 	// that repeats the last input) doesn't spam a document write + broadcast to every client.
 	//
@@ -528,11 +652,17 @@ export class IntroductionsDialog extends StonetopDialog {
 		if (!actor) return;
 		const cur = this._stepDraft(actorId, stepKey);
 		const { q, a, who } = { ...cur, ...patch };
-		const nq  = _normQ(q);
-		const na  = typeof a === "string" ? a : "";
-		const nw  = _normWho(who);
-		if (cur.q === nq && cur.a === na && cur.who === nw) return;
-		await actor.setFlag(_FLAG_SCOPE, `${_INTRO_FLAG}.live`, { stepKey, q: nq, a: na, who: nw });
+		const next = { q: _normQ(q), a: typeof a === "string" ? a : "", who: _normWho(who) };
+		const base    = `flags.${_FLAG_SCOPE}.${_INTRO_FLAG}`;
+		const legacy  = _legacyDraftDeletions(this._intro(actorId), stepKey, base);
+		const folding = Object.keys(legacy).length > 0;
+		if (!folding && cur.q === next.q && cur.a === next.a && cur.who === next.who) return;
+		if (!folding) {
+			await actor.setFlag(_FLAG_SCOPE, `${_INTRO_FLAG}.drafts.${stepKey}`, next);
+			return;
+		}
+		// An old-shape draft for this step moves into its own key in the same write.
+		await actor.update({ [`${base}.drafts.${stepKey}`]: next, ...legacy });
 	}
 
 	// Shared 300ms debounce behind the near-live draft/narration writes. Cancellable via the
@@ -561,10 +691,26 @@ export class IntroductionsDialog extends StonetopDialog {
 	// is that the write 300ms later records what was on screen when the key was pressed rather than
 	// whatever the flag says by then. Letting `_saveDraft` merge these from the current draft would
 	// quietly undo that.
+	//
+	// ⚠ AND THE STEP'S RECORD IS SNAPSHOTTED WITH THEM (_commitMark). The turn and phase can still
+	// match when the write fires while the draft it carries has meanwhile been RECORDED: the GM's
+	// Next landed inside the 300ms. Written anyway, it put the recorded text back as a fresh draft
+	// carrying the question just used, and the next Next recorded it a second time.
 	_scheduleLiveDraft(actorId, stepKey, q, a, who) {
+		const mark = this._commitMark(actorId, stepKey);
 		this._scheduleLiveWrite(actorId,
 			phase => _isStep(phase) && phase.stepKey === stepKey,
-			() => this._saveDraft(actorId, stepKey, { q, a, who }));
+			async () => {
+				if (this._commitMark(actorId, stepKey) !== mark) return;
+				await this._saveDraft(actorId, stepKey, { q, a, who });
+			});
+	}
+
+	// What a PC has recorded for a step, as one comparable string: it changes whenever an answer
+	// is recorded, edited or deleted, or the PC passes or is un-passed. A draft typed against one
+	// mark and written under another was typed against a record that has since moved on.
+	_commitMark(actorId, stepKey) {
+		return JSON.stringify(this._stepRecord(actorId, stepKey));
 	}
 
 	_cancelLiveDraft() {
@@ -615,16 +761,21 @@ export class IntroductionsDialog extends StonetopDialog {
 		if (!key) { this._captureSeen = null; return; }
 		const { actorId, stepKey } = el.dataset;
 		const draft = stepKey ? this._stepDraft(actorId, stepKey) : null;
-		this._captureSeen = { key, text: el.value, q: draft?.q ?? null, who: draft?.who ?? null };
+		// `mark`: the step's record this field was drawn against (see _commitMark). A field drawn
+		// before an answer was recorded must never be flushed back in after it (_draftWorthFlushing).
+		const mark  = stepKey ? this._commitMark(actorId, stepKey) : null;
+		this._captureSeen = { key, text: el.value, q: draft?.q ?? null, who: draft?.who ?? null, mark };
 		const actor = this._actor(actorId);
 		if (actor) this._absorbCaptureWrite(actor, null);
 	}
 
 	// A PC's intro flag just changed, by anyone, this client included: bring the capture field on
-	// screen up to date with it, in place.
+	// screen up to date with it, in place. Returns true when the change RECORDED (or passed) the
+	// draft on screen and the field was emptied, which the caller answers with a redraw even while
+	// the caret is in it (there is nothing left in the field to protect).
 	_absorbCaptureWrite(actor, userId) {
 		const root = this.element?.[0];
-		if (!root || !actor) return;
+		if (!root || !actor) return false;
 		const phase = _PHASES[this._phase];
 		// A readonly mirror carries no data-*, so it's matched to the PC shown. Nothing is typed
 		// into one, so it simply takes the text as it stands. A step's draft that has just been
@@ -646,19 +797,36 @@ export class IntroductionsDialog extends StonetopDialog {
 			}
 		}
 		const draftEl = root.querySelector("textarea.stonetop-intros-draft:not([readonly])");
-		if (draftEl?.dataset.actorId === actor.id && draftEl.dataset.stepKey) this._absorbDraftWrite(root, draftEl, userId);
+		if (draftEl?.dataset.actorId === actor.id && draftEl.dataset.stepKey) return this._absorbDraftWrite(root, draftEl, userId);
+		return false;
 	}
 
 	// The answer/ask step's half of _absorbCaptureWrite: the text merges like narration's, and the
-	// picks (question, who it's about) follow the flag.
+	// picks (question, who it's about) follow the flag. Returns true when it emptied the field.
 	_absorbDraftWrite(root, el, userId) {
 		const { actorId, stepKey } = el.dataset;
-		// Recording or passing clears the draft outright. That ends the answer rather than editing
-		// it, and the re-render that follows rebuilds the field; merging "nothing" in here would
-		// only empty a field the flush is careful to leave alone.
-		if (!this._hasLiveDraft(actorId, stepKey)) return;
 		const key   = this._captureKey(el);
 		const seen  = this._captureSeen?.key === key ? this._captureSeen : null;
+		const mark  = this._commitMark(actorId, stepKey);
+		if (!this._hasLiveDraft(actorId, stepKey)) {
+			// Recording or passing clears the draft outright. That ENDS the answer rather than
+			// editing it, so when the field was showing a draft that has now been recorded, it is
+			// emptied here and then, caret or no caret. Left standing (the redraw is skipped while
+			// somebody is typing), it was the recorded answer sitting in an editable field, and the
+			// next keystroke or flush wrote it back as a brand-new draft with the question just used.
+			// A field that showed no saved draft has nothing recorded out of it, and is left alone.
+			if (!seen || !seen.text || seen.mark === mark) return false;
+			this._cancelLiveDraft();
+			this._setFieldText(el, "");
+			for (const btn of root.querySelectorAll(".stonetop-intros-question-pick")) btn.classList.toggle("is-selected", false);
+			const about = root.querySelector(".stonetop-intros-about-pick");
+			if (about?.dataset.actorId === actorId && about.dataset.stepKey === stepKey) about.value = "";
+			this._captureSeen = { ...seen, text: "", q: null, who: null, mark };
+			return true;
+		}
+		// The draft survived, so whatever changed in the record (the GM editing an older answer)
+		// did not record what is in this field: it stays a draft against the record as it is now.
+		if (seen) seen.mark = mark;
 		const draft = this._stepDraft(actorId, stepKey);
 		// A pick is never unsaved (a click writes the flag before anything else), so the flag's is
 		// simply shown. Left alone, a question the other editor picked stayed unlit here while the
@@ -675,11 +843,12 @@ export class IntroductionsDialog extends StonetopDialog {
 			about.value = draft.who ?? "";
 		}
 		const unsaved = this._mergeIntoField(el, draft.a, userId);
-		this._captureSeen = { ...this._captureSeen, q: draft.q, who: draft.who };
+		this._captureSeen = { ...this._captureSeen, q: draft.q, who: draft.who, mark };
 		if (unsaved !== null) {
 			this._setSaveStatus("saving");
 			this._scheduleLiveDraft(actorId, stepKey, draft.q, unsaved, this._aboutPicked(actorId, stepKey) ?? draft.who);
 		}
+		return false;
 	}
 
 	// Merge the flag's value for a field into what's on screen, and record it as seen. Returns the
@@ -730,8 +899,7 @@ export class IntroductionsDialog extends StonetopDialog {
 		const a     = String(draft.a ?? "").trim();
 		if (!a) return false;
 		const entry   = { q: _normQ(draft.q), a, ...(draft.who ? { who: draft.who } : {}) };
-		const answers = [...this._stepRecord(actorId, stepKey).answers, entry];
-		await this._commitStep(actor, stepKey, "answers", answers);
+		await this._commitStep(actor, stepKey, "answers", withRecordedAnswer(this._stepRecord(actorId, stepKey).answers, entry));
 		return true;
 	}
 
@@ -742,14 +910,113 @@ export class IntroductionsDialog extends StonetopDialog {
 		await this._commitStep(actor, stepKey, "passed", passed);
 	}
 
-	// Write one committed step field (answers / passed) and clear the live draft in the
-	// same update — the two always go together (recording or passing ends the draft), so
-	// centralizing means neither path can forget the `-=live` unset.
+	// ── The GM's corrections: un-pass, and edit or delete a recorded answer ───────────────
+	// A player who passed by mistake, or recorded something they want back, asks the GM (which is
+	// what the Pass prompt tells them). The GM running the table is the only one offered these: a
+	// second GM writing the same list would race the first, and the harvest and Chronicle follow
+	// the primary's writes.
+
+	// Write a PC's whole answer list for a step. Whole, through the dotted path, because a flag
+	// merge cannot drop an element; and WITHOUT touching the live draft, unlike _commitStep: the
+	// player may be partway through their next answer while the GM fixes an earlier one.
+	async _writeAnswers(actor, stepKey, answers) {
+		await actor.update({ [`flags.${_FLAG_SCOPE}.${_INTRO_FLAG}.${stepKey}.answers`]: answers });
+	}
+
+	async _unpass(actorId, stepKey) {
+		if (!runsIntroductions() || !this._actor(actorId)) return;
+		await this._setPassed(actorId, stepKey, false);
+		this.render(false);
+	}
+
+	_startAnswerEdit(actorId, stepKey, index) {
+		if (!runsIntroductions()) return;
+		const entry = this._stepRecord(actorId, stepKey).answers[index];
+		if (!entry) return;
+		const text = String(entry.a ?? "");
+		this._editingAnswer = { actorId, stepKey, index, text, original: text };
+		this.render(false);
+	}
+
+	_cancelAnswerEdit() {
+		this._editingAnswer = null;
+		this.render(false);
+	}
+
+	// Save the answer being edited. The list is re-read first, and the edit refused if that answer
+	// is no longer the one the GM opened (deleted, or changed under them meanwhile), so a stale
+	// index can never reword somebody else's answer.
+	async _saveAnswerEdit() {
+		const ed = this._editingAnswer;
+		if (!ed || !runsIntroductions()) return;
+		const actor = this._actor(ed.actorId);
+		if (!actor) return;
+		const field = this.element?.[0]?.querySelector(".stonetop-intros-recorded-edit-field");
+		const text  = typeof field?.value === "string" ? field.value : ed.text;
+		const answers = this._stepRecord(ed.actorId, ed.stepKey).answers;
+		if (String(answers[ed.index]?.a ?? "") !== ed.original) {
+			ui.notifications?.warn("That answer changed while you were editing it. Have another look, then edit it again.");
+			this._editingAnswer = null;
+			this.render(false);
+			return;
+		}
+		const next = withAnswerEdited(answers, ed.index, text);
+		if (!next) {
+			ui.notifications?.warn("An answer can't be left empty. To remove it, delete it instead.");
+			return;
+		}
+		this._editingAnswer = null;
+		await this._writeAnswers(actor, ed.stepKey, next);
+		this.render(false);
+	}
+
+	async _confirmDeleteAnswer(actorId, stepKey, index) {
+		if (!runsIntroductions()) return;
+		const actor = this._actor(actorId);
+		const entry = this._stepRecord(actorId, stepKey).answers[index];
+		if (!actor || !entry) return;
+		const confirmed = await confirmOutcome({
+			title:   "Delete this answer?",
+			content: `<p>Delete this answer from <strong>${escHtml(actor.name ?? "")}</strong>'s record?</p>`
+			       + `<blockquote>${escHtml(String(entry.a ?? ""))}</blockquote>`
+			       + `<p>Its question becomes free to answer again. This can't be undone.</p>`,
+			yes:     { label: "Delete answer", icon: "fa-trash", className: "stonetop-dialog-btn--danger" },
+			no:      { label: "Keep it" },
+		});
+		if (!confirmed) return;
+		await this._deleteAnswer(actorId, stepKey, index, entry);
+	}
+
+	// Remove one recorded answer. Found again by its content when the list moved while the confirm
+	// was up, and not at all when it has gone.
+	async _deleteAnswer(actorId, stepKey, index, entry) {
+		if (!runsIntroductions()) return;
+		const actor = this._actor(actorId);
+		if (!actor) return;
+		const answers = this._stepRecord(actorId, stepKey).answers;
+		const same = x => x && x.a === entry.a && x.q === entry.q;
+		const at = same(answers[index]) ? index : answers.findIndex(same);
+		const next = withoutAnswer(answers, at);
+		if (!next) return;
+		if (this._editingAnswer?.actorId === actorId && this._editingAnswer.stepKey === stepKey) this._editingAnswer = null;
+		await this._writeAnswers(actor, stepKey, next);
+		this.render(false);
+	}
+
+	// Write one committed step field (answers / passed) and clear THIS step's draft in the
+	// same update: the two always go together (recording or passing ends the draft), so
+	// centralizing means neither path can forget the unset. The other step's draft is untouched.
+	//
+	// The unset goes out even when this client sees no draft: the owner's latest keystroke may not
+	// have reached this client yet, and it must not outlive the commit.
 	async _commitStep(actor, stepKey, field, value) {
-		const [liveKey, liveVal] = deletionEntry(`flags.${_FLAG_SCOPE}.${_INTRO_FLAG}.live`);
+		const base  = `flags.${_FLAG_SCOPE}.${_INTRO_FLAG}`;
+		const intro = actor.getFlag?.(_FLAG_SCOPE, _INTRO_FLAG) ?? {};
+		const [draftKey, draftVal] = deletionEntry(`${base}.drafts.${stepKey}`);
 		await actor.update({
-			[`flags.${_FLAG_SCOPE}.${_INTRO_FLAG}.${stepKey}.${field}`]: value,
-			[liveKey]: liveVal,
+			[`${base}.${stepKey}.${field}`]: value,
+			[draftKey]: draftVal,
+			..._legacyDraftDeletions(intro, stepKey, base),
 		});
 		// Every commit is followed by a re-render, and _render flushes the capture DOM first —
 		// but that DOM still shows the answer just recorded, so the flush would write it
@@ -790,7 +1057,7 @@ export class IntroductionsDialog extends StonetopDialog {
 	// Whether this client may WRITE the given PC's live draft this turn. The active player
 	// edits their OWN PC on their turn during an answer/ask step. The PRIMARY GM may also
 	// write: it edits narration, GM-only PCs, and turns whose owning player is offline, and on
-	// a round-robin turn owned by a present player it CO-EDITS the one shared live-draft buffer
+	// a round-robin turn owned by a present player it CO-EDITS that step's shared draft
 	// alongside them (each side's typing is merged into the other's field as it lands; see
 	// _absorbCaptureWrite, and _hasOnlinePlayerOwner, which drives the "writing together"
 	// label). A secondary GM only watches. The GM commits the draft with Next (which
@@ -814,11 +1081,7 @@ export class IntroductionsDialog extends StonetopDialog {
 	// while a present co-owner is locked out; falls back to any owner. "" when no player owns
 	// it (a GM-only PC, which then never auto-opens on a player and is driven by the GM).
 	_primaryOwnerId(actor) {
-		const owners = game.users?.filter(u => !u.isGM && actor?.testUserPermission?.(u, "OWNER")) ?? [];
-		const online = owners.filter(u => u.active);
-		const pick   = online.find(u => u.character?.id === actor.id) ?? online[0]
-			?? owners.find(u => u.character?.id === actor.id) ?? owners[0];
-		return pick?.id ?? "";
+		return playerOf(actor, { preferOnline: true })?.id ?? "";
 	}
 
 	// Whether a present (online) player — someone other than this GM — owns the PC. When true
@@ -862,10 +1125,17 @@ export class IntroductionsDialog extends StonetopDialog {
 	// only close() (a deliberate finish) deactivates the session. Carries the PC order the session
 	// is running in, so every client follows the same table for as long as it runs.
 	_syncCursorFromLocal() {
-		if (!game.user?.isGM || !isPrimaryGM()) return; // only the primary GM authors the cursor
+		if (!runsIntroductions()) return; // only the primary GM authors the cursor
+		if (this._closing) return;
 		const phase = this._phase;
 		if (phase < 1 || phase > _LAST_PHASE) return;
-		const actor   = _isRoundRobin(_PHASES[phase]) ? (this._pcs[this._pcIndex] ?? null) : null;
+		const def = _PHASES[phase];
+		let actor = _isRoundRobin(def) ? (this._pcs[this._pcIndex] ?? null) : null;
+		// NOBODY'S TURN on a step where the PC this dialog is parked on is done with it: everyone
+		// has passed or answered everything (the GM's "Everyone's done, continue" wait), or the PC
+		// has no questions for this step at all. Naming them handed the turn to their player, who
+		// was summoned to a window with nothing left to do in it.
+		if (actor && _isStep(def) && this._isPcDone(actor, def)) actor = null;
 		const activeActorId = actor?.id ?? "";
 		const activeUserId  = actor ? this._primaryOwnerId(actor) : "";
 		const pcOrder = this._pcs.map(a => a.id);
@@ -899,11 +1169,16 @@ export class IntroductionsDialog extends StonetopDialog {
 		if (!cur.active || !Number.isInteger(cur.phase) || cur.phase < 1 || cur.phase > _LAST_PHASE) {
 			this._phase   = 0;
 			this._pcIndex = 0;
+			this._waitingOnTurn = false;
 			return false;
 		}
 		this._phase   = cur.phase;
 		const idx     = this._pcs.findIndex(a => a.id === cur.activeActorId);
 		this._pcIndex = idx >= 0 ? idx : 0;
+		// On a round of turns, a cursor naming nobody this client can find (nobody's turn on a
+		// step everyone is done with, or a PC deleted since the GM wrote it) is a wait, not the
+		// first PC's turn. Drawn as one (see getData), rather than showing PC #1 as up.
+		this._waitingOnTurn = _isRoundRobin(_PHASES[cur.phase]) && idx < 0;
 		return true;
 	}
 
@@ -1003,14 +1278,32 @@ export class IntroductionsDialog extends StonetopDialog {
 
 	// Harvest one PC's flag into the world setting (primary GM only).
 	async _harvestActor(actor) {
-		if (!isPrimaryGM()) return;
+		if (!this._refreshDraftIfNewPrimary()) return;
 		if (this._mergeActorIntoDraft(actor)) await setSetting(_ANSWERS_SETTING, this._answers());
+	}
+
+	// A PC's whole intro flag was removed (a reset, by macro or by hand): what was harvested from
+	// it goes too. Only on a REMOVAL, seen as such by the updateActor hook. A PC that simply has no
+	// flag may be one whose narration was typed straight into the setting before players wrote
+	// their own, and that must stay.
+	async _clearHarvested(actor) {
+		if (!actor || !this._refreshDraftIfNewPrimary()) return;
+		const all = this._answers();
+		if (!(actor.id in all)) return;
+		delete all[actor.id];
+		await setSetting(_ANSWERS_SETTING, all);
 	}
 
 	// Harvest every PC's flag into the world setting in one write — run before compiling
 	// the Chronicle so an un-harvested edit (or one made while this GM wasn't primary)
-	// still lands.
+	// still lands. The primary GM only: a second GM's copy of the setting is whatever it last
+	// read, and writing it would put back everything recorded since.
 	async _harvestAll({ skipActorId = null, force = true } = {}) {
+		if (!this._refreshDraftIfNewPrimary()) return false;
+		// A forced harvest (closing, saving) starts from the setting as it stands, not from the
+		// copy held since this dialog opened: everything recorded since is re-read from the flags
+		// below either way, so nothing is lost by it, and nothing stale is written back.
+		if (force) this._draft = null;
 		let touched = false;
 		for (const actor of getPlayerCharacters()) {
 			if (actor.id === skipActorId) continue;
@@ -1024,10 +1317,24 @@ export class IntroductionsDialog extends StonetopDialog {
 	// as narration is typed, debounced so a burst of writes coalesces into one compile.
 	// Every client's hook calls this, but only the primary GM (the sole world-doc writer)
 	// proceeds; players and secondary GMs no-op.
+	//
+	// A timer of its own rather than foundry.utils.debounce, so that close() and the final save can
+	// CANCEL it: left pending, it compiled the Chronicle a second time over the top of the save.
 	_scheduleChronicleSync() {
-		if (!game.user?.isGM || !isPrimaryGM()) return;
-		this._chronicleSync ??= foundry.utils.debounce(() => this._syncChronicle(), 1500);
-		this._chronicleSync();
+		if (!runsIntroductions() || this._closing) return;
+		this._cancelChronicleSync();
+		this._chronicleSyncTimer = setTimeout(() => {
+			this._chronicleSyncTimer = null;
+			this._syncChronicle();
+		}, 1500);
+	}
+
+	// Drop a pending live sync. Answers true when one was pending (its changes not compiled yet).
+	_cancelChronicleSync() {
+		if (!this._chronicleSyncTimer) return false;
+		clearTimeout(this._chronicleSyncTimer);
+		this._chronicleSyncTimer = null;
+		return true;
 	}
 
 	// The PC whose UNTRACKED (pre-fix) Chronicle page a live sync may adopt and refresh from
@@ -1055,7 +1362,7 @@ export class IntroductionsDialog extends StonetopDialog {
 	// writes nothing when there's nothing new, so a no-op tick is cheap. Silent: no toast, and
 	// it never opens the journal (unlike the finish button or the macro).
 	async _syncChronicle() {
-		if (!game.user?.isGM || !isPrimaryGM()) return;
+		if (!runsIntroductions()) return;
 		try {
 			await this._harvestAll({ force: false });
 			const adoptId = this._liveAdoptActorId();
@@ -1069,10 +1376,14 @@ export class IntroductionsDialog extends StonetopDialog {
 	// shared "Chronicle" journal and open it. GM-only — the button is hidden for
 	// players, who read the journal once it's shared. Harvest every PC's flag into the
 	// setting first so the compiler (which reads the persisted setting) sees the latest.
-	async _saveChronicle(button) {
+	//
+	// `keepDisabled` on the way to finishing: the window closes after a good save, and a button
+	// re-enabled in between let a second click run the whole finish again.
+	async _saveChronicle(button, { keepDisabled = false } = {}) {
 		return saveChronicleFromButton(button, {
 			context:    "Introductions",
 			beforeSave: () => this._harvestAll(),
+			keepDisabled,
 		});
 	}
 
@@ -1080,8 +1391,18 @@ export class IntroductionsDialog extends StonetopDialog {
 	// recorded to the Chronicle (GM only; there's no separate save step) before the
 	// dialog closes. Players just close. If the save errors, keep the dialog open so
 	// the GM can fix it and try again rather than losing the closing action.
+	//
+	// The GM running the table only, among GMs: the save harvests every PC into the setting, and a
+	// second GM's harvest would write its own stale copy. Its window shows no such button anyway.
 	async _finish(button) {
-		if (game.user?.isGM && !(await this._saveChronicle(button))) return;
+		if (game.user?.isGM) {
+			if (!isPrimaryGM()) return;
+			// The authoritative save is about to compile everything; a live sync still pending would
+			// only compile it again over the top of it.
+			this._cancelChronicleSync();
+			if (!(await this._saveChronicle(button, { keepDisabled: true }))) return;
+			this._finishing = true;
+		}
 		// Mark the run finished (drops the saved round/turn so a manual reopen starts at
 		// the pre-check) — this is half of what stops the Welcome guide auto-opening once
 		// spring's also burst forth. close() then re-stamps open:false.
@@ -1094,13 +1415,73 @@ export class IntroductionsDialog extends StonetopDialog {
 	// playbook-bearing actors, so a non-PC create/delete is a harmless no-op re-render. A
 	// change to the saved order itself arrives through the setting's onChange instead
 	// (onOrderChanged).
+	//
+	// A character gaining (or losing) a playbook is a PC joining or leaving that list too, so a
+	// playbook change refreshes it as well: a PC made after the window opened usually gets its
+	// playbook a while after it is created.
+	//
+	// DURING A SESSION the run is the cursor's own order, and the GM running the table keeps it
+	// true: a PC deleted mid-session leaves it (and hands the turn on if it was theirs), and a new
+	// PC with a playbook joins it at the end, which is where the saved order puts somebody it has
+	// not placed yet (see introductions-order.js). Everyone else follows the cursor.
 	_registerRosterHooks() {
 		if (this._rosterHooks) return;
-		const refresh = () => { if (this._phase === 0) this.render(false); };
+		const onDelete = (actor) => {
+			if (this._phase === 0) return this.render(false);
+			if (!this._pcs?.some(pc => pc.id === actor?.id)) return;
+			if (runsIntroductions()) return this._dropFromSession(actor.id);
+			// A follower: the GM's cursor write is on its way, but until it lands this window must
+			// not go on showing (or fall back to the first PC for) a character that no longer exists.
+			this._syncFromCursor();
+			this.render(false);
+		};
+		const onJoin = (actor) => {
+			if (this._phase === 0) return this.render(false);
+			if (runsIntroductions()) this._addToSession(actor);
+		};
+		const onUpdate = (actor, changes) => {
+			if (actor?.type !== "character" || !Object.keys(changes?.system ?? {}).some(k => k.replace(/^-=/, "") === "playbook")) return;
+			onJoin(actor);
+		};
 		this._rosterHooks = [
-			["createActor", Hooks.on("createActor", refresh)],
-			["deleteActor", Hooks.on("deleteActor", refresh)],
+			["createActor", Hooks.on("createActor", onJoin)],
+			["deleteActor", Hooks.on("deleteActor", onDelete)],
+			["updateActor", Hooks.on("updateActor", onUpdate)],
 		];
+	}
+
+	// Primary GM: a PC deleted mid-session leaves the run. When it was their turn, the turn goes to
+	// whoever is next (on a step, the next PC still answering; on a narration round, the next PC
+	// in line, or the next step when they were the last). The render that follows writes the new
+	// order and turn into the cursor.
+	_dropFromSession(actorId) {
+		const at = this._pcs.findIndex(pc => pc.id === actorId);
+		if (at < 0) return;
+		const wasTurn = at === this._pcIndex;
+		this._pcs = this._pcs.filter(pc => pc.id !== actorId);
+		if (at < this._pcIndex) this._pcIndex--;
+		const phase = _PHASES[this._phase];
+		if (wasTurn && this._pcs.length) {
+			if (_isStep(phase)) {
+				// From the PC before the gap, so the one who slid into it is first in line.
+				const next = nextActiveIndex((at - 1 + this._pcs.length) % this._pcs.length, this._pcs.length,
+					i => this._isPcDone(this._pcs[i], phase));
+				this._pcIndex = next >= 0 ? next : Math.min(at, this._pcs.length - 1);
+			} else if (_isRoundRobin(phase) && at >= this._pcs.length) {
+				if (this._phase < _LAST_PHASE) this._enterPhase(this._phase + 1);
+				else this._pcIndex = this._pcs.length - 1;
+			}
+		}
+		this._pcIndex = Math.max(0, Math.min(this._pcIndex, Math.max(this._pcs.length - 1, 0)));
+		if (this.rendered) this.render(false);
+	}
+
+	// Primary GM: a PC that gained its playbook mid-session joins the run at the end of the order.
+	_addToSession(actor) {
+		if (!actor?.id || this._pcs.some(pc => pc.id === actor.id)) return;
+		if (!getPlayerCharacters().some(pc => pc.id === actor.id)) return;
+		this._pcs = [...this._pcs, actor];
+		if (this.rendered) this.render(false);
 	}
 
 	_unregisterRosterHooks() {
@@ -1121,30 +1502,43 @@ export class IntroductionsDialog extends StonetopDialog {
 		// Re-render (debounced) when a shown PC's intro flag changes, unless a field here
 		// is focused (never yank a textarea mid-edit). The harvest is done immediately,
 		// not in this debounce, so a coalesced burst can't drop a step change.
+		// `force`: the change recorded the draft that was on screen and the field has been emptied
+		// (see _absorbCaptureWrite), so there is nothing left under the caret to protect, and the
+		// recorded list and the used question still need redrawing.
+		let forceNext = false;
 		const scheduleRender = foundry.utils.debounce(actor => {
+			const force = forceNext;
+			forceNext = false;
 			const shown = this._pcs?.[this._pcIndex];
 			if (shown && actor.id === shown.id && this.rendered && this._phase > 0
-				&& !this.element?.[0]?.contains(document.activeElement)) this.render(false);
+				&& (force || !this.element?.[0]?.contains(document.activeElement))) this.render(false);
 		}, 150);
 		this._introHook = Hooks.on("updateActor", (actor, changes, _options, userId) => {
 			if (actor?.type !== "character") return;
 			const stFlags = changes?.flags?.[_FLAG_SCOPE];
 			if (!stFlags) return;
 			if (!Object.keys(stFlags).some(k => k.replace(/^-=/, "") === _INTRO_FLAG)) return;
+			// The whole intro flag removed (a reset): what was harvested from it goes too.
+			if (!actor.getFlag(_FLAG_SCOPE, _INTRO_FLAG)) {
+				if (game.user?.isGM) this._clearHarvested(actor);
+				this._scheduleChronicleSync();
+				scheduleRender(actor);
+				return;
+			}
 			// Bring the capture field on screen up to date NOW, in place, before anything else: the
 			// re-render below is skipped while somebody's caret is in it, and a field left showing
 			// an old value is exactly what used to save straight back over the other editor's words.
-			this._absorbCaptureWrite(actor, userId);
+			if (this._absorbCaptureWrite(actor, userId)) forceNext = true;
 			// Only a step4/step6 change (a recorded answer or a pass) is worth mirroring
 			// into the world setting — not a live-typing keystroke, so per-keystroke draft
 			// writes don't churn the world setting. Harvest immediately (primary GM only).
 			const introDelta   = stFlags[_INTRO_FLAG];
 			const stepChanged  = !!introDelta && ("step4" in introDelta || "step6" in introDelta);
 			if (game.user?.isGM && stepChanged) this._harvestActor(actor);
-			// Fill the shared Chronicle in as answers are recorded (and completed narration lands).
-			// Fires on any intro change including narration keystrokes; _syncChronicle debounces and
-			// skips the actively-typing PC, so a half-typed round is never frozen into the seed-once
-			// journal. Primary-GM-guarded inside.
+			// Fill the shared Chronicle in as answers are recorded and narration is typed. Fires on
+			// any intro change, keystrokes included; _syncChronicle is debounced, and a prose section
+			// follows its source until somebody edits it in the journal, so a half-typed round is
+			// refreshed on the next tick rather than frozen. Primary-GM-guarded inside.
 			this._scheduleChronicleSync();
 			// A player recording their one answer (or passing) on their own turn hands the
 			// turn along: the primary GM (the cursor author) advances to the next still-active
@@ -1164,7 +1558,28 @@ export class IntroductionsDialog extends StonetopDialog {
 	}
 
 	async close(options = {}) {
+		if (this._closing) return;
+		// From here on no render draws and nothing writes the cursor or the resume record (see
+		// _render): a render that began before this must not undo what closing does.
+		this._closing = true;
+		try {
+			return await this._closeNow(options);
+		} finally {
+			this._closing = false;
+			this._finishing = false;
+		}
+	}
+
+	async _closeNow(options) {
+		// Keep what was typed in the last moments before the window went. The player's window is
+		// closed for them when the session ends, often mid-sentence, and dropping the pending
+		// keystroke write lost the tail of it. The flush saves only typing not saved yet.
+		await this._flushCaptureFromDom();
 		this._cancelLiveDraft();
+		this._editingAnswer = null;
+		// A live Chronicle sync still pending: dropped, so it can't run over the final save. When the
+		// window is closed WITHOUT that save, its changes are compiled once below instead.
+		const syncPending = this._cancelChronicleSync();
 		// Harvest every PC's answers — narration INCLUDED — into the world setting before we
 		// go. The live updateActor harvest only fires on step (step4/step6) changes, so without
 		// this, narration typed then closed with the X (rather than the Save-to-Chronicle
@@ -1174,7 +1589,7 @@ export class IntroductionsDialog extends StonetopDialog {
 		// persists narration typed and then closed with the X, so a swallowed failure here loses
 		// player-written text outright, and the table's only clue is that the Chronicle came out
 		// short. Say so loudly enough that it can be retyped before anyone moves on.
-		if (game.user?.isGM && isPrimaryGM()) {
+		if (runsIntroductions()) {
 			try { await this._harvestAll(); }
 			catch (err) {
 				console.error("Stonetop | Introductions: harvesting answers on close failed", err);
@@ -1182,6 +1597,9 @@ export class IntroductionsDialog extends StonetopDialog {
 					"Stonetop: the Introductions answers could not be saved. Reopen the window and "
 					+ "check the latest narration before continuing.");
 			}
+			// Closed with the X while a live sync was still waiting: compile its changes now, once,
+			// since the timer that would have is gone. Not after "Save to Chronicle", which just did.
+			if (syncPending && !this._finishing) await this._syncChronicle();
 		}
 		this._unregisterRosterHooks();
 		this._unregisterIntroHooks();
@@ -1192,7 +1610,7 @@ export class IntroductionsDialog extends StonetopDialog {
 		// The primary GM closing on purpose ends the shared session, so players' dialogs
 		// close too. (A secondary GM or a player closing their own window doesn't end it; a
 		// GM browser reload skips close(), leaving the cursor active for reopen.)
-		if (game.user?.isGM && isPrimaryGM() && this._cursor().active) this._writeCursor({ active: false });
+		if (runsIntroductions() && this._cursor().active) this._writeCursor({ active: false });
 		return super.close(options);
 	}
 
@@ -1225,9 +1643,15 @@ export class IntroductionsDialog extends StonetopDialog {
 		}
 
 		const isGM  = game.user?.isGM ?? false;
+		// The GM running the table: the only one who moves it on, saves it, or corrects a record.
+		// A second GM watches, with a note saying who is running it in place of those controls.
+		const isDriver = runsIntroductions();
 		const pcs   = this._pcs;
 		const phase = _PHASES[this._phase];
-		const actor = _isRoundRobin(phase) ? (pcs[this._pcIndex] ?? null) : null;
+		// Nobody's turn as far as this follower can tell (see _syncFromCursor): drawn as a wait
+		// rather than as the first PC being up.
+		const waiting = !isDriver && _isRoundRobin(phase) && !!this._waitingOnTurn;
+		const actor = _isRoundRobin(phase) && !waiting ? (pcs[this._pcIndex] ?? null) : null;
 
 		let currentPc = null;
 		let capture   = null;
@@ -1283,9 +1707,18 @@ export class IntroductionsDialog extends StonetopDialog {
 					.filter(other => other.id !== actor.id)
 					.map(other => ({ id: other.id, name: other.name, isSelected: other.id === draft.who }));
 				const nameOf = id => pcs.find(other => other.id === id)?.name ?? "";
-				const recorded = answers.map(x => ({
+				const editing = this._editingAnswer?.actorId === actor.id && this._editingAnswer.stepKey === stepKey
+					? this._editingAnswer : null;
+				const recorded = answers.map((x, index) => ({
+					index,
 					question: Number.isInteger(x.q) ? wrapLoreTerms(qList[x.q] ?? "") : "",
 					answer:   x.a,
+					// The GM's inline edit of this answer, when it is the one open for editing; the
+					// text is what has been typed into it so far, so a redraw mid-edit keeps it.
+					editing:  isDriver && editing?.index === index,
+					editText: editing?.index === index ? editing.text : "",
+					editLabel:   `Edit this answer`,
+					deleteLabel: `Delete this answer`,
 					// Said back on the recorded line so a pick can be SEEN to have stuck. It is the
 					// one part of a recorded answer that is not in the writing itself, so without
 					// this there is nothing on screen to show it was ever made. A person since
@@ -1293,6 +1726,11 @@ export class IntroductionsDialog extends StonetopDialog {
 					about:    nameOf(x.who),
 				}));
 				const total   = qList.length;
+				// A playbook with no questions for this step (one the introductions have no data
+				// for): the PC counts as done, the turn passes them by, and if they are shown anyway
+				// the window says why there is nothing to pick, rather than offering a Done that can
+				// only ever answer "Tap the question".
+				const noQuestions = total === 0;
 				capture = {
 					isStep:       true,
 					isAsk:        phase.kind === "ask",
@@ -1315,8 +1753,14 @@ export class IntroductionsDialog extends StonetopDialog {
 					recorded,
 					hasRecorded:  recorded.length > 0,
 					passed,
+					noQuestions,
 					// Pass is offered on any un-passed turn (a PC may pass without answering).
-					canPass:      !passed,
+					canPass:      !passed && !noQuestions,
+					// The player's Done: only while there is still something to record.
+					canDone:      canEdit && !isGM && !passed && !noQuestions,
+					// The GM's corrections: un-pass, and edit or delete a recorded answer.
+					canManage:    isDriver,
+					unpassLabel:  `Un-pass ${actor.name}`,
 					answeredCount: answers.length,
 					total,
 				};
@@ -1366,7 +1810,7 @@ export class IntroductionsDialog extends StonetopDialog {
 		// phase (1..last), the current one flagged active. Only the primary GM drives the
 		// cursor (see _jumpToPhase), so players AND secondary GMs follow it and get no rail
 		// (a rendered-but-inert rail would click into _jumpToPhase's isPrimaryGM guard).
-		const steps = (isGM && isPrimaryGM()) ? _PHASES.slice(1).map((p, i) => ({
+		const steps = isDriver ? _PHASES.slice(1).map((p, i) => ({
 			index:    i + 1,
 			title:    p.title,
 			icon:     p.icon,
@@ -1376,6 +1820,9 @@ export class IntroductionsDialog extends StonetopDialog {
 		return {
 			isPreCheck:     false,
 			isGM,
+			isDriver,
+			watchingNote:   isGM && !isDriver ? `Watching: ${IntroductionsDialog._primaryGmName()} is running the introductions.` : "",
+			waiting,
 			steps,
 			phase:          this._phase,
 			currentPc,
@@ -1422,11 +1869,22 @@ export class IntroductionsDialog extends StonetopDialog {
 	_begin() {
 		// Only the PRIMARY GM starts the session — it authors the cursor every other client
 		// follows; a secondary GM beginning locally would move only its own view and desync.
-		if (!game.user?.isGM || !isPrimaryGM()) return;
+		if (!runsIntroductions()) return;
 		this._pcs     = introductionsRoster();
 		this._phase   = 1;
 		this._pcIndex = 0;
 		this.render(false);
+	}
+
+	// ONE MOVE AT A TIME. Next awaits its flag writes before it moves the turn, and a second press
+	// arriving in between (a double click, or Next landing while Pass is still writing) moved it a
+	// second time from wherever the first left it: a PC skipped, or a whole round. Presses that
+	// arrive while a move is under way are dropped, not queued; the window redraws when it is done.
+	async _navLatch(fn) {
+		if (this._navBusy) return undefined;
+		this._navBusy = true;
+		try { return await fn(); }
+		finally { this._navBusy = false; }
 	}
 
 	// "Next". On an answer/ask step this records the active PC's drafted answer (if
@@ -1438,6 +1896,10 @@ export class IntroductionsDialog extends StonetopDialog {
 		// GM-paced: only the primary GM drives the shared cursor. A secondary GM's Next would
 		// move its local view without propagating, then snap back on the next primary write.
 		if (game.user?.isGM && !isPrimaryGM()) return;
+		return this._navLatch(() => this._advanceNow());
+	}
+
+	async _advanceNow() {
 		const phase = _PHASES[this._phase];
 		if (_isStep(phase)) { await this._advanceStep(phase); return; }
 		if (_isRoundRobin(phase) && this._pcIndex < this._pcs.length - 1) {
@@ -1504,12 +1966,11 @@ export class IntroductionsDialog extends StonetopDialog {
 		}
 	}
 
-	// Does a live draft for this step actually EXIST on the actor? _stepDraft answers the
+	// Does a draft for this step actually EXIST on the actor? _stepDraft answers the
 	// same empty { q: null, a: "" } for "no draft" and "an empty one", which is right for
 	// reading and wrong for deciding whether to write.
 	_hasLiveDraft(actorId, stepKey) {
-		const live = this._intro(actorId).live;
-		return !!live && live.stepKey === stepKey;
+		return !!this._draftSource(actorId, stepKey);
 	}
 
 	/**
@@ -1536,7 +1997,15 @@ export class IntroductionsDialog extends StonetopDialog {
 	 * back to that PC the commit refused it with "Tap the question they chose" and returned false.
 	 * The GM's Next then did nothing at all, with nothing on screen to say why.
 	 */
+	//
+	// And never when the step's record has moved on since the field was drawn (an answer recorded,
+	// the PC passed): whatever the field holds was typed against a record that no longer stands,
+	// most often the answer just recorded plus a word or two, and writing that back is the answer
+	// coming back as a draft. Checked first, since a NEW draft (somebody else's) may exist by then.
 	_draftWorthFlushing(el) {
+		const seen = this._captureSeen;
+		if (seen?.key === this._captureKey(el) && typeof seen.mark === "string"
+			&& seen.mark !== this._commitMark(el.dataset.actorId, el.dataset.stepKey)) return false;
 		if (this._hasLiveDraft(el.dataset.actorId, el.dataset.stepKey)) return true;
 		if (el !== globalThis.document?.activeElement) return false;
 		const text = String(el.value ?? "").trim();
@@ -1562,13 +2031,19 @@ export class IntroductionsDialog extends StonetopDialog {
 	// Record the active PC's draft, then move the cursor on within the step. Only the GM has
 	// Next, so this runs on the GM. It flushes whatever the GM typed and hasn't saved yet into
 	// the draft first, so a fast type-then-Next captures the last text, then records the flag.
+	//
+	// COMPARE, THEN MOVE. The record is awaited, and while it is in flight the PC's own player can
+	// press Done on the same answer, which the primary GM answers by handing the turn on
+	// (_autoAdvanceOnRemoteStep). Moving on again from wherever that left the turn skipped the
+	// next PC. So the turn only moves if it is still where this press found it.
 	async _advanceStep(phase) {
 		this._cancelLiveDraft();
 		const actor = this._pcs[this._pcIndex];
+		const from  = { phase: this._phase, id: actor?.id ?? null };
 		// Record the shown PC's draft first; a draft with text but no chosen question is
 		// rejected (below) and holds the turn. No actor (empty roster) still advances.
 		if (actor && !(await this._commitComposedDraft(actor, phase, "Tap the question they chose before recording it."))) return;
-		this._advanceStepCursor(phase);
+		if (this._phase === from.phase && (this._pcs[this._pcIndex]?.id ?? null) === from.id) this._advanceStepCursor(phase);
 		this.render(false);
 	}
 
@@ -1597,21 +2072,28 @@ export class IntroductionsDialog extends StonetopDialog {
 	// GM's updateActor hook picks up via _autoAdvanceOnRemoteStep). Mirrors the record half of
 	// the GM's Next: flush the latest typed text, require a chosen question, append it.
 	async _recordCurrentDraft() {
-		const phase = _PHASES[this._phase];
-		if (!_isStep(phase)) return;
-		const actor = this._pcs[this._pcIndex];
-		if (!actor || !this._canEditActor(actor)) return;
-		this._cancelLiveDraft();
-		if (!(await this._commitComposedDraft(actor, phase, "Tap the question you're answering before recording it."))) return;
-		this.render(false);
+		return this._navLatch(async () => {
+			const phase = _PHASES[this._phase];
+			if (!_isStep(phase)) return;
+			const actor = this._pcs[this._pcIndex];
+			if (!actor || !this._canEditActor(actor)) return;
+			this._cancelLiveDraft();
+			if (!(await this._commitComposedDraft(actor, phase, "Tap the question you're answering before recording it."))) return;
+			this.render(false);
+		});
 	}
 
 	// Pass, with a confirmation for the player explaining what passing means. The GM — who
 	// paces the table and may pass on behalf of an offline PC — passes without the prompt.
+	//
+	// The step and PC are taken when the prompt OPENS: it stays up for as long as the player
+	// takes to read it, and the GM may move the table on meanwhile. Passing whatever step and PC
+	// the window shows by the time they answer passed the wrong one.
 	async _confirmPass() {
 		const phase = _PHASES[this._phase];
 		if (!_isStep(phase)) return;
-		if (game.user?.isGM) return this._pass();
+		const target = { phaseIndex: this._phase, actorId: this._pcs[this._pcIndex]?.id ?? null };
+		if (game.user?.isGM) return this._pass(target);
 		const isAsk = phase.kind === "ask";
 		const confirmed = await confirmOutcome({
 			title:   "Pass this part?",
@@ -1620,7 +2102,7 @@ export class IntroductionsDialog extends StonetopDialog {
 			yes:     { label: "Pass this part", icon: "fa-forward" },
 			no:      { label: `Keep ${isAsk ? "asking" : "answering"}` },
 		});
-		if (confirmed) await this._pass();
+		if (confirmed) await this._pass(target);
 	}
 
 	// Pass: the active PC opts out of the rest of this step. The turn then moves to the next
@@ -1628,15 +2110,29 @@ export class IntroductionsDialog extends StonetopDialog {
 	// flag and the primary GM's updateActor hook (_autoAdvanceOnRemoteStep) advances for them.
 	// A pass never auto-leaves the step (GM-paced: when all are done the GM's lit-up Next is
 	// what advances the phase), and the GM's Next always skips already-passed PCs.
-	async _pass() {
-		const phase = _PHASES[this._phase];
-		if (!_isStep(phase)) return;
-		const actor = this._pcs[this._pcIndex];
-		if (!actor || !this._canEditActor(actor)) return;
-		this._cancelLiveDraft();
-		await this._setPassed(actor.id, phase.stepKey, true);
-		if (game.user?.isGM) this._stepToNextActivePc(phase); // else stay put; everyone's done → GM clicks Next
-		this.render(false);
+	//
+	// `target` ({ phaseIndex, actorId }) is the step and PC the press was made on (see
+	// _confirmPass); when the table has moved on from either since, nothing is passed.
+	async _pass(target = null) {
+		return this._navLatch(async () => {
+			const phase = _PHASES[this._phase];
+			if (!_isStep(phase)) return;
+			const actor = this._pcs[this._pcIndex];
+			if (!actor || !this._canEditActor(actor)) return;
+			if (target && (target.phaseIndex !== this._phase || target.actorId !== actor.id)) {
+				ui.notifications?.info("The introductions moved on while you were deciding, so nothing was passed.");
+				return;
+			}
+			this._cancelLiveDraft();
+			const phaseIndex = this._phase;
+			await this._setPassed(actor.id, phase.stepKey, true);
+			// GM: hand the turn on, from this PC, and only if the turn is still theirs (compare, then
+			// move: see _advanceStep). A player stays put; their pass reaches the GM, who moves it.
+			if (game.user?.isGM && this._phase === phaseIndex && this._pcs[this._pcIndex]?.id === actor.id) {
+				this._stepToNextActivePc(phase);
+			}
+			this.render(false);
+		});
 	}
 
 	// Move the round-robin cursor to the next still-active PC in this looping step,
@@ -1666,7 +2162,7 @@ export class IntroductionsDialog extends StonetopDialog {
 	// Returns true when handled (advanced / stayed on a lone active PC / parked, then
 	// re-rendered), false to fall through to the ordinary debounced re-render.
 	_autoAdvanceOnRemoteStep(actor) {
-		if (!game.user?.isGM || !isPrimaryGM()) return false;
+		if (!runsIntroductions()) return false;
 		const phase = _PHASES[this._phase];
 		if (!_isStep(phase)) return false;
 		if (this._pcs?.[this._pcIndex]?.id !== actor.id) return false; // only the active PC's own turn
@@ -1680,6 +2176,8 @@ export class IntroductionsDialog extends StonetopDialog {
 
 	// Enter a phase, parking the cursor: on a looping step, on the first still-active
 	// PC (so a re-entered step skips PCs already done); otherwise on the first PC.
+	// A step everyone is already done with parks on the first PC for the GM's own view, but names
+	// nobody in the cursor (see _syncCursorFromLocal), so no player is summoned to it.
 	_enterPhase(phase) {
 		this._phase = phase;
 		const def = _PHASES[phase];
@@ -1691,17 +2189,30 @@ export class IntroductionsDialog extends StonetopDialog {
 		}
 	}
 
+	// Back. On a step it steps over PCs who are done with it (passed, or answered everything):
+	// they have no turn to go back to, and landing on one summoned their player for nothing. Off
+	// the front of a step it goes to the step before, landing on its last PC still taking turns
+	// (on a narration round, simply its last PC).
 	_retreat() {
 		// Back is GM-paced too: only the primary GM moves the shared cursor (see _advance).
 		if (game.user?.isGM && !isPrimaryGM()) return;
-		if (this._phase === 0) return;
+		if (this._phase === 0 || this._navBusy) return;
 		const phase = _PHASES[this._phase];
-		if (_isRoundRobin(phase) && this._pcIndex > 0) {
-			this._pcIndex--;
+		const doneIn = def => i => this._isPcDone(this._pcs[i], def);
+		const prevHere = !_isRoundRobin(phase) ? -1
+			: _isStep(phase) ? prevActiveIndex(this._pcIndex, doneIn(phase))
+			: this._pcIndex - 1;
+		if (prevHere >= 0) {
+			this._pcIndex = prevHere;
 		} else if (this._phase > 1) {
 			this._phase--;
 			const prev = _PHASES[this._phase];
-			this._pcIndex = _isRoundRobin(prev) ? this._pcs.length - 1 : 0;
+			if (_isStep(prev)) {
+				const last = lastActiveIndex(this._pcs.length, doneIn(prev));
+				this._pcIndex = last >= 0 ? last : Math.max(this._pcs.length - 1, 0);
+			} else {
+				this._pcIndex = _isRoundRobin(prev) ? Math.max(this._pcs.length - 1, 0) : 0;
+			}
 		} else {
 			// Back to pre-check from phase 1, first PC
 			this._phase   = 0;
@@ -1717,18 +2228,19 @@ export class IntroductionsDialog extends StonetopDialog {
 	// cursor (a secondary GM/player has no rail, and this guard backstops that). A
 	// click on the current step is a no-op so it can't reset the per-PC turn.
 	_jumpToPhase(index) {
-		if (!game.user?.isGM || !isPrimaryGM()) return;
+		if (!runsIntroductions()) return;
 		if (!Number.isInteger(index) || index < 1 || index > _LAST_PHASE || index === this._phase) return;
+		if (this._navBusy) return;
 		this._cancelLiveDraft();
 		this._enterPhase(index);
 		this._scheduleChronicleSync();
 		this.render(false);
 	}
 
-	// Resume the phase/turn saved before a reload (the dialog doesn't survive a refresh).
-	// Returns true when it restored a live position; false (leaving the dialog on the
-	// pre-check) when nothing's saved or there are no PCs — the caller then falls back to the
-	// shared cursor so a fresh GM tab joins a running session instead of resetting.
+	// Resume the phase/turn this browser saved (the dialog doesn't survive a refresh), for a GM
+	// reopening a session nobody is running: while one IS running, the cursor wins (see _doOpen).
+	// Returns true when it restored a position; false (leaving the dialog on the pre-check) when
+	// nothing's saved or there are no PCs.
 	//
 	// The order comes from the running session's cursor when there is one, and only otherwise
 	// from the saved order: the saved turn index counts into the order the session BEGAN with,
@@ -1763,7 +2275,12 @@ export class IntroductionsDialog extends StonetopDialog {
 	// moved, which matters more here than for the steppers — this dialog re-renders on a capture
 	// flush and on every cursor sync, not only when the GM navigates. This walkthrough's "place"
 	// is the round, the turn within it, and the format version those two are written in.
+	//
+	// The GM's only. A player never reopens this from a saved record: they follow the cursor, which
+	// is what says whether a session is running at all. A record of theirs reopened the window on
+	// a dead "Waiting for the GM to begin" screen after the session had ended.
 	_saveResume() {
+		if (!game.user?.isGM) return;
 		saveWalkthroughPosition(_RESUME_KEY, { v: _RESUME_VERSION, phase: this._phase, pcIndex: this._pcIndex });
 	}
 }

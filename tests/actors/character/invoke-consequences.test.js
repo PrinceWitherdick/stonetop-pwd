@@ -141,10 +141,18 @@ describe("the effort taxes you", () => {
 		const message = card();
 		const buttons = [{ disabled: false }];
 		await expect(settleInvokeDebility(message, seren, "1", "dazed", { buttons })).resolves.toBe(false);
-		expect(message.getFlag(SCOPE, CONSEQUENCES_FLAG)?.["1"]).toBeUndefined();
+		expect(message.getFlag(SCOPE, CONSEQUENCES_FLAG)?.["1"]?.marked).toBeUndefined();
 		expect(buttons[0].disabled).toBe(false);
 		expect(globalThis.ui.notifications.warn).toHaveBeenCalled();
 		await expect(settleInvokeDebility(message, seren, "1", "weakened")).resolves.toBe(true);
+	});
+
+	it("leaves the rest of the bullet's record alone when it gives the bullet back", async () => {
+		const seren = lightbearer({ marked: ["dazed"] });
+		const message = card();
+		await message.setFlag(SCOPE, `${CONSEQUENCES_FLAG}.1`, { relic: true, stamped: ["warmth-of-the-sun"] });
+		await expect(settleInvokeDebility(message, seren, "1", "dazed")).resolves.toBe(false);
+		expect(message.getFlag(SCOPE, CONSEQUENCES_FLAG)["1"]).toEqual({ relic: true, stamped: ["warmth-of-the-sun"] });
 	});
 });
 

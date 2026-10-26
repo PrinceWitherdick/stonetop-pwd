@@ -16,8 +16,8 @@
       holding something the player should act on while they are looking at another one. Pass
       `attentionLabel` with it — the dot is decoration, so the reason has to reach the tooltip
       and the aria-label or it says nothing to anyone who can't see it. --}}
-<a class="item stonetop-tab-rail-item{{#if attention}} stonetop-tab-attention{{/if}}" data-tab="{{tab}}"
-   aria-label="{{label}}{{#if attention}}: {{attentionLabel}}{{/if}}"
-   data-tooltip="{{label}}{{#if attention}}: {{attentionLabel}}{{/if}}" data-tooltip-direction="LEFT">
+<a class="item stonetop-tab-rail-item{{#if attention}} stonetop-tab-attention{{/if}}" data-tab="{{this.tab}}"
+   aria-label="{{this.label}}{{#if attention}}: {{this.attentionLabel}}{{/if}}"
+   data-tooltip="{{this.label}}{{#if attention}}: {{this.attentionLabel}}{{/if}}" data-tooltip-direction="LEFT">
 	<span class="stonetop-tab-icon" aria-hidden="true"></span>
 </a>

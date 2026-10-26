@@ -13,7 +13,7 @@
 <form class="stonetop-timeline-entry" autocomplete="off">
 
 	<section class="stonetop-timeline-entry-when">
-		{{{pickerHtml}}}
+		{{{this.pickerHtml}}}
 	</section>
 
 	<section class="stonetop-timeline-entry-what">
@@ -21,7 +21,7 @@
 			{{localize "stonetop.timeline.dialog.entryTitle"}}
 		</label>
 		<input id="stonetop-timeline-title" type="text" class="stonetop-timeline-entry-title"
-		       value="{{entryTitle}}" autocomplete="off"
+		       value="{{this.entryTitle}}" autocomplete="off"
 		       placeholder="{{localize "stonetop.timeline.dialog.entryTitlePlaceholder"}}">
 
 		{{!-- ONE TAG, on a typed row only: none, a kind the system records (it then reads as that
@@ -42,10 +42,10 @@
 			</button>
 		</div>
 		<div class="stonetop-timeline-entry-tag-form" id="stonetop-timeline-tag-form" hidden>
-			<input type="text" class="stonetop-timeline-entry-tag-name" maxlength="{{tagNameMax}}"
+			<input type="text" class="stonetop-timeline-entry-tag-name" maxlength="{{this.tagNameMax}}"
 			       autocomplete="off" aria-label="{{localize "stonetop.timeline.dialog.tagName"}}"
 			       placeholder="{{localize "stonetop.timeline.dialog.tagNamePlaceholder"}}">
-			<input type="color" class="stonetop-timeline-entry-tag-colour" value="{{tagColour}}"
+			<input type="color" class="stonetop-timeline-entry-tag-colour" value="{{this.tagColour}}"
 			       aria-label="{{localize "stonetop.timeline.dialog.tagColour"}}"
 			       data-tooltip="{{localize "stonetop.timeline.dialog.tagColour"}}">
 			<button type="button" class="stonetop-timeline-entry-tag-add">
@@ -65,7 +65,7 @@
 		      typing in the field breaks the link, and that happens without a re-render. --}}
 		<div class="stonetop-timeline-entry-place-zone{{#if placeLinked}} is-linked{{/if}}">
 			<input id="stonetop-timeline-place" type="text" class="stonetop-timeline-entry-place"
-			       value="{{place}}" autocomplete="off" list="stonetop-timeline-places"
+			       value="{{this.place}}" autocomplete="off" list="stonetop-timeline-places"
 			       placeholder="{{localize "stonetop.timeline.dialog.placePlaceholder"}}">
 			<span class="stonetop-timeline-entry-linked"
 			      data-tooltip="{{localize "stonetop.timeline.dialog.placeLinkedTooltip"}}">
@@ -84,7 +84,7 @@
 		<label class="stonetop-timeline-entry-label" for="stonetop-timeline-foes">
 			{{localize "stonetop.timeline.dialog.foes"}}
 		</label>
-		<textarea id="stonetop-timeline-foes" class="stonetop-timeline-entry-foes" rows="4">{{foesText}}</textarea>
+		<textarea id="stonetop-timeline-foes" class="stonetop-timeline-entry-foes" rows="4">{{this.foesText}}</textarea>
 		<p class="stonetop-timeline-entry-hint">{{localize "stonetop.timeline.dialog.foesHint"}}</p>
 		{{/if}}
 
@@ -92,7 +92,7 @@
 			{{localize "stonetop.timeline.dialog.body"}}
 		</label>
 		<textarea id="stonetop-timeline-body" class="stonetop-timeline-entry-body" rows="6"
-		          placeholder="{{localize "stonetop.timeline.dialog.bodyPlaceholder"}}">{{body}}</textarea>
+		          placeholder="{{localize "stonetop.timeline.dialog.bodyPlaceholder"}}">{{this.body}}</textarea>
 		<p class="stonetop-timeline-entry-hint">{{localize "stonetop.timeline.dialog.bodyDropHint"}}</p>
 	</section>
 

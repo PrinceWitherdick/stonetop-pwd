@@ -1,4 +1,4 @@
-<form class="{{cssClass}} steading-sheet" autocomplete="off">
+<form class="{{this.cssClass}} steading-sheet" autocomplete="off">
 	<div class="sheet-wrapper steading-sheet-wrapper">
 
 		<div class="steading-header">
@@ -65,19 +65,19 @@
 				      inside through the class named here. --}}
 				{{#if interactive}}
 				<button type="button"
-				        class="steading-hold steading-hold--{{tone}} steading-hold--{{icon}}"
-				        data-action="{{action}}"
-				        aria-label="{{label}}"
-				        data-tooltip-html="<span class=&quot;stonetop-hold-tip-name&quot;>{{label}}</span><span class=&quot;stonetop-hold-tip-text&quot;>{{tooltip}}</span>"
+				        class="steading-hold steading-hold--{{this.tone}} steading-hold--{{this.icon}}"
+				        data-action="{{this.action}}"
+				        aria-label="{{this.label}}"
+				        data-tooltip-html="<span class=&quot;stonetop-hold-tip-name&quot;>{{this.label}}</span><span class=&quot;stonetop-hold-tip-text&quot;>{{this.tooltip}}</span>"
 				        data-tooltip-class="stonetop-hold-tip" data-tooltip-direction="DOWN">
 					<span class="steading-hold-glyph" aria-hidden="true"></span>
 				</button>
 				{{/if}}
 				{{#unless interactive}}
-				<span class="steading-hold steading-hold--{{tone}} steading-hold--{{icon}}"
+				<span class="steading-hold steading-hold--{{this.tone}} steading-hold--{{this.icon}}"
 				      role="img"
-				      aria-label="{{label}}"
-				      data-tooltip-html="<span class=&quot;stonetop-hold-tip-name&quot;>{{label}}</span><span class=&quot;stonetop-hold-tip-text&quot;>{{tooltip}}</span>"
+				      aria-label="{{this.label}}"
+				      data-tooltip-html="<span class=&quot;stonetop-hold-tip-name&quot;>{{this.label}}</span><span class=&quot;stonetop-hold-tip-text&quot;>{{this.tooltip}}</span>"
 				      data-tooltip-class="stonetop-hold-tip" data-tooltip-direction="DOWN">
 					<span class="steading-hold-glyph" aria-hidden="true"></span>
 				</span>

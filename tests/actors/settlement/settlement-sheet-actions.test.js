@@ -155,3 +155,38 @@ describe("the settlement Overview's rows", () => {
 		expect(overview + list).not.toMatch(/<strong>/);
 	});
 });
+
+// ST-6: a resident's cells write their NPC, so they open only for a user who may write that NPC as
+// well as the sheet; the write refuses a non-owner and a blank name rather than throwing.
+describe("the settlement Residents cells", () => {
+	const people = read("templates/actor/settlement/settlement-people.hbs");
+
+	it("open only on a row whose NPC this user may write", () => {
+		expect(people).not.toMatch(/\{\{#if @root\.editable\}\}\s*<input/);
+		expect(people.match(/\{\{#if cellsEditable\}\}/g)?.length).toBe(3);
+		expect(SHEET).toMatch(/const npc = resolved\.unresolved \? null : game\.actors\?\.get\(resolved\.id\);/);
+		expect(SHEET).toMatch(/cellsEditable: editable && !!npc\?\.isOwner/);
+	});
+
+	it("refuse a write the NPC would refuse", () => {
+		expect(SHEET).toMatch(/if \(!npc\.isOwner\) return refuse\("cannotEditResident"\);/);
+		expect(SHEET).toMatch(/if \(field === "name" && !value\) return refuse\("residentNeedsName"\);/);
+	});
+});
+
+// ST-8, ST-9, ST-10: the sheet's smaller guards.
+describe("the settlement sheet's guards", () => {
+	it("names only the settlements this user can see as a new Home", () => {
+		expect(SHEET).toMatch(/settlementActors\(\)\.filter\(s => s\.visible\)\.map\(s => s\.name\)/);
+	});
+
+	it("takes no dropped Item, folder of Items or effect", () => {
+		for (const method of ["_onDropItem", "_onDropFolder", "_onDropActiveEffect"]) {
+			expect(SHEET, method).toMatch(new RegExp(`^\\t\\tasync ${method}\\(\\) \\{ return false; \\}`, "m"));
+		}
+	});
+
+	it("says nothing about a resident just made here that a GM's hook listed first", () => {
+		expect(SHEET).toMatch(/if \(!quiet\) ui\.notifications\?\.info\?\.\(format\(`\$\{KEY\}\.alreadyResident`/);
+	});
+});

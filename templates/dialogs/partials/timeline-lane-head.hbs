@@ -5,10 +5,10 @@
       reads their playbook under their name ("The Seeker"). --}}
 <span class="stonetop-timeline-lane-who">
 	{{#if portrait}}
-	<img class="stonetop-timeline-lane-portrait" src="{{portrait}}" alt="" draggable="false">
+	<img class="stonetop-timeline-lane-portrait" src="{{this.portrait}}" alt="" draggable="false">
 	{{/if}}
 	<span class="stonetop-timeline-lane-label">
-		<span class="stonetop-timeline-lane-name">{{name}}</span>
-		{{#if playbook}}<span class="stonetop-timeline-lane-playbook">{{playbook}}</span>{{/if}}
+		<span class="stonetop-timeline-lane-name">{{this.name}}</span>
+		{{#if playbook}}<span class="stonetop-timeline-lane-playbook">{{this.playbook}}</span>{{/if}}
 	</span>
 </span>

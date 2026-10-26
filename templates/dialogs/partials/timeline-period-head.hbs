@@ -31,29 +31,29 @@
       which takes no `text-box`).
 
       Context: one period view-model (timeline-view.js#periodVM). --}}
-<h3 class="stonetop-timeline-period-title{{#if glyphClass}} stonetop-season-entry {{glyphClass}}{{/if}}">
-	<span class="stonetop-timeline-period-name">{{#if undated}}{{label}}{{else}}{{seasonLabel}}{{/if}}</span>
+<h3 class="stonetop-timeline-period-title{{#if glyphClass}} stonetop-season-entry {{this.glyphClass}}{{/if}}">
+	<span class="stonetop-timeline-period-name">{{#if undated}}{{this.label}}{{else}}{{this.seasonLabel}}{{/if}}</span>
 </h3>
 {{#unless undated}}
-<span class="stonetop-year-chip">{{yearCount}}{{#if yearTail}} <small class="stonetop-year-chip-tail"><abbr data-tooltip="{{yearTail}}">{{yearTailShort}}</abbr></small>{{/if}}</span>
+<span class="stonetop-year-chip">{{this.yearCount}}{{#if yearTail}} <small class="stonetop-year-chip-tail"><abbr data-tooltip="{{this.yearTail}}">{{this.yearTailShort}}</abbr></small>{{/if}}</span>
 {{/unless}}
 {{#if seasonNotes.length}}
 <div class="stonetop-timeline-season-notes">
 	{{#each seasonNotes}}
-	<div class="stonetop-timeline-season-note" data-entry-id="{{id}}" data-track-id="{{trackId}}">
+	<div class="stonetop-timeline-season-note" data-entry-id="{{this.id}}" data-track-id="{{this.trackId}}">
 		{{#if title}}
-		<p class="stonetop-timeline-season-note-title">{{title}}</p>
+		<p class="stonetop-timeline-season-note-title">{{this.title}}</p>
 		{{/if}}
 		{{#if enrichedBody}}
-		<div class="stonetop-timeline-season-note-body">{{{enrichedBody}}}</div>
+		<div class="stonetop-timeline-season-note-body">{{{this.enrichedBody}}}</div>
 		{{/if}}
 		{{#if canEdit}}
 		<div class="stonetop-timeline-card-actions stonetop-timeline-season-note-actions">
-			<button type="button" class="stonetop-timeline-edit" data-entry-id="{{id}}"
+			<button type="button" class="stonetop-timeline-edit" data-entry-id="{{this.id}}"
 			        aria-label="{{localize "stonetop.timeline.editSeasonNote"}}"
 			        data-tooltip="{{localize "stonetop.timeline.editSeasonNote"}}"
 			        data-tooltip-direction="UP"><i class="fas fa-pen"></i></button>
-			<button type="button" class="stonetop-timeline-remove" data-entry-id="{{id}}"
+			<button type="button" class="stonetop-timeline-remove" data-entry-id="{{this.id}}"
 			        aria-label="{{localize "stonetop.timeline.removeSeasonNote"}}"
 			        data-tooltip="{{localize "stonetop.timeline.removeSeasonNote"}}"
 			        data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>

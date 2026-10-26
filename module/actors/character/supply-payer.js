@@ -17,10 +17,11 @@
 
 import { SUPPLY_PURPOSE, defaultSupplyPurse, otherSupplyPayers } from "./supply-cost.js";
 import { purseSpendUpdate } from "../../camp/camp-rules.js";
-import { carerStockAnswerer } from "./healers-arts.js";
+import { carerStockAnswerer, recoverRefusal } from "./healers-arts.js";
 import { isOutOfPlaySafe } from "./deaths-door-actor.js";
 import { OWNER_ASK_MS, spendOrAskOwner, answerOwnerAsk, tooLate, gmAnswersNote } from "../../utils/owner-ask.js";
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
+import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { escHtml } from "../../utils/strings.js";
 
 /** The User query a patient's player sends when someone else decides on the payer's supplies. */
@@ -83,39 +84,54 @@ export function behalfSpendRow(payerName, receipt, patientName) {
  * Spend `n` uses out of `payer`'s purse `slug` (their first eligible one holding `n` with none named), on THIS client,
  * read live: a purse that no longer holds `n` pays nothing.
  *
- * @returns {Promise<{slug: string, label: string, spent: number, left: number}|null>}
+ * `recover` (`{self, tend}`, healers-arts.js#recoverRefusal) is checked against `patient` in the same turn, just
+ * before the write. Refused, nothing is paid and `{refused}` says why; but a refused `self` with more uses asked
+ * (the followers ticked alongside, a use each) pays one use fewer, for the followers alone, and says why too.
+ *
+ * @returns {Promise<{slug: string, label: string, spent: number, left: number, refused?: string}|{refused: string}|null>}
  */
-export async function spendPayerSupplies(payer, { slug = null, n = 1, purpose = SUPPLY_PURPOSE.RECOVER, moveName = null } = {}) {
-	const character = payer?.typedActor;
-	const purses = character?.supplyPurses?.(purpose);
-	if (!purses) return null;
-	const uses = Math.max(1, Math.trunc(Number(n) || 1));
-	const purse = payerPurse(purses, slug, uses);
-	if (!purse || purse.remaining < uses) return null;
-	const { update } = purseSpendUpdate([{ slug: purse.slug, n: uses }], {
-		resources: character.spendablePurseResources?.({ carriedOnly: false }) ?? {},
-		resourceData: (s, count) => character.inventoryResourceData(s, count),
+export function spendPayerSupplies(payer, { slug = null, n = 1, purpose = SUPPLY_PURPOSE.RECOVER, moveName = null, patient = null, recover = null } = {}) {
+	// One spend at a time out of the payer's purse (utils/spender-queue.js).
+	return inSpenderTurn(payer, async () => {
+		const character = payer?.typedActor;
+		const purses = character?.supplyPurses?.(purpose);
+		if (!purses) return null;
+		let uses = Math.max(1, Math.trunc(Number(n) || 1));
+		const refused = recover ? recoverRefusal(patient, recover) : null;
+		if (refused) {
+			if (!recover.self || uses < 2) return { refused };
+			uses -= 1;
+		}
+		const purse = payerPurse(purses, slug, uses);
+		if (!purse || purse.remaining < uses) return null;
+		const { update } = purseSpendUpdate([{ slug: purse.slug, n: uses }], {
+			resources: character.spendablePurseResources?.({ carriedOnly: false }) ?? {},
+			resourceData: (s, count) => character.inventoryResourceData(s, count),
+		});
+		await payer.update(update, moveName ? { stonetopMove: moveName } : {});
+		return { slug: purse.slug, label: purse.label, spent: uses, left: purse.remaining - uses, ...(refused ? { refused } : {}) };
 	});
-	await payer.update(update, moveName ? { stonetopMove: moveName } : {});
-	return { slug: purse.slug, label: purse.label, spent: uses, left: purse.remaining - uses };
 }
 
 /**
  * Pay `n` uses of `payer`'s supplies for `patient` (see the header): here when this user decides for the
  * payer, else by asking whoever does (utils/owner-ask.js#spendOrAskOwner).
  *
- * @returns {Promise<object|null>} the receipt (spendPayerSupplies) when paid; `{declined: true}` when the
- *   payer's side said no or closed the window, plus `unanswered: true` when no answer came; null when it
- *   could not be paid (nobody to ask, a purse that no longer holds enough, a refused ask)
+ * `recover` is what the uses pay for, checked in the payer's turn (spendPayerSupplies), on whichever client pays.
+ *
+ * @returns {Promise<object|null>} the receipt (spendPayerSupplies) when paid, or `{refused}` alone when the
+ *   Recover could no longer happen; `{declined: true}` when the payer's side said no or closed the window,
+ *   plus `unanswered: true` when no answer came; null when it could not be paid (nobody to ask, a purse
+ *   that no longer holds enough, a refused ask)
  */
-export async function payOthersSupplies({ payer, patient, slug = null, n = 1, purpose = SUPPLY_PURPOSE.RECOVER, moveName = null }) {
+export async function payOthersSupplies({ payer, patient, slug = null, n = 1, purpose = SUPPLY_PURPOSE.RECOVER, moveName = null, recover = null }) {
 	if (!payer || !patient) return null;
 	return spendOrAskOwner({
 		owner: payer,
 		answerer: carerStockAnswerer(payer, globalThis.game?.users, { asker: globalThis.game?.user ?? null, patient }),
-		spend: () => spendPayerSupplies(payer, { slug, n, purpose, moveName }),
+		spend: () => spendPayerSupplies(payer, { slug, n, purpose, moveName, patient, recover }),
 		query: SUPPLY_PAY_QUERY,
-		data: { payerId: payer.id, patientId: patient.id, slug, n, purpose, moveName },
+		data: { payerId: payer.id, patientId: patient.id, slug, n, purpose, moveName, recover },
 		whether: `${payer.name} spends ${n === 1 ? "a use" : `${n} uses`} of supplies on ${patient.name}'s ${moveName ?? "move"}.`,
 		what: "spending someone's supplies",
 	});
@@ -135,6 +151,10 @@ export async function handleSupplyPayQuery(data, context = {}, { actors = global
 	const purpose = PURPOSES.has(data?.purpose) ? data.purpose : SUPPLY_PURPOSE.RECOVER;
 	const moveName = typeof data?.moveName === "string" && data.moveName ? data.moveName : "Recover";
 	const slug = typeof data?.slug === "string" && data.slug ? data.slug : null;
+	// What the uses pay for, checked against the patient as this client sees them when it pays.
+	const recover = data?.recover && typeof data.recover === "object"
+		? { self: data.recover.self === true, tend: typeof data.recover.tend === "string" && data.recover.tend ? data.recover.tend : null }
+		: null;
 	let purse = null;
 	return answerOwnerAsk(data, context, {
 		users, confirm,
@@ -163,6 +183,6 @@ export async function handleSupplyPayQuery(data, context = {}, { actors = global
 		},
 		settle: async late => late()
 			? tooLate(`Too late: ${patient.name}'s ${moveName} has already gone ahead without it.`)
-			: spendPayerSupplies(payer, { slug: purse.slug, n, purpose, moveName }),
+			: spendPayerSupplies(payer, { slug: purse.slug, n, purpose, moveName, patient, recover }),
 	});
 }

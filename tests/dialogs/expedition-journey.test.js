@@ -468,7 +468,7 @@ describe("building the panel", () => {
 			new URL("../../templates/dialogs/partials/expedition-journey.hbs", import.meta.url), "utf8");
 		const link = markup.match(/<a class="content-link stonetop-journey-book"[\s\S]*?>/)[0];
 		expect(link).toContain("data-link");
-		expect(link).toContain('data-uuid="{{uuid}}"');
+		expect(link).toContain('data-uuid="{{this.uuid}}"');
 	});
 });
 
@@ -1533,7 +1533,7 @@ describe("the template asks for what the dialog builds", () => {
 			const nested = TEMPLATE.indexOf("{{#each ", from);
 			const close = TEMPLATE.indexOf("{{/each}}", from);
 			const body = TEMPLATE.slice(from, nested > -1 ? Math.min(nested, close) : close);
-			// Bare {{field}} / {{#if field}} references, skipping helpers and @-data.
+			// Bare {{this.field}} / {{#if field}} references, skipping helpers and @-data.
 			const fields = new Set([...body.matchAll(/\{\{#?(?:if |unless )?([a-z][\w]*)\}\}/g)].map(m => m[1]));
 			for (const field of fields) {
 				if (field === "else" || field === "this") continue;

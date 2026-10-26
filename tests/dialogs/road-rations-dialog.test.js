@@ -84,6 +84,19 @@ describe("the days-on-the-road window", () => {
 		expect(data.rows.map(r => r.pays)).toEqual([1, 1]);
 	});
 
+	// Code review 10-22 (HC-8): a pack eaten from while the window was open pays what it still holds, and the
+	// card says the rest went short rather than naming uses nobody ate.
+	it("names on the card only what the packs still held at the press", async () => {
+		const ash = pc("Ash", { supplies: 2 });
+		const d = new RoadRationsDialog([ash], { days: 2 });
+		await d.getData();
+		ash.pack = { supplies: 1 };
+		await d._apply();
+		expect(ash.updates[0].data).toEqual({ [`flags.${SCOPE}.inventory.resources.supplies`]: 0 });
+		expect(chat[0].content).toContain("1 use (1 supplies)");
+		expect(chat[0].content).toContain("Went short");
+	});
+
 	it("spends each pack provisions first, and posts who paid what", async () => {
 		const ash = pc("Ash", { supplies: 4, provisions: 1 });
 		const bo = pc("Bo", { supplies: 4 });

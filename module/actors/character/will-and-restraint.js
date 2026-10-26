@@ -50,8 +50,9 @@ export async function ironWill(actor, { ask = askWithButtons, roll = null } = {}
 	if (take !== true) return false;
 	// Loaded when used: attack-flow.js is the whole fight, and the sheet's other imports of it stay its own.
 	const rollIt = roll ?? (await import("../../combat/attack-flow.js")).rollOptionDamage;
-	await rollIt(actor, { move: IRON_WILL, damage: { ...IRON_WILL_DAMAGE } });
-	return true;
+	// Null: the damage window it opens (a Marshal's Battlefield Grace) was closed, so the 1d4 was never taken.
+	const rolled = await rollIt(actor, { move: IRON_WILL, damage: { ...IRON_WILL_DAMAGE } });
+	return rolled !== null;
 }
 
 /**

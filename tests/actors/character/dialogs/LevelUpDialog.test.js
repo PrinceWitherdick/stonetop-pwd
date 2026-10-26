@@ -1,10 +1,25 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import Handlebars from "handlebars";
 import { LevelUpDialog } from "../../../../module/actors/character/dialogs/LevelUpDialog.js";
 import { StonetopDialog } from "../../../../module/utils/stonetop-dialog.js";
 
+// The level-up's agreed step asks a world setting whether this user may write a custom move
+// (utils/authoring-gates.js); a world always has settings, so the tests give it some, all unset.
+let priorSettings;
+beforeEach(() => { priorSettings = game.settings; game.settings ??= { get: () => undefined }; });
+afterEach(() => { game.settings = priorSettings; });
+
 const TEMPLATE = fs.readFileSync(path.join(process.cwd(), "templates", "dialogs", "level-up.hbs"), "utf8");
+// The agreed and cross-playbook steps' card, one partial for both (`family` tells them apart).
+const OTHER_CARD = fs.readFileSync(path.join(process.cwd(), "templates", "dialogs", "partials", "level-up-other-card.hbs"), "utf8");
+function renderOtherCard(context) {
+	const hb = Handlebars.create();
+	hb.registerHelper("localize", key => key);
+	hb.registerHelper("moveBody", description => description);
+	return hb.compile(OTHER_CARD)(context);
+}
 // Comments stripped: they name these selectors in prose, and a raw scan would read a
 // paragraph about the hazard as an instance of the hazard.
 const DIALOG_SRC = fs
@@ -87,7 +102,7 @@ describe("LevelUpDialog cross-playbook step machine", () => {
 		expect(dlg._selectedForeignMoveId).toBe("f1"); // pick preserved
 	});
 
-	it("foreignMove step: canContinue needs a pick unless the list is empty; isLastStep when no invocation follows", () => {
+	it("foreignMove step: canContinue needs a pick; an empty list blocks a move that grants nothing else; isLastStep when no invocation follows", () => {
 		const { dlg } = makeDialog({ data: { availableMoves: [crossMove] } });
 		dlg._selectedMoveId = "v1";
 		dlg._step = "foreignMove";
@@ -99,7 +114,34 @@ describe("LevelUpDialog cross-playbook step machine", () => {
 		dlg._selectedForeignMoveId = "f1";
 		expect(dlg.getData().canContinue).toBe(true);
 		dlg._foreignMoves = []; dlg._selectedForeignMoveId = null;
-		expect(dlg.getData().canContinue).toBe(true);  // empty list still lets the player finish
+		// Versatile with nothing to learn would buy nothing: the level can't be spent on it (J6).
+		expect(dlg.getData().canContinue).toBe(false);
+		expect(dlg.getData().foreignBlocked).toBe(true);
+	});
+
+	it("foreignMove step: an empty list still lets an Initiate finish, for the Sacred Pouch it grants", () => {
+		const initiate = { compendiumId: "i1", name: "Initiate of the Secret Arts", cap: null, crossPlaybook: { playbooks: ["The Blessed"], grantsPossession: "sacred-pouch" } };
+		const { dlg } = makeDialog({ data: { availableMoves: [initiate] } });
+		dlg._selectedMoveId = "i1";
+		dlg._step = "foreignMove";
+		dlg._foreignMoves = [];
+		dlg._grantsNewPossession = true;   // _loadForeignMoves: no Sacred Pouch held yet
+		const ctx = dlg.getData();
+		expect(ctx.foreignBlocked).toBe(false);
+		expect(ctx.canContinue).toBe(true);
+	});
+
+	// A second Initiate with nothing to learn brings no new Pouch either, so it buys nothing.
+	it("foreignMove step: an empty list blocks an Initiate whose Sacred Pouch is already held", () => {
+		const initiate = { compendiumId: "i1", name: "Initiate of the Secret Arts", cap: null, crossPlaybook: { playbooks: ["The Blessed"], grantsPossession: "sacred-pouch" } };
+		const { dlg } = makeDialog({ data: { availableMoves: [initiate] } });
+		dlg._selectedMoveId = "i1";
+		dlg._step = "foreignMove";
+		dlg._foreignMoves = [];
+		dlg._grantsNewPossession = false;
+		const ctx = dlg.getData();
+		expect(ctx.foreignBlocked).toBe(true);
+		expect(ctx.canContinue).toBe(false);
 	});
 
 	it("foreignMove step: playbook chips are the distinct source playbooks, article-stripped, and suppressed below two", () => {
@@ -138,13 +180,16 @@ describe("LevelUpDialog cross-playbook step machine", () => {
 
 		const chip = TEMPLATE.match(/<button[^>]*stonetop-levelup-foreign-chip[^>]*>/);
 		expect(chip).not.toBeNull();
-		expect(chip[0]).toContain('data-playbook="{{key}}"');
+		expect(chip[0]).toContain('data-playbook="{{this.key}}"');
 		expect(chip[0]).not.toContain("data-move-group");
 
 		// And the cards the chips filter must expose the playbook the filter matches on.
-		const card = TEMPLATE.match(/<div[^>]*stonetop-levelup-foreign-option[^>]*>/);
+		expect(TEMPLATE).toContain('{{> "stonetop.level-up-other-card" family="foreign"}}');
+		const card = renderOtherCard({ family: "foreign", compendiumId: "f1", playbook: "The Heavy", name: "Brawler" })
+			.match(/<div[^>]*stonetop-levelup-foreign-option[^>]*>/);
 		expect(card).not.toBeNull();
-		expect(card[0]).toContain('data-playbook="{{playbook}}"');
+		expect(card[0]).toContain('data-playbook="The Heavy"');
+		expect(card[0]).toContain('data-compendium-id="f1"');
 	});
 
 	it("both chip rows ship with aria-pressed, and _paintChips keeps it in step with the highlight", () => {
@@ -244,7 +289,8 @@ describe("LevelUpDialog cross-playbook step machine", () => {
 		dlg._selectedMoveId = "i1";
 		dlg._selectedForeignMoveId = "bm1";
 		await dlg._apply();
-		expect(char.applyLevelUp.mock.calls[0][3]).toEqual({ fromLevel: 2, moveName: "Initiate of the Secret Arts" });
+		// The timeline row names the foreign move the cross pick learned as well.
+		expect(char.applyLevelUp.mock.calls[0][3]).toEqual({ fromLevel: 2, moveName: "Initiate of the Secret Arts (Big Magic)" });
 	});
 
 	it("_apply still passes the stat choice for a stat move (no cross-playbook collision)", async () => {
@@ -270,16 +316,9 @@ describe("LevelUpDialog — one window per character, and a refused level-up", (
 		}
 	});
 
-	it("openFor finds the window already open for that character, and only that one", () => {
-		const prior = global.ui.windows;
-		const open = { id: "stonetop-levelup-dialog-actorA" };
-		global.ui.windows = { 7: open };
-		try {
-			expect(LevelUpDialog.openFor("actorA")).toBe(open);
-			expect(LevelUpDialog.openFor("actorB")).toBeNull();
-		} finally {
-			global.ui.windows = prior;
-		}
+	it("idFor names the same per-character id the window takes", () => {
+		expect(LevelUpDialog.idFor("actorA")).toBe("stonetop-levelup-dialog-actorA");
+		expect(LevelUpDialog.idFor("actorB")).not.toBe(LevelUpDialog.idFor("actorA"));
 	});
 
 	it.each([

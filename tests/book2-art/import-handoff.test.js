@@ -103,7 +103,7 @@ describe("the books a surface asks for on the macro's behalf", () => {
 	});
 
 	it("puts the edition where the GM is about to choose a file", () => {
-		expect(GALLERY_HBS).toContain('class="stonetop-people-book-edition">{{edition}}');
+		expect(GALLERY_HBS).toContain('class="stonetop-people-book-edition">{{this.edition}}');
 	});
 
 	it("keeps its copy free of em dashes, like everything else the gallery says", () => {
@@ -119,12 +119,12 @@ describe("the gallery's own book fields", () => {
 	// The template writes the name, the dialog reads it back. Written twice, they can drift, and a
 	// drifted name is a book silently dropped rather than an error.
 	it("names each field by its book number, on both sides", () => {
-		expect(GALLERY_HBS).toContain('name="stonetop-book-file-{{book}}"');
+		expect(GALLERY_HBS).toContain('name="stonetop-book-file-{{this.book}}"');
 		expect(GALLERY_JS).toContain('`[name="stonetop-book-file-${book}"]`');
 	});
 
 	it("accepts only PDFs", () => {
-		expect(GALLERY_HBS).toMatch(/type="file" name="stonetop-book-file-\{\{book\}\}" accept="application\/pdf,\.pdf"/);
+		expect(GALLERY_HBS).toMatch(/type="file" name="stonetop-book-file-\{\{this\.book\}\}" accept="application\/pdf,\.pdf"/);
 	});
 
 	it("reads the files BEFORE it closes", () => {

@@ -175,6 +175,43 @@ describe("the card's payment row", () => {
 		expect(message.flags[TRADE_PAY_FLAG]).toBeUndefined();
 	});
 
+	// Code review 10-22 (HC-1): the GM and whoever rolled can both write the card. A payment settled by one of
+	// them while the other's window was open must not be paid a second time when that window is answered.
+	it("pays nothing when the card was settled while the window was open, and opens one window per click", async () => {
+		const actor = fakeSteadingActor({ system: { attributes: { surplus: { value: 3 } } } });
+		vi.stubGlobal("game", { ...globalThis.game, actors: { get: () => actor }, user: { id: "gm", isGM: true } });
+		const message = cardWith(actor);
+		const root = rowIn(tradePaymentActions());
+		let answer;
+		const ask = vi.fn(() => new Promise(resolve => { answer = resolve; }));
+		wireTradePaymentRow(message, root, { ask });
+		const button = root.querySelector("[data-trade-pay='stores']");
+		button.click();
+		expect(button.disabled).toBe(true);
+		button.click();
+		expect(ask).toHaveBeenCalledTimes(1);
+		// The other writer pays meanwhile.
+		message.flags[TRADE_PAY_FLAG] = { surplus: 1, direction: "pay", steading: "Stonetop" };
+		answer(normalizePayment({ surplus: 1 }));
+		await vi.waitFor(() => expect(globalThis.ui.notifications.info).toHaveBeenCalled());
+		expect(actor.update).not.toHaveBeenCalled();
+		expect(message.setFlag).not.toHaveBeenCalled();
+		expect(button.disabled).toBe(true);
+	});
+
+	it("puts the button back up when the window is closed without paying", async () => {
+		const actor = fakeSteadingActor({ system: { attributes: { surplus: { value: 3 } } } });
+		vi.stubGlobal("game", { ...globalThis.game, actors: { get: () => actor }, user: { id: "gm", isGM: true } });
+		const message = cardWith(actor);
+		const root = rowIn(tradePaymentActions());
+		const ask = vi.fn(async () => null);
+		wireTradePaymentRow(message, root, { ask });
+		const button = root.querySelector("[data-trade-pay='stores']");
+		button.click();
+		await vi.waitFor(() => expect(ask).toHaveBeenCalled());
+		await vi.waitFor(() => expect(button.disabled).toBe(false));
+	});
+
 	it("is wired on its own from the chat hook, beside the hand-over row", () => {
 		const actor = fakeSteadingActor();
 		const message = { ...cardWith(actor), getFlag: () => ({ surplus: 1, direction: "pay", steading: "Stonetop" }) };
@@ -235,5 +272,28 @@ describe("an artifact changing hands", () => {
 		await vi.waitFor(() => expect(flags[TRADE_ARTIFACT_FLAG]).toEqual({ actorId: "wren", name: "Wren", item: "Torc" }));
 		expect(torc.delete).toHaveBeenCalled();
 		expect(crown.delete).not.toHaveBeenCalled();
+	});
+
+	it("takes nothing off anyone when another writer handed one over while the picker was open", async () => {
+		const torc = treasure("Torc", "Value 3");
+		const wren = { id: "wren", name: "Wren", type: "character", isOwner: true, items: [torc] };
+		const flags = {};
+		const message = {
+			canUserModify: () => true, getFlag: (s, k) => flags[k],
+			setFlag: vi.fn(async (s, k, v) => { flags[k] = v; }), unsetFlag: vi.fn(async (s, k) => { delete flags[k]; }),
+		};
+		const doc = new Window().document;
+		const root = doc.body.appendChild(doc.createElement("div"));
+		root.innerHTML = tradePaymentActions();
+		const pickArtifact = vi.fn(async ({ options }) => {
+			flags[TRADE_ARTIFACT_FLAG] = { actorId: "rook", name: "Rook", item: "Ring" };
+			return options[0].id;
+		});
+		wireTradePaymentRow(message, root, { pickArtifact, actors: [wren], user: { id: "p", isGM: false } });
+		root.querySelector("[data-trade-pay='artifact']").click();
+		await vi.waitFor(() => expect(pickArtifact).toHaveBeenCalled());
+		await vi.waitFor(() => expect(globalThis.ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("Someone else settled")));
+		expect(torc.delete).not.toHaveBeenCalled();
+		expect(message.setFlag).not.toHaveBeenCalled();
 	});
 });

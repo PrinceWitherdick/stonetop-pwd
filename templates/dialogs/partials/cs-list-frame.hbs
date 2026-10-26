@@ -24,14 +24,14 @@
       _PARTIAL_PARAMS in create-site-dialog.js): Handlebars MERGES a partial's hash into the
       enclosing context, so a bare `chips` up there would be inherited by every list that was not
       passed one. --}}
-<div class="stonetop-cf-gear {{frameClass}}">
+<div class="stonetop-cf-gear {{this.frameClass}}">
   {{#if label}}
-  <div class="stonetop-cf-pick-label">{{label}}{{#if hint}} <span class="stonetop-cf-pick-hint">({{hint}})</span>{{/if}}</div>
+  <div class="stonetop-cf-pick-label">{{this.label}}{{#if hint}} <span class="stonetop-cf-pick-hint">({{this.hint}})</span>{{/if}}</div>
   {{/if}}
   {{#if chips}}
   <div class="stonetop-cf-chips">
     {{#each chips}}
-    <button type="button" class="stonetop-cf-chip stonetop-cs-suggest{{#if used}} is-selected{{/if}}" data-list="{{list}}" data-text="{{text}}">{{text}}</button>
+    <button type="button" class="stonetop-cf-chip stonetop-cs-suggest{{#if used}} is-selected{{/if}}" data-list="{{this.list}}" data-text="{{this.text}}">{{this.text}}</button>
     {{/each}}
   </div>
   {{/if}}
@@ -39,5 +39,5 @@
   <ul class="stonetop-cs-hint-list">{{#each kinds}}<li>{{this}}</li>{{/each}}</ul>
   {{/if}}
   {{> @partial-block}}
-  <button type="button" class="stonetop-cs-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-list="{{list}}"><i class="fas fa-plus"></i> {{addLabel}}</button>
+  <button type="button" class="stonetop-cs-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-list="{{this.list}}"><i class="fas fa-plus"></i> {{this.addLabel}}</button>
 </div>

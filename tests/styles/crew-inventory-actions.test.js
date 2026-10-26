@@ -68,7 +68,7 @@ describe("the crew's per-member produced list", () => {
 		}
 		expect(PRODUCED).toContain('data-ftype="crew"');
 		expect(PRODUCED).toContain('data-slug=""');
-		expect(PRODUCED).toContain('data-index="{{index}}"');
+		expect(PRODUCED).toContain('data-index="{{this.index}}"');
 	});
 
 	// Every other follower's gear list keeps rename and remove under the card's pencil. Always

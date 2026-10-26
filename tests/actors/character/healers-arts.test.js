@@ -234,7 +234,7 @@ describe("asking the carer's player", () => {
 		const gwynn = carer({ owner: false, owners: ["p-gwynn"] });
 		const paid = await payHealersArtsStock({ carer: gwynn, patient: bram, sourceKey: "stock" });
 		expect(alex.query).toHaveBeenCalledWith(HEALERS_ARTS_QUERY,
-			{ carerId: "gwynn", patientId: "bram", userId: "p-bram" }, { timeout: HEALERS_ARTS_ASK_MS });
+			{ carerId: "gwynn", patientId: "bram", userId: "p-bram", askId: expect.any(String) }, { timeout: HEALERS_ARTS_ASK_MS });
 		expect(gm.query).not.toHaveBeenCalled();
 		expect(gwynn.typedActor.spendStock).not.toHaveBeenCalled();
 		expect(paid).toEqual(receipt);

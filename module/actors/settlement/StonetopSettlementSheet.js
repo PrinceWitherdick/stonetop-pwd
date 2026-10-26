@@ -47,7 +47,7 @@ import { getOpenSheetsInEditMode } from "../../settings.js";
 import { readCurrentSeason } from "../../seasons/current-season.js";
 import { homesteadFieldsHtml, homesteadMoveFlow, homesteadMoveText } from "../steading/homestead-moves.js";
 import { ContentPickerDialog } from "../../dialogs/content-picker.js";
-import { rosterSettlement, settlementsBySlug } from "./settlement-actor.js";
+import { rosterSettlement, settlementHiddenFromPlayers, settlementsBySlug, tradePartnerSlug } from "./settlement-actor.js";
 import { SETTLEMENT_MOVES, rollSettlementMove, settlementIsLacking, settlementRolledStat } from "./settlement-rolls.js";
 import { SETTLEMENT_LISTS, isSettlementList, settlementRow } from "./settlement-rows.js";
 import { escHtml } from "../../utils/strings.js";
@@ -70,6 +70,7 @@ import { displayPortraitSrc } from "../../book2-art/people-portraits.js";
 import { plansView, wireSteadingNotesTab } from "../steading/steading-plans.js";
 import { editSteadingPlan } from "../steading/SteadingPlanDialog.js";
 import { settlementPlanStore } from "./settlement-plans.js";
+import { wireKeyboardButtons } from "../../utils/keyboard-buttons.js";
 
 // Plain literals, not built from SYSTEM_ID: the template checks in tests find paths by searching
 // the source for them.
@@ -180,7 +181,8 @@ export function createStonetopSettlementSheetClass(Base) {
 				note: key === "prosperity" && lacking ? localize(`${KEY}.lackingNote`) : "",
 			}]));
 
-			const sheetsBySlug = settlementsBySlug();
+			// Built only when a Trade-with row names a partner to link.
+			const sheetsBySlug = (system.tradeWith ?? []).some(row => row.slug) ? settlementsBySlug() : new Map();
 
 			Object.assign(context, {
 				actor,
@@ -207,8 +209,13 @@ export function createStonetopSettlementSheetClass(Base) {
 				// Each Residents row as Stonetop's table draws it, read live off its NPC. `rowId` is the
 				// row's own id, which edits and removals address it by; `id` is the NPC's. Resolved by
 				// uuid alone: a Stonetop row's `id` is the NPC's, and this row's is not.
-				residents: await Promise.all((system.residents ?? []).map(async row =>
-					({ ...await resolvePersonRow(residentPointer(row)), rowId: row.id }))),
+				// `cellsEditable`: the row's cells write its NPC, so they open only for a user who may
+				// write that NPC as well as this sheet; anyone else reads them as text, wrench or no.
+				residents: await Promise.all((system.residents ?? []).map(async row => {
+					const resolved = await resolvePersonRow(residentPointer(row));
+					const npc = resolved.unresolved ? null : game.actors?.get(resolved.id);
+					return { ...resolved, rowId: row.id, cellsEditable: editable && !!npc?.isOwner };
+				})),
 				occupationSuggestions: OCCUPATIONS,
 				traitSuggestions: TRAITS,
 				canGazetteer: !!system.journalId,
@@ -292,10 +299,8 @@ export function createStonetopSettlementSheetClass(Base) {
 
 			root.addEventListener("click", event => this.#dispatch(event, "[data-action]"));
 			// A move's NAME rolls it, as on Stonetop's Moves tab. It is a <strong role="button">, not a
-			// <button> (core would disable that for a reader), so Enter and Space are wired by hand.
-			root.addEventListener("keydown", event => {
-				if (event.key === "Enter" || event.key === " ") this.#dispatch(event, "[role='button'][data-action]");
-			});
+			// <button> (core would disable that for a reader): Enter and Space press it (utils/keyboard-buttons.js).
+			wireKeyboardButtons(root);
 
 			// The notes: saved whole on the editor's own change (it carries no `name`).
 			root.querySelector(".stonetop-settlement-notes prose-mirror")?.addEventListener("change", event => {
@@ -320,11 +325,12 @@ export function createStonetopSettlementSheetClass(Base) {
 		}
 
 		/**
-		 * Hidden from the players: no player can see it. Core lists an actor in a player's sidebar from
-		 * LIMITED up, by their own entry or the default, so both are asked, through core's own test.
+		 * Hidden from the players: what the header chip shows and flips (settlement-actor.js
+		 * #settlementHiddenFromPlayers). A player who OWNS the place is left out of the question, as
+		 * _onToggleHidden leaves them owning it, so the chip still says, and sets, what everyone else sees.
 		 */
 		#isHidden() {
-			return !(game.users ?? []).some(user => !user.isGM && this.actor.testUserPermission(user, "LIMITED"));
+			return settlementHiddenFromPlayers(this.actor.ownership, game.users ?? []);
 		}
 
 		/** @inheritDoc: list rows are written here, by id; everything else is core's submit. */
@@ -352,6 +358,16 @@ export function createStonetopSettlementSheetClass(Base) {
 		#editList(list, edit) {
 			return editSettlementList(this.actor, list, edit);
 		}
+
+		/**
+		 * A settlement holds no Items or effects: core would make a dropped Item (or every Item in a
+		 * dropped folder, or an effect) an embedded document of the place that no tab ever shows.
+		 */
+		async _onDropItem() { return false; }
+
+		async _onDropFolder() { return false; }
+
+		async _onDropActiveEffect() { return false; }
 
 		/**
 		 * @inheritDoc: an NPC dropped on the People tab becomes a resident, as on Stonetop's (open to
@@ -401,8 +417,9 @@ export function createStonetopSettlementSheetClass(Base) {
 			const home = String(actor.system?.home ?? "").trim();
 			const livesHere = settlementForHome(home) === this.actor;
 			if (livesHere && (this.actor.system.residents ?? []).some(r => r.uuid === actor.uuid)) {
-				ui.notifications?.info?.(format(`${KEY}.alreadyResident`, { name: actor.name }));
-				return false;
+				// Quiet (a resident just made here): the primary GM's hook may have listed them first.
+				if (!quiet) ui.notifications?.info?.(format(`${KEY}.alreadyResident`, { name: actor.name }));
+				return quiet ? actor : false;
 			}
 			if (!livesHere) {
 				if (!actor.isOwner) {
@@ -484,7 +501,8 @@ export function createStonetopSettlementSheetClass(Base) {
 			const resolve = settlementResolver();
 			const isHere = place => resolve(place) === this.actor;
 			const seen = new Set();
-			const choices = [HOME_STONETOP, ...HOMES, ...settlementActors().map(s => s.name)]
+			// Only the sheets this user can see: a place the GM hides is not named to a player.
+			const choices = [HOME_STONETOP, ...HOMES, ...settlementActors().filter(s => s.visible).map(s => s.name)]
 				.filter(place => {
 					const key = homeKey(place);
 					if (!key || isHere(place) || seen.has(key)) return false;
@@ -534,12 +552,25 @@ export function createStonetopSettlementSheetClass(Base) {
 			const row = (this.actor.system.residents ?? []).find(r => r.id === rowId);
 			const npc = row && personRowActor(residentPointer(row));
 			if (!path || field === "notes" || !npc) return;
-			await npc.update({ [path]: cell.value ?? "" });
-			if (field === "name") {
+			const value = field === "name" ? String(cell.value ?? "").trim() : (cell.value ?? "");
+			// Refused before the write, the cell redrawn to what the NPC says: a non-owner's write would
+			// only throw, and Foundry refuses a nameless actor.
+			const refuse = key => {
+				ui.notifications?.warn?.(format(`${KEY}.${key}`, { name: npc.name }));
+				this.render(false);
+			};
+			if (!npc.isOwner) return refuse("cannotEditResident");
+			if (field === "name" && !value) return refuse("residentNeedsName");
+			const wrote = await npc.update({ [path]: value }).then(() => true, err => {
+				console.warn("Stonetop | Could not write a resident's", field, err);
+				this.render(false);
+				return false;
+			});
+			if (wrote && field === "name") {
 				await this.#editList("residents", rows => {
 					const target = rows.find(r => r.id === rowId);
-					if (!target) return false;
-					target.name = cell.value ?? "";
+					if (!target || target.name === value) return false;
+					target.name = value;
 				});
 			}
 		}
@@ -583,6 +614,8 @@ export function createStonetopSettlementSheetClass(Base) {
 			if (!ROW_FIELDS[list] || !this.isEditable) return;
 			const values = await this.#askRow(list, settlementRow(list), target.textContent.trim());
 			if (!values) return;
+			// A trade partner the roster knows by that name links to its sheet (settlement-actor.js#tradePartnerSlug).
+			if (list === "tradeWith") values.slug = tradePartnerSlug(values.partner);
 			return this.#editList(list, rows => { rows.push(settlementRow(list, values)); });
 		}
 
@@ -598,6 +631,9 @@ export function createStonetopSettlementSheetClass(Base) {
 			return this.#editList(list, rows => {
 				const at = rows.find(r => r.id === id);
 				if (!at) return false;
+				// A renamed trade partner takes the link of the place it names now, or none, rather
+				// than still opening the old one's sheet.
+				if (list === "tradeWith") values.slug = tradePartnerSlug(values.partner, at);
 				Object.assign(at, values);
 			});
 		}

@@ -13,9 +13,9 @@ export const VETERAN_CREW_MOVE = "Veteran Crew";
 
 export const CREATION_MARK_MOVES = {
 	[VETERAN_CREW_MOVE]: [
-		{ slug: "tags",        label: "Select 2 new tags for your Crew",          marks: 4, crewTags: 2 },
+		{ slug: "tags",        label: "Select 2 new tags for your Crew",          marks: 1, crewTags: 2 },
 		{ slug: "crew-damage", label: "Increase their damage die from d6 to d8", marks: 1 },
-		{ slug: "crew-hp",     label: "Increase their max HP by 2 each",          marks: 4 },
+		{ slug: "crew-hp",     label: "Increase their max HP by 2 each",          marks: 1 },
 	],
 };
 

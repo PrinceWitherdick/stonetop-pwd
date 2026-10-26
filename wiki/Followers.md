@@ -6,7 +6,7 @@ Hirelings, initiates, a crew, an animal companion, a summoned thing: everyone wh
 
 ## Getting a follower
 
-- **Create a follower** at the bottom of the tab makes a new one from scratch. When a move or possession of yours brings a particular follower, a button for it sits beside that one (Pim's sheet reads **Add Good dog**).
+- **Create a follower** at the bottom of the tab makes a new one from scratch. When a move or possession of yours brings a particular follower, a button for it sits beside that one (Pim's sheet reads **Add Good dog**). Closing **Create a follower** part way asks before throwing away what you've written.
 - Some moves and possessions bring followers with them (a Marshal's crew, a Blessed's initiates, a Ranger's companion). They're added when you take the move.
 - **Drag an NPC or a monster onto your sheet** and the system offers to turn it into your follower, with the stats it needs.
 - An arcanum that lets you summon something (Manifest) adds the summoned follower here, asking the picks from the card's back first. If an older follower is missing picks, a **Finish** prompt lets you complete it, or **Remind me later**.
@@ -74,10 +74,18 @@ When members fall, they're struck off the roster (a group keeps at least two).
 
 ## When a follower drops
 
-At 0 HP a follower faces their own Death's Door, rolled from the chat card. If you have **Sir, Permission to Die, Sir**, you can spend 1 of their Loyalty to keep them alive (at 0 HP and out of the action), or let them go and mark XP.
+At 0 HP a follower's fate is in the GM's hands (Book I p.469). A window opens on the GM's screen to pick **Dead**, **Death's Door** or **Dying**; closing it means the blow wasn't lethal. Death's Door is rolled by the follower's player from the chat card. A crew or group member who dies is struck off that roster.
+
+Two moves stay the player's:
+
+- **Loyal to the End** (the Ranger's animal companion) replaces the GM's pick and opens on the player's screen.
+- **Sir, Permission to Die, Sir**: when the GM picks Dead, the player's window opens first, so you can spend 1 of their Loyalty to keep them alive (at 0 HP and out of the action), or let them go and mark XP.
+
+With no GM online, the player picks the fate.
 
 ## See also
 - [Fights (for Players)](Fights-for-Players)
+- [Death and Beyond](Death-and-Beyond)
 - [Camp, Journeys and Group Moves](Camp-Journeys-and-Group-Moves)
 - [The GM Toolkit](The-GM-Toolkit)
 - [Playbook Notes](Playbook-Notes)

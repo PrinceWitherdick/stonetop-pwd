@@ -1,4 +1,4 @@
-<form class="{{cssClass}} stonetop-npc-sheet" autocomplete="off">
+<form class="{{this.cssClass}} stonetop-npc-sheet" autocomplete="off">
 	<div class="sheet-wrapper stonetop-npc-container">
 
 		<header class="sheet-header stonetop-sheet-header stonetop-npc-header{{#unless stonetop.editMode}}{{#unless stonetop.hasPortrait}} stonetop-npc-header--no-portrait{{/unless}}{{/unless}}{{#if stonetop.isInactive}} stonetop-npc-header--inactive{{/if}}">
@@ -43,7 +43,7 @@
 						<select class="stonetop-npc-status-select" name="system.status"
 						        title='{{localize "stonetop.npc.status"}}' aria-label='{{localize "stonetop.npc.status"}}'>
 							{{#each stonetop.statusOptions}}
-							<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+							<option value="{{this.value}}" {{#if selected}}selected{{/if}}>{{this.label}}</option>
 							{{/each}}
 						</select>
 						{{else}}
@@ -268,12 +268,12 @@
 						{{!-- Body wrapper so the item can be a two-column grid: the arrow bullet
 						      (::before) in the first column, everything else in the second — the
 						      same shape as the monster sheet's move list. --}}
-						<li class="stonetop-npc-move-item{{#if ../stonetop.editMode}} stonetop-npc-move-item--edit{{/if}}" data-item-id="{{id}}">
+						<li class="stonetop-npc-move-item{{#if ../stonetop.editMode}} stonetop-npc-move-item--edit{{/if}}" data-item-id="{{this.id}}">
 							<div class="stonetop-npc-move-body">
 								{{#if ../stonetop.editMode}}
 								<div class="stonetop-npc-move-head">
 									<input class="stonetop-npc-move-name-input stonetop-npc-move-field" type="text"
-									       data-field="name" value="{{name}}"
+									       data-field="name" value="{{this.name}}"
 									       placeholder='{{localize "stonetop.npc.moveNamePlaceholder"}}'>
 									<input class="stonetop-npc-move-formula-input stonetop-npc-move-field" type="text"
 									       data-field="system.rollFormula" value="{{system.rollFormula}}"
@@ -283,7 +283,7 @@
 									</a>
 								</div>
 								<prose-mirror class="stonetop-npc-rich-editor stonetop-npc-move-editor stonetop-npc-move-field"
-								              data-field="system.description" toggled value="{{system.description}}">{{{enrichedDescription}}}</prose-mirror>
+								              data-field="system.description" toggled value="{{system.description}}">{{{this.enrichedDescription}}}</prose-mirror>
 								{{else}}
 								<div class="stonetop-npc-move-head">
 									{{#if system.rollFormula}}
@@ -291,7 +291,7 @@
 										<i class="fas fa-dice-d6"></i>
 									</a>
 									{{/if}}
-									<span class="stonetop-npc-move-name">{{name}}</span>
+									<span class="stonetop-npc-move-name">{{this.name}}</span>
 								</div>
 								{{#if system.description}}
 								<div class="stonetop-npc-move-description">{{{moveBody system.description system.moveResults}}}</div>

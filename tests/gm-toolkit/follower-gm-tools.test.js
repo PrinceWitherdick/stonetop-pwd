@@ -89,6 +89,18 @@ describe("use up their resources (p.182)", () => {
 		expect(useUpUpdate(andras, { customFollowers: { a1: { ammo: 2 } } }, { key: "ammo" }, "stonetop-pwd")).toBeNull();
 	});
 
+	// Code review 10-22 (HC-9): the card was drawn when the window opened, the list is read at the press. A row
+	// moved or removed meanwhile must not put another item under the chosen index.
+	it("unticks the item the window named, found again by its label when the list changed meanwhile", () => {
+		const moved = { customFollowers: { a1: { gear: [{ label: "rope", checked: true }, { label: "bow", checked: true }] } } };
+		expect(useUpUpdate(andras, moved, { key: "gear", ref: "detail:0" }, "stonetop-pwd")).toEqual({
+			update: { "flags.stonetop-pwd.customFollowers.a1.gear": [{ label: "rope", checked: true }, { label: "bow", checked: false }] },
+			what: "bow lost",
+		});
+		const gone = { customFollowers: { a1: { gear: [{ label: "rope", checked: true }, { label: "bow", checked: false }] } } };
+		expect(useUpUpdate(andras, gone, { key: "gear", ref: "detail:0" }, "stonetop-pwd")).toBeNull();
+	});
+
 	it("reads a marked-up label as plain text", () => {
 		const card = { ftype: "crew", gear: [{ checked: true, slug: "spears", label: "<em>2</em> piercing &lt;x&gt;" }] };
 		expect(useUpChoices(card).find(c => c.key === "gear").items[0].label).toBe("2 piercing <x>");
@@ -126,6 +138,7 @@ describe("the balk card", () => {
 		const message = { id: "m1", flags: { [SYSTEM_ID]: { [BALK_FLAG]: { characterUuid: "Actor.cadi", ftype: "crew", slug: "", loyaltySlug: "", name: "The Crew", reason: "scared" } } } };
 		const cadi = { name: "Cadi", isOwner: true, flags: { [SYSTEM_ID]: { crew: { loyalty: 2 } } }, update: vi.fn(async () => {}) };
 		globalThis.game = { ...saved.game, messages: [] };
+		ChatMessage.create.mockImplementation(async () => ({ id: "a1" }));
 		expect(await answerFollowerBalk(message, "spend", cadi)).toBe(true);
 		expect(cadi.update.mock.calls[0][0][`flags.${SYSTEM_ID}.crew.loyalty`]).toBe(1);
 		const answer = ChatMessage.create.mock.calls[0][0];
@@ -149,6 +162,17 @@ describe("the balk card", () => {
 		});
 		expect(await answerFollowerBalk(message, "spend", cadi)).toBe(false);
 		expect(mine.delete).toHaveBeenCalledTimes(1);
+		expect(cadi.update).not.toHaveBeenCalled();
+	});
+
+	// Code review 10-22 (HC-6): the answer card IS the claim on the balk. Without one (a hook refused it, the
+	// create failed), nothing is spent, or the card would stay open for a second spend.
+	it("spends nothing when its answer card could not be posted", async () => {
+		const message = { id: "m1", flags: { [SYSTEM_ID]: { [BALK_FLAG]: { characterUuid: "Actor.cadi", ftype: "crew", slug: "", loyaltySlug: "", name: "The Crew", reason: "scared" } } } };
+		const cadi = { name: "Cadi", isOwner: true, flags: { [SYSTEM_ID]: { crew: { loyalty: 2 } } }, update: vi.fn(async () => {}) };
+		globalThis.game = { ...saved.game, messages: [] };
+		ChatMessage.create.mockImplementation(async () => undefined);
+		expect(await answerFollowerBalk(message, "spend", cadi)).toBe(false);
 		expect(cadi.update).not.toHaveBeenCalled();
 	});
 

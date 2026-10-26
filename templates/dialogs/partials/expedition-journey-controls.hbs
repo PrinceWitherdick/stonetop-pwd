@@ -27,9 +27,9 @@
         select nothing), so a reader told "tab 3 of 4" about one would be told something untrue. --}}
   <div class="stonetop-journey-tierlist" role="tablist" aria-label="Map">
     {{#each journey.tiers}}
-    <button type="button" role="tab" aria-selected="{{isActive}}" data-tier="{{slug}}"
+    <button type="button" role="tab" aria-selected="{{this.isActive}}" data-tier="{{this.slug}}"
             class="stonetop-journey-tier{{#if isActive}} is-active{{/if}}">
-      {{name}}{{#unless hasMap}} <i class="fas fa-image-slash" role="img" aria-label="Not imported" data-tooltip="Not imported"></i>{{/unless}}
+      {{this.name}}{{#unless hasMap}} <i class="fas fa-image-slash" role="img" aria-label="Not imported" data-tooltip="Not imported"></i>{{/unless}}
     </button>
     {{/each}}
   </div>

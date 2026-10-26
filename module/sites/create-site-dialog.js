@@ -1,4 +1,5 @@
 import { StepperDialog } from "../dialogs/StepperDialog.js";
+import { SaveForNow } from "../dialogs/save-for-now.js";
 import {
 	SITE_MANNERS, REGIONS, siteManner, region, visibleTables, pickLines,
 	regionTables, regionPickLines, REGION_TABLE_PREFIX,
@@ -25,9 +26,13 @@ import { MAX_ROW_SPAN, SITE_LINE_LISTS, SITE_PAIR_LISTS, clampRowSpan, expandTab
 //   9    Review
 //
 // Mirrors CreateHazardDialog: created without a page it resolves the collected SEED via
-// promise() (the steading sheet then calls createSite); created with `{ page }` it opens
-// pre-filled, the final button becomes "Save site", and it applies the update to the page
-// itself. The wizard IS the site editor, so there is no separate editor dialog.
+// promise() (the caller, gm-prep-actions.js#createSiteFlow, then calls createSite); created with
+// `{ page }` it opens pre-filled, the final button becomes "Save site", and it applies the update
+// to the page itself. The wizard IS the site editor, so there is no separate editor dialog.
+//
+// Every step but the last also has Save for now (Save, when editing): the book says to do only
+// as much as next session needs, so the GM can stop anywhere and pick it up from the site's
+// pencil. Closing with unsaved answers asks first (utils/close-guard.js).
 
 const _STEPS = [
 	{
@@ -91,7 +96,7 @@ const _STEPS = [
 		icon:    "fa-clipboard-check",
 		isFinal: true,
 		body:    `<p>Read it over. Is anything missing? Add it. Is anything no longer needed? Cut it. It'll never be perfect, and that's fine: if anyone even notices, you can fix it during play.</p>
-				<p>Its card lives on the GM Toolkit's Sites tab. Drag it onto a scene to pin it to the map, and edit it any time.</p>`,
+				<p>Its card lives at the foot of the GM Toolkit's Expeditions tab. Drag it onto a scene to pin it to the map, and edit it any time.</p>`,
 	},
 ];
 
@@ -216,13 +221,15 @@ function blankRow(list) {
 	return keys ? Object.fromEntries(keys.map(k => [k, ""])) : "";
 }
 
-export class CreateSiteDialog extends StepperDialog {
+export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 	/** @param {{ page?: JournalEntryPage|null }} [config] pass a site page to edit it in place. */
-	constructor({ page = null } = {}, options = {}) {
+	constructor({ page = null, quietSave = false } = {}, options = {}) {
 		// Editing gets a per-page window id so two sites can be open side by side; creation
 		// keeps the fixed id (one "Create a Site" at a time).
 		super(page ? foundry.utils.mergeObject({ id: `stonetop-create-site-${page.id}` }, options) : options);
 		this._page = page;
+		// The caller announces a saved site itself (the content picker), so Save for now doesn't.
+		this._quietSave = quietSave;
 		this._sel = page ? this._seedFromPage(page) : {
 			name: "", why: "", description: "",
 			manner: "", picks: {}, regionId: "", terrain: [], regionPicks: {},
@@ -558,6 +565,7 @@ export class CreateSiteDialog extends StepperDialog {
 		this._bindStepNav(html);
 
 		html.find(".stonetop-cs-create").on("click", () => this._finish());
+		html.find(".stonetop-guide-save-for-now").on("click", () => this._saveForNow());
 
 		// Scalar text fields persist on blur (no re-render, so focus survives typing).
 		html.find("[data-field]").on("change", ev => {
@@ -772,6 +780,11 @@ export class CreateSiteDialog extends StepperDialog {
 	// thing that reads them back.
 	_onBeforeStepChange() {
 		this._captureLiveFields();
+	}
+
+	// Save for now and the close-guard's question (dialogs/save-for-now.js).
+	get _saveCopy() {
+		return { noun: "site", keptAt: "at the foot of the GM Toolkit's Expeditions tab" };
 	}
 
 	_captureLiveFields() {

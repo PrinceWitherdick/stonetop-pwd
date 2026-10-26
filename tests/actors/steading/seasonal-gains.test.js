@@ -152,7 +152,7 @@ describe("the first spring's gains", () => {
 	it("are applied by the walkthrough's Done, before the clock is stamped", () => {
 		const src  = readRepo("module/dialogs/SpringBurstDialog.js");
 		const body = src.slice(src.indexOf("async _finish(button)"));
-		const gains = body.indexOf("await applySpringBurstGains(getStonetopSteadingActor(), picked)");
+		const gains = body.indexOf("await applySpringBurstGains(steadingActor, picked)");
 		const clock = body.indexOf("await recordCurrentSeason(");
 		expect(gains).toBeGreaterThan(-1);
 		expect(clock).toBeGreaterThan(gains);

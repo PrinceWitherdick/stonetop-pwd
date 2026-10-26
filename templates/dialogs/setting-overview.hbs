@@ -6,17 +6,17 @@
 		{{#each entries}}
 		<button type="button"
 		        class="stonetop-so-nav-entry {{#if active}}is-active{{/if}}"
-		        data-entry="{{id}}">
-			{{title}}
+		        data-entry="{{this.id}}">
+			{{this.title}}
 		</button>
 		{{/each}}
 	</nav>
 
 	{{!-- Content area --}}
 	<div class="stonetop-so-content">
-		<h2 class="stonetop-so-entry-title">{{entryTitle}}</h2>
+		<h2 class="stonetop-so-entry-title">{{this.entryTitle}}</h2>
 		<div class="stonetop-so-entry-body">
-			{{{content}}}
+			{{{this.content}}}
 		</div>
 	</div>
 

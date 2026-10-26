@@ -24,7 +24,9 @@ import { format, localize } from "../utils/i18n.js";
 import { themedDialogClasses } from "../utils/window-theme.js";
 import { contentElement } from "../utils/dialogv2-content.js";
 import { HEROES, touching } from "./engagements.js";
-import { gridOf } from "./fight-state.js";
+import { gridOf, fightOnScene, combatantBodies, each } from "./fight-state.js";
+import { isFightTabEnabled } from "../settings.js";
+import { resolveSync } from "../utils/foundry-compat.js";
 import { rollerEngagement, asTarget } from "./damage-seed.js";
 import { namesPhrase } from "./fight-copy.js";
 
@@ -62,8 +64,10 @@ export function foesInFight(actor, { scene = globalThis.canvas?.scene ?? null, e
 	const self = found.fighters.find(f => f.id === found.combatant.id);
 	const near = engagedOpponents(actor, { engagement: found });
 	const seen = new Set(near.map(foe => foe.uuid));
+	// `visible` is the tracker's own rule (fight-state.js#fighterOf): a fighter the GM has hidden from this
+	// reader is not named to them, or the picker gives the ambush away.
 	const rest = found.fighters
-		.filter(f => f.id !== found.combatant.id && f.side !== self?.side && !f.out)
+		.filter(f => f.id !== found.combatant.id && f.side !== self?.side && !f.out && f.visible !== false)
 		.map(f => found.combatants.get(f.id)).filter(c => c?.token).map(asTarget)
 		.filter(foe => !seen.has(foe.uuid));
 	return [...near, ...rest];
@@ -151,6 +155,30 @@ export async function askWhoItHits(question, { DialogV2 = globalThis.foundry?.ap
 }
 
 /**
+ * Hand targets without the ones the fight has put down: a token whose combatant, in the fight on that
+ * token's own scene, is out (defeated, at 0 HP, a routed group; fight-sides.js#bodiesFor). A blow in contact
+ * records no shot, so the target a player put on a foe before closing with it stays up after the foe falls;
+ * kept, it aimed their next Clash at the corpse, and a 7-9 or a miss had the corpse strike back. A target
+ * that is not in a fight, or with the Fight tab off, is kept as it is.
+ *
+ * @param {Array<{uuid: string}>} targets
+ * @returns {Array<{uuid: string}>}
+ */
+export function withoutDowned(targets = [], { resolve = resolveSync } = {}) {
+	const list = Array.isArray(targets) ? targets : [];
+	if (!list.length || !isFightTabEnabled()) return list;
+	const kept = list.filter(target => {
+		const token = target?.uuid ? resolve(target.uuid) : null;
+		if (token?.documentName !== "Token") return true;
+		const scene = token.parent ?? null;
+		const combatant = each(fightOnScene(scene)?.combatants).find(c => c.tokenId === token.id && c.sceneId === scene?.id);
+		return !combatant || !combatantBodies(combatant).out;
+	});
+	// The same list when nobody was dropped, so a caller holding it still holds what it handed in.
+	return kept.length === list.length ? list : kept;
+}
+
+/**
  * Who a roll hits: the hand targets when there are any, else whoever the roller is fighting, asking
  * which when that is more than one. Resolves to an array (empty when there is nobody to hit, which
  * rolls damage at no one, as before), or null when the roller backed out of the question.
@@ -167,7 +195,10 @@ export async function askWhoItHits(question, { DialogV2 = globalThis.foundry?.ap
  * @param {typeof askWhoItHits} [options.ask]
  * @returns {Promise<object[]|null>}
  */
-export async function rollTargets(actor, { handTargets = [], roller = "", area = false, areaAround = "roller", ask = askWhoItHits } = {}) {
+export async function rollTargets(actor, { handTargets: held = [], roller = "", area = false, areaAround = "roller", ask = askWhoItHits } = {}) {
+	// A hand target the fight has put down (0 HP, marked out, routed) is a target left up on a corpse, not
+	// an aim: drop it, and let the engagement aim the blow (withoutDowned).
+	const handTargets = withoutDowned(held);
 	// Hand targets win outright for an ordinary blow — but an AREA attack is not aimed at one thing, it
 	// is aimed at a PLACE, and who else is standing there is the whole of what the tag buys. Returned
 	// here, a Blot Out the Sun fired at a targeted foe spent the quiver on a volley that fell on that

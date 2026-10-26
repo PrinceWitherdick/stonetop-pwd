@@ -17,6 +17,7 @@
 import { learnedTrack } from "./MoveResources.js";
 import { followerCardFor } from "./follower-masters.js";
 import { escHtml } from "../../utils/strings.js";
+import { inSpenderTurn } from "../../utils/spender-queue.js";
 
 export const FRONT_LINE_LEADER = "Front Line Leader";
 
@@ -42,16 +43,19 @@ export function presenceFor(actor, ftype) {
 }
 
 /**
- * Spend 1 Presence, off what is held, attributed to the move in the ledger. Answers `{from, to}`, or null
- * when nothing was held to spend (or the move is not learned).
+ * Spend 1 Presence, off what is held, attributed to the move in the ledger. Read and written in the
+ * character's spending turn (utils/spender-queue.js). Answers `{from, to}`, or null when nothing was held
+ * to spend (or the move is not learned).
  *
  * @returns {Promise<{from: number, to: number}|null>}
  */
-export async function spendPresence(actor) {
-	const track = learnedTrack(actor, FRONT_LINE_LEADER);
-	if (!track || track.held <= 0) return null;
-	await track.resources.setUses(FRONT_LINE_LEADER, track.held - 1, { stonetopMove: FRONT_LINE_LEADER });
-	return { from: track.held, to: track.held - 1 };
+export function spendPresence(actor) {
+	return inSpenderTurn(actor, async () => {
+		const track = learnedTrack(actor, FRONT_LINE_LEADER);
+		if (!track || track.held <= 0) return null;
+		await track.resources.setUses(FRONT_LINE_LEADER, track.held - 1, { stonetopMove: FRONT_LINE_LEADER });
+		return { from: track.held, to: track.held - 1 };
+	});
 }
 
 /**

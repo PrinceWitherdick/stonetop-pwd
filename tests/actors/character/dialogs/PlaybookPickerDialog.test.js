@@ -128,3 +128,54 @@ describe("the picker's cards", () => {
 		delete global.fromUuid;
 	});
 });
+
+// creation-flow.js sets `_suppressOnClose` when the character being built is deleted or replaced.
+// The picker ignored it, so its onClose opened the deleted character's sheet: a ghost window.
+describe("closing the picker", () => {
+	const base = Object.getPrototypeOf(PlaybookPickerDialog.prototype);
+	afterEach(() => vi.restoreAllMocks());
+
+	it("skips its exit callback when the flow suppressed it", async () => {
+		vi.spyOn(base, "close").mockResolvedValue(undefined);
+		const picker = Object.create(PlaybookPickerDialog.prototype);
+		picker._onClose = vi.fn();
+		picker._suppressOnClose = true;
+
+		await picker.close();
+
+		expect(picker._onClose).not.toHaveBeenCalled();
+	});
+
+	it("still runs it on an ordinary close", async () => {
+		vi.spyOn(base, "close").mockResolvedValue(undefined);
+		const picker = Object.create(PlaybookPickerDialog.prototype);
+		picker._onClose = vi.fn();
+
+		await picker.close();
+
+		expect(picker._onClose).toHaveBeenCalledTimes(1);
+	});
+
+	it("stops listening for other players' picks once closed", async () => {
+		vi.spyOn(base, "close").mockResolvedValue(undefined);
+		const off = vi.fn();
+		const savedHooks = global.Hooks;
+		global.Hooks = { on: vi.fn(() => 7), off };
+		try {
+			const picker = Object.create(PlaybookPickerDialog.prototype);
+			picker._registerHooks();
+			expect(global.Hooks.on).toHaveBeenCalledWith("updateActor", expect.any(Function));
+			await picker.close();
+			expect(off).toHaveBeenCalledWith("updateActor", 7);
+		} finally {
+			global.Hooks = savedHooks;
+		}
+	});
+});
+
+describe("an empty picker", () => {
+	it("says why there is nothing to pick", async () => {
+		const html = await renderTemplate("systems/stonetop-pwd/templates/dialogs/playbook-picker.hbs", { playbooks: [] });
+		expect(html).toContain("No playbooks to choose from");
+	});
+});

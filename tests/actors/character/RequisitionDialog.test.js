@@ -108,7 +108,7 @@ describe("RequisitionDialog", () => {
 		expect(alone.rollMode).toBe("dis");
 
 		const hbs = fs.readFileSync(path.resolve(HERE, "../../../templates/dialogs/requisition-picker.hbs"), "utf8");
-		expect(hbs).toContain("{{nervesNote}}");
+		expect(hbs).toContain("{{this.nervesNote}}");
 		// Steady nerves: nothing said, nothing taken.
 		expect(makeDialog([]).getData().nervesNote).toBe("");
 		expect(makeDialog([])._rollAnswers(makeRoot({}))).toEqual({ herdCount: 0, logistics: false });

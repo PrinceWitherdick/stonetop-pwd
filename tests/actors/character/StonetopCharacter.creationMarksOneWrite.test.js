@@ -88,8 +88,9 @@ describe("setCreationMarks stores what the old run of writes stored, in one writ
 		expect(marks["crew-hp"]).toEqual([{ stat: "", level: 1 }]);
 		// With 2 copies the budget is already spent.
 		expect((await expectSameAsSequential(() => marshal(2), VETERAN_CREW, ["crew-damage"]))["crew-damage"]).toEqual([]);
-		// With 4, two picks of the same option each see the one before.
-		expect((await expectSameAsSequential(() => marshal(4), VETERAN_CREW, ["tags", "tags", "tags"])).tags).toHaveLength(3);
+		// With 4, budget to spare, the options are still once each (one box each, Book I p.126): the
+		// level-2 tag fills tags' box, so no pick of it lands.
+		expect((await expectSameAsSequential(() => marshal(4), VETERAN_CREW, ["tags", "tags", "tags"])).tags).toEqual([{ stat: "", level: 2 }]);
 	});
 
 	it("frees budget by taking a mark off, for a pick that needs it", async () => {

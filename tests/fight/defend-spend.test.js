@@ -1,11 +1,17 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { halveDamage, defendOffers, defendNotes, spendOnBlow, spentOn, handleSpendQuery, SPEND_QUERY, takeSpend, rowToken, pickOne, beingApplied, wireDefendSpends } from "../../module/fight/defend-spend.js";
+import { describe, it, expect, vi, beforeEach, afterEach, onTestFinished } from "vitest";
+import { halveDamage, defendOffers, defendNotes, spendOnBlow, spentOn, handleSpendQuery, SPEND_QUERY, takeSpend, rowToken, pickOne, beingApplied, wireDefendSpends, combatAlliesOf, spendWriter, strikeBackAim, charmsOn, handleCharmQuery, CHARM_QUERY, handleCharmSettleQuery, CHARM_SETTLE_QUERY } from "../../module/fight/defend-spend.js";
 import { stubAsk } from "../fakes/confirm.js";
 import { inCardTurn } from "../../module/utils/card-queue.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection } from "../fakes/fight.js";
 import { heldReadiness, READINESS_FLAG } from "../../module/combat/defend-readiness.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { writeFlagPath } from "../fakes/combat-chat.js";
+import { RELAY_GRACE_MS } from "../../module/utils/relay-landed.js";
+import { useFakeHooks } from "../fakes/hooks.js";
+import { forgetWorldMarkScans } from "../../module/actors/character/blessed-marks.js";
+
+// The world's charm makers are kept between renders; each test starts from a fresh scan.
+beforeEach(() => forgetWorldMarkScans());
 
 // Spending Defend's Readiness on a blow from its damage card (Book I p.216).
 
@@ -42,7 +48,7 @@ describe("defendOffers", () => {
 
 	it("offers each option once against a blow, and nothing on a blow already applied", () => {
 		const taken = { ...damage, halvedBy: [{ uuid: "Token.bram", name: "bram", how: "halve" }], standIns:[{ uuid: "Token.bram", by: aeliana.uuid, name: "aeliana" }] };
-		const none = { halve: [], parry: [], standIn: [], ignore: [], knockedDown: [], neverGonna: [], safetyFirst: [], redirect: [] };
+		const none = { halve: [], parry: [], standIn: [], ignore: [], knockedDown: [], neverGonna: [], safetyFirst: [], redirect: [], charm: [] };
 		expect(defendOffers(taken, () => ({ self: bram, allies: [aeliana] }), () => aeliana)).toEqual(none);
 		const applied = { ...damage, applied: [{ uuid: "Token.bram" }] };
 		expect(defendOffers(applied, () => ({ self: bram, allies: [aeliana] }))).toEqual(none);
@@ -668,6 +674,48 @@ describe("a player's spend on a card the GM wrote", () => {
 		expect(query).toHaveBeenCalledWith(SPEND_QUERY, expect.objectContaining({ kind: "parry", defenderUuid: "Actor.fox" }), { timeout: 10000 });
 	});
 
+	// QY-6: the GM's client recorded the spend, but its answer came after the asker stopped waiting.
+	it("counts a spend the card shows as taken, though no answer came in time", async () => {
+		const fox = owned("fox", 2, "pim", ["Parry & Riposte"]);
+		const blow = card({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.fox", name: "Fox" }] });
+		const query = vi.fn(async () => {
+			blow.flag = { ...blow.flag, halvedBy: [{ uuid: "Token.fox", name: "fox", how: "parry" }] };
+			throw new Error("timed out");
+		});
+		globalThis.game = { user: PIM, users: { activeGM: { ...GM, query } } };
+		const strike = vi.fn(async (_d, _a, _l, { commit }) => commit());
+		expect(await spendOnBlow(blow, "parry", { row: blow.flag.results[0], defender: fox, cost: 1 }, { relay: true, strikeBack: strike })).toBe(true);
+		// And one that never lands is still a no, once the wait for it is over.
+		vi.useFakeTimers();
+		try {
+			const other = card({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.fox", name: "Fox" }] });
+			globalThis.game = { user: PIM, users: { activeGM: { ...GM, query: vi.fn(async () => { throw new Error("timed out"); }) } } };
+			const out = spendOnBlow(other, "parry", { row: other.flag.results[0], defender: fox, cost: 1 }, { relay: true, strikeBack: strike });
+			await vi.advanceTimersByTimeAsync(RELAY_GRACE_MS);
+			expect(await out).toBe(false);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	// The GM's write was queued behind others on the card, so it lands after the asker stopped waiting.
+	it("counts a spend the GM's client records a moment after no answer came", async () => {
+		const hooks = useFakeHooks();
+		try {
+			const fox = owned("fox", 2, "pim", ["Parry & Riposte"]);
+			const blow = card({ attackerUuid: "Scene.s.Token.wolf", results: [{ uuid: "Token.fox", name: "Fox" }] });
+			globalThis.game = { user: PIM, users: { activeGM: { ...GM, query: vi.fn(async () => { throw new Error("timed out"); }) } } };
+			const strike = vi.fn(async (_d, _a, _l, { commit }) => commit());
+			const out = spendOnBlow(blow, "parry", { row: blow.flag.results[0], defender: fox, cost: 1 }, { relay: true, strikeBack: strike });
+			await vi.waitFor(() => expect(hooks.handlers.size).toBe(1));
+			blow.flag = { ...blow.flag, halvedBy: [{ uuid: "Token.fox", name: "fox", how: "parry" }] };
+			hooks.fire("updateChatMessage", blow);
+			expect(await out).toBe(true);
+		} finally {
+			hooks.restore();
+		}
+	});
+
 	describe("handleSpendQuery", () => {
 		function gmSide() {
 			const bram = owned("bram", 2, "pim");
@@ -753,6 +801,23 @@ describe("a spend beside an Apply on the same card", () => {
 		}
 	});
 
+	// QY-4: two cards are two lines, and both read the defender's last Readiness before either paid it.
+	it("pays one last Readiness once, though two cards ask for it at once", async () => {
+		const bram = character("bram", 1);
+		bram.setFlag = vi.fn(async function (scope, key, value) {
+			await new Promise(r => setTimeout(r, 5));
+			this.flags[scope][key] = value;
+		});
+		const one = card({ results: [{ uuid: "Token.bram", name: "Bram" }], applied: [] });
+		const two = { ...card({ results: [{ uuid: "Token.bram", name: "Bram" }], applied: [] }), id: "m-race-2" };
+		const results = await Promise.all([
+			takeSpend(one, "halve", { row: one.flag.results[0], defender: bram, cost: 1 }),
+			takeSpend(two, "halve", { row: two.flag.results[0], defender: bram, cost: 1 }),
+		]);
+		expect(results.filter(Boolean)).toHaveLength(1);
+		expect(bram.flags[SYSTEM_ID][READINESS_FLAG]).toBe(0);
+	});
+
 	it("writes only its own list, so an applied row written from another client stays applied", async () => {
 		const aeliana = character("aeliana", 2);
 		const blow = card({ results: [{ uuid: "Token.bram", name: "Bram" }, { uuid: "Token.pim", name: "Pim" }], applied: [] });
@@ -769,7 +834,15 @@ describe("rowToken", () => {
 		const combat = fakeCombat({ scene, combatants: [fakeCombatant({ id: "c-bram", token, scene })] });
 		const doc = { ...bram, id: "bram", getActiveTokens: () => [] };
 		expect(rowToken(doc, { scene: { id: "elsewhere" }, combats: collection([combat]) })).toBe(token);
+		// The setting is read live (fight-state.js#countsAsFight).
+		const settings = globalThis.game.settings;
+		onTestFinished(() => { globalThis.game.settings = settings; });
+		let fightTab = true;
+		globalThis.game.settings = { get: (_scope, key) => (key === "fightTab" ? fightTab : undefined) };
 		expect(rowToken(doc, { scene: { id: "elsewhere" }, combats: collection([{ ...combat, flags: {} }]) })).toBeNull();
+		// With the Fight tab off nothing is stamped, and a core Combat is the fight.
+		fightTab = false;
+		expect(rowToken(doc, { scene: { id: "elsewhere" }, combats: collection([{ ...combat, flags: {} }]) })).toBe(token);
 	});
 });
 
@@ -838,5 +911,321 @@ describe("Front Line Leader's Presence on a blow at the crew", () => {
 		expect(await spendOnBlow(card, "halve", { row: card.flag.results[0], defender: rhianna, cost: 1, purse: "presence" })).toBe(false);
 		expect(card.setFlag).not.toHaveBeenCalled();
 		expect(rhianna.flags[SYSTEM_ID][READINESS_FLAG]).toBe(3);
+	});
+});
+
+// Combat audit 2026-10-23 (MOV-1, MOV-2, MOV-5, MOV-7): the user's rulings.
+describe("combat audit fixes on the damage card", () => {
+	const GM = { id: "gm", isGM: true, active: true };
+	const PIM = { id: "pim", isGM: false, active: true };
+	let saved;
+	beforeEach(() => { saved = globalThis.game; });
+	afterEach(() => { globalThis.game = saved; });
+
+	const card = flag => ({
+		id: "m1", flag,
+		getFlag() { return this.flag; },
+		setFlag: vi.fn(async function (_scope, key, value) { const store = { damage: this.flag }; writeFlagPath(store, key, value); this.flag = store.damage; }),
+	});
+
+	// MOV-1: with the Fight tab off, the people standing by are the heroes' side of the same Combat.
+	describe("combatAlliesOf (the Fight tab off)", () => {
+		const hero = (id, extra = {}) => ({ id, name: id, type: "character", hasPlayerOwner: true, ...extra });
+		const c = (id, actor, extra = {}) => ({ id, actor, actorId: actor?.id, tokenId: `t-${id}`, ...extra });
+		it("lists everyone else on the heroes' side of the Combat the one hit stands in, never the one hit or the down", () => {
+			const bram = hero("bram");
+			const ana = hero("ana");
+			const cadi = hero("cadi");
+			const wolf = { id: "wolf", name: "Wolf", type: "monster", hasPlayerOwner: false };
+			const combat = { combatants: [c("b", bram), c("a", ana), c("w", wolf), c("c", cadi, { isDefeated: true })] };
+			expect(combatAlliesOf(bram, null, { combats: [combat] })).toEqual([ana]);
+			// Not in any Combat, or no hero there: nobody.
+			expect(combatAlliesOf(hero("pim"), null, { combats: [combat] })).toEqual([]);
+			expect(combatAlliesOf(wolf, null, { combats: [combat] })).toEqual([]);
+		});
+
+		// The old Introductions left a tokenless roster Combat holding every PC: it is no fight, so it makes
+		// nobody an ally of anybody, and a PC dropped into a fight tokenless stands by nobody either.
+		it("never counts a tokenless roster Combat, nor a tokenless combatant", () => {
+			const bram = hero("bram");
+			const ana = hero("ana");
+			const roster = { combatants: [c("rb", bram, { tokenId: null }), c("ra", ana, { tokenId: null })] };
+			expect(combatAlliesOf(bram, null, { combats: [roster] })).toEqual([]);
+			const wolf = { id: "wolf", name: "Wolf", type: "monster", hasPlayerOwner: false };
+			const fight = { combatants: [c("b", bram), c("w", wolf), c("a", ana, { tokenId: null })] };
+			expect(combatAlliesOf(bram, null, { combats: [roster, fight] })).toEqual([]);
+		});
+	});
+
+	// MOV-7: a player who wrote the card asks the GM's client too, while one is on.
+	describe("spendWriter", () => {
+		const own = { isOwner: true };
+		const theirs = { isOwner: false };
+		it("has the card's author relay through the GM while one is on, and write it alone otherwise", () => {
+			expect(spendWriter(own, PIM, { gm: GM })).toBe("relay");
+			expect(spendWriter(own, PIM, { gm: null })).toBe("direct");
+			expect(spendWriter(theirs, PIM, { gm: GM })).toBe("relay");
+			expect(spendWriter(theirs, PIM, { gm: null })).toBeNull();
+		});
+		it("has the primary GM write it, and any other GM offer nothing", () => {
+			expect(spendWriter(own, GM, { gm: GM, primary: () => true })).toBe("direct");
+			expect(spendWriter(own, GM, { gm: GM, primary: () => false })).toBeNull();
+		});
+	});
+
+	// MOV-2: a strike back with nobody targeted is at an attacker, the archer shooting at them included.
+	describe("strikeBackAim", () => {
+		const combatant = (id, name) => ({ id, name, actorId: id, actor: { id }, token: { uuid: `Scene.s.Token.${id}`, name, disposition: -1 } });
+		const engagement = attackers => ({
+			entry: { attackers },
+			combatants: new Map([["wolf", combatant("wolf", "Wolf")], ["archer", combatant("archer", "Archer")]]),
+		});
+		it("aims at the one attacker outright, asks between several, and finds nobody with no fight to read", async () => {
+			const ask = vi.fn(async ({ candidates }) => [candidates[1]]);
+			expect(await strikeBackAim({ name: "Bram" }, { engagement: engagement(["archer"]), ask })).toEqual([
+				{ uuid: "Scene.s.Token.archer", name: "Archer", actorId: "archer", disposition: -1, hasActor: true },
+			]);
+			expect(ask).not.toHaveBeenCalled();
+			const two = await strikeBackAim({ name: "Bram" }, { engagement: engagement(["wolf", "archer"]), ask });
+			expect(two.map(t => t.name)).toEqual(["Archer"]);
+			expect(ask).toHaveBeenCalledWith(expect.objectContaining({ roller: "Bram" }));
+			expect(await strikeBackAim({ name: "Bram" }, { engagement: null, ask })).toEqual([]);
+		});
+	});
+
+	// MOV-5: Amulets & Talismans from the damage card.
+	describe("a charm (Amulets & Talismans)", () => {
+		const blessedWith = (marks, { total = 10, owner = "pim" } = {}) => {
+			const actor = {
+				id: "eira", name: "Eira", type: "character", uuid: "Actor.eira", isOwner: true,
+				items: [{ type: "move", name: "Amulets & Talismans" }],
+				flags: { [SYSTEM_ID]: { blessedMarks: marks } },
+				getFlag(scope, key) { return this.flags[scope]?.[key]; },
+				testUserPermission: user => user.id === owner || user.isGM,
+				typedActor: {
+					onDirectStatRoll: vi.fn(async () => ({ total })),
+					liftBlessedMark: vi.fn(async () => true),
+				},
+			};
+			return actor;
+		};
+		const bram = { id: "bram", name: "Bram", type: "character", uuid: "Actor.bram", isOwner: true, flags: {}, items: [] };
+		const charm = (extra = {}) => ({ id: "mark1", kind: "charm", uuid: "Actor.bram", name: "Bram", note: "fire", ...extra });
+		const damage = () => ({ results: [{ uuid: "Token.bram", name: "Bram", raw: 8 }] });
+		const nobody = () => ({ self: null, allies: [] });
+
+		it("finds the charms a bearer wears, by document or by name, from a Blessed who has the move learned", () => {
+			const eira = blessedWith([charm(), { id: "m2", kind: "barkskin", uuid: "Actor.bram", name: "Bram" }]);
+			expect(charmsOn(bram, [eira])).toEqual([{ blessed: eira, mark: charm() }]);
+			const byName = blessedWith([{ id: "m3", kind: "charm", name: "bram " }]);
+			expect(charmsOn(bram, [byName]).map(c => c.mark.id)).toEqual(["m3"]);
+			const unlearned = blessedWith([charm()]);
+			unlearned.items = [{ type: "move", name: "Amulets & Talismans", flags: { [SYSTEM_ID]: { learned: false } } }];
+			expect(charmsOn(bram, [unlearned])).toEqual([]);
+		});
+
+		it("offers the Charm spend on the bearer's row, naming the harm, once per blow", () => {
+			const eira = blessedWith([charm({ extraHarm: "frost" })]);
+			const offers = defendOffers(damage(), nobody, () => bram, () => null, who => charmsOn(who, [eira]));
+			expect(offers.charm).toEqual([expect.objectContaining({ defender: eira, bearer: bram, harm: "fire or frost", cost: 0 })]);
+			const tested = { ...damage(), charmedBy: [{ uuid: "Token.bram", how: "charm", tier: "failure" }] };
+			expect(defendOffers(tested, nobody, () => bram, () => null, who => charmsOn(who, [eira])).charm).toEqual([]);
+		});
+
+		// The kept scan is dropped by stonetop.js's actor and item hooks (forgetWorldMarkScans).
+		it("keeps the world's charm makers between renders until an actor or item changes", () => {
+			const priorGame = globalThis.game;
+			forgetWorldMarkScans();
+			try {
+				const eira = blessedWith([charm()]);
+				globalThis.game = { user: null, actors: [eira] };
+				const offered = () => defendOffers(damage(), nobody, () => bram, () => null).charm.length;
+				expect(offered()).toBe(1);
+				// Read from the kept list: the flags are not walked again on the next render.
+				eira.flags[SYSTEM_ID].blessedMarks = [];
+				expect(offered()).toBe(1);
+				forgetWorldMarkScans();
+				expect(offered()).toBe(0);
+				// A swapped actors collection is read anew.
+				globalThis.game = { user: null, actors: [blessedWith([charm()])] };
+				expect(offered()).toBe(1);
+			} finally {
+				globalThis.game = priorGame;
+				forgetWorldMarkScans();
+			}
+		});
+
+		it("reads a 10+ as the blow ignored, a 7-9 as halved, and a 6- as nothing", () => {
+			const at = tier => spentOn({ ...damage(), charmedBy: [{ uuid: "Token.bram", how: "charm", tier, move: "Amulets & Talismans" }] });
+			expect(at("success").voided.get("Token.bram")).toEqual({ lineKey: "stonetop.fight.defend.charmIgnoredLine", move: "Amulets & Talismans" });
+			expect([...at("partial").charmHalved]).toEqual(["Token.bram"]);
+			expect(at("partial").voided.size).toBe(0);
+			expect(at("failure").voided.size + at("failure").charmHalved.size).toBe(0);
+			expect(defendNotes({ ...damage(), charmedBy: [{ uuid: "Token.bram", name: "Eira", how: "charm", tier: "partial" }] }))
+				.toEqual([expect.stringContaining("only half the damage")]);
+		});
+
+		it("rolls the Blessed's +INT when their own player presses it, records the tier, and lifts the spent charm", async () => {
+			const me = { ...PIM, character: { id: "eira" } };
+			globalThis.game = { user: me, users: Object.assign([me], { get: id => (id === me.id ? me : null), activeGM: null }) };
+			const eira = blessedWith([charm()], { total: 8 });
+			const blow = card(damage());
+			const [offer] = defendOffers(blow.flag, nobody, () => bram, () => null, who => charmsOn(who, [eira])).charm;
+			expect(await spendOnBlow(blow, "charm", offer)).toBe(true);
+			expect(eira.typedActor.onDirectStatRoll).toHaveBeenCalledWith("int", { moveName: "Amulets & Talismans", targets: [] });
+			expect(blow.flag.charmedBy).toEqual([expect.objectContaining({ uuid: "Token.bram", how: "charm", tier: "partial", by: "Actor.eira" })]);
+			expect(eira.typedActor.liftBlessedMark).toHaveBeenCalledWith("mark1");
+			// Potent Workings' "retains its potency" keeps it on a 10+.
+			const kept = blessedWith([charm({ retains: true })], { total: 11 });
+			const other = card(damage());
+			const [again] = defendOffers(other.flag, nobody, () => bram, () => null, who => charmsOn(who, [kept])).charm;
+			expect(await spendOnBlow(other, "charm", again)).toBe(true);
+			expect(spentOn(other.flag).voided.has("Token.bram")).toBe(true);
+			expect(kept.typedActor.liftBlessedMark).not.toHaveBeenCalled();
+		});
+
+		it("asks the Blessed's player to roll it when someone else presses, and rolls nothing on a no", async () => {
+			const eiraPlayer = { id: "pim", isGM: false, active: true, character: { id: "eira" }, query: vi.fn(async () => ({ tier: "partial" })) };
+			const bramPlayer = { id: "bob", isGM: false, active: true, character: { id: "bram" } };
+			const list = [GM, eiraPlayer, bramPlayer];
+			globalThis.game = { user: bramPlayer, users: Object.assign([...list], { get: id => list.find(u => u.id === id) ?? null, activeGM: null }) };
+			const eira = blessedWith([charm()]);
+			const blow = card(damage());
+			const [offer] = defendOffers(blow.flag, nobody, () => bram, () => null, who => charmsOn(who, [eira])).charm;
+			expect(await spendOnBlow(blow, "charm", offer)).toBe(true);
+			expect(eiraPlayer.query).toHaveBeenCalledWith(CHARM_QUERY, expect.objectContaining({ blessedId: "eira", markId: "mark1", ward: "Bram" }), expect.anything());
+			// Rolled over there, not here.
+			expect(eira.typedActor.onDirectStatRoll).not.toHaveBeenCalled();
+			expect(spentOn(blow.flag).charmHalved.has("Token.bram")).toBe(true);
+			eiraPlayer.query.mockResolvedValueOnce({ declined: true });
+			const other = card(damage());
+			expect(await spendOnBlow(other, "charm", offer)).toBe(false);
+			expect(other.setFlag).not.toHaveBeenCalled();
+		});
+
+		it("answers the ask on the Blessed's player's client: rolls there, and lifts nothing until the card records it", async () => {
+			const me = { id: "pim", isGM: false, active: true };
+			const asker = { id: "bob", isGM: false, active: true };
+			globalThis.game = { user: me, users: Object.assign([me, asker], { get: id => [me, asker].find(u => u.id === id) ?? null, activeGM: null }) };
+			const eira = blessedWith([charm()], { total: 12 });
+			const actors = { get: id => (id === "eira" ? eira : null) };
+			const answer = await handleCharmQuery({ blessedId: "eira", markId: "mark1", ward: "Bram" }, { user: asker }, { actors, users: globalThis.game.users, confirm: async () => true });
+			expect(answer).toEqual({ tier: "success" });
+			expect(eira.typedActor.liftBlessedMark).not.toHaveBeenCalled();
+			expect(await handleCharmQuery({ blessedId: "eira", markId: "gone", ward: "Bram" }, { user: asker }, { actors, users: globalThis.game.users, confirm: async () => true })).toBeNull();
+		});
+
+		it("uses up no charm when the card refuses the spend after the roll", async () => {
+			const me = { ...PIM, character: { id: "eira" } };
+			globalThis.game = { user: me, users: Object.assign([me], { get: id => (id === me.id ? me : null), activeGM: null }) };
+			const eira = blessedWith([charm()], { total: 8 });
+			const blow = card(damage());
+			const [offer] = defendOffers(blow.flag, nobody, () => bram, () => null, who => charmsOn(who, [eira])).charm;
+			// Someone else's charm roll landed on this blow first.
+			blow.flag.charmedBy = [{ uuid: "Token.bram", how: "charm", tier: "failure" }];
+			expect(await spendOnBlow(blow, "charm", offer)).toBe(false);
+			expect(eira.typedActor.onDirectStatRoll).toHaveBeenCalled();
+			expect(eira.typedActor.liftBlessedMark).not.toHaveBeenCalled();
+		});
+
+		it("asks whoever decides for the Blessed to use the charm up once the card records it, and they check the card", async () => {
+			const eiraPlayer = { id: "pim", isGM: false, active: true, character: { id: "eira" }, query: vi.fn(async q => (q === CHARM_QUERY ? { tier: "partial" } : true)) };
+			const bramPlayer = { id: "bob", isGM: false, active: true, character: { id: "bram" } };
+			const list = [GM, eiraPlayer, bramPlayer];
+			globalThis.game = { user: bramPlayer, users: Object.assign([...list], { get: id => list.find(u => u.id === id) ?? null, activeGM: null }) };
+			const eira = blessedWith([charm()]);
+			eira.isOwner = false;
+			const blow = card(damage());
+			const [offer] = defendOffers(blow.flag, nobody, () => bram, () => null, who => charmsOn(who, [eira])).charm;
+			expect(await spendOnBlow(blow, "charm", offer)).toBe(true);
+			expect(eiraPlayer.query).toHaveBeenLastCalledWith(CHARM_SETTLE_QUERY, expect.objectContaining({ blessedId: "eira", markId: "mark1", rowUuid: "Token.bram", tier: "partial" }), expect.anything());
+			expect(eira.typedActor.liftBlessedMark).not.toHaveBeenCalled();
+			// On the Blessed's player's client: settled only for a roll the card records.
+			eira.isOwner = true;
+			const deps = { actors: { get: id => (id === "eira" ? eira : null) }, messages: { get: () => blow } };
+			expect(await handleCharmSettleQuery({ messageId: "m1", rowUuid: "Token.bram", blessedId: "eira", markId: "mark1", tier: "success" }, {}, deps)).toBe(false);
+			expect(eira.typedActor.liftBlessedMark).not.toHaveBeenCalled();
+			expect(await handleCharmSettleQuery({ messageId: "m1", rowUuid: "Token.bram", blessedId: "eira", markId: "mark1", tier: "partial" }, {}, deps)).toBe(true);
+			expect(eira.typedActor.liftBlessedMark).toHaveBeenCalledWith("mark1");
+		});
+
+		it("records a relayed charm on the GM's client with the tier the asker rolled, and nothing without one", async () => {
+			const eira = blessedWith([charm()]);
+			const blow = card(damage());
+			globalThis.game = { user: GM, users: { get: id => [GM, PIM].find(u => u.id === id) ?? null, activeGM: GM } };
+			const deps = {
+				messages: { get: () => blow }, users: { get: id => [GM, PIM].find(u => u.id === id) ?? null },
+				offersOf: d => defendOffers(d, nobody, () => bram, () => null, who => charmsOn(who, [eira])),
+			};
+			const data = { messageId: "m1", kind: "charm", rowUuid: "Token.bram", defenderUuid: "Actor.eira", markId: "mark1" };
+			expect(await handleSpendQuery(data, { user: PIM }, deps)).toBe(false);
+			expect(eira.typedActor.liftBlessedMark).not.toHaveBeenCalled();
+			expect(await handleSpendQuery({ ...data, tier: "success" }, { user: PIM }, deps)).toBe(true);
+			expect(spentOn(blow.flag).voided.has("Token.bram")).toBe(true);
+			// The GM can write the Blessed, so the charm is used up there and then.
+			expect(eira.typedActor.liftBlessedMark).toHaveBeenCalledWith("mark1");
+		});
+
+		it("relays which charm was rolled, so the GM's client records and lifts that one when a Blessed laid two", async () => {
+			const eira = blessedWith([charm({ id: "fire", note: "fire" }), charm({ id: "poison", note: "poison" })]);
+			const blow = card(damage());
+			globalThis.game = { user: GM, users: { get: id => [GM, PIM].find(u => u.id === id) ?? null, activeGM: GM } };
+			const deps = {
+				messages: { get: () => blow }, users: { get: id => [GM, PIM].find(u => u.id === id) ?? null },
+				offersOf: d => defendOffers(d, nobody, () => bram, () => null, who => charmsOn(who, [eira])),
+			};
+			const data = { messageId: "m1", kind: "charm", rowUuid: "Token.bram", defenderUuid: "Actor.eira", tier: "partial" };
+			expect(await handleSpendQuery({ ...data, markId: "gone" }, { user: PIM }, deps)).toBe(false);
+			expect(await handleSpendQuery({ ...data, markId: "poison" }, { user: PIM }, deps)).toBe(true);
+			expect(blow.flag.charmedBy).toEqual([expect.objectContaining({ markId: "poison", bearerUuid: "Actor.bram" })]);
+			expect(eira.typedActor.liftBlessedMark).toHaveBeenCalledWith("poison");
+			expect(eira.typedActor.liftBlessedMark).not.toHaveBeenCalledWith("fire");
+		});
+
+		it("sends the charm's id when a player's charm spend is relayed to the GM", async () => {
+			const gm = { ...GM, query: vi.fn(async () => true) };
+			const me = { ...PIM, character: { id: "eira" } };
+			globalThis.game = { user: me, users: Object.assign([gm, me], { get: id => [gm, me].find(u => u.id === id) ?? null, activeGM: gm }) };
+			const eira = blessedWith([charm({ id: "fire" }), charm({ id: "poison" })], { total: 8 });
+			const blow = card(damage());
+			const offers = defendOffers(blow.flag, nobody, () => bram, () => null, who => charmsOn(who, [eira])).charm;
+			const poison = offers.find(o => o.mark.id === "poison");
+			await spendOnBlow(blow, "charm", poison, { relay: true });
+			expect(gm.query).toHaveBeenCalledWith(SPEND_QUERY, expect.objectContaining({ kind: "charm", markId: "poison", tier: "partial" }), expect.anything());
+		});
+
+		it("does not let a ward's charm halve a blow a stand-in now takes, and offers the stand-in's own charm", () => {
+			const wren = { id: "wren", name: "Wren", type: "character", uuid: "Actor.wren", isOwner: true, flags: {}, items: [] };
+			const eira = blessedWith([charm(), charm({ id: "mark2", uuid: "Actor.wren", name: "Wren" })]);
+			const wardCharm = { uuid: "Token.bram", how: "charm", tier: "partial", by: "Actor.eira", bearerUuid: "Actor.bram", markId: "mark1" };
+			const standIn = { uuid: "Token.bram", how: "standIn", by: "Actor.wren", name: "Wren" };
+			// The ward's 7-9 halves while the ward takes it.
+			expect(spentOn({ ...damage(), charmedBy: [wardCharm] }).charmHalved.has("Token.bram")).toBe(true);
+			// Once Wren stands in, it no longer does, and Wren's own charm is offered.
+			const stood = { ...damage(), charmedBy: [wardCharm], standIns: [standIn] };
+			expect(spentOn(stood).charmHalved.has("Token.bram")).toBe(false);
+			const resolve = uuid => (uuid === "Actor.wren" ? wren : bram);
+			const offers = defendOffers(stood, nobody, resolve, () => null, who => charmsOn(who, [eira])).charm;
+			expect(offers.map(o => [o.bearer.id, o.mark.id])).toEqual([["wren", "mark2"]]);
+			// Wren's own 7-9 halves it.
+			const wrenCharm = { uuid: "Token.bram", how: "charm", tier: "partial", by: "Actor.eira", bearerUuid: "Actor.wren", markId: "mark2" };
+			expect(spentOn({ ...stood, charmedBy: [wardCharm, wrenCharm] }).charmHalved.has("Token.bram")).toBe(true);
+			// A spend written before the bearer was kept counts as it always did.
+			expect(spentOn({ ...stood, charmedBy: [{ uuid: "Token.bram", how: "charm", tier: "partial" }] }).charmHalved.has("Token.bram")).toBe(true);
+		});
+
+		it("records a stand-in's own charm on a blow whose ward already rolled one", async () => {
+			const wren = { id: "wren", name: "Wren", type: "character", uuid: "Actor.wren", isOwner: true, flags: {}, items: [] };
+			const me = { ...PIM, character: { id: "eira" } };
+			globalThis.game = { user: me, users: Object.assign([me], { get: id => (id === me.id ? me : null), activeGM: null }) };
+			const eira = blessedWith([charm({ id: "mark2", uuid: "Actor.wren", name: "Wren" })], { total: 8 });
+			const blow = card({ ...damage(),
+				charmedBy: [{ uuid: "Token.bram", how: "charm", tier: "partial", by: "Actor.eira", bearerUuid: "Actor.bram", markId: "mark1" }],
+				standIns: [{ uuid: "Token.bram", how: "standIn", by: "Actor.wren", name: "Wren" }] });
+			const resolve = uuid => (uuid === "Actor.wren" ? wren : bram);
+			const [offer] = defendOffers(blow.flag, nobody, resolve, () => null, who => charmsOn(who, [eira])).charm;
+			expect(await spendOnBlow(blow, "charm", offer)).toBe(true);
+			expect(blow.flag.charmedBy).toHaveLength(2);
+		});
 	});
 });

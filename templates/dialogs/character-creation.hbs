@@ -5,11 +5,11 @@
   </header>
 
   <p class="stonetop-charintro-body">
-    Your GM has started a character for you. When you're ready, choose a playbook and walk through making your hero: pick a background, set your stats, choose your moves, and answer a few questions about who you are.
+    {{#if startedByGM}}Your GM has started a character for you: <strong>{{this.characterName}}</strong>.{{else}}Your character <strong>{{this.characterName}}</strong> is ready to be made.{{/if}} When you're ready, choose a playbook and walk through making your hero: pick a background, set your stats, choose your moves, and answer a few questions about who you are.
   </p>
 
   <p class="stonetop-charintro-body">
-    There are no wrong answers. Once you've finished, or any time you close the walkthrough, your character sheet opens with everything you've chosen, ready to play.
+    There are no wrong answers. When you finish, or if you close the walkthrough part-way, your character sheet opens with everything you've chosen so far. Close this window instead and you'll be asked again the next time you log in.
   </p>
 
   <div class="stonetop-charintro-actions">

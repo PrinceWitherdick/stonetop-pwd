@@ -37,6 +37,7 @@ Requisition asks how many horses you take from the herd, if Stonetop has one.
 The **Residents** tab has three lists: **Player Characters**, **Residents of Stonetop** and neighbors. Each person is an NPC actor, so they have a full sheet of their own.
 
 - Drag NPCs from the sidebar onto a list to add them, or **Add Resident**.
+- **Residents follow their Home.** An NPC whose **Home** names a settlement is on that settlement's Residents, wherever they were made, and changing someone's Home on their sheet moves them. Dropping someone who lives elsewhere asks **Move (name) to (place)?** first. The remove cross asks **Where does (name) live now?** rather than just taking them off the list.
 - **Drag player characters onto the Player Characters list** to keep them with Stonetop; their Keep in mind reminders show there.
 - Each person is a card showing their **Occupation**, **Traits**, **Relations** and **Notes**, kept A to Z by name. Click a list's pencil to edit its fields; the pencil beside a resident's Notes then opens that NPC's notes in a pop-up editor, and changes go straight to their sheet.
 - The magnifying glass filters the list.
@@ -58,11 +59,11 @@ The steading has its own **Relationship Map** tab (the table's shared boards) an
 
 ## Notes
 
-The **Notes** tab holds:
+The **Notes** tab holds, in this order:
 
-- **Content guidelines**: excluded content, veiled content, special requests and the line, to review at the start of each session.
 - **Plans**: **New plan** records something the village hopes to achieve and what the GM says it requires (Make a Plan), with a checkbox per requirement.
-- free notes for the GM.
+- **Notes**: free notes for the GM.
+- **Content guidelines**: excluded content, veiled content, special requests and the line, to review at the start of each session.
 
 ## Other settlements
 
@@ -70,7 +71,8 @@ Other villages, towns and bands are **Settlement** actors. Create one from the A
 
 - Size, Population, Prosperity and Defenses, with resources, defenses, trade partners and a **Read in the gazetteer** link to its journal entry;
 - **Who runs it**, notable people (link them to NPC sheets) and groups;
-- on **People**, a **Residents** table like Stonetop's: **Add Resident**, or drag an NPC from the sidebar onto the tab;
+- on **People**, a **Residents** table like Stonetop's: **Add Resident**, or drag an NPC from the sidebar onto the tab (residents follow their Home here too);
+- on **Notes**, its own **Plans**, made and edited the same way as Stonetop's;
 - its own Trade & Barter, Muster, Deploy and Pull Together, rolled off its stats. A hamlet rolls these with disadvantage and a town or city with advantage.
 
 A settlement starts **Hidden from players**; click the toggle in its header to show it to them. How each settlement stands with Stonetop is stored on Stonetop's sheet, in the **Relationships** card at the bottom of its Residents tab, where you rate each one and use the pencil to choose which settlements to show.

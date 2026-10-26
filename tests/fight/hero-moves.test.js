@@ -296,9 +296,10 @@ describe("Something to Remember Me By, off the fight ring", () => {
 
 	it("is offered unticked only to a hero with the move learned, holding Readiness, on a blow not rolled as a strike back", () => {
 		const { actor } = wouldBe([HERO_MOVES.REMEMBER_ME], { readiness: 2 });
+		// Ticked, it makes the blow a strike back: "deal your damage, with disadvantage" (p.216).
 		expect(blowOffers(actor, {}).find(o => o.key === "rememberMeSpend")).toMatchObject({
-			dice: "1d4", applied: false,
-			label: "Something to Remember Me By, struck back (spend 1 Readiness): +1d4 damage, and you scar, mark or diminish them",
+			dice: "1d4", applied: false, mode: "dis", strikeBack: true,
+			label: "Something to Remember Me By, struck back with disadvantage (spend 1 Readiness): +1d4 damage, and you scar, mark or diminish them",
 			pill: "Something to Remember Me By +1d4",
 		});
 		expect(keys(wouldBe([HERO_MOVES.REMEMBER_ME], { readiness: 0 }).actor, {})).not.toContain("rememberMeSpend");
@@ -321,6 +322,13 @@ describe("Something to Remember Me By, off the fight ring", () => {
 		await offer.spend(actor);
 		expect(actor.setFlag).toHaveBeenCalledTimes(1);
 		expect(flags[SYSTEM_ID].readiness).toBe(0);
+	});
+
+	// Combat audit MOV-8 (2026-10-23): an attack move's own damage is the attack, never a strike back.
+	it("is not offered on an attack move's damage window", () => {
+		const { actor } = wouldBe([HERO_MOVES.REMEMBER_ME], { readiness: 2 });
+		for (const moveKey of ["clash", "let-fly", "ambush"]) expect(keys(actor, { moveKey })).not.toContain("rememberMeSpend");
+		expect(keys(actor, {})).toContain("rememberMeSpend");
 	});
 
 	it("leaves the ring's strike back as it was: ticked, costing nothing more, and no second line", () => {

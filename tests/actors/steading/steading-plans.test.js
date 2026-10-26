@@ -83,6 +83,23 @@ describe("a plan", () => {
 		]);
 	});
 
+	// Code review 10-22 (HC-9): a plan removed while its editor was open is not brought back by the editor's save.
+	it("does not bring back a plan removed while its editor was open, and says so", async () => {
+		const base = plan({ requirements: [{ text: "Persuade Elios", done: false }] });
+		const s = steading({ plans: [structuredClone(base), plan({ id: "p2" })] });
+		await removePlan(s, "p1");
+		const warn = vi.fn();
+		const savedUi = globalThis.ui;
+		globalThis.ui = { notifications: { warn } };
+		try {
+			expect(await savePlan(s, { ...base, name: "A stone palisade" }, { base })).toBe(false);
+		} finally {
+			globalThis.ui = savedUi;
+		}
+		expect(s._flags.plans.map(p => p.id)).toEqual(["p2"]);
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining("was removed while you were editing it"));
+	});
+
 	it("still writes a tick the editor itself changed", async () => {
 		const base = plan({ requirements: [{ text: "Persuade Elios", done: false }] });
 		const s = steading({ plans: [structuredClone(base)] });

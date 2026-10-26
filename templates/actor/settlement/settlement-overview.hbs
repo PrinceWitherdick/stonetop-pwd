@@ -22,8 +22,8 @@
 	<div class="steading-track">
 		{{#each (steadingTrack stat.value 0)}}
 		<label class="steading-track-option {{#if checked}}is-selected{{/if}}">
-			<input type="radio" name="{{../stat.name}}" value="{{val}}" {{#if checked}}checked{{/if}}{{#unless @root.editable}} disabled{{/unless}}>
-			<span class="steading-track-label">{{label}}</span>
+			<input type="radio" name="{{../stat.name}}" value="{{this.val}}" {{#if checked}}checked{{/if}}{{#unless @root.editable}} disabled{{/unless}}>
+			<span class="steading-track-label">{{this.label}}</span>
 		</label>
 		{{/each}}
 	</div>
@@ -56,8 +56,8 @@
 					<div class="steading-size-options">
 						{{#each sizes}}
 						<label class="steading-size-option">
-							<input type="radio" class="steading-size-radio" name="system.size" value="{{id}}"{{#if selected}} checked{{/if}}{{#unless @root.editable}} disabled{{/unless}}>
-							<span><em>{{option}}</em></span>
+							<input type="radio" class="steading-size-radio" name="system.size" value="{{this.id}}"{{#if selected}} checked{{/if}}{{#unless @root.editable}} disabled{{/unless}}>
+							<span><em>{{this.option}}</em></span>
 						</label>
 						{{/each}}
 					</div>
@@ -92,14 +92,14 @@
 			{{#if tradeWith.length}}
 			<ul class="steading-list stonetop-settlement-rows">
 				{{#each tradeWith}}
-				<li class="steading-list-item stonetop-settlement-row" data-row-id="{{id}}">
+				<li class="steading-list-item stonetop-settlement-row" data-row-id="{{this.id}}">
 					<span class="steading-list-bullet" aria-hidden="true"></span>
 					<span class="steading-list-name"{{#if ../editable}} data-action="editRow" role="button" tabindex="0" data-tooltip="{{localize "stonetop.settlement.editRowTooltip"}}"{{/if}}>
-						<span class="stonetop-settlement-row-title">{{partner}}</span>{{#if goods}} ({{goods}}){{/if}}
+						<span class="stonetop-settlement-row-title">{{this.partner}}</span>{{#if goods}} ({{this.goods}}){{/if}}
 					</span>
 					<span class="stonetop-settlement-row-tools">
 						{{#if partnerUuid}}
-						<button type="button" class="stonetop-settlement-quiet" data-action="openActor" data-actor-uuid="{{partnerUuid}}" data-reader-ok
+						<button type="button" class="stonetop-settlement-quiet" data-action="openActor" data-actor-uuid="{{this.partnerUuid}}" data-reader-ok
 						        data-tooltip="{{localize "stonetop.settlement.openPartner" name=partner}}" aria-label="{{localize "stonetop.settlement.openPartner" name=partner}}">
 							<i class="fa-solid fa-arrow-up-right-from-square" inert></i>
 						</button>
@@ -152,15 +152,15 @@
 			{{#if leaders.length}}
 			<ul class="steading-list stonetop-settlement-rows stonetop-settlement-rows--people">
 				{{#each leaders}}
-				<li class="steading-list-item stonetop-settlement-row" data-row-id="{{id}}">
+				<li class="steading-list-item stonetop-settlement-row" data-row-id="{{this.id}}">
 					<span class="steading-list-bullet" aria-hidden="true"></span>
 					<span class="steading-list-name"{{#if ../editable}} data-action="editRow" role="button" tabindex="0" data-tooltip="{{localize "stonetop.settlement.editRowTooltip"}}"{{/if}}>
-						<span class="stonetop-settlement-row-title">{{name}}</span>{{#if role}}, {{role}}{{/if}}
-						{{#if instinct}}<span class="stonetop-settlement-instinct-text">{{localize "stonetop.settlement.personInstinct"}}: {{instinct}}</span>{{/if}}
+						<span class="stonetop-settlement-row-title">{{this.name}}</span>{{#if role}}, {{this.role}}{{/if}}
+						{{#if instinct}}<span class="stonetop-settlement-instinct-text">{{localize "stonetop.settlement.personInstinct"}}: {{this.instinct}}</span>{{/if}}
 					</span>
 					<span class="stonetop-settlement-row-tools">
 						{{#if uuid}}
-						<button type="button" class="stonetop-settlement-quiet" data-action="openActor" data-actor-uuid="{{uuid}}" data-reader-ok
+						<button type="button" class="stonetop-settlement-quiet" data-action="openActor" data-actor-uuid="{{this.uuid}}" data-reader-ok
 						        data-tooltip="{{localize "stonetop.settlement.openPerson" name=name}}" aria-label="{{localize "stonetop.settlement.openPerson" name=name}}">
 							<i class="fa-solid fa-id-card" inert></i>
 						</button>
@@ -196,10 +196,10 @@
 			{{#if groups.length}}
 			<ul class="steading-list stonetop-settlement-rows">
 				{{#each groups}}
-				<li class="steading-list-item stonetop-settlement-row" data-row-id="{{id}}">
+				<li class="steading-list-item stonetop-settlement-row" data-row-id="{{this.id}}">
 					<span class="steading-list-bullet" aria-hidden="true"></span>
 					<span class="steading-list-name"{{#if ../editable}} data-action="editRow" role="button" tabindex="0" data-tooltip="{{localize "stonetop.settlement.editRowTooltip"}}"{{/if}}>
-						<span class="stonetop-settlement-row-title">{{name}}</span>{{#if count}} ({{count}}){{/if}}{{#if notes}}: {{notes}}{{/if}}
+						<span class="stonetop-settlement-row-title">{{this.name}}</span>{{#if count}} ({{this.count}}){{/if}}{{#if notes}}: {{this.notes}}{{/if}}
 					</span>
 					{{#if ../editable}}
 					<button type="button" class="steading-list-delete" data-action="deleteRow"
@@ -230,7 +230,7 @@
 			{{else}}
 			<p class="stonetop-settlement-region-text">{{system.region}}</p>
 			{{/if}}
-			{{#if blurb}}<p class="stonetop-settlement-blurb">{{blurb}}</p>{{/if}}
+			{{#if blurb}}<p class="stonetop-settlement-blurb">{{this.blurb}}</p>{{/if}}
 		</div>
 	</div>
 

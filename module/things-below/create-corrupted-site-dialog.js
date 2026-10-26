@@ -187,6 +187,20 @@ export class CreateCorruptedSiteDialog extends StepperDialog {
 		if (terrain) this._terrain = terrain.value;
 	}
 
+	// What the close-guard compares (utils/close-guard.js): every choice, as picked.
+	_workState() {
+		this._onBeforeStepChange();
+		return {
+			name: this._name, terrain: this._terrain, feature: this._featureText, proximity: this._proximity,
+			themes: [...this._themeIds], cause: this._causeText, intent: this._causeIntent, severity: this._severityKey,
+			reqs: [...this._cleansingReqs], binds: [...this._cleansingBinds],
+		};
+	}
+
+	_discardCopy() {
+		return { title: "Discard this corrupted site?", body: "This corrupted site hasn't been made yet. Closing the window now loses what you've chosen and written." };
+	}
+
 	// Build the threat seed for a MacGuffin: prose from feature/cause/severity, the seeded
 	// doom track, the cleansing plan, and the severity's cumulative danger GM moves.
 	_seed() {

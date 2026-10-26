@@ -73,7 +73,20 @@ function world({ isGM = false, ownsBram = false, samHere = false, me = null, ale
 	globalThis.ChatMessage = {
 		create: vi.fn(async data => {
 			const posted = message(`m${log.length + 1}`, data.flags?.[SYSTEM_ID] ?? {});
-			Object.assign(posted, { content: data.content, speaker: data.speaker });
+			Object.assign(posted, {
+				content: data.content, speaker: data.speaker,
+				// An answer card is posted first as its claim, then confirmed with what it gave.
+				update: vi.fn(async changes => {
+					for (const [key, value] of Object.entries(changes)) {
+						if (key === "content") { posted.content = value; continue; }
+						const path = key.replace(`flags.${SYSTEM_ID}.`, "").split(".");
+						let at = posted.flags[SYSTEM_ID];
+						for (const part of path.slice(0, -1)) at = (at[part] ??= {});
+						at[path.at(-1)] = value;
+					}
+				}),
+				delete: vi.fn(async () => { log.splice(log.indexOf(posted), 1); }),
+			});
 			log.push(posted);
 			return posted;
 		}),
@@ -195,7 +208,8 @@ describe("answering", () => {
 		await answerPcAsk(card, "advantage", null);
 		expect(actors.bram.typedActor.holdAdvantage).toHaveBeenCalledWith("Aeliana's Aid");
 		const [posted] = ChatMessage.create.mock.calls[0];
-		expect(posted.flags[SYSTEM_ID][PC_ANSWER_FLAG]).toEqual({ to: "ask-1", choice: "advantage" });
+		// The claim, confirmed once the advantage is held.
+		expect(posted.flags[SYSTEM_ID][PC_ANSWER_FLAG]).toEqual({ to: "ask-1", choice: "advantage", claim: false });
 		expect(posted.speaker).toEqual({ actor: "bram" });
 		// Redrawn by the createChatMessage hook (below), which fires on the answering client too.
 		expect(ui.chat.updateMessage).not.toHaveBeenCalled();
@@ -261,10 +275,56 @@ describe("answering", () => {
 		world({ ownsBram: true });
 		await answerPcAsk(asking(PERSUADE_PC_MOVE), "agree", "success");
 		expect(adjustXp).toHaveBeenCalledWith(actors.bram, 1, { move: PERSUADE_PC_MOVE });
-		const [posted] = ChatMessage.create.mock.calls[0];
-		expect(posted.flags[SYSTEM_ID]).toMatchObject({ xpMark: 1, [PC_ANSWER_FLAG]: { to: "ask-1", choice: "agree" } });
+		// Posted first as the claim, then confirmed with the receipt.
+		const posted = log.at(-1);
+		expect(posted.update).toHaveBeenCalledTimes(1);
+		expect(posted.flags[SYSTEM_ID]).toMatchObject({ xpMark: 1, [PC_ANSWER_FLAG]: { to: "ask-1", choice: "agree", claim: false } });
 		expect(posted.content).toContain("+1 XP (5 / 8)");
 		expect(posted.content).toContain("stonetop-xp-undo");
+	});
+
+	// Code review 10-22 (HC-6): two clients answering at once each post a card. The first in the log stands;
+	// the other takes its card back before giving anything, so one Persuade never marks XP twice.
+	it("gives nothing, and takes its card back, when another answer reached the log first", async () => {
+		world({ ownsBram: true });
+		const card = asking(PERSUADE_PC_MOVE);
+		const create = ChatMessage.create.getMockImplementation();
+		ChatMessage.create.mockImplementationOnce(async data => {
+			// The other client's answer lands ahead of this one's.
+			log.push(message("theirs", { [PC_ANSWER_FLAG]: { to: "ask-1", choice: "refuse" } }));
+			return create(data);
+		});
+		await answerPcAsk(card, "agree", "success");
+		expect(adjustXp).not.toHaveBeenCalled();
+		expect(log.map(m => m.id)).toEqual(["theirs"]);
+	});
+
+	// The card would keep `claim` after the XP was marked, and deleting a claim takes nothing back: so the XP is
+	// taken back at once, and the card with it, reopening the question.
+	it("takes the XP back, and its card, when the card could not be confirmed after the XP was marked", async () => {
+		world({ ownsBram: true });
+		const create = ChatMessage.create.getMockImplementation();
+		ChatMessage.create.mockImplementationOnce(async data => {
+			const posted = await create(data);
+			posted.update.mockRejectedValueOnce(new Error("offline"));
+			return posted;
+		});
+		await answerPcAsk(asking(PERSUADE_PC_MOVE), "agree", "success");
+		expect(adjustXp).toHaveBeenNthCalledWith(1, actors.bram, 1, { move: PERSUADE_PC_MOVE });
+		expect(adjustXp).toHaveBeenNthCalledWith(2, actors.bram, -1, { move: `${PERSUADE_PC_MOVE} (answer withdrawn)` });
+		expect(log).toEqual([]);
+		expect(ui.notifications.error).toHaveBeenCalled();
+	});
+
+	it("takes nothing back for a claim that never gave anything", async () => {
+		const handlers = {};
+		globalThis.Hooks = { on: vi.fn((name, fn) => { handlers[name] = fn; }), once: () => {} };
+		registerPcAskHooks();
+		log.push(asking(AID_MOVE));
+		const claim = Object.assign(message("m8", { [PC_ANSWER_FLAG]: { to: "ask-1", choice: "advantage", claim: true } }), { speaker: { actor: "bram" } });
+		handlers.deleteChatMessage(claim, {}, game.user.id);
+		await new Promise(resolve => setTimeout(resolve, 0));
+		expect(actors.bram.typedActor.releaseHeldAdvantage).not.toHaveBeenCalled();
 	});
 
 	it("marks no XP for a refusal", async () => {

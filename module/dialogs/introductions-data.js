@@ -6,8 +6,8 @@
 // text. Keep this the single source so the dialog and the recorded journal agree.
 //
 //   step3  — the round-3 narration prompt (HTML), themed per playbook.
-//   step4  — the four "answer one, naming an NPC" questions for rounds 4 & 5.
-//   step6  — the four "ask your fellow PCs" questions for rounds 6 & 7.
+//   step4  — the four "answer one, naming an NPC" questions for the looping "Bonds & ties" step.
+//   step6  — the four "ask your fellow PCs" questions for the looping "Asking the others" step.
 
 export const INTRO_PLAYBOOK_DATA = {
 	"the-blessed": {
@@ -146,6 +146,20 @@ export const INTRO_PLAYBOOK_DATA = {
 		],
 	},
 };
+
+/**
+ * Older wordings a release SHIPPED for a question that has since been reworded: current text to the
+ * texts it replaced. The Chronicle brings a journal answer that still wears one of these up to the
+ * current wording; a GM's own edit matches none of them and is left alone (utils/chronicle-core.js,
+ * mergeQaPairs). WHEN YOU REWORD A QUESTION ABOVE, ADD ITS OLD TEXT HERE, or every world that
+ * compiled under the old text keeps it.
+ */
+export const SUPERSEDED_INTRO_QUESTIONS = Object.freeze({
+	// 81ee77b7 (shipped in 1.8.0): Heavy, Judge and Marshal.
+	"Who is your lover/spouse/betrothed?":      Object.freeze(["Who is your lover, spouse, or betrothed?"]),
+	// 81ee77b7 (shipped in 1.8.0): Heavy.
+	"Who most needs/deserves your protection?": Object.freeze(["Who most needs or deserves your protection?"]),
+});
 
 /** The four round-4/5 "answer one, naming an NPC" questions, or null if unknown. */
 export function step4Questions(slug) {

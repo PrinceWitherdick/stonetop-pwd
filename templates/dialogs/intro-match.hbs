@@ -3,7 +3,7 @@
       One root element, as AppV1 requires. Driven by module/dialogs/IntroMatchDialog.js. --}}
 <form class="stonetop-intro-match">
 
-  <p class="stonetop-intro-match-intro">{{intro}}</p>
+  <p class="stonetop-intro-match-intro">{{this.intro}}</p>
 
   <div class="stonetop-intro-match-body">
     {{#each groups}}
@@ -36,13 +36,13 @@
 
   {{!-- Affirmative on the left, as everywhere else in the system. --}}
   <footer class="stonetop-intro-match-foot">
-    <span class="stonetop-intro-match-count">{{countLine}}</span>
+    <span class="stonetop-intro-match-count">{{this.countLine}}</span>
     <span class="stonetop-intro-match-buttons">
       <button type="button" class="stonetop-cta" data-intro-match="save">
-        <i class="fas fa-feather"></i> <span>{{saveLabel}}</span>
+        <i class="fas fa-feather"></i> <span>{{this.saveLabel}}</span>
       </button>
       <button type="button" data-intro-match="cancel">
-        <i class="fas fa-xmark"></i> <span>{{cancelLabel}}</span>
+        <i class="fas fa-xmark"></i> <span>{{this.cancelLabel}}</span>
       </button>
     </span>
   </footer>

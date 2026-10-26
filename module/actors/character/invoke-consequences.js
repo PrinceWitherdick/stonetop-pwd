@@ -357,8 +357,9 @@ export function invokeDebilityChoices(actor) {
  */
 export async function settleInvokeDebility(message, actor, index, choice, { buttons = [] } = {}) {
 	if (!choice || !actor?.typedActor || recordFor(message, index).marked) return false;
-	// The latch is this bullet's record (writeRecord's path).
-	return withCardLatch(message, `${CONSEQUENCES_FLAG}.${index}`, { marked: choice }, buttons, async () => {
+	// The latch is the `marked` key of this bullet's record (writeRecord's path), not the whole record, which can
+	// hold other things (the Empowered record's relic use): a latch given back unsets only `marked`.
+	return withCardLatch(message, `${CONSEQUENCES_FLAG}.${index}.marked`, choice, buttons, async () => {
 		const paid = await payDebility(actor, choice, INVOKE_THE_SUN_GOD);
 		if (!paid) {
 			globalThis.ui?.notifications?.warn?.(localize("stonetop.invocations.consequenceTaken"));

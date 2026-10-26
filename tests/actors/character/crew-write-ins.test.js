@@ -58,7 +58,7 @@ describe("write-in tags", () => {
 describe("the templates", () => {
 	it("draw a box per write-in on the card and in onboarding, and the add row with its strike-off", () => {
 		const tab = readRepo("templates/actor/partials/tab-followers.hbs");
-		expect(tab).toMatch(/\{\{#each tagCustoms\}\}<input type="text" class="stonetop-follower-text stonetop-crew-tag-custom" data-index="\{\{index\}\}"/);
+		expect(tab).toMatch(/\{\{#each tagCustoms\}\}<input type="text" class="stonetop-follower-text stonetop-crew-tag-custom" data-index="\{\{this\.index\}\}"/);
 		expect(tab).toMatch(/\{\{#if writeIn\}\}\{\{#if \.\.\/edit\.gear\}\}<button type="button" class="stonetop-crew-gear-remove/);
 		expect(tab).toContain('class="stonetop-crew-gear-add stonetop-inline-btn"');
 		const onboarding = readRepo("templates/dialogs/character-onboarding.hbs");

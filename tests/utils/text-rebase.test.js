@@ -132,6 +132,20 @@ describe("merge3", () => {
 	it("treats a missing value as empty", () => {
 		expect(merge3(undefined, "", "hello")).toBe("hello");
 	});
+
+	// A deletion of mine against their edit of the same words is a clash, and mine wins. The empty
+	// string is "held" by every string, so this used to hand the deleted word straight back.
+	it("keeps my deletion of a word they changed", () => {
+		expect(merge3("a b c", "a c", "a bb c")).toBe("a c");
+	});
+
+	it("keeps my deletion of a phrase they added to", () => {
+		expect(merge3("I owe Olwin money.", "I owe money.", "I owe Olwin's widow money.")).toBe("I owe money.");
+	});
+
+	it("still takes their edit elsewhere alongside my deletion", () => {
+		expect(merge3("one two three four", "one three four", "one two three FOUR")).toBe("one three FOUR");
+	});
 });
 
 describe("mapIndex", () => {

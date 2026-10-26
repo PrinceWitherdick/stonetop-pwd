@@ -14,15 +14,15 @@
     {{!-- The lists. Each entry carries its own count, which the find box rewrites as it narrows:
           a name in a list you are not looking at still shows up as a number that stayed. --}}
     {{#unless single}}
-    <nav class="stonetop-guide-toc stonetop-person-picker-rail" aria-label="{{listsAria}}">
+    <nav class="stonetop-guide-toc stonetop-person-picker-rail" aria-label="{{this.listsAria}}">
       <ol class="stonetop-guide-toc-list">
         {{#each groups}}
         <li class="stonetop-guide-toc-item{{#if selected}} is-active{{/if}}">
-          <button type="button" class="stonetop-guide-toc-btn stonetop-person-picker-tab" data-group="{{key}}"
-                  {{#if hint}}data-tooltip="{{hint}}"{{/if}}{{#if selected}} aria-current="true"{{/if}}>
-            <i class="fas {{icon}} stonetop-guide-toc-icon" aria-hidden="true"></i>
-            <span class="stonetop-guide-toc-text">{{label}}</span>
-            <span class="stonetop-person-picker-count" data-count-for="{{key}}">{{count}}</span>
+          <button type="button" class="stonetop-guide-toc-btn stonetop-person-picker-tab" data-group="{{this.key}}"
+                  {{#if hint}}data-tooltip="{{this.hint}}"{{/if}}{{#if selected}} aria-current="true"{{/if}}>
+            <i class="fas {{this.icon}} stonetop-guide-toc-icon" aria-hidden="true"></i>
+            <span class="stonetop-guide-toc-text">{{this.label}}</span>
+            <span class="stonetop-person-picker-count" data-count-for="{{this.key}}">{{this.count}}</span>
           </button>
         </li>
         {{/each}}
@@ -32,28 +32,28 @@
 
     <div class="stonetop-guide-main stonetop-person-picker-main">
 
-      {{#if hint}}<p class="stonetop-person-picker-hintline">{{hint}}</p>{{/if}}
+      {{#if hint}}<p class="stonetop-person-picker-hintline">{{this.hint}}</p>{{/if}}
 
       {{!-- Takes the focus as the window opens. A real label rather than a placeholder alone, so
             the control still has a name once somebody has typed in it. --}}
       <label class="stonetop-person-picker-find">
         <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
         <input type="text" class="stonetop-person-picker-find-input" autocomplete="off"
-               placeholder="{{findLabel}}" aria-label="{{findAria}}">
+               placeholder="{{this.findLabel}}" aria-label="{{this.findAria}}">
       </label>
 
       {{!-- The picks, on a question that takes several. Empty and hidden at render; the dialog
             fills it as rows are ticked, and each chip unticks its own person. --}}
       {{#if multiple}}
       <div class="stonetop-person-picker-chosen" hidden>
-        <span class="stonetop-person-picker-chosen-label">{{chosenLabel}}</span>
+        <span class="stonetop-person-picker-chosen-label">{{this.chosenLabel}}</span>
         <ul class="stonetop-person-picker-chosen-list"></ul>
       </div>
       {{/if}}
 
       <div class="stonetop-person-picker-body">
         {{#each groups}}
-        <section class="stonetop-person-picker-group" data-group="{{key}}"{{#unless selected}} hidden{{/unless}}>
+        <section class="stonetop-person-picker-group" data-group="{{this.key}}"{{#unless selected}} hidden{{/unless}}>
           {{!-- "Select all", on a question that takes several answers. It ticks what this
                 list is SHOWING and not what it holds, so narrowing with the find box first is how
                 a reader ticks fewer than all of them; it is per-list for the same reason, since a
@@ -63,19 +63,19 @@
           {{#if ../multiple}}
           <label class="stonetop-person-picker-all" data-tooltip="{{../selectAllHint}}">
             <input type="checkbox" class="stonetop-person-picker-check stonetop-person-picker-all-check"
-                   data-all-for="{{key}}">
+                   data-all-for="{{this.key}}">
             <span class="stonetop-person-picker-all-text">{{../selectAllLabel}}</span>
           </label>
           {{/if}}
           {{!-- A row's face and its name and note: the same on a tickable row and on a header row. --}}
           {{#*inline "personFaceText"}}
                 <span class="stonetop-person-picker-face">
-                  {{#if img}}<img class="stonetop-person-picker-face-img" src="{{img}}" alt="" draggable="false"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}>
+                  {{#if img}}<img class="stonetop-person-picker-face-img" src="{{this.img}}" alt="" draggable="false"{{#if imgStyle}} style="{{this.imgStyle}}"{{/if}}>
                   {{else}}<i class="fas fa-user" aria-hidden="true"></i>{{/if}}
                 </span>
                 <span class="stonetop-person-picker-text">
-                  <span class="stonetop-person-picker-name">{{name}}</span>
-                  {{#if hint}}<span class="stonetop-person-picker-note">{{hint}}</span>{{/if}}
+                  <span class="stonetop-person-picker-name">{{this.name}}</span>
+                  {{#if hint}}<span class="stonetop-person-picker-note">{{this.hint}}</span>{{/if}}
                 </span>
           {{/inline}}
           <ul class="stonetop-person-picker-list">
@@ -84,7 +84,7 @@
                   with a `parent` sits indented under that row (a follower under their character);
                   a `header` row has no tick and only heads the rows under it. --}}
             <li class="stonetop-person-picker-item{{#if parent}} stonetop-person-picker-item--nested{{/if}}"
-                data-search="{{search}}" data-person-id="{{id}}"{{#if parent}} data-parent="{{parent}}"{{/if}}{{#if header}} data-header{{/if}}>
+                data-search="{{this.search}}" data-person-id="{{this.id}}"{{#if parent}} data-parent="{{this.parent}}"{{/if}}{{#if header}} data-header{{/if}}>
               {{#if header}}
               <div class="stonetop-person-picker-row stonetop-person-picker-row--header">
                 <span class="stonetop-person-picker-nocheck" aria-hidden="true"></span>
@@ -97,7 +97,7 @@
                       the dialog reads. The CLASS follows the type because the two are skinned
                       apart: the checkbox joins the system's SVG master block (a checkbox left off
                       it renders as a native browser box), and the radio is pinned to slate. --}}
-                <input type="{{../../inputType}}" class="{{../../inputClass}}" name="person" value="{{id}}"{{#if checked}} checked{{/if}}>
+                <input type="{{../../inputType}}" class="{{../../inputClass}}" name="person" value="{{this.id}}"{{#if checked}} checked{{/if}}>
                 {{> personFaceText}}
               </label>
               {{/if}}
@@ -117,9 +117,9 @@
   {{#if toggles.length}}
   <div class="stonetop-person-picker-toggles">
     {{#each toggles}}
-    <label class="stonetop-person-picker-toggle"{{#if hint}} data-tooltip="{{hint}}"{{/if}}>
-      <input type="checkbox" class="stonetop-check stonetop-person-picker-toggle-check" data-toggle="{{key}}"{{#if checked}} checked{{/if}}>
-      <span class="stonetop-person-picker-toggle-text">{{label}}</span>
+    <label class="stonetop-person-picker-toggle"{{#if hint}} data-tooltip="{{this.hint}}"{{/if}}>
+      <input type="checkbox" class="stonetop-check stonetop-person-picker-toggle-check" data-toggle="{{this.key}}"{{#if checked}} checked{{/if}}>
+      <span class="stonetop-person-picker-toggle-text">{{this.label}}</span>
     </label>
     {{/each}}
   </div>
@@ -131,11 +131,11 @@
   <footer class="stonetop-guide-nav stonetop-guide-nav--end stonetop-person-picker-foot">
     <button type="button" class="stonetop-guide-btn--primary stonetop-person-picker-choose"
             data-person-picker="choose" disabled>
-      <i class="fas {{chooseIcon}}" aria-hidden="true"></i>
-      <span class="stonetop-person-picker-choose-label">{{chooseLabel}}</span>
+      <i class="fas {{this.chooseIcon}}" aria-hidden="true"></i>
+      <span class="stonetop-person-picker-choose-label">{{this.chooseLabel}}</span>
     </button>
     <button type="button" data-person-picker="cancel">
-      <i class="fas fa-xmark" aria-hidden="true"></i> <span>{{cancelLabel}}</span>
+      <i class="fas fa-xmark" aria-hidden="true"></i> <span>{{this.cancelLabel}}</span>
     </button>
   </footer>
 

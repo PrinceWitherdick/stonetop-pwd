@@ -96,21 +96,21 @@ export function registerRollCardAction(action, run) {
 /**
  * Press `action` on a card: run here when this client is the card's writer, else on the primary GM's. `data`
  * is what the action needs beyond the card (a cost, a source), plain values only. Answers the action's own
- * answer, or null when nobody could write the card or the GM's client did not answer.
+ * answer, or null when nobody could write the card, or `noAnswer` (null by default) when the GM's client did not answer.
  *
  * @param {ChatMessage} message
  * @param {string} action
  * @param {object} [data]
- * @param {{user?: User, gm?: User|null, timeout?: number}} [options]
+ * @param {{user?: User, gm?: User|null, timeout?: number, noAnswer?: *}} [options]
  */
 export async function pressRollCard(message, action, data = {}, {
-	user = globalThis.game?.user, gm = globalThis.game?.users?.activeGM ?? null, timeout,
+	user = globalThis.game?.user, gm = globalThis.game?.users?.activeGM ?? null, timeout, noAnswer = null,
 } = {}) {
 	const route = rollCardRoute(message, user, gm);
 	if (route === "local") return (await _actions.get(action)?.({ message, user, data })) ?? null;
 	if (route !== "relay") return null;
 	return askGMClient(gm, ROLL_CARD_QUERY, { ...data, action, messageId: message.id, userId: user?.id ?? null },
-		{ fallback: null, what: "rewrite a roll card", ...(timeout ? { timeout } : {}) });
+		{ fallback: noAnswer, what: "rewrite a roll card", ...(timeout ? { timeout } : {}) });
 }
 
 /**

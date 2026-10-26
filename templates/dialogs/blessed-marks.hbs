@@ -7,8 +7,8 @@
 	      every render, on a window that re-renders after every write. `upgradeAll` resolves a
 	      field's list by its id (utils/autocomplete.js), so five fields naming one list all read
 	      it. --}}
-	<datalist id="{{listId}}">
-		{{#each suggestions}}<option value="{{value}}"{{#if hint}} label="{{hint}}"{{/if}}></option>{{/each}}
+	<datalist id="{{this.listId}}">
+		{{#each suggestions}}<option value="{{this.value}}"{{#if hint}} label="{{this.hint}}"{{/if}}></option>{{/each}}
 	</datalist>
 	{{!-- One kind at a time behind a left rail, once this Blessed has more than one of the five.
 	      With a single kind the rail is not drawn and `activeTab` is pointed at the only panel, so
@@ -35,7 +35,7 @@
 			      all five kinds. --}}
 			<div class="stonetop-marks-heading">
 				{{#if playbookImg}}
-				<img class="stonetop-marks-mark" src="{{playbookImg}}" alt="" draggable="false">
+				<img class="stonetop-marks-mark" src="{{this.playbookImg}}" alt="" draggable="false">
 				{{/if}}
 				<p class="stonetop-marks-rule">{{localize "stonetop.blessedMarks.rule"}}</p>
 			</div>
@@ -48,15 +48,16 @@
 
 			      The panel is also this kind's drop target and carries this kind's add bar, which is
 			      what retired the old "which mark" picker: the kind is where you are standing. --}}
-			<section class="stonetop-marks-group stonetop-roster-panel" data-mark-kind="{{key}}" data-tab="{{key}}"
+			<section class="stonetop-marks-group stonetop-roster-panel" data-mark-kind="{{this.key}}" data-tab="{{this.key}}"
 			         {{#unless (eq ../activeTab key)}}hidden{{/unless}}>
 				{{!-- Always, unlike the Judge's: his two lists are named by the window title, while
 				      nothing else here says which of the five you are looking at — the rule line under
 				      it quotes the move's effect without naming the move. --}}
-				<h3 class="stonetop-marks-group-heading">{{label}}</h3>
-				<p class="stonetop-marks-group-rule">{{rule}}</p>
-				{{!-- Trackless Step only: how many wear it against what 1 Stock covers (level + INT).
-				      A flag past the cap, never a block (blessed-marks.js#tracklessTally). --}}
+				<h3 class="stonetop-marks-group-heading">{{this.label}}</h3>
+				<p class="stonetop-marks-group-rule">{{this.rule}}</p>
+				{{!-- Trackless Step: how many wear it against what 1 Stock covers (level + INT).
+				      Wards & Bindings: the word limit (level) and any ward past it. A flag past the cap,
+				      never a block (blessed-marks.js#tracklessTally, #wardWordTally). --}}
 				{{#if tally}}
 				<p class="stonetop-marks-tally{{#if tally.over}} is-over{{/if}}">{{tally.text}}</p>
 				{{/if}}
@@ -81,7 +82,7 @@
 						{{#each pips}}
 						{{#if ../editable}}
 						<button type="button" class="stonetop-readiness-pip stonetop-mark-loyalty-pip{{#if filled}} is-filled{{/if}}"
-						        data-row-id="{{../id}}" data-index="{{index}}"
+						        data-row-id="{{../id}}" data-index="{{this.index}}"
 						        aria-label="{{localize "stonetop.blessedMarks.loyaltySet"}}"></button>
 						{{else}}
 						<span class="stonetop-readiness-pip stonetop-mark-loyalty-pip{{#if filled}} is-filled{{/if}}"></span>
@@ -100,8 +101,8 @@
 					      data-tooltip-direction="UP">
 						{{#each signs}}
 						<button type="button" class="stonetop-mark-sign-btn{{#if active}} is-active{{/if}}"
-						        data-row-id="{{../id}}" data-sign="{{key}}"
-						        data-tooltip="{{rule}}" data-tooltip-direction="UP">{{label}}</button>
+						        data-row-id="{{../id}}" data-sign="{{this.key}}"
+						        data-tooltip="{{this.rule}}" data-tooltip-direction="UP">{{this.label}}</button>
 						{{/each}}
 					</span>
 					{{!-- A viewer who cannot write gets the ANSWER, not a widget that does nothing when
@@ -113,13 +114,13 @@
 					<span class="stonetop-mark-sign" data-tooltip="{{localize "stonetop.blessedMarks.signTooltip"}}"
 					      data-tooltip-direction="UP">
 						{{#each signs}}{{#if active}}<span class="stonetop-mark-sign-btn is-active"
-						      data-tooltip="{{rule}}" data-tooltip-direction="UP">{{label}}</span>{{/if}}{{/each}}
+						      data-tooltip="{{this.rule}}" data-tooltip-direction="UP">{{this.label}}</span>{{/if}}{{/each}}
 					</span>
 					{{/unless}}{{/if}}
 					{{/if}}
 					{{!-- A charm crafted with Potent Workings: its second harm, or that a 10+ keeps it. --}}
 					{{#if potency}}
-					<span class="stonetop-mark-potency">{{potency}}</span>
+					<span class="stonetop-mark-potency">{{this.potency}}</span>
 					{{/if}}
 					{{/"stonetop.roster-row"}}
 					{{/each}}
@@ -133,7 +134,7 @@
 				{{!-- The Potent Workings choice just paid for in the crafting window, waiting for the
 				      charm it belongs to: the next charm laid in this window carries it. --}}
 				{{#if pending}}
-				<p class="stonetop-marks-pending">{{pending}}</p>
+				<p class="stonetop-marks-pending">{{this.pending}}</p>
 				{{/if}}
 
 				{{#if canAdd}}
@@ -150,7 +151,7 @@
 				{{#if signs}}
 				<select class="stonetop-marks-sign" aria-label="{{localize "stonetop.blessedMarks.signLabel"}}">
 					{{#each signs}}
-					<option value="{{key}}"{{#if selected}} selected{{/if}}>{{label}}</option>
+					<option value="{{this.key}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>
 					{{/each}}
 				</select>
 				{{/if}}
@@ -167,7 +168,7 @@
 	      window wears it outside the panel column. --}}
 	<div class="stonetop-marks-heading">
 		{{#if playbookImg}}
-		<img class="stonetop-marks-mark" src="{{playbookImg}}" alt="" draggable="false">
+		<img class="stonetop-marks-mark" src="{{this.playbookImg}}" alt="" draggable="false">
 		{{/if}}
 		<p class="stonetop-marks-rule">{{localize "stonetop.blessedMarks.rule"}}</p>
 	</div>

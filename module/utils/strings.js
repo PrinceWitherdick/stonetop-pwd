@@ -190,6 +190,15 @@ export function decodeEntities(text) {
 		.replace(/&amp;|&#38;/gi, "&");
 }
 
+/**
+ * Text as a change-detection hash reads it: entities decoded, runs of whitespace collapsed to one
+ * space, trimmed. An editor re-saving the same words (`&#x27;` back as `'`, a reflowed line) then
+ * does not read as an edit. Shared by the Chronicle's prose hashes and the timeline's season rows.
+ */
+export function normaliseEditorText(text) {
+	return decodeEntities(text).replace(/\s+/g, " ").trim();
+}
+
 // A move outcome's flattened value reads "<lead-in> pick 1: <option> / <option> / …"
 // (the source <ul><li> list is collapsed to slash-separated text by the move pipeline).
 // This marker finds the "pick N:" / "choose N:" / "select N:" hinge so we can split the

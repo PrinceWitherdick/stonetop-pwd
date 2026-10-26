@@ -249,15 +249,15 @@
 			{{#*inline "stonetopHeldGlyph"}}
 			{{#if held.show}}
 			{{#if editable}}
-			<button type="button" class="{{stem}}"
+			<button type="button" class="{{this.stem}}"
 			        aria-label="{{held.label}}"
 			        data-tooltip="{{held.tooltip}}"
-			        data-tooltip-direction="UP"><span class="{{stem}}-icon" aria-hidden="true"></span></button>
+			        data-tooltip-direction="UP"><span class="{{this.stem}}-icon" aria-hidden="true"></span></button>
 			{{else}}
-			<span class="{{stem}}" role="img"
+			<span class="{{this.stem}}" role="img"
 			      aria-label="{{held.label}}"
 			      data-tooltip="{{held.tooltip}}"
-			      data-tooltip-direction="UP"><span class="{{stem}}-icon" aria-hidden="true"></span></span>
+			      data-tooltip-direction="UP"><span class="{{this.stem}}-icon" aria-hidden="true"></span></span>
 			{{/if}}
 			{{/if}}
 			{{/inline}}

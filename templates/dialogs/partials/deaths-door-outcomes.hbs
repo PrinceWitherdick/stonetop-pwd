@@ -4,10 +4,10 @@
       the current tier, because the current one renders them as actual buttons below. --}}
 {{#each tiers}}
 <div class="deaths-door-outcome{{#if isCurrent}} is-result{{/if}}">
-	<h3 class="deaths-door-outcome-label"><strong>{{label}}</strong></h3>
+	<h3 class="deaths-door-outcome-label"><strong>{{this.label}}</strong></h3>
 	{{! Escaped, not raw: the tier text is plain text (the chat card escapes the same string),
 	    so both surfaces treat it the same way and neither can be fed markup by accident. }}
-	<p class="deaths-door-outcome-text">{{text}}</p>
+	<p class="deaths-door-outcome-text">{{this.text}}</p>
 	{{#if options}}
 	{{#unless isCurrent}}
 	<ul class="deaths-door-outcome-options">

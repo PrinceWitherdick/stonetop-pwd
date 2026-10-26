@@ -12,6 +12,8 @@ import { rosterGroupFor } from "../../../module/fight/group-hits.js";
 import { stubAsk } from "../../fakes/confirm.js";
 import { invokeCardReduced, invokeCardChoosesConsequence } from "../../../module/actors/character/invoke-consequences.js";
 import { buildLiveCharacter } from "../../fakes/LiveCharacter.js";
+import { NO_ANSWER, RELAY_GRACE_MS } from "../../../module/utils/relay-landed.js";
+import { useFakeHooks } from "../../fakes/hooks.js";
 
 // Loaded at collection: the sheet's cold import is heavy enough to blow a test's 5s budget under a full parallel run.
 const { createStonetopCharacterSheetClass } = await import("../../../module/actors/character/StonetopCharacterSheet.js");
@@ -392,6 +394,35 @@ describe("the GM's side of the heal", () => {
 		await expect(handleBathQuery(ask(), {}, gmTable({ flag: "Bram" }).deps)).resolves.toBeNull();
 		await expect(handleBathQuery(ask({ picks: [pick("hp5"), pick("hp5"), pick("minor")] }), {}, gmTable().deps)).resolves.toBeNull();
 	});
+
+	// QY-3: an answer that never reached the asker gave the card back, and a second press healed twice.
+	it("stamps the card settled before it heals, so the same ask a second time heals nobody", async () => {
+		const { message, apply, deps } = gmTable();
+		let flagWhileHealing = null;
+		apply.mockImplementation(async () => { flagWhileHealing = message.getFlag(SCOPE, BATH_FLAG); return { patient: "Bram" }; });
+		await expect(handleBathQuery(ask(), {}, deps)).resolves.toEqual({ patient: "Bram" });
+		expect(flagWhileHealing).toBe("Bram");
+		await expect(handleBathQuery(ask(), {}, deps)).resolves.toBeNull();
+		expect(apply).toHaveBeenCalledTimes(1);
+	});
+
+	it("heals once for two asks arriving together", async () => {
+		const { apply, deps } = gmTable();
+		const [a, b] = await Promise.all([handleBathQuery(ask(), {}, deps), handleBathQuery(ask(), {}, deps)]);
+		expect([a, b].filter(Boolean)).toEqual([{ patient: "Bram" }]);
+		expect(apply).toHaveBeenCalledTimes(1);
+	});
+
+	it("puts the card back as asked when the heal wrote nothing, and keeps the stamp when it threw", async () => {
+		const empty = gmTable();
+		empty.apply.mockImplementation(async () => null);
+		await expect(handleBathQuery(ask(), {}, empty.deps)).resolves.toBeNull();
+		expect(empty.message.getFlag(SCOPE, BATH_FLAG)).toBe(true);
+		const threw = gmTable();
+		threw.apply.mockImplementation(async () => { throw new Error("half written"); });
+		await expect(handleBathQuery(ask(), {}, threw.deps)).rejects.toThrow("half written");
+		expect(threw.message.getFlag(SCOPE, BATH_FLAG)).toBe("Bram");
+	});
 });
 
 // A follower, another NPC or a monster as the patient: HP only, on the actor's own fields.
@@ -506,6 +537,46 @@ describe("a patient who is not a player character", () => {
 		})).resolves.toBe(false);
 		expect(heal).not.toHaveBeenCalled();
 		expect(message.getFlag(SCOPE, BATH_FLAG)).toBeUndefined();
+	});
+
+	it("answers NO_ANSWER when the GM's client did not answer in time", async () => {
+		const gm = { query: vi.fn(async () => { throw new Error("timed out"); }) };
+		await expect(healPatient(card(), npcPatient({ owner: false }), [pick("hp5")], {}, { gm, userId: "u1" })).resolves.toBe(NO_ANSWER);
+	});
+
+	// The GM's stamp was queued behind other writes to the card, so it lands after the asker stopped waiting.
+	it("keeps the card when the GM's client stamps it a moment after no answer came", async () => {
+		const hooks = useFakeHooks();
+		try {
+			const message = card();
+			const out = settleBathOfHealingLight(message, seren, {
+				choosePatient: async () => npcPatient({ owner: false }), askPicks: async () => ({ reduced: false, picks: [pick("hp5")] }),
+				heal: async () => NO_ANSWER,
+			});
+			await vi.waitFor(() => expect(hooks.handlers.size).toBe(1));
+			message.flags[SCOPE][BATH_FLAG] = "Andras";
+			hooks.fire("updateChatMessage", message);
+			await expect(out).resolves.toBe(true);
+			expect(message.getFlag(SCOPE, BATH_FLAG)).toBe("Andras");
+		} finally {
+			hooks.restore();
+		}
+	});
+
+	it("gives the card back when no answer came and no stamp lands in the wait", async () => {
+		vi.useFakeTimers();
+		try {
+			const message = card();
+			const out = settleBathOfHealingLight(message, seren, {
+				choosePatient: async () => npcPatient({ owner: false }), askPicks: async () => ({ reduced: false, picks: [pick("hp5")] }),
+				heal: async () => NO_ANSWER,
+			});
+			await vi.advanceTimersByTimeAsync(RELAY_GRACE_MS);
+			await expect(out).resolves.toBe(false);
+			expect(message.getFlag(SCOPE, BATH_FLAG)).toBeUndefined();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 
@@ -1099,6 +1170,17 @@ describe("the card's Bath of Healing Light button", () => {
 		expect(globalThis.ui.notifications.warn.mock.calls.at(-1)[0]).toMatch(/no GM is online/);
 		expect(message.getFlag(SCOPE, BATH_FLAG)).toBeUndefined();
 		expect(posted).toEqual([]);
+	});
+
+	// QY-3: the GM's client stamped the card and healed, but its answer never came back.
+	it("keeps a card the GM's client settled, though no answer reached this client", async () => {
+		const message = card();
+		const heal = vi.fn(async () => { message.flags[SCOPE][BATH_FLAG] = "Kyra"; return null; });
+		await expect(settleBathOfHealingLight(message, seren, {
+			choosePatient: async () => kyra, askPicks: async () => ({ reduced: false, picks: [pick("minor")] }), heal,
+		})).resolves.toBe(true);
+		expect(message.getFlag(SCOPE, BATH_FLAG)).toBe("Kyra");
+		expect(globalThis.ui.notifications.warn.mock.calls.at(-1)[0]).toMatch(/answer never came back/);
 	});
 });
 

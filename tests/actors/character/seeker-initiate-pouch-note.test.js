@@ -4,10 +4,16 @@
 // or third take, when the pouch is already held.
 // C14: un-picking a possession forgets its spent uses and picks, so picking it again starts fresh.
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildLiveCharacter, sourceMovesFor } from "../../fakes/LiveCharacter.js";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { LevelUpDialog } from "../../../module/actors/character/dialogs/LevelUpDialog.js";
+
+// The level-up's agreed step asks a world setting whether this user may write a custom move
+// (utils/authoring-gates.js); a world always has settings, so the tests give it some, all unset.
+let priorSettings;
+beforeEach(() => { priorSettings = game.settings; game.settings ??= { get: () => undefined }; });
+afterEach(() => { game.settings = priorSettings; });
 
 const POUCH = "sacred-pouch";
 const INITIATE = "Initiate of the Secret Arts";

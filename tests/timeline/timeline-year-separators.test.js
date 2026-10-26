@@ -172,7 +172,7 @@ describe("a year before play's long name", () => {
 
 	it("splits every timeline year chip the same way", () => {
 		expect(readRepo("templates/dialogs/partials/timeline-year-chip.hbs"))
-			.toContain('<small class="stonetop-year-chip-tail">{{yearTail}}</small>');
+			.toContain('<small class="stonetop-year-chip-tail">{{this.yearTail}}</small>');
 		for (const f of ["timeline.hbs", "partials/timeline-period.hbs", "partials/timeline-hperiod.hbs"]) {
 			const src = readRepo(`templates/dialogs/${f}`);
 			expect(src, f).not.toContain('<span class="stonetop-year-chip">');

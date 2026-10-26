@@ -20,8 +20,8 @@
 
   {{#if journey.map}}
   <div class="stonetop-image-zoom-view">
-    <img class="stonetop-image-zoom-img" src="{{src}}" alt="{{alt}}" draggable="false">
-    <div class="stonetop-image-zoom-overlay stonetop-journey-canvas">{{{overlay}}}</div>
+    <img class="stonetop-image-zoom-img" src="{{this.src}}" alt="{{this.alt}}" draggable="false">
+    <div class="stonetop-image-zoom-overlay stonetop-journey-canvas">{{{this.overlay}}}</div>
   </div>
   {{else}}
   <p class="stonetop-journey-nomap">

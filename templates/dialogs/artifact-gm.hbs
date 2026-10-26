@@ -12,7 +12,7 @@
 		<label for="st-artifact-state">{{localize "stonetop.artifact.gmCurrentState"}}</label>
 		<select id="st-artifact-state" name="state">
 			{{#each states}}
-			<option value="{{value}}"{{#if selected}} selected{{/if}}>{{localize labelKey}}</option>
+			<option value="{{this.value}}"{{#if selected}} selected{{/if}}>{{localize labelKey}}</option>
 			{{/each}}
 		</select>
 	</div>
@@ -22,11 +22,11 @@
 	      as it was saved (utils/gear-note.js wrapGearNoteTerms), so escaping it a second time
 	      would show the GM their own italics spelled out. It is the ONE value here that isn't
 	      escaped, which is why it says so. --}}
-	{{#if note}}<p class="notes">{{localize "stonetop.artifact.gmTags"}} {{{note}}}</p>{{/if}}
+	{{#if note}}<p class="notes">{{localize "stonetop.artifact.gmTags"}} {{{this.note}}}</p>{{/if}}
 
 	{{#each fields}}
 	<div class="stonetop-artifact-field{{#if rich}} stonetop-artifact-field--rich{{/if}}">
-		<label for="st-artifact-{{key}}">{{localize labelKey}}</label>
+		<label for="st-artifact-{{this.key}}">{{localize labelKey}}</label>
 		{{#if rich}}
 		{{!-- The write-up is stored as HTML (artifactLore is an HTMLField on MoveModel) and is
 		      printed RAW on the gear row and in the identify card, so it has to be authored as
@@ -38,10 +38,10 @@
 		      exists to write in, so making the GM press a pencil before they can type is a step
 		      with nothing behind it. The dialog harvests by name on Save and <prose-mirror> is
 		      form-associated, so the name carries the value out exactly as the textarea did. --}}
-		<prose-mirror id="st-artifact-{{key}}" class="stonetop-artifact-rich" name="{{key}}"
-		              value="{{value}}">{{{enriched}}}</prose-mirror>
+		<prose-mirror id="st-artifact-{{this.key}}" class="stonetop-artifact-rich" name="{{this.key}}"
+		              value="{{this.value}}">{{{this.enriched}}}</prose-mirror>
 		{{else}}
-		<input id="st-artifact-{{key}}" name="{{key}}" type="text" value="{{value}}">
+		<input id="st-artifact-{{this.key}}" name="{{this.key}}" type="text" value="{{this.value}}">
 		{{/if}}
 		<p class="notes">{{localize hintKey}}</p>
 	</div>

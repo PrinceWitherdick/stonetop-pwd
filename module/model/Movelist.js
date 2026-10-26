@@ -40,6 +40,8 @@ export class OtherItemSnapshot {
 		this.resource    = b._resource ?? null;
 		// A love letter the player has resolved: hidden from them, kept (dimmed) for the GM.
 		this.resolved    = b._resolved ?? false;
+		// A love letter the GM saved without sending: only the GM's snapshot carries it.
+		this.draft       = b._draft ?? false;
 	}
 }
 
@@ -59,6 +61,7 @@ export class OtherItemSnapshotBuilder {
 	withResourceKey(v) { this._resourceKey = v; return this; }
 	withResource(v)    { this._resource    = v; return this; }
 	withResolved(v)    { this._resolved    = !!v; return this; }
+	withDraft(v)       { this._draft       = !!v; return this; }
 	build()            { return new OtherItemSnapshot(this); }
 }
 

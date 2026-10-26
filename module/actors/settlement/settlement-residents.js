@@ -8,30 +8,33 @@
 // and the NPC's sheet can never say two different things. The user's call, 2026-10-20.
 //
 // Who writes: the primary GM, from the actor hooks below, so a player's new neighbor reaches a
-// settlement they can only read. A connected GM only (isResidentsWriter): with none, isPrimaryGM()
-// is true on every client, and each would write whole Residents lists from its own copy. The
-// settlement sheet also syncs straight away for its own user, which keeps a GM-less session working
-// for an owner; both paths are idempotent and queue through editSettlementList, so running twice
-// changes nothing.
+// settlement they can only read. Compendium and token copies of a settlement are left alone
+// (isWorldSettlement): no Home names them, so a sweep would only strip their rows. A connected GM
+// only (isResidentsWriter): with none, isPrimaryGM() is true on every client, and each would write
+// whole Residents lists from its own copy. The settlement sheet also syncs straight away for its own
+// user, which keeps a GM-less session working for an owner; both paths are idempotent and queue
+// through editSettlementList, so running twice changes nothing.
 //
 // A RENAMED SETTLEMENT KEEPS ITS PEOPLE. The rename itself writes the old name into
 // `system.formerNames` (onPreUpdateActorForResidents), and a Home that still says a former name
-// counts as this settlement's (settlementForHome) until it has been re-homed. The renaming client
-// re-homes the NPCs it may write and the primary GM the rest, now or on its next load; a former
-// name is forgotten once no Home says it. So a player who renames a sheet whose residents they
-// don't own leaves the table as it was, rather than emptying it.
+// counts as this settlement's (settlementForHome) until it has been re-homed. The primary GM
+// re-homes its people, now or on its next load; in a session with no GM connected the renaming
+// client does, as far as it may write them, and the GM finishes on its next load. A former name is
+// forgotten once no Home says it. So a player who renames a sheet whose residents they don't own
+// leaves the table as it was, rather than emptying it.
 //
 // Old worlds, and a settlement made after its people: sweepSettlementResidents, on every load of the
 // primary GM and whenever a settlement is created. Stonetop's own Residents and Neighbors rosters
 // are not touched here: a Neighbor from the Delve is on both, which is what the two lists mean.
 //
-// Several settlements with the same name: the first in the world's actor list takes the people. A
-// sheet RENAMED onto a name another settlement already goes by keeps its people under its old name
-// (settleRenames leaves their Homes alone) until it is given a name of its own.
+// Several settlements with the same name: the oldest (oldestSettlementsFirst: made first, then by
+// id) takes the people, the same sheet on every load and every client. A sheet RENAMED onto a name
+// another settlement already goes by keeps its people under its old name (settleRenames leaves
+// their Homes alone) until it is given a name of its own.
 
-import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { anyActiveGM, isPrimaryGM } from "../../utils/primary-gm.js";
 import { inTurn } from "../../utils/turn-queue.js";
-import { isSettlementActor, settlementActors } from "./settlement-type.js";
+import { isWorldSettlement, settlementActors } from "./settlement-type.js";
 import { settlementRow } from "./settlement-rows.js";
 import { format } from "../../utils/i18n.js";
 
@@ -54,7 +57,8 @@ export function homeKey(text) {
 
 /**
  * settlementForHome for many Homes at once: each settlement's names are keyed once, so a sweep over
- * every NPC costs one lookup per Home rather than a pass over every settlement's names.
+ * every NPC costs one lookup per Home rather than a pass over every settlement's names. Where two
+ * settlements share a name, the first has it: `settlements` in settlementActors()'s order (oldest first).
  */
 export function settlementResolver(settlements = settlementActors()) {
 	const byName = new Map(), byFormer = new Map();
@@ -80,7 +84,7 @@ export function settlementForHome(home, settlements = settlementActors()) {
 	return settlementResolver(settlements)(home);
 }
 
-/** Whether a settlement's own name finds it, rather than an earlier settlement of the same name. */
+/** Whether a settlement's own name finds it, rather than an older settlement of the same name. */
 export function ownsItsName(settlement, settlements = settlementActors()) {
 	return settlementForHome(settlement?.name, settlements) === settlement;
 }
@@ -217,11 +221,13 @@ export async function settleRenames(settlement, { actors = globalThis.game?.acto
 /**
  * Bring every settlement (or just `only`) into step with the world's Homes, one write per
  * settlement that needs one. First, on a full sweep, the people of a renamed settlement are
- * re-homed (settleRenames). Then an NPC listed on a settlement with a BLANK Home (linked before
- * Homes were the rule) takes that settlement's name, so a sweep files them where they were rather
- * than taking them off. `adoptHomes`, once per world: the same for a listed NPC whose Home names no
- * settlement at all ("Stonetop", "North Manmarch"), since the old sheet listed people without
- * touching a Home already written. Resolves to how many settlements were written.
+ * re-homed (settleRenames). Then, with `adoptHomes` (once per world, the first sweep it sees), an NPC
+ * listed on a settlement whose Home is BLANK or names no settlement at all ("Stonetop", "North
+ * Manmarch") takes that settlement's name, since the old sheet listed people without touching their
+ * Home; the sweep files them where they were rather than taking them off. Never after that pass: a
+ * blank Home means Stonetop (steading-people.js#npcHome), so a Home cleared in a session with no GM
+ * to file it takes them off at the next sweep rather than being written back. Resolves to how many
+ * settlements were written.
  */
 export async function sweepSettlementResidents({ actors = globalThis.game?.actors, only = null, adoptHomes = false } = {}) {
 	const settlements = settlementActors(actors);
@@ -234,25 +240,26 @@ export async function sweepSettlementResidents({ actors = globalThis.game?.actor
 		}
 	}
 	const npcs = (actors?.filter?.(isWorldNpc) ?? []);
-	const resolveBefore = settlementResolver(settlements);
+	const resolve = settlementResolver(settlements);
 	// A listed NPC whose Home could not be given the table's name keeps their row, rather than being
 	// taken off for a Home that still names nowhere: a failed write, or a table whose name an earlier
 	// settlement goes by (that Home would file them there).
 	const keep = new Set();
-	for (const npc of npcs) {
-		if (!npc.isOwner) continue;
-		const home = String(npc.system?.home ?? "").trim();
-		if (home && !(adoptHomes && !resolveBefore(home))) continue;
-		const listing = targets.find(s => listsNpc(s, npc));
-		if (!listing) continue;
-		if (resolveBefore(listing.name) !== listing) { keep.add(npc.uuid); continue; }
-		const moved = await npc.update({ "system.home": listing.name }).then(() => true, err => {
-			console.warn("Stonetop | Could not set the resident's Home for", npc.name, err);
-			return false;
-		});
-		if (!moved) keep.add(npc.uuid);
+	if (adoptHomes) {
+		for (const npc of npcs) {
+			if (!npc.isOwner) continue;
+			const home = String(npc.system?.home ?? "").trim();
+			if (home && resolve(home)) continue;
+			const listing = targets.find(s => listsNpc(s, npc));
+			if (!listing) continue;
+			if (resolve(listing.name) !== listing) { keep.add(npc.uuid); continue; }
+			const moved = await npc.update({ "system.home": listing.name }).then(() => true, err => {
+				console.warn("Stonetop | Could not set the resident's Home for", npc.name, err);
+				return false;
+			});
+			if (!moved) keep.add(npc.uuid);
+		}
 	}
-	const resolve = settlementResolver(settlements);
 	const homeOf = new Map(npcs.map(npc => [npc.uuid, resolve(npc.system?.home)]));
 	let wrote = 0;
 	for (const settlement of targets) {
@@ -284,7 +291,7 @@ async function rehomeOnRename(settlement) {
  * client ever sees the new name while its people's Homes still say only the old one.
  */
 export function onPreUpdateActorForResidents(actor, changed) {
-	if (!isSettlementActor(actor) || typeof changed?.name !== "string") return;
+	if (!isWorldSettlement(actor) || typeof changed?.name !== "string") return;
 	const from = homeKey(actor.name), to = homeKey(changed.name);
 	if (!from || from === to) return;
 	const seen = new Set([to]);
@@ -301,16 +308,17 @@ export function onPreUpdateActorForResidents(actor, changed) {
 export function onCreateActorForResidents(actor) {
 	if (!isResidentsWriter()) return;
 	const run = isWorldNpc(actor) ? syncResidentHome(actor)
-		: isSettlementActor(actor) ? sweepSettlementResidents({ only: actor })
+		: isWorldSettlement(actor) ? sweepSettlementResidents({ only: actor })
 		: null;
 	run?.catch(err => console.error("Stonetop | settlement residents failed", err));
 }
 
 /**
- * `updateActor`: a Home changed moves the NPC, and a name changed follows onto their row; a settlement renamed keeps its people, re-homed by
- * the renaming client (for a GM-less session) and by the primary GM (for the NPCs a player can't
- * write). Both are idempotent. A rename onto a name an earlier settlement goes by tells the renaming
- * user why its people have not moved to the new name.
+ * `updateActor`: a Home changed moves the NPC, and a name changed follows onto their row; a settlement
+ * renamed keeps its people, re-homed by the primary GM. Only when no GM is connected does the renaming
+ * client do it instead (as far as it may write them): with a GM there, a second run would write every
+ * Home twice and race the GM's `formerNames`. A rename onto a name an older settlement goes by tells
+ * the renaming user why its people have not moved to the new name.
  */
 export function onUpdateActorForResidents(actor, changed, _options, userId) {
 	const has = globalThis.foundry?.utils?.hasProperty;
@@ -318,11 +326,11 @@ export function onUpdateActorForResidents(actor, changed, _options, userId) {
 	const mine = userId === globalThis.game?.user?.id;
 	let run = null;
 	if (isWorldNpc(actor) && (has(changed, "system.home") || typeof changed?.name === "string") && isResidentsWriter()) run = syncResidentHome(actor);
-	else if (isSettlementActor(actor) && typeof changed?.name === "string" && (mine || isResidentsWriter())) {
+	else if (isWorldSettlement(actor) && typeof changed?.name === "string") {
 		if (mine && !ownsItsName(actor)) {
 			globalThis.ui?.notifications?.warn?.(format("stonetop.settlement.renameSharedName", { place: actor.name }));
 		}
-		run = rehomeOnRename(actor);
+		if (isResidentsWriter() || (mine && !anyActiveGM())) run = rehomeOnRename(actor);
 	}
 	run?.catch(err => console.error("Stonetop | settlement residents failed", err));
 }

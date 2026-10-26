@@ -4,8 +4,8 @@
       Params: `plans` (steading-plans.js#plansView), `canEdit`, `titleId` (the heading's id, one per window).
       Inside the `each` blocks the params are read as `../canEdit` / `../../canEdit`: Foundry compiles
       without compat mode, so a bare name there looks only on the plan or the requirement. --}}
-<section class="steading-list-section steading-plans" aria-labelledby="{{titleId}}">
-	<h3 id="{{titleId}}" class="stonetop-move-group-title steading-notes-heading">Plans</h3>
+<section class="steading-list-section steading-plans" aria-labelledby="{{this.titleId}}">
+	<h3 id="{{this.titleId}}" class="stonetop-move-group-title steading-notes-heading">Plans</h3>
 	<p class="steading-notes-hint">Make a Plan: say what you hope to achieve; the GM says what it requires (Book I p.530).</p>
 	{{#each plans as |plan|}}
 	<article class="steading-plan{{#if plan.done}} is-done{{/if}}" data-plan-id="{{plan.id}}">

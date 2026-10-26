@@ -88,6 +88,39 @@ describe("the introductions template — who an answer is about", () => {
 		expect(html).toContain("Sela");
 	});
 
+	// The GM's corrections: labelled icon buttons on each recorded answer, wired to the PC, step
+	// and place in the list; and Un-pass on a passed PC.
+	it("gives the GM running the table edit and delete on each recorded answer", () => {
+		const html = template({ ...context({
+			canManage: true, hasRecorded: true, answeredCount: 1,
+			recorded: [{ index: 0, question: "Q", answer: "A", about: "", editLabel: "Edit this answer", deleteLabel: "Delete this answer" }],
+		}), isGM: true, isDriver: true });
+		expect(html).toMatch(/class="stonetop-intros-recorded-edit"[^>]*data-answer-index="0"[^>]*aria-label="Edit this answer"/);
+		expect(html).toMatch(/class="stonetop-intros-recorded-delete"[^>]*aria-label="Delete this answer"/);
+	});
+
+	it("offers no corrections to anyone else", () => {
+		const html = template(context({
+			hasRecorded: true, answeredCount: 1,
+			recorded: [{ index: 0, question: "Q", answer: "A", about: "" }],
+		}));
+		expect(html).not.toContain("stonetop-intros-recorded-edit");
+	});
+
+	it("offers Un-pass on a passed PC, and no Done", () => {
+		const html = template({ ...context({ passed: true, canManage: true, canDone: false, unpassLabel: "Un-pass Pim" }), isGM: true, isDriver: true });
+		expect(html).toContain('class="stonetop-intros-unpass"');
+		expect(html).not.toContain("stonetop-intros-done");
+	});
+
+	it("shows a second GM who is running the table instead of Back and Next", () => {
+		const html = template({ ...context({ canEdit: false, canPreview: true }), isGM: true, isDriver: false,
+			watchingNote: "Watching: Gail is running the introductions." });
+		expect(html).toContain("Watching: Gail is running the introductions.");
+		expect(html).not.toContain("stonetop-intros-next");
+		expect(html).not.toContain("stonetop-intros-back");
+	});
+
 	it("says nothing about a recorded answer nobody was picked for", () => {
 		const html = template(context({
 			hasRecorded: true, answeredCount: 1,

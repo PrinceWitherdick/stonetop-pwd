@@ -86,10 +86,11 @@ describe("everything on the name's line is pinned to its first line", () => {
 
 	it("drops the small column's checkbox to that line's middle, through the size the checkbox is drawn at", () => {
 		expect(declarations(CSS, `${SMALL_ROW} .stonetop-inventory-item-check`))
-			.toMatch(/margin-top:\s*calc\(\(1lh - 15px \* var\(--stonetop-font-scale, 1\)\) \/ 2\)/);
-		// The offset is only centred while the box is the size the shared checkbox skin draws it.
+			.toMatch(/margin-top:\s*calc\(\(1lh - var\(--st-check-size\)\) \/ 2\)/);
+		// The offset is only centred while the box is the size the shared checkbox skin draws it:
+		// both read the one token.
 		expect(declarations(CSS, ".stonetop-onboarding-check"))
-			.toMatch(/height:\s*calc\(15px \* var\(--stonetop-font-scale, 1\)\)/);
+			.toMatch(/height:\s*var\(--st-check-size\) !important/);
 	});
 
 	for (const icon of [".stonetop-inv-artifact-chip", ".stonetop-inv-lore-toggle", ".stonetop-inv-artifact-identify",

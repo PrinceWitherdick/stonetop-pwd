@@ -1,6 +1,6 @@
 # Relationships, Notes and Reminders
 
-Your character's ties to other people, the things the GM should keep in mind about them, and the love letters the GM sends between sessions. This page covers the **Relationships** section of the **Details** tab, the "Keep in mind" chips under your name, the **Notes** tab, and love letters from the player's side.
+Your character's ties to other people, the things the GM should keep in mind about them, and the love letters the GM sends between sessions. This page covers the **Relationships** section of the **Details** tab, the "Keep in mind" chips beside your appearance, the **Notes** tab, and love letters from the player's side.
 
 ## Relationships
 
@@ -21,7 +21,7 @@ There are two layouts, switched with the **Table** and **Board** buttons in the 
 
 ## Keep in mind
 
-Short reminders for the GM about your character, like *reeks of smoke* or *owes Gwen a favor*, sit as chips under your appearance line at the top of the sheet. Click the faint **+** chip at the end of the row, type one, and press **Enter** (**Escape** cancels). Click the **×** on a reminder to remove it. They show:
+Short reminders for the GM about your character, like *reeks of smoke* or *owes Gwen a favor*, sit as chips at the end of your appearance line at the top of the sheet. Click the faint **+** chip at the end of the row, type one, and press **Enter** (**Escape** cancels). Hover the **+** or the box to see what a reminder is for and where it shows. Click the **×** on a reminder to remove it. They show:
 
 - under your character's name at the top of the sheet;
 - on every roll card you make;

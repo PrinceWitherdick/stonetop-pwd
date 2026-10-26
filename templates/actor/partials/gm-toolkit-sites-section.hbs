@@ -56,7 +56,7 @@
 		{{#if stonetop.sites.length}}
 		<div class="steading-threats-grid">
 			{{#each stonetop.sites}}
-			<div class="threat-card-wrap" data-page-uuid="{{uuid}}">
+			<div class="threat-card-wrap" data-page-uuid="{{this.uuid}}">
 				{{> "stonetop.site-card" this}}
 				{{> "stonetop.gm-prep-card-tools" kind="site" uuid=uuid}}
 			</div>

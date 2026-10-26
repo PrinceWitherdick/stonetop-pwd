@@ -280,6 +280,20 @@ export class CorruptBeingDialog extends StepperDialog {
 		if (instinct) this._instinct = instinct.value;
 	}
 
+	// What the close-guard compares (utils/close-guard.js): every choice, as picked.
+	_workState() {
+		this._onBeforeStepChange();
+		return {
+			source: this._sourceId, name: this._name, instinct: this._instinct, origin: this._originText,
+			themes: [...this._themeIds], aspects: [...this._aspectIds], gifts: [...this._giftIds], marks: [...this._markIds],
+		};
+	}
+
+	_discardCopy() {
+		const what = this._mode === "emanation" ? "emanation" : "corrupted being";
+		return { title: `Discard this ${what}?`, body: `This ${what} hasn't been made yet. Closing the window now loses what you've chosen and written.` };
+	}
+
 	// Assemble the corrupted-monster actor data (mirrors CreateMonsterDialog._buildActorData).
 	_buildActorData() {
 		const base = this._base();

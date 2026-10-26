@@ -164,6 +164,33 @@ export function roadLedger(members = [], { days = 1, messKit = false, packAnimal
 }
 
 /**
+ * The ledger as it can actually be paid from what each pack (and crew) holds NOW, `held(actorId)` being that
+ * member's purses by slug (camp-store.js#mealSpendTarget's `resources`). The window reads the packs once, so a
+ * use eaten or found while it was open would otherwise be named on the card as paid when it was not: each
+ * purse pays what it still holds, and whatever it no longer holds is the party's shortfall. PURE.
+ *
+ * @param {object} ledger  roadLedger's answer
+ * @param {(actorId: string) => object} held
+ */
+export function ledgerAsPaid(ledger, held) {
+	const rows = ledger.rows.map(r => {
+		const has = held(r.actorId) ?? {};
+		const cut = list => (list ?? []).map(s => ({ ...s, n: Math.min(count(has[s.slug]), count(s.n)) })).filter(s => s.n > 0);
+		const spend = cut(r.spend);
+		const crewSpend = cut(r.crewSpend);
+		const sum = list => list.reduce((total, s) => total + s.n, 0);
+		return { ...r, spend, crewSpend, pays: sum(spend), crewPays: sum(crewSpend) };
+	});
+	const crewPaid = rows.reduce((sum, r) => sum + r.crewPays, 0);
+	const paid = crewPaid + rows.reduce((sum, r) => sum + r.pays, 0);
+	return {
+		...ledger, rows, crewPaid, paid,
+		short: Math.max(0, ledger.bill - paid),
+		over:  Math.max(0, paid - ledger.bill),
+	};
+}
+
+/**
  * What a member's crew purse says in the window, in place of a figure to set (as Make Camp's does,
  * camp-view.js#crewPurseText), or "" for a member whose crew eats nothing on this trip.
  */

@@ -258,13 +258,13 @@ export async function ringButtonsFor(actor) {
 	const letFly = isCharacter && itemsOf(actor).some(i => i?.type === "move" && i.name === "Let Fly");
 	// Both read the character's gear, and neither waits on the other.
 	const [die, ammo] = await Promise.all([isCharacter ? pcDamageDie(actor) : "", letFly ? letFlyAmmoStatuses(actor) : null]);
-	const { order, swarm } = followerRingInfo(actor);
-	// A follower's is kept on their card (fight/follower-readiness.js); only a follower who takes orders holds any.
-	const readiness = isCharacter ? heldReadiness(actor) : (order ? readinessHeldBy(actor) : 0);
 	// Working out their place in the fight takes the whole fight, so it is worked out at most once, and only
-	// for a button that needs it: locking eyes and striking back for someone who could spend on it.
+	// for a button that needs it: a group follower's swarm die, locking eyes, and striking back.
 	let place;
 	const fight = () => (place === undefined ? (place = rollerEngagement(actor)) : place);
+	const { order, swarm } = followerRingInfo(actor, { engagement: fight });
+	// A follower's is kept on their card (fight/follower-readiness.js); only a follower who takes orders holds any.
+	const readiness = isCharacter ? heldReadiness(actor) : (order ? readinessHeldBy(actor) : 0);
 	const bigDamnHero = isCharacter && ownsLearnedMoveNamed(actor, HERO_MOVES.BIG_DAMN_HERO);
 	const canLockEyes = bigDamnHero && readiness > 0 && lockEyesCandidates(actor, fight()).length > 0;
 	const canStrikeBack = (isCharacter || !!order) && readiness > 0 && hasAttacker(actor, { engagementOf: fight });
@@ -336,7 +336,7 @@ export async function runRingButton(button, actor, { shiftKey = false } = {}) {
 		seeded: !strikeBack,
 		strikeBack,
 		shiftKey,
-	}) : await rollFollowerOrFoeDamage(actor, button, { shiftKey });
+	}) : await rollFollowerOrFoeDamage(actor, button, { shiftKey, seeded: !strikeBack });
 	if (strikeBack && rolled) await spendReadiness(actor);
 	// A follower's own blow is them going on the offense: one holding Readiness on their card is asked whether
 	// they keep it, as a character's Damage asks (combat/readiness-loss.js). A strike back spent its own.
@@ -347,9 +347,10 @@ export async function runRingButton(button, actor, { shiftKey = false } = {}) {
 /**
  * A stat block's or a follower's damage button: its own die, tags and armor clause. The Marshal's crew
  * deals its blow with one of the weapons their card has ticked, asked first (combat/attack-flow.js#crewBlow),
- * so the weapon's piercing and tags ride the blow as they do from the card.
+ * so the weapon's piercing and tags ride the blow as they do from the card. `seeded` is off for a follower's
+ * strike back: one defender's blow, so no fight +N, as a character's is not.
  */
-async function rollFollowerOrFoeDamage(actor, button, { shiftKey = false, cardFor = followerCardFor } = {}) {
+async function rollFollowerOrFoeDamage(actor, button, { shiftKey = false, seeded = true, cardFor = followerCardFor } = {}) {
 	let { label, keywords, weapon } = button;
 	const card = actor?.type === "npc" ? cardFor(actor) : null;
 	if (card?.ftype === "crew") {
@@ -357,7 +358,7 @@ async function rollFollowerOrFoeDamage(actor, button, { shiftKey = false, cardFo
 		if (!blow) return false;
 		({ label, weapon, keywords } = blow);
 	}
-	return rollDamageAt(actor, { formula: button.formula, label, keywords, rollMode: button.rollMode, weapon, shiftKey });
+	return rollDamageAt(actor, { formula: button.formula, label, keywords, rollMode: button.rollMode, weapon, seeded, shiftKey });
 }
 
 /**

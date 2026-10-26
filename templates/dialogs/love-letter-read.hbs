@@ -6,14 +6,14 @@
 		{{#if isRolled}}
 		<p class="stonetop-love-letter-read-roll">
 			<i class="fas fa-dice-d6" aria-hidden="true"></i>
-			{{localize "stonetop.character.moves.loveLetter.rollButton"}} +{{rollLabel}}
+			{{localize "stonetop.character.moves.loveLetter.rollButton"}} +{{this.rollLabel}}
 		</p>
 		{{/if}}
 		<ul>
 			{{#each tiers}}
 			<li>
-				<span class="stonetop-love-letter-read-tier-label">{{label}}</span>
-				<span class="stonetop-love-letter-read-tier-body">{{#if lead}}<strong>{{lead}}</strong>{{#if value}}. {{/if}}{{/if}}{{value}}</span>
+				<span class="stonetop-love-letter-read-tier-label">{{this.label}}</span>
+				<span class="stonetop-love-letter-read-tier-body">{{#if lead}}<strong>{{this.lead}}</strong>{{#if value}}. {{/if}}{{/if}}{{this.value}}</span>
 			</li>
 			{{/each}}
 		</ul>
@@ -28,12 +28,12 @@
 	</ul>
 	{{/if}}
 
-	{{#if signed}}<p class="stonetop-move-signoff">{{signed}}</p>{{/if}}
+	{{#if signed}}<p class="stonetop-move-signoff">{{this.signed}}</p>{{/if}}
 
 	<div class="stonetop-custom-move-actions">
 		<button type="button" class="stonetop-custom-move-save stonetop-love-letter-resolve">
 			{{#if isRolled}}<i class="fas fa-dice-d6" aria-hidden="true"></i>{{else}}<i class="fas fa-feather" aria-hidden="true"></i>{{/if}}
-			{{resolveLabel}}
+			{{this.resolveLabel}}
 		</button>
 	</div>
 </div>

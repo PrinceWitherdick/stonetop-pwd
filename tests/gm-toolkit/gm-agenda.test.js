@@ -98,6 +98,6 @@ describe("the hook guide", () => {
 	it("rides under the hook field on the Spring Burst roll step", () => {
 		const roll = new SpringBurstDialog()._steps.find(s => s.key === "roll");
 		expect(roll.hookGuide).toBe(true);
-		expect(read("templates/dialogs/spring-burst.hbs")).toContain("{{{hookGuide}}}");
+		expect(read("templates/dialogs/spring-burst.hbs")).toContain("{{{this.hookGuide}}}");
 	});
 });

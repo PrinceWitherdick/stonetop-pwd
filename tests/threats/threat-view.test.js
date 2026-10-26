@@ -43,8 +43,8 @@ describe("threat card: lesser threats in parentheses (Book I p.289)", () => {
 
 	it("draws the parenthetical from that note, and none at all when it is empty", () => {
 		const hbs = readFileSync(new URL("../../templates/journal/partials/threat-card.hbs", import.meta.url), "utf8");
-		expect(hbs).toContain("{{name}}{{#if note}} <em>({{note}})</em>{{/if}}");
-		expect(hbs).not.toContain("({{type}}");
+		expect(hbs).toContain("{{this.name}}{{#if note}} <em>({{this.note}})</em>{{/if}}");
+		expect(hbs).not.toContain("({{this.type}}");
 	});
 });
 

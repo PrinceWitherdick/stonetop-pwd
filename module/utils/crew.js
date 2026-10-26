@@ -24,6 +24,24 @@ export function crewBackgroundTag(playbookDoc, crewDef, backgroundSlug) {
 	return (crewDef ?? playbookDoc.crew)?.backgroundTags?.[backgroundSlug ?? ""] ?? null;
 }
 
+/**
+ * How many tags an existing crew is still owed: the insert's picks (2) plus Veteran Crew's "Select 2
+ * new tags" (`tagBonus`), less the tags chosen. The background's tag and "group" are never picks.
+ * 0 for a crew never set up (the "Create your crew" offer asks for those) or with nothing owed.
+ *
+ * @param {object|null} crew      the stored crew (flags crew)
+ * @param {object|null} crewDef   the Crew insert the crew is drawn from
+ * @param {number}      tagBonus  Veteran Crew's extra tag picks
+ * @param {string|null} bgTag     the background's tag (crewBackgroundTag)
+ */
+export function crewTagsOwed(crew, crewDef, tagBonus = 0, bgTag = null) {
+	if (!crewDef || !crewExists(crew)) return 0;
+	const base = Number.isFinite(crewDef.additionalTagCount) ? crewDef.additionalTagCount : 2;
+	const limit = base + Math.max(0, Number(tagBonus) || 0);
+	const chosen = (crew.tags ?? []).filter(t => t && t !== bgTag && String(t).toLowerCase() !== "group").length;
+	return Math.max(0, limit - chosen);
+}
+
 // Hard cap on crew headcount, so a fat-fingered roster size can't build a
 // thousand-member anonymous list (and a thousand-die group HP pool).
 export const CREW_SIZE_MAX = 99;

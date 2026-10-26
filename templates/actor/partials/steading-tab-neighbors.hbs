@@ -25,7 +25,7 @@
 				<ul class="steading-residents-list">
 					{{#each stonetop.players}}
 					{{#if name}}
-					<li class="steading-residents-row steading-person" data-sort-name="{{name}}">
+					<li class="steading-residents-row steading-person" data-sort-name="{{this.name}}">
 						<div class="steading-person-face">
 							{{#if img}}
 							{{!-- No data-tooltip here: this portrait raises the shared hover preview
@@ -37,12 +37,12 @@
 							      and the inner image is explicitly undraggable so Gecko cannot hand
 							      over an image payload in place of the Actor uuid. --}}
 							<span class="steading-player-portrait stonetop-portrait-box"
-							     {{#if uuid}}draggable="true" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"{{/if}}><img class="steading-player-portrait-img" src="{{img}}" alt="" draggable="false"
-							     data-name="{{name}}" {{#if playbookName}}data-subtitle="{{playbookName}}"{{/if}}{{#if imgStyle}} style="{{imgStyle}}"{{/if}}></span>
+							     {{#if uuid}}draggable="true" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"{{/if}}><img class="steading-player-portrait-img" src="{{this.img}}" alt="" draggable="false"
+							     data-name="{{this.name}}" {{#if playbookName}}data-subtitle="{{this.playbookName}}"{{/if}}{{#if imgStyle}} style="{{this.imgStyle}}"{{/if}}></span>
 							{{else}}
 							<span class="steading-player-portrait steading-player-portrait--empty"
-							      {{#if uuid}}draggable="true" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"{{/if}}
-							      {{#if playbookName}}data-tooltip="{{playbookName}}" data-tooltip-direction="UP"{{/if}}>
+							      {{#if uuid}}draggable="true" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"{{/if}}
+							      {{#if playbookName}}data-tooltip="{{this.playbookName}}" data-tooltip-direction="UP"{{/if}}>
 								<i class="fas fa-user"></i>
 							</span>
 							{{/if}}
@@ -54,18 +54,18 @@
 								{{#if uuid}}
 								{{!-- Labelled rather than tooltipped, for the same reason as the NPC rows
 								      below: no href to announce, and no room for a hover bubble. --}}
-								<a class="steading-player-name-text steading-player-open steading-person-text" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
-								   draggable="true" aria-label='{{localize "stonetop.relationships.open" name=fullName}}'>{{name}}{{#if playbookName}} <span class="stonetop-playbook-epithet">{{playbookName}}</span>{{/if}}</a>
+								<a class="steading-player-name-text steading-player-open steading-person-text" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"
+								   draggable="true" aria-label='{{localize "stonetop.relationships.open" name=fullName}}'>{{this.name}}{{#if playbookName}} <span class="stonetop-playbook-epithet">{{this.playbookName}}</span>{{/if}}</a>
 								{{else}}
-								<span class="steading-player-name-text steading-person-text">{{name}}{{#if playbookName}} <span class="stonetop-playbook-epithet">{{playbookName}}</span>{{/if}}</span>
+								<span class="steading-player-name-text steading-person-text">{{this.name}}{{#if playbookName}} <span class="stonetop-playbook-epithet">{{this.playbookName}}</span>{{/if}}</span>
 								{{/if}}
 							</div>
 							{{#if @root.stonetop.edit.players}}
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="occupation" data-list="players" list="steading-occupation-suggestions"
-							       value="{{occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
+							       value="{{this.occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
 							{{else if resolvedOccupation}}
-							<div class="steading-person-role steading-person-text">{{resolvedOccupation}}</div>
+							<div class="steading-person-role steading-person-text">{{this.resolvedOccupation}}</div>
 							{{/if}}
 						</div>
 						<div class="steading-person-details">
@@ -73,14 +73,14 @@
 							<label class="steading-person-field"><span class="steading-person-label">Relations</span>
 								<input type="text" class="steading-resident-input"
 								       data-index="{{@index}}" data-field="relations" data-list="players"
-								       value="{{relations}}" placeholder="Relations"></label>
+								       value="{{this.relations}}" placeholder="Relations"></label>
 							<label class="steading-person-field"><span class="steading-person-label">Notes</span>
 								<input type="text" class="steading-resident-input"
 								       data-index="{{@index}}" data-field="notes" data-list="players"
-								       value="{{notes}}" placeholder="Notes"></label>
+								       value="{{this.notes}}" placeholder="Notes"></label>
 							{{else}}
-							{{#if relations}}<div class="steading-person-field"><span class="steading-person-label">Relations</span><span class="steading-person-value steading-person-text">{{relations}}</span></div>{{/if}}
-							{{#if notes}}<div class="steading-person-field"><span class="steading-person-label">Notes</span><span class="steading-person-value steading-person-text">{{notes}}</span></div>{{/if}}
+							{{#if relations}}<div class="steading-person-field"><span class="steading-person-label">Relations</span><span class="steading-person-value steading-person-text">{{this.relations}}</span></div>{{/if}}
+							{{#if notes}}<div class="steading-person-field"><span class="steading-person-label">Notes</span><span class="steading-person-value steading-person-text">{{this.notes}}</span></div>{{/if}}
 							{{/if}}
 						</div>
 						<div class="steading-residents-col-actions">
@@ -111,41 +111,41 @@
 				<ul class="steading-residents-list">
 					{{#each stonetop.residents}}
 					{{#if name}}
-					<li class="steading-residents-row steading-person" data-sort-name="{{name}}">
+					<li class="steading-residents-row steading-person" data-sort-name="{{this.name}}">
 						<div class="steading-person-face">
 							{{!-- Behaviour attributes stay on the WRAPPER (it is what the click and
 							      drag handlers resolve with closest), and the inner image is
 							      explicitly undraggable so Gecko cannot hand over an image payload
 							      in place of the Actor uuid. --}}
-							<span class="steading-member-avatar stonetop-portrait-box" data-name="{{name}}"
+							<span class="steading-member-avatar stonetop-portrait-box" data-name="{{this.name}}"
 							     data-list="residents" data-index="{{@index}}"
-							     {{#if uuid}}draggable="true" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"{{/if}}><img class="steading-member-avatar-img" src="{{profileImg}}" alt="" draggable="false" data-name="{{name}}"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}></span>
+							     {{#if uuid}}draggable="true" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"{{/if}}><img class="steading-member-avatar-img" src="{{this.profileImg}}" alt="" draggable="false" data-name="{{this.name}}"{{#if imgStyle}} style="{{this.imgStyle}}"{{/if}}></span>
 						</div>
 						<div class="steading-residents-col-name steading-person-who{{#if unresolved}} steading-member-unresolved{{/if}}">
 							{{#if @root.stonetop.edit.residents}}
 							<input type="text" class="steading-resident-input steading-person-name-input"
 							       data-index="{{@index}}" data-field="name"
-							       value="{{name}}" placeholder="Name" aria-label="Name">
+							       value="{{this.name}}" placeholder="Name" aria-label="Name">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="occupation" list="steading-occupation-suggestions"
-							       value="{{occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
+							       value="{{this.occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="traits" list="steading-trait-suggestions"
-							       value="{{traits}}" placeholder="Traits" aria-label="Traits">
+							       value="{{this.traits}}" placeholder="Traits" aria-label="Traits">
 							{{else}}
 							<div class="steading-person-name-line">
 								{{#if uuid}}
 								{{!-- Labelled rather than tooltipped: no href, so nothing else tells a
 								      screen-reader user this name opens anything. --}}
-								<a class="steading-member-open steading-member-name-text steading-person-text{{#if statusInactive}} is-inactive{{/if}}" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
-								   draggable="true" aria-label="Open {{name}}'s NPC sheet">{{name}}</a>
-								{{#if status}}<span class="stonetop-npc-status-badge stonetop-npc-status-badge--sm" data-status="{{status}}" data-tooltip="{{statusLabel}}"><span class="stonetop-npc-status-badge-text">{{statusLabel}}</span></span>{{/if}}
+								<a class="steading-member-open steading-member-name-text steading-person-text{{#if statusInactive}} is-inactive{{/if}}" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"
+								   draggable="true" aria-label="Open {{this.name}}'s NPC sheet">{{this.name}}</a>
+								{{#if status}}<span class="stonetop-npc-status-badge stonetop-npc-status-badge--sm" data-status="{{this.status}}" data-tooltip="{{this.statusLabel}}"><span class="stonetop-npc-status-badge-text">{{this.statusLabel}}</span></span>{{/if}}
 								{{else}}
-								<span class="steading-member-name-text steading-person-text">{{name}}</span>
+								<span class="steading-member-name-text steading-person-text">{{this.name}}</span>
 								{{/if}}
 							</div>
-							{{#if resolvedOccupation}}<div class="steading-person-role steading-person-text">{{resolvedOccupation}}</div>{{/if}}
-							{{#if traits}}<div class="steading-person-traits steading-person-text">{{traits}}</div>{{/if}}
+							{{#if resolvedOccupation}}<div class="steading-person-role steading-person-text">{{this.resolvedOccupation}}</div>{{/if}}
+							{{#if traits}}<div class="steading-person-traits steading-person-text">{{this.traits}}</div>{{/if}}
 							{{/if}}
 						</div>
 						<div class="steading-person-details">
@@ -153,15 +153,15 @@
 							<label class="steading-person-field"><span class="steading-person-label">Relations</span>
 								<input type="text" class="steading-resident-input"
 								       data-index="{{@index}}" data-field="relations"
-								       value="{{relations}}" placeholder="Relations"></label>
+								       value="{{this.relations}}" placeholder="Relations"></label>
 							{{else if relations}}
-							<div class="steading-person-field"><span class="steading-person-label">Relations</span><span class="steading-person-value steading-person-text">{{relations}}</span></div>
+							<div class="steading-person-field"><span class="steading-person-label">Relations</span><span class="steading-person-value steading-person-text">{{this.relations}}</span></div>
 							{{/if}}
 							{{#if uuid}}
 							{{!-- Actor-backed row: the rich notes live on the NPC. A rendered preview,
 							      clamped; in edit mode a pencil opens the shared pop-up editor. --}}
 							{{#if (or @root.stonetop.edit.residents notes)}}
-							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">Notes</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{notesHtml}}}</div>{{#if @root.stonetop.edit.residents}}<button type="button" class="steading-member-notes-edit" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
+							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">Notes</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{this.notesHtml}}}</div>{{#if @root.stonetop.edit.residents}}<button type="button" class="steading-member-notes-edit" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"
 							        title="Edit notes" aria-label="Edit notes" tabindex="-1"><i class="fas fa-pen"></i></button>{{/if}}</div>
 							{{/if}}
 							{{else}}
@@ -170,9 +170,9 @@
 							<label class="steading-person-field"><span class="steading-person-label">Notes</span>
 								<input type="text" class="steading-resident-input"
 								       data-index="{{@index}}" data-field="notes"
-								       value="{{notes}}" placeholder="Notes"></label>
+								       value="{{this.notes}}" placeholder="Notes"></label>
 							{{else if notes}}
-							<div class="steading-person-field"><span class="steading-person-label">Notes</span><span class="steading-person-value steading-person-text">{{notes}}</span></div>
+							<div class="steading-person-field"><span class="steading-person-label">Notes</span><span class="steading-person-value steading-person-text">{{this.notes}}</span></div>
 							{{/if}}
 							{{/if}}
 						</div>
@@ -191,23 +191,23 @@
 						<div class="steading-residents-col-name steading-person-who">
 							<input type="text" class="steading-resident-input steading-person-name-input"
 							       data-index="{{@index}}" data-field="name"
-							       value="{{name}}" placeholder="Name" aria-label="Name">
+							       value="{{this.name}}" placeholder="Name" aria-label="Name">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="occupation" list="steading-occupation-suggestions"
-							       value="{{occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
+							       value="{{this.occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="traits" list="steading-trait-suggestions"
-							       value="{{traits}}" placeholder="Traits" aria-label="Traits">
+							       value="{{this.traits}}" placeholder="Traits" aria-label="Traits">
 						</div>
 						<div class="steading-person-details">
 							<label class="steading-person-field"><span class="steading-person-label">Relations</span>
 								<input type="text" class="steading-resident-input"
 								       data-index="{{@index}}" data-field="relations"
-								       value="{{relations}}" placeholder="Relations"></label>
+								       value="{{this.relations}}" placeholder="Relations"></label>
 							<label class="steading-person-field"><span class="steading-person-label">Notes</span>
 								<input type="text" class="steading-resident-input"
 								       data-index="{{@index}}" data-field="notes"
-								       value="{{notes}}" placeholder="Notes"></label>
+								       value="{{this.notes}}" placeholder="Notes"></label>
 						</div>
 						<div class="steading-residents-col-actions">
 							<button type="button" class="steading-list-delete"
@@ -236,43 +236,43 @@
 				<ul class="steading-residents-list">
 					{{#each stonetop.neighbors}}
 					{{#if name}}
-					<li class="steading-residents-row steading-person" data-sort-name="{{name}}">
+					<li class="steading-residents-row steading-person" data-sort-name="{{this.name}}">
 						<div class="steading-person-face">
 							{{!-- See the residents list above: attributes on the wrapper, image
 							      explicitly undraggable. --}}
-							<span class="steading-member-avatar stonetop-portrait-box" data-name="{{name}}"
+							<span class="steading-member-avatar stonetop-portrait-box" data-name="{{this.name}}"
 							     data-list="neighbors" data-index="{{@index}}"
-							     {{#if uuid}}draggable="true" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"{{/if}}><img class="steading-member-avatar-img" src="{{profileImg}}" alt="" draggable="false" data-name="{{name}}"{{#if imgStyle}} style="{{imgStyle}}"{{/if}}></span>
+							     {{#if uuid}}draggable="true" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"{{/if}}><img class="steading-member-avatar-img" src="{{this.profileImg}}" alt="" draggable="false" data-name="{{this.name}}"{{#if imgStyle}} style="{{this.imgStyle}}"{{/if}}></span>
 						</div>
 						<div class="steading-residents-col-name steading-person-who{{#if unresolved}} steading-member-unresolved{{/if}}">
 							{{#if @root.stonetop.edit.neighbors}}
 							<input type="text" class="steading-resident-input steading-person-name-input"
 							       data-index="{{@index}}" data-field="name" data-list="neighbors"
-							       value="{{name}}" placeholder="Name" aria-label="Name">
+							       value="{{this.name}}" placeholder="Name" aria-label="Name">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="home" data-list="neighbors" list="steading-home-suggestions"
-							       value="{{home}}" placeholder="Home" aria-label="Home">
+							       value="{{this.home}}" placeholder="Home" aria-label="Home">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="occupation" data-list="neighbors" list="steading-occupation-suggestions"
-							       value="{{occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
+							       value="{{this.occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="traits" data-list="neighbors" list="steading-trait-suggestions"
-							       value="{{traits}}" placeholder="Traits" aria-label="Traits">
+							       value="{{this.traits}}" placeholder="Traits" aria-label="Traits">
 							{{else}}
 							<div class="steading-person-name-line">
 								{{#if uuid}}
 								{{!-- Labelled rather than tooltipped: no href, so nothing else tells a
 								      screen-reader user this name opens anything. --}}
-								<a class="steading-member-open steading-member-name-text steading-person-text{{#if statusInactive}} is-inactive{{/if}}" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
-								   draggable="true" aria-label="Open {{name}}'s NPC sheet">{{name}}</a>
-								{{#if status}}<span class="stonetop-npc-status-badge stonetop-npc-status-badge--sm" data-status="{{status}}" data-tooltip="{{statusLabel}}"><span class="stonetop-npc-status-badge-text">{{statusLabel}}</span></span>{{/if}}
+								<a class="steading-member-open steading-member-name-text steading-person-text{{#if statusInactive}} is-inactive{{/if}}" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"
+								   draggable="true" aria-label="Open {{this.name}}'s NPC sheet">{{this.name}}</a>
+								{{#if status}}<span class="stonetop-npc-status-badge stonetop-npc-status-badge--sm" data-status="{{this.status}}" data-tooltip="{{this.statusLabel}}"><span class="stonetop-npc-status-badge-text">{{this.statusLabel}}</span></span>{{/if}}
 								{{else}}
-								<span class="steading-member-name-text steading-person-text">{{name}}</span>
+								<span class="steading-member-name-text steading-person-text">{{this.name}}</span>
 								{{/if}}
 							</div>
 							{{!-- Where they live rides the occupation line: "Trader · Marshedge". --}}
-							{{#if (or occupation home)}}<div class="steading-person-role steading-person-text">{{occupation}}{{#if (and occupation home)}} · {{/if}}{{#if home}}<span class="steading-person-home">{{home}}</span>{{/if}}</div>{{/if}}
-							{{#if traits}}<div class="steading-person-traits steading-person-text">{{traits}}</div>{{/if}}
+							{{#if (or occupation home)}}<div class="steading-person-role steading-person-text">{{this.occupation}}{{#if (and occupation home)}} · {{/if}}{{#if home}}<span class="steading-person-home">{{this.home}}</span>{{/if}}</div>{{/if}}
+							{{#if traits}}<div class="steading-person-traits steading-person-text">{{this.traits}}</div>{{/if}}
 							{{/if}}
 						</div>
 						<div class="steading-person-details">
@@ -280,15 +280,15 @@
 							<label class="steading-person-field"><span class="steading-person-label">Relations</span>
 								<input type="text" class="steading-resident-input"
 								       data-index="{{@index}}" data-field="relations" data-list="neighbors"
-								       value="{{relations}}" placeholder="Relations"></label>
+								       value="{{this.relations}}" placeholder="Relations"></label>
 							{{else if relations}}
-							<div class="steading-person-field"><span class="steading-person-label">Relations</span><span class="steading-person-value steading-person-text">{{relations}}</span></div>
+							<div class="steading-person-field"><span class="steading-person-label">Relations</span><span class="steading-person-value steading-person-text">{{this.relations}}</span></div>
 							{{/if}}
 							{{#if uuid}}
 							{{!-- Actor-backed row: the rich notes live on the NPC. A rendered preview,
 							      clamped; in edit mode a pencil opens the shared pop-up editor. --}}
 							{{#if (or @root.stonetop.edit.neighbors notes)}}
-							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">Notes</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{notesHtml}}}</div>{{#if @root.stonetop.edit.neighbors}}<button type="button" class="steading-member-notes-edit" data-actor-uuid="{{uuid}}" data-actor-id="{{id}}"
+							<div class="steading-person-field steading-person-field--notes"><span class="steading-person-label">Notes</span><div class="steading-person-value steading-member-notes-preview stonetop-npc-rich-text steading-person-text">{{{this.notesHtml}}}</div>{{#if @root.stonetop.edit.neighbors}}<button type="button" class="steading-member-notes-edit" data-actor-uuid="{{this.uuid}}" data-actor-id="{{this.id}}"
 							        title="Edit notes" aria-label="Edit notes" tabindex="-1"><i class="fas fa-pen"></i></button>{{/if}}</div>
 							{{/if}}
 							{{else}}
@@ -297,9 +297,9 @@
 							<label class="steading-person-field"><span class="steading-person-label">Notes</span>
 								<input type="text" class="steading-resident-input"
 								       data-index="{{@index}}" data-field="notes" data-list="neighbors"
-								       value="{{notes}}" placeholder="Notes"></label>
+								       value="{{this.notes}}" placeholder="Notes"></label>
 							{{else if notes}}
-							<div class="steading-person-field"><span class="steading-person-label">Notes</span><span class="steading-person-value steading-person-text">{{notes}}</span></div>
+							<div class="steading-person-field"><span class="steading-person-label">Notes</span><span class="steading-person-value steading-person-text">{{this.notes}}</span></div>
 							{{/if}}
 							{{/if}}
 						</div>
@@ -318,26 +318,26 @@
 						<div class="steading-residents-col-name steading-person-who">
 							<input type="text" class="steading-resident-input steading-person-name-input"
 							       data-index="{{@index}}" data-field="name" data-list="neighbors"
-							       value="{{name}}" placeholder="Name" aria-label="Name">
+							       value="{{this.name}}" placeholder="Name" aria-label="Name">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="home" data-list="neighbors" list="steading-home-suggestions"
-							       value="{{home}}" placeholder="Home" aria-label="Home">
+							       value="{{this.home}}" placeholder="Home" aria-label="Home">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="occupation" data-list="neighbors" list="steading-occupation-suggestions"
-							       value="{{occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
+							       value="{{this.occupation}}" placeholder="Occupation or Playbook" aria-label="Occupation">
 							<input type="text" class="steading-resident-input"
 							       data-index="{{@index}}" data-field="traits" data-list="neighbors" list="steading-trait-suggestions"
-							       value="{{traits}}" placeholder="Traits" aria-label="Traits">
+							       value="{{this.traits}}" placeholder="Traits" aria-label="Traits">
 						</div>
 						<div class="steading-person-details">
 							<label class="steading-person-field"><span class="steading-person-label">Relations</span>
 								<input type="text" class="steading-resident-input"
 								       data-index="{{@index}}" data-field="relations" data-list="neighbors"
-								       value="{{relations}}" placeholder="Relations"></label>
+								       value="{{this.relations}}" placeholder="Relations"></label>
 							<label class="steading-person-field"><span class="steading-person-label">Notes</span>
 								<input type="text" class="steading-resident-input"
 								       data-index="{{@index}}" data-field="notes" data-list="neighbors"
-								       value="{{notes}}" placeholder="Notes"></label>
+								       value="{{this.notes}}" placeholder="Notes"></label>
 						</div>
 						<div class="steading-residents-col-actions">
 							<button type="button" class="steading-list-delete"

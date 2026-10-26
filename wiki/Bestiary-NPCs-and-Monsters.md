@@ -37,7 +37,7 @@ The Actors sidebar's **Create Actor** button opens a chooser instead of Foundry'
 
 ### The monster worksheet
 
-A new monster opens the book's monster-making worksheet, with HP, Armor and Damage worked out live as you answer. You can turn this off with the world setting **Guided Monster Builder**.
+A new monster opens the book's monster-making worksheet, with HP, Armor and Damage worked out live as you answer. You can turn this off with the world setting **Guided Monster Builder**. Closing the worksheet after you've written on it asks before throwing that away.
 
 ## The monster sheet
 

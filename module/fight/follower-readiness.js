@@ -15,6 +15,7 @@ import { followerCardFor } from "../actors/character/follower-masters.js";
 import { FOLLOWER_FLAGS, fillFollowerSlug } from "../actors/character/follower-roster.js";
 import { readableFlags } from "../actors/character/StonetopFlags.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { inSpenderTurn } from "../utils/spender-queue.js";
 
 /**
  * Where one follower card keeps its Readiness: the character and the flag path on it, or null for a card
@@ -56,15 +57,21 @@ export function readinessHeldBy(actor, options = {}) {
 }
 
 /**
- * Take `cost` Readiness off whoever holds it, never below none: a character's flag, or a follower's card on
- * their character. Answers the write, or null when they hold no track.
+ * Take `cost` Readiness off whoever holds it: a character's flag, or a follower's card on their character.
+ * Read and written in the spending turn of the character it is written on (utils/spender-queue.js). Answers
+ * true when spent, or null when nothing was: no track, or less than `cost` held.
  */
-export async function spendHeldReadiness(actor, cost = 1, options = {}) {
+export function spendHeldReadiness(actor, cost = 1, options = {}) {
 	const ref = actor?.type === "character" ? null : followerReadinessRef(actor, options);
-	if (actor?.type !== "character" && !ref) return null;
-	const next = Math.max(0, readinessHeldBy(actor, options) - cost);
-	if (!ref) return actor.setFlag(SYSTEM_ID, READINESS_FLAG, next);
-	return ref.character.update({ [`flags.${SYSTEM_ID}.${ref.path}`]: next }, { stonetopMove: "Spend Readiness" });
+	if (actor?.type !== "character" && !ref) return Promise.resolve(null);
+	return inSpenderTurn(ref?.character ?? actor, async () => {
+		const held = readinessHeldBy(actor, options);
+		if (held < Math.max(1, cost)) return null;
+		const next = held - cost;
+		if (!ref) await actor.setFlag(SYSTEM_ID, READINESS_FLAG, next);
+		else await ref.character.update({ [`flags.${SYSTEM_ID}.${ref.path}`]: next }, { stonetopMove: "Spend Readiness" });
+		return true;
+	});
 }
 
 /**

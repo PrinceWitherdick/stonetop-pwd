@@ -67,11 +67,11 @@
 							       {{#if ../disabled}}disabled{{/if}}>
 							{{/each}}
 						</span>
-						<span class="stonetop-inv-label">{{name}}</span>
+						<span class="stonetop-inv-label">{{this.name}}</span>
 					</label>
-					{{#if note}}<span class="stonetop-inv-note">({{{note}}})</span>{{/if}}
+					{{#if note}}<span class="stonetop-inv-note">({{{this.note}}})</span>{{/if}}
 					{{#if (and isCustom @root.stonetop.editMode)}}
-					<a class="stonetop-inv-delete" data-owned-id="{{ownedId}}" title="{{localize 'stonetop.inventory.removeItem'}}"><i class="fas fa-times"></i></a>
+					<a class="stonetop-inv-delete" data-owned-id="{{this.ownedId}}" title="{{localize 'stonetop.inventory.removeItem'}}"><i class="fas fa-times"></i></a>
 					{{/if}}
 				</div>
 				{{/each}}
@@ -103,8 +103,8 @@
 					       {{#if ../disabled}}disabled{{/if}}>
 					{{/each}}
 				</span>
-				<span class="stonetop-inv-label">{{name}}
-					{{#if note}}<span class="stonetop-inv-note">({{{note}}})</span>{{/if}}
+				<span class="stonetop-inv-label">{{this.name}}
+					{{#if note}}<span class="stonetop-inv-note">({{{this.note}}})</span>{{/if}}
 				</span>
 			</div>
 			{{/each}}
@@ -148,10 +148,10 @@
 				<div class="stonetop-inv-item stonetop-inv-small{{#if checked}} is-checked{{/if}}">
 					<label class="stonetop-inv-item-toggle">
 						<input type="checkbox" class="stonetop-inventory-item-check"
-						       data-slug="{{slug}}"
+						       data-slug="{{this.slug}}"
 						       {{#if checked}}checked{{/if}}
 						       {{#if disabled}}disabled{{/if}}>
-						<span class="stonetop-inv-label">{{name}}</span>
+						<span class="stonetop-inv-label">{{this.name}}</span>
 					</label>
 				</div>
 				{{/each}}
@@ -168,8 +168,8 @@
 			{{> "stonetop.section-heading" title=(localize "stonetop.inventory.arcanaItems") collapse="invArcanaSmall"}}
 			{{#each stonetop.inventory.outfit.arcanaSmall}}
 			<div class="stonetop-inv-item stonetop-inv-small stonetop-inv-static{{#if checked}} is-checked{{/if}}">
-				<span class="stonetop-inv-label">{{name}}
-					{{#if note}}<span class="stonetop-inv-note">({{{note}}})</span>{{/if}}
+				<span class="stonetop-inv-label">{{this.name}}
+					{{#if note}}<span class="stonetop-inv-note">({{{this.note}}})</span>{{/if}}
 				</span>
 			</div>
 			{{/each}}
@@ -208,30 +208,30 @@
 			<li class="stonetop-item{{#if checked}} is-checked{{/if}}">
 				<div class="stonetop-item-header">
 					<input type="checkbox" class="stonetop-item-check stonetop-possession-check"
-					       data-slug="{{slug}}"
+					       data-slug="{{this.slug}}"
 					       {{#if checked}}checked{{/if}}
 					       {{#if (or disabled (not @root.stonetop.possessionsEdit))}}disabled{{/if}}>
-					<strong class="stonetop-item-name">{{{label}}}</strong>
-					{{#if preselectedSource}}<span class="stonetop-item-source">{{preselectedSource}}</span>{{/if}}
+					<strong class="stonetop-item-name">{{{this.label}}}</strong>
+					{{#if preselectedSource}}<span class="stonetop-item-source">{{this.preselectedSource}}</span>{{/if}}
 					{{#if isCustom}}<span class="stonetop-item-source">Write-in</span>{{/if}}
 					{{#if (and checked resource)}}
 					<span class="stonetop-item-resources">
-						{{#if usesLabel}}<span class="stonetop-uses-label">{{usesLabel}}</span>{{/if}}
+						{{#if usesLabel}}<span class="stonetop-uses-label">{{this.usesLabel}}</span>{{/if}}
 						{{> "stonetop.resource-track" resource=resource btnClass="stonetop-item-resource-check" possessionSlug=slug groupBy=5}}
 					</span>
 					{{/if}}
 					{{#if (and isCustom @root.stonetop.possessionsEdit)}}
-					<a class="stonetop-possession-custom-remove" data-slug="{{slug}}" title="{{localize 'stonetop.character.gear.removePossession'}}"><i class="fas fa-times"></i></a>
+					<a class="stonetop-possession-custom-remove" data-slug="{{this.slug}}" title="{{localize 'stonetop.character.gear.removePossession'}}"><i class="fas fa-times"></i></a>
 					{{/if}}
 					{{#if (and hasChoiceGroups @root.stonetop.possessionsEdit)}}
-					<a class="stonetop-possession-choices-edit" data-possession-choices="{{slug}}"
+					<a class="stonetop-possession-choices-edit" data-possession-choices="{{this.slug}}"
 					   data-tooltip="Edit your sacred pouch's details &amp; remarkable trait(s)" data-tooltip-direction="UP">
 						<i class="fas fa-pen-to-square" aria-hidden="true"></i>
 					</a>
 					{{/if}}
 				</div>
 				{{#if description}}
-				<div class="stonetop-item-description">{{{description}}}</div>
+				<div class="stonetop-item-description">{{{this.description}}}</div>
 				{{/if}}
 				{{!-- The Marshal's personal symbol: "when you display or reveal it in a dramatic
 				     fashion, your crew holds +1 Loyalty (max 3)". A button pressed once it has
@@ -256,11 +256,11 @@
 				<div class="stonetop-possession-choice-summary stonetop-pouch-slots">
 					{{#each @root.stonetop.sacredPouch.slots}}
 					<p class="stonetop-possession-choice-summary-line stonetop-pouch-slot">
-						<span class="stonetop-possession-choice-summary-heading">{{kindLabel}}:</span> {{name}}
+						<span class="stonetop-possession-choice-summary-heading">{{this.kindLabel}}:</span> {{this.name}}
 						{{#if @root.stonetop.sacredPouch.editable}}
-						<button type="button" class="stonetop-pouch-slot-remove stonetop-inline-btn" data-slot-id="{{id}}"
+						<button type="button" class="stonetop-pouch-slot-remove stonetop-inline-btn" data-slot-id="{{this.id}}"
 						        data-tooltip="Take it out of the pouch (its space comes back empty)" data-tooltip-direction="UP"
-						        aria-label="Take {{name}} out of the pouch">
+						        aria-label="Take {{this.name}} out of the pouch">
 							<i class="fas fa-times" aria-hidden="true"></i>
 						</button>
 						{{/if}}
@@ -281,7 +281,7 @@
 				<div class="stonetop-possession-choice-summary">
 					{{#each choiceSummary}}
 					<p class="stonetop-possession-choice-summary-line">
-						<span class="stonetop-possession-choice-summary-heading">{{{heading}}}</span> {{{selections}}}
+						<span class="stonetop-possession-choice-summary-heading">{{{this.heading}}}</span> {{{this.selections}}}
 					</p>
 					{{/each}}
 				</div>
@@ -303,9 +303,9 @@
 								       {{#if ../disabled}}disabled{{/if}}>
 								{{/each}}
 							</span>
-							<span class="stonetop-inv-label">{{name}}</span>
+							<span class="stonetop-inv-label">{{this.name}}</span>
 						</label>
-						{{#if resource}}<span class="stonetop-inv-note">(<span class="stonetop-inv-resources">{{> "stonetop.resource-track" resource=resource btnClass="stonetop-inv-resource-btn stonetop-inventory-resource-btn" slug=slug}}</span>{{#if resourceSuffix}} {{resourceSuffix}}{{/if}})</span>{{/if}}
+						{{#if resource}}<span class="stonetop-inv-note">(<span class="stonetop-inv-resources">{{> "stonetop.resource-track" resource=resource btnClass="stonetop-inv-resource-btn stonetop-inventory-resource-btn" slug=slug}}</span>{{#if resourceSuffix}} {{this.resourceSuffix}}{{/if}})</span>{{/if}}
 						{{!-- No delete control: bundled gear belongs to its possession and is
 						     added/removed with the possession, not individually. --}}
 					</div>
@@ -316,21 +316,21 @@
 					{{!-- Kept at home, not carried (the Distillery's stills and barrels, tagged
 					     immobile): no mark, so it never eats the small-item allowance. --}}
 					<div class="stonetop-inv-item stonetop-inv-small stonetop-inv-static stonetop-possession-gear-item">
-						<span class="stonetop-inv-label">{{name}}
-							{{#if note}}<span class="stonetop-inv-note">({{{note}}})</span>{{/if}}
+						<span class="stonetop-inv-label">{{this.name}}
+							{{#if note}}<span class="stonetop-inv-note">({{{this.note}}})</span>{{/if}}
 						</span>
 					</div>
 					{{else}}
 					<div class="stonetop-inv-item stonetop-inv-small stonetop-possession-gear-item{{#if checked}} is-checked{{/if}}">
 						<label class="stonetop-inv-item-toggle">
 							<input type="checkbox" class="stonetop-inventory-item-check"
-							       data-slug="{{slug}}"
+							       data-slug="{{this.slug}}"
 							       data-small="true"
 							       {{#if checked}}checked{{/if}}
 							       {{#if disabled}}disabled{{/if}}>
-							<span class="stonetop-inv-label">{{name}}</span>
+							<span class="stonetop-inv-label">{{this.name}}</span>
 						</label>
-						{{#if resource}}<span class="stonetop-inv-note">(<span class="stonetop-inv-resources">{{> "stonetop.resource-track" resource=resource btnClass="stonetop-inv-resource-btn stonetop-inventory-resource-btn" slug=slug}}</span>{{#if resourceSuffix}} {{resourceSuffix}}{{/if}})</span>{{/if}}
+						{{#if resource}}<span class="stonetop-inv-note">(<span class="stonetop-inv-resources">{{> "stonetop.resource-track" resource=resource btnClass="stonetop-inv-resource-btn stonetop-inventory-resource-btn" slug=slug}}</span>{{#if resourceSuffix}} {{this.resourceSuffix}}{{/if}})</span>{{/if}}
 						{{!-- No delete control: bundled gear belongs to its possession and is
 						     added/removed with the possession, not individually. --}}
 					</div>
@@ -367,13 +367,13 @@
 						<label class="stonetop-sub-choice-label">
 							<input type="checkbox" class="stonetop-item-check stonetop-possession-sub-check"
 							       data-possession-slug="{{../slug}}"
-							       data-choice-slug="{{slug}}"
+							       data-choice-slug="{{this.slug}}"
 							       {{#if checked}}checked{{/if}}
 							       {{#if disabled}}disabled{{/if}}>
 							{{!-- One element for the whole label: bare text beside the <em> tags would
 							     each become their own flex item, gapped apart and wrapping between
 							     words instead of inside them (see .stonetop-sub-choice-text). --}}
-							<span class="stonetop-sub-choice-text">{{#if hasBlank}}{{{fillBefore}}}<input type="text" class="stonetop-possession-sub-fill" data-possession-slug="{{../slug}}" data-choice-slug="{{slug}}" value="{{fillValue}}" placeholder="…">{{{fillAfter}}}{{else}}{{{label}}}{{/if}}</span>
+							<span class="stonetop-sub-choice-text">{{#if hasBlank}}{{{this.fillBefore}}}<input type="text" class="stonetop-possession-sub-fill" data-possession-slug="{{../slug}}" data-choice-slug="{{this.slug}}" value="{{this.fillValue}}" placeholder="…">{{{this.fillAfter}}}{{else}}{{{this.label}}}{{/if}}</span>
 						</label>
 						{{#if (and checked resource)}}
 						<span class="stonetop-item-resources">

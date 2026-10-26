@@ -1,21 +1,21 @@
 {{#if introField}}
 {{#if editMode}}
-<textarea class="stonetop-monster-line-intro-input" name="system.{{introField}}" data-doc-field="{{introField}}"
-          placeholder='{{localize "stonetop.bestiary.introPlaceholder"}}'>{{intro}}</textarea>
+<textarea class="stonetop-monster-line-intro-input" name="system.{{this.introField}}" data-doc-field="{{this.introField}}"
+          placeholder='{{localize "stonetop.bestiary.introPlaceholder"}}'>{{this.intro}}</textarea>
 {{else}}{{#if intro}}
-<p class="stonetop-monster-line-intro">{{{introHtml}}}</p>
+<p class="stonetop-monster-line-intro">{{{this.introHtml}}}</p>
 {{/if}}{{/if}}
 {{/if}}
 <ul class="stonetop-monster-line-list">
 	{{#each lines}}
 	<li class="stonetop-monster-line" data-line-index="{{@index}}">
 		{{#if ../editMode}}
-		<input type="text" class="stonetop-entry-line-input" value="{{text}}">
+		<input type="text" class="stonetop-entry-line-input" value="{{this.text}}">
 		<button type="button" class="stonetop-entry-remove-line" title="{{localize "stonetop.bestiary.removeLine"}}">
 			<i class="fas fa-times"></i>
 		</button>
 		{{else}}
-		<span>{{{html}}}</span>
+		<span>{{{this.html}}}</span>
 		{{/if}}
 	</li>
 	{{else}}
@@ -23,7 +23,7 @@
 	{{/each}}
 </ul>
 {{#if editMode}}
-<button type="button" class="stonetop-entry-add-line" data-field="{{key}}">
+<button type="button" class="stonetop-entry-add-line" data-field="{{this.key}}">
 	<i class="fas fa-plus"></i> {{localize "stonetop.bestiary.addLine"}}
 </button>
 {{/if}}

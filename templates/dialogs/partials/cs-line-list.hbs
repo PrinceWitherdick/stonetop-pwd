@@ -20,8 +20,8 @@
 {{#> "stonetop.cs-list-frame" list=list label=label hint=hint chips=chips kinds=kinds addLabel=addLabel frameClass=frameClass}}
   {{#each rows}}
   <div class="stonetop-cf-gear-row">
-    <input type="text" class="stonetop-cf-input stonetop-cs-line" data-list="{{list}}" data-index="{{index}}" value="{{text}}" placeholder="{{../placeholder}}">
-    <button type="button" class="stonetop-cs-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-list="{{list}}" data-index="{{index}}"><i class="fas fa-times"></i></button>
+    <input type="text" class="stonetop-cf-input stonetop-cs-line" data-list="{{this.list}}" data-index="{{this.index}}" value="{{this.text}}" placeholder="{{../placeholder}}">
+    <button type="button" class="stonetop-cs-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-list="{{this.list}}" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
   </div>
   {{/each}}
 {{/"stonetop.cs-list-frame"}}

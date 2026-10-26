@@ -62,7 +62,7 @@
 				      the soft/hard line where the book gives one, the examples of play VERBATIM,
 				      and the page. It is `hidden` at render, always. The tab is a scannable
 				      reference list first, and thirty open entries is a chapter. --}}
-				<li class="stonetop-gm-move" data-move="{{name}}">
+				<li class="stonetop-gm-move" data-move="{{this.name}}">
 					{{!-- THE NAME IS THE POST. Clicking it sends this move to chat, to the whole
 					      table, as the very card the die posts (random-gm-move.js `postGmMove`)
 					      — same frame, same gloss, same quoted example, same page — the only
@@ -84,7 +84,7 @@
 					      read off the row's `data-move` — already there for the light to land on,
 					      and already the move's exact printed name. --}}
 					<button type="button" class="stonetop-gm-move-name" data-section="{{../key}}"
-					        data-tooltip="{{../postTitle}}">{{name}}</button>
+					        data-tooltip="{{../postTitle}}">{{this.name}}</button>
 					<button type="button" class="stonetop-gm-move-toggle" aria-expanded="false"
 					        data-tooltip="{{../expandTitle}}"><span class="stonetop-gm-move-lead">{{blurb.lead}}</span>{{#if blurb.rest}}<span class="stonetop-gm-move-rest" hidden> {{blurb.rest}}</span>{{/if}}</button>
 					<div class="stonetop-gm-move-book" hidden>

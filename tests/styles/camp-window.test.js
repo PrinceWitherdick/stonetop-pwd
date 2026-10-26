@@ -54,7 +54,10 @@ describe("the camp window's controls", () => {
 		// Core drops an app's radio 2px with `top`, and an unlayered rule only outranks that for the
 		// properties it declares, so leaving `top` unsaid leaves every radio low.
 		expect(declared(seat, "top")).toBe("0");
-		expect(declared(seat, "margin")).toMatch(/^calc\(\(1lh - 15px \* var\(--stonetop-font-scale, 1\)\) \/ 2\) 0 0$/);
+		expect(declared(seat, "margin")).toBe("calc((1lh - var(--st-check-size)) / 2) 0 0");
+		// Both skins it seats are drawn at that one size.
+		expect(declarations(CSS, ".stonetop-camp-radio")).toMatch(/height:\s*var\(--st-check-size\) !important/);
+		expect(declarations(CSS, ".stonetop-camp-extra-check")).toMatch(/height:\s*var\(--st-check-size\) !important/);
 		// `1lh` is read off the input's own leading, which is only the label's line once inherited.
 		expect(declared(seat, "line-height")).toBe("inherit");
 		expect(declared(seat, "font-size")).toBe("inherit");

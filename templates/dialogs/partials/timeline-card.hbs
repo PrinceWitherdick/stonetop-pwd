@@ -26,20 +26,20 @@
 
       Context: one card view-model (timeline-view.js#cardVM), plus `enrichedBody` where the host has
       enriched it. --}}
-<li class="stonetop-timeline-card{{#if isAuto}} stonetop-timeline-card--auto stonetop-timeline-kind--{{kind}}{{/if}}{{#if isTagged}} stonetop-timeline-card--tagged stonetop-timeline-kind--{{kind}}{{/if}}"{{#if kindStyle}} style="{{kindStyle}}"{{/if}} data-entry-id="{{id}}">
+<li class="stonetop-timeline-card{{#if isAuto}} stonetop-timeline-card--auto stonetop-timeline-kind--{{this.kind}}{{/if}}{{#if isTagged}} stonetop-timeline-card--tagged stonetop-timeline-kind--{{this.kind}}{{/if}}"{{#if kindStyle}} style="{{this.kindStyle}}"{{/if}} data-entry-id="{{this.id}}">
 	{{#if wearsChip}}
 	<span class="stonetop-timeline-card-kind">
-		<i class="fas {{kindIcon}}" aria-hidden="true"></i>
-		<span>{{kindLabel}}</span>
+		<i class="fas {{this.kindIcon}}" aria-hidden="true"></i>
+		<span>{{this.kindLabel}}</span>
 	</span>
 	{{/if}}
 
 	{{#if title}}
-	<h4 class="stonetop-timeline-card-title">{{title}}</h4>
+	<h4 class="stonetop-timeline-card-title">{{this.title}}</h4>
 	{{/if}}
 
 	{{#if killSummary}}
-	<p class="stonetop-timeline-card-kills">{{killSummary}}</p>
+	<p class="stonetop-timeline-card-kills">{{this.killSummary}}</p>
 	{{/if}}
 
 	{{#if place}}
@@ -54,32 +54,32 @@
 		      element; `content-link` is the LOOK alone. A link with the class and the uuid but no
 		      `data-link` renders perfectly, carries the right target, and silently does nothing when
 		      clicked, with no console error. --}}
-		<a class="content-link" data-link data-uuid="{{placeUuid}}" draggable="true">{{place}}</a>
+		<a class="content-link" data-link data-uuid="{{this.placeUuid}}" draggable="true">{{this.place}}</a>
 		{{else}}
-		<span>{{place}}</span>
+		<span>{{this.place}}</span>
 		{{/if}}
 	</p>
 	{{/if}}
 
 	{{#if enrichedBody}}
-	<div class="stonetop-timeline-card-body">{{{enrichedBody}}}</div>
+	<div class="stonetop-timeline-card-body">{{{this.enrichedBody}}}</div>
 	{{/if}}
 
 	{{#if canEdit}}
 	<div class="stonetop-timeline-card-actions">
-		<button type="button" class="stonetop-timeline-move" data-entry-id="{{id}}" data-delta="-1"
+		<button type="button" class="stonetop-timeline-move" data-entry-id="{{this.id}}" data-delta="-1"
 		        aria-label="{{localize "stonetop.timeline.moveEarlier"}}"
 		        data-tooltip="{{localize "stonetop.timeline.moveEarlier"}}"
 		        data-tooltip-direction="UP"><i class="fas fa-chevron-up"></i></button>
-		<button type="button" class="stonetop-timeline-move" data-entry-id="{{id}}" data-delta="1"
+		<button type="button" class="stonetop-timeline-move" data-entry-id="{{this.id}}" data-delta="1"
 		        aria-label="{{localize "stonetop.timeline.moveLater"}}"
 		        data-tooltip="{{localize "stonetop.timeline.moveLater"}}"
 		        data-tooltip-direction="UP"><i class="fas fa-chevron-down"></i></button>
-		<button type="button" class="stonetop-timeline-edit" data-entry-id="{{id}}"
+		<button type="button" class="stonetop-timeline-edit" data-entry-id="{{this.id}}"
 		        aria-label="{{localize "stonetop.timeline.editEntry"}}"
 		        data-tooltip="{{localize "stonetop.timeline.editEntry"}}"
 		        data-tooltip-direction="UP"><i class="fas fa-pen"></i></button>
-		<button type="button" class="stonetop-timeline-remove" data-entry-id="{{id}}"
+		<button type="button" class="stonetop-timeline-remove" data-entry-id="{{this.id}}"
 		        aria-label="{{localize "stonetop.timeline.removeEntry"}}"
 		        data-tooltip="{{localize "stonetop.timeline.removeEntry"}}"
 		        data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>

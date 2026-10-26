@@ -10,8 +10,8 @@
 	        {{#if ../../slug}}data-slug="{{../../slug}}"{{/if}}
 	        {{#if ../../resourceKind}}data-resource-kind="{{../../resourceKind}}"{{/if}}
 	        {{#if ../../choiceSlug}}data-choice-slug="{{../../choiceSlug}}"{{/if}}
-	        data-index="{{index}}"></button>
-	{{#if label}}<span class="stonetop-resource-label">{{label}}</span>{{/if}}
+	        data-index="{{this.index}}"></button>
+	{{#if label}}<span class="stonetop-resource-label">{{this.label}}</span>{{/if}}
 	{{/each}}
 	</span>
 {{/each}}
@@ -25,6 +25,6 @@
         {{#if ../resourceKind}}data-resource-kind="{{../resourceKind}}"{{/if}}
         {{#if ../choiceSlug}}data-choice-slug="{{../choiceSlug}}"{{/if}}
         data-index="{{@index}}"></button>
-{{#if label}}<span class="stonetop-resource-label">{{label}}</span>{{/if}}
+{{#if label}}<span class="stonetop-resource-label">{{this.label}}</span>{{/if}}
 {{/each}}
 {{/if}}

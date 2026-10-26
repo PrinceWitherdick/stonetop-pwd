@@ -1,9 +1,20 @@
+/* LIBRE CASLON TEXT'S LINE BOX, CENTRED ON ITS CAPITALS. The files say ascent 970 and descent 260
+   (upm 1000; hhea and OS/2 typo agree, USE_TYPO_METRICS set) with an 'H' 781 tall, so a line box's
+   middle fell 0.036em above the middle of the capitals, and every button, input and icon row that
+   centres a line box showed its words high. The two overrides keep the sum (1.230em, so no
+   `line-height: normal` box changes height) and make ascent - descent = 0.78125em, the H's height:
+   (1.230 + 0.78125) / 2 = 1.005625, (1.230 - 0.78125) / 2 = 0.224375. Every Caslon face below
+   carries the same pair, the bracket-only italic ones included, or a line mixing them would
+   take the taller box. `text-box: trim-both cap alphabetic` reads the cap height and the
+   baseline, not these, so trimmed chips are untouched. Guarded by tests/styles/caslon-metrics.test.js. */
 @font-face {
 	font-family: "Libre Caslon Text";
 	src: url("../assets/fonts/libre-caslon-text/LibreCaslonText-Regular.ttf") format("truetype");
 	font-weight: normal;
 	font-style: normal;
 	font-display: swap;
+	ascent-override: 100.5625%;
+	descent-override: 22.4375%;
 }
 @font-face {
 	font-family: "Libre Caslon Text";
@@ -11,6 +22,8 @@
 	font-weight: bold;
 	font-style: normal;
 	font-display: swap;
+	ascent-override: 100.5625%;
+	descent-override: 22.4375%;
 }
 @font-face {
 	font-family: "Libre Caslon Text";
@@ -18,6 +31,8 @@
 	font-weight: normal;
 	font-style: italic;
 	font-display: swap;
+	ascent-override: 100.5625%;
+	descent-override: 22.4375%;
 }
 
 @font-face {
@@ -67,6 +82,8 @@
 	font-style: italic;
 	font-display: swap;
 	unicode-range: U+0028-0029, U+005B, U+005D;
+	ascent-override: 100.5625%;
+	descent-override: 22.4375%;
 }
 @font-face {
 	font-family: "Libre Caslon Text";
@@ -75,6 +92,8 @@
 	font-style: italic;
 	font-display: swap;
 	unicode-range: U+0028-0029, U+005B, U+005D;
+	ascent-override: 100.5625%;
+	descent-override: 22.4375%;
 }
 @font-face {
 	font-family: "IM Fell English";
@@ -607,6 +626,20 @@
 	--st-radius:    4px;
 	--st-radius-lg: 6px;
 
+	/* Narrowest a column of move cards gets in the creation and level-up move pickers.
+	   Sized so both windows show two columns at their default width and three once
+	   dragged wide; the em floor drops a column for a large UI font rather than
+	   squeezing the text. The default widths it is sized against are LEVELUP_MOVE_WIDTH
+	   (860, LevelUpDialog.js) and the onboarding window's 660
+	   (CharacterOnboardingDialog.defaultOptions); three 285px columns must NOT fit in
+	   either. tests/actors/character/move-card-columns.test.js checks the arithmetic. */
+	--st-move-column-min: max(285px, 16em);
+
+	/* The SVG-skinned checkbox's side, scaled with the reader's sheet font. --stonetop-font-scale
+	   is set on <html>, so resolving it here is the same as resolving it on the box. Anything
+	   lined up against the box (the onboarding badge that wraps under a name) reads it here. */
+	--st-check-size: calc(15px * var(--stonetop-font-scale, 1));
+
 	/* ── Stacking ─────────────────────────────────────────────────────────
 	   The one rung this system adds to Foundry's z-index scale: above every
 	   window, below tooltips and notifications. Foundry's own ladder is
@@ -977,13 +1010,18 @@ body {
    moving such a rule later in the file does not help it, and nothing is logged when it loses. So
    a per-dialog override of `display`, `align-items`, `justify-content`, `min-height` or
    `line-height` has to carry this same `.vtt .stonetop.dialog` scope to get above it.
-   tests/styles/dialog-button-specificity.test.js fails any that does not. */
+   tests/styles/dialog-button-specificity.test.js fails any that does not.
+
+   `line-height: normal` (1.23 in Libre Caslon Text) and not a number: the label is a bare text
+   node, so it cannot be trimmed, and any leading is split by Blink with the top half floored to a
+   whole pixel, which left one-line labels up to 1px high. With no leading the line box is the
+   font's own, which its @font-face centres on the capitals: within 0.4px at roots 12-24. */
 .vtt .stonetop.dialog .dialog-buttons button {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	min-height: 32px;
-	line-height: 1.25;
+	line-height: normal;
 }
 
 /* Strange Scene navigation bug fix */
@@ -4081,11 +4119,11 @@ input.stonetop-name-field {
 	cursor: pointer;
 	box-shadow: none;
 	margin: 0;
-	/* align-items: center lands the radio on the text's line-box center, which is a
-	   hair below the letterforms' optical center, so the label reads higher than the
-	   radio. Lift the radio slightly to meet the label. */
+	/* Level with the label: `align-items: center` puts the radio on the label's line box, which
+	   the Libre Caslon Text @font-face centres on the capitals (the old `top: -1px` now left it 1px
+	   high). `top: 0` because core drops radios 2px with `position: relative; top: 2px`. */
 	position: relative;
-	top: -1px;
+	top: 0;
 }
 
 .stonetop-roll-mode-option input:checked {
@@ -4430,7 +4468,10 @@ input.stonetop-name-field {
 	gap: 4px;
 }
 
-.stonetop-stat-boost-chip {
+/* Shared with the temporary-Instinct badge, which differs only in its gold colours and its margin
+   (see .stonetop-instinct-temporary-badge). */
+.stonetop-stat-boost-chip,
+.stonetop-instinct-temporary-badge {
 	width: fit-content;
 	/* CENTRED BY TRIMMING, not by nudging. The label is a bare text node, so the chip trims ITSELF:
 	   inline-block rather than inline-flex, because an anonymous flex item takes no `text-box`, and
@@ -4692,9 +4733,9 @@ input.stonetop-name-field {
 .steading-list-check {
 	appearance: none !important;
 	-webkit-appearance: none !important;
-	width: calc(15px * var(--stonetop-font-scale, 1)) !important;
-	height: calc(15px * var(--stonetop-font-scale, 1)) !important;
-	flex: 0 0 calc(15px * var(--stonetop-font-scale, 1)) !important;
+	width: var(--st-check-size) !important;
+	height: var(--st-check-size) !important;
+	flex: 0 0 var(--st-check-size) !important;
 	border: none !important;
 	border-radius: 0 !important;
 	/* Through a variable, not a literal, for the same reason the spiral bullets go through one:
@@ -6719,6 +6760,8 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-weapon-choice-dialog .stonetop-weapon-option:hover { background: rgba(159, 146, 117, 0.15); }
 .stonetop-weapon-choice-dialog .stonetop-weapon-name { font-weight: bold; }
 .stonetop-weapon-choice-dialog .stonetop-weapon-traits { font-size: 0.85em; opacity: 0.75; }
+/* An all-out weapon is still offered, and said so (Book I p.94): warned, never refused. */
+.stonetop-weapon-choice-dialog .stonetop-weapon-out { font-size: 0.85em; color: var(--st-on-dark-caution, #6b4400); }
 :is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .stonetop-suffer-fiction {
 	font-style: italic;
 	opacity: 0.75;
@@ -8166,7 +8209,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-inv-item:is(.stonetop-inv-treasure, :has(.stonetop-inv-artifact-hint, .stonetop-inv-artifact-lead, .stonetop-inv-artifact-lore)) { align-items: flex-start; }
 .stonetop-inv-item:is(.stonetop-inv-treasure, :has(.stonetop-inv-artifact-hint, .stonetop-inv-artifact-lead, .stonetop-inv-artifact-lore)) .stonetop-inv-diamonds { min-height: 1lh; }
 .stonetop-inv-item.stonetop-inv-small:is(.stonetop-inv-treasure, :has(.stonetop-inv-artifact-hint, .stonetop-inv-artifact-lead, .stonetop-inv-artifact-lore)) .stonetop-inventory-item-check {
-	margin-top: calc((1lh - 15px * var(--stonetop-font-scale, 1)) / 2);
+	margin-top: calc((1lh - var(--st-check-size)) / 2);
 }
 .stonetop-inv-item:is(.stonetop-inv-treasure, :has(.stonetop-inv-artifact-hint, .stonetop-inv-artifact-lead, .stonetop-inv-artifact-lore)) .stonetop-inv-artifact-chip,
 .stonetop-inv-item:is(.stonetop-inv-treasure, :has(.stonetop-inv-artifact-hint, .stonetop-inv-artifact-lead, .stonetop-inv-artifact-lore)) .stonetop-inv-lore-toggle,
@@ -8816,7 +8859,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	flex: 0 0 auto;
 	position: relative;
 	top: 0;
-	margin: calc((1lh - 15px * var(--stonetop-font-scale, 1)) / 2) 0 0;
+	margin: calc((1lh - var(--st-check-size)) / 2) 0 0;
 	font-size: inherit;
 	line-height: inherit;
 	color: inherit;
@@ -9586,6 +9629,10 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	color: var(--color-text-dark-primary);
 }
 .stonetop-custom-move-cancel:hover { background: rgba(0, 0, 0, 0.06); }
+/* The Love Letter window's saved drafts, one outline button each, stacked. */
+.stonetop-love-letter-drafts-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.stonetop-love-letter-drafts-list > li { margin: 0; }
+.stonetop-love-letter-drafts-list .stonetop-love-letter-draft-open { width: 100%; justify-content: flex-start; font-weight: normal; text-align: left; }
 
 /* Moves-tab affordances for player-authored moves: the edit pencil mirrors the
    hover-revealed delete link, and owns the right-push so the two sit together. */
@@ -10102,7 +10149,8 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-love-letter:hover .stonetop-love-letter-delete { display: inline-flex; }
 .stonetop-love-letter-actions { display: flex; align-items: center; margin-top: 8px; }
 .stonetop-love-letter-read,
-.stonetop-love-letter-resend {
+.stonetop-love-letter-resend,
+.stonetop-love-letter-send {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
@@ -10118,10 +10166,13 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	transition: background 0.15s;
 }
 .stonetop-love-letter-read:hover,
-.stonetop-love-letter-resend:hover { background: #8f4a50; }
-/* A resolved letter is only on the GM's sheet: the paper fades, the actions stay crisp. */
+.stonetop-love-letter-resend:hover,
+.stonetop-love-letter-send:hover { background: #8f4a50; }
+/* A resolved letter or a draft is only on the GM's sheet: the paper fades, the actions stay crisp. */
 .tab.moves .stonetop-item.stonetop-love-letter.is-resolved .stonetop-item-name,
-.tab.moves .stonetop-item.stonetop-love-letter.is-resolved .stonetop-item-description { opacity: 0.6; }
+.tab.moves .stonetop-item.stonetop-love-letter.is-resolved .stonetop-item-description,
+.tab.moves .stonetop-item.stonetop-love-letter.is-draft .stonetop-item-name,
+.tab.moves .stonetop-item.stonetop-love-letter.is-draft .stonetop-item-description { opacity: 0.6; }
 .stonetop-love-letter-resolved-badge {
 	margin-left: 8px;
 	padding: 0 6px;
@@ -13131,10 +13182,12 @@ button.stonetop-rapport-chip:focus-visible {
 .stonetop-reminder-chip button.stonetop-reminder-chip-remove > i { margin: 0; line-height: inherit; opacity: 1; }
 .stonetop-reminder-chip button.stonetop-reminder-chip-remove:is(:hover, :focus-visible) { opacity: 1; }
 
-/* What the "+" turns into: a box of the chip's own shape, wide enough for a short line. The browser
-   draws an input's text centred on its line box, which in Libre Caslon Text sits 0.048em above the
-   cap band, so the typed words read high (1.4px at 1.5x, pixel scan). No text-box trim reaches an
-   input's text, so the 0.048em is spent as padding, as a <select>'s is: the box keeps its height. */
+/* What the "+" turns into: a box of the chip's own shape, wide enough for a short line. No text-box
+   trim reaches an input's text, so its padding carries the centring, unevenly and at no cost to the
+   height. Not for the font (the Libre Caslon Text @font-face centres its line box on the capitals):
+   the chip's whole-pixel line leaves about 1px of leading, Blink floors the half above the text to
+   a whole pixel, and the words sat 0.5-0.9px high (geometric, root 14-20px). This lowers them to
+   within 0.4px in Libre Caslon and Signika, and halves IM Fell English's error. */
 .stonetop-reminder-chips input.stonetop-reminder-chip--input {
 	width: 16em;
 	height: auto;
@@ -15532,14 +15585,16 @@ button.stonetop-mark-sign-btn.is-active:hover {
 /*
  * Masonry-style card grids (move / foreign-move pickers and the invocation
  * picker): variable-height cards pack tightly into balanced columns (multi-column,
- * not CSS grid, whose row tracks would leave gaps). Up to two columns, dropping to
- * one when the window is narrowed. The columns live in their own auto-height wrapper
+ * not CSS grid, whose row tracks would leave gaps). Two columns at the step's
+ * default width, three once the window is dragged wide, one when it is narrowed.
+ * The character-creation move and invocation steps (.stonetop-onboarding-cards--columns) use the same
+ * column width. The columns live in their own auto-height wrapper
  * so the list scrolls VERTICALLY — a multi-column box with a constrained height
  * overflows sideways instead.
  */
 .stonetop-levelup-move-grid,
 .stonetop-levelup-invocation-grid {
-	columns: 210px 2;
+	columns: var(--st-move-column-min) 3;
 	column-gap: 6px;
 }
 
@@ -17868,6 +17923,38 @@ button.stonetop-mark-sign-btn.is-active:hover {
 
 .stonetop-instinct-replaced-note i { margin-right: 5px; opacity: 0.75; }
 
+/* A temporary Instinct (until the next Level Up) sits over the chosen one, which is dimmed below
+   it. The badge's shape, type and trim are .stonetop-stat-boost-chip's (one rule, both selectors);
+   only its gold and its margin are set here. */
+.stonetop-instinct-temporary {
+	margin: 0 0 6px;
+	line-height: 1.6;
+}
+
+.stonetop-instinct-temporary-badge {
+	margin-right: 6px;
+	border-color: var(--st-gold-border, rgba(100,116,139,0.35));
+	background: var(--st-gold-bg, hsl(45 60% 90%));
+}
+
+.stonetop-instinct-readonly.is-overridden { opacity: 0.6; }
+
+.stonetop-instinct-temporary-row {
+	display: flex;
+	gap: 6px;
+	margin: 0 0 6px;
+}
+
+.stonetop-instinct-temporary-value,
+.stonetop-instinct-temporary-source {
+	box-sizing: border-box;
+	font-family: inherit;
+	font-size: calc(0.9rem * var(--stonetop-font-scale, 1));
+}
+
+.stonetop-instinct-temporary-value { flex: 1 1 auto; min-width: 0; }
+.stonetop-instinct-temporary-source { flex: 0 0 30%; }
+
 /* ── Choose Your Fate: the three inserts, as cards ────────────────── */
 
 /* One column rather than a row of three: the blurb is the book's trigger sentence, and three
@@ -19587,6 +19674,11 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	display: block;
 	white-space: nowrap;
 	font-size: clamp(0.72rem, 12.5cqi, var(--font-size-16));
+	/* Centred on its capitals by trimming, as the chips are (Chip centring tokens in :root); the
+	   untrimmed line read up to 1.05px high where Blink floored its half-leading. Same height. */
+	text-box: trim-both cap alphabetic;
+	padding-top: var(--st-trim-top);
+	padding-bottom: var(--st-trim-bottom);
 }
 
 .pbta.sheet .sheet-tabs:not(.stonetop-tab-rail) .item:hover,
@@ -24570,9 +24662,10 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 .stonetop-onboarding-card.is-selected { border-color: slategrey; background: var(--st-on-dark-selected, hsl(210 15% 96%)); }
 
 .stonetop-onboarding-card-header {
+	--st-onboarding-header-gap: 6px;
 	display: flex;
 	align-items: baseline;
-	gap: 6px;
+	gap: var(--st-onboarding-header-gap);
 }
 
 .stonetop-onboarding-card-header input[type="radio"] {
@@ -25249,20 +25342,39 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 .stonetop-levelup-empty.is-filtered-out { display: none; }
 
 .stonetop-levelup-move-no-matches,
-.stonetop-levelup-foreign-no-matches { margin-top: 8px; }
+.stonetop-levelup-foreign-no-matches,
+.stonetop-levelup-agreed-no-matches { margin-top: 8px; }
+
+/* The move step's "Agreed with the table" card sits under the playbook's list, apart from it;
+   on the agreed step the custom-move card sits above the other playbooks' moves. */
+.stonetop-levelup-agreed-entry { margin-top: 8px; }
+.stonetop-levelup-agreed-custom { margin-bottom: 8px; }
+
+/* Option cards are picked from the keyboard too (role="button", tabindex): show where focus is. */
+.stonetop-levelup-pickable:focus-visible {
+	outline: 2px solid slategrey;
+	outline-offset: 1px;
+}
 
 /* Inline "+1 to which stat?" picker on a stat-increase move (the Would-Be Hero's
-   Improved Stat). Hidden until the move card is selected, mirroring the initiate
-   inline-choice pattern. */
+   Improved Stat). Always laid out, faded and inert until the move is ticked: the move
+   cards flow in balanced columns (.stonetop-onboarding-cards--columns), and a picker
+   that appeared on tick would grow the card and reshuffle the columns under the
+   pointer. With pointer-events off, a click on the faded picker lands on the card: it
+   ticks the move and picks the stat it landed on (CharacterOnboardingDialog). Until then
+   its radios are disabled and the picker is `inert`, so a screen reader passes over it. */
 .stonetop-onboarding-card--stat-move .stonetop-onboarding-move-stat-picker {
-	display: none;
+	display: block;
 	margin-top: 8px;
 	padding-top: 8px;
 	border-top: 1px solid var(--st-on-dark-rule-soft, #eee);
+	opacity: 0.45;
+	pointer-events: none;
 }
 
 .stonetop-onboarding-card--stat-move.is-selected .stonetop-onboarding-move-stat-picker {
-	display: block;
+	opacity: 1;
+	pointer-events: auto;
 }
 
 .stonetop-onboarding-move-stat-label {
@@ -25286,12 +25398,38 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	cursor: not-allowed;
 }
 
+/* The whole picker is already faded while its move is unticked; a capped stat isn't faded a
+   second time on top of that (0.45 x 0.5 is too faint to read), it says "(max)" instead. */
+.stonetop-onboarding-card--stat-move:not(.is-selected) .stonetop-onboarding-move-stat-option.is-disabled {
+	opacity: 1;
+}
+
 /* "Either X OR Y" starting-move choice (e.g. the Heavy's Armored OR Uncanny
    Reflexes): a radio group of move cards, spaced off from the free-pick list.
    `--move-choice` is also the JS hook the change handler uses to toggle is-selected;
    the card body is otherwise styled by the base .stonetop-onboarding-card. */
 .stonetop-onboarding-move-choice-group { margin-bottom: 14px; }
 .stonetop-onboarding-move-choice-group .stonetop-onboarding-step-hint { margin-bottom: 6px; }
+
+/* Starting Moves and Invocations: the cards pack into balanced columns like the level-up
+   move and invocation pickers (.stonetop-levelup-move-grid): two at the window's default
+   width, three when it is dragged wide. Sits after the base .stonetop-onboarding-cards so
+   `display: block` wins. */
+.stonetop-onboarding-cards--columns {
+	display: block;
+	columns: var(--st-move-column-min) 3;
+	column-gap: 6px;
+}
+
+.stonetop-onboarding-cards--columns > .stonetop-onboarding-card {
+	break-inside: avoid;
+	margin-bottom: 6px;
+}
+
+/* The flex gap this replaces put nothing after the last card; nor does this. */
+.stonetop-onboarding-cards--columns > .stonetop-onboarding-card:last-child {
+	margin-bottom: 0;
+}
 
 /* Center the radio against the bold title, matching the possession cards — the base
    header baseline-aligns, which otherwise floats the radio low next to the title. */
@@ -25308,6 +25446,26 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 .stonetop-onboarding-card--possession .stonetop-onboarding-card-header,
 .stonetop-onboarding-card--invocation.is-preselected .stonetop-onboarding-card-header {
 	align-items: center;
+}
+
+/* In a narrow column the "Learned at level-up" badge would squeeze the invocation's name
+   down to a word a line. Give the name a floor; when name + badge don't fit, the badge
+   wraps under it and the name keeps the line beside its checkbox. The badge's left margin
+   is the checkbox plus the header gap (both tokens), so a wrapped badge starts under the name rather
+   than flush right (the base badge's margin-left: auto); on one line the growing name
+   fills that space anyway. */
+.stonetop-onboarding-card--invocation.is-preselected .stonetop-onboarding-card-header {
+	flex-wrap: wrap;
+	row-gap: 4px;
+}
+
+.stonetop-onboarding-card--invocation.is-preselected .stonetop-onboarding-card-title {
+	flex: 1 1 0;
+	min-width: min(12em, 70%);
+}
+
+.stonetop-onboarding-card--invocation.is-preselected .stonetop-onboarding-possession-badge {
+	margin-left: calc(var(--st-check-size) + var(--st-onboarding-header-gap));
 }
 
 .stonetop-onboarding-possession-badge {
@@ -28267,6 +28425,24 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 .stonetop-follower-tag--tooltip {
 	cursor: help;
 }
+
+/* Tags a crew is still owed (Veteran Crew): the blue "needs your input" cue, a flex chip whose
+   label is the trimmed .stonetop-chip-text, as the Fallen badge's is. */
+.stonetop-crew-tags-owed {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 1px 8px;
+	border: 1px solid var(--st-blue-border);
+	border-radius: 999px;
+	background: var(--st-blue-bg);
+	color: var(--st-blue-text);
+	font-size: var(--st-fs-sm);
+	cursor: pointer;
+}
+.stonetop-crew-tags-owed > i { font-size: round(1em, 1px); }
+.stonetop-crew-tags-owed:hover,
+.stonetop-crew-tags-owed:focus-visible { border-color: var(--st-blue-text); }
 
 .stonetop-follower-tag--trait,
 .stonetop-follower-tag--exceptional {
@@ -33632,6 +33808,14 @@ th:has(> .stonetop-roll-table-btn) {
 	border-top: 1px solid rgb(var(--st-ink-rgb) / 0.08);
 }
 
+/* Two buttons held together at one end of the row (a walkthrough's Save for now + Next). */
+.stonetop-guide-nav .stonetop-guide-nav-group {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-shrink: 0;
+}
+
 /* Right-align the buttons when there's no centre label (Share's Cancel / Save). */
 .stonetop-guide-nav--end {
 	justify-content: flex-end;
@@ -34236,6 +34420,91 @@ th:has(> .stonetop-roll-table-btn) {
 
 .stonetop-intros-passed i { color: var(--st-green-border, rgba(40, 140, 70, 0.7)); }
 
+/* The GM's corrections to a step: Un-pass on the Passed badge, edit / delete on each recorded
+   answer, and the Save / Cancel of an answer being edited in place. Content-sized buttons:
+   core's `button { display: flex; width: 100% }` would otherwise stretch each across the row. */
+.stonetop-intros-unpass,
+.stonetop-intros-recorded-edit,
+.stonetop-intros-recorded-delete,
+.stonetop-intros-recorded-save,
+.stonetop-intros-recorded-cancel {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: auto;
+	margin: 0;
+	line-height: 1;
+	cursor: pointer;
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.3);
+	border-radius: var(--st-radius-sm);
+	background: rgb(var(--st-paper-rgb) / 0.55);
+	color: inherit;
+	transition: background 0.15s;
+}
+
+/* Sized by padding round a normal line box, like the nav buttons, rather than squeezed into a fixed
+   height with `line-height: 1`, which left the words 1.4px high. */
+.stonetop-intros-unpass,
+.stonetop-intros-recorded-save,
+.stonetop-intros-recorded-cancel {
+	height: auto;
+	padding: 3px 10px;
+	line-height: normal;
+	font-family: var(--font-stonetop);
+	font-size: calc(0.8rem * var(--stonetop-font-scale, 1));
+}
+
+.stonetop-intros-unpass { margin-left: auto; }
+
+.stonetop-intros-recorded-edit,
+.stonetop-intros-recorded-delete {
+	min-width: 26px;
+	height: 24px;
+	padding: 0 6px;
+	font-size: calc(0.78rem * var(--stonetop-font-scale, 1));
+}
+
+/* Core spaces a button's icon from a label these buttons do not have. */
+.stonetop-intros-recorded-edit > i,
+.stonetop-intros-recorded-delete > i { margin: 0; }
+
+.stonetop-intros-unpass:hover,
+.stonetop-intros-recorded-edit:hover,
+.stonetop-intros-recorded-cancel:hover { background: var(--st-green-bg-hover); }
+
+.stonetop-intros-recorded-delete { color: var(--st-red-text); border-color: var(--st-red-border); }
+.stonetop-intros-recorded-delete:hover { background: var(--st-red-bg); }
+
+/* A recorded answer the GM may correct: the answer, then its two tools at the right. */
+.stonetop-intros-recorded-list li.stonetop-intros-recorded-item--managed {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: start;
+	gap: 8px;
+}
+
+.stonetop-intros-recorded-body { min-width: 0; }
+
+.stonetop-intros-recorded-tools {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.stonetop-intros-recorded-edit-field {
+	display: block;
+	width: 100%;
+	margin: 4px 0;
+	resize: vertical;
+}
+
+.stonetop-intros-recorded-edit-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+}
+
 /* GM-only "N of M done" tally on a step; turns green once everyone's ready. */
 .stonetop-intros-ready-tally {
 	display: flex;
@@ -34729,6 +34998,10 @@ th:has(> .stonetop-roll-table-btn) {
 }
 
 .stonetop-welcome-create {
+	/* A flex row so the label can be trimmed to its cap band and centred (it is a flex item, a
+	   block); see .stonetop-welcome-create-label. */
+	display: inline-flex;
+	align-items: center;
 	flex: 0 0 auto;
 	width: auto;
 	white-space: nowrap;
@@ -34746,6 +35019,13 @@ th:has(> .stonetop-roll-table-btn) {
 
 .stonetop-welcome-create:hover { background: var(--st-btn-primary-bg-hover); }
 .stonetop-welcome-create > i { margin-right: 4px; }
+/* Trimmed to its capitals and padded back to its line box, as every chip is (Chip centring tokens in
+   :root), so the words sit centred whatever Blink does with the line's half-leading. */
+.stonetop-welcome-create-label {
+	text-box: trim-both cap alphabetic;
+	padding-top: var(--st-trim-top);
+	padding-bottom: var(--st-trim-bottom);
+}
 
 /* No destructive variant of this button. It used to go red for a player who already had a
    character, because pressing it deleted that character; it now asks whether the new one
@@ -36361,8 +36641,8 @@ th:has(> .stonetop-roll-table-btn) {
 .stonetop-camp-radio {
 	appearance: none !important;
 	-webkit-appearance: none !important;
-	width: calc(15px * var(--stonetop-font-scale, 1)) !important;
-	height: calc(15px * var(--stonetop-font-scale, 1)) !important;
+	width: var(--st-check-size) !important;
+	height: var(--st-check-size) !important;
 	flex: 0 0 auto !important;
 	border: 1.5px solid currentColor !important;
 	border-radius: 50% !important;
@@ -47313,30 +47593,6 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	height: 100%;
 	min-height: 0;
 	gap: 0;
-	/* HOW FAR THE WORDS ON THE CONTROLS HAVE TO COME DOWN to sit where the eye reads as centred, as
-	   a fraction of whatever size the text using it is set at. Every control in this window centres
-	   a LINE BOX, and in Libre Caslon Text the line box is not centred on the ink: it carries an
-	   ascent of 0.958em over a descent of 0.272em, so its middle falls 0.343em above the baseline,
-	   while the middle of the capitals (cap height 0.781em) falls 0.391em above it. The 0.048em
-	   between the two is the whole of the complaint: measured on the old toolbar, a tool button was
-	   leaving about 1.3px more paper under its label than over it, and a row of them reads as words
-	   sitting high in their boxes rather than as one thing slightly out.
-
-	   ⚠ DECLARED ON THE ROOT AND NOT ON A ROW. It was the toolbar's, and the toolbar is gone; the
-	   buttons it was written for now stand in the footer, and a token declared on whichever row
-	   happens to hold them today is a token that goes silently missing the next time one moves.
-	   Read below by the tool buttons.
-
-	   It is `em` on purpose: a custom property holding a relative length is resolved against the
-	   element that USES it, so the same token lands correctly on the button (whose font-size core
-	   anchors in pixels) and on any smaller label beside it (whose font-size tracks the root), with
-	   no arithmetic to drift. Verified at root 16, 20 and 24: -0.0476em before, under 0.005em after.
-
-	   The ICONS are not lifted and must not be nudged with the words. Measured, a Font Awesome
-	   glyph in these buttons already sits within 0.25px of the centre; moving it would break what
-	   is right to fix what is beside it. (The display titles set in Avara carry the same trap far
-	   more heavily, and are corrected the same way; see `.steading-title`.) */
-	--st-relmap-ink-lift: 0.048em;
 }
 
 .stonetop-relmap-pages { grid-row: 1; }
@@ -47360,14 +47616,13 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	white-space: nowrap;
 }
 
-/* THE LABEL COMES DOWN, and the icon beside it does not. `align-items: center` above has already
-   centred both, exactly and to the pixel; what it centred for the word is its line box, which
-   Libre Caslon Text does not centre on its own ink (the token's comment on `.stonetop-relmap` has
-   the metrics). A relative offset rather than padding, so the button's size, the row's height and
-   every neighbour in the footer stay exactly where they were. */
+/* The label is trimmed to its cap band and padded back to its line box, as every chip is (see the
+   Chip centring tokens in :root): Blink floors a line's half-leading to whole pixels, which left the
+   untrimmed words up to 0.7px high at some font sizes. The icon beside it is left alone. */
 .stonetop-relmap-tool > span {
-	position: relative;
-	top: var(--st-relmap-ink-lift, 0);
+	text-box: trim-both cap alphabetic;
+	padding-top: var(--st-trim-top);
+	padding-bottom: var(--st-trim-bottom);
 }
 
 .stonetop-relmap-tool[aria-pressed="true"] {
@@ -47418,12 +47673,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    way on `.stonetop-relmap-page-tool`, whose comment carries the full scan.
 
    `margin: 0` on every side, so a core change to any other one lands the same way, and
-   `justify-items` so what is centred is the glyph's own box rather than a stretched column.
-
-   NOT LIFTED, unlike the words beside them. `--st-relmap-ink-lift` exists because Libre Caslon
-   Text does not centre its ink in its line box; a Font Awesome glyph in these buttons was measured
-   within 0.25px of the centre already, and nudging it would break what is right to match what is
-   no longer beside it. */
+   `justify-items` so what is centred is the glyph's own box rather than a stretched column. */
 .stonetop-relmap-history .stonetop-relmap-tool {
 	/* SQUARE, AND EXACTLY AS TALL AS THE TOOL BESIDE IT. The height of every button in this window is
 	   its label's line box (1.6) plus 0.25em of padding above and below; take the label away and the
@@ -47456,10 +47706,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    1.6em EACH WAY is the line box a label on one of these buttons makes, which is what makes it square
    above; `line-height` to match, so the arrow sits in that box exactly as a word would.
 
-   NOT LIFTED, unlike the words beside them, and not for want of measuring. `--st-relmap-ink-lift`
-   exists because Libre Caslon Text does not centre its INK in its line box, and every word on this
-   row is moved by it; these two arrows scan 0.60px high in a 31.4px button at root 16 and 1.00px in
-   a 38.8px one at root 20. That is the glyph's own outline and not a fault in the box: a curved
+   NOT NUDGED, and not for want of measuring: these two arrows scan 0.60px high in a 31.4px button
+   at root 16 and 1.00px in a 38.8px one at root 20. That is the glyph's own outline and not a fault in the box: a curved
    arrow is notched at the bottom and pointed at the top, so its ink bounds sit above its optical
    centre, and nudging it down by the difference would push the arrow itself low. The row's other
    icons are left where they are for the same reason. */

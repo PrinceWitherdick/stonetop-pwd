@@ -300,9 +300,9 @@ describe("the Core Loop tab", () => {
 		// be ON the button — a path rebuilt from the slug here would break the same way the
 		// index lookup is written not to.
 		it("carries the picture, its name and its slug on the button", () => {
-			expect(LOOP_HBS).toContain('data-src="{{src}}"');
-			expect(LOOP_HBS).toContain('data-caption="{{caption}}"');
-			expect(LOOP_HBS).toContain('data-slug="{{slug}}"');
+			expect(LOOP_HBS).toContain('data-src="{{this.src}}"');
+			expect(LOOP_HBS).toContain('data-caption="{{this.caption}}"');
+			expect(LOOP_HBS).toContain('data-slug="{{this.slug}}"');
 		});
 
 		it("opens the zoom window from the sheet's delegated click", () => {

@@ -102,6 +102,8 @@ export class OrderFollowersDialog extends StonetopDialog {
 		this._inWall       = true;
 		// Spending 1 Command on Stentorian's advantage: only asked while the Marshal holds some.
 		this._command      = false;
+		// A whole group at one foe Aids itself (p.414): ticked, and only asked when `follower.groupAid` offers it.
+		this._groupAid     = true;
 		// They balked and 1 Loyalty is spent so they do it anyway (p.464, p.466): only while they hold some.
 		this._spendLoyalty = false;
 		// Paying that balk with Front Line Leader's Presence instead: only while the crew's Marshal holds some.
@@ -189,6 +191,20 @@ export class OrderFollowersDialog extends StonetopDialog {
 		return this._offersWall() && this._inWall;
 	}
 
+	/**
+	 * Whether this order is a whole group's Clash or Let Fly at one foe (`follower.groupAid`, worked out by the
+	 * caller from the fight), i.e. the box is shown: "they effectively Aid themselves" (p.414; p.473 "likely with
+	 * advantage"). Not for one member picked on the Who row: one attacker aids nobody.
+	 */
+	_offersGroupAid() {
+		return !!this._follower.groupAid && !this._who && (this._moveKey === "clash" || this._moveKey === "let-fly");
+	}
+
+	/** Whether that Aid's advantage is on this roll: offered, and still ticked. */
+	_groupAidAdvantage() {
+		return this._offersGroupAid() && this._groupAid;
+	}
+
 	/** How much Command the Marshal holds on Stentorian's track (0 without the move learned). */
 	_commandHeld() {
 		return commandHeld(this._actor);
@@ -201,7 +217,7 @@ export class OrderFollowersDialog extends StonetopDialog {
 
 	/** Advantage from any source: the player's toggle, Shield Wall, or Command spent. */
 	_hasAdvantage() {
-		return this._advantage || this._wallAdvantage() || this._commandAdvantage();
+		return this._advantage || this._wallAdvantage() || this._commandAdvantage() || this._groupAidAdvantage();
 	}
 
 	// Live tallies the player's chip picks into the Order Followers result. Moves
@@ -291,6 +307,9 @@ export class OrderFollowersDialog extends StonetopDialog {
 			advantage:    this._advantage,
 			disadvantage: this._disadvantage,
 			shieldWall:   this._offersWall(),
+			groupAid:     this._offersGroupAid(),
+			groupAidOn:   this._groupAid,
+			groupAidLabel: game.i18n.localize("stonetop.character.followers.order.groupAidLabel"),
 			inWall:       this._inWall,
 			commandHeld:  this._commandHeld(),
 			spendCommand: this._command,
@@ -347,6 +366,7 @@ export class OrderFollowersDialog extends StonetopDialog {
 
 		html.find(".stonetop-of-adv").on("change", ev => { this._advantage    = ev.currentTarget.checked; this.render(false); });
 		html.find(".stonetop-of-wall").on("change", ev => { this._inWall      = ev.currentTarget.checked; this.render(false); });
+		html.find(".stonetop-of-group-aid").on("change", ev => { this._groupAid = ev.currentTarget.checked; this.render(false); });
 		html.find(".stonetop-of-command").on("change", ev => { this._command  = ev.currentTarget.checked; this.render(false); });
 		html.find(".stonetop-of-dis").on("change", ev => { this._disadvantage = ev.currentTarget.checked; this.render(false); });
 		html.find(".stonetop-of-balk").on("change", ev => { this._spendLoyalty = ev.currentTarget.checked; });

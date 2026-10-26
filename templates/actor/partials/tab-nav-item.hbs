@@ -17,9 +17,9 @@
       class is still stamped on the classic anchor so a classic-scoped dot rule is one
       selector away if that turns out to be wanted; no dot is drawn today. --}}
 {{#if stonetop.classicLayout}}
-<a class="item{{#if attention}} stonetop-tab-attention{{/if}}" data-tab="{{tab}}"
-   aria-label="{{label}}{{#if attention}} ({{attentionLabel}}){{/if}}"
-   {{#if attention}}data-tooltip="{{label}} ({{attentionLabel}})"{{/if}}><span class="stonetop-tab-label">{{label}}</span></a>
+<a class="item{{#if attention}} stonetop-tab-attention{{/if}}" data-tab="{{this.tab}}"
+   aria-label="{{this.label}}{{#if attention}} ({{this.attentionLabel}}){{/if}}"
+   {{#if attention}}data-tooltip="{{this.label}} ({{this.attentionLabel}})"{{/if}}><span class="stonetop-tab-label">{{this.label}}</span></a>
 {{else}}
 {{> "stonetop.tab-rail-item" tab=tab label=label attention=attention attentionLabel=attentionLabel}}
 {{/if}}
