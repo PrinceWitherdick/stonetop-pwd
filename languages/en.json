@@ -2908,6 +2908,9 @@
       "inputLabel": "New reminder",
       "placeholder": "e.g. reeks of smoke, owes Gwen a favor",
       "addChip": "Add something to keep in mind",
+      "addChipTooltip": "Add a reminder about this character for the GM and the table, like reeks of smoke or owes Gwen a favor. It shows {places}. Tags from their gear, like cumbersome, are added on their own.",
+      "inputTooltip": "Type a short reminder about this character and press Enter to pin it; Escape cancels. The GM and the table see it {places}.",
+      "places": "here, on every roll card, on the Fight tab and in the steading's list of characters",
       "remove": "Remove \"{text}\"",
       "saveFailed": "That reminder could not be saved."
     },

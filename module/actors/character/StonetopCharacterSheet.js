@@ -221,6 +221,7 @@ import {chipsFrom, normalizeReminders} from "./gear-reminders.js";
 import {localize, format} from "../../utils/i18n.js";
 import {promptRaiseFromDead} from "../../hooks/DeathsDoorPrompt.js";
 import { wireKeyboardButtons } from "../../utils/keyboard-buttons.js";
+import { replaceKeepingTooltip, dropTooltipWithin, restoreTooltip } from "../../utils/tooltip-handoff.js";
 
 const _STAT_KEYS = new Set(["str", "dex", "con", "int", "wis", "cha"]);
 const _STAT_CHOICES = [..._STAT_KEYS].map(k => [k, k.toUpperCase()]);
@@ -13487,16 +13488,20 @@ export function createStonetopCharacterSheetClass(Base) {
 			input.className = "stonetop-reminder-chip stonetop-reminder-chip--input";
 			input.placeholder = game.i18n.localize("stonetop.reminders.placeholder");
 			input.setAttribute("aria-label", game.i18n.localize("stonetop.reminders.inputLabel"));
+			input.dataset.tooltipText = game.i18n.format("stonetop.reminders.inputTooltip", { places: game.i18n.localize("stonetop.reminders.places") });
+			input.dataset.tooltipDirection = "UP";
 			let done = false;
 			const finish = async save => {
 				if (done) return;
 				done = true;
 				const text = input.value.trim();
 				if (save && text) {
-					if (!(await this._saveReminders([...normalizeReminders(this.actor.system?.reminders), text]))) done = false;
+					// _saveReminders takes the box's tooltip down before the re-render, and the new
+					// line joins the list as it stands when the write runs.
+					if (!(await this._saveReminders(list => [...list, text]))) done = false;
 					return;
 				}
-				input.replaceWith(chip);
+				replaceKeepingTooltip(input, chip);
 				chip.focus();
 			};
 			input.addEventListener("keydown", e => {
@@ -13504,7 +13509,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(false); }
 			});
 			input.addEventListener("blur", () => finish(true));
-			chip.replaceWith(input);
+			replaceKeepingTooltip(chip, input);
 			input.focus();
 		}
 
@@ -13512,22 +13517,45 @@ export function createStonetopCharacterSheetClass(Base) {
 			ev.preventDefault();
 			ev.stopPropagation();
 			const index = Number(ev.currentTarget.dataset.index);
-			const list = normalizeReminders(this.actor.system?.reminders);
-			if (!Number.isInteger(index) || index < 0 || index >= list.length) return;
-			list.splice(index, 1);
-			await this._saveReminders(list);
+			const shown = normalizeReminders(this.actor.system?.reminders);
+			if (!Number.isInteger(index) || index < 0 || index >= shown.length) return;
+			// The x names a line, not a slot: by the time the write runs, a line typed into the box
+			// (saved as this click blurred it) may have joined the list, or a second click on the
+			// same x may already have struck it.
+			const text = shown[index];
+			await this._saveReminders(list => {
+				const at = list[index] === text ? index : list.indexOf(text);
+				return at < 0 ? null : list.toSpliced(at, 1);
+			});
 		}
 
-		// Whether it saved; a failure is said, never thrown.
-		async _saveReminders(list) {
-			try {
-				await this.actor.update({ "system.reminders": list });
-				return true;
-			} catch (err) {
-				console.error("Stonetop | could not save the character's reminders", err);
-				ui.notifications?.error(game.i18n.localize("stonetop.reminders.saveFailed"));
-				return false;
-			}
+		/**
+		 * Write the reminders; resolves whether it saved (a failure is said, never thrown). `next` is
+		 * the new list, or a function from the list as it stands when this write runs to the new one
+		 * (null: nothing to write). Writes run one after another, so a box saved on blur and an x
+		 * clicked in the same gesture each build on the other's result instead of the last one to
+		 * land undoing the first. The save re-renders the header's chip row, so a tooltip open on
+		 * this sheet's chips (the box, or the chip whose x was clicked) is taken down first, and put
+		 * back if the save fails and leaves it under the pointer.
+		 */
+		_saveReminders(next) {
+			const tipOn = dropTooltipWithin(this.element?.[0] ?? this.element, ".stonetop-reminder-chips");
+			const write = async () => {
+				const list = typeof next === "function" ? next(normalizeReminders(this.actor.system?.reminders)) : next;
+				if (!list) return true;
+				try {
+					await this.actor.update({ "system.reminders": list });
+					return true;
+				} catch (err) {
+					console.error("Stonetop | could not save the character's reminders", err);
+					ui.notifications?.error(game.i18n.localize("stonetop.reminders.saveFailed"));
+					restoreTooltip(tipOn);
+					return false;
+				}
+			};
+			const run = (this._reminderWrites ?? Promise.resolve()).then(write);
+			this._reminderWrites = run.catch(() => false);
+			return run;
 		}
 
 		// ── Wounds (4th harm track) ────────────────────────────────────────────────

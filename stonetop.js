@@ -140,6 +140,7 @@ import { wireSeasonsReminderResets } from "./module/seasons/seasons-change-remin
 import { onSteadingPeopleUpdate, repaintOpenSteadingRosters } from "./module/actors/steading/steading-people.js";
 import { makeDialogsResizable, enableAutoHeightVerticalResize } from "./module/utils/resizable-dialogs.js";
 import { registerStonetopWindowTheme, registerStonetopLightTheme } from "./module/utils/window-theme.js";
+import { registerOrphanedTooltipCleanup } from "./module/utils/tooltip-handoff.js";
 import { registerUserConfigCharacterFilter } from "./module/hooks/user-config-characters.js";
 import { registerAssignToPlayer } from "./module/hooks/assign-to-player.js";
 import { registerCampaignActorMenu } from "./module/campaign/campaign-actor-menu.js";
@@ -303,6 +304,10 @@ Hooks.once("init", () => {
 	// light theme even in a dark-mode world. Core already does this for AppV1; this
 	// covers our ApplicationV2 windows. Native Foundry windows are left alone.
 	registerStonetopLightTheme();
+
+	// A window that re-renders under a still pointer takes the tooltipped element out of the page,
+	// and Foundry's tooltip, which goes by the pointer, would hang over where it was.
+	registerOrphanedTooltipCleanup();
 
 	// User Configuration's Character dropdown lists playbook characters only, not
 	// NPCs, monsters, the steading or the GM Toolkit. A GM who means to hand a player
