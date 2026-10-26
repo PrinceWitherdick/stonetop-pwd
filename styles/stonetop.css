@@ -626,6 +626,20 @@
 	--st-radius:    4px;
 	--st-radius-lg: 6px;
 
+	/* Narrowest a column of move cards gets in the creation and level-up move pickers.
+	   Sized so both windows show two columns at their default width and three once
+	   dragged wide; the em floor drops a column for a large UI font rather than
+	   squeezing the text. The default widths it is sized against are LEVELUP_MOVE_WIDTH
+	   (860, LevelUpDialog.js) and the onboarding window's 660
+	   (CharacterOnboardingDialog.defaultOptions); three 285px columns must NOT fit in
+	   either. tests/actors/character/move-card-columns.test.js checks the arithmetic. */
+	--st-move-column-min: max(285px, 16em);
+
+	/* The SVG-skinned checkbox's side, scaled with the reader's sheet font. --stonetop-font-scale
+	   is set on <html>, so resolving it here is the same as resolving it on the box. Anything
+	   lined up against the box (the onboarding badge that wraps under a name) reads it here. */
+	--st-check-size: calc(15px * var(--stonetop-font-scale, 1));
+
 	/* ── Stacking ─────────────────────────────────────────────────────────
 	   The one rung this system adds to Foundry's z-index scale: above every
 	   window, below tooltips and notifications. Foundry's own ladder is
@@ -4719,9 +4733,9 @@ input.stonetop-name-field {
 .steading-list-check {
 	appearance: none !important;
 	-webkit-appearance: none !important;
-	width: calc(15px * var(--stonetop-font-scale, 1)) !important;
-	height: calc(15px * var(--stonetop-font-scale, 1)) !important;
-	flex: 0 0 calc(15px * var(--stonetop-font-scale, 1)) !important;
+	width: var(--st-check-size) !important;
+	height: var(--st-check-size) !important;
+	flex: 0 0 var(--st-check-size) !important;
 	border: none !important;
 	border-radius: 0 !important;
 	/* Through a variable, not a literal, for the same reason the spiral bullets go through one:
@@ -8195,7 +8209,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-inv-item:is(.stonetop-inv-treasure, :has(.stonetop-inv-artifact-hint, .stonetop-inv-artifact-lead, .stonetop-inv-artifact-lore)) { align-items: flex-start; }
 .stonetop-inv-item:is(.stonetop-inv-treasure, :has(.stonetop-inv-artifact-hint, .stonetop-inv-artifact-lead, .stonetop-inv-artifact-lore)) .stonetop-inv-diamonds { min-height: 1lh; }
 .stonetop-inv-item.stonetop-inv-small:is(.stonetop-inv-treasure, :has(.stonetop-inv-artifact-hint, .stonetop-inv-artifact-lead, .stonetop-inv-artifact-lore)) .stonetop-inventory-item-check {
-	margin-top: calc((1lh - 15px * var(--stonetop-font-scale, 1)) / 2);
+	margin-top: calc((1lh - var(--st-check-size)) / 2);
 }
 .stonetop-inv-item:is(.stonetop-inv-treasure, :has(.stonetop-inv-artifact-hint, .stonetop-inv-artifact-lead, .stonetop-inv-artifact-lore)) .stonetop-inv-artifact-chip,
 .stonetop-inv-item:is(.stonetop-inv-treasure, :has(.stonetop-inv-artifact-hint, .stonetop-inv-artifact-lead, .stonetop-inv-artifact-lore)) .stonetop-inv-lore-toggle,
@@ -8845,7 +8859,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	flex: 0 0 auto;
 	position: relative;
 	top: 0;
-	margin: calc((1lh - 15px * var(--stonetop-font-scale, 1)) / 2) 0 0;
+	margin: calc((1lh - var(--st-check-size)) / 2) 0 0;
 	font-size: inherit;
 	line-height: inherit;
 	color: inherit;
@@ -15571,14 +15585,16 @@ button.stonetop-mark-sign-btn.is-active:hover {
 /*
  * Masonry-style card grids (move / foreign-move pickers and the invocation
  * picker): variable-height cards pack tightly into balanced columns (multi-column,
- * not CSS grid, whose row tracks would leave gaps). Up to two columns, dropping to
- * one when the window is narrowed. The columns live in their own auto-height wrapper
+ * not CSS grid, whose row tracks would leave gaps). Two columns at the step's
+ * default width, three once the window is dragged wide, one when it is narrowed.
+ * The character-creation move and invocation steps (.stonetop-onboarding-cards--columns) use the same
+ * column width. The columns live in their own auto-height wrapper
  * so the list scrolls VERTICALLY — a multi-column box with a constrained height
  * overflows sideways instead.
  */
 .stonetop-levelup-move-grid,
 .stonetop-levelup-invocation-grid {
-	columns: 210px 2;
+	columns: var(--st-move-column-min) 3;
 	column-gap: 6px;
 }
 
@@ -24646,9 +24662,10 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 .stonetop-onboarding-card.is-selected { border-color: slategrey; background: var(--st-on-dark-selected, hsl(210 15% 96%)); }
 
 .stonetop-onboarding-card-header {
+	--st-onboarding-header-gap: 6px;
 	display: flex;
 	align-items: baseline;
-	gap: 6px;
+	gap: var(--st-onboarding-header-gap);
 }
 
 .stonetop-onboarding-card-header input[type="radio"] {
@@ -25340,17 +25357,24 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 }
 
 /* Inline "+1 to which stat?" picker on a stat-increase move (the Would-Be Hero's
-   Improved Stat). Hidden until the move card is selected, mirroring the initiate
-   inline-choice pattern. */
+   Improved Stat). Always laid out, faded and inert until the move is ticked: the move
+   cards flow in balanced columns (.stonetop-onboarding-cards--columns), and a picker
+   that appeared on tick would grow the card and reshuffle the columns under the
+   pointer. With pointer-events off, a click on the faded picker lands on the card: it
+   ticks the move and picks the stat it landed on (CharacterOnboardingDialog). Until then
+   its radios are disabled and the picker is `inert`, so a screen reader passes over it. */
 .stonetop-onboarding-card--stat-move .stonetop-onboarding-move-stat-picker {
-	display: none;
+	display: block;
 	margin-top: 8px;
 	padding-top: 8px;
 	border-top: 1px solid var(--st-on-dark-rule-soft, #eee);
+	opacity: 0.45;
+	pointer-events: none;
 }
 
 .stonetop-onboarding-card--stat-move.is-selected .stonetop-onboarding-move-stat-picker {
-	display: block;
+	opacity: 1;
+	pointer-events: auto;
 }
 
 .stonetop-onboarding-move-stat-label {
@@ -25374,12 +25398,38 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	cursor: not-allowed;
 }
 
+/* The whole picker is already faded while its move is unticked; a capped stat isn't faded a
+   second time on top of that (0.45 x 0.5 is too faint to read), it says "(max)" instead. */
+.stonetop-onboarding-card--stat-move:not(.is-selected) .stonetop-onboarding-move-stat-option.is-disabled {
+	opacity: 1;
+}
+
 /* "Either X OR Y" starting-move choice (e.g. the Heavy's Armored OR Uncanny
    Reflexes): a radio group of move cards, spaced off from the free-pick list.
    `--move-choice` is also the JS hook the change handler uses to toggle is-selected;
    the card body is otherwise styled by the base .stonetop-onboarding-card. */
 .stonetop-onboarding-move-choice-group { margin-bottom: 14px; }
 .stonetop-onboarding-move-choice-group .stonetop-onboarding-step-hint { margin-bottom: 6px; }
+
+/* Starting Moves and Invocations: the cards pack into balanced columns like the level-up
+   move and invocation pickers (.stonetop-levelup-move-grid): two at the window's default
+   width, three when it is dragged wide. Sits after the base .stonetop-onboarding-cards so
+   `display: block` wins. */
+.stonetop-onboarding-cards--columns {
+	display: block;
+	columns: var(--st-move-column-min) 3;
+	column-gap: 6px;
+}
+
+.stonetop-onboarding-cards--columns > .stonetop-onboarding-card {
+	break-inside: avoid;
+	margin-bottom: 6px;
+}
+
+/* The flex gap this replaces put nothing after the last card; nor does this. */
+.stonetop-onboarding-cards--columns > .stonetop-onboarding-card:last-child {
+	margin-bottom: 0;
+}
 
 /* Center the radio against the bold title, matching the possession cards — the base
    header baseline-aligns, which otherwise floats the radio low next to the title. */
@@ -25396,6 +25446,26 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 .stonetop-onboarding-card--possession .stonetop-onboarding-card-header,
 .stonetop-onboarding-card--invocation.is-preselected .stonetop-onboarding-card-header {
 	align-items: center;
+}
+
+/* In a narrow column the "Learned at level-up" badge would squeeze the invocation's name
+   down to a word a line. Give the name a floor; when name + badge don't fit, the badge
+   wraps under it and the name keeps the line beside its checkbox. The badge's left margin
+   is the checkbox plus the header gap (both tokens), so a wrapped badge starts under the name rather
+   than flush right (the base badge's margin-left: auto); on one line the growing name
+   fills that space anyway. */
+.stonetop-onboarding-card--invocation.is-preselected .stonetop-onboarding-card-header {
+	flex-wrap: wrap;
+	row-gap: 4px;
+}
+
+.stonetop-onboarding-card--invocation.is-preselected .stonetop-onboarding-card-title {
+	flex: 1 1 0;
+	min-width: min(12em, 70%);
+}
+
+.stonetop-onboarding-card--invocation.is-preselected .stonetop-onboarding-possession-badge {
+	margin-left: calc(var(--st-check-size) + var(--st-onboarding-header-gap));
 }
 
 .stonetop-onboarding-possession-badge {
@@ -36571,8 +36641,8 @@ th:has(> .stonetop-roll-table-btn) {
 .stonetop-camp-radio {
 	appearance: none !important;
 	-webkit-appearance: none !important;
-	width: calc(15px * var(--stonetop-font-scale, 1)) !important;
-	height: calc(15px * var(--stonetop-font-scale, 1)) !important;
+	width: var(--st-check-size) !important;
+	height: var(--st-check-size) !important;
 	flex: 0 0 auto !important;
 	border: 1.5px solid currentColor !important;
 	border-radius: 50% !important;

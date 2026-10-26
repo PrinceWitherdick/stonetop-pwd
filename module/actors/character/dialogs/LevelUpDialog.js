@@ -15,7 +15,10 @@ import { xpRules } from "../../../utils/xp.js";
 import { wireKeyboardButtons, pressesRoleButton } from "../../../utils/keyboard-buttons.js";
 
 // Base width (overview, stat, marks). The move, foreign-move, and invocation steps
-// widen so their two-column masonry lists show both columns comfortably by default.
+// widen so their masonry lists show two columns by default. The grid allows three
+// (columns: var(--st-move-column-min) 3 in stonetop.css), so this width must stay
+// short of three --st-move-column-min columns: at ~900 the default would open on
+// three. tests/actors/character/move-card-columns.test.js checks it.
 // Heights are NOT fixed here: every step fits its own content (height:"auto"), and a
 // CSS `max-height` on `.stonetop-levelup-dialog` (stonetop.css) caps the tall steps —
 // the move grid and the invocation grid — so they scroll inside a comfortable window
@@ -23,7 +26,7 @@ import { wireKeyboardButtons, pressesRoleButton } from "../../../utils/keyboard-
 const LEVELUP_BASE_WIDTH = 520;
 const LEVELUP_MOVE_WIDTH = 860;
 
-// Steps whose two-column masonry card grids need the wider window. Anything else
+// Steps whose masonry card grids need the wider window. Anything else
 // (overview, stat, marks) shows at LEVELUP_BASE_WIDTH.
 const LEVELUP_WIDE_STEPS = ["move", "agreed", "foreignMove", "invocation"];
 

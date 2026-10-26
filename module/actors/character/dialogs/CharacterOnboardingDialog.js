@@ -3276,17 +3276,23 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			} else {
 				this._selections.moves = this._selections.moves.filter(m => m !== id);
 				this._trimCompanionPicksToLimit();
-				// Dropping a stat-increase move discards its pending "+1 to which stat?" pick,
-				// and clears its radios so re-picking the move starts from an unchosen state.
+				// Dropping a stat-increase move discards its pending "+1 to which stat?" pick
+				// (its radios are cleared below, so re-picking the move starts unchosen).
 				delete this._selections.moveStatChoices[id];
-				const card = ev.currentTarget.closest(".stonetop-onboarding-card--move");
-				card?.querySelectorAll(".onboard-move-stat").forEach(radio => {
-					radio.checked = false;
-					radio.closest(".stonetop-onboarding-move-stat-option")?.classList.remove("is-selected");
-				});
 			}
-			ev.currentTarget.closest(".stonetop-onboarding-card--move")
-				?.classList.toggle("is-selected", ev.currentTarget.checked);
+			const moveCard = ev.currentTarget.closest(".stonetop-onboarding-card--move");
+			moveCard?.classList.toggle("is-selected", checked);
+			// A stat-increase move's picker is always laid out (so ticking doesn't reshuffle the
+			// columns), but it is inert and its radios take no pick until the move is ticked; a
+			// stat at its cap stays disabled either way. Unticking also clears the pick.
+			const statPicker = moveCard?.querySelector(".stonetop-onboarding-move-stat-picker");
+			if (statPicker) statPicker.inert = !checked;
+			moveCard?.querySelectorAll(".onboard-move-stat").forEach(radio => {
+				radio.disabled = !checked || !!radio.closest(".stonetop-onboarding-move-stat-option")?.classList.contains("is-disabled");
+				if (checked) return;
+				radio.checked = false;
+				radio.closest(".stonetop-onboarding-move-stat-option")?.classList.remove("is-selected");
+			});
 			html.find(".stonetop-onboarding-move-count").text(this._selections.moves.length);
 			const atLimit = this._selections.moves.length >= limit;
 			html.find("[name='onboard-move']:not(:checked)").prop("disabled", atLimit);
@@ -3309,6 +3315,28 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			const newStepEl = root?.querySelector(".stonetop-onboarding-step");
 			if (newStepEl) newStepEl.scrollTop = scrollTop;
 			[...(root?.querySelectorAll("[name='onboard-move']") ?? [])].find(el => el.value === id)?.focus({ preventScroll: true });
+		});
+
+		// A click on an unticked stat-increase move's faded picker passes through it (it is inert)
+		// to the card, which ticks the move. Take the stat the click landed on as the pick as well,
+		// so the player needn't click the same pill twice. This runs before the label ticks the
+		// box, so the pick waits a task for the tick's handler above to switch the radios on; a
+		// tick refused (the pick limit) leaves the card unselected, and nothing is picked.
+		html.find(".stonetop-onboarding-card--stat-move").on("click", ev => {
+			const card = ev.currentTarget;
+			const { clientX: x, clientY: y } = ev.originalEvent ?? ev;
+			if (card.classList.contains("is-selected") || ev.target.closest?.("input") || x == null) return;
+			const option = [...card.querySelectorAll(".stonetop-onboarding-move-stat-option:not(.is-disabled)")].find(o => {
+				const r = o.getBoundingClientRect();
+				return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+			});
+			const radio = option?.querySelector(".onboard-move-stat");
+			if (!radio) return;
+			setTimeout(() => {
+				if (!radio.isConnected || radio.disabled || radio.checked || !card.classList.contains("is-selected")) return;
+				radio.checked = true;
+				radio.dispatchEvent(new Event("change", { bubbles: true }));
+			}, 0);
 		});
 
 		// A stat-increase move's inline "+1 to which stat?" pick (Improved Stat). Records

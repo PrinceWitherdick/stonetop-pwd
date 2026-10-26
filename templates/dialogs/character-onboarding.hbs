@@ -518,7 +518,7 @@
 		{{#each moveChoiceGroups}}
 		<div class="stonetop-onboarding-move-choice-group">
 			<p class="stonetop-onboarding-step-hint">{{this.label}}</p>
-			<div class="stonetop-onboarding-cards">
+			<div class="stonetop-onboarding-cards stonetop-onboarding-cards--columns">
 				{{#each options}}
 				<label class="stonetop-onboarding-card stonetop-onboarding-card--move-choice{{#if selected}} is-selected{{/if}}">
 					<div class="stonetop-onboarding-card-header">
@@ -553,7 +553,7 @@
 			{{/each}}
 		</div>
 		{{/if}}
-		<div class="stonetop-onboarding-cards">
+		<div class="stonetop-onboarding-cards stonetop-onboarding-cards--columns">
 			{{#each moveOptions}}
 			<label class="stonetop-onboarding-card stonetop-onboarding-card--move{{#if selected}} is-selected{{/if}}{{#if statChoice}} stonetop-onboarding-card--stat-move{{/if}}"
 			       data-move-groups="{{#each groups}}{{this}} {{/each}}">
@@ -568,15 +568,17 @@
 				{{/if}}
 				{{#if statChoice}}
 				{{!-- Inline "+1 to which stat?" picker (Improved Stat). stopPropagation keeps a
-				      radio click from also toggling the parent card's checkbox. --}}
-				<div class="stonetop-onboarding-move-stat-picker" onclick="event.stopPropagation()">
+				      radio click from also toggling the parent card's checkbox. Always laid out
+				      (faded until the move is ticked, so the columns don't reshuffle); until then it is
+				      inert and its radios disabled, and the tick handler switches both. --}}
+				<div class="stonetop-onboarding-move-stat-picker" onclick="event.stopPropagation()"{{#unless this.selected}} inert{{/unless}}>
 					<span class="stonetop-onboarding-move-stat-label">Increase which stat? <em>(max +{{statChoice.cap}})</em></span>
 					<div class="stonetop-onboarding-appearance-options stonetop-onboarding-move-stat-options">
 						{{#each statChoice.options}}
 						<label class="stonetop-onboarding-appearance-option stonetop-onboarding-move-stat-option{{#if selected}} is-selected{{/if}}{{#if atCap}} is-disabled{{/if}}">
 							<input type="radio" class="onboard-move-stat" name="onboard-move-stat-{{this.moveId}}"
 							       value="{{this.key}}" data-move-id="{{this.moveId}}"
-							       {{#if selected}}checked{{/if}} {{#if atCap}}disabled{{/if}}>
+							       {{#if selected}}checked{{/if}} {{#if atCap}}disabled{{else}}{{#unless ../selected}}disabled{{/unless}}{{/if}}>
 							{{this.label}}
 							<span class="stonetop-onboarding-move-stat-delta">{{#if atCap}}{{this.currentDisplay}} (max){{else}}{{this.currentDisplay}} &rarr; {{this.nextDisplay}}{{/if}}</span>
 						</label>
@@ -598,7 +600,7 @@
 			<span class="stonetop-onboarding-invocation-count">{{invocationData.selectedCount}}</span>
 			/ {{invocationData.startingCount}} chosen
 		</p>
-		<div class="stonetop-onboarding-cards">
+		<div class="stonetop-onboarding-cards stonetop-onboarding-cards--columns">
 			{{#each invocationData.options}}
 			<label class="stonetop-onboarding-card stonetop-onboarding-card--invocation{{#if isSelected}} is-selected{{/if}}{{#if isLearned}} is-preselected{{/if}}">
 				<div class="stonetop-onboarding-card-header">
