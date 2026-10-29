@@ -152,7 +152,7 @@ import {showJudgeMarks, condemnedContext, CONDEMN, CENSURE, CASTIGATE} from "./c
 import {PIETY, BOLSTER, holdBlessing, shareBlessing} from "./roll-boosts.js";
 import {giveAdvantageCardHtml, seekInsightQuestionsFor} from "./give-advantage.js";
 import {IRON_WILL, UNFETTERED, ironWill, unfettered} from "./will-and-restraint.js";
-import {openBolster} from "./bolster.js";
+import {openBolster, bolsterCardData} from "./bolster.js";
 import {inOverYourHeadCardHtml} from "./would-be-hero-cards.js";
 import {pickPersonOnMap} from "../../dialogs/RelationshipLinkDialog.js";
 import {readyRulebookIcon, openSharedRulebook} from "../../books/rulebook-icons.js";
@@ -2200,6 +2200,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				: 0;
 			context.stonetop.recover = this._buildRecoverData(context.stonetop, { hurtFollowers });
 			context.stonetop.convalesce = this._buildConvalesceData(context.stonetop, { hurtFollowers });
+			// Bolster's card says what Preparation is held now, and for what (bolster.js holds it).
+			context.stonetop.bolster = bolsterCardData(this.actor);
 			// Retiring is the owner's or the GM's call, while still in play (Book I p.584; campaign/retire-pc.js).
 			context.stonetop.canRetire = canRetire(this.actor);
 			context.stonetop.woundsView = this._buildWoundsView(context.stonetop.wounds, context.editable);
@@ -5203,6 +5205,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find("button.stonetop-held-disadvantage").on("click", this._onReleaseHeldDisadvantage.bind(this));
 			html.find(".stonetop-recover-open-btn").on("click", this._onRecoverOpen.bind(this));
 			html.find(".stonetop-convalesce-open-btn").on("click", this._onConvalesceOpen.bind(this));
+			html.find(".stonetop-bolster-open-btn").on("click", () => openBolster(this.actor));
 			html.find(".stonetop-retire-open-btn").on("click", () => openRetireDialog(this.actor));
 
 			// Wounds (4th harm track): add / edit / remove. Status transitions are otherwise

@@ -896,6 +896,13 @@
         "followersLegend": "Followers who rest with you, back to full HP:",
         "unlivingHint": "Unliving: no benefit. A Ghost or Revenant gains nothing from Convalesce."
       },
+      "bolster": {
+        "title": "Bolster",
+        "button": "Bolster",
+        "summary": "When you <em><strong>prepare for what's coming or seek the favor of the gods</strong></em>, hold Preparation: 1 for a week or so, 2 for a month or so, 3 for the better part of a season. Spend 1 for +1 on a roll your efforts apply to.",
+        "heldHint": "You hold {held} Preparation ({purpose}). Spend it from a roll's card.",
+        "heldHintNoPurpose": "You hold {held} Preparation. Spend it from a roll's card."
+      },
       "retire": {
         "title": "Retire",
         "button": "Retire",
