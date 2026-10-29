@@ -6,6 +6,8 @@
 // calculation rather than a counter, and the dialog should not be the only place it
 // exists. The dialog renders whatever these functions return; nothing here touches the DOM.
 
+import { countOf } from "../utils/plural.js";
+
 /** Lifecycle of a single setup step. */
 export const STEP_STATE = Object.freeze({
 	PENDING: "pending",
@@ -14,6 +16,20 @@ export const STEP_STATE = Object.freeze({
 	SKIPPED: "skipped",
 	FAILED:  "failed",
 });
+
+/**
+ * How every one-time import's opening paragraph ends, whether the world is brand new or an
+ * established one being given a library it never had (hooks/WorldSetup.js#setupLead).
+ */
+export const ONE_TIME_IMPORT_CLOSE = "This only happens once. You can carry on while it finishes.";
+
+/**
+ * The paragraph a brand-new world's first load opens with. Here rather than in the dialog so
+ * the orchestrator that picks a run's wording (hooks/WorldSetup.js) and the dialog's own
+ * fallback read the one sentence.
+ */
+export const FIRST_LOAD_LEAD = "Stonetop is filling your new world with its journals, monsters and treasures. "
+	+ ONE_TIME_IMPORT_CLOSE;
 
 /** A step that will never move again — done, deliberately skipped, or given up on. */
 const SETTLED = new Set([STEP_STATE.DONE, STEP_STATE.SKIPPED, STEP_STATE.FAILED]);
@@ -86,12 +102,15 @@ export function setupOverallFraction(steps) {
  * The closing line for a finished run: how many steps landed, and whether any failed.
  * Skipped steps are deliberately not counted as failures — "nothing to import" is a
  * normal outcome on a world that already has the content.
+ *
+ * `doneLine` replaces the success line, for a run that is not a world being set up (the
+ * journal refresh after an update says what it refreshed instead).
  */
-export function setupSummary(steps) {
+export function setupSummary(steps, doneLine = "Your world is ready.") {
 	const failed = steps.filter(s => s.state === STEP_STATE.FAILED);
 	if (failed.length) {
-		return `Setup finished, but ${failed.length} step${failed.length === 1 ? "" : "s"} did not complete. `
+		return `Setup finished, but ${countOf(failed.length, "step")} did not complete. `
 			+ "The next time you load this world it will try again.";
 	}
-	return "Your world is ready.";
+	return doneLine;
 }

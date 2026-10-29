@@ -1,7 +1,7 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import {
-	STEP_STATE, makeSetupSteps, updateSetupStep, stepStateIcon, setupOverallFraction, setupSummary,
+	STEP_STATE, FIRST_LOAD_LEAD, makeSetupSteps, updateSetupStep, stepStateIcon, setupOverallFraction, setupSummary,
 } from "./world-setup-steps.js";
 
 // ── WorldSetupDialog ─────────────────────────────────────────────────────────
@@ -23,9 +23,27 @@ import {
 // "your world is ready", short enough not to be in the way of the Welcome guide.
 const AUTO_CLOSE_MS = 2200;
 
+// How long a window with failures keeps itself above the windows that open after it. Covers the
+// load's own burst: the Welcome guide's resume handoff alone waits up to 2.5 seconds.
+const KEEP_FAILURE_IN_VIEW_MS = 8000;
+
+// Whether two runs' rows and wording are the same, so reopening on them changes nothing.
+function sameRun(stepsA, copyA, stepsB, copyB) {
+	const run = (steps, copy) => JSON.stringify([steps.map(s => [s.key, s.label]), copy?.title, copy?.lead, copy?.doneLine]);
+	return run(stepsA, copyA) === run(stepsB, copyB);
+}
+
 export class WorldSetupDialog extends StonetopDialog {
-	constructor(stepDefs = [], options = {}) {
+	/**
+	 * @param {object[]} stepDefs  the rows, `{ key, label }` each
+	 * @param {object} [copy]      what this run says about itself: `title`, `lead` (the paragraph
+	 *                             above the bar) and `doneLine` (the closing line when nothing failed).
+	 *                             A first-load setup and a post-update journal refresh share this
+	 *                             window, and only the caller knows which one it is.
+	 */
+	constructor(stepDefs = [], copy = {}, options = {}) {
 		super(options);
+		this._copy = copy;
 		this._steps = makeSetupSteps(stepDefs);
 		this._closeTimer = null;
 		// Latched by close(). AppV1 ignores a close() on a window whose first render is still
@@ -43,9 +61,9 @@ export class WorldSetupDialog extends StonetopDialog {
 	 * windows, so a second setup run (a re-entrant ready, a manual call) narrates into the
 	 * open window rather than stacking a duplicate over it.
 	 */
-	static open(stepDefs) {
+	static open(stepDefs, copy = {}) {
 		const dialog = openOrFocus("stonetop-world-setup", () => {
-			const created = new WorldSetupDialog(stepDefs);
+			const created = new WorldSetupDialog(stepDefs, copy);
 			created.render(true);
 			return created;
 		});
@@ -53,30 +71,44 @@ export class WorldSetupDialog extends StonetopDialog {
 		// work rather than this one's. Re-seat it, or the mismatch is silent both ways:
 		// updateSetupStep no-ops on a key it does not know, so a lane this run owns would never
 		// narrate at all, while finish() would tick off rows nobody is working on.
-		dialog?.adoptSteps(stepDefs);
+		dialog?.adoptSteps(stepDefs, copy);
 		return dialog;
 	}
 
 	/**
-	 * Point an open window at a new run's step list. A no-op when the rows already match,
-	 * which is the ordinary case — including the call that immediately follows a fresh
-	 * construction — so this costs nothing on the path that does not need it.
+	 * Point an open window at a new run's step list and wording. A no-op when the rows (keys
+	 * AND labels) and the wording already match, which is the ordinary case — including the
+	 * call that immediately follows a fresh construction — so this costs nothing on the path
+	 * that does not need it.
+	 *
+	 * Labels and wording count, not just keys: the update window's row says how many journals
+	 * changed in which version, so a later run with the same one row can still have different
+	 * words, and a window that kept the old ones would describe the wrong update.
 	 *
 	 * Clears the auto-close timer along with the completion state: a previous run that had
 	 * already settled would otherwise close the window part-way through this one.
 	 */
-	adoptSteps(stepDefs = []) {
-		const keyOf = list => list.map(s => s.key).join("|");
-		if (keyOf(stepDefs) === keyOf(this._steps)) return;
+	adoptSteps(stepDefs = [], copy = this._copy) {
+		if (sameRun(stepDefs, copy, this._steps, this._copy)) return;
+		this._copy = copy;
 		this._steps = makeSetupSteps(stepDefs);
 		this._complete = false;
+		this._stopKeepingInView?.();
 		if (this._closeTimer) { clearTimeout(this._closeTimer); this._closeTimer = null; }
+		// AppV1 re-renders only the window's content once it is up, never its header, so a new
+		// title has to be written in by hand.
+		const titleEl = this.element?.[0]?.querySelector?.(".window-title");
+		if (titleEl) titleEl.textContent = this.title;
 		this.renderNow();
 	}
 
 	// The row list is fixed-length and only its states change, so the window hugs its
 	// content once and then holds still.
 	get _autoHeight() { return true; }
+
+	get title() {
+		return this._copy?.title ?? super.title;
+	}
 
 	static get defaultOptions() {
 		return foundry.utils.mergeObject(super.defaultOptions, {
@@ -96,7 +128,8 @@ export class WorldSetupDialog extends StonetopDialog {
 			steps: this._steps.map(step => ({ ...step, stateIcon: stepStateIcon(step.state) })),
 			percent:  Math.round(fraction * 100),
 			complete: this._complete,
-			summary:  this._complete ? setupSummary(this._steps) : "",
+			lead:     this._copy?.lead ?? FIRST_LOAD_LEAD,
+			summary:  this._complete ? setupSummary(this._steps, this._copy?.doneLine) : "",
 		};
 	}
 
@@ -162,8 +195,63 @@ export class WorldSetupDialog extends StonetopDialog {
 		const closed = new Promise(resolve => { this._resultResolve = resolve; });
 		if (!this._steps.some(s => s.state === STEP_STATE.FAILED)) {
 			this._closeTimer = setTimeout(() => { this._closeTimer = null; this.close(); }, AUTO_CLOSE_MS);
+		} else {
+			this._keepFailureInView();
 		}
 		return closed;
+	}
+
+	/**
+	 * A run with failures is the one this window stays up for, so it must not end up buried. On
+	 * an established world the update window opens first and the load then opens its own windows
+	 * after it (the Welcome guide, resumed walkthroughs, rulebooks), every one of which would land
+	 * on top. So: come to the front now, and again whenever another window opens during the next
+	 * few seconds, the load's own burst of windows.
+	 *
+	 * Stops as soon as the GM clicks anywhere outside this window, so a window they deliberately
+	 * picked is never pulled out from under them, and when this window closes.
+	 *
+	 * Nothing waits on the window instead, which is the point: the load carries on, and only the
+	 * stacking order changes.
+	 */
+	_keepFailureInView() {
+		this._stopKeepingInView?.();
+		this._raise();
+		// V1 windows give no "first render" flag in their hook, so tell an opening window from a
+		// re-render by whether it was already up.
+		const seen = new Set(Object.keys(globalThis.ui?.windows ?? {}));
+		const raiseSoon = () => setTimeout(() => this._raise(), 0);
+		const onV1 = app => {
+			if (app === this || !app?.popOut || seen.has(String(app.appId))) return;
+			seen.add(String(app.appId));
+			raiseSoon();
+		};
+		const onV2 = (app, _element, _context, options) => {
+			if (options?.isFirstRender && app?.hasFrame) raiseSoon();
+		};
+		const onPointer = event => {
+			if (!this.element?.[0]?.contains?.(event.target)) stop();
+		};
+		const v1Hook = Hooks.on("renderApplication", onV1);
+		const v2Hook = Hooks.on("renderApplicationV2", onV2);
+		document.addEventListener("pointerdown", onPointer, true);
+		const timer = setTimeout(() => stop(), KEEP_FAILURE_IN_VIEW_MS);
+		const stop = () => {
+			Hooks.off("renderApplication", v1Hook);
+			Hooks.off("renderApplicationV2", v2Hook);
+			document.removeEventListener("pointerdown", onPointer, true);
+			clearTimeout(timer);
+			this._stopKeepingInView = null;
+		};
+		this._stopKeepingInView = stop;
+	}
+
+	_raise() {
+		if (this._closed || !this.rendered) return;
+		// Core's bringToTop does nothing for the window it still thinks is active, even after a
+		// window that opened since has gone above it.
+		if (globalThis.ui?.activeWindow === this) ui.activeWindow = null;
+		this.bringToTop();
 	}
 
 	// ---- rendering ----------------------------------------------------------
@@ -198,6 +286,7 @@ export class WorldSetupDialog extends StonetopDialog {
 
 	async close(options = {}) {
 		this._closed = true;
+		this._stopKeepingInView?.();
 		if (this._closeTimer) { clearTimeout(this._closeTimer); this._closeTimer = null; }
 		return super.close(options);
 	}

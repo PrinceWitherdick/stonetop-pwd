@@ -7,6 +7,7 @@ import {
 	nightmaresWarded, precautionTonight, crewBill,
 	messKitAllAlong, messKitWouldHelp, provisionsAtFire, spareUses, suppliesAllAlong,
 } from "./camp-rules.js";
+import { plural } from "../utils/plural.js";
 
 /**
  * WHAT THE CAMP SAYS: the shared window's rows, the card that invites the table to the fire, and
@@ -17,14 +18,6 @@ import {
  * said under the name reads the same whoever is behind it.
  */
 
-function uses(n) {
-	return n === 1 ? "use" : "uses";
-}
-
-function plural(n, one, many) {
-	return n === 1 ? one : many;
-}
-
 function campOf(hostName) {
 	return hostName ? `${hostName}'s camp` : "This camp";
 }
@@ -33,7 +26,7 @@ function campOf(hostName) {
 function shareLine(purses) {
 	return purses
 		.filter(p => p.n > 0)
-		.map((p, i) => `${p.n} ${i === 0 ? `${uses(p.n)} of ` : "of "}${p.label.toLowerCase()}`)
+		.map((p, i) => `${p.n} ${i === 0 ? `${plural(p.n, "use")} of ` : "of "}${p.label.toLowerCase()}`)
 		.join(", ");
 }
 
@@ -42,10 +35,10 @@ function shareLine(purses) {
  * meal, and what its supplies cannot cover falls to the packs. `bill` is what the crew's meal costs.
  */
 function crewPurseText(purse, bill) {
-	if (purse.n >= bill) return `Feeds the crew first: ${purse.n} ${uses(purse.n)} for the crew's meal.`;
+	if (purse.n >= bill) return `Feeds the crew first: ${purse.n} ${plural(purse.n, "use")} for the crew's meal.`;
 	const rest = bill - purse.n;
-	if (!purse.n) return `Empty, so the crew's meal (${bill} ${uses(bill)}) comes out of the packs at the fire.`;
-	return `Feeds the crew first: ${purse.n} ${uses(purse.n)} of the ${bill} its meal costs. The other ${rest} ${plural(rest, "comes", "come")} out of the packs at the fire.`;
+	if (!purse.n) return `Empty, so the crew's meal (${bill} ${plural(bill, "use")}) comes out of the packs at the fire.`;
+	return `Feeds the crew first: ${purse.n} ${plural(purse.n, "use")} of the ${bill} its meal costs. The other ${rest} ${plural(rest, "comes", "come")} out of the packs at the fire.`;
 }
 
 /**
@@ -57,7 +50,7 @@ function shareRow(entry) {
 	const crew  = spend.filter(s => s.slug === CREW_SUPPLIES_SLUG).reduce((sum, s) => sum + s.n, 0);
 	const pack  = shareLine(spend.filter(s => s.slug !== CREW_SUPPLIES_SLUG));
 	if (!crew) return pack ? { label: `From ${entry.name}'s pack`, value: pack } : null;
-	const crewPart = `${CREW_SUPPLIES_LABEL}: ${crew} ${uses(crew)}`;
+	const crewPart = `${CREW_SUPPLIES_LABEL}: ${crew} ${plural(crew, "use")}`;
 	return pack
 		? { label: `From ${entry.name}'s crew and pack`, value: `${crewPart}; ${entry.name}'s pack: ${pack}` }
 		: { label: `From ${entry.name}'s crew`, value: crewPart };
@@ -129,13 +122,13 @@ function mealLine(ledger) {
 	if (!mouths) return "Nobody needed feeding.";
 	const proper = breakBreadOffered(ledger) && ledger.properMeal ? " A proper meal (Break Bread)." : "";
 	const hungry = ravenousText(ledger);
-	return `${mouths} fed on ${bill} ${uses(bill)} of food${messKit ? `, cooked in ${cooks[0]}'s mess kit` : ""}.${hungry ? ` ${hungry}` : ""}${proper}`;
+	return `${mouths} fed on ${bill} ${plural(bill, "use")} of food${messKit ? `, cooked in ${cooks[0]}'s mess kit` : ""}.${hungry ? ` ${hungry}` : ""}${proper}`;
 }
 
 /** A Ravenous Thrall's extra 1d4 uses, said as rolled: "Ravenous: Rook eats 3 extra uses (1d4)." Empty without one. */
 function ravenousText(ledger) {
 	return (ledger.ravenous ?? [])
-		.map(r => `Ravenous: ${r.name} eats ${r.uses} extra ${uses(r.uses)} (1d4).`)
+		.map(r => `Ravenous: ${r.name} eats ${r.uses} extra ${plural(r.uses, "use")} (1d4).`)
 		.join(" ");
 }
 
@@ -250,7 +243,7 @@ function mealView(ledger) {
 	else mouthsText = `${mouths} to feed: ${atFire} at the fire and ${followers} ${followerWord}.`;
 
 	let statusText = "";
-	if (short) statusText = `${short} more ${uses(short)} needed. Share more food, decide someone had supplies all along, or mark who goes without.`;
+	if (short) statusText = `${short} more ${plural(short, "use")} needed. Share more food, decide someone had supplies all along, or mark who goes without.`;
 	else if (over) statusText = `Paid for, with ${over} to spare. Only what the meal needs is eaten, and the rest stays in the packs.`;
 	else if (mouths) statusText = "Paid for.";
 
@@ -259,7 +252,7 @@ function mealView(ledger) {
 		cookText: !mouths ? "" : messKit
 			? `${cooks[0]}'s mess kit stretches each use to feed 4.`
 			: "With no mess kit, each use feeds 1.",
-		costText: !mouths ? "" : `The meal costs ${bill} ${uses(bill)} of food, and ${offered} ${plural(offered, "has", "have")} been shared.`,
+		costText: !mouths ? "" : `The meal costs ${bill} ${plural(bill, "use")} of food, and ${offered} ${plural(offered, "has", "have")} been shared.`,
 		statusText,
 		// Forage is the other way to more food, and it comes before the fire: "a few hours seeking
 		// food in the wild" (p.79), so it is said only while the meal is short.
@@ -333,7 +326,7 @@ function nights(n) {
 function afterTonightText({ left, nights: more }) {
 	if (!left) return "After tonight, the packs at this fire hold no more food.";
 	const lasts = more ? `enough for ${more} more ${nights(more)} like this one` : "not enough for another night like this one";
-	return `After tonight, ${left} ${uses(left)} of food ${plural(left, "stays", "stay")} in the packs at this fire: ${lasts}.`;
+	return `After tonight, ${left} ${plural(left, "use")} of food ${plural(left, "stays", "stay")} in the packs at this fire: ${lasts}.`;
 }
 
 /**
@@ -381,7 +374,7 @@ function allAlongView(member, ledger, canEdit) {
 		supplies: {
 			show:    showSupplies,
 			can:     supplies.ok,
-			label:   supplies.ok ? `Had supplies all along (${supplies.uses} ${uses(supplies.uses)})` : "Had supplies all along",
+			label:   supplies.ok ? `Had supplies all along (${supplies.uses} ${plural(supplies.uses, "use")})` : "Had supplies all along",
 			blocked,
 			// A held button says on hover why it is held; otherwise, what pressing it spends.
 			tip:     blocked || "Have What You Need: 1 undefined ◇ becomes a row of supplies you had all along.",
@@ -397,7 +390,7 @@ function allAlongView(member, ledger, canEdit) {
 export function hadAllAlongRows(what, { row, uses: n } = {}) {
 	const item = what === HAD_ALL_ALONG.MESS_KIT
 		? "A mess kit, for 1 undefined ◇. It needs fire and water, and then 1 use of food feeds 4."
-		: `${SUPPLY_ROW_LABELS[row] ?? "Supplies"}, ${n} ${uses(n)} of food, for 1 undefined ◇.`;
+		: `${SUPPLY_ROW_LABELS[row] ?? "Supplies"}, ${n} ${plural(n, "use")} of food, for 1 undefined ◇.`;
 	return [
 		{ label: "Had all along", value: item },
 		{ label: "Any objection", value: "The GM or any player can veto something that could not have been there all along." },
@@ -482,12 +475,12 @@ function rowView(member, at, ledger, { canEdit, isMine, canOpenSheet }) {
 		cover: {
 			show:  ledger.short > 0 && spare > 0,
 			label: spare >= ledger.short
-				? `Cover the last ${ledger.short} ${uses(ledger.short)}`
-				: `Share the ${spare} ${uses(spare)} still in this pack`,
+				? `Cover the last ${ledger.short} ${plural(ledger.short, "use")}`
+				: `Share the ${spare} ${plural(spare, "use")} still in this pack`,
 		},
 		allAlong: allAlongView(member, ledger, canEdit),
 		givesBackText: returned > 0
-			? `${returned} ${uses(returned)} shared here ${plural(returned, "stays", "stay")} in the pack: the meal is already paid for.`
+			? `${returned} ${plural(returned, "use")} shared here ${plural(returned, "stays", "stay")} in the pack: the meal is already paid for.`
 			: "",
 		// Going without food (p.335) costs the night's pick, not the seat: the card stays, marked. The
 		// Unliving have no meal to go without.
@@ -532,7 +525,7 @@ function rowView(member, at, ledger, { canEdit, isMine, canOpenSheet }) {
 function settleBlockedText(ledger) {
 	if (!ledger.rows.length) return "Nobody is at the fire.";
 	const { short } = ledger;
-	return `The meal is ${short} ${uses(short)} of food short. Share more food, decide someone had supplies all along, or press Go without on the card of anyone not eating.`;
+	return `The meal is ${short} ${plural(short, "use")} of food short. Share more food, decide someone had supplies all along, or press Go without on the card of anyone not eating.`;
 }
 
 function navView({ isOpen, manages, ledger, hostName }) {

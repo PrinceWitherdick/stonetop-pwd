@@ -12,11 +12,16 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 vi.mock("../../module/locations/location-tooltips.js", () => ({ invalidateLocationSummaryIndex: vi.fn() }));
 
 const {
-	needsJournalSync, updateSeededJournalsOnVersionChange,
+	needsJournalSync, planJournalSync, applyJournalSync,
 } = await import("../../module/hooks/SeedCompendiums.js");
 const { managedHash } = await import("../../module/hooks/journal-sync-core.js");
 
 const VERSION = "9.9.9";
+
+/** The whole pass as a load runs it: compare, then write. */
+async function syncJournals({ onProgress } = {}) {
+	return applyJournalSync(await planJournalSync({ onProgress }));
+}
 const PACK = "stonetop-pwd.stonetop-journal";
 
 let store;
@@ -99,12 +104,12 @@ describe("needsJournalSync", () => {
 	});
 });
 
-describe("updateSeededJournalsOnVersionChange", () => {
+describe("the version sync, compare then write", () => {
 	it("reads the whole pack once instead of resolving each entry on its own", async () => {
 		const journals = [seeded("a"), seeded("b"), seeded("c")];
 		harness({ journals, packDocs: [shipped("a"), shipped("b"), shipped("c")] });
 
-		await updateSeededJournalsOnVersionChange();
+		await syncJournals();
 
 		expect(global.fromUuid).not.toHaveBeenCalled();
 	});
@@ -113,7 +118,7 @@ describe("updateSeededJournalsOnVersionChange", () => {
 		const journals = [seeded("a"), seeded("b"), seeded("c")];
 		harness({ journals, packDocs: [shipped("a"), shipped("b"), shipped("c")] });
 
-		await updateSeededJournalsOnVersionChange();
+		await syncJournals();
 
 		expect(updateDocuments).toHaveBeenCalledTimes(1);
 		expect(updateDocuments.mock.calls[0][0]).toHaveLength(3);
@@ -125,7 +130,7 @@ describe("updateSeededJournalsOnVersionChange", () => {
 	it("writes the baseline as a merging flag update", async () => {
 		harness({ journals: [seeded("a")], packDocs: [shipped("a")] });
 
-		await updateSeededJournalsOnVersionChange();
+		await syncJournals();
 
 		expect(updateDocuments.mock.calls[0][0][0]).toEqual({
 			_id: "a",
@@ -136,7 +141,7 @@ describe("updateSeededJournalsOnVersionChange", () => {
 	it("marks the version done so the next load skips the pass", async () => {
 		harness({ journals: [seeded("a")], packDocs: [shipped("a")] });
 
-		await updateSeededJournalsOnVersionChange();
+		await syncJournals();
 
 		expect(store.journalSyncVersion).toBe(VERSION);
 	});
@@ -148,7 +153,7 @@ describe("updateSeededJournalsOnVersionChange", () => {
 		updateDocuments.mockRejectedValue(new Error("no"));
 		vi.spyOn(console, "error").mockImplementation(() => {});
 
-		await updateSeededJournalsOnVersionChange();
+		await syncJournals();
 
 		expect(store.journalSyncVersion).toBe("0.0.1");
 	});
@@ -160,13 +165,13 @@ describe("updateSeededJournalsOnVersionChange", () => {
 		updateDocuments.mockRejectedValue(new Error("no"));
 		vi.spyOn(console, "error").mockImplementation(() => {});
 
-		await expect(updateSeededJournalsOnVersionChange()).resolves.toEqual({ stamped: false });
+		await expect(syncJournals()).resolves.toMatchObject({ stamped: false });
 	});
 
 	it("reports success when the stamps land", async () => {
 		harness({ journals: [seeded("a")], packDocs: [shipped("a")] });
 
-		await expect(updateSeededJournalsOnVersionChange()).resolves.toEqual({ stamped: true });
+		await expect(syncJournals()).resolves.toMatchObject({ stamped: true });
 	});
 
 	// Prefetching the pack and batching the stamps took every await out of the common path,
@@ -182,7 +187,7 @@ describe("updateSeededJournalsOnVersionChange", () => {
 		vi.spyOn(globalThis.performance, "now").mockImplementation(() => (clock += 1000));
 		const timeout = vi.spyOn(globalThis, "setTimeout");
 
-		await updateSeededJournalsOnVersionChange();
+		await syncJournals();
 
 		expect(timeout).toHaveBeenCalled();
 		vi.restoreAllMocks();
@@ -192,7 +197,7 @@ describe("updateSeededJournalsOnVersionChange", () => {
 		harness({ journals: [seeded("a")], hasPack: false });
 		global.fromUuid.mockResolvedValue(shipped("a"));
 
-		await updateSeededJournalsOnVersionChange();
+		await syncJournals();
 
 		expect(global.fromUuid).toHaveBeenCalledWith(`Compendium.${PACK}.JournalEntry.a`);
 		expect(updateDocuments).toHaveBeenCalledTimes(1);
@@ -204,7 +209,7 @@ describe("updateSeededJournalsOnVersionChange", () => {
 		const entry = seeded("a", { source: "Compendium.stonetop_pwd.stonetop-journal.JournalEntry.a" });
 		harness({ journals: [entry], packDocs: [shipped("a")] });
 
-		await updateSeededJournalsOnVersionChange();
+		await syncJournals();
 
 		expect(global.fromUuid).not.toHaveBeenCalled();
 		expect(updateDocuments).toHaveBeenCalledTimes(1);
@@ -214,7 +219,7 @@ describe("updateSeededJournalsOnVersionChange", () => {
 		harness({ journals: [seeded("a"), seeded("b")], packDocs: [shipped("a"), shipped("b")] });
 		const seen = [];
 
-		await updateSeededJournalsOnVersionChange({ onProgress: p => seen.push(p) });
+		await syncJournals({ onProgress: p => seen.push(p) });
 
 		expect(seen.map(p => p.fraction)).toEqual([0.5, 1]);
 		expect(seen[0].detail).toBe("Checking 1 of 2");
@@ -227,19 +232,177 @@ describe("updateSeededJournalsOnVersionChange", () => {
 		entry.getFlag = vi.fn(() => ({ hash: "not-the-current-content", version: "0.0.0" }));
 		harness({ journals: [entry], packDocs: [shipped("a")] });
 
-		await updateSeededJournalsOnVersionChange();
+		await syncJournals();
 
 		expect(updateDocuments).not.toHaveBeenCalled();
 		expect(global.ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("kept your edits"));
+	});
+
+	// The every-release toast: an edited entry whose shipped content has not moved since we last
+	// wrote it is missing nothing, so there is nothing to tell the GM.
+	it("says nothing about an edited journal whose shipped content is unchanged", async () => {
+		const entry = seeded("a", { content: "the GM's own words" });
+		const original = managedHash({ pages: [{ _id: "p-a", name: "a", type: "text", text: { content: "body of a" } }] });
+		entry.getFlag = vi.fn(() => ({ hash: original, version: "0.0.0" }));
+		harness({ journals: [entry], packDocs: [shipped("a")] });
+
+		await syncJournals();
+
+		expect(global.ui.notifications.info).not.toHaveBeenCalled();
+		expect(store.journalSyncVersion).toBe(VERSION);
 	});
 
 	it("ignores journals that did not come from our compendium", async () => {
 		const foreign = seeded("x", { source: "Compendium.other-system.stuff.JournalEntry.x" });
 		harness({ journals: [foreign], packDocs: [] });
 
-		await updateSeededJournalsOnVersionChange();
+		await syncJournals();
 
 		expect(updateDocuments).not.toHaveBeenCalled();
+		expect(store.journalSyncVersion).toBe(VERSION);
+	});
+});
+
+// The read-only half, which the setup window opens on. It has to be read-only for real: it runs
+// before anything decides whether to tell the GM about the update.
+describe("planJournalSync", () => {
+	it("has nothing to refresh when the release changed no journals", async () => {
+		harness({ journals: [seeded("a"), seeded("b")], packDocs: [shipped("a"), shipped("b")] });
+
+		const plan = await planJournalSync();
+
+		expect(plan.refresh).toEqual([]);
+		expect(plan.stamps).toHaveLength(2);
+		expect(plan.version).toBe(VERSION);
+	});
+
+	it("lists an untouched journal whose shipped content changed", async () => {
+		const journals = [seeded("a"), seeded("b")];
+		harness({ journals, packDocs: [shipped("a", { content: "new wording" }), shipped("b")] });
+
+		const plan = await planJournalSync();
+
+		expect(plan.refresh.map(r => r.entry)).toEqual([journals[0]]);
+		expect(plan.stamps).toHaveLength(1);
+	});
+
+	it("names an edited journal only when its shipped content moved on", async () => {
+		const entry = seeded("a", { content: "the GM's own words" });
+		entry.getFlag = vi.fn(() => ({ hash: "what we last wrote", version: "0.0.0" }));
+		harness({ journals: [entry], packDocs: [shipped("a", { content: "new wording" })] });
+
+		const plan = await planJournalSync();
+
+		expect(plan.refresh).toEqual([]);
+		expect(plan.keptEdits).toEqual(["a"]);
+	});
+
+	it("writes nothing", async () => {
+		const journals = [seeded("a")];
+		harness({ journals, packDocs: [shipped("a", { content: "new wording" })] });
+
+		await planJournalSync();
+
+		expect(updateDocuments).not.toHaveBeenCalled();
+		expect(journals[0].setFlag).not.toHaveBeenCalled();
+		expect(store.journalSyncVersion).toBe("0.0.1");
+		expect(global.ui.notifications.info).not.toHaveBeenCalled();
+	});
+
+	it("is null once this version is synced", async () => {
+		harness({ settings: { journalSyncVersion: VERSION } });
+		await expect(planJournalSync()).resolves.toBeNull();
+	});
+
+	// Seeded before baselines existed and different from what ships: left alone like an edit,
+	// but with no baseline there is no telling whether this version changed it, so it must not
+	// be announced as "also changed" on every release.
+	it("keeps a differing entry with no baseline out of the kept-edits list", async () => {
+		const entry = seeded("a", { content: "the GM's own words", baseline: "none" });
+		harness({ journals: [entry], packDocs: [shipped("a")] });
+
+		const plan = await planJournalSync();
+
+		expect(plan.keptEdits).toEqual([]);
+		expect(plan.legacyEdits).toEqual(["a"]);
+		expect(plan.refresh).toEqual([]);
+	});
+});
+
+// The writing half, on entries whose shipped content changed.
+describe("applyJournalSync", () => {
+	/** A pristine seeded entry that can have its pages rewritten. */
+	function refreshable(id, { failWith = null } = {}) {
+		const entry = seeded(id);
+		entry.createEmbeddedDocuments = vi.fn(async () => {
+			if (failWith) throw failWith;
+			return [];
+		});
+		entry.deleteEmbeddedDocuments = vi.fn(async () => []);
+		entry.update = vi.fn(async () => {});
+		return entry;
+	}
+
+	it("refreshes an untouched entry and records the version", async () => {
+		const entry = refreshable("a");
+		harness({ journals: [entry], packDocs: [shipped("a", { content: "new wording" })] });
+
+		const result = await syncJournals();
+
+		expect(result).toEqual({ stamped: true, updated: ["a"], failed: [] });
+		expect(entry.createEmbeddedDocuments).toHaveBeenCalled();
+		expect(store.journalSyncVersion).toBe(VERSION);
+	});
+
+	// The entry still holds its old content under its old baseline, so it is still pristine and
+	// a retry would pick it up. Recording the version would leave it stale until the next release.
+	it("leaves the version unrecorded when a refresh throws, and does not call it an edit", async () => {
+		const good = refreshable("a");
+		const bad = refreshable("b", { failWith: new Error("no permission") });
+		harness({
+			journals: [good, bad],
+			packDocs: [shipped("a", { content: "new a" }), shipped("b", { content: "new b" })],
+		});
+		vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const result = await syncJournals();
+
+		expect(result).toEqual({ stamped: false, updated: ["a"], failed: ["b"] });
+		expect(store.journalSyncVersion).toBe("0.0.1");
+		const toast = global.ui.notifications.info.mock.calls.map(c => c[0]).join(" ");
+		expect(toast).toContain("updated 1 journal");
+		expect(toast).not.toContain("kept your edits");
+	});
+
+	it("reports progress per refreshed entry", async () => {
+		harness({
+			journals: [refreshable("a"), refreshable("b")],
+			packDocs: [shipped("a", { content: "new a" }), shipped("b", { content: "new b" })],
+		});
+		const seen = [];
+
+		await applyJournalSync(await planJournalSync(), { onProgress: p => seen.push(p) });
+
+		expect(seen.map(p => p.fraction)).toEqual([0.5, 1]);
+		expect(seen[1].detail).toBe("Updating b (2 of 2)");
+	});
+
+	// The update window already says what changed and what was kept.
+	it("drops its toast when the caller's window says the same", async () => {
+		harness({ journals: [refreshable("a")], packDocs: [shipped("a", { content: "new wording" })] });
+
+		await applyJournalSync(await planJournalSync(), { notify: false });
+
+		expect(global.ui.notifications.info).not.toHaveBeenCalled();
+	});
+
+	it("says nothing about an old entry with no baseline", async () => {
+		const entry = seeded("a", { content: "the GM's own words", baseline: "none" });
+		harness({ journals: [entry], packDocs: [shipped("a")] });
+
+		await syncJournals();
+
+		expect(global.ui.notifications.info).not.toHaveBeenCalled();
 		expect(store.journalSyncVersion).toBe(VERSION);
 	});
 });
