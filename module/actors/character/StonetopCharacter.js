@@ -102,7 +102,8 @@ import {CharacterArcana} from "./CharacterArcana.js";
 import {seekerArcanaState, seekerArcanaChosen, seekerCardRoles, majorMarkBoxes, withMinorRole, seekerMajorSwitchPlan, seekerMajorOwed} from "./seeker-collection.js";
 import {CharacterLore} from "./CharacterLore.js";
 import {CharacterPostDeath, buildLoreSection, insertHpPenalty} from "./CharacterPostDeath.js";
-import {isPostDeathMove, planLoreMoveSync, postDeathMoveItemData} from "./post-death-moves.js";
+import {INSERT_MOVES_PENDING_FLAG, isPostDeathMove, planLoreMoveSync, planMissingInsertMoves, postDeathMoveItemData} from "./post-death-moves.js";
+import {undeathRecordsLifted} from "./undeath-return.js";
 import {effectiveSubgroupMax, sumMoveBonus} from "./dialogs/possession-choice-cap.js";
 import {partitionMovesByGroup} from "./dialogs/onboarding-move-groups.js";
 import {backgroundMarkOption, hasBackgroundMarkOptions, moveChoiceKey} from "./dialogs/well-versed-topics.js";
@@ -309,6 +310,14 @@ const FICTION_ROLL_OFFERS = [
 	{ key: "free-running", anyMove: true, ownsLearned: "Free Running", whileLoad: "light",
 		source: "Free Running", label: "stonetop.rollOffers.freeRunning" },
 ];
+
+/**
+ * The update fragment that lifts an insert swap's marker (INSERT_MOVES_PENDING_FLAG), once the insert's
+ * own moves are made. Built per call: deletionEntry's form follows the running core.
+ */
+function liftInsertMovesPending() {
+	return Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${INSERT_MOVES_PENDING_FLAG}`)]);
+}
 
 /** The Ghost's and the Revenant's UNSTABLE, as its count is keyed in their lore (see _foldStandingNotes). */
 const UNSTABLE_LORE = "consequences:unstable";
@@ -2400,14 +2409,30 @@ export class StonetopCharacter {
 		// moves, so the pruning is measured against the new insert and not against itself.
 		// Removal (slug = null) deliberately prunes nothing: it's an edit-mode undo, and a
 		// mis-click shouldn't cost a character every Consequence they've collected.
-		if (slug) await this._postDeath.pruneToInsert(slug);
+		// Worked out here and WRITTEN with the slug below, in its one update (audit RV-6): as a write of
+		// its own, a reload after it left the old insert worn, its 0-HP move still owed, and every answer
+		// the new insert can't hold already gone for good.
+		const pruned = slug ? await this._postDeath.pruneToInsertUpdateData(slug) : {};
 
+		// The old moves go BEFORE the slug moves and the new ones come after it, so a reload anywhere in
+		// between leaves the insert the slug names with its moves missing and nothing worse: the primary
+		// GM's load-time pass makes them (syncPostDeathInsertMoves, post-death-moves.js). It does so ONLY
+		// while the swap's marker stands (INSERT_MOVES_PENDING_FLAG, the user's ruling 2026-10-28, review
+		// VG-3): set before the old moves go (or in the slug's own write when there are none), lifted once
+		// the new ones are made, so a move deleted by hand later is never put back.
+		// The marker names who is swapping, so the load-time repair leaves a swap still under way to them.
+		const pending = { [`flags.${STONETOP_SCOPE}.${INSERT_MOVES_PENDING_FLAG}`]: globalThis.game?.user?.id ?? true };
 		const toRemove = this._actor.items
 			.filter(isPostDeathMove)
 			.map(i => i._id);
 		if (toRemove.length > 0) {
+			await this._actor.update(pending);
 			await this._actor.deleteEmbeddedDocuments("Item", toRemove);
 		}
+		// Taking an insert keeps the marker up until its moves are made, below; removing one makes none, so
+		// its write lifts a marker that stands (and adds nothing when none does).
+		const marker = slug ? pending
+			: (toRemove.length > 0 || readableFlags(this._actor)?.[INSERT_MOVES_PENDING_FLAG] != null) ? liftInsertMovesPending() : {};
 		// One update, not two: taking an insert is also the END of the brush with death that led
 		// to it, and as separate writes a reload landing between them left a character wearing a
 		// Ghost and still flagged `fate-pending` — every surface then said Death's Door was owed by
@@ -2427,21 +2452,57 @@ export class StonetopCharacter {
 		// See deaths-door.js#stateOnTakingInsert.
 		const taken = slug ? stateOnTakingInsert(this.deathsDoorState) : null;
 		await this._actor.update({
+			...pruned,
 			...this._postDeath.slugUpdateData(slug),
 			...(taken ? this.deathsDoorStateUpdateData(taken.state) : {}),
 			...(taken?.atTheDoor && this.hp !== 0 ? { "system.attributes.hp.value": 0 } : {}),
 			...(this._postDeath.tabRequestUpdateData(!slug) ?? {}),
+			...marker,
+			// The old insert's 0-HP move is over either way: Undying's kept-HP stamp and an Undeath roll still in
+			// progress go with it, so a later insert never reads them (audit LC-2). A Death's Door marker stays.
+			...undeathRecordsLifted(this._actor),
 		});
 		if (slug) {
 			// The insert's own moves. A Consequence's or Mark's move (Poltergeist, Red Wrath) is the
 			// lore sync's, made below only for what the character has marked and carried over.
 			// Made whole, outcomes and track included, as a lore move is: the roll card reads its
 			// outcomes off this copy, and one made from the text alone posted Undying with none.
+			// Only those still missing, read now: a load-time repair landing mid-swap may have made some already.
 			const entries = (await this._moveRepo.getPostDeathMoves(slug)).filter(m => !m.loreOption);
-			await this._actor.createEmbeddedDocuments("Item", entries.map(postDeathMoveItemData));
+			const missing = planMissingInsertMoves({ entries, owned: this._actor.items.filter(isPostDeathMove) });
+			if (missing.length) await this._actor.createEmbeddedDocuments("Item", missing.map(postDeathMoveItemData));
 			await this._syncPostDeathLoreMoves();
+			// Made: the swap is whole, and nothing is left for the load-time repair to do. With no moves read
+			// (the pack not readable yet), nothing was made, so the marker stays for the repair.
+			if (entries.length) await this._actor.update(liftInsertMovesPending());
 		}
 		return true;
+	}
+
+	/**
+	 * Make any of the worn insert's OWN moves (Unliving, Undying, Tethered...) the character lacks, ONLY
+	 * while a swap's marker stands (INSERT_MOVES_PENDING_FLAG): the repair for a swap or a take a reload cut
+	 * short before its moves were made (audit RV-6, 2026-10-26), which retaking the same insert never was
+	 * (it is a no-op). Without the marker nothing is made, so a move deleted by hand stays deleted, and a
+	 * character from before the marker is left alone (the user's ruling, 2026-10-28, review VG-3). Only
+	 * ever creates, and only moves missing by name; the lore options' moves are syncPostDeathLoreMoves'.
+	 * The marker is lifted once done. Queued behind any swap. Resolves to how many were made.
+	 */
+	async syncPostDeathInsertMoves() {
+		return this._queuePostDeathMoves(() => this._syncPostDeathInsertMoves());
+	}
+
+	async _syncPostDeathInsertMoves() {
+		if (readableFlags(this._actor)?.[INSERT_MOVES_PENDING_FLAG] == null) return 0;
+		const slug = this._postDeath.activeSlug;
+		const entries = slug ? (await this._moveRepo.getPostDeathMoves(slug)).filter(m => !m.loreOption) : [];
+		// Every insert has moves of its own, so none read is a pack not readable yet, not a swap made whole:
+		// the marker stays, and the next load tries again.
+		if (slug && !entries.length) return 0;
+		const missing = planMissingInsertMoves({ entries, owned: this._actor.items.filter(isPostDeathMove) });
+		if (missing.length) await this._actor.createEmbeddedDocuments("Item", missing.map(postDeathMoveItemData));
+		await this._actor.update(liftInsertMovesPending());
+		return missing.length;
 	}
 
 	/**
@@ -6855,6 +6916,8 @@ export class StonetopCharacter {
 	get postDeathSlug()                 { return this._postDeath.activeSlug; }
 	async postDeathInsertName()         { return this._postDeath.insertName(); }
 	async postDeathInstinctOptions()    { return this._postDeath.instinctOptions(); }
+	/** The insert Instinct chosen, printed or written in (composeInstinct's word and description), or "". */
+	get postDeathInstinctValue()        { return this._postDeath.instinct.selectedValue ?? ""; }
 	postDeathLoreText(section, option)  { return this._postDeath.loreText(section, option); }
 	async chooseOneSectionOption(section, option) { return this._postDeath.chooseOneSectionOption(section, option); }
 
@@ -8445,9 +8508,14 @@ function _buildMoveEntry(entry, source, moveResourcesMap, bgSlugs = new Set(), m
 // item that has one; without it the card has none.
 function _buildOwnedItemMoveSnapshot(item, { sourceType, isStarting, resources = null }) {
 	const resourceDef = resources ? item.system?.resource ?? null : null;
+	const stored = Math.max(0, Number(resources?.[item.name]) || 0);
+	// An uncapped pool (Poltergeist's Fury) draws its `max` pips at the least, and always one EMPTY pip past
+	// what is held, so nothing held is hidden and one more can always be ticked by hand (MoveResources.js
+	// #trackCap; review VG-2, 2026-10-28). A capped track draws its max, as ever.
+	const drawn = resourceDef?.uncapped ? Math.max(Number(resourceDef.max) || 0, stored + 1) : resourceDef?.max;
 	const resource = resourceDef?.max ? new ResourceBuilder()
-		.withCurrent(Math.min(resourceDef.max, Math.max(0, Number(resources[item.name]) || 0)))
-		.withMax(resourceDef.max)
+		.withCurrent(Math.min(drawn, stored))
+		.withMax(drawn)
 		.withTitle(resourceDef.title ?? null)
 		.withLabels(resourceDef.labels ?? [])
 		.withSpendTooltip(new ResourceDef(resourceDef).spendTooltip)

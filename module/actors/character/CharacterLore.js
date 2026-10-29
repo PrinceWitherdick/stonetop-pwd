@@ -54,21 +54,22 @@ export class CharacterLore {
 	}
 
 	/**
-	 * Drop every count and text whose key isn't in `validKeys` — for when the thing this lore
-	 * belongs to has been swapped for a different one and its answers no longer mean anything.
+	 * Drop every count and text whose key isn't in `validKeys`, as an `actor.update()` fragment: for when
+	 * the thing this lore belongs to has been swapped for a different one and its answers no longer mean
+	 * anything. A fragment, so the caller lands it in ONE write with something outside this store (an insert
+	 * swap, with the slug it is measured against: as two writes, a reload between them left the old insert
+	 * worn with the answers already gone). `{}` when nothing would be dropped.
 	 *
-	 * Deleted through `batch`, not by writing a filtered object back: an object flag value MERGES
-	 * on write, so a filtered copy would leave every dropped key exactly where it was. Removing a
-	 * sub-key needs an explicit delete, which is what batch's `deletes` builds. One
-	 * actor.update for the lot, so it costs one re-render rather than one per key.
-	 *
-	 * Returns how many were dropped, so a caller can tell whether anything happened.
+	 * Built of sub-key deletions, not a filtered object written back: an object flag value MERGES on write,
+	 * so a filtered copy would leave every dropped key exactly where it was.
 	 */
-	async pruneTo(validKeys) {
-		const counts = Object.keys(this.counts).filter(k => !validKeys.has(k));
-		const texts  = Object.keys(this.texts).filter(k => !validKeys.has(k));
-		if (!counts.length && !texts.length) return 0;
-		await this._flags.batch({ deletes: { counts, texts } });
-		return counts.length + texts.length;
+	pruneToUpdateData(validKeys) {
+		const data = {};
+		for (const [key, store] of [["counts", this.counts], ["texts", this.texts]]) {
+			for (const sub of Object.keys(store)) {
+				if (!validKeys.has(sub)) Object.assign(data, this._flags.subKeyDeletionData(key, sub));
+			}
+		}
+		return data;
 	}
 }

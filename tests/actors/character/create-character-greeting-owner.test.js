@@ -98,3 +98,40 @@ describe("a copy of a minted character", () => {
 		expect(mint.updateSource).not.toHaveBeenCalled();
 	});
 });
+
+describe("a copy of a character holding post-death records (audit LC-1)", () => {
+	it("loses the host, manifestation, roll marker, kept-HP stamp and pending marker, and keeps the insert", () => {
+		const handlers = {};
+		global.Hooks = { on: (name, fn) => { handlers[name] = fn; } };
+		registerAutoOpenForCleanup();
+		const data = { flags: { [SCOPE]: {
+			postDeathInsert: { slug: "ghost", manifest: ["Your touch can harm the living (ignores armor)"] },
+			bodysnatcherHost: { uuid: "Actor.host", name: "Host" },
+			deathsDoorRolling: { id: "undeath:abc" },
+			undeathKeptHp: true,
+			insertMovesPending: { slug: "ghost" },
+		} } };
+
+		const copy = { updateSource: vi.fn() };
+		handlers.preCreateActor(copy, data, {});
+		expect(copy.updateSource).toHaveBeenCalledTimes(1);
+		const changes = copy.updateSource.mock.calls[0][0];
+		expect(changes).toEqual({
+			[`flags.${SCOPE}.-=bodysnatcherHost`]: null,
+			[`flags.${SCOPE}.-=deathsDoorRolling`]: null,
+			[`flags.${SCOPE}.-=undeathKeptHp`]: null,
+			[`flags.${SCOPE}.-=insertMovesPending`]: null,
+			[`flags.${SCOPE}.postDeathInsert.-=manifest`]: null,
+		});
+		expect(Object.keys(changes).some(k => k.endsWith("slug"))).toBe(false);
+	});
+
+	it("writes nothing for a copy with none of them", () => {
+		const handlers = {};
+		global.Hooks = { on: (name, fn) => { handlers[name] = fn; } };
+		registerAutoOpenForCleanup();
+		const copy = { updateSource: vi.fn() };
+		handlers.preCreateActor(copy, { flags: { [SCOPE]: { postDeathInsert: { slug: "ghost" } } } }, {});
+		expect(copy.updateSource).not.toHaveBeenCalled();
+	});
+});

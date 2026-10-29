@@ -18,6 +18,7 @@ import { pressRollCard, registerRollCardAction } from "./roll-card-writer.js";
 import { speakerActor } from "./speaker-actor.js";
 import { composeDamageFormula, seedBonus, extraTerm } from "./damage.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { THRALL_MARK, hasThrallMark } from "../actors/character/thrall-marks.js";
 import { getBooleanSetting } from "../settings.js";
 import { privateMessageModeOptions, deletionEntry } from "./foundry-compat.js";
 import { CRITICAL_TOTAL, ROLLED_FLAG, rolledRecord, countedNote, cardCountedTier, cardTierNow, outcomeTier } from "./counted-tier.js";
@@ -673,6 +674,30 @@ function _remindersNoticeHtml(actor) {
 	});
 }
 
+/**
+ * Whether a 2d6 roll's two KEPT dice match: doubles. At advantage or disadvantage (3d6kh2 / 3d6kl2) the
+ * die the roll dropped neither makes a pair nor breaks one (the user's ruling, 2026-10-27). A total given
+ * rather than rolled has no dice, and so no doubles. PURE.
+ */
+export function keptDoubles(roll) {
+	const die = (roll?.dice ?? [])[0];
+	const kept = (die?.results ?? []).filter(r => r.active !== false && !r.discarded);
+	return kept.length === 2 && kept[0].result === kept[1].result;
+}
+
+// A Thrall's A FESTERING ROT (Book I p.153): "When you roll doubles, something on your person is ruined.
+// The GM will tell you what, and how." A NOTE on the card and nothing more: what is ruined is the GM's to
+// say, so nothing is taken off the sheet.
+function _festeringRotNoticeHtml(actor, roll) {
+	if (!hasThrallMark(actor, THRALL_MARK.FESTERING_ROT) || !keptDoubles(roll)) return "";
+	return cardNoticeHtml({
+		className: "stonetop-roll-festering-notice",
+		icon: "fa-biohazard",
+		title: escHtml(game.i18n.localize("stonetop.postDeathMoves.festeringRot.title")),
+		items: [`<li>${escHtml(game.i18n.localize("stonetop.postDeathMoves.festeringRot.note"))}</li>`],
+	});
+}
+
 // Which wound statuses can still explain a bad roll. `problematic` is the book's own name for a
 // wound with live fictional consequences, and `permanent` is one that can never be dealt with --
 // the book's own example, a severed hand, is both. `stabilized` is the one that HAS been tended
@@ -1015,7 +1040,8 @@ export async function rollStat(statKey, actor, options = {}) {
 		// The wounds are the rolling CHARACTER's: a follower's roll (Order Followers, a Struggle as One
 		// follower row) is made on the PC's actor, but the PC's injuries neither hinder nor explain it.
 		noticesHtml: statKey === "follower" ? ""
-			: _woundReminderHtml(actor, moveName) + _remindersNoticeHtml(actor) + _woundJustifyHtml(actor, result.key),
+			: _woundReminderHtml(actor, moveName) + _remindersNoticeHtml(actor) + _woundJustifyHtml(actor, result.key)
+				+ _festeringRotNoticeHtml(actor, roll),
 		buttons: true,
 		total: roll.total,
 		formula: roll.formula,

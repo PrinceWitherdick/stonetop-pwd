@@ -23,6 +23,12 @@ import { STONETOP_SCOPE } from "./StonetopFlags.js";
 import { isMidCreation, progressFor } from "./onboarding-progress.js";
 import { isOutOfPlaySafe } from "./deaths-door-actor.js";
 import { hasLeftPlay } from "../../campaign/left-play.js";
+import { deletionEntry } from "../../utils/foundry-compat.js";
+import { HOST_FLAG } from "./bodysnatcher.js";
+import { MANIFEST_KEY } from "./manifest.js";
+import { DEATHS_DOOR_ROLLING_FLAG } from "./deaths-door.js";
+import { UNDEATH_KEPT_HP_FLAG } from "./undeath-return.js";
+import { INSERT_MOVES_PENDING_FLAG } from "./post-death-moves.js";
 
 /**
  * Create a character, hand it to a player, and greet them with character creation.
@@ -300,8 +306,9 @@ export function ownsForGreeting(actor, user, users = game.users) {
 export function registerAutoOpenForCleanup() {
 	Hooks.on("preCreateActor", (actor, data, options) => {
 		if (options?.[MINT_OPTION]) return;
-		if (!data?.flags?.[STONETOP_SCOPE]?.autoOpenFor) return;
-		actor.updateSource?.({ [`flags.${STONETOP_SCOPE}.autoOpenFor`]: null });
+		const changes = { ...liveInsertRecordsDropped(data) };
+		if (data?.flags?.[STONETOP_SCOPE]?.autoOpenFor) changes[`flags.${STONETOP_SCOPE}.autoOpenFor`] = null;
+		if (Object.keys(changes).length) actor.updateSource?.(changes);
 	});
 	Hooks.on("updateActor", (actor, changes) => {
 		if (changes && "ownership" in changes) dropStaleAutoOpen(actor);
@@ -313,6 +320,22 @@ export function registerAutoOpenForCleanup() {
 	Hooks.on("deleteUser", () => {
 		for (const actor of game.actors ?? []) dropStaleAutoOpen(actor);
 	});
+}
+
+/**
+ * The post-death records that belong to the ONE character they were written on, as deletions for a copy
+ * (a duplicate, an import) that carries them: the Ghost's host (a copy would be billed for the original's
+ * host too), the manifestation, a Death's Door or Undeath roll in progress, Undying's kept-HP stamp, and a
+ * swap's pending moves marker (the copy is not repaired from it; its moves came across as they were). PURE.
+ */
+export function liveInsertRecordsDropped(data) {
+	const flags = data?.flags?.[STONETOP_SCOPE];
+	if (!flags || typeof flags !== "object") return {};
+	const base = `flags.${STONETOP_SCOPE}`;
+	const paths = [HOST_FLAG, DEATHS_DOOR_ROLLING_FLAG, UNDEATH_KEPT_HP_FLAG, INSERT_MOVES_PENDING_FLAG]
+		.filter(key => flags[key] != null).map(key => `${base}.${key}`);
+	if (flags.postDeathInsert?.[MANIFEST_KEY] != null) paths.push(`${base}.postDeathInsert.${MANIFEST_KEY}`);
+	return Object.fromEntries(paths.map(deletionEntry));
 }
 
 /** Drop an actor's greeting flag if the player it names can no longer be greeted. Primary GM only. */

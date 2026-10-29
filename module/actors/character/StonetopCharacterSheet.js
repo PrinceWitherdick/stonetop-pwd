@@ -20,14 +20,16 @@ import {CREATION_MARK_MOVES, creationMarkCopies, creationMarkCrewTags, VETERAN_C
 import {crewWriteInTagBoxes, crewWriteInOverflow, crewTagsWithWriteIns, crewWrittenGear, addCrewWrittenGear, removeCrewWrittenGearUpdate} from "./crew-write-ins.js";
 import {PossessionChoicesDialog} from "./dialogs/PossessionChoicesDialog.js";
 import {DeathsDoorDialog, tradeHardToKillDebility} from "./dialogs/DeathsDoorDialog.js";
-import {UndeathDialog} from "./dialogs/UndeathDialog.js";
+import {UndeathDialog, swapRevenantForGhost} from "./dialogs/UndeathDialog.js";
+import {comeBack, keepsHpOnReturn, returnHp} from "./undeath-return.js";
 import {buildPostDeathChoices, choiceWriteIns, sectionReader} from "./post-death-choices.js";
 import {moveActionsFor, runPostDeathAction} from "./post-death-actions.js";
 import {lieInWaitActionsFor, isLieInWaitAction, lieInWait} from "../../combat/battle-holds.js";
 import {
-	buildPostDeathTabView, completeMasterTask, gainThrallMark, runPostDeathOutcome, setFavorFromPip, tickInsertLore,
+	buildPostDeathTabView, callTentacle, completeMasterTask, gainFavor, gainThrallMark, runPostDeathOutcome, setFavorFromPip,
+	setRavenousMaw, tickInsertLore,
 } from "./post-death-outcomes.js";
-import {DEATHS_DOOR_STATE, HARD_TO_KILL, HARD_TO_KILL_TRADE_FLAG, PAST_DEATH_KINDS, POST_DEATH_INSERT_SLUGS, UNDEATH_MOVE_NAMES, halfMaxHp, pastDeathClasses, pastDeathKind, hardToKillTradeOpen, zeroHpMove} from "./deaths-door.js";
+import {DEATHS_DOOR_STATE, HARD_TO_KILL, HARD_TO_KILL_TRADE_FLAG, PAST_DEATH_KINDS, POST_DEATH_INSERT_SLUGS, UNDEATH_MOVE_NAMES, pastDeathClasses, pastDeathKind, hardToKillTradeOpen, zeroHpMove} from "./deaths-door.js";
 import {WoundDialog} from "./dialogs/WoundDialog.js";
 import {WOUND_STATUS_GLYPH, WOUND_STATUS_LABEL} from "./wound-display.js";
 import {normalizeWound, normalizeWoundList} from "./wound-record.js";
@@ -2352,8 +2354,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// it (a return, not a heal: _onDeathsDoorClear), and it never lowers HP already above it.
 			const resolution = this._stonetopCharacter?.zeroHpResolution ?? null;
 			const hpNow = Number(snapshot.vitals.hp.value) || 0;
+			// Undying's own "out of the action" cost already gave them their HP, so coming back keeps it
+			// (undeath-return.js).
 			const backHp = isOutOfAction && resolution
-				? Math.max(hpNow, halfMaxHp(snapshot.vitals.hp.max))
+				? returnHp({ hpNow, maxHp: snapshot.vitals.hp.max, keepsHp: keepsHpOnReturn(this.actor, resolution) })
 				: null;
 			const reform = backHp !== null && resolution.disperses ? backHp : null;
 			// How a character past the Door left play, when it was not through the Last Door.
@@ -2449,20 +2453,23 @@ export function createStonetopCharacterSheetClass(Base) {
 			const dyingHint   = this._dyingHint();
 
 			const able        = !unliving && !dyingHint;
+			// Their followers are not Unliving, and Recover on their own (p.240, p.473): the card stays open for
+			// them, follower-only (the user's ruling, 2026-10-27). The dying still can't see to anyone.
+			const followersAble = !dyingHint;
 			// "Or someone else must expend a use on their behalf" (p.246): with nothing of their own, another
 			// character's supplies can still pay. Only asked when it could matter, and asked as the Recover
 			// window asks it (supply-payer.js#supplyPayersFor: in play, and someone here can answer for them),
 			// so the card never lights for a payer the window then leaves out.
-			const wantsUses   = (!locked && !atFullHp) || hurtFollowers > 0;
-			const othersPay   = able && suppliesLeft <= 0 && wantsUses
+			const wantsUses   = (!unliving && !locked && !atFullHp) || hurtFollowers > 0;
+			const othersPay   = followersAble && (able || hurtFollowers > 0) && suppliesLeft <= 0 && wantsUses
 				&& supplyPayersFor(this.actor, SUPPLY_PURPOSE.RECOVER).length > 0;
 			const canPay      = suppliesLeft > 0 || othersPay;
 			const canRecover  = able && !locked && canPay && !atFullHp;
 			const canTend     = able && (snapshot.debilities ?? []).some(d => d.active);
-			const followersCanRecover = able && hurtFollowers > 0 && canPay;
+			const followersCanRecover = followersAble && hurtFollowers > 0 && canPay;
 
 			let hint = null;
-			if (unliving)               hint = { icon: "fa-ghost",               text: game.i18n.localize("stonetop.specialMoves.recover.unlivingHint") };
+			if (unliving)               hint = { icon: "fa-ghost",               text: game.i18n.localize(`stonetop.specialMoves.recover.${followersCanRecover ? "unlivingFollowersHint" : "unlivingHint"}`) };
 			else if (dyingHint)         hint = dyingHint;
 			else if (locked)            hint = { icon: "fa-lock",                text: game.i18n.localize("stonetop.specialMoves.recover.lockedHint") };
 			else if (!canPay)           hint = { icon: "fa-triangle-exclamation", text: game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint") };
@@ -2522,11 +2529,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			// for a debility, so it is often the only thing marked.
 			const markedTracks     = snapshotTracksClearedBy(snapshot, CLEARS_ON.CONVALESCE).filter(t => t.marked);
 			// A Ghost or a Revenant: "You gain no benefit from ... Convalesce", HP, debilities and wounds alike.
+			// The followers who rest with them still do (the user's ruling, 2026-10-27): follower-only.
 			const unliving         = isUnliving(this.actor);
 			const dyingHint        = this._dyingHint();
-			const canConvalesce    = !unliving && !dyingHint && (!atFullHp || hasDebility || openWounds.length > 0 || markedTracks.length > 0 || hurtFollowers > 0);
+			const canConvalesce    = !dyingHint && (unliving
+				? hurtFollowers > 0
+				: (!atFullHp || hasDebility || openWounds.length > 0 || markedTracks.length > 0 || hurtFollowers > 0));
 			let hint = null;
-			if (unliving)            hint = { icon: "fa-ghost", text: game.i18n.localize("stonetop.specialMoves.convalesce.unlivingHint") };
+			if (unliving)            hint = { icon: "fa-ghost", text: game.i18n.localize(`stonetop.specialMoves.convalesce.${canConvalesce ? "unlivingFollowersHint" : "unlivingHint"}`) };
 			else if (dyingHint)      hint = dyingHint;
 			else if (!canConvalesce) hint = { icon: "fa-heart", text: game.i18n.localize("stonetop.specialMoves.convalesce.nothingHint") };
 			return {
@@ -5022,16 +5032,9 @@ export function createStonetopCharacterSheetClass(Base) {
 					html.find(".stonetop-instinct-custom-word, .stonetop-instinct-custom-desc").val("");
 					this._stonetopCharacter.instinct.select(ev.currentTarget.value);
 				});
-				// Keep the word field to a single token, then save the composed
-				// "Word — Description" so custom instincts match the suggestions.
-				html.find(".stonetop-instinct-custom-word").on("input", ev => {
-					ev.currentTarget.value = ev.currentTarget.value.replace(/\s+/g, "");
-				});
-				html.find(".stonetop-instinct-custom-word, .stonetop-instinct-custom-desc").on("change", () => {
-					html.find("[name=stonetop-instinct]").prop("checked", false);
-					const word = html.find(".stonetop-instinct-custom-word").val();
-					const desc = html.find(".stonetop-instinct-custom-desc").val();
-					this._stonetopCharacter.instinct.select(composeInstinct(word, desc));
+				this._wireInstinctWriteIn(html, {
+					word: ".stonetop-instinct-custom-word", desc: ".stonetop-instinct-custom-desc",
+					radios: "[name=stonetop-instinct]", save: value => this._stonetopCharacter.instinct.select(value),
 				});
 				// The temporary Instinct (until the next Level Up): its text and where it came from.
 				// A blank text removes it.
@@ -6540,8 +6543,11 @@ export function createStonetopCharacterSheetClass(Base) {
 				const radio = ev.target.closest(".stonetop-pdi-instinct");
 				if (!radio) return;
 				if (!this.isEditable) return;
+				html.find(".stonetop-pdi-instinct-custom-word, .stonetop-pdi-instinct-custom-desc").val("");
 				this._stonetopCharacter.setPostDeathInstinct(radio.value);
 			}, true);
+
+			this._wirePostDeathInstinctWriteIn(html);
 
 			// The write-in answers hung off a post-death pick: who the Terrible Purpose is about,
 			// what a Revenant with STRANGE APPETITES eats. Live outside edit mode while unanswered,
@@ -6793,8 +6799,17 @@ export function createStonetopCharacterSheetClass(Base) {
 				ui.notifications?.info?.(`Dropped onto ${unlinkedFrom}'s unlinked token: written to the character instead.`);
 			}
 			if (POST_DEATH_INSERT_SLUGS.includes(slug)) {
-				await target.setPostDeathInsert(slug);
-				(redirectedTo?.sheet ?? this).render(false);
+				const sheet = redirectedTo?.sheet ?? this;
+				// A Revenant becoming a Ghost (the Pale Hunter's "linger on") is asked what Undying's swap asks:
+				// what is lost, the maimings, then a fresh first Consequence (audit GM-3). A no writes nothing.
+				if (slug === "ghost" && target.postDeathSlug === "revenant") {
+					await swapRevenantForGhost(target, slug, {
+						openChoices: carried => DeathsDoorDialog.openChoices(target, () => sheet.render(false), { carried, taken: "undying" }),
+					});
+				} else {
+					await target.setPostDeathInsert(slug);
+				}
+				sheet.render(false);
 				return;
 			}
 			// A DIFFERENT playbook clears what came with the old one (the user's ruling), once the
@@ -9140,7 +9155,39 @@ export function createStonetopCharacterSheetClass(Base) {
 		async _onUndeathOpen() {
 			const move = this._stonetopCharacter.zeroHpMove;
 			if (!this._stonetopCharacter.zeroHpResolution) return this.rollMoveByName(move.name);
-			await UndeathDialog.open(this._stonetopCharacter, () => this.render(false));
+			// One window per character, raised if already open: the auto-open and the dying card's button
+			// both come here, and a second window minted under the same id painted over the first, roll
+			// and all. A roll already landed is resumed from the actor whichever window asks (UndeathDialog).
+			await openOrFocus(UndeathDialog.idFor(this.actor.id),
+				() => UndeathDialog.open(this._stonetopCharacter, () => this.render(false)));
+		}
+
+		/**
+		 * The insert Instinct written in on the Post-Death tab (Level Up, p.528: "Feel free to make up new
+		 * options"), the same pair as the playbook's on Details (_wireInstinctWriteIn). Its own method, wired
+		 * from activateListeners, so the wiring can be tested.
+		 */
+		_wirePostDeathInstinctWriteIn(html) {
+			this._wireInstinctWriteIn(html, {
+				word: ".stonetop-pdi-instinct-custom-word", desc: ".stonetop-pdi-instinct-custom-desc",
+				radios: ".stonetop-pdi-instinct", save: value => this._stonetopCharacter.setPostDeathInstinct(value),
+			});
+		}
+
+		/**
+		 * An Instinct written in as a word and what it means: the word kept to one token as it is typed, and
+		 * the pair saved composed as "Word — Description", as a printed one is, unticking the printed radios.
+		 * Both boxes emptied clears the written-in Instinct. Details and the Post-Death tab both wire theirs here.
+		 */
+		_wireInstinctWriteIn(html, { word, desc, radios, save }) {
+			html.find(word).on("input", ev => {
+				ev.currentTarget.value = ev.currentTarget.value.replace(/\s+/g, "");
+			});
+			html.find(`${word}, ${desc}`).on("change", () => {
+				if (!this.isEditable) return;
+				html.find(radios).prop("checked", false);
+				save(composeInstinct(html.find(word).val(), html.find(desc).val()));
+			});
 		}
 
 		/**
@@ -9164,18 +9211,24 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!this.isEditable) return;
 			// Someone past the Door doesn't just wake up: they are back on their feet with half their
 			// max HP, rounded up (the user's ruling, 2026-09-27; a dispersed Ghost's is the book's own
-			// "you reform near your tether with half your max HP"). The return is not a heal, so Torment's
-			// Blessing does not halve it (the user's ruling, 2026-09-30). Clearing the state IS the return,
-			// so it brings the hit points with it, in the one write. Only from out of the action: a `dead`
-			// cleared here is a mistake being undone, not a return.
+			// "you reform near your tether with half your max HP"), except after Undying's own "out of
+			// the action" cost, which already gave them their HP (2026-10-27). A dispersed Ghost is asked
+			// first whether their tether still stands. Only from out of the action: a `dead` cleared here
+			// is a mistake being undone, not a return. The rules: undeath-return.js#comeBack.
 			const char = this._stonetopCharacter;
-			const resolution = char.zeroHpResolution;
-			const backHp = resolution && char.deathsDoorState === DEATHS_DOOR_STATE.OUT_OF_ACTION
-				? halfMaxHp(await char.computedMaxHp())
-				: null;
-			if (backHp !== null) await char.restoreHp(backHp, resolution.move, { clearsDeathsDoor: true, unhalved: true });
-			else await char.setDeathsDoorState(null);
-			this.render(false);
+			const done = await comeBack(char, { askTetherIntact: tether => askWithButtons({
+				title:   localize("stonetop.specialMoves.deathsDoor.tetherIntactTitle"),
+				content: `<p>${_esc(format("stonetop.specialMoves.deathsDoor.tetherIntactBody",
+					{ tether: tether || localize("stonetop.specialMoves.deathsDoor.tetherUnnamed") }))}</p>`,
+				buttons: [
+					{ key: "intact",    label: localize("stonetop.specialMoves.deathsDoor.tetherIntactYes"), icon: "fa-anchor", value: true },
+					{ key: "destroyed", label: localize("stonetop.specialMoves.deathsDoor.tetherIntactNo"), icon: "fa-skull",
+						className: "stonetop-dialog-btn--danger", value: false },
+					{ key: "cancel",    label: localize("stonetop.specialMoves.deathsDoor.tetherIntactLater"), icon: "fa-xmark", value: null },
+				],
+				defaultKey: "intact",
+			}) });
+			if (done !== null) this.render(false);
 		}
 
 		/**
@@ -9249,6 +9302,11 @@ export function createStonetopCharacterSheetClass(Base) {
 				case "gain-mark":     return this._renderAfter(gainThrallMark(character));
 				case "cross-off":     return this._renderAfter(character.crossOffMark(slug));
 				case "uncross":       return this._renderAfter(character.restoreCrossedOffMark(slug));
+				// The Thrall's Favor buttons beside the pips (post-death-outcomes.js#_favorView).
+				case "favor-gain":     return this._renderAfter(gainFavor(character));
+				case "favor-tentacle": return this._renderAfter(callTentacle(character));
+				case "favor-maw":      return this._renderAfter(setRavenousMaw(character, true));
+				case "favor-maw-away": return this._renderAfter(setRavenousMaw(character, false));
 				default:              return this._renderAfter(runPostDeathOutcome(character, action, { source }));
 			}
 		}
@@ -12627,24 +12685,32 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		async _onRecoverOpen() {
-			// The card is locked for the Unliving (_buildRecoverData); a hotbar or sidebar press is not.
-			if (isUnliving(this.actor)) return;
+			// A Ghost or a Revenant gains nothing from Recover, so the window is their followers' alone (the
+			// user's ruling, 2026-10-27): no HP, no tend, no Healer's Arts for the character.
+			const unliving = isUnliving(this.actor);
 			// Nor for the dying, who can't save themselves (Book I p.240): said, since a press got here.
 			if (this._refuseIfDying()) return;
-			const snapshot = await this._stonetopCharacter.buildSnapshot();
-			const hp = snapshot.vitals.hp;
-			const locked = !!this.actor.getFlag(STONETOP_SCOPE, "recover.spent");
-
 			const purses    = this._stonetopCharacter.supplyPurses(SUPPLY_PURPOSE.RECOVER);
 			// "Or someone else must expend a use on their behalf" (Book I p.246): another character's
 			// supplies, whoever this user can reach to pay them (supply-payer.js).
 			const payers    = supplyPayersFor(this.actor, SUPPLY_PURPOSE.RECOVER);
 			const canPay    = purses.total > 0 || payers.length > 0;
-			// Their own HP: not once the Recover is spent, nor at full HP.
-			const self      = canPay && !locked && hp.value < hp.max;
 			// Followers who are hurt Recover too, a use each (p.240, p.473), whatever the PC's own HP.
 			const bodies    = canPay ? await hurtFollowerBodies(this.actor) : [];
-			const debilities = (snapshot.debilities ?? []).filter(d => d.active);
+			// The Unliving with no follower to Recover for: said before the snapshot is built, since only
+			// the character's own part reads it. Hurt followers and nothing to pay for them is the supplies' fault,
+			// not the insert's, and is said so.
+			if (unliving && !bodies.length) {
+				const unpaid = !canPay && (await hurtFollowerBodies(this.actor)).length > 0;
+				return void ui.notifications?.warn(game.i18n.localize(unpaid
+					? "stonetop.specialMoves.recover.noSuppliesHint" : "stonetop.specialMoves.recover.unlivingHint"));
+			}
+			const snapshot = await this._stonetopCharacter.buildSnapshot();
+			const hp = snapshot.vitals.hp;
+			const locked = !!this.actor.getFlag(STONETOP_SCOPE, "recover.spent");
+			// Their own HP: not once the Recover is spent, nor at full HP.
+			const self      = !unliving && canPay && !locked && hp.value < hp.max;
+			const debilities = unliving ? [] : (snapshot.debilities ?? []).filter(d => d.active);
 			// Nothing to heal, only a debility to tend: straight to that (p.78), which needs none of the above.
 			if (!self && !bodies.length) {
 				if (debilities.length) this._onTendDebility();
@@ -12662,7 +12728,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			const selfRows = self
 				? `<li>Expend <strong>1 use of supplies</strong>.</li>
 					<li>Regain HP: <strong>${hp.value} &rarr; <span class="stonetop-recover-new-hp">${plain.newHp}</span></strong> (<span class="stonetop-recover-breakdown">${_esc(recoverBreakdown(plain))}</span>).</li>`
-				: `<li>${_esc(game.i18n.localize(locked ? "stonetop.specialMoves.recover.lockedHint" : "stonetop.specialMoves.recover.fullHpHint"))}</li>`;
+				: `<li>${_esc(game.i18n.localize(unliving ? "stonetop.specialMoves.recover.unlivingHint"
+					: locked ? "stonetop.specialMoves.recover.lockedHint" : "stonetop.specialMoves.recover.fullHpHint"))}</li>`;
 
 			const buttons = {
 				recover: {
@@ -12760,11 +12827,16 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * spent FIRST, through their own player when it is theirs to decide: a "no" spends and heals nothing.
 		 */
 		async _applyRecover({ purse, base = 4, slow = false, care = null, payer = null, self = true, followers = [] }) {
-			// Unliving since the window opened: nothing is spent for a Recover that does them no good.
-			if (isUnliving(this.actor)) return;
 			// Dying since the window opened: they can't save themselves (Book I p.240).
 			if (this._refuseIfDying()) return;
 			const picked = Array.isArray(followers) ? followers.filter(Boolean) : [];
+			// Unliving, now or since the window opened: their own part does them no good, so nothing is spent
+			// on it, and the Recover goes ahead for the followers ticked alone (the user's ruling, 2026-10-27).
+			if (isUnliving(this.actor)) {
+				if (!picked.length) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.unlivingHint"));
+				self = false;
+				care = null;
+			}
 			if (!self && !picked.length) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.nothingPicked"));
 			// The character's own part, read live: spent already (by a second window or a second press), or
 			// at full HP since the window opened. With followers ticked, the Recover goes ahead for them
@@ -13029,35 +13101,42 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		async _onConvalesceOpen() {
-			// Locked on the card for the Unliving (_buildConvalesceData); refused here for any other way in.
-			if (isUnliving(this.actor)) return;
+			// A Ghost or a Revenant gains nothing from Convalesce: HP, debilities, wounds and tracks alike. The
+			// followers who rest with them still do, so the window is theirs alone (the user's ruling, 2026-10-27).
+			const unliving = isUnliving(this.actor);
 			// And for the dying, who can't save themselves (Book I p.240): said, since a press got here.
 			if (this._refuseIfDying()) return;
-			const snapshot = await this._stonetopCharacter.buildSnapshot();
-			const hp = snapshot.vitals.hp;
-			const activeDebilities = (snapshot.debilities ?? []).filter(d => d.active);
-			const openWounds = (snapshot.wounds ?? []).filter(w => !w.healed);
-			const healable   = openWounds.filter(w => w.status !== "permanent");
-			const permanent  = openWounds.filter(w => w.status === "permanent");
-			// Auspicious Birth: "Clear it when you Make Camp or Convalesce."
-			const tracks     = snapshotTracksClearedBy(snapshot, CLEARS_ON.CONVALESCE).filter(t => t.marked);
-			// The same "anything left to do" the card asks (_buildConvalesceData): a planned permanent
-			// injury is listed below for its note, but does not open the window on its own.
-			const outstanding = openWounds.filter(_woundKeepsConvalesceOpen);
 			// Followers rest too: "A PC or follower regains HP when ... they have a few days of downtime and
 			// Convalesce" (Book I p.240). Offered unticked, since which of them rested with the PC is the table's to say.
 			const bodies = await hurtFollowerBodies(this.actor);
+			// The Unliving with no follower to rest: said before the snapshot is built, since only the
+			// character's own part reads it.
+			if (unliving && !bodies.length) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.convalesce.unlivingHint"));
+			const snapshot = await this._stonetopCharacter.buildSnapshot();
+			const hp = snapshot.vitals.hp;
+			const activeDebilities = unliving ? [] : (snapshot.debilities ?? []).filter(d => d.active);
+			const openWounds = unliving ? [] : (snapshot.wounds ?? []).filter(w => !w.healed);
+			const healable   = openWounds.filter(w => w.status !== "permanent");
+			const permanent  = openWounds.filter(w => w.status === "permanent");
+			// Auspicious Birth: "Clear it when you Make Camp or Convalesce."
+			const tracks     = unliving ? [] : snapshotTracksClearedBy(snapshot, CLEARS_ON.CONVALESCE).filter(t => t.marked);
+			// The same "anything left to do" the card asks (_buildConvalesceData): a planned permanent
+			// injury is listed below for its note, but does not open the window on its own.
+			const outstanding = openWounds.filter(_woundKeepsConvalesceOpen);
 			if (hp.value >= hp.max && activeDebilities.length === 0 && outstanding.length === 0 && tracks.length === 0 && !bodies.length) return;
 
 			// Torment's Blessing: "all your HP" is only half of what was missing, rounded up.
 			const slow  = slowToHeal(this.actor);
 			const newHp = recoveredHpTo(hp.value, hp.max, slow);
-			const hpRow = hp.value < hp.max
-				? `<li>Recover all HP: <strong>${hp.value} &rarr; ${newHp}</strong>${slow ? " (halved, rounded up: Torment's Blessing)" : ""}.</li>`
-				: `<li>HP already full.</li>`;
-			const debilityRow = activeDebilities.length
-				? `<li>Clear ${activeDebilities.length === 1 ? "debility" : "debilities"}: <strong>${_esc(activeDebilities.map(d => d.name).join(", "))}</strong>.</li>`
-				: `<li>No debilities marked.</li>`;
+			const hpRow = unliving
+				? `<li>${_esc(game.i18n.localize("stonetop.specialMoves.convalesce.unlivingHint"))}</li>`
+				: hp.value < hp.max
+					? `<li>Recover all HP: <strong>${hp.value} &rarr; ${newHp}</strong>${slow ? " (halved, rounded up: Torment's Blessing)" : ""}.</li>`
+					: `<li>HP already full.</li>`;
+			const debilityRow = unliving ? ""
+				: activeDebilities.length
+					? `<li>Clear ${activeDebilities.length === 1 ? "debility" : "debilities"}: <strong>${_esc(activeDebilities.map(d => d.name).join(", "))}</strong>.</li>`
+					: `<li>No debilities marked.</li>`;
 			const trackRow = tracks.length
 				? `<li>Clear <strong>${_esc(tracks.map(t => t.name).join(", "))}</strong>.</li>`
 				: "";
@@ -13105,7 +13184,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					<div class="stonetop-homestead-reference">
 						<ul>${hpRow}${debilityRow}${trackRow}</ul>
 					</div>
-					<p class="stonetop-homestead-note"><em>When you rest for a few weeks under the care of a healer,</em> heal any problematic wounds that can heal. If you have suffered a permanent injury or impairment, either retire or Make a Plan to adapt to it.</p>
+					${unliving ? "" : `<p class="stonetop-homestead-note"><em>When you rest for a few weeks under the care of a healer,</em> heal any problematic wounds that can heal. If you have suffered a permanent injury or impairment, either retire or Make a Plan to adapt to it.</p>`}
 					${healSection}
 					${permSection}
 					${_restFollowersHtml(bodies, { legend: game.i18n.localize("stonetop.specialMoves.convalesce.followersLegend"), gain: b => b.max })}
@@ -13142,18 +13221,29 @@ export function createStonetopCharacterSheetClass(Base) {
 		// before it (and a Thrall's halved "all your HP" could then LOWER them).
 		// `followers`: the follower bodies ticked to rest back to their max with them (follower-rest.js).
 		async _applyConvalesce({ debilities, tracks = [], healable = [], healIds = [], planNotes = {}, followers = [] }) {
-			// Unliving since the window opened: the rest does them no good at all.
-			if (isUnliving(this.actor)) return;
 			// Dying since the window opened: they can't save themselves (Book I p.240).
 			if (this._refuseIfDying()) return;
+			// Unliving, now or since the window opened: the rest does THEM no good at all, so only the followers
+			// ticked are rested (the user's ruling, 2026-10-27), and with none ticked nothing is written.
+			const unliving = isUnliving(this.actor);
+			if (unliving) {
+				if (!followers?.length) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.convalesce.unlivingHint"));
+				debilities = [];
+				tracks = [];
+				healIds = [];
+				planNotes = {};
+			}
 			const oldHp = this._stonetopCharacter.hp;
-			// Torment's Blessing: "all your HP" is only half of what was missing, rounded up.
-			const newHp = recoveredHpTo(oldHp, await this._stonetopCharacter.computedMaxHp(), slowToHeal(this.actor));
-			const update = { "system.attributes.hp.value": newHp };
-			// Walk It Off's box among them (walk-it-off.js), cleared as a debility is.
-			for (const d of debilities) Object.assign(update, debilityData(d.key, false));
-			Object.assign(update, clearTracksData(tracks, STONETOP_SCOPE));
-			await this.actor.update(update, { stonetopMove: "Convalesce" });
+			let newHp = oldHp;
+			if (!unliving) {
+				// Torment's Blessing: "all your HP" is only half of what was missing, rounded up.
+				newHp = recoveredHpTo(oldHp, await this._stonetopCharacter.computedMaxHp(), slowToHeal(this.actor));
+				const update = { "system.attributes.hp.value": newHp };
+				// Walk It Off's box among them (walk-it-off.js), cleared as a debility is.
+				for (const d of debilities) Object.assign(update, debilityData(d.key, false));
+				Object.assign(update, clearTracksData(tracks, STONETOP_SCOPE));
+				await this.actor.update(update, { stonetopMove: "Convalesce" });
+			}
 
 			// Heal checked wounds (→ scars) and stamp any Make-a-Plan notes, in one write.
 			const hasPlanNotes = Object.keys(planNotes).length > 0;

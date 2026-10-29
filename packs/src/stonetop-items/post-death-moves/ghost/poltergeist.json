@@ -9,6 +9,7 @@
     "rollType": null,
     "resource": {
       "max": 4,
+      "uncapped": true,
       "title": "Fury",
       "spendOptions": [
         "Shatter, break, or destroy a number of small mundane objects, or one big object",

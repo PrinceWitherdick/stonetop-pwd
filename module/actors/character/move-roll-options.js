@@ -14,6 +14,7 @@ import { WE_HAPPY_FEW, speechRollOptions } from "./inspiration.js";
 import { GIVE_ADVANTAGE_MOVES, giveAdvantageRollOptions, burgleRollOptions } from "./give-advantage.js";
 import { OMENS_OF_FATE, omensRollOptions } from "./destined.js";
 import { SUCK_THE_POISON_OUT, BORROW_POWER, suckThePoisonOutRollOptions, borrowPowerRollOptions } from "./sacred-pouch.js";
+import { bodysnatcherRollOptions } from "./bodysnatcher.js";
 
 const named = name => moveName => moveName === name;
 
@@ -48,6 +49,10 @@ export const MOVE_ROLL_OPTIONS = [
 	// it in your sacred pouch", and Borrow Power's 7-9 "you do it, but lose the power".
 	{ matches: named(SUCK_THE_POISON_OUT), build: suckThePoisonOutRollOptions },
 	{ matches: named(BORROW_POWER), build: borrowPowerRollOptions },
+	// The Ghost's Bodysnatcher, forcing their host: the 6-'s "they force you from their body and you mark a
+	// consequence" as a button that does both (bodysnatcher.js). Named by its literal, not an import, so this
+	// table never reads a binding a module cycle has yet to fill.
+	{ matches: named("Bodysnatcher"), build: bodysnatcherRollOptions },
 	// "You or an ally gain advantage" on the tiers that print it (GIVE_ADVANTAGE_ROLL_OPTIONS above).
 	...GIVE_ADVANTAGE_ROLL_OPTIONS,
 ];

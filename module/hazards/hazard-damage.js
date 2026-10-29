@@ -22,7 +22,7 @@ import { applyDamageToActor, damageRowActor } from "../utils/damage.js";
 import { format, localize } from "../utils/i18n.js";
 import { escHtml } from "../utils/strings.js";
 import { postListCard } from "../utils/chat.js";
-import { rollHazardDamage, selfTarget, snapshotTargets } from "../combat/attack-flow.js";
+import { rollHazardDamage, selfTarget, snapshotTargets, disembodiedSufferer } from "../combat/attack-flow.js";
 import { hazardDamageRoll } from "./hazard-view.js";
 
 const KEY = "stonetop.hazards.damage";
@@ -67,6 +67,14 @@ export function hazardCandidates({ characters = [], tokens = [] } = {}) {
 }
 
 /**
+ * A picker row's name: a Ghost's says Disembodied may spare them (Book I p.148; audit XS-4). A label only, so the
+ * GM picking sees it; nothing is taken off the hazard's harm. Exported for the tests.
+ */
+export function candidateLabel(name, actor) {
+	return disembodiedSufferer(actor) ? format(`${KEY}.pickGhost`, { name }) : name;
+}
+
+/**
  * The defaults behind the card's two buttons, the people picker loaded at click time: it is large, and
  * only a GM who presses one ever needs it. (The damage flow is not: the system loads it at startup for
  * every damage card, and the targets here are its rows.) Anything the caller passes wins, which is how
@@ -104,7 +112,7 @@ async function hazardTargets(page, kind, d) {
 	if (!candidates.length) return [];
 	const death = kind === "death";
 	const ids = await d.pick({
-		options: candidates.map(({ id, name, actor }) => ({ id, name, actor })),
+		options: candidates.map(({ id, name, actor }) => ({ id, name: candidateLabel(name, actor), actor })),
 		title: format(`${KEY}.pickTitle`, { name: page.name }),
 		hint: localize(`${KEY}.pickHint`),
 		buttonLabel: localize(`${KEY}.${death ? "pickDeath" : "pickRoll"}`),

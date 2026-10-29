@@ -2722,6 +2722,31 @@ describe("buildSnapshot — movelist / post-death moves", () => {
 		expect(move.isStarting).toBe(true);
 		expect(move.name).toBe("Undying");
 	});
+
+	// Poltergeist's Fury has no ceiling (the user's ruling R6), so its track always draws one EMPTY pip past
+	// what is held, to tick one more by hand (review VG-2, 2026-10-28). A capped track draws its max, as ever.
+	it("draws an uncapped track one empty pip past what is held, and a capped one at its max", async () => {
+		const track = (name, resource) => ({ _id: `pd${name}`, name, type: "move", system: { moveType: "post-death", description: "", resource } });
+		const drawn = async held => {
+			const actor = new FakeActorBuilder()
+				.withFlag("postDeathInsert.slug", "revenant")
+				.withFlag("moves.backgroundChoices", { Poltergeist: held, Capped: 9 })
+				.addItem(track("Poltergeist", { max: 4, uncapped: true, title: "Fury" }))
+				.addItem(track("Capped", { max: 3 }))
+				.build();
+			const snap = await new TestCharacterBuilder(actor)
+				.withPostDeathInsertRepo(new FakePostDeathInsertRepository([REVENANT_INSERT]))
+				.build()
+				.buildSnapshot();
+			const res = name => snap.movelist.postDeathGroup.moves.find(m => m.name === name).resource;
+			return { fury: res("Poltergeist"), capped: res("Capped") };
+		};
+		expect((await drawn(2)).fury).toMatchObject({ current: 2, max: 4 });
+		expect((await drawn(4)).fury).toMatchObject({ current: 4, max: 5 });
+		const six = await drawn(6);
+		expect(six.fury).toMatchObject({ current: 6, max: 7 });
+		expect(six.capped).toMatchObject({ current: 3, max: 3 });
+	});
 });
 
 // ── movelist: level move budget ───────────────────────────────────────────────

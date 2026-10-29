@@ -12,14 +12,24 @@ export function heldOnTrack(resources, moveName, max) {
 }
 
 /**
+ * The most a move's track (`system.resource`) may hold: its `max`, or no ceiling at all for a pool the book
+ * caps nowhere (`uncapped`: Poltergeist's Fury, "hold that much Fury"). 0 for no track.
+ */
+export function trackCap(resource) {
+	const max = Math.trunc(Number(resource?.max) || 0);
+	return max && resource?.uncapped ? Infinity : max;
+}
+
+/**
  * A learned move's hold track, `{held, max, resources}`, or null for a character without the move
  * learned or a move with no track. The max is the LEARNED copy's `resource` (a copy taken before the pack
  * gave it one is filled in by migration/move-refresh.js), so a switched-off second copy cannot set it.
+ * An `uncapped` pool's max is Infinity (trackCap): nothing it holds is clamped away by a spend.
  */
 export function learnedTrack(actor, move) {
 	const learned = ownedLearnedMove(actor, move);
 	if (!learned) return null;
-	const max = Math.trunc(Number(learned.system?.resource?.max) || 0);
+	const max = trackCap(learned.system?.resource);
 	const resources = actor?.typedActor?.moveResources;
 	if (!max || !resources) return null;
 	return { held: heldOnTrack(resources, move, max), max, resources };

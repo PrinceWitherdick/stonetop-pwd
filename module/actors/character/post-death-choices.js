@@ -278,7 +278,8 @@ async function _buildStep(character, step, carriedSlugs, sections) {
 
 	if (step.kind === "instinct") {
 		const options = await character.postDeathInstinctOptions();
-		return { ...base, options, done: options.some(o => o.selected) };
+		// A written-in Instinct (the Post-Death tab's write-in) answers it as well as a printed one.
+		return { ...base, options, done: options.some(o => o.selected) || !!String(character.postDeathInstinctValue ?? "").trim() };
 	}
 
 	if (step.kind === "tether") {
@@ -509,20 +510,48 @@ export function activatePostDeathChoices(html, character, onChanged) {
 	});
 
 	html.find(".stonetop-pdc-name, .stonetop-pdc-text").on("change", async (ev) => {
-		const el = ev.currentTarget;
-		await character.setPostDeathLoreText(el.dataset.section, el.dataset.option, el.value);
-		// Writing one in is the other half of the same exclusive choice: it replaces whichever
-		// printed option was ticked, or nothing at all if it's been cleared back to empty.
-		if (el.classList.contains("stonetop-pdc-writein") && el.value.trim()) {
-			await character.clearSectionPicks(el.dataset.section);
-		}
+		await saveLoreTextField(ev.currentTarget, character);
 		await after();
 	});
 
 	html.find(".stonetop-pdc-tether").on("change", async (ev) => {
-		await character.setTether(ev.currentTarget.value);
+		await saveTether(ev.currentTarget, character);
 		await after();
 	});
+}
+
+/** A name or text field's answer, written against its option's key: its change handler, and the close's flush. */
+async function saveLoreTextField(el, character) {
+	const { section, option } = el.dataset;
+	await character.setPostDeathLoreText(section, option, el.value);
+	// Writing one in is the other half of the same exclusive choice: it replaces whichever
+	// printed option was ticked, or nothing at all if it's been cleared back to empty.
+	if (el.classList.contains("stonetop-pdc-writein") && el.value.trim()) {
+		await character.clearSectionPicks(section);
+	}
+}
+
+/** The Ghost's tether, as typed: its change handler, and the close's flush. */
+async function saveTether(el, character) {
+	await character.setTether(el.value);
+}
+
+/**
+ * Save what was typed into the text fields and not yet saved, for a window closing with one still in hand.
+ * They save on `change`, which never fires for a field typed in and then shut with Escape (the window's
+ * own mark input has the same flush: DeathsDoorDialog#close). Each is written as its handler above writes
+ * it, and only when it differs from what is stored, so a close with nothing typed writes nothing.
+ */
+export async function flushPostDeathChoices(html, character) {
+	if (!html?.find || !character) return;
+	for (const el of html.find(".stonetop-pdc-name, .stonetop-pdc-text").toArray?.() ?? []) {
+		const { section, option } = el.dataset ?? {};
+		if (!section || !option || el.value === character.postDeathLoreText(section, option)) continue;
+		await saveLoreTextField(el, character);
+	}
+	for (const el of html.find(".stonetop-pdc-tether").toArray?.() ?? []) {
+		if (el.value !== (character.tether ?? "")) await saveTether(el, character);
+	}
 }
 
 /**

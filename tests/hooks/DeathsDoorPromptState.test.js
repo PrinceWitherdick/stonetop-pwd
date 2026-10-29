@@ -331,6 +331,22 @@ describe("onPreUpdateActorDeathsDoor: a Death's Door roll left on the sheet", ()
 		expect(hit({ deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION, hardToKillTrade: true }, 0, 1))
 			.not.toHaveProperty(["-=hardToKillTrade"]);
 	});
+
+	// Undying's kept-HP stamp (undeath-return.js) belongs to the out-of-the-action it was laid with. Left on a new
+	// brush, a "not lethal" ruling would have "Back on your feet" keep the 0 HP they have then.
+	it("drops Undying's kept-HP stamp on going down afresh, by hit points or by the GM's Mark dying", () => {
+		const bag = hit({ deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION, undeathKeptHp: true }, 4, 0);
+		expect(bag.deathsDoor).toBe(DEATHS_DOOR_STATE.DYING);
+		expect(bag).toHaveProperty(["-=undeathKeptHp"], null);
+
+		const named = { flags: { "stonetop-pwd": { deathsDoor: DEATHS_DOOR_STATE.DYING } } };
+		onPreUpdateActorDeathsDoor(about({ deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION, undeathKeptHp: true }, 0), named, {});
+		expect(named.flags["stonetop-pwd"]).toHaveProperty(["-=undeathKeptHp"], null);
+
+		// Not while they are still out of the action on that cost, nor when nothing is stamped.
+		expect(hit({ deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION, undeathKeptHp: true }, 4, 6)).not.toHaveProperty(["-=undeathKeptHp"]);
+		expect(hit({}, 5, 0)).not.toHaveProperty(["-=undeathKeptHp"]);
+	});
 });
 
 /**

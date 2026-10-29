@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { Window } from "happy-dom";
-import { stubConfirm } from "../../fakes/confirm.js";
+import { stubAsk, stubConfirm } from "../../fakes/confirm.js";
 import { createStonetopCharacterSheetClass, woundEditPatch } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { WoundDialog } from "../../../module/actors/character/dialogs/WoundDialog.js";
+import { DeathsDoorDialog } from "../../../module/actors/character/dialogs/DeathsDoorDialog.js";
 import {FakeActorBuilder} from "../../fakes/FakeActorBuilder.js";
 import { DEATHS_DOOR_STATE, zeroHpMove, zeroHpResolution } from "../../../module/actors/character/deaths-door.js";
 import { supplyPursesFor } from "../../../module/actors/character/supply-cost.js";
@@ -1747,14 +1748,20 @@ describe("Recover and Convalesce for the Unliving", () => {
 		expect(makeSheet(actor)._buildConvalesceData(convalesceSnapshot({ hpValue: 2 })).canConvalesce).toBe(true);
 	});
 
+	// With no follower hurt there is nothing either move could do for them (their followers' Recover and
+	// Convalesce stay open: the user's ruling, 2026-10-27, tests/actors/character/recover-branches.test.js).
 	it("opens no window and writes nothing when either is reached another way", async () => {
 		const actor = unliving();
 		actor.update = vi.fn();
 		const sheet = makeSheet(actor);
-		sheet._stonetopCharacter.buildSnapshot = vi.fn();
+		const Dialog = vi.fn();
+		const saved = globalThis.Dialog;
+		globalThis.Dialog = Dialog;
+		sheet._stonetopCharacter.buildSnapshot = vi.fn(async () => ({ vitals: { hp: { value: 2, max: 8 } }, debilities: [], wounds: [] }));
 		await sheet._onRecoverOpen();
 		await sheet._onConvalesceOpen();
-		expect(sheet._stonetopCharacter.buildSnapshot).not.toHaveBeenCalled();
+		expect(Dialog).not.toHaveBeenCalled();
+		globalThis.Dialog = saved;
 		await sheet._applyRecover({ purse: { slug: "supplies", label: "Supplies", remaining: 3 }, oldHp: 2, newHp: 7 });
 		await sheet._applyConvalesce({ oldHp: 2, newHp: 8, debilities: [] });
 		expect(actor.update).not.toHaveBeenCalled();
@@ -2020,6 +2027,56 @@ describe("StonetopCharacterSheet._onDropPlaybook", () => {
 			expect(actor.typedActor.setPostDeathInsert).toHaveBeenCalledWith(slug);
 			expect(actor.update).not.toHaveBeenCalled();
 		}
+	});
+
+	// Audit GM-3: a Revenant turned Ghost by a drop (the Pale Hunter's "linger on") is asked what Undying's
+	// swap asks: the confirm, the maimings, then the Ghost's first Consequence with what they held carried.
+	describe("the Ghost dropped on a Revenant (audit GM-3)", () => {
+		function revenant() {
+			const actor = makeActor();
+			const sheet = makeSheet(actor);
+			actor.update = vi.fn(async () => {});
+			const char = actor.typedActor;
+			char.postDeathSlug = "revenant";
+			char.sectionOptions = vi.fn(async () => [
+				{ slug: "breakdown", label: "Breakdown", marked: true },
+				{ slug: "nightkin", label: "Nightkin", marked: false },
+			]);
+			char.woundRecords = () => [{ id: "m1", text: "Permanently maimed: lost a hand", status: "permanent" }];
+			char.applyUpdate = vi.fn(async () => {});
+			return { actor, sheet, char };
+		}
+		afterEach(() => { vi.restoreAllMocks(); delete globalThis.foundry?.applications?.api?.DialogV2; });
+
+		it("a no writes nothing", async () => {
+			const { sheet, char } = revenant();
+			const opened = vi.spyOn(DeathsDoorDialog, "openChoices").mockResolvedValue(null);
+			const wait = stubConfirm(false);
+			await sheet._onDropPlaybook(makePlaybookDoc("ghost"));
+			expect(wait).toHaveBeenCalledTimes(1);
+			expect(char.setPostDeathInsert).not.toHaveBeenCalled();
+			expect(char.applyUpdate).not.toHaveBeenCalled();
+			expect(opened).not.toHaveBeenCalled();
+		});
+
+		it("a yes swaps, heals the maimings, and asks for the first Consequence with the Purpose carried", async () => {
+			const { sheet, char } = revenant();
+			const opened = vi.spyOn(DeathsDoorDialog, "openChoices").mockResolvedValue(null);
+			const wait = stubConfirm(true);
+			await sheet._onDropPlaybook(makePlaybookDoc("ghost"));
+			expect(char.setPostDeathInsert).toHaveBeenCalledWith("ghost");
+			expect(wait).toHaveBeenCalledTimes(2);
+			expect(char.applyUpdate.mock.calls[0][0]["system.attributes.wounds"][0].healed).toBe(true);
+			expect(opened).toHaveBeenCalledWith(char, expect.any(Function), { carried: { consequences: ["breakdown"] }, taken: "undying" });
+		});
+
+		it("any other insert dropped on a Revenant is taken as before", async () => {
+			const { sheet, char } = revenant();
+			const wait = stubConfirm(false);
+			await sheet._onDropPlaybook(makePlaybookDoc("thrall"));
+			expect(char.setPostDeathInsert).toHaveBeenCalledWith("thrall");
+			expect(wait).not.toHaveBeenCalled();
+		});
 	});
 
 	// HP starts full only with a NEW playbook, as onboarding does: the same one dropped again
@@ -2308,11 +2365,30 @@ describe("StonetopCharacterSheet Death's Door card past the Door", () => {
 	it("brings anyone out of the action back on their feet with half their max HP", async () => {
 		for (const [slug, move] of [["revenant", "Undying"], ["thrall", "Dark Succor"], ["ghost", "Tethered"]]) {
 			const sheet = makeCardSheet(slug, { state: DEATHS_DOOR_STATE.OUT_OF_ACTION });
+			// The Ghost is asked first whether the tether still stands (GH-9): it does.
+			const ask = stubAsk("intact");
 			await sheet._onDeathsDoorClear();
+			expect(ask, slug).toHaveBeenCalledTimes(slug === "ghost" ? 1 : 0);
 			// Unhalved: a return is not a heal, so Torment's Blessing leaves it alone (the user's ruling, 2026-09-30).
-			expect(sheet._stonetopCharacter.restoreHp, slug).toHaveBeenCalledWith(8, move, { clearsDeathsDoor: true, unhalved: true });
+			expect(sheet._stonetopCharacter.restoreHp, slug).toHaveBeenCalledWith(8, move, { clearsDeathsDoor: true, unhalved: true, alsoUpdate: {} });
 			expect(sheet._stonetopCharacter.setDeathsDoorState, slug).not.toHaveBeenCalled();
 		}
+	});
+
+	// GH-9: the tether went while they were dispersed. Not yet asks again later; destroyed is the Final Consequence.
+	it("asks a dispersed Ghost whether the tether still stands before they reform", async () => {
+		const later = makeCardSheet("ghost", { state: DEATHS_DOOR_STATE.OUT_OF_ACTION });
+		stubAsk("cancel");
+		await later._onDeathsDoorClear();
+		expect(later._stonetopCharacter.restoreHp).not.toHaveBeenCalled();
+
+		const gone = makeCardSheet("ghost", { state: DEATHS_DOOR_STATE.OUT_OF_ACTION });
+		gone._stonetopCharacter.finalConsequenceUpdateData = vi.fn(() => ({ final: true }));
+		gone._stonetopCharacter.applyUpdate = vi.fn(async () => {});
+		stubAsk("destroyed");
+		await gone._onDeathsDoorClear();
+		expect(gone._stonetopCharacter.applyUpdate).toHaveBeenCalledWith({ final: true }, "Tethered");
+		expect(gone._stonetopCharacter.restoreHp).not.toHaveBeenCalled();
 	});
 
 	it("labels the button for it, the Ghost's as its reform", () => {

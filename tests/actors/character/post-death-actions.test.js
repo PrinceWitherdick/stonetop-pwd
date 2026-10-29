@@ -12,6 +12,7 @@ import {
 	POLTERGEIST, RED_WRATH, TORMENTS_BLESSING,
 } from "../../../module/actors/character/post-death-actions.js";
 import { loreMoveItemData, postDeathMoveItemData } from "../../../module/actors/character/post-death-moves.js";
+import { manifestedPicks, manifestsHarmfulTouch } from "../../../module/actors/character/manifest.js";
 import { MoveDefinition } from "../../../module/model/MoveDefinition.js";
 import { makeLiveActor, makeLiveItem } from "../../fakes/LiveCharacter.js";
 import { FakeRepositoryFactory } from "../../fakes/FakeRepositoryFactory.js";
@@ -78,18 +79,27 @@ describe("the buttons each move card carries", () => {
 });
 
 describe("Poltergeist", () => {
-	it("gets angry: loses 1d4 HP and holds that much Fury, to the track's four", async () => {
-		const { actor, char } = character({ items: [loreItem("ghost", "poltergeist")] });
+	// The user's ruling R6 (2026-10-27): the book prints no ceiling, so what is rolled is all held.
+	it("gets angry: loses 1d4 HP and holds that much Fury, with no ceiling", async () => {
+		const { actor, char } = character({ items: [loreItem("ghost", "poltergeist")], hp: 12 });
 		rolls.push(3);
 		await runPostDeathAction(actor, "getAngry");
-		expect(actor.system.attributes.hp.value).toBe(5);
+		expect(actor.system.attributes.hp.value).toBe(9);
 		expect(held(char)).toBe(3);
 		expect(posted.at(-1).formula).toBe("1d4");
 		expect(posted.at(-1).flavor).toContain("Holds 3 Fury");
 		rolls.push(4);
 		await runPostDeathAction(actor, "getAngry");
-		expect(held(char)).toBe(4);
-		expect(actor.system.attributes.hp.value).toBe(1);
+		expect(held(char)).toBe(7);
+		expect(posted.at(-1).flavor).toContain("Holds 7 Fury");
+		expect(actor.system.attributes.hp.value).toBe(5);
+	});
+
+	it("spends from Fury held past four without clamping the rest away", async () => {
+		const { actor, char } = character({ items: [loreItem("ghost", "poltergeist")] });
+		await char.moveResources.setUses(POLTERGEIST, 6);
+		expect(await runPostDeathAction(actor, "shatter")).toBe(true);
+		expect(held(char)).toBe(5);
 	});
 
 	it("hurls: asks the roll window, spends 1 Fury, then rolls +DEX with your damage on both hits", async () => {
@@ -130,6 +140,8 @@ describe("Poltergeist", () => {
 describe("the HP the other moves cost", () => {
 	it("Bodysnatcher's possession loses 1d4 HP", async () => {
 		const { actor } = character({ items: [loreItem("ghost", "bodysnatcher")] });
+		// Nobody targeted: asked first, and "possess anyway" bills the 1d4 (bodysnatcher.test.js has the rest).
+		stubAsk("untracked");
 		rolls.push(2);
 		await runPostDeathAction(actor, "possess");
 		expect(actor.system.attributes.hp.value).toBe(6);
@@ -161,6 +173,27 @@ describe("the HP the other moves cost", () => {
 		await runPostDeathAction(three.actor, "manifest");
 		expect(posted.at(-1).formula).toBe("2d4");
 		expect(three.actor.system.attributes.hp.value).toBe(3);
+	});
+
+	// Audit GH-6 (the user's ruling, 2026-10-27): the picks are kept while manifest, named on the End
+	// manifestation button, and gone when it is pressed.
+	it("Disembodied keeps the picks while manifest, and End manifestation clears them", async () => {
+		const TOUCH = "Your touch (or ghostly weapons) can harm the living (ignores armor)";
+		const { actor } = character({ items: [insertItem("ghost", "disembodied")], flags: { "postDeathInsert.slug": "ghost" } });
+		expect(moveActionsFor(actor).Disembodied.map(a => a.action)).toEqual(["manifest"]);
+
+		stubAsk("manifest", fakeForm({ "manifest-1": { checked: true }, "manifest-2": { checked: true } }));
+		rolls.push(2);
+		await runPostDeathAction(actor, "manifest");
+		expect(manifestedPicks(actor)).toEqual(["You can speak clearly and intelligibly", TOUCH]);
+		expect(manifestsHarmfulTouch(actor)).toBe(true);
+		const end = moveActionsFor(actor).Disembodied[1];
+		expect(end.action).toBe("endManifestation");
+		expect(end.tooltip).toContain("You can speak clearly and intelligibly");
+
+		await runPostDeathAction(actor, "endManifestation");
+		expect(manifestedPicks(actor)).toEqual([]);
+		expect(posted.at(-1).content).toContain("no longer manifest");
 	});
 
 	it("never takes HP below 0", async () => {

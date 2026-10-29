@@ -6,7 +6,7 @@
 // the ones marked while that background is the one taken, read-only (beastBondActions). Four of the five
 // are fiction. The fifth, "Lend it your strength: lose 1d6 HP, and it regains an equal amount", is a
 // button (lendStrength): the 1d6 is thrown where the table sees it, the Ranger LOSES THE WHOLE ROLL
-// through the plain HP writer (utils/damage.js#applyDamageToActor, the Vessel's price's path, so 0 HP
+// through the plain HP-loss writer (utils/damage.js#applyHpLossToActor, the Vessel's price's path, so 0 HP
 // opens Death's Door as any HP loss does), and the companion regains as much, never past its max, the
 // rest wasted (the user's ruling). The companion is raised as Bath of Healing Light raises a follower's
 // card (invocation-apply.js#restoreFollowerCardHp, through follower-hp.js#setFollowerHp): the NPC that
@@ -28,7 +28,7 @@ import { STONETOP_SCOPE, readableFlags } from "./StonetopFlags.js";
 import { restoreFollowerCardHp } from "./invocation-apply.js";
 import { followerActorFromLink } from "./follower-actors.js";
 import { NO_GM_KEY, canSetFollowerHp } from "./follower-hp.js";
-import { applyDamageToActor } from "../../utils/damage.js";
+import { applyHpLossToActor } from "../../utils/damage.js";
 import { rolledTotalCard } from "../../utils/chat.js";
 import { withCardLatch, wireLatchedButtons } from "../../utils/card-latch.js";
 import { escHtml } from "../../utils/strings.js";
@@ -132,7 +132,8 @@ export async function lendStrength(actor, { cardHp, npc = companionNpc(actor), g
 	}
 	const roll = await new Roll(LEND_STRENGTH_FORMULA).evaluate();
 	const amount = Math.max(0, Math.trunc(Number(roll.total) || 0));
-	const hp = await applyDamageToActor(actor, amount, { stonetopMove: LEND_STRENGTH });
+	// HP lost, not damage (StonetopFlags.js#HP_LOSS_OPTION): nothing that answers a blow reads it as one.
+	const hp = await applyHpLossToActor(actor, amount, { stonetopMove: LEND_STRENGTH });
 	const card = await restoreFollowerCardHp({ character: actor, ftype: "animal-companion", slug: "" }, amount,
 		{ moveName: LEND_STRENGTH, link: () => npc, ...(cardHp ? { cardHp } : {}) });
 	const companion = String(readableFlags(actor)?.animalCompanion?.name ?? "").trim() || localize(`${KEY}.fallbackName`);

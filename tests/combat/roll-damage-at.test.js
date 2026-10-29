@@ -1224,7 +1224,8 @@ describe("a Revenant's Undying on the damage card", () => {
 		const message = makeMessage({ damage: { move: "Bite", results: [{ uuid: tokens.wyn.uuid, name: "Wyn", raw: 6 }, { uuid: tokens.pim.uuid, name: "Pim", raw: 6 }], applied: [] } });
 		message.canUserModify = () => true;
 		wireConditionalArmor(message, { querySelector: sel => (sel === ".stonetop-attack-actions" ? actions : null) });
-		expect(actions.kids).toHaveLength(1);
+		// Undying's halving, then its poison-and-disease box (RV-1), both Wyn's.
+		expect(actions.kids).toHaveLength(2);
 		const [box, words] = actions.kids[0].kids;
 		expect(box.checked).toBe(true);
 		expect(words.textContent).toBe("Wyn: Undying: from cutting, stabbing or crushing, so half damage after armor");
@@ -1352,6 +1353,269 @@ describe("an Invocation's own damage (Go Back to the Shadow)", () => {
 	it("rolls nothing without a die", async () => {
 		expect(await rollInvocationDamage(hero("seren", "Seren"), { move: "Go Back to the Shadow", formula: "" })).toBeNull();
 		expect(posted).toEqual([]);
+	});
+});
+
+// Audit RV-1 (2026-10-26): Undying's "Neither poison nor disease do you harm." A box of its own, opening
+// ticked on a blow whose name or tags say poison, venom or disease.
+describe("Undying's poison and disease on the damage card", () => {
+	const revenant = () => Object.assign(hero("wyn", "Wyn"), { flags: { [SCOPE]: { postDeathInsert: { slug: "revenant" } } } });
+	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
+
+	it("takes nothing from a blow ticked as poison, and says why", async () => {
+		const wyn = revenant();
+		const { tokens } = fightInARow([["wyn", wyn]]);
+		const row = { uuid: tokens.wyn.uuid, name: "Wyn", raw: 9 };
+		await apply({ move: "Adder", weapon: null, results: [row], applied: [], undyingOff: [row.uuid], poisonHarmless: [row.uuid] });
+		expect(wyn.system.attributes.hp.value).toBe(10);
+		expect(posted.at(-1).content).toContain("neither poison nor disease harms a Revenant");
+	});
+
+	it("draws the box unticked on an ordinary blow, and writes it when ticked", async () => {
+		const wyn = revenant();
+		const { tokens } = fightInARow([["wyn", wyn]]);
+		globalThis.document = { createElement: element };
+		const actions = element("div");
+		const message = makeMessage({ damage: { move: "Bite", results: [{ uuid: tokens.wyn.uuid, name: "Wyn", raw: 6 }], applied: [] } });
+		message.canUserModify = () => true;
+		wireConditionalArmor(message, { querySelector: sel => (sel === ".stonetop-attack-actions" ? actions : null) });
+		const [box, words] = actions.kids[1].kids;
+		expect(box.checked).toBe(false);
+		expect(words.textContent).toBe("Undying: this is poison or disease, which does a Revenant no harm");
+		box.checked = true;
+		await box.fire();
+		expect(message.getFlag(SCOPE, "damage").poisonHarmless).toEqual([tokens.wyn.uuid]);
+	});
+
+	it("opens ticked on a stat block's blow tagged poison or named for venom, and not on another", async () => {
+		const { blowIsPoison } = await import("../../module/combat/attack-flow.js");
+		expect(blowIsPoison({ name: "Bite", tags: ["close", "poison"] })).toBe(true);
+		expect(blowIsPoison({ name: "Venomous sting", tags: [] })).toBe(true);
+		expect(blowIsPoison({ name: "", keywords: "hand, diseased" })).toBe(true);
+		expect(blowIsPoison({ name: "Bite", tags: ["close", "messy"] })).toBe(false);
+
+		const wyn = revenant();
+		const { tokens, tokenActor } = fightInARow([["crin", crinwin("crinwin")], ["wyn", wyn]]);
+		const bite = parseMonsterAttacks("bite d6 (close, poison)")[0];
+		await rollDamageAt(tokenActor("crin"), {
+			formula: "d6", label: "Bite", keywords: "close, poison", rollMode: "normal", weapon: attackWeapon(bite), shiftKey: true,
+		});
+		expect(damageFlag().poisonHarmless).toEqual([tokens.wyn.uuid]);
+		await apply(damageFlag());
+		expect(wyn.system.attributes.hp.value).toBe(10);
+	});
+});
+
+// Audit GH-7 (the user's ruling, 2026-10-27): a blow that says it harms spirits opens Disembodied's box as harm
+// landing. A character's own price does not.
+describe("Disembodied's box opening on what harms spirits", () => {
+	it("knows silver, salt and a spirit tag", async () => {
+		const { blowHarmsSpirits } = await import("../../module/combat/attack-flow.js");
+		expect(blowHarmsSpirits({ name: "Silver dagger", tags: [] })).toBe(true);
+		expect(blowHarmsSpirits({ name: "", tags: ["salt"] })).toBe(true);
+		expect(blowHarmsSpirits({ name: "", keywords: "close, spirit" })).toBe(true);
+		expect(blowHarmsSpirits({ name: "Spirit-wood club", tags: ["close"] })).toBe(false);
+		expect(blowHarmsSpirits({ name: "Bite", tags: ["close"] })).toBe(false);
+	});
+
+	it("lists every row of Go Back to the Shadow as harming spirits from the start", async () => {
+		const seren = hero("seren", "Seren");
+		const { tokens } = fightInARow([["seren", seren], ["a", crinwin("shade1")]]);
+		globalThis.game.user.targets = new Set([{ document: tokens.a, actor: tokens.a.actor }]);
+		await rollInvocationDamage(seren, { move: "Go Back to the Shadow", formula: "2d8", shiftKey: true, harmsSpirits: true });
+		expect(damageFlag().harmsSpirit).toEqual([tokens.a.uuid]);
+	});
+
+	it("leaves an ordinary blow's rows off both lists", async () => {
+		const seren = hero("seren", "Seren");
+		const { tokens } = fightInARow([["seren", seren], ["a", crinwin("shade1")]]);
+		await rollMoveDamageAt(seren, tokens.a, { move: "Castigate", formula: "1d6" });
+		const flag = damageFlag();
+		expect(flag).not.toHaveProperty("harmsSpirit");
+		expect(flag).not.toHaveProperty("poisonHarmless");
+	});
+});
+
+// Audit GH-6 (the user's ruling, 2026-10-27): a Ghost manifest with "your touch (or ghostly weapons) can harm
+// the living (ignores armor)" deals their own blows with the card's "Ignores armor" box ticked.
+describe("a manifest Ghost's touch on their own damage card", () => {
+	const TOUCH = "Your touch (or ghostly weapons) can harm the living (ignores armor)";
+	const ghost = manifest => Object.assign(hero("rhys", "Rhys"), {
+		flags: { [SCOPE]: { postDeathInsert: { slug: "ghost", ...(manifest ? { manifest } : {}) } } },
+		typedActor: { carriedWeaponGear: async () => [], computedDamageDie: async () => "d6" },
+	});
+
+	it("opens the blow ignoring armor while the touch option is manifest, as the GM's on-the-fly tick", async () => {
+		const rhys = ghost([TOUCH]);
+		fightInARow([["rhys", rhys], ["crin", crinwin("crinwin")]]);
+		expect(await rollCharacterDamageAt(rhys, { label: "Damage", shiftKey: true })).toBe(true);
+		const flag = damageFlag();
+		expect(flag.weapon.ignoresArmor).toBe(true);
+		expect(flag.armorIgnoredOnTheFly).toBe(true);
+	});
+
+	it("leaves armor alone when manifest with something else, or not at all, and on a move's own number", async () => {
+		for (const manifest of [["You can speak clearly and intelligibly"], null]) {
+			posted.length = 0;
+			const rhys = ghost(manifest);
+			fightInARow([["rhys", rhys], ["crin", crinwin("crinwin")]]);
+			await rollCharacterDamageAt(rhys, { label: "Damage", shiftKey: true });
+			expect(damageFlag()).not.toHaveProperty("armorIgnoredOnTheFly");
+		}
+		posted.length = 0;
+		const rhys = ghost([TOUCH]);
+		const { tokens } = fightInARow([["rhys", rhys], ["crin", crinwin("crinwin")]]);
+		await rollMoveDamageAt(rhys, tokens.crin, { move: "Castigate", formula: "1d6" });
+		expect(damageFlag()).not.toHaveProperty("armorIgnoredOnTheFly");
+	});
+
+	// Audit XS-3: Poltergeist's Hurl throws an object, "deal your damage (forceful)" (Book I p.149): no touch of theirs.
+	it("leaves armor alone on a blow that is no touch of theirs (Hurl)", async () => {
+		const rhys = ghost([TOUCH]);
+		fightInARow([["rhys", rhys], ["crin", crinwin("crinwin")]]);
+		await rollDamageAt(rhys, { formula: "d6", label: "Poltergeist: Hurl", keywords: "forceful", notTouch: true, shiftKey: true,
+			weapon: { name: "", range: [], piercing: 0, ignoresArmor: false, tags: ["forceful"] } });
+		const flag = damageFlag();
+		expect(flag).not.toHaveProperty("armorIgnoredOnTheFly");
+		expect(flag.weapon.ignoresArmor).toBe(false);
+	});
+});
+
+// Audit XS-2 (the user's ruling, 2026-10-28): a Ghost has "the barest influence on the material world" (Book I
+// p.148), so their own blow, while not manifest with the harmful touch and possessing nobody, carries a gold caution.
+// Flagged, never blocked: the numbers stand.
+describe("a Ghost's own blow without the harmful touch", () => {
+	const TOUCH = "Your touch (or ghostly weapons) can harm the living (ignores armor)";
+	const CAUTION = "is a Ghost, not manifest with";
+	const ghost = (extra = {}) => Object.assign(hero("rhys", "Rhys"), {
+		flags: { [SCOPE]: { postDeathInsert: { slug: "ghost", ...(extra.manifest ? { manifest: extra.manifest } : {}) }, ...(extra.flags ?? {}) } },
+		typedActor: { carriedWeaponGear: async () => [], computedDamageDie: async () => "d6" },
+	});
+	const roll = async actor => {
+		fightInARow([["rhys", actor], ["crin", crinwin("crinwin")]]);
+		await rollCharacterDamageAt(actor, { label: "Damage", shiftKey: true });
+		return posted.at(-1).content;
+	};
+
+	it("cautions on the card of a Ghost not manifest with the touch, and leaves the numbers alone", async () => {
+		const content = await roll(ghost());
+		expect(content).toContain(CAUTION);
+		expect(content).toContain("stonetop-attack-warn");
+		expect(damageFlag().weapon.ignoresArmor).toBeFalsy();
+		// Manifest with something else is no harmful touch either.
+		posted.length = 0;
+		expect(await roll(ghost({ manifest: ["You can speak clearly and intelligibly"] }))).toContain(CAUTION);
+	});
+
+	it("says nothing while manifest with the touch, while possessing a host, or for anyone else", async () => {
+		expect(await roll(ghost({ manifest: [TOUCH] }))).not.toContain(CAUTION);
+		posted.length = 0;
+		const possessing = ghost({ flags: {
+			postDeathLore: { counts: { "consequences:bodysnatcher": 1 } }, bodysnatcherHost: { uuid: "Actor.host", name: "Bran" },
+		} });
+		expect(await roll(possessing)).not.toContain(CAUTION);
+		posted.length = 0;
+		expect(await roll(Object.assign(hero("rhys", "Rhys"), { typedActor: { carriedWeaponGear: async () => [], computedDamageDie: async () => "d6" } }))).not.toContain(CAUTION);
+	});
+
+	it("says nothing on Hurl, or on a move's own number", async () => {
+		const rhys = ghost();
+		const { tokens } = fightInARow([["rhys", rhys], ["crin", crinwin("crinwin")]]);
+		await rollDamageAt(rhys, { formula: "d6", label: "Poltergeist: Hurl", notTouch: true, shiftKey: true });
+		expect(posted.at(-1).content).not.toContain(CAUTION);
+		await rollMoveDamageAt(rhys, tokens.crin, { move: "Castigate", formula: "1d6" });
+		expect(posted.at(-1).content).not.toContain(CAUTION);
+	});
+
+	it("cautions on the plain card too, with nobody to hit", async () => {
+		globalThis.game.combats = collection([]);
+		globalThis.game.user.targets = new Set();
+		await rollDamageAt(ghost(), { formula: "d6", label: "Damage", shiftKey: true });
+		expect(plainCard.mock.calls.at(-1)[2].notices).toContain(CAUTION);
+		await rollDamageAt(ghost(), { formula: "d6", label: "Poltergeist: Hurl", notTouch: true, shiftKey: true });
+		expect(plainCard.mock.calls.at(-1)[2].notices ?? "").not.toContain(CAUTION);
+	});
+});
+
+// Audit XS-1 (the user's ruling, 2026-10-28): a Thrall's A Festering Rot, "You are unharmed by poison, disease,
+// caustic substances, and vermin bites", and Child of the Deeps, "suffer no harm from cold or pressure" (Book I p.153).
+describe("a Thrall's Festering Rot and Child of the Deeps on the damage card", () => {
+	const thrall = mark => Object.assign(hero("ash", "Ash"), { flags: { [SCOPE]: {
+		postDeathInsert: { slug: "thrall" }, postDeathLore: { counts: mark ? { [`marks:${mark}`]: 1 } : {} },
+	} } });
+	const element = tag => ({ tagName: tag, className: "", type: "", checked: false, disabled: false, title: "", textContent: "", kids: [], append(...k) { this.kids.push(...k); }, addEventListener(_t, fn) { this.fire = fn; } });
+	const boxesFor = (actor, move) => {
+		const { tokens } = fightInARow([["ash", actor]]);
+		globalThis.document = { createElement: element };
+		const actions = element("div");
+		const message = makeMessage({ damage: { move, results: [{ uuid: tokens.ash.uuid, name: "Ash", raw: 6 }], applied: [] } });
+		message.canUserModify = () => true;
+		wireConditionalArmor(message, { querySelector: sel => (sel === ".stonetop-attack-actions" ? actions : null) });
+		return { actions, message, tokens };
+	};
+
+	it("takes nothing from a blow ticked as Festering Rot's, and the whole of it unticked", async () => {
+		const ash = thrall("a-festering-rot");
+		const { tokens } = fightInARow([["ash", ash]]);
+		const row = { uuid: tokens.ash.uuid, name: "Ash", raw: 9 };
+		await apply({ move: "Acid spit", weapon: null, results: [row], applied: [], rotHarmless: [row.uuid] });
+		expect(ash.system.attributes.hp.value).toBe(10);
+		expect(posted.at(-1).content).toContain("(A Festering Rot)");
+		const plain = thrall("a-festering-rot");
+		const second = fightInARow([["ash", plain]]);
+		await apply({ move: "Sword", weapon: null, results: [{ uuid: second.tokens.ash.uuid, name: "Ash", raw: 9 }], applied: [] });
+		expect(plain.system.attributes.hp.value).toBe(3);
+	});
+
+	it("draws Festering Rot's box for a Thrall with the Mark, writes it when ticked, and none without the Mark", async () => {
+		const { actions, message, tokens } = boxesFor(thrall("a-festering-rot"), "Sword");
+		expect(actions.kids).toHaveLength(1);
+		const [box, words] = actions.kids[0].kids;
+		expect(box.checked).toBe(false);
+		expect(words.textContent).toContain("A Festering Rot: this is poison, disease, something caustic or a vermin's bite");
+		box.checked = true;
+		await box.fire();
+		expect(message.getFlag(SCOPE, "damage").rotHarmless).toEqual([tokens.ash.uuid]);
+		expect(boxesFor(thrall(null), "Sword").actions.kids).toHaveLength(0);
+		expect(boxesFor(thrall("ravenous"), "Sword").actions.kids).toHaveLength(0);
+	});
+
+	it("opens ticked on a blow that is poison, caustic, acid or a bite, and not on another", async () => {
+		const { blowRotIgnores } = await import("../../module/combat/attack-flow.js");
+		expect(blowRotIgnores({ name: "Bite", tags: ["close"] })).toBe(true);
+		expect(blowRotIgnores({ name: "", keywords: "near, caustic" })).toBe(true);
+		expect(blowRotIgnores({ name: "Acid spray", tags: [] })).toBe(true);
+		expect(blowRotIgnores({ name: "Sting", tags: ["poison"] })).toBe(true);
+		expect(blowRotIgnores({ name: "Sword", tags: ["close", "messy"] })).toBe(false);
+
+		const ash = thrall("a-festering-rot");
+		const { tokens, tokenActor } = fightInARow([["crin", crinwin("crinwin")], ["ash", ash]]);
+		const bite = parseMonsterAttacks("bite d6 (close, 1 piercing)")[0];
+		await rollDamageAt(tokenActor("crin"), { formula: "d6", label: "Bite", keywords: "close, 1 piercing", rollMode: "normal", weapon: attackWeapon(bite), shiftKey: true });
+		const flag = damageFlag();
+		expect(flag.rotHarmless).toEqual([tokens.ash.uuid]);
+		// A bite is no poison: a Revenant's Undying box stays as it was.
+		expect(flag).not.toHaveProperty("poisonHarmless");
+		await apply(flag);
+		expect(ash.system.attributes.hp.value).toBe(10);
+	});
+
+	it("draws Child of the Deeps' box unticked, and spares the blow once ticked", async () => {
+		const { actions, message, tokens } = boxesFor(thrall("child-of-the-deeps"), "Frost breath");
+		expect(actions.kids).toHaveLength(1);
+		const [box, words] = actions.kids[0].kids;
+		expect(box.checked).toBe(false);
+		expect(words.textContent).toBe("Child of the Deeps: this is cold or pressure, which does this Thrall no harm");
+		box.checked = true;
+		await box.fire();
+		expect(message.getFlag(SCOPE, "damage").deepsUnharmed).toEqual([tokens.ash.uuid]);
+
+		const ash = thrall("child-of-the-deeps");
+		const fight = fightInARow([["ash", ash]]);
+		const row = { uuid: fight.tokens.ash.uuid, name: "Ash", raw: 9 };
+		await apply({ move: "Frost breath", weapon: null, results: [row], applied: [], deepsUnharmed: [row.uuid] });
+		expect(ash.system.attributes.hp.value).toBe(10);
+		expect(posted.at(-1).content).toContain("(Child of the Deeps)");
 	});
 });
 

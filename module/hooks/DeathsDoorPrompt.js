@@ -18,6 +18,8 @@ import {
 } from "../actors/character/unstoppable.js";
 import { BATTLE_JOY_DROPPED_OPTION, BATTLE_JOY_FLAG } from "../actors/character/battle-joy.js";
 import { canKeepOneHp } from "../actors/character/inspiration.js";
+import { rollMarkerDeletion } from "../actors/character/deaths-door-actor.js";
+import { keptHpUpdate } from "../actors/character/undeath-return.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
 import { format, localize } from "../utils/i18n.js";
 import { getSetting } from "../settings.js";
@@ -75,6 +77,10 @@ export function onPreUpdateActorDeathsDoor(actor, changes, options = {}) {
 		try {
 			const named = foundry.utils.getProperty(changes, `flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`);
 			if (named !== undefined && named !== DEATHS_DOOR_STATE.DYING) liftFightingStamp(actor, changes);
+			// The GM's "Mark dying" is a new brush with death too: Undying's kept-HP stamp goes, as on the HP path.
+			if (named === DEATHS_DOOR_STATE.DYING && resolvedFlagProperty(actor, DEATHS_DOOR_FLAG) !== DEATHS_DOOR_STATE.DYING) {
+				liftKeptHpStamp(actor, changes);
+			}
 		} catch (err) {
 			console.error("Stonetop | Error lifting Unstoppable's stamp:", err);
 		}
@@ -124,14 +130,16 @@ export function onPreUpdateActorDeathsDoor(actor, changes, options = {}) {
 			// in this same write: a marker left over from an earlier visit must never tell the next one that
 			// somebody is already rolling, or hand their old card to a Take over.
 			if (resolvedFlagProperty(actor, DEATHS_DOOR_ROLLING_FLAG)) {
-				const [key, value] = deletionEntry(`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_ROLLING_FLAG}`);
-				foundry.utils.setProperty(changes, key, value);
+				for (const [key, value] of Object.entries(rollMarkerDeletion())) foundry.utils.setProperty(changes, key, value);
 			}
 			// So does a Hard to Kill trade left open by the last one's 7-9: a new brush is a new roll.
 			if (next === DEATHS_DOOR_STATE.DYING && resolvedFlagProperty(actor, HARD_TO_KILL_TRADE_FLAG)) {
 				const [key, value] = deletionEntry(`flags.${STONETOP_SCOPE}.${HARD_TO_KILL_TRADE_FLAG}`);
 				foundry.utils.setProperty(changes, key, value);
 			}
+			// And Undying's kept-HP stamp from the last one's "out of the action" cost: left in place, a "not lethal"
+			// ruling on this brush would have "Back on your feet" keep the 0 HP they have now.
+			if (next === DEATHS_DOOR_STATE.DYING) liftKeptHpStamp(actor, changes);
 		}
 
 		// Unstoppable: "When you are reduced to 0 HP IN BATTLE, you can keep fighting" (Book I p.114). Whether
@@ -179,6 +187,11 @@ export function onPreUpdateActorDeathsDoor(actor, changes, options = {}) {
 	} catch (err) {
 		console.error("Stonetop | Error recording the dying state:", err);
 	}
+}
+
+/** Fold the lifting of Undying's kept-HP stamp (undeath-return.js) into a pending write (nothing when none is laid). */
+function liftKeptHpStamp(actor, changes) {
+	for (const [key, value] of Object.entries(keptHpUpdate(actor, false))) foundry.utils.setProperty(changes, key, value);
 }
 
 /** Fold the lifting of Unstoppable's "fighting on" stamp into a pending write (nothing when none is laid). */
@@ -410,8 +423,31 @@ export function answersFor(actor) {
 export async function openZeroHpMove(actor) {
 	const sheet = actor?.sheet;
 	if (!sheet) return;
-	await sheet.render(true);
+	await sheetOnScreen(sheet);
 	await sheet._onDeathsDoorOpen?.();
+}
+
+/**
+ * Open `sheet` and resolve once it is drawn. An AppV1 sheet's `render(true)` returns before the window
+ * is on screen, so for a closed sheet the walkthrough opened straight after it was drawn FIRST and the
+ * sheet then landed on top of it, over its Roll button (live, 2026-10-28). An open sheet is only raised.
+ * Gives up waiting after `timeout` ms, so a sheet that never draws can't hold the walkthrough back.
+ */
+export function sheetOnScreen(sheet, { timeout = 3000 } = {}) {
+	if (sheet.rendered) { sheet.render(true); return Promise.resolve(); }
+	return new Promise(resolve => {
+		const hooks = ["renderActorSheet", "renderApplication"];
+		const ids = [];
+		let timer = null;
+		const done = () => {
+			hooks.forEach((name, i) => Hooks.off(name, ids[i]));
+			clearTimeout(timer);
+			resolve();
+		};
+		for (const name of hooks) ids.push(Hooks.on(name, app => { if (app === sheet) done(); }));
+		timer = setTimeout(done, timeout);
+		sheet.render(true);
+	});
 }
 
 /**
@@ -535,7 +571,7 @@ export async function markNotLethal(actor) {
 	const joyEnds = !!resolvedFlagProperty(actor, BATTLE_JOY_FLAG);
 	await actor.update({
 		[`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`]: DEATHS_DOOR_STATE.OUT_OF_ACTION,
-		...Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_ROLLING_FLAG}`)]),
+		...rollMarkerDeletion(),
 		...(joyEnds ? Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${BATTLE_JOY_FLAG}`)]) : {}),
 		...unstoppable.update,
 		// Out of the action, they have stopped fighting: the "fighting on" stamp goes too.
@@ -574,10 +610,13 @@ export async function markDyingByFiat(actor) {
 	}
 	// A new brush with death: whatever the last one's 7-9 left open for Hard to Kill goes with it, as on the HP path.
 	// And they were not "reduced to 0 HP in battle" by this ruling (Book I p.114): already down, they face the Door
-	// rather than fight on, so no Unstoppable stamp is laid, and any left over is lifted.
+	// rather than fight on, so no Unstoppable stamp is laid, and any left over is lifted. So does a roll marker
+	// (DEATHS_DOOR_ROLLING_FLAG) the last one left behind, as going down on hit points lifts it: a new brush is a
+	// new roll, and a landed Undying or Dark Succor roll left over would otherwise be resumed (UndeathDialog).
 	await actor.update({
 		[`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`]: DEATHS_DOOR_STATE.DYING,
 		...Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${HARD_TO_KILL_TRADE_FLAG}`)]),
+		...rollMarkerDeletion(),
 		...stopFightingUpdate(actor),
 	}, { stonetopMove: localize(`${_I18N}.title`) });
 	return true;

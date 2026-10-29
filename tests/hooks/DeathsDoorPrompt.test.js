@@ -21,7 +21,8 @@ const user = (id, { isGM = false, active = true, assigned = false } = {}) => ({ 
  * dying PC, and only one of them is playing them.
  */
 function world({ me = "player-1", owners = ["player-1", "player-2", "gm"], playedBy = "player-1", settings = {} } = {}) {
-	const sheet = { render: vi.fn(async () => {}), _onDeathsDoorOpen: vi.fn(async () => {}) };
+	// Already on screen: the order the sheet and the walkthrough draw in is open-zero-hp-move.test.js's business.
+	const sheet = { rendered: true, render: vi.fn(async () => {}), _onDeathsDoorOpen: vi.fn(async () => {}) };
 	const actor = { id: "actor-1", type: "character", sheet };
 	const users = [
 		{ id: "player-1", isGM: false, active: true },

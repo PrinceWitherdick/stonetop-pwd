@@ -71,7 +71,7 @@ export const SUPERSEDED = {
 	"aMTTEPwmuEaVrjnx": {"crossPlaybook":["9b55e0da69fcb93a"],"description":["960bda705db4d076"],"requirement":["9b55e0da69fcb93a"]}, // Seasoned Warrior (The Heavy)
 	"anUbm73QNd8A0aai": {"cap":["9b55e0da69fcb93a"],"description":["4dfb43e86d92d6b3"],"requirement":["9b55e0da69fcb93a"]}, // Superior Stat (The Marshal)
 	"AO32oNSm4l0H3dKv": {"description":["315fd21b4dab8711"],"requirement":["9b55e0da69fcb93a"]}, // Like a Dog with a Bone (The Judge)
-	"apBTuwKXNYmtl8rX": {"noXpOnMiss":["9b55e0da69fcb93a"]}, // Death's Door
+	"apBTuwKXNYmtl8rX": {"description":["03399025a116f61c"],"noXpOnMiss":["9b55e0da69fcb93a"]}, // Death's Door
 	"AR5P7VaOPdVb2sKD": {"description":["22640f6cbc0b7208"]}, // Sir, Permission to Die, Sir (The Marshal)
 	"atAXBUvL5QvA5W4X": {"cap":["9b55e0da69fcb93a"],"description":["4dfb43e86d92d6b3"],"requirement":["9b55e0da69fcb93a"]}, // Superior Stat (The Fox)
 	"AujuxbJNCUfpFP5s": {"description":["495ade05b306aece"]}, // Everything Bleeds (The Seeker)
@@ -257,6 +257,7 @@ export const SUPERSEDED = {
 	"pFtnrGUmaBTMeRl6": {"description":["db6eff463432b234"]}, // Lightning Rod (The Blessed)
 	"pJjxxwiK9dCJ3ibx": {"description":["f9c888175e0c1b82"]}, // Predator (The Ranger)
 	"PoIWU6Qdplkm9Dd0": {"description":["bacd441dab33cac3"]}, // Vision Unclouded (The Judge)
+	"Pq4wRt7yUz2xNv8K": {"resource":["8da8ea0f30995fa1"],"resource.uncapped":["9b55e0da69fcb93a"]}, // Poltergeist (ghost)
 	"PYXUWkHmFT4B9HcH": {"description":["b665d5d41ec3ced8"],"moveResults":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Burgle (The Fox)
 	"PzaeSTkTKEUy9CHN": {"description":["abd57c96c1e47b77"]}, // Underestimated (The Would-Be Hero)
 	"pZIRgdcOK60QDeAw": {"asterisk":["25857b07fb89e481"],"description":["31e1081629aac7bc"],"requirement":["9b55e0da69fcb93a"]}, // Undaunted (The Would-Be Hero)
@@ -481,7 +482,7 @@ export const CURRENT_FINGERPRINTS = {
 	"anUbm73QNd8A0aai": "40ecb288378dc47f",
 	"AO32oNSm4l0H3dKv": "b7acd447851774b1",
 	"aoMKzkCOxvFUZF8O": "16fabbe14eded51d",
-	"apBTuwKXNYmtl8rX": "1f08a9ba7ea6608e",
+	"apBTuwKXNYmtl8rX": "504716c0c8cd3c33",
 	"AQLKHu7qnQTupqzi": "335514fd70a2b70a",
 	"AR5P7VaOPdVb2sKD": "5b511f4083341090",
 	"AraVNqTIAae24HZK": "7857efe967972cd5",
@@ -760,7 +761,7 @@ export const CURRENT_FINGERPRINTS = {
 	"pJjxxwiK9dCJ3ibx": "81e84e9ea8068546",
 	"PoIWU6Qdplkm9Dd0": "36d0ba4b00ee10f7",
 	"PPgdzUvZ3gpmmICi": "5e3e84d385d942b3",
-	"Pq4wRt7yUz2xNv8K": "5d58efae039eae02",
+	"Pq4wRt7yUz2xNv8K": "c3dfe329bef2a3ad",
 	"PqlQqc82Ww7z97Nr": "69120f947b49198c",
 	"PuDCCRnGEY59YVkQ": "5e24dc1170c951b3",
 	"PysepsFvW8qJGPHy": "ada52c122d1ebdb5",

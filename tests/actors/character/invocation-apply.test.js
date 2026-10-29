@@ -1190,7 +1190,7 @@ describe("Go Back to the Shadow's button", () => {
 		const hungry = { ...seren, items: [{ type: "move", name: "Hungry Flames" }] };
 		const message = card({ invocations: [GO_BACK_TO_THE_SHADOW] });
 		await expect(settleShadowDamage(message, hungry, { roll })).resolves.toBe(true);
-		expect(roll).toHaveBeenCalledWith(hungry, expect.objectContaining({ move: "Go Back to the Shadow", formula: "2d8" }));
+		expect(roll).toHaveBeenCalledWith(hungry, expect.objectContaining({ move: "Go Back to the Shadow", formula: "2d8", harmsSpirits: true }));
 		expect(roll.mock.calls[0][1].offers.map(o => o.key)).toEqual(["hungryFlames"]);
 		expect(message.getFlag(SCOPE, SHADOW_FLAG)).toBe(true);
 		await expect(settleShadowDamage(message, hungry, { roll })).resolves.toBe(false);

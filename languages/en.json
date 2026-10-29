@@ -595,6 +595,13 @@
         "outOfActionHint": "No longer dying, but out of the action until the GM says otherwise.",
         "dispersedHint": "Your essence has dispersed. You reform near your tether at the next sunset with {hp} HP.",
         "reform": "Reform at your tether",
+        "tetherIntactTitle": "Reform at your tether",
+        "tetherIntactBody": "Is {tether} still intact? If your tether has been destroyed, you mark the Final Consequence instead of reforming.",
+        "tetherUnnamed": "your tether",
+        "tetherIntactYes": "Intact: reform",
+        "tetherIntactNo": "Destroyed: mark the Final Consequence",
+        "tetherIntactLater": "Not yet",
+        "tetherLost": "{name}'s tether was destroyed while they were dispersed: marked <strong>the Final Consequence</strong>. They pass into the GM's hands.",
         "backOnFeet": "Back on your feet",
         "backOnFeetHint": "Out of the action. Back on your feet, you return with {hp} HP.",
         "deadHint": "They stepped through the Last Door.",
@@ -641,12 +648,19 @@
           },
           "thrall": {
             "label": "Call on one of the Things Below by name and beseech it to intercede; gain the Thrall insert",
-            "hint": "You must know the name of a Thing Below. If none have come up in play, you can't call on one."
+            "hint": "You must know the name of a Thing Below. If none have come up in play, ask the GM: maybe you can Know Things before you die."
           }
         },
         "refusalHints": {
           "revenant": "You cling stubbornly to your body.",
           "ghost": "Your body is dead and gone; your soul lingers."
+        },
+        "dictated": {
+          "redwoodEffigy": "{arcanum}: you marked the Consequence that leaves you no choice on a 6- here. You gain the Revenant insert until the effigy is destroyed (then you become a wraith the GM controls) or buried in a Red Grove (then you become a spirit of that grove).",
+          "iceSphere": "{arcanum}: you marked the Consequence that leaves you no choice on a 6- here. You gain the Ghost insert, with the Ice Sphere as your tether (filled in for you when you take the Ghost).",
+          "hungeringMaw": "{arcanum}: you marked the Consequence that says a 6- here kills you, and you become a wraith, a monster in the GM's control.",
+          "others": "That fate is marked below. The others stay open, in case your table rules otherwise.",
+          "suggested": "Your arcanum decides this one"
         },
         "taken": {
           "refused": {
@@ -775,7 +789,7 @@
           "next": "Next"
         },
         "summary": "When you <em><strong>are dying</strong></em>, you glimpse the Last Door and the Lady of Crows. Roll +nothing: on a 10+ return to 1 HP; on a 7-9 you're out of action; on a 6- choose a dark fate.",
-        "description": "When you <em><strong>are dying</strong></em>, you glimpse the Last Door and the Lady of Crows (describe it). Then, roll +nothing: on a 10+, you wrest yourself back to the realm of the living&mdash;return to 1 HP but say how your brush with death has marked you; on a 7-9, the Lady waves you off&mdash;you're no longer dying but you're out of the action; on a 6-, your time has come&mdash;choose 1: make one last move as if you rolled a 12+, then step through the Last Door; refuse to go and gain the Revenant or Ghost insert; or call on one of the Things Below by name and beseech it to intercede, gaining the Thrall insert."
+        "description": "When you <em><strong>are dying</strong></em>, you glimpse the Last Door and the Lady of Crows (describe them). Then, roll +nothing: on a 10+, you wrest yourself back to the realm of the living&mdash;return to 1 HP but say how your brush with death has marked you; on a 7-9, the Lady waves you off&mdash;you're no longer dying but you're out of the action; on a 6-, your time has come&mdash;choose 1: make one last move as if you rolled a 12+, then step through the Last Door; refuse to go and gain the Revenant or Ghost insert; or call on one of the Things Below by name and beseech it to intercede, gaining the Thrall insert."
       },
       "levelUp": {
         "title": "Level Up",
@@ -824,7 +838,11 @@
         "companionIntro": "Beast-Bonded: mark another action you can use when you focus on your animal companion.",
         "reviewReminder": "Last, review your Instinct and Appearance on the Details tab. Change anything that no longer applies, or make up something new.",
         "reviewReminderTemporary": "Last, your temporary Instinct \"{instinct}\" ends with this Level Up, and your own Instinct is back. Review it and your Appearance on the Details tab. Change anything that no longer applies, or make up something new.",
-        "reviewReminderInsert": "Last, review your Instinct (your {insert} insert's, which replaced your playbook's) and your Appearance on the Details tab. Change anything that no longer applies.",
+        "reviewReminderInsert": "Last, review your Instinct (your {insert} insert's, which replaced your playbook's) on the Post-Death tab, in edit mode, and your Appearance on the Details tab. Change anything that no longer applies, or make up something new.",
+        "reviewReminderTemporaryInsert": "Last, your temporary Instinct \"{instinct}\" ends with this Level Up, and your insert's Instinct is back. Review it on the Post-Death tab, in edit mode, and your Appearance on the Details tab. Change anything that no longer applies, or make up something new.",
+        "reviewReminderInsertUnchosen": "Last, choose your Instinct on the Post-Death tab (your insert's replaces your playbook's), and review your Appearance on the Details tab.",
+        "insertInert": "Never fires for you: at 0 HP you face {move}, not Death's Door.",
+        "insertInertHalf": "Its Death's Door half never fires for you: at 0 HP you face {move}, not Death's Door.",
         "instinctEnded": "Your temporary Instinct \"{instinct}\" has ended.",
         "partlyFailed": "Level {level} is reached, but some of it could not be saved: {parts}. Finish it on the sheet.",
         "again": "You have enough XP to level up again, so here's the next one.",
@@ -866,6 +884,7 @@
         "noSuppliesHint": "You have no uses of supplies to expend.",
         "fullHpHint": "You're already at full HP.",
         "unlivingHint": "Unliving: no benefit. A Ghost or Revenant gains nothing from Recover.",
+        "unlivingFollowersHint": "Unliving: you gain nothing from Recover, but your hurt followers still can.",
         "otherPayerNote": "Someone else can expend a use on your behalf. Their player is asked first when it is theirs to decide.",
         "followersButton": "Recover the followers ticked",
         "followersLegend": "Followers who Recover too (1 use of supplies each, +{heal} HP):",
@@ -894,7 +913,8 @@
         "summary": "When you <em><strong>rest for a few days, in safety and comfort</strong></em>, recover all your HP and clear all your debilities.",
         "nothingHint": "You're already at full HP with no debilities to clear.",
         "followersLegend": "Followers who rest with you, back to full HP:",
-        "unlivingHint": "Unliving: no benefit. A Ghost or Revenant gains nothing from Convalesce."
+        "unlivingHint": "Unliving: no benefit. A Ghost or Revenant gains nothing from Convalesce.",
+        "unlivingFollowersHint": "Unliving: you gain nothing from Convalesce, but the followers who rest with you still do."
       },
       "bolster": {
         "title": "Bolster",
@@ -914,6 +934,26 @@
       "becameGhost": "Gave up the Revenant insert and became a <strong>Ghost</strong>. Your Terrible Purpose stays with you; choose your first Consequence as a Ghost.",
       "ghostDown": "Your body is given up, so no HP comes back now: you're out of the action until you reform (Reform at your tether, on your Special Moves tab).",
       "taskStanding": "Your master's task still stands: \"{task}\". A new task takes its place.",
+      "rolledBy": "Rolled by {name}. That roll stands.",
+      "settled": "{move} is no longer owed: {name} is not dying, or it was resolved from another window.",
+      "nothingPaid": "Resolved, with nothing left to pay.",
+      "dispersed": "Your essence disperses until the next sunset. You reform near <strong>{tether}</strong> with <strong>{hp} HP</strong> (Reform at your tether, on your Special Moves tab).",
+      "dispersedUnbound": "Your essence disperses until the next sunset. You reform near your tether with <strong>{hp} HP</strong> (Reform at your tether, on your Special Moves tab).",
+      "unpayable": {
+        "note": "Every Consequence is already marked; the move can't be paid. The GM rules.",
+        "final": "The GM rules: mark the Final Consequence",
+        "marked": "Every Consequence was already marked, and the GM ruled: marked <strong>the Final Consequence</strong>. You pass into the GM's hands."
+      },
+      "becomeGhostTitle": "Become a Ghost?",
+      "becomeGhostBody": "Give up the Revenant insert and gain the Ghost insert instead. Your body is given up for good.",
+      "becomeGhostLost": "Give up the Revenant insert and gain the Ghost insert instead. Your body is given up for good, and these Consequences go with it, since the Ghost doesn't print them: {lost}.",
+      "becomeGhostYes": "Become a Ghost",
+      "becomeGhostNo": "Keep the Revenant",
+      "maimingsTitle": "Your maimings",
+      "maimingsBody": "Undying left {count} permanent maiming(s) on your wound list. The body that carried them is gone: mark them healed?",
+      "maimingsYes": "Mark them healed",
+      "maimingsNo": "Keep them",
+      "maimingsHealed": "Your body's maimings are healed: the body is gone.",
       "unholyVessel": {
         "label": "Unholy Vessel",
         "warning": "You would gain a Mark, but there are none left to gain. Your humanity is utterly lost: you become a threat in the GM's control. Make a new character.",
@@ -923,7 +963,7 @@
     },
     "postDeath": {
       "chooseFate": "Choose Your Fate",
-      "chooseFateHint": "You take one of these only when it becomes relevant: you died, and refused to go. Death's Door grants it for you on a 6-; pick one here if your table resolved that away from the sheet.",
+      "chooseFateHint": "You take one of these only when it becomes relevant: you died and refused to go, or called on a Thing Below. Death's Door grants these on a 6-. Pick one here when your table resolved that away from the sheet, or when something else grants one (Blackwater Lake, the Pale Hunter).",
       "removeInsert": "Remove Insert",
       "hideTab": "Remove Post-Death Tab",
       "hideTabHint": "Take this tab off the sheet. It comes back on its own if this character takes an insert, or faces the Last Door.",
@@ -932,11 +972,13 @@
       "tetherPlaceholder": "Your mortal remains, the place where you died, an object of significance…",
       "tetherMissing": "Name your tether. Tethered can't resolve without knowing where you reform.",
       "crossedOff": "Crossed Off",
-      "crossedOffHint": "Dark Succor took these away. You can never gain them.",
+      "crossedOffHint": "Crossed off by Dark Succor, or by the GM when Favor overflowed into a new Mark. You can never gain them.",
       "carriedOver": "carried over",
       "masterTask": "Your Master's Task",
       "masterTaskHint": "Until it's done, your Favor stays at 0.",
       "instinct": "Instinct",
+      "instinctCustomWordLabel": "Your own Instinct: the word",
+      "instinctCustomDescLabel": "Your own Instinct: what it means",
       "moves": "Granted Moves",
       "purpose": "In Your Own Words",
       "retiredTooltip": "Who they were before they died. The playbook and its Instinct are still on the sheet, and come back if the insert is removed.",
@@ -961,6 +1003,7 @@
         "clearConsequence": "Clear a consequence",
         "markConsequence": "Mark a consequence",
         "lastDoor": "Pass through the Last Door",
+        "markFinal": "Mark the Final Consequence",
         "regainD8": "Regain 1d8 HP",
         "clearDebility": "Clear a debility",
         "healHalf": "Heal half your max HP",
@@ -985,6 +1028,7 @@
         "lastDoorYes": "Pass through the Last Door",
         "lastDoorNo": "Not yet, they stay",
         "lastDoorLine": "<strong>{name}</strong> passes through the Last Door.",
+        "finalLine": "<strong>{name}</strong> marks the Final Consequence ({source}): their tenuous connection to humanity is lost, and they become a monster under the GM's control.",
         "regained": "HP <strong>{from}</strong> &rarr; <strong>{to}</strong>.",
         "rolledHeal": "rolled {roll}, HP <strong>{from}</strong> &rarr; <strong>{to}</strong>.",
         "rolledNoGain": "rolled {roll}, but they are already at full HP.",
@@ -1000,9 +1044,44 @@
         "favorHeldByTask": "Held at 0 until your master's task is done",
         "favorCautionTask": "Your master's task isn't done yet, and until it is, your Favor stays at 0 (Dark Succor).",
         "favorPip": "Favor {n} of {max}",
-        "favorHint": "A ticked pip is Favor held. Click a pip to set your Favor to it.",
+        "favorHint": "A ticked pip is Favor held. Press +1 Favor when you gain one: at 3, another resets it to 0 and you choose what your master gives you. Click a pip to correct the count by hand.",
+        "favorGained": "Gained 1 Favor: <strong>{held}</strong> of {max} held.",
+        "reasonNoFavor": "You hold no Favor to spend.",
+        "favorActions": {
+          "gain": {
+            "label": "+1 Favor",
+            "tooltip": "Urges: you acted as bidden, or acted on your impulse uncompelled and it caused you or your allies trouble. At 3 Favor, gaining another resets it to 0 and you choose 1."
+          },
+          "tentacle": {
+            "label": "Call the tentacle (1 Favor)",
+            "tooltip": "Child of the Deeps: while near a body of water (the table's call), spend 1 Favor to call forth a slimy tentacle to do your bidding. It joins your Followers.",
+            "card": "Child of the Deeps"
+          },
+          "maw": {
+            "label": "Gain the maw (1 Favor)",
+            "tooltip": "Ravenous: spend 1 Favor to gain a horrid, iron-rending maw (hand, 3 piercing, messy) for as long as you wish. Clash offers it as a weapon while it is out.",
+            "card": "Ravenous"
+          },
+          "maw-away": {
+            "label": "Put the maw away",
+            "tooltip": "Ravenous: the maw lasts for as long as you wish. Put it away; bringing it back costs another 1 Favor."
+          }
+        },
+        "overflowTitle": "Favor Overflows",
+        "overflowAsk": "You have 3 Favor and would gain another. Your Favor is reduced to 0. Choose 1:",
+        "overflowQuestion": "Ask your master a question (advantage on your next roll to act on the answer)",
+        "overflowMark": "Gain a new Mark of your choice (then the GM crosses one off)",
+        "overflowQuestionSource": "Your master's answer (Favor)",
+        "overflowAsked": "Asked a question of their master: advantage on their next roll to act on the answer.",
+        "overflowCrossOff": "Now ask the GM to choose a Mark that you don't have, and cross it off: you can never gain it. (GM: Cross off, on that Mark in edit mode.)",
+        "tentacleCalled": "Called forth a slimy tentacle from the water. It is on the Followers tab.",
+        "tentacleAgain": "Called forth the slimy tentacle again (its card is already on the Followers tab).",
+        "mawDescription": "You gain a horrid, iron-rending maw (<em>hand</em>, 3 piercing, <em>messy</em>) for as long as you wish, and with it the ability to eat and digest anything.",
+        "mawOut": "Gained a horrid, iron-rending maw (hand, 3 piercing, messy), and with it the ability to eat and digest anything. Clash offers it as a weapon until it is put away.",
+        "mawAway": "Put the horrid maw away.",
+        "ravenousImpulse": "Wantonly devour flesh (Ravenous)",
         "gainMark": "Gain a Mark",
-        "gainMarkHint": "When Favor goes past 3 and you choose a new Mark: your Favor goes to 0. Then the GM crosses off one you don't have. With none left to gain, it is Unholy Vessel.",
+        "gainMarkHint": "Adds a Mark of your choice. When Favor would go past 3, press +1 Favor instead: it resets Favor to 0, asks what your master gives you, and has the GM cross off a Mark if you take one. With none left to gain, it is Unholy Vessel.",
         "gainMarkTitle": "Gain a Mark",
         "gainMarkAsk": "<p>Which Mark does this Thrall gain?</p>",
         "markGained": "Gained the Mark <strong>{name}</strong>.",
@@ -1020,6 +1099,7 @@
         "taskDoneLine": "Completed the master's task: <em>{task}</em>. Favor can rise again.",
         "cautionNeedsFirst": "{name} requires {requires}, which is not marked. Flagged, not blocked.",
         "cautionTwoPurposes": "The Terrible Purpose is choose 1, but {names} are marked together. Flagged, not blocked.",
+        "cautionTwoImpulses": "The GM chooses 1 Impulse, but {names} are marked together. Flagged, not blocked.",
         "finalTitle": "Mark the Final Consequence?",
         "finalBody": "<p>The Final Consequence ends <strong>{name}</strong> as a player character: their tenuous connection to humanity is lost, and they become a monster under the GM's control.</p>",
         "finalYes": "Mark it: they become a monster",
@@ -2559,10 +2639,25 @@
       "unstableNote": "<strong>Unstable:</strong> on a 6-, the GM can choose to have you enter an unthinking, unfeeling rage (as per Breakdown).",
       "hpLost": "HP lost",
       "hpLine": "HP {from} → {to}",
-      "furyHeld": "Holds {held} Fury (of {max})",
+      "furyHeld": "Holds {held} Fury",
       "noFury": "No Fury held to spend.",
       "shattered": "{name} spends 1 Fury to shatter, break, or destroy a number of small mundane objects, or one big object ({held} Fury left).",
       "possessDetail": "Possesses an unconscious or willing person",
+      "possessDetailNamed": "Possesses {host}: the damage they take, you lose as HP",
+      "possessWhoAsk": "<p>Which of the targeted tokens do you possess? While you do, the damage they take, you lose as HP.</p>",
+      "possessNoTarget": "<p>No token is targeted, so nobody's damage can follow you. Target the person you possess first, or possess them anyway with nobody recorded.</p>",
+      "possessAnyway": "Possess anyway (nobody recorded)",
+      "possessCancel": "Not yet",
+      "possessionEnded": "{name} leaves {host}'s body.",
+      "possessionEndedAtZero": "{name} is at 0 HP and forced from {host}'s body.",
+      "hostHurt": "{host} took {n} damage while possessed: you lose an equal amount of HP",
+      "theHost": "their host",
+      "forcedOut": "Forced out: mark a consequence",
+      "forcedOutTitle": "Bodysnatcher: forced out",
+      "forcedOutAsk": "<p>{host} forces you from their body. Which consequence do you mark? You'll never be able to possess them again.</p>",
+      "forcedOutMark": "Mark {name}",
+      "forcedOutLine": "{name} is forced from {host}'s body and marks the consequence {consequence}. They can never possess {host} again.",
+      "forcedOutNoneLeft": "{name} is forced from {host}'s body. Every consequence is already marked, so it can't be paid: the GM rules. They can never possess {host} again.",
       "noFavor": "Not enough Favor held to spend.",
       "favorAsk": "Spend how much Favor? You hold {held}, and the roll adds what you spend.",
       "favorSpend": "Spend {n} Favor",
@@ -2571,6 +2666,7 @@
       "manifestButton": "Manifest",
       "manifested": "Manifests: {list}",
       "manifestNote": "{name} manifests a ghostly presence: {list}.",
+      "manifestEnded": "{name} is no longer manifest.",
       "pushAsk": "You push the limits of your undead body: lose 1d4 HP and choose 1.",
       "ownDamage": "Deal your damage (forceful)",
       "loseHp": "Lose {formula} HP",
@@ -2607,11 +2703,19 @@
         },
         "possess": {
           "label": "Possess (lose 1d4 HP)",
-          "tooltip": "When you possess an unconscious or willing person, lose 1d4 HP and control their actions."
+          "tooltip": "When you possess an unconscious or willing person, lose 1d4 HP and control their actions. Target their token first, and the damage they take, you lose as HP."
+        },
+        "endPossession": {
+          "label": "End possession of {host}",
+          "tooltip": "You are possessing {host}: the damage they take, you lose as HP. Press when the possession ends."
         },
         "manifest": {
           "label": "Manifest",
           "tooltip": "When you manifest a ghostly presence in shadows or darkness, pick 1. Each additional option costs 1d4 HP."
+        },
+        "endManifestation": {
+          "label": "End manifestation",
+          "tooltip": "You are manifest: {list}. You remain so for as long as you concentrate. Press when you stop, or when pain, shock or sunlight breaks it."
         },
         "push": {
           "label": "Push your limits (lose 1d4 HP)",
@@ -2626,6 +2730,14 @@
           "label": "Speak a word of torment (spend Favor)",
           "tooltip": "Name someone nearby, spend 1-3 Favor, and roll +Favor spent.",
           "empty": "You hold no Favor to spend."
+        },
+        "gainFavor": {
+          "label": "+1 Favor",
+          "tooltip": "You acted as bidden, or acted on your impulse uncompelled and it caused you or your allies trouble: gain 1 Favor. At 3 Favor, gaining another resets it to 0 and you choose 1."
+        },
+        "mawAway": {
+          "label": "Put the maw away",
+          "tooltip": "The maw lasts for as long as you wish. Put it away; bringing it back costs another 1 Favor."
         }
       },
       "vermin": {
@@ -2633,7 +2745,21 @@
         "title": "Home to Vermin",
         "ask": "Bugs, moths, and other vermin have taken up residence in {name}'s corpse. Add them to the Followers tab as a group follower (tiny, gross, meek, stealthy; HP 1 each; Instinct to get distracted; Cost: genuine affection)?",
         "yes": "Add the vermin to Followers",
-        "no": "Leave them off"
+        "no": "Leave them off",
+        "dismissAsk": "{name} no longer has Home to Vermin: the vermin lived in their corpse. Take the {follower} card off the Followers tab?",
+        "dismissYes": "Dismiss the vermin",
+        "dismissNo": "Keep the card"
+      },
+      "tentacle": {
+        "name": "Slimy tentacle",
+        "title": "Child of the Deeps",
+        "dismissAsk": "{name} no longer has Child of the Deeps, which called forth the tentacle. Take the {follower} card off the Followers tab?",
+        "dismissYes": "Dismiss the tentacle",
+        "dismissNo": "Keep the card"
+      },
+      "festeringRot": {
+        "title": "A Festering Rot",
+        "note": "Doubles: something on your person is ruined. The GM will tell you what, and how."
       }
     },
     "wouldBeHero": {
@@ -3018,7 +3144,9 @@
       "keepCardButton": "Keep 1 HP (Inspiration)",
       "keptOneHp": "{name} spends 1 Inspiration and keeps 1 HP instead of being reduced to 0 HP ({left} left).",
       "keptOneHpJoy": "{name} spends 1 Inspiration and keeps 1 HP instead of being reduced to 0 HP ({left} left). Their Battle Joy goes on.",
-      "keptReadiness": "They still hold {count} Readiness."
+      "keptReadiness": "They still hold {count} Readiness.",
+      "keptManifestEnded": "Their manifestation still ended when they dropped: keeping 1 HP does not bring it back.",
+      "keptPossessionEnded": "They were still forced out of {host}'s body when they dropped: keeping 1 HP does not put them back."
     },
     "roiling": {
       "onLabel": "Roiling with anger",
@@ -3747,6 +3875,7 @@
         },
         "pickTitle": "Who does {name} catch?",
         "pickHint": "Tick everyone it catches. You can also target their tokens before pressing the button.",
+        "pickGhost": "{name} (Disembodied: only silver, salt or spirit harm)",
         "pickRoll": "Roll damage",
         "pickRollMany": "Roll damage against {count}",
         "pickDeath": "Reduce to 0 HP",
@@ -4029,11 +4158,22 @@
       },
       "undying": {
         "box": "Undying: from cutting, stabbing or crushing, so half damage after armor",
-        "halvedNote": "halved from {soaked} after armor, Undying"
+        "halvedNote": "halved from {soaked} after armor, Undying",
+        "poisonBox": "Undying: this is poison or disease, which does a Revenant no harm",
+        "poisonNote": "{soaked} after armor comes to nothing: neither poison nor disease harms a Revenant (Undying)"
+      },
+      "festeringRot": {
+        "box": "A Festering Rot: this is poison, disease, something caustic or a vermin's bite, which does this Thrall no harm",
+        "note": "{soaked} after armor comes to nothing: poison, disease, caustic substances and vermin bites don't harm this Thrall (A Festering Rot)"
+      },
+      "childOfTheDeeps": {
+        "box": "Child of the Deeps: this is cold or pressure, which does this Thrall no harm",
+        "note": "{soaked} after armor comes to nothing: cold and pressure don't harm this Thrall (Child of the Deeps)"
       },
       "disembodied": {
         "box": "Disembodied: this harms spirits (silver, salt, or what harms spirits or ghosts)",
-        "unharmedNote": "{soaked} after armor comes to nothing: only silver, salt, or what harms spirits can harm a Ghost (Disembodied)"
+        "unharmedNote": "{soaked} after armor comes to nothing: only silver, salt, or what harms spirits can harm a Ghost (Disembodied)",
+        "ownBlowCaution": "{name} is a Ghost, not manifest with \"Your touch (or ghostly weapons) can harm the living\": with only \"the barest influence on the material world\", this blow may not harm a living target (Disembodied, Book I p.148)."
       },
       "foeNotes": {
         "row": "Its stat block also says (not applied): {notes}",

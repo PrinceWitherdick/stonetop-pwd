@@ -10105,6 +10105,18 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	   dark palette turns the paper dark while the seal stays maroon, and the label has to stay light. */
 	--ll-seal-text: var(--tc-paper-hi);
 }
+/* The hit-tier and gold inks at their paper values, declared on the letter itself so that a window
+   which re-inks them for a black ground (the past-death sheet) cannot reach the cream: its lifted
+   inks read 2.0 to 2.7:1 here. Light mode only, because dark mode turns the letter's paper dark as
+   well, and there it keeps whatever inks the window around it has. High contrast's darker gold is
+   re-declared with its own block further down. */
+:root:not(.stonetop-dark) .tab.moves .stonetop-item.stonetop-love-letter,
+:root:not(.stonetop-dark) .stonetop-love-letter-read-dialog {
+	--st-tier-failure-text: #6e0000;
+	--st-tier-partial-text: #6b4400;
+	--st-tier-success-text: #1a4a1a;
+	--st-gold-text:         #8a6d12;
+}
 .tab.moves .stonetop-item.stonetop-love-letter {
 	position: relative;
 	padding: 0.8rem 1rem 0.85rem 1.15rem;
@@ -16461,6 +16473,36 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	white-space: normal;
 }
 
+/* A fate a held arcanum dictates (Redwood Effigy, Noruba's Ice Sphere, the Hungering Maw): the gold
+   caution, flagged and never blocked. The line above the fates names the arcanum; the fate it
+   dictates wears the gold edge and says so in words, so it is not told by colour alone. The bright
+   gold stop carries it on the Door's black paper, as on the past-death sheet. */
+.deaths-door-dictated {
+	margin: 0;
+	padding: 8px 10px;
+	border: 1px solid var(--st-gold-border);
+	border-left-width: 3px;
+	border-radius: var(--st-radius-sm);
+	background: var(--st-gold-bg);
+	color: var(--st-gold-text);
+	line-height: 1.4;
+}
+
+.deaths-door-dictated > i { margin-right: 4px; }
+
+:is(.deaths-door-mood--dusk, .deaths-door-mood--waved-off, .deaths-door-mood--door) .deaths-door-dictated,
+:is(.deaths-door-mood--dusk, .deaths-door-mood--waved-off, .deaths-door-mood--door) .deaths-door-fate-dictated {
+	color: var(--st-gold-border);
+}
+
+.deaths-door-fate-dictated {
+	font-size: var(--st-fs-sm);
+	font-weight: 700;
+	color: var(--st-gold-text);
+	line-height: 1.35;
+	white-space: normal;
+}
+
 /* ── Death's Door: Hard to Kill's 7-9 debility trade ───────────────── */
 
 .deaths-door-debility-trade {
@@ -16901,6 +16943,14 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	box-shadow: inset 3px 0 0 var(--dd-accent), 0 0 14px -4px var(--dd-accent);
 }
 
+/* The fate a held arcanum dictates keeps its gold edge in the dark and on hover (see .deaths-door-dictated). */
+:is(.deaths-door-fate-btn, .deaths-door-insert-btn).is-dictated,
+.deaths-door-mood--door :is(.deaths-door-fate-btn, .deaths-door-insert-btn).is-dictated,
+.deaths-door-mood--door :is(.deaths-door-fate-btn, .deaths-door-insert-btn).is-dictated:hover {
+	border-color: var(--st-gold-border);
+	box-shadow: inset 3px 0 0 var(--st-gold-border), 0 0 14px -6px var(--st-gold-border);
+}
+
 /* ── The rail, in the dark ─────────────────────────────────────────
    The last step wears the shared .stonetop-guide-toc chrome, which is mixed for parchment: its
    fills are black-on-light and its hover is a warm cream that lands as a lit block on this
@@ -17050,6 +17100,16 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	--st-blue-text:                hsl(212 55% 78%);
 	--st-green-bg:                 hsla(140, 35%, 30%, 0.32);
 	--st-green-border:             hsl(140 30% 50%);
+	/* The hit tiers on every move card, lifted the same way the insert chat cards lift them (same
+	   values). The paper inks measured 1.66 to 2.45:1 here. These clear 4.5:1 on the panel, on a
+	   card's fill and under the rolled tier's wash (failure, the lowest: 6.2:1 at 12%, 4.6:1 at 16%
+	   with the wash). --st-rolled-ink reads these, so the rolled row comes along. */
+	--st-tier-failure-text:        hsl(6 62% 68%);
+	--st-tier-partial-text:        hsl(38 60% 64%);
+	--st-tier-success-text:        hsl(140 34% 62%);
+	/* The gold caution ink (the "once per level" mark note on a move card, and the other flagged
+	   picks), the dark-mode stop: the paper one is 3.4:1 here, this is 8.3:1. */
+	--st-gold-text:                #d9b44a;
 	/* The Judge's brand furniture, turned over the same way. Not merely dimmed on black paper but
 	   GONE: these are near-black at their paper values, so the scales' branding state and the
 	   roster's hover and focus marks would paint black-on-black. Reached by a condemned PC's own
@@ -17111,6 +17171,9 @@ button.stonetop-mark-sign-btn.is-active:hover {
 		#fff var(--st-inverted-paper) center / cover no-repeat;
 	background-blend-mode: normal, normal, difference;
 }
+
+/* A love letter on this sheet stays cream paper, and it declares its own tier and gold inks at their
+   paper values (see the letter's own rules), so the lifted inks above stop at its edge. */
 
 /* The one warmth on the sheet is whichever thing brought them back, so the ink tints the paper
    the faintest amount rather than being spent only on rules and edges. The colours themselves are
@@ -54995,6 +55058,12 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	--tc-rule-hard: #4a3d2a;   /* 9.36:1, from 3.46:1 */
 	--tc-ink-soft:  #33291d;   /* 12.6:1, from 8.99:1 */
 }
+/* The letter declares its paper gold on itself in light mode, which puts the root block's darker
+   gold out of its reach, so it is given back here. */
+:root.stonetop-high-contrast:not(.stonetop-dark) .tab.moves .stonetop-item.stonetop-love-letter,
+:root.stonetop-high-contrast:not(.stonetop-dark) .stonetop-love-letter-read-dialog {
+	--st-gold-text: #5c470b;
+}
 
 /* THE ONE PLACE THE RAMP SITS ON A DARK GROUND. The playbook picker's tooltip paints itself
    #2a2a2a and letters its complexity line in `--st-text-faint`, which works at 5.04:1 while
@@ -55044,6 +55113,10 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 	--st-accent-fill:            hsl(210 15% 68%);  /*  8.2:1 as a pip, from 2.1:1 */
 	--color-text-hyperlink:      hsl(30 90% 70%);   /* 10.4:1, from 2.0:1 */
 	--color-text-dark-inactive:  hsl(0 0% 66%);     /*  7.9:1, from 2.5:1 */
+	/* The hit tiers at this mode's own stops. Without these, the lifted inks these papers set win. */
+	--st-tier-failure-text:      #f3afa8;           /*  9.0:1, from 6.2:1 */
+	--st-tier-partial-text:      #eac988;           /* 10.4:1 */
+	--st-tier-success-text:      #96d7a6;           /*  9.9:1 */
 }
 
 /* ── "No Italic Text" ──────────────────────────────────────────────────

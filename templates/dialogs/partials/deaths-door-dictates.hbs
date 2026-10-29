@@ -1,0 +1,6 @@
+{{!-- The fates a held arcanum's marked Consequence dictates, flagged in gold above the fate buttons of
+      Death's Door's result step and of its fate step alike. Drawn in the calling step's own context, so
+      `this.dictates` and `@root.dictatedOthers` read what they read there. --}}
+{{#each this.dictates}}
+<p class="deaths-door-dictated"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> {{this.text}}{{#if @last}} {{@root.dictatedOthers}}{{/if}}</p>
+{{/each}}

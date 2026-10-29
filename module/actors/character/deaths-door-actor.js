@@ -5,6 +5,7 @@ import {
 	effectiveDeathsDoorState, pastDeathKind,
 } from "./deaths-door.js";
 import { hasLeftPlay } from "../../campaign/left-play.js";
+import { THRALL_MARK, hasThrallMark } from "./thrall-marks.js";
 
 // How far back through the chat log a roll's card is looked for by its nonce, when the marker never got as far
 // as naming it (the page went away while the dice were still in the air). The card is always among the latest.
@@ -73,14 +74,21 @@ export function actorDeathsDoorState(actor) {
 }
 
 /**
+ * The marker's deletion as an update fragment, for a write that lifts it alongside other changes. Built on each
+ * call: the deletion's shape depends on the running core generation (foundry-compat.js#deletionEntry).
+ */
+export function rollMarkerDeletion() {
+	return Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_ROLLING_FLAG}`)]);
+}
+
+/**
  * Clear the marker, but only while it still names roll `nonce`: a roll taken over since, or a newer one, is not
  * this caller's to clear. Whether it wrote anything.
  */
 export async function clearDeathsDoorRollMarker(actor, nonce) {
 	const marker = deathsDoorRollMarker(actor);
 	if (!marker || (nonce && marker.nonce !== nonce) || typeof actor?.update !== "function") return false;
-	const [key, value] = deletionEntry(`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_ROLLING_FLAG}`);
-	await actor.update({ [key]: value }, { render: false });
+	await actor.update(rollMarkerDeletion(), { render: false });
 	return true;
 }
 
@@ -180,24 +188,9 @@ export function isUnliving(actor) {
 	return UNLIVING_KINDS.includes(actorPastDeathKind(actor));
 }
 
-/** The Thrall Marks this file's rules turn on, by their slug in the insert's `marks` section. */
-export const THRALL_MARK = Object.freeze({
-	TORMENTS_BLESSING:  "torments-blessing",
-	RAVENOUS:           "ravenous",
-	QUICKSILVER_DREAMS: "quicksilver-dreams",
-});
-
-/**
- * Whether a Thrall has Mark `slug` marked. Read off the actor's flags rather than through the
- * character model, because Make Camp asks it of every character at the fire on every client, and a
- * camp reads raw actors (camp/camp-store.js). A Mark left on a sheet whose insert was taken away
- * (removal prunes nothing, so it can be undone) no longer counts.
- */
-export function hasThrallMark(actor, slug) {
-	if (!actor || !slug || resolvedFlagProperty(actor, "postDeathInsert.slug") !== "thrall") return false;
-	const counts = resolvedFlagProperty(actor, "postDeathLore.counts");
-	return Number(counts?.[`marks:${slug}`]) > 0;
-}
+// The Thrall Marks this file's rules turn on, and whether a character holds one: thrall-marks.js, which
+// the roll engine reads too.
+export { THRALL_MARK, hasThrallMark };
 
 /**
  * Torment's Blessing: "Your wounds are slow to heal. When you recover HP, recover only half the
