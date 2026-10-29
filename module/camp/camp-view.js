@@ -4,7 +4,7 @@ import { CREW_SUPPLIES_LABEL, CREW_SUPPLIES_SLUG } from "../actors/character/sup
 import {
 	CAMP_BENEFIT, CAMP_STATE, HAD_ALL_ALONG, HAD_ALL_ALONG_REFUSAL, SETTLE_REFUSAL, breakBreadOffered,
 	CAMP_EXTRA, debilityToClear, eatsTonight, foodAfterTonight, healTo, homeFiresHp, homeFiresKeeper, homeFiresOffered, planExtras,
-	nightmaresWarded, precautionTonight, crewBill,
+	nightmaresWarded, precautionTonight, crewBill, UNLIVING_NEEDS,
 	messKitAllAlong, messKitWouldHelp, provisionsAtFire, spareUses, suppliesAllAlong,
 } from "./camp-rules.js";
 import { plural } from "../utils/plural.js";
@@ -410,7 +410,7 @@ function rowSentences(member, offer, { eats, benefit, clearing, hpAfter, dying =
 	const others = record.followers
 		? `${record.followers} ${plural(record.followers, "follower eats", "followers eat")}`
 		: "";
-	if (member.unliving) says.push(`Needs no food or sleep (Unliving)${others ? `, but ${others}` : ""}.`);
+	if (member.unliving) says.push(`${UNLIVING_NEEDS}${others ? `, but ${others}` : ""}.`);
 	// The card's own mark already says they are going without, so only who still eats is left to say.
 	else if (!record.eats) { if (others) says.push(`${others} tonight.`); }
 	else says.push(others ? `Eating tonight, and ${others} too.` : "Eating tonight.");
@@ -458,6 +458,7 @@ function rowView(member, at, ledger, { canEdit, isMine, canOpenSheet }) {
 		isMine,
 		canEdit,
 		unliving:   member.unliving,
+		unlivingText: member.unliving ? `${UNLIVING_NEEDS}, and takes nothing from the night.` : "",
 		stateText:  member.isHost ? "Making camp" : record.ready ? "Ready" : "Still choosing",
 		stateClass: member.isHost ? "is-host" : record.ready ? "is-ready" : "is-choosing",
 		purses: offer.purses.map(p => ({

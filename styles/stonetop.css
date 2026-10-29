@@ -38968,6 +38968,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop .road-rations .road-intro,
 .stonetop .road-rations .road-hint,
 .stonetop .road-rations .road-holds,
+.stonetop .road-rations .road-unliving,
 .stonetop .road-rations .road-crew { font-size: var(--st-fs-sm); color: var(--st-text-secondary); }
 .stonetop .road-rations .road-settings { display: flex; flex-direction: column; gap: 0.35rem; }
 .stonetop .road-rations .road-field { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem 0.6rem; }

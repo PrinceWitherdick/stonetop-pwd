@@ -144,6 +144,9 @@ export const SETTLE_REFUSAL = Object.freeze({
  */
 export { UNLIVING_KINDS };
 
+/** How every party window words the Unliving rule, so Make Camp and the road never say it two ways. */
+export const UNLIVING_NEEDS = "Needs no food or sleep (Unliving)";
+
 /** Every purse a camp can be fed from, in the order a spend drains them. */
 const CAMP_PURSE_SLUGS = supplyPurseSlugsFor(SUPPLY_PURPOSE.CAMP);
 
