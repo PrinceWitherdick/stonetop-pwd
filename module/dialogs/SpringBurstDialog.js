@@ -280,6 +280,9 @@ export class SpringBurstDialog extends StepperDialog {
 			height:    "auto",
 			resizable: true,
 			classes:   ["stonetop", "stonetop-spring-dialog"],
+			// Asking for the roll redraws the step, which drew it back at its top. StepperDialog
+			// still opens a new step at its top (_stepScrollSelector).
+			scrollY:   [".stonetop-guide-main"],
 		});
 	}
 

@@ -71,6 +71,52 @@ describe("a window that keeps its reader's place", () => {
 		expect(next.column.scrollTop).toBe(240);
 	});
 
+	// A walkthrough's step, or whose turn it is: a different page opens at its top, as it would fresh.
+	it("keeps the place through a redraw of the same page, and starts a new page at its top", async () => {
+		class Paged extends Kept { get _keptPlaceKey() { return this.page; } }
+		const app = new Paged();
+		app.page = "origin";
+		app._drawnPlaceKey = "origin";
+		const had = control({ "data-kept-focus": "roll" });
+		focusOn(had);
+		const same = draw([control({ "data-kept-focus": "roll" })]);
+		await redrawing(app, draw([had], 240), same)._render(false, {});
+		expect(same.column.scrollTop).toBe(240);
+		expect(same.controls[0].focus).toHaveBeenCalled();
+
+		app.page = "review";
+		const again = control({ "data-kept-focus": "roll" });
+		const fresh = draw([again]);
+		focusOn(same.controls[0]);
+		await redrawing(app, draw(same.controls, 240), fresh)._render(false, {});
+		expect(fresh.column.scrollTop).toBe(0);
+		expect(again.focus).not.toHaveBeenCalled();
+		expect(app._drawnPlaceKey).toBe("review");
+	});
+
+	// Undeath: destroying the tether takes away the dispersal note above that very box, so the same
+	// offset drew the box a paragraph higher, out from under the pointer.
+	it("keeps the pressed control where it stood on screen when a line above it came or went", async () => {
+		/** A draw whose column holds its controls, each standing `top` px down the column's content. */
+		const placed = (scrollTop, tops) => {
+			const column = { scrollTop, contains: el => controls.includes(el) };
+			const controls = Object.entries(tops).map(([key, top]) => ({
+				...control({ "data-kept-focus": key }),
+				getBoundingClientRect: () => ({ top: top - column.scrollTop }),
+			}));
+			const byKey = sel => controls.find(el => sel === `[data-kept-focus="${el.getAttribute("data-kept-focus")}"]`) ?? null;
+			const root = { querySelector: sel => (sel === COLUMN ? column : byKey(sel)), contains: el => el === column || controls.includes(el) };
+			return { root, column, controls };
+		};
+		const first = placed(300, { tether: 500 });
+		const next  = placed(0, { tether: 440 });
+		focusOn(first.controls[0]);
+		await redrawing(new Kept(), first, next)._render(false, {});
+		// 200px down the view before; the box now sits 60px higher in the content, so 60px less scroll.
+		expect(next.column.scrollTop).toBe(240);
+		expect(next.controls[0].getBoundingClientRect().top).toBe(200);
+	});
+
 	it("gives the keyboard back to the same control in the fresh draw, without scrolling to it", async () => {
 		const had   = control({ "data-kept-focus": "bram:add:food" });
 		const again = control({ "data-kept-focus": "bram:add:food" });

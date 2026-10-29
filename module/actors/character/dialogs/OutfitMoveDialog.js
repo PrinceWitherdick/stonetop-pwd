@@ -3,7 +3,9 @@ import { getHoverDescriptionSetting } from "../../../settings.js";
 import { applyGearTermTooltips } from "../../../utils/gear-term-tooltips.js";
 import { wrapStonetopGlyphsInEl } from "../../../utils/glyphs.js";
 import { wireTabSearch } from "../../../utils/tab-search.js";
+import { mountScrollerFrost } from "../../../utils/scroll-frost.js";
 import { LOAD_LEVEL_LIMITS, deriveLoadLevel, loadBandLabels, poolCountFromClick, poolAtLimitKey } from "../../../utils/load.js";
+import { attrValue } from "../../../utils/strings.js";
 
 /** The window's id, one per character (perDocumentOptions). */
 export const OUTFIT_ID_PREFIX = "stonetop-outfit-dialog";
@@ -81,7 +83,26 @@ export class OutfitMoveDialog extends StonetopDialog {
 			height: 1200,
 			resizable: true,
 			classes: ["stonetop", "stonetop-outfit-dialog"],
+			// Every mark re-renders the window, and each list scrolls on its own: without these a
+			// tick halfway down threw the list back to its top. The body, the fallback scroller
+			// around them, is the draw's root, which core's restore never finds (it searches inside
+			// the fresh draw), so it is kept by _keptScrollSelector instead.
+			scrollY: [".stonetop-outfit-regular-section", ".stonetop-outfit-small-section"],
 		});
+	}
+
+	get _keptScrollSelector() { return ".stonetop-outfit-move-body"; }
+
+	// The box just ticked keeps the keyboard through the redraw: an item by its slug, an undefined
+	// box by its track and place.
+	_focusSelector(el) {
+		const slug = el.dataset?.slug;
+		if (el.classList?.contains("stonetop-outfit-item-check") && slug) return `.stonetop-outfit-item-check[data-slug="${attrValue(slug)}"]`;
+		const index = el.dataset?.index;
+		for (const cls of ["stonetop-regular-pool-btn", "stonetop-small-pool-display"]) {
+			if (el.classList?.contains(cls) && index != null) return `.${cls}[data-index="${attrValue(index)}"]`;
+		}
+		return null;
 	}
 
 	getData() {
@@ -200,6 +221,8 @@ export class OutfitMoveDialog extends StonetopDialog {
 		// dialog and put back, rather than dropped on the first click.
 		const searchTerms = (this._searchTerms ??= {});
 		for (const section of [".stonetop-outfit-regular-section", ".stonetop-outfit-small-section"]) {
+			// The frosted seam at the list's top edge, as under the character sheet's header.
+			mountScrollerFrost(html[0].querySelector(section));
 			wireTabSearch(html[0].querySelector(section), {
 				itemSel: ".stonetop-outfit-item",
 				textFor: row => [".stonetop-outfit-item-name", ".stonetop-outfit-item-note"]

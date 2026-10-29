@@ -15253,6 +15253,11 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	font-size: var(--st-fs-base);
 }
 
+/* Nothing marked: the row keeps its height, so the first mark shows it without moving the lists. */
+.stonetop-outfit-weight-row.is-empty {
+	visibility: hidden;
+}
+
 .stonetop-outfit-weight-diamonds {
 	display: inline-flex;
 	flex-wrap: wrap;
@@ -15293,6 +15298,45 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	/* Room for the heading's search box, which grows UPWARD when it opens
 	   (.stonetop-tab-search.is-open) and would otherwise be clipped by this scrollport. */
 	padding-top: calc(8px * var(--stonetop-font-scale, 1));
+	/* The seam's hairline, as the character sheet draws it under its header: always there but
+	   transparent, so it appearing never moves the list a pixel. */
+	border-top: 1px solid transparent;
+	transition: border-top-color 0.15s ease-out;
+}
+
+/* The frosted seam at each list's top edge, the character sheet's (`.stonetop-sheet-layout
+   .sheet-body::before`): a row passing out of the list softens instead of being sliced off. Each
+   list is its own scrollport with nothing pinned above it inside, so the band is a sticky first
+   child rather than a layer outside it. The negative margin hands its 13px back to the heading
+   below, and `top` sits it on the list's edge rather than inside its padding, where a sticky
+   `top: 0` would pin. Only while the list is off its top (`is-scrolled`, utils/scroll-frost.js
+   mountScrollerFrost); painted at rest it would blur the heading. */
+.stonetop-outfit-regular-section::before,
+.stonetop-outfit-small-section::before {
+	content: "";
+	display: block;
+	position: sticky;
+	top: calc(-8px * var(--stonetop-font-scale, 1));
+	height: 13px;
+	margin-bottom: -13px;
+	z-index: 2;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 0.15s ease-out;
+	backdrop-filter: blur(1.5px);
+	-webkit-backdrop-filter: blur(1.5px);
+	mask-image: linear-gradient(to bottom, rgb(0 0 0) 0%, rgb(0 0 0 / 0.55) 55%, transparent 100%);
+	-webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0) 0%, rgb(0 0 0 / 0.55) 55%, transparent 100%);
+}
+
+.stonetop-outfit-regular-section.is-scrolled,
+.stonetop-outfit-small-section.is-scrolled {
+	border-top-color: rgb(var(--st-ink-rgb) / 0.25);
+}
+
+.stonetop-outfit-regular-section.is-scrolled::before,
+.stonetop-outfit-small-section.is-scrolled::before {
+	opacity: 1;
 }
 
 .stonetop-outfit-regular-section { flex: 1 1 55%; min-width: 0; }

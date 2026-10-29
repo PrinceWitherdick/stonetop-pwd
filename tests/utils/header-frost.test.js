@@ -152,3 +152,40 @@ describe("the frosted header seam", () => {
 		});
 	}
 });
+
+// The same seam at the top of each Outfit list, which scrolls on its own with nothing pinned above
+// it inside: the band is a sticky first child, shown only while that list is off its top.
+describe("the Outfit lists' frosted seam", () => {
+	const OUTFIT = read("module/actors/character/dialogs/OutfitMoveDialog.js");
+
+	it("pins a band to each list's top edge, gated on is-scrolled", () => {
+		for (const list of [".stonetop-outfit-regular-section", ".stonetop-outfit-small-section"]) {
+			const band = block(`${list}::before`);
+			expect(band).toMatch(/position:\s*sticky/);
+			expect(band).toMatch(/backdrop-filter:\s*blur\(1\.5px\)/);
+			expect(band).toMatch(/opacity:\s*0;/);
+			// Its height handed back, so the heading sits where it would with no band.
+			expect(band).toMatch(/height:\s*13px;[\s\S]*margin-bottom:\s*-13px;/);
+			expect(block(`${list}.is-scrolled::before`)).toMatch(/opacity:\s*1;/);
+		}
+		expect(OUTFIT).toMatch(/mountScrollerFrost\(html\[0\]\.querySelector\(section\)\)/);
+	});
+
+	it("marks a list scrolled while it is off its top, and clear again back at it", async () => {
+		const { mountScrollerFrost } = await import("../../module/utils/scroll-frost.js");
+		const classes = new Set();
+		let onScroll = null;
+		const list = {
+			scrollTop: 0,
+			classList: { toggle: (c, on) => (on ? classes.add(c) : classes.delete(c)) },
+			addEventListener: (type, fn) => { if (type === "scroll") onScroll = fn; },
+		};
+		mountScrollerFrost(list);
+		expect(classes.has("is-scrolled")).toBe(false);
+		list.scrollTop = 120; onScroll();
+		expect(classes.has("is-scrolled")).toBe(true);
+		list.scrollTop = 0; onScroll();
+		expect(classes.has("is-scrolled")).toBe(false);
+		expect(() => mountScrollerFrost(null)).not.toThrow();
+	});
+});

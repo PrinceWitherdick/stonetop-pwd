@@ -272,6 +272,11 @@ export function createStonetopSteadingSheetClass(Base) {
 				// Mirrors the CSS floor in stonetop.css — see the character sheet's note.
 				minHeight: 620,
 				tabs: [{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "overview" }],
+				// Each tab is its own scrollport, and Notes scrolls its own column: without these every
+				// write to the steading (a tick, a season turning) snapped the reader back to the top.
+				// Selectors from inside the form, as on the character sheet. The relationship map and
+				// the timeline carry their own place (utils/mounted-panel-slot.js).
+				scrollY: [".sheet-body > .tab.active", ".steading-notes"],
 			});
 		}
 

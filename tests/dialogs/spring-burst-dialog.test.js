@@ -213,3 +213,12 @@ describe("Done", () => {
 		expect(d.close).not.toHaveBeenCalled();
 	});
 });
+
+// Asking for the roll redraws the step, which drew it back at its top; a new step still opens at
+// its top, because StepperDialog zeroes the same column when the step changes.
+describe("scroll", () => {
+	it("keeps the step's column through a redraw of the same step", () => {
+		expect(SpringBurstDialog.defaultOptions.scrollY).toEqual([".stonetop-guide-main"]);
+		expect(new SpringBurstDialog()._stepScrollSelector).toBe(".stonetop-guide-main");
+	});
+});

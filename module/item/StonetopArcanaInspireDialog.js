@@ -56,6 +56,11 @@ export class StonetopArcanaInspireDialog extends StonetopDialog {
 		this._major = false;
 	}
 
+	// Every roll redraws the window, which drew the step back at its top; the step keeps its scroll
+	// through that, and the next step opens at its top.
+	get _keptScrollSelector() { return ".stonetop-guide-main"; }
+	get _keptPlaceKey() { return this._step; }
+
 	static get defaultOptions() {
 		return foundry.utils.mergeObject(super.defaultOptions, {
 			id:        "stonetop-arcana-inspire-dialog",

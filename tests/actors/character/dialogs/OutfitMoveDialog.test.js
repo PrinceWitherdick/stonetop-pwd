@@ -130,6 +130,32 @@ describe("OutfitMoveDialog: special-possession gear", () => {
 		expect(data.totalSmallMarks).toBe(2);
 	});
 
+	// Every mark re-renders the window, and each list used to come back scrolled to its top.
+	it("keeps both lists' and the body's scroll place, and the ticked box's keyboard, through a redraw", () => {
+		expect(OutfitMoveDialog.defaultOptions.scrollY).toEqual([".stonetop-outfit-regular-section", ".stonetop-outfit-small-section"]);
+		const dialog = new OutfitMoveDialog({}, snapshot(), null);
+		expect(dialog._keptScrollSelector).toBe(".stonetop-outfit-move-body");
+		const box = (cls, dataset) => ({ classList: { contains: c => c === cls }, dataset });
+		expect(dialog._focusSelector(box("stonetop-outfit-item-check", { slug: "weapons-of-war:long-spear" })))
+			.toBe('.stonetop-outfit-item-check[data-slug="weapons-of-war:long-spear"]');
+		expect(dialog._focusSelector(box("stonetop-outfit-item-check", { slug: 'a"b' })))
+			.toBe('.stonetop-outfit-item-check[data-slug="a\\"b"]');
+		expect(dialog._focusSelector(box("stonetop-small-pool-display", { index: "2" })))
+			.toBe('.stonetop-small-pool-display[data-index="2"]');
+		expect(dialog._focusSelector(box("stonetop-regular-pool-btn", { index: "0" })))
+			.toBe('.stonetop-regular-pool-btn[data-index="0"]');
+		expect(dialog._focusSelector(box("stonetop-outfit-confirm-btn", {}))).toBeNull();
+	});
+
+	// The running total sits above both lists. Left out until the first mark, it arrived then and
+	// pushed them down a row: the first tick "jumped" though every scroll offset was kept.
+	it("draws the running total even at none, hidden, so the first mark moves nothing", async () => {
+		const { readFileSync } = await import("node:fs");
+		const hbs = readFileSync("templates/dialogs/outfit-move.hbs", "utf8");
+		expect(hbs).toMatch(/class="stonetop-outfit-weight-row\{\{#if loadLevelNone\}\} is-empty\{\{\/if\}\}"/);
+		expect(hbs).not.toMatch(/\{\{#unless loadLevelNone\}\}/);
+	});
+
 	it("has no possession rows for a snapshot that carries none", () => {
 		const data = new OutfitMoveDialog({}, snapshot({ possessionRegular: undefined, possessionSmall: undefined }), null).getData();
 		expect(data.possessionRegular).toEqual([]);
