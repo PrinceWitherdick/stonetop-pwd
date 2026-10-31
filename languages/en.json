@@ -254,8 +254,10 @@
         "rolling": "Rolling and Chat",
         "windows": "Windows",
         "hover": "On Hover Info",
+        "timeline": "Timeline",
         "fights": "Fights",
-        "worldScoped": "This one is the whole table's, not yours. Changing it changes it for everyone, then offers to reload the whole table.",
+        "worldScoped": "This one is the whole table's, not yours. Changing it changes it for everyone.",
+        "worldScopedReload": "This one is the whole table's, not yours. Changing it changes it for everyone, then offers to reload the whole table.",
         "searchLabel": "Search settings",
         "searchPlaceholder": "Search settings…",
         "noMatches": "No setting here matches what you typed. Try a shorter word, or open all Stonetop settings below.",
@@ -1342,7 +1344,10 @@
       },
       "showTimeline": {
         "name": "Timeline",
-        "hint": "When on (the default), the steading and every character have a Timeline tab, and the Chronicle folder holds the Timeline journal. Turn it off to take the tabs and the journal away for everyone. It goes on recording in the background while it is off, so nothing is missing when you turn it on again."
+        "hint": "Where the timeline appears, for everyone. Everywhere (the default): the steading and every character have a Timeline tab, and the Chronicle folder holds the Timeline journal. Steading sheet only: character sheets lose their tab, and the steading's tab and the journal stay. Off: no tabs and no journal. It goes on recording in the background, so nothing is missing when you turn it back on.",
+        "all": "Everywhere",
+        "steading": "Steading sheet only",
+        "off": "Off"
       },
       "characterSheetsShared": {
         "name": "Players See Every Character Sheet",
@@ -1427,6 +1432,10 @@
       "timeBannerShown": {
         "name": "Weather and Season Bar",
         "hint": "Show the weather, the season and the year at the top of the screen. This only affects your own screen."
+      },
+      "timelineTabShown": {
+        "name": "Timeline Tab on My Sheets",
+        "hint": "Show a Timeline tab on character and steading sheets. Turn it off to take the tab off your own sheets; the Timeline journal stays in the Chronicle folder and the timeline goes on recording. If the GM has turned the Timeline off for the table, the tab stays hidden whatever this says. This only affects your own screen."
       },
       "loveLetterJingle": {
         "name": "Love Letter Jingle",

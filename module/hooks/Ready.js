@@ -25,7 +25,7 @@ import { MACRO_MODULES } from "../book2-art/macro-modules.js";
 import { openProgressNotification } from "../utils/progress-notification.js";
 import { stonetopChatCard, whisperGm } from "../utils/chat.js";
 import { stampWorldLayoutBaseline } from "../utils/sheet-layout.js";
-import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyReduceMotion, applySheetContrast, splitLegacyHighContrast, watchFoundryTheme, applySheetTexture, applySheetTextureFade, applyNoItalics, getTimelineKindColours, refuseHiddenFeature, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown, adoptClassicLayoutScope, isFightTabEnabled, getArraySetting, areCharacterSheetsShared } from "../settings.js";
+import { applySheetFont, applySheetFontScale, applyEditPencilRevealDelay, applyReduceMotion, applySheetContrast, splitLegacyHighContrast, watchFoundryTheme, applySheetTexture, applySheetTextureFade, applyNoItalics, getTimelineKindColours, refuseHiddenFeature, getSetting, setSetting, getSettingOverviewShown, markSettingOverviewShown, migrateFlatSettingOverviewShown, adoptClassicLayoutScope, migrateTimelineReach, isFightTabEnabled, getArraySetting, areCharacterSheetsShared } from "../settings.js";
 import { applyTimelineKindColours } from "../timeline/timeline-colours.js";
 import { EndOfSessionDialog } from "../dialogs/EndOfSessionDialog.js";
 import { IntroductionsDialog } from "../dialogs/IntroductionsDialog.js";
@@ -227,6 +227,10 @@ export async function onReady() {
 	// upgraded world silently reverts to the classic layout. See adoptClassicLayoutScope.
 	try { await adoptClassicLayoutScope(); }
 	catch (err) { console.error("Stonetop | classic-layout scope adoption failed", err); }
+	// The GM's Timeline switch went from on/off to everywhere / steading only / off. Rewrite an old
+	// stored on/off so the settings window's dropdown shows it. See migrateTimelineReach.
+	try { await migrateTimelineReach(); }
+	catch (err) { console.error("Stonetop | timeline switch migration failed", err); }
 	try { await _migrateArmourToArmor(); }
 	catch (err) { console.error("Stonetop | armour → armor migration failed", err); }
 	// Take retired sheet-preference flags off any actor still carrying one (see

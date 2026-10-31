@@ -127,7 +127,7 @@ import {isOutOfPlaySafe, isUnliving, recoveredHpTo, slowToHeal} from "./deaths-d
 import {createCharacterForUser} from "./create-character.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
 import {openPeoplePortraitPicker} from "../steading/PeopleGalleryDialog.js";
-import {getHoverDescriptionSetting, getObjectSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getFollowerCardsCollapsed, setFollowerCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getAskRollModeEachRollSetting, isClassicLayout, isTimelineShown, layoutClasses, stampLayoutClass} from "../../settings.js";
+import {getHoverDescriptionSetting, getObjectSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getFollowerCardsCollapsed, setFollowerCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getAskRollModeEachRollSetting, isClassicLayout, isTimelineTabShown, layoutClasses, stampLayoutClass} from "../../settings.js";
 import {bringDialogToFront} from "../../utils/front-on-open.js";
 import {wireSidebarToggle} from "../../utils/sidebar-toggle.js";
 import {openLedgerDialog} from "../../utils/ledger-dialog.js";
@@ -1658,9 +1658,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// off whichever sheet's context it lands in, which is why all three sheets name it
 			// `stonetop.classicLayout` with no sheet suffix.
 			context.stonetop.classicLayout = isClassicLayout("character");
-			// The GM's world switch for the Timeline tab (module/settings.js). Off takes the tab
-			// out of the rail, and the panel goes with it (utils/mounted-panel-slot.js).
-			context.stonetop.timelineShown = isTimelineShown();
+			// The GM's world switch for the Timeline tab (everywhere, steading only, or off), and this
+			// player's own (module/settings.js). Either can take the tab out of the rail, and the
+			// panel goes with it (utils/mounted-panel-slot.js).
+			context.stonetop.timelineShown = isTimelineTabShown("character");
 			// A sheet left on the Timeline tab when it goes (the switch, or the classic layout) would
 			// otherwise re-render with `active` naming a tab that is not drawn, and Tabs.activate
 			// shows no body at all. Clamp before the paint, as the NPC sheet does for its own tabs.
