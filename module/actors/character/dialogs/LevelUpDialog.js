@@ -7,12 +7,14 @@ import { annotateInvocationEffects } from "../invocation-effects.js";
 import { getHoverDescriptionSetting } from "../../../settings.js";
 import { playbookIconPath } from "../../../utils/playbook-actors.js";
 import { INVOKE_THE_SUN_GOD } from "../holy-light.js";
+import { HARD_TO_KILL, NEVER_GONNA_KEEP_ME_DOWN, UNSTOPPABLE } from "../deaths-door.js";
 import { localize, format } from "../../../utils/i18n.js";
 import { levelUpAwayNote } from "../../../campaign/level-up-at-home.js";
 import { CustomMoveDialog } from "./CustomMoveDialog.js";
 import { canAuthorCustomMoves } from "../../../utils/authoring-gates.js";
 import { xpRules } from "../../../utils/xp.js";
 import { wireKeyboardButtons, pressesRoleButton } from "../../../utils/keyboard-buttons.js";
+import { attrValue } from "../../../utils/strings.js";
 
 // Base width (overview, stat, marks). The move, foreign-move, and invocation steps
 // widen so their masonry lists show two columns by default. The grid allows three
@@ -56,12 +58,11 @@ function _xpRuleText() {
 // keyboard focus stays on it. Off the one data key each card family carries.
 const PICK_KEYS = ["compendiumId", "statKey", "markSlug", "actionSlug", "slug"];
 function _pickableSelector(el) {
-	const esc = v => (globalThis.CSS?.escape ? globalThis.CSS.escape(v) : String(v).replace(/["\\]/g, "\\$&"));
 	for (const key of PICK_KEYS) {
 		const value = el?.dataset?.[key];
 		if (value == null) continue;
 		const attr = key.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`);
-		return `.stonetop-levelup-pickable[data-${attr}="${esc(value)}"]`;
+		return `.stonetop-levelup-pickable[data-${attr}="${attrValue(value)}"]`;
 	}
 	return null;
 }
@@ -115,8 +116,25 @@ const OTHER_PLAYBOOK_LISTS = {
 	},
 };
 
+// The moves that turn on Death's Door, which an insert takes away (each insert has its own 0-HP move):
+// the note key each one gets on a Level Up row for a character wearing one. Said, never hidden or
+// blocked (Book I p.529: the player picks any move they qualify for; "consider ... whether it creates a
+// weird rules interaction"). Never Gonna Keep Me Down's first half still works, so its note says which half.
+const _INSERT_INERT = {
+	[HARD_TO_KILL]:             "insertInert",
+	[UNSTOPPABLE]:              "insertInert",
+	[NEVER_GONNA_KEEP_ME_DOWN]: "insertInertHalf",
+};
+
+/** The Level Up row's note for move `name` when `zeroHpMoveName` (the insert's 0-HP move) is not Death's Door, else null. */
+export function insertInertNote(name, zeroHpMoveName) {
+	const key = _INSERT_INERT[name];
+	return key && zeroHpMoveName ? format(`stonetop.specialMoves.levelUp.${key}`, { move: zeroHpMoveName }) : null;
+}
+
 // One move from another playbook as a card, for the agreed step and the cross-playbook step alike.
-function _otherPlaybookCard(m, selectedId) {
+// `insertMove`: the 0-HP move of an insert the character wears, for insertInertNote.
+function _otherPlaybookCard(m, selectedId, insertMove = null) {
 	return {
 		compendiumId:  m.compendiumId,
 		name:          m.name,
@@ -127,6 +145,7 @@ function _otherPlaybookCard(m, selectedId) {
 		// "Costs Stock; you have no sacred pouch", or null. Display only (see
 		// StonetopCharacter#getForeignMovesForLevelUp, which leaves it off an Initiate pick).
 		stockNote:     m.stockNote ?? null,
+		insertNote:    insertInertNote(m.name, insertMove),
 		selected:      m.compendiumId === selectedId,
 	};
 }
@@ -241,6 +260,8 @@ export class LevelUpDialog extends StonetopDialog {
 		const isLastStep = this._adjacentStep(+1) === undefined;
 
 		const playbookName = d.playbookName ?? null;
+		// The 0-HP move of an insert they wear (Undying, Tethered, Dark Succor), or null: Death's Door is behind them.
+		const insertMove = this._insertZeroHpMove();
 
 		const moves = d.availableMoves.map(m => ({
 			compendiumId:  m.compendiumId,
@@ -251,6 +272,7 @@ export class LevelUpDialog extends StonetopDialog {
 			moveResults:   m.moveResults ?? null,
 			requiresLabel: m.requiresLabel,
 			groupsAttr:    moveGroupKeys(playbookName, m.name).join(" "),
+			insertNote:    insertInertNote(m.name, insertMove),
 			selected:      m.compendiumId === this._selectedMoveId,
 		}));
 
@@ -277,12 +299,12 @@ export class LevelUpDialog extends StonetopDialog {
 		// playbook's qualifying moves, then "a custom move" where this user may write one.
 		const agreedPicked = this._selectedMoveId === AGREED_ID;
 		const customAllowed = canAuthorCustomMoves();
-		const agreedMoves = this._agreedMoves.map(m => _otherPlaybookCard(m, this._selectedAgreedId));
+		const agreedMoves = this._agreedMoves.map(m => _otherPlaybookCard(m, this._selectedAgreedId, insertMove));
 
 		// Foreign-move picker (cross-playbook moves): the qualifying foreign moves, with a
 		// text filter. An empty list (nothing qualifies) allows Continue only for a move that
 		// grants something else (Initiate's Sacred Pouch); any other would grant nothing.
-		const foreignMoves = this._foreignMoves.map(m => _otherPlaybookCard(m, this._selectedForeignMoveId));
+		const foreignMoves = this._foreignMoves.map(m => _otherPlaybookCard(m, this._selectedForeignMoveId, insertMove));
 
 		// Source-playbook chips beside the foreign-move search. Derived from the moves
 		// actually offered (so a chip can never filter to nothing) rather than from the
@@ -523,11 +545,26 @@ export class LevelUpDialog extends StonetopDialog {
 
 	// Step 6's line: names a temporary Instinct this level-up ends, or the insert whose Instinct
 	// the character now goes by (a Ghost, Revenant or Thrall), else the book's plain reminder.
+	//
+	// An insert's Instinct is changed on the Post-Death tab, never on Details (whose radios are the retired
+	// playbook's), so an insert PC is pointed there: with the temporary Instinct ending, with theirs chosen,
+	// or with none chosen yet.
 	_reviewLine() {
 		const d = this._data ?? {};
-		if (d.temporaryInstinct) return format("stonetop.specialMoves.levelUp.reviewReminderTemporary", { instinct: d.temporaryInstinct });
+		const insert = !!this._character?.postDeathSlug;
+		if (d.temporaryInstinct) {
+			return format(`stonetop.specialMoves.levelUp.${insert ? "reviewReminderTemporaryInsert" : "reviewReminderTemporary"}`,
+				{ instinct: d.temporaryInstinct });
+		}
 		if (d.insertInstinctName) return format("stonetop.specialMoves.levelUp.reviewReminderInsert", { insert: d.insertInstinctName });
+		if (insert) return localize("stonetop.specialMoves.levelUp.reviewReminderInsertUnchosen");
 		return localize("stonetop.specialMoves.levelUp.reviewReminder");
+	}
+
+	/** The 0-HP move of the insert the character wears, or null for one still facing Death's Door. */
+	_insertZeroHpMove() {
+		const move = this._character?.postDeathSlug ? this._character?.zeroHpMove : null;
+		return move && !move.dialog ? move.name ?? null : null;
 	}
 
 	// Whether a given step is part of THIS level-up; the optional steps appear only when

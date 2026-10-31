@@ -10,6 +10,7 @@ import { createStonetopCharacterSheetClass, GUIDED_CHARACTER_MOVES } from "../..
 import { LevelUpDialog } from "../../../module/actors/character/dialogs/LevelUpDialog.js";
 import { NO_POUCH_STOCK_NOTE, stockCostFromDescription, stockSources } from "../../../module/actors/character/stock-cost.js";
 import { restockPouch } from "../../../module/actors/character/provisions.js";
+import { HP_LOSS_OPTION } from "../../../module/actors/character/StonetopFlags.js";
 import { readRepo } from "../../fakes/css.js";
 
 // The level-up's agreed step asks a world setting whether this user may write a custom move
@@ -102,7 +103,8 @@ describe("the Vessel: 2d4 HP in place of 1 Stock", () => {
 
 		expect(await char.spendStock(hp, 1, { moveName: "Call the Spirits" })).toEqual({ lost: 5 });
 		expect(actor.system.attributes.hp.value).toBe(3);
-		expect(actor.update).toHaveBeenCalledWith({ "system.attributes.hp.value": 3 }, { stonetopMove: "Call the Spirits" });
+		// HP lost, said on the write (review VG-1, 2026-10-28): a Ghost possessing them shares none of it.
+		expect(actor.update).toHaveBeenCalledWith({ "system.attributes.hp.value": 3 }, { [HP_LOSS_OPTION]: true, stonetopMove: "Call the Spirits" });
 		expect(posted).toHaveLength(1);
 		expect(posted[0].formula).toBe("2d4");
 		expect(posted[0].flavor).toContain("HP lost");

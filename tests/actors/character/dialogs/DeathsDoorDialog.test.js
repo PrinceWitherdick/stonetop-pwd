@@ -982,6 +982,7 @@ describe("DeathsDoorDialog: a roll under way, seen from every owner's window", (
 			? game.i18n.format(key, options.hash) : game.i18n.localize(key)));
 		hb.registerHelper("escapeHtml", value => escHtml(value));
 		hb.registerPartial("stonetop.deaths-door-outcomes", readRepo("templates/dialogs/partials/deaths-door-outcomes.hbs"));
+		hb.registerPartial("stonetop.deaths-door-dictates", readRepo("templates/dialogs/partials/deaths-door-dictates.hbs"));
 		hb.registerPartial("stonetop.post-death-choices", "");
 		return hb.compile(readRepo("templates/dialogs/deaths-door.hbs"))(data);
 	}

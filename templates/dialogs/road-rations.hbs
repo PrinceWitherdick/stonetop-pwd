@@ -32,11 +32,13 @@
 				<td class="road-who">
 					<strong>{{this.name}}</strong>
 					<span class="road-holds">carries {{this.holds}} to eat{{#if spend}}: {{this.spend}}{{/if}}</span>
+					{{!-- A Ghost or Revenant need not eat (Unliving), so their Eats box starts unticked; the line says why, or what ticking it costs (RoadRationsDialog.js#unlivingRoadText). The Eats box points at it for a screen reader. --}}
+					{{#if unlivingText}}<span class="road-unliving" id="road-unliving-{{this.actorId}}">{{this.unlivingText}}</span>{{/if}}
 					{{!-- The crew's own supplies pay the crew's mouths by themselves (road-rations.js#crewRoadText), so no figure to set. --}}
 					{{#if crewText}}<span class="road-crew">Crew supplies ({{this.crewHeld}} left): {{this.crewText}}</span>{{/if}}
 				</td>
 				<td><input type="checkbox" class="road-eats" data-actor-id="{{this.actorId}}" data-road-focus="eats-{{this.actorId}}"
-				           aria-label="{{this.name}} eats"{{#if eats}} checked{{/if}}></td>
+				           aria-label="{{this.name}} eats"{{#if unlivingText}} aria-describedby="road-unliving-{{this.actorId}}"{{/if}}{{#if eats}} checked{{/if}}></td>
 				<td><input type="number" class="road-followers" min="0" step="1" value="{{this.followers}}"
 				           data-actor-id="{{this.actorId}}" data-road-focus="followers-{{this.actorId}}" aria-label="Followers {{this.name}} feeds"></td>
 				<td><input type="number" class="road-pays{{#if changed}} is-changed{{/if}}" min="0" max="{{this.holds}}" step="1" value="{{this.pays}}"

@@ -249,6 +249,9 @@ describe("icon-and-label buttons centre by flex, unnudged", () => {
 		".stonetop-intros-unpass",
 		".stonetop-intros-recorded-save",
 		".stonetop-intros-recorded-cancel",
+		// The Post-Death tab's outcome buttons, the Favor row's (+1 Favor, the tentacle, the maw) among them
+		// (measured 10-28 with the text-centring audit: -0.2px at 1x/1.25x/1.5x).
+		".stonetop-pdi-outcome-btn",
 	])("%s", sel => {
 		const body = declarations(MAIN, sel);
 		expect(body, `${sel} has no rule`).toBeTruthy();
@@ -256,6 +259,29 @@ describe("icon-and-label buttons centre by flex, unnudged", () => {
 		expect(declared(body, "align-items")).toBe("center");
 		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
 		expect(bottom).toBe(top);
+	});
+});
+
+// Measured 10-28 with the text-centring audit: the Bolster card's icon-and-label button -0.5px (row) at
+// 1x/1.25x/1.5x on core's button, and Death's Door's gold "Suggested" tag is plain text inside its fate button,
+// with no box to centre in. What would break either is a hand nudge, so neither may carry one.
+describe("the Bolster button and the Suggested tag carry no hand nudge", () => {
+	it.each([
+		".stonetop-special-move-card button",
+		".deaths-door-fate-dictated",
+	])("%s", sel => {
+		const body = declarations(MAIN, sel);
+		expect(body, `${sel} has no rule`).toBeTruthy();
+		for (const prop of ["top", "bottom", "transform", "translate", "padding-top", "padding-bottom", "vertical-align"]) {
+			expect(declared(body, prop) ?? null, `${sel} sets ${prop}`).toBeNull();
+		}
+		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+		expect(bottom).toBe(top);
+	});
+
+	it("draws the Bolster button on the special-move card, under the rule above", () => {
+		const src = readRepo("templates/actor/partials/tab-special-moves.hbs");
+		expect(src).toMatch(/<div class="stonetop-special-move-card">[\s\S]*?<button type="button" class="stonetop-bolster-open-btn">/);
 	});
 });
 

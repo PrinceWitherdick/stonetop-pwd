@@ -13,7 +13,8 @@ import {
 } from "../../model/CharacterSnapshot.js";
 import { composeInstinct, stripHtmlToText } from "../../utils/strings.js";
 import { clampInt } from "../../utils/custom-move-data.js";
-import { zeroHpResolution, FAVOR_MAX, FAVOR_TRACK } from "./deaths-door.js";
+import { zeroHpResolution, FAVOR_MAX, FAVOR_TRACK, POST_DEATH_INSERT_SLUGS } from "./deaths-door.js";
+import { MANIFEST_KEY } from "./manifest.js";
 
 /**
  * The one lore section crossing-off applies to.
@@ -263,25 +264,45 @@ export class CharacterPostDeath {
 	 * So this prunes by what the new insert can hold rather than by wiping and starting over.
 	 */
 	async pruneToInsert(newSlug) {
+		// applyUpdateData writes nothing for an empty fragment, so a swap that drops nothing costs no update.
+		await this._insertFlags.applyUpdateData(await this.pruneToInsertUpdateData(newSlug));
+	}
+
+	/**
+	 * pruneToInsert as ONE `actor.update()` fragment (`{}` for nothing to drop), so taking the new insert
+	 * lands it in the same write as the slug it is measured against (StonetopCharacter#setPostDeathInsert).
+	 * As separate writes, a reload between them left a Revenant still wearing the Revenant, still owing
+	 * Undying, with every Revenant-only Consequence already deleted (audit RV-6, 2026-10-26).
+	 */
+	async pruneToInsertUpdateData(newSlug) {
 		const data = newSlug ? await this._insertRepo.findBySlug(newSlug) : null;
 		// An insert we cannot READ is not an insert that holds nothing — but that is exactly what
-		// the empty `valid` set below would tell pruneTo, and pruneTo deletes every key outside it.
+		// the empty `valid` set below would tell the lore's prune, which deletes every key outside it.
 		// A pack that hasn't loaded, a slug renamed between versions, a world Item standing in for
 		// a compendium one: any of them would take a character's whole post-death record with it,
 		// irreversibly. Nothing recorded is worth less than nothing known, so leave it alone.
-		if (newSlug && !data) return;
+		if (newSlug && !data) return {};
 
 		const valid = new Set();
 		for (const entry of data?.lore ?? []) {
 			for (const opt of entry.options ?? []) valid.add(`${entry.slug}:${opt.slug}`);
 		}
-		await this._lore.pruneTo(valid);
+		const update = this._lore.pruneToUpdateData(valid);
 
-		// The instinct is one value rather than a keyed set, so it's kept only if the new insert
-		// actually offers it.
+		// The instinct is one value rather than a keyed set, so a printed one is kept only if the new
+		// insert actually offers it. One the player wrote in (Level Up step 6's "make up new options")
+		// is printed by neither insert and belongs to the character, so it goes with them.
 		const selected = this._instinct.selectedValue;
-		if (selected && !(data?.instincts ?? []).some(i => composeInstinct(i.word, i.description) === selected)) {
-			await this._instinct.select("");
+		const prints = (insert, value) => (insert?.instincts ?? []).some(i => composeInstinct(i.word, i.description) === value);
+		// Printed by any other insert, it is that insert's, not the player's: the one worn, or, with none
+		// worn (removed in edit mode, which prunes nothing), the one it was left behind by.
+		if (selected && !prints(data, selected)) {
+			const others = [...new Set([this.activeSlug, ...POST_DEATH_INSERT_SLUGS])].filter(s => s && s !== newSlug);
+			for (const slug of others) {
+				if (!prints(await this._insertRepo.findBySlug(slug), selected)) continue;
+				Object.assign(update, this._instinct.selectUpdateData(""));
+				break;
+			}
 		}
 
 		// The three records that have no lore option to live in, and so survived the prune above:
@@ -296,12 +317,16 @@ export class CharacterPostDeath {
 		if (!sections.has("marks")) drops.push("crossedOff", "task");
 		// The tether belongs to the insert whose 0-HP move disperses them — the Ghost's Tethered.
 		if (!zeroHpResolution(newSlug)?.disperses) drops.push("tether");
-		// unsetFlag, not a write of "" or []: an object flag MERGES, so a blank value would leave a
+		// A manifestation (Disembodied) is a moment of the insert being left, never a record the next
+		// one takes over (the user's ruling, 2026-10-27; actors/character/manifest.js).
+		drops.push(MANIFEST_KEY);
+		// A deletion, not a write of "" or []: an object flag MERGES, so a blank value would leave a
 		// present-but-empty record behind rather than removing it. Only the keys actually present
 		// are touched, so an ordinary swap is still one write or none.
 		for (const key of drops) {
-			if (this._insertFlags.getFlag(key) != null) await this._insertFlags.unsetFlag(key);
+			if (this._insertFlags.getFlag(key) != null) Object.assign(update, this._insertFlags.deletionData(key));
 		}
+		return update;
 	}
 
 	/**

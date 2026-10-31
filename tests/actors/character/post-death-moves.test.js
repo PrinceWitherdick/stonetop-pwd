@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, it, expect, vi } from "vitest";
-import { planLoreMoveSync, loreMoveItemData, postDeathMoveItemData, offerLoreFollowers, mayMoveLoreMoves, LORE_FOLLOWERS } from "../../../module/actors/character/post-death-moves.js";
+import { planLoreMoveSync, loreMoveItemData, postDeathMoveItemData, offerLoreFollowers, mayMoveLoreMoves, LORE_FOLLOWERS, planMissingInsertMoves, repairInsertMoves, repairsInsertMovesHere } from "../../../module/actors/character/post-death-moves.js";
 import { MoveDefinition } from "../../../module/model/MoveDefinition.js";
 import { makeLiveActor } from "../../fakes/LiveCharacter.js";
 import { FakeRepositoryFactory } from "../../fakes/FakeRepositoryFactory.js";
@@ -230,5 +230,46 @@ describe("offerLoreFollowers", () => {
 		await offerLoreFollowers(revenant({}), { confirm });
 		await offerLoreFollowers(revenant({ [VERMIN]: 1 }, { "postDeathInsert.slug": null }), { confirm });
 		expect(confirm).not.toHaveBeenCalled();
+	});
+});
+
+// Audit RV-6 (2026-10-26): a swap a reload cut short after the slug moved left the insert's own moves
+// unmade, and retaking the same insert is a no-op. The primary GM's load-time pass makes them.
+describe("planMissingInsertMoves and the load-time repair", () => {
+	const def = (name, loreOption = null) => new MoveDefinition({ name, type: "move", system: { moveType: "post-death", ...(loreOption ? { loreOption } : {}) } });
+
+	it("names the worn insert's own moves held by no copy, never a lore option's", () => {
+		const entries = [def("Unliving"), def("Undying"), def("Implacable"), def("Poltergeist", "consequences:poltergeist")];
+		const owned = [{ name: "Undying", system: { moveType: "post-death" } }, { name: "Implacable", system: { moveType: "post-death", loreOption: "x" } }];
+		expect(planMissingInsertMoves({ entries, owned }).map(m => m.name)).toEqual(["Unliving", "Implacable"]);
+	});
+
+	it("asks the character to make them, and a fault in one sheet is swallowed", async () => {
+		const syncPostDeathInsertMoves = vi.fn(async () => 2);
+		expect(await repairInsertMoves({ name: "Wyn", typedActor: { syncPostDeathInsertMoves } })).toBe(2);
+		const broken = { name: "Bram", typedActor: { syncPostDeathInsertMoves: vi.fn(async () => { throw new Error("pack"); }) } };
+		const err = vi.spyOn(console, "error").mockImplementation(() => {});
+		expect(await repairInsertMoves(broken)).toBe(0);
+		err.mockRestore();
+	});
+});
+
+// Review 10-28: a swap still under way on its player's client must not be repaired beside itself by the GM's load.
+describe("repairsInsertMovesHere: who finishes a swap a reload cut short", () => {
+	const active = new Set(["player-1"]);
+	it("leaves a swap to the player who started it while they are connected", () => {
+		expect(repairsInsertMovesHere("player-1", { userId: "gm", primaryGM: true, activeUserIds: active })).toBe(false);
+		expect(repairsInsertMovesHere("player-1", { userId: "player-1", primaryGM: false, activeUserIds: new Set(["gm"]) })).toBe(true);
+	});
+
+	it("hands it to the primary GM once they are gone, or for a marker naming nobody", () => {
+		expect(repairsInsertMovesHere("player-1", { userId: "gm", primaryGM: true, activeUserIds: new Set() })).toBe(true);
+		expect(repairsInsertMovesHere(true, { userId: "gm", primaryGM: true, activeUserIds: active })).toBe(true);
+		expect(repairsInsertMovesHere(true, { userId: "player-2", primaryGM: false, activeUserIds: active })).toBe(false);
+	});
+
+	it("repairs nothing without a marker", () => {
+		expect(repairsInsertMovesHere(undefined, { userId: "gm", primaryGM: true })).toBe(false);
+		expect(repairsInsertMovesHere(null, { userId: "gm", primaryGM: true })).toBe(false);
 	});
 });

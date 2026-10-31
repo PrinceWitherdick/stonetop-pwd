@@ -30,7 +30,7 @@ import {openPeoplePortraitPicker} from "./PeopleGalleryDialog.js";
 import {STONETOP_SCOPE} from "../character/StonetopFlags.js";
 import {SpecialItemPickerDialog} from "../character/dialogs/SpecialItemPickerDialog.js";
 import {SPECIAL_ITEM_CATALOG} from "../../data/special-items.js";
-import {getRollStatChipsSetting, getOpenSheetsInEditMode, getHoverDescriptionSetting, getSidebarCollapsed, setSidebarCollapsed, getAskRollModeEachRollSetting, isClassicLayout, isRelationshipMapShown, isTimelineShown, layoutClasses, stampLayoutClass} from "../../settings.js";
+import {getRollStatChipsSetting, getOpenSheetsInEditMode, getHoverDescriptionSetting, getSidebarCollapsed, setSidebarCollapsed, getAskRollModeEachRollSetting, isClassicLayout, isRelationshipMapShown, isTimelineTabShown, layoutClasses, stampLayoutClass} from "../../settings.js";
 import {applyLabelTooltips} from "../../utils/label-tooltips.js";
 import {wireSidebarToggle} from "../../utils/sidebar-toggle.js";
 import {promptRoll, promptSurplusRoll, tookOffer, normalizeRollMode} from "../../dialogs/RollDialog.js";
@@ -272,6 +272,11 @@ export function createStonetopSteadingSheetClass(Base) {
 				// Mirrors the CSS floor in stonetop.css — see the character sheet's note.
 				minHeight: 620,
 				tabs: [{ navSelector: ".sheet-tabs", contentSelector: ".sheet-body", initial: "overview" }],
+				// Each tab is its own scrollport, and Notes scrolls its own column: without these every
+				// write to the steading (a tick, a season turning) snapped the reader back to the top.
+				// Selectors from inside the form, as on the character sheet. The relationship map and
+				// the timeline carry their own place (utils/mounted-panel-slot.js).
+				scrollY: [".sheet-body > .tab.active", ".steading-notes"],
 			});
 		}
 
@@ -463,10 +468,11 @@ export function createStonetopSteadingSheetClass(Base) {
 			// tabs, Homefront Moves as a right-hand sidebar) or today's. Client-scoped and per
 			// sheet type — see isClassicLayout in module/settings.js.
 			context.stonetop.classicLayout = isClassicLayout("steading");
-			// The GM's world switches for the Relationship Map and Timeline tabs (module/settings.js).
-			// Off takes the tab out of the rail, and its panel goes with it (utils/mounted-panel-slot.js).
+			// The GM's world switches for the Relationship Map and Timeline tabs, and this player's own
+			// for the Timeline tab (module/settings.js). Off takes the tab out of the rail, and its
+			// panel goes with it (utils/mounted-panel-slot.js).
 			context.stonetop.relmapShown = isRelationshipMapShown();
-			context.stonetop.timelineShown = isTimelineShown();
+			context.stonetop.timelineShown = isTimelineTabShown("steading");
 			// A sheet left on either tab when it goes (its switch, or the classic layout) would
 			// otherwise re-render with `active` naming a tab that is not drawn, and Tabs.activate
 			// shows no body at all. Clamp before the paint, as the NPC sheet does for its own tabs.

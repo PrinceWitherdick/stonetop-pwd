@@ -32,7 +32,7 @@ The window shows the move and all three results before you roll. Nothing is fina
 The three fates are buttons:
 
 - **Make one last move as if you rolled a 12+, then step through the Last Door.** Pick the move and the card is made at 12+. The character is then dead; their sheet shows a **Dead** chip.
-- **Refuse to Go.** Name the person, task or reckoning you won't leave behind (your Terrible Purpose). You become a Revenant or a Ghost.
+- **Refuse to go; gain the Revenant or Ghost insert.** Name the person, task or reckoning you won't leave behind (your Terrible Purpose). You become a Revenant or a Ghost.
 - **Call on one of the Things Below** by name and beseech it to intercede: you gain the Thrall insert. Name your master; the GM chooses the Mark it leaves.
 
 Whatever the insert asks you to decide can be answered right away or later: anything left undecided waits on your **Post-Death** tab. If the table played the result out in conversation instead, the GM can **Clear the pending fate**.
@@ -40,6 +40,7 @@ Whatever the insert asks you to decide can be answered right away or later: anyt
 > **Did you know?**
 > - If a dead character's HP goes back above 0, the system asks **Is (name) being brought back?** Answer **Yes, they live again** and the sheet becomes theirs again; **No, they are still dead** leaves it as it was.
 > - A dead character no longer levels up. Choosing a playbook on their sheet asks **Make a New Character?** and makes a fresh level-1 character on a new sheet (Book I p.53), so the dead one stays as the record of their story.
+> - Some arcana decide the 6- for you once their Death's Door box is ticked: the Redwood Effigy, Noruba's Ice Sphere and the Hungering Maw of Hlad. The fate step names the arcanum, marks the fate it dictates in gold and picks it for you; the other fates stay clickable, since the table has the last word. Taking the Ghost through the Ice Sphere fills in your tether with the sphere, and the Maw warns that the character dies and becomes a wraith.
 
 ## The Post-Death tab
 
@@ -60,6 +61,27 @@ At 0 HP an undead character doesn't face Death's Door again. Their insert's own 
 > **Did you know?**
 > - Everything a Ghost, Revenant or Thrall says in chat is drawn on a black card.
 > - A dead character's sheet turns dark too, so the whole table can see at a glance who has passed.
+
+### Moves on the cards
+
+The insert's granted moves carry buttons of their own, so their costs land on the sheet:
+
+- **Instinct.** In edit mode, pick one of the insert's Instincts or write your own: a word, and what it means.
+- **Possess (lose 1d4 HP)** (Ghost, Bodysnatcher). Target the person's token first. While you possess them, the damage they take comes off your HP on its own, with a line in chat. **End possession of (name)** stops it; so does dropping to 0 HP.
+- **Manifest** (Ghost, Disembodied). Pick 1 option, and lose 1d4 HP for each extra one. With "Your touch (or ghostly weapons) can harm the living", your own damage cards open with **Ignores armor** ticked. **End manifestation** when you stop concentrating, or when pain, shock or sunlight breaks it; dropping to 0 HP ends it too. A Ghost who is neither manifest with that touch nor possessing someone gets a gold caution on their own damage card: the blow may not harm the living. The numbers are left alone.
+- **Get angry** (Ghost, Poltergeist). Lose 1d4 HP and hold that much Fury, with no cap. **Shatter**, **Hurl (+DEX)** and **Telekinetic force (+INT)** each spend 1.
+- **Push your limits (lose 1d4 HP)** (Revenant, Implacable). Then choose 1.
+- **+1 Favor** (Thrall). At 3 Favor, gaining another resets it to 0 and asks what your master gives you: answer a question (advantage on your next roll to act on it) or a new Mark, after which the GM crosses off a Mark you don't have. **Lash out** and **Speak a word of torment** spend 1-3 Favor and roll +Favor spent.
+- **Call the tentacle (1 Favor)** (Thrall, Child of the Deeps). The tentacle joins your Followers tab.
+- **Gain the maw (1 Favor)** (Thrall, Ravenous). A horrid maw (*hand*, 3 piercing, *messy*) that Clash offers as a weapon until you **Put the maw away**.
+- **Mark the Final Consequence** is the last of a Terrible Purpose's Outcomes. It asks first. When Undying or Tethered finds every Consequence already marked, its window says so and offers the same box, unticked.
+
+Damage cards add boxes for undead targets, ticked where the source's tags say so and yours to change:
+
+- **Undying**: cutting, stabbing or crushing does half damage after armor, and poison or disease does a Revenant no harm.
+- **Disembodied**: only silver, salt or what harms spirits can hurt a Ghost.
+- **A Festering Rot**: poison, disease, caustic substances and vermin bites do this Thrall no harm.
+- **Child of the Deeps**: cold and pressure do this Thrall no harm. This one always starts unticked.
 
 ## Retiring a character
 

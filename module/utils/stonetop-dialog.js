@@ -1,5 +1,6 @@
 import { FrontOnOpen } from "./front-on-open.js";
 import { mayClose, notePristineWork } from "./close-guard.js";
+import { attrValue } from "./strings.js";
 
 // Minimum gap between progress re-renders. A long job reports once per document — a seeded
 // world has several hundred — and each render is a full getData + template + setPosition;
@@ -171,6 +172,13 @@ export class StonetopDialog extends Application {
 	 */
 	get _keptScrollSelector() { return null; }
 
+	/**
+	 * Which page of the window is drawn (a step, a turn), or null, the default, for a window that is
+	 * one page. A redraw onto a different page starts it at its top with the keyboard let go, as
+	 * opening it there would; only a redraw of the same page keeps the reader's place.
+	 */
+	get _keptPlaceKey() { return null; }
+
 	/** The attribute that names a control across redraws (`data-camp-focus`), read by _focusSelector; null, the default, for none. */
 	get _focusKeyAttribute() { return null; }
 
@@ -185,7 +193,7 @@ export class StonetopDialog extends Application {
 	_focusSelector(el) {
 		const attr = this._focusKeyAttribute;
 		const key = attr ? el.getAttribute?.(attr) : null;
-		return key ? `[${attr}="${key}"]` : null;
+		return key ? `[${attr}="${attrValue(key)}"]` : null;
 	}
 
 	/**
@@ -201,11 +209,14 @@ export class StonetopDialog extends Application {
 		const column = scroller ? before.querySelector?.(scroller) : null;
 		// A hidden column reads 0 both ways, so its place is the last one it was seen at.
 		const held = column && !isDrawn(column) ? this._heldOffsets : null;
+		const focused = active && before.contains?.(active) ? this._focusSelector(active) : null;
 		return {
 			scroller,
 			scrolled:     held?.top ?? column?.scrollTop ?? 0,
 			scrolledLeft: held?.left ?? column?.scrollLeft ?? 0,
-			focused:      active && before.contains?.(active) ? this._focusSelector(active) : null,
+			focused,
+			// Where on screen that control stood, when it scrolls with the column (see _restorePlace).
+			anchorTop:    focused && !held && column?.contains?.(active) ? active.getBoundingClientRect?.().top ?? null : null,
 		};
 	}
 
@@ -221,7 +232,14 @@ export class StonetopDialog extends Application {
 		// would otherwise be thrown a whole gutter by somebody else's write.
 		const column = place.scroller ? after?.querySelector?.(place.scroller) : null;
 		if (column) this._putOffsets(column, { top: place.scrolled, left: place.scrolledLeft });
-		if (place.focused) after?.querySelector?.(place.focused)?.focus?.({ preventScroll: true });
+		const control = place.focused ? after?.querySelector?.(place.focused) : null;
+		control?.focus?.({ preventScroll: true });
+		// The same offset is not always the same view: a line above the control that the press added
+		// or took away (Undeath's dispersal note goes when the tether is destroyed) moves the control
+		// itself, out from under the pointer. Shift the column by however far it moved.
+		const now = place.anchorTop != null && column?.contains?.(control) && isDrawn(column)
+			? control.getBoundingClientRect?.().top : null;
+		if (now != null && now !== place.anchorTop) column.scrollTop += now - place.anchorTop;
 	}
 
 	/**
@@ -265,8 +283,14 @@ export class StonetopDialog extends Application {
 	}
 
 	async _render(force, options) {
-		const place = this._readPlace();
+		const page = this._keptPlaceKey;
+		// Undefined before the first draw, which has no place to keep anyway.
+		const samePage = this._drawnPlaceKey === undefined || page === this._drawnPlaceKey;
+		// The last page's held place, too, so a redraw of the new one while hidden cannot hand it back.
+		if (!samePage) this._heldOffsets = null;
+		const place = samePage ? this._readPlace() : null;
 		await super._render(force, options);
+		this._drawnPlaceKey = page;
 		// What the window opened with, for the close-guard (utils/close-guard.js); a no-op after the first.
 		notePristineWork(this);
 		this._frontOnOpen.apply();

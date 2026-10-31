@@ -97,3 +97,18 @@ export function mountScrollFrost(app, html) {
 	// freshly built tab still pinned at 0 — and a fresh form carries no `is-scrolled` to clear.
 	requestAnimationFrame(() => refresh(form));
 }
+
+/**
+ * The same gate for a lone scrollport that carries its own band, a sticky `::before` pinned to
+ * its top edge (the Outfit window's two lists): `is-scrolled` on the scroller itself while it is
+ * off its top. The scroller is the one being watched, so there is no tab to look up.
+ * @param {HTMLElement} scroller
+ */
+export function mountScrollerFrost(scroller) {
+	if (!scroller?.addEventListener) return;
+	const mark = () => scroller.classList.toggle("is-scrolled", scroller.scrollTop > AT_REST);
+	scroller.addEventListener("scroll", mark, { passive: true });
+	// Core puts a kept offset back AFTER activateListeners (scrollY), so read again next frame.
+	mark();
+	globalThis.requestAnimationFrame?.(mark);
+}

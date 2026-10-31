@@ -16,6 +16,10 @@ The first time a GM opens a new world, Stonetop fills it in the background. A wi
 
 The window never blocks you. The work carries on whether it is open or not, so closing it changes nothing, and it closes itself a moment after it says "Your world is ready." If a row fails, the summary says so and the next load tries again.
 
+### After an update
+
+Most updates open no window at all. When an update changes some of the journals that came with your world, a smaller window titled **Updating your world** says which version changed how many journals, and brings the ones you haven't edited up to date. Journals you have edited keep your words; the new wording is in the Stonetop journal compendium. It closes itself when it's done. If a journal can't be updated, the window stays open to say so (or a notice appears, when no window was open), and Stonetop tries again the next time you load the world.
+
 <!-- SHOT: your-first-session-world-setup | GM client, brand-new world on first load: the "Setting up your world" window mid-run, with the journal row ticked, the Monster sheets row spinning with a partial bar, and the overall bar at about 60% -->
 
 ### What else the system sets for you

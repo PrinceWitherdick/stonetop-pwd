@@ -17,7 +17,7 @@ import {
 	DEATHS_DOOR_BOOSTS, askDeathsDoorBoost, askDeathsDoorClaim, burnBrightlyOnDoorCard, deathsDoorBoostsLeft,
 } from "../deaths-door-relay.js";
 import { ROLLED_FLAG, countedNote, countedTier, outcomeTier } from "../../../utils/counted-tier.js";
-import { activatePostDeathChoices, buildPostDeathChoices, outstandingLabel } from "../post-death-choices.js";
+import { activatePostDeathChoices, buildPostDeathChoices, flushPostDeathChoices, outstandingLabel } from "../post-death-choices.js";
 import { endBattleJoyUnrolled } from "../../../combat/battle-joy-offer.js";
 import { SYSTEM_ID } from "../../../system-id.js";
 import { deletionEntry } from "../../../utils/foundry-compat.js";
@@ -29,6 +29,7 @@ import { NO_ANSWER, relayOutcome } from "../../../utils/relay-landed.js";
 import { moveRollable } from "../../../utils/move-rollable.js";
 import { boostButtonFace, boostNote, boostsOn, deathsDoorPlusOnes, pressBoost } from "../roll-boosts.js";
 import { BURN_BRIGHTLY_COST } from "../burn-brightly.js";
+import { deathsDoorDictatesKey, heldDeathsDoorDictates, suggestedDictate } from "../deaths-door-arcana.js";
 import { GAVE_IT_ALL_FLAG, GIVE_IT_ALL_COSTS, IMPETUOUS_YOUTH, askGiveItAllCost, giveItAllAtDeathsDoor, givenByPress, newPressId, rollGiveItAllHurt } from "../impetuous-youth.js";
 
 // The move itself (name + trigger), from the 0-HP routing table that every other surface reads.
@@ -364,6 +365,13 @@ export class DeathsDoorDialog extends StonetopDialog {
 		// Whether the window has already been resized for the rail sheet. One-shot, so a player who
 		// resizes the window mid-question doesn't have it snapped back on their next click.
 		this._sizedForChoices = false;
+		// The 6- fates a held arcanum's marked Consequence dictates (deaths-door-arcana.js), read before each
+		// render of the steps that show the fates (_readDictates). The key is what the last read was of, the
+		// promise that read, and the version counts the answers that changed, so a render can tell it drew a stale one.
+		this._dictates = [];
+		this._dictatesKey = null;
+		this._dictatesRead = Promise.resolve();
+		this._dictatesVersion = 0;
 	}
 
 	/**
@@ -421,6 +429,10 @@ export class DeathsDoorDialog extends StonetopDialog {
 	 */
 	async _render(force, options) {
 		this._syncRoll();
+		// Not awaited: a render that waited on the compendium was one a second render could be dropped beside
+		// (AppV1 refuses a render while one is under way). A read that lands with a new answer redraws.
+		this._readDictates();
+		const drawnDictates = this._dictatesVersion;
 		const before = this._captureScroll();
 		await super._render(force, options);
 		this._sizeForStep();
@@ -429,6 +441,39 @@ export class DeathsDoorDialog extends StonetopDialog {
 		this._listen();
 		this._drawnWatchKey = this._watchKey();
 		this._armStaleTimer();
+		// The read landed mid-render with a different answer: this render may have drawn the old one.
+		if (this._dictatesVersion !== drawnDictates) this.render(false);
+	}
+
+	/**
+	 * Which fate a held arcanum dictates (Redwood Effigy, Noruba's Ice Sphere, the Hungering Maw), read on the
+	 * steps that offer the fates. Async because the card text comes from the compendium, so it is read here
+	 * rather than in getData, and only when what decides it has changed (deathsDoorDictatesKey): a redraw for
+	 * anything else reuses the last answer. A new answer landing redraws an open window. A failed read flags
+	 * nothing, blocks nothing, and is tried again on the next render. Resolves once the current read has landed.
+	 */
+	_readDictates() {
+		if (this._step !== "result" && this._step !== "fate") return this._dictatesRead;
+		const key = deathsDoorDictatesKey(this._character);
+		if (key === this._dictatesKey) return this._dictatesRead;
+		this._dictatesKey = key;
+		const read = heldDeathsDoorDictates(this._character)
+			.catch(err => {
+				console.error("Stonetop | could not read the arcana that decide Death's Door", err);
+				if (this._dictatesRead === read) this._dictatesKey = null;
+				return [];
+			})
+			.then(dictates => {
+				// A newer read has started since: its answer is the one that counts.
+				if (this._dictatesRead !== read) return;
+				if (JSON.stringify(dictates) === JSON.stringify(this._dictates)) return;
+				this._dictates = dictates;
+				this._dictatesVersion++;
+				// Mid-render, `rendered` is false, and _render's own check redraws once it is done.
+				if (this.rendered) this.render(false);
+			});
+		this._dictatesRead = read;
+		return read;
 	}
 
 	_captureScroll() {
@@ -646,10 +691,27 @@ export class DeathsDoorDialog extends StonetopDialog {
 			debilityTraded:  !!this._debilityTraded,
 			outOfAction:     !this._boostsPending && key === "partial" && !this._debilityTraded,
 
-			// 6-
-			fates:          _FATES,
-			refusalInserts: _REFUSAL_INSERTS,
+			// 6-. A fate a held arcanum dictates is flagged and marked as the suggestion; the others stay
+			// clickable (rule violations are flagged, never blocked).
+			...this._dictatedData(),
 			fateApplied:    !!this._fateApplied,
+		};
+	}
+
+	/** The fates and the Revenant/Ghost fork, with the one a held arcanum dictates marked, and its cautions. */
+	_dictatedData() {
+		const dictates  = this._dictates ?? [];
+		const suggested = suggestedDictate(dictates);
+		return {
+			fates: _FATES.map(f => ({ key: f.key, label: f.label, hint: f.hint, dictated: suggested?.fate === f.key })),
+			refusalInserts: _REFUSAL_INSERTS.map(i => ({
+				slug: i.slug, name: i.name, hint: i.hint, dictated: !!suggested?.insert && suggested.insert === i.slug,
+			})),
+			dictates: dictates.map(d => ({ slug: d.slug, text: format(`${_I18N}.dictated.${d.i18n}`, { arcanum: d.name }) })),
+			// "That fate is marked below": only where the marked one is on screen. The Revenant/Ghost fork shows
+			// no Last Door, which is the Hungering Maw's.
+			dictatedOthers: suggested && (this._step !== "fate" || suggested.insert) ? localize(`${_I18N}.dictated.others`) : "",
+			dictatedTag:    localize(`${_I18N}.dictated.suggested`),
 		};
 	}
 
@@ -1828,6 +1890,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 			this._fateApplied = false;
 			throw err;
 		}
+		await this._fillDictatedTether(slug);
 		const name  = _REFUSAL_INSERTS.find(i => i.slug === slug)?.name ?? "Thrall";
 		const taken = _INSERT_TAKEN[slug] ?? _REFUSED;
 		// Straight on to what the insert asks for. The insert is already theirs, so this step is
@@ -1841,6 +1904,24 @@ export class DeathsDoorDialog extends StonetopDialog {
 		// up waiting and closed the window must not have it reopened underneath them. Everything
 		// above is already written, and the Post-Death tab prints the rest.
 		this.renderIfOpen();
+	}
+
+	/**
+	 * Noruba's Ice Sphere: "gain the Ghost insert (with the Ice Sphere as your tether)". A Ghost taken while its
+	 * Consequence is marked gets the sphere as its tether, unless one is already written. The insert is already
+	 * theirs, so a failed write is logged and the tether question stays open on the next step.
+	 */
+	async _fillDictatedTether(slug) {
+		if (slug !== "ghost" || this._character?.tether) return;
+		// A click can beat the read the render started: wait for it rather than miss the sphere.
+		await this._readDictates();
+		const sphere = (this._dictates ?? []).find(d => d.tether && d.insert === slug);
+		if (!sphere?.name || typeof this._character?.setTether !== "function") return;
+		try {
+			await this._character.setTether(sphere.name);
+		} catch (err) {
+			console.error("Stonetop | could not write the Ice Sphere as the Ghost's tether", err);
+		}
 	}
 
 	/**
@@ -1902,6 +1983,11 @@ export class DeathsDoorDialog extends StonetopDialog {
 			// the only thing at stake here is the wording.
 			try { await this._saveMark(text); }
 			catch (err) { console.error("Stonetop | could not save the Death's-Door mark", err); }
+		}
+		// The choices step's own text fields (a Purpose's name, the master's, the tether), the same way.
+		if (this._step === "choices" && this.element?.find) {
+			try { await flushPostDeathChoices(this.element, this._character); }
+			catch (err) { console.error("Stonetop | could not save the insert's written answers", err); }
 		}
 		return super.close(options);
 	}

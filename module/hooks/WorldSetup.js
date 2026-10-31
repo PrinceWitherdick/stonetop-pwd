@@ -4,7 +4,7 @@ import { WorldSetupDialog } from "../dialogs/WorldSetupDialog.js";
 import { PosterMapScenesDialog } from "../dialogs/PosterMapScenesDialog.js";
 import {
 	needsJournalSeed, needsJournalSync, seedCompendiumJournalsOnce, restampSeededJournalSources,
-	updateSeededJournalsOnVersionChange, syncSeededFolderColors, unnestSeededWorldRootOnce,
+	planJournalSync, applyJournalSync, syncSeededFolderColors, unnestSeededWorldRootOnce,
 } from "./SeedCompendiums.js";
 import { openProgressNotification } from "../utils/progress-notification.js";
 import { needsBestiaryActorSeed, seedBestiaryActorsOnce, collapseBestiaryActorSubfoldersOnce } from "./SeedActors.js";
@@ -18,6 +18,8 @@ import { seedRelationshipMapOnce } from "../relmap/relmap-make.js";
 import { syncTrackPages } from "../timeline/timeline-store.js";
 import { backfillLevelUpsOnce } from "../timeline/timeline-backfill.js";
 import { stripExpeditionTitlePrefixesOnce } from "../migration/expedition-title-prefix.js";
+import { FIRST_LOAD_LEAD, ONE_TIME_IMPORT_CLOSE } from "../dialogs/world-setup-steps.js";
+import { plural, countOf } from "../utils/plural.js";
 
 // The GM's first load of a world, narrated.
 //
@@ -42,6 +44,10 @@ import { stripExpeditionTitlePrefixesOnce } from "../migration/expedition-title-
 // Everything here is best-effort. A step that throws is reported and abandoned; nothing
 // downstream waits on it, and the guards that gate each seed leave their flag unset so the
 // next load retries.
+
+// How long the journal comparison may run on an established world, with no window up, before a
+// notification bar appears to say what the wait is. Most releases finish it well inside this.
+const COMPARE_BAR_DELAY_MS = 1500;
 
 // One row of the setup window, and the three strings that row can show. Everything a lane
 // varies by lives here, so adding a fourth library is a row plus its work function rather
@@ -105,6 +111,40 @@ export function pendingSetupWork() {
 }
 
 /**
+ * The paragraph a setup window opens with, for the imports it is about to run.
+ *
+ * A brand-new world (journals still owed) gets the first-load wording. An established world only
+ * ever owes an import when a release adds a library it never had, or when one failed last time,
+ * and telling that GM their world is "new" would be wrong.
+ */
+export function setupLead(pending) {
+	if (pending.journals) return FIRST_LOAD_LEAD;
+	const adding = [pending.monsters && "monster sheets", pending.treasures && "Treasures & Wonders"].filter(Boolean);
+	return `Stonetop is adding its ${adding.join(" and ") || "content"} to your world. `
+		+ ONE_TIME_IMPORT_CLOSE;
+}
+
+/**
+ * What the window says when a new version changed journals this world already has. Only shown
+ * when there is something to refresh; see runArtAndJournals.
+ */
+export function updateWindowCopy({ version, refreshCount, keptCount = 0 }) {
+	const kept = keptCount
+		? ` ${countOf(keptCount, "other journal")} also changed, but ${plural(keptCount, "it has", "they have")} `
+			+ `edits in your world, so ${plural(keptCount, "it stays as it is", "they stay as they are")}. `
+			+ "The new wording is in the Stonetop compendium."
+		: "";
+	return {
+		title:    "Updating your world",
+		lead:     `Stonetop ${version} changed ${countOf(refreshCount, "journal")} that came with your world, `
+			+ `and Stonetop is bringing ${plural(refreshCount, "it", "them")} up to date.${kept} `
+			+ "This window only appears when an update changes journals. You can carry on while it finishes.",
+		rowLabel: `${countOf(refreshCount, "journal")} changed in ${version}`,
+		doneLine: `Your journals are up to date with Stonetop ${version}.`,
+	};
+}
+
+/**
  * Run one narrated lane: announce the step, do the work, report what it came to. `work`
  * returns the line to show on success, or a `{ skip: detail }` for "there was nothing to
  * do" — a normal outcome, not a failure.
@@ -116,6 +156,9 @@ export function pendingSetupWork() {
  * Best-effort by construction: a lane that throws is logged and reported, and nothing
  * downstream waits on it. The seeds leave their flags unset on failure, so the next load
  * retries — which is what every `failed` line promises.
+ *
+ * Resolves true when the work went through (or had nothing to do), false when it threw, for a
+ * caller that has to tell the GM about a failure some other way when no window is watching.
  */
 async function runLane(dialog, { key, starting, failed }, work) {
 	dialog?.start(key, starting);
@@ -123,9 +166,11 @@ async function runLane(dialog, { key, starting, failed }, work) {
 		const outcome = await work(dialog ? (p => dialog.step(key, p)) : undefined);
 		if (outcome?.skip) dialog?.skip(key, outcome.skip);
 		else dialog?.done(key, outcome ?? "");
+		return true;
 	} catch (err) {
 		error(`World setup: the ${key} step failed`, err);
 		dialog?.fail(key, failed);
+		return false;
 	}
 }
 
@@ -146,11 +191,15 @@ export function runWorldSetup() {
 	// seed is pending because the seed stamps the sync's version on its way out, so the two
 	// can never both have work in the same run.
 	const syncingJournals = !pending.journals && needsJournalSync();
-	const anyWork = pending.journals || pending.monsters || pending.treasures || syncingJournals;
+	const anyImport = pending.journals || pending.monsters || pending.treasures;
 
-	// The window only opens when there is genuinely a wait to explain. On a settled world
-	// this whole module is a couple of guarded no-ops and a self-heal, and popping a
-	// progress window for that would be noise.
+	// The window only opens up front when there is an import to explain. On a settled world
+	// this whole module is a couple of guarded no-ops and a self-heal, and popping a progress
+	// window for that would be noise.
+	//
+	// A version bump on its own does NOT open it here. Most releases change no journal content,
+	// so the sync lane first works out whether this one did, and opens a window of its own only
+	// when it has journals to refresh. See runArtAndJournals.
 	const steps = [
 		STEP_DEFS.art,
 		...(pending.journals  ? [STEP_DEFS.journals]    : []),
@@ -159,13 +208,16 @@ export function runWorldSetup() {
 		...(pending.treasures ? [STEP_DEFS.treasures]   : []),
 		STEP_DEFS.finish,
 	];
-	const dialog = anyWork ? WorldSetupDialog.open(steps) : null;
+	const dialog = anyImport ? WorldSetupDialog.open(steps, { lead: setupLead(pending) }) : null;
 
 	// Every lane runs on every GM load, exactly as before. `pending` decides only whether the
 	// lane is NARRATED — each of these chains carries one-time repairs and per-version syncs
 	// (the journal update channel, the retired-folder un-nest, the Bestiary tree collapse)
 	// that an already-seeded world still needs, and every call self-guards.
-	const journals = runArtAndJournals(dialog, { narrateSeed: pending.journals, narrateSync: syncingJournals });
+	// Filled in by the journal chain with the update window's closing, when it opens one, so the
+	// finishing pass can wait for that window too before it asks the GM anything.
+	const updateWindow = { closed: null };
+	const journals = runArtAndJournals(dialog, { narrateSeed: pending.journals, syncingJournals, updateWindow });
 	const monsters = runLane(pending.monsters ? dialog : null, STEP_DEFS.monsters, async report => {
 		// The seed is once-per-world; the collapse is a one-time repair for worlds seeded
 		// under the old deep folder tree, so it has to keep running on already-seeded worlds
@@ -191,7 +243,7 @@ export function runWorldSetup() {
 	});
 
 	void Promise.allSettled([journals, monsters, treasures])
-		.then(() => runFinishingTouches(dialog))
+		.then(() => runFinishingTouches(dialog, updateWindow))
 		.catch(err => error("World setup: the finishing pass failed", err));
 
 	return journals;
@@ -214,12 +266,12 @@ export function runWorldSetup() {
 // reverse. They stay in one function, and in this order, because the order is load-bearing.
 // The restamp has to precede the sync (it puts back the compendiumSource stamps the sync keys
 // on), and the un-nest has to precede the recolour (which matches folders by top-level name).
-async function runArtAndJournals(dialog, { narrateSeed, narrateSync } = {}) {
+async function runArtAndJournals(dialog, { narrateSeed, syncingJournals, updateWindow = {} } = {}) {
 	await runLane(dialog, STEP_DEFS.art, async () => {
 		const result = await reapplyBook2ArtOnVersionChange();
 		if (!result) return { skip: "No imported book art found: you can import it later" };
 		return result.total
-			? `Found your book art and wired it into ${result.total} ${result.total === 1 ? "entry" : "entries"}`
+			? `Found your book art and wired it into ${countOf(result.total, "entry", "entries")}`
 			: "Your imported book art is already in place";
 	});
 
@@ -230,18 +282,86 @@ async function runArtAndJournals(dialog, { narrateSeed, narrateSync } = {}) {
 	});
 
 	// A seed that failed leaves `seedingComplete` unset, which is the sync's own guard, so
-	// this lane no-ops rather than working against a half-imported sidebar.
-	await runLane(narrateSync ? dialog : null, STEP_DEFS.journalSync, async report => {
-		const sync = await updateSeededJournalsOnVersionChange({ onProgress: report });
+	// the plan comes back null and this lane no-ops rather than working against a half-imported
+	// sidebar.
+	//
+	// The comparison runs first and writes nothing, because it decides whether there is a window
+	// at all: a release that changed no journals has nothing to refresh, only baselines to
+	// stamp, and that is one quiet batched write the GM never needs to hear about.
+	//
+	// It is also the slow half, so it reports into whatever is there to watch: the main window's
+	// row when an import already has that window up, and otherwise a notification bar that only
+	// appears when the comparison runs long enough for a GM to wonder what is going on.
+	const syncKey = STEP_DEFS.journalSync.key;
+	const compareRow = syncingJournals ? dialog : null;
+	const compareBar = syncingJournals && !dialog
+		? openProgressNotification("Stonetop: checking your journals against the new version", { delayMs: COMPARE_BAR_DELAY_MS })
+		: null;
+	compareRow?.start(syncKey, STEP_DEFS.journalSync.starting);
+	let plan = null, planError = null;
+	try {
+		plan = await planJournalSync({
+			onProgress: compareRow ? p => compareRow.step(syncKey, p) : compareBar ? p => compareBar.update(p) : undefined,
+		});
+		compareBar?.close();
+	} catch (err) {
+		planError = err;
+		compareBar?.abandon();
+	}
+	const updateDialog = plan?.refresh.length && !dialog
+		? openJournalUpdateWindow(plan)
+		: null;
+	const syncWindow = syncingJournals ? (dialog ?? updateDialog) : null;
+
+	const synced = await runLane(syncWindow, STEP_DEFS.journalSync, async report => {
+		// A window on screen already says what changed and what was kept, so the toast would only
+		// repeat it.
+		const sync = await applyJournalSync(plan, { onProgress: report, notify: !syncWindow });
 		// These two are per-load repairs rather than part of the sync, so they run either way.
 		await unnestSeededWorldRootOnce();
 		await syncSeededFolderColors();
+		// A comparison that threw recorded nothing, so the next load tries again; same as below.
+		if (planError) throw planError;
+		// A journal whose refresh threw keeps its old content under its old baseline, so it is
+		// still due an update, and the sync left this version unrecorded so the next load gives it
+		// one. The row has to say it did not land rather than count it as updated.
+		if (sync?.failed?.length) {
+			throw new Error(`could not update ${countOf(sync.failed.length, "journal")}: ${sync.failed.join(", ")}`);
+		}
 		// The sync reports a failed baseline write by leaving this version unrecorded, on
 		// purpose, so the next load retries it. That is a failed step, not a finished one, and
 		// the row has to say so or the GM is told a write landed that did not.
 		if (!sync?.stamped) throw new Error("journal baselines were not stamped; the next load will retry");
-		return "Your journals are up to date with this release";
+		const kept = plan?.keptEdits.length
+			? `; kept your edits in ${plan.keptEdits.length} (the latest is in the compendium)`
+			: "";
+		return sync.updated.length
+			? `Updated ${countOf(sync.updated.length, "journal")}${kept}`
+			: `Your journals are up to date with this release${kept}`;
 	});
+	// With no window up, a failed sync would otherwise only reach the console, and the GM would
+	// never learn their journals were left on the old wording.
+	if (!synced && syncingJournals && !syncWindow) {
+		ui.notifications?.warn("Stonetop could not finish updating your journals for this version. "
+			+ "It will try again the next time you load this world.");
+	}
+
+	// The update window narrates this one lane and nothing else, so it closes as soon as the lane
+	// settles rather than waiting on the finishing pass. Not awaited here: the ready flow awaits
+	// this function on an established world, and the window's closing beat is no reason to hold
+	// it. The finishing pass does wait for it, before it offers the GM anything.
+	updateWindow.closed = updateDialog?.finish() ?? null;
+}
+
+// The window an established world sees after an update that changed some of its journals: one
+// row, and words about the update rather than about setting a new world up.
+function openJournalUpdateWindow(plan) {
+	const copy = updateWindowCopy({
+		version: plan.version,
+		refreshCount: plan.refresh.length,
+		keptCount: plan.keptEdits.length,
+	});
+	return WorldSetupDialog.open([{ ...STEP_DEFS.journalSync, label: copy.rowLabel }], copy);
 }
 
 // -- the finishing pass -------------------------------------------------------
@@ -262,7 +382,7 @@ async function runArtAndJournals(dialog, { narrateSeed, narrateSync } = {}) {
  *  3. the poster-map offer, which is a dialog, so it waits for the progress window to be
  *     off the screen before asking anything.
  */
-async function runFinishingTouches(dialog) {
+async function runFinishingTouches(dialog, updateWindow = {}) {
 	// The self-heal has just walked every durable art directory, so it already knows whether
 	// the GM has any art at all — it returns null when the folder is empty. Passing that on
 	// saves the map offer a browse of its own on every load of a world with no imported art.
@@ -271,7 +391,7 @@ async function runFinishingTouches(dialog) {
 		const result = await reapplyBook2Art({ worldOnly: true, cheapWorldSkip: true });
 		artOnDisk = result !== null;
 		const total = result?.total ?? 0;
-		return total ? `Art added to ${total} ${total === 1 ? "entry" : "entries"}` : "Everything is in place";
+		return total ? `Art added to ${countOf(total, "entry", "entries")}` : "Everything is in place";
 	});
 
 	// The map the steading sheet's Relationship Map tab opens on. Once per world and never after
@@ -303,8 +423,10 @@ async function runFinishingTouches(dialog) {
 	}
 
 	// Resolves once the window has actually gone (auto-close, or the GM closing it first),
-	// so the map offer never lands on top of it.
+	// so the map offer never lands on top of it. The same goes for the update window an
+	// established world may have up instead.
 	await dialog?.finish();
+	await updateWindow.closed;
 	await offerPosterMapScenesOnce({ artOnDisk });
 }
 

@@ -40,6 +40,9 @@ import { altStatGrantForMove } from "./alt-stat-grants.js";
 /** The Fox's move that arms them with throwing blades and throws their knives (MOVE_GRANTED_WEAPONS). */
 export const ALL_IN_THE_WRIST = "All in the Wrist";
 
+/** The Ravenous Thrall's maw, as the post-death move that grants it while it is out (MOVE_GRANTED_WEAPONS). */
+export const HORRID_MAW = "Horrid Maw";
+
 export const M = (over = {}) => ({
 	range: [],
 	damageBonus: 0,
@@ -142,6 +145,14 @@ export const MOVE_GRANTED_WEAPONS = {
 		slug: "all-in-the-wrist-throwing-blades",
 		meta: M({ name: "Iron throwing blades", range: ["near", "thrown"], iron: true, ammo: true }),
 		ammoStore: "move",
+	},
+	// A Ravenous Thrall's "horrid, iron-rending maw (hand, 3 piercing, messy) for as long as you wish"
+	// (Book I p.153), bought with 1 Favor. The move that grants it is made when the maw comes out and
+	// deleted when it goes away (post-death-outcomes.js#setRavenousMaw), so owning the move IS the maw
+	// being out, and the weapon is offered exactly then.
+	[HORRID_MAW]: {
+		slug: "ravenous-horrid-maw",
+		meta: M({ name: "Horrid maw", range: ["hand"], piercing: 3, tags: ["messy"] }),
 	},
 };
 

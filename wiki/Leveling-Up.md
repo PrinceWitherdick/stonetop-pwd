@@ -36,7 +36,7 @@ Steps that don't apply to you are skipped, so most level-ups are just the first 
 | **Animal companion** | for a Ranger with Beast-Bonded | Mark another action you can use when you focus on your animal companion. |
 | **Invocation** | on an even level for a Lightbearer, or anyone who got Invoke the Sun God | **Choose one new Invocation to add to your repertoire.** |
 
-The last step ends with a reminder to review your Instinct and Appearance on the **Details** tab.
+The last step ends with a reminder to review your Instinct and Appearance on the **Details** tab. A Ghost, Revenant or Thrall is pointed at the **Post-Death** tab for their Instinct instead, since the insert's replaced the playbook's. For them, a move that can never fire (Hard to Kill, Unstoppable, the Death's Door half of Never Gonna Keep Me Down) carries a note on its row: at 0 HP they face their insert's own move, not Death's Door. It can still be taken.
 
 The whole window works from the keyboard: **Tab** to a card and press **Enter** or **Space** to pick it.
 

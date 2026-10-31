@@ -3,6 +3,9 @@ import { StonetopCharacter } from "../../../module/actors/character/StonetopChar
 import { DEATHS_DOOR_STATE } from "../../../module/actors/character/deaths-door.js";
 import { FakeActorBuilder } from "../../fakes/FakeActorBuilder.js";
 import { FakeRepositoryFactory } from "../../fakes/FakeRepositoryFactory.js";
+import { FakePostDeathInsertRepository } from "../../fakes/FakePostDeathInsertRepository.js";
+import { FakeMoveRepository } from "../../fakes/FakeMoveRepository.js";
+import { readFileSync } from "node:fs";
 
 const SLUG_PATH  = "flags.stonetop-pwd.postDeathInsert.slug";
 const STATE_PATH = "flags.stonetop-pwd.deathsDoor";
@@ -18,10 +21,18 @@ function makeCharacter(flags = {}, { hp = 0 } = {}) {
 	return { actor, character: new StonetopCharacter(actor, new FakeRepositoryFactory()) };
 }
 
-/** The update that carried the slug, whichever call it was. */
+/** The swap's repair marker (review VG-3), which rides on the slug's write and has a block of its own below. */
+const PENDING_PATH = "flags.stonetop-pwd.insertMovesPending";
+const isPendingKey = key => key === PENDING_PATH || key === "flags.stonetop-pwd.-=insertMovesPending";
+
+/** The update that carried the slug, whichever call it was, without the repair marker. */
 function slugWrite(actor) {
-	return actor.update.mock.calls.map(([data]) => data).find(data => SLUG_PATH in data) ?? null;
+	const data = actor.update.mock.calls.map(([d]) => d).find(d => SLUG_PATH in d);
+	return data ? Object.fromEntries(Object.entries(data).filter(([key]) => !isPendingKey(key))) : null;
 }
+
+/** The writes that carried anything but the repair marker: the swap's own, which must stay one. */
+const swapWrites = actor => actor.update.mock.calls.filter(([d]) => Object.keys(d).some(key => !isPendingKey(key)));
 
 /**
  * Taking an insert used to be two writes: the slug, then the Death's Door state. A reload landing
@@ -63,7 +74,7 @@ describe("setPostDeathInsert — the insert and the end of dying are one write",
 
 		await character.setPostDeathInsert("ghost");
 
-		expect(actor.update).toHaveBeenCalledTimes(1);
+		expect(swapWrites(actor)).toHaveLength(1);
 		expect(slugWrite(actor)).toEqual({ [SLUG_PATH]: "ghost", [STATE_PATH]: DEATHS_DOOR_STATE.OUT_OF_ACTION });
 	});
 
@@ -148,5 +159,193 @@ describe("deathsDoorState — an insert is the fate, whatever the flag still say
 		});
 
 		expect(character.deathsDoorState).toBe(DEATHS_DOOR_STATE.OUT_OF_ACTION);
+	});
+});
+
+/**
+ * Audit RV-6 (2026-10-26): a swap was four writes (the prune, the old moves gone, the slug, the new moves
+ * made), and a reload between two of them left a Revenant still wearing the Revenant with every
+ * Revenant-only Consequence already deleted, or a Ghost with no insert moves that retaking the same insert
+ * (a no-op) could never give back.
+ */
+describe("setPostDeathInsert, torn by a reload", () => {
+	const readPack = name => JSON.parse(readFileSync(new URL(`../../../packs/src/stonetop-items/post-death-inserts/${name}.json`, import.meta.url), "utf8"));
+	const ghostMoves = ["Unliving", "Disembodied", "Tethered"].map(name => ({ name, type: "move", system: { moveType: "post-death" } }));
+
+	function swapCharacter(flags, { owned = [] } = {}) {
+		const actor = new FakeActorBuilder().withFlags(flags).withHp(0, 8).build();
+		actor.items = owned;
+		actor.update = vi.fn(async () => {});
+		actor.createEmbeddedDocuments = vi.fn(async () => []);
+		actor.deleteEmbeddedDocuments = vi.fn(async () => []);
+		const repos = new FakeRepositoryFactory({
+			postDeathInsert: new FakePostDeathInsertRepository([readPack("ghost"), readPack("revenant")]),
+			moves: new FakeMoveRepository([], [], ghostMoves),
+		});
+		return { actor, character: new StonetopCharacter(actor, repos) };
+	}
+
+	it("prunes what the Ghost can't hold in the slug's own write, keeping what both inserts print", async () => {
+		const { actor, character } = swapCharacter({
+			deathsDoor: DEATHS_DOOR_STATE.DYING,
+			postDeathInsert: { slug: "revenant" },
+			postDeathLore: { counts: { "consequences:carrion-stench": 1, "consequences:breakdown": 1 } },
+		}, { owned: [{ _id: "r1", name: "Undying", type: "move", system: { moveType: "post-death" } }] });
+
+		await character.setPostDeathInsert("ghost");
+
+		expect(swapWrites(actor)).toHaveLength(1);
+		const write = slugWrite(actor);
+		expect(write[SLUG_PATH]).toBe("ghost");
+		const keys = Object.keys(write);
+		expect(keys.some(k => k.includes("postDeathLore.counts") && k.endsWith("consequences:carrion-stench"))).toBe(true);
+		expect(keys.some(k => k.endsWith("consequences:breakdown"))).toBe(false);
+		// The old moves went before that write, and the new ones came after it.
+		const slugCall = actor.update.mock.calls.findIndex(([d]) => SLUG_PATH in d);
+		expect(actor.deleteEmbeddedDocuments.mock.invocationCallOrder[0]).toBeLessThan(actor.update.mock.invocationCallOrder[slugCall]);
+		expect(actor.createEmbeddedDocuments.mock.invocationCallOrder[0]).toBeGreaterThan(actor.update.mock.invocationCallOrder[slugCall]);
+	});
+
+	it("makes the worn insert's own moves that are missing, and only those, while a swap's marker stands", async () => {
+		const { actor, character } = swapCharacter({ postDeathInsert: { slug: "ghost" }, insertMovesPending: true }, {
+			owned: [{ _id: "u1", name: "Unliving", type: "move", system: { moveType: "post-death" } }],
+		});
+
+		expect(await character.syncPostDeathInsertMoves()).toBe(2);
+
+		const made = actor.createEmbeddedDocuments.mock.calls[0][1].map(d => d.name);
+		expect(made).toEqual(["Disembodied", "Tethered"]);
+		// And the marker is lifted, so the next load does nothing.
+		expect(Object.keys(actor.update.mock.calls.at(-1)[0])).toEqual(["flags.stonetop-pwd.-=insertMovesPending"]);
+	});
+
+	it("makes nothing for a character wearing no insert, or holding every move", async () => {
+		const none = swapCharacter({ insertMovesPending: true });
+		expect(await none.character.syncPostDeathInsertMoves()).toBe(0);
+		const whole = swapCharacter({ postDeathInsert: { slug: "ghost" }, insertMovesPending: true }, {
+			owned: ghostMoves.map((m, i) => ({ _id: `m${i}`, ...m })),
+		});
+		expect(await whole.character.syncPostDeathInsertMoves()).toBe(0);
+		expect(whole.actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * The user's ruling, 2026-10-28 (review VG-3): "Repair only after a swap". The load-time repair puts back an
+ * insert's own moves only while the swap's marker says one was under way, so a move a GM deleted by hand
+ * later (a house rule taking Tethered away) stays deleted, and a character from before the marker is left alone.
+ */
+describe("the load-time repair answers only a swap cut short", () => {
+	const ghostMoves = ["Unliving", "Disembodied", "Tethered"].map(name => ({ name, type: "move", system: { moveType: "post-death" } }));
+	function wearing(flags, owned = []) {
+		const actor = new FakeActorBuilder().withFlags(flags).withHp(0, 8).build();
+		actor.items = owned;
+		actor.update = vi.fn(async () => {});
+		actor.createEmbeddedDocuments = vi.fn(async () => []);
+		actor.deleteEmbeddedDocuments = vi.fn(async () => []);
+		const repos = new FakeRepositoryFactory({ moves: new FakeMoveRepository([], [], ghostMoves) });
+		return { actor, character: new StonetopCharacter(actor, repos) };
+	}
+
+	// Review 10-28: a pack not readable yet reads as no moves at all, which is not a swap made whole.
+	it("keeps the marker when the insert's moves could not be read", async () => {
+		const actor = new FakeActorBuilder().withFlags({ postDeathInsert: { slug: "ghost" }, insertMovesPending: true }).withHp(0, 8).build();
+		actor.items = [];
+		actor.update = vi.fn(async () => {});
+		actor.createEmbeddedDocuments = vi.fn(async () => []);
+		const repos = new FakeRepositoryFactory({ moves: new FakeMoveRepository([], [], []) });
+		const character = new StonetopCharacter(actor, repos);
+		expect(await character.syncPostDeathInsertMoves()).toBe(0);
+		expect(actor.update).not.toHaveBeenCalled();
+	});
+
+	// Review 10-28: a load-time repair landing mid-swap may already have made some of them.
+	it("makes only the moves still missing when the swap gets to them", async () => {
+		const { actor, character } = wearing({ postDeathInsert: { slug: "revenant" } }, [
+			{ _id: "r1", name: "Undying", type: "move", system: { moveType: "post-death" } },
+		]);
+		actor.deleteEmbeddedDocuments = vi.fn(async () => {
+			actor.items = [{ _id: "u9", name: "Unliving", type: "move", system: { moveType: "post-death" } }];
+			return [];
+		});
+		await character.setPostDeathInsert("ghost");
+		expect(actor.createEmbeddedDocuments.mock.calls[0][1].map(d => d.name)).toEqual(["Disembodied", "Tethered"]);
+	});
+
+	it("never puts back a move deleted after the swap was whole", async () => {
+		const { actor, character } = wearing({ postDeathInsert: { slug: "ghost" } }, [
+			{ _id: "u1", name: "Unliving", type: "move", system: { moveType: "post-death" } },
+			{ _id: "d1", name: "Disembodied", type: "move", system: { moveType: "post-death" } },
+		]);
+		expect(await character.syncPostDeathInsertMoves()).toBe(0);
+		expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+		expect(actor.update).not.toHaveBeenCalled();
+	});
+
+	it("raises the marker before the old moves go, keeps it on the slug's write, and lifts it once the new ones are made", async () => {
+		const { actor, character } = wearing({ postDeathInsert: { slug: "revenant" } }, [
+			{ _id: "r1", name: "Undying", type: "move", system: { moveType: "post-death" } },
+		]);
+		await character.setPostDeathInsert("ghost");
+
+		const calls = actor.update.mock.calls.map(([d]) => d);
+		const order = actor.update.mock.invocationCallOrder;
+		expect(calls[0]).toEqual({ [PENDING_PATH]: true });
+		expect(order[0]).toBeLessThan(actor.deleteEmbeddedDocuments.mock.invocationCallOrder[0]);
+		const slugCall = calls.findIndex(d => SLUG_PATH in d);
+		expect(calls[slugCall][PENDING_PATH]).toBe(true);
+		expect(calls.at(-1)).toEqual({ "flags.stonetop-pwd.-=insertMovesPending": null });
+		expect(order.at(-1)).toBeGreaterThan(actor.createEmbeddedDocuments.mock.invocationCallOrder[0]);
+	});
+
+	it("takes the marker with it when an insert is removed, and adds nothing when none stands", async () => {
+		const swap = wearing({ postDeathInsert: { slug: "ghost" } }, [{ _id: "u1", name: "Unliving", type: "move", system: { moveType: "post-death" } }]);
+		await swap.character.setPostDeathInsert(null);
+		const write = swap.actor.update.mock.calls.map(([d]) => d).find(d => SLUG_PATH in d);
+		expect(write).toHaveProperty(["flags.stonetop-pwd.-=insertMovesPending"], null);
+
+		const bare = wearing({});
+		await bare.character.setPostDeathInsert(null);
+		expect(Object.keys(bare.actor.update.mock.calls[0][0]).some(isPendingKey)).toBe(false);
+	});
+});
+
+/**
+ * Audit LC-2: the old insert's 0-HP move is over once an insert is taken or removed, so Undying's kept-HP stamp
+ * and an Undeath roll in progress go in the slug's own write. A Death's Door roll's marker is left alone.
+ */
+describe("setPostDeathInsert lifts what Undying left behind (audit LC-2)", () => {
+	const KEPT = "flags.stonetop-pwd.-=undeathKeptHp";
+	const ROLLING = "flags.stonetop-pwd.-=deathsDoorRolling";
+	const undeathMarker = { userId: "u", nonce: "undeath:abc", tier: "failure" };
+
+	it("on removal: the stamp and the Undeath marker, in the slug's write", async () => {
+		const { actor, character } = makeCharacter({
+			postDeathInsert: { slug: "revenant" }, deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION,
+			undeathKeptHp: true, deathsDoorRolling: undeathMarker,
+		});
+		await character.setPostDeathInsert(null);
+		const write = actor.update.mock.calls.map(([d]) => d).find(d => SLUG_PATH in d);
+		expect(write).toHaveProperty([KEPT], null);
+		expect(write).toHaveProperty([ROLLING], null);
+	});
+
+	it("on a take: the same, in the slug's write", async () => {
+		const { actor, character } = makeCharacter({
+			postDeathInsert: { slug: "revenant" }, deathsDoor: DEATHS_DOOR_STATE.DYING,
+			undeathKeptHp: true, deathsDoorRolling: undeathMarker,
+		});
+		await character.setPostDeathInsert("thrall");
+		const write = actor.update.mock.calls.map(([d]) => d).find(d => SLUG_PATH in d);
+		expect(write).toHaveProperty([KEPT], null);
+		expect(write).toHaveProperty([ROLLING], null);
+	});
+
+	it("leaves a Death's Door roll's marker, and adds nothing when neither stands", async () => {
+		const door = makeCharacter({ deathsDoor: DEATHS_DOOR_STATE.FATE_PENDING, deathsDoorRolling: { userId: "u", nonce: "abc" } });
+		await door.character.setPostDeathInsert("ghost");
+		const write = door.actor.update.mock.calls.map(([d]) => d).find(d => SLUG_PATH in d);
+		expect(write).not.toHaveProperty([ROLLING]);
+		expect(write).not.toHaveProperty([KEPT]);
 	});
 });

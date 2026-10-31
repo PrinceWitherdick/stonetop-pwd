@@ -2033,6 +2033,11 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		});
 	}
 
+	// Every pick re-renders the window, which drew the page back at its top; the page keeps its
+	// scroll through a redraw of the same step, and a new step opens at its top.
+	get _keptScrollSelector() { return ".stonetop-onboarding-step"; }
+	get _keptPlaceKey() { return this._steps?.[this._step] ?? null; }
+
 	get title() {
 		return `New Character: ${this._playbookDoc.name}`;
 	}
@@ -3303,17 +3308,13 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			_refreshNextButton();
 			// Picks chain (_freePickOffers): Hound of Aratis opens Like a Dog with a Bone, and
 			// unticking it closes that card again and lets a pick of it go. When the offers
-			// changed, re-render (scroll and focus kept, as the either/or radios do); the step's
+			// changed, re-render (focus kept, as the either/or radios do); the step's
 			// render prunes the picks and redraws the count.
 			const shown  = new Set(html.find("[name='onboard-move']").map((_, el) => el.value).get());
 			const offers = this._freePickOffers().map(doc => doc.id);
 			if (offers.length === shown.size && offers.every(o => shown.has(o))) return;
-			const stepEl    = html.find(".stonetop-onboarding-step")[0];
-			const scrollTop = stepEl?.scrollTop ?? 0;
 			await this.render(false);
 			const root      = this.element?.[0];
-			const newStepEl = root?.querySelector(".stonetop-onboarding-step");
-			if (newStepEl) newStepEl.scrollTop = scrollTop;
 			[...(root?.querySelectorAll("[name='onboard-move']") ?? [])].find(el => el.value === id)?.focus({ preventScroll: true });
 		});
 
@@ -3356,16 +3357,12 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		// "Either X OR Y" starting-move choices (one radio group per choice). Re-rendered, since
 		// the pick decides the free picks on offer: Skill at Arms opens Parry & Riposte, the half
 		// just picked leaves the list and the other half joins it, and a free pick that leaned on
-		// the half given up is let go. Scroll kept, as the arcana pickers do.
+		// the half given up is let go.
 		html.find("[name^='onboard-move-choice-']").on("change", async ev => {
 			const { name, value } = ev.currentTarget;
 			this._selections.moveChoices[ev.currentTarget.dataset.group] = value;
-			const stepEl    = html.find(".stonetop-onboarding-step")[0];
-			const scrollTop = stepEl?.scrollTop ?? 0;
 			await this.render(false);
 			const root      = this.element?.[0];
-			const newStepEl = root?.querySelector(".stonetop-onboarding-step");
-			if (newStepEl) newStepEl.scrollTop = scrollTop;
 			// Keyboard focus stays on the radio the player just moved to.
 			[...(root?.querySelectorAll(`[name='${name}']`) ?? [])].find(r => r.value === value)?.focus({ preventScroll: true });
 		});
@@ -3662,13 +3659,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			});
 			// Re-render so the "begin to unlock the mysteries" marks reflect the newly
 			// chosen arcanum (a different insert with its own ○ circles / □ tasks).
-			// getData reconciles the marks to the new major's default. Preserve scroll
-			// like the "Draw again" handler so the page doesn't jump to the top.
-			const stepEl    = html.find(".stonetop-onboarding-step")[0];
-			const scrollTop = stepEl?.scrollTop ?? 0;
+			// getData reconciles the marks to the new major's default. The page keeps its scroll
+			// through it (_keptScrollSelector).
 			await this.render(false);
-			const newStepEl = this.element?.[0]?.querySelector(".stonetop-onboarding-step");
-			if (newStepEl) newStepEl.scrollTop = scrollTop;
 		});
 
 		// Marking a ○ circle / □ task inline on the chosen major's card front, right in
@@ -3706,12 +3699,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		});
 
 		html.find(".stonetop-onboarding-redraw-minor").on("click", async () => {
-			const stepEl = html.find(".stonetop-onboarding-step")[0];
-			const scrollTop = stepEl?.scrollTop ?? 0;
 			const arcana = await this._loadArcanaOptions();
 			this._drawSeekerMinorArcana(arcana.minor);
 			await this.render(false);
-			if (stepEl) stepEl.scrollTop = scrollTop;
 		});
 
 		html.find(".stonetop-onboarding-minor-swap-select").on("change", async ev => {
@@ -3721,12 +3711,8 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			// The card is still hovered while its <select> is open, so a preview popup may be
 			// up; clear it before the re-render replaces the card it was anchored to.
 			this._removeArcanaPreview();
-			const stepEl    = html.find(".stonetop-onboarding-step")[0];
-			const scrollTop = stepEl?.scrollTop ?? 0;
 			this._swapSeekerMinorArcana(oldSlug, newSlug);
 			await this.render(false);
-			const newStepEl = this.element?.[0]?.querySelector(".stonetop-onboarding-step");
-			if (newStepEl) newStepEl.scrollTop = scrollTop;
 		});
 
 		html.find(".onboard-name-chip").on("click", ev => {

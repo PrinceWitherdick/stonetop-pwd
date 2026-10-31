@@ -112,6 +112,8 @@ describe("the camp window's template", () => {
 		expect(hostsRow).not.toContain('data-camp-action="go-without"');
 		expect(hostsRow).not.toContain("Going without");
 		expect(hostsRow).not.toContain("stonetop-camp-row-foot");
+		// The same words the road window uses (camp-rules.js#UNLIVING_NEEDS).
+		expect(hostsRow).toContain("Needs no food or sleep (Unliving), and takes nothing from the night.");
 	});
 
 	it("gives a GM one line and one list to bring someone to the fire or send anyone but the host away", async () => {

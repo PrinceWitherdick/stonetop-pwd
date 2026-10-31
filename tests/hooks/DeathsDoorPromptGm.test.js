@@ -159,6 +159,18 @@ describe("markDyingByFiat: sent to the Door at 0 HP", () => {
 		expect(options).toEqual({ stonetopMove: "Death's Door" });
 	});
 
+	// Audit VL-2 (2026-10-28): a roll marker the last brush left (an Undying or Dark Succor roll stamped as the GM
+	// ruled it not lethal) goes in the same write, as it does when hit points send them down.
+	it("lifts a roll marker left over from the last brush with death", async () => {
+		const actor = pc({ flags: {
+			deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION,
+			deathsDoorRolling: { userId: "u1", nonce: "undeath:old", tier: "failure", total: 4 },
+		} });
+		await markDyingByFiat(actor);
+		expect(actor.update).toHaveBeenCalledTimes(1);
+		expect(actor.update.mock.calls[0][0]).toMatchObject({ [`flags.${SCOPE}.-=deathsDoorRolling`]: null });
+	});
+
 	// Unstoppable: "When you are reduced to 0 HP in battle, you can keep fighting" (Book I p.114). A Heavy put back
 	// on the Door by the GM's fiat, already down and out of the action, was not reduced to 0 in battle by it: they
 	// face the Door rather than fight on, even with a fight running round them, and a stale stamp is lifted.

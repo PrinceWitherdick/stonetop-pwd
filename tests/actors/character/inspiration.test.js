@@ -494,10 +494,48 @@ describe("keep 1 HP instead of being reduced to 0 HP", () => {
 		const offerFn = vi.fn(async () => true);
 		const dying = { flags: { [SCOPE]: { deathsDoor: "dying" } } };
 		onUpdateActorInspirationAtZero(wren, dying, {}, null, { answers: () => true, offer: offerFn, combats: fighting(wren) });
-		expect(offerFn).toHaveBeenCalledWith(wren, { battleJoy: false, readiness: 2 });
+		expect(offerFn).toHaveBeenCalledWith(wren, { battleJoy: false, readiness: 2, manifestEnded: false, possessedHost: "" });
 		const keep = vi.fn(async () => true);
 		await offerKeepOneHp(wren, { readiness: 2, ask: async () => true, keep, open: async () => {}, autoOpens: () => false });
-		expect(keep).toHaveBeenCalledWith(wren, { battleJoy: false, readiness: 2 });
+		expect(keep).toHaveBeenCalledWith(wren, { battleJoy: false, readiness: 2, manifestEnded: false, possessedHost: "" });
+	});
+
+	// XS-5: a Ghost's manifestation or possession the drop ended is not put back, and the card says so.
+	it("says a manifestation or possession the drop ended stays ended, and only when one did", async () => {
+		const ghostFlags = {
+			postDeathInsert: { slug: "ghost" }, postDeathLore: { counts: { "consequences:bodysnatcher": 1 } },
+			bodysnatcherHost: { uuid: "Actor.host", name: "Brennan" },
+		};
+		const ghost = pc({ id: "ghost", held: 1, hp: 0, dying: true, flags: ghostFlags });
+		const offerFn = vi.fn(async () => true);
+		const drop = { system: { attributes: { hp: { value: 0 } } }, flags: { [SCOPE]: { deathsDoor: "dying" } } };
+		onUpdateActorInspirationAtZero(ghost, drop, { stonetopManifestEnded: true }, null, { answers: () => true, offer: offerFn, combats: fighting(ghost) });
+		expect(offerFn).toHaveBeenCalledWith(ghost, { battleJoy: false, readiness: 0, manifestEnded: true, possessedHost: "Brennan" });
+
+		const keep = vi.fn(async () => true);
+		await offerKeepOneHp(ghost, { manifestEnded: true, possessedHost: "Brennan", ask: async () => true, keep, open: async () => {}, autoOpens: () => false });
+		expect(keep).toHaveBeenCalledWith(ghost, { battleJoy: false, readiness: 0, manifestEnded: true, possessedHost: "Brennan" });
+
+		expect(await keepOneHp(ghost, { manifestEnded: true, possessedHost: "Brennan", combats: fighting(ghost) })).toBe(true);
+		const note = globalThis.ChatMessage.create.mock.calls.at(-1)[0].content;
+		expect(note).toMatch(/keptManifestEnded|manifestation/);
+		expect(note).toMatch(/keptPossessionEnded|Brennan/);
+		// Nothing put back: the keep writes no manifestation or host.
+		expect(ghost.typedActor.restoreHp.mock.calls[0][2].alsoUpdate).toEqual({});
+
+		const wren = pc({ id: "wren", held: 1, hp: 0, dying: true });
+		expect(await keepOneHp(wren, { combats: fighting(wren) })).toBe(true);
+		expect(globalThis.ChatMessage.create.mock.calls.at(-1)[0].content).not.toMatch(/keptManifestEnded|keptPossessionEnded|manifestation|body/);
+	});
+
+	it("names no possession on a write that marks them dying without writing their HP", () => {
+		const ghost = pc({ id: "ghost", held: 1, hp: 0, dying: true, flags: {
+			postDeathInsert: { slug: "ghost" }, postDeathLore: { counts: { "consequences:bodysnatcher": 1 } },
+			bodysnatcherHost: { uuid: "Actor.host", name: "Brennan" },
+		} });
+		const offerFn = vi.fn(async () => true);
+		onUpdateActorInspirationAtZero(ghost, { flags: { [SCOPE]: { deathsDoor: "dying" } } }, {}, null, { answers: () => true, offer: offerFn, combats: fighting(ghost) });
+		expect(offerFn.mock.calls[0][1].possessedHost).toBe("");
 	});
 
 	it("keeps nothing out of a fight", async () => {
@@ -523,7 +561,7 @@ describe("keep 1 HP instead of being reduced to 0 HP", () => {
 		const offerFn = vi.fn(async () => true);
 		const dying = { flags: { [SCOPE]: { deathsDoor: "dying" } } };
 		onUpdateActorInspirationAtZero(wren, dying, { stonetopBattleJoyDropped: true }, null, { answers: () => true, offer: offerFn, combats: fighting(wren) });
-		expect(offerFn).toHaveBeenCalledWith(wren, { battleJoy: true, readiness: 0 });
+		expect(offerFn).toHaveBeenCalledWith(wren, { battleJoy: true, readiness: 0, manifestEnded: false, possessedHost: "" });
 		offerFn.mockClear();
 		onUpdateActorInspirationAtZero(wren, dying, {}, null, { answers: () => false, offer: offerFn, combats: fighting(wren) });
 		onUpdateActorInspirationAtZero(wren, { system: {} }, {}, null, { answers: () => true, offer: offerFn, combats: fighting(wren) });

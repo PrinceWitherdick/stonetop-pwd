@@ -164,6 +164,7 @@ import { registerCampHooks } from "./module/camp/camp-store.js";
 import { registerVitalsMirrorHooks } from "./module/actors/character/vitals-mirror.js";
 import { registerBronzeLineHooks } from "./module/actors/character/bronze-lines.js";
 import { registerPostDeathMoveHooks } from "./module/actors/character/post-death-moves.js";
+import { installBodysnatcherHooks } from "./module/actors/character/bodysnatcher.js";
 import { loseHp, wirePostDeathMoveCards } from "./module/actors/character/post-death-actions.js";
 import { registerRosterFateHooks } from "./module/fight/roster-fate.js";
 import { registerLevelUpClaimQuery } from "./module/actors/character/level-up-claim.js";
@@ -793,6 +794,7 @@ Hooks.once("init", () => {
 		"stonetop.timeline-add-slot":         "systems/stonetop-pwd/templates/dialogs/partials/timeline-add-slot.hbs",
 		"stonetop.timeline-entry-tag":        "systems/stonetop-pwd/templates/dialogs/partials/timeline-entry-tag.hbs",
 		"stonetop.deaths-door-outcomes":      "systems/stonetop-pwd/templates/dialogs/partials/deaths-door-outcomes.hbs",
+		"stonetop.deaths-door-dictates":      "systems/stonetop-pwd/templates/dialogs/partials/deaths-door-dictates.hbs",
 		"stonetop.artifact-gm":              "systems/stonetop-pwd/templates/dialogs/artifact-gm.hbs",
 		"stonetop.header-toggle-glyph":       "systems/stonetop-pwd/templates/actor/partials/header-toggle-glyph.hbs",
 		"stonetop.header-count-glyph":        "systems/stonetop-pwd/templates/actor/partials/header-count-glyph.hbs",
@@ -2984,6 +2986,8 @@ registerBronzeLineHooks();
 // And a character's post-death Consequence and Mark moves (Poltergeist, Red Wrath), kept to what is marked
 // on whichever client marked it, with Home to Vermin's follower offered there.
 registerPostDeathMoveHooks();
+// A Ghost's Bodysnatcher: the damage their host takes, lost as HP; the possession ended at 0 HP or once it lapses.
+installBodysnatcherHooks();
 // A crew member a lone blow drops in a fight is asked their fate on the Marshal's player's screen.
 registerRosterFateHooks();
 // And a camp window open when this client reloaded comes back with the sheets, where it was left

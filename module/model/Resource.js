@@ -36,6 +36,10 @@ export class ResourceDef {
 		this.spendTooltip = this.spendOptions.length
 			? "Spend 1 to:<br>• " + this.spendOptions.join("<br>• ")
 			: null;
+		// A hold pool the book gives no ceiling (Poltergeist's Fury: "hold that much Fury"): `max` is then
+		// only how many pips the track draws at the least, and it grows to show whatever more is held
+		// (MoveResources.js#trackCap). Set only when true, so every other track keeps the shape it had.
+		if (data.uncapped) this.uncapped = true;
 	}
 }
 

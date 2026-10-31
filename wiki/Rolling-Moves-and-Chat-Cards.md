@@ -73,7 +73,7 @@ Some moves let another character spend something to add +1 to *your* roll. When 
 | **Sanction: +1** | A character acting on Aratis's orders (Commune with Aratis) |
 | **Many Hands: +1** | A Judge with Many Hands Make Light Work |
 | **Blessing: +1** | Someone who worshipped Helior with Piety |
-| **Preparation: +1** | Whoever holds Preparation from the steading's Bolster move |
+| **Preparation: +1** | Whoever holds Preparation from Bolster (the **Special Moves** tab), on their own cards and the steading's |
 
 The +1 is added to the card and the spender's track goes down by one.
 

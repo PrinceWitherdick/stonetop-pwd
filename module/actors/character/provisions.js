@@ -3,7 +3,7 @@ import { CharacterPossessions } from "./CharacterPossessions.js";
 import { StonetopFlags } from "./StonetopFlags.js";
 import { SACRED_POUCH_SLUG, vesselHpFormula } from "./stock-cost.js";
 import { rolledTotalCard } from "../../utils/chat.js";
-import { applyDamageToActor } from "../../utils/damage.js";
+import { applyHpLossToActor } from "../../utils/damage.js";
 
 /**
  * PROVISIONS — food taken from the wild, and the one inventory track whose size is rolled for
@@ -181,8 +181,8 @@ export async function rollStock(actor, { formula, pouchMax, speaker } = {}) {
  * 2d4 HP instead." Throws the dice where the table can see them and takes that much HP.
  *
  * HP LOST, not damage: no armor stands between a Vessel and Danu's power, so the total comes off
- * through the plain HP writer (utils/damage.js#applyDamageToActor, the one the damage cards use
- * AFTER armor), attributed to the move for the ledger. The card goes out after the write, so it
+ * through the plain HP writer (utils/damage.js#applyHpLossToActor, the one the damage cards use
+ * AFTER armor, marked as HP lost), attributed to the move for the ledger. The card goes out after the write, so it
  * can say where HP ended up, the same order rollStock keeps.
  *
  * @param {Actor} actor
@@ -195,7 +195,8 @@ export async function rollStock(actor, { formula, pouchMax, speaker } = {}) {
 export async function loseHpForStock(actor, { amount = 1, moveName = "", speaker } = {}) {
 	const roll = await new Roll(vesselHpFormula(amount)).evaluate();
 	const lost = Math.max(0, Math.trunc(roll.total));
-	const hp = await applyDamageToActor(actor, lost, moveName ? { stonetopMove: moveName } : {});
+	// Marked as HP lost (StonetopFlags.js#HP_LOSS_OPTION): nothing that answers damage reads it as a blow.
+	const hp = await applyHpLossToActor(actor, lost, moveName ? { stonetopMove: moveName } : {});
 	const oldHp = hp?.oldHp ?? 0;
 	const newHp = hp?.newHp ?? 0;
 	await roll.toMessage({

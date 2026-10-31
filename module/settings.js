@@ -419,14 +419,27 @@ export function registerSettings() {
 		default: true,
 		onChange: value => Hooks.callAll(FEATURE_SWITCH_HOOK, "relationshipMap", value),
 	});
+	// The timeline's switch is a three-way choice (TIMELINE_REACH): everywhere, the steading sheet
+	// only (character sheets lose their tab; the steading's tab, the journal and the window stay), or
+	// off. It was a Boolean until 2026-10-31, and worlds from before then still store `true`/`false`
+	// under this key, which Foundry hands back as the strings "true"/"false" now the type is String.
+	// timelineReachOf reads those as "all"/"off", so a world is right before migrateTimelineReach
+	// (hooks/Ready.js) rewrites the stored value, and the settings window's dropdown shows it after.
 	game.settings.register(SYSTEM_ID, "showTimeline", {
 		name: "stonetop.settings.showTimeline.name",
 		hint: "stonetop.settings.showTimeline.hint",
 		scope: "world",
 		config: true,
-		type: Boolean,
-		default: true,
-		onChange: value => Hooks.callAll(FEATURE_SWITCH_HOOK, "timeline", value),
+		type: String,
+		choices: {
+			"all":      "stonetop.settings.showTimeline.all",
+			"steading": "stonetop.settings.showTimeline.steading",
+			"off":      "stonetop.settings.showTimeline.off",
+		},
+		default: "all",
+		// The hook still says on or off: going to or from "steading" only repaints, and the sheets
+		// it repaints read the reach themselves.
+		onChange: value => Hooks.callAll(FEATURE_SWITCH_HOOK, "timeline", timelineReachOf(value) !== "off"),
 	});
 
 	// Whether every player may open every character's sheet, read-only (actors/character/shared-sheets.js).
@@ -1663,6 +1676,20 @@ export function registerSettings() {
 		default: true,
 	});
 
+	// Whether this player's character and steading sheets carry a Timeline tab. Per browser, beside
+	// the GM's `showTimeline`: the GM's switch takes the timeline away from the whole table, this one
+	// only takes the TAB off one player's sheets. The Timeline journal and its window stay theirs to
+	// open, and recording is untouched. Read through isTimelineTabShown, which asks both.
+	game.settings.register(SYSTEM_ID, "timelineTabShown", {
+		name: "stonetop.settings.timelineTabShown.name",
+		hint: "stonetop.settings.timelineTabShown.hint",
+		scope: "client",
+		config: true,
+		type: Boolean,
+		default: true,
+		onChange: () => _rerenderActorSheets(),
+	});
+
 	// The bells the love-letter notice rings as it drops in (actors/character/love-letter-notice.js).
 	// Per browser, and only the sound: the red notice still comes, so a player who finds the
 	// jingle too much doesn't also stop being told a letter arrived. Read each time it would ring.
@@ -2597,9 +2624,67 @@ export function areCharacterSheetsShared() {
 	return getBooleanSetting("characterSheetsShared", true);
 }
 
-/** Is the timeline on in this world? Defaults to yes, unregistered included. */
+/** The three places the GM can leave the timeline: everywhere, the steading sheet only, or off. */
+export const TIMELINE_REACH = Object.freeze(["all", "steading", "off"]);
+
+/**
+ * A stored `showTimeline` value as one of TIMELINE_REACH. The pre-2026-10-31 Boolean (`true`/`false`,
+ * or the strings Foundry casts them to) reads as "all"/"off"; anything else unknown reads as the default.
+ */
+export function timelineReachOf(value) {
+	const text = String(value);
+	if (TIMELINE_REACH.includes(text)) return text;
+	return text === "false" ? "off" : "all";
+}
+
+/** Where the GM has the timeline in this world. Defaults to "all", unregistered included. */
+export function getTimelineReach() {
+	try {
+		return timelineReachOf(globalThis.game?.settings?.get?.(SYSTEM_ID, "showTimeline"));
+	} catch (_) {
+		return "all";
+	}
+}
+
+/** Is the timeline on in this world, anywhere? Defaults to yes, unregistered included. */
 export function isTimelineShown() {
-	return getBooleanSetting("showTimeline", true);
+	return getTimelineReach() !== "off";
+}
+
+/**
+ * Does this kind of sheet draw a Timeline tab for this player? Only while the GM has the timeline
+ * on, on a character sheet only while it is on "all" rather than "steading", and only while this
+ * player has not hidden the tab for themselves (`timelineTabShown`). Defaults to yes.
+ *
+ * @param {"character"|"steading"} sheetType
+ */
+export function isTimelineTabShown(sheetType) {
+	const reach = getTimelineReach();
+	if (reach === "off") return false;
+	if (sheetType === "character" && reach === "steading") return false;
+	return getBooleanSetting("timelineTabShown", true);
+}
+
+/**
+ * Rewrite a world's pre-2026-10-31 Boolean `showTimeline` as its TIMELINE_REACH choice, once.
+ *
+ * Reading needs none of this (timelineReachOf takes the old values), but the settings window's
+ * dropdown matches the stored value against its choices, and "true"/"false" match none. Primary GM
+ * only, since it writes a world setting; a world with nothing stored, or a choice already, is left alone.
+ *
+ * @returns {Promise<string|null>} the value written, or null when nothing needed writing
+ */
+export async function migrateTimelineReach({ game = globalThis.game } = {}) {
+	if (!game?.user?.isGM || !isPrimaryGM()) return null;
+	// The Setting document itself, as adoptClassicLayoutScope reads it: `get` would hand back the
+	// default for a world that never stored the key, and that needs no rewrite.
+	const worldStore = game.settings?.storage?.get?.("world");
+	if (!worldStore) return null;
+	const doc = [...worldStore].find(d => d?.key === `${SYSTEM_ID}.showTimeline`);
+	if (!doc || TIMELINE_REACH.includes(doc.value)) return null;
+	const reach = timelineReachOf(doc.value);
+	await game.settings.set(SYSTEM_ID, "showTimeline", reach);
+	return reach;
 }
 
 /**

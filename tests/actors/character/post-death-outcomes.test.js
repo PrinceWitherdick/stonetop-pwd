@@ -78,14 +78,16 @@ afterEach(() => {
 // ── R-PURPOSE: the view ────────────────────────────────────────────────────
 
 describe("the Post-Death tab's outcome buttons", () => {
-	it("offers a Ghost's Terrible Purpose its five outcomes, in play, to its owner", async () => {
+	it("offers a Ghost's Terrible Purpose its six outcomes, in play, to its owner", async () => {
 		const { char } = makeUndead("ghost", { counts: { "terrible-purpose:longing": 1, "consequences:breakdown": 1 }, debilities: ["dazed"] });
 		const view = await tabView(char);
 		const [purpose] = view.outcomes.rows;
 		expect(purpose.title).toBe("Terrible Purpose: LONGING");
-		expect(purpose.actions.map(a => a.action)).toEqual(["regain-all", "clear-all", "clear-consequence", "mark-consequence", "last-door"]);
+		expect(purpose.actions.map(a => a.action)).toEqual(["regain-all", "clear-all", "clear-consequence", "mark-consequence", "last-door", "mark-final"]);
 		expect(purpose.actions.every(a => !a.disabled)).toBe(true);
 		expect(purpose.actions.find(a => a.action === "last-door").danger).toBe(true);
+		// "Should they be taken from you violently, mark the Final Consequence": the Purpose's last line.
+		expect(purpose.actions.find(a => a.action === "mark-final")).toMatchObject({ danger: true, label: "Mark the Final Consequence" });
 	});
 
 	it("says why an outcome has nothing to do, rather than hiding it", async () => {
@@ -191,6 +193,25 @@ describe("pressing an outcome", () => {
 		await runPostDeathOutcome(char, "last-door", { source: "DUTY" });
 		expect(wait.mock.calls[0][0].buttons.map(b => b.label)).toEqual(["Pass through the Last Door", "Not yet, they stay"]);
 		expect(flag(actor, "deathsDoor")).toBe(DEATHS_DOOR_STATE.DEAD);
+	});
+
+	it("marks the Final Consequence only once asked, as the edit-mode tick does: one write, a monster", async () => {
+		const { actor, char } = makeUndead("ghost", { counts: { "terrible-purpose:vengeance": 1 } });
+		stubConfirm(false);
+		expect(await runPostDeathOutcome(char, "mark-final", { source: "VENGEANCE" })).toBeNull();
+		expect(count(actor, "consequences:final-consequence")).toBe(0);
+		expect(flag(actor, "deathsDoor")).toBeUndefined();
+
+		actor.update.mockClear();
+		const wait = stubConfirm(true);
+		const lines = await runPostDeathOutcome(char, "mark-final", { source: "VENGEANCE" });
+		expect(wait.mock.calls[0][0].buttons[0].label).toBe("Mark it: they become a monster");
+		expect(actor.update).toHaveBeenCalledTimes(1);
+		expect(count(actor, "consequences:final-consequence")).toBe(1);
+		expect(flag(actor, "deathsDoor")).toBe(DEATHS_DOOR_STATE.DEAD);
+		expect(char.lostToTheGm).toBe("monster");
+		expect(lines[0]).toContain("VENGEANCE");
+		expect(ChatMessage.create).toHaveBeenCalledTimes(1);
 	});
 
 	it("rolls SPECTER's 1d8 where the table sees it and heals by it, capped at max", async () => {

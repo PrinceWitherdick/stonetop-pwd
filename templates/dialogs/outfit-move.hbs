@@ -31,9 +31,9 @@
 	<p class="stonetop-outfit-load-bonus-note">{{{format "stonetop.specialMoves.outfit.loadBonusNote" moves=loadBonusFrom bonus=loadBonus light=loadLimits.light normal=loadLimits.normal heavy=loadLimits.heavy}}}</p>
 	{{/if}}
 
-	{{!-- Running mark total (specific items + undefined), shown once anything is marked --}}
-	{{#unless loadLevelNone}}
-	<div class="stonetop-outfit-weight-row">
+	{{!-- Running mark total (specific items + undefined), shown once anything is marked. Drawn
+	      (hidden) even at none, so the first mark does not push the lists below it down a row. --}}
+	<div class="stonetop-outfit-weight-row{{#if loadLevelNone}} is-empty{{/if}}">
 		<span class="stonetop-outfit-weight-diamonds">
 			{{!-- Empty spans: the icon is the background. A literal ◆ here would be re-skinned by
 			      wrapStonetopGlyphsInEl into a second diamond overlapping the first. --}}
@@ -41,7 +41,6 @@
 		</span>
 		<span class="stonetop-outfit-weight-count">{{this.totalMarks}} {{{localize "stonetop.specialMoves.outfit.totalWeight"}}}{{#if loadLevelOverloaded}} <strong class="stonetop-outfit-overloaded">{{localize "stonetop.inventory.outfit.overloaded"}}</strong>{{/if}}</span>
 	</div>
-	{{/unless}}
 
 	<div class="stonetop-outfit-columns">
 

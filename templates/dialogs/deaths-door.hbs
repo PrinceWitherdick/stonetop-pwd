@@ -235,11 +235,15 @@
 			{{else if fateApplied}}
 			<p class="deaths-door-applied"><i class="fas fa-check"></i> {{localize "stonetop.specialMoves.deathsDoor.result.fateRecorded"}}</p>
 			{{else}}
+			{{! A fate a held arcanum's marked Consequence dictates: flagged in gold and marked as the
+			    suggestion. The other fates stay clickable (flagged, never blocked). }}
+			{{> "stonetop.deaths-door-dictates"}}
 			<div class="deaths-door-fates">
-				{{#each fates}}
-				<button type="button" class="deaths-door-fate-btn" data-fate="{{this.key}}">
+				{{#each this.fates}}
+				<button type="button" class="deaths-door-fate-btn{{#if this.dictated}} is-dictated{{/if}}" data-fate="{{this.key}}">
 					<span class="deaths-door-fate-label">{{this.label}}</span>
 					<span class="deaths-door-fate-hint">{{this.hint}}</span>
+					{{#if this.dictated}}<span class="deaths-door-fate-dictated">{{@root.dictatedTag}}</span>{{/if}}
 				</button>
 				{{/each}}
 			</div>
@@ -277,11 +281,13 @@
 		<p class="deaths-door-intro deaths-door-move-trigger">
 			{{localize "stonetop.specialMoves.deathsDoor.fate.intro"}}
 		</p>
+		{{> "stonetop.deaths-door-dictates"}}
 		<div class="deaths-door-fates">
-			{{#each refusalInserts}}
-			<button type="button" class="deaths-door-insert-btn" data-slug="{{this.slug}}">
+			{{#each this.refusalInserts}}
+			<button type="button" class="deaths-door-insert-btn{{#if this.dictated}} is-dictated{{/if}}" data-slug="{{this.slug}}">
 				<span class="deaths-door-fate-label">{{this.name}}</span>
 				<span class="deaths-door-fate-hint">{{this.hint}}</span>
+				{{#if this.dictated}}<span class="deaths-door-fate-dictated">{{@root.dictatedTag}}</span>{{/if}}
 			</button>
 			{{/each}}
 		</div>

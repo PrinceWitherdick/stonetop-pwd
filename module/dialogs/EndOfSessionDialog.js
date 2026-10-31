@@ -167,6 +167,9 @@ export class EndOfSessionDialog extends StonetopDialog {
 		return super.close(options);
 	}
 
+	// Every tick redraws the window, which drew the questions back at their top.
+	get _keptScrollSelector() { return ".stonetop-eos-sections"; }
+
 	static get defaultOptions() {
 		return foundry.utils.mergeObject(super.defaultOptions, {
 			id:        "stonetop-end-of-session-dialog",

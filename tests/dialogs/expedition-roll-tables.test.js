@@ -43,6 +43,8 @@ describe("the Die of Fate button on Player moves on the road", () => {
 		expect(playermoves.bodyAfterFate).toContain("<strong>Deprivation</strong> (p.335)");
 		expect(playermoves.bodyAfterFate).toContain("deprivation up as a threat");
 		expect(playermoves.bodyAfterFate).toContain("<em>Defy Danger</em>");
+		// Ghosts and Revenants need not eat, drink or sleep (Unliving), so deprivation passes them by.
+		expect(playermoves.bodyAfterFate).toContain("A Ghost or Revenant needs no food, drink or sleep");
 	});
 
 	// Prose past the button only makes sense on a step that HAS the button. Running the journey is
