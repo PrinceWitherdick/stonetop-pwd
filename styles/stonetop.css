@@ -2974,7 +2974,9 @@ input.stonetop-name-field {
 }
 
 .stonetop.sheet.actor.monster:not(.minimized) .window-header .window-title,
-.stonetop.sheet.actor.npc:not(.minimized) .window-header .window-title {
+.stonetop.sheet.actor.npc:not(.minimized) .window-header .window-title,
+.stonetop.sheet.actor.settlement:not(.minimized) .window-header .window-title,
+.stonetop.sheet.actor.gm-toolkit:not(.minimized) .window-header .window-title {
 	visibility: hidden;
 }
 
