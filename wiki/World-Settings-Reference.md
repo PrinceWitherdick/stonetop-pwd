@@ -75,7 +75,7 @@ Each player can also quiet pin names on the current map for themselves; see [Chr
 | Setting | Default | What it changes |
 |---|---|---|
 | **Relationship Map** | On | Off takes away the steading's map tab, the Journal sidebar button and the hotbar macro, for everyone. Nothing drawn is lost. See [The Relationship Map](The-Relationship-Map). |
-| **Timeline** | On | Off takes away the Timeline tabs and the Timeline journal for everyone. It keeps recording in the background, so nothing is missing when you turn it back on. See [The Timeline](The-Timeline). |
+| **Timeline** | Everywhere | Where the timeline appears, for everyone. **Everywhere**: the steading and every character have a Timeline tab, and the Chronicle folder holds the Timeline journal. **Steading sheet only**: character sheets lose their tab; the steading's tab and the journal stay. **Off**: no tabs and no journal. It keeps recording in the background, so nothing is missing when you turn it back on. Each player can also hide the tab from their own sheets with **Timeline Tab on My Sheets**. See [The Timeline](The-Timeline). |
 
 ## Layout
 

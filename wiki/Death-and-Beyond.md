@@ -54,7 +54,7 @@ The tab holds:
 - the consequences you've marked, with the Final Consequence apart from the rest;
 - **Remove Insert** (in edit mode), for mistakes. Once no insert is left, **Remove Post-Death Tab** takes the tab off the sheet.
 
-At 0 HP an undead character doesn't face Death's Door again. Their insert's own move (Undying, Tethered or Dark Succor) opens instead and applies its costs to the sheet.
+At 0 HP an undead character doesn't face Death's Door again. Their insert's own move (Undying, Tethered or Dark Succor) opens instead and applies its costs to the sheet. Only one person rolls it: anyone else who presses Roll is told who is already rolling, and can press Roll again once those dice land to take up the result.
 
 ![A Revenant's sheet in the dark post-death colours: Revenant (Denial) with The Heavy beside it, the Outcomes buttons, In Your Own Words and the granted moves](images/death-and-beyond-post-death.webp)
 
@@ -67,7 +67,7 @@ At 0 HP an undead character doesn't face Death's Door again. Their insert's own 
 The insert's granted moves carry buttons of their own, so their costs land on the sheet:
 
 - **Instinct.** In edit mode, pick one of the insert's Instincts or write your own: a word, and what it means.
-- **Possess (lose 1d4 HP)** (Ghost, Bodysnatcher). Target the person's token first. While you possess them, the damage they take comes off your HP on its own, with a line in chat. **End possession of (name)** stops it; so does dropping to 0 HP.
+- **Possess (lose 1d4 HP)** (Ghost, Bodysnatcher). Target the person's token first. While you possess them, the damage they take comes off your HP on its own, with a line in chat. **End possession of (name)** stops it; so does dropping to 0 HP. If the host forces you out, **Forced out: mark a consequence** asks which one you mark, and the book says you can never possess them again. Trying it later asks first: **Possess anyway (GM's call)**, and the roll card notes it.
 - **Manifest** (Ghost, Disembodied). Pick 1 option, and lose 1d4 HP for each extra one. With "Your touch (or ghostly weapons) can harm the living", your own damage cards open with **Ignores armor** ticked. **End manifestation** when you stop concentrating, or when pain, shock or sunlight breaks it; dropping to 0 HP ends it too. A Ghost who is neither manifest with that touch nor possessing someone gets a gold caution on their own damage card: the blow may not harm the living. The numbers are left alone.
 - **Get angry** (Ghost, Poltergeist). Lose 1d4 HP and hold that much Fury, with no cap. **Shatter**, **Hurl (+DEX)** and **Telekinetic force (+INT)** each spend 1.
 - **Push your limits (lose 1d4 HP)** (Revenant, Implacable). Then choose 1.

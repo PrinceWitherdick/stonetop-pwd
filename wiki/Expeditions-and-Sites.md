@@ -41,7 +41,7 @@ The **Running the journey** step has the tools for each leg:
 
 - **Roll the Die of Fate**, with advantage or disadvantage, and its table for perilous legs.
 - **Call for Struggle as One** when the whole party faces the same danger. The window says it's **Part of a journey**. See [Camp, Journeys and Group Moves](Camp-Journeys-and-Group-Moves).
-- **Days pass on the road...** for days you gloss over: it spends the supplies each traveller eats (1 use a head a day; a mess kit feeds four). You can adjust each person before it's spent.
+- **Days pass on the road...** for days you gloss over: it spends the supplies each traveller eats (1 use a head a day; a mess kit feeds four). You can adjust each person before it's spent. A Ghost or Revenant needs no food, so their **Eats** box starts unticked with a line saying why; their followers still eat. Tick the box to count them anyway.
 
 Players run Make Camp themselves in its shared window.
 
