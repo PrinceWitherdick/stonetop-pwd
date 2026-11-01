@@ -81,6 +81,11 @@ import {worldLogisticsNames} from "../character/logistics.js";
 import {deployCommandOffers} from "../../combat/command-holders.js";
 import {shakenNervesOffers} from "../character/fight-states.js";
 import {worldLearnedHolderNames} from "../character/owns-move.js";
+import {
+	preparationRollOffers, takenPreparationOffer, claimPreparationOffer, returnPreparationOffer, announcePreparationOffer,
+} from "../character/bolster.js";
+import {partyCharacters} from "../../utils/playbook-actors.js";
+import {isOutOfPlaySafe} from "../character/deaths-door-actor.js";
 import { countOf, plural } from "../../utils/plural.js";
 
 /**
@@ -906,6 +911,13 @@ export function createStonetopSteadingSheetClass(Base) {
 			// Other Settlements rows that have a settlement sheet carry its uuid, so their names
 			// open it (and a picture the GM chose previews on hover).
 			wireRelationshipLinks(html[0]);
+			// The GM's "Add Settlement" under that table: the sidebar's settlement chooser. Making
+			// the actor redraws this sheet (redrawForSettlement), so its row appears on its own.
+			html[0].querySelectorAll(".steading-settlement-new").forEach(btn => btn.addEventListener("click", async ev => {
+				ev.preventDefault();
+				const { createSettlementSheet } = await import("../../dialogs/create-actor-dialog.js");
+				await createSettlementSheet();
+			}));
 
 			// Residents / Neighbors faces, through the same shared preview the relationships
 			// component uses — a face previews identically wherever it appears.
@@ -2524,9 +2536,10 @@ export function createStonetopSteadingSheetClass(Base) {
 						if (rollFortunesBtn.disabled) return;
 						rollFortunesBtn.disabled = true;
 						try {
-							// The modifier is always offered here, whatever the setting says: "PCs can
-							// Bolster for a coming season and spend the Preparation on the roll(s)"
-							// (Book I p. 516), and this prompt is the only place to spend it.
+							// The modifier is always offered here, whatever the setting says, for the
+							// GM's own call on the season. Bolstered Preparation (Book I p. 516) is NOT
+							// typed in here: it is spent from the card's own "Preparation: +1" button,
+							// which takes it off the PC's track (roll-boosts.js, `onSteading`).
 							const prompted = await promptRoll({ title: "Seasons Change", askModifier: true });
 							if (!prompted) { rollFortunesBtn.disabled = false; return; }
 							// Winter's card names the second bite as this steading rolls it, off the
@@ -2568,16 +2581,29 @@ export function createStonetopSteadingSheetClass(Base) {
 					askHopefulBtn?.addEventListener("click", async () => {
 						if (askHopefulBtn.disabled) return;
 						askHopefulBtn.disabled = true;
+						// Once the card is up the season's roll is handed over, whatever fails after
+						// it: the button stays off. Before that, a failure gives the button back, and
+						// any Preparation paid for the card's +1 with it.
+						let posted = false;
+						let prepTaken = null;
 						try {
 							// The same questions the other seasons' Roll +Fortunes asks, answered by the
 							// GM as the roll is handed over, because the card the player clicks has no
-							// window and no Shift buttons of its own: a mode, a modifier (Bolstered
-							// Preparation, p. 516), and Book II's storm curse, whose "next Fortunes roll
-							// for Seasons Change is automatically a 6-" the other seasons settle with
-							// Shift Down on their card.
+							// window and no Shift or +1 buttons of its own: a mode, a modifier, Bolstered
+							// Preparation (p. 516: one line per PC holding any, spent off their track,
+							// at most one per roll; bolster.js#preparationRollOffers), and Book II's storm
+							// curse, whose "next Fortunes roll for Seasons Change is automatically a 6-"
+							// the other seasons settle with Shift Down on their card.
 							const stormMiss = { key: "stormMiss", label: "Automatically a 6- (a terrible storm's curse, Book II)", applied: false };
-							const prompted = await promptRoll({ title: "Seasons Change: Spring", askModifier: true, offers: [stormMiss] });
+							// The party still in play, as every other party list reads it, not every
+							// character actor in the world (a retired PC, a GM's spare).
+							const prepOffers = preparationRollOffers(partyCharacters().filter(a => !isOutOfPlaySafe(a)));
+							const prompted = await promptRoll({ title: "Seasons Change: Spring", askModifier: true, offers: [stormMiss, ...prepOffers] });
 							if (!prompted) { askHopefulBtn.disabled = false; return; }
+							const { taken: prepPicked, extra: prepExtra } = takenPreparationOffer(prepOffers, prompted.takenOffers);
+							// Paid BEFORE the card goes out, so its +1 is one somebody paid for: the
+							// holder may have spent their last since the window opened (the GM is told).
+							prepTaken = prepPicked && await claimPreparationOffer(prepPicked) ? prepPicked : null;
 							const { held, rollMode, spend } = await settleSteadingRoll(this._stonetopSteading, {
 								moveName: "Seasons Change", statKey: "fortunes",
 								chosenMode: prompted.rollMode ?? this._sheetRollMode(),
@@ -2594,15 +2620,29 @@ export function createStonetopSteadingSheetClass(Base) {
 								fortunes: this._stonetopSteading.getStatValue("fortunes"),
 								rollMode,
 								why: held?.source ?? "",
-								modifier: prompted.situational ?? 0,
+								modifier: (prompted.situational ?? 0) + (prepTaken ? 1 : 0),
 								countsAsMiss: tookOffer(stormMiss, prompted.takenOffers) ? "a terrible storm's curse" : "",
 								seasonKey: seasonsRollKey(year, seasonId),
 							});
-							await spend();
+							posted = true;
+							// The step is marked first, so nothing failing below can hand out a second
+							// card for one season.
 							await steading.setFlags({ ...opening, ...steading.seasonStepFlags("fortunesRoll", year, seasonId) });
 							refreshResetLock();
+							await spend();
+							if (prepTaken) {
+								await announcePreparationOffer(prepTaken, `Seasons Change: ${label}`, { extra: prepExtra })
+									.catch(e => console.error("Stonetop | could not post the Preparation spent on spring's roll", e));
+							}
 							if (held) this.render(false);
-						} catch (err) { askHopefulBtn.disabled = false; throw err; }
+						} catch (err) {
+							if (!posted) {
+								if (prepTaken) await returnPreparationOffer(prepTaken)
+									.catch(e => console.error("Stonetop | could not give back the Preparation", e));
+								askHopefulBtn.disabled = false;
+							}
+							throw err;
+						}
 					});
 
 					// Winter's 7-9 (and the 6- that repeats it): "consume 1d4+Population more

@@ -181,6 +181,7 @@ import { reconcileTierEffects } from "./module/actors/character/tier-effects.js"
 import {
 	INSPIRATION_QUERY, handleInspirationQuery, onUpdateActorInspirationAtZero, wireInspirationDamage, wireKeepOneHp, wireSpeechCard,
 } from "./module/actors/character/inspiration-flow.js";
+import { PREPARATION_DAMAGE_QUERY, handlePreparationDamageQuery, wirePreparationDamage } from "./module/actors/character/preparation-damage.js";
 import { wireGmMoveShare } from "./module/gm-toolkit/random-gm-move.js";
 import { GIVE_ADVANTAGE_QUERY, handleGiveAdvantageQuery, wireFocusFire, wireGiveAdvantage, wireRapierWit, wireTruthOrConsequences, wireSpeakSoftly } from "./module/actors/character/give-advantage-flow.js";
 import { RAPIER_WIT_QUERY, handleRapierWitQuery, CENSURE_ENRAGED_QUERY, handleCensureEnragedQuery } from "./module/fight/hero-moves.js";
@@ -253,6 +254,8 @@ Hooks.once("init", () => {
 	// And We Happy Few's Inspiration: given to an ally the Marshal's player does not own, or its 1d6 added
 	// to a damage card the holder's player cannot write (inspiration-flow.js).
 	if (CONFIG.queries) CONFIG.queries[INSPIRATION_QUERY] = (data, context) => handleInspirationQuery(data, context, INSPIRATION_DEPS);
+	// And Bolster's +1 from Preparation on a damage card the holder's player cannot write (preparation-damage.js).
+	if (CONFIG.queries) CONFIG.queries[PREPARATION_DAMAGE_QUERY] = (data, context) => handlePreparationDamageQuery(data, context, INSPIRATION_DEPS);
 	// And Bath of Healing Light, on a patient the Lightbearer's player does not own (invocation-apply.js).
 	if (CONFIG.queries) CONFIG.queries[BATH_QUERY] = (data, context) => handleBathQuery(data, context);
 	// And "you or an ally gain advantage" (Countermeasures, Sage Advice, Everything Burns, Work With What
@@ -2949,6 +2952,8 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	// ...and We Happy Few's "+1d6 (Inspiration)" on the holder's own damage card, AFTER the seed pass so the
 	// die's redraw of the totals reads the same rows it did (inspiration-flow.js#wireInspirationDamage).
 	wireInspirationDamage(message, html, INSPIRATION_DEPS);
+	// ...and Bolster's "Preparation: +1" on the holder's own damage card, the same way (preparation-damage.js).
+	wirePreparationDamage(message, html, INSPIRATION_DEPS);
 	// ...and the tick box for armor a move grants on a clause only the fiction can answer: Barkskin
 	// while touching the earth, a holy light held by someone otherwise unarmed.
 	wireConditionalArmor(message, html, damageGate);

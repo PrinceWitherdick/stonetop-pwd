@@ -5061,6 +5061,9 @@ input.stonetop-name-field {
    `pointer-events: none` (inputs, buttons, selects, labels) never reached in the first place. */
 .stonetop-readonly .stonetop-answer-character-questions-btn,
 .stonetop-readonly .steading-list-add,
+/* Relationships' "Add Settlement" (GM only) makes a whole new actor; it edits nothing on this
+   steading, so the section's pencil has nothing to guard. */
+.stonetop-readonly .steading-settlement-new,
 /* NOTHING FROM THE GM-PREP TABS IS ON THIS LIST ANY MORE, and nothing should go back on.
    Seven lines used to live here — the add bar, the card pencil, a site's d20 roll, the collapse
    chevron, the threat-type disclosure and the two doom-track selectors — every one of them
@@ -13048,9 +13051,11 @@ button.stonetop-invocation-chip:focus-visible {
    editable (it acts fearlessly) and a <span> where it isn't, so every property core sets on an in-app
    button is named here, for the reason the Invocation chip's comment gives.
    Up With People's Rapport, held with a hero (up-with-people.js), wears the same pill: one more hold
-   another character handed over, spent from this chip. */
+   another character handed over, spent from this chip. So does Bolster's Preparation (bolster.js),
+   which is spent from a roll's card; its pill changes what it is for. */
 .stonetop-inspiration-chip,
-.stonetop-rapport-chip {
+.stonetop-rapport-chip,
+.stonetop-preparation-chip {
 	display: inline-flex;
 	align-items: center;
 	align-self: center;
@@ -13078,10 +13083,12 @@ button.stonetop-invocation-chip:focus-visible {
 }
 
 .stonetop-inspiration-chip i,
-.stonetop-rapport-chip i { font-size: 0.95em; font-size: round(0.95em, 1px); }
+.stonetop-rapport-chip i,
+.stonetop-preparation-chip i { font-size: 0.95em; font-size: round(0.95em, 1px); }
 
 .stonetop-inspiration-chip-name,
-.stonetop-rapport-chip-name {
+.stonetop-rapport-chip-name,
+.stonetop-preparation-chip-name {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -13089,13 +13096,16 @@ button.stonetop-invocation-chip:focus-visible {
 }
 
 button.stonetop-inspiration-chip,
-button.stonetop-rapport-chip { cursor: pointer; }
+button.stonetop-rapport-chip,
+button.stonetop-preparation-chip { cursor: pointer; }
 
 button.stonetop-inspiration-chip:hover,
-button.stonetop-rapport-chip:hover { border-color: var(--st-gold-text); }
+button.stonetop-rapport-chip:hover,
+button.stonetop-preparation-chip:hover { border-color: var(--st-gold-text); }
 
 button.stonetop-inspiration-chip:focus-visible,
-button.stonetop-rapport-chip:focus-visible {
+button.stonetop-rapport-chip:focus-visible,
+button.stonetop-preparation-chip:focus-visible {
 	outline: 2px solid var(--color-shadow-primary, slategrey);
 	outline-offset: 2px;
 }
@@ -13251,9 +13261,11 @@ button.stonetop-rapport-chip:focus-visible {
 .stonetop-appearance-row > .stonetop-reminder-chips { display: contents; }
 
 /* What a We Happy Few card gave, and the die a damage card took: a line of the card's own text.
-   So is who a "Give advantage to..." card gave it to (give-advantage-flow.js). */
+   So is who a "Give advantage to..." card gave it to (give-advantage-flow.js), and the +1 a damage
+   card took from Bolster's Preparation (preparation-damage.js). */
 .stonetop-inspiration-readout,
 .stonetop-inspiration-note,
+.stonetop-preparation-note,
 .stonetop-give-advantage-readout {
 	margin: 0.3em 0 0;
 	font-size: var(--st-fs-xs);
@@ -13681,6 +13693,7 @@ button.stonetop-held-disadvantage:hover { color: var(--st-text-body); }
 .stonetop-invocation-chip-name,
 .stonetop-inspiration-chip-name,
 .stonetop-rapport-chip-name,
+.stonetop-preparation-chip-name,
 .stonetop-reminder-chip-text,
 .stonetop .create-monster .cm-move-suggestion > span,
 .stonetop-person-picker-chip-name,
@@ -14981,6 +14994,23 @@ button.stonetop-mark-sign-btn.is-active:hover {
    of the two: this is sheet plumbing, not a move anyone is making. */
 .stonetop-special-move-card .stonetop-deathsdoor-postdeath-btn {
 	margin-top: 0;
+	background: transparent;
+	border: 1px dashed var(--color-border-dark-5, #7a7971);
+	color: var(--color-text-dark-secondary);
+}
+
+/* Bolster's two quieter buttons while Preparation is held (change what it's for; it no longer
+   applies), side by side under the hint. Kept OFF the card's foot, which the Bolster button holds
+   (`margin-top: auto`), and dressed as the Death's Door card's sheet plumbing above. */
+.stonetop-bolster-held-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.stonetop-special-move-card .stonetop-bolster-held-actions button {
+	flex: 1 1 auto;
+	width: auto;
+	margin: 0;
 	background: transparent;
 	border: 1px dashed var(--color-border-dark-5, #7a7971);
 	color: var(--color-text-dark-secondary);
@@ -21497,9 +21527,10 @@ button.stonetop-mark-sign-btn.is-active:hover {
    Make a hazard (.steading-improvement-add-btn) use. Was a muted left-aligned
    caption, which read as a different control from the ones beside it.
    The Notes tab's "New plan" wears it under its own class, since the sheet delegates every
-   `.steading-list-add` click to its list-row adder. */
+   `.steading-list-add` click to its list-row adder; so does Relationships' "Add Settlement". */
 .steading-list-add,
-.steading-plan-add {
+.steading-plan-add,
+.steading-settlement-new {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -21518,7 +21549,8 @@ button.stonetop-mark-sign-btn.is-active:hover {
 }
 
 .steading-list-add:hover,
-.steading-plan-add:hover {
+.steading-plan-add:hover,
+.steading-settlement-new:hover {
 	background: var(--st-on-dark-raised, hsl(210 10% 92%));
 	color: var(--st-text-body);
 }
@@ -33750,6 +33782,29 @@ ul:has(> li.st-treasure-line:only-child) {
 /* Lone footer button: the slate `.stonetop-cta` (its fill, box and centred label), only full width.
    Two classes, because the CTA's own one-class `width: auto` comes later in this file. */
 .stonetop-content-picker-footer > .stonetop-content-picker-confirm { width: 100%; }
+/* With a second button (ContentPickerDialog's `secondary`), the two share the footer equally,
+   Confirm first. The second wears `.stonetop-cta`'s BOX, font and leading so the pair is one
+   height and one width (a flex basis of 0 still floors at each button's own padding and border,
+   so core's thinner box would come out narrower); only its colours stay core's quiet ones, as the
+   timeline toolbar's quieter buttons do. Colour-only transition for the reason the CTA gives. */
+.stonetop-content-picker-footer.has-secondary { display: flex; gap: 8px; }
+.stonetop-content-picker-footer.has-secondary > button { flex: 1 1 0; width: auto; min-width: 0; }
+.stonetop-content-picker-footer > .stonetop-content-picker-secondary {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.4em;
+	box-sizing: border-box;
+	min-height: 32px;
+	padding: 4px 14px;
+	white-space: nowrap;
+	font-family: var(--font-stonetop);
+	font-size: calc(0.875rem * var(--stonetop-font-scale, 1));
+	line-height: 1.25;
+	border: 1px solid var(--color-border-dark, #7a7971);
+	border-radius: var(--st-radius-sm);
+	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
 
 /* Rollable die in a random table's "Roll" header (module/utils/journal-roll-tables.js).
    Sits just before the "Roll" label; clicking it rolls the table and posts to chat. */

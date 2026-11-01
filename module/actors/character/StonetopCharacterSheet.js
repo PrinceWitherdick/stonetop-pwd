@@ -151,10 +151,10 @@ import {GLORIOUS_SERVANT, INVOKE_CONSEQUENCE_BULLETS, TEN_PLUS_FLAG, consequence
 import {DANCING_LIGHT, invocationLabel, invocationLabels, invokeWindowNotice, readOngoing, resolveInvocationUse} from "./ongoing-invocation.js";
 import {invocationCountArgs, invocationCountCue} from "./invocation-count.js";
 import {showJudgeMarks, condemnedContext, CONDEMN, CENSURE, CASTIGATE} from "./condemn.js";
-import {PIETY, BOLSTER, holdBlessing, shareBlessing} from "./roll-boosts.js";
+import {PIETY, BOLSTER, PREPARATION_ARCANA, holdBlessing, shareBlessing} from "./roll-boosts.js";
 import {giveAdvantageCardHtml, seekInsightQuestionsFor} from "./give-advantage.js";
 import {IRON_WILL, UNFETTERED, ironWill, unfettered} from "./will-and-restraint.js";
-import {openBolster, bolsterCardData} from "./bolster.js";
+import {openBolster, bolsterCardData, editPreparationFor, dropPreparation, preparationChip} from "./bolster.js";
 import {inOverYourHeadCardHtml} from "./would-be-hero-cards.js";
 import {pickPersonOnMap} from "../../dialogs/RelationshipLinkDialog.js";
 import {readyRulebookIcon, openSharedRulebook} from "../../books/rulebook-icons.js";
@@ -2289,6 +2289,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// The Rapport this PC holds with a Would-Be Hero who conversed with them (Up With People), one
 			// chip per hero, pressed to spend it on a question (./up-with-people.js).
 			context.stonetop.rapport = rapportChips(this.actor, { editable: context.editable });
+			// Bolster's Preparation, on the same pill: held for weeks of play and read by any roll the efforts
+			// apply to, so it is in sight, not only on the Special Moves tab. Pressed to change what it is for
+			// (./bolster.js) or let it go; it is spent from a roll's card.
+			context.stonetop.preparation = preparationChip(this.actor, { editable: context.editable });
 			// An advantage HELD over the next roll — a peaceful camp, so far (p.334). Shown for the
 			// same reason the steading shows its own promised +Fortunes advantage: the roll it is
 			// owed to has not been made yet, possibly not this session, and a promise nobody can
@@ -5222,10 +5226,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find("button.stonetop-inspiration-chip").on("click", this._onActFearlessly.bind(this));
 			// Up With People's Rapport chip, held with a hero: spend it on a question. Same `button.` terms.
 			html.find("button.stonetop-rapport-chip").on("click", this._onSpendRapport.bind(this));
+			// Bolster's Preparation chip: change what it is for, or let it go. Same `button.` terms.
+			html.find("button.stonetop-preparation-chip").on("click", () => editPreparationFor(this.actor, { offerDrop: true }));
 			html.find("button.stonetop-held-disadvantage").on("click", this._onReleaseHeldDisadvantage.bind(this));
 			html.find(".stonetop-recover-open-btn").on("click", this._onRecoverOpen.bind(this));
 			html.find(".stonetop-convalesce-open-btn").on("click", this._onConvalesceOpen.bind(this));
 			html.find(".stonetop-bolster-open-btn").on("click", () => openBolster(this.actor));
+			html.find(".stonetop-bolster-edit-btn").on("click", () => editPreparationFor(this.actor));
+			html.find(".stonetop-bolster-drop-btn").on("click", () => dropPreparation(this.actor));
 			html.find(".stonetop-retire-open-btn").on("click", () => openRetireDialog(this.actor));
 
 			// Wounds (4th harm track): add / edit / remove. Status transitions are otherwise
@@ -6413,6 +6421,19 @@ export function createStonetopCharacterSheetClass(Base) {
 				const { slug, index, resourceKind } = btn.dataset;
 				const isChecked = btn.classList.contains("is-checked");
 				const newVal = isChecked ? Number(index) : Number(index) + 1;
+				// The prayer beads' pips ARE Bolster's Preparation (roll-boosts.js#PREPARATION_ARCANA), which the
+				// header pill and the Special Moves card show too, so that click is written as a change from what
+				// the card showed and redraws the sheet (here and on every client), unlike any other track.
+				if (resourceKind !== "item" && PREPARATION_ARCANA.includes(slug)) {
+					const shown = btn.parentElement.querySelectorAll(".stonetop-arcanum-resource-btn.is-checked").length;
+					this._stonetopCharacter.setArcanumResource(slug, newVal, { from: shown })
+						.then(wrote => { if (!wrote) this.render(false); })
+						.catch(err => {
+							console.error("Stonetop | prayer beads write failed", err);
+							this.render(false);
+						});
+					return;
+				}
 				// Reflect the new fill in place and persist WITHOUT a re-render. An arcana
 				// resource track is self-contained — nothing else on the sheet derives from its
 				// count — and a full re-render repacks the arcana masonry, which jumps the tab's

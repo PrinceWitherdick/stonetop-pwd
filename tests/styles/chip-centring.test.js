@@ -131,6 +131,7 @@ describe("chips with an icon or a count trim their label element", () => {
 		".stonetop-invocation-chip-name",
 		".stonetop-inspiration-chip-name",
 		".stonetop-rapport-chip-name",
+		".stonetop-preparation-chip-name",
 		".stonetop-reminder-chip-text",
 		".stonetop .create-monster .cm-move-suggestion > span",
 		".stonetop-person-picker-chip-name",
@@ -243,6 +244,7 @@ describe("icon-and-label buttons centre by flex, unnudged", () => {
 	it.each([
 		".stonetop-steading-plan button.spe-req-add",
 		".steading-plan-add",
+		".steading-settlement-new",
 		".stonetop-love-letter-send",
 		".stonetop-love-letter-resend",
 		// Text-only, on the same balanced line box: Introductions' Un-pass and an answer's Save / Cancel.
@@ -252,6 +254,9 @@ describe("icon-and-label buttons centre by flex, unnudged", () => {
 		// The Post-Death tab's outcome buttons, the Favor row's (+1 Favor, the tentacle, the maw) among them
 		// (measured 10-28 with the text-centring audit: -0.2px at 1x/1.25x/1.5x).
 		".stonetop-pdi-outcome-btn",
+		// The shared picker window's second footer button (Bolster's "It no longer applies" beside Save), on the
+		// CTA's box (measured 11-01: -0.7px, the same as Save, at 1x/1.25x/1.5x).
+		".stonetop-content-picker-footer > .stonetop-content-picker-secondary",
 	])("%s", sel => {
 		const body = declarations(MAIN, sel);
 		expect(body, `${sel} has no rule`).toBeTruthy();
@@ -265,9 +270,12 @@ describe("icon-and-label buttons centre by flex, unnudged", () => {
 // Measured 10-28 with the text-centring audit: the Bolster card's icon-and-label button -0.5px (row) at
 // 1x/1.25x/1.5x on core's button, and Death's Door's gold "Suggested" tag is plain text inside its fate button,
 // with no box to centre in. What would break either is a hand nudge, so neither may carry one.
+// Measured 11-01 (z:/tmp/foundry-verify/bolster-buttons-centre.mjs): the Bolster card's two quiet buttons while
+// Preparation is held -1px (chip) at 1x/1.25x/1.5x, on core's button and even padding like the Bolster button's.
 describe("the Bolster button and the Suggested tag carry no hand nudge", () => {
 	it.each([
 		".stonetop-special-move-card button",
+		".stonetop-special-move-card .stonetop-bolster-held-actions button",
 		".deaths-door-fate-dictated",
 	])("%s", sel => {
 		const body = declarations(MAIN, sel);

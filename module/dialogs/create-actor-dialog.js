@@ -296,6 +296,8 @@ async function _createGmToolkit(folder, name) {
  * create it. GM only: preCreateActor refuses a player's too, but saying so here is kinder than a
  * veto after the questions.
  *
+ * Also run by the "Add Settlement" button under Stonetop's Relationships table.
+ *
  * @param {object} [options]
  * @param {string|null} [options.folder]
  * @param {string} [options.name]  A name supplied by the caller; the naming step opens on it.

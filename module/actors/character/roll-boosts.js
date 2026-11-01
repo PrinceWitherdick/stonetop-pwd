@@ -78,6 +78,15 @@ export const BOLSTER = "Bolster";
 /** The most Preparation Bolster holds: "The better part of a season: 3 Preparation" (Book I p.524). */
 export const PREPARATION_MAX = 3;
 
+/**
+ * Arcana whose track IS Bolster's Preparation. A length of prayer beads (Cold Mind, Iron Body): "When you
+ * Bolster by spending downtime in isolation, fasting, and meditation with the prayer beads, hold Preparation
+ * (as per the Bolster move)." Its card's pips read and write the Bolster track (StonetopCharacter.js), so
+ * Bolstering fills them, a roll card's +1 empties them, and the beads' own spends (clear a debility, a feat
+ * of endurance, ignore elemental harm, "after about ten days of such hard living, lose 1") are a pip clicked.
+ */
+export const PREPARATION_ARCANA = Object.freeze(["length-of-prayer-beads"]);
+
 /** The character flag naming what their Preparation is for ("laying in extra stores for winter", p.525). */
 export const PREPARATION_FOR_FLAG = "preparationFor";
 
@@ -480,7 +489,7 @@ export function wireRollBoosts(message, html, deps, { user = globalThis.game?.us
 		button.type = "button";
 		button.className = `stonetop-roll-boost-btn stonetop-roll-boost-btn--${offer.source}`;
 		button.textContent = face.label;
-		button.dataset.tooltip = face.tip;
+		button.dataset.tooltipText = face.tip;
 		button.dataset.tooltipDirection = "UP";
 		button.addEventListener("click", async () => {
 			if (button.disabled) return;
@@ -675,7 +684,13 @@ export async function holdPreparation(actor, amount, purpose = "", scope = SYSTE
 	return true;
 }
 
-/** Spend 1 Preparation. Whether one was held. Run in the character's spending turn: payBoost, its one caller, holds it. */
+/** Change what a character's Preparation is for, keeping how much is held (bolster.js#editPreparationFor). */
+export async function setPreparationFor(actor, purpose = "", scope = SYSTEM_ID) {
+	if (actor?.type !== "character") return;
+	await actor.update({ [`flags.${scope}.${PREPARATION_FOR_FLAG}`]: String(purpose ?? "").trim() }, { stonetopMove: BOLSTER });
+}
+
+/** Spend 1 Preparation. Whether one was held. Run in the character's spending turn, as payBoost and preparation-damage.js hold it. */
 export async function spendPreparation(actor) {
 	const held = preparationHeld(actor);
 	if (held <= 0) return false;
@@ -683,8 +698,11 @@ export async function spendPreparation(actor) {
 	return true;
 }
 
-/** Give back the Preparation a +1 spent, for a +1 that never reached its card (see takeBoost). */
-async function refundPreparation(actor) {
+/**
+ * Give back the Preparation a +1 spent, for a +1 that never reached its card (takeBoost, and
+ * preparation-damage.js#addPreparationToDamage). Run in the character's spending turn.
+ */
+export async function refundPreparation(actor) {
 	const held = preparationHeld(actor);
 	if (held >= PREPARATION_MAX) return;
 	await actor.typedActor.moveResources.setUses(BOLSTER, held + 1, { stonetopMove: BOLSTER });

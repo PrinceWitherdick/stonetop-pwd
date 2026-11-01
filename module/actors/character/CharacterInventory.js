@@ -53,6 +53,11 @@ export class CharacterInventory {
 		return this._flags.subKeyData("resources", slug, count);
 	}
 
+	// Dropping one track's count, as a fragment for the same kind of batched write.
+	resourceDeletionData(slug) {
+		return this._flags.subKeyDeletionData("resources", slug);
+	}
+
 	// Drop a removed arcanum's resource tracks (the back-power track keyed by slug and the
 	// back-item ammo track keyed "<slug>:item"), so a later re-acquire doesn't inherit stale
 	// charges. No-op when the card had no tracks.

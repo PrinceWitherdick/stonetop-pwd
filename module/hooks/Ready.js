@@ -86,6 +86,7 @@ import { grandfatherCreationFinished, CREATION_FINISHED_SWEEP } from "../migrati
 import { grandfatherUnstoppableFighting, UNSTOPPABLE_FIGHTING_SWEEP } from "../migration/unstoppable-fighting-grandfather.js";
 import { repairAllPossessionGrants } from "../migration/possession-grant-repair.js";
 import { repairMasteredArcanumCircles } from "../migration/mastered-arcanum-circles.js";
+import { adoptAllPrayerBeadPips } from "../migration/prayer-bead-preparation.js";
 import { settleAllArcanumBoxLayouts, settleOwnArcanumBoxLayouts } from "../migration/tulpa-move-boxes.js";
 import { refreshHeldMoves } from "../migration/move-refresh.js";
 import { refreshSteadingImprovements } from "../migration/improvement-refresh.js";
@@ -351,6 +352,10 @@ export async function onReady() {
 		// world swept once has nothing left to find.
 		try { await oncePerVersion("masteredArcanumCircles", repairMasteredArcanumCircles); }
 		catch (err) { console.error("Stonetop | mastered arcanum repair failed", err); }
+		// Move prayer-bead pips ticked before the beads' track became Bolster's Preparation onto the Bolster
+		// track (migration/prayer-bead-preparation.js). GATED: legacy repair; once moved, the old key is gone.
+		try { await oncePerVersion("prayerBeadPreparation", adoptAllPrayerBeadPips); }
+		catch (err) { console.error("Stonetop | prayer bead Preparation move failed", err); }
 		// Move marks on arcana whose printed boxes have moved (the beautiful scroll's four move
 		// boxes; migration/tulpa-move-boxes.js). Per VERSION: each character records that it has
 		// been settled in the same write that settles it, so a repeat, a sweep that dies part-way

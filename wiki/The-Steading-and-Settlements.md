@@ -28,7 +28,7 @@ The cards those rolls make carry their own buttons, for example:
 - **Mark XP** on a miss (whoever made the move marks XP), or **Mark XP for someone else** to pick the character (the GM, who plays nobody, gets just **Mark XP**, and it asks who);
 - spending Fortunes or Stock, marking a debility, raising a muster;
 - handing over what Trade & Barter got you;
-- spending Preparation from Bolster for +1, if a character holds some and their efforts apply (see [Rolling Moves and Chat Cards](Rolling-Moves-and-Chat-Cards#help-from-your-friends)).
+- spending Preparation from Bolster for +1, if a character holds some and their efforts apply (see [Rolling Moves and Chat Cards](Rolling-Moves-and-Chat-Cards#help-from-your-friends)). Spring's roll is handed to a player, so its Preparation is a tick box in the window the GM sees while handing it over, one per character holding some (only one counts).
 
 Requisition asks how many horses you take from the herd, if Stonetop has one.
 
@@ -67,7 +67,7 @@ The **Notes** tab holds, in this order:
 
 ## Other settlements
 
-Other villages, towns and bands are **Settlement** actors. Create one from the Actors sidebar's **Create Actor** button, choosing Settlement, then a place from Book II, a typical stat block, or a blank sheet. A settlement sheet has **Overview**, **People**, **Homefront Moves** and **Notes** tabs:
+Other villages, towns and bands are **Settlement** actors. Create one from the Actors sidebar's **Create Actor** button, choosing Settlement, then a place from Book II, a typical stat block, or a blank sheet for a homebrew place. The GM can also click **Add Settlement** under Stonetop's Relationships table, which asks the same questions. Each settlement gets its own row in that table, with hearts and notes. A settlement sheet has **Overview**, **People**, **Homefront Moves** and **Notes** tabs:
 
 - Size, Population, Prosperity and Defenses, with resources, defenses, trade partners and a **Read in the gazetteer** link to its journal entry;
 - **Who runs it**, notable people (link them to NPC sheets) and groups;
