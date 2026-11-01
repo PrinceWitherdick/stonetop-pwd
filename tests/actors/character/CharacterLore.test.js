@@ -92,3 +92,13 @@ describe("CharacterLore — text values", () => {
 		expect(flags.setFlag).toHaveBeenCalledWith("texts", { "earth:q-one": "new" });
 	});
 });
+
+describe("CharacterLore — textUpdateData", () => {
+	it("is the text's own sub-key as a fragment, so two in one update keep both, and writes nothing", () => {
+		const flags = { ...makeFlags({ texts: { "earth:q-one": "first" } }), subKeyData: (k, sub, v) => ({ [`ns.${k}.${sub}`]: v }) };
+		const lore = new CharacterLore(flags);
+		expect({ ...lore.textUpdateData("earth", "q-two", "second"), ...lore.textUpdateData("sky", "q-one", "third") })
+			.toEqual({ "ns.texts.earth:q-two": "second", "ns.texts.sky:q-one": "third" });
+		expect(flags.setFlag).not.toHaveBeenCalled();
+	});
+});

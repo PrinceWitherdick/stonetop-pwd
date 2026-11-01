@@ -1473,8 +1473,8 @@ describe("a manifest Ghost's touch on their own damage card", () => {
 	it("leaves armor alone on a blow that is no touch of theirs (Hurl)", async () => {
 		const rhys = ghost([TOUCH]);
 		fightInARow([["rhys", rhys], ["crin", crinwin("crinwin")]]);
-		await rollDamageAt(rhys, { formula: "d6", label: "Poltergeist: Hurl", keywords: "forceful", notTouch: true, shiftKey: true,
-			weapon: { name: "", range: [], piercing: 0, ignoresArmor: false, tags: ["forceful"] } });
+		await rollDamageAt(rhys, { formula: "d6", label: "Poltergeist: Hurl", keywords: "forceful", shiftKey: true,
+			weapon: { name: "", range: [], piercing: 0, ignoresArmor: false, tags: ["forceful"], notTouch: true } });
 		const flag = damageFlag();
 		expect(flag).not.toHaveProperty("armorIgnoredOnTheFly");
 		expect(flag.weapon.ignoresArmor).toBe(false);
@@ -1487,6 +1487,8 @@ describe("a manifest Ghost's touch on their own damage card", () => {
 describe("a Ghost's own blow without the harmful touch", () => {
 	const TOUCH = "Your touch (or ghostly weapons) can harm the living (ignores armor)";
 	const CAUTION = "is a Ghost, not manifest with";
+	// Poltergeist's Hurl, as its card's button hands it in (post-death-actions.js): an object thrown, no touch.
+	const HURL = { name: "", range: [], piercing: 0, ignoresArmor: false, tags: [], notTouch: true };
 	const ghost = (extra = {}) => Object.assign(hero("rhys", "Rhys"), {
 		flags: { [SCOPE]: { postDeathInsert: { slug: "ghost", ...(extra.manifest ? { manifest: extra.manifest } : {}) }, ...(extra.flags ?? {}) } },
 		typedActor: { carriedWeaponGear: async () => [], computedDamageDie: async () => "d6" },
@@ -1521,7 +1523,7 @@ describe("a Ghost's own blow without the harmful touch", () => {
 	it("says nothing on Hurl, or on a move's own number", async () => {
 		const rhys = ghost();
 		const { tokens } = fightInARow([["rhys", rhys], ["crin", crinwin("crinwin")]]);
-		await rollDamageAt(rhys, { formula: "d6", label: "Poltergeist: Hurl", notTouch: true, shiftKey: true });
+		await rollDamageAt(rhys, { formula: "d6", label: "Poltergeist: Hurl", shiftKey: true, weapon: HURL });
 		expect(posted.at(-1).content).not.toContain(CAUTION);
 		await rollMoveDamageAt(rhys, tokens.crin, { move: "Castigate", formula: "1d6" });
 		expect(posted.at(-1).content).not.toContain(CAUTION);
@@ -1532,7 +1534,7 @@ describe("a Ghost's own blow without the harmful touch", () => {
 		globalThis.game.user.targets = new Set();
 		await rollDamageAt(ghost(), { formula: "d6", label: "Damage", shiftKey: true });
 		expect(plainCard.mock.calls.at(-1)[2].notices).toContain(CAUTION);
-		await rollDamageAt(ghost(), { formula: "d6", label: "Poltergeist: Hurl", notTouch: true, shiftKey: true });
+		await rollDamageAt(ghost(), { formula: "d6", label: "Poltergeist: Hurl", shiftKey: true, weapon: HURL });
 		expect(plainCard.mock.calls.at(-1)[2].notices ?? "").not.toContain(CAUTION);
 	});
 });

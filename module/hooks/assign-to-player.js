@@ -1,4 +1,4 @@
-import { contextMenuEntry, deletionEntry } from "../utils/foundry-compat.js";
+import { contextMenuEntry, deletionUpdate } from "../utils/foundry-compat.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { escHtml as esc } from "../utils/strings.js";
 import { PERSON_ACTOR_TYPES } from "../utils/actor-types.js";
@@ -75,7 +75,7 @@ export async function assignToPlayer(actor) {
 	if (!choice) return;
 	const { user, release } = choice;
 	// The previous holder's own ownership entry goes, so the actor falls back to its default for them.
-	const disown = who => actor.update(Object.fromEntries([deletionEntry(`ownership.${who.id}`)]));
+	const disown = who => actor.update(deletionUpdate(`ownership.${who.id}`));
 	try {
 		if (release) {
 			await user.update({ character: null });

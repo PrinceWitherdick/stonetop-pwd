@@ -1,5 +1,5 @@
 import { SYSTEM_ID } from "../system-id.js";
-import { deletionEntry } from "./foundry-compat.js";
+import { deletionEntry, deletionUpdate } from "./foundry-compat.js";
 import { resolvedFlags } from "../actors/character/StonetopFlags.js";
 import { isActorRow, personRowActor } from "../actors/steading/steading-people.js";
 import { STEADING_DEFAULTS } from "../actors/steading/StonetopSteading.js";
@@ -186,7 +186,7 @@ export function followerFrameHandle(actor, base, { editable = false } = {}) {
 		// Via deletionEntry so v14 gets a ForcedDeletion instead of a deprecated `-=` key.
 		clear: () => (detail().portraitFrame === undefined
 			? Promise.resolve()
-			: actor.update(Object.fromEntries([deletionEntry(`flags.${SYSTEM_ID}.${base}.portraitFrame`)])))
+			: actor.update(deletionUpdate(`flags.${SYSTEM_ID}.${base}.portraitFrame`)))
 	};
 }
 

@@ -92,16 +92,53 @@ describe("LV-5: the chooser's typed answers survive a close that fires no change
 	const htmlOf = byClass => ({ find: sel => ({ toArray: () => sel.split(",").flatMap(s => byClass[s.trim()] ?? []) }) });
 
 	it("writes a name and a tether typed but not saved, and nothing that is already stored", async () => {
-		const { char } = makeUndead("ghost", { flags: { postDeathLore: { texts: { "terrible-purpose:vengeance": "Old" } } } });
-		const set = vi.spyOn(char, "setPostDeathLoreText");
+		const { actor, char } = makeUndead("ghost", { flags: { postDeathLore: { texts: { "terrible-purpose:vengeance": "Old" } } } });
 		await flushPostDeathChoices(htmlOf({
 			".stonetop-pdc-name": [field(["stonetop-pdc-name"], { section: "terrible-purpose", option: "longing" }, "My daughter"),
 				field(["stonetop-pdc-name"], { section: "terrible-purpose", option: "vengeance" }, "Old")],
-			".stonetop-pdc-tether": [field(["stonetop-pdc-tether"], {}, "The oak")],
+			".stonetop-pdc-tether": [field(["stonetop-pdc-tether"], {}, "  The oak ")],
 		}), char);
 		expect(char.postDeathLoreText("terrible-purpose", "longing")).toBe("My daughter");
-		expect(set).toHaveBeenCalledTimes(1);
+		expect(char.postDeathLoreText("terrible-purpose", "vengeance")).toBe("Old");
 		expect(char.tether).toBe("The oak");
+		// One write for the lot, carrying only what changed.
+		expect(actor.update).toHaveBeenCalledTimes(1);
+		expect(actor.setFlag).not.toHaveBeenCalled();
+		expect(Object.keys(actor.update.mock.calls[0][0]).sort()).toEqual([
+			"flags.stonetop-pwd.postDeathInsert.tether",
+			"flags.stonetop-pwd.postDeathLore.texts.terrible-purpose:longing",
+		]);
+	});
+
+	it("lands a write-in, the printed pick it replaces and a second answer in one update", async () => {
+		const { actor, char } = makeUndead("thrall", { flags: { postDeathLore: {
+			counts: { "impulse:erode-hope": 1, "marks:ravenous": 1 },
+			texts:  { "impulse:custom-impulse": "" },
+		} } });
+		await flushPostDeathChoices(htmlOf({
+			".stonetop-pdc-name": [],
+			".stonetop-pdc-text": [
+				field(["stonetop-pdc-text", "stonetop-pdc-writein"], { section: "impulse", option: "custom-impulse" }, "Spread rumours"),
+				field(["stonetop-pdc-text"], { section: "your-master", option: "master-name" }, "The Hollow King"),
+			],
+		}), char);
+		expect(actor.update).toHaveBeenCalledTimes(1);
+		expect(actor.setFlag).not.toHaveBeenCalled();
+		// The same end state the field-by-field writes left: both answers, the printed Impulse unticked,
+		// and a count in another section untouched.
+		expect(char.postDeathLoreText("impulse", "custom-impulse")).toBe("Spread rumours");
+		expect(char.postDeathLoreText("your-master", "master-name")).toBe("The Hollow King");
+		expect(char._postDeath.lore.counts).toEqual({ "impulse:erode-hope": 0, "marks:ravenous": 1 });
+	});
+
+	it("writes nothing at all for a close with nothing typed", async () => {
+		const { actor, char } = makeUndead("ghost", { flags: { postDeathLore: { texts: { "terrible-purpose:vengeance": "Old" } } } });
+		await flushPostDeathChoices(htmlOf({
+			".stonetop-pdc-name": [field(["stonetop-pdc-name"], { section: "terrible-purpose", option: "vengeance" }, "Old")],
+			".stonetop-pdc-tether": [field(["stonetop-pdc-tether"], {}, "")],
+		}), char);
+		expect(actor.update).not.toHaveBeenCalled();
+		expect(actor.setFlag).not.toHaveBeenCalled();
 	});
 
 	// Audit VL-3 (2026-10-28): the flush is the window's own close, on the choices step only.

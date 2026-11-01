@@ -26,7 +26,7 @@ import { isPostDeathMove } from "./post-death-moves.js";
 import { BODYSNATCHER, possessedHost, hostUpdate, endPossessionUpdate } from "./bodysnatcher.js";
 import { manifestedPicks, manifestUpdateData, endManifestUpdateData } from "./manifest.js";
 import { markableConsequences } from "./post-death-choices.js";
-import { favorHeld, gainFavor, setRavenousMaw } from "./post-death-outcomes.js";
+import { favorHeld, gainFavor, pickLoreOption, setRavenousMaw, spendFavor } from "./post-death-outcomes.js";
 import { HORRID_MAW } from "../../data/weapons.js";
 
 export const POLTERGEIST        = "Poltergeist";
@@ -266,19 +266,12 @@ async function forcedOut(actor) {
 		await postMoveNote(actor, BODYSNATCHER, format(`${KEY}.forcedOutNoneLeft`, { name, host }));
 		return true;
 	}
-	const slug = await askWithButtons({
-		title:   localize(`${KEY}.forcedOutTitle`),
-		content: format(`${KEY}.forcedOutAsk`, { host: escHtml(host) }),
-		buttons: [
-			...options.map(o => ({ key: `c-${o.slug}`, label: format(`${KEY}.forcedOutMark`, { name: o.label }), value: o.slug })),
-			{ key: "cancel", label: localize(`${KEY}.possessCancel`), icon: "fa-xmark", value: null },
-		],
-	});
-	const marked = slug ? character.markSectionOptionUpdateData("consequences", slug) : null;
+	const picked = await pickLoreOption(localize(`${KEY}.forcedOutTitle`), format(`${KEY}.forcedOutAsk`, { host: escHtml(host) }),
+		"markNamed", options, { cancelLabel: localize(`${KEY}.possessCancel`) });
+	const marked = picked ? character.markSectionOptionUpdateData("consequences", picked.slug) : null;
 	if (!marked) return false;
 	await character.applyUpdate({ ...marked, ...endPossessionUpdate() }, BODYSNATCHER);
-	const picked = options.find(o => o.slug === slug)?.label ?? slug;
-	await postMoveNote(actor, BODYSNATCHER, format(`${KEY}.forcedOutLine`, { name, host, consequence: picked }));
+	await postMoveNote(actor, BODYSNATCHER, format(`${KEY}.forcedOutLine`, { name, host, consequence: picked.label }));
 	return true;
 }
 
@@ -351,13 +344,8 @@ async function spendFavorAndRoll(actor, moveName, prompt) {
 	if (!spend) return false;
 	const prompted = await prompt({ title: moveName, offersFor: moveName });
 	if (!prompted) return false;
-	// Re-read: Favor spent elsewhere while the windows were open cannot be spent twice.
-	const now = favorHeld(character);
-	if (now < spend) {
-		globalThis.ui?.notifications?.warn?.(localize(`${KEY}.noFavor`));
-		return false;
-	}
-	await character.setFavor(now - spend);
+	// Re-read inside spendFavor: Favor spent elsewhere while the windows were open cannot be spent twice.
+	if ((await spendFavor(character, spend, moveName)) === null) return false;
 	const moveResults = item.system?.moveResults ?? null;
 	await character.onDirectStatRoll("", {
 		statValue: spend,
@@ -551,9 +539,8 @@ export async function pressCardButton(message, actor, btn) {
 				formula: await pcDamageDie(actor),
 				label: move,
 				keywords: tags.join(", "),
-				weapon: { name: "", range: [], piercing: 0, ignoresArmor: false, tags },
 				// Hurl throws an object: no ghostly touch, so no manifest touch's "ignores armor" (audit XS-3).
-				notTouch: true,
+				weapon: { name: "", range: [], piercing: 0, ignoresArmor: false, tags, notTouch: true },
 			});
 		}
 		if (btn.classList.contains("stonetop-pd-move-damage")) {

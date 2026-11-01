@@ -236,7 +236,7 @@ function _outcomesView(character, purposeEntry, consequences, { hp, maxHp }) {
  * (setRavenousMaw, out or away). A spend with no Favor to pay says so rather than vanishing.
  */
 function _favorView(character, { canSet, task = "" }) {
-	const held = Math.max(0, Math.min(FAVOR_MAX, Number(character.favor?.()) || 0));
+	const held = Math.min(FAVOR_MAX, favorHeld(character));
 	const actor = character._actor;
 	const noFavor = held < 1 ? localize(`${_I18N}.reasonNoFavor`) : "";
 	const action = (key, icon, { reason = "" } = {}) => ({
@@ -347,13 +347,13 @@ async function _outcome(character, action, source) {
 			return key ? _clearDebilities(character, [key], source) : null;
 		}
 		case "clear-consequence": {
-			const picked = await _pickOption(format(`${_I18N}.clearConsequenceTitle`, { source }), localize(`${_I18N}.clearConsequenceAsk`),
+			const picked = await pickLoreOption(format(`${_I18N}.clearConsequenceTitle`, { source }), localize(`${_I18N}.clearConsequenceAsk`),
 				"clearNamed", _clearableConsequences(await character.sectionOptions(_CONSEQUENCES)));
 			if (!picked || !(await character.unmarkSectionOption(_CONSEQUENCES, picked.slug))) return null;
 			return said(format(`${_I18N}.consequenceCleared`, { name: escHtml(picked.label) }));
 		}
 		case "mark-consequence": {
-			const picked = await _pickOption(format(`${_I18N}.markConsequenceTitle`, { source }), localize(`${_I18N}.markConsequenceAsk`),
+			const picked = await pickLoreOption(format(`${_I18N}.markConsequenceTitle`, { source }), localize(`${_I18N}.markConsequenceAsk`),
 				"markNamed", markableConsequences(await character.sectionOptions(_CONSEQUENCES)));
 			if (!picked || !(await character.markSectionOption(_CONSEQUENCES, picked.slug))) return null;
 			return said(format(`${_I18N}.consequenceMarked`, { name: escHtml(picked.label) }));
@@ -432,24 +432,29 @@ async function _clearDebilities(character, keys, source) {
 }
 
 /**
- * One button per choice, each naming its outcome, and a way out last. Null when there is nothing to
- * choose from or the window is closed.
+ * One button per choice, each naming its outcome, and a way out last (`cancelLabel`, "Never mind" by
+ * default). A choice may name its own button `key`. Null when there is nothing to choose from or the
+ * window is closed.
  */
-async function _pick(title, content, choices) {
+async function _pick(title, content, choices, cancelLabel = localize(`${_I18N}.cancel`)) {
 	if (!choices.length) return null;
 	return askWithButtons({
 		title,
 		content,
 		buttons: [
-			...choices.map((c, i) => ({ key: `c${i}`, label: c.label, value: c.value })),
-			{ key: "cancel", label: localize(`${_I18N}.cancel`), icon: "fa-xmark", value: null },
+			...choices.map((c, i) => ({ key: c.key ?? `c${i}`, label: c.label, value: c.value })),
+			{ key: "cancel", label: cancelLabel, icon: "fa-xmark", value: null },
 		],
 	});
 }
 
-/** `_pick` over lore options, each button worded by `namedKey`: the option picked (`{slug, label}`), or null. */
-async function _pickOption(title, content, namedKey, options) {
-	const slug = await _pick(title, content, options.map(o => ({ value: o.slug, label: format(`${_I18N}.${namedKey}`, { name: o.label }) })));
+/**
+ * `_pick` over lore options, each button worded by `namedKey` (under stonetop.postDeath.outcomes) and keyed by
+ * the option's slug: the option picked (`{slug, label}`), or null. `cancelLabel` as `_pick` takes it.
+ */
+export async function pickLoreOption(title, content, namedKey, options, { cancelLabel } = {}) {
+	const choices = options.map(o => ({ key: `c-${o.slug}`, value: o.slug, label: format(`${_I18N}.${namedKey}`, { name: o.label }) }));
+	const slug = await _pick(title, content, choices, cancelLabel);
 	return slug ? options.find(o => o.slug === slug) ?? { slug, label: slug } : null;
 }
 
@@ -507,7 +512,7 @@ export async function gainThrallMark(character, { overflow = false } = {}) {
 		await postOutcomeCard(character, localize("stonetop.undeath.unholyVessel.label"), lines);
 		return { unholyVessel: true, lines };
 	}
-	const picked = await _pickOption(localize(`${_I18N}.gainMarkTitle`), localize(`${_I18N}.gainMarkAsk`), "gainNamed", options);
+	const picked = await pickLoreOption(localize(`${_I18N}.gainMarkTitle`), localize(`${_I18N}.gainMarkAsk`), "gainNamed", options);
 	const marked = picked ? character.markSectionOptionUpdateData(_MARKS, picked.slug) : null;
 	if (!marked) return null;
 	const hadFavor = Number(character.favor?.()) > 0;
@@ -601,17 +606,18 @@ export async function gainFavor(character) {
 }
 
 /**
- * One Favor spent, and why, in the same write as what it bought (`also`). Null, writing nothing, when
- * none is held: the button says so first, and a pip clicked away since the sheet drew cannot be spent.
+ * `n` Favor spent for `moveName`, in the same write as what it bought (`also`): the Favor left, read
+ * fresh. Null, writing nothing, when fewer than `n` are held: the button says so first, and Favor spent
+ * elsewhere since the sheet drew (or while a window was open) cannot be spent twice.
  */
-async function _spendOneFavor(character, also, moveName) {
+export async function spendFavor(character, n, moveName, also = null) {
 	const held = favorHeld(character);
-	if (held < 1) {
+	if (held < n) {
 		globalThis.ui?.notifications?.warn?.(localize("stonetop.postDeathMoves.noFavor"));
 		return null;
 	}
-	await character.applyUpdate({ ...(also ?? {}), ...character.favorUpdateData(held - 1) }, moveName);
-	return held - 1;
+	await character.applyUpdate({ ...(also ?? {}), ...character.favorUpdateData(held - n) }, moveName);
+	return held - n;
 }
 
 /**
@@ -627,7 +633,7 @@ export async function callTentacle(character) {
 	if (!hasThrallMark(actor, THRALL_MARK.CHILD_OF_THE_DEEPS)) return null;
 	const card = callLoreFollowerUpdate(actor, key);
 	const title = localize(`${_I18N}.favorActions.tentacle.card`);
-	const left = await _spendOneFavor(character, card, title);
+	const left = await spendFavor(character, 1, title, card);
 	if (left === null) return null;
 	const lines = [
 		localize(card ? `${_I18N}.tentacleCalled` : `${_I18N}.tentacleAgain`),
@@ -676,7 +682,7 @@ export async function setRavenousMaw(character, out) {
 	const title = localize(`${_I18N}.favorActions.maw.card`);
 	if (out) {
 		if (ravenousMawOut(actor) || !hasThrallMark(actor, THRALL_MARK.RAVENOUS)) return false;
-		if ((await _spendOneFavor(character, null, title)) === null) return false;
+		if ((await spendFavor(character, 1, title)) === null) return false;
 		await actor.createEmbeddedDocuments("Item", [_mawItemData()]);
 		await postOutcomeCard(character, title, [localize(`${_I18N}.mawOut`), format("stonetop.postDeathMoves.favorSpent", { n: 1 })]);
 		return true;

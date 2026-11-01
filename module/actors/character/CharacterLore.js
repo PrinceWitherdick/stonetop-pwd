@@ -54,6 +54,15 @@ export class CharacterLore {
 	}
 
 	/**
+	 * setText as an `actor.update()` fragment, for a caller landing several answers in ONE write (a window's
+	 * close saving every field typed but not yet saved: post-death-choices.js#flushPostDeathChoices). Written
+	 * as the text's own sub-key, as countUpdateData is, so two of these in one update keep both keys.
+	 */
+	textUpdateData(loreSlug, optionSlug, value) {
+		return this._flags.subKeyData("texts", `${loreSlug}:${optionSlug}`, value);
+	}
+
+	/**
 	 * Drop every count and text whose key isn't in `validKeys`, as an `actor.update()` fragment: for when
 	 * the thing this lore belongs to has been swapped for a different one and its answers no longer mean
 	 * anything. A fragment, so the caller lands it in ONE write with something outside this store (an insert

@@ -81,6 +81,7 @@ import {worldLogisticsNames} from "../character/logistics.js";
 import {deployCommandOffers} from "../../combat/command-holders.js";
 import {shakenNervesOffers} from "../character/fight-states.js";
 import {worldLearnedHolderNames} from "../character/owns-move.js";
+import { countOf, plural } from "../../utils/plural.js";
 
 /**
  * What the member-photo WINDOW shows, given the path a member actually wears.
@@ -3932,7 +3933,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			let msg = `Herd fed: needed ${result.cost} Surplus, paid ${result.paid} (Surplus ${surplus}→${surplus - result.paid}).`;
 			if (result.shortfall > 0) {
 				const newTotal = result.herd.grown + result.herd.yearlings + result.herd.foals;
-				msg += ` ${result.shortfall} short → lost ${result.lost} horse${result.lost === 1 ? "" : "s"} (herd ${before.total}→${newTotal}).`;
+				msg += ` ${result.shortfall} short → lost ${countOf(result.lost, "horse")} (herd ${before.total}→${newTotal}).`;
 			}
 			ui.notifications.info(msg);
 		}
@@ -4017,7 +4018,7 @@ export function createStonetopSteadingSheetClass(Base) {
 								<span class="stonetop-muster-change-why">${completed
 									? "It is complete, but nothing was applied automatically."
 									: "It was never completed, so nothing was applied to give back."}</span>`}
-						${ticked ? `<span class="stonetop-muster-change-why">${ticked} ticked requirement${ticked === 1 ? "" : "s"} will be forgotten.</span>` : ""}
+						${ticked ? `<span class="stonetop-muster-change-why">${ticked} ticked ${plural(ticked, "requirement")} will be forgotten.</span>` : ""}
 					</div>
 					<p class="stonetop-rites-note">A homebrew card in the journal is a separate copy and is not touched; this only removes it from this steading.</p>
 				</div>`,

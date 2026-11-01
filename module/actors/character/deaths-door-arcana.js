@@ -42,14 +42,6 @@ export function dictatedFates(cards = [], boxStates = {}) {
 }
 
 /**
- * The one dictate to suggest when several are marked: the first, in table order. Two that disagree (an Effigy
- * AND an Ice Sphere) are both flagged, and the table settles it.
- */
-export function suggestedDictate(dictates = []) {
-	return dictates?.[0] ?? null;
-}
-
-/**
  * Everything heldDeathsDoorDictates reads off the character, as one string: which of the three cards they own,
  * which are still leads, and which of their back boxes are ticked. The same key, the same answer, so a window
  * redrawn for any other reason need not read the cards again. Synchronous.

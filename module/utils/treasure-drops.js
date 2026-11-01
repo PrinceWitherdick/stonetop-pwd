@@ -18,6 +18,7 @@ import { book2ArtSrc } from "../book2-art/art-root.js";
 import { isInJournalEditor } from "./journal-editor-guard.js";
 import { STONETOP_ITEM_ICONS } from "./item-icon.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { countOf } from "./plural.js";
 
 const norm = s => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
@@ -191,7 +192,7 @@ function badgeHtml(entry) {
 	else parts.push(`<span class="st-treasure-weight st-small" data-tooltip="Small item (no load)">▫</span>`);
 	if (entry.uses > 0) {
 		const label = entry.usesLabel ? ` <em>${entry.usesLabel}</em>` : "";
-		parts.push(`<span class="st-treasure-uses" data-tooltip="${entry.uses} use${entry.uses === 1 ? "" : "s"}${entry.usesLabel ? " (" + entry.usesLabel + ")" : ""}">${circleGlyphs(Math.min(entry.uses, 8))}${label}</span>`);
+		parts.push(`<span class="st-treasure-uses" data-tooltip="${countOf(entry.uses, "use")}${entry.usesLabel ? " (" + entry.usesLabel + ")" : ""}">${circleGlyphs(Math.min(entry.uses, 8))}${label}</span>`);
 	}
 	return parts.join("");
 }

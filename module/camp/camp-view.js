@@ -7,7 +7,7 @@ import {
 	nightmaresWarded, precautionTonight, crewBill, UNLIVING_NEEDS,
 	messKitAllAlong, messKitWouldHelp, provisionsAtFire, spareUses, suppliesAllAlong,
 } from "./camp-rules.js";
-import { plural } from "../utils/plural.js";
+import { countOf, plural } from "../utils/plural.js";
 
 /**
  * WHAT THE CAMP SAYS: the shared window's rows, the card that invites the table to the fire, and
@@ -318,15 +318,11 @@ function homeFiresView(ledger, { isOpen, manages }) {
 	};
 }
 
-function nights(n) {
-	return n === 1 ? "night" : "nights";
-}
-
 /** What the fire has left to eat once tonight is paid, as the p.327 party works it out. */
 function afterTonightText({ left, nights: more }) {
 	if (!left) return "After tonight, the packs at this fire hold no more food.";
-	const lasts = more ? `enough for ${more} more ${nights(more)} like this one` : "not enough for another night like this one";
-	return `After tonight, ${left} ${plural(left, "use")} of food ${plural(left, "stays", "stay")} in the packs at this fire: ${lasts}.`;
+	const lasts = more ? `enough for ${more} more ${plural(more, "night")} like this one` : "not enough for another night like this one";
+	return `After tonight, ${countOf(left, "use")} of food ${plural(left, "stays", "stay")} in the packs at this fire: ${lasts}.`;
 }
 
 /**

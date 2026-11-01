@@ -1,5 +1,5 @@
 import { STONETOP_SCOPE, readableFlags, resolvedFlagProperty } from "./StonetopFlags.js";
-import { deletionEntry, serverNow } from "../../utils/foundry-compat.js";
+import { deletionUpdate, serverNow } from "../../utils/foundry-compat.js";
 import {
 	DEATHS_DOOR_FLAG, DEATHS_DOOR_ROLL_FLAG, DEATHS_DOOR_ROLLING_FLAG, DEATHS_DOOR_STATE, NEVER_GONNA_KEEP_ME_DOWN,
 	effectiveDeathsDoorState, pastDeathKind,
@@ -78,7 +78,7 @@ export function actorDeathsDoorState(actor) {
  * call: the deletion's shape depends on the running core generation (foundry-compat.js#deletionEntry).
  */
 export function rollMarkerDeletion() {
-	return Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_ROLLING_FLAG}`)]);
+	return deletionUpdate(`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_ROLLING_FLAG}`);
 }
 
 /**

@@ -35,7 +35,7 @@ import {
 } from "../../model/CharacterSnapshot.js";
 import {PlaybookMoveEntry} from "./PlaybookMoveEntry.js";
 import {normalizeRollMode, tookOffer} from "../../dialogs/RollDialog.js";
-import {deletionEntry} from "../../utils/foundry-compat.js";
+import {deletionEntry, deletionUpdate} from "../../utils/foundry-compat.js";
 import {appendLedgerEntries} from "../../utils/ledger-core.js";
 import {statRequirementsUnmet} from "./stat-requirement.js";
 import {effectiveRequiredMoves, requiredMovesUnmet, requirementLabel} from "./move-requirement.js";
@@ -313,10 +313,10 @@ const FICTION_ROLL_OFFERS = [
 
 /**
  * The update fragment that lifts an insert swap's marker (INSERT_MOVES_PENDING_FLAG), once the insert's
- * own moves are made. Built per call: deletionEntry's form follows the running core.
+ * own moves are made. Built per call: deletionUpdate's form follows the running core.
  */
 function liftInsertMovesPending() {
-	return Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${INSERT_MOVES_PENDING_FLAG}`)]);
+	return deletionUpdate(`flags.${STONETOP_SCOPE}.${INSERT_MOVES_PENDING_FLAG}`);
 }
 
 /** The Ghost's and the Revenant's UNSTABLE, as its count is keyed in their lore (see _foldStandingNotes). */
@@ -2462,21 +2462,31 @@ export class StonetopCharacter {
 			// progress go with it, so a later insert never reads them (audit LC-2). A Death's Door marker stays.
 			...undeathRecordsLifted(this._actor),
 		});
-		if (slug) {
-			// The insert's own moves. A Consequence's or Mark's move (Poltergeist, Red Wrath) is the
-			// lore sync's, made below only for what the character has marked and carried over.
-			// Made whole, outcomes and track included, as a lore move is: the roll card reads its
-			// outcomes off this copy, and one made from the text alone posted Undying with none.
-			// Only those still missing, read now: a load-time repair landing mid-swap may have made some already.
-			const entries = (await this._moveRepo.getPostDeathMoves(slug)).filter(m => !m.loreOption);
-			const missing = planMissingInsertMoves({ entries, owned: this._actor.items.filter(isPostDeathMove) });
-			if (missing.length) await this._actor.createEmbeddedDocuments("Item", missing.map(postDeathMoveItemData));
-			await this._syncPostDeathLoreMoves();
-			// Made: the swap is whole, and nothing is left for the load-time repair to do. With no moves read
-			// (the pack not readable yet), nothing was made, so the marker stays for the repair.
-			if (entries.length) await this._actor.update(liftInsertMovesPending());
-		}
+		// The insert's own moves, then the lore sync's: a Consequence's or Mark's move (Poltergeist, Red Wrath),
+		// made only for what the character has marked and carried over. The marker is lifted after both.
+		if (slug) await this._makeMissingInsertMoves(slug, () => this._syncPostDeathLoreMoves());
 		return true;
+	}
+
+	/**
+	 * Make the insert `slug`'s OWN moves the character lacks, then lift the swap's marker
+	 * (INSERT_MOVES_PENDING_FLAG): the swap is whole, and nothing is left for the load-time repair to do.
+	 * Made whole, outcomes and track included, as a lore move is: the roll card reads its outcomes off this
+	 * copy, and one made from the text alone posted Undying with none. Only those still missing, read now:
+	 * a load-time repair landing mid-swap may have made some already (planMissingInsertMoves, which also
+	 * leaves the lore options' moves to the lore sync).
+	 *
+	 * Every insert has moves of its own, so none read is a pack not readable yet, not a swap made whole:
+	 * nothing is made and the marker stays for the next load. `beforeLift` runs once the moves are made and
+	 * before the marker goes. Resolves to how many were made.
+	 */
+	async _makeMissingInsertMoves(slug, beforeLift = null) {
+		const entries = slug ? await this._moveRepo.getPostDeathMoves(slug) : [];
+		const missing = planMissingInsertMoves({ entries, owned: this._actor.items.filter(isPostDeathMove) });
+		if (missing.length) await this._actor.createEmbeddedDocuments("Item", missing.map(postDeathMoveItemData));
+		await beforeLift?.();
+		if (!slug || entries.length) await this._actor.update(liftInsertMovesPending());
+		return missing.length;
 	}
 
 	/**
@@ -2494,15 +2504,7 @@ export class StonetopCharacter {
 
 	async _syncPostDeathInsertMoves() {
 		if (readableFlags(this._actor)?.[INSERT_MOVES_PENDING_FLAG] == null) return 0;
-		const slug = this._postDeath.activeSlug;
-		const entries = slug ? (await this._moveRepo.getPostDeathMoves(slug)).filter(m => !m.loreOption) : [];
-		// Every insert has moves of its own, so none read is a pack not readable yet, not a swap made whole:
-		// the marker stays, and the next load tries again.
-		if (slug && !entries.length) return 0;
-		const missing = planMissingInsertMoves({ entries, owned: this._actor.items.filter(isPostDeathMove) });
-		if (missing.length) await this._actor.createEmbeddedDocuments("Item", missing.map(postDeathMoveItemData));
-		await this._actor.update(liftInsertMovesPending());
-		return missing.length;
+		return this._makeMissingInsertMoves(this._postDeath.activeSlug);
 	}
 
 	/**
@@ -3749,8 +3751,7 @@ export class StonetopCharacter {
 		if (!(slug in this._possessionGrantsApplied())) return;
 		// setFlag can't drop keys — delete just this slug's entry, in whichever form the running
 		// core applies (deletionEntry: ForcedDeletion on v14+, the legacy `-=` prefix below it).
-		await this._actor.update(Object.fromEntries(
-			[deletionEntry(`flags.${STONETOP_SCOPE}.possessionGrantsApplied.${slug}`)]));
+		await this._actor.update(deletionUpdate(`flags.${STONETOP_SCOPE}.possessionGrantsApplied.${slug}`));
 	}
 
 	// Ready-time back-fill for characters whose grant-bearing possessions were selected
@@ -6845,6 +6846,8 @@ export class StonetopCharacter {
 	async crossOffMark(s)   { return this._postDeath.crossOffMark(s); }
 	async restoreCrossedOffMark(s) { return this._postDeath.restoreCrossedOffMark(s); }
 	async sectionOptions(s) { return this._postDeath.sectionOptions(s); }
+	/** The post-death lore keys (`section:option`) a swap to the insert `slug` drops. See CharacterPostDeath. */
+	async loreDroppedBySwap(slug) { return this._postDeath.loreDroppedBySwap(slug); }
 	async markSectionOption(section, option)   { return this._postDeath.markSectionOption(section, option); }
 	async unmarkSectionOption(section, option) { return this._postDeath.unmarkSectionOption(section, option); }
 	async clearSectionPicks(section)           { return this._postDeath.clearSectionPicks(section); }
@@ -6860,6 +6863,9 @@ export class StonetopCharacter {
 	masterTaskUpdateData(t)    { return this._postDeath.masterTaskUpdateData(t); }
 	tetherUpdateData(t)        { return this._postDeath.tetherUpdateData(t); }
 	favorUpdateData(v)         { return this._postDeath.favorUpdateData(v); }
+	// And for a chooser's close saving its typed answers in ONE write (post-death-choices.js#flushPostDeathChoices).
+	postDeathLoreTextUpdateData(section, option, value) { return this._postDeath.loreTextUpdateData(section, option, value); }
+	async clearSectionPicksUpdateData(section) { return this._postDeath.clearSectionPicksUpdateData(section); }
 	/** The Death's Door state as a fragment, written as the caller's decision (see DeathsDoorPrompt's preUpdate). */
 	deathsDoorStateUpdateData(state) { return { [`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`]: state ?? null }; }
 	/**
@@ -7144,6 +7150,16 @@ export class StonetopCharacter {
 		return { update: stabilized.length ? { "system.attributes.wounds": wounds } : {}, stabilized };
 	}
 
+	/**
+	 * The wounds `ids` names, healed: kept as scars (healed:true), as every healed wound is. Handed back as
+	 * an UPDATE, as stabilizeOpenWoundsUpdate is, so the caller lands it in its own write (Convalesce's, with
+	 * its plan notes; the Revenant-to-Ghost swap's maimings).
+	 */
+	healWoundsUpdate(ids) {
+		const heal = new Set(ids);
+		return { "system.attributes.wounds": this._woundList().map(w => (heal.has(w.id) ? { ...w, healed: true } : w)) };
+	}
+
 	// "Heal" keeps the record as a scar (healed:true) rather than deleting it, so the
 	// "it's now true" fiction stays referenceable in the collapsed Scars list.
 	async healWound(id) {
@@ -7159,15 +7175,9 @@ export class StonetopCharacter {
 	// stamp Make-a-Plan notes onto permanent injuries. One update so the sheet
 	// re-renders once instead of once per wound.
 	async convalesceWounds({ healIds = [], planNotes = {} } = {}) {
-		const healSet = new Set(healIds);
-		const wounds = this._woundList().map(w => {
-			let next = w;
-			if (healSet.has(w.id)) next = { ...next, healed: true };
-			if (Object.prototype.hasOwnProperty.call(planNotes, w.id)) {
-				next = { ...next, planNote: String(planNotes[w.id] ?? "").trim() };
-			}
-			return next;
-		});
+		const wounds = this.healWoundsUpdate(healIds)["system.attributes.wounds"].map(w =>
+			(Object.prototype.hasOwnProperty.call(planNotes, w.id)
+				? { ...w, planNote: String(planNotes[w.id] ?? "").trim() } : w));
 		await this._writeWounds(wounds, "Convalesce");
 	}
 	async getArcanum(slug)                           { return this._arcana.getArcanum(slug); }
@@ -7547,8 +7557,7 @@ export class StonetopCharacter {
 		const next    = cap != null ? Math.min(current + 1, cap) : current + 1;
 		if (next <= current) {
 			if ((this._actor.getFlag(STONETOP_SCOPE, "improvedStatChoices") ?? {})[moveItem.id]) {
-				await this._actor.update(Object.fromEntries(
-					[deletionEntry(`flags.${STONETOP_SCOPE}.improvedStatChoices.${moveItem.id}`)]));
+				await this._actor.update(deletionUpdate(`flags.${STONETOP_SCOPE}.improvedStatChoices.${moveItem.id}`));
 			}
 			ui.notifications?.warn?.(game.i18n.format("stonetop.character.moves.statIncreaseAtCap",
 				{ move: moveItem.name, stat: _STAT_DEFS[statKey].name, cap }));
@@ -7628,8 +7637,7 @@ export class StonetopCharacter {
 		if (!statKey) return;
 		// setFlag merges (it can't drop keys), so unset just this instance's entry — via
 		// deletionEntry, so v14 gets a ForcedDeletion rather than a deprecated `-=` key.
-		await this._actor.update(Object.fromEntries(
-			[deletionEntry(`flags.${STONETOP_SCOPE}.improvedStatChoices.${moveItem.id}`)]));
+		await this._actor.update(deletionUpdate(`flags.${STONETOP_SCOPE}.improvedStatChoices.${moveItem.id}`));
 		if (!_STAT_DEFS[statKey]) return;
 		const current = this._actor.system?.stats?.[statKey]?.value ?? 0;
 		await this._actor.update(

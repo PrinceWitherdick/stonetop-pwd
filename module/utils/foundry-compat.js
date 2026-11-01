@@ -205,6 +205,21 @@ export function deletionEntry(keyPath) {
 	return [`${keyPath.slice(0, i + 1)}-=${keyPath.slice(i + 1)}`, null];
 }
 
+/** `deletionEntry` as a one-key update object, ready to pass to `update()` or spread into a bigger one. */
+export function deletionUpdate(keyPath) {
+	return Object.fromEntries([deletionEntry(keyPath)]);
+}
+
+/**
+ * Fold a flat update fragment (`{ "dotted.path": value }`) into a pending `changes` object, as a
+ * preUpdate hook does when it adds to the write it is looking at.
+ * @param {object} changes
+ * @param {object|null|undefined} fragment
+ */
+export function foldUpdate(changes, fragment) {
+	for (const [key, value] of Object.entries(fragment ?? {})) foundry.utils.setProperty(changes, key, value);
+}
+
 /**
  * Build the `document.update()` entry that REPLACES `keyPath` with `value` outright instead of
  * merging into what is stored there: the way to change a stored value's SHAPE (a list becoming an

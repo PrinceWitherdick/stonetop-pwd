@@ -130,7 +130,7 @@ describe("DeathsDoorDialog: a held arcanum that dictates the 6-", () => {
 		const read = vi.spyOn(dialog, "_readDictates");
 		dialog._syncRoll = () => {};
 		// The render up to the frame: what reaches super._render is not this test's business.
-		dialog._captureScroll = () => { throw new Error("stop"); };
+		dialog._readPlace = () => { throw new Error("stop"); };
 		// The read has not landed, and the render went on regardless.
 		await expect(dialog._render(true, {})).rejects.toThrow("stop");
 		expect(read).toHaveBeenCalled();

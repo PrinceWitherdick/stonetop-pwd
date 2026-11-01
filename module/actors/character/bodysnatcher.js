@@ -24,7 +24,8 @@
 import { SYSTEM_ID } from "../../system-id.js";
 import { readableFlags, HP_CEILING_OPTION, HP_LOSS_OPTION } from "./StonetopFlags.js";
 import { isOutOfPlay } from "./deaths-door-actor.js";
-import { deletionEntry } from "../../utils/foundry-compat.js";
+import { deletionUpdate } from "../../utils/foundry-compat.js";
+import { holdsLoreOption } from "./insert-lore.js";
 import { escHtml } from "../../utils/strings.js";
 import { format, localize } from "../../utils/i18n.js";
 
@@ -42,10 +43,8 @@ export const HOST_HP_LOST_OPTION = "stonetopHostHpLost";
 const KEY = "stonetop.postDeathMoves";
 
 /** Whether this character is a Ghost holding BODYSNATCHER and still in play: the only one a record speaks for. */
-export function possessionHolds(actor) {
-	if (actor?.type !== "character" || isOutOfPlay(actor)) return false;
-	const flags = readableFlags(actor);
-	return flags.postDeathInsert?.slug === "ghost" && Number(flags.postDeathLore?.counts?.[BODYSNATCHER_LORE]) > 0;
+function possessionHolds(actor) {
+	return actor?.type === "character" && !isOutOfPlay(actor) && holdsLoreOption(actor, BODYSNATCHER_LORE, { insert: "ghost" });
 }
 
 /** The host as recorded, whether or not it still holds. */
@@ -66,7 +65,7 @@ export function hostUpdate(host) {
 
 /** The record's removal as an update fragment (writes nothing harmful where there is none). */
 export function endPossessionUpdate() {
-	return Object.fromEntries([deletionEntry(`flags.${SYSTEM_ID}.${HOST_FLAG}`)]);
+	return deletionUpdate(`flags.${SYSTEM_ID}.${HOST_FLAG}`);
 }
 
 /**
@@ -189,9 +188,15 @@ export async function onUpdateGhost(actor, changes, _options, userId, deps = {})
 export function installBodysnatcherHooks({ hooks = globalThis.Hooks } = {}) {
 	const ids = [
 		["preUpdateActor", hooks.on("preUpdateActor", (actor, changes, options) => onPreUpdateHost(actor, changes, options))],
+		// Every actor write on every client: the cheap synchronous half of each hook's own first check
+		// (an HP loss carried on the options; a host recorded on a character) before the async call.
 		["updateActor", hooks.on("updateActor", (actor, changes, options, userId) => {
-			onUpdateHost(actor, changes, options, userId).catch(err => console.error("Stonetop | Bodysnatcher could not mirror the host's damage", err));
-			onUpdateGhost(actor, changes, options, userId).catch(err => console.error("Stonetop | Bodysnatcher could not end a possession", err));
+			if (options?.[HOST_HP_LOST_OPTION]) {
+				onUpdateHost(actor, changes, options, userId).catch(err => console.error("Stonetop | Bodysnatcher could not mirror the host's damage", err));
+			}
+			if (actor?.type === "character" && storedHost(actor)) {
+				onUpdateGhost(actor, changes, options, userId).catch(err => console.error("Stonetop | Bodysnatcher could not end a possession", err));
+			}
 		})],
 	];
 	return () => { for (const [name, id] of ids) hooks.off(name, id); };

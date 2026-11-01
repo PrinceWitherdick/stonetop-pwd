@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { readRepo } from "../../fakes/css.js";
 import {
-	DEATHS_DOOR_ARCANA, dictatedFates, heldDeathsDoorDictates, suggestedDictate,
+	DEATHS_DOOR_ARCANA, dictatedFates, heldDeathsDoorDictates,
 } from "../../../module/actors/character/deaths-door-arcana.js";
 
 // GM-1: a held arcanum whose marked Consequence decides the Death's Door 6-. Read off the shipped cards' own
@@ -79,8 +79,8 @@ describe("deaths-door-arcana: which fate a held arcanum dictates", () => {
 		};
 		const both = dictatedFates([SPHERE, EFFIGY], boxes);
 		expect(both.map(d => d.slug)).toEqual(["redwood-effigy", "norubas-ice-sphere"]);
-		expect(suggestedDictate(both).insert).toBe("revenant");
-		expect(suggestedDictate([])).toBeNull();
+		// The window suggests the first (DeathsDoorDialog#_dictatedData).
+		expect(both[0].insert).toBe("revenant");
 	});
 });
 

@@ -328,7 +328,7 @@ export function registerAutoOpenForCleanup() {
  * host too), the manifestation, a Death's Door or Undeath roll in progress, Undying's kept-HP stamp, and a
  * swap's pending moves marker (the copy is not repaired from it; its moves came across as they were). PURE.
  */
-export function liveInsertRecordsDropped(data) {
+function liveInsertRecordsDropped(data) {
 	const flags = data?.flags?.[STONETOP_SCOPE];
 	if (!flags || typeof flags !== "object") return {};
 	const base = `flags.${STONETOP_SCOPE}`;

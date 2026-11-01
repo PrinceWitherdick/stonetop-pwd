@@ -2043,6 +2043,11 @@ describe("StonetopCharacterSheet._onDropPlaybook", () => {
 				{ slug: "nightkin", label: "Nightkin", marked: false },
 			]);
 			char.woundRecords = () => [{ id: "m1", text: "Permanently maimed: lost a hand", status: "permanent" }];
+			// StonetopCharacter's own rules, over the stub's records.
+			char.loreDroppedBySwap = vi.fn(async () => new Set());
+			char.healWoundsUpdate = ids => ({
+				"system.attributes.wounds": char.woundRecords().map(w => (ids.includes(w.id) ? { ...w, healed: true } : w)),
+			});
 			char.applyUpdate = vi.fn(async () => {});
 			return { actor, sheet, char };
 		}

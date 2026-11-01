@@ -4,7 +4,7 @@ import { WorldSetupDialog } from "../dialogs/WorldSetupDialog.js";
 import { PosterMapScenesDialog } from "../dialogs/PosterMapScenesDialog.js";
 import {
 	needsJournalSeed, needsJournalSync, seedCompendiumJournalsOnce, restampSeededJournalSources,
-	planJournalSync, applyJournalSync, syncSeededFolderColors, unnestSeededWorldRootOnce,
+	planJournalSync, applyJournalSync, syncSeededFolderColors, unnestSeededWorldRootOnce, keptEditsText,
 } from "./SeedCompendiums.js";
 import { openProgressNotification } from "../utils/progress-notification.js";
 import { needsBestiaryActorSeed, seedBestiaryActorsOnce, collapseBestiaryActorSubfoldersOnce } from "./SeedActors.js";
@@ -214,10 +214,9 @@ export function runWorldSetup() {
 	// lane is NARRATED — each of these chains carries one-time repairs and per-version syncs
 	// (the journal update channel, the retired-folder un-nest, the Bestiary tree collapse)
 	// that an already-seeded world still needs, and every call self-guards.
-	// Filled in by the journal chain with the update window's closing, when it opens one, so the
+	// The journal chain settles to the update window's closing, when it opened one, so the
 	// finishing pass can wait for that window too before it asks the GM anything.
-	const updateWindow = { closed: null };
-	const journals = runArtAndJournals(dialog, { narrateSeed: pending.journals, syncingJournals, updateWindow });
+	const journals = runArtAndJournals(dialog, { narrateSeed: pending.journals, syncingJournals });
 	const monsters = runLane(pending.monsters ? dialog : null, STEP_DEFS.monsters, async report => {
 		// The seed is once-per-world; the collapse is a one-time repair for worlds seeded
 		// under the old deep folder tree, so it has to keep running on already-seeded worlds
@@ -243,7 +242,7 @@ export function runWorldSetup() {
 	});
 
 	void Promise.allSettled([journals, monsters, treasures])
-		.then(() => runFinishingTouches(dialog, updateWindow))
+		.then(([chain]) => runFinishingTouches(dialog, chain.value?.updateClosed))
 		.catch(err => error("World setup: the finishing pass failed", err));
 
 	return journals;
@@ -266,7 +265,7 @@ export function runWorldSetup() {
 // reverse. They stay in one function, and in this order, because the order is load-bearing.
 // The restamp has to precede the sync (it puts back the compendiumSource stamps the sync keys
 // on), and the un-nest has to precede the recolour (which matches folders by top-level name).
-async function runArtAndJournals(dialog, { narrateSeed, syncingJournals, updateWindow = {} } = {}) {
+async function runArtAndJournals(dialog, { narrateSeed, syncingJournals } = {}) {
 	await runLane(dialog, STEP_DEFS.art, async () => {
 		const result = await reapplyBook2ArtOnVersionChange();
 		if (!result) return { skip: "No imported book art found: you can import it later" };
@@ -332,9 +331,7 @@ async function runArtAndJournals(dialog, { narrateSeed, syncingJournals, updateW
 		// purpose, so the next load retries it. That is a failed step, not a finished one, and
 		// the row has to say so or the GM is told a write landed that did not.
 		if (!sync?.stamped) throw new Error("journal baselines were not stamped; the next load will retry");
-		const kept = plan?.keptEdits.length
-			? `; kept your edits in ${plan.keptEdits.length} (the latest is in the compendium)`
-			: "";
+		const kept = plan?.keptEdits.length ? `; ${keptEditsText(plan.keptEdits.length)}` : "";
 		return sync.updated.length
 			? `Updated ${countOf(sync.updated.length, "journal")}${kept}`
 			: `Your journals are up to date with this release${kept}`;
@@ -347,10 +344,11 @@ async function runArtAndJournals(dialog, { narrateSeed, syncingJournals, updateW
 	}
 
 	// The update window narrates this one lane and nothing else, so it closes as soon as the lane
-	// settles rather than waiting on the finishing pass. Not awaited here: the ready flow awaits
-	// this function on an established world, and the window's closing beat is no reason to hold
-	// it. The finishing pass does wait for it, before it offers the GM anything.
-	updateWindow.closed = updateDialog?.finish() ?? null;
+	// settles rather than waiting on the finishing pass. Not awaited here, and handed back inside an
+	// object so that awaiting this function does not wait on it either: the ready flow awaits this
+	// on an established world, and the window's closing beat is no reason to hold it. The finishing
+	// pass does wait for it, before it offers the GM anything.
+	return { updateClosed: updateDialog?.finish() ?? null };
 }
 
 // The window an established world sees after an update that changed some of its journals: one
@@ -382,7 +380,7 @@ function openJournalUpdateWindow(plan) {
  *  3. the poster-map offer, which is a dialog, so it waits for the progress window to be
  *     off the screen before asking anything.
  */
-async function runFinishingTouches(dialog, updateWindow = {}) {
+async function runFinishingTouches(dialog, updateClosed = null) {
 	// The self-heal has just walked every durable art directory, so it already knows whether
 	// the GM has any art at all — it returns null when the folder is empty. Passing that on
 	// saves the map offer a browse of its own on every load of a world with no imported art.
@@ -426,7 +424,7 @@ async function runFinishingTouches(dialog, updateWindow = {}) {
 	// so the map offer never lands on top of it. The same goes for the update window an
 	// established world may have up instead.
 	await dialog?.finish();
-	await updateWindow.closed;
+	await updateClosed;
 	await offerPosterMapScenesOnce({ artOnDisk });
 }
 
@@ -465,7 +463,7 @@ export async function offerPosterMapScenesOnce({ artOnDisk = null } = {}) {
 	// createPosterMapScenes has always reported per map; until now nothing was listening, so
 	// the only feedback was a toast that faded after five seconds while the work ran on.
 	const bar = openProgressNotification(
-		`Stonetop: building ${chosen.length} map scene${chosen.length === 1 ? "" : "s"}`,
+		`Stonetop: building ${countOf(chosen.length, "map scene")}`,
 		{ delayMs: 0 }
 	);
 	let result;
@@ -481,7 +479,7 @@ export async function offerPosterMapScenesOnce({ artOnDisk = null } = {}) {
 	bar.close();
 	const built = result.created + result.updated;
 	if (built) {
-		ui.notifications?.info(`Stonetop: ${result.created} map scene${result.created === 1 ? "" : "s"} created`
+		ui.notifications?.info(`Stonetop: ${countOf(result.created, "map scene")} created`
 			+ `${result.updated ? `, ${result.updated} refreshed` : ""}`
 			+ `${result.pins ? `, ${result.pins} village pins placed` : ""}`
 			+ `${result.markers ? `, ${result.markers} places marked` : ""}.`);

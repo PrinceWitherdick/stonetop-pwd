@@ -2664,7 +2664,6 @@
       "forcedOut": "Forced out: mark a consequence",
       "forcedOutTitle": "Bodysnatcher: forced out",
       "forcedOutAsk": "<p>{host} forces you from their body. Which consequence do you mark? You'll never be able to possess them again.</p>",
-      "forcedOutMark": "Mark {name}",
       "forcedOutLine": "{name} is forced from {host}'s body and marks the consequence {consequence}. They can never possess {host} again.",
       "forcedOutNoneLeft": "{name} is forced from {host}'s body. Every consequence is already marked, so it can't be paid: the GM rules. They can never possess {host} again.",
       "noFavor": "Not enough Favor held to spend.",

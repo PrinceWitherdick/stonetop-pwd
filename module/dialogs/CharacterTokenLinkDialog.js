@@ -1,5 +1,6 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { driftSummary } from "../migration/link-character-tokens.js";
+import { plural } from "../utils/plural.js";
 
 // ── CharacterTokenLinkDialog ─────────────────────────────────────────────────
 // "This token and this character have both been played. Which one is the character?"
@@ -117,7 +118,7 @@ export class CharacterTokenLinkDialog extends StonetopDialog {
 		const note = root?.querySelector?.(".stonetop-token-link-outstanding");
 		if (note) {
 			note.textContent = outstanding
-				? `Choose for ${outstanding} more ${outstanding === 1 ? "character" : "characters"}.`
+				? `Choose for ${outstanding} more ${plural(outstanding, "character")}.`
 				: "";
 		}
 	}

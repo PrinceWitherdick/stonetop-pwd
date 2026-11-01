@@ -24,6 +24,7 @@ import { privateMessageModeOptions, deletionEntry } from "./foundry-compat.js";
 import { CRITICAL_TOTAL, ROLLED_FLAG, rolledRecord, countedNote, cardCountedTier, cardTierNow, outcomeTier } from "./counted-tier.js";
 import { SEASONAL_GAINS } from "../dialogs/spring-burst-data.js";
 import { seasonStamp } from "../seasons/campaign-year.js";
+import { plural } from "./plural.js";
 
 // What a miss is worth (Book I p.209: "a tick mark that raises your total by 1"). Named because
 // the mark and the Undo that takes it back have to agree, and a card stamped by one number and
@@ -744,7 +745,7 @@ function _woundJustifyNotice(actor) {
 	return cardNoticeHtml({
 		className: "stonetop-roll-wound-justify-notice",
 		icon: "fa-droplet",
-		title: items.length === 1 ? "Problematic wound" : "Problematic wounds",
+		title: `Problematic ${plural(items.length, "wound")}`,
 		lead: WOUND_JUSTIFY_LEAD,
 		items,
 	});

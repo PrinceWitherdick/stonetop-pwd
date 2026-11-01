@@ -158,6 +158,7 @@ import {openBolster, bolsterCardData} from "./bolster.js";
 import {inOverYourHeadCardHtml} from "./would-be-hero-cards.js";
 import {pickPersonOnMap} from "../../dialogs/RelationshipLinkDialog.js";
 import {readyRulebookIcon, openSharedRulebook} from "../../books/rulebook-icons.js";
+import { countOf, plural } from "../../utils/plural.js";
 
 /**
  * The one book a PLAYER's sheet offers. Book I is the rules they play by; Book II is the
@@ -649,6 +650,21 @@ function _toggleGlyphKeys(keys, on, editable) {
  */
 function _recoverHealBase(snapshot) {
 	return snapshot.inventory.outfit.smallItemLimit;
+}
+
+/**
+ * What a rest (Recover, Convalesce) would see to of the character's own, off `snapshot`: their active
+ * debilities, their open wounds, and the marked tracks that `clears` (background-tracks.js#CLEARS_ON)
+ * empties. All empty for the Unliving: a Ghost or a Revenant gains nothing from either, and only the
+ * followers who rest with them do (the user's ruling, 2026-10-27).
+ */
+function _ownRestNeeds(snapshot, { unliving = false, clears = null } = {}) {
+	if (unliving) return { debilities: [], openWounds: [], tracks: [] };
+	return {
+		debilities: (snapshot.debilities ?? []).filter(d => d.active),
+		openWounds: (snapshot.wounds ?? []).filter(w => !w.healed),
+		tracks:     clears ? snapshotTracksClearedBy(snapshot, clears).filter(t => t.marked) : [],
+	};
 }
 
 /**
@@ -2846,7 +2862,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					],
 					traitChoices: acTraitChoices,
 					// Options the allowance still owes (a Magnificent Specimen taken since the build).
-					traitsNote:   unpicked ? `${unpicked} option${unpicked === 1 ? "" : "s"} unpicked` : null,
+					traitsNote:   unpicked ? `${countOf(unpicked, "option")} unpicked` : null,
 					hpSlug:       "",
 					hpMax,
 					hpCurrent:    _clampHp(hpRaw, hpMax),
@@ -6804,9 +6820,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				// A Revenant becoming a Ghost (the Pale Hunter's "linger on") is asked what Undying's swap asks:
 				// what is lost, the maimings, then a fresh first Consequence (audit GM-3). A no writes nothing.
 				if (slug === "ghost" && target.postDeathSlug === "revenant") {
-					await swapRevenantForGhost(target, slug, {
-						openChoices: carried => DeathsDoorDialog.openChoices(target, () => sheet.render(false), { carried, taken: "undying" }),
-					});
+					const swap = await swapRevenantForGhost(target, slug);
+					if (swap) await DeathsDoorDialog.openChoices(target, () => sheet.render(false), { carried: swap.carried, taken: "undying" });
 				} else {
 					await target.setPostDeathInsert(slug);
 				}
@@ -8932,7 +8947,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (larder && isRoll !== "1") {
 					postMoveToChat(this.actor, "Provisions", [
 						{ label: name || "Harvested",
-						  value: `+${uses} ${uses === 1 ? "use" : "uses"} (${larder.held} in the pack)` },
+						  value: `+${countOf(uses, "use")} (${larder.held} in the pack)` },
 					]);
 				}
 				this.render(false);
@@ -12711,7 +12726,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			const locked = !!this.actor.getFlag(STONETOP_SCOPE, "recover.spent");
 			// Their own HP: not once the Recover is spent, nor at full HP.
 			const self      = !unliving && canPay && !locked && hp.value < hp.max;
-			const debilities = unliving ? [] : (snapshot.debilities ?? []).filter(d => d.active);
+			const { debilities } = _ownRestNeeds(snapshot, { unliving });
 			// Nothing to heal, only a debility to tend: straight to that (p.78), which needs none of the above.
 			if (!self && !bodies.length) {
 				if (debilities.length) this._onTendDebility();
@@ -13115,12 +13130,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (unliving && !bodies.length) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.convalesce.unlivingHint"));
 			const snapshot = await this._stonetopCharacter.buildSnapshot();
 			const hp = snapshot.vitals.hp;
-			const activeDebilities = unliving ? [] : (snapshot.debilities ?? []).filter(d => d.active);
-			const openWounds = unliving ? [] : (snapshot.wounds ?? []).filter(w => !w.healed);
+			// Auspicious Birth's track among them: "Clear it when you Make Camp or Convalesce."
+			const { debilities: activeDebilities, openWounds, tracks } = _ownRestNeeds(snapshot, { unliving, clears: CLEARS_ON.CONVALESCE });
 			const healable   = openWounds.filter(w => w.status !== "permanent");
 			const permanent  = openWounds.filter(w => w.status === "permanent");
-			// Auspicious Birth: "Clear it when you Make Camp or Convalesce."
-			const tracks     = unliving ? [] : snapshotTracksClearedBy(snapshot, CLEARS_ON.CONVALESCE).filter(t => t.marked);
 			// The same "anything left to do" the card asks (_buildConvalesceData): a planned permanent
 			// injury is listed below for its note, but does not open the window on its own.
 			const outstanding = openWounds.filter(_woundKeepsConvalesceOpen);
@@ -13136,7 +13149,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					: `<li>HP already full.</li>`;
 			const debilityRow = unliving ? ""
 				: activeDebilities.length
-					? `<li>Clear ${activeDebilities.length === 1 ? "debility" : "debilities"}: <strong>${_esc(activeDebilities.map(d => d.name).join(", "))}</strong>.</li>`
+					? `<li>Clear ${plural(activeDebilities.length, "debility", "debilities")}: <strong>${_esc(activeDebilities.map(d => d.name).join(", "))}</strong>.</li>`
 					: `<li>No debilities marked.</li>`;
 			const trackRow = tracks.length
 				? `<li>Clear <strong>${_esc(tracks.map(t => t.name).join(", "))}</strong>.</li>`
@@ -13260,7 +13273,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (newHp > oldHp)       rows.push({ label: "HP", value: `${oldHp} → ${newHp} (+${newHp - oldHp})` });
 			if (debilities.length)   rows.push({ label: "Debilities cleared", value: debilities.map(d => d.name).join(", ") });
 			if (tracks.length)       rows.push({ label: "Cleared", value: tracks.map(t => t.name).join(", ") });
-			if (healedNames.length)  rows.push({ label: healedNames.length === 1 ? "Wound healed" : "Wounds healed", value: healedNames.join(", ") });
+			if (healedNames.length)  rows.push({ label: `${plural(healedNames.length, "Wound")} healed`, value: healedNames.join(", ") });
 			// The followers who rested with them, back to their max through the one follower HP writer.
 			const followerRow = followers?.length ? followerRestRow(await restFollowers(this.actor, followers, { moveName: "Convalesce" })) : null;
 			if (followerRow)         rows.push(followerRow);

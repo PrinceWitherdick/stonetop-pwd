@@ -198,11 +198,11 @@ describe("VL-1: a window left waiting never rolls or pays a second time", () => 
 	it("the fork to the Ghost, confirmed after the move was settled elsewhere, swaps nothing", async () => {
 		const { actor, char } = makeUndead("revenant");
 		const dialog = await landed(char, "failure");
-		dialog._insertRepo = new FakePostDeathInsertRepository(INSERTS);
 		dialog._openChoices = vi.fn(async () => {});
-		dialog._confirmGhost = vi.fn(async () => {
+		// The question is answered yes, after the move was settled from another window while it was up.
+		stubConfirm(true).mockImplementationOnce(async () => {
 			actor.flags["stonetop-pwd"].deathsDoor = DEATHS_DOOR_STATE.OUT_OF_ACTION;
-			return true;
+			return "yes";
 		});
 		await dialog._onAlternative("ghost");
 		expect(flag(actor, "postDeathInsert").slug).toBe("revenant");
@@ -377,7 +377,6 @@ describe("RV-5 and RV-4: the fork to the Ghost asks first, and asks after the ma
 			counts: { "consequences:breakdown": 1, "consequences:carrion-stench": 1 },
 		});
 		const dialog = await landed(char, "failure");
-		dialog._insertRepo = new FakePostDeathInsertRepository(INSERTS);
 		dialog._openChoices = vi.fn(async () => {});
 		const wait = stubConfirm(false);
 
@@ -398,15 +397,15 @@ describe("RV-5 and RV-4: the fork to the Ghost asks first, and asks after the ma
 			{ id: "w2", text: "Broken rib", status: "problematic" },
 		];
 		const dialog = await landed(char, "failure");
-		dialog._insertRepo = new FakePostDeathInsertRepository(INSERTS);
 		dialog._openChoices = vi.fn(async () => {});
-		dialog._confirmGhost = vi.fn(async () => true);
-		dialog._askHealMaimings = vi.fn(async () => true);
+		// Yes to the swap, then yes to the maimings.
+		const wait = stubConfirm(true);
 
 		await dialog._onAlternative("ghost");
 
 		expect(flag(actor, "postDeathInsert").slug).toBe("ghost");
-		expect(dialog._askHealMaimings).toHaveBeenCalledWith(1);
+		expect(wait).toHaveBeenCalledTimes(2);
+		expect(wait.mock.calls[1][0].content).toContain("Undying left 1 permanent maiming(s)");
 		const wounds = actor.system.attributes.wounds;
 		expect(wounds.find(w => w.id === "m1").healed).toBe(true);
 		expect(wounds.find(w => w.id === "w2").healed).toBe(false);

@@ -9,7 +9,7 @@
 // nor off the HP (healed in between, or not), so the walkthrough says so: UndeathDialog stamps
 // UNDEATH_KEPT_HP_FLAG in the same write that takes them out of the action, and the return lifts it.
 import { STONETOP_SCOPE, resolvedFlagProperty } from "./StonetopFlags.js";
-import { deletionEntry } from "../../utils/foundry-compat.js";
+import { deletionUpdate } from "../../utils/foundry-compat.js";
 import { format } from "../../utils/i18n.js";
 import { escHtml } from "../../utils/strings.js";
 import { DEATHS_DOOR_STATE, halfMaxHp } from "./deaths-door.js";
@@ -41,7 +41,7 @@ export function returnHp({ hpNow = 0, maxHp = 0, keepsHp = false } = {}) {
 export function keptHpUpdate(actor, on) {
 	const path = `flags.${STONETOP_SCOPE}.${UNDEATH_KEPT_HP_FLAG}`;
 	if (on) return { [path]: true };
-	return actor && resolvedFlagProperty(actor, UNDEATH_KEPT_HP_FLAG) ? Object.fromEntries([deletionEntry(path)]) : {};
+	return actor && resolvedFlagProperty(actor, UNDEATH_KEPT_HP_FLAG) ? deletionUpdate(path) : {};
 }
 
 /** The nonce prefix an Undeath roll's marker carries (dialogs/UndeathDialog.js), so a Death's Door one is never taken for it. */

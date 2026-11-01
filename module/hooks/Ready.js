@@ -65,7 +65,7 @@ import { rollMoveFromUuid } from "./HotbarDrop.js";
 import { ensureThreatsEntry } from "../threats/threat-store.js";
 import { ensureHazardsEntry } from "../hazards/hazard-store.js";
 import { STONETOP_SCOPE, ITEM_FLAG_SCOPE, resolvedFlagProperty, resolvedFlags } from "../actors/character/StonetopFlags.js";
-import { deletionEntry, hookOrTimeout } from "../utils/foundry-compat.js";
+import { deletionEntry, deletionUpdate, hookOrTimeout } from "../utils/foundry-compat.js";
 import { SHARED_WITH_TABLE_FLAG, SHARED_SHEETS_ADOPTION_SWEEP, SHARED_SHEETS_UPDATE_OPTION, sharedSheetAdoptions, sharedSheetChanges, sharedSheetLevel } from "../actors/character/shared-sheets.js";
 import { inTurn } from "../utils/turn-queue.js";
 import { markPosterMapScenes } from "../book2-art/poster-maps.js";
@@ -95,6 +95,7 @@ import { refreshCatalogFollowers } from "../migration/follower-refresh.js";
 import { refreshInstincts } from "../migration/instinct-refresh.js";
 import { splitFollowerWholeParty, FOLLOWER_WHOLE_PARTY_SWEEP } from "../migration/follower-whole-party.js";
 import { linkFollowerTokens, LINK_FOLLOWER_TOKENS_SWEEP } from "../migration/link-follower-tokens.js";
+import { countOf, plural } from "../utils/plural.js";
 
 const _EOS_MACRO_NAME   = "End of Session";
 const _EOS_MACRO_IMG    = "systems/stonetop-pwd/assets/icons/macros/truce.svg";
@@ -576,7 +577,7 @@ export async function onReady() {
 		// has no button, and a toast that fades after five seconds while a 140-image job runs on
 		// is the exact thing the notification bar exists for. No delay: the caller just asked.
 		const bar = openProgressNotification(
-			`Stonetop: rebuilding ${todo} picture${todo === 1 ? "" : "s"}`, { delayMs: 0 });
+			`Stonetop: rebuilding ${countOf(todo, "picture")}`, { delayMs: 0 });
 		let res;
 		try {
 			res = await runBookArtRebuild({
@@ -1804,7 +1805,7 @@ export async function _migrateArmourToArmor() {
 	// retry behind it: see _updateActorsBatched for both reasons.
 	await _updateActorsBatched(
 		staleActors,
-		() => Object.fromEntries([deletionEntry("system.attributes.armour")]),
+		() => deletionUpdate("system.attributes.armour"),
 		"armour key drop",
 	);
 }
@@ -2240,7 +2241,7 @@ function _offerPartialArtImportOnce() {
 }
 
 function _buildPartialArtImportContent(missing, total) {
-	const pictures = missing === 1 ? "picture" : "pictures";
+	const pictures = plural(missing, "picture");
 	return stonetopChatCard(
 		"Finish Your Art Import",
 		`<div class="stonetop-roll-card-description">

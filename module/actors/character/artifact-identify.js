@@ -19,6 +19,8 @@
 // on their own; the sheet does the DOM, the rolls and the document writes. Arcana are the
 // SEPARATE ladder on p.440 (see arcana-identify.js) — this one never touches an arcanum.
 
+import { countOf } from "../../utils/plural.js";
+
 /**
  * An artifact's identification state, stored on the item as `system.identifyState`.
  *
@@ -167,7 +169,7 @@ export function knowThingsArtifactResults() {
 export function seekInsightArtifactResults(bonuses = []) {
 	const plus = bonuses.reduce((sum, b) => sum + (Number(b?.plus) || 0), 0);
 	const floor = bonuses.reduce((most, b) => Math.max(most, Number(b?.missFloor) || 0), 0);
-	const questions = n => `${n} question${n === 1 ? "" : "s"} about the artifact from the list. They answer honestly and helpfully.`;
+	const questions = n => `${countOf(n, "question")} about the artifact from the list. They answer honestly and helpfully.`;
 	const act = "Take advantage on your next move to act on the answers.";
 	return {
 		success: `Ask the GM ${questions(3 + plus)} ${act}`,

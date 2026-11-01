@@ -13,6 +13,7 @@
 
 import { readableFlags } from "./StonetopFlags.js";
 import { customGroupPresent, groupFollowerMembers } from "../../utils/crew.js";
+import { isLoreFollowerRecord } from "./insert-lore.js";
 
 /** Each follower kind's answer while its toggle has never been touched. */
 export const FOLLOWER_PARTY_DEFAULTS = Object.freeze({
@@ -94,14 +95,6 @@ const DOG_GLYPH = "fas fa-dog";
 /** The type labels data/beasts.js#followerInputFromBeast gives a custom follower made from a beast. */
 const BEAST_TYPE_LABELS = new Set(["beast follower", "livestock"]);
 
-/**
- * The `sourceUuid` every card a post-death insert's lore option makes starts with (post-death-moves.js
- * #LORE_FOLLOWERS): a Revenant's vermin, who live in its corpse and are "tiny" critters ("small critters
- * don't need much food", p.304), and a Thrall's tentacle, called up out of the water. Neither eats from
- * a pack, the vermin group included.
- */
-const LORE_FOLLOWER_SOURCE = "post-death:";
-
 /** Whether a follower is an animal that feeds itself (see above), eating nothing from a pack. PURE. */
 export function followerFeedsItself(flags, follower) {
 	switch (follower?.ftype) {
@@ -109,7 +102,11 @@ export function followerFeedsItself(flags, follower) {
 		case "beast":            return (follower.slug ?? "") !== FED_BEAST_SLUG;
 		case "custom": {
 			const record = flags?.customFollowers?.[follower.slug];
-			if (String(record?.sourceUuid ?? "").startsWith(LORE_FOLLOWER_SOURCE)) return true;
+			// A card a post-death insert's lore option made (insert-lore.js#isLoreFollowerRecord): a Revenant's
+			// vermin, who live in its corpse and are "tiny" critters ("small critters don't need much food",
+			// p.304), and a Thrall's tentacle, called up out of the water. Neither eats from a pack, the vermin
+			// group included.
+			if (isLoreFollowerRecord(record)) return true;
 			if (!record || record.isGroup) return false;
 			// The beast it was made from, when it says; renaming it or changing its portrait changes nothing.
 			if (record.beastSlug) return record.beastSlug !== FED_BEAST_SLUG;

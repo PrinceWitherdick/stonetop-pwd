@@ -25,6 +25,7 @@ vi.mock("../../module/hooks/SeedCompendiums.js", () => ({
 	applyJournalSync: (...a) => applyJournalSync(...a),
 	syncSeededFolderColors: async () => {},
 	unnestSeededWorldRootOnce: async () => {},
+	keptEditsText: n => `kept your edits in ${n} (the latest is in the compendium)`,
 }));
 vi.mock("../../module/utils/progress-notification.js", () => ({ openProgressNotification: (...a) => openProgressNotification(...a) }));
 vi.mock("../../module/hooks/SeedActors.js", () => ({

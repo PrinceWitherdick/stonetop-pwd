@@ -34,6 +34,8 @@ describe("opening the 0-HP walkthrough over the sheet", () => {
 		await vi.advanceTimersByTimeAsync(250);
 		await opening;
 		expect(order).toEqual(["render called", "sheet drawn", "walkthrough"]);
+		// An AppV1 ActorSheet's render hooks stop at "ActorSheet" (its baseApplication): no renderApplication.
+		expect(bus.on.mock.calls.map(([name]) => name)).toEqual(["renderActorSheet"]);
 		expect(bus.count()).toBe(0);
 	});
 

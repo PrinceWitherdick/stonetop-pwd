@@ -180,6 +180,32 @@ describe("a window that keeps its reader's place", () => {
 		expect(next.column.scrollTop).toBe(0);
 	});
 
+	// Death's Door: the walkthrough's body scrolls on every step but the last, the rail sheet's panel on that one.
+	it("keeps each of several columns on its own, whichever of them is drawn", async () => {
+		const OTHER = ".deaths-door-choices-main";
+		class Two extends Kept { get _keptScrollSelector() { return [COLUMN, OTHER]; } }
+		/** A draw holding the first column, and the second where `otherTop` is given. */
+		const both = (top, otherTop) => {
+			const d = draw([], top);
+			const other = otherTop == null ? null : { scrollTop: otherTop };
+			const query = d.root.querySelector;
+			d.root.querySelector = sel => (sel === OTHER ? other : query(sel));
+			return { ...d, other };
+		};
+		const first = both(240, 90);
+		const next  = both(0, 0);
+		const app = redrawing(new Two(), first, next);
+		app.setPosition = vi.fn();
+		await app._render(false, {});
+		expect(next.column.scrollTop).toBe(240);
+		expect(next.other.scrollTop).toBe(90);
+
+		// The second column gone from the fresh draw: the first is kept all the same.
+		const after = both(0);
+		await redrawing(app, both(120, 30), after)._render(false, {});
+		expect(after.column.scrollTop).toBe(120);
+	});
+
 	it("finds the control by the window's own selector where it overrides one", async () => {
 		class ByField extends Kept {
 			_focusSelector(el) { return `[data-field="${el.getAttribute("data-field")}"]`; }
@@ -264,7 +290,7 @@ describe("a column that is hidden at the redraw", () => {
 		first.column.scrollTop = 240;
 		first.column.onScroll();
 		first.column.hidden = true;
-		expect(app._readPlace().scrolled).toBe(240);
+		expect(app._readPlace().columns[0].top).toBe(240);
 	});
 });
 

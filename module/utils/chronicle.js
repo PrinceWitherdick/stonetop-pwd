@@ -32,6 +32,7 @@ import {
 	EXPEDITIONS_JOURNAL_NAME,
 	EXPEDITION_PAGE_KEY_PREFIX,
 } from "./chronicle-core.js";
+import { countOf } from "./plural.js";
 
 // Shape the roster for the compiler: player characters in the order the introductions went
 // around the table, with any PC that order does not mention appended in roster order, so every
@@ -220,8 +221,8 @@ export async function writeChronicle({ silent = false, adoptLegacyKeys = null } 
 	}
 
 	const parts = [];
-	if (created) parts.push(`added ${created} ${created === 1 ? "page" : "pages"}`);
-	if (updated) parts.push(`updated ${updated} ${updated === 1 ? "page" : "pages"}`);
+	if (created) parts.push(`added ${countOf(created, "page")}`);
+	if (updated) parts.push(`updated ${countOf(updated, "page")}`);
 	const keptNote = kept
 		? `${kept} ${kept === 1 ? "section was" : "sections were"} left as edited in the journal`
 		: "";

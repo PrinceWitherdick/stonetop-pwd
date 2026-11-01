@@ -149,26 +149,17 @@ describe("markNotLethal: out of the action, with no Door to face", () => {
 });
 
 describe("markDyingByFiat: sent to the Door at 0 HP", () => {
-	it("writes dying, naming the move, and drops a Hard to Kill trade the last brush left open", async () => {
+	// The last brush's leftovers (a Hard to Kill trade, a roll marker: audit VL-2) are lifted by the preUpdate this
+	// write passes through, as on the HP path: see DeathsDoorPromptState.test.js, "a write that names dying".
+	it("writes dying in one write, naming the move", async () => {
 		const actor = pc({ flags: { deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION, hardToKillTrade: true } });
 
 		expect(await markDyingByFiat(actor)).toBe(true);
 
-		const [data, options] = actor.update.mock.calls[0];
-		expect(data).toMatchObject({ [`flags.${SCOPE}.deathsDoor`]: DEATHS_DOOR_STATE.DYING, [`flags.${SCOPE}.-=hardToKillTrade`]: null });
-		expect(options).toEqual({ stonetopMove: "Death's Door" });
-	});
-
-	// Audit VL-2 (2026-10-28): a roll marker the last brush left (an Undying or Dark Succor roll stamped as the GM
-	// ruled it not lethal) goes in the same write, as it does when hit points send them down.
-	it("lifts a roll marker left over from the last brush with death", async () => {
-		const actor = pc({ flags: {
-			deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION,
-			deathsDoorRolling: { userId: "u1", nonce: "undeath:old", tier: "failure", total: 4 },
-		} });
-		await markDyingByFiat(actor);
 		expect(actor.update).toHaveBeenCalledTimes(1);
-		expect(actor.update.mock.calls[0][0]).toMatchObject({ [`flags.${SCOPE}.-=deathsDoorRolling`]: null });
+		const [data, options] = actor.update.mock.calls[0];
+		expect(data).toMatchObject({ [`flags.${SCOPE}.deathsDoor`]: DEATHS_DOOR_STATE.DYING });
+		expect(options).toEqual({ stonetopMove: "Death's Door" });
 	});
 
 	// Unstoppable: "When you are reduced to 0 HP in battle, you can keep fighting" (Book I p.114). A Heavy put back

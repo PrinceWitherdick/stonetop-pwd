@@ -150,7 +150,7 @@ export async function unnestSeededWorldRootOnce() {
 				await Folder.updateDocuments(children.map(f => ({ _id: f.id, folder: null })));
 			}
 			await world.delete();
-			info(`Un-nested ${children.length} gazetteer tree${children.length === 1 ? "" : "s"} from the "${WORLD_FOLDER_NAME}" folder.`);
+			info(`Un-nested ${countOf(children.length, "gazetteer tree")} from the "${WORLD_FOLDER_NAME}" folder.`);
 		} catch (err) {
 			error(`Failed to un-nest the seeded "${WORLD_FOLDER_NAME}" folder:`, err);
 			return; // leave the flag unset so the next load retries
@@ -313,7 +313,7 @@ export async function syncSeededFolderColors() {
 	if (updates.length) {
 		try {
 			await Folder.updateDocuments(updates);
-			info(`Coloured ${updates.length} seeded gazetteer folder${updates.length === 1 ? "" : "s"}.`);
+			info(`Coloured ${countOf(updates.length, "seeded gazetteer folder")}.`);
 		} catch (err) {
 			error("Failed to colour seeded gazetteer folders:", err);
 			return; // leave the signature unstamped so the next load retries
@@ -348,7 +348,7 @@ export async function restampSeededJournalSources() {
 	if (!updates.length) return;
 	try {
 		await JournalEntry.updateDocuments(updates);
-		info(`Restored the compendium-source stamp on ${updates.length} imported journal${updates.length === 1 ? "" : "s"}.`);
+		info(`Restored the compendium-source stamp on ${countOf(updates.length, "imported journal")}.`);
 	} catch (err) {
 		error("Failed to restamp imported journal sources:", err);
 	}
@@ -505,6 +505,11 @@ export async function planJournalSync({ onProgress } = {}) {
 	return { version, refresh, stamps, keptEdits, legacyEdits };
 }
 
+/** What the sync says about the changed journals it left alone because they hold the GM's edits. */
+export function keptEditsText(n) {
+	return `kept your edits in ${n} (the latest is in the compendium)`;
+}
+
 /**
  * The writing half of the version sync: refresh what the plan said to refresh, stamp the
  * baselines, and record this version as done.
@@ -563,7 +568,7 @@ export async function applyJournalSync(plan, { onProgress, notify = true } = {})
 	if (updated.length || keptEdits.length) {
 		const parts = [];
 		if (updated.length) parts.push(`updated ${countOf(updated.length, "journal")}`);
-		if (keptEdits.length) parts.push(`kept your edits in ${keptEdits.length} (latest is in the compendium)`);
+		if (keptEdits.length) parts.push(keptEditsText(keptEdits.length));
 		if (notify) ui.notifications?.info(`Stonetop: ${parts.join("; ")}.`);
 	}
 	if (updated.length || keptEdits.length || legacyEdits.length || failed.length) {

@@ -14,7 +14,7 @@
 // the guard, every builder below refuses anything else, and a test holds it there.
 
 import { SYSTEM_ID } from "../system-id.js";
-import { deletionEntry } from "../utils/foundry-compat.js";
+import { deletionEntry, deletionUpdate } from "../utils/foundry-compat.js";
 import { clipText } from "../utils/strings.js";
 import {
 	RELMAP_BOARD_ASPECT, RELMAP_CAPTION_FLOOR_PX, RELMAP_CAPTION_PX, boardMetrics, clampReach,
@@ -724,7 +724,7 @@ export function dropNodePatch(graph, id) {
 /** Rub out one link. */
 export function dropEdgePatch(id) {
 	if (!isSafeId(id)) return null;
-	return Object.fromEntries([deletionEntry(relmapPath("edges", id))]);
+	return deletionUpdate(relmapPath("edges", id));
 }
 
 /** Rename, recolour or reshape one group. Never its members; see {@link groupMembersPatch}. */
@@ -777,7 +777,7 @@ export function addGroupPatch(id, {
 /** Rub out one group. The people in it stay exactly where they are. */
 export function dropGroupPatch(id) {
 	if (!isSafeId(id)) return null;
-	return Object.fromEntries([deletionEntry(relmapPath("groups", id))]);
+	return deletionUpdate(relmapPath("groups", id));
 }
 
 /**

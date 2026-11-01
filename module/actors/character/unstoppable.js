@@ -29,7 +29,7 @@ import { STONETOP_SCOPE, StonetopFlags, resolvedFlagProperty } from "./StonetopF
 import {
 	DEATHS_DOOR_FLAG, DEATHS_DOOR_STATE, POST_DEATH_INSERT_SLUGS, UNSTOPPABLE, UNSTOPPABLE_FIGHTING_FLAG,
 } from "./deaths-door.js";
-import { deletionEntry } from "../../utils/foundry-compat.js";
+import { deletionUpdate } from "../../utils/foundry-compat.js";
 import { inBattle } from "../../fight/in-battle.js";
 import { ownedLearnedMove, ownsLearnedMoveNamed } from "./owns-move.js";
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
@@ -94,7 +94,7 @@ export function fightsOnWhenDropped(actor, { combats = globalThis.game?.combats 
 /** The update fragment that lifts the "fighting on" stamp: they have stopped fighting. Empty when none is laid. */
 export function stopFightingUpdate(actor) {
 	if (resolvedFlagProperty(actor, UNSTOPPABLE_FIGHTING_FLAG) == null) return {};
-	return Object.fromEntries([deletionEntry(`flags.${STONETOP_SCOPE}.${UNSTOPPABLE_FIGHTING_FLAG}`)]);
+	return deletionUpdate(`flags.${STONETOP_SCOPE}.${UNSTOPPABLE_FIGHTING_FLAG}`);
 }
 
 /** A character whose 0-HP move is Death's Door, with Unstoppable learned. */

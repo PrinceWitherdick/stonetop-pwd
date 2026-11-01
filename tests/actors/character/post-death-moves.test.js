@@ -170,6 +170,22 @@ describe("which updates re-sync", () => {
 		expect(mayMoveLoreMoves({ flags: { [SCOPE]: { readiness: 1 } } })).toBe(false);
 		expect(mayMoveLoreMoves({ system: { attributes: { hp: { value: 3 } } } })).toBe(false);
 	});
+
+	it("counts every spelling of a lore or slug write: dotted, a v13 deletion, the whole namespace as one value", () => {
+		expect(mayMoveLoreMoves({ [`flags.${SCOPE}.postDeathLore.counts.consequences:poltergeist`]: 0 })).toBe(true);
+		expect(mayMoveLoreMoves({ flags: { [SCOPE]: { postDeathLore: { "-=counts": null } } } })).toBe(true);
+		expect(mayMoveLoreMoves({ flags: { [SCOPE]: { postDeathInsert: { "-=slug": null } } } })).toBe(true);
+		expect(mayMoveLoreMoves({ [`flags.${SCOPE}.postDeathInsert`]: null })).toBe(true);
+		expect(mayMoveLoreMoves({ [`flags.${SCOPE}.postDeathLore`]: null })).toBe(true);
+	});
+
+	it("leaves out the insert's other flags, which settling never reads", () => {
+		expect(mayMoveLoreMoves({ flags: { [SCOPE]: { postDeathInsert: { manifest: ["Your touch can harm the living"] } } } })).toBe(false);
+		expect(mayMoveLoreMoves({ flags: { [SCOPE]: { postDeathInsert: { "-=manifest": null } } } })).toBe(false);
+		expect(mayMoveLoreMoves({ flags: { [SCOPE]: { postDeathInsert: { offered: ["consequences:home-to-vermin"] } } } })).toBe(false);
+		expect(mayMoveLoreMoves({ flags: { [SCOPE]: { postDeathInsert: { tether: "my bones" } } } })).toBe(false);
+		expect(mayMoveLoreMoves({ flags: { [SCOPE]: { postDeathInsert: { slugs: "x", slugNote: "x" } } } })).toBe(false);
+	});
 });
 
 // Home to Vermin: "Treat them as followers: group, tiny, gross, meek, stealthy; HP 1 each; Instinct to

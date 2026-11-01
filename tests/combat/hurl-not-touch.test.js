@@ -1,5 +1,5 @@
 // Audit XS-3: Poltergeist's Hurl, "Hurl an object at someone ... deal your damage (forceful)" (Book I p.149), is an
-// object thrown, not the Ghost's touch, so its card's damage button tells rollDamageAt so (`notTouch`), and a manifest
+// object thrown, not the Ghost's touch, so its card's damage button tells rollDamageAt so (the weapon's `notTouch`), and a manifest
 // touch's "ignores armor" stays off it (attack-flow.js#rollAndPostDamage).
 
 import { describe, it, expect, vi } from "vitest";
@@ -36,7 +36,7 @@ describe("Poltergeist's Hurl button", () => {
 		};
 		expect(await pressCardButton(card(), { name: "Wisp", type: "character" }, btn)).toBe(true);
 		expect(rollDamageAt).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-			formula: "d6", label: "Poltergeist: Hurl", keywords: "forceful", notTouch: true,
+			formula: "d6", label: "Poltergeist: Hurl", keywords: "forceful", weapon: expect.objectContaining({ notTouch: true }),
 		}));
 	});
 });

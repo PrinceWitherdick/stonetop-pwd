@@ -22,6 +22,7 @@ import { groupFollowerMembers } from "../../utils/crew.js";
 import { rosterHpUpdate, rosterMemberHp } from "../../fight/group-hits.js";
 import { count } from "../../camp/camp-rules.js";
 import { memberMax } from "../../camp/camp-followers.js";
+import { plural } from "../../utils/plural.js";
 
 /**
  * Every follower body below their max HP, alive, as a list a window can offer: `id` is stable for the
@@ -144,5 +145,5 @@ export async function restFollowers(character, ids, {
 /** The chat row for followers healed by a move, or null when nobody was. */
 export function followerRestRow(healed) {
 	if (!healed?.length) return null;
-	return { label: healed.length === 1 ? "Follower" : "Followers", value: healed.map(h => `${h.name} ${h.from} → ${h.to}`).join("; ") };
+	return { label: plural(healed.length, "Follower"), value: healed.map(h => `${h.name} ${h.from} → ${h.to}`).join("; ") };
 }

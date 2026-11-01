@@ -12,6 +12,9 @@
 
 import { STONETOP_SCOPE, StonetopFlags, resolvedFlagProperty } from "./StonetopFlags.js";
 import { DEATHS_DOOR_FLAG, DEATHS_DOOR_STATE } from "./deaths-door.js";
+import { wornInsertSlug } from "./insert-lore.js";
+import { foldUpdate } from "../../utils/foundry-compat.js";
+import { writtenHp } from "../../utils/written-hp.js";
 
 /** The key, in the insert's own flag namespace (`postDeathInsert`), the picks are kept under. */
 export const MANIFEST_KEY = "manifest";
@@ -31,7 +34,7 @@ const HARMFUL_TOUCH_RE = /\bharm the living\b/i;
 
 /** The options a character is manifest with now, as the move printed them: [] when none. */
 export function manifestedPicks(actor) {
-	if (!actor || resolvedFlagProperty(actor, "postDeathInsert.slug") !== MANIFESTING_INSERT) return [];
+	if (!actor || wornInsertSlug(actor) !== MANIFESTING_INSERT) return [];
 	const stored = resolvedFlagProperty(actor, MANIFEST_PATH);
 	return Array.isArray(stored) ? stored.filter(text => typeof text === "string" && text.trim()) : [];
 }
@@ -70,14 +73,14 @@ export function onPreUpdateActorManifest(actor, changes, options) {
 		// A manifestation recorded in this very write: the extra options' 1d4s can be what drops them.
 		const recording = !!insertChanges && typeof insertChanges === "object" && MANIFEST_KEY in insertChanges;
 		if (!recording && resolvedFlagProperty(actor, MANIFEST_PATH) == null) return;
-		const hp = foundry.utils.getProperty(changes, "system.attributes.hp.value");
+		const hp = writtenHp(changes);
 		const state = foundry.utils.getProperty(changes, `flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`);
-		const down = (hp !== undefined && hp !== null && (Number(hp) || 0) <= 0) || ENDS_MANIFESTATION.has(state);
+		const down = (hp !== null && hp <= 0) || ENDS_MANIFESTATION.has(state);
 		if (!down) return;
 		if (options && typeof options === "object") options[MANIFEST_ENDED_OPTION] = true;
 		if (recording) delete insertChanges[MANIFEST_KEY];
 		if (resolvedFlagProperty(actor, MANIFEST_PATH) == null) return;
-		for (const [key, value] of Object.entries(endManifestUpdateData())) foundry.utils.setProperty(changes, key, value);
+		foldUpdate(changes, endManifestUpdateData());
 	} catch (err) {
 		console.error("Stonetop | could not end a manifestation", err);
 	}

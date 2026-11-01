@@ -99,6 +99,28 @@ describe("onPreUpdateActorDeathsDoor — the state a hit records", () => {
 		expect(changes.flags["stonetop-pwd"]).toHaveProperty(["-=deathsDoorRolling"], null);
 	});
 
+	// The GM's "Mark dying" names the state with no hit points in the write. It is a new brush with death all the
+	// same, so it lifts exactly what going down on hit points lifts (audit VL-2: a landed Undying or Dark Succor
+	// roll's marker would otherwise be resumed).
+	it("lifts the last brush's roll marker, Hard to Kill trade and kept-HP stamp on a write that names dying", () => {
+		const actor = about({
+			deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION,
+			deathsDoorRolling: { userId: "u1", nonce: "undeath:old", tier: "failure", total: 4 },
+			hardToKillTrade: true,
+			undeathKeptHp: true,
+		}, 0);
+		const changes = { flags: { "stonetop-pwd": { deathsDoor: DEATHS_DOOR_STATE.DYING } } };
+
+		onPreUpdateActorDeathsDoor(actor, changes, {});
+
+		expect(changes.flags["stonetop-pwd"]).toMatchObject({
+			deathsDoor: DEATHS_DOOR_STATE.DYING,
+			"-=deathsDoorRolling": null,
+			"-=hardToKillTrade": null,
+			"-=undeathKeptHp": null,
+		});
+	});
+
 	// Nothing walks `dead` back on its own — the raise is asked about, never assumed.
 	it("writes no state change when a dead character is given hit points", () => {
 		const actor = about({ deathsDoor: DEATHS_DOOR_STATE.DEAD }, 0);

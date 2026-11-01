@@ -9,7 +9,6 @@ import { deathsDoorRollMarker, rollMarkerDeletion, setDeathsDoorRollMarker } fro
 import { gainableMarks, markableConsequences } from "../post-death-choices.js";
 import { loseToUnholyVessel, postOutcomeCard } from "../post-death-outcomes.js";
 import { UNDEATH_ROLL_NONCE_PREFIX, isUndeathRollMarker, keptHpUpdate } from "../undeath-return.js";
-import { FoundryPostDeathInsertRepository } from "../repositories/FoundryPostDeathInsertRepository.js";
 import { confirmOutcome } from "../../../utils/ask-with-buttons.js";
 import { DeathsDoorDialog } from "./DeathsDoorDialog.js";
 
@@ -74,7 +73,7 @@ export class UndeathDialog extends StonetopDialog {
 		this._forcedMiss = false;     // Revenant: body destroyed → resolve as a 6-
 		this._tetherDestroyed = false;
 		// Every Consequence already marked, so the move cannot be paid: the GM rules, and may have them
-		// mark the Final Consequence instead. Never ticked for them (_unpayable).
+		// mark the Final Consequence instead. Never ticked for them (_owesExhausted).
 		this._owedFinal = false;
 		this._choices  = {};          // effect kind → chosen option slug / text
 		this._sections = { [_CONSEQUENCES]: [], [_MARKS]: [] };
@@ -192,13 +191,14 @@ export class UndeathDialog extends StonetopDialog {
 			exhausted: this._isExhausted(e.kind),
 		}));
 
+		// _availableCount, off the effects just read, and handed to everything below that needs it.
 		const available = effects.filter(e => !e.exhausted).length;
-		const pick = this._pickCount();
+		const pick = this._pickCount(available);
 		// Unholy Vessel: the move demands a Mark and there is none left to gain. Nothing else is asked.
-		const unholyVessel = this._isUnholyVessel();
-		// Every Consequence already marked and the move owing one (_unpayable): said, with the GM's
+		const unholyVessel = this._owesExhausted("mark-gain", available);
+		// Every Consequence already marked and the move owing one (_owesExhausted): said, with the GM's
 		// way out offered and never taken for them.
-		const unpayable = !unholyVessel && !this._tetherDestroyed && this._unpayable();
+		const unpayable = !unholyVessel && !this._tetherDestroyed && this._owesExhausted("consequence", available);
 		return {
 			moveName:  this._moveName,
 			trigger:   this._character?.zeroHpMove?.trigger ?? "",
@@ -218,7 +218,7 @@ export class UndeathDialog extends StonetopDialog {
 			pickedCount: this._picked.size,
 			// "All 3 apply" is not a choice — say so instead of asking them to tick three boxes.
 			allApply:    pick >= available && available > 0,
-			canApply:    this._canApply(),
+			canApply:    this._canApply(available),
 			unpayable:   unpayable ? {
 				note:  localize(`${_I18N}.unpayable.note`),
 				label: localize(`${_I18N}.unpayable.final`),
@@ -357,20 +357,6 @@ export class UndeathDialog extends StonetopDialog {
 		this._prunePicks();
 	}
 
-	/**
-	 * Unholy Vessel (the Thrall's own move): "When you would gain a Mark but there are none left to gain,
-	 * your humanity is utterly lost. You become a threat in the GM's control. Make a new character."
-	 *
-	 * "Would gain" is the move demanding it: the tier asks for more costs than the others can cover
-	 * without the gain (a 6-'s all three, or a 7-9's two with nothing but the task left), and there
-	 * is no Mark to gain. A 10+ that can be paid with the task never comes here. Before this, the
-	 * exhausted gain was quietly let off (`pick` counts only what is left), so a Thrall who had spent
-	 * every Mark simply could not be lost.
-	 */
-	_isUnholyVessel() {
-		return this._owesExhausted("mark-gain");
-	}
-
 	/** How many of the move's costs still have something left to spend. */
 	_availableCount() {
 		return (this._resolution?.effects ?? []).filter(e => !this._isExhausted(e.kind)).length;
@@ -378,13 +364,25 @@ export class UndeathDialog extends StonetopDialog {
 
 	/**
 	 * Whether the tier owes cost `kind`, which has nothing left to spend, and the move's other costs cannot cover
-	 * it: the shape both Unholy Vessel (_isUnholyVessel) and an unpayable consequence (_unpayable) take.
+	 * it. `available` is _availableCount, for a caller that has it already. It takes two shapes:
+	 *
+	 * "mark-gain" is Unholy Vessel (the Thrall's own move): "When you would gain a Mark but there are none left
+	 * to gain, your humanity is utterly lost. You become a threat in the GM's control. Make a new character."
+	 * "Would gain" is the move demanding it: the tier asks for more costs than the others can cover without the
+	 * gain (a 6-'s all three, or a 7-9's two with nothing but the task left), and there is no Mark to gain. A
+	 * 10+ that can be paid with the task never comes here. Before this, the exhausted gain was quietly let off
+	 * (`pick` counts only what is left), so a Thrall who had spent every Mark simply could not be lost.
+	 *
+	 * "consequence" is a move that cannot be paid: every Consequence is already marked, and the tier owes one
+	 * (Tethered's only cost; Undying's 6-, where all three apply). The book says nothing of this case, so the
+	 * window says the move can't be paid and leaves it to the GM, who may have them mark the Final Consequence
+	 * (the user's ruling, 2026-10-27). Never decided for them.
 	 */
-	_owesExhausted(kind) {
+	_owesExhausted(kind, available = this._availableCount()) {
 		const tier = resolutionTier(this._resolution, this._tierKey);
 		const effects = this._resolution?.effects ?? [];
 		if (!tier || !effects.some(e => e.kind === kind) || !this._isExhausted(kind)) return false;
-		return tier.pick > this._availableCount();
+		return tier.pick > available;
 	}
 
 	/**
@@ -392,28 +390,18 @@ export class UndeathDialog extends StonetopDialog {
 	 * insert has left to give (every consequence already marked, every Mark held), and asking for three
 	 * when only two exist would leave the Apply button dead forever.
 	 */
-	_pickCount() {
+	_pickCount(available = this._availableCount()) {
 		const tier = resolutionTier(this._resolution, this._tierKey);
-		return Math.min(tier?.pick ?? 0, this._availableCount());
+		return Math.min(tier?.pick ?? 0, available);
 	}
 
 	/**
 	 * Whether Apply is live. Asked by getData and again as the task is typed (activateListeners), which
 	 * redraws nothing: the button used to light only on a redraw, and typing the task is not one.
 	 */
-	_canApply() {
-		if (this._isUnholyVessel()) return true;
-		return this._picked.size === this._pickCount() && this._choicesComplete();
-	}
-
-	/**
-	 * Every Consequence is already marked, and the tier owes one that the move's other costs cannot cover
-	 * (Tethered's only cost; Undying's 6-, where all three apply). The book says nothing of this case, so
-	 * the window says the move can't be paid and leaves it to the GM, who may have them mark the Final
-	 * Consequence (the user's ruling, 2026-10-27). Never decided for them.
-	 */
-	_unpayable() {
-		return this._owesExhausted("consequence");
+	_canApply(available = this._availableCount()) {
+		if (this._owesExhausted("mark-gain", available)) return true;
+		return this._picked.size === this._pickCount(available) && this._choicesComplete();
 	}
 
 	/** Every picked effect that needs a choice has one, and no Mark is being gained and lost at once. */
@@ -577,11 +565,7 @@ export class UndeathDialog extends StonetopDialog {
 			this.renderIfOpen();
 			return true;
 		}
-		if (this._character.deathsDoorState !== DEATHS_DOOR_STATE.DYING) {
-			await this._settledElsewhere();
-			return true;
-		}
-		return false;
+		return !await this._stillOwed();
 	}
 
 	/**
@@ -601,11 +585,12 @@ export class UndeathDialog extends StonetopDialog {
 	}
 
 	/**
-	 * The move is no longer owed, though this window still offered it: resolved from another owner's
-	 * window, or the character was brought back up meanwhile. Said, and the window gives way, so a stale
-	 * window can neither roll again nor pay the costs a second time.
+	 * Whether they are still dying, with the move this window offers owed. When not (resolved from another
+	 * owner's window, or the character brought back up meanwhile) it is said, and the window gives way, so a
+	 * stale window can neither roll again nor pay the costs a second time.
 	 */
-	async _settledElsewhere() {
+	async _stillOwed() {
+		if (this._character?.deathsDoorState === DEATHS_DOOR_STATE.DYING) return true;
 		globalThis.ui?.notifications?.info?.(format(`${_I18N}.settled`, { name: this._character?._actor?.name ?? "", move: this._moveName }));
 		await this.close();
 		return false;
@@ -625,12 +610,12 @@ export class UndeathDialog extends StonetopDialog {
 		// The gate the button is drawn with, asked again: a stale draw can leave it lit.
 		if (!this._canApply()) return;
 		// Paid already from another window, or no longer dying: the costs are not paid twice.
-		if (this._character?.deathsDoorState !== DEATHS_DOOR_STATE.DYING) return this._settledElsewhere();
+		if (!await this._stillOwed()) return;
 		this._applied = true;
 
 		let done;
 		try {
-			done = this._isUnholyVessel() ? await this._applyUnholyVessel() : await this._applyTier(tier);
+			done = this._owesExhausted("mark-gain") ? await this._applyUnholyVessel() : await this._applyTier(tier);
 		} catch (err) {
 			this._applied = false;
 			throw err;
@@ -677,9 +662,9 @@ export class UndeathDialog extends StonetopDialog {
 			lines.after.push("Favor reset to <strong>0</strong>.");
 		}
 
-		// A move that could not be paid (_unpayable), and whether the GM had them mark the Final
+		// A move that could not be paid (_owesExhausted), and whether the GM had them mark the Final
 		// Consequence for it. Ticked or not, the card says so.
-		const unpayable = this._unpayable();
+		const unpayable = this._owesExhausted("consequence");
 		const owedFinal = unpayable && this._owedFinal;
 		if (unpayable && !owedFinal && !this._tetherDestroyed) lines.after.push(localize(`${_I18N}.unpayable.note`));
 
@@ -790,82 +775,50 @@ export class UndeathDialog extends StonetopDialog {
 	/**
 	 * The Revenant's 6- alternative: give up this insert and become a Ghost instead.
 	 *
-	 * The swap is one write (StonetopCharacter#setPostDeathInsert): the slug, and out of the action at
-	 * 0 HP, since they are dying as they take it. Then they are asked for a FRESH first Consequence,
-	 * in the same window every Ghost is asked in (Death's Door's choices step). What the Revenant held
-	 * is read before the swap: the prune keeps the Consequences both inserts print, and those do not
-	 * answer the Ghost's "choose 1 Consequence".
-	 *
-	 * Asked first, naming the Consequences the Ghost does not print and so does not keep: the prune
-	 * takes them for good. And once it is done, whether the maimings Undying left are healed, since
-	 * the body that carried them is gone (the user's ruling, 2026-10-27; yes unless they say not).
+	 * The swap itself, its questions and the maimings it may heal are swapRevenantForGhost's (one flow
+	 * for this and the insert dropped on the sheet). The window latches around it, asks again that the
+	 * move is still owed once they say yes, then says what happened on the card, gives way, and opens
+	 * the Ghost's FRESH first Consequence in the same window every Ghost is asked in (Death's Door's
+	 * choices step), with what the Revenant held carried.
 	 */
 	async _onAlternative(slug) {
 		if (this._applied || this._confirming || !slug) return;
-		if (this._character?.deathsDoorState !== DEATHS_DOOR_STATE.DYING) return this._settledElsewhere();
-		await swapRevenantForGhost(this._character, slug, {
-			confirm: async (to, heldOptions) => {
-				// Latched while the question is up, so a second press does not stack a second one.
-				this._confirming = true;
-				try {
-					return await this._confirmGhost(await this._lostOnSwap(to, heldOptions));
-				} finally {
-					this._confirming = false;
-				}
-			},
-			proceed: async () => {
-				if (this._applied) return false;
-				// Asked again: the question waits as long as they do, and the move may have been settled from
-				// another owner's window meanwhile.
-				if (this._character?.deathsDoorState !== DEATHS_DOOR_STATE.DYING) {
-					await this._settledElsewhere();
-					return false;
-				}
-				this._applied = true;
-				return true;
-			},
-			failed: () => { this._applied = false; },
-			swapped: async () => {
-				// The roll is spent with the move that it settled (see the note above _landedRoll): the swap's own
-				// write lifted its marker (StonetopCharacter#setPostDeathInsert, undeathRecordsLifted).
-				this._summary = [localize(`${_I18N}.becameGhost`), localize(`${_I18N}.ghostDown`)];
-			},
-			askHealMaimings: count => this._askHealMaimings(count),
-			moveName: this._moveName,
-			healed: () => this._summary.push(localize(`${_I18N}.maimingsHealed`)),
-			beforeChoices: async () => {
-				this._step = "done";
-				await this._post(this._summary);
-				// Straight on to the Ghost's questions. This window's work is done and its summary is on the
-				// chat card, so it gives way rather than standing open beside the next one.
-				await this.close();
-			},
-			openChoices: carried => this._openChoices(carried),
-		});
+		if (!await this._stillOwed()) return;
+		// Latched while its questions are up, so a second press does not stack a second one.
+		this._confirming = true;
+		let swap;
+		try {
+			swap = await swapRevenantForGhost(this._character, slug, {
+				gate: async () => {
+					if (this._applied) return false;
+					// Asked again: the question waits as long as they do, and the move may have been settled from
+					// another owner's window meanwhile.
+					if (!await this._stillOwed()) return false;
+					this._applied = true;
+					return true;
+				},
+				failed: () => { this._applied = false; },
+				moveName: this._moveName,
+			});
+		} finally {
+			this._confirming = false;
+		}
+		if (!swap) return;
+		// The roll is spent with the move that it settled (see the note above _landedRoll): the swap's own
+		// write lifted its marker (StonetopCharacter#setPostDeathInsert, undeathRecordsLifted).
+		this._summary = [localize(`${_I18N}.becameGhost`), localize(`${_I18N}.ghostDown`)];
+		if (swap.healed) this._summary.push(localize(`${_I18N}.maimingsHealed`));
+		this._step = "done";
+		await this._post(this._summary);
+		// Straight on to the Ghost's questions. This window's work is done and its summary is on the
+		// chat card, so it gives way rather than standing open beside the next one.
+		await this.close();
+		await this._openChoices(swap.carried);
 	}
 
 	/** The Ghost's questions, in Death's Door's choices step. Its own method so a test can stand in for the window. */
 	_openChoices(carried) {
 		return DeathsDoorDialog.openChoices(this._character, this._onDone, { carried, taken: "undying" });
-	}
-
-	/**
-	 * See ghostSwapLost. Its own method so a test can hand in the insert repository. Read through the
-	 * character's own, whose cache the swap's prune then reads from, when it has one.
-	 */
-	async _lostOnSwap(slug, heldOptions) {
-		this._insertRepo ??= this._character?._postDeathInsertRepo ?? new FoundryPostDeathInsertRepository();
-		return ghostSwapLost(slug, heldOptions, this._insertRepo);
-	}
-
-	/** See confirmGhostSwap. Its own method for the tests. */
-	_confirmGhost(lost) {
-		return confirmGhostSwap(lost);
-	}
-
-	/** See askHealMaimings. Its own method for the tests. */
-	_askHealMaimings(count) {
-		return askHealMaimings(count);
 	}
 
 	async _post(lines) {
@@ -884,70 +837,49 @@ export class UndeathDialog extends StonetopDialog {
  * Pale Hunter's "linger on (gain the Ghost insert)" is taken (audit GM-3).
  *
  * Asked first, naming the Consequences the Ghost does not print: the prune takes them for good, and a no writes
- * nothing. The swap is one write (StonetopCharacter#setPostDeathInsert). Then whether the maimings Undying left
- * are healed, since the body that carried them is gone (the user's ruling, 2026-10-27; yes unless they say not).
- * Then the Ghost's FRESH first Consequence, in Death's Door's choices step, with what the Revenant held carried
- * (the Consequences both inserts print do not answer the Ghost's "choose 1 Consequence").
+ * nothing. `gate` is asked once they say yes, and a false from it writes nothing either. The swap is one write
+ * (StonetopCharacter#setPostDeathInsert); `failed` is told if it throws. Then whether the maimings Undying left
+ * are healed, since the body that carried them is gone (the user's ruling, 2026-10-27; yes unless they say not),
+ * written as `moveName` when the swap is one's alternative.
  *
- * `steps` stands in for any part (the dialog latches its window around them); the rest is the plain flow.
- * `steps.moveName` is the move the maimings' healing is written as, when the swap is one's alternative.
- * Whether the swap was made.
+ * Resolves to null when nothing was swapped, else `{carried, healed}`: what the Revenant held, for the Ghost's
+ * FRESH first Consequence in Death's Door's choices step (the Consequences both inserts print do not answer the
+ * Ghost's "choose 1 Consequence"), and whether the maimings were healed. Opening that step is the caller's.
  */
-export async function swapRevenantForGhost(character, slug = "ghost", steps = {}) {
-	const {
-		confirm = async (to, held) => confirmGhostSwap(await ghostSwapLost(to, held, character?._postDeathInsertRepo)),
-		proceed = async () => true,
-		failed = () => {},
-		swapped = async () => {},
-		maimings = () => undyingMaimings(character),
-		askHealMaimings: askHeal = askHealMaimings,
-		moveName = null,
-		healMaimings: heal = list => healMaimings(character, list, moveName),
-		healed = () => {},
-		beforeChoices = async () => {},
-		openChoices = carried => DeathsDoorDialog.openChoices(character, null, { carried, taken: "undying" }),
-	} = steps;
+export async function swapRevenantForGhost(character, slug = "ghost", { gate = async () => true, failed = () => {}, moveName = null } = {}) {
 	const heldOptions = (await character.sectionOptions(_CONSEQUENCES)).filter(o => o.marked);
-	if (!await confirm(slug, heldOptions)) return false;
-	if (!await proceed()) return false;
-	const carried = { [_CONSEQUENCES]: heldOptions.map(o => o.slug) };
+	if (!await _confirmGhostSwap(await _lostOnSwap(character, slug, heldOptions))) return null;
+	if (!await gate()) return null;
 	try {
 		await character.setPostDeathInsert(slug);
 	} catch (err) {
-		failed(err);
+		failed();
 		throw err;
 	}
-	await swapped();
-	const maimed = maimings();
-	if (maimed.length && await askHeal(maimed.length)) {
-		await heal(maimed);
-		healed();
-	}
-	await beforeChoices();
-	await openChoices(carried);
-	return true;
+	const maimed = _undyingMaimings(character);
+	const healed = maimed.length > 0 && !!await _askHealMaimings(maimed.length);
+	// Kept as scars, as every healed wound is, in one write.
+	if (healed) await character.applyUpdate(character.healWoundsUpdate(maimed.map(w => w.id)), moveName);
+	return { carried: { [_CONSEQUENCES]: heldOptions.map(o => o.slug) }, healed };
 }
 
 /**
- * The Consequences held now that the insert `slug` does not print, by label: what the swap's prune takes
- * for good. Read off the incoming insert's own lists, as the prune reads them (CharacterPostDeath#pruneToInsert).
- * An insert that cannot be read names none, as the prune then keeps everything.
+ * The Consequences held now that the insert `slug` does not print, by label: what the swap's prune takes for
+ * good (CharacterPostDeath#loreDroppedBySwap). An insert that cannot be read names none, as the prune then keeps
+ * everything.
  */
-export async function ghostSwapLost(slug, heldOptions, insertRepo = null) {
-	let data = null;
+async function _lostOnSwap(character, slug, heldOptions) {
+	let dropped = new Set();
 	try {
-		data = await (insertRepo ?? new FoundryPostDeathInsertRepository()).findBySlug(slug);
+		dropped = await character.loreDroppedBySwap(slug);
 	} catch (err) {
 		console.warn("Stonetop | could not read the insert the swap goes to", err);
 	}
-	if (!data) return [];
-	const printed = new Set((data.lore ?? []).filter(e => e.slug === _CONSEQUENCES)
-		.flatMap(e => (e.options ?? []).map(o => o.slug)));
-	return heldOptions.filter(o => !printed.has(o.slug)).map(o => o.label ?? o.slug);
+	return heldOptions.filter(o => dropped.has(`${_CONSEQUENCES}:${o.slug}`)).map(o => o.label ?? o.slug);
 }
 
 /** "Give up this insert and gain the Ghost insert instead?", naming what will not carry over. */
-export function confirmGhostSwap(lost) {
+function _confirmGhostSwap(lost) {
 	const body = lost.length
 		? format(`${_I18N}.becomeGhostLost`, { lost: lost.map(l => `<strong>${escHtml(l)}</strong>`).join(", ") })
 		: localize(`${_I18N}.becomeGhostBody`);
@@ -960,13 +892,13 @@ export function confirmGhostSwap(lost) {
 }
 
 /** The maimings Undying recorded (UndeathDialog#_effectUpdate's "maim") that are not healed yet. */
-export function undyingMaimings(character) {
+function _undyingMaimings(character) {
 	return (character?.woundRecords?.() ?? [])
 		.filter(w => !w.healed && w.status === "permanent" && String(w.text ?? "").startsWith(_MAIM_PREFIX));
 }
 
 /** Whether to mark them healed now the body is gone. Yes unless they say not. */
-export function askHealMaimings(count) {
+function _askHealMaimings(count) {
 	return confirmOutcome({
 		title:   localize(`${_I18N}.maimingsTitle`),
 		content: `<p>${escHtml(format(`${_I18N}.maimingsBody`, { count }))}</p>`,
@@ -974,13 +906,6 @@ export function askHealMaimings(count) {
 		no:      { label: localize(`${_I18N}.maimingsNo`) },
 		defaultYes: true,
 	});
-}
-
-/** Mark `maimings` healed in one write, kept as scars as every healed wound is. */
-export async function healMaimings(character, maimings, moveName = null) {
-	const ids = new Set(maimings.map(w => w.id));
-	const wounds = character.woundRecords().map(w => (ids.has(w.id) ? { ...w, healed: true } : w));
-	await character.applyUpdate({ "system.attributes.wounds": wounds }, moveName);
 }
 
 // Labels from utils/move-results.js — see MOVE_TIERS there for why they are not retyped.

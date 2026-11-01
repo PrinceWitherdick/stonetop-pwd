@@ -5,6 +5,7 @@ import { compendiumRefTail, seededSourceKeys } from "../migration/compat.js";
 import { BESTIARY_ROOT_NAME, BESTIARY_FOLDER_COLOR, planBestiaryFolderTree } from "./bestiary-seed-core.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { progressSlice, SEED_FOLDER_PHASE, SEED_BULK_CREATE_FRACTION } from "../utils/progress-slice.js";
+import { countOf } from "../utils/plural.js";
 
 // On load, import the system's "Monsters" (stonetop-bestiary) actor compendium into the
 // world's Actors sidebar under a single red "Bestiary" folder tree that mirrors the
@@ -111,7 +112,7 @@ export async function collapseBestiaryActorSubfoldersOnce() {
 				foldersToDelete.sort((a, b) => depthOf(b) - depthOf(a));
 				await Folder.deleteDocuments(foldersToDelete.map(f => f.id));
 			}
-			info(`Collapsed the world Bestiary: moved ${actorUpdates.length} monsters up, removed ${foldersToDelete.length} subfolder${foldersToDelete.length === 1 ? "" : "s"}.`);
+			info(`Collapsed the world Bestiary: moved ${actorUpdates.length} monsters up, removed ${countOf(foldersToDelete.length, "subfolder")}.`);
 		} catch (err) {
 			error("Failed to collapse the world Bestiary actor subfolders:", err);
 			return; // leave the flag unset so the next load retries

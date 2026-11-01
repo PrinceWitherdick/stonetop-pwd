@@ -1,6 +1,7 @@
 import { rebuildBookArt, plannedBookArtRebuilds, plannedPeopleArtRebuilds } from "./rebuild-crops.js";
 import { publishPeopleArtIndexes, reapplyBook2Art } from "./reapply.js";
 import { flipPeoplePortraitsToWhole } from "./repoint-portraits.js";
+import { countOf } from "../utils/plural.js";
 
 /**
  * Cut every picture this world could have from the art it already holds, then point what is
@@ -150,7 +151,7 @@ export async function runBookArtRebuildFromButton(btn) {
  */
 export function describeRebuild(res) {
 	const n = res?.written ?? 0;
-	const bits = [`Rebuilt ${n} picture${n === 1 ? "" : "s"} from art already on disk.`];
+	const bits = [`Rebuilt ${countOf(n, "picture")} from art already on disk.`];
 	if (res?.repointed) {
 		bits.push(res.repointed === 1
 			? "1 portrait already in play now uses its close-up."

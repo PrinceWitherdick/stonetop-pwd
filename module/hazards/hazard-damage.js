@@ -68,9 +68,9 @@ export function hazardCandidates({ characters = [], tokens = [] } = {}) {
 
 /**
  * A picker row's name: a Ghost's says Disembodied may spare them (Book I p.148; audit XS-4). A label only, so the
- * GM picking sees it; nothing is taken off the hazard's harm. Exported for the tests.
+ * GM picking sees it; nothing is taken off the hazard's harm.
  */
-export function candidateLabel(name, actor) {
+function candidateLabel(name, actor) {
 	return disembodiedSufferer(actor) ? format(`${KEY}.pickGhost`, { name }) : name;
 }
 

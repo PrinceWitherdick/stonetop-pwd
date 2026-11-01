@@ -4,6 +4,7 @@ import { StonetopFlags } from "./StonetopFlags.js";
 import { SACRED_POUCH_SLUG, vesselHpFormula } from "./stock-cost.js";
 import { rolledTotalCard } from "../../utils/chat.js";
 import { applyHpLossToActor } from "../../utils/damage.js";
+import { plural } from "../../utils/plural.js";
 
 /**
  * PROVISIONS — food taken from the wild, and the one inventory track whose size is rolled for
@@ -145,7 +146,7 @@ function _provisionsCard(roll, title, note, larder) {
 	// The second is only knowable once the write has landed, which is why the card is built after
 	// it rather than before.
 	const details = [note, larder ? `${larder.held} in the pack` : ""].filter(Boolean).join(" • ");
-	return rolledTotalCard(roll, title, `${uses === 1 ? "use" : "uses"} of provisions`, details);
+	return rolledTotalCard(roll, title, `${plural(uses, "use")} of provisions`, details);
 }
 
 /**

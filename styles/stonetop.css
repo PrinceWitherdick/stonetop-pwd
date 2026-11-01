@@ -17172,9 +17172,6 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	background-blend-mode: normal, normal, difference;
 }
 
-/* A love letter on this sheet stays cream paper, and it declares its own tier and gold inks at their
-   paper values (see the letter's own rules), so the lifted inks above stop at its edge. */
-
 /* The one warmth on the sheet is whichever thing brought them back, so the ink tints the paper
    the faintest amount rather than being spent only on rules and edges. The colours themselves are
    the shared `--st-undead-wash-*` tokens, which the chat cards read too, so the two surfaces can

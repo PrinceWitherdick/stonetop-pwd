@@ -35,6 +35,7 @@ import { INITIATE_BACKGROUND, choiceCountState } from "../initiates.js";
 import { lorePickMax, lorePickMin } from "../lore-pick-count.js";
 import { MAGNIFICENT_SPECIMEN_MOVE, companionKindOptions, companionTraitAllowance, trimCompanionTraits } from "../animal-companion.js";
 import { seekerMajorTrack, pickSeekerMajorMark, drawableMinorSlugs, seekerMinorStepComplete } from "../seeker-collection.js";
+import { plural } from "../../../utils/plural.js";
 
 const SEEKER_ARCANA_SLUGS = ["collection", "arcana-major", "arcana-minor"];
 
@@ -2261,7 +2262,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			// whose move was unselected or whose stat sits at the cap after a stats edit.
 			this._reconcileMoveStatChoices();
 			const n           = this._movePickCount;
-			movePickNote = `Choose ${n} more starting ${n === 1 ? "move" : "moves"}`;
+			movePickNote = `Choose ${n} more starting ${plural(n, "move")}`;
 
 			const docByName = new Map(this._movesCache.map(doc => [doc.name, doc]));
 			// "Either X OR Y" choice groups (e.g. the Heavy's Armored OR Uncanny

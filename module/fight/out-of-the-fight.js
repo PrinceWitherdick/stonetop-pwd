@@ -31,23 +31,13 @@
 
 import { each } from "./fight-state.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
+import { writtenHp } from "../utils/written-hp.js";
+
+// The hit points a committed diff wrote, or null (utils/written-hp.js). Re-exported for the fight's other readers.
+export { writtenHp };
 
 /** Core's defeated status, which a world may have re-pointed; "dead" is core's own default. */
 export const defeatedStatusId = (config = globalThis.CONFIG) => config?.specialStatusEffects?.DEFEATED ?? "dead";
-
-/**
- * The hit points a committed diff wrote, or null when it did not touch them. Both spellings: a
- * sheet writes the dotted path, code building an update object writes the nested one. PURE.
- */
-export function writtenHp(changes = {}) {
-	const nested = changes?.system?.attributes?.hp;
-	const raw = nested && typeof nested === "object" && "value" in nested
-		? nested.value
-		: changes?.["system.attributes.hp.value"];
-	if (raw === undefined || raw === null || raw === "") return null;
-	const hp = Number(raw);
-	return Number.isFinite(hp) ? hp : null;
-}
 
 /**
  * Whether this committed actor update has just put a monster on 0 hit points or fewer. PURE.

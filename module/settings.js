@@ -2625,7 +2625,7 @@ export function areCharacterSheetsShared() {
 }
 
 /** The three places the GM can leave the timeline: everywhere, the steading sheet only, or off. */
-export const TIMELINE_REACH = Object.freeze(["all", "steading", "off"]);
+const TIMELINE_REACH = Object.freeze(["all", "steading", "off"]);
 
 /**
  * A stored `showTimeline` value as one of TIMELINE_REACH. The pre-2026-10-31 Boolean (`true`/`false`,

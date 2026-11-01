@@ -386,6 +386,39 @@ describe("DeathsDoorDialog — the rail through what the insert asks", () => {
 	});
 });
 
+// The reader's place through a redraw is StonetopDialog's (stonetop-dialog-kept-place.test.js). This window's
+// half is which columns it keeps, what counts as a new page, and how its controls are found again.
+describe("DeathsDoorDialog: the place kept through a redraw", () => {
+	it("keeps both columns, the walkthrough's body and the rail sheet's panel", () => {
+		expect(makeDialog(makeCharacter())._keptScrollSelector).toEqual([".deaths-door-dialog-content", ".deaths-door-choices-main"]);
+	});
+
+	it("starts a new step, or a new question on the rail, at its top, and keeps the place through an answer", () => {
+		const dialog = withChoices(GHOST_STEPS());
+		expect(dialog._keptPlaceKey).toBe("roll");
+		dialog._step = "choices";
+		dialog._latchChoiceStep();
+		const onPurpose = dialog._keptPlaceKey;
+		dialog._choices.steps[0].done = true;
+		dialog._latchChoiceStep();
+		expect(dialog._keptPlaceKey, "an answer").toBe(onPurpose);
+		dialog._goToChoice("tether");
+		expect(dialog._keptPlaceKey, "a rail click").not.toBe(onPurpose);
+	});
+
+	it("finds the control with the keyboard again by its section, option and, for a shared radio, its value", () => {
+		const dialog = makeDialog(makeCharacter());
+		const control = (cls, dataset = {}, value = "") => ({ classList: { contains: c => c === cls }, dataset, value });
+		expect(dialog._focusSelector(control("stonetop-pdc-mark", { section: "consequences", option: "cold" })))
+			.toBe('.stonetop-pdc-mark[data-section="consequences"][data-option="cold"]');
+		expect(dialog._focusSelector(control("stonetop-pdc-subpick", { section: "consequences", option: "appetites" }, "Blood")))
+			.toBe('.stonetop-pdc-subpick[data-section="consequences"][data-option="appetites"][value="Blood"]');
+		expect(dialog._focusSelector(control("deaths-door-stat-choice", {}, "con"))).toBe('.deaths-door-stat-choice[value="con"]');
+		expect(dialog._focusSelector(control("stonetop-pdc-tether"))).toBe(".stonetop-pdc-tether");
+		expect(dialog._focusSelector(control("deaths-door-roll-btn"))).toBeNull();
+	});
+});
+
 // Burn Brightly ("spend 2 XP after you roll to add +1") and the Would-Be Hero's Impetuous Youth ("give it
 // your all and turn a 6- into a 7-9, a 7-9 into a 10+") both reach back into a roll after the dice land.
 // This window settles the tier the moment they do, so when either is on offer it waits on the counted

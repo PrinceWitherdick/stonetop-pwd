@@ -26,6 +26,7 @@ import { expeditionLabel } from "./expedition-log-core.js";
 // Change-detection hash (pure, Foundry-free) — lets us tell a page's still-pristine
 // prose (safe to refresh from the source) from one the GM has edited in the journal.
 import { hashString } from "../hooks/journal-sync-core.js";
+import { plural } from "./plural.js";
 
 // "The Chronicle" is a Journal FOLDER holding two journals — the player
 // introductions and the expedition log. (Foundry folders hold entries, not pages, so
@@ -707,7 +708,7 @@ export function buildChroniclePages({ pcs = [], introAnswers = {}, springAnswers
 	// walkthrough no longer records, so there's no section for it.)
 	const omenGains = SEASONAL_GAINS.filter(g => springAnswers?.gains?.[g.key]).map(g => g.name);
 	const omenBody  =
-		(omenGains.length ? `<p><strong>${omenGains.length > 1 ? "Gains" : "Gain"} chosen:</strong> ${omenGains.join(", ")}</p>` : "")
+		(omenGains.length ? `<p><strong>${plural(omenGains.length, "Gain")} chosen:</strong> ${omenGains.join(", ")}</p>` : "")
 		+ paragraphs(springAnswers?.hook);
 	const spring = sectionsAndCleared([
 		proseCandidate("The season's omen", omenBody),

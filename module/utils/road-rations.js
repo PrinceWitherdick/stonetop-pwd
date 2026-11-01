@@ -1,5 +1,6 @@
 import { CREW_SUPPLIES_LABEL, CREW_SUPPLIES_SLUG, campUsesNeeded } from "../actors/character/supply-cost.js";
 import { campPurses, count, crewMealUses } from "../camp/camp-rules.js";
+import { countOf, plural } from "./plural.js";
 
 /**
  * DAYS ON THE ROAD: what feeding the party costs while the GM glosses the travel (Book I p.89,
@@ -198,10 +199,10 @@ export function crewRoadText(row) {
 	const bill = count(row?.crewBill);
 	if (!bill) return "";
 	const n = count(row.crewPays);
-	if (n >= bill) return `Feeds the crew first: ${usesWord(n)}, all the crew eats.`;
-	if (!n) return `Empty, so what the crew eats (${usesWord(bill)}) comes out of the packs.`;
+	if (n >= bill) return `Feeds the crew first: ${countOf(n, "use")}, all the crew eats.`;
+	if (!n) return `Empty, so what the crew eats (${countOf(bill, "use")}) comes out of the packs.`;
 	const rest = bill - n;
-	return `Feeds the crew first: ${n} of the ${usesWord(bill)} the crew eats. The other ${rest} ${rest === 1 ? "comes" : "come"} out of the packs.`;
+	return `Feeds the crew first: ${n} of the ${countOf(bill, "use")} the crew eats. The other ${rest} ${plural(rest, "comes", "come")} out of the packs.`;
 }
 
 /** "2 provisions, 1 supplies": a spend in words. */
@@ -209,17 +210,12 @@ export function spendWords(spend) {
 	return (spend ?? []).map(s => `${s.n} ${String(s.label).toLowerCase()}`).join(", ");
 }
 
-/** "1 use", "3 uses". */
-export function usesWord(n) {
-	return `${n} ${n === 1 ? "use" : "uses"}`;
-}
-
 /**
  * The chat card's rows for a ledger that was applied: the bill, each payer, and any shortfall.
  * `{label, value}` rows, the shape chat.js#postMoveToChat takes.
  */
 export function roadSummaryRows(ledger) {
-	const days = `${ledger.days} ${ledger.days === 1 ? "day" : "days"}`;
+	const days = countOf(ledger.days, "day");
 	if (ledger.packAnimal) {
 		return [{
 			label: "On the road",
@@ -229,13 +225,13 @@ export function roadSummaryRows(ledger) {
 	const kit = ledger.messKit ? ", a mess kit going" : "";
 	const rows = [{
 		label: "On the road",
-		value: `${days}, ${ledger.mouths} ${ledger.mouths === 1 ? "mouth" : "mouths"}${kit}: ${usesWord(ledger.perDay)} a day, ${usesWord(ledger.bill)} in all.`,
+		value: `${days}, ${countOf(ledger.mouths, "mouth")}${kit}: ${countOf(ledger.perDay, "use")} a day, ${countOf(ledger.bill, "use")} in all.`,
 	}];
 	for (const r of ledger.rows) {
-		const pack = r.pays ? `${usesWord(r.pays)} (${spendWords(r.spend)})` : "";
+		const pack = r.pays ? `${countOf(r.pays, "use")} (${spendWords(r.spend)})` : "";
 		// What the crew's own supplies paid is named apart from the pack, as Make Camp's card names it.
 		if (r.crewPays) {
-			const crew = `${usesWord(r.crewPays)} from the crew's own supplies`;
+			const crew = `${countOf(r.crewPays, "use")} from the crew's own supplies`;
 			rows.push({ label: r.name, value: pack ? `${crew}; ${pack} from the pack` : crew });
 		} else if (pack) {
 			rows.push({ label: r.name, value: pack });
@@ -244,7 +240,7 @@ export function roadSummaryRows(ledger) {
 	if (ledger.short) {
 		rows.push({
 			label: "Went short",
-			value: `${usesWord(ledger.short)} nobody had: someone goes without, and that is deprivation (Book I p.335).`,
+			value: `${countOf(ledger.short, "use")} nobody had: someone goes without, and that is deprivation (Book I p.335).`,
 		});
 	}
 	return rows;

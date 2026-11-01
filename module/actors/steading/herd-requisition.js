@@ -1,5 +1,6 @@
 import { askWithButtons } from "../../utils/ask-with-buttons.js";
 import { escHtml } from "../../utils/strings.js";
+import { plural } from "../../utils/plural.js";
 
 /**
  * Requisitioning from the Herd of Horses: how many horses go?
@@ -31,7 +32,7 @@ export async function askHorsesFromHerd({ cap = 0, preset = 0, who = "" } = {}) 
 	const start = Math.min(max, asked > 0 ? asked : 2);
 	const answer = await askWithButtons({
 		title: "Horses from the herd",
-		content: `<p>How many grown horses ${who ? `does ${escHtml(who)} take` : "are taken"} from the herd? It has <strong>${max}</strong> grown horse${max === 1 ? "" : "s"}.</p>
+		content: `<p>How many grown horses ${who ? `does ${escHtml(who)} take` : "are taken"} from the herd? It has <strong>${max}</strong> grown ${plural(max, "horse")}.</p>
 			<label class="stonetop-homestead-field"><span>Horses</span><input type="number" name="horses" min="1" max="${max}" value="${start}"></label>
 			<p>They leave the herd's count until they come home; add them back on the Herd of Horses card then.</p>`,
 		buttons: [

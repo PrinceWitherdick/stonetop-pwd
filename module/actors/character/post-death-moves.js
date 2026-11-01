@@ -29,10 +29,11 @@ import { isPrimaryGM } from "../../utils/primary-gm.js";
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { localize, format } from "../../utils/i18n.js";
 import { escHtml } from "../../utils/strings.js";
-import { deletionEntry } from "../../utils/foundry-compat.js";
+import { deletionUpdate } from "../../utils/foundry-compat.js";
 import { buildCustomFollower, nextFollowerOrder } from "../../data/follower-build.js";
 import { readableFlags } from "./StonetopFlags.js";
 import { onPreUpdateActorManifest } from "./manifest.js";
+import { LORE_FOLLOWER_SOURCE } from "./insert-lore.js";
 
 /** Whether an Item is a post-death move: an insert's own, or a Consequence's or Mark's. PURE. */
 export const isPostDeathMove = item => item?.type === "move" && item.system?.moveType === "post-death";
@@ -146,7 +147,7 @@ export function postDeathMoveItemData(def) {
 /**
  * The follower cards lore options describe, keyed by the lore option that grants them. `sourceUuid` is
  * how a card already made is found again, as an arcanum's summons are (data/arcana-summons.js); every
- * one starts "post-death:", which is also how follower-party.js#followerFeedsItself knows them. `i18n`
+ * one starts LORE_FOLLOWER_SOURCE, which is also how follower-party.js#followerFeedsItself knows them. `i18n`
  * is the block their windows' words live in.
  *
  *   HOME TO VERMIN     "Bugs, moths, and other vermin have taken up residence in your corpse. They will do
@@ -161,7 +162,7 @@ export function postDeathMoveItemData(def) {
  */
 export const LORE_FOLLOWERS = {
 	"consequences:home-to-vermin": {
-		sourceUuid: "post-death:home-to-vermin",
+		sourceUuid: `${LORE_FOLLOWER_SOURCE}home-to-vermin`,
 		nameKey:    "stonetop.postDeathMoves.vermin.name",
 		i18n:       "stonetop.postDeathMoves.vermin",
 		follower: {
@@ -175,7 +176,7 @@ export const LORE_FOLLOWERS = {
 		},
 	},
 	"marks:child-of-the-deeps": {
-		sourceUuid: "post-death:child-of-the-deeps",
+		sourceUuid: `${LORE_FOLLOWER_SOURCE}child-of-the-deeps`,
 		nameKey:    "stonetop.postDeathMoves.tentacle.name",
 		i18n:       "stonetop.postDeathMoves.tentacle",
 		summoned:   true,
@@ -236,8 +237,7 @@ export function callLoreFollowerUpdate(actor, key) {
 async function removeLoreFollower(actor, id) {
 	const sheet = actor?.sheet;
 	if (typeof sheet?._removeCustomFollower === "function") return sheet._removeCustomFollower(id);
-	const [key, val] = deletionEntry(`flags.${SYSTEM_ID}.customFollowers.${id}`);
-	return actor.update({ [key]: val });
+	return actor.update(deletionUpdate(`flags.${SYSTEM_ID}.customFollowers.${id}`));
 }
 
 /**
@@ -338,8 +338,10 @@ export async function dropStrayHeldMoves(actor) {
 
 // ── The hooks ──────────────────────────────────────────────────────────────
 
-// The insert's own flags and its lore: the slug a swap moves, and the counts a mark or an unmark writes.
-const LORE_INPUT = /^flags\.[^.]+\.(postDeathLore|postDeathInsert)(\.|$)/;
+// What settle() reads: the insert's lore (the counts a mark or an unmark writes) and the insert's slug (a swap
+// or a removal), not the rest of the insert's flags (a manifestation, the follower offers settle() itself
+// records). Each as its own key, its v13 `-=` deletion, or the whole namespace as one value (a v14 deletion).
+const LORE_INPUT = /^flags\.[^.]+\.(postDeathLore(\.|$)|postDeathInsert(\.(-=)?slug)?$)/;
 const SETTLE_MS = 250;
 const pending = new Map();
 

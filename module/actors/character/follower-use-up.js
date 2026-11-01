@@ -20,6 +20,7 @@ import { fillFollowerSlug, followerDetailBase, followerDetailFlags, FOLLOWER_FLA
 import { stripHtmlToText } from "../../utils/strings.js";
 import { clampInt } from "../../utils/custom-move-data.js";
 import { crewSuppliesHeld, crewSuppliesLeaving } from "./supply-cost.js";
+import { countOf } from "../../utils/plural.js";
 
 export const USE_UP_RESOURCES = "Use up their resources";
 
@@ -89,7 +90,7 @@ export function useUpUpdate(card, flags, pick, scope) {
 		if (!spent) return null;
 		return {
 			update: { [`flags.${scope}.crew.supplies`]: crewSuppliesLeaving(stored, size, perSet, held - spent) },
-			what:   `${spent} use${spent === 1 ? "" : "s"} of Supplies lost (${held - spent} left)`,
+			what:   `${countOf(spent, "use")} of Supplies lost (${held - spent} left)`,
 		};
 	}
 	if (pick?.key === "ammo") {
