@@ -73,6 +73,19 @@
 				<span class="stonetop-pdi-favor-count">{{stonetop.postDeathTab.favor.heldLabel}}</span>
 				{{#if stonetop.postDeathTab.favor.caution}}<i class="fas fa-triangle-exclamation stonetop-lore-option-caution" role="img" aria-label="{{stonetop.postDeathTab.favor.caution}}" data-tooltip="{{stonetop.postDeathTab.favor.caution}}" data-tooltip-direction="UP"></i>{{/if}}
 			</div>
+			{{! +1 Favor (with its overflow at 3), and the Favor spends that put something on the sheet while
+			    their Mark is held. `aria-disabled` on a spend with no Favor, as the outcome buttons do. }}
+			{{#if stonetop.postDeathTab.favor.actions.length}}
+			<div class="stonetop-pdi-outcome-actions stonetop-pdi-favor-actions">
+				{{#each stonetop.postDeathTab.favor.actions}}
+				<button type="button" class="stonetop-pdi-outcome-btn" data-pdi-action="{{this.action}}"
+				        data-tooltip="{{this.tooltip}}"{{#if disabled}} aria-disabled="true"{{/if}}>
+					<i class="fas {{this.icon}}" aria-hidden="true"></i>
+					<span>{{this.label}}</span>
+				</button>
+				{{/each}}
+			</div>
+			{{/if}}
 			{{#if stonetop.postDeathTab.favor.canSet}}
 			<p class="stonetop-pdi-hint">{{localize "stonetop.postDeath.outcomes.favorHint"}}</p>
 			{{/if}}
@@ -231,6 +244,18 @@
 					<div class="stonetop-item-description">{{this.description}}</div>
 				</label>
 				{{/each}}
+			</div>
+			{{! "Feel free to make up new options" (Level Up, p.528): a word and what it means, written in.
+			    Typing here unticks the printed three; ticking one clears it. }}
+			<div class="stonetop-instinct-custom-row">
+				<input type="text" class="stonetop-pdi-instinct-custom-word"
+				       value="{{stonetop.postDeathInsert.activeInsert.instinct.customWord}}"
+				       aria-label="{{localize "stonetop.postDeath.instinctCustomWordLabel"}}"
+				       placeholder="{{localize "stonetop.character.selection.instinct.customWordPlaceholder"}}">
+				<input type="text" class="stonetop-pdi-instinct-custom-desc"
+				       value="{{stonetop.postDeathInsert.activeInsert.instinct.customDescription}}"
+				       aria-label="{{localize "stonetop.postDeath.instinctCustomDescLabel"}}"
+				       placeholder="{{localize "stonetop.character.selection.instinct.customPlaceholder"}}">
 			</div>
 			{{else}}
 			<p class="stonetop-instinct-readonly">{{stonetop.postDeathInsert.activeInsert.instinct.selected}}</p>

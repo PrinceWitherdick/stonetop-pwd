@@ -8,6 +8,7 @@ import { FakeRepositoryFactory } from "../../../fakes/FakeRepositoryFactory.js";
 import { FakePostDeathInsertRepository } from "../../../fakes/FakePostDeathInsertRepository.js";
 import { makeLiveActor } from "../../../fakes/LiveCharacter.js";
 import { readRepo } from "../../../fakes/css.js";
+import { stubConfirm } from "../../../fakes/confirm.js";
 
 // The three inserts as they SHIP, so every Consequence and Mark the dialog offers is the book's.
 const INSERTS = ["revenant", "ghost", "thrall"].map(slug =>
@@ -57,7 +58,10 @@ async function apply(dialog, actor) {
 beforeEach(() => {
 	global.ChatMessage = { create: vi.fn(async () => ({})), getSpeaker: () => ({}) };
 });
-afterEach(() => { delete global.ChatMessage; });
+afterEach(() => {
+	delete global.ChatMessage;
+	delete globalThis.foundry?.applications?.api?.DialogV2;
+});
 
 describe("UndeathDialog._onApply: Undying, per tier, in one write", () => {
 	it("10+: half max HP back, the one cost taken, and on their feet", async () => {
@@ -278,16 +282,22 @@ describe("UndeathDialog._onAlternative: the Revenant who becomes a Ghost", () =>
 		});
 		const dialog = await landed(char, "failure");
 		dialog._openChoices = vi.fn(async () => {});
+		// Asked first since 2026-10-27 (UndeathDialog.fixes.test.js covers the question itself).
+		stubConfirm(true);
 		actor.update.mockClear();
 
 		await dialog._onAlternative("ghost");
 
 		const slugWrites = actor.update.mock.calls.map(([d]) => d)
 			.filter(d => "flags.stonetop-pwd.postDeathInsert.slug" in d);
-		expect(slugWrites).toEqual([{
+		// The prune rides in the same write (audit RV-6): CARRION STENCH goes with the slug, never before it.
+		expect(slugWrites).toHaveLength(1);
+		expect(slugWrites[0]).toMatchObject({
 			"flags.stonetop-pwd.postDeathInsert.slug": "ghost",
 			"flags.stonetop-pwd.deathsDoor": DEATHS_DOOR_STATE.OUT_OF_ACTION,
-		}]);
+		});
+		expect(Object.keys(slugWrites[0]).filter(k => k.includes("carrion-stench"))).toHaveLength(1);
+		expect(Object.keys(slugWrites[0]).some(k => k.includes("breakdown"))).toBe(false);
 		expect(flag(actor, "deathsDoor")).toBe(DEATHS_DOOR_STATE.OUT_OF_ACTION);
 		expect(dialog._openChoices).toHaveBeenCalledWith({ consequences: ["breakdown", "carrion-stench"] });
 		// The summary no longer sends them to the tab for a Purpose they already have.

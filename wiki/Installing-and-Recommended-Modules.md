@@ -17,7 +17,7 @@ https://github.com/PrinceWitherdick/stonetop-pwd/releases/latest/download/system
 
 Create a world with the **Stonetop** system and launch it. The first time a GM loads the world, a **Setting up your world** window imports the journals, monsters and treasures in the background. See [Your First Session](Your-First-Session) for what happens next.
 
-Updates arrive through Foundry's normal **Update** button on the Game Systems tab.
+Updates arrive through Foundry's normal **Update** button on the Game Systems tab. An update only opens a window when it changes journals your world already has; see [After an update](Your-First-Session#after-an-update).
 
 ### Already playing on the older release?
 

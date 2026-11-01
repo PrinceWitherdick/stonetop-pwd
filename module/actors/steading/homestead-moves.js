@@ -151,6 +151,22 @@ const _STEADING_MOVES_RAW = [
 		description: `<p>The residents are NPCs. When you <strong>press or entice an NPC</strong>, make the <strong>Persuade (vs. NPCs)</strong> move from your own character sheet: "say what you want them to do (or not do). If they have reason to resist, roll +CHA" (Book I p.224). The steading rolls nothing for it.</p>
 <p><em>Malcontent debility: folks need Persuading more often than usual.</em></p>`,
 	},
+	// A REFERENCE card too: Bolster is a homefront move, but the Preparation it holds is each PC's own
+	// (roll-boosts.js), so it is made from the character sheet's Special Moves tab (bolster.js). Listed
+	// here because the season's rolls are where it is spent: "PCs can Bolster for a coming season and
+	// spend the Preparation on the roll(s)" (p.516).
+	{
+		slug: "bolster",
+		label: "Bolster",
+		stat: null,
+		statLabel: null,
+		rollable: false,
+		interactive: false,
+		reference: true,
+		description: `<p>When you <strong>prepare for what's coming or seek the favor of the gods</strong>, say how and answer the GM's questions. Then hold Preparation: 1 for a week or so, 2 for a month or so, 3 for the better part of a season.</p>
+<p>When you <strong>make any roll to which your efforts might apply</strong>, you may spend 1 Preparation to add +1 to that roll, after it is made (maximum +1 per roll).</p>
+<p><em>Each PC Bolsters from their own character sheet, on its Special Moves tab. Preparation can be spent on the steading's rolls too, from the roll's card.</em></p>`,
+	},
 	// The two improvements that ARE a move. Listed only once built (`requires`), since a
 	// steading without them has no such move to make.
 	{

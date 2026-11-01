@@ -13,7 +13,7 @@ vi.mock("../../module/timeline/timeline-store.js", () => ({ findTimelineJournal:
 const { RelationshipMapWindow } = await import("../../module/dialogs/RelationshipMapWindow.js");
 const { TimelineWindow } = await import("../../module/dialogs/TimelineWindow.js");
 const { hideTimelineJournalRow, onFeatureSwitched, syncOpenMapButton } = await import("../../module/hooks/feature-switches.js");
-const { isRelationshipMapShown, isTimelineShown } = await import("../../module/settings.js");
+const { isRelationshipMapShown, isTimelineShown, isTimelineTabShown, getTimelineReach, timelineReachOf, migrateTimelineReach } = await import("../../module/settings.js");
 
 const values = new Map();
 const journalApp = { collection: { documentName: "JournalEntry", get: () => null } };
@@ -50,6 +50,107 @@ describe("the switch getters", () => {
 		values.set(`${SYSTEM_ID}.showTimeline`, false);
 		expect(isRelationshipMapShown()).toBe(false);
 		expect(isTimelineShown()).toBe(false);
+	});
+});
+
+describe("a player's own Timeline tab switch", () => {
+	it("draws the tab when nothing is stored", () => {
+		expect(isTimelineTabShown("character")).toBe(true);
+		expect(isTimelineTabShown("steading")).toBe(true);
+	});
+
+	it("hides the tab when this player turned it off, and leaves the timeline itself on", () => {
+		values.set(`${SYSTEM_ID}.timelineTabShown`, false);
+		expect(isTimelineTabShown("character")).toBe(false);
+		expect(isTimelineTabShown("steading")).toBe(false);
+		expect(isTimelineShown()).toBe(true);
+	});
+
+	it("hides the tab when the GM turned the timeline off, whatever the player's switch says", () => {
+		values.set(`${SYSTEM_ID}.showTimeline`, false);
+		values.set(`${SYSTEM_ID}.timelineTabShown`, true);
+		expect(isTimelineTabShown("character")).toBe(false);
+		expect(isTimelineTabShown("steading")).toBe(false);
+	});
+
+	it("keeps the steading's tab when the GM leaves the timeline on the steading sheet only", () => {
+		values.set(`${SYSTEM_ID}.showTimeline`, "steading");
+		expect(isTimelineTabShown("character")).toBe(false);
+		expect(isTimelineTabShown("steading")).toBe(true);
+		expect(isTimelineShown()).toBe(true);
+	});
+
+	it("is a per-browser setting offered on the Preferences tab, read by both sheets", () => {
+		const read = rel => readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
+		const reg = /register\(SYSTEM_ID, "timelineTabShown", \{([\s\S]*?)\}\);/.exec(read("module/settings.js"))?.[1] ?? "";
+		expect(reg).toContain('scope: "client"');
+		expect(reg).toContain("_rerenderActorSheets");
+		expect(read("module/utils/sheet-preferences.js")).toContain('"timelineTabShown"');
+		expect(read("module/actors/character/StonetopCharacterSheet.js")).toContain('context.stonetop.timelineShown = isTimelineTabShown("character");');
+		expect(read("module/actors/steading/StonetopSteadingSheet.js")).toContain('context.stonetop.timelineShown = isTimelineTabShown("steading");');
+		const gm = /register\(SYSTEM_ID, "showTimeline", \{([\s\S]*?)\}\);/.exec(read("module/settings.js"))?.[1] ?? "";
+		expect(gm).toContain('scope: "world"');
+		expect(gm).toContain("type: String");
+		expect(gm).toContain('default: "all"');
+		const en = JSON.parse(read("languages/en.json"));
+		expect(en.stonetop.settings.timelineTabShown.name).toBeTruthy();
+		expect(en.stonetop.settings.timelineTabShown.hint).toBeTruthy();
+		for (const choice of ["all", "steading", "off"]) expect(en.stonetop.settings.showTimeline[choice]).toBeTruthy();
+	});
+});
+
+describe("the GM's Timeline switch, from on/off to three places", () => {
+	it("reads the old stored Boolean, and the strings Foundry casts it to, as everywhere and off", () => {
+		expect(timelineReachOf(true)).toBe("all");
+		expect(timelineReachOf("true")).toBe("all");
+		expect(timelineReachOf(false)).toBe("off");
+		expect(timelineReachOf("false")).toBe("off");
+	});
+
+	it("keeps the three choices, and reads anything else unknown as the default", () => {
+		for (const reach of ["all", "steading", "off"]) expect(timelineReachOf(reach)).toBe(reach);
+		expect(timelineReachOf(undefined)).toBe("all");
+		expect(timelineReachOf("nonsense")).toBe("all");
+		expect(getTimelineReach()).toBe("all");
+	});
+
+	function worldWith(stored) {
+		const docs = stored === undefined ? [] : [{ key: `${SYSTEM_ID}.showTimeline`, value: stored }];
+		const set = vi.fn(async () => {});
+		const gm = { id: "gm", isGM: true, active: true };
+		globalThis.game = { user: gm, users: { activeGM: gm }, settings: { storage: new Map([["world", docs]]), set } };
+		return set;
+	}
+
+	it("rewrites an old stored off as off, and an old on as everywhere", async () => {
+		let set = worldWith("false");
+		expect(await migrateTimelineReach()).toBe("off");
+		expect(set).toHaveBeenCalledWith(SYSTEM_ID, "showTimeline", "off");
+		set = worldWith("true");
+		expect(await migrateTimelineReach()).toBe("all");
+		expect(set).toHaveBeenCalledWith(SYSTEM_ID, "showTimeline", "all");
+	});
+
+	it("leaves a world alone that stored nothing, or a choice already", async () => {
+		for (const stored of [undefined, "steading", "off", "all"]) {
+			const set = worldWith(stored);
+			expect(await migrateTimelineReach()).toBe(null);
+			expect(set).not.toHaveBeenCalled();
+		}
+	});
+
+	it("is the primary GM's to write, not a player's or a second GM's", async () => {
+		const set = worldWith("false");
+		globalThis.game.user = { id: "player", isGM: false };
+		expect(await migrateTimelineReach()).toBe(null);
+		globalThis.game.user = { id: "gm2", isGM: true };
+		expect(await migrateTimelineReach()).toBe(null);
+		expect(set).not.toHaveBeenCalled();
+	});
+
+	it("runs on ready", () => {
+		const ready = readFileSync(new URL("../../module/hooks/Ready.js", import.meta.url), "utf8");
+		expect(ready).toContain("await migrateTimelineReach()");
 	});
 });
 

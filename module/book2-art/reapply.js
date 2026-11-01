@@ -12,6 +12,7 @@ import { isBestiaryPlaceholderImg } from "../bestiary/monster-portrait.js";
 import { creatureTypeIcon } from "../bestiary/creature-types.js";
 import { isOurCompendiumRef } from "../migration/compat.js";
 import { SYSTEM_ID, packId } from "../system-id.js";
+import { countOf } from "../utils/plural.js";
 
 // Re-apply the Book II illustrations to the compendia, the world journals, and the
 // world actors, WITHOUT the source PDF.
@@ -1045,7 +1046,7 @@ export async function reapplyBook2Art({ entries = null, worldOnly = false, cheap
 		// The console line always goes out; the TOAST is suppressible. A caller running this as one
 		// step of a larger job reports that job's own result, and two unrelated notifications for one
 		// button press reads as two things having happened.
-		if (!quiet) ui.notifications?.info(`Stonetop: added Book II art to ${total} ${total === 1 ? "entry" : "entries"}.`);
+		if (!quiet) ui.notifications?.info(`Stonetop: added Book II art to ${countOf(total, "entry", "entries")}.`);
 	}
 	return { errors, total, actors, besPages, codexPages, locPages, soPages, worldActors, worldJournalPages, steadingActors, worldTokens };
 }

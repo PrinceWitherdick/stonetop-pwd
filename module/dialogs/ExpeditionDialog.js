@@ -490,7 +490,8 @@ const _STEPS = [
 				   the worse it gets: ask them to <em>Defy Danger</em> against their own hunger, thirst
 				   or exhaustion; then a debility; then more debilities; then increasingly aggressive
 				   moves, using the GM moves for afflictions. Between sessions, write their
-				   deprivation up as a threat.</p>`,
+				   deprivation up as a threat. A Ghost or Revenant needs no food, drink or sleep
+				   (<em>Unliving</em>), so none of this touches them; their followers still need feeding.</p>`,
 	},
 	{
 		key:     "home",

@@ -165,6 +165,19 @@ describe("Certain death (p.383): straight to 0 HP, no damage roll", () => {
 		expect(d.rollHazardDamage).not.toHaveBeenCalled();
 	});
 
+	// Audit XS-4 (the user's ruling, 2026-10-28): Disembodied, "You can be harmed only by silver, salt, or that which
+	// harms spirits or ghosts" (Book I p.148). A label on the Ghost's row only; the hazard still does what it does.
+	it("labels a Ghost's row in the pick, and the target keeps their plain name", async () => {
+		const wisp = { ...pc("wisp", "Wisp"), flags: { stonetop: { postDeathInsert: { slug: "ghost" } } } };
+		const vahid = pc("vahid", "Vahid");
+		const d = deps({ characters: () => [vahid, wisp], pick: vi.fn(async () => ["Actor.wisp"]), resolve: async () => wisp });
+		await hazardCertainDeath(page(FALL), d);
+		const names = d.pick.mock.calls[0][0].options.map(o => o.name);
+		expect(names).toEqual(["Vahid", "Wisp (Disembodied: only silver, salt or spirit harm)"]);
+		expect(d.apply).toHaveBeenCalledWith(wisp, 8, expect.anything());
+		expect(d.post.mock.calls[0][1]).toContain("Wisp: 8 → 0 HP");
+	});
+
 	it("leaves someone already at 0 HP alone, and says so", async () => {
 		const down = pc("andras", "Andras", 0);
 		const d = deps({ handTargets: () => [{ uuid: "Actor.andras", name: "Andras", hasActor: true }], resolve: async () => down });

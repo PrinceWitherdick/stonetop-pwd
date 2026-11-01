@@ -7,7 +7,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { buildLiveCharacter, sourceMovesFor, makeLiveItem } from "../../fakes/LiveCharacter.js";
 import { loadPlaybookPackDocs } from "../../fakes/sourcePack.js";
-import { STONETOP_SCOPE } from "../../../module/actors/character/StonetopFlags.js";
+import { STONETOP_SCOPE, HP_LOSS_OPTION } from "../../../module/actors/character/StonetopFlags.js";
 import { CharacterOnboardingDialog } from "../../../module/actors/character/dialogs/CharacterOnboardingDialog.js";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import {
@@ -607,7 +607,8 @@ describe("Beast-Bonded on the companion card, and Lend it your strength (M8)", (
 		vi.stubGlobal("Roll", class { constructor(f) { this.formula = f; } async evaluate() { this.total = 6; return this; } toMessage() {} });
 		try {
 			await bond.lendStrength(actor, { npc: null, cardHp: async () => ({ max: 16, current: 0 }) });
-			expect(actor.update).toHaveBeenCalledWith({ "system.attributes.hp.value": 0 }, { stonetopMove: "Lend it your strength" });
+			// HP LOST, not damage, said on the write (review VG-1, 2026-10-28): a Ghost possessing them shares none of it.
+			expect(actor.update).toHaveBeenCalledWith({ "system.attributes.hp.value": 0 }, { [HP_LOSS_OPTION]: true, stonetopMove: "Lend it your strength" });
 			expect(actor.getFlag(STONETOP_SCOPE, "animalCompanion.hpCurrent")).toBe(6);
 		} finally {
 			vi.unstubAllGlobals();

@@ -23,6 +23,7 @@ import { CLEARS_ON, markedTracks, snapshotTracksClearedBy } from "../actors/char
 import { campSummaryRows, hadAllAlongRows, settleRefusalText } from "./camp-view.js";
 import { campFollowerShare } from "./camp-followers.js";
 import { setFollowerHp } from "../actors/character/follower-hp.js";
+import { countOf } from "../utils/plural.js";
 
 /**
  * THE CAMP'S DOCUMENTS: who is sitting at the fire, the choices they make there, and the moment
@@ -773,7 +774,7 @@ async function payShare(actor, entry, campId) {
 		}
 		if (followers.rows.length) postMoveToChat(actor, "Make Camp", followers.rows);
 		if (shortfall > 0) {
-			ui.notifications?.warn?.(`By the time the camp was settled, ${actor.name}'s pack held ${shortfall} ${shortfall === 1 ? "use" : "uses"} less than was shared from it.`);
+			ui.notifications?.warn?.(`By the time the camp was settled, ${actor.name}'s pack held ${countOf(shortfall, "use")} less than was shared from it.`);
 		}
 	} catch (err) {
 		console.error(`Stonetop | Make Camp: could not pay ${actor.name}'s share of the camp`, err);

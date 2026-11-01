@@ -35,6 +35,10 @@ vi.mock("../../module/utils/foundry-compat.js", () => ({
 		const i = keyPath.lastIndexOf(".");
 		return [`${keyPath.slice(0, i + 1)}-=${keyPath.slice(i + 1)}`, null];
 	},
+	deletionUpdate: keyPath => {
+		const i = keyPath.lastIndexOf(".");
+		return { [`${keyPath.slice(0, i + 1)}-=${keyPath.slice(i + 1)}`]: null };
+	},
 	// ⚠ THE OTHER HALF OF THE SAME DECISION, and it has to be here or the undo goes blind. The real
 	// pair is in utils/foundry-compat.js: `deletionEntry` spells a deletion, `deletionTarget` reads
 	// one back, and the two live together precisely so that a reader knowing only one spelling

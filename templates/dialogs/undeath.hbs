@@ -40,6 +40,7 @@
 
 		{{#if rolledTotal}}
 		<p class="undeath-result-banner">You rolled <strong>{{this.rolledTotal}}</strong>, <strong>{{this.tierLabel}}</strong>.</p>
+		{{#if rolledBy}}<p class="undeath-hint">{{this.rolledBy}}</p>{{/if}}
 		{{/if}}
 
 		{{#if hp}}
@@ -94,6 +95,8 @@
 			</p>
 		</div>
 		{{else}}
+		{{! Nothing left to choose from (every Consequence marked, for Tethered): no "Choose 0". }}
+		{{#if pick}}
 		<p class="undeath-pick-label">
 			{{#if allApply}}
 			All of these apply:
@@ -101,6 +104,7 @@
 			Choose {{this.pick}}, <span class="undeath-pick-count">{{this.pickedCount}} of {{this.pick}} taken</span>:
 			{{/if}}
 		</p>
+		{{/if}}
 
 		<div class="undeath-effects">
 			{{#each effects}}
@@ -120,7 +124,7 @@
 					{{#if ../standingTask}}<p class="undeath-hint">{{../standingTask}}</p>{{/if}}
 					{{else if options.length}}
 					<select class="undeath-effect-select" data-kind="{{this.kind}}">
-						<option value="">&mdash; choose &mdash;</option>
+						<option value="">Choose one</option>
 						{{#each options}}
 						<option value="{{this.slug}}"{{#if (eq slug ../choice)}} selected{{/if}}>{{this.label}}</option>
 						{{/each}}
@@ -130,6 +134,21 @@
 			</div>
 			{{/each}}
 		</div>
+
+		{{! Every Consequence already marked, and the move owing one: the book is silent, so the GM rules.
+		    The Final Consequence is offered, never ticked for them. }}
+		{{#if unpayable}}
+		<div class="undeath-unpayable">
+			<p class="undeath-hint undeath-warning">
+				<i class="fas fa-triangle-exclamation"></i>
+				{{this.unpayable.note}}
+			</p>
+			<label class="undeath-toggle">
+				<input type="checkbox" class="undeath-owed-final" {{#if unpayable.on}}checked{{/if}}>
+				<span>{{this.unpayable.label}}</span>
+			</label>
+		</div>
+		{{/if}}
 		{{/if}}
 
 		{{#if alternative}}

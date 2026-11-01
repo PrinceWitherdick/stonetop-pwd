@@ -25,6 +25,8 @@
 import { SYSTEM_ID } from "../../system-id.js";
 import { STONETOP_SCOPE } from "./StonetopFlags.js";
 import { BATTLE_JOY_DROPPED_OPTION, BATTLE_JOY_FLAG } from "./battle-joy.js";
+import { MANIFEST_ENDED_OPTION } from "./manifest.js";
+import { possessedHost, wroteZeroHp } from "./bodysnatcher.js";
 import { heldReadiness, readinessCount, READINESS_FLAG } from "../../combat/defend-readiness.js";
 import { keepsFightingAtZero } from "./unstoppable.js";
 import { ownsLearnedMoveNamed } from "./owns-move.js";
@@ -409,10 +411,12 @@ export async function handleInspirationQuery(data, context = {}, deps = {}) {
  * character model's restoreHp, whose `clearsDeathsDoor` is what Unstoppable reads as "not a heal").
  * `battleJoy` puts back a Battle Joy the drop ended, and `readiness` the Readiness held just before it
  * (the GM's client lets it go when they drop, combat/readiness-loss.js), since they never dropped: both
- * in that same write. Said in chat. Whether it was kept.
+ * in that same write. A Ghost's manifestation (`manifestEnded`) or possession (`possessedHost`, the host's
+ * name) that the drop ended is NOT put back; the card says it stays ended. Said in chat. Whether it was kept.
  */
 export async function keepOneHp(actor, {
-	battleJoy = false, readiness = 0, scope = SYSTEM_ID, combats = globalThis.game?.combats,
+	battleJoy = false, readiness = 0, manifestEnded = false, possessedHost: host = "",
+	scope = SYSTEM_ID, combats = globalThis.game?.combats,
 } = {}) {
 	if (!canKeepOneHp(actor, { scope, combats })) return false;
 	if (!(await spendInspiration(actor, scope))) return false;
@@ -425,6 +429,8 @@ export async function keepOneHp(actor, {
 	} });
 	let note = format(`${KEY}.${joy ? "keptOneHpJoy" : "keptOneHp"}`, { name: actor.name, left: inspirationHeld(actor, scope) });
 	if (ready) note += ` ${format(`${KEY}.keptReadiness`, { count: ready })}`;
+	if (manifestEnded) note += ` ${localize(`${KEY}.keptManifestEnded`)}`;
+	if (host) note += ` ${format(`${KEY}.keptPossessionEnded`, { host })}`;
 	await postMoveNote(actor, WE_HAPPY_FEW, note);
 	return true;
 }
@@ -453,9 +459,10 @@ function walkthroughAutoOpens() {
  * when the table has it open on its own and Unstoppable is not keeping them fighting.
  */
 export async function offerKeepOneHp(actor, {
-	battleJoy = false, readiness = 0, ask = askKeepOneHp, keep = keepOneHp, open = openZeroHpMove, autoOpens = walkthroughAutoOpens,
+	battleJoy = false, readiness = 0, manifestEnded = false, possessedHost: host = "",
+	ask = askKeepOneHp, keep = keepOneHp, open = openZeroHpMove, autoOpens = walkthroughAutoOpens,
 } = {}) {
-	if ((await ask(actor)) && (await keep(actor, { battleJoy, readiness }))) return true;
+	if ((await ask(actor)) && (await keep(actor, { battleJoy, readiness, manifestEnded, possessedHost: host }))) return true;
 	if (autoOpens() && !keepsFightingAtZero(actor)) await open(actor);
 	return false;
 }
@@ -473,8 +480,14 @@ export function onUpdateActorInspirationAtZero(actor, changes, options = {}, _us
 	try {
 		const answers = deps.answers ?? answersFor;
 		if (!answers(actor) || !canKeepOneHp(actor, deps)) return;
-		(deps.offer ?? offerKeepOneHp)(actor, { battleJoy: !!options?.[BATTLE_JOY_DROPPED_OPTION], readiness: heldReadiness(actor) })
-			.catch(err => console.error("Stonetop | offering to keep 1 HP failed", err));
+		// A Ghost's possession is still recorded here: a write that puts them at 0 HP ends it in a later
+		// write (bodysnatcher.js#onUpdateGhost). Their manifestation went in this one; the option says so.
+		const atZero = wroteZeroHp(actor, changes);
+		(deps.offer ?? offerKeepOneHp)(actor, {
+			battleJoy: !!options?.[BATTLE_JOY_DROPPED_OPTION], readiness: heldReadiness(actor),
+			manifestEnded: !!options?.[MANIFEST_ENDED_OPTION],
+			possessedHost: atZero ? (possessedHost(actor)?.name ?? "") : "",
+		}).catch(err => console.error("Stonetop | offering to keep 1 HP failed", err));
 	} catch (err) {
 		console.error("Stonetop | offering to keep 1 HP failed", err);
 	}

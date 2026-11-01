@@ -11,6 +11,7 @@ import { addDamageBonus } from "../utils/damage-die.js";
 import { documentPortraitFrame } from "../utils/portrait-frame.js";
 import { followerArmorGate } from "../actors/character/move-armor.js";
 import { monsterArmorGate } from "./monster-armor.js";
+import { countOf } from "../utils/plural.js";
 
 // ── Step 3: hit points (p.476–477) ───────────────────────────────────────────
 // "How resilient are they? (pick 1)" then "What else applies? (pick all)".
@@ -640,7 +641,7 @@ export function groupFightCardSummaries({
 	// a state the card does not mean.
 	const exchange = outnumberBonus(aliveCount, 1);
 	return {
-		rosterSummary: `${roster.length} member${roster.length === 1 ? "" : "s"}`
+		rosterSummary: countOf(roster.length, "member")
 			+ (max ? ` · ${hp}/${max} HP` : "")
 			+ (down > 0 ? ` · ${down} down` : ""),
 		// The pool is one member's HP, so the number alone reads like a typo beside a

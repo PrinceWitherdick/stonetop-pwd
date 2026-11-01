@@ -58,6 +58,9 @@ import {appendMonsterDamageNotes} from "../actors/monster/monster-damage-notes.j
 import {MOVE_OPTION_TAGS} from "../actors/character/move-pick-bonuses.js";
 import {keepsFightingAtZero, markUnstoppable} from "../actors/character/unstoppable.js";
 import {actorPastDeathKind, isOutOfPlay} from "../actors/character/deaths-door-actor.js";
+import {manifestsHarmfulTouch} from "../actors/character/manifest.js";
+import {possessedHost} from "../actors/character/bodysnatcher.js";
+import {THRALL_MARK, hasThrallMark} from "../actors/character/thrall-marks.js";
 import {format, localize} from "../utils/i18n.js";
 import {foldModes} from "../utils/roll-mode.js";
 import {bringDialogToFront} from "../utils/front-on-open.js";
@@ -1471,7 +1474,9 @@ function seedForTargets(actor, targets) {
  * @param {string} [options.keywords]   the blow's tags, printed beside each total
  * @param {string} [options.description] a monster move's text, on the plain card
  * @param {string} [options.rollMode]   the stat block's own advantage on this die
- * @param {object} [options.weapon]     utils/damage.js#attackWeapon, for the armor Apply takes off
+ * @param {object} [options.weapon]     utils/damage.js#attackWeapon, for the armor Apply takes off. Its `notTouch`
+ *   marks a Ghost's blow that is no touch of theirs (Poltergeist's Hurl): no manifest touch's "ignores armor",
+ *   and no caution that a Ghost's touch can't harm the living (ghostBlowCautionHtml)
  * @param {boolean} [options.seeded]    offer the fight's +N (off for a row whose formula has its own)
  * @param {boolean} [options.shiftKey]  skip the damage window
  * @param {{name: string, group: boolean}|null} [options.striker]  a follower off the map striking beside
@@ -1526,7 +1531,8 @@ export async function rollDamageAt(actor, { formula, label, keywords = "", descr
 		if (!damage) return false;
 		// The fiction the weapon's tags owe, as a Clash with nobody targeted prints it (rollAndPostDamage).
 		// Worked out AFTER the window, because a tag a ticked line just bought owes its notice too.
-		const notices = tagNoticesHtml(withAddedTags(striker ? weapon : muscleboundWeapon(actor, weapon), damage.addTags));
+		const notices = ghostBlowCautionHtml(actor, { own: !striker, weapon })
+			+ tagNoticesHtml(withAddedTags(striker ? weapon : muscleboundWeapon(actor, weapon), damage.addTags));
 		const { base, addTags, ...adjust } = settled(damage);
 		const roll = await rollDamage(base, actor, {
 			label, keywords, description, ...adjust,
@@ -1895,6 +1901,18 @@ export function weaponWarningsHtml(weapon, { noRangedWeapon = false } = {}) {
 	});
 }
 
+/**
+ * A gold caution on a Ghost's own blow while they are not manifest with "Your touch (or ghostly weapons) can harm
+ * the living" and possess nobody: Disembodied gives them "the barest influence on the material world" (Book I
+ * p.148). Flagged, never blocked: the numbers stand, and the table decides (audit XS-2, the user's ruling
+ * 2026-10-28). Not on their own price, and not on a blow that is no touch of theirs (the weapon's `notTouch`: Hurl). "" otherwise.
+ */
+function ghostBlowCautionHtml(actor, { own = true, selfHarm = false, weapon = null } = {}) {
+	if (!own || selfHarm || weapon?.notTouch || !disembodiedSufferer(actor)) return "";
+	if (manifestsHarmfulTouch(actor) || possessedHost(actor)) return "";
+	return `<p class="stonetop-attack-warn stonetop-damage-ghost-caution"><i class="fas fa-triangle-exclamation"></i> ${escHtml(format("stonetop.fight.disembodied.ownBlowCaution", { name: actor.name ?? "" }))}</p>`;
+}
+
 // Roll damage once per applyable target and post the results card. With no applyable
 // targets, fall back to a single plain damage roll (no Apply button). A tagged weapon prints its
 // fiction notes ON whichever of those two cards it got (tagNoticesHtml) rather than under it, so
@@ -1927,6 +1945,11 @@ async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignores
 	// `unarmedWeapon`, not a bare record: this runs BEFORE Musclebound reads the reach below, and a
 	// bare-handed blow that ignores armor is still a bare-handed blow.
 	weapon = ignoresArmor ? { ...(weapon ?? unarmedWeapon()), ignoresArmor: true } : weapon;
+	// A Ghost manifest with "your touch (or ghostly weapons) can harm the living (ignores armor)": their own
+	// blow opens with the card's "Ignores armor" box ticked, which the table can still untick (the user's
+	// ruling, 2026-10-27; manifest.js). Not their own price, and not a blow that ignores armor already.
+	// The weapon's `notTouch`: a blow that is no touch of theirs (Poltergeist's Hurl, an object thrown).
+	const manifestTouch = own && !selfHarm && !weapon?.notTouch && !weapon?.ignoresArmor && manifestsHarmfulTouch(actor);
 
 	// The character's OWN blow carries their own moves' fiction: Musclebound makes a hand-to-hand or
 	// thrown attack forceful and messy, and a ticked line can add a tag of its own (Anger is a Gift's
@@ -1952,7 +1975,7 @@ async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignores
 	// it. Both cards have the same slot for it (roll-engine.js#_rollCard's `noticesHtml`, and the
 	// results card's own body), which is what lets the two paths say it identically.
 	// ...and, beside it, what the weapon itself owes a warning for: every box marked, or nothing to shoot with.
-	const notices = tagNoticesHtml(weapon) + weaponWarningsHtml(weapon, { noRangedWeapon });
+	const notices = ghostBlowCautionHtml(actor, { own, selfHarm, weapon }) + tagNoticesHtml(weapon) + weaponWarningsHtml(weapon, { noRangedWeapon });
 
 	let results = [];
 	if (applyable.length === 0 && !speaker) {
@@ -1976,7 +1999,7 @@ async function rollAndPostDamage(actor, { move, weapon, targets, damage, ignores
 		// ended or moved on, and a group's blow must not turn into a lone one then (fight/group-hits.js).
 		// Nobody strikes a hazard's blow, so it says nothing either way.
 		const attackerGroup = selfHarm || !actor || !applyable.length ? null : attackerIsGroup(actor, resolveSync(applyable[0].uuid)?.parent ?? globalThis.canvas?.scene ?? null);
-		await postDamageResultsCard(actor, { move, weapon, ownPiercing, results, damage, selfHarm, ownPrice, notices, foeUuid, groupBlow, followerBlow, attackerGroup, counterOf, speaker });
+		await postDamageResultsCard(actor, { move, weapon, ownPiercing, results, damage, selfHarm, ownPrice, notices, foeUuid, groupBlow, followerBlow, attackerGroup, counterOf, speaker, armorIgnoredOnTheFly: manifestTouch });
 		// The blow on the map, as its card lands. `fx` is the caller saying this was a weapon's blow at
 		// all: a move's own number (rollOptionDamage, rollMoveDamageAt) passes none and draws nothing.
 		// Never awaited, and it cannot throw: everything before it is already spent.
@@ -2236,16 +2259,19 @@ export async function rollMoveDamageAt(actor, target, { move, formula, ignoresAr
  * @param {string} p.formula   the Invocation's number ("2d8", "1d8" reduced)
  * @param {object[]} [p.offers] the damage window's lines
  * @param {boolean} [p.shiftKey]
+ * @param {boolean} [p.harmsSpirits]  the Invocation's text names spirits as what it harms, as Go Back to the
+ *   Shadow's does (its caller passes it): a Ghost's Disembodied box then opens as harm landing (the user's
+ *   ruling, 2026-10-27, audit GH-7). Off unless said, so an Invocation added later harms no spirit by accident.
  * @returns {Promise<object[]|null>}  the rolled totals, or null when the window was cancelled
  */
-export async function rollInvocationDamage(actor, { move, formula, offers = [], shiftKey = false }) {
+export async function rollInvocationDamage(actor, { move, formula, offers = [], shiftKey = false, harmsSpirits = false }) {
 	if (!actor || !formula) return null;
 	const targets = snapshotTargets();
 	const damage = await askDamageAdjustment(actor, { formula, rollMode: "normal", seed: null, offers, attacker: actor.name, targets, shiftKey });
 	if (!damage) return null;
 	return rollAndPostDamage(actor, {
 		move, targets, damage, ignoresArmor: true, own: false, spillsBlood: true, shots: false, askOffense: true,
-		weapon: { name: "", range: [], piercing: 0, ignoresArmor: true, tags: [] },
+		weapon: { name: "", range: [], piercing: 0, ignoresArmor: true, tags: [], harmsSpirits },
 	});
 }
 
@@ -2451,8 +2477,86 @@ function undyingSufferer(actor) {
  * A Ghost, whose Disembodied reads "You can be harmed only by silver, salt, or that which harms spirits or
  * ghosts" (Book I p.148). One who has left play is no player's to spare, as for Undying above.
  */
-function disembodiedSufferer(actor) {
+export function disembodiedSufferer(actor) {
 	return actor?.type === "character" && !isOutOfPlay(actor) && actorPastDeathKind(actor) === "ghost";
+}
+
+/** A Thrall in play holding Mark `slug` (thrall-marks.js): A Festering Rot or Child of the Deeps (Book I p.153). */
+function thrallMarkSufferer(actor, slug) {
+	return actor?.type === "character" && !isOutOfPlay(actor) && hasThrallMark(actor, slug);
+}
+
+// WHAT A BLOW IS MADE OF, for the boxes that open the other way when the blow says so: Undying's "Neither
+// poison nor disease do you harm" (UNDYING_POISON_BOX), A Festering Rot's "unharmed by poison, disease, caustic
+// substances, and vermin bites" (FESTERING_ROT_BOX) and Disembodied's "harmed only by silver, salt, or that
+// which harms spirits or ghosts" (DISEMBODIED_BOX). Read off the weapon record the card carries at the moment
+// it is posted (its name, the stat block's printed tag list, the tags an option or a hazard gives it), since
+// the flag keeps no tags. Each box stays the table's to tick either way (the user's rulings, 2026-10-27/28).
+
+/** Poison, venom or disease, anywhere in the blow's name or tags. */
+const POISON_BLOW_RE = /\b(?:poison(?:s|ed|ous)?|venom(?:s|ous)?|disease[sd]?)\b/i;
+/** A tag that says the blow harms spirits: silver, salt, or a spirit tag, as a whole tag. */
+const SPIRIT_TAG_RE = /^(?:silver|salt|spirits?|harms spirits(?: or ghosts)?)$/i;
+/** Silver or salt in the blow's own name ("Silver dagger", "A fistful of salt"). */
+const SPIRIT_NAME_RE = /\b(?:silver|salt)\b/i;
+
+/** The blow's tags, one per entry: its own list and a stat block's printed one. */
+function blowTags(weapon) {
+	const printed = String(weapon?.keywords ?? "").split(",");
+	return [...(Array.isArray(weapon?.tags) ? weapon.tags : []), ...printed].map(t => String(t ?? "").trim()).filter(Boolean);
+}
+
+/** Everything the blow says of itself: its name, then its tags. */
+function blowTexts(weapon) {
+	return [weapon?.name ?? "", ...blowTags(weapon)];
+}
+
+/** Caustic, acid or a bite, for A Festering Rot's "caustic substances, and vermin bites". */
+const ROT_BLOW_RE = /\b(?:caustic|acid(?:s|ic)?|bites?|bitten)\b/i;
+
+/**
+ * What the blow's name and tags say it is, read once: `poison` (poison, venom or disease) and `rotIgnores` (that,
+ * or caustic, acid or a bite: what A Festering Rot shrugs off).
+ */
+function blowMakeup(weapon) {
+	const texts = blowTexts(weapon);
+	const poison = texts.some(text => POISON_BLOW_RE.test(text));
+	return { poison, rotIgnores: poison || texts.some(text => ROT_BLOW_RE.test(text)) };
+}
+
+/** Whether the blow is poison, venom or disease. Exported for the tests. */
+export function blowIsPoison(weapon) {
+	return blowMakeup(weapon).poison;
+}
+
+/** Whether the blow is one A Festering Rot shrugs off: poison, disease, caustic, acid or a bite. Exported for the tests. */
+export function blowRotIgnores(weapon) {
+	return blowMakeup(weapon).rotIgnores;
+}
+
+/** Whether the blow harms spirits: silver, salt or a spirit tag. Exported for the tests. */
+export function blowHarmsSpirits(weapon) {
+	return SPIRIT_NAME_RE.test(String(weapon?.name ?? "")) || blowTags(weapon).some(tag => SPIRIT_TAG_RE.test(tag));
+}
+
+/**
+ * The rows a new damage card's flag lists from the start, keyed as the boxes read them (damageSet): every row
+ * under the key of each ROW_BOXES entry whose `opensFor` says this blow opens it the other way. Today that is
+ * UNDYING_POISON_BOX for a blow that is poison, FESTERING_ROT_BOX for what A Festering Rot shrugs off, and
+ * DISEMBODIED_BOX for one that harms spirits (the weapon's `harmsSpirits`: the caller says so, as Go Back to the
+ * Shadow does for its spirits of darkness). Who actually gets a box is still each box's `qualifies`, so listing
+ * a row whose sufferer is nobody's Revenant, Thrall or Ghost does nothing. `{}` for an ordinary blow.
+ * `move` names a stat block's blow, whose weapon has no name of its own ("Bite", "Silver Claw"). `ownPrice`
+ * is a character's own price (rollOptionDamage), which never opens Disembodied as harm landing: as printed,
+ * it stays unticked whatever the option's words are made of.
+ */
+function seededRowBoxes(weapon, results, { move = "", ownPrice = false } = {}) {
+	const uuids = (results ?? []).map(r => r.uuid).filter(Boolean);
+	if (!uuids.length) return {};
+	const named = weapon?.name ? weapon : { ...(weapon ?? {}), name: move };
+	const harmsSpirits = !ownPrice && (Boolean(weapon?.harmsSpirits) || blowHarmsSpirits(named));
+	const blow = { ...blowMakeup(named), harmsSpirits };
+	return Object.fromEntries(ROW_BOXES.filter(box => box.opensFor?.(blow)).map(box => [box.key, uuids]));
 }
 
 /** Fire Within's "reduce that damage by 2" (Book I p.122). */
@@ -2536,7 +2640,7 @@ function appendRowBox(message, actions, { row, standIn, target, several, gate, d
 	});
 }
 
-function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, damage, selfHarm = false, ownPrice = false, notices = "", foeUuid = "", groupBlow = false, followerBlow = false, attackerGroup = null, counterOf = "", speaker = null }) {
+function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, damage, selfHarm = false, ownPrice = false, notices = "", foeUuid = "", groupBlow = false, followerBlow = false, attackerGroup = null, counterOf = "", speaker = null, armorIgnoredOnTheFly = false }) {
 	// Several targets is the book's own rule now that the roller is asked who a blow hits
 	// (fight/fight-targets.js), so the note says when it applies rather than calling it an abstraction.
 	const multiWarn = results.length > 1 && !weapon?.area
@@ -2617,7 +2721,12 @@ function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, dama
 		flags: { [SCOPE]: { damage: {
 			// No attacker for a hazard: nobody to strike back at, credit a kill to, or remember for Payback.
 			move, attackerUuid: actor?.uuid ?? "",
-			weapon: weapon ? { name: weapon.name, piercing: ownPiercing, ignoresArmor: weapon.ignoresArmor } : null,
+			// A manifest Ghost's touch "can harm the living (ignores armor)" (manifest.js): written as the GM's on-the-fly
+			// tick is (setArmorIgnoredOnTheFly), so the card opens with that box ticked and it can still come back off.
+			weapon: weapon ? { name: weapon.name, piercing: ownPiercing, ignoresArmor: weapon.ignoresArmor || armorIgnoredOnTheFly } : null,
+			...(armorIgnoredOnTheFly && weapon && !weapon.ignoresArmor ? { [ARMOR_IGNORED_ON_THE_FLY]: true } : {}),
+			// The boxes that open the other way for what this blow is made of (seededRowBoxes).
+			...seededRowBoxes(weapon, results, { move, ownPrice: selfHarm && ownPrice }),
 			// `applied` is an ARRAY, not a uuid-keyed object: a token uuid ("Scene.x.Token.y")
 			// used as a flag key would be dot-expanded into nested objects by setFlag, breaking
 			// the idempotency lookup so a second click re-subtracts HP.
@@ -3846,17 +3955,10 @@ export function wireConditionalArmor(message, html, gateFor = applyGateOnce(mess
 		appendRowBox(message, actions, { row, standIn, target, several, gate, done, words, key: "armorOff", listed: off, listsTicked: false });
 	}
 
-	// And Undaunted's +1 armor where the fight does not show it holding: the same kind of question about
-	// the same armor, drawn under the same gate. Here rather than beside its caller, so every damage card
-	// that asks about armor asks about this too.
+	// And the rest of the row's boxes (ROW_BOXES), drawn under the same gate. Here rather than beside its
+	// caller, so every damage card that asks about armor asks about these too.
 	const rows = { damage, pending, gate, done, several };
-	wireRowBoxes(message, actions, rows, UNDAUNTED_ARMOR_BOX);
-	// And a Revenant's Undying, which halves what gets past that armor: the next question down the same sum.
-	wireRowBoxes(message, actions, rows, UNDYING_BOX);
-	// And a Lightbearer's Fire Within, which takes 2 off what gets past it for cold or fire.
-	wireRowBoxes(message, actions, rows, FIRE_WITHIN_BOX);
-	// And a Ghost's Disembodied: nothing gets through unless this blow harms spirits.
-	wireRowBoxes(message, actions, rows, DISEMBODIED_BOX);
+	for (const box of ROW_BOXES) wireRowBoxes(message, actions, rows, box);
 }
 
 /**
@@ -3902,6 +4004,7 @@ const FIRE_WITHIN_BOX = Object.freeze({
 	wordsKey: "stonetop.fight.heroMoves.fireWithin.box", key: "fireWithin", listsTicked: true,
 	adjust: dmg => Math.max(0, dmg - FIRE_WITHIN_REDUCTION),
 	noteKey: "stonetop.fight.heroMoves.fireWithin.note", noteParams: Object.freeze({ by: FIRE_WITHIN_REDUCTION }),
+	afterArmorStep: 0,
 });
 
 /**
@@ -3910,8 +4013,9 @@ const FIRE_WITHIN_BOX = Object.freeze({
  *
  * Ticked for the reason the conditional armor's box is: the box opens on the ORDINARY case. A blade, a
  * spear, an arrow, a club, a claw or a fist all cut, stab or crush, and that is nearly every blow a card
- * carries; fire, poison, cold or a curse are the exceptions the table knows when it sees them, so it
- * unticks for those and applyOwedDamage then takes the blow whole. (Undaunted's box opens unticked
+ * carries; fire, cold or a curse are the exceptions the table knows when it sees them, so it unticks for
+ * those and applyOwedDamage then takes the blow whole. Poison and disease are not among them: those do a
+ * Revenant no harm at all, which is UNDYING_POISON_BOX's to say. (Undaunted's box opens unticked
  * because being outnumbered or outsized is NOT the ordinary case.) Drawn per row against whoever takes
  * the blow, a Defend's stand-in included, and gated like the armor boxes.
  */
@@ -3921,6 +4025,58 @@ const UNDYING_BOX = Object.freeze({
 	// Wrapped, not the import itself: read at Apply, never while the modules are still loading.
 	adjust: dmg => halveDamage(dmg),
 	noteKey: "stonetop.fight.undying.halvedNote", noteParams: Object.freeze({}),
+	afterArmorStep: 1,
+});
+
+/**
+ * A box that, ticked, has the blow do its sufferer nothing at all, listed on the flag while ticked: what
+ * UNDYING_POISON_BOX, FESTERING_ROT_BOX and CHILD_OF_THE_DEEPS_BOX share. `modifier` names its class, and
+ * `opensFor`, where given, is seededRowBoxes' question of whether a new card lists the rows from the start,
+ * and `afterArmorStep` its place in Apply's sum (AFTER_ARMOR_BOXES).
+ */
+function harmlessBox({ qualifies, modifier, wordsKey, key, noteKey, opensFor, afterArmorStep }) {
+	return Object.freeze({
+		qualifies, className: `stonetop-damage-armor-gate stonetop-damage-${modifier}`,
+		wordsKey, key, listsTicked: true,
+		adjust: () => 0,
+		noteKey, noteParams: Object.freeze({}),
+		opensFor, afterArmorStep,
+	});
+}
+
+/**
+ * The box for the rest of Undying: "Neither poison nor disease do you harm" (Book I p.150), on a row whose
+ * sufferer is a Revenant. Ticked, the blow does them nothing (audit RV-1, 2026-10-26). It opens ticked on a
+ * blow whose name or tags say poison, venom or disease (seededRowBoxes lists those rows from the start) and
+ * unticked on every other, and the table ticks it for the poisoned blade the card can't know about.
+ */
+const UNDYING_POISON_BOX = harmlessBox({
+	qualifies: undyingSufferer, modifier: "undying-poison",
+	wordsKey: "stonetop.fight.undying.poisonBox", key: "poisonHarmless", noteKey: "stonetop.fight.undying.poisonNote",
+	opensFor: blow => blow.poison, afterArmorStep: 2,
+});
+
+/**
+ * The same kind of box for a Thrall holding A Festering Rot: "You are unharmed by poison, disease, caustic
+ * substances, and vermin bites" (Book I p.153; audit XS-1, the user's ruling 2026-10-28). Ticked, the blow does
+ * them nothing. It opens ticked on a blow named or tagged poison, venom, disease, caustic, acid or bite
+ * (seededRowBoxes), and the table unticks it for a bite that is no vermin's.
+ */
+const FESTERING_ROT_BOX = harmlessBox({
+	qualifies: actor => thrallMarkSufferer(actor, THRALL_MARK.FESTERING_ROT), modifier: "festering-rot",
+	wordsKey: "stonetop.fight.festeringRot.box", key: "rotHarmless", noteKey: "stonetop.fight.festeringRot.note",
+	opensFor: blow => blow.rotIgnores, afterArmorStep: 3,
+});
+
+/**
+ * The UNTICKED box for a Thrall holding Child of the Deeps: "suffer no harm from cold or pressure" (Book I
+ * p.153; audit XS-1). Unticked like Fire Within's, since cold and pressure are the exception; ticked, the blow
+ * does them nothing.
+ */
+const CHILD_OF_THE_DEEPS_BOX = harmlessBox({
+	qualifies: actor => thrallMarkSufferer(actor, THRALL_MARK.CHILD_OF_THE_DEEPS), modifier: "child-of-the-deeps",
+	wordsKey: "stonetop.fight.childOfTheDeeps.box", key: "deepsUnharmed", noteKey: "stonetop.fight.childOfTheDeeps.note",
+	afterArmorStep: 4,
 });
 
 /**
@@ -3928,21 +4084,36 @@ const UNDYING_BOX = Object.freeze({
  * spirits or ghosts" (Book I p.148), on a row whose sufferer is a Ghost. Unticked, the blow does them nothing
  * (the user's ruling, 2026-10-23): a sword or a bite harms no spirit, and the table ticks it for the silver
  * blade, the salt or the spirit's claw that does. So this box ACTS while unticked (`whenUnticked`), the one of
- * these that does.
+ * these that does. It opens TICKED (harm lands) on a blow that says it harms spirits: an Invocation aimed at
+ * them (Go Back to the Shadow), or a weapon named or tagged silver, salt or spirit (seededRowBoxes; the
+ * user's ruling, 2026-10-27, audit GH-7). A character's own price stays unticked, as printed.
  */
 const DISEMBODIED_BOX = Object.freeze({
 	qualifies: disembodiedSufferer, className: "stonetop-damage-armor-gate stonetop-damage-disembodied",
 	wordsKey: "stonetop.fight.disembodied.box", key: "harmsSpirit", listsTicked: true, whenUnticked: true,
 	adjust: () => 0,
 	noteKey: "stonetop.fight.disembodied.unharmedNote", noteParams: Object.freeze({}),
+	opensFor: blow => blow.harmsSpirits, afterArmorStep: 5,
 });
 
 /**
- * In the order Apply takes them: Fire Within's 2 comes off what got through armor, and Undying halves what
- * is left; a Ghost unharmed takes none of it. A new move that acts on that number is one entry here and needs
- * no edit to the sum.
+ * Every box a damage row may carry after its conditional armor, in the order wireConditionalArmor draws them:
+ * Undaunted's +1 armor (the same kind of question about the same armor), then the moves that act on what gets
+ * past it. Each box's `qualifies` says whose row gets it, and its optional `opensFor` whether a new card lists
+ * the rows from the start (seededRowBoxes). A new box is one entry here; one that acts on what got through armor
+ * also gives its `afterArmorStep`, its place in Apply's sum (AFTER_ARMOR_BOXES).
  */
-const AFTER_ARMOR_BOXES = Object.freeze([FIRE_WITHIN_BOX, UNDYING_BOX, DISEMBODIED_BOX]);
+const ROW_BOXES = Object.freeze([UNDAUNTED_ARMOR_BOX, UNDYING_BOX, UNDYING_POISON_BOX, FESTERING_ROT_BOX, CHILD_OF_THE_DEEPS_BOX, FIRE_WITHIN_BOX, DISEMBODIED_BOX]);
+
+/**
+ * The ROW_BOXES that act on what got through armor, in the order Apply takes them (not the order they are
+ * drawn): Fire Within's 2 comes off what got through armor, and Undying halves what is left; a Revenant spared
+ * poison, a Thrall unharmed, or a Ghost unharmed, takes none of it. Read off each box's `afterArmorStep`, so a
+ * new move that acts on that number gives one there and needs no edit to the sum. Exported for the tests.
+ */
+export const AFTER_ARMOR_BOXES = Object.freeze(ROW_BOXES
+	.filter(box => Number.isInteger(box.afterArmorStep))
+	.sort((a, b) => a.afterArmorStep - b.afterArmorStep));
 
 /**
  * What a row's sufferer takes of the `soaked` damage that got through armor, once AFTER_ARMOR_BOXES have each

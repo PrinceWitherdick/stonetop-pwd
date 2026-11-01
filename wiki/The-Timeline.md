@@ -10,7 +10,9 @@ The timeline is the campaign's history, season by season: Stonetop's own thread 
 - The **Timeline** tab on each character sheet shows that character's thread (in the Modern sheet layout).
 - **Open the full timeline** on either tab shows every thread together in its own window.
 
-Your GM can turn the whole feature off with the world setting **Timeline**. The system keeps recording in the background either way.
+Your GM picks where the timeline appears with the world setting **Timeline**: **Everywhere** (the default), **Steading sheet only** (character sheets lose their tab; the steading's tab and the journal stay) or **Off** (no tabs, no journal). The system keeps recording in the background whatever they pick.
+
+Each player can also take the tab off their own sheets: untick **Timeline Tab on My Sheets** on the **Preferences** tab. The Timeline journal and the full timeline window stay. See [Preferences and Accessibility](Preferences-and-Accessibility#timeline).
 
 ## What's recorded for you
 

@@ -130,7 +130,7 @@ The **Defend** row shows your Readiness circles. Click a circle to set how much 
 
 - **Inventory**: your gear, load and special possessions. See [Inventory and Gear](Inventory-and-Gear).
 - **Details**: **Background**, **Instinct**, **Appearance**, **Origin**, your **Lore** answers and **Relationships**. While background questions are unanswered, **Answer Background Questions** opens the walkthrough on them.
-- **Special Moves**: **Death's Door**, **Recover**, **Convalesce**, **Level Up**, **Burn Brightly** and, while your character is still in play, **Retire** (retire or leave Stonetop; shown to the owner and the GM), each with its own button. A move that is not available right now says why (for example, Level Up needs enough XP; Death's Door is only for a dying character).
+- **Special Moves**: **Death's Door**, **Recover**, **Convalesce**, **Bolster** (say how long you prepared and for what, and hold that much Preparation; the card says what you hold now), **Level Up**, **Burn Brightly** and, while your character is still in play, **Retire** (retire or leave Stonetop; shown to the owner and the GM), each with its own button. A move that is not available right now says why (for example, Level Up needs enough XP; Death's Door is only for a dying character).
 - **Invocations** (the Lightbearer, or anyone who learned to invoke the Sun God): see [Playbook Notes](Playbook-Notes).
 - **Followers**: see [Followers](Followers).
 - **Arcana**: see [Arcana and Artifacts](Arcana-and-Artifacts).

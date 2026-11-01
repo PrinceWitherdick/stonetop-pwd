@@ -11,6 +11,11 @@ export class CharacterInstincts {
 		await this._flags.setFlag("selected", value);
 	}
 
+	/** select as an `actor.update()` fragment, for a caller landing it in one write with more. */
+	selectUpdateData(value) {
+		return this._flags.updateData("selected", value);
+	}
+
 	/**
 	 * An Instinct that holds only until the next Level Up (Book II p.370, the grwgnach: "until you
 	 * Level Up, your instinct becomes 'Birdlike'"; p.523, the wolf pelt). It sits over the chosen

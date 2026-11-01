@@ -75,6 +75,8 @@
 				{{#if description}}
 				<div class="stonetop-levelup-move-description">{{{moveBody description moveResults}}}</div>
 				{{/if}}
+				{{! A move whose trigger an insert has taken away (Hard to Kill for a Revenant): said, never hidden. }}
+				{{#if insertNote}}<p class="stonetop-levelup-move-note stonetop-levelup-insert-note">{{this.insertNote}}</p>{{/if}}
 			</div>
 			{{/each}}
 

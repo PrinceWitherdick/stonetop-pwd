@@ -26,6 +26,7 @@ import { escHtml, normaliseEditorText } from "../utils/strings.js";
 import { hashString } from "../hooks/journal-sync-core.js";
 import { TIER_LABELS } from "../utils/move-results.js";
 import { seasonStamp } from "../seasons/campaign-year.js";
+import { plural } from "../utils/plural.js";
 
 /**
  * The line a season prints on the timeline.
@@ -40,7 +41,7 @@ export function seasonEntryBody({ gainNames = [], surplusChange = 0, notes = "",
 	const tierLabel = TIER_LABELS[fortunesTier];
 	if (tierLabel) parts.push(`<p><strong>Fortunes roll:</strong> ${tierLabel}</p>`);
 	if (gainNames.length) {
-		parts.push(`<p><strong>Seasonal gain${gainNames.length > 1 ? "s" : ""}:</strong> ${gainNames.map(escHtml).join(", ")}</p>`);
+		parts.push(`<p><strong>${plural(gainNames.length, "Seasonal gain")}:</strong> ${gainNames.map(escHtml).join(", ")}</p>`);
 	}
 	if (Number.isFinite(surplusChange) && surplusChange !== 0) {
 		parts.push(`<p><strong>Surplus:</strong> ${sign(surplusChange)}</p>`);

@@ -123,6 +123,23 @@
 			</button>
 		</div>
 
+		{{! Bolster (homefront, Book I p.524): any PC can, so the card is always live. The Preparation it
+		    holds is spent from a roll's card (roll-boosts.js); the hint says what is held now. }}
+		<div class="stonetop-special-move-card">
+			<h3 class="stonetop-special-move-name">{{localize "stonetop.specialMoves.bolster.title"}}</h3>
+			<p class="stonetop-special-move-summary">{{{localize "stonetop.specialMoves.bolster.summary"}}}</p>
+			{{#if stonetop.bolster.hint}}
+			<p class="stonetop-special-move-locked-hint">
+				<i class="fas fa-hourglass-half"></i>
+				{{stonetop.bolster.hint}}
+			</p>
+			{{/if}}
+			<button type="button" class="stonetop-bolster-open-btn">
+				<i class="fas fa-hourglass-half"></i>
+				{{localize "stonetop.specialMoves.bolster.button"}}
+			</button>
+		</div>
+
 		{{! Only for whoever may retire them (owner or GM) while they are still in play: canRetire. }}
 		{{#if stonetop.canRetire}}
 		<div class="stonetop-special-move-card">

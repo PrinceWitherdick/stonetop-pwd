@@ -18,9 +18,10 @@ vi.mock("../../module/utils/world.js", () => ({
 }));
 
 // The camp's own readers of a pack, stood in for so the suite needs no character model.
-vi.mock("../../module/camp/camp-store.js", () => ({
+// isUnliving is Death's Door's own rule, so a Ghost here is one by the insert they wear.
+vi.mock("../../module/camp/camp-store.js", async () => ({
 	campVitalsFor:       async actor => ({ messKit: !!actor.carriesMessKit }),
-	isUnliving:          actor => !!actor.unliving,
+	isUnliving:          (await vi.importActual("../../module/actors/character/deaths-door-actor.js")).isUnliving,
 	packResources:       actor => ({ ...actor.pack }),
 	partyFollowerMouths: actor => actor.fed ?? 0,
 	partyCrewMouths:     actor => actor.crewFed ?? 0,
@@ -39,6 +40,12 @@ const { ExpeditionDialog } = await import("../../module/dialogs/ExpeditionDialog
 const SCOPE = "stonetop-pwd";
 
 /** A PC whose pack is `pack`, recording every update it is sent. */
+/** A PC wearing the `insert` post-death insert (ghost, revenant, thrall). */
+function wearing(insert, id, pack, over = {}) {
+	const flags = { [SCOPE]: { postDeathInsert: { slug: insert } } };
+	return pc(id, pack, { flags, getFlag: (_s, key) => foundry.utils.getProperty(flags[SCOPE], key), ...over });
+}
+
 function pc(id, pack, over = {}) {
 	const actor = {
 		id, name: id, img: "", type: "character", flags: { [SCOPE]: {} },
@@ -141,6 +148,50 @@ describe("the days-on-the-road window", () => {
 		const html = await renderTemplate("systems/stonetop-pwd/templates/dialogs/road-rations.hbs", data);
 		expect(html).toContain("Crew supplies (8 left): Feeds the crew first: 2 uses, all the crew eats.");
 		expect(html.match(/class="road-pays/g)).toHaveLength(1);
+	});
+
+	// Unliving (Ghost and Revenant inserts): "You need not eat nor drink nor sleep." Their box starts
+	// unticked, and the row says why, so a GM who ticks it knows what it costs.
+	describe("a Ghost or Revenant on the trip", () => {
+		const render = data => renderTemplate("systems/stonetop-pwd/templates/dialogs/road-rations.hbs", data);
+
+		it("leaves a Ghost's Eats box unticked and says why, while their followers still eat", async () => {
+			const wisp = wearing("ghost", "Wisp", { supplies: 4 }, { fed: 2 });
+			const bo = pc("Bo", { supplies: 4 });
+			const data = await new RoadRationsDialog([wisp, bo], { days: 1 }).getData();
+			expect(data.rows.find(r => r.actorId === "Wisp").eats).toBe(false);
+			// Bo and Wisp's two followers: 3 mouths.
+			expect(data.bill).toBe(3);
+			const html = await render(data);
+			expect(html.match(/class="road-unliving"/g)).toHaveLength(1);
+			expect(html).toContain("Needs no food or sleep (Unliving); their followers still eat.");
+			// The Eats box points a screen reader at the reason.
+			expect(html).toContain('id="road-unliving-Wisp"');
+			expect(html).toMatch(/aria-label="Wisp eats" aria-describedby="road-unliving-Wisp"/);
+			expect(html).not.toContain('aria-describedby="road-unliving-Bo"');
+		});
+
+		it("names no followers when none travel with them", async () => {
+			const wisp = wearing("revenant", "Wisp", { supplies: 4 });
+			const data = await new RoadRationsDialog([wisp], { days: 1 }).getData();
+			expect(data.rows[0].unlivingText).toBe("Needs no food or sleep (Unliving).");
+		});
+
+		it("says they cost a mouth once the GM ticks their Eats box", async () => {
+			const wisp = wearing("ghost", "Wisp", { supplies: 4 }, { fed: 1 });
+			const d = new RoadRationsDialog([wisp], { days: 1 });
+			await d.getData();
+			d._eats.Wisp = true;
+			const data = await d.getData();
+			expect(data.bill).toBe(2);
+			expect(data.rows[0].unlivingText).toBe("Needs no food or sleep (Unliving), but counted as a mouth here: untick Eats to leave them out.");
+		});
+
+		it("feeds a Thrall like anyone else", async () => {
+			const data = await new RoadRationsDialog([wearing("thrall", "Grim", { supplies: 4 })], { days: 1 }).getData();
+			expect(data.rows[0].eats).toBe(true);
+			expect(data.rows[0].unlivingText).toBe("");
+		});
 	});
 
 	it("writes nothing for days with a laden pack animal, but still says the days went by", async () => {

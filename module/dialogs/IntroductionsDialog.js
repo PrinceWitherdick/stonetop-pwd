@@ -366,6 +366,12 @@ export class IntroductionsDialog extends StonetopDialog {
 		});
 	}
 
+	// Every answer, pass and turn written anywhere at the table redraws this window, which drew the
+	// column back at its top under whoever was reading it. A redraw of the same turn keeps the
+	// place; the next phase or PC opens at the top. The pre-check (phase 0) scrolls its own list.
+	get _keptScrollSelector() { return ".stonetop-intros-precheck, .stonetop-guide-main"; }
+	get _keptPlaceKey() { return `${this._phase}:${this._pcs?.[this._pcIndex]?.id ?? ""}`; }
+
 	async _render(force, options) {
 		// Persist whatever's typed in the editable capture field to its flag BEFORE the DOM is
 		// rebuilt. The narration rounds have no player commit button (only autosave), so a turn

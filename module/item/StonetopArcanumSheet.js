@@ -491,6 +491,13 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			if (this._editMode && this._canEditArcanum()) {
 				root.addEventListener("change", ev => this._onEditChange(ev));
 				root.addEventListener("click",  ev => this._onEditClick(ev));
+				// Editors the author has typed in this render: their blank value is a real clear,
+				// not an un-activated read (see _collectEditorUpdates).
+				this._editedRich = new WeakSet();
+				root.addEventListener("input", ev => {
+					const pm = ev.target.closest?.("prose-mirror[data-arc-field]");
+					if (pm) this._editedRich.add(pm);
+				}, true);
 				// Insert glyph runs on mousedown so the focused editor keeps focus.
 				root.querySelectorAll(".stonetop-arc-glyph").forEach(btn =>
 					btn.addEventListener("mousedown", ev => { ev.preventDefault(); this._insertGlyph(btn.dataset.glyph); }));
@@ -686,7 +693,8 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 		}
 
 		// Map of flag-path → live editor value for every rich editor whose content changed,
-		// skipping empty reads from un-activated editors (which would clobber stored content).
+		// skipping empty reads from editors the author hasn't typed in (an un-activated editor
+		// reads blank, which would clobber stored content). A blank from an edited one is a clear.
 		_collectEditorUpdates() {
 			const root = this.element?.[0];
 			const updates = {};
@@ -695,7 +703,7 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 				if (!path) return;
 				const val    = pm.value ?? "";
 				const stored = foundry.utils.getProperty(this.item, path) ?? "";
-				if (!hasText(val) && hasText(stored)) return;
+				if (!hasText(val) && hasText(stored) && !this._editedRich?.has(pm)) return;
 				if (val !== stored) updates[path] = val;
 			});
 			return updates;
@@ -732,8 +740,8 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 
 		// Persist any unsaved rich-editor content (e.g. before a re-render or on close) without
 		// re-rendering. An un-activated ProseMirror can report an empty value; _collectEditorUpdates
-		// never lets that clobber stored content (legitimate clears go through the editor's own
-		// change event).
+		// only lets a blank through from an editor the author has typed in, so a deliberate clear
+		// saves and an untouched editor never clobbers stored content.
 		async _flushRichEditors() {
 			const updates = this._collectEditorUpdates();
 			if (Object.keys(updates).length) await this.item.update(updates, { render: false });

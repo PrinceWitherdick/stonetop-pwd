@@ -28,10 +28,12 @@ vi.mock("../../../module/dialogs/content-picker.js", async importOriginal => {
 const { createStonetopCharacterSheetClass } = await import("../../../module/actors/character/StonetopCharacterSheet.js");
 const { supplyPursesFor, SUPPLY_PURPOSE } = await import("../../../module/actors/character/supply-cost.js");
 
-function makeSheet({ hp = 4, max = 20, supplies = 3, spent = false, debilities = [], smallMarks = 0 } = {}) {
+function makeSheet({ hp = 4, max = 20, supplies = 3, spent = false, debilities = [], smallMarks = 0, insert = null } = {}) {
 	const flags = { "inventory.resources": { supplies }, "recover.spent": spent };
 	const patient = {
 		id: "bram", name: "Bram", isOwner: true,
+		// A worn post-death insert, where isUnliving reads it.
+		flags: insert ? { "stonetop-pwd": { postDeathInsert: { slug: insert } } } : {},
 		getFlag: (_scope, key) => flags[key] ?? null,
 		update: vi.fn(async () => {}),
 		typedActor: {
@@ -338,6 +340,69 @@ describe("Convalesce with followers", () => {
 		await sheet._applyConvalesce({ debilities: [], followers: ["f1"] });
 		expect(followers.restFollowers).toHaveBeenCalledWith(expect.anything(), ["f1"], { moveName: "Convalesce" });
 		expect(global.ChatMessage.create.mock.calls[0][0].content).toContain("Hari 1 → 6");
+	});
+});
+
+// RV-2 (2026-10-26 audit; the user's ruling, 2026-10-27): "You gain no benefit from ... Recover or
+// Convalesce" is the Ghost's or Revenant's own. Their followers are not Unliving, and Recover and
+// Convalesce on their own, so both moves stay open for them, follower-only.
+describe("an Unliving character's followers", () => {
+	const snapshot = ({ value = 4, max = 20, debility = true } = {}) => ({
+		vitals: { hp: { value, max } },
+		inventory: { outfit: { usesPerSupply: 4, smallItemLimit: 4 } },
+		debilities: [{ key: "weakened", name: "Weakened", active: debility }],
+		wounds: [],
+	});
+
+	it("keeps the Recover card open for hurt followers alone, and locked with none", () => {
+		const { sheet } = makeSheet({ insert: "revenant" });
+		expect(sheet._buildRecoverData(snapshot(), { hurtFollowers: 1 })).toMatchObject({
+			canRecover: false, canTend: false, followersCanRecover: true, canOpen: true,
+			hint: { text: global.game.i18n.localize("stonetop.specialMoves.recover.unlivingFollowersHint") },
+		});
+		expect(sheet._buildRecoverData(snapshot())).toMatchObject({
+			canOpen: false, hint: { text: global.game.i18n.localize("stonetop.specialMoves.recover.unlivingHint") },
+		});
+	});
+
+	it("keeps the Convalesce card open for hurt followers alone, not for the character's own HP or debilities", () => {
+		const { sheet } = makeSheet({ insert: "ghost" });
+		expect(sheet._buildConvalesceData(snapshot(), { hurtFollowers: 2 })).toMatchObject({ canConvalesce: true });
+		expect(sheet._buildConvalesceData(snapshot())).toMatchObject({ canConvalesce: false });
+	});
+
+	it("spends a use per follower and leaves the character's own HP and lock alone, even when asked for both", async () => {
+		followers.hurtFollowerBodies.mockImplementation(async () => [{ id: "f1" }]);
+		const { sheet, patient } = makeSheet({ insert: "revenant" });
+		await sheet._applyRecover({ purse, base: 4, self: true, care: { carer: { id: "x" }, stock: true }, followers: ["f1"] });
+		expect(patient.update).toHaveBeenCalledWith({ "flags.stonetop-pwd.inventory.resources.supplies": 2 }, { stonetopMove: "Recover" });
+		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1"], { heal: 4, moveName: "Recover" });
+	});
+
+	it("spends nothing on a Recover with no follower ticked", async () => {
+		const { sheet, patient } = makeSheet({ insert: "revenant" });
+		await sheet._applyRecover({ purse, base: 4 });
+		expect(patient.update).not.toHaveBeenCalled();
+		expect(global.ui.notifications.warn).toHaveBeenCalledWith(global.game.i18n.localize("stonetop.specialMoves.recover.unlivingHint"));
+	});
+
+	it("rests the followers ticked and writes nothing of the character's own", async () => {
+		followers.restFollowers.mockImplementation(async () => [{ name: "Hari", from: 1, to: 6 }]);
+		const { sheet, patient } = makeSheet({ insert: "ghost" });
+		await sheet._applyConvalesce({ debilities: [{ key: "weakened", name: "Weakened" }], healIds: ["w1"], followers: ["f1"] });
+		expect(patient.update).not.toHaveBeenCalled();
+		expect(patient.typedActor.convalesceWounds).not.toHaveBeenCalled();
+		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1"], { moveName: "Convalesce" });
+		const card = global.ChatMessage.create.mock.calls[0][0].content;
+		expect(card).toContain("Hari 1 → 6");
+		expect(card).not.toContain("Weakened");
+	});
+
+	it("writes nothing at all with no follower ticked", async () => {
+		const { sheet, patient } = makeSheet({ insert: "ghost" });
+		await sheet._applyConvalesce({ debilities: [{ key: "weakened", name: "Weakened" }], followers: [] });
+		expect(patient.update).not.toHaveBeenCalled();
+		expect(followers.restFollowers).not.toHaveBeenCalled();
 	});
 });
 

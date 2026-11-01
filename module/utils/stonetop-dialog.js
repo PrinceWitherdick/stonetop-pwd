@@ -1,5 +1,6 @@
 import { FrontOnOpen } from "./front-on-open.js";
 import { mayClose, notePristineWork } from "./close-guard.js";
+import { attrValue } from "./strings.js";
 
 // Minimum gap between progress re-renders. A long job reports once per document — a seeded
 // world has several hundred — and each render is a full getData + template + setPosition;
@@ -13,6 +14,22 @@ const PROGRESS_RENDER_MS = 150;
  */
 export function isDrawn(column) {
 	return typeof column?.getClientRects !== "function" || column.getClientRects().length > 0;
+}
+
+/** Whether `column` has more content than it shows, so it scrolls. */
+function scrolls(column) {
+	return column.scrollHeight > column.clientHeight || column.scrollWidth > column.clientWidth;
+}
+
+/** The one of `holders` ({ column }) that no other of them sits inside, or undefined for none. */
+function innermost(holders) {
+	return holders.find(h => !holders.some(o => o !== h && h.column.contains?.(o.column)));
+}
+
+/** How far down `column` the control `el` stands on screen, or null where `el` has no box. */
+function topIn(el, column) {
+	const top = el?.getBoundingClientRect?.().top;
+	return top == null ? null : top - (column.getBoundingClientRect?.().top ?? 0);
 }
 
 /**
@@ -162,7 +179,9 @@ export class StonetopDialog extends Application {
 
 	/**
 	 * The column whose scroll offset a redraw keeps, as a selector (its first match), or null, the
-	 * default, for none.
+	 * default, for none. An array of selectors keeps each of several columns, every one on its own:
+	 * a window whose pages scroll in different columns (Death's Door's walkthrough body, and its rail
+	 * sheet's panel column) names them all, and whichever is drawn answers.
 	 *
 	 * Not core's `scrollY`: core puts those offsets back inside super._render, BEFORE the auto-height
 	 * fit at the end of _render below, and that fit measures the window with its height cleared,
@@ -170,6 +189,18 @@ export class StonetopDialog extends Application {
 	 * back after the fit.
 	 */
 	get _keptScrollSelector() { return null; }
+
+	/** _keptScrollSelector as a list, however it was declared. */
+	_keptScrollSelectors() {
+		return [this._keptScrollSelector].flat().filter(Boolean);
+	}
+
+	/**
+	 * Which page of the window is drawn (a step, a turn), or null, the default, for a window that is
+	 * one page. A redraw onto a different page starts it at its top with the keyboard let go, as
+	 * opening it there would; only a redraw of the same page keeps the reader's place.
+	 */
+	get _keptPlaceKey() { return null; }
 
 	/** The attribute that names a control across redraws (`data-camp-focus`), read by _focusSelector; null, the default, for none. */
 	get _focusKeyAttribute() { return null; }
@@ -185,54 +216,76 @@ export class StonetopDialog extends Application {
 	_focusSelector(el) {
 		const attr = this._focusKeyAttribute;
 		const key = attr ? el.getAttribute?.(attr) : null;
-		return key ? `[${attr}="${key}"]` : null;
+		return key ? `[${attr}="${attrValue(key)}"]` : null;
 	}
 
 	/**
-	 * Where the reader is in the window as drawn: the kept column's offsets (down AND across -- a
+	 * Where the reader is in the window as drawn: each kept column's offsets (down AND across -- a
 	 * timeline laid out sideways scrolls left to right), and the control with the keyboard. Null
 	 * before the first draw.
 	 */
 	_readPlace() {
 		const before = this.element?.[0];
 		if (!before) return null;
-		const scroller = this._keptScrollSelector;
 		const active = globalThis.document?.activeElement;
-		const column = scroller ? before.querySelector?.(scroller) : null;
-		// A hidden column reads 0 both ways, so its place is the last one it was seen at.
-		const held = column && !isDrawn(column) ? this._heldOffsets : null;
-		return {
-			scroller,
-			scrolled:     held?.top ?? column?.scrollTop ?? 0,
-			scrolledLeft: held?.left ?? column?.scrollLeft ?? 0,
-			focused:      active && before.contains?.(active) ? this._focusSelector(active) : null,
-		};
+		const focused = active && before.contains?.(active) ? this._focusSelector(active) : null;
+		const holders = [];
+		const columns = this._keptScrollSelectors().map(selector => {
+			const column = before.querySelector?.(selector);
+			// A hidden column reads 0 both ways, so its place is the last one it was seen at.
+			const held = column && !isDrawn(column) ? this._heldOffsets?.get(selector) : null;
+			if (focused && !held && column?.contains?.(active)) holders.push({ selector, column });
+			return { selector, top: held?.top ?? column?.scrollTop ?? 0, left: held?.left ?? column?.scrollLeft ?? 0 };
+		});
+		// Where in its column that control stood (see _restorePlace). The column it scrolls with is the
+		// innermost kept one holding it that scrolls: Death's Door keeps its outer body AND the choices
+		// panel inside it, and on the choices step only the inner one moves.
+		const holder = innermost(holders.filter(h => scrolls(h.column))) ?? innermost(holders);
+		const top = holder ? topIn(active, holder.column) : null;
+		const anchor = top != null ? { selector: holder.selector, top } : null;
+		return { columns, focused, anchor };
 	}
 
 	/**
-	 * Put the reader back in the fresh draw: the offset first, then the keyboard, with
+	 * Put the reader back in the fresh draw: the offsets first, then the keyboard, with
 	 * `preventScroll` so focusing a control never moves the column the line before just placed.
 	 */
 	_restorePlace(place) {
 		if (!place) return;
 		const after = this.element?.[0];
-		// ⚠ ZERO IS PUT BACK TOO. A fresh column does not always start at 0: the timeline's opens past
-		// its drag gutter (utils/drag-scroll.js), so a reader who had scrolled right up to the edge
-		// would otherwise be thrown a whole gutter by somebody else's write.
-		const column = place.scroller ? after?.querySelector?.(place.scroller) : null;
-		if (column) this._putOffsets(column, { top: place.scrolled, left: place.scrolledLeft });
-		if (place.focused) after?.querySelector?.(place.focused)?.focus?.({ preventScroll: true });
+		const drawn = new Map();
+		for (const { selector, top, left } of place.columns ?? []) {
+			// ⚠ ZERO IS PUT BACK TOO. A fresh column does not always start at 0: the timeline's opens past
+			// its drag gutter (utils/drag-scroll.js), so a reader who had scrolled right up to the edge
+			// would otherwise be thrown a whole gutter by somebody else's write.
+			const column = after?.querySelector?.(selector);
+			if (!column) continue;
+			drawn.set(selector, column);
+			this._putOffsets(selector, column, { top, left });
+		}
+		const control = place.focused ? after?.querySelector?.(place.focused) : null;
+		control?.focus?.({ preventScroll: true });
+		// The same offset is not always the same view: a line above the control that the press added
+		// or took away (Undeath's dispersal note goes when the tether is destroyed) moves the control
+		// itself, out from under the pointer. Shift the column by however far it moved. Measured from the
+		// column's own top, not the screen's: an auto-height window that grows is moved back on screen by
+		// setPosition, and that move is not the reader's to scroll by.
+		const was = place.anchor?.top;
+		const column = was != null ? drawn.get(place.anchor.selector) : null;
+		const now = column?.contains?.(control) && isDrawn(column) ? topIn(control, column) : null;
+		if (now != null && now !== was) column.scrollTop += now - was;
 	}
 
 	/**
-	 * Write `offsets` into `column`: now if it is drawn, or the moment it is if not. A hidden column
-	 * drops the write, so a redraw behind a tab the reader is not on (or a minimized window) would
-	 * otherwise hand them the start of the column when they come back to it.
+	 * Write `offsets` into `column`, the one `selector` found: now if it is drawn, or the moment it is
+	 * if not. A hidden column drops the write, so a redraw behind a tab the reader is not on (or a
+	 * minimized window) would otherwise hand them the start of the column when they come back to it.
 	 */
-	_putOffsets(column, offsets) {
-		this._heldOffsets = offsets;
-		this._offsetsWaiter?.disconnect();
-		this._offsetsWaiter = null;
+	_putOffsets(selector, column, offsets) {
+		(this._heldOffsets ??= new Map()).set(selector, offsets);
+		this._offsetsWaiters ??= new Map();
+		this._offsetsWaiters.get(selector)?.disconnect();
+		this._offsetsWaiters.delete(selector);
 		const write = () => {
 			column.scrollTop = offsets.top;
 			column.scrollLeft = offsets.left;
@@ -242,31 +295,45 @@ export class StonetopDialog extends Application {
 		const waiter = new globalThis.ResizeObserver(() => {
 			if (!isDrawn(column)) return;
 			waiter.disconnect();
-			if (this._offsetsWaiter === waiter) this._offsetsWaiter = null;
+			if (this._offsetsWaiters.get(selector) === waiter) this._offsetsWaiters.delete(selector);
 			write();
 		});
 		waiter.observe(column);
-		this._offsetsWaiter = waiter;
+		this._offsetsWaiters.set(selector, waiter);
+	}
+
+	/** Stop every wait for a hidden column to be drawn (_putOffsets). */
+	_stopOffsetsWaiters() {
+		for (const waiter of this._offsetsWaiters?.values() ?? []) waiter.disconnect();
+		this._offsetsWaiters?.clear();
 	}
 
 	/**
-	 * Keep `_heldOffsets` on wherever the reader scrolls the kept column, so a redraw while it is
+	 * Keep `_heldOffsets` on wherever the reader scrolls each kept column, so a redraw while it is
 	 * hidden still knows their place. Once per column: a sheet tab carries the SAME column through
 	 * its own repaints (utils/mounted-panel-slot.js).
 	 */
 	_trackOffsets() {
-		const scroller = this._keptScrollSelector;
-		const column = scroller ? this.element?.[0]?.querySelector?.(scroller) : null;
-		if (!column?.addEventListener || this._trackedColumn === column) return;
-		this._trackedColumn = column;
-		column.addEventListener("scroll", () => {
-			if (isDrawn(column)) this._heldOffsets = { top: column.scrollTop, left: column.scrollLeft };
-		}, { passive: true });
+		const root = this.element?.[0];
+		for (const selector of this._keptScrollSelectors()) {
+			const column = root?.querySelector?.(selector);
+			if (!column?.addEventListener || this._trackedColumns?.has(column)) continue;
+			(this._trackedColumns ??= new WeakSet()).add(column);
+			column.addEventListener("scroll", () => {
+				if (isDrawn(column)) (this._heldOffsets ??= new Map()).set(selector, { top: column.scrollTop, left: column.scrollLeft });
+			}, { passive: true });
+		}
 	}
 
 	async _render(force, options) {
-		const place = this._readPlace();
+		const page = this._keptPlaceKey;
+		// Undefined before the first draw, which has no place to keep anyway.
+		const samePage = this._drawnPlaceKey === undefined || page === this._drawnPlaceKey;
+		// The last page's held places, too, so a redraw of the new one while hidden cannot hand them back.
+		if (!samePage) this._heldOffsets?.clear();
+		const place = samePage ? this._readPlace() : null;
 		await super._render(force, options);
+		this._drawnPlaceKey = page;
 		// What the window opened with, for the close-guard (utils/close-guard.js); a no-op after the first.
 		notePristineWork(this);
 		this._frontOnOpen.apply();
@@ -289,8 +356,7 @@ export class StonetopDialog extends Application {
 		if (!(await mayClose(this, options))) return;
 		this._frontOnOpen.stop();
 		this._cancelThrottledRender();
-		this._offsetsWaiter?.disconnect();
-		this._offsetsWaiter = null;
+		this._stopOffsetsWaiters();
 		try {
 			return await super.close(options);
 		} finally {

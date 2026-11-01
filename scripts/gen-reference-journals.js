@@ -6,6 +6,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
+import { countOf } from "../module/utils/plural.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root    = path.join(__dirname, "..");
@@ -221,7 +222,7 @@ async function main() {
 
     console.log("✓ Written to packs/src/stonetop-journals/reference-journals/");
     for (const [name, data] of writes) {
-        console.log(`  ${name} (${data.pages.length} page${data.pages.length !== 1 ? "s" : ""})`);
+        console.log(`  ${name} (${countOf(data.pages.length, "page")})`);
     }
 }
 

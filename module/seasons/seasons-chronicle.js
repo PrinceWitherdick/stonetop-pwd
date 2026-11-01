@@ -5,6 +5,7 @@ import { ensureChronicleJournal, findChronicleJournal, withChronicleLock } from 
 import { seasonLabel, SEASON_IDS } from "./seasons-change-reminders.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { displayYear } from "./campaign-year.js";
+import { plural } from "../utils/plural.js";
 
 // ── Seasons Change chronicle ───────────────────────────────────────────────────
 // Records each Seasons Change move (the steading flow's "Done") into a "Seasons Change"
@@ -72,7 +73,7 @@ export function yearLabelParts(year) {
 	const shown = displayYear(year);
 	if (shown >= 1) return { count: `Year ${cardinalWord(shown)}`, tail: "", tailShort: "" };
 	const before = 1 - shown;
-	return { count: `${cardinalWord(before)} ${before === 1 ? "Year" : "Years"}`, tail: "Before Year One", tailShort: "BYO" };
+	return { count: `${cardinalWord(before)} ${plural(before, "Year")}`, tail: "Before Year One", tailShort: "BYO" };
 }
 
 // Find (or create) the "Seasons Change" journal in the Chronicle folder. Player-readable
@@ -91,7 +92,7 @@ function _seasonBlock(seasonId, gainNames, fortunes, surplusChange, notes, fortu
 	// CSS modifier matches the location pages' season classes ("autumn" art is "fall").
 	const seasonClass = `stonetop-season--${seasonId === "autumn" ? "fall" : seasonId}`;
 	const gainsHtml = gainNames.length
-		? `<p><strong>Seasonal gain${gainNames.length > 1 ? "s" : ""}:</strong> ${gainNames.map(escHtml).join(", ")}</p>`
+		? `<p><strong>${plural(gainNames.length, "Seasonal gain")}:</strong> ${gainNames.map(escHtml).join(", ")}</p>`
 		: `<p><em>No seasonal gain.</em></p>`;
 	// How the roll went, when its card can be found (seasonsRollTier): "7-9 on +Fortunes (+1)".
 	const tierLabel = TIER_LABELS[fortunesTier] ?? "";

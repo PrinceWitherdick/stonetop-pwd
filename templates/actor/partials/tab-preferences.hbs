@@ -117,7 +117,7 @@
 				{{#if isWorld}}
 				<p class="notes stonetop-preference-world">
 					<i class="fas fa-users" aria-hidden="true"></i>
-					{{localize "stonetop.sheet.preferences.worldScoped"}}
+					{{#if this.reloads}}{{localize "stonetop.sheet.preferences.worldScopedReload"}}{{else}}{{localize "stonetop.sheet.preferences.worldScoped"}}{{/if}}
 				</p>
 				{{/if}}
 			</div>

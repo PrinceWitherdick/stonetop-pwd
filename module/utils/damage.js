@@ -1,6 +1,7 @@
 import {getStonetopProsperity} from "./world.js";
 import {DAMAGE_DIE_RE, isWholeDamageDie, attackSeparatorRe} from "./damage-die.js";
 import {capitalizeFirst} from "./strings.js";
+import {HP_LOSS_OPTION} from "../actors/character/StonetopFlags.js";
 
 // The canonical damage-die grammar is DEFINED in damage-die.js (which has no Foundry in it, so
 // the Foundry-free Dangers worksheet can share it) and re-exported here, where most of the
@@ -251,6 +252,15 @@ export async function applyDamageToActor(targetActor, amount, updateOptions = {}
 	const newHp = Math.max(0, oldHp - Math.max(0, Math.round(Number(amount) || 0)));
 	if (newHp !== oldHp || alsoUpdate) await targetActor.update({ ...alsoUpdate, "system.attributes.hp.value": newHp }, updateOptions);
 	return { oldHp, newHp };
+}
+
+/**
+ * applyDamageToActor for HP LOST rather than damage taken ("lose 1d4 HP", the Vessel's 2d4 for Stock, Lend it
+ * your strength). The write carries StonetopFlags.js#HP_LOSS_OPTION, set here so no caller has to remember
+ * it, and nothing that answers a blow (a Ghost's Bodysnatcher, bodysnatcher.js) reads it as one.
+ */
+export async function applyHpLossToActor(targetActor, amount, updateOptions = {}, alsoUpdate = null) {
+	return applyDamageToActor(targetActor, amount, { ...updateOptions, [HP_LOSS_OPTION]: true }, alsoUpdate);
 }
 
 /**

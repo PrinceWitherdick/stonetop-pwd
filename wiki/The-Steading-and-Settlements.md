@@ -21,14 +21,14 @@ Below are **Resources**, **Fortifications, etc.**, **Assets** (owned in common; 
 
 ## Homefront Moves
 
-The **Homefront Moves** tab prints each move the steading makes: Aurochs Hunt, Meet with Disaster, Persuade, Seasons Change, Deploy, Muster, Pull Together, Requisition, Trade & Barter, Bolster and Return Triumphant. Click a move's stat chip to roll it. Advantage and disadvantage for steading rolls are chosen at the top of the tab.
+The **Homefront Moves** tab prints each move the steading makes: Deploy, Meet with Disaster, Muster, Pull Together, Requisition, Return Triumphant, Seasons Change and Trade & Barter, plus Aurochs Hunt and Heroic Reputation once those improvements are built. Persuade and Bolster are there for reference: you make them from your own character sheet (Bolster is on its **Special Moves** tab). Click a move's name or stat chip to make it. Advantage and disadvantage for steading rolls are chosen at the top of the tab.
 
 The cards those rolls make carry their own buttons, for example:
 
 - **Mark XP** on a miss (whoever made the move marks XP), or **Mark XP for someone else** to pick the character (the GM, who plays nobody, gets just **Mark XP**, and it asks who);
 - spending Fortunes or Stock, marking a debility, raising a muster;
 - handing over what Trade & Barter got you;
-- holding Preparation from Bolster, which anyone can spend later for +1 (see [Rolling Moves and Chat Cards](Rolling-Moves-and-Chat-Cards#help-from-your-friends)).
+- spending Preparation from Bolster for +1, if a character holds some and their efforts apply (see [Rolling Moves and Chat Cards](Rolling-Moves-and-Chat-Cards#help-from-your-friends)).
 
 Requisition asks how many horses you take from the herd, if Stonetop has one.
 

@@ -3,6 +3,7 @@ import {
 	MOVE, ROW_KIND, SPOTS, STAT_LABELS, STRUGGLE_STATUS, TIER, allowedStats, bundleChoices, canPickBundleAlly, endWarnings,
 	halfMissesFor, rescueTargets, tierOf,
 } from "./struggle-rules.js";
+import { plural } from "../utils/plural.js";
 
 /**
  * WHAT A STRUGGLE SAYS: the shared window's rows for whoever is reading it, and the cards it posts.
@@ -39,10 +40,6 @@ function signed(n) {
 
 function statLabel(key) {
 	return STAT_LABELS[key] ?? String(key ?? "").toUpperCase();
-}
-
-function plural(n, one, many) {
-	return n === 1 ? one : many;
 }
 
 /** "+WIS", "+STR or +CON", "any stat". */

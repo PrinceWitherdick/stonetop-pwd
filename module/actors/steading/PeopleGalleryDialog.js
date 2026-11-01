@@ -10,6 +10,7 @@ import { filePicker } from "../../utils/foundry-compat.js";
 import { pickRandomExcluding } from "../../utils/arrays.js";
 import { canStoreRulebook } from "../../books/book-store.js";
 import { prefersReducedMotion } from "../../utils/reduced-motion.js";
+import { countOf } from "../../utils/plural.js";
 
 // How long the grid takes to travel to a rolled portrait, however far away it landed. The
 // browser's own `scrollIntoView({behavior:"smooth"})` picks its own duration and scales it
@@ -138,7 +139,7 @@ export function emptyGalleryOffer({ isGM = false, artOnDisk = false, rebuildable
 	const n = Math.max(0, Math.trunc(Number(rebuildable) || 0));
 	return {
 		canRebuild: n > 0,
-		rebuildLabel: `Build ${n} portrait${n === 1 ? "" : "s"} from art you already have`,
+		rebuildLabel: `Build ${countOf(n, "portrait")} from art you already have`,
 		// Offered even when the rebuild is, because the two are not the same thing: a cut face is
 		// carved out of an already-downscaled page, while an import lifts it from the book at full
 		// resolution and brings the people no parent on disk can account for.

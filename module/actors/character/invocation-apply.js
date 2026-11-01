@@ -921,7 +921,8 @@ export async function settleShadowDamage(message, actor, { reduced = false, shif
 	return withCardLatch(message, SHADOW_FLAG, true, buttons, async release => {
 		const results = await roll(actor, {
 			move: effectTitle(SHADOW_NAME, { reduced }), formula: shadowDamageFormula({ reduced }),
-			offers: holyLightOffers(actor), shiftKey,
+			// "Spirits of darkness in your light": a Ghost's Disembodied box opens as harm landing.
+			offers: holyLightOffers(actor), shiftKey, harmsSpirits: true,
 		});
 		if (!results) return false;
 		if (!results.some(r => r?.uuid)) await release();

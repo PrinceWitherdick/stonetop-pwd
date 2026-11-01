@@ -17,6 +17,14 @@ export const MIRRORED_HP_PENALTY_FLAG = "mirroredHpPenalty";
  */
 export const HP_CEILING_OPTION = "stonetopHpCeiling";
 
+/**
+ * Update option: this write is HP LOST, not damage taken ("lose 1d4 HP", the Vessel's 2d4 for Stock, Lend it
+ * your strength). Set only by utils/damage.js#applyHpLossToActor, the plain HP-loss writer (provisions.js
+ * #loseHpForStock, companion-bond.js#lendStrength, post-death-actions.js#loseHp), so the hooks that answer
+ * damage only (a Ghost's Bodysnatcher, "when your host takes damage", bodysnatcher.js) stand aside for it.
+ */
+export const HP_LOSS_OPTION = "stonetopHpLoss";
+
 // Compendium pack ids, derived from the system scope so a system-id rename touches only
 // system-id.js. Re-exported rather than declared here: they live beside packId now, where the
 // journal, bestiary and macro packs could join them. Import from either; do not retype the

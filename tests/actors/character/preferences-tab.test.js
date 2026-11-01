@@ -4,7 +4,7 @@ import {
 } from "../../fakes/css.js";
 import { fakeEl, fakeRoot } from "../../fakes/dom.js";
 import {
-	GM_ONLY_KEYS, PREFERENCE_GROUPS, PREFERENCE_KEYS, buildPreferenceGroups, formatRange, openPreferenceMenu, setPreference,
+	GM_ONLY_KEYS, PLAYER_ONLY_KEYS, PREFERENCE_GROUPS, PREFERENCE_KEYS, buildPreferenceGroups, formatRange, openPreferenceMenu, setPreference,
 } from "../../../module/utils/sheet-preferences.js";
 import { showsPreferencesTab, withPreferencesTab } from "../../../module/utils/preferences-tab.js";
 
@@ -416,7 +416,7 @@ describe("Preferences tab contents", () => {
 	// applied for the whole table on the GM's, so one that arrived on this tab unnoticed would be
 	// a control that works for one person and lies to everyone else. Adding a second means coming
 	// through this test, which is where the three things a world row owes are written down.
-	const WORLD_KEYS = ["fightTab"];
+	const WORLD_KEYS = ["fightTab", "showTimeline"];
 
 	it("offers only client-scoped settings, bar the world rows named here", () => {
 		const wrong = ALL_KEYS
@@ -603,7 +603,7 @@ describe("the GM-only rows", () => {
 	it("draws them for a GM", () => {
 		globalThis.game = fakeGame(allRegistered(), { isGM: true });
 		const drawn = buildPreferenceGroups().flatMap(g => g.rows.map(r => r.key));
-		expect(drawn).toEqual(ALL_KEYS);
+		expect(drawn).toEqual(ALL_KEYS.filter(key => !PLAYER_ONLY_KEYS.has(key)));
 	});
 
 	it("leaves them out for a player, and leaves the rest of the group standing", () => {
@@ -612,6 +612,7 @@ describe("the GM-only rows", () => {
 		const drawn  = groups.flatMap(g => g.rows.map(r => r.key));
 
 		expect(drawn).toEqual(ALL_KEYS.filter(key => !GM_ONLY_KEYS.has(key)));
+		expect(drawn).toContain("timelineTabShown");
 		expect(drawn).not.toContain("openSheetsInEditMode");
 		// Windows loses one of its two rows, not the heading over the other.
 		expect(groups.find(g => g.id === "windows").rows.map(r => r.key)).toEqual(["restoreWindowsOnReload"]);
@@ -739,6 +740,62 @@ describe("the Fight tab row", () => {
 		globalThis.game = fakeGame(fightTab(true));
 		expect(await setPreference("fightTab", false)).toBe(true);
 		expect(globalThis.game._values.get(`${SYSTEM_ID}.fightTab`)).toBe(false);
+	});
+
+	it("says the table will be offered a reload", () => {
+		globalThis.game = fakeGame(fightTab());
+		expect(buildPreferenceGroups().at(-1).rows[0].reloads).toBe(true);
+	});
+});
+
+// The two Timeline switches, in a group of their own: the reader's own tab switch, then the GM's
+// three-way switch for the whole table, which needs no reload and so must not promise one.
+describe("the Timeline rows", () => {
+	const timeline = () => ({
+		timelineTabShown: { name: "My tab", hint: "h", scope: "client", type: Boolean, default: true },
+		showTimeline: { name: "Timeline", hint: "h", scope: "world", type: String, default: "all",
+			choices: { all: "Everywhere", steading: "Steading sheet only", off: "Off" }, value: "steading" },
+	});
+
+	it("gives a GM only the table's, as a dropdown marked as the table's with no reload", () => {
+		globalThis.game = fakeGame(timeline());
+		const group = buildPreferenceGroups().find(g => g.id === "timeline");
+		expect(group.rows.map(r => r.key)).toEqual(["showTimeline"]);
+		const gm = group.rows[0];
+		expect(gm.isChoice).toBe(true);
+		expect(gm.choices.find(c => c.selected)?.value).toBe("steading");
+		expect(gm.isWorld).toBe(true);
+		expect(gm.reloads).toBe(false);
+	});
+
+	// A GM has no sheets of their own, and the personal row sat straight above the table's, where
+	// unticking it read as hiding the tab from the players.
+	it("keeps the personal row off a GM's tab, and refuses a GM's write of it", async () => {
+		expect(PLAYER_ONLY_KEYS.has("timelineTabShown")).toBe(true);
+		globalThis.game = fakeGame(timeline());
+		expect(await setPreference("timelineTabShown", false)).toBe(false);
+		expect(globalThis.game.settings.set).not.toHaveBeenCalled();
+	});
+
+	it("gives a player only their own row, and refuses the table's write", async () => {
+		globalThis.game = fakeGame(timeline(), { isGM: false });
+		const group = buildPreferenceGroups().find(g => g.id === "timeline");
+		expect(group.rows.map(r => r.key)).toEqual(["timelineTabShown"]);
+		expect(group.rows[0].isWorld).toBe(false);
+		expect(await setPreference("showTimeline", "off")).toBe(false);
+		expect(globalThis.game.settings.set).not.toHaveBeenCalled();
+	});
+
+	it("writes the GM's choice as the string it is", async () => {
+		globalThis.game = fakeGame(timeline());
+		expect(await setPreference("showTimeline", "off")).toBe(true);
+		expect(globalThis.game._values.get(`${SYSTEM_ID}.showTimeline`)).toBe("off");
+	});
+
+	it("words the sentence by whether the row reloads", () => {
+		expect(TAB_HBS).toContain('{{#if this.reloads}}{{localize "stonetop.sheet.preferences.worldScopedReload"}}{{else}}{{localize "stonetop.sheet.preferences.worldScoped"}}{{/if}}');
+		expect(EN.stonetop.sheet.preferences.worldScopedReload).toMatch(/reload/);
+		expect(EN.stonetop.sheet.preferences.worldScoped).not.toMatch(/reload/);
 	});
 });
 

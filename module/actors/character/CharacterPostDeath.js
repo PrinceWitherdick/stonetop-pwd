@@ -13,7 +13,8 @@ import {
 } from "../../model/CharacterSnapshot.js";
 import { composeInstinct, stripHtmlToText } from "../../utils/strings.js";
 import { clampInt } from "../../utils/custom-move-data.js";
-import { zeroHpResolution, FAVOR_MAX, FAVOR_TRACK } from "./deaths-door.js";
+import { zeroHpResolution, FAVOR_MAX, FAVOR_TRACK, POST_DEATH_INSERT_SLUGS } from "./deaths-door.js";
+import { MANIFEST_KEY } from "./manifest.js";
 
 /**
  * The one lore section crossing-off applies to.
@@ -111,7 +112,7 @@ export class CharacterPostDeath {
 	/**
 	 * Take a crossing-off back: the GM's control for a Mark crossed off by mistake. The book never
 	 * un-crosses one ("you can never gain it"), so this is a correction, not a rule. The last one
-	 * going unsets the flag rather than leaving an empty list behind, as pruneToInsert does.
+	 * going unsets the flag rather than leaving an empty list behind, as pruneToInsertUpdateData does.
 	 */
 	async restoreCrossedOffMark(slug) {
 		if (!slug || !this.crossedOffMarks.includes(slug)) return false;
@@ -236,17 +237,26 @@ export class CharacterPostDeath {
 	 * awaited in order or the writes would clobber one another.
 	 */
 	async _setSectionPicks(sectionSlug, winnerSlug) {
-		const section = await this._activeSection(sectionSlug);
-		if (!section) return false;
+		const changes = await this._sectionPickChanges(sectionSlug, winnerSlug);
+		if (!changes) return false;
+		if (Object.keys(changes).length) await this._lore.setCounts(sectionSlug, changes);
+		return true;
+	}
 
+	/**
+	 * The counts `_setSectionPicks` would change, as `{ optionSlug: count }` (`{}` for none), measured
+	 * against what is stored now. Null when the worn insert has no such section. The one rule for which
+	 * options an exclusive choice touches, shared by the write and its fragment twin below.
+	 */
+	async _sectionPickChanges(sectionSlug, winnerSlug) {
+		const section = await this._activeSection(sectionSlug);
+		if (!section) return null;
 		const changes = {};
 		for (const opt of section.options ?? []) {
 			const wanted = opt.slug === winnerSlug ? 1 : 0;
-			if (this._lore.getCount(sectionSlug, opt.slug) === wanted) continue;
-			changes[opt.slug] = wanted;
+			if (this._lore.getCount(sectionSlug, opt.slug) !== wanted) changes[opt.slug] = wanted;
 		}
-		if (Object.keys(changes).length) await this._lore.setCounts(sectionSlug, changes);
-		return true;
+		return changes;
 	}
 
 	/**
@@ -261,27 +271,32 @@ export class CharacterPostDeath {
 	 * Ghost print the same three Terrible Purposes and the same Denial/Obsession/Ennui, and a
 	 * character who refused the Door for their daughter refused it for their daughter either way.
 	 * So this prunes by what the new insert can hold rather than by wiping and starting over.
+	 *
+	 * ONE `actor.update()` fragment (`{}` for nothing to drop), so taking the new insert lands it in the
+	 * same write as the slug it is measured against (StonetopCharacter#setPostDeathInsert). As separate
+	 * writes, a reload between them left a Revenant still wearing the Revenant, still owing Undying, with
+	 * every Revenant-only Consequence already deleted (audit RV-6, 2026-10-26).
 	 */
-	async pruneToInsert(newSlug) {
-		const data = newSlug ? await this._insertRepo.findBySlug(newSlug) : null;
-		// An insert we cannot READ is not an insert that holds nothing — but that is exactly what
-		// the empty `valid` set below would tell pruneTo, and pruneTo deletes every key outside it.
-		// A pack that hasn't loaded, a slug renamed between versions, a world Item standing in for
-		// a compendium one: any of them would take a character's whole post-death record with it,
-		// irreversibly. Nothing recorded is worth less than nothing known, so leave it alone.
-		if (newSlug && !data) return;
+	async pruneToInsertUpdateData(newSlug) {
+		const target = await this._swapTarget(newSlug);
+		if (!target) return {};
+		const { data, printed: valid } = target;
+		const update = this._lore.pruneToUpdateData(valid);
 
-		const valid = new Set();
-		for (const entry of data?.lore ?? []) {
-			for (const opt of entry.options ?? []) valid.add(`${entry.slug}:${opt.slug}`);
-		}
-		await this._lore.pruneTo(valid);
-
-		// The instinct is one value rather than a keyed set, so it's kept only if the new insert
-		// actually offers it.
+		// The instinct is one value rather than a keyed set, so a printed one is kept only if the new
+		// insert actually offers it. One the player wrote in (Level Up step 6's "make up new options")
+		// is printed by neither insert and belongs to the character, so it goes with them.
 		const selected = this._instinct.selectedValue;
-		if (selected && !(data?.instincts ?? []).some(i => composeInstinct(i.word, i.description) === selected)) {
-			await this._instinct.select("");
+		const prints = (insert, value) => (insert?.instincts ?? []).some(i => composeInstinct(i.word, i.description) === value);
+		// Printed by any other insert, it is that insert's, not the player's: the one worn, or, with none
+		// worn (removed in edit mode, which prunes nothing), the one it was left behind by.
+		if (selected && !prints(data, selected)) {
+			const others = [...new Set([this.activeSlug, ...POST_DEATH_INSERT_SLUGS])].filter(s => s && s !== newSlug);
+			for (const slug of others) {
+				if (!prints(await this._insertRepo.findBySlug(slug), selected)) continue;
+				Object.assign(update, this._instinct.selectUpdateData(""));
+				break;
+			}
 		}
 
 		// The three records that have no lore option to live in, and so survived the prune above:
@@ -296,20 +311,46 @@ export class CharacterPostDeath {
 		if (!sections.has("marks")) drops.push("crossedOff", "task");
 		// The tether belongs to the insert whose 0-HP move disperses them — the Ghost's Tethered.
 		if (!zeroHpResolution(newSlug)?.disperses) drops.push("tether");
-		// unsetFlag, not a write of "" or []: an object flag MERGES, so a blank value would leave a
+		// A manifestation (Disembodied) is a moment of the insert being left, never a record the next
+		// one takes over (the user's ruling, 2026-10-27; actors/character/manifest.js).
+		drops.push(MANIFEST_KEY);
+		// A deletion, not a write of "" or []: an object flag MERGES, so a blank value would leave a
 		// present-but-empty record behind rather than removing it. Only the keys actually present
 		// are touched, so an ordinary swap is still one write or none.
 		for (const key of drops) {
-			if (this._insertFlags.getFlag(key) != null) await this._insertFlags.unsetFlag(key);
+			if (this._insertFlags.getFlag(key) != null) Object.assign(update, this._insertFlags.deletionData(key));
 		}
+		return update;
 	}
 
 	/**
-	 * Clear every pick in a section without taking one — the other half of an exclusive choice,
-	 * for when it's answered by a write-in rather than by one of the printed options.
+	 * The insert `slug` a swap goes to, and the lore keys (`section:option`) it prints, which are all a swap
+	 * keeps of the lore. Null for an insert that cannot be READ, which is not an insert that holds nothing:
+	 * an empty set would tell the lore's prune to delete every key. A pack that hasn't loaded, a slug renamed
+	 * between versions, a world Item standing in for a compendium one: any of them would take a character's
+	 * whole post-death record with it, irreversibly. Nothing recorded is worth less than nothing known, so a
+	 * swap to one drops nothing. No slug (a removal) reads nothing and prints nothing.
 	 */
-	async clearSectionPicks(sectionSlug) {
-		return this._setSectionPicks(sectionSlug, null);
+	async _swapTarget(slug) {
+		const data = slug ? await this._insertRepo.findBySlug(slug) : null;
+		if (slug && !data) return null;
+		const printed = new Set();
+		for (const entry of data?.lore ?? []) {
+			for (const opt of entry.options ?? []) printed.add(`${entry.slug}:${opt.slug}`);
+		}
+		return { data, printed };
+	}
+
+	/**
+	 * The lore keys (`section:option`) recorded now that a swap to `slug` drops for good: every count or
+	 * text the insert does not print. None for an insert that cannot be read (see _swapTarget). What the
+	 * swap's confirmation names (UndeathDialog's Revenant-to-Ghost), read by the rule its prune follows.
+	 */
+	async loreDroppedBySwap(slug) {
+		const target = await this._swapTarget(slug);
+		if (!target) return new Set();
+		const recorded = [...Object.keys(this._lore.counts), ...Object.keys(this._lore.texts)];
+		return new Set(recorded.filter(key => !target.printed.has(key)));
 	}
 
 	/** Untick one lore option. Returns false if it wasn't marked to begin with. */
@@ -354,6 +395,36 @@ export class CharacterPostDeath {
 
 	/** setMasterTask as a fragment. */
 	masterTaskUpdateData(text) { return this._insertFlags.updateData("task", String(text ?? "").trim()); }
+
+	/**
+	 * Every pick in a section cleared without taking one, as a fragment: the other half of an exclusive
+	 * choice, for when it's answered by a write-in rather than by one of the printed options. One count
+	 * sub-key per option it unticks, so several sections' clears fold into one update without the second
+	 * replacing the first. `{}` when nothing is ticked or the worn insert has no such section.
+	 */
+	async clearSectionPicksUpdateData(sectionSlug) {
+		return (await this._sectionPicksUpdateData(sectionSlug, null)) ?? {};
+	}
+
+	/**
+	 * chooseOneSectionOption as a fragment, for a pick that lands in ONE write with the write-in it
+	 * replaces (post-death-choices.js). Null where chooseOneSectionOption would refuse.
+	 */
+	async chooseOneSectionOptionUpdateData(sectionSlug, optionSlug) {
+		if (!optionSlug) return null;
+		return this._sectionPicksUpdateData(sectionSlug, optionSlug);
+	}
+
+	/** _setSectionPicks as a fragment, one count sub-key per option it changes; null for no such section. */
+	async _sectionPicksUpdateData(sectionSlug, winnerSlug) {
+		const changes = await this._sectionPickChanges(sectionSlug, winnerSlug);
+		if (!changes) return null;
+		return Object.assign({}, ...Object.entries(changes)
+			.map(([option, count]) => this._lore.countUpdateData(sectionSlug, option, count)));
+	}
+
+	/** One lore option's written text as a fragment (CharacterLore#textUpdateData). */
+	loreTextUpdateData(sectionSlug, optionSlug, value) { return this._lore.textUpdateData(sectionSlug, optionSlug, value); }
 
 	/** setTether as a fragment. */
 	tetherUpdateData(text) { return this._insertFlags.updateData("tether", String(text ?? "").trim()); }

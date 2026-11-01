@@ -150,6 +150,9 @@ export function createStonetopSettlementSheetClass(Base) {
 				resizable: true,
 				submitOnChange: true,
 				tabs: [{ navSelector: ".stonetop-tab-rail", contentSelector: ".stonetop-settlement-body", initial: "overview" }],
+				// Each tab is its own scrollport; without this every write to the settlement snapped
+				// the reader back to the top. From inside the form, as on the character sheet.
+				scrollY: [".stonetop-settlement-tab.active"],
 			});
 		}
 

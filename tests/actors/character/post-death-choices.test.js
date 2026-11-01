@@ -10,13 +10,38 @@ import { CharacterPostDeath } from "../../../module/actors/character/CharacterPo
 import { CharacterInstincts } from "../../../module/actors/character/CharacterInstincts.js";
 import { CharacterLore } from "../../../module/actors/character/CharacterLore.js";
 
-function makeFlags(store = {}) {
+// The flag stores by namespace, so an `actor.update()` fragment one store builds can land in any of them,
+// as the real StonetopFlags' fragments land in one actor's flags.
+const FAKE_NAMESPACES = new Map();
+
+function applyFakeUpdate(data) {
+	for (const [path, value] of Object.entries(data ?? {})) {
+		const [ns, ...rest] = path.replace(/^flags\.stonetop-pwd\./, "").split(".");
+		let node = FAKE_NAMESPACES.get(ns);
+		if (!node) continue;
+		for (const part of rest.slice(0, -1)) node = node[part] ??= {};
+		const last = rest.at(-1);
+		if (last.startsWith("-=")) delete node[last.slice(2)];
+		else node[last] = value;
+	}
+}
+
+function makeFlags(store = {}, ns = `ns${FAKE_NAMESPACES.size}`) {
+	FAKE_NAMESPACES.set(ns, store);
+	const key = k => `flags.stonetop-pwd.${ns}.${k}`;
 	return {
-		getFlag: (key) => store[key] ?? null,
-		setFlag: vi.fn(async (key, val) => { store[key] = val; }),
+		getFlag: (k) => store[k] ?? null,
+		setFlag: vi.fn(async (k, val) => { store[k] = val; }),
 		// The real one deletes the key outright (an object flag merges, so writing "" or [] would
-		// leave a present-but-empty record) — pruneToInsert drops the non-lore records this way.
-		unsetFlag: vi.fn(async (key) => { delete store[key]; }),
+		// leave a present-but-empty record) — the prune drops the non-lore records this way.
+		unsetFlag: vi.fn(async (k) => { delete store[k]; }),
+		// The fragment forms (StonetopFlags), which the prune hands back as one write.
+		updateData: (k, value) => ({ [key(k)]: value }),
+		subKeyData: (k, sub, value) => ({ [`${key(k)}.${sub}`]: value }),
+		_ns: `flags.stonetop-pwd.${ns}`,
+		deletionData: (k) => ({ [`flags.stonetop-pwd.${ns}.-=${k}`]: null }),
+		subKeyDeletionData: (k, sub) => ({ [`${key(k)}.-=${sub}`]: null }),
+		applyUpdateData: vi.fn(async (data) => applyFakeUpdate(data)),
 		_store: store,
 	};
 }
@@ -98,7 +123,6 @@ function makeCharacter(slug, lore, { counts = {}, texts = {}, instinct = null, i
 		async chooseOneSectionOption(s, o) { return pd.chooseOneSectionOption(s, o); },
 		async markSectionOption(s, o)      { return pd.markSectionOption(s, o); },
 		async unmarkSectionOption(s, o)    { return pd.unmarkSectionOption(s, o); },
-		async clearSectionPicks(s)         { return pd.clearSectionPicks(s); },
 		get tether()                       { return pd.tether; },
 	};
 }
@@ -406,7 +430,7 @@ describe("which sections accumulate, and which are one to a character", () => {
 	});
 });
 
-describe("unmarkSectionOption / clearSectionPicks", () => {
+describe("unmarkSectionOption / clearSectionPicksUpdateData", () => {
 	it("takes one option off and leaves the rest", async () => {
 		const character = makeCharacter("ghost", GHOST_LORE, {
 			counts: { "consequences:breakdown": 1, "consequences:specter": 1 },
@@ -422,12 +446,28 @@ describe("unmarkSectionOption / clearSectionPicks", () => {
 		expect(await character.unmarkSectionOption("consequences", "specter")).toBe(false);
 	});
 
-	it("clears a whole exclusive section", async () => {
+	it("hands an exclusive pick back as a fragment: the winner ticked, its ticked siblings cleared", async () => {
 		const character = makeCharacter("thrall", THRALL_LORE, { counts: { "impulse:stoke-conflict": 1 } });
-		expect(await character.clearSectionPicks("impulse")).toBe(true);
+		const loreFlags = character._postDeath.lore._flags;
+		const data = await character._postDeath.chooseOneSectionOptionUpdateData("impulse", "erode-hope");
+		expect(data).toEqual({
+			[`${loreFlags._ns}.counts.impulse:stoke-conflict`]: 0,
+			[`${loreFlags._ns}.counts.impulse:erode-hope`]: 1,
+		});
+		expect(loreFlags.setFlag).not.toHaveBeenCalled();
+		expect(await character._postDeath.chooseOneSectionOptionUpdateData("impulse", "")).toBeNull();
+		expect(await character._postDeath.chooseOneSectionOptionUpdateData("no-such-section", "erode-hope")).toBeNull();
+	});
 
-		const step = (await buildPostDeathChoices(character)).steps.find(s => s.key === "impulse");
-		expect(step.options.some(o => o.marked)).toBe(false);
+	it("hands a clear back as one count sub-key per option it unticks, writing nothing", async () => {
+		const character = makeCharacter("thrall", THRALL_LORE, { counts: { "impulse:stoke-conflict": 1, "impulse:erode-hope": 0 } });
+		const loreFlags = character._postDeath.lore._flags;
+		const data = await character._postDeath.clearSectionPicksUpdateData("impulse");
+		expect(data).toEqual({ [`${loreFlags._ns}.counts.impulse:stoke-conflict`]: 0 });
+		expect(loreFlags.setFlag).not.toHaveBeenCalled();
+		// Nothing ticked, or no such section on the worn insert: nothing to write.
+		expect(await makeCharacter("thrall", THRALL_LORE)._postDeath.clearSectionPicksUpdateData("impulse")).toEqual({});
+		expect(await character._postDeath.clearSectionPicksUpdateData("no-such-section")).toEqual({});
 	});
 });
 
@@ -589,13 +629,15 @@ describe("swapping one insert for another", () => {
 		const insertFlags = makeFlags({ slug: "revenant" });
 		const loreFlags   = makeFlags({ counts, texts: { "terrible-purpose:duty": "The bridge" } });
 		// Both real inserts resolve, so a swap in either direction can be exercised; anything else
-		// returns null, which is the "can't read the insert" case pruneToInsert refuses to act on.
+		// returns null, which is the "can't read the insert" case the prune refuses to act on.
 		const inserts = {
 			ghost:    { slug: "ghost",    name: "Ghost",    lore: GHOST_LORE, instincts: INSTINCTS },
 			// Same two sections as the Ghost for this fixture's purposes — what matters here is
 			// that neither insert carries a `marks` section, which is what the Thrall's crossed-off
 			// Marks and master's task hang off.
-			revenant: { slug: "revenant", name: "Revenant", lore: GHOST_LORE, instincts: INSTINCTS },
+			// One Instinct the Ghost doesn't print, so "printed by the old insert, not the new" exists.
+			revenant: { slug: "revenant", name: "Revenant", lore: GHOST_LORE,
+				instincts: [...INSTINCTS, { word: "Fascination", description: "To explore your powers." }] },
 		};
 		const repo = {
 			findBySlug: async (s) => inserts[s] ?? null,
@@ -614,33 +656,62 @@ describe("swapping one insert for another", () => {
 		return { pd, loreFlags, instincts, insertFlags };
 	}
 
+	/** The prune as the swap lands it: its one fragment, applied. */
+	async function pruneTo(pd, slug) {
+		applyFakeUpdate(await pd.pruneToInsertUpdateData(slug));
+	}
+
+	it("names the lore keys a swap drops, by the rule its prune follows", async () => {
+		const { pd } = swapCharacter({ "consequences:carrion-stench": 1, "consequences:breakdown": 1 });
+		expect([...await pd.loreDroppedBySwap("ghost")]).toEqual(["consequences:carrion-stench"]);
+		// An insert that cannot be read drops nothing, as the prune then keeps everything.
+		expect([...await pd.loreDroppedBySwap("wight")]).toEqual([]);
+	});
+
 	it("drops what the new insert has no option for", async () => {
 		const { pd, loreFlags } = swapCharacter({
 			"consequences:carrion-stench": 1,   // Revenant only — a Ghost has no body to reek
 			"consequences:breakdown": 1,        // on both lists
 			"terrible-purpose:duty": 1,         // on both lists
 		});
-		await pd.pruneToInsert("ghost");
+		await pruneTo(pd, "ghost");
 
 		expect(Object.keys(loreFlags._store.counts).sort()).toEqual(["consequences:breakdown", "terrible-purpose:duty"]);
 	});
 
 	it("keeps the name written against a purpose both inserts print", async () => {
 		const { pd, loreFlags } = swapCharacter({ "terrible-purpose:duty": 1 });
-		await pd.pruneToInsert("ghost");
+		await pruneTo(pd, "ghost");
 		expect(loreFlags._store.texts["terrible-purpose:duty"]).toBe("The bridge");
 	});
 
 	it("keeps an Instinct the new insert also offers", async () => {
 		const { pd, instincts } = swapCharacter({}, "Denial — To refuse to accept that you are dead.");
-		await pd.pruneToInsert("ghost");
+		await pruneTo(pd, "ghost");
 		expect(instincts.selectedValue).toBe("Denial — To refuse to accept that you are dead.");
 	});
 
 	it("clears an Instinct the new insert doesn't offer", async () => {
 		const { pd, instincts } = swapCharacter({}, "Fascination — To explore your powers.");
-		await pd.pruneToInsert("ghost");
+		await pruneTo(pd, "ghost");
 		expect(instincts.selectedValue).toBe("");
+	});
+
+	// An insert removed in edit mode prunes nothing, so its printed Instinct is still selected when the next
+	// one is taken with none worn: it is still that insert's, not a write-in.
+	it("clears another insert's printed Instinct when no insert is worn", async () => {
+		const { pd, instincts, insertFlags } = swapCharacter({}, "Fascination — To explore your powers.");
+		delete insertFlags._store.slug;
+		expect(pd.activeSlug).toBeFalsy();
+		await pruneTo(pd, "ghost");
+		expect(instincts.selectedValue).toBe("");
+	});
+
+	// Level Up step 6's "make up new options": an Instinct neither insert prints is the player's own.
+	it("keeps an Instinct the player wrote in", async () => {
+		const { pd, instincts } = swapCharacter({}, "Regret — To make amends to those I wronged.");
+		await pruneTo(pd, "ghost");
+		expect(instincts.selectedValue).toBe("Regret — To make amends to those I wronged.");
 	});
 
 	it("drops the records the new insert has nowhere to put", async () => {
@@ -653,7 +724,7 @@ describe("swapping one insert for another", () => {
 		insertFlags._store.task       = "Bring me the Crow-Mother's eye";
 		insertFlags._store.tether     = "The oak where they buried me";
 
-		await pd.pruneToInsert("ghost");
+		await pruneTo(pd, "ghost");
 
 		// The Ghost has no Marks, so neither of the Thrall's Mark records can follow them…
 		expect(pd.crossedOffMarks).toEqual([]);
@@ -662,25 +733,55 @@ describe("swapping one insert for another", () => {
 		expect(pd.tether).toBe("The oak where they buried me");
 	});
 
+	// Audit RV-6: the prune is one fragment, so the swap lands it with the slug in ONE write.
+	it("hands the whole prune back as one update fragment, writing nothing itself", async () => {
+		const { pd, loreFlags, instincts, insertFlags } = swapCharacter(
+			{ "consequences:carrion-stench": 1, "consequences:breakdown": 1 },
+			"Fascination — To explore your powers.",
+		);
+		insertFlags._store.task = "Bring me the Crow-Mother's eye";
+		const data = await pd.pruneToInsertUpdateData("ghost");
+
+		// The Revenant-only Consequence, the Instinct the Ghost doesn't offer and the Thrall's task: three
+		// keys of one fragment, and breakdown (both inserts print it) is not among them.
+		const keys = Object.keys(data);
+		expect(keys).toHaveLength(3);
+		expect(keys.some(k => k.endsWith("counts.-=consequences:carrion-stench"))).toBe(true);
+		expect(keys.some(k => k.endsWith(".-=task"))).toBe(true);
+		expect(keys.some(k => k.endsWith(".selected") && data[k] === "")).toBe(true);
+		// Nothing was written: the caller lands it.
+		expect(loreFlags._store.counts["consequences:carrion-stench"]).toBe(1);
+		expect(instincts.selectedValue).toBe("Fascination — To explore your powers.");
+		expect(insertFlags.applyUpdateData).not.toHaveBeenCalled();
+	});
+
+	// GH-6 (the user's ruling, 2026-10-27): a manifestation is a moment of the insert left behind.
+	it("drops a Ghost's manifestation on any swap", async () => {
+		const { pd, insertFlags } = swapCharacter({});
+		insertFlags._store.manifest = ["You can speak clearly and intelligibly"];
+		await pruneTo(pd, "revenant");
+		expect(insertFlags._store.manifest).toBeUndefined();
+	});
+
 	it("drops a tether when the new insert has nothing to reform beside", async () => {
 		const { pd, insertFlags } = swapCharacter({});
 		insertFlags._store.tether = "The oak where they buried me";
 
-		await pd.pruneToInsert("revenant");
+		await pruneTo(pd, "revenant");
 
 		expect(pd.tether).toBe("");
 	});
 
 	it("keeps everything when the incoming insert can't be read at all", async () => {
 		// An insert we cannot READ is not an insert that holds nothing — but an empty valid-set is
-		// exactly how that used to arrive at pruneTo, which deletes every key outside it. A pack
+		// exactly how that used to arrive at the lore's prune, which deletes every key outside it. A pack
 		// that hasn't loaded or a slug renamed between versions would have taken the character's
 		// whole post-death record with it, irreversibly.
 		const { pd, loreFlags, instincts } = swapCharacter(
 			{ "consequences:breakdown": 1, "terrible-purpose:duty": 1 },
 			"Denial — To refuse to accept that you are dead.",
 		);
-		await pd.pruneToInsert("wight");   // no such insert in the repo
+		await pruneTo(pd, "wight");   // no such insert in the repo
 
 		expect(Object.keys(loreFlags._store.counts).sort())
 			.toEqual(["consequences:breakdown", "terrible-purpose:duty"]);

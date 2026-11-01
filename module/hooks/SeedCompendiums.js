@@ -6,6 +6,7 @@ import { makeRewriter, remapPageData, managedHash, carryOverPageState, planSourc
 import { compendiumSourceOf } from "../utils/foundry-compat.js";
 import { progressSlice, progressSubSlice } from "../utils/progress-slice.js";
 import { makePaintYielder } from "../utils/paint-yield.js";
+import { countOf } from "../utils/plural.js";
 import { SEEDED_FOLDER_COLORS, rawFolderColor, planSeededFolderColorUpdates, seededFolderColorSignature } from "./seeded-folder-colors.js";
 import { isOurCompendiumRef, seededSourceKeys, compendiumRefTail } from "../migration/compat.js";
 import { SYSTEM_ID, JOURNAL_PACK } from "../system-id.js";
@@ -101,7 +102,7 @@ export async function seedCompendiumJournalsOnce({ onProgress } = {}) {
 	// Record the baseline fingerprint of each seeded entry (after the link remap, so
 	// it matches what's stored) plus the version it was seeded at. Future loads use
 	// this to tell a pristine entry — safe to refresh to a newer shipped version —
-	// from one the GM has edited. See updateSeededJournalsOnVersionChange.
+	// from one the GM has edited. See planJournalSync.
 	await stampJournalBaselines(created, { onProgress: progressSlice(onProgress, SEED_PHASES.stamp) });
 	await setSetting("journalSyncVersion", game.system.version);
 	await openSettingOverviewToPlayers(created);
@@ -149,7 +150,7 @@ export async function unnestSeededWorldRootOnce() {
 				await Folder.updateDocuments(children.map(f => ({ _id: f.id, folder: null })));
 			}
 			await world.delete();
-			info(`Un-nested ${children.length} gazetteer tree${children.length === 1 ? "" : "s"} from the "${WORLD_FOLDER_NAME}" folder.`);
+			info(`Un-nested ${countOf(children.length, "gazetteer tree")} from the "${WORLD_FOLDER_NAME}" folder.`);
 		} catch (err) {
 			error(`Failed to un-nest the seeded "${WORLD_FOLDER_NAME}" folder:`, err);
 			return; // leave the flag unset so the next load retries
@@ -312,7 +313,7 @@ export async function syncSeededFolderColors() {
 	if (updates.length) {
 		try {
 			await Folder.updateDocuments(updates);
-			info(`Coloured ${updates.length} seeded gazetteer folder${updates.length === 1 ? "" : "s"}.`);
+			info(`Coloured ${countOf(updates.length, "seeded gazetteer folder")}.`);
 		} catch (err) {
 			error("Failed to colour seeded gazetteer folders:", err);
 			return; // leave the signature unstamped so the next load retries
@@ -331,7 +332,7 @@ const JOURNAL_PACK_ID = JOURNAL_PACK;
 // isStonetopJournalEntry), but the managed update channel + cross-link remap still key on
 // the source stamp, so put it back. `compendiumSource` is a writable (non-server-managed)
 // `_stats` field, so a plain update sticks. GM-only; idempotent — a no-op once every entry
-// is stamped, so it's safe to run every load ahead of updateSeededJournalsOnVersionChange.
+// is stamped, so it's safe to run every load ahead of planJournalSync.
 export async function restampSeededJournalSources() {
 	if (!game.user?.isGM) return;
 	const pack = game.packs.get(JOURNAL_PACK_ID);
@@ -347,7 +348,7 @@ export async function restampSeededJournalSources() {
 	if (!updates.length) return;
 	try {
 		await JournalEntry.updateDocuments(updates);
-		info(`Restored the compendium-source stamp on ${updates.length} imported journal${updates.length === 1 ? "" : "s"}.`);
+		info(`Restored the compendium-source stamp on ${countOf(updates.length, "imported journal")}.`);
 	} catch (err) {
 		error("Failed to restamp imported journal sources:", err);
 	}
@@ -410,6 +411,19 @@ function stampUpdate(entry, hash, version) {
 	return { _id: entry.id, [`flags.${SYSTEM_ID}.journalSync`]: { hash, version } };
 }
 
+// What an edited entry was last told about: the shipped fingerprint it was compared with, paired
+// with the baseline it was compared over. Written beside the baseline (`journalSync.kept`), never
+// over it, so the entry still reads as edited and is still never refreshed. Paired so a `kept` left
+// from an earlier edit, under a baseline since re-stamped, is never mistaken for this one's.
+function keptStampUpdate(entry, baseHash, shippedHash) {
+	return { _id: entry.id, [`flags.${SYSTEM_ID}.journalSync.kept`]: { base: baseHash, shipped: shippedHash } };
+}
+
+/** The shipped fingerprint an edited entry was last compared with: its `kept` one, or its baseline. */
+function lastShippedHash(baseline) {
+	return baseline?.kept?.base === baseline?.hash && baseline?.kept?.shipped ? baseline.kept.shipped : baseline?.hash;
+}
+
 // On a system-version bump, roll newly-shipped journal content into the world — but
 // only for entries the GM hasn't touched. An entry is "pristine" when its current
 // content fingerprint still equals the baseline we stamped when we last wrote it; a
@@ -420,33 +434,45 @@ function stampUpdate(entry, hash, version) {
 // Runs GM-only, once per version (guarded by the `journalSyncVersion` setting). Does
 // nothing until the world has been seeded — fresh installs go through the seed path.
 //
-// Reports `{ fraction, detail }` per entry so the setup window can show a row for it. Worth a
-// row on its own: on a settled world this is the ONLY thing running, and it used to be a
-// silent multi-second stall on the first load after every update.
-//
-// Returns `{ stamped }`. False means the pass deliberately left this version unrecorded so the
-// next load retries it, which the caller has to know about: a row that ticks itself off green
-// after a write that did not land is worse than no row.
-//
-// @returns {Promise<{stamped: boolean}>}
-export async function updateSeededJournalsOnVersionChange({ onProgress } = {}) {
-	if (!needsJournalSync()) return { stamped: true };
+// Two halves, so the setup window can decide whether to open at all: planJournalSync reads
+// and compares without writing anything, and applyJournalSync does the writes. Most releases
+// change no journal content, and on those the plan has nothing to refresh, so the window stays
+// shut and the apply is one batched stamp write. See hooks/WorldSetup.js.
+
+/**
+ * The read-only half of the version sync: compare every seeded entry with what this version
+ * ships and decide what to do with it. Writes nothing.
+ *
+ * `refresh` are pristine entries whose shipped content changed, `stamps` are baseline writes
+ * only (content already right, or a legacy entry adopting a baseline), and `keptEdits` names
+ * entries the GM edited AND whose shipped content moved on since they were last compared. An
+ * edited entry whose shipped content has not changed is in none of them: it is missing nothing
+ * new, so there is nothing to tell the GM about. Each one named gets a `kept` stamp (in `stamps`)
+ * recording what it was compared with, so the next release names it only if it changes again.
+ *
+ * `legacyEdits` names entries seeded before baselines existed whose world copy differs from
+ * what ships. Left alone like an edit, but kept out of `keptEdits`: with no baseline there is
+ * no telling whether THIS version changed them, and they would otherwise be announced as
+ * "also changed" on every release for as long as the world lives.
+ *
+ * Reports `{ fraction, detail }` per entry when given `onProgress`.
+ *
+ * @returns {Promise<{version: string, refresh: object[], stamps: object[], keptEdits: string[], legacyEdits: string[]} | null>}
+ *          null when the sync has nothing to do this load.
+ */
+export async function planJournalSync({ onProgress } = {}) {
+	if (!needsJournalSync()) return null;
 	const version = game.system.version;
 
 	const rewrite = makeRewriter(buildWorldLinkMap());
 	const shipped = await shippedJournalsByTail();
 	const entries = (game.journal ?? []).filter(e => isOurCompendiumRef(compendiumSourceOf(e)));
-	const updated = [], skipped = [];
-	// Entries whose content is already right and only need their version stamp moved on. This
-	// is the overwhelming majority on a release that changed no journals, and it is the whole
-	// reason the pass was slow: one awaited setFlag each, which is one server round trip and
-	// one sidebar re-render broadcast per entry.
-	const stamps = [];
-	// Batching the stamps and prefetching the pack took every await out of the common path,
-	// which is the point of both, but it also means this loop would hold the main thread from
-	// the first entry to the last and the row above could never draw a frame. The yield goes at
-	// the TOP of the body because four of the branches below `continue`, and those are exactly
-	// the cheap-and-common ones a bottom-of-body yield would skip. See paint-yield.js.
+	const refresh = [], stamps = [], keptEdits = [], legacyEdits = [];
+	// Prefetching the pack took every await out of this loop, which is the point, but it also
+	// means the loop would hold the main thread from the first entry to the last and nothing
+	// could draw a frame. The yield goes at the TOP of the body because the branches below
+	// `continue`, and those are exactly the cheap-and-common ones a bottom-of-body yield would
+	// skip. See paint-yield.js.
 	const yieldToPaint = makePaintYielder();
 
 	for (const [index, entry] of entries.entries()) {
@@ -459,31 +485,77 @@ export async function updateSeededJournalsOnVersionChange({ onProgress } = {}) {
 		const source = shipped.get(compendiumRefTail(src)) ?? await fromUuid(src);
 		if (!source) continue; // entry dropped from the pack this version — leave the world copy
 
-		const worldHash = managedHash(entry.toObject());
-		const baseline = entry.getFlag(SYSTEM_ID, "journalSync");
-		// GM-edited: fingerprint drifted from what we last wrote. Hands off.
-		if (baseline?.hash && baseline.hash !== worldHash) { skipped.push(entry.name); continue; }
-
 		// The newly-shipped content, with its links remapped to this world's copies.
 		const srcData = source.toObject();
 		const newPages = (srcData.pages ?? []).map(p => remapPageData(p, rewrite));
 		const newHash = managedHash({ pages: newPages });
+
+		const worldHash = managedHash(entry.toObject());
+		const baseline = entry.getFlag(SYSTEM_ID, "journalSync");
+		// GM-edited: fingerprint drifted from what we last wrote. Hands off. Only worth a mention
+		// when this version ships something other than what the entry was last compared with;
+		// otherwise the GM is missing nothing, and saying "kept your edits" on every release is noise.
+		if (baseline?.hash && baseline.hash !== worldHash) {
+			if (lastShippedHash(baseline) !== newHash) {
+				keptEdits.push(entry.name);
+				stamps.push(keptStampUpdate(entry, baseline.hash, newHash));
+			}
+			continue;
+		}
 
 		// No baseline yet (seeded before this feature shipped): only adopt one if the
 		// world copy still matches the shipped content — otherwise we can't tell an edit
 		// from version drift, so we never risk clobbering it.
 		if (!baseline?.hash) {
 			if (worldHash === newHash) stamps.push(stampUpdate(entry, newHash, version));
-			else skipped.push(entry.name);
+			else legacyEdits.push(entry.name);
 			continue;
 		}
 
 		// Pristine. If the shipped content is unchanged, just bump the version stamp.
 		if (newHash === worldHash) { stamps.push(stampUpdate(entry, newHash, version)); continue; }
 
-		// Pristine and the shipped version differs → refresh the entry's pages in place,
-		// carrying over reader state (checkbox ticks) the content hash doesn't track so
-		// updating the content doesn't wipe a player's progress.
+		// Pristine and the shipped version differs → the apply refreshes it.
+		refresh.push({ entry, srcData, newPages, newHash });
+	}
+
+	return { version, refresh, stamps, keptEdits, legacyEdits };
+}
+
+/** What the sync says about the changed journals it left alone because they hold the GM's edits. */
+export function keptEditsText(n) {
+	return `kept your edits in ${n} (the latest is in the compendium)`;
+}
+
+/**
+ * The writing half of the version sync: refresh what the plan said to refresh, stamp the
+ * baselines, and record this version as done.
+ *
+ * Reports `{ fraction, detail }` per refreshed entry when given `onProgress`.
+ *
+ * Returns `{ stamped }`. False means the pass deliberately left this version unrecorded so the
+ * next load retries it, which the caller has to know about: a row that ticks itself off green
+ * after a write that did not land is worse than no row. That covers a refresh that threw as
+ * well as a failed stamp write: the entry still holds the old content under its old baseline,
+ * so it is still pristine and the retry picks it up, where recording the version would leave it
+ * stale until the next release.
+ *
+ * `notify: false` drops the summary toast, for a caller whose window already says the same.
+ *
+ * @returns {Promise<{stamped: boolean, updated: string[], failed: string[]}>}
+ */
+export async function applyJournalSync(plan, { onProgress, notify = true } = {}) {
+	if (!plan) return { stamped: true, updated: [], failed: [] };
+	const { version, refresh, stamps, keptEdits, legacyEdits = [] } = plan;
+	const updated = [], failed = [];
+
+	for (const [index, { entry, srcData, newPages, newHash }] of refresh.entries()) {
+		onProgress?.({
+			fraction: (index + 1) / refresh.length,
+			detail: `Updating ${entry.name} (${index + 1} of ${refresh.length})`,
+		});
+		// Refresh the entry's pages in place, carrying over reader state (checkbox ticks) the
+		// content hash doesn't track so updating the content doesn't wipe a player's progress.
 		//
 		// This branch keeps its own inline stamp rather than joining the batch: it has just
 		// rewritten the entry's pages, and a baseline that lands separately from the content
@@ -500,7 +572,7 @@ export async function updateSeededJournalsOnVersionChange({ onProgress } = {}) {
 			updated.push(entry.name);
 		} catch (err) {
 			error(`Failed to refresh seeded journal "${entry.name}":`, err);
-			skipped.push(entry.name);
+			failed.push(entry.name);
 		}
 	}
 
@@ -509,13 +581,16 @@ export async function updateSeededJournalsOnVersionChange({ onProgress } = {}) {
 	// only baselines for the NEXT run, so whether they land says nothing about any of it — and
 	// failing to invalidate would leave the cached summaries pointing at page data that no longer
 	// exists for the rest of the session, which is a wrong tooltip rather than a retryable one.
-	if (updated.length || skipped.length) {
-		invalidateLocationSummaryIndex(); // links/summaries may have moved
+	if (updated.length) invalidateLocationSummaryIndex(); // links/summaries may have moved
+	if (updated.length || keptEdits.length) {
 		const parts = [];
-		if (updated.length) parts.push(`updated ${updated.length} journal${updated.length === 1 ? "" : "s"}`);
-		if (skipped.length) parts.push(`kept your edits in ${skipped.length} (latest is in the compendium)`);
-		ui.notifications?.info(`Stonetop: ${parts.join("; ")}.`);
-		info(`Journal sync → v${version}. Updated: [${updated.join(", ")}]. Skipped (edited): [${skipped.join(", ")}].`);
+		if (updated.length) parts.push(`updated ${countOf(updated.length, "journal")}`);
+		if (keptEdits.length) parts.push(keptEditsText(keptEdits.length));
+		if (notify) ui.notifications?.info(`Stonetop: ${parts.join("; ")}.`);
+	}
+	if (updated.length || keptEdits.length || legacyEdits.length || failed.length) {
+		info(`Journal sync → v${version}. Updated: [${updated.join(", ")}]. Skipped (edited): [${keptEdits.join(", ")}]. `
+			+ `Skipped (no baseline, differs): [${legacyEdits.join(", ")}]. Failed: [${failed.join(", ")}].`);
 	}
 
 	if (stamps.length) {
@@ -526,10 +601,13 @@ export async function updateSeededJournalsOnVersionChange({ onProgress } = {}) {
 			// same contract every other seed here keeps. Re-running is free: the entries that
 			// did land re-hash to the same value and simply get stamped again.
 			error("Failed to stamp seeded journal baselines:", err);
-			return { stamped: false };
+			return { stamped: false, updated, failed };
 		}
 	}
 
+	// A refresh that threw leaves the version unrecorded too; see the doc comment above.
+	if (failed.length) return { stamped: false, updated, failed };
+
 	await setSetting("journalSyncVersion", version);
-	return { stamped: true };
+	return { stamped: true, updated, failed };
 }

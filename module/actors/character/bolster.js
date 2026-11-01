@@ -39,6 +39,20 @@ export function bolsterBodyHtml(actor) {
 		</label>`;
 }
 
+/**
+ * The Special Moves tab's Bolster card: what is held now, as one line, or no hint while nothing is.
+ * PURE apart from the localization.
+ */
+export function bolsterCardData(actor) {
+	const held = preparationHeld(actor);
+	if (!held) return { held: 0, hint: "" };
+	const purpose = preparationFor(actor);
+	const hint = purpose
+		? format("stonetop.specialMoves.bolster.heldHint", { held, purpose })
+		: format("stonetop.specialMoves.bolster.heldHintNoPurpose", { held });
+	return { held, hint };
+}
+
 /** The answer read off the window's form: `{hold, purpose}`. PURE. */
 export function readBolsterForm(form) {
 	const picked = form?.querySelector?.('input[name="bolsterHold"]:checked');

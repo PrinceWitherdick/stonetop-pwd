@@ -24,6 +24,9 @@ export class SettingOverviewDialog extends Application {
 			height:   600,
 			resizable: true,
 			classes:  ["stonetop", "stonetop-setting-overview"],
+			// A pick in the sidebar redraws the window; the sidebar stays where it was scrolled, and the
+			// entry picked opens at its top.
+			scrollY:  [".stonetop-so-sidebar"],
 		});
 	}
 

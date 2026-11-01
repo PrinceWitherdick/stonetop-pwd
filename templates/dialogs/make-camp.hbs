@@ -115,8 +115,8 @@
 
         <div class="stonetop-camp-part">
           <p class="stonetop-camp-part-label">Eating</p>
-          {{#if unliving}}
-          <p class="stonetop-camp-says">Needs no food or sleep (Unliving), and takes nothing from the night.</p>
+          {{#if unlivingText}}
+          <p class="stonetop-camp-says">{{this.unlivingText}}</p>
           {{/if}}
           <div class="stonetop-camp-line stonetop-camp-line--stepper">
             <span class="stonetop-camp-line-label">Followers eating too</span>

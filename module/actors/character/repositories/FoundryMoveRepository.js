@@ -59,7 +59,8 @@ export class FoundryMoveRepository {
 		if (this._postDeathCache.has(insertSlug)) return this._postDeathCache.get(insertSlug);
 		const entries = await this._store.filterEntries(e => e.system?.playbook === insertSlug);
 		const moves   = entries.map(e => new MoveDefinition(e));
-		this._postDeathCache.set(insertSlug, moves);
+		// Every insert has moves, so none is a pack not read yet: not cached, so the next ask reads again.
+		if (moves.length) this._postDeathCache.set(insertSlug, moves);
 		return moves;
 	}
 

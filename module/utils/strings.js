@@ -65,6 +65,14 @@ export function escapeRegExp(v) {
 }
 
 /**
+ * A value safe inside a double-quoted attribute selector, `[data-x="${attrValue(v)}"]`. The one
+ * such escaper: pure, so the node tests (which have no `CSS.escape`) can run it.
+ */
+export function attrValue(v) {
+	return String(v ?? "").replace(/["\\]/g, "\\$&");
+}
+
+/**
  * A signed number as the book prints it: "+2", "+0", "-1".
  *
  * Here rather than beside the roll code because it is not a roll's business: a stat score on the

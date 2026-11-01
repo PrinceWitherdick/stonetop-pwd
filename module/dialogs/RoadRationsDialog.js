@@ -2,10 +2,11 @@ import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import {
 	campVitalsFor, crewSuppliesOf, isUnliving, mealSpendTarget, packResources, partyCrewMouths, partyFollowerMouths,
 } from "../camp/camp-store.js";
-import { count, purseSpendUpdate } from "../camp/camp-rules.js";
+import { UNLIVING_NEEDS, count, purseSpendUpdate } from "../camp/camp-rules.js";
 import { partyFollowersOf } from "../actors/character/follower-roster.js";
 import { postMoveToChat } from "../utils/chat.js";
-import { crewRoadText, ledgerAsPaid, roadLedger, roadSummaryRows, spendWords, usesWord } from "../utils/road-rations.js";
+import { crewRoadText, ledgerAsPaid, roadLedger, roadSummaryRows, spendWords } from "../utils/road-rations.js";
+import { countOf, plural } from "../utils/plural.js";
 
 /** The ledger's name for the write, so the character's history says where the food went. */
 const ON_THE_ROAD = "On the road";
@@ -21,6 +22,17 @@ const ON_THE_ROAD = "On the road";
  * GM can write every character. Nothing is spent until the GM presses the button, and every figure
  * on the way is theirs to change.
  */
+/**
+ * Why a Ghost's or Revenant's Eats box starts unticked, or, once the GM ticks it, that they now cost
+ * a mouth. Followers are named only when some travel with them.
+ */
+function unlivingRoadText(row) {
+	if (!row.unliving) return "";
+	if (row.eats) return `${UNLIVING_NEEDS}, but counted as a mouth here: untick Eats to leave them out.`;
+	if (!row.followers) return `${UNLIVING_NEEDS}.`;
+	return `${UNLIVING_NEEDS}; ${plural(row.followers, "their follower still eats", "their followers still eat")}.`;
+}
+
 export class RoadRationsDialog extends StonetopDialog {
 	/**
 	 * @param {Actor[]} actors  the PCs on this trip
@@ -115,13 +127,14 @@ export class RoadRationsDialog extends StonetopDialog {
 				spend:   r.pays ? spendWords(r.spend) : "",
 				// The crew's own supplies pay the crew by themselves: a sentence, never a figure to set.
 				crewText: crewRoadText(r),
+				unlivingText: unlivingRoadText(r),
 			})),
 			bill:      ledger.bill,
 			billText:  ledger.packAnimal
 				? "No meals to count: they re-Outfit from the stash."
-				: `${ledger.mouths} ${ledger.mouths === 1 ? "mouth" : "mouths"}: ${usesWord(ledger.perDay)} a day, ${usesWord(ledger.bill)} in all.`,
-			shortText: ledger.short ? `${usesWord(ledger.short)} short: someone goes without (deprivation, p.335).` : "",
-			overText:  ledger.over ? `${usesWord(ledger.over)} more than the bill.` : "",
+				: `${countOf(ledger.mouths, "mouth")}: ${countOf(ledger.perDay, "use")} a day, ${countOf(ledger.bill, "use")} in all.`,
+			shortText: ledger.short ? `${countOf(ledger.short, "use")} short: someone goes without (deprivation, p.335).` : "",
+			overText:  ledger.over ? `${countOf(ledger.over, "use")} more than the bill.` : "",
 		};
 	}
 

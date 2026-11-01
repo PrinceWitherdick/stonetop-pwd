@@ -23,6 +23,7 @@ import { OWNER_ASK_MS, spendOrAskOwner, answerOwnerAsk, tooLate, gmAnswersNote }
 import { confirmOutcome } from "../../utils/ask-with-buttons.js";
 import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { escHtml } from "../../utils/strings.js";
+import { countOf } from "../../utils/plural.js";
 
 /** The User query a patient's player sends when someone else decides on the payer's supplies. */
 export const SUPPLY_PAY_QUERY = "stonetop.supplyPay";
@@ -30,9 +31,6 @@ export const SUPPLY_PAY_QUERY = "stonetop.supplyPay";
 export const SUPPLY_PAY_ASK_MS = OWNER_ASK_MS;
 
 const PURPOSES = new Set(Object.values(SUPPLY_PURPOSE));
-
-/** "1 use", "3 uses". */
-const usesText = n => (n === 1 ? "1 use" : `${n} uses`);
 
 /**
  * The other characters who could pay for `patient`, alive, that this user can reach: each with its
@@ -59,7 +57,7 @@ export function ownSupplySpend(character, { slug, n = 1, purpose = SUPPLY_PURPOS
 	const live = character?.supplyPurses?.(purpose)?.eligible?.find(p => p.slug === slug && p.remaining >= n) ?? null;
 	if (!live) return null;
 	const left = live.remaining - n;
-	return { update: character.inventoryResourceData(live.slug, left), left, row: { label: live.label, value: `Expended ${usesText(n)} (${left} left)` } };
+	return { update: character.inventoryResourceData(live.slug, left), left, row: { label: live.label, value: `Expended ${countOf(n, "use")} (${left} left)` } };
 }
 
 /**
@@ -76,7 +74,7 @@ function payerPurse(purses, slug, n) {
 export function behalfSpendRow(payerName, receipt, patientName) {
 	return {
 		label: `${payerName}'s ${String(receipt.label ?? "").toLowerCase()}`,
-		value: `Expended ${usesText(receipt.spent)} on ${patientName}'s behalf (${receipt.left} left)`,
+		value: `Expended ${countOf(receipt.spent, "use")} on ${patientName}'s behalf (${receipt.left} left)`,
 	};
 }
 
@@ -166,11 +164,11 @@ export async function handleSupplyPayQuery(data, context = {}, { actors = global
 			purse = payerPurse(payer.typedActor?.supplyPurses?.(purpose), slug, n);
 			if (!purse || purse.remaining < n) {
 				globalThis.ui?.notifications?.warn?.(purse
-					? `${payer.name}'s ${purse.label} holds ${purse.remaining}, not the ${usesText(n)} asked for.`
+					? `${payer.name}'s ${purse.label} holds ${purse.remaining}, not the ${countOf(n, "use")} asked for.`
 					: `${payer.name} has no supplies left to spend.`);
 				return null;
 			}
-			const uses = usesText(n);
+			const uses = countOf(n, "use");
 			return {
 				title: `${moveName}: ${patient.name}`,
 				content: `<p>${escHtml(user.name ?? "A player")} asks: spend <strong>${uses}</strong> of `

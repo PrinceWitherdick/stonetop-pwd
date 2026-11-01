@@ -6,6 +6,7 @@ import {
 	SERVANT_ASPECTS, SERVANT_TAG_OPTIONS, SERVANT_NUMBER_OPTIONS, SERVANT_SIZE_OPTIONS,
 	SERVANT_TRAIT_OPTIONS, SERVANT_MOVE_OPTIONS, resolveServantBatch,
 } from "../../../data/servant-of-daagon.js";
+import { countOf, plural } from "../../../utils/plural.js";
 
 // ── CallUpDeepOnesDialog ─────────────────────────────────────────────────────
 // The Ring of Daagon's "Call Up the Deep Ones" mystery (Book II, "Mysteries of the
@@ -158,8 +159,8 @@ export class CallUpDeepOnesDialog extends StonetopDialog {
 		const parts = [];
 		const t = this._traitLimit() - this._traits.length;
 		const m = this._moveLimit()  - this._moves.length;
-		if (t > 0) parts.push(`${t} more trait${t === 1 ? "" : "s"}`);
-		if (m > 0) parts.push(`${m} more move${m === 1 ? "" : "s"}`);
+		if (t > 0) parts.push(`${t} more ${plural(t, "trait")}`);
+		if (m > 0) parts.push(`${m} more ${plural(m, "move")}`);
 		return parts.join(" and ");
 	}
 
@@ -270,8 +271,8 @@ export class CallUpDeepOnesDialog extends StonetopDialog {
 			parts.push(o.ranges.join(", "));
 			return `${o.label} (${parts.join(", ")})`;
 		}
-		if (key === "traits") return `choose ${die} trait${die === 1 ? "" : "s"}`;
-		if (key === "moves")  return `choose ${die} move${die === 1 ? "" : "s"}`;
+		if (key === "traits") return `choose ${countOf(die, "trait")}`;
+		if (key === "moves")  return `choose ${countOf(die, "move")}`;
 		return "";
 	}
 

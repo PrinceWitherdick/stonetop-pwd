@@ -104,6 +104,17 @@ describe("setupSummary", () => {
 		expect(setupSummary(steps)).toContain("ready");
 	});
 
+	// The post-update journal refresh shares the window but is not a world being set up.
+	it("closes on the caller's own line when one is given", () => {
+		const steps = makeSetupSteps(DEFS).map(s => ({ ...s, state: STEP_STATE.DONE }));
+		expect(setupSummary(steps, "Your journals are up to date.")).toBe("Your journals are up to date.");
+	});
+
+	it("still reports a failure over the caller's line", () => {
+		const steps = updateSetupStep(makeSetupSteps(DEFS), "art", { state: STEP_STATE.FAILED });
+		expect(setupSummary(steps, "Your journals are up to date.")).toContain("try again");
+	});
+
 	it("names the failure count and promises a retry", () => {
 		let steps = makeSetupSteps(DEFS).map(s => ({ ...s, state: STEP_STATE.DONE }));
 		steps = updateSetupStep(steps, "monsters", { state: STEP_STATE.FAILED });

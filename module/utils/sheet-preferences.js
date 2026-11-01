@@ -98,6 +98,15 @@ export const PREFERENCE_GROUPS = [
 		menu: "hoverDescriptionSettings",
 	},
 	{
+		id: "timeline",
+		titleKey: "stonetop.sheet.preferences.timeline",
+		// The two Timeline switches, and nobody is offered both: a player gets their own (the tab
+		// on their sheets, PLAYER_ONLY_KEYS), a GM with SETTINGS_MODIFY the whole table's
+		// (everywhere, the steading sheet only, or off). Down here with Fights rather than up in Look and Feel
+		// because of that second row: a table-wide switch keeps away from the everyday rows.
+		keys: ["timelineTabShown", "showTimeline"],
+	},
+	{
 		id: "fights",
 		titleKey: "stonetop.sheet.preferences.fights",
 		// LAST, and on its own, because it is the only group on the tab that is not the reader's
@@ -136,8 +145,8 @@ export const PREFERENCE_KEYS = new Set(PREFERENCE_GROUPS.flatMap(group => group.
  * can edit most of them. A player opens their own character, which they can already flip with
  * the header wrench.
  *
- * `fightTab` is here for a blunter reason: it is world-scoped, so a player's client would refuse
- * the write outright. Being a GM is not enough for it either — see `offeredToThisUser`, which
+ * `fightTab` and `showTimeline` are here for a blunter reason: they are world-scoped, so a
+ * player's client would refuse the write outright. Being a GM is not enough for it either — see `offeredToThisUser`, which
  * asks a second question of every world-scoped key.
  *
  * Gated HERE rather than at registration, because `registerSettings` runs on the `init` hook and
@@ -150,7 +159,18 @@ export const PREFERENCE_KEYS = new Set(PREFERENCE_GROUPS.flatMap(group => group.
  * change handler takes its key from a `data-pref` attribute, so hiding the control without
  * refusing the key would leave the setting one hand-edited attribute from being written anyway.
  */
-export const GM_ONLY_KEYS = new Set(["openSheetsInEditMode", "fightTab"]);
+export const GM_ONLY_KEYS = new Set(["openSheetsInEditMode", "fightTab", "showTimeline"]);
+
+/**
+ * Keys the tab offers to a player and not to a GM: the other way round from GM_ONLY_KEYS.
+ *
+ * `timelineTabShown` takes the Timeline tab off the reader's OWN sheets. A GM has no character of
+ * their own, and the row would sit straight above their `showTimeline` dropdown, where unticking
+ * it reads as hiding the tab from the players when it only hides it from the GM. So a GM gets the
+ * table's switch here and nothing else; the personal one stays in Configure Settings for a GM who
+ * really wants it. Refused on the write path too, as GM_ONLY_KEYS is.
+ */
+export const PLAYER_ONLY_KEYS = new Set(["timelineTabShown"]);
 
 /**
  * NO ROW ON THIS TAB IS EVER DRAWN DISABLED BY ANOTHER ROW, and that is worth saying because
@@ -198,7 +218,8 @@ function isWorldScoped(key, cfg = registration(key)) {
  * Two questions, and a world-scoped key is asked both.
  *
  * The role is the first: `GM_ONLY_KEYS` is the list of rows a player is not shown, and for the
- * world-scoped one it is also the list Foundry would reject on their client anyway.
+ * world-scoped ones it is also the list Foundry would reject on their client anyway.
+ * `PLAYER_ONLY_KEYS` is the list a GM is not shown.
  *
  * The PERMISSION is the second, and it is the one `isGM` gets wrong. An assistant gamemaster is
  * `isGM`, and `SETTINGS_MODIFY` is a role permission a world can take off the assistant role —
@@ -213,6 +234,7 @@ function isWorldScoped(key, cfg = registration(key)) {
  */
 function offeredToThisUser(key) {
 	if (GM_ONLY_KEYS.has(key) && !globalThis.game?.user?.isGM) return false;
+	if (PLAYER_ONLY_KEYS.has(key) && globalThis.game?.user?.isGM) return false;
 	if (isWorldScoped(key) && !globalThis.game?.user?.can?.("SETTINGS_MODIFY")) return false;
 	return true;
 }
@@ -249,6 +271,9 @@ function buildRow(key) {
 	// carries a line of its own saying whose setting it is. Read off the registration rather than
 	// listed here, so the sentence cannot go missing from a world row added later.
 	const row = { key, label: loc(cfg.name), hint: loc(cfg.hint), isWorld: isWorldScoped(key, cfg) };
+	// Whether that sentence goes on to say the table will be offered a reload. Only a
+	// `requiresReload` setting does that (setPreference), and the Timeline switch, say, does not.
+	if (row.isWorld) row.reloads = !!cfg.requiresReload;
 
 	if (cfg.choices) {
 		row.isChoice = true;

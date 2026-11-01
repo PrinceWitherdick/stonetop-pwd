@@ -71,6 +71,93 @@ describe("a window that keeps its reader's place", () => {
 		expect(next.column.scrollTop).toBe(240);
 	});
 
+	// A walkthrough's step, or whose turn it is: a different page opens at its top, as it would fresh.
+	it("keeps the place through a redraw of the same page, and starts a new page at its top", async () => {
+		class Paged extends Kept { get _keptPlaceKey() { return this.page; } }
+		const app = new Paged();
+		app.page = "origin";
+		app._drawnPlaceKey = "origin";
+		const had = control({ "data-kept-focus": "roll" });
+		focusOn(had);
+		const same = draw([control({ "data-kept-focus": "roll" })]);
+		await redrawing(app, draw([had], 240), same)._render(false, {});
+		expect(same.column.scrollTop).toBe(240);
+		expect(same.controls[0].focus).toHaveBeenCalled();
+
+		app.page = "review";
+		const again = control({ "data-kept-focus": "roll" });
+		const fresh = draw([again]);
+		focusOn(same.controls[0]);
+		await redrawing(app, draw(same.controls, 240), fresh)._render(false, {});
+		expect(fresh.column.scrollTop).toBe(0);
+		expect(again.focus).not.toHaveBeenCalled();
+		expect(app._drawnPlaceKey).toBe("review");
+	});
+
+	// Undeath: destroying the tether takes away the dispersal note above that very box, so the same
+	// offset drew the box a paragraph higher, out from under the pointer.
+	it("keeps the pressed control where it stood on screen when a line above it came or went", async () => {
+		/** A draw whose column holds its controls, each standing `top` px down the column's content. */
+		const placed = (scrollTop, tops) => {
+			const column = { scrollTop, contains: el => controls.includes(el) };
+			const controls = Object.entries(tops).map(([key, top]) => ({
+				...control({ "data-kept-focus": key }),
+				getBoundingClientRect: () => ({ top: top - column.scrollTop }),
+			}));
+			const byKey = sel => controls.find(el => sel === `[data-kept-focus="${el.getAttribute("data-kept-focus")}"]`) ?? null;
+			const root = { querySelector: sel => (sel === COLUMN ? column : byKey(sel)), contains: el => el === column || controls.includes(el) };
+			return { root, column, controls };
+		};
+		const first = placed(300, { tether: 500 });
+		const next  = placed(0, { tether: 440 });
+		focusOn(first.controls[0]);
+		await redrawing(new Kept(), first, next)._render(false, {});
+		// 200px down the view before; the box now sits 60px higher in the content, so 60px less scroll.
+		expect(next.column.scrollTop).toBe(240);
+		expect(next.controls[0].getBoundingClientRect().top).toBe(200);
+	});
+
+	// An auto-height window that grows is moved back on screen by setPosition. The box moved with the
+	// window, not in its column, so the column keeps the reader's offset.
+	it("does not scroll the column by however far the window itself moved", async () => {
+		const placed = (scrollTop, windowTop) => {
+			const column = { scrollTop, contains: el => el === box, getBoundingClientRect: () => ({ top: windowTop }) };
+			const box = { ...control({ "data-kept-focus": "tether" }), getBoundingClientRect: () => ({ top: windowTop + 500 - column.scrollTop }) };
+			const root = { querySelector: sel => (sel === COLUMN ? column : box), contains: el => el === column || el === box };
+			return { root, column, controls: [box] };
+		};
+		const first = placed(300, 100);
+		const next  = placed(0, 40);
+		focusOn(first.controls[0]);
+		await redrawing(new Kept(), first, next)._render(false, {});
+		expect(next.column.scrollTop).toBe(300);
+	});
+
+	// Death's Door keeps its outer body and the choices panel inside it; on the choices step only the
+	// inner one scrolls, so a line added above the ticked box is made up there.
+	it("shifts the innermost kept column that scrolls, not an outer one holding it", async () => {
+		const INNER = ".deaths-door-choices-main";
+		class Nested extends Kept { get _keptScrollSelector() { return [COLUMN, INNER]; } }
+		const nested = (innerTop, boxAt) => {
+			const outer = { scrollTop: 0, scrollHeight: 400, clientHeight: 400, contains: el => el === inner || el === box };
+			const inner = { scrollTop: innerTop, scrollHeight: 2000, clientHeight: 400, contains: el => el === box };
+			const box = { ...control({ "data-kept-focus": "mark" }), getBoundingClientRect: () => ({ top: boxAt - inner.scrollTop }) };
+			const root = {
+				querySelector: sel => (sel === COLUMN ? outer : sel === INNER ? inner : box),
+				contains: el => el === outer || el === inner || el === box,
+			};
+			return { root, column: outer, inner, controls: [box] };
+		};
+		const first = nested(300, 500);
+		const next  = nested(0, 560);
+		focusOn(first.controls[0]);
+		const app = redrawing(new Nested(), first, next);
+		app.setPosition = vi.fn();
+		await app._render(false, {});
+		expect(next.inner.scrollTop).toBe(360);
+		expect(next.column.scrollTop).toBe(0);
+	});
+
 	it("gives the keyboard back to the same control in the fresh draw, without scrolling to it", async () => {
 		const had   = control({ "data-kept-focus": "bram:add:food" });
 		const again = control({ "data-kept-focus": "bram:add:food" });
@@ -132,6 +219,32 @@ describe("a window that keeps its reader's place", () => {
 		await redrawing(new Kept(), null, next)._render(true, {});
 		expect(next.controls[0].focus).not.toHaveBeenCalled();
 		expect(next.column.scrollTop).toBe(0);
+	});
+
+	// Death's Door: the walkthrough's body scrolls on every step but the last, the rail sheet's panel on that one.
+	it("keeps each of several columns on its own, whichever of them is drawn", async () => {
+		const OTHER = ".deaths-door-choices-main";
+		class Two extends Kept { get _keptScrollSelector() { return [COLUMN, OTHER]; } }
+		/** A draw holding the first column, and the second where `otherTop` is given. */
+		const both = (top, otherTop) => {
+			const d = draw([], top);
+			const other = otherTop == null ? null : { scrollTop: otherTop };
+			const query = d.root.querySelector;
+			d.root.querySelector = sel => (sel === OTHER ? other : query(sel));
+			return { ...d, other };
+		};
+		const first = both(240, 90);
+		const next  = both(0, 0);
+		const app = redrawing(new Two(), first, next);
+		app.setPosition = vi.fn();
+		await app._render(false, {});
+		expect(next.column.scrollTop).toBe(240);
+		expect(next.other.scrollTop).toBe(90);
+
+		// The second column gone from the fresh draw: the first is kept all the same.
+		const after = both(0);
+		await redrawing(app, both(120, 30), after)._render(false, {});
+		expect(after.column.scrollTop).toBe(120);
 	});
 
 	it("finds the control by the window's own selector where it overrides one", async () => {
@@ -218,7 +331,7 @@ describe("a column that is hidden at the redraw", () => {
 		first.column.scrollTop = 240;
 		first.column.onScroll();
 		first.column.hidden = true;
-		expect(app._readPlace().scrolled).toBe(240);
+		expect(app._readPlace().columns[0].top).toBe(240);
 	});
 });
 

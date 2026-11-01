@@ -149,13 +149,16 @@ describe("markNotLethal: out of the action, with no Door to face", () => {
 });
 
 describe("markDyingByFiat: sent to the Door at 0 HP", () => {
-	it("writes dying, naming the move, and drops a Hard to Kill trade the last brush left open", async () => {
+	// The last brush's leftovers (a Hard to Kill trade, a roll marker: audit VL-2) are lifted by the preUpdate this
+	// write passes through, as on the HP path: see DeathsDoorPromptState.test.js, "a write that names dying".
+	it("writes dying in one write, naming the move", async () => {
 		const actor = pc({ flags: { deathsDoor: DEATHS_DOOR_STATE.OUT_OF_ACTION, hardToKillTrade: true } });
 
 		expect(await markDyingByFiat(actor)).toBe(true);
 
+		expect(actor.update).toHaveBeenCalledTimes(1);
 		const [data, options] = actor.update.mock.calls[0];
-		expect(data).toMatchObject({ [`flags.${SCOPE}.deathsDoor`]: DEATHS_DOOR_STATE.DYING, [`flags.${SCOPE}.-=hardToKillTrade`]: null });
+		expect(data).toMatchObject({ [`flags.${SCOPE}.deathsDoor`]: DEATHS_DOOR_STATE.DYING });
 		expect(options).toEqual({ stonetopMove: "Death's Door" });
 	});
 

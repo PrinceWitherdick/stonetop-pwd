@@ -11,7 +11,7 @@
   },
   {
     "name": "Death's Door",
-    "description": "<p>When you <strong><em>are dying</em></strong>, you glimpse the Last Door and the Lady of Crows (describe it). Then, roll +nothing: <strong>on a 10+</strong>, you wrest yourself back to the realm of the living—return to 1 HP but say how your brush with death has marked you; <strong>on a 7-9</strong>, the Lady waves you off—you're no longer dying but you're out of the action; <strong>on a 6-</strong>, your time has come—choose 1:</p><ul><li>Make one last move as if you rolled a 12+, then step through the Last Door</li><li>Refuse to go; gain the Revenant or Ghost insert</li><li>Call on one of the Things Below by name and beseech it to intercede; gain the Thrall insert</li></ul>",
+    "description": "<p>When you <strong><em>are dying</em></strong>, you glimpse the Last Door and the Lady of Crows (describe them). Then, roll +nothing: <strong>on a 10+</strong>, you wrest yourself back to the realm of the living—return to 1 HP but say how your brush with death has marked you; <strong>on a 7-9</strong>, the Lady waves you off—you're no longer dying but you're out of the action; <strong>on a 6-</strong>, your time has come—choose 1:</p><ul><li>Make one last move as if you rolled a 12+, then step through the Last Door</li><li>Refuse to go; gain the Revenant or Ghost insert</li><li>Call on one of the Things Below by name and beseech it to intercede; gain the Thrall insert</li></ul>",
     "rollType": "ask",
     "results": {
       "success": {

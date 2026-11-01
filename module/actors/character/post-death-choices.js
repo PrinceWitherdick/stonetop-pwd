@@ -278,7 +278,8 @@ async function _buildStep(character, step, carriedSlugs, sections) {
 
 	if (step.kind === "instinct") {
 		const options = await character.postDeathInstinctOptions();
-		return { ...base, options, done: options.some(o => o.selected) };
+		// A written-in Instinct (the Post-Death tab's write-in) answers it as well as a printed one.
+		return { ...base, options, done: options.some(o => o.selected) || !!String(character.postDeathInstinctValue ?? "").trim() };
 	}
 
 	if (step.kind === "tether") {
@@ -473,16 +474,18 @@ export function activatePostDeathChoices(html, character, onChanged) {
 
 	// An exclusive pick — a Terrible Purpose, an Impulse. Clears its siblings, and clears the
 	// section's write-in too where there is one, since taking a printed Impulse is the GM saying
-	// they no longer want the one they invented.
+	// they no longer want the one they invented. The pick and the write-in's clearing land in ONE
+	// write, as typing a write-in and clearing the picks does (loreTextFieldUpdateData).
 	html.find(".stonetop-pdc-pick").on("change", async (ev) => {
-		const el = ev.currentTarget;
-		await character.chooseOneSectionOption(el.dataset.section, el.dataset.option);
+		const { section, option, writein } = ev.currentTarget.dataset;
+		const update = (await character.chooseOneSectionOptionUpdateData(section, option)) ?? {};
 		// Only when there is one to clear. `data-writein` rides on EVERY radio of a section that
-		// has a write-in, so an unguarded write would add an empty key — and a whole document
-		// update and re-render — on every click of the seven printed Impulses.
-		if (el.dataset.writein && character.postDeathLoreText(el.dataset.section, el.dataset.writein)) {
-			await character.setPostDeathLoreText(el.dataset.section, el.dataset.writein, "");
+		// has a write-in, so an unguarded clear would add an empty key on every click of the seven
+		// printed Impulses.
+		if (writein && character.postDeathLoreText(section, writein)) {
+			Object.assign(update, character.postDeathLoreTextUpdateData(section, writein, ""));
 		}
+		await character.applyUpdate(update);
 		await after();
 	});
 
@@ -509,13 +512,7 @@ export function activatePostDeathChoices(html, character, onChanged) {
 	});
 
 	html.find(".stonetop-pdc-name, .stonetop-pdc-text").on("change", async (ev) => {
-		const el = ev.currentTarget;
-		await character.setPostDeathLoreText(el.dataset.section, el.dataset.option, el.value);
-		// Writing one in is the other half of the same exclusive choice: it replaces whichever
-		// printed option was ticked, or nothing at all if it's been cleared back to empty.
-		if (el.classList.contains("stonetop-pdc-writein") && el.value.trim()) {
-			await character.clearSectionPicks(el.dataset.section);
-		}
+		await character.applyUpdate(await loreTextFieldUpdateData(ev.currentTarget, character));
 		await after();
 	});
 
@@ -523,6 +520,43 @@ export function activatePostDeathChoices(html, character, onChanged) {
 		await character.setTether(ev.currentTarget.value);
 		await after();
 	});
+}
+
+/**
+ * A name or text field's answer, written against its option's key, as ONE `actor.update()` fragment: its
+ * change handler, and the close's flush. The picks a write-in clears are measured against what is stored,
+ * which the text beside them does not touch, so the fragments of several fields fold together unchanged.
+ */
+async function loreTextFieldUpdateData(el, character) {
+	const { section, option } = el.dataset;
+	const update = character.postDeathLoreTextUpdateData(section, option, el.value);
+	// Writing one in is the other half of the same exclusive choice: it replaces whichever
+	// printed option was ticked, or nothing at all if it's been cleared back to empty.
+	if (el.classList.contains("stonetop-pdc-writein") && el.value.trim()) {
+		Object.assign(update, await character.clearSectionPicksUpdateData(section));
+	}
+	return update;
+}
+
+/**
+ * Save what was typed into the text fields and not yet saved, for a window closing with one still in hand.
+ * They save on `change`, which never fires for a field typed in and then shut with Escape (the window's
+ * own mark input has the same flush: DeathsDoorDialog#close). Each is written as its handler above writes
+ * it, and only when it differs from what is stored, so a close with nothing typed writes nothing; and all of
+ * them land in ONE update, so a close costs one write and one re-render however many fields it saves.
+ */
+export async function flushPostDeathChoices(html, character) {
+	if (!html?.find || !character) return;
+	const update = {};
+	for (const el of html.find(".stonetop-pdc-name, .stonetop-pdc-text").toArray?.() ?? []) {
+		const { section, option } = el.dataset ?? {};
+		if (!section || !option || el.value === character.postDeathLoreText(section, option)) continue;
+		Object.assign(update, await loreTextFieldUpdateData(el, character));
+	}
+	for (const el of html.find(".stonetop-pdc-tether").toArray?.() ?? []) {
+		if (el.value !== (character.tether ?? "")) Object.assign(update, character.tetherUpdateData(el.value));
+	}
+	if (Object.keys(update).length) await character.applyUpdate(update);
 }
 
 /**

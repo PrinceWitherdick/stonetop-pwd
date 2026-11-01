@@ -95,6 +95,15 @@ The **Configure** window has one switch per kind of hover help:
 | **Hover Descriptions: Journal Cross-links** | An entry's one-line summary when you hover a link into the Stonetop journals. Links still work with this off. |
 | **Hover Descriptions: Lore Terms** | Explains Stonetop's four gods (Danu, Aratis, Helior, Tor) in the Character Introductions prompts and the character creation wizard. |
 
+### Timeline
+
+This group holds one row. Players and the GM see different ones, never both.
+
+| Setting | Who sees it | Choices | Default | What it does |
+|---|---|---|---|---|
+| **Timeline Tab on My Sheets** | Players | on / off | on | Off takes the Timeline tab off your own character and steading sheets. The Timeline journal stays in the Chronicle folder and the timeline goes on recording. If the GM has turned the Timeline off for the table, the tab stays hidden whatever this says. |
+| **Timeline** | GM | **Everywhere**, **Steading sheet only**, **Off** | Everywhere | The world setting: where the timeline appears for everyone. The row says it is the whole table's. It takes effect without a reload. See [World Settings Reference](World-Settings-Reference#features-on-and-off). |
+
 ### Fights
 
 On the Preferences tab, this group holds one row, and only the GM sees it: **Fight tab (replaces the Combat tracker)**. It is a world setting, and the row says so: changing it changes it for the whole table and offers to reload everyone. See [Running Fights](Running-Fights).

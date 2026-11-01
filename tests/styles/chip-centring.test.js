@@ -249,6 +249,9 @@ describe("icon-and-label buttons centre by flex, unnudged", () => {
 		".stonetop-intros-unpass",
 		".stonetop-intros-recorded-save",
 		".stonetop-intros-recorded-cancel",
+		// The Post-Death tab's outcome buttons, the Favor row's (+1 Favor, the tentacle, the maw) among them
+		// (measured 10-28 with the text-centring audit: -0.2px at 1x/1.25x/1.5x).
+		".stonetop-pdi-outcome-btn",
 	])("%s", sel => {
 		const body = declarations(MAIN, sel);
 		expect(body, `${sel} has no rule`).toBeTruthy();
@@ -256,6 +259,65 @@ describe("icon-and-label buttons centre by flex, unnudged", () => {
 		expect(declared(body, "align-items")).toBe("center");
 		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
 		expect(bottom).toBe(top);
+	});
+});
+
+// Measured 10-28 with the text-centring audit: the Bolster card's icon-and-label button -0.5px (row) at
+// 1x/1.25x/1.5x on core's button, and Death's Door's gold "Suggested" tag is plain text inside its fate button,
+// with no box to centre in. What would break either is a hand nudge, so neither may carry one.
+describe("the Bolster button and the Suggested tag carry no hand nudge", () => {
+	it.each([
+		".stonetop-special-move-card button",
+		".deaths-door-fate-dictated",
+	])("%s", sel => {
+		const body = declarations(MAIN, sel);
+		expect(body, `${sel} has no rule`).toBeTruthy();
+		for (const prop of ["top", "bottom", "transform", "translate", "padding-top", "padding-bottom", "vertical-align"]) {
+			expect(declared(body, prop) ?? null, `${sel} sets ${prop}`).toBeNull();
+		}
+		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+		expect(bottom).toBe(top);
+	});
+
+	it("draws the Bolster button on the special-move card, under the rule above", () => {
+		const src = readRepo("templates/actor/partials/tab-special-moves.hbs");
+		expect(src).toMatch(/<div class="stonetop-special-move-card">[\s\S]*?<button type="button" class="stonetop-bolster-open-btn">/);
+	});
+});
+
+// Measured 10-31 with the text-centring audit (z:/tmp/foundry-verify/forced-out-centre.mjs): Bodysnatcher's
+// "Forced out" roll-card button (icon row, -1 to 0px) and Death's Door's icon-led gold caution row (-0.5 to
+// 0px), at 1x/1.25x/1.5x in all three sheet fonts. The button is the chat card's shared button and the row a
+// plain paragraph, both centring by their line box; what would break either is a hand nudge.
+describe("the post-death card buttons and Death's Door's caution row carry no hand nudge", () => {
+	const NUDGES = ["top", "bottom", "transform", "translate", "padding-top", "padding-bottom", "vertical-align"];
+	/** Every rule body whose selector list mentions `cls` anywhere (a descendant or state rule included). */
+	const rulesMentioning = cls => [...MAIN.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+		.filter(([, prelude]) => new RegExp(String.raw`${cls.replace(".", "\\.")}(?![\w-])`).test(prelude))
+		.map(([, , body]) => body);
+
+	it("keeps the chat card's shared button on even padding, unnudged", () => {
+		const body = declarations(MAIN, ":is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .card-buttons button");
+		expect(body).toBeTruthy();
+		for (const prop of NUDGES) expect(declared(body, prop) ?? null, `sets ${prop}`).toBeNull();
+		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+		expect(bottom).toBe(top);
+	});
+
+	it.each([".stonetop-pd-card-btn", ".stonetop-pd-forced-out", ".deaths-door-dictated"])("%s and its icon", cls => {
+		for (const body of rulesMentioning(cls)) {
+			for (const prop of NUDGES) expect(declared(body, prop) ?? null, `${cls} sets ${prop}`).toBeNull();
+			const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+			expect(bottom, `${cls} pads unevenly`).toBe(top);
+		}
+	});
+
+	it("draws the Forced out button as the audit measured it: an icon element, then the label", async () => {
+		const { cardButton } = await import("../../module/actors/character/post-death-card-button.js");
+		expect(cardButton("stonetop-pd-forced-out", { key: "forced-out", label: "Forced out", icon: "fa-person-walking-arrow-right" }))
+			.toMatch(/^<button type="button" class="stonetop-pd-card-btn stonetop-pd-forced-out"[^>]*><i class="fas fa-person-walking-arrow-right"><\/i> Forced out<\/button>$/);
+		expect(readRepo("templates/dialogs/partials/deaths-door-dictates.hbs"))
+			.toMatch(/<p class="deaths-door-dictated"><i class="fas [\w-]+" aria-hidden="true"><\/i> /);
 	});
 });
 

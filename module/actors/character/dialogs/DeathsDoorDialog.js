@@ -1,5 +1,5 @@
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
-import { escHtml } from "../../../utils/strings.js";
+import { attrValue, escHtml } from "../../../utils/strings.js";
 import { TIER_LABELS } from "../../../utils/move-results.js";
 import { classifyResult, messageOfRoll } from "../../../utils/roll-engine.js";
 import { promptRoll } from "../../../dialogs/RollDialog.js";
@@ -17,10 +17,10 @@ import {
 	DEATHS_DOOR_BOOSTS, askDeathsDoorBoost, askDeathsDoorClaim, burnBrightlyOnDoorCard, deathsDoorBoostsLeft,
 } from "../deaths-door-relay.js";
 import { ROLLED_FLAG, countedNote, countedTier, outcomeTier } from "../../../utils/counted-tier.js";
-import { activatePostDeathChoices, buildPostDeathChoices, outstandingLabel } from "../post-death-choices.js";
+import { activatePostDeathChoices, buildPostDeathChoices, flushPostDeathChoices, outstandingLabel } from "../post-death-choices.js";
 import { endBattleJoyUnrolled } from "../../../combat/battle-joy-offer.js";
 import { SYSTEM_ID } from "../../../system-id.js";
-import { deletionEntry } from "../../../utils/foundry-compat.js";
+import { deletionUpdate } from "../../../utils/foundry-compat.js";
 import { postDyingCard } from "../../../hooks/DeathsDoorPrompt.js";
 import { format, localize } from "../../../utils/i18n.js";
 import { rollRewrite } from "../../../utils/roll-rewrite.js";
@@ -29,6 +29,7 @@ import { NO_ANSWER, relayOutcome } from "../../../utils/relay-landed.js";
 import { moveRollable } from "../../../utils/move-rollable.js";
 import { boostButtonFace, boostNote, boostsOn, deathsDoorPlusOnes, pressBoost } from "../roll-boosts.js";
 import { BURN_BRIGHTLY_COST } from "../burn-brightly.js";
+import { deathsDoorDictatesKey, heldDeathsDoorDictates } from "../deaths-door-arcana.js";
 import { GAVE_IT_ALL_FLAG, GIVE_IT_ALL_COSTS, IMPETUOUS_YOUTH, askGiveItAllCost, giveItAllAtDeathsDoor, givenByPress, newPressId, rollGiveItAllHurt } from "../impetuous-youth.js";
 
 // The move itself (name + trigger), from the 0-HP routing table that every other surface reads.
@@ -201,6 +202,13 @@ const _CHOICES_SIZE = { width: 760, height: 600 };
 // on every step but the last, and the rail sheet's panel column on that one.
 const _SCROLLERS = [".deaths-door-dialog-content", ".deaths-door-choices-main"];
 
+// The controls that keep the keyboard through a redraw: the roll's stat, the 10+ mark, and every answer to
+// the insert's questions (post-death-choices.hbs). Each is found again by its section and option, and the
+// radios that share those (an instinct, a Consequence's own sub-pick) by their value as well.
+const _KEPT_CONTROLS = ["deaths-door-stat-choice", "deaths-door-mark-input", "stonetop-pdc-mark", "stonetop-pdc-pick",
+	"stonetop-pdc-subpick", "stonetop-pdc-instinct", "stonetop-pdc-text", "stonetop-pdc-name", "stonetop-pdc-tether"];
+const _KEPT_BY_VALUE = new Set(["deaths-door-stat-choice", "stonetop-pdc-subpick", "stonetop-pdc-instinct"]);
+
 // The window on THIS client holding each character's roll in progress, by actor id: the one that wrote (or
 // took over) its marker, until the tier lands. A second window for the same character here (one closed while
 // the dice were in the air, then opened again) follows that one instead of picking the roll up a second time.
@@ -275,7 +283,7 @@ export async function tradeHardToKillDebility(character, key) {
 	const name = character?.debilityMarkChoices?.find(d => d.key === key)?.name ?? key;
 	const actor = character._actor ?? null;
 	const latch = actor?.getFlag?.(SYSTEM_ID, HARD_TO_KILL_TRADE_FLAG)
-		? Object.fromEntries([deletionEntry(`flags.${SYSTEM_ID}.${HARD_TO_KILL_TRADE_FLAG}`)]) : null;
+		? deletionUpdate(`flags.${SYSTEM_ID}.${HARD_TO_KILL_TRADE_FLAG}`) : null;
 	const ok = await character.markDebility(key, { hp: 1, moveName: HARD_TO_KILL, clearsDeathsDoor: true, alsoUpdate: latch });
 	if (!ok) return false;
 	await postDyingCard(actor, HARD_TO_KILL, `<p>${format(`${_I18N}.chat.hardToKill`, {
@@ -358,12 +366,16 @@ export class DeathsDoorDialog extends StonetopDialog {
 		// each time would move itself: answering the question you are looking at would swap the
 		// panel out from under you before you had read what taking it did to your character.
 		this._choiceStep = null;
-		// Set by the rail so ONE render lands the new panel at its top. Everything else about that
-		// step wants the scroll kept (see _render).
-		this._choiceScrollReset = false;
 		// Whether the window has already been resized for the rail sheet. One-shot, so a player who
 		// resizes the window mid-question doesn't have it snapped back on their next click.
 		this._sizedForChoices = false;
+		// The 6- fates a held arcanum's marked Consequence dictates (deaths-door-arcana.js), read before each
+		// render of the steps that show the fates (_readDictates). The key is what the last read was of, the
+		// promise that read, and the version counts the answers that changed, so a render can tell it drew a stale one.
+		this._dictates = [];
+		this._dictatesKey = null;
+		this._dictatesRead = Promise.resolve();
+		this._dictatesVersion = 0;
 	}
 
 	/**
@@ -412,43 +424,79 @@ export class DeathsDoorDialog extends StonetopDialog {
 	get _autoHeight() { return this._step !== "choices"; }
 
 	/**
-	 * Carries the scroll position across the re-render every answer on the choices step triggers:
-	 * a Thrall's nine Marks run well past the window's height cap, and without this, ticking the
-	 * Mark you scrolled down to threw you back to the top of the list.
-	 *
-	 * Also the one place the rail sheet is sized. Both columns are queried because which of them
-	 * scrolls depends on the step (see _SCROLLERS), and only the one on screen answers.
+	 * The scroll and the keyboard, kept through the re-render every answer on the choices step triggers
+	 * (StonetopDialog#_keptScrollSelector): a Thrall's nine Marks run well past the window's height cap,
+	 * and without this, ticking the Mark you scrolled down to threw you back to the top of the list.
+	 * Both columns are named because which of them scrolls depends on the step (see _SCROLLERS).
 	 */
+	get _keptScrollSelector() { return _SCROLLERS; }
+
+	/**
+	 * A new step, or a new question on the rail, opens at its top, the same as every other guide-rail
+	 * sheet's panel does (applyGuideRail). An answer leaves the rail where it is (_latchChoiceStep), so
+	 * it keeps the place.
+	 */
+	get _keptPlaceKey() {
+		return this._step === "choices" ? `choices:${this._activeChoiceKey()}` : this._step;
+	}
+
+	/** The control that had the keyboard, found again in the fresh draw (see _KEPT_CONTROLS). */
+	_focusSelector(el) {
+		const cls = _KEPT_CONTROLS.find(c => el.classList?.contains(c));
+		if (!cls) return null;
+		const { section, option } = el.dataset ?? {};
+		return `.${cls}`
+			+ (section ? `[data-section="${attrValue(section)}"]` : "")
+			+ (option ? `[data-option="${attrValue(option)}"]` : "")
+			+ (_KEPT_BY_VALUE.has(cls) ? `[value="${attrValue(el.value)}"]` : "");
+	}
+
+	/** Also the one place the rail sheet is sized. */
 	async _render(force, options) {
 		this._syncRoll();
-		const before = this._captureScroll();
+		// Not awaited: a render that waited on the compendium was one a second render could be dropped beside
+		// (AppV1 refuses a render while one is under way). A read that lands with a new answer redraws.
+		this._readDictates();
+		const drawnDictates = this._dictatesVersion;
 		await super._render(force, options);
 		this._sizeForStep();
-		this._restoreScroll(before);
 		this._paintMood();
 		this._listen();
 		this._drawnWatchKey = this._watchKey();
 		this._armStaleTimer();
-	}
-
-	_captureScroll() {
-		const root = this.element?.[0];
-		return _SCROLLERS.map(sel => root?.querySelector(sel)?.scrollTop ?? 0);
+		// The read landed mid-render with a different answer: this render may have drawn the old one.
+		if (this._dictatesVersion !== drawnDictates) this.render(false);
 	}
 
 	/**
-	 * Put each column back where it was. A rail click is the one render that must NOT: a fresh
-	 * panel starts at its top, the same as every other guide-rail sheet does it (applyGuideRail).
+	 * Which fate a held arcanum dictates (Redwood Effigy, Noruba's Ice Sphere, the Hungering Maw), read on the
+	 * steps that offer the fates. Async because the card text comes from the compendium, so it is read here
+	 * rather than in getData, and only when what decides it has changed (deathsDoorDictatesKey): a redraw for
+	 * anything else reuses the last answer. A new answer landing redraws an open window. A failed read flags
+	 * nothing, blocks nothing, and is tried again on the next render. Resolves once the current read has landed.
 	 */
-	_restoreScroll(tops) {
-		const reset = this._choiceScrollReset;
-		this._choiceScrollReset = false;
-		const root = this.element?.[0];
-		_SCROLLERS.forEach((sel, i) => {
-			if (!tops[i] || (reset && sel === ".deaths-door-choices-main")) return;
-			const el = root?.querySelector(sel);
-			if (el) el.scrollTop = tops[i];
-		});
+	_readDictates() {
+		if (this._step !== "result" && this._step !== "fate") return this._dictatesRead;
+		const key = deathsDoorDictatesKey(this._character);
+		if (key === this._dictatesKey) return this._dictatesRead;
+		this._dictatesKey = key;
+		const read = heldDeathsDoorDictates(this._character)
+			.catch(err => {
+				console.error("Stonetop | could not read the arcana that decide Death's Door", err);
+				if (this._dictatesRead === read) this._dictatesKey = null;
+				return [];
+			})
+			.then(dictates => {
+				// A newer read has started since: its answer is the one that counts.
+				if (this._dictatesRead !== read) return;
+				if (JSON.stringify(dictates) === JSON.stringify(this._dictates)) return;
+				this._dictates = dictates;
+				this._dictatesVersion++;
+				// Mid-render, `rendered` is false, and _render's own check redraws once it is done.
+				if (this.rendered) this.render(false);
+			});
+		this._dictatesRead = read;
+		return read;
 	}
 
 	/**
@@ -646,10 +694,29 @@ export class DeathsDoorDialog extends StonetopDialog {
 			debilityTraded:  !!this._debilityTraded,
 			outOfAction:     !this._boostsPending && key === "partial" && !this._debilityTraded,
 
-			// 6-
-			fates:          _FATES,
-			refusalInserts: _REFUSAL_INSERTS,
+			// 6-. A fate a held arcanum dictates is flagged and marked as the suggestion; the others stay
+			// clickable (rule violations are flagged, never blocked).
+			...this._dictatedData(),
 			fateApplied:    !!this._fateApplied,
+		};
+	}
+
+	/** The fates and the Revenant/Ghost fork, with the one a held arcanum dictates marked, and its cautions. */
+	_dictatedData() {
+		const dictates  = this._dictates ?? [];
+		// The one to suggest when several are marked: the first, in table order. Two that disagree (an Effigy
+		// AND an Ice Sphere) are both flagged, and the table settles it.
+		const suggested = dictates[0] ?? null;
+		return {
+			fates: _FATES.map(f => ({ key: f.key, label: f.label, hint: f.hint, dictated: suggested?.fate === f.key })),
+			refusalInserts: _REFUSAL_INSERTS.map(i => ({
+				slug: i.slug, name: i.name, hint: i.hint, dictated: !!suggested?.insert && suggested.insert === i.slug,
+			})),
+			dictates: dictates.map(d => ({ slug: d.slug, text: format(`${_I18N}.dictated.${d.i18n}`, { arcanum: d.name }) })),
+			// "That fate is marked below": only where the marked one is on screen. The Revenant/Ghost fork shows
+			// no Last Door, which is the Hungering Maw's.
+			dictatedOthers: suggested && (this._step !== "fate" || suggested.insert) ? localize(`${_I18N}.dictated.others`) : "",
+			dictatedTag:    localize(`${_I18N}.dictated.suggested`),
 		};
 	}
 
@@ -722,8 +789,8 @@ export class DeathsDoorDialog extends StonetopDialog {
 	_goToChoice(key) {
 		if (!key || key === this._activeChoiceKey()) return;
 		if (!this._choiceSteps.some(s => s.key === key)) return;
+		// A new panel, so the redraw opens it at its top (_keptPlaceKey).
 		this._choiceStep = key;
-		this._choiceScrollReset = true;
 		this.renderIfOpen();
 	}
 
@@ -1828,6 +1895,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 			this._fateApplied = false;
 			throw err;
 		}
+		await this._fillDictatedTether(slug);
 		const name  = _REFUSAL_INSERTS.find(i => i.slug === slug)?.name ?? "Thrall";
 		const taken = _INSERT_TAKEN[slug] ?? _REFUSED;
 		// Straight on to what the insert asks for. The insert is already theirs, so this step is
@@ -1841,6 +1909,24 @@ export class DeathsDoorDialog extends StonetopDialog {
 		// up waiting and closed the window must not have it reopened underneath them. Everything
 		// above is already written, and the Post-Death tab prints the rest.
 		this.renderIfOpen();
+	}
+
+	/**
+	 * Noruba's Ice Sphere: "gain the Ghost insert (with the Ice Sphere as your tether)". A Ghost taken while its
+	 * Consequence is marked gets the sphere as its tether, unless one is already written. The insert is already
+	 * theirs, so a failed write is logged and the tether question stays open on the next step.
+	 */
+	async _fillDictatedTether(slug) {
+		if (slug !== "ghost" || this._character?.tether) return;
+		// A click can beat the read the render started: wait for it rather than miss the sphere.
+		await this._readDictates();
+		const sphere = (this._dictates ?? []).find(d => d.tether && d.insert === slug);
+		if (!sphere?.name || typeof this._character?.setTether !== "function") return;
+		try {
+			await this._character.setTether(sphere.name);
+		} catch (err) {
+			console.error("Stonetop | could not write the Ice Sphere as the Ghost's tether", err);
+		}
 	}
 
 	/**
@@ -1902,6 +1988,11 @@ export class DeathsDoorDialog extends StonetopDialog {
 			// the only thing at stake here is the wording.
 			try { await this._saveMark(text); }
 			catch (err) { console.error("Stonetop | could not save the Death's-Door mark", err); }
+		}
+		// The choices step's own text fields (a Purpose's name, the master's, the tether), the same way.
+		if (this._step === "choices" && this.element?.find) {
+			try { await flushPostDeathChoices(this.element, this._character); }
+			catch (err) { console.error("Stonetop | could not save the insert's written answers", err); }
 		}
 		return super.close(options);
 	}

@@ -1,10 +1,14 @@
-import { describe, it, expect, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { Window } from "happy-dom";
 import {
 	boostOffers, takeBoost, boostButtonFace, holdPreparation, preparationHeld, preparationFor,
 	BOLSTER, BOOSTS_FLAG, PREPARATION_FOR_FLAG,
 } from "../../../module/actors/character/roll-boosts.js";
-import { openBolster, bolsterBodyHtml, readBolsterForm } from "../../../module/actors/character/bolster.js";
+import { openBolster, bolsterBodyHtml, readBolsterForm, bolsterCardData } from "../../../module/actors/character/bolster.js";
+import { STEADING_MOVES } from "../../../module/actors/steading/homestead-moves.js";
 
 // Bolster (Book I p.524): hold 1/2/3 Preparation for a week/month/season, and spend 1 for +1 on a roll the
 // efforts apply to, after it is made (maximum +1 per roll). The steading's rolls take it too (p.516).
@@ -144,5 +148,48 @@ describe("using Bolster", () => {
 		for (const radio of form.querySelectorAll('input[name="bolsterHold"]')) radio.checked = radio.value === "3";
 		form.querySelector('input[name="preparationFor"]').value = "winter stores";
 		expect(readBolsterForm(form)).toEqual({ hold: 3, purpose: "winter stores" });
+	});
+});
+
+// Where a player finds the move. The homefront moves are not put on a sheet by default, so before this
+// card nothing reached the Bolster window short of dragging the move in from the compendium.
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const read = rel => fs.readFileSync(path.resolve(HERE, "../../..", rel), "utf8");
+
+describe("the Special Moves tab's Bolster card", () => {
+	afterEach(() => vi.unstubAllGlobals());
+	const i18n = () => vi.stubGlobal("game", { i18n: { format: (key, data) => `${key} ${JSON.stringify(data)}` } });
+
+	it("says nothing while no Preparation is held", () => {
+		expect(bolsterCardData(pc({ id: "vahid", name: "Vahid" }))).toEqual({ held: 0, hint: "" });
+		expect(bolsterCardData(pc({ id: "vahid", name: "Vahid", held: 0, purpose: "winter" }))).toEqual({ held: 0, hint: "" });
+	});
+
+	it("says how much is held and what for, or just how much when nothing was written", () => {
+		i18n();
+		const card = bolsterCardData(pc({ id: "vahid", name: "Vahid", held: 2, purpose: "winter stores" }));
+		expect(card.held).toBe(2);
+		expect(card.hint).toBe('stonetop.specialMoves.bolster.heldHint {"held":2,"purpose":"winter stores"}');
+		expect(bolsterCardData(pc({ id: "vahid", name: "Vahid", held: 1 })).hint)
+			.toBe('stonetop.specialMoves.bolster.heldHintNoPurpose {"held":1}');
+	});
+
+	it("is drawn on the tab with its own button, opened for whoever may edit the sheet", () => {
+		const hbs = read("templates/actor/partials/tab-special-moves.hbs");
+		expect(hbs).toContain('{{localize "stonetop.specialMoves.bolster.title"}}');
+		expect(hbs).toContain('<button type="button" class="stonetop-bolster-open-btn">');
+		const sheet = read("module/actors/character/StonetopCharacterSheet.js");
+		expect(sheet).toContain("context.stonetop.bolster = bolsterCardData(this.actor);");
+		const wired = sheet.indexOf('html.find(".stonetop-bolster-open-btn").on("click", () => openBolster(this.actor));');
+		expect(wired).toBeGreaterThan(-1);
+		expect(sheet.lastIndexOf("if (!this.isEditable) return;", wired)).toBeGreaterThan(-1);
+		const en = JSON.parse(read("languages/en.json")).stonetop.specialMoves.bolster;
+		expect(Object.keys(en).sort()).toEqual(["button", "heldHint", "heldHintNoPurpose", "summary", "title"]);
+	});
+
+	it("is listed on the steading's Homefront Moves for reference, rolling nothing there", () => {
+		const row = STEADING_MOVES.find(m => m.label === "Bolster");
+		expect(row).toMatchObject({ reference: true, interactive: false, rollable: false, stat: null });
+		expect(row.description).toContain("Special Moves tab");
 	});
 });
