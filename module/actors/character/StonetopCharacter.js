@@ -39,7 +39,8 @@ import {deletionEntry, deletionUpdate} from "../../utils/foundry-compat.js";
 import {appendLedgerEntries} from "../../utils/ledger-core.js";
 import {statRequirementsUnmet} from "./stat-requirement.js";
 import {effectiveRequiredMoves, requiredMovesUnmet, requirementLabel} from "./move-requirement.js";
-import {MoveResources, learnedTrack, takeBackHeld} from "./MoveResources.js";
+import {MoveResources, heldOnTrack, learnedTrack, takeBackHeld} from "./MoveResources.js";
+import {BOLSTER, PREPARATION_ARCANA, PREPARATION_FOR_FLAG, PREPARATION_MAX} from "./roll-boosts.js";
 import { inSpenderTurn } from "../../utils/spender-queue.js";
 import {debilityData, walkItOffChoice} from "./walk-it-off.js";
 import {normalizeWound as _normalizeWound, normalizeWoundList} from "./wound-record.js";
@@ -1207,7 +1208,7 @@ export class StonetopCharacter {
 			.withMoves(moves)
 			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters, playbookData?.name ?? null, this._retiredPickCount(), this._levelPickCount()))
 			.withInventory(inventory)
-			.withArcana(await this._arcana.buildSnapshot(actor.system.stats ?? {}, this._inventory.checked, this._inventory.resources))
+			.withArcana(await this._arcana.buildSnapshot(actor.system.stats ?? {}, this._inventory.checked, this._arcanumResources()))
 			.withPostDeathInsert(postDeath)
 			.withRollMode(normalizeRollMode(resolvedFlags(actor).rollMode))
 			.withCrewBonuses(crewStats)
@@ -7219,7 +7220,58 @@ export class StonetopCharacter {
 	async settleArcanumBoxLayouts(options)                             { return this._arcana.settleBoxLayouts(options); }
 	async setArcanumBoxesChecked(slug, context, ticks)                 { await this._arcana.setArcanumBoxesChecked(slug, context, ticks); }
 	async markNextArcanumUnlockStep(slug, options)                       { return this._arcana.markNextUnlockStep(slug, options); }
-	async setArcanumResource(slug, count, options)                       { await this._inventory.setResource(slug, count, options); }
+	/**
+	 * An arcanum card's track counts, by slug. The prayer beads' (PREPARATION_ARCANA) is Bolster's Preparation,
+	 * read off the Bolster track rather than the arcana's own store, so the two never disagree.
+	 */
+	_arcanumResources() {
+		const held = heldOnTrack(this._moveResources, BOLSTER, PREPARATION_MAX);
+		return { ...this._inventory.resources, ...Object.fromEntries(PREPARATION_ARCANA.map(slug => [slug, held])) };
+	}
+
+	/**
+	 * Set an arcanum card's track. The prayer beads' is written to the Bolster track (see _arcanumResources),
+	 * attributed to Bolster; emptied, it drops what the Preparation was written down as for, as letting it go
+	 * from the Special Moves card does.
+	 *
+	 * The beads' write takes the character's spending turn, as every other Preparation spend does, so it cannot
+	 * land between a roll card's read and write. `from` (the count the clicked card showed) makes the click a
+	 * CHANGE rather than a value: a +1 spent on a card meanwhile is kept, not written back over. For the beads,
+	 * whether it wrote (a click that changes nothing, once clamped, writes nothing).
+	 */
+	async setArcanumResource(slug, count, options) {
+		if (!PREPARATION_ARCANA.includes(slug)) return this._inventory.setResource(slug, count, options);
+		const { from, ...rest } = options ?? {};
+		const clamp = n => Math.min(PREPARATION_MAX, Math.max(0, Math.trunc(Number(n) || 0)));
+		return inSpenderTurn(this._actor, async () => {
+			const held = heldOnTrack(this._moveResources, BOLSTER, PREPARATION_MAX);
+			const hold = clamp(typeof from === "number" ? held + clamp(count) - clamp(from) : count);
+			if (hold === held) return false;
+			await this._actor.update({
+				...this._moveResources.usesUpdate(BOLSTER, hold),
+				...(hold ? {} : { [`flags.${STONETOP_SCOPE}.${PREPARATION_FOR_FLAG}`]: "" }),
+			}, { ...rest, stonetopMove: BOLSTER });
+			return true;
+		});
+	}
+
+	/**
+	 * Bring prayer-bead pips ticked before the beads' track became Bolster's into the Bolster track, and drop
+	 * the old count (migration/prayer-bead-preparation.js). The larger of the two is kept: either one was what
+	 * the player last saw as held. Whether it wrote.
+	 */
+	async adoptPrayerBeadPips() {
+		const stored = this._inventory.resources;
+		const old = PREPARATION_ARCANA.filter(slug => slug in stored);
+		if (!old.length) return false;
+		const held = heldOnTrack(this._moveResources, BOLSTER, PREPARATION_MAX);
+		const ticked = Math.min(PREPARATION_MAX, Math.max(0, ...old.map(slug => Math.trunc(Number(stored[slug]) || 0))));
+		await this._actor.update({
+			...(ticked > held ? this._moveResources.usesUpdate(BOLSTER, ticked) : {}),
+			...Object.assign({}, ...old.map(slug => this._inventory.resourceDeletionData(slug))),
+		}, { stonetopMove: BOLSTER });
+		return true;
+	}
 	async setLoreOptionCount(loreSlug, optionSlug, count)           { await this._lore.setCount(loreSlug, optionSlug, count); }
 	async setLoreOptionText(loreSlug, optionSlug, value)            { await this._lore.setText(loreSlug, optionSlug, value); }
 	// One section's counts in one write, zeros included, so a section can be set wholesale.

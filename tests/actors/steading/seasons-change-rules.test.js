@@ -293,9 +293,9 @@ describe("spring's hand-off", () => {
 
 	it("asks the GM before handing it over", () => {
 		const at = SHEET.indexOf("data-action='ask-hopeful'");
-		const body = SHEET.slice(at, at + 2600);
-		expect(body).toContain("promptRoll({ title: \"Seasons Change: Spring\", askModifier: true, offers: [stormMiss] })");
-		expect(body).toContain("modifier: prompted.situational");
+		const body = SHEET.slice(at, at + 4000);
+		expect(body).toContain("promptRoll({ title: \"Seasons Change: Spring\", askModifier: true, offers: [stormMiss, ...prepOffers] })");
+		expect(body).toContain("modifier: (prompted.situational ?? 0) + (prepTaken ? 1 : 0)");
 	});
 
 	it("is rolled with both by the chat button", () => {

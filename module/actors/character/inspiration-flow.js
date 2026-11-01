@@ -43,7 +43,11 @@ import { canRewriteCard, postMoveNote } from "../../utils/chat.js";
 import { belongsToMessage } from "../../utils/picked-option-button.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
 import { inCardTurn } from "../../utils/card-queue.js";
-import { rollCardRoute, writeCardRoll } from "../../utils/roll-card-writer.js";
+import { rollCardRoute } from "../../utils/roll-card-writer.js";
+import {
+	damageBoostHolder, openDamageCard, addTermToRoll, writeDamageBoost, damageBoostCard, drawDamageBoostNote,
+	appendDamageBoostButton,
+} from "./damage-card-boost.js";
 import { isPrimaryGM } from "../../utils/primary-gm.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { holdForEach, shareHold } from "../../utils/share-hold.js";
@@ -60,8 +64,9 @@ export const INSPIRATION_QUERY = "stonetop.inspiration";
 export const SPEECH_FLAG = "inspirationShared";
 /** Message flag: the Inspiration die a damage card took, `{by, name, amount}`. */
 export const DIE_FLAG = "inspirationDie";
-/** Message flag: a follower's blow posted under their character's name, which is not the character's roll. */
-export const FOLLOWER_BLOW_FLAG = "followerBlow";
+// Which cards a damage boost reads, shared with Bolster's +1 (damage-card-boost.js), named here too for this
+// file's older readers.
+export { FOLLOWER_BLOW_FLAG, damageCardKind } from "./damage-card-boost.js";
 
 // -- The speech ------------------------------------------------------------------------------------
 
@@ -203,17 +208,6 @@ export function wireSpeechCard(message, html, deps = {}) {
 // -- +1d6 on a damage roll -------------------------------------------------------------------------
 
 /**
- * Which kind of damage card this is: the attack flow's `results` card (flag `damage`, one row per
- * target, Apply beneath), the `plain` card of a roll with nobody targeted, or null for anything else. PURE.
- */
-export function damageCardKind(message, scope = SYSTEM_ID) {
-	const damage = message?.getFlag?.(scope, "damage");
-	if (Array.isArray(damage?.results)) return "results";
-	if (message?.rolls?.length && String(message.flavor ?? "").includes("stonetop-damage-roll-card")) return "plain";
-	return null;
-}
-
-/**
  * Whether this card offers `user` the Inspiration die, and to whom: its speaker's own damage roll, not yet
  * given one, not a follower's blow nor a blow they took, not yet applied; the speaker holding Inspiration
  * in a fight; and `user` the one who presses for them (roll-boosts.js#actsForHelper: their player, the GM
@@ -225,19 +219,12 @@ export function inspirationDamageOffer(message, {
 	user = globalThis.game?.user, holderOf = speakerActor, ownersOf = ownerUsers,
 	combats = globalThis.game?.combats, scope = SYSTEM_ID,
 } = {}) {
-	const kind = damageCardKind(message, scope);
-	if (!kind || message.getFlag(scope, DIE_FLAG) || message.getFlag(scope, FOLLOWER_BLOW_FLAG)) return null;
-	const holder = holderOf(message);
-	if (holder?.type !== "character") return null;
-	if (kind === "results") {
-		const damage = message.getFlag(scope, "damage");
-		if (damage.selfHarm || damage.groupBlow) return null;
-		if ((damage.applied ?? []).length || damage.attackerUuid !== holder.uuid) return null;
-	}
-	const held = inspirationHeld(holder, scope);
-	if (held <= 0 || !inBattle(holder, combats)) return null;
-	if (!actsForHelper(user, ownersOf(holder))) return null;
-	return { holder, held, kind };
+	const card = damageBoostHolder(message, DIE_FLAG, { holderOf, scope });
+	if (!card) return null;
+	const held = inspirationHeld(card.holder, scope);
+	if (held <= 0 || !inBattle(card.holder, combats)) return null;
+	if (!actsForHelper(user, ownersOf(card.holder))) return null;
+	return { holder: card.holder, held, kind: card.kind };
 }
 
 /** A d6, rolled. */
@@ -246,19 +233,9 @@ async function rollInspirationDie() {
 	return roll.total;
 }
 
-/**
- * The die onto a plain card's roll, as a term of its own: the way stonetop.js#_shiftRoll puts a GM's
- * Shift on, so a Shift after this keeps it, and the Roll still adds up to what the card says. Handed the
- * copy utils/roll-card-writer.js#writeCardRoll lifts, so a refused write leaves the card's own roll as it was.
- */
-async function addToRoll(roll, amount) {
-	const { OperatorTerm, NumericTerm } = globalThis.foundry.dice.terms;
-	roll.terms.push(
-		new OperatorTerm({ operator: "+", options: { inspiration: true } }),
-		new NumericTerm({ number: amount, options: { inspiration: true } }),
-	);
-	roll.resetFormula();
-	await roll._evaluate();
+/** The die onto a plain card's roll, as a term of its own (damage-card-boost.js#addTermToRoll). */
+function addToRoll(roll, amount) {
+	return addTermToRoll(roll, amount, "inspiration");
 }
 
 /**
@@ -276,24 +253,15 @@ export function addInspirationDie(message, holder, {
 	cardFlavor = f => f, rollDie = rollInspirationDie, addDie = addToRoll, scope = SYSTEM_ID,
 } = {}) {
 	return inCardTurn(message, async () => {
-		const kind = damageCardKind(message, scope);
-		if (!kind || !holder || message.getFlag(scope, DIE_FLAG)) return false;
-		const damage = kind === "results" ? message.getFlag(scope, "damage") : null;
-		if (damage && (damage.applied ?? []).length) return false;
+		const open = holder ? openDamageCard(message, DIE_FLAG, scope) : null;
+		if (!open) return false;
 		if (inspirationHeld(holder, scope) <= 0) return false;
 		const amount = Math.trunc(Number(await rollDie()) || 0);
 		// Paid in the holder's spending turn (spendInspiration, utils/spender-queue.js).
 		if (!(await spendInspiration(holder, scope))) return false;
 		const record = { by: holder.uuid, name: holder.name, amount };
 		try {
-			if (damage) {
-				const results = damage.results.map(r => ({ ...r, raw: (Number(r.raw) || 0) + amount }));
-				await message.update({ flags: { [scope]: { damage: { results }, [DIE_FLAG]: record } } });
-			} else {
-				await writeCardRoll(message, roll => addDie(roll, amount), {
-					cardFlavor: (flavor, total, formula) => cardFlavor(flavor, Math.max(0, total), formula),
-				}, { flags: { [scope]: { [DIE_FLAG]: record } } });
-			}
+			await writeDamageBoost(message, { damage: open.damage, amount, flag: DIE_FLAG, record, addTerm: addDie, cardFlavor, scope });
 		} catch (err) {
 			await refundInspiration(holder, scope);
 			throw err;
@@ -309,63 +277,34 @@ export function inspirationDieNote(record) {
 
 /**
  * Put the Inspiration die button on a damage card, and name the die once taken. Drawn every render from
- * the flag. A results card's totals are redrawn from its rows (the card's own HTML was written before the
- * die); with a fight's +N on the card, attack-flow.js#wireDamageSeed redraws them from the same rows.
+ * the flag (damage-card-boost.js).
  */
 export function wireInspirationDamage(message, html, deps = {}, { user = globalThis.game?.user } = {}) {
-	const root = html?.[0] ?? html;
 	const scope = deps.scope ?? SYSTEM_ID;
-	if (!root?.querySelector) return;
-	const kind = damageCardKind(message, scope);
-	if (!kind) return;
-	const row = root.querySelector(kind === "results" ? ".stonetop-attack-actions" : ".stonetop-card-buttons");
+	const card = damageBoostCard(message, html, scope);
+	if (!card) return;
 	const record = message.getFlag(scope, DIE_FLAG);
 	if (record) {
-		const damage = kind === "results" ? message.getFlag(scope, "damage") : null;
-		if (damage && !damage.seed) {
-			for (const rowEl of root.querySelectorAll(".stonetop-damage-row[data-uuid]")) {
-				const result = damage.results.find(r => r.uuid === rowEl.dataset.uuid);
-				const number = rowEl.querySelector(".stonetop-roll-result-number");
-				if (result && number) number.textContent = String(Math.max(0, Number(result.raw) || 0));
-			}
-		}
-		root.querySelectorAll(".stonetop-inspiration-note").forEach(el => el.remove());
-		const note = `<p class="stonetop-inspiration-note">${escHtml(inspirationDieNote(record))}</p>`;
-		if (row) row.insertAdjacentHTML("beforebegin", note);
-		else root.querySelector(".card-content, .cell--chat")?.insertAdjacentHTML("beforeend", note);
+		drawDamageBoostNote(message, card, { noteClass: "stonetop-inspiration-note", text: inspirationDieNote(record), scope });
 		return;
 	}
-	if (!row) return;
+	if (!card.row) return;
 	const offer = inspirationDamageOffer(message, { user, scope, ...(deps.holderOf ? { holderOf: deps.holderOf } : {}) });
 	if (!offer) return;
 	const route = rollCardRoute(message, user);
 	if (!route) return;
-	const button = (root.ownerDocument ?? globalThis.document).createElement("button");
-	button.type = "button";
-	button.className = "stonetop-inspiration-die-btn";
-	button.textContent = localize(`${KEY}.damageButton`);
-	button.dataset.tooltip = format(`${KEY}.damageTip`, { name: offer.holder.name, held: offer.held });
-	button.dataset.tooltipDirection = "UP";
-	button.addEventListener("click", async () => {
-		if (button.disabled) return;
-		button.disabled = true;
-		try {
-			const added = route === "relay"
-				? !!(await askGM(globalThis.game?.users?.activeGM, {
-					action: "damage", messageId: message.id, holderUuid: offer.holder.uuid, userId: user?.id ?? null,
-				}, false))
-				: await addInspirationDie(message, offer.holder, deps);
-			if (!added) {
-				globalThis.ui?.notifications?.warn?.(localize(`${KEY}.refused`));
-				button.disabled = false;
-			}
-		} catch (err) {
-			console.error("Stonetop | adding the Inspiration die failed", err);
-			button.disabled = false;
-		}
+	appendDamageBoostButton(card, {
+		className: "stonetop-inspiration-die-btn",
+		label: localize(`${KEY}.damageButton`),
+		tip: format(`${KEY}.damageTip`, { name: offer.holder.name, held: offer.held }),
+		refused: localize(`${KEY}.refused`),
+		failure: "adding the Inspiration die failed",
+		press: async () => (route === "relay"
+			? !!(await askGM(globalThis.game?.users?.activeGM, {
+				action: "damage", messageId: message.id, holderUuid: offer.holder.uuid, userId: user?.id ?? null,
+			}, false))
+			: addInspirationDie(message, offer.holder, deps)),
 	});
-	row.appendChild(button);
-	if (kind === "plain") row.style.display = "flex";
 }
 
 // -- The GM's side ---------------------------------------------------------------------------------
@@ -510,7 +449,7 @@ export function wireKeepOneHp(message, html, { user = globalThis.game?.user } = 
 	button.type = "button";
 	button.className = "stonetop-dying-btn stonetop-inspiration-keep";
 	button.innerHTML = `<i class="fas fa-heart-pulse"></i> ${escHtml(localize(`${KEY}.keepCardButton`))}`;
-	button.dataset.tooltip = format(`${KEY}.keepAsk`, { name: actor.name, held: inspirationHeld(actor) });
+	button.dataset.tooltipText = format(`${KEY}.keepAsk`, { name: actor.name, held: inspirationHeld(actor) });
 	button.addEventListener("click", async () => {
 		if (button.disabled) return;
 		button.disabled = true;

@@ -92,6 +92,30 @@ describe("the window", () => {
 		expect(await back).toBe("kept");
 	});
 
+	// A second footer button (Bolster's "It no longer applies" beside Save) settles the window on its own
+	// value, without reading the form; the template draws it right of Confirm, the affirmative first.
+	it("resolves to a secondary button's value when that is pressed instead", async () => {
+		const LET_GO = Symbol("letGo");
+		const read = vi.fn(() => "read");
+		const back = ContentPickerDialog.ask({
+			title: "t", buttonLabel: "Save", body: "<input name=\"n\">", read,
+			secondary: { label: "It no longer applies", icon: "fa-xmark", value: LET_GO },
+		});
+		const dialog = opened[0];
+		expect(dialog.getData().secondary).toMatchObject({ label: "It no longer applies", icon: "fa-xmark" });
+		const form = await show(dialog);
+		const btn = document.createElement("button");
+		btn.type = "button";
+		btn.className = "stonetop-content-picker-secondary";
+		form.querySelector("footer").appendChild(btn);
+		dialog.activateListeners([form]);
+		btn.click();
+		expect(await back).toBe(LET_GO);
+		expect(read).not.toHaveBeenCalled();
+		const hbs = (await import("node:fs")).readFileSync("templates/dialogs/content-picker.hbs", "utf8");
+		expect(hbs.indexOf("stonetop-content-picker-confirm")).toBeLessThan(hbs.indexOf("stonetop-content-picker-secondary"));
+	});
+
 	it("gives Confirm the focus as it opens, as the V2 prompt did", async () => {
 		pickContentOption({ title: "t", options: [{ id: "a", label: "A", icon: "fa-user" }] });
 		const form = await show(opened[0]);

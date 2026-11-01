@@ -73,13 +73,15 @@ Some moves let another character spend something to add +1 to *your* roll. When 
 | **Sanction: +1** | A character acting on Aratis's orders (Commune with Aratis) |
 | **Many Hands: +1** | A Judge with Many Hands Make Light Work |
 | **Blessing: +1** | Someone who worshipped Helior with Piety |
-| **Preparation: +1** | Whoever holds Preparation from Bolster (the **Special Moves** tab), on their own cards and the steading's |
+| **Preparation: +1** | Whoever holds Preparation from Bolster (the **Special Moves** tab), on their own cards (damage cards too) and the steading's. One per roll; the button's tooltip says what the Preparation was for, so the table can agree it applies |
 
 The +1 is added to the card and the spender's track goes down by one.
 
 Other buttons you may see on your own cards include **Give it your all**, **Keep 1 HP (Inspiration)**, and the Fox's ways around a bad result. These are covered per playbook in [Playbook Notes](Playbook-Notes).
 
 ### Attacks and damage
+
+A damage card you rolled yourself also offers **Preparation: +1** while you hold Preparation from Bolster and the damage is not yet applied: the book lets Preparation go on damage rolls when the table agrees your efforts apply.
 
 When you roll Clash or Let Fly at a target, the card offers **Roll your damage** (or a choice of how to deal it, such as **Deal +1d4 damage** or **Deal no damage** when a move gives you the option). Ammunition and the foe's counter-attack are handled on the same card.
 

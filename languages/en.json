@@ -207,6 +207,7 @@
       "settlement": "Settlement",
       "settlementShowTooltip": "Show this settlement on the sheet",
       "settlementsAllHidden": "No settlements ticked. Use the pencil to choose which ones this steading tracks.",
+      "settlementNew": "Add Settlement",
       "missXp": {
         "button": "Mark XP",
         "buttonTooltip": "On a miss, whoever made the move marks XP. Marks it for your own character.",
@@ -923,7 +924,11 @@
         "button": "Bolster",
         "summary": "When you <em><strong>prepare for what's coming or seek the favor of the gods</strong></em>, hold Preparation: 1 for a week or so, 2 for a month or so, 3 for the better part of a season. Spend 1 for +1 on a roll your efforts apply to.",
         "heldHint": "You hold {held} Preparation ({purpose}). Spend it from a roll's card.",
-        "heldHintNoPurpose": "You hold {held} Preparation. Spend it from a roll's card."
+        "heldHintNoPurpose": "You hold {held} Preparation. Spend it from a roll's card.",
+        "editButton": "Change what it's for",
+        "editHint": "Fix what this Preparation is written down as for, keeping how much is held.",
+        "dropButton": "It no longer applies",
+        "dropHint": "Preparation lasts until it is spent, until it no longer applies or makes sense, or until you Bolster again."
       },
       "retire": {
         "title": "Retire",
@@ -4541,16 +4546,47 @@
         "title": "Bolster",
         "lead": "Say how you prepare for what's coming or seek the favor of the gods, and answer the GM's questions. How much time do you devote?",
         "duration": {
-          "week": "A week or so: hold 1 Preparation",
-          "month": "A month or so: hold 2 Preparation",
-          "season": "The better part of a season: hold 3 Preparation"
+          "week": "A week or so",
+          "month": "A month or so",
+          "season": "The better part of a season"
         },
+        "holds": "Hold {hold} Preparation",
         "replaces": "You hold {held} Preparation ({purpose}). Bolstering again replaces it.",
         "noPurpose": "no purpose written down",
         "purposeLabel": "What are you preparing for?",
         "purposePlaceholder": "laying in extra stores for winter",
         "confirm": "Hold the Preparation",
-        "held": "{name} holds {held} Preparation. Spend 1 for +1 on a roll your efforts apply to, from its card."
+        "chatTime": {
+          "week": "a week or so",
+          "month": "a month or so",
+          "season": "the better part of a season"
+        },
+        "chat": "{name} Bolstered for {time} and holds {held} Preparation ({purpose}).",
+        "chatNoPurpose": "{name} Bolstered for {time} and holds {held} Preparation.",
+        "chatReplaces": "It replaces the {held} Preparation held before ({purpose}).",
+        "chatReplacesNoPurpose": "It replaces the {held} Preparation held before.",
+        "editTitle": "What is the Preparation for?",
+        "editConfirm": "Save",
+        "chatEdited": "{name}'s {held} Preparation is now written down as for: {purpose}.",
+        "chatEditedBlank": "{name}'s {held} Preparation no longer says what it is for.",
+        "dropTitle": "Let go of this Preparation?",
+        "dropAsk": "Let go of {name}'s {held} Preparation ({purpose})? Only Bolstering again gets it back.",
+        "dropAskNoPurpose": "Let go of {name}'s {held} Preparation? Only Bolstering again gets it back.",
+        "dropConfirm": "Let it go",
+        "dropKeep": "Keep it",
+        "chatDropped": "{name}'s {held} Preparation ({purpose}) no longer applies, and is gone.",
+        "chatDroppedNoPurpose": "{name}'s {held} Preparation no longer applies, and is gone.",
+        "damageRefused": "The +1 was not added: this damage already has its +1 from Preparation, it has been applied, no Preparation is held, or no GM is here to record it.",
+        "rollOffer": "+1: {name} spends 1 Preparation ({held} held, {purpose}). One per roll.",
+        "rollOfferNoPurpose": "+1: {name} spends 1 Preparation ({held} held). One per roll.",
+        "rollOfferGone": "{name} has no Preparation left to spend, so this roll goes without its +1.",
+        "chatSpentOnRoll": "{name} spends 1 Preparation for +1 on {roll}.",
+        "chatOnePerRoll": "Only one Preparation counts on a roll (maximum +1), so no one else's was spent.",
+        "chipLabel": "Preparation {held}",
+        "chipTooltip": "Preparation (Bolster): {held} held, for {purpose}. Spend 1 for +1 on a roll your efforts apply to, from its card.",
+        "chipTooltipNoPurpose": "Preparation (Bolster): {held} held. Spend 1 for +1 on a roll your efforts apply to, from its card.",
+        "chipClick": "Click to change what it's for, or let it go.",
+        "dropButton": "It no longer applies"
       }
     }
   }

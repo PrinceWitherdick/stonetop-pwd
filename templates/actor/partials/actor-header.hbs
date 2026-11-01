@@ -203,12 +203,12 @@
 			{{#if editable}}
 			<button type="button" class="stonetop-inspiration-chip"
 			        aria-label="{{stonetop.inspiration.tooltip}}"
-			        data-tooltip="{{stonetop.inspiration.tooltip}}"
+			        data-tooltip-text="{{stonetop.inspiration.tooltip}}"
 			        data-tooltip-direction="UP"><i class="fas fa-bullhorn" aria-hidden="true"></i><span class="stonetop-inspiration-chip-name">{{stonetop.inspiration.label}}</span></button>
 			{{else}}
 			<span class="stonetop-inspiration-chip"
 			      aria-label="{{stonetop.inspiration.tooltip}}"
-			      data-tooltip="{{stonetop.inspiration.tooltip}}"
+			      data-tooltip-text="{{stonetop.inspiration.tooltip}}"
 			      data-tooltip-direction="UP"><i class="fas fa-bullhorn" aria-hidden="true"></i><span class="stonetop-inspiration-chip-name">{{stonetop.inspiration.label}}</span></span>
 			{{/if}}
 			{{/if}}
@@ -220,15 +220,31 @@
 			{{#if ../editable}}
 			<button type="button" class="stonetop-rapport-chip" data-hero-id="{{r.heroId}}"
 			        aria-label="{{r.tooltip}}"
-			        data-tooltip="{{r.tooltip}}"
+			        data-tooltip-text="{{r.tooltip}}"
 			        data-tooltip-direction="UP"><i class="fas fa-comments" aria-hidden="true"></i><span class="stonetop-rapport-chip-name">{{r.label}}</span></button>
 			{{else}}
 			<span class="stonetop-rapport-chip"
 			      aria-label="{{r.tooltip}}"
-			      data-tooltip="{{r.tooltip}}"
+			      data-tooltip-text="{{r.tooltip}}"
 			      data-tooltip-direction="UP"><i class="fas fa-comments" aria-hidden="true"></i><span class="stonetop-rapport-chip-name">{{r.label}}</span></span>
 			{{/if}}
 			{{/each}}
+			{{! Bolster's Preparation (bolster.js#preparationChip), on the same pill: held IN WORDS, what it is for
+			    in its tooltip, drawn only while some is held. A <button> that changes what it is for, or lets it
+			    go, where the sheet is editable, a readout where it is not; it is spent from a roll's card. }}
+			{{#if stonetop.preparation.show}}
+			{{#if editable}}
+			<button type="button" class="stonetop-preparation-chip"
+			        aria-label="{{stonetop.preparation.tooltip}}"
+			        data-tooltip-text="{{stonetop.preparation.tooltip}}"
+			        data-tooltip-direction="UP"><i class="fas fa-hourglass-half" aria-hidden="true"></i><span class="stonetop-preparation-chip-name">{{stonetop.preparation.label}}</span></button>
+			{{else}}
+			<span class="stonetop-preparation-chip"
+			      aria-label="{{stonetop.preparation.tooltip}}"
+			      data-tooltip-text="{{stonetop.preparation.tooltip}}"
+			      data-tooltip-direction="UP"><i class="fas fa-hourglass-half" aria-hidden="true"></i><span class="stonetop-preparation-chip-name">{{stonetop.preparation.label}}</span></span>
+			{{/if}}
+			{{/if}}
 			{{! An advantage HELD over the next roll (a peaceful camp, p.334), on the steading's
 			    holds-tray terms rather than the candle's: it is not a state anyone toggles on, so
 			    it is drawn only while one is held and it goes when a roll spends it.

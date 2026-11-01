@@ -134,6 +134,23 @@
 				{{stonetop.bolster.hint}}
 			</p>
 			{{/if}}
+			{{! "Preparation lasts until it is spent, until it no longer applies or makes sense, or until the PC
+			    Bolsters again" (p.525): the two that are not a roll card's or this window's. Quiet, like
+			    Death's Door's own plumbing, and only while something is held. }}
+			{{#if (and stonetop.bolster.held this.editable)}}
+			<div class="stonetop-bolster-held-actions">
+				<button type="button" class="stonetop-bolster-edit-btn"
+				        data-tooltip="{{localize "stonetop.specialMoves.bolster.editHint"}}">
+					<i class="fas fa-pen"></i>
+					{{localize "stonetop.specialMoves.bolster.editButton"}}
+				</button>
+				<button type="button" class="stonetop-bolster-drop-btn"
+				        data-tooltip="{{localize "stonetop.specialMoves.bolster.dropHint"}}">
+					<i class="fas fa-xmark"></i>
+					{{localize "stonetop.specialMoves.bolster.dropButton"}}
+				</button>
+			</div>
+			{{/if}}
 			<button type="button" class="stonetop-bolster-open-btn">
 				<i class="fas fa-hourglass-half"></i>
 				{{localize "stonetop.specialMoves.bolster.button"}}

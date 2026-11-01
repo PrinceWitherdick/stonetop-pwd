@@ -232,8 +232,12 @@ export class ContentPickerDialog extends StonetopDialog {
 	 * @param {Function} [p.onShow]     `(form) => void`: run once the window is on screen and placed,
 	 *                                  for anything that measures, scrolls or focuses.
 	 * @param {string} [p.bodyClass]    An extra class on the body, for a layout variant.
+	 * @param {{label: string, icon?: string, className?: string, value: any}} [p.secondary]  A second footer
+	 *                                  button, right of Confirm (affirmative first): the window resolves to its
+	 *                                  `value` without reading the form. Bolster's "It no longer applies" beside
+	 *                                  Save (actors/character/bolster.js#editPreparationFor).
 	 */
-	constructor({ body, buttonLabel, read, wire = null, onShow = null, bodyClass = "", ...options }) {
+	constructor({ body, buttonLabel, read, wire = null, onShow = null, bodyClass = "", secondary = null, ...options }) {
 		super(options);
 		this._body = body;
 		this._buttonLabel = buttonLabel;
@@ -241,6 +245,7 @@ export class ContentPickerDialog extends StonetopDialog {
 		this._wire = wire;
 		this._onShow = onShow;
 		this._bodyClass = bodyClass;
+		this._secondary = secondary;
 		this._shown = false;
 	}
 
@@ -255,7 +260,7 @@ export class ContentPickerDialog extends StonetopDialog {
 	}
 
 	getData() {
-		return { body: this._body, buttonLabel: this._buttonLabel, bodyClass: this._bodyClass };
+		return { body: this._body, buttonLabel: this._buttonLabel, bodyClass: this._bodyClass, secondary: this._secondary };
 	}
 
 	activateListeners(html) {
@@ -266,6 +271,10 @@ export class ContentPickerDialog extends StonetopDialog {
 		form.addEventListener("submit", event => {
 			event.preventDefault();
 			this._resolveWith(this._read(form));
+		});
+		form.querySelector(".stonetop-content-picker-secondary")?.addEventListener("click", event => {
+			event.preventDefault();
+			this._resolveWith(this._secondary?.value ?? null);
 		});
 	}
 

@@ -65,7 +65,7 @@ Below your name sits your appearance line. If your character has died, a **Dead*
 
 ### State icons beside your name
 
-Some playbooks show small icons next to the name plate: the Lightbearer's candle and running Invocation, the Judge's scales, the Blessed's marks, the Heavy's Battle Joy, a Marshal's shaken nerves, a Storm Markings anger, being unseen, Inspiration, and Rapport with a Would-be Hero. Hover any of them to read what it means; click it to act on it (light the candle, end an Invocation, open a list, and so on). Each is described on [Playbook Notes](Playbook-Notes).
+Some playbooks show small icons next to the name plate: the Lightbearer's candle and running Invocation, the Judge's scales, the Blessed's marks, the Heavy's Battle Joy, a Marshal's shaken nerves, a Storm Markings anger, being unseen, Inspiration, Rapport with a Would-be Hero, and Preparation from Bolster (any character; its tooltip says what it is for). Hover any of them to read what it means; click it to act on it (light the candle, end an Invocation, open a list, change what your Preparation is for or let it go, and so on). Each is described on [Playbook Notes](Playbook-Notes).
 
 > **Did you know?**
 > - When something has promised you advantage (or disadvantage) on your next roll, an icon appears beside your name. Hover it to see where it came from. Click it to give it up without rolling.
@@ -130,7 +130,7 @@ The **Defend** row shows your Readiness circles. Click a circle to set how much 
 
 - **Inventory**: your gear, load and special possessions. See [Inventory and Gear](Inventory-and-Gear).
 - **Details**: **Background**, **Instinct**, **Appearance**, **Origin**, your **Lore** answers and **Relationships**. While background questions are unanswered, **Answer Background Questions** opens the walkthrough on them.
-- **Special Moves**: **Death's Door**, **Recover**, **Convalesce**, **Bolster** (say how long you prepared and for what, and hold that much Preparation; the card says what you hold now), **Level Up**, **Burn Brightly** and, while your character is still in play, **Retire** (retire or leave Stonetop; shown to the owner and the GM), each with its own button. A move that is not available right now says why (for example, Level Up needs enough XP; Death's Door is only for a dying character).
+- **Special Moves**: **Death's Door**, **Recover**, **Convalesce**, **Bolster** (say how long you prepared and for what, and hold that much Preparation; it is said in chat, and the card says what you hold now, with **Change what it's for** and **It no longer applies** buttons while you hold any. A length of prayer beads' Preparation pips are the same Preparation), **Level Up**, **Burn Brightly** and, while your character is still in play, **Retire** (retire or leave Stonetop; shown to the owner and the GM), each with its own button. A move that is not available right now says why (for example, Level Up needs enough XP; Death's Door is only for a dying character).
 - **Invocations** (the Lightbearer, or anyone who learned to invoke the Sun God): see [Playbook Notes](Playbook-Notes).
 - **Followers**: see [Followers](Followers).
 - **Arcana**: see [Arcana and Artifacts](Arcana-and-Artifacts).
