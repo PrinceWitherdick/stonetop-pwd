@@ -45,6 +45,22 @@ describe("the write that ends a manifestation", () => {
 		expect(ended(dispersal)).toBe(true);
 	});
 
+	// An HP field cleared by hand, or written as a word: no hit points to stand on, as it always read.
+	it("ends it with an HP written blank or not as a number, in either spelling, but not with HP left out", () => {
+		for (const changes of [
+			{ system: { attributes: { hp: { value: "" } } } },
+			{ "system.attributes.hp.value": "" },
+			{ system: { attributes: { hp: { value: "abc" } } } },
+		]) {
+			onPreUpdateActorManifest(ghost({ manifest: [TOUCH] }), changes);
+			expect(ended(changes)).toBe(true);
+		}
+		for (const changes of [{ system: { attributes: { hp: { max: 8 } } } }, { system: { attributes: { hp: { value: null } } } }]) {
+			onPreUpdateActorManifest(ghost({ manifest: [TOUCH] }), changes);
+			expect(ended(changes)).toBeFalsy();
+		}
+	});
+
 	it("leaves it be on a blow they survive, and writes nothing for a Ghost not manifest", () => {
 		const hit = { system: { attributes: { hp: { value: 3 } } } };
 		onPreUpdateActorManifest(ghost({ manifest: [TOUCH] }), hit);

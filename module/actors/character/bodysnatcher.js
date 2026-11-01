@@ -26,7 +26,7 @@ import { readableFlags, HP_CEILING_OPTION, HP_LOSS_OPTION } from "./StonetopFlag
 import { isOutOfPlay } from "./deaths-door-actor.js";
 import { deletionUpdate } from "../../utils/foundry-compat.js";
 import { holdsLoreOption } from "./insert-lore.js";
-import { escHtml } from "../../utils/strings.js";
+import { cardButton } from "./post-death-card-button.js";
 import { format, localize } from "../../utils/i18n.js";
 
 export const BODYSNATCHER = "Bodysnatcher";
@@ -36,6 +36,13 @@ const BODYSNATCHER_LORE = "consequences:bodysnatcher";
 
 /** Actor flag key (under the system scope) holding the host: `{uuid, name}`. */
 export const HOST_FLAG = "bodysnatcherHost";
+
+/**
+ * Actor flag key (under the system scope) holding everyone who forced this Ghost out on a 6-, `[{uuid, name}]`:
+ * "You'll never be able to possess them again." Possess FLAGS a barred host and asks, it never refuses
+ * (post-death-actions.js#chooseHost): the table may rule otherwise.
+ */
+export const BARRED_FLAG = "bodysnatcherBarred";
 
 /** Update option carrying the HP a write just took off a possessed host, from the preUpdate half to every client. */
 export const HOST_HP_LOST_OPTION = "stonetopHostHpLost";
@@ -66,6 +73,26 @@ export function hostUpdate(host) {
 /** The record's removal as an update fragment (writes nothing harmful where there is none). */
 export function endPossessionUpdate() {
 	return deletionUpdate(`flags.${SYSTEM_ID}.${HOST_FLAG}`);
+}
+
+/** Everyone who forced this Ghost out, `[{uuid, name}]`. */
+export function barredHosts(actor) {
+	const list = readableFlags(actor)?.[BARRED_FLAG];
+	return Array.isArray(list)
+		? list.filter(h => h?.uuid).map(h => ({ uuid: String(h.uuid), name: String(h.name ?? "") }))
+		: [];
+}
+
+/** Whether `uuid` forced this Ghost out before. */
+export function isBarredHost(actor, uuid) {
+	return !!uuid && barredHosts(actor).some(h => h.uuid === uuid);
+}
+
+/** `host` added to the barred list, as an update fragment (the whole list: a flag array is written whole). */
+export function barHostUpdate(actor, host) {
+	const list = barredHosts(actor);
+	if (host?.uuid && !list.some(h => h.uuid === host.uuid)) list.push({ uuid: host.uuid, name: host.name ?? "" });
+	return { [`flags.${SYSTEM_ID}.${BARRED_FLAG}`]: list };
 }
 
 /**
@@ -105,9 +132,10 @@ export function hostHpLost(oldHp, newHp) {
  */
 export function bodysnatcherRollOptions(actor) {
 	if (!possessionHolds(actor)) return null;
-	const label = escHtml(localize(`${KEY}.forcedOut`));
 	return { tierActions: {
-		failure: `<button type="button" class="stonetop-pd-card-btn stonetop-pd-forced-out" data-key="forced-out" data-move="${BODYSNATCHER}"><i class="fas fa-person-walking-arrow-right"></i> ${label}</button>`,
+		failure: cardButton("stonetop-pd-forced-out", {
+			key: "forced-out", label: localize(`${KEY}.forcedOut`), icon: "fa-person-walking-arrow-right", data: { move: BODYSNATCHER },
+		}),
 	} };
 }
 

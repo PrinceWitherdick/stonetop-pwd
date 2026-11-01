@@ -117,6 +117,47 @@ describe("a window that keeps its reader's place", () => {
 		expect(next.controls[0].getBoundingClientRect().top).toBe(200);
 	});
 
+	// An auto-height window that grows is moved back on screen by setPosition. The box moved with the
+	// window, not in its column, so the column keeps the reader's offset.
+	it("does not scroll the column by however far the window itself moved", async () => {
+		const placed = (scrollTop, windowTop) => {
+			const column = { scrollTop, contains: el => el === box, getBoundingClientRect: () => ({ top: windowTop }) };
+			const box = { ...control({ "data-kept-focus": "tether" }), getBoundingClientRect: () => ({ top: windowTop + 500 - column.scrollTop }) };
+			const root = { querySelector: sel => (sel === COLUMN ? column : box), contains: el => el === column || el === box };
+			return { root, column, controls: [box] };
+		};
+		const first = placed(300, 100);
+		const next  = placed(0, 40);
+		focusOn(first.controls[0]);
+		await redrawing(new Kept(), first, next)._render(false, {});
+		expect(next.column.scrollTop).toBe(300);
+	});
+
+	// Death's Door keeps its outer body and the choices panel inside it; on the choices step only the
+	// inner one scrolls, so a line added above the ticked box is made up there.
+	it("shifts the innermost kept column that scrolls, not an outer one holding it", async () => {
+		const INNER = ".deaths-door-choices-main";
+		class Nested extends Kept { get _keptScrollSelector() { return [COLUMN, INNER]; } }
+		const nested = (innerTop, boxAt) => {
+			const outer = { scrollTop: 0, scrollHeight: 400, clientHeight: 400, contains: el => el === inner || el === box };
+			const inner = { scrollTop: innerTop, scrollHeight: 2000, clientHeight: 400, contains: el => el === box };
+			const box = { ...control({ "data-kept-focus": "mark" }), getBoundingClientRect: () => ({ top: boxAt - inner.scrollTop }) };
+			const root = {
+				querySelector: sel => (sel === COLUMN ? outer : sel === INNER ? inner : box),
+				contains: el => el === outer || el === inner || el === box,
+			};
+			return { root, column: outer, inner, controls: [box] };
+		};
+		const first = nested(300, 500);
+		const next  = nested(0, 560);
+		focusOn(first.controls[0]);
+		const app = redrawing(new Nested(), first, next);
+		app.setPosition = vi.fn();
+		await app._render(false, {});
+		expect(next.inner.scrollTop).toBe(360);
+		expect(next.column.scrollTop).toBe(0);
+	});
+
 	it("gives the keyboard back to the same control in the fresh draw, without scrolling to it", async () => {
 		const had   = control({ "data-kept-focus": "bram:add:food" });
 		const again = control({ "data-kept-focus": "bram:add:food" });

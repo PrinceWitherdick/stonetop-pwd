@@ -2546,14 +2546,16 @@ export function blowHarmsSpirits(weapon) {
  * DISEMBODIED_BOX for one that harms spirits (the weapon's `harmsSpirits`: the caller says so, as Go Back to the
  * Shadow does for its spirits of darkness). Who actually gets a box is still each box's `qualifies`, so listing
  * a row whose sufferer is nobody's Revenant, Thrall or Ghost does nothing. `{}` for an ordinary blow.
- * `move` names a stat block's blow, whose weapon has no name of its own ("Bite").
+ * `move` names a stat block's blow, whose weapon has no name of its own ("Bite", "Silver Claw"). `ownPrice`
+ * is a character's own price (rollOptionDamage), which never opens Disembodied as harm landing: as printed,
+ * it stays unticked whatever the option's words are made of.
  */
-function seededRowBoxes(weapon, results, { move = "" } = {}) {
+function seededRowBoxes(weapon, results, { move = "", ownPrice = false } = {}) {
 	const uuids = (results ?? []).map(r => r.uuid).filter(Boolean);
 	if (!uuids.length) return {};
 	const named = weapon?.name ? weapon : { ...(weapon ?? {}), name: move };
-	// Silver or salt is read off the weapon's own name, never the move's.
-	const blow = { ...blowMakeup(named), harmsSpirits: Boolean(weapon?.harmsSpirits) || blowHarmsSpirits(weapon) };
+	const harmsSpirits = !ownPrice && (Boolean(weapon?.harmsSpirits) || blowHarmsSpirits(named));
+	const blow = { ...blowMakeup(named), harmsSpirits };
 	return Object.fromEntries(ROW_BOXES.filter(box => box.opensFor?.(blow)).map(box => [box.key, uuids]));
 }
 
@@ -2724,7 +2726,7 @@ function postDamageResultsCard(actor, { move, weapon, ownPiercing, results, dama
 			weapon: weapon ? { name: weapon.name, piercing: ownPiercing, ignoresArmor: weapon.ignoresArmor || armorIgnoredOnTheFly } : null,
 			...(armorIgnoredOnTheFly && weapon && !weapon.ignoresArmor ? { [ARMOR_IGNORED_ON_THE_FLY]: true } : {}),
 			// The boxes that open the other way for what this blow is made of (seededRowBoxes).
-			...seededRowBoxes(weapon, results, { move }),
+			...seededRowBoxes(weapon, results, { move, ownPrice: selfHarm && ownPrice }),
 			// `applied` is an ARRAY, not a uuid-keyed object: a token uuid ("Scene.x.Token.y")
 			// used as a flag key would be dot-expanded into nested objects by setFlag, breaking
 			// the idempotency lookup so a second click re-subtracts HP.
@@ -4002,6 +4004,7 @@ const FIRE_WITHIN_BOX = Object.freeze({
 	wordsKey: "stonetop.fight.heroMoves.fireWithin.box", key: "fireWithin", listsTicked: true,
 	adjust: dmg => Math.max(0, dmg - FIRE_WITHIN_REDUCTION),
 	noteKey: "stonetop.fight.heroMoves.fireWithin.note", noteParams: Object.freeze({ by: FIRE_WITHIN_REDUCTION }),
+	afterArmorStep: 0,
 });
 
 /**
@@ -4022,20 +4025,22 @@ const UNDYING_BOX = Object.freeze({
 	// Wrapped, not the import itself: read at Apply, never while the modules are still loading.
 	adjust: dmg => halveDamage(dmg),
 	noteKey: "stonetop.fight.undying.halvedNote", noteParams: Object.freeze({}),
+	afterArmorStep: 1,
 });
 
 /**
  * A box that, ticked, has the blow do its sufferer nothing at all, listed on the flag while ticked: what
  * UNDYING_POISON_BOX, FESTERING_ROT_BOX and CHILD_OF_THE_DEEPS_BOX share. `modifier` names its class, and
- * `opensFor`, where given, is seededRowBoxes' question of whether a new card lists the rows from the start.
+ * `opensFor`, where given, is seededRowBoxes' question of whether a new card lists the rows from the start,
+ * and `afterArmorStep` its place in Apply's sum (AFTER_ARMOR_BOXES).
  */
-function harmlessBox({ qualifies, modifier, wordsKey, key, noteKey, opensFor }) {
+function harmlessBox({ qualifies, modifier, wordsKey, key, noteKey, opensFor, afterArmorStep }) {
 	return Object.freeze({
 		qualifies, className: `stonetop-damage-armor-gate stonetop-damage-${modifier}`,
 		wordsKey, key, listsTicked: true,
 		adjust: () => 0,
 		noteKey, noteParams: Object.freeze({}),
-		opensFor,
+		opensFor, afterArmorStep,
 	});
 }
 
@@ -4048,7 +4053,7 @@ function harmlessBox({ qualifies, modifier, wordsKey, key, noteKey, opensFor }) 
 const UNDYING_POISON_BOX = harmlessBox({
 	qualifies: undyingSufferer, modifier: "undying-poison",
 	wordsKey: "stonetop.fight.undying.poisonBox", key: "poisonHarmless", noteKey: "stonetop.fight.undying.poisonNote",
-	opensFor: blow => blow.poison,
+	opensFor: blow => blow.poison, afterArmorStep: 2,
 });
 
 /**
@@ -4060,7 +4065,7 @@ const UNDYING_POISON_BOX = harmlessBox({
 const FESTERING_ROT_BOX = harmlessBox({
 	qualifies: actor => thrallMarkSufferer(actor, THRALL_MARK.FESTERING_ROT), modifier: "festering-rot",
 	wordsKey: "stonetop.fight.festeringRot.box", key: "rotHarmless", noteKey: "stonetop.fight.festeringRot.note",
-	opensFor: blow => blow.rotIgnores,
+	opensFor: blow => blow.rotIgnores, afterArmorStep: 3,
 });
 
 /**
@@ -4071,6 +4076,7 @@ const FESTERING_ROT_BOX = harmlessBox({
 const CHILD_OF_THE_DEEPS_BOX = harmlessBox({
 	qualifies: actor => thrallMarkSufferer(actor, THRALL_MARK.CHILD_OF_THE_DEEPS), modifier: "child-of-the-deeps",
 	wordsKey: "stonetop.fight.childOfTheDeeps.box", key: "deepsUnharmed", noteKey: "stonetop.fight.childOfTheDeeps.note",
+	afterArmorStep: 4,
 });
 
 /**
@@ -4087,25 +4093,27 @@ const DISEMBODIED_BOX = Object.freeze({
 	wordsKey: "stonetop.fight.disembodied.box", key: "harmsSpirit", listsTicked: true, whenUnticked: true,
 	adjust: () => 0,
 	noteKey: "stonetop.fight.disembodied.unharmedNote", noteParams: Object.freeze({}),
-	opensFor: blow => blow.harmsSpirits,
+	opensFor: blow => blow.harmsSpirits, afterArmorStep: 5,
 });
 
 /**
  * Every box a damage row may carry after its conditional armor, in the order wireConditionalArmor draws them:
  * Undaunted's +1 armor (the same kind of question about the same armor), then the moves that act on what gets
  * past it. Each box's `qualifies` says whose row gets it, and its optional `opensFor` whether a new card lists
- * the rows from the start (seededRowBoxes). A new box is one entry here, and one in AFTER_ARMOR_BOXES if it
- * acts on what got through armor.
+ * the rows from the start (seededRowBoxes). A new box is one entry here; one that acts on what got through armor
+ * also gives its `afterArmorStep`, its place in Apply's sum (AFTER_ARMOR_BOXES).
  */
 const ROW_BOXES = Object.freeze([UNDAUNTED_ARMOR_BOX, UNDYING_BOX, UNDYING_POISON_BOX, FESTERING_ROT_BOX, CHILD_OF_THE_DEEPS_BOX, FIRE_WITHIN_BOX, DISEMBODIED_BOX]);
 
 /**
  * The ROW_BOXES that act on what got through armor, in the order Apply takes them (not the order they are
  * drawn): Fire Within's 2 comes off what got through armor, and Undying halves what is left; a Revenant spared
- * poison, a Thrall unharmed, or a Ghost unharmed, takes none of it. A new move that acts on that number is one
- * entry here (beside its ROW_BOXES one) and needs no edit to the sum.
+ * poison, a Thrall unharmed, or a Ghost unharmed, takes none of it. Read off each box's `afterArmorStep`, so a
+ * new move that acts on that number gives one there and needs no edit to the sum. Exported for the tests.
  */
-const AFTER_ARMOR_BOXES = Object.freeze([FIRE_WITHIN_BOX, UNDYING_BOX, UNDYING_POISON_BOX, FESTERING_ROT_BOX, CHILD_OF_THE_DEEPS_BOX, DISEMBODIED_BOX]);
+export const AFTER_ARMOR_BOXES = Object.freeze(ROW_BOXES
+	.filter(box => Number.isInteger(box.afterArmorStep))
+	.sort((a, b) => a.afterArmorStep - b.afterArmorStep));
 
 /**
  * What a row's sufferer takes of the `soaked` damage that got through armor, once AFTER_ARMOR_BOXES have each

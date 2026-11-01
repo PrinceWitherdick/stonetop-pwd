@@ -474,16 +474,18 @@ export function activatePostDeathChoices(html, character, onChanged) {
 
 	// An exclusive pick — a Terrible Purpose, an Impulse. Clears its siblings, and clears the
 	// section's write-in too where there is one, since taking a printed Impulse is the GM saying
-	// they no longer want the one they invented.
+	// they no longer want the one they invented. The pick and the write-in's clearing land in ONE
+	// write, as typing a write-in and clearing the picks does (loreTextFieldUpdateData).
 	html.find(".stonetop-pdc-pick").on("change", async (ev) => {
-		const el = ev.currentTarget;
-		await character.chooseOneSectionOption(el.dataset.section, el.dataset.option);
+		const { section, option, writein } = ev.currentTarget.dataset;
+		const update = (await character.chooseOneSectionOptionUpdateData(section, option)) ?? {};
 		// Only when there is one to clear. `data-writein` rides on EVERY radio of a section that
-		// has a write-in, so an unguarded write would add an empty key — and a whole document
-		// update and re-render — on every click of the seven printed Impulses.
-		if (el.dataset.writein && character.postDeathLoreText(el.dataset.section, el.dataset.writein)) {
-			await character.setPostDeathLoreText(el.dataset.section, el.dataset.writein, "");
+		// has a write-in, so an unguarded clear would add an empty key on every click of the seven
+		// printed Impulses.
+		if (writein && character.postDeathLoreText(section, writein)) {
+			Object.assign(update, character.postDeathLoreTextUpdateData(section, writein, ""));
 		}
+		await character.applyUpdate(update);
 		await after();
 	});
 

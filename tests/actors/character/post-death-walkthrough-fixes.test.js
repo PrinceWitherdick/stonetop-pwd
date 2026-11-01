@@ -7,7 +7,7 @@ import { composeInstinct } from "../../../module/utils/strings.js";
 import { LevelUpDialog, insertInertNote } from "../../../module/actors/character/dialogs/LevelUpDialog.js";
 import { StonetopCharacter } from "../../../module/actors/character/StonetopCharacter.js";
 import { DEATHS_DOOR_STATE } from "../../../module/actors/character/deaths-door.js";
-import { buildPostDeathChoices, flushPostDeathChoices } from "../../../module/actors/character/post-death-choices.js";
+import { activatePostDeathChoices, buildPostDeathChoices, flushPostDeathChoices } from "../../../module/actors/character/post-death-choices.js";
 import { DeathsDoorDialog } from "../../../module/actors/character/dialogs/DeathsDoorDialog.js";
 import { FakeRepositoryFactory } from "../../fakes/FakeRepositoryFactory.js";
 import { FakePostDeathInsertRepository } from "../../fakes/FakePostDeathInsertRepository.js";
@@ -129,6 +129,20 @@ describe("LV-5: the chooser's typed answers survive a close that fires no change
 		expect(char.postDeathLoreText("impulse", "custom-impulse")).toBe("Spread rumours");
 		expect(char.postDeathLoreText("your-master", "master-name")).toBe("The Hollow King");
 		expect(char._postDeath.lore.counts).toEqual({ "impulse:erode-hope": 0, "marks:ravenous": 1 });
+	});
+
+	it("lands a printed pick and the write-in it replaces in one update", async () => {
+		const { actor, char } = makeUndead("thrall", { flags: { postDeathLore: {
+			counts: { "impulse:erode-hope": 1 },
+			texts:  { "impulse:custom-impulse": "Spread rumours" },
+		} } });
+		const handlers = {};
+		activatePostDeathChoices({ find: sel => ({ on: (_ev, fn) => { handlers[sel] = fn; } }) }, char, async () => {});
+		await handlers[".stonetop-pdc-pick"]({ currentTarget: { dataset: { section: "impulse", option: "stoke-conflict", writein: "custom-impulse" } } });
+		expect(actor.update).toHaveBeenCalledTimes(1);
+		expect(actor.setFlag).not.toHaveBeenCalled();
+		expect(char.postDeathLoreText("impulse", "custom-impulse")).toBe("");
+		expect(char._postDeath.lore.counts).toMatchObject({ "impulse:erode-hope": 0, "impulse:stoke-conflict": 1 });
 	});
 
 	it("writes nothing at all for a close with nothing typed", async () => {

@@ -23,7 +23,8 @@ import { rollDamageAt, rollOptionDamage, pcDamageDie } from "../../combat/attack
 import { rolledTotalCard } from "../../utils/chat.js";
 import { heldOnTrack, takeBackHeld, trackCap } from "./MoveResources.js";
 import { isPostDeathMove } from "./post-death-moves.js";
-import { BODYSNATCHER, possessedHost, hostUpdate, endPossessionUpdate } from "./bodysnatcher.js";
+import { BODYSNATCHER, possessedHost, hostUpdate, endPossessionUpdate, barHostUpdate, isBarredHost } from "./bodysnatcher.js";
+import { cardButton } from "./post-death-card-button.js";
 import { manifestedPicks, manifestUpdateData, endManifestUpdateData } from "./manifest.js";
 import { markableConsequences } from "./post-death-choices.js";
 import { favorHeld, gainFavor, pickLoreOption, setRavenousMaw, spendFavor } from "./post-death-outcomes.js";
@@ -201,14 +202,19 @@ async function getAngry(actor) {
  * Bodysnatcher: "When you possess an unconscious or willing person, lose 1d4 HP and control their actions."
  * Whom is the token targeted (asked when several are), recorded in the 1d4's own write so the damage they
  * take follows the Ghost (bodysnatcher.js). With nobody targeted it asks first: possess anyway, with nobody
- * recorded, or not yet. A new body ends whatever possession stood before it.
+ * recorded, or not yet. A new body ends whatever possession stood before it. Someone who forced them out
+ * before ("You'll never be able to possess them again") is flagged, not refused: the player is asked, and
+ * the card says so if they go ahead.
  */
 async function possess(actor) {
 	const host = await chooseHost(actor);
 	if (host === undefined) return false;
+	const barred = host && isBarredHost(actor, host.uuid);
 	await loseHp(actor, "1d4", {
 		moveName: BODYSNATCHER,
-		detail: host ? format(`${KEY}.possessDetailNamed`, { host: host.name }) : localize(`${KEY}.possessDetail`),
+		detail: host
+			? format(`${KEY}.${barred ? "possessDetailBarred" : "possessDetailNamed"}`, { host: host.name })
+			: localize(`${KEY}.possessDetail`),
 		alongside: () => ({ update: host ? hostUpdate(host) : endPossessionUpdate() }),
 	});
 	return true;
@@ -216,9 +222,25 @@ async function possess(actor) {
 
 /**
  * The person Possess takes, `{uuid, name}` off the targeted token's actor (an unlinked token's own); null to
- * possess with nobody recorded; undefined when the player backed out.
+ * possess with nobody recorded; undefined when the player backed out. A person who forced them out before
+ * is asked about first (flagged, never refused).
  */
 async function chooseHost(actor) {
+	const host = await pickHost(actor);
+	if (!host || !isBarredHost(actor, host.uuid)) return host;
+	const anyway = await askWithButtons({
+		title:   BODYSNATCHER,
+		content: format(`${KEY}.possessBarredAsk`, { host: escHtml(host.name) }),
+		buttons: [
+			{ key: "barred-anyway", label: localize(`${KEY}.possessBarredAnyway`), icon: "fa-triangle-exclamation", value: true },
+			{ key: "cancel", label: localize(`${KEY}.possessCancel`), icon: "fa-xmark", value: null },
+		],
+	});
+	return anyway ? host : undefined;
+}
+
+/** The targeted person (asked when several are), null for nobody recorded, undefined when backed out. */
+async function pickHost(actor) {
 	const people = [...(globalThis.game?.user?.targets ?? [])]
 		.map(token => ({ uuid: token?.actor?.uuid ?? "", name: token?.name ?? token?.actor?.name ?? "" }))
 		.filter(p => p.uuid && p.uuid !== actor?.uuid);
@@ -251,18 +273,21 @@ async function endPossession(actor) {
 
 /**
  * Bodysnatcher's 6-: "they force you from their body and you mark a consequence. You'll never be able to
- * possess them again." The Consequence picked, and the possession's end, in one write. With every
+ * possess them again." The Consequence picked, the possession's end and the host barred, in one write. With every
  * Consequence already marked the possession still ends, and the card says the move can't be paid. Answers
  * whether anything was written (a closed picker writes nothing, and gives the card's button back).
  */
 async function forcedOut(actor) {
 	const character = actor?.typedActor;
 	if (!character) return false;
-	const host = possessedHost(actor)?.name || localize(`${KEY}.theHost`);
+	const record = possessedHost(actor);
+	const host = record?.name || localize(`${KEY}.theHost`);
+	// "You'll never be able to possess them again": who, kept so a later Possess of them is flagged.
+	const barred = record ? barHostUpdate(actor, record) : {};
 	const options = markableConsequences(await character.sectionOptions("consequences"));
 	const name = actor.name ?? "";
 	if (!options.length) {
-		await actor.update(endPossessionUpdate(), { stonetopMove: BODYSNATCHER });
+		await actor.update({ ...endPossessionUpdate(), ...barred }, { stonetopMove: BODYSNATCHER });
 		await postMoveNote(actor, BODYSNATCHER, format(`${KEY}.forcedOutNoneLeft`, { name, host }));
 		return true;
 	}
@@ -270,7 +295,7 @@ async function forcedOut(actor) {
 		"markNamed", options, { cancelLabel: localize(`${KEY}.possessCancel`) });
 	const marked = picked ? character.markSectionOptionUpdateData("consequences", picked.slug) : null;
 	if (!marked) return false;
-	await character.applyUpdate({ ...marked, ...endPossessionUpdate() }, BODYSNATCHER);
+	await character.applyUpdate({ ...marked, ...endPossessionUpdate(), ...barred }, BODYSNATCHER);
 	await postMoveNote(actor, BODYSNATCHER, format(`${KEY}.forcedOutLine`, { name, host, consequence: picked.label }));
 	return true;
 }
@@ -431,13 +456,6 @@ async function pushTheLimits(actor) {
 }
 
 // ── The roll cards' buttons ────────────────────────────────────────────────
-
-/** One button on a roll card's tier row. `key` is its latch on the message: one press per key, per card. */
-function cardButton(className, { key, label, icon, data = {} }) {
-	const attrs = Object.entries({ key, ...data })
-		.map(([name, value]) => ` data-${name}="${escHtml(String(value))}"`).join("");
-	return `<button type="button" class="stonetop-pd-card-btn ${className}"${attrs}><i class="fas ${icon}"></i> ${escHtml(label)}</button>`;
-}
 
 // The damage buttons latch once per CARD, not per tier: a GM Shift that moves the card between 7-9 and
 // 10+ redraws the other tier's row, and the blow it already dealt is still the one blow the roll owes.

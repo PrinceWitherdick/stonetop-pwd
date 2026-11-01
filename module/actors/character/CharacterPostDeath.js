@@ -353,14 +353,6 @@ export class CharacterPostDeath {
 		return new Set(recorded.filter(key => !target.printed.has(key)));
 	}
 
-	/**
-	 * Clear every pick in a section without taking one — the other half of an exclusive choice,
-	 * for when it's answered by a write-in rather than by one of the printed options.
-	 */
-	async clearSectionPicks(sectionSlug) {
-		return this._setSectionPicks(sectionSlug, null);
-	}
-
 	/** Untick one lore option. Returns false if it wasn't marked to begin with. */
 	async unmarkSectionOption(sectionSlug, optionSlug) {
 		if (!optionSlug) return false;
@@ -405,12 +397,28 @@ export class CharacterPostDeath {
 	masterTaskUpdateData(text) { return this._insertFlags.updateData("task", String(text ?? "").trim()); }
 
 	/**
-	 * clearSectionPicks as a fragment: one count sub-key per option it unticks, so several sections'
-	 * clears fold into one update without the second replacing the first. `{}` when nothing is ticked
-	 * or the worn insert has no such section.
+	 * Every pick in a section cleared without taking one, as a fragment: the other half of an exclusive
+	 * choice, for when it's answered by a write-in rather than by one of the printed options. One count
+	 * sub-key per option it unticks, so several sections' clears fold into one update without the second
+	 * replacing the first. `{}` when nothing is ticked or the worn insert has no such section.
 	 */
 	async clearSectionPicksUpdateData(sectionSlug) {
-		const changes = await this._sectionPickChanges(sectionSlug, null) ?? {};
+		return (await this._sectionPicksUpdateData(sectionSlug, null)) ?? {};
+	}
+
+	/**
+	 * chooseOneSectionOption as a fragment, for a pick that lands in ONE write with the write-in it
+	 * replaces (post-death-choices.js). Null where chooseOneSectionOption would refuse.
+	 */
+	async chooseOneSectionOptionUpdateData(sectionSlug, optionSlug) {
+		if (!optionSlug) return null;
+		return this._sectionPicksUpdateData(sectionSlug, optionSlug);
+	}
+
+	/** _setSectionPicks as a fragment, one count sub-key per option it changes; null for no such section. */
+	async _sectionPicksUpdateData(sectionSlug, winnerSlug) {
+		const changes = await this._sectionPickChanges(sectionSlug, winnerSlug);
+		if (!changes) return null;
 		return Object.assign({}, ...Object.entries(changes)
 			.map(([option, count]) => this._lore.countUpdateData(sectionSlug, option, count)));
 	}

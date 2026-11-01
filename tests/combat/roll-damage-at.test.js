@@ -1434,6 +1434,32 @@ describe("Disembodied's box opening on what harms spirits", () => {
 		expect(flag).not.toHaveProperty("harmsSpirit");
 		expect(flag).not.toHaveProperty("poisonHarmless");
 	});
+
+	// Code review 2026-10-31: a stat block's blow has a nameless weapon and goes by its move, as poison does.
+	it("reads silver or salt off a stat block's blow by the move it goes by", async () => {
+		const { tokens, tokenActor } = fightInARow([["crin", crinwin("crinwin")], ["rhys", hero("rhys", "Rhys")]]);
+		const claw = parseMonsterAttacks("silver claw d6 (close)")[0];
+		await rollDamageAt(tokenActor("crin"), {
+			formula: "d6", label: "Silver Claw", keywords: "close", rollMode: "normal", weapon: attackWeapon(claw), shiftKey: true,
+		});
+		expect(damageFlag().harmsSpirit).toEqual([tokens.rhys.uuid]);
+	});
+
+	// "A character's own price stays unticked, as printed": not even an option whose words say spirit.
+	it("never opens a character's own price as harming spirits", async () => {
+		const rhys = hero("rhys", "Rhys");
+		fightInARow([["rhys", rhys]]);
+		await rollOptionDamage(rhys, { move: "Salt the Wound", damage: { formula: "1d4", self: true, ignoresArmor: true, tags: ["spirit"] } });
+		expect(damageFlag()).not.toHaveProperty("harmsSpirit");
+	});
+});
+
+// Code review 2026-10-31: Apply's after-armor sum is read off each box's own step, not a second hand-kept list.
+describe("the order Apply takes the after-armor boxes in", () => {
+	it("is Fire Within, Undying, then the boxes that spare the blow entirely", async () => {
+		const { AFTER_ARMOR_BOXES } = await import("../../module/combat/attack-flow.js");
+		expect(AFTER_ARMOR_BOXES.map(box => box.key)).toEqual(["fireWithin", "undyingOff", "poisonHarmless", "rotHarmless", "deepsUnharmed", "harmsSpirit"]);
+	});
 });
 
 // Audit GH-6 (the user's ruling, 2026-10-27): a Ghost manifest with "your touch (or ghostly weapons) can harm

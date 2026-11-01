@@ -411,6 +411,19 @@ function stampUpdate(entry, hash, version) {
 	return { _id: entry.id, [`flags.${SYSTEM_ID}.journalSync`]: { hash, version } };
 }
 
+// What an edited entry was last told about: the shipped fingerprint it was compared with, paired
+// with the baseline it was compared over. Written beside the baseline (`journalSync.kept`), never
+// over it, so the entry still reads as edited and is still never refreshed. Paired so a `kept` left
+// from an earlier edit, under a baseline since re-stamped, is never mistaken for this one's.
+function keptStampUpdate(entry, baseHash, shippedHash) {
+	return { _id: entry.id, [`flags.${SYSTEM_ID}.journalSync.kept`]: { base: baseHash, shipped: shippedHash } };
+}
+
+/** The shipped fingerprint an edited entry was last compared with: its `kept` one, or its baseline. */
+function lastShippedHash(baseline) {
+	return baseline?.kept?.base === baseline?.hash && baseline?.kept?.shipped ? baseline.kept.shipped : baseline?.hash;
+}
+
 // On a system-version bump, roll newly-shipped journal content into the world — but
 // only for entries the GM hasn't touched. An entry is "pristine" when its current
 // content fingerprint still equals the baseline we stamped when we last wrote it; a
@@ -432,9 +445,10 @@ function stampUpdate(entry, hash, version) {
  *
  * `refresh` are pristine entries whose shipped content changed, `stamps` are baseline writes
  * only (content already right, or a legacy entry adopting a baseline), and `keptEdits` names
- * entries the GM edited AND whose shipped content moved on since we last wrote them. An edited
- * entry whose shipped content has not changed is in none of them: it is missing nothing new,
- * so there is nothing to tell the GM about.
+ * entries the GM edited AND whose shipped content moved on since they were last compared. An
+ * edited entry whose shipped content has not changed is in none of them: it is missing nothing
+ * new, so there is nothing to tell the GM about. Each one named gets a `kept` stamp (in `stamps`)
+ * recording what it was compared with, so the next release names it only if it changes again.
  *
  * `legacyEdits` names entries seeded before baselines existed whose world copy differs from
  * what ships. Left alone like an edit, but kept out of `keptEdits`: with no baseline there is
@@ -479,10 +493,13 @@ export async function planJournalSync({ onProgress } = {}) {
 		const worldHash = managedHash(entry.toObject());
 		const baseline = entry.getFlag(SYSTEM_ID, "journalSync");
 		// GM-edited: fingerprint drifted from what we last wrote. Hands off. Only worth a mention
-		// when this version ships something other than what we last wrote; otherwise the GM is
-		// missing nothing, and saying "kept your edits" on every release is noise.
+		// when this version ships something other than what the entry was last compared with;
+		// otherwise the GM is missing nothing, and saying "kept your edits" on every release is noise.
 		if (baseline?.hash && baseline.hash !== worldHash) {
-			if (baseline.hash !== newHash) keptEdits.push(entry.name);
+			if (lastShippedHash(baseline) !== newHash) {
+				keptEdits.push(entry.name);
+				stamps.push(keptStampUpdate(entry, baseline.hash, newHash));
+			}
 			continue;
 		}
 

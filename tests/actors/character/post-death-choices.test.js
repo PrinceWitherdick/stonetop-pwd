@@ -123,7 +123,6 @@ function makeCharacter(slug, lore, { counts = {}, texts = {}, instinct = null, i
 		async chooseOneSectionOption(s, o) { return pd.chooseOneSectionOption(s, o); },
 		async markSectionOption(s, o)      { return pd.markSectionOption(s, o); },
 		async unmarkSectionOption(s, o)    { return pd.unmarkSectionOption(s, o); },
-		async clearSectionPicks(s)         { return pd.clearSectionPicks(s); },
 		get tether()                       { return pd.tether; },
 	};
 }
@@ -431,7 +430,7 @@ describe("which sections accumulate, and which are one to a character", () => {
 	});
 });
 
-describe("unmarkSectionOption / clearSectionPicks", () => {
+describe("unmarkSectionOption / clearSectionPicksUpdateData", () => {
 	it("takes one option off and leaves the rest", async () => {
 		const character = makeCharacter("ghost", GHOST_LORE, {
 			counts: { "consequences:breakdown": 1, "consequences:specter": 1 },
@@ -447,15 +446,20 @@ describe("unmarkSectionOption / clearSectionPicks", () => {
 		expect(await character.unmarkSectionOption("consequences", "specter")).toBe(false);
 	});
 
-	it("clears a whole exclusive section", async () => {
+	it("hands an exclusive pick back as a fragment: the winner ticked, its ticked siblings cleared", async () => {
 		const character = makeCharacter("thrall", THRALL_LORE, { counts: { "impulse:stoke-conflict": 1 } });
-		expect(await character.clearSectionPicks("impulse")).toBe(true);
-
-		const step = (await buildPostDeathChoices(character)).steps.find(s => s.key === "impulse");
-		expect(step.options.some(o => o.marked)).toBe(false);
+		const loreFlags = character._postDeath.lore._flags;
+		const data = await character._postDeath.chooseOneSectionOptionUpdateData("impulse", "erode-hope");
+		expect(data).toEqual({
+			[`${loreFlags._ns}.counts.impulse:stoke-conflict`]: 0,
+			[`${loreFlags._ns}.counts.impulse:erode-hope`]: 1,
+		});
+		expect(loreFlags.setFlag).not.toHaveBeenCalled();
+		expect(await character._postDeath.chooseOneSectionOptionUpdateData("impulse", "")).toBeNull();
+		expect(await character._postDeath.chooseOneSectionOptionUpdateData("no-such-section", "erode-hope")).toBeNull();
 	});
 
-	it("hands the same clear back as one count sub-key per option it unticks, writing nothing", async () => {
+	it("hands a clear back as one count sub-key per option it unticks, writing nothing", async () => {
 		const character = makeCharacter("thrall", THRALL_LORE, { counts: { "impulse:stoke-conflict": 1, "impulse:erode-hope": 0 } });
 		const loreFlags = character._postDeath.lore._flags;
 		const data = await character._postDeath.clearSectionPicksUpdateData("impulse");

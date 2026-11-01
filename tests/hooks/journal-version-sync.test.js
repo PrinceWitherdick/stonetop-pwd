@@ -234,8 +234,45 @@ describe("the version sync, compare then write", () => {
 
 		await syncJournals();
 
-		expect(updateDocuments).not.toHaveBeenCalled();
+		// The only write is the note of what it was compared with, beside its baseline: never its
+		// pages, and never the baseline itself, so it still reads as edited next time.
+		expect(updateDocuments).toHaveBeenCalledTimes(1);
+		const [writes] = updateDocuments.mock.calls[0];
+		expect(writes).toEqual([{ _id: "a", "flags.stonetop-pwd.journalSync.kept": { base: "not-the-current-content", shipped: expect.any(String) } }]);
+		expect(entry.setFlag).not.toHaveBeenCalled();
 		expect(global.ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("kept your edits"));
+	});
+
+	// Code review 2026-10-31: the baseline of an edited entry never moves, so comparing the new
+	// release with it named the entry again on every release after the one that changed it.
+	it("names an edited journal once per change to what ships, not on every release after", async () => {
+		const entry = seeded("a", { content: "the GM's own words" });
+		const flag = { hash: "what we last wrote", version: "0.0.0" };
+		entry.getFlag = vi.fn(() => flag);
+		harness({ journals: [entry], packDocs: [shipped("a", { content: "new wording" })] });
+
+		const first = await planJournalSync();
+		expect(first.keptEdits).toEqual(["a"]);
+		// The next release ships the same new wording: land the kept stamp as Foundry would.
+		flag.kept = first.stamps[0]["flags.stonetop-pwd.journalSync.kept"];
+		store.journalSyncVersion = "0.0.1";
+		const second = await planJournalSync();
+		expect(second.keptEdits).toEqual([]);
+		expect(second.stamps).toEqual([]);
+		expect(flag.hash).toBe("what we last wrote");
+
+		// And a release that changes it again names it again.
+		harness({ journals: [entry], packDocs: [shipped("a", { content: "newer wording" })] });
+		expect((await planJournalSync()).keptEdits).toEqual(["a"]);
+	});
+
+	it("ignores a kept stamp left over from under an earlier baseline", async () => {
+		const entry = seeded("a", { content: "the GM's own words" });
+		const shippedHash = managedHash({ pages: [{ _id: "p-a", name: "a", type: "text", text: { content: "new wording" } }] });
+		entry.getFlag = vi.fn(() => ({ hash: "what we last wrote", version: "0.0.0", kept: { base: "an older baseline", shipped: shippedHash } }));
+		harness({ journals: [entry], packDocs: [shipped("a", { content: "new wording" })] });
+
+		expect((await planJournalSync()).keptEdits).toEqual(["a"]);
 	});
 
 	// The every-release toast: an edited entry whose shipped content has not moved since we last

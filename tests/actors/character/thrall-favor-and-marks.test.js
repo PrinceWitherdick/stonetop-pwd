@@ -224,6 +224,13 @@ describe("TH-4: the Ravenous maw", () => {
 		expect(favor(none.actor)).toBe(1);
 	});
 
+	it("spends no Favor when the maw's move can't be made", async () => {
+		const { actor, char } = makeThrall({ counts: { [KEY]: 1, "favor:favor-track": 1 } });
+		actor.createEmbeddedDocuments = vi.fn(async () => { throw new Error("socket dropped"); });
+		await expect(setRavenousMaw(char, true)).rejects.toThrow("socket dropped");
+		expect(favor(actor)).toBe(1);
+	});
+
 	it("goes when Ravenous is no longer held, or the insert is taken away", async () => {
 		const { actor, char } = makeThrall({ counts: { [KEY]: 1, "favor:favor-track": 1 } });
 		await setRavenousMaw(char, true);

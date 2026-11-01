@@ -6850,7 +6850,6 @@ export class StonetopCharacter {
 	async loreDroppedBySwap(slug) { return this._postDeath.loreDroppedBySwap(slug); }
 	async markSectionOption(section, option)   { return this._postDeath.markSectionOption(section, option); }
 	async unmarkSectionOption(section, option) { return this._postDeath.unmarkSectionOption(section, option); }
-	async clearSectionPicks(section)           { return this._postDeath.clearSectionPicks(section); }
 	favor()                 { return this._postDeath.favor(); }
 	async setFavor(v)       { await this._postDeath.setFavor(v); }
 
@@ -6866,6 +6865,7 @@ export class StonetopCharacter {
 	// And for a chooser's close saving its typed answers in ONE write (post-death-choices.js#flushPostDeathChoices).
 	postDeathLoreTextUpdateData(section, option, value) { return this._postDeath.loreTextUpdateData(section, option, value); }
 	async clearSectionPicksUpdateData(section) { return this._postDeath.clearSectionPicksUpdateData(section); }
+	async chooseOneSectionOptionUpdateData(section, option) { return this._postDeath.chooseOneSectionOptionUpdateData(section, option); }
 	/** The Death's Door state as a fragment, written as the caller's decision (see DeathsDoorPrompt's preUpdate). */
 	deathsDoorStateUpdateData(state) { return { [`flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`]: state ?? null }; }
 	/**
@@ -6936,7 +6936,8 @@ export class StonetopCharacter {
 	 * `clearsDeathsDoor` rides the state change along in the same write: being restored IS the
 	 * end of the brush with death, so it should cost one ledger line and one re-render rather
 	 * than two. It still has to happen when the hit points DON'T move (a character healed above
-	 * the amount while the dialog was open), so that path writes the state on its own.
+	 * the amount while the dialog was open, or a return that keeps the HP it has), so that path
+	 * writes the state with `alsoUpdate`, still as one write.
 	 */
 	// `alsoUpdate`: more of the same decision, in the same write (We Happy Few's Keep 1 HP puts back
 	// the Battle Joy and Readiness the drop cost), so hooks see it land as one.
@@ -6947,8 +6948,7 @@ export class StonetopCharacter {
 	async restoreHp(value, moveName, { clearsDeathsDoor = false, alsoUpdate = null, unhalved = false } = {}) {
 		const target = recoveredHpTo(this.hp, Math.max(0, Math.trunc(Number(value) || 0)), !unhalved && slowToHeal(this._actor));
 		if (target <= this.hp) {
-			if (clearsDeathsDoor) await this.setDeathsDoorState(null);
-			await this.applyUpdate(alsoUpdate, moveName);
+			await this.applyUpdate({ ...(alsoUpdate ?? {}), ...(clearsDeathsDoor ? this._clearDeathsDoorUpdate : {}) }, moveName);
 			return false;
 		}
 		const update = { "system.attributes.hp.value": target, ...(alsoUpdate ?? {}) };

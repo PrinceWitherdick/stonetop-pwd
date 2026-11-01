@@ -285,6 +285,42 @@ describe("the Bolster button and the Suggested tag carry no hand nudge", () => {
 	});
 });
 
+// Measured 10-31 with the text-centring audit (z:/tmp/foundry-verify/forced-out-centre.mjs): Bodysnatcher's
+// "Forced out" roll-card button (icon row, -1 to 0px) and Death's Door's icon-led gold caution row (-0.5 to
+// 0px), at 1x/1.25x/1.5x in all three sheet fonts. The button is the chat card's shared button and the row a
+// plain paragraph, both centring by their line box; what would break either is a hand nudge.
+describe("the post-death card buttons and Death's Door's caution row carry no hand nudge", () => {
+	const NUDGES = ["top", "bottom", "transform", "translate", "padding-top", "padding-bottom", "vertical-align"];
+	/** Every rule body whose selector list mentions `cls` anywhere (a descendant or state rule included). */
+	const rulesMentioning = cls => [...MAIN.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+		.filter(([, prelude]) => new RegExp(String.raw`${cls.replace(".", "\\.")}(?![\w-])`).test(prelude))
+		.map(([, , body]) => body);
+
+	it("keeps the chat card's shared button on even padding, unnudged", () => {
+		const body = declarations(MAIN, ":is(#chat, #chat-notifications, #chat-popout) .message .pbta-chat-card .card-buttons button");
+		expect(body).toBeTruthy();
+		for (const prop of NUDGES) expect(declared(body, prop) ?? null, `sets ${prop}`).toBeNull();
+		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+		expect(bottom).toBe(top);
+	});
+
+	it.each([".stonetop-pd-card-btn", ".stonetop-pd-forced-out", ".deaths-door-dictated"])("%s and its icon", cls => {
+		for (const body of rulesMentioning(cls)) {
+			for (const prop of NUDGES) expect(declared(body, prop) ?? null, `${cls} sets ${prop}`).toBeNull();
+			const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+			expect(bottom, `${cls} pads unevenly`).toBe(top);
+		}
+	});
+
+	it("draws the Forced out button as the audit measured it: an icon element, then the label", async () => {
+		const { cardButton } = await import("../../module/actors/character/post-death-card-button.js");
+		expect(cardButton("stonetop-pd-forced-out", { key: "forced-out", label: "Forced out", icon: "fa-person-walking-arrow-right" }))
+			.toMatch(/^<button type="button" class="stonetop-pd-card-btn stonetop-pd-forced-out"[^>]*><i class="fas fa-person-walking-arrow-right"><\/i> Forced out<\/button>$/);
+		expect(readRepo("templates/dialogs/partials/deaths-door-dictates.hbs"))
+			.toMatch(/<p class="deaths-door-dictated"><i class="fas [\w-]+" aria-hidden="true"><\/i> /);
+	});
+});
+
 describe("chip icons sit at a whole-pixel size", () => {
 	const ICONS = [
 		".stonetop-roll-card-badge i",

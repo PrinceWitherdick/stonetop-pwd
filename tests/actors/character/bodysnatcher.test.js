@@ -8,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import {
-	HOST_FLAG, HOST_HP_LOST_OPTION, bodysnatcherRollOptions, hostHpLost, onPreUpdateHost, onUpdateGhost, onUpdateHost,
+	BARRED_FLAG, HOST_FLAG, HOST_HP_LOST_OPTION, barredHosts, bodysnatcherRollOptions, hostHpLost, onPreUpdateHost, onUpdateGhost, onUpdateHost,
 	possessedHost, possessorsOf,
 } from "../../../module/actors/character/bodysnatcher.js";
 import { BODYSNATCHER, loseHp, moveActionsFor, pressCardButton, runPostDeathAction } from "../../../module/actors/character/post-death-actions.js";
@@ -52,11 +52,14 @@ afterEach(() => {
 });
 
 /** A Ghost holding BODYSNATCHER (unless told otherwise), with `host` recorded if given. */
-function ghost({ hp = 8, counts = { "consequences:bodysnatcher": 1 }, slug = "ghost", host = null } = {}) {
+function ghost({ hp = 8, counts = { "consequences:bodysnatcher": 1 }, slug = "ghost", host = null, barred = null } = {}) {
 	const actor = makeLiveActor({
 		name: "Wisp",
 		items: [bodysnatcherItem()],
-		flags: { postDeathInsert: { slug }, postDeathLore: { counts }, ...(host ? { [HOST_FLAG]: host } : {}) },
+		flags: {
+			postDeathInsert: { slug }, postDeathLore: { counts },
+			...(host ? { [HOST_FLAG]: host } : {}), ...(barred ? { [BARRED_FLAG]: barred } : {}),
+		},
 	});
 	actor.uuid = "Actor.wisp";
 	actor.system.attributes.hp.value = hp;
@@ -108,6 +111,33 @@ describe("Possess records the host", () => {
 		expect(actor.system.attributes.hp.value).toBe(7);
 		// A new body ends the old possession.
 		expect(hostOf(actor)).toBeUndefined();
+	});
+});
+
+describe("Possess flags someone who forced them out before (never refuses)", () => {
+	it("asks first: not yet writes nothing; anyway possesses, and the card says the book bars it", async () => {
+		const { actor } = ghost({ barred: [ALDRIC] });
+		globalThis.game.user = { id: "u1", targets: new Set([target("Aldric", ALDRIC.uuid)]) };
+		const wait = stubAsk("cancel");
+		actor.update.mockClear();
+		expect(await runPostDeathAction(actor, "possess")).toBe(false);
+		expect(wait.mock.calls[0][0].content).toContain("never be able to possess them again");
+		expect(actor.update).not.toHaveBeenCalled();
+
+		stubAsk("barred-anyway");
+		rolls.push(2);
+		expect(await runPostDeathAction(actor, "possess")).toBe(true);
+		expect(hostOf(actor)).toEqual(ALDRIC);
+		expect(posted.at(-1).flavor).toContain("who forced them out before");
+	});
+
+	it("asks nothing for someone not barred", async () => {
+		const { actor } = ghost({ barred: [{ uuid: "Actor.bryn", name: "Bryn" }] });
+		globalThis.game.user = { id: "u1", targets: new Set([target("Aldric", ALDRIC.uuid)]) };
+		const wait = stubAsk("cancel");
+		rolls.push(2);
+		expect(await runPostDeathAction(actor, "possess")).toBe(true);
+		expect(wait).not.toHaveBeenCalled();
 	});
 });
 
@@ -282,6 +312,17 @@ describe("the 6-: they force you from their body and you mark a consequence", ()
 		expect(actor.flags["stonetop-pwd"].postDeathLore.counts["consequences:quarry"]).toBe(1);
 		expect(hostOf(actor)).toBeUndefined();
 		expect(posted.at(-1).content).toContain("can never possess Aldric again");
+		// "You'll never be able to possess them again": recorded, in that same write.
+		expect(barredHosts(actor)).toEqual([ALDRIC]);
+	});
+
+	it("bars the host even when every consequence is already marked, and keeps those barred before", async () => {
+		const BRYN = { uuid: "Actor.bryn", name: "Bryn" };
+		const { actor, char } = ghost({ host: ALDRIC, barred: [BRYN] });
+		char.sectionOptions = async () => [];
+		expect(await pressCardButton(card(), actor, forcedOutButton())).toBe(true);
+		expect(hostOf(actor)).toBeUndefined();
+		expect(barredHosts(actor)).toEqual([BRYN, ALDRIC]);
 	});
 
 	it("writes nothing and gives the button back when the picker is closed", async () => {

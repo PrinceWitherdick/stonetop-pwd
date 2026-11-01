@@ -4,18 +4,23 @@ import { TIER_LABELS } from "../../../utils/move-results.js";
 import { classifyResult } from "../../../utils/roll-engine.js";
 import { promptRoll } from "../../../dialogs/RollDialog.js";
 import { format, localize } from "../../../utils/i18n.js";
-import { DEATHS_DOOR_STATE, FINAL_CONSEQUENCE, resolutionTier, resolvedHp } from "../deaths-door.js";
-import { deathsDoorRollMarker, rollMarkerDeletion, setDeathsDoorRollMarker } from "../deaths-door-actor.js";
+import { DEATHS_DOOR_STATE, FINAL_CONSEQUENCE, deathsDoorClaimRuling, resolutionTier, resolvedHp } from "../deaths-door.js";
+import {
+	clearDeathsDoorRollMarker, deathsDoorRollClock, deathsDoorRollMarker, deathsDoorRollPosted, rollMarkerDeletion,
+	setDeathsDoorRollMarker,
+} from "../deaths-door-actor.js";
+import { askDeathsDoorClaim } from "../deaths-door-relay.js";
 import { gainableMarks, markableConsequences } from "../post-death-choices.js";
 import { loseToUnholyVessel, postOutcomeCard } from "../post-death-outcomes.js";
 import { UNDEATH_ROLL_NONCE_PREFIX, isUndeathRollMarker, keptHpUpdate } from "../undeath-return.js";
 import { confirmOutcome } from "../../../utils/ask-with-buttons.js";
 import { DeathsDoorDialog } from "./DeathsDoorDialog.js";
 
-// The roll, once its dice land, is written to the actor as the Death's Door roll marker is
-// (deaths-door-actor.js#setDeathsDoorRollMarker), under a nonce of its own kind so neither window
-// can take the other's for its own. The marker is what a window opened again (closed, a second
-// click, another owner's) resumes from instead of rolling again, and it goes in the write that
+// The roll is claimed on the actor before the dice, as Death's Door's is (deaths-door-actor.js
+// #setDeathsDoorRollMarker), under a nonce of its own kind so neither window can take the other's
+// for its own; the claim is what stops two owners rolling at once (UndeathDialog#_claimRoll). Once
+// the dice land it carries the tier, and that is what a window opened again (closed, a second
+// click, another owner's) resumes from instead of rolling again. It goes in the write that
 // settles the move. Any HP write that moves the state lifts it too (DeathsDoorPrompt's preUpdate),
 // so one left by a brush with death that ended some other way never reaches the next one.
 
@@ -160,8 +165,8 @@ export class UndeathDialog extends StonetopDialog {
 
 	/**
 	 * Pick up the roll the actor's marker says has landed, while they are still dying with it owed. Whether it
-	 * did. The tier is taken as it stands: the marker is written once the dice are down (_onRoll), and the card
-	 * takes no +1s or Shift afterwards (deaths-door.js#isUndeathCard).
+	 * did. The tier is taken as it stands: the marker carries it only once the dice are down (_onRoll; a claim
+	 * still in the air has none), and the card takes no +1s or Shift afterwards (deaths-door.js#isUndeathCard).
 	 */
 	_resumeLandedRoll() {
 		if (this._step !== "roll" || !this._resolution?.roll) return false;
@@ -191,14 +196,13 @@ export class UndeathDialog extends StonetopDialog {
 			exhausted: this._isExhausted(e.kind),
 		}));
 
-		// _availableCount, off the effects just read, and handed to everything below that needs it.
 		const available = effects.filter(e => !e.exhausted).length;
-		const pick = this._pickCount(available);
+		const pick = this._pickCount();
 		// Unholy Vessel: the move demands a Mark and there is none left to gain. Nothing else is asked.
-		const unholyVessel = this._owesExhausted("mark-gain", available);
+		const unholyVessel = this._owesExhausted("mark-gain");
 		// Every Consequence already marked and the move owing one (_owesExhausted): said, with the GM's
 		// way out offered and never taken for them.
-		const unpayable = !unholyVessel && !this._tetherDestroyed && this._owesExhausted("consequence", available);
+		const unpayable = !unholyVessel && !this._tetherDestroyed && this._owesExhausted("consequence");
 		return {
 			moveName:  this._moveName,
 			trigger:   this._character?.zeroHpMove?.trigger ?? "",
@@ -218,7 +222,7 @@ export class UndeathDialog extends StonetopDialog {
 			pickedCount: this._picked.size,
 			// "All 3 apply" is not a choice — say so instead of asking them to tick three boxes.
 			allApply:    pick >= available && available > 0,
-			canApply:    this._canApply(available),
+			canApply:    this._canApply(),
 			unpayable:   unpayable ? {
 				note:  localize(`${_I18N}.unpayable.note`),
 				label: localize(`${_I18N}.unpayable.final`),
@@ -364,7 +368,7 @@ export class UndeathDialog extends StonetopDialog {
 
 	/**
 	 * Whether the tier owes cost `kind`, which has nothing left to spend, and the move's other costs cannot cover
-	 * it. `available` is _availableCount, for a caller that has it already. It takes two shapes:
+	 * it. It takes two shapes:
 	 *
 	 * "mark-gain" is Unholy Vessel (the Thrall's own move): "When you would gain a Mark but there are none left
 	 * to gain, your humanity is utterly lost. You become a threat in the GM's control. Make a new character."
@@ -378,11 +382,11 @@ export class UndeathDialog extends StonetopDialog {
 	 * window says the move can't be paid and leaves it to the GM, who may have them mark the Final Consequence
 	 * (the user's ruling, 2026-10-27). Never decided for them.
 	 */
-	_owesExhausted(kind, available = this._availableCount()) {
+	_owesExhausted(kind) {
 		const tier = resolutionTier(this._resolution, this._tierKey);
 		const effects = this._resolution?.effects ?? [];
 		if (!tier || !effects.some(e => e.kind === kind) || !this._isExhausted(kind)) return false;
-		return tier.pick > available;
+		return tier.pick > this._availableCount();
 	}
 
 	/**
@@ -390,18 +394,18 @@ export class UndeathDialog extends StonetopDialog {
 	 * insert has left to give (every consequence already marked, every Mark held), and asking for three
 	 * when only two exist would leave the Apply button dead forever.
 	 */
-	_pickCount(available = this._availableCount()) {
+	_pickCount() {
 		const tier = resolutionTier(this._resolution, this._tierKey);
-		return Math.min(tier?.pick ?? 0, available);
+		return Math.min(tier?.pick ?? 0, this._availableCount());
 	}
 
 	/**
 	 * Whether Apply is live. Asked by getData and again as the task is typed (activateListeners), which
 	 * redraws nothing: the button used to light only on a redraw, and typing the task is not one.
 	 */
-	_canApply(available = this._availableCount()) {
-		if (this._owesExhausted("mark-gain", available)) return true;
-		return this._picked.size === this._pickCount(available) && this._choicesComplete();
+	_canApply() {
+		if (this._owesExhausted("mark-gain")) return true;
+		return this._picked.size === this._pickCount() && this._choicesComplete();
 	}
 
 	/** Every picked effect that needs a choice has one, and no Mark is being gained and lost at once. */
@@ -524,17 +528,27 @@ export class UndeathDialog extends StonetopDialog {
 			// Asked again: the pre-roll window waits as long as the player does, and another owner may have
 			// rolled, or the move been settled, while it was up.
 			if (await this._overtaken()) return;
-			const roll = await this._character.onDirectStatRoll(usesLore ? "" : res.roll.stat, {
-				...prompted,
-				targets: [],
-				statValue,
-				moveName: this._moveName,
-				// Undying / Tethered / Dark Succor ARE Death's Door for a character who has already
-				// been through it, so they follow the same house rule: no +1 XP on the miss that
-				// might end them. See DeathsDoorDialog._onRoll.
-				noXpOnMiss: true,
-				moveDescription: `<p>${this._character.zeroHpMove.trigger}</p>`,
-			});
+			// Claimed before the dice, so another owner pressing Roll meanwhile is told whose roll it is
+			// rather than rolling a second time.
+			const claim = await this._claimRoll(actor);
+			if (!claim) return;
+			let roll = null;
+			try {
+				roll = await this._character.onDirectStatRoll(usesLore ? "" : res.roll.stat, {
+					...prompted,
+					targets: [],
+					statValue,
+					moveName: this._moveName,
+					// Undying / Tethered / Dark Succor ARE Death's Door for a character who has already
+					// been through it, so they follow the same house rule: no +1 XP on the miss that
+					// might end them. See DeathsDoorDialog._onRoll.
+					noXpOnMiss: true,
+					moveDescription: `<p>${this._character.zeroHpMove.trigger}</p>`,
+				});
+			} finally {
+				// No dice landed (backed out, or the roll failed): the claim is let go, so Roll is free again.
+				if (!roll) await this._releaseRoll(actor, claim);
+			}
 			if (!roll) return;
 
 			this._rolledTotal = roll.total;
@@ -544,8 +558,9 @@ export class UndeathDialog extends StonetopDialog {
 			// On the actor, so the roll stands however this window is closed or opened again. Written even
 			// when this window was shut while the dice fell: the card is posted, so the roll is spent. Not
 			// once they have stopped dying meanwhile (healed, or the GM's "not lethal"): a stamp on a character
-			// no longer owing the move would be resumed by the next brush with death.
-			if (this._character.deathsDoorState === DEATHS_DOOR_STATE.DYING) await this._stampRoll(actor, roll.total, this._tierKey);
+			// no longer owing the move would be resumed by the next brush with death, so the claim goes too.
+			if (this._character.deathsDoorState === DEATHS_DOOR_STATE.DYING) await this._stampRoll(actor, claim, roll.total, this._tierKey);
+			else await this._releaseRoll(actor, claim);
 			// Guarded: the 3D dice are several seconds of await, and a window closed during them
 			// must not be forced back open. See DeathsDoorDialog._onRoll.
 			this.renderIfOpen();
@@ -569,16 +584,72 @@ export class UndeathDialog extends StonetopDialog {
 	}
 
 	/**
-	 * Write the landed roll to the actor (see the note above _landedRoll). A failure is logged and no more: the
+	 * Claim the roll for this window, before the dice (see the note above _landedRoll). The claim, or null when the
+	 * roll is not this window's to make.
+	 *
+	 * Death's Door's way (DeathsDoorDialog#_claimRoll), and its ruling (deaths-door.js#deathsDoorClaimRuling): put to
+	 * the primary GM's client when one is connected, which rules on one claim at a time, so of two owners pressing
+	 * Roll together exactly one rolls. With no GM to rule, the same ruling is read here, the claim written, and read
+	 * back: one that landed over it is the other owner's roll. Either way a claim left behind is never a lock: one of
+	 * this user's own (a page reloaded mid-roll) is theirs to make again, and another owner's is anyone's once they
+	 * have left the game or let it sit for DEATHS_DOOR_ROLL_STALE_MS. A claim that cannot be written costs the other
+	 * windows their warning and never this roll.
+	 */
+	async _claimRoll(actor) {
+		const user  = globalThis.game?.user ?? null;
+		const nonce = `${UNDEATH_ROLL_NONCE_PREFIX}${globalThis.foundry?.utils?.randomID?.() ?? Math.random().toString(36).slice(2)}`;
+		const claim = {
+			userId: user?.id ?? "unknown", userName: user?.name ?? "", at: deathsDoorRollClock(), nonce, total: null, tier: null,
+		};
+		let ruling = await askDeathsDoorClaim(actor, { nonce });
+		if (ruling?.granted) return { ...claim, ...(ruling.marker ?? {}) };
+		if (!ruling) {
+			const marker = deathsDoorRollMarker(actor);
+			ruling = deathsDoorClaimRuling({
+				marker,
+				state:        this._character?.deathsDoorState ?? null,
+				userId:       claim.userId,
+				nonce,
+				holderActive: !!(marker && globalThis.game?.users?.get?.(marker.userId)?.active),
+				posted:       deathsDoorRollPosted(marker),
+				now:          claim.at,
+			});
+			if (ruling.granted) {
+				try {
+					await setDeathsDoorRollMarker(actor, claim);
+				} catch (err) {
+					console.error("Stonetop | could not claim the undeath roll on the character", err);
+				}
+				const stored = deathsDoorRollMarker(actor);
+				if (!stored || stored.nonce === nonce) return claim;
+				ruling = { granted: false, holder: stored };
+			}
+		}
+		// Not this window's: a roll that landed meanwhile is picked up, a move no longer owed closes the window, and
+		// a roll still in the air is named.
+		if (await this._overtaken()) return null;
+		globalThis.ui?.notifications?.info?.(format(`${_I18N}.claimHeld`, {
+			name: ruling.holder?.userName || localize("stonetop.specialMoves.deathsDoor.anotherPlayer"), move: this._moveName,
+		}));
+		return null;
+	}
+
+	/** Let a claim go that no dice landed on, while it is still this one. A failure is logged: the claim goes stale. */
+	async _releaseRoll(actor, claim) {
+		try {
+			await clearDeathsDoorRollMarker(actor, claim.nonce);
+		} catch (err) {
+			console.error("Stonetop | could not release the undeath roll on the character", err);
+		}
+	}
+
+	/**
+	 * Write the landed roll over its claim (see the note above _landedRoll). A failure is logged and no more: the
 	 * roll is on the card and in this window, and only a window opened again would miss it.
 	 */
-	async _stampRoll(actor, total, tier) {
-		const user = globalThis.game?.user ?? null;
-		const nonce = `${UNDEATH_ROLL_NONCE_PREFIX}${globalThis.foundry?.utils?.randomID?.() ?? Math.random().toString(36).slice(2)}`;
+	async _stampRoll(actor, claim, total, tier) {
 		try {
-			await setDeathsDoorRollMarker(actor, {
-				userId: user?.id ?? "unknown", userName: user?.name ?? "", nonce, total, tier,
-			});
+			await setDeathsDoorRollMarker(actor, { ...claim, at: deathsDoorRollClock(), total, tier });
 		} catch (err) {
 			console.error("Stonetop | could not record the undeath roll on the character", err);
 		}
@@ -783,11 +854,12 @@ export class UndeathDialog extends StonetopDialog {
 	 */
 	async _onAlternative(slug) {
 		if (this._applied || this._confirming || !slug) return;
-		if (!await this._stillOwed()) return;
-		// Latched while its questions are up, so a second press does not stack a second one.
+		// Latched before anything is awaited, and while its questions are up, so a second press does not stack a
+		// second one.
 		this._confirming = true;
 		let swap;
 		try {
+			if (!await this._stillOwed()) return;
 			swap = await swapRevenantForGhost(this._character, slug, {
 				gate: async () => {
 					if (this._applied) return false;

@@ -16,6 +16,22 @@ export function isDrawn(column) {
 	return typeof column?.getClientRects !== "function" || column.getClientRects().length > 0;
 }
 
+/** Whether `column` has more content than it shows, so it scrolls. */
+function scrolls(column) {
+	return column.scrollHeight > column.clientHeight || column.scrollWidth > column.clientWidth;
+}
+
+/** The one of `holders` ({ column }) that no other of them sits inside, or undefined for none. */
+function innermost(holders) {
+	return holders.find(h => !holders.some(o => o !== h && h.column.contains?.(o.column)));
+}
+
+/** How far down `column` the control `el` stands on screen, or null where `el` has no box. */
+function topIn(el, column) {
+	const top = el?.getBoundingClientRect?.().top;
+	return top == null ? null : top - (column.getBoundingClientRect?.().top ?? 0);
+}
+
 /**
  * Base class for Stonetop's authoring dialogs (custom move, love letter, add inventory
  * item, monster builder, love-letter reader). It centralises the two pieces of lifecycle
@@ -213,17 +229,20 @@ export class StonetopDialog extends Application {
 		if (!before) return null;
 		const active = globalThis.document?.activeElement;
 		const focused = active && before.contains?.(active) ? this._focusSelector(active) : null;
-		// Where on screen that control stood, when it scrolls with a kept column (see _restorePlace).
-		let anchor = null;
+		const holders = [];
 		const columns = this._keptScrollSelectors().map(selector => {
 			const column = before.querySelector?.(selector);
 			// A hidden column reads 0 both ways, so its place is the last one it was seen at.
 			const held = column && !isDrawn(column) ? this._heldOffsets?.get(selector) : null;
-			if (focused && !held && !anchor && column?.contains?.(active)) {
-				anchor = { selector, top: active.getBoundingClientRect?.().top ?? null };
-			}
+			if (focused && !held && column?.contains?.(active)) holders.push({ selector, column });
 			return { selector, top: held?.top ?? column?.scrollTop ?? 0, left: held?.left ?? column?.scrollLeft ?? 0 };
 		});
+		// Where in its column that control stood (see _restorePlace). The column it scrolls with is the
+		// innermost kept one holding it that scrolls: Death's Door keeps its outer body AND the choices
+		// panel inside it, and on the choices step only the inner one moves.
+		const holder = innermost(holders.filter(h => scrolls(h.column))) ?? innermost(holders);
+		const top = holder ? topIn(active, holder.column) : null;
+		const anchor = top != null ? { selector: holder.selector, top } : null;
 		return { columns, focused, anchor };
 	}
 
@@ -248,10 +267,12 @@ export class StonetopDialog extends Application {
 		control?.focus?.({ preventScroll: true });
 		// The same offset is not always the same view: a line above the control that the press added
 		// or took away (Undeath's dispersal note goes when the tether is destroyed) moves the control
-		// itself, out from under the pointer. Shift the column by however far it moved.
+		// itself, out from under the pointer. Shift the column by however far it moved. Measured from the
+		// column's own top, not the screen's: an auto-height window that grows is moved back on screen by
+		// setPosition, and that move is not the reader's to scroll by.
 		const was = place.anchor?.top;
 		const column = was != null ? drawn.get(place.anchor.selector) : null;
-		const now = column?.contains?.(control) && isDrawn(column) ? control.getBoundingClientRect?.().top : null;
+		const now = column?.contains?.(control) && isDrawn(column) ? topIn(control, column) : null;
 		if (now != null && now !== was) column.scrollTop += now - was;
 	}
 

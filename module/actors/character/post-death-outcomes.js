@@ -673,8 +673,8 @@ function _mawItemData() {
 
 /**
  * Ravenous: "You can spend 1 Favor to ... Gain a horrid, iron-rending maw (hand, 3 piercing, messy) for as
- * long as you wish" (Book I p.153). Out (`out` true) costs the 1 Favor, then makes the move that arms them
- * with it as a weapon (data/weapons.js#MOVE_GRANTED_WEAPONS), so Clash offers it; away deletes that move,
+ * long as you wish" (Book I p.153). Out (`out` true) makes the move that arms them with it as a weapon, then
+ * costs the 1 Favor (data/weapons.js#MOVE_GRANTED_WEAPONS), so Clash offers it; away deletes that move,
  * and costs nothing. Resolves to whether anything changed.
  */
 export async function setRavenousMaw(character, out) {
@@ -682,8 +682,19 @@ export async function setRavenousMaw(character, out) {
 	const title = localize(`${_I18N}.favorActions.maw.card`);
 	if (out) {
 		if (ravenousMawOut(actor) || !hasThrallMark(actor, THRALL_MARK.RAVENOUS)) return false;
-		if ((await spendFavor(character, 1, title)) === null) return false;
-		await actor.createEmbeddedDocuments("Item", [_mawItemData()]);
+		if (favorHeld(character) < 1) {
+			globalThis.ui?.notifications?.warn?.(localize("stonetop.postDeathMoves.noFavor"));
+			return false;
+		}
+		// An embedded create can't share the Favor's write, so the maw is made FIRST and the Favor spent
+		// only once it stands: a create that fails spends nothing. Favor spent elsewhere in between puts
+		// the maw back away.
+		const made = await actor.createEmbeddedDocuments("Item", [_mawItemData()]);
+		if ((await spendFavor(character, 1, title)) === null) {
+			const ids = (made ?? []).map(i => i?._id ?? i?.id).filter(Boolean);
+			if (ids.length) await actor.deleteEmbeddedDocuments("Item", ids);
+			return false;
+		}
 		await postOutcomeCard(character, title, [localize(`${_I18N}.mawOut`), format("stonetop.postDeathMoves.favorSpent", { n: 1 })]);
 		return true;
 	}

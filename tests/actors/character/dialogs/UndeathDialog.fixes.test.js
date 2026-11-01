@@ -223,6 +223,100 @@ describe("VL-2: no stamp on a character who stopped dying while the dice fell", 
 	});
 });
 
+// Code review 2026-10-31: the stamp went on only once the dice were down, so two owners pressing Roll at once
+// both rolled. The roll is claimed first now, on Death's Door's terms.
+describe("the roll is claimed before the dice", () => {
+	const USERS = {
+		ana:  { id: "ana", name: "Ana", active: true },
+		bryn: { id: "bryn", name: "Bryn", active: true },
+		gone: { id: "gone", name: "Gone", active: false },
+	};
+	let savedGame, savedUi, info;
+	beforeEach(() => {
+		savedGame = globalThis.game;
+		savedUi = globalThis.ui;
+		info = vi.fn();
+		globalThis.game = { user: USERS.ana, users: { get: id => USERS[id] } };
+		globalThis.ui = { notifications: { info } };
+	});
+	afterEach(() => {
+		globalThis.game = savedGame;
+		globalThis.ui = savedUi;
+	});
+
+	it("a second owner pressing Roll while the dice are in the air rolls nothing, and picks the roll up once it lands", async () => {
+		const { actor, char } = makeUndead("revenant");
+		const first = await UndeathDialog.open(char, () => {});
+		const other = await UndeathDialog.open(char, () => {});
+		let during = async () => {
+			during = null;
+			globalThis.game.user = USERS.bryn;
+			await other._onRoll();
+			globalThis.game.user = USERS.ana;
+		};
+		char.onDirectStatRoll = vi.fn(async () => { await during?.(); return { total: 4 }; });
+
+		await first._onRoll();
+		expect(char.onDirectStatRoll).toHaveBeenCalledTimes(1);
+		expect(info).toHaveBeenCalledWith("stonetop.undeath.claimHeld");
+		expect(other._step).toBe("roll");
+		expect(deathsDoorRollMarker(actor)).toMatchObject({ userId: "ana", tier: "failure", total: 4 });
+
+		globalThis.game.user = USERS.bryn;
+		await other._onRoll();
+		expect(char.onDirectStatRoll).toHaveBeenCalledTimes(1);
+		expect(other._step).toBe("resolve");
+		expect(other._tierKey).toBe("failure");
+	});
+
+	it("a roll that never lands lets its claim go", async () => {
+		const { actor, char } = makeUndead("revenant");
+		char.onDirectStatRoll = vi.fn(async () => null);
+		await (await UndeathDialog.open(char, () => {}))._onRoll();
+		expect(deathsDoorRollMarker(actor)).toBeNull();
+
+		char.onDirectStatRoll = vi.fn(async () => { throw new Error("socket"); });
+		await expect((await UndeathDialog.open(char, () => {}))._onRoll()).rejects.toThrow("socket");
+		expect(deathsDoorRollMarker(actor)).toBeNull();
+	});
+
+	it("a claim left behind is no lock: this user's own (a reload), or another owner's who has gone or let it sit", async () => {
+		for (const left of [
+			{ userId: "ana", at: Date.now() },
+			{ userId: "gone", at: Date.now() },
+			{ userId: "bryn", at: Date.now() - 6 * 60 * 1000 },
+		]) {
+			const { actor, char } = makeUndead("revenant");
+			actor.flags["stonetop-pwd"].deathsDoorRolling = { ...left, userName: "x", nonce: "undeath:old", tier: null, total: null };
+			char.onDirectStatRoll = vi.fn(async () => ({ total: 11 }));
+			await (await UndeathDialog.open(char, () => {}))._onRoll();
+			expect(char.onDirectStatRoll, left.userId).toHaveBeenCalledTimes(1);
+			expect(deathsDoorRollMarker(actor)).toMatchObject({ userId: "ana", tier: "success" });
+		}
+	});
+
+	it("another owner's claim still in the air holds", async () => {
+		const { actor, char } = makeUndead("revenant");
+		actor.flags["stonetop-pwd"].deathsDoorRolling = { userId: "bryn", userName: "Bryn", at: Date.now(), nonce: "undeath:live", tier: null, total: null };
+		char.onDirectStatRoll = vi.fn(async () => ({ total: 11 }));
+		await (await UndeathDialog.open(char, () => {}))._onRoll();
+		expect(char.onDirectStatRoll).not.toHaveBeenCalled();
+		expect(info).toHaveBeenCalledWith("stonetop.undeath.claimHeld");
+		expect(deathsDoorRollMarker(actor)).toMatchObject({ nonce: "undeath:live" });
+	});
+});
+
+describe("the fork to the Ghost, pressed twice", () => {
+	it("asks once", async () => {
+		const { char } = makeUndead("revenant");
+		const dialog = await landed(char, "failure");
+		dialog._openChoices = vi.fn(async () => {});
+		const wait = stubConfirm(false);
+		await Promise.all([dialog._onAlternative("ghost"), dialog._onAlternative("ghost")]);
+		expect(wait).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe("GH-2's checkbox, as undeath.hbs draws and wires it", () => {
 	const render = data => {
 		const hb = Handlebars.create();
@@ -319,7 +413,10 @@ describe("RV-3: Undying's own out of the action keeps the HP the move gave", () 
 		expect(actor.system.attributes.hp.value).toBe(1);
 		expect(flag(actor, UNDEATH_KEPT_HP_FLAG)).toBe(true);
 
+		actor.update.mockClear();
 		expect(await comeBack(char)).toBe("back");
+		// The state and the stamp's lift land as one write, though no HP moves.
+		expect(actor.update).toHaveBeenCalledTimes(1);
 		expect(actor.system.attributes.hp.value).toBe(1);
 		expect(flag(actor, "deathsDoor") ?? null).toBeNull();
 		expect(flag(actor, UNDEATH_KEPT_HP_FLAG)).toBeUndefined();

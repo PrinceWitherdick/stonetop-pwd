@@ -60,6 +60,13 @@ const ENDS_MANIFESTATION = new Set([DEATHS_DOOR_STATE.DYING, DEATHS_DOOR_STATE.O
 /** Update option: this write ended a manifestation (read by We Happy Few's Keep 1 HP card). */
 export const MANIFEST_ENDED_OPTION = "stonetopManifestEnded";
 
+/** Whether `changes` wrote the hit points as something that is not a number ("", "abc"). */
+function wroteUnreadableHp(changes) {
+	const nested = changes?.system?.attributes?.hp;
+	const raw = nested && typeof nested === "object" && "value" in nested ? nested.value : changes?.["system.attributes.hp.value"];
+	return raw !== undefined && raw !== null && writtenHp(changes) === null;
+}
+
 /**
  * preUpdateActor: a write that takes a manifest Ghost to 0 HP, or names a state they cannot hold one in
  * (dying, dispersed by Tethered, out of play), ends the manifestation in that same write, and says so on
@@ -75,7 +82,8 @@ export function onPreUpdateActorManifest(actor, changes, options) {
 		if (!recording && resolvedFlagProperty(actor, MANIFEST_PATH) == null) return;
 		const hp = writtenHp(changes);
 		const state = foundry.utils.getProperty(changes, `flags.${STONETOP_SCOPE}.${DEATHS_DOOR_FLAG}`);
-		const down = (hp !== null && hp <= 0) || ENDS_MANIFESTATION.has(state);
+		// An HP written blank or not as a number is no hit points to stand on, so it ends one too.
+		const down = (hp !== null ? hp <= 0 : wroteUnreadableHp(changes)) || ENDS_MANIFESTATION.has(state);
 		if (!down) return;
 		if (options && typeof options === "object") options[MANIFEST_ENDED_OPTION] = true;
 		if (recording) delete insertChanges[MANIFEST_KEY];
