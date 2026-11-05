@@ -1,4 +1,5 @@
 import { ALL_SYSTEM_IDS } from "../migration/compat.js";
+import { deletionEntry } from "../utils/foundry-compat.js";
 
 // The poster-map catalog, and the rule for telling which of them a Scene IS.
 //
@@ -111,6 +112,22 @@ export function scopedFlag(doc, key) {
 }
 
 /**
+ * The update entries that delete flag `key` from every scope `scopedFlag` reads and that actually
+ * holds it, `except` one scope if named. Through `deletionEntry`, so an update reaches a scope
+ * stamped under a package id this system no longer answers to, which `unsetFlag` cannot.
+ */
+export function scopedFlagDeletions(doc, key, { except = null } = {}) {
+	const flags = doc?.flags ?? {};
+	const drop = {};
+	for (const scope of flagScopes()) {
+		if (scope === except || !flags[scope]?.[key]) continue;
+		const [path, value] = deletionEntry(`flags.${scope}.${key}`);
+		drop[path] = value;
+	}
+	return drop;
+}
+
+/**
  * The Scene's background image, wherever this generation keeps it.
  *
  * v14 moved the artwork into the `levels` collection; v13 has it at the Scene root. `background`
@@ -181,6 +198,19 @@ export function posterSceneFor(slug, scenes = []) {
 	const map = posterMapFor(slug);
 	if (!map) return null;
 	return scenes.find(scene => isPosterMapScene(scene, map)) ?? null;
+}
+
+/**
+ * This world's Scene for one poster map that a reader may treat AS that map, or null.
+ *
+ * Stricter than `posterSceneFor`, which adopts a Scene by name alone because the builder is about
+ * to paint the map onto whatever it finds. A reader that is going to draw on the answer needs the
+ * Scene to be the map (`posterMapSlugOf`): the stamp, or the name AND the printing. Otherwise a
+ * GM's own Scene merely NAMED "The Vicinity" is offered as the place to go while they stand on it.
+ */
+export function usablePosterScene(slug, scenes = []) {
+	if (!posterMapFor(slug)) return null;
+	return scenes.find(scene => posterMapSlugOf(scene) === slug) ?? null;
 }
 
 /**

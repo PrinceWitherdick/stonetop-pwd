@@ -51,6 +51,9 @@
 	<p class="road-empty">Nobody is on this trip. Pick the party on the Outfit step.</p>
 	{{/if}}
 
+	{{!-- Followers whose PC is out of play, still on the road (RoadRationsDialog.js, audit ROAD-13). --}}
+	{{#each this.orphansLines}}<p class="road-orphans">{{this}}</p>{{/each}}
+
 	<div class="road-summary" aria-live="polite">
 		<p class="road-bill">{{this.billText}}</p>
 		{{#if shortText}}<p class="road-short"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> {{this.shortText}}</p>{{/if}}

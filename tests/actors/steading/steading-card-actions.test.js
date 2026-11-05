@@ -253,12 +253,12 @@ describe("STD-4 and STD-9: the Muster's +1 Defenses", () => {
 	// p.508: Fortunes "can range from -1 to +3".
 	it("lets Return Triumphant raise Fortunes no higher than +3", async () => {
 		const actor = fakeSteadingActor({ system: { stats: { fortunes: { value: 3 } } } });
-		openReturnTriumphant(new StonetopSteading(actor));
+		await openReturnTriumphant(new StonetopSteading(actor));
 		expect(dialogs).toHaveLength(0);
 		expect(actor.update).not.toHaveBeenCalled();
 		expect(globalThis.ui.notifications.info).toHaveBeenCalledWith(expect.stringMatching(/already \+3/));
 		const room = fakeSteadingActor({ system: { stats: { fortunes: { value: 2 } } } });
-		openReturnTriumphant(new StonetopSteading(room));
+		await openReturnTriumphant(new StonetopSteading(room));
 		expect(dialogs.at(-1).data.content).toContain("+3");
 	});
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { readCss, ownRule, declarations, readRepo as read } from "../fakes/css.js";
+import { stubAsk } from "../fakes/confirm.js";
 
 // The route step of the Run an Expedition walkthrough: the book's maps made tappable over its
 // travel table. The graph and the solve are proven in tests/data/travel-times.test.js and
@@ -45,7 +46,7 @@ const { ExpeditionDialog } = await import("../../module/dialogs/ExpeditionDialog
 const { chartPicked, chartGroupOf } = await import("../../module/dialogs/expedition-data.js");
 const { frameFor, travelPlace } = await import("../../module/data/travel-times.js");
 const { offMapNote, routeArrow, routeLegs, routePath } = await import("../../module/utils/route-path.js");
-const { offMapNames, showRouteOnScene } = await import("../../module/utils/scene-route.js");
+const { offMapNames, showRouteOnScene, storedJourney } = await import("../../module/utils/scene-route.js");
 
 // The printed renders, which need no frame registration.
 const PRINTED = {
@@ -917,7 +918,7 @@ describe("saying why a map has no line on it", () => {
 			new URL("../../templates/dialogs/partials/expedition-journey-route.hbs", import.meta.url), "utf8");
 		expect(route).toContain("journey.map.offMap");
 		// The partial prints the finished sentence and the button's label; the wording itself is
-		// in en.json and is built in ExpeditionDialog._offMapReadout, so what the template must
+		// in en.json and is built in journey-map-layer.js `offMapReadout`, so what the template must
 		// still carry is those two fields and the tier the button switches to.
 		for (const field of ["sentence", "other", "showLabel"]) {
 			expect(route, field).toContain("journey.map.offMap." + field);
@@ -1038,10 +1039,12 @@ describe("seeing the whole map", () => {
 	// stops alone — so it told the GM the days were filled on every single-leg journey, including
 	// the four from Stonetop measured only in hours, where `chartBlankValue` refuses the blank and
 	// the box is left unticked. One predicate now answers for both.
+	// Since audit ruling E15 a journey in hours is at least a day too (Book I p.305's cave bears),
+	// so every route with a time carries the days.
 	it("says the days are carried only where the checklist can actually take them", async () => {
 		const hours = (await dialog({ destination: "the-red-grove" })._buildJourney()).route;
 		expect(hours.hasStops).toBe(false);
-		expect(hours.hasDays).toBe(false);
+		expect(hours.hasDays).toBe(true);
 
 		const days = (await dialog({ destination: "marshedge" })._buildJourney()).route;
 		expect(days.hasStops).toBe(false);
@@ -1380,6 +1383,42 @@ describe("drawing the route on the scene", () => {
 		expect(said.info.at(-1)).toContain("off The Vicinity");
 	});
 
+	// Audit RTE-2. A double-click's second press used to land after the first write and before the
+	// redraw, read the line the first press had just drawn, and take it straight back off.
+	it("drops a press whose button no longer says what the scene shows", async () => {
+		const doc = scene();
+		onCanvas(doc);
+		const d = dialog({ destination: "the-crossroads" });
+		await d._putRouteOnScene("false");    // the button said "Draw": it draws
+		await d._putRouteOnScene("false");    // the same stale "Draw" again: dropped
+		expect(doc.flags["stonetop-pwd"].expeditionRoute).toBeTruthy();
+		await d._putRouteOnScene("true");     // the redrawn "Take it off": it takes it off
+		expect(doc.flags["stonetop-pwd"].expeditionRoute).toBeUndefined();
+	});
+
+	it("drops a second press while the first is still writing", async () => {
+		const doc = scene();
+		onCanvas(doc);
+		let writes = 0;
+		const write = doc.update;
+		doc.update = async changes => { writes += 1; await new Promise(r => setTimeout(r, 5)); return write(changes); };
+		const d = dialog({ destination: "the-crossroads" });
+		await Promise.all([d._putRouteOnScene(), d._putRouteOnScene()]);
+		expect(writes).toBe(1);
+		expect(doc.flags["stonetop-pwd"].expeditionRoute).toBeTruthy();
+	});
+
+	// Audit RTE-8: a refusal from the server is said out loud, never an unhandled rejection.
+	it("says so when the scene refuses the write", async () => {
+		const doc = scene();
+		onCanvas(doc);
+		const errors = [];
+		global.ui.notifications.error = msg => errors.push(msg);
+		doc.update = async () => { throw new Error("no"); };
+		await expect(dialog({ destination: "the-crossroads" })._putRouteOnScene()).resolves.toBeUndefined();
+		expect(errors[0]).toContain("couldn't go on the scene");
+	});
+
 	// The whole point of the alert. "Nothing happened" is the one answer none of the refusals
 	// deserve, and the map that WOULD take it is the only part of a no the GM can act on. This is
 	// what is left of them now the wrong-map cases walk to the right map instead: a world that
@@ -1407,10 +1446,53 @@ describe("drawing the route on the scene", () => {
 				.toMatchObject({ origin: "stonetop", destination: "the-crossroads" });
 			expect(said.warn).toHaveLength(0);
 			// It says the canvas moved, not only where the line went: a scene switch is the
-			// loudest thing this button does and the GM did not ask for it in so many words.
+			// loudest thing this button does and the GM did not ask for it in so many words. No
+			// scene is active here, so only the GM's own canvas moved, and the words say so.
 			expect(said.info[0]).toContain("The Vicinity");
 			expect(said.info[0]).toContain("the Crossroads");
-			expect(said.info[0]).toContain("on the canvas now");
+			expect(said.info[0]).toContain("on your canvas now");
+		});
+
+		// Audit ruling E14. `Scene#view` moves one canvas; a GM standing on the players' scene
+		// takes the table with them, by activating the new one.
+		it("activates the new scene, and says so, when the GM is on the players' scene", async () => {
+			const vicinity = scene("vicinity");
+			let activated = 0;
+			vicinity.activate = async () => { activated += 1; globalThis.canvas = { scene: vicinity }; };
+			const barrow = scene(null, { name: "The Barrow", width: 4000, height: 3000 });
+			barrow.active = true;
+			const said = onCanvas(barrow, [vicinity]);
+			await dialog({ destination: "the-crossroads" })._putRouteOnScene();
+			expect(activated).toBe(1);
+			expect(vicinity.viewed).toBe(0);
+			expect(said.info[0]).toContain("for the whole table");
+		});
+
+		// ...and a GM away from the players moves alone, leaves the line on the players' scene
+		// where it is, and is told the players have not followed.
+		it("leaves the players' line alone when only the GM moves", async () => {
+			const worldsEnd = scene("worlds-end");
+			const table = scene("vicinity");
+			table.active = true;
+			table.flags["stonetop-pwd"].expeditionRoute = { origin: "stonetop", destination: "the-crossroads", custom: null };
+			const prep = scene(null, { name: "The Barrow", width: 4000, height: 3000 });
+			const said = onCanvas(prep, [worldsEnd, table]);
+			await dialog({ destination: "tors-fist" })._putRouteOnScene();
+			expect(worldsEnd.viewed).toBe(1);
+			expect(worldsEnd.flags["stonetop-pwd"].expeditionRoute).toBeTruthy();
+			expect(table.flags["stonetop-pwd"].expeditionRoute).toBeTruthy();
+			expect(said.info[0]).toContain("on your canvas now");
+			expect(said.info[0]).toContain("The players are still on The Vicinity");
+		});
+
+		it("refuses rather than writing while the canvas is still loading", async () => {
+			const vicinity = scene("vicinity");
+			const said = onCanvas(scene(null, { name: "The Barrow", width: 4000, height: 3000 }), [vicinity]);
+			globalThis.canvas.loading = true;
+			await dialog({ destination: "the-crossroads" })._putRouteOnScene();
+			expect(vicinity.viewed).toBe(0);
+			expect(vicinity.flags["stonetop-pwd"].expeditionRoute).toBeUndefined();
+			expect(said.warn).toHaveLength(1);
 		});
 
 		// The end this map cannot place is on the other one, which is the same fact wearing a
@@ -1461,6 +1543,72 @@ describe("drawing the route on the scene", () => {
 		expect(said.info[0]).toContain("The World's End");
 	});
 
+	// User report, 2026-11-04: a GM who built their own Scene of the map pressed the button and was
+	// told the world had no scene for it. The button now asks which map their Scene is and, on an
+	// answer, marks it and draws the route there.
+	describe("a scene the GM made themselves", () => {
+		let prevDialog;
+		beforeEach(() => { prevDialog = globalThis.foundry?.applications?.api?.DialogV2; });
+		afterEach(() => { globalThis.foundry.applications.api.DialogV2 = prevDialog; });
+
+		it("asks which map it is, marks it, and draws the route on it", async () => {
+			const own = scene(null, { name: "My Vicinity" });
+			const said = onCanvas(own);
+			const asked = stubAsk("vicinity");
+			await dialog({ destination: "the-crossroads" })._putRouteOnScene();
+			// The map the trip needs is offered first, and the other travel map beside it.
+			const buttons = asked.mock.calls[0][0].buttons.map(b => b.action);
+			expect(buttons.slice(0, 2)).toEqual(["vicinity", "worlds-end"]);
+			expect(own.flags["stonetop-pwd"].posterMap).toBe("vicinity");
+			expect(own.flags["stonetop-pwd"].expeditionRoute)
+				.toMatchObject({ origin: "stonetop", destination: "the-crossroads" });
+			expect(said.warn).toHaveLength(0);
+			expect(said.info.at(-1)).toContain("The Vicinity");
+		});
+
+		it("takes a picture of the book's map page, not only the poster scan", async () => {
+			// The printed page is 584 x 422; the poster scan is a different crop.
+			const own = scene(null, { name: "Vicinity from the PDF", width: 5840, height: 4220 });
+			const said = onCanvas(own);
+			stubAsk("vicinity");
+			await dialog({ destination: "the-crossroads" })._putRouteOnScene();
+			expect(own.flags["stonetop-pwd"].expeditionRoute).toBeTruthy();
+			expect(said.warn).toHaveLength(0);
+		});
+
+		it("writes nothing, and says how to mark it later, when the GM says it is neither map", async () => {
+			const own = scene(null, { name: "The Barrow", width: 4000, height: 3000 });
+			const said = onCanvas(own);
+			stubAsk("no");
+			await dialog({ destination: "the-crossroads" })._putRouteOnScene();
+			expect(own.flags["stonetop-pwd"].posterMap).toBeUndefined();
+			expect(own.flags["stonetop-pwd"].expeditionRoute).toBeUndefined();
+			expect(said.warn[0]).toContain("Right-click your scene");
+			expect(said.warn[0]).toContain("The Vicinity");
+		});
+
+		// Named the system's way but showing its own picture: it used to be sent to "open The
+		// Vicinity" while standing on it.
+		it("asks rather than sending the GM to the scene they are already on", async () => {
+			const own = scene(null, { name: "The Vicinity" });
+			const said = onCanvas(own);
+			stubAsk("no");
+			await dialog({ destination: "the-crossroads" })._putRouteOnScene();
+			expect(said.warn[0]).not.toContain("Open The Vicinity");
+			expect(said.warn[0]).toContain("Right-click your scene");
+		});
+
+		it("still refuses a marked picture that is neither crop", async () => {
+			const own = scene(null, { name: "Odd crop", width: 6000, height: 6000 });
+			const said = onCanvas(own);
+			stubAsk("vicinity");
+			await dialog({ destination: "the-crossroads" })._putRouteOnScene();
+			expect(own.flags["stonetop-pwd"].posterMap).toBe("vicinity");
+			expect(own.flags["stonetop-pwd"].expeditionRoute).toBeUndefined();
+			expect(said.warn[0]).toContain("map page in the book");
+		});
+	});
+
 	it("puts the button in the markup both surfaces render", async () => {
 		onCanvas(scene());
 		const journey = await dialog({ destination: "the-crossroads" })._buildJourney();
@@ -1472,6 +1620,268 @@ describe("drawing the route on the scene", () => {
 });
 
 
+// Showing the players the way, on their own screens rather than on the canvas
+// (utils/shared-route.js). INDEPENDENT of the scene button above: neither press touches what the
+// other wrote. What is covered here is the dialog's half: which label the GM is shown, and what
+// pressing it writes and posts. The players' window is proven in
+// tests/dialogs/shared-route-window.test.js.
+describe("showing the players the route", () => {
+	let posted;
+	let said;
+	beforeEach(() => {
+		posted = [];
+		globalThis.ChatMessage = { create: data => { posted.push(data); return Promise.resolve(data); } };
+		said = { info: [] };
+		global.ui = { notifications: { info: msg => said.info.push(msg), warn: () => {}, error: () => {} } };
+	});
+	afterEach(() => { delete globalThis.ChatMessage; delete globalThis.canvas; });
+
+	it("offers no button until there is somewhere to go, and none to a player", async () => {
+		expect((await dialog()._buildJourney()).share).toBeNull();
+		game.user.isGM = false;
+		expect((await dialog({ destination: "the-crossroads" })._buildJourney()).share).toBeNull();
+	});
+
+	it("offers to show the players, and says what that does", async () => {
+		const { share } = await dialog({ destination: "the-crossroads" })._buildJourney();
+		expect(share.label).toBe("Show players");
+		expect(share.shared).toBe(false);
+		expect(share.tooltip).toContain("chat");
+		expect(share.tooltip).toContain("steading sheet");
+	});
+
+	it("stores the way and the map's file, posts the card, and says where the players can find it", async () => {
+		const d = dialog({ destination: "the-crossroads" });
+		await d._shareRouteWithPlayers();
+		expect(store.sharedRoute).toMatchObject({
+			expeditionId: "trip-1", tier: "vicinity",
+			journey: { origin: "stonetop", destination: "the-crossroads", custom: null },
+			art: { src: PRINTED.vicinity.src, frame: PRINTED.vicinity.frame },
+		});
+		expect(posted).toHaveLength(1);
+		expect(posted[0].flags["stonetop-pwd"].sharedRoute.id).toBe(store.sharedRoute.id);
+		expect(said.info[0]).toContain("the Crossroads");
+		expect(said.info[0]).toContain("chat");
+	});
+
+	it("offers to hide it once this very way is shown, and a second press takes it back off", async () => {
+		const d = dialog({ destination: "the-crossroads" });
+		await d._shareRouteWithPlayers();
+		const { share } = await d._buildJourney();
+		expect(share.label).toBe("Hide from players");
+		expect(share.shared).toBe(true);
+		await d._shareRouteWithPlayers();
+		expect(store.sharedRoute).toEqual({});
+		// Taking it off posts nothing: the cards already in chat stay as the record they are.
+		expect(posted).toHaveLength(1);
+	});
+
+	it("offers the new way once the trip goes somewhere else, naming what is shown now", async () => {
+		const d = dialog({ destination: "the-crossroads" });
+		await d._shareRouteWithPlayers();
+		saved().journey = { origin: "stonetop", destination: "the-maw" };
+		const { share } = await d._buildJourney();
+		expect(share.label).toBe("Show players the new way");
+		expect(share.tooltip).toContain("the Crossroads");
+		await d._shareRouteWithPlayers();
+		expect(store.sharedRoute.journey.destination).toBe("the-maw");
+		expect(posted).toHaveLength(2);
+	});
+
+	// The scene button's lesson: a share outlives the trip that made it.
+	it("still offers to hide it when this trip has no route at all", async () => {
+		await dialog({ destination: "the-crossroads" })._shareRouteWithPlayers();
+		const shown = store.sharedRoute;
+		store.expeditionAnswers = { currentId: "trip-2", list: [{ id: "trip-2", title: "", createdAt: 0 }] };
+		const d = Object.create(ExpeditionDialog.prototype);
+		d._rolls = {};
+		store.sharedRoute = shown;
+		const { share } = await d._buildJourney();
+		expect(share.label).toBe("Hide from players");
+		await d._shareRouteWithPlayers();
+		expect(store.sharedRoute).toEqual({});
+	});
+
+	it("shares the legs without a picture where the world has no copy of the map, and says so", async () => {
+		art.resolved = new Map();
+		await dialog({ destination: "the-crossroads" })._shareRouteWithPlayers();
+		expect(store.sharedRoute.art).toBeNull();
+		expect(said.info.at(-1)).toContain("without a map");
+	});
+
+	it("leaves the scene alone, and the scene button leaves it alone", async () => {
+		const doc = { id: "s", name: "The Vicinity", width: 6000, height: 4714, flags: { "stonetop-pwd": { posterMap: "vicinity" } }, update: async () => { throw new Error("touched the scene"); } };
+		globalThis.canvas = { scene: doc };
+		game.scenes = [doc];
+		await dialog({ destination: "the-crossroads" })._shareRouteWithPlayers();
+		expect(doc.flags["stonetop-pwd"].expeditionRoute).toBeUndefined();
+		const { scene } = await dialog({ destination: "the-crossroads" })._buildJourney();
+		expect(scene.label).toBe("Draw it on the scene");
+	});
+
+	it("puts the button in the markup both surfaces render", async () => {
+		const journey = await dialog({ destination: "the-crossroads" })._buildJourney();
+		const html = await renderTemplate(
+			"systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-controls.hbs", { journey });
+		expect(html).toContain("stonetop-journey-share");
+		expect(html).toContain("Show players");
+		expect(html).toContain('data-state="none"');
+		expect(html).not.toContain("stonetop-journey-share-hide");
+	});
+
+	// Audit RTE-12: an older way on show can be stopped, not only replaced.
+	it("offers a second button that only stops an older way", async () => {
+		const d = dialog({ destination: "the-crossroads" });
+		await d._shareRouteWithPlayers();
+		saved().journey = { origin: "stonetop", destination: "the-maw" };
+		const journey = await d._buildJourney();
+		expect(journey.share.state).toBe("stale");
+		expect(journey.share.hide.label).toBe("Hide from players");
+		const html = await renderTemplate(
+			"systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-controls.hbs", { journey });
+		expect(html).toContain("stonetop-journey-share-hide");
+		await d._hideSharedRoute();
+		expect(store.sharedRoute).toEqual({});
+		expect(posted).toHaveLength(1);
+	});
+
+	// ...and a renamed trip is an older share: its old name heads the players' window.
+	it("counts a rename as an older share", async () => {
+		const d = dialog({ destination: "the-crossroads" });
+		await d._shareRouteWithPlayers();
+		saved().title = "To the Crossroads at dusk";
+		expect((await d._buildJourney()).share.state).toBe("stale");
+	});
+
+	// Audit RTE-2, the share half: a stale press is dropped.
+	it("drops a press whose button no longer says what is shown", async () => {
+		const d = dialog({ destination: "the-crossroads" });
+		await d._shareRouteWithPlayers("none");
+		await d._shareRouteWithPlayers("none");
+		expect(posted).toHaveLength(1);
+		expect(store.sharedRoute.id).toBeTruthy();
+	});
+
+	// Audit RTE-7: the other map, where this world has no copy of the first and the other draws it.
+	it("falls back to the other map when the world lacks the first", async () => {
+		art.resolved = new Map([["worlds-end", PRINTED["worlds-end"]]]);
+		await dialog({ destination: "the-red-grove" })._shareRouteWithPlayers();
+		expect(store.sharedRoute.tier).toBe("worlds-end");
+		expect(store.sharedRoute.art.src).toBe(PRINTED["worlds-end"].src);
+	});
+
+	// Audit ruling E4: the Chart a Course lines go only when the GM ticks them in.
+	describe("what goes with the way", () => {
+		const chart = { picked: [
+			{ id: "a", group: "requirements", key: "days", answer: "" },
+			{ id: "b", group: "requirements", key: "bring", answer: "warm clothes" },
+			{ id: "c", group: "challenges", key: "lost", answer: "the trail forks a lot" },
+		] };
+
+		it("asks first when there are lines, and shares none unless asked to", async () => {
+			const d = dialog({ destination: "lygos" }, chart);
+			let asked = 0;
+			d._askHowToShare = async () => { asked += 1; return { requirements: false, labels: null }; };
+			await d._shareRouteWithPlayers();
+			expect(asked).toBe(1);
+			expect(store.sharedRoute.requirements).toBeUndefined();
+		});
+
+		it("sends the lines, filled, and never the GM's words under a line with no blank", async () => {
+			const d = dialog({ destination: "lygos" }, chart);
+			d._askHowToShare = async () => ({ requirements: true, labels: null });
+			await d._shareRouteWithPlayers();
+			expect(store.sharedRoute.requirements).toEqual([
+				{ label: "Requirements", lines: [
+					"It'll take at least 40 days each way (and a corresponding amount of supplies)",
+					"You'll need to bring warm clothes (warm clothes, a cart, rope…)",
+				] },
+				{ label: "Challenges", lines: ["You risk getting lost"] },
+			]);
+			expect(JSON.stringify(store.sharedRoute)).not.toContain("forks");
+		});
+
+		it("shares nothing when the GM backs out", async () => {
+			const d = dialog({ destination: "lygos" }, chart);
+			d._askHowToShare = async () => null;
+			await d._shareRouteWithPlayers();
+			expect(store.sharedRoute).toBeUndefined();
+			expect(posted).toHaveLength(0);
+		});
+
+		// Audit ruling E17: what the players hear for a stop the GM put down is the GM's to type,
+		// kept on the trip for the next share, and a site's name never goes unless typed.
+		it("keeps what the GM typed for a hand-laid stop, and sends it instead of the site", async () => {
+			const d = dialog({
+				origin: "stonetop",
+				custom: { tier: "vicinity", points: [{ fx: 0.5, fy: 0.5, siteUuid: "s1", name: "The Sunken Barrow" }] },
+			});
+			d._askHowToShare = async () => ({ requirements: false, labels: [{ fx: 0.5, fy: 0.5, label: "the old shrine" }] });
+			await d._shareRouteWithPlayers();
+			expect(saved().journey.custom.points[0].label).toBe("the old shrine");
+			expect(store.sharedRoute.journey.custom.points[0]).toEqual({ fx: 0.5, fy: 0.5, label: "the old shrine" });
+			expect(JSON.stringify(store.sharedRoute)).not.toContain("Sunken");
+		});
+
+		// Audit RTE-6, the start's half: a start the GM put down by hand gets the GM's words too.
+		it("keeps what the GM typed for a hand-placed start, and sends it", async () => {
+			const d = dialog({ origin: { tier: "vicinity", fx: 0.88, fy: 0.6 }, destination: "the-crossroads" });
+			d._askHowToShare = async () => ({ requirements: false, labels: null, startLabel: "the old shrine" });
+			await d._shareRouteWithPlayers();
+			// On the start mark itself, where a moved start leaves it behind.
+			expect(saved().journey.origin.label).toBe("the old shrine");
+			expect(store.sharedRoute.journey.origin.label).toBe("the old shrine");
+		});
+
+		it("asks for the start's words, offering the nearest place, and hands back what was typed", async () => {
+			const d = dialog({ origin: { tier: "vicinity", fx: 0.88, fy: 0.6 }, destination: "the-crossroads" });
+			let seen = null;
+			const form = { elements: { namedItem: name => (name === "start-label" ? { value: " the old shrine " } : null) } };
+			globalThis.foundry.applications ??= {};
+			globalThis.foundry.applications.api ??= {};
+			const prev = globalThis.foundry.applications.api.DialogV2;
+			const prevDoc = globalThis.document;
+			// The ask's body is built as an element; a bare stand-in that keeps the markup is enough.
+			globalThis.document = { createElement: () => ({ innerHTML: "" }) };
+			globalThis.foundry.applications.api.DialogV2 = {
+				wait: async config => {
+					seen = config;
+					const show = config.buttons.find(b => b.action === "show");
+					return show.callback(null, { form });
+				},
+			};
+			try {
+				const asked = await d._askHowToShare(d._currentExpedition(), d._journeyRoute());
+				const html = String(seen.content?.innerHTML ?? seen.content?.outerHTML ?? seen.content);
+				expect(html).toContain('name="start-label"');
+				expect(html).toContain("a point near the Red Grove");
+				expect(asked.startLabel).toBe("the old shrine");
+			} finally {
+				globalThis.foundry.applications.api.DialogV2 = prev;
+				globalThis.document = prevDoc;
+			}
+		});
+
+		it("drops the start's words when the GM types none", async () => {
+			const d = dialog({ origin: { tier: "vicinity", fx: 0.88, fy: 0.6, label: "the old shrine" }, destination: "the-crossroads" });
+			await d._writeShareLabels({ startLabel: "  " });
+			expect(saved().journey.origin).toEqual({ tier: "vicinity", fx: 0.88, fy: 0.6 });
+		});
+
+		it("forgets the start's words when the start moves", async () => {
+			const d = dialog({ origin: { tier: "vicinity", fx: 0.88, fy: 0.6, label: "the old shrine" }, destination: "the-crossroads" });
+			await d._writeJourneyPick(entry => foundry.utils.setProperty(entry, "journey.origin", { tier: "vicinity", fx: 0.4, fy: 0.4 }));
+			expect(saved().journey.origin).not.toHaveProperty("label");
+		});
+
+		it("keeps the start's words when only the destination changes", async () => {
+			const d = dialog({ origin: { tier: "vicinity", fx: 0.88, fy: 0.6, label: "the old shrine" }, destination: "the-crossroads" });
+			await d._writeJourneyPick(entry => foundry.utils.setProperty(entry, "journey.destination", "the-red-grove"));
+			expect(saved().journey.origin.label).toBe("the old shrine");
+		});
+	});
+});
+
 describe("the template asks for what the dialog builds", () => {
 	// A renamed context field is silent: Handlebars prints an empty string for a path that is not
 	// there, so the panel would just quietly lose its map or its day counts. Nothing else catches
@@ -1480,7 +1890,7 @@ describe("the template asks for what the dialog builds", () => {
 	// Every piece of the panel: its own markup plus the three partials it composes — the same
 	// three the "See the whole map" window renders, which is what makes this one check cover both.
 	const TEMPLATE = [
-		"expedition-journey.hbs", "expedition-journey-pins.hbs",
+		"expedition-journey.hbs", "expedition-journey-pins.hbs", "expedition-journey-line.hbs",
 		"expedition-journey-controls.hbs", "expedition-journey-drawhint.hbs",
 		"expedition-journey-route.hbs",
 	].map(f => readFileSync(new URL(`../../templates/dialogs/partials/${f}`, import.meta.url), "utf8"))
@@ -1569,13 +1979,12 @@ describe("carrying the pick onto Chart a Course", () => {
 		expect(charted()).toEqual(["days"]);
 	});
 
-	// Five of the eighteen destinations from Stonetop are measured only in hours, so they have
-	// legs and no day count — and `fillChartBlank` refuses to fill a day count it hasn't got. A
-	// line on the list still reading "at least ___ days" is worse than no line at all.
-	it("adds no days line for a journey the book measures in hours", async () => {
+	// Audit ruling E15: Book I p.305 has the GM jot "It'll take at least 1 day there and back" for
+	// the cave bears, three to four hours away. A journey in hours still costs the day.
+	it("adds the days line for a journey the book measures in hours", async () => {
 		const d = dialog();
 		await d._setJourneyPlace("destination", "the-red-grove");
-		expect(charted()).toEqual([]);
+		expect(charted()).toEqual(["days"]);
 	});
 
 	// Nothing used to clear these, so a GM who changed their mind kept the previous journey's
@@ -1585,7 +1994,7 @@ describe("carrying the pick onto Chart a Course", () => {
 		await d._setJourneyPlace("destination", "lygos");
 		expect(charted().sort()).toEqual(["days", "firstTravel"]);
 		await d._setJourneyPlace("destination", "the-red-grove");
-		expect(charted()).toEqual([]);
+		expect(charted()).toEqual(["days"]);
 		expect(saved().chart.route).toBe("Stonetop to the Red Grove");
 	});
 
@@ -1619,7 +2028,8 @@ describe("carrying the pick onto Chart a Course", () => {
 			],
 		});
 		await d._setJourneyPlace("destination", "the-red-grove");
-		expect(charted()).toEqual([]);
+		// The days line stays: the Red Grove still has a day to answer it with (ruling E15).
+		expect(charted()).toEqual(["days"]);
 	});
 
 	// ...unless the GM has written under it. What they told the table is theirs: a route that can
@@ -1722,7 +2132,8 @@ describe("what a charted line offers to answer with", () => {
 	it("offers the days and the first stop from the plotted route", () => {
 		const rows = chartRows(presenting({ origin: "stonetop", destination: "lygos" },
 			{ days: "", firstTravel: "" }));
-		expect(rows.days.hint).toBe("40");
+		// "First travel to" is on the list too, so the days are charted per leg (ruling E16).
+		expect(rows.days.hint).toBe("10 days to Marshedge, then 30 from there, each way");
 		expect(rows.firstTravel.hint).toBe("Marshedge");
 		// A placeholder, not an answer: nothing is written until the GM writes it.
 		expect(rows.days.answer).toBe("");
@@ -1743,7 +2154,7 @@ describe("what a charted line offers to answer with", () => {
 			{ days: "60, the long way round", perilous: "the Ettenmark wolves are hunting" }));
 		expect(rows.days.answer).toBe("60, the long way round");
 		// Still shown as the placeholder, so the map's answer stays legible under the override.
-		expect(rows.days.hint).toBe("40");
+		expect(rows.days.hint).toBe("40 days each way");
 		expect(rows.perilous.answer).toBe("the Ettenmark wolves are hunting");
 	});
 
@@ -1936,7 +2347,19 @@ describe("tapping one of the GM's own sites", () => {
 	it("lays the stop on the site's recorded spot", async () => {
 		const d = dialog({ origin: "stonetop" });
 		await d._chooseJourneySite(barrow);
-		expect(way().points[0]).toEqual({ fx: 0.5, fy: 0.5 });
+		// And the site goes with it, name and all, so the GM's readout says the barrow rather than
+		// "point 1" (audit ruling E17).
+		expect(way().points[0]).toEqual({ fx: 0.5, fy: 0.5, siteUuid: barrow, name: "The Sunken Barrow" });
+	});
+
+	it("names the stop for the site in the GM's readout, and never on the scene or the share", async () => {
+		const d = dialog({ origin: "stonetop" });
+		await d._chooseJourneySite(barrow);
+		const route = d._journeyRoute();
+		expect(route.legs.at(-1).toName).toBe("The Sunken Barrow");
+		const stored = storedJourney(saved().journey);
+		expect(stored.custom.points[0]).toEqual({ fx: 0.5, fy: 0.5 });
+		expect(JSON.stringify(stored)).not.toContain("Sunken");
 	});
 
 	// Shift adds it as another stop rather than moving the far end there, exactly as it does for a
@@ -1947,11 +2370,12 @@ describe("tapping one of the GM's own sites", () => {
 			custom: { tier: "vicinity", points: [{ fx: 0.2, fy: 0.2 }] },
 		});
 		await d._chooseJourneySite(barrow, { shiftKey: true });
-		expect(way().points).toEqual([{ fx: 0.2, fy: 0.2 }, { fx: 0.5, fy: 0.5 }]);
+		const site = { fx: 0.5, fy: 0.5, siteUuid: barrow, name: "The Sunken Barrow" };
+		expect(way().points).toEqual([{ fx: 0.2, fy: 0.2 }, site]);
 
 		// And a plain tap moves that far end, rather than adding a third.
 		await d._chooseJourneySite(barrow);
-		expect(way().points).toEqual([{ fx: 0.2, fy: 0.2 }, { fx: 0.5, fy: 0.5 }]);
+		expect(way().points).toEqual([{ fx: 0.2, fy: 0.2 }, site]);
 	});
 
 	// With no start, the tap plants it — a site the GM has written up being a very likely answer to

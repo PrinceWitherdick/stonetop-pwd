@@ -12,11 +12,11 @@
 // false one. A character ticked out of that trip's party (`partyOut`) is at home whatever the others do.
 
 import { getObjectSetting } from "../settings.js";
-import { expeditionLabel, normalizeLog } from "../utils/expedition-log-core.js";
+import { EXPEDITION_LOG_SETTING, expeditionLabel, normalizeLog } from "../utils/expedition-log-core.js";
 import { format } from "../utils/i18n.js";
 
 /** The expedition log's world setting (settings.js). */
-export const EXPEDITION_LOG_SETTING = "expeditionAnswers";
+export { EXPEDITION_LOG_SETTING };
 
 /** Whether a logged trip has set out and not yet come home. */
 export function tripUnderway(trip) {

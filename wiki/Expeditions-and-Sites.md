@@ -31,9 +31,11 @@ The **Chart a Course** and **The route** steps work out the way from the book's 
 - Click to say where the party sets out from, if it isn't Stonetop.
 - **Shift-click the map to lay a route by hand**, one leg at a time. Click to move the end of the way; right-click to take a leg back. **Start over** throws the hand-drawn marks away. Hand-drawn times are measured off the map at the pace of the book's own journeys: a good guess, not a printed time.
 - **Draw it on the scene** puts the route on the poster-map scene your players are viewing, as a ribbon everybody sees. **Take it off the scene** removes it.
+- **Show players** lets the players see the route on their own screens, whichever scene they're on. It posts a chat card with every leg and the total time written out, and puts a **See the route** button on the steading sheet. Both open the map with the route drawn on it, which players can zoom and drag but not change. A screen reader reads the legs as text. **Show players** works on its own: it doesn't draw on any scene, and **Draw it on the scene** doesn't share anything.
+- Once the trip goes somewhere else, the button reads **Show players the new way**. **Hide from players** (or **Stop showing players** in the players' window, which only the GM sees) takes the **See the route** button away. Cards already in chat keep the route they posted, marked as an older route.
 - A larger copy of the map opens in its own window, and there's a link to read the gazetteer entry for where they're bound.
 
-The poster-map scenes come from [Import Book Art](Import-Book-Art).
+The poster-map scenes come from [Import Book Art](Import-Book-Art). If you made your own scene of the map, mark it as one: right-click it in the Scenes sidebar and choose **Stonetop map...**, or press **Draw it on the scene** while you're on it and say which map it is. Routes and pins only land in the right places when the scene's picture is the poster map or the map page from the book, not trimmed.
 
 ## On the road
 

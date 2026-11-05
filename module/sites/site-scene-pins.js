@@ -30,9 +30,10 @@
 // the behaviour prep wants.
 
 import { posterMapFor, posterMapSlugOf, sceneOrigin } from "../book2-art/poster-map-catalog.js";
-import { TRAVEL_MAPS, frameFitsImage, frameFor, markedMap, percentSpot } from "../data/travel-times.js";
+import { TRAVEL_MAPS, markedMap, percentSpot, sceneFrame } from "../data/travel-times.js";
 import { posterSpotPixels } from "../utils/map-pins.js";
 import { warn } from "../utils/logger.js";
+import { isPrimaryGM } from "../utils/primary-gm.js";
 import { listSitePages, sitePageById } from "./site-store.js";
 import { siteMapSpot, setSiteMapSpot } from "./site-map-spots.js";
 
@@ -70,12 +71,12 @@ export function siteScenePoint(spot, scene) {
 	const width = Number(scene?.width);
 	const height = Number(scene?.height);
 	if (!map || !tier || !(width > 0) || !(height > 0)) return null;
-	const frame = frameFor(map.out);
+	const frame = sceneFrame(map.out, width / height, tier.printedAspect);
 	// A frame is a claim about the shape of a particular file, and a GM who saved their own
 	// differently-trimmed scan over one of the names we know has broken it without breaking
 	// anything a caller could notice. Refused rather than placed wrong: a missing pin is obviously
 	// missing, and a pin in the wrong valley looks finished.
-	if (!frameFitsImage(frame, width / height, tier.printedAspect)) return null;
+	if (!frame) return null;
 	const at = posterSpotPixels({ spot, frame, width, height });
 	const origin = sceneOrigin(scene);
 	return { x: origin.x + at.x, y: origin.y + at.y };
@@ -108,8 +109,8 @@ export function siteSpotFromScenePoint(point, scene, tier) {
 	const height = Number(scene?.height);
 	if (!map || !marked || !(width > 0) || !(height > 0)) return null;
 	if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return null;
-	const frame = frameFor(map.out);
-	if (!frameFitsImage(frame, width / height, marked.printedAspect)) return null;
+	const frame = sceneFrame(map.out, width / height, marked.printedAspect);
+	if (!frame) return null;
 	const origin = sceneOrigin(scene);
 	const at = percentSpot({
 		left: ((point.x - origin.x) / width) * 100,
@@ -302,7 +303,9 @@ export async function onUpdateSiteNote(note, changes) {
  * @returns {Promise<number>} how many sites were marked or moved.
  */
 export async function reconcileSitePins(steading) {
-	if (!steading || !globalThis.game?.user?.isGM) return 0;
+	// ONE GM, not every GM (audit RTE-15). Two GMs loading after a version bump both found no Note
+	// for a placed site and both created one, so every pinned site came out pinned twice.
+	if (!steading || !globalThis.game?.user?.isGM || !isPrimaryGM()) return 0;
 	let marked = 0;
 	for (const page of listSitePages(steading)) {
 		const spot = siteMapSpot(page);

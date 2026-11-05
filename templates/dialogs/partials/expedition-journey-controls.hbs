@@ -62,10 +62,34 @@
         player cannot do, and a control that is visibly there and refuses on click is worse than one
         that never offered. Players still SEE the line, because the flag broadcasts. Built only once
         there is a route to draw. See utils/scene-route.js. --}}
+  {{!-- `data-showing` and `data-state` are what the button SAID when it was drawn, sent with the
+        press: a press whose button no longer says what the world now is (a double-click landing
+        after the first write and before the redraw) is dropped rather than undoing the first.
+        See ExpeditionDialog `_onePress`. --}}
   {{#if journey.scene}}
   <button type="button" class="stonetop-journey-to-scene{{#if journey.scene.showing}} is-showing{{/if}}"
+          data-showing="{{#if journey.scene.showing}}true{{else}}false{{/if}}"
           data-tooltip="{{journey.scene.tooltip}}">
     <i class="fas {{journey.scene.icon}}" aria-hidden="true"></i> <span class="stonetop-chip-text">{{journey.scene.label}}</span>
   </button>
+  {{/if}}
+  {{!-- Show the players the way, on their own screens: a chat card and the steading sheet’s See the
+        route button, both opening the map with the way drawn on it (utils/shared-route.js). Its
+        OWN press, independent of the scene one beside it (user, 2026-11-03): either can be done
+        without the other. GM-only and absent for a player, for the scene button’s reason. --}}
+  {{#if journey.share}}
+  <button type="button" class="stonetop-journey-share{{#if journey.share.shared}} is-showing{{/if}}"
+          data-state="{{journey.share.state}}"
+          data-tooltip="{{journey.share.tooltip}}">
+    <i class="fas {{journey.share.icon}}" aria-hidden="true"></i> <span class="stonetop-chip-text">{{journey.share.label}}</span>
+  </button>
+  {{!-- The players are being shown an older way: beside "show them this one", a way to just stop
+        (audit RTE-12). --}}
+  {{#if journey.share.hide}}
+  <button type="button" class="stonetop-journey-share-hide"
+          data-tooltip="{{journey.share.hide.tooltip}}">
+    <i class="fas fa-eye-slash" aria-hidden="true"></i> <span class="stonetop-chip-text">{{journey.share.hide.label}}</span>
+  </button>
+  {{/if}}
   {{/if}}
 </div>

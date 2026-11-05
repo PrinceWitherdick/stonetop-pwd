@@ -394,9 +394,17 @@ describe("buildChroniclePages — expeditions", () => {
 				withJourney({ origin: "stonetop", destination: "lygos" },
 					{ checks: { days: true, firstTravel: true } }),
 				"The way ahead");
-			expect(way).toContain("It'll take at least 40 days");
+			// "First travel to" is ticked too, so the days are charted per leg (audit ruling E16).
+			expect(way).toContain("It'll take at least 10 days to Marshedge, then 30 from there, each way");
 			expect(way).toContain("First travel to Marshedge, and from there to your destination");
 			expect(way).not.toContain("___");
+		});
+
+		it("gives one total, each way, when the trip need not first travel anywhere", () => {
+			const way = bodyOf(
+				withJourney({ origin: "stonetop", destination: "lygos" }, { checks: { days: true } }),
+				"The way ahead");
+			expect(way).toContain("It'll take at least 40 days each way");
 		});
 
 		it("keeps the authored blank when a ticked requirement has nothing to fill it", () => {

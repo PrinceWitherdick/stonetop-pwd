@@ -61,7 +61,7 @@ import {startOfPlayGear, START_GEAR_FLAG} from "./start-of-play-gear.js";
 import {RITES_OF_THE_LAND, SACRED_POUCH_SLUG, NO_POUCH_STOCK_NOTE, BLESSED_PLAYBOOK, isVessel, stockSourcesForFlags, stockCostFromDescription} from "./stock-cost.js";
 import {loseHpForStock} from "./provisions.js";
 import {readPouchSlots, pouchUsableMax, spentAfterStore, spentAfterFree, settledPouchSpent} from "./sacred-pouch.js";
-import {SUPPLY_SLUGS, supplyPursesFor, spendablePurseResources as _spendablePurseResources, suppliesUsesOnMark, suppliesGiveBack} from "./supply-cost.js";
+import {SUPPLY_SLUGS, supplyPursesFor, spendablePurseResources as _spendablePurseResources, suppliesUsesOnMark, suppliesGiveBack, suppliesMarkNeedsAsk} from "./supply-cost.js";
 import {askWriteInSource, WRITE_IN_SOURCE} from "./write-in-source.js";
 import {HOLY_LIGHT_FLAG, canWieldHolyLight, INVOKE_THE_SUN_GOD, holyLightAfterRoll, LUMINOUS_SHIELD} from "./holy-light.js";
 import {moveArmor, barkskinMarkedBy} from "./move-armor.js";
@@ -2839,7 +2839,7 @@ export class StonetopCharacter {
 	 */
 	seasonMoveDisadvantage(moveName) {
 		if (!moveName || !SEASON_MOVE_DISADVANTAGE.some(g => g.move === moveName)) return null;
-		const season = readCurrentSeason(this.getSteadingActor())?.season ?? null;
+		const season = this.currentSeason()?.season ?? null;
 		const hit = SEASON_MOVE_DISADVANTAGE.find(g => g.move === moveName && g.season === season);
 		return hit ? seasonLabel(hit.season) : null;
 	}
@@ -3082,6 +3082,17 @@ export class StonetopCharacter {
 	}
 
 	/**
+	 * The season this character is living in, as the steading's clock stamps it (`{season, year}`, see
+	 * seasons/current-season.js#readCurrentSeason), or null with none recorded. The season is the world's:
+	 * a PC tied to a settlement, or to a steading with no Seasons Change stamped, reads the home steading's
+	 * clock (audit ROAD-14). Every reader of "is it winter for this PC" asks here, so Forage's winter
+	 * (seasonMoveDisadvantage) and On the Hoof's never disagree.
+	 */
+	currentSeason() {
+		return readCurrentSeason(this.getSteadingActor()) ?? readCurrentSeason(getStonetopSteadingActor());
+	}
+
+	/**
 	 * Whether the steading has earned Weapons of War: the improvement in force by the one rule every
 	 * reader asks (improvement-rules.js), so built, or "Weapons of War" ticked on its Fortifications
 	 * list (a GM who wrote it there by hand, or a homebrew improvement that adds it), and not
@@ -3214,7 +3225,7 @@ export class StonetopCharacter {
 		return Math.max(0, Math.trunc(Number(this._inventory.regularPool) || 0));
 	}
 
-	async toggleCarriedItem(slug, isChecked, { small = false, weight = 1, loot = false, uses: setUses, stonetopMove } = {}) {
+	async toggleCarriedItem(slug, isChecked, { small = false, weight = 1, loot = false, uses: setUses, packed = false, stonetopMove } = {}) {
 		const writeOptions = stonetopMove ? { stonetopMove } : undefined;
 		const wasChecked = !!this._inventory.checked[slug];
 		const supplies   = SUPPLY_SLUGS.includes(slug);
@@ -3225,14 +3236,34 @@ export class StonetopCharacter {
 		const reserve = this._reserveDrawData(slug, isChecked, {
 			small, weight, loot, giveBack: supplies ? suppliesGiveBack({ drawn, uses, perSupply }) : null,
 		});
+		let held = uses;
 		if (setUses !== undefined) {
+			held = setUses;
 			Object.assign(update, this._inventory.resourceData(slug, setUses));
 		} else if (supplies && isChecked && !wasChecked) {
-			const packed = suppliesUsesOnMark({ drew: reserve.drawn, uses, perSupply });
-			if (packed !== uses) Object.assign(update, this._inventory.resourceData(slug, packed));
+			// `packed`: an empty row the player said was packed at home or bought (supply-cost.js#suppliesMarkNeedsAsk).
+			held = suppliesUsesOnMark({ drew: reserve.drawn, uses, perSupply, packed });
+			if (held !== uses) Object.assign(update, this._inventory.resourceData(slug, held));
 		}
+		// A supplies row set down with its food eaten remembers it, so marking it again picks up the empty ◆
+		// rather than packing a fresh one (audit ROAD-2); a row that holds food again forgets it.
+		if (supplies && !isChecked && wasChecked) Object.assign(update, this._inventory.emptiedData(slug, uses <= 0));
+		else if (supplies && isChecked && Number(held) > 0) Object.assign(update, this._inventory.emptiedData(slug, false));
 		Object.assign(update, reserve.update);
 		await this._actor.update(update, writeOptions);
+		return { drawn: isChecked ? reserve.drawn : 0, uses: held };
+	}
+
+	/**
+	 * Whether marking the printed supplies row `slug` has to ask where its food came from first
+	 * (supply-cost.js#suppliesMarkNeedsAsk): empty, never set down emptied, and no undefined ◆ to draw.
+	 * `emptied` says it was eaten empty, for the notice that it stays so.
+	 */
+	suppliesMarkAsk(slug) {
+		if (!SUPPLY_SLUGS.includes(slug) || this._inventory.checked[slug]) return { ask: false, emptied: false };
+		const uses = Number(this._inventory.resources[slug]) || 0;
+		const emptied = !!this._inventory.emptied[slug] && uses <= 0 && this.undefinedRegularMarks <= 0;
+		return { ask: suppliesMarkNeedsAsk({ uses, pool: this.undefinedRegularMarks, emptied: !!this._inventory.emptied[slug] }), emptied };
 	}
 
 	/**
@@ -3307,6 +3338,8 @@ export class StonetopCharacter {
 			this._inventory.poolData(regularPool),
 			this._inventory.poolData(smallPool, { small: true }),
 			this._inventory.clearDrawnData(),
+			// Packed afresh: no row is an emptied one any more (toggleCarriedItem, audit ROAD-2).
+			this._inventory.clearEmptiedData(),
 			...packing.map(([slug, count]) => this._inventory.resourceData(slug, count)),
 		));
 		// All in the Wrist: "Reset your ammo whenever you Outfit." The blades' track is the move's own
@@ -3338,11 +3371,14 @@ export class StonetopCharacter {
 		return slugs.filter(slug => (Number(resources[slug]) || 0) > 0).map(slug => [slug, 0]);
 	}
 
-	async addCustomInventoryItem(name, weight) {
+	// `flags` rides on the item under the system's scope: a Requisition stamps the asset it came from
+	// (utils/requisition-asset.js#REQUISITIONED_FROM_FLAG), so bringing it home can offer to take it off.
+	async addCustomInventoryItem(name, weight, flags = null) {
 		await this._actor.createEmbeddedDocuments("Item", [{
 			name,
 			type: "move",
 			system: { moveType: "inventory-custom", inventoryColumn: "regular", weight: Math.max(1, weight) },
+			...(flags && Object.keys(flags).length ? { flags: { [STONETOP_SCOPE]: flags } } : {}),
 		}]);
 	}
 
@@ -4020,12 +4056,19 @@ export class StonetopCharacter {
 	async setChoiceGearCarried(possessionSlug, choiceSlug, isCarried) {
 		const key = `${possessionSlug}:${choiceSlug}`;
 		const update = this._possessions.choicesCarriedData({ [key]: isCarried });
+		let drawn = 0;
 		if (!!isCarried !== this._possessions.isChoiceCarried(possessionSlug, choiceSlug)) {
 			const bundle = this._buildChoiceGearByPossession(await this.playbook()).get(possessionSlug);
 			const row = [...(bundle?.regular ?? []), ...(bundle?.small ?? [])].find(r => r.choiceSlug === choiceSlug);
-			if (row) Object.assign(update, this._reserveDrawData(key, !!isCarried, { small: !(row.weight > 0), weight: row.weight }).update);
+			if (row) {
+				const reserve = this._reserveDrawData(key, !!isCarried, { small: !(row.weight > 0), weight: row.weight });
+				drawn = isCarried ? reserve.drawn : 0;
+				Object.assign(update, reserve.update);
+			}
 		}
 		await this._actor.update(update);
+		// What the mark drew from the undefined pool, for the sheet's Have What You Need card (audit ROAD-9).
+		return { drawn };
 	}
 	async setPossessionChoiceText(possessionSlug, choiceSlug, value) { await this._possessions.setChoiceText(possessionSlug, choiceSlug, value); }
 
@@ -6272,13 +6315,18 @@ export class StonetopCharacter {
 		// Readiness when a follower is ordered to Defend and rolls 7+ (p.469).
 		// With the sides handed over, a straight roll reached by cancelling stays straight under the nerves;
 		// without them (a caller that hands only the net), the net is the one side.
-		const sources = Array.isArray(modeSources) ? modeSources : [rollMode];
+		const baseSources = Array.isArray(modeSources) ? modeSources : [rollMode];
+		// A follower sent to Forage forages in the same winter: "In winter, you have disadvantage" (Book I p.79,
+		// audit ROAD-10), a side of its own so a tag's advantage cancels it.
+		const winter = moveKey === "forage" ? this.seasonMoveDisadvantage(orderedMoveName(moveKey)) : null;
+		const sources = winter ? [...baseSources, "dis"] : baseSources;
 		const nerves = fightStateActive(this._actor, "nerves");
 		// Stentorian's "Spend 1 Command ... You have advantage to Order Followers" (Book I p.127), ticked in the
 		// window (dialogs/OrderFollowersDialog.js): named on the card, and the Command paid once the dice land.
 		const shouted = !!command && commandHeld(this._actor) > 0;
 		// Where an advantage came from, when the Marshal's Shield Wall gave it, and a disadvantage.
 		const conditionNotes = [
+			...(winter ? [winter] : []),
 			...(shieldWall ? ["Shield Wall"] : []),
 			...(shouted ? [HERO_MOVES.STENTORIAN] : []),
 			...(nerves ? [format("stonetop.nerves.rollNote", { move: WE_HAPPY_FEW })] : []),

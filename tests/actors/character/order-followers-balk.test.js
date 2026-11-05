@@ -128,6 +128,21 @@ describe("the order's card reads the move they made", () => {
 		expect(rolled[0].conditionNotes.some(n => /Loyalty/.test(n) && /1/.test(n))).toBe(true);
 	});
 
+	// Expedition audit ROAD-10: a follower sent to Forage forages with disadvantage in winter (Book I p.79, p.336).
+	it("folds winter's disadvantage into a follower's Forage, and only there", async () => {
+		expect(orderedMoveName("forage")).toBe("Forage");
+		const char = rhianna();
+		char.seasonMoveDisadvantage = vi.fn(move => (move === "Forage" ? "Winter" : null));
+		await char.onOrderFollowersRoll({ moveName: "Andras: Forage", moveKey: "forage", followerName: "Andras" });
+		expect(rolled[0].rollMode).toBe("dis");
+		expect(rolled[0].conditionNotes).toContain("Winter");
+		// A tag's advantage cancels it.
+		await char.onOrderFollowersRoll({ moveKey: "forage", followerName: "Andras", rollMode: "adv", modeSources: ["adv"] });
+		expect(rolled[1].rollMode).toBe("normal");
+		await char.onOrderFollowersRoll({ moveKey: "let-fly", followerName: "Andras" });
+		expect(rolled[2].rollMode).toBe("normal");
+	});
+
 	it("names Presence spent in a balk's Loyalty's place on the card", async () => {
 		await rhianna().onOrderFollowersRoll({ moveKey: "let-fly", followerName: "Andras", presenceSpent: { from: 2, to: 1 } });
 		expect(rolled[0].conditionNotes.some(n => /Presence/.test(n) && /Front Line Leader/.test(n) && /1 left/.test(n))).toBe(true);

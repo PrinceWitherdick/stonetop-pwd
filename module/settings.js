@@ -1124,6 +1124,25 @@ export function registerSettings() {
 		onChange: (value, _options, userId) => game.stonetop?.onExpeditionLog?.(value, userId),
 	});
 
+	// The route the GM has SHOWN THE PLAYERS from the Run an Expedition walkthrough (its "Show
+	// players" button), for the player's own view of it: the chat card and the steading sheet's
+	// "See the route" button (utils/shared-route.js, dialogs/SharedRouteWindow.js). Separate from
+	// `expeditionAnswers` because that log holds the GM's prep and notes, and from the Scene flag
+	// because the GM may show a route without drawing it on any scene. Shape:
+	//   { id, sharedAt, expeditionId, title, journey: { origin, destination, custom }, tier,
+	//     art: { src, out, frame, aspect } | null }   — or {} when nothing is shown.
+	// `art` is there because a player cannot browse the art folder to find the map's file; the GM's
+	// client resolves it and hands it on. A fresh `id` on every share makes a re-share a change.
+	// The onChange fires on every client, players included, so their views follow it.
+	game.settings.register(SYSTEM_ID, "sharedRoute", {
+		name: "Route Shown to Players",
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {},
+		onChange: value => globalThis.Hooks?.callAll?.(SHARED_ROUTE_HOOK, value),
+	});
+
 	// The system-macro hotbar layout version this client has been snapped to (see
 	// hooks/Ready.js _SYSTEM_MACROS / _reorderSystemMacros). Bumping _HOTBAR_LAYOUT_VERSION
 	// re-snaps the system macros into their new canonical slots once, then leaves the
@@ -2613,6 +2632,13 @@ export function isFightTabEnabled() {
  * closes. See hooks/feature-switches.js.
  */
 export const FEATURE_SWITCH_HOOK = "stonetopFeatureSwitched";
+
+/**
+ * Fired on every client when the route shown to the players changes, with the setting's new value.
+ * A hook for the same reason as the one above: this file never loads the windows that follow it.
+ * See dialogs/SharedRouteWindow.js `registerSharedRouteHooks`.
+ */
+export const SHARED_ROUTE_HOOK = "stonetopSharedRouteChanged";
 
 /** Is the relationship map on in this world? Defaults to yes, unregistered included. */
 export function isRelationshipMapShown() {

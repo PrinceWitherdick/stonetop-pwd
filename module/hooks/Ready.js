@@ -58,7 +58,7 @@ import { LoveLetterDialog } from "../dialogs/LoveLetterDialog.js";
 import { StonetopArcanaInspireDialog } from "../item/StonetopArcanaInspireDialog.js";
 import { StonetopBrowserDialog } from "../dialogs/StonetopBrowserDialog.js";
 import { findVisibleJournal, SETTING_OVERVIEW_JOURNAL } from "../utils/seeded-journals.js";
-import { getStonetopSteadingActor, getStonetopSteadingActorOrWarn } from "../utils/world.js";
+import { getStonetopSteadingActor, getStonetopSteadingActorOrWarn, isSteadingActor } from "../utils/world.js";
 import { nextSeasonStamp, readCurrentSeason, readCurrentYear } from "../seasons/current-season.js";
 import { installCampaignYearSync, openCampaignYearDialog } from "../seasons/campaign-year-dialog.js";
 import { addBookAgesOnce } from "../timeline/timeline-book-ages.js";
@@ -692,6 +692,13 @@ export async function onReady() {
 	// sheets, and core redraws a sheet only for its own document (settlement-actor.js).
 	Hooks.on("createActor", actor => redrawForSettlement(actor));
 	Hooks.on("updateActor", (actor, changed) => redrawForSettlement(actor, changed));
+	// A player's Requisition from their sheet goes on its trip's record as it lands (primary GM only).
+	Hooks.on("updateActor", (actor, changed) => {
+		if (!game.user?.isGM || !isSteadingActor(actor) || !foundry.utils.hasProperty(changed ?? {}, `flags.${STONETOP_SCOPE}.steading`)) return;
+		import("../timeline/timeline-expedition-record.js")
+			.then(({ recordExpeditionTakes }) => recordExpeditionTakes(actor.typedActor))
+			.catch(err => console.warn("Stonetop | recording a player's take on the trip failed", err));
+	});
 	Hooks.on("deleteActor", actor => redrawForSettlement(actor));
 	// A settlement's Residents follow each NPC's Home (settlement-residents.js): a new or re-homed NPC
 	// moves on the primary GM, a renamed settlement re-homes its people on the renaming client, and

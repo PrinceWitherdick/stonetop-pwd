@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CAMP_STATE, SETTLE_REFUSAL, campLedger, freezeCampPlan } from "../../module/camp/camp-rules.js";
 import {
 	campCardClosedText, campJoinCardBody, campSummaryRows, campWindowView, closedCampNotice, departedCampNotice,
-	settleRefusalText,
+	settleRefusalText, KEEP_COMPANY_CUE, orphanedFollowersLines,
 } from "../../module/camp/camp-view.js";
 import { seat } from "../fakes/camp.js";
 
@@ -64,6 +64,8 @@ describe("the settled camp's card", () => {
 			{ label: "The meal", value: "2 fed on 2 uses of food." },
 			{ label: "From Aeliana's pack", value: "1 use of supplies" },
 			{ label: "From Bram's pack", value: "1 use of provisions" },
+			// Book I p.335: settled in, ask if they want to Keep Company (audit ROAD-16).
+			{ label: "Keep Company", value: KEEP_COMPANY_CUE },
 			{ label: "Aeliana", value: "HP 4 → 12 (half max)." },
 			{ label: "Bram", value: "Cleared Dazed." },
 			{ label: "Cora", value: "Went without food, so took no pick tonight." },
@@ -408,5 +410,27 @@ describe("the camp window's footer", () => {
 		expect(closed.rows[0].canEdit).toBe(false);
 		expect(closed.nav.canSettle).toBe(false);
 		expect(closed.nav.blocked).toBe("That camp is no longer open.");
+	});
+});
+
+// Expedition audit ROAD-13 (the user's ruling E13): followers left at the fire by a PC who is out of play.
+describe("followers whose PC is gone", () => {
+	const orphans = [{ pcId: "rhi", pcName: "Rhianna", followers: [
+		{ ftype: "crew", slug: "", name: "The Wolves", canHandOff: false },
+		{ ftype: "custom", slug: "a", name: "Andras", canHandOff: true },
+	] }];
+
+	it("names them, says who can be handed off, and where to count the rest", () => {
+		const [line] = orphanedFollowersLines(orphans, { where: "card" });
+		expect(line).toContain("Rhianna is out of play, but The Wolves & Andras still travel with the party");
+		expect(line).toContain("Hand Andras to a living PC");
+		expect(line).toContain("The Wolves can't be handed off: count them as followers on a living PC's card.");
+		expect(line).not.toMatch(/—/);
+	});
+
+	it("is said in an open camp's window only", () => {
+		const ledger = campLedger([aeliana()]);
+		expect(campWindowView({ state: CAMP_STATE.OPEN, ledger, orphans }).orphansLines).toHaveLength(1);
+		expect(campWindowView({ state: CAMP_STATE.OPEN, ledger }).orphansLines).toEqual([]);
 	});
 });

@@ -36617,6 +36617,29 @@ th:has(> .stonetop-roll-table-btn) {
 	white-space: nowrap;
 }
 
+/* The stamp's buttons (stamp now / redo now / clear), a row of their own beside the note. A row
+   of buttons is spaced by `gap`, so no framework margin under a button doubles it. */
+.stonetop-exp-stamp-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.stonetop-exp-stamp-buttons > .stonetop-exp-stamp-btn {
+	margin: 0;
+}
+
+/* Running the journey's "Add a challenge", under the to-do list it adds to. */
+.stonetop-exp-todo > .stonetop-exp-todo-add {
+	margin-top: 8px;
+}
+
+/* The homecoming to-do: the same Q&A field every other walkthrough note is, set off from the
+   asides around it. */
+.stonetop-exp-home-todo {
+	margin-top: 14px;
+}
+
 /* NO CHECKBOX ANYWHERE IN THIS WALKTHROUGH ANY MORE. Chart a Course was the only step
    that had one — a tick per requirement, twelve of them standing on the page — and the
    step now records what it presented as a list a GM adds to instead (see the charted-list
@@ -39976,6 +39999,40 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
 }
 
+/* Surplus loaded for the trip (ruling E7): a label, a − count + stepper, and the count in words.
+   The step buttons are blocks with a fixed square, so their one glyph sits on the button's middle. */
+.stonetop-expedition-dialog .stonetop-exp-surplus {
+	display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+	padding: 8px 12px; border-top: 1px solid rgb(var(--st-ink-rgb) / 0.08);
+	font-size: var(--st-fs-xs);
+}
+.stonetop-expedition-dialog .stonetop-exp-surplus-label { font-weight: 600; }
+.stonetop-expedition-dialog .stonetop-exp-surplus-stepper { display: inline-flex; align-items: center; gap: 6px; }
+.stonetop-expedition-dialog .stonetop-exp-surplus-step {
+	display: inline-block; flex: 0 0 auto; width: 1.8em; height: 1.8em; min-height: 0;
+	margin: 0; padding: 0; line-height: 1.8em; text-align: center;
+}
+.stonetop-expedition-dialog .stonetop-exp-surplus-count {
+	min-width: 1.5em; text-align: center; font-variant-numeric: tabular-nums; font-weight: 700;
+}
+.stonetop-expedition-dialog .stonetop-exp-surplus-left {
+	flex: 1 1 100%; font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
+}
+
+/* Going home: what is still out with this trip (ruling E2), in the Requisition card's chrome. Each row
+   is the asset's name over its two outcome buttons. */
+.stonetop-expedition-dialog .stonetop-exp-home-assets .stonetop-exp-assets-title { margin: 0; font-size: inherit; border: 0; }
+.stonetop-expedition-dialog .stonetop-exp-home-asset { align-items: center; padding: 6px 12px; }
+.stonetop-expedition-dialog .stonetop-exp-home-asset-name {
+	flex: 1 1 100%; font-family: var(--font-stonetop); font-size: var(--st-fs-xs); line-height: 1.35;
+}
+.stonetop-expedition-dialog .stonetop-exp-home-asset-name .stonetop-exp-asset-where { padding-left: 0; }
+.stonetop-expedition-dialog .stonetop-exp-home-asset-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.stonetop-expedition-dialog .stonetop-exp-home-asset-btn {
+	display: inline-block; flex: 0 0 auto; width: auto; min-height: 0; margin: 0;
+	padding: 3px 10px; font-size: var(--st-fs-2xs); line-height: 1.35; white-space: nowrap;
+}
+
 /* ── Run an Expedition · The route step · maps and travel times ────────────────
    The book's regional maps with a hotspot per place, over the travel table's day counts
    (module/data/travel-times.js, templates/dialogs/partials/expedition-journey.hbs).
@@ -40055,6 +40112,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    artwork rather than as a control over it. Its whole appearance is its own block below. */
 .stonetop-journey .stonetop-journey-tier,
 .stonetop-journey .stonetop-journey-to-scene,
+.stonetop-journey .stonetop-journey-share,
+.stonetop-journey .stonetop-journey-share-hide,
 .stonetop-journey .stonetop-journey-place-site {
 	flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; width: auto;
 	font-size: var(--st-fs-2xs);
@@ -40071,7 +40130,9 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    the destination readout until that row went (user, 2026-08-24) and now trails "put a site on the
    map" at the end of this one: both write something onto a picture, so they read as a pair and
    travel to the right end of the row together on the site button's auto margin. */
-.stonetop-journey .stonetop-journey-to-scene {
+.stonetop-journey .stonetop-journey-to-scene,
+.stonetop-journey .stonetop-journey-share,
+.stonetop-journey .stonetop-journey-share-hide {
 	padding: 3px 10px; line-height: 1.4;
 }
 /* UNLESS IT IS THE ONLY ONE OF THE PAIR, in which case it carries the margin itself. The two are
@@ -40080,7 +40141,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    the right end of the row" cannot be left to whichever of them happens to be first. Selected by
    adjacency to the tablist, which is exactly "nothing else came before me". Later than the base
    rule, per the modifier-ordering house rule. */
-.stonetop-journey .stonetop-journey-tierlist + .stonetop-journey-to-scene { margin-left: auto; }
+.stonetop-journey .stonetop-journey-tierlist + .stonetop-journey-to-scene,
+.stonetop-journey .stonetop-journey-tierlist + .stonetop-journey-share { margin-left: auto; }
 /* Put one of the GM's own sites on this map (module/sites/place-site-on-map.js). It shares the
    pill above and opens the far end of the map-tab row: the tabs say which picture, and this and the
    scene button after it are what the GM does TO that picture. The auto margin is what splits the
@@ -40090,6 +40152,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 }
 .stonetop-journey .stonetop-journey-tier:hover,
 .stonetop-journey .stonetop-journey-to-scene:hover,
+.stonetop-journey .stonetop-journey-share:hover,
+.stonetop-journey .stonetop-journey-share-hide:hover,
 .stonetop-journey .stonetop-journey-place-site:hover {
 	background: var(--st-slate-hover-bg); border-color: var(--st-slate-hover-border);
 }
@@ -40101,7 +40165,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    accent the chosen destination wears. Later than the base rule, per the modifier-ordering
    house rule. */
 .stonetop-journey .stonetop-journey-tier.is-active,
-.stonetop-journey .stonetop-journey-to-scene.is-showing {
+.stonetop-journey .stonetop-journey-to-scene.is-showing,
+.stonetop-journey .stonetop-journey-share.is-showing {
 	color: var(--st-gold-text); font-weight: 700;
 	background: var(--st-gold-bg); border-color: var(--st-gold-border);
 }
@@ -40644,7 +40709,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 /* A prose row that happens to be a <button>, so core's button rule has to be unpinned in full:
    `display: flex` on its own replaces only `display`, and the `justify-content: center` beside it
    survives — which `text-align: left` cannot undo, because the children are flex items and not
-   text. A row whose place has no route renders only its name (`_timeLabel` returns null and the
+   text. A row whose place has no route renders only its name (`timeLabel` returns null and the
    time span is inside an `{{#if}}`), and those rows were the ones that came out CENTRED while
    every other name sat left. Height and min-height go together, min-height winning, or a name that
    wraps is clipped. Same fix and same reason as `.stonetop-weather-row`. The chrome it once wore
@@ -47403,6 +47468,104 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-travel-map-foot { max-height: 34%; overflow-y: auto; }
 .stonetop-travel-map .stonetop-journey-route { margin-top: 0; }
 .stonetop-travel-map .stonetop-journey-nomap { flex: 1 1 auto; }
+
+/* ── Shared route window ──────────────────────────────────────────────────────
+   The route the GM has shown the players (module/dialogs/SharedRouteWindow.js,
+   templates/dialogs/shared-route.hbs). It wears the travel map window's classes, so the column,
+   the viewport, Map Brightness and the leg list are all that window's rules above; this adds only
+   what a read-only picture with a heading needs.
+
+   The pin layer is wrapped in one element so it can be hidden from a screen reader as a whole,
+   and that wrapper has to be the picture's own box: every mark inside it is placed in percentages
+   of its containing block. */
+.stonetop-shared-route .stonetop-shared-route-layer { position: absolute; inset: 0; }
+/* NOTHING ON THE PLAYERS' PICTURE IS A CONTROL, so a press anywhere on it pans. The GM's pins opt
+   back in to pointer events (see .stonetop-journey-canvas .stonetop-journey-pick); these must not.
+   Later than that rule and one class heavier. */
+.stonetop-shared-route .stonetop-journey-canvas .stonetop-journey-pick { pointer-events: none; }
+.stonetop-shared-route .stonetop-shared-route-head {
+	display: flex; flex-direction: column; gap: 2px;
+}
+.stonetop-shared-route .stonetop-shared-route-title {
+	margin: 0; padding: 0; border: 0;
+	font-family: var(--font-stonetop); font-size: var(--st-fs-lg); font-weight: 700;
+	color: var(--st-text);
+}
+.stonetop-shared-route .stonetop-journey-total { margin: 0; }
+.stonetop-shared-route .stonetop-shared-route-older,
+.stonetop-shared-route .stonetop-shared-route-none {
+	margin: 0; font-size: var(--st-fs-xs); font-style: italic; color: var(--st-text-muted);
+}
+.stonetop-shared-route .stonetop-journey-legs { margin-top: 0; }
+/* The GM's own way to take it back off. Sized like the journey row's pills, left to the dialog's
+   themed slate for its paint. */
+.stonetop-shared-route .stonetop-shared-route-stop {
+	display: inline-flex; align-items: center; gap: 6px;
+	width: auto; flex: 0 0 auto; margin-top: 8px; padding: 3px 10px; line-height: 1.4;
+	font-size: var(--st-fs-2xs);
+}
+/* The window's announcement channel (SharedRouteWindow `_announce`). On the window frame, outside
+   the content AppV1 replaces, and read by a screen reader only: the same words are on screen. */
+.stonetop-shared-route-app > .stonetop-shared-route-live {
+	position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+	overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+/* The Chart a Course lines a share carries (audit ruling E4), in the window and on the card. */
+.stonetop-shared-route-requirements { margin-top: 8px; }
+.stonetop-shared-route-requirements .stonetop-shared-route-reqtitle { margin: 0 0 2px; font-weight: 700; }
+.stonetop-shared-route-requirements .stonetop-shared-route-reqhead {
+	margin: 4px 0 0; font-size: var(--st-fs-xs); font-weight: 700; color: var(--st-text-secondary);
+}
+/* Spiral bullets, never the browser's disc. Named under the chat log too, so the card's copy
+   outweighs core's bullets on chat-message lists. */
+:is(.stonetop-shared-route-requirements, :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-shared-route-requirements) .stonetop-shared-route-reqs {
+	list-style: none; margin: 0; padding-left: 0;
+}
+:is(.stonetop-shared-route-requirements, :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-shared-route-requirements) .stonetop-shared-route-reqs li {
+	position: relative; margin: 2px 0;
+	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
+}
+:is(.stonetop-shared-route-requirements, :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-shared-route-requirements) .stonetop-shared-route-reqs li::before {
+	content: ""; position: absolute; left: 0; top: 0.2em;
+	width: var(--stonetop-bullet-size, 10px); height: var(--stonetop-bullet-size, 10px);
+	background: var(--stonetop-spiral-icon) no-repeat center / contain; opacity: 0.55;
+}
+/* The Show players ask: one labelled field per stop the GM put down by hand. */
+.stonetop-share-ask-stop { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }
+.stonetop-share-ask-hint { margin: 6px 0 2px; font-size: var(--st-fs-xs); color: var(--st-text-secondary); }
+
+/* The steading sheet's See the route chip, just ahead of the clock. A labelled pill in the journey
+   row's shape, so the two read as the same idea. Restated through .steading-header, which is what
+   beats core's .app button box (see the clock block).
+
+   IT TAKES THE CLOCK'S AUTO MARGIN while it is there. Two auto left margins in one flex row split
+   the free space between them, which would strand the chip in the middle of the header; so the
+   chip carries the margin and the clock after it gives its own up, and the pair park together
+   against the right edge. */
+.steading-header .steading-header-route {
+	display: inline-flex; align-items: center; gap: 6px;
+	flex: 0 0 auto; width: auto; height: auto; margin: 0 0 0 auto; padding: 3px 10px;
+	line-height: 1.4; font-size: var(--st-fs-2xs); white-space: nowrap;
+	color: var(--st-text-secondary);
+	border: 1px solid rgba(0,0,0,0.16); border-radius: 999px;
+	background: transparent; box-shadow: none;
+}
+.steading-header .steading-header-route:hover {
+	background: var(--st-slate-hover-bg); border-color: var(--st-slate-hover-border);
+}
+.steading-header .steading-header-route + .steading-header-clock { margin-left: 10px; }
+
+/* The chat card: the legs as a plain list, and the button in the card's own action size. */
+.stonetop-shared-route-card .stonetop-shared-route-summary { margin: 0 0 4px; font-weight: 700; }
+.stonetop-shared-route-card .stonetop-shared-route-legs { margin: 0 0 6px; padding-left: 1.3em; }
+.stonetop-shared-route-card .stonetop-shared-route-legs li.is-estimate { font-style: italic; }
+.stonetop-shared-route-card .stonetop-shared-route-estimate {
+	margin: 0 0 6px; font-size: var(--st-fs-2xs); font-style: italic;
+}
+.stonetop-shared-route-card .stonetop-shared-route-open {
+	display: inline-flex; align-items: center; justify-content: center; gap: 0.4em;
+	padding: 0.15rem 0.6rem; line-height: 1.6;
+}
 
 
 /* -- A move that charges before it rolls ------------------------ */

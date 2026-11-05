@@ -1,6 +1,8 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { partyCharacters } from "../utils/playbook-actors.js";
+import { orphanedPartyFollowers } from "../actors/character/follower-roster.js";
+import { isOutOfPlaySafe } from "../actors/character/deaths-door-actor.js";
 import { escHtml } from "../utils/strings.js";
 import { registerRestorableWindow } from "../utils/window-restore.js";
 import {
@@ -131,6 +133,8 @@ export class CampWindow extends StonetopDialog {
 				: [],
 			// The undo for Bring someone, so it is in the same hands.
 			sendsAway: !!user?.isGM,
+			// Followers whose PC is out of play, still travelling with the party (audit ROAD-13).
+			orphans:  orphanedPartyFollowers(partyCharacters(), { outOfPlay: isOutOfPlaySafe }),
 		});
 	}
 

@@ -1,3 +1,22 @@
+import { SYSTEM_ID } from "../system-id.js";
+import { escHtml, joinNames } from "./strings.js";
+import { askWithButtons } from "./ask-with-buttons.js";
+import { deletionEntry } from "./foundry-compat.js";
+import { normalizeLog, expeditionLabel } from "./expedition-log-core.js";
+
+/**
+ * The trip a player's Requisition goes out on (ruling E6): the walkthrough's current trip, while it has
+ * not come home yet (no timeline row written for its homecoming). `{id, title}`, or null for none. PURE.
+ * @param {object} rawLog  the `expeditionAnswers` world setting
+ */
+export function openTripTag(rawLog) {
+	const log = normalizeLog(rawLog);
+	const at = log.list.findIndex(e => e.id === log.currentId);
+	const trip = at < 0 ? null : log.list[at];
+	if (!trip?.id || trip.timelineRecorded) return null;
+	return { id: trip.id, title: expeditionLabel(trip, at) };
+}
+
 /** Sentinel <option> value for the "Something else…" custom-asset choice, shared by
  *  the two Requisition pickers (the player-facing RequisitionDialog and the steading
  *  sheet's GM walkthrough) so the marker can never drift between them. */
@@ -74,4 +93,104 @@ export function assetTakenLabel(asset) {
 export function assetTakenTooltip(asset) {
 	const label = assetTakenLabel(asset);
 	return label ? `${label}. Click to return` : "";
+}
+
+// ── What a take leaves on the character (expedition audit PREP-5, ruling E6) ──────────────
+// A take stamps the item and the followers it makes with the asset they came from, so bringing the
+// asset home can offer to take them off the sheet again. Draft animals and the village's vehicles
+// are never made an Inventory item: a wagon is not ◇ in anyone's pack, and the animals are followers.
+
+/** The flag (an item's) or field (a custom follower's) naming the asset a take came from. */
+export const REQUISITIONED_FROM_FLAG = "requisitionedFrom";
+
+// The village's vehicles and implements, read off a typed or seeded asset's name.
+const VEHICLE_RE = /\b(wagons?|carts?|plo(?:ugh|w)s?|sleds?|sledges?|boats?|barges?|carriages?|herd)\b/i;
+
+/**
+ * Whether a requisitioned asset is something a character carries, and so an Inventory item: not an
+ * animal (`isBeast`, the caller's beastFollowerForAsset answer) nor a vehicle. PURE.
+ * @param {object|string} asset  the steading's row, or a typed asset's name
+ * @param {boolean} isBeast
+ */
+export function assetIsCarried(asset, isBeast = false) {
+	if (isBeast) return false;
+	const name = typeof asset === "object" && asset ? asset.name : asset;
+	return !VEHICLE_RE.test(String(name ?? ""));
+}
+
+/**
+ * The steading's assets out with a trip that the trip's own record does not name yet: the takes a
+ * player made from their sheet (a player cannot write the trip log, so the steading's tag was their
+ * only record). Names only, case-blind against the record, blanks dropped. PURE.
+ * @param {object[]} record   the trip's `requisitioned` lines
+ * @param {object[]} assets   the steading's rows out with that trip (`getAssetsOnExpedition`)
+ * @returns {string[]}
+ */
+export function takesMissingFrom(record, assets) {
+	const known = new Set((Array.isArray(record) ? record : []).map(r => String(r?.name ?? "").trim().toLowerCase()));
+	return (assets ?? [])
+		.map(a => String(a?.name ?? "").trim())
+		.filter(name => name && !known.has(name.toLowerCase()));
+}
+
+/** Two asset names the same, the way the steading's rows compare. */
+function sameAssetName(a, b) {
+	return String(a ?? "").trim() === String(b ?? "").trim() && String(a ?? "").trim() !== "";
+}
+
+/**
+ * What a Requisition of `assetName` left on a character: the items stamped with it and the custom
+ * followers noted with it. PURE but for the actor it reads.
+ * @returns {{items: object[], followers: string[]}}  items, and the custom followers' keys
+ */
+export function requisitionedCopies(actor, assetName, scope = SYSTEM_ID) {
+	const items = [...(actor?.items ?? [])].filter(item => sameAssetName(item?.flags?.[scope]?.[REQUISITIONED_FROM_FLAG], assetName));
+	const map = actor?.flags?.[scope]?.customFollowers ?? {};
+	const followers = Object.entries(map)
+		.filter(([, f]) => sameAssetName(f?.[REQUISITIONED_FROM_FLAG], assetName))
+		.map(([key]) => key);
+	return { items, followers };
+}
+
+/** The whole lot of `requisitionedCopies` said in words, for the ask: "the wagon item and Horse 1 & Horse 2". */
+function copiesWords(actor, copies, scope) {
+	const map = actor?.flags?.[scope]?.customFollowers ?? {};
+	const names = [
+		...copies.items.map(i => `the ${i.name} item`),
+		...copies.followers.map(key => map[key]?.name || "a follower"),
+	];
+	return joinNames(names);
+}
+
+/**
+ * An asset came home: offer to take what its take left on the character who had it off their sheet.
+ * Asked only of a user who can write that character, and only when something is there. The answer names
+ * outcomes; a closed window leaves the sheet as it is.
+ *
+ * @param {object} o
+ * @param {string} [o.holderId]   the character the asset was out with (`takenBy.id`)
+ * @param {string} o.assetName
+ * @param {Function} [o.ask]      askWithButtons, or a test's stand-in
+ * @param {Function} [o.deletion] foundry-compat.js#deletionEntry, or a test's stand-in
+ * @returns {Promise<boolean>} whether anything was taken off
+ */
+export async function offerToClearRequisitioned({ holderId, assetName, ask = askWithButtons, deletion = deletionEntry, scope = SYSTEM_ID, actors = globalThis.game?.actors } = {}) {
+	const actor = holderId ? actors?.get?.(holderId) : null;
+	if (!actor?.isOwner || !assetName) return false;
+	const copies = requisitionedCopies(actor, assetName, scope);
+	if (!copies.items.length && !copies.followers.length) return false;
+	const answer = await ask({
+		title: "Back home",
+		content: `<p>${escHtml(actor.name)} still has ${escHtml(copiesWords(actor, copies, scope))} from the Requisition on their sheet.</p>`,
+		buttons: [
+			{ key: "clear", label: `Take it off ${actor.name}'s sheet`, icon: "fa-eraser", value: "clear" },
+			{ key: "keep", label: `Leave ${actor.name}'s sheet as it is`, icon: "fa-xmark", value: null },
+		],
+	});
+	if (answer !== "clear") return false;
+	if (copies.items.length) await actor.deleteEmbeddedDocuments("Item", copies.items.map(i => i.id));
+	if (copies.followers.length) {
+		await actor.update(Object.fromEntries(copies.followers.map(key => deletion(`flags.${scope}.customFollowers.${key}`))));
+	}
+	return true;
 }

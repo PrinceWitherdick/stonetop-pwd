@@ -440,10 +440,14 @@ export function moveEntry(list, id, delta) {
  *
  * An entry with no key is simply added.
  *
+ * `refreshWhile` makes a refresh conditional, field by field: `{ title: "Old name" }` refreshes the
+ * title only on a row that still reads "Old name", so a renamed trip's row follows the new name
+ * while a title the GM typed over stays theirs.
+ *
  * @returns {{entries, added, changed}}  `added` or `changed` is the row written; both null when
  *          nothing moved.
  */
-export function upsertByKey(list, entry, { refresh = [], makeId = () => "" } = {}) {
+export function upsertByKey(list, entry, { refresh = [], refreshWhile = {}, makeId = () => "" } = {}) {
 	const key = String(entry?.key ?? "").trim();
 	const entries = readEntries(list);
 	const found = key ? entries.find(e => e.key === key) : null;
@@ -451,7 +455,8 @@ export function upsertByKey(list, entry, { refresh = [], makeId = () => "" } = {
 		const { entries: next, added } = addEntry(entries, entry, makeId);
 		return { entries: next, added, changed: null };
 	}
-	const changes = Object.fromEntries(refresh.filter(field => field in (entry ?? {})).map(field => [field, entry[field]]));
+	const still = field => !Object.hasOwn(refreshWhile ?? {}, field) || found[field] === refreshWhile[field];
+	const changes = Object.fromEntries(refresh.filter(field => field in (entry ?? {}) && still(field)).map(field => [field, entry[field]]));
 	if (!Object.keys(changes).length) return { entries, added: null, changed: null };
 	const { entries: next, changed } = patchEntry(entries, found.id, changes);
 	return { entries: next, added: null, changed };

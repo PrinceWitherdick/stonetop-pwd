@@ -574,7 +574,7 @@ describe("asking before a trip is deleted", () => {
 	// The delete button answers with what was ticked; Keep it and a closed window, null.
 	it("deletes only on the delete", async () => {
 		stubAsk("delete", fakeForm());
-		expect(await dialog()._askDeleteExpedition("x")).toEqual({ removePage: false });
+		expect(await dialog()._askDeleteExpedition("x")).toEqual({ removePage: false, removeRows: false, herdBack: false, stopSharing: false });
 		stubAsk("keep");
 		expect(await dialog()._askDeleteExpedition("x")).toBeNull();
 		stubAsk(null);
@@ -586,5 +586,297 @@ describe("asking before a trip is deleted", () => {
 		d._askDeleteExpedition = async () => null;
 		await d._deleteCurrentExpedition();
 		expect(store.expeditionAnswers.list.map(t => t.id)).toEqual(["trip-1"]);
+	});
+});
+
+// ── The expedition audit's preparation fixes (2026-11-03) ──────────────────────────
+/** Answer a run of askWithButtons windows in order, one key each (null closes it). */
+function stubAsks(keys, form = null) {
+	const queue = [...keys];
+	const wait = vi.fn(async config => {
+		const key = queue.shift() ?? null;
+		const button = config.buttons?.find(b => b.action === key);
+		if (!button) return null;
+		return button.callback ? button.callback(null, { form }) : key;
+	});
+	globalThis.foundry.applications ??= {};
+	globalThis.foundry.applications.api ??= {};
+	globalThis.foundry.applications.api.DialogV2 = { wait };
+	return wait;
+}
+
+const repoFile = rel => fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..", rel), "utf8");
+
+describe("PREP-2: a click names the asset its row was drawn for", () => {
+	it("refuses, and redraws, a take whose row moved under it", async () => {
+		const d = dialog();
+		d.render = vi.fn();
+		await d._toggleRequisitionedAsset(0, true, "A wagon");
+		expect(assetsNow().some(a => a.takenBy)).toBe(false);
+		expect(warned.join(" ")).toMatch(/isn't where this list had it/);
+		expect(d.render).toHaveBeenCalled();
+	});
+
+	it("refuses a return whose row moved, rather than sending another asset home", async () => {
+		assetsNow()[0] = { name: "A pair of hardy draft horses", checked: false, takenBy: { name: "Wren", id: "hero1" } };
+		const d = dialog();
+		await d._toggleRequisitionedAsset(0, false, "A wagon");
+		expect(assetsNow()[0].takenBy).toEqual({ name: "Wren", id: "hero1" });
+	});
+
+	it("says so when the asset went out with someone else meanwhile", async () => {
+		assetsNow()[1] = { name: "A wagon", checked: false, takenBy: { name: "Wren" } };
+		const d = dialog();
+		d.render = vi.fn();
+		await d._toggleRequisitionedAsset(1, true, "A wagon");
+		expect(warned.join(" ")).toMatch(/no longer on hand/);
+		expect(tripNow().requisitioned ?? []).toEqual([]);
+	});
+
+	it("hands each row's own name back from the template", () => {
+		expect(repoFile("templates/dialogs/expedition.hbs")).toContain(`data-asset-name="{{this.assetName}}"`);
+		expect(dialog()._buildAssetPicker().rows[1].assetName).toBe("A wagon");
+	});
+});
+
+describe("PREP-4: a walkthrough take after a 6- costs 1 Fortunes", () => {
+	it("asks, takes, pays and latches the trip's own card", async () => {
+		world.steading.system = { stats: { fortunes: { value: 1 } } };
+		const flags = {};
+		const card = {
+			getFlag: (scope, key) => flags[key], setFlag: vi.fn(async (s, k, v) => { flags[k] = v; }), unsetFlag: vi.fn(),
+		};
+		global.game.messages = { get: id => (id === "m1" ? card : null) };
+		const d = dialog();
+		d._rolls[d._rollKey("requisition")] = { total: 4, tier: "failure", messageId: "m1", herdCount: 0 };
+		stubAsks(["take"]);
+
+		await d._toggleRequisitionedAsset(1, true, "A wagon");
+
+		expect(assetsNow()[1].takenBy?.expedition?.id).toBe("trip-1");
+		expect(world.steading.update.mock.calls.at(-1)[0]["system.stats.fortunes.value"]).toBe(0);
+		expect(flags.requisitionMissCostApplied).toBe(true);
+	});
+
+	it("takes nothing when the GM leaves it", async () => {
+		global.game.messages = { get: () => ({ getFlag: () => undefined }) };
+		const d = dialog();
+		d._rolls[d._rollKey("requisition")] = { total: 4, tier: "failure", messageId: "m1" };
+		stubAsks(["leave"]);
+		await d._toggleRequisitionedAsset(1, true, "A wagon");
+		expect(assetsNow()[1].takenBy).toBeUndefined();
+	});
+});
+
+describe("PREP-6: the herd take is capped at the count the roll was made for", () => {
+	it("offers no more horses than this trip's roll asked about", async () => {
+		world.steading = steadingActor([{ name: HERD_ASSET_NAME, checked: true, beast: { slug: "horse", herd: true } }]);
+		Object.assign(world.steading.flags.stonetop.steading, { improvements: { herdOfHorses: { completed: true } }, herd: { grown: 10, yearlings: 0, foals: 0 } });
+		const d = dialog();
+		d._rolls[d._rollKey("requisition")] = { total: 9, tier: "partial", herdCount: 3 };
+		const wait = stubAsks(["none"]);
+		await d._toggleRequisitionedAsset(0, true);
+		expect(wait.mock.calls[0][0].content).toContain(`max="3"`);
+	});
+});
+
+describe("PREP-10 / E7: Surplus loaded for the trip", () => {
+	beforeEach(() => {
+		world.steading.flags.stonetop.steading.system = { attributes: { surplus: { value: 2 } } };
+		world.steading.update = vi.fn(async data => {
+			const v = data["flags.stonetop-pwd.steading.system.attributes.surplus.value"];
+			if (v !== undefined) world.steading.flags.stonetop.steading.system.attributes.surplus.value = v;
+		});
+	});
+
+	it("moves one Surplus from the steading onto the trip, and back", async () => {
+		const d = dialog();
+		await d._stepTripSurplus(1);
+		expect(world.steading.update.mock.calls[0]).toEqual([
+			{ "system.attributes.surplus.value": 1, "flags.stonetop-pwd.steading.system.attributes.surplus.value": 1 },
+			{ stonetopMove: "Requisition" },
+		]);
+		expect(tripNow().surplusOut).toBe(1);
+		expect(d._buildAssetPicker().surplus).toMatchObject({ out: 1, onHand: 1, canLoad: true, canUnload: true });
+
+		await d._stepTripSurplus(-1);
+		expect(tripNow().surplusOut).toBe(0);
+		expect(world.steading.flags.stonetop.steading.system.attributes.surplus.value).toBe(2);
+	});
+
+	it("puts the Surplus back when the trip went before its load was written", async () => {
+		const d = dialog();
+		d._log();
+		// Another GM deletes the trip while the steading write is on its way.
+		world.steading.update.mockImplementationOnce(async data => {
+			world.steading.flags.stonetop.steading.system.attributes.surplus.value = data["system.attributes.surplus.value"];
+			d._logDraft = { currentId: null, list: [] };
+		});
+		await d._stepTripSurplus(1);
+		expect(world.steading.update.mock.calls.map(c => c[0]["system.attributes.surplus.value"])).toEqual([1, 2]);
+		expect(d._log().list).toEqual([]);
+	});
+
+	it("loads nothing when the steading has none left", async () => {
+		world.steading.flags.stonetop.steading.system.attributes.surplus.value = 0;
+		const d = dialog();
+		await d._stepTripSurplus(1);
+		expect(world.steading.update).not.toHaveBeenCalled();
+		expect(warned.join(" ")).toMatch(/no Surplus left/);
+	});
+
+	it("starts Days on the Road with the pack-animal tick on once Surplus is loaded", () => {
+		expect(repoFile("module/dialogs/RoadRationsDialog.js")).toContain("this._packAnimal = !!packAnimal;");
+		expect(repoFile("module/dialogs/ExpeditionDialog.js")).toContain("const packAnimal = (Number(this._currentExpedition()?.surplusOut) || 0) > 0;");
+	});
+});
+
+describe("WLK-4 / PREP-3 / E2: Going home lists what is still out", () => {
+	const out = { expedition: { id: "trip-1", title: "The Wandering Tower" } };
+
+	it("lists this trip's assets and its herd lines still out, and nothing of another trip's", () => {
+		assetsNow()[1] = { name: "A wagon", checked: false, takenBy: { name: "Wren", id: "hero1", ...out } };
+		assetsNow()[0] = { name: "A pair of hardy draft horses", checked: false, takenBy: { expedition: { id: "trip-9", title: "x" } } };
+		const d = dialog([{ id: "trip-1", title: "T", createdAt: 0, requisitioned: [
+			{ name: "A wagon" }, { name: "2 horses from the herd", herd: 2 }, { name: "A horse from the herd", herd: 1, home: true, back: 1 },
+		] }]);
+		const home = d._buildHomeAssets();
+		expect(home.rows).toEqual([{ index: 1, name: "A wagon", with: "Wren" }]);
+		expect(home.herd).toEqual([{ at: 1, name: "2 horses from the herd", count: 2 }]);
+		expect(home.hasAny).toBe(true);
+	});
+
+	it("brings an asset home", async () => {
+		assetsNow()[1] = { name: "A wagon", checked: false, takenBy: out };
+		await dialog()._settleHomeAsset({ action: "home", index: "1", name: "A wagon" });
+		expect(assetsNow()[1]).toEqual({ name: "A wagon", checked: true });
+	});
+
+	it("loses an asset: off the list, kept on the trip marked lost, and Meets with Disaster when asked to", async () => {
+		world.steading.system = { stats: { fortunes: { value: 1 } } };
+		assetsNow()[1] = { name: "A wagon", checked: false, takenBy: out };
+		const d = dialog([{ id: "trip-1", title: "T", createdAt: 0, requisitioned: [{ name: "A wagon" }] }]);
+		const wait = stubAsks(["disaster"]);
+		await d._settleHomeAsset({ action: "lost", index: "1", name: "A wagon" });
+		expect(wait.mock.calls[0][0].buttons.map(b => b.label)).toEqual(["Lost it: Meet with Disaster", "Lost it, but no disaster", "Keep it out for now"]);
+		expect(assetsNow().map(a => a.name)).not.toContain("A wagon");
+		expect(tripNow().requisitioned).toEqual([{ name: "A wagon", lost: true }]);
+		expect(world.steading.update.mock.calls.at(-1)[0]["system.stats.fortunes.value"]).toBe(0);
+	});
+
+	it("keeps the asset out when the GM closes the ask", async () => {
+		assetsNow()[1] = { name: "A wagon", checked: false, takenBy: out };
+		stubAsks([null]);
+		await dialog()._settleHomeAsset({ action: "lost", index: "1", name: "A wagon" });
+		expect(assetsNow()[1].takenBy).toEqual(out);
+	});
+
+	it("counts herd horses home: those back go in the herd, and the line is settled", async () => {
+		world.steading = steadingActor([{ name: HERD_ASSET_NAME, checked: true, beast: { slug: "horse", herd: true } }]);
+		Object.assign(world.steading.flags.stonetop.steading, { improvements: { herdOfHorses: { completed: true } }, herd: { grown: 5, yearlings: 0, foals: 0 } });
+		const d = dialog([{ id: "trip-1", title: "T", createdAt: 0, requisitioned: [{ name: "3 horses from the herd", herd: 3 }] }]);
+		const wait = stubAsks(["back", "lost"], fakeForm({ horses: { value: "2" } }));
+		await d._settleHomeAsset({ action: "herd", at: "0" });
+		expect(world.steading.update).toHaveBeenCalledWith({ "flags.stonetop-pwd.steading.herd": { grown: 7, yearlings: 0, foals: 0 } }, { stonetopMove: "Requisition" });
+		expect(tripNow().requisitioned).toEqual([{ name: "3 horses from the herd", herd: 3, home: true, back: 2 }]);
+		expect(d._buildHomeAssets().herd).toEqual([]);
+		// One horse lost: asked whether it Meets with Disaster, and "No disaster" writes no Fortunes.
+		expect(wait).toHaveBeenCalledTimes(2);
+		expect(wait.mock.calls[1][0].content).toContain("A horse from the herd didn't come home");
+	});
+
+	it("counts a herd line home once on a double press", async () => {
+		world.steading = steadingActor([{ name: HERD_ASSET_NAME, checked: true, beast: { slug: "horse", herd: true } }]);
+		Object.assign(world.steading.flags.stonetop.steading, { improvements: { herdOfHorses: { completed: true } }, herd: { grown: 5, yearlings: 0, foals: 0 } });
+		const d = dialog([{ id: "trip-1", title: "T", createdAt: 0, requisitioned: [{ name: "3 horses from the herd", herd: 3 }] }]);
+		const wait = stubAsks(["back", "back"], fakeForm({ horses: { value: "3" } }));
+		await Promise.all([d._settleHomeAsset({ action: "herd", at: "0" }), d._settleHomeAsset({ action: "herd", at: "0" })]);
+		expect(wait).toHaveBeenCalledTimes(1);
+		const herdWrites = world.steading.update.mock.calls.filter(c => c[0]["flags.stonetop-pwd.steading.herd"]);
+		expect(herdWrites.map(c => c[0]["flags.stonetop-pwd.steading.herd"])).toEqual([{ grown: 8, yearlings: 0, foals: 0 }]);
+		// Once the first press has landed the button works again, and the line is settled.
+		await d._settleHomeAsset({ action: "herd", at: "0" });
+		expect(wait).toHaveBeenCalledTimes(1);
+	});
+
+	it("renders the list with outcome buttons and the clear-your-marks line, from the home step", async () => {
+		const html = await global.renderTemplate("systems/stonetop-pwd/templates/dialogs/partials/expedition-home-assets.hbs", {
+			homeAssets: { hasSteading: true, hasAny: true, steadingName: "Stonetop", rows: [{ index: 1, name: "A wagon", with: "Wren" }], herd: [{ at: 0, name: "2 horses from the herd", count: 2 }] },
+		});
+		expect(html).toContain("Still out with this trip");
+		expect(html).toContain(`data-action="home" data-index="1" data-name="A wagon"`);
+		expect(html).toContain("Lost it (Meet with Disaster)");
+		expect(html).toContain(`data-action="herd" data-at="0"`);
+		expect(html).toContain("(with Wren)");
+		expect(html).toContain("clears the marks from their Inventory insert (p.89)");
+		expect(repoFile("templates/dialogs/expedition.hbs")).toContain(`{{> "stonetop.expedition-home-assets" homeAssets=homeAssets}}`);
+	});
+});
+
+describe("PREP-12: the roll reads Fortunes as the steading does", () => {
+	it("reads the mirrored copy first", () => {
+		world.steading.system = { stats: { fortunes: { value: 0 } } };
+		world.steading.flags.stonetop.steading.system = { stats: { fortunes: { value: 2 } } };
+		expect(dialog()._steadingFortunes()).toBe(2);
+	});
+});
+
+describe("PREP-2: the asset list is live from the steading", () => {
+	it("redraws the Requisition step when the steading changes under it", () => {
+		vi.useFakeTimers();
+		const on = vi.fn(() => 7);
+		const prevHooks = global.Hooks;
+		global.Hooks = { ...prevHooks, on, off: vi.fn() };
+		try {
+			const d = dialog();
+			d._stepNav = () => ({ step: { key: "requisition" } });
+			d.rendered = true;
+			d._redrawWhenFree = vi.fn();
+			d._wireLoadWatch();
+			expect(on).toHaveBeenCalledWith("updateActor", expect.any(Function));
+			const watch = on.mock.calls[0][1];
+			watch({ type: "character" }, {}, {});
+			watch(world.steading, {}, {});
+			vi.runAllTimers();
+			expect(d._redrawWhenFree).toHaveBeenCalledTimes(1);
+		} finally {
+			global.Hooks = prevHooks;
+			vi.useRealTimers();
+		}
+	});
+});
+
+describe("PREP-5: the Chronicle names a player's own take", () => {
+	it("adds an asset the steading holds out with this trip to the trip's record", () => {
+		const d = dialog([{ id: "trip-1", title: "The Wandering Tower", createdAt: 0, requisitioned: [{ name: "A wagon" }] }]);
+		assetsNow()[0] = {
+			name: "A pair of hardy draft horses", checked: false,
+			takenBy: { name: "Wren", id: "hero1", expedition: { id: "trip-1", title: "The Wandering Tower" } },
+		};
+		assetsNow()[1] = { name: "A wagon", checked: false, takenBy: { expedition: { id: "trip-1", title: "The Wandering Tower" } } };
+
+		expect(d._foldPlayerTakes()).toBe(true);
+		expect(d._log().list[0].requisitioned).toEqual([{ name: "A wagon" }, { name: "A pair of hardy draft horses" }]);
+		// A second save adds nothing more.
+		expect(d._foldPlayerTakes()).toBe(false);
+	});
+
+	it("adds them onto a copy, leaving what another GM's write is merged against as it was", () => {
+		const d = dialog([{ id: "trip-1", title: "The Wandering Tower", createdAt: 0, requisitioned: [{ name: "A wagon" }] }]);
+		assetsNow()[0] = {
+			name: "A pair of hardy draft horses", checked: false,
+			takenBy: { name: "Wren", id: "hero1", expedition: { id: "trip-1", title: "The Wandering Tower" } },
+		};
+		const base = d._log();
+		expect(d._logBase).toBe(base);
+		expect(d._foldPlayerTakes()).toBe(true);
+		expect(d._logBase.list[0].requisitioned).toEqual([{ name: "A wagon" }]);
+		expect(d._log().list[0].requisitioned).toEqual([{ name: "A wagon" }, { name: "A pair of hardy draft horses" }]);
+	});
+
+	it("leaves the record alone when nothing is out with this trip", () => {
+		const d = dialog();
+		expect(d._foldPlayerTakes()).toBe(false);
+		expect(d._log().list[0].requisitioned).toBeUndefined();
 	});
 });

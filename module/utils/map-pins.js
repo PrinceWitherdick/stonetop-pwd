@@ -23,8 +23,8 @@
 import { SYSTEM_ID } from "../system-id.js";
 import { systemAssetVariants } from "../migration/compat.js";
 import {
-	captionsOnMap, exitsOnMap, frameFitsImage, frameFor, markedMap, placeMapLabel, placesOnMap,
-	spotPercent, travelPlace,
+	captionsOnMap, exitsOnMap, markedMap, placeMapLabel, placesOnMap,
+	sceneFrame, spotPercent, travelPlace,
 } from "../data/travel-times.js";
 
 /**
@@ -368,7 +368,7 @@ export function markerPinKey(slug, family = "place") {
  * standing in slightly different valleys on one picture, which is exactly the failure the fractions
  * exist to prevent.
  *
- * `frame` is the caller's, resolved once with `frameFor` and checked once with `frameFitsImage`,
+ * `frame` is the caller's, resolved and checked once with `sceneFrame`,
  * because what to DO about a Scene that is not the shape the fractions were measured against
  * differs: the marker builder draws no pins at all, while a site placement says so out loud.
  *
@@ -398,8 +398,9 @@ export function posterSpotPixels({ spot, frame, width, height }) {
  *
  * REFUSED RATHER THAN DRAWN WRONG. A frame is a claim about the shape of a particular file, and
  * a GM who saved their own differently-trimmed scan over one of the names we know breaks that
- * claim without breaking anything a caller could notice. `frameFitsImage` re-derives the printed
- * page's proportions from the Scene's actual ones and returns nothing at all if they disagree,
+ * claim without breaking anything a caller could notice. `sceneFrame` re-derives the printed
+ * page's proportions from the Scene's actual ones (taking the book's own page crop as well as the
+ * poster scan) and this returns nothing at all if neither fits,
  * because a map with no pins is obviously missing them, while a map with every pin in the wrong
  * valley looks finished and is worse than useless.
  *
@@ -412,12 +413,13 @@ export function posterMapPins(map, { width, height } = {}) {
 	const tier = markedMap(map?.slug);
 	if (!tier || !(width > 0) || !(height > 0)) return [];
 
-	// A tier's fractions are against the printed crop and `frameFor` insets them into the poster;
+	// A tier's fractions are against the printed crop and `sceneFrame` insets them into the poster
+	// (or takes the whole picture, on a Scene showing the book's page crop);
 	// the village's are against the poster already, and the identity frame a file with no entry
 	// gets is exactly that. Either way the guard asks the one question worth asking, which is
 	// whether this Scene is the shape the numbers were measured against.
-	const frame = frameFor(map.out);
-	if (!frameFitsImage(frame, width / height, tier.printedAspect)) return [];
+	const frame = sceneFrame(map.out, width / height, tier.printedAspect);
+	if (!frame) return [];
 
 	// The note's position, which is not quite the caption's: see markerTipLift. The conversion
 	// itself is `posterSpotPixels`, so a marker and a site pin cannot be laid by two arithmetics.

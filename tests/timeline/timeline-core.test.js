@@ -353,6 +353,27 @@ describe("upsertByKey", () => {
 		expect(entries[0].body).toBe("Set out. Returned triumphant.");
 	});
 
+	// Audit WLK-8: a renamed trip's row follows the new name only while it still wears the old one.
+	it("refreshes a field named in refreshWhile only while the row still holds that value", () => {
+		const first = upsertByKey([], { source: "expedition", key: "expedition:t1", title: "Old name" }, { makeId: ids() }).entries;
+		const ours = upsertByKey(first, { source: "expedition", key: "expedition:t1", title: "New name" },
+			{ refresh: ["title"], refreshWhile: { title: "Old name" } });
+		expect(ours.entries[0].title).toBe("New name");
+
+		const typed = patchEntry(first, first[0].id, { title: "The GM's own words" }).entries;
+		const theirs = upsertByKey(typed, { source: "expedition", key: "expedition:t1", title: "New name" },
+			{ refresh: ["title"], refreshWhile: { title: "Old name" } });
+		expect(theirs.changed).toBeNull();
+		expect(theirs.entries[0].title).toBe("The GM's own words");
+	});
+
+	// Audit WLK-9: an entry that brings its own id keeps it, so two clients adding the same keyed
+	// row add it under one id.
+	it("keeps an id the entry brings", () => {
+		const { added } = upsertByKey([], { id: "expedition-t1", source: "expedition", key: "expedition:t1", title: "Ford" }, { makeId: ids() });
+		expect(added.id).toBe("expedition-t1");
+	});
+
 	it("simply adds an entry with no key", () => {
 		const list = [entry({ id: "a" })];
 		expect(upsertByKey(list, { title: "Another", season: "spring" }, { makeId: ids() }).entries).toHaveLength(2);

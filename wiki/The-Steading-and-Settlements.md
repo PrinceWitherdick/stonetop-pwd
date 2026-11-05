@@ -8,6 +8,7 @@ Stonetop itself is an actor with its own sheet: its stats, resources, people, im
 
 - **The season clock.** The season and year sit at the top right. Click them to make the **Seasons Change** move, or just correct what the sheet says. See [Seasons, Weather and the Year](Seasons-Weather-and-the-Year).
 - **Things owed.** Small glyphs beside the name flag unresolved obligations, such as upkeep due or a held bonus. Hover one to see what it is.
+- **See the route.** While the GM is showing the players an expedition's route, this button sits beside the season clock. It opens the map with the route drawn on it, and every leg and the total time written out. See [Expeditions and Sites](Expeditions-and-Sites).
 - **Ledger.** A dated history of every change to the steading, with search, a filter by subject, sorting, and select-to-delete. Characters and NPCs have a Ledger too.
 
 ## Overview

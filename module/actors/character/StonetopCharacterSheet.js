@@ -94,12 +94,13 @@ import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
 import {statApproaches} from "../../utils/stat-approaches.js";
 import {wirePickTally} from "../../utils/pick-tally.js";
 import {canPayStock, defaultStockSource, payableStockSources, mustAskStockSource, stockSourceChoiceLabel, stockReceipt, vesselHpFormula, stockCostFromDescription, RITES_OF_THE_LAND} from "./stock-cost.js";
-import {defaultSupplyPurse, SUPPLY_PURPOSE} from "./supply-cost.js";
+import {defaultSupplyPurse, SUPPLY_PURPOSE, SUPPLY_SLUGS, spreadSupplySpend} from "./supply-cost.js";
 import {supplyPayersFor, payOthersSupplies, spendPayerSupplies, ownSupplySpend, behalfSpendRow} from "./supply-payer.js";
 import {canRetire, openRetireDialog} from "../../campaign/retire-pc.js";
-import {hurtFollowerBodies, restFollowers, followerRestRow} from "./follower-rest.js";
+import {hurtFollowerBodies, restFollowers, followerRestRow, recoverFollowerPlan} from "./follower-rest.js";
 import {openMakeCamp} from "../../camp/camp-flow.js";
-import {magpieReminderRows} from "../../camp/camp-store.js";
+import {magpieReminderRows, crewSuppliesOf} from "../../camp/camp-store.js";
+import {EXPEDITION_LOG_SETTING} from "../../campaign/level-up-at-home.js";
 import {openStruggleAsOne} from "../../struggle/struggle-flow.js";
 import {beginAid} from "../../pc-asks/pc-ask-flow.js";
 import {STRUGGLE_MOVE} from "../../struggle/struggle-rules.js";
@@ -122,7 +123,7 @@ import {readCurrentSeason, readCurrentYear} from "../../seasons/current-season.j
 import {laboratoryNewlySelected, rollNaphthaYield} from "../../seasons/seasons-change-reminders.js";
 import {markWildWaysXp, wildWaysState} from "./wild-ways.js";
 import {openRitesOfTheLand} from "./rites-of-the-land.js";
-import {HEALERS_ARTS, HEALERS_ARTS_STOCK, HEALERS_ARTS_STOCK_HP, healersArtsCarers, carerWis, recoverHeal, recoverBreakdown, recoverRefusal, canReachCarerStock, payHealersArtsStock, spendsCarerStockDirectly} from "./healers-arts.js";
+import {HEALERS_ARTS, HEALERS_ARTS_STOCK, HEALERS_ARTS_STOCK_HP, recoverCarerActors, carerWis, recoverHeal, recoverBreakdown, recoverOutOfPlayReason, recoverRefusal, canReachCarerStock, payHealersArtsStock, spendsCarerStockDirectly} from "./healers-arts.js";
 import {isOutOfPlaySafe, isUnliving, recoveredHpTo, slowToHeal} from "./deaths-door-actor.js";
 import {createCharacterForUser} from "./create-character.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
@@ -485,7 +486,9 @@ export const GUIDED_CHARACTER_MOVES = {
 	},
 	"Forage": {
 		trigger: "When you spend a few hours seeking food in the wild, roll +WIS. In winter, you have disadvantage.",
-		results: ["10+: pick 2.", "7-9: pick 1.", "6-: you find nothing, and there is danger or risk."],
+		// The move prints no miss of its own (Book I p.79); p.336's GM advice is what the card offers (ROAD-11),
+		// the same words as the pack's moveResults so the dialog and the card agree.
+		results: ["10+: pick 2.", "7-9: pick 1.", "6-: The GM makes a move. Maybe the land is barren or picked clean, the whole party marks a debility from hunger, or you stumble into danger."],
 		note: "Provisions can substitute for supplies when you Make Camp, 1-for-1. The four options are on the result card; take as many as the roll allows. In winter the disadvantage is added to the roll for you, from the steading's season. A Blessed Raised by Wolves has advantage, also added for them; in winter the two cancel and the roll goes straight.",
 		roll: "wis",
 	},
@@ -823,7 +826,7 @@ function _chosenRecoverCare(html, carers) {
  * Keep the window's readout, the Stock tick and the Recover button in step with the care fields.
  * The tick is offered only when the carer can pay, and says why not when they cannot.
  */
-function _wireRecoverCare(html, { hp, base, carers, slow = false }) {
+function _wireRecoverCare(html, { hp, base, carers, slow = false, selfPart = true }) {
 	const root = html?.[0] ?? html;
 	const form = root?.querySelector?.(".stonetop-recover-dialog") ?? root;
 	if (!form?.querySelector?.('[name="recoverCarer"]')) return;
@@ -836,7 +839,15 @@ function _wireRecoverCare(html, { hp, base, carers, slow = false }) {
 	const paint = () => {
 		const care = _chosenRecoverCare(html, carers);
 		const carer = care?.carer ?? null;
-		show(tickRow, !!carer);
+		// A Recover for followers alone: their carer's WIS rides each body's heal, the Stock does not (the
+		// user's ruling E11), so neither the tick nor the character's own readout is drawn.
+		show(tickRow, !!carer && selfPart);
+		if (!selfPart) {
+			if (tick) tick.checked = false;
+			show(pick, false);
+			show(why, false);
+			return;
+		}
 		if (carer) {
 			tick.disabled = !carer.canPay;
 			if (!carer.canPay) tick.checked = false;
@@ -2214,10 +2225,18 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Followers who could Recover or Convalesce with them light those cards too (follower-rest.js; never
 			// throws). Read only when there are followers, and from the playbook, inserts and bonuses the
 			// Followers tab was just built from, so a render does not work them all out a second time.
-			const hurtFollowers = context.stonetop.hasFollowers
-				? (await hurtFollowerBodies(this.actor, { inputs: { playbookDoc, crewDef, companionDef, crewStats, companionBonuses } })).length
-				: 0;
-			context.stonetop.recover = this._buildRecoverData(context.stonetop, { hurtFollowers });
+			const hurtBodies = context.stonetop.hasFollowers
+				? await hurtFollowerBodies(this.actor, { inputs: { playbookDoc, crewDef, companionDef, crewStats, companionBonuses } })
+				: [];
+			const hurtFollowers = hurtBodies.length;
+			// Recover leaves out a body whose Recover is spent until it takes more damage (audit ROAD-4); the
+			// crew's own Supplies can pay for its members (ROAD-3): follower-rest.js#recoverFollowerPlan, as the
+			// window and the press read them. Convalesce counts every hurt body.
+			const recoverPlan = recoverFollowerPlan(this.actor, hurtBodies);
+			context.stonetop.recover = this._buildRecoverData(context.stonetop, {
+				hurtFollowers: recoverPlan.bodies.length,
+				crewSuppliesHeld: recoverPlan.crewHeld,
+			});
 			context.stonetop.convalesce = this._buildConvalesceData(context.stonetop, { hurtFollowers });
 			// Bolster's card says what Preparation is held now, and for what (bolster.js holds it).
 			context.stonetop.bolster = bolsterCardData(this.actor);
@@ -2455,7 +2474,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		// supplies stand in the way of, and heals followers who are hurt (p.240, p.473), so the card opens
 		// for either even when this character's own HP can't be recovered. `hurtFollowers` counts the
 		// follower bodies below max (follower-rest.js#hurtFollowerBodies).
-		_buildRecoverData(snapshot, { hurtFollowers = 0 } = {}) {
+		_buildRecoverData(snapshot, { hurtFollowers = 0, crewSuppliesHeld = 0 } = {}) {
 			const locked      = !!this.actor.getFlag(STONETOP_SCOPE, "recover.spent");
 			// Only what may actually pay for a Recover is counted: a pack full of provisions is
 			// not an answer to "can you Recover?" (supply-cost.js, Book I p.89), and counting it
@@ -2471,7 +2490,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			// A Ghost or a Revenant: "You gain no benefit from ... Recover." First, because nothing
 			// else on the card could change that.
 			const unliving    = isUnliving(this.actor);
-			const dyingHint   = this._dyingHint();
+			// The dying, a fate still to choose, or out of play (audit ROAD-6): _recoverBarHint.
+			const dyingHint   = this._recoverBarHint();
 
 			const able        = !unliving && !dyingHint;
 			// Their followers are not Unliving, and Recover on their own (p.240, p.473): the card stays open for
@@ -2487,7 +2507,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			const canPay      = suppliesLeft > 0 || othersPay;
 			const canRecover  = able && !locked && canPay && !atFullHp;
 			const canTend     = able && (snapshot.debilities ?? []).some(d => d.active);
-			const followersCanRecover = followersAble && hurtFollowers > 0 && canPay;
+			// The crew pays its own members' Recover from its own Supplies first (Book I p.472-473, audit ROAD-3).
+			const followersCanRecover = followersAble && hurtFollowers > 0 && (canPay || crewSuppliesHeld > 0);
 
 			let hint = null;
 			if (unliving)               hint = { icon: "fa-ghost",               text: game.i18n.localize(`stonetop.specialMoves.recover.${followersCanRecover ? "unlivingFollowersHint" : "unlivingHint"}`) };
@@ -2528,6 +2549,23 @@ export function createStonetopCharacterSheetClass(Base) {
 			const dying = this._dyingHint();
 			if (dying) ui.notifications?.warn(dying.text);
 			return !!dying;
+		}
+
+		// Recover (HP, a debility or a wound tended) refuses more than the dying (audit ROAD-6): a character
+		// whose Death's Door fate is pending ("your time has come", Book I p.244) or who is out of play (dead,
+		// p.245) has nothing to Recover. Null when Recover may go ahead; the hint says why otherwise.
+		_recoverBarHint() {
+			const dying = this._dyingHint();
+			if (dying) return dying;
+			const gone = recoverOutOfPlayReason(this.actor);
+			return gone ? { icon: "fa-skull", text: gone } : null;
+		}
+
+		// The press-time refusal for Recover's bar: warns with the hint and answers true when barred.
+		_refuseRecover() {
+			const barred = this._recoverBarHint();
+			if (barred) ui.notifications?.warn(barred.text);
+			return !!barred;
 		}
 
 		// Convalesce (homefront move): rest a few days in safety and comfort to
@@ -2607,7 +2645,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				canEdit: editable,
 				// Tending a wound IS Recover: a Ghost or Revenant gains nothing from it, and the dying
 				// can't save themselves (the same lock as the Recover card, _dyingHint).
-				canTend: editable && !isUnliving(this.actor) && !this._dyingHint(),
+				canTend: editable && !isUnliving(this.actor) && !this._recoverBarHint(),
 				isGM,
 				active,
 				scars,
@@ -8655,7 +8693,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			const group = el.closest(".stonetop-inv-diamonds");
 			if (group) for (const box of group.querySelectorAll(".stonetop-inv-diamond")) box.checked = el.checked;
 			el.closest(".stonetop-inv-item")?.classList.toggle("is-checked", el.checked);
-			await this._stonetopCharacter.setChoiceGearCarried(possessionSlug, choiceSlug, el.checked);
+			const marked = await this._stonetopCharacter.setChoiceGearCarried(possessionSlug, choiceSlug, el.checked);
+			// Drawn from the undefined pool: Have What You Need, said on a card (the user's ruling E12).
+			if (el.checked) this._postHadAllAlong(this._inventoryRowName(el), marked?.drawn ?? 0, !(Number(el.dataset.weight) > 0));
 			this.render(false);
 		}
 
@@ -8692,8 +8732,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (answer === null) return unmark();
 				if (answer === "enigma") {
 					if (!(await this._spendEnigmaForItem(this._inventoryRowName(el)))) return unmark();
+					// Produced by the Enigma, so an empty ◆ of supplies comes full (`packed`, supply-cost.js#suppliesUsesOnMark).
 					return void await this._stonetopCharacter.toggleCarriedItem(el.dataset.slug, true, {
-						small, weight: Number(el.dataset.weight ?? 1), loot: true,
+						small, weight: Number(el.dataset.weight ?? 1), loot: true, packed: true,
 					});
 				}
 			}
@@ -8702,6 +8743,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// so marking one asks which (StonetopCharacter#markWriteInCarried). A closed window marks
 			// nothing, so the boxes go back to unmarked.
 			if (el.checked && el.dataset.writeIn === "true") {
+				const poolBefore = this._undefinedPool(small);
 				const answer = await this._stonetopCharacter.markWriteInCarried(el.dataset.slug, {
 					name:   el.dataset.name ?? "",
 					small,
@@ -8709,7 +8751,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				});
 				// A mark is one actor update, which re-renders the sheet itself; a closed window wrote
 				// nothing, so only that case draws again here.
-				if (answer === null) unmark();
+				if (answer === null) return unmark();
+				this._postHadAllAlong(this._inventoryRowName(el), poolBefore - this._undefinedPool(small), small);
 				return;
 			}
 			// Past the allotment with no undefined □ left: the extra small item is paid for (supplies, or an
@@ -8721,14 +8764,94 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (extra === null) return unmark();
 				found = extra === "found" || extra === "enigma";
 			}
+			// A ◆ item with no undefined ◆ to draw (audit ROAD-2 and ROAD-9, the user's rulings E9 and E12). An
+			// empty supplies row asks where its food came from (or, eaten empty on the road, is picked up empty);
+			// anything else whose weight the undefined ◆ can't cover is "Found it out here" or not marked.
+			let packed = false;
+			if (el.checked && !small && !found && el.dataset.loot !== "true") {
+				const choice = await this._markWithoutUndefined(el);
+				if (choice === null) return unmark();
+				packed = choice === "packed";
+				found = choice === "found";
+			}
 			// One actor update (StonetopCharacter#toggleCarriedItem), whose re-render redraws the load.
-			await this._stonetopCharacter.toggleCarriedItem(el.dataset.slug, el.checked, {
+			const marked = await this._stonetopCharacter.toggleCarriedItem(el.dataset.slug, el.checked, {
 				small,
 				weight: Number(el.dataset.weight ?? 1),
 				// The provisions a Forage brought in are weight gained in the field, not something had
 				// all along: they draw nothing from the undefined pool (inv-item-*.hbs).
 				loot:   found || el.dataset.loot === "true",
+				packed,
 			});
+			if (el.checked) this._postHadAllAlong(this._inventoryRowName(el), marked?.drawn ?? 0, small);
+		}
+
+		/** The undefined marks left in the pool a mark of this kind draws on (□ for a small item, ◆ otherwise). */
+		_undefinedPool(small) {
+			const character = this._stonetopCharacter;
+			return small ? character.undefinedSmallMarks : (character.undefinedRegularMarks ?? 0);
+		}
+
+		/**
+		 * Marking a ◆ row the undefined ◆ can't pay for, asked before anything is written (the user's rulings
+		 * E9 and E12):
+		 *  · an empty printed supplies row never set down emptied: "Packed it at home" / "Bought it" pack it
+		 *    full (supply-cost.js#suppliesMarkNeedsAsk); one eaten empty on the road is picked up empty, said so;
+		 *  · any other item heavier than the undefined ◆ left: "Found it out here" (new weight, draws nothing).
+		 * Resolves "packed", "found", "mark" (go on as an ordinary mark) or null (closed: mark nothing).
+		 */
+		async _markWithoutUndefined(el) {
+			const slug = el.dataset.slug;
+			const name = this._inventoryRowName(el);
+			const character = this._stonetopCharacter;
+			const supplies = character.suppliesMarkAsk?.(slug) ?? { ask: false, emptied: false };
+			const key = k => `stonetop.inventory.${k}`;
+			if (supplies.ask) {
+				const answer = await askWithButtons({
+					title:   game.i18n.localize(key("suppliesSource.title")),
+					content: game.i18n.format(key("suppliesSource.body"), { name: _esc(name), uses: character.getUsesPerSupply?.() ?? 4 }),
+					buttons: [
+						{ key: "packed", label: game.i18n.localize(key("suppliesSource.packed")), value: "packed", icon: "fa-house" },
+						{ key: "bought", label: game.i18n.localize(key("suppliesSource.bought")), value: "packed", icon: "fa-coins" },
+						{ key: "cancel", label: game.i18n.localize(key("suppliesSource.cancel")), value: null },
+					],
+					defaultKey: "packed",
+				});
+				return answer ?? null;
+			}
+			if (supplies.emptied) {
+				ui.notifications?.info(game.i18n.format(key("suppliesEmptied"), { name }));
+				return "mark";
+			}
+			if (SUPPLY_SLUGS.includes(slug)) return "mark";
+			const weight = Math.max(0, Number(el.dataset.weight ?? 1) || 0);
+			const pool = this._undefinedPool(false);
+			if (weight <= pool) return "mark";
+			const answer = await askWithButtons({
+				title:   game.i18n.localize(key("noUndefinedMark.title")),
+				content: game.i18n.format(key("noUndefinedMark.body"), { name: _esc(name || game.i18n.localize(key("extraSmall.thisItem"))), weight, pool }),
+				buttons: [
+					{ key: "found",  label: game.i18n.localize(key("noUndefinedMark.found")), value: "found", icon: "fa-hand-holding" },
+					{ key: "cancel", label: game.i18n.localize(key("noUndefinedMark.cancel")), value: null },
+				],
+				defaultKey: "found",
+			});
+			return answer ?? null;
+		}
+
+		/**
+		 * HAVE WHAT YOU NEED's card, one line, whenever a mark DREW from the undefined pool (the user's ruling
+		 * E12): "The GM or any player can veto unreasonable items" (Book I p.78) needs the table to hear what
+		 * was produced. Nothing when nothing was drawn (loot, an Outfit-defined item picked back up).
+		 */
+		_postHadAllAlong(itemName, drew, small) {
+			if (!(drew > 0)) return;
+			const key = k => `stonetop.inventory.hadAllAlong.${k}`;
+			const mark = game.i18n.localize(key(small ? "smallMark" : "regularMark"));
+			postMoveToChat(this.actor, "Have What You Need", [{
+				label: itemName || game.i18n.localize("stonetop.inventory.extraSmall.thisItem"),
+				value: game.i18n.format(key("receipt"), { marks: `${drew} ${mark}`, left: this._undefinedPool(small) }),
+			}, ...magpieReminderRows(this.actor)]);
 		}
 
 		/**
@@ -8898,12 +9021,13 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * Gated on having the move LEARNED, like every other MOVE_USE_EFFECTS handler: the row posts
 		 * its text for anyone reading another playbook's page, and only a Ranger actually procures.
 		 *
-		 * The box starts ticked in winter, read off the steading's clock as Forage's winter is
-		 * (StonetopCharacter's SEASON_MOVE_DISADVANTAGE). Barren terrain is the player's to tick.
+		 * The box starts ticked in winter, read off the same clock as Forage's winter
+		 * (StonetopCharacter#currentSeason, the home steading's when the PC's own has none stamped).
+		 * Barren terrain is the player's to tick.
 		 */
 		async _onTheHoof() {
 			if (!this.isEditable || !ownsLearnedMoveNamed(this.actor, ON_THE_HOOF)) return;
-			const winter = readCurrentSeason(this._stonetopCharacter?.getSteadingActor?.())?.season === "winter";
+			const winter = this._stonetopCharacter?.currentSeason?.()?.season === "winter";
 			new Dialog({
 				title: ON_THE_HOOF,
 				content: `<form class="stonetop-homestead-dialog">
@@ -12725,20 +12849,24 @@ export function createStonetopCharacterSheetClass(Base) {
 			// A Ghost or a Revenant gains nothing from Recover, so the window is their followers' alone (the
 			// user's ruling, 2026-10-27): no HP, no tend, no Healer's Arts for the character.
 			const unliving = isUnliving(this.actor);
-			// Nor for the dying, who can't save themselves (Book I p.240): said, since a press got here.
-			if (this._refuseIfDying()) return;
+			// Nor for the dying, who can't save themselves (Book I p.240), a fate still to choose or out of play
+			// (audit ROAD-6): said, since a press got here.
+			if (this._refuseRecover()) return;
 			const purses    = this._stonetopCharacter.supplyPurses(SUPPLY_PURPOSE.RECOVER);
 			// "Or someone else must expend a use on their behalf" (Book I p.246): another character's
 			// supplies, whoever this user can reach to pay them (supply-payer.js).
 			const payers    = supplyPayersFor(this.actor, SUPPLY_PURPOSE.RECOVER);
 			const canPay    = purses.total > 0 || payers.length > 0;
-			// Followers who are hurt Recover too, a use each (p.240, p.473), whatever the PC's own HP.
-			const bodies    = canPay ? await hurtFollowerBodies(this.actor) : [];
+			// Followers who are hurt Recover too, a use each (p.240, p.473), whatever the PC's own HP; not one whose
+			// Recover is spent until they take more damage (audit ROAD-4), and only a crew member when the crew's
+			// own Supplies (Book I p.472-473, audit ROAD-3) are all there is to pay with (recoverFollowerPlan).
+			const plan      = recoverFollowerPlan(this.actor, await hurtFollowerBodies(this.actor), { canPay });
+			const bodies    = plan.bodies;
 			// The Unliving with no follower to Recover for: said before the snapshot is built, since only
 			// the character's own part reads it. Hurt followers and nothing to pay for them is the supplies' fault,
 			// not the insert's, and is said so.
 			if (unliving && !bodies.length) {
-				const unpaid = !canPay && (await hurtFollowerBodies(this.actor)).length > 0;
+				const unpaid = !canPay && plan.hurt.length > 0;
 				return void ui.notifications?.warn(game.i18n.localize(unpaid
 					? "stonetop.specialMoves.recover.noSuppliesHint" : "stonetop.specialMoves.recover.unlivingHint"));
 			}
@@ -12760,8 +12888,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			const plain      = recoverHeal({ base: healAmount, hp: hp.value, max: hp.max, slow });
 			const guide      = GUIDED_CHARACTER_MOVES.Recover;
 			// Healer's Arts: whoever could be tending this Recover (healers-arts.js). None, and the
-			// window is the plain Recover it always was.
-			const carers     = self ? await this._recoverCarers() : [];
+			// window is the plain Recover it always was. Tended followers get the carer's WIS too (E11).
+			const carers     = self || bodies.length ? await this._recoverCarers() : [];
 			const selfRows = self
 				? `<li>Expend <strong>1 use of supplies</strong>.</li>
 					<li>Regain HP: <strong>${hp.value} &rarr; <span class="stonetop-recover-new-hp">${plain.newHp}</span></strong> (<span class="stonetop-recover-breakdown">${_esc(recoverBreakdown(plain))}</span>).</li>`
@@ -12779,7 +12907,7 @@ export function createStonetopCharacterSheetClass(Base) {
 							purse, payer, self,
 							base:      healAmount,
 							slow,
-							care:      self ? _chosenRecoverCare(html, carers) : null,
+							care:      carers.length ? _chosenRecoverCare(html, carers) : null,
 							followers: _chosenRestFollowers(html),
 						});
 					},
@@ -12810,7 +12938,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				default: "recover",
 				render: html => {
 					bringDialogToFront(html);
-					if (carers.length) _wireRecoverCare(html, { hp, base: healAmount, carers, slow });
+					if (carers.length) _wireRecoverCare(html, { hp, base: healAmount, carers, slow, selfPart: self });
 				},
 			}, { width: 480, classes: this._pastDeathWindowClasses(["dialog", "stonetop", "stonetop-recover-dialog"]) }).render(true);
 		}
@@ -12825,7 +12953,8 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * asked (healers-arts.js#payHealersArtsStock).
 		 */
 		async _recoverCarers() {
-			const actors = healersArtsCarers(game.actors?.contents ?? game.actors ?? []);
+			// In play, not dying, and on the patient's trip while one is under way (audit ROAD-8, the user's ruling E11).
+			const actors = recoverCarerActors(game.actors?.contents ?? game.actors ?? [], this.actor, { log: getObjectSetting(EXPEDITION_LOG_SETTING) });
 			return Promise.all(actors.map(async actor => {
 				const sources = (await actor.typedActor?.stockSources?.()) ?? [];
 				const payable = payableStockSources(sources, HEALERS_ARTS_STOCK);
@@ -12864,15 +12993,17 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * spent FIRST, through their own player when it is theirs to decide: a "no" spends and heals nothing.
 		 */
 		async _applyRecover({ purse, base = 4, slow = false, care = null, payer = null, self = true, followers = [] }) {
-			// Dying since the window opened: they can't save themselves (Book I p.240).
-			if (this._refuseIfDying()) return;
+			// Dying since the window opened: they can't save themselves (Book I p.240); nor with a fate still to
+			// choose, or out of play (audit ROAD-6).
+			if (this._refuseRecover()) return;
 			const picked = Array.isArray(followers) ? followers.filter(Boolean) : [];
 			// Unliving, now or since the window opened: their own part does them no good, so nothing is spent
 			// on it, and the Recover goes ahead for the followers ticked alone (the user's ruling, 2026-10-27).
+			// A carer still tends the followers (their WIS, never the Stock: the user's ruling E11).
 			if (isUnliving(this.actor)) {
 				if (!picked.length) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.unlivingHint"));
 				self = false;
-				care = null;
+				care = care ? { ...care, stock: false } : null;
 			}
 			if (!self && !picked.length) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.nothingPicked"));
 			// The character's own part, read live: spent already (by a second window or a second press), or
@@ -12885,27 +13016,33 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (selfBlocked && !picked.length) return void ui.notifications?.warn(game.i18n.localize(`stonetop.specialMoves.recover.${selfBlocked}`));
 				if (selfBlocked) self = false;
 			}
-			// The followers still below their max now; one healed meanwhile is not paid for. restFollowers
-			// reads them again at the heal, since a carer or payer may take minutes to answer in between.
-			const hurtPicked = picked.length
-				? (await hurtFollowerBodies(this.actor)).filter(b => picked.includes(b.id))
-				: [];
+			// The followers ticked, worked out as the window's were (recoverFollowerPlan) but read again now: one
+			// healed meanwhile is not paid for. restFollowers reads them again at the heal, since a carer or payer
+			// may take minutes to answer in between.
+			const plan = recoverFollowerPlan(this.actor, picked.length ? await hurtFollowerBodies(this.actor) : [], { ids: picked });
+			// A body whose Recover is spent (by a second window meanwhile) is left out until it takes more damage
+			// (audit ROAD-4, the user's ruling E10), and said so.
+			if (plan.locked.length) {
+				ui.notifications?.warn(game.i18n.format("stonetop.specialMoves.recover.followersLocked", { names: joinNames(plan.locked.map(b => b.name)) }));
+			}
 			// A follower whose HP is an NPC this client cannot write needs the GM's client to heal them. With no
 			// GM here they are left out now, before a use is spent on a heal that could not land.
-			const waiting = hurtPicked.filter(b => b.healable === false);
-			if (waiting.length) {
-				ui.notifications?.warn(game.i18n.format("stonetop.specialMoves.recover.followersNeedGm", { names: waiting.map(b => b.name).join(", ") }));
+			if (plan.waiting.length) {
+				ui.notifications?.warn(game.i18n.format("stonetop.specialMoves.recover.followersNeedGm", { names: plan.waiting.map(b => b.name).join(", ") }));
 			}
-			const followerBodies = hurtPicked.filter(b => !waiting.includes(b));
-			const followerIds = followerBodies.map(b => b.id);
+			const followerIds = plan.healing.map(b => b.id);
 			if (!self && !followerIds.length) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.nothingPicked"));
-			const uses = (self ? 1 : 0) + followerIds.length;
+			// The crew's members pay out of the crew's own Supplies first (plan.crewPays); only what those can't
+			// cover falls to a pack.
+			const crewPays = plan.crewPays;
+			const uses = (self ? 1 : 0) + followerIds.length - crewPays;
 			// Whose purse: this character's, or the payer's, read live either way.
-			const payerActor = payer ? (game.actors?.get?.(payer.id) ?? null) : null;
-			if (payer && !payerActor) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint"));
+			const payerActor = payer && uses > 0 ? (game.actors?.get?.(payer.id) ?? null) : null;
+			if (payer && uses > 0 && !payerActor) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint"));
 			const purseOwner = payerActor?.typedActor ?? this._stonetopCharacter;
-			const livePurse = () => purseOwner.supplyPurses(SUPPLY_PURPOSE.RECOVER)
-				.eligible.find(p => p.slug === purse?.slug && p.remaining >= uses) ?? null;
+			// Out of the purse picked first, then the owner's others (supply-cost.js#spreadSupplySpend, audit ROAD-7).
+			const livePurse = () => uses <= 0
+				|| !!spreadSupplySpend(purseOwner.supplyPurses(SUPPLY_PURPOSE.RECOVER).eligible, { slug: purse?.slug ?? null, n: uses });
 			if (!livePurse()) {
 				return void ui.notifications?.warn(uses > 1
 					? game.i18n.format("stonetop.specialMoves.recover.notEnoughSupplies", { uses })
@@ -12953,16 +13090,19 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Someone else's supplies (p.246), paid before anything here is written: through their own player
 			// when it is theirs to decide (supply-payer.js). Kept, unanswered or unpayable, nothing is healed.
 			// Otherwise this character's own, read as the purse is now, into the one write below.
-			const own = payerActor ? null : ownSupplySpend(this._stonetopCharacter, { slug: purse.slug, n: uses, purpose: SUPPLY_PURPOSE.RECOVER });
-			if (!payerActor && !own) return void ui.notifications?.warn(stockGone(game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint")));
+			const own = payerActor || uses <= 0 ? null : ownSupplySpend(this._stonetopCharacter, { slug: purse?.slug ?? null, n: uses, purpose: SUPPLY_PURPOSE.RECOVER });
+			if (!payerActor && uses > 0 && !own) return void ui.notifications?.warn(stockGone(game.i18n.localize("stonetop.specialMoves.recover.noSuppliesHint")));
 			// Asking the payer can take a while too, and meanwhile a second window may have made this Recover, or
 			// a blow may have put this character on Death's Door ("can't save themselves", Book I p.240). The payer's
 			// turn checks that just before it pays (recoverRefusal): refused, it pays for the followers alone.
 			const paidBy = payerActor
-				? await this._payOnBehalf(payerActor, { slug: purse.slug, n: uses, kept: stockGone, recover: { self } })
+				? await this._payOnBehalf(payerActor, { slug: purse?.slug ?? null, n: uses, kept: stockGone, recover: { self } })
 				: null;
-			const spentRow = payerActor ? paidBy?.row : own.row;
-			if (!spentRow) return;
+			const spentRow = payerActor ? paidBy?.row : own?.row ?? null;
+			if (uses > 0 && !spentRow) return;
+			// The crew's share, out of its own Supplies, read live at the write (camp-store.js#crewSuppliesOf).
+			const crewNow = crewPays > 0 ? crewSuppliesOf(this.actor) : null;
+			const crewLeft = crewNow ? Math.max(0, crewNow.held - crewPays) : 0;
 			if (paidBy?.refused) {
 				ui.notifications?.warn(stockGone(paidBy.refused));
 				self = false;
@@ -12987,6 +13127,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			// A payer's uses were their own write; a Recover for followers alone leaves this character's HP be.
 			const update = {
 				...(own?.update ?? {}),
+				...(crewNow ? crewNow.leaving(crewLeft) : {}),
 				...(self ? {
 					"system.attributes.hp.value": newHp,
 					"flags.stonetop-pwd.recover.spent": true,
@@ -12994,16 +13135,29 @@ export function createStonetopCharacterSheetClass(Base) {
 				} : {}),
 			};
 			if (Object.keys(update).length) await this.actor.update(update, { stonetopMove: "Recover" });
-			// The followers, by the same 4+Prosperity, as read above (follower-rest.js: their boxes in one write).
+			// The followers, by the same 4+Prosperity, as read above (follower-rest.js: their boxes in one write),
+			// and a carer's WIS on top for each (Healer's Arts, the user's ruling E11; never less than nothing).
+			const followerWis = care ? Math.max(0, Math.trunc(Number(care.carer.wis) || 0)) : 0;
+			// Each body healed has had its Recover until it takes more damage (audit ROAD-4, E10): `lock` writes that
+			// in the same update as their boxes.
 			const healed = followerIds.length
-				? await restFollowers(this.actor, followerIds, { heal: base, moveName: "Recover" })
+				? await restFollowers(this.actor, followerIds, { heal: base + followerWis, moveName: "Recover", lock: true })
 				: [];
 
-			const rows = [spentRow];
+			const rows = spentRow ? [spentRow] : [];
+			if (crewNow) {
+				rows.push({
+					label: game.i18n.localize("stonetop.specialMoves.recover.crewSuppliesRow"),
+					value: game.i18n.format("stonetop.specialMoves.recover.crewSuppliesSpent", { uses: countOf(crewPays, "use"), left: crewLeft }),
+				});
+			}
 			if (self) rows.push({ label: "HP", value: `${oldHp} → ${newHp} (+${newHp - oldHp})` });
 			if (self && newHp > oldHp && slowToHeal(this.actor)) rows.push({ label: "Torment's Blessing", value: "Slow to heal: only half the HP, rounded up" });
 			const followerRow = followerRestRow(healed);
 			if (followerRow) rows.push(followerRow);
+			if (!self && care && healed.length) {
+				rows.push({ label: HEALERS_ARTS, value: `Under ${care.carer.name}'s care: +${followerWis} HP (WIS) each` });
+			}
 			if (self && care) {
 				rows.push({ label: HEALERS_ARTS, value: `Under ${care.carer.name}'s care: +${Math.max(0, care.carer.wis)} HP (WIS)` });
 				if (paid) {
@@ -13038,7 +13192,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (isUnliving(this.actor)) {
 				return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.unlivingHint"));
 			}
-			if (this._refuseIfDying()) return;
+			if (this._refuseRecover()) return;
 			const marked = this._stonetopCharacter.debilityChoices.filter(d => d.marked);
 			if (!marked.length) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.noDebility"));
 			const purses = this._stonetopCharacter.supplyPurses(SUPPLY_PURPOSE.RECOVER);
@@ -13079,7 +13233,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * "no" clears nothing. Everything is read again here, so a debility cleared meanwhile spends nothing.
 		 */
 		async _applyTendDebility({ key, spend = false, purse = null, payer = null }) {
-			if (isUnliving(this.actor) || this._refuseIfDying()) return;
+			if (isUnliving(this.actor) || this._refuseRecover()) return;
 			const debility = this._stonetopCharacter.debilityChoices.find(d => d.key === key && d.marked);
 			if (!debility) return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.noDebility"));
 			const update = debilityData(debility.key, false);
@@ -13736,8 +13890,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (isUnliving(this.actor)) {
 				return void ui.notifications?.warn(game.i18n.localize("stonetop.specialMoves.recover.unlivingHint"));
 			}
-			// Nor while dying: Book I p.240, they can't save themselves.
-			if (this._refuseIfDying()) return;
+			// Nor while dying: Book I p.240, they can't save themselves; nor with a fate to choose or out of play (ROAD-6).
+			if (this._refuseRecover()) return;
 			const wound = this._woundRecord(id);
 			if (!wound) return void ui.notifications?.warn("That wound is no longer on the sheet.");
 			const label = wound.text || "(unnamed wound)";
@@ -13753,7 +13907,7 @@ export function createStonetopCharacterSheetClass(Base) {
 
 			const stabilize = async () => {
 				// Re-asked at confirm: HP can drop to 0 while the dialog is open.
-				if (isUnliving(this.actor) || this._refuseIfDying()) return;
+				if (isUnliving(this.actor) || this._refuseRecover()) return;
 				await this._stonetopCharacter.updateWound(id, { status: "stabilized", requirementNote: "" }, { moveName: "Recover" });
 				postMoveToChat(this.actor, "Recover", [{ label: "Wound stabilized", value: chatLabel }]);
 				this.render(false);

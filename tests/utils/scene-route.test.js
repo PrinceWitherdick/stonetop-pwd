@@ -2,14 +2,14 @@ import { describe, it, expect } from "vitest";
 import { readRepo } from "../fakes/css.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { POSTER_MAPS, posterSceneFor } from "../../module/book2-art/poster-map-catalog.js";
-import { frameFor, spotPercent, travelPlace } from "../../module/data/travel-times.js";
+import { FULL_FRAME, frameFor, sceneFrame, spotPercent, travelPlace } from "../../module/data/travel-times.js";
 import { journeyRoute, normalizeJourney } from "../../module/utils/travel-route.js";
 import { MAP_PIN_ICON_SIZE } from "../../module/utils/map-pins.js";
 import { tierDrawing } from "../../module/utils/route-path.js";
 import {
 	ROUTE_CASE_WIDTH, ROUTE_DOT_GAP, ROUTE_DOT_SIZE, ROUTE_HEAD_SIZE,
 	ROUTE_INK_FALLBACK, ROUTE_WAYPOINT_HEAD_SIZE, SCENE_ROUTE_FLAG,
-	clearRouteOnScene, routeFlagTouched, routeInk, sceneJourney, sceneRouteCheck,
+	clearRouteElsewhere, clearRouteOnScene, routeFlagTouched, routeInk, sceneJourney, sceneRouteCheck,
 	sceneRoutePlan, sceneRouteRefusal, sceneShowsJourney, showRouteOnScene,
 } from "../../module/utils/scene-route.js";
 
@@ -91,6 +91,24 @@ describe("which scene a route may go on", () => {
 		expect(check.reason).toBe("wrong-shape");
 	});
 
+	// A GM's own Scene made from the book's map page is the PRINTED crop, not the poster scan, and
+	// the positions are measured against the printed crop, so it takes the route through no insets.
+	it("takes a scene showing the book's map page as well as one showing the poster scan", () => {
+		const page = posterScene("vicinity", { width: 5840, height: 4220 });
+		expect(sceneRouteCheck(page, routeTo("the-crossroads")).ok).toBe(true);
+		const pageWE = posterScene("worlds-end", { width: 5860, height: 4790 });
+		expect(sceneRouteCheck(pageWE, routeTo("tors-fist")).ok).toBe(true);
+	});
+
+	// The World's End page crop lands inside the tolerance of the poster frame too; the closer fit
+	// has to win or every point goes through insets that picture does not have.
+	it("places through the closer of the two crops", () => {
+		const out = POSTER_MAPS.find(m => m.slug === "worlds-end").out;
+		expect(sceneFrame(out, 586 / 479, 586 / 479)).toEqual(FULL_FRAME);
+		expect(sceneFrame(out, 6000 / 4714, 586 / 479)).toEqual(frameFor(out));
+		expect(sceneFrame(out, 1, 586 / 479)).toBeNull();
+	});
+
 	it("refuses with nothing to draw, and with nowhere to draw it", () => {
 		expect(sceneRouteCheck(posterScene("vicinity"), null).reason).toBe("no-destination");
 		expect(sceneRouteCheck(null, routeTo("the-crossroads")).reason).toBe("no-scene");
@@ -122,6 +140,8 @@ describe("what the GM is told when it will not draw", () => {
 		const said = refusal(posterScene("stonetop-village"), routeTo("the-crossroads"), { hasScene: false });
 		expect(said).toContain("Import Book Art");
 		expect(said).not.toContain("Open The Vicinity");
+		// A GM who built their own Scene is told how to mark it, by the map's name.
+		expect(said).toContain("marked as The Vicinity");
 	});
 
 	it("names the end the map cannot place", () => {
@@ -488,6 +508,59 @@ describe("what the scene remembers", () => {
 		expect(posterSceneFor("vicinity", [byFlag])).toBe(byFlag);
 		expect(posterSceneFor("worlds-end", [{ name: "The World's End", flags: {} }])).toBeTruthy();
 		expect(posterSceneFor("worlds-end", [byFlag])).toBeNull();
+	});
+
+	// Audit RTE-14. v14 wants the ForcedDeletion operator; the bare `-=` key is deprecated there
+	// and gone in v16. v13 keeps the key, which its nested flags need.
+	it("takes the flag off with the operator on v14 and the -= key on v13", async () => {
+		const ForcedDeletion = class {};
+		const before = { game: globalThis.game, foundry: globalThis.foundry };
+		globalThis.foundry = { ...globalThis.foundry, data: { ...globalThis.foundry?.data, operators: { ForcedDeletion } } };
+		try {
+			for (const [generation, check] of [
+				[14, changes => expect(changes[`flags.${SYSTEM_ID}.${SCENE_ROUTE_FLAG}`]).toBeInstanceOf(ForcedDeletion)],
+				[13, changes => expect(changes).toHaveProperty([`flags.${SYSTEM_ID}.-=${SCENE_ROUTE_FLAG}`], null)],
+			]) {
+				globalThis.game = { ...before.game, release: { generation } };
+				const scene = posterScene("vicinity", {
+					flags: { [SYSTEM_ID]: { posterMap: "vicinity", [SCENE_ROUTE_FLAG]: { origin: "stonetop", destination: "the-maw" } } },
+				});
+				let sent = null;
+				scene.update = async changes => { sent = changes; };
+				await clearRouteOnScene(scene);
+				check(sent);
+			}
+		} finally {
+			globalThis.game = before.game;
+			globalThis.foundry = before.foundry;
+		}
+	});
+
+	// Audit ruling E14: a line drawn where the players are not leaves the players' line alone.
+	it("spares the players' scene when told to, and clears every other", async () => {
+		const drawnOn = writableScene("worlds-end");
+		const table = writableScene("vicinity");
+		const stale = posterScene("vicinity", { id: "scene-old" });
+		stale.update = async changes => applyUpdate(stale, changes);
+		for (const scene of [table, stale]) {
+			scene.flags[SYSTEM_ID][SCENE_ROUTE_FLAG] = { origin: "stonetop", destination: "the-maw", custom: null };
+		}
+		const cleared = await clearRouteElsewhere(drawnOn, { scenes: [drawnOn, table, stale], spare: table });
+		expect(cleared).toBe(1);
+		expect(table.flags[SYSTEM_ID][SCENE_ROUTE_FLAG]).toBeTruthy();
+		expect(stale.flags[SYSTEM_ID][SCENE_ROUTE_FLAG]).toBeUndefined();
+	});
+
+	// Audit ruling E17: a site's name and uuid are GM prep, and a Scene flag reaches every client.
+	it("writes a stop laid on a site as a bare mark, keeping the players' label", async () => {
+		const scene = writableScene();
+		const where = await showRouteOnScene(scene, {
+			origin: "stonetop",
+			custom: { tier: "vicinity", points: [{ fx: 0.4, fy: 0.6, siteUuid: "s1", name: "The Sunken Barrow", label: "the shrine" }] },
+		});
+		expect(scene.flags[SYSTEM_ID][SCENE_ROUTE_FLAG].custom.points).toEqual([{ fx: 0.4, fy: 0.6, label: "the shrine" }]);
+		// The GM's own notice may still name it: that is read from the trip, not the flag.
+		expect(where).toBe("The Sunken Barrow");
 	});
 });
 

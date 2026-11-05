@@ -9,7 +9,7 @@ import {openLedgerDialog} from "../../utils/ledger-dialog.js";
 import {wireTabSearch} from "../../utils/tab-search.js";
 import {injectHeaderToggle} from "../../utils/sheet-chrome.js";
 import {escHtml, stripHtmlToText} from "../../utils/strings.js";
-import {CUSTOM_ASSET_VALUE, wireCustomAssetSelect} from "../../utils/requisition-asset.js";
+import {CUSTOM_ASSET_VALUE, offerToClearRequisitioned, wireCustomAssetSelect} from "../../utils/requisition-asset.js";
 import {postMoveToChat, rolledTotalCard, stonetopChatCard} from "../../utils/chat.js";
 import {AddSteadingMemberDialog} from "../../dialogs/AddSteadingMemberDialog.js";
 import {addPersonToSteading, personFieldPath, isActorRow, personRowActor, usedPersonPortraits, HOME_STONETOP} from "./steading-people.js";
@@ -87,6 +87,8 @@ import {
 import {partyCharacters} from "../../utils/playbook-actors.js";
 import {isOutOfPlaySafe} from "../character/deaths-door-actor.js";
 import { countOf, plural } from "../../utils/plural.js";
+import {readSharedRoute, sharedRouteChip, sharedRouteChipHtml} from "../../utils/shared-route.js";
+import {openSharedRoute} from "../../dialogs/SharedRouteWindow.js";
 
 /**
  * What the member-photo WINDOW shows, given the path a member actually wears.
@@ -581,6 +583,9 @@ export function createStonetopSteadingSheetClass(Base) {
 			// template wants to know is whether the world has a map at all, and if not, whether
 			// this reader is one of the people who may make the first one.
 			context.stonetop.relmap = relmapTabContext();
+			// The route the GM is showing the players, if any: a See the route button in the header,
+			// on every tab, for everyone. Gone when nothing is being shown (utils/shared-route.js).
+			context.stonetop.sharedRouteChip = sharedRouteChipHtml(sharedRouteChip(readSharedRoute()));
 			return context;
 		}
 
@@ -782,6 +787,10 @@ export function createStonetopSteadingSheetClass(Base) {
 			// GM-only, like the clock: the template renders a plain span for everyone else, so
 			// this binds nothing for a player.
 			html.find("[data-action='set-current-weather']").on("click", () => game.stonetop?.openWeather?.());
+
+			// The route the GM is showing the players (dialogs/SharedRouteWindow.js). For everyone:
+			// opening it writes nothing.
+			html.find("[data-action='see-shared-route']").on("click", () => openSharedRoute());
 
 			// A real radio group, so `change` rather than a delegated click: the browser owns the
 			// deselection, and change only fires on the one that became checked.
@@ -3292,11 +3301,28 @@ export function createStonetopSteadingSheetClass(Base) {
 			});
 		}
 
+		// returnAsset can refuse (the row at `index` is another asset by the time the write is made, PREP-2)
+		// or throw (the GM's client refused or did not answer the relay). Either way the asset is still out
+		// with its holder, so nothing is said to be returned and nothing is offered off their sheet.
 		async _onReturnAsset(index) {
-			const name = this._stonetopSteading._flags.assets?.[index]?.name ?? "Asset";
-			await this._stonetopSteading.returnAsset(index);
+			const row = this._stonetopSteading._flags.assets?.[index] ?? null;
+			const name = row?.name ?? "Asset";
+			const ok = await this._stonetopSteading.returnAsset(index, row?.name ? { name: row.name } : {})
+				.catch(err => { console.warn("Stonetop | Could not return the asset:", err); return null; });
 			this.render(false);
+			if (ok === null) {
+				ui.notifications.warn(`Could not update ${this.actor.name}'s assets.`);
+				return;
+			}
+			if (!ok) {
+				ui.notifications.warn(`${name} isn't where this list had it any more. The sheet is redrawn: check it and click again.`);
+				return;
+			}
 			ui.notifications.info(`${name} returned to ${this.actor.name}.`);
+			// What the take left on the character who had it (an item, its animals as followers): offered off
+			// again, to a user who can write that sheet (expedition audit PREP-5).
+			await offerToClearRequisitioned({ holderId: row?.takenBy?.id, assetName: row?.name })
+				.catch(err => console.warn("Stonetop | Could not offer to clear a returned asset off the sheet:", err));
 		}
 
 		async _onListItemAdd(list) {

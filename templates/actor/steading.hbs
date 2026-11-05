@@ -85,6 +85,15 @@
 				{{/each}}
 			</div>
 			{{/if}}
+			{{!-- The route the GM is showing the players from the Run an Expedition walkthrough (its
+			      Show players button; utils/shared-route.js). Just ahead of the clock, and parked against
+			      it: it carries the auto margin itself and the clock gives its own up while this is here
+			      (see .steading-header-route in stonetop.css), so the two never split the row between
+			      them. A labelled chip rather than a bare glyph, so a screen reader has a name to read,
+			      and in the header so it is there from every tab. Absent when nothing is being shown. It
+			      opens a window and writes nothing, so it is a button for everyone. The markup is
+			      utils/shared-route.js `sharedRouteChipHtml`, the same the in-place refresh draws. --}}
+			{{{stonetop.sharedRouteChip}}}
 			{{!-- The campaign's clock, beside the title: the season the table is playing in and
 			      the year it belongs to, stamped by the Seasons Change move (see
 			      module/seasons/current-season.js). Both halves always show: a world that has

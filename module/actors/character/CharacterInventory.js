@@ -26,6 +26,22 @@ export class CharacterInventory {
 	// instead of the item's full cost (which would invent marks). Items defined at
 	// Outfit have no entry, so un-marking them just drops their weight from the load.
 	get drawn()        { return this._flags.getFlag("drawn") ?? {}; }
+	// The printed supplies rows set down EMPTY (their food eaten), keyed by slug: re-marking one picks up
+	// the empty ◆ rather than packing a fresh one (supply-cost.js#suppliesUsesOnMark, audit ROAD-2).
+	// Outfit packs afresh and Reset clears the marks, so both forget it.
+	get emptied()      { return this._flags.getFlag("emptied") ?? {}; }
+
+	// Remember (or forget) that a supplies row was set down empty, as a fragment. Forgetting is a
+	// deletion of that slug (setFlag merges); empty when there is nothing to forget.
+	emptiedData(slug, isEmptied) {
+		if (isEmptied) return this._flags.subKeyData("emptied", slug, true);
+		return slug in this.emptied ? this._flags.subKeyDeletionData("emptied", slug) : {};
+	}
+
+	// Forget every emptied row (Outfit packs the food afresh), as a fragment.
+	clearEmptiedData() {
+		return this._flags.deletionData("emptied");
+	}
 
 	// One slug's mark, written as its own sub-key like setResource: re-sending the whole map from
 	// this client's copy would write back a stale mark for every OTHER slug a second client (or a
@@ -178,6 +194,7 @@ export class CharacterInventory {
 			...this._flags.deletionData("regularPool"),
 			...this._flags.deletionData("smallPool"),
 			...this._flags.deletionData("drawn"),
+			...this._flags.deletionData("emptied"),
 		};
 	}
 

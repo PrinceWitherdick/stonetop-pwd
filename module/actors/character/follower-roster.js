@@ -48,6 +48,10 @@ export const FOLLOWER_FLAGS = {
 	"custom":           { detailBase: "customFollowers.{slug}",  loyalty: "customFollowers.{slug}.loyalty", readiness: "customFollowers.{slug}.readiness", ammo: "customFollowers.{slug}.ammo", structural: {} },
 };
 
+// The single followers whose "Dead" lives on their card's details (follower-fate.js#followerDeadPath, the
+// writer; the same three types). Not imported from there: follower-fate pulls in the roll engine.
+const DETAIL_DEAD_TYPES = new Set(["animal-companion", "initiate", "beast"]);
+
 /** A FOLLOWER_FLAGS path template with its `{slug}` filled, or null for no template. */
 export const fillFollowerSlug = (tpl, slug) => tpl == null ? null : tpl.replaceAll("{slug}", slug ?? "");
 
@@ -137,7 +141,9 @@ export function followerRoster(actor, sf, { playbookDoc = null, crewDef = null, 
 		const hpMax = rec.hpMax == null ? null : (followerHpMaxOverride(details) ?? rec.hpMax);
 		out.push({
 			ftype, slug,
-			dead: false,
+			// "Dead" from the 0-HP fate: a companion's, initiate's or beast's is kept on their card's details
+			// (follower-fate.js#followerDeadPath, `<detailBase>.dead`), a custom follower's on its record (`rec`).
+			dead: DETAIL_DEAD_TYPES.has(ftype) && !!details?.dead,
 			isGroup: false,
 			...rec,
 			hpMax,
@@ -197,4 +203,42 @@ export async function followerRosterOf(actor) {
 /** The followers travelling with a character's party, alive (followerRosterOf, filtered). */
 export async function partyFollowersOf(actor) {
 	return partyFollowers(await followerRosterOf(actor));
+}
+
+/**
+ * FOLLOWERS LEFT ON THE ROAD BY A PC WHO IS GONE (audit ROAD-13, the user's ruling E13). A PC who dies or
+ * leaves play mid-trip drops out of every road surface (Days on the Road, the camp), and their followers
+ * went with them, unfed and uncounted, though "each member of the party" eats (Book I p.79) and followers
+ * "shift their loyalty from one PC to another" (p.480). This names them, so the GM can count them on a
+ * living PC or hand them off.
+ *
+ * Read off the flags alone, synchronously (a window's getData): the crew, an animal companion and the
+ * custom followers still travelling with the party and alive. Only a custom follower can be handed off
+ * (`canHandOff`, the sheet's Hand off); the crew and a companion are tied to their playbook.
+ *
+ * @param {Actor[]} characters  the characters to look through (the dead among them are the ones read)
+ * @param {object} [o]
+ * @param {(actor: Actor) => boolean} o.outOfPlay  deaths-door-actor.js#isOutOfPlaySafe, injected (it imports campaign code)
+ * @returns {Array<{pcId: string, pcName: string, followers: Array<{ftype: string, slug: string, name: string, canHandOff: boolean}>}>}
+ */
+export function orphanedPartyFollowers(characters, { outOfPlay } = {}) {
+	const out = [];
+	for (const pc of Array.isArray(characters) ? characters : []) {
+		if (!pc || typeof outOfPlay !== "function" || !outOfPlay(pc)) continue;
+		const sf = readableFlags(pc);
+		const followers = [];
+		if (crewExists(sf?.crew) && followerInPartyFlags(sf, "crew")) {
+			followers.push({ ftype: "crew", slug: "", name: sf.crew.name || "Crew", canHandOff: false });
+		}
+		const companion = sf?.animalCompanion;
+		if (companion?.type && ownsMoveNamed(pc, ANIMAL_COMPANION_MOVE) && followerInPartyFlags(sf, "animal-companion") && !companion.details?.dead) {
+			followers.push({ ftype: "animal-companion", slug: "", name: companion.name || "Animal Companion", canHandOff: false });
+		}
+		for (const [id, c] of orderedCustomFollowers(sf)) {
+			if (!c || c.dead || c.brokenFree || !followerInPartyFlags(sf, "custom", id)) continue;
+			followers.push({ ftype: "custom", slug: id, name: c.name || "Follower", canHandOff: true });
+		}
+		if (followers.length) out.push({ pcId: pc.id, pcName: pc.name ?? "", followers });
+	}
+	return out;
 }

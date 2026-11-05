@@ -791,6 +791,9 @@ export function frameFor(out) {
 	return MAP_FRAMES[out] ?? FULL_FRAME;
 }
 
+/** How far a frame may land from the printed proportions and still be taken as that map's crop. */
+const FRAME_TOLERANCE = 0.04;
+
 /**
  * Does `frame` actually describe `fileAspect`?
  *
@@ -803,8 +806,38 @@ export function frameFor(out) {
  * One check covers both cases: for the identity frame it reduces to "is this file the printed
  * crop?", which is exactly the right question for the two PDF renders.
  */
-export function frameFitsImage(frame = FULL_FRAME, fileAspect, printedAspect, tolerance = 0.04) {
+export function frameFitsImage(frame = FULL_FRAME, fileAspect, printedAspect, tolerance = FRAME_TOLERANCE) {
 	if (!(fileAspect > 0) || !(printedAspect > 0)) return true;   // nothing measured, nothing to doubt
+	return frameMisfit(frame, fileAspect, printedAspect) <= tolerance;
+}
+
+/** How far `frame` on a file of `fileAspect` lands from `printedAspect`, as a share of it. */
+function frameMisfit(frame, fileAspect, printedAspect) {
 	const implied = fileAspect * ((frame.x1 - frame.x0) / (frame.y1 - frame.y0));
-	return Math.abs(implied - printedAspect) / printedAspect <= tolerance;
+	return Math.abs(implied - printedAspect) / printedAspect;
+}
+
+/**
+ * The frame to place fractions through on a Scene of `sceneAspect` showing the map whose file is
+ * `out`, or null when the picture is neither crop the positions can be read against.
+ *
+ * TWO CROPS A GM MAY HAVE. The poster scan the importer writes (`frameFor(out)` insets the printed
+ * page into it) and the book's own map page, which a GM who built their own Scene from a PDF
+ * screenshot is showing and which IS the printed crop, so the whole image is its frame.
+ *
+ * THE CLOSER FIT WINS, not the first that fits. The World's End page crop lands 3.7% off the
+ * poster frame, inside the 4% tolerance, so asking the poster frame first would place every point
+ * through insets that picture does not have.
+ */
+export function sceneFrame(out, sceneAspect, printedAspect) {
+	const candidates = [frameFor(out), FULL_FRAME];
+	if (!(sceneAspect > 0) || !(printedAspect > 0)) return candidates[0];
+	let best = null;
+	let bestMisfit = Infinity;
+	for (const frame of candidates) {
+		// `frameFitsImage`'s test, with the misfit kept for the comparison.
+		const misfit = frameMisfit(frame, sceneAspect, printedAspect);
+		if (misfit <= FRAME_TOLERANCE && misfit < bestMisfit) { best = frame; bestMisfit = misfit; }
+	}
+	return best;
 }

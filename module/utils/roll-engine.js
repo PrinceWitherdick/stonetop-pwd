@@ -256,14 +256,16 @@ export async function rollSeasonsCard({ formula, title = "", alias = "", resultT
 	// Titled even when spoken under an alias: the title row is what carries the "?" that brings a
 	// hidden description back, and without it a table that hides descriptions would lose the ladder.
 	// `actor` rides an aliased speaker so a card button can find what it acts on (speakerActor).
-	await roll.toMessage({
+	const message = await roll.toMessage({
 		speaker: alias ? { alias, ...(actor?.id ? { actor: actor.id } : {}) } : ChatMessage.getSpeaker(),
 		flavor:  stonetopChatCard(title || alias, body, "stonetop-spring-card", description ? DESC_TOGGLE_HTML : ""),
 		// A season's own +Fortunes roll says which season it was, and what it counted as: this card
 		// has no Shift, so the tier it lands on is the one it keeps (seasonsRollTier).
 		...(seasonKey ? { flags: seasonsRollFlags(seasonKey, outcomeTier(tier)) } : {}),
 	});
-	return { total: roll.total, tier, label: result.label };
+	// The card's id, for a caller whose later step reads the card back (the expedition's Requisition: a
+	// take after its 6- latches the cost on it, steading-card-actions.js#takeOnRequisitionMiss).
+	return { total: roll.total, tier, label: result.label, messageId: message?.id ?? null };
 }
 
 /**

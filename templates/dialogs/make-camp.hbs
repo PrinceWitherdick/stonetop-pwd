@@ -33,6 +33,8 @@
       {{#if meal.statusText}}<p class="stonetop-camp-meal-status">{{meal.statusText}}</p>{{/if}}
       {{#if allAlongText}}<p class="stonetop-camp-meal-line">{{this.allAlongText}}</p>{{/if}}
       {{#if meal.forageText}}<p class="stonetop-camp-meal-line">{{meal.forageText}}</p>{{/if}}
+      {{!-- Followers whose PC is gone, still at the fire (audit ROAD-13). --}}
+      {{#each this.orphansLines}}<p class="stonetop-camp-meal-line stonetop-camp-orphans">{{this}}</p>{{/each}}
       {{#if meal.afterText}}<p class="stonetop-camp-meal-line">{{meal.afterText}}</p>{{/if}}
       {{#if meal.provisionsText}}<p class="stonetop-camp-meal-line stonetop-camp-meal-note">{{meal.provisionsText}}</p>{{/if}}
       {{!-- Break Bread (the Judge): the host's box, ticked until they say the meal was not a proper one. --}}

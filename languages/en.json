@@ -888,6 +888,11 @@
         "fullHpHint": "You're already at full HP.",
         "unlivingHint": "Unliving: no benefit. A Ghost or Revenant gains nothing from Recover.",
         "unlivingFollowersHint": "Unliving: you gain nothing from Recover, but your hurt followers still can.",
+        "fatePendingHint": "Your time has come: choose your fate (the Death's Door window) before anything else. Recover can't help now.",
+        "outOfPlayHint": "Out of play: this character can't Recover.",
+        "crewSuppliesRow": "Crew supplies",
+        "crewSuppliesSpent": "Expended {uses} for the crew ({left} left)",
+        "followersLocked": "{names} already Recovered and can't again until they take more damage.",
         "otherPayerNote": "Someone else can expend a use on your behalf. Their player is asked first when it is theirs to decide.",
         "followersButton": "Recover the followers ticked",
         "followersLegend": "Followers who Recover too (1 use of supplies each, +{heal} HP):",
@@ -1266,6 +1271,25 @@
         "closeNote": "<p>Close this window to leave it unmarked.</p>",
         "had": "Had it all along",
         "found": "Found it"
+      },
+      "noUndefinedMark": {
+        "title": "No undefined ◆ left",
+        "body": "<p>You are marking <strong>{name}</strong> ({weight} ◆), but you have {pool} undefined ◆ left, so you can't Have What You Need for it. If you found or picked it up out here, it adds its full weight to your load.</p>",
+        "found": "Found it out here",
+        "cancel": "Don't mark it"
+      },
+      "suppliesSource": {
+        "title": "Where is this food from?",
+        "body": "<p>This ◆ of {name} is empty, and you have no undefined ◆ left to Have What You Need for it. If it was packed at home or bought in a market, it is a fresh ◆ with {uses} uses.</p>",
+        "packed": "Packed it at home",
+        "bought": "Bought it",
+        "cancel": "Don't mark it"
+      },
+      "suppliesEmptied": "That ◆ of {name} was eaten empty, so it is carried empty. Have What You Need (an undefined ◆) or Outfit to pack a fresh one.",
+      "hadAllAlong": {
+        "receipt": "Had it all along: used {marks} ({left} left)",
+        "regularMark": "undefined ◆",
+        "smallMark": "undefined □"
       },
       "choosePossessionsButton": "Choose Special Possessions",
       "possessionsOverLimitOne": "This character has 1 more special possession than the playbook lets you choose.",
@@ -3214,6 +3238,19 @@
       "title": "Situational Awareness",
       "lead": "A fight breaks out: ask the GM 1 question you could ask when Seeking Insight."
     },
+    "posterMapScene": {
+      "menu": "Stonetop map...",
+      "title": "Which map is {scene}?",
+      "ask": "Is <strong>{scene}</strong> one of the Stonetop maps?",
+      "explain": "Marking a scene as a map lets expedition routes, place pins and site pins go on it. They only land in the right places when the picture is the poster map or the map page from the book, not trimmed.",
+      "none": "Not a Stonetop map",
+      "marked": "{scene} is now {map}.",
+      "unmarked": "{scene} is no longer a Stonetop map. Pins already on it stay until you delete them.",
+      "confirmTitle": "Is this one of the Stonetop maps?",
+      "confirmAsk": "The route goes on {map}, and <strong>{scene}</strong> isn't marked as any Stonetop map yet. If this scene is one of them, say which.",
+      "confirmYes": "This scene is {map}",
+      "confirmNo": "It isn't either of these"
+    },
     "expedition": {
       "fateMode": {
         "advTooltip": "Roll 2d6 and keep the higher",
@@ -3226,36 +3263,152 @@
         "unnamed": "this expedition",
         "yes": "Delete the expedition",
         "no": "Keep it",
-        "removePage": "Also remove its page from the Chronicle (you may have edited it there)"
+        "removePage": "Also remove its page from the Chronicle (you may have edited it there)",
+        "removeRows": "Also remove its rows from the timeline (everyone who went, and Stonetop's)",
+        "herdBack": "Put {count} back in the herd. They went out with this trip, and nothing else brings them home.",
+        "stopSharing": "Stop showing its route to the players"
       },
+      "triumphAgain": {
+        "title": "Return Triumphant again?",
+        "ask": "{name} already Returned Triumphant. The move is made once for each homecoming (Book I p.339).",
+        "yes": "Make the move again",
+        "no": "Leave it as it is"
+      },
+      "stamp": {
+        "setOutTitle": "Setting out now?",
+        "setOutAsk": "Are they setting out on {name} now? The trip notes the season they leave and who goes, and Level Up reminds anyone still on the road.",
+        "setOutYes": "They set out now",
+        "homeTitle": "Are they home now?",
+        "homeAsk": "Are they home from {name} now? It goes on the timeline of everyone who went, and Stonetop's, dated this season.",
+        "homeYes": "They're home: put it on the timeline",
+        "notYet": "Not yet",
+        "setOut": "Set out in {when}.",
+        "setOutNotYet": "Not marked as set out yet. Mark it when they leave.",
+        "party": "Party: {names}.",
+        "setOutRedo": "Redo: they set out now",
+        "setOutClear": "Clear: they haven't left",
+        "homeRedo": "Redo: they came home now",
+        "homeClear": "Clear: they aren't home yet",
+        "failed": "Couldn't save that on the expedition. Try again."
+      },
+      "save": {
+        "failed": "Couldn't save the expedition notes. They're kept in this window, and the next change you make saves them again."
+      },
+      "homeTodo": {
+        "prompt": "Your to-do list for their return: the answers you'll reveal, and the scenes to play",
+        "placeholder": "Owain's mother waits at the gate; the wagon's loss reaches Fion by supper…"
+      },
+      "assets": {
+        "moved": "{name} isn't where this list had it on {steading}'s sheet any more. The list is redrawn: check it and click again.",
+        "notOnHand": "{name} is no longer on hand at {steading}. The list is redrawn."
+      },
+      "surplus": {
+        "label": "Surplus loaded for the trip",
+        "load": "Load 1 Surplus onto the cart",
+        "unload": "Put 1 Surplus back in the stores",
+        "said": "{out} Surplus with the trip, {onHand} left at {steading}.",
+        "none": "{steading} has no Surplus left to load."
+      },
+      "homeAssets": {
+        "title": "Still out with this trip",
+        "with": "(with {name})",
+        "home": "Brought it home",
+        "lost": "Lost it (Meet with Disaster)",
+        "herd": "Count them home",
+        "none": "Nothing of {steading}'s is still out with this trip.",
+        "noSteading": "No steading sheet in this world, so nothing was requisitioned.",
+        "clearMarks": "Back home, everyone clears the marks from their Inventory insert (p.89): what they carry in town rarely matters.",
+        "lostTitle": "Lost on the trip",
+        "lostAsk": "{name} didn't come home. It comes off {steading}'s Assets list (the trip keeps its name for the Chronicle). Failing to bring a borrowed asset home safely almost always counts as Meeting with Disaster (p.308): Fortunes drops by 1, and at −1 the GM picks what it costs.",
+        "lostDisaster": "Lost it: Meet with Disaster",
+        "lostQuiet": "Lost it, but no disaster",
+        "lostKeep": "Keep it out for now",
+        "horsesLostAsk": "{what} didn't come home to {steading}'s herd. Failing to bring a borrowed asset home safely almost always counts as Meeting with Disaster (p.308): Fortunes drops by 1, and at −1 the GM picks what it costs.",
+        "horsesNoDisaster": "No disaster"
+      },
+      "requirements": {
+        "heading": "What Chart a Course requires of them",
+        "intro": "Remind them as they Outfit (p.303). Change these on Chart a Course.",
+        "addChallenge": "Add a challenge"
+      },
+      "gmOnly": "Only the GM can run the expedition walkthrough.",
       "route": {
         "goToOpen": " Open {map} and try again.",
-        "goToImport": " This world has no scene for it yet. The Import Book Art macro builds one.",
+        "goToImport": " No scene in this world is marked as {map}. Right-click your scene in the Scenes sidebar and choose Stonetop map, or build one with the Import Book Art macro.",
         "noScene": "There's no scene on screen to draw the route on.",
         "noDestination": "Pick where they're bound first, and the way there can go on the map.",
-        "notAMap": "This scene isn't one of the poster maps, so there's nowhere on it the route means anything.",
+        "notAMap": "This scene isn't marked as one of the Stonetop maps, so the route can't go on it.",
         "wrongMap": "{map} isn't the map this journey is drawn on.",
         "notCharted": "{map} isn't a map the travel table charts a course across.",
         "noSize": "This scene has no dimensions to place the route against.",
-        "wrongShape": "This scene's picture isn't the shape the map positions were measured against, so the route would run through the wrong valleys. Rebuild it from the Import Book Art macro to put it right.",
+        "wrongShape": "This scene's picture isn't the shape of the poster map or of the map page in the book, so the route would run through the wrong valleys. Use the poster scan or the book's map page without trimming it, or build the scene with the Import Book Art macro.",
         "offMapNamed": "{map} doesn't draw {places}, so the way there isn't on it.",
         "offMapWhole": "{map} can't draw the whole of this journey.",
         "refused": "The route can't go on this scene.",
         "draw": "Draw it on the scene",
         "take": "Take it off the scene",
-        "drawTip": "Draw this route on the map the table is looking at. It goes on the scene open on your canvas rather than on the picture in this window, so if that isn't {map}, this brings {map} up first.",
+        "drawTip": "Draw this route on the scene open on your canvas, not on the picture in this window. If that isn't {map}, this brings {map} up first: for the whole table when the players are on your scene, otherwise on your canvas only.",
         "drawTipMap": "the map it runs across",
-        "takeTip": "Take this route back off the map the table is looking at.",
+        "takeTip": "Take this route back off the scene in front of you.",
         "cleared": "The way there is off {scene}.",
         "placed": "The way to {place} is on {map}.",
-        "movedPlaced": "{map} is on the canvas now, and the way to {place} is on it.",
-        "movedPlacedDrawn": "{map} is on the canvas now, and the way you drew is on it.",
+        "movedPlaced": "{map} is on the canvas now for the whole table, and the way to {place} is on it.",
+        "movedPlacedDrawn": "{map} is on the canvas now for the whole table, and the way you drew is on it.",
+        "movedPlacedYours": "{map} is on your canvas now, and the way to {place} is on it.",
+        "movedPlacedYoursDrawn": "{map} is on your canvas now, and the way you drew is on it.",
+        "playersStay": " The players are still on {scene}, so it isn't in front of them yet.",
+        "failed": "The route couldn't go on the scene. The console has the details.",
         "panelOffMap": "This map doesn't draw {places}, so the way there isn't on it.",
         "panelShow": "Show {map}",
         "panelNoMap": "No one map draws both ends of this journey, so the way there isn't drawn. The legs below still hold.",
         "placedDrawn": "The way you drew is on {map}.",
         "panelDrawnOn": "This way was drawn on {map}, so it isn't on this one.",
         "panelStartOn": "They set out from a point on {map}, so the way there is only on that map."
+      },
+      "share": {
+        "show": "Show players",
+        "hide": "Hide from players",
+        "update": "Show players the new way",
+        "showTip": "Post this route to chat and put a See the route button on the steading sheet, so the players can open the map with the way drawn on it and the legs written out. Nothing goes on the canvas.",
+        "hideTip": "Stop showing this route to the players. The See the route button leaves the steading sheet; cards already in chat keep the route they posted.",
+        "updateTip": "The players are being shown the way to {place}. Show them this one instead.",
+        "updateTipUnnamed": "The players are being shown an older way. Show them this one instead.",
+        "shown": "The players can see the way to {place}. It is in chat and on the steading sheet.",
+        "shownDrawn": "The players can see the way you drew. It is in chat and on the steading sheet.",
+        "shownNoMap": "This world has no copy of {map}, so the players get the legs and times without a map.",
+        "hidden": "The players can no longer see the route.",
+        "hideStaleTip": "Stop showing the players the older way, without showing them this one. The See the route button leaves the steading sheet; cards already in chat keep the route they posted.",
+        "failed": "The route couldn't be shown to the players. The console has the details.",
+        "ask": {
+          "title": "Show the players the way",
+          "intro": "The players get the map with the way drawn on it and every leg written out. Your notes never go with it.",
+          "requirements": "Include the Chart a Course lines you chose ({count}), with their blanks filled in",
+          "stopsHint": "What should the players hear for each spot you put down by hand? Leave it blank to say where it is from the nearest place the map names.",
+          "start": "Where they set out from (your mark on the map)",
+          "stop": "Point {mark}",
+          "siteStop": "Point {mark} (your site {name}, which the players won't see unless you type it)",
+          "yes": "Show them the way",
+          "no": "Not now"
+        }
+      },
+      "shared": {
+        "windowTitle": "The route",
+        "title": "The way to {place}",
+        "titleDrawn": "The way they are going",
+        "total": "It will take {phrase}.",
+        "alt": "{map}, with the way from {from} to {to} drawn on it.",
+        "legs": "The legs of the journey",
+        "noMap": "This world has no copy of the map, so the way is written out below.",
+        "none": "The GM isn’t showing a route right now.",
+        "older": "This is an older route. The GM has shown a different one since, or stopped showing it.",
+        "seeRoute": "See the route",
+        "chipTip": "{summary}. Opens the map with the way drawn on it, and the legs written out.",
+        "stop": "Stop showing players",
+        "estimated": "about {time}",
+        "near": "near {place}",
+        "startNear": "a point near {place}",
+        "markName": "{name} (point {mark})",
+        "requirements": "What the journey asks of them"
       },
       "sites": {
         "place": "Put a site on the map",
@@ -3867,9 +4020,9 @@
       },
       "expedition": {
         "recorded": "On the timeline: home in {when}, for everyone who went and for Stonetop.",
-        "notYet": "Not on the timeline yet. It is written the first time you step in here with Next.",
-        "record": "Record on the timeline",
-        "again": "Record on the timeline again"
+        "notYet": "Not on the timeline yet. Put it there when they walk back in.",
+        "record": "They're home: put it on the timeline",
+        "failed": "Couldn't put the trip on every timeline, so it isn't marked as home yet. Try again from Going home."
       },
       "threatAsk": {
         "title": "Put this on the timeline?",

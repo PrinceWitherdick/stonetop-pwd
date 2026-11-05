@@ -199,6 +199,15 @@ export function decodeEntities(text) {
 }
 
 /**
+ * Authored rich text as plain words to be READ: tags dropped by {@link stripHtmlToText}, then the
+ * entities it does not carry (`&hellip;` above all) decoded. For an `aria-label`, or a line a
+ * screen reader reads aloud.
+ */
+export function htmlToPlainText(html) {
+	return decodeEntities(stripHtmlToText(html));
+}
+
+/**
  * Text as a change-detection hash reads it: entities decoded, runs of whitespace collapsed to one
  * space, trimmed. An editor re-saving the same words (`&#x27;` back as `'`, a reflowed line) then
  * does not read as an edit. Shared by the Chronicle's prose hashes and the timeline's season rows.

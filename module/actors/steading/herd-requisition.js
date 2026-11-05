@@ -1,6 +1,7 @@
 import { askWithButtons } from "../../utils/ask-with-buttons.js";
 import { escHtml } from "../../utils/strings.js";
 import { plural } from "../../utils/plural.js";
+import { clampInt } from "../../utils/custom-move-data.js";
 
 /**
  * Requisitioning from the Herd of Horses: how many horses go?
@@ -50,10 +51,35 @@ export function herdHorsesLabel(count) {
 }
 
 /**
+ * How many horses came home of `taken` that left the herd (Going home, ruling E2). Defaults to all of them.
+ * @returns {Promise<number|null>} how many to put back (0 to taken), or null when the window was closed
+ */
+export async function askHorsesBack({ taken = 0 } = {}) {
+	const max = Math.max(0, Math.trunc(Number(taken) || 0));
+	if (!max) return 0;
+	const answer = await askWithButtons({
+		title: "Horses home",
+		content: `<p>${escHtml(herdHorsesLabel(max))} went with them. How many came home?</p>
+			<label class="stonetop-homestead-field"><span>Came home</span><input type="number" name="horses" min="0" max="${max}" value="${max}"></label>
+			<p>Those put back in the herd's count. Any that didn't come home were lost on the trip.</p>`,
+		buttons: [
+			{ key: "back", label: "Count them home", icon: "fa-horse",
+				value: form => Math.trunc(Number(form?.elements?.namedItem?.("horses")?.value)) },
+			{ key: "cancel", label: "Not yet", icon: "fa-xmark", value: null },
+		],
+	});
+	if (answer === null || answer === undefined || !Number.isFinite(Number(answer))) return null;
+	return clampInt(answer, 0, max);
+}
+
+/**
  * How many herd horses a requisitioned line stands for, or 0 for any other line. A line written by
  * the expedition picker carries the count as `herd`; one written before that is read off its label.
+ * A line already counted home (`home`, Going home) stands for none still out: it stays on the trip
+ * only as the record the Chronicle prints.
  */
 export function herdHorsesOnLine(line) {
+	if (line?.home) return 0;
 	const count = Math.trunc(Number(line?.herd) || 0);
 	if (count > 0) return count;
 	const name = String(line?.name ?? "");

@@ -144,10 +144,12 @@ import { registerOrphanedTooltipCleanup } from "./module/utils/tooltip-handoff.j
 import { registerUserConfigCharacterFilter } from "./module/hooks/user-config-characters.js";
 import { registerAssignToPlayer } from "./module/hooks/assign-to-player.js";
 import { registerCampaignActorMenu } from "./module/campaign/campaign-actor-menu.js";
+import { registerScenePosterMapMenu } from "./module/book2-art/mark-poster-scene.js";
 import { installWindowRestore } from "./module/utils/window-restore.js";
 import { registerUuidRedirects } from "./module/migration/compat.js";
 import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
 import { StonetopFlags } from "./module/actors/character/StonetopFlags.js";
+import { onPreUpdateActorRecoverLock } from "./module/actors/character/recover-lock.js";
 import { payableStockSources, mustAskStockSource, stockReceipt } from "./module/actors/character/stock-cost.js";
 import { askStockSource } from "./module/actors/character/ask-stock-source.js";
 import { moveLearnedIn } from "./module/actors/character/owns-move.js";
@@ -168,9 +170,11 @@ import { installBodysnatcherHooks } from "./module/actors/character/bodysnatcher
 import { loseHp, wirePostDeathMoveCards } from "./module/actors/character/post-death-actions.js";
 import { registerRosterFateHooks } from "./module/fight/roster-fate.js";
 import { registerLevelUpClaimQuery } from "./module/actors/character/level-up-claim.js";
+import { registerSteadingAssetsQuery } from "./module/actors/steading/steading-asset-relay.js";
 import { FOLLOWER_NPC_HP_QUERY, handleFollowerNpcHpQuery } from "./module/actors/character/follower-hp.js";
 import { registerFollowerFateQueries } from "./module/actors/character/follower-fate-pick.js";
 import { wireCampCard } from "./module/camp/camp-flow.js";
+import { registerSharedRouteHooks, wireSharedRouteCard } from "./module/dialogs/SharedRouteWindow.js";
 import { registerCampWindowRestore } from "./module/camp/CampWindow.js";
 import { registerTimelineWindowRestore } from "./module/dialogs/TimelineWindow.js";
 import { registerStruggleHooks } from "./module/struggle/struggle-flow.js";
@@ -290,6 +294,8 @@ Hooks.once("init", () => {
 	// And who takes a card's payout or once-only button first, the same way (utils/gm-claim.js).
 	registerPickedOptionClaimQuery(CONFIG.queries);
 	registerCardLatchQuery(CONFIG.queries);
+	// And a player's Requisition of a steading asset or herd horses, made in the GM's turn (steading-asset-relay.js).
+	registerSteadingAssetsQuery(CONFIG.queries);
 
 	// Every window and modal in the system is drag-resizable; the ad-hoc
 	// Dialog popups we spawn from sheets default to resizable too. The companion
@@ -323,6 +329,8 @@ Hooks.once("init", () => {
 	registerAssignToPlayer();
 	// Retire a PC, a PC or follower become a threat, and back into play (Book I p.584; module/campaign/).
 	registerCampaignActorMenu();
+	// "Stonetop map..." on a Scene's right-click menu: mark a GM's own Scene as one of the poster maps.
+	registerScenePosterMapMenu();
 
 	// Track open document sheets + their geometry and reopen them at the same spot on
 	// the next reload (per-client; toggled by the "Restore Open Windows on Reload"
@@ -776,8 +784,11 @@ Hooks.once("init", () => {
 		"stonetop.guide-toc":                 "systems/stonetop-pwd/templates/dialogs/partials/guide-toc.hbs",
 		"stonetop.guide-tabs":                "systems/stonetop-pwd/templates/dialogs/partials/guide-tabs.hbs",
 		"stonetop.expedition-load":           "systems/stonetop-pwd/templates/dialogs/partials/expedition-load.hbs",
+		"stonetop.expedition-home-assets":    "systems/stonetop-pwd/templates/dialogs/partials/expedition-home-assets.hbs",
 		"stonetop.expedition-journey":        "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey.hbs",
 		"stonetop.expedition-journey-pins":   "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-pins.hbs",
+		"stonetop.expedition-journey-line":   "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-line.hbs",
+		"stonetop.shared-route-pins":         "systems/stonetop-pwd/templates/dialogs/partials/shared-route-pins.hbs",
 		"stonetop.expedition-journey-controls": "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-controls.hbs",
 		"stonetop.expedition-journey-drawhint": "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-drawhint.hbs",
 		"stonetop.expedition-journey-route":  "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-route.hbs",
@@ -1190,16 +1201,9 @@ Hooks.on("updateActor", onSteadingPeopleUpdate);
 
 // -- RECOVER LOCK ----------------------------------------------
 // The Recover special move can't be used again until the character takes more
-// damage; clear its lock flag the moment HP drops.
-Hooks.on("preUpdateActor", (actor, changes) => {
-	if (actor?.type !== "character") return;
-	const newHp = foundry.utils.getProperty(changes, "system.attributes.hp.value");
-	if (newHp === undefined) return;
-	const oldHp = actor.system?.attributes?.hp?.value ?? 0;
-	if (newHp < oldHp && actor.getFlag(SYSTEM_ID, "recover.spent")) {
-		foundry.utils.setProperty(changes, `flags.${SYSTEM_ID}.recover.spent`, false);
-	}
-});
+// damage; clear its lock flag the moment damage drops their HP (not HP lost, not a
+// max-HP clamp), and a follower body's when their HP box drops (recover-lock.js).
+Hooks.on("preUpdateActor", onPreUpdateActorRecoverLock);
 
 // -- DEATH AND DYING -------------------------------------------
 // A PC reduced to 0 HP is dying and must face their 0-HP move (Book I p.245). Record that
@@ -2974,6 +2978,9 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	wireSufferChoice(message, html);
 	// The card a new camp posts: its Join button, or how the camp ended (camp/camp-flow.js).
 	wireCampCard(message, html);
+	// The card a GM posts when they show the players the route: its See the route button opens the
+	// route the card carries (dialogs/SharedRouteWindow.js).
+	wireSharedRouteCard(message, html);
 	// Aid, Interfere and Persuade (vs. PCs): the other person's answer, drawn where the move asks
 	// for it (pc-asks/pc-ask-flow.js).
 	wirePcAskCard(message, html);
@@ -2987,6 +2994,9 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 // is settled, each character's share is paid by the one client elected to pay it. See
 // module/camp/camp-store.js.
 registerCampHooks();
+// On every client: the players' route windows, the steading sheets' See the route button and the
+// GM's walkthrough all follow the route the GM has shown the players (dialogs/SharedRouteWindow.js).
+registerSharedRouteHooks();
 // A character's stored armor and max HP, re-mirrored whenever they or their gear change, sheet open or not.
 registerVitalsMirrorHooks();
 // A bronze weapon's line deleted from the sheet takes its "which weapon?" answer with it.

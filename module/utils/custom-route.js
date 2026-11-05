@@ -22,8 +22,8 @@
 // compiler can print a hand-drawn route into a journal from the stored marks alone.
 
 import {
-	BOOK_LEGS, MARCH_HOURS, TRAVEL_LEGS, TRAVEL_MAPS, exitsOnMap, isFraction, roundMark, travelMap,
-	travelPlace,
+	BOOK_LEGS, MARCH_HOURS, TRAVEL_LEGS, TRAVEL_MAPS, TRAVEL_PLACES, exitsOnMap, isFraction, roundMark,
+	travelMap, travelPlace,
 } from "../data/travel-times.js";
 // Re-offered, because a reader of a hand-drawn path asks this module what its marks are stored at.
 export { MARK_PRECISION } from "../data/travel-times.js";
@@ -126,7 +126,48 @@ function normalizeMark(point, tier) {
 	const place = travelPlace(point.slug);
 	if (place) return originSpot(tier, place.slug) ? { slug: place.slug } : null;
 	if (!isFraction(point.fx) || !isFraction(point.fy)) return null;
-	return { fx: roundMark(point.fx), fy: roundMark(point.fy) };
+	return { fx: roundMark(point.fx), fy: roundMark(point.fy), ...markWords(point) };
+}
+
+/**
+ * What a bare mark is CALLED, kept beside its fraction when it has a name to keep.
+ *
+ * Two different audiences, so two different fields (audit ruling E17, 2026-11-03):
+ *  • `siteUuid` + `name`: a stop laid on one of the GM's own written-up sites, with the site's
+ *    name as it read when the stop went down. The GM's readout, Scene notice and Chronicle say
+ *    "the Swyn's barrow" rather than "point 2". GM prep, so `storedJourney` (utils/scene-route.js)
+ *    strips both before the trip goes anywhere a player's screen reads.
+ *  • `label`: what the PLAYERS hear for this stop, typed by the GM when they show them the way.
+ *    Without one the players' view says where it is relative to the nearest lettered place.
+ */
+function markWords(point) {
+	const words = {};
+	const uuid = String(point?.siteUuid ?? "").trim();
+	const name = String(point?.name ?? "").trim();
+	const label = String(point?.label ?? "").trim();
+	if (uuid) words.siteUuid = uuid;
+	if (uuid && name) words.name = name;
+	if (label) words.label = label;
+	return words;
+}
+
+/**
+ * The nearest place a map LETTERS to a point on it, or null: what a bare mark is "near" when it is
+ * read out to someone who cannot see where on the picture it stands.
+ *
+ * Lettered places only, never anchors: an anchor is a position nobody can see a name at.
+ */
+export function nearestPlace(tier, spot) {
+	const map = travelMap(tier);
+	if (!map || !spot) return null;
+	let best = null;
+	for (const place of TRAVEL_PLACES) {
+		const at = placeSpot(tier, place.slug);
+		if (!at) continue;
+		const distance = spotDistance(spot, at, map.printedAspect);
+		if (best === null || distance < best.distance) best = { place, distance };
+	}
+	return best?.place ?? null;
 }
 
 /** Are two stored marks the same stop: the same place, or the same fraction of the map? */
@@ -204,7 +245,16 @@ export function customStops(start, custom) {
 			continue;
 		}
 		placed += 1;
-		stops.push({ slug: null, name: `point ${placed}`, spot: { fx: point.fx, fy: point.fy }, mark: placed });
+		// A stop laid on one of the GM's sites keeps that site's name (see `markWords`); any other
+		// bare mark is "point N", the numeral its badge on the picture wears.
+		stops.push({
+			slug: null,
+			name: point.name || `point ${placed}`,
+			spot: { fx: point.fx, fy: point.fy },
+			mark: placed,
+			label: point.label ?? null,
+			siteUuid: point.siteUuid ?? null,
+		});
 	}
 	return stops;
 }

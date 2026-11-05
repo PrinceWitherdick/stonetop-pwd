@@ -1,0 +1,45 @@
+{{!-- Going home: what this trip still has out of the steading's stores (ExpeditionDialog
+      #_buildHomeAssets; ruling E2). Each asset comes home or was lost: "If the PCs borrow an asset
+      and fail to bring it home safely, that almost always counts as Meeting with Disaster" (Book I
+      p.308). Each line of herd horses is counted back into the herd. Same card chrome as the
+      Requisition step's asset list. --}}
+<section class="stonetop-exp-assets stonetop-exp-home-assets" aria-labelledby="stonetop-exp-home-assets-title">
+  <div class="stonetop-exp-assets-head">
+    <h3 class="stonetop-exp-assets-title" id="stonetop-exp-home-assets-title">{{localize "stonetop.expedition.homeAssets.title"}}</h3>
+  </div>
+  {{#if this.homeAssets.hasSteading}}
+    {{#if this.homeAssets.hasAny}}
+    <ul class="stonetop-exp-assets-list">
+      {{#each this.homeAssets.rows}}
+      <li class="stonetop-exp-asset stonetop-exp-home-asset">
+        <span class="stonetop-exp-home-asset-name">{{this.name}}{{#if this.with}} <span class="stonetop-exp-asset-where">{{localize "stonetop.expedition.homeAssets.with" name=this.with}}</span>{{/if}}</span>
+        <span class="stonetop-exp-home-asset-actions">
+          <button type="button" class="stonetop-exp-home-asset-btn" data-action="home" data-index="{{this.index}}" data-name="{{this.name}}">
+            <i class="fas fa-house" aria-hidden="true"></i> {{localize "stonetop.expedition.homeAssets.home"}}
+          </button>
+          <button type="button" class="stonetop-exp-home-asset-btn" data-action="lost" data-index="{{this.index}}" data-name="{{this.name}}">
+            <i class="fas fa-house-crack" aria-hidden="true"></i> {{localize "stonetop.expedition.homeAssets.lost"}}
+          </button>
+        </span>
+      </li>
+      {{/each}}
+      {{#each this.homeAssets.herd}}
+      <li class="stonetop-exp-asset stonetop-exp-home-asset">
+        <span class="stonetop-exp-home-asset-name">{{this.name}}</span>
+        <span class="stonetop-exp-home-asset-actions">
+          <button type="button" class="stonetop-exp-home-asset-btn" data-action="herd" data-at="{{this.at}}">
+            <i class="fas fa-horse" aria-hidden="true"></i> {{localize "stonetop.expedition.homeAssets.herd"}}
+          </button>
+        </span>
+      </li>
+      {{/each}}
+    </ul>
+    {{else}}
+    <p class="stonetop-exp-assets-empty">{{localize "stonetop.expedition.homeAssets.none" steading=this.homeAssets.steadingName}}</p>
+    {{/if}}
+  {{else}}
+  <p class="stonetop-exp-assets-empty">{{localize "stonetop.expedition.homeAssets.noSteading"}}</p>
+  {{/if}}
+  {{!-- Book I p.89: "When you return home, clear the marks from your Inventory insert". --}}
+  <p class="stonetop-exp-assets-foot">{{localize "stonetop.expedition.homeAssets.clearMarks"}}</p>
+</section>

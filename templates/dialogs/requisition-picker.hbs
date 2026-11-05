@@ -34,7 +34,7 @@
 		<label class="stonetop-requisition-choice-label" for="stonetop-requisition-asset">Asset</label>
 		<select id="stonetop-requisition-asset" class="stonetop-requisition-asset-select">
 			{{#each assets}}
-			<option value="{{this.index}}">{{this.name}}</option>
+			<option value="{{this.index}}" data-name="{{this.name}}">{{this.name}}</option>
 			{{/each}}
 			<option value="{{this.customAssetValue}}">Something else...</option>
 		</select>

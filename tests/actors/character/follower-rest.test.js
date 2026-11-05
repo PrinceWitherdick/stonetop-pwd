@@ -4,7 +4,7 @@
 // of their own heals on it, through follower-hp.js#setFollowerHp.
 
 import { describe, it, expect, vi } from "vitest";
-import { followerRestBodies, restFollowers, followerRestRow } from "../../../module/actors/character/follower-rest.js";
+import { followerRestBodies, restFollowers, followerRestRow, recoverFollowerPlan } from "../../../module/actors/character/follower-rest.js";
 
 const flags = {
 	customFollowers: {
@@ -109,5 +109,78 @@ describe("resting them", () => {
 		expect(await restFollowers(character, [], options(set))).toEqual([]);
 		expect(character.update).not.toHaveBeenCalled();
 		expect(followerRestRow([])).toBeNull();
+	});
+
+	// Recover's lock (audit ROAD-4) rides the box write, so a Recover is one update of the character, not two.
+	it("locks a Recover's box-held bodies in the same write as their boxes", async () => {
+		const character = leader();
+		await restFollowers(character, ["custom:c1", "custom:g1:member:0"], { heal: 4, moveName: "Recover", lock: true, ...options(vi.fn()) });
+		expect(character.update).toHaveBeenCalledTimes(1);
+		expect(character.update).toHaveBeenCalledWith({
+			"flags.stonetop-pwd.customFollowers.c1.hpCurrent": 4,
+			"flags.stonetop-pwd.customFollowers.g1.memberHp": [4, null, 0],
+			"flags.stonetop-pwd.recoverFollowers.custom:c1": { follower: "custom", slug: "c1" },
+			"flags.stonetop-pwd.recoverFollowers.custom:g1:member:0": { follower: "custom-member", slug: "g1", index: 0 },
+		}, { stonetopMove: "Recover" });
+	});
+
+	it("locks an NPC-held body in a write of its own once the NPC took the heal, and none that did not", async () => {
+		const character = { ...leader(), flags: { "stonetop-pwd": withBransNpc } };
+		await restFollowers(character, ["animal-companion:", "custom:c1"], { heal: 4, moveName: "Recover", lock: true, ...options(vi.fn(async () => "npc"), bransNpc) });
+		expect(character.update).toHaveBeenCalledTimes(2);
+		expect(character.update.mock.calls[0][0]).toHaveProperty(["flags.stonetop-pwd.recoverFollowers.custom:c1"]);
+		expect(character.update.mock.calls[0][0]).not.toHaveProperty(["flags.stonetop-pwd.recoverFollowers.animal-companion:"]);
+		expect(character.update).toHaveBeenLastCalledWith({
+			"flags.stonetop-pwd.recoverFollowers.animal-companion:": { follower: "animal-companion", slug: "" },
+		}, { stonetopLedger: true });
+
+		const missed = { ...leader(), flags: { "stonetop-pwd": withBransNpc } };
+		await restFollowers(missed, ["animal-companion:"], { heal: 4, lock: true, ...options(vi.fn(async () => null), bransNpc) });
+		expect(missed.update).not.toHaveBeenCalled();
+	});
+
+	it("locks nothing for Convalesce, or a Recover not asked to", async () => {
+		const character = leader();
+		await restFollowers(character, ["custom:c1"], { moveName: "Convalesce", ...options(vi.fn()) });
+		expect(Object.keys(character.update.mock.calls[0][0])).toEqual(["flags.stonetop-pwd.customFollowers.c1.hpCurrent"]);
+	});
+});
+
+// The one reading of Recover's followers that the card, the window and the press all share.
+describe("the Recover plan", () => {
+	const body = (id, extra = {}) => ({ id, name: id, from: 1, max: 4, row: { follower: "initiate", slug: id }, ...extra });
+	const crew = (key, extra = {}) => body(`crew::${key}`, { card: { ftype: "crew", slug: "" }, key, ...extra });
+	const pc = (more = {}) => ({ flags: { "stonetop-pwd": { recoverFollowers: { ash: { follower: "initiate", slug: "ash" } }, ...more } } });
+	const hurt = [body("ash"), body("bryn"), body("cole", { npcHeld: true, healable: false }), crew("anon:0"), crew("anon:1")];
+
+	it("leaves out a body whose Recover is spent, and keeps the one waiting on a GM to offer but not heal", () => {
+		const plan = recoverFollowerPlan(pc(), hurt, { crewHeld: () => 1 });
+		expect(plan.locked.map(b => b.id)).toEqual(["ash"]);
+		expect(plan.bodies.map(b => b.id)).toEqual(["bryn", "cole", "crew::anon:0", "crew::anon:1"]);
+		expect(plan.waiting.map(b => b.id)).toEqual(["cole"]);
+		expect(plan.healing.map(b => b.id)).toEqual(["bryn", "crew::anon:0", "crew::anon:1"]);
+		// One use in the crew's Supplies pays for one of its two members.
+		expect(plan).toMatchObject({ crewHeld: 1, crewPays: 1 });
+	});
+
+	it("reads only the ticked bodies at the press, and the crew's Supplies only for a crew member", () => {
+		const held = vi.fn(() => 3);
+		const plan = recoverFollowerPlan(pc(), hurt, { ids: ["bryn"], crewHeld: held });
+		expect(plan.hurt.map(b => b.id)).toEqual(["bryn"]);
+		expect(plan).toMatchObject({ crewHeld: 0, crewPays: 0 });
+		expect(held).not.toHaveBeenCalled();
+	});
+
+	it("offers only the crew's members when nothing else can pay, and none once the crew's Supplies are empty", () => {
+		expect(recoverFollowerPlan(pc(), hurt, { canPay: false, crewHeld: () => 2 }).bodies.map(b => b.id)).toEqual(["crew::anon:0", "crew::anon:1"]);
+		const broke = recoverFollowerPlan(pc(), hurt, { canPay: false, crewHeld: () => 0 });
+		expect(broke.bodies).toEqual([]);
+		// Still hurt, so a window can say it is the supplies that are missing.
+		expect(broke.hurt).toHaveLength(5);
+	});
+
+	it("reads the crew's own Supplies off the character by default", () => {
+		const plan = recoverFollowerPlan(pc({ crew: { size: 2, supplies: [4, 4] } }), [crew("anon:0")]);
+		expect(plan).toMatchObject({ crewHeld: 8, crewPays: 1 });
 	});
 });

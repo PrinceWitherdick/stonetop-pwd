@@ -15,7 +15,7 @@
       },
       "failure": {
         "label": "6-",
-        "value": "The land is barren or picked clean, hunger sets in (mark a debility), or you stumble into danger."
+        "value": "The GM makes a move. Maybe the land is barren or picked clean, the whole party marks a debility from hunger, or you stumble into danger."
       }
     },
     "rollType": "wis"

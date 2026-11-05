@@ -111,7 +111,7 @@ describe("Recover with followers", () => {
 			"flags.stonetop-pwd.recover.spent": true,
 		}, { stonetopMove: "Recover" });
 		// Not handed the bodies read before any ask: restFollowers reads their HP again at the heal.
-		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1", "f2"], { heal: 4, moveName: "Recover" });
+		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1", "f2"], { heal: 4, moveName: "Recover", lock: true });
 		expect(global.ChatMessage.create.mock.calls[0][0].content).toContain("Hari 1 → 5; Glaw 2 → 6");
 	});
 
@@ -149,7 +149,7 @@ describe("Recover with followers", () => {
 		const { sheet, patient } = makeSheet();
 		await sheet._applyRecover({ purse, base: 4, followers: ["f1", "f2"] });
 		expect(patient.update).toHaveBeenCalledWith(expect.objectContaining({ "flags.stonetop-pwd.inventory.resources.supplies": 1 }), { stonetopMove: "Recover" });
-		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1"], { heal: 4, moveName: "Recover" });
+		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1"], { heal: 4, moveName: "Recover", lock: true });
 		expect(global.ui.notifications.warn.mock.calls[0][0]).toContain("Glaw");
 	});
 
@@ -205,7 +205,7 @@ describe("someone else's supplies", () => {
 		});
 		await sheet._applyRecover({ purse: { slug: "supplies", label: "Supplies" }, payer: { id: "wren" }, base: 4, followers: ["f1"] });
 		expect(patient.update).not.toHaveBeenCalled();
-		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1"], { heal: 4, moveName: "Recover" });
+		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1"], { heal: 4, moveName: "Recover", lock: true });
 		expect(global.ChatMessage.create.mock.calls[0][0].content).toContain("Hari 1 → 5");
 	});
 
@@ -244,7 +244,7 @@ describe("someone else's supplies", () => {
 		await sheet._applyRecover({ purse: { slug: "supplies", label: "Supplies" }, payer: { id: "wren" }, base: 4, followers: ["f1"] });
 		expect(payers.payOthersSupplies).toHaveBeenCalledWith(expect.objectContaining({ n: 2 }));
 		expect(patient.update).not.toHaveBeenCalled();
-		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1"], { heal: 4, moveName: "Recover" });
+		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1"], { heal: 4, moveName: "Recover", lock: true });
 		expect(global.ui.notifications.warn).toHaveBeenCalledWith("On Death's Door.");
 	});
 
@@ -376,7 +376,7 @@ describe("an Unliving character's followers", () => {
 		const { sheet, patient } = makeSheet({ insert: "revenant" });
 		await sheet._applyRecover({ purse, base: 4, self: true, care: { carer: { id: "x" }, stock: true }, followers: ["f1"] });
 		expect(patient.update).toHaveBeenCalledWith({ "flags.stonetop-pwd.inventory.resources.supplies": 2 }, { stonetopMove: "Recover" });
-		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1"], { heal: 4, moveName: "Recover" });
+		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["f1"], { heal: 4, moveName: "Recover", lock: true });
 	});
 
 	it("spends nothing on a Recover with no follower ticked", async () => {
@@ -431,5 +431,70 @@ describe("Have What You Need: a small item past the allotment", () => {
 		const withMarks = makeSheet({ smallMarks: 2 }).sheet;
 		expect(await withMarks._haveExtraSmallItem(column(4, 5))).toBe("ok");
 		expect(asked.askWithButtons).not.toHaveBeenCalled();
+	});
+});
+
+// Expedition audit 2026-11-03, the road's Recover fixes.
+describe("Recover on the road (audit ROAD-3, ROAD-4, ROAD-6, ROAD-7, ROAD-8)", () => {
+	const withFlags = (patient, extra) => { patient.flags = { "stonetop-pwd": { ...(patient.flags?.["stonetop-pwd"] ?? {}), ...extra } }; };
+
+	it("pays a crew member's Recover out of the crew's own Supplies first (p.472-473)", async () => {
+		followers.hurtFollowerBodies.mockImplementation(async () => [
+			{ id: "crew::anon:0", name: "Hari", card: { ftype: "crew", slug: "" }, row: { follower: "crew-member", index: 0, slug: "" } },
+		]);
+		followers.restFollowers.mockImplementation(async () => [{ id: "crew::anon:0", name: "Hari", from: 1, to: 5 }]);
+		const { sheet, patient } = makeSheet({ hp: 20, supplies: 0 });
+		withFlags(patient, { crew: { size: 2, supplies: [4, 4] } });
+		await sheet._applyRecover({ purse: null, base: 4, self: false, followers: ["crew::anon:0"] });
+		expect(patient.update).toHaveBeenCalledWith(
+			expect.objectContaining({ "flags.stonetop-pwd.crew.supplies": expect.any(Array) }), { stonetopMove: "Recover" });
+		const crewWrite = patient.update.mock.calls[0][0]["flags.stonetop-pwd.crew.supplies"];
+		expect(crewWrite.reduce((a, b) => a + b, 0)).toBe(7);
+		// The body healed is locked until it takes more damage, in restFollowers' own write of its box: the
+		// sheet makes no second write for the lock.
+		expect(followers.restFollowers).toHaveBeenCalledWith(patient, ["crew::anon:0"], { heal: 4, moveName: "Recover", lock: true });
+		expect(patient.update).toHaveBeenCalledTimes(1);
+		expect(global.ChatMessage.create.mock.calls[0][0].content).toContain("for the crew");
+	});
+
+	it("leaves out a body whose Recover is spent, says so, and spends nothing for it", async () => {
+		followers.hurtFollowerBodies.mockImplementation(async () => [{ id: "initiate:ash", name: "Ash", row: { follower: "initiate", slug: "ash" } }]);
+		const { sheet, patient } = makeSheet({ hp: 20 });
+		withFlags(patient, { recoverFollowers: { "initiate:ash": { follower: "initiate", slug: "ash" } } });
+		await sheet._applyRecover({ purse, base: 4, self: false, followers: ["initiate:ash"] });
+		expect(patient.update).not.toHaveBeenCalled();
+		expect(followers.restFollowers).not.toHaveBeenCalled();
+		expect(global.ui.notifications.warn.mock.calls[0][0]).toContain("Ash");
+	});
+
+	it("spreads the uses over the pack's purses when the one picked runs short", async () => {
+		followers.hurtFollowerBodies.mockImplementation(async () => [{ id: "f1" }, { id: "f2" }, { id: "f3" }]);
+		const { sheet, patient } = makeSheet({ supplies: 2 });
+		const resources = { supplies: 2, "more-supplies": 3 };
+		patient.typedActor.supplyPurses = vi.fn(p => supplyPursesFor(resources, p));
+		await sheet._applyRecover({ purse, base: 4, followers: ["f1", "f2", "f3"] });
+		expect(patient.update).toHaveBeenCalledWith(expect.objectContaining({
+			"flags.stonetop-pwd.inventory.resources.supplies": 0,
+			"flags.stonetop-pwd.inventory.resources.more-supplies": 1,
+		}), { stonetopMove: "Recover" });
+	});
+
+	it("adds a carer's WIS to each tended follower, never their Stock", async () => {
+		followers.hurtFollowerBodies.mockImplementation(async () => [{ id: "f1" }]);
+		const { sheet } = makeSheet({ hp: 20 });
+		await sheet._applyRecover({ purse, base: 4, self: false, followers: ["f1"], care: { carer: { id: "gwynn", name: "Gwynn", wis: 2 }, stock: true } });
+		expect(followers.restFollowers).toHaveBeenCalledWith(expect.anything(), ["f1"], { heal: 6, moveName: "Recover", lock: true });
+	});
+
+	it("refuses with a fate still to choose (Death's Door 6-) or out of play", async () => {
+		const pending = makeSheet();
+		pending.patient.typedActor.deathsDoorState = "fate-pending";
+		await pending.sheet._applyRecover({ purse, base: 4 });
+		expect(pending.patient.update).not.toHaveBeenCalled();
+		expect(global.ui.notifications.warn).toHaveBeenCalledWith(global.game.i18n.localize("stonetop.specialMoves.recover.fatePendingHint"));
+		const dead = makeSheet();
+		withFlags(dead.patient, { deathsDoor: "dead" });
+		await dead.sheet._applyRecover({ purse, base: 4 });
+		expect(dead.patient.update).not.toHaveBeenCalled();
 	});
 });

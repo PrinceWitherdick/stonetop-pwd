@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { crewMemberHpMax, followerRoster, followerRosterOf, partyFollowersOf } from "../../../module/actors/character/follower-roster.js";
+import { crewMemberHpMax, followerRoster, followerRosterOf, orphanedPartyFollowers, partyFollowersOf } from "../../../module/actors/character/follower-roster.js";
 import { ANIMAL_COMPANION_MOVE } from "../../../module/actors/character/animal-companion.js";
+import { partyFollowers } from "../../../module/actors/character/follower-party.js";
 
 // Who a character's followers are, read from their flags and playbook rather than off a sheet, so
 // the camp and the expedition answer with any sheet open or none, and with any sheet class in use.
@@ -52,6 +53,23 @@ describe("followerRoster", () => {
 		expect(crewMemberHpMax({ crew: { details: { hpMax: "" } } }, { memberHp: 6 })).toBe(6);
 	});
 
+	it("reads a companion's or a beast's Dead off their card's details, so nothing counts them as alive (audit ROAD-1)", () => {
+		const sf = {
+			animalCompanion: { type: "wolf", name: "Fang", hpCurrent: 0, details: { dead: true } },
+			inventory: { addedSpecial: ["horse", "goat"] },
+			beastHp: { horse: 0 },
+			beastParty: { horse: true, goat: true },
+			beastDetails: { horse: { dead: true } },
+		};
+		const roster = followerRoster(actorWith([{ type: "move", name: ANIMAL_COMPANION_MOVE }]), sf, { companionDef: WOLF_DEF });
+		const by = Object.fromEntries(roster.map(f => [`${f.ftype}:${f.slug}`, f]));
+		expect(by["animal-companion:"].dead).toBe(true);
+		expect(by["beast:horse"].dead).toBe(true);
+		expect(by["beast:goat"].dead).toBe(false);
+		// The party (camp mouths, road days, Recover) reads only the living.
+		expect(partyFollowers(roster).map(f => f.slug)).toEqual(["goat"]);
+	});
+
 	it("leaves out a Servant batch that broke free (Book II p.561: no longer followers)", () => {
 		const sf = { customFollowers: {
 			s: { name: "Deep Ones", hpMax: 3, order: 1, party: true, brokenFree: true },
@@ -73,5 +91,34 @@ describe("followerRosterOf", () => {
 		} finally {
 			warn.mockRestore();
 		}
+	});
+});
+
+// Expedition audit ROAD-13 (the user's ruling E13): followers left on the road by a PC who is out of play.
+describe("orphanedPartyFollowers", () => {
+	it("names the living party followers of a PC out of play, and which can be handed off", () => {
+		const dead = {
+			id: "rhi", name: "Rhianna", items: [{ type: "move", name: ANIMAL_COMPANION_MOVE }],
+			flags: { "stonetop-pwd": {
+				crew: { name: "The Wolves", size: 3 },
+				animalCompanion: { type: "wolf", name: "Fang" },
+				customFollowers: {
+					a: { name: "Andras", order: 1, party: true },
+					b: { name: "Bryn", order: 2, party: true, dead: true },
+					c: { name: "Cai", order: 3, party: false },
+				},
+			} },
+		};
+		const alive = { id: "bla", name: "Blodwen", items: [], flags: { "stonetop-pwd": { customFollowers: { x: { name: "Xan", party: true } } } } };
+		const orphans = orphanedPartyFollowers([dead, alive], { outOfPlay: a => a.id === "rhi" });
+		expect(orphans).toEqual([{
+			pcId: "rhi", pcName: "Rhianna",
+			followers: [
+				{ ftype: "crew", slug: "", name: "The Wolves", canHandOff: false },
+				{ ftype: "animal-companion", slug: "", name: "Fang", canHandOff: false },
+				{ ftype: "custom", slug: "a", name: "Andras", canHandOff: true },
+			],
+		}]);
+		expect(orphanedPartyFollowers([dead], {})).toEqual([]);
 	});
 });

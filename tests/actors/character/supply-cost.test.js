@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { supplyPursesFor, defaultSupplyPurse, campUsesNeeded, spendablePurseResources, suppliesUsesOnMark, suppliesGiveBack, SUPPLY_PURPOSE, SUPPLY_SLUGS, crewSuppliesHeld, crewSuppliesLeaving } from "../../../module/actors/character/supply-cost.js";
+import { supplyPursesFor, defaultSupplyPurse, campUsesNeeded, spendablePurseResources, suppliesUsesOnMark, suppliesGiveBack, suppliesMarkNeedsAsk, spreadSupplySpend, SUPPLY_PURPOSE, SUPPLY_SLUGS, crewSuppliesHeld, crewSuppliesLeaving } from "../../../module/actors/character/supply-cost.js";
 
 // The crew's own supplies (the Crew insert, Book I p.144): one ◇ per member, as the Followers tab draws them.
 describe("crewSuppliesHeld / crewSuppliesLeaving", () => {
@@ -148,12 +148,33 @@ describe("spendablePurseResources", () => {
 
 // IA-1: a ◆ of supplies is its food; the tick moves the ◆ (Book I p.88, p.326-327).
 describe("suppliesUsesOnMark / suppliesGiveBack", () => {
-	it("packs a fresh, full ◆ when the mark drew an undefined ◆ or the row was empty", () => {
+	it("packs a fresh, full ◆ when the mark drew an undefined ◆, or an empty row was said to be packed", () => {
 		expect(suppliesUsesOnMark({ drew: 1, uses: 0, perSupply: 5 })).toBe(5);
 		expect(suppliesUsesOnMark({ drew: 1, uses: 2, perSupply: 5 })).toBe(5);
 		expect(suppliesUsesOnMark({ drew: 0, uses: 2, perSupply: 5 })).toBe(2);
-		// Marked by hand at home after a Reset: a fresh ◆, not an empty one.
-		expect(suppliesUsesOnMark({ drew: 0, uses: 0, perSupply: 5 })).toBe(5);
+		// ROAD-2 (E9): an empty row is full only once the player says it was packed or bought.
+		expect(suppliesUsesOnMark({ drew: 0, uses: 0, perSupply: 5 })).toBe(0);
+		expect(suppliesUsesOnMark({ drew: 0, uses: 0, perSupply: 5, packed: true })).toBe(5);
+	});
+
+	it("spreads a spend over the purses, the one picked first (ROAD-7)", () => {
+		const eligible = [
+			{ slug: "supplies", label: "Supplies", remaining: 2 },
+			{ slug: "more-supplies", label: "More supplies", remaining: 3 },
+		];
+		expect(spreadSupplySpend(eligible, { slug: "supplies", n: 4 })).toEqual([
+			{ slug: "supplies", label: "Supplies", n: 2, left: 0 },
+			{ slug: "more-supplies", label: "More supplies", n: 2, left: 1 },
+		]);
+		expect(spreadSupplySpend(eligible, { slug: "more-supplies", n: 1 })).toEqual([{ slug: "more-supplies", label: "More supplies", n: 1, left: 2 }]);
+		expect(spreadSupplySpend(eligible, { slug: "supplies", n: 6 })).toBeNull();
+	});
+
+	it("asks where the food came from only for an empty, never-emptied row with nothing to draw", () => {
+		expect(suppliesMarkNeedsAsk({ uses: 0, pool: 0, emptied: false })).toBe(true);
+		expect(suppliesMarkNeedsAsk({ uses: 0, pool: 0, emptied: true })).toBe(false);
+		expect(suppliesMarkNeedsAsk({ uses: 0, pool: 1, emptied: false })).toBe(false);
+		expect(suppliesMarkNeedsAsk({ uses: 2, pool: 0, emptied: false })).toBe(false);
 	});
 
 	it("hands back the draw only while the ◆ is still full", () => {

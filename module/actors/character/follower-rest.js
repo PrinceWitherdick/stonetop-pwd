@@ -22,7 +22,9 @@ import { groupFollowerMembers } from "../../utils/crew.js";
 import { rosterHpUpdate, rosterMemberHp } from "../../fight/group-hits.js";
 import { count } from "../../camp/camp-rules.js";
 import { memberMax } from "../../camp/camp-followers.js";
+import { crewSuppliesOf } from "../../camp/camp-store.js";
 import { plural } from "../../utils/plural.js";
+import { SYSTEM_ID } from "../../system-id.js";
 
 /**
  * Every follower body below their max HP, alive, as a list a window can offer: `id` is stable for the
@@ -105,10 +107,15 @@ export async function hurtFollowerBodies(character, { inputs = null, roster = fo
  * Every box on the character's sheet lands in ONE update; a body whose HP is their NPC's goes through
  * setFollowerHp, a heal that never lowers the NPC.
  *
+ * `lock` (Recover's) locks each body healed until it takes more damage (recoverLockUpdate, audit ROAD-4).
+ * A box-held body's lock rides the box write itself, so a Recover is one update of the character and not
+ * two: each one re-renders the sheet on every client and runs every updateActor hook. A body whose HP is
+ * their NPC's is locked once the NPC has taken the heal, in one write for all of them.
+ *
  * @returns {Promise<Array<{id: string, name: string, from: number, to: number}>>}  who regained HP
  */
 export async function restFollowers(character, ids, {
-	heal = null, moveName = null, bodies = null, roster = followerRosterOf, link = followerActorFromLink, set = setFollowerHp,
+	heal = null, moveName = null, bodies = null, lock = false, roster = followerRosterOf, link = followerActorFromLink, set = setFollowerHp,
 } = {}) {
 	const wanted = new Set(ids ?? []);
 	if (!character || !wanted.size) return [];
@@ -132,14 +139,120 @@ export async function restFollowers(character, ids, {
 		}
 	}
 	for (const { card, hpByKey } of groups.values()) Object.assign(update, rosterHpUpdate(flags, card, hpByKey));
+	// Whether any HP box is written is asked BEFORE the locks join the write: a box-held body has regained HP
+	// only when its box was written, never because its lock was.
 	const boxed = Object.keys(update).length > 0;
-	if (boxed) await (moveName ? character.update(update, { stonetopMove: moveName }) : character.update(update));
+	if (boxed) {
+		const write = lock ? { ...update, ...recoverLockUpdate(heals.filter(h => !h.body.npcHeld).map(h => h.body)) } : update;
+		await (moveName ? character.update(write, { stonetopMove: moveName }) : character.update(write));
+	}
 	const healed = [];
+	const npcHealed = [];
 	for (const { body, to } of heals) {
 		const landed = body.npcHeld ? await set(character, body.row, to, { moveName, raiseOnly: true, link }) : boxed;
-		if (landed) healed.push({ id: body.id, name: body.name, from: body.from, to });
+		if (!landed) continue;
+		healed.push({ id: body.id, name: body.name, from: body.from, to });
+		if (body.npcHeld) npcHealed.push(body);
 	}
+	const npcLocks = lock ? recoverLockUpdate(npcHealed) : {};
+	if (Object.keys(npcLocks).length) await character.update(npcLocks, { stonetopLedger: true });
 	return healed;
+}
+
+/**
+ * What a Recover can do for a character's hurt followers, worked out in ONE place for the Recover card, its
+ * window and the press that applies it, so the three never disagree. `hurt` is hurtFollowerBodies' read;
+ * the lock flags and the crew's Supplies are read off the character HERE, so a caller asks again at the
+ * press rather than keeping a plan from when the window opened (a carer or a payer may take minutes to
+ * answer in between). PURE but for those two reads.
+ *
+ * - `hurt`: the bodies below max (only those in `ids`, when the caller ticked some);
+ * - `locked`: those whose Recover is spent until they take more damage (audit ROAD-4, the user's ruling E10);
+ * - `bodies`: the rest, the ones a Recover can be made for. With `canPay` false nothing but the crew's own
+ *   Supplies can pay, so only the crew's members, and none once those Supplies are empty;
+ * - `waiting`: those of `bodies` whose HP is an NPC this client cannot write, with no GM here to write it
+ *   (followerRestBodies' `healable: false`), so no use is spent on a heal that could not land;
+ * - `healing`: `bodies` without `waiting`, the ones a press heals;
+ * - `crewHeld`: what the crew's own Supplies hold, read only when one of `bodies` is a crew member, else 0;
+ * - `crewPays`: how many of `healing` those Supplies pay for, "food that the followers brought with them"
+ *   (Book I p.472-473, audit ROAD-3), before anything falls to a pack.
+ *
+ * @param {Actor} character
+ * @param {object[]} hurt  followerRestBodies' records
+ * @param {{ids?: string[]|null, canPay?: boolean, crewHeld?: (actor: Actor) => number}} [options]
+ */
+export function recoverFollowerPlan(character, hurt, { ids = null, canPay = true, crewHeld = actor => crewSuppliesOf(actor).held } = {}) {
+	const wanted = ids ? new Set(ids) : null;
+	const all = (Array.isArray(hurt) ? hurt : []).filter(b => !wanted || wanted.has(b.id));
+	const open = recoverableBodies(readableFlags(character), all);
+	const locked = all.filter(b => !open.includes(b));
+	const isCrew = b => b.card?.ftype === "crew";
+	const held = open.some(isCrew) ? crewHeld(character) : 0;
+	const bodies = canPay ? open : held > 0 ? open.filter(isCrew) : [];
+	const waiting = bodies.filter(b => b.healable === false);
+	const healing = bodies.filter(b => b.healable !== false);
+	return { hurt: all, locked, bodies, waiting, healing, crewHeld: held, crewPays: Math.min(healing.filter(isCrew).length, held) };
+}
+
+// ── A follower's Recover, once until they take more damage (audit ROAD-4, the user's ruling E10) ─────────
+// "Once a given character regains HP via the Recover move, they can't do so again until they take more
+// damage" (Book I p.246), a follower body included. The lock is per BODY, keyed by the rest-body id
+// (followerRestBodies), on the character: `flags.<system>.recoverFollowers.<id>` holds the body's HP row
+// ({follower, slug, index}) while locked and null once lifted. Set by Recover only (Convalesce heals with no
+// lock), and lifted by the character's preUpdateActor hook when that row's HP box drops (recoverUnlockChanges):
+// an NPC-held follower's box mirrors its NPC (fight/roster-fate.js#onUpdateActorFollowerHp), so a blow on the
+// token lifts it too.
+
+/** The flag (under the system scope) holding the follower Recover locks. */
+export const RECOVER_FOLLOWERS_FLAG = "recoverFollowers";
+
+/** The rest-body ids whose Recover is spent, off the character's resolved flags. PURE. */
+export function recoverLockedIds(flags) {
+	const locks = flags?.[RECOVER_FOLLOWERS_FLAG];
+	return new Set(Object.entries(locks && typeof locks === "object" ? locks : {}).filter(([, v]) => !!v).map(([id]) => id));
+}
+
+/** The bodies (followerRestBodies) whose Recover is not spent. PURE. */
+export function recoverableBodies(flags, bodies) {
+	const locked = recoverLockedIds(flags);
+	return (Array.isArray(bodies) ? bodies : []).filter(b => !locked.has(b.id));
+}
+
+/** The update that locks each body Recover healed (`bodies` carry `id` and `row`). PURE. */
+export function recoverLockUpdate(bodies) {
+	const update = {};
+	for (const b of Array.isArray(bodies) ? bodies : []) {
+		if (!b?.id || !b.row?.follower) continue;
+		update[`flags.${SYSTEM_ID}.${RECOVER_FOLLOWERS_FLAG}.${b.id}`] = {
+			follower: b.row.follower, slug: b.row.slug ?? "", ...(b.row.index != null ? { index: b.row.index } : {}),
+		};
+	}
+	return update;
+}
+
+/**
+ * Lift, in the same write, the Recover lock of every body whose HP box this update LOWERS: the preUpdateActor
+ * half of the lock. `changes` is Foundry's expanded diff; mutated in place. Returns the ids lifted.
+ */
+export function recoverUnlockChanges(actor, changes) {
+	if (!changes?.flags?.[SYSTEM_ID]) return [];
+	const flags = readableFlags(actor ?? {}) ?? {};
+	const locks = flags[RECOVER_FOLLOWERS_FLAG];
+	if (!locks || typeof locks !== "object") return [];
+	const lifted = [];
+	for (const [id, row] of Object.entries(locks)) {
+		if (!row?.follower) continue;
+		const path = followerFateHpPath(row.follower, row.slug ?? "", row.index);
+		if (!path) continue;
+		const next = foundry.utils.getProperty(changes, `flags.${SYSTEM_ID}.${path}`);
+		if (next === undefined || next === null || next === "") continue;
+		const before = Number(foundry.utils.getProperty(flags, path));
+		if (Number.isFinite(before) && Number(next) < before) {
+			foundry.utils.setProperty(changes, `flags.${SYSTEM_ID}.${RECOVER_FOLLOWERS_FLAG}.${id}`, null);
+			lifted.push(id);
+		}
+	}
+	return lifted;
 }
 
 /** The chat row for followers healed by a move, or null when nobody was. */

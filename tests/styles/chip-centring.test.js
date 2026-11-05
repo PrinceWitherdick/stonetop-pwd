@@ -175,6 +175,13 @@ describe("chips with an icon or a count trim their label element", () => {
 		// Veteran Crew's "tags owed" cue, a flex chip with a hand icon.
 		["templates/actor/partials/tab-followers.hbs", "stonetop-crew-tags-owed", "span", 1],
 		["templates/dialogs/partials/catalog-shell.hbs", "stonetop-catalog-badge", "span", 1],
+		// The route pills: the scene button, Show players (its class also matches the stale share's
+		// Hide beside it, so two), that Hide, and the players' window's Stop showing (audit RTE-16).
+		// The steading header's See the route is built in JS (sharedRouteChipHtml, below).
+		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-to-scene", "button", 1],
+		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-share", "button", 2],
+		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-share-hide", "button", 1],
+		["templates/dialogs/shared-route.hbs", "stonetop-shared-route-stop", "button", 1],
 	])("wraps every label in %s (.%s)", (file, chipClass, tag, count) => {
 		const { count: found, bare } = everyChipWrapped(readRepo(file), chipClass, tag);
 		expect(found, `expected ${count} ${chipClass} in ${file}`).toBe(count);
@@ -234,6 +241,17 @@ describe("chips with an icon or a count trim their label element", () => {
 		const fn = chat.match(/export function rollKindBadge[\s\S]*?\n\}/)?.[0];
 		expect(fn, "rollKindBadge is gone from chat.js").toBeTruthy();
 		expect(fn).toContain('<span class="stonetop-chip-text">');
+	});
+
+	// Built in JS rather than in a template: the shared route card's See the route button, and the
+	// steading chip the in-place refresh draws (audit RTE-16).
+	it("wraps the shared route's built buttons' labels where they are built", () => {
+		const src = readRepo("module/utils/shared-route.js");
+		for (const name of ["sharedRouteCardHtml", "sharedRouteChipHtml"]) {
+			const fn = src.match(new RegExp(String.raw`export function ${name}[\s\S]*?\n\}`))?.[0];
+			expect(fn, `${name} is gone from shared-route.js`).toBeTruthy();
+			expect(fn).toContain('<span class="stonetop-chip-text">');
+		}
 	});
 });
 

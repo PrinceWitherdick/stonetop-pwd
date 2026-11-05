@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
 	MARK_PRECISION, arrowOnly, arrowRemainder, customStops, customTierFor, estimateSpan, insideMap,
-	markSpot, normalizeCustom, placeSpot, pricedLeg, sameMark, seedMarks, spanOfHours, spotDistance,
-	tierPace, withMark,
+	markSpot, nearestPlace, normalizeCustom, placeSpot, pricedLeg, sameMark, seedMarks, spanOfHours,
+	spotDistance, tierPace, withMark,
 } from "../../module/utils/custom-route.js";
 import { BOOK_LEGS, MARCH_HOURS, TRAVEL_MAPS, travelPlace } from "../../module/data/travel-times.js";
 import { journeyRoute } from "../../module/utils/travel-route.js";
@@ -403,5 +403,37 @@ describe("a mark the printed map can hold", () => {
 		];
 		const kept = normalizeCustom({ on: true, tier: TRAVEL_MAPS[0].slug, points: marks }).points;
 		expect(kept).toEqual(marks.filter(insideMap));
+	});
+});
+
+// Audit ruling E17: a stop laid on one of the GM's sites keeps the site, for the GM; what the
+// players hear is a separate `label`, and a bare mark is "near" the nearest lettered place.
+describe("what a bare mark is called", () => {
+	it("keeps a site's uuid and name, and the players' label, through the round trip", () => {
+		const custom = normalizeCustom({ tier: "vicinity", points: [
+			{ fx: 0.88, fy: 0.6, siteUuid: "s1", name: "The Sunken Barrow", label: "the shrine", stray: 1 },
+			{ fx: 0.3, fy: 0.3, name: "a name with no site" },
+		] });
+		expect(custom.points).toEqual([
+			{ fx: 0.88, fy: 0.6, siteUuid: "s1", name: "The Sunken Barrow", label: "the shrine" },
+			{ fx: 0.3, fy: 0.3 },
+		]);
+		expect(normalizeCustom(custom).points).toEqual(custom.points);
+	});
+
+	it("names the stop for its site on the GM's side, and keeps the numeral", () => {
+		const stops = customStops("stonetop", { tier: "vicinity", points: [
+			{ fx: 0.88, fy: 0.6, siteUuid: "s1", name: "The Sunken Barrow" }, { fx: 0.3, fy: 0.3 },
+		] });
+		expect(stops.slice(1).map(s => [s.name, s.mark, s.siteUuid])).toEqual([
+			["The Sunken Barrow", 1, "s1"], ["point 2", 2, null],
+		]);
+	});
+
+	it("finds the nearest place a map letters, never an anchor", () => {
+		expect(nearestPlace("vicinity", { fx: 0.88, fy: 0.6 })?.slug).toBe("the-red-grove");
+		// The World's End draws the Red Grove only as an anchor, so it is never the answer there.
+		expect(nearestPlace("worlds-end", { fx: 0.365, fy: 0.336 })?.slug).not.toBe("the-red-grove");
+		expect(nearestPlace("nowhere", { fx: 0.5, fy: 0.5 })).toBeNull();
 	});
 });
