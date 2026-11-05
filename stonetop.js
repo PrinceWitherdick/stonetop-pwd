@@ -153,11 +153,11 @@ import { askStockSource } from "./module/actors/character/ask-stock-source.js";
 import { moveLearnedIn } from "./module/actors/character/owns-move.js";
 import { readProvisionsYield, rollProvisions, rollStock, withTrappingGear, TRAPPING_GEAR_SLUG } from "./module/actors/character/provisions.js";
 import { askWithButtons, confirmOutcome } from "./module/utils/ask-with-buttons.js";
-import { belongsToMessage, optionLabelText, wirePickedOptionButton, claimPickedOption, settlePickedOption, releasePickedOption, pickedOptionRecord } from "./module/utils/picked-option-button.js";
+import { belongsToMessage, optionLabelText, wirePickedOptionButton, claimPickedOption, settlePickedOption, releasePickedOption, pickedOptionRecord, registerPickedOptionClaimQuery } from "./module/utils/picked-option-button.js";
 import { readOptionDamage, readOptionDamageChoices } from "./module/utils/damage.js";
 import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
-import { withLateStampLatch } from "./module/utils/card-latch.js";
+import { withLateStampLatch, registerCardLatchQuery } from "./module/utils/card-latch.js";
 import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
 import { watchOwnHelpers } from "./module/utils/foreign-helper-check.js";
 import { registerCampHooks } from "./module/camp/camp-store.js";
@@ -287,6 +287,9 @@ Hooks.once("init", () => {
 	registerFollowerFateQueries(CONFIG.queries);
 	// And two clients levelling the same character at once: the GM's client says which one takes the level.
 	registerLevelUpClaimQuery(CONFIG.queries);
+	// And who takes a card's payout or once-only button first, the same way (utils/gm-claim.js).
+	registerPickedOptionClaimQuery(CONFIG.queries);
+	registerCardLatchQuery(CONFIG.queries);
 
 	// Every window and modal in the system is drag-resizable; the ad-hoc
 	// Dialog popups we spawn from sheets default to resizable too. The companion

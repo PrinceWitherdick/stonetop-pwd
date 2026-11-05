@@ -28,6 +28,8 @@
 
 import { SYSTEM_ID } from "../system-id.js";
 import { deletionEntry } from "./foundry-compat.js";
+import { canUserWriteCard } from "./chat.js";
+import { claimedCard, defineGmClaim } from "./gm-claim.js";
 
 /**
  * Is this element part of the card being wired?
@@ -184,20 +186,74 @@ export function pickedOptionRecord(message, flagKey, index, done = message?.getF
 	return stale ? null : record;
 }
 
+/** The User query a player's client sends the GM's to claim an option's payout (gm-claim.js). */
+export const PICKED_OPTION_CLAIM_QUERY = "stonetop.pickedOptionClaim";
+
+/**
+ * An option's payout, claimed on the GM's client (gm-claim.js). Two clients that read "unclaimed" at once used
+ * to both write a claim and both pay (audit ROAD-15); here the GM's client reads the card and writes the claim
+ * in one turn, so the second asker finds the first one's claim. The GM writes it only for a user who could
+ * write the card themselves, which is what a claim written by the asker always required. A claim this user
+ * left behind by a reload is theirs to take again: their own client has already said it is not one it holds.
+ */
+const pickedOptionClaim = defineGmClaim({
+	query:   PICKED_OPTION_CLAIM_QUERY,
+	what:    "claim a card's payout",
+	subject: claimedCard,
+	key:     message => message.uuid ?? message.id,
+	may:     (message, asker, data) => typeof data?.flagKey === "string" && typeof data?.index === "string"
+		&& canUserWriteCard(message, asker, { whenUnknown: false }),
+	async grant(message, { flagKey, index }, asker) {
+		const record = message.getFlag(SYSTEM_ID, flagKey)?.[index];
+		if (record && !(record.pending && record.by === asker.id)) return false;
+		try {
+			await message.setFlag(SYSTEM_ID, flagKey, { [index]: { pending: true, by: asker.id } });
+			return true;
+		} catch (err) {
+			console.warn("Stonetop | Could not claim a card's payout:", err);
+			return false;
+		}
+	},
+});
+
+/** Register the GM's side of claimPickedOption (stonetop.js, at init). */
+export function registerPickedOptionClaimQuery(queries = globalThis.CONFIG?.queries) {
+	pickedOptionClaim.register(queries);
+}
+
 /**
  * Claim option `index` before paying it out. False, having written nothing, when it is already
  * claimed or paid, or when this client may not write the card.
  *
+ * The active GM's client decides (pickedOptionClaim), at once and in the order the claims reach it. With no
+ * GM connected, or none answering, this client writes its own claim and settles a crossing one by waiting
+ * `settleMs` (see below); that wait still lets two clients both pay over a round trip longer than it.
+ *
  * @param {ChatMessage} message
  * @param {string} flagKey
  * @param {string} index
+ * @param {{settleMs?: number, game?: object, ask?: Function}} [options]  `game` and `ask` for the tests
  * @returns {Promise<boolean>}
  */
-export async function claimPickedOption(message, flagKey, index) {
+export async function claimPickedOption(message, flagKey, index, { settleMs = CLAIM_SETTLE_MS, game, ask } = {}) {
 	const done = message.getFlag(SYSTEM_ID, flagKey) ?? {};
 	if (pickedOptionRecord(message, flagKey, index, done)) return false;
 	const key = heldKey(message, flagKey, index);
+	// A second press on this client while its first claim is still out: the first one decides.
+	if (_held.has(key)) return false;
 	_held.add(key);
+	const decided = await pickedOptionClaim.ask({ messageUuid: message.uuid, flagKey, index: String(index) }, { game, ask, local: message })
+		.catch(err => { console.warn("Stonetop | Could not ask the GM's client for a card's payout:", err); return null; });
+	if (decided === true) return true;
+	if (decided === false) {
+		_held.delete(key);
+		return false;
+	}
+	return claimHere(message, flagKey, index, key, done, settleMs);
+}
+
+/** claimPickedOption with nobody to decide: this client writes its own claim, then waits out a crossing one. */
+async function claimHere(message, flagKey, index, key, done, settleMs) {
 	try {
 		await message.setFlag(SYSTEM_ID, flagKey, { ...done, [index]: { pending: true, by: currentUserId() } });
 	} catch (err) {
@@ -205,8 +261,24 @@ export async function claimPickedOption(message, flagKey, index) {
 		console.warn("Stonetop | Could not claim a card's payout:", err);
 		return false;
 	}
+	// Two clients that read "unclaimed" at once both write a claim. The server applies them in order and
+	// broadcasts each, so the LAST one stands: wait a moment for a crossing claim to arrive, then pay only while
+	// the claim on the card is still this user's. The other stands down, paying nothing, and its card already
+	// shows the winner's "Being taken…".
+	if (settleMs > 0) await new Promise(resolve => setTimeout(resolve, settleMs));
+	const standing = message.getFlag(SYSTEM_ID, flagKey)?.[index];
+	if (standing && standing.by !== currentUserId()) {
+		_held.delete(key);
+		return false;
+	}
 	return true;
 }
+
+/**
+ * How long a claim made with no GM to decide it waits for a crossing claim from another client before it pays
+ * (claimPickedOption): about one round trip to the server and back.
+ */
+export const CLAIM_SETTLE_MS = 300;
 
 /** Stamp what a claimed option paid (`record`, which the readout reads), ending the claim. */
 export async function settlePickedOption(message, flagKey, index, record) {

@@ -155,7 +155,7 @@ describe("level-up claims", () => {
 	it("the query handler refuses a non-owner", async () => {
 		const actor = { ...pc(), testUserPermission: () => false };
 		const asker = { id: "u2", isGM: false };
-		expect(await handleLevelUpClaimQuery({ actorUuid: "Actor.pc", fromLevel: 2 }, { user: asker }, { resolve: () => actor })).toBe(false);
+		expect(await handleLevelUpClaimQuery({ actorUuid: "Actor.pc", fromLevel: 2 }, { user: asker }, { me: { id: "gm", isGM: true }, resolve: () => actor })).toBe(false);
 	});
 
 	// v13 names no sender: a player naming a GM must not skip the owner check and hold another's level.
@@ -192,7 +192,7 @@ describe("level-up claims", () => {
 		const ask = vi.fn(async () => false);
 		const game = { user: { id: "p" }, users: { activeGM: { id: "g" } } };
 		expect(await claimLevelUp(actor, 2, { game, ask })).toBe(false);
-		expect(ask).toHaveBeenCalledWith(game.users.activeGM, expect.any(String), expect.objectContaining({ fromLevel: 2, askId: expect.any(String) }), expect.objectContaining({ fallback: true }));
+		expect(ask).toHaveBeenCalledWith(game.users.activeGM, expect.any(String), expect.objectContaining({ fromLevel: 2, userId: "p", askId: expect.any(String) }), expect.objectContaining({ fallback: null }));
 		expect(await claimLevelUp(actor, 2, { game: { user: { id: "p" }, users: {} }, ask })).toBe(true);
 		expect(await claimLevelUp(actor, 2, { game, ask: vi.fn(async () => true) })).toBe(true);
 	});

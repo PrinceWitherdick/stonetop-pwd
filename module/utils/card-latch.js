@@ -3,11 +3,53 @@
 // click, a re-render or another owner's client cannot do it twice, and each gives the card back when
 // the work is backed out of or fails. The next render reads the flag, not the buttons, so a failure
 // has to take the latch back as well as re-enable them.
+//
+// Two clients pressing inside one round trip each read the card unlatched on their own copy, and both
+// used to do the work. So the latch is set on the active GM's client (cardLatchClaim, utils/gm-claim.js),
+// which reads the card and writes the latch in one turn: the second press finds the first one's latch.
+// A latch with its own `taken` rule (a user taking over their own latch left by a reload) cannot be sent
+// to the GM's client as a rule, so it is still read and written here, and keeps that race; so does every
+// latch with no GM connected.
 
 import { SYSTEM_ID } from "../system-id.js";
-import { canRewriteCard } from "./chat.js";
+import { canRewriteCard, canUserWriteCard } from "./chat.js";
+import { claimedCard, defineGmClaim } from "./gm-claim.js";
 import { belongsToMessage } from "./picked-option-button.js";
 import { speakerActor } from "./speaker-actor.js";
+
+/** The User query a player's client sends the GM's to latch a card (gm-claim.js). */
+export const CARD_LATCH_QUERY = "stonetop.cardLatch";
+
+/**
+ * A card's latch, set on the GM's client when nobody holds it. Answers `{latched: true}`, `{taken: true, held}`
+ * with what holds it, or `{denied: true}` for a user who could not have written the card themselves. A write
+ * that fails on the GM's side answers null, so the asker writes it as it would with no GM.
+ */
+const cardLatchClaim = defineGmClaim({
+	query:   CARD_LATCH_QUERY,
+	what:    "latch a card's button",
+	subject: claimedCard,
+	key:     message => message.uuid ?? message.id,
+	may:     (message, asker, data) => typeof data?.scope === "string" && typeof data?.flag === "string"
+		&& canUserWriteCard(message, asker, { whenUnknown: false }),
+	refused: { denied: true },
+	async grant(message, { scope, flag, value }) {
+		const held = message.getFlag(scope, flag);
+		if (held) return { taken: true, held };
+		try {
+			await message.setFlag(scope, flag, value);
+			return { latched: true };
+		} catch (err) {
+			console.warn(`Stonetop | the GM's client could not latch ${flag}`, err);
+			return null;
+		}
+	},
+});
+
+/** Register the GM's side of withCardLatch (stonetop.js, at init). */
+export function registerCardLatchQuery(queries = globalThis.CONFIG?.queries) {
+	cardLatchClaim.register(queries);
+}
 
 /**
  * Disable `buttons`, write `flag` = `value` on the message, then run `work(release)`. `work` answers
@@ -22,18 +64,22 @@ import { speakerActor } from "./speaker-actor.js";
  * record) or one this user may take over (their own latch left by a reload); by default, any truthy value.
  * `onTaken(held)` runs on a refusal (to say why), and its answer is returned in place of `false`.
  *
+ * With the default `taken`, the latch is set on the active GM's client (see the head of this file), and a
+ * press that loses to another client's is refused there just as one read here would be.
+ *
  * @param {ChatMessage} message
  * @param {string} flag  the message flag's key under `scope` (a dotted path is fine)
  * @param {*} value
  * @param {Iterable<HTMLButtonElement>} buttons
  * @param {(release: () => Promise<void>) => Promise<boolean>} work
- * @param {{taken?: (held: *) => boolean, onTaken?: (held: *) => *, scope?: string}} [options]  `scope` defaults to the system's
+ * @param {{taken?: (held: *) => boolean, onTaken?: (held: *) => *, scope?: string, game?: object, ask?: Function}} [options]
+ *   `scope` defaults to the system's; `game` and `ask` are for the tests
  * @returns {Promise<boolean>}  whether the action happened (or onTaken's answer on a refusal)
  */
-export async function withCardLatch(message, flag, value, buttons, work, { taken = held => !!held, onTaken = null, scope = SYSTEM_ID } = {}) {
+export async function withCardLatch(message, flag, value, buttons, work, { taken = null, onTaken = null, scope = SYSTEM_ID, game, ask } = {}) {
 	for (const b of buttons) b.disabled = true;
 	const held = message?.getFlag?.(scope, flag);
-	if (taken(held)) return onTaken ? onTaken(held) : false;
+	if ((taken ?? anyLatch)(held)) return onTaken ? onTaken(held) : false;
 	let latched = false;
 	const release = async () => {
 		if (latched) await message.unsetFlag(scope, flag);
@@ -41,7 +87,12 @@ export async function withCardLatch(message, flag, value, buttons, work, { taken
 		for (const b of buttons) b.disabled = false;
 	};
 	try {
-		await message.setFlag(scope, flag, value);
+		// Null: no GM to decide (or a `taken` rule of the caller's own), so it is read above and written here.
+		const decided = taken ? null : await cardLatchClaim.ask({ messageUuid: message?.uuid, scope, flag, value }, { game, ask, local: message });
+		if (decided?.taken) return onTaken ? onTaken(decided.held) : false;
+		// As a write refused here would throw, so the caller's own error path runs.
+		if (decided?.denied) throw new Error(`Stonetop | the GM's client refused the ${flag} latch: this user cannot write the card`);
+		if (!decided?.latched) await message.setFlag(scope, flag, value);
 		latched = true;
 		if (await work(release)) return true;
 		await release();
@@ -51,6 +102,9 @@ export async function withCardLatch(message, flag, value, buttons, work, { taken
 		throw err;
 	}
 }
+
+/** withCardLatch's default `taken`: any value holds the card. The GM's client reads it the same way. */
+const anyLatch = held => !!held;
 
 /**
  * withCardLatch for work whose stamp is known only once it is done (a steading card's button, which
