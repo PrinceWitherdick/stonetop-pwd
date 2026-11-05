@@ -21,7 +21,7 @@ import { clipText, escHtml } from "../utils/strings.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { finitePlace } from "../utils/window-restore.js";
 import { openingSize } from "../utils/opening-size.js";
-import { getDragEventData, renderTemplate } from "../utils/foundry-compat.js";
+import { deletionTarget, getDragEventData, renderTemplate } from "../utils/foundry-compat.js";
 import { openLinkedActorSheet } from "../utils/actor-link.js";
 import { documentPortraitFrame, portraitOrNone } from "../utils/portrait-frame.js";
 import { format, localize } from "../utils/i18n.js";
@@ -30,19 +30,19 @@ import { ZoomPanSurface } from "../utils/zoom-pan-surface.js";
 import { groupPressed, pressStartsBox, pressStartsDraw, wireRelmapDrag } from "../utils/relmap-drag.js";
 import {
 	RELMAP_BOARD_ASPECT, RELMAP_BOARD_WIDTH, RELMAP_CAPTION_FLOOR_PX, RELMAP_CAPTION_PX,
-	RELMAP_GROUP_CORNERS, RELMAP_HEAD_PX,
+	RELMAP_GROUP_CORNERS, RELMAP_HEAD_PX, RELMAP_NODE_PX, RELMAP_SUBTITLE_TOP_PX,
 	ROUTE_HEAD_PATH, ROUTE_HEAD_VIEWBOX,
 	bandPath, boardBounds, boardMetrics,
 	captionRoomPx, captionSize, clampReach, clearanceBow, curveWithGap, edgeArrowheads, edgeBow,
 	edgeCurve, edgeLabelAnchor, freeSpot, groupShapes, groupsInside, growFor, insideGroupShape, nodeRadiusPct,
-	grownRect, resizeRect, seatAlong, spreadLabels,
+	groupFloor, grownRect, resizeRect, seatAlong, spreadLabels,
 } from "../utils/relmap-geometry.js";
 import {
 	RELMAP_DASHES, RELMAP_DASH_DEFAULT, RELMAP_DIRS, RELMAP_FLAG, RELMAP_GROUP_DASHES, RELMAP_GROUP_SHAPES, RELMAP_INKS,
-	RELMAP_LABEL_MAX, RELMAP_SEAT_MIN, RELMAP_SIZES, RELMAP_SIZE_MAX, RELMAP_SIZE_MIN,
+	RELMAP_LABEL_MAX, RELMAP_SUBTITLE_MAX, RELMAP_SEAT_MIN, RELMAP_SIZES, RELMAP_SIZE_MAX, RELMAP_SIZE_MIN,
 	addEdgePatch, addGroupPatch,
 	addNodePatch, addNodesPatch, dropEdgePatch, dropGroupPatch, dropNodePatch, edgePatch, fanIndexes,
-	groupMembersPatch, groupPatch, nodePatch, readSeat, seatArrivals, takenSpots,
+	groupMembersPatch, groupPatch, nodePatch, pruneDeadPatch, readSeat, seatArrivals, takenSpots,
 } from "../relmap/relmap-store.js";
 import { RELMAP_INK_ACROSS, RELMAP_INK_PRESETS, inkPaint, normalizeHex }
 	from "../relmap/relmap-ink.js";
@@ -58,12 +58,14 @@ import {
 } from "../relmap/relmap-history.js";
 import { RelmapTieBar, TIE_DIR_ICONS } from "../utils/relmap-tie-bar.js";
 import { RelmapGroupBar } from "../utils/relmap-group-bar.js";
+import { RelmapPersonBar } from "../utils/relmap-person-bar.js";
 import { hasOwnRingArt, partyCharacters } from "../utils/playbook-actors.js";
 import {
 	applyPatch, canEditRelationshipMap, canHideMapPages, createMapPage, deleteMapPage,
 	ensureFirstMapPage, getMapPage, isMapPageHidden, mapPageName, moveMapPage, readGraph, renameMapPage,
-	resolveMapBoard, setMapPageHidden, syncPartyPage, syncVillagePage,
+	resolveMapBoard, seedMap, setMapPageHidden, syncPartyPage, syncVillagePage,
 } from "../relmap/relmap-doc.js";
+import { changedSavedFace } from "../relmap/relmap-faces.js";
 import { steadingListActors } from "../actors/steading/steading-people.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
 import { introRegards } from "../relmap/relmap-intros.js";
@@ -83,8 +85,32 @@ import { FINE_ZOOM_STEP } from "../utils/image-zoom.js";
 const TEMPLATE = "systems/stonetop-pwd/templates/dialogs/relationship-map.hbs";
 const BOARD_PARTIAL = "systems/stonetop-pwd/templates/dialogs/partials/relationship-map-board.hbs";
 
+/**
+ * The attributes that say what a focusable thing on the board is about: a face, the label under it,
+ * its link handle, its bin, a line's caption, a group's name. Read by `_focusKeyIn`, so a repaint
+ * can give the keyboard back to the same one.
+ */
+const FOCUS_KEYS = Object.freeze([
+	"data-relmap-open", "data-relmap-subtitle", "data-relmap-handle", "data-relmap-remove",
+	"data-relmap-words", "data-relmap-group",
+]);
+
 /** How long a burst of remote writes is allowed to coalesce before the board repaints. */
 const SYNC_DEBOUNCE_MS = 50;
+
+/**
+ * Whether an actor update touched anything a face on the map shows: the name, the picture, or the
+ * crop the GM framed it with (`portraitFrame`, see utils/portrait-frame.js), set or rubbed out.
+ */
+function changedFace(changed) {
+	if (changedSavedFace(changed)) return true;
+	const flags = changed?.flags;
+	if (!flags || typeof flags !== "object") return false;
+	// The system's whole flag scope rubbed out takes the crop with it, in either core's spelling.
+	if (Object.entries(flags).some(([key, value]) => deletionTarget(key, value) === SYSTEM_ID)) return true;
+	const ours = flags[SYSTEM_ID];
+	return !!ours && typeof ours === "object" && ("portraitFrame" in ours || "-=portraitFrame" in ours);
+}
 
 /**
  * What one wheel notch multiplies the board's zoom by, and it is DELIBERATELY GENTLER than the
@@ -162,7 +188,7 @@ const NUDGE_COMMIT_MS = 250;
 const BOARD_CONTROLS =
 	"[data-relmap-node], [data-relmap-handle], [data-relmap-remove], [data-relmap-edge], "
 	+ "[data-relmap-hit], [data-relmap-open], [data-relmap-action], .stonetop-relmap-tiebar, "
-	+ "[data-relmap-group], [data-relmap-group-hit], [data-relmap-grip], .stonetop-relmap-groupbar";
+	+ "[data-relmap-group], [data-relmap-group-hit], [data-relmap-grip], .stonetop-relmap-groupbar, .stonetop-relmap-personbar";
 
 /**
  * And which of them a RIGHT press must not start one from either.
@@ -179,7 +205,7 @@ const BOARD_CONTROLS =
  * board out from under that press would move the very thing they were reading while they chose. So
  * the bar refuses the drag, and everything actually drawn on the board gives way to it.
  */
-const BOARD_MENUS = ".stonetop-relmap-tiebar, .stonetop-relmap-groupbar";
+const BOARD_MENUS = ".stonetop-relmap-tiebar, .stonetop-relmap-groupbar, .stonetop-relmap-personbar";
 
 /**
  * ONE GLYPH APIECE FOR THE CORNER OVER THE BOARD, and each is a picture of the thing it resizes
@@ -395,6 +421,11 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// the two write different patches to different halves of the graph -- and one map holding
 		// both would be one place to ask "is this a node or a line?" on every flush for ever.
 		this._pendingSeat = new Map();
+		// EVERY WRITE THIS WINDOW HAS SENT AND NOT HEARD BACK FROM, whatever sent it. An undo waits
+		// for all of them before it looks at the stack: see `_write` and `_stepHistoryNow`.
+		this._inflight = new Set();
+		// The history this view's undo buttons are listening to, and how to stop. See `_watchHistory`.
+		this._watching = null;
 		// WHO THIS READER HAS SELECTED on the board in front of them, to move together. Theirs
 		// alone and in memory only, like the lit web beside it: a selection is where somebody's
 		// hands are, not a fact about the map, and another player's would be no use to them. The
@@ -411,6 +442,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// draw it (like `_pendingPick` for a line), and whether the group tool is armed to draw a box
 		// on the next drag. All this reader's own, none of it written anywhere.
 		this._groupBar = null;
+		// The bar a person's label raises. See utils/relmap-person-bar.js.
+		this._personBar = null;
 		this._litGroup = null;
 		this._pickedGroupParts = [];
 		// Its four resize corners, the size they were last drawn at, and one resize's worth of preview.
@@ -767,6 +800,13 @@ export class RelationshipMapWindow extends StonetopDialog {
 				take: localize("stonetop.relmap.groups.takeSelected"),
 				drop: localize("stonetop.relmap.groups.drop"),
 			},
+			// THE LABEL UNDER A PERSON'S NAME, and the one field its bar holds. One name for both: the
+			// bar holds nothing but that field, so the group and the field answer to the same words.
+			personBar: {
+				label: localize("stonetop.relmap.subtitle.field"),
+				placeholder: localize("stonetop.relmap.subtitle.placeholder"),
+				maxLength: RELMAP_SUBTITLE_MAX,
+			},
 			// ⚠ THE VISIBLE NAMES ONLY. What each of these two can actually do, and what it would
 			// take back, is written onto the elements by `_paintHistory` — the history is this
 			// reader's own and is not part of the document a render was built from. They come up
@@ -965,7 +1005,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * spreader's obstacle list, the cast the partial walks) reads it, so they cannot come apart.
 	 */
 	_plan(graph = null) {
-		const whole = graph ?? readGraph(this.boardDoc);
+		const whole = graph ?? this._withLanding(readGraph(this.boardDoc));
 		return {
 			graph: whole,
 			// THE SHEET GROWS WITH THE CAST, so a portrait's radius is not a constant: it is
@@ -1122,9 +1162,20 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// with NO uuid is a different thing entirely — somebody typed onto the board who never
 			// had an actor — and neither reading may catch it.
 			const gone = !!node.uuid && !actor;
+			// THE LABEL UNDER THE NAME ("Iron Knight", "Deceased"), off THIS MAP'S node and never the
+			// actor's: it is what the person is on this board. Folded into the face's sentence too, so a
+			// reader who cannot see the chip under it still hears it.
+			const subtitle = node.subtitle ?? "";
+			const called = subtitle ? `${name}, ${subtitle}` : name;
 			return {
 				id,
 				name,
+				subtitle,
+				// The button's spoken name REPLACES its visible words, so it says them too, ahead of what
+				// a press does: "Iron Knight. Change the label under Lord Elroy".
+				subtitleLabel: subtitle
+					? `${subtitle}. ${format("stonetop.relmap.subtitle.edit", { name })}`
+					: format("stonetop.relmap.subtitle.edit", { name }),
 				left: node.x,
 				top: node.y,
 				img: portrait.src,
@@ -1153,10 +1204,10 @@ export class RelationshipMapWindow extends StonetopDialog {
 				// note somewhere the reader is not looking. It matters most on the deleted-actor
 				// sentence, which is exactly the face somebody is about to want gone.
 				tooltip: withHint(gone
-					? format("stonetop.relmap.deletedActor", { name })
+					? format("stonetop.relmap.deletedActor", { name: called })
 					: actor
-						? format("stonetop.relmap.openSheet", { name })
-						: name),
+						? format("stonetop.relmap.openSheet", { name: called })
+						: called),
 				linkLabel: format("stonetop.relmap.linkFrom", { name }),
 				removeLabel: format("stonetop.relmap.removeLabel", { name }),
 			};
@@ -1299,6 +1350,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 			headD: ROUTE_HEAD_PATH,
 			headBox: ROUTE_HEAD_VIEWBOX,
 			linkHint: localize("stonetop.relmap.linkHint"),
+			addSubtitle: localize("stonetop.relmap.subtitle.add"),
 		};
 	}
 
@@ -1318,7 +1370,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * selection changing under a group).
 	 */
 	get _bars() {
-		return [this._tieBar, this._groupBar].filter(Boolean);
+		return [this._tieBar, this._groupBar, this._personBar].filter(Boolean);
 	}
 
 	/** Raise one bar on one thing, putting every other bar down first. See `_bars`. */
@@ -1350,6 +1402,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this._teardownDrag = null;
 		this._tieBar = null;
 		this._groupBar = null;
+		this._personBar = null;
 
 		// Adopted BEFORE the early return. Left until after it, a render that somehow produced no
 		// viewport would leave this pointing at the PREVIOUS render, and the next live update would
@@ -1472,6 +1525,14 @@ export class RelationshipMapWindow extends StonetopDialog {
 			canEdit: () => this.canEdit,
 		});
 
+		// AND THE LABEL UNDER A PERSON'S NAME: one field, written as one step per burst of typing.
+		this._personBar = new RelmapPersonBar(root, {
+			surface: () => this._surface,
+			personAt: id => this._personAt(id),
+			onField: (id, fields) => this._writeSubtitle(id, fields),
+			canEdit: () => this.canEdit,
+		});
+
 		this._teardownDrag = wireRelmapDrag(root, {
 			surface: this._surface,
 			// Asked per gesture, and for the moving and the Delete key as well, which default to it in the
@@ -1522,6 +1583,18 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// reader clicks around on while talking, so letting go has to be as easy as taking
 			// hold: an X on the bar would be the only way out of a thing that opens on a click.
 			onPickNone: () => { this._closeBars(); },
+			// And by Escape on the board while one is up, which otherwise went on to close the window.
+			barOpen: () => this._bars.some(bar => bar.isOpen),
+			// ⚠ A PRESS OVER, HOWEVER IT ENDED, lets through the repaint `_isBusy` held back for it. The
+			// pointerup flush in `activateListeners` cannot answer for all of them: a press let go of off
+			// the board never sends this view a pointerup at all. On a timeout like the others, so whatever the release
+			// itself writes or opens runs first, on the markup it was pressed on.
+			onPressEnd: () => setTimeout(() => this._flushPendingSync(), 0),
+			// THE LABEL UNDER SOMEBODY'S NAME, clicked: its bar goes up, and the focus comes back to the
+			// label on the way out, FOUND THEN because a repaint replaces it.
+			onPickPerson: (id, from) => {
+				this._openBar(this._personBar, id, { returnTo: from ? () => this._subtitleEl(id) : null });
+			},
 			// ⚠ THE GROUPS. A group is moved by carrying its members, so the drag layer asks who they
 			// are and then runs the ordinary group move; it never learns where an outline is.
 			groupMembers: id => this._groupMembersOf(id),
@@ -1589,7 +1662,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 
 		// A repaint held back while a drag or an edit was in the way, let through the moment it
 		// clears. Both on a timeout so the handlers that END the obstruction run first: the drag
-		// layer takes its class off in its own pointerup, which is bound before this one.
+		// layer ends its press in its own pointerup, which is bound before this one. (A press ended
+		// any other way says so itself: see `onPressEnd`.)
 		const flush = () => setTimeout(() => this._flushPendingSync(), 0);
 		root.addEventListener("focusout", flush);
 		view.addEventListener("pointerup", flush);
@@ -1600,6 +1674,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this._wireLighting(board);
 		this._wireDrop(view);
 		this._wireSync();
+		// Told whenever this board's history moves, from this view or any other. See `_watchHistory`.
+		if (!this._closed) this._watchHistory();
 		// What this reader can take back lives on their own machine, not in the markup a render was
 		// built from, and a fresh bar comes up with both buttons enabled until it is told otherwise.
 		this._paintHistory();
@@ -1787,6 +1863,36 @@ export class RelationshipMapWindow extends StonetopDialog {
 		};
 		on("createJournalEntryPage", page => onPageChange(page, false));
 		on("deleteJournalEntryPage", page => onPageChange(page, true));
+
+		// ── And the people on it, who are ACTORS and are read live ────────────────────────────────
+		//
+		// A face's name, picture and crop come off the actor at every paint (`_personOnMap`), but
+		// nothing used to ASK for a paint when an actor changed: a character renamed, or given new art,
+		// kept their old face and name on an open map until somebody happened to touch the map itself.
+		// So a change to anybody standing on the board in front of this reader repaints it, and only
+		// that: every actor write in the world arrives here (hit points included), so the fields are
+		// asked about first and the board is walked only for a change that could show on a face.
+		// ⚠ MID-RENDER COUNTS. A rename landing after `getData` read the actors and before the render
+		// finished would otherwise be dropped; asked for, `sync` holds it until the render is done.
+		// ⚠ ASKED OF THE LAST PAINT (`_drawn`), not of a fresh `readGraph`: this runs on every face change
+		// and every actor made or rubbed out in the world, and normalizing the board for each is the
+		// whole cost of a repaint's first step spent on a question the paint already answers. Somebody
+		// in the document and not yet in the paint has a repaint already coming, which reads the actor
+		// fresh. Read off the document only before anything has been painted.
+		const onBoard = actor => {
+			const uuid = actor?.uuid;
+			if (!uuid || !(this.rendered || this._isMidRender())) return false;
+			const graph = this._drawn?.graph ?? readGraph(this.boardDoc);
+			return Object.values(graph?.nodes ?? {}).some(node => node.uuid === uuid);
+		};
+		on("updateActor", (actor, changed) => {
+			if (!changedFace(changed)) return;
+			if (onBoard(actor)) repaint();
+		});
+		// Deleted, the face goes to its dashed "no longer in this world" look; restored by an undo, it
+		// comes back. Both are the same question about who is on the board.
+		on("deleteActor", actor => { if (onBoard(actor)) repaint(); });
+		on("createActor", actor => { if (onBoard(actor)) repaint(); });
 	}
 
 	/**
@@ -1852,7 +1958,12 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const board = this._boardEl();
 		if (!board) return;
 		const plan = this._plan();
-		board.innerHTML = await this._renderBoard(plan);
+		const html = await this._renderBoard(plan);
+		// ⚠ WHAT HAD THE FOCUS, taken down AFTER the await and just before the markup goes: the focus can
+		// move while the template renders. See `_focusKeyIn`.
+		const focused = this._focusKeyIn(board);
+		board.innerHTML = html;
+		this._refocus(board, focused);
 		// The captions exist now, so the gaps cut for them can stop being guesses.
 		this._fitGapsToPaint();
 		// The sheet itself may have changed size, because somebody else put another person on it.
@@ -1904,6 +2015,34 @@ export class RelationshipMapWindow extends StonetopDialog {
 			this._pickGroup(pick, { focusName: true, returnTo: () => this._groupNameEl(pick) });
 		}
 		this._paintChrome(plan);
+	}
+
+	/**
+	 * WHICH THING ON THE BOARD HAS THE KEYBOARD, by what it is about rather than by the element, which
+	 * a repaint throws away. Null when the focus is anywhere else.
+	 *
+	 * ⚠ WITHOUT THIS EVERY REPAINT DROPPED THE FOCUS ON <body>: the reader's own arrow-key nudge being
+	 * written, Enter keeping a label, any change from across the table. The next Delete, Space or arrow
+	 * then went to Foundry's canvas, where Delete takes the GM's selected tokens.
+	 */
+	_focusKeyIn(board) {
+		const active = board?.ownerDocument?.activeElement;
+		if (!active || active === board || !board.contains?.(active)) return null;
+		for (const attr of FOCUS_KEYS) {
+			const value = active.getAttribute?.(attr);
+			if (value) return { attr, value };
+		}
+		return null;
+	}
+
+	/** Give the keyboard back to the same thing in the new markup, if it is still on the board. */
+	_refocus(board, key) {
+		if (!key) return;
+		for (const el of board.querySelectorAll?.(`[${key.attr}]`) ?? []) {
+			if (el.getAttribute?.(key.attr) !== key.value) continue;
+			el.focus?.({ preventScroll: true });
+			return;
+		}
 	}
 
 	/**
@@ -2295,6 +2434,13 @@ export class RelationshipMapWindow extends StonetopDialog {
 	async _ensurePage() {
 		if (this._pagesReady) return;
 		this._pagesReady = true;
+		// ⚠ ONE PASS PER MAP ON THIS CLIENT, NOT PER WINDOW: the steading sheet's map tab is a second
+		// window of this class. A pass already running for this map is waited on instead. See `seedMap`.
+		await seedMap(this._entryId ?? this.entry?.id ?? "", () => this._seedPages());
+	}
+
+	/** The pass itself, run once per map at a time: see `_ensurePage`. */
+	async _seedPages() {
 		try { await ensureFirstMapPage(this.entry); }
 		catch (err) { console.warn("Stonetop | relationship map could not be given its first page", err); }
 		// AND THEN THE PARTY'S OWN BOARD, in the same guarded once-per-window pass and after the
@@ -2306,6 +2452,31 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// reason: a steading that cannot be read must not cost the map its party board or its pages.
 		try { await this._syncVillagePage(); }
 		catch (err) { console.warn("Stonetop | relationship map could not seat the village", err); }
+		// AND THE LINES NOTHING CAN BRING BACK, rubbed out of the flag: one end gone in a race between
+		// two players, hidden on every read and kept for ever. See `pruneDeadPatch` for why only lines.
+		try { await this._pruneDead(); }
+		catch (err) { console.warn("Stonetop | relationship map could not tidy its boards", err); }
+	}
+
+	/**
+	 * One write per board that carries dead lines, by the primary GM only, never through the undo.
+	 *
+	 * ALL SENT AT ONCE, since every board is its own document. Every write is waited for before a
+	 * failure is passed on, so one board refusing still leaves the rest tidied, and the caller still
+	 * hears about the first refusal (`_seedPages` warns once).
+	 */
+	async _pruneDead() {
+		if (!isPrimaryGM()) return;
+		const writes = [];
+		for (const page of this.entry?.pages ?? []) {
+			// ⚠ THE RAW FLAG, not `readGraph`, which has already hidden what is to be rubbed out.
+			const raw = page?.getFlag?.(SYSTEM_ID, RELMAP_FLAG);
+			if (!raw || !page.isOwner) continue;
+			const prune = pruneDeadPatch(raw);
+			if (prune) writes.push(applyPatch(page, prune));
+		}
+		const refused = (await Promise.allSettled(writes)).find(done => done.status === "rejected");
+		if (refused) throw refused.reason;
 	}
 
 	/**
@@ -3025,14 +3196,15 @@ export class RelationshipMapWindow extends StonetopDialog {
 	/**
 	 * Is this a moment a repaint would interrupt?
 	 *
-	 * The live drag is read off the CLASS the drag layer sets rather than a flag mirrored here.
-	 * One source of truth: a flag would have to be cleared on every one of the four ways a drag can
-	 * end, and the one that got missed would wedge the board's live updates off for good with no
-	 * sign of why.
+	 * A press held on the board is ASKED OF THE DRAG LAYER (`pressing`) rather than a flag mirrored
+	 * here. One source of truth: a flag would have to be cleared on every one of the ways a press can
+	 * end, and the one that got missed would wedge the board's live updates off for good with no sign
+	 * of why. And the whole press, not only the drag it may become: a repaint landing between the
+	 * press and the drag threshold replaced the portrait the drag was about to carry. The layer says
+	 * when the press is over (`onPressEnd`), which is what lets the held repaint through.
 	 */
 	_isBusy() {
-		const board = this._boardEl();
-		if (board?.classList.contains("is-dragging")) return true;
+		if (this._teardownDrag?.pressing?.()) return true;
 		// A nudge not written yet is the same kind of obstruction: a repaint would redraw the
 		// portrait at the spot the document still holds, undoing the keys already pressed.
 		if (this._pendingNudge.size) return true;
@@ -3100,8 +3272,30 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 *        about. See below.
 	 * @param {object} [options.graph]  the board as the caller has JUST read it, in the same breath
 	 *        (nothing awaited in between), so it is not normalized a second time. Read here otherwise.
+	 * @returns {Promise<boolean>}  whether the write landed.
 	 */
-	async _write(patch, { announce = "", label = "", coalesce = "", remember = true, onto = null, graph: read = null } = {}) {
+	_write(patch, options) {
+		// ⚠ EVERY WRITE IS KEPT UNTIL IT LANDS, and kept HERE because every edit comes through here: a
+		// bar's field, a drag, a nudge, a line drawn or rubbed out. The undo needs it as well as the
+		// flushes it asks for. Pressing the footer's Undo blurs a bar's field first, and the blur's flush
+		// starts the write and marks the words saved; the undo's own flush then had nothing left to
+		// write, peeked at the step BEFORE the label, took that back, and then the label landed and
+		// emptied the redo stack. Taken in the same breath as the call, before anything is awaited.
+		const write = this._writeNow(patch, options);
+		this._inflight.add(write);
+		const done = () => this._inflight.delete(write);
+		// The caller has the write itself and answers for its failure; this only lets go of it.
+		write.then(done, done).catch(() => {});
+		return write;
+	}
+
+	/** Every write `_write` has sent that has not landed yet, as one promise; undefined for none. */
+	_writesLanded() {
+		return this._inflight.size ? Promise.allSettled([...this._inflight]) : undefined;
+	}
+
+	/** The write itself, once `_write` has taken note of it. */
+	async _writeNow(patch, { announce = "", label = "", coalesce = "", remember = true, onto = null, graph: read = null } = {}) {
 		if (!patch) return false;
 		const doc = this.boardDoc;
 		// ⚠ NO BOARD, NO WRITE, AND NOTHING SAID. A collection whose maps have all been rubbed out, or one
@@ -3123,7 +3317,13 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// step). Asked of the board the write is about to land on, in the same breath.
 		// A write about SEVERAL (`ids`, a group moved together) is refused the same way if any one of
 		// them has gone; `_moveNodes` leaves the missing out before it asks, so this is a rail.
-		if (onto && !(onto.ids ?? [onto.id]).every(id => graph[onto.kind]?.[id])) return false;
+		if (onto && !(onto.ids ?? [onto.id]).every(id => graph[onto.kind]?.[id])) {
+			// ⚠ AND THE REPAINT THAT TOOK THEM OFF IS LET THROUGH. It was most likely held back by this very
+			// write (a bar holding words counts as busy), and nothing else would flush it until the focus
+			// left the board: the gone face and its open bar stood there, refusing every keystroke.
+			this._flushPendingSync();
+			return false;
+		}
 		const change = remember ? describeWrite(graph, patch) : null;
 		// Announced BEFORE the write. The write repaints the board and takes the live region's
 		// neighbours with it; announcing afterwards can land on a node already replaced.
@@ -3134,13 +3334,13 @@ export class RelationshipMapWindow extends StonetopDialog {
 			this.reportWriteFailure(localize("stonetop.relmap.noun"), err);
 			return false;
 		}
+		// Every view of this board repaints its buttons off the history's own word that it moved.
 		if (change) {
 			historyFor(doc).record({
 				...change,
 				label: label || localize("stonetop.relmap.history.change"),
 				coalesce,
 			});
-			this._paintHistory();
 		}
 		return true;
 	}
@@ -3195,15 +3395,14 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 */
 	async _stepHistory(way) {
 		if (!this.canEdit) return false;
-		// ⚠ ONE STEP AT A TIME. A step PEEKS its entry, awaits a write to the document, and only
-		// then commits it. Two of them overlapping would both peek the SAME entry, apply the same
-		// reversal twice and commit twice — taking one change back and throwing a second away
-		// unread. Two presses land that close together easily enough: a double-press on the tool,
-		// or a held key on a board whose write is waiting on the network.
-		if (this._stepping) return false;
+		// ⚠ ONE STEP AT A TIME, guarded by the HISTORY, which every view of this board shares: see
+		// `RelmapHistory#step`. And by this window as well, for a step still in flight on the board
+		// the reader has just left by the tab strip: the history in front of them is another one.
+		const history = this._history;
+		if (this._stepping || history.stepping) return false;
 		this._stepping = true;
 		try {
-			return await this._stepHistoryNow(way);
+			return await history.step(() => this._stepHistoryNow(way));
 		} finally {
 			this._stepping = false;
 		}
@@ -3218,6 +3417,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// flight, and leaving the board right while the two stacks were wrong. And a group's name,
 		// held back the same way: every bar, one after the other, each awaited before the next.
 		for (const bar of this._bars) await bar.flush();
+		// AND EVERY WRITE STARTED A MOMENT AGO AND NOT BACK YET, the one the blur of the Undo press
+		// itself started included: see `_write`.
+		await this._writesLanded();
 		// ⚠ AND THE ARROW KEYS' MOVES, FOR THE SAME REASON. A nudge or a caption slide is held for a breath
 		// after the last key (NUDGE_COMMIT_MS), and an undo pressed inside that breath peeked at the change
 		// BEFORE it -- took that one back instead -- and then the nudge landed, recorded itself and emptied
@@ -3237,7 +3439,6 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// at the top of the stack refusing to do anything every time it is pressed.
 			commit();
 			ui.notifications?.info?.(localize("stonetop.relmap.history.gone"));
-			this._paintHistory();
 			return false;
 		}
 		const said = format(`stonetop.relmap.history.${way}Done`, { what: entry.label });
@@ -3246,7 +3447,6 @@ export class RelationshipMapWindow extends StonetopDialog {
 		if (!await this._write(patch, { announce: said, remember: false })) return false;
 		commit();
 		ui.notifications?.info?.(said);
-		this._paintHistory();
 		return true;
 	}
 
@@ -3329,6 +3529,25 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// reaching core's own keybindings is core's undo of the last canvas operation.
 		ev.stopPropagation();
 		this._stepHistory(key === "y" || ev.shiftKey ? "forward" : "back");
+	}
+
+	/**
+	 * LISTEN TO THIS BOARD'S HISTORY, so the buttons follow every change to it: one made here, and one
+	 * made or taken back in another view of the same board (the steading sheet's map tab beside the
+	 * map window). Asked on every render, which is what every move to another board is, and moved over
+	 * to that board's history when it is a different one. See `RelmapHistory`.
+	 */
+	_watchHistory() {
+		const history = this._history;
+		if (this._watching?.history === history) return;
+		this._unwatchHistory();
+		this._watching = { history, stop: history.subscribe(() => this._paintHistory()) };
+	}
+
+	/** And stop, for a view that is closing. */
+	_unwatchHistory() {
+		this._watching?.stop();
+		this._watching = null;
 	}
 
 	/**
@@ -3574,6 +3793,10 @@ export class RelationshipMapWindow extends StonetopDialog {
 		}
 		if (!Object.keys(spots).length) return;
 		this._previewMoves(spots);
+		// AND THEIR LABEL'S BAR WITH THEM, which otherwise stayed where they had been until the write came
+		// back. `_personAt` reads the unwritten nudge (`_nodeAt`).
+		const bar = this._personBar;
+		if (bar?.isOpen && bar.id in spots) bar.refresh();
 		this._commitNudge();
 	}
 
@@ -3811,7 +4034,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// it was over is not on the board being arrived at.
 		for (const bar of this._bars) bar.flush();
 		this._groupBar?.close();
+		this._personBar?.close();
 		this._pendingGroupPick = "";
+		this._pendingPick = "";
 		if (this._drawArmed) this._armDraw(false);
 		if (this._linesArmed) this._armLines(false);
 	}
@@ -3830,6 +4055,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this._preview = null;
 		for (const bar of this._bars) bar.discard();
 		this._pendingGroupPick = "";
+		this._pendingPick = "";
 		if (this._drawArmed) this._armDraw(false);
 		if (this._linesArmed) this._armLines(false);
 	}
@@ -3880,6 +4106,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const here = graph?.nodes ?? {};
 		let patch = null;
 		const ids = [];
+		const landing = this._landingNudge;
+		const spots = [];
 		for (const [id, at] of Object.entries(moves ?? {})) {
 			if (!here[id]) continue;
 			// Reach and not the sheet: see `RELMAP_REACH_MIN`. The same rule `nodePatch` holds it
@@ -3893,12 +4121,36 @@ export class RelationshipMapWindow extends StonetopDialog {
 			}
 			patch = { ...patch, ...nodePatch(id, spot) };
 			ids.push(id);
+			// HELD AS LANDING until the server has it, a drag's drop as much as an arrow key's: see
+			// `_withLanding`. Let go only where no later move has replaced it since.
+			landing.set(id, spot);
+			spots.push([id, spot]);
 		}
 		if (!ids.length) return false;
 		const label = ids.length === 1
 			? localize("stonetop.relmap.history.moved")
 			: format("stonetop.relmap.history.movedMany", { count: ids.length });
-		return this._write(patch, { label, coalesce, onto: { kind: "nodes", ids }, graph });
+		try {
+			return await this._write(patch, { label, coalesce, onto: { kind: "nodes", ids }, graph });
+		} finally {
+			for (const [id, spot] of spots) if (landing.get(id) === spot) landing.delete(id);
+		}
+	}
+
+	/**
+	 * The board as read, with everybody whose move is still on its way to the server put where it
+	 * sends them.
+	 *
+	 * ⚠ A REPAINT IN THAT BREATH DREW THE DOCUMENT AS IT WAS. A drag's release lets a held repaint
+	 * through (another player's write, or a bar's own timed one) before the drop's write has come back,
+	 * so the face, its lines and the label bar flashed back to where the drag began. A copy: the graph
+	 * read is the caller's.
+	 */
+	_withLanding(graph) {
+		if (!this._landingNudge?.size || !graph?.nodes) return graph;
+		const nodes = { ...graph.nodes };
+		for (const [id, at] of this._landingNudge) if (nodes[id]) nodes[id] = { ...nodes[id], x: at.x, y: at.y };
+		return { ...graph, nodes };
 	}
 
 	/**
@@ -4043,7 +4295,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 		if (!at) return null;
 		const from = graph.nodes[edge.a];
 		const to = graph.nodes[edge.b];
-		const names = { a: from?.name ?? "", b: to?.name ?? "" };
+		// Live names, as the faces show them: a renamed actor's old name on the arrows read as somebody else.
+		const names = { a: from ? this._nameOf(graph, edge.a) : "", b: to ? this._nameOf(graph, edge.b) : "" };
 		return {
 			edge,
 			// `x` is what decides which way the two one-way arrows point, and it is the SEAT this
@@ -4098,7 +4351,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 */
 	async _createLink(a, b) {
 		if (a === b) return;
-		const graph = readGraph(this.boardDoc);
+		const doc = this.boardDoc;
+		const graph = readGraph(doc);
 		if (!graph.nodes[a] || !graph.nodes[b]) return;
 		const id = foundry.utils.randomID();
 		// ⚠ IN THE PEN THIS MAP IS BEING DRAWN WITH, which is the one thing about a new line that
@@ -4115,7 +4369,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const pen = penFor(this.entry, { size: getLastSize() });
 		const written = await this._write(addEdgePatch(id, { a, b, ...pen }), {
 			announce: format("stonetop.relmap.linked", {
-				a: graph.nodes[a].name, b: graph.nodes[b].name,
+				a: this._nameOf(graph, a), b: this._nameOf(graph, b),
 			}),
 			label: localize("stonetop.relmap.history.linked"),
 		});
@@ -4125,7 +4379,10 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// existed. Asked now, it would find nothing, refuse to open, and the gesture would end with
 		// a line drawn and no way to say what it is. So the id is left for the repaint the write
 		// has already set off, which is the first moment there is a stroke to float over.
-		if (written) this._pendingPick = id;
+		// ⚠ AND ONLY WHILE THE READER IS STILL ON THAT BOARD. Switched away while the write was out, the
+		// first repaint of the board arrived at went looking for a line it does not have, and put down
+		// whatever bar the reader had raised there to do it.
+		if (written && this._stillOn(doc)) this._pendingPick = id;
 	}
 
 	/**
@@ -4179,6 +4436,52 @@ export class RelationshipMapWindow extends StonetopDialog {
 	_groupNameEl(id) {
 		const board = this._boardEl();
 		return board ? indexGroupParts(board).get(id)?.name ?? null : null;
+	}
+
+	/**
+	 * One person as their label's bar wants them, off the PAINT: the node, and the point under their
+	 * name (board percentages) where the label sits and the bar takes its place. Null when the last
+	 * paint drew nobody of that id.
+	 */
+	_personAt(id) {
+		const graph = this._drawn?.graph;
+		const node = graph?.nodes?.[id];
+		const board = this._drawn?.board;
+		if (!node || !board?.height) return null;
+		// WHERE THEY STAND NOW, an arrow-key nudge not yet written (or not yet back) included: read off
+		// the paint alone, Enter on a label just after a nudge opened the bar where they had been.
+		const spot = this._nodeAt(id, graph) ?? node;
+		return {
+			node,
+			at: { left: spot.x, top: spot.y + (RELMAP_SUBTITLE_TOP_PX / board.height) * 100 },
+			// The top of the face, for a bar with no room below it to sit above the person instead.
+			lift: { left: spot.x, top: spot.y - (RELMAP_NODE_PX / 2 / board.height) * 100 },
+			// What a screen reader hears the bar called: WHOSE label it is, by the name as painted.
+			label: format("stonetop.relmap.subtitle.bar", { name: this._nameOf(graph, id) }),
+		};
+	}
+
+	/**
+	 * Write what the label bar holds.
+	 *
+	 * ⚠ ITS OWN COALESCE KEY, never `node:<id>`: that is the arrow keys' nudge of one person, and a
+	 * label typed and a nudge made within the fold window would come back as ONE undo step.
+	 */
+	_writeSubtitle(id, fields) {
+		return this._write(nodePatch(id, fields), {
+			label: localize("stonetop.relmap.history.editedPerson"), coalesce: `subtitle:${id}`,
+			onto: { kind: "nodes", id },
+		});
+	}
+
+	/** A person's label on the board as painted NOW, for the focus to go back to. Walked, not built. */
+	_subtitleEl(id) {
+		const board = this._boardEl();
+		if (!board) return null;
+		for (const el of board.querySelectorAll?.("[data-relmap-subtitle]") ?? []) {
+			if (el.dataset?.relmapSubtitle === id) return el;
+		}
+		return null;
 	}
 
 	/** Who is in a group, off the paint, for the drag layer to carry. */
@@ -4401,7 +4704,12 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const board = this._drawn?.board;
 		if (!shape || !board || !at) return null;
 		const px = spot => ({ x: (spot.x / 100) * board.width, y: (spot.y / 100) * board.height });
-		const asked = resizeRect(shape.outline.rect, corner, px({ x: at.left, y: at.top }), { square });
+		// The graph as painted, read ONCE: this runs every frame of the drag, and `_nodeAt` without one
+		// normalises the whole board again for every member.
+		const graph = this._drawn.graph ?? readGraph(this.boardDoc);
+		// Never smaller than the biggest of them alone, label and all: see `groupFloor`.
+		const min = groupFloor(shape.members.map(member => graph?.nodes?.[member]));
+		const asked = resizeRect(shape.outline.rect, corner, px({ x: at.left, y: at.top }), { square, min });
 		if (!asked) return null;
 		// HELD TO WHAT WILL BE STORED: the offsets are capped (`readGroupGrow`), and the rectangle who
 		// stays is judged against has to be the one the outline is drawn on once it is let go.
@@ -4409,9 +4717,6 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const rect = grownRect(shape.outline.snug, grow);
 		const staying = [];
 		const leaving = [];
-		// The graph as painted, read ONCE: this runs every frame of the drag, and `_nodeAt` without one
-		// normalises the whole board again for every member.
-		const graph = this._drawn.graph ?? readGraph(this.boardDoc);
 		for (const member of shape.members) {
 			const spot = this._nodeAt(member, graph);
 			(spot && insideGroupShape(shape.group.shape, rect, px(spot)) ? staying : leaving).push(member);
@@ -4560,13 +4865,15 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const graph = readGraph(doc);
 		const node = graph.nodes[id];
 		if (!node) return;
+		// The name the face shows, which is the live actor's, not the one stored when they were added.
+		const name = this._nameOf(graph, id);
 		const links = Object.values(graph.edges).filter(e => e.a === id || e.b === id).length;
 		const ok = await this._confirm({
 			title: localize("stonetop.relmap.removeTitle"),
 			body: links
-				? format("stonetop.relmap.removeBodyLinks", { name: node.name, count: links })
-				: format("stonetop.relmap.removeBody", { name: node.name }),
-			confirm: format("stonetop.relmap.removeConfirm", { name: node.name }),
+				? format("stonetop.relmap.removeBodyLinks", { name, count: links })
+				: format("stonetop.relmap.removeBody", { name }),
+			confirm: format("stonetop.relmap.removeConfirm", { name }),
 			cancel: localize("stonetop.relmap.removeCancel"),
 		});
 		if (!ok || !this._stillOn(doc)) return;
@@ -4576,8 +4883,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const now = readGraph(doc);
 		if (!now.nodes[id]) return;
 		await this._write(dropNodePatch(now, id), {
-			announce: format("stonetop.relmap.removed", { name: node.name }),
-			label: format("stonetop.relmap.history.removed", { name: node.name }),
+			announce: format("stonetop.relmap.removed", { name }),
+			label: format("stonetop.relmap.history.removed", { name }),
 		});
 	}
 
@@ -4596,8 +4903,13 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const doc = this.boardDoc;
 		const graph = readGraph(doc);
 		const already = uuidsOn(graph);
+		// ⚠ ONLY WHO THIS READER CAN SEE (`visible`: Limited or better, everybody for a GM), the same
+		// people the Actors sidebar shows them and so the same people they could drag on. Every actor in
+		// the world reaches every client, so without this a player's chooser named and pictured the NPCs
+		// the GM is keeping back, and let them seat one on a shared board.
 		const actors = (game.actors?.contents ?? [])
-			.filter(actor => ["character", "npc"].includes(actor.type) && !already.has(actor.uuid));
+			.filter(actor => ["character", "npc"].includes(actor.type) && !already.has(actor.uuid)
+				&& actor.visible !== false);
 		if (!actors.length) {
 			ui.notifications?.info?.(localize("stonetop.relmap.everyoneAdded"));
 			return;
@@ -5027,7 +5339,10 @@ export class RelationshipMapWindow extends StonetopDialog {
 				? groupShapes(plan.graph, plan.board, { wordScale: weightScales().word })
 				: [];
 		const outlines = shapes.map(({ outline }) => outline);
-		return boardBounds(Object.values(plan?.graph?.nodes ?? {}), plan?.board, outlines);
+		// AND EVERY LINE AND CAPTION, which a wide fan between two people bows well past both of them.
+		// Off the paint for the reason the outlines are; the tests' plans have none.
+		const lines = this._drawn?.graph === plan?.graph ? [...(this._drawn?.shapes?.values() ?? [])] : [];
+		return boardBounds(Object.values(plan?.graph?.nodes ?? {}), plan?.board, outlines, lines);
 	}
 
 	/**
@@ -5437,6 +5752,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		for (const bar of this._bars) bar.destroy();
 		this._tieBar = null;
 		this._groupBar = null;
+		this._personBar = null;
 		this._teardownDrag?.();
 		this._teardownDrag = null;
 		// The two document-level listeners the undo keys need. A closed window that kept them would
@@ -5460,6 +5776,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// BEFORE the teardown, while the bar still holds both the id and the field.
 		this._leaveBoard();
 		this._teardown();
+		this._unwatchHistory();
 		return super.close(options);
 	}
 }
@@ -5510,7 +5827,8 @@ function edgeShapes(graph, {
 		const dodge = clearanceBow({ ...ends, avoid: faces, aspect: RELMAP_BOARD_ASPECT, r });
 		const curve = edgeCurve({
 			...ends,
-			bow: edgeBow(fans[id] ?? 0, dodge),
+			// Mirrored when drawn against the pair's id order, so opposite-way twins never coincide.
+			bow: edgeBow(fans[id] ?? 0, dodge, { reversed: edge.a > edge.b }),
 			aspect: RELMAP_BOARD_ASPECT,
 			r,
 		});

@@ -5,6 +5,7 @@ import { openTimelineWindow } from "../dialogs/TimelineWindow.js";
 import { canCreateRelationshipMap, ensureRelationshipMapFolder, listRelationshipMaps } from "../relmap/relmap-doc.js";
 import { promptForNewRelationshipMap } from "../relmap/relmap-make.js";
 import { defaultBoard } from "../relmap/relmap-last.js";
+import { keepSavedFacesCurrent, sweepStaleFaces } from "../relmap/relmap-faces.js";
 import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
@@ -679,6 +680,14 @@ export async function onReady() {
 	// load, not awaited, one browse. And a sheet renamed while on its initials takes the new ones, on
 	// the GM client that made the rename (the disc is a file it writes).
 	Hooks.on("updateActor", reletterOnRename);
+	// Each person on a relationship map keeps a saved copy of their name and picture for when their
+	// actor is deleted; a rename or new art refreshes it on every board (relmap/relmap-faces.js), and
+	// the primary GM's load catches up whatever changed while no GM was on to write a hidden board.
+	Hooks.on("updateActor", (actor, changed, options, userId) => {
+		keepSavedFacesCurrent(actor, changed, options, userId)
+			.catch(err => console.warn("Stonetop | refreshing saved names on the relationship map failed", err));
+	});
+	sweepStaleFaces().catch(err => console.warn("Stonetop | refreshing saved names on the relationship map failed", err));
 	// Stonetop's Other Settlements table (and another settlement's trade links) draw from settlement
 	// sheets, and core redraws a sheet only for its own document (settlement-actor.js).
 	Hooks.on("createActor", actor => redrawForSettlement(actor));

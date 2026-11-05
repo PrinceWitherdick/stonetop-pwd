@@ -14,7 +14,7 @@ import {
 	getRelationshipMap, getPartyPage, hadPartyPage, isMapPageHidden, listMapPages,
 	listRelationshipMaps, listVisibleMapPages, mapBoardDoc, mapPageName, resolveMapBoard,
 	mapPagesArranged, moveMapPage, planPageMove,
-	readGraph, renameMapPage, setMapPageHidden, syncPartyPage,
+	readGraph, renameMapPage, seedMap, setMapPageHidden, syncPartyPage,
 } from "../../module/relmap/relmap-doc.js";
 import { RELMAP_VERSION } from "../../module/relmap/relmap-store.js";
 import { createRelationshipMapEntrySheetClass } from "../../module/journal/RelationshipMapEntrySheet.js";
@@ -260,7 +260,7 @@ describe("finding the maps in a world", () => {
 
 	it("reads a stored graph back through the normalizer", () => {
 		const map = entry("A map", {
-			"stonetop-pwd": { relationshipMap: { nodes: { "bad.id": { x: 1, y: 1 } } } },
+			"stonetop-pwd": { relationshipMap: { nodes: { "bad.id": { name: "bad.id", x: 1, y: 1 } } } },
 		});
 		expect(readGraph(map).nodes).toEqual({});
 	});
@@ -376,7 +376,7 @@ describe("the document a board is read from and written to", () => {
 	// window reads and writes through one handle and needs no second code path anywhere.
 	it("is the ENTRY itself on a map that still has no pages", () => {
 		const legacy = entry("Old map", {
-			"stonetop-pwd": { relationshipMap: { version: 1, nodes: { a: { x: 5, y: 5 } } } },
+			"stonetop-pwd": { relationshipMap: { version: 1, nodes: { a: { name: "a", x: 5, y: 5 } } } },
 		});
 		expect(mapBoardDoc(legacy, null)).toBe(legacy);
 		expect(Object.keys(readGraph(mapBoardDoc(legacy, null)).nodes)).toEqual(["a"]);
@@ -1084,5 +1084,35 @@ describe("hiding a board from the players", () => {
 		]);
 		expect(await ensureFirstMapPage(map)).toBe(listMapPages(map)[0]);
 		expect(listMapPages(map)).toHaveLength(2);
+	});
+});
+
+// ⚠ THE STEADING SHEET'S MAP TAB IS A SECOND WINDOW ONTO THE SAME MAP, and two passes side by side each
+// seated the party under fresh ids. One pass per map at a time, on this client.
+describe("the open-time pass, once per map at a time", () => {
+	it("hands a second caller the pass already running for the same map", async () => {
+		let finish;
+		const pass = vi.fn(() => new Promise(done => { finish = done; }));
+		const a = seedMap("m1", pass);
+		const b = seedMap("m1", pass);
+		expect(pass).toHaveBeenCalledTimes(1);
+		expect(b).toBe(a);
+		// Another map is another pass.
+		const other = vi.fn(async () => {});
+		await seedMap("m2", other);
+		expect(other).toHaveBeenCalledTimes(1);
+		finish();
+		await a;
+		// Finished, the next caller runs a pass of its own.
+		const later = vi.fn(async () => {});
+		await seedMap("m1", later);
+		expect(later).toHaveBeenCalledTimes(1);
+	});
+
+	it("forgets a pass that failed, even one that threw before it began", async () => {
+		await expect(seedMap("m3", () => { throw new Error("no"); })).rejects.toThrow("no");
+		const next = vi.fn(async () => {});
+		await seedMap("m3", next);
+		expect(next).toHaveBeenCalledTimes(1);
 	});
 });

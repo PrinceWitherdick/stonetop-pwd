@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
 	RELMAP_COALESCE_MS, RELMAP_HISTORY_MAX, RelmapHistory, describeWrite, forgetAllHistory,
 	forgetHistory, historyFor, stepPatch,
@@ -96,6 +96,36 @@ describe("what one write does, and what would put it back", () => {
 	});
 });
 
+describe("the label under a person's name", () => {
+	// ⚠ ONLY UNDOABLE BECAUSE `normalizeGraph` EMITS IT ON EVERYBODY. `describeWrite` gives up on a
+	// field it cannot read the old value of, so a label absent from the read was a write nobody could
+	// take back, with nothing anywhere to say so.
+	it("takes a label back off, and puts a changed one back as it was", () => {
+		const before = graph();
+		const written = nodePatch("elena", { subtitle: "Iron Knight" });
+		const change = describeWrite(before, written);
+		expect(change).toBeTruthy();
+		const after = afterPatch(before, written);
+		expect(after.nodes.elena.subtitle).toBe("Iron Knight");
+		const back = afterPatch(after, stepPatch(after, change.back));
+		expect(back.nodes.elena.subtitle).toBe("");
+
+		const again = describeWrite(after, nodePatch("elena", { subtitle: "Deceased" }));
+		const later = afterPatch(after, nodePatch("elena", { subtitle: "Deceased" }));
+		expect(afterPatch(later, stepPatch(later, again.back)).nodes.elena.subtitle).toBe("Iron Knight");
+	});
+
+	it("brings somebody's label back with them when their removal is undone", () => {
+		const before = afterPatch(graph(), nodePatch("elena", { subtitle: "Deceased" }));
+		const patch = dropNodePatch(before, "elena");
+		const change = describeWrite(before, patch);
+		const gone = afterPatch(before, patch);
+		expect(gone.nodes.elena).toBeUndefined();
+		const back = afterPatch(gone, stepPatch(gone, change.back));
+		expect(back.nodes.elena.subtitle).toBe("Deceased");
+	});
+});
+
 describe("making and unmaking", () => {
 	it("takes a newly added person off again", () => {
 		const before = graph();
@@ -185,6 +215,20 @@ describe("a board that has moved on underneath the step", () => {
 		const back = afterPatch(live, stepPatch(live, change.back));
 		expect(back.nodes.elena).toEqual(before.nodes.elena);
 		expect(back.edges.link1).toBeUndefined();
+	});
+
+	// AUDIT 2026-11-02: Elena taken off, put on again by somebody else (a new id), then the removal
+	// undone. Re-made, the same actor stood on the board twice. Her line goes onto the Elena standing.
+	it("puts nobody on twice: what comes back about them goes onto the one already standing", () => {
+		const before = graph();
+		const change = describeWrite(before, dropNodePatch(before, "elena"));
+		let live = afterPatch(before, dropNodePatch(before, "elena"));
+		live = afterPatch(live, addNodePatch("elena2", { uuid: "Actor.a1", name: "Elena", x: 5, y: 5 }));
+
+		const back = afterPatch(live, stepPatch(live, change.back));
+		expect(Object.values(back.nodes).filter(node => node.uuid === "Actor.a1")).toHaveLength(1);
+		expect(back.nodes.elena).toBeUndefined();
+		expect(back.edges.link1).toMatchObject({ a: "elena2", b: "stefan", label: "exes" });
 	});
 
 	it("has nothing to rub out twice", () => {
@@ -310,6 +354,60 @@ describe("the stack itself", () => {
 		expect(history.peekRedo()).toBeNull();
 		expect(history.commitUndo()).toBeNull();
 		expect(history.undoLabel).toBe("");
+	});
+});
+
+// ⚠ ONE BOARD OPEN IN TWO VIEWS (the steading sheet's tab and the map window) IS ONE HISTORY, so the
+// word that it has moved, and the one-step-at-a-time guard, are the history's and not a window's.
+describe("every view of one board", () => {
+	const change = () => describeWrite(graph(), nodePatch("elena", { x: 80 }));
+
+	it("tells every listener when either stack moves, and stops telling one that has left", () => {
+		const history = new RelmapHistory();
+		const here = vi.fn();
+		const there = vi.fn();
+		history.subscribe(here);
+		const leave = history.subscribe(there);
+		history.record({ ...change(), label: "a" });
+		expect(here).toHaveBeenCalledTimes(1);
+		expect(there).toHaveBeenCalledWith(history);
+		history.commitUndo();
+		history.commitRedo();
+		expect(here).toHaveBeenCalledTimes(3);
+		leave();
+		history.clear();
+		expect(here).toHaveBeenCalledTimes(4);
+		expect(there).toHaveBeenCalledTimes(3);
+	});
+
+	it("says nothing when nothing moved", () => {
+		const history = new RelmapHistory();
+		const told = vi.fn();
+		history.subscribe(told);
+		history.commitUndo();
+		history.commitRedo();
+		history.record({});
+		expect(told).not.toHaveBeenCalled();
+	});
+
+	it("takes one step at a time, from whichever view asks", async () => {
+		const history = new RelmapHistory();
+		let land;
+		const first = history.step(() => new Promise(done => { land = done; }));
+		expect(history.stepping).toBe(true);
+		const second = vi.fn(async () => true);
+		expect(await history.step(second)).toBe(false);
+		expect(second).not.toHaveBeenCalled();
+		land(true);
+		expect(await first).toBe(true);
+		expect(history.stepping).toBe(false);
+		expect(await history.step(second)).toBe(true);
+	});
+
+	it("lets go of the guard when a step fails", async () => {
+		const history = new RelmapHistory();
+		await expect(history.step(async () => { throw new Error("refused"); })).rejects.toThrow("refused");
+		expect(history.stepping).toBe(false);
 	});
 });
 

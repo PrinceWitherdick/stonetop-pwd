@@ -74,8 +74,59 @@ describe("the part of the board with anything on it", () => {
 		expect(box.top).toBe(0);
 	});
 
+	it("frames the label under somebody's name too", () => {
+		const plain = boardBounds([{ x: 50, y: 150 }], sheet);
+		const labelled = boardBounds([{ x: 50, y: 150, subtitle: "Iron Knight" }], sheet);
+		expect(labelled.bottom).toBeGreaterThan(plain.bottom);
+	});
+
 	it("skips a person with no place at all rather than framing nowhere", () => {
 		expect(boardBounds([{ x: NaN, y: 3 }], sheet)).toEqual({ left: 0, top: 0, right: 1200, bottom: 960 });
+	});
+
+	// AUDIT 2026-11-03 (O8): a fan of ten lines between one pair bows about a quarter of the sheet off
+	// the straight run, and a frame worked out from the faces alone cut the outer ones off.
+	describe("and the lines on it", () => {
+		const nodes = [{ x: 40, y: 2 }, { x: 60, y: 2 }];
+		// A line along the top edge bowed up: its control is 40% above the sheet, so the stroke's own
+		// highest point is half that, 20% of 960 = 192px above it.
+		const bowed = { curve: { from: { left: 40, top: 2 }, control: { left: 50, top: -38 }, to: { left: 60, top: 2 } } };
+
+		it("frames exactly what it always did when given no lines", () => {
+			expect(boardBounds(nodes, sheet, [], [])).toEqual(boardBounds(nodes, sheet));
+			expect(boardBounds(nodes, sheet, [], undefined)).toEqual(boardBounds(nodes, sheet));
+		});
+
+		it("takes in the outermost bow at the stroke's true extreme, not at its control point", () => {
+			const box = boardBounds(nodes, sheet, [], [bowed]);
+			const peak = ((2 - 0.5 * 40) / 100) * 960; // the curve's top at t = 0.5
+			expect(box.top).toBeLessThan(peak);
+			// Never framed out as far as the control point, which is twice the bow.
+			expect(box.top).toBeGreaterThan((-38 / 100) * 960);
+			expect(box.left).toBe(0);
+			expect(box.right).toBe(1200);
+		});
+
+		it("takes in a caption, turned, round its anchor", () => {
+			// 50% of the sheet wide in flat units (600px), on a line far below the sheet.
+			const line = {
+				curve: { from: { left: 45, top: 150 }, control: { left: 50, top: 150 }, to: { left: 55, top: 150 } },
+				anchor: { left: 50, top: 150, angle: 90 },
+				size: { w: 50, h: 2 },
+			};
+			const box = boardBounds([], sheet, [], [line]);
+			// Turned upright, the 600px chip reaches 300px below its anchor at 1440px.
+			expect(box.bottom).toBeGreaterThan(1440 + 300);
+			// Lying flat, it reaches only half its own height down.
+			const flatBox = boardBounds([], sheet, [], [{ ...line, anchor: { ...line.anchor, angle: 0 } }]);
+			expect(flatBox.bottom).toBeLessThan(1440 + 300);
+		});
+
+		it("skips a line with no curve or no numbers in it", () => {
+			const plain = boardBounds(nodes, sheet);
+			expect(boardBounds(nodes, sheet, [], [null, {}, { curve: null }, { curve: { from: { left: NaN, top: 1 }, control: {}, to: {} } }]))
+				.toEqual(plain);
+		});
 	});
 });
 

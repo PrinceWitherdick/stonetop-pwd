@@ -405,6 +405,14 @@ export const RELMAP_LABEL_MAX = 60;
  */
 export const RELMAP_NAME_MAX = 120;
 
+/**
+ * How long the label under a person's name may be ("Iron Knight", "Deceased", "Acolyte of the
+ * Celebrated Seer"). It belongs to the person ON THIS MAP, never to the actor, so one face can be
+ * "Squire" on one board and "Deceased" on another. Drawn at most two lines deep under the name, so it
+ * is a title and not a biography; the note is where the story goes.
+ */
+export const RELMAP_SUBTITLE_MAX = 80;
+
 /** How long the notes behind a line or a person may be. Where the prose that will not fit on the
  * board goes, so it is generous: nothing on the board is measured against it. */
 export const RELMAP_NOTE_MAX = RELMAP_NAME_MAX * 4;
@@ -467,6 +475,12 @@ const str = (v, max = 0) => {
 };
 
 /**
+ * A label under a name, TRIMMED: one of only spaces is no label. Kept, it drew a blank chip where
+ * "Add a label" belongs and made every outline round that person reach for words nobody can see.
+ */
+const subtitleOf = v => str(v, RELMAP_SUBTITLE_MAX).trim();
+
+/**
  * A stored graph, made safe to render.
  *
  * Everything here comes out of a world flag that any owner of the map could have written, through
@@ -488,6 +502,13 @@ export function normalizeGraph(raw) {
 
 	for (const [id, node] of Object.entries(raw.nodes ?? {})) {
 		if (!isSafeId(id) || !node || typeof node !== "object") continue;
+		// ⚠ NOBODY AT ALL: no actor, no name, no picture. Nothing puts a person down like that (every
+		// arrival brings an actor's uuid and name), so it is the RACE: a move, a nudge or a label written
+		// by one reader landing on the server just after another took that person off, which makes the
+		// node again out of that one field. Kept, the whole table saw a blank "Someone" appear. The
+		// window's `onto` guard catches the case it can see; this is the one it cannot, since the write
+		// had already left. The stray leaf stays in the flag, unread, as a removed person's groups do.
+		if (!node.uuid && !node.name && !node.img) continue;
 		graph.nodes[id] = {
 			uuid: node.uuid ? str(node.uuid) : null,
 			name: str(node.name, RELMAP_NAME_MAX),
@@ -497,6 +518,10 @@ export function normalizeGraph(raw) {
 			x: clampReach(node.x),
 			y: clampReach(node.y),
 			note: str(node.note, RELMAP_NOTE_MAX),
+			// ⚠ EMITTED ON EVERY NODE, EMPTY OR NOT. The undo stack records a field only when it can read
+			// the old value off this read (relmap-history.js `describeWrite`), so a label absent here is a
+			// label nobody can take back. Absent on every person put down before it existed: no migration.
+			subtitle: subtitleOf(node.subtitle),
 		};
 	}
 
@@ -602,6 +627,7 @@ const NODE_GATES = Object.freeze({
 	y: clampReach,
 	name: v => str(v, RELMAP_NAME_MAX),
 	note: v => str(v, RELMAP_NOTE_MAX),
+	subtitle: subtitleOf,
 });
 
 const EDGE_GATES = Object.freeze({
@@ -658,8 +684,9 @@ export function edgePatch(id, fields = {}) {
 }
 
 /** Put somebody on the map. Every field written, so the node is whole from its first write. */
-export function addNodePatch(id, { uuid = null, name = "", img = "", x = 50, y = 50, note = "" } = {}) {
-	return nodePatch(id, { uuid, name, img, x, y, note });
+export function addNodePatch(id, { uuid = null, name = "", img = "", x = 50, y = 50, note = "", subtitle = "" } = {}) {
+	// The label too: undoing a removal puts the person back through here, label and all.
+	return nodePatch(id, { uuid, name, img, x, y, note, subtitle });
 }
 
 /**
@@ -781,13 +808,63 @@ export function dropGroupPatch(id) {
 }
 
 /**
+ * The dead data in a STORED map that nothing can ever bring back, as one patch rubbing it out, or
+ * null when there is none. Read off the RAW flag, since what it is after is exactly what
+ * `normalizeGraph` already hides.
+ *
+ * ONLY LINES WITH AN END NOBODY IS STANDING AT (or both ends on one person, or not a line at all).
+ * They are left by the race `normalizeGraph` describes: a line drawn to somebody in the moment another
+ * reader took them off. Nothing needs them. Taking a person off rubs out every line it can see in the
+ * same write (`dropNodePatch`), and undoing that re-draws each of those lines, whole, from the step
+ * itself (relmap-history.js `describeWrite`), never from what is left in the flag; and `stepPatch`
+ * refuses to draw a line whose end is not on the board. The one way a dead line comes back to life
+ * unpruned is the person it was raced to being put back, which revives a line nobody drew to them.
+ *
+ * ⚠ NOT A REMOVED PERSON'S MEMBERSHIP KEYS, AND NOT A GROUP WITH NOBODY LEFT STANDING. Those are
+ * hidden on the read and still READ BY AN UNDO: putting back the last person taken out of a group
+ * brings the group back through the key they left (relmap-groups.test.js "brings a group back with
+ * its last member"), and with two readers undoing in turn the keys are the only record of who was in
+ * a group that emptied in between. The history is per reader and never leaves their machine, so
+ * nobody pruning can know whether some open window still holds such a step.
+ *
+ * ⚠ NOR A STRAY FIELD MADE INTO A FACELESS NODE (see `normalizeGraph`). Rubbing that out is a
+ * deletion of the whole `nodes.<id>`, and if it lands just after an undo has put that person back
+ * whole, it takes them off the map again.
+ *
+ * @param {object} raw  the graph flag as stored, not normalized.
+ * @returns {object|null}
+ */
+export function pruneDeadPatch(raw) {
+	if (!raw || typeof raw !== "object" || !raw.edges || typeof raw.edges !== "object") return null;
+	// Who is standing is the read's own answer, so a line is dead here exactly when no board draws it.
+	const standing = normalizeGraph(raw).nodes;
+	const entries = [];
+	for (const [id, edge] of Object.entries(raw.edges)) {
+		// An id no path could have written cannot be named in a deletion either; it stays, unread.
+		if (!isSafeId(id)) continue;
+		const a = edge && typeof edge === "object" ? str(edge.a) : "";
+		const b = edge && typeof edge === "object" ? str(edge.b) : "";
+		if (standing[a] && standing[b] && a !== b) continue;
+		// The same spelling `dropNodePatch` uses, for the reason it gives: the two cores disagree.
+		entries.push(deletionEntry(relmapPath("edges", id)));
+	}
+	return entries.length ? Object.fromEntries(entries) : null;
+}
+
+/**
  * Where the portraits already sit, in the shape `freeSpot` and `ringsLayout` want.
  *
  * ONE spelling, shared by the window and the importer: a seat that reads the occupied list
  * differently from the one that fills it is how a newcomer lands on top of somebody.
+ *
+ * `labelled` on somebody with a label under their name, and only on them, so `freeSpot` keeps a
+ * newcomer's face off the label too. Left off everybody else, a board with no labels seats exactly
+ * as it always did.
  */
 export function takenSpots(graph) {
-	return Object.values(graph?.nodes ?? {}).map(n => ({ left: n.x, top: n.y }));
+	return Object.values(graph?.nodes ?? {}).map(n => (n.subtitle
+		? { left: n.x, top: n.y, labelled: true }
+		: { left: n.x, top: n.y }));
 }
 
 /**

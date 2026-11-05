@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import Handlebars from "handlebars";
-import { RELMAP_NODE_PX } from "../../module/utils/relmap-geometry.js";
+import {
+	RELMAP_NODE_PX, RELMAP_SUBTITLE_MAX_W, RELMAP_SUBTITLE_REACH_PX, RELMAP_SUBTITLE_TOP_PX,
+} from "../../module/utils/relmap-geometry.js";
 
 // The map's three templates, COMPILED AND RENDERED against the context the code actually builds.
 //
@@ -65,6 +67,36 @@ const boardContext = () => ({
 
 describe("the board template", () => {
 	const render = compile(BOARD);
+
+	// THE LABEL UNDER A NAME: a button for somebody who may change it ("Add a label" where there is
+	// none), the bare words for somebody who may only look, and nothing at all where there are none.
+	describe("the label under a name", () => {
+		const withLabels = canEdit => {
+			const ctx = boardContext();
+			ctx.canEdit = canEdit;
+			ctx.addSubtitle = "Add a label";
+			ctx.nodes[0] = { ...ctx.nodes[0], subtitle: "Iron Knight", subtitleLabel: "Change the label under Elena" };
+			ctx.nodes[1] = { ...ctx.nodes[1], subtitle: "", subtitleLabel: "Change the label under Stefan" };
+			return ctx;
+		};
+
+		it("is a button for an editor, with an offer where there is no label yet", () => {
+			const html = render(withLabels(true));
+			expect(html).toMatch(/<button type="button" class="stonetop-relmap-subtitle"\s+data-relmap-subtitle="n1"/);
+			expect(html).toContain('aria-label="Change the label under Elena"');
+			expect(html).toContain('<span class="stonetop-relmap-subtitle-words">Iron Knight</span></button>');
+			expect(html).toMatch(/class="stonetop-relmap-subtitle is-empty"\s+data-relmap-subtitle="n2"/);
+			expect(html).toContain(">Add a label</span></button>");
+		});
+
+		it("is only the words for a reader, and nothing where there are none", () => {
+			const html = render(withLabels(false));
+			expect(html).toContain('<span class="stonetop-relmap-subtitle" data-tooltip-text="Iron Knight"><span class="stonetop-relmap-subtitle-words">Iron Knight</span></span>');
+			expect(html).not.toContain("data-relmap-subtitle");
+			expect(html).not.toContain("Add a label");
+			expect((html.match(/class="stonetop-relmap-subtitle"/g) ?? []).length).toBe(1);
+		});
+	});
 
 	it("compiles and draws a line, its label, its head and both people", () => {
 		const html = render(boardContext());
@@ -1204,6 +1236,24 @@ describe("a portrait's box is the circle and nothing else", () => {
 	it("hangs the name out of the flow rather than stacking it under the face", () => {
 		expect(rule("name")).toMatch(/position:\s*absolute/);
 	});
+
+	// ⚠ THE LABEL UNDER THE NAME IS MEASURED BY THE GEOMETRY TOO: a group outline and the board's
+	// framing reach round it by these numbers, so the stylesheet and the constants must agree.
+	it("hangs the label under the name where the geometry measures it", () => {
+		const sub = rule("subtitle");
+		expect(sub).toMatch(/position:\s*absolute/);
+		// The face's bottom edge, then everything between it and the label's top.
+		const below = RELMAP_SUBTITLE_TOP_PX - RELMAP_NODE_PX / 2;
+		expect(sub).toMatch(new RegExp(`top:\\s*calc\\(100% \\+ ${below}px\\)`));
+		expect(sub).toMatch(new RegExp(`max-width:\\s*${RELMAP_SUBTITLE_MAX_W}px`));
+		const line = Number(sub.match(/line-height:\s*(\d+)px/)?.[1]);
+		// ⚠ THE CLAMP IS ON THE INNER SPAN: Chrome ignores one set on a <button>.
+		const words = rule("subtitle-words");
+		const lines = Number(words.match(/-webkit-line-clamp:\s*(\d+)/)?.[1]);
+		expect(1 + line * lines).toBe(RELMAP_SUBTITLE_REACH_PX);
+		expect(words).toMatch(/display:\s*-webkit-box/);
+		expect(sub).not.toMatch(/line-clamp/);
+	});
 });
 
 // -- Groups: a named box or oval round some people -----------------------------------------------
@@ -1298,5 +1348,24 @@ describe("the groups on a board", () => {
 		expect(html).toContain("stonetop-relmap-tiebar-rule--dashed");
 		expect(html).toContain('data-relmap-said="Put {count} in"');
 		expect(html.indexOf("stonetop-relmap-groupbar")).toBeGreaterThan(html.indexOf("stonetop-relmap-board"));
+	});
+});
+
+// AUDIT 2026-11-02: the label's bar was left off the pan surface's lists, so a press in its field
+// started a pan, drag-selecting its words moved the board, and double-clicking one flipped the zoom.
+// Every floating bar the window prints has to be named in both, which is what this holds.
+describe("the floating bars, which the pan surface must leave alone", () => {
+	it("names every bar the window template prints in both of the surface's lists", () => {
+		const bars = [...read(WINDOW).matchAll(/class="(stonetop-relmap-[a-z]+bar)"/g)].map(m => m[1]);
+		expect(bars).toEqual(expect.arrayContaining(["stonetop-relmap-tiebar", "stonetop-relmap-groupbar", "stonetop-relmap-personbar"]));
+		const source = read("module/dialogs/RelationshipMapWindow.js");
+		const list = name => {
+			const m = source.match(new RegExp(`const ${name} =([\\s\\S]*?);\\r?\\n`));
+			return m ? m[1] : "";
+		};
+		for (const bar of bars) {
+			expect(list("BOARD_CONTROLS"), bar).toContain(`.${bar}`);
+			expect(list("BOARD_MENUS"), bar).toContain(`.${bar}`);
+		}
 	});
 });

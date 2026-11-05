@@ -85,6 +85,7 @@ describe("Enter and Space on a portrait's own buttons", () => {
 		["the face", b => b.portraits.n1.face],
 		["the link handle", b => b.portraits.n1.handle],
 		["the trash can", b => b.portraits.n1.bin],
+		["the label under the name", b => b.portraits.n1.subtitle],
 	];
 	for (const [what, pick] of BUTTONS) {
 		for (const key of ["Enter", " "]) {

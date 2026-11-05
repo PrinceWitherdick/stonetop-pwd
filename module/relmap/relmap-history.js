@@ -193,6 +193,18 @@ export function describeWrite(graph, patch) {
 		// far end of the table taking a person off while this reader pressed Delete on the same
 		// person is exactly this, and the outcome both of them wanted has happened.
 		if (was) back.make.push({ kind, id, data: { ...was } });
+		// ⚠ AND PUT BACK INTO EVERY GROUP THEY WERE IN, said out loud rather than left to the membership
+		// key `dropNodePatch` leaves behind. That key goes when the group is rubbed out, and undoing the
+		// rubbing-out re-makes it with only the people then standing (`stepPatch`). So: take Ordga off,
+		// rub out "The hunters", undo, undo, and Ordga and the hunters were both back with Ordga outside
+		// it. `stepPatch` skips this for a group that is not on the board when it is pressed, so a group
+		// somebody has rubbed out since is never drawn again by it; one that went off the board only
+		// because its last member left still comes back through the key it kept.
+		if (kind === "nodes" && was) {
+			for (const [groupId, group] of Object.entries(graph?.groups ?? {})) {
+				if (group?.members?.[id]) back.set.push({ kind: "groups", id: groupId, field: MEMBERS, key: id, value: true });
+			}
+		}
 	}
 
 	if (!forward.make.length && !forward.set.length && !forward.drop.length) return null;
@@ -229,26 +241,43 @@ export function stepPatch(graph, step) {
 	const patch = {};
 
 	const make = step.make ?? [];
+	// ⚠ SOMEBODY PUT BACK WHO IS ALREADY HERE UNDER ANOTHER ID: taken off, then put on again by
+	// another reader, then the removal undone. Re-made, the same actor stood on the board twice. So
+	// they are NOT re-made, and what this step puts back about them (their lines, their groups) goes
+	// onto the one already standing. `alias` maps the id the step knew to the id on the board.
+	const byActor = new Map();
+	for (const [nodeId, node] of Object.entries(graph?.nodes ?? {})) if (node?.uuid) byActor.set(node.uuid, nodeId);
+	const alias = new Map();
+	for (const one of make) {
+		if (one.kind !== "nodes" || graph?.nodes?.[one.id]) continue;
+		const there = one.data?.uuid ? byActor.get(one.data.uuid) : null;
+		if (there) alias.set(one.id, there);
+	}
+	const as = nodeId => alias.get(nodeId) ?? nodeId;
 	// Who will be on the board once this step has landed: what is there now, plus what this very
 	// step puts back. A line re-made alongside both its people has both its ends.
 	const standing = new Set(Object.keys(graph?.nodes ?? {}));
-	for (const one of make) if (one.kind === "nodes") standing.add(one.id);
-	const making = new Set(make.map(one => `${one.kind}/${one.id}`));
+	for (const one of make) if (one.kind === "nodes" && !alias.has(one.id)) standing.add(one.id);
+	const making = new Set(make.filter(one => !(one.kind === "nodes" && alias.has(one.id)))
+		.map(one => `${one.kind}/${one.id}`));
 
 	for (const { kind, id, data } of make) {
 		if (kind === "nodes") {
+			if (alias.has(id)) continue;
 			Object.assign(patch, addNodePatch(id, data ?? {}) ?? {});
 			continue;
 		}
 		if (kind === "groups") {
 			// Only the people who will be standing: a membership leaf for somebody gone is a key
 			// nothing will ever draw. A group left with nobody in it is not re-made at all.
-			const members = Object.keys(data?.members ?? {}).filter(nodeId => standing.has(nodeId));
+			const members = [...new Set(Object.keys(data?.members ?? {}).map(as))].filter(nodeId => standing.has(nodeId));
 			Object.assign(patch, addGroupPatch(id, { ...(data ?? {}), members }) ?? {});
 			continue;
 		}
-		if (!standing.has(data?.a) || !standing.has(data?.b)) continue;
-		Object.assign(patch, addEdgePatch(id, data ?? {}) ?? {});
+		const a = as(data?.a);
+		const b = as(data?.b);
+		if (!standing.has(a) || !standing.has(b) || a === b) continue;
+		Object.assign(patch, addEdgePatch(id, { ...(data ?? {}), a, b }) ?? {});
 	}
 
 	for (const { kind, id, field, key, value } of step.set ?? []) {
@@ -256,8 +285,9 @@ export function stepPatch(graph, step) {
 		if (kind === "groups" && field === MEMBERS) {
 			// Putting somebody back into a group they have since left the BOARD from would leave a
 			// key behind for nobody; the same rule as a field put back onto a person who has gone.
-			if (value && !standing.has(key)) continue;
-			Object.assign(patch, (value ? groupMembersPatch(id, [key]) : groupMembersPatch(id, [], [key])) ?? {});
+			const member = as(key);
+			if (value && !standing.has(member)) continue;
+			Object.assign(patch, (value ? groupMembersPatch(id, [member]) : groupMembersPatch(id, [], [member])) ?? {});
 			continue;
 		}
 		// Through the store's own builders, so an undo is held to every bound and every clamp an
@@ -342,6 +372,13 @@ function mergeBackSteps(first, second) {
  * Two stacks and the usual bargain between them. Recording anything empties the forward one,
  * because a change made after an undo is a new branch and there is no longer a single "again" to
  * put back.
+ *
+ * ⚠ ONE BOARD, TWO VIEWS, ONE HISTORY. The steading sheet's map tab and the map window are separate
+ * windows, and both find a board's history by its page (`historyFor`), which is right: it is the same
+ * reader taking back the same change. So two things that would otherwise be each window's own live
+ * here instead. The one-step-at-a-time guard (`step`), or an Undo in each applied one step twice. And
+ * the word that the stacks have moved (`subscribe`), so every view's buttons are repainted after a
+ * change made in either, or the other one went on offering a change already taken back.
  */
 export class RelmapHistory {
 	constructor({ max = RELMAP_HISTORY_MAX, now = () => Date.now() } = {}) {
@@ -349,6 +386,56 @@ export class RelmapHistory {
 		this._now = now;
 		this._back = [];
 		this._forward = [];
+		this._stepping = false;
+		this._listeners = new Set();
+	}
+
+	/**
+	 * Be told whenever either stack moves: a change recorded, one taken back or put forward, or the
+	 * lot forgotten. The listener is handed this history.
+	 *
+	 * @param {Function} listener
+	 * @returns {Function}  takes the listener back off; a view calls it when it closes or moves to
+	 *          another board.
+	 */
+	subscribe(listener) {
+		if (typeof listener !== "function") return () => {};
+		this._listeners.add(listener);
+		return () => { this._listeners.delete(listener); };
+	}
+
+	/** Tell every listener the stacks have moved. Off a copy, so a listener that unsubscribes as it
+	 * is told does not upset the walk. */
+	_changed() {
+		for (const listener of [...this._listeners]) listener(this);
+	}
+
+	/** Whether a step (`step`) is under way on this board right now, from any view of it. */
+	get stepping() {
+		return this._stepping;
+	}
+
+	/**
+	 * Run one undo or redo, and refuse a second while it is under way.
+	 *
+	 * ⚠ ONE STEP AT A TIME. A step PEEKS its entry, awaits a write to the document, and only then
+	 * commits it. Two of them overlapping would both peek the SAME entry, apply the same reversal
+	 * twice and commit twice: taking one change back and throwing a second away unread. Two presses
+	 * land that close together easily enough: a double-press on the tool, a held key on a board whose
+	 * write is waiting on the network, or an Undo in each of two views of this board.
+	 *
+	 * @param {Function} run  `() => Promise<boolean>`, the step itself.
+	 * @returns {Promise<boolean>}  what `run` answered, or false without running it when a step is
+	 *          already under way.
+	 */
+	async step(run) {
+		if (this._stepping) return false;
+		this._stepping = true;
+		try {
+			return await run();
+		} finally {
+			this._stepping = false;
+		}
 	}
 
 	/** How many changes are remembered. For the tests and for nothing else. */
@@ -401,6 +488,7 @@ export class RelmapHistory {
 			top.back = mergeBackSteps(top.back, back);
 			top.label = label || top.label;
 			top.at = at;
+			this._changed();
 			return top;
 		}
 		const entry = { forward, back, label, coalesce, at };
@@ -409,6 +497,7 @@ export class RelmapHistory {
 		// a table that leaves the window open all evening.
 		while (this._back.length > this._max) this._back.shift();
 		this._forward.length = 0;
+		this._changed();
 		return entry;
 	}
 
@@ -426,20 +515,27 @@ export class RelmapHistory {
 	/** The undo landed: move it across. */
 	commitUndo() {
 		const entry = this._back.pop();
-		if (entry) this._forward.push(entry);
+		if (entry) {
+			this._forward.push(entry);
+			this._changed();
+		}
 		return entry ?? null;
 	}
 
 	/** And back again. */
 	commitRedo() {
 		const entry = this._forward.pop();
-		if (entry) this._back.push(entry);
+		if (entry) {
+			this._back.push(entry);
+			this._changed();
+		}
 		return entry ?? null;
 	}
 
 	clear() {
 		this._back.length = 0;
 		this._forward.length = 0;
+		this._changed();
 	}
 }
 

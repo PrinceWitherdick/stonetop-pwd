@@ -31,6 +31,10 @@ Your GM can turn the whole feature off with the world setting **Relationship Map
 
 **Double-click** a portrait to open their sheet. **Right-click** a portrait to show its delete button; taking someone off a map never touches their sheet.
 
+### Labels under a name
+
+A person can carry a short label under their name, such as *Iron Knight*, *Acolyte of the Celebrated Seer* or *Deceased*. Rest the pointer on someone and click **Add a label** under their name (or click a label that is already there), type, and press `Enter`. `Esc` leaves it as it was, and an empty label removes it. A label belongs to that person on that board only, so the same character can be *Squire* on one board and *Deceased* on another. Long labels wrap onto two lines, and the full text shows when you rest the pointer on it.
+
 ## Drawing lines
 
 - **`Alt`-drag** from one person to another to draw a line between them.

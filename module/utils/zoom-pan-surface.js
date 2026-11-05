@@ -125,6 +125,7 @@ export class ZoomPanSurface {
 			["pointermove", this._onPanMove.bind(this)],
 			["pointerup", this._onPanEnd.bind(this)],
 			["pointercancel", this._onPanCancel.bind(this)],
+			["lostpointercapture", this._onPanLost.bind(this)],
 			["dblclick", this._onDoubleClick.bind(this)],
 			["contextmenu", this._onContextMenu.bind(this)],
 			// ⚠ CAPTURE, and the only listener here that is. It has to reach the click BEFORE the
@@ -265,6 +266,10 @@ export class ZoomPanSurface {
 		this._observer = new Observer(() => {
 			this._measure();
 			if (this._fitting) this.fit();
+			// ⚠ AND A PLACED BOARD IS CLAMPED AGAIN. Its corner is kept, but a window shrunk under it
+			// (or put back from a maximise) can leave the whole board out of sight until the next pan
+			// or zoom happened to clamp it. `apply` is where the clamp lives.
+			else this.apply();
 		});
 		this._observer.observe(this._view);
 	}
@@ -523,6 +528,11 @@ export class ZoomPanSurface {
 	 */
 	_onPanMove(ev) {
 		if (!this._pan || ev.pointerId !== this._pan.id) return;
+		// A MOVE WITH NO BUTTON HELD is a release this surface never heard (an Alt-Tab mid-drag, say).
+		// Followed, the board would trail the cursor with nothing held and refuse every new pan.
+		// Not a throw: the hand let go some time ago. A host that reports no `buttons` at all (the
+		// tests' fake events) compares false and carries on, as in utils/relmap-drag.js.
+		if (ev.buttons === 0) { this._onPanLost(ev); return; }
 		const dx = ev.clientX - this._pan.x;
 		const dy = ev.clientY - this._pan.y;
 		this._pan.lastX = ev.clientX;
@@ -588,11 +598,30 @@ export class ZoomPanSurface {
 		this._onPanEnd(ev);
 	}
 
-	_onPanEnd(ev) {
+	/**
+	 * A pan whose pointer went away without a pointerup: the capture taken off it, or a move made
+	 * with no button held (`_onPanMove`). Ended as a cancel, so no throw and no click left armed.
+	 *
+	 * ⚠ ONLY WHILE A PAN IS LIVE. `lostpointercapture` also fires after every ordinary release,
+	 * BETWEEN the pointerup and the click, and dropping `_caught` there would let through the very
+	 * click it was armed to swallow. The same rule utils/drag-scroll.js keeps.
+	 */
+	_onPanLost(ev) {
 		if (!this._pan || ev.pointerId !== this._pan.id) return;
-		this._view.releasePointerCapture?.(ev.pointerId);
-		this._view.classList.remove("stonetop-zoom-pan--panning");
+		this._caught = false;
+		this._caughtGlide = false;
+		// A lost capture has nothing left to release; a move with no button held still holds it.
+		this._onPanEnd(ev, { thrown: false, release: ev.type !== "lostpointercapture" });
+	}
+
+	_onPanEnd(ev, { thrown = ev.type !== "pointercancel", release = true } = {}) {
+		if (!this._pan || ev.pointerId !== this._pan.id) return;
+		// ⚠ CLEARED BEFORE THE RELEASE. `releasePointerCapture` can fire `lostpointercapture` there
+		// and then, and with the pan still set that would end it a second time, as a cancel, and
+		// take the throw away from an ordinary let-go.
 		this._pan = null;
+		if (release) this._view.releasePointerCapture?.(ev.pointerId);
+		this._view.classList.remove("stonetop-zoom-pan--panning");
 		// The release carries a position of its own, and on a fast flick it is the last few pixels
 		// of the throw. `_mark` shrugs off a host that gave us no coordinates to read.
 		this._mark(ev);
@@ -602,7 +631,7 @@ export class ZoomPanSurface {
 		// A CANCEL IS NOT A THROW. It is the platform taking the gesture away (a system gesture, a
 		// pen leaving the tablet, a window losing the pointer), and finishing it off with a flourish
 		// the reader never asked for would be the board moving on its own.
-		if (ev.type === "pointercancel") { this._marks = []; return; }
+		if (!thrown) { this._marks = []; return; }
 		this._startGlide(throwVelocity(this._marks, this._now()));
 		this._marks = [];
 	}

@@ -49,6 +49,8 @@ function activeTab(sheet) {
 export function mountedPanelSlot({ field, tab, mountSel, build, openOptions = () => ({}) }) {
 	// Where each panel's reader was when `detach` lifted it out, until `sync` puts it back.
 	const places = new WeakMap();
+	// And what inside it had the keyboard, for the same trip.
+	const focuses = new WeakMap();
 
 	/**
 	 * Put the panel where it belongs, whatever has just happened to the sheet.
@@ -81,6 +83,13 @@ export function mountedPanelSlot({ field, tab, mountSel, build, openOptions = ()
 			if (places.has(panel)) {
 				panel._restorePlace?.(places.get(panel));
 				places.delete(panel);
+			}
+			// AND THE KEYBOARD back where it was, caret and all. See `detach`.
+			const held = focuses.get(panel);
+			focuses.delete(panel);
+			if (held?.el?.isConnected && body.contains(held.el)) {
+				held.el.focus?.({ preventScroll: true });
+				if (held.caret) held.el.setSelectionRange?.(...held.caret);
 			}
 			return;
 		}
@@ -115,6 +124,15 @@ export function mountedPanelSlot({ field, tab, mountSel, build, openOptions = ()
 		// ⚠ READ WHILE IT IS STILL IN THE DOCUMENT: out of it, the column has no offset to read.
 		const place = panel._readPlace?.();
 		if (place) places.set(panel, place);
+		// ⚠ AND WHAT HAD THE FOCUS. Taken out of the document, the focus falls to <body> however briefly
+		// the panel is gone, so a sheet re-rendering by itself (a season ticking over) took it out of a
+		// label half-typed on the map tab, and the rest of the word went to Foundry's hotkeys.
+		const active = body.ownerDocument?.activeElement;
+		if (active && active !== body && body.contains?.(active)) {
+			const caret = typeof active.selectionStart === "number"
+				? [active.selectionStart, active.selectionEnd] : null;
+			focuses.set(panel, { el: active, caret });
+		}
 		body.remove();
 	}
 

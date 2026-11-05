@@ -473,6 +473,38 @@ describe("finding room for one more", () => {
 		expect(() => freeSpot([null, undefined, { left: 50, top: 50 }], { aspect: ASPECT, r }))
 			.not.toThrow();
 	});
+
+	// AUDIT 2026-11-03 (S3): somebody with a label under their name holds the label's box too.
+	describe("beside somebody with a label under their name", () => {
+		const opts = { aspect: ASPECT, r };
+		const first = freeSpot([], opts);
+		// Just far enough above the first seat that their FACES clear (2r + pad, and a hair), which
+		// puts their label, hung 57 to 88 board pixels under their centre, across the newcomer's face.
+		const above = { left: first.left, top: first.top - (2 * r + 3 + 0.5) * ASPECT };
+
+		it("seats a newcomer there when the person above has no label", () => {
+			expect(freeSpot([above], opts)).toEqual(first);
+		});
+
+		it("keeps the newcomer's face off the label when they have one", () => {
+			const spot = freeSpot([{ ...above, labelled: true }], opts);
+			expect(spot).not.toEqual(first);
+			// Board pixels on the plain sheet: 12 to a percent across, 9.6 down.
+			const cx = above.left * 12;
+			const cy = above.top * 9.6;
+			const box = { left: cx - 66, right: cx + 66, top: cy + 57, bottom: cy + 88 };
+			const px = { x: spot.left * 12, y: spot.top * 9.6 };
+			const dx = Math.max(box.left - px.x, 0, px.x - box.right);
+			const dy = Math.max(box.top - px.y, 0, px.y - box.bottom);
+			// The face's own 36, and the same 36 of daylight a face keeps off another face's rim.
+			expect(Math.hypot(dx, dy)).toBeGreaterThanOrEqual(71);
+		});
+
+		it("seats exactly as before when nobody standing has a label", () => {
+			const taken = ringsLayout(7, opts);
+			expect(freeSpot(taken.map(p => ({ ...p, labelled: false })), opts)).toEqual(freeSpot(taken, opts));
+		});
+	});
 });
 
 describe("keeping a coordinate on the board", () => {
@@ -828,6 +860,23 @@ describe("putting a link's dodge and its place in the fan together", () => {
 
 	it("treats rubbish as no dodge at all", () => {
 		for (const bad of [null, undefined, "x", NaN]) expect(edgeBow(1, bad)).toBe(fanBow(1));
+	});
+
+	// AUDIT 2026-11-02: a bow bends to the left of the way a line is DRAWN, so Ann->Bo #2 and Bo->Ann #1
+	// with the plain alternating fan were the very same curve: two strokes, one hit target.
+	it("keeps three lines between one pair apart however each of them was drawn", () => {
+		const ann = { left: 20, top: 40 };
+		const bo = { left: 70, top: 40 };
+		// Ann->Bo (fan 0), Bo->Ann (fan 1), Ann->Bo (fan 2): the second runs against the pair's order.
+		const drawn = [
+			{ from: ann, to: bo, bow: edgeBow(0, 0, { reversed: false }) },
+			{ from: bo, to: ann, bow: edgeBow(1, 0, { reversed: true }) },
+			{ from: ann, to: bo, bow: edgeBow(2, 0, { reversed: false }) },
+		].map(spec => edgeCurve({ ...spec, aspect: ASPECT, r: 3 }));
+		const middles = drawn.map(curve => pointOn(curve, 0.5).top.toFixed(4));
+		expect(new Set(middles).size).toBe(3);
+		// And a lone straight line stays straight either way round.
+		expect(edgeBow(0, 0, { reversed: true })).toBe(0);
 	});
 });
 

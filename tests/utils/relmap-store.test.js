@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
 	RELMAP_DASH_DEFAULT, RELMAP_DIR_DEFAULT, RELMAP_INKS, RELMAP_INK_DEFAULT, RELMAP_LABEL_MAX,
 	RELMAP_ORIGIN_MAX, RELMAP_SEAT_AUTO, RELMAP_SEAT_MAX, RELMAP_SEAT_MIN,
-	RELMAP_SIZE_MAX, RELMAP_SIZE_MIN, RELMAP_SIZE_NONE, RELMAP_VERSION,
+	RELMAP_SIZE_MAX, RELMAP_SIZE_MIN, RELMAP_SIZE_NONE, RELMAP_SUBTITLE_MAX, RELMAP_VERSION,
 	addEdgePatch, addNodePatch, dropEdgePatch, dropNodePatch, edgePatch, edgesBetween,
 	edgesTouching, emptyGraph, fanIndexes, isImportedEdge, isSafeId, nodePatch, normalizeGraph,
-	readSeat, relmapPath,
+	pruneDeadPatch, readSeat, relmapPath, seatArrivals, takenSpots,
 } from "../../module/relmap/relmap-store.js";
 import { RELMAP_CAPTION_PX, RELMAP_REACH_MAX, RELMAP_REACH_MIN } from "../../module/utils/relmap-geometry.js";
 
@@ -157,8 +157,19 @@ describe("the shape of a write", () => {
 		const patch = addNodePatch("elena", { uuid: "Actor.a1", name: "Elena", x: 20, y: 30 });
 		expect(Object.keys(patch).sort()).toEqual([
 			`${PREFIX}.nodes.elena.img`, `${PREFIX}.nodes.elena.name`, `${PREFIX}.nodes.elena.note`,
+			`${PREFIX}.nodes.elena.subtitle`,
 			`${PREFIX}.nodes.elena.uuid`, `${PREFIX}.nodes.elena.x`, `${PREFIX}.nodes.elena.y`,
 		].sort());
+	});
+
+	// ⚠ THE LABEL IS WRITTEN WHOLE ON AN ADD, because undoing a removal puts somebody back through
+	// `addNodePatch`: left out, "Deceased" would not come back with Simon.
+	it("writes the label under a person's name with them, and cuts a long one short", () => {
+		const patch = addNodePatch("simon", { name: "Simon", subtitle: "Deceased" });
+		expect(patch[`${PREFIX}.nodes.simon.subtitle`]).toBe("Deceased");
+		expect(addNodePatch("simon", { name: "Simon" })[`${PREFIX}.nodes.simon.subtitle`]).toBe("");
+		const long = nodePatch("simon", { subtitle: "x".repeat(RELMAP_SUBTITLE_MAX + 20) });
+		expect(long[`${PREFIX}.nodes.simon.subtitle`]).toHaveLength(RELMAP_SUBTITLE_MAX);
 	});
 
 	it("refuses a link from somebody to themselves", () => {
@@ -202,7 +213,7 @@ describe("removing things, on both cores", () => {
 	// client a moment in which the portrait is gone and its lines are still hanging in the air.
 	it("takes a person's links with them, in the same update", () => {
 		const g = normalizeGraph({
-			nodes: { elena: { x: 1, y: 1 }, stefan: { x: 2, y: 2 }, damon: { x: 3, y: 3 } },
+			nodes: { elena: { name: "elena", x: 1, y: 1 }, stefan: { name: "stefan", x: 2, y: 2 }, damon: { name: "damon", x: 3, y: 3 } },
 			edges: {
 				link1: { a: "elena", b: "stefan" },
 				link2: { a: "damon", b: "elena" },
@@ -219,10 +230,101 @@ describe("removing things, on both cores", () => {
 
 	it("finds every link touching somebody, from either end", () => {
 		const g = normalizeGraph({
-			nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 }, c: { x: 3, y: 3 } },
+			nodes: { a: { name: "a", x: 1, y: 1 }, b: { name: "b", x: 2, y: 2 }, c: { name: "c", x: 3, y: 3 } },
 			edges: { e1: { a: "a", b: "b" }, e2: { a: "c", b: "a" }, e3: { a: "b", b: "c" } },
 		});
 		expect(edgesTouching(g, "a")).toEqual(["e1", "e2"]);
+	});
+
+	// AUDIT 2026-11-03 (O6): the dead data that piles up in the flag, read off the RAW flag.
+	describe("rubbing out what nothing can bring back", () => {
+		const raw = () => ({
+			nodes: {
+				elena: { uuid: "Actor.a1", name: "Elena", x: 1, y: 1 },
+				stefan: { uuid: "Actor.b2", name: "Stefan", x: 2, y: 2 },
+				// A stray field left by a move landing after a removal: nobody at all.
+				ghost: { x: 5 },
+			},
+			edges: {
+				link1: { a: "elena", b: "stefan" },
+				// The race: a line drawn to somebody in the moment they were taken off.
+				raced: { a: "elena", b: "damon" },
+				toGhost: { a: "ghost", b: "stefan" },
+				self: { a: "elena", b: "elena" },
+				junk: "not a line",
+				"bad.id": { a: "elena", b: "nobody" },
+			},
+			groups: {
+				hunt: { name: "Hunters", members: { elena: true, damon: true } },
+				gone: { name: "Empty", members: { damon: true } },
+			},
+		});
+
+		it("rubs out every line no board can draw, in the v13 spelling", () => {
+			expect(pruneDeadPatch(raw())).toEqual({
+				[`${PREFIX}.edges.-=raced`]: null,
+				[`${PREFIX}.edges.-=toGhost`]: null,
+				[`${PREFIX}.edges.-=self`]: null,
+				[`${PREFIX}.edges.-=junk`]: null,
+			});
+		});
+
+		it("and in the v14 one", () => {
+			globalThis.game.release.generation = 14;
+			const patch = pruneDeadPatch(raw());
+			expect(Object.keys(patch)).toContain(`${PREFIX}.edges.raced`);
+			expect(patch[`${PREFIX}.edges.raced`]).toBeInstanceOf(foundry.data.operators.ForcedDeletion);
+		});
+
+		// ⚠ THE UNDO STILL READS THESE: see `pruneDeadPatch`.
+		it("leaves a removed person's membership keys, an emptied group and a faceless node alone", () => {
+			const keys = Object.keys(pruneDeadPatch(raw()));
+			expect(keys.some(key => key.includes(".groups."))).toBe(false);
+			expect(keys.some(key => key.includes(".nodes."))).toBe(false);
+		});
+
+		it("answers nothing for a clean map, an empty one, or no map", () => {
+			const clean = raw();
+			clean.edges = { link1: clean.edges.link1 };
+			expect(pruneDeadPatch(clean)).toBeNull();
+			expect(pruneDeadPatch(emptyGraph())).toBeNull();
+			for (const nothing of [null, undefined, "x", {}, { edges: "x" }]) expect(pruneDeadPatch(nothing)).toBeNull();
+		});
+
+		it("leaves a board that reads exactly as it did", () => {
+			const before = raw();
+			const after = raw();
+			for (const key of Object.keys(pruneDeadPatch(before))) delete after.edges[key.split(".-=")[1]];
+			expect(normalizeGraph(after)).toEqual(normalizeGraph(before));
+		});
+	});
+});
+
+// AUDIT 2026-11-03 (S3): a newcomer's face is kept off a label under somebody's name.
+describe("where the people already standing are", () => {
+	it("marks the ones with a label, and nobody else", () => {
+		const g = normalizeGraph({
+			nodes: {
+				elena: { uuid: "Actor.a1", name: "Elena", x: 20, y: 30, subtitle: "Iron Knight" },
+				stefan: { uuid: "Actor.b2", name: "Stefan", x: 70, y: 30, subtitle: "   " },
+			},
+		});
+		expect(takenSpots(g)).toEqual([{ left: 20, top: 30, labelled: true }, { left: 70, top: 30 }]);
+	});
+
+	it("seats an arrival off a standing person's label", () => {
+		// Where the first arrival on this board goes when the person standing has no label.
+		// Just above the top of the outer ring, far enough that the two FACES clear: so the label is
+		// all that stands in the way of the newcomer's usual first seat.
+		const plain = { uuid: "Actor.a1", name: "Elena", x: 50, y: -4.4 };
+		const people = [{ uuid: "Actor.c3", name: "Damon" }];
+		const unlabelled = seatArrivals(normalizeGraph({ nodes: { elena: plain } }), people, () => "dam1");
+		const labelled = seatArrivals(
+			normalizeGraph({ nodes: { elena: { ...plain, subtitle: "Iron Knight" } } }), people, () => "dam1",
+		);
+		const at = seating => ({ x: seating.nodes.dam1.x, y: seating.nodes.dam1.y });
+		expect(at(unlabelled)).toEqual({ x: 50, y: 7.5 });
+		expect(at(labelled)).not.toEqual(at(unlabelled));
 	});
 });
 
@@ -231,7 +333,7 @@ describe("reading a stored map back", () => {
 	// Nothing migrates, and nothing has to: a map written last season opens exactly as it looked.
 	it("reads a line with no stroke recorded as a solid one", () => {
 		const read = normalizeGraph({
-			nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 } },
+			nodes: { a: { name: "a", x: 1, y: 1 }, b: { name: "b", x: 2, y: 2 } },
 			edges: { link1: { a: "a", b: "b" }, link2: { a: "a", b: "b", dash: "spotty" } },
 		});
 		expect(read.edges.link1.dash).toBe(RELMAP_DASH_DEFAULT);
@@ -240,7 +342,7 @@ describe("reading a stored map back", () => {
 
 	it("keeps a stroke somebody broke by hand", () => {
 		const read = normalizeGraph({
-			nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 } },
+			nodes: { a: { name: "a", x: 1, y: 1 }, b: { name: "b", x: 2, y: 2 } },
 			edges: { link1: { a: "a", b: "b", dash: "dotted" } },
 		});
 		expect(read.edges.link1.dash).toBe("dotted");
@@ -250,7 +352,7 @@ describe("reading a stored map back", () => {
 	// bigger caption reads as one whose lines are all set in whatever the sheet sets.
 	it("reads a line with no size recorded as having none of its own", () => {
 		const read = normalizeGraph({
-			nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 } },
+			nodes: { a: { name: "a", x: 1, y: 1 }, b: { name: "b", x: 2, y: 2 } },
 			edges: {
 				link1: { a: "a", b: "b" },
 				link2: { a: "a", b: "b", size: "enormous" },
@@ -267,7 +369,7 @@ describe("reading a stored map back", () => {
 	// be dragged, and nearly every line since.
 	it("reads a line with no seat recorded as one the board still places", () => {
 		const read = normalizeGraph({
-			nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 } },
+			nodes: { a: { name: "a", x: 1, y: 1 }, b: { name: "b", x: 2, y: 2 } },
 			edges: {
 				link1: { a: "a", b: "b" },
 				link2: { a: "a", b: "b", seat: "halfway" },
@@ -290,7 +392,7 @@ describe("reading a stored map back", () => {
 	// it. The delete takes the edges it knew about; this catches the race.
 	it("drops a link whose end is not on the map", () => {
 		const g = normalizeGraph({
-			nodes: { elena: { x: 1, y: 1 } },
+			nodes: { elena: { name: "elena", x: 1, y: 1 } },
 			edges: { ghost: { a: "elena", b: "gone" }, alsoGhost: { a: "nobody", b: "elena" } },
 		});
 		expect(g.edges).toEqual({});
@@ -298,7 +400,7 @@ describe("reading a stored map back", () => {
 
 	it("drops a node whose id could never have been written by this system", () => {
 		const g = normalizeGraph({
-			nodes: { "Actor.a1": { x: 1, y: 1 }, elena: { x: 2, y: 2 } },
+			nodes: { "Actor.a1": { name: "Actor.a1", x: 1, y: 1 }, elena: { name: "elena", x: 2, y: 2 } },
 			edges: { e1: { a: "Actor.a1", b: "elena" } },
 		});
 		expect(Object.keys(g.nodes)).toEqual(["elena"]);
@@ -307,11 +409,56 @@ describe("reading a stored map back", () => {
 
 	it("keeps only the fields it knows, so junk cannot ride along into a render", () => {
 		const g = normalizeGraph({
-			nodes: { elena: { x: 1, y: 1, onclick: "alert(1)", __proto__: { evil: true } } },
+			nodes: { elena: { name: "elena", x: 1, y: 1, onclick: "alert(1)", __proto__: { evil: true } } },
 			edges: {},
 		});
 		expect(Object.keys(g.nodes.elena).sort())
-			.toEqual(["img", "name", "note", "uuid", "x", "y"]);
+			.toEqual(["img", "name", "note", "subtitle", "uuid", "x", "y"]);
+	});
+
+	// ⚠ EMPTY AND NOT ABSENT on every person put down before labels existed: the undo stack records a
+	// field only when it can read its old value off this read, so an absent one could not be taken back.
+	it("reads every person's label, empty where none was ever written", () => {
+		const g = normalizeGraph({
+			nodes: {
+				elroy: { name: "Lord Elroy", subtitle: "Iron Knight", x: 1, y: 1 },
+				simon: { name: "Simon", x: 2, y: 2 },
+				vera: { name: "Vera", subtitle: "y".repeat(RELMAP_SUBTITLE_MAX + 5), x: 3, y: 3 },
+			},
+		});
+		expect(g.nodes.elroy.subtitle).toBe("Iron Knight");
+		expect(g.nodes.simon.subtitle).toBe("");
+		expect(g.nodes.vera.subtitle).toHaveLength(RELMAP_SUBTITLE_MAX);
+	});
+
+	// AUDIT 2026-11-02: a label of nothing but spaces drew a blank chip where "Add a label" belongs.
+	it("reads a label of only spaces as no label, and trims the ends of a real one", () => {
+		const g = normalizeGraph({ nodes: {
+			simon: { name: "Simon", subtitle: "   ", x: 1, y: 1 },
+			elroy: { name: "Lord Elroy", subtitle: "  Iron Knight ", x: 2, y: 2 },
+		} });
+		expect(g.nodes.simon.subtitle).toBe("");
+		expect(g.nodes.elroy.subtitle).toBe("Iron Knight");
+		expect(nodePatch("simon", { subtitle: "  " })[`${PREFIX}.nodes.simon.subtitle`]).toBe("");
+	});
+
+	// AUDIT 2026-11-02: a move or a label written by one reader landing just after another took the
+	// person off makes the node again out of that one field, and the table saw a blank "Someone".
+	it("drops a person who is nobody at all, the leftovers of a write that raced a removal", () => {
+		const g = normalizeGraph({
+			nodes: {
+				elena: { name: "Elena", x: 1, y: 1 },
+				raced: { x: 40, y: 40, subtitle: "Squire" },
+			},
+			edges: { e1: { a: "elena", b: "raced" } },
+		});
+		expect(Object.keys(g.nodes)).toEqual(["elena"]);
+		expect(g.edges).toEqual({});
+		// Anybody with an actor, a name or a picture is somebody.
+		const kept = normalizeGraph({ nodes: {
+			a: { uuid: "Actor.a", x: 1, y: 1 }, b: { img: "b.webp", x: 2, y: 2 }, c: { name: "Cora", x: 3, y: 3 },
+		} });
+		expect(Object.keys(kept.nodes).sort()).toEqual(["a", "b", "c"]);
 	});
 
 	it("reads a person with no actor behind them, which is a real case", () => {
@@ -323,19 +470,19 @@ describe("reading a stored map back", () => {
 	// Read back through the sheet's edge, somebody standing off it would be walked onto it at every
 	// repaint, which is the invisible wall this was widened to take away.
 	it("reads a coordinate off the sheet back where it was stored", () => {
-		const g = normalizeGraph({ nodes: { elena: { x: 140, y: -4 } } });
+		const g = normalizeGraph({ nodes: { elena: { name: "elena", x: 140, y: -4 } } });
 		expect(g.nodes.elena).toMatchObject({ x: 140, y: -4 });
 	});
 
 	it("holds a coordinate stored past reach to the rail", () => {
-		const g = normalizeGraph({ nodes: { elena: { x: 9000, y: -9000 } } });
+		const g = normalizeGraph({ nodes: { elena: { name: "elena", x: 9000, y: -9000 } } });
 		expect(g.nodes.elena).toMatchObject({ x: RELMAP_REACH_MAX, y: RELMAP_REACH_MIN });
 	});
 
 	it("keeps every ink it ships and replaces any it does not", () => {
 		for (const ink of RELMAP_INKS) {
 			const g = normalizeGraph({
-				nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 } },
+				nodes: { a: { name: "a", x: 1, y: 1 }, b: { name: "b", x: 2, y: 2 } },
 				edges: { e1: { a: "a", b: "b", ink } },
 			});
 			expect(g.edges.e1.ink).toBe(ink);
@@ -348,7 +495,7 @@ describe("reading a stored map back", () => {
 	// data and a `style` attribute on the board.
 	it("keeps a colour of the reader's own", () => {
 		const read = ink => normalizeGraph({
-			nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 } },
+			nodes: { a: { name: "a", x: 1, y: 1 }, b: { name: "b", x: 2, y: 2 } },
 			edges: { e1: { a: "a", b: "b", ink } },
 		}).edges.e1.ink;
 		expect(read("#a1263a")).toBe("#a1263a");
@@ -362,7 +509,7 @@ describe("reading a stored map back", () => {
 	// which is a line somebody can see and go and fix.
 	it("refuses anything that is not a colour rather than putting it on the board", () => {
 		const read = ink => normalizeGraph({
-			nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 } },
+			nodes: { a: { name: "a", x: 1, y: 1 }, b: { name: "b", x: 2, y: 2 } },
 			edges: { e1: { a: "a", b: "b", ink } },
 		}).edges.e1.ink;
 		for (const bad of ["red", "#abcd", "rgb(1,2,3)", "#a1263a;x:y", "var(--st-page)"]) {
@@ -377,7 +524,7 @@ describe("reading a stored map back", () => {
 	// somebody's board grey a colour at a time, which is the failure this exists to prevent.
 	it("reads the two colours that were taken away as the green that replaced them", () => {
 		const read = ink => normalizeGraph({
-			nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 } },
+			nodes: { a: { name: "a", x: 1, y: 1 }, b: { name: "b", x: 2, y: 2 } },
 			edges: { e1: { a: "a", b: "b", ink } },
 		}).edges.e1.ink;
 		expect(read("sage")).toBe("green");
@@ -390,7 +537,7 @@ describe("reading a stored map back", () => {
 
 describe("fanning a pair's links apart", () => {
 	const many = () => normalizeGraph({
-		nodes: { a: { x: 1, y: 1 }, b: { x: 2, y: 2 }, c: { x: 3, y: 3 } },
+		nodes: { a: { name: "a", x: 1, y: 1 }, b: { name: "b", x: 2, y: 2 }, c: { name: "c", x: 3, y: 3 } },
 		edges: {
 			e3: { a: "a", b: "b", label: "third" },
 			e1: { a: "a", b: "b", label: "first" },

@@ -234,6 +234,24 @@
     </span>
   </button>
   <span class="stonetop-relmap-name">{{this.name}}</span>
+  {{!-- THE LABEL UNDER THE NAME ("Iron Knight", "Deceased"), this map's and not the actor's.
+
+        For somebody who may edit it is a BUTTON, and clicking it raises the small bar that changes it
+        (dragging it still moves the person, as dragging the name does). With nothing written it says
+        "Add a label" and the stylesheet keeps it out of sight until the person is hovered or has the
+        focus: forty of those standing open on a crowded board would be most of what the eye saw.
+        A reader who may only look gets the words alone, and nothing at all where there are none.
+
+        ⚠ THE WORDS ARE AN INNER SPAN, and that is what lets a long label stop at two lines: Chrome lays
+        a <button> out as a box of its own kind whatever `display` says, so a clamp set on the button
+        itself never runs. The span does the clamping, in both branches alike. --}}
+  {{#if ../canEdit}}
+  <button type="button" class="stonetop-relmap-subtitle{{#unless subtitle}} is-empty{{/unless}}"
+          data-relmap-subtitle="{{this.id}}" aria-label="{{this.subtitleLabel}}"
+          {{#if subtitle}}data-tooltip-text="{{this.subtitle}}"{{/if}}><span class="stonetop-relmap-subtitle-words">{{#if subtitle}}{{this.subtitle}}{{else}}{{../addSubtitle}}{{/if}}</span></button>
+  {{else if subtitle}}
+  <span class="stonetop-relmap-subtitle" data-tooltip-text="{{this.subtitle}}"><span class="stonetop-relmap-subtitle-words">{{this.subtitle}}</span></span>
+  {{/if}}
   {{!-- Focusable, and it does something on a plain CLICK as well as on a drag: dragging it to
         another portrait draws the line, and clicking it asks who to draw to. Drag is the quick way
         and not the only way, which is what keeps the board usable from a keyboard and on a touch

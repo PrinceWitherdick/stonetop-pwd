@@ -523,6 +523,65 @@ describe("ZoomPanSurface glide", () => {
 		expect(caught).toHaveBeenCalled();
 	});
 
+	// A RELEASE THE SURFACE NEVER HEARD. Alt-Tab mid-drag, or the capture taken away: left alone,
+	// `_pan` stays set, the board trails the cursor with no button held and refuses every new pan.
+	it("ends a pan whose pointer capture was taken away, and throws nothing", () => {
+		const at = drag(5, { dx: 20 });
+		const freed = vi.spyOn(view, "releasePointerCapture");
+		view.emit("lostpointercapture", { pointerId: 1, type: "lostpointercapture", clientX: at.x, clientY: 0 });
+		expect(surface._pan).toBeNull();
+		expect(frames.size).toBe(0);
+		// The capture is already gone, so there is nothing to give back.
+		expect(freed).not.toHaveBeenCalled();
+
+		const left = surface.offset.x;
+		view.emit("pointermove", { pointerId: 1, clientX: at.x + 50, clientY: 0 });
+		paint();
+		expect(surface.offset.x).toBe(left);
+
+		// And the next press is a pan again.
+		drag(3, { dx: -20 });
+		expect(surface.offset.x).toBe(left - 60);
+	});
+
+	it("ends a pan on a move made with no button held, and throws nothing", () => {
+		const at = drag(5, { dx: 20 });
+		const left = surface.offset.x;
+		view.emit("pointermove", { pointerId: 1, buttons: 0, clientX: at.x + 50, clientY: 0 });
+		expect(surface._pan).toBeNull();
+		expect(surface.offset.x).toBe(left);
+		expect(frames.size).toBe(0);
+
+		drag(3, { dx: -20 });
+		expect(surface.offset.x).toBe(left - 60);
+	});
+
+	it("keeps a pan going when some other pointer loses its capture", () => {
+		drag(3);
+		view.emit("lostpointercapture", { pointerId: 9, type: "lostpointercapture" });
+		expect(surface._pan).not.toBeNull();
+	});
+
+	// ⚠ A BROWSER MAY FIRE `lostpointercapture` FROM INSIDE `releasePointerCapture`. With the pan
+	// still set at that moment, an ordinary let-go would be ended a second time as a cancel.
+	it("still throws a board let go of normally when the release fires lostpointercapture at once", () => {
+		view.releasePointerCapture = id =>
+			view.emit("lostpointercapture", { pointerId: id, type: "lostpointercapture" });
+		release(drag(5));
+		expect(frames.size).toBeGreaterThan(0);
+	});
+
+	it("still takes the click from a caught press with lostpointercapture between the release and it", () => {
+		release(drag(5));
+		paint();
+		view.emit("pointerdown", { pointerId: 2, button: 0, buttons: 1, clientX: 0, clientY: 0, target: view });
+		view.emit("pointerup", { pointerId: 2, type: "pointerup", clientX: 0, clientY: 0 });
+		view.emit("lostpointercapture", { pointerId: 2, type: "lostpointercapture" });
+		const caught = vi.fn();
+		view.emit("click", { stopImmediatePropagation: caught });
+		expect(caught).toHaveBeenCalled();
+	});
+
 	it("gives up the axis that has run out of board, and keeps the other", () => {
 		// Hurled right, hard enough that the drag itself has already pinned the board at the end of
 		// its travel, and gently downwards at the same time.
@@ -554,5 +613,64 @@ describe("ZoomPanSurface glide", () => {
 		surface.destroy();
 		paint();
 		expect(apply).not.toHaveBeenCalled();
+	});
+});
+
+describe("ZoomPanSurface viewport resize", () => {
+	let view;
+	let content;
+	let surface;
+	let observed;
+
+	/** The window becoming a new size, as the ResizeObserver would report it. */
+	const resize = (w, h) => {
+		view.clientWidth = w;
+		view.clientHeight = h;
+		observed();
+	};
+
+	beforeEach(() => {
+		globalThis.ResizeObserver = class {
+			constructor(fn) { observed = fn; }
+			observe() {}
+			disconnect() {}
+		};
+		// Frames that never run, and a clock that leaps so the drag below throws nothing.
+		globalThis.requestAnimationFrame = () => 1;
+		globalThis.cancelAnimationFrame = () => {};
+		let clock = 0;
+		vi.spyOn(globalThis.performance, "now").mockImplementation(() => (clock += 1000));
+		view = fakeEl({ w: 800, h: 600 });
+		content = fakeEl();
+		surface = new ZoomPanSurface({ view, content, naturalWidth: 1000, naturalHeight: 800 }).attach();
+	});
+
+	afterEach(() => {
+		surface?.destroy();
+		vi.restoreAllMocks();
+		delete globalThis.ResizeObserver;
+		delete globalThis.requestAnimationFrame;
+		delete globalThis.cancelAnimationFrame;
+	});
+
+	it("pulls a placed board back into a window shrunk out from under it", () => {
+		surface.zoomTo(1, { x: 0, y: 0 });
+		view.emit("pointerdown", { pointerId: 1, button: 0, clientX: 0, clientY: 0, target: view });
+		view.emit("pointermove", { pointerId: 1, clientX: 700, clientY: 500 });
+		view.emit("pointerup", { pointerId: 1, type: "pointerup", clientX: 700, clientY: 500 });
+		// Off past where a 400x300 window would end.
+		expect(surface.offset.x).toBeGreaterThan(400);
+		expect(surface.offset.y).toBeGreaterThan(300);
+
+		resize(400, 300);
+		// Kept at the reader's zoom, and held to the same sliver at the edge a pan would be.
+		expect(surface.scale).toBe(1);
+		expect(surface.offset).toEqual({ x: 360, y: 260 });
+		expect(content.style.transform).toBe("translate(360px, 260px) scale(1)");
+	});
+
+	it("still re-fits a board nobody has placed", () => {
+		resize(400, 300);
+		expect(surface.scale).toBeCloseTo(0.375);
 	});
 });

@@ -693,6 +693,15 @@
       </div>
     </div>
 
+    {{!-- THE LABEL UNDER ONE PERSON'S NAME ("Iron Knight", "Deceased"), and nothing else.
+          utils/relmap-person-bar.js drives it. Outside the board and `hidden` rather than absent,
+          for the other two bars' reasons. Enter keeps what is typed, Escape puts it back. --}}
+    <div class="stonetop-relmap-personbar" role="group" aria-label="{{personBar.label}}" hidden>
+      <input type="text" class="stonetop-relmap-personbar-field" data-relmap-pbar="subtitle"
+             maxlength="{{personBar.maxLength}}" aria-label="{{personBar.label}}"
+             placeholder="{{personBar.placeholder}}" autocomplete="off" spellcheck="false">
+    </div>
+
     {{!-- OPEN THIS BOARD IN A WINDOW OF ITS OWN, in the corner of the board itself.
 
           ONLY ON A SURFACE THAT HAS SOMEWHERE TO POP OUT FROM, which today means the steading

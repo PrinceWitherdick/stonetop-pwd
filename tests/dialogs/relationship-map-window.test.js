@@ -62,7 +62,7 @@ const { RelationshipMapWindow, openRelationshipMap } =
 	await import("../../module/dialogs/RelationshipMapWindow.js");
 const { listVisibleMapPages, mapBoardRole, readGraph } = await import("../../module/relmap/relmap-doc.js");
 const { forgetAllHistory } = await import("../../module/relmap/relmap-history.js");
-const { dropNodePatch, edgePatch } = await import("../../module/relmap/relmap-store.js");
+const { dropNodePatch, edgePatch, nodePatch } = await import("../../module/relmap/relmap-store.js");
 const { RELMAP_SEAT_MIN } = await import("../../module/relmap/relmap-store.js");
 const { RELMAP_REACH_MAX, RELMAP_REACH_MIN } = await import("../../module/utils/relmap-geometry.js");
 const { RELMAP_BOARD_ASPECT, RELMAP_HEAD_PX, curveWithGap, edgeLabelAnchor } =
@@ -195,6 +195,8 @@ function windowFor(graph = TWO_PEOPLE, {
 	// constructor stands up beside that one. Its own map for the reason the class gives: the two
 	// flush into different halves of the graph.
 	app._pendingSeat = new Map();
+	// And the writes sent and not back yet, which an undo waits on. See `_inflight` on the class.
+	app._inflight = new Set();
 	// Who this reader has selected to move together, which the constructor stands up empty. See
 	// `_selected` on the class.
 	app._selected = [];
@@ -387,14 +389,18 @@ describe("the update hook", () => {
 describe("a repaint that arrives at a bad moment", () => {
 	// Repainting under a live drag replaces the very element the pointer is holding: the drag then
 	// carries on moving a node that is no longer in the document, and the drop writes nothing.
-	it("waits while this reader is dragging, and lands the moment they let go", async () => {
+	//
+	// ⚠ AND FROM THE PRESS, not from the drag threshold: a repaint landing in those few pixels replaced
+	// the portrait the drag was about to carry. The drag layer is asked (`pressing`).
+	it("waits while this reader is pressing on the board, and lands the moment they let go", async () => {
 		const { app, board } = windowFor();
-		board.classList.add("is-dragging");
+		let pressing = true;
+		app._teardownDrag = Object.assign(() => {}, { pressing: () => pressing });
 		await app.sync();
 		expect(board.innerHTML).toBe("");
 		expect(app._pendingSync).toBe(true);
 
-		board.classList.remove("is-dragging");
+		pressing = false;
 		await app._flushPendingSync();
 		await new Promise(r => setTimeout(r, 0));
 		expect(app._pendingSync).toBe(false);
@@ -1337,6 +1343,35 @@ describe("what a portrait says when it is rested on", () => {
 		expect(said.nobody).toBe("The Miller");
 		expect(said.elena).not.toContain("Right-click");
 	});
+
+	// THE LABEL UNDER THE NAME is this map's, never the actor's, and the face says it too: a reader on
+	// a screen reader hears "Elena, Iron Knight" where a sighted one reads the chip under the face.
+	it("carries the label under the name, off this map, and says it on the face", () => {
+		const cast = foundry.utils.deepClone(CAST);
+		cast.nodes.elena.subtitle = "Iron Knight";
+		cast.nodes.nobody.subtitle = "Deceased";
+		const { app } = windowFor(cast, { isOwner: false });
+		const nodes = Object.fromEntries(app._boardContext(app._plan()).nodes.map(node => [node.id, node]));
+		expect(nodes.elena.subtitle).toBe("Iron Knight");
+		expect(nodes.ghost.subtitle).toBe("");
+		expect(nodes.nobody.tooltip).toBe("The Miller, Deceased");
+		expect(nodes.elena.tooltip).toMatch(/^Elena, Iron Knight\b/);
+		// The name itself stays the name: it is what every other sentence about them uses.
+		expect(nodes.elena.name).toBe("Elena");
+	});
+
+	// THE LABEL'S BAR is placed off the PAINT, under the name: where the label sits.
+	it("hands the label's bar the person as painted, with its point under their name", () => {
+		const cast = foundry.utils.deepClone(CAST);
+		cast.nodes.elena.subtitle = "Iron Knight";
+		const { app } = windowFor(cast);
+		app._boardContext(app._plan());
+		const held = app._personAt("elena");
+		expect(held.node.subtitle).toBe("Iron Knight");
+		expect(held.at.left).toBe(20);
+		expect(held.at.top).toBeGreaterThan(30);
+		expect(app._personAt("somebody-else")).toBeNull();
+	});
 });
 
 // THE MARK BEHIND THE TRASH CAN. A right press on a portrait arms one (utils/relmap-drag.js
@@ -2098,6 +2133,88 @@ describe("what happens to the document under the window", () => {
 
 		update(entry, { ownership: { default: 3 } });
 		expect(app.render).toHaveBeenCalled();
+	});
+});
+
+// THE PEOPLE ON THE BOARD ARE ACTORS, read live at every paint. Reported 2026-11-02: renaming a
+// character or giving them new art left the old face and name on an open map, because nothing asked
+// for a paint when an actor changed.
+describe("an actor on the board changing", () => {
+	const CAST = {
+		version: 1,
+		nodes: {
+			elroy: { uuid: "Actor.elroy", name: "Lord Elroy", img: "", x: 20, y: 20, note: "" },
+			typed: { uuid: null, name: "The Miller", img: "", x: 60, y: 20, note: "" },
+		},
+		edges: {},
+	};
+	const settle = () => new Promise(r => setTimeout(r, 80));
+
+	function wired() {
+		const on = hooksOf();
+		const made = windowFor(CAST);
+		made.app.rendered = true;
+		made.app.sync = vi.fn();
+		made.app._wireSync();
+		return { on, ...made };
+	}
+
+	it("repaints when somebody on it is renamed, re-pictured or re-cropped", async () => {
+		for (const changed of [
+			{ name: "Lord Elroy the Bold" },
+			{ img: "new-art.webp" },
+			{ flags: { "stonetop-pwd": { portraitFrame: { x: 10 } } } },
+			{ flags: { "stonetop-pwd": { "-=portraitFrame": null } } },
+		]) {
+			const { on, app } = wired();
+			on.get("updateActor")({ uuid: "Actor.elroy" }, changed);
+			await settle();
+			expect(app.sync, JSON.stringify(changed)).toHaveBeenCalled();
+		}
+	});
+
+	// Every actor write in the world arrives on this hook, hit points and all.
+	it("leaves the board alone for a change no face shows, or for somebody not on it", async () => {
+		const { on, app } = wired();
+		on.get("updateActor")({ uuid: "Actor.elroy" }, { system: { attributes: { hp: { value: 3 } } } });
+		on.get("updateActor")({ uuid: "Actor.stranger" }, { name: "Somebody Else" });
+		on.get("updateActor")({ uuid: "Actor.elroy" }, { flags: { "stonetop-pwd": { other: 1 } } });
+		await settle();
+		expect(app.sync).not.toHaveBeenCalled();
+	});
+
+	it("repaints when somebody on it is deleted, or brought back", async () => {
+		for (const hook of ["deleteActor", "createActor"]) {
+			const { on, app } = wired();
+			on.get(hook)({ uuid: "Actor.elroy" });
+			await settle();
+			expect(app.sync, hook).toHaveBeenCalled();
+		}
+	});
+
+	// AUDIT 2026-11-02: a rename landing while the window was part-way through a render was dropped.
+	it("holds a change that lands mid-render for the render to let through", async () => {
+		const { on, app } = wired();
+		app.rendered = false;
+		app._isMidRender = () => true;
+		on.get("updateActor")({ uuid: "Actor.elroy" }, { name: "Renamed" });
+		await settle();
+		expect(app.sync).toHaveBeenCalled();
+	});
+
+	it("repaints when the system's whole flag scope is rubbed out, crop and all", async () => {
+		const { on, app } = wired();
+		on.get("updateActor")({ uuid: "Actor.elroy" }, { flags: { "-=stonetop-pwd": null } });
+		await settle();
+		expect(app.sync).toHaveBeenCalled();
+	});
+
+	it("does nothing from a window that is closed", async () => {
+		const { on, app } = wired();
+		app.rendered = false;
+		on.get("updateActor")({ uuid: "Actor.elroy" }, { name: "Renamed" });
+		await settle();
+		expect(app.sync).not.toHaveBeenCalled();
 	});
 });
 
@@ -3923,6 +4040,47 @@ describe("taking a change back", () => {
 		expect(app._history.canUndo).toBe(false);
 	});
 
+	// ⚠ A LABEL AND A NUDGE OF THE SAME PERSON ARE TWO CHANGES. They shared `node:<id>` once, and an
+	// undo inside the fold window took the label back with the move.
+	it("never folds a label typed into an arrow-key nudge of the same person", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._writeSubtitle("elena", { subtitle: "Iron Knight" });
+		await app._moveNode("elena", { x: 25, y: 30 }, { coalesce: "node:elena" });
+
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena.x).toBe(20);
+		expect(readGraph(page).nodes.elena.subtitle).toBe("Iron Knight");
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena.subtitle).toBe("");
+	});
+
+	// ⚠ ONE BOARD OPEN IN TWO VIEWS (the steading sheet's tab and the map window) is ONE history, and an
+	// Undo pressed in each at once applied the same step twice when the guard was each window's own.
+	it("takes one step at a time across two views of the same board", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		const { app: other } = windowFor(null, { entry, pageId: "p1" });
+		await app._moveNode("elena", { x: 40, y: 30 });
+		await app._moveNode("elena", { x: 60, y: 30 });
+		const [one, two] = await Promise.all([app._stepHistory("back"), other._stepHistory("back")]);
+		expect([one, two].filter(Boolean)).toHaveLength(1);
+		expect(readGraph(page).nodes.elena.x).toBe(40);
+	});
+
+	// A drop whose write has not come back yet is where the person is: a repaint in that breath drew the
+	// document as it was, and the face flashed back to where the drag began.
+	it("draws a person whose move is still landing where the move sends them", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		app._landingNudge.set("elena", { x: 70, y: 65 });
+		expect(app._plan().graph.nodes.elena).toMatchObject({ x: 70, y: 65 });
+		expect(readGraph(page).nodes.elena.x).toBe(20);
+		app._landingNudge.clear();
+		await app._moveNode("elena", { x: 45, y: 30 });
+		expect(app._landingNudge.size).toBe(0);
+	});
+
 	// A drag passes no key, because a drag is a gesture already.
 	it("never folds two deliberate drags together", async () => {
 		const { entry, pages: [page] } = ONE_LIVING_BOARD();
@@ -5498,5 +5656,111 @@ describe("groups on the map", () => {
 		expect(app._tieBar.close).toHaveBeenCalled();
 		expect(app._groupBar.close).not.toHaveBeenCalled();
 		expect(app._groupBar.open).toHaveBeenCalledWith("hunt", { returnTo: null, focusName: true });
+	});
+});
+
+// ── Audit 2026-11-02 ────────────────────────────────────────────────────────────────────────────
+
+describe("the keyboard across a repaint", () => {
+	/** A focusable thing on the board, answering for one data attribute. */
+	const focusable = (attr, value) => {
+		const one = el({ attrs: { [attr]: value } });
+		one.getAttribute = key => one.attrs[key] ?? null;
+		one.focus = vi.fn();
+		return one;
+	};
+
+	// Without this every repaint dropped the focus on <body>, and the next Delete went to the canvas.
+	it("gives the focus back to the same face in the new markup", async () => {
+		const { app, board } = windowFor();
+		const was = focusable("data-relmap-open", "elena");
+		board.children.was = was;
+		board.ownerDocument = { activeElement: was };
+		const other = focusable("data-relmap-open", "stefan");
+		const now = focusable("data-relmap-open", "elena");
+		board.all["[data-relmap-open]"] = [other, now];
+		await app._repaintBoard();
+		expect(now.focus).toHaveBeenCalledWith({ preventScroll: true });
+		expect(other.focus).not.toHaveBeenCalled();
+	});
+
+	it("leaves the focus alone when it was not on the board", async () => {
+		const { app, board } = windowFor();
+		board.ownerDocument = { activeElement: el() };
+		const face = focusable("data-relmap-open", "elena");
+		board.all["[data-relmap-open]"] = [face];
+		await app._repaintBoard();
+		expect(face.focus).not.toHaveBeenCalled();
+	});
+});
+
+describe("an undo pressed while a bar is still writing", () => {
+	// The Undo press blurs the field, the blur starts the label's write, and the undo must wait for it
+	// to land before it looks at the stack, or it takes back the step before the label.
+	it("waits for the write a bar started before it does anything else", async () => {
+		const { app } = windowFor(structuredClone(TWO_PEOPLE));
+		const order = [];
+		let land;
+		// The blur's write, already sent through the window's one write path when the undo starts.
+		app._writeNow = () => new Promise(done => { land = done; }).then(() => { order.push("label landed"); return true; });
+		app._write(nodePatch("elena", { subtitle: "Iron Knight" }));
+		app._personBar = { flush: vi.fn(() => undefined) };
+		app._writeNudge = async () => { order.push("nudges"); };
+		app._writeSeats = async () => {};
+		const step = app._stepHistoryNow("back");
+		await Promise.resolve();
+		expect(order).toEqual([]);
+		land();
+		await step;
+		expect(order).toEqual(["label landed", "nudges"]);
+		// Let go of once it has landed, so the next undo has nothing to wait for.
+		expect(app._inflight.size).toBe(0);
+	});
+});
+
+describe("seating the party and the village, once per map", () => {
+	// The steading sheet's map tab is a second window of this class. Both open at load on the GM's
+	// client ran two passes side by side, and each seated the party under fresh ids.
+	it("runs one pass for two windows on the same map opened together", async () => {
+		const first = windowFor().app;
+		const second = windowFor().app;
+		let finish;
+		const seed = vi.fn(() => new Promise(done => { finish = done; }));
+		first._seedPages = seed;
+		second._seedPages = seed;
+		const a = first._ensurePage();
+		const b = second._ensurePage();
+		expect(seed).toHaveBeenCalledTimes(1);
+		finish();
+		await Promise.all([a, b]);
+		// Finished, a later window runs its own pass, which finds the people there and adds nobody.
+		const third = windowFor().app;
+		third._seedPages = vi.fn(async () => {});
+		await third._ensurePage();
+		expect(third._seedPages).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("choosing somebody to add", () => {
+	stubNotifications();
+
+	// Every actor reaches every client; the chooser used to name and picture the GM's hidden NPCs.
+	it("offers a player nobody they cannot see", async () => {
+		const { app, entry } = windowFor(structuredClone(TWO_PEOPLE));
+		globalThis.game.actors = { contents: [
+			{ uuid: "Actor.secret", name: "The Hidden Hand", type: "npc", visible: false },
+		] };
+		await app._addPerson();
+		expect(globalThis.ui.notifications.info).toHaveBeenCalled();
+		expect(entry.updates).toHaveLength(0);
+	});
+});
+
+describe("leaving a board with a line just drawn", () => {
+	it("forgets the line it was waiting to take hold of", () => {
+		const { app } = windowFor();
+		app._pendingPick = "link1";
+		app._leaveBoard();
+		expect(app._pendingPick).toBe("");
 	});
 });

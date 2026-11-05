@@ -167,6 +167,8 @@ export function pointerBoard({ nodes = ["n1", "n2"], edges = ["e1"], groups = []
 		const el = boardEl({ cls: ["stonetop-relmap-node"], dataset: { relmapNode: id }, parent: board });
 		el.face = boardEl({ cls: ["stonetop-relmap-face"], dataset: { relmapOpen: id }, parent: el });
 		el.name = boardEl({ cls: ["stonetop-relmap-name"], parent: el });
+		// THE LABEL UNDER THE NAME, a sibling of the face like the handle, with its own attribute.
+		el.subtitle = boardEl({ cls: ["stonetop-relmap-subtitle"], dataset: { relmapSubtitle: id }, parent: el });
 		el.handle = boardEl({ cls: ["stonetop-relmap-handle"], dataset: { relmapHandle: id }, parent: el });
 		// THE TRASH CAN, which is a THIRD sibling and not a child of the face either — same trap as
 		// the handle above, and the same consequence if this fake pretends otherwise. It is printed
@@ -277,7 +279,7 @@ export function wireBoard(board, over = {}) {
 		nodeAt: vi.fn(id => ({ x: 20, y: 30, id })),
 		onMove: vi.fn(), onNudge: vi.fn(), onDragMove: vi.fn(), onDragEnd: vi.fn(),
 		onLink: vi.fn(), onLinkFrom: vi.fn(), onOpen: vi.fn(), onPickEdge: vi.fn(),
-		onPickNone: vi.fn(), onRemove: vi.fn(), onArm: vi.fn(),
+		onPickNone: vi.fn(), onRemove: vi.fn(), onArm: vi.fn(), onPickPerson: vi.fn(),
 		// The caption's own four, and the seat it is sitting at when a press arrives — which the
 		// window answers off the last paint, and which is what an abandoned slide goes back to.
 		seatAt: vi.fn(() => 0.5),

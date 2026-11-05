@@ -49256,6 +49256,14 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 
 .stonetop-relmap-groupbar .stonetop-relmap-tiebar-btn[hidden] { display: none; }
 
+/* THE LABEL'S BAR is one field, typed where the label sits. */
+.stonetop-relmap-personbar-field {
+	width: 13em;
+	height: 26px;
+	margin: 0;
+	font-size: 13px;
+}
+
 /* THE "DRAW LINES" TOOL IS ARMED: every face draws a line rather than moving, so it stops looking
    like something to grab. */
 .stonetop-relmap.is-drawing-lines:not(.is-readonly) .stonetop-relmap-face { cursor: crosshair; }
@@ -49318,7 +49326,8 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 .stonetop-relmap-face,
 .stonetop-relmap-handle,
 .stonetop-relmap-bin,
-.stonetop-relmap-name { pointer-events: auto; }
+.stonetop-relmap-name,
+.stonetop-relmap-subtitle { pointer-events: auto; }
 
 /* ⚠ THE RIM IS A LITERAL AND NOT `--st-card-rule`, WHICH EVERY OTHER LINE IN THIS WINDOW READS.
    That token is a HAIRLINE between surfaces, tuned to be barely there at 1px; this is a 3px rim
@@ -49450,6 +49459,97 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+/* THE LABEL UNDER THE NAME ("Iron Knight", "Deceased"), this map's and not the actor's.
+
+   Hung a pixel under the name chip and set like it -- the same paper, the same body ink, in board
+   PIXELS for the reason the name's rule gives -- but smaller and in italics, so it reads as what the
+   person IS rather than who. Never coloured: a reader on a magnifier gets body ink on paper.
+
+   TWO LINES AT MOST, then an ellipsis, with the whole of it in the tooltip: "Acolyte of the
+   Celebrated Seer" fits whole, and a paragraph does not cover the faces below.
+
+   ⚠ THE NUMBERS ARE THE GEOMETRY'S. `top` (the face's 72px, then 2 + 18 + 1), `max-width` and the
+   two 15px lines are `RELMAP_SUBTITLE_TOP_PX`, `RELMAP_SUBTITLE_MAX_W` and `RELMAP_SUBTITLE_REACH_PX`
+   in utils/relmap-geometry.js, which a group's outline and the board's framing are measured with.
+   Move them together.
+
+   For somebody who may edit it is a BUTTON, so core's button dressing comes off it: no border, no
+   fill but the paper, no fixed height, and a plain block rather than core's flex box.
+
+   ⚠ THE CLAMP IS ON THE INNER SPAN (`-words`), NEVER ON THIS BOX. Chrome lays a <button> out as a
+   box of its own kind whatever `display` asks for (it computes as `flow-root`), so a line clamp
+   set here does nothing and a long label runs on down over whoever stands below. Measured in
+   Chromium: on the span the Acolyte's label stops at two lines; on the button it did not. */
+.stonetop-relmap-subtitle {
+	position: absolute;
+	top: calc(100% + 21px);
+	left: 50%;
+	transform: translateX(-50%);
+	box-sizing: border-box;
+	display: block;
+	width: max-content;
+	max-width: 132px;
+	height: auto;
+	min-height: 0;
+	margin: 0;
+	padding: 0 0.35em;
+	border: 0;
+	border-radius: var(--st-radius-sm);
+	box-shadow: none;
+	background: var(--st-page);
+	color: var(--st-text-body);
+	font-family: inherit;
+	font-size: 11px;
+	font-style: italic;
+	font-weight: 400;
+	line-height: 15px;
+	text-align: center;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	overflow: hidden;
+}
+
+.stonetop-relmap-subtitle-words {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	overflow: hidden;
+}
+
+button.stonetop-relmap-subtitle { cursor: text; }
+
+button.stonetop-relmap-subtitle:hover {
+	background: var(--st-page);
+	color: var(--st-text-body);
+	box-shadow: none;
+}
+
+button.stonetop-relmap-subtitle:focus-visible {
+	outline: 2px solid var(--st-text-body);
+	outline-offset: 1px;
+}
+
+/* NOTHING WRITTEN YET: "Add a label", out of sight until the person is hovered or the button itself
+   has the focus, the handle's own bargain. Dashed and quieter, so it reads as an offer and never as
+   something the person is called. `opacity`, like the handle, so it stays a tab stop.
+
+   ⚠ AND IT TAKES NO PRESS WHILE IT IS OUT OF SIGHT. Unseen, it still caught every click about 63x15px
+   under each name: a line or a caption running there opened the label bar instead of its own, a
+   press there moved the person instead of panning, and a tap on a touch screen raised the bar and
+   the keyboard for a button nobody could see. It takes presses only while it is showing. */
+.stonetop-relmap-subtitle.is-empty {
+	opacity: 0;
+	pointer-events: none;
+	outline: 1px dashed rgb(var(--st-ink-rgb) / 0.45);
+	outline-offset: -1px;
+	color: var(--st-text-body);
+	transition: opacity 120ms ease;
+}
+
+.stonetop-relmap-node:hover .stonetop-relmap-subtitle.is-empty,
+.stonetop-relmap-subtitle.is-empty:focus-visible { opacity: 1; pointer-events: auto; }
 
 /* 30px AND NOT THE 22 IT WAS (user, 2026-10-07: "The little chain circle is kind of small and hard to
    click"), with a pad of invisible reach round it below, so the press that counts is about 40px
@@ -49656,7 +49756,8 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    ON THE PANEL TONE AND NOT THE PAGE, unlike the aside above it. The aside murmurs and belongs to
    the paper; this is chrome laid over the drawing and has to read as a thing in front of it. */
 .stonetop-relmap-tiebar,
-.stonetop-relmap-groupbar {
+.stonetop-relmap-groupbar,
+.stonetop-relmap-personbar {
 	position: absolute;
 	/* Written by `place()`. Here so the first paint before it runs is off-screen rather than in the
 	   top-left corner of the board. */
@@ -49677,7 +49778,8 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 
 /* `display: flex` above beats the attribute on its own, so the hidden state has to be said. */
 .stonetop-relmap-tiebar[hidden],
-.stonetop-relmap-groupbar[hidden] { display: none; }
+.stonetop-relmap-groupbar[hidden],
+.stonetop-relmap-personbar[hidden] { display: none; }
 
 /* THE WRITING FIELD, CLIPPED OFF THE BAR.
 

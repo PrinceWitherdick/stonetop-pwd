@@ -503,6 +503,39 @@ export async function ensureFirstMapPage(entry) {
 	return page;
 }
 
+/** The open-time pass running for each map on this client, by the map's id. See `seedMap`. */
+const SEEDING = new Map();
+
+/**
+ * Run a map's open-time pass (its first page, the party's board, the village, the tidy) ONCE AT A
+ * TIME PER MAP ON THIS CLIENT, NOT PER WINDOW.
+ *
+ * ⚠ THE STEADING SHEET'S MAP TAB IS A SECOND WINDOW ONTO THE SAME MAP, and a GM whose saved layout
+ * reopens both at load ran two passes over the same unchanged board side by side, each seating the
+ * party under fresh ids: everybody twice. So a pass already running for this map is handed back to
+ * the second caller to wait on instead of starting another. One that has FINISHED is forgotten,
+ * because it has written: a later window runs its own, which finds the people there and adds nobody.
+ *
+ * The pass itself is the caller's, since it reads the party and the steading through the window that
+ * asks; what is kept here is only which map has one under way.
+ *
+ * @param {string} entryId  the map's id.
+ * @param {Function} pass  `() => Promise`, started at once when no pass is running for this map.
+ * @returns {Promise}  the pass under way for this map, this caller's or the one already running.
+ */
+export function seedMap(entryId, pass) {
+	const key = String(entryId ?? "");
+	const running = SEEDING.get(key);
+	if (running) return running;
+	let started;
+	// A pass that throws before its first await is a failed pass like any other, not a throw out of
+	// here that leaves the map marked as seeding for ever.
+	try { started = Promise.resolve(pass()); } catch (err) { started = Promise.reject(err); }
+	const seeding = started.finally(() => { if (SEEDING.get(key) === seeding) SEEDING.delete(key); });
+	SEEDING.set(key, seeding);
+	return seeding;
+}
+
 /**
  * Add a board to a map.
  *

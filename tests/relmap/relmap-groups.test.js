@@ -5,8 +5,9 @@ import {
 	groupMembersPatch, groupPatch, normalizeGraph, relmapPath,
 } from "../../module/relmap/relmap-store.js";
 import {
-	RELMAP_CAPTION_PX, RELMAP_GROUP_GROW_MAX, RELMAP_GROUP_MIN_H, RELMAP_GROUP_MIN_W, RELMAP_GROUP_PAD_PX, boardBounds, groupNestPx,
-	groupOutline, groupShapes, groupsInside, growFor, insideGroupShape, readGroupGrow, resizeRect,
+	RELMAP_CAPTION_PX, RELMAP_GROUP_GROW_MAX, RELMAP_GROUP_MIN_H, RELMAP_GROUP_MIN_W, RELMAP_GROUP_PAD_PX,
+	RELMAP_SUBTITLE_MAX_W, RELMAP_SUBTITLE_REACH_PX, RELMAP_SUBTITLE_TOP_PX, boardBounds, groupNestPx,
+	groupFloor, groupOutline, groupShapes, groupsInside, growFor, insideGroupShape, readGroupGrow, resizeRect,
 } from "../../module/utils/relmap-geometry.js";
 
 // NAMED GROUPS ON THE RELATIONSHIP MAP: "The hunters", "The elders", an outline round some people.
@@ -247,6 +248,61 @@ describe("taking a group change back", () => {
 		expect(back.groups.hunt.members).toEqual({ marrec: true, ordga: true });
 	});
 
+	// AUDIT 2026-11-03 (O5): rubbing a group out took the key Ordga left in it, and undoing that
+	// re-made the group with the people then standing. Two undos brought both back, Ordga outside.
+	it("puts a person back into a group rubbed out and restored after they left", () => {
+		const before = graph();
+		const off = dropNodePatch(before, "ordga");
+		const offChange = describeWrite(before, off);
+		let raw = landRaw(before, off);
+		let live = normalizeGraph(raw);
+		const rub = dropGroupPatch("hunt");
+		const rubChange = describeWrite(live, rub);
+		raw = landRaw(raw, rub);
+		live = normalizeGraph(raw);
+		expect(live.groups.hunt).toBeUndefined();
+		// Undo, undo: the group first, then Ordga.
+		raw = landRaw(raw, stepPatch(live, rubChange.back));
+		live = normalizeGraph(raw);
+		expect(live.groups.hunt.members).toEqual({ marrec: true });
+		raw = landRaw(raw, stepPatch(live, offChange.back));
+		live = normalizeGraph(raw);
+		expect(live.nodes.ordga).toBeTruthy();
+		expect(live.groups.hunt.members).toEqual({ marrec: true, ordga: true });
+	});
+
+	// And never draws a group somebody rubbed out for good while they were off the board.
+	it("does not bring back a group rubbed out while the person was off the board", () => {
+		const before = graph();
+		const off = dropNodePatch(before, "ordga");
+		const offChange = describeWrite(before, off);
+		let raw = landRaw(landRaw(before, off), dropGroupPatch("hunt"));
+		let live = normalizeGraph(raw);
+		raw = landRaw(raw, stepPatch(live, offChange.back));
+		live = normalizeGraph(raw);
+		expect(live.nodes.ordga).toBeTruthy();
+		expect(live.groups).toEqual({});
+	});
+
+	// Taken off, then put on again by another reader under a new id, then the removal undone.
+	it("puts the person already standing into the group, under their own id", () => {
+		const before = graph({
+			nodes: {
+				ordga: { uuid: "Actor.o1", name: "Ordga", x: 20, y: 30 },
+				marrec: { name: "Marrec", x: 40, y: 30 },
+			},
+		});
+		const off = dropNodePatch(before, "ordga");
+		const offChange = describeWrite(before, off);
+		let raw = landRaw(before, off);
+		raw = landRaw(raw, { [`${PREFIX}.nodes.ordga2`]: { uuid: "Actor.o1", name: "Ordga", x: 5, y: 5 } });
+		let live = normalizeGraph(raw);
+		raw = landRaw(raw, stepPatch(live, offChange.back));
+		live = normalizeGraph(raw);
+		expect(live.nodes.ordga).toBeUndefined();
+		expect(live.groups.hunt.members).toEqual({ marrec: true, ordga2: true });
+	});
+
 	it("does not put somebody who has since left the board back into a group", () => {
 		const before = graph();
 		const change = describeWrite(before, groupMembersPatch("hunt", [], ["ordga"]));
@@ -301,6 +357,19 @@ describe("the outline round a group", () => {
 		}
 		expect(oval.name.align).toBe("centre");
 		expect(oval.d).toContain(" A ");
+	});
+
+	// A DASHED "DECEASED" BOX ROUND SIMON must not cut through the label under his name.
+	it("reaches round the label under a member's name, and only for a member who has one", () => {
+		const plain = groupOutline([at(50, 50)], { board });
+		const labelled = groupOutline([{ ...at(50, 50), subtitle: "Deceased" }], { board });
+		const py = 0.5 * board.height;
+		const px = 0.5 * board.width;
+		expect(labelled.bottom).toBeGreaterThanOrEqual(py + RELMAP_SUBTITLE_TOP_PX + RELMAP_SUBTITLE_REACH_PX - 1);
+		expect(labelled.bottom - plain.bottom).toBe(RELMAP_SUBTITLE_REACH_PX);
+		expect(labelled.left).toBeLessThanOrEqual(px - RELMAP_SUBTITLE_MAX_W / 2);
+		expect(labelled.right).toBeGreaterThanOrEqual(px + RELMAP_SUBTITLE_MAX_W / 2);
+		expect(plain.top).toBe(labelled.top);
 	});
 
 	it("still draws round one person alone, and round nobody returns nothing", () => {
@@ -569,6 +638,41 @@ describe("a group's extra room", () => {
 
 // Stored in whole pixels, rounded OUTWARD: a stored outline always holds the one asked for, and an
 // offset already whole (the corner held still) never creeps out a pixel per drag.
+// AUDIT 2026-11-02: the floor was one person WITHOUT a label (144x128), and one with a label stands
+// 168x159, so a group of one shrunk to the floor had the label poking out of the bottom and, dragged
+// from the top, its edge through the face.
+describe("the floor for a group with a label in it", () => {
+	const board = { width: 1200, height: 800 };
+	const labelled = [{ x: 50, y: 50, subtitle: "Iron Knight" }];
+
+	it("is the plain floor until somebody in the group has a label, then that person alone", () => {
+		expect(groupFloor([{ x: 1, y: 1 }])).toEqual({ w: RELMAP_GROUP_MIN_W, h: RELMAP_GROUP_MIN_H });
+		const snug = groupOutline(labelled, { board });
+		const floor = groupFloor(labelled);
+		expect(floor.w).toBeCloseTo(snug.right - snug.left);
+		expect(floor.h).toBeCloseTo(snug.bottom - snug.top);
+	});
+
+	it("is never shrunk past by a corner dragged in, so the label stays inside", () => {
+		const snug = groupOutline(labelled, { board });
+		const floor = groupFloor(labelled);
+		for (const corner of ["nw", "ne", "se", "sw"]) {
+			const rect = resizeRect(snug, corner, { x: 600, y: 400 }, { min: floor });
+			expect(rect.right - rect.left).toBeGreaterThanOrEqual(floor.w - 1e-6);
+			expect(rect.bottom - rect.top).toBeGreaterThanOrEqual(floor.h - 1e-6);
+		}
+	});
+
+	it("is drawn round the whole of that person, label and all, when it was shrunk below them", () => {
+		const snug = groupOutline(labelled, { board });
+		const shrunk = groupOutline(labelled, { board, grow: { left: -40, top: -40, right: -40, bottom: -40 } });
+		expect(shrunk.top).toBeLessThanOrEqual(snug.top + 1e-6);
+		expect(shrunk.bottom).toBeGreaterThanOrEqual(snug.bottom - 1e-6);
+		expect(shrunk.left).toBeLessThanOrEqual(snug.left + 1e-6);
+		expect(shrunk.right).toBeGreaterThanOrEqual(snug.right - 1e-6);
+	});
+});
+
 describe("growFor's rounding", () => {
 	it("never stores an outline smaller than the one asked for", () => {
 		const snug = { left: 100.4, top: 50.6, right: 200.2, bottom: 150.8 };

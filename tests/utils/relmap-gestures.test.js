@@ -782,6 +782,94 @@ describe("the trash can on a portrait", () => {
 	});
 });
 
+// THE LABEL UNDER A NAME ("Iron Knight", or "Add a label" before there is one).
+describe("the label under a portrait's name", () => {
+	let board;
+	beforeEach(() => {
+		board = pointerBoard();
+		board.view.setPointerCapture = vi.fn();
+		board.view.releasePointerCapture = vi.fn();
+	});
+	afterEach(() => board.destroy());
+
+	it("raises its bar on a click, naming the person and handing back the element", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.portraits.n1.subtitle);
+		expect(handlers.onPickPerson).toHaveBeenCalledWith("n1", board.portraits.n1.subtitle);
+		expect(handlers.onOpen).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// A press that travels is the person's drag, as one on the name is, and the bar does not also go up.
+	it("still moves the person when it is dragged, and raises nothing", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.portraits.n1.subtitle, { to: [40, 0] });
+		expect(handlers.onMove).toHaveBeenCalled();
+		expect(handlers.onPickPerson).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	it("raises nothing on a board the reader may not edit", () => {
+		const { handlers, teardown } = wire(board, { canEdit: () => false });
+		press(board, board.portraits.n1.subtitle);
+		expect(handlers.onPickPerson).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// ⚠ DELETE ON IT NEVER REACHES THE SCENE, where it deletes the GM's selected tokens, and it takes
+	// nobody off the map either: the label is not the person.
+	it("keeps Delete and the arrows from the scene, and does nothing with them", () => {
+		const { handlers, teardown } = wire(board);
+		for (const key of ["Delete", "ArrowLeft"]) {
+			const ev = board.view.emit("keydown", board.portraits.n1.subtitle, { key });
+			expect(ev.propagationStopped).toBe(true);
+		}
+		expect(handlers.onRemove).not.toHaveBeenCalled();
+		expect(handlers.onNudge).not.toHaveBeenCalled();
+		expect(handlers.onMove).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	// AUDIT 2026-11-02: with Draw lines armed the label is the person as the face is. It used to raise
+	// its bar, leaving the aim live and its band chasing the pointer.
+	it("picks the person for the Draw lines tool instead of raising its bar", () => {
+		const { handlers, teardown } = wire(board, { linking: () => true, onLinkPicked: vi.fn(), onStopLinking: vi.fn() });
+		press(board, board.portraits.n1.face);
+		press(board, board.portraits.n2.subtitle);
+		expect(handlers.onLink).toHaveBeenCalledWith("n1", "n2");
+		expect(handlers.onPickPerson).not.toHaveBeenCalled();
+		teardown();
+	});
+});
+
+// AUDIT 2026-11-02: an arrow key while the pointer is carrying somebody is a second write about the
+// same person racing the drop, and whichever landed last decided where they ended up.
+describe("the arrow keys while a face is being dragged", () => {
+	let board;
+	beforeEach(() => {
+		board = pointerBoard();
+		board.view.setPointerCapture = vi.fn();
+		board.view.releasePointerCapture = vi.fn();
+	});
+	afterEach(() => board.destroy());
+
+	it("nudge nobody, and still keep the key from the scene", () => {
+		const { handlers, teardown } = wire(board);
+		const face = board.portraits.n1.face;
+		board.view.emit("pointerdown", face, { pointerId: 1, clientX: 0, clientY: 0 });
+		board.view.emit("pointermove", face, { pointerId: 1, clientX: 40, clientY: 0 });
+		board.flush();
+		const ev = board.view.emit("keydown", face, { key: "ArrowRight" });
+		expect(ev.propagationStopped).toBe(true);
+		expect(handlers.onNudge).not.toHaveBeenCalled();
+		board.view.emit("pointerup", face, { pointerId: 1, clientX: 40, clientY: 0 });
+		// Let go, the keys move them again.
+		board.view.emit("keydown", face, { key: "ArrowRight" });
+		expect(handlers.onNudge).toHaveBeenCalled();
+		teardown();
+	});
+});
+
 // thing a real button gave for free has to be handed to it here.
 describe("a caption, which is a button only by manners", () => {
 	let board;
@@ -1313,5 +1401,102 @@ describe("drawing a line without the handle", () => {
 			expect(handlers.onLink).not.toHaveBeenCalled();
 			teardown();
 		});
+	});
+});
+
+// AUDIT 2026-11-03 (/fix-all): the smaller exits and claims the drag layer was missing.
+describe("the person's other parts, and the exits round a drag", () => {
+	let board;
+	beforeEach(() => {
+		board = pointerBoard();
+		board.view.setPointerCapture = vi.fn();
+		board.view.releasePointerCapture = vi.fn();
+	});
+	afterEach(() => board.destroy());
+
+	// A click on a name used to be a click on bare paper: it let go of every bar, the selection and a pick.
+	it("takes a click on somebody's name as a click on them, not on the paper", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.portraits.n1.name);
+		expect(handlers.onPickNone).not.toHaveBeenCalled();
+		teardown();
+	});
+
+	it("draws a line to the person whose name is clicked with Draw lines armed", () => {
+		const { handlers, teardown } = wire(board, { linking: () => true, onLinkPicked: vi.fn(), onStopLinking: vi.fn() });
+		press(board, board.portraits.n1.face);
+		press(board, board.portraits.n2.name);
+		expect(handlers.onLink).toHaveBeenCalledWith("n1", "n2");
+		teardown();
+	});
+
+	// Holding Enter on a label opened its bar, closed it, and opened it again, for as long as it was held.
+	it("treats a held Enter on a label as one press", () => {
+		const { teardown } = wire(board);
+		const ev = board.view.emit("keydown", board.portraits.n1.subtitle, { key: "Enter", repeat: true });
+		expect(ev.defaultPrevented).toBe(true);
+		expect(ev.propagationStopped).toBe(true);
+		teardown();
+	});
+
+	// The focus back on the board with a bar still up: Escape went to core, which closed the window.
+	it("puts an open bar down on Escape from the board, and keeps the key from core", () => {
+		const { handlers, teardown } = wire(board, { barOpen: () => true });
+		const ev = board.view.emit("keydown", board.portraits.n1.face, { key: "Escape" });
+		expect(handlers.onPickNone).toHaveBeenCalled();
+		expect(ev.propagationStopped).toBe(true);
+		teardown();
+	});
+
+	it("leaves Escape to core when no bar is up and nothing else is held", () => {
+		const { handlers, teardown } = wire(board, { barOpen: () => false });
+		const ev = board.view.emit("keydown", board.portraits.n1.face, { key: "Escape" });
+		expect(handlers.onPickNone).not.toHaveBeenCalled();
+		expect(ev.propagationStopped).toBe(false);
+		teardown();
+	});
+
+	// Another player's write landing between the press and the threshold replaced every portrait, and
+	// the drag carried the old, detached one. So the window holds its repaints for the whole PRESS,
+	// which it asks of this layer, and lets them through when the layer says the press is over.
+	it("says a press is held from the moment it is armed, before it is a drag", () => {
+		const onPressEnd = vi.fn();
+		const { teardown } = wire(board, { onPressEnd });
+		expect(teardown.pressing()).toBe(false);
+		board.view.emit("pointerdown", board.portraits.n1.face, { pointerId: 1, clientX: 0, clientY: 0 });
+		expect(teardown.pressing()).toBe(true);
+		expect(board.board.classList.contains("is-dragging")).toBe(false);
+		board.view.emit("pointerup", board.portraits.n1.face, { pointerId: 1, clientX: 0, clientY: 0 });
+		expect(teardown.pressing()).toBe(false);
+		expect(onPressEnd).toHaveBeenCalledTimes(1);
+		teardown();
+	});
+
+	// ⚠ A RELEASE THIS BOARD NEVER HEARD still ends the press, and still says so, or the repaint held
+	// for it would wait until the next click.
+	it("ends the press, and says so, when the button was let go of somewhere else", () => {
+		const onPressEnd = vi.fn();
+		const { teardown } = wire(board, { onPressEnd });
+		board.view.emit("pointerdown", board.portraits.n1.face, { pointerId: 1, clientX: 0, clientY: 0 });
+		board.view.emit("pointermove", board.board, { pointerId: 1, clientX: 1, clientY: 0, buttons: 0 });
+		expect(teardown.pressing()).toBe(false);
+		expect(onPressEnd).toHaveBeenCalledTimes(1);
+		teardown();
+		// The teardown finds nothing held, and says nothing more.
+		expect(onPressEnd).toHaveBeenCalledTimes(1);
+	});
+
+	// A capture lost with the button still down leaves a click to come, and it landed on the paper.
+	it("eats the click a lost pointer capture leaves behind", () => {
+		const { handlers, teardown } = wire(board, { selected: () => ["n2"], onSelect: vi.fn() });
+		const face = board.portraits.n1.face;
+		board.view.emit("pointerdown", face, { pointerId: 1, clientX: 0, clientY: 0 });
+		board.view.emit("pointermove", face, { pointerId: 1, clientX: 40, clientY: 0 });
+		board.flush();
+		board.view.emit("lostpointercapture", face, { pointerId: 1 });
+		board.view.emit("click", board.board, { pointerId: 1, detail: 1 });
+		expect(handlers.onPickNone).not.toHaveBeenCalled();
+		expect(handlers.onSelect).not.toHaveBeenCalled();
+		teardown();
 	});
 });
