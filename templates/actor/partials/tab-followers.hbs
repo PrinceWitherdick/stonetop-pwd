@@ -891,6 +891,12 @@
 							<span class="stonetop-hp-max">{{this.hpMax}}</span>
 						</span>
 						{{#if ../edit.individuals}}
+						{{!-- Crew members gain and lose tags and traits in play, so a named member is
+						      edited in place: the "Name them" window, filled in with what they have. --}}
+						<button type="button" class="stonetop-crew-edit-individual stonetop-inline-btn"
+						        data-index="{{this.index}}" data-tooltip="Edit name, tag and traits" data-tooltip-direction="UP">
+							<i class="fas fa-pen"></i>
+						</button>
 						<button type="button" class="stonetop-crew-delete-individual stonetop-inline-btn stonetop-inline-btn--danger"
 						        data-index="{{this.index}}" title="Remove">
 							<i class="fas fa-times"></i>

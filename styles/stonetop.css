@@ -29078,6 +29078,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 	flex: 1 1 auto;
 }
 
+.stonetop-crew-individual-header .stonetop-crew-edit-individual,
 .stonetop-crew-individual-header .stonetop-crew-delete-individual {
 	flex: none;
 	width: 20px !important;
@@ -30622,6 +30623,27 @@ li.question-bullet::before {
 	padding: 4px;
 	border: 1px solid var(--st-on-dark-rule-soft, #eee);
 	border-radius: var(--st-radius);
+}
+
+/* "Add a trait of your own" under the grid: the field takes the row, Add sits at its end.
+   The dialog-scoped `.form-group input[type="text"]` rule below makes every text field
+   full-width and `flex: none`, which would push Add onto a line of its own, so the field
+   is put back to growing here at a higher specificity. */
+.stonetop-individual-dialog .stonetop-trait-custom-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+}
+
+.stonetop-individual-dialog .form-group .stonetop-trait-custom-row input[type="text"] {
+	flex: 1 1 auto;
+	width: auto;
+	min-width: 0;
+}
+
+.stonetop-individual-dialog .stonetop-trait-custom-row .stonetop-trait-custom-add {
+	flex: none;
 }
 
 /* Scoped dialog overrides */

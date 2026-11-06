@@ -571,8 +571,16 @@ function crewNamedCount(names, ctx) {
  * Matched by NAME rather than by position: the array is spliced, so every index above the change
  * shifts and a positional diff would report the whole tail as replaced. A portrait pick rewrites
  * this same array with the membership untouched, which is exactly why this yields nothing then.
+ *
+ * A write that keeps the SAME LENGTH is not a join or a leave: naming appends and removing splices,
+ * so neither keeps it. It is a member edited in place (the pencil on a named member) or a portrait
+ * pick, and those are read by position instead. A rename then reads as a rename rather than one
+ * person leaving and a stranger joining.
  */
 function crewMembershipEntries(oldValue, newValue, crewName) {
+	if (Array.isArray(oldValue) && Array.isArray(newValue) && oldValue.length && oldValue.length === newValue.length) {
+		return crewMemberEditEntries(oldValue, newValue);
+	}
 	const tally = (value) => (Array.isArray(value) ? value : []).reduce((counts, row) => {
 		const name = String(row?.name ?? "").trim();
 		if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
@@ -595,6 +603,33 @@ function crewMembershipEntries(oldValue, newValue, crewName) {
 			entries.push({ action: `${name}${ordinal} ${verb}` });
 		}
 	}
+	return entries;
+}
+
+/**
+ * What changed on each named member when the roster was rewritten in place: a new name, a new tag,
+ * and each trait gained or lost. Crew members pick these up and shed them in play, which is the
+ * story the Chronicle is there to keep. A portrait pick touches none of the three, so it stays
+ * quiet here as it always has.
+ */
+function crewMemberEditEntries(before, after) {
+	const text   = (v) => String(v ?? "").trim();
+	const traits = (row) => (Array.isArray(row?.traits) ? row.traits.map(text).filter(Boolean) : []);
+	const entries = [];
+	before.forEach((was, index) => {
+		const now     = after[index];
+		const oldName = text(was?.name);
+		const newName = text(now?.name);
+		const who     = newName || oldName || crewIndividualLabel(index);
+		if (oldName && newName && oldName !== newName) entries.push({ action: `${oldName} is now called ${newName}` });
+		const oldTag = text(was?.tag);
+		const newTag = text(now?.tag);
+		if (oldTag !== newTag) entries.push(followerFieldEntry(who, "tag", oldTag, newTag));
+		const had = traits(was);
+		const has = traits(now);
+		for (const trait of has) if (!had.includes(trait)) entries.push({ action: `${who} gained the trait ${trait}` });
+		for (const trait of had) if (!has.includes(trait)) entries.push({ action: `${who} lost the trait ${trait}` });
+	});
 	return entries;
 }
 

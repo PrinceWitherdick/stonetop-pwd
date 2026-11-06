@@ -476,6 +476,33 @@ describe("CharacterLedger", () => {
 			expect(entries.map(e => e.action)).toEqual([]);
 		});
 
+		// Editing a named member in place rewrites the array at the same length. Read as a
+		// membership diff, a rename came out as one person leaving and a stranger joining, and a
+		// tag or trait gained in play left no line at all.
+		it("reads a rename as a rename, not a departure and an arrival", async () => {
+			const actor = crew({ individuals: [{ name: "Aled" }, { name: "Eira" }] });
+			const entries = await CharacterLedger.entriesForActorUpdate(actor, {
+				"flags.stonetop-pwd.crew.individuals": [{ name: "Aled" }, { name: "Eirlys" }],
+			});
+			expect(entries.map(e => e.action)).toEqual(["Eira is now called Eirlys"]);
+		});
+
+		it("says when a named member's tag changes or their traits are gained and lost", async () => {
+			const actor = crew({ individuals: [
+				{ name: "Cean", tag: "kind", traits: ["Fiona's parent", "missing eye"], img: "cean.webp" },
+			] });
+			const entries = await CharacterLedger.entriesForActorUpdate(actor, {
+				"flags.stonetop-pwd.crew.individuals": [
+					{ name: "Cean", tag: "brave", traits: ["Fiona's parent", "scarred"], img: "cean.webp" },
+				],
+			});
+			expect(entries.map(e => e.action)).toEqual([
+				"Cean tag changed from kind to brave",
+				"Cean gained the trait scarred",
+				"Cean lost the trait missing eye",
+			]);
+		});
+
 		// The card's own two are covered by the system-wide cosmetic-portrait rule; the anonymous
 		// members' array needs a rule of its own, because it is one atomic leaf whose path never
 		// mentions `img`.
