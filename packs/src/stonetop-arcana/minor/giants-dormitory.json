@@ -17,9 +17,9 @@
           "note": "<em>magical</em>",
           "inventoryColumn": null
         },
-        "description": "<p>In a ruin of the Stone Lords is an old dwelling that bears the psychic imprint of its inhabitant, a stoneshaper of some considerable skill.</p><p>When you <strong><em>enter the dormitory</em></strong>, you are overcome with a vision of this student inventing his first spell. You can learn this spell, but…</p>",
+        "description": "<p>In a ruin of the Stone Lords is an old dwelling that bears the psychic imprint of its inhabitant, a stoneshaper of some considerable skill.</p>",
         "unlock": {
-          "description": "When you enter the dormitory, you are overcome with a vision of this student inventing his first spell. You can learn this spell, but…",
+          "description": "When you <strong><em>enter the dormitory</em></strong>, you are overcome with a vision of this student inventing his first spell. You can learn this spell, but…",
           "requirements": [
             {
               "type": "option",

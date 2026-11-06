@@ -24,6 +24,7 @@
             {
               "type": "option",
               "slug": "find-teacher",
+              "path": "teacher",
               "description": "… find one who knows its workings, and get them to teach you;"
             },
             {
@@ -33,7 +34,14 @@
             {
               "type": "option",
               "slug": "fill-and-drink",
-              "description": "… fill the bottle with spring-water and hallucinogenic mushrooms, and let it steep in the dark for a fortnight, drink the contents and risk learning nothing as you suffer through the sickness and the nightmares."
+              "path": "brew",
+              "description": "… fill the bottle with spring-water and hallucinogenic mushrooms, and let it steep in the dark for a fortnight."
+            },
+            {
+              "type": "option",
+              "slug": "drink-contents",
+              "path": "brew",
+              "description": "… drink the contents and risk learning nothing as you suffer through the sickness and the nightmares."
             }
           ]
         }

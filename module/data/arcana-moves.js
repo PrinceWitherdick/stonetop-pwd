@@ -2,6 +2,7 @@ import { capitalizeFirst, escHtml, slugify, stripHtmlToText } from "../utils/str
 import { pickLimitsFrom } from "../utils/move-picks.js";
 import { firstOptionList } from "../utils/chat.js";
 import { normalizeRollType } from "../utils/roll-types.js";
+import { maskGlyphLabels } from "../utils/glyphs.js";
 
 /**
  * The mysteries on an arcanum's BACK are moves — "choose one of the moves on the reverse"
@@ -46,7 +47,9 @@ function _moveNameFrom(inner) {
 
 // The "Moves" section of a back description: from its heading to the next heading (or the
 // end). Same slice rule the front-side Consequences lift uses, for the same reason — it keeps
-// nested lists intact without balanced-tag matching. Returns null when the card prints none.
+// nested lists intact without balanced-tag matching. Returns `{start, end}` of the body (after
+// the heading), or null when the card prints none. The card editor (arcanum-edit.js) inserts
+// new mysteries into the same section.
 //
 // The heading is singular on a card that grants just one: the Hec'tumel Codex prints "Move" over
 // DARKSOME VESSEL, which a plural-only match left as unclickable prose. "Spells of the Codex" stays
@@ -54,7 +57,7 @@ function _moveNameFrom(inner) {
 // own, and their names are not SHOUTED, so the head walk would find nothing there anyway.
 const _MOVES_HEADING_RE = /<h([1-6])\b[^>]*>\s*Moves?\s*<\/h\1>/i;
 
-function _movesSection(description) {
+export function movesSection(description) {
 	if (!description) return null;
 	const m = _MOVES_HEADING_RE.exec(description);
 	if (!m) return null;
@@ -69,10 +72,11 @@ const _ROLL_RE = /\broll\s*\+\s*(str|dex|con|int|wis|cha|nothing)\b/i;
 
 /**
  * A move whose 6- says "don't mark XP" (the Timeless Vault's runes, Book II p.518: "on a 6-, ... (and
- * don't mark XP)"). Read off the printed text, since a card carries no field for it and a homebrew card
- * says it the same way; the shipped arcana use the phrase for nothing else.
+ * don't mark XP)") or "instead of marking XP" (the Azure Hand's front, Book II p.574: "On a 6-, instead
+ * of marking XP, mark 1"). Read off the printed text, since a card carries no field for it and a homebrew
+ * card says it the same way; the shipped arcana use the phrases for nothing else.
  */
-const _NO_XP_RE = /\b(?:don['’]t|do not)\s+mark\s+XP\b/i;
+const _NO_XP_RE = /\b(?:(?:don['’]t|do not)\s+mark|instead\s+of\s+marking)\s+XP\b/i;
 const _noXpOnMiss = html => _NO_XP_RE.test(stripHtmlToText(String(html ?? "")));
 
 /**
@@ -90,7 +94,9 @@ const _noXpOnMiss = html => _NO_XP_RE.test(stripHtmlToText(String(html ?? "")));
 function _picksFrom(blockHtml) {
 	const list = firstOptionList(blockHtml);
 	if (!list) return { picks: [], picksLabel: "", listHtml: "", pickMax: 0 };
-	const picks = list.items.map(stripHtmlToText).filter(Boolean);
+	// An option's own learned box (the Lidless Orb's four effects, Book II p.541: "□ Cast your sight
+	// afar") is the card's to tick, not part of the option's words.
+	const picks = list.items.map(item => stripHtmlToText(item).replace(/^□\s*/, "")).filter(Boolean);
 	// What the prose calls the list, taken from the clause that introduces it ("choose 2 from
 	// the list below", "Spend Guise, 1-for-1 to"). Long lead-ins fall back to a plain label
 	// rather than dragging half a paragraph into the dialog's heading.
@@ -159,8 +165,39 @@ export function parseArcanumMoves(description) {
 const _MOVES_CACHE = new Map();
 const _MOVES_CACHE_MAX = 200;
 
+// A follower's stat block printed inside a move, in the house style: a paragraph opening with the
+// creature's bold name, a dash, then its italic tags ("<p><strong>Servant of Daagon</strong> - <em>terrifying,
+// violent, wretched</em>", "<p><strong>Astor</strong> - <em>undead, spirit, ...</em>").
+const _STAT_BLOCK_RE = /<p\b[^>]*>\s*<strong>[^<]*<\/strong>\s*[\u2014\u2013-]\s*<em>/i;
+
+/**
+ * Where a move's own text stops, inside `run` (its head to the next head).
+ *
+ * A move that calls up followers prints their stat block after its own text (the Blackwood Fetishes'
+ * Astor and Halix, Book II p.565; the Ring of Daagon's Servants, p.561). The block is part of what the
+ * move gives you, so it stays in the move's text, but a roll or a list printed after it is not the
+ * move's: the Ring's CALL UP THE DEEP ONES rolls nothing, and the five-aspect list and the "roll +CHA"
+ * that follow its Servant belong to the Call Up's 5d4 and to sending them back (both run from the
+ * follower card). So:
+ *  - `own` ends at the first stat block: the roll and the options are read from there only;
+ *  - `end` ends at the first paragraph after that block which opens a new trigger ("When you
+ *    <strong><em>send them back whence they came</em></strong>"), a move of its own with no name.
+ * A run with no stat block is all the move's (`own` = `end` = its length).
+ *
+ * @param {string} run     the move's html, from its head to the next head
+ * @param {number} bodyAt  where the head's opening ends inside `run`
+ * @returns {{own: number, end: number}}
+ */
+function _moveBlockLimits(run, bodyAt) {
+	const at = run.slice(bodyAt).search(_STAT_BLOCK_RE);
+	if (at < 0) return { own: run.length, end: run.length };
+	const own  = bodyAt + at;
+	const next = _paragraphs(run).find(p => p.start > own && _HAS_TRIGGER_RE.test(run.slice(p.start, p.end)));
+	return { own, end: next ? next.start : run.length };
+}
+
 function _parseArcanumMoves(description) {
-	const section = _movesSection(description);
+	const section = movesSection(description);
 	if (!section) return [];
 	const body = description.slice(section.start, section.end);
 
@@ -182,13 +219,17 @@ function _parseArcanumMoves(description) {
 
 	const usedSlugs = new Set();
 	return heads.map((head, i) => {
-		const block = body.slice(head.blockStart, heads[i + 1]?.blockStart ?? body.length);
+		const run   = body.slice(head.blockStart, heads[i + 1]?.blockStart ?? body.length);
+		const limit = _moveBlockLimits(run, head.headEnd - head.blockStart);
+		// What the move itself says, before any follower stat block it prints: where its roll and
+		// its options are read from.
+		const own   = run.slice(0, limit.own);
 		// The prose that follows the name: the rest of its opening paragraph plus whatever
 		// runs on until the next move. Drop the <br> or dash that only separated name from
 		// text, then re-open the paragraph the head's own <p> started.
-		const tail = body.slice(head.headEnd, heads[i + 1]?.blockStart ?? body.length)
+		const tail = body.slice(head.headEnd, head.blockStart + limit.end)
 			.replace(/^\s*(?:<br\s*\/?>|[\u2014\u2013-])\s*/, "");
-		const { picks, picksLabel, listHtml, pickMax } = _picksFrom(block);
+		const { picks, picksLabel, listHtml, pickMax } = _picksFrom(own);
 		// A slug per card, so two moves that shout the same name still address separately.
 		let slug = slugify(head.name);
 		for (let n = 2; usedSlugs.has(slug); n++) slug = `${slugify(head.name)}-${n}`;
@@ -197,12 +238,12 @@ function _parseArcanumMoves(description) {
 			slug,
 			name:        head.name,
 			boxIndex:    head.hasBox
-				? (description.slice(0, head.innerStart + description.slice(head.innerStart).indexOf(_LEARN_BOX))
+				? (maskGlyphLabels(description).slice(0, head.innerStart + description.slice(head.innerStart).indexOf(_LEARN_BOX))
 					.match(/□/g) ?? []).length
 				: null,
 			description: `<p>${tail}`,
-			roll:        _ROLL_RE.exec(stripHtmlToText(block))?.[1]?.toLowerCase() ?? null,
-			noXpOnMiss:  _noXpOnMiss(block),
+			roll:        _ROLL_RE.exec(stripHtmlToText(own))?.[1]?.toLowerCase() ?? null,
+			noXpOnMiss:  _noXpOnMiss(own),
 			picks,
 			picksLabel,
 			pickMax,
@@ -243,7 +284,7 @@ export function condensedArcanumMove(move, { backDescription = "" } = {}) {
 	// one move written out at length (no mysteries section): the Timeless Vault's condensed text leaves the
 	// clause out, and only its back says it.
 	const noXpOnMiss = move.noXpOnMiss === true || _noXpOnMiss(description)
-		|| (!!backDescription && !_movesSection(String(backDescription)) && _noXpOnMiss(backDescription));
+		|| (!!backDescription && !movesSection(String(backDescription)) && _noXpOnMiss(backDescription));
 	return {
 		slug: CONDENSED_MOVE_SLUG,
 		name: String(move.name ?? "").trim(),
@@ -267,7 +308,7 @@ export function condensedArcanumMove(move, { backDescription = "" } = {}) {
 export function markArcanumMoveNames(description, arcanumSlug) {
 	const moves = parseArcanumMoves(description);
 	if (!moves.length) return description;
-	const section = _movesSection(description);
+	const section = movesSection(description);
 	const byName = new Map(moves.map(m => [m.name, m]));
 	const head = description.slice(0, section.start);
 	const tail = description.slice(section.end);

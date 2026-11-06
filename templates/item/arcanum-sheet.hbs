@@ -100,7 +100,15 @@
 		</div>
 	</div>
 
-	{{!-- Back Side --}}
+	{{!-- Back Side. Withheld from a player whose character hasn't earned it (ruling A3, see
+	     StonetopArcanumSheet#getData): none of it reaches the page, only this line. --}}
+	{{#if this.backHidden}}
+	<div class="stonetop-arcanum-card stonetop-arcanum-sheet-side stonetop-arcanum-sheet-back stonetop-arcanum-back-hidden">
+		<div class="stonetop-arcanum-body">
+			<p>{{localize "stonetop.arcana.homebrew.backHidden"}}</p>
+		</div>
+	</div>
+	{{/if}}
 	{{#if back.title}}
 	<div class="stonetop-arcanum-card stonetop-arcanum-sheet-side stonetop-arcanum-sheet-back">
 		<div class="stonetop-arcanum-header">
@@ -123,6 +131,33 @@
 			{{/if}}
 		</div>
 	</div>
+	{{/if}}
+
+	{{!-- The GM's own notes (the Inspire wizard's rolls). getData fills this for a GM only. --}}
+	{{#if this.gmNotes}}
+	<div class="stonetop-arcanum-card stonetop-arcanum-sheet-side stonetop-arcanum-gm-notes">
+		<div class="stonetop-arcanum-header">
+			<div class="stonetop-arcanum-header-left">
+				<span class="stonetop-arcanum-title">{{localize "stonetop.arcana.homebrew.gmNotesTitle"}}</span>
+			</div>
+		</div>
+		<div class="stonetop-arcanum-body">{{{this.gmNotes}}}</div>
+	</div>
+	{{/if}}
+
+	{{!-- An unfinished draft, reopened. Same footer row and buttons as the editor's Save / Cancel. --}}
+	{{#if draft.isDraft}}
+	<div class="stonetop-arcanum-card stonetop-arcanum-sheet-side stonetop-arcanum-draft-note">
+		<div class="stonetop-arcanum-body"><p>{{localize "stonetop.arcana.homebrew.draftNote"}}</p></div>
+	</div>
+	{{#if draft.canFinish}}
+	<footer class="stonetop-guide-nav stonetop-arc-nav">
+		<span class="stonetop-arc-nav-btns">
+			<button type="button" class="stonetop-arc-draft-finish stonetop-guide-btn--primary">{{localize "stonetop.arcana.homebrew.draftFinish"}}</button>
+			<button type="button" class="stonetop-arc-draft-discard">{{localize "stonetop.arcana.homebrew.draftDiscard"}}</button>
+		</span>
+	</footer>
+	{{/if}}
 	{{/if}}
 
 {{/unless}}

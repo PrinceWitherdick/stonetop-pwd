@@ -99,6 +99,12 @@
 					<span class="stonetop-arc-hint">Majors show this art on the card and the character sheet.</span>
 				</div>
 				{{/if}}
+				{{!-- The GM's own notes: never on a character sheet, and on the card and in this editor only to a GM. --}}
+				{{#if edit.showGmNotes}}
+				<label class="stonetop-arc-label">{{localize "stonetop.arcana.homebrew.gmNotesTitle"}}</label>
+				<prose-mirror class="stonetop-arc-rich" data-arc-field="flags.stonetop.gmNotes" value="{{edit.gmNotes}}">{{{edit.gmNotesEnriched}}}</prose-mirror>
+				<p class="stonetop-arc-hint">{{localize "stonetop.arcana.homebrew.gmNotesHint"}}</p>
+				{{/if}}
 			</section>
 
 			{{!-- Front --}}
@@ -142,7 +148,8 @@
 							</select>
 							{{#if isOption}}
 							<input type="text" class="stonetop-arc-req-input" data-req-prop="description" placeholder="A requirement to check off…" value="{{this.description}}">
-							<input type="text" class="stonetop-arc-req-slug" data-req-prop="slug" title="stable key: avoid changing once in use" value="{{this.slug}}">
+							{{!-- Locked once a character holds the card (ruling A15): it keys their unlock count. --}}
+							<input type="text" class="stonetop-arc-req-slug" data-req-prop="slug" value="{{this.slug}}"{{#if @root.edit.slugLocked}} readonly title="{{localize 'stonetop.arcana.homebrew.optionSlugLocked'}}"{{else}} title="stable key: avoid changing once in use"{{/if}}>
 							<input type="number" class="stonetop-arc-req-max" data-req-prop="max" min="1" value="{{this.max}}" title="number of checkboxes">
 							{{else}}
 							<input type="text" class="stonetop-arc-req-input stonetop-arc-req-input--wide" data-req-prop="content" placeholder="Interstitial label (e.g. “And then…”)" value="{{this.content}}">
@@ -168,7 +175,7 @@
 					<button type="button" class="stonetop-arc-add-consequence" data-weight="1"><span class="stonetop-arc-chip-label">Consequence</span>□</button>
 					<button type="button" class="stonetop-arc-add-consequence" data-weight="2">□□</button>
 					<button type="button" class="stonetop-arc-add-consequence" data-weight="3">□□□</button>
-					<span class="stonetop-arc-hint">Appends a guided block to the description; edit it above.</span>
+					<span class="stonetop-arc-hint">A mystery goes under the back's Moves heading, a consequence into its Consequences list (each made the first time); edit them above.</span>
 				</div>
 				{{/if}}
 
@@ -264,7 +271,7 @@
 			      pushed every section down the window on a card that had two or three notes. --}}
 			{{#if edit.slugLocked}}
 			<ul class="stonetop-arc-validation">
-				<li class="stonetop-arc-issue stonetop-arc-issue--warn"><i class="fas fa-users"></i> <span>A character already holds this card. Editing the mark tracks (◇ ○ □) can shift players' saved marks: add or remove glyphs at the <em>end</em> of a track, not before a marked one.</span></li>
+				<li class="stonetop-arc-issue stonetop-arc-issue--warn"><i class="fas fa-users"></i> <span>{{#if edit.holderNames}}{{format "stonetop.arcana.homebrew.heldBy" names=edit.holderNames}}{{else}}A character already holds this card.{{/if}} Editing the mark tracks (◇ ○ □) can shift players' saved marks: add or remove glyphs at the <em>end</em> of a track, not before a marked one. The Add mystery and Add consequence buttons move the marks after them for you. Unlock option keys are locked.</span></li>
 			</ul>
 			{{/if}}
 

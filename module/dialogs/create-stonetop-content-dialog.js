@@ -300,6 +300,6 @@ async function _openArcanaInspire() {
 	const { createArcanumItem } = await import("../item/createArcanum.js");
 	const { StonetopArcanaInspireDialog } = await import("../item/StonetopArcanaInspireDialog.js");
 	new StonetopArcanaInspireDialog({
-		onCreate: ({ name, major, front }) => createArcanumItem({ name, major, front }),
+		onCreate: ({ name, major, gmNotes }) => createArcanumItem({ name, major, gmNotes }),
 	}).render(true);
 }

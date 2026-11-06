@@ -257,7 +257,9 @@ function weaponAmmoIndex(actor, weapon) {
 		return Math.min(Math.max(0, Number(used) || 0), max);
 	}
 	const resources = actor.getFlag(SCOPE, "inventory.resources") ?? {};
-	return Math.min(Math.max(0, Number(resources[slug]) || 0), max);
+	// An arcanum curio's uses may sit under the card's own key rather than its slug (ammoKey,
+	// CharacterArcana.js#arcanumItemResourceKey), where the Arcana tab and the Inventory row keep them.
+	return Math.min(Math.max(0, Number(resources[weapon?.ammoKey ?? slug]) || 0), max);
 }
 
 function weaponAmmoLabel(actor, weapon) {
@@ -311,7 +313,7 @@ async function advanceWeaponAmmo(actor, weapon, moveName = null) {
 		const [possessionSlug, choiceSlug] = String(slug).split(":");
 		await actor.typedActor?.setSubChoiceUses?.(possessionSlug, choiceSlug, next, moveName ? ledger : undefined);
 	} else {
-		await actor.update({ [`flags.${SCOPE}.inventory.resources.${slug}`]: next }, ledger);
+		await actor.update({ [`flags.${SCOPE}.inventory.resources.${weapon?.ammoKey ?? slug}`]: next }, ledger);
 	}
 	return { index: next, label: ammoStatusLabel(next, track), allOut: next >= track.max };
 }
@@ -373,6 +375,7 @@ export async function carriedAttackWeapons(actor, move) {
 			ammoStore: g.ammoStore ?? "inventory",
 			ammoMax: g.ammoMax ?? null,
 			ammoLabels: g.ammoLabels ?? null,
+			...(g.ammoKey ? { ammoKey: g.ammoKey } : {}),
 		};
 		out.push(withTrackState(actor, weapon));
 	}
@@ -507,9 +510,11 @@ export function withUnarmedChoice(candidates) {
 // The flattened, storable weapon record baked into the chat card (no functions). The ammo track's
 // shape rides along with the store it lives in: the card is what "deplete your ammo" is pressed
 // on, and by then the gear record it came from is long gone.
-function serializeWeapon({ slug, meta, ammoStore = "inventory", ammoMax = null, ammoLabels = null, ammoMove = null, allOut = false }) {
+function serializeWeapon({ slug, meta, ammoStore = "inventory", ammoMax = null, ammoLabels = null, ammoMove = null, ammoKey = null, allOut = false }) {
 	return {
 		slug, ammoStore, ammoMax, ammoLabels,
+		// Only for an arcanum curio whose uses are not under its slug (weaponAmmoIndex).
+		...(ammoKey ? { ammoKey } : {}),
 		// Only for a track kept on a move (weaponAmmoIndex), so every other card stays as it was.
 		...(ammoMove ? { ammoMove } : {}),
 		name: meta.name, range: meta.range, damageBonus: meta.damageBonus,

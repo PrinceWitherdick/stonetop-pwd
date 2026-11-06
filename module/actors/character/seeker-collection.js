@@ -15,6 +15,7 @@
  */
 
 import { stripHtmlToText } from "../../utils/strings.js";
+import { maskGlyphLabels, unmaskGlyphLabels } from "../../utils/glyphs.js";
 
 export const SEEKER_MINOR_ROLES = Object.freeze(["mastered", "found", "lead"]);
 
@@ -101,7 +102,7 @@ export function seekerMinorStepComplete({ minorRoles = {}, questionsAnswered = f
  * and, for a □ task, the task's text. `front` is a card's front ({ description, unlock: { description } }).
  */
 export function seekerMajorTrack(front) {
-	const unlock = String(front?.unlock?.description ?? "");
+	const unlock = maskGlyphLabels(front?.unlock?.description);
 	const circles = (unlock.match(/○/g) || []).length;
 	if (circles) {
 		return { kind: "circle", markers: Array.from({ length: circles }, (_, index) => ({ context: "unlock", index, label: "" })) };
@@ -131,7 +132,7 @@ const _WORD_COUNTS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven
  * @returns {{markers: {context: string, index: number, label: string}[], needed: number}|null}
  */
 export function frontTaskTrack(front) {
-	const lead = stripHtmlToText(front?.unlock?.description ?? "");
+	const lead = stripHtmlToText(maskGlyphLabels(front?.unlock?.description));
 	if (lead.includes("○") || !_TASK_LEAD.test(lead)) return null;
 	if ((front?.unlock?.requirements ?? []).length) return null;
 	const markers = frontTaskMarkers(front?.description);
@@ -147,14 +148,15 @@ export function frontTaskTrack(front) {
  * list item the □ sits in (trimmed, the □ dropped), or "" for a □ outside a list item.
  */
 export function frontTaskMarkers(description) {
-	const html = String(description ?? "");
+	// Display-only □ (glyphs.js#maskGlyphLabels) are no task and take no index.
+	const html = maskGlyphLabels(description);
 	const markers = [];
 	for (const match of html.matchAll(/□/g)) {
 		const before  = html.slice(0, match.index);
 		const liOpen  = before.lastIndexOf("<li");
 		const inItem  = liOpen > before.lastIndexOf("</li>");
 		const end     = inItem ? html.indexOf("</li>", match.index) : -1;
-		const label   = inItem ? stripHtmlToText(html.slice(liOpen, end < 0 ? undefined : end)).replace(/□/g, "").trim() : "";
+		const label   = inItem ? unmaskGlyphLabels(stripHtmlToText(html.slice(liOpen, end < 0 ? undefined : end)).replace(/□/g, "")).trim() : "";
 		markers.push({ context: "front", index: markers.length, label });
 	}
 	return markers;

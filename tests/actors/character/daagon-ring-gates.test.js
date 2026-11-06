@@ -3,7 +3,8 @@
 // DAA-5: "When you make the last mark, you unlock the ring's mysteries and may Call Up the Deep Ones
 // (see reverse) while wearing the ring. The ring itself becomes a follower." (p.560). The "Add as
 // follower" button and Call Up used to need only a visible back, so a GM reveal or the peek setting
-// let a bearer with no marks call the deep ones. The Ring only: every other summon is as it was.
+// let a bearer with no marks call the deep ones. Since the 2026-11-04 arcana audit (A4) every summon waits the
+// same way (arcana-fix-skr-summons.test.js has the rule itself).
 //
 // DAA-2: "this batch breaks free of your control and are no longer followers" (p.561). A broken-free
 // batch kept its Order, Clash/Let Fly, shared Loyalty and Send Them Back buttons.
@@ -19,7 +20,8 @@ import { loadPlaybookDefs } from "../../fakes/sourcePack.js";
 import { createStonetopCharacterSheetClass } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { CallUpDeepOnesDialog } from "../../../module/actors/character/dialogs/CallUpDeepOnesDialog.js";
 import { StonetopDialog } from "../../../module/utils/stonetop-dialog.js";
-import { RING_SOURCE_UUID, SERVANT_SOURCE_UUID, summonUnlocked } from "../../../module/data/servant-of-daagon.js";
+import { RING_SOURCE_UUID, SERVANT_SOURCE_UUID } from "../../../module/data/servant-of-daagon.js";
+import { summonRealised } from "../../../module/data/arcana-summon-gates.js";
 
 vi.mock("../../../module/utils/ask-with-buttons.js", async importOriginal => ({
 	...(await importOriginal()),
@@ -41,8 +43,8 @@ function sheetOver(actor) {
 	return new (createStonetopCharacterSheetClass(Base))();
 }
 
-/** A bare actor whose Ring card is (or is not) unlocked. */
-function bearer({ unlocked, followers = {} }) {
+/** A bare actor whose Ring card is (or is not) unlocked; identified unless told otherwise. */
+function bearer({ unlocked, identified = true, followers = {} }) {
 	const actor = {
 		name: "Corvin", items: [],
 		getFlag: (_scope, key) => (key === "customFollowers" ? followers : undefined),
@@ -51,6 +53,7 @@ function bearer({ unlocked, followers = {} }) {
 	actor.typedActor = {
 		getArcanum: vi.fn(async slug => ({ slug })),
 		isArcanumUnlocked: vi.fn(async () => unlocked),
+		identifiedArcanaSlugs: new Set(identified ? ["ring-of-daagon", "blackwood-fetishes"] : []),
 		arcanaBoxStates: {},
 	};
 	return actor;
@@ -62,10 +65,11 @@ beforeEach(() => {
 });
 
 describe("the Ring becomes a follower only once its mysteries are unlocked (DAA-5)", () => {
-	it("gates the Ring's summon alone", () => {
-		expect(summonUnlocked("ring-of-daagon", false)).toBe(false);
-		expect(summonUnlocked("ring-of-daagon", true)).toBe(true);
-		expect(summonUnlocked("blackwood-fetishes", false)).toBe(true);
+	it("gates the Ring's summon, and every other (A4), on an identified, unlocked card", () => {
+		expect(summonRealised("ring-of-daagon", { identified: true, unlocked: false })).toBe(false);
+		expect(summonRealised("ring-of-daagon", { identified: true, unlocked: true })).toBe(true);
+		expect(summonRealised("blackwood-fetishes", { identified: true, unlocked: false })).toBe(false);
+		expect(summonRealised("blackwood-fetishes", { identified: false, unlocked: true })).toBe(false);
 	});
 
 	it("refuses to add the Ring before the last mark, and adds it after", async () => {
@@ -80,10 +84,20 @@ describe("the Ring becomes a follower only once its mysteries are unlocked (DAA-
 		expect(written.sourceUuid).toBe(RING_SOURCE_UUID);
 	});
 
-	it("leaves every other arcanum's summon as it was", async () => {
-		const actor = bearer({ unlocked: false });
-		await sheetOver(actor)._onArcanaSummon("blackwood-fetishes");
-		expect(actor.update).toHaveBeenCalled();
+	it("holds every other arcanum's summon to the same gate (A4)", async () => {
+		const locked = bearer({ unlocked: false });
+		await sheetOver(locked)._onArcanaSummon("blackwood-fetishes");
+		expect(locked.update).not.toHaveBeenCalled();
+		expect(ui.notifications.warn).toHaveBeenCalledWith(expect.stringContaining("Unlock the mysteries"));
+
+		const unread = bearer({ unlocked: true, identified: false });
+		await sheetOver(unread)._onArcanaSummon("blackwood-fetishes");
+		expect(unread.update).not.toHaveBeenCalled();
+		expect(ui.notifications.warn).toHaveBeenCalledWith(expect.stringContaining("Identify"));
+
+		const open = bearer({ unlocked: true });
+		await sheetOver(open)._onArcanaSummon("blackwood-fetishes");
+		expect(open.update).toHaveBeenCalled();
 	});
 
 	it("refuses Call Up before the last mark, even with a Ring follower already on the tab", async () => {

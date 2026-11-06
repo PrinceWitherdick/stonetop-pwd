@@ -25,6 +25,9 @@ export class MinorArcanumMove {
 		this.name        = data.name;
 		this.rollType    = data.rollType    ?? null;
 		this.description = data.description;
+		// A condensed move whose 6- marks no XP (data/arcana-moves.js#condensedArcanumMove reads it).
+		// This DTO whitelists fields, so until declared here an authored value was dropped.
+		if (data.noXpOnMiss) this.noXpOnMiss = true;
 	}
 }
 

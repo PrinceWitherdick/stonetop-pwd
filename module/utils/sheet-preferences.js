@@ -107,6 +107,13 @@ export const PREFERENCE_GROUPS = [
 		keys: ["timelineTabShown", "showTimeline"],
 	},
 	{
+		id: "arcana",
+		titleKey: "stonetop.sheet.preferences.arcana",
+		// A GM-only, world-scoped row (Book I p.136, ruling A19): whether the world's homebrew minor
+		// arcana join the deck a new Seeker draws from. Down with the other table switches.
+		keys: ["arcanaSeekerDrawsHomebrew"],
+	},
+	{
 		id: "fights",
 		titleKey: "stonetop.sheet.preferences.fights",
 		// LAST, and on its own, because it is the only group on the tab that is not the reader's
@@ -159,7 +166,7 @@ export const PREFERENCE_KEYS = new Set(PREFERENCE_GROUPS.flatMap(group => group.
  * change handler takes its key from a `data-pref` attribute, so hiding the control without
  * refusing the key would leave the setting one hand-edited attribute from being written anyway.
  */
-export const GM_ONLY_KEYS = new Set(["openSheetsInEditMode", "fightTab", "showTimeline"]);
+export const GM_ONLY_KEYS = new Set(["openSheetsInEditMode", "fightTab", "showTimeline", "arcanaSeekerDrawsHomebrew"]);
 
 /**
  * Keys the tab offers to a player and not to a GM: the other way round from GM_ONLY_KEYS.

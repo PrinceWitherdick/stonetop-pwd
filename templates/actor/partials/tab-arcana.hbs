@@ -20,6 +20,16 @@
 	</div>
 	{{/if}}
 
+	{{!-- "Roll 1d4+8" (A9): a track whose size is rolled when found, offered while it is untouched.
+	      data-slug is the track's key, as its pips send it. --}}
+	{{#*inline "arcanumRollUses"}}
+	<button type="button" class="stonetop-arcanum-roll-uses-btn" data-slug="{{resource.key}}"
+	        data-formula="{{resource.rollUses}}" data-max="{{resource.max}}"
+	        title="{{localize 'stonetop.arcana.engine.rollUsesTitle' formula=resource.rollUses}}">
+		<i class="fas fa-dice" aria-hidden="true"></i> {{localize "stonetop.arcana.engine.rollUses" formula=resource.rollUses}}
+	</button>
+	{{/inline}}
+
 	{{#*inline "arcanumCard"}}
 	{{#if owned}}
 	<div class="stonetop-arcanum-card{{#if isSpread}} stonetop-arcanum-card--spread{{/if}}{{#if collapsed}} is-collapsed{{/if}}" data-slug="{{this.slug}}" data-section="{{this.slug}}"{{#if greaterConduit}} data-greater-conduit="true"{{/if}}>
@@ -76,6 +86,8 @@
 						<input type="checkbox"
 						       class="stonetop-inventory-item-check stonetop-inv-diamond"
 						       data-slug="{{../slug}}"
+						       data-weight="{{../front.item.weight}}"
+						       data-name="{{../front.item.name}}"
 						       {{#if ../checked}}checked{{/if}}>
 						{{/each}}
 					</span>
@@ -108,7 +120,8 @@
 				{{#if (eq type "text")}}
 				<li class="stonetop-arcanum-unlock-text">{{{this.content}}}</li>
 				{{else}}
-				<li class="stonetop-arcanum-unlock-option">
+				{{#if this.orBefore}}<li class="stonetop-arcanum-unlock-or" aria-hidden="true">{{localize "stonetop.arcana.engine.unlockOr"}}</li>{{/if}}
+				<li class="stonetop-arcanum-unlock-option{{#if this.path}} stonetop-arcanum-unlock-option--path{{/if}}"{{#if this.path}} data-path="{{this.path}}"{{/if}}>
 					<span class="stonetop-arcanum-unlock-checks">
 						{{#each (times max)}}
 						<input type="checkbox" class="stonetop-arcanum-unlock-check"
@@ -168,6 +181,8 @@
 						<input type="checkbox"
 						       class="stonetop-inventory-item-check stonetop-inv-diamond"
 						       data-slug="{{../slug}}"
+						       data-weight="{{../back.item.weight}}"
+						       data-name="{{../back.item.name}}"
 						       {{#if ../checked}}checked{{/if}}>
 						{{/each}}
 					</span>
@@ -178,7 +193,8 @@
 					{{#if back.item.note}}<span class="stonetop-inv-note">{{{back.item.note}}}</span>{{/if}}
 					{{#if back.item.resource}}
 					<span class="stonetop-inv-resources">
-						{{> "stonetop.resource-track" resource=back.item.resource btnClass="stonetop-arcanum-resource-btn" slug=slug resourceKind="item"}}
+						{{> "stonetop.resource-track" resource=back.item.resource btnClass="stonetop-arcanum-resource-btn" slug=back.item.resource.key resourceKind="item"}}
+						{{#if (and back.item.resource.rollUses @root.stonetop.canEdit)}}{{> arcanumRollUses resource=back.item.resource}}{{/if}}
 					</span>
 					{{/if}}
 				</div>
@@ -186,7 +202,8 @@
 			</div>
 			{{#if back.resource}}
 			<div class="stonetop-arcanum-header-resource">
-				{{> "stonetop.resource-track" resource=back.resource btnClass="stonetop-arcanum-resource-btn" slug=slug}}
+				{{> "stonetop.resource-track" resource=back.resource btnClass="stonetop-arcanum-resource-btn" slug=back.resource.key}}
+				{{#if (and back.resource.rollUses @root.stonetop.canEdit)}}{{> arcanumRollUses resource=back.resource}}{{/if}}
 			</div>
 			{{/if}}
 		</div>
@@ -198,18 +215,35 @@
 			<p class="stonetop-arcanum-move-trigger"><strong><em><span class="stonetop-arcanum-move-name" data-arcanum-slug="{{this.slug}}" data-move-slug="{{back.move.slug}}" role="button" tabindex="0">{{back.move.name}}</span></em></strong></p>
 			{{{moveBody back.move.description}}}
 			{{/if}}
-			{{#if summon}}
+			{{#if (and summon @root.stonetop.canEdit)}}
 			<div class="stonetop-arcanum-summon">
 				<button type="button" class="stonetop-arcanum-summon-btn{{#if summon.added}} is-added{{/if}}"
 				        data-slug="{{this.slug}}"{{#if summon.added}} disabled{{/if}}>
 					<i class="fas {{#if summon.added}}fa-check{{else}}fa-user-plus{{/if}}"></i> {{summon.label}}
 				</button>
+				{{!-- Another character already has this creature (A16, arcana-summon-gates.js): flagged, never blocked. --}}
+				{{#if summon.caution}}<p class="stonetop-arcanum-summon-caution">{{summon.caution}}</p>{{/if}}
 			</div>
 			{{/if}}
 		</div>
 		</div>
 		{{/if}}
 		</div>
+
+		{{!-- The player's own note on the card (A6, arcana.notes[slug]): an owner-editable box saved on
+		      change, readable by any viewer once written. Below both sides, so it shows on any view. --}}
+		{{#if showNotes}}
+		<div class="stonetop-arcanum-notes">
+			{{#if canEditNotes}}
+			<label class="stonetop-arcanum-notes-label" for="stonetop-arcanum-notes-{{this.slug}}">{{localize "stonetop.arcana.engine.notesLabel"}}</label>
+			<textarea id="stonetop-arcanum-notes-{{this.slug}}" class="stonetop-arcanum-notes-input" data-slug="{{this.slug}}" rows="2"
+			          placeholder="{{localize 'stonetop.arcana.engine.notesPlaceholder'}}">{{this.notes}}</textarea>
+			{{else}}
+			<span class="stonetop-arcanum-notes-label">{{localize "stonetop.arcana.engine.notesLabel"}}</span>
+			<p class="stonetop-arcanum-notes-text">{{this.notes}}</p>
+			{{/if}}
+		</div>
+		{{/if}}
 
 		{{!-- Collapsed preview: when the card is clamped, the full body is hidden and this
 		      front-description lead shows beneath whichever header is visible (front, or the
@@ -273,9 +307,11 @@
 		<div class="stonetop-arcanum-body stonetop-arcanum-lead-body">
 			<i class="fas fa-map-location-dot stonetop-arcanum-lead-icon"></i>
 			<p>{{localize "stonetop.arcana.leadText"}}</p>
+			{{#if @root.stonetop.canEdit}}
 			<button type="button" class="stonetop-arcanum-discover-btn" data-slug="{{this.slug}}">
 				{{localize "stonetop.arcana.discover"}}
 			</button>
+			{{/if}}
 		</div>
 		{{#if sectionEditable}}
 		<div class="stonetop-arcanum-footer">
@@ -299,10 +335,12 @@
 			      to Know Things about the arcanum"); handing it over without one is the GM's
 			      move, so "Give the card" renders only for them. --}}
 			<div class="stonetop-arcanum-identify-row">
+				{{#if @root.stonetop.canEdit}}
 				<button type="button" class="stonetop-arcanum-identify-btn" data-slug="{{this.slug}}"
 				        title="{{localize 'stonetop.arcana.identifyHint'}}">
 					<i class="fas fa-dice-d6"></i> {{localize "stonetop.arcana.identify"}}
 				</button>
+				{{/if}}
 				{{#if canGiveCard}}
 				<button type="button" class="stonetop-arcanum-givecard-btn" data-slug="{{this.slug}}"
 				        title="{{localize 'stonetop.arcana.giveCardHint'}}">

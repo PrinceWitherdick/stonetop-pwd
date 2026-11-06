@@ -36,6 +36,11 @@ function makeCharacterMock(rollTotal) {
 		identifyFrontOwedArcanum:  vi.fn(async () => {}),
 		revealArcanum:             vi.fn(async () => {}),
 		getArcanum:                vi.fn(async () => ({ front: { title: "A Huge Wooden Sphere" } })),
+		// Held, face down: the identify writers write only for a card the character holds (SKR-6).
+		ownedArcanaSlugs:          new Set(["huge-wooden-sphere"]),
+		identifiedArcanaSlugs:     new Set(),
+		revealedArcanaSlugs:       new Set(),
+		backOwedArcanaSlugs:       new Set(),
 	};
 }
 

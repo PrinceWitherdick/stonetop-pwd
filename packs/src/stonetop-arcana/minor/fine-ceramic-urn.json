@@ -47,7 +47,7 @@
       "back": {
         "title": "Plaster of Joining",
         "item": null,
-        "description": "<p>When you <strong><em>pour water, a pinch of blood, and special reagents (Value 1) into the urn and sing over it for a full day and night</em></strong>, the urn gains 1 use (3 uses max) of plaster.</p><p>When you <strong><em>use the plaster to join two or more pieces of stone, rock, or crystal</em></strong> and let the plaster set for a few hours, the pieces will fuse together. Different materials will fuse together seamlessly. Similar materials will fuse together seamlessly.</p><p>A single use of the plaster can cover an area up to a few inches wide and tall. Multiple uses can join together larger pieces of stone. Unused plaster will last indefinitely as long as the urn stays sealed.</p>",
+        "description": "<p>When you <strong><em>pour water, a pinch of blood, and special reagents (Value 1) into the urn and sing over it for a full day and night</em></strong>, the urn gains 1 use (3 uses max) of plaster.</p><p>When you <strong><em>use the plaster to join two or more pieces of stone, rock, or crystal</em></strong> and let the plaster set for a few hours, the pieces will fuse together. Different materials will show a natural, gradient seam. Similar materials will fuse together seamlessly.</p><p>A single use of the plaster can cover an area up to a few inches wide and tall. Multiple uses can join together larger pieces of stone. Unused plaster will last indefinitely as long as the urn stays sealed.</p>",
         "resource": {
           "max": 3,
           "maxStat": null,
@@ -57,7 +57,7 @@
         "move": {
           "name": "When you pour water, a pinch of blood, and special reagents into the urn and sing over it for a full day and night",
           "rollType": null,
-          "description": "<p>The urn gains 1 use (3 uses max) of plaster. Use the plaster to join two or more pieces of stone, rock, or crystal; let set for a few hours and the pieces fuse together seamlessly.</p>"
+          "description": "<p>The urn gains 1 use (3 uses max) of plaster. Use the plaster to join two or more pieces of stone, rock, or crystal; let set for a few hours and the pieces fuse together (different materials show a natural, gradient seam; similar ones fuse seamlessly).</p>"
         },
         "options": []
       }

@@ -17,7 +17,7 @@
           "note": "<em>magical, terrifying</em>",
           "inventoryColumn": null
         },
-        "description": "<p>Secreted away in some Maker's trove is a gleaming white thing, like a key, I guess, but not a specific key, more like the <em>idea</em> of keyness. Hurts to look right at it; makes you aware of your own dying flesh.</p><p>You don't unlock this key's mysteries, so much as it unlocks you. But only if you…</p>",
+        "description": "<p>Secreted away in some Maker's trove is a gleaming white thing, like a key, I guess, but not a specific key, more like the <em>idea</em> of keyness. Hurts to look right at it; makes you aware of your own dying flesh.</p>",
         "unlock": {
           "description": "You don't unlock this key's mysteries, so much as it unlocks you. But only if you…",
           "requirements": [

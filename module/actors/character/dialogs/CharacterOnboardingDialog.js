@@ -1,5 +1,5 @@
 // Descriptions for animal companion trait tags — checked before compendium lookup.
-import { isMajorArcana } from "../../../arcana-icons.js";
+import { isMajorArcana, isMajorArcanumItem } from "../../../arcana-icons.js";
 import { parseMovePickCount, allowedMarkableActions, backgroundMoveNames, backgroundPossessionSlugs, startingMoveChoiceNames } from "../StonetopCharacter.js";
 import { ITEMS_PACK, ARCANA_PACK } from "../StonetopFlags.js";
 import { markQuestionBullets } from "../../../utils/question-bullets.js";
@@ -20,7 +20,7 @@ import { StonetopAutocomplete } from "../../../utils/autocomplete.js";
 import { wellVersedTopicSummary, backgroundMarkOption, moveChoiceKey, WELL_VERSED_MOVE, WELL_VERSED_TOPICS } from "./well-versed-topics.js";
 import { localize, format } from "../../../utils/i18n.js";
 import { LORE_TERM_TOOLTIPS } from "../../../utils/lore-terms.js";
-import { getHoverDescriptionSetting } from "../../../settings.js";
+import { getBooleanSetting, getHoverDescriptionSetting } from "../../../settings.js";
 import { moveGroupsForPlaybook, moveGroupKeys } from "./onboarding-move-groups.js";
 import { effectiveSubgroupMax } from "./possession-choice-cap.js";
 import { requiredMovesUnmet } from "../move-requirement.js";
@@ -36,8 +36,25 @@ import { lorePickMax, lorePickMin } from "../lore-pick-count.js";
 import { MAGNIFICENT_SPECIMEN_MOVE, companionKindOptions, companionTraitAllowance, trimCompanionTraits } from "../animal-companion.js";
 import { seekerMajorTrack, pickSeekerMajorMark, drawableMinorSlugs, seekerMinorStepComplete } from "../seeker-collection.js";
 import { plural } from "../../../utils/plural.js";
+import { isFinishedWorldArcanum } from "../../../item/createArcanum.js";
 
 const SEEKER_ARCANA_SLUGS = ["collection", "arcana-major", "arcana-minor"];
+
+/**
+ * The world's homebrew minor arcana that join the Seeker's draw, when the GM's world switch
+ * `arcanaSeekerDrawsHomebrew` is on (ruling A19; Book I p.136 "Draw 3 at random"). Finished cards
+ * only: a draft (flags.stonetop.draft) and a card without a slug are no card yet, and a major is
+ * the background's to grant, never drawn. Empty when the switch is off.
+ */
+export function seekerHomebrewMinors({ items = globalThis.game?.items, enabled } = {}) {
+	const on = enabled === undefined ? getBooleanSetting("arcanaSeekerDrawsHomebrew") : enabled;
+	if (!on) return [];
+	return [...(items ?? [])].filter(item => {
+		const flags = item?.flags?.stonetop ?? {};
+		return isFinishedWorldArcanum(item) && !!flags.slug
+			&& !isMajorArcanumItem({ slug: flags.slug, major: flags.major });
+	});
+}
 
 // The Ranger's animal-companion builder only applies to characters who have the
 // Animal Companion move (Beast-Bonded background or a free-pick choice).
@@ -1168,13 +1185,17 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			// Arcana live in their own GM-hidden compendium (split out of stonetop-items);
 			// the pack is arcana-only, but keep the moveType filter below as a defensive guard.
 			const pack = await ensurePackIndex(ARCANA_PACK, ["system.moveType"]);
-			if (!pack) return { major: [], minor: [] };
-			const entries = pack.index.filter(entry => entry.system?.moveType === "arcanum");
-			const docs = await Promise.all(entries.map(entry => pack.getDocument(entry._id)));
-			const options = docs.filter(Boolean).flatMap(doc => {
+			const entries = pack ? pack.index.filter(entry => entry.system?.moveType === "arcanum") : [];
+			const packDocs = pack ? await Promise.all(entries.map(entry => pack.getDocument(entry._id))) : [];
+			// Book I p.136 "Draw 3 at random": with the GM's switch on (ruling A19) the world's own
+			// finished minors join the deck. After the pack's, so a shipped slug always wins.
+			const docs = [...packDocs.filter(Boolean), ...seekerHomebrewMinors()];
+			const seen = new Set();
+			const options = docs.flatMap(doc => {
 				const flags = doc.flags?.stonetop ?? {};
 				const slug  = flags.slug;
-				if (!slug) return [];
+				if (!slug || seen.has(slug)) return [];
+				seen.add(slug);
 				return [{
 					slug,
 					name:        this._normalizeOnboardingText(doc.name ?? flags.front?.title ?? slug),

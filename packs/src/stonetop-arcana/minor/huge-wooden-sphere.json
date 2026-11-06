@@ -22,10 +22,6 @@
           "description": "The pictograms depict some sort of recipe, which you can learn but you must…",
           "requirements": [
             {
-              "type": "text",
-              "content": "The pictograms depict some sort of recipe, which you can learn but you must…"
-            },
-            {
               "type": "option",
               "slug": "dig-up-clean",
               "description": "… first dig up and clean the sphere."
@@ -61,17 +57,18 @@
         "title": "Ffyrnig Tonic",
         "item": {
           "name": "Ffyrnig Tonic",
-          "weight": 1,
+          "weight": null,
           "note": "<em>magical</em>",
-          "inventoryColumn": "regular"
+          "inventoryColumn": null,
+          "resource": {
+            "max": 3,
+            "maxStat": null,
+            "title": null,
+            "labels": []
+          }
         },
         "description": "<p>When you pickle fresh ffyrnig root in a suspension of boar bile for two full moons, it becomes a skin of ffyrnig tonic (3 uses, magical).</p>",
-        "resource": {
-          "max": 3,
-          "maxStat": null,
-          "title": "Ffyrnig Tonic",
-          "labels": []
-        },
+        "resource": null,
         "move": {
           "name": "When you take a draught of ffyrnig tonic",
           "rollType": null,

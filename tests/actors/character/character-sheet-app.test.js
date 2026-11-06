@@ -178,6 +178,8 @@ function makeCharacterMock(actor) {
 		// empty Set means every dropped card counts as new (matches the real getter,
 		// which returns a Set of owned slugs).
 		ownedArcanaSlugs: new Set(),
+		// A dropped card resolves (ENG-10 warns and skips one that does not).
+		getArcanum: vi.fn(async slug => ({ slug })),
 		onDropMove: vi.fn(async () => false),
 		setPostDeathInsert: vi.fn(async () => {}),
 		moveResources: { add: vi.fn() },

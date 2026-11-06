@@ -4,6 +4,7 @@ import {OutfitItemBuilder} from "../../../module/model/OutfitItem.js";
 import {TestCharacterBuilder} from "../../fakes/TestCharacterBuilder.js";
 import {FakeInventoryRepository} from "../../fakes/FakeInventoryRepository.js";
 import {FakeActorBuilder} from "../../fakes/FakeActorBuilder.js";
+import {flagFragmentOps} from "../../fakes/flag-fragments.js";
 
 // -- Fake flags ---------------------------------------------------------------
 
@@ -56,35 +57,21 @@ describe("CharacterInventory", () => {
 		expect(store.resources).toEqual({"bow-arrows": 2});
 	});
 
-	it("clearArcanumResources actually drops the removed arcanum's tracks (setFlag merges)", async () => {
-		// A merge-modelling fake: setFlag deep-merges objects (so a plain smaller-object write
-		// would NOT drop keys — the original bug), while unsetFlag clears the whole flag. The fix
-		// must unsetFlag then re-set the survivors so a later re-acquire can't inherit stale charges.
-		const store = { resources: { "the-key": 2, "the-key:item": 1, "other": 3 } };
-		const flags = {
-			getFlag: (key) => store[key] ?? null,
-			setFlag: async (key, val) => {
-				const cur = store[key];
-				const mergeable = v => v && typeof v === "object" && !Array.isArray(v);
-				store[key] = mergeable(cur) && mergeable(val) ? { ...cur, ...val } : val;
-			},
-			unsetFlag: async (key) => { delete store[key]; },
-		};
-		await new CharacterInventory(flags).clearArcanumResources("the-key");
-		expect(store.resources).toEqual({ other: 3 });
+	// MNA-11 / MNB-18 / ENG-4: a removed arcanum's tracks and carried mark go as sub-key deletions in
+	// the card's ONE removal update, never an unset-then-set of the whole map.
+	it("arcanumRemovalData drops the removed arcanum's tracks and mark, and nothing else", () => {
+		const store = { resources: { "the-key": 2, "the-key:item": 1, other: 3 }, checked: { "the-key": true, other: true } };
+		const flags = { getFlag: key => store[key] ?? null, ...flagFragmentOps(store) };
+		const data = new CharacterInventory(flags).arcanumRemovalData("the-key");
+		expect(Object.keys(data).sort()).toEqual([
+			"flags.fake.ns.checked.-=the-key", "flags.fake.ns.resources.-=the-key", "flags.fake.ns.resources.-=the-key:item",
+		]);
 	});
 
-	it("clearArcanumResources is a no-op when the arcanum had no tracks", async () => {
+	it("arcanumRemovalData is empty when the arcanum left nothing behind", () => {
 		const store = { resources: { other: 3 } };
-		let unset = false;
-		const flags = {
-			getFlag: (key) => store[key] ?? null,
-			setFlag: async (key, val) => { store[key] = val; },
-			unsetFlag: async () => { unset = true; },
-		};
-		await new CharacterInventory(flags).clearArcanumResources("the-key");
-		expect(store.resources).toEqual({ other: 3 });
-		expect(unset).toBe(false);
+		const flags = { getFlag: key => store[key] ?? null, ...flagFragmentOps(store) };
+		expect(new CharacterInventory(flags).arcanumRemovalData("the-key")).toEqual({});
 	});
 });
 

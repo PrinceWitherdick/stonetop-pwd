@@ -134,6 +134,8 @@ export function snapshotFrom({ system = {}, flags = {} } = {}) {
 			// The tracks an unlock and a Consequence are read off, by "slug:..." key (CharacterArcana).
 			unlock:     { ...(flags?.arcana?.unlock ?? {}) },
 			boxes:      { ...(flags?.arcana?.boxes ?? {}) },
+			// Cards whose track has once been completed (CharacterArcana#unlockedOnce): unlocked for good.
+			unlockedOnce: slugs(flags?.arcana?.unlockedOnce),
 		},
 		followers: {
 			custom,
@@ -319,14 +321,14 @@ export function arcanaTrackSlugs(before, after) {
  * @param {object} before  snapshotFrom(...)
  * @param {object} after   snapshotFrom(...)
  * @param {object} reads
- * @param {(unlock: object, boxes: object) => boolean} reads.unlocked  Is the card unlocked under these marks?
+ * @param {(unlock: object, boxes: object, unlockedOnce: string[]) => boolean} reads.unlocked  Is the card unlocked under these marks?
  * @param {{from: number, to: number}|null} [reads.consequences]  Its back's Consequence boxes, by index.
  * @param {(index: number) => string} [reads.consequenceLabel]  What the box at that index says.
  */
 export function detectArcanaTracks(slug, before, after, { unlocked, consequences = null, consequenceLabel = () => "" } = {}) {
 	const out = [];
-	const was = unlocked(before.arcana.unlock, before.arcana.boxes);
-	const now = unlocked(after.arcana.unlock, after.arcana.boxes);
+	const was = unlocked(before.arcana.unlock, before.arcana.boxes, before.arcana.unlockedOnce ?? []);
+	const now = unlocked(after.arcana.unlock, after.arcana.boxes, after.arcana.unlockedOnce ?? []);
 	if (now && !was) out.push({ source: "arcana", key: `arcana:${slug}:unlocked`, titleKey: "stonetop.timeline.milestone.arcanaUnlocked", data: {}, arcanaSlug: slug });
 	if (was && !now) out.push({ forget: `arcana:${slug}:unlocked` });
 	if (consequences) {

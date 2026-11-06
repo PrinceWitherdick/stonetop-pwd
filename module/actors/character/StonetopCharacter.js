@@ -1289,7 +1289,9 @@ export class StonetopCharacter {
 			// A second bronze weapon is a write-in standing for the handout's bronze row (bronze-lines.js): it is
 			// that row's weapon, asked once which one, under its own id.
 			.map(i => rec(i._id, { ...readInventoryItemData(i), name: i.name }, { weaponSlug: bronzeRowOf(i) }));
-		const arcana = arcanaCarried.map(i => rec(i.slug, i));
+		// A curio's uses sit under its slug, or where the Arcana tab keeps a back item's that shares its
+		// card with a back-power track (OutfitItem#resourceKey): Let Fly reads and spends them there.
+		const arcana = arcanaCarried.map(i => rec(i.slug, i, i.resourceKey ? { ammoKey: i.resourceKey } : {}));
 		// Gear choices are the one store that is NOT inventory.checked, so their marks are
 		// collected alongside their items and unioned into `marks` below. Their weapon slug is
 		// the WEAPON_META key ("battleaxe"; the Marshal's fine-steel "long-spear" names its own),
@@ -1682,7 +1684,7 @@ export class StonetopCharacter {
 				.withWeight(weight)
 				.withChecked(checked[outfitItem.slug] ?? false)
 				.withResource(res ? new ResourceBuilder()
-					.withCurrent(Math.min(resources[outfitItem.slug] ?? 0, resMax ?? 0))
+					.withCurrent(Math.min(resources[outfitItem.resourceKey ?? outfitItem.slug] ?? 0, resMax ?? 0))
 					.withMax(resMax)
 					.withTitle(res.title ?? null)
 					.withLabels(res.labels ?? [])
@@ -2558,7 +2560,12 @@ export class StonetopCharacter {
 
 	async setInventoryItemChecked(slug, isChecked) { await this._inventory.setItemChecked(slug, isChecked); }
 	// `options` reaches the write, so a move spending a use can name itself to the ledger ({stonetopMove}).
-	async setInventoryResource(slug, count, options) { await this._inventory.setResource(slug, count, options); }
+	// A held arcanum's curio row writes where its card keeps the uses (CharacterArcana#carriedResourceKey):
+	// a back item whose card also has a back-power track keeps them under "<slug>:item".
+	async setInventoryResource(slug, count, options) {
+		const key = this._arcana.ownedSlugs.has(slug) ? await this._arcana.carriedResourceKey(slug) : slug;
+		await this._inventory.setResource(key, count, options);
+	}
 	// Fragment forms, for a move that changes several things at once and wants one write for the
 	// lot of them (see camp/camp-rules.js#campShareUpdate; heldAdvantageData is with the held modes).
 	inventoryResourceData(slug, count)              { return this._inventory.resourceData(slug, count); }
@@ -6309,7 +6316,7 @@ export class StonetopCharacter {
 	 *   #orderFollowersModeSources), so the nerves are folded with each of them rather than with the net
 	 * @param {string} [opts.moveName]  - Card header, e.g. "Hari: Defy Danger"
 	 */
-	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", modeSources = null, moveName, moveKey = null, followerName = "", shieldWall = false, command = false, loyaltySpent = null, presenceSpent = null, attack = null } = {}) {
+	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", modeSources = null, moveName, moveKey = null, followerName = "", shieldWall = false, command = false, loyaltySpent = null, presenceSpent = null, attack = null, missActions = "" } = {}) {
 		const { rollStat } = await import("../../utils/roll-engine.js");
 		// Return the roll so the caller can react to the result — e.g. auto-holding
 		// Readiness when a follower is ordered to Defend and rolls 7+ (p.469).
@@ -6343,7 +6350,12 @@ export class StonetopCharacter {
 			...(conditionNotes.length ? { conditionNotes } : {}),
 			...this._orderedMoveText(moveKey, followerName),
 			// An ordered Clash or Let Fly: the follower's damage button on a hit (fight/follower-order-attack.js).
-			...(attack ? { tierActions: orderedAttackTierActions({ ...attack, move: moveKey }) } : {}),
+			// And what a 6- costs beyond the GM's move, when the follower's card says so (`missActions`: the
+			// Mindgem's Mighty Servant, "on a 6-, in addition to whatever the GM says, mark a consequence").
+			...((attack || missActions) ? { tierActions: {
+				...(attack ? orderedAttackTierActions({ ...attack, move: moveKey }) : {}),
+				...(missActions ? { failure: missActions } : {}),
+			} } : {}),
 		});
 		if (roll && shouted) await takeBackHeld(this._actor, HERO_MOVES.STENTORIAN, 1);
 		return roll;
@@ -7231,11 +7243,49 @@ export class StonetopCharacter {
 	}
 	async getArcanum(slug)                           { return this._arcana.getArcanum(slug); }
 	async isArcanumUnlocked(slug)                    { return this._arcana.isArcanumUnlocked(slug); }
+	async arcanumBackOpenToOwner(slug, options)      { return this._arcana.backOpenToOwner(slug, options); }
 	async getArcanumMove(slug, moveSlug)             { return this._arcana.getArcanumMove(slug, moveSlug); }
 	async addArcanum(slug)                           { await this._arcana.addArcanum(slug); }
 	// Its tracks AND its carried mark go with it, so a card that comes back (given back, re-found)
 	// arrives set down and charged afresh, not already counting toward load.
-	async removeArcanum(slug)                        { await this._arcana.removeArcanum(slug); await this._inventory.clearArcanumResources(slug); await this._inventory.clearCarried(slug); }
+	/**
+	 * Remove a held card in ONE update: its arcana flags (CharacterArcana#removeArcanumData, which keeps
+	 * the card's marked Consequences when asked), its resource tracks and its carried mark, and any
+	 * custom followers named in `followers` (the Remove confirm's "Also remove ...").
+	 * @param {string} slug
+	 * @param {{keepConsequences?: boolean, followers?: string[]}} [options]
+	 */
+	async removeArcanum(slug, { followers = [], ...options } = {}) {
+		const data = {
+			...await this._arcana.removeArcanumData(slug, options),
+			...this._inventory.arcanumRemovalData(slug),
+			...Object.fromEntries(followers.map(id => deletionEntry(`flags.${STONETOP_SCOPE}.customFollowers.${id}`))),
+		};
+		if (Object.keys(data).length) await this._actor.update(data);
+	}
+	async markedArcanumConsequences(slug)            { return this._arcana.markedConsequences(slug); }
+	async setArcanumNote(slug, text, options)        { return this._arcana.setArcanumNote(slug, text, options); }
+	/**
+	 * The update settling the back-item uses the Arcana tab stored under "<slug>:item" on a card with
+	 * no back-power track, where every reader now looks under the bare slug (arcanumItemResourceKey).
+	 * The larger of the two counts is kept (the more uses spent is the safer reading) and the old key
+	 * goes. Null when there is nothing to move: once moved, nothing is left under the old key. Written
+	 * by the arcana audit's settle (migration/arcana-audit-1104.js) in the same update as its counts.
+	 */
+	async arcanumResourceKeysUpdate() {
+		const resources = this._inventory.resources;
+		const keys = Object.keys(resources).filter(key => key.endsWith(":item"));
+		const slugOf = key => key.slice(0, -":item".length);
+		const cards = await Promise.all(keys.map(key => this._arcana.getArcanum(slugOf(key))));
+		const data = {};
+		keys.forEach((key, i) => {
+			if (!cards[i] || cards[i].back?.resource) return;
+			const slug = slugOf(key);
+			const count = Math.max(Number(resources[slug]) || 0, Number(resources[key]) || 0);
+			Object.assign(data, this._inventory.resourceData(slug, count), this._inventory.resourceDeletionData(key));
+		});
+		return Object.keys(data).length ? data : null;
+	}
 	async identifyArcanum(slug, options)             { await this._arcana.identifyArcanum(slug, options); }
 	async identifyAndRevealArcanum(slug, options)    { await this._arcana.identifyAndRevealArcanum(slug, options); }
 	async identifyFrontOwedArcanum(slug, options)    { await this._arcana.identifyFrontOwedArcanum(slug, options); }
@@ -7260,11 +7310,15 @@ export class StonetopCharacter {
 	// (see _syncArcanumIdentification in stonetop.js).
 	get identifiedArcanaSlugs() { return this._arcana.identifiedSlugs; }
 	get ownedArcanaSlugs()      { return this._arcana.ownedSlugs; }
+	get leadArcanaSlugs()       { return this._arcana.leadSlugs; }
 	// Every card's □/○/◇ marks, keyed "slug:context:index" (CharacterArcana#boxStates).
 	get arcanaBoxStates()       { return this._arcana.boxStates; }
-	async setArcanumUnlockCount(arcanumSlug, optionSlug, count)          { await this._arcana.setUnlockCount(arcanumSlug, optionSlug, count); }
+	// Every card's unlock-requirement counts, keyed "slug:option" (CharacterArcana#unlockCounts).
+	get arcanaUnlockCounts()    { return this._arcana.unlockCounts; }
+	async setArcanumUnlockCount(arcanumSlug, optionSlug, count, options) { await this._arcana.setUnlockCount(arcanumSlug, optionSlug, count, options); }
 	async setArcanumBackOptionCount(arcanumSlug, optionSlug, count)      { await this._arcana.setBackOptionCount(arcanumSlug, optionSlug, count); }
-	async setArcanumBoxChecked(slug, context, index, checked)            { await this._arcana.setArcanumBoxChecked(slug, context, index, checked); }
+	// Answers false when the card refused the tick (a locked slot, CharacterArcana#arcanumSlotLocked).
+	async setArcanumBoxChecked(slug, context, index, checked, options) { return this._arcana.setArcanumBoxChecked(slug, context, index, checked, options); }
 	async settleArcanumBoxLayouts(options)                             { return this._arcana.settleBoxLayouts(options); }
 	async setArcanumBoxesChecked(slug, context, ticks)                 { await this._arcana.setArcanumBoxesChecked(slug, context, ticks); }
 	async markNextArcanumUnlockStep(slug, options)                       { return this._arcana.markNextUnlockStep(slug, options); }

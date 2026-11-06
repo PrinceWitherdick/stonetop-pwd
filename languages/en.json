@@ -256,6 +256,7 @@
         "windows": "Windows",
         "hover": "On Hover Info",
         "timeline": "Timeline",
+        "arcana": "Arcana",
         "fights": "Fights",
         "worldScoped": "This one is the whole table's, not yours. Changing it changes it for everyone.",
         "worldScopedReload": "This one is the whole table's, not yours. Changing it changes it for everyone, then offers to reload the whole table.",
@@ -1125,6 +1126,25 @@
       }
     },
     "arcana": {
+      "deathsDoor": {
+        "scales": {
+          "note": "<strong>{arcanum}</strong> (Proof Against Harm): you may mark a consequence before you roll to automatically get a 10+.",
+          "notWorn": "Your inventory doesn't mark the {arcanum} as worn. The move is for when you wear them.",
+          "button": "Mark a consequence: 10+",
+          "buttonTitle": "{arcanum}: mark one of its Consequences, then take a 10+ without rolling",
+          "chat": "{name} marks a Consequence of the {arcanum} and gets a 10+ without rolling.",
+          "rule": "When you wear the Rune-laden Scales and find yourself at Death's Door, you may mark a consequence before you roll to automatically get a 10+.",
+          "tierNote": "{arcanum}: a Consequence marked for a {tier}, without rolling."
+        },
+        "souls": {
+          "name": "Shell Game of Souls",
+          "note": "<strong>Shell Game of Souls</strong>: you can release a bound soul to go through the Last Door in your place. If you do, you survive as if you rolled a 7-9. Your body, though, still bears the marks of that which would have killed you. ({count} bound)",
+          "button": "Release a bound soul: survive as a 7-9",
+          "chat": "{name} releases a bound soul to go through the Last Door in their place, and survives as if they rolled a 7-9. Their body still bears the marks of what would have killed them.",
+          "tierNote": "A bound soul went through the Last Door in your place: counted as a {tier}.",
+          "writeFailed": "The bound soul couldn't be taken off the Shell Game of Souls, so nothing changed: the 6- still waits on its fate. See the console for details."
+        }
+      },
       "createGmOnly": "Only the GM can create homebrew arcana in this world.",
       "empty": "Drag arcana here from the Arcana compendium.",
       "showFront": "Show front",
@@ -1161,7 +1181,51 @@
       "discoverYes": "Reveal the arcanum",
       "discoverNo": "Not yet",
       "leadText": "You have a lead on this arcanum's whereabouts, but haven't recovered it yet.",
-      "missingText": "This arcanum's card can no longer be found in this world. Remove it to clear its marks."
+      "missingText": "This arcanum's card can no longer be found in this world. Remove it to clear its marks.",
+      "engine": {
+        "unlockOr": "or",
+        "notesLabel": "Notes",
+        "notesPlaceholder": "Your notes on this arcanum: what you recorded, crossed off or rolled…",
+        "notesSaveFailed": "Your note on this arcanum could not be saved.",
+        "rollUses": "Roll {formula}",
+        "rollUsesTitle": "Roll how many uses this holds ({formula}) and mark the rest as used",
+        "rollUsesFlavor": "{name}: {formula} uses",
+        "removeTitle": "Remove arcanum",
+        "removeBody": "Remove <strong>{name}</strong> from your arcana? This can't be undone.",
+        "removeYes": "Remove the arcanum",
+        "removeNo": "Keep it",
+        "removeMarked": "Its marked Consequences:",
+        "removeKeep": "Keep its Consequence marks (they come back if the card is added again)",
+        "removeFollower": "Also remove {name} from your Followers",
+        "writeRefused": "That mark could not be saved. The sheet has been refreshed.",
+        "dropAlreadyHeld": "{actor} already holds {name}.",
+        "dropLeadTitle": "A lead on {name}",
+        "dropLeadBody": "{actor} has a lead on <strong>{name}</strong>. Have you tracked it down and recovered it?",
+        "dropUnresolved": "{name} can't be found as an arcanum in this world (its card is not a world item or in the Arcana pack), so the sheet would show it as missing. Import it into the world first."
+      },
+      "homebrew": {
+        "backHidden": "The back is hidden until you unlock or are shown it.",
+        "gmNotesTitle": "GM notes",
+        "gmNotesHint": "Only for you: never shown on a character sheet, and on the card only to a GM.",
+        "draftNote": "This arcanum is an unfinished draft. It isn't listed in the Arcana browser until it's saved.",
+        "draftFinish": "Finish it",
+        "draftDiscard": "Discard",
+        "heldBy": "Held by {names}.",
+        "optionSlugLocked": "Locked: a character holds this card, and this key counts their ticks.",
+        "deleteTitle": "Delete a held arcanum?",
+        "deleteBody": "<p><strong>{name}</strong> is held by {names}.</p><p>Deleting it leaves each of them a stub named for the card, with Remove to clear its marks.</p>",
+        "deleteYes": "Delete the arcanum",
+        "deleteNo": "Keep it"
+      },
+      "improvise": {
+        "effectPrompt": "<p>Every unlock circle on <strong>{title}</strong> is marked already, so this step marks a new effect for <strong>{name}</strong>. Which effect?</p>",
+        "markNothing": "Mark nothing yet",
+        "effectMarked": "Every unlock circle on {title} is marked already, so {actor} marks a new effect for {name}: {effect}.",
+        "effectsAllMarked": "Every unlock circle on {title} is marked already, and so is every effect for {name}.",
+        "effectTaken": "That effect of {title} is marked already; nothing was marked.",
+        "setTrack": "Every unlock circle on {title} is marked already, so {actor} sets {name} to {value}.",
+        "boxTaken": "That step towards unlocking {title} is marked already; nothing was marked."
+      }
     },
     "inventory": {
       "regularItems": "Items",
@@ -1382,6 +1446,10 @@
       "characterSheetsShared": {
         "name": "Players See Every Character Sheet",
         "hint": "When on (the default), every player can open every character's sheet to read it, but only its owner and the GM can change it. Turn it off to keep each sheet to its own player and the GM. A sheet you have shared or hidden yourself with Configure Ownership keeps what you set."
+      },
+      "arcanaSeekerDrawsHomebrew": {
+        "name": "Include homebrew minor arcana in the Seeker's draw",
+        "hint": "When on, the minor arcana made in this world (finished, not drafts) join the shipped ones in the deck a new Seeker draws 3 from. Off by default."
       },
       "arcanaPlayersSeeBothSides": {
         "name": "Arcana: Players See Both Sides",

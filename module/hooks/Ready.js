@@ -10,7 +10,7 @@ import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
 import { repairAllChronicleFlagScopes } from "../migration/chronicle-flag-scope.js";
-import { oncePerVersion, forgetSweep, sweepVersion } from "../migration/once-per-version.js";
+import { oncePerVersion, forgetSweep, sweepVersion, sweptThisVersion } from "../migration/once-per-version.js";
 import { repairCharacterTokenLinks, applyLinkChoices } from "../migration/link-character-tokens.js";
 import { CharacterTokenLinkDialog } from "../dialogs/CharacterTokenLinkDialog.js";
 import { createArcanumItem, newArcanumSlug, isArcanumData } from "../item/createArcanum.js";
@@ -89,6 +89,7 @@ import { repairAllPossessionGrants } from "../migration/possession-grant-repair.
 import { repairMasteredArcanumCircles } from "../migration/mastered-arcanum-circles.js";
 import { adoptAllPrayerBeadPips } from "../migration/prayer-bead-preparation.js";
 import { settleAllArcanumBoxLayouts, settleOwnArcanumBoxLayouts } from "../migration/tulpa-move-boxes.js";
+import { ARCANA_AUDIT_1104_SWEEP, registerArcanaAudit1104Hooks, settleAllArcanaAudit1104, settleOwnArcanaAudit1104 } from "../migration/arcana-audit-1104.js";
 import { refreshHeldMoves } from "../migration/move-refresh.js";
 import { refreshSteadingImprovements } from "../migration/improvement-refresh.js";
 import { refreshSeededMonsters } from "../migration/bestiary-refresh.js";
@@ -202,6 +203,9 @@ const _SYSTEM_MACROS = [
 const _HOTBAR_LAYOUT_VERSION = 3;
 
 export async function onReady() {
+	// Before the migrations below: characters made from here on start stamped by the arcana count
+	// settle, and that settle's own writes stay off the timeline (migration/arcana-audit-1104.js).
+	registerArcanaAudit1104Hooks();
 	applySheetFont(getSetting("sheetFont"));
 	applySheetFontScale(getSetting("sheetFontScale"));
 	applyEditPencilRevealDelay(getSetting("editPencilRevealDelay"));
@@ -363,6 +367,13 @@ export async function onReady() {
 		// or a player's own client settling first all leave nothing to do twice.
 		try { await oncePerVersion("arcanumBoxLayouts", settleAllArcanumBoxLayouts); }
 		catch (err) { console.error("Stonetop | arcanum box layout settle failed", err); }
+		// Bring the counts on three minor arcana up to their corrected tracks (the mummified hand's
+		// three crystals, the blade's Blaze and the Silver Branch starting ticked) and a card's
+		// back-item uses under one key, in one write per character (migration/arcana-audit-1104.js).
+		// Per VERSION, safe to repeat: each character records the counts in the same write, and a
+		// moved key leaves nothing under the old one.
+		try { await oncePerVersion(ARCANA_AUDIT_1104_SWEEP, settleAllArcanaAudit1104); }
+		catch (err) { console.error("Stonetop | arcana count settle failed", err); }
 
 		// Point player tokens back at the characters they stand for. An unlinked PC token carries
 		// a private copy of its character, and the two drift because a roll writes to the sheet's
@@ -644,7 +655,7 @@ export async function onReady() {
 	// homebrew arcanum world Item pre-filled with the rolled results and opens its editor.
 	// Callable from a macro/console/hotbar:  game.stonetop.inspireArcanum()
 	game.stonetop.inspireArcanum    = () => new StonetopArcanaInspireDialog({
-		onCreate: ({ name, major, front }) => createArcanumItem({ name, major, front }),
+		onCreate: ({ name, major, gmNotes }) => createArcanumItem({ name, major, gmNotes }),
 	}).render(true);
 	// Manually re-apply the durable Book II art to the compendium + world journals + world
 	// actors, bypassing the once-per-version gate. The dev-loop entry point after
@@ -730,6 +741,9 @@ export async function onReady() {
 	// right. Background: it is a flag read per character, and a write only the once.
 	if (!game.user.isGM) {
 		settleOwnArcanumBoxLayouts().catch(err => console.error("Stonetop | arcanum box layout settle failed", err));
+		// The back-item keys need the cards, so they wait only until the GM's sweep has run.
+		settleOwnArcanaAudit1104({ resourceKeys: !sweptThisVersion(ARCANA_AUDIT_1104_SWEEP) })
+			.catch(err => console.error("Stonetop | arcana count settle failed", err));
 	}
 	_registerCharacterAutoOpen();
 	_registerGmToolkitAdopt();

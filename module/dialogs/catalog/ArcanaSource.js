@@ -1,4 +1,4 @@
-import { isArcanumData } from "../../item/createArcanum.js";
+import { isFinishedWorldArcanum } from "../../item/createArcanum.js";
 import { CatalogSource, summarize, searchIndex } from "./CatalogSource.js";
 import { stripHtmlToText } from "../../utils/strings.js";
 import { MinorArcanum } from "../../model/MinorArcanum.js";
@@ -48,7 +48,9 @@ export class ArcanaSource extends CatalogSource {
 			empty: "No arcana match those filters. (Only Major arcana carry a Consequences track.)",
 			// Every row here is an arcanum Item, so a row drags as one: onto a character sheet to
 			// plant the card face-down as a mystery (StonetopCharacterSheet#_onDropItemCreate), or
-			// into the Items directory to pull a copy out of the pack to homebrew from.
+			// into the Items directory to start a homebrew card from it: the copy gets a slug of
+			// its own (StonetopItem#_preCreate), so it is a NEW card, and the shipped one is
+			// unchanged on every sheet that holds it.
 			dragType: "Item",
 		});
 		// Which cards the character who opened the browser already holds, for the "held" badge.
@@ -132,8 +134,10 @@ export class ArcanaSource extends CatalogSource {
 		});
 	}
 
+	// An unfinished draft (flags.stonetop.draft, cleared on Save) is not a card yet: listing it
+	// would show a half-written card, its working title and all, to the table.
 	_worldDocs() {
-		return [...(game.items ?? [])].filter(isArcanumData);
+		return [...(game.items ?? [])].filter(isFinishedWorldArcanum);
 	}
 
 	/** One browser row from an arcanum Item document. */

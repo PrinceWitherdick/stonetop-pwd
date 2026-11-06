@@ -11691,6 +11691,17 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	color: var(--color-text-dark-secondary);
 }
 
+/* Another character already has this creature (arcana audit A16): the gold caution, flagged and never
+   blocked, on its own line under the button. Also inside the Manifest follower confirm. */
+.stonetop-arcanum-summon { flex-wrap: wrap; }
+.stonetop-arcanum-summon-caution {
+	flex: 1 0 100%;
+	margin: 4px 0 0;
+	text-align: center;
+	font-size: var(--st-fs-xs);
+	color: var(--st-on-dark-caution, var(--st-gold-text));
+}
+
 .stonetop-arcanum-delete {
 	font-size: var(--st-fs-xs);
 	padding: 2px 8px;
@@ -11752,7 +11763,8 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-arcanum-backowed span { flex: 1; min-width: 8em; }
 
 .stonetop-arcanum-backowed-btn,
-.stonetop-arcanum-unlock-choice-btn {
+.stonetop-arcanum-unlock-choice-btn,
+.stonetop-arcanum-roll-uses-btn {
 	width: auto;
 	flex: 0 0 auto;
 	font-size: var(--st-fs-2xs);
@@ -11932,6 +11944,43 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	background-image: var(--stonetop-blood-icon);
 }
 
+/* ── Lone ○ marks drawn from □ boxes ──────────────────────────────────────────
+   A lone ○ stays display text, so a card whose single ○ must be markable carries a □ in its
+   pack text instead (a real tick box) and these rules draw that box as the printed ○ again:
+   the Mummified Hand's three "mark one" changes (Book II p.536, back boxes 0-2) and the
+   Richly-woven Rug's "○ Terror" hold (p.512, back box 0). On the character sheet the box takes
+   the arcanum circle's ring (filled when marked); on the item sheet the static □ glyph takes
+   the circle glyph's ring. The item sheet's back side carries no slug of its own, so it is
+   found through the form holding the slugged front. */
+.vtt .window-app input[type=checkbox].stonetop-arcanum-box[data-arcanum-slug="mummified-hand"][data-context="back"],
+.vtt .window-app input[type=checkbox].stonetop-arcanum-box[data-arcanum-slug="richly-woven-rug"][data-context="back"][data-index="0"] {
+	width: 15px !important;
+	height: 15px !important;
+	flex: 0 0 15px !important;
+	border: 1.5px solid currentColor !important;
+	border-radius: 50% !important;
+	background: none !important;
+	margin: 0 1px;
+	top: -1px;
+}
+.vtt .window-app input[type=checkbox].stonetop-arcanum-box[data-arcanum-slug="mummified-hand"][data-context="back"]:checked,
+.vtt .window-app input[type=checkbox].stonetop-arcanum-box[data-arcanum-slug="richly-woven-rug"][data-context="back"][data-index="0"]:checked {
+	background: currentColor !important;
+}
+form:has(.stonetop-arcanum-sheet-side[data-slug="mummified-hand"]) .stonetop-arcanum-sheet-back .stonetop-glyph--checkbox,
+form:has(.stonetop-arcanum-sheet-side[data-slug="richly-woven-rug"]) .stonetop-arcanum-sheet-back .stonetop-glyph--checkbox {
+	box-sizing: border-box;
+	width: 0.88em;
+	height: 0.88em;
+	border: 0.1em solid currentColor;
+	border-radius: 50%;
+	vertical-align: -0.1em;
+	background-image: none;
+	color: inherit;
+	text-indent: 1.5em;
+	white-space: nowrap;
+}
+
 .stonetop-arcanum-unlock-lead {
 	margin: 0 0 4px;
 }
@@ -11965,6 +12014,60 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	flex: 1;
 	min-width: 0;
 	overflow-wrap: break-word;
+}
+
+/* Either/or unlocks (arcana audit A1): an option on a path wears a rule down its left, and each
+   later path is headed "or", so the alternatives read as alternatives. */
+.stonetop-arcanum-unlock-option--path {
+	padding-left: 6px;
+	border-left: 2px solid var(--color-border-dark);
+}
+.stonetop-arcanum-unlock-or {
+	margin: 2px 0 3px;
+	font-size: var(--st-fs-2xs);
+	font-style: italic;
+	font-weight: bold;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--color-text-dark-secondary);
+}
+
+/* "Roll 1d4+8" beside a track whose size is rolled when it is found (A9). */
+.stonetop-arcanum-roll-uses-btn { margin-left: 6px; vertical-align: middle; }
+
+/* The player's own note on a card (A6), under both sides on every view. */
+.stonetop-arcanum-notes {
+	margin-top: 6px;
+	padding-top: 4px;
+	border-top: 1px dashed var(--color-border-dark);
+}
+.stonetop-arcanum-notes-label {
+	display: block;
+	font-size: var(--st-fs-2xs);
+	font-weight: bold;
+	color: var(--color-text-dark-secondary);
+}
+.vtt .window-app textarea.stonetop-arcanum-notes-input {
+	width: 100%;
+	min-height: 2.6em;
+	resize: vertical;
+	font-size: var(--st-fs-xs);
+}
+.stonetop-arcanum-notes-text {
+	margin: 2px 0 0;
+	font-size: var(--st-fs-xs);
+	white-space: pre-wrap;
+}
+
+/* The Remove confirm's list of the card's marked Consequences (A5). */
+.application.dialog.stonetop-ask .stonetop-arcanum-remove-marked { margin: 6px 0 2px; }
+.application.dialog.stonetop-ask .stonetop-arcanum-remove-marked-list { margin: 0 0 4px; padding-left: 1.2em; }
+
+/* The Redwood Effigy's locked potential Conduits are `disabled` checkboxes (MAJ-11), so a keyboard
+   can't tick them either; keep the dotted look rather than core's faded disabled one. */
+.vtt .window-app input[type=checkbox].stonetop-arcanum-diamond[data-arcanum-slug="redwood-effigy"]:disabled {
+	opacity: 1;
+	cursor: default;
 }
 
 .stonetop-arcanum-resource-title {

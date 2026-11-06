@@ -52,7 +52,7 @@
         "move": {
           "name": "When you speak the dread word",
           "rollType": "con",
-          "description": "<p>Name an object that your voice can reach—it shatters, unravels, or is otherwise unmade. Roll +CON: <strong>on a 10+</strong>, pick 1; <strong>on a 7-9</strong>, pick 1 and the GM picks another; <strong>on a 6-</strong>, pick 1 plus whatever the GM says: your throat burns (mark miserable); your ears and every ear that heard it start bleeding (1d4 damage, ignores armor, temporarily deafened); 1d4 other objects are also unmade; this place becomes corrupted.</p>"
+          "description": "<p>Name an object that your voice can reach—it shatters, unravels, or is otherwise unmade. Roll +CON: <strong>on a 10+</strong>, pick 1; <strong>on a 7-9</strong>, pick 1 and the GM picks another; <strong>on a 6-</strong>, pick 1 plus whatever the GM says; if the object was <em>indestructible</em>, pick 1 more: your throat burns (mark miserable); your ears and every ear that heard it start bleeding (1d4 damage, ignores armor, temporarily deafened); 1d4 other objects are also unmade; this place becomes corrupted.</p>"
         },
         "options": []
       }

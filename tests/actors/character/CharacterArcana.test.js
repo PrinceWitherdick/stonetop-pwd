@@ -8,6 +8,7 @@ import {
 	ArcanumUnlockSection,
 } from "../../../module/model/CharacterSnapshot.js";
 import {FakeArcanaRepository} from "../../fakes/FakeArcanaRepository.js";
+import { flagFragmentOps } from "../../fakes/flag-fragments.js";
 import { CONDENSED_MOVE_SLUG } from "../../../module/data/arcana-moves.js";
 
 // -- Helpers ------------------------------------------------------------------
@@ -15,6 +16,7 @@ import { CONDENSED_MOVE_SLUG } from "../../../module/data/arcana-moves.js";
 function makeFlags(store = {}) {
 	return {
 		_store: store,
+		...flagFragmentOps(store),
 		getFlag: (key) => store[key] ?? null,
 		// Model Foundry's setFlag (mergeObject): plain objects deep-merge, so keys missing from
 		// the written value SURVIVE; arrays and primitives replace wholesale. This faithfully
@@ -220,11 +222,12 @@ describe("CharacterArcana.buildSnapshot()", () => {
 	});
 
 	describe("unlocked state", () => {
-		it("unlocked is true when there are no trackable requirements", async () => {
+		// A14 (arcana audit 2026-11-04): a card with no step towards unlocking stays locked.
+		it("unlocked is false when the card has no unlock step at all", async () => {
 			const arcanum = { ...FFYRNIG_SPHERE, front: { ...FFYRNIG_SPHERE.front, unlock: { description: "Unlock by…", requirements: [] } } };
 			const arcana = new CharacterArcana(makeFlags({ owned: ["huge-wooden-sphere"] }), new FakeArcanaRepository([arcanum]));
 			const item = (await arcana.buildSnapshot()).minor.items[0];
-			expect(item.unlocked).toBe(true);
+			expect(item.unlocked).toBe(false);
 		});
 
 		it("unlocked is false when option requirements are not met", async () => {
@@ -325,7 +328,8 @@ describe("CharacterArcana.buildSnapshot()", () => {
 		});
 
 		it("a □ on a card whose lead names no tasks is not its lock (a homebrew one-shot box)", async () => {
-			expect(await taskUnlocked("homebrew-charm", 1, 0, "When you learn its true name, see reverse.")).toBe(true);
+			// Not a lock, so the card has no step at all, and a card with no step stays locked (A14).
+			expect(await taskUnlocked("homebrew-charm", 1, 0, "When you learn its true name, see reverse.")).toBe(false);
 			const arcana = new CharacterArcana(makeFlags({ owned: ["homebrew-charm"] }),
 				new FakeArcanaRepository([taskArcanum("homebrew-charm", 1, "When you learn its true name, see reverse.")]));
 			expect((await arcana.masteryGrant("homebrew-charm")).boxes).toEqual([]);
@@ -464,9 +468,13 @@ describe("CharacterArcana.buildSnapshot()", () => {
 				expect(item.back.item.resource.current).toBe(4);  // item  → :item key
 			});
 
-			it("item track falls back to the legacy bare-slug value when no :item key exists", async () => {
+			// MNB-2 / HB-12: one key rule (arcanumItemResourceKey). On a card with both tracks the bare
+			// slug is the power track's, so the item track never shows that count.
+			it("item track never reads the power track's bare-slug count", async () => {
 				const item = (await buildBoth({ "both-tracks": 5 })).minor.items[0];
-				expect(item.back.item.resource.current).toBe(5);  // legacy data preserved
+				expect(item.back.item.resource.current).toBe(0);
+				expect(item.back.item.resource.key).toBe("both-tracks:item");
+				expect(item.back.resource.key).toBe("both-tracks");
 			});
 		});
 
@@ -637,8 +645,9 @@ describe("CharacterArcana.buildSnapshot()", () => {
 			const flags = makeFlags();
 			const arcana = new CharacterArcana(flags, new FakeArcanaRepository());
 			await arcana.addLead("some-slug");
-			expect(flags.setFlag).toHaveBeenCalledWith("owned", ["some-slug"]);
-			expect(flags.setFlag).toHaveBeenCalledWith("leads", ["some-slug"]);
+			// ONE update (ENG-8), so the timeline never sees the card owned before it is a lead.
+			expect(flags.batch).toHaveBeenCalledTimes(1);
+			expect(flags.batch.mock.calls[0][0].sets).toMatchObject({ owned: ["some-slug"], leads: ["some-slug"], leadBackfilled: true });
 		});
 
 		it("addLead preserves already-owned slugs", async () => {
@@ -790,9 +799,8 @@ describe("CharacterArcana.buildSnapshot()", () => {
 			it("removeArcanum clears the owed back, so a re-dropped card carries no stale promise", async () => {
 				const flags = makeFlags({ owned: ["a"], identified: ["a"], backOwed: ["a"] });
 				await new CharacterArcana(flags, new FakeArcanaRepository()).removeArcanum("a");
-				const { sets } = flags.batch.mock.calls[0][0];
-				expect(sets.backOwed).toEqual([]);
-				expect(sets.identified).toEqual([]);
+				expect(flags._store.backOwed).toEqual([]);
+				expect(flags._store.identified).toEqual([]);
 			});
 
 			it("buildSnapshot surfaces backOwed on the owed card only", async () => {
@@ -825,7 +833,9 @@ describe("CharacterArcana.buildSnapshot()", () => {
 			const flags = makeFlags();
 			const arcana = new CharacterArcana(flags, new FakeArcanaRepository());
 			await arcana.setUnlockCount("huge-wooden-sphere", "dig-sphere", 1);
-			expect(flags.setFlag).toHaveBeenCalledWith("unlock", { "huge-wooden-sphere:dig-sphere": 1 });
+			// Its own sub-key (ENG-5): nothing else in the map is re-sent from this copy.
+			expect(flags.applyUpdateData).toHaveBeenCalledWith({ "flags.fake.ns.unlock.huge-wooden-sphere:dig-sphere": 1 }, undefined);
+			expect(flags._store.unlock).toEqual({ "huge-wooden-sphere:dig-sphere": 1 });
 		});
 
 	});
@@ -901,18 +911,20 @@ describe("CharacterArcana — moves printed on a card's back", () => {
 			expect((await arcana.getArcanumMove("mystery-card", "ember")).learned).toBe(false);
 		});
 
-		it("counts a move with no box as always available", async () => {
-			const arcana = makeArcana(
-				{ owned: ["boxless"], identified: ["boxless"] },
-				[{
-					...ARCANUM_WITH_MOVES,
-					slug: "boxless",
-					back: { ...ARCANUM_WITH_MOVES.back, description: "<h3>Moves</h3><p><strong>SOLE POWER</strong><br>It simply works.</p>" },
-				}]
-			);
-			const move = await arcana.getArcanumMove("boxless", "sole-power");
-			expect(move.boxIndex).toBeNull();
-			expect(move.learned).toBe(true);
+		// MAJ-2 / SKR-4: a mystery printed with no box is the back's, learned once the back is realised.
+		it("counts a move with no box as learned once the back is realised", async () => {
+			const boxless = {
+				...ARCANUM_WITH_MOVES,
+				slug: "boxless",
+				front: { ...ARCANUM_WITH_MOVES.front, unlock: { description: "○○ Unlock by…", requirements: [] } },
+				back: { ...ARCANUM_WITH_MOVES.back, description: "<h3>Moves</h3><p><strong>SOLE POWER</strong><br>It simply works.</p>" },
+			};
+			const learned = async store => (await makeArcana({ owned: ["boxless"], identified: ["boxless"], ...store }, [boxless])
+				.getArcanumMove("boxless", "sole-power"));
+			const before = await learned({});
+			expect(before.boxIndex).toBeNull();
+			expect(before.learned).toBe(false);
+			expect((await learned({ boxes: { "boxless:unlock:0": true, "boxless:unlock:1": true } })).learned).toBe(true);
 		});
 
 		it("reports a card's condensed back move learned only once the back is realised", async () => {
@@ -1340,11 +1352,11 @@ describe("settleBoxLayouts", () => {
 		const store = { boxes: {
 			"beautiful-scroll:back:1": true, "beautiful-scroll:back:7": true,
 			"beautiful-scroll:back:10": true, "beautiful-scroll:back:11": false,
-			"mindgem:back:10": true,
+			"twisted-spear:back:10": true,
 		} };
 		const arcana = arcanaWith(store);
 		expect(await arcana.settleBoxLayouts()).toBe(true);
-		expect(on(store)).toEqual(["beautiful-scroll:back:1", "beautiful-scroll:back:14", "beautiful-scroll:back:7", "mindgem:back:10"]);
+		expect(on(store)).toEqual(["beautiful-scroll:back:1", "beautiful-scroll:back:14", "beautiful-scroll:back:7", "twisted-spear:back:10"]);
 		expect(store.boxLayouts).toEqual({ [MARKER]: true });
 		expect(arcana._flags.batch).toHaveBeenCalledTimes(1);
 		expect(arcana._flags.batch.mock.calls[0][1]).toEqual({ stonetopLedger: true });
@@ -1382,7 +1394,7 @@ describe("settleBoxLayouts", () => {
 	it("leaves other cards unstamped, and removing the card forgets its record", async () => {
 		const store = { boxes: {}, owned: ["beautiful-scroll"] };
 		const arcana = arcanaWith(store);
-		await arcana.setArcanumBoxChecked("mindgem", "back", 10, true);
+		await arcana.setArcanumBoxChecked("twisted-spear", "back", 10, true);
 		expect(store.boxLayouts).toBeUndefined();
 		await arcana.setArcanumBoxChecked("beautiful-scroll", "back", 0, true);
 		await arcana.removeArcanum("beautiful-scroll");
@@ -1393,7 +1405,7 @@ describe("settleBoxLayouts", () => {
 		const store = { boxes: { "beautiful-scroll:back:0": true, "x:back:0": true }, boxLayouts: { [MARKER]: true } };
 		const arcana = arcanaWith(store);
 		await arcana.setArcanumBoxesChecked("beautiful-scroll", "back", { 0: false, 3: true, 5: false });
-		expect(arcana._flags.batch).toHaveBeenCalledTimes(1);
+		expect(arcana._flags.applyUpdateData).toHaveBeenCalledTimes(1);
 		expect(store.boxes).toEqual({ "beautiful-scroll:back:0": false, "beautiful-scroll:back:3": true, "x:back:0": true });
 	});
 });

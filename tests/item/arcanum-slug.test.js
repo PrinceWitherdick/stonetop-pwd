@@ -70,14 +70,15 @@ describe("StonetopItem#_preCreate — the arcanum slug", () => {
 		expect(item.flags.stonetop.slug).toBe("arc-IDIDIDIDIDIDIDID");
 	});
 
-	// The one that matters most: a shipped pack card and a card from createArcanumItem both
-	// arrive WITH a slug, and rewriting it would orphan every mark in the world pointing at it.
+	// The one that matters most: a homebrew card restored from a backup and a card from
+	// createArcanumItem both arrive WITH a slug, and rewriting it would orphan every mark in the
+	// world pointing at it. (A SHIPPED slug is re-minted: tests/item/arcana-fix-hb-slugs.test.js.)
 	it("leaves a slug the card already carries alone", async () => {
-		const item = pending(arcanum({ slug: "azure-hand" }));
+		const item = pending(arcanum({ slug: "arc-homebrewbackup" }));
 		await item._preCreate({}, {}, {});
 
 		expect(item.updateSource).not.toHaveBeenCalled();
-		expect(item.flags.stonetop.slug).toBe("azure-hand");
+		expect(item.flags.stonetop.slug).toBe("arc-homebrewbackup");
 	});
 
 	// The sidebar's Duplicate copies the whole document, slug and all. Two cards on one slug is
@@ -87,7 +88,7 @@ describe("StonetopItem#_preCreate — the arcanum slug", () => {
 	// `_stats.duplicateSource` (Document#clone's `addSource`), which is what settles it.
 	it("re-mints the slug on a copy rather than letting two cards share one identity", async () => {
 		const item = pending({
-			...arcanum({ slug: "azure-hand" }),
+			...arcanum({ slug: "arc-homebrewbackup" }),
 			_stats: { duplicateSource: "Item.abcdefabcdefabcd" },
 		});
 		await item._preCreate({}, {}, {});
@@ -99,7 +100,7 @@ describe("StonetopItem#_preCreate — the arcanum slug", () => {
 	// why the stamp is checked before the sweep and the sweep is skipped there entirely.
 	it("re-mints a copy made inside a compendium too", async () => {
 		const item = pending({
-			...arcanum({ slug: "azure-hand" }), pack: "stonetop.stonetop-arcana",
+			...arcanum({ slug: "arc-homebrewbackup" }), pack: "stonetop.stonetop-arcana",
 			_stats: { duplicateSource: "Compendium.stonetop.stonetop-arcana.Item.abcdefabcdefabcd" },
 		});
 		await item._preCreate({}, {}, {});
@@ -109,22 +110,22 @@ describe("StonetopItem#_preCreate — the arcanum slug", () => {
 
 	// The copies core does not stamp: a macro or a module doing `Item.create(card.toObject())`.
 	it("re-mints a slug the world is already using, however the copy was made", async () => {
-		globalThis.game = { items: [{ id: "other", flags: { stonetop: { slug: "azure-hand" } } }] };
-		const item = pending(arcanum({ slug: "azure-hand" }));
+		globalThis.game = { items: [{ id: "other", flags: { stonetop: { slug: "arc-homebrewbackup" } } }] };
+		const item = pending(arcanum({ slug: "arc-homebrewbackup" }));
 		await item._preCreate({}, {}, {});
 
 		expect(item.flags.stonetop.slug).toBe("arc-IDIDIDIDIDIDIDID");
 	});
 
-	// The import that must NOT be re-minted: a pack card landing in a world that has never held
-	// it. Rewriting the slug there would orphan every mark in the world pointing at the old one.
+	// The import that must NOT be re-minted: a homebrew card from a backup compendium landing in a
+	// world that has never held it. Rewriting the slug there would orphan every mark pointing at it.
 	it("leaves an import alone when no card in the world holds its slug", async () => {
 		globalThis.game = { items: [{ id: "other", flags: { stonetop: { slug: "mindgem" } } }] };
-		const item = pending(arcanum({ slug: "azure-hand" }));
+		const item = pending(arcanum({ slug: "arc-homebrewbackup" }));
 		await item._preCreate({}, {}, {});
 
 		expect(item.updateSource).not.toHaveBeenCalled();
-		expect(item.flags.stonetop.slug).toBe("azure-hand");
+		expect(item.flags.stonetop.slug).toBe("arc-homebrewbackup");
 	});
 
 	// A blank or whitespace slug is not a slug: the marks would key off "" either way.
@@ -144,27 +145,27 @@ describe("StonetopItem#_preCreate — the arcanum slug", () => {
 	// is what lets a card claim its slug for the ones behind it.
 	it("tells one card in a batch from another, though neither is in the world yet", async () => {
 		const options = {};
-		const first = pending(arcanum({ slug: "azure-hand" }));
-		const second = pending(arcanum({ slug: "azure-hand" }));
+		const first = pending(arcanum({ slug: "arc-homebrewbackup" }));
+		const second = pending(arcanum({ slug: "arc-homebrewbackup" }));
 
 		await first._preCreate({}, options, {});
 		await second._preCreate({}, options, {});
 
-		expect(first.flags.stonetop.slug).toBe("azure-hand");
+		expect(first.flags.stonetop.slug).toBe("arc-homebrewbackup");
 		expect(second.flags.stonetop.slug).toBe("arc-IDIDIDIDIDIDIDID");
 	});
 
 	// And a SEPARATE call starts fresh, so an import of the same card into a world that does not
 	// hold it is still left alone — the case a batch-wide memory must not break.
 	it("does not carry a claim over into the next create call", async () => {
-		const first = pending(arcanum({ slug: "azure-hand" }));
+		const first = pending(arcanum({ slug: "arc-homebrewbackup" }));
 		await first._preCreate({}, {}, {});
 
-		const later = pending(arcanum({ slug: "azure-hand" }));
+		const later = pending(arcanum({ slug: "arc-homebrewbackup" }));
 		await later._preCreate({}, {}, {});
 
 		expect(later.updateSource).not.toHaveBeenCalled();
-		expect(later.flags.stonetop.slug).toBe("azure-hand");
+		expect(later.flags.stonetop.slug).toBe("arc-homebrewbackup");
 	});
 
 	// The world directory is walked ONCE per call, not once per card. Against a world holding the

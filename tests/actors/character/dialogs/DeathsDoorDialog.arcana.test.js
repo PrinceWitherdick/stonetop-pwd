@@ -27,7 +27,9 @@ function pendingHero({ owned = [], tether = "" } = {}) {
 		_arcana: {
 			ownedSlugs: new Set(owned),
 			leadSlugs:  new Set(),
-			boxStates:  Object.fromEntries(Object.keys(backs).map(s => [`${s}:back:0`, true])),
+			// The held cards' boxes only: a card no longer held whose ticked box was KEPT still counts (A5,
+			// deaths-door-arcana.test.js), so a box ticked for every card would read as three kept Consequences.
+			boxStates:  Object.fromEntries(owned.filter(s => backs[s]).map(s => [`${s}:back:0`, true])),
 			getArcanum: async slug => (backs[slug]
 				? { slug, front: { title: backs[slug].title }, back: { description: backs[slug].back } } : null),
 		},

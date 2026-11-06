@@ -67,13 +67,12 @@
           "note": "<em>magical, beautiful</em>",
           "inventoryColumn": "regular"
         },
-        "description": "<p>A few feet long, laden with white flowers and jingling golden fruits. Surprisingly sturdy, and stays fresh indefinitely unless its powers are used. Only one such branch can leave the Fae domain at a time.</p><p>When you <strong><em>jingle the silver branch</em></strong>, all who hear it (<em>reach</em>, area except you) are filled with bliss and forget their woes for a few hours. Roll +CHA: <strong>on a 10+</strong>, pick 1 and the GM picks another; <strong>on a 6-</strong>, all 3:</p><ul><li>The branch starts to fade; if already fading, it goes bare, its powers gone</li><li>Some (GM's choice of who) are blissed out for days or weeks, growing weak and wretched in the meantime</li><li>Some (GM's choice of who) become obsessed with hearing it jingle again</li></ul>",
+        "description": "<p>A few feet long, laden with white flowers and jingling golden fruits. Surprisingly sturdy, and stays fresh indefinitely unless its powers are used. Only one such branch can leave the Fae domain at a time.</p><p>When you <strong><em>jingle the silver branch</em></strong>, all who hear it (<em>reach</em>, area except you) are filled with bliss and forget their woes for a few hours. Roll +CHA: <strong>on a 10+</strong>, pick 1; <strong>on a 7-9</strong>, pick 1 and the GM picks another; <strong>on a 6-</strong>, all 3:</p><ul><li>The branch starts to fade; if already fading, it goes bare, its powers gone</li><li>Some (GM's choice of who) are blissed out for days or weeks, growing weak and wretched in the meantime</li><li>Some (GM's choice of who) become obsessed with hearing it jingle again</li></ul>",
         "resource": {
-          "max": 3,
+          "max": 2,
           "maxStat": null,
           "title": "Freshness",
           "labels": [
-            "fresh",
             "fading",
             "bare"
           ]
@@ -81,7 +80,7 @@
         "move": {
           "name": "When you jingle the silver branch",
           "rollType": "cha",
-          "description": "<p>All who hear it (reach, area except you) are filled with bliss and forget their woes for a few hours. Roll +CHA: <strong>on a 10+</strong>, pick 1 and the GM picks another; <strong>on a 6-</strong>, all 3: the branch starts to fade (if already fading, it goes bare); some are blissed out for days or weeks; some become obsessed with hearing it again.</p>"
+          "description": "<p>All who hear it (reach, area except you) are filled with bliss and forget their woes for a few hours. Roll +CHA: <strong>on a 10+</strong>, pick 1; <strong>on a 7-9</strong>, pick 1 and the GM picks another; <strong>on a 6-</strong>, all 3: the branch starts to fade (if already fading, it goes bare); some are blissed out for days or weeks; some become obsessed with hearing it again.</p>"
         },
         "options": []
       }

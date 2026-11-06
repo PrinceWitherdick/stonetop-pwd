@@ -44,9 +44,9 @@ export const ARCANA_SUMMONS = {
 				exceptional:  true,
 				hp:           10,
 				armor:        1,
-				damage:       "ghostly touch d4 (hand, ignores armor) or host's weapon d6",
+				damage:       "ghostly touch d4 (hand, ignores armor) or host's weapon d6 (tags vary)",
 				instinct:     "to second-guess your decisions",
-				moves:        "Manifest a ghostly presence\nPossess an inebriated victim\nSpot a weakness, want, or fear\nSpin plots and falsehoods",
+				moves:        "Manifest a ghostly presence (harmed only by silver or salt)\nPossess an inebriated victim\nSpot a weakness, want, or fear\nSpin plots and falsehoods",
 				cost:         "pleasures of the flesh",
 				notes:        "Armor 1 (lacks organs). Bound to obey your direct commands; can take no overt action against you, but Persuade them to do anything beyond your orders to the letter. Dismiss them and they return to their figurine; banished or reduced to 0 HP, both spirits return to their fetishes and can't be called forth again until the next new moon.",
 				sourceUuid:   "blackwood-fetishes:halix",
@@ -106,6 +106,8 @@ export const ARCANA_SUMMONS = {
 				cost:         "profuse gratitude",
 				notes:        "Armor 3 (metal). Special qualities: fireproof; holds +1 Readiness on a 7+ to Defend; requires a smithy and tools to regain HP. The hearth spirit animates it only as long as fire burns in its stove-like chest.",
 				sourceUuid:   "metal-man:bronze-protector",
+				// "holds +1 Readiness on a 7+ to Defend" (p.533): read by arcana-summon-gates.js#followerReadinessBonus.
+				readinessBonus: 1,
 			},
 		],
 	},
@@ -205,7 +207,7 @@ export const ARCANA_SUMMONS = {
 				damage:       "void touch 1d10 w/advantage (hand, grabby, ignores armor)",
 				instinct:     "to rage at all the noise and chaos",
 				moves:        "Manifest as a black hole in reality\nSnuff out a source of energy\nBecome confused, unsure what to do",
-				cost:         "profuse gratitude",
+				cost:         "",
 				loyalty:      3,
 				notes:        "Armor 1 (lacks organs). Special qualities: immune to most harm. Starts with 3 Loyalty and can never gain more. Speak the Words of Unbeing to send it back to the void—if it wants to go.",
 				sourceUuid:   "oversized-crown:void-elemental",
@@ -223,7 +225,7 @@ export const ARCANA_SUMMONS = {
 				tags:         ["spirit", "terrifying", "stealthy", "devious"],
 				hp:           13,
 				armor:        1,
-				damage:       "feast on fear d8 (close, hand, ignores armor, disadvantage)",
+				damage:       "feast on fear d6 (hand, close, ignores armor, disadvantage)",
 				instinct:     "to take things too far",
 				moves:        "Sense a victim's doubt and worries\nShape sound and shadow to unnerve and frighten\nManifest as its victim's fears (harmed only by one who masters their fear)",
 				cost:         "new, exquisite fears",
@@ -236,7 +238,7 @@ export const ARCANA_SUMMONS = {
 	"stone-idol": {
 		followers: [
 			{
-				name:         "All-mighty Thistlewik",
+				name:         "All-mighty Thistlewisk",
 				pronoun:      "it",
 				typeLabel:    "fae",
 				portraitIcon: "fas fa-frog",
@@ -260,12 +262,15 @@ export const ARCANA_SUMMONS = {
 				pronoun:      "they",
 				typeLabel:    "wraith group",
 				portraitIcon: "fas fa-ghost",
-				tags:         ["group (3)", "spirit", "undead", "terrifying", "vicious"],
+				// "Group (3)" (Book II p.512): a group follower of three, 13 HP each (follower-build.js).
+				isGroup:      true,
+				size:         3,
+				tags:         ["spirit", "undead", "terrifying", "vicious"],
 				hp:           13,
 				armor:        1,
 				damage:       "life drain d8 (hand, ignores armor)",
 				instinct:     "to run rampant",
-				moves:        "Whisper their longings to the weaver\nManifest a form of shadow and cold (harmed only by silver and salt)\nHurl themselves at the living\nSuck the vitality from their prey",
+				moves:        "Whisper their longings to the wearer\nManifest a form of shadow and cold (harmed only by silver and salt)\nHurl themselves at the living\nSuck the vitality from their prey",
 				cost:         "souls feasted upon",
 				notes:        "Group of 3. Armor 1 (amorphous). Special qualities: powerless in daylight. They are loathe to return to the mantle; spend their Loyalty or Persuade them.",
 				sourceUuid:   "tattered-mantle:mantle-wraiths",
@@ -294,9 +299,8 @@ export const ARCANA_SUMMONS = {
 	},
 
 	"ring-of-daagon": {
-		// The Ring becomes a follower only "when you make the last mark" (Book II p.560): its summon
-		// waits on the card being unlocked (servant-of-daagon.js#summonUnlocked).
-		untilUnlocked: true,
+		// The Ring becomes a follower only "when you make the last mark" (Book II p.560): like every
+		// summon, it waits on the card being unlocked (arcana-summon-gates.js#summonBlocker).
 		followers: [
 			{
 				name:         "Ring of Daagon",
@@ -349,6 +353,11 @@ export function hasArcanaSummon(slug) {
 	return !!ARCANA_SUMMONS[slug];
 }
 
+/** The stable `slug:name` identity a homebrew follower gets when it carries no sourceUuid of its own. */
+export function followerSourceUuid(slug, name) {
+	return `${slug}:${slugify(name) || "follower"}`;
+}
+
 /**
  * Resolve the follower list for a resolved arcanum ({@link MinorArcanum}), homebrew first:
  * a card that authors its own followers in `flags.stonetop.summon.followers` uses those;
@@ -363,7 +372,7 @@ export function arcanaSummonFollowers(arcanum) {
 			.filter(f => String(f?.name ?? "").trim())
 			.map(f => ({
 				...f,
-				sourceUuid: f.sourceUuid || `${arcanum.slug}:${slugify(f.name) || "follower"}`,
+				sourceUuid: f.sourceUuid || followerSourceUuid(arcanum.slug, f.name),
 			}));
 	}
 	return arcanaSummon(arcanum?.slug)?.followers ?? null;

@@ -97,3 +97,53 @@ function _statNotes(rows) {
 export function advantageRollOptions(rollMode, claimed) {
 	return layModes({ rollMode }, claimed ? ["adv"] : []);
 }
+
+// -- What an identifying roll writes ------------------------------------------------------------------
+
+/**
+ * What identifying an arcanum at `tier` writes, given what the character already has (Book I p.440:
+ * "on a 10+, give them the card and have them read both sides; on a 7-9, have them read the front, and
+ * show them the back when they have some time to study it or learn more"):
+ *  - "reveal": front and back, any back debt settled (10+);
+ *  - "owed": the front, with the back owed (7-9);
+ *  - "front": the front only, for a 7-9 on a card whose back the character can read already (a GM reveal,
+ *    or a Shift that lifted the same card to a 10+ while its dice were still rolling): no debt to owe;
+ *  - null: nothing to write, which is also the answer for a card the character no longer holds (removed
+ *    since the roll), so an old card's Shift cannot hand back a card nobody has.
+ * UPGRADES ONLY: a tier never takes back what a higher one already gave.
+ *
+ * @param {string} tier  "critical" | "success" | "partial" | "failure"
+ * @param {{owned: boolean, identified: boolean, revealed: boolean, backOwed: boolean}} state
+ * @returns {"reveal"|"owed"|"front"|null}
+ */
+export function arcanumIdentifyWrite(tier, { owned = false, identified = false, revealed = false, backOwed = false } = {}) {
+	if (!owned) return null;
+	if (tier === "success" || tier === "critical") return identified && revealed && !backOwed ? null : "reveal";
+	if (tier !== "partial" || identified) return null;
+	return revealed ? "front" : "owed";
+}
+
+/** The state arcanumIdentifyWrite reads, off a character (StonetopCharacter's arcana getters). */
+export function arcanumIdentifyState(character, slug) {
+	const has = set => !!set?.has?.(slug);
+	return {
+		owned:      has(character?.ownedArcanaSlugs),
+		identified: has(character?.identifiedArcanaSlugs),
+		revealed:   has(character?.revealedArcanaSlugs),
+		backOwed:   has(character?.backOwedArcanaSlugs),
+	};
+}
+
+/** Make arcanumIdentifyWrite's write. Answers whether anything was written. */
+export async function applyArcanumIdentifyWrite(character, slug, write, options) {
+	if (write === "reveal") await character.identifyAndRevealArcanum(slug, options);
+	else if (write === "owed") await character.identifyFrontOwedArcanum(slug, options);
+	else if (write === "front") await character.identifyArcanum(slug, options);
+	else return false;
+	return true;
+}
+
+/** Identify `slug` at `tier`: read the state, work out the write, make it. Answers whether anything was written. */
+export function identifyArcanumAtTier(character, slug, tier, options) {
+	return applyArcanumIdentifyWrite(character, slug, arcanumIdentifyWrite(tier, arcanumIdentifyState(character, slug)), options);
+}

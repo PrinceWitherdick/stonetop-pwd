@@ -8,16 +8,22 @@
 // Foundry globals) so it unit-tests and is reused by CallUpDeepOnesDialog.
 
 import { buildCustomFollower, normalizeTags } from "./follower-build.js";
-import { arcanaSummon } from "./arcana-summons.js";
 
 // Stable identity markers shared with the arcana-summons registry: the Ring itself is
 // one follower, the Servants another. Call Up dedupes nothing (a fresh batch each time),
 // but the sheet uses these to link a Servant batch's Loyalty to the Ring's pool.
 export const RING_SOURCE_UUID    = "ring-of-daagon:the-ring";
 export const SERVANT_SOURCE_UUID = "ring-of-daagon:servant-of-daagon";
-// The Ring's arcanum slug: its summon is the one gated on the card's mysteries being unlocked
-// (its arcana-summons.js entry's `untilUnlocked`).
+// The Ring's arcanum slug: Call Up waits on its mysteries being unlocked (arcana-summon-gates.js).
 export const RING_ARCANUM_SLUG   = "ring-of-daagon";
+
+/**
+ * Every `[id, record]` of a customFollowers map summoned from `sourceUuid` (the stable marker
+ * arcana-summons.js stamps), in map order. PURE.
+ */
+export function followersFromSource(map, sourceUuid) {
+	return Object.entries(map ?? {}).filter(([, f]) => f?.sourceUuid === sourceUuid);
+}
 
 /**
  * The Ring of Daagon and its Servants share one Loyalty pool (Book II p.561). Find the Ring
@@ -25,7 +31,7 @@ export const RING_ARCANUM_SLUG   = "ring-of-daagon";
  * the Ring's track. Callers pass an in-hand map (getData) or a freshly read flag.
  */
 export function findRingFollower(map = {}) {
-	const entry = Object.entries(map ?? {}).find(([, f]) => f?.sourceUuid === RING_SOURCE_UUID);
+	const [entry] = followersFromSource(map, RING_SOURCE_UUID);
 	return {
 		id:      entry?.[0] ?? null,
 		name:    entry?.[1]?.name || "the Ring of Daagon",
@@ -45,14 +51,9 @@ export function loyaltyOwnerId(map = {}, id = "") {
 	return findRingFollower(map).id ?? id;
 }
 
-/**
- * Whether an arcanum's "Add as follower" may manifest yet. A summon marked `untilUnlocked`
- * (arcana-summons.js) waits on the card being unlocked: the Ring becomes a follower only "when you
- * make the last mark" (Book II p.560). Every other summon is as it was.
- */
-export function summonUnlocked(slug, unlocked) {
-	return !arcanaSummon(slug)?.untilUnlocked || !!unlocked;
-}
+// Whether an arcanum's "Add as follower" may manifest yet is arcana-summon-gates.js#summonRealised: since
+// the 2026-11-04 arcana audit (A4) EVERY summon waits on its card being identified and unlocked, as the
+// Ring always did ("when you make the last mark", Book II p.560).
 
 // The five aspects, in the order the rulebook lists them. Each rolled d4 is assigned to
 // exactly one aspect; the assigned die's VALUE resolves that aspect.

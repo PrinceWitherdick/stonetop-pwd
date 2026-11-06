@@ -416,7 +416,7 @@ describe("Preferences tab contents", () => {
 	// applied for the whole table on the GM's, so one that arrived on this tab unnoticed would be
 	// a control that works for one person and lies to everyone else. Adding a second means coming
 	// through this test, which is where the three things a world row owes are written down.
-	const WORLD_KEYS = ["fightTab", "showTimeline"];
+	const WORLD_KEYS = ["fightTab", "showTimeline", "arcanaSeekerDrawsHomebrew"];
 
 	it("offers only client-scoped settings, bar the world rows named here", () => {
 		const wrong = ALL_KEYS

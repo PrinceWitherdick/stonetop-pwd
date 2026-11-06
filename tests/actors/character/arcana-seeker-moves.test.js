@@ -10,6 +10,7 @@ import {
 } from "../../../module/actors/character/arcana-seeker-moves.js";
 import { CharacterArcana, consequenceBoxRange } from "../../../module/actors/character/CharacterArcana.js";
 import { FakeArcanaRepository } from "../../fakes/FakeArcanaRepository.js";
+import { flagFragmentOps } from "../../fakes/flag-fragments.js";
 
 // The Seeker's arcana moves on the arcana tab (audit A7/C11 Mind Over Magic, A12/C12 Improvise,
 // A10/C10 Conduit of Power + Overchannel).
@@ -203,7 +204,8 @@ describe("Improvise: an un-learned mystery's own roll", () => {
 		expect(model.setArcanumBoxChecked).toHaveBeenCalledWith("mindgem", "front", 2, true);
 		expect(boxes["mindgem:front:2"]).toBe(true);
 		expect(message.flags[SCOPE][IMPROVISE_STEP_FLAG]).toBe(true);
-		expect(posted[0].content).toContain("marks a step towards unlocking Mindgem: Recover and repair the intricate bronze helm");
+		// The helm's ◇◇ is Book II p.548's (arcana audit 11-04, MAJ-14), carried into the line as printed.
+		expect(posted[0].content).toContain("marks a step towards unlocking Mindgem: Recover and repair the intricate ◇◇ bronze helm");
 		expect(await settleImproviseStep(message, actor, "mindgem", { ask })).toBe(false);
 		expect(ask).toHaveBeenCalledOnce();
 	});
@@ -251,7 +253,7 @@ describe("Improvise: an un-learned mystery's own roll", () => {
 		await askImproviseTask({ title: "Mindgem", tasks: unmarkedFrontTasks(MINDGEM.front, {}, "mindgem").slice(0, 2) }, { ask });
 		expect(ask.mock.calls[0][0].buttons.map(b => b.label)).toEqual([
 			"Recover its chassis of white granite, which weighs well over a ton",
-			expect.stringContaining("Recover its \"heart,\""),
+			expect.stringContaining("Recover its ◇ \"heart,\""),
 			"Mark nothing yet",
 		]);
 	});
@@ -260,6 +262,7 @@ describe("Improvise: an un-learned mystery's own roll", () => {
 describe("CharacterArcana: the pieces the Seeker's moves read", () => {
 	function arcana(store, cards) {
 		const flags = {
+			...flagFragmentOps(store),
 			getFlag: key => store[key] ?? null,
 			setFlag: vi.fn(async (key, value) => { store[key] = value; }),
 		};
@@ -334,7 +337,7 @@ describe("Conduit of Power and Overchannel: a major arcanum's Consequence marked
 		const { actor, model, boxes, resources } = seeker({ moves: [CONDUIT], conduit: 1, cards: [MAJOR] });
 		const ask = vi.fn(async () => ({ kind: DIVERT.CONDUIT }));
 		expect(await settleArcanumBoxTick(actor, TICK, { ask })).toBe("diverted");
-		expect(ask).toHaveBeenCalledWith({ title: "Azure Hand", diversions: { conduit: { marked: 1, max: 3 }, debilities: [] } });
+		expect(ask).toHaveBeenCalledWith({ title: "Azure Hand", diversions: { conduit: { marked: 1, max: 3 }, debilities: [], loyalty: null } });
 		expect(model.moveResources.setUses).toHaveBeenCalledWith(CONDUIT_OF_POWER, 2, { stonetopMove: CONDUIT_OF_POWER });
 		expect(resources[CONDUIT_OF_POWER]).toBe(2);
 		expect(boxes["azure-hand:back:3"]).toBeUndefined();
@@ -444,7 +447,7 @@ describe("Ring of Daagon: 'mark a consequence' from the Call Up and Send Them Ba
 		const ask  = vi.fn(async () => ({ kind: DIVERT.CONDUIT }));
 		const pick = async ({ consequences }) => consequences[0];
 		expect(await markArcanumConsequence(actor, RING_OF_DAAGON, { ask, pick })).toBe(true);
-		expect(ask).toHaveBeenCalledWith({ title: "Ring of Daagon", diversions: { conduit: { marked: 0, max: 3 }, debilities: [] } });
+		expect(ask).toHaveBeenCalledWith({ title: "Ring of Daagon", diversions: { conduit: { marked: 0, max: 3 }, debilities: [], loyalty: null } });
 		expect(resources[CONDUIT_OF_POWER]).toBe(1);
 		expect(boxes["ring-of-daagon:back:1"]).toBeUndefined();
 

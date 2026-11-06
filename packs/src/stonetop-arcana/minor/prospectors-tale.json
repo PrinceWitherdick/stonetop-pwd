@@ -42,7 +42,7 @@
       "back": {
         "title": "Sublime Words",
         "item": null,
-        "description": "<p>When you <strong><em>spend supplies (Value 2) and a full season a-crafting, chanting the Sublime Words all the while</em></strong>, roll +WIS. No matter what, you've damaged your voice (mark a status above) and made a thing of true beauty (Value 4). <strong>On a 10+</strong>, pick 1 and further damage your voice; <strong>on a 7-9</strong>, pick 1 and further damage your voice:</p><ul><li>Its beauty will persist through the ages</li><li>It eases pain and lifts grief</li><li>It inspires others to better themselves</li></ul><p><strong>On a 6-</strong>, it stokes greed in those who see it and fear in those who own it, worse if those qualities were already there. Expect bloodshed.</p><p>When you <strong><em>rest your voice for a season</em></strong> (no shouting, little talking, not using the Sublime Words), clear one status above.</p>",
+        "description": "<p>When you <strong><em>spend supplies (Value 2) and a full season a-crafting, chanting the Sublime Words all the while</em></strong>, roll +WIS. No matter what, you've damaged your voice (mark a status above) and made a thing of true beauty (Value 4). <strong>On a 10+</strong>, pick 1, or 2 and further damage your voice; <strong>on a 7-9</strong>, pick 1 and further damage your voice:</p><ul><li>Its beauty will persist through the ages</li><li>It eases pain and lifts grief</li><li>It inspires others to better themselves</li></ul><p><strong>On a 6-</strong>, it stokes greed in those who see it and fear in those who own it, worse if those qualities were already there. Expect bloodshed.</p><p>When you <strong><em>rest your voice for a season</em></strong> (no shouting, little talking, not using the Sublime Words), clear one status above.</p>",
         "resource": {
           "max": 3,
           "maxStat": null,
@@ -56,7 +56,7 @@
         "move": {
           "name": "When you spend supplies (Value 2) and a full season a-crafting, chanting the Sublime Words all the while",
           "rollType": "wis",
-          "description": "<p>No matter what, you've damaged your voice and made a thing of true beauty (Value 4). <strong>On a 10+</strong>, pick 1: beauty persists through the ages; eases pain and lifts grief; inspires others to better themselves. <strong>On a 7-9</strong>, pick 1 and further damage your voice. <strong>On a 6-</strong>, it stokes greed and fear.</p>"
+          "description": "<p>No matter what, you've damaged your voice and made a thing of true beauty (Value 4); its beauty may persist through the ages, ease pain and lift grief, or inspire others to better themselves. <strong>On a 10+</strong>, pick 1, or 2 and further damage your voice; <strong>on a 7-9</strong>, pick 1 and further damage your voice. <strong>On a 6-</strong>, it stokes greed in those who see it and fear in those who own it. Expect bloodshed.</p>"
         },
         "options": []
       }

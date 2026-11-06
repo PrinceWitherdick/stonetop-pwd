@@ -14,25 +14,21 @@
 // Every write to such a card settles it first too (setArcanumBoxChecked), so no path can tick a
 // box against the new text while older marks are still waiting to move.
 
+import { sweepCharacters } from "./sweep-characters.js";
+
 /**
  * @param {object} [options]
  * @param {Iterable} [options.actors]
  * @returns {Promise<number>} how many characters were written to
  */
-export async function settleAllArcanumBoxLayouts({ actors = globalThis.game?.actors ?? [] } = {}) {
-	let written = 0;
-	for (const actor of actors) {
-		if (actor?.type !== "character") continue;
-		if (await actor.typedActor?.settleArcanumBoxLayouts?.()) written += 1;
-	}
-	return written;
+export async function settleAllArcanumBoxLayouts({ actors } = {}) {
+	return sweepCharacters(actor => actor.typedActor?.settleArcanumBoxLayouts?.(), { actors });
 }
 
 /**
  * The characters this user can write, settled. A player's own client, on load: a GM's world
  * sweep covers everyone else.
  */
-export async function settleOwnArcanumBoxLayouts({ actors = globalThis.game?.actors ?? [] } = {}) {
-	const own = [...actors].filter(actor => actor?.isOwner);
-	return settleAllArcanumBoxLayouts({ actors: own });
+export async function settleOwnArcanumBoxLayouts({ actors } = {}) {
+	return sweepCharacters(actor => actor.typedActor?.settleArcanumBoxLayouts?.(), { actors, own: true });
 }

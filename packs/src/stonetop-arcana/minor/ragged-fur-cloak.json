@@ -52,7 +52,7 @@
         "move": {
           "name": "When you open your own veins and drench the fur with your own fresh blood",
           "rollType": null,
-          "description": "<p>Lose 1d8 HP and mark a debility. If the cloak holds no Charges, it gains 1d4 Charges. When you suffer a blow while wearing the cloak, it loses 1 Charge and you transform briefly into a cloud of shadow, suffering no harm.</p>"
+          "description": "<p>Lose 1d8 HP and mark a debility. If the cloak holds no Charges, it gains 1d4 Charges. When you suffer a blow while wearing the cloak, it loses 1 Charge and you transform briefly into a cloud of shadow, suffering no harm (not while it holds no Charges). When direct sunlight or holy light touches the cloak, or anyone but you dons it, it loses all its Charges.</p>"
         },
         "options": []
       }

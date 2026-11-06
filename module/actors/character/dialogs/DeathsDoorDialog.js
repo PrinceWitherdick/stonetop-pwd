@@ -30,6 +30,8 @@ import { moveRollable } from "../../../utils/move-rollable.js";
 import { boostButtonFace, boostNote, boostsOn, deathsDoorPlusOnes, pressBoost } from "../roll-boosts.js";
 import { BURN_BRIGHTLY_COST } from "../burn-brightly.js";
 import { deathsDoorDictatesKey, heldDeathsDoorDictates } from "../deaths-door-arcana.js";
+import { boundSoulsOffer, scalesOfferKey, scalesTenPlusOffer } from "../deaths-door-arcana-offers.js";
+import { markArcanumConsequence } from "../arcana-seeker-moves.js";
 import { GAVE_IT_ALL_FLAG, GIVE_IT_ALL_COSTS, IMPETUOUS_YOUTH, askGiveItAllCost, giveItAllAtDeathsDoor, givenByPress, newPressId, rollGiveItAllHurt } from "../impetuous-youth.js";
 
 // The move itself (name + trigger), from the 0-HP routing table that every other surface reads.
@@ -80,6 +82,8 @@ const _MOVE = zeroHpMove(null);
 // This window's strings in languages/en.json. Every table below reads them through getters, so each
 // reader gets them in the language of the moment it reads them (as impetuous-youth.js#GIVE_IT_ALL_COSTS does).
 const _I18N = "stonetop.specialMoves.deathsDoor";
+// The two arcana offers' own strings (the Rune-laden Scales, the Shell Game of Souls).
+const _ARCANA_I18N = "stonetop.arcana.deathsDoor";
 
 // What the 10+ mark says before the player says anything. The mark itself is not optional —
 // "say how your brush with death has marked you" — so the wound goes on the sheet the moment the
@@ -371,11 +375,20 @@ export class DeathsDoorDialog extends StonetopDialog {
 		this._sizedForChoices = false;
 		// The 6- fates a held arcanum's marked Consequence dictates (deaths-door-arcana.js), read before each
 		// render of the steps that show the fates (_readDictates). The key is what the last read was of, the
-		// promise that read, and the version counts the answers that changed, so a render can tell it drew a stale one.
+		// promise that read, and the version counts the answers that changed, so a render can tell it drew a stale
+		// one (_keyedRead).
 		this._dictates = [];
 		this._dictatesKey = null;
 		this._dictatesRead = Promise.resolve();
 		this._dictatesVersion = 0;
+		// The Rune-laden Scales' "mark a consequence before you roll to automatically get a 10+", when it is on
+		// offer (deaths-door-arcana-offers.js), read on the roll step the way the dictates are read on the fates.
+		this._scalesOffer = null;
+		this._scalesOfferKey = null;
+		this._scalesOfferRead = Promise.resolve();
+		this._scalesOfferVersion = 0;
+		// A bound soul being released (the Shell Game of Souls), so a second click can't release two.
+		this._releasingSoul = false;
 	}
 
 	/**
@@ -457,7 +470,9 @@ export class DeathsDoorDialog extends StonetopDialog {
 		// Not awaited: a render that waited on the compendium was one a second render could be dropped beside
 		// (AppV1 refuses a render while one is under way). A read that lands with a new answer redraws.
 		this._readDictates();
+		this._readScalesOffer();
 		const drawnDictates = this._dictatesVersion;
+		const drawnScales = this._scalesOfferVersion;
 		await super._render(force, options);
 		this._sizeForStep();
 		this._paintMood();
@@ -465,7 +480,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 		this._drawnWatchKey = this._watchKey();
 		this._armStaleTimer();
 		// The read landed mid-render with a different answer: this render may have drawn the old one.
-		if (this._dictatesVersion !== drawnDictates) this.render(false);
+		if (this._dictatesVersion !== drawnDictates || this._scalesOfferVersion !== drawnScales) this.render(false);
 	}
 
 	/**
@@ -477,25 +492,49 @@ export class DeathsDoorDialog extends StonetopDialog {
 	 */
 	_readDictates() {
 		if (this._step !== "result" && this._step !== "fate") return this._dictatesRead;
-		const key = deathsDoorDictatesKey(this._character);
-		if (key === this._dictatesKey) return this._dictatesRead;
-		this._dictatesKey = key;
-		const read = heldDeathsDoorDictates(this._character)
+		return this._keyedRead("_dictates", deathsDoorDictatesKey(this._character),
+			() => heldDeathsDoorDictates(this._character),
+			{ fallback: [], failure: "could not read the arcana that decide Death's Door" });
+	}
+
+	/**
+	 * Whether the Rune-laden Scales' 10+ is on offer (deaths-door-arcana-offers.js#scalesTenPlusOffer), read on the
+	 * roll step as _readDictates reads the fates: async (the card's text is the compendium's), again only when what
+	 * decides it has changed, and a new answer landing redraws an open window. A failed read offers nothing.
+	 */
+	_readScalesOffer() {
+		if (this._step !== "roll") return this._scalesOfferRead;
+		const key = scalesOfferKey(this._character);
+		return this._keyedRead("_scalesOffer", key,
+			() => (key ? scalesTenPlusOffer(this._character) : Promise.resolve(null)),
+			{ fallback: null, failure: "could not read the Rune-laden Scales for Death's Door" });
+	}
+
+	/**
+	 * One async read, done again only when `key` changes. `field` holds the answer, `${field}Key` what the last
+	 * read was of, `${field}Read` its promise, and `${field}Version` counts the answers that changed. A failed read
+	 * answers `fallback` and clears the key, so the next render tries again. Resolves once the read has landed.
+	 */
+	_keyedRead(field, key, fetch, { fallback, failure }) {
+		const keyField = `${field}Key`, readField = `${field}Read`, versionField = `${field}Version`;
+		if (key === this[keyField]) return this[readField];
+		this[keyField] = key;
+		const read = fetch()
 			.catch(err => {
-				console.error("Stonetop | could not read the arcana that decide Death's Door", err);
-				if (this._dictatesRead === read) this._dictatesKey = null;
-				return [];
+				console.error(`Stonetop | ${failure}`, err);
+				if (this[readField] === read) this[keyField] = null;
+				return fallback;
 			})
-			.then(dictates => {
+			.then(answer => {
 				// A newer read has started since: its answer is the one that counts.
-				if (this._dictatesRead !== read) return;
-				if (JSON.stringify(dictates) === JSON.stringify(this._dictates)) return;
-				this._dictates = dictates;
-				this._dictatesVersion++;
+				if (this[readField] !== read) return;
+				if (JSON.stringify(answer) === JSON.stringify(this[field])) return;
+				this[field] = answer;
+				this[versionField]++;
 				// Mid-render, `rendered` is false, and _render's own check redraws once it is done.
 				if (this.rendered) this.render(false);
 			});
-		this._dictatesRead = read;
+		this[readField] = read;
 		return read;
 	}
 
@@ -661,6 +700,8 @@ export class DeathsDoorDialog extends StonetopDialog {
 			skipRollMove:   opts.skipRollMove ?? null,
 			neverGonnaUsed: !!opts.neverGonnaUsed,
 			neverGonnaName: NEVER_GONNA_KEEP_ME_DOWN,
+			// The Rune-laden Scales' PROOF AGAINST HARM: a Consequence for a 10+, before the dice (_onScalesTenPlus).
+			scalesOffer:    this._scalesOfferData(),
 			// Destined: who moves the tier up a step, said before the dice.
 			tierShift:      opts.tierShift ?? null,
 			// After it: how the tier came to be what it is, when it isn't simply the dice's.
@@ -698,6 +739,31 @@ export class DeathsDoorDialog extends StonetopDialog {
 			// clickable (rule violations are flagged, never blocked).
 			...this._dictatedData(),
 			fateApplied:    !!this._fateApplied,
+			// The Shell Game of Souls: a bound soul through the Last Door in their place, as a 7-9 (_onReleaseSoul).
+			soulsOffer:     this._soulsOfferData(),
+		};
+	}
+
+	/** The Scales' offer as the roll step draws it, or null: only on the roll step, and never to a watcher. */
+	_scalesOfferData() {
+		const offer = this._scalesOffer;
+		if (!offer || this._step !== "roll" || this._fatePending) return null;
+		return {
+			text:    format(`${_ARCANA_I18N}.scales.note`, { arcanum: escHtml(offer.name) }),
+			notWorn: offer.worn ? "" : format(`${_ARCANA_I18N}.scales.notWorn`, { arcanum: escHtml(offer.name) }),
+			button:  localize(`${_ARCANA_I18N}.scales.button`),
+			title:   format(`${_ARCANA_I18N}.scales.buttonTitle`, { arcanum: offer.name }),
+		};
+	}
+
+	/** The Shell Game of Souls' offer as the 6- draws it, or null: a 6- still waiting on its fate, theirs to choose. */
+	_soulsOfferData() {
+		if (this._step !== "result" || !this._fatePending || this._spectator || this._fateApplied || this._boostsPending) return null;
+		const offer = boundSoulsOffer(this._character);
+		if (!offer) return null;
+		return {
+			text:   format(`${_ARCANA_I18N}.souls.note`, { count: offer.souls }),
+			button: localize(`${_ARCANA_I18N}.souls.button`),
 		};
 	}
 
@@ -726,6 +792,8 @@ export class DeathsDoorDialog extends StonetopDialog {
 		// Shift skips the pre-roll window, as it does on every other roll (RollDialog.js#promptRoll).
 		html.find(".deaths-door-roll-btn").on("click", (ev) => this._onRoll({ shiftKey: !!ev.shiftKey }));
 		html.find(".deaths-door-skip-roll-btn").on("click", () => this._onTakeTenPlus());
+		html.find(".deaths-door-scales-btn").on("click", () => this._onScalesTenPlus());
+		html.find(".deaths-door-release-soul-btn").on("click", () => this._onReleaseSoul());
 		html.find(".deaths-door-close-btn").on("click", () => this._onFinish());
 		html.find(".deaths-door-cancel-btn").on("click", () => this.close());
 		html.find(".deaths-door-accept-btn").on("click", () => this._onAcceptResult());
@@ -942,19 +1010,7 @@ export class DeathsDoorDialog extends StonetopDialog {
 			await this._character.moveResources?.setUses?.(skipRollMove, 1, { stonetopMove: skipRollMove });
 			await this._post(skipRollMove, `<p>${format(`${_I18N}.chat.skipped`, { name: escHtml(this._actorName) })}</p>
 				<p class="stonetop-dying-trigger">${localize(`${_I18N}.chat.skippedRule`)}</p>`);
-
-			this._rolledTotal = null;
-			this._rollMessage = null;
-			this._privateCardId = null;
-			this._landed = "success";
-			this._tierNote = format(`${_I18N}.notes.skipped`, { move: skipRollMove, tier: TIER_LABELS.success });
-			this._step = "result";
-			this._debilityTraded = false;
-			this._fateApplied = false;
-			// The 10+ goes on the marker before it lands, as the dice's result does (_onRoll): the move's one use is
-			// spent, so a window taking this over accepts the 10+ rather than rolling.
-			await this._noteRoll();
-			await this._land("success");
+			await this._landUnrolledTenPlus(format(`${_I18N}.notes.skipped`, { move: skipRollMove, tier: TIER_LABELS.success }));
 			this.renderIfOpen();
 		} finally {
 			this._rolling = false;
@@ -962,6 +1018,91 @@ export class DeathsDoorDialog extends StonetopDialog {
 			// Stopped short of the 10+ (a write failed): nothing landed, so nothing is in progress either.
 			// A no-op once it has landed, which releases the roll itself.
 			if (claimed) await this._releaseRoll();
+		}
+	}
+
+	/** A 10+ with no dice (Never Gonna Keep Me Down, the Rune-laden Scales), `note` saying how it came. */
+	async _landUnrolledTenPlus(note) {
+		this._rolledTotal = null;
+		this._rollMessage = null;
+		this._privateCardId = null;
+		this._landed = "success";
+		this._tierNote = note;
+		this._step = "result";
+		this._debilityTraded = false;
+		this._fateApplied = false;
+		// The 10+ goes on the marker before it lands, as the dice's result does (_onRoll): what bought it is
+		// spent, so a window taking this over accepts the 10+ rather than rolling.
+		await this._noteRoll();
+		await this._land("success");
+	}
+
+	/**
+	 * The Rune-laden Scales' PROOF AGAINST HARM (Book II p.563): "you may mark a consequence before you roll to
+	 * automatically get a 10+." The offer is read again here (the card, the box, a Consequence left), the roll is
+	 * claimed as Never Gonna Keep Me Down claims it, and then the Consequence is marked through the one pick every
+	 * "mark a consequence" goes through (arcana-seeker-moves.js#markArcanumConsequence), so Conduit of Power and
+	 * Overchannel can take it. Nothing picked, nothing marked: no 10+, and the Door is still to face.
+	 */
+	async _onScalesTenPlus() {
+		if (this._rolling) return;
+		this._rolling = true;
+		let claimed = false;
+		try {
+			const actor = this._character?._actor ?? null;
+			if (!actor) return;
+			const offer = await scalesTenPlusOffer(this._character);
+			if (!offer) { this.renderIfOpen(); return; }
+			if (this._rollWatch().kind !== "none") { this.renderIfOpen(); return; }
+			if (this._notAtTheDoor()) return;
+			claimed = true;
+			if (!(await this._claimRoll())) { this.renderIfOpen(); return; }
+			if (!(await markArcanumConsequence(actor, offer.slug))) return;
+			// Facing the Door is when they stop fighting, with or without the dice (see _onRoll).
+			await endBattleJoyUnrolled(actor);
+			await this._post(offer.name, `<p>${format(`${_ARCANA_I18N}.scales.chat`, {
+				name: escHtml(this._actorName), arcanum: escHtml(offer.name),
+			})}</p><p class="stonetop-dying-trigger">${localize(`${_ARCANA_I18N}.scales.rule`)}</p>`);
+			await this._landUnrolledTenPlus(format(`${_ARCANA_I18N}.scales.tierNote`, { arcanum: offer.name, tier: TIER_LABELS.success }));
+			this.renderIfOpen();
+		} finally {
+			this._rolling = false;
+			this._settleOnRollEnd = false;
+			if (claimed) await this._releaseRoll();
+		}
+	}
+
+	/**
+	 * The Shell Game of Souls (Carvings in a cave, Book II p.510): "When you roll a 6- on Death's Door, you can
+	 * release a bound soul to go through the Last Door in your place. If you do, you survive as if you rolled a
+	 * 7-9." On a 6- still waiting on its fate, with no boost still to spend (the offer _soulsOfferData draws):
+	 * one soul comes off the card's Souls track first, and only once that is written is the 7-9 written as the
+	 * dice's 7-9 is (_applyTier) and the table told. A soul that could not be taken buys nothing.
+	 */
+	async _onReleaseSoul() {
+		if (this._releasingSoul || !this._soulsOfferData()) { this.renderIfOpen(); return; }
+		const offer = boundSoulsOffer(this._character);
+		if (!offer) { this.renderIfOpen(); return; }
+		this._releasingSoul = true;
+		try {
+			try {
+				await this._character.setArcanumResource(offer.slug, offer.souls - 1, { stonetopMove: localize(`${_ARCANA_I18N}.souls.name`) });
+			} catch (err) {
+				console.error("Stonetop | could not release the bound soul from the Shell Game of Souls", err);
+				ui.notifications?.warn?.(localize(`${_ARCANA_I18N}.souls.writeFailed`));
+				return;
+			}
+			await this._applyTier("partial");
+			this._landed = "partial";
+			this._tierNote = format(`${_ARCANA_I18N}.souls.tierNote`, { tier: TIER_LABELS.partial });
+			this._step = "result";
+			this._debilityTraded = false;
+			await this._post(localize(`${_ARCANA_I18N}.souls.name`), `<p>${format(`${_ARCANA_I18N}.souls.chat`, {
+				name: escHtml(this._actorName),
+			})}</p>`);
+		} finally {
+			this._releasingSoul = false;
+			this.renderIfOpen();
 		}
 	}
 

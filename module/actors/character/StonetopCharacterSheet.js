@@ -49,7 +49,8 @@ import {BackgroundNeighborsDialog, storedNeighborPicks, storedNeighborTraits, tr
 import {BackgroundAnswersDialog, backgroundSetupAsks} from "./dialogs/BackgroundAnswersDialog.js";
 import {SeekerMajorArcanumDialog} from "./dialogs/SeekerMajorArcanumDialog.js";
 import {minorArcanaHeldElsewhere} from "./seeker-collection.js";
-import {RING_SOURCE_UUID, SERVANT_SOURCE_UUID, buildServantFollower, findRingFollower, loyaltyOwnerId, summonUnlocked, RING_ARCANUM_SLUG} from "../../data/servant-of-daagon.js";
+import {RING_SOURCE_UUID, SERVANT_SOURCE_UUID, buildServantFollower, findRingFollower, loyaltyOwnerId, RING_ARCANUM_SLUG} from "../../data/servant-of-daagon.js";
+import {characterSummonBlocker, followerReadinessBonus, summonBlockedMessage, summonHeldElsewhere, summonHeldElsewhereText, summonHoldersBySource} from "../../data/arcana-summon-gates.js";
 import {SEND_THEM_BACK, sendBackRollOptions} from "./send-them-back.js";
 import {grantedWeaponForMove, weaponTraitText} from "../../data/weapons.js";
 import {grantedWeaponAttackFor, rollCharacterDamageAt, rollFollowerDamageAt, crewBlow, sufferEnemyAttack} from "../../combat/attack-flow.js";
@@ -106,7 +107,7 @@ import {beginAid} from "../../pc-asks/pc-ask-flow.js";
 import {STRUGGLE_MOVE} from "../../struggle/struggle-rules.js";
 import {rollProvisions, ON_THE_HOOF} from "./provisions.js";
 import {buildMoveTierResults} from "../../utils/move-results.js";
-import {knowThingsRollChoices, seekInsightRollChoices, advantageRollOptions, KNOW_THINGS_STAT, KNOW_THINGS_ADVANTAGE_MOVES, SEEK_INSIGHT_STAT} from "./arcana-identify.js";
+import {knowThingsRollChoices, seekInsightRollChoices, advantageRollOptions, KNOW_THINGS_STAT, KNOW_THINGS_ADVANTAGE_MOVES, SEEK_INSIGHT_STAT, identifyArcanumAtTier} from "./arcana-identify.js";
 import {movePickBonusesFor, withMovePickBonuses} from "./move-pick-bonuses.js";
 import {statRuleIssues} from "./stat-rules.js";
 import {ARTIFACT_STATE, artifactStateForTier, knowThingsArtifactResults, seekInsightArtifactResults,
@@ -128,7 +129,7 @@ import {isOutOfPlaySafe, isUnliving, recoveredHpTo, slowToHeal} from "./deaths-d
 import {createCharacterForUser} from "./create-character.js";
 import {peopleNames, steadingPeopleActors, usedPersonPortraits, createPersonNpc, isActorRow, personRowActor, personRowKey, personRowIdentity, rebasePersonRows, addCharacterToSteadingPlayers} from "../steading/steading-people.js";
 import {openPeoplePortraitPicker} from "../steading/PeopleGalleryDialog.js";
-import {getHoverDescriptionSetting, getObjectSetting, getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getFollowerCardsCollapsed, setFollowerCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getAskRollModeEachRollSetting, isClassicLayout, isTimelineTabShown, layoutClasses, stampLayoutClass} from "../../settings.js";
+import {getBooleanSetting, getHoverDescriptionSetting, getObjectSetting,getRollStatChipsSetting, getCrewSectionsOpen, setCrewSectionsOpen, getMovesSectionsCollapsed, setMovesSectionsCollapsed, getArcanaSectionsCollapsed, setArcanaSectionsCollapsed, getArcanaContentExpanded, setArcanaContentExpanded, getArcanaCardsCollapsed, setArcanaCardsCollapsed, getFollowerCardsCollapsed, setFollowerCardsCollapsed, getInventoryLoreExpanded, setInventoryLoreExpanded, getSidebarCollapsed, setSidebarCollapsed, getOpenSheetsInEditMode, getAskRollModeEachRollSetting, isClassicLayout, isTimelineTabShown, layoutClasses, stampLayoutClass} from "../../settings.js";
 import {bringDialogToFront} from "../../utils/front-on-open.js";
 import {wireSidebarToggle} from "../../utils/sidebar-toggle.js";
 import {openLedgerDialog} from "../../utils/ledger-dialog.js";
@@ -198,9 +199,12 @@ import {crewReadinessCap, formedInShieldWall, settleShieldWallOnOrder, shieldWal
 import {settleFollowerReadinessOnAttack} from "../../combat/readiness-loss.js";
 import {LOAD_LEVEL_LIMITS, poolCountFromClick, poolAtLimitKey} from "../../utils/load.js";
 import {arcanaSummonFollowers, summonAsks, summonChoiceGroups, summonPickTicks, summonPicksComplete, resolveSummonChoices} from "../../data/arcana-summons.js";
+import {isArcanumFrontMoveSlug} from "../../data/arcana-moves.js";
+import {rolledTrackTouched, rolledUsesCount} from "./CharacterArcana.js";
+import {contentElement} from "../../utils/dialogv2-content.js";
 import {ArcanaSummonDialog} from "./dialogs/ArcanaSummonDialog.js";
 import {offerSummonRepairs} from "./summon-repair.js";
-import {IMPROVISE, RING_OF_DAAGON, arcanumAltRolls, chooseUnlockChoices, improviseOffer, improviseRollOptions, markConsequenceButton, mindOverMagicRoll, settleArcanumBoxTick} from "./arcana-seeker-moves.js";
+import {IMPROVISE, RING_OF_DAAGON, arcanumAltRolls, arcanumCastingPenalty, chooseUnlockChoices, improviseOffer, improviseRollOptions, markConsequenceButton, mindOverMagicRoll, orderMissConsequenceActions, settleArcanumBoxTick} from "./arcana-seeker-moves.js";
 import {joinNames} from "../../utils/strings.js";
 import {availablePossessionFollowers} from "../../data/possession-followers.js";
 import {FOLLOWER_MOVES} from "../../data/follower-moves.js";
@@ -2061,6 +2065,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				Object.values(this.actor.getFlag(STONETOP_SCOPE, "customFollowers") ?? {})
 					.map(f => f?.sourceUuid).filter(Boolean)
 			);
+			// Other characters' summoned followers (A16 caution), read from the world once, on first need.
+			let summonHolders = null;
 			// Per-card arcana back visibility. Two independent things gate whether the back
 			// panel renders beside the front: PERMISSION (may this viewer see the back at
 			// all) and the per-card "show both" toggle (a view preference, default off, so
@@ -2119,6 +2125,8 @@ export function createStonetopCharacterSheetClass(Base) {
 					// Observer-permission player) never sees another character's hidden back. The
 					// world setting is the separate peek switch: on → any player may open the back
 					// without unlocking it. Otherwise a locked back waits on the GM's reveal.
+					// The owner's part is CharacterArcana#backOpenToOwner, read here off the
+					// snapshot (revealed, item.unlocked) rather than awaited per card.
 					const permittedBack    = viewerIsGM || playersSeeBothArcana
 						|| (viewerOwnsActor && (revealed || item.unlocked));
 					item.showBoth          = showBothArcana.has(item.slug);
@@ -2161,6 +2169,10 @@ export function createStonetopCharacterSheetClass(Base) {
 					// person over a "Study it" button that _onArcanumStudyBack drops on the spot
 					// (!isEditable). The GM settles it with the footer's reveal toggle (canReveal).
 					item.showBackOwed      = item.backOwed && !permittedBack && viewerOwnsActor;
+					// The player's own note on the card (A6): editable by whoever may edit the sheet,
+					// readable by any viewer once written, on every view of an identified card.
+					item.canEditNotes      = !!this.isEditable;
+					item.showNotes         = !!item.identified && (item.canEditNotes || !!item.notes);
 
 					// The plain "Add as follower" button manifests only the directly-summoned
 					// followers. `viaCallUp` followers (the Ring of Daagon's Servants) are rolled
@@ -2168,8 +2180,11 @@ export function createStonetopCharacterSheetClass(Base) {
 					// card instead, so they're excluded here — the Ring's button adds just the Ring.
 					const followers = (item.summonFollowers ?? []).filter(f => !f.viaCallUp);
 					if (!followers.length) continue;
-					// The Ring becomes a follower only "when you make the last mark" (Book II p.560).
-					if (!summonUnlocked(item.slug, item.unlocked)) continue;
+					// Every summon waits on the back being realised (A4): identified and unlocked, and the
+					// Demonhide Cloak on its "becomes a follower" Consequence too (arcana-summon-gates.js).
+					if (await characterSummonBlocker(this._stonetopCharacter, item.slug, {
+						identified: !!item.identified, unlocked: !!item.unlocked,
+					})) continue;
 					const names   = joinNames(followers.map(f => f.name));
 					const plural  = followers.length > 1;
 					// A repeatable follower (the Ring's Servants) can always be summoned
@@ -2181,6 +2196,10 @@ export function createStonetopCharacterSheetClass(Base) {
 						label: addedAll
 							? `${names} ${plural ? "are" : "is"} in your Followers`
 							: `Add ${names} as ${plural ? "followers" : "a follower"}`,
+						// Another character already has this creature (A16): a gold caution, never a block.
+						caution: addedAll ? "" : summonHeldElsewhereText(summonHeldElsewhere(null, this.actor.id, followers, {
+							holders: summonHolders ??= summonHoldersBySource(globalThis.game?.actors ?? [], this.actor.id, { scope: STONETOP_SCOPE }),
+						})),
 					};
 				}
 			}
@@ -3592,7 +3611,9 @@ export function createStonetopCharacterSheetClass(Base) {
 						card.readinessSlug     = rSlug;
 						card.readinessValue    = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, _followerReadinessPath(card.ftype, rSlug))) || 0);
 						card.readinessHasShield = _followerBearsShield(card.gear);
-						card.readinessPips      = _makeReadinessPips(card.readinessValue, readinessCap(card.readinessHasShield));
+						// The Bronze Protector's "+1 Readiness on a 7+ to Defend" prints Readiness ○○○○ (p.533).
+						card.readinessPips      = _makeReadinessPips(card.readinessValue,
+							readinessCap(card.readinessHasShield) + this._followerReadinessBonus(card.ftype, rSlug));
 					}
 					// The two pip tracks reserve the same number of slots so their Spend
 					// buttons start at the same x, however many circles each row draws (a
@@ -5012,6 +5033,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			// since any PC may move such a follower's Loyalty (p.464; _wireFollowerBond).
 			this._wireFollowerBond(html);
 
+			// The Arcana tab's Show back / Show both: above the guard, since they write only the VIEWER's
+			// own user flags (a reading preference), so an Observer with the peek setting on can use
+			// the buttons they are shown (A18).
+			this._wireArcanaViewToggles(html);
+
 			if (!this.isEditable) return;
 
 			// Details-tab per-section edit pencils: toggle just that section's edit
@@ -6390,15 +6416,16 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!title) return;
 				ev.stopPropagation();
 				const { slug, flipped } = title.dataset;
-				this._stonetopCharacter.getArcanumChatContent(slug, flipped === "true").then(content => {
+				this._stonetopCharacter.getArcanumChatContent(slug, flipped === "true").then(async content => {
 					if (!content) return;
 					// The chat mode applied the way core applies it (chat.js#whisperedAs); passing
 					// rollMode as a create-data key alone does nothing, so a "Private GM Roll"
-					// setting would still broadcast a referenced card back to every player.
-					return ChatMessage.create(whisperedAs({
+					// setting would still broadcast a referenced card back to every player. A back
+					// the card's owner may not read yet goes to the GM alone (_arcanumChatData).
+					return ChatMessage.create(await this._arcanumChatData(slug, {
 						content,
 						speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-					}, null, currentChatMode()));
+					}, { back: flipped === "true" }));
 				}).catch(err => console.error("Stonetop | could not post the arcanum card", err));
 			}, true);
 
@@ -6449,6 +6476,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const btn = ev.target.closest(".stonetop-arcanum-discover-btn");
 				if (!btn) return;
 				ev.stopPropagation();
+				if (!this.isEditable) return;
 				const { slug } = btn.dataset;
 				const ok = await confirmOutcome({
 					title:   game.i18n.localize("stonetop.arcana.discoverTitle"),
@@ -6459,8 +6487,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					defaultYes: true,
 				});
 				if (!ok) return;
-				await this._stonetopCharacter.discoverArcanum(slug);
-				this.render(false);
+				await this._renderAfter(this._stonetopCharacter.discoverArcanum(slug));
 			}, true);
 
 			// The Seeker's owed major arcanum (the tab's cue): the Details tab's own ask, again.
@@ -6485,29 +6512,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			wireAvatarPreview(html[0], ".stonetop-arcanum-thumb, .stonetop-lore-arcana-img",
 				{ placement: "right", variant: "stonetop-avatar-preview--art" });
 
-			// "Show both sides" ⇄ "show front only" toggle (available in and out of edit
-			// mode). Persists a PER-USER display preference so the card renders as a front|back
-			// spread while reading in play mode. Stored on the viewing user, so the GM's and the
-			// owning player's choices are independent. It never overrides back permission — the
-			// button is only rendered for cards whose back this viewer may already see.
-			html[0].addEventListener("click", ev => {
-				const btn = ev.target.closest(".stonetop-arcanum-showboth-btn");
-				if (!btn) return;
-				ev.stopPropagation();
-				const { slug, show } = btn.dataset;
-				this._renderAfter(this._toggleArcanumShowBoth(slug, show !== "true"));
-			}, true);
-
-			// "Show back" ⇄ "Show front" single-side flip. A sibling PER-USER preference to
-			// show-both; it swaps which lone side renders while the card isn't spread. Same
-			// permission guard — only ever offered for a back this viewer may already see.
-			html[0].addEventListener("click", ev => {
-				const btn = ev.target.closest(".stonetop-arcanum-flip-btn");
-				if (!btn) return;
-				ev.stopPropagation();
-				const { slug, show } = btn.dataset;
-				this._renderAfter(this._toggleArcanumShowBack(slug, show !== "true"));
-			}, true);
+			// Show both / Show back: wired above the isEditable guard (_wireArcanaViewToggles).
 
 			// GM-only: in secretive mode (setting off), toggle whether the owning player can
 			// peek at a still-LOCKED card's back (the button is hidden once unlocked — the
@@ -6558,10 +6563,34 @@ export function createStonetopCharacterSheetClass(Base) {
 				// button at index i is filled when i < count, matching the resourceChecks helper).
 				btn.parentElement.querySelectorAll(".stonetop-arcanum-resource-btn").forEach(b =>
 					b.classList.toggle("is-checked", Number(b.dataset.index) < newVal));
-				// A card's back-ITEM resource is keyed `${slug}:item` so it never shares storage
-				// with the back-power resource on the same card (see CharacterArcana buildSnapshot).
-				const key = resourceKind === "item" ? `${slug}:item` : slug;
-				this._stonetopCharacter.setArcanumResource(key, newVal, { render: false });
+				// The pip's data-slug IS the track's key (CharacterArcana.js#arcanumItemResourceKey, set on
+				// the snapshot's resource): a back item's track on a card that also has a back-power track
+				// is "<slug>:item", every other track the bare slug. A refused write repaints what stored.
+				this._stonetopCharacter.setArcanumResource(slug, newVal, { render: false })
+					.catch(err => this._arcanaWriteRefused(err));
+			}, true);
+
+			// "Roll 1d4+8" on a track whose size is rolled when it is found (the Time-worn Missive's
+			// pouch, A9): a Foundry Roll posted to chat, then the uses it did not give marked as used.
+			html[0].addEventListener("click", ev => {
+				const btn = ev.target.closest(".stonetop-arcanum-roll-uses-btn");
+				if (!btn) return;
+				ev.stopPropagation();
+				btn.disabled = true;
+				this._renderAfter(this._onArcanumRollUses(btn.dataset));
+			}, true);
+
+			// The card's notes box (A6): saved on change, as its own sub-key, with no re-render (the
+			// text is already on screen; another client re-renders from the update as usual).
+			html[0].addEventListener("change", ev => {
+				const box = ev.target.closest(".stonetop-arcanum-notes-input");
+				if (!box) return;
+				ev.stopPropagation();
+				this._stonetopCharacter.setArcanumNote(box.dataset.slug, box.value, { render: false })
+					.catch(err => {
+						console.error("Stonetop | saving an arcanum note failed", err);
+						ui.notifications?.error(game.i18n.localize("stonetop.arcana.engine.notesSaveFailed"));
+					});
 			}, true);
 
 			html[0].addEventListener("click", async ev => {
@@ -6571,21 +6600,18 @@ export function createStonetopCharacterSheetClass(Base) {
 				const { slug } = btn.dataset;
 				const title = btn.closest(".stonetop-arcanum-card")
 					?.querySelector(".stonetop-arcanum-title")?.textContent?.trim() || "this arcanum";
-				const ok = await confirmOutcome({
-					title:   "Remove arcanum",
-					content: `<p>Remove <strong>${escHtml(title)}</strong> from your arcana? This can't be undone.</p>`,
-					yes:     { label: "Remove the arcanum", icon: "fa-trash" },
-					no:      { label: "Keep it" },
-					classes: ["stonetop-remove-arcanum-dialog"],
-				});
-				if (!ok) return;
+				const answer = await this._askRemoveArcanum(slug, title);
+				if (!answer) return;
 				// render(false) via _renderAfter, not render(true): every sibling handler
 				// repaints in place, while force re-opens the window and resets its position.
 				// The catch matters more — a failed removal used to leave the card the user
 				// was just told was gone sitting on the sheet with nothing logged.
 				await this._renderAfter((async () => {
 					await this._pruneArcanumUserPrefs(slug);
-					await this._stonetopCharacter.removeArcanum(slug);
+					// The followers go in the card's own update; their NPCs are unlinked after, read before.
+					const unlinks = answer.followers.map(id => unlinkRemovedFollower(this.actor, id));
+					await this._stonetopCharacter.removeArcanum(slug, answer);
+					await Promise.all(unlinks.map(unlink => this._unlinkRemovedFollowerNpc(unlink)));
 				})());
 			}, true);
 
@@ -6601,7 +6627,10 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!cb) return;
 				const { arcanumSlug, optionSlug, index } = cb.dataset;
 				const newCount = cb.checked ? Number(index) + 1 : Number(index);
-				this._stonetopCharacter.setArcanumUnlockCount(arcanumSlug, optionSlug, newCount);
+				// A refused write (no permission, a lost connection) repaints what stored, rather than
+				// leaving the box ticked over nothing.
+				this._stonetopCharacter.setArcanumUnlockCount(arcanumSlug, optionSlug, newCount)
+					.catch(err => this._arcanaWriteRefused(err));
 			}, true);
 
 			html[0].addEventListener("change", ev => {
@@ -6614,7 +6643,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				// and a mark made elsewhere leaves this box clear. Everything else writes as before.
 				settleArcanumBoxTick(this.actor, { slug: arcanumSlug, context, index: Number(index), checked: cb.checked })
 					.then(result => { if (result === "diverted" || result === "cancelled") cb.checked = false; })
-					.catch(err => console.error("Stonetop | marking an arcanum box failed", err));
+					.catch(err => this._arcanaWriteRefused(err));
 			}, true);
 
 			html[0].addEventListener("change", ev => {
@@ -7049,11 +7078,23 @@ export function createStonetopCharacterSheetClass(Base) {
 			const addedArcana = [];
 			for (const item of arcana) {
 				const slug = item.flags?.stonetop?.slug;
-				if (slug && !ownedArcana.has(slug)) {
-					await target.addArcanum(slug);
-					addedArcana.push(item.name || item.flags?.stonetop?.front?.title || "an arcanum");
-					anyAdded = true;
+				if (!slug) continue;
+				const name = item.name || item.flags?.stonetop?.front?.title || "an arcanum";
+				// A re-drop is never silent (ENG-10): a lead dropped again is the card found, so
+				// Discover is offered; a card already in hand says so.
+				if (ownedArcana.has(slug)) {
+					await this._onArcanumRedropped(target, slug, name);
+					continue;
 				}
+				// A card no pack or world arcanum answers to (a homebrew card dragged from a world
+				// compendium, never imported) would land as a "missing" stub at once: warn instead.
+				if (!(await target.getArcanum?.(slug))) {
+					ui.notifications?.warn?.(game.i18n.format("stonetop.arcana.engine.dropUnresolved", { name }));
+					continue;
+				}
+				await target.addArcanum(slug);
+				addedArcana.push(name);
+				anyAdded = true;
 			}
 			// onDropMove refuses a move the character already owns by NAME and returns false.
 			// That refusal used to be entirely silent — no card, no toast, no console error —
@@ -7920,10 +7961,19 @@ export function createStonetopCharacterSheetClass(Base) {
 					const ladder = guide.card ? { moveDescription: moveCardBody(guide.card, null) } : {};
 					// A move whose 6- says "don't mark XP" (an arcanum's, from _arcanumMoveGuide) marks none on a miss.
 					const noXp = guide.noXpOnMiss ? { noXpOnMiss: true } : {};
-					await this._stonetopCharacter.onDirectStatRoll(stat, { moveName: name, ...ladder, ...flat, ...noXp, ...prompted });
+					// A penalty the card marks against this move (the Hec'tumel Codex's Casting penalty), folded into
+					// the roll's one-off modifier and named on the card beside it.
+					const penalty = guide.penalty ? {
+						situational:    (Number(prompted.situational) || 0) + guide.penalty.value,
+						conditionNotes: [...(prompted.conditionNotes ?? []), guide.penalty.note],
+					} : {};
+					// A back mystery the card's owner may not read yet rolls to the GM alone, as its post does.
+					const hidden = await this._arcanumRollWhisper(guide.chatAs);
+					await this._stonetopCharacter.onDirectStatRoll(stat, { moveName: name, ...ladder, ...flat, ...noXp, ...prompted, ...penalty, ...hidden });
 				};
 				buttons.roll = {
-					label: fixedStat ? `Roll +${fixedStat.toUpperCase()}` : "Roll",
+					// "roll +nothing" is a flat 2d6, so its button is a plain "Roll", not "Roll +NOTHING".
+					label: fixedStat && fixedStat !== "nothing" ? `Roll +${fixedStat.toUpperCase()}` : "Roll",
 					callback: rollWith(fixedStat),
 				};
 				// Mind Over Magic's "+INT instead of the stat you'd normally roll", Laugh at Danger's
@@ -7940,7 +7990,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (guide.improvise) {
 				buttons.improvise = {
 					label:    `${IMPROVISE} (roll +INT)`,
-					callback: () => this._rollImprovise(guide.improvise),
+					callback: () => this._rollImprovise(guide.improvise, guide.chatAs),
 				};
 			}
 
@@ -8126,6 +8176,19 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!found) return void ui.notifications.warn("That move is no longer on this arcanum.");
 			const move = improvised ? { ...found, learned: true } : found;
 			const guide = this._arcanumMoveGuide(move, arcanumSlug);
+			// Where its "Send to chat" goes (_postGuidedCharacterMove): a back's move, to the GM alone
+			// while the owner may not read the back.
+			guide.chatAs ??= { slug: arcanumSlug, back: !isArcanumFrontMoveSlug(moveSlug) };
+			// A penalty the card's own track puts on this move (the Hec'tumel Codex's Casting penalty ○○○○○,
+			// -1 per mark, Book II p.556), on the roll and named on its card (arcana-seeker-moves.js).
+			if (guide.roll) {
+				const penalty = arcanumCastingPenalty(await this._stonetopCharacter.getArcanum?.(arcanumSlug), move,
+					this._stonetopCharacter.arcanaBoxStates ?? {});
+				if (penalty) {
+					guide.penalty = penalty;
+					guide.note ??= `${penalty.note}: ${penalty.value} on this roll, from the marks on the card.`;
+				}
+			}
 			if (guide.roll || guide.picks.length || guide.improvise) {
 				this._openGuidedCharacterMove({ name: move.name, guide }, null);
 				return;
@@ -8134,10 +8197,39 @@ export function createStonetopCharacterSheetClass(Base) {
 			// parsed out of the card (data/arcana-moves), so its outcomes are only ever in the
 			// sentence. `moveBodyHtml` reads them back out of it, which is the same ladder the
 			// arcana tab prints for the same move.
-			await ChatMessage.create({
+			await ChatMessage.create(await this._arcanumChatData(arcanumSlug, {
 				content: moveChatCard(move.name, moveBodyHtml(move.description, null)),
 				speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-			});
+			}, guide.chatAs));
+		}
+
+		/**
+		 * Chat data for a post read off an arcanum: to the GM alone when it shows the card's BACK and
+		 * the card's owner may not read that back yet (a GM, or a peeking viewer, clicking a locked
+		 * back), else in the poster's chat mode (whisperedAs), so "Private GM Roll" is honoured.
+		 */
+		async _arcanumChatData(slug, data, { back = true } = {}) {
+			if (back && slug && !(await this._arcanumBackOpenToOwner(slug))) {
+				data.whisper = ChatMessage.getWhisperRecipients("GM").map(u => u.id);
+				return data;
+			}
+			return whisperedAs(data, null, currentChatMode());
+		}
+
+		/**
+		 * The roll-card half of _arcanumChatData: `{whisper}` to the GM alone for a roll of a back
+		 * mystery (`chatAs`, the guide's) the card's owner may not read yet, else {} (the roll follows
+		 * the chat mode as any roll does).
+		 */
+		async _arcanumRollWhisper(chatAs) {
+			if (!chatAs?.back || !chatAs.slug || await this._arcanumBackOpenToOwner(chatAs.slug)) return {};
+			return { whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id) };
+		}
+
+		/** Whether the card's owner may read its back: the peek setting, or the owner's own rule (a GM reveal, or the card unlocked). */
+		async _arcanumBackOpenToOwner(slug) {
+			if (getBooleanSetting("arcanaPlayersSeeBothSides")) return true;
+			return !!(await this._stonetopCharacter.arcanumBackOpenToOwner?.(slug));
 		}
 
 		/**
@@ -8145,14 +8237,16 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * dialog): the move's own +INT roll, whose card names the mystery and carries the 7+'s
 		 * "use it this once" and the 10+'s step (arcana-seeker-moves.js#wireImproviseCard).
 		 */
-		async _rollImprovise(offer) {
+		async _rollImprovise(offer, chatAs = null) {
 			if (!offer || !this.isEditable) return;
 			const prompted = await this._promptRollOptions({ title: IMPROVISE, offersFor: IMPROVISE });
 			if (!prompted) return;
 			// Aimed at the mystery, not at whoever is still targeted on the map.
 			// The move's text gets its tier ladder from rollStat (move-tiers.js#rollCardBody).
 			const improvised = improviseRollOptions(this.actor, offer);
-			await this._stonetopCharacter.onDirectStatRoll("int", { ...improvised, ...prompted, targets: [] });
+			// The card names a back mystery: to the GM alone while the owner may not read that back.
+			const hidden = await this._arcanumRollWhisper(chatAs);
+			await this._stonetopCharacter.onDirectStatRoll("int", { ...improvised, ...prompted, targets: [], ...hidden });
 		}
 
 		async _postGuidedCharacterMove(name, guide, html, { withText = true } = {}) {
@@ -8174,11 +8268,13 @@ export function createStonetopCharacterSheetClass(Base) {
 				// in _openGuidedCharacterMove), so the card posted ahead of it keeps only what was
 				// ticked, and is not posted at all when nothing was.
 				if (!withText && !picked) return;
-				await ChatMessage.create({
+				const data = {
 					// Laid out with its tier ladder, as the same move's text-only post is (_onArcanumMoveName).
 					content: moveChatCard(name, (withText ? moveBodyHtml(guide.card, null) : "") + picked),
 					speaker: ChatMessage.getSpeaker({ actor: this.actor }),
-				});
+				};
+				// No `chatAs` (a playbook guide): `back: false` is the plain chat-mode post.
+				await ChatMessage.create(await this._arcanumChatData(guide.chatAs?.slug, data, guide.chatAs ?? { back: false }));
 				return;
 			}
 			postMoveToChat(this.actor, name, selected.length ? [{ label: "Selected", value: selected.join("\n") }] : []);
@@ -10194,6 +10290,109 @@ export function createStonetopCharacterSheetClass(Base) {
 			).render(true);
 		}
 
+		/**
+		 * "Show both sides" ⇄ "show front only", and the single-side "Show back" ⇄ "Show front" flip.
+		 * Each persists a PER-USER display preference (the viewing user's flags, never the actor), so
+		 * the GM's and the owner's choices are independent and a viewer who cannot edit the sheet can
+		 * still use them. Neither overrides back permission: the buttons render only for a back this
+		 * viewer may already see.
+		 */
+		_wireArcanaViewToggles(html) {
+			html[0].addEventListener("click", ev => {
+				const btn = ev.target.closest(".stonetop-arcanum-showboth-btn, .stonetop-arcanum-flip-btn");
+				if (!btn) return;
+				ev.stopPropagation();
+				const { slug, show } = btn.dataset;
+				const toggle = btn.classList.contains("stonetop-arcanum-showboth-btn")
+					? this._toggleArcanumShowBoth(slug, show !== "true")
+					: this._toggleArcanumShowBack(slug, show !== "true");
+				this._renderAfter(toggle);
+			}, true);
+		}
+
+		/**
+		 * A held card dropped on the sheet again: a lead offers Discover (the same end state as the
+		 * card's own button), anything else a toast that it is already held.
+		 */
+		async _onArcanumRedropped(target, slug, name) {
+			const actor = target?.name ?? this.actor.name;
+			if (!target?.leadArcanaSlugs?.has?.(slug)) {
+				ui.notifications?.info?.(game.i18n.format("stonetop.arcana.engine.dropAlreadyHeld", { actor, name }));
+				return;
+			}
+			const ok = await confirmOutcome({
+				title:   game.i18n.format("stonetop.arcana.engine.dropLeadTitle", { name }),
+				content: `<p>${game.i18n.format("stonetop.arcana.engine.dropLeadBody", { actor: escHtml(actor), name: escHtml(name) })}</p>`,
+				yes:     { label: game.i18n.localize("stonetop.arcana.discoverYes"), icon: "fa-eye" },
+				no:      { label: game.i18n.localize("stonetop.arcana.discoverNo") },
+				defaultYes: true,
+			});
+			if (ok) await this._renderAfter(target.discoverArcanum(slug));
+		}
+
+		/** A refused Arcana-tab write: logged, said, and the sheet repainted from what stored (ENG-13). */
+		_arcanaWriteRefused(err) {
+			console.error("Stonetop | an arcanum write failed", err);
+			ui.notifications?.error(game.i18n.localize("stonetop.arcana.engine.writeRefused"));
+			this.render(false);
+		}
+
+		/**
+		 * The Remove confirm (A5, A16): names the card's marked Consequences with "Keep its Consequence
+		 * marks" (ticked), and each follower summoned from the card with "Also remove ..." (unticked).
+		 * Answers `{ keepConsequences, followers: [id] }`, or null when the card stays.
+		 */
+		async _askRemoveArcanum(slug, title) {
+			const t = (key, data) => (data ? format : localize)(`stonetop.arcana.engine.${key}`, data);
+			const marked = (await this._stonetopCharacter.markedArcanumConsequences(slug)) ?? [];
+			const arcanum = await this._stonetopCharacter.getArcanum(slug);
+			const sources = new Set((arcanaSummonFollowers(arcanum) ?? []).map(f => f.sourceUuid).filter(Boolean));
+			const followers = Object.entries(this.actor.getFlag(STONETOP_SCOPE, "customFollowers") ?? {})
+				.filter(([, f]) => f && sources.has(f.sourceUuid))
+				.map(([id, f]) => ({ id, name: String(f.name ?? "").trim() || id }));
+			// The shared opt-in row beside a question (.stonetop-ask-check, as ExpeditionDialog's).
+			const check = (name, text, checked) => `<label class="stonetop-camp-check stonetop-ask-check"><input type="checkbox" class="stonetop-check" name="${name}"${checked ? " checked" : ""}><span>${escHtml(text)}</span></label>`;
+			let body = `<p>${t("removeBody", { name: escHtml(title) })}</p>`;
+			if (marked.length) {
+				body += `<p class="stonetop-arcanum-remove-marked">${escHtml(t("removeMarked"))}</p>`
+					+ `<ul class="stonetop-arcanum-remove-marked-list">${marked.map(c => `<li>${escHtml(c.label || "")}</li>`).join("")}</ul>`
+					+ check("keepConsequences", t("removeKeep"), true);
+			}
+			followers.forEach((f, i) => { body += check(`follower-${i}`, t("removeFollower", { name: f.name }), false); });
+			const answer = await askWithButtons({
+				title:   t("removeTitle"),
+				content: contentElement(body),
+				classes: ["stonetop-remove-arcanum-dialog"],
+				buttons: [
+					{ key: "yes", label: t("removeYes"), icon: "fa-trash", value: form => ({
+						keepConsequences: !!form?.elements?.namedItem?.("keepConsequences")?.checked,
+						followers: followers.filter((_, i) => form?.elements?.namedItem?.(`follower-${i}`)?.checked).map(f => f.id),
+					}) },
+					{ key: "no", label: t("removeNo"), icon: "fa-xmark", value: false },
+				],
+				// Enter keeps the card: removing it cannot be undone.
+				defaultKey: "no",
+			});
+			return answer && typeof answer === "object" ? answer : null;
+		}
+
+		/**
+		 * "Roll 1d4+8" (A9): roll the formula as a Foundry Roll, post it, and mark the uses the roll
+		 * did not give as used (max - total, clamped). Only while the track is untouched: the button
+		 * is drawn then and nowhere else, and this checks again against what is stored. A stored 0
+		 * counts as touched (a roll of the full 12 writes 0), so the size is rolled once.
+		 */
+		async _onArcanumRollUses({ slug: key, formula, max } = {}) {
+			if (!this.isEditable || !key || !formula) return;
+			if (rolledTrackTouched(this.actor.getFlag(STONETOP_SCOPE, "inventory.resources"), key)) return;
+			const roll = await new Roll(String(formula)).evaluate();
+			await roll.toMessage(whisperedAs({
+				speaker: ChatMessage.getSpeaker({ actor: this.actor }),
+				flavor:  game.i18n.format("stonetop.arcana.engine.rollUsesFlavor", { name: escHtml(this.actor.name), formula: escHtml(formula) }),
+			}, null, currentChatMode()));
+			await this._stonetopCharacter.setArcanumResource(key, rolledUsesCount(Number(max) || 0, roll.total));
+		}
+
 		// Toggle the viewing user's "show both sides" preference for one arcanum. Kept as a
 		// User flag (not on the actor) so the GM's spread choices stay independent of the
 		// owning player's — each client renders its own. Keyed by actor id, since one user
@@ -10265,10 +10464,12 @@ export function createStonetopCharacterSheetClass(Base) {
 			// button adds just the Ring itself.
 			const followers = arcanaSummonFollowers(arcanum)?.filter(f => !f.viaCallUp);
 			if (!followers?.length) return;
-			// "When you make the last mark, you unlock the ring's mysteries ... The ring itself becomes a
-			// follower" (Book II p.560). The Ring only: every other summon is as it was.
-			if (!summonUnlocked(slug, await this._stonetopCharacter.isArcanumUnlocked?.(slug))) {
-				ui.notifications?.warn?.("Make the last mark on the Ring of Daagon first: then the Ring becomes a follower.");
+			// Every summon waits on the back being realised (A4; Book I p.444 "by a PC who unlocks its mysteries",
+			// the Ring's "When you make the last mark ... The ring itself becomes a follower", Book II p.560), and
+			// the Demonhide Cloak on its "becomes a follower" Consequence (arcana-summon-gates.js). Read live.
+			const blocker = await characterSummonBlocker(this._stonetopCharacter, slug, { arcanum });
+			if (blocker) {
+				ui.notifications?.warn?.(summonBlockedMessage(blocker, { slug, title: arcanum?.front?.title ?? "", names: joinNames(followers.map(f => f.name)) }));
 				return;
 			}
 			const existing = this.actor.getFlag(STONETOP_SCOPE, "customFollowers") ?? {};
@@ -10301,9 +10502,12 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (plain.length && !inputs.length) {
 				const names = joinNames(plain.map(f => f.name));
 				const plural = plain.length > 1;
+				// Another character already has this creature (A16): said, never refused.
+				const caution = summonHeldElsewhereText(summonHeldElsewhere(globalThis.game?.actors ?? [], this.actor.id, plain, { scope: STONETOP_SCOPE }));
 				const confirmed = await confirmOutcome({
 					title:   "Manifest follower",
-					content: `<p>Manifest <strong>${escHtml(names)}</strong> and add ${plural ? "them" : "it"} to your Followers tab?</p>`,
+					content: `<p>Manifest <strong>${escHtml(names)}</strong> and add ${plural ? "them" : "it"} to your Followers tab?</p>`
+						+ (caution ? `<p class="stonetop-arcanum-summon-caution">${escHtml(caution)}</p>` : ""),
 					yes:     { label: `Add ${plural ? "them" : "it"} to Followers`, icon: "fa-user-plus" },
 					no:      { label: "Not now" },
 				});
@@ -10346,7 +10550,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			}
 			// "When you make the last mark, you unlock the ring's mysteries and may Call Up the Deep Ones"
 			// (Book II p.560): a Ring follower added before then does not open the door early.
-			if (!summonUnlocked(RING_ARCANUM_SLUG, await this._stonetopCharacter.isArcanumUnlocked?.(RING_ARCANUM_SLUG))) {
+			// The Ring prints no box gate, so this reads only identified and unlocked.
+			if (await characterSummonBlocker(this._stonetopCharacter, RING_ARCANUM_SLUG)) {
 				ui.notifications?.warn?.("Make the last mark on the Ring of Daagon first: then you may Call Up the Deep Ones.");
 				return;
 			}
@@ -10436,11 +10641,15 @@ export function createStonetopCharacterSheetClass(Base) {
 			const unlink = unlinkRemovedFollower(this.actor, slug);
 			const [key, val] = deletionEntry(`flags.${STONETOP_SCOPE}.customFollowers.${slug}`);
 			await this.actor.update({ [key]: val }, updateOptions);
-			if (unlink?.npc?.isOwner) {
-				await unlink.npc.update(unlink.update, { stonetopLedger: true })
-					.catch(err => console.warn("Stonetop | could not unlink the removed follower's NPC", err));
-			}
+			await this._unlinkRemovedFollowerNpc(unlink);
 			this.render(false);
+		}
+
+		/** Apply an unlinkRemovedFollower answer (null for none) to the NPC, when this user owns it. */
+		async _unlinkRemovedFollowerNpc(unlink) {
+			if (!unlink?.npc?.isOwner) return;
+			await unlink.npc.update(unlink.update, { stonetopLedger: true })
+				.catch(err => console.warn("Stonetop | could not unlink the removed follower's NPC", err));
 		}
 
 		/**
@@ -10678,9 +10887,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!outcome) return;
 
 			const opts = { stonetopMove: "Know Things" };
-			const tier = classifyResult(Number(outcome.roll?.total) || 0).key;
-			if (tier === "success")      await this._stonetopCharacter.identifyAndRevealArcanum(slug, opts);
-			else if (tier === "partial") await this._stonetopCharacter.identifyFrontOwedArcanum(slug, opts);
+			// The tier the card COUNTS as NOW, not the dice's: a Shift or +1 pressed on the card while its dice
+			// were still rolling has already re-applied its own tier (stonetop.js#_syncArcanumIdentification),
+			// and the raw 7-9 written over it would owe a back the player was just shown. What is written, and
+			// whether anything is (the card removed meanwhile, a back already readable), is arcana-identify.js's.
+			const message = messageOfRoll(outcome.roll);
+			const tier = (message ? cardTierNow(message, STONETOP_SCOPE) : null) ?? classifyResult(Number(outcome.roll?.total) || 0).key;
+			await identifyArcanumAtTier(this._stonetopCharacter, slug, tier, opts);
 			this.render(false);
 		}
 
@@ -12350,6 +12563,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			return _followerBearsShield(detail?.gear);
 		}
 
+		// Readiness a follower holds beyond the usual on a 7+ Defend, which raises its cap too: an arcana
+		// summon's own (the Bronze Protector's +1, arcana-summon-gates.js#followerReadinessBonus). 0 for most.
+		_followerReadinessBonus(ftype, slug) {
+			if (ftype !== "custom" || !slug) return 0;
+			return followerReadinessBonus((this.actor.getFlag(STONETOP_SCOPE, "customFollowers") ?? {})[slug]);
+		}
+
 		/**
 		 * Direct one follower to make a move, and roll what the dialog decides (p.462).
 		 *
@@ -12450,8 +12670,11 @@ export function createStonetopCharacterSheetClass(Base) {
 					if (attacking) {
 						await settleFollowerReadinessOnAttack(this.actor, { ftype, slug, name: who }, orderedMoveName(result.moveKey) || result.moveName || "");
 					}
+					// The Mindgem's Mighty Servant marks a Consequence on a 6- (Book II p.549): a button on that tier.
+					const missActions = ftype === "custom" ? orderMissConsequenceActions((this.actor.getFlag(STONETOP_SCOPE, "customFollowers") ?? {})[slug]) : "";
 					const roll = await this._stonetopCharacter.onOrderFollowersRoll({
 						...result, loyaltySpent, ...(presenceSpent ? { presenceSpent } : {}),
+						...(missActions ? { missActions } : {}),
 						// A Clash or Let Fly carries a damage button on its hit (fight/follower-order-attack.js).
 						// One member ordered on their own strikes as one attacker (FOE-5); a card that tracks ammo gets Let
 						// Fly's 7-9 deplete button (FOE-10).
@@ -12599,7 +12822,10 @@ export function createStonetopCharacterSheetClass(Base) {
 			// SHIELD WALL (p.126): "on a 7+ they hold +2 Readiness (instead of the usual +1 for shields)". A crew
 			// formed bearing shields gets it on its own, kept on the card's record so a Shift settles the same
 			// hold (tier-effects.js#settleFollowerReadiness). Only the Marshal's crew is offered the wall.
-			const bonus = ftype === "crew" ? shieldWallDefendBonus({ shieldWall: !!result?.shieldWall, hasShield: bearsShield }) : 0;
+			const wallBonus = ftype === "crew" ? shieldWallDefendBonus({ shieldWall: !!result?.shieldWall, hasShield: bearsShield }) : 0;
+			// And a summon's own (the Bronze Protector "holds +1 Readiness on a 7+ to Defend", Book II p.533).
+			const ownBonus = this._followerReadinessBonus(ftype, slug ?? "");
+			const bonus = wallBonus + ownBonus;
 			const record = await settleFollowerReadiness(this.actor, tier, { path, prior: existing, set: existing, name: who, ...(bonus ? { bonus } : {}) });
 			await recordTierEffects(messageOfRoll(roll), { followerReadiness: record });
 			if (total < 7) return;
@@ -12612,8 +12838,9 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Only advertise the shield's +1 when the follower actually bears one, and only
 			// when this Defend set the (fresh) base hold, not when we kept a higher pool.
 			// Formed up in a shield wall, the shields' +2 is already in the hold, and the card says so.
-			const shieldNote = !bearsShield || next !== held ? ""
-				: bonus ? ` (with the shield wall's +${bonus})` : ` (${held + 1} with their shield)`;
+			const shieldNote = (!bearsShield || next !== held ? ""
+				: wallBonus ? ` (with the shield wall's +${wallBonus})` : ` (${held + 1} with their shield)`)
+				+ (ownBonus && next === held ? ` (with its own +${ownBonus})` : "");
 			const wallLine = result?.shieldWall && ftype === "crew" ? `<p>${escHtml(localize("stonetop.shieldWall.formed"))}</p>` : "";
 			await this._postMoveCard("Defend: Readiness held",
 				`<p><strong>${escHtml(who)}</strong> holds <strong>${next}</strong> Readiness${shieldNote}.</p>`

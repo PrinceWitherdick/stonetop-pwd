@@ -141,10 +141,14 @@ const ARCANA_SLUG_LISTS = {
 	// A 7-9 on the Know Things roll to identify a card (Book I p.440) hands over the front and
 	// promises the back later; the debt is settled when the GM reveals it.
 	backOwed:   { added: "Arcanum back owed",  removed: "Arcanum back delivered",    merge: "Arcana backs owed" },
+	// The unlock latch (CharacterArcana#unlockedOnce): set in the write that completes a card's track,
+	// so a card that later says "erase all marks" stays unlocked. Cleared by Remove, or by taking the
+	// completing tick back before anything on the back is marked.
+	unlockedOnce: { added: "Arcanum unlocked", removed: "Arcanum unlock forgotten", merge: "Arcana unlocked" },
 };
 // Bookkeeping sub-flags with no play meaning of their own — a backfill guard, the onboarding
 // draw, per-card display state. They were logging lines like "Arcana set to on".
-const ARCANA_SILENT_KEYS = new Set(["leadBackfilled", "minorDraw", "majorMarksFor", "flipped", "seeBothSides"]);
+const ARCANA_SILENT_KEYS = new Set(["leadBackfilled", "minorDraw", "majorMarksFor", "flipped", "seeBothSides", "owedAtLatch"]);
 
 // Lore: `lore.counts.<loreSlug>:<optionSlug>` (a tick count) and `lore.texts.<loreSlug>:<optionSlug>`
 // (the written answer). Both were falling through to the "Lore" namespace label, so a ticked box

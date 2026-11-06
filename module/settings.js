@@ -474,6 +474,18 @@ export function registerSettings() {
 		default: false,
 	});
 
+	// Book I p.136, the Seeker's minor arcana: "Draw 3 at random". Off (the default) draws from
+	// the shipped deck only; on, the world's finished homebrew minors join it (ruling A19). Read at
+	// the draw, CharacterOnboardingDialog#_loadArcanaOptions. On the Preferences tab as a GM row.
+	game.settings.register(SYSTEM_ID, "arcanaSeekerDrawsHomebrew", {
+		name: "stonetop.settings.arcanaSeekerDrawsHomebrew.name",
+		hint: "stonetop.settings.arcanaSeekerDrawsHomebrew.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: false,
+	});
+
 	// Identifying artifacts, Book I pp.430-431. When on, a Book II treasure dropped onto a
 	// character sheet lands with its tags, Value and ○ uses withheld, so the table plays out
 	// "describe it… hint at more than meets the eye" and a PC has to Know Things about it.

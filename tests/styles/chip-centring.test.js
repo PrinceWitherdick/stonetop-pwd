@@ -311,6 +311,25 @@ describe("the Bolster button and the Suggested tag carry no hand nudge", () => {
 	});
 });
 
+// Measured 11-05 with the text-centring audit at 1x/1.25x/1.5x: the arcana tab's "Roll 1d4+8" (icon row, -1.3px)
+// and the crew member dialog's "Add" for a trait of their own (icon row, 0px), on core's button and even padding.
+// The crew member's edit pencil is icon-only and the unlock list's "or" a plain list label, so neither has words
+// to centre in a box. What would break the two buttons is a hand nudge on the label.
+describe("the arcana Roll uses button and the crew trait Add carry no hand nudge", () => {
+	it.each([
+		".stonetop-arcanum-roll-uses-btn",
+		".stonetop-individual-dialog .stonetop-trait-custom-row .stonetop-trait-custom-add",
+	])("%s", sel => {
+		const body = declarations(MAIN, sel);
+		expect(body, `${sel} has no rule`).toBeTruthy();
+		for (const prop of ["top", "bottom", "transform", "translate", "padding-top", "padding-bottom"]) {
+			expect(declared(body, prop) ?? null, `${sel} sets ${prop}`).toBeNull();
+		}
+		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+		expect(bottom).toBe(top);
+	});
+});
+
 // Measured 10-31 with the text-centring audit (z:/tmp/foundry-verify/forced-out-centre.mjs): Bodysnatcher's
 // "Forced out" roll-card button (icon row, -1 to 0px) and Death's Door's icon-led gold caution row (-0.5 to
 // 0px), at 1x/1.25x/1.5x in all three sheet fonts. The button is the chat card's shared button and the row a

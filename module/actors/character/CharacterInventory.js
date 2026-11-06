@@ -74,20 +74,20 @@ export class CharacterInventory {
 		return this._flags.subKeyDeletionData("resources", slug);
 	}
 
-	// Drop a removed arcanum's resource tracks (the back-power track keyed by slug and the
-	// back-item ammo track keyed "<slug>:item"), so a later re-acquire doesn't inherit stale
-	// charges. No-op when the card had no tracks.
-	async clearArcanumResources(slug) {
+	// A removed arcanum's traces in the inventory, as ONE fragment for the card's removal update
+	// (StonetopCharacter#removeArcanum): its resource tracks (the back-power track keyed by slug,
+	// the back-item track keyed "<slug>:item" when the card has both) and its carried mark, each a
+	// sub-key deletion, so a re-acquire inherits no stale charges and comes back set down. Nothing
+	// else in the map is re-sent, so a concurrent change to another track survives, and there is
+	// no second write to fail half-way. {} when the card left nothing behind.
+	arcanumRemovalData(slug) {
+		const data = {};
 		const resources = this.resources;
-		const itemKey = `${slug}:item`;
-		const kept = Object.entries(resources).filter(([k]) => k !== slug && k !== itemKey);
-		if (kept.length !== Object.keys(resources).length) {
-			// setFlag MERGES, so writing the smaller object leaves the removed slug/"<slug>:item"
-			// keys in place (see CharacterArcana.removeArcanum). Unset the whole map, then re-set
-			// the survivors, so a later re-acquire can't inherit stale charges.
-			await this._flags.unsetFlag("resources");
-			if (kept.length) await this._flags.setFlag("resources", Object.fromEntries(kept));
+		for (const key of [slug, `${slug}:item`]) {
+			if (key in resources) Object.assign(data, this._flags.subKeyDeletionData("resources", key));
 		}
+		if (slug in this.checked) Object.assign(data, this._flags.subKeyDeletionData("checked", slug));
+		return data;
 	}
 
 	async setRegularPool(count, options) {
@@ -165,7 +165,7 @@ export class CharacterInventory {
 
 	// Drops the item AND everything keyed to it: its carried mark (so it stops counting toward
 	// load and armor) and its uses / acquired-capacity tracks. The tracks go for the same reason
-	// clearArcanumResources drops an arcanum's — a re-acquired item must not inherit stale
+	// arcanumRemovalData drops an arcanum's — a re-acquired item must not inherit stale
 	// charges. Provisions is where that bites: a larder tossed to the crows with 2 uses left,
 	// then re-foraged, would otherwise come back holding those 2.
 	//

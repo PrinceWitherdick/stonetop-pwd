@@ -100,7 +100,7 @@ async function arcanaTrackMilestones(before, after) {
 		if (!card?.front) continue;
 		const back = card.back?.description ?? "";
 		out.push(...detectArcanaTracks(slug, before, after, {
-			unlocked: (unlock, boxes) => arcanumUnlockedUnder(card, unlock, boxes),
+			unlocked: (unlock, boxes, unlockedOnce) => arcanumUnlockedUnder(card, unlock, boxes, unlockedOnce),
 			consequences: consequenceBoxRange(back),
 			consequenceLabel: index => consequenceBoxLabel(back, index),
 		}));

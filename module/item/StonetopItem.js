@@ -7,7 +7,7 @@ import {filterStatOptionLines, escHtml} from "../utils/strings.js";
 import {moveCardBody} from "../utils/move-tiers.js";
 import {stonetopThumbnail} from "../utils/item-icon.js";
 import {STONETOP_SCOPE, ITEM_FLAG_SCOPE} from "../actors/character/StonetopFlags.js";
-import {newArcanumSlug, isArcanumData} from "./createArcanum.js";
+import {newArcanumSlug, isArcanumData, shippedArcanumSlugs} from "./createArcanum.js";
 import {withMovePickBonuses} from "../actors/character/move-pick-bonuses.js";
 import {invokeCardFlags} from "../actors/character/invoke-consequences.js";
 import {moveRollOptions} from "../actors/character/move-roll-options.js";
@@ -73,11 +73,14 @@ export function createStonetopItemClass(BaseItem) {
 		 * reached cards somebody happened to open: a card built by macro or console and never
 		 * edited stayed slug-less while players held marks against it.
 		 *
-		 * Fills a GAP, and breaks a TIE. Shipped pack arcana carry their own slug and
-		 * `createArcanumItem` mints one into its payload, so an import and the creator both pass
-		 * straight through -- which matters, because a slug rewritten on import would orphan every
-		 * mark in the world that points at the old one. A COPY is the other way a card can arrive
+		 * Fills a GAP, and breaks a TIE. `createArcanumItem` mints a slug into its payload, and a
+		 * homebrew card brought back from a backup compendium keeps its own, so both pass straight
+		 * through -- which matters, because a slug rewritten on that import would orphan every mark
+		 * in the world that points at the old one. A COPY is the other way a card can arrive
 		 * carrying a slug, and there the slug has to be re-minted: see `_arcanumSlugIsSomebodyElses`.
+		 * So is a SHIPPED card dragged out of the arcana pack into the world (ruling A13): on the
+		 * pack's slug the pack card would always win, so the world copy's edits would reach no
+		 * sheet. Re-minted, it is a new homebrew card started from the shipped one.
 		 *
 		 * Same shape as StonetopActor#_preCreate: one `updateSource` on the pending document.
 		 * @override
@@ -88,7 +91,7 @@ export function createStonetopItemClass(BaseItem) {
 			if (!isArcanumData(this)) return;
 			const slug = String(this.flags?.[ITEM_FLAG_SCOPE]?.slug ?? "").trim();
 			let mine = slug;
-			if (!slug || this._arcanumSlugIsSomebodyElses(slug, options)) {
+			if (!slug || this._arcanumSlugIsSomebodyElses(slug, options) || await this._arcanumSlugIsShipped(slug)) {
 				mine = newArcanumSlug();
 				this.updateSource({ [`flags.${ITEM_FLAG_SCOPE}.slug`]: mine });
 			}
@@ -132,6 +135,52 @@ export function createStonetopItemClass(BaseItem) {
 			const owners = batch?.owners ?? _worldSlugOwners();
 			const owner = owners.get(slug);
 			return owner !== undefined && owner !== this.id;
+		}
+
+		/**
+		 * Is this slug a SHIPPED card's, for a card landing in the world (not in a compendium, not
+		 * on an actor)? The arcana repository resolves the pack before the world, so a world card on
+		 * a shipped slug is never what any sheet reads.
+		 * @param {string} slug
+		 */
+		async _arcanumSlugIsShipped(slug) {
+			if (this.pack || this.parent) return false;
+			return (await shippedArcanumSlugs()).has(slug);
+		}
+
+		/**
+		 * Keep a world arcanum's slug its own through an update (HB-7). Core's "Import Data" on a
+		 * card is an update with the whole exported document (diff off, not recursive), so
+		 * importing card B's JSON onto card A used to hand A card B's slug: A's holders lost their
+		 * card and the two cards shared marks. A slug change onto a slug another world card or a
+		 * shipped card owns is refused, keeping the card's own slug, with a notice.
+		 * @override
+		 */
+		async _preUpdate(changed, options, user) {
+			const allowed = await super._preUpdate?.(changed, options, user);
+			if (allowed === false) return false;
+			if (!isArcanumData(this) || this.pack || this.parent) return allowed;
+			const path   = `flags.${ITEM_FLAG_SCOPE}.slug`;
+			const dotted = Object.prototype.hasOwnProperty.call(changed ?? {}, path);
+			const next   = dotted ? changed[path] : changed?.flags?.[ITEM_FLAG_SCOPE]?.slug;
+			if (next === undefined) return allowed;
+			const current = String(this.flags?.[ITEM_FLAG_SCOPE]?.slug ?? "").trim();
+			const wanted  = String(next ?? "").trim();
+			if (wanted && wanted === current) return allowed;
+			const owner = _worldSlugOwners().get(wanted);
+			const taken = !wanted
+				|| (owner !== undefined && owner !== this.id)
+				|| (await shippedArcanumSlugs()).has(wanted);
+			if (!taken) return allowed;
+			const keep = current || newArcanumSlug();
+			if (dotted) changed[path] = keep;
+			else changed.flags[ITEM_FLAG_SCOPE].slug = keep;
+			if (wanted) {
+				globalThis.ui?.notifications?.warn(
+					`"${this.name}" kept its own arcanum id: the update would have given it the id of another card, and two cards on one id share every mark.`,
+				);
+			}
+			return allowed;
 		}
 
 		/**

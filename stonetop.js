@@ -56,6 +56,7 @@ import { wireFollowerBalkCard, registerFollowerBalkHooks } from "./module/gm-too
 import { FOLLOWER_LOYALTY_QUERY, handleFollowerLoyaltyQuery } from "./module/actors/character/follower-bond.js";
 import { FOLLOWER_HANDOFF_QUERY, handleFollowerHandoffQuery } from "./module/actors/character/follower-handoff.js";
 import { wireImproviseCard, wireMarkConsequenceCard } from "./module/actors/character/arcana-seeker-moves.js";
+import { identifyArcanumAtTier } from "./module/actors/character/arcana-identify.js";
 import { wireSendBackCard } from "./module/actors/character/send-them-back.js";
 import { wirePouchCards } from "./module/actors/character/sacred-pouch.js";
 import { wireInvocationEffects, BATH_QUERY, handleBathQuery } from "./module/actors/character/invocation-apply.js";
@@ -164,6 +165,7 @@ import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./modul
 import { watchOwnHelpers } from "./module/utils/foreign-helper-check.js";
 import { registerCampHooks } from "./module/camp/camp-store.js";
 import { registerVitalsMirrorHooks } from "./module/actors/character/vitals-mirror.js";
+import { registerArcanaCardEditHooks } from "./module/hooks/arcana-card-edits.js";
 import { registerBronzeLineHooks } from "./module/actors/character/bronze-lines.js";
 import { registerPostDeathMoveHooks } from "./module/actors/character/post-death-moves.js";
 import { installBodysnatcherHooks } from "./module/actors/character/bodysnatcher.js";
@@ -1552,15 +1554,10 @@ async function _syncArcanumIdentification(message, actor, total) {
 	const key  = cardCountedTier(message, Number(total) || 0, SYSTEM_ID);
 	const opts = { stonetopMove: "Know Things" };
 	try {
-		if (key === "success" || key === "critical") {
-			// Already read front and back? Then there is nothing to grant, and identifyAndReveal
-			// would be a no-op write that re-renders every open sheet.
-			if (character.revealedArcanaSlugs?.has?.(slug) && !character.backOwedArcanaSlugs?.has?.(slug)) return;
-			await character.identifyAndRevealArcanum(slug, opts);
-		} else if (key === "partial") {
-			if (character.identifiedArcanaSlugs?.has?.(slug)) return;   // a 6- shifted up to a 7-9 only
-			await character.identifyFrontOwedArcanum(slug, opts);
-		} else return;
+		// What to write is arcana-identify.js's: nothing for a card this character no longer holds (a Shift on
+		// an old card after it was removed must not hand it back face-up), nothing a higher tier already gave,
+		// and no back debt for a 7-9 on a card whose back is readable already.
+		if (!(await identifyArcanumAtTier(character, slug, key, opts))) return;
 		actor.sheet?.render(false);
 	} catch (err) {
 		console.error("Stonetop | Error re-applying the arcanum's identification:", err);
@@ -2999,6 +2996,9 @@ registerCampHooks();
 registerSharedRouteHooks();
 // A character's stored armor and max HP, re-mirrored whenever they or their gear change, sheet open or not.
 registerVitalsMirrorHooks();
+// A world arcanum held by characters: a delete asks first and leaves each holder the card's name,
+// and an edit repaints the holders' open sheets.
+registerArcanaCardEditHooks();
 // A bronze weapon's line deleted from the sheet takes its "which weapon?" answer with it.
 registerBronzeLineHooks();
 // And a character's post-death Consequence and Mark moves (Poltergeist, Red Wrath), kept to what is marked

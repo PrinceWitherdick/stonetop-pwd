@@ -8,6 +8,7 @@ import {
 	MIND_OVER_MAGIC, askUnlockChoice, chooseUnlockChoices, improviseOffer, markImproviseStep, mindOverMagicRoll, settleArcanumBoxTick,
 } from "../../../module/actors/character/arcana-seeker-moves.js";
 import { FakeArcanaRepository } from "../../fakes/FakeArcanaRepository.js";
+import { flagFragmentOps } from "../../fakes/flag-fragments.js";
 
 // Three arcana fixes from the Seeker re-audit (2026-10-18):
 //  - the rolls printed on a card's FRONT are rollable handles, with Mind Over Magic's +INT;
@@ -23,6 +24,7 @@ const ARCH   = readCard("packs/src/stonetop-arcana/minor/crumbling-arch.json");
 function makeFlags(store = {}) {
 	return {
 		_store: store,
+		...flagFragmentOps(store),
 		getFlag: key => store[key] ?? null,
 		setFlag: vi.fn(async (key, value) => { store[key] = value; }),
 		batch: vi.fn(async ({ sets = {} } = {}) => { for (const [k, v] of Object.entries(sets)) store[k] = v; }),

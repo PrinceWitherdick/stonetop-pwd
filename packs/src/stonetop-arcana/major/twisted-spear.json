@@ -11,7 +11,7 @@
         "title": "Twisted Spear",
         "item": {
           "name": "Twisted Spear",
-          "weight": 1,
+          "weight": 2,
           "note": "<em>reach, magical</em>",
           "inventoryColumn": "regular"
         },

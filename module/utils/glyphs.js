@@ -1,4 +1,5 @@
 import { replaceTextMatches } from "./text-nodes.js";
+import { stripHtmlToText } from "./strings.js";
 
 /**
  * Every glyph we draw, and the modifier class its shape is drawn from.
@@ -41,6 +42,32 @@ const _GLYPH_CHARS = [..._GLYPH_MODIFIERS.keys()].join("");
 const _GLYPH_RE = new RegExp(`[([{"'‘“]*[${_GLYPH_CHARS}]+[)\\]}.,;:!?"'’”]*`, "g");
 
 /**
+ * Display-only glyphs: a run wrapped in `<span class="stonetop-glyph-label">…</span>` (a follower's
+ * "Loyalty ○○○" printed in its stat block, the Oversized Codex's "(else, it's ◇◇ at most)") is drawn
+ * as a glyph but is never a checkbox and never counted for any box index.
+ *
+ * Every counter and injector reads the text through maskGlyphLabels, which swaps the ○ ◇ □ inside
+ * such a span for private-use stand-ins of the SAME length, so string offsets found in the masked
+ * text hold in the original. unmaskGlyphLabels puts the glyphs back (a plain character swap, so it
+ * works on any string cut from masked text, tags or no tags).
+ */
+const _GLYPH_LABEL_RE = /<span\b[^>]*\bclass\s*=\s*["'][^"']*\bstonetop-glyph-label\b[^"']*["'][^>]*>[\s\S]*?<\/span>/gi;
+const _LABEL_MASK   = new Map([["○", "\uE000"], ["◇", "\uE001"], ["□", "\uE002"]]);
+const _LABEL_UNMASK = new Map([..._LABEL_MASK].map(([glyph, stand]) => [stand, glyph]));
+
+/** `html` with the ○ ◇ □ inside every `.stonetop-glyph-label` span swapped for same-length stand-ins. */
+export function maskGlyphLabels(html) {
+	const text = String(html ?? "");
+	if (!text.includes("stonetop-glyph-label")) return text;
+	return text.replace(_GLYPH_LABEL_RE, span => span.replace(/[○◇□]/g, ch => _LABEL_MASK.get(ch)));
+}
+
+/** Undo maskGlyphLabels on any string cut from masked text. */
+export function unmaskGlyphLabels(text) {
+	return String(text ?? "").replace(/[\uE000-\uE002]/g, ch => _LABEL_UNMASK.get(ch));
+}
+
+/**
  * Wrap standalone mark/charge tracks (runs of ◇ or ○) in a block span so CSS can drop
  * them onto their own centered line, matching the printed cards. Only two shapes count
  * as tracks: a run trailing a sentence at the end of a paragraph (e.g. "…maximum of 3):
@@ -54,9 +81,10 @@ const _GLYPH_RE = new RegExp(`[([{"'‘“]*[${_GLYPH_CHARS}]+[)\\]}.,;:!?"'’�
  */
 export function centerArcanumTracks(html) {
 	if (!html) return html;
-	return html
+	// A display-only label run (maskGlyphLabels) is never a track, so never centred either.
+	return unmaskGlyphLabels(maskGlyphLabels(html)
 		.replace(/\s([◇○]{2,})\s*(<\/p>)/g, ' <span class="stonetop-arcanum-track">$1</span>$2')
-		.replace(/^(\s*)([◇○]{2,})\s+/, '$1<span class="stonetop-arcanum-track">$2</span> ');
+		.replace(/^(\s*)([◇○]{2,})\s+/, '$1<span class="stonetop-arcanum-track">$2</span> '));
 }
 
 /**
@@ -235,14 +263,15 @@ function _opensParent(node) {
 export function injectGlyphCheckboxes(html, runRe, { slug, context, cssClass, isChecked }) {
 	if (!html) return { html, count: 0 };
 	let index = 0;
-	const processed = String(html).replace(runRe, run =>
+	// Glyphs inside a display-only label (maskGlyphLabels) are skipped and take no index.
+	const processed = maskGlyphLabels(html).replace(runRe, run =>
 		`<span class="stonetop-glyph-run">${[...run].map(() => {
 			const i = index++;
 			return `<input type="checkbox" class="${cssClass}" data-arcanum-slug="${slug}"`
 				+ ` data-context="${context}" data-index="${i}"${isChecked(i) ? " checked" : ""}>`;
 		}).join("")}</span>`
 	);
-	return { html: processed, count: index };
+	return { html: unmaskGlyphLabels(processed), count: index };
 }
 
 /**
@@ -255,11 +284,51 @@ export function injectGlyphCheckboxes(html, runRe, { slug, context, cssClass, is
  * earlier: on a card whose text predates a box, the box of the line above.
  */
 export function boxIndexBefore(html, label, { adjacent = false } = {}) {
-	const text = String(html ?? "");
+	const text = maskGlyphLabels(html);
 	const at = label ? text.indexOf(label) : -1;
 	if (at < 0) return -1;
 	const box = text.lastIndexOf("□", at);
 	if (box < 0) return -1;
 	if (adjacent && !/^[\s▶]*$/.test(text.slice(box + 1, at).replace(/<[^>]*>/g, ""))) return -1;
 	return (text.slice(0, box).match(/□/g) || []).length;
+}
+
+/**
+ * Is the □ belonging to the named back-side mystery ticked?
+ *
+ * A mystery's box is identified by its printed LABEL, not by a hard-coded index: the □ printed
+ * nearest before the label (boxIndexBefore; the text reads "□ GREATER CONDUIT"), whose state is
+ * stored as `slug:back:index`. That survives edits to the back text that a bare index would not.
+ *
+ * Shared by the Redwood Effigy's Conduit slots, the armor unlocks (the Rune-laden Scales' PROOF
+ * AGAINST HARM), Death's Door and the summon gates.
+ */
+export function backBoxChecked(backDescription, slug, label, boxStates) {
+	const index = boxIndexBefore(backDescription, label);
+	return index >= 0 && !!boxStates[`${slug}:back:${index}`];
+}
+
+/**
+ * The words a glyph marks: `text` (masked by maskGlyphLabels or not) from offset `at` up to the
+ * first match of `stopRe` (or the end), as plain text with any display glyphs put back, trimmed.
+ * Callers tidy the end as their row needs.
+ */
+export function glyphLabelAt(text, at, stopRe) {
+	const rest = String(text ?? "").slice(at);
+	const stop = rest.search(stopRe);
+	return unmaskGlyphLabels(stripHtmlToText(stop < 0 ? rest : rest.slice(0, stop))).trim();
+}
+
+/**
+ * The first ○ track (a run of 2+) starting at or after `offset` in masked `html`: `at` its offset,
+ * `from` the index injectGlyphCheckboxes gives its first ○ (every ○ of each earlier run of 2+
+ * counted), and its `length`. Null when there is none.
+ */
+export function circleRunAfter(html, offset) {
+	let from = 0;
+	for (const m of String(html ?? "").matchAll(/○{2,}/g)) {
+		if (m.index >= offset) return { at: m.index, from, length: m[0].length };
+		from += m[0].length;
+	}
+	return null;
 }
