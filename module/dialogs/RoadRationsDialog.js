@@ -1,8 +1,9 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import {
-	campVitalsFor, crewSuppliesOf, isUnliving, mealSpendTarget, packResources, partyCrewMouths, partyFollowerMouths,
+	campVitalsFor, crewSuppliesOf, fastsTonight, isUnliving, mealSpendTarget, packResources, partyCrewMouths,
+	partyFollowerMouths,
 } from "../camp/camp-store.js";
-import { UNLIVING_NEEDS, count, purseSpendUpdate } from "../camp/camp-rules.js";
+import { FASTING_NEEDS, UNLIVING_NEEDS, count, purseSpendUpdate } from "../camp/camp-rules.js";
 import { orphanedPartyFollowers, partyFollowersOf } from "../actors/character/follower-roster.js";
 import { isOutOfPlaySafe } from "../actors/character/deaths-door-actor.js";
 import { orphanedFollowersLines } from "../camp/camp-view.js";
@@ -31,10 +32,12 @@ const ON_THE_ROAD = "On the road";
  * a mouth. Followers are named only when some travel with them.
  */
 function unlivingRoadText(row) {
-	if (!row.unliving) return "";
-	if (row.eats) return `${UNLIVING_NEEDS}, but counted as a mouth here: untick Eats to leave them out.`;
-	if (!row.followers) return `${UNLIVING_NEEDS}.`;
-	return `${UNLIVING_NEEDS}; ${plural(row.followers, "their follower still eats", "their followers still eat")}.`;
+	// The prayer beads feed their holder while they hold Preparation (camp-rules.js#FASTING_NEEDS), said the same way.
+	const needs = row.unliving ? UNLIVING_NEEDS : row.fasting ? FASTING_NEEDS : "";
+	if (!needs) return "";
+	if (row.eats) return `${needs}, but counted as a mouth here: untick Eats to leave them out.`;
+	if (!row.followers) return `${needs}.`;
+	return `${needs}; ${plural(row.followers, "their follower still eats", "their followers still eat")}.`;
 }
 
 /**
@@ -111,6 +114,8 @@ export class RoadRationsDialog extends StonetopDialog {
 				name:      actor.name,
 				img:       actor.img ?? "",
 				unliving:  isUnliving(actor),
+				// No meal on the road for the prayer beads' holder (Book II p.526).
+				fasting:   fastsTonight(actor, vitals),
 				messKit:   !!vitals?.messKit,
 				followers: partyFollowerMouths(actor, party),
 				crewMouths: partyCrewMouths(actor, party),
@@ -124,7 +129,7 @@ export class RoadRationsDialog extends StonetopDialog {
 	_seated() {
 		return (this._members ?? []).map(m => ({
 			...m,
-			eats:      this._eats[m.actorId] ?? !m.unliving,
+			eats:      this._eats[m.actorId] ?? !(m.unliving || m.fasting),
 			followers: this._followers[m.actorId] ?? m.followers,
 		}));
 	}

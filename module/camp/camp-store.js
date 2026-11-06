@@ -15,9 +15,10 @@ import { capitalizeFirst } from "../utils/strings.js";
 import {
 	A_SAFE_PLACE, BREAK_BREAD, CAMP_FLAG, CAMP_OWED_FLAG, CAMP_STATE, CAMP_STATUS, HAD_ALL_ALONG, HOME_FIRES, SETTLE_REFUSAL,
 	campLedger, campShareUpdate, campState, count, freezeCampPlan, isFurLinedBedrollName, isSettledRecord, messKitAllAlong, newCampRecord,
-	readCampRecord, readOwedCamps, rollsBedroll, rollsBreakBread, suppliesAllAlong, followersBreakBread,
+	preparationCardRealised, readCampRecord, readOwedCamps, rollsBedroll, rollsBreakBread, suppliesAllAlong, followersBreakBread,
 } from "./camp-rules.js";
 import { ownsLearnedMoveNamed } from "../actors/character/owns-move.js";
+import { PREPARATION_ARCANA, preparationHeld } from "../actors/character/roll-boosts.js";
 import { walkItOffChoice } from "../actors/character/walk-it-off.js";
 import { CLEARS_ON, markedTracks, snapshotTracksClearedBy } from "../actors/character/background-tracks.js";
 import { campSummaryRows, hadAllAlongRows, settleRefusalText } from "./camp-view.js";
@@ -115,6 +116,14 @@ export function canCamp(actor) {
  */
 export { isUnliving };
 
+/**
+ * Fed by the prayer beads (camp-rules.js#FASTING_NEEDS): their back realised (`vitals.prayerBeads`, from
+ * campVitalsFor) and at least 1 Preparation held, read live. Shared by Make Camp and road rations.
+ */
+export function fastsTonight(actor, vitals) {
+	return !!vitals?.prayerBeads && preparationHeld(actor) >= 1;
+}
+
 /** Every camp in the world that can still be joined, as `{campId, hostId, hostName}`. */
 export function openCamps(now = serverNow()) {
 	const camps = [];
@@ -166,6 +175,8 @@ export function campMember(actor, hostId) {
 		maxHp:            record?.vitals.maxHp || count(actor.system?.attributes?.hp?.max),
 		activeDebilities: markedDebilities(actor, record?.vitals),
 		unliving:         isUnliving(actor),
+		// The card's back as it stood when they sat down, the Preparation read live.
+		fasting:          fastsTonight(actor, record?.vitals),
 		// At 0 HP with their 0-HP move still to face: the night restores them no HP (camp-rules.js
 		// #freezeCampPlan). Read live, so one brought back up mid-camp heals as anyone does.
 		dying:            !!actor.typedActor?.canFaceDeathsDoor,
@@ -340,13 +351,15 @@ export async function campVitalsFor(actor) {
 			bedroll:    carried("bedroll"),
 			furBedroll,
 			messKit:    carried("mess-kit"),
+			// The prayer beads' back realised (camp-rules.js#preparationCardRealised): with Preparation held, no meal.
+			prayerBeads: preparationCardRealised(snapshot?.arcana, PREPARATION_ARCANA),
 			debilities: (snapshot?.debilities ?? []).map(d => ({ key: d.key, name: d.name })),
 			// Auspicious Birth's circle, which Make Camp clears.
 			clears:     snapshotTracksClearedBy(snapshot, CLEARS_ON.MAKE_CAMP).map(t => ({ key: t.key, name: t.name })),
 		};
 	} catch (err) {
 		console.warn(`Stonetop | Make Camp: could not read ${actor?.name}'s sheet, so the stored max HP stands in`, err);
-		return { maxHp: storedMax, bedroll: false, furBedroll: false, messKit: false, debilities: [], clears: [] };
+		return { maxHp: storedMax, bedroll: false, furBedroll: false, messKit: false, prayerBeads: false, debilities: [], clears: [] };
 	}
 }
 

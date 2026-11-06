@@ -34,7 +34,8 @@ import { countOf, plural } from "./plural.js";
  * @typedef {object} RoadMember  One PC on the trip, as the dialog reads them.
  * @property {string}  actorId
  * @property {string}  name
- * @property {boolean} eats       a living mouth (a Ghost or Revenant need not eat)
+ * @property {boolean} eats       a living mouth (a Ghost or Revenant need not eat, nor the prayer beads' holder
+ *   while they hold Preparation, Book II p.526: the dialog starts their Eats box unticked)
  * @property {number}  followers  the party followers they feed besides themselves
  * @property {number}  [crewMouths]  how many of `followers` are their crew's (camp-store.js#partyCrewMouths)
  * @property {{held: number}} [crew]  what the crew's own supplies hold (camp-store.js#crewSuppliesOf)

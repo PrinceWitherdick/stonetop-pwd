@@ -21,6 +21,8 @@ vi.mock("../../module/utils/world.js", () => ({
 // isUnliving is Death's Door's own rule, so a Ghost here is one by the insert they wear.
 vi.mock("../../module/camp/camp-store.js", async () => ({
 	campVitalsFor:       async actor => ({ messKit: !!actor.carriesMessKit }),
+	// No prayer beads here (the vitals above carry none), so nobody fasts.
+	fastsTonight:        () => false,
 	isUnliving:          (await vi.importActual("../../module/actors/character/deaths-door-actor.js")).isUnliving,
 	packResources:       actor => ({ ...actor.pack }),
 	partyFollowerMouths: actor => actor.fed ?? 0,

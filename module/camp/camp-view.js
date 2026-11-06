@@ -4,7 +4,7 @@ import { CREW_SUPPLIES_LABEL, CREW_SUPPLIES_SLUG } from "../actors/character/sup
 import {
 	CAMP_BENEFIT, CAMP_STATE, HAD_ALL_ALONG, HAD_ALL_ALONG_REFUSAL, SETTLE_REFUSAL, breakBreadOffered,
 	CAMP_EXTRA, debilityToClear, eatsTonight, foodAfterTonight, healTo, homeFiresHp, homeFiresKeeper, homeFiresOffered, planExtras,
-	nightmaresWarded, precautionTonight, crewBill, UNLIVING_NEEDS,
+	nightmaresWarded, precautionTonight, crewBill, UNLIVING_NEEDS, FASTING_NEEDS, mouthTonight,
 	messKitAllAlong, messKitWouldHelp, provisionsAtFire, spareUses, suppliesAllAlong,
 } from "./camp-rules.js";
 import { countOf, plural } from "../utils/plural.js";
@@ -258,7 +258,8 @@ function precautionLine(precaution) {
 
 function mealView(ledger) {
 	const { mouths, bill, offered, short, over, messKit, cooks } = ledger;
-	const atFire    = ledger.rows.filter(eatsTonight).length;
+	// The mouths at the fire: one the prayer beads feed eats nothing from the packs (camp-rules.js#mouthTonight).
+	const atFire    = ledger.rows.filter(mouthTonight).length;
 	const followers = mouths - atFire;
 	const followerWord = plural(followers, "follower", "followers");
 	let mouthsText;
@@ -434,6 +435,7 @@ function rowSentences(member, offer, { eats, benefit, clearing, hpAfter, dying =
 	if (member.unliving) says.push(`${UNLIVING_NEEDS}${others ? `, but ${others}` : ""}.`);
 	// The card's own mark already says they are going without, so only who still eats is left to say.
 	else if (!record.eats) { if (others) says.push(`${others} tonight.`); }
+	else if (member.fasting) says.push(`${FASTING_NEEDS}${others ? `, but ${others}` : ""}.`);
 	else says.push(others ? `Eating tonight, and ${others} too.` : "Eating tonight.");
 	if (record.messKit && record.vitals.messKit) says.push("Cooking with a mess kit.");
 	// A Safe Place asks nothing of the meal or the night, so it is said before either can end the list.
@@ -479,7 +481,9 @@ function rowView(member, at, ledger, { canEdit, isMine, canOpenSheet }) {
 		isMine,
 		canEdit,
 		unliving:   member.unliving,
-		unlivingText: member.unliving ? `${UNLIVING_NEEDS}, and takes nothing from the night.` : "",
+		unlivingText: member.unliving ? `${UNLIVING_NEEDS}, and takes nothing from the night.`
+			// The prayer beads feed them (camp-rules.js#FASTING_NEEDS): no mouth, but the night is theirs as anyone's.
+			: member.fasting && record.eats ? `${FASTING_NEEDS}, so eats nothing from the packs tonight.` : "",
 		stateText:  member.isHost ? "Making camp" : record.ready ? "Ready" : "Still choosing",
 		stateClass: member.isHost ? "is-host" : record.ready ? "is-ready" : "is-choosing",
 		purses: offer.purses.map(p => ({

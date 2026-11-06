@@ -147,6 +147,29 @@ export { UNLIVING_KINDS };
 /** How every party window words the Unliving rule, so Make Camp and the road never say it two ways. */
 export const UNLIVING_NEEDS = "Needs no food or sleep (Unliving)";
 
+/**
+ * The length of prayer beads: "While you hold at least 1 Preparation, you ... need not consume supplies or
+ * provisions when traveling or making camp" (Book II p.526). FOOD ONLY: they sleep and take the night's
+ * benefit as anyone does, so unlike the Unliving they are still at the meal's table, just not a mouth.
+ * `fasting` on a camp or road member (camp-store.js#campMember, RoadRationsDialog) is that rule met.
+ */
+export const FASTING_NEEDS = "Needs no food while holding Preparation (prayer beads)";
+
+/**
+ * Whether a character's arcana snapshot (CharacterSnapshot#arcana) has a Preparation card's back realised:
+ * held and recovered (not a lead), identified and unlocked. `slugs` is roll-boosts.js#PREPARATION_ARCANA.
+ * Only half the rule: the other half is holding at least 1 Preparation, read live.
+ */
+export function preparationCardRealised(arcana, slugs = []) {
+	const items = [...(arcana?.minor?.items ?? []), ...(arcana?.major?.items ?? [])];
+	return items.some(i => slugs.includes(i?.slug) && i.identified && i.unlocked && !i.lead && !i.missing);
+}
+
+/** Whether this member is a mouth the meal has to feed: eating tonight, and not fed by the prayer beads. */
+export function mouthTonight(member) {
+	return eatsTonight(member) && !member.fasting;
+}
+
 /** Every purse a camp can be fed from, in the order a spend drains them. */
 const CAMP_PURSE_SLUGS = supplyPurseSlugsFor(SUPPLY_PURPOSE.CAMP);
 
@@ -177,6 +200,8 @@ function readVitals(raw) {
 		bedroll:    !!raw?.bedroll || !!raw?.furBedroll,
 		furBedroll: !!raw?.furBedroll,
 		messKit:    !!raw?.messKit,
+		// The prayer beads' back realised when they sat down (camp-store.js#campVitalsFor); their Preparation is read live.
+		prayerBeads: !!raw?.prayerBeads,
 		debilities: named(raw?.debilities),
 		clears:     named(raw?.clears),
 	};
@@ -452,6 +477,7 @@ function trimToBill(offers, bill) {
  * @property {number}  maxHp      the COMPUTED max
  * @property {Array<{key: string, name: string}>} activeDebilities  read live
  * @property {boolean} unliving
+ * @property {boolean} [fasting]  needs no food tonight (the prayer beads, FASTING_NEEDS), read live
  * @property {boolean} [breaksBread]  has Break Bread learned, read live
  * @property {number|null} [hearthCha]  CHA, when Keep the Home-Fires Burning is learned (read live);
  *   null without it
@@ -483,11 +509,11 @@ export function campLedger(members = []) {
 	const rows    = [...members].sort(byJoinOrder);
 	const cooks   = rows.filter(m => m.record.messKit && m.record.vitals.messKit);
 	const messKit = cooks.length > 0;
-	const mouths  = rows.reduce((sum, m) => sum + (eatsTonight(m) ? 1 : 0) + m.record.followers, 0);
+	const mouths  = rows.reduce((sum, m) => sum + (mouthTonight(m) ? 1 : 0) + m.record.followers, 0);
 	// Ravenous: "When you Make Camp, consume an extra 1d4 provisions or uses of supplies." On top of
 	// the meal, so a mess kit does not stretch it, and only for a Thrall who eats: one who goes
 	// without consumes nothing at all.
-	const ravenous = rows.filter(m => m.ravenous && eatsTonight(m)).map(m => ({ actorId: m.actorId, name: m.name, uses: m.record.hunger }));
+	const ravenous = rows.filter(m => m.ravenous && mouthTonight(m)).map(m => ({ actorId: m.actorId, name: m.name, uses: m.record.hunger }));
 	const hunger  = ravenous.reduce((sum, r) => sum + r.uses, 0);
 	const bill    = campUsesNeeded(mouths, messKit) + hunger;
 	const offers  = rows.map(m => offerFrom(m, messKit));
