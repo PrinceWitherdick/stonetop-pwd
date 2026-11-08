@@ -122,6 +122,13 @@ describe("roster shifts (FOE-2)", () => {
 		expect(remapRosterRow(flags, { follower: "crew-member", index: 1 }, 0)).toEqual({ follower: "crew-individual", index: 3 });
 	});
 
+	// Code review of 1.8.4: a member named INTO the middle of the named list pushes the rows at and below it down.
+	it("a member named into the middle of the named list moves the rows from there down one", () => {
+		const flags = crewWith(withRosterShift([], "crew-member", 0, { row: "crew-individual", index: 1 }));
+		expect(remapRosterRow(flags, { follower: "crew-individual", index: 1 }, 0)).toEqual({ follower: "crew-individual", index: 2 });
+		expect(remapRosterRow(flags, { follower: "crew-individual", index: 0 }, 0)).toEqual({ follower: "crew-individual", index: 0 });
+	});
+
 	it("the fate's Dead and the Remove button log their cut", () => {
 		const crew = { size: 6, individuals: [{ name: "Aled" }], individualsHp: { 0: 0 }, memberHp: [6, 0, 6, 0, 6] };
 		expect(crewMemberDeathUpdate(crew, "crew-member", 1)[`flags.${S}.crew.rosterShifts`]).toEqual([{ n: 1, row: "crew-member", index: 1 }]);

@@ -103,7 +103,12 @@ export function remapRosterRow(flags, { follower, slug = "", index }, stamp) {
 	if (list.length >= SHIFTS_KEPT && since < Number(list[0].n) - 1) return null;
 	let at = { ...row };
 	for (const cut of list) {
-		if (Number(cut.n) <= since || cut.row !== at.follower) continue;
+		if (Number(cut.n) <= since) continue;
+		// A member moved INTO this row's list at or above it pushes it down one (an append moves nothing).
+		if (cut.row !== at.follower) {
+			if (cut.to?.row === at.follower && cut.to.index <= at.index) at = { ...at, index: at.index + 1 };
+			continue;
+		}
 		if (cut.index === at.index) {
 			if (!cut.to) return null;
 			at = { follower: cut.to.row, index: cut.to.index };

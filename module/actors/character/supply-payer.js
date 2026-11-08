@@ -53,7 +53,7 @@ export function supplyPayersFor(patient, purpose = SUPPLY_PURPOSE.RECOVER, {
  * purses between them no longer hold `n`.
  *
  * @param {object} character  the StonetopCharacter paying
- * @returns {{update: object, left: number, row: {label: string, value: string}}|null}  `left`: the first purse's
+ * @returns {{update: object, left: number, row: {label: string, value: string}}|null}  `left`: what the purses spent from hold now, together
  */
 export function ownSupplySpend(character, { slug, n = 1, purpose = SUPPLY_PURPOSE.RECOVER } = {}) {
 	const parts = spreadSupplySpend(character?.supplyPurses?.(purpose)?.eligible, { slug, n });
@@ -61,7 +61,7 @@ export function ownSupplySpend(character, { slug, n = 1, purpose = SUPPLY_PURPOS
 	const update = {};
 	for (const part of parts) Object.assign(update, character.inventoryResourceData(part.slug, part.left));
 	const label = parts.map(p => p.label).join(" & ");
-	return { update, left: parts[0].left, row: { label, value: spreadSpendWords(parts, countOf) } };
+	return { update, left: parts.reduce((sum, p) => sum + p.left, 0), row: { label, value: spreadSpendWords(parts, countOf) } };
 }
 
 /**
@@ -76,9 +76,12 @@ function payerPurse(purses, slug, n) {
 
 /** The chat row for uses another character paid on `patientName`'s behalf, from payOthersSupplies' receipt. */
 export function behalfSpendRow(payerName, receipt, patientName) {
+	// Spread over several purses, each says what it has left (as spreadSpendWords does for one's own).
+	const parts = Array.isArray(receipt.parts) && receipt.parts.length > 1 ? receipt.parts : null;
+	const left = parts ? parts.map(p => `${p.label} ${p.left} left`).join(", ") : `${receipt.left} left`;
 	return {
 		label: `${payerName}'s ${String(receipt.label ?? "").toLowerCase()}`,
-		value: `Expended ${countOf(receipt.spent, "use")} on ${patientName}'s behalf (${receipt.left} left)`,
+		value: `Expended ${countOf(receipt.spent, "use")} on ${patientName}'s behalf (${left})`,
 	};
 }
 
@@ -115,7 +118,10 @@ export function spendPayerSupplies(payer, { slug = null, n = 1, purpose = SUPPLY
 		await payer.update(update, moveName ? { stonetopMove: moveName } : {});
 		return {
 			slug: parts[0].slug, label: parts.map(p => p.label).join(" & "), spent: uses,
-			left: parts.reduce((sum, p) => sum + p.left, 0), ...(refused ? { refused } : {}),
+			left: parts.reduce((sum, p) => sum + p.left, 0),
+			// Spread over several purses: what each has left, for behalfSpendRow.
+			...(parts.length > 1 ? { parts: parts.map(p => ({ label: p.label, left: p.left })) } : {}),
+			...(refused ? { refused } : {}),
 		};
 	});
 }

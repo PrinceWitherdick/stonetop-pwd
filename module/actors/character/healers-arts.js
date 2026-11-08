@@ -55,7 +55,7 @@ export function healersArtsCarers(actors) {
  * Who could be tending `patient`'s Recover (audit ROAD-8, the user's ruling E11): a Healer's Arts carer in
  * play (isOutOfPlay: not dead or retired) and not dying; and while the patient is away on a trip that has set
  * out and not come home (campaign/level-up-at-home.js#expeditionUnderwayFor), only someone on that trip. A
- * carer at home cannot tend someone on the road.
+ * carer at home cannot tend someone on the road, nor a carer on the road someone at home.
  *
  * @param {Actor[]} actors   every character to consider
  * @param {Actor} patient
@@ -63,11 +63,14 @@ export function healersArtsCarers(actors) {
  * @param {object|null} [o.log]  the expedition log (raw or normalized); null reads no trip
  */
 export function recoverCarerActors(actors, patient, { log = null } = {}) {
-	const away = patient?.id && log ? expeditionUnderwayFor(patient.id, log) : null;
+	const tripOf = id => (id && log ? expeditionUnderwayFor(id, log)?.trip ?? null : null);
+	const patientTrip = tripOf(patient?.id);
 	return healersArtsCarers(actors).filter(actor => {
 		if (isOutOfPlaySafe(actor)) return false;
 		if (actor.typedActor?.canFaceDeathsDoor) return false;
-		if (away && (away.trip.partyOut?.[actor.id])) return false;
+		// Both at home, or both on the same trip: a carer at home cannot tend someone on the road, nor
+		// a carer on the road someone at home.
+		if (actor.id !== patient?.id && tripOf(actor.id) !== patientTrip) return false;
 		return true;
 	});
 }

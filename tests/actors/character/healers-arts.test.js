@@ -127,6 +127,16 @@ describe("who can tend a Recover", () => {
 		const back = { currentId: "t1", list: [{ id: "t1", setOut: { year: 1 }, timelineRecorded: { year: 1 }, partyOut: { home: true } }] };
 		expect(recoverCarerActors(actors, patient, { log: back }).map(a => a.id)).toEqual(["home", "along"]);
 	});
+
+	// Code review of 1.8.4: a carer never in the trip's party is at home, and a carer on the road cannot tend
+	// a patient at home.
+	it("pairs carer and patient by trip: both on it or both at home", () => {
+		const home = carer({ id: "home", name: "Home" });
+		const along = carer({ id: "along", name: "Along" });
+		const log = { currentId: "t1", list: [{ id: "t1", setOut: { year: 1 }, party: [{ id: "bram" }, { id: "along" }] }] };
+		expect(recoverCarerActors([home, along], { id: "bram" }, { log }).map(a => a.id)).toEqual(["along"]);
+		expect(recoverCarerActors([home, along], { id: "stayer" }, { log }).map(a => a.id)).toEqual(["home"]);
+	});
 });
 
 describe("paying the carer's Stock", () => {

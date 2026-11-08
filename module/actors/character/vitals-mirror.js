@@ -148,10 +148,12 @@ const VITAL_MARK_KINDS = MARK_KINDS.filter(kind => kind.movesVitals);
  * re-mirror, the wearer's stored armor kept the 2 a switched-off Barkskin no longer gave, and Apply took it off every
  * blow. The rows are read raw, whatever the move's state now: it may have just been switched off or removed.
  */
-function markWearers(item) {
+function markWearers(item, changed = null) {
 	const blessed = item?.parent;
 	if (item?.type !== "move" || blessed?.type !== "character") return [];
-	const kinds = new Set(VITAL_MARK_KINDS.filter(kind => kind.move === item.name).map(kind => kind.key));
+	// A rename may take the move to or from Barkskin's name, and the old name is gone by now: every vital kind.
+	const renamed = changed?.name !== undefined;
+	const kinds = new Set(VITAL_MARK_KINDS.filter(kind => renamed || kind.move === item.name).map(kind => kind.key));
 	if (!kinds.size) return [];
 	const rows = readableFlags(blessed)?.[BLESSED_MARKS_FLAG];
 	const worn = (Array.isArray(rows) ? rows : []).filter(row => row && kinds.has(markKindKey(row.kind)));
@@ -159,10 +161,10 @@ function markWearers(item) {
 	return [...(globalThis.game?.actors ?? [])].filter(actor => worn.some(row => markIsOn(row, actor)));
 }
 
-function onItem(item, userId) {
+function onItem(item, userId, changed = null) {
 	if (isWorldArcanum(item)) scheduleEveryone();
 	// Asked of the primary GM only, before the wearers are looked up: every other client would stand aside anyway.
-	else if (isPrimaryGM()) scheduleEveryone(markWearers(item));
+	else if (isPrimaryGM()) scheduleEveryone(markWearers(item, changed));
 	const actor = item?.parent;
 	if (mirrorsHere(actor, userId)) scheduleVitalsMirror(actor);
 }
@@ -187,7 +189,7 @@ export function registerVitalsMirrorHooks() {
 	Hooks.on("updateActor", onUpdateActor);
 	// create/delete pass (doc, options, userId); update passes (doc, changed, options, userId).
 	Hooks.on("createItem", (item, _options, userId) => onItem(item, userId));
-	Hooks.on("updateItem", (item, _changed, _options, userId) => onItem(item, userId));
+	Hooks.on("updateItem", (item, changed, _options, userId) => onItem(item, userId, changed));
 	Hooks.on("deleteItem", (item, _options, userId) => onItem(item, userId));
 	Hooks.on("deleteActor", actor => onDeleteActor(actor));
 	// A world whose characters changed before this existed, or while no GM was on to follow the steading:

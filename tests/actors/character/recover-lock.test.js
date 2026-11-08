@@ -55,6 +55,19 @@ describe("the character's own lock", () => {
 });
 
 describe("a follower body's lock", () => {
+	// Code review of 1.8.4: HP lost or clamped by a falling max is no damage to a follower either.
+	it("stays on a follower's box lowered by HP LOST or a max-HP clamp", () => {
+		for (const option of [HP_LOSS_OPTION, HP_CEILING_OPTION]) {
+			const actor = pc({ flags: {
+				initiatesHp: { ash: 6 },
+				recoverFollowers: { "initiate:ash": { follower: "initiate", slug: "ash" } },
+			} });
+			const changes = { flags: { [SCOPE]: { initiatesHp: { ash: 2 } } } };
+			onPreUpdateActorRecoverLock(actor, changes, { [option]: true });
+			expect(changes.flags[SCOPE].recoverFollowers).toBeUndefined();
+		}
+	});
+
 	const bodies = [
 		{ id: "initiate:ash", name: "Ash", row: { follower: "initiate", slug: "ash" } },
 		{ id: "crew::anon:1", name: "Hari", row: { follower: "crew-member", index: 1, slug: "" } },

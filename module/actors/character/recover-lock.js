@@ -15,11 +15,12 @@ import { SYSTEM_ID } from "../../system-id.js";
 export function onPreUpdateActorRecoverLock(actor, changes, options = {}) {
 	if (actor?.type !== "character") return;
 	try {
-		// A follower's box drops whatever wrote it: their damage is the box (or their NPC, mirrored onto it).
+		// HP lost or clamped by a falling max is no damage, for the character or a follower on them.
+		if (options?.[HP_LOSS_OPTION] || options?.[HP_CEILING_OPTION]) return;
+		// A follower's box drops whatever else wrote it: their damage is the box (or their NPC, mirrored onto it).
 		recoverUnlockChanges(actor, changes);
 		const newHp = foundry.utils.getProperty(changes, "system.attributes.hp.value");
 		if (newHp === undefined) return;
-		if (options?.[HP_LOSS_OPTION] || options?.[HP_CEILING_OPTION]) return;
 		const oldHp = actor.system?.attributes?.hp?.value ?? 0;
 		if (Number(newHp) < Number(oldHp) && actor.getFlag?.(SYSTEM_ID, "recover.spent")) {
 			foundry.utils.setProperty(changes, `flags.${SYSTEM_ID}.recover.spent`, false);

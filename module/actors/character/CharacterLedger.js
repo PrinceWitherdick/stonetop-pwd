@@ -582,8 +582,15 @@ function crewNamedCount(names, ctx) {
  * person leaving and a stranger joining.
  */
 function crewMembershipEntries(oldValue, newValue, crewName) {
+	// Same length with at most ONE name changed is an edit in place. More than one name moving is a
+	// reorder, or a removal and a naming in one write: the rows are paired by name instead, and the
+	// names left over are the joins and leaves.
+	let pairs = null;
 	if (Array.isArray(oldValue) && Array.isArray(newValue) && oldValue.length && oldValue.length === newValue.length) {
-		return crewMemberEditEntries(oldValue, newValue);
+		const nameAt = (row) => String(row?.name ?? "").trim();
+		const moved = oldValue.filter((was, i) => nameAt(was) !== nameAt(newValue[i])).length;
+		if (moved <= 1) return crewMemberEditEntries(oldValue, newValue);
+		pairs = crewRowsPairedByName(oldValue, newValue);
 	}
 	const tally = (value) => (Array.isArray(value) ? value : []).reduce((counts, row) => {
 		const name = String(row?.name ?? "").trim();
@@ -607,7 +614,26 @@ function crewMembershipEntries(oldValue, newValue, crewName) {
 			entries.push({ action: `${name}${ordinal} ${verb}` });
 		}
 	}
+	if (pairs) entries.push(...crewMemberEditEntries(pairs.before, pairs.after));
 	return entries;
+}
+
+/** The rows of two rosters that carry the same name, paired off in order (repeats one for one). */
+function crewRowsPairedByName(oldValue, newValue) {
+	const nameAt = (row) => String(row?.name ?? "").trim();
+	const free = newValue.map((row, i) => i);
+	const before = [];
+	const after = [];
+	for (const was of oldValue) {
+		const name = nameAt(was);
+		if (!name) continue;
+		const at = free.findIndex(i => nameAt(newValue[i]) === name);
+		if (at < 0) continue;
+		before.push(was);
+		after.push(newValue[free[at]]);
+		free.splice(at, 1);
+	}
+	return { before, after };
 }
 
 /**

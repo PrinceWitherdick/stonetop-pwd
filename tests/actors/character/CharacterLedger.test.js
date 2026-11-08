@@ -503,6 +503,19 @@ describe("CharacterLedger", () => {
 			]);
 		});
 
+		// Same length is not always an edit: a removal and a naming in one write, or a reorder.
+		it("reads a same-length write that moves several names as leaves, joins and nothing for a reorder", async () => {
+			const actor = crew({ individuals: [{ name: "Aled" }, { name: "Bran" }, { name: "Cean", traits: ["scarred"] }] });
+			const swapped = await CharacterLedger.entriesForActorUpdate(actor, {
+				"flags.stonetop-pwd.crew.individuals": [{ name: "Aled" }, { name: "Cean", traits: ["scarred"] }, { name: "Glaw" }],
+			});
+			expect(swapped.map(e => e.action)).toEqual(["Bran removed from The Red Shields", "Glaw named to The Red Shields"]);
+			const reordered = await CharacterLedger.entriesForActorUpdate(actor, {
+				"flags.stonetop-pwd.crew.individuals": [{ name: "Cean", traits: ["scarred", "brave"] }, { name: "Aled" }, { name: "Bran" }],
+			});
+			expect(reordered.map(e => e.action)).toEqual(["Cean gained the trait brave"]);
+		});
+
 		// The card's own two are covered by the system-wide cosmetic-portrait rule; the anonymous
 		// members' array needs a rule of its own, because it is one atomic leaf whose path never
 		// mentions `img`.
