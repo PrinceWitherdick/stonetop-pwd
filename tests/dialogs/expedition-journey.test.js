@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { readCss, ownRule, declarations, readRepo as read } from "../fakes/css.js";
-import { stubAsk } from "../fakes/confirm.js";
+import { stubAsk, stubConfirm } from "../fakes/confirm.js";
 
 // The route step of the Run an Expedition walkthrough: the book's maps made tappable over its
 // travel table. The graph and the solve are proven in tests/data/travel-times.test.js and
@@ -2612,11 +2612,59 @@ describe("the three gestures", () => {
 
 	// "Start over" is also the way OUT: with the marks gone there is no way, and the trip is back to
 	// the road the travel table works out.
-	it("throws the marks away, and with them the drawing", async () => {
-		const d = drawing([{ fx: 0.4, fy: 0.6 }, { fx: 0.5, fy: 0.5 }]);
-		await d._clearDrawnWay();
-		expect(drawnWay()).toEqual({ tier: "vicinity", points: [] });
-		expect(d._customPath().on).toBe(false);
+	describe("asks before it starts over", () => {
+		let prevDialog;
+		beforeEach(() => { prevDialog = globalThis.foundry?.applications?.api?.DialogV2; });
+		afterEach(() => { globalThis.foundry.applications.api.DialogV2 = prevDialog; });
+
+		it("throws the marks away, and with them the drawing, once told to", async () => {
+			const asked = stubConfirm(true);
+			const d = drawing([{ fx: 0.4, fy: 0.6 }, { fx: 0.5, fy: 0.5 }]);
+			await d._clearDrawnWay();
+			expect(asked).toHaveBeenCalledTimes(1);
+			const { window, content, buttons } = asked.mock.calls[0][0];
+			expect(window.title).toBe("Start the route over?");
+			expect(content).toContain("2 hand-drawn marks");
+			expect(content).toContain("right-click");
+			expect(buttons.map(b => b.label)).toEqual(["Start over", "Keep the route"]);
+			// Enter lands on the answer that keeps the route.
+			expect(buttons.find(b => b.default).action).toBe("no");
+			expect(drawnWay()).toEqual({ tier: "vicinity", points: [] });
+			expect(d._customPath().on).toBe(false);
+		});
+
+		it("keeps the marks on a no, or when the window is closed", async () => {
+			const points = [{ fx: 0.4, fy: 0.6 }];
+			for (const answer of [false, null]) {
+				const asked = stubConfirm(answer);
+				const d = drawing(points);
+				rendered = 0;
+				await d._clearDrawnWay();
+				expect(asked).toHaveBeenCalledTimes(1);
+				expect(asked.mock.calls[0][0].content).toContain("1 hand-drawn mark ");
+				expect(drawnWay()).toEqual({ tier: "vicinity", points });
+				expect(rendered).toBe(0);
+			}
+		});
+
+		// Nothing drawn, nothing to lose: no question, and on it goes as before.
+		it("does not ask when there are no marks", async () => {
+			const asked = stubConfirm(false);
+			const d = drawing([]);
+			await d._clearDrawnWay();
+			expect(asked).not.toHaveBeenCalled();
+			expect(d._customPath().on).toBe(false);
+		});
+
+		// The map window calls the same handler, so it asks too.
+		it("asks from the map window as well", async () => {
+			const asked = stubConfirm(false);
+			const d = drawing([{ fx: 0.4, fy: 0.6 }]);
+			d._refreshMapWindows = vi.fn(() => Promise.resolve());
+			await d._mapWindowSource().clearDrawn({});
+			expect(asked).toHaveBeenCalledTimes(1);
+			expect(drawnWay().points).toEqual([{ fx: 0.4, fy: 0.6 }]);
+		});
 	});
 
 	// The same door out, one leg at a time: the way is over when its last mark is taken back.

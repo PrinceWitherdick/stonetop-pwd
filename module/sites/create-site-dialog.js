@@ -9,8 +9,16 @@ import {
 	SITE_DANGER_KINDS, SITE_DISCOVERY_KINDS, AREA_DETAIL_PROMPTS,
 	SITE_LAYOUT_TIPS, SITE_REVIEW_CHECKS,
 } from "../data/site-tables.js";
-import { shapeSiteSystem, setSiteName } from "./site-store.js";
+import { createSite, shapeSiteSystem, setSiteName } from "./site-store.js";
+import { getStonetopSteadingActorOrWarn } from "../utils/world.js";
+import { announceSiteAdded } from "../actors/gmtoolkit/gm-prep-actions.js";
 import { MAX_ROW_SPAN, SITE_LINE_LISTS, SITE_PAIR_LISTS, clampRowSpan, expandTableRows, numberTableRows, pairKeys, tableRowRanges } from "./site-schema.js";
+import { escHtml, stripHtmlToText } from "../utils/strings.js";
+import { confirmOutcome } from "../utils/ask-with-buttons.js";
+import { notePristineWork } from "../utils/close-guard.js";
+import { CREATE_SITE_RESTORE_KIND, NEW_SITE_KEY, createSiteWindowId } from "./create-site-restore.js";
+import { openSuggestionMenu } from "../utils/suggestion-menu.js";
+import { swapAside } from "../utils/set-aside.js";
 
 // ── CreateSiteDialog ─────────────────────────────────────────────────────────
 // A walkthrough for "Creating sites" (Book I, Sites, pp. 355-370). The book's procedure
@@ -25,14 +33,17 @@ import { MAX_ROW_SPAN, SITE_LINE_LISTS, SITE_PAIR_LISTS, clampRowSpan, expandTab
 //   8    Write it up               (plans, and the lists and tables you'll roll on)
 //   9    Review
 //
-// Mirrors CreateHazardDialog: created without a page it resolves the collected SEED via
-// promise() (the caller, gm-prep-actions.js#createSiteFlow, then calls createSite); created with
-// `{ page }` it opens pre-filled, the final button becomes "Save site", and it applies the update
-// to the page itself. The wizard IS the site editor, so there is no separate editor dialog.
+// Created without a page it files the new site under the steading itself (_finish) and resolves
+// promise() to the page; created with `{ page }` it opens pre-filled, the final button becomes
+// "Save site", and it applies the update to the page itself. The wizard IS the site editor, so
+// there is no separate editor dialog.
 //
 // Every step but the last also has Save for now (Save, when editing): the book says to do only
 // as much as next session needs, so the GM can stop anywhere and pick it up from the site's
 // pencil. Closing with unsaved answers asks first (utils/close-guard.js).
+//
+// A reload brings it back where it was, on the same step with every answer so far, like the
+// character sheet (create-site-restore.js; `restoreKey` and `restoreView` below).
 
 const _STEPS = [
 	{
@@ -131,88 +142,102 @@ const _TEXT_FIELDS = new Set(["name", "why", "description"]);
 // Here rather than in the template because the row markup is a loop over these: a fixed keyA/keyB
 // pair of hash arguments could not serve areas' four keys, and quietly dropped everything past the
 // second while the schema went on advertising them.
-// `inline` puts every field of a row on ONE control row (the timeline: a date and what happened,
-// which read as one line); the default stacks the first field with the delete button and indents
-// the rest under it. `rowClass` is the wrapper each row gets.
+// Every row is the first field sharing a line with the delete button and the rest stacked under
+// it. `rowClass` is the wrapper each row gets: a titled entry is a boxed card
+// (`stonetop-cs-card`), so its title, its text and its delete button read as one thing. A
+// `stonetop-cs-title` field reads as a bold label and a `stonetop-cs-body` one as plain text, each
+// until it is clicked (see the CSS).
 const _PAIR_FIELDS = {
 	questions: {
-		rowClass: "stonetop-cs-pair-row",
+		rowClass: "stonetop-cs-card",
 		fields: {
-			prompt: { placeholder: "Why didn't the Fae gut the tomb during their uprising?" },
-			answer: { placeholder: "The inner vault is guarded by powerful, loyal Fae…", cls: "stonetop-cs-answer" },
+			prompt: { placeholder: "Why didn't the Fae gut the tomb during their uprising?", cls: "stonetop-cs-title" },
+			answer: { placeholder: "The inner vault is guarded by powerful, loyal Fae…", cls: "stonetop-cs-body" },
 		},
 	},
 	timeline: {
-		inline: true,
+		rowClass: "stonetop-cs-card",
 		fields: {
-			when: { placeholder: "Last autumn", cls: "stonetop-cs-when" },
-			text: { placeholder: "Sajra arrives with crinwin thralls in tow; Thornthumb is made to stay away" },
+			when: { placeholder: "Last autumn", cls: "stonetop-cs-title" },
+			text: { placeholder: "Sajra arrives with crinwin thralls in tow; Thornthumb is made to stay away", cls: "stonetop-cs-body" },
 		},
 	},
 	denizens: {
-		rowClass: "stonetop-cs-pair-row",
+		rowClass: "stonetop-cs-card",
 		fields: {
-			name:  { placeholder: '"Trusted" crinwin' },
-			notes: { placeholder: "Nest inside, lord over the others, jealous of the kids, mimic Sajra's voice", cls: "stonetop-cs-answer" },
+			name:  { placeholder: '"Trusted" crinwin', cls: "stonetop-cs-title" },
+			notes: { placeholder: "Nest inside, lord over the others, jealous of the kids, mimic Sajra's voice", cls: "stonetop-cs-body" },
 		},
 	},
 	areas: {
-		rowClass: "stonetop-cs-area",
+		rowClass: "stonetop-cs-card",
 		fields: {
-			title:       { placeholder: "Entrance chamber (A)", cls: "stonetop-cs-area-title" },
-			description: { placeholder: "Dimly lit from outside. Soil and debris piled nearly 4 feet high at the entrance, sloping down into the room. Beyond, the floor is filthy, muddy…", multiline: true, lines: 3 },
-			contents:    { placeholder: "Contents: who's here, what they're doing, dangers, discoveries, questions to ask the PCs…", multiline: true, lines: 2 },
-			exits:       { placeholder: "Exits: outside (north), collapsed hallway (B), central chamber (C)" },
+			title:       { placeholder: "Entrance chamber (A)", cls: "stonetop-cs-title" },
+			description: { placeholder: "Dimly lit from outside. Soil and debris piled nearly 4 feet high at the entrance, sloping down into the room. Beyond, the floor is filthy, muddy…", multiline: true, lines: 3, cls: "stonetop-cs-body" },
+			contents:    { placeholder: "Contents: who's here, what they're doing, dangers, discoveries, questions to ask the PCs…", multiline: true, lines: 2, cls: "stonetop-cs-body" },
+			exits:       { placeholder: "Exits: outside (north), collapsed hallway (B), central chamber (C)", cls: "stonetop-cs-body" },
 		},
 	},
 };
 
 // Every hash argument the list partials read. Handlebars MERGES a partial's hash into the enclosing
 // context, so any of these left sitting on the dialog's own context would be inherited by every
-// list that was not passed one — silently handing the denizens the questions' suggestion chips.
+// list that was not passed one — silently giving the denizens' Add button the questions' menu.
 // getData clears them rather than trusting nobody will ever add one.
-const _PARTIAL_PARAMS = ["list", "label", "hint", "chips", "kinds", "rows", "cells", "addLabel",
-	"placeholder", "rowClass", "frameClass", "inline"];
+const _PARTIAL_PARAMS = ["list", "label", "hint", "menu", "kinds", "rows", "cells", "addLabel",
+	"placeholder", "rowClass", "frameClass"];
 
-// The review step's tally, in step order, and which shaped lists each line counts. Two of the
-// wizard's lists share a line (the two impression lists read as one "Impressions"), so this cannot
-// simply be the schema's keys — but it IS checked against them, in _previewCard, so a list added to
-// the site and left out here says so instead of quietly going uncounted on the step whose whole job
-// is to tell the GM what they have.
-const _COUNT_GROUPS = [
-	["Connections",  ["connections"]],
-	["Questions",    ["questions"]],
-	["Timeline",     ["timeline"]],
-	["Denizens",     ["denizens"]],
-	["Dangers",      ["dangers"]],
-	["Discoveries",  ["discoveries"]],
-	["Impressions",  ["outside", "inside"]],
-	["Areas",        ["areas"]],
-	["Plans",        ["plans"]],
-	["Tables",       ["randomTables"]],
+// The lists whose Add button opens a menu of the book's suggestions (Book I p. 358), said only here:
+// getData hands the template `suggestionMenus` from these keys, which marks the button. The items are
+// built at the press, so a row typed but not yet redrawn still counts as added.
+const _SUGGESTIONS = {
+	connections: { heading: "Connect it to (Book I p. 358)", blankLabel: "Blank connection", items: SITE_CONNECTIONS },
+	questions:   { heading: "Kinds of question (Book I p. 358)", blankLabel: "Blank question", items: SITE_QUESTION_PROMPTS },
+};
+
+// The review step's "what you have", in step order: each shaped list as a headed list of its own
+// entries, the way the finished card prints them. An entry is `{lead, text}`: the bold part (a
+// question, a date, a name, an area's title) and what follows it. The list is checked against the
+// shaper's keys in _reviewSections, so a list added to the site and left out here says so instead
+// of quietly going missing on the step whose whole job is to tell the GM what they have.
+const line = (s) => ({ lead: "", text: s });
+const _REVIEW_GROUPS = [
+	["Connections", "connections",  line],
+	["Questions",   "questions",    q => ({ lead: q.prompt, text: q.answer, open: !q.answer })],
+	["Timeline",    "timeline",     t => ({ lead: t.when, text: t.text })],
+	["Denizens",    "denizens",     d => ({ lead: d.name, text: d.notes })],
+	["Dangers",     "dangers",      line],
+	["Discoveries", "discoveries",  line],
+	["Outside",     "outside",      line],
+	["Inside",      "inside",       line],
+	// The title alone: an area's description and contents are prose, and the card has the room.
+	["Areas",       "areas",        (a, i) => ({ lead: "", text: a.title || `Area ${i + 1}` })],
+	["Plans",       "plans",        line],
+	// One stored row per face of the die, so the face count IS the die.
+	["Tables",      "randomTables", t => ({ lead: t.caption || "Table", text: t.rows.length ? `1d${t.rows.length}` : "" })],
 ];
 
-// `picks` is a list too, but the review card prints it in full a few lines up rather than counting
-// it, so it is the one list the coverage check below expects to be absent.
-const _UNCOUNTED = new Set(["picks"]);
+// `picks` is a list too, but the review card prints it in full a few lines up, so it is the one
+// list the coverage check below expects to be absent.
+const _SHOWN_ELSEWHERE = new Set(["picks"]);
 
 /**
- * The review step's "what you have" tally, and the check that it is telling the whole truth.
+ * The review step's sections, and the check that they are telling the whole truth.
  *
  * Exported for the tests: the point of the check is that adding a list to the site without adding
  * it here is caught, and a warning nobody asserts on is a warning nobody notices.
  *
  * @param {object} shaped  shapeSiteSystem's output
- * @returns {{label: string, n: number}[]}  non-empty lines, in step order
+ * @returns {{label: string, items: {lead: string, text: string, open?: boolean}[]}[]}  non-empty sections, in step order
  */
-export function _countLines(shaped = {}) {
-	const counted = new Set(_COUNT_GROUPS.flatMap(([, keys]) => keys));
+export function _reviewSections(shaped = {}) {
+	const shown = new Set(_REVIEW_GROUPS.map(([, key]) => key));
 	const missed = Object.keys(shaped)
-		.filter(k => Array.isArray(shaped[k]) && !counted.has(k) && !_UNCOUNTED.has(k));
-	if (missed.length) console.warn(`Stonetop | the site review step is not counting: ${missed.join(", ")}`);
-	return _COUNT_GROUPS
-		.map(([label, keys]) => ({ label, n: keys.reduce((n, k) => n + (shaped[k]?.length ?? 0), 0) }))
-		.filter(c => c.n > 0);
+		.filter(k => Array.isArray(shaped[k]) && !shown.has(k) && !_SHOWN_ELSEWHERE.has(k));
+	if (missed.length) console.warn(`Stonetop | the site review step is not showing: ${missed.join(", ")}`);
+	return _REVIEW_GROUPS
+		.map(([label, key, item]) => ({ label, items: (shaped[key] ?? []).map(item) }))
+		.filter(s => s.items.length > 0);
 }
 
 /** A blank row for a list, so add-a-row and seeding agree on the shape. */
@@ -222,14 +247,22 @@ function blankRow(list) {
 }
 
 export class CreateSiteDialog extends SaveForNow(StepperDialog) {
-	/** @param {{ page?: JournalEntryPage|null }} [config] pass a site page to edit it in place. */
-	constructor({ page = null, quietSave = false } = {}, options = {}) {
+	/**
+	 * @param {object} [config]
+	 * @param {JournalEntryPage|null} [config.page]  a site page to edit in place
+	 * @param {Actor|null} [config.steading]  where a new site is filed; the world's steading when not given
+	 * @param {boolean} [config.announce]  say where a new site went (announceSiteAdded), for a way in
+	 *   that may leave the GM Toolkit closed: the sidebar's picker and a reload's reopening
+	 */
+	constructor({ page = null, steading = null, announce = false } = {}, options = {}) {
 		// Editing gets a per-page window id so two sites can be open side by side; creation
 		// keeps the fixed id (one "Create a Site" at a time).
-		super(page ? foundry.utils.mergeObject({ id: `stonetop-create-site-${page.id}` }, options) : options);
+		super(page ? foundry.utils.mergeObject({ id: createSiteWindowId(page) }, options) : options);
 		this._page = page;
-		// The caller announces a saved site itself (the content picker), so Save for now doesn't.
-		this._quietSave = quietSave;
+		this._steading = steading;
+		this._announce = announce;
+		// That notice says where the site went, so Save for now's own would repeat it.
+		this._quietSave = announce;
 		this._sel = page ? this._seedFromPage(page) : {
 			name: "", why: "", description: "",
 			manner: "", picks: {}, regionId: "", terrain: [], regionPicks: {},
@@ -242,21 +275,79 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 
 	static get defaultOptions() {
 		return foundry.utils.mergeObject(super.defaultOptions, {
-			id:        "stonetop-create-site",
+			id:        createSiteWindowId(null),
 			template:  "systems/stonetop-pwd/templates/dialogs/create-site.hbs",
-			// Wide enough that the 168px jump-to-step rail sits beside the content column
-			// rather than eating into it (the same reason Create a Follower is 728).
-			width:     760,
-			height:    "auto",
+			// One size for every step, so the window doesn't jump between them; taller steps scroll
+			// inside it. Wide enough for the 168px jump-to-step rail beside a content column that
+			// holds the Theme step's manner, region and terrain abreast (.stonetop-cs-foundation).
+			// Core clamps the height to a smaller screen.
+			width:     1200,
+			height:    900,
 			resizable: true,
+			// Every pick, roll, add and remove redraws the window, which put the step column back
+			// at its top. Core keeps these panels' offsets through a redraw; changing step still
+			// opens the new one at the top (StepperDialog._render).
+			scrollY:   [".stonetop-guide-main", ".stonetop-guide-toc"],
 			classes:   ["stonetop", "stonetop-spring-dialog", "stonetop-create-site-dialog"],
 		});
 	}
 
 	get title() { return this._page ? `Site: ${this._page.name}` : "Create a Site"; }
 
+	/** What utils/window-restore.js saves this window under, and reopens it from (create-site-restore.js). */
+	get restoreKey() {
+		return `${CREATE_SITE_RESTORE_KIND}:${this._page?.uuid ?? NEW_SITE_KEY}`;
+	}
+
+	/**
+	 * Where the GM had got to, for a reload: the step, by key, and every answer. Read live, as the
+	 * page unloads too, so a field typed in and never left still counts.
+	 */
+	get restoreView() {
+		try { this._captureLiveFields(); }
+		catch (_err) { /* a window mid-close keeps what it last had */ }
+		return { step: this._steps[this._step]?.key ?? null, sel: this._sel, setAside: this._setAside };
+	}
+
+	/** A reload's reopening draw carries that back (`options.view`); it goes on before the first draw. */
+	async _render(force, options = {}) {
+		if (options?.view && this._renderedStep === undefined) this._takeRestoredView(options.view);
+		return super._render(force, options);
+	}
+
+	/**
+	 * Put a reload's step and answers back. The close-guard is told what the window would have opened
+	 * with FIRST (blank, or the page as saved), so the answers that came back through the reload still
+	 * count as unsaved and closing asks before losing them.
+	 *
+	 * Each answer is taken only where it has the shape this version keeps it in, so a record written
+	 * by an older version can't hand a list a string; anything else stays as it opened.
+	 */
+	_takeRestoredView(view) {
+		notePristineWork(this);
+		const sel = view?.sel;
+		if (sel && typeof sel === "object" && !Array.isArray(sel)) {
+			for (const [key, base] of Object.entries(this._sel)) {
+				const value = sel[key];
+				const fits = Array.isArray(base)
+					? Array.isArray(value)
+					: value !== null && !Array.isArray(value) && typeof value === typeof base;
+				if (fits) this._sel[key] = value;
+			}
+		}
+		// The answers a Manner or Region switch set aside (_switchManner), so switching back after a
+		// reload still finds them.
+		const isMap = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+		for (const kind of ["manner", "region"]) {
+			if (isMap(view?.setAside?.[kind])) this._setAside[kind] = view.setAside[kind];
+		}
+		const step = this._steps.findIndex(s => s.key === view?.step);
+		if (step >= 0) this._step = step;
+	}
+
 	get _steps() { return _STEPS; }
-	get _autoHeight() { return true; }
+	// Not content-hugging: one fixed size for every step (defaultOptions).
+	get _autoHeight() { return false; }
 
 	// Working state seeded from an existing page (edit mode). The stored picks are ordered
 	// label/value pairs; the wizard keys them by table, so they're matched back by label
@@ -320,7 +411,9 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 		const nav  = this._stepNav();
 		const step = nav.step;
 		const sel  = this._sel;
-		const ctx  = { ...nav, sel, isEdit: !!this._page };
+		// Which lists' Add buttons open a suggestion menu (`menu=` in the template), off _SUGGESTIONS.
+		const suggestionMenus = Object.fromEntries(Object.keys(_SUGGESTIONS).map(list => [list, true]));
+		const ctx  = { ...nav, sel, isEdit: !!this._page, suggestionMenus };
 
 		if (step.key === "foundation") {
 			ctx.storyQuestions = SITE_STORY_QUESTIONS;
@@ -343,12 +436,11 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 			// purpose), through the same controls under their own reserved keys.
 			ctx.terrainTables = regionTables(chosenRegion, sel.terrain, sel.regionPicks)
 				.map(t => ({ note: t.note ?? "", ...this._pickSlots(REGION_TABLE_PREFIX + t.key) }));
+			ctx.hasPickTables = ctx.tables.length > 0 || ctx.terrainTables.length > 0;
 		}
 		if (step.key === "story") {
 			ctx.connectionRows = this._lineRows("connections");
-			ctx.connectionChips = this._lineChips("connections", SITE_CONNECTIONS);
 			ctx.questionRows = this._pairRows("questions");
-			ctx.questionChips = this._pairChips("questions", SITE_QUESTION_PROMPTS);
 		}
 		if (step.key === "timeline") {
 			ctx.timelineRows = this._pairRows("timeline");
@@ -376,7 +468,9 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 				// The faces each row covers, as the card will number them ("1-3", "4").
 				const rows = numberTableRows(t.rows.map((row, rowIndex) => ({ rowIndex, text: row.text, span: clampRowSpan(row.span) })));
 				const faces = rows.at(-1)?.to ?? 0;
-				return { index, caption: t.caption, die: faces ? `1d${faces}` : "", rows };
+				// The roll column is as wide as this table's longest label ("4" or "10-12"), not a fixed width.
+				const rollCh = Math.max(1, ...rows.map(r => r.roll.length));
+				return { index, caption: t.caption, die: faces ? `1d${faces}` : "", rows, rollCh };
 			});
 		}
 		if (step.isFinal) {
@@ -487,11 +581,6 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 		return this._sel[list].map((text, index) => ({ index, list, text }));
 	}
 
-	/** Suggestion chips for a string list, marked when the list already carries one. */
-	_lineChips(list, prompts = []) {
-		return prompts.map(text => ({ list, text, used: this._sel[list].includes(text) }));
-	}
-
 	/**
 	 * Rows for a paired list, as `{index, cells}` — one cell per key the schema declares, in the
 	 * order it declares them. The template loops the cells rather than naming two fields, so the
@@ -509,7 +598,6 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 			index,
 			list,
 			rowClass: ui.rowClass ?? "",
-			inline: !!ui.inline,
 			cells: keys.map((key, i) => ({
 				list,
 				index,
@@ -527,16 +615,25 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 	}
 
 	/**
-	 * Suggestion chips for a paired list, marked when the list already carries one.
+	 * The book's suggestions for a list, as suggestion-menu items, each marked `used` when the list
+	 * already carries it.
 	 *
-	 * The chip's "already added" state and the click handler's "add it once" guard are the same
-	 * question, so they read the same key — the list's FIRST, whatever it is called. Asking for a
-	 * hardcoded `prompt` made both correct for questions alone: on any other list the chip never
-	 * lit up and every click appended another row.
+	 * "Already added" and the pick handler's "add it once" guard are the same question, so both
+	 * read the same key: a paired list's FIRST, whatever it is called, or the line itself.
 	 */
-	_pairChips(list, prompts = []) {
+	_suggestionItems(list, prompts = []) {
 		const [first] = pairKeys(list) ?? [];
-		return prompts.map(text => ({ list, text, used: this._sel[list].some(r => r?.[first] === text) }));
+		const has = first
+			? text => this._sel[list].some(r => r?.[first] === text)
+			: text => this._sel[list].includes(text);
+		return prompts.map(text => ({ value: text, label: text, used: has(text) }));
+	}
+
+	/** Add one of the book's suggestions to a list as a new row, unless it is already there. */
+	_addSuggestion(list, text) {
+		const [first] = pairKeys(list) ?? [];
+		if (this._suggestionItems(list, [text])[0].used) return;
+		this._sel[list].push(first ? { ...blankRow(list), [first]: text } : text);
 	}
 
 	// A compact summary of the site-to-be, shown on the final step.
@@ -553,10 +650,10 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 			name:        sel.name.trim() || "Unnamed site",
 			foundation,
 			why:         shaped.why,
-			description: shaped.description.trim(),
+			// Stored as HTML; the summary is a clamped line of plain words.
+			description: stripHtmlToText(shaped.description),
 			picks:       this._pickLines(),
-			counts:      _countLines(shaped),
-			areas: shaped.areas.map(a => a.title).filter(Boolean),
+			sections:    _reviewSections(shaped),
 		};
 	}
 
@@ -576,8 +673,7 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 		// ── Manner + its tables ──────────────────────────────────────────────
 		// Changing the manner drops the old picks: they belong to the old entry's tables.
 		html.find(".stonetop-cs-manner").on("change", ev => {
-			this._sel.manner = ev.currentTarget.value;
-			this._sel.picks = {};
+			this._switchManner(ev.currentTarget.value);
 			this.render(false);
 		});
 		// A pick can open or close a branch, so every pick re-renders.
@@ -607,27 +703,45 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 			target.set(next);
 			this.render(false);
 		});
-		html.find(".stonetop-cs-roll-all").on("click", () => {
+		html.find(".stonetop-cs-roll-all").on("click", async () => {
+			if (!(await this._confirmRollAll())) return;
 			this._rollAll();
 			this.render(false);
 		});
 
 		// ── Region + terrain ─────────────────────────────────────────────────
 		html.find(".stonetop-cs-region").on("change", ev => {
-			this._sel.regionId = ev.currentTarget.value;
-			this._sel.terrain = [];
-			this._sel.regionPicks = {};
+			this._switchRegion(ev.currentTarget.value);
 			this.render(false);
 		});
 		// Terrain has no handlers of its own: its controls carry TERRAIN_KEY and go through the
 		// pick handlers above, which is what keeps "and roll 1d10 again" working on a terrain row.
 
 		// ── Row lists (add / remove / suggest) ───────────────────────────────
+		// A list with book suggestions opens a menu off its Add button: a blank row first, then the
+		// suggestions, the ones already on the list shown as added (user 2026-11-07: a dropdown,
+		// not rows of chips).
 		html.find(".stonetop-cs-add").on("click", ev => {
+			const button = ev.currentTarget;
+			const list = button.dataset.list;
 			this._captureLiveFields();
-			const list = ev.currentTarget.dataset.list;
-			this._sel[list].push(blankRow(list));
-			this.render(false);
+			const menu = _SUGGESTIONS[list];
+			if (!menu) {
+				this._sel[list].push(blankRow(list));
+				this.render(false);
+				return;
+			}
+			openSuggestionMenu(button, {
+				heading: menu.heading,
+				blankLabel: menu.blankLabel,
+				items: this._suggestionItems(list, menu.items),
+				onPick: text => {
+					this._captureLiveFields();
+					if (text === null) this._sel[list].push(blankRow(list));
+					else this._addSuggestion(list, text);
+					this.render(false);
+				},
+			});
 		});
 		html.find(".stonetop-cs-remove").on("click", ev => {
 			this._captureLiveFields();
@@ -635,23 +749,6 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 			this._sel[list].splice(Number(index), 1);
 			this.render(false);
 		});
-		// A suggestion chip appends the book's own prompt as a new row (once).
-		html.find(".stonetop-cs-suggest").on("click", ev => {
-			this._captureLiveFields();
-			const { list, text } = ev.currentTarget.dataset;
-			const [first] = pairKeys(list) ?? [];
-			if (first) {
-				// Read and written through the same key, so the guard holds for every paired list
-				// rather than only the one whose first key happens to be called "prompt".
-				if (!this._sel[list].some(r => r?.[first] === text)) {
-					this._sel[list].push({ ...blankRow(list), [first]: text });
-				}
-			} else if (!this._sel[list].includes(text)) {
-				this._sel[list].push(text);
-			}
-			this.render(false);
-		});
-
 		// ── Random tables ────────────────────────────────────────────────────
 		html.find(".stonetop-cs-table-add").on("click", () => {
 			this._captureLiveFields();
@@ -757,6 +854,55 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 	}
 
 	/**
+	 * Answers set aside by a Manner or Region switch, keyed by the choice they were made under, so
+	 * switching back brings them back. The old answers belong to the old entry's tables and can't
+	 * stay on screen, but throwing them away on a change of dropdown lost up to ten picks to one
+	 * stray click.
+	 */
+	get _setAside() {
+		return (this.__setAside ??= { manner: {}, region: {} });
+	}
+
+	/** Change the manner: its own tables' answers come back if it was chosen before. */
+	_switchManner(id) {
+		const sel = this._sel;
+		if (id === sel.manner) return;
+		const keep = sel.manner && Object.keys(sel.picks).length ? sel.picks : null;
+		sel.picks = swapAside(this._setAside.manner, sel.manner, id, keep, () => ({}));
+		sel.manner = id;
+	}
+
+	/** Change the region: its terrain, and the tables that terrain opened, come back likewise. */
+	_switchRegion(id) {
+		const sel = this._sel;
+		if (id === sel.regionId) return;
+		const keep = sel.regionId && (sel.terrain.length || Object.keys(sel.regionPicks ?? {}).length)
+			? { terrain: sel.terrain, regionPicks: sel.regionPicks ?? {} }
+			: null;
+		({ terrain: sel.terrain, regionPicks: sel.regionPicks } = swapAside(this._setAside.region, sel.regionId, id, keep,
+			() => ({ terrain: [], regionPicks: {} })));
+		sel.regionId = id;
+	}
+
+	/**
+	 * Whether Roll the lot may go ahead. It throws away every answer on the manner's tables, the
+	 * hand-picked ones and the conditional ones it won't re-roll included, so once there are any it
+	 * asks first. Enter (and closing the window) keeps them.
+	 */
+	async _confirmRollAll() {
+		const manner = this._manner;
+		const n = pickLines(manner, this._sel.picks).length;
+		if (!manner || !n) return true;
+		return !!(await confirmOutcome({
+			title:   "Roll the lot?",
+			content: `<p>You already have ${n === 1 ? "an answer" : `${n} answers`} on the <strong>${escHtml(manner.label)}</strong> tables.</p>
+				<p>Rolling the lot throws ${n === 1 ? "it" : "all of them"} away and rolls every table afresh. To change just one, use the dice beside it instead.</p>`,
+			yes: { label: "Roll the lot anyway", icon: "fa-dice-d20", className: "stonetop-dialog-btn--danger" },
+			no:  { label: "Keep my answers" },
+		}));
+	}
+
+	/**
 	 * A branch pick that changed leaves the other branch's answers orphaned; drop any pick whose
 	 * table is no longer visible so it can't ride along into the write-up. The same for a region's
 	 * further tables, once the terrain or building row that opened them is gone.
@@ -784,7 +930,7 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 
 	// Save for now and the close-guard's question (dialogs/save-for-now.js).
 	get _saveCopy() {
-		return { noun: "site", keptAt: "at the foot of the GM Toolkit's Expeditions tab" };
+		return { noun: "site", keptAt: "at the foot of the GM Toolkit's Expeditions tab", saveLabel: "Save my changes" };
 	}
 
 	_captureLiveFields() {
@@ -852,17 +998,28 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 		};
 	}
 
+	/**
+	 * Write the site and close, resolving promise() to its page. An edit is applied in place; a new
+	 * site is filed under the steading here, so every way in (the Sites tab, the sidebar's picker, a
+	 * reload's reopening) only has to open the window. With no steading, or no page made, the window
+	 * stays open, so nothing written is lost.
+	 */
 	async _finish() {
 		this._captureLiveFields();
 		const seed = this._seed();
 		if (this._page) {
-			// Edit mode: apply in place. The name is the site's identity across the page and
-			// its scene pins, so it routes through setSiteName.
+			// The name is the site's identity across the page and its scene pins, so it routes
+			// through setSiteName.
 			await this._page.update({ system: shapeSiteSystem(seed) });
 			await setSiteName(this._page, seed.name);
 			this._resolveWith(this._page);
-		} else {
-			this._resolveWith(seed);
+			return;
 		}
+		const steading = this._steading ?? getStonetopSteadingActorOrWarn({ because: "there is nowhere to file a site" });
+		if (!steading) return;
+		const page = await createSite(steading, seed);
+		if (!page) return;
+		if (this._announce) announceSiteAdded(page);
+		this._resolveWith(page);
 	}
 }

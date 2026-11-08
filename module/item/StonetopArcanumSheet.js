@@ -1,5 +1,5 @@
 import { arcanumCardImg } from "../arcana-icons.js";
-import { confirmOutcome } from "../utils/ask-with-buttons.js";
+import { askWithButtons, confirmOutcome } from "../utils/ask-with-buttons.js";
 import { ITEM_FLAG_SCOPE } from "../actors/character/StonetopFlags.js";
 import { centerArcanumTracks, wrapGlyphTextContainers, wrapStonetopGlyphsInEl } from "../utils/glyphs.js";
 import { markValueTooltips } from "../utils/value-tooltips.js";
@@ -8,7 +8,7 @@ import { enrichHTML, compendiumSourceOf } from "../utils/foundry-compat.js";
 import { isInCompendium } from "../utils/compendium-edit-guard.js";
 import { applyGuideRail } from "../utils/guide-rail.js";
 import { wireGrowableFields, refitGrowableFields } from "../utils/growable-fields.js";
-import { isDefaultImg, joinNames } from "../utils/strings.js";
+import { isDefaultImg, joinNames, escHtml } from "../utils/strings.js";
 import { STAT_KEYS } from "../utils/roll-types.js";
 import { circleLabelsFromLines, circleLabelsToLines } from "../utils/gear-note.js";
 import { hasText } from "../actors/bestiary/codex.js";
@@ -30,6 +30,32 @@ const EDIT_TEMPLATE = "systems/stonetop-pwd/templates/item/arcanum-sheet-edit.hb
 // The "Max = stat" picker options, derived from the shared stat list so the order and
 // labels match the rest of the app (and can't drift). { key, abbr } is the template shape.
 const STAT_OPTIONS = STAT_KEYS.map(key => ({ key, abbr: key.toUpperCase() }));
+
+// What unticking each presence box throws away, for the question asked first (_confirmToggleOff).
+// `name` is the field that names the section, quoted back so the author knows which one is meant.
+const TOGGLE_LOSSES = {
+	"front.item":         { noun: "The thing",                  name: "name",  what: "its name, weight and tag line",              yes: "Remove the thing" },
+	"back.item":          { noun: "The revealed item",          name: "name",  what: "its name, weight and tag line",              yes: "Remove the item" },
+	"back.item.resource": { noun: "The item's resource track",  name: "title", what: "its title, size and circle labels",          yes: "Remove the track" },
+	"back.resource":      { noun: "The resource track",         name: "title", what: "its title, size and circle labels",          yes: "Remove the track" },
+	"back.move":          { noun: "The condensed move",         name: "name",  what: "its trigger, roll and effect text",          yes: "Remove the move" },
+};
+
+/**
+ * Whether a sub-object a presence box made from `defaults` holds anything the author put there: a
+ * field that is neither blank nor what ticking the box filled in. A nested sub-object (the revealed
+ * item's own track) is judged the same way against its own defaults.
+ */
+function toggleHasContent(value, defaults = {}) {
+	if (!value || typeof value !== "object") return false;
+	return Object.entries(value).some(([key, v]) => {
+		if (v == null) return false;
+		if (typeof v === "string") return hasText(v);
+		if (Array.isArray(v)) return v.some(x => String(x ?? "").trim());
+		if (typeof v === "object") return toggleHasContent(v, key === "resource" ? defaultResourceDef() : {});
+		return v !== defaults[key];
+	});
+}
 
 // Glyph runs the toolbar inserts into the focused rich editor. Tracks need a run of 2+ to
 // become interactive on the character sheet (see CharacterArcana._injectMarkers); a lone
@@ -278,14 +304,22 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 		// stored draft's Discard button (the view footer), open to anyone who may edit the card.
 		async _discardDraft({ stored = false } = {}) {
 			if ((stored ? !this._canEditArcanum() : !this._arcanumDraft) || this._discarded) return false;
-			const ok = await confirmOutcome({
-				title:   "Discard arcanum?",
-				content: stored
-					? "<p>This arcanum is an unfinished draft. Discard it? This can't be undone.</p>"
-					: "<p>This arcanum hasn't been saved yet. Discard it? This can't be undone.</p>",
-				yes:     { label: "Discard the arcanum", icon: "fa-trash" },
-				no:      { label: stored ? "Keep it" : "Keep editing" },
-			});
+			const yes = { label: "Discard the arcanum", icon: "fa-trash" };
+			// Closing an unsaved draft asks with Discard alone: the question's own X keeps editing, and
+			// Enter presses nothing. The stored draft's Discard button is a delete, asked as one.
+			const ok = stored
+				? await confirmOutcome({
+					title:   "Discard arcanum?",
+					content: "<p>This arcanum is an unfinished draft. Discard it? This can't be undone.</p>",
+					yes,
+					no:      { label: "Keep it" },
+				})
+				: await askWithButtons({
+					title:   "Discard arcanum?",
+					content: "<p>This arcanum hasn't been saved yet. Discard it? This can't be undone.</p>",
+					buttons: [{ key: "yes", ...yes, value: true }],
+					defaultKey: false,
+				});
 			if (!ok) return false;
 			// Re-check after the await: the confirm is non-modal, so while it was open the author
 			// could have clicked "Save & Done" (which commits the draft and clears _arcanumDraft) —
@@ -320,7 +354,7 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			// has been saved (no longer a draft) or discarded (torn down by item.delete()).
 			if (this._arcanumDraft && !this._discarded && !itemGone) {
 				const discarded = await this._discardDraft();
-				if (!discarded) return this;   // "Keep editing" → don't close
+				if (!discarded) return this;   // closed unanswered → don't close
 				return this;                   // discarded: item.delete() already closed the sheet
 			}
 			// Flush any pending rich-editor content before teardown. Skip it when the item was
@@ -604,7 +638,7 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 
 			// Presence toggles add/remove a sub-object → restructure.
 			const toggle = t.closest("[data-arc-toggle]");
-			if (toggle) return this._onToggle(toggle.dataset.arcToggle, toggle.checked);
+			if (toggle) return this._onToggle(toggle.dataset.arcToggle, toggle.checked, toggle);
 
 			// Generic scalar / select field. Rich (prose-mirror) content is intentionally NOT
 			// saved here — it's flushed on Done/close/toggle/append (every path before a
@@ -848,9 +882,34 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			return defaultArcanumItemLine();
 		}
 
-		async _onToggle(which, on) {
+		// `box`: the presence checkbox, ticked again when the author keeps what unticking would
+		// throw away (no update means no re-render to put it back).
+		async _onToggle(which, on, box = null) {
 			await this._flushRichEditors();
+			if (!on && !(await this._confirmToggleOff(which))) {
+				if (box) box.checked = true;
+				return;
+			}
 			await this.item.update({ [`flags.${ITEM_FLAG_SCOPE}.${which}`]: on ? this._defaultForToggle(which) : null });
+		}
+
+		// Unticking a presence box nulls its whole sub-object, so ask first when the author has put
+		// anything in it. One still at the blank defaults ticking made just goes.
+		async _confirmToggleOff(which) {
+			const value = which.split(".").reduce((node, key) => node?.[key], this._flags());
+			if (!toggleHasContent(value, this._defaultForToggle(which))) return true;
+			const loss = TOGGLE_LOSSES[which] ?? { noun: "This section", name: "name", what: "everything in it", yes: "Remove it" };
+			const named = String(value?.[loss.name] ?? "").trim();
+			const what = which === "back.item" && toggleHasContent(value.resource, defaultResourceDef())
+				? "its name, weight, tag line and resource track"
+				: loss.what;
+			return !!(await confirmOutcome({
+				title:   `${loss.yes}?`,
+				content: `<p>${loss.noun}${named ? ` <strong>${escHtml(named)}</strong>` : ""} goes, with ${what}.</p>
+					<p>Ticking the box again starts it blank.</p>`,
+				yes: { label: loss.yes, icon: "fa-trash", className: "stonetop-dialog-btn--danger" },
+				no:  { label: "Keep it" },
+			}));
 		}
 
 		async _addRequirement(type) {
@@ -874,17 +933,26 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			const root = this.element?.[0];
 			if (!root) return;
 			const taken = new Set();
-			const reqs = [...root.querySelectorAll(".stonetop-arc-req-row")].map(row => {
+			const stored = this._flags().front?.unlock?.requirements ?? [];
+			const reqs = [...root.querySelectorAll(".stonetop-arc-req-row")].map((row, index) => {
+				// Over the STORED row, so what the form has no field for (an option's `path`) survives
+				// an edit, and switching Option/Text keeps the other kind's words on the row for a
+				// switch back. Every reader branches on `type`, so the idle kind's fields are inert.
+				const now = { ...(stored[Number(row.dataset.reqIndex ?? index)] ?? {}) };
+				// Read off the row's inputs where it shows them, off the stored row where it doesn't.
+				for (const prop of ["content", "description", "slug", "max"]) {
+					const value = row.querySelector(`[data-req-prop="${prop}"]`)?.value;
+					if (value != null) now[prop] = value;
+				}
+				const toMax = raw => (raw ? Math.max(1, Number(raw) || 1) : 1);
 				const type = row.querySelector('[data-req-prop="type"]')?.value ?? "option";
 				if (type === "text") {
-					return { type: "text", content: row.querySelector('[data-req-prop="content"]')?.value ?? "" };
+					return { ...now, type: "text", content: now.content ?? "", ...(now.max != null ? { max: toMax(now.max) } : {}) };
 				}
-				const description = row.querySelector('[data-req-prop="description"]')?.value ?? "";
-				const slug = ensureOptionSlug(row.querySelector('[data-req-prop="slug"]')?.value ?? "", description, taken);
+				const description = now.description ?? "";
+				const slug = ensureOptionSlug(now.slug ?? "", description, taken);
 				taken.add(slug);
-				const maxRaw = row.querySelector('[data-req-prop="max"]')?.value;
-				const max = maxRaw ? Math.max(1, Number(maxRaw) || 1) : 1;
-				return { type: "option", slug, description, max };
+				return { ...now, type: "option", slug, description, max: toMax(now.max) };
 			});
 			return this.item.update({ [`flags.${ITEM_FLAG_SCOPE}.front.unlock.requirements`]: reqs }, { render });
 		}

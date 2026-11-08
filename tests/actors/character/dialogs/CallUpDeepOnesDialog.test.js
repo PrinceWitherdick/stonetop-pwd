@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { CallUpDeepOnesDialog } from "../../../../module/actors/character/dialogs/CallUpDeepOnesDialog.js";
+import { stubConfirm } from "../../../fakes/confirm.js";
 
 // "Each time you Call Up the Deep Ones, roll five d4s" (Book II p.561). The window keeps an
 // unspent roll, announces a deliberate re-roll, and rolls how many appear exactly once.
@@ -57,6 +58,59 @@ describe("CallUpDeepOnesDialog dice", () => {
 		const content = ChatMessage.create.mock.calls.at(-1)[0].content;
 		expect(content).toContain("3, 1, 4, 2, 2");
 		expect(content).toContain("1, 1, 2, 3, 4");
+	});
+
+	describe("a re-roll asks before throwing work away", () => {
+		afterEach(() => { delete globalThis.foundry?.applications?.api?.DialogV2; });
+
+		it("asks nothing while the dice sit on their own aspects and nothing is chosen", async () => {
+			const ask = stubConfirm(false);
+			const { d } = makeDialog();
+			queueRolls([3, 1, 4, 2, 2], [1, 1, 2, 3, 4]);
+			await d._rollDice();
+			expect(await d._reroll()).toBe(true);
+			expect(ask).not.toHaveBeenCalled();
+			expect(d._dice).toEqual([1, 1, 2, 3, 4]);
+		});
+
+		it("kept: nothing is rolled or posted, and the assignment, traits and moves stay", async () => {
+			const ask = stubConfirm(false);
+			const { d } = makeDialog();
+			queueRolls([3, 1, 4, 2, 2], [1, 1, 2, 3, 4]);
+			await d._rollDice();
+			d._assignDie("traits", 2);          // traits takes the 4
+			d._traits = ["hide", "powerful"];
+			d._moves = ["Heal at a prodigious rate"];
+			const assign = { ...d._assign };
+			ChatMessage.create.mockClear();
+			expect(await d._reroll()).toBe(false);
+			const asked = ask.mock.calls[0][0];
+			expect(asked.window.title).toBe("Re-roll the five d4s?");
+			expect(asked.content).toContain("How you've assigned the dice");
+			expect(asked.content).toContain("Blubbery/scaly hide");
+			expect(asked.content).toContain("Heal at a prodigious rate");
+			expect(asked.buttons.find(b => b.default).action).toBe("no");
+			expect(queue).toHaveLength(1);
+			expect(ChatMessage.create).not.toHaveBeenCalled();
+			expect(d._dice).toEqual([3, 1, 4, 2, 2]);
+			expect(d._assign).toEqual(assign);
+			expect(d._traits).toEqual(["hide", "powerful"]);
+			expect(d._moves).toEqual(["Heal at a prodigious rate"]);
+		});
+
+		it("a chosen trait alone is enough to ask; yes re-rolls, resets and posts", async () => {
+			const ask = stubConfirm(true);
+			const { d } = makeDialog();
+			queueRolls([3, 1, 4, 2, 2], [1, 1, 2, 3, 4]);
+			await d._rollDice();
+			d._traits = ["hide"];
+			expect(await d._reroll()).toBe(true);
+			expect(ask).toHaveBeenCalledTimes(1);
+			expect(ask.mock.calls[0][0].content).not.toContain("How you've assigned the dice");
+			expect(d._dice).toEqual([1, 1, 2, 3, 4]);
+			expect(d._traits).toEqual([]);
+			expect(ChatMessage.create).toHaveBeenCalledTimes(1);
+		});
 	});
 
 	it("swapping the No. Appearing die rolls nothing; the headcount is rolled once, at Manifest", async () => {

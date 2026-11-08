@@ -30,7 +30,6 @@ import { stonetopChatCard } from "../utils/chat.js";
 import { resolveSync } from "../utils/foundry-compat.js";
 import { BALK_REASONS, BALK_RULE } from "./follower-text.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
-import { contentElement } from "../utils/dialogv2-content.js";
 import { changeFollowerLoyalty, followerLoyalty, SPEND_LOYALTY } from "../actors/character/follower-bond.js";
 import { findPcAnswer } from "../pc-asks/pc-ask-rules.js";
 
@@ -51,13 +50,11 @@ export function balkAnswerFor(message, messages = globalThis.game?.messages) {
 /**
  * The balk card's body. PURE.
  *
- * @param {{name: string, leaderName: string, reason: string, order?: string, loyalty: number}} balk
+ * @param {{name: string, leaderName: string, reason: string, loyalty: number}} balk
  */
-export function balkCardBody({ name, leaderName, reason, order = "", loyalty = 0 }) {
+export function balkCardBody({ name, leaderName, reason, loyalty = 0 }) {
 	const why = BALK_REASONS.find(r => r.key === reason)?.text ?? "";
-	const what = order ? `<p>${escHtml(format(`${KEY}.order`, { order }))}</p>` : "";
 	return `<p><strong>${escHtml(format(`${KEY}.lead`, { name, leader: leaderName }))}</strong></p>`
-		+ what
 		+ (why ? `<p><em>${escHtml(why)}</em></p>` : "")
 		+ `<p class="stonetop-balk-rule">${escHtml(BALK_RULE)} (p.466)</p>`
 		+ `<div class="card-buttons stonetop-balk-answers">`
@@ -70,44 +67,37 @@ export function balkCardBody({ name, leaderName, reason, order = "", loyalty = 0
 /**
  * Post the balk card: the GM reveals that a follower won't do as they're told.
  *
- * @param {{character: Actor, ftype: string, slug?: string, loyaltySlug?: string, name: string, reason: string, order?: string}} p
+ * @param {{character: Actor, ftype: string, slug?: string, loyaltySlug?: string, name: string, reason: string}} p
  */
-export async function postFollowerBalk({ character, ftype, slug = "", loyaltySlug = slug, name, reason, order = "" }) {
+export async function postFollowerBalk({ character, ftype, slug = "", loyaltySlug = slug, name, reason }) {
 	if (!character) return null;
 	const loyalty = followerLoyalty(character, ftype, loyaltySlug);
 	return globalThis.ChatMessage?.create?.({
-		content: stonetopChatCard(localize(`${KEY}.title`), `<div class="card-content">${balkCardBody({ name, leaderName: character.name, reason, order, loyalty })}</div>`, "stonetop-balk-card"),
+		content: stonetopChatCard(localize(`${KEY}.title`), `<div class="card-content">${balkCardBody({ name, leaderName: character.name, reason, loyalty })}</div>`, "stonetop-balk-card"),
 		speaker: { alias: name },
 		flags: { [SYSTEM_ID]: { [BALK_FLAG]: { characterUuid: character.uuid, ftype, slug, loyaltySlug, name, reason } } },
 	});
 }
 
 /**
- * Ask why the follower won't do as they're told (and, optionally, what the order was), then post the card.
+ * Ask why the follower won't do as they're told, then post the card. The order itself is said aloud at the
+ * table, not typed: it would only ever be shown on this one card.
  * Answers the card, or null when the window was cancelled.
  *
  * @param {{character: Actor, ftype: string, slug?: string, loyaltySlug?: string, name: string}} ref
  */
 export async function askFollowerBalk(ref) {
 	if (!ref?.character) return null;
-	const form = contentElement(`<p>${escHtml(format(`${KEY}.ask`, { name: ref.name }))}</p>`
-		+ `<label class="stonetop-balk-order">${escHtml(localize(`${KEY}.orderLabel`))} <input type="text" name="order" placeholder="${escHtml(localize(`${KEY}.orderPlaceholder`))}"></label>`);
-	let order = "";
 	const reason = await askWithButtons({
 		title: format(`${KEY}.askTitle`, { name: ref.name }),
-		content: form,
+		content: `<p>${escHtml(format(`${KEY}.ask`, { name: ref.name }))}</p>`,
 		buttons: [
 			...BALK_REASONS.map(r => ({ key: r.key, label: localize(`${KEY}.reason.${r.key}`), value: r.key })),
 			{ key: "cancel", label: localize(`${KEY}.cancel`), value: null },
 		],
-		// The window keeps only the markup it is handed, so the typed order is read as it is typed.
-		render: root => {
-			const input = root?.querySelector?.('input[name="order"]');
-			input?.addEventListener("input", () => { order = String(input.value ?? "").trim(); });
-		},
 	});
 	if (!reason) return null;
-	return postFollowerBalk({ ...ref, reason, order });
+	return postFollowerBalk({ ...ref, reason });
 }
 
 /** Whether this user may answer for the leader: an owner, or the GM while no owning player is logged in. */

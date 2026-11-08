@@ -74,11 +74,7 @@ describe("the two arrows", () => {
 	});
 
 	// Core's `body.game .app button > i` carries a `margin-right: 3px` for a label that is not
-	// coming, and on a button this small three pixels is most of what centring there is. Set on all
-	// four sides so a core change to any one of them lands the same way.
-	it("takes core's icon-to-label margin off the glyph inside it", () => {
-		expect(rule(".stonetop-relmap-heft-step > i")).toMatch(/margin:\s*0;/);
-	});
+	// coming; core's icon-to-label margin comes off through the icon-only marker (tests/utils/icon-only-buttons.test.js).
 });
 
 // ⚠ THE THIRD FACE OF THE SAME TRAP, and the one that only bites on this line. Core pins a button's

@@ -19,6 +19,6 @@
 	<li class="stonetop-reminder-chip stonetop-reminder-chip--{{c.kind}}" data-tooltip-text="{{c.tooltip}}" data-tooltip-direction="UP"><i class="fas {{#if (eq c.kind "gear")}}fa-shirt{{else}}fa-thumbtack{{/if}}" aria-hidden="true"></i><span class="stonetop-reminder-chip-text">{{c.label}}{{#if c.detail}}{{#unless ../compact}} <span class="stonetop-reminder-chip-detail">({{c.detail}})</span>{{/unless}}{{/if}}</span>{{#if ../reminderEditable}}{{#if (eq c.kind "note")}}<button type="button" class="stonetop-reminder-chip-remove" data-index="{{c.index}}" aria-label="{{localize "stonetop.reminders.remove" text=c.label}}"><i class="fas fa-xmark" aria-hidden="true"></i></button>{{/if}}{{/if}}</li>
 	{{/each}}
 	{{#if reminderEditable}}
-	<li class="stonetop-reminder-chip-slot"><button type="button" class="stonetop-reminder-chip stonetop-reminder-chip--add" aria-label="{{localize "stonetop.reminders.addChip"}}" data-tooltip-text="{{localize "stonetop.reminders.addChipTooltip" places=(localize "stonetop.reminders.places")}}" data-tooltip-direction="UP"><i class="fas fa-plus" aria-hidden="true"></i></button></li>
+	<li class="stonetop-reminder-chip-slot"><button type="button" class="stonetop-reminder-chip stonetop-reminder-chip--add stonetop-add-chip" aria-label="{{localize "stonetop.reminders.addChip"}}" data-tooltip-text="{{localize "stonetop.reminders.addChipTooltip" places=(localize "stonetop.reminders.places")}}" data-tooltip-direction="UP"><i class="fas fa-plus" aria-hidden="true"></i></button></li>
 	{{/if}}
 </ul>

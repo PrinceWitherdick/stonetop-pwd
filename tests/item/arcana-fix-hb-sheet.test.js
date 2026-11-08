@@ -6,12 +6,13 @@ import { fileURLToPath } from "node:url";
 import Handlebars from "handlebars";
 vi.mock("../../module/utils/ask-with-buttons.js", async importOriginal => {
 	const actual = await importOriginal();
-	return { ...actual, confirmOutcome: vi.fn(actual.confirmOutcome) };
+	return { ...actual, confirmOutcome: vi.fn(actual.confirmOutcome), askWithButtons: vi.fn(actual.askWithButtons) };
 });
 
 import { createStonetopArcanumSheetClass } from "../../module/item/StonetopArcanumSheet.js";
 import { viewerMaySeeArcanumBack, arcanumHolders, characterHasArcanumBack } from "../../module/item/arcanum-access.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
+import { stubConfirm } from "../fakes/confirm.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const EN   = JSON.parse(fs.readFileSync(path.join(ROOT, "languages/en.json"), "utf8"));
@@ -177,13 +178,14 @@ describe("HB-11: a stored draft", () => {
 
 	it("Discard refused by the held-card guard leaves the sheet as it was", async () => {
 		setGame({ isGM: true });
-		const { confirmOutcome } = await import("../../module/utils/ask-with-buttons.js");
+		const { askWithButtons } = await import("../../module/utils/ask-with-buttons.js");
 		const item = card({ draft: true }, { delete: vi.fn(async () => undefined) });
 		const sheet = sheetFor(item);
 		const onSave = vi.fn();
 		sheet._arcanumDraft = true;
 		sheet._arcanumOnSave = onSave;
-		vi.mocked(confirmOutcome).mockResolvedValueOnce(true);
+		// Closing an unsaved draft asks with Discard alone (its X keeps editing).
+		vi.mocked(askWithButtons).mockResolvedValueOnce(true);
 		// The item is still there after the delete: the guard refused it to ask first.
 		expect(await sheet._discardDraft()).toBe(false);
 		expect(item.delete).toHaveBeenCalledOnce();
@@ -192,7 +194,7 @@ describe("HB-11: a stored draft", () => {
 
 		// A delete that lands is a discard.
 		globalThis.game.items = { get: vi.fn().mockReturnValueOnce({}).mockReturnValue(undefined) };
-		vi.mocked(confirmOutcome).mockResolvedValueOnce(true);
+		vi.mocked(askWithButtons).mockResolvedValueOnce(true);
 		expect(await sheet._discardDraft()).toBe(true);
 		expect(sheet._discarded).toBe(true);
 	});
@@ -268,5 +270,112 @@ describe("HB-8 / A15: holders", () => {
 		expect(data.edit.holderNames).toBe("Aldric");
 		const src = fs.readFileSync(path.join(ROOT, "templates/item/arcanum-sheet-edit.hbs"), "utf8");
 		expect(src).toMatch(/data-req-prop="slug"[^>]*\{\{#if @root\.edit\.slugLocked\}\} readonly/);
+	});
+});
+
+describe("unticking a presence box asks before it throws typed text away", () => {
+	const back = extra => ({ title: "Secret Power", description: "", ...extra });
+	const box = () => Object.assign(document.createElement("input"), { type: "checkbox", checked: false });
+
+	it("a section still at its blank defaults just goes, without a question", async () => {
+		const ask = stubConfirm(false);
+		const item = card({ back: back({
+			move: { name: "", rollType: null, description: "<p></p>" },
+			resource: { max: 3, maxStat: null, title: "", labels: ["", ""] },
+			item: { name: "", weight: null, note: "", inventoryColumn: null, resource: { max: 3, maxStat: null, title: "", labels: [] } },
+		}) });
+		const sheet = sheetFor(item);
+		for (const which of ["back.move", "back.resource", "back.item"]) await sheet._onToggle(which, false, box());
+		expect(ask).not.toHaveBeenCalled();
+		expect(item.update.mock.calls.map(([u]) => u)).toEqual([
+			{ "flags.stonetop.back.move": null }, { "flags.stonetop.back.resource": null }, { "flags.stonetop.back.item": null },
+		]);
+	});
+
+	it("a typed section and Keep it: nothing written, and the box is ticked again", async () => {
+		for (const answer of [false, null]) {
+			const ask = stubConfirm(answer);
+			const item = card({ back: back({ move: { name: "When you <wake> it", rollType: null, description: "" } }) });
+			const el = box();
+			await sheetFor(item)._onToggle("back.move", false, el);
+			expect(ask).toHaveBeenCalledOnce();
+			expect(item.update).not.toHaveBeenCalled();
+			expect(el.checked).toBe(true);
+			expect(item.flags.stonetop.back.move.name).toBe("When you <wake> it");
+		}
+	});
+
+	it("a typed section and yes: nulled, after a question that names it and says what goes", async () => {
+		const ask = stubConfirm(true);
+		const item = card({ back: back({ move: { name: "When you <wake> it", rollType: "wis", description: "" } }) });
+		await sheetFor(item)._onToggle("back.move", false, box());
+		expect(item.update).toHaveBeenCalledWith({ "flags.stonetop.back.move": null });
+		const asked = ask.mock.calls[0][0];
+		expect(asked.window.title).toBe("Remove the move?");
+		expect(asked.content).toContain("When you &lt;wake&gt; it");
+		expect(asked.content).toContain("its trigger, roll and effect text");
+		expect(asked.buttons.map(b => b.label)).toEqual(["Remove the move", "Keep it"]);
+		expect(asked.buttons[0].class).toBe("stonetop-dialog-btn--danger");
+		expect(asked.buttons.find(b => b.default).action).toBe("no");
+	});
+
+	it("counts a changed number, a stat, a label, and a typed track inside the revealed item", async () => {
+		const cases = [
+			{ resource: { max: 5, maxStat: null, title: "", labels: [] } },
+			{ resource: { max: 3, maxStat: "wis", title: "", labels: [] } },
+			{ resource: { max: 3, maxStat: null, title: "", labels: ["", "low"] } },
+			{ item: { name: "", weight: 0, note: "", inventoryColumn: null } },
+			{ item: { name: "", weight: null, note: "", inventoryColumn: null, resource: { max: 3, maxStat: null, title: "Ammo", labels: [] } } },
+		];
+		for (const extra of cases) {
+			const ask = stubConfirm(false);
+			const which = `back.${Object.keys(extra)[0]}`;
+			await sheetFor(card({ back: back(extra) }))._onToggle(which, false, box());
+			expect(ask, which).toHaveBeenCalledOnce();
+		}
+		const ask = stubConfirm(false);
+		await sheetFor(card({ back: back(cases[4]) }))._onToggle("back.item", false, box());
+		expect(ask.mock.calls[0][0].content).toContain("tag line and resource track");
+	});
+
+	it("ticking never asks", async () => {
+		const ask = stubConfirm(false);
+		const item = card();
+		await sheetFor(item)._onToggle("front.item", true, box());
+		expect(ask).not.toHaveBeenCalled();
+		expect(item.update).toHaveBeenCalledWith({ "flags.stonetop.front.item": { name: "", weight: null, note: "", inventoryColumn: null } });
+	});
+});
+
+describe("switching an unlock requirement between Option and Text keeps the other kind's words", () => {
+	const rowHtml = (i, r) => `<li class="stonetop-arc-req-row" data-req-index="${i}">
+		<select data-req-prop="type"><option value="option"${r.show === "option" ? " selected" : ""}>Option</option><option value="text"${r.show === "text" ? " selected" : ""}>Text</option></select>
+		${r.inputs === "option"
+			? `<input data-req-prop="description" value="${r.description}"><input data-req-prop="slug" value="${r.slug}"><input data-req-prop="max" value="${r.max}">`
+			: `<input data-req-prop="content" value="${r.content}">`}</li>`;
+	const rebuild = async (stored, rows) => {
+		const item = card({ front: { title: "T", description: "", unlock: { description: "", requirements: stored } } });
+		const sheet = sheetFor(item);
+		const root = document.createElement("div");
+		root.innerHTML = rows.map((r, i) => rowHtml(i, r)).join("");
+		sheet.element = [root];
+		await sheet._rebuildRequirements();
+		return item.update.mock.calls[0][0]["flags.stonetop.front.unlock.requirements"];
+	};
+
+	it("Option to Text and back again restores the description, slug and count", async () => {
+		const option = { type: "option", slug: "feed-it", description: "Feed it blood", max: 2, path: "a" };
+		// Switched to Text: the row still shows the option's inputs until it re-renders.
+		const [asText] = await rebuild([option], [{ show: "text", inputs: "option", description: "Feed it blood", slug: "feed-it", max: "2" }]);
+		expect(asText).toMatchObject({ type: "text", content: "", slug: "feed-it", description: "Feed it blood", max: 2, path: "a" });
+		// Typed a label, then switched back: the text row's inputs are what shows now.
+		const [back] = await rebuild([{ ...asText, content: "And then" }], [{ show: "option", inputs: "text", content: "And then" }]);
+		expect(back).toMatchObject({ type: "option", slug: "feed-it", description: "Feed it blood", max: 2, path: "a", content: "And then" });
+	});
+
+	it("a plain edit keeps what the form has no field for", async () => {
+		const [opt] = await rebuild([{ type: "option", slug: "o1", description: "d", max: 1, path: "b" }],
+			[{ show: "option", inputs: "option", description: "d2", slug: "o1", max: "1" }]);
+		expect(opt).toEqual({ type: "option", slug: "o1", description: "d2", max: 1, path: "b" });
 	});
 });

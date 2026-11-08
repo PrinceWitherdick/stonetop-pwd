@@ -60,7 +60,7 @@
 		      one up" bars. Those open a dialog and are the end of a long act; this one is a line
 		      of typing, most often done while the list is already long, and a bar that walks down
 		      the page as the list grows is one a GM has to go looking for. --}}
-		<div class="stonetop-gm-wonder-add">
+		<div class="stonetop-gm-wonder-add stonetop-field-btns">
 			<input type="text" class="stonetop-gm-wonder-new" maxlength="300"
 			       aria-label="{{localize "stonetop.gmToolkit.wonder.add"}}"
 			       placeholder="{{localize "stonetop.gmToolkit.wonder.addPlaceholder"}}">
@@ -87,7 +87,7 @@
 		<ul class="stonetop-gm-wonder-list">
 			{{#each stonetop.wonders.open}}
 			<li class="stonetop-gm-wonder-item" data-wonder-id="{{this.id}}">
-				<div class="stonetop-gm-wonder-head">
+				<div class="stonetop-gm-wonder-head stonetop-field-btns">
 					{{!-- The question itself is the input, not a label with a pencil beside it.
 					      It is one line of text that gets reworded as often as it gets answered
 					      ("maybe the question isn't how do the bandits keep the ghosts at bay,
@@ -95,7 +95,7 @@
 					      dialog for a one-line edit is a dialog nobody opens. --}}
 					<input type="text" class="stonetop-gm-wonder-question" value="{{this.question}}" maxlength="300"
 					       aria-label="{{localize "stonetop.gmToolkit.wonder.questionLabel"}}">
-					<span class="stonetop-gm-wonder-tools">
+					<span class="stonetop-gm-wonder-tools stonetop-field-btns__tools">
 						<button type="button" class="stonetop-gm-wonder-settle"
 						        data-tooltip="{{localize "stonetop.gmToolkit.wonder.settle"}}" data-tooltip-direction="UP">
 							<i class="fas fa-check"></i>

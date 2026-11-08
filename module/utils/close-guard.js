@@ -9,12 +9,12 @@ import { askWithButtons } from "./ask-with-buttons.js";
 // A window opts in by defining `_workState()`: a snapshot of what it would save (any JSON value, or
 // a string). The first one is taken after the first render (notePristineWork), and the question is
 // asked only while the current one differs. A window that can save partway defines `_saveForNow()`,
-// and the question then offers that too. `_discardCopy()` may return its own `{ title, body }`.
+// and the question then offers that too. `_discardCopy()` may return its own `{ title, body, saveLabel }`.
 //
 // A close that FINISHES (the work was saved) passes `{ discard: true }`.
 //
 // Escape closes every open window at once (core's dismiss, with `closeKey`), so the others go while
-// this one asks, and if the answer is Keep writing core may go on to open its main menu. Core's
+// this one asks, and if the question is closed unanswered core may go on to open its main menu. Core's
 // behaviour, accepted: the Improvement builder has always had it.
 
 /** The window's work as one comparable string, or null when it has none to guard. */
@@ -66,12 +66,12 @@ export async function mayClose(app, options = {}) {
 			title: copy.title ?? "Discard what you've written?",
 			content: `<p>${copy.body ?? "This hasn't been saved. Closing the window now loses what you've written."}</p>`,
 			buttons: [
-				...(canSave ? [{ key: "save", label: "Save for now", icon: "fa-floppy-disk", value: "save" }] : []),
+				...(canSave ? [{ key: "save", label: copy.saveLabel ?? "Save for now", icon: "fa-floppy-disk", value: "save" }] : []),
 				{ key: "discard", label: "Discard what I wrote", icon: "fa-trash", className: "stonetop-dialog-btn--danger", value: "discard" },
-				{ key: "keep", label: "Keep writing", icon: "fa-pen", value: "keep" },
 			],
-			// Enter leaves things as they were.
-			defaultKey: "keep",
+			// No "keep writing" button: the question's own X (or Escape) does that. Enter presses
+			// nothing, so it can't throw the work away.
+			defaultKey: false,
 		});
 	} finally {
 		app._askingToClose = false;

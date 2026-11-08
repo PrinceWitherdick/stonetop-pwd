@@ -8,7 +8,7 @@
 {{/if}}
 <ul class="stonetop-monster-line-list">
 	{{#each lines}}
-	<li class="stonetop-monster-line" data-line-index="{{@index}}">
+	<li class="stonetop-monster-line stonetop-field-btns" data-line-index="{{@index}}">
 		{{#if ../editMode}}
 		<input type="text" class="stonetop-entry-line-input" value="{{this.text}}">
 		<button type="button" class="stonetop-entry-remove-line" title="{{localize "stonetop.bestiary.removeLine"}}">

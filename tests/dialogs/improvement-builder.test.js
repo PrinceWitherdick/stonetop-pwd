@@ -1,7 +1,8 @@
 import Handlebars from "handlebars";
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import { readRepo, readCss, stripComments, declarations } from "../fakes/css.js";
-import { stubConfirm } from "../fakes/confirm.js";
+import { stubAsk, stubConfirm } from "../fakes/confirm.js";
+import { mayClose } from "../../module/utils/close-guard.js";
 import {
 	ImprovementBuilderDialog,
 	SECTIONS,
@@ -11,7 +12,6 @@ import {
 	journalImprovementSources,
 	steadingImprovementSaver,
 } from "../../module/dialogs/ImprovementBuilderDialog.js";
-import { StonetopDialog } from "../../module/utils/stonetop-dialog.js";
 import { MAX_REQUIREMENT_REPEAT } from "../../module/utils/improvement-def.js";
 import { IMPROVEMENT_CATEGORIES, IMPROVEMENT_DEFINITIONS } from "../../module/actors/steading/StonetopSteading.js";
 
@@ -408,55 +408,59 @@ describe("saving", () => {
 });
 
 describe("work is not thrown away unasked", () => {
-	it("asks before closing over unsaved work, and stays open on Keep editing", async () => {
-		const closed = vi.spyOn(StonetopDialog.prototype, "close").mockResolvedValue(undefined);
-		const asked = stubConfirm(false);
-		const dialog = dialogWith(improvementCardSaver());
-		dialog._isDirty = () => true;
-		await dialog.close();
-		expect(closed).not.toHaveBeenCalled();
+	// The window keeps no close() of its own: StonetopDialog's close-guard (utils/close-guard.js)
+	// asks, reading the form through _workState and its wording from _discardCopy.
+	it("leaves closing to the shared close-guard", () => {
+		expect(Object.hasOwn(ImprovementBuilderDialog.prototype, "close")).toBe(false);
+	});
+
+	/** A builder opened on `before`, now holding `after`. */
+	function written(saver, before = "{}", after = '{"name":"Mill"}') {
+		const dialog = dialogWith(saver);
+		dialog._pristineWork = before;
+		dialog._workState = () => after;
+		return dialog;
+	}
+
+	it("asks before closing over unsaved work, and stays open when the question is closed", async () => {
+		const asked = stubAsk(null);
+		expect(await mayClose(written(improvementCardSaver()))).toBe(false);
 		const config = asked.mock.calls[0][0];
-		// Buttons that name the outcome, affirmative first, and Enter on the one that loses nothing.
-		expect(config.buttons.map(b => b.label)).toEqual(["Discard this improvement", "Keep editing"]);
-		expect(config.buttons.find(b => b.default)?.action).toBe("no");
+		expect(config.window.title).toBe("Discard this improvement?");
+		expect(config.content).toContain("This improvement has not been saved.");
+		// Discard alone: the question's own X keeps editing, and Enter presses nothing.
+		expect(config.buttons.map(b => b.label)).toEqual(["Discard what I wrote"]);
+		expect(config.buttons.some(b => b.default)).toBe(false);
 	});
 
 	it("closes on Discard", async () => {
-		const closed = vi.spyOn(StonetopDialog.prototype, "close").mockResolvedValue(undefined);
-		stubConfirm(true);
-		const dialog = dialogWith(improvementCardSaver());
-		dialog._isDirty = () => true;
-		await dialog.close();
-		expect(closed).toHaveBeenCalledTimes(1);
+		stubAsk("discard");
+		expect(await mayClose(written(improvementCardSaver()))).toBe(true);
 	});
 
 	it("closes without asking when nothing was typed, or when the work was just saved", async () => {
-		const closed = vi.spyOn(StonetopDialog.prototype, "close").mockResolvedValue(undefined);
-		const asked = stubConfirm(false);
-		const clean = dialogWith(improvementCardSaver());
-		clean._isDirty = () => false;
-		await clean.close();
-		const saved = dialogWith(improvementCardSaver());
-		saved._isDirty = () => true;
-		await saved.close({ discard: true });
-		expect(closed).toHaveBeenCalledTimes(2);
+		const asked = stubAsk(null);
+		expect(await mayClose(written(improvementCardSaver(), "{}", "{}"))).toBe(true);
+		expect(await mayClose(written(improvementCardSaver()), { discard: true })).toBe(true);
 		expect(asked).not.toHaveBeenCalled();
 	});
 
 	it("names the edit's own loss when an edit is closed", async () => {
-		vi.spyOn(StonetopDialog.prototype, "close").mockResolvedValue(undefined);
-		const asked = stubConfirm(false);
-		const dialog = dialogWith({ editing: { name: "Roadbuilding" } });
-		dialog._isDirty = () => true;
-		await dialog.close();
-		expect(asked.mock.calls[0][0].buttons[0].label).toBe("Discard my changes");
+		const asked = stubAsk(null);
+		await mayClose(written({ editing: { name: "Roadbuilding" } }));
+		expect(asked.mock.calls[0][0].window.title).toBe("Discard your changes?");
+	});
+
+	it("reads no work before the form is drawn", () => {
+		expect(dialogWith(improvementCardSaver())._workState()).toBeNull();
 	});
 
 	it("asks before Start from replaces a form with work in it", async () => {
 		const asked = stubConfirm(false);
 		const dialog = dialogWith(improvementCardSaver());
 		dialog._sources = new Map([["builtin:palisade", { name: "Palisade" }]]);
-		dialog._isDirty = () => true;
+		dialog._pristineWork = "{}";
+		dialog._workState = () => '{"name":"Mill"}';
 		dialog._fillFrom = vi.fn();
 		const select = { value: "builtin:palisade" };
 		await dialog._onPickSource(fakeRoot(), select);

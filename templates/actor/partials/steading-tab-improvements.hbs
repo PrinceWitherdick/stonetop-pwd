@@ -124,7 +124,7 @@
 							{{#each herd.tiers}}
 							<div class="steading-herd-tier">
 								<span class="steading-herd-tier-label">{{this.label}} <span class="steading-herd-tier-value">V{{this.value}}</span></span>
-								<div class="steading-herd-stepper">
+								<div class="steading-herd-stepper stonetop-field-btns">
 									<button type="button" class="steading-herd-step" data-slug="{{../slug}}" data-tier="{{this.key}}" data-delta="-1" {{#unless @root.stonetop.canEdit}}disabled{{/unless}} aria-label="Fewer {{this.label}}"><i class="fas fa-minus" aria-hidden="true"></i></button>
 									<input type="number" class="steading-herd-input" data-slug="{{../slug}}" data-tier="{{this.key}}" value="{{this.count}}" min="0" aria-label="{{this.label}}: how many" {{#unless @root.stonetop.canEdit}}disabled{{/unless}}>
 									<button type="button" class="steading-herd-step" data-slug="{{../slug}}" data-tier="{{this.key}}" data-delta="1" {{#unless @root.stonetop.canEdit}}disabled{{/unless}} aria-label="More {{this.label}}"><i class="fas fa-plus" aria-hidden="true"></i></button>

@@ -158,7 +158,7 @@ describe("WoundDialog", () => {
 			expect(html, cls).toContain(cls);
 		}
 		// The prefilled tick-box row carries the classes _read pulls its text and tick from.
-		const row = html.slice(html.indexOf('<li class="wd-req">'));
+		const row = html.slice(html.indexOf('<li class="wd-req stonetop-field-btns">'));
 		expect(row).toMatch(/class="stonetop-check wd-req-done" checked/);
 		expect(row).toMatch(/class="wd-req-text" value="a splint"/);
 	});

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readCss, readRepo, declarations, ownRule, splitSelectorList } from "../fakes/css.js";
+import { readCss, readRepo, declarations, declared, ownRule, splitSelectorList, stripComments } from "../fakes/css.js";
 
 /**
  * A follower card in EDIT MODE, and the three ways it stopped looking like the card beside it.
@@ -163,6 +163,30 @@ describe("the shared ring reset", () => {
 		for (const sel of entries) seen.set(sel, (seen.get(sel) ?? 0) + 1);
 		for (const [sel, count] of seen) {
 			expect(count, `${sel} clears box-shadow in ${count} places`).toBe(1);
+		}
+	});
+});
+
+// A named crew member's pencil and X are glyph-only squares, and core's
+// `body.game .app button > i { margin-right: 3px }` (there to space an icon from its label) put
+// both glyphs 1.5px left of centre; a glyph sized from the UI font also grew inside the fixed 20px
+// box and sat up to 1.4px high at root 24. Measured fix: a whole-px 11px glyph here, and the margin
+// comes off through the icon-only marker (tests/utils/icon-only-buttons.test.js), which only
+// reaches buttons that hold nothing but an icon. Probe: z:/tmp/foundry-verify/crew-member-btn-centre.mjs.
+describe("a named crew member's pencil and X", () => {
+	it.each([".stonetop-crew-edit-individual > i", ".stonetop-crew-delete-individual > i"])(
+		"sits %s in the middle of its square", selector => {
+			const body = declarations(CSS, selector);
+			expect(body, `${selector} is unstyled`).toBeTruthy();
+			expect(declared(body, "font-size")).toBe("11px");
+		});
+
+	it("holds nothing but an icon, so the marker takes its margin off", () => {
+		const found = [...stripComments(TAB).matchAll(/<button[\s\S]*?<\/button>/g)].map(m => m[0])
+			.filter(b => /stonetop-crew-(?:edit|delete)-individual/.test(b));
+		expect(found).toHaveLength(2);
+		for (const button of found) {
+			expect(button.replace(/<[^>]*>/g, "").trim(), button).toBe("");
 		}
 	});
 });

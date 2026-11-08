@@ -11,6 +11,13 @@ function makeDialog(follower = {}) {
 }
 
 describe("OrderFollowersDialog", () => {
+	it("rolls a custom order as 'something else', with no box to type it into", () => {
+		const dialog = makeDialog();
+		dialog._moveKey = "custom";
+		expect(dialog._moveLabel()).toBe("something else");
+		expect(dialog.getData()).not.toHaveProperty("customMove");
+	});
+
 	it("counts an applicable move toward the bonus, the same as a tag", () => {
 		const dialog = makeDialog({ tags: ["stealthy"], moves: ["Ride the wind"] });
 

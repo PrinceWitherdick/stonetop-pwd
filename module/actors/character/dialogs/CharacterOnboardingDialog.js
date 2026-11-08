@@ -6,7 +6,8 @@ import { markQuestionBullets } from "../../../utils/question-bullets.js";
 import { openJournalSheetAsChild } from "../../../utils/front-on-open.js";
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { shuffle } from "../../../utils/arrays.js";
-import { normalizePlaybookGlyphs, composeInstinct, parseInstinct } from "../../../utils/strings.js";
+import { normalizePlaybookGlyphs, composeInstinct, parseInstinct, escHtml } from "../../../utils/strings.js";
+import { confirmOutcome } from "../../../utils/ask-with-buttons.js";
 import { splitFillBlank, fillBlank } from "../../../utils/fill-blanks.js";
 import { STAT_KEYS } from "../../../utils/roll-types.js";
 import { parseStatArray, statScoreLabel, DEFAULT_STAT_ARRAY } from "../stat-rules.js";
@@ -296,7 +297,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			// "<context>:<index>" keys (the same box-flag suffix the live sheet uses).
 			// majorMarksFor tracks the slug those marks belong to, so switching the major
 			// resets to the rule default (1 ○ circle marked, or none for □-task arcana).
-			arcana:          { major: "", minorDraw: [], minorRoles: { mastered: "", found: "", lead: "" }, majorMarks: [], majorMarksFor: "" },
+			// minorSwappedIn: the drawn minors put there by hand with a card's swap picker rather than
+			// dealt, so "Draw again" knows it would throw away a choice (_confirmSeekerMinorRedraw).
+			arcana:          { major: "", minorDraw: [], minorRoles: { mastered: "", found: "", lead: "" }, minorSwappedIn: [], majorMarks: [], majorMarksFor: "" },
 			backgroundChoices: {},
 			// The mark a background-answered move asks beside the background's answer, by move name:
 			// Well Versed's "Mark 1 topic, in addition to the one noted in your Background" → the
@@ -1002,6 +1005,40 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	_drawSeekerMinorArcana(minorOptions) {
 		this._selections.arcana.minorDraw = shuffle(drawableMinorSlugs(minorOptions, this._heldMinorArcana)).slice(0, 3);
 		this._selections.arcana.minorRoles = { mastered: "", found: "", lead: "" };
+		this._selections.arcana.minorSwappedIn = [];
+	}
+
+	// "Draw again": a fresh draw of three, once the player has agreed to lose what this one holds.
+	async _redrawSeekerMinorArcana() {
+		const arcana = await this._loadArcanaOptions();
+		if (!(await this._confirmSeekerMinorRedraw(arcana.minor))) return;
+		this._drawSeekerMinorArcana(arcana.minor);
+		await this.render(false);
+	}
+
+	// A redraw throws away the roles given to the drawn cards and any card swapped in by hand, so it
+	// asks first when there is either; a bare draw nobody has touched is redrawn without a word.
+	async _confirmSeekerMinorRedraw(minorOptions = []) {
+		const { minorDraw = [], minorRoles = {}, minorSwappedIn = [] } = this._selections.arcana;
+		const nameOf = slug => escHtml(minorOptions.find(option => option.slug === slug)?.name ?? slug);
+		const roles   = ["mastered", "found", "lead"].filter(role => minorRoles[role]);
+		const swapped = minorDraw.filter(slug => minorSwappedIn.includes(slug));
+		if (!roles.length && !swapped.length) return true;
+		const list = items => new Intl.ListFormat(globalThis.game?.i18n?.lang || "en", { type: "conjunction" }).format(items);
+		const key  = k => `stonetop.onboarding.redrawMinor.${k}`;
+		const content = [
+			format(key("body"), { cards: list(minorDraw.map(slug => `<strong>${nameOf(slug)}</strong>`)) }),
+			roles.length ? format(key("roles"), {
+				roles: list(roles.map(role => `${localize(key(`role.${role}`))} (${nameOf(minorRoles[role])})`)),
+			}) : "",
+			swapped.length ? format(key("swapped"), { cards: list(swapped.map(nameOf)) }) : "",
+		].join("");
+		return !!(await confirmOutcome({
+			title:   localize(key("title")),
+			content,
+			yes: { label: localize(key("yes")), icon: "fa-shuffle", className: "stonetop-dialog-btn--danger" },
+			no:  { label: localize(key("no")) },
+		}));
 	}
 
 	_ensureSeekerMinorDraw(minorOptions) {
@@ -1026,6 +1063,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		for (const role of Object.keys(roles)) {
 			if (roles[role] === oldSlug) roles[role] = newSlug;
 		}
+		// Remembered as picked, not dealt, so "Draw again" asks before throwing it away.
+		const swappedIn = this._selections.arcana.minorSwappedIn ?? [];
+		this._selections.arcana.minorSwappedIn = [...swappedIn.filter(slug => slug !== oldSlug), newSlug];
 	}
 
 	// A lore section with no options has nothing to select, so it shouldn't get its
@@ -3749,11 +3789,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			_refreshNextButton();
 		});
 
-		html.find(".stonetop-onboarding-redraw-minor").on("click", async () => {
-			const arcana = await this._loadArcanaOptions();
-			this._drawSeekerMinorArcana(arcana.minor);
-			await this.render(false);
-		});
+		html.find(".stonetop-onboarding-redraw-minor").on("click", () => this._redrawSeekerMinorArcana());
 
 		html.find(".stonetop-onboarding-minor-swap-select").on("change", async ev => {
 			const oldSlug = ev.currentTarget.dataset.slug;

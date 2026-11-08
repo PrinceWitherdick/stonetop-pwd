@@ -82,8 +82,8 @@ describe("the route step's expand button", () => {
 		expect(own).toMatch(/background:\s*#fff\b/);
 
 		const icon = declarations(CSS, ".stonetop-journey .stonetop-journey-zoom > i");
-		// Core Foundry gives every `button > i` a right margin for the label it assumes is coming.
-		expect(icon).toMatch(/margin-right:\s*0\b/);
+		// Core Foundry gives every `button > i` a right margin for the label it assumes is coming;
+		// it comes off through the icon-only marker (tests/utils/icon-only-buttons.test.js).
 		// Font Awesome 7 paints above the middle of its own box, and no amount of centring reaches it.
 		expect(icon).toMatch(/transform:\s*translate\(/);
 	});

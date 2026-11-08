@@ -20,6 +20,7 @@ import {
 } from "../utils/improvement-def.js";
 import { improvementPreviewHtml, improvementPreviewNotes } from "../utils/improvement-preview.js";
 import { confirmOutcome } from "../utils/ask-with-buttons.js";
+import { hasUnsavedWork, notePristineWork } from "../utils/close-guard.js";
 import { escHtml } from "../utils/strings.js";
 
 /**
@@ -543,9 +544,6 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 		}
 		// Set while a save is in flight, so a second press of Save cannot write a second copy.
 		this._saving = false;
-		// The form as it stood when it was opened or last filled from "Start from", as
-		// _formState writes it: what "is there anything here to lose?" is measured against.
-		this._pristine = null;
 		this._root = null;
 	}
 
@@ -633,11 +631,11 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 
 		root.querySelector(".stonetop-improvement-builder-save")?.addEventListener("click", () => this._save(root));
 		root.querySelector(".stonetop-improvement-builder-cancel")?.addEventListener("click", () => this.close());
-
-		this._pristine = this._formState(root);
 	}
 
 	// ── Closing without saving ──────────────────────────────────
+	// Cancel, Escape and the title bar's X go through StonetopDialog.close, whose close-guard
+	// (utils/close-guard.js) asks before losing work. A successful save closes with `{discard: true}`.
 
 	/**
 	 * What the form holds, as a string to compare: the definition it would save. Measured on the
@@ -649,39 +647,15 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 		catch (_e) { return null; }
 	}
 
-	/** True when closing now would throw away something typed since the window opened. */
-	_isDirty(root = this._root) {
-		if (!root || this._pristine === null) return false;
-		return this._formState(root) !== this._pristine;
+	/** The close-guard's snapshot: the form, once it is drawn. */
+	_workState() {
+		return this._root ? this._formState(this._root) : null;
 	}
 
-	/**
-	 * Cancel, Escape and the title bar's close all come through here. With nothing typed it
-	 * closes; with work in the form it asks first, Enter landing on "Keep editing". A successful
-	 * save closes with `{discard: true}`, since the work is not being discarded but kept.
-	 */
-	async close(options = {}) {
-		if (!options.discard && this.rendered !== false && this._isDirty()) {
-			// Escape pressed again while the question is up must not stack a second one.
-			if (this._askingToClose) return;
-			this._askingToClose = true;
-			let discard;
-			try {
-				const editing = !!this._saver.editing;
-				discard = await confirmOutcome({
-					title: editing ? "Discard your changes?" : "Discard this improvement?",
-					content: `<p>${editing
-						? "Your changes to this improvement have not been saved. Closing the window now loses them."
-						: "This improvement has not been saved. Closing the window now loses what you have written."}</p>`,
-					yes: { label: editing ? "Discard my changes" : "Discard this improvement", icon: "fa-trash" },
-					no: { label: "Keep editing", icon: "fa-pen" },
-				});
-			} finally {
-				this._askingToClose = false;
-			}
-			if (discard !== true) return;
-		}
-		return super.close(options);
+	_discardCopy() {
+		return this._saver.editing
+			? { title: "Discard your changes?", body: "Your changes to this improvement have not been saved. Closing the window now loses them." }
+			: { title: "Discard this improvement?", body: "This improvement has not been saved. Closing the window now loses what you have written." };
 	}
 
 	// ── The rail ────────────────────────────────────────────────
@@ -1043,7 +1017,7 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 		select.value = "";
 		if (!def) return;
 		// It replaces the whole form, so work already in it is asked about first.
-		if (this._isDirty(root)) {
+		if (hasUnsavedWork(this)) {
 			const replace = await confirmOutcome({
 				title: "Replace what is in the form?",
 				content: `<p>Starting from ${escHtml(def.name)} replaces everything in the form, on every panel. What you have written so far will be lost.</p>`,
@@ -1056,7 +1030,8 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 		this._fillFrom(root, { ...def, name });
 		// A copy nobody has touched yet is not work to lose: closing straight after picking
 		// one closes without asking, and so does picking a different one.
-		this._pristine = this._formState(root);
+		this._pristineWork = null;
+		notePristineWork(this);
 		this._clearNameError(root);
 		ui.notifications?.info?.(name === def.name
 			? `Copied ${def.name} into the form.`

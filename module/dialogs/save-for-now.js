@@ -9,7 +9,10 @@
  * @param {typeof import("./StepperDialog.js").StepperDialog} Base
  */
 export const SaveForNow = Base => class extends Base {
-	/** @returns {{ noun: string, keptAt: string }} e.g. { noun: "hazard", keptAt: "on the GM Toolkit's Threats & Dangers tab" } */
+	/**
+	 * `saveLabel` names the save button in the close question (default "Save for now").
+	 * @returns {{ noun: string, keptAt: string, saveLabel?: string }} e.g. { noun: "hazard", keptAt: "on the GM Toolkit's Threats & Dangers tab" }
+	 */
 	get _saveCopy() {
 		throw new Error(`${this.constructor.name} must define _saveCopy`);
 	}
@@ -21,10 +24,10 @@ export const SaveForNow = Base => class extends Base {
 	}
 
 	_discardCopy() {
-		const { noun, keptAt } = this._saveCopy;
+		const { noun, keptAt, saveLabel = "Save for now" } = this._saveCopy;
 		return this._page
-			? { title: "Discard your changes?", body: `Your changes to this ${noun} haven't been saved. Closing the window now loses them.` }
-			: { title: `Discard this ${noun}?`, body: `This ${noun} hasn't been saved. Closing the window now loses what you've written. Save for now keeps it ${keptAt}, to finish later.` };
+			? { title: "Discard your changes?", body: `Your changes to this ${noun} haven't been saved. Closing the window now loses them.`, saveLabel }
+			: { title: `Discard this ${noun}?`, body: `This ${noun} hasn't been saved. Closing the window now loses what you've written. ${saveLabel} keeps it ${keptAt}, to finish later.`, saveLabel };
 	}
 
 	// Save what's there, from any step, and close: a new one lands where `keptAt` says (its pencil reopens

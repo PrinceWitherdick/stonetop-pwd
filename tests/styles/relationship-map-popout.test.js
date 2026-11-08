@@ -87,11 +87,7 @@ describe("the glyph inside it", () => {
 	});
 
 	// Core's `body.game .app button > i` carries a `margin-right: 3px` for the label it assumes is
-	// coming. There is no label here, so it is welded to the right of the box being centred and the
-	// glyph paints about 1.5px left of the middle.
-	it("takes core's icon-to-label margin off every side", () => {
-		expect(rule(".stonetop-relmap-popout > i")).toMatch(/margin:\s*0;/);
-	});
+	// coming; core's icon-to-label margin comes off through the icon-only marker (tests/utils/icon-only-buttons.test.js).
 });
 
 describe("what makes it work at all", () => {

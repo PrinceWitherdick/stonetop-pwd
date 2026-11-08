@@ -11,6 +11,7 @@ import { THREAT_TYPES, THREAT_PROXIMITIES, threatType, DEFAULT_PROXIMITY } from 
 import { setThreatName } from "./threat-store.js";
 import { enrichHTML } from "../utils/foundry-compat.js";
 import { htmlToPlainText, plainTextKeeper } from "../journal/card-vm.js";
+import { openSuggestionMenu } from "../utils/suggestion-menu.js";
 
 const EMPTY_ROW = {
 	grimPortents: () => ({ text: "", done: false }),
@@ -144,11 +145,13 @@ export class ThreatEditorDialog extends StonetopDialog {
 		root.addEventListener("click", async ev => {
 			if (ev.target.closest(".threat-editor-done")) return this.close();
 			const add = ev.target.closest(".threat-list-add");
-			if (add) { ev.preventDefault(); return this._addListRow(add.dataset.list); }
+			if (add) {
+				ev.preventDefault();
+				if (add.hasAttribute("aria-haspopup")) return this._openGmMoveMenu(add);
+				return this._addListRow(add.dataset.list);
+			}
 			const rem = ev.target.closest(".threat-list-remove");
 			if (rem) { ev.preventDefault(); return this._removeListRow(rem.dataset.list, Number(rem.dataset.index)); }
-			const chip = ev.target.closest(".threat-suggested__chip");
-			if (chip) { ev.preventDefault(); return this._addGmMove(chip.dataset.suggestedMove); }
 			const more = ev.target.closest(".threat-editor-more-toggle");
 			if (more) {
 				ev.preventDefault();
@@ -199,6 +202,20 @@ export class ThreatEditorDialog extends StonetopDialog {
 		if (!Number.isInteger(index) || index < 0 || index >= cur.length) return;
 		cur.splice(index, 1);
 		await this.page.update({ [`system.${listName}`]: cur });
+	}
+
+	// "Add GM move" opens a menu: a blank row first, then the threat type's suggested moves, the
+	// ones already on the list shown as added. Read at the press, from the DOM, so a row typed but
+	// not yet saved still counts as added.
+	_openGmMoveMenu(button) {
+		const type = threatType(this.page.system?.type);
+		const used = new Set(this._currentList("gmMoves").map(m => String(m).trim()));
+		openSuggestionMenu(button, {
+			heading: `Suggested for ${type.label}`,
+			blankLabel: "Blank GM move",
+			items: type.suggestedMoves.map(text => ({ value: text, label: text, used: used.has(text) })),
+			onPick: text => (text === null ? this._addListRow("gmMoves") : this._addGmMove(text)),
+		});
 	}
 
 	async _addGmMove(text) {

@@ -36,15 +36,16 @@ describe("asking before a close", () => {
 		expect(asked).not.toHaveBeenCalled();
 	});
 
-	it("asks once something is written: Discard, then Keep writing, with Enter on Keep writing", async () => {
-		const asked = stubAsk("keep");
+	it("asks once something is written: Discard alone (the question's X keeps writing), with nothing on Enter", async () => {
+		const asked = stubAsk(null);
 		const { app, state } = windowWith();
 		state.text = "The old mill";
 		expect(hasUnsavedWork(app)).toBe(true);
 		expect(await mayClose(app)).toBe(false);
 		const config = asked.mock.calls[0][0];
-		expect(config.buttons.map(b => b.label)).toEqual(["Discard what I wrote", "Keep writing"]);
-		expect(config.buttons.find(b => b.default)?.action).toBe("keep");
+		expect(config.buttons.map(b => b.label)).toEqual(["Discard what I wrote"]);
+		expect(config.buttons.some(b => b.default)).toBe(false);
+		expect(typeof config.render).toBe("function");
 	});
 
 	it("closes on Discard, and stays open when the question is closed unanswered", async () => {
@@ -64,7 +65,16 @@ describe("asking before a close", () => {
 		// The save closes the window itself, so this close doesn't go ahead.
 		expect(await mayClose(app)).toBe(false);
 		expect(save).toHaveBeenCalledTimes(1);
-		expect(asked.mock.calls[0][0].buttons.map(b => b.label)).toEqual(["Save for now", "Discard what I wrote", "Keep writing"]);
+		expect(asked.mock.calls[0][0].buttons.map(b => b.label)).toEqual(["Save for now", "Discard what I wrote"]);
+	});
+
+	it("names the save button as the window asks", async () => {
+		const asked = stubAsk(null);
+		const { app, state } = windowWith({ saveForNow: vi.fn() });
+		app._discardCopy = () => ({ saveLabel: "Save my changes" });
+		state.text = "x";
+		await mayClose(app);
+		expect(asked.mock.calls[0][0].buttons.map(b => b.label)).toEqual(["Save my changes", "Discard what I wrote"]);
 	});
 
 	it("never asks for a close that finishes", async () => {
@@ -210,6 +220,17 @@ describe("Save for now", () => {
 		site._quietSave = true;
 		await site._saveForNow();
 		expect(info).toHaveBeenCalledTimes(1);
+	});
+
+	it("the close question's save button reads Save my changes for a site, Save for now for a hazard", () => {
+		for (const page of [null, { id: "p" }]) {
+			const site = Object.assign(Object.create(CreateSiteDialog.prototype), { _page: page });
+			expect(site._discardCopy().saveLabel).toBe("Save my changes");
+			const hazard = Object.assign(Object.create(CreateHazardDialog.prototype), { _page: page });
+			expect(hazard._discardCopy().saveLabel).toBe("Save for now");
+		}
+		const site = Object.assign(Object.create(CreateSiteDialog.prototype), { _page: null });
+		expect(site._discardCopy().body).toContain("Save my changes keeps it");
 	});
 
 	it("writes an edit straight to its page without the notice", async () => {

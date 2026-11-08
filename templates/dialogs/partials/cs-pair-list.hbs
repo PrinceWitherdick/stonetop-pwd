@@ -12,11 +12,8 @@
       So a row arrives as `cells`, one per key the schema declares, in the order it declares them
       (see _pairRows), and this file loops them.
 
-      Two shapes, chosen per row:
-        inline  every field on ONE control row (the timeline: a date and what happened read as a
-                single line)
-        else    the first field shares a row with the delete button and the rest stack under it,
-                each cell either a single-line input or, if `multiline`, a textarea
+      Each row: the first field shares a line with the delete button and the rest stack under it,
+      each a single-line input or, if `multiline`, a textarea.
 
       Every cell carries its own `list` and `index` rather than being walked back to with `../`:
       inside a partial's block the hash arguments have pushed a frame, so the depth a `../` chain
@@ -24,22 +21,14 @@
       undefined — a `data-list=""` that no delegated handler matches.
 
       Context: the frame's, plus
-        rows  this list's rows ({index, list, rowClass, inline, cells}), each cell
+        rows  this list's rows ({index, list, rowClass, cells}), each cell
               {list, index, key, first, value, placeholder, cls, multiline, lines} --}}
-{{#> "stonetop.cs-list-frame" list=list label=label hint=hint chips=chips kinds=kinds addLabel=addLabel frameClass=frameClass}}
+{{#> "stonetop.cs-list-frame" list=list label=label hint=hint menu=menu kinds=kinds addLabel=addLabel frameClass=frameClass}}
   {{#each rows}}
-  {{#if inline}}
-  <div class="stonetop-cf-gear-row">
-    {{#each cells}}
-    <input type="text" class="stonetop-cf-input stonetop-cs-pair {{this.cls}}" data-list="{{this.list}}" data-index="{{this.index}}" data-key="{{this.key}}" value="{{this.value}}" placeholder="{{this.placeholder}}">
-    {{/each}}
-    <button type="button" class="stonetop-cs-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-list="{{this.list}}" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
-  </div>
-  {{else}}
   <div class="{{this.rowClass}}">
     {{#each cells}}
     {{#if first}}
-    <div class="stonetop-cf-gear-row">
+    <div class="stonetop-cf-gear-row stonetop-field-btns">
       <input type="text" class="stonetop-cf-input stonetop-cs-pair {{this.cls}}" data-list="{{this.list}}" data-index="{{this.index}}" data-key="{{this.key}}" value="{{this.value}}" placeholder="{{this.placeholder}}">
       <button type="button" class="stonetop-cs-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-list="{{this.list}}" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
     </div>
@@ -50,6 +39,5 @@
     {{/if}}
     {{/each}}
   </div>
-  {{/if}}
   {{/each}}
 {{/"stonetop.cs-list-frame"}}

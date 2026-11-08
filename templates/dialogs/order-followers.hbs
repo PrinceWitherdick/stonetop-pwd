@@ -58,11 +58,6 @@
           {{#each moves}}<option value="{{this.key}}" {{#if selected}}selected{{/if}}>{{this.label}}</option>{{/each}}
         </select>
       </label>
-      {{#if isCustom}}
-      <label class="stonetop-cf-label stonetop-of-custom-label">What are they doing?
-        <input type="text" class="stonetop-cf-input stonetop-of-custom" value="{{this.customMove}}" placeholder="e.g. scale the wall…">
-      </label>
-      {{/if}}
 
       {{!-- Resolve which tags help or hinder (a table judgment call) --}}
       <div class="stonetop-of-tags-block">

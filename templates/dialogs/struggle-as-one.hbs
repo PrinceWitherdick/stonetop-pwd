@@ -84,7 +84,7 @@
         {{/if}}
 
         {{#if rollForm}}
-        <div class="stonetop-camp-row-foot stonetop-struggle-roll">
+        <div class="stonetop-camp-row-foot stonetop-struggle-roll stonetop-field-btns">
           {{#if rollForm.choices}}
           <select class="stonetop-struggle-stat" data-row-key="{{this.key}}" aria-label="Which stat {{this.name}} rolls" data-struggle-focus="{{this.key}}:stat">
             {{#each rollForm.choices}}<option value="{{this.value}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
@@ -103,10 +103,13 @@
           {{#if rescue.all}}
           <button type="button" class="stonetop-camp-inline-btn" data-struggle-action="rescue" data-row-key="{{this.key}}" data-targets="{{rescue.allKeys}}" data-struggle-focus="{{this.key}}:rescue"><i class="fas fa-hand-holding-hand" aria-hidden="true"></i> {{rescue.label}}</button>
           {{else}}
+          {{!-- Its own row, so the button takes the select's height rather than the hint's above. --}}
+          <span class="stonetop-field-btns">
           <select class="stonetop-struggle-target" data-row-key="{{this.key}}" aria-label="Who {{this.name}} gets out of their spot" data-struggle-focus="{{this.key}}:target">
             {{#each rescue.options}}<option value="{{this.value}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
           </select>
           <button type="button" class="stonetop-camp-inline-btn" data-struggle-action="rescue" data-row-key="{{this.key}}" data-struggle-focus="{{this.key}}:rescue"><i class="fas fa-hand-holding-hand" aria-hidden="true"></i> {{rescue.label}}</button>
+          </span>
           {{/if}}
           {{/if}}
         </div>

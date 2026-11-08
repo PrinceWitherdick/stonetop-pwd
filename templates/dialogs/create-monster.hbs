@@ -223,7 +223,7 @@
 				{{!-- Cloned per card by the dialog; kept here so the markup lives with the rest. --}}
 				<template class="cm-attack-tpl">
 					<div class="cm-attack-card">
-						<div class="cm-attack-card-head">
+						<div class="cm-attack-card-head stonetop-field-btns">
 							<input type="text" class="cm-attack-name" placeholder="What it attacks with (e.g. bow)">
 							<input type="text" class="cm-attack-die" placeholder="die"
 							       data-tooltip="Its own die, if it differs. Leave blank to use the creature's." data-tooltip-direction="UP">
@@ -261,29 +261,19 @@
 			      injected/removed client-side (see CreateMonsterDialog.js), so they survive
 			      tab switches like the rest of the form. --}}
 			<section class="cm-section cm-section--moves" data-tab="moves" hidden>
-				<p class="cm-section-hint">Step 9 &middot; Give it a few moves: things it does that you narrate, no roll needed. Tap a prompt to start from the book, or write your own. Most monsters have about three.</p>
-
-				<div class="cm-field">
-					<span class="cm-label">Book prompts <em>(tap to add &amp; edit)</em></span>
-					<div class="cm-move-suggestions">
-						{{#each moveSuggestions}}
-						<button type="button" class="cm-move-suggestion" data-suggestion="{{this.id}}" data-tooltip="{{this.description}}" data-tooltip-direction="UP">
-							<i class="fas fa-plus"></i><span>{{this.name}}</span>
-						</button>
-						{{/each}}
-					</div>
-				</div>
+				<p class="cm-section-hint">Step 9 &middot; Give it a few moves: things it does that you narrate, no roll needed. Add a move to start from one of the book's prompts, or write your own. Most monsters have about three.</p>
 
 				<div class="cm-field">
 					<span class="cm-label">This monster's moves</span>
-					<div class="cm-move-list" data-empty="No moves yet. Tap a prompt above, or add one below."></div>
-					<button type="button" class="cm-move-add"><i class="fas fa-plus"></i> Add a move</button>
+					<div class="cm-move-list" data-empty="No moves yet. Use Add a move below."></div>
+					{{!-- Opens a menu: a blank move, then the book's prompts (utils/suggestion-menu.js). --}}
+					<button type="button" class="cm-move-add" aria-haspopup="menu" aria-expanded="false"><i class="fas fa-plus"></i> Add a move</button>
 				</div>
 
 				{{!-- Cloned per card by the dialog; kept here so the markup lives with the rest. --}}
 				<template class="cm-move-tpl">
 					<div class="cm-move-card">
-						<div class="cm-move-card-head">
+						<div class="cm-move-card-head stonetop-field-btns">
 							<input type="text" class="cm-move-name" placeholder="Move name (e.g. Snatch and drag off)">
 							<button type="button" class="cm-move-remove" data-tooltip="Remove this move" aria-label="Remove this move"><i class="fas fa-xmark"></i></button>
 						</div>

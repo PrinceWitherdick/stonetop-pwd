@@ -3617,7 +3617,26 @@ export class ExpeditionDialog extends StepperDialog {
 	 * had spent a minute laying out.
 	 */
 	async _clearDrawnWay(from = null) {
+		if (!(await this._confirmClearDrawnWay())) return undefined;
 		return this._writeDrawnWay(() => [], from);
+	}
+
+	/**
+	 * Ask before "Start over" throws the marks away, since it is one click, saved at once, with no
+	 * undo. Here rather than on the button so the panel and the map window both ask. Nothing drawn
+	 * means nothing to lose, so no question; Enter and closing the window keep the route.
+	 */
+	async _confirmClearDrawnWay() {
+		const n = this._customPath().points.length;
+		if (!n) return true;
+		const key = "stonetop.expedition.draw";
+		return !!(await confirmOutcome({
+			title:   localize(`${key}.clearTitle`),
+			content: `<p>${escHtml(format(`${key}.clearAsk`, { marks: countOf(n, "hand-drawn mark") }))}</p>
+				<p>${escHtml(localize(`${key}.clearInstead`))}</p>`,
+			yes: { label: localize(`${key}.clearYes`), icon: "fa-eraser", className: "stonetop-dialog-btn--danger" },
+			no:  { label: localize(`${key}.clearNo`) },
+		}));
 	}
 
 	/**

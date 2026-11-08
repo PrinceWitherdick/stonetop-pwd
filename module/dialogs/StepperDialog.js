@@ -198,7 +198,7 @@ export class StepperDialog extends Application {
 
 	async close(options = {}) {
 		// Ask before throwing away what was written, for a wizard that keeps its work (close-guard.js).
-		// First, before the side effects below, so Keep writing leaves the wizard exactly as it was.
+		// First, before the side effects below, so not discarding leaves the wizard exactly as it was.
 		if (!(await mayClose(this, options))) return;
 		this._frontOnOpen.stop();
 		// Closing on purpose clears the open flag (no auto-reopen next load); a reload skips

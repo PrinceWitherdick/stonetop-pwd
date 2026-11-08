@@ -18,7 +18,8 @@ import { themedDialogClasses } from "./window-theme.js";
  *   core does not sanitize, so a form control's attributes survive)
  * @param {Array<{key: string, label: string, value: *, icon?: string, className?: string}>} o.buttons
  *   affirmative first; `className` is added to that button (the destructive skin, say)
- * @param {string} [o.defaultKey]  the button Enter presses; the first unless the first destroys something
+ * @param {string|false} [o.defaultKey]  the button Enter presses; the first unless the first destroys
+ *   something. `false`: Enter presses none (a question whose only "no" is the window's own X).
  * @param {string[]} [o.classes]  extra window classes
  * @param {object} [o.position]  the window's position, for one that needs a width of its own
  * @param {(root: HTMLElement) => void} [o.render]  run once the window is on screen, with its element: a
@@ -29,14 +30,26 @@ import { themedDialogClasses } from "./window-theme.js";
 export async function askWithButtons({ title, content, buttons, defaultKey = null, classes = [], position = null, render = null }) {
 	const DialogV2 = globalThis.foundry?.applications?.api?.DialogV2;
 	if (!DialogV2) return null;
-	const chosen  = defaultKey ?? buttons[0]?.key;
+	const noDefault = defaultKey === false;
+	const chosen  = noDefault ? null : (defaultKey ?? buttons[0]?.key);
+	// Core makes the FIRST button Enter's when none is marked, and focuses it. With no default, the
+	// window itself takes the focus instead, so Enter presses nothing and Escape still closes it
+	// (DialogV2 listens for Escape on its own element). The render event comes before core's focus.
+	const onRender = noDefault
+		? root => {
+			for (const button of root.querySelectorAll("[autofocus]")) button.removeAttribute("autofocus");
+			root.setAttribute("tabindex", "-1");
+			root.focus({ preventScroll: true });
+			render?.(root);
+		}
+		: render;
 	const pressed = await DialogV2.wait({
 		// `stonetop-ask` is the question-and-answers shape (stonetop.css): it caps the width a
 		// DialogV2 would otherwise take from the viewport, and gives each answer a row of its own.
 		classes: themedDialogClasses(...classes, "stonetop-ask"),
 		window:  { title },
 		...(position ? { position } : {}),
-		...(render ? { render: (_event, dialog) => render(dialog?.element ?? dialog) } : {}),
+		...(onRender ? { render: (_event, dialog) => onRender(dialog?.element ?? dialog) } : {}),
 		content,
 		buttons: buttons.map(button => ({
 			action:  button.key,

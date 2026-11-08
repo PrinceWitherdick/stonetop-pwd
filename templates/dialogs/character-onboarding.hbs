@@ -1154,15 +1154,15 @@
 		</div>
 		{{/if}}
 		<div class="stonetop-onboarding-footer-nav">
-			{{#if showBack}}
-			{{#if isFirst}}
-			<button type="button" class="stonetop-onboarding-back-to-picker"><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
-			{{else}}
-			<button type="button" class="stonetop-onboarding-back"><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
-			{{/if}}
-			{{else}}
-			<span class="stonetop-onboarding-footer-placeholder" aria-hidden="true"></span>
-			{{/if}}
+			<div class="stonetop-onboarding-footer-left">
+				{{#if showBack}}
+				{{#if isFirst}}
+				<button type="button" class="stonetop-onboarding-back-to-picker"><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
+				{{else}}
+				<button type="button" class="stonetop-onboarding-back"><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
+				{{/if}}
+				{{/if}}
+			</div>
 
 			<span class="stonetop-onboarding-step-counter">{{this.stepNumber}} / {{this.stepCount}}</span>
 

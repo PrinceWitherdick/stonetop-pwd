@@ -1715,10 +1715,8 @@ export function createStonetopSteadingSheetClass(Base) {
 							<span>Asset</span>
 							<select class="stonetop-requisition-asset-select" data-requisition-asset-select>
 								${assetOptions}
-								<option value="${CUSTOM_ASSET_VALUE}">Something else...</option>
+								<option value="something else">Something else...</option>
 							</select>
-							<input type="text" class="stonetop-requisition-custom-input" data-requisition-custom-asset placeholder="Enter an asset or item" disabled hidden>
-							<input type="hidden" name="asset" data-requisition-asset-value value="${availableAssets[0]?.name ? escHtml(availableAssets[0].name) : ""}">
 						</label>
 						${questionHtml}
 					</div>
@@ -1740,7 +1738,7 @@ export function createStonetopSteadingSheetClass(Base) {
 							if (asset) postMoveToChat(this.actor, "Requisition", [{ label: "Asset", value: asset }]);
 							// The asset ROW the pick names, so the card's take marks it out on the Assets
 							// list. Not the herd's row: the herd stays home and its horses are counted out
-							// from a character's Requisition window. A typed asset has no row to mark.
+							// from a character's Requisition window. "Something else" has no row to mark.
 							const row = availableAssets.find(a => a.name.trim() === asset && !isHerdAsset(a));
 							const taken = row ? { index: row.index, name: row.name } : {};
 							await this._onSteadingRoll("Requisition", "fortunes", {
@@ -1761,14 +1759,6 @@ export function createStonetopSteadingSheetClass(Base) {
 					},
 				},
 				default: "roll",
-				render: html => {
-					const root = html[0];
-					wireCustomAssetSelect({
-						select: root.querySelector("[data-requisition-asset-select]"),
-						customInput: root.querySelector("[data-requisition-custom-asset]"),
-						valueInput: root.querySelector("[data-requisition-asset-value]"),
-					});
-				},
 			}, { width: 520, classes: ["dialog", "stonetop", "stonetop-homestead-move-dialog"] });
 			dialog.render(true);
 		}

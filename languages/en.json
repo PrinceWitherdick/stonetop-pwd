@@ -1804,7 +1804,20 @@
       "savedTitle": "Selections Saved",
       "savedContent": "Your current character creation selections have been saved.",
       "continueEditing": "Continue Editing",
-      "closeForNow": "Close for Now"
+      "closeForNow": "Close for Now",
+      "redrawMinor": {
+        "title": "Draw three new cards?",
+        "body": "<p>Drawing again puts back {cards} and deals three others at random.</p>",
+        "roles": "<p>The roles you gave them are cleared too: {roles}.</p>",
+        "swapped": "<p>That includes {cards}, which you picked by hand.</p>",
+        "role": {
+          "mastered": "Mastered",
+          "found": "Found",
+          "lead": "Lead"
+        },
+        "yes": "Draw three new cards",
+        "no": "Keep these cards"
+      }
     },
     "rollCard": {
       "writerSilent": "The GM's client did not answer in time. It may still go through, so check the card before pressing again.",
@@ -3566,6 +3579,11 @@
         "drawnNote": "This way was drawn by hand, so the times beside it are measured off the map rather than printed in the book.",
         "clear": "Start over",
         "clearTip": "Throw the hand-drawn marks away and go back to the way the travel table works out.",
+        "clearTitle": "Start the route over?",
+        "clearAsk": "This route has {marks} on it. Starting over throws them all away at once and goes back to the way the travel table works out.",
+        "clearInstead": "To take back just the last mark, right-click the map instead.",
+        "clearYes": "Start over",
+        "clearNo": "Keep the route",
         "notOnMap": "{map} doesn't draw {place}, so the way can't stop there. Pick somewhere this map letters, or click the map itself.",
         "offTheMap": "That click was past the printed edge of {map}, so no mark was laid. Click inside the map itself.",
         "estimate": "Measured off {map} at the pace of the book's own printed journeys: a good guess, not a printed time."

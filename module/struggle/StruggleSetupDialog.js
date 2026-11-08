@@ -1,5 +1,6 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
+import { isDefaultImg } from "../utils/strings.js";
 import { partyCharacters } from "../utils/playbook-actors.js";
 import { isOutOfPlay } from "../actors/character/deaths-door-actor.js";
 import { ownsLearnedMoveNamed } from "../actors/character/owns-move.js";
@@ -58,7 +59,8 @@ async function rosterEntry(actor) {
 	return {
 		actorId: actor.id,
 		name: actor.name,
-		img: actor.img ?? "",
+		// A placeholder (mystery-man) is no portrait: drop it so the card shows none, not a blank square.
+		img: isDefaultImg(actor.img) ? "" : actor.img,
 		owns,
 		load,
 		overloaded,

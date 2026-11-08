@@ -92,7 +92,7 @@ function yearFieldHtml(startYear, { minYear = 1, maxYear = MAX_CAMPAIGN_YEAR } =
 	// The numbers in the field are DISPLAYED years: what the GM calls them, not what is stored.
 	return `<div class="stonetop-season-year">
 					<label class="stonetop-season-year-label" for="${YEAR_INPUT_ID}">Year</label>
-					<div class="stonetop-season-year-stepper">
+					<div class="stonetop-season-year-stepper stonetop-field-btns">
 						<button type="button" class="stonetop-season-year-step" data-step="-1" aria-label="An earlier year">&minus;</button>
 						<input id="${YEAR_INPUT_ID}" class="stonetop-season-year-input" type="number"
 							inputmode="numeric" min="${displayYear(minYear)}" max="${displayYear(maxYear)}" step="1" value="${displayYear(startYear)}">

@@ -194,7 +194,7 @@
           its first half, so whichever button comes first starts pressable, and a redraw puts the GM's
           pick back (CampWindow#_keepRosterPick). --}}
     {{#if roster.show}}
-    <div class="stonetop-camp-roster">
+    <div class="stonetop-camp-roster stonetop-field-btns">
       <select name="campRosterActor" aria-label="Someone to bring to the fire or send away from it">
         {{#if add.show}}<optgroup label="Not at the fire">{{#each add.options}}<option value="{{this.id}}" data-camp-roster="add">{{this.name}}</option>{{/each}}</optgroup>{{/if}}
         {{#if sendAway.show}}<optgroup label="At the fire">{{#each sendAway.options}}<option value="{{this.id}}" data-camp-roster="send-away">{{this.name}}</option>{{/each}}</optgroup>{{/if}}

@@ -143,6 +143,7 @@ import { onSteadingPeopleUpdate, repaintOpenSteadingRosters } from "./module/act
 import { makeDialogsResizable, enableAutoHeightVerticalResize } from "./module/utils/resizable-dialogs.js";
 import { registerStonetopWindowTheme, registerStonetopLightTheme } from "./module/utils/window-theme.js";
 import { registerOrphanedTooltipCleanup } from "./module/utils/tooltip-handoff.js";
+import { watchIconOnlyButtons } from "./module/utils/icon-only-buttons.js";
 import { registerUserConfigCharacterFilter } from "./module/hooks/user-config-characters.js";
 import { registerAssignToPlayer } from "./module/hooks/assign-to-player.js";
 import { registerCampaignActorMenu } from "./module/campaign/campaign-actor-menu.js";
@@ -182,6 +183,7 @@ import { wireCampCard } from "./module/camp/camp-flow.js";
 import { registerSharedRouteHooks, wireSharedRouteCard } from "./module/dialogs/SharedRouteWindow.js";
 import { registerCampWindowRestore } from "./module/camp/CampWindow.js";
 import { registerTimelineWindowRestore } from "./module/dialogs/TimelineWindow.js";
+import { registerCreateSiteRestore } from "./module/sites/create-site-restore.js";
 import { registerStruggleHooks } from "./module/struggle/struggle-flow.js";
 import { registerPcAskHooks, wirePcAskCard } from "./module/pc-asks/pc-ask-flow.js";
 import { registerFightTab } from "./module/fight/fight-boot.js";
@@ -326,6 +328,10 @@ Hooks.once("init", () => {
 	// A window that re-renders under a still pointer takes the tooltipped element out of the page,
 	// and Foundry's tooltip, which goes by the pointer, would hang over where it was.
 	registerOrphanedTooltipCleanup();
+
+	// A button holding only an icon is marked `data-icon-only`, and stonetop.css takes off the
+	// margin core puts after every button icon for a label that isn't there.
+	watchIconOnlyButtons();
 
 	// User Configuration's Character dropdown lists playbook characters only, not
 	// NPCs, monsters, the steading or the GM Toolkit. A GM who means to hand a player
@@ -913,6 +919,8 @@ Hooks.on("updateActor", onUpdateCondemned);
 registerTimelineWatch();
 // And the aggregate timeline window, if it was open when this client reloaded (utils/window-restore.js).
 registerTimelineWindowRestore();
+// And a Create a Site walkthrough, on the step it was left on with its answers (sites/create-site-restore.js).
+registerCreateSiteRestore();
 
 // -- READY -----------------------------------------------------
 // FIRST of the ready listeners, deliberately. This one reports whether the startup it is reporting

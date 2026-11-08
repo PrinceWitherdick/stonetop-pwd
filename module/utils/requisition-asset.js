@@ -17,9 +17,10 @@ export function openTripTag(rawLog) {
 	return { id: trip.id, title: expeditionLabel(trip, at) };
 }
 
-/** Sentinel <option> value for the "Something else…" custom-asset choice, shared by
- *  the two Requisition pickers (the player-facing RequisitionDialog and the steading
- *  sheet's GM walkthrough) so the marker can never drift between them. */
+/** Sentinel <option> value for the player-facing RequisitionDialog's "Something else…"
+ *  custom-asset choice, whose typed name becomes a gear item. (The steading sheet's
+ *  Requisition has a plain "Something else..." pick with no box: its asset is only ever
+ *  named on the card, so the table says it out loud.) */
 export const CUSTOM_ASSET_VALUE = "__custom__";
 
 /**

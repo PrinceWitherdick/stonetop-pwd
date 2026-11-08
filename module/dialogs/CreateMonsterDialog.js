@@ -27,6 +27,7 @@ import {
 } from "../data/monster-builder.js";
 import { formatCustomMoveDescription } from "../utils/custom-move-text.js";
 import { applyGuideRail } from "../utils/guide-rail.js";
+import { openSuggestionMenu } from "../utils/suggestion-menu.js";
 
 const DEFAULTS = { organization: "group", size: "medium", armorBase: 0 };
 
@@ -92,7 +93,6 @@ export class CreateMonsterDialog extends StonetopDialog {
 			damageRangeTags:  DAMAGE_RANGE_TAGS,
 			damageEffectTags: DAMAGE_EFFECT_TAGS,
 			damageModifiers:  DAMAGE_MODIFIERS,
-			moveSuggestions:  MOVE_SUGGESTIONS,
 			creatureTypes:    Object.entries(CREATURE_TYPE_CHOICES).map(([slug, label]) => ({ slug, label })),
 			summary:          this._summary(derived),
 		};
@@ -203,17 +203,20 @@ export class CreateMonsterDialog extends StonetopDialog {
 		})).filter(a => a.name || a.die || a.tags.length);
 	}
 
-	// Moves section: the book prompts are quick-add buttons and every move is an
-	// editable card (name + description). Cards are the authoritative move list read
-	// at submit — the prompts just seed a card the GM can then rewrite in place.
+	// Moves section: every move is an editable card (name + description). Cards are the
+	// authoritative move list read at submit. "Add a move" opens a menu: a blank card first, then
+	// the book's prompts, each seeding a card the GM can rewrite in place.
 	_wireMoves(form) {
-		form.querySelectorAll(".cm-move-suggestion").forEach(btn =>
-			btn.addEventListener("click", () => {
-				const sug = MOVE_SUGGESTIONS.find(m => m.id === btn.dataset.suggestion);
+		const add = form.querySelector(".cm-move-add");
+		add?.addEventListener("click", () => openSuggestionMenu(add, {
+			heading: "Book prompts",
+			blankLabel: "Blank move",
+			items: MOVE_SUGGESTIONS.map(m => ({ value: m.id, label: m.name, hint: m.hint })),
+			onPick: id => {
+				const sug = MOVE_SUGGESTIONS.find(m => m.id === id);
 				this._addMoveCard(form, { name: sug?.name ?? "", description: sug?.description ?? "", focus: true });
-			}));
-		form.querySelector(".cm-move-add")?.addEventListener("click", () =>
-			this._addMoveCard(form, { focus: true }));
+			},
+		}));
 		this._syncListEmpty(form, "move");
 	}
 

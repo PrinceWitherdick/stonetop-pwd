@@ -6,22 +6,41 @@
       Every value a slot needs rides on the SLOT, including the ones that belong to the table as a
       whole. A `../` chain out of the inner loop would land at a depth that depends on how this
       partial was called, and reading one wrong yields data-key="", which no handler matches.
+      The table's caption is read off the first slot at this partial's top level (`this.slots.[0]`),
+      outside any loop, for the same reason.
 
       The options carry the result alone. The roll number in front of it is the table's own
-      bookkeeping, not part of the answer. --}}
+      bookkeeping, not part of the answer.
+
+      The caption is the table's, not the first slot's, so it heads the whole pick (every combined
+      part, its Combine button and its note) rather than sitting inside slot 0.
+
+      The select and its buttons share one .stonetop-field-btns row, so the buttons take the
+      select's height. A <label> can't hold the buttons too (a button is labelable), so the caption
+      is a plain block and the select is named by aria-label. --}}
 <div class="stonetop-cs-table-pick">
-  {{#each slots}}
-  <div class="stonetop-cs-pick-slot{{#if extra}} stonetop-cs-pick-slot--extra{{/if}}">
-    <label class="stonetop-cf-label">{{this.label}}{{#if hint}} <span class="stonetop-cf-pick-hint">{{this.hint}}</span>{{/if}}
-      <select class="stonetop-cf-input stonetop-cs-pick" data-key="{{this.key}}" data-slot="{{this.slot}}">
-        <option value="">(choose or roll)</option>
-        {{#each rows}}<option value="{{this.text}}"{{#if selected}} selected{{/if}}>{{this.text}}</option>{{/each}}
-      </select>
-    </label>
-    <button type="button" class="stonetop-cs-roll stonetop-cf-mini-btn" data-key="{{this.key}}" data-slot="{{this.slot}}" data-tooltip="{{this.rollTip}}" data-tooltip-direction="UP"><i class="fas fa-dice-d20"></i></button>
-    {{#if extra}}<button type="button" class="stonetop-cs-uncombine stonetop-cf-mini-btn" data-key="{{this.key}}" data-slot="{{this.slot}}" data-tooltip="Drop this one" data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>{{/if}}
+  {{#with this.slots.[0]}}
+  <div class="stonetop-cs-pick-head"><span class="stonetop-cs-pick-caption">{{this.label}}</span>{{#if hint}} <span class="stonetop-cf-pick-hint">{{this.hint}}</span>{{/if}}</div>
+  {{/with}}
+  {{!-- Two or more slots are one combined answer: --combined spaces them a little wider, and
+        each extra slot opens on a "combined with" divider, so every part reads as its own piece. --}}
+  <div class="stonetop-cs-pick-body">
+    <div class="stonetop-cs-slots{{#if this.slots.[1]}} stonetop-cs-slots--combined{{/if}}">
+    {{#each slots}}
+    <div class="stonetop-cs-pick-slot{{#if extra}} stonetop-cs-pick-slot--extra{{/if}}">
+      {{#if extra}}<div class="stonetop-cs-combined-rule">{{this.label}}</div>{{/if}}
+      <div class="stonetop-field-btns">
+        <select class="stonetop-cf-input stonetop-cs-pick" data-key="{{this.key}}" data-slot="{{this.slot}}" aria-label="{{this.label}}">
+          <option value="">(choose or roll)</option>
+          {{#each rows}}<option value="{{this.text}}"{{#if selected}} selected{{/if}}>{{this.text}}</option>{{/each}}
+        </select>
+        <button type="button" class="stonetop-cs-roll stonetop-cf-mini-btn" data-key="{{this.key}}" data-slot="{{this.slot}}" data-tooltip="{{this.rollTip}}" data-tooltip-direction="UP"><i class="fas fa-dice-d20"></i></button>
+        {{#if extra}}<button type="button" class="stonetop-cs-uncombine stonetop-cf-mini-btn" data-key="{{this.key}}" data-slot="{{this.slot}}" data-tooltip="Drop this one" data-tooltip-direction="UP"><i class="fas fa-xmark"></i></button>{{/if}}
+      </div>
+    </div>
+    {{/each}}
+    </div>
+    {{#if canAdd}}<button type="button" class="stonetop-cs-combine stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-key="{{this.key}}"><i class="fas fa-plus"></i> Combine another</button>{{/if}}
+    {{#if note}}<p class="stonetop-cs-note">{{this.note}}</p>{{/if}}
   </div>
-  {{/each}}
-  {{#if canAdd}}<button type="button" class="stonetop-cs-combine stonetop-cf-mini-btn" data-key="{{this.key}}"><i class="fas fa-plus"></i> Combine another</button>{{/if}}
-  {{#if note}}<p class="stonetop-cs-note">{{this.note}}</p>{{/if}}
 </div>

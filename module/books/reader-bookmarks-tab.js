@@ -136,7 +136,7 @@ const BOOKMARKS_CSS = `
 }
 .stonetopBookmarkPage {
 	display: block;
-	font-size: 11px;
+	font-size: 12px;
 	opacity: 0.7;
 }
 .stonetopBookmarkTool {
