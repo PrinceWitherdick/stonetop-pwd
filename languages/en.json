@@ -3957,7 +3957,7 @@
         },
         "name": {
           "name": "Names",
-          "hint": "How big each person's name and the label under it are set, as a percentage. Group outlines grow to fit them. This is yours alone: it changes every map you open and nobody else's window, and nothing on the map itself is altered."
+          "hint": "How big each person's name, the label under it and their chips are set, as a percentage. Group outlines keep their size. This is yours alone: it changes every map you open and nobody else's window, and nothing on the map itself is altered."
         }
       }
     },
