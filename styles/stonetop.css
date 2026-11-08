@@ -21937,6 +21937,13 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	opacity: 0.35;
 }
 
+/* FA's down caret is drawn low in its box: lifted onto the label's capitals (measured on the
+   ink: within 0.6px at UI font sizes 14-16px, about 1px high at 18-20px). */
+.steading-residents-sort-icon.fa-caret-down {
+	position: relative;
+	top: -0.12em;
+}
+
 .steading-residents-col-sortable:hover .steading-residents-sort-icon,
 .steading-residents-col-sortable.is-sorted .steading-residents-sort-icon {
 	opacity: 0.85;
@@ -22426,44 +22433,90 @@ a.steading-player-open:hover {
 	}
 }
 
-/* -- The People cards ------------------------------------------------------------------------
+/* -- The People rows ---------------------------------------------------------------------------
    The steading's Player Characters / Residents / Neighbors lists and a settlement's Residents
-   (`.steading-people-cards`) are rows of CARDS, not columns (user's call, 10-19): a sort on a
-   sentence of traits or notes told nobody anything, and a column per field cut every one of them
-   to an ellipsis. A row is face | who (name, occupation, traits) | details (Relations and Notes
-   under labels) | remove, and its text wraps rather than truncating. No header: the rows keep
-   A-Z by name (`data-sort="name"`, sortable-columns.js). Everything here is scoped under the
-   modifier, so the relationship tables that borrow `.steading-residents-*` keep their grid; the
-   (0,2,0) selectors also outrank the narrow-window `.steading-residents-row` grid above. */
+   (`.steading-people-cards`) draw ONE LINE per person (user's call, 11-07: the 10-19 cards, name
+   over occupation and a label on every field, left most of each row empty). A row is
+   face | who (name · occupation · traits) | Relations | Notes | remove. Every field keeps to its
+   line and ends in "…", whole on hover (utils/clip-tooltips.js); edit mode's inputs share the
+   line too. The header labels the columns (the per-row labels stay for screen readers); Name
+   and Relations drag wider (resizable-columns.js writes --st-person-cols on the table), and
+   only Name sorts, A-Z or Z-A (`data-sort="name"`, sortable-columns.js). Everything
+   is scoped under the modifier, so the relationship tables that borrow `.steading-residents-*`
+   keep their grid; the (0,2,0) selectors also outrank the narrow-window
+   `.steading-residents-row` grid above. */
 .steading-people-cards {
 	container-type: inline-size;
+	--st-person-cols: 24px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.2fr) 22px;
 }
 /* An empty list is no box at all (the Add button sits under it), rather than a bare border. */
 .steading-people-cards:not(:has(.steading-person)) {
 	display: none;
 }
-.steading-people-cards .steading-person {
+.steading-people-cards .steading-person,
+.steading-people-cards .steading-person-header {
 	display: grid;
-	grid-template-columns: 36px minmax(0, 2fr) minmax(0, 3fr) 22px;
-	column-gap: 12px;
-	row-gap: 6px;
-	align-items: start;
+	grid-template-columns: var(--st-person-cols);
+	column-gap: 10px;
+	row-gap: 2px;
+	align-items: center;
 	min-height: 0;
-	padding: 8px 6px 8px 10px;
+	/* 33px a row with its rule, the height the pre-1.8.0 table had (user, 11-07). */
+	padding: 4px 6px 4px 8px;
 }
 .steading-people-cards .steading-person:hover {
 	background: rgb(var(--st-ink-rgb) / 0.035);
 }
 
+/* The column labels. (0,2,0) so the old table header's per-section grids above don't win. */
+.steading-people-cards .steading-person-header {
+	padding-block: 4px;
+	border-bottom: 1px solid rgb(var(--st-ink-rgb) / 0.12);
+	background: rgb(var(--st-ink-rgb) / 0.05);
+	font-size: var(--st-fs-xs);
+	font-weight: 700;
+	line-height: 1.2;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--st-text-secondary);
+}
+.steading-people-cards .steading-person-header .steading-residents-header-cell {
+	padding: 0;
+	border-radius: var(--st-radius-sm);
+}
+/* The Name sort shows no hover tint (user, 11-07); the arrow and pointer say it sorts. */
+.steading-people-cards .steading-person-header .steading-residents-col-sortable:hover {
+	background: none;
+}
+/* The resize handle sits in the middle of the gap after its column. */
+.steading-people-cards .steading-col-resize-handle {
+	right: -11px;
+}
+
+/* Every cell sits at a fixed place, so a row with no Relations keeps its Notes under "Notes".
+   The details box hands its fields straight to the row's grid. */
+.steading-people-cards .steading-person-details {
+	display: contents;
+}
+.steading-people-cards .steading-person-face,
+.steading-people-cards .steading-person-header-face     { grid-row: 1; grid-column: 1; display: flex; }
+.steading-people-cards .steading-person-who,
+.steading-people-cards .steading-person-header .steading-residents-col-name { grid-row: 1; grid-column: 2; }
+.steading-people-cards .steading-person-field--relations { grid-row: 1; grid-column: 3; }
+.steading-people-cards .steading-person-field--notes     { grid-row: 1; grid-column: 4; }
+.steading-people-cards .steading-residents-col-actions  { grid-row: 1; grid-column: 5; }
+/* A PC's gear tags and reminders: a second line, only on the rows that have them. */
+.steading-people-cards .steading-player-reminders       { grid-row: 2; grid-column: 2 / 5; padding: 0; margin: 3px 0 0; }
+
 .steading-people-cards .steading-member-avatar,
 .steading-people-cards .steading-player-portrait,
 .steading-person-face-empty {
-	width: 36px;
-	height: 36px;
+	width: 24px;
+	height: 24px;
 	flex: none;
 }
 .steading-people-cards .steading-player-portrait--empty {
-	font-size: var(--st-fs-md);
+	font-size: var(--st-fs-xs);
 }
 .steading-person-face-empty {
 	display: block;
@@ -22471,33 +22524,39 @@ a.steading-player-open:hover {
 	border-radius: 50%;
 }
 
-.steading-person-who,
-.steading-person-details {
+/* Who: name, then occupation, then traits, on one line. The name keeps its whole width (cut
+   only when it alone is wider than the cell), the occupation next, and the traits get what is
+   left over. */
+.steading-people-cards .steading-person-who {
 	display: flex;
-	flex-direction: column;
-	gap: 2px;
+	align-items: baseline;
+	column-gap: 4px;
 	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	font-size: var(--st-fs-sm);
+	line-height: 1.35;
 }
-.steading-person-details {
-	gap: 4px;
-}
-
-.steading-person-name-line {
+.steading-people-cards .steading-person-name-line {
 	display: flex;
 	align-items: center;
-	gap: 2px 6px;
+	gap: 0 6px;
+	flex: none;
+	max-width: 100%;
 	min-width: 0;
 }
-/* The name wraps rather than ellipsizing now there is room under it. Bold is the cue that it
-   opens the sheet; it never underlines. */
+.steading-people-cards .steading-person-name-line .stonetop-npc-status-badge {
+	flex: none;
+}
+/* Bold is the cue that the name opens the sheet; it never underlines. */
 .steading-people-cards .steading-member-name-text,
 .steading-people-cards .steading-player-name-text {
 	flex: 0 1 auto;
 	min-width: 0;
-	overflow: visible;
-	overflow-wrap: anywhere;
-	white-space: normal;
-	font-size: var(--st-fs-md);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--st-fs-base);
 	font-weight: 700;
 	line-height: 1.35;
 	color: inherit;
@@ -22522,86 +22581,101 @@ a.steading-player-open:hover {
 	opacity: 0.6;
 }
 
-.steading-person-role,
-.steading-person-traits {
-	font-size: var(--st-fs-sm);
-	line-height: 1.3;
+.steading-people-cards .steading-person-role,
+.steading-people-cards .steading-person-traits {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	color: var(--st-text-secondary);
-	overflow-wrap: anywhere;
 }
-.steading-person-traits {
-	font-style: italic;
+.steading-people-cards .steading-person-role   { flex: 0 1 auto; }
+.steading-people-cards .steading-person-traits { flex: 1 1 0; font-style: italic; }
+.steading-people-cards .steading-person-role::before,
+.steading-people-cards .steading-person-traits::before {
+	content: "· ";
+	font-style: normal;
 }
 
-/* Label | value, the labels one fixed width so every row's values start on the same line. The
-   notes pencil, where there is one, opens a third column of its own (see below), so a row
-   without one gives its value the whole width rather than an empty column's gap. */
-.steading-person-field {
-	display: grid;
-	grid-template-columns: 6em minmax(0, 1fr);
-	column-gap: 8px;
-	align-items: baseline;
+/* Relations / Notes: the value, and in edit mode the input or the notes pencil, on one line. */
+.steading-people-cards .steading-person-field {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
 	margin: 0;
 	font-size: var(--st-fs-sm);
 	line-height: 1.35;
 }
-.steading-person-label {
-	font-size: var(--st-fs-xs);
-	font-weight: 700;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
-	color: var(--st-text-secondary);
+.steading-people-cards .steading-person-label {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
 }
-.steading-person-value {
+.steading-people-cards .steading-person-value {
+	flex: 1 1 auto;
 	min-width: 0;
 	overflow: hidden;
-	white-space: normal;
-	text-overflow: clip;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
-.steading-people-cards .steading-member-notes-preview p {
-	display: block;
+/* The NPC's rich notes run on as one line: its blocks go inline, a space between them. */
+.steading-people-cards .steading-member-notes-preview :is(p, div, ul, ol, li, h1, h2, h3, h4, h5, h6, blockquote) {
+	display: inline;
 	margin: 0;
 	padding: 0;
 }
-.steading-people-cards .steading-member-notes-preview p + p {
-	margin-top: 0.3em;
-}
-.steading-people-cards .steading-member-notes-edit {
-	grid-column: 3;
-	align-self: center;
+.steading-people-cards .steading-member-notes-preview :is(p, div, ul, ol, li, h1, h2, h3, h4, h5, h6, blockquote) + :is(p, div, ul, ol, li, h1, h2, h3, h4, h5, h6, blockquote)::before {
+	content: " ";
 }
 
-/* Edit mode: every field an input, drawn as one so it reads as somewhere to type. */
+/* Edit mode: every field an input, drawn as one so it reads as somewhere to type, side by side. */
+.steading-people-cards .steading-person-who:has(> .steading-resident-input) {
+	align-items: center;
+}
 .steading-people-cards .steading-resident-input {
-	height: 26px;
-	padding: 2px 6px;
+	flex: 1 1 0;
+	width: auto;
+	min-width: 0;
+	height: 24px;
+	padding: 1px 6px;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.15);
 	border-radius: var(--st-radius-sm);
 	background: rgb(var(--st-paper-rgb) / 0.6);
 	font-size: var(--st-fs-sm);
 }
 .steading-people-cards .steading-person-name-input {
+	flex-grow: 1.4;
 	font-size: var(--st-fs-base);
 	font-weight: 700;
 }
 
 .steading-people-cards .steading-residents-col-actions {
-	align-self: start;
 	justify-content: center;
 	padding: 0;
 }
 
-/* A narrow window: the details drop under the who, in the face's row's text column. */
+/* A narrow window: two lines, who on the first and Relations | Notes under it, and the header
+   laid out the same way. */
 @container (max-width: 480px) {
-	.steading-people-cards .steading-person {
-		grid-template-columns: 36px minmax(0, 1fr) 22px;
+	.steading-people-cards .steading-person,
+	.steading-people-cards .steading-person-header {
+		grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1.2fr) 22px;
 	}
-	.steading-people-cards .steading-person-face            { grid-column: 1; grid-row: 1; }
-	.steading-people-cards .steading-person-who             { grid-column: 2; grid-row: 1; }
-	.steading-people-cards .steading-residents-col-actions  { grid-column: 3; grid-row: 1; }
-	.steading-people-cards .steading-person-details         { grid-column: 2 / -1; grid-row: 2; }
-	.steading-people-cards .steading-player-reminders       { grid-column: 2 / -1; grid-row: 3; }
-	.steading-people-cards .steading-person-details:not(:has(*)) { display: none; }
+	.steading-people-cards .steading-person-who,
+	.steading-people-cards .steading-person-header .steading-residents-col-name { grid-column: 2 / 4; }
+	/* Two lines leave no column edges to drag. */
+	.steading-people-cards .steading-col-resize-handle       { display: none; }
+	.steading-people-cards .steading-person-field--relations { grid-row: 2; grid-column: 2; }
+	.steading-people-cards .steading-person-field--notes     { grid-row: 2; grid-column: 3; }
+	.steading-people-cards .steading-residents-col-actions   { grid-column: 4; }
+	.steading-people-cards .steading-player-reminders        { grid-row: 3; grid-column: 2 / 4; }
 }
 
 /* Treasury (Silver & Gold) */

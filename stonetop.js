@@ -753,6 +753,7 @@ Hooks.once("init", () => {
 		"stonetop.steading-moves-sidebar":    "systems/stonetop-pwd/templates/actor/partials/steading-moves-sidebar.hbs",
 		"stonetop.steading-tab-overview":     "systems/stonetop-pwd/templates/actor/partials/steading-tab-overview.hbs",
 		"stonetop.steading-tab-neighbors":    "systems/stonetop-pwd/templates/actor/partials/steading-tab-neighbors.hbs",
+		"stonetop.people-header":             "systems/stonetop-pwd/templates/actor/partials/people-header.hbs",
 		"stonetop.steading-tab-improvements": "systems/stonetop-pwd/templates/actor/partials/steading-tab-improvements.hbs",
 		"stonetop.steading-tab-moves":        "systems/stonetop-pwd/templates/actor/partials/steading-tab-moves.hbs",
 		"stonetop.steading-tab-relmap":       "systems/stonetop-pwd/templates/actor/partials/steading-tab-relmap.hbs",

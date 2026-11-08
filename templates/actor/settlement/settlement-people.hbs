@@ -1,5 +1,5 @@
 {{!-- People: the place's Residents, as Stonetop's own People tab draws its Residents of Stonetop
-      (templates/actor/partials/steading-tab-neighbors.hbs): the same card rows, the same classes,
+      (templates/actor/partials/steading-tab-neighbors.hbs): the same one-line rows, the same classes,
       so it keeps A-Z by name, filters and previews faces the same way. One table here, not Stonetop's
       three: a settlement has no Player Characters roster and no Neighbors of its own.
 
@@ -25,7 +25,8 @@
 		<div class="steading-residents-section steading-residents-section--residents{{#unless editable}} stonetop-readonly{{/unless}}" data-list="residents">
 			<h3 class="steading-residents-heading">{{localize "stonetop.settlement.residents"}} {{> "stonetop.tab-search-control" title=(localize "stonetop.settlement.residentsSearch") placeholder=(localize "stonetop.settlement.residentsFilter")}}</h3>
 			{{#if residents.length}}
-			<div class="steading-residents-table steading-people-cards" data-resize-key="settlement-residents" data-sort="name">
+			<div class="steading-residents-table steading-people-cards" data-col-var="--st-person-cols" data-resize-key="settlement-residents" data-sort="name">
+				{{> "stonetop.people-header" colName=(localize "stonetop.settlement.col.name") colRelations=(localize "stonetop.settlement.col.relations") colNotes=(localize "stonetop.settlement.col.notes")}}
 				<ul class="steading-residents-list">
 					{{#each residents}}
 					<li class="steading-residents-row steading-person" data-row-id="{{this.rowId}}" data-sort-name="{{this.name}}">
@@ -61,11 +62,11 @@
 						</div>
 						<div class="steading-person-details">
 							{{#if cellsEditable}}
-							<label class="steading-person-field"><span class="steading-person-label">{{localize "stonetop.settlement.col.relations"}}</span>
+							<label class="steading-person-field steading-person-field--relations"><span class="steading-person-label">{{localize "stonetop.settlement.col.relations"}}</span>
 								<input type="text" class="steading-resident-input" data-resident-field="relations"
 								       value="{{this.relations}}" placeholder="{{localize "stonetop.settlement.col.relations"}}"></label>
 							{{else if relations}}
-							<div class="steading-person-field"><span class="steading-person-label">{{localize "stonetop.settlement.col.relations"}}</span><span class="steading-person-value steading-person-text">{{this.relations}}</span></div>
+							<div class="steading-person-field steading-person-field--relations"><span class="steading-person-label">{{localize "stonetop.settlement.col.relations"}}</span><span class="steading-person-value steading-person-text">{{this.relations}}</span></div>
 							{{/if}}
 							{{!-- The rich notes live on the NPC: a rendered preview here, clamped, and with
 							      the wrench on, a pencil that opens the shared pop-up editor. --}}

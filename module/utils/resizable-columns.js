@@ -12,7 +12,13 @@ const STORAGE_PREFIX = `${SYSTEM_ID}.columnWidths.`;
  * All resizable columns get a fixed pixel width except the last one, which
  * stays `minmax(0, 1fr)` and absorbs whatever space remains — mirroring how
  * spreadsheet/table UIs let you shrink one column to reveal more of another.
- * The trailing actions column is always fixed at 32px and never resizable.
+ * The trailing actions column is always fixed at 32px and never resizable. Any other
+ * header cell carrying `data-col-fixed="<width>"` (the People rows' face, and their
+ * narrower remove column) keeps that width and gets no handle.
+ *
+ * The widths land as each row's inline grid-template-columns, or, when the table names a
+ * custom property in `data-col-var`, as that property on the table. The People rows take
+ * the property so a narrow window's container query can still lay them out its own way.
  *
  * @param {HTMLElement} table       - the `.steading-residents-table` wrapper
  * @param {string}      storageKey  - unique key (e.g. "players", "neighbors")
@@ -22,8 +28,10 @@ export function makeColumnsResizable(table, storageKey) {
 	if (!grid) return;
 	const { header, list } = grid;
 
-	const headerCells = Array.from(header.children)
-		.filter(cell => !cell.classList.contains("steading-residents-col-actions"));
+	const fixedWidth = cell => cell.dataset?.colFixed
+		?? (cell.classList.contains("steading-residents-col-actions") ? "32px" : null);
+	const allCells = Array.from(header.children);
+	const headerCells = allCells.filter(cell => !fixedWidth(cell));
 	if (headerCells.length < 2) return;
 
 	// Idempotent, so no caller has to know whether someone else got there first: a sheet
@@ -54,16 +62,18 @@ export function makeColumnsResizable(table, storageKey) {
 		widths = saved.map((w, i) => Math.max(minWidths[i], w));
 	}
 
-	// Tables with a trailing fixed actions column (the steading's Players/Residents/
-	// Neighbors) reserve a final 32px track for it; tables without one (the NPC sheet's
-	// Relationships table) don't, so the last resizable column absorbs all the slack.
-	const hasActions = !!header.querySelector(":scope > .steading-residents-col-actions");
-
+	// Fixed cells keep their own track; the last resizable column absorbs the slack. A table
+	// with no actions column (the NPC sheet's Relationships table) has no trailing track.
 	const applyTemplate = () => {
 		if (!widths) return;
-		const columns = widths.map((w, i) => i === widths.length - 1 ? "minmax(0, 1fr)" : `${Math.round(w)}px`);
-		if (hasActions) columns.push("32px");
-		const template = columns.join(" ");
+		let i = 0;
+		const template = allCells.map(cell => {
+			const fixed = fixedWidth(cell);
+			if (fixed) return fixed;
+			const w = widths[i++];
+			return i === widths.length ? "minmax(0, 1fr)" : `${Math.round(w)}px`;
+		}).join(" ");
+		if (table.dataset.colVar) return table.style.setProperty(table.dataset.colVar, template);
 		header.style.gridTemplateColumns = template;
 		list.querySelectorAll(":scope > .steading-residents-row").forEach(row => {
 			row.style.gridTemplateColumns = template;

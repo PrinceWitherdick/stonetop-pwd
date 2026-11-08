@@ -7,9 +7,10 @@ import {moveTiersHtml} from "../../utils/move-tiers.js";
 import {prepareMoveHoverBody} from "../../utils/move-hover.js";
 import {openLedgerDialog} from "../../utils/ledger-dialog.js";
 import {wireTabSearch} from "../../utils/tab-search.js";
+import {bindClipTooltips} from "../../utils/clip-tooltips.js";
 import {injectHeaderToggle} from "../../utils/sheet-chrome.js";
 import {escHtml, stripHtmlToText} from "../../utils/strings.js";
-import {CUSTOM_ASSET_VALUE, offerToClearRequisitioned, wireCustomAssetSelect} from "../../utils/requisition-asset.js";
+import {offerToClearRequisitioned} from "../../utils/requisition-asset.js";
 import {postMoveToChat, rolledTotalCard, stonetopChatCard} from "../../utils/chat.js";
 import {AddSteadingMemberDialog} from "../../dialogs/AddSteadingMemberDialog.js";
 import {addPersonToSteading, personFieldPath, isActorRow, personRowActor, usedPersonPortraits, HOME_STONETOP} from "./steading-people.js";
@@ -621,6 +622,8 @@ export function createStonetopSteadingSheetClass(Base) {
 					memory: searchTerms, key: sec,
 				});
 			}
+			// The People rows are one line each: a field cut short shows whole on hover.
+			bindClipTooltips(html[0], ".steading-people-cards .steading-person-text");
 
 			// Improvements filter. Scoped to the whole `.tab.improvements` so the `.is-searching`
 			// class lands on the same element that carries `.hide-unearned-improvements`, letting the
@@ -1713,7 +1716,7 @@ export function createStonetopSteadingSheetClass(Base) {
 					<div class="stonetop-homestead-fields">
 						<label class="stonetop-homestead-field">
 							<span>Asset</span>
-							<select class="stonetop-requisition-asset-select" data-requisition-asset-select>
+							<select name="asset" class="stonetop-requisition-asset-select">
 								${assetOptions}
 								<option value="something else">Something else...</option>
 							</select>
