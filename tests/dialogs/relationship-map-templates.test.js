@@ -3,8 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import Handlebars from "handlebars";
 import {
-	RELMAP_NODE_PX, RELMAP_SUBTITLE_MAX_W, RELMAP_SUBTITLE_REACH_PX, RELMAP_SUBTITLE_TOP_PX,
+	RELMAP_CHIP_GAP_PX, RELMAP_CHIP_H_PX, RELMAP_CHIP_ROW_W, RELMAP_NODE_PX, RELMAP_SUBTITLE_MAX_W, RELMAP_SUBTITLE_REACH_PX,
+	RELMAP_SUBTITLE_TOP_PX, chipReach,
 } from "../../module/utils/relmap-geometry.js";
+import { chipPaint, chipPillHtml } from "../../module/utils/relmap-chip-pill.js";
 
 // The map's three templates, COMPILED AND RENDERED against the context the code actually builds.
 //
@@ -95,6 +97,49 @@ describe("the board template", () => {
 			expect(html).not.toContain("data-relmap-subtitle");
 			expect(html).not.toContain("Add a label");
 			expect((html.match(/class="stonetop-relmap-subtitle"/g) ?? []).length).toBe(1);
+		});
+	});
+
+	// TAG CHIPS under the label, drawn in the rows the window laid out, ending in "+N" where some did
+	// not fit. The same pill the person bar builds in script, to the character.
+	describe("the chips under a name", () => {
+		const dead = chipPaint({ id: "dead", name: "Dead", icon: "fa-skull", ink: "crimson" });
+		const noble = chipPaint({ id: "c1", name: "Noble's \"kin\"", icon: "", ink: "#336699" });
+		const withChips = canEdit => {
+			const ctx = boardContext();
+			ctx.canEdit = canEdit;
+			ctx.addSubtitle = "Add a label";
+			ctx.nodes[0] = {
+				...ctx.nodes[0], subtitle: "", subtitleLabel: "Change the label under Elena",
+				chipRows: [[dead], [noble]], chipMore: { label: "+2", tooltip: "Healer, Outcast" },
+			};
+			ctx.nodes[1] = { ...ctx.nodes[1], subtitle: "", chipRows: [], chipMore: null };
+			return ctx;
+		};
+
+		it("draws each row as laid out, the label and the chips in one column", () => {
+			const html = render(withChips(true));
+			expect(html).toMatch(/<div class="stonetop-relmap-under">\s*<button type="button" class="stonetop-relmap-subtitle is-empty"/);
+			expect((html.match(/class="stonetop-relmap-chip-row"/g) ?? []).length).toBe(2);
+			expect(html).toContain('data-relmap-chips="n1"');
+			// The "+N" pill ends the LAST row, with the rest named in its tooltip.
+			expect(html).toMatch(/Noble[^]*?stonetop-relmap-chip--more" data-tooltip-text="Healer, Outcast"[^]*?>\+2</);
+			// Nobody wearing any: no chip markup at all.
+			expect((html.match(/class="stonetop-relmap-chips"/g) ?? []).length).toBe(1);
+		});
+
+		it("is the same pill the person bar builds", () => {
+			const html = render(withChips(false));
+			expect(html).toContain(chipPillHtml(dead));
+			expect(html).toContain(chipPillHtml(noble));
+			expect(chipPillHtml(noble)).toContain('style="--relmap-ink-raw:#336699"');
+			expect(chipPillHtml(dead)).toContain('<i class="fas fa-skull" aria-hidden="true"></i>');
+		});
+
+		it("takes no press for a reader", () => {
+			const html = render(withChips(false));
+			expect(html).toContain('class="stonetop-relmap-chips"');
+			expect(html).not.toContain("data-relmap-chips");
 		});
 	});
 
@@ -1241,18 +1286,60 @@ describe("a portrait's box is the circle and nothing else", () => {
 	// framing reach round it by these numbers, so the stylesheet and the constants must agree.
 	it("hangs the label under the name where the geometry measures it", () => {
 		const sub = rule("subtitle");
-		expect(sub).toMatch(/position:\s*absolute/);
-		// The face's bottom edge, then everything between it and the label's top.
-		const below = RELMAP_SUBTITLE_TOP_PX - RELMAP_NODE_PX / 2;
-		expect(sub).toMatch(new RegExp(`top:\\s*calc\\(100% \\+ ${below}px\\)`));
-		expect(sub).toMatch(new RegExp(`max-width:\\s*${RELMAP_SUBTITLE_MAX_W}px`));
-		const line = Number(sub.match(/line-height:\s*(\d+)px/)?.[1]);
+		// The column the label stands in carries its place: the label is the column's first entry.
+		const under = rule("under");
+		expect(under).toMatch(/position:\s*absolute/);
+		// The face's bottom edge, then everything between it and the label's top. The name chip's
+		// height (21px) grows with the reader's names dial and the two gaps round it do not, which
+		// is exactly how `personReach` measures it.
+		const chip = 21;
+		const below = RELMAP_SUBTITLE_TOP_PX - RELMAP_NODE_PX / 2 - chip;
+		const scaled = n => `calc\\(${n}px \\* var\\(--relmap-name-scale, 1\\)\\)`;
+		expect(under).toMatch(new RegExp(`top:\\s*calc\\(100% \\+ ${below}px \\+ ${chip}px \\* var\\(--relmap-name-scale, 1\\)\\)`));
+		expect(sub).toMatch(new RegExp(`max-width:\\s*${scaled(RELMAP_SUBTITLE_MAX_W)}`));
+		expect(sub).toMatch(new RegExp(`max-width:\\s*${scaled(RELMAP_SUBTITLE_MAX_W)}`));
+		expect(sub).toMatch(new RegExp(`font-size:\\s*${scaled(13)}`));
+		// The name: 14px at a line-height of 1.5 is the 21px chip above, capped at 126px wide.
+		expect(rule("name")).toMatch(new RegExp(`font-size:\\s*${scaled(14)}`));
+		expect(rule("name")).toMatch(/line-height:\s*1\.5;/);
+		expect(rule("name")).toMatch(new RegExp(`max-width:\\s*${scaled(126)}`));
+		// ⚠ AND BOTH LINE HEIGHTS IN WHOLE PIXELS at any setting of the dial, as `personReach` rounds
+		// them: a fractional line box set the name a pixel high in its chip. The unrounded value
+		// before each is the fallback for a browser without `round()`.
+		const rounded = n => `round\\(${n}px \\* var\\(--relmap-name-scale, 1\\), 1px\\)`;
+		expect(rule("name")).toMatch(new RegExp(`line-height:\\s*${rounded(21)}`));
+		expect(sub).toMatch(new RegExp(`line-height:\\s*${rounded(18)}`));
+		expect(under).toMatch(new RegExp(`top:\\s*calc\\(100% \\+ ${below}px \\+ ${rounded(chip)}\\)`));
+		const line = Number(sub.match(/line-height:\s*calc\((\d+)px \* var\(--relmap-name-scale, 1\)\)/)?.[1]);
 		// ⚠ THE CLAMP IS ON THE INNER SPAN: Chrome ignores one set on a <button>.
 		const words = rule("subtitle-words");
 		const lines = Number(words.match(/-webkit-line-clamp:\s*(\d+)/)?.[1]);
 		expect(1 + line * lines).toBe(RELMAP_SUBTITLE_REACH_PX);
 		expect(words).toMatch(/display:\s*-webkit-box/);
 		expect(sub).not.toMatch(/line-clamp/);
+	});
+
+	// The names dial is written on the window's root and sizes the BOARD's pills; the person bar's pills
+	// (its worn row, the form's preview) are chrome and stay at their base size (user, 2026-11-07).
+	it("stops the names dial at the person bar", () => {
+		const bar = css.match(/(?:^|\n)div\.stonetop-relmap-personbar\s*\{([^}]*)\}/)?.[1] ?? "";
+		expect(bar).toMatch(/--relmap-name-scale:\s*1;/);
+	});
+
+	// THE CHIPS ARE MEASURED BY THE GEOMETRY TOO: the gap over the first row and between rows, and the
+	// pill's height, are what `chipReach` adds under a person for every outline round them.
+	it("draws the chip rows at the height the geometry reaches round", () => {
+		const chips = rule("chips");
+		const pill = rule("chip");
+		expect(chips).toMatch(new RegExp(`gap:\\s*${RELMAP_CHIP_GAP_PX}px;`));
+		expect(chips).toMatch(new RegExp(`margin:\\s*${RELMAP_CHIP_GAP_PX}px 0 0;`));
+		expect(pill).toMatch(new RegExp(`height:\\s*round\\(${RELMAP_CHIP_H_PX}px \\* var\\(--relmap-name-scale, 1\\), 1px\\)`));
+		expect(chipReach(2)).toBe(2 * (RELMAP_CHIP_GAP_PX + RELMAP_CHIP_H_PX));
+		// Never wrapped by the stylesheet: the rows are the window's, at the width it packs them to.
+		expect(rule("chip-row")).not.toMatch(/flex-wrap:\s*wrap/);
+		const wide = `max-width:\\s*calc\\(${RELMAP_CHIP_ROW_W}px \\* var\\(--relmap-name-scale, 1\\)\\)`;
+		expect(rule("chip-row")).toMatch(new RegExp(wide));
+		expect(pill).toMatch(new RegExp(wide));
 	});
 });
 

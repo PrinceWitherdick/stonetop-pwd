@@ -229,6 +229,22 @@ describe("chips with an icon or a count trim their label element", () => {
 		}
 	});
 
+	// The reminder row's "+" and the relationship map's Add chip are one kind of control, a dashed add
+	// chip, so core's button rule comes off them in one shared rule and each keeps only its own size.
+	it("resets both dashed add chips through one shared class", () => {
+		const shared = declarations(MAIN, ".stonetop-add-chip");
+		for (const [prop, value] of [["width", "auto"], ["min-height", "0"], ["flex", "none"], ["border-style", "dashed"], ["box-shadow", "none"], ["font-family", "inherit"]]) {
+			expect(declared(shared, prop), prop).toBe(value);
+		}
+		expect(readRepo("templates/actor/partials/reminder-chips.hbs")).toMatch(/class="[^"]*stonetop-reminder-chip--add stonetop-add-chip"/);
+		expect(readRepo("templates/dialogs/relationship-map.hbs")).toMatch(/class="stonetop-relmap-personbar-add stonetop-add-chip"/);
+		// Neither restates the reset.
+		for (const sel of [".stonetop-reminder-chips button.stonetop-reminder-chip--add", ".stonetop-relmap-personbar-add"]) {
+			const body = declarations(MAIN, sel);
+			for (const prop of ["width", "min-height", "box-shadow", "font-family", "flex"]) expect(declared(body, prop), `${sel} ${prop}`).toBeNull();
+		}
+	});
+
 	// No trim reaches an input's text. The Libre Caslon Text @font-face now centres its line box on the
 	// capitals, but the chip's whole-pixel line leaves ~1px of leading whose top half Blink floors to a
 	// whole pixel, so the padding still lowers the words: geometric -0.36/+0.09/-0.02px at roots 14/16/20
@@ -387,6 +403,8 @@ describe("chip icons sit at a whole-pixel size", () => {
 		".stonetop-crew-tags-owed > i",
 		".stonetop-possession-choices-owed > i",
 		".stonetop-companion-unique-owed > i",
+		".stonetop-relmap-chip > i",
+		".stonetop-relmap-personbar-add > i",
 	];
 
 	it.each(ICONS)("%s rounds its font-size to 1px", sel => {

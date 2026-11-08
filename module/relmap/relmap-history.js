@@ -28,8 +28,9 @@
 // faceless portrait carrying nothing but coordinates — so it is dropped instead.
 
 import {
-	addEdgePatch, addGroupPatch, addNodePatch, dropEdgePatch, dropGroupPatch, dropNodePatch,
-	edgePatch, groupMembersPatch, groupPatch, isSafeId, nodePatch, relmapPath,
+	addChipPatch, addEdgePatch, addGroupPatch, addNodePatch, chipPatch, dropChipPatch, dropEdgePatch,
+	dropGroupPatch, dropNodePatch, edgePatch, groupMembersPatch, groupPatch, isSafeId, nodeChipsPatch,
+	nodePatch, relmapPath,
 } from "./relmap-store.js";
 
 import { deletionTarget } from "../utils/foundry-compat.js";
@@ -58,8 +59,8 @@ export const RELMAP_HISTORY_MAX = 25;
  */
 export const RELMAP_COALESCE_MS = 1500;
 
-/** The three parts of a graph a step can name. Anything else in a patch is not one of ours. */
-const KINDS = Object.freeze(["nodes", "edges", "groups"]);
+/** The parts of a graph a step can name. Anything else in a patch is not one of ours. */
+const KINDS = Object.freeze(["nodes", "edges", "groups", "chips"]);
 
 /**
  * ⚠ THE ONE FOUR-PART PATH THIS FILE READS: `groups.<id>.members.<person>`, a single person going
@@ -69,8 +70,13 @@ const KINDS = Object.freeze(["nodes", "edges", "groups"]);
  * both tell "Ordga into the hunters" apart from "Marrec into the hunters".
  */
 const MEMBERS = "members";
-const isMemberPath = parts => parts.length === 4 && parts[0] === "groups" && parts[2] === MEMBERS
-	&& isSafeId(parts[3]);
+/**
+ * And the second, built the same way for the same reason: `nodes.<id>.chips.<chip>`, one chip going
+ * onto or off one person (`nodeChipsPatch`). Each kind has at most one such set-of-keys field.
+ */
+const CHIPS = "chips";
+const SET_FIELDS = Object.freeze({ groups: MEMBERS, nodes: CHIPS });
+const isSetPath = parts => parts.length === 4 && SET_FIELDS[parts[0]] === parts[2] && isSafeId(parts[3]);
 
 /**
  * ONE STEP, either way round.
@@ -136,11 +142,11 @@ export function describeWrite(graph, patch) {
 		const [kind, id, field] = parts;
 		if (!KINDS.includes(kind) || !isSafeId(id)) return null;
 		const at = `${kind}/${id}`;
-		if (isMemberPath(parts)) {
+		if (isSetPath(parts)) {
 			const held = touched.get(at) ?? { kind, id, fields: {} };
-			held.members ??= {};
+			held.keys ??= {};
 			// In or out, and nothing in between: a deletion is out, any write is in.
-			held.members[parts[3]] = target ? null : true;
+			held.keys[parts[3]] = target ? null : true;
 			touched.set(at, held);
 			continue;
 		}
@@ -156,7 +162,8 @@ export function describeWrite(graph, patch) {
 		touched.set(at, held);
 	}
 
-	for (const { kind, id, fields, members } of touched.values()) {
+	for (const { kind, id, fields, keys } of touched.values()) {
+		const setField = SET_FIELDS[kind];
 		const was = graph?.[kind]?.[id];
 		if (was) {
 			for (const [field, value] of Object.entries(fields)) {
@@ -166,13 +173,23 @@ export function describeWrite(graph, patch) {
 				forward.set.push({ kind, id, field, value });
 				back.set.push({ kind, id, field, value: was[field] });
 			}
-			for (const [key, value] of Object.entries(members ?? {})) {
-				forward.set.push({ kind, id, field: MEMBERS, key, value });
-				back.set.push({ kind, id, field: MEMBERS, key, value: was.members?.[key] ? true : null });
+			for (const [key, value] of Object.entries(keys ?? {})) {
+				forward.set.push({ kind, id, field: setField, key, value });
+				back.set.push({ kind, id, field: setField, key, value: was[setField]?.[key] ? true : null });
 			}
 			continue;
 		}
-		if (members) {
+		if (keys && kind === "nodes") {
+			// Chips on somebody who is not on the board: the race `normalizeGraph` hides (a chip put on
+			// a person just as another reader took them off). Nothing a step could put back.
+			if (!Object.keys(fields).length) continue;
+			const into = Object.fromEntries(Object.entries(keys).filter(([, on]) => on));
+			forward.make.push({ kind, id, data: { ...fields, chips: into } });
+			back.drop.push({ kind, id });
+			continue;
+		}
+		if (keys) {
+			const members = keys;
 			// A group being MADE: its members are part of what makes it, and putting it back means
 			// rubbing the whole group out. Taking somebody out of a group that is not there is nothing.
 			const into = Object.fromEntries(Object.entries(members).filter(([, on]) => on));
@@ -274,6 +291,10 @@ export function stepPatch(graph, step) {
 			Object.assign(patch, addGroupPatch(id, { ...(data ?? {}), members }) ?? {});
 			continue;
 		}
+		if (kind === "chips") {
+			Object.assign(patch, addChipPatch(id, data ?? {}) ?? {});
+			continue;
+		}
 		const a = as(data?.a);
 		const b = as(data?.b);
 		if (!standing.has(a) || !standing.has(b) || a === b) continue;
@@ -290,10 +311,17 @@ export function stepPatch(graph, step) {
 			Object.assign(patch, (value ? groupMembersPatch(id, [member]) : groupMembersPatch(id, [], [member])) ?? {});
 			continue;
 		}
+		if (kind === "nodes" && field === CHIPS) {
+			// A chip put back onto somebody must still be on the board (or coming back in this step),
+			// or the leaf would name a chip nothing draws.
+			if (value && !graph?.chips?.[key] && !making.has(`chips/${key}`)) continue;
+			Object.assign(patch, (value ? nodeChipsPatch(id, [key]) : nodeChipsPatch(id, [], [key])) ?? {});
+			continue;
+		}
 		// Through the store's own builders, so an undo is held to every bound and every clamp an
 		// ordinary edit is. A value recorded before a bound was tightened is trimmed on its way
 		// back in, exactly as it would be if the reader had typed it again today.
-		const build = { nodes: nodePatch, edges: edgePatch, groups: groupPatch }[kind];
+		const build = { nodes: nodePatch, edges: edgePatch, groups: groupPatch, chips: chipPatch }[kind];
 		Object.assign(patch, build?.(id, { [field]: value }) ?? {});
 	}
 
@@ -304,6 +332,10 @@ export function stepPatch(graph, step) {
 		}
 		if (kind === "groups") {
 			if (graph?.groups?.[id]) Object.assign(patch, dropGroupPatch(id) ?? {});
+			continue;
+		}
+		if (kind === "chips") {
+			if (graph?.chips?.[id]) Object.assign(patch, dropChipPatch(graph, id) ?? {});
 			continue;
 		}
 		if (graph?.edges?.[id]) Object.assign(patch, dropEdgePatch(id) ?? {});

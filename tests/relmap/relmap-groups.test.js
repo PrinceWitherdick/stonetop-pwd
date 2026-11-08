@@ -7,7 +7,8 @@ import {
 import {
 	RELMAP_CAPTION_PX, RELMAP_GROUP_GROW_MAX, RELMAP_GROUP_MIN_H, RELMAP_GROUP_MIN_W, RELMAP_GROUP_PAD_PX,
 	RELMAP_SUBTITLE_MAX_W, RELMAP_SUBTITLE_REACH_PX, RELMAP_SUBTITLE_TOP_PX, boardBounds, groupNestPx,
-	groupFloor, groupOutline, groupShapes, groupsInside, growFor, insideGroupShape, readGroupGrow, resizeRect,
+	groupFloor, groupOutline, groupShapes, groupsInside, growFor, insideGroupShape, personReach, readGroupGrow,
+	resizeRect,
 } from "../../module/utils/relmap-geometry.js";
 
 // NAMED GROUPS ON THE RELATIONSHIP MAP: "The hunters", "The elders", an outline round some people.
@@ -670,6 +671,66 @@ describe("the floor for a group with a label in it", () => {
 		expect(shrunk.bottom).toBeGreaterThanOrEqual(snug.bottom - 1e-6);
 		expect(shrunk.left).toBeLessThanOrEqual(snug.left + 1e-6);
 		expect(shrunk.right).toBeGreaterThanOrEqual(snug.right - 1e-6);
+	});
+});
+
+// THE NAMES DIAL (user, 2026-11-07): a reader can set every name, and the label under it, bigger or
+// smaller (`--relmap-name-scale`). The board's framing measures the same multiplier; group outlines
+// deliberately do not.
+describe("the reader's names dial", () => {
+	const board = { width: 1200, height: 960 };
+	const labelled = [{ x: 50, y: 50, subtitle: "Iron Knight" }];
+
+	it("measures exactly what it always did at the base weight", () => {
+		const reach = personReach(1);
+		expect(reach.subTop).toBe(RELMAP_SUBTITLE_TOP_PX);
+		expect(reach.subReach).toBe(RELMAP_SUBTITLE_REACH_PX);
+		expect(reach.subX).toBe(RELMAP_SUBTITLE_MAX_W / 2);
+		expect(boardBounds(labelled, board, [], [], 1)).toEqual(boardBounds(labelled, board));
+	});
+
+	// 14px names at a line-height of 1.5 are a 21px chip; two 18px label lines; widths 126 and 156.
+	it("grows the name chip, the label and their widths, but not the face or the gaps", () => {
+		const reach = personReach(2);
+		expect(reach.top).toBe(36);
+		expect(reach.bottom).toBe(36 + 2 + 42);
+		expect(reach.subTop).toBe(36 + 2 + 42 + 1);
+		expect(reach.subReach).toBe(1 + 72);
+		expect(reach.x).toBe(126);
+		expect(reach.subX).toBe(156);
+	});
+
+	// Whole pixels, as the stylesheet's `round()` gives them: 21 x 1.5 = 31.5 -> 32.
+	it("rounds the line heights to whole pixels, as the stylesheet does", () => {
+		expect(personReach(1.5).bottom).toBe(36 + 2 + 32);
+		expect(personReach(1.5).subReach).toBe(1 + 2 * 27);
+	});
+
+	it("never measures a name narrower than the face", () => {
+		expect(personReach(0.5).x).toBe(36);
+		expect(personReach(0.5).subX).toBe(39);
+	});
+
+	// ⚠ THE OUTLINES DO NOT FOLLOW IT (user, 2026-11-07: boxes swelling with the names "looks odd").
+	// A group's stored `grow` is measured from its snug outline, so one sized by a reader's own dial
+	// would store room every other reader sees as a different size.
+	it("leaves group outlines and their floor at the base size, whatever the dial says", () => {
+		const graph = {
+			nodes: { a: { x: 50, y: 50, subtitle: "Iron Knight" } },
+			groups: { g: { members: { a: true }, shape: "box" } },
+		};
+		const plainShape = groupShapes(graph, board)[0].outline;
+		expect(groupShapes(graph, board, { nameScale: 3 })[0].outline).toEqual(plainShape);
+		expect(groupOutline(labelled, { board, nameScale: 3 })).toEqual(groupOutline(labelled, { board }));
+		expect(groupFloor(labelled, 3)).toEqual(groupFloor(labelled));
+	});
+
+	it("frames the board round bigger names", () => {
+		const near = [{ x: 98, y: 98, subtitle: "Iron Knight" }];
+		const base = boardBounds(near, board);
+		const big = boardBounds(near, board, [], [], 3);
+		expect(big.right).toBeGreaterThan(base.right);
+		expect(big.bottom).toBeGreaterThan(base.bottom);
 	});
 });
 

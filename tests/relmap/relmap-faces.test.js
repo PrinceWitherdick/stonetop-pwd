@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import {
-	changedSavedFace, everyBoard, freshFacePatch, keepSavedFacesCurrent, sweepStaleFaces,
+	changedSavedFace, everyBoard, freshFacePatch, keepDeadChipsCurrent, keepSavedFacesCurrent, sweepStaleFaces,
 } from "../../module/relmap/relmap-faces.js";
 import { readGraph } from "../../module/relmap/relmap-doc.js";
 
@@ -21,7 +21,10 @@ function applyDotted(doc, patch) {
 			if (at[part] === null || typeof at[part] !== "object") at[part] = {};
 			at = at[part];
 		}
-		at[leaf] = value;
+		// A deletion in either core's spelling (utils/foundry-compat.js `deletionEntry`).
+		if (leaf.startsWith("-=")) delete at[leaf.slice(2)];
+		else if (value?.constructor?.name === "ForcedDeletion") delete at[leaf];
+		else at[leaf] = value;
 	}
 }
 
@@ -258,5 +261,61 @@ describe("the primary GM's sweep on load", () => {
 		asUser({ id: "gm2", isGM: true, active: true });
 		expect(await sweepStaleFaces({ resolve })).toBe(0);
 		expect(village.pages.contents[0].updates).toHaveLength(0);
+	});
+});
+
+// THE DEAD CHIP FOLLOWS A DEATH (relmap/relmap-dead.js): somebody who dies gets it on every board they
+// stand on, somebody brought back loses it, by the same one-writer rule as the saved faces.
+describe("a death or a return", () => {
+	const deadFlag = state => ({ "stonetop-pwd": { deathsDoor: state } });
+	const elroy = state => ({ uuid: ELROY, type: "character", name: "Lord Elroy", flags: deadFlag(state) });
+	let home;
+	let secret;
+	beforeEach(() => {
+		const village = map("Village", [
+			{ name: "Home", nodes: { a: node(ELROY, "Lord Elroy"), v: node("Actor.vera", "Vera") } },
+			{ name: "Secret", nodes: { s: node(ELROY, "Lord Elroy") }, hidden: true },
+		]);
+		[home, secret] = village.pages.contents;
+		journals.push(village);
+	});
+
+	it("puts Dead on them, defining it on a board that has never had it, and on nobody else", async () => {
+		asUser(GM);
+		const wrote = await keepDeadChipsCurrent(elroy("dead"), { flags: { "stonetop-pwd": { deathsDoor: "dead" } } }, {}, GM.id);
+		expect(wrote).toBe(2);
+		expect(readGraph(home).chips.dead).toMatchObject({ icon: "fa-skull", ink: "crimson" });
+		expect(readGraph(home).nodes.a.chips).toEqual({ dead: true });
+		expect(readGraph(home).nodes.v.chips).toEqual({});
+		expect(readGraph(secret).nodes.s.chips).toEqual({ dead: true });
+	});
+
+	it("takes it off again when they come back, and writes nothing a second time", async () => {
+		asUser(GM);
+		await keepDeadChipsCurrent(elroy("dead"), { "flags.stonetop-pwd.deathsDoor": "dead" }, {}, GM.id);
+		expect(await keepDeadChipsCurrent(elroy("dead"), { "flags.stonetop-pwd.deathsDoor": "dead" }, {}, GM.id)).toBe(0);
+		expect(await keepDeadChipsCurrent(elroy(null), { "flags.stonetop-pwd.-=deathsDoor": null }, {}, GM.id)).toBe(2);
+		expect(readGraph(home).nodes.a.chips).toEqual({});
+		// The chip stays on the board for the next person.
+		expect(readGraph(home).chips.dead).toBeTruthy();
+	});
+
+	it("follows the one-writer rule: the player who made it writes the boards they may", async () => {
+		asUser(PLAYER);
+		expect(await keepDeadChipsCurrent(elroy("dead"), { "flags.stonetop-pwd.deathsDoor": "dead" }, {}, PLAYER.id)).toBe(1);
+		expect(secret.updates).toHaveLength(0);
+	});
+
+	it("ignores an update that has nothing to do with death", async () => {
+		asUser(GM);
+		expect(await keepDeadChipsCurrent(elroy("dead"), { name: "Elroy" }, {}, GM.id)).toBe(0);
+		expect(home.updates).toHaveLength(0);
+	});
+
+	it("reads an NPC by their status", async () => {
+		asUser(GM);
+		const vera = { uuid: "Actor.vera", type: "npc", name: "Vera", system: { status: "dead" }, flags: {} };
+		await keepDeadChipsCurrent(vera, { system: { status: "dead" } }, {}, GM.id);
+		expect(readGraph(home).nodes.v.chips).toEqual({ dead: true });
 	});
 });

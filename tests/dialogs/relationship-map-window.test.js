@@ -4055,6 +4055,89 @@ describe("taking a change back", () => {
 		expect(readGraph(page).nodes.elena.subtitle).toBe("");
 	});
 
+	// A DEAD ACTOR ARRIVES WEARING DEAD (relmap/relmap-dead.js), in the write that seats them, so one
+	// undo takes the person and the chip back together.
+	it("seats a dead actor wearing the Dead chip, and one undo takes both back", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		const hafgan = { uuid: "Actor.hafgan", name: "Hafgan", img: "", type: "character", flags: { "stonetop-pwd": { deathsDoor: "dead" } } };
+		await app._addNodeFor(hafgan, { left: 50, top: 80 });
+		const [id] = Object.entries(readGraph(page).nodes).find(([, n]) => n.uuid === "Actor.hafgan");
+		expect(readGraph(page).nodes[id].chips).toEqual({ dead: true });
+		expect(readGraph(page).chips.dead).toMatchObject({ icon: "fa-skull" });
+
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes[id]).toBeUndefined();
+		expect(readGraph(page).chips.dead).toBeUndefined();
+	});
+
+	// TAG CHIPS ("Dead"): one press to put on, one undo to take back, and a chip made and worn in one
+	// breath is one step that takes the chip away again with it.
+	it("puts a chip on somebody and takes it back, the chip's copy on this board and all", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._wearChip("elena", { id: "dead", name: "Dead", icon: "fa-skull", ink: "crimson" });
+		expect(readGraph(page).chips.dead).toEqual({ name: "Dead", icon: "fa-skull", ink: "crimson" });
+		expect(readGraph(page).nodes.elena.chips).toEqual({ dead: true });
+
+		await app._stepHistory("back");
+		expect(readGraph(page).chips.dead).toBeUndefined();
+		expect(readGraph(page).nodes.elena.chips).toEqual({});
+	});
+
+	it("takes a chip off somebody, and puts it back on", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._wearChip("elena", { id: "dead", name: "Dead", icon: "fa-skull", ink: "crimson" });
+		await app._takeOffChip("elena", "dead");
+		expect(readGraph(page).nodes.elena.chips).toEqual({});
+		expect(readGraph(page).chips.dead).toBeTruthy();
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena.chips).toEqual({ dead: true });
+	});
+
+	it("makes a new chip on somebody, or puts on the one already called that", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._saveChip("elena", null, { name: "Noble", icon: "fa-crown", ink: "ochre" });
+		const [id] = Object.keys(readGraph(page).chips);
+		expect(readGraph(page).chips[id]).toEqual({ name: "Noble", icon: "fa-crown", ink: "ochre" });
+		await app._saveChip("stefan", null, { name: "noble", icon: "", ink: "rose" });
+		expect(Object.keys(readGraph(page).chips)).toEqual([id]);
+		expect(readGraph(page).nodes.stefan.chips).toEqual({ [id]: true });
+	});
+
+	it("changes a chip on this board as one step", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._wearChip("elena", { id: "dead", name: "Dead", icon: "fa-skull", ink: "crimson" });
+		await app._saveChip("elena", "dead", { name: "Fallen", icon: "fa-ghost", ink: "#123456" });
+		expect(readGraph(page).chips.dead).toEqual({ name: "Fallen", icon: "fa-ghost", ink: "#123456" });
+		await app._stepHistory("back");
+		expect(readGraph(page).chips.dead).toEqual({ name: "Dead", icon: "fa-skull", ink: "crimson" });
+	});
+
+	it("asks before deleting a chip, and an undo brings it back onto everybody", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._wearChip("elena", { id: "dead", name: "Dead", icon: "fa-skull", ink: "crimson" });
+		await app._wearChip("stefan", { id: "dead", name: "Dead", icon: "fa-skull", ink: "crimson" });
+		app._confirm = vi.fn(async () => false);
+		expect(await app._dropChip("dead")).toBe(false);
+		expect(readGraph(page).chips.dead).toBeTruthy();
+
+		app._confirm = vi.fn(async () => true);
+		expect(await app._dropChip("dead")).toBe(true);
+		// On no other board, so not the destructive skin: this board's part is all there is, and undoable.
+		expect(app._confirm.mock.calls[0][0].danger).toBe(false);
+		expect(readGraph(page).chips.dead).toBeUndefined();
+		expect(readGraph(page).nodes.elena.chips).toEqual({});
+
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena.chips).toEqual({ dead: true });
+		expect(readGraph(page).nodes.stefan.chips).toEqual({ dead: true });
+	});
+
 	// ⚠ ONE BOARD OPEN IN TWO VIEWS (the steading sheet's tab and the map window) is ONE history, and an
 	// Undo pressed in each at once applied the same step twice when the guard was each window's own.
 	it("takes one step at a time across two views of the same board", async () => {
@@ -4988,7 +5071,7 @@ describe("how heavily this reader wants the board drawn", () => {
 		// Without them every write below would be a silent no-op and every assertion about the
 		// readouts would pass against a window that never touched one.
 		made.rows = {};
-		for (const key of ["line", "head", "word"]) {
+		for (const key of ["line", "head", "word", "name"]) {
 			const row = { now: el({ attrs: {} }), up: el(), down: el() };
 			row.now.setAttribute = (k, v) => { row.now.attrs[k] = v; };
 			made.root.children[`[data-relmap-weight="${key}"][data-relmap-step="0"]`] = row.now;
@@ -5020,7 +5103,11 @@ describe("how heavily this reader wants the board drawn", () => {
 		const { app } = dialled();
 		const rows = app._weightDials();
 		// A stroke, the head on its end, then the words along it. See `RELMAP_WEIGHTS`.
-		expect(rows.map(r => r.key)).toEqual(["line", "head", "word"]);
+		expect(rows.map(r => r.key)).toEqual(["name", "word", "line", "head"]);
+		// Two runs on the footer, the rule and the captions box between them: the names, then the line.
+		const runs = app._weightRuns();
+		expect(runs.weightsBefore.map(r => r.key)).toEqual(["name"]);
+		expect(runs.weightsAfter.map(r => r.key)).toEqual(["word", "line", "head"]);
 		expect(rows.every(r => r.pct === RELMAP_WEIGHT_BASE)).toBe(true);
 		expect(rows.every(r => r.atBase)).toBe(true);
 	});
@@ -5032,10 +5119,10 @@ describe("how heavily this reader wants the board drawn", () => {
 	it("hands the stylesheet the same three numbers as a multiplier", () => {
 		const { app } = dialled();
 		expect(app._weightStyle()).toBe(
-			"--relmap-head-px:22px;--relmap-line-scale:1;--relmap-head-scale:1;--relmap-word-scale:1",
+			"--relmap-head-px:22px;--relmap-name-scale:1;--relmap-word-scale:1;--relmap-line-scale:1;--relmap-head-scale:1",
 		);
-		expect(app._weightStyle({ head: 150, line: 50, word: 200 })).toBe(
-			"--relmap-head-px:22px;--relmap-line-scale:0.5;--relmap-head-scale:1.5;--relmap-word-scale:2",
+		expect(app._weightStyle({ head: 150, line: 50, word: 200, name: 130 })).toBe(
+			"--relmap-head-px:22px;--relmap-name-scale:1.3;--relmap-word-scale:2;--relmap-line-scale:0.5;--relmap-head-scale:1.5",
 		);
 	});
 
@@ -5167,14 +5254,26 @@ describe("how heavily this reader wants the board drawn", () => {
 		expect(rows.head.now.attrs["aria-disabled"]).toBe("true");
 	});
 
-	it("writes all three properties onto the root for the stylesheet", async () => {
+	it("writes all four properties onto the root for the stylesheet", async () => {
 		const { app, root } = dialled();
 		await press(app, "head", 1);
 		expect(root.style.props).toEqual({
 			"--relmap-head-scale": "1.1",
 			"--relmap-line-scale": "1",
 			"--relmap-word-scale": "1",
+			"--relmap-name-scale": "1",
 		});
+	});
+
+	// THE NAMES DIAL (user, 2026-11-07) moves the names and the labels under them, and the group
+	// outlines measure the same multiplier, so it is redrawn like the other three.
+	it("moves the names on their own dial", async () => {
+		const { app, root } = dialled();
+		await press(app, "name", 1);
+		await press(app, "name", 1);
+		expect(pctOf(app, "name")).toBe(RELMAP_WEIGHT_BASE + 2 * RELMAP_WEIGHT_STEP);
+		expect(pctOf(app, "word")).toBe(RELMAP_WEIGHT_BASE);
+		expect(root.style.props["--relmap-name-scale"]).toBe("1.2");
 	});
 
 	it("ignores a press that names no weight of this window's", async () => {

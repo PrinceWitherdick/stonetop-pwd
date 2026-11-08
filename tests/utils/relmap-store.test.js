@@ -7,7 +7,7 @@ import {
 	edgesTouching, emptyGraph, fanIndexes, isImportedEdge, isSafeId, nodePatch, normalizeGraph,
 	pruneDeadPatch, readSeat, relmapPath, seatArrivals, takenSpots,
 } from "../../module/relmap/relmap-store.js";
-import { RELMAP_CAPTION_PX, RELMAP_REACH_MAX, RELMAP_REACH_MIN } from "../../module/utils/relmap-geometry.js";
+import { RELMAP_CAPTION_PX, RELMAP_REACH_MAX, RELMAP_REACH_MIN, RELMAP_SUBTITLE_MAX_W, RELMAP_SUBTITLE_REACH_PX } from "../../module/utils/relmap-geometry.js";
 
 // The map's data layer: the only place in the feature that writes a flag path string, and the
 // guard that stops an id from destroying the map it is stored in.
@@ -309,7 +309,7 @@ describe("where the people already standing are", () => {
 				stefan: { uuid: "Actor.b2", name: "Stefan", x: 70, y: 30, subtitle: "   " },
 			},
 		});
-		expect(takenSpots(g)).toEqual([{ left: 20, top: 30, labelled: true }, { left: 70, top: 30 }]);
+		expect(takenSpots(g)).toEqual([{ left: 20, top: 30, under: RELMAP_SUBTITLE_REACH_PX, across: RELMAP_SUBTITLE_MAX_W / 2 }, { left: 70, top: 30 }]);
 	});
 
 	it("seats an arrival off a standing person's label", () => {
@@ -413,7 +413,7 @@ describe("reading a stored map back", () => {
 			edges: {},
 		});
 		expect(Object.keys(g.nodes.elena).sort())
-			.toEqual(["img", "name", "note", "subtitle", "uuid", "x", "y"]);
+			.toEqual(["chips", "img", "name", "note", "subtitle", "uuid", "x", "y"]);
 	});
 
 	// ⚠ EMPTY AND NOT ABSENT on every person put down before labels existed: the undo stack records a

@@ -17,8 +17,8 @@ import { SYSTEM_ID } from "../system-id.js";
 import { deletionEntry, deletionUpdate } from "../utils/foundry-compat.js";
 import { clipText } from "../utils/strings.js";
 import {
-	RELMAP_BOARD_ASPECT, RELMAP_CAPTION_FLOOR_PX, RELMAP_CAPTION_PX, boardMetrics, clampReach,
-	freeSpot, readGroupGrow, ringsLayout,
+	RELMAP_BOARD_ASPECT, RELMAP_CAPTION_FLOOR_PX, RELMAP_CAPTION_PX, boardMetrics, chipLayout, clampReach,
+	freeSpot, personReach, readGroupGrow, ringsLayout, underReach,
 } from "../utils/relmap-geometry.js";
 import { normalizeHex } from "./relmap-ink.js";
 
@@ -462,9 +462,68 @@ export function readGroupDash(value) {
 	return RELMAP_GROUP_DASHES.includes(value) ? value : RELMAP_GROUP_DASH_DEFAULT;
 }
 
+/**
+ * TAG CHIPS: short marks worn by a person on this board ("Dead", "Noble"), each a word, a colour and
+ * an optional icon. Defined once per board in `graph.chips` and worn by id, one leaf per chip per
+ * person (`nodes.<id>.chips.<chip>`), so two players tagging one person at once both keep theirs.
+ *
+ * Shared between maps by id: a chip made on one board is offered on every board (relmap-chips.js), and
+ * wearing it on a board that has never seen it copies the definition there under the same id.
+ */
+export const RELMAP_CHIP_NAME_MAX = 24;
+
+/** The icons a chip may wear: Font Awesome solid glyphs, checked against the FA build of v13 and v14. */
+export const RELMAP_CHIP_ICONS = Object.freeze([
+	"fa-skull", "fa-heart", "fa-heart-crack", "fa-crown", "fa-shield-halved", "fa-hand-fist", "fa-star",
+	"fa-eye", "fa-eye-slash", "fa-mask", "fa-ghost", "fa-coins", "fa-scroll", "fa-book-open", "fa-hammer",
+	"fa-wheat-awn", "fa-leaf", "fa-paw", "fa-dove", "fa-fire", "fa-droplet", "fa-link", "fa-lock", "fa-key",
+	"fa-question", "fa-exclamation", "fa-user-secret", "fa-hourglass-half", "fa-handshake", "fa-gavel",
+	"fa-house", "fa-ring", "fa-baby", "fa-moon", "fa-sun",
+]);
+
+/**
+ * Chips every board offers before anyone has made one. The name is localized when it is offered and
+ * stored as that text when first worn, so from then on it is an ordinary chip the table can recolour.
+ */
+export const RELMAP_CHIP_PRESETS = Object.freeze([
+	Object.freeze({ id: "dead", nameKey: "stonetop.relmap.chips.dead", icon: "fa-skull", ink: "crimson" }),
+]);
+
+/** One stored chip icon, read safely. Anything not on the list is no icon. */
+export function readChipIcon(value) {
+	return RELMAP_CHIP_ICONS.includes(value) ? value : "";
+}
+
+/**
+ * ONE ORDER FOR A PERSON'S CHIPS everywhere they are drawn: the presets first, in their own order
+ * ("Dead" leads), then by name. A stored order would be one more thing two players could write at once.
+ *
+ * @returns {Array<{id: string, name: string, icon: string, ink: string}>}
+ */
+export function chipsWorn(node, graph) {
+	return Object.keys(node?.chips ?? {})
+		.map(id => (graph?.chips?.[id] ? { id, ...graph.chips[id] } : null))
+		.filter(Boolean)
+		.sort(compareChips);
+}
+
+/** The order chips are listed in: presets first, then by name, then by id so it is total. */
+export function compareChips(a, b) {
+	const rank = chip => {
+		const at = RELMAP_CHIP_PRESETS.findIndex(preset => preset.id === chip.id);
+		return at < 0 ? RELMAP_CHIP_PRESETS.length : at;
+	};
+	return rank(a) - rank(b)
+		|| String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" })
+		|| String(a.id).localeCompare(String(b.id));
+}
+
+/** A chip's name, trimmed: one of only spaces is no name. */
+export const chipNameOf = v => str(v, RELMAP_CHIP_NAME_MAX).trim();
+
 /** A map with nobody on it yet. */
 export function emptyGraph() {
-	return { version: RELMAP_VERSION, nodes: {}, edges: {}, groups: {} };
+	return { version: RELMAP_VERSION, nodes: {}, edges: {}, groups: {}, chips: {} };
 }
 
 const str = (v, max = 0) => {
@@ -479,6 +538,16 @@ const str = (v, max = 0) => {
  * "Add a label" belongs and made every outline round that person reach for words nobody can see.
  */
 const subtitleOf = v => str(v, RELMAP_SUBTITLE_MAX).trim();
+
+/** The chips one person wears, as `{chipId: true}`, keeping only ids `defined` holds. */
+function wornChips(raw, defined) {
+	const worn = {};
+	if (!raw || typeof raw !== "object") return worn;
+	for (const [chipId, on] of Object.entries(raw)) {
+		if (on && isSafeId(chipId) && defined[chipId]) worn[chipId] = true;
+	}
+	return worn;
+}
 
 /**
  * A stored graph, made safe to render.
@@ -499,6 +568,15 @@ export function normalizeGraph(raw) {
 	// belonged to "Tidy up" and to the family tree, which are gone; leaving the stored keys where
 	// they are costs a table nothing and spares every world a migration for two fields nothing asks
 	// about. A board reads exactly as it was left.
+
+	// CHIPS FIRST, because a person's chips are read against them. A chip with no name has nothing to
+	// say and is not on the board; nobody wearing it is fine (it is still offered).
+	for (const [id, chip] of Object.entries(raw.chips ?? {})) {
+		if (!isSafeId(id) || !chip || typeof chip !== "object") continue;
+		const name = chipNameOf(chip.name);
+		if (!name) continue;
+		graph.chips[id] = { name, icon: readChipIcon(chip.icon), ink: readInk(chip.ink) };
+	}
 
 	for (const [id, node] of Object.entries(raw.nodes ?? {})) {
 		if (!isSafeId(id) || !node || typeof node !== "object") continue;
@@ -522,7 +600,16 @@ export function normalizeGraph(raw) {
 			// the old value off this read (relmap-history.js `describeWrite`), so a label absent here is a
 			// label nobody can take back. Absent on every person put down before it existed: no migration.
 			subtitle: subtitleOf(node.subtitle),
+			// Emitted on every node for the same reason, and only chips this board defines: a deleted
+			// chip's leaf stays in the flag, unread, so undoing the deletion brings it back on everyone.
+			chips: wornChips(node.chips, graph.chips),
 		};
+		// DERIVED, NEVER STORED (`storableGraph` strips them): this person's chips laid out in the rows
+		// they are drawn in (`chipLaid`, which the window paints), and how many rows that is
+		// (`chipRows`, which every outline and frame reaches round: relmap-geometry.js `underReach`).
+		// Worked out once per read here rather than again on every paint. Only on somebody wearing any.
+		const laid = chipLayout(chipsWorn(graph.nodes[id], graph));
+		if (laid.rows.length) Object.assign(graph.nodes[id], { chipRows: laid.rows.length, chipLaid: laid });
 	}
 
 	for (const [id, edge] of Object.entries(raw.edges ?? {})) {
@@ -583,6 +670,23 @@ export function normalizeGraph(raw) {
 		};
 	}
 	return graph;
+}
+
+/** What `normalizeGraph` works out for a person and never stores. */
+const DERIVED_NODE_FIELDS = Object.freeze(["chipRows", "chipLaid"]);
+
+/**
+ * A normalized graph made fit to write WHOLE (a new page's flag), without the fields the read derives.
+ * A copy: the graph handed in is the caller's.
+ */
+export function storableGraph(graph) {
+	const nodes = {};
+	for (const [id, node] of Object.entries(graph?.nodes ?? {})) {
+		const kept = { ...node };
+		for (const field of DERIVED_NODE_FIELDS) delete kept[field];
+		nodes[id] = kept;
+	}
+	return { ...graph, nodes };
 }
 
 /**
@@ -684,9 +788,65 @@ export function edgePatch(id, fields = {}) {
 }
 
 /** Put somebody on the map. Every field written, so the node is whole from its first write. */
-export function addNodePatch(id, { uuid = null, name = "", img = "", x = 50, y = 50, note = "", subtitle = "" } = {}) {
-	// The label too: undoing a removal puts the person back through here, label and all.
-	return nodePatch(id, { uuid, name, img, x, y, note, subtitle });
+export function addNodePatch(id, {
+	uuid = null, name = "", img = "", x = 50, y = 50, note = "", subtitle = "", chips = {},
+} = {}) {
+	// The label and chips too: undoing a removal puts the person back through here, label and all.
+	const patch = nodePatch(id, { uuid, name, img, x, y, note, subtitle });
+	if (!patch) return null;
+	const worn = Object.keys(chips ?? {}).filter(chipId => chips[chipId]);
+	return { ...patch, ...(nodeChipsPatch(id, worn) ?? {}) };
+}
+
+// ⚠ `chips` IS NOT A FIELD `nodePatch` WRITES. A person's chips go one leaf each through
+// `nodeChipsPatch`, for the reason group members do: a whole object written by one player replaces
+// the one another player wrote a moment before.
+const CHIP_GATES = Object.freeze({
+	name: chipNameOf,
+	icon: readChipIcon,
+	ink: readInk,
+});
+
+/** Rename, recolour or re-icon one chip on this board. */
+export function chipPatch(id, fields = {}) {
+	return leafPatch("chips", id, gated(CHIP_GATES, fields));
+}
+
+/** Define a chip on this board. Every field written, so it is whole from its first write. Null with no name. */
+export function addChipPatch(id, { name = "", icon = "", ink = RELMAP_INK_DEFAULT } = {}) {
+	if (!chipNameOf(name)) return null;
+	return chipPatch(id, { name, icon, ink });
+}
+
+/**
+ * Put chips on one person and take chips off, ONE LEAF PER CHIP, written `true` to wear and deleted
+ * to take off. A chip named in both lists is worn.
+ */
+export function nodeChipsPatch(id, add = [], remove = []) {
+	if (!isSafeId(id)) return null;
+	const patch = {};
+	for (const chipId of remove ?? []) {
+		if (!isSafeId(chipId)) continue;
+		const [key, value] = deletionEntry(relmapPath("nodes", id, "chips", chipId));
+		patch[key] = value;
+	}
+	for (const chipId of add ?? []) {
+		if (!isSafeId(chipId)) continue;
+		const [gone] = deletionEntry(relmapPath("nodes", id, "chips", chipId));
+		delete patch[gone];
+		patch[relmapPath("nodes", id, "chips", chipId)] = true;
+	}
+	return Object.keys(patch).length ? patch : null;
+}
+
+/** Rub a chip off this board: its definition and every person's leaf for it, in one update. */
+export function dropChipPatch(graph, id) {
+	if (!isSafeId(id)) return null;
+	const entries = [deletionEntry(relmapPath("chips", id))];
+	for (const [nodeId, node] of Object.entries(graph?.nodes ?? {})) {
+		if (node?.chips?.[id]) entries.push(deletionEntry(relmapPath("nodes", nodeId, "chips", id)));
+	}
+	return Object.fromEntries(entries);
 }
 
 /**
@@ -857,14 +1017,16 @@ export function pruneDeadPatch(raw) {
  * ONE spelling, shared by the window and the importer: a seat that reads the occupied list
  * differently from the one that fills it is how a newcomer lands on top of somebody.
  *
- * `labelled` on somebody with a label under their name, and only on them, so `freeSpot` keeps a
- * newcomer's face off the label too. Left off everybody else, a board with no labels seats exactly
- * as it always did.
+ * `under` (how deep their label and chips hang, in board pixels) and `across` (how far either side) on
+ * somebody with either, and only on them, so `freeSpot` keeps a newcomer's face off those too. Left off
+ * everybody else, a board with no labels or chips seats exactly as it always did.
  */
 export function takenSpots(graph) {
-	return Object.values(graph?.nodes ?? {}).map(n => (n.subtitle
-		? { left: n.x, top: n.y, labelled: true }
-		: { left: n.x, top: n.y }));
+	const reach = personReach();
+	return Object.values(graph?.nodes ?? {}).map(n => {
+		const { x, down } = underReach(n, reach);
+		return down ? { left: n.x, top: n.y, under: down, across: x } : { left: n.x, top: n.y };
+	});
 }
 
 /**

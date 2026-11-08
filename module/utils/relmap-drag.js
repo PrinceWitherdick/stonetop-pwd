@@ -1249,13 +1249,14 @@ export function wireRelmapDrag(root, {
 		// THE LABEL UNDER A NAME ("Iron Knight", "Add a label"), pressed and not dragged: its bar goes
 		// up. A press that travels is still the person's drag, as one on the name is, and `swallowClick`
 		// above has already eaten the click that drag would have left behind.
-		const subtitle = ev.target.closest?.("[data-relmap-subtitle]");
+		// THE CHIPS UNDER IT ("Dead") are the same press: they live on the same bar.
+		const subtitle = ev.target.closest?.("[data-relmap-subtitle], [data-relmap-chips]");
 		// ⚠ EXCEPT WITH "DRAW LINES" ARMED, when the label is the person as the face is, and the click is
 		// the tool's (below). Raising the bar instead left the aim live with its band following the
 		// pointer, and Escape in the field then went to the aim and not to the words.
 		if (subtitle && !(linking?.() && canEdit())) {
 			ev.preventDefault();
-			if (canEdit()) onPickPerson?.(subtitle.dataset.relmapSubtitle, subtitle);
+			if (canEdit()) onPickPerson?.(subtitle.dataset.relmapSubtitle ?? subtitle.dataset.relmapChips, subtitle);
 			return;
 		}
 		// ⚠ A SINGLE CLICK ON A FACE OPENS NOTHING ANY MORE (user, 2026-09-10). The board is the
@@ -1274,7 +1275,8 @@ export function wireRelmapDrag(root, {
 		// own). Left to fall through, a click on somebody's name was a click on bare paper: it let go
 		// of every bar, the whole selection and a Draw-lines pick.
 		const face = ev.target.closest?.("[data-relmap-open]") ?? subtitle ?? ev.target.closest?.("[data-relmap-node]");
-		const faceId = face?.dataset.relmapOpen ?? face?.dataset.relmapSubtitle ?? face?.dataset.relmapNode;
+		const faceId = face?.dataset.relmapOpen ?? face?.dataset.relmapSubtitle ?? face?.dataset.relmapChips
+			?? face?.dataset.relmapNode;
 		// WITH "DRAW LINES" ARMED, A CLICK ON A FACE IS THE TOOL'S, from the mouse and the keyboard
 		// alike: the first picks who to draw from, the next on somebody else draws the line, and the
 		// same face again lets the pick go. Enter on a face draws lines instead of opening a sheet

@@ -17,6 +17,7 @@ import { isPrimaryGM } from "../utils/primary-gm.js";
 import { clipText } from "../utils/strings.js";
 import { applyPatch, hasLegacyBoard, listMapPages, listRelationshipMaps, readGraph } from "./relmap-doc.js";
 import { RELMAP_NAME_MAX, nodePatch } from "./relmap-store.js";
+import { changedDeath, deadChipPatch, isDeadActor } from "./relmap-dead.js";
 
 /** Whether an actor update changed what the saved copy holds: the name or the picture. */
 export function changedSavedFace(changed) {
@@ -79,7 +80,7 @@ function freshenNode(patch, id, node, want) {
 async function writeBoard(doc, patch) {
 	try { return await applyPatch(doc, patch); }
 	catch (err) {
-		console.warn(`Stonetop | could not refresh a saved name on the relationship map "${doc?.name}"`, err);
+		console.warn(`Stonetop | could not update the relationship map "${doc?.name}" for an actor change`, err);
 		return false;
 	}
 }
@@ -103,6 +104,24 @@ async function writeBoards(writes) {
  */
 export async function keepSavedFacesCurrent(actor, changed, _options, userId) {
 	if (!changedSavedFace(changed) || !actor?.uuid) return 0;
+	return writeMyBoards(userId, graph => freshFacePatch(graph, actor.uuid, actor));
+}
+
+/**
+ * `updateActor`: somebody died or came back, so the Dead chip goes on (or comes off) everyone standing
+ * for them on every board (relmap-dead.js). The same one-writer rule as the saved faces.
+ */
+export async function keepDeadChipsCurrent(actor, changed, _options, userId) {
+	if (!changedDeath(changed) || !actor?.uuid) return 0;
+	const dead = isDeadActor(actor);
+	return writeMyBoards(userId, graph => deadChipPatch(graph, actor.uuid, dead));
+}
+
+/**
+ * Write `patchFor(graph)` onto the boards THIS client answers for after a change made by `userId`:
+ * every board it may edit if it made the change, else (as the primary GM) the boards the maker may not.
+ */
+async function writeMyBoards(userId, patchFor) {
 	const me = globalThis.game?.user;
 	if (!me) return 0;
 	const mine = userId === me.id;
@@ -115,7 +134,7 @@ export async function keepSavedFacesCurrent(actor, changed, _options, userId) {
 	for (const doc of everyBoard()) {
 		if (mine && !doc.isOwner) continue;
 		if (backstop && maker && doc.testUserPermission?.(maker, "OWNER")) continue;
-		const patch = freshFacePatch(readGraph(doc), actor.uuid, actor);
+		const patch = patchFor(readGraph(doc));
 		if (patch) writes.push([doc, patch]);
 	}
 	return writeBoards(writes);

@@ -3,7 +3,7 @@ import {
 	RELMAP_BOARD_ASPECT, RELMAP_BOARD_MAX, RELMAP_BOARD_WIDTH, RELMAP_CAPTION_PX, RELMAP_HEAD_PX,
 	bandPath, boardMetrics,
 	clampPct, clearanceBow,
-	RELMAP_LABEL_CLEAR_PX,
+	RELMAP_LABEL_CLEAR_PX, RELMAP_SUBTITLE_REACH_PX,
 	edgeArrowheads, edgeBow, edgeCurve, edgeLabelAnchor, fanBow, freeSpot, labelSize,
 	captionRoomPx, captionSize, curvePoints, curveWithGap, nodeRadiusPct, ringsLayout,
 	seatAlong, spreadLabels,
@@ -487,7 +487,7 @@ describe("finding room for one more", () => {
 		});
 
 		it("keeps the newcomer's face off the label when they have one", () => {
-			const spot = freeSpot([{ ...above, labelled: true }], opts);
+			const spot = freeSpot([{ ...above, under: RELMAP_SUBTITLE_REACH_PX }], opts);
 			expect(spot).not.toEqual(first);
 			// Board pixels on the plain sheet: 12 to a percent across, 9.6 down.
 			const cx = above.left * 12;
@@ -502,7 +502,7 @@ describe("finding room for one more", () => {
 
 		it("seats exactly as before when nobody standing has a label", () => {
 			const taken = ringsLayout(7, opts);
-			expect(freeSpot(taken.map(p => ({ ...p, labelled: false })), opts)).toEqual(freeSpot(taken, opts));
+			expect(freeSpot(taken.map(p => ({ ...p, under: 0 })), opts)).toEqual(freeSpot(taken, opts));
 		});
 	});
 });

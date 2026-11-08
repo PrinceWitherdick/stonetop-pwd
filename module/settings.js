@@ -1969,7 +1969,7 @@ export function registerSettings() {
 	// much magnification one pair of eyes needs is not a fact about the map, and storing it on the
 	// board would have one reader rewriting another's window), and NOT nested by world: it holds
 	// three numbers rather than an id, and that need is the same in every world they open. Shape:
-	// { head, line, word }. See relmap/relmap-weights.js.
+	// { head, line, word, name }. See relmap/relmap-weights.js.
 	game.settings.register(SYSTEM_ID, "relmapWeights", {
 		scope: "client",
 		config: false,

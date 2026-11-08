@@ -13838,14 +13838,16 @@ button.stonetop-held-disadvantage:hover { color: var(--st-text-body); }
    as the old symmetric padding did, and gets the old untrimmed nudge back. */
 .stonetop-npc-status-badge-text,
 .stonetop-condemned-tag-text,
-.stonetop-dead-tag-text {
+.stonetop-dead-tag-text,
+.stonetop-relmap-chip-text {
 	text-box: trim-both cap alphabetic;
 	transform: translateY(var(--st-caps-trim-nudge, 0em));
 }
 @supports not (text-box: trim-both cap alphabetic) {
 	.stonetop-npc-status-badge-text,
 	.stonetop-condemned-tag-text,
-	.stonetop-dead-tag-text { transform: translateY(var(--st-caps-nudge, 0.073em)); }
+	.stonetop-dead-tag-text,
+	.stonetop-relmap-chip-text { transform: translateY(var(--st-caps-nudge, 0.073em)); }
 	/* Every other chip: nothing is trimmed, so there is no height to put back, and each keeps the
 	   padding it had before trimming. The count disc goes back to flex centring its line box. */
 	:root { --st-trim-top: 0px; --st-trim-bottom: 0px; }
@@ -49233,6 +49235,18 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	color: var(--st-text-secondary);
 }
 
+/* THE RULE AFTER THE NAMES DIAL, parting the people's own dial from the three that make up a line
+   (user, 2026-11-07). Taller and darker than the dials' own boxes, so it reads as a divider on the
+   line and not as one more box edge. The group's `gap` gives it air on both sides. */
+.stonetop-relmap-heft-split {
+	flex: none;
+	align-self: stretch;
+	width: 1px;
+	min-height: 1.6em;
+	background: currentColor;
+	opacity: 0.45;
+}
+
 /* ONE DIAL: what it resizes, then lighter, the number, heavier.
  *
    ⚠ THE BOX IS WHAT MAKES THIS READ AS THREE CONTROLS AND NOT AS TWELVE (user, 2026-09-09). Laid
@@ -49735,6 +49749,9 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	/* The halo is painted outside the glyphs, and a caption may sit right on the edge of the
 	   board. */
 	overflow: visible;
+	/* ⚠ NO `z-index` HERE: the people paint OVER the captions. A face, its name, its label and its
+	   chips stay readable when a caption runs past them (user, 2026-11-08, undoing 11-07's
+	   captions-over-everything). */
 }
 
 /* ⚠ NO `will-change` HERE, AND THAT IS A FINDING RATHER THAN AN OMISSION. Giving this layer a
@@ -50081,7 +50098,7 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    with); only the name field is its own, because here the name is typed IN the bar. */
 .stonetop-relmap-groupbar-name {
 	width: 11em;
-	height: 26px;
+	height: var(--relmap-bar-control);
 	margin: 0;
 	font-size: var(--relmap-bar-font);
 }
@@ -50091,9 +50108,195 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 /* THE LABEL'S BAR is one field, typed where the label sits. */
 .stonetop-relmap-personbar-field {
 	width: 13em;
-	height: 26px;
+	height: var(--relmap-bar-control);
 	margin: 0;
-	font-size: 13px;
+	font-size: var(--relmap-bar-font);
+}
+
+/* THE PERSON'S BAR STACKS: the label, the chips they wear with Add chip, then the chip form. The
+   element in the selector so it outranks the three bars' shared shell, which comes later.
+
+   ⚠ THE NAMES DIAL STOPS AT THE BAR. The window writes `--relmap-name-scale` on its root, so the
+   chips drawn in the bar (the worn row, the form's preview) grew with the board's names until they
+   dwarfed Add chip beside them. The bar is chrome, not the drawing: its pills keep their base size. */
+div.stonetop-relmap-personbar {
+	--relmap-name-scale: 1;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 6px;
+}
+
+.stonetop-relmap-personbar-chips {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+	max-width: 19em;
+}
+
+/* A row-laid list: spaced with `gap`, and core's list margins taken off its entries. */
+.stonetop-relmap-personbar-worn {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.stonetop-relmap-personbar-worn[hidden] { display: none; }
+
+.stonetop-relmap-personbar-worn-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 1px;
+	margin: 0;
+	padding: 0;
+}
+
+/* Each worn pill is a button: it opens that chip's form. */
+button.stonetop-relmap-chip { cursor: pointer; }
+button.stonetop-relmap-chip:hover {
+	background: color-mix(in srgb, var(--relmap-ink, var(--st-relmap-ink-slate)) 28%, var(--st-page));
+	border-color: var(--relmap-ink, var(--st-relmap-ink-slate));
+	color: var(--st-text-body);
+}
+button.stonetop-relmap-chip:focus-visible,
+.stonetop-relmap-personbar-chipoff:focus-visible,
+.stonetop-relmap-personbar-add:focus-visible,
+.stonetop-relmap-chipform-btn:focus-visible {
+	outline: 2px solid var(--st-accent-fill);
+	outline-offset: 1px;
+}
+
+/* Its x: no box of its own, the body ink at half strength until it is pointed at. */
+.stonetop-relmap-personbar-chipoff {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 20px;
+	height: 20px;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	box-shadow: none;
+	background: none;
+	color: var(--st-text-body);
+	font-size: 14px;
+	line-height: 1;
+	opacity: 0.55;
+	cursor: pointer;
+}
+.stonetop-relmap-personbar-chipoff > i { margin: 0; }
+.stonetop-relmap-personbar-chipoff:is(:hover, :focus-visible) {
+	opacity: 1;
+	background: var(--st-slate-hover-bg);
+}
+
+/* ADD CHIP: the reminder row's dashed "+" chip (.stonetop-add-chip carries the shared reset), with
+   words, and a caret for the menu it drops. */
+.stonetop-relmap-personbar-add {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+	height: 24px;
+	padding: 0 9px;
+	border-width: 1px;
+	border-color: var(--st-card-rule);
+	background: none;
+	color: var(--st-text-body);
+	font-size: var(--relmap-bar-font);
+	line-height: 1;
+}
+.stonetop-relmap-personbar-add > i {
+	margin: 0;
+	font-size: 1em;
+	font-size: round(1em, 1px);
+}
+.stonetop-relmap-personbar-add > i.fa-caret-down { opacity: 0.7; }
+.stonetop-relmap-personbar-add:hover,
+.stonetop-relmap-personbar-add[aria-expanded="true"] {
+	border-color: var(--st-slate-hover-border);
+	background: var(--st-slate-hover-bg);
+}
+
+/* THE CHIP FORM: a name with Save and Cancel, the colours, the icons, and the chip as it will look. */
+.stonetop-relmap-chipform {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding-top: 6px;
+	border-top: 1px solid var(--st-card-rule);
+}
+.stonetop-relmap-chipform[hidden] { display: none; }
+
+.stonetop-relmap-chipform-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.stonetop-relmap-chipform-name {
+	flex: 1 1 auto;
+	min-width: 8em;
+	height: var(--relmap-bar-control);
+	margin: 0;
+	font-size: var(--relmap-bar-font);
+}
+
+.stonetop-relmap-chipform-btn {
+	flex: none;
+	width: auto;
+	margin: 0;
+	padding: 0 10px;
+	border: 1px solid var(--st-card-rule);
+	border-radius: var(--st-radius);
+	box-shadow: none;
+	background: var(--st-page);
+	color: var(--st-text-body);
+	font-size: var(--relmap-bar-font);
+	cursor: pointer;
+}
+.stonetop-relmap-chipform-btn:hover {
+	border-color: var(--st-slate-hover-border);
+	background: var(--st-slate-hover-bg);
+}
+.stonetop-relmap-chipform-btn.is-primary {
+	border-color: var(--st-btn-primary-border);
+	background: var(--st-btn-primary-bg);
+	color: var(--st-btn-primary-text);
+}
+.stonetop-relmap-chipform-btn.is-primary:hover {
+	border-color: var(--st-btn-primary-border-hover, var(--st-btn-primary-border));
+	background: var(--st-btn-primary-bg-hover);
+	color: var(--st-btn-primary-text);
+}
+
+.stonetop-relmap-chipform-inks {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+/* NINE TO A ROW, which the bar's Up and Down arrows step by (CHIP_ICON_COLUMNS). */
+.stonetop-relmap-chipform-icons {
+	display: grid;
+	grid-template-columns: repeat(9, 26px);
+	gap: 2px;
+}
+
+.stonetop-relmap-chipform-foot {
+	justify-content: space-between;
+	min-height: 26px;
+}
+
+.stonetop-relmap-chipform-preview {
+	display: flex;
+	align-items: center;
+	min-width: 0;
 }
 
 /* THE "DRAW LINES" TOOL IS ARMED: every face draws a line rather than moving, so it stops looking
@@ -50159,7 +50362,8 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 .stonetop-relmap-handle,
 .stonetop-relmap-bin,
 .stonetop-relmap-name,
-.stonetop-relmap-subtitle { pointer-events: auto; }
+.stonetop-relmap-subtitle,
+.stonetop-relmap-chips { pointer-events: auto; }
 
 /* ⚠ THE RIM IS A LITERAL AND NOT `--st-card-rule`, WHICH EVERY OTHER LINE IN THIS WINDOW READS.
    That token is a HAIRLINE between surfaces, tuned to be barely there at 1px; this is a 3px rim
@@ -50263,7 +50467,12 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    lines and the captions together and keeps the diagram a diagram. That is a real difference from
    the rest of the system and worth knowing about: raising the font setting grows this window's bar,
    tabs and dialogs and leaves the board alone until it is zoomed. Matched by
-   `.stonetop-relmap-label-text`, which is the same decision for the captions on the lines. */
+   `.stonetop-relmap-label-text`, which is the same decision for the captions on the lines.
+
+   AND THE FOOTER'S "NAMES" DIAL, which moves this and the label under it together without the
+   rest of the board (module/relmap/relmap-weights.js `name`). It is a multiplier on these same
+   board pixels, and the geometry measures the same multiplier (`personReach` in
+   utils/relmap-geometry.js), so a group outline still goes round a name of any size. */
 .stonetop-relmap-name {
 	/* HUNG UNDER THE FACE, OUT OF THE FLOW, for the reason `.stonetop-relmap-node` above gives at
 	   length: a caption in the flow makes the node taller than the circle, and the circle then
@@ -50279,13 +50488,19 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	/* Sized to the name and then capped, because an absolute box has no column to take its width
 	   from any more. The transform centres whatever that comes out as under the face. */
 	width: max-content;
-	max-width: 108px;
+	max-width: calc(126px * var(--relmap-name-scale, 1));
 	transform: translateX(-50%);
 	border-radius: var(--st-radius-sm);
 	background: var(--st-page);
 	color: var(--st-text-body);
-	font-size: 12px;
+	font-size: calc(14px * var(--relmap-name-scale, 1));
+	/* ⚠ A WHOLE NUMBER OF PIXELS, at every setting of the names dial. A line box of 31.5px (the dial
+	   at 150%) has its half-leading rounded by the browser, and the name came out a pixel high in its
+	   chip at every setting that left a fraction. Rounded, it sits mid-chip at all of them. The
+	   geometry rounds the same way (`personReach`); `1.5` is the same height for a browser without
+	   `round()`. */
 	line-height: 1.5;
+	line-height: round(21px * var(--relmap-name-scale, 1), 1px);
 	text-align: center;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -50301,10 +50516,11 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    TWO LINES AT MOST, then an ellipsis, with the whole of it in the tooltip: "Acolyte of the
    Celebrated Seer" fits whole, and a paragraph does not cover the faces below.
 
-   ⚠ THE NUMBERS ARE THE GEOMETRY'S. `top` (the face's 72px, then 2 + 18 + 1), `max-width` and the
-   two 15px lines are `RELMAP_SUBTITLE_TOP_PX`, `RELMAP_SUBTITLE_MAX_W` and `RELMAP_SUBTITLE_REACH_PX`
+   ⚠ THE NUMBERS ARE THE GEOMETRY'S. `top` (the face's 72px, then 2 + 21 + 1), `max-width` and the
+   two 18px lines are `RELMAP_SUBTITLE_TOP_PX`, `RELMAP_SUBTITLE_MAX_W` and `RELMAP_SUBTITLE_REACH_PX`
    in utils/relmap-geometry.js, which a group's outline and the board's framing are measured with.
-   Move them together.
+   Move them together. The name chip's 21px, the width and the type all grow with the reader's
+   names dial (`--relmap-name-scale`); the face and the two small gaps do not (`personReach`).
 
    For somebody who may edit it is a BUTTON, so core's button dressing comes off it: no border, no
    fill but the paper, no fixed height, and a plain block rather than core's flex box.
@@ -50313,15 +50529,29 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
    box of its own kind whatever `display` asks for (it computes as `flow-root`), so a line clamp
    set here does nothing and a long label runs on down over whoever stands below. Measured in
    Chromium: on the span the Acolyte's label stops at two lines; on the button it did not. */
-.stonetop-relmap-subtitle {
+/* THE COLUMN UNDER THE NAME: the label, then the chips (`.stonetop-relmap-chips`). It carries the
+   label's old place, so a chip sits right under a one-line label, and right under the name when there
+   is no label. ⚠ `top` is the geometry's (see the label's note below). No width cap of its own: the
+   label keeps its 156px, and a row of chips may run to its 200 (`RELMAP_CHIP_ROW_W`). */
+.stonetop-relmap-under {
 	position: absolute;
-	top: calc(100% + 21px);
+	top: calc(100% + 3px + 21px * var(--relmap-name-scale, 1));
+	top: calc(100% + 3px + round(21px * var(--relmap-name-scale, 1), 1px));
 	left: 50%;
 	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	width: max-content;
+}
+
+.stonetop-relmap-subtitle {
+	position: relative;
+	flex: none;
 	box-sizing: border-box;
 	display: block;
 	width: max-content;
-	max-width: 132px;
+	max-width: calc(156px * var(--relmap-name-scale, 1));
 	height: auto;
 	min-height: 0;
 	margin: 0;
@@ -50332,10 +50562,12 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	background: var(--st-page);
 	color: var(--st-text-body);
 	font-family: inherit;
-	font-size: 11px;
+	font-size: calc(13px * var(--relmap-name-scale, 1));
 	font-style: italic;
 	font-weight: 400;
-	line-height: 15px;
+	/* Whole pixels, for the name's reason above. */
+	line-height: calc(18px * var(--relmap-name-scale, 1));
+	line-height: round(18px * var(--relmap-name-scale, 1), 1px);
 	text-align: center;
 	white-space: normal;
 	overflow-wrap: anywhere;
@@ -50382,6 +50614,89 @@ button.stonetop-relmap-subtitle:focus-visible {
 
 .stonetop-relmap-node:hover .stonetop-relmap-subtitle.is-empty,
 .stonetop-relmap-subtitle.is-empty:focus-visible { opacity: 1; pointer-events: auto; }
+
+/* Out of sight, it still stands in the column; after the chips, so it leaves no gap above them. */
+.stonetop-relmap-subtitle.is-empty { order: 1; }
+
+/* TAG CHIPS UNDER THE LABEL ("Dead", "Noble"): the character sheet's Dead pill, in this board's
+   pixels and its eight inks. Body ink on a tint of the chip's ink, with an ink rim and an ink icon:
+   the colour is never the only thing saying which chip it is, and the words are never coloured.
+
+   ⚠ THE ROWS ARE THE WINDOW'S, NOT THE STYLESHEET'S. `chipLayout` (utils/relmap-geometry.js) decides
+   which pills share a row, and this draws each row as given and never wraps, so the height a group
+   outline reaches round (`chipReach`) is the height drawn: the 3px above the first row and between
+   rows is `RELMAP_CHIP_GAP_PX`, and the pill's 20px is `RELMAP_CHIP_H_PX`. The widths, paddings and
+   type grow with the names dial with the pill, which is what keeps the packing the same at every
+   setting of it. */
+.stonetop-relmap-chips {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 3px;
+	margin: 3px 0 0;
+}
+
+.stonetop-relmap-chip-row {
+	display: flex;
+	justify-content: center;
+	gap: calc(3px * var(--relmap-name-scale, 1));
+	max-width: calc(200px * var(--relmap-name-scale, 1));
+}
+
+.stonetop-relmap-chip {
+	box-sizing: border-box;
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: calc(4px * var(--relmap-name-scale, 1));
+	width: auto;
+	min-width: 0;
+	max-width: calc(200px * var(--relmap-name-scale, 1));
+	height: calc(20px * var(--relmap-name-scale, 1));
+	height: round(20px * var(--relmap-name-scale, 1), 1px);
+	min-height: 0;
+	margin: 0;
+	padding: 0 calc(7px * var(--relmap-name-scale, 1));
+	border: 1px solid var(--relmap-ink, var(--st-relmap-ink-slate));
+	border-radius: 999px;
+	box-shadow: none;
+	background: color-mix(in srgb, var(--relmap-ink, var(--st-relmap-ink-slate)) 14%, var(--st-page));
+	color: var(--st-text-body);
+	font-family: var(--font-stonetop);
+	font-size: calc(13px * var(--relmap-name-scale, 1));
+	font-style: normal;
+	font-weight: 600;
+	/* 1, so an untrimmed label (a browser without text-box) is a 1em box the pinned height centres. */
+	line-height: 1;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.stonetop-relmap-chip > i {
+	flex: none;
+	margin: 0;
+	color: var(--relmap-ink, var(--st-relmap-ink-slate));
+	font-size: 1em;
+	font-size: round(1em, 1px);
+}
+
+/* Cut with an ellipsis rather than spilling past its row; the tooltip has the whole name. The padding
+   and the margin that takes it back keep the clip off the capitals the trim (below) sits on. */
+.stonetop-relmap-chip-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	padding: 2px 0;
+	margin: -2px 0;
+}
+
+/* "+2": the pills that did not fit two rows, named in its tooltip. Quieter than a chip. */
+.stonetop-relmap-chip--more {
+	border-style: dashed;
+	border-color: var(--st-card-rule);
+	background: var(--st-page);
+}
 
 /* 30px AND NOT THE 22 IT WAS (user, 2026-10-07: "The little chain circle is kind of small and hard to
    click"), with a pad of invisible reach round it below, so the press that counts is about 40px
@@ -50787,7 +51102,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 	gap: 0.3em;
 	flex: none;
 	width: auto;
-	height: 26px;
+	height: var(--relmap-bar-control);
 	min-width: 0;
 	margin: 0;
 	padding: 0 0.35em;
@@ -51031,7 +51346,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 	gap: 0.35em;
 	flex: none;
 	width: auto;
-	height: 26px;
+	height: var(--relmap-bar-control);
 	min-width: 0;
 	margin: 0;
 	padding: 0 0.5em;
@@ -51067,7 +51382,7 @@ button.stonetop-relmap-subtitle:focus-visible {
    in pixels rather than inheriting it. */
 .stonetop-relmap-tiebar-hex input[type="text"] {
 	width: 6.2em;
-	height: 26px;
+	height: var(--relmap-bar-control);
 	min-width: 0;
 	margin: 0;
 	padding: 0 0.25em;
@@ -51177,7 +51492,7 @@ button.stonetop-relmap-subtitle:focus-visible {
 	align-items: center;
 	gap: 0.5em;
 	width: 100%;
-	height: 26px;
+	height: var(--relmap-bar-control);
 	min-width: 0;
 	margin: 0;
 	padding: 0 0.4em;

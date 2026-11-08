@@ -5,7 +5,7 @@ import { openTimelineWindow } from "../dialogs/TimelineWindow.js";
 import { canCreateRelationshipMap, ensureRelationshipMapFolder, listRelationshipMaps } from "../relmap/relmap-doc.js";
 import { promptForNewRelationshipMap } from "../relmap/relmap-make.js";
 import { defaultBoard } from "../relmap/relmap-last.js";
-import { keepSavedFacesCurrent, sweepStaleFaces } from "../relmap/relmap-faces.js";
+import { keepDeadChipsCurrent, keepSavedFacesCurrent, sweepStaleFaces } from "../relmap/relmap-faces.js";
 import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
@@ -85,6 +85,7 @@ import { grandfatherRetiredMoves } from "../migration/retired-move-grandfather.j
 import { grandfatherWouldBeHeroes } from "../migration/would-be-hero-grandfather.js";
 import { grandfatherCreationFinished, CREATION_FINISHED_SWEEP } from "../migration/creation-finished-grandfather.js";
 import { grandfatherUnstoppableFighting, UNSTOPPABLE_FIGHTING_SWEEP } from "../migration/unstoppable-fighting-grandfather.js";
+import { settleConsequenceBoonHp, CONSEQUENCE_BOON_HP_SWEEP } from "../migration/consequence-boon-hp.js";
 import { repairAllPossessionGrants } from "../migration/possession-grant-repair.js";
 import { repairMasteredArcanumCircles } from "../migration/mastered-arcanum-circles.js";
 import { adoptAllPrayerBeadPips } from "../migration/prayer-bead-preparation.js";
@@ -346,6 +347,10 @@ export async function onReady() {
 		// for the same reason.
 		try { await oncePerVersion(UNSTOPPABLE_FIGHTING_SWEEP, grandfatherUnstoppableFighting); }
 		catch (err) { console.error("Stonetop | Unstoppable fighting-on grandfathering failed", err); }
+		// Take a marked arcana Consequence's max HP and armor back out of a hand-set one typed as exactly it, now that
+		// the sheet counts it (migration/consequence-boon-hp.js). Once per WORLD, for the same reason.
+		try { await oncePerVersion(CONSEQUENCE_BOON_HP_SWEEP, settleConsequenceBoonHp); }
+		catch (err) { console.error("Stonetop | Consequence max HP settling failed", err); }
 		// Bring special-possession gear made before its grant was corrected up to the grant (the
 		// Tannery cuirass made as a stacking modifier; see migration/possession-grant-repair.js).
 		// Per VERSION, because a grant only changes with a release: each new version is one more
@@ -699,6 +704,12 @@ export async function onReady() {
 			.catch(err => console.warn("Stonetop | refreshing saved names on the relationship map failed", err));
 	});
 	sweepStaleFaces().catch(err => console.warn("Stonetop | refreshing saved names on the relationship map failed", err));
+	// Somebody who dies, or comes back, puts the Dead chip on (or takes it off) everyone standing for
+	// them on every board (relmap/relmap-dead.js); the same one-writer rule as the saved faces.
+	Hooks.on("updateActor", (actor, changed, options, userId) => {
+		keepDeadChipsCurrent(actor, changed, options, userId)
+			.catch(err => console.warn("Stonetop | updating the Dead chip on the relationship map failed", err));
+	});
 	// Stonetop's Other Settlements table (and another settlement's trade links) draw from settlement
 	// sheets, and core redraws a sheet only for its own document (settlement-actor.js).
 	Hooks.on("createActor", actor => redrawForSettlement(actor));

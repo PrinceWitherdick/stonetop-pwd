@@ -30,18 +30,19 @@ import { ZoomPanSurface } from "../utils/zoom-pan-surface.js";
 import { groupPressed, pressStartsBox, pressStartsDraw, wireRelmapDrag } from "../utils/relmap-drag.js";
 import {
 	RELMAP_BOARD_ASPECT, RELMAP_BOARD_WIDTH, RELMAP_CAPTION_FLOOR_PX, RELMAP_CAPTION_PX,
-	RELMAP_GROUP_CORNERS, RELMAP_HEAD_PX, RELMAP_NODE_PX, RELMAP_SUBTITLE_TOP_PX,
+	RELMAP_GROUP_CORNERS, RELMAP_HEAD_PX, RELMAP_NODE_PX,
 	ROUTE_HEAD_PATH, ROUTE_HEAD_VIEWBOX,
 	bandPath, boardBounds, boardMetrics,
 	captionRoomPx, captionSize, clampReach, clearanceBow, curveWithGap, edgeArrowheads, edgeBow,
 	edgeCurve, edgeLabelAnchor, freeSpot, groupShapes, groupsInside, growFor, insideGroupShape, nodeRadiusPct,
-	groupFloor, grownRect, resizeRect, seatAlong, spreadLabels,
+	groupFloor, grownRect, personReach, resizeRect, seatAlong, spreadLabels,
 } from "../utils/relmap-geometry.js";
 import {
+	RELMAP_CHIP_ICONS, RELMAP_CHIP_NAME_MAX,
 	RELMAP_DASHES, RELMAP_DASH_DEFAULT, RELMAP_DIRS, RELMAP_FLAG, RELMAP_GROUP_DASHES, RELMAP_GROUP_SHAPES, RELMAP_INKS,
 	RELMAP_LABEL_MAX, RELMAP_SUBTITLE_MAX, RELMAP_SEAT_MIN, RELMAP_SIZES, RELMAP_SIZE_MAX, RELMAP_SIZE_MIN,
-	addEdgePatch, addGroupPatch,
-	addNodePatch, addNodesPatch, dropEdgePatch, dropGroupPatch, dropNodePatch, edgePatch, fanIndexes,
+	addEdgePatch, addGroupPatch, chipPatch, chipsWorn, dropChipPatch, nodeChipsPatch,
+	dropEdgePatch, dropGroupPatch, dropNodePatch, edgePatch, fanIndexes,
 	groupMembersPatch, groupPatch, nodePatch, pruneDeadPatch, readSeat, seatArrivals, takenSpots,
 } from "../relmap/relmap-store.js";
 import { RELMAP_INK_ACROSS, RELMAP_INK_PRESETS, inkPaint, normalizeHex }
@@ -50,7 +51,7 @@ import { rememberBoard } from "../relmap/relmap-last.js";
 import { penFor, rememberPen } from "../relmap/relmap-pen.js";
 import { getLastSize, rememberSize } from "../relmap/relmap-size.js";
 import {
-	RELMAP_WEIGHTS, RELMAP_WEIGHT_BASE, RELMAP_WEIGHT_MAX, RELMAP_WEIGHT_MIN, RELMAP_WEIGHT_STEP,
+	RELMAP_WEIGHTS, RELMAP_WEIGHT_BASE, RELMAP_WEIGHT_MAX, RELMAP_WEIGHT_MIN, RELMAP_WEIGHT_SPLIT, RELMAP_WEIGHT_STEP,
 	getWeights, setWeights, weightScales,
 } from "../relmap/relmap-weights.js";
 import {
@@ -59,6 +60,9 @@ import {
 import { RelmapTieBar, TIE_DIR_ICONS } from "../utils/relmap-tie-bar.js";
 import { RelmapGroupBar } from "../utils/relmap-group-bar.js";
 import { RelmapPersonBar } from "../utils/relmap-person-bar.js";
+import { chipPaint } from "../utils/relmap-chip-pill.js";
+import { chipElsewhere, chipLibrary, chipWearPatch, spreadChip } from "../relmap/relmap-chips.js";
+import { seatPatch } from "../relmap/relmap-dead.js";
 import { hasOwnRingArt, partyCharacters } from "../utils/playbook-actors.js";
 import {
 	applyPatch, canEditRelationshipMap, canHideMapPages, createMapPage, deleteMapPage,
@@ -145,6 +149,9 @@ const CAPTION_READ_PX = 13;
 /** How wide a held group's resize corners are ON SCREEN, at any zoom. See `_paintGrips`. */
 const GROUP_GRIP_PX = 16;
 
+/** The chip layout of somebody wearing none (`normalizeGraph` sets `chipLaid` only on a wearer). */
+const NO_CHIPS = Object.freeze({ rows: [], hidden: [] });
+
 /**
  * How long after the last arrow key a nudge is written.
  *
@@ -229,6 +236,9 @@ const WEIGHT_ICONS = Object.freeze({
 	// looks like -- the strokes run corner to corner between faces, never flat.
 	line: "fas fa-slash",
 	word: "fas fa-font",
+	// A PERSON AND A TAG, because what this dial moves is the writing under a face -- the name and
+	// the label under it -- and not the writing along a line, which the `fa-font` beside it has.
+	name: "fas fa-user-tag",
 });
 
 /**
@@ -806,6 +816,30 @@ export class RelationshipMapWindow extends StonetopDialog {
 				label: localize("stonetop.relmap.subtitle.field"),
 				placeholder: localize("stonetop.relmap.subtitle.placeholder"),
 				maxLength: RELMAP_SUBTITLE_MAX,
+				// THE CHIPS' WORDS. `edit` and `off` are PATTERNS with `{chip}` left in: the bar fills in
+				// which chip, and carries no i18n of its own.
+				chips: {
+					add: localize("stonetop.relmap.chips.add"),
+					newChip: localize("stonetop.relmap.chips.newChip"),
+					menuHeading: localize("stonetop.relmap.chips.menuHeading"),
+					edit: localize("stonetop.relmap.chips.edit"),
+					off: localize("stonetop.relmap.chips.off"),
+					name: localize("stonetop.relmap.chips.name"),
+					namePlaceholder: localize("stonetop.relmap.chips.namePlaceholder"),
+					nameMax: RELMAP_CHIP_NAME_MAX,
+					colour: localize("stonetop.relmap.chips.colour"),
+					colourOwn: localize("stonetop.relmap.chips.colourOwn"),
+					icon: localize("stonetop.relmap.chips.icon"),
+					preview: localize("stonetop.relmap.chips.preview"),
+					save: localize("stonetop.relmap.chips.save"),
+					cancel: localize("stonetop.relmap.chips.cancel"),
+					delete: localize("stonetop.relmap.chips.delete"),
+					// "No icon" leads the grid; its key is the empty icon a chip stores.
+					icons: [
+						{ key: "", glyph: "fa-ban", name: localize("stonetop.relmap.chips.noIcon") },
+						...RELMAP_CHIP_ICONS.map(key => ({ key, glyph: key, name: localize(`stonetop.relmap.chips.icons.${key}`) })),
+					],
+				},
 			},
 			// ⚠ THE VISIBLE NAMES ONLY. What each of these two can actually do, and what it would
 			// take back, is written onto the elements by `_paintHistory` — the history is this
@@ -912,7 +946,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// HOW HEAVILY THIS READER WANTS IT DRAWN, in three dials. See `_weightDials`, and
 			// relmap/relmap-weights.js for why this is the reader's own and not the map's.
 			weightGroup: localize("stonetop.relmap.weightGroup"),
-			weights: this._weightDials(),
+			// IN TWO RUNS, the names dial and then the line's three, with the rule and the captions
+			// box between them in the template. See `RELMAP_WEIGHT_SPLIT`.
+			...this._weightRuns(),
 			// ⚠ AND THE SAME THREE NUMBERS AS PROPERTIES ON THE ROOT, printed by the template
 			// rather than written by `_paintWeights` after the fact. `activateListeners` measures
 			// the captions the moment this markup lands (`_fitGapsToPaint` reads a real caption's
@@ -961,6 +997,16 @@ export class RelationshipMapWindow extends StonetopDialog {
 				atMin: pct === RELMAP_WEIGHT_MIN,
 			};
 		});
+	}
+
+	/**
+	 * The dials split where the footer draws its rule: up to and including `RELMAP_WEIGHT_SPLIT`, then
+	 * the rest. The template puts the rule and the captions box between the two.
+	 */
+	_weightRuns(weights = getWeights()) {
+		const dials = this._weightDials(weights);
+		const cut = dials.findIndex(dial => dial.key === RELMAP_WEIGHT_SPLIT) + 1;
+		return { weightsBefore: dials.slice(0, cut), weightsAfter: dials.slice(cut) };
 	}
 
 	/**
@@ -1166,11 +1212,24 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// actor's: it is what the person is on this board. Folded into the face's sentence too, so a
 			// reader who cannot see the chip under it still hears it.
 			const subtitle = node.subtitle ?? "";
-			const called = subtitle ? `${name}, ${subtitle}` : name;
+			// AND THE CHIPS ("Dead"), in the rows they are drawn in, which are the rows every outline
+			// reaches round: laid out once by the read (relmap-store.js `normalizeGraph`, `chipLaid`).
+			// Spoken with the name too: "Simon, Deceased, Dead". The rows and then the hidden ones are
+			// the worn order.
+			const laid = node.chipLaid ?? NO_CHIPS;
+			const worn = [...laid.rows.flat(), ...laid.hidden];
+			const called = [name, subtitle, ...worn.map(chip => chip.name)].filter(Boolean).join(", ");
 			return {
 				id,
 				name,
 				subtitle,
+				chipRows: laid.rows.map(row => row.map(chipPaint)),
+				chipMore: laid.hidden.length
+					? {
+						label: format("stonetop.relmap.chips.more", { count: laid.hidden.length }),
+						tooltip: laid.hidden.map(chip => chip.name).join(", "),
+					}
+					: null,
 				// The button's spoken name REPLACES its visible words, so it says them too, ahead of what
 				// a press does: "Iron Knight. Change the label under Lord Elroy".
 				subtitleLabel: subtitle
@@ -1531,6 +1590,16 @@ export class RelationshipMapWindow extends StonetopDialog {
 			personAt: id => this._personAt(id),
 			onField: (id, fields) => this._writeSubtitle(id, fields),
 			canEdit: () => this.canEdit,
+			// AND THEIR CHIPS: the menu's list, and the four writes the bar asks for.
+			library: () => chipLibrary(readGraph(this.boardDoc), { doc: this.boardDoc }),
+			onWear: (id, chip) => this._wearChip(id, chip),
+			onTakeOff: (id, chipId) => this._takeOffChip(id, chipId),
+			onSaveChip: (id, chipId, def) => this._saveChip(id, chipId, def),
+			onDropChip: chipId => this._dropChip(chipId),
+			onNudged: (chose, used) => ui.notifications?.info?.(
+				format("stonetop.relmap.chips.inkDeepened", { chose, used }),
+			),
+			onNeedName: () => ui.notifications?.warn?.(localize("stonetop.relmap.chips.needName")),
 		});
 
 		this._teardownDrag = wireRelmapDrag(root, {
@@ -4453,12 +4522,86 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const spot = this._nodeAt(id, graph) ?? node;
 		return {
 			node,
-			at: { left: spot.x, top: spot.y + (RELMAP_SUBTITLE_TOP_PX / board.height) * 100 },
+			// Under the name as the reader has it sized (`personReach`), which is where the label is drawn.
+			at: { left: spot.x, top: spot.y + (personReach(this._drawn?.scales?.name).subTop / board.height) * 100 },
 			// The top of the face, for a bar with no room below it to sit above the person instead.
 			lift: { left: spot.x, top: spot.y - (RELMAP_NODE_PX / 2 / board.height) * 100 },
 			// What a screen reader hears the bar called: WHOSE label it is, by the name as painted.
 			label: format("stonetop.relmap.subtitle.bar", { name: this._nameOf(graph, id) }),
+			// The chips they wear, in the order the board draws them.
+			chips: chipsWorn(node, graph),
 		};
+	}
+
+	// ── Chips ("Dead", "Noble") ─────────────────────────────────────
+	//
+	// Kept per board and shared between boards by id: see relmap/relmap-chips.js. Each press is its own
+	// step of the undo, never folded: putting a chip on and taking it straight off again are two changes.
+
+	/** Put a chip on somebody, copying its definition onto this board first if it has never had it. */
+	_wearChip(id, chip) {
+		const graph = readGraph(this.boardDoc);
+		return this._write(chipWearPatch(graph, id, chip), {
+			label: localize("stonetop.relmap.history.editedChips"),
+			onto: { kind: "nodes", id }, graph,
+		});
+	}
+
+	/** Take one chip off somebody. The chip stays on the board for the next person. */
+	_takeOffChip(id, chipId) {
+		return this._write(nodeChipsPatch(id, [], [chipId]), {
+			label: localize("stonetop.relmap.history.editedChips"),
+			onto: { kind: "nodes", id },
+		});
+	}
+
+	/**
+	 * The chip form's Save. A chip already here (`chipId`) is changed on this board, then on every
+	 * other board that has it. A new one is put on this person, unless a chip of that name already
+	 * exists anywhere, which is put on them instead: two "Noble"s would be one chip twice in the menu.
+	 */
+	async _saveChip(id, chipId, def) {
+		if (chipId) {
+			const written = await this._write(chipPatch(chipId, def), {
+				label: localize("stonetop.relmap.history.editedChip"),
+			});
+			if (written) await spreadChip(chipId, def, { doc: this.boardDoc });
+			return written;
+		}
+		const graph = readGraph(this.boardDoc);
+		const named = def.name.toLocaleLowerCase();
+		const twin = chipLibrary(graph, { doc: this.boardDoc }).find(chip => chip.name.toLocaleLowerCase() === named);
+		const chip = twin ?? { id: foundry.utils.randomID(), ...def };
+		return this._write(chipWearPatch(graph, id, chip), {
+			label: localize("stonetop.relmap.history.editedChips"),
+			onto: { kind: "nodes", id }, graph,
+		});
+	}
+
+	/**
+	 * Delete a chip: off everybody on this board (undoable) and off every other board that has it
+	 * (not). Asked first, saying how far it reaches. False when the reader thought better of it.
+	 */
+	async _dropChip(chipId) {
+		const graph = readGraph(this.boardDoc);
+		const chip = graph.chips[chipId];
+		if (!chip) return false;
+		const elsewhere = chipElsewhere(chipId, { doc: this.boardDoc });
+		const body = [format("stonetop.relmap.chips.deleteBody", { chip: chip.name })];
+		if (elsewhere) body.push(format("stonetop.relmap.chips.deleteElsewhere", { count: elsewhere }));
+		const go = await this._confirm({
+			title: format("stonetop.relmap.chips.deleteTitle", { chip: chip.name }),
+			body: body.join(" "),
+			confirm: localize("stonetop.relmap.chips.deleteYes"),
+			cancel: localize("stonetop.relmap.chips.cancel"),
+			danger: elsewhere > 0,
+		});
+		if (!go) return false;
+		const written = await this._write(dropChipPatch(graph, chipId), {
+			label: localize("stonetop.relmap.history.droppedChip"), graph,
+		});
+		if (written) await spreadChip(chipId, null, { doc: this.boardDoc });
+		return written;
 	}
 
 	/**
@@ -4991,7 +5134,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 		const seating = seatArrivals(graph, actors.map(actor => ({
 			uuid: actor.uuid, name: actor.name, img: actor.img ?? "",
 		})));
-		const patch = addNodesPatch(seating.nodes);
+		// A dead actor arrives wearing the Dead chip, in the same write (relmap/relmap-dead.js).
+		const patch = seatPatch(graph, seating.nodes);
 		if (!Object.keys(patch).length) return;
 		const count = Object.keys(seating.nodes).length;
 		return this._write(patch, {
@@ -5002,10 +5146,12 @@ export class RelationshipMapWindow extends StonetopDialog {
 
 	async _addNodeFor(actor, spot) {
 		const id = foundry.utils.randomID();
-		return this._write(addNodePatch(id, {
-			uuid: actor.uuid, name: actor.name, img: actor.img ?? "",
-			x: spot.left, y: spot.top,
-		}), {
+		const graph = readGraph(this.boardDoc);
+		// A dead actor arrives wearing the Dead chip, in the same write (relmap/relmap-dead.js).
+		const patch = seatPatch(graph, {
+			[id]: { uuid: actor.uuid, name: actor.name, img: actor.img ?? "", x: spot.left, y: spot.top },
+		}, { resolve: () => actor });
+		return this._write(Object.keys(patch).length ? patch : null, {
 			announce: format("stonetop.relmap.added", { name: actor.name }),
 			label: format("stonetop.relmap.history.added", { name: actor.name }),
 		});
@@ -5333,16 +5479,17 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// group at the edge of what the reader can pan to would otherwise be cut off at its rim.
 		// Off the paint when it was drawn from this very plan, which is every caller but the tests.
 		const drawn = this._drawn?.graph === plan?.graph ? this._drawn?.groups : null;
+		const scales = weightScales();
 		const shapes = drawn
 			? [...drawn.values()]
 			: plan?.graph?.groups && plan?.board
-				? groupShapes(plan.graph, plan.board, { wordScale: weightScales().word })
+				? groupShapes(plan.graph, plan.board, { wordScale: scales.word })
 				: [];
 		const outlines = shapes.map(({ outline }) => outline);
 		// AND EVERY LINE AND CAPTION, which a wide fan between two people bows well past both of them.
 		// Off the paint for the reason the outlines are; the tests' plans have none.
 		const lines = this._drawn?.graph === plan?.graph ? [...(this._drawn?.shapes?.values() ?? [])] : [];
-		return boardBounds(Object.values(plan?.graph?.nodes ?? {}), plan?.board, outlines, lines);
+		return boardBounds(Object.values(plan?.graph?.nodes ?? {}), plan?.board, outlines, lines, scales.name);
 	}
 
 	/**
