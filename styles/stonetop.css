@@ -37766,6 +37766,21 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius);
 	background: var(--st-card-fill);
 }
+/* A card's title and the line under it read as one entry, not two spaced-out fields (user
+   2026-11-08). Core pins every input at --input-height, which left a field's worth of padding
+   above and below each line of words; here a one-line field is as tall as its words plus a hair,
+   and the fields sit 2px apart (not 0, so two empty wells don't merge into one box). Symmetric
+   padding keeps the words centred in the well: measured, the capitals sit within 0.85px of its
+   middle at 1x-1.5x (line-height 1.2 and 1.15 came out over 1px high). The delete button follows
+   the title's height (.stonetop-field-btns). Textareas (an area's description and contents) keep
+   their own sizing. */
+.stonetop-create-site-dialog .stonetop-cs-card { gap: 2px; }
+.stonetop-create-site-dialog .stonetop-cs-card input.stonetop-cf-input {
+	height: auto;
+	min-height: 0;
+	padding-block: 1px;
+	line-height: 1.25;
+}
 .stonetop-create-site-dialog .stonetop-cs-die { flex: 0 0 auto; font-size: var(--st-fs-xs); color: var(--st-text-muted); }
 .stonetop-create-site-dialog .stonetop-cs-trow-span-wrap {
 	display: inline-flex;
