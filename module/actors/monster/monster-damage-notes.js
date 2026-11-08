@@ -20,7 +20,9 @@ import { format } from "../../utils/i18n.js";
  */
 export function appendMonsterDamageNotes(actions, { row, target, several = false, isGM = !!globalThis.game?.user?.isGM } = {}) {
 	if (!isGM || !actions || target?.type !== "monster") return false;
-	const notes = monsterDamageNotes(target.system);
+	// Its moves too: a damage-taken clause printed inside one (the Tomb-Bog Spirit's hulking form, FOE-6).
+	const moves = [...(target.items ?? [])].filter(item => item?.type === "monsterMove").map(item => item.name);
+	const notes = monsterDamageNotes(target.system, { moves });
 	if (!notes.length) return false;
 	const line = document.createElement("p");
 	line.className = "stonetop-damage-foe-notes";

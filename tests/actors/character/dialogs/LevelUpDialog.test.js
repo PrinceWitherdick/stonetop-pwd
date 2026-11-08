@@ -422,7 +422,7 @@ describe("LevelUpDialog — an Invocation for a Would-be Hero who takes Invoke t
 		dlg._selectedMoveId = "v1";
 		dlg._foreignMoves = foreign;
 		dlg._selectedForeignMoveId = "smash";
-		dlg._selectedInvocationSlug = "bath-of-healing-light";
+		dlg._selectedInvocations = ["bath-of-healing-light"];
 		await dlg._apply();
 		expect(char.applyLevelUp.mock.calls[0][1]).toBeNull();
 	});
@@ -432,9 +432,9 @@ describe("LevelUpDialog — an Invocation for a Would-be Hero who takes Invoke t
 		dlg._selectedMoveId = "v1";
 		dlg._foreignMoves = foreign;
 		dlg._selectedForeignMoveId = "isg";
-		dlg._selectedInvocationSlug = "bath-of-healing-light";
+		dlg._selectedInvocations = ["bath-of-healing-light"];
 		await dlg._apply();
-		expect(char.applyLevelUp.mock.calls[0][1]).toBe("bath-of-healing-light");
+		expect(char.applyLevelUp.mock.calls[0][1]).toEqual(["bath-of-healing-light"]);
 	});
 });
 
@@ -556,10 +556,12 @@ describe("LevelUpDialog mark step — budgeted moves (Veteran Crew / Well Versed
 			return Object.fromEntries(dlg.getData().markStep.options.map(o => [o.slug, o]));
 		};
 		const capped = at("d10");
-		expect(capped["crew-damage"]).toMatchObject({ disabled: true, tooltip: "Their damage die is already d10" });
-		expect(capped.inured).toMatchObject({ disabled: false, tooltip: null });
+		// Said as text under the option (L15), tied to it for a screen reader, not in a tooltip only.
+		expect(capped["crew-damage"]).toMatchObject({ disabled: true, note: "Their damage die is already d10" });
+		expect(capped["crew-damage"].noteId).toMatch(/-why$/);
+		expect(capped.inured).toMatchObject({ disabled: false, note: null, noteId: null });
 		const room = at("d8");
-		expect(room["crew-damage"]).toMatchObject({ disabled: false, tooltip: null });
+		expect(room["crew-damage"]).toMatchObject({ disabled: false, note: null });
 	});
 });
 

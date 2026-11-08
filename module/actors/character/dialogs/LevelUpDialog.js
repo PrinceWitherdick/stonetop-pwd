@@ -7,14 +7,16 @@ import { annotateInvocationEffects } from "../invocation-effects.js";
 import { getHoverDescriptionSetting } from "../../../settings.js";
 import { playbookIconPath } from "../../../utils/playbook-actors.js";
 import { INVOKE_THE_SUN_GOD } from "../holy-light.js";
-import { HARD_TO_KILL, NEVER_GONNA_KEEP_ME_DOWN, UNSTOPPABLE } from "../deaths-door.js";
+import { insertInertNote } from "../insert-inert-note.js";
 import { localize, format } from "../../../utils/i18n.js";
 import { levelUpAwayNote } from "../../../campaign/level-up-at-home.js";
 import { CustomMoveDialog } from "./CustomMoveDialog.js";
 import { canAuthorCustomMoves } from "../../../utils/authoring-gates.js";
 import { xpRules } from "../../../utils/xp.js";
-import { wireKeyboardButtons, pressesRoleButton } from "../../../utils/keyboard-buttons.js";
+import { wireKeyboardButtons } from "../../../utils/keyboard-buttons.js";
 import { attrValue } from "../../../utils/strings.js";
+import { focusInto, focusNextWindow } from "../../../utils/focus-window.js";
+import { LEARN_LATER } from "../../../timeline/timeline-milestones.js";
 
 // Base width (overview, stat, marks). The move, foreign-move, and invocation steps
 // widen so their masonry lists show two columns by default. The grid allows three
@@ -43,6 +45,14 @@ const LEVELUP_STEPS = ["overview", "move", "agreed", "foreignMove", "stat", "mar
 // move pick like any other; the agreed step that follows says which move.
 const AGREED_ID = "__agreed__";
 const AGREED_CUSTOM = "__custom__";
+
+// The move step's "Choose my move later" card (Book I p.529: "they can take time to think ... if
+// they're stumped, they can pick a new move during play"). The level is taken with no move; the Moves
+// tab's shortfall banner then asks for it, and ticking it there asks for every choice it needs.
+const LATER_ID = "__later__";
+
+// What a step change hands the keyboard to: the new step's intro (template: data-levelup-focus).
+const STEP_FOCUS = "[data-levelup-focus]";
 
 // This world's Level Up cost in words: the book's "6 + twice your current level" (p.528), or the
 // slower curve the world picked (p.582, utils/xp.js).
@@ -90,7 +100,7 @@ function _togglePick(picks, slug, allowance) {
 // way. The move step's own "Agreed with the table" card IS a move card (it is that step's pick), but
 // stays out of the move filter so a search never hides it.
 const MOVE_CARD    = ".stonetop-levelup-move-option:not(.stonetop-levelup-foreign-option):not(.stonetop-levelup-agreed-option)";
-const MOVE_FILTER_CARD = `${MOVE_CARD}:not(.stonetop-levelup-agreed-entry)`;
+const MOVE_FILTER_CARD = `${MOVE_CARD}:not(.stonetop-levelup-agreed-entry):not(.stonetop-levelup-later-entry)`;
 const FOREIGN_CARD = ".stonetop-levelup-foreign-option";
 const AGREED_CARD  = ".stonetop-levelup-agreed-option";
 const MOVE_CHIP    = ".stonetop-levelup-move-chip[data-move-group]";
@@ -116,26 +126,12 @@ const OTHER_PLAYBOOK_LISTS = {
 	},
 };
 
-// The moves that turn on Death's Door, which an insert takes away (each insert has its own 0-HP move):
-// the note key each one gets on a Level Up row for a character wearing one. Said, never hidden or
-// blocked (Book I p.529: the player picks any move they qualify for; "consider ... whether it creates a
-// weird rules interaction"). Never Gonna Keep Me Down's first half still works, so its note says which half.
-const _INSERT_INERT = {
-	[HARD_TO_KILL]:             "insertInert",
-	[UNSTOPPABLE]:              "insertInert",
-	[NEVER_GONNA_KEEP_ME_DOWN]: "insertInertHalf",
-};
-
-/** The Level Up row's note for move `name` when `zeroHpMoveName` (the insert's 0-HP move) is not Death's Door, else null. */
-export function insertInertNote(name, zeroHpMoveName) {
-	const key = _INSERT_INERT[name];
-	return key && zeroHpMoveName ? format(`stonetop.specialMoves.levelUp.${key}`, { move: zeroHpMoveName }) : null;
-}
-
 // One move from another playbook as a card, for the agreed step and the cross-playbook step alike.
 // `insertMove`: the 0-HP move of an insert the character wears, for insertInertNote.
-function _otherPlaybookCard(m, selectedId, insertMove = null) {
+function _otherPlaybookCard(m, selectedId, insertMove = null, idBase = "") {
+	const insertNote = insertInertNote(m.name, insertMove);
 	return {
+		..._cardIds(idBase, { description: m.description, requiresLabel: m.requiresLabel, stockNote: m.stockNote, insertNote }),
 		compendiumId:  m.compendiumId,
 		name:          m.name,
 		description:   m.description,
@@ -145,9 +141,20 @@ function _otherPlaybookCard(m, selectedId, insertMove = null) {
 		// "Costs Stock; you have no sacred pouch", or null. Display only (see
 		// StonetopCharacter#getForeignMovesForLevelUp, which leaves it off an Initiate pick).
 		stockNote:     m.stockNote ?? null,
-		insertNote:    insertInertNote(m.name, insertMove),
+		insertNote,
 		selected:      m.compendiumId === selectedId,
 	};
+}
+
+// A pickable card's short spoken name and its description (M1): the card is named by its move's
+// name (`nameId`) and described by its text and notes (`descIds`), rather than read whole as its name.
+// The second argument says which pieces the card shows, so only ids that exist are referred to.
+function _cardIds(idBase, { description = null, requiresLabel = null, stockNote = null, insertNote = null } = {}) {
+	if (!idBase) return { nameId: null, descId: null, reqId: null, stockId: null, noteId: null, descIds: null };
+	const ids = { nameId: `${idBase}-name`, descId: `${idBase}-desc`, reqId: `${idBase}-req`, stockId: `${idBase}-stock`, noteId: `${idBase}-note` };
+	const descIds = [description && ids.descId, requiresLabel && ids.reqId, stockNote && ids.stockId, insertNote && ids.noteId]
+		.filter(Boolean).join(" ");
+	return { ...ids, descIds: descIds || null };
 }
 
 export class LevelUpDialog extends StonetopDialog {
@@ -162,7 +169,10 @@ export class LevelUpDialog extends StonetopDialog {
 		this._step       = "overview"; // "overview" | "move" | "foreignMove" | "stat" | "marks" | "invocation"
 		this._selectedMoveId         = null;
 		this._selectedStat           = null;
-		this._selectedInvocationSlug = null;
+		// The Invocations picked: one on an even level, or every one owed when catching up (C3).
+		this._selectedInvocations    = [];
+		// The keyboard's place for the next draw (a selector), or null: see _render.
+		this._focusNext              = null;
 		// Level-up mark step (Veteran Crew / Well Versed / …; never Potential for Greatness, which
 		// is marked in play): the picks made this take, each { slug, stat? }.
 		this._selectedMarks          = [];
@@ -220,8 +230,27 @@ export class LevelUpDialog extends StonetopDialog {
 		// on this point keeps the new, larger window centered over the old one.
 		// Nothing is held on the first render (no prior position), where Foundry centers us.
 		const recentre = holdCentre(this);
+		// The keyboard's place (M1): a redraw replaces every control, and the browser drops focus on the
+		// page body. A step change goes to the new step's intro (set by Next/Back); otherwise the control
+		// that had focus is found again; the first draw starts on the overview's intro.
+		const firstDraw = !this.rendered;
+		this._focusNext ??= this._focusSelectorFor(globalThis.document?.activeElement);
 		await super._render(force, options);
 		this._applyStepSize(recentre);
+		const target = this._focusNext ?? (firstDraw ? STEP_FOCUS : null);
+		this._focusNext = null;
+		if (target) focusInto(this.element, { prefer: target });
+	}
+
+	// A selector that finds `el` (the focused control, inside this window) in the next draw, or null.
+	_focusSelectorFor(el) {
+		const root = this.element?.[0];
+		if (!el || !root?.contains?.(el)) return null;
+		if (el.matches?.(".stonetop-levelup-pickable")) return _pickableSelector(el);
+		if (el.matches?.(".stonetop-levelup-locked-check")) return ".stonetop-levelup-locked-check";
+		if (el.dataset?.moveGroup) return `${MOVE_CHIP}[data-move-group="${attrValue(el.dataset.moveGroup)}"]`;
+		if (el.dataset?.playbook && el.matches?.(FOREIGN_CHIP)) return `${FOREIGN_CHIP}[data-playbook="${attrValue(el.dataset.playbook)}"]`;
+		return null;
 	}
 
 	// Resize the window to match the active step — but only when the step actually
@@ -263,7 +292,10 @@ export class LevelUpDialog extends StonetopDialog {
 		// The 0-HP move of an insert they wear (Undying, Tethered, Dark Succor), or null: Death's Door is behind them.
 		const insertMove = this._insertZeroHpMove();
 
-		const moves = d.availableMoves.map(m => ({
+		// Each card's ids, unique to this window (M1: a short spoken name, the text as its description).
+		const idBase = `stonetop-levelup-${this.appId ?? "x"}`;
+		const moves = d.availableMoves.map((m, i) => ({
+			..._cardIds(`${idBase}-m${i}`, { description: m.description, requiresLabel: m.requiresLabel, insertNote: insertInertNote(m.name, insertMove) }),
 			compendiumId:  m.compendiumId,
 			name:          m.name,
 			description:   m.description,
@@ -288,23 +320,31 @@ export class LevelUpDialog extends StonetopDialog {
 		// Mirror the Invocations tab: when the hover-descriptions setting is on, wrap the
 		// "Reduced:" / "Empowered:" labels so they carry the same explanatory tooltip here.
 		const showEffectTips = getHoverDescriptionSetting("hoverDescriptionsInvocations");
-		const invocations = d.availableInvocations.map(inv => ({
-			slug:        inv.slug,
-			label:       inv.label,
-			description: showEffectTips ? annotateInvocationEffects(inv.description ?? "") : inv.description,
-			selected:    inv.slug === this._selectedInvocationSlug,
-		}));
+		const invocationAllowance = this._invocationAllowance();
+		const invocations = d.availableInvocations.map((inv, i) => {
+			const selected = this._selectedInvocations.includes(inv.slug);
+			return {
+				..._cardIds(`${idBase}-i${i}`, { description: inv.description }),
+				slug:        inv.slug,
+				label:       inv.label,
+				description: showEffectTips ? annotateInvocationEffects(inv.description ?? "") : inv.description,
+				selected,
+				// A multi-pick step locks the rest once its allowance is picked; a single pick just swaps.
+				disabled:    !selected && invocationAllowance > 1 && this._selectedInvocations.length >= invocationAllowance,
+			};
+		});
 
 		// The move step's "Agreed with the table" pick, and the agreed step's list: every other
 		// playbook's qualifying moves, then "a custom move" where this user may write one.
 		const agreedPicked = this._selectedMoveId === AGREED_ID;
+		const laterPicked = this._selectedMoveId === LATER_ID;
 		const customAllowed = canAuthorCustomMoves();
-		const agreedMoves = this._agreedMoves.map(m => _otherPlaybookCard(m, this._selectedAgreedId, insertMove));
+		const agreedMoves = this._agreedMoves.map((m, i) => _otherPlaybookCard(m, this._selectedAgreedId, insertMove, `${idBase}-a${i}`));
 
 		// Foreign-move picker (cross-playbook moves): the qualifying foreign moves, with a
 		// text filter. An empty list (nothing qualifies) allows Continue only for a move that
 		// grants something else (Initiate's Sacred Pouch); any other would grant nothing.
-		const foreignMoves = this._foreignMoves.map(m => _otherPlaybookCard(m, this._selectedForeignMoveId, insertMove));
+		const foreignMoves = this._foreignMoves.map((m, i) => _otherPlaybookCard(m, this._selectedForeignMoveId, insertMove, `${idBase}-f${i}`));
 
 		// Source-playbook chips beside the foreign-move search. Derived from the moves
 		// actually offered (so a chip can never filter to nothing) rather than from the
@@ -338,7 +378,7 @@ export class LevelUpDialog extends StonetopDialog {
 			|| (isStat && this._selectedStat !== null)
 			|| (isMarks && marksComplete)
 			|| (isCompanion && this._selectedCompanionActions.length === (d.companionActions?.allowance ?? 0))
-			|| (isInvocation && this._selectedInvocationSlug !== null);
+			|| (isInvocation && this._selectedInvocations.length === invocationAllowance);
 
 		// Companion step (Beast-Bonded Ranger): each action not yet marked is a pickable row;
 		// one already marked shows as such and can't be picked again. An allowance of 1 just
@@ -347,11 +387,12 @@ export class LevelUpDialog extends StonetopDialog {
 		const companionStep = companion ? {
 			allowance: companion.allowance,
 			used:      this._selectedCompanionActions.length,
+			chosenLabel: format("stonetop.specialMoves.levelUp.picksChosen", { used: this._selectedCompanionActions.length, allowance: companion.allowance }),
 			options: companion.options.map(o => {
 				const selected = this._selectedCompanionActions.includes(o.slug);
 				return {
 					slug: o.slug, label: o.label, selected,
-					existingLabel: o.marked ? "marked" : null,
+					existingLabel: o.marked ? localize("stonetop.specialMoves.levelUp.marked") : null,
 					disabled: o.marked || (!selected && companion.allowance !== 1 && this._selectedCompanionActions.length >= companion.allowance),
 				};
 			}),
@@ -374,17 +415,21 @@ export class LevelUpDialog extends StonetopDialog {
 			moveName:  markDesc.moveName,
 			allowance: markAllowance,
 			used:      this._selectedMarks.length,
-			options: markDesc.options.map(o => {
+			chosenLabel: format("stonetop.specialMoves.levelUp.marksChosen", { move: markDesc.moveName, used: this._selectedMarks.length, allowance: markAllowance }),
+			options: markDesc.options.map((o, i) => {
 				const selected = this._selectedMarks.some(p => p.slug === o.slug);
 				// An option whose target is already at its cap (the crew's die at d10) buys nothing,
 				// so it has no room either, and says why (move-mark-budget.js#markOptionCapNote).
 				const hasRoom  = o.existing < o.capacity && !o.capNote;
+				// Why an option is out (crew already at d10, a background's box), said in text a keyboard or
+				// screen-reader user meets too (L15), not in a hover tooltip only.
 				return {
 					slug: o.slug, label: o.label, selected,
-					tooltip: !selected ? o.capNote : null,
+					note:   o.capNote ?? null,
+					noteId: o.capNote ? `${idBase}-mk${i}-why` : null,
 					existingLabel: o.background
 						? localize("stonetop.character.moves.backgroundMark")
-						: o.existing > 0 ? `marked ×${o.existing}` : null,
+						: o.existing > 0 ? format("stonetop.specialMoves.levelUp.markedTimes", { count: o.existing }) : null,
 					disabled: !selected && (!hasRoom || (this._selectedMarks.length >= markDesc.allowance && markDesc.allowance !== 1)),
 				};
 			}),
@@ -408,6 +453,8 @@ export class LevelUpDialog extends StonetopDialog {
 			canContinue,
 			overviewIntro:   format("stonetop.specialMoves.levelUp.overviewIntroRule", { rule: _xpRuleText() }),
 			agreedPicked,
+			laterPicked,
+			laterId:         LATER_ID,
 			agreedMoves,
 			hasAgreedMoves:  agreedMoves.length > 0,
 			agreedLoaded:    this._agreedLoaded,
@@ -431,6 +478,9 @@ export class LevelUpDialog extends StonetopDialog {
 			pouchGrowthNote: isOverview && d.pouchGrowth > 0 ? format("stonetop.specialMoves.levelUp.pouchGrowth", { count: d.pouchGrowth }) : "",
 			cost:            d.cost,
 			xpRemaining:     d.xpRemaining,
+			// "Reset XP to 0 on Level Up" (Book I p.582): every point goes, not just the cost (L12).
+			resetAside:      isOverview && xpRules().resetOnLevelUp && (d.xp ?? 0) > (d.cost ?? 0)
+				? format("stonetop.specialMoves.levelUp.resetAside", { xp: d.xp }) : "",
 			moves,
 			hasMoves:        moves.length > 0,
 			lockedMoves,
@@ -440,9 +490,23 @@ export class LevelUpDialog extends StonetopDialog {
 			showMoveFilter:  moves.length > 0 || (this._showLockedMoves && lockedMoves.length > 0),
 			invocations,
 			needsInvocation: d.needsInvocation,
+			invocationAllowance,
+			// Owed from earlier levels (C3), or on an odd level: not "your new level is even".
+			invocationAside: invocationAllowance > 1 || (d.newLevel ?? 0) % 2 === 1
+				? format("stonetop.specialMoves.levelUp.invocationAsideOwed", { count: invocationAllowance })
+				: localize("stonetop.specialMoves.levelUp.invocationAside"),
+			invocationIntro: invocationAllowance > 1
+				? format("stonetop.specialMoves.levelUp.invocationIntroMany", { count: invocationAllowance })
+				: localize("stonetop.specialMoves.levelUp.invocationIntro"),
+			invocationChosen: invocationAllowance > 1
+				? format("stonetop.specialMoves.levelUp.picksChosen", { used: this._selectedInvocations.length, allowance: invocationAllowance })
+				: "",
 			statOptions,
 			statMoveName:    selectedEntry?.name ?? null,
 			statCap,
+			statCapLabel:    selectedEntry?.name && statCap != null
+				? format("stonetop.specialMoves.levelUp.statCapNote", { move: selectedEntry.name, cap: statCap }) : "",
+			statAtMaxLabel:  localize("stonetop.specialMoves.levelUp.statAtMax"),
 			statAllAtCap:    statOptions.length > 0 && statOptions.every(s => s.atCap),
 			foreignMoves,
 			foreignPlaybooks,
@@ -521,6 +585,17 @@ export class LevelUpDialog extends StonetopDialog {
 		if (this._isAgreed()) return this._agreedForeign()?.name === INVOKE_THE_SUN_GOD;
 		const foreign = this._foreignMoves.find(m => m.compendiumId === this._selectedForeignMoveId);
 		return this._needsForeignMoveChoice() && foreign?.name === INVOKE_THE_SUN_GOD;
+	}
+
+	// How many Invocations the step asks for: every one owed when the character already draws on a
+	// list (getLevelUpData's `invocationAllowance`, C3), else one (Invoke the Sun God taken this level).
+	_invocationAllowance() {
+		return this._data?.needsInvocation ? Math.max(1, Number(this._data?.invocationAllowance) || 1) : 1;
+	}
+
+	// Whether the move step's pick is "Choose my move later" (C2).
+	_isLater() {
+		return this._selectedMoveId === LATER_ID;
 	}
 
 	// Whether the move step's pick is "Agreed with the table".
@@ -720,14 +795,7 @@ export class LevelUpDialog extends StonetopDialog {
 
 		html.find(`${MOVE_CARD}:not(.is-locked)`).on("click", ev => {
 			this._selectedMoveId = ev.currentTarget.dataset.compendiumId;
-			// Drop any stat / foreign-move / mark pick from a previously-selected move so they
-			// re-validate against the new move (a non-stat / non-cross-playbook move ignores them).
-			this._selectedStat = null;
-			this._selectedForeignMoveId = null;
-			this._foreignMoves = [];
-			this._foreignMovesForId = null;
-			this._selectedMarks = [];
-			this._selectedAgreedId = null;
+			this._clearMoveDependents();
 			this.render(false);
 		});
 
@@ -737,16 +805,9 @@ export class LevelUpDialog extends StonetopDialog {
 
 		// Every pickable card answers Enter and Space as well as a click, so the window works from
 		// the keyboard and a screen reader (the cards carry role="button" and tabindex in the template):
-		// utils/keyboard-buttons.js presses it. The press redraws the window, so the card pressed is
-		// remembered first and focused again afterwards.
-		html.find(".stonetop-levelup-pickable").on("keydown", ev => {
-			if (pressesRoleButton(ev.originalEvent ?? ev) === ev.currentTarget) this._refocus = _pickableSelector(ev.currentTarget);
-		});
+		// utils/keyboard-buttons.js presses it. The press redraws the window, and _render puts the
+		// keyboard back on the card pressed (M1).
 		wireKeyboardButtons(html);
-		if (this._refocus) {
-			html[0]?.querySelector?.(this._refocus)?.focus?.();
-			this._refocus = null;
-		}
 
 		html.find(".stonetop-levelup-stat-option:not(.is-at-cap)").on("click", ev => {
 			this._selectedStat = ev.currentTarget.dataset.statKey;
@@ -804,14 +865,17 @@ export class LevelUpDialog extends StonetopDialog {
 			this.render(false);
 		});
 
-		html.find(".stonetop-levelup-invocation-option").on("click", ev => {
-			this._selectedInvocationSlug = ev.currentTarget.dataset.slug;
+		html.find(".stonetop-levelup-invocation-option:not(.is-at-cap)").on("click", ev => {
+			this._selectedInvocations = _togglePick(this._selectedInvocations, ev.currentTarget.dataset.slug, this._invocationAllowance());
 			this.render(false);
 		});
 
 		html.find(".stonetop-levelup-back-btn").on("click", () => {
 			const prev = this._adjacentStep(-1);
-			if (prev) this._step = prev; // undefined only at overview — stay put
+			if (prev) {
+				this._step = prev; // undefined only at overview: stay put
+				this._focusNext = STEP_FOCUS;
+			}
 			this.render(false);
 		});
 
@@ -833,6 +897,7 @@ export class LevelUpDialog extends StonetopDialog {
 					if (next === "foreignMove") await this._loadForeignMoves();
 					if (next === "agreed") await this._loadAgreedMoves();
 					this._step = next;
+					this._focusNext = STEP_FOCUS;
 				}
 				this.render(false);
 			});
@@ -864,28 +929,54 @@ export class LevelUpDialog extends StonetopDialog {
 		// Only when the step ran THIS time: a player who picked Invoke the Sun God through
 		// Versatile, chose an Invocation, then went Back and picked another move has a stale
 		// slug left over that must not be learned.
-		const invocationSlug = this._stepActive("invocation") ? this._selectedInvocationSlug : null;
+		const invocations = this._stepActive("invocation") ? [...this._selectedInvocations] : null;
 		// A move agreed with the table: another playbook's (added like any move) or a custom one,
 		// written in the custom move editor first; the level is taken only when that saves.
 		const agreedForeign = this._agreedForeign();
 		if (this._isAgreed()) {
-			if (this._selectedAgreedId === AGREED_CUSTOM) return this._openCustomEditor(choices, invocationSlug);
+			if (this._selectedAgreedId === AGREED_CUSTOM) return this._openCustomEditor(choices, invocations);
 			choices.agreed = { foreignMoveId: agreedForeign?.compendiumId ?? null };
 		}
 		// The foreign move a cross-playbook pick learned, for the timeline row and the sheet.
 		const foreignMoveName = choices.crossPlaybook
 			? this._foreignMoves.find(m => m.compendiumId === choices.foreignMoveId)?.name
 			: undefined;
-		const moveName = agreedForeign?.name ?? (foreignMoveName ? `${entry?.name} (${foreignMoveName})` : entry?.name ?? "");
+		const moveName = this._isLater() ? LEARN_LATER
+			: agreedForeign?.name ?? (foreignMoveName ? `${entry?.name} (${foreignMoveName})` : entry?.name ?? "");
 		// `fromLevel` pins the level these choices were built for, so a stale window (the same
 		// level-up already applied elsewhere, or XP spent meanwhile) writes nothing. `moveName`
 		// rides along to the timeline's "Reached level N" row ("Learned Seasoned Warrior.").
 		const result = await this._character.applyLevelUp(
-			this._isAgreed() ? null : this._selectedMoveId, invocationSlug,
+			this._isAgreed() || this._isLater() ? null : this._selectedMoveId, invocations,
 			Object.keys(choices).length ? choices : null,
 			{ fromLevel: this._data.level, moveName },
 		);
+		if (result?.reason === "moveHeld") return this._backToMoves(agreedForeign?.name ?? entry?.name ?? "");
 		return this._finish(result, { addedMoveName: agreedForeign?.name ?? entry?.name ?? null, foreignMoveName });
+	}
+
+	// The move picked was put on the sheet while this window was open (L7): nothing was written. Say
+	// so, read the level-up afresh (the move is no longer offered), and go back to the move step.
+	async _backToMoves(moveName) {
+		ui.notifications?.warn(format("stonetop.specialMoves.levelUp.refusedMoveHeld", { move: moveName }));
+		this._data = await this._character.getLevelUpData();
+		this._selectedMoveId = null;
+		this._clearMoveDependents();
+		this._agreedLoaded = false;
+		this._agreedMoves = [];
+		this._step = "move";
+		this._focusNext = STEP_FOCUS;
+	}
+
+	// Drop any stat / foreign-move / mark / agreed pick hanging on the move picked before, so they
+	// re-validate against the new move (a non-stat / non-cross-playbook move ignores them).
+	_clearMoveDependents() {
+		this._selectedStat = null;
+		this._selectedForeignMoveId = null;
+		this._foreignMoves = [];
+		this._foreignMovesForId = null;
+		this._selectedMarks = [];
+		this._selectedAgreedId = null;
 	}
 
 	// "A custom move" agreed with the table: the custom move editor opens, and saving it takes the
@@ -893,13 +984,13 @@ export class LevelUpDialog extends StonetopDialog {
 	// Closing the editor without saving changes nothing; the level-up window stays open.
 	// The editor saves whatever picks the last Apply carried: the level-up window stays usable
 	// while the editor is open, so Back + a changed pick + Apply again must not be lost.
-	_openCustomEditor(choices, invocationSlug) {
-		this._customPicks = { choices, invocationSlug };
+	_openCustomEditor(choices, invocations) {
+		this._customPicks = { choices, invocations };
 		if (this._customEditor?.rendered) return this._customEditor.bringToTop();
 		const saver = {
 			create: async input => {
-				const { choices, invocationSlug } = this._customPicks;
-				const result = await this._character.applyLevelUp(null, invocationSlug,
+				const { choices, invocations } = this._customPicks;
+				const result = await this._character.applyLevelUp(null, invocations,
 					{ ...choices, agreed: { customMove: input } },
 					{ fromLevel: this._data.level, moveName: input?.name ?? "" });
 				await this._finish(result, { addedMoveName: null });
@@ -932,6 +1023,7 @@ export class LevelUpDialog extends StonetopDialog {
 			const refused = { outOfPlay: "refusedOutOfPlay", level: "refusedLevel" }[result.reason] ?? "refusedXp";
 			ui.notifications?.warn(game.i18n.localize(`stonetop.specialMoves.levelUp.${refused}`));
 			if (this._onDone) this._onDone(null, { applied: false });
+			this._focusAfterApply();
 			return;
 		}
 		// A pick that could not be saved after the level was paid for: say which, so it is finished
@@ -948,5 +1040,16 @@ export class LevelUpDialog extends StonetopDialog {
 		// cross-playbook pick hands back the foreign move it learned too: a Seeker who takes
 		// Big Magic through Initiate of the Secret Arts is owed that trait just the same.
 		if (this._onDone) this._onDone(addedMoveName, { applied: true, foreignMoveName });
+		this._focusAfterApply();
+	}
+
+	// M1: the window is gone, so the keyboard would land on the page body. It goes to a window the
+	// Apply opened, or else to the sheet's Level field, which now reads the new level.
+	_focusAfterApply() {
+		const sheet = this._character?._actor?.sheet ?? null;
+		// Redrawing counts: the sheet is mid-render for the new level as this runs (V1 RENDERING = 1,
+		// RENDERED = 2), and focusNextWindow puts the keyboard back once that draw lands.
+		const live = !!sheet && (sheet.rendered || (sheet._state ?? 0) >= 1);
+		return focusNextWindow({ fallback: live ? sheet : null, fallbackSelector: "input[name='system.attributes.level.value']" });
 	}
 }

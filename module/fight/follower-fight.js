@@ -29,12 +29,14 @@ import { followerMarkedDead } from "../actors/character/follower-fate.js";
 import { readableFlags } from "../actors/character/StonetopFlags.js";
 import { isFightTabEnabled } from "../settings.js";
 import { fightOnScene } from "./fight-state.js";
+import { each } from "./in-battle.js";
 import { rollerEngagement } from "./damage-seed.js";
 import { opponentsOf } from "./engagements.js";
 import { groupTokenInfo, rosterGroupFor } from "./group-hits.js";
 import { groupFollowerStanding } from "../utils/crew.js";
 import { normalizeTags, pileOnBonus } from "../data/follower-build.js";
 import { BEAST_CATALOG } from "../data/beasts.js";
+import { damageBlows, sameDie } from "../utils/damage.js";
 
 /**
  * Whether a custom follower's card is only a record now, with nobody to order: one marked Dead by the 0-HP
@@ -76,7 +78,7 @@ export function followerTags(raw) {
 
 /** A follower's own moves: the NPC move items the card's Moves lines became. */
 function followerMoves(actor) {
-	const items = typeof actor?.items?.[Symbol.iterator] === "function" ? [...actor.items] : [];
+	const items = each(actor?.items);
 	return items
 		.filter(item => item?.type === "npcMove")
 		.map(item => String(item?.name ?? "").trim())
@@ -167,8 +169,15 @@ export function followerSwarm(actor, card, { engagement = rollerEngagement, targ
 /**
  * How many foes a follower's blow is aimed at, as far as can be told before the dice: the roller's own targets
  * on the map, a group token counted as several (group-hits.js), else who the fighter is fighting, each counted
- * as its bodies; 1 when nothing says otherwise (the table says who it hits). Inside a group-against-group
- * exchange it is never one: the abstraction's own +N already counts the crew (p.416).
+ * as its bodies; 1 when nothing says otherwise (the table says who it hits).
+ *
+ * BY WHO THE BLOW IS AT, NOT BY THE ENGAGEMENT (audit FGT-5). A crew trading blows with a horde AND swinging at
+ * the ogre beside it is fighting that ogre as "a single foe" (p.473: "roll one attacker's damage, +1 for each
+ * additional attacker"); the group-against-group +N (p.416) is for its blows at the horde, which count as many
+ * here because the horde is (a fighter's own bodies, damage-seed.js#groupBlowSeed takes the exchange's seed for
+ * them). Read off the engagement alone, the crew's blow at the ogre got neither bonus. A targeted token is
+ * counted by the fight's own bodies when the fight has it (a GM headcount's warband included), else as several
+ * for a group token.
  *
  * @param {Actor} actor  the follower's token actor in the fight, else their character
  * @param {object} [o]
@@ -177,17 +186,22 @@ export function followerSwarm(actor, card, { engagement = rollerEngagement, targ
  */
 export function foeBodiesAt(actor, { targets = globalThis.game?.user?.targets ?? [], engagement = rollerEngagement } = {}) {
 	const place = engagement(actor);
-	const self = place?.combatant?.id;
-	const inGroupExchange = !!self && (place.result?.clusters ?? [])
-		.some(c => c?.groups && (c.heroIds?.includes(self) || c.foeIds?.includes(self)));
+	const bodiesOfId = id => Math.max(1, Number((place?.fighters ?? []).find(f => f.id === id)?.bodies) || 1);
+	// The fight's own count for a targeted token, by the combatant standing on it.
+	const idByToken = new Map([...(place?.combatants?.values?.() ?? [])].map(c => [c?.token?.uuid, c?.id]).filter(([uuid]) => uuid));
+	const aimedBodies = token => {
+		const id = idByToken.get(token?.document?.uuid ?? token?.uuid);
+		if (id) return bodiesOfId(id);
+		return groupTokenInfo(token.actor) || rosterGroupFor(token.actor) ? 2 : 1;
+	};
 	const aimed = [...(targets ?? [])].filter(token => token?.actor);
 	let bodies = 1;
-	if (aimed.length) bodies = aimed.reduce((n, token) => n + (groupTokenInfo(token.actor) || rosterGroupFor(token.actor) ? 2 : 1), 0);
+	if (aimed.length) bodies = aimed.reduce((n, token) => n + aimedBodies(token), 0);
 	else if (place?.entry) {
 		const ids = opponentsOf(place.entry);
-		if (ids.length) bodies = ids.reduce((n, id) => n + Math.max(1, Number((place.fighters ?? []).find(f => f.id === id)?.bodies) || 1), 0);
+		if (ids.length) bodies = ids.reduce((n, id) => n + bodiesOfId(id), 0);
 	}
-	return inGroupExchange ? Math.max(2, bodies) : bodies;
+	return bodies;
 }
 
 /**
@@ -212,6 +226,44 @@ export function followerRingInfo(actor, { engagement = rollerEngagement, ...opti
 	const card = followerCardFor(actor, options);
 	if (!card) return { order: null, swarm: null };
 	return { order: followerOrderInfo(actor, card), swarm: followerSwarm(actor, card, { engagement }) };
+}
+
+// ── A FOLLOWER'S OTHER BLOWS ──────────────────────────────────────────────────────────────────────────
+// The NPC sheet's and the ring's one damage button rolls the follower's `rollFormula`, the first die their card
+// prints. A follower whose card prints a second attack had no way to deal it: Halix's "ghostly touch d4 (hand,
+// ignores armor) or host's weapon d6 (tags vary)" (Book II p.565), and the cloak's storm spirit, whose lightning
+// is one of its moves, "Fling lightning from a raging storm, d10+3 (far, forceful, reload)". Each gets a button
+// of its own, read by the reader a monster's buttons use (utils/damage.js#damageBlows), so its name, die, tags and
+// armor clause ride the blow (round-2 audit, the summons' second blows). Its die is matched by utils/damage.js#sameDie.
+
+/**
+ * A follower NPC's printed blows other than the one its damage button rolls: the damage line's other attacks,
+ * then each move that prints a die of its own (not a move that costs or gains HP, "lose 1d4 HP"). PURE but for
+ * the actor read.
+ *
+ * @param {Actor} actor  the follower's NPC
+ * @returns {Array<{formula: string, title: string, keywords: string, rollMode: string, weapon: object|null}>}
+ */
+export function followerExtraBlows(actor) {
+	if (actor?.type !== "npc") return [];
+	const printed = actor.system?.attributes?.damage ?? {};
+	const out = [];
+	let primaryTaken = false;
+	for (const blow of damageBlows(printed.value)) {
+		if (!blow.formula) continue;
+		// The first blow printing the button's die IS the button.
+		if (!primaryTaken && sameDie(blow.formula, printed.rollFormula)) { primaryTaken = true; continue; }
+		out.push(blow);
+	}
+	const items = each(actor.items);
+	for (const item of items) {
+		if (item?.type !== "npcMove") continue;
+		const name = String(item.name ?? "");
+		if (/\bHP\b/.test(name)) continue;
+		const blow = damageBlows(name).find(b => b.formula);
+		if (blow) out.push(blow);
+	}
+	return out;
 }
 
 // ── THE CARD'S TOKEN ────────────────────────────────────────────────────────────────────────────

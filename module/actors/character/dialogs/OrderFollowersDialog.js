@@ -85,7 +85,6 @@ export class OrderFollowersDialog extends StonetopDialog {
 		this._moveKey    = _ORDER_MOVES.some(m => m.key === this._follower.moveKey)
 			? this._follower.moveKey
 			: "defy-danger";
-		this._customMove = "";
 		// Per-tag state: "help" | "hinder" | "" (neither). Keyed by tag string. A tag the caller
 		// names in `hinderingTags` (an animal companion's "injured") starts in the way; a click
 		// still cycles it, the call being the table's.
@@ -244,7 +243,9 @@ export class OrderFollowersDialog extends StonetopDialog {
 	}
 
 	_moveLabel() {
-		if (this._moveKey === "custom") return this._customMove.trim() || "act";
+		// "Custom / other…" has no box to type the move into: the table says what they're doing out loud,
+		// since the words would only ever head this one roll card.
+		if (this._moveKey === "custom") return "something else";
 		return _ORDER_MOVES.find(m => m.key === this._moveKey)?.label ?? "act";
 	}
 
@@ -289,9 +290,9 @@ export class OrderFollowersDialog extends StonetopDialog {
 			exceptional:  !!this._follower.exceptional,
 			// The crew's Heroes to the Last "inured to terror & horror", noted by the balk (the caller's words).
 			inuredNote:   String(this._follower.inuredNote ?? "").trim(),
+			// At 0 HP, or a group with nobody standing: "out of the action" (p.469), said, never refused (FOE-3).
+			downNote:     String(this._follower.downNote ?? "").trim(),
 			moves:        _ORDER_MOVES.map(m => ({ ...m, selected: m.key === this._moveKey })),
-			isCustom:     this._moveKey === "custom",
-			customMove:   this._customMove,
 			tags: this._tags().map(tag => ({
 				tag,
 				help:    this._tagState[tag] === "help",
@@ -340,7 +341,6 @@ export class OrderFollowersDialog extends StonetopDialog {
 			this._moveKey = ev.currentTarget.value;
 			this.render(false);
 		});
-		html.find(".stonetop-of-custom").on("change", ev => { this._customMove = ev.currentTarget.value; });
 
 		// Tri-state tag chip: cycles neither → helps → hinders → neither.
 		//
@@ -377,11 +377,6 @@ export class OrderFollowersDialog extends StonetopDialog {
 	}
 
 	async _finish() {
-		// Capture an un-blurred custom-move field.
-		const root = this.element?.[0];
-		const customEl = root?.querySelector(".stonetop-of-custom");
-		if (customEl) this._customMove = customEl.value;
-
 		const { bonus, rollMode, modeSources } = this._result();
 		// A member ordered on their own rolls under their own name: "Glaw: Let Fly".
 		const name = this._name();

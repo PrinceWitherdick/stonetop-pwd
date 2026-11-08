@@ -9,6 +9,9 @@
   "flags": {
     "stonetop": {
       "slug": "creepy-cave",
+      "consequenceBoons": [
+        { "label": "Gain unholy resilience", "hp": 2, "versus": { "armor": 1, "against": "bronze" } }
+      ],
       "front": {
         "title": "A creepy cave",
         "item": null,

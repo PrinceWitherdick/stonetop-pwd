@@ -365,15 +365,26 @@ describe("a blow whose dice come to less than nothing", () => {
 	});
 });
 
-describe("the targeted damage card follows the roller's chat mode", () => {
-	it("is whispered on a blind roll, as the no-target card already was", async () => {
+// ATK-2 (round 2, shown live): the counter-attack is often posted on the GM's client, whose chat mode is the GM's
+// own. A blow on a character goes to the table, or to the attack card's own whisper with its owners added.
+describe("a counter-attack's card is never hidden from the one taking it", () => {
+	it("ignores the posting client's private chat mode: the card is public", async () => {
 		globalThis.game.settings = { get: (scope, key) => (key === "rollMode" ? "blindroll" : "roll") };
 		globalThis.ChatMessage.applyRollMode = vi.fn((data, mode) => {
 			if (mode === "blindroll") Object.assign(data, { whisper: ["gm1"], blind: true });
 		});
 		await sufferEnemyAttack(pc, { targets: targeting("bronze khopesh d10+2 (close)", "d10+2") });
-		expect(globalThis.ChatMessage.applyRollMode).toHaveBeenCalledWith(expect.anything(), "blindroll");
-		expect(damageCard()).toMatchObject({ whisper: ["gm1"], blind: true });
+		expect(globalThis.ChatMessage.applyRollMode).not.toHaveBeenCalled();
+		expect(damageCard()?.whisper ?? []).toEqual([]);
+	});
+
+	it("follows a whispered attack card, with the struck character's owners added", () => {
+		const owner = { id: "p1", isGM: false };
+		const other = { id: "p2", isGM: false };
+		const struck = { testUserPermission: u => u === owner };
+		const messages = new Map([["clash1", { whisper: ["gm1"] }]]);
+		expect(attackFlow.incomingAudience(struck, "clash1", { messages, users: { players: [owner, other] } })).toEqual({ whisper: ["gm1", "p1"] });
+		expect(attackFlow.incomingAudience(struck, "", { messages, users: { players: [owner] } })).toEqual({ whisper: [] });
 	});
 });
 
@@ -423,6 +434,26 @@ describe("a counter-attack the 10+ avoided", () => {
 		expect(amount.flags[SCOPE].sufferAmount.counterOf).toBe("msg1");
 		await dealSufferedAmount(makeMessage(amount.flags[SCOPE]), "3");
 		expect(damageCard().flags[SCOPE].damage.counterOf).toBe("msg1");
+	});
+
+	// An ordered member's counter-blow names that member on every card it passes through, so Apply lands it on them
+	// without reading the order card back (round-2 audit FOE-1).
+	it("carries the ordered member through the GM's cards to the damage card", async () => {
+		const targets = targetingResolvable("rusty sword d8+2 (close) or crushing grip (grabby)", "");
+		await sufferEnemyAttack(pc, { targets, counterOf: "msg1", memberKey: "anon:2" });
+		const choice = choiceCard();
+		expect(choice.flags[SCOPE].sufferChoice.memberKey).toBe("anon:2");
+		await resolveSufferChoice(makeMessage(choice.flags[SCOPE]), 1);
+		const amount = amountCard();
+		expect(amount.flags[SCOPE].sufferAmount.memberKey).toBe("anon:2");
+		await dealSufferedAmount(makeMessage(amount.flags[SCOPE]), "3");
+		expect(damageCard().flags[SCOPE].damage).toMatchObject({ counterOf: "msg1", memberKey: "anon:2" });
+	});
+
+	it("leaves the member off a counter-blow nobody was ordered alone for", async () => {
+		const targets = targetingResolvable("rusty sword d8+2 (close) or crushing grip (grabby)", "");
+		await sufferEnemyAttack(pc, { targets, counterOf: "msg1" });
+		expect(choiceCard().flags[SCOPE].sufferChoice).not.toHaveProperty("memberKey");
 	});
 
 	it("is avoided only while the card stands on the 10+ that avoided it", () => {

@@ -30,6 +30,7 @@ const levelPick = item => !!item?.flags?.[STONETOP_SCOPE]?.[LEVEL_PICK_FLAG];
 describe("applyLevelUp: a move agreed with the table (Book I p.529)", () => {
 	it("learns another playbook's move as the level's pick, stamped so the budget counts it", async () => {
 		const { char, actor } = foxAt(2);
+		const picksBefore = char._levelPickCount(await char._playbookMoveRow());
 		const create = vi.spyOn(actor, "createEmbeddedDocuments");
 		const res = await char.applyLevelUp(null, null, { agreed: { foreignMoveId: heavyId("Cut from Granite") } }, { fromLevel: 2 });
 		expect(res.applied).toBe(true);
@@ -39,7 +40,7 @@ describe("applyLevelUp: a move agreed with the table (Book I p.529)", () => {
 		// Stamped in the write that creates it, not set on the item afterwards.
 		const written = create.mock.calls.flatMap(([, docs]) => docs).find(d => d.name === "Cut from Granite");
 		expect(levelPick(written)).toBe(true);
-		expect(char._levelPickCount()).toBe(1);
+		expect(char._levelPickCount(await char._playbookMoveRow())).toBe(picksBefore + 1);
 	});
 
 	it("writes a custom move from the editor's input, stamped the same", async () => {

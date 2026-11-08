@@ -463,6 +463,18 @@ describe("ringFightFor", () => {
 		expect(ringFightFor(table().bystander)).toBeNull();
 	});
 
+	// EDG-1: "you're out of the action" (Book I p.245) whatever HP is left: no Clash or Defend to offer.
+	it("has nothing for a fighter who is out of it: marked out, or out of the action at Death's Door", () => {
+		const { bram: token, combat } = table();
+		token.actor.flags = { ...(token.actor.flags ?? {}), "stonetop-pwd": { deathsDoor: "out-of-action" } };
+		token.document.actor = token.actor;
+		combat.combatants.get("cBram").actor = token.actor;
+		expect(ringFightFor(token)).toBeNull();
+		const again = table();
+		again.combat.combatants.get("cFoe").isDefeated = true;
+		expect(ringFightFor(again.foe)).toBeNull();
+	});
+
 	it("has nothing for a token on a scene nobody is looking at", () => {
 		const { bram: token } = table();
 		expect(ringFightFor(token, { canvasScene: { id: "elsewhere" } })).toBeNull();

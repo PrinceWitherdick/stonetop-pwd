@@ -51,9 +51,27 @@ export function grantLevelUpClaim(actor, fromLevel, userId, now = Date.now()) {
 	for (const [key, claim] of _claims) if (now - claim.at > LEVEL_UP_CLAIM_TTL) _claims.delete(key);
 	const key = `${actor.uuid ?? actor.id}|${Number(fromLevel)}`;
 	const held = _claims.get(key);
-	if (held && held.userId !== userId) return false;
+	// A claim whose level the GM's copy has seen land (noteLevelUpLanded), and that is back at
+	// `fromLevel` now, was undone by hand since: it holds nothing any more.
+	if (held && held.userId !== userId && !held.landed) return false;
 	_claims.set(key, { userId, at: now });
 	return true;
+}
+
+/**
+ * The GM's copy of `actor` has moved past a claimed level (the holder's write landed). Marks those
+ * claims, so the level taken back by hand afterwards can be claimed again at once rather than being
+ * refused for the claim's lifetime. Called from `updateActor` on the GM's client.
+ *
+ * @param {object} actor
+ */
+export function noteLevelUpLanded(actor) {
+	if (!actor || !_claims.size) return;
+	const level = Number(actor.system?.attributes?.level?.value ?? 1);
+	const prefix = `${actor.uuid ?? actor.id}|`;
+	for (const [key, claim] of _claims) {
+		if (key.startsWith(prefix) && level > Number(key.slice(prefix.length))) claim.landed = true;
+	}
 }
 
 /**
@@ -131,6 +149,9 @@ export async function releaseLevelUp(actor, fromLevel, { game: g = globalThis.ga
 }
 
 /** Register the query (stonetop.js, at init). */
-export function registerLevelUpClaimQuery(queries = globalThis.CONFIG?.queries) {
+export function registerLevelUpClaimQuery(queries = globalThis.CONFIG?.queries, hooks = globalThis.Hooks) {
 	levelUpClaim.register(queries);
+	hooks?.on?.("updateActor", actor => {
+		if (globalThis.game?.user?.isGM) noteLevelUpLanded(actor);
+	});
 }

@@ -134,10 +134,13 @@ export const DEFAULT_WARD_SIGN = WARD_SIGNS[0].key;
  * `icon` is the kind's glyph in the roster's left rail (BlessedMarksDialog), where the five sit as
  * one list and the glyph is what makes a kind findable without reading. Plain silhouettes on
  * purpose: the rail draws them at `--st-fs-xs`, and a busy glyph at that size reads as a smudge.
+ *
+ * `movesVitals` marks a kind that is a vital on whoever WEARS it (Barkskin's armor, move-armor.js), so
+ * a change to its move re-mirrors their stored vitals (vitals-mirror.js), not only the Blessed's.
  */
 export const MARK_KINDS = [
 	{
-		key: "barkskin", move: BARKSKIN, label: "Barkskin", subject: "person", icon: "fa-shield-halved",
+		key: "barkskin", move: BARKSKIN, label: "Barkskin", subject: "person", icon: "fa-shield-halved", movesVitals: true,
 		rule: "They have 2 armor while touching the earth, so long as the mark remains. Costs 1 Stock.",
 	},
 	{

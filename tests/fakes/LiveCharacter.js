@@ -73,6 +73,8 @@ export function makeLiveItem(data) {
 		getFlag: (scope, key) => getPath(flags[scope], key) ?? null,
 		setFlag: vi.fn(async (scope, key, val) => { flags[scope] ??= {}; setPath(flags[scope], key, val); }),
 		unsetFlag: vi.fn(async (scope, key) => unsetPath(flags[scope], key)),
+		// Dotted-path writes, e.g. { "flags.stonetop-pwd.retiredMove": "Bulwark" }.
+		update: vi.fn(async function (updates = {}) { for (const [k, v] of Object.entries(updates)) setPath(this, k, v); }),
 	};
 }
 

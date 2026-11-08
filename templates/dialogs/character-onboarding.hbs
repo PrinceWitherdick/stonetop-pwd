@@ -595,10 +595,11 @@
 		{{!-- ── Invocations (Lightbearer) ─────────────────────────── --}}
 		{{#if isInvocations}}
 		<h3 class="stonetop-onboarding-step-title">Invocations</h3>
-		<p class="stonetop-onboarding-step-hint">You start knowing {{invocationData.startingCount}} Invocations. Choose them now.{{#if invocationData.learnedCount}} The ones you learned at level-up stay known.{{/if}}</p>
+		{{!-- Above 1st level the even levels already reached are owed too (Book I p.146). --}}
+		<p class="stonetop-onboarding-step-hint">You start knowing {{invocationData.startingCount}} Invocations{{#if invocationData.levelExtra}}, and {{invocationData.levelExtra}} more for reaching level {{invocationData.level}} (1 at each even level){{/if}}. Choose them now.{{#if invocationData.learnedCount}} The ones you learned at level-up stay known.{{/if}}</p>
 		<p class="stonetop-onboarding-move-counter">
 			<span class="stonetop-onboarding-invocation-count">{{invocationData.selectedCount}}</span>
-			/ {{invocationData.startingCount}} chosen
+			/ {{invocationData.pickCount}} chosen
 		</p>
 		<div class="stonetop-onboarding-cards stonetop-onboarding-cards--columns">
 			{{#each invocationData.options}}

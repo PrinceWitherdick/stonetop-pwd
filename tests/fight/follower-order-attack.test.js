@@ -87,8 +87,10 @@ describe("an ordered blow", () => {
 		const place = { entry: { melee: ["a"], shootingAt: [] }, fighters: [{ id: "a", bodies: 6 }] };
 		expect(orderedFoeBodies({ character: {}, targets: [], engagement: () => place })).toBe(6);
 		expect(orderedFoeBodies({ character: {}, targets: [], engagement: () => null })).toBe(1);
-		// Never one inside a group-against-group exchange (p.416), as the token's swarm die reads it.
-		const exchange = { ...place, combatant: { id: "crew" }, fighters: [{ id: "a", bodies: 1 }], result: { clusters: [{ heroIds: ["crew"], foeIds: ["a"], groups: {} }] } };
-		expect(orderedFoeBodies({ character: {}, targets: [foe], engagement: () => exchange })).toBeGreaterThan(1);
+		// FGT-5: by who the blow is AT, as the token's swarm die reads it. Inside a group-against-group exchange a blow
+		// at the lone foe beside the crew is still "at a single foe" (p.473); one at the other group is several.
+		const exchange = { ...place, combatant: { id: "crew" }, fighters: [{ id: "a", bodies: 1 }, { id: "horde", bodies: 20 }], result: { clusters: [{ heroIds: ["crew"], foeIds: ["a", "horde"], groups: {} }] } };
+		expect(orderedFoeBodies({ character: {}, targets: [foe], engagement: () => exchange })).toBe(1);
+		expect(orderedFoeBodies({ character: {}, targets: [], engagement: () => ({ ...exchange, entry: { melee: ["horde"], shootingAt: [] } }) })).toBe(20);
 	});
 });

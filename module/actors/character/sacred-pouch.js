@@ -18,9 +18,10 @@
 //   · An entry goes into an EMPTY space when there is one (spent - 1, Stock unchanged). With none, it
 //     takes the place of 1 Stock, which is discarded (flagged to the player, never refused).
 //   · An entry taken out leaves its space EMPTY (spent + 1, Stock unchanged).
-//   · The pouch growing (an even level, Big Magic learned) adds EMPTY room (spent + the growth); shrinking
-//     (Big Magic removed or un-learned) clamps spent to the new max. A pouch gained or lost has nothing to
-//     settle: a new one (creation, a Seeker's Initiate) starts full.
+//   · The pouch growing (an even level, Big Magic learned) adds EMPTY room (spent + the growth). Shrinking
+//     (Big Magic removed or un-learned, a lower level) loses EMPTY room first (spent - the loss, never
+//     below 0), so the Stock stays while it still fits (ruling 2026-11-06). A pouch gained or lost has
+//     nothing to settle: a new one (creation, a Seeker's Initiate) starts full.
 //
 // The arithmetic is plain numbers here; StonetopCharacter writes it, and the card and sheet flows at the
 // bottom are the buttons that ask for it.
@@ -91,7 +92,8 @@ export function spentAfterFree(spent, usableBefore, usableAfter) {
 /**
  * The spent count once the pouch's max goes from `before` to `after` (an even level, Big Magic learned or
  * removed), or null when there is nothing to settle: no change, or a pouch gained or lost (null either side).
- * Growth arrives EMPTY (spent rises by it); a shrink clamps spent to the new max, never below 0.
+ * Growth arrives EMPTY (spent rises by it); a shrink takes EMPTY space first (spent falls by it, never
+ * below 0), so a pouch of 4 Stock in 6 shrunk to 5 still holds 4.
  */
 export function settledPouchSpent(spent, before, after) {
 	if (before == null || after == null) return null;
@@ -99,7 +101,7 @@ export function settledPouchSpent(spent, before, after) {
 	const a = whole(after);
 	if (a === b) return null;
 	const s = Math.min(b, whole(spent));
-	return a > b ? Math.min(a, s + (a - b)) : Math.min(s, a);
+	return a > b ? Math.min(a, s + (a - b)) : Math.min(a, Math.max(0, s - (b - a)));
 }
 
 /**

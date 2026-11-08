@@ -64,8 +64,8 @@ describe("levelling up twice", () => {
 		const { sheet } = makeSheet({ canLevelUp: false });
 		await sheet._onLevelUpOpen();
 		opened[0]._onDone("Initiate of the Secret Arts", { applied: true, foreignMoveName: "Big Magic" });
+		await vi.waitFor(() => expect(sheet._maybeOpenPossessionChoicesForMove).toHaveBeenCalledWith("Big Magic"));
 		expect(sheet._maybeOpenPossessionChoicesForMove).toHaveBeenCalledWith("Initiate of the Secret Arts");
-		expect(sheet._maybeOpenPossessionChoicesForMove).toHaveBeenCalledWith("Big Magic");
 	});
 
 	it("opens the companion's trait picker for a Magnificent Specimen learned through a cross-playbook pick (POS-2)", async () => {
@@ -73,8 +73,8 @@ describe("levelling up twice", () => {
 		sheet._maybeOpenCompanionTraitsForMove = vi.fn();
 		await sheet._onLevelUpOpen();
 		opened[0]._onDone("Wild Soul", { applied: true, foreignMoveName: "Magnificent Specimen" });
-		expect(sheet._maybeOpenCompanionTraitsForMove).toHaveBeenCalledWith("Wild Soul");
-		expect(sheet._maybeOpenCompanionTraitsForMove).toHaveBeenCalledWith("Magnificent Specimen");
+		await vi.waitFor(() => expect(sheet._maybeOpenCompanionTraitsForMove).toHaveBeenCalledWith("Magnificent Specimen"));
+		expect(sheet._maybeOpenCompanionTraitsForMove).not.toHaveBeenCalledWith("Wild Soul");
 	});
 
 	it("raises the window already open for that character instead of opening another", async () => {

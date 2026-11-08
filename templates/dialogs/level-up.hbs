@@ -3,7 +3,7 @@
 	{{!-- ── Step 1: Overview ────────────────────────────────────────────── --}}
 	{{#if isOverview}}
 	<div class="stonetop-levelup-step">
-		<p class="stonetop-levelup-intro">{{{this.overviewIntro}}}</p>
+		<p class="stonetop-levelup-intro" tabindex="-1" data-levelup-focus data-autofocus>{{{this.overviewIntro}}}</p>
 		{{#if awayWarning}}
 		<p class="stonetop-levelup-aside stonetop-levelup-away"><i class="fas fa-triangle-exclamation"></i> {{this.awayWarning}}</p>
 		{{/if}}
@@ -24,8 +24,11 @@
 			</div>
 		</div>
 
+		{{#if this.resetAside}}
+		<p class="stonetop-levelup-aside stonetop-levelup-reset">{{this.resetAside}}</p>
+		{{/if}}
 		{{#if needsInvocation}}
-		<p class="stonetop-levelup-aside">{{{localize "stonetop.specialMoves.levelUp.invocationAside"}}}</p>
+		<p class="stonetop-levelup-aside">{{this.invocationAside}}</p>
 		{{/if}}
 		{{#if pouchGrowthNote}}
 		<p class="stonetop-levelup-aside stonetop-levelup-pouch">{{this.pouchGrowthNote}}</p>
@@ -36,7 +39,7 @@
 	{{!-- ── Step 2: Choose a Move ──────────────────────────────────────── --}}
 	{{#if isMove}}
 	<div class="stonetop-levelup-step">
-		<p class="stonetop-levelup-intro">{{{localize "stonetop.specialMoves.levelUp.moveIntro"}}}</p>
+		<p class="stonetop-levelup-intro" tabindex="-1" data-levelup-focus>{{{localize "stonetop.specialMoves.levelUp.moveIntro"}}}</p>
 		{{#if hasLockedMoves}}
 		<label class="stonetop-levelup-toggle-locked">
 			<input type="checkbox" class="stonetop-levelup-locked-check" {{#if showLockedMoves}}checked{{/if}}>
@@ -64,19 +67,20 @@
 			{{#each moves}}
 			<div class="stonetop-levelup-move-option stonetop-levelup-pickable{{#if selected}} is-selected{{/if}}"
 				role="button" tabindex="0" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"
+				aria-labelledby="{{this.nameId}}"{{#if this.descIds}} aria-describedby="{{this.descIds}}"{{/if}}
 				data-compendium-id="{{this.compendiumId}}"
 				data-move-groups="{{this.groupsAttr}}">
 				<div class="stonetop-levelup-move-header">
-					<span class="stonetop-levelup-move-name">{{this.name}}</span>
+					<span class="stonetop-levelup-move-name" id="{{this.nameId}}">{{this.name}}</span>
 					{{#if requiresLabel}}
-					<span class="stonetop-levelup-move-req">{{this.requiresLabel}}</span>
+					<span class="stonetop-levelup-move-req" id="{{this.reqId}}">{{this.requiresLabel}}</span>
 					{{/if}}
 				</div>
 				{{#if description}}
-				<div class="stonetop-levelup-move-description">{{{moveBody description moveResults}}}</div>
+				<div class="stonetop-levelup-move-description" id="{{this.descId}}">{{{moveBody description moveResults}}}</div>
 				{{/if}}
 				{{! A move whose trigger an insert has taken away (Hard to Kill for a Revenant): said, never hidden. }}
-				{{#if insertNote}}<p class="stonetop-levelup-move-note stonetop-levelup-insert-note">{{this.insertNote}}</p>{{/if}}
+				{{#if insertNote}}<p class="stonetop-levelup-move-note stonetop-levelup-insert-note" id="{{this.noteId}}">{{this.insertNote}}</p>{{/if}}
 			</div>
 			{{/each}}
 
@@ -141,13 +145,24 @@
 			</div>
 			<div class="stonetop-levelup-move-description">{{localize "stonetop.specialMoves.levelUp.agreedHint"}}</div>
 		</div>
+
+		{{!-- Book I p.529: "if they're stumped, they can pick a new move during play". The level is
+		      taken now with no move; the Moves tab asks for it. --}}
+		<div class="stonetop-levelup-move-option stonetop-levelup-later-entry stonetop-levelup-pickable{{#if this.laterPicked}} is-selected{{/if}}"
+			role="button" tabindex="0" aria-pressed="{{#if this.laterPicked}}true{{else}}false{{/if}}"
+			data-compendium-id="{{this.laterId}}">
+			<div class="stonetop-levelup-move-header">
+				<span class="stonetop-levelup-move-name">{{localize "stonetop.specialMoves.levelUp.laterTitle"}}</span>
+			</div>
+			<div class="stonetop-levelup-move-description">{{localize "stonetop.specialMoves.levelUp.laterHint"}}</div>
+		</div>
 	</div>
 	{{/if}}
 
 	{{!-- ── Step: A Move Agreed With the Table ─────────────────────────── --}}
 	{{#if isAgreed}}
 	<div class="stonetop-levelup-step">
-		<p class="stonetop-levelup-intro">{{localize "stonetop.specialMoves.levelUp.agreedIntro"}}</p>
+		<p class="stonetop-levelup-intro" tabindex="-1" data-levelup-focus>{{localize "stonetop.specialMoves.levelUp.agreedIntro"}}</p>
 		{{#if customAllowed}}
 		<div class="stonetop-levelup-move-option stonetop-levelup-agreed-option stonetop-levelup-agreed-custom stonetop-levelup-pickable{{#if customSelected}} is-selected{{/if}}"
 			role="button" tabindex="0" aria-pressed="{{#if customSelected}}true{{else}}false{{/if}}"
@@ -182,7 +197,7 @@
 	{{!-- ── Step: Choose a Foreign Move (cross-playbook moves) ────────── --}}
 	{{#if isForeignMove}}
 	<div class="stonetop-levelup-step">
-		<p class="stonetop-levelup-intro">
+		<p class="stonetop-levelup-intro" tabindex="-1" data-levelup-focus>
 			{{{localize "stonetop.specialMoves.levelUp.foreignIntro"}}}
 			{{#if foreignFromMoveName}}<span class="stonetop-levelup-stat-cap-note">{{localize "stonetop.specialMoves.levelUp.foreignVia" move=foreignFromMoveName}}{{#if foreignGrantsPouch}} · {{localize "stonetop.specialMoves.levelUp.foreignAlsoPouch"}}{{/if}}</span>{{/if}}
 		</p>
@@ -217,9 +232,9 @@
 	{{!-- ── Step: Increase a Stat (Improved / Superior Stat) ──────────── --}}
 	{{#if isStat}}
 	<div class="stonetop-levelup-step">
-		<p class="stonetop-levelup-intro">
+		<p class="stonetop-levelup-intro" tabindex="-1" data-levelup-focus>
 			{{{localize "stonetop.specialMoves.levelUp.statIntro"}}}
-			{{#if statMoveName}}<span class="stonetop-levelup-stat-cap-note">{{this.statMoveName}}: max +{{this.statCap}}</span>{{/if}}
+			{{#if this.statCapLabel}}<span class="stonetop-levelup-stat-cap-note">{{this.statCapLabel}}</span>{{/if}}
 		</p>
 		<div class="stonetop-levelup-stat-list">
 			{{#each statOptions}}
@@ -227,7 +242,7 @@
 				role="button" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"{{#if atCap}} aria-disabled="true"{{else}} tabindex="0"{{/if}}
 				data-stat-key="{{this.key}}">
 				<span class="stonetop-levelup-stat-name">{{this.name}}</span>
-				<span class="stonetop-levelup-stat-value">{{this.valueLabel}}{{#if atCap}} <em>(max)</em>{{/if}}</span>
+				<span class="stonetop-levelup-stat-value">{{this.valueLabel}}{{#if atCap}} <em>{{@root.statAtMaxLabel}}</em>{{/if}}</span>
 			</div>
 			{{/each}}
 		</div>
@@ -240,18 +255,20 @@
 	{{!-- ── Step: Mark Selections (Veteran Crew / Heroes to the Last / Beast of Legend / Well Versed) ── --}}
 	{{#if isMarks}}
 	<div class="stonetop-levelup-step">
-		<p class="stonetop-levelup-intro">
+		<p class="stonetop-levelup-intro" tabindex="-1" data-levelup-focus>
 			{{{localize "stonetop.specialMoves.levelUp.marksIntro"}}}
-			{{#if markStep}}<span class="stonetop-levelup-stat-cap-note">{{markStep.moveName}}: {{markStep.used}} / {{markStep.allowance}} chosen</span>{{/if}}
+			{{#if this.markStep}}<span class="stonetop-levelup-stat-cap-note">{{this.markStep.chosenLabel}}</span>{{/if}}
 		</p>
 		<div class="stonetop-levelup-mark-list">
 			{{#each markStep.options}}
 			<div class="stonetop-levelup-stat-option stonetop-levelup-mark-option stonetop-levelup-pickable{{#if selected}} is-selected{{/if}}{{#if disabled}} is-at-cap{{/if}}"
-				role="button" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"{{#if disabled}} aria-disabled="true"{{else}} tabindex="0"{{/if}}
-				data-mark-slug="{{this.slug}}"{{#if tooltip}} data-tooltip="{{this.tooltip}}" data-tooltip-direction="UP"{{/if}}>
+				role="button" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"{{#if disabled}} aria-disabled="true"{{/if}} tabindex="0"
+				{{#if this.noteId}}aria-describedby="{{this.noteId}}"{{/if}}
+				data-mark-slug="{{this.slug}}">
 				<span class="stonetop-levelup-stat-name">{{this.label}}</span>
 				{{#if existingLabel}}<span class="stonetop-levelup-stat-value">{{this.existingLabel}}</span>{{/if}}
 			</div>
+			{{#if this.note}}<p class="stonetop-levelup-option-note" id="{{this.noteId}}">{{this.note}}</p>{{/if}}
 			{{/each}}
 		</div>
 	</div>
@@ -260,9 +277,9 @@
 	{{!-- ── Step: Mark a Companion Action (Beast-Bonded Ranger at 3rd/5th/7th/9th) ── --}}
 	{{#if isCompanion}}
 	<div class="stonetop-levelup-step">
-		<p class="stonetop-levelup-intro">
+		<p class="stonetop-levelup-intro" tabindex="-1" data-levelup-focus>
 			{{{localize "stonetop.specialMoves.levelUp.companionIntro"}}}
-			{{#if companionStep}}<span class="stonetop-levelup-stat-cap-note">{{companionStep.used}} / {{companionStep.allowance}} chosen</span>{{/if}}
+			{{#if this.companionStep}}<span class="stonetop-levelup-stat-cap-note">{{this.companionStep.chosenLabel}}</span>{{/if}}
 		</p>
 		<div class="stonetop-levelup-mark-list">
 			{{#each companionStep.options}}
@@ -280,20 +297,21 @@
 	{{!-- ── Step 3: Choose an Invocation ──────────────────────────────── --}}
 	{{#if isInvocation}}
 	<div class="stonetop-levelup-step">
-		<div class="stonetop-levelup-intro stonetop-levelup-intro--playbook">
+		<div class="stonetop-levelup-intro stonetop-levelup-intro--playbook" tabindex="-1" data-levelup-focus>
 			{{#if playbookIcon}}<img class="stonetop-levelup-intro-icon" src="{{this.playbookIcon}}" alt="{{this.playbookName}}">{{/if}}
-			<span>{{{localize "stonetop.specialMoves.levelUp.invocationIntro"}}}</span>
+			<span>{{this.invocationIntro}}{{#if this.invocationChosen}} <span class="stonetop-levelup-stat-cap-note">{{this.invocationChosen}}</span>{{/if}}</span>
 		</div>
 
 		<div class="stonetop-levelup-invocation-list">
 			<div class="stonetop-levelup-invocation-grid">
 			{{#each invocations}}
-			<div class="stonetop-levelup-invocation-option stonetop-levelup-pickable{{#if selected}} is-selected{{/if}}"
-				role="button" tabindex="0" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"
+			<div class="stonetop-levelup-invocation-option stonetop-levelup-pickable{{#if selected}} is-selected{{/if}}{{#if disabled}} is-at-cap{{/if}}"
+				role="button" tabindex="0" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"{{#if disabled}} aria-disabled="true"{{/if}}
+				aria-labelledby="{{this.nameId}}"{{#if this.descIds}} aria-describedby="{{this.descIds}}"{{/if}}
 				data-slug="{{this.slug}}">
-				<span class="stonetop-levelup-invocation-name">{{this.label}}</span>
+				<span class="stonetop-levelup-invocation-name" id="{{this.nameId}}">{{this.label}}</span>
 				{{#if description}}
-				<div class="stonetop-levelup-invocation-description">{{{this.description}}}</div>
+				<div class="stonetop-levelup-invocation-description" id="{{this.descId}}">{{{this.description}}}</div>
 				{{/if}}
 			</div>
 			{{/each}}

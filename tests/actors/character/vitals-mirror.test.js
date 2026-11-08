@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { registerVitalsMirrorHooks, mayMoveVitals, mayMoveSteadingGear, mayMoveMarks, FLAG_NOISE } from "../../../module/actors/character/vitals-mirror.js";
-import { CLASHED_FLAG, HARMED_BY_FLAG, KNOCKED_DOWN_FLAG, ALPHA_FLAG } from "../../../module/fight/hero-moves.js";
+import {
+	CLASHED_FLAG, HARMED_BY_FLAG, KNOCKED_DOWN_FLAG, ALPHA_FLAG, RAPIER_WIT_FLAG, TRUTH_FLAG, SPEAK_SOFTLY_FLAG,
+	CENSURE_ENRAGED_FLAG, FOCUS_FIRE_FLAG, FOCUS_FIRE_USED_FLAG, TOUGH_LOVE_FLAG,
+} from "../../../module/fight/hero-moves.js";
 import { StonetopCharacter } from "../../../module/actors/character/StonetopCharacter.js";
 import { READINESS_FLAG } from "../../../module/combat/defend-readiness.js";
 import { LEDGER_KEY } from "../../../module/utils/ledger-core.js";
@@ -60,6 +63,7 @@ describe("what moves a vital", () => {
 		expect([...FLAG_NOISE].sort()).toEqual([
 			READINESS_FLAG, LEDGER_KEY, CAMP_FLAG, CAMP_OWED_FLAG, CAMP_HUNGER_FLAG, DEATHS_DOOR_FLAG, DEATHS_DOOR_ROLLING_FLAG,
 			UNSTOPPABLE_FIGHTING_FLAG, CLASHED_FLAG, HARMED_BY_FLAG, KNOCKED_DOWN_FLAG, ALPHA_FLAG,
+			RAPIER_WIT_FLAG, TRUTH_FLAG, SPEAK_SOFTLY_FLAG, CENSURE_ENRAGED_FLAG, FOCUS_FIRE_FLAG, FOCUS_FIRE_USED_FLAG, TOUGH_LOVE_FLAG,
 			INSPIRATION_FLAG, BLESSING_FLAG, "invocations", ...ONGOING_INVOCATION_FLAGS, MIRRORED_HP_PENALTY_FLAG,
 		].sort());
 		// The Candle against the Dark's armor reads the light, so lighting it must re-mirror.
@@ -154,6 +158,42 @@ describe("the vitals mirror hooks", () => {
 			handlers.updateActor(steading, { flags: { "stonetop-pwd": { steading: { population: 3 } } } }, {}, "me");
 			await vi.runAllTimersAsync();
 			for (const actor of [others.pim, others.cadi, mine.pim, mine.cadi]) expect(actor.sync).not.toHaveBeenCalled();
+		});
+
+		// Book I p.104: Barkskin's mark gives its benefit "so long as the mark remains", and a mark only counts while
+		// the Blessed has the move learned. Switching it off, removing it, or deleting the Blessed moves the wearers'.
+		it("re-mirrors the Barkskin's wearers when a Blessed's Barkskin changes, and everyone when a Blessed with marks is deleted", async () => {
+			const { pim, cadi } = world(true);
+			const blessed = { ...character({ id: "olwin" }), flags: { "stonetop-pwd": { blessedMarks: [{ kind: "barkskin", uuid: "Actor.pim" }, { kind: "charm", uuid: "Actor.cadi" }] } } };
+			handlers.updateItem({ parent: blessed, type: "move", name: "Barkskin" }, {}, {}, "a-player");
+			await vi.runAllTimersAsync();
+			expect(pim.sync).toHaveBeenCalledTimes(1);
+			// Cadi bears only a charm, which is no armor: her vitals stay as they were.
+			expect(cadi.sync).not.toHaveBeenCalled();
+			handlers.deleteActor(blessed);
+			await vi.runAllTimersAsync();
+			expect(pim.sync).toHaveBeenCalledTimes(2);
+			// A Blessed with no marks laid, or another move, moves nobody else's armor.
+			const bare = { ...character({ id: "bare" }), flags: { "stonetop-pwd": {} } };
+			handlers.updateItem({ parent: bare, type: "move", name: "Barkskin" }, {}, {}, "a-player");
+			handlers.updateItem({ parent: blessed, type: "move", name: "Spirit Tongue" }, {}, {}, "a-player");
+			await vi.runAllTimersAsync();
+			expect(pim.sync).toHaveBeenCalledTimes(2);
+		});
+
+		it("looks for a Barkskin's wearers on the primary GM's client only", async () => {
+			const { pim } = world(false);
+			const blessed = { ...character({ id: "olwin" }), flags: { "stonetop-pwd": { blessedMarks: [{ kind: "barkskin", uuid: "Actor.pim" }] } } };
+			// Every other client stands aside before reading the world's actors at all.
+			const actors = globalThis.game.actors;
+			Object.defineProperty(globalThis.game, "actors", { configurable: true, get: () => { throw new Error("read the world"); } });
+			try {
+				handlers.updateItem({ parent: blessed, type: "move", name: "Barkskin" }, {}, {}, "a-player");
+			} finally {
+				Object.defineProperty(globalThis.game, "actors", { configurable: true, writable: true, value: actors });
+			}
+			await vi.runAllTimersAsync();
+			expect(pim.sync).not.toHaveBeenCalled();
 		});
 
 		it("re-mirrors every character when a world arcanum's record changes", async () => {

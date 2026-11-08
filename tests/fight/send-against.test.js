@@ -1,5 +1,5 @@
 ﻿import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { spotBeside, sendAgainst, handleSendQuery, SEND_QUERY } from "../../module/fight/send-against.js";
+import { spotBeside, sendAgainst, handleSendQuery, sendAtChoices, SEND_QUERY } from "../../module/fight/send-against.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { touching } from "../../module/fight/engagements.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, GRID } from "../fakes/fight.js";
@@ -292,5 +292,32 @@ describe("handleSendQuery", () => {
 		// Claiming to be the GM would move the hidden one: the claim is refused outright.
 		expect(await handleSendQuery({ sceneId: scene.id, moves, userId: "gm" }, { timeout: 10000 }, deps)).toBe(0);
 		expect(await handleSendQuery({ sceneId: scene.id, moves }, { timeout: 10000 }, deps)).toBe(0);
+	});
+});
+
+// FGT-8: the drag's send, for a reader who cannot drag (a magnifier user, a keyboard): who could be picked.
+describe("sendAtChoices", () => {
+	function fight() {
+		const tBram = fakeToken({ id: "tBram", col: 0, row: 0, actor: fakeActor({ id: "bram", type: "character", hasPlayerOwner: true }) });
+		const tWolf = fakeToken({ id: "tWolf", col: 5, row: 0, actor: fakeActor({ id: "wolf", type: "monster" }) });
+		const tHidden = fakeToken({ id: "tHid", col: 8, row: 0, hidden: true, actor: fakeActor({ id: "lurker", type: "monster" }) });
+		const tDead = fakeToken({ id: "tDead", col: 9, row: 0, actor: fakeActor({ id: "dead", type: "monster" }) });
+		const scene = fakeScene({ tokens: [tBram, tWolf, tHidden, tDead] });
+		const cBram = fakeCombatant({ id: "cBram", token: tBram, scene, side: "heroes", isOwner: true });
+		const cWolf = fakeCombatant({ id: "cWolf", token: tWolf, scene, side: "foes" });
+		const cHid = fakeCombatant({ id: "cHid", token: tHidden, scene, side: "foes" });
+		const cDead = fakeCombatant({ id: "cDead", token: tDead, scene, side: "foes", defeated: true });
+		return { scene, combat: fakeCombat({ scene, combatants: [cBram, cWolf, cHid, cDead] }), cBram, cWolf, cHid };
+	}
+
+	it("lists the other side still in the fight that this reader may see, and nobody for one they may not move", () => {
+		const { scene, combat, cBram, cWolf, cHid } = fight();
+		const player = { id: "player", isGM: false };
+		expect(sendAtChoices(combat, cBram, { scene, viewer: player })).toEqual([{ id: "cWolf", name: "wolf" }]);
+		expect(sendAtChoices(combat, cBram, { scene, viewer: { id: "gm", isGM: true } }).map(c => c.id)).toEqual(["cWolf", "cHid"]);
+		expect(sendAtChoices(combat, cWolf, { scene, viewer: player })).toEqual([{ id: "cBram", name: "bram" }]);
+		// A hidden fighter stays put for a player (mayMove), and a fight on another map sends nobody.
+		expect(sendAtChoices(combat, cHid, { scene, viewer: player })).toEqual([]);
+		expect(sendAtChoices(combat, cBram, { scene: fakeScene({ id: "elsewhere" }), viewer: player })).toEqual([]);
 	});
 });

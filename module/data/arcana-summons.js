@@ -190,6 +190,20 @@ export const ARCANA_SUMMONS = {
 				cost:         "wonder, excitement, joy, discovery",
 				notes:        "Special qualities: living stone, tireless. When it makes a move at your behest and rolls a 6-, mark a Consequence — the Mindgem's reverse lists how it changes (new tags/moves, shifting damage, or developing a purpose of its own).",
 				sourceUuid:   "mindgem:mighty-servant",
+				// How the Servant changes as the Mindgem's Consequences are marked (Book II pp.548-549), imposed by
+				// actors/character/mindgem-servant.js. `label` is the text printed after the □, `damage` the line that
+				// replaces the printed one, `damageTags` the tags its attacks gain, `swapTags` the tags it trades.
+				consequences: [
+					{
+						label:    "It realizes its potential as a weapon",
+						damage:   "stone fists 1d10+5 (hand, close, messy, forceful, 3 piercing)",
+						swapTags: { slow: "warrior" },
+					},
+					{
+						label:      "It becomes aggressive and reckless in battle",
+						damageTags: ["area", "dangerous"],
+					},
+				],
 			},
 		],
 	},
@@ -244,7 +258,9 @@ export const ARCANA_SUMMONS = {
 				portraitIcon: "fas fa-frog",
 				tags:         ["fae", "tiny", "magical", "devious", "arrogant"],
 				hp:           15,
-				armor:        6,
+				// "Armor 6 (stone, resilience), 2 vs. iron": kept as the card's conditional form, so its NPC's damage card
+				// offers the iron back (follower-build.js#followerArmorWithClause; round-2 audit EDG-12).
+				armor:        "6 (2 vs. iron)",
 				damage:       "none",
 				instinct:     "to heap abuse on its worshippers",
 				moves:        "Make unreasonable demands\nConsume the essence of foodstuffs\nSense one's idle thoughts/memories\nWeave powerful illusions and hallucinations (near, area)\nGrow bored/huffy and go to sleep",
@@ -287,7 +303,8 @@ export const ARCANA_SUMMONS = {
 				portraitIcon: "fas fa-paw",
 				tags:         ["undead", "construct", "terrifying", "clumsy"],
 				hp:           3,
-				armor:        4,
+				// "Armor 4 (0 vs. bronze)", kept whole for the damage card's box (round-2 audit EDG-12).
+				armor:        "4 (0 vs. bronze)",
 				damage:       "varies d6 (hand, maybe others)",
 				instinct:     "to get confused and lash out",
 				moves:        "Do something one of its component beasts could do\nMoan, wretchedly and disturbingly",

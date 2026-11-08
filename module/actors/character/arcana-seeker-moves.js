@@ -33,6 +33,7 @@
 
 import { SYSTEM_ID } from "../../system-id.js";
 import { isMajorArcanumItem } from "../../arcana-icons.js";
+import { PACED_BACK_MOVES } from "../../data/arcana-rules.js";
 import { consequenceBoxRange, consequenceLabel, unlockChoiceState, unlockCircleCount } from "./CharacterArcana.js";
 import { frontTaskTrack } from "./seeker-collection.js";
 import { bookMoveName, moveLearnedIn, ownedLearnedMove, ownsLearnedMoveNamed } from "./owns-move.js";
@@ -358,6 +359,8 @@ async function tickImproviseTask(actor, arcanumSlug, title, picked) {
 	await postMoveNote(actor, IMPROVISE,
 		`${actor.name} marks a step towards unlocking ${title}: ${picked.text}.`
 		+ (unlocked ? " That was the last step: see the card for what unlocking it brings." : ""));
+	// A task can earn a back move (the Twisted Spear's "Each time you mark a task thereafter").
+	await chooseUnlockChoices(actor, arcanumSlug);
 	return true;
 }
 
@@ -377,6 +380,7 @@ async function markImproviseTask(actor, arcanumSlug, step, ask) {
 	await postMoveNote(actor, IMPROVISE,
 		`${actor.name} marks a step towards unlocking ${step.title}: ${task.label || `task ${task.index + 1}`}.`
 		+ (left ? "" : " That was the last one: see the card for what unlocking it brings."));
+	await chooseUnlockChoices(actor, arcanumSlug);
 	return true;
 }
 
@@ -613,15 +617,28 @@ export function arcanumCastingPenalty(card, move, boxes = {}) {
  * where no one could be asked (the Seeker's creation mark) or a pick that was closed leaves the
  * card owing the choice, and the tab's cue on the front asks again (chooseUnlockChoices).
  */
-export function askUnlockChoice({ title, name, choices }, { ask = askWithButtons } = {}) {
+export function askUnlockChoice({ title, name, choices, rule = null, page = null }, { ask = askWithButtons } = {}) {
+	// A card whose back moves come over time quotes its own rule (PACED_BACK_MOVES).
+	const lead = rule
+		? `<p><strong>${escHtml(title)}</strong>: "${escHtml(rule)}"${page ? ` (${escHtml(page)})` : ""}. You have one to choose.</p>`
+		: `<p>Your mark on <strong>${escHtml(title)}</strong> lets you choose one of the ${escHtml(name)}.</p>`;
 	return ask({
 		title:   `${title}: choose one of the ${name}`,
-		content: `<p>Your mark on <strong>${escHtml(title)}</strong> lets you choose one of the ${escHtml(name)}. Which do you learn?</p>`,
+		content: `${lead}<p>Which do you learn?</p>`,
 		buttons: [
 			...choices.map((c, n) => ({ key: `choice-${c.index}`, label: c.label || `Choice ${n + 1}`, icon: "fa-book-open", value: c })),
 			{ key: "none", label: "Choose later", icon: "fa-xmark", value: null },
 		],
 	});
+}
+
+/**
+ * A card's owed choices for this character (unlockChoiceState): the Codex's spells, or the back moves a
+ * card gives over time (CharacterArcana.js#PACED_BACK_MOVES), read with its completed tracks.
+ */
+function owedChoiceState(character, card) {
+	return unlockChoiceState(card, character?.arcanaBoxStates ?? {},
+		{ completions: character?.arcanaCompletionCount?.(card.slug) ?? 0 });
 }
 
 /**
@@ -631,18 +648,18 @@ export function askUnlockChoice({ title, name, choices }, { ask = askWithButtons
  *
  * @param {Actor} actor
  * @param {string} slug
- * @param {{ask?: Function}} [o]  askUnlockChoice by default
+ * @param {{ask?: Function, card?: object}} [o]  askUnlockChoice by default; `card` the slug's card when the caller has read it
  */
-export async function chooseUnlockChoices(actor, slug, { ask = askUnlockChoice } = {}) {
+export async function chooseUnlockChoices(actor, slug, { ask = askUnlockChoice, card: known = null } = {}) {
 	const character = actor?.typedActor;
-	const card = slug ? await character?.getArcanum?.(slug) : null;
+	const card = known ?? (slug ? await character?.getArcanum?.(slug) : null);
 	if (!card) return 0;
 	const title = card.front?.title ?? slug;
 	let chosen = 0;
 	for (;;) {
-		const state = unlockChoiceState(card, character.arcanaBoxStates);
+		const state = owedChoiceState(character, card);
 		if (!state?.owed) return chosen;
-		const picked = await ask({ title, name: state.name, choices: state.open });
+		const picked = await ask({ title, name: state.name, choices: state.open, rule: state.rule ?? null, page: state.page ?? null });
 		if (!picked) {
 			globalThis.ui?.notifications?.info?.(`No ${state.name} chosen yet: the mark stays. `
 				+ `Choose one from the card on the Arcana tab when you're ready.`);
@@ -755,7 +772,8 @@ export async function askConsequenceDiversion({ title, diversions }, { ask = ask
 /**
  * A change on an arcanum card's □/○/◇, from the sheet. A tick of a major arcanum's Consequence
  * asks first when Conduit of Power or Overchannel gives a choice; a tick of an unlock ○ that buys a
- * choice (the Hec'tumel Codex's spells) asks for it after the mark is written; everything else is
+ * choice (the Hec'tumel Codex's spells), or any tick that makes a back move owed (PACED_BACK_MOVES),
+ * asks for it after the mark is written; everything else is
  * written as it stands. Answers "marked", "unticked", "diverted" (something else was marked and the
  * box stays clear), "cancelled" (nothing was marked), or null without a character.
  *
@@ -777,6 +795,22 @@ export async function settleArcanumBoxTick(actor, { slug, context, index, checke
 		await chooseUnlockChoices(actor, slug, { ask: pick });
 		return result;
 	}
+	// A tick that makes a back move owed (a Consequence on the Ice Sphere, a task on the Twisted Spear:
+	// PACED_BACK_MOVES) asks for it once the mark is written, as an unlock ○ on the Codex does. On any
+	// other card a tick off the unlock track can only fill a choice, never owe one, so it skips the reads.
+	// A tick changes the marks, never the card, so the card is read once and its state read off the
+	// live marks before and after.
+	const card = PACED_BACK_MOVES[slug] ? await character.getArcanum?.(slug) : null;
+	const owedNow = () => (card ? (owedChoiceState(character, card)?.owed ?? 0) : 0);
+	const owedBefore = owedNow();
+	const result = await settleMarkedTick(actor, character, { slug, context, index }, write, ask);
+	if (card && result === "marked" && owedNow() > owedBefore) await chooseUnlockChoices(actor, slug, { ask: pick, card });
+	return result;
+}
+
+// The rest of settleArcanumBoxTick for a box being ticked: a major's Consequence asks about Conduit of
+// Power, Overchannel or the Cloak's Loyalty first; anything else is written as it stands.
+async function settleMarkedTick(actor, character, { slug, context, index }, write, ask) {
 	const card = await majorConsequenceCard(character, slug, context, index);
 	if (!card) return write();
 	const diversions = consequenceDiversions(actor, slug);

@@ -10,8 +10,11 @@
 //    map mid-animation, the canvas zooming). The overlay redraws; the tab does not care.
 
 import { coalesceFrame } from "../utils/coalesce.js";
+import { changedKeys } from "../utils/foundry-compat.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { READINESS_FLAG } from "../combat/defend-readiness.js";
+import { DEATHS_DOOR_FLAG, UNSTOPPABLE_FIGHTING_FLAG } from "../actors/character/deaths-door.js";
+import { LEFT_PLAY_FLAG } from "../campaign/left-play.js";
 
 /** Token fields that can change contact, visibility or which actor stands behind the token. */
 const TOKEN_KEYS = ["x", "y", "width", "height", "hidden", "elevation", "level", "shape", "actorId", "actorLink", "disposition"];
@@ -20,28 +23,34 @@ const TOKEN_KEYS = ["x", "y", "width", "height", "hidden", "elevation", "level",
  * Actor fields that change how many bodies a token stands for, or the numbers a row shows: HP, armor,
  * a character's crew and custom followers, whose rosters say how many of a group are standing, and a
  * character's Defend Readiness, and the gear tags and typed reminders a character's row carries
- * (actors/character/gear-reminders.js).
+ * (actors/character/gear-reminders.js). And a character's brush with death, which can put them out of the
+ * fight with no hit point changing (fight-state.js#fightStanding's `doorOut`): their Death's Door state, Unstoppable's
+ * "fighting on" stamp, the post-death insert that answers a fate, and having left play.
  */
 const ACTOR_PATHS = [
 	"system.attributes.hp", "system.attributes.armor", "system.count", "system.fightAsGroup", "system.organization",
 	"system.attributes.gearTags", "system.reminders",
 	`flags.${SYSTEM_ID}.crew`, `flags.${SYSTEM_ID}.customFollowers`, `flags.${SYSTEM_ID}.${READINESS_FLAG}`,
+	...[DEATHS_DOOR_FLAG, UNSTOPPABLE_FIGHTING_FLAG, "postDeathInsert", LEFT_PLAY_FLAG].map(key => `flags.${SYSTEM_ID}.${key}`),
 ];
 
-/** Whether an update's (expanded) change object reaches `path`. */
-function touchesPath(changes, path) {
-	let node = changes;
-	for (const part of path.split(".")) {
-		if (!node || typeof node !== "object" || !(part in node)) return false;
-		node = node[part];
+/** ACTOR_PATHS as a set, built once: it is read on every actor update on every client. */
+const ACTOR_PATH_SET = new Set(ACTOR_PATHS);
+
+/** Whether `key` is one of ACTOR_PATHS or lies under one: each of its own leading paths, looked up in the set. */
+function keyCountsBodies(key) {
+	for (let dot = key.indexOf("."); dot !== -1; dot = key.indexOf(".", dot + 1)) {
+		if (ACTOR_PATH_SET.has(key.slice(0, dot))) return true;
 	}
-	return true;
+	return ACTOR_PATH_SET.has(key);
 }
 
-/** Whether an actor update changed anything that decides bodies or a row's numbers. */
+/**
+ * Whether an actor update changed anything that decides bodies or a row's numbers. The keys are read back to plain
+ * paths once (foundry-compat.js#changedKeys), so a stamp LIFTED is heard as well as one laid.
+ */
 export function actorChangeCountsBodies(changes = {}) {
-	const flat = Object.keys(changes ?? {});
-	return ACTOR_PATHS.some(path => touchesPath(changes, path) || flat.some(key => key === path || key.startsWith(`${path}.`)));
+	return changedKeys(changes).some(keyCountsBodies);
 }
 
 /** Whether a token update changed anything that decides engagements. */

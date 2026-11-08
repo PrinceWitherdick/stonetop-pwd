@@ -322,6 +322,8 @@
 				{{#if traitsNote}}<span class="stonetop-follower-trait-note">{{this.traitsNote}}</span>{{/if}}
 				{{!-- Tags the crew is still owed (Veteran Crew's "Select 2 new tags"): opens the tag picker. --}}
 				{{#if tagsOwed}}{{#if @root.editable}}<span class="stonetop-crew-tags-owed" role="button" tabindex="0" data-tooltip="{{localize "stonetop.character.followers.crewTagsOwed.tooltip"}}" data-tooltip-direction="UP"><i class="fas fa-hand-pointer" aria-hidden="true"></i><span class="stonetop-chip-text">{{#if (eq tagsOwed 1)}}{{localize "stonetop.character.followers.crewTagsOwed.labelOne"}}{{else}}{{localize "stonetop.character.followers.crewTagsOwed.label" count=tagsOwed}}{{/if}}</span></span>{{/if}}{{/if}}
+				{{!-- Beast of Legend's "unique ability or trait" picked and not yet written on the card: opens its edit. --}}
+				{{#if uniqueTraitOwed}}{{#if @root.editable}}<span class="stonetop-companion-unique-owed" role="button" tabindex="0" data-tooltip="{{localize "stonetop.character.followers.companion.uniqueOwedTooltip"}}" data-tooltip-direction="UP"><i class="fas fa-hand-pointer" aria-hidden="true"></i><span class="stonetop-chip-text">{{localize "stonetop.character.followers.companion.uniqueOwedLabel"}}</span></span>{{/if}}{{/if}}
 			</div>
 			{{else}}{{#unless tagEdit}}<span class="stonetop-follower-fill-line"></span>{{/unless}}{{/if}}
 			{{/if}}
@@ -343,7 +345,7 @@
 					{{#each debilityToggles}}<button type="button" class="stonetop-follower-tag stonetop-follower-debility-toggle{{#if held}} is-selected{{/if}}" data-ftype="{{../ftype}}" data-slug="{{../slug}}" data-tag="{{this.tag}}" aria-pressed="{{#if held}}true{{else}}false{{/if}}">{{this.tag}}</button>{{/each}}
 				</div>
 				{{/if}}
-				<div class="stonetop-follower-tag-add-row">
+				<div class="stonetop-follower-tag-add-row stonetop-field-btns">
 					<input type="text" class="stonetop-follower-tag-input" data-ftype="{{this.ftype}}" data-slug="{{this.slug}}" placeholder="{{tagEdit.placeholder}}" aria-label="{{tagEdit.addLabel}}" autocomplete="off">
 					<button type="button" class="stonetop-follower-tag-add stonetop-cf-mini-btn" aria-label="{{tagEdit.addLabel}}" data-tooltip="{{tagEdit.addLabel}}" data-tooltip-direction="UP"><i class="fas fa-plus"></i></button>
 				</div>
@@ -656,7 +658,7 @@
 				<div class="stonetop-follower-field-value">
 					<div class="stonetop-follower-gear-list">
 						{{#each gear}}
-						<div class="stonetop-follower-gear-item{{#if checked}} is-checked{{/if}}">
+						<div class="stonetop-follower-gear-item stonetop-field-btns{{#if checked}} is-checked{{/if}}">
 							{{#if ../edit.gear}}
 							<input type="checkbox" class="stonetop-follower-gear-check" data-ftype="{{../ftype}}" data-slug="{{../slug}}" data-index="{{this.index}}" {{#if checked}}checked{{/if}}>
 							<input type="text" class="stonetop-follower-gear-label" data-ftype="{{../ftype}}" data-slug="{{../slug}}" data-index="{{this.index}}" value="{{this.label}}" placeholder="gear…">
@@ -793,7 +795,7 @@
 			{{!-- The insert's six blank inventory lines (3 ◇, 3 ◇◇, p.144): write an item in and it
 			      loads the crew like the printed kit (crew-write-ins.js). --}}
 			{{#if @root.editable}}
-			<div class="stonetop-crew-gear-add-row">
+			<div class="stonetop-crew-gear-add-row stonetop-field-btns">
 				<input type="text" class="stonetop-crew-gear-add-name" placeholder="Write in an item…" aria-label="New item">
 				<select class="stonetop-crew-gear-add-weight" aria-label="Its weight">
 					<option value="1">1 ◇</option>
@@ -814,7 +816,7 @@
 				<p class="stonetop-follower-section-heading">Carried by individuals</p>
 				<div class="stonetop-follower-gear-list">
 					{{#each produced}}
-					<div class="stonetop-follower-gear-item{{#if checked}} is-checked{{/if}}">
+					<div class="stonetop-follower-gear-item stonetop-field-btns{{#if checked}} is-checked{{/if}}">
 						{{#if ../edit.gear}}
 						<input type="checkbox" class="stonetop-follower-gear-check" data-ftype="crew" data-slug="" data-index="{{this.index}}" {{#if checked}}checked{{/if}}>
 						<input type="text" class="stonetop-follower-gear-label" data-ftype="crew" data-slug="" data-index="{{this.index}}" value="{{this.label}}" placeholder="gear…">
@@ -865,7 +867,7 @@
 			{{> "stonetop.follower-section-edit" section="individuals" editing=edit.individuals}}
 
 			{{#if edit.individuals}}
-			<div class="stonetop-crew-size-row">
+			<div class="stonetop-crew-size-row stonetop-field-btns">
 				<span class="stonetop-crew-size-label">Crew size</span>
 				<button type="button" class="stonetop-crew-size-step stonetop-inline-btn" data-delta="-1" title="Remove a member"><i class="fas fa-minus"></i></button>
 				<input class="stonetop-crew-size-input" type="number" value="{{this.size}}" min="{{this.namedCount}}" max="99">
@@ -1055,7 +1057,7 @@
 				<i class="fas fa-caret-down stonetop-follower-section-caret"></i>
 			</summary>
 			{{#if edit.card}}
-			<div class="stonetop-crew-size-row">
+			<div class="stonetop-crew-size-row stonetop-field-btns">
 				<span class="stonetop-crew-size-label">Group size</span>
 				<button type="button" class="stonetop-custom-group-size-step stonetop-inline-btn" data-slug="{{this.slug}}" data-delta="-1" title="Remove a member"><i class="fas fa-minus"></i></button>
 				<input class="stonetop-custom-group-size-input" type="number" data-slug="{{this.slug}}" value="{{this.groupSize}}" min="2" max="99">

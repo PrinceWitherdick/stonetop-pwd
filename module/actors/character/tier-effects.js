@@ -35,7 +35,7 @@ import { LUMINOUS_SHIELD, WIELDER_OF_THE_WHITE_FLAME } from "./holy-light.js";
 import { DEFEND_MOVE, defendReadinessHold, readinessForTier } from "../../combat/defend-readiness.js";
 import { moveChatCard } from "../../utils/chat.js";
 import { escHtml } from "../../utils/strings.js";
-import { HERO_MOVES, foeKey, recordAlphaOver, forgetAlphaOver } from "../../fight/hero-moves.js";
+import { HERO_MOVES, alphaKeysHeld, foeKey, recordAlphaOver, forgetAlphaOver } from "../../fight/hero-moves.js";
 import { OMENS_OF_FATE, settleOmensTier } from "./destined.js";
 import { reconcileGivenAdvantage } from "./give-advantage-flow.js";
 import { learnedTrack, takeBackHeld } from "./MoveResources.js";
@@ -172,22 +172,45 @@ const TIER_EFFECTS = {
 		recorded: true,
 		settle: (actor, _move, tier, done) => settleFollowerReadiness(actor, tier, done, { announce: true }),
 	},
+	// An Amulets & Talismans charm's roll (fight/defend-spend.js#rollCharm): `{card, row, by, markId, tier}`, the
+	// damage card and row it was rolled for and the tier that card recorded. Matched by its RECORD (the roll card is
+	// a bare +INT titled for the move). A Shift or a +1 moving this roll card moves the damage card's tier too
+	// (defend-spend.js#retierCharm), and the charm's potency with it.
+	charmSpend: {
+		moves: [],
+		recorded: true,
+		async settle(actor, _move, tier, done) {
+			if (!done?.card || done.tier === tier) return done ?? undefined;
+			const { retierCharm } = await import("../../fight/defend-spend.js");
+			return (await retierCharm(actor, done, tier)) ? { ...done, tier } : done;
+		},
+	},
 	// `{prior, set}`: the Readiness held before the roll, and what this card's tier raised it to.
 	readiness: {
 		moves: [DEFEND_MOVE],
 		settle: (_actor, _move, tier, done, character) => character?.settleDefendReadinessTier?.(tier, done) ?? done ?? null,
 	},
-	// `{foes, set}`: the foes the Alpha was aimed at (`{key, name}`), and whether this card's 10+ has them
-	// remembered. Aimed at nobody, nothing: there is no "them" to have advantage against.
+	// `{foes, set, added}`: the foes the Alpha was aimed at (`{key, name}`), whether this card's 10+ has them
+	// remembered, and which of them THIS card put there (`added`, their keys). A foe already held from an earlier
+	// Alpha 10+ is that card's, so a Shift taking this card off its 10+ lets go only of what this card added.
+	// Aimed at nobody, nothing: there is no "them" to have advantage against.
 	alphaOver: {
 		moves: [HERO_MOVES.ALPHA],
 		async settle(actor, _move, tier, done, _character, { targets = [] } = {}) {
 			const foes = done?.foes ?? (targets ?? []).map(t => ({ key: foeKey(t), name: t?.name ?? "" })).filter(f => f.key);
 			if (!foes.length) return undefined;
 			const wants = tier === "success";
-			if (wants && !done?.set) return { foes, set: await recordAlphaOver(actor, foes) };
-			if (!wants && done?.set) { await forgetAlphaOver(actor, foes.map(f => f.key)); return { foes, set: false }; }
-			return { foes, set: !!done?.set };
+			if (wants && !done?.set) {
+				const held = new Set(alphaKeysHeld(actor));
+				const added = foes.map(f => f.key).filter(key => !held.has(key));
+				return { foes, set: await recordAlphaOver(actor, foes), added };
+			}
+			if (!wants && done?.set) {
+				// A card from before `added` was kept takes back every foe it named, as it always did.
+				await forgetAlphaOver(actor, done.added ?? foes.map(f => f.key));
+				return { foes, set: false };
+			}
+			return { foes, set: !!done?.set, ...(done?.added ? { added: done.added } : {}) };
 		},
 	},
 	// `{prior, set}`: the Omens held before the roll, and what this card's tier asked for (none on a 7+, one

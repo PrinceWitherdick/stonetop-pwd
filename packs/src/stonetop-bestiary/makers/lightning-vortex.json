@@ -81,7 +81,7 @@
       "img": "icons/magic/lightning/bolt-strike-blue.webp",
       "system": {
         "description": "",
-        "rollFormula": ""
+        "rollFormula": "d10"
       },
       "_key": "!actors.items!baV7yiVwXMTKa49B.ycqAXhBqM4LBrodX"
     },

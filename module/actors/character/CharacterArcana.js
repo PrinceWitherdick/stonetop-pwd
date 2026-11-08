@@ -14,7 +14,8 @@ import {
 	CONDENSED_MOVE_SLUG, FRONT_MOVE_PREFIX, condensedArcanumMove, findArcanumFrontMove, findArcanumMove,
 	isArcanumFrontMoveSlug, markArcanumFrontMoves, markArcanumMoveNames,
 } from "../../data/arcana-moves.js";
-import { backBoxChecked, centerArcanumTracks, glyphLabelAt, injectGlyphCheckboxes, maskGlyphLabels, unmaskGlyphLabels } from "../../utils/glyphs.js";
+import { backBoxChecked, boxIndexBefore, centerArcanumTracks, glyphLabelAt, injectGlyphCheckboxes, maskGlyphLabels, unmaskGlyphLabels } from "../../utils/glyphs.js";
+import { PACED_BACK_MOVES } from "../../data/arcana-rules.js";
 import { stonetopChatCard } from "../../utils/chat.js";
 import { prettifySlug } from "../../utils/ledger-core.js";
 import { clipText, stripHtmlToText } from "../../utils/strings.js";
@@ -204,6 +205,42 @@ export function unlockedArcanumArmor(item, sideItem, boxStates) {
 }
 
 /**
+ * What the bearer's marked Consequences add to them for good, summed over the cards they hold (audit EDG-6,
+ * 2026-11-06): `{hp, armor, versus}`, `versus` `{armor, against}` (or null) for armor that does not count
+ * against one thing. Read off each card's `consequenceBoons` (model/MinorArcanum.js), each □ found by its printed
+ * words (backBoxChecked) and counted while marked. PURE.
+ *
+ * Book II: the Redwood Effigy's "Your blood flows like sap ... Gain +1 armor and +4 max HP" (pp.570-571), the
+ * Hec'tumel Codex's scales, "Gain +1 armor" (pp.556-557), the Lidless Orb's protrusions that "continue to grow
+ * until you gain +1 armor" (pp.540-541; read as the +1 they grow into), and the Creepy Cave's "increase your max
+ * HP by 2 and gain +1 armor against anything but bronze" (p.528).
+ *
+ * A card still a lead is not in their hands, but a Consequence it left on them is: a mark is theirs once made, so
+ * every OWNED card counts.
+ *
+ * @param {Array<{slug: string, back?: {description?: string}, consequenceBoons?: object[]}>} cards
+ * @param {Record<string, boolean>} boxStates
+ */
+export function consequenceBoonsFrom(cards, boxStates) {
+	const out = { hp: 0, armor: 0, versus: null };
+	for (const card of cards ?? []) {
+		for (const boon of card?.consequenceBoons ?? []) {
+			if (!boon?.label || !backBoxChecked(card.back?.description, card.slug, boon.label, boxStates ?? {})) continue;
+			out.hp    += Math.trunc(Number(boon.hp) || 0);
+			out.armor += Math.trunc(Number(boon.armor) || 0);
+			const versus = Math.trunc(Number(boon.versus?.armor) || 0);
+			if (versus > 0 && boon.versus?.against) {
+				// The card's one "vs." box carries one clause: the first such boon names it, and a second against
+				// the same thing adds to it.
+				if (!out.versus) out.versus = { armor: versus, against: String(boon.versus.against) };
+				else if (out.versus.against === String(boon.versus.against)) out.versus.armor += versus;
+			}
+		}
+	}
+	return out;
+}
+
+/**
  * The sheet's own marker injection: {@link injectGlyphCheckboxes} with this card's persisted
  * box states supplying the checked test. Keys are `slug:context:index`, which is how the
  * sheet stores them; the onboarding dialog indexes the same boxes the same way through the
@@ -303,6 +340,17 @@ export function consequenceBoxRange(backDescription) {
 }
 
 /**
+ * The back-side indices of a card's ticked Consequences (consequenceBoxRange), in printed order, as
+ * `slug:back:i` keys them in `boxes`. [] when the card prints none or none is marked. PURE.
+ */
+export function markedConsequenceIndexes(backDescription, boxes, slug) {
+	const range = consequenceBoxRange(backDescription);
+	const out = [];
+	for (let i = range?.from ?? 0; i < (range?.to ?? 0); i++) if (boxes?.[`${slug}:back:${i}`]) out.push(i);
+	return out;
+}
+
+/**
  * The text a back-side □ marks: what follows its run of □, up to the next □, list or item end,
  * as plain text. "" when the index is past the last □. Read off the RAW back description, whose □
  * are indexed as consequenceBoxRange counts them.
@@ -376,9 +424,9 @@ export function unlockChoiceSection(unlockDescription, backDescription) {
  * how many marks have bought no choice yet (never more than are left to choose). Null for a card
  * with no unlock choice.
  */
-export function unlockChoiceState(item, boxes = {}) {
+export function unlockChoiceState(item, boxes = {}, { completions = 0 } = {}) {
 	const section = unlockChoiceSection(item?.front?.unlock?.description, item?.back?.description);
-	if (!section) return null;
+	if (!section) return pacedBackMoveState(item, boxes, { completions });
 	const slug = item.slug;
 	const circles = unlockCircleCount(item.front?.unlock?.description);
 	let marked = 0;
@@ -386,6 +434,52 @@ export function unlockChoiceState(item, boxes = {}) {
 	const learned = section.choices.filter(c => boxes?.[`${slug}:back:${c.index}`]);
 	const open    = section.choices.filter(c => !boxes?.[`${slug}:back:${c.index}`]);
 	return { ...section, marked, learned, open, owed: Math.max(0, Math.min(open.length, marked - learned.length)) };
+}
+/** Major arcana whose back moves come over time: the table lives with the other per-card rules (data/arcana-rules.js). */
+
+/** Whether a card's back moves are paced by completed unlock tracks (PACED_BACK_MOVES `cycles`). */
+export function backMovesPacedByCycles(slug) {
+	return !!PACED_BACK_MOVES[slug ?? ""]?.earn?.cycles;
+}
+
+// How many back moves a paced card has given under these marks.
+function _pacedEarned(item, pace, boxes, completions) {
+	const slug = item.slug;
+	const { consequences, tasks, cycles } = pace.earn;
+	if (cycles) return Math.max(0, Math.trunc(Number(completions) || 0));
+	if (tasks) {
+		const markers = frontTaskTrack(item.front)?.markers ?? [];
+		const done = markers.filter(m => boxes?.[`${slug}:front:${m.index}`]).length;
+		return done >= tasks.from ? done - tasks.from + 1 : 0;
+	}
+	const marked = markedConsequenceIndexes(item.back?.description, boxes, slug).length;
+	if (consequences?.per) return Math.floor(marked / consequences.per);
+	return consequences?.atLeast && marked >= consequences.atLeast ? 1 : 0;
+}
+
+/**
+ * Where a paced card's back moves stand (PACED_BACK_MOVES): `earned`, `learned` and `open` (the
+ * choices ticked and not), `owed` (earned and not yet ticked, never more than are open) and `over`
+ * (ticked beyond what it has given: a soft caution, never a block). The shape unlockChoiceState
+ * answers, with `paced`, `rule` and `page`. Null for any other card. PURE.
+ */
+export function pacedBackMoveState(item, boxes = {}, { completions = 0 } = {}) {
+	const pace = PACED_BACK_MOVES[item?.slug ?? ""];
+	if (!pace || !item?.back?.description) return null;
+	const back = item.back.description;
+	const choices = pace.choices
+		.map(label => ({ index: boxIndexBefore(back, label), label: label.replace(/[.:]$/, "") }))
+		.filter(c => c.index >= 0);
+	if (!choices.length) return null;
+	const earned  = _pacedEarned(item, pace, boxes, completions);
+	const learned = choices.filter(c => boxes?.[`${item.slug}:back:${c.index}`]);
+	const open    = choices.filter(c => !boxes?.[`${item.slug}:back:${c.index}`]);
+	return {
+		name: pace.name ?? "moves on the reverse", rule: pace.rule, page: pace.page, paced: true,
+		choices, earned, learned, open,
+		owed: Math.max(0, Math.min(open.length, earned - learned.length)),
+		over: Math.max(0, learned.length - earned),
+	};
 }
 
 // The learned choices' paragraphs (or list items), lifted out of the PROCESSED back so their □ keep
@@ -552,6 +646,20 @@ export class CharacterArcana {
 	get unlockedOnceSlugs() { return new Set(this._flags.getFlag("unlockedOnce") ?? []); }
 	// The latched cards whose 7-9 back debt the latch settled, so releasing the latch owes it again.
 	get owedAtLatchSlugs()  { return new Set(this._flags.getFlag("owedAtLatch") ?? []); }
+	// Completed unlock tracks per card, for the cards that erase their marks and give a back move
+	// each time (PACED_BACK_MOVES `cycles`). Kept from 2026-11-06 on, by slug.
+	get completionCounts()  { return this._flags.getFlag("completions") ?? {}; }
+
+	/**
+	 * How many times a card's unlock track has been completed: the kept count, else 1 for a card
+	 * latched before the count was kept (it was completed at least once), else 0.
+	 */
+	completionCount(slug) {
+		const counts = this.completionCounts;
+		const kept = Number(counts[slug]);
+		if (slug in counts && Number.isFinite(kept)) return Math.max(0, kept);
+		return this.unlockedOnceSlugs.has(slug) ? 1 : 0;
+	}
 	// The player's own note per card, by slug.
 	get notes()            { return this._flags.getFlag("notes") ?? {}; }
 
@@ -691,10 +799,19 @@ export class CharacterArcana {
 			// carries the ones learned, since "you can now cast it" holds with the back still hidden,
 			// and how many marks still owe a choice (the tab's "choose" cue, for a mark made where no
 			// one could be asked, such as the Seeker's creation mark, or a pick that was closed).
-			const choiceState = unlockChoiceState(item, arcanaBoxes);
-			const unlockChoice = choiceState
-				? { name: choiceState.name, owed: choiceState.owed, html: _extractLearnedChoices(backDesc, choiceState) }
-				: null;
+			// A card whose back moves come over time (PACED_BACK_MOVES) carries the same cue, plus a caution
+			// when more are ticked than it has given; it says nothing while neither applies.
+			const choiceState = unlockChoiceState(item, arcanaBoxes, { completions: this.completionCount(item.slug) });
+			let unlockChoice = null;
+			if (choiceState?.paced) {
+				if (choiceState.owed || choiceState.over) {
+					unlockChoice = { name: choiceState.name, owed: choiceState.owed, html: null, paced: true,
+						over: choiceState.over, earned: choiceState.earned, learned: choiceState.learned.length,
+						rule: choiceState.rule, page: choiceState.page };
+				}
+			} else if (choiceState) {
+				unlockChoice = { name: choiceState.name, owed: choiceState.owed, html: _extractLearnedChoices(backDesc, choiceState) };
+			}
 
 			// Redwood Effigy: the two "potential" Conduit slots on the front stay locked until
 			// the Greater Conduit mystery (a □ on the back) is checked. Resolved by LABEL through
@@ -799,6 +916,21 @@ export class CharacterArcana {
 		return _backRealised(item, this.identifiedSlugs, this.unlockCounts, this.boxStates, this.unlockedOnceSlugs);
 	}
 
+	/**
+	 * Every card this character owns, resolved. A caller that reads several things off them per render
+	 * (StonetopCharacter#snapshotWithGear: the carried curios, the Consequences' boons) fetches them once
+	 * and hands them to weightedInventoryItems / consequenceBoons, rather than each walking the repo.
+	 */
+	async ownedCards() {
+		const slugs = [...this.ownedSlugs];
+		return slugs.length ? this._arcanaRepo.findBySlugs(slugs) : [];
+	}
+
+	/** consequenceBoonsFrom over every card this character owns (see it), or over `cards` already fetched. */
+	async consequenceBoons(cards = null) {
+		return consequenceBoonsFrom(cards ?? await this.ownedCards(), this.boxStates);
+	}
+
 	/** The resolved {@link MinorArcanum} for a slug (pack or world), or null. */
 	async getArcanum(slug) {
 		const [item] = await this._arcanaRepo.findBySlugs([slug]);
@@ -881,14 +1013,8 @@ export class CharacterArcana {
 	 */
 	async markedConsequences(slug) {
 		const item = await this.getArcanum(slug);
-		const range = consequenceBoxRange(item?.back?.description);
-		if (!range) return [];
-		const boxes = this.boxStates;
-		const out = [];
-		for (let i = range.from; i < range.to; i++) {
-			if (boxes[`${slug}:back:${i}`]) out.push({ index: i, label: consequenceLabel(item.back.description, i) });
-		}
-		return out;
+		const back = item?.back?.description;
+		return markedConsequenceIndexes(back, this.boxStates, slug).map(index => ({ index, label: consequenceLabel(back, index) }));
 	}
 
 	/**
@@ -920,7 +1046,7 @@ export class CharacterArcana {
 		}
 		// Keyed maps ("<slug>:…" keys): an update MERGES, so each sub-key is deleted on its own.
 		// `titles` is the stored name a deleted homebrew card's stub goes by (HB-6).
-		for (const key of ["unlock", "boxes", "backOptions", "boxLayouts", "notes", "titles"]) {
+		for (const key of ["unlock", "boxes", "backOptions", "boxLayouts", "notes", "titles", "completions"]) {
 			if (key === "boxLayouts" && kept.size) continue;
 			const cur = this._flags.getFlag(key) ?? {};
 			for (const k of Object.keys(cur)) {
@@ -1050,7 +1176,7 @@ export class CharacterArcana {
 		const unlock = { ...this.unlockCounts };
 		const boxes  = { ...this.boxStates };
 		// Each count and box its own sub-key, so nothing else on the character is re-sent from this
-		// copy, and the unlock latch in the SAME update.
+		// copy, and the unlock latch (and completion count) in the SAME update.
 		const data = {};
 		for (const [option, count] of Object.entries(grant.unlock)) {
 			unlock[`${slug}:${option}`] = count;
@@ -1060,7 +1186,7 @@ export class CharacterArcana {
 			boxes[`${slug}:${box.context}:${box.index}`] = true;
 			Object.assign(data, this._flags.subKeyData("boxes", `${slug}:${box.context}:${box.index}`, true));
 		}
-		Object.assign(data, await this._latchData(slug, { unlock, boxes }));
+		Object.assign(data, await this._trackTransitionData(slug, { unlock, boxes }));
 		await this._flags.applyUpdateData(data);
 	}
 
@@ -1182,8 +1308,23 @@ export class CharacterArcana {
 		const unlock = { ...this.unlockCounts, [key]: count };
 		await this._flags.applyUpdateData({
 			...this._flags.subKeyData("unlock", key, count),
-			...await this._latchData(arcanumSlug, { unlock, trackEdit: true }),
+			...await this._trackTransitionData(arcanumSlug, { unlock, trackEdit: true }),
 		}, options);
+	}
+
+	/**
+	 * What a write leaving a card's marks at `unlock` / `boxes` carries beside the marks, in the same
+	 * update: the unlock latch (_latchData) and the completion count (_completionData). Every writer of
+	 * a card's marks builds through this one, so none can send the marks without either. The completion
+	 * count only moves when the write changes whether the track is complete, so a write off the track is
+	 * {} there. The card is read once for both.
+	 */
+	async _trackTransitionData(slug, { unlock, boxes, item = null, trackEdit = false } = {}) {
+		const card = item ?? (backMovesPacedByCycles(slug) ? await this.getArcanum(slug) : null);
+		return {
+			...await this._latchData(slug, { unlock, boxes, item: card, trackEdit }),
+			...await this._completionData(slug, { unlock, boxes, item: card }),
+		};
 	}
 
 	/**
@@ -1217,6 +1358,26 @@ export class CharacterArcana {
 			Object.assign(data, this._flags.updateData("backOwed", [...owed]), this._flags.updateData("owedAtLatch", [...settled]));
 		}
 		return data;
+	}
+
+	/**
+	 * The completion count's fragment (completionCount) for a write that leaves a card's marks at
+	 * `unlock` / `boxes`, on a card that gives a back move per completed track (backMovesPacedByCycles):
+	 * +1 when the write completes the track. A write that takes a just-completed track short again counts
+	 * one back only while that completion's move is still unchosen (a misclicked last mark), never for the
+	 * "erase all marks" the card prints after a move is chosen. {} when nothing changes.
+	 */
+	async _completionData(slug, { unlock = this.unlockCounts, boxes = this.boxStates, item = null } = {}) {
+		if (!backMovesPacedByCycles(slug)) return {};
+		const card = item ?? await this.getArcanum(slug);
+		if (!card?.front) return {};
+		const before = _trackComplete(card, this.unlockCounts, this.boxStates);
+		const after  = _trackComplete(card, unlock ?? {}, boxes ?? {});
+		if (before === after) return {};
+		const count = this.completionCount(slug);
+		if (after) return this._flags.subKeyData("completions", slug, count + 1);
+		const chosen = pacedBackMoveState(card, boxes ?? {}, { completions: count })?.learned.length ?? 0;
+		return chosen < count ? this._flags.subKeyData("completions", slug, count - 1) : {};
 	}
 
 	/**
@@ -1303,7 +1464,7 @@ export class CharacterArcana {
 		const data = {};
 		for (const [key, value] of Object.entries(changed)) Object.assign(data, this._flags.subKeyData("boxes", key, value));
 		const trackEdit = Object.keys(changed).some(key => _UNLOCK_TRACK_CONTEXTS.has(key.slice(slug.length + 1).split(":")[0]));
-		Object.assign(data, await this._latchData(slug, { boxes: { ...this.boxStates, ...changed }, item, trackEdit }));
+		Object.assign(data, await this._trackTransitionData(slug, { boxes: { ...this.boxStates, ...changed }, item, trackEdit }));
 		await this._flags.applyUpdateData(data, options);
 	}
 
@@ -1359,14 +1520,14 @@ export class CharacterArcana {
 		}
 	}
 
-	async weightedInventoryItems() {
-		const ownedSlugs   = this.ownedSlugs;
+	// `cards`: the owned cards when the caller already fetched them (ownedCards).
+	async weightedInventoryItems(cards = null) {
 		const identified   = this.identifiedSlugs;
 		const leads        = this.leadSlugs;
 		const unlockCounts = this.unlockCounts;
 		const arcanaBoxes  = this._flags.getFlag("boxes") ?? {};
 		const unlockedOnce = this.unlockedOnceSlugs;
-		const items = await this._arcanaRepo.findBySlugs([...ownedSlugs]);
+		const items = cards ?? await this.ownedCards();
 		return items.flatMap(item => {
 			// A "lead" is owned (so it renders on the arcana tab as a placeholder) but not yet
 			// recovered, so its curio isn't in the party's packs — skip it entirely, or the

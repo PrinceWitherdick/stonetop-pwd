@@ -178,7 +178,8 @@ describe("ATK-8: the GM's 'Ignores armor' tick", () => {
 		wireIgnoresArmorBox(makeMessage({ damage: damage() }), html, { isGM: false });
 		expect(appended).toHaveLength(0);
 		wireIgnoresArmorBox(makeMessage({ damage: damage() }), html, { isGM: true });
-		expect(appended).toHaveLength(1);
+		// The tick, and beside it the on-the-fly piercing (round 2, FOE-6).
+		expect(appended).toHaveLength(2);
 		globalThis.document = savedDocument;
 	});
 });

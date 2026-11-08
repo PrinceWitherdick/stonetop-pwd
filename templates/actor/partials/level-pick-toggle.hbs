@@ -1,0 +1,9 @@
+{{!-- A move from outside the playbook's list (custom, dropped, or kept off it) named as a level's pick
+      (C4, Book I p.528): the move card's "Taken as a level pick" box, on the playbook's move groups
+      and on Other Moves alike. The context is the move's card (level-pick-toggle.js#attachLevelPickToggles). --}}
+{{#if this.levelPickToggle}}
+<label class="stonetop-level-pick-toggle" data-tooltip="{{localize 'stonetop.character.moves.levelPickToggleHint'}}" data-tooltip-direction="UP">
+	<input type="checkbox" class="stonetop-level-pick-check" data-item-id="{{this.levelPickToggle.itemId}}"{{#if this.levelPickToggle.on}} checked{{/if}}>
+	<span>{{localize "stonetop.character.moves.levelPickToggle"}}</span>
+</label>
+{{/if}}

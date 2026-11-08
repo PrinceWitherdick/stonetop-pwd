@@ -174,6 +174,10 @@ describe("chips with an icon or a count trim their label element", () => {
 		["templates/actor/partials/tab-followers.hbs", "stonetop-exceptional-toggle", "button", 1],
 		// Veteran Crew's "tags owed" cue, a flex chip with a hand icon.
 		["templates/actor/partials/tab-followers.hbs", "stonetop-crew-tags-owed", "span", 1],
+		// Big Magic's "trait owed" cue on the sacred pouch row, the same chip.
+		["templates/actor/partials/tab-equipment.hbs", "stonetop-possession-choices-owed", "span", 1],
+		// Beast of Legend's "unique ability or trait" cue on the companion card, the same chip.
+		["templates/actor/partials/tab-followers.hbs", "stonetop-companion-unique-owed", "span", 1],
 		["templates/dialogs/partials/catalog-shell.hbs", "stonetop-catalog-badge", "span", 1],
 		// The route pills: the scene button, Show players (its class also matches the stale share's
 		// Hide beside it, so two), that Hide, and the players' window's Stop showing (audit RTE-16).
@@ -384,6 +388,8 @@ describe("chip icons sit at a whole-pixel size", () => {
 		".stonetop .stonetop-moves-level-notice-dismiss i",
 		".stonetop-reminder-chip i",
 		".stonetop-crew-tags-owed > i",
+		".stonetop-possession-choices-owed > i",
+		".stonetop-companion-unique-owed > i",
 	];
 
 	it.each(ICONS)("%s rounds its font-size to 1px", sel => {

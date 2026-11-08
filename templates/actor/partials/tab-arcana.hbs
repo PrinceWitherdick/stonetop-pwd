@@ -30,6 +30,24 @@
 	</button>
 	{{/inline}}
 
+	{{!-- A major arcanum whose back moves come over time (CharacterArcana.js#PACED_BACK_MOVES): the
+	      Codex's "choose" cue while one is owed, and a gold caution when more are ticked than the
+	      card has given (flagged, never blocked). On the back where it is shown, else the front. --}}
+	{{#*inline "arcanumPacedMoves"}}
+	{{#if (and unlockChoice.owed @root.stonetop.canEdit)}}
+	<div class="stonetop-arcanum-backowed stonetop-arcanum-unlock-choice-owed">
+		<i class="fas fa-book-open" aria-hidden="true"></i>
+		<span>{{localize "stonetop.arcana.pacedMovesOwed" rule=unlockChoice.rule page=unlockChoice.page owed=unlockChoice.owed}}</span>
+		<button type="button" class="stonetop-arcanum-unlock-choice-btn" data-slug="{{this.slug}}">
+			{{localize "stonetop.arcana.unlockChoiceChoose"}}
+		</button>
+	</div>
+	{{/if}}
+	{{#if unlockChoice.over}}
+	<p class="stonetop-arcanum-paced-over" role="note">{{localize "stonetop.arcana.pacedMovesOver" learned=unlockChoice.learned earned=unlockChoice.earned rule=unlockChoice.rule page=unlockChoice.page}}</p>
+	{{/if}}
+	{{/inline}}
+
 	{{#*inline "arcanumCard"}}
 	{{#if owned}}
 	<div class="stonetop-arcanum-card{{#if isSpread}} stonetop-arcanum-card--spread{{/if}}{{#if collapsed}} is-collapsed{{/if}}" data-slug="{{this.slug}}" data-section="{{this.slug}}"{{#if greaterConduit}} data-greater-conduit="true"{{/if}}>
@@ -139,7 +157,9 @@
 			{{!-- A card whose unlock marks each buy a choice off its back (the Hec'tumel Codex's
 			      spells): a cue while a mark still owes one, and, in the front-only view, the
 			      choices already learned, so a hidden back still shows what you can cast. --}}
-			{{#if unlockChoice}}
+			{{#if unlockChoice.paced}}
+			{{#unless backVisible}}{{> arcanumPacedMoves}}{{/unless}}
+			{{else if unlockChoice}}
 			{{#if (and unlockChoice.owed @root.stonetop.canEdit)}}
 			<div class="stonetop-arcanum-backowed stonetop-arcanum-unlock-choice-owed">
 				<i class="fas fa-book-open"></i>
@@ -209,6 +229,7 @@
 		</div>
 		<div class="stonetop-arcanum-body">
 			<span class="stonetop-arcanum-side-label">{{localize "stonetop.arcana.backLabel"}}</span>
+			{{#if unlockChoice.paced}}{{> arcanumPacedMoves}}{{/if}}
 			{{{back.description}}}
 			{{#if back.move}}
 			{{!-- The trigger is the move's handle: click it to roll or post it, as a mystery's name. --}}

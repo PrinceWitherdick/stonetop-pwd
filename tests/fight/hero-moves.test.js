@@ -104,6 +104,18 @@ describe("Big Damn Hero", () => {
 		expect(eyesLockedAgainst(foe, [{ uuid: tokens.pim.uuid }])).toEqual([]);
 	});
 
+	// MOV-9: "for the rest of the fight" (p.139). A counter-attack is rolled on the GM's client, whose canvas may be
+	// on another map, and aimed at the character (not their token) when their token is not on that canvas.
+	it("reads the fight off the foe's own map, whatever the reader is looking at, and finds a row aimed at the actor", () => {
+		const { pim, tokens, combatants } = world([["w", 2, 1, wolf()]]);
+		combatants.pim.flags[SYSTEM_ID][LOCKED_EYES_FLAG] = ["cw"];
+		const foe = { ...tokens.w.actor, token: tokens.w };
+		globalThis.canvas = { scene: fakeScene({ id: "elsewhere" }) };
+		pim.uuid = "Actor.pim";
+		expect(eyesLockedAgainst(foe, [{ uuid: tokens.pim.uuid }])).toEqual(["Pim"]);
+		expect(eyesLockedAgainst(foe, [{ uuid: "Actor.pim" }])).toEqual(["Pim"]);
+	});
+
 	// A19: one roll per card, so a blow at the hero AND at someone the hero is not guarding is not at
 	// disadvantage, as incomingMode asks of every other mode ("EVERY TARGET MUST CARRY IT").
 	it("puts a blow at several at disadvantage only when every one of them is guarded", () => {
@@ -329,6 +341,22 @@ describe("Something to Remember Me By, off the fight ring", () => {
 		const { actor } = wouldBe([HERO_MOVES.REMEMBER_ME], { readiness: 2 });
 		for (const moveKey of ["clash", "let-fly", "ambush"]) expect(keys(actor, { moveKey })).not.toContain("rememberMeSpend");
 		expect(keys(actor, {})).toContain("rememberMeSpend");
+	});
+
+	// MOV-12 (the user's ruling, 2026-11-06): Defend's "strike back at an attacker (deal your damage, with
+	// disadvantage)" (p.216) for every Readiness holder, wherever the ring is not offering it.
+	it("gives every other Readiness holder the plain strike-back line, unticked, at 1 Readiness", async () => {
+		const { actor, flags } = wouldBe([], { readiness: 2 });
+		const line = blowOffers(actor, {}).find(o => o.key === "strikeBack");
+		expect(line).toMatchObject({ mode: "dis", strikeBack: true, applied: false, pill: "Strike back" });
+		expect(line.dice).toBeUndefined();
+		await line.spend(actor);
+		expect(flags[SYSTEM_ID].readiness).toBe(1);
+		// Not on an attack move's own damage, not to someone holding none, and not twice to a Remember Me holder.
+		expect(keys(actor, { moveKey: "clash" })).not.toContain("strikeBack");
+		expect(keys(wouldBe([], { readiness: 0 }).actor, {})).not.toContain("strikeBack");
+		expect(keys(wouldBe([HERO_MOVES.REMEMBER_ME], { readiness: 2 }).actor, {})).not.toContain("strikeBack");
+		expect(keys(actor, { strikeBack: true })).not.toContain("strikeBack");
 	});
 
 	it("leaves the ring's strike back as it was: ticked, costing nothing more, and no second line", () => {

@@ -37,6 +37,9 @@ import { coerceBroken } from "../actors/character/oath-broken.js";
 /** The update option a level-up sets to the move it learned (StonetopCharacter#applyLevelUp). */
 export const LEARNED_OPTION = "stonetopTimelineLearned";
 
+/** LEARNED_OPTION's value for a level taken with its move still to choose (Book I p.529). */
+export const LEARN_LATER = "__learnLater__";
+
 /** A level-up's key and title, live or backfilled: one shape, so the two share their key. */
 export const levelUpKey = level => `levelup:${level}`;
 export const LEVELUP_TITLE_KEY = "stonetop.timeline.milestone.levelup";
@@ -166,7 +169,10 @@ export function detectMilestones(before, after, { learned = "", markPlaceholder 
 	// A level gained. One row per level; the move learned goes on the highest one.
 	if (before.level >= 1 && after.level > before.level) {
 		for (let level = before.level + 1; level <= after.level; level++) {
-			const body = level === after.level && learned ? { bodyKey: "stonetop.timeline.milestone.learned", bodyData: { move: learned } } : {};
+			const later = learned === LEARN_LATER;
+			const body = level === after.level && learned
+				? { bodyKey: later ? "stonetop.timeline.milestone.learnLater" : "stonetop.timeline.milestone.learned", bodyData: later ? {} : { move: learned } }
+				: {};
 			out.push({ source: "levelup", key: levelUpKey(level), titleKey: LEVELUP_TITLE_KEY, data: { level }, ...body });
 		}
 	}

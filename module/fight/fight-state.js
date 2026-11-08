@@ -19,11 +19,15 @@
 //    only for the scene on screen, so a scene nobody is looking at has melee and recorded shots only.
 
 import { SYSTEM_ID } from "../system-id.js";
-import { each, isFight, FIGHT_FLAG, countsAsFight, fightersOf, onMap } from "./in-battle.js";
+import { each, isFight, FIGHT_FLAG, countsAsFight, fightersOf, onMap, makingLastMove } from "./in-battle.js";
 import { engage, HEROES, FOES } from "./engagements.js";
-import { classifySide, bodiesFor } from "./fight-sides.js";
+import { classifySide, bodiesFor, atZeroOf } from "./fight-sides.js";
 import { followerRoster } from "./fight-vitals.js";
 import { keepsFightingAtZero } from "../actors/character/unstoppable.js";
+import { DEATHS_DOOR_STATE } from "../actors/character/deaths-door.js";
+import { actorDeathsDoorState } from "../actors/character/deaths-door-actor.js";
+import { readableFlags } from "../actors/character/StonetopFlags.js";
+import { hasLeftPlay } from "../campaign/left-play.js";
 
 export const SIDE_FLAG = "side";
 export const COUNT_FLAG = "count";
@@ -112,10 +116,65 @@ export function combatantSide(combatant) {
 	return classifySide(sideInfoFor(combatant?.actor, combatant?.token))?.side ?? null;
 }
 
+/** The Death's Door states that leave a character out of the action, whatever HP they have. */
+const OUT_AT_THE_DOOR = new Set([DEATHS_DOOR_STATE.OUT_OF_ACTION, DEATHS_DOOR_STATE.FATE_PENDING, DEATHS_DOOR_STATE.DEAD]);
+
+/**
+ * Where an actor stands in a fight, read ONE way for every rule that asks: the fight's bodies (combatantBodies),
+ * the "striking while down" caution (combat/attack-flow.js#attackerDowned), a frozen target dropping out
+ * (fight-targets.js#withoutDowned) and Battle Joy's "still on their feet" (combat/battle-joy-offer.js). Death's
+ * Door is read insert-adjusted everywhere: a fate-pending state a post-death insert has already answered is the
+ * living's (deaths-door.js#effectiveDeathsDoorState). Never throws.
+ *
+ *  • atZero ....... at 0 of a real HP pool (fight-sides.js#atZeroOf)
+ *  • unstoppable .. a Heavy fighting on at 0 HP (actors/character/unstoppable.js#keepsFightingAtZero)
+ *  • lastMove ..... making Death's Door's last move on this client (fight/in-battle.js#makingLastMove)
+ *  • fightingOn ... either of those: it wins over 0 HP and the door alike
+ *  • down ......... at 0 HP and not fighting on
+ *  • atLastDoor ... fate pending or dead: the door's last move is theirs to make, at 0 HP by the book's own word
+ *  • doorOut ...... a brush with death has them out whatever their HP: out of the action (Death's Door 7-9, "you're
+ *    out of the action until you say otherwise", Book I p.245; a Revenant's Undying 7-9 at half HP, p.150), owed or
+ *    past the Last Door (6-), or out of play (dead, retired, become a threat: campaign/left-play.js)
+ *  • onTheirFeet .. a character with no Death's Door state (or dying on Unstoppable's word) and no post-death insert
+ *
+ * @param {Actor|null} actor
+ */
+export function fightStanding(actor) {
+	const atZero = atZeroOf(actor?.system?.attributes?.hp);
+	const lastMove = makingLastMove(actor);
+	// A monster or an NPC has no Death's Door, no insert and no Unstoppable: none of the character reads below
+	// (this runs for every combatant on every snapshot).
+	if (actor?.type !== "character") {
+		return {
+			atZero, unstoppable: false, lastMove, fightingOn: lastMove, doorState: null,
+			down: atZero && !lastMove, atLastDoor: false, doorOut: false, onTheirFeet: false,
+		};
+	}
+	const flags = readableFlags(actor) ?? {};
+	// Nested or dotted, as the flags were written (no foundry.utils: this must not throw where it is absent).
+	const insertSlug = flags?.postDeathInsert?.slug ?? flags?.["postDeathInsert.slug"] ?? null;
+	const doorState = actorDeathsDoorState(actor);
+	const unstoppable = keepsFightingAtZero(actor);
+	const fightingOn = unstoppable || lastMove;
+	return {
+		atZero, unstoppable, lastMove, fightingOn, doorState,
+		down: atZero && !fightingOn,
+		atLastDoor: doorState === DEATHS_DOOR_STATE.FATE_PENDING || doorState === DEATHS_DOOR_STATE.DEAD,
+		doorOut: OUT_AT_THE_DOOR.has(doorState) || leftPlay(actor),
+		onTheirFeet: !insertSlug && (!doorState || unstoppable),
+	};
+}
+
+/** hasLeftPlay, never throwing. */
+function leftPlay(actor) {
+	try { return hasLeftPlay(actor); } catch { return false; }
+}
+
 /** How many capable bodies a combatant's token stands for. See fight-sides.js#bodiesFor. */
 export function combatantBodies(combatant) {
 	const actor = combatant?.actor;
 	const system = actor?.system ?? {};
+	const standing = fightStanding(actor);
 	return bodiesFor({
 		defeated: !!combatant?.isDefeated,
 		type: actor?.type ?? "",
@@ -126,7 +185,9 @@ export function combatantBodies(combatant) {
 		headcount: ours(combatant)[COUNT_FLAG] ?? null,
 		roster: followerRoster(combatant),
 		startSize: groupStartSize(actor),
-		keepsFighting: keepsFightingAtZero(actor),
+		// Death's Door's last move is made at 0 HP, and is a blow at whoever stands there (fight/in-battle.js).
+		keepsFighting: standing.fightingOn,
+		outOfAction: standing.doorOut,
 	});
 }
 

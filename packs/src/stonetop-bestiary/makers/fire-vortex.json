@@ -81,7 +81,7 @@
       "img": "icons/svg/shield.svg",
       "system": {
         "description": "",
-        "rollFormula": ""
+        "rollFormula": "d10"
       },
       "_key": "!actors.items!1U5ExYjZPgmW0Gck.shvC17A2JlMfbian"
     },

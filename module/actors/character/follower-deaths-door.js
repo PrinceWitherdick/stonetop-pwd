@@ -33,6 +33,10 @@
 
 import { setFollowerHp } from "./follower-hp.js";
 import { followerActorFromLink } from "./follower-actors.js";
+import { followerFateHpPath, wasStanding } from "./follower-fate.js";
+import { resolveRosterRef, rowButtonData, rowFromButton } from "./follower-roster-shifts.js";
+import { readableFlags } from "./StonetopFlags.js";
+import { wireFollowerFateReopen } from "./follower-fate-pick.js";
 import { withCardLatch, wireLatchedButtons } from "../../utils/card-latch.js";
 import { cardTierNow } from "../../utils/counted-tier.js";
 import { foldModes } from "../../utils/roll-mode.js";
@@ -49,23 +53,25 @@ export const FOLLOWER_DEATHS_DOOR = "Death's Door";
 export const DOOR_ROLLED_FLAG = "followerDoorRolled";
 export const DOOR_SETTLED_FLAG = "followerDoorSettled";
 
-/** The data attributes a card button carries to say whose follower and which HP row. PURE. */
-export function doorButtonData({ follower = "", slug = "", index = null, name = "" } = {}) {
-	return `data-follower="${escHtml(follower)}" data-slug="${escHtml(slug ?? "")}" data-index="${index == null ? "" : escHtml(String(index))}" data-name="${escHtml(name)}"`;
-}
-
-/** Read a button's row back, the inverse of doorButtonData. PURE. */
-export function doorRowFromButton(btn) {
-	const d = btn?.dataset ?? {};
-	const index = d.index === "" || d.index == null ? null : Number(d.index);
-	return { follower: d.follower ?? "", slug: d.slug ?? "", index: Number.isInteger(index) ? index : null, name: d.name ?? "" };
+/**
+ * The row the 10+ is written to NOW, or null when it must not be (PURE but for the flags read): a roster member
+ * cut out since the card was posted, or a row no longer at 0 HP (healed meanwhile, or a stale index that would
+ * name a member standing). "Return to 1 HP" (p.244) never lowers anyone. `flags` is the leader's.
+ */
+export function doorUpRow(flags, row) {
+	if (!row?.follower) return null;
+	const now = resolveRosterRef(flags, row);
+	if (!now) return null;
+	const path = followerFateHpPath(now.follower, row.slug ?? "", now.index);
+	if (path && wasStanding(foundry.utils.getProperty(flags ?? {}, path))) return null;
+	return { ...row, follower: now.follower, index: now.index };
 }
 
 /** The Follower Down card's body for the Death's Door outcome, with its Roll button. PURE. */
 export function followerDoorCardHtml(row, leaderName = "") {
 	const who = `<strong>${escHtml(row?.name || "Your follower")}</strong>`;
 	return `<p>${format(`${KEY}.triggers`, { name: who, leader: escHtml(leaderName) })}</p>`
-		+ `<button type="button" class="stonetop-follower-door-roll" ${doorButtonData(row)}>`
+		+ `<button type="button" class="stonetop-follower-door-roll" ${rowButtonData(row)}>`
 		+ `<i class="fas fa-dice"></i> ${escHtml(localize(`${KEY}.rollButton`))}</button>`;
 }
 
@@ -77,7 +83,7 @@ export function followerDoorMoveName(name) {
 /** The roll's options: +nothing, no XP on a miss, the book's three tiers, the 10+ and 6- buttons. PURE. */
 export function followerDoorRollOptions(row) {
 	const name = row?.name || localize(`${KEY}.fallbackName`);
-	const attrs = doorButtonData(row);
+	const attrs = rowButtonData(row);
 	return {
 		statValue:   0,
 		modifier:    0,
@@ -103,7 +109,14 @@ export function followerDoorRollOptions(row) {
  */
 export async function followerDoorUp(character, row, { link = followerActorFromLink } = {}) {
 	if (!character || !row?.follower) return false;
-	return !!(await setFollowerHp(character, row, 1, { moveName: FOLLOWER_DEATHS_DOOR, link }));
+	// A roster row is read back through any cut made since the card (FOE-2), and nobody standing is lowered to 1.
+	const now = doorUpRow(readableFlags(character), row);
+	if (!now) {
+		globalThis.ui?.notifications?.warn?.(format(`${KEY}.upStale`, { name: row.name || localize(`${KEY}.fallbackName`) }));
+		return false;
+	}
+	// `raiseOnly`: an NPC healed meanwhile is never lowered to 1 by a late press.
+	return !!(await setFollowerHp(character, now, 1, { moveName: FOLLOWER_DEATHS_DOOR, link, raiseOnly: true }));
 }
 
 /**
@@ -167,12 +180,16 @@ export function followerDoorCardTier(message) {
 	return cardTierNow(message, SYSTEM_ID);
 }
 
-/** Wire the three buttons (stonetop.js renderChatMessageHTML), each once per card. */
+/**
+ * Wire the three buttons (stonetop.js renderChatMessageHTML), each once per card, and the "out of the action"
+ * card's "Decide their fate" beside them (follower-fate-pick.js, audit FOE-5), which the same render reaches.
+ */
 export function wireFollowerDeathsDoor(message, html) {
+	wireFollowerFateReopen(message, html);
 	wireLatchedButtons(message, html, {
 		selector: ".stonetop-follower-door-roll", flag: DOOR_ROLLED_FLAG, what: "rolling a follower's Death's Door",
 		act: (actor, btn, buttons) => withCardLatch(message, DOOR_ROLLED_FLAG, true, buttons,
-			async () => !!(await rollFollowerDeathsDoor(actor, doorRowFromButton(btn)))),
+			async () => !!(await rollFollowerDeathsDoor(actor, rowFromButton(btn)))),
 	});
 	wireLatchedButtons(message, html, {
 		selector: ".stonetop-follower-door-up, .stonetop-follower-door-dead", flag: DOOR_SETTLED_FLAG, what: "settling a follower's Death's Door",
@@ -184,7 +201,7 @@ export function wireFollowerDeathsDoor(message, html) {
 				return Promise.resolve(false);
 			}
 			return withCardLatch(message, DOOR_SETTLED_FLAG, up ? "up" : "dead", buttons, async () => {
-				const row = doorRowFromButton(btn);
+				const row = rowFromButton(btn);
 				if (up) return followerDoorUp(actor, row);
 				// The fate dialog's own Dead (a custom follower marked fallen, a roster member struck off), through
 				// SIR, PERMISSION TO DIE, SIR's choice when it is learned (see the header).

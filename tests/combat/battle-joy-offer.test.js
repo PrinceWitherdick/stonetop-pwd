@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
 	offersBattleJoy, askLoseThemselves, offerBattleJoyOnDamage, offerBattleJoyOnHurt, hpLost, installBattleJoyOnHurt, HP_LOST_OPTION,
+	bloodDrawn, bloodSpiller, offerBattleJoyOnApplied,
 	installBattleJoyEnd, stillFighting, actionStops, wireBattleJoyResult, settleBattleJoyResult, BATTLE_JOY_RESULT_FLAG,
 } from "../../module/combat/battle-joy-offer.js";
 import { BATTLE_JOY_DROPPED_OPTION } from "../../module/actors/character/battle-joy.js";
+import { UNSTOPPABLE_FIGHTS_ON_OPTION } from "../../module/hooks/DeathsDoorPrompt.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { stubAsk } from "../fakes/confirm.js";
 
@@ -54,6 +56,71 @@ describe("offersBattleJoy", () => {
 		expect(offersBattleJoy(heavy({ learned: false }), [3])).toBe(false);
 		expect(offersBattleJoy(heavy({ isOwner: false }), [3])).toBe(false);
 		expect(offersBattleJoy(heavy({ type: "npc" }), [3])).toBe(false);
+	});
+
+	it("does not ask one down, dead or past death", () => {
+		const at = (flags) => { const duvin = heavy(); Object.assign(duvin.flags[SYSTEM_ID], flags); return duvin; };
+		expect(offersBattleJoy(at({ deathsDoor: "dead" }), [3])).toBe(false);
+		expect(offersBattleJoy(at({ deathsDoor: "out-of-action" }), [3])).toBe(false);
+		expect(offersBattleJoy(at({ deathsDoor: "fate-pending" }), [3])).toBe(false);
+		expect(offersBattleJoy(at({ deathsDoor: "dying" }), [3])).toBe(false);
+		expect(offersBattleJoy(at({ postDeathInsert: { slug: "ghost" } }), [3])).toBe(false);
+	});
+});
+
+// Book I p.239: "If the target's armor is equal to or greater than the damage, they don't lose any HP." Blood
+// is spilled at Apply, by the rows that really lost HP.
+describe("blood spilled at Apply", () => {
+	it("counts each row's HP really lost, once", () => {
+		const seen = new Set(["old"]);
+		expect(bloodDrawn([
+			{ uuid: "old", oldHp: 9, newHp: 1 },
+			{ uuid: "a", effective: 3, oldHp: 7, newHp: 4 },
+			{ uuid: "b", effective: 0, oldHp: 7, newHp: 7 },
+			{ uuid: "c", effective: 2, member: true, before: 5, after: 3 },
+			{ uuid: "d", effective: 0, ignored: true },
+			{ uuid: "e", effective: 4 },
+		], seen)).toEqual([{ uuid: "a", lost: 3 }, { uuid: "b", lost: 0 }, { uuid: "c", lost: 2 }, { uuid: "e", lost: 4 }]);
+	});
+
+	const card = (damage, { followerBlow = false } = {}) => ({
+		id: `m${Math.random()}`,
+		getFlag: (scope, key) => (key === "damage" ? damage : key === "followerBlow" ? followerBlow : undefined),
+	});
+
+	it("is the character's own blow, never one struck at them or a follower's", () => {
+		const duvin = { ...heavy(), documentName: "Actor" };
+		const resolve = uuid => (uuid === "Actor.duvin" ? duvin : null);
+		expect(bloodSpiller(card({ attackerUuid: "Actor.duvin" }), { resolve })).toBe(duvin);
+		expect(bloodSpiller(card({ attackerUuid: "Actor.duvin", selfHarm: true }), { resolve })).toBe(null);
+		expect(bloodSpiller(card({ attackerUuid: "Actor.duvin" }, { followerBlow: true }), { resolve })).toBe(null);
+		expect(bloodSpiller(card({ attackerUuid: "" }), { resolve })).toBe(null);
+	});
+
+	it("asks the Heavy's own client when a row lost HP, and not for a blow armor stopped", async () => {
+		const duvin = Object.assign(heavy(), { documentName: "Actor" });
+		const resolve = uuid => (uuid === "Actor.duvin" ? duvin : { documentName: "Actor", type: "monster" });
+		const ask = vi.fn(async () => false);
+		const stopped = card({ attackerUuid: "Actor.duvin", move: "Clash" });
+		expect(offerBattleJoyOnApplied(stopped, [{ uuid: "t1", effective: 0, oldHp: 6, newHp: 6 }], { answers: () => true, resolve, ask })).toBe(false);
+		const bled = card({ attackerUuid: "Actor.duvin", move: "Clash" });
+		expect(offerBattleJoyOnApplied(bled, [{ uuid: "t1", effective: 3, oldHp: 6, newHp: 3 }], { answers: () => false, resolve, ask })).toBe(false);
+		expect(offerBattleJoyOnApplied(bled, [{ uuid: "t1", effective: 3, oldHp: 6, newHp: 3 }], { answers: () => true, resolve, ask })).toBe(true);
+		await vi.waitFor(() => expect(ask).toHaveBeenCalledWith(duvin, "Duvin has just dealt damage (Clash)."));
+		// The same row written again (another row applied after it) is not asked twice.
+		expect(offerBattleJoyOnApplied(bled, [{ uuid: "t1", effective: 3, oldHp: 6, newHp: 3 }], { answers: () => true, resolve, ask })).toBe(false);
+	});
+
+	it("says with no fight running that it is ended from the glyph", async () => {
+		const savedCombats = globalThis.game.combats;
+		globalThis.game.combats = [];
+		try {
+			const duvin = heavy();
+			await offerBattleJoyOnDamage(duvin, "Clash", [5], { ask: async () => true });
+			expect(posted.at(-1).content).toContain("No fight is running");
+		} finally {
+			globalThis.game.combats = savedCombats;
+		}
 	});
 });
 
@@ -124,6 +191,11 @@ describe("their own blood", () => {
 		expect(hpLost(5, 9)).toBe(0);
 		expect(hpLost(10, "")).toBe(0);
 	});
+
+	it("counts the blood of a Heavy dropped to 0 who fights on with Unstoppable (p.114)", () => {
+		expect(hpLost(6, 0, { fightsOn: true })).toBe(6);
+		expect(hpLost(6, -3, { fightsOn: true })).toBe(6);
+	});
 });
 
 describe("installBattleJoyOnHurt", () => {
@@ -155,9 +227,39 @@ describe("installBattleJoyOnHurt", () => {
 
 		const other = {};
 		hooks.fire("preUpdateActor", heavy({ moves: [] }), { system: { attributes: { hp: { value: 6 } } } }, other);
-		hooks.fire("preUpdateActor", heavy(), { system: { attributes: { hp: { value: 0 } } } }, other);
 		hooks.fire("preUpdateActor", heavy(), { name: "Duv" }, other);
 		expect(other).toEqual({});
+
+		// A drop to 0 is marked in full: whether that blood counts is asked once the write commits.
+		const dropped = {};
+		hooks.fire("preUpdateActor", heavy(), { system: { attributes: { hp: { value: 0 } } } }, dropped);
+		expect(dropped[HP_LOST_OPTION]).toBe(10);
+	});
+
+	// Unstoppable's "fights on" is decided once, by the Death's Door hook's preUpdate, and read here once committed,
+	// so it does not matter which preUpdate ran first (that hook names the dying state in `changes`).
+	it("asks a Heavy dropped to 0 only when Death's Door's hook says Unstoppable keeps them fighting", async () => {
+		const hooks = fakeHooks();
+		installBattleJoyOnHurt({ hooks });
+		const duvin = heavy();
+		duvin.system.attributes.hp.value = 0;
+		const player = { id: "p1", isGM: false, active: true, character: duvin };
+		duvin.testUserPermission = () => true;
+		globalThis.game.users = [player];
+		globalThis.game.user = player;
+		const wait = vi.fn(async () => null);
+		globalThis.foundry.applications = { api: { DialogV2: { wait } } };
+
+		hooks.fire("updateActor", duvin, {}, { [HP_LOST_OPTION]: 10 });
+		await new Promise(r => setTimeout(r, 0));
+		expect(wait).not.toHaveBeenCalled();
+
+		// Standing at 0 on Unstoppable's word (the stamp the same write laid), so the question can be put.
+		duvin.items.push({ type: "move", name: "Unstoppable", flags: {} });
+		duvin.flags[SYSTEM_ID] = { deathsDoor: "dying", unstoppableFighting: true };
+		hooks.fire("updateActor", duvin, {}, { [HP_LOST_OPTION]: 10, [UNSTOPPABLE_FIGHTS_ON_OPTION]: true });
+		await new Promise(r => setTimeout(r, 0));
+		expect(wait).toHaveBeenCalledTimes(1);
 	});
 
 	// Wave 4 HP-3: HP taken down to a max that fell (or a typed number capped at it) is no blood spilled.
@@ -211,7 +313,7 @@ describe("installBattleJoyEnd: the action stops", () => {
 		const on = new Map();
 		return { on: (name, fn) => { on.set(name, fn); return name; }, off: vi.fn(), fire: (name, ...args) => on.get(name)?.(...args) };
 	}
-	const combat = (id, actors) => ({ id, combatants: actors.map((actor, i) => ({ id: `${id}-c${i}`, actor })) });
+	const combat = (id, actors, { tokenless = false } = {}) => ({ id, combatants: actors.map((actor, i) => ({ id: `${id}-c${i}`, actor, tokenId: tokenless ? null : `${id}-t${i}` })) });
 	let savedGame;
 	beforeEach(() => { savedGame = { user: globalThis.game.user, users: globalThis.game.users, combats: globalThis.game.combats }; });
 	afterEach(() => {
@@ -365,6 +467,21 @@ describe("installBattleJoyEnd: the action stops", () => {
 		expect(stillFighting(duvin, [f1])).toBe(true);
 		expect(stillFighting(duvin, [f1], { exceptCombat: f1 })).toBe(false);
 		expect(stillFighting(duvin, [f1], { exceptCombatant: f1.combatants[0] })).toBe(false);
+	});
+
+	it("does not count the old Introductions' tokenless roster Combat as still fighting", async () => {
+		const duvin = heavy();
+		duvin.id = "duvin";
+		const roster = combat("intro", [duvin], { tokenless: true });
+		expect(stillFighting(duvin, [roster])).toBe(false);
+		// So the fight ending still hands an Unstoppable Heavy their Death's Door.
+		const duvinDown = down(table("p1", { raging: false }), { unstoppable: true });
+		const openDeathsDoor = vi.fn(async () => {});
+		const hooks = hooksFake();
+		installBattleJoyEnd({ hooks, endBattleJoy: vi.fn(), openDeathsDoor });
+		globalThis.game.combats = [combat("intro", [duvinDown], { tokenless: true })];
+		hooks.fire("deleteCombat", combat("f1", [duvinDown]));
+		await vi.waitFor(() => expect(openDeathsDoor).toHaveBeenCalledWith(duvinDown));
 	});
 });
 

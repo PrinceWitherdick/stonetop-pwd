@@ -81,9 +81,10 @@ function candidateLabel(name, actor) {
  * the tests drive it.
  */
 async function withDefaults(deps = {}) {
-	const [people, pcs] = await Promise.all([
+	const [people, pcs, door] = await Promise.all([
 		"pick" in deps ? null : import("../dialogs/RelationshipLinkDialog.js"),
 		"characters" in deps ? null : import("../utils/characters-in-play.js"),
+		"markDying" in deps ? null : import("../hooks/DeathsDoorPrompt.js"),
 	]);
 	return {
 		handTargets: () => snapshotTargets(),
@@ -93,6 +94,8 @@ async function withDefaults(deps = {}) {
 		tokens: () => Array.from(globalThis.canvas?.scene?.tokens ?? []),
 		resolve: uuid => Promise.resolve(globalThis.fromUuid?.(uuid)).catch(() => null),
 		apply: applyDamageToActor,
+		// A character already at 0 HP whom certain death catches faces the Door all the same (hazardCertainDeath).
+		markDying: actor => door.markDyingByFiat(actor),
 		// The shared list card (utils/chat.js#postListCard), spoken by the hazard and worn as an applied card.
 		post: (title, rowsHtml, options) => postListCard(null, title, rowsHtml, options),
 		notify: message => globalThis.ui?.notifications?.info?.(message),
@@ -169,7 +172,15 @@ export async function hazardCertainDeath(page, deps = {}) {
 		const name = target.name || actor?.name || "";
 		const hp = Number(actor?.system?.attributes?.hp?.value);
 		if (!actor || !Number.isFinite(hp)) { lines.push(format(`${KEY}.noHp`, { name })); continue; }
-		if (hp <= 0) { lines.push(format(`${KEY}.alreadyDown`, { name })); continue; }
+		if (hp <= 0) {
+			// ALREADY DOWN, and caught by something that "should immediately reduce them to 0 HP and trigger the
+			// Death's Door move" (Book I p.383): a character at 0 who is not already dying or past it (out of the
+			// action, say) faces the Door now, marked the way the GM's own "Mark dying" marks it. Anyone else, or a
+			// character already dying or dead, gets the line alone.
+			const marked = actor.type === "character" ? await d.markDying(actor) : false;
+			lines.push(format(`${KEY}.${marked ? "alreadyDownDoor" : "alreadyDown"}`, { name }));
+			continue;
+		}
 		const hit = await d.apply(actor, hp, { stonetopMove: page.name });
 		if (!hit) { lines.push(format(`${KEY}.noHp`, { name })); continue; }
 		lines.push(format(`${KEY}.deathLine`, { name, from: hit.oldHp }));

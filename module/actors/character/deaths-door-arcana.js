@@ -46,6 +46,12 @@ export function tickedBackBoxes(boxes, slug) {
 	return Object.keys(boxes ?? {}).filter(k => k.startsWith(`${slug}:back:`) && boxes[k]);
 }
 
+/** The Rune-laden Scales' slug: its Death's Door offer (deaths-door-arcana-offers.js) and its stand fast (fight/defend-spend.js). */
+export const RUNE_LADEN_SCALES = "rune-laden-scales";
+
+/** Whether the character's inventory marks the arcanum `slug` worn (checked), held or not: the Scales, the Demonhide Cloak. */
+export const markedWorn = (character, slug) => !!character?._inventory?.checked?.[slug];
+
 /** Held and recovered: owned and not a lead (a lead is not yet in their hands). */
 export function holdsArcanum(character, slug) {
 	const arcana = character?._arcana;

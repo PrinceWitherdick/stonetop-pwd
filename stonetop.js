@@ -51,7 +51,7 @@ import { wireOptionDebility } from "./module/actors/character/option-debility.js
 import { wireCensureEnraged } from "./module/actors/character/censure-enraged.js";
 import { wireLoyalToTheEnd } from "./module/actors/character/companion-bond.js";
 import { wireFollowerDeathsDoor } from "./module/actors/character/follower-deaths-door.js";
-import { wireFollowerOrderDamage } from "./module/fight/follower-order-attack.js";
+import { wireFollowerOrderDamage, reconcileOrderedClashCounter } from "./module/fight/follower-order-attack.js";
 import { wireFollowerBalkCard, registerFollowerBalkHooks } from "./module/gm-toolkit/follower-balk.js";
 import { FOLLOWER_LOYALTY_QUERY, handleFollowerLoyaltyQuery } from "./module/actors/character/follower-bond.js";
 import { FOLLOWER_HANDOFF_QUERY, handleFollowerHandoffQuery } from "./module/actors/character/follower-handoff.js";
@@ -73,6 +73,7 @@ import { installMapPinNameToggle } from "./module/hooks/MapPinNameToggle.js";
 import { registerMapBrightness } from "./module/hooks/map-brightness.js";
 import { installTimeBanner } from "./module/seasons/time-banner.js";
 import { installLoveLetterNotice } from "./module/actors/character/love-letter-notice.js";
+import { primeArcanaRules } from "./module/actors/character/repositories/FoundryArcanaRepository.js";
 import { registerExpeditionRouteHooks } from "./module/hooks/ExpeditionRouteOverlay.js";
 import { bumpEncounterNotesGeneration } from "./module/actors/gmtoolkit/gm-encounters-tab.js";
 import { gmToolkitActors } from "./module/actors/gmtoolkit/gm-toolkit-actor.js";
@@ -169,6 +170,8 @@ import { registerArcanaCardEditHooks } from "./module/hooks/arcana-card-edits.js
 import { registerBronzeLineHooks } from "./module/actors/character/bronze-lines.js";
 import { registerPostDeathMoveHooks } from "./module/actors/character/post-death-moves.js";
 import { installBodysnatcherHooks } from "./module/actors/character/bodysnatcher.js";
+import { installGmPresenceRedraw } from "./module/hooks/gm-presence-redraw.js";
+import { installSummonConsequenceHooks } from "./module/actors/character/mindgem-servant.js";
 import { loseHp, wirePostDeathMoveCards } from "./module/actors/character/post-death-actions.js";
 import { registerRosterFateHooks } from "./module/fight/roster-fate.js";
 import { registerLevelUpClaimQuery } from "./module/actors/character/level-up-claim.js";
@@ -679,6 +682,8 @@ Hooks.once("init", () => {
 		"stonetop.npc-quick-facts":     "systems/stonetop-pwd/templates/actor/partials/npc-quick-facts.hbs",
 		"stonetop.npc-tab-nav":         "systems/stonetop-pwd/templates/actor/partials/npc-tab-nav.hbs",
 		"stonetop.move-group":           "systems/stonetop-pwd/templates/actor/partials/move-group.hbs",
+		// A move card's "Taken as a level pick" box, on move-group.hbs and tab-moves.hbs's Other Moves.
+		"stonetop.level-pick-toggle":    "systems/stonetop-pwd/templates/actor/partials/level-pick-toggle.hbs",
 		"stonetop.tab-search-control":   "systems/stonetop-pwd/templates/actor/partials/tab-search-control.hbs",
 		"stonetop.catalog-shell":        "systems/stonetop-pwd/templates/dialogs/partials/catalog-shell.hbs",
 		// One other playbook's move, on the level-up's agreed and cross-playbook steps alike.
@@ -1076,6 +1081,11 @@ Hooks.once("ready", installTimeBanner);
 // A player's red "a love letter has arrived" notice, hung under that bar; after it, so it finds
 // the bar to hang from. See actors/character/love-letter-notice.js.
 Hooks.once("ready", installLoveLetterNotice);
+
+// The arcana cards whose boxes the fight reads by their printed labels (data/arcana-rules.js), read for the
+// characters that hold them so a blow struck before any sheet has opened still finds them; a card gained later
+// is read as it is gained.
+Hooks.once("ready", () => primeArcanaRules());
 
 // -- EXPEDITION ROUTE ON THE MAP -------------------------------
 // A journey put on a poster-map scene from the Run an Expedition walkthrough. The scene
@@ -1645,6 +1655,12 @@ async function _resyncRewrittenTotal(message, actor, total) {
 		await reconcileClashCounter(message, actor, total);
 	} catch (err) {
 		console.error("Stonetop | Error matching a rewritten Clash's counter-attack:", err);
+	}
+	// And an ORDERED Clash's, struck once per order card (fight/follower-order-attack.js, audit FOE-1).
+	try {
+		await reconcileOrderedClashCounter(message, actor, total);
+	} catch (err) {
+		console.error("Stonetop | Error matching a rewritten ordered Clash's counter-attack:", err);
 	}
 }
 
@@ -3006,6 +3022,10 @@ registerBronzeLineHooks();
 registerPostDeathMoveHooks();
 // A Ghost's Bodysnatcher: the damage their host takes, lost as HP; the possession ended at 0 HP or once it lapses.
 installBodysnatcherHooks();
+// The latest cards redrawn when a GM comes or goes: their buttons are gated on who is connected (hooks/gm-presence-redraw.js).
+installGmPresenceRedraw();
+// And a summoned follower changed as its card's marked Consequences say, the Mindgem's Mighty Servant (actors/character/mindgem-servant.js).
+installSummonConsequenceHooks();
 // A crew member a lone blow drops in a fight is asked their fate on the Marshal's player's screen.
 registerRosterFateHooks();
 // And a camp window open when this client reloaded comes back with the sheets, where it was left

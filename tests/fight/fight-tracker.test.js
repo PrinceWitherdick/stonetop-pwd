@@ -5,7 +5,7 @@ import { createFightTrackerClass, fighterDragType } from "../../module/fight/Fig
 import { FIGHT_OVER, FIGHT_WINDOW_WIDTH, noteFightWindowClosed, openFightWindow, rememberFightWindowPosition } from "../../module/fight/fight-window.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, collection } from "../fakes/fight.js";
-import { stubConfirm } from "../fakes/confirm.js";
+import { stubAsk, stubConfirm } from "../fakes/confirm.js";
 
 // The Fight tab's class, over a stand-in for core's CombatTracker.
 
@@ -111,7 +111,7 @@ describe("the Fight tab class", () => {
 
 	it("adds its own actions and leaves core's to the merge", () => {
 		expect(Object.keys(FightTracker.DEFAULT_OPTIONS.actions).sort()).toEqual(
-			["addToFight", "endFight", "lineUpFight", "openFightWindow", "startFight", "stopRounds"],
+			["addToFight", "endFight", "lineUpFight", "openFightWindow", "sendAt", "startFight", "stopRounds"],
 		);
 		expect(FightTracker.name).toBe("FightTracker");
 	});
@@ -165,6 +165,87 @@ describe("the Fight tab class", () => {
 		expect(pair.foes[0]).toMatchObject({ id: "cCrin", draggable: true, dropTarget: true });
 	});
 
+	// FGT-6: core views whatever Combat it finds, and an old world's tokenless Introductions roster is no fight.
+	it("draws a Combat that is not a fight as no fight: the Start a fight header, an empty tracker", async () => {
+		const { combat } = oneFight();
+		combat.flags = {};
+		const tab = new FightTracker();
+		tab.viewed = combat;
+		tab.combats = [combat];
+		const header = {};
+		await tab._prepareCombatContext(header, {});
+		expect(header).toMatchObject({ hasCombat: false, combat: null, cycle: null });
+		const body = {};
+		await tab._prepareTrackerContext(body, {});
+		expect(body.fight).toBeNull();
+		// The cycle counts fights only.
+		const fight = oneFight().combat;
+		tab.viewed = fight;
+		tab.combats = [combat, fight];
+		const again = {};
+		await tab._prepareCombatContext(again, {});
+		expect(again).toMatchObject({ hasCombat: true, cycle: null });
+		// And a real fight beside that roster is never out of reach: viewing the roster draws the fight.
+		tab.viewed = combat;
+		const beside = {};
+		await tab._prepareCombatContext(beside, {});
+		expect(beside).toMatchObject({ hasCombat: true, combat: fight });
+	});
+
+	// FGT-1: core keeps the token's hidden and the row's apart, and the fight shows a player only a fighter neither hides.
+	it("hides and shows the token along with the row", async () => {
+		const { combat, cCrin } = oneFight();
+		cCrin.token.update = vi.fn(async changes => Object.assign(cCrin.token, changes));
+		const tab = new FightTracker();
+		tab.viewed = combat;
+		await tab._onToggleHidden(cCrin);
+		expect(cCrin.update).toHaveBeenCalledWith({ hidden: true });
+		expect(cCrin.token.update).toHaveBeenCalledWith({ hidden: true });
+		// A token already where the row is going is not written again.
+		cCrin.hidden = true;
+		cCrin.token.hidden = false;
+		cCrin.token.update.mockClear();
+		await tab._onToggleHidden(cCrin);
+		expect(cCrin.update).toHaveBeenLastCalledWith({ hidden: false });
+		expect(cCrin.token.update).not.toHaveBeenCalled();
+	});
+
+	// FGT-8: the drag's send, for a reader who cannot drag: a row button and a menu entry, asked with a button per foe.
+	it("sends a fighter at someone picked from a window, asked even when there is one choice", async () => {
+		const { combat, cBram } = oneFight();
+		cBram.isOwner = true;
+		const sendAgainst = vi.fn(async () => "moved");
+		globalThis.game.stonetop = { fight: { sendAgainst } };
+		globalThis.canvas = { scene: combat.scene, tokens: { controlled: [] } };
+		globalThis.game.user = { id: "player", isGM: false, hasPermission: () => true };
+		globalThis.foundry = { ...saved.foundry, applications: { api: {} } };
+		const hadDocument = "document" in globalThis;
+		const previous = globalThis.document;
+		globalThis.document = { createElement: () => ({ innerHTML: "", firstElementChild: null, children: [] }) };
+		try {
+			const tab = new FightTracker();
+			tab.viewed = combat;
+			const asked = stubAsk("t0");
+			const row = { closest: () => ({ dataset: { combatantId: "cBram" } }) };
+			await FightTracker.DEFAULT_OPTIONS.actions.sendAt.call(tab, {}, row);
+			expect(asked).toHaveBeenCalledTimes(1);
+			expect(asked.mock.calls[0][0].buttons.map(b => b.label)).toEqual(["crinwin", "Leave them where they are"]);
+			expect(sendAgainst).toHaveBeenCalledWith(combat, "cBram", "cCrin");
+			// The menu's entry is there for the player too, on a row drawn with the row's own rule (`data-send-at`), and
+			// backing out of the window sends nobody.
+			const sendAt = tab._getEntryContextOptions().find(e => e.label === "stonetop.fight.menu.sendAt");
+			expect(sendAt.visible({ dataset: { combatantId: "cBram", sendAt: "" } })).toBe(true);
+			expect(sendAt.visible({ dataset: { combatantId: "cBram" } })).toBe(false);
+			stubAsk("cancel");
+			sendAgainst.mockClear();
+			await sendAt.onClick({}, { dataset: { combatantId: "cBram" } });
+			expect(sendAgainst).not.toHaveBeenCalled();
+		} finally {
+			if (hadDocument) globalThis.document = previous;
+			else delete globalThis.document;
+		}
+	});
+
 	it("has nothing to draw with no fight", async () => {
 		const tab = new FightTracker();
 		const context = {};
@@ -180,7 +261,7 @@ describe("the Fight tab class", () => {
 		expect(entries.map(e => e.label)).toEqual([
 			"stonetop.fight.menu.switchSide", "stonetop.fight.menu.headcount", "stonetop.fight.menu.stopShooting",
 			"stonetop.fight.scale.menuMerge", "stonetop.fight.scale.menuSplit",
-			"stonetop.fight.menu.openSheet", "stonetop.fight.menu.remove",
+			"stonetop.fight.menu.sendAt", "stonetop.fight.menu.openSheet", "stonetop.fight.menu.remove",
 		]);
 		for (const entry of entries) {
 			expect(entry.name).toBe(entry.label);
@@ -192,7 +273,7 @@ describe("the Fight tab class", () => {
 		expect(entries[0].visible(li)).toBe(true);
 		globalThis.game.user = { id: "player", isGM: false };
 		expect(entries[0].visible(li)).toBe(false);
-		expect(entries[6].visible(li)).toBe(false);
+		expect(entries[7].visible(li)).toBe(false);
 		// One crinwin, fighting as itself, with no shot on record: nothing to stop, nothing to merge it
 		// with, and no group to split.
 		globalThis.game.user = { id: "gm", isGM: true };

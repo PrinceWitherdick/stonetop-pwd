@@ -12,14 +12,15 @@
 
       `data-fight-drag` marks a row a GM can pick up and `data-fight-drop` one that takes a drop; each
       carries the row's own side, which is how a drop onto the side it came from is refused
-      (FightTracker.js#_onFightDrop).
+      (FightTracker.js#_onFightDrop). `row.sendAt` puts the same send on a button, for a reader who cannot
+      drag (FightTracker.js#_askSendAt), and `data-send-at` offers it on the row's menu by the same rule.
 
       The line under the name is HP and Armor; who they are fighting is the name's tooltip, and is read
       out with it.
 
       Source order is reading order: name, HP and Armor, the badge, then the buttons. The
       stylesheet lifts the badge and the buttons up beside the name, so a row costs no extra line. --}}
-<li class="combatant stonetop-fight-row {{row.css}}" data-combatant-id="{{row.id}}" data-action="activateCombatant"{{#if row.draggable}} draggable="true" data-fight-drag="{{row.side}}"{{/if}}{{#if row.dropTarget}} data-fight-drop="{{row.side}}"{{/if}}>
+<li class="combatant stonetop-fight-row {{row.css}}" data-combatant-id="{{row.id}}" data-action="activateCombatant"{{#if row.draggable}} draggable="true" data-fight-drag="{{row.side}}"{{/if}}{{#if row.dropTarget}} data-fight-drop="{{row.side}}"{{/if}}{{#if row.sendAt}} data-send-at{{/if}}>
   {{#if row.img}}<img class="stonetop-fight-face" src="{{row.img}}" alt="" loading="lazy" draggable="false">{{/if}}
   <div class="stonetop-fight-row-text">
     <strong class="name stonetop-fight-name"{{#if row.readout}} data-tooltip-text="{{row.readout}}" aria-description="{{row.readout}}"{{/if}}>{{row.name}}</strong>
@@ -39,6 +40,10 @@
               data-action="toggleDefeated" aria-pressed="{{#if row.defeated}}true{{else}}false{{/if}}"
               data-tooltip="{{#if row.defeated}}{{localize "stonetop.fight.row.backIn"}}{{else}}{{localize "stonetop.fight.row.out"}}{{/if}}"
               aria-label="{{#if row.defeated}}{{localize "stonetop.fight.row.backIn"}}{{else}}{{localize "stonetop.fight.row.out"}}{{/if}}"></button>
+      {{/if}}
+      {{#if row.sendAt}}
+      <button type="button" class="inline-control combatant-control icon fa-solid fa-person-walking-arrow-right" data-action="sendAt"
+              data-tooltip="{{localize "stonetop.fight.row.sendAt"}}" aria-label="{{localize "stonetop.fight.row.sendAtAria" name=row.name}}"></button>
       {{/if}}
       {{#if row.canPing}}
       <button type="button" class="inline-control combatant-control icon fa-solid fa-bullseye-arrow" data-action="pingCombatant"

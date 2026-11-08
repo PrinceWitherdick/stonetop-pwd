@@ -1,5 +1,5 @@
 import {getStonetopProsperity} from "./world.js";
-import {DAMAGE_DIE_RE, isWholeDamageDie, attackSeparatorRe} from "./damage-die.js";
+import {DAMAGE_DIE_RE, isWholeDamageDie, attackSeparatorRe, ownHpChangeRe} from "./damage-die.js";
 import {capitalizeFirst} from "./strings.js";
 import {HP_LOSS_OPTION} from "../actors/character/StonetopFlags.js";
 
@@ -235,6 +235,17 @@ export function damageRowActor(doc) {
 	return doc?.documentName === "Actor" ? doc : (doc?.actor ?? null);
 }
 
+/** A uuid resolved with `resolve` (a resolveSync), or null when there is none or resolving it throws. */
+export function resolvedOrNull(uuid, resolve) {
+	if (!uuid) return null;
+	try { return resolve(uuid) ?? null; } catch { return null; }
+}
+
+/** A damage row's actor from its uuid (damageRowActor), or null when there is none or it cannot be resolved. */
+export function damageRowActorAt(uuid, resolve) {
+	return damageRowActor(resolvedOrNull(uuid, resolve));
+}
+
 /**
  * Subtract `amount` HP from an actor, clamped at 0, and return the transition
  * `{ oldHp, newHp }` (null if the actor has no HP attribute). Writes
@@ -323,9 +334,8 @@ const DAMAGE_VERB_RE = /\b(?:takes?|taking|suffers?|suffering|deals?|dealing|inf
 // HIT POINTS LOST, which the books print without the word "damage": "They do it, but it costs you, lose
 // 2d4 HP" (the Ghost's Bodysnatcher), "Mark a debility, lose 1d4 HP". A die or a count straight before
 // "HP", after a form of "lose". It is always the reader's own, and never armored: HP lost is not a blow.
-// "They lose" is somebody else's, and left alone.
-const HP_LOSS_RE = /\b(?:lose|loses|losing)\s+(\d*\s*d\s*\d+(?:\s*[+-]\s*\d+)?|\d+)\s*HP\b/i;
-const THEIR_HP_LOSS_RE = /\b(?:they|it|the\s+target)\s+(?:lose|loses)\b/i;
+// "They lose" is somebody else's, and left alone (damage-die.js#ownHpChangeRe).
+const HP_LOSS_RE = ownHpChangeRe({ speaker: "pc", verbs: "loss", count: true });
 
 // "1d6 extra damage", "add 1d6 to a damage roll": a number that rides another roll rather than
 // being one, said in words. The other half of that rule is the SIGN, and it is not read here but
@@ -501,8 +511,8 @@ export function readOptionDamageChoices(text) {
  */
 function _readHpLoss(line) {
 	const match = HP_LOSS_RE.exec(line);
-	if (!match || THEIR_HP_LOSS_RE.test(line)) return null;
-	const formula = match[1].replace(/\s+/g, "").replace(/^d/i, "1d");
+	if (!match) return null;
+	const formula = match.groups.amount.replace(/\s+/g, "").replace(/^d/i, "1d");
 	return { formula, isRoll: /d/i.test(formula), self: true, ignoresArmor: true, piercing: 0, tags: [], hpLoss: true };
 }
 
@@ -563,9 +573,13 @@ export function parseMonsterAttacks(damageValue, rollFormula = "") {
 	return fallback ? [_readAttack(fallback)] : [];
 }
 
-/** Each printed attack's mechanical text, keeping only those with a die or a tag list to read. */
+/**
+ * Each printed attack's mechanical text, keeping only those with a die or a tag list to read. What a blow
+ * costs the monster itself ("costs 1d4 HP") is taken out first, before the split, so its die is never read
+ * as an attack of its own.
+ */
 function _mechanicalAttacks(damageValue) {
-	return _splitPrintedAttacks(damageValue)
+	return _splitPrintedAttacks(withoutSelfHpCosts(damageValue))
 		.map(entry => entry.mechanical)
 		.filter(text => DAMAGE_DIE_RE.test(text) || _TAG_LIST_RE.test(text));
 }
@@ -623,6 +637,8 @@ export function splitMonsterAttackProse(damageValue) {
 export function damageCardText(damageValue, formula = "") {
 	// The mechanical text, not the printed: a trailing name with no die of its own is printed with
 	// the attack before it but is no part of that attack (see _splitPrintedAttacks).
+	// And not what the blow costs the monster itself ("costs 1d4 HP"): said beside its tags, never read as its die.
+	const costs = selfHpCosts(damageValue);
 	const attacks = _mechanicalAttacks(damageValue);
 	const die = _comparableDie(formula);
 	const text = (die && attacks.find(attack => _comparableDie(dieFromDamage(attack)) === die))
@@ -632,7 +648,7 @@ export function damageCardText(damageValue, formula = "") {
 	const tags = _attackTags(text).filter(tag => !_BARE_ADVANTAGE_RE.test(tag) && !_BARE_DIE_TAG_RE.test(tag));
 	return {
 		title: capitalizeFirst(_readAttack(text).label),
-		keywords: [tags.join(", "), _attackNote(text)].filter(Boolean).join(" · "),
+		keywords: [tags.join(", "), _attackNote(text), costs.join(", ")].filter(Boolean).join(" · "),
 	};
 }
 
@@ -640,6 +656,9 @@ export function damageCardText(damageValue, formula = "") {
 function _comparableDie(die) {
 	return String(die ?? "").replace(/\s+/g, "").toLowerCase().replace(/^1d/, "d");
 }
+
+/** Whether two dice are the same die as two stat lines can spell it ("1d8 + 2" is "d8+2"). PURE. */
+export const sameDie = (a, b) => _comparableDie(a) === _comparableDie(b);
 
 /** An advantage the tag list carries as a word of its own ("beak d10 (reach, disadvantage)"). It is
  *  not a keyword on the card, because the pill under the total already says it, read by the same
@@ -904,20 +923,66 @@ export function damageBlows(damageValue) {
 	});
 }
 
-/** One attack a MOVE rolls: read out of its name, at the die its own field carries. */
+/**
+ * One attack a MOVE rolls: read out of its name, at the die its own field carries.
+ *
+ * A VARIANT of the stat block's own blow is that blow, changed: "Bite down ... (+messy, 3 piercing)", "Fling a
+ * lightning bolt (+near, +forceful, +loud, ignores armor; costs 1d4 HP)", "Erupt in a flurry of violence (area, +2
+ * damage, lose 2d4 HP)". The book's "+" means "on top of", so the move keeps the blow's own tags and piercing (the
+ * Stone Sentinel's fists' 3 piercing) and adds its own. Its die is its own field, which carries the printed blow's
+ * die with any "+N damage" already in it.
+ */
 export function readMoveAttack(item) {
 	const name = String(item?.name ?? "");
-	const attack = _readAttack(name);
+	// A self-cost's die is no part of the blow (withoutSelfHpCosts).
+	const attack = _readAttack(withoutSelfHpCosts(name));
+	const ownFormula = String(item?.system?.rollFormula ?? "").trim().replace(/\s+/g, "");
+	// A "+tag" or "+N damage" changes the stat block's blow rather than naming one of its own.
+	const base = attack.tags.some(tag => /^\+/.test(tag)) ? _variantBase(item, ownFormula) : null;
 	return {
 		...attack,
+		...(base ? {
+			tags: [...new Set([...base.tags, ...attack.tags.map(tag => tag.replace(/^\+\s*/, "")).filter(tag => !/^\d+\s*damage$/.test(tag))])],
+			piercing: Math.max(base.piercing ?? 0, attack.piercing ?? 0),
+			ignoresArmor: !!(base.ignoresArmor || attack.ignoresArmor),
+			rollMode: attack.rollMode !== "normal" ? attack.rollMode : (base.rollMode || "normal"),
+		} : {}),
 		// A name that is nothing but its die ("d8+2 damage") leaves no label behind; the move's own
 		// name is then the only thing to call it, which is better on a button than "Attack".
 		label: attack.label || name.trim(),
-		formula: String(item?.system?.rollFormula ?? "").trim().replace(/\s+/g, ""),
+		formula: ownFormula,
 	};
 }
 
-/** One printed attack — its name, its die, and the armor clause it carries. */
+/** The stat block's printed blow a variant move changes: the one at the move's die, else the line's first. */
+function _variantBase(item, formula) {
+	const damage = (item?.actor ?? item?.parent)?.system?.attributes?.damage ?? {};
+	const attacks = parseMonsterAttacks(damage.value, damage.rollFormula);
+	const die = _comparableDie(formula);
+	return attacks.find(a => die && _comparableDie(a.formula) === die) ?? attacks[0] ?? null;
+}
+
+/**
+ * What a monster's move costs THE MONSTER ITSELF in hit points: the vortexes' "costs 1d4 HP", the Stone Sentinel's
+ * "lose 2d4 HP" and "but lose 1d4 HP", the Lightning Vortex's "gaining 1d4 HP". Never one said of someone else ("they
+ * lose 1d4 HP" is a blow). Its die is a price or a gain, not the attack's die.
+ */
+const SELF_HP_COST_RE = new RegExp(String.raw`[;,]?\s*${ownHpChangeRe({ speaker: "monster", verbs: "cost" }).source}`, "gi");
+
+/** The text with its self-costs taken out, and an emptied "()" with them. PURE. Exported for the tests. */
+export function withoutSelfHpCosts(text) {
+	return String(text ?? "").replace(SELF_HP_COST_RE, "").replace(/\(\s*\)/g, "").replace(/\s+\)/g, ")").trim();
+}
+
+/** The self-costs a text prints, as printed ("costs 1d4 HP"). PURE. Exported for the tests. */
+export function selfHpCosts(text) {
+	return [...String(text ?? "").matchAll(SELF_HP_COST_RE)].map(m => m[0].replace(/^[;,]?\s*/, "").trim());
+}
+
+/**
+ * One printed attack: its name, its die, and the armor clause it carries. Handed text with its self-costs
+ * already out (_mechanicalAttacks, readMoveAttack), so a cost's die is never read as the blow's.
+ */
 function _readAttack(text) {
 	const formula = (dieFromDamage(text) ?? "").replace(/\s+/g, "");
 	// Everything before the die is what the book calls this blow; the parenthesised tail is tags.

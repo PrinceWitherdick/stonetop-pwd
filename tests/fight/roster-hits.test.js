@@ -262,7 +262,8 @@ describe("a crew member dropped by a lone blow is asked their fate", () => {
 		expect(open).not.toHaveBeenCalled();
 
 		expect(onUpdateActorRosterFate(marshal, {}, options, "gm", { answers: () => true })).toBe(true);
-		expect(open).toHaveBeenCalledWith(fate);
+		// With the roster's number at the drop, so a cut made before the pick finds the member again (FOE-2).
+		expect(open).toHaveBeenCalledWith({ ...fate, stamp: 0 });
 
 		// The sheet's own HP box writes without the option: nothing opens here for it.
 		expect(onUpdateActorRosterFate(marshal, {}, {}, "pim", { answers: () => true })).toBe(false);
@@ -292,7 +293,7 @@ describe("a crew member dropped by a lone blow is asked their fate", () => {
 		expect(onUpdateActorRosterFate(marshal, {}, options, "gm", onClient("gm"))).toBe(false);
 		expect(onUpdateActorRosterFate(marshal, {}, options, "gm", onClient("pim"))).toBe(true);
 		expect(open).toHaveBeenCalledTimes(1);
-		expect(open).toHaveBeenCalledWith(marshal, { follower: "crew-member", slug: "", index: 0, name: "Crew member 2" });
+		expect(open).toHaveBeenCalledWith(marshal, { follower: "crew-member", slug: "", index: 0, name: "Crew member 2", stamp: 0 });
 	});
 });
 

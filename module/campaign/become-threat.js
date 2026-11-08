@@ -33,8 +33,11 @@ export const isPc = actor => actor?.type === "character";
 const threatPageExists = uuid => !!globalThis.fromUuidSync?.(uuid, { strict: false });
 
 /**
- * Who the GM can turn into a threat: a PC still in play, or an NPC (a follower's actor among them), unless they
- * already became one (BECAME_THREAT_FLAG) whose page is still there. A page since deleted frees them again.
+ * Who the GM can turn into a threat: a PC still in play, a PC an insert handed to the GM (StonetopCharacter
+ * #lostToTheGm: a Ghost or Revenant who marked THE FINAL CONSEQUENCE, Book I pp.149/151, or a Thrall lost to
+ * Unholy Vessel, p.152; the very case p.584 is about, "Write them up as both a threat and a monster"), or an NPC
+ * (a follower's actor among them), unless they already became one (BECAME_THREAT_FLAG) whose page is still
+ * there. A page since deleted frees them again. A PC who simply died is not offered.
  *
  * @param {{pageExists?: (uuid: string) => boolean}} [deps]  injectable for tests
  */
@@ -42,7 +45,7 @@ export function canBecomeThreat(actor, user = globalThis.game?.user, { pageExist
 	if (!user?.isGM) return false;
 	const became = actor?.flags?.[STONETOP_SCOPE]?.[BECAME_THREAT_FLAG];
 	if (became && pageExists(became)) return false;
-	if (isPc(actor)) return !isOutOfPlay(actor);
+	if (isPc(actor)) return !isOutOfPlay(actor) || !!actor.typedActor?.lostToTheGm;
 	return actor?.type === "npc";
 }
 
@@ -133,8 +136,9 @@ export async function makeThreatOf(actor, choice = {}, deps = {}) {
 	}
 
 	const record = { [`flags.${STONETOP_SCOPE}.${BECAME_THREAT_FLAG}`]: page.uuid ?? null };
-	// "They stop becoming a PC" (p.584): out of every party list, the way the dead are.
-	if (isPc(actor) && choice.outOfPlay) {
+	// "They stop becoming a PC" (p.584): out of every party list, the way the dead are. One the insert already
+	// took out of play (`dead`, StonetopCharacter#lostToTheGm) gets no second record, so "Return to Play" is not offered for them.
+	if (isPc(actor) && choice.outOfPlay && !isOutOfPlay(actor)) {
 		record[`flags.${STONETOP_SCOPE}.${LEFT_PLAY_FLAG}`] = { how: LEFT_PLAY_HOW.VILLAIN, at: Date.now(), threatUuid: page.uuid ?? null };
 	}
 	await actor.update(record);

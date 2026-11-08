@@ -24,9 +24,10 @@ import { format, localize } from "../utils/i18n.js";
 import { themedDialogClasses } from "../utils/window-theme.js";
 import { contentElement } from "../utils/dialogv2-content.js";
 import { HEROES, touching } from "./engagements.js";
-import { gridOf, fightOnScene, combatantBodies, each } from "./fight-state.js";
+import { gridOf, fightOnScene, combatantBodies, each, fightStanding } from "./fight-state.js";
 import { isFightTabEnabled } from "../settings.js";
 import { resolveSync } from "../utils/foundry-compat.js";
+import { damageRowActor, resolvedOrNull } from "../utils/damage.js";
 import { rollerEngagement, asTarget } from "./damage-seed.js";
 import { namesPhrase } from "./fight-copy.js";
 
@@ -155,27 +156,36 @@ export async function askWhoItHits(question, { DialogV2 = globalThis.foundry?.ap
 }
 
 /**
- * Hand targets without the ones the fight has put down: a token whose combatant, in the fight on that
- * token's own scene, is out (defeated, at 0 HP, a routed group; fight-sides.js#bodiesFor). A blow in contact
- * records no shot, so the target a player put on a foe before closing with it stays up after the foe falls;
- * kept, it aimed their next Clash at the corpse, and a 7-9 or a miss had the corpse strike back. A target
- * that is not in a fight, or with the Fight tab off, is kept as it is.
+ * Hand targets without the ones that are down: a token whose combatant, in the fight on that token's own
+ * scene, is out (defeated, at 0 HP, a routed group; fight-sides.js#bodiesFor), and any target whose own actor
+ * is at 0 HP (fight-state.js#fightStanding's `down`), so one with no fight to read, or with the Fight tab off,
+ * is dropped too: a foe "reduced to 0 HP" (Book I p.240). A blow in contact records no shot, so the target a
+ * player put on a foe before closing with it stays up after the foe falls; kept, it aimed their next Clash at
+ * the corpse, and a 7-9 or a miss had the corpse strike back. Every "is this target down" reads this one list.
  *
  * @param {Array<{uuid: string}>} targets
  * @returns {Array<{uuid: string}>}
  */
 export function withoutDowned(targets = [], { resolve = resolveSync } = {}) {
 	const list = Array.isArray(targets) ? targets : [];
-	if (!list.length || !isFightTabEnabled()) return list;
+	if (!list.length) return list;
+	const fightOn = isFightTabEnabled();
 	const kept = list.filter(target => {
-		const token = target?.uuid ? resolve(target.uuid) : null;
-		if (token?.documentName !== "Token") return true;
-		const scene = token.parent ?? null;
-		const combatant = each(fightOnScene(scene)?.combatants).find(c => c.tokenId === token.id && c.sceneId === scene?.id);
+		const doc = resolvedOrNull(target?.uuid, resolve);
+		if (downAtZero(doc)) return false;
+		if (!fightOn || doc?.documentName !== "Token") return true;
+		const scene = doc.parent ?? null;
+		const combatant = each(fightOnScene(scene)?.combatants).find(c => c.tokenId === doc.id && c.sceneId === scene?.id);
 		return !combatant || !combatantBodies(combatant).out;
 	});
 	// The same list when nobody was dropped, so a caller holding it still holds what it handed in.
 	return kept.length === list.length ? list : kept;
+}
+
+/** Whether a target's actor is down at 0 of a real HP pool, and not fighting on (fight-state.js#fightStanding). */
+function downAtZero(doc) {
+	const actor = damageRowActor(doc);
+	return !!actor && fightStanding(actor).down;
 }
 
 /**

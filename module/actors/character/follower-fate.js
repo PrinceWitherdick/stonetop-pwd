@@ -54,6 +54,7 @@ import { ownsLearnedMoveNamed } from "./owns-move.js";
 import { presenceFor } from "./front-line-presence.js";
 import { followerDetailBase } from "./follower-masters.js";
 import { STONETOP_SCOPE } from "./StonetopFlags.js";
+import { withRosterShift } from "./follower-roster-shifts.js";
 
 export const SIR_PERMISSION_TO_DIE = "Sir, Permission to Die, Sir";
 
@@ -151,6 +152,12 @@ export function rosterMemberRow(ftype, key) {
 		: ftype === "custom" ? { member: "custom-member" }[kind]
 		: undefined;
 	return follower ? { follower, index } : null;
+}
+
+/** A roster member's key for the row they sit on, the inverse of rosterMemberRow, or null for any other row. PURE. */
+export function rosterMemberKey(follower, index) {
+	const kind = { "crew-individual": "named", "crew-member": "anon", "custom-member": "member" }[follower];
+	return kind && Number.isInteger(index) && index >= 0 ? `${kind}:${index}` : null;
 }
 
 /**
@@ -286,6 +293,8 @@ export function crewIndividualRemovalUpdate(crew, index) {
 	}
 	for (const [k, v] of Object.entries(newHp)) update[`${base}.individualsHp.${k}`] = v;
 	update[`${base}.size`] = Math.max(individuals.length, sizeBefore - 1);
+	// Logged, so a card or window that remembered a later row by index finds it again (follower-roster-shifts.js).
+	update[`${base}.rosterShifts`] = withRosterShift(crew?.rosterShifts, "crew-individual", idx);
 	return update;
 }
 
@@ -320,6 +329,8 @@ export function crewMemberDeathUpdate(crew, follower, index) {
 		const update = {
 			[`${base}.memberHp`]: memberHp,
 			[`${base}.size`]:     Math.max(individuals.length, sizeBefore - 1),
+			// Logged, so a row remembered by index finds its member again (follower-roster-shifts.js).
+			[`${base}.rosterShifts`]: withRosterShift(crew?.rosterShifts, "crew-member", idx),
 		};
 		// Their face is an array slot parallel to memberHp, so it goes by the same cut.
 		const portraits = crew?.memberPortrait;
@@ -364,6 +375,8 @@ export function customMemberDeathUpdate(record, slug, index) {
 	const update = {
 		[`${base}.memberHp`]: memberHp,
 		[`${base}.size`]:     sizeBefore - 1,
+		// Logged, so a row remembered by index finds its member again (follower-roster-shifts.js).
+		[`${base}.rosterShifts`]: withRosterShift(record?.rosterShifts, "custom-member", idx),
 	};
 	const portraits = record.memberPortrait;
 	if (Array.isArray(portraits) && idx < portraits.length) {

@@ -83,6 +83,17 @@ function displayName(raw) {
 	return stripHtmlToText(bold ? bold[2] : text).replace(/\s+/g, " ").trim();
 }
 
+// "damage d10" or "d10 damage": a die the WEAPON deals, stated as the book states the naphtha's. Not one with a sign
+// in front of it ("+1d4 damage", "-1 damage"), which is a bonus on your own die.
+const OWN_DIE_RE = new RegExp(`(?:^|[\\s,(;])damage\\s+(${DAMAGE_DIE_RE.source})|(?:^|[\\s,(;])(${DAMAGE_DIE_RE.source})\\s+damage\\b`, "i");
+
+/** The die a tag line says the weapon itself deals, spaces taken out ("d10", "2d6+1"), or null. PURE. */
+export function ownDamageDie(text) {
+	const hit = OWN_DIE_RE.exec(String(text ?? ""));
+	const die = hit ? (hit[1] ?? hit[2]) : null;
+	return die ? die.replace(/\s+/g, "") : null;
+}
+
 /**
  * WEAPON_META-shaped metadata read off an item's own name + tag line, or null when the tag line
  * does not describe a weapon.
@@ -119,6 +130,10 @@ export function weaponMetaFromNote(name, note, { ammo = false } = {}) {
 	// Prosperity, is the one form PIERCING_RE does not cover and stays local.
 	const pierceN = PIERCING_RE.exec(text);
 	const pierceX = PROSPERITY_PIERCING_RE.exec(text);
+	// ITS OWN DIE, when the line prints one: the clay spheres' "damage d10, thrown, area, dangerous, ignores armor"
+	// (Book II, the Forge Lords) deals a d10 whoever throws it, as the catalog's naphtha deals its d8 (Book I p.95).
+	// A die with a "+" before it ("+1d4 damage") rides your own die instead and is not read here.
+	const ownDie = ownDamageDie(text);
 
 	// Through weapons.js's own factory, so a field added to WEAPON_META defaults here too
 	// rather than being silently absent on every arcanum, treasure and write-in weapon.
@@ -129,6 +144,7 @@ export function weaponMetaFromNote(name, note, { ammo = false } = {}) {
 		piercing: pierceX ? "prosperity" : (pierceN ? Number(pierceN[1]) : 0),
 		ignoresArmor: IGNORES_ARMOR_RE.test(text),
 		area: has(text, "area"),
+		damageDie: ownDie,
 		ammo: !!ammo,
 		iron: has(text, "iron"),
 		tags: TAGS.filter(t => has(text, t)),

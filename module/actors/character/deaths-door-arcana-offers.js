@@ -1,6 +1,6 @@
 import { backBoxChecked } from "./CharacterArcana.js";
 import { unmarkedConsequences } from "./arcana-seeker-moves.js";
-import { holdsArcanum, tickedBackBoxes } from "./deaths-door-arcana.js";
+import { holdsArcanum, tickedBackBoxes, markedWorn, RUNE_LADEN_SCALES } from "./deaths-door-arcana.js";
 
 /**
  * Two arcana that OFFER something at Death's Door rather than dictate a fate (deaths-door-arcana.js has those):
@@ -15,8 +15,7 @@ import { holdsArcanum, tickedBackBoxes } from "./deaths-door-arcana.js";
  * Both are the player's choice, so each is a button, never applied for them. A card still a lead is not in their
  * hands yet, so it offers nothing.
  */
-export const RUNE_LADEN_SCALES  = "rune-laden-scales";
-const PROOF_AGAINST_HARM        = "PROOF AGAINST HARM";
+const PROOF_AGAINST_HARM       = "PROOF AGAINST HARM";
 export const CARVINGS_IN_A_CAVE = "carvings-in-a-cave";
 
 /**
@@ -28,7 +27,7 @@ export function scalesOfferKey(character) {
 	if (!holdsArcanum(character, RUNE_LADEN_SCALES)) return "";
 	return JSON.stringify([
 		tickedBackBoxes(character._arcana.boxStates, RUNE_LADEN_SCALES).sort(),
-		!!character._inventory?.checked?.[RUNE_LADEN_SCALES],
+		markedWorn(character, RUNE_LADEN_SCALES),
 	]);
 }
 
@@ -51,7 +50,7 @@ export async function scalesTenPlusOffer(character) {
 	return {
 		slug: RUNE_LADEN_SCALES,
 		name: card.front?.title ?? "Rune-laden Scales",
-		worn: !!character._inventory?.checked?.[RUNE_LADEN_SCALES],
+		worn: markedWorn(character, RUNE_LADEN_SCALES),
 		consequencesLeft,
 	};
 }

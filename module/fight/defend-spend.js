@@ -105,6 +105,8 @@ import { isPrimaryGM } from "../utils/primary-gm.js";
 import { inCardTurn } from "../utils/card-queue.js";
 import { askGMClient, resolveSync, queryAsker } from "../utils/foundry-compat.js";
 import { NO_ANSWER, relayOutcome } from "../utils/relay-landed.js";
+import { holdsArcanum, markedWorn, RUNE_LADEN_SCALES } from "../actors/character/deaths-door-arcana.js";
+import { beingApplied } from "../utils/applying-mark.js";
 
 const KEY = "stonetop.fight.defend";
 const HERO_KEY = "stonetop.fight.heroMoves";
@@ -120,32 +122,91 @@ export const halveDamage = raw => Math.ceil(Math.max(0, Number(raw) || 0) / 2);
 /**
  * The kinds of spend a card can offer, in the order its buttons stand: `list`, which list on the
  * card's flag records one (spentOn reads them back), `free`, a kind that costs no Readiness (I
- * Get Knocked Down is paid for in the fiction; Safety First in Protection), and `bySufferer`, a kind
- * that is the sufferer's own move, so its spend says whose it was (`by`) and is once per blow PER
- * SPENDER (takeSpend). `voids` marks a kind that takes the whole blow off the row (spentOn's `voided`),
- * naming the words Apply says it in, and `note` is the words the card says a spend in (defendNotes):
- * a key under `stonetop.fight.defend`, or one picked by the spend. A new kind is one row here, its
- * offers in defendOffers and its words in the lang file.
+ * Get Knocked Down is paid for in the fiction; Safety First in Protection), and `perTaker`, a kind that
+ * is once per blow PER TAKER rather than once per blow (takeSpend), and counts only while that taker
+ * still takes the blow (spentOn): `field` is where the spend names them, `of` who they are on an offer.
+ * `voids` marks a kind that takes the whole blow off the row (spentOn's `voided`), naming the words Apply
+ * says it in, and `note` is the words the card says a spend in (defendNotes): a key under
+ * `stonetop.fight.defend`, or one picked by the spend.
+ *
+ * `tiered` marks a kind that is a roll, its tier kept on the spend (TIERS): a 10+ voids the blow (in the
+ * words `voidLine`), a 7-9 halves it before armor, a 6- leaves it whole. `move` is its name on the card,
+ * `roll` rolls it (answering the tier, or null), `entry` adds its own fields to the spend, `askers` are who
+ * may hand the GM's client its tier, and `afterSpend` / `afterGmSpend` what follows a spend recorded here or
+ * on the GM's client. Its roll card remembers the damage card and row (linkSpendRoll), so a Shift or a +1 on it
+ * moves the recorded tier too (retierSpend): `rolledAs(spend, link)` finds the spend that roll was,
+ * `retierWords` heads the lang keys said when the tier cannot move, and `afterRetier` follows a moved one.
+ * A new kind is one row here, its offers in defendOffers and its words in the lang file.
  */
+// A sufferer's own move (I Get Knocked Down, the Scales' stand fast): once per blow for each who suffers it.
+const PER_SUFFERER = Object.freeze({ field: "by", of: offer => offer?.defender?.uuid });
+// A charm: once per blow for whoever bears it.
+const PER_BEARER = Object.freeze({ field: "bearerUuid", of: offer => offer?.bearer?.uuid });
+
+/**
+ * THE RUNE-LADEN SCALES (Book II p.562), the card's front: "When you wear the Rune-laden Scales and stand fast
+ * against a magical attack, roll +CON: on a 10+, the magic washes over you, unpleasant perhaps but with no ill
+ * effect; on a 7-9, you're only partially affected--suffer half damage (if any) and a reduced effect; on a 6-, mark
+ * XP, and the magic affects you fully." A spend on the damage card for whoever suffers the blow while they hold the
+ * Scales marked worn (the sheet can check that, so it is imposed); whether the blow is a magical attack is the
+ * table's to say, so the button says so. Its 10+ voids the blow, its 7-9 halves it before armor, rounded up as
+ * every halving is, its 6- leaves it whole (the roll card marks the XP, as any miss does).
+ */
+export const SCALES_NAME = "Rune-laden Scales";
+const STAND_FAST_NOTE = Object.freeze({ success: "noteStandFastIgnore", partial: "noteStandFastHalve", failure: "noteStandFastMiss" });
+
 const SPEND_KINDS = {
 	halve:       { list: "halvedBy", note: "noteHalve" },
 	parry:       { list: "halvedBy", note: "noteParry" },
 	standIn:     { list: "standIns", note: spend => (spend.free ? "noteStandInFree" : "noteStandIn") },
 	ignore:      { list: "ignoredBy", note: "noteIgnore", voids: "ignoredLine" },
-	knockedDown: { list: "knockedDownBy", note: "noteKnockedDown", free: true, bySufferer: true },
+	knockedDown: { list: "knockedDownBy", note: "noteKnockedDown", free: true, perTaker: PER_SUFFERER },
 	neverGonna:  { list: "neverGonnaBy", note: spend => (spend?.straight ? "noteNeverGonnaStraight" : "noteNeverGonna"), free: true },
 	safetyFirst: { list: "safetyFirstBy", note: "noteSafetyFirst", free: true },
-	// Amulets & Talismans: free of Readiness, its price is the charm itself. What it did is the tier the Blessed
-	// rolled, kept on the spend (spentOn reads a 10+ as void, a 7-9 as halved).
-	charm:       { list: "charmedBy", note: spend => CHARM_NOTE[spend?.tier] ?? "noteCharmMiss", free: true },
+	// Amulets & Talismans: free of Readiness, its price is the charm itself. The Blessed's +INT, rolled by whoever
+	// decides for the Blessed (askCharmRoll); the charm is used up once the card holds the spend.
+	charm: {
+		list: "charmedBy", note: spend => CHARM_NOTE[spend?.tier] ?? "noteCharmMiss", free: true, perTaker: PER_BEARER,
+		tiered: {
+			voidLine: "charmIgnoredLine", move: AMULETS_TALISMANS,
+			roll: (offer, message) => askCharmRoll(offer, message),
+			entry: offer => ({ bearer: offer.bearer?.name ?? "", bearerUuid: offer.bearer?.uuid ?? "", markId: offer.mark?.id ?? "" }),
+			// The Blessed's player or the bearer's asks; the tier is the one thing taken from the ask.
+			askers: offer => [offer.defender, offer.bearer],
+			afterSpend: (message, offer) => settleCharmAfterSpend(message, offer),
+			// The GM can write the Blessed, so the charm is used up there, the moment its spend is recorded.
+			afterGmSpend: offer => settleCharm(offer.defender, offer.mark, offer.tier),
+			rolledAs: (s, { row, by, markId = "" }) => isCharmSpend(s, row, by, markId),
+			retierWords: "charmRetier",
+			afterRetier: (blessed, link, entry, tier, words) => settleCharmRetier(blessed, link, entry, tier, words),
+		},
+	},
 	redirect:    { list: "redirectedBy", note: "noteRedirect", voids: "redirectedLine" },
+	// The Rune-laden Scales' stand fast (Book II p.562): the wearer's own +CON, rolled here (the offer is only drawn
+	// for whoever may write them), free of Readiness, the sufferer's own.
+	standFast: {
+		list: "stoodFastBy", note: spend => STAND_FAST_NOTE[spend?.tier] ?? "noteStandFastMiss", free: true, perTaker: PER_SUFFERER,
+		tiered: {
+			voidLine: "standFastIgnoredLine", move: SCALES_NAME,
+			roll: (offer, message) => rollStandFast(offer.defender, { card: message?.id ?? null, row: offer.row?.uuid ?? null }),
+			askers: offer => [offer.defender],
+			rolledAs: (s, { row, by }) => s?.uuid === row && s.by === by,
+			retierWords: "standFastRetier",
+		},
+	},
 };
+
+/** Whether a character wears the Rune-laden Scales: the card in their hands (not a lead) and marked worn. */
+export function wearsScales(actor) {
+	const character = actor?.type === "character" ? actor.typedActor : null;
+	return !!character && holdsArcanum(character, RUNE_LADEN_SCALES) && markedWorn(character, RUNE_LADEN_SCALES);
+}
 
 /** A charm's roll, by tier, as the card says it. */
 const CHARM_NOTE = Object.freeze({ success: "noteCharmIgnore", partial: "noteCharmHalve", failure: "noteCharmMiss" });
 
-/** The tiers a charm spend can record. */
-const CHARM_TIERS = new Set(Object.keys(CHARM_NOTE));
+/** The tiers a rolled spend (a charm, a stand fast) can record. */
+const TIERS = new Set(Object.keys(CHARM_NOTE));
 
 /**
  * The charms a bearer wears, as `{blessed, mark}`: every Blessed with Amulets & Talismans learned whose roster has a
@@ -205,49 +266,53 @@ function canPay(kind, offer, cost) {
  * Rampart's ignored blow and Mirrorshield's or Lightning Rod's redirected magic, each with the words Apply
  * says it in (`lineKey`) and the move that did it (`move`, for a redirect). PURE.
  *
+ * `tiered` holds each rolled kind's spends (a charm, a stand fast), by kind: `halved`, the rows its 7-9 halves
+ * ("suffer half damage", before armor, rounded up, each its own halving beside Defend's), and `rolled`, every row
+ * it was rolled for by whoever takes the blow now, whatever it came to (once per blow per taker). Its 10+ is
+ * among `voided`.
+ *
  * @param {object} damage  the card's damage flag
- * @returns {{halved: Set<string>, standIns: Map<string, object>, voided: Map<string, {lineKey: string, move: string}>}}
+ * @returns {{halved: Set<string>, standIns: Map<string, object>, voided: Map<string, {lineKey: string, move: string}>,
+ *   tiered: Record<string, {halved: Set<string>, rolled: Set<string>}>}}
  */
 export function spentOn(damage) {
 	const spent = kind => (damage?.[SPEND_KINDS[kind].list] ?? []);
-	const uuids = kind => new Set(spent(kind).map(spend => spend.uuid));
+	const uuids = spends => new Set(spends.map(spend => spend.uuid));
 	const standIns = new Map(spent("standIn").map(spend => [spend.uuid, spend]));
+	// A once-per-taker spend counts only for whoever it was spent by (or for), while they still take the blow: a
+	// ward who used one and then had someone stand in no longer takes it, so it does not follow the blow onto the
+	// stand-in, who may spend their own. A spend written before its taker was kept counts as it always did.
+	const stillTaking = kind => {
+		const { field } = SPEND_KINDS[kind].perTaker;
+		return spent(kind).filter(spend => !spend[field] || !standIns.has(spend.uuid) || spend[field] === standIns.get(spend.uuid).by);
+	};
 	const voided = new Map();
+	const voidRow = (spend, lineKey, move) => { if (!voided.has(spend.uuid)) voided.set(spend.uuid, { lineKey: `${KEY}.${lineKey}`, move }); };
 	for (const [kind, { voids }] of Object.entries(SPEND_KINDS)) {
-		if (!voids) continue;
-		for (const spend of spent(kind)) {
-			if (!voided.has(spend.uuid)) voided.set(spend.uuid, { lineKey: `${KEY}.${voids}`, move: spend.move ?? "" });
-		}
+		if (voids) for (const spend of spent(kind)) voidRow(spend, voids, spend.move ?? "");
 	}
-	// A charm wards its bearer only: once someone else stands in and takes the blow, the ward's charm no longer
-	// reaches it, and the stand-in may roll their own. A spend written before `bearerUuid` was kept counts as before.
-	const charms = spent("charm").filter(spend => !spend.bearerUuid || !standIns.has(spend.uuid) || spend.bearerUuid === standIns.get(spend.uuid).by);
-	// A charm's 10+: "they ignore the harm entirely".
-	for (const spend of charms) {
-		if (spend.tier === "success" && !voided.has(spend.uuid)) voided.set(spend.uuid, { lineKey: `${KEY}.charmIgnoredLine`, move: spend.move ?? AMULETS_TALISMANS });
+	// A rolled spend's 10+ voids the blow (a charm's "they ignore the harm entirely", the Scales' "the magic washes
+	// over you ... with no ill effect"), after the moves that void outright.
+	const tiered = {};
+	for (const [kind, { tiered: tier }] of Object.entries(SPEND_KINDS)) {
+		if (!tier) continue;
+		const counted = stillTaking(kind);
+		for (const spend of counted) if (spend.tier === "success") voidRow(spend, tier.voidLine, spend.move ?? tier.move);
+		tiered[kind] = { halved: uuids(counted.filter(spend => spend.tier === "partial")), rolled: uuids(counted) };
 	}
 	return {
-		halved: uuids("halve"),
+		halved: uuids(spent("halve")),
 		standIns,
 		voided,
 		// I Get Knocked Down halves as Readiness does, from its own list: it is a different move with a
-		// different price, and "each option once against any given attack" counts them apart. And only for
-		// whoever it was spent by, while they still take the blow: a ward who used it and then had someone
-		// stand in for them no longer takes it, so their halving does not follow the blow onto the
-		// stand-in. A spend written before `by` was kept counts as it always did.
-		knockedDown: new Set(spent("knockedDown")
-			.filter(spend => !spend.by || !standIns.has(spend.uuid) || spend.by === standIns.get(spend.uuid).by)
-			.map(spend => spend.uuid)),
+		// different price, and "each option once against any given attack" counts them apart.
+		knockedDown: uuids(stillTaking("knockedDown")),
 		// Safety First's halving the same way: its own move, paid in Protection.
-		safetyFirst: uuids("safetyFirst"),
+		safetyFirst: uuids(spent("safetyFirst")),
 		// The rows a stand-in's Never Gonna Keep Me Down rolled again: once per row, its number already
 		// written onto the row (takeSpend), so nothing at apply time reads it.
-		neverGonna: uuids("neverGonna"),
-		// A charm's 7-9: "they suffer only half the damage or effect", its own halving beside Defend's.
-		charmHalved: new Set(charms.filter(spend => spend.tier === "partial").map(spend => spend.uuid)),
-		// Every row a charm was rolled for by whoever takes the blow now, whatever it came to: one charm at a
-		// time, once per blow per bearer.
-		charmed: new Set(charms.map(spend => spend.uuid)),
+		neverGonna: uuids(spent("neverGonna")),
+		tiered,
 	};
 }
 
@@ -361,8 +426,8 @@ function defendersFor(uuid, { user = globalThis.game?.user, cardFor } = {}) {
  */
 export function defendOffers(damage, defendersOf = defendersFor, resolveActor = uuid => damageRowActor(resolveSync(uuid)), presenceOf = presenceKeeperFor, charmsOf = charmsMemo()) {
 	const done = new Set((damage?.applied ?? []).map(a => a.uuid));
-	const { halved, standIns, voided, knockedDown, safetyFirst, neverGonna, charmed } = spentOn(damage);
-	const offers = { halve: [], parry: [], standIn: [], ignore: [], knockedDown: [], neverGonna: [], safetyFirst: [], redirect: [], charm: [] };
+	const { halved, standIns, voided, knockedDown, safetyFirst, neverGonna, tiered } = spentOn(damage);
+	const offers = { halve: [], parry: [], standIn: [], ignore: [], knockedDown: [], neverGonna: [], safetyFirst: [], redirect: [], charm: [], standFast: [] };
 	const user = globalThis.game?.user;
 	// Whose follower card each NPC is, searched once per NPC for the whole pass rather than once per row and
 	// question: the Readiness a follower holds and the Presence guarding a crew are both read off it.
@@ -440,12 +505,20 @@ export function defendOffers(damage, defendersOf = defendersFor, resolveActor = 
 		// Amulets & Talismans, on whoever bears the charm and suffers the blow; the roll is the Blessed's +INT.
 		// Pressed by anyone who can get it rolled: the Blessed's own player rolls it, anyone else ASKS whoever decides
 		// for the Blessed (charmRollAnswerer: their player, else the GM), as a carer's Stock is asked for.
-		if (!charmed.has(row.uuid)) {
+		if (!tiered.charm.rolled.has(row.uuid)) {
 			const bearer = standIn ? stoodIn : hit;
 			for (const { blessed, mark } of charmsOf(bearer)) {
 				if (!user || user.isGM || blessed.isOwner || charmRollAnswerer(blessed, bearer, user)) {
 					offers.charm.push({ row, defender: blessed, bearer, mark, harm: charmHarm(mark), cost: 0, move: AMULETS_TALISMANS });
 				}
+			}
+		}
+		// The Rune-laden Scales' stand fast, to whoever suffers the blow wearing them: their own +CON, rolled by
+		// whoever may write them (their player, or a GM).
+		if (!tiered.standFast.rolled.has(row.uuid)) {
+			const wearer = standIn ? stoodIn : hit;
+			if (wearer && (user?.isGM || wearer.isOwner || !user) && wearsScales(wearer)) {
+				offers.standFast.push({ row, defender: wearer, cost: 0, move: SCALES_NAME });
 			}
 		}
 	}
@@ -504,10 +577,11 @@ function pickOffer(offers, kind) {
 export async function spendOnBlow(message, kind, offer, { scope = SYSTEM_ID, strikeBack = null, relay = false } = {}) {
 	const current = message.getFlag(scope, "damage");
 	if (!current || !offer) return false;
-	const cost = Number.isFinite(offer.cost) ? offer.cost : 1;
-	if (!canPay(kind, offer, cost)) return false;
-	// Written here, or by the GM's client for a card this reader cannot write (see the note at the top).
-	const take = relay ? () => askGMToSpend(message, kind, offer, { scope }) : () => takeSpend(message, kind, offer, { scope });
+	const cost = spendCost(offer);
+	if (!canPay(kind, offer, cost)) return saySpendRefused("unpaid", offer);
+	// Written here, or by the GM's client for a card this reader cannot write (see the note at the top). A spend
+	// refused says why (EDG-3): the GM's client is asked and says nothing back, so the press must not either.
+	const take = relay ? () => askGMToSpend(message, kind, offer, { scope }) : () => takeSpendSaying(message, kind, offer, { scope });
 
 	// I Get Knocked Down: the pick IS the price, so it is asked before anything is written, and backing
 	// out of it halves nothing. Then the foe is remembered for But I Get Up Again.
@@ -527,18 +601,17 @@ export async function spendOnBlow(message, kind, offer, { scope = SYSTEM_ID, str
 		globalThis.ui?.notifications?.warn?.(format(`${KEY}.redirectNoShield`, { defender: offer.defender.name }));
 		return false;
 	}
-	// Amulets & Talismans: the Blessed's +INT is rolled first, by whoever decides for the Blessed (askCharmRoll:
-	// here when that is this user, else their player is asked), and its tier is what the card records. No roll,
-	// a "no" or no answer records nothing.
-	// The charm is used up only once the card holds the spend: by the GM's client on a relayed one
-	// (handleSpendQuery), else here or by whoever decides for the Blessed (settleCharmAfterSpend).
-	if (kind === "charm") {
-		const tier = await askCharmRoll(offer);
+	// A rolled spend (a charm, a stand fast): rolled first, and its tier is what the card records. No roll, a "no"
+	// or no answer records nothing. What follows a recorded spend (a charm used up) is done by the GM's client on a
+	// relayed one (handleSpendQuery), else here (`afterSpend`).
+	const { tiered } = SPEND_KINDS[kind] ?? {};
+	if (tiered) {
+		const tier = await tiered.roll(offer, message);
 		if (!tier) return false;
 		const tested = { ...offer, tier };
 		if (relay) return askGMToSpend(message, kind, tested, { scope });
-		if (!(await takeSpend(message, kind, tested, { scope }))) return false;
-		await settleCharmAfterSpend(message, tested);
+		if (!(await takeSpendSaying(message, kind, tested, { scope }))) return false;
+		await tiered.afterSpend?.(message, tested);
 		return true;
 	}
 	if (kind !== "parry") return take();
@@ -579,10 +652,51 @@ export async function strikeBackAim(actor, { engagement = rollerEngagement(actor
 
 /**
  * Roll a Blessed's +INT for their charm (Amulets & Talismans), as a roll card of its own, and answer its tier
- * ("success", "partial", "failure"), or null when nothing was rolled.
+ * ("success", "partial", "failure"), or null when nothing was rolled. With `link` (the damage card and row it is
+ * for), the roll card remembers them (linkSpendRoll), so a Shift or a +1 on it later moves the tier the damage
+ * card recorded too (retierSpend).
  */
-export async function rollCharm(blessed) {
+export async function rollCharm(blessed, link = null) {
 	const roll = await blessed?.typedActor?.onDirectStatRoll?.("int", { moveName: AMULETS_TALISMANS, targets: [] });
+	const tier = tierOfRoll(roll);
+	if (tier && link?.card && link?.row) await linkSpendRoll(roll, blessed, "charm", link, tier);
+	return tier;
+}
+
+/**
+ * Stamp a rolled spend's roll card with the damage card and row it was rolled for (see rollCharm), under
+ * tier-effects.js#TIER_EFFECTS charmSpend. That record is named for the charm, the first kind linked, so any other
+ * kind's says its `kind`. Never at the roll's cost.
+ */
+async function linkSpendRoll(roll, roller, kind, { card, row, markId = "" }, tier) {
+	try {
+		const { messageOfRoll } = await import("../utils/roll-engine.js");
+		const { recordTierEffects, TIER_EFFECTS_FLAG } = await import("../actors/character/tier-effects.js");
+		const rolled = messageOfRoll(roll);
+		if (!rolled?.setFlag) return;
+		const held = rolled.getFlag?.(SYSTEM_ID, TIER_EFFECTS_FLAG) ?? {};
+		const by = roller.uuid;
+		const link = kind === "charm" ? { card, row, by, markId, tier } : { kind, card, row, by, tier };
+		await recordTierEffects(rolled, { ...held, charmSpend: link });
+	} catch (err) {
+		console.warn("Stonetop | could not note on a rolled spend's roll card which blow it was for", err);
+	}
+}
+
+/**
+ * The Rune-laden Scales' stand fast (see wearsScales): the wearer's +CON as a roll card of its own, its tier, or null
+ * when nothing was rolled. With `link` (the damage card and row it is for), the roll card remembers them, as a
+ * charm's does (rollCharm).
+ */
+export async function rollStandFast(wearer, link = null) {
+	const roll = await wearer?.typedActor?.onDirectStatRoll?.("con", { moveName: `${SCALES_NAME}: ${localize(`${KEY}.standFastMove`)}`, targets: [] });
+	const tier = tierOfRoll(roll);
+	if (tier && link?.card && link?.row) await linkSpendRoll(roll, wearer, "standFast", link, tier);
+	return tier;
+}
+
+/** A stat roll's tier ("success", "partial", "failure"), or null when nothing was rolled. */
+function tierOfRoll(roll) {
 	const total = Number(roll?.total);
 	return roll && Number.isFinite(total) ? classifyResult(total).key : null;
 }
@@ -603,23 +717,24 @@ export function charmRollAnswerer(blessed, bearer, asker = globalThis.game?.user
  * Roll the charm, here or by asking (utils/owner-ask.js#spendOrAskOwner): the roll card is the Blessed's. Nothing
  * is used up yet: that waits for the card to record the spend (settleCharmAfterSpend). Answers the tier, or null.
  */
-async function askCharmRoll(offer) {
+async function askCharmRoll(offer, message = null) {
 	const { defender: blessed, bearer, mark, row } = offer;
+	const link = { card: message?.id ?? null, row: row?.uuid ?? null, markId: mark?.id ?? "" };
 	const receipt = await spendOrAskOwner({
 		owner: blessed,
 		answerer: charmRollAnswerer(blessed, bearer),
-		spend: () => rollCharmTier(blessed),
+		spend: () => rollCharmTier(blessed, link),
 		query: CHARM_QUERY,
-		data: { blessedId: blessed?.id ?? null, markId: mark?.id ?? null, ward: row?.name ?? "" },
+		data: { blessedId: blessed?.id ?? null, markId: mark?.id ?? null, ward: row?.name ?? "", messageId: link.card, rowUuid: link.row },
 		whether: format(`${KEY}.charmAskWhether`, { defender: blessed?.name ?? "", ward: row?.name ?? "" }),
 		what: "a charm's roll",
 	});
-	return CHARM_TIERS.has(receipt?.tier) ? receipt.tier : null;
+	return TIERS.has(receipt?.tier) ? receipt.tier : null;
 }
 
 /** Roll the charm on this client: `{tier}`, or null when nothing was rolled. */
-async function rollCharmTier(blessed) {
-	const tier = await rollCharm(blessed);
+async function rollCharmTier(blessed, link = null) {
+	const tier = await rollCharm(blessed, link);
 	return tier ? { tier } : null;
 }
 
@@ -631,7 +746,7 @@ async function rollCharmTier(blessed) {
  */
 export async function handleCharmQuery(data, context = {}, { actors = globalThis.game?.actors, users = globalThis.game?.users, confirm } = {}) {
 	const blessed = actors?.get?.(data?.blessedId);
-	const mark = (blessed?.getFlag?.(SYSTEM_ID, BLESSED_MARKS_FLAG) ?? []).find?.(row => row?.id === data?.markId && markKindKey(row.kind) === "charm") ?? null;
+	const mark = charmMarkOf(blessed, data?.markId);
 	return answerOwnerAsk(data, context, {
 		users, ...(confirm ? { confirm } : {}),
 		question: (asker, me) => {
@@ -644,17 +759,28 @@ export async function handleCharmQuery(data, context = {}, { actors = globalThis
 				no: { label: localize(`${KEY}.charmAskNo`) },
 			};
 		},
-		settle: () => rollCharmTier(blessed),
+		settle: () => rollCharmTier(blessed, { card: data?.messageId ?? null, row: data?.rowUuid ?? null, markId: data?.markId ?? "" }),
 	});
 }
 
 /** The User query that asks whoever may write the Blessed to use up a charm the card has now recorded. */
 export const CHARM_SETTLE_QUERY = "stonetop.charmSettle";
 
+/** The Blessed's charm row `markId` (blessed-marks.js), or null. */
+function charmMarkOf(blessed, markId) {
+	return (blessed?.getFlag?.(SYSTEM_ID, BLESSED_MARKS_FLAG) ?? []).find?.(row => row?.id === markId && markKindKey(row.kind) === "charm") ?? null;
+}
+
+/** Whether a charm spend `s` on the card is `by`'s on the row `row` (and of the charm `markId`, when both say). PURE. */
+const isCharmSpend = (s, row, by, markId = "") => s?.uuid === row && s.by === by && (!markId || !s.markId || s.markId === markId);
+
+/** Whether the row `uuid` is applied on the card, or the card is being applied right now. PURE apart from `users`. */
+const rowSettled = (damage, uuid) => (damage?.applied ?? []).some(a => a.uuid === uuid) || beingApplied(damage);
+
 /** Whether the card records `blessed`'s charm roll at `tier` on the row `rowUuid` (and of the charm `markId`, when both say). PURE but for the read. */
 function charmRecorded(message, rowUuid, blessed, tier, scope = SYSTEM_ID, markId = "") {
 	const list = message?.getFlag?.(scope, "damage")?.[SPEND_KINDS.charm.list] ?? [];
-	return list.some(s => s?.uuid === rowUuid && s.by === blessed?.uuid && s.tier === tier && (!s.markId || !markId || s.markId === markId));
+	return list.some(s => isCharmSpend(s, rowUuid, blessed?.uuid, markId) && s.tier === tier);
 }
 
 /**
@@ -684,8 +810,8 @@ async function settleCharmAfterSpend(message, offer, { scope = SYSTEM_ID } = {})
  */
 export async function handleCharmSettleQuery(data, _context = {}, { actors = globalThis.game?.actors, messages = globalThis.game?.messages } = {}) {
 	const blessed = actors?.get?.(data?.blessedId);
-	if (!blessed?.isOwner || !CHARM_TIERS.has(data?.tier)) return false;
-	const mark = (blessed.getFlag?.(SYSTEM_ID, BLESSED_MARKS_FLAG) ?? []).find?.(row => row?.id === data?.markId && markKindKey(row.kind) === "charm") ?? null;
+	if (!blessed?.isOwner || !TIERS.has(data?.tier)) return false;
+	const mark = charmMarkOf(blessed, data?.markId);
 	const message = messages?.get?.(data?.messageId);
 	if (!mark || !charmRecorded(message, data?.rowUuid, blessed, data.tier, data?.scope ?? SYSTEM_ID, mark.id)) return false;
 	await settleCharm(blessed, mark, data.tier);
@@ -713,19 +839,80 @@ async function settleCharm(blessed, mark, tier) {
 }
 
 /**
- * Whether a damage card is being applied right now: its `applying` mark (combat/attack-flow.js#applyOwedDamage)
- * names a user who is still connected. A mark left by someone who dropped mid-apply holds nothing. PURE apart
- * from `users`.
- *
- * @param {object} damage  the card's damage flag
- * @param {{get?: Function}} [users]
+ * Write a rolled spend's tier again on its damage card, in the card's turn: the spend of `kind` its roll card's
+ * `{row, by, markId}` names (`rolledAs`), while the blow is not yet applied (nor being applied). Whether it
+ * changed. PURE but for the card's reads and its write.
  */
-export function beingApplied(damage, users = globalThis.game?.users) {
-	const by = damage?.applying;
-	if (!by) return false;
-	if (typeof by !== "string") return true;
-	const user = users?.get?.(by);
-	return user ? !!user.active : !users?.get;
+async function writeSpendTier(message, kind, spend, tier, { scope = SYSTEM_ID } = {}) {
+	const { list, tiered } = SPEND_KINDS[kind] ?? {};
+	if (!tiered?.rolledAs || !TIERS.has(tier) || !message?.getFlag) return false;
+	return inCardTurn(message, async () => {
+		const now = message.getFlag(scope, "damage");
+		if (!now || rowSettled(now, spend.row)) return false;
+		const held = now[list] ?? [];
+		const at = held.findIndex(s => tiered.rolledAs(s, spend));
+		if (at < 0 || held[at].tier === tier) return false;
+		await message.setFlag(scope, `damage.${list}`, held.map((s, i) => (i === at ? { ...s, tier } : s)));
+		return true;
+	});
+}
+
+/**
+ * A rolled spend's roll card was moved to another tier (a Shift, a +1, Burn Brightly: tier-effects.js#TIER_EFFECTS
+ * charmSpend, on the client that rewrote it, which can write the roller): the damage card it was rolled for records
+ * the new tier too. A charm's ("on a 10+, they ignore the harm entirely; on a 7-9, they suffer only half", Book I
+ * p.106) takes the charm's potency with it (afterRetier); a stand fast's (Book II p.562) only moves the blow. The
+ * link's `kind` says which (a charm's names none). A blow already applied is left as it landed, and said. Whether
+ * the card was changed.
+ *
+ * @param {Actor} roller  who rolled it: the Blessed, the Scales' wearer
+ * @param {{card: string, row: string, markId?: string, kind?: string}} link  the roll card's record
+ * @param {"success"|"partial"|"failure"} tier  what the roll card counts as now
+ */
+export async function retierSpend(roller, link = {}, tier, { scope = SYSTEM_ID, messages = globalThis.game?.messages } = {}) {
+	const kind = link?.kind ?? "charm";
+	const tiered = isSpendKind(kind) ? SPEND_KINDS[kind].tiered : null;
+	if (!tiered?.rolledAs) return false;
+	const { card, row, markId = "" } = link;
+	const spend = { row, by: roller?.uuid, markId };
+	const message = messages?.get?.(card);
+	const damage = message?.getFlag?.(scope, "damage");
+	const entry = (damage?.[SPEND_KINDS[kind].list] ?? []).find(s => tiered.rolledAs(s, spend));
+	if (!entry || entry.tier === tier || !TIERS.has(tier)) return false;
+	const words = { name: roller?.name ?? "", ward: (damage.results ?? []).find(r => r.uuid === row)?.name ?? "" };
+	if (rowSettled(damage, row)) {
+		globalThis.ui?.notifications?.warn?.(format(`${KEY}.${tiered.retierWords}Late`, words));
+		return false;
+	}
+	const how = spendWriter(message, globalThis.game?.user);
+	let changed = false;
+	if (how === "direct") changed = await writeSpendTier(message, kind, spend, tier, { scope });
+	else if (how === "relay") {
+		changed = !!await askGMClient(globalThis.game?.users?.activeGM, SPEND_QUERY, {
+			retier: true, messageId: message.id, kind, rowUuid: row, defenderUuid: roller.uuid, markId, tier,
+			userId: globalThis.game?.user?.id ?? null,
+		}, { fallback: false, what: "move a rolled spend's tier" });
+	}
+	if (!changed) {
+		globalThis.ui?.notifications?.warn?.(format(`${KEY}.${tiered.retierWords}Failed`, words));
+		return false;
+	}
+	await tiered.afterRetier?.(roller, link, entry, tier, words);
+	return true;
+}
+
+/** retierSpend under the name tier-effects.js#TIER_EFFECTS charmSpend calls it by. */
+export const retierCharm = retierSpend;
+
+/**
+ * A charm's potency, as its moved roll has it ("It loses its potency after 1 use", unless Potent Workings keeps it
+ * on a 10+): one that stood (a Potent Workings 10+) is used up by a lower tier; one already used up that a 10+ would
+ * have kept cannot be laid again from here, and the table is told.
+ */
+async function settleCharmRetier(blessed, link, entry, tier, words) {
+	const mark = charmMarkOf(blessed, link?.markId || entry.markId);
+	if (mark) await settleCharm(blessed, mark, tier);
+	else if (tier === "success") globalThis.ui?.notifications?.info?.(format(`${KEY}.charmRetierGone`, words));
 }
 
 /**
@@ -738,29 +925,12 @@ export function beingApplied(damage, users = globalThis.game?.users) {
  * @returns {Promise<boolean>} whether the spend was taken
  */
 export function takeSpend(message, kind, offer, { scope = SYSTEM_ID, reroll = rollFormula } = {}) {
-	const cost = Number.isFinite(offer?.cost) ? offer.cost : 1;
+	const cost = spendCost(offer);
 	// Each kept as a list of who spent what, which is all spentOn and defendNotes read.
-	const list = SPEND_KINDS[kind]?.list ?? "standIns";
-	const bySufferer = !!SPEND_KINDS[kind]?.bySufferer;
+	const { list = "standIns", perTaker, tiered } = SPEND_KINDS[kind] ?? {};
 	const take = async () => {
 		const now = message.getFlag(scope, "damage");
-		if (!now || (now.applied ?? []).some(a => a.uuid === offer.row.uuid)) return false;
-		// Being applied right now, perhaps on another client (combat/attack-flow.js#applyOwedDamage): the HP
-		// may already be written whole, so the Readiness would buy nothing.
-		if (beingApplied(now)) return false;
-		if (!canPay(kind, offer, cost)) return false;
-		// A charm records the tier its roll came to, and nothing without one.
-		if (kind === "charm" && !CHARM_TIERS.has(offer.tier)) return false;
-		// The same option twice on one blow is refused (p.216: "each option once against any given attack").
-		// A sufferer's own move (I Get Knocked Down), so a stand-in may still take it on a blow whose ward took
-		// it before they stepped in (spentOn: the ward's no longer counts).
-		// A charm, once per blow for whoever bears it: a stand-in's own charm after the ward's (spentOn).
-		const again = bySufferer
-			? s => s.uuid === offer.row.uuid && (!s.by || s.by === offer.defender.uuid)
-			: kind === "charm"
-				? s => s.uuid === offer.row.uuid && (!s.bearerUuid || s.bearerUuid === offer.bearer?.uuid)
-				: s => s.uuid === offer.row.uuid;
-		if ((now[list] ?? []).some(again)) return false;
+		if (spendBlocker(now, kind, offer)) return false;
 		// Never Gonna Keep Me Down writes its number onto the row with its record, in one write.
 		if (kind === "neverGonna") return rollAgainKeepLower(message, now, offer, { scope, reroll });
 		// Each pool re-reads itself in the defender's spending turn (utils/spender-queue.js) and refuses when it
@@ -771,11 +941,11 @@ export function takeSpend(message, kind, offer, { scope = SYSTEM_ID, reroll = ro
 		if (paysPresence(offer)) { if (!await spendPresence(offer.defender)) return false; }
 		else if (cost > 0 && !await spendReadiness(offer.defender, cost)) return false;
 		const spend = { uuid: offer.row.uuid, name: offer.defender.name, how: kind, ...(paysPresence(offer) ? { purse: "presence" } : {}) };
-		// A stand-in, and a sufferer's own move (a knock-down), say whose it was: spentOn reads the knock-down
-		// against whoever takes the blow now.
+		// A stand-in, a rolled spend and a sufferer's own move (a knock-down) say whose it was: spentOn reads the
+		// knock-down against whoever takes the blow now. A rolled spend keeps its tier.
 		const entry = list === "standIns" ? { ...spend, by: offer.defender.uuid, free: cost === 0 }
-			: kind === "charm" ? { ...spend, by: offer.defender.uuid, move: offer.move ?? AMULETS_TALISMANS, tier: offer.tier, bearer: offer.bearer?.name ?? "", bearerUuid: offer.bearer?.uuid ?? "", markId: offer.mark?.id ?? "" }
-			: bySufferer ? { ...spend, by: offer.defender.uuid }
+			: tiered ? { ...spend, by: offer.defender.uuid, move: offer.move ?? tiered.move, tier: offer.tier, ...tiered.entry?.(offer) }
+			: perTaker ? { ...spend, by: offer.defender.uuid }
 			: offer.move ? { ...spend, move: offer.move }
 			: spend;
 		await message.setFlag(scope, `damage.${list}`, [...(now[list] ?? []), entry]);
@@ -839,7 +1009,7 @@ function spendsRecorded(message, kind, offer, scope = SYSTEM_ID) {
  */
 async function askGMToSpend(message, kind, offer, { scope = SYSTEM_ID } = {}) {
 	const gm = globalThis.game?.users?.activeGM;
-	if (!gm) return false;
+	if (!gm) return saySpendRefused("noGm", offer);
 	const before = spendsRecorded(message, kind, offer, scope);
 	const grew = () => spendsRecorded(message, kind, offer, scope) > before;
 	const answer = await askGMClient(gm, SPEND_QUERY, {
@@ -849,7 +1019,54 @@ async function askGMToSpend(message, kind, offer, { scope = SYSTEM_ID } = {}) {
 		...(offer.mark?.id ? { markId: offer.mark.id } : {}),
 		userId: globalThis.game?.user?.id ?? null,
 	}, { fallback: NO_ANSWER, what: "record a Readiness spend" });
-	return !!await relayOutcome(message, answer, grew);
+	if (await relayOutcome(message, answer, grew)) return true;
+	// Never silent (EDG-3): no answer in time, or the GM's client said no, read against the card for the reason.
+	return saySpendRefused(answer === NO_ANSWER ? "timedOut" : spendRefusedWhy(message, kind, offer, { scope }), offer);
+}
+
+/** What an offer costs its defender: its own `cost`, else 1. */
+const spendCost = offer => (Number.isFinite(offer?.cost) ? offer.cost : 1);
+
+/**
+ * What stops a spend on this card as it stands, or null when nothing does: takeSpend refuses on any of them, and
+ * spendRefusedWhy says which. "applied" (the blow is already on someone's HP) or "applying" (being applied right
+ * now, perhaps on another client: combat/attack-flow.js#applyOwedDamage), where the HP may already be written whole
+ * so the Readiness would buy nothing; "taken" (that option was already taken on this blow, p.216: "each option once
+ * against any given attack"; a once-per-taker kind only by the same taker, so a stand-in may still take their own
+ * after the ward's); "unpaid" (too little Readiness or Presence left); "refused" (a rolled spend with no tier, which
+ * records nothing). PURE but for reads.
+ */
+function spendBlocker(now, kind, offer) {
+	const uuid = offer?.row?.uuid;
+	if (!now || !uuid) return "refused";
+	if ((now.applied ?? []).some(a => a.uuid === uuid)) return "applied";
+	if (beingApplied(now)) return "applying";
+	const { list = "standIns", perTaker, tiered } = SPEND_KINDS[kind] ?? {};
+	const sameTaker = s => !perTaker || !s[perTaker.field] || s[perTaker.field] === perTaker.of(offer);
+	if ((now[list] ?? []).some(s => s?.uuid === uuid && sameTaker(s))) return "taken";
+	if (!canPay(kind, offer, spendCost(offer))) return "unpaid";
+	if (tiered && !TIERS.has(offer.tier)) return "refused";
+	return null;
+}
+
+/**
+ * Why a spend on this card was refused, read off the card as it stands (spendBlocker, takeSpend's own tests), else
+ * "refused". PURE but for reads.
+ */
+export function spendRefusedWhy(message, kind, offer, { scope = SYSTEM_ID } = {}) {
+	return spendBlocker(message?.getFlag?.(scope, "damage"), kind, offer) ?? "refused";
+}
+
+/** Say why a spend was not recorded, naming who spends on whose blow. Answers false, for the caller to return. */
+function saySpendRefused(why, offer) {
+	globalThis.ui?.notifications?.warn?.(format(`${KEY}.refused.${why}`, { defender: offer?.defender?.name ?? "", ward: offer?.row?.name ?? "" }));
+	return false;
+}
+
+/** takeSpend on this client, saying why when it is refused (EDG-3). */
+async function takeSpendSaying(message, kind, offer, options = {}) {
+	if (await takeSpend(message, kind, offer, options)) return true;
+	return saySpendRefused(spendRefusedWhy(message, kind, offer, options), offer);
 }
 
 /**
@@ -869,18 +1086,25 @@ export async function handleSpendQuery(data, context = {}, { messages = globalTh
 	const message = messages?.get?.(data?.messageId);
 	const damage = message?.getFlag?.(scope, "damage");
 	if (!user || !isSpendKind(kind) || !damage) return false;
+	// A rolled spend's roll card moved (a Shift, a +1) after the card recorded it: the tier is written again, for
+	// the roller's own player or a GM (retierSpend). writeSpendTier refuses a kind that is not rolled.
+	if (data?.retier) {
+		const roller = data.defenderUuid ? resolveSync(data.defenderUuid) : null;
+		if (!roller?.testUserPermission?.(user, "OWNER")) return false;
+		return writeSpendTier(message, kind, { row: data.rowUuid, by: data.defenderUuid, markId: data.markId ?? "" }, data.tier, { scope });
+	}
+	// A charm's offer also names which charm (`mark`): one Blessed may have laid several on the same bearer.
 	const offer = (offersOf(damage)[kind] ?? []).find(o => o.row?.uuid === data.rowUuid && o.defender?.uuid === data.defenderUuid
-		&& (o.purse ?? "") === (data.purse ?? "") && (kind !== "charm" || o.mark?.id === data.markId));
-	// A charm's tier was rolled already, by whoever decides for the Blessed (askCharmRoll), and the asker is the
-	// Blessed's player or the bearer's: the tier is the one thing taken from the ask.
-	if (kind === "charm") {
-		if (!offer || !CHARM_TIERS.has(data?.tier)) return false;
-		const owns = doc => !!doc?.testUserPermission?.(user, "OWNER");
-		if (!owns(offer.defender) && !owns(offer.bearer)) return false;
+		&& (o.purse ?? "") === (data.purse ?? "") && (!o.mark || o.mark.id === data.markId));
+	// A rolled spend's tier was rolled already, by the asker's side (spendOnBlow): the tier is the one thing taken
+	// from the ask, from one of its `askers`.
+	const { tiered } = SPEND_KINDS[kind];
+	if (tiered) {
+		if (!offer || !TIERS.has(data?.tier)) return false;
+		if (!tiered.askers(offer).some(doc => doc?.testUserPermission?.(user, "OWNER"))) return false;
 		const tested = { ...offer, tier: data.tier };
 		if (!(await takeSpend(message, kind, tested, { scope }))) return false;
-		// The GM can write the Blessed, so the charm is used up here, the moment its spend is recorded.
-		await settleCharm(tested.defender, tested.mark, tested.tier);
+		await tiered.afterGmSpend?.(tested);
 		return true;
 	}
 	if (!offer || !offer.defender.testUserPermission?.(user, "OWNER")) return false;

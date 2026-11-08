@@ -17,13 +17,17 @@
 // arcanum's own record, which the arcana repository reads before the pack.
 
 import { isPrimaryGM } from "../../utils/primary-gm.js";
+import { changedKeys } from "../../utils/foundry-compat.js";
 import { isSteadingActor } from "../../utils/world.js";
-import { BLESSED_MARKS_FLAG } from "./blessed-marks.js";
-import { CLASHED_FLAG, HARMED_BY_FLAG, KNOCKED_DOWN_FLAG, ALPHA_FLAG } from "../../fight/hero-moves.js";
+import { BLESSED_MARKS_FLAG, MARK_KINDS, markIsOn, markKindKey } from "./blessed-marks.js";
+import {
+	CLASHED_FLAG, HARMED_BY_FLAG, KNOCKED_DOWN_FLAG, RAPIER_WIT_FLAG, FIGHT_FOE_RECORD_FLAGS,
+	FOCUS_FIRE_FLAG, FOCUS_FIRE_USED_FLAG, TOUGH_LOVE_FLAG,
+} from "../../fight/hero-moves.js";
 import { INSPIRATION_FLAG } from "./inspiration.js";
 import { BLESSING_FLAG } from "./roll-boosts.js";
 import { NEEDS_SUN_FLAG, ONGOING_INVOCATION_FLAGS } from "./ongoing-invocation.js";
-import { MIRRORED_HP_PENALTY_FLAG } from "./StonetopFlags.js";
+import { MIRRORED_HP_PENALTY_FLAG, readableFlags } from "./StonetopFlags.js";
 import { DEATHS_DOOR_FLAG, DEATHS_DOOR_ROLLING_FLAG, UNSTOPPABLE_FIGHTING_FLAG } from "./deaths-door.js";
 
 // What the vitals are worked out from on the character document itself, outside its flags. Its items
@@ -47,7 +51,9 @@ export const FLAG_NOISE = new Set([
 	DEATHS_DOOR_ROLLING_FLAG,
 	// Unstoppable's "fighting on at 0 HP" stamp, laid with the drop and lifted when the fight ends.
 	UNSTOPPABLE_FIGHTING_FLAG,
-	CLASHED_FLAG, HARMED_BY_FLAG, KNOCKED_DOWN_FLAG, ALPHA_FLAG,
+	CLASHED_FLAG, HARMED_BY_FLAG, KNOCKED_DOWN_FLAG,
+	// The other per-foe and per-ally records the fight keeps (fight/hero-moves.js): no vital reads them.
+	RAPIER_WIT_FLAG, ...FIGHT_FOE_RECORD_FLAGS, FOCUS_FIRE_FLAG, FOCUS_FIRE_USED_FLAG, TOUGH_LOVE_FLAG,
 	INSPIRATION_FLAG, BLESSING_FLAG, NEEDS_SUN_FLAG.split(".")[0], ...ONGOING_INVOCATION_FLAGS,
 	// The mirror's own bookkeeping, written in the same update as the max it describes.
 	MIRRORED_HP_PENALTY_FLAG,
@@ -72,16 +78,11 @@ function isWorldCharacter(actor) {
 	return actor?.type === "character" && !actor.pack && !actor.isToken;
 }
 
-/** The dotted keys an update touched. */
-function changedKeys(changed) {
-	return Object.keys(globalThis.foundry?.utils?.flattenObject?.(changed ?? {}) ?? {});
-}
-
 /** Whether an actor update could move a derived vital. */
 export function mayMoveVitals(changed) {
 	return changedKeys(changed).some(key => {
-		// `-=` deletes a key and `==` replaces it (v13's spellings); either way the key is the noise.
-		if (key.startsWith("flags.")) return !FLAG_NOISE.has(String(key.split(".")[2]).replace(/^(?:-=|==)/, ""));
+		// A deleted or replaced key comes back plain (foundry-compat.js#changedKeys): either way the key is the noise.
+		if (key.startsWith("flags.")) return !FLAG_NOISE.has(String(key.split(".")[2]));
 		return SYSTEM_INPUTS.some(input => key === input || key.startsWith(`${input}.`));
 	});
 }
@@ -117,10 +118,10 @@ function scheduleVitalsMirror(actor) {
 	}, SETTLE_MS));
 }
 
-/** Every character in the world, on the primary GM's client only. */
-function scheduleEveryone() {
+/** These characters (default: every one in the world), on the primary GM's client only. */
+function scheduleEveryone(actors = globalThis.game?.actors ?? []) {
 	if (!isPrimaryGM()) return;
-	for (const actor of globalThis.game?.actors ?? []) {
+	for (const actor of actors) {
 		if (isWorldCharacter(actor) && actor.isOwner) scheduleVitalsMirror(actor);
 	}
 }
@@ -130,10 +131,45 @@ function isWorldArcanum(item) {
 	return !item?.parent && !item?.pack && item?.type === "move" && item.system?.moveType === "arcanum";
 }
 
+/** Whether an actor has laid any Blessed's mark on anyone. */
+const laysMarks = actor => {
+	const rows = readableFlags(actor)?.[BLESSED_MARKS_FLAG];
+	return Array.isArray(rows) && rows.length > 0;
+};
+
+/** The mark kinds that are a vital on whoever wears them (blessed-marks.js#MARK_KINDS `movesVitals`): Barkskin. */
+const VITAL_MARK_KINDS = MARK_KINDS.filter(kind => kind.movesVitals);
+
+/**
+ * Whoever an item change moves the armor of, beyond its own sheet: the characters a Blessed's Barkskin marks lie on,
+ * when that Barkskin is learned, switched off, added or removed ("they gain this benefit so long as the mark remains",
+ * Book I p.104, and a mark only counts while its move does: blessed-marks.js#blessedMarkRows). Barkskin is the one
+ * mark kind that is armor on someone else (move-armor.js); the others move no vital. Left to the Blessed's own
+ * re-mirror, the wearer's stored armor kept the 2 a switched-off Barkskin no longer gave, and Apply took it off every
+ * blow. The rows are read raw, whatever the move's state now: it may have just been switched off or removed.
+ */
+function markWearers(item) {
+	const blessed = item?.parent;
+	if (item?.type !== "move" || blessed?.type !== "character") return [];
+	const kinds = new Set(VITAL_MARK_KINDS.filter(kind => kind.move === item.name).map(kind => kind.key));
+	if (!kinds.size) return [];
+	const rows = readableFlags(blessed)?.[BLESSED_MARKS_FLAG];
+	const worn = (Array.isArray(rows) ? rows : []).filter(row => row && kinds.has(markKindKey(row.kind)));
+	if (!worn.length) return [];
+	return [...(globalThis.game?.actors ?? [])].filter(actor => worn.some(row => markIsOn(row, actor)));
+}
+
 function onItem(item, userId) {
-	if (isWorldArcanum(item)) return scheduleEveryone();
+	if (isWorldArcanum(item)) scheduleEveryone();
+	// Asked of the primary GM only, before the wearers are looked up: every other client would stand aside anyway.
+	else if (isPrimaryGM()) scheduleEveryone(markWearers(item));
 	const actor = item?.parent;
 	if (mirrorsHere(actor, userId)) scheduleVitalsMirror(actor);
+}
+
+/** A Blessed deleted takes their marks with them: everyone they marked re-mirrors. */
+function onDeleteActor(actor) {
+	if (actor?.type === "character" && laysMarks(actor)) scheduleEveryone();
 }
 
 function onUpdateActor(actor, changed, _options, userId) {
@@ -153,6 +189,7 @@ export function registerVitalsMirrorHooks() {
 	Hooks.on("createItem", (item, _options, userId) => onItem(item, userId));
 	Hooks.on("updateItem", (item, _changed, _options, userId) => onItem(item, userId));
 	Hooks.on("deleteItem", (item, _options, userId) => onItem(item, userId));
+	Hooks.on("deleteActor", actor => onDeleteActor(actor));
 	// A world whose characters changed before this existed, or while no GM was on to follow the steading:
 	// the primary GM settles every character once on load, one at a time so the load is not a burst of
 	// pack reads. Most are already current, which costs a comparison and no write.

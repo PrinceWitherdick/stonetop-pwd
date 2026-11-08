@@ -564,7 +564,8 @@ export async function pressCardButton(message, actor, btn) {
 		if (btn.classList.contains("stonetop-pd-move-damage")) {
 			const results = await rollOptionDamage(actor, { move, damage: {
 				formula,
-				self: false,
+				// The roller's own harm on an arcanum move's card (arcana-move-damage.js); a +Favor roll's is always a foe's.
+				self: btn.dataset.self === "1",
 				ignoresArmor: btn.dataset.ignores === "1",
 				piercing: Number(btn.dataset.piercing) || 0,
 				tags,

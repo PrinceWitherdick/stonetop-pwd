@@ -125,9 +125,46 @@ describe("giving it", () => {
 		const gm = { query: vi.fn(async () => true) };
 		expect(await giveAdvantage(s, b, "Sage Advice", { gm, userId: "u-s" })).toBe(true);
 		expect(gm.query).toHaveBeenCalledWith(GIVE_ADVANTAGE_QUERY,
-			{ giverUuid: "Actor.s", targetUuid: "Actor.b", moveName: "Sage Advice", userId: "u-s" }, { timeout: 10000 });
+			{ giverUuid: "Actor.s", targetUuid: "Actor.b", moveName: "Sage Advice", userId: "u-s", messageId: null }, { timeout: 10000 });
 		expect(b.typedActor.holdAdvantage).not.toHaveBeenCalled();
-		expect(await giveAdvantage(s, b, "Sage Advice", { gm: null })).toBe(false);
+		const outcome = {};
+		expect(await giveAdvantage(s, b, "Sage Advice", { gm: null, outcome })).toBe(false);
+		expect(outcome.why).toBe("noGm");
+	});
+
+	// EDG-9: an answer that never came is not a no. The GM's client stamps the card in its turn; a stamp that
+	// lands late counts as given, and a second ask for the same card and person holds nothing more.
+	it("reads a late GM write off the card's stamp, and the GM's side holds it once per card", async () => {
+		const s = pc({ id: "s" });
+		const b = pc({ id: "b", owner: false });
+		const card = message({ flags: { advantageGivenTo: ["Actor.b"] } });
+		const timedOut = { query: vi.fn(async () => { throw new Error("timed out"); }) };
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			expect(await giveAdvantage(s, b, "Sage Advice", { gm: timedOut, userId: "u-s", message: card })).toBe(true);
+			const outcome = {};
+			expect(await giveAdvantage(s, b, "Sage Advice", { gm: timedOut, userId: "u-s", message: null, outcome })).toBe(false);
+			expect(outcome.why).toBe("timedOut");
+		} finally {
+			warn.mockRestore();
+		}
+
+		globalThis.game.user = GM;
+		globalThis.game.users = { activeGM: GM, get: id => [player("s"), player("b")].find(u => u.id === id) ?? null };
+		const giver = pc({ id: "s", name: "Maelis", moves: ["Countermeasures"] });
+		const stamped = message();
+		const savedMessages = globalThis.game.messages;
+		globalThis.game.messages = { get: id => (id === stamped.id ? stamped : null) };
+		try {
+			const ask = () => handleGiveAdvantageQuery({ giverUuid: giver.uuid, targetUuid: b.uuid, moveName: "Countermeasures", userId: "u-s", messageId: stamped.id }, {},
+				{ resolve: uuid => [giver, b].find(a => a.uuid === uuid) ?? null });
+			expect(await ask()).toBe(true);
+			expect(await ask()).toBe(true);
+			expect(b.typedActor.holdAdvantage).toHaveBeenCalledTimes(1);
+			expect(stamped.getFlag(SCOPE, "advantageGivenTo")).toEqual(["Actor.b"]);
+		} finally {
+			globalThis.game.messages = savedMessages;
+		}
 	});
 
 	it("the GM's side writes it for the giver's player, with the move learned, and for nobody else", async () => {
@@ -579,6 +616,57 @@ describe("Stentorian's Command", () => {
 		const m = marshal(2);
 		expect(await offerAdvantage(message(), m, "Stentorian", { pick, party: () => [pc({ id: "a" })] })).toBe(false);
 		expect(m.typedActor.moveResources.setUses).not.toHaveBeenCalled();
+	});
+
+	// MOV-6: the Command is paid BEFORE the gift, so one spent elsewhere while the picker was open buys nothing,
+	// and a gift nobody could be given hands it back.
+	it("gives nothing when the Command went while the picker was open, and gives it back when nobody got it", async () => {
+		const m = marshal(1);
+		const a = pc({ id: "a", name: "Ash" });
+		const pick = vi.fn(async () => {
+			m.typedActor.moveResources.getMoveResources().Stentorian = 0;
+			return ["a"];
+		});
+		const savedUi = globalThis.ui;
+		globalThis.ui = { notifications: { warn: vi.fn(), info: vi.fn() } };
+		try {
+			expect(await offerAdvantage(message(), m, "Stentorian", { pick, party: () => [a] })).toBe(false);
+			expect(a.typedActor.holdAdvantage).not.toHaveBeenCalled();
+			const n = marshal(1);
+			const give = vi.fn(async (giver, target, move, { outcome }) => { outcome.why = "noGm"; return false; });
+			expect(await offerAdvantage(message(), n, "Stentorian", { pick: async () => ["a"], party: () => [a], give })).toBe(false);
+			expect(n.typedActor.moveResources.getMoveResources().Stentorian).toBe(1);
+			expect(globalThis.ui.notifications.warn).toHaveBeenLastCalledWith("Ash could not be given advantage: no GM is online to write it.");
+		} finally {
+			globalThis.ui = savedUi;
+		}
+	});
+});
+
+// MOV-10: the GM and the Marshal's player both seeing a Command-paying button let both press inside one round
+// trip and both pay. The giver's own logged-in player presses it; the GM stands in only while none is online.
+describe("who presses a giver's card button", () => {
+	it("is the giver's logged-in player, and the GM only while no player of theirs is online", async () => {
+		const { pressesFor } = await import("../../../module/actors/character/give-advantage-flow.js");
+		const card = { canUserModify: () => true };
+		const playerU = { id: "u-m", isGM: false, active: true };
+		const gm = { id: "u-gm", isGM: true, active: true };
+		const savedUsers = globalThis.game.users;
+		const savedUser = globalThis.game.user;
+		try {
+			const m = { ...pc({ id: "m", moves: ["Focus Fire"] }), testUserPermission: () => true };
+			globalThis.game.users = [playerU, gm];
+			globalThis.game.user = gm;
+			expect(pressesFor(card, m, gm)).toBe(false);
+			globalThis.game.user = playerU;
+			expect(pressesFor(card, m, playerU)).toBe(true);
+			playerU.active = false;
+			globalThis.game.user = gm;
+			expect(pressesFor(card, m, gm)).toBe(true);
+		} finally {
+			globalThis.game.users = savedUsers;
+			globalThis.game.user = savedUser;
+		}
 	});
 });
 

@@ -243,12 +243,18 @@ describe("Censure: enraged", () => {
 		expect(gm.query).toHaveBeenCalledWith(CENSURE_ENRAGED_QUERY, { judgeUuid: judge.uuid, rollerUuid: bran.uuid, keys: [CULTIST.uuid], userId: "u1" }, expect.anything());
 		expect(judge.setFlag).not.toHaveBeenCalled();
 
-		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		// MOV-4 / EDG-10: the roller is TOLD, not the console, both with no GM and when the GM's client says no.
+		const savedUi = globalThis.ui;
+		const warn = vi.fn();
+		globalThis.ui = { notifications: { warn } };
 		try {
 			expect(await spendCensureEnraged(bran, [CULTIST], { actors: [judge, bran], gm: null, userId: "u1" })).toBe(false);
-			expect(warn).toHaveBeenCalled();
+			expect(warn).toHaveBeenCalledWith(expect.stringContaining("No GM is connected to mark Hafgan's Censure (enraged) as used"));
+			const refusing = { query: vi.fn(async () => false) };
+			expect(await spendCensureEnraged(bran, [CULTIST], { actors: [judge, bran], gm: refusing, userId: "u1" })).toBe(false);
+			expect(warn).toHaveBeenLastCalledWith(expect.stringContaining("did not mark Hafgan's Censure (enraged) as used"));
 		} finally {
-			warn.mockRestore();
+			globalThis.ui = savedUi;
 		}
 	});
 

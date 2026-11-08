@@ -26,6 +26,7 @@ import { SYSTEM_ID } from "../../system-id.js";
 import { ROLLED_FLAG, cardCountedTier, outcomeTier } from "../../utils/counted-tier.js";
 import { normalizeRollType } from "../../utils/roll-types.js";
 import { moveLearnedIn } from "./owns-move.js";
+import { duringLastMove } from "../../fight/in-battle.js";
 
 // The state a character is in with respect to their current brush with death. Stored on the
 // actor (see DEATHS_DOOR_FLAG); absent/null is the ordinary living state.
@@ -645,10 +646,12 @@ export function lastMoveChoices(items) {
  */
 export async function makeLastMove(character, item, { rollable = null, note = "" } = {}) {
 	if (!character?.onRoll || !item || !rollable) return false;
-	const made = await character.onRoll({ currentTarget: rollable }, {
+	// Counted as fighting while it is made, so a Clash with nothing targeted is aimed at the foe in front of
+	// them, not at nobody (fight/in-battle.js#duringLastMove): they are at 0 HP, which the fight reads as out.
+	const made = await duringLastMove(character._actor ?? character.actor ?? null, () => character.onRoll({ currentTarget: rollable }, {
 		asIfTotal: LAST_MOVE_TOTAL,
 		rollMode: "normal",
 		conditionNotes: note ? [note] : [],
-	});
+	}));
 	return !!made && made !== "cancel";
 }

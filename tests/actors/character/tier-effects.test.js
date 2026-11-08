@@ -307,6 +307,14 @@ describe("Defend's Readiness", () => {
 		expect(readinessForTier({ prior: 2, set: 3, current: 3, hold: 1 })).toEqual({ next: 2, set: 2 });
 	});
 
+	// MOV-11: a second rewrite read against the card's old record (another client's, landing together) never
+	// stacks the tier on itself: a 7-9 lifted to a 10+ twice over still holds 3 (p.216).
+	it("never holds past what the tier holds or what is held already", () => {
+		expect(readinessForTier({ prior: 0, set: 1, current: 3, hold: 3 })).toEqual({ next: 3, set: 3 });
+		// Readiness from a later Defend is never taken back, and never stacked on.
+		expect(readinessForTier({ prior: 0, set: 1, current: 4, hold: 3 })).toEqual({ next: 4, set: 3 });
+	});
+
 	it("rises when a 7-9 is lifted to a 10+ and falls back when lowered (the character's own settle)", async () => {
 		const self = {
 			_actor: { name: "Hale" },
@@ -386,6 +394,22 @@ describe("the holy light", () => {
 	});
 });
 
+// EDG-15: a charm's roll card remembers the blow it was rolled for (defend-spend.js#rollCharm), and its record
+// asks the damage card to follow a moved tier whatever move the card is titled for.
+describe("a charm's roll card", () => {
+	it("runs its record on a moved tier, and keeps it as it was when the damage card is gone", async () => {
+		const savedMessages = globalThis.game.messages;
+		globalThis.game.messages = { get: () => null };
+		try {
+			const done = { charmSpend: { card: "gone", row: "Token.bram", by: "Actor.eira", markId: "m1", tier: "success" } };
+			expect(await settleTierEffects({ type: "character", uuid: "Actor.eira" }, "Amulets & Talismans", "partial", done)).toEqual(done);
+			expect(await settleTierEffects({ type: "character" }, "Amulets & Talismans", "partial", null)).toEqual({});
+		} finally {
+			globalThis.game.messages = savedMessages;
+		}
+	});
+});
+
 // Ranger audit M10: Alpha's "on a 10+, you also have advantage on your next roll against them". The 10+
 // remembers the foes the roll was aimed at (fight/hero-moves.js#alphaAgainst reads it), and a Shift that
 // takes the 10+ away forgets them again; one that lifts a 7-9 to a 10+ remembers them then.
@@ -401,11 +425,20 @@ describe("Alpha's foes", () => {
 		const { actor } = hero({ moves: ["Alpha"] });
 		const hit = await alphaRoll(actor, "success", [wolf]);
 		expect(actor.flags[SYSTEM_ID].alphaOver).toEqual([{ key: wolf.uuid, name: "Grey Wolf" }]);
-		expect(hit.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ alphaOver: { foes: [{ key: wolf.uuid, name: "Grey Wolf" }], set: true } });
+		expect(hit.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ alphaOver: { foes: [{ key: wolf.uuid, name: "Grey Wolf" }], set: true, added: [wolf.uuid] } });
 		await shift(hit, actor, 9);
 		expect(actor.flags[SYSTEM_ID].alphaOver).toEqual([]);
 		// The card kept who it was aimed at, so a lift needs no targets to remember them by.
 		await shift(hit, actor, 10);
+		expect(actor.flags[SYSTEM_ID].alphaOver).toEqual([{ key: wolf.uuid, name: "Grey Wolf" }]);
+	});
+
+	// MOV-8: a Shift takes back only what THIS card's 10+ added, never an older Alpha's unspent record.
+	it("a Shift off a 10+ leaves alone a foe an earlier Alpha already held", async () => {
+		const { actor } = hero({ moves: ["Alpha"] });
+		actor.flags[SYSTEM_ID].alphaOver = [{ key: wolf.uuid, name: "Grey Wolf" }];
+		const hit = await alphaRoll(actor, "success", [wolf]);
+		await shift(hit, actor, 9);
 		expect(actor.flags[SYSTEM_ID].alphaOver).toEqual([{ key: wolf.uuid, name: "Grey Wolf" }]);
 	});
 

@@ -2072,6 +2072,16 @@ body :is(.app, .window-app).stonetop-height-resized {
 	transform: scale(1.18);
 }
 
+/* On a sheet the viewer can only observe, the cue is a picture that says so, not a button (L14). */
+.stonetop-levelup-icon.is-readonly {
+	cursor: default;
+}
+
+.stonetop-levelup-icon.is-readonly:hover {
+	background-color: var(--st-levelup-accent);
+	transform: none;
+}
+
 /* Number cell (Armor, Level) */
 .sheet-attributes-top .cell--Number .stonetop-vital-inner > input,
 .sheet-attributes-top .cell--Number .cell__number > input {
@@ -6355,6 +6365,10 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
    cursor says it has a hover. Built by chat.js#damageKeywordsHtml for both damage cards. */
 .stonetop-damage-keyword { font-weight: bold; cursor: help; }
 
+/* The GM's on-the-fly "[n] piercing" field on a damage card (attack-flow.js#wirePiercingOnTheFly):
+   a one-digit field beside its label, not a full-width one. */
+.stonetop-damage-piercing .stonetop-damage-piercing-input { width: 3.5em; margin-left: 0.5em; }
+
 /* A damage line on the per-target results card: the same result block as a move roll,
    tinted red. Sits AFTER the tier rules on purpose — a `--modifier` ties with the base
    class on specificity and only wins by coming later in the file. */
@@ -7901,6 +7915,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 }
 .stonetop-move-choice-needed,
 .stonetop-move-stat-choice-needed,
+.stonetop-move-possession-choice-needed,
 .stonetop-move-background-answer-needed {
 	margin-left: 5px;
 	color: var(--st-blue-text);
@@ -7910,6 +7925,8 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-move-choice-needed:focus-visible,
 .stonetop-move-stat-choice-needed:hover,
 .stonetop-move-stat-choice-needed:focus-visible,
+.stonetop-move-possession-choice-needed:hover,
+.stonetop-move-possession-choice-needed:focus-visible,
 .stonetop-move-background-answer-needed:hover,
 .stonetop-move-background-answer-needed:focus-visible {
 	color: var(--st-blue-border);
@@ -11761,6 +11778,16 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 }
 
 .stonetop-arcanum-backowed span { flex: 1; min-width: 8em; }
+
+/* More back moves ticked than a paced card has given (CharacterArcana.js#PACED_BACK_MOVES): the gold
+   caution, flagged and never blocked, as the summon caution below. */
+.stonetop-arcanum-paced-over {
+	margin: 0 0 8px;
+	padding: 4px 8px;
+	border-left: 3px solid var(--st-on-dark-caution, #a8741a);
+	font-size: var(--st-fs-2xs);
+	color: var(--st-on-dark-caution, var(--st-gold-text));
+}
 
 .stonetop-arcanum-backowed-btn,
 .stonetop-arcanum-unlock-choice-btn,
@@ -15741,6 +15768,23 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	user-select: none;
 }
 
+/* Moves tab, edit mode: "Taken as a level pick" under a move from outside the playbook's list (C4).
+   Laid out as the Level Up window's "Show moves I don't qualify for yet" row. */
+.stonetop-level-pick-toggle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 4px;
+	font-size: var(--st-fs-sm);
+	color: var(--color-text-dark-secondary);
+	cursor: pointer;
+	user-select: none;
+}
+
+.stonetop-level-pick-toggle input {
+	margin: 0;
+}
+
 /* Divider between available and locked moves */
 .stonetop-levelup-locked-divider {
 	display: flex;
@@ -15923,6 +15967,20 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	flex-direction: column;
 	gap: 6px;
 	margin-top: 4px;
+}
+
+/* Why a greyed mark option is out (crew already at d10, a background's box), as text under it
+   at full contrast rather than a hover tooltip only (L15). */
+.stonetop-levelup-option-note {
+	margin: -2px 12px 2px;
+	font-size: var(--st-fs-floor);
+	line-height: 1.35;
+	color: var(--color-text-dark-secondary);
+}
+
+/* A step's intro takes the keyboard on a step change (tabindex -1); no ring for a mouse user. */
+.stonetop-levelup-intro[data-levelup-focus]:focus:not(:focus-visible) {
+	outline: none;
 }
 
 /* Footer */
@@ -22405,7 +22463,7 @@ a.steading-player-open:hover {
 	white-space: normal;
 	font-size: var(--st-fs-md);
 	font-weight: 700;
-	line-height: 1.3;
+	line-height: 1.35;
 	color: inherit;
 	text-decoration: none;
 }
@@ -28667,9 +28725,12 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	cursor: help;
 }
 
-/* Tags a crew is still owed (Veteran Crew): the blue "needs your input" cue, a flex chip whose
-   label is the trimmed .stonetop-chip-text, as the Fallen badge's is. */
-.stonetop-crew-tags-owed {
+/* Tags a crew is still owed (Veteran Crew), a pouch's traits (Big Magic), and a companion's unique trait to write
+   (Beast of Legend): the blue "needs your input" cue, a flex chip whose label is the trimmed .stonetop-chip-text,
+   as the Fallen badge's is. */
+.stonetop-crew-tags-owed,
+.stonetop-possession-choices-owed,
+.stonetop-companion-unique-owed {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
@@ -28681,9 +28742,15 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	font-size: var(--st-fs-sm);
 	cursor: pointer;
 }
-.stonetop-crew-tags-owed > i { font-size: round(1em, 1px); }
+.stonetop-crew-tags-owed > i,
+.stonetop-possession-choices-owed > i,
+.stonetop-companion-unique-owed > i { font-size: round(1em, 1px); }
 .stonetop-crew-tags-owed:hover,
-.stonetop-crew-tags-owed:focus-visible { border-color: var(--st-blue-text); }
+.stonetop-crew-tags-owed:focus-visible,
+.stonetop-possession-choices-owed:hover,
+.stonetop-possession-choices-owed:focus-visible,
+.stonetop-companion-unique-owed:hover,
+.stonetop-companion-unique-owed:focus-visible { border-color: var(--st-blue-text); }
 
 .stonetop-follower-tag--trait,
 .stonetop-follower-tag--exceptional {

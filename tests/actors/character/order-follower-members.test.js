@@ -165,6 +165,8 @@ describe("orderFollower and an attack", () => {
 	it("strikes the counter-blow when an ordered Clash misses, and not on a hit or another move", async () => {
 		const { sheet, actor } = makeSheet(crewFlags);
 		sheet._followerSuffersCounter = vi.fn(async () => true);
+		// Struck through follower-order-attack.js#strikeOrderCounter, which reaches the leader's own sheet (FOE-1).
+		actor.sheet = sheet;
 		await sheet.orderFollower({ name: "The Crew", tags: [] }, { ftype: "crew", slug: "" });
 		actor.typedActor.onOrderFollowersRoll.mockResolvedValueOnce({ total: 5 });
 		await opened[0].onRoll({ moveKey: "clash", followerName: "The Crew" });
@@ -173,6 +175,6 @@ describe("orderFollower and an attack", () => {
 		actor.typedActor.onOrderFollowersRoll.mockResolvedValueOnce({ total: 4 });
 		await opened[0].onRoll({ moveKey: "let-fly", followerName: "The Crew" });
 		expect(sheet._followerSuffersCounter).toHaveBeenCalledTimes(1);
-		expect(sheet._followerSuffersCounter).toHaveBeenCalledWith({ ftype: "crew", slug: "" });
+		expect(sheet._followerSuffersCounter).toHaveBeenCalledWith({ ftype: "crew", slug: "" }, { member: "", name: "The Crew", counterOf: "" });
 	});
 });

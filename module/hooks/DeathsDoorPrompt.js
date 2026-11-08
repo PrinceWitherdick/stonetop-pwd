@@ -36,6 +36,13 @@ const _I18N = "stonetop.specialMoves.deathsDoor";
 export const RAISED_OPTION = "stonetopRaisedFromDead";
 
 /**
+ * Document-update option marking "this write dropped a Heavy to 0 HP in battle, and Unstoppable keeps them
+ * fighting". Decided once, by the preUpdate half below, and read by Battle Joy's update half
+ * (combat/battle-joy-offer.js#installBattleJoyOnHurt) rather than worked out a second time there.
+ */
+export const UNSTOPPABLE_FIGHTS_ON_OPTION = "stonetopUnstoppableFightsOn";
+
+/**
  * "When a PC is reduced to 0 HP by an attack that could kill them, they're dying and must
  * make this move" (Book I, Harm & Healing p.245).
  *
@@ -138,8 +145,11 @@ export function onPreUpdateActorDeathsDoor(actor, changes, options = {}) {
 		// to 0 in battle. The stamp goes with them leaving dying (healed, the Door settled); a hit at 0 keeps it.
 		const dropped = next === DEATHS_DOOR_STATE.DYING && state !== DEATHS_DOOR_STATE.DYING;
 		const fightsOn = dropped && !settlesDoor && fightsOnWhenDropped(actor);
-		if (fightsOn) foundry.utils.setProperty(changes, `flags.${STONETOP_SCOPE}.${UNSTOPPABLE_FIGHTING_FLAG}`, true);
-		else if (dropped || next !== DEATHS_DOOR_STATE.DYING || newHp > 0) liftFightingStamp(actor, changes);
+		if (fightsOn) {
+			foundry.utils.setProperty(changes, `flags.${STONETOP_SCOPE}.${UNSTOPPABLE_FIGHTING_FLAG}`, true);
+			// Said on the options too, for Battle Joy's committed half, which counts this drop's blood as spilled.
+			options[UNSTOPPABLE_FIGHTS_ON_OPTION] = true;
+		} else if (dropped || next !== DEATHS_DOOR_STATE.DYING || newHp > 0) liftFightingStamp(actor, changes);
 
 		// The Heavy's Battle Joy lasts "as long as you keep fighting", and one who drops to 0 HP has
 		// stopped (the user's ruling): it ends in this same write, with no roll, so the Death's Door

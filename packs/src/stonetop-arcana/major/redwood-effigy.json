@@ -7,6 +7,9 @@
   "flags": {
     "stonetop": {
       "slug": "redwood-effigy",
+      "consequenceBoons": [
+        { "label": "Your blood flows like sap", "hp": 4, "armor": 1 }
+      ],
       "front": {
         "title": "Redwood Effigy",
         "item": {

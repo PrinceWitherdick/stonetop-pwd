@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { FoundryArcanaRepository } from "../../../../module/actors/character/repositories/FoundryArcanaRepository.js";
+import {
+	FoundryArcanaRepository, _resetArcanaRulePriming, primeArcanaRules,
+} from "../../../../module/actors/character/repositories/FoundryArcanaRepository.js";
 import { MinorArcanum } from "../../../../module/model/MinorArcanum.js";
 
 // -- Fixtures -----------------------------------------------------------------
@@ -199,5 +201,52 @@ describe("FoundryArcanaRepository", () => {
 			const repo = new FoundryArcanaRepository();
 			expect(await repo.findBySlugs([])).toEqual([]);
 		});
+	});
+});
+
+describe("primeArcanaRules", () => {
+	afterEach(() => _resetArcanaRulePriming());
+
+	// A world actor as StonetopFlags reads it: `owned` under the arcana namespace.
+	const character = (owned, type = "character") => ({
+		type, flags: {}, getFlag: (_scope, key) => (key === "arcana.owned" ? owned : undefined),
+	});
+	const hooksStub = () => {
+		const on = {};
+		return { on: vi.fn((name, fn) => { on[name] = fn; }), fire: (name, ...args) => on[name]?.(...args) };
+	};
+
+	it("reads only the rule cards a world character holds, each once", async () => {
+		const repo = { findBySlugs: vi.fn(async () => []) };
+		const actors = [
+			character(["storm-markings", "huge-wooden-sphere"]),
+			character(["storm-markings", "redwood-effigy"]),
+			character(["twisted-spear"], "npc"),
+		];
+		await primeArcanaRules({ actors, hooks: hooksStub(), repo });
+		expect(repo.findBySlugs).toHaveBeenCalledTimes(1);
+		expect(repo.findBySlugs.mock.calls[0][0].sort()).toEqual(["redwood-effigy", "storm-markings"]);
+	});
+
+	it("reads a rule card as a character gains it, not again once read", async () => {
+		const repo = { findBySlugs: vi.fn(async () => []) };
+		const hooks = hooksStub();
+		await primeArcanaRules({ actors: [], hooks, repo });
+		expect(repo.findBySlugs).not.toHaveBeenCalled();
+		hooks.fire("updateActor", character(["twisted-spear"]), { name: "Renamed" });
+		expect(repo.findBySlugs).not.toHaveBeenCalled();
+		hooks.fire("updateActor", character(["twisted-spear"]), { flags: {} });
+		hooks.fire("createActor", character(["twisted-spear", "norubas-ice-sphere"]));
+		await Promise.resolve();
+		expect(repo.findBySlugs.mock.calls.map(([slugs]) => slugs)).toEqual([["twisted-spear"], ["norubas-ice-sphere"]]);
+	});
+
+	it("tries again after a read that failed", async () => {
+		const repo = { findBySlugs: vi.fn(async () => { throw new Error("offline"); }) };
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		await primeArcanaRules({ actors: [character(["storm-markings"])], hooks: hooksStub(), repo });
+		await primeArcanaRules({ actors: [character(["storm-markings"])], hooks: hooksStub(), repo });
+		expect(repo.findBySlugs).toHaveBeenCalledTimes(2);
+		warn.mockRestore();
 	});
 });

@@ -148,7 +148,7 @@ const ARCANA_SLUG_LISTS = {
 };
 // Bookkeeping sub-flags with no play meaning of their own — a backfill guard, the onboarding
 // draw, per-card display state. They were logging lines like "Arcana set to on".
-const ARCANA_SILENT_KEYS = new Set(["leadBackfilled", "minorDraw", "majorMarksFor", "flipped", "seeBothSides", "owedAtLatch"]);
+const ARCANA_SILENT_KEYS = new Set(["leadBackfilled", "minorDraw", "majorMarksFor", "flipped", "seeBothSides", "owedAtLatch", "completions"]);
 
 // Lore: `lore.counts.<loreSlug>:<optionSlug>` (a tick count) and `lore.texts.<loreSlug>:<optionSlug>`
 // (the written answer). Both were falling through to the "Lore" namespace label, so a ticked box

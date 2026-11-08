@@ -847,8 +847,10 @@ describe("the crew tags Veteran Crew owes", () => {
 
 	it("is wired after a level-up, after a ticked tags box, and on the card's cue", () => {
 		const src = readFileSync(new URL("../../../module/actors/character/StonetopCharacterSheet.js", import.meta.url), "utf8");
-		expect(src).toContain("this._maybeOpenCrewTagsForMarks(foreignMoveName ?? addedMoveName)");
-		expect(src).toContain("creationMarkCrewTags({ [moveName]: [markSlug] }) > 0");
+		expect(src).toContain("this._afterMoveTaken([addedMoveName, foreignMoveName])");
+		expect(src).toContain("[VETERAN_CREW_MOVE,         [\"_maybeOpenCrewTagsForMarks\", \"_offerCrewReselect\"]]");
+		expect(src).toContain("[`${VETERAN_CREW_MOVE}:tags`,  \"_maybeOpenCrewTagsForMarks\"]");
+		expect(src).toContain("this._afterMarkTicked(moveName, markSlug)");
 		expect(src).toContain(`html.find(".stonetop-crew-tags-owed")`);
 		const hbs = readFileSync(new URL("../../../templates/actor/partials/tab-followers.hbs", import.meta.url), "utf8");
 		expect(hbs).toContain("{{#if tagsOwed}}");
@@ -1126,6 +1128,8 @@ describe("follower fate: a custom group's members are followers too", () => {
 			"flags.stonetop-pwd.customFollowers.band.memberHp":       [4, 3, null],
 			"flags.stonetop-pwd.customFollowers.band.memberPortrait": ["a.webp", "c.webp", "d.webp"],
 			"flags.stonetop-pwd.customFollowers.band.size":           3,
+			// The cut, logged so a row remembered by index finds its member again (follower-roster-shifts.js, FOE-2).
+			"flags.stonetop-pwd.customFollowers.band.rosterShifts":   [{ n: 1, row: "custom-member", index: 1 }],
 		});
 	});
 

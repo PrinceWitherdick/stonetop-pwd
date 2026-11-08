@@ -7,6 +7,9 @@
   "flags": {
     "stonetop": {
       "slug": "staff-of-the-lidless-orb",
+      "consequenceBoons": [
+        { "label": "You begin to sprout warty, scale-like protrusions", "armor": 1 }
+      ],
       "front": {
         "title": "Staff of the Lidless Orb",
         "item": {

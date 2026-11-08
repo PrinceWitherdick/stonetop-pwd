@@ -16,7 +16,9 @@
 //     stored (2026-10-18);
 //   • the Void elemental carried an invented cost, "profuse gratitude"; the crown prints none (2026-11-05);
 //   • the dool spirit's damage was d8, not the book's d6, and Halix's damage and moves dropped their
-//     "(tags vary)" and "(harmed only by silver or salt)" (2026-11-05).
+//     "(tags vary)" and "(harmed only by silver or salt)" (2026-11-05);
+//   • Thistlewik's and the unliving chimera's armor was a bare number, dropping "2 vs. iron" and "0 vs. bronze"
+//     (2026-11-06).
 // The mantle wraiths became a group of three (2026-11-05) but are not listed: a group is a different
 // card (size, per-member HP), so one already summoned stays as it is.
 //
@@ -54,7 +56,13 @@ export const FOLLOWER_SUPERSEDED = {
 	"stone-idol:thistlewik": {
 		"notes": [
 			"Armor 6 (stone, resilience), 2 vs. iron. Special qualities: inert; indistinguishable voice. It hardly considers itself a follower."
-		]
+		],
+		// The plain 6 dropped its "2 vs. iron" (round-2 audit EDG-12): the card keeps the clause now.
+		"armor": [6]
+	},
+	// The plain 4 dropped its "0 vs. bronze" (round-2 audit EDG-12).
+	"rusty-cauldron:unliving-chimera": {
+		"armor": [4]
 	},
 	// The Void elemental's cost was invented: Book II p.539 prints none (2026-11-05 arcana audit).
 	"oversized-crown:void-elemental": {

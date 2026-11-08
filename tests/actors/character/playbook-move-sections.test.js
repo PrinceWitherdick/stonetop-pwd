@@ -118,6 +118,7 @@ describe("organize-by-category toggle", () => {
 		hb.registerPartial("stonetop.section-heading", "[heading:{{title}}]");
 		hb.registerPartial("stonetop.details-section-edit-toggle", "");
 		hb.registerPartial("stonetop.move-mark-level", "");
+		hb.registerPartial("stonetop.level-pick-toggle", "");
 		const tpl = hb.compile(MOVE_GROUP_HBS);
 		hb.registerPartial("stonetop.move-group", tpl);
 		const html = tpl(ctx);

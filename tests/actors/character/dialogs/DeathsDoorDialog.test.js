@@ -1638,6 +1638,24 @@ describe("DeathsDoorDialog: a roll under way, seen from every owner's window", (
 			expect(rollingOn(actor)).toBeNull();
 		});
 
+		// The asker stops waiting after askGMClient's 10 s and writes its own marker; a grant reached later writes nothing.
+		it("rules nothing and writes no marker for a claim that reaches its turn after its asker stopped waiting", async () => {
+			const { actor } = dyingHero();
+			withGM();
+			as("gm");
+			let t = 0;
+			const now = () => t;
+			const ask = { actorId: actor.id, nonce: "late", takeOver: false, userId: "p1" };
+			// Arrives at 0, and its turn comes 9 s later (another claim on the same character ahead of it).
+			const pending = handleDeathsDoorClaimQuery(ask, {}, { now: () => { const v = now(); t = 9000; return v; } });
+			expect(await pending).toBeNull();
+			expect(rollingOn(actor)).toBeNull();
+			// In time, the same ask is granted and written.
+			t = 0;
+			expect(await handleDeathsDoorClaimQuery({ ...ask, nonce: "soon" }, {}, { now })).toMatchObject({ granted: true });
+			expect(rollingOn(actor)).toMatchObject({ userId: "p1", nonce: "soon" });
+		});
+
 		it("with no GM to rule, a claim another owner's write landed over rolls nothing, and waits on theirs", async () => {
 			as("p1");
 			const { actor, character } = dyingHero();

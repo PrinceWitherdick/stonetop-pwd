@@ -8,7 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildLiveCharacter, makeLiveItem, sourceMovesFor } from "../../fakes/LiveCharacter.js";
 import { createStonetopCharacterSheetClass, GUIDED_CHARACTER_MOVES } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { LevelUpDialog } from "../../../module/actors/character/dialogs/LevelUpDialog.js";
-import { NO_POUCH_STOCK_NOTE, stockCostFromDescription, stockSources } from "../../../module/actors/character/stock-cost.js";
+import { noPouchNote, noPouchNoteKind, pouchMoveFromDescription, stockCostFromDescription, stockSources } from "../../../module/actors/character/stock-cost.js";
+
+// The English table (tests/setup.js loads it), as players read the notes.
+const NO_POUCH_STOCK_NOTE = "Costs Stock; you have no sacred pouch.";
+const NO_POUCH_POUCH_NOTE = "Works on a sacred pouch; you have none, so it does nothing for you until you gain one.";
 import { restockPouch } from "../../../module/actors/character/provisions.js";
 import { HP_LOSS_OPTION } from "../../../module/actors/character/StonetopFlags.js";
 import { readRepo } from "../../fakes/css.js";
@@ -277,9 +281,33 @@ describe("the no-pouch note on foreign-move pickers", () => {
 		const foreign = await ranger().getForeignMovesForLevelUp({ playbooks: ["The Blessed"] }, 6);
 		const stock = foreign.filter(m => stockCostFromDescription(m.description));
 		expect(stock.length).toBeGreaterThan(0);
-		for (const m of foreign) {
-			expect(m.stockNote, m.name).toBe(stockCostFromDescription(m.description) ? NO_POUCH_STOCK_NOTE : null);
+		for (const m of stock) expect(m.stockNote, m.name).toBe(NO_POUCH_STOCK_NOTE);
+		for (const m of foreign.filter(m => !stockCostFromDescription(m.description) && !pouchMoveFromDescription(m.description))) {
+			expect(m.stockNote, m.name).toBeNull();
 		}
+	});
+
+	// Big Magic grows the pouch and Borrow Power stores in it: neither spends Stock, and with no pouch
+	// both do nothing, so they say so with their own line (stock-cost.js#noPouchNote).
+	it("gives Big Magic and Borrow Power the pouch note, and Suck the Poison Out the Stock one", async () => {
+		const pack = name => JSON.parse(readRepo(`packs/src/stonetop-items/playbook-moves/the-blessed/${name}.json`)).system.description;
+		expect(noPouchNote(pack("big-magic"))?.note).toBe(NO_POUCH_POUCH_NOTE);
+		expect(noPouchNote(pack("borrow-power"))?.note).toBe(NO_POUCH_POUCH_NOTE);
+		expect(noPouchNote(pack("suck-the-poison-out"))?.note).toBe(NO_POUCH_STOCK_NOTE);
+		// On the picker row: Big Magic needs nothing to qualify, so the Ranger is offered it.
+		const foreign = await ranger().getForeignMovesForLevelUp({ playbooks: ["The Blessed"] }, 6);
+		const bigMagic = foreign.find(m => m.name === "Big Magic");
+		expect(bigMagic?.stockNote).toBe(NO_POUCH_POUCH_NOTE);
+		expect(bigMagic?.stockNoteKind).toBe("pouch");
+		expect(foreign.filter(m => m.stockNoteKind === "stock").every(m => m.stockNote === NO_POUCH_STOCK_NOTE)).toBe(true);
+	});
+
+	it("reads the notes from the language table", () => {
+		expect(noPouchNote("<p>When you spend 1 Stock, ...</p>")?.note).toBe(NO_POUCH_STOCK_NOTE);
+		expect(noPouchNote("<p>Store it in your pouch in place of 1 Stock.</p>")?.note).toBe(NO_POUCH_POUCH_NOTE);
+		expect(noPouchNote("<p>When you Defy Danger...</p>")).toBeNull();
+		expect(noPouchNote("<p>When you spend 1 Stock, ...</p>")?.kind).toBe("stock");
+		expect(noPouchNoteKind("<p>Store it in your pouch.</p>")).toBe("pouch");
 	});
 
 	// Initiate of the Secret Arts brings its own pouch in the same step.
@@ -306,7 +334,7 @@ describe("the no-pouch note on foreign-move pickers", () => {
 		dlg._foreignMoves = [{ compendiumId: "f1", name: "Call the Spirits", playbook: "The Blessed", stockNote: NO_POUCH_STOCK_NOTE }];
 		expect(dlg.getData().foreignMoves[0].stockNote).toBe(NO_POUCH_STOCK_NOTE);
 		const template = fs.readFileSync(path.join(process.cwd(), "templates", "dialogs", "partials", "level-up-other-card.hbs"), "utf8");
-		expect(template).toContain("{{#if stockNote}}<p class=\"stonetop-levelup-move-note\">{{this.stockNote}}</p>{{/if}}");
+		expect(template).toMatch(/\{\{#if stockNote\}\}<p class="stonetop-levelup-move-note"[^>]*>\{\{this\.stockNote\}\}<\/p>\{\{\/if\}\}/);
 		const sheet = readRepo("module/actors/character/StonetopCharacterSheet.js");
 		const picker = sheet.slice(sheet.indexOf("async _maybePromptForeignMove(addedItem) {"));
 		expect(picker.slice(0, 3000)).toContain("m.stockNote");

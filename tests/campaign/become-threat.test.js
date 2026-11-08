@@ -6,6 +6,8 @@ import { BecomeThreatDialog } from "../../module/campaign/BecomeThreatDialog.js"
 import { leftPlayRecord } from "../../module/campaign/left-play.js";
 import { isOutOfPlay } from "../../module/actors/character/deaths-door-actor.js";
 import { campaignMenuEntries } from "../../module/campaign/campaign-actor-menu.js";
+import { FakeActorBuilder } from "../fakes/FakeActorBuilder.js";
+import { TestCharacterBuilder } from "../fakes/TestCharacterBuilder.js";
 
 // Book I p.584: "When a PC descends into villainy and monstrosity, they stop becoming a PC and become a threat
 // under the GM's control. Write them up as both a threat (page 282) and a monster (page 391)". p.481: a follower
@@ -17,6 +19,7 @@ function actor(data) {
 	const a = {
 		flags: {},
 		...data,
+		getFlag: (scope, key) => key.split(".").reduce((node, k) => node?.[k], a.flags[scope]) ?? null,
 		update: vi.fn(async changes => {
 			for (const [path, value] of Object.entries(changes)) {
 				const parts = path.split(".");
@@ -48,6 +51,36 @@ describe("who can become a threat", () => {
 		expect(canBecomeThreat(actor({ type: "character", flags: { [SCOPE]: { deathsDoor: "dead" } } }))).toBe(false);
 		user.isGM = false;
 		expect(canBecomeThreat(villain())).toBe(false);
+	});
+
+	// The Final Consequence (Book I pp.149/151) and Unholy Vessel (p.152) leave the PC `dead`, "a monster / threat
+	// under the GM's control": exactly who p.584 has the GM write up. A plain death is not.
+	it("is offered for a PC an insert handed to the GM, and not for one who simply died", () => {
+		// Read through the character's own getter (StonetopCharacter#lostToTheGm), as a real actor's typedActor is.
+		const lost = (slug, counts = {}) => {
+			const a = new FakeActorBuilder().withFlags({ deathsDoor: "dead", postDeathInsert: { slug }, postDeathLore: { counts } }).build();
+			a.typedActor = new TestCharacterBuilder(a).build();
+			return a;
+		};
+		expect(canBecomeThreat(lost("ghost", { "consequences:final-consequence": 1 }))).toBe(true);
+		expect(canBecomeThreat(lost("revenant", { "consequences:final-consequence": 1 }))).toBe(true);
+		expect(canBecomeThreat(lost("thrall"))).toBe(true);
+		// A Ghost who passed through the Last Door (their Purpose done) is dead, not lost.
+		expect(canBecomeThreat(lost("ghost"))).toBe(false);
+		user.isGM = false;
+		expect(canBecomeThreat(lost("thrall"))).toBe(false);
+	});
+
+	it("writes no second out-of-play record for a PC already out of play", async () => {
+		const nesta = actor({ id: "nesta", uuid: "Actor.nesta", type: "character", name: "Nesta",
+			flags: { [SCOPE]: { deathsDoor: "dead", postDeathInsert: { slug: "thrall" } } },
+			system: { attributes: { hp: { max: 10 } } } });
+		nesta.typedActor = new TestCharacterBuilder(nesta).build();
+		const page = { uuid: "JournalEntry.t.JournalEntryPage.n", update: vi.fn() };
+		const made = await makeThreatOf(nesta, { outOfPlay: true }, { steading: {}, create: async () => page });
+		expect(made.page).toBe(page);
+		expect(leftPlayRecord(nesta)).toBeFalsy();
+		expect(nesta.flags[SCOPE][BECAME_THREAT_FLAG]).toBe(page.uuid);
 	});
 
 	// BECAME_THREAT_FLAG names the page they became, "so it is not made twice by accident": while that page is

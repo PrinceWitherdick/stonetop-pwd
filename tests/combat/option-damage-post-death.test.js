@@ -35,6 +35,9 @@ describe("HP lost", () => {
 
 	it("leaves HP somebody else loses, and a max HP, alone", () => {
 		expect(readOptionDamage("They lose 1d4 HP")).toBeNull();
+		expect(readOptionDamage("The foe loses 1d4 HP")).toBeNull();
+		// Somebody else losing something else in the same line leaves the reader's own loss standing.
+		expect(readOptionDamage("Lose 1d8 HP and mark a debility; the cloak loses 1 Charge, or it loses all of them")).toMatchObject({ formula: "1d8", hpLoss: true });
 		expect(readOptionDamage("Reduce your max HP by 2")).toBeNull();
 		// Damage still reads as damage, not as HP lost.
 		expect(readOptionDamage("You take 1d6 damage and lose 1 HP").hpLoss).toBeUndefined();

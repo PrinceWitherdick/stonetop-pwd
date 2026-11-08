@@ -90,6 +90,9 @@ export function fightTrackerView({ snapshot, rows, isGM = false, format, cites, 
 			canPing: !!info.canPing,
 			draggable: !!side && canPickUp(id),
 			dropTarget: !!side && inPlay(id) && dragFrom.has(otherSide(side)),
+			// The same send without a drag (FightTracker#_askSendAt): a button on the row, for anyone who may pick
+			// it up while someone on the other side is there to be closed with.
+			sendAt: !!side && canPickUp(id) && sideInPlay(otherSide(side)),
 			css: [info.hidden ? "hide" : "", info.defeated ? "defeated" : "", badge ? "is-ganged" : ""].filter(Boolean).join(" "),
 		};
 	};

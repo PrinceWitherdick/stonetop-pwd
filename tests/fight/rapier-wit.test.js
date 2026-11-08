@@ -11,7 +11,7 @@ import { giveAdvantageCardHtml } from "../../module/actors/character/give-advant
 import { wireRapierWit, rapierWitAttack, RAPIER_WIT_CARD_FLAG } from "../../module/actors/character/give-advantage-flow.js";
 import {
 	HERO_MOVES, RAPIER_WIT_FLAG, RAPIER_WIT_QUERY, recordRapierWit, rapierWitAgainst, spendRapierWitRoll, rapierWitOffers,
-	rapierWitBlowOwed, spendRapierWitBlow, handleRapierWitQuery, foeAdvantage, clearRapierWit,
+	rapierWitBlowOwed, spendRapierWitBlow, handleRapierWitQuery, foeAdvantage, clearFightFoeRecords,
 } from "../../module/fight/hero-moves.js";
 import { StonetopCharacter } from "../../module/actors/character/StonetopCharacter.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
@@ -30,6 +30,7 @@ function fox({ moves = [HERO_MOVES.RAPIER_WIT], owner = true } = {}) {
 		flags,
 		getFlag: (scope, key) => flags[scope]?.[key],
 		setFlag: vi.fn(async (scope, key, value) => { flags[scope][key] = value; }),
+		update: vi.fn(async data => { for (const [path, value] of Object.entries(data)) flags[SYSTEM_ID][path.split(".").pop()] = value; }),
 	};
 }
 
@@ -283,6 +284,10 @@ describe("+1d4 on their next hit on the Fox", () => {
 			expect(await spendRapierWitBlow(f, striker(OGRE), { gm: null, userId: "u1" })).toBe(false);
 			expect(globalThis.ui.notifications.warn).toHaveBeenCalledTimes(1);
 			expect(owedTo(f, OGRE)).toMatchObject({ blow: true });
+			// EDG-10: the GM's client refusing or never answering is said too, not left to the console.
+			expect(await spendRapierWitBlow(f, striker(OGRE), { gm: { query: vi.fn(async () => false) }, userId: "u1" })).toBe(false);
+			expect(globalThis.ui.notifications.warn).toHaveBeenCalledTimes(2);
+			expect(globalThis.ui.notifications.warn.mock.calls[1][0]).toContain("did not mark");
 		} finally {
 			globalThis.ui = saved;
 		}
@@ -330,20 +335,20 @@ describe("when the fight ends", () => {
 		const f = fox();
 		await recordRapierWit(f, [OGRE, VILLAIN]);
 		await spendRapierWitRoll(f, [VILLAIN]);
-		f.flags[SYSTEM_ID].harmedBy = ["Scene.s.Token.ogre"];
-		expect(await clearRapierWit(f)).toBe(true);
+		f.flags[SYSTEM_ID].harmedBy = ["Actor.villain"];
+		expect(await clearFightFoeRecords(f)).toBe(true);
 		expect(f.flags[SYSTEM_ID][RAPIER_WIT_FLAG]).toEqual([{ key: VILLAIN.uuid, name: "Lord Ulm", roll: false, blow: true }]);
-		// Nothing else on the Fox is touched.
-		expect(f.flags[SYSTEM_ID].harmedBy).toEqual(["Scene.s.Token.ogre"]);
+		// Nothing else on the Fox is touched: a grudge against a named foe stays too.
+		expect(f.flags[SYSTEM_ID].harmedBy).toEqual(["Actor.villain"]);
 		expect(Object.keys(f.flags[SYSTEM_ID])).toEqual([RAPIER_WIT_FLAG, "harmedBy"]);
 	});
 
 	it("writes nothing when nothing is let go", async () => {
 		const f = fox();
-		expect(await clearRapierWit(f)).toBe(false);
+		expect(await clearFightFoeRecords(f)).toBe(false);
 		await recordRapierWit(f, [VILLAIN]);
-		f.setFlag.mockClear();
-		expect(await clearRapierWit(f)).toBe(false);
-		expect(f.setFlag).not.toHaveBeenCalled();
+		f.update.mockClear();
+		expect(await clearFightFoeRecords(f)).toBe(false);
+		expect(f.update).not.toHaveBeenCalled();
 	});
 });

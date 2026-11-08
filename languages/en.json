@@ -609,6 +609,10 @@
         "backOnFeet": "Back on your feet",
         "backOnFeetHint": "Out of the action. Back on your feet, you return with {hp} HP.",
         "deadHint": "They stepped through the Last Door.",
+        "clearDeadTitle": "Bring them back from the Last Door?",
+        "clearDeadBody": "<strong>{name}</strong> is dead and out of play. Clearing this puts them back in play as if they never died. Do it only to undo a mistake, or when the rarest of magic has brought them back.",
+        "clearDeadYes": "Bring them back into play",
+        "clearDeadNo": "Keep them dead",
         "monsterHint": "Their tenuous connection to humanity is lost: they became a monster under the GM's control.",
         "threatHint": "Their humanity is utterly lost: they became a threat in the GM's control.",
         "undeathNotDying": "{move} is {name}'s move at 0 HP, and {name} is not dying.",
@@ -820,8 +824,25 @@
         "filterPlaceholder": "Filter moves…",
         "filterLabel": "Filter moves",
         "requiresPrefix": "Requires:",
+        "tickPicker": {
+          "statTitle": "{move}: Increase a Stat",
+          "statPrompt": "Choose one stat to raise by +1 (max +{cap}).",
+          "statMaxed": "Already at the max (+{cap}): {stats}.",
+          "statOption": "{stat} ({from} to {to})",
+          "statAllMaxed": "{move}: every stat is already at the maximum (+{cap}).",
+          "foreignTitle": "{move}: Learn a Move",
+          "foreignPrompt": "Choose a move to learn from another playbook.",
+          "foreignSelectLabel": "Move to learn",
+          "foreignPouch": "{move} also grants a Sacred Pouch.",
+          "costsStock": "{move} (costs Stock)",
+          "needsPouch": "{move} (needs a sacred pouch)",
+          "learn": "Learn",
+          "cancel": "Cancel",
+          "foreignNothing": "{move}: you don't qualify for any move it could teach you yet, so it would give you nothing. It has been unticked.",
+          "foreignPouchOnly": "{move}: you don't qualify for any move it could teach you yet, but it grants a Sacred Pouch."
+        },
         "agreedTitle": "Agreed with the table",
-        "agreedHint": "A move from another playbook, or a custom move, if everyone (not just you) agrees (Book I, page 529).",
+        "agreedHint": "A move from an insert class you've unlocked (Book I, page 528), or one from another playbook or a custom move if everyone (not just you) agrees (page 529).",
         "agreedIntro": "Choose the move the table agreed on: one from another playbook that you qualify for, or a custom move.",
         "agreedCustomTitle": "A custom move",
         "agreedCustomHint": "Write it in the custom move editor. The level is taken when you save the move.",
@@ -856,6 +877,19 @@
         "refusedOutOfPlay": "This character has left play, so nothing changed. A character who is dead, lost to the GM, or retired no longer levels up.",
         "back": "Back",
         "next": "Next",
+        "laterTitle": "Choose my move later",
+        "laterHint": "Take the level now and pick its move during play: \"they can take time to think ... if they're stumped, they can pick a new move during play\" (Book I, page 529). The Moves tab will ask for it.",
+        "invocationAsideOwed": "You know fewer Invocations than your level calls for, so you'll also choose {count} on the last step.",
+        "invocationIntroMany": "Choose {count} new Invocations: one for this level and the ones still owed from earlier levels.",
+        "picksChosen": "{used} / {allowance} chosen",
+        "marksChosen": "{move}: {used} / {allowance} chosen",
+        "statCapNote": "{move}: max +{cap}",
+        "statAtMax": "(max)",
+        "marked": "marked",
+        "markedTimes": "marked ×{count}",
+        "resetAside": "This world resets XP to 0 on Level Up (Book I, page 582), so all {xp} XP is spent, not just the cost.",
+        "refusedMoveHeld": "{move} is already on the sheet (it was added while this window was open), so nothing changed. Pick another move.",
+        "readyReadOnly": "Ready to level up (only the character's owner or the GM can open Level Up)",
         "apply": "Apply Level Up"
       },
       "outfit": {
@@ -1174,6 +1208,8 @@
       "backOwedTitle": "Study it",
       "unlockChoiceOwed": "Each mark on this card lets you choose one of the {name}. Marks still to choose for: {owed}.",
       "unlockChoiceChoose": "Choose",
+      "pacedMovesOwed": "\"{rule}\" ({page}). Moves still to choose: {owed}.",
+      "pacedMovesOver": "{learned} moves are ticked on the back, but this card has given {earned} so far: \"{rule}\" ({page}). A caution only: nothing is taken away.",
       "unidentifiedText": "This arcanum has not yet been identified. You can tell it's something, but not what.",
       "discover": "Arcana Discovered",
       "discoverTitle": "Arcanum Discovered",
@@ -2028,6 +2064,11 @@
       "gear": {
         "specialPossessions": "Special Possessions",
         "removePossession": "Remove this write-in possession",
+        "choicesOwed": {
+          "labelOne": "Choose 1 more trait",
+          "label": "Choose {count} more traits",
+          "tooltip": "Big Magic gave your sacred pouch another remarkable trait. Tap to choose it."
+        },
         "addPossession": "Something else (discuss with GM)",
         "addPossessionTitle": "Something else (discuss with GM)",
         "addPossessionButton": "Add it",
@@ -2064,6 +2105,10 @@
           "loyalSub": "Loyal to the End: roll for its fate (p.143)",
           "notLethalNote": "If the blow wasn't lethal, just close this. They're out of the action until they Recover or you say otherwise.",
           "notLethalClose": "Not lethal / decide later",
+          "reopenButton": "Decide their fate",
+          "outTitle": "Follower Down",
+          "outFallbackName": "Your follower",
+          "outOfAction": "{name} is out of the action until the GM says otherwise or they regain HP (Book I p.469).",
           "deathsDoorDesc": "They trigger Death's Door: you roll for them.",
           "gmDeathsDoorDesc": "They trigger Death's Door: their PC's player rolls for them."
         },
@@ -2080,7 +2125,10 @@
           "lendGained": "{name} regains {gain} HP ({from} to {to}).",
           "lendNoBox": "{name} has no HP box to raise.",
           "injuredButton": "Add the injured tag",
-          "removeCondition": "Remove the {tag} tag"
+          "removeCondition": "Remove the {tag} tag",
+          "uniqueOwedLabel": "Describe its unique ability",
+          "uniqueOwedTooltip": "Beast of Legend: \"They develop some unique ability or trait\" (Book I p.131). Tap to open the card and write it in its Moves or Notes.",
+          "uniqueOwedNotice": "Beast of Legend: \"They develop some unique ability or trait\" (Book I p.131). Your companion's card is open on the Followers tab: write it in its Moves or Notes."
         },
         "summon": {
           "title": "Manifest {name}",
@@ -2141,6 +2189,8 @@
           "tierMoved": "The card no longer reads as a hit, so there is no damage to roll.",
           "attacks": "{name} attacks",
           "swarmLabel": "{name} attacks, all {count} at one foe (+{bonus})",
+          "downNote": "{name} is at 0 HP: out of the action (Book I p.469). Order them only if the GM agrees they can act.",
+          "counterNoToken": "{name} suffers the enemy's attack (Clash, p.215), but has no single token in the fight to strike it at. The GM says what it costs.",
           "strikeHardLabel": "{label}, striking hard (+1d6)",
           "depleteButton": "Deplete {name}'s ammo",
           "depleteMarked": "{name}'s ammo: {status}.",
@@ -2157,6 +2207,7 @@
           "labelOne": "Pick 1 more tag",
           "tooltip": "Veteran Crew gave your crew new tags to pick. Tap to open the crew's tag picker."
         },
+        "veteranCrewReselect": "Veteran Crew: \"You can also choose to reselect their Instinct and Cost\" (Book I p.126). Your crew's card is open on the Followers tab if you want to.",
         "wholeParty": {
           "label": "Follows the party as a whole",
           "hint": "(any PC may pay its cost or spend its Loyalty)",
@@ -2178,6 +2229,7 @@
           "partial": "The Lady waves {name} off: no longer dying, but out of the action (unconscious, or close enough) until the GM says otherwise.",
           "failure": "{name}'s time has come. They can make one last move as if they rolled a 12+, but after that they're dead.",
           "upButton": "Back to 1 HP",
+          "upStale": "{name} is no longer at 0 HP, or no longer on that roster row, so nothing was written. Set their HP on the Followers tab.",
           "deadButton": "Mark dead",
           "aidOffer": "Advantage from {source} (Aiding the Death's Door roll)",
           "tierMoved": "This card no longer reads that result: use the buttons of the result it shows now.",
@@ -2191,8 +2243,6 @@
           "cancel": "Cancel",
           "askTitle": "{name} balks",
           "ask": "Why won't {name} do as they're told? The card shows the reason to the table, with the player's answers.",
-          "orderLabel": "The order (optional):",
-          "orderPlaceholder": "e.g. hold the bridge",
           "reason": {
             "scared": "Scared",
             "overwhelmed": "Overwhelmed",
@@ -2201,7 +2251,6 @@
           },
           "title": "They balk",
           "lead": "{name} doesn't want to do as {leader} says.",
-          "order": "The order: {order}",
           "spend": "Spend 1 Loyalty ({loyalty} held)",
           "persuade": "Persuade them",
           "drop": "Let it drop",
@@ -2224,8 +2273,6 @@
           "title": "{name}: Use up their resources",
           "lead": "What does {name} lose?",
           "count": "How many uses:",
-          "howLabel": "How it shows (optional):",
-          "howPlaceholder": "e.g. a strap snaps and the waterskin is gone",
           "confirm": "Use it up",
           "cancel": "Cancel",
           "nothing": "{name} has nothing left to use up.",
@@ -2260,10 +2307,14 @@
         "markLevelShared": "Another mark was noted at this level too. This move is marked once per level: check the levels, or leave it if your table allows it.",
         "markLevelAhead": "Noted at a level above your current level ({level}). Check the level, or leave it if your table allows it.",
         "statIncreaseAtCap": "{move}: {stat} is already at +{cap}, so it was not raised. Choose another stat from the move's card.",
+        "possessionChoiceOwedOne": "{move}: your sacred pouch has 1 more remarkable trait to choose. Choose it now.",
+        "possessionChoiceOwedMany": "{move}: your sacred pouch has {count} more remarkable traits to choose. Choose them now.",
         "chooseStartingMoves": "Choose Starting Moves",
         "levelMovesIncompleteOne": "You still have 1 move to choose for level {level}.",
         "levelMovesIncompleteMany": "You still have {count} moves to choose for level {level}.",
-        "levelMovesIncompleteHint": "Turn on Edit and tick the playbook moves you've earned.",
+        "levelMovesIncompleteHint": "Choose it on the Moves tab: turn on Edit, then tick the move you've earned.",
+        "levelPickToggle": "Taken as a level pick",
+        "levelPickToggleHint": "Counts this move as the new move of one of your level-ups (Book I, page 528: \"Choose a new move from your class playbook, or an insert class that you've unlocked\").",
         "levelMovesOverLimitOne": "This character has 1 more move than expected for level {level}.",
         "levelMovesOverLimitMany": "This character has {count} more moves than expected for level {level}.",
         "levelMovesOverLimitHint": "Turn on Edit and remove a playbook move, or leave it if this is intentional.",
@@ -3065,6 +3116,10 @@
       "nameOnly": "Nobody in the world is named {name}, so the oath records the name alone.",
       "already": "{name} has already sworn an oath before you."
     },
+    "stockCost": {
+      "noPouch": "Costs Stock; you have no sacred pouch.",
+      "noPouchForPouch": "Works on a sacred pouch; you have none, so it does nothing for you until you gain one."
+    },
     "blessedMarks": {
       "openLabel": "Marks",
       "noneTooltip": "Nobody bears your marks. Click to open the roster.",
@@ -3105,6 +3160,11 @@
       "releaseCancel": "Keep holding it",
       "givenSpent": "{name} already used the advantage this roll gave.",
       "noneHeld": "{move}: you hold none left to spend.",
+      "notGiven": {
+        "noGm": "{name} could not be given advantage: no GM is online to write it.",
+        "timedOut": "{name} could not be given advantage: the GM's client did not answer in time. Check their sheet before pressing again.",
+        "refused": "{name} could not be given advantage: the GM's client refused it (this move cannot give it to them, or the card is not yours to press)."
+      },
       "whoHeard": "Who heard your order or warning? Each gains advantage on their next roll to do as you say.",
       "setUpStrike": {
         "unrolled": "Roll your damage with Set-Up Strike first: tick its line in the damage window.",
@@ -3176,6 +3236,7 @@
       "askEnter": "Lose themselves in battle",
       "askDecline": "Keep their head",
       "entered": "{name} spills blood and loses themselves in battle, ignoring fear, pain, mind-control and the effects of debilities as long as they keep fighting.",
+      "noFight": "No fight is running, so nothing will ask when it ends: when the action stops, click the Battle Joy glyph on {name}'s sheet to roll +CON.",
       "endedDropped": "{name} drops to 0 HP and stops fighting: their Battle Joy ends, with no roll.",
       "endedDown": "The action stops with {name} down: their Battle Joy ends, with no roll.",
       "regainButton": "That was a rush: regain 1d4 HP",
@@ -4130,6 +4191,7 @@
         "deathTitle": "{name}: certain death",
         "deathLine": "{name}: {from} → 0 HP, no damage roll (certain death, Book I p.383).",
         "alreadyDown": "{name} is already at 0 HP.",
+        "alreadyDownDoor": "{name} was already at 0 HP, and now faces Death's Door (certain death, Book I p.383).",
         "noHp": "{name} has no HP to lose.",
         "noOne": "There is nobody for {name} to catch: no one is targeted, and there are no characters or tokens to pick from."
       }
@@ -4200,7 +4262,11 @@
       "send": {
         "noRoom": "There is no free space next to {name}.",
         "noGM": "Only the GM can move {name}, and no GM is connected.",
-        "refused": "The GM's client did not move {name}."
+        "refused": "The GM's client did not move {name}.",
+        "atTitle": "Send {name} at someone",
+        "atQuestion": "Who should {name} close with? Their token steps up beside the one you pick.",
+        "atCancel": "Leave them where they are",
+        "nobody": "There is nobody on the other side for {name} to close with."
       },
       "roundsNote": "This fight was started in Foundry's tracker, which counts rounds and turns. Stonetop does not take turns.",
       "stopRounds": "Stop counting rounds",
@@ -4260,14 +4326,17 @@
         "show": "Show to players",
         "out": "Mark out of the fight",
         "backIn": "Back in the fight",
-        "ping": "Point this out on the map"
+        "ping": "Point this out on the map",
+        "sendAt": "Send at someone on the other side",
+        "sendAtAria": "Send {name} at someone on the other side"
       },
       "menu": {
         "switchSide": "Move to the other side",
         "headcount": "How many are in this token",
         "openSheet": "Open sheet",
         "remove": "Remove from the fight",
-        "stopShooting": "Stop shooting"
+        "stopShooting": "Stop shooting",
+        "sendAt": "Send at someone on the other side"
       },
       "headcount": {
         "title": "How many are in {name}?",
@@ -4388,12 +4457,33 @@
         "gmNaming": "The GM is naming what this blow costs.",
         "cardTwinTaken": "This blow was already answered on another copy of its card.",
         "ignoresArmorBox": "Ignores armor (the fiction says armor can't stop it)",
-        "ignoresArmorHint": "Book I p.239: apply \"ignores armor\" on the fly when the fiction dictates. Every row not yet applied takes the blow whole."
+        "ignoresArmorHint": "Book I p.239: apply \"ignores armor\" on the fly when the fiction dictates. Every row not yet applied takes the blow whole.",
+        "piercingBox": "Piercing on the fly",
+        "piercingHint": "Book I p.239: \"If the attack has the '[n] piercing' tag, ignore [n] points of armor for that attack.\" For a blow whose piercing the card can't know (a stat block's variant attack, a ruling). Apply uses the largest of this, the blow's own piercing and the other attackers'.",
+        "anotherGmConfirms": "Another GM will press this",
+        "downedToast": "{name} is at 0 HP: \"out of the action\" (Book I p.240). The attack still goes ahead if the table says so.",
+        "downedCard": "{name} struck this at 0 HP, which is \"out of the action\" (Book I p.240).",
+        "targetsDown": "{names}: already down, so not struck again.",
+        "theEnemy": "The enemy",
+        "foeDownTitle": "{names}: down",
+        "foeDown": "{names} is down, so there is no enemy's attack to suffer from them (Book I p.240: a foe at 0 HP is out of the fight).",
+        "artifactUnknown": "an artifact not yet worked out: its nature is unknown"
+      },
+      "arcanaAttacks": {
+          "noFury": "{name} holds no Fury, and Storm's Fury spends it \"1-for-1\" to manifest the bolt (Book II, Storm Markings). Its price was not paid.",
+          "noDebility": "{name} has no debility left to mark, the price of the {card}'s blast (Book II). Its price was not paid.",
+          "furyAsk": "{name} lets fly a bolt of lightning: spend 1 Fury (Storm's Fury, \"spend Fury 1-for-1 to manifest one of the following\")?",
+          "furyPay": "Spend 1 Fury",
+          "vortexAsk": "{name} flings the energy gathered about the {card}: that is the one choice, and the vortex is gone. Fling it?",
+          "vortexPay": "Fling the energy",
+          "cancel": "Not now",
+          "gmDamageCard": "The {card} names no damage: \"inflicting damage and other effects of the GM's choosing\". The GM sets the number (in the damage window) and says what else it does."
       },
       "groupHit": {
         "down": "one of them goes down, {after} still standing",
         "hurt": "one of them is hurt ({memberHp} of {hpMax} HP left), {after} still standing",
         "unhurt": "none of them is hurt, {after} still standing",
+        "moveStale": "{name} is no longer where the blow left them on the roster, so the blow can't be moved. Change their HP on the Followers tab.",
         "memberDown": "{member} takes it and goes down ({oldHp} → 0 HP), {after} still standing",
         "memberHurt": "{member} takes it ({oldHp} → {newHp} HP), {after} still standing",
         "memberUnhurt": "{member} takes it unhurt, {after} still standing",
@@ -4494,7 +4584,46 @@
         "charmAskNo": "Don't roll it",
         "secondIntent": "{name} parried: also pick 1 option from the Ambush list. The strike back was rolled without the +1d4 damage.",
         "secondIntentTookDie": "{name} parried and took +1d4 damage on the strike back: that is their pick from the Ambush list.",
+        "standFast": "Stand fast: roll +CON (Rune-laden Scales)",
+        "standFastOne": "{defender} stands fast in the Rune-laden Scales: roll +CON (if this is a magical attack)",
+        "standFastChoice": "{defender} stands fast on {ward}'s blow (Rune-laden Scales)",
+        "standFastMove": "stand fast",
+        "noteStandFastIgnore": "{defender} stood fast in the Rune-laden Scales: the magic washes over them with no ill effect (10+).",
+        "noteStandFastHalve": "{defender} stood fast in the Rune-laden Scales: only partially affected, they suffer half damage and a reduced effect (7-9).",
+        "noteStandFastMiss": "{defender} stood fast in the Rune-laden Scales, but the magic affects them fully (6-, mark XP).",
+        "standFastIgnoredLine": "the magic washed over them ({move}), no damage",
+        "charmRetierLate": "{name}'s charm roll moved, but the blow on {ward} is already applied: change the HP by hand if the new result matters.",
+        "charmRetierFailed": "{name}'s charm roll moved, but the damage card could not be told (no GM to write it, or no answer): the card still shows the old result.",
+        "charmRetierGone": "{name}'s charm roll is now a 10+, but the charm was already used up: lay it again by hand if Potent Workings keeps it.",
+        "standFastRetierLate": "{name}'s stand fast roll moved, but the blow on {ward} is already applied: change the HP by hand if the new result matters.",
+        "standFastRetierFailed": "{name}'s stand fast roll moved, but the damage card could not be told (no GM to write it, or no answer): the card still shows the old result.",
+        "refused": {
+          "noGm": "{defender}'s spend on {ward}'s blow was not recorded: no GM is online to write this card. Nothing was spent.",
+          "timedOut": "{defender}'s spend on {ward}'s blow was not recorded: the GM's client did not answer in time. Nothing was spent; press it again.",
+          "applied": "{defender}'s spend on {ward}'s blow was not recorded: the blow is already applied. Nothing was spent.",
+          "applying": "{defender}'s spend on {ward}'s blow was not recorded: the blow is being applied right now. Nothing was spent.",
+          "taken": "{defender}'s spend on {ward}'s blow was not recorded: that option was already taken on this blow (each option once per attack). Nothing was spent.",
+          "unpaid": "{defender}'s spend on {ward}'s blow was not recorded: there is not enough left to pay for it.",
+          "refused": "{defender}'s spend on {ward}'s blow was not recorded: the card no longer offers it. Nothing was spent."
+        },
         "secondIntentOpportunity": "If you picked \"Create an opportunity\": you or an ally gains advantage on the next move to act on it."
+      },
+      "arcanaDefence": {
+        "iceSphere": { "label": "{name}'s Ice Sphere: if this is fire, roll the damage twice and take the higher", "pill": "Ice Sphere: fire" },
+        "redwood": { "label": "{name}'s Redwood Effigy: if this is heat or fire, +{dice} damage", "pill": "Redwood Effigy +{dice}" }
+      },
+      "arcanaBlows": {
+        "blaze": { "label": "Flaming Sword: add the Blaze die, +{dice} damage", "pill": "{card} +{dice}" },
+        "aetherium": { "label": "Aetherium Spear: mark a debility to blast your foe with lightning, +{dice} damage, forceful, loud", "pill": "{card} +{dice}" },
+        "thunderbolt": { "label": "Thunderbolt Bow: a shot charged for ten deep breaths, +{dice} damage, area, dangerous", "pill": "{card} +{dice}" },
+        "stormsFury": { "label": "Storm's Fury: spend 1 Fury to imbue this strike with the force of thunder, +{dice} damage, forceful, loud", "pill": "{card} +{dice}" },
+        "doomSworn": { "label": "Promise of Doom: against the spirit or demon you swore to destroy, +{dice} damage", "pill": "{card} +{dice}" },
+        "doomOther": { "label": "Promise of Doom: against anything you did not swear to destroy, {dice} damage", "pill": "{card} {dice}" },
+        "herd": { "label": "Spirits of the Herd: the stampeding wisent charge with you, +{dice} damage, forceful, messy, area, dangerous", "pill": "{card} +{dice}" },
+        "bloodRage": { "label": "Blood-rage: attacking the nearest living creature, with advantage", "pill": "{card}: blood-rage" },
+        "noDebility": "{name} has no debility left to mark, so the lightning stays in the spear.",
+        "debilityAsk": "Which debility does {name} mark to blast the foe with lightning?",
+        "debilityCancel": "Not this time"
       },
       "heroMoves": {
         "undaunted": {
@@ -4531,7 +4660,8 @@
           "readout": "{foe} attacked: +1d4 on their next hit on you, and advantage on your next roll against them.",
           "label": "Rapier Wit: +{dice} damage, if this blow hits {name}, whose quip they answered by attacking",
           "pill": "{move} +{dice}",
-          "noGm": "No GM is connected to mark {name}'s {move} +1d4 as used, so it is still owed and may ride that foe's next blow too."
+          "noGm": "No GM is connected to mark {name}'s {move} +1d4 as used, so it is still owed and may ride that foe's next blow too.",
+          "noAnswer": "The GM's client did not mark {name}'s {move} +1d4 as used (it refused, or did not answer in time), so it may still be owed on that foe's next blow."
         },
         "truth": {
           "advButton": "They said Yes",
@@ -4564,7 +4694,9 @@
         "censureEnraged": {
           "source": "{move}: enraged ({name})",
           "readout": "Enraged: the next roll against {names} has advantage.",
-          "nobody": "Nobody was named, so nobody is enraged. Untick it and tick it again to name them."
+          "nobody": "Nobody was named, so nobody is enraged. Untick it and tick it again to name them.",
+          "noGm": "No GM is connected to mark {judge}'s {move} (enraged) as used, so it is still owed and will give the next roll advantage too. Ask {judge}'s player to untick it on the {move} card.",
+          "noAnswer": "The GM's client did not mark {judge}'s {move} (enraged) as used (it refused, or did not answer in time), so it may still be owed. Ask {judge}'s player to untick it on the {move} card if this roll used it."
         },
         "leapIn": {
           "button": "Leap in (Big Damn Hero)",
@@ -4591,6 +4723,10 @@
         "rememberMeSpend": {
           "label": "Something to Remember Me By, struck back with disadvantage (spend 1 Readiness): +{dice} damage, and you scar, mark or diminish them",
           "pill": "{move} +{dice}"
+        },
+        "strikeBack": {
+          "label": "Strike back at an attacker (Defend: spend 1 Readiness): deal your damage with disadvantage",
+          "pill": "Strike back"
         },
         "lineUnpaid": "{line} could no longer be paid for (spent elsewhere meanwhile), so this blow was not rolled.",
         "moveDamageWhole": "{move} deals the move's own damage, so the bonus or dice typed in were left off.",
@@ -4723,6 +4859,7 @@
       "lostFightOver": "The fight is over: {names} let go of their Readiness.",
       "lostLeftFight": "{name} leaves the fight and loses their Readiness.",
       "lostDown": "{name} is down and loses their Readiness.",
+      "lostStopped": "{name} stops fighting at 0 HP and loses their Readiness.",
       "follower": "Your follower"
     },
     "shieldWall": {

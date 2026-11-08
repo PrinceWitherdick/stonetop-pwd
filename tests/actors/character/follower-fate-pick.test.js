@@ -40,7 +40,8 @@ describe("openFollowerFate", () => {
 		const rhianna = character();
 		const ask = vi.fn(async () => true);
 		expect(await openFollowerFate(rhianna, crewFate, { gm: { id: "gm" }, me: { id: "p1" }, ask })).toBe("gm");
-		expect(ask).toHaveBeenCalledWith({ id: "gm" }, FOLLOWER_FATE_OPEN_QUERY, { characterUuid: "Actor.rhianna", fate: crewFate, userId: "p1" }, expect.anything());
+		// With a one-off askId, so a GM's client that answers late can check back first (EDG-8).
+		expect(ask).toHaveBeenCalledWith({ id: "gm" }, FOLLOWER_FATE_OPEN_QUERY, { characterUuid: "Actor.rhianna", fate: crewFate, userId: "p1", askId: expect.any(String) }, expect.anything());
 		expect(rhianna.sheet._openFollowerFate).not.toHaveBeenCalled();
 	});
 
@@ -100,24 +101,33 @@ describe("the GM's pick", () => {
 		const sheet = { _followerDoorDeath: vi.fn(async () => true), _resolveFollowerFate: vi.fn(async () => {}), _followerFateLoyalty: () => 1 };
 		const rhianna = character(sheet);
 		await settleHere(rhianna, crewFate, "dead");
-		expect(sheet._followerDoorDeath).toHaveBeenCalledWith({ follower: "crew-member", slug: "", index: 2, name: "Glaw", gmDead: true });
+		expect(sheet._followerDoorDeath).toHaveBeenCalledWith({ follower: "crew-member", slug: "", index: 2, name: "Glaw", stamp: null, gmDead: true });
 		await settleHere(rhianna, crewFate, "deathsdoor");
-		expect(sheet._resolveFollowerFate).toHaveBeenCalledWith("deathsdoor", { name: "Glaw", loyalty: 1, follower: "crew-member", slug: "", index: 2 });
+		expect(sheet._resolveFollowerFate).toHaveBeenCalledWith("deathsdoor", { name: "Glaw", loyalty: 1, follower: "crew-member", slug: "", index: 2, stamp: null });
+		// The roster's number at the fall rides along, so a cut made since finds the member again (FOE-2).
+		await settleHere(rhianna, { ...crewFate, stamp: 3 }, "dying");
+		expect(sheet._resolveFollowerFate).toHaveBeenLastCalledWith("dying", { name: "Glaw", loyalty: 1, follower: "crew-member", slug: "", index: 2, stamp: 3 });
 	});
 });
 
 describe("the queries", () => {
-	it("the GM opens a pick only for an owner of the character, and never the companion's", () => {
+	it("the GM opens a pick only for an owner of the character, and never the companion's", async () => {
 		const savedGame = globalThis.game;
 		globalThis.game = { ...savedGame, user: { id: "gm", isGM: true }, users: { activeGM: { id: "gm" } } };
 		try {
 			const rhianna = character();
 			const open = vi.fn(() => ({}));
 			const resolve = () => rhianna;
-			expect(handleFollowerFateOpenQuery({ characterUuid: "Actor.rhianna", fate: crewFate }, { user: { id: "p1" } }, { resolve, open })).toBe(true);
-			expect(handleFollowerFateOpenQuery({ characterUuid: "Actor.rhianna", fate: crewFate }, { user: { id: "p9" } }, { resolve, open })).toBe(false);
-			expect(handleFollowerFateOpenQuery({ characterUuid: "Actor.rhianna", fate: wolfFate }, { user: { id: "p1" } }, { resolve, open })).toBe(false);
+			expect(await handleFollowerFateOpenQuery({ characterUuid: "Actor.rhianna", fate: crewFate }, { user: { id: "p1" } }, { resolve, open })).toBe(true);
+			expect(await handleFollowerFateOpenQuery({ characterUuid: "Actor.rhianna", fate: crewFate }, { user: { id: "p9" } }, { resolve, open })).toBe(false);
+			expect(await handleFollowerFateOpenQuery({ characterUuid: "Actor.rhianna", fate: wolfFate }, { user: { id: "p1" } }, { resolve, open })).toBe(false);
 			expect(open).toHaveBeenCalledTimes(1);
+			// EDG-8: an ask that reached the GM's client after the player's gave up and opened its own opens nothing.
+			const asking = vi.fn(async () => false);
+			expect(await handleFollowerFateOpenQuery({ characterUuid: "Actor.rhianna", fate: crewFate, askId: "a1" }, { user: { id: "p1" } }, { resolve, open, asking })).toBe(false);
+			expect(asking).toHaveBeenCalledWith({ id: "p1" }, expect.objectContaining({ askId: "a1" }), expect.anything());
+			expect(await handleFollowerFateOpenQuery({ characterUuid: "Actor.rhianna", fate: crewFate, askId: "a2" }, { user: { id: "p1" } }, { resolve, open, asking: async () => true })).toBe(true);
+			expect(open).toHaveBeenCalledTimes(2);
 		} finally {
 			globalThis.game = savedGame;
 		}
@@ -127,9 +137,13 @@ describe("the queries", () => {
 		const rhianna = character();
 		const settle = vi.fn(async () => true);
 		const resolve = () => rhianna;
-		expect(await handleFollowerFateSettleQuery({ characterUuid: "x", fate: crewFate, action: "dead" }, { user: { id: "gm", isGM: true } }, { resolve, settle })).toBe(true);
-		expect(await handleFollowerFateSettleQuery({ characterUuid: "x", fate: crewFate, action: "dead" }, { user: { id: "p2", isGM: false } }, { resolve, settle })).toBe(false);
-		expect(await handleFollowerFateSettleQuery({ characterUuid: "x", fate: crewFate, action: "spare" }, { user: { id: "gm", isGM: true } }, { resolve, settle })).toBe(false);
+		const asking = async () => true;
+		expect(await handleFollowerFateSettleQuery({ characterUuid: "x", fate: crewFate, action: "dead" }, { user: { id: "gm", isGM: true } }, { resolve, settle, asking })).toBe(true);
+		expect(await handleFollowerFateSettleQuery({ characterUuid: "x", fate: crewFate, action: "dead" }, { user: { id: "p2", isGM: false } }, { resolve, settle, asking })).toBe(false);
+		expect(await handleFollowerFateSettleQuery({ characterUuid: "x", fate: crewFate, action: "spare" }, { user: { id: "gm", isGM: true } }, { resolve, settle, asking })).toBe(false);
+		expect(settle).toHaveBeenCalledTimes(1);
+		// v14 (the sender named): a settle the GM's client no longer waits on, having settled it itself, is refused.
+		expect(await handleFollowerFateSettleQuery({ characterUuid: "x", fate: crewFate, action: "dead", askId: "late" }, { user: { id: "gm", isGM: true } }, { resolve, settle, asking: async () => false })).toBe(false);
 		expect(settle).toHaveBeenCalledTimes(1);
 	});
 

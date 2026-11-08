@@ -33,12 +33,29 @@ describe("which changes count", () => {
 		expect(actorChangeCountsBodies({ system: { attributes: { armor: { value: 2 } } } })).toBe(true);
 		expect(actorChangeCountsBodies({ system: { attributes: { stats: { str: 2 } } } })).toBe(false);
 		expect(actorChangeCountsBodies({ name: "x" })).toBe(false);
+		// A parent written as one dotted key, and a path sharing only the start of a watched one.
+		expect(actorChangeCountsBodies({ "system.attributes": { hp: { value: 1 } } })).toBe(true);
+		expect(actorChangeCountsBodies({ system: { counter: 1 } })).toBe(false);
 	});
 
 	it("counts a character's crew or custom follower roster changing, and not their other flags", () => {
 		expect(actorChangeCountsBodies({ flags: { [SYSTEM_ID]: { crew: { memberHp: [0, 6] } } } })).toBe(true);
 		expect(actorChangeCountsBodies({ [`flags.${SYSTEM_ID}.customFollowers.warband.memberHp`]: [3] })).toBe(true);
 		expect(actorChangeCountsBodies({ flags: { [SYSTEM_ID]: { notes: "x" } } })).toBe(false);
+	});
+
+	// FGT-7 / EDG-1: a brush with death takes a character out of the fight with no hit point changing.
+	it("counts a character's Death's Door state, Unstoppable's stamp laid or lifted, and leaving play", () => {
+		expect(actorChangeCountsBodies({ flags: { [SYSTEM_ID]: { deathsDoor: "dying" } } })).toBe(true);
+		expect(actorChangeCountsBodies({ [`flags.${SYSTEM_ID}.deathsDoor`]: "out-of-action" })).toBe(true);
+		expect(actorChangeCountsBodies({ flags: { [SYSTEM_ID]: { unstoppableFighting: true } } })).toBe(true);
+		// v13 spells a lifted stamp as a deletion key.
+		expect(actorChangeCountsBodies({ flags: { [SYSTEM_ID]: { "-=unstoppableFighting": null } } })).toBe(true);
+		expect(actorChangeCountsBodies({ [`flags.${SYSTEM_ID}.-=unstoppableFighting`]: null })).toBe(true);
+		// And a roster replaced outright, v13's `==` spelling.
+		expect(actorChangeCountsBodies({ [`flags.${SYSTEM_ID}.==crew`]: { memberHp: [6] } })).toBe(true);
+		expect(actorChangeCountsBodies({ flags: { [SYSTEM_ID]: { postDeathInsert: { slug: "ghost" } } } })).toBe(true);
+		expect(actorChangeCountsBodies({ flags: { [SYSTEM_ID]: { leftPlay: { how: "retired" } } } })).toBe(true);
 	});
 });
 

@@ -3,15 +3,16 @@
       card family the dialog's handlers select on, so the two lists never answer each other's clicks. --}}
 <div class="stonetop-levelup-move-option stonetop-levelup-{{this.family}}-option stonetop-levelup-pickable{{#if selected}} is-selected{{/if}}"
 	role="button" tabindex="0" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"
+	{{#if this.nameId}}aria-labelledby="{{this.nameId}} {{this.nameId}}-pb"{{/if}}{{#if this.descIds}} aria-describedby="{{this.descIds}}"{{/if}}
 	data-compendium-id="{{this.compendiumId}}" data-playbook="{{this.playbook}}">
 	<div class="stonetop-levelup-move-header">
-		<span class="stonetop-levelup-move-name">{{this.name}}</span>
-		<span class="stonetop-levelup-move-req">{{this.playbook}}</span>
+		<span class="stonetop-levelup-move-name" id="{{this.nameId}}">{{this.name}}</span>
+		<span class="stonetop-levelup-move-req" id="{{this.nameId}}-pb">{{this.playbook}}</span>
 	</div>
 	{{#if description}}
-	<div class="stonetop-levelup-move-description">{{{moveBody description moveResults}}}</div>
+	<div class="stonetop-levelup-move-description" id="{{this.descId}}">{{{moveBody description moveResults}}}</div>
 	{{/if}}
-	{{#if requiresLabel}}<p class="stonetop-levelup-move-note">{{localize "stonetop.specialMoves.levelUp.requiresPrefix"}} {{this.requiresLabel}}</p>{{/if}}
-	{{#if stockNote}}<p class="stonetop-levelup-move-note">{{this.stockNote}}</p>{{/if}}
-	{{#if insertNote}}<p class="stonetop-levelup-move-note stonetop-levelup-insert-note">{{this.insertNote}}</p>{{/if}}
+	{{#if requiresLabel}}<p class="stonetop-levelup-move-note" id="{{this.reqId}}">{{localize "stonetop.specialMoves.levelUp.requiresPrefix"}} {{this.requiresLabel}}</p>{{/if}}
+	{{#if stockNote}}<p class="stonetop-levelup-move-note" id="{{this.stockId}}">{{this.stockNote}}</p>{{/if}}
+	{{#if insertNote}}<p class="stonetop-levelup-move-note stonetop-levelup-insert-note" id="{{this.noteId}}">{{this.insertNote}}</p>{{/if}}
 </div>

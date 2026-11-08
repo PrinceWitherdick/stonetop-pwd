@@ -593,25 +593,18 @@ describe("a character's own damage, with the weapon in hand", () => {
 		expect(settleReadinessOnAttack).not.toHaveBeenCalled();
 	});
 
-	it("offers the Battle Joy on the character's own blow, and never on a follower's or the enemy's", async () => {
+	// Blood is spilled when HP is LOST (Book I p.239), so the Battle Joy is asked once the card is applied
+	// (combat/battle-joy-offer.js#offerBattleJoyOnApplied), never at the roll: not on the character's own
+	// targeted blow, not on the plain card nobody can apply, not on a follower's.
+	it("never offers the Battle Joy at the roll: it waits for HP lost at Apply", async () => {
 		const pim = armed("sword");
 		fightInARow([["pim", pim], ["crin", crinwin("crinwin")]]);
 		vi.mocked(offerBattleJoyOnDamage).mockClear();
 		await rollCharacterDamageAt(pim, { label: "Damage", shiftKey: true });
-		expect(offerBattleJoyOnDamage).toHaveBeenCalledTimes(1);
-		expect(offerBattleJoyOnDamage).toHaveBeenCalledWith(pim, "Damage: Sword", [expect.any(Number)]);
-
-		vi.mocked(offerBattleJoyOnDamage).mockClear();
 		await rollFollowerDamageAt(pim, { formula: "d6", label: "Pim's crew attacks", attacker: "Pim's crew", shiftKey: true });
-		expect(offerBattleJoyOnDamage).not.toHaveBeenCalled();
-	});
-
-	it("offers the Battle Joy on the plain card too, when nobody is there to hit", async () => {
-		const pim = armed("sword");
-		vi.mocked(offerBattleJoyOnDamage).mockClear();
 		vi.mocked(plainCard).mockResolvedValueOnce({ total: 4 });
-		await rollDamageAt(pim, { formula: "d8", label: "Damage", shiftKey: true });
-		expect(offerBattleJoyOnDamage).toHaveBeenCalledWith(pim, "Damage", [4]);
+		await rollDamageAt(armed("sword"), { formula: "d8", label: "Damage", shiftKey: true });
+		expect(offerBattleJoyOnDamage).not.toHaveBeenCalled();
 	});
 
 	it("carries a warhammer's 2 piercing to Apply", async () => {

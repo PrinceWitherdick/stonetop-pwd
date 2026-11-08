@@ -22,7 +22,7 @@ import { onePress } from "../utils/one-press.js";
 import { CHART_GROUPS, HOME_GROUP, chartPicked, chartEntryText, chartGroupOf } from "./expedition-data.js";
 import { pickOrWriteOption } from "./content-picker.js";
 import { contentElement } from "../utils/dialogv2-content.js";
-import { askWithButtons } from "../utils/ask-with-buttons.js";
+import { askWithButtons, confirmOutcome } from "../utils/ask-with-buttons.js";
 import { FATE_TABLES, fateTableList } from "../data/fate-tables.js";
 import { saveChronicleFromButton, findExpeditionChroniclePage, deleteExpeditionChroniclePage } from "../utils/chronicle.js";
 import { chartedLines } from "../utils/chronicle-core.js";

@@ -23,6 +23,7 @@ import { LORE_TERM_TOOLTIPS } from "../../../utils/lore-terms.js";
 import { getBooleanSetting, getHoverDescriptionSetting } from "../../../settings.js";
 import { moveGroupsForPlaybook, moveGroupKeys } from "./onboarding-move-groups.js";
 import { effectiveSubgroupMax } from "./possession-choice-cap.js";
+import { expectedInvocationCount } from "../invocation-count.js";
 import { requiredMovesUnmet } from "../move-requirement.js";
 import { playbookIconPath } from "../../../utils/playbook-actors.js";
 import { ensurePackIndex } from "../../../utils/pack-index.js";
@@ -153,7 +154,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	}
 
 	constructor(playbookDoc, onComplete, options = {}) {
-		const { onBack, onSave, onClose, onProgress, onLiveSave, onExit, initialSelections, startAtStep = null, ownedMoveCounts = null, retiredMoveNames = null, retiredCreationPicks = 0, crewTagBonus = 0, companionTraitBonus = 0, heldMinorArcana = null, ...appOptions } = options;
+		const { onBack, onSave, onClose, onProgress, onLiveSave, onExit, initialSelections, startAtStep = null, ownedMoveCounts = null, restoredPickCounts = null, characterLevel = 1, retiredMoveNames = null, retiredCreationPicks = 0, crewTagBonus = 0, companionTraitBonus = 0, heldMinorArcana = null, ...appOptions } = options;
 		super(appOptions);
 		this._playbookDoc        = playbookDoc;
 		this._onComplete         = onComplete;
@@ -173,6 +174,11 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		// remarkable traits, +1 per Big Magic) is correct after taking that move at
 		// level-up. New characters pass none; in-session move picks add on top.
 		this._ownedMoveCounts    = ownedMoveCounts ?? {};
+		// The owned copies this run restores as its own picks (free picks, either/or moves), by name:
+		// counted from the selections instead, so a free-pick Big Magic is not counted twice.
+		this._restoredPickCounts = restoredPickCounts ?? {};
+		// The character's level: a Lightbearer made above 1st level is owed its even levels' Invocations.
+		this._characterLevel = Math.max(1, Math.trunc(Number(characterLevel) || 1));
 		// Extra crew tags the character's marked moves allow (Veteran Crew's "Select 2 new tags",
 		// the crew stats' tagBonus), on top of the playbook's pick count. A new character has none.
 		this._crewTagBonus       = Math.max(0, Number(crewTagBonus) || 0);
@@ -1530,10 +1536,15 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	// step precedes it, but re-visiting recomputes — see _refreshChoiceGroupLimits).
 	_effectiveMoveCounts() {
 		const counts = { ...this._ownedMoveCounts };
+		// The restored picks count once, from the selections below, whether or not they are kept.
+		for (const [name, n] of Object.entries(this._restoredPickCounts ?? {})) {
+			if (counts[name] != null) counts[name] = Math.max(0, counts[name] - (Number(n) || 0));
+		}
 		const idToName = new Map((this._movesCache ?? []).map(d => [d.id, d.name]));
 		const ids = [...this._selections.moves, ...Object.values(this._selections.moveChoices ?? {})];
 		for (const id of ids) {
-			const name = idToName.get(id);
+			// A restored pick is still its NAME until the move list loads (_reconcileMoveChoices).
+			const name = idToName.get(id) ?? (Object.hasOwn(this._restoredPickCounts ?? {}, id) ? id : null);
 			if (name) counts[name] = (counts[name] ?? 0) + 1;
 		}
 		return counts;
@@ -1652,12 +1663,16 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	 */
 	_invocationStepData() {
 		const raw     = this._rawInvocations;
-		const count   = raw.startingCount ?? 2;
+		const start   = raw.startingCount ?? 2;
+		const count   = this._invocationPickCount();
 		const chosen  = new Set(this._selections.invocations);
 		const learned = new Set((this._selections.learnedInvocations ?? []).filter(slug => !chosen.has(slug)));
 		const atLimit = chosen.size >= count;
 		return {
-			startingCount: count,
+			startingCount: start,
+			pickCount:     count,
+			levelExtra:    Math.max(0, count - start),
+			level:         this._characterLevel,
 			selectedCount: chosen.size,
 			learnedCount:  learned.size,
 			options: (raw.options ?? []).map(opt => ({
@@ -1669,6 +1684,20 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 				disabled:    learned.has(opt.slug) || (!chosen.has(opt.slug) && atLimit),
 			})),
 		};
+	}
+
+	// How many Invocations this run asks for. "Lightbearer, you start knowing 2 Invocations. Each time
+	// you reach an even-numbered level, learn 1 new Invocation" (Book I p.146), so a character made or
+	// re-made above 1st level is owed the even levels already reached too, less the ones a level-up
+	// taught that this run keeps (shown known and locked). Never fewer than the starting count.
+	_invocationPickCount() {
+		const raw = this._rawInvocations;
+		const start = Number(raw?.startingCount) || 0;
+		if (!start) return 0;
+		const chosen = new Set(this._selections.invocations ?? []);
+		const learned = (this._selections.learnedInvocations ?? []).filter(slug => !chosen.has(slug)).length;
+		const expected = expectedInvocationCount({ optionCount: raw.options?.length ?? 0, startingCount: start, level: this._characterLevel }) ?? start;
+		return Math.max(start, expected - learned);
 	}
 
 	// ── Completion check ──────────────────────────────────────────────
@@ -1716,7 +1745,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 				return choicesComplete && statChoicesComplete &&
 					this._selections.moves.length === this._movePickCount;
 			}
-			case "invocations":    return this._selections.invocations.length === (this._rawInvocations?.startingCount ?? 0);
+			case "invocations":    return this._selections.invocations.length === this._invocationPickCount();
 			case "initiates": {
 				const d = this._getInitiatesData();
 				const [min] = this._initiatesCountRange(d);
@@ -3419,7 +3448,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find("[name='onboard-invocation']").on("change", ev => {
 			const slug    = ev.currentTarget.value;
 			const checked = ev.currentTarget.checked;
-			const limit   = this._rawInvocations?.startingCount ?? 2;
+			const limit   = this._invocationPickCount();
 			if (checked) {
 				if (this._selections.invocations.length < limit && !this._selections.invocations.includes(slug)) {
 					this._selections.invocations.push(slug);

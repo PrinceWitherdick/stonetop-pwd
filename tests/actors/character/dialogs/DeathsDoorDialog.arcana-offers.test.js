@@ -3,8 +3,9 @@ import Handlebars from "handlebars";
 import { DeathsDoorDialog } from "../../../../module/actors/character/dialogs/DeathsDoorDialog.js";
 import { DEATHS_DOOR_STATE } from "../../../../module/actors/character/deaths-door.js";
 import {
-	CARVINGS_IN_A_CAVE, RUNE_LADEN_SCALES, boundSoulsOffer, scalesTenPlusOffer,
+	CARVINGS_IN_A_CAVE, boundSoulsOffer, scalesTenPlusOffer,
 } from "../../../../module/actors/character/deaths-door-arcana-offers.js";
+import { RUNE_LADEN_SCALES } from "../../../../module/actors/character/deaths-door-arcana.js";
 import { readRepo } from "../../../fakes/css.js";
 import { escHtml } from "../../../../module/utils/strings.js";
 

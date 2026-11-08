@@ -26,6 +26,11 @@ import { withCardLatch } from "../../utils/card-latch.js";
 import { cardCountedTier, outcomeTier } from "../../utils/counted-tier.js";
 import { format, localize } from "../../utils/i18n.js";
 import { learnedTrack, takeBackHeld } from "./MoveResources.js";
+import { inSpenderTurn } from "../../utils/spender-queue.js";
+import { inCardTurn } from "../../utils/card-queue.js";
+import { actsForHelper } from "./roll-boosts.js";
+import { ownerUsers } from "../../hooks/DeathsDoorPrompt.js";
+import { NO_ANSWER, relayOutcome } from "../../utils/relay-landed.js";
 import { escHtml, joinNames } from "../../utils/strings.js";
 
 /** The User query a gift of advantage goes through when this client cannot write the character. */
@@ -49,11 +54,52 @@ const _choosing = new Set();
 const _recording = new Set();
 
 /**
+ * Message flag: the characters the GM's client has held a card's advantage for, as their uuids, stamped in the
+ * card's turn as each is given (handleGiveAdvantageQuery). A press whose answer never came back reads it to tell
+ * a gift that landed late from one that never did, and the GM's client reads it so a gift is held once per card.
+ */
+export const GIVEN_TO_FLAG = "advantageGivenTo";
+
+/** Who a card's GM-written gifts were held for (GIVEN_TO_FLAG). */
+const givenTo = (message, scope = SYSTEM_ID) => {
+	const list = message?.getFlag?.(scope, GIVEN_TO_FLAG);
+	return Array.isArray(list) ? list : [];
+};
+
+/**
+ * Whether this user presses a giver's once-per-card button: one who can write the card and the giver, and of those
+ * the giver's own logged-in player, or the GM only while none is online (roll-boosts.js#actsForHelper). Both the GM
+ * and the player seeing it let both press inside one round trip, and a latch with its own `taken` rule is read on
+ * each client (utils/card-latch.js), so both paid: two Command off Stentorian for one Focus Fire order.
+ */
+export function pressesFor(message, giver, user = globalThis.game?.user ?? null) {
+	if (!canRewriteCard(message, giver)) return false;
+	const owners = ownerUsers(giver);
+	// A giver nobody can be named for (a test's bare actor, a sheet with no users): the card's own rule stands.
+	return !owners.length || actsForHelper(user, owners);
+}
+
+/** The reasons a gift was not given, as `stonetop.heldAdvantage.notGiven.<why>` says each. */
+const NOT_GIVEN_WHY = new Set(["noGm", "timedOut", "refused"]);
+
+/** One back onto a hold a press took and gave nobody (Stentorian's Command), never past the track. */
+function giveBackHeld(actor, move) {
+	return inSpenderTurn(actor, async () => {
+		const track = learnedTrack(actor, move);
+		if (!track || track.held >= track.max) return false;
+		await track.resources.setUses(move, track.held + 1, { stonetopMove: move });
+		return true;
+	});
+}
+
+/**
  * Hold advantage on `target`'s next roll for `moveName`: written here when this client owns them,
- * otherwise by the GM's client. Whether it was held.
+ * otherwise by the GM's client, which stamps it on the card (`message`, GIVEN_TO_FLAG) in the card's turn.
+ * Whether it was held. `outcome.why` says why not, for a relayed gift: "noGm", "timedOut" (no answer, and no
+ * stamp landed on the card in the grace after: relay-landed.js) or "refused".
  */
 export async function giveAdvantage(giver, target, moveName, {
-	gm = globalThis.game?.users?.activeGM ?? null, userId = globalThis.game?.user?.id ?? null,
+	gm = globalThis.game?.users?.activeGM ?? null, userId = globalThis.game?.user?.id ?? null, message = null, outcome = null,
 } = {}) {
 	if (target?.type !== "character") return false;
 	if (!mayReceive(giver, target, moveName)) return false;
@@ -61,9 +107,17 @@ export async function giveAdvantage(giver, target, moveName, {
 		await target.typedActor?.holdAdvantage?.(givenSource(moveName, giver, target));
 		return true;
 	}
-	return !!(await askGMClient(gm, GIVE_ADVANTAGE_QUERY, {
-		giverUuid: giver?.uuid ?? null, targetUuid: target.uuid, moveName, userId,
-	}, { fallback: false, what: "give advantage" }));
+	const said = why => { if (outcome) outcome.why = why; return false; };
+	if (!gm) return said("noGm");
+	const answer = await askGMClient(gm, GIVE_ADVANTAGE_QUERY, {
+		giverUuid: giver?.uuid ?? null, targetUuid: target.uuid, moveName, userId, messageId: message?.id ?? null,
+	}, { fallback: NO_ANSWER, what: "give advantage" });
+	// No answer in time is not a no: the GM's write may land a moment later, and its stamp on the card says so.
+	const held = message
+		? await relayOutcome(message, answer, () => givenTo(message).includes(target.uuid))
+		: (answer === NO_ANSWER ? false : answer);
+	if (held) return true;
+	return said(answer === NO_ANSWER ? "timedOut" : "refused");
 }
 
 /**
@@ -81,8 +135,19 @@ export async function handleGiveAdvantageQuery(data, context = {}, deps = {}) {
 	if (!user || !GIVE_ADVANTAGE_MOVES[moveName] || !giver?.testUserPermission?.(user, "OWNER")) return false;
 	if (!ownsLearnedMoveNamed(giver, moveName) || target?.type !== "character") return false;
 	if (!mayReceive(giver, target, moveName)) return false;
-	await target.typedActor?.holdAdvantage?.(givenSource(moveName, giver, target));
-	return true;
+	const message = data?.messageId ? globalThis.game?.messages?.get?.(data.messageId) ?? null : null;
+	if (!message) {
+		await target.typedActor?.holdAdvantage?.(givenSource(moveName, giver, target));
+		return true;
+	}
+	// In the card's turn, read and stamped together: an ask that arrives again (the player's client gave up waiting
+	// and the press was made twice) finds the stamp and holds nothing more.
+	return inCardTurn(message, async () => {
+		if (givenTo(message).includes(target.uuid)) return true;
+		await target.typedActor?.holdAdvantage?.(givenSource(moveName, giver, target));
+		await message.setFlag(SYSTEM_ID, GIVEN_TO_FLAG, [...givenTo(message), target.uuid]);
+		return true;
+	});
 }
 
 /**
@@ -119,7 +184,7 @@ export async function reconcileGivenAdvantage(message, total, { scope = SYSTEM_I
 		await message.setFlag(scope, GIVEN_FLAG, { ...given, spent: true });
 		return false;
 	}
-	const update = Object.fromEntries([GIVEN_FLAG, GIVING_FLAG]
+	const update = Object.fromEntries([GIVEN_FLAG, GIVING_FLAG, GIVEN_TO_FLAG]
 		.filter(key => message.getFlag(scope, key) !== undefined && message.getFlag(scope, key) !== null)
 		.map(key => deletionEntry(`flags.${scope}.${key}`)));
 	if (Object.keys(update).length) await message.update(update);
@@ -164,14 +229,26 @@ export async function offerAdvantage(message, giver, moveName, {
 	const targets = recipients.filter(actor => ids.includes(actor.id));
 	if (!targets.length) return false;
 	if (stillMine && !stillMine()) return true;
-	const gave = await Promise.all(targets.map(target => give(giver, target, moveName)));
-	const given = targets.filter((target, i) => gave[i]);
-	for (const target of targets.filter((target, i) => !gave[i])) {
-		globalThis.ui?.notifications?.warn?.(`${target.name} could not be given advantage: no GM is online to write it.`);
+	// "Spend 1 Command to shout an order or warning" (Book I p.127): PAID BEFORE anyone is given anything, re-read
+	// in the Marshal's spending turn, so Command spent elsewhere while the picker was open (Focus Fire, a Deploy, a
+	// pip clicked off) cannot buy it free. Given back when nobody could be given it.
+	if (rule?.spendHeld && !(await takeBackHeld(giver, rule.spendHeld, 1))) {
+		globalThis.ui?.notifications?.warn?.(format("stonetop.heldAdvantage.noneHeld", { move: rule.spendHeld }));
+		return false;
 	}
-	if (!given.length) return false;
-	// Paid once the advantage is held, so a press that gave nobody anything costs nothing.
-	if (rule?.spendHeld) await takeBackHeld(giver, rule.spendHeld, 1);
+	// Why a gift could not be given, per target (giveAdvantage's `outcome`), so the warning says which it was.
+	const outcomes = targets.map(() => ({}));
+	const gave = await Promise.all(targets.map((target, i) => give(giver, target, moveName, { message, outcome: outcomes[i] })));
+	const given = targets.filter((target, i) => gave[i]);
+	targets.forEach((target, i) => {
+		if (gave[i]) return;
+		const why = NOT_GIVEN_WHY.has(outcomes[i].why) ? outcomes[i].why : "refused";
+		globalThis.ui?.notifications?.warn?.(format(`stonetop.heldAdvantage.notGiven.${why}`, { name: target.name ?? "" }));
+	});
+	if (!given.length) {
+		if (rule?.spendHeld) await giveBackHeld(giver, rule.spendHeld);
+		return false;
+	}
 	const [target] = given;
 	const names = joinNames(given.map(actor => actor.name));
 	await message.setFlag(scope, GIVEN_FLAG, {
@@ -197,7 +274,7 @@ export function wireGiveAdvantage(message, html, deps = {}) {
 	if (!buttons.length) return;
 	const giver = deps.giver ?? speakerActor(message);
 	const given = message?.getFlag?.(scope, GIVEN_FLAG) ?? null;
-	const usable = deps.usable ?? canRewriteCard(message, giver);
+	const usable = deps.usable ?? pressesFor(message, giver);
 	const me = deps.userId ?? globalThis.game?.user?.id ?? "";
 	// Someone is choosing: another user, or this client already (a re-render mid-choice). A latch of
 	// this user's own with nothing in flight (a reload mid-choice) is theirs to press again.
@@ -393,7 +470,7 @@ function wireRecordOnce(message, html, deps, { selector, flag, wired, readout, p
 	const scope = deps.scope ?? SYSTEM_ID;
 	const actor = deps.giver ?? speakerActor(message);
 	const recorded = message?.getFlag?.(scope, flag) ?? null;
-	const usable = deps.usable ?? canRewriteCard(message, actor);
+	const usable = deps.usable ?? pressesFor(message, actor);
 	const me = deps.userId ?? globalThis.game?.user?.id ?? "";
 	const inFlight = `${message?.id}:${flag}`;
 	// Claimed by another user, or by this client still pressing: theirs. This user's own stale claim: not.

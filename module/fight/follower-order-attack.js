@@ -20,21 +20,34 @@
 //
 // LET FLY'S 7-9 "Deal your damage, but deplete your ammo" (FOE-10) gets a button of its own, for a follower whose
 // card tracks ammo, which marks the card's next status (low ammo, then all out).
+//
+// THE COUNTER-BLOW IS STRUCK ONCE PER CARD (round-2 audit FOE-1), as a character's own Clash's is
+// (combat/attack-flow.js#reconcileClashCounter). The order's card carries who was ordered (ORDER_FLAG) and
+// is latched the moment the blow is struck (ORDER_COUNTERED_FLAG), from the 6- at the roll, the 7-9 or strike
+// hard at the press, or a Shift: a 6- lifted onto a 7-9 keeps the blow it already took, and a card moved DOWN
+// onto a 6- (or onto a 7-9 after its damage was dealt) suffers the one it never took (reconcileOrderedClashCounter,
+// run from stonetop.js#_resyncRewrittenTotal). One member ordered on their own takes it themselves: the
+// counter-blow's card names the order card (`counterOf`) and the member (`memberKey`), whom Apply lands it on.
 
 import { SYSTEM_ID } from "../system-id.js";
 import { escHtml } from "../utils/strings.js";
 import { format, localize } from "../utils/i18n.js";
 import { wireLatchedButtons, withCardLatch } from "../utils/card-latch.js";
-import { cardTierNow } from "../utils/counted-tier.js";
+import { cardCountedTier, cardTierNow, outcomeTier } from "../utils/counted-tier.js";
 import { AMMO_MAX, ammoStatusLabel, pickedEffects, pickedOptionLabels } from "../combat/attack-flow.js";
 import { pileOnBonus } from "../data/follower-build.js";
 import { FOLLOWER_FLAGS, fillFollowerSlug } from "../actors/character/follower-roster.js";
 import { readableFlags } from "../actors/character/StonetopFlags.js";
 import { foeBodiesAt } from "./follower-fight.js";
+import { atZeroOf } from "./fight-sides.js";
 
 const KEY = "stonetop.character.followers.order";
 export const ORDER_DAMAGE_FLAG = "followerOrderDamage";
 export const ORDER_DEPLETE_FLAG = "followerOrderDeplete";
+/** Who an ordered attack's card is for: `{move, ftype, slug, name, member, memberName}`. */
+export const ORDER_FLAG = "followerOrder";
+/** Set once the enemy's attack has been struck for an ordered Clash, so it is struck once (FOE-1). */
+export const ORDER_COUNTERED_FLAG = "followerOrderCountered";
 const SELECTOR = ".stonetop-follower-order-damage";
 const DEPLETE_SELECTOR = ".stonetop-follower-order-deplete";
 
@@ -119,6 +132,82 @@ export function orderedPress(move, tier, labels = []) {
 }
 
 /**
+ * The order card's flags for an ordered Clash or Let Fly (rollStat's `messageFlags`): who was ordered, so a
+ * Shift that moves the card later can still strike their counter-blow, and Apply can land it on the one member
+ * who was sent. PURE.
+ */
+export function orderCardFlags({ ftype = "", slug = "", name = "", member = "", memberName = "" } = {}, move = "") {
+	return { [SYSTEM_ID]: { [ORDER_FLAG]: { move: String(move ?? ""), ftype, slug: slug ?? "", name: name ?? "", member: member ?? "", memberName: memberName ?? "" } } };
+}
+
+/**
+ * Whether a REWRITTEN ordered Clash now owes the enemy's attack it never took (PURE): Clash's 6- "suffer the
+ * enemy's attack" (p.215), and a 7-9 ("you deal your damage but suffer the enemy's attack") on a card whose
+ * damage was already dealt from a 10+, which has no button left to strike it from. Never twice.
+ */
+export function rewriteOwesCounter({ move, tier, countered = false, pressed = false } = {}) {
+	if (move !== "clash" || countered) return false;
+	return tier === "failure" || (tier === "partial" && pressed);
+}
+
+/**
+ * Strike an ordered Clash's counter-blow once (FOE-1): latch the card, then the sheet strikes it on the
+ * follower's own token (StonetopCharacterSheet#_followerSuffersCounter), naming the card so Apply lands it on a
+ * member ordered alone. Answers whether it was struck from here (false: already struck, or no sheet to strike it).
+ *
+ * @param {ChatMessage|null} message  the order's card
+ * @param {Actor} character  the follower's leader
+ * @param {{ftype: string, slug?: string, name?: string, member?: string, memberName?: string}} order
+ */
+export async function strikeOrderCounter(message, character, order = {}) {
+	if (!character || message?.getFlag?.(SYSTEM_ID, ORDER_COUNTERED_FLAG)) return false;
+	const sheet = character.sheet;
+	if (typeof sheet?._followerSuffersCounter !== "function") return false;
+	if (message?.setFlag) {
+		try {
+			await message.setFlag(SYSTEM_ID, ORDER_COUNTERED_FLAG, true);
+		} catch (err) {
+			console.warn("Stonetop | could not latch the ordered Clash's counter-blow on its card", err);
+		}
+	}
+	await sheet._followerSuffersCounter({ ftype: order.ftype ?? "", slug: order.slug ?? "" }, {
+		member: order.member ?? "", name: order.memberName || order.name || "", counterOf: message?.id ?? "",
+	});
+	return true;
+}
+
+/**
+ * A rewritten order card (stonetop.js#_resyncRewrittenTotal): an ordered Clash moved onto a tier that suffers
+ * the enemy's attack it never took strikes it now (rewriteOwesCounter). Run on the card's writer. Answers whether
+ * a counter-blow was struck.
+ */
+export async function reconcileOrderedClashCounter(message, actor, total) {
+	const order = message?.getFlag?.(SYSTEM_ID, ORDER_FLAG);
+	if (!order || !actor || !Number.isFinite(Number(total))) return false;
+	const owed = rewriteOwesCounter({
+		move: order.move,
+		tier: outcomeTier(cardCountedTier(message, Number(total), SYSTEM_ID)),
+		countered: !!message.getFlag(SYSTEM_ID, ORDER_COUNTERED_FLAG),
+		pressed: !!message.getFlag(SYSTEM_ID, ORDER_DAMAGE_FLAG),
+	});
+	return owed ? strikeOrderCounter(message, actor, order) : false;
+}
+
+/**
+ * Whether a follower about to be ordered is down (PURE): a group with nobody standing (`roster`, utils/crew.js
+ * #groupFollowerStanding), else a one-body follower whose card reads 0 HP. "When a follower is reduced to 0 HP
+ * ... they're out of the action" (Book I p.469). Never for one `member` picked from the roster, who is standing.
+ *
+ * @param {{hp?: {value?: number, max?: number}}|null} card  the follower's finished card (_followerCardSnapshot)
+ * @param {{standing: number, size: number}|null} roster
+ */
+export function followerIsDown(card, roster = null, { member = "" } = {}) {
+	if (member) return false;
+	if (roster && Number(roster.size) > 0) return Number(roster.standing) <= 0;
+	return atZeroOf(card?.hp);
+}
+
+/**
  * Mark the next status on a follower card's ammo track (0 full, 1 low ammo, 2 all out), worded as a character's
  * weapon track is (combat/attack-flow.js#ammoStatusLabel). Answers the status marked, or null when there was none
  * left to mark.
@@ -152,8 +241,10 @@ export function wireFollowerOrderDamage(message, html) {
 			if (typeof sheet?._rollOrderedFollowerDamage !== "function") return Promise.resolve(false);
 			const { ftype = "", slug = "", move = "", member = "", memberName = "" } = btn.dataset;
 			const press = orderedPress(move, tier, pickedOptionLabels(btn.closest?.(".chat-message, .message") ?? root));
+			// A counter-blow already struck for this card (a 6- lifted onto this tier) is not struck again (FOE-1).
+			const counter = press.counter && !message.getFlag?.(SYSTEM_ID, ORDER_COUNTERED_FLAG);
 			return withCardLatch(message, ORDER_DAMAGE_FLAG, true, buttons, () => sheet._rollOrderedFollowerDamage(ftype, slug, {
-				move, ...press, member, memberName,
+				move, ...press, counter, member, memberName, message,
 			}));
 		},
 	});

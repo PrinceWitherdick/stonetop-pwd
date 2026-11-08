@@ -72,5 +72,11 @@ export class MinorArcanum {
 		// edited without silently re-pointing the unlock (see CharacterArcana#backBoxChecked).
 		// The best armor among the ticked ones wins over the curio's own printed value.
 		this.armorUnlocks = data.armorUnlocks ?? [];
+		// Consequences on the BACK that change the BEARER for good once marked: the Redwood Effigy's "Gain +1 armor
+		// and +4 max HP", the Hec'tumel Codex's scales ("Gain +1 armor"), the Creepy Cave's "increase your max HP by
+		// 2 and gain +1 armor against anything but bronze". Each entry is `{ label, hp?, armor?, versus? }`: `label`
+		// the consequence's printed words, its □ found by them as armorUnlocks' are; `hp` and `armor` what it adds;
+		// `versus` `{armor, against}`, armor that does not count against one thing (CharacterArcana#consequenceBoons).
+		this.consequenceBoons = data.consequenceBoons ?? [];
 	}
 }

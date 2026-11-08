@@ -4,7 +4,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { composeInstinct } from "../../../module/utils/strings.js";
-import { LevelUpDialog, insertInertNote } from "../../../module/actors/character/dialogs/LevelUpDialog.js";
+import { LevelUpDialog } from "../../../module/actors/character/dialogs/LevelUpDialog.js";
+import { insertInertNote } from "../../../module/actors/character/insert-inert-note.js";
 import { StonetopCharacter } from "../../../module/actors/character/StonetopCharacter.js";
 import { DEATHS_DOOR_STATE } from "../../../module/actors/character/deaths-door.js";
 import { activatePostDeathChoices, buildPostDeathChoices, flushPostDeathChoices } from "../../../module/actors/character/post-death-choices.js";

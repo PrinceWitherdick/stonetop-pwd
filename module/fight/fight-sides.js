@@ -47,6 +47,16 @@ export function otherSide(side) {
 	return side === HEROES ? FOES : HEROES;
 }
 
+/**
+ * At 0 of a real HP pool, a maximum above 0: "reduced to 0 HP" (Book I p.240). The ONE reading of it, for
+ * the fight's bodies, a character's standing (fight-state.js#fightStanding) and a follower card (follower-order-attack.js
+ * #followerIsDown). No hit points recorded is not 0. PURE.
+ */
+export function atZeroOf(hp) {
+	const value = Number(hp?.value);
+	return Math.trunc(Number(hp?.max) || 0) > 0 && Number.isFinite(value) && value <= 0;
+}
+
 /** Whether a monster is fought as one group (p.416): its "Group fight" switch on a group or a horde. */
 export function fightsAsGroup({ type = "", fightAsGroup = false, organization = "" } = {}) {
 	return type === "monster" && !!fightAsGroup && (organization === "group" || organization === "horde");
@@ -56,6 +66,10 @@ export function fightsAsGroup({ type = "", fightAsGroup = false, organization = 
  * How many capable bodies a token stands for (Book I p.414 counts "each capable attacker").
  *
  *  • Marked out of the fight (core's defeated) ................ none, out
+ *  • Out of the action at Death's Door, whatever their HP ..... none, out, unless it `keepsFighting`.
+ *    A Death's Door 7-9 leaves a character "out of the action" (Book I p.245), a Revenant's Undying
+ *    7-9 does at half HP, a 6- is the Last Door, and a character who has left play is gone
+ *    (`outOfAction`, fight-state.js#fightStanding's `doorOut`)
  *  • A group or horde monster fighting as a group (p.416) ..... the members still standing,
  *    read off its HP pool as casualties; routed at 0 HP is out; a group with no headcount
  *    recorded stands for one, as the monster sheet's rows do
@@ -63,8 +77,10 @@ export function fightsAsGroup({ type = "", fightAsGroup = false, organization = 
  *    a Heavy's Unstoppable ("reduced to 0 HP in battle, you can keep fighting") until they roll
  *    Death's Door (actors/character/unstoppable.js#keepsFightingAtZero)
  *  • A group follower (the crew, a custom group) .............. the members its character's roster
- *    has still standing; none left is routed. The roster is who is really up, and it falls as they
- *    do, so the group's bonuses shrink with its casualties (p.416 "Adjust the bonuses")
+ *    has still standing, and never more than its token's pool leaves standing: a group's blows on the
+ *    crew land on that pool (fight/group-hits.js), and p.416 reads them as casualties ("If one group
+ *    loses half its HP, then about half that group's numbers are out the action. Adjust the bonuses
+ *    to damage and armor accordingly!"). None left, or the pool at 0, is routed
  *  • Anything else ............................................ the headcount the GM set on the
  *    combatant (a warband of plain NPCs), falling as its HP does like a monster group's (its HP is one
  *    member's; routed at 0), else one
@@ -78,26 +94,32 @@ export function fightsAsGroup({ type = "", fightAsGroup = false, organization = 
  * @param {number}  [info.count]         a monster's group size
  * @param {number}  [info.headcount]     the combatant's own headcount
  * @param {{standing: number, size: number}|null} [info.roster]  a group follower's roster
- * @param {boolean} [info.keepsFighting]  fighting on at 0 HP (Unstoppable)
+ * @param {boolean} [info.keepsFighting]  fighting on at 0 HP (Unstoppable), or making Death's Door's
+ *   last move (fight/in-battle.js#makingLastMove): wins over `outOfAction` and 0 HP alike
+ * @param {boolean} [info.outOfAction]   a character's Death's Door state puts them out of the action
  * @param {number}  [info.startSize]     the size a monster group started at before lone blows dropped
  *   members (fight/group-hits.js#GROUP_SIZE_FLAG); only the `size` it reports reads it
  * @returns {{bodies: number, out: boolean, group: boolean, standing: number|null, size: number|null, routed: boolean}}
  */
 export function bodiesFor({
 	defeated = false, type = "", fightAsGroup = false, organization = "", hp = {}, count = 0, headcount = null, roster = null, startSize = 0,
-	keepsFighting = false,
+	keepsFighting = false, outOfAction = false,
 } = {}) {
 	const none = { bodies: 0, out: true, group: false, standing: null, size: null, routed: false };
 	if (defeated) return none;
+	if (outOfAction && !keepsFighting) return none;
 
 	const max = Math.max(0, Math.trunc(Number(hp?.max) || 0));
 	const value = Number(hp?.value);
 
 	const rosterSize = Math.max(0, Math.trunc(Number(roster?.size) || 0));
 	if (rosterSize > 0) {
-		const standing = Math.max(0, Math.min(rosterSize, Math.trunc(Number(roster.standing) || 0)));
-		const pooled = max > 0 && Number.isFinite(value) && value <= 0;
-		if (standing === 0 || pooled) return { ...none, group: rosterSize > 1, standing: 0, size: rosterSize, routed: true };
+		const onRoster = Math.max(0, Math.min(rosterSize, Math.trunc(Number(roster.standing) || 0)));
+		// The pool's casualties, the same reading the crew card's casualty line makes (follower-build.js#casualtyNote).
+		const pool = max > 0 && Number.isFinite(value) ? groupCasualties({ hpMax: max, hpCurrent: value, count: rosterSize }) : null;
+		// Held at one while the pool has any HP left, as a monster group's is below: only 0 HP routs them.
+		const standing = pool && !pool.routed ? Math.min(onRoster, Math.max(1, pool.standing)) : onRoster;
+		if (standing === 0 || pool?.routed) return { ...none, group: rosterSize > 1, standing: 0, size: rosterSize, routed: true };
 		return { bodies: standing, out: false, group: rosterSize > 1, standing, size: rosterSize, routed: false };
 	}
 
@@ -122,7 +144,7 @@ export function bodiesFor({
 		return { bodies: Math.max(1, standing), out: false, group: true, standing, size: set, routed: false };
 	}
 
-	if (max > 0 && Number.isFinite(value) && value <= 0 && !keepsFighting) return none;
+	if (atZeroOf(hp) && !keepsFighting) return none;
 
 	return { bodies: set > 1 ? set : 1, out: false, group: set > 1, standing: null, size: set > 1 ? set : null, routed: false };
 }
