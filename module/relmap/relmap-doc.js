@@ -94,10 +94,10 @@ export async function ensureRelationshipMapFolder() {
  * the folder, or files it beside the front it belongs to, has not stopped it being a map — and a
  * lookup that went by folder would quietly lose it. The folder is filing, the flag is identity.
  */
-export function listRelationshipMaps() {
-	return (game.journal?.contents ?? [])
-		.filter(entry => !!entry.getFlag?.(SYSTEM_ID, RELMAP_FLAG))
-		.sort((a, b) => a.name.localeCompare(b.name));
+export function listRelationshipMaps({ sorted = true } = {}) {
+	const maps = (game.journal?.contents ?? []).filter(entry => !!entry.getFlag?.(SYSTEM_ID, RELMAP_FLAG));
+	// A walk over every board for its data (relmap-faces.js `everyBoard`) has no use for the order.
+	return sorted ? maps.sort((a, b) => a.name.localeCompare(b.name)) : maps;
 }
 
 /**
@@ -711,6 +711,26 @@ export async function moveMapPage(entry, movedId, beforeId = null) {
  */
 export function readGraph(doc) {
 	return normalizeGraph(doc?.getFlag?.(SYSTEM_ID, RELMAP_FLAG));
+}
+
+/**
+ * Only the chips a board defines, for a look across every board that needs nothing else: `readGraph`
+ * would lay out every person on it too. Normalized by the same reader (a graph of nothing but chips).
+ */
+export function readChips(doc) {
+	const chips = doc?.getFlag?.(SYSTEM_ID, RELMAP_FLAG)?.chips;
+	return chips && typeof chips === "object" ? normalizeGraph({ chips }).chips : {};
+}
+
+/**
+ * Whether anybody stored on this board stands for `uuid`, read off the flag without normalizing it: the
+ * cheap first look before a change to one actor reads a whole board. A person `readGraph` would drop
+ * still counts, which only means that board is read and found to need nothing.
+ */
+export function boardCarries(doc, uuid) {
+	const nodes = doc?.getFlag?.(SYSTEM_ID, RELMAP_FLAG)?.nodes;
+	if (!uuid || !nodes || typeof nodes !== "object") return false;
+	return Object.values(nodes).some(node => node && typeof node === "object" && String(node.uuid ?? "") === uuid);
 }
 
 /**

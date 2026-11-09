@@ -129,6 +129,80 @@ describe("the suggestion menu", () => {
 	});
 });
 
+describe("the hint on a suggestion already added", () => {
+	it("is the one the caller passes, in place of the item's own", () => {
+		openSuggestionMenu(button, { blankLabel: "New chip", items: ITEMS, usedHint: "on them", onPick });
+		expect(items()[2].querySelector(".stonetop-autocomplete-hint").textContent).toBe("on them");
+		expect(items()[3].querySelector(".stonetop-autocomplete-hint").textContent).toBe("quietly");
+	});
+
+	it("is the localised word when the caller passes none", () => {
+		const saved = game.i18n.localize;
+		game.i18n.localize = key => (key === "stonetop.suggestionMenu.added" ? "ajouté" : key);
+		try {
+			open();
+			expect(items()[2].querySelector(".stonetop-autocomplete-hint").textContent).toBe("ajouté");
+		} finally {
+			game.i18n.localize = saved;
+		}
+	});
+});
+
+// A scroll keeps the menu pinned to its button, placed at most once a frame, and only for a scroll
+// that could have moved the button.
+describe("following its button on a scroll", () => {
+	let frames;
+	let saved;
+	let reads;
+	beforeEach(() => {
+		saved = globalThis.requestAnimationFrame;
+		frames = [];
+		globalThis.requestAnimationFrame = fn => frames.push(fn);
+		reads = 0;
+		const real = button.getBoundingClientRect.bind(button);
+		button.getBoundingClientRect = () => { reads++; return real(); };
+	});
+	afterEach(() => {
+		globalThis.requestAnimationFrame = saved;
+	});
+	const scroll = target => target.dispatchEvent(new Event("scroll"));
+
+	it("places it once a frame however many scrolls the frame holds", () => {
+		const box = document.createElement("div");
+		document.body.appendChild(box);
+		box.appendChild(button);
+		open();
+		const before = reads;
+		scroll(box);
+		scroll(box);
+		scroll(document);
+		expect(reads).toBe(before);
+		expect(frames).toHaveLength(1);
+		frames.shift()();
+		expect(reads).toBe(before + 1);
+		scroll(box);
+		expect(frames).toHaveLength(1);
+	});
+
+	it("ignores a scroll in a box that does not hold the button, or in the menu itself", () => {
+		const elsewhere = document.createElement("div");
+		document.body.appendChild(elsewhere);
+		open();
+		scroll(elsewhere);
+		scroll(menu());
+		expect(frames).toHaveLength(0);
+	});
+
+	it("does not place a menu that closed before its frame came", () => {
+		open();
+		scroll(document);
+		closeSuggestionMenu();
+		const before = reads;
+		frames.shift()();
+		expect(reads).toBe(before);
+	});
+});
+
 describe("placing the popup", () => {
 	const rect = { top: 0, bottom: 0, left: 0, width: 0 };
 	const at = (top, bottom, left = 20, width = 100) => ({ ...rect, top, bottom, left, width });

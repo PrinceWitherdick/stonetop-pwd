@@ -418,8 +418,13 @@ export class RelmapBoardBar {
 		if (said === this._saved) return undefined;
 		// ⚠ SAID, NOT DROPPED QUIETLY. Edit rights taken away mid-sentence (the GM changing who owns the
 		// map) used to throw the words away with nothing on screen to say so.
+		// Once per lot of words, though: every later flush (the next blur, a board switch, Undo,
+		// closing) would otherwise say it again about the same words.
 		if (!this._canEdit()) {
-			globalThis.ui?.notifications?.warn?.(globalThis.game?.i18n?.localize?.("stonetop.relmap.editLost") ?? "");
+			if (this._lostSaid !== said) {
+				this._lostSaid = said;
+				globalThis.ui?.notifications?.warn?.(globalThis.game?.i18n?.localize?.("stonetop.relmap.editLost") ?? "");
+			}
 			return undefined;
 		}
 		this._saved = said;

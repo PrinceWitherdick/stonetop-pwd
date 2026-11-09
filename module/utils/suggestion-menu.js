@@ -15,6 +15,7 @@
  */
 
 import { placeFixedPopup } from "./autocomplete.js";
+import { localize } from "./i18n.js";
 
 const MAX_HEIGHT = 300;
 // Every V1 / V2 window fires one of these as it closes, whatever its class.
@@ -41,13 +42,16 @@ export function closeSuggestionMenu({ refocus = false } = {}) {
  * @param {{value: string, label: string, hint?: string, used?: boolean, icon?: string, iconClass?: string,
  *         iconStyle?: string}[]} o.items  `icon` is a Font Awesome class drawn before the label, in a
  *         span wearing `iconClass` and `iconStyle` (the relationship map colours its chips' icons so).
+ * @param {string} [o.usedHint]  the hint on an item that is `used`, in place of its own; the plain
+ *        localised "added" (stonetop.suggestionMenu.added) when not given.
  * @param {(value: string|null) => void} o.onPick  called with an item's value, or null for blank
  */
-export function openSuggestionMenu(anchor, { heading = "", blankLabel, items = [], onPick }) {
+export function openSuggestionMenu(anchor, { heading = "", blankLabel, items = [], usedHint, onPick }) {
 	if (current?.anchor === anchor) { closeSuggestionMenu({ refocus: true }); return; }
 	closeSuggestionMenu();
 
 	const esc = foundry.utils.escapeHTML;
+	const used = usedHint ?? localize("stonetop.suggestionMenu.added");
 	const menu = document.createElement("ul");
 	menu.className = "stonetop-autocomplete stonetop-suggestion-menu";
 	menu.setAttribute("role", "menu");
@@ -65,7 +69,7 @@ export function openSuggestionMenu(anchor, { heading = "", blankLabel, items = [
 		+ `</li>`;
 	menu.innerHTML = row("", blankLabel, "", { blank: true })
 		+ (items.length && heading ? `<li class="stonetop-suggestion-menu-heading" role="presentation">${esc(heading)}</li>` : "")
-		+ items.map(i => row(i.value, i.label, i.used ? "added" : (i.hint ?? ""), { used: !!i.used, item: i })).join("");
+		+ items.map(i => row(i.value, i.label, i.used ? used : (i.hint ?? ""), { used: !!i.used, item: i })).join("");
 	document.body.appendChild(menu);
 
 	const options = () => [...menu.querySelectorAll('[role="menuitem"]:not([aria-disabled="true"])')];
@@ -99,12 +103,22 @@ export function openSuggestionMenu(anchor, { heading = "", blankLabel, items = [
 	// Outside presses close it; presses on the button are left to the button's own click, which
 	// toggles, so the menu does not close here and reopen there.
 	const outside = ev => { if (!menu.contains(ev.target) && !anchor.contains(ev.target)) closeSuggestionMenu(); };
-	// A scroll inside the menu is the menu's own; any other keeps it pinned to its button, and a
+	// A scroll inside the menu is the menu's own, and one in a box that does not hold the button (the
+	// chat log, the sidebar) cannot have moved it. Any other keeps it pinned to its button, and a
 	// button scrolled away (or re-rendered out of the page) takes the menu with it.
+	// Placed at most ONCE A FRAME: a scroll fires many times a frame, and each placing reads the button's box.
+	const frame = globalThis.requestAnimationFrame ?? (fn => setTimeout(fn, 16));
+	let queued = false;
 	const reflow = ev => {
-		if (ev?.target && menu.contains(ev.target)) return;
+		const target = ev?.target;
+		if (target && (menu.contains(target) || (target !== document && !target.contains?.(anchor)))) return;
 		if (!anchor.isConnected) return closeSuggestionMenu();
-		place();
+		if (queued) return;
+		queued = true;
+		frame(() => {
+			queued = false;
+			if (current?.menu === menu) place();
+		});
 	};
 	const resize = () => closeSuggestionMenu();
 	// The menu goes with its button's window, so no window has to put it away in its own close().

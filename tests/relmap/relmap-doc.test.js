@@ -14,7 +14,7 @@ import {
 	getRelationshipMap, getPartyPage, hadPartyPage, isMapPageHidden, listMapPages,
 	listRelationshipMaps, listVisibleMapPages, mapBoardDoc, mapPageName, resolveMapBoard,
 	mapPagesArranged, moveMapPage, planPageMove,
-	readGraph, renameMapPage, seedMap, setMapPageHidden, syncPartyPage,
+	boardCarries, readChips, readGraph, renameMapPage, seedMap, setMapPageHidden, syncPartyPage,
 } from "../../module/relmap/relmap-doc.js";
 import { RELMAP_VERSION } from "../../module/relmap/relmap-store.js";
 import { createRelationshipMapEntrySheetClass } from "../../module/journal/RelationshipMapEntrySheet.js";
@@ -250,6 +250,16 @@ describe("finding the maps in a world", () => {
 			entry("Another map", { "stonetop-pwd": { relationshipMap: { nodes: {} } } }),
 		];
 		expect(listRelationshipMaps().map(m => m.name)).toEqual(["A map", "Another map"]);
+	});
+
+	// A walk over every board for its data (relmap-faces.js `everyBoard`) has no use for the order.
+	it("comes in name order unless the order is not wanted", () => {
+		journals = [
+			entry("Zed", { "stonetop-pwd": { relationshipMap: { nodes: {} } } }),
+			entry("Ash", { "stonetop-pwd": { relationshipMap: { nodes: {} } } }),
+		];
+		expect(listRelationshipMaps().map(m => m.name)).toEqual(["Ash", "Zed"]);
+		expect(listRelationshipMaps({ sorted: false }).map(m => m.name)).toEqual(["Zed", "Ash"]);
 	});
 
 	it("does not mistake an ordinary journal for one", () => {
@@ -1114,5 +1124,27 @@ describe("the open-time pass, once per map at a time", () => {
 		const next = vi.fn(async () => {});
 		await seedMap("m3", next);
 		expect(next).toHaveBeenCalledTimes(1);
+	});
+});
+
+// The cheap looks at a board's raw flag, for a walk over every board that needs one thing of each.
+describe("a quick look at a board", () => {
+	const board = raw => ({ getFlag: (scope, key) => (scope === "stonetop-pwd" && key === "relationshipMap" ? raw : undefined) });
+
+	it("says whether anybody on it stands for an actor, read off the raw flag", () => {
+		const doc = board({ nodes: { a: { uuid: "Actor.elroy" }, b: null, c: "junk" } });
+		expect(boardCarries(doc, "Actor.elroy")).toBe(true);
+		expect(boardCarries(doc, "Actor.vera")).toBe(false);
+		expect(boardCarries(doc, "")).toBe(false);
+		expect(boardCarries(board(null), "Actor.elroy")).toBe(false);
+		expect(boardCarries(null, "Actor.elroy")).toBe(false);
+	});
+
+	it("reads only its chips, through the same normalizer as the whole board", () => {
+		const raw = { chips: { noble: { name: "Noble" }, blank: { name: "" } }, nodes: { a: { uuid: "Actor.a", x: 5, y: 5 } } };
+		expect(readChips(board(raw))).toEqual(readGraph(board(raw)).chips);
+		expect(Object.keys(readChips(board(raw)))).toEqual(["noble"]);
+		expect(readChips(board(null))).toEqual({});
+		expect(readChips(null)).toEqual({});
 	});
 });

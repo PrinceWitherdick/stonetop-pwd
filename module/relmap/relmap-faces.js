@@ -15,7 +15,7 @@
 
 import { isPrimaryGM } from "../utils/primary-gm.js";
 import { clipText } from "../utils/strings.js";
-import { applyPatch, hasLegacyBoard, listMapPages, listRelationshipMaps, readGraph } from "./relmap-doc.js";
+import { applyPatch, boardCarries, hasLegacyBoard, listMapPages, listRelationshipMaps, readGraph } from "./relmap-doc.js";
 import { RELMAP_NAME_MAX, nodePatch } from "./relmap-store.js";
 import { changedDeath, deadChipPatch, isDeadActor } from "./relmap-dead.js";
 
@@ -28,7 +28,7 @@ export function changedSavedFace(changed) {
  * Every board in the world: each map's pages, and a version 1 map's own entry, whose flag is its board.
  * Hidden boards included, because the copy on a hidden board goes stale just the same.
  */
-export function everyBoard(maps = listRelationshipMaps()) {
+export function everyBoard(maps = listRelationshipMaps({ sorted: false })) {
 	const boards = [];
 	for (const entry of maps) {
 		const pages = listMapPages(entry);
@@ -77,10 +77,10 @@ function freshenNode(patch, id, node, want) {
 }
 
 /** Write one board's patch, reporting a refusal rather than throwing into the hook that called it. */
-async function writeBoard(doc, patch) {
+async function writeBoard(doc, patch, why) {
 	try { return await applyPatch(doc, patch); }
 	catch (err) {
-		console.warn(`Stonetop | could not update the relationship map "${doc?.name}" for an actor change`, err);
+		console.warn(`Stonetop | could not update the relationship map "${doc?.name}" ${why}`, err);
 		return false;
 	}
 }
@@ -91,9 +91,11 @@ async function writeBoard(doc, patch) {
  * never throws, so one refusal cannot stop the rest.
  *
  * @param {Array<[object, object]>} writes  `[doc, patch]` pairs, every patch already non-empty.
+ * @param {object} [o]
+ * @param {string} [o.why]  what the writes were for, finishing the warning a refusal logs.
  */
-async function writeBoards(writes) {
-	const landed = await Promise.all(writes.map(([doc, patch]) => writeBoard(doc, patch)));
+export async function writeBoards(writes, { why = "for an actor change" } = {}) {
+	const landed = await Promise.all(writes.map(([doc, patch]) => writeBoard(doc, patch, why)));
 	return landed.filter(Boolean).length;
 }
 
@@ -104,7 +106,7 @@ async function writeBoards(writes) {
  */
 export async function keepSavedFacesCurrent(actor, changed, _options, userId) {
 	if (!changedSavedFace(changed) || !actor?.uuid) return 0;
-	return writeMyBoards(userId, graph => freshFacePatch(graph, actor.uuid, actor));
+	return writeMyBoards(userId, actor.uuid, graph => freshFacePatch(graph, actor.uuid, actor));
 }
 
 /**
@@ -113,15 +115,17 @@ export async function keepSavedFacesCurrent(actor, changed, _options, userId) {
  */
 export async function keepDeadChipsCurrent(actor, changed, _options, userId) {
 	if (!changedDeath(changed) || !actor?.uuid) return 0;
-	const dead = isDeadActor(actor);
-	return writeMyBoards(userId, graph => deadChipPatch(graph, actor.uuid, dead));
+	// Asked only once a board this client writes carries them: every client hears the hook.
+	let dead;
+	return writeMyBoards(userId, actor.uuid, graph => deadChipPatch(graph, actor.uuid, dead ??= isDeadActor(actor)));
 }
 
 /**
- * Write `patchFor(graph)` onto the boards THIS client answers for after a change made by `userId`:
- * every board it may edit if it made the change, else (as the primary GM) the boards the maker may not.
+ * Write `patchFor(graph)` onto the boards THIS client answers for after a change to the actor `uuid`
+ * made by `userId`: every board it may edit if it made the change, else (as the primary GM) the boards
+ * the maker may not. A board nobody on which stands for `uuid` is passed over unread.
  */
-async function writeMyBoards(userId, patchFor) {
+async function writeMyBoards(userId, uuid, patchFor) {
 	const me = globalThis.game?.user;
 	if (!me) return 0;
 	const mine = userId === me.id;
@@ -134,6 +138,7 @@ async function writeMyBoards(userId, patchFor) {
 	for (const doc of everyBoard()) {
 		if (mine && !doc.isOwner) continue;
 		if (backstop && maker && doc.testUserPermission?.(maker, "OWNER")) continue;
+		if (!boardCarries(doc, uuid)) continue;
 		const patch = patchFor(readGraph(doc));
 		if (patch) writes.push([doc, patch]);
 	}

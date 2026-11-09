@@ -4,8 +4,8 @@ import {
 	forgetHistory, historyFor, stepPatch,
 } from "../../module/relmap/relmap-history.js";
 import {
-	addEdgePatch, addNodePatch, dropEdgePatch, dropNodePatch, edgePatch, nodePatch, normalizeGraph,
-	relmapPath,
+	addChipPatch, addEdgePatch, addNodePatch, dropEdgePatch, dropNodePatch, edgePatch, nodeChipsPatch,
+	nodePatch, normalizeGraph, relmapPath,
 } from "../../module/relmap/relmap-store.js";
 
 // TAKING A CHANGE BACK ON THE RELATIONSHIP MAP.
@@ -50,6 +50,20 @@ function afterPatch(graph, patch) {
 		const [kind, id, field] = parts;
 		next[kind][id] ??= {};
 		next[kind][id][field] = value;
+	}
+	return normalizeGraph(next);
+}
+
+/** `afterPatch` for leaves at any depth (a person's chips, `nodes.<id>.chips.<chip>`), as core merges them. */
+function mergePatch(graph, patch) {
+	const next = foundry.utils.deepClone(graph);
+	for (const [key, value] of Object.entries(patch ?? {})) {
+		const parts = key.slice(`${PREFIX}.`.length).split(".");
+		const leaf = parts.pop();
+		let at = next;
+		for (const part of parts) at = at[part] ??= {};
+		if (leaf.startsWith("-=")) delete at[leaf.slice(2)];
+		else at[leaf] = value;
 	}
 	return normalizeGraph(next);
 }
@@ -231,6 +245,25 @@ describe("a board that has moved on underneath the step", () => {
 		expect(back.edges.link1).toMatchObject({ a: "elena2", b: "stefan", label: "exes" });
 	});
 
+	it("puts back the label and chips of somebody it does not re-make, under none written since", () => {
+		const raw = {
+			chips: { noble: { name: "Noble" } },
+			nodes: {
+				elena: { uuid: "Actor.a1", name: "Elena", x: 20, y: 30, subtitle: "Iron Knight", note: "Old", chips: { noble: true } },
+				stefan: { uuid: "Actor.b2", name: "Stefan", x: 70, y: 30 },
+			},
+		};
+		const before = graph(raw);
+		const change = describeWrite(before, dropNodePatch(before, "elena"));
+		let live = mergePatch(before, dropNodePatch(before, "elena"));
+		live = mergePatch(live, addNodePatch("elena2", { uuid: "Actor.a1", name: "Elena", x: 5, y: 5, note: "New" }));
+
+		const back = mergePatch(live, stepPatch(live, change.back));
+		expect(back.nodes.elena2.subtitle).toBe("Iron Knight");
+		expect(back.nodes.elena2.note).toBe("New");
+		expect(back.nodes.elena2.chips).toEqual({ noble: true });
+	});
+
 	it("has nothing to rub out twice", () => {
 		const before = graph();
 		const change = describeWrite(before, dropEdgePatch("link1"));
@@ -246,6 +279,32 @@ describe("a board that has moved on underneath the step", () => {
 		const change = describeWrite(before, dropEdgePatch("gone1"));
 		expect(change.forward.drop).toEqual([{ kind: "edges", id: "gone1" }]);
 		expect(change.back.make).toEqual([]);
+	});
+});
+
+describe("a chip first defined by the step being undone", () => {
+	const wearDead = id => ({ ...addChipPatch("dead", { name: "Dead" }), ...nodeChipsPatch(id, ["dead"]) });
+
+	it("is rubbed out with the step when only the people it put it on wear it", () => {
+		const before = graph();
+		const change = describeWrite(before, wearDead("elena"));
+		const live = mergePatch(before, wearDead("elena"));
+		const back = mergePatch(live, stepPatch(live, change.back));
+		expect(back.chips.dead).toBeUndefined();
+		expect(back.nodes.elena.chips).toEqual({});
+	});
+
+	// REVIEW 2026-11-08: the Dead chip defined by a seating, then kept current on somebody else.
+	// Undoing the seating took it off them too.
+	it("stays on whoever has been given it since, and only comes off the people the step put it on", () => {
+		const before = graph();
+		const change = describeWrite(before, wearDead("elena"));
+		let live = mergePatch(before, wearDead("elena"));
+		live = mergePatch(live, nodeChipsPatch("stefan", ["dead"]));
+		const back = mergePatch(live, stepPatch(live, change.back));
+		expect(back.chips.dead).toMatchObject({ name: "Dead" });
+		expect(back.nodes.elena.chips).toEqual({});
+		expect(back.nodes.stefan.chips).toEqual({ dead: true });
 	});
 });
 
@@ -408,6 +467,7 @@ describe("every view of one board", () => {
 		const history = new RelmapHistory();
 		await expect(history.step(async () => { throw new Error("refused"); })).rejects.toThrow("refused");
 		expect(history.stepping).toBe(false);
+		expect(await history.step(async () => true)).toBe(true);
 	});
 });
 
@@ -564,5 +624,32 @@ describe("one history per board", () => {
 	// every other such handle under the key `undefined`.
 	it("never shares a history between two nameless handles", () => {
 		expect(historyFor(null)).not.toBe(historyFor(null));
+		expect(historyFor({})).not.toBe(historyFor({}));
+	});
+
+	// A write tracked on a nameless handle has to be found by the step that waits for it.
+	it("hands one nameless handle the same history each time", () => {
+		const handle = {};
+		expect(historyFor(handle)).toBe(historyFor(handle));
+	});
+});
+
+describe("the writes a board is waiting on", () => {
+	it("holds each until it lands, from whichever view sent it, and lets it go either way", async () => {
+		const history = new RelmapHistory();
+		expect(history.landed()).toBeUndefined();
+		let land;
+		let fail;
+		const ok = history.track(new Promise(done => { land = done; }));
+		const bad = history.track(new Promise((_, no) => { fail = no; }));
+		bad.catch(() => {});
+		expect(history.writing).toBe(2);
+		const all = history.landed();
+		land(true);
+		fail(new Error("refused"));
+		await all;
+		await ok;
+		await Promise.resolve();
+		expect(history.writing).toBe(0);
 	});
 });

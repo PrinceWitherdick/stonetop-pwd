@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 import {
 	changedSavedFace, everyBoard, freshFacePatch, keepDeadChipsCurrent, keepSavedFacesCurrent, sweepStaleFaces,
+	writeBoards,
 } from "../../module/relmap/relmap-faces.js";
 import { readGraph } from "../../module/relmap/relmap-doc.js";
 
@@ -132,9 +133,9 @@ describe("every board in the world", () => {
 		const legacy = map("Old", [], { nodes: { a: node(ELROY, "Lord Elroy") }, edges: {} });
 		const empty = map("Empty");
 		journals.push(shown, legacy, empty, { name: "Notes", getFlag: () => null });
-		// Maps come in name order, so "Old" first.
+		// In no order that matters: every caller walks them all for their data.
 		const boards = everyBoard();
-		expect(boards.map(b => b.name)).toEqual(["Old", "Home", "Secret"]);
+		expect(boards.map(b => b.name).sort()).toEqual(["Home", "Old", "Secret"]);
 	});
 });
 
@@ -190,6 +191,21 @@ describe("a rename or new art", () => {
 		asUser(GM);
 		expect(await keepSavedFacesCurrent(renamed(), { system: { hp: 3 } }, {}, GM.id)).toBe(0);
 		expect(home.updates).toHaveLength(0);
+	});
+
+	// A rename reaches only the boards that hold them: any other is looked at off its raw flag, once,
+	// and never normalized (relmap-doc.js `boardCarries`).
+	it("passes over a board nobody on which stands for them, without reading it whole", async () => {
+		asUser(GM);
+		const other = map("Other", [{ name: "Elsewhere", nodes: { v: node("Actor.vera", "Vera") } }]);
+		journals.push(other);
+		const [elsewhere] = other.pages.contents;
+		const look = vi.spyOn(elsewhere, "getFlag");
+		const read = vi.spyOn(home, "getFlag");
+		expect(await keepSavedFacesCurrent(renamed(), { name: "x" }, {}, GM.id)).toBe(2);
+		expect(elsewhere.updates).toHaveLength(0);
+		// One look fewer than a board that holds them, which is read whole after the same look.
+		expect(look.mock.calls.length).toBe(read.mock.calls.length - 1);
 	});
 
 	it("reports a refused write rather than throwing", async () => {
@@ -312,10 +328,50 @@ describe("a death or a return", () => {
 		expect(home.updates).toHaveLength(0);
 	});
 
+	// Every client hears the hook: one that writes no board holding them never works out the death.
+	it("never asks whether they died when no board this client writes carries them", async () => {
+		asUser(GM);
+		let asked = 0;
+		const stranger = { uuid: "Actor.stranger", name: "Stranger", flags: deadFlag("dead"), get type() { asked++; return "character"; } };
+		expect(await keepDeadChipsCurrent(stranger, { "flags.stonetop-pwd.deathsDoor": "dead" }, {}, GM.id)).toBe(0);
+		expect(asked).toBe(0);
+		expect(home.updates).toHaveLength(0);
+	});
+
 	it("reads an NPC by their status", async () => {
 		asUser(GM);
 		const vera = { uuid: "Actor.vera", type: "npc", name: "Vera", system: { status: "dead" }, flags: {} };
 		await keepDeadChipsCurrent(vera, { system: { status: "dead" } }, {}, GM.id);
 		expect(readGraph(home).nodes.v.chips).toEqual({ dead: true });
+	});
+});
+
+// THE ONE WRITER FOR MANY BOARDS (relmap-faces.js `writeBoards`), used by the chips and the window's
+// tidy too: every write sent at once, one refusal warned about and the rest still landing.
+describe("writing several boards at once", () => {
+	it("counts the boards that took their write, and warns, naming what for, about one that refused", async () => {
+		const village = map("Village", [{ name: "Home", nodes: {} }, { name: "Away", nodes: {} }]);
+		const [home, away] = village.pages.contents;
+		home.update = () => Promise.reject(new Error("refused"));
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const wrote = await writeBoards([
+			[home, { "flags.stonetop-pwd.relationshipMap.nodes.a.name": "A" }],
+			[away, { "flags.stonetop-pwd.relationshipMap.nodes.b.name": "B" }],
+		], { why: "to tidy away its dead lines" });
+		expect(wrote).toBe(1);
+		expect(away.updates).toHaveLength(1);
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn.mock.calls[0][0]).toContain('"Home" to tidy away its dead lines');
+		warn.mockRestore();
+	});
+
+	it("says it was for an actor change when nobody says what for", async () => {
+		const village = map("Village", [{ name: "Home", nodes: {} }]);
+		const [home] = village.pages.contents;
+		home.update = () => Promise.reject(new Error("refused"));
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		expect(await writeBoards([[home, { "flags.stonetop-pwd.relationshipMap.nodes.a.name": "A" }]])).toBe(0);
+		expect(warn.mock.calls[0][0]).toContain("for an actor change");
+		warn.mockRestore();
 	});
 });

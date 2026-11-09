@@ -3210,7 +3210,10 @@ describe("the arrow keys, the server and the undo", () => {
 		const { app, entry } = windowFor(structuredClone(TWO_PEOPLE));
 		app._pendingNudge.set("elena", { x: 44, y: 30 });
 		await app._stepHistoryNow("back");
-		expect(entry.updates).toHaveLength(1);
+		// The nudge is written first, and is then the step the undo takes back: Elena goes home.
+		expect(entry.updates).toHaveLength(2);
+		expect(Object.entries(entry.updates[0]).find(([key]) => key.endsWith(".elena.x"))?.[1]).toBe(44);
+		expect(Object.entries(entry.updates[1]).find(([key]) => key.endsWith(".elena.x"))?.[1]).toBe(20);
 		expect(app._pendingNudge.size).toBe(0);
 	});
 });

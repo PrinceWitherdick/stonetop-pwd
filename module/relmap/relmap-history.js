@@ -280,7 +280,20 @@ export function stepPatch(graph, step) {
 
 	for (const { kind, id, data } of make) {
 		if (kind === "nodes") {
-			if (alias.has(id)) continue;
+			if (alias.has(id)) {
+				// Not re-made, but what the step knew about them is not lost either: their chips go
+				// back on, and their label and note fill in wherever the one standing has none (never
+				// over words somebody has written on them since).
+				const there = alias.get(id);
+				const now = graph.nodes[there] ?? {};
+				const words = {};
+				for (const field of ["subtitle", "note"]) if (data?.[field] && !now[field]) words[field] = data[field];
+				if (Object.keys(words).length) Object.assign(patch, nodePatch(there, words) ?? {});
+				const worn = Object.keys(data?.chips ?? {}).filter(chipId => data.chips[chipId]
+					&& !now.chips?.[chipId] && (graph?.chips?.[chipId] || making.has(`chips/${chipId}`)));
+				if (worn.length) Object.assign(patch, nodeChipsPatch(there, worn) ?? {});
+				continue;
+			}
 			Object.assign(patch, addNodePatch(id, data ?? {}) ?? {});
 			continue;
 		}
@@ -335,7 +348,19 @@ export function stepPatch(graph, step) {
 			continue;
 		}
 		if (kind === "chips") {
-			if (graph?.chips?.[id]) Object.assign(patch, dropChipPatch(graph, id) ?? {});
+			if (!graph?.chips?.[id]) continue;
+			// ⚠ ONLY WHEN NOBODY ELSE STILL WEARS IT. Undoing the step that first defined a chip takes
+			// it off the people THIS step put it on (its `set`) and the people it takes off the board
+			// (its `drop`). Anybody wearing it besides them got it some other way since — another
+			// reader, or the Dead chip kept current — and rubbing out the chip would take it off them too.
+			const off = new Set();
+			for (const one of step.set ?? []) {
+				if (one.kind === "nodes" && one.field === CHIPS && one.key === id && !one.value) off.add(as(one.id));
+			}
+			for (const one of step.drop ?? []) if (one.kind === "nodes") off.add(one.id);
+			const wornElsewhere = Object.entries(graph?.nodes ?? {})
+				.some(([nodeId, node]) => node?.chips?.[id] && !off.has(nodeId));
+			if (!wornElsewhere) Object.assign(patch, dropChipPatch(graph, id) ?? {});
 			continue;
 		}
 		if (graph?.edges?.[id]) Object.assign(patch, dropEdgePatch(id) ?? {});
@@ -406,11 +431,13 @@ function mergeBackSteps(first, second) {
  * put back.
  *
  * ⚠ ONE BOARD, TWO VIEWS, ONE HISTORY. The steading sheet's map tab and the map window are separate
- * windows, and both find a board's history by its page (`historyFor`), which is right: it is the same
- * reader taking back the same change. So two things that would otherwise be each window's own live
- * here instead. The one-step-at-a-time guard (`step`), or an Undo in each applied one step twice. And
- * the word that the stacks have moved (`subscribe`), so every view's buttons are repainted after a
- * change made in either, or the other one went on offering a change already taken back.
+ * windows (and two map windows may be open on one board), and both find a board's history by its page (`historyFor`), which is right: it is the same
+ * reader taking back the same change. So three things that would otherwise be each window's own live
+ * here instead. The one-step-at-a-time guard (`step`), or an Undo in each applied one step twice. The
+ * writes still on their way to the server (`track`), or an Undo in one view looked at the stack before
+ * a label written from the other had landed, took back the step before it, and the label then emptied
+ * the redo stack. And the word that the stacks have moved (`subscribe`), so every view's buttons are
+ * repainted after a change made in either, or the other one went on offering a change already taken back.
  */
 export class RelmapHistory {
 	constructor({ max = RELMAP_HISTORY_MAX, now = () => Date.now() } = {}) {
@@ -419,7 +446,32 @@ export class RelmapHistory {
 		this._back = [];
 		this._forward = [];
 		this._stepping = false;
+		this._inflight = new Set();
 		this._listeners = new Set();
+	}
+
+	/**
+	 * Hold on to one write to this board until it lands, so a step from ANY view of the board waits for
+	 * it first (`landed`). Taken in the same breath as the write is sent. Hands the write back.
+	 *
+	 * @param {Promise<*>} write
+	 */
+	track(write) {
+		this._inflight.add(write);
+		const done = () => this._inflight.delete(write);
+		// The caller has the write itself and answers for its failure; this only lets go of it.
+		Promise.resolve(write).then(done, done).catch(() => {});
+		return write;
+	}
+
+	/** Every tracked write that has not landed yet, as one promise; undefined for none. */
+	landed() {
+		return this._inflight.size ? Promise.allSettled([...this._inflight]) : undefined;
+	}
+
+	/** How many tracked writes are still on their way. For the tests. */
+	get writing() {
+		return this._inflight.size;
 	}
 
 	/**
@@ -520,6 +572,7 @@ export class RelmapHistory {
 			top.back = mergeBackSteps(top.back, back);
 			top.label = label || top.label;
 			top.at = at;
+			// Nothing to forget: a fold only happens with nothing undone (see the guard above).
 			this._changed();
 			return top;
 		}
@@ -583,13 +636,21 @@ export class RelmapHistory {
  * It lasts as long as the page is loaded and no longer. Nothing is written to any document.
  */
 const HISTORIES = new Map();
+/** The histories of handles with no uuid, by the handle itself, so each goes when its handle does. */
+const UNNAMED = new WeakMap();
 
 /** This board's history, made the first time it is asked for. */
 export function historyFor(doc) {
 	const key = doc?.uuid;
 	// A handle with no uuid is one nothing could ever find again; it gets a history of its own that
-	// is thrown away with it, rather than sharing one under the key `undefined`.
-	if (!key) return new RelmapHistory();
+	// is thrown away with it, rather than sharing one under the key `undefined`. The SAME one each
+	// time it is asked, or a write tracked on it would be missed by the step that waits for it.
+	if (!key) {
+		if (!doc || typeof doc !== "object") return new RelmapHistory();
+		let own = UNNAMED.get(doc);
+		if (!own) { own = new RelmapHistory(); UNNAMED.set(doc, own); }
+		return own;
+	}
 	let history = HISTORIES.get(key);
 	if (!history) {
 		history = new RelmapHistory();

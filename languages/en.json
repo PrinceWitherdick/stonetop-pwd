@@ -3593,6 +3593,9 @@
         "pinLabel": "setting out"
       }
     },
+    "suggestionMenu": {
+      "added": "added"
+    },
     "relmap": {
       "disabled": "The relationship map is turned off in this world's settings.",
       "noun": "relationship map",
