@@ -107,10 +107,14 @@
 		<div class="stonetop-vital-inner">
 			<div class="stonetop-vital-title-row">
 				<label class="cell__title" data-vital="level">{{localize "stonetop.character.attributes.level"}}</label>
-				{{#if stonetop.canLevelUp}}
+				{{#if stonetop.levelUpCanOpen}}
 				<a class="stonetop-levelup-icon" role="button" tabindex="0"
 				   data-tooltip="{{localize "stonetop.specialMoves.levelUp.ready"}}"
 				   aria-label="{{localize "stonetop.specialMoves.levelUp.ready"}}"></a>
+				{{else if stonetop.canLevelUp}}
+				<span class="stonetop-levelup-icon is-readonly" role="img"
+				   data-tooltip="{{localize "stonetop.specialMoves.levelUp.readyReadOnly"}}"
+				   aria-label="{{localize "stonetop.specialMoves.levelUp.readyReadOnly"}}"></span>
 				{{/if}}
 			</div>
 			<input class="attr-value" type="number"

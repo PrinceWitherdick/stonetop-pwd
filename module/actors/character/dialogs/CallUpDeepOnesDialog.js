@@ -7,6 +7,8 @@ import {
 	SERVANT_TRAIT_OPTIONS, SERVANT_MOVE_OPTIONS, resolveServantBatch,
 } from "../../../data/servant-of-daagon.js";
 import { countOf, plural } from "../../../utils/plural.js";
+import { confirmOutcome } from "../../../utils/ask-with-buttons.js";
+import { escHtml } from "../../../utils/strings.js";
 
 // ── CallUpDeepOnesDialog ─────────────────────────────────────────────────────
 // The Ring of Daagon's "Call Up the Deep Ones" mystery (Book II, "Mysteries of the
@@ -105,7 +107,9 @@ export class CallUpDeepOnesDialog extends StonetopDialog {
 
 	// Throw the unspent dice away and roll five fresh d4s, telling the table: the old and
 	// new values go to chat, so a re-roll is a visible ruling rather than a private redo.
+	// False when the player chose to keep what they have (nothing rolled, nothing posted).
 	async _reroll() {
+		if (!(await this._confirmReroll())) return false;
 		const before = [...(this._dice ?? [])];
 		_pendingDice.delete(this._pendingKey);
 		await this._rollDice();
@@ -115,6 +119,28 @@ export class CallUpDeepOnesDialog extends StonetopDialog {
 			speaker: ChatMessage.getSpeaker({ actor: this._actor }),
 		});
 		this.render(false);
+		return true;
+	}
+
+	// A re-roll puts every die back on its own aspect and clears the traits and moves (on their
+	// own panels, out of sight from the dice), so it asks first once any of that has been done.
+	async _confirmReroll() {
+		const reassigned = _ASPECT_KEYS.some((k, i) => this._assign[k] !== i);
+		const traits = this._traits.map(key => SERVANT_TRAIT_OPTIONS.find(t => t.key === key)?.label ?? key);
+		const moves  = [...this._moves];
+		if (!reassigned && !traits.length && !moves.length) return true;
+		const named = names => names.map(n => `<strong>${escHtml(n)}</strong>`).join(", ");
+		const lost = [
+			reassigned    ? `<p>How you've assigned the dice: Die 1 goes back on ${SERVANT_ASPECTS[0].label}, Die 2 on ${SERVANT_ASPECTS[1].label}, and so on.</p>` : "",
+			traits.length ? `<p>Your ${plural(traits.length, "trait")}: ${named(traits)}.</p>` : "",
+			moves.length  ? `<p>Your ${plural(moves.length, "move")}: ${named(moves)}.</p>` : "",
+		].join("");
+		return !!(await confirmOutcome({
+			title:   "Re-roll the five d4s?",
+			content: `<p>Rolling five fresh d4s starts this batch over, and you lose:</p>${lost}<p>The re-roll is posted to chat, old dice and new.</p>`,
+			yes: { label: "Re-roll and start over", icon: "fa-dice", className: "stonetop-dialog-btn--danger" },
+			no:  { label: "Keep these dice" },
+		}));
 	}
 
 	// The die VALUE assigned to an aspect (1-4), or 0 if unassigned.
@@ -299,7 +325,12 @@ export class CallUpDeepOnesDialog extends StonetopDialog {
 		html.find(".stonetop-cu-name").on("change", ev => { this._name = ev.currentTarget.value; this.render(false); });
 		html.find(".stonetop-cu-cost-input").on("change", ev => { this._costKind = ev.currentTarget.value; this.render(false); });
 
-		html.find(".stonetop-cu-reroll").on("click", ev => this._guardBusy(ev, () => this._reroll()));
+		// A re-roll redraws the window, which brings the button back; one turned down does not, so
+		// the button is given back here.
+		html.find(".stonetop-cu-reroll").on("click", async ev => {
+			const button = ev.currentTarget;
+			if ((await this._guardBusy(ev, () => this._reroll())) === false) button.disabled = false;
+		});
 		// Latched: Manifest awaits a roll and the sheet's write before it closes, and a second
 		// click in that gap would call up a second batch.
 		html.find(".stonetop-cu-manifest").on("click", ev => this._guardBusy(ev, () => this._finish()));

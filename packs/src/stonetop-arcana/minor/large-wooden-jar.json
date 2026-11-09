@@ -49,7 +49,7 @@
         "item": null,
         "description": "<p>When you <strong><em>interrupt the idyllic afterlife of the Green Lord bound to the jar and demand that it change your form</em></strong>, describe the change and pick as many as you dare:</p><ul><li>The change lasts as long as you like (else, it lasts until you get a 6- on a move)</li><li>The change is quick and easy (else, it takes minutes or even hours)</li><li>You adapt to the new form quickly (else, mark a debility)</li><li>Pick 2 of your stats; swap their values until the change ends</li></ul><p>Then roll +CHA: <strong>on a 10+</strong>, the spirit works the change, just as you asked; <strong>on a 7-9</strong>, it works the change, but you gain Ire equal to the number of choices you've made; <strong>on a 6-</strong>, the spirit rebels and wracks your body, dealing 1d10 damage per Ire you hold. If you survive, clear all Ire.</p>",
         "resource": {
-          "max": 8,
+          "max": 9,
           "maxStat": null,
           "title": "Ire",
           "labels": []

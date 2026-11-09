@@ -21,6 +21,7 @@
 // in the delete dialog (`deleteExpeditionChroniclePage`).
 
 import { getSetting } from "../settings.js";
+import { EXPEDITION_LOG_SETTING } from "./expedition-log-core.js";
 import { writePlacesOfInterest } from "./places-chronicle.js";
 import { playbookSlug } from "./playbook-actors.js";
 import { introductionsRoster } from "./introductions-order.js";
@@ -131,7 +132,7 @@ export async function openChroniclePageForActor(actor) {
 // them now, so a page whose text was cleared at its source loses what is still ours on it. Those
 // are never created.
 function compileChroniclePages() {
-	const expeditionLog = getSetting("expeditionAnswers") ?? {};
+	const expeditionLog = getSetting(EXPEDITION_LOG_SETTING) ?? {};
 	const pages = buildChroniclePages({
 		pcs:           chroniclePcs(),
 		introAnswers:  getSetting("introductionsAnswers") ?? {},

@@ -62,17 +62,18 @@ function elementUnderPointer() {
  * Clicking a column cycles: unsorted -> ascending -> descending -> ascending...
  * Clicking a different column starts it ascending.
  *
- * A table with no header and `data-sort="name"` (the steading's People cards, whose rows
- * are not columns any more) has nothing to click: its rows simply stay A-Z by name, with
- * the same don't-move-under-the-pointer guard. Each row then names itself in
- * `data-sort-name`, since its name sits deep inside the card rather than in a cell.
+ * A table with `data-sort="name"` (the People rows) sorts on the name only: A-Z unless its
+ * Name header has been clicked to Z-A, never unsorted. Its other header cells carry no
+ * `.steading-residents-header-label`, so they never sort (a sort on a sentence of
+ * relations or notes tells nobody anything). Each row names itself in `data-sort-name`,
+ * since its name sits among the occupation and traits rather than alone in a cell.
  *
  * @param {HTMLElement} table       - the `.steading-residents-table` wrapper
  * @param {string}      storageKey  - unique key (e.g. "players", "residents", "neighbors")
  */
 export function makeColumnsSortable(table, storageKey) {
 	const byNameOnly = table?.dataset.sort === "name";
-	const header = byNameOnly ? null : resolveResidentsGrid(table)?.header;
+	const header = resolveResidentsGrid(table)?.header ?? null;
 	const list = table?.querySelector(":scope > .steading-residents-list");
 	if (!list || (!byNameOnly && !header)) return;
 
@@ -99,13 +100,13 @@ export function makeColumnsSortable(table, storageKey) {
 
 	const storageId = `${STORAGE_PREFIX}${storageKey}`;
 	let state = null;
-	const saved = byNameOnly ? null : readStoredColumnState(storageId);
-	if (saved && typeof saved.col === "string" && (saved.dir === "asc" || saved.dir === "desc")) state = saved;
+	const nameClass = "steading-residents-col-name";
+	const saved = readStoredColumnState(storageId);
+	if (saved && typeof saved.col === "string" && (saved.dir === "asc" || saved.dir === "desc")
+		&& (!byNameOnly || saved.col === nameClass)) state = saved;
+	if (byNameOnly && !state) state = { col: nameClass, dir: "asc" };
 
 	const persist = () => writeStoredColumnState(storageId, state);
-
-	const nameClass = "steading-residents-col-name";
-	if (byNameOnly) state = { col: nameClass, dir: "asc" };
 
 	const valueOf = (row, colClass) => {
 		if (colClass === nameClass && row.dataset.sortName !== undefined) return row.dataset.sortName.trim();
@@ -223,7 +224,9 @@ export function makeColumnsSortable(table, storageKey) {
 			const icon = cell.querySelector(":scope > .steading-residents-sort-icon");
 			if (icon) {
 				icon.className = "fas steading-residents-sort-icon "
-					+ (active ? (state.dir === "asc" ? "fa-sort-up" : "fa-sort-down") : "fa-sort");
+					// Carets, not fa-sort-up/-down: those are the two halves of the double arrow,
+					// drawn 2px high and 4px low of the label.
+					+ (active ? (state.dir === "asc" ? "fa-caret-up" : "fa-caret-down") : "fa-sort");
 			}
 		}
 	};

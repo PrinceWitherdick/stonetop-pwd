@@ -37,10 +37,10 @@
 
 import { SYSTEM_ID } from "../system-id.js";
 import { isFightTabEnabled, isFightRingOn } from "../settings.js";
-import { fightOnScene } from "./fight-state.js";
+import { fightOnScene, combatantBodies } from "./fight-state.js";
 import { damageBlows, damageCardText, printedBlow } from "../utils/damage.js";
 import { pcDamageDie, rollDamageAt, rollCharacterDamageAt, letFlyAmmoStatuses, crewBlow } from "../combat/attack-flow.js";
-import { followerRingInfo, openFollowerOrder } from "./follower-fight.js";
+import { followerRingInfo, openFollowerOrder, followerExtraBlows } from "./follower-fight.js";
 import { followerCardFor } from "../actors/character/follower-masters.js";
 import { heldReadiness } from "../combat/defend-readiness.js";
 import { readinessHeldBy } from "./follower-readiness.js";
@@ -246,6 +246,13 @@ export function ringButtons(actor, { die = "", order = null, swarm = null, readi
 				});
 			}
 		}
+		// A follower's other printed blows, each a button: Halix's "host's weapon d6", the storm spirit's lightning
+		// (follower-fight.js#followerExtraBlows; round-2 audit, the summons' second blows).
+		if (order) {
+			for (const blow of followerExtraBlows(actor)) {
+				damage.push({ run: "damage", label: blow.title || damageText, formula: blow.formula, keywords: blow.keywords, rollMode: blow.rollMode || "normal", weapon: blow.weapon, icon: dieIcon(blow.formula) });
+			}
+		}
 	}
 
 	return { moves, damage, readiness: actor?.type === "character" || order ? Math.max(0, Math.trunc(Number(readiness) || 0)) : 0 };
@@ -364,6 +371,11 @@ async function rollFollowerOrFoeDamage(actor, button, { shiftKey = false, seeded
 /**
  * The fight a token stands in, when its ring may come up for this reader, else null.
  *
+ * NOT FOR ONE OUT OF THE FIGHT (fight-sides.js#bodiesFor): a foe at 0 HP or marked out, a character dying,
+ * out of the action at Death's Door ("you're out of the action", Book I p.245) or past it. Their ring offered
+ * Clash and Defend to someone who can make neither. Unstoppable's fighting on still counts them in, and the
+ * Door's own last move is made from its window, not from here. A ring up when they drop goes (syncFightRing).
+ *
  * @param {Token} token  the placeable
  * @returns {null|{combat: Combat, combatant: Combatant}}
  */
@@ -375,7 +387,7 @@ export function ringFightFor(token, { canvasScene = globalThis.canvas?.scene } =
 	const combat = fightOnScene(scene);
 	const combatants = typeof combat?.combatants?.[Symbol.iterator] === "function" ? [...combat.combatants] : [];
 	const combatant = combatants.find(c => c.tokenId === doc.id && c.sceneId === scene.id);
-	return combatant ? { combat, combatant } : null;
+	return combatant && !combatantBodies(combatant).out ? { combat, combatant } : null;
 }
 
 /**

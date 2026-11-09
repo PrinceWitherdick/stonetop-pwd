@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from "vitest";
 import {
 	askGoingOnOffense, settleReadinessOnAttack, holdersLeft, droppedHoldingReadiness, installReadinessLoss, charactersLeft,
-	settleFollowerReadinessOnAttack, settleFollowerTokenReadinessOnAttack, shieldWallsLeft,
+	settleFollowerReadinessOnAttack, settleFollowerTokenReadinessOnAttack, shieldWallsLeft, stoppedFightingHoldingReadiness,
 } from "../../module/combat/readiness-loss.js";
 import { countsAsFight } from "../../module/fight/fight-state.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
@@ -19,10 +19,19 @@ function hero(id, readiness = 0, { hp = 10, type = "character" } = {}) {
 		flags: { [SYSTEM_ID]: { readiness } },
 		system: { attributes: { hp: { value: hp } } },
 		setFlag: vi.fn(async (scope, key, value) => { actor.flags[scope][key] = value; }),
+		update: vi.fn(async data => { for (const [path, value] of Object.entries(data)) setPath(actor, path, value); }),
 	};
 	return actor;
 }
 const held = actor => actor.flags[SYSTEM_ID].readiness;
+/** An update's dotted path written onto a fake actor. */
+const setPath = (obj, path, value) => {
+	const keys = path.split(".");
+	const last = keys.pop();
+	let at = obj;
+	for (const key of keys) at = (at[key] ??= {});
+	at[last] = value;
+};
 
 /** A character with move tracks (`tracks`, counting what is held), written as MoveResources writes them. */
 function marshal(id, tracks = {}) {
@@ -208,6 +217,68 @@ describe("installReadinessLoss", () => {
 		expect(held(ana)).toBe(1);
 	});
 
+	// Unstoppable (p.114) "When you stop fighting, roll for Death's Door": one who has stopped fighting has stopped
+	// defending too (p.216). The stamp lifted at 0 HP lets the Readiness go; the stamp laid at the drop keeps it.
+	it("stopping fighting at 0 HP lets it go", async () => {
+		const bram = hero("bram", 2, { hp: 0 });
+		expect(stoppedFightingHoldingReadiness(bram, { flags: { [SYSTEM_ID]: { "-=unstoppableFighting": null } } })).toBe(true);
+		expect(stoppedFightingHoldingReadiness(bram, { flags: { [SYSTEM_ID]: { unstoppableFighting: null } } })).toBe(true);
+		expect(stoppedFightingHoldingReadiness(bram, { flags: { [SYSTEM_ID]: { battleJoy: null } } })).toBe(false);
+		expect(stoppedFightingHoldingReadiness(hero("ana", 2, { hp: 4 }), { flags: { [SYSTEM_ID]: { "-=unstoppableFighting": null } } })).toBe(false);
+		const hooks = fakeHooks();
+		installReadinessLoss({ hooks });
+		await hooks.fire("updateActor", bram, { flags: { [SYSTEM_ID]: { "-=unstoppableFighting": null } } });
+		expect(held(bram)).toBe(0);
+		expect(posted[0].content).toContain("Bram stops fighting at 0 HP and loses their Readiness.");
+	});
+
+	// EDG-15: with no GM online, the client that answers for a character (its player's) lets their Readiness go.
+	it("with no GM online, the character's own player's client lets it go, and nobody else's", async () => {
+		const p1 = { id: "p1", isGM: false, active: true };
+		const p2 = { id: "p2", isGM: false, active: true };
+		globalThis.game.users = Object.assign(collection([p1, p2]), { activeGM: null });
+		const bram = hero("bram", 3, { hp: 0 });
+		bram.testUserPermission = user => user.id === "p1";
+		const hooks = fakeHooks();
+		installReadinessLoss({ hooks });
+		globalThis.game.user = p2;
+		await hooks.fire("updateActor", bram, { system: { attributes: { hp: { value: 0 } } } });
+		expect(held(bram)).toBe(3);
+		globalThis.game.user = p1;
+		await hooks.fire("updateActor", bram, { system: { attributes: { hp: { value: 0 } } } });
+		expect(held(bram)).toBe(0);
+	});
+
+	it("a GM who is not the primary writes nothing", async () => {
+		const gm2 = { id: "gm2", isGM: true, active: true };
+		const gm = globalThis.game.users.activeGM;
+		globalThis.game.users = Object.assign(collection([gm, gm2]), { activeGM: gm });
+		globalThis.game.user = gm2;
+		const hooks = fakeHooks();
+		installReadinessLoss({ hooks });
+		const bram = hero("bram", 3, { hp: 0 });
+		await hooks.fire("updateActor", bram, { system: { attributes: { hp: { value: 0 } } } });
+		expect(held(bram)).toBe(3);
+	});
+
+	// A follower ordered to Defend holds Readiness on Defend's terms (p.469): leaving the fight lets it go.
+	it("a follower's token taken out of a fight still going lets the Readiness on their card go", async () => {
+		const maddoc = hero("maddoc");
+		maddoc.flags[SYSTEM_ID].crew = { readiness: 2 };
+		maddoc.update = vi.fn(async data => { for (const [path, value] of Object.entries(data)) setPath(maddoc, path, value); });
+		const crew = hero("crew", 0, { type: "npc" });
+		const cardFor = actor => (actor === crew ? { character: maddoc, ftype: "crew", slug: "" } : null);
+		const hooks = fakeHooks();
+		installReadinessLoss({ hooks, cardFor });
+		const going = fight("f1", [combatant("m", maddoc)]);
+		globalThis.game.combats = collection([going]);
+		const left = combatant("c", crew);
+		left.parent = going;
+		await hooks.fire("deleteCombatant", left);
+		expect(maddoc.flags[SYSTEM_ID].crew.readiness).toBe(0);
+		expect(posted.at(-1).content).toContain("Crew leaves the fight and loses their Readiness.");
+	});
+
 	it("going down lets it go", async () => {
 		const hooks = fakeHooks();
 		installReadinessLoss({ hooks });
@@ -236,6 +307,27 @@ describe("installReadinessLoss", () => {
 	});
 
 	// Heavy re-audit, the user's ruling (2026-10-18): grudges against NAMED foes outlast the fight.
+	// The other "next roll against them" records follow the same rule (hero-moves.js#clearFightFoeRecords).
+	it("the fight ending lets Censure, Truth, Speak Softly and Alpha records against tokens go, in one write", async () => {
+		const bram = hero("bram");
+		Object.assign(bram.flags[SYSTEM_ID], {
+			censureEnraged: [{ key: "Scene.s1.Token.crin", name: "Crinwin" }, { key: "Actor.villain", name: "Villain" }],
+			truthOrConsequences: [{ key: "named:old tom", name: "Old Tom", mode: "adv" }, { key: "Scene.s1.Token.crin", name: "Crinwin", mode: "dis" }],
+			speakSoftly: [{ key: "Scene.s1.Token.crin", name: "Crinwin" }],
+			alphaOver: [{ key: "Actor.wolf", name: "Wolf" }],
+		});
+		bram.getFlag = (scope, key) => bram.flags[scope]?.[key];
+		bram.update = vi.fn(async data => { for (const [path, value] of Object.entries(data)) setPath(bram, path, value); });
+		const hooks = fakeHooks();
+		installReadinessLoss({ hooks });
+		await hooks.fire("deleteCombat", fight("f1", [combatant("a", bram)]));
+		expect(bram.update).toHaveBeenCalledTimes(1);
+		expect(bram.flags[SYSTEM_ID].censureEnraged).toEqual([{ key: "Actor.villain", name: "Villain" }]);
+		expect(bram.flags[SYSTEM_ID].truthOrConsequences).toEqual([{ key: "named:old tom", name: "Old Tom", mode: "adv" }]);
+		expect(bram.flags[SYSTEM_ID].speakSoftly).toEqual([]);
+		expect(bram.flags[SYSTEM_ID].alphaOver).toEqual([{ key: "Actor.wolf", name: "Wolf" }]);
+	});
+
 	it("the fight ending keeps Payback's grudges against named foes and lets the mooks' tokens go", async () => {
 		const bram = hero("bram");
 		bram.flags[SYSTEM_ID].harmedBy = ["Actor.villain", "Scene.s1.Token.crin", "Actor.witch"];
@@ -276,7 +368,9 @@ describe("installReadinessLoss", () => {
 		await hooks.fire("deleteCombat", fight("f1", [combatant("v", vesna)]));
 		expect(vesna.flags[SYSTEM_ID].rapierWit).toEqual([{ key: "Actor.villain", name: "Lord Ulm", roll: false, blow: true }]);
 		expect(vesna.flags[SYSTEM_ID].harmedBy).toEqual(["Actor.villain"]);
-		expect(vesna.setFlag).not.toHaveBeenCalledWith(SYSTEM_ID, "harmedBy", expect.anything());
+		// One write, naming only what was let go: the grudge list, all named foes, is not written.
+		expect(vesna.update).toHaveBeenCalledTimes(1);
+		expect(Object.keys(vesna.update.mock.calls[0][0])).toEqual([`flags.${SYSTEM_ID}.rapierWit`]);
 	});
 
 	it("only the primary GM writes", async () => {

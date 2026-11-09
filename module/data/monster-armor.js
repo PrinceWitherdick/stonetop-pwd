@@ -86,14 +86,41 @@ export function monsterArmorGate(system) {
 	return { conditional: armor - clause.armor, conditionalSource: `${VERSUS_ARMOR_PREFIX}${clause.against}` };
 }
 
+/** A bracketed clause about harm a move DEALS, never a reminder about harm taken. */
+const DEALT_RE = /\b(?:harms|deals?|foes?)\b/i;
+
+/**
+ * The damage-taken clauses a stat block prints INSIDE a move, each said with the move it holds for: the Tomb-Bog
+ * Spirit's "Shape a hulking form from peat, soil, and mud (takes half damage from stabbing, slashing, or fire)",
+ * Morgais's "Manifest as a youth or beast, shaped from water (unharmed by cutting or stabbing, unless bronze)"
+ * (round-2 audit FOE-6). Only a bracketed clause is read, and only by the harm-taken patterns, so a move's own
+ * tags ("(+messy, 3 piercing)") are never mistaken for one.
+ */
+function moveDamageNotes(moves) {
+	const notes = [];
+	for (const raw of moves ?? []) {
+		const name = stripHtmlToText(String(raw ?? ""));
+		const label = name.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim().replace(/[,;:]+$/, "");
+		for (const group of name.matchAll(/\(([^)]*)\)/g)) {
+			const clause = group[1].trim();
+			// Not a clause about harm the move DEALS: the Cinderwraith's engulf "harms even fireproof foes".
+			if (!clause || !DAMAGE_NOTE_RE.test(clause) || DEALT_RE.test(clause)) continue;
+			notes.push(label ? `${clause} (${label})` : clause);
+		}
+	}
+	return notes;
+}
+
 /**
  * What a damage card reminds whoever applies a blow to this monster, one line each: the armor exceptions the
- * box does not carry, and the qualities that change what a blow does (see the note at the top). [] for none.
+ * box does not carry, the qualities that change what a blow does (see the note at the top), and the same said
+ * inside one of its moves (`moves`, the move names). [] for none.
  *
  * @param {object} system
+ * @param {{moves?: string[]}} [o]
  * @returns {string[]}
  */
-export function monsterDamageNotes(system) {
+export function monsterDamageNotes(system, { moves = [] } = {}) {
 	const clauses = versusClauses(system);
 	const gate = gateClause(clauses, armorValue(system));
 	const notes = clauses.filter(clause => clause !== gate).map(clause => clause.text);
@@ -104,5 +131,6 @@ export function monsterDamageNotes(system) {
 		if (!rest || !DAMAGE_NOTE_RE.test(rest)) continue;
 		notes.push(rest.replace(/^and\s+/i, ""));
 	}
+	notes.push(...moveDamageNotes(moves));
 	return [...new Set(notes.map(note => note.charAt(0).toUpperCase() + note.slice(1)))];
 }

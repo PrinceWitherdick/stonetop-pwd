@@ -61,8 +61,9 @@ vi.mock("../../module/dialogs/content-picker.js", () => ({
 const { RelationshipMapWindow, openRelationshipMap } =
 	await import("../../module/dialogs/RelationshipMapWindow.js");
 const { listVisibleMapPages, mapBoardRole, readGraph } = await import("../../module/relmap/relmap-doc.js");
+const { labelItalicFor } = await import("../../module/relmap/relmap-pen.js");
 const { forgetAllHistory } = await import("../../module/relmap/relmap-history.js");
-const { dropNodePatch, edgePatch } = await import("../../module/relmap/relmap-store.js");
+const { dropNodePatch, edgePatch, nodePatch } = await import("../../module/relmap/relmap-store.js");
 const { RELMAP_SEAT_MIN } = await import("../../module/relmap/relmap-store.js");
 const { RELMAP_REACH_MAX, RELMAP_REACH_MIN } = await import("../../module/utils/relmap-geometry.js");
 const { RELMAP_BOARD_ASPECT, RELMAP_HEAD_PX, curveWithGap, edgeLabelAnchor } =
@@ -195,6 +196,8 @@ function windowFor(graph = TWO_PEOPLE, {
 	// constructor stands up beside that one. Its own map for the reason the class gives: the two
 	// flush into different halves of the graph.
 	app._pendingSeat = new Map();
+	// And the writes sent and not back yet, which an undo waits on. See `_inflight` on the class.
+	app._inflight = new Set();
 	// Who this reader has selected to move together, which the constructor stands up empty. See
 	// `_selected` on the class.
 	app._selected = [];
@@ -387,14 +390,18 @@ describe("the update hook", () => {
 describe("a repaint that arrives at a bad moment", () => {
 	// Repainting under a live drag replaces the very element the pointer is holding: the drag then
 	// carries on moving a node that is no longer in the document, and the drop writes nothing.
-	it("waits while this reader is dragging, and lands the moment they let go", async () => {
+	//
+	// ⚠ AND FROM THE PRESS, not from the drag threshold: a repaint landing in those few pixels replaced
+	// the portrait the drag was about to carry. The drag layer is asked (`pressing`).
+	it("waits while this reader is pressing on the board, and lands the moment they let go", async () => {
 		const { app, board } = windowFor();
-		board.classList.add("is-dragging");
+		let pressing = true;
+		app._teardownDrag = Object.assign(() => {}, { pressing: () => pressing });
 		await app.sync();
 		expect(board.innerHTML).toBe("");
 		expect(app._pendingSync).toBe(true);
 
-		board.classList.remove("is-dragging");
+		pressing = false;
 		await app._flushPendingSync();
 		await new Promise(r => setTimeout(r, 0));
 		expect(app._pendingSync).toBe(false);
@@ -1337,6 +1344,61 @@ describe("what a portrait says when it is rested on", () => {
 		expect(said.nobody).toBe("The Miller");
 		expect(said.elena).not.toContain("Right-click");
 	});
+
+	// THE LABEL UNDER THE NAME is this map's, never the actor's, and the face says it too: a reader on
+	// a screen reader hears "Elena, Iron Knight" where a sighted one reads the chip under the face.
+	it("carries the label under the name, off this map, and says it on the face", () => {
+		const cast = foundry.utils.deepClone(CAST);
+		cast.nodes.elena.subtitle = "Iron Knight";
+		cast.nodes.nobody.subtitle = "Deceased";
+		const { app } = windowFor(cast, { isOwner: false });
+		const nodes = Object.fromEntries(app._boardContext(app._plan()).nodes.map(node => [node.id, node]));
+		expect(nodes.elena.subtitle).toBe("Iron Knight");
+		expect(nodes.ghost.subtitle).toBe("");
+		expect(nodes.nobody.tooltip).toBe("The Miller, Deceased");
+		expect(nodes.elena.tooltip).toMatch(/^Elena, Iron Knight\b/);
+		// The name itself stays the name: it is what every other sentence about them uses.
+		expect(nodes.elena.name).toBe("Elena");
+	});
+
+	// THE LABEL'S BAR is placed off the PAINT, under the name: where the label sits.
+	it("hands the label's bar the person as painted, with its point under their name", () => {
+		const cast = foundry.utils.deepClone(CAST);
+		cast.nodes.elena.subtitle = "Iron Knight";
+		const { app } = windowFor(cast);
+		app._boardContext(app._plan());
+		const held = app._personAt("elena");
+		expect(held.node.subtitle).toBe("Iron Knight");
+		expect(held.at.left).toBe(20);
+		expect(held.at.top).toBeGreaterThan(30);
+		expect(app._personAt("somebody-else")).toBeNull();
+	});
+
+	// WHERE THE WORDS STAND, AND THE ITALICS, for the board; a label's lines heard as a list.
+	it("carries each person's side and italics, and says a label's lines one after another", () => {
+		const cast = foundry.utils.deepClone(CAST);
+		cast.nodes.elena.subtitle = "The Iron Knight\nLord of the Vale";
+		cast.nodes.elena.side = "left";
+		cast.nodes.elena.italic = false;
+		const { app } = windowFor(cast, { isOwner: false });
+		const nodes = Object.fromEntries(app._boardContext(app._plan()).nodes.map(node => [node.id, node]));
+		expect(nodes.elena).toMatchObject({ side: "left", upright: true });
+		expect(nodes.ghost).toMatchObject({ side: "below", upright: false });
+		expect(nodes.elena.tooltip).toMatch(/^Elena, The Iron Knight, Lord of the Vale\b/);
+	});
+
+	// Words standing over or beside the face leave the bar to open just under the face itself.
+	it("opens the bar just under the face for somebody whose words stand elsewhere", () => {
+		const cast = foundry.utils.deepClone(CAST);
+		cast.nodes.elena.subtitle = "Iron Knight";
+		const below = windowFor(cast).app;
+		below._boardContext(below._plan());
+		cast.nodes.elena.side = "above";
+		const above = windowFor(cast).app;
+		above._boardContext(above._plan());
+		expect(above._personAt("elena").at.top).toBeLessThan(below._personAt("elena").at.top);
+		expect(above._personAt("elena").at.top).toBeGreaterThan(30);
+	});
 });
 
 // THE MARK BEHIND THE TRASH CAN. A right press on a portrait arms one (utils/relmap-drag.js
@@ -2098,6 +2160,88 @@ describe("what happens to the document under the window", () => {
 
 		update(entry, { ownership: { default: 3 } });
 		expect(app.render).toHaveBeenCalled();
+	});
+});
+
+// THE PEOPLE ON THE BOARD ARE ACTORS, read live at every paint. Reported 2026-11-02: renaming a
+// character or giving them new art left the old face and name on an open map, because nothing asked
+// for a paint when an actor changed.
+describe("an actor on the board changing", () => {
+	const CAST = {
+		version: 1,
+		nodes: {
+			elroy: { uuid: "Actor.elroy", name: "Lord Elroy", img: "", x: 20, y: 20, note: "" },
+			typed: { uuid: null, name: "The Miller", img: "", x: 60, y: 20, note: "" },
+		},
+		edges: {},
+	};
+	const settle = () => new Promise(r => setTimeout(r, 80));
+
+	function wired() {
+		const on = hooksOf();
+		const made = windowFor(CAST);
+		made.app.rendered = true;
+		made.app.sync = vi.fn();
+		made.app._wireSync();
+		return { on, ...made };
+	}
+
+	it("repaints when somebody on it is renamed, re-pictured or re-cropped", async () => {
+		for (const changed of [
+			{ name: "Lord Elroy the Bold" },
+			{ img: "new-art.webp" },
+			{ flags: { "stonetop-pwd": { portraitFrame: { x: 10 } } } },
+			{ flags: { "stonetop-pwd": { "-=portraitFrame": null } } },
+		]) {
+			const { on, app } = wired();
+			on.get("updateActor")({ uuid: "Actor.elroy" }, changed);
+			await settle();
+			expect(app.sync, JSON.stringify(changed)).toHaveBeenCalled();
+		}
+	});
+
+	// Every actor write in the world arrives on this hook, hit points and all.
+	it("leaves the board alone for a change no face shows, or for somebody not on it", async () => {
+		const { on, app } = wired();
+		on.get("updateActor")({ uuid: "Actor.elroy" }, { system: { attributes: { hp: { value: 3 } } } });
+		on.get("updateActor")({ uuid: "Actor.stranger" }, { name: "Somebody Else" });
+		on.get("updateActor")({ uuid: "Actor.elroy" }, { flags: { "stonetop-pwd": { other: 1 } } });
+		await settle();
+		expect(app.sync).not.toHaveBeenCalled();
+	});
+
+	it("repaints when somebody on it is deleted, or brought back", async () => {
+		for (const hook of ["deleteActor", "createActor"]) {
+			const { on, app } = wired();
+			on.get(hook)({ uuid: "Actor.elroy" });
+			await settle();
+			expect(app.sync, hook).toHaveBeenCalled();
+		}
+	});
+
+	// AUDIT 2026-11-02: a rename landing while the window was part-way through a render was dropped.
+	it("holds a change that lands mid-render for the render to let through", async () => {
+		const { on, app } = wired();
+		app.rendered = false;
+		app._isMidRender = () => true;
+		on.get("updateActor")({ uuid: "Actor.elroy" }, { name: "Renamed" });
+		await settle();
+		expect(app.sync).toHaveBeenCalled();
+	});
+
+	it("repaints when the system's whole flag scope is rubbed out, crop and all", async () => {
+		const { on, app } = wired();
+		on.get("updateActor")({ uuid: "Actor.elroy" }, { flags: { "-=stonetop-pwd": null } });
+		await settle();
+		expect(app.sync).toHaveBeenCalled();
+	});
+
+	it("does nothing from a window that is closed", async () => {
+		const { on, app } = wired();
+		app.rendered = false;
+		on.get("updateActor")({ uuid: "Actor.elroy" }, { name: "Renamed" });
+		await settle();
+		expect(app.sync).not.toHaveBeenCalled();
 	});
 });
 
@@ -3093,7 +3237,10 @@ describe("the arrow keys, the server and the undo", () => {
 		const { app, entry } = windowFor(structuredClone(TWO_PEOPLE));
 		app._pendingNudge.set("elena", { x: 44, y: 30 });
 		await app._stepHistoryNow("back");
-		expect(entry.updates).toHaveLength(1);
+		// The nudge is written first, and is then the step the undo takes back: Elena goes home.
+		expect(entry.updates).toHaveLength(2);
+		expect(Object.entries(entry.updates[0]).find(([key]) => key.endsWith(".elena.x"))?.[1]).toBe(44);
+		expect(Object.entries(entry.updates[1]).find(([key]) => key.endsWith(".elena.x"))?.[1]).toBe(20);
 		expect(app._pendingNudge.size).toBe(0);
 	});
 });
@@ -3809,6 +3956,9 @@ function livingMap(boards) {
 }
 
 const ONE_LIVING_BOARD = () => livingMap([{ id: "p1", name: "Stonetop", graph: TWO_PEOPLE }]);
+/** The person bar's change, as its Save hands it over. */
+const saved = ({ fields = {}, wear = [], off = [], defs = {}, drop = [] } = {}) => ({ fields, wear, off, defs, drop });
+const DEAD_CHIP = Object.freeze({ id: "dead", name: "Dead", icon: "fa-skull", ink: "crimson" });
 
 describe("taking a change back", () => {
 	// The stacks outlive the window they were filled through, which is the point of them -- so a
@@ -3921,6 +4071,212 @@ describe("taking a change back", () => {
 		await app._stepHistory("back");
 		expect(readGraph(page).nodes.elena.x).toBe(20);
 		expect(app._history.canUndo).toBe(false);
+	});
+
+	// ⚠ A LABEL AND A NUDGE OF THE SAME PERSON ARE TWO CHANGES. They shared `node:<id>` once, and an
+	// undo inside the fold window took the label back with the move.
+	it("never folds a label typed into an arrow-key nudge of the same person", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._savePerson("elena", saved({ fields: { subtitle: "Iron Knight" } }));
+		await app._moveNode("elena", { x: 25, y: 30 }, { coalesce: "node:elena" });
+
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena.x).toBe(20);
+		expect(readGraph(page).nodes.elena.subtitle).toBe("Iron Knight");
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena.subtitle).toBe("");
+	});
+
+	// A DEAD ACTOR ARRIVES WEARING DEAD (relmap/relmap-dead.js), in the write that seats them, so one
+	// undo takes the person and the chip back together.
+	it("seats a dead actor wearing the Dead chip, and one undo takes both back", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		const hafgan = { uuid: "Actor.hafgan", name: "Hafgan", img: "", type: "character", flags: { "stonetop-pwd": { deathsDoor: "dead" } } };
+		await app._addNodeFor(hafgan, { left: 50, top: 80 });
+		const [id] = Object.entries(readGraph(page).nodes).find(([, n]) => n.uuid === "Actor.hafgan");
+		expect(readGraph(page).nodes[id].chips).toEqual({ dead: true });
+		expect(readGraph(page).chips.dead).toMatchObject({ icon: "fa-skull" });
+
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes[id]).toBeUndefined();
+		expect(readGraph(page).chips.dead).toBeUndefined();
+	});
+
+	// TAG CHIPS ("Dead"): put on with the rest of the person bar's change, one undo to take back, and a
+	// chip made and worn in one Save is one step that takes the chip away again with it.
+	it("puts a chip on somebody and takes it back, the chip's copy on this board and all", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._savePerson("elena", saved({ wear: [DEAD_CHIP] }));
+		expect(readGraph(page).chips.dead).toEqual({ name: "Dead", icon: "fa-skull", ink: "crimson" });
+		expect(readGraph(page).nodes.elena.chips).toEqual({ dead: true });
+
+		await app._stepHistory("back");
+		expect(readGraph(page).chips.dead).toBeUndefined();
+		expect(readGraph(page).nodes.elena.chips).toEqual({});
+	});
+
+	it("takes a chip off somebody, and puts it back on", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._savePerson("elena", saved({ wear: [DEAD_CHIP] }));
+		await app._savePerson("elena", saved({ off: ["dead"] }));
+		expect(readGraph(page).nodes.elena.chips).toEqual({});
+		expect(readGraph(page).chips.dead).toBeTruthy();
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena.chips).toEqual({ dead: true });
+	});
+
+	// ONE SAVE IS ONE STEP, whatever it changed: the label, the side and the chips come back together.
+	it("writes the label, side and chips of one Save as one step", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._savePerson("elena", saved({ fields: { subtitle: "Fallen", side: "left" }, wear: [DEAD_CHIP] }));
+		expect(readGraph(page).nodes.elena).toMatchObject({ subtitle: "Fallen", side: "left", chips: { dead: true } });
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena).toMatchObject({ subtitle: "", side: "below", chips: {} });
+		expect(app._history.canUndo).toBe(false);
+	});
+
+	it("makes a new chip, or hands back the one already called that", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		const made = app._newChip({ name: "Noble", icon: "fa-crown", ink: "ochre" });
+		await app._savePerson("elena", saved({ wear: [made] }));
+		expect(readGraph(page).chips[made.id]).toEqual({ name: "Noble", icon: "fa-crown", ink: "ochre" });
+		expect(app._newChip({ name: "noble", icon: "", ink: "rose" })).toEqual(made);
+	});
+
+	it("changes a chip on this board, with the person, as one step", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._savePerson("elena", saved({ wear: [DEAD_CHIP] }));
+		await app._savePerson("elena", saved({ defs: { dead: { name: "Fallen", icon: "fa-ghost", ink: "#123456" } } }));
+		expect(readGraph(page).chips.dead).toEqual({ name: "Fallen", icon: "fa-ghost", ink: "#123456" });
+		await app._stepHistory("back");
+		expect(readGraph(page).chips.dead).toEqual({ name: "Dead", icon: "fa-skull", ink: "crimson" });
+	});
+
+	it("defines a chip put on and changed in the same Save as changed", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._savePerson("elena", saved({ wear: [DEAD_CHIP], defs: { dead: { name: "Fallen", icon: "fa-ghost", ink: "rose" } } }));
+		expect(readGraph(page).chips.dead).toEqual({ name: "Fallen", icon: "fa-ghost", ink: "rose" });
+	});
+
+	// SHOWN BEFORE IT IS SAVED: the board is painted with the bar's change over the stored map, and the
+	// bar is told about the person as stored, so it still knows what it has changed.
+	it("paints the person bar's change without writing it, and paints the board as stored once it goes", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		app._personDraft = { id: "elena", change: saved({ fields: { subtitle: "Fallen", italic: false }, wear: [DEAD_CHIP] }) };
+		const plan = app._plan();
+		expect(plan.graph.nodes.elena).toMatchObject({ subtitle: "Fallen", italic: false, chips: { dead: true } });
+		expect(plan.graph.chips.dead).toEqual({ name: "Dead", icon: "fa-skull", ink: "crimson" });
+		expect(readGraph(page).nodes.elena.subtitle).toBe("");
+		app._boardContext(plan);
+		const held = app._personAt("elena");
+		expect(held.node.subtitle).toBe("");
+		expect(held.chips.map(chip => chip.id)).toEqual(["dead"]);
+		expect(held.boardChips).toEqual([]);
+
+		app._previewPerson("elena", null);
+		expect(app._personDraft).toBeNull();
+		expect(app._plan().graph.nodes.elena.subtitle).toBe("");
+	});
+
+	// A NEW LABEL STARTS IN THE ITALICS THE LAST ONE SAVED ON THIS MAP HAD, kept on the map's pen.
+	it("remembers the italics a label was saved in, for the next new label on this map", async () => {
+		const { entry } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		expect(labelItalicFor(entry)).toBe(true);
+		await app._savePerson("elena", saved({ fields: { subtitle: "Smith" } }));
+		expect(entry.updates).toEqual([]);
+		await app._savePerson("elena", saved({ fields: { italic: false } }));
+		expect(entry.updates).toEqual([{ "flags.stonetop-pwd.relationshipMapPen.italic": false }]);
+	});
+
+	// ⚠ ON THE BOARD ITSELF, not just in the graph: the pills are drawn from the read's chip layout.
+	it("draws a chip taken off in the bar off the board, and back on once the change is let go", async () => {
+		const { entry } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._savePerson("elena", saved({ wear: [DEAD_CHIP] }));
+		// Stonetop's rows are the painted chips themselves, which the template draws.
+		const pills = () => JSON.stringify(app._boardContext(app._plan()).nodes.find(node => node.id === "elena").chipRows);
+		expect(pills()).toContain("Dead");
+		app._previewPerson("elena", saved({ off: ["dead"] }));
+		expect(pills()).not.toContain("Dead");
+		app._previewPerson("elena", null);
+		expect(pills()).toContain("Dead");
+	});
+
+	it("holds a saved change on the board until it has landed", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		const saving = app._savePerson("elena", saved({ fields: { subtitle: "Fallen" } }));
+		expect(app._plan().graph.nodes.elena.subtitle).toBe("Fallen");
+		await saving;
+		expect(app._landingPerson).toBeNull();
+		expect(readGraph(page).nodes.elena.subtitle).toBe("Fallen");
+	});
+
+	it("asks before deleting a chip, and an undo brings it back onto everybody", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._savePerson("elena", saved({ wear: [DEAD_CHIP] }));
+		await app._savePerson("stefan", saved({ wear: [DEAD_CHIP] }));
+		app._confirm = vi.fn(async () => false);
+		expect(await app._dropChip("dead")).toBe(false);
+		expect(readGraph(page).chips.dead).toBeTruthy();
+
+		app._confirm = vi.fn(async () => true);
+		expect(await app._dropChip("dead")).toBe(true);
+		// On no other board, so not the destructive skin: this board's part is all there is, and undoable.
+		expect(app._confirm.mock.calls[0][0].danger).toBe(false);
+		// ASKING WRITES NOTHING: the bar shows it gone, and its Save deletes it.
+		expect(readGraph(page).chips.dead).toBeTruthy();
+		app._personDraft = { id: "elena", change: saved({ drop: ["dead"] }) };
+		const shown = app._plan().graph;
+		expect(shown.chips.dead).toBeUndefined();
+		expect(shown.nodes.stefan.chips).toEqual({});
+		app._personDraft = null;
+
+		await app._savePerson("elena", saved({ drop: ["dead"] }));
+		expect(readGraph(page).chips.dead).toBeUndefined();
+		expect(readGraph(page).nodes.elena.chips).toEqual({});
+		expect(readGraph(page).nodes.stefan.chips).toEqual({});
+
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena.chips).toEqual({ dead: true });
+		expect(readGraph(page).nodes.stefan.chips).toEqual({ dead: true });
+	});
+
+	// ⚠ ONE BOARD OPEN IN TWO VIEWS (the steading sheet's tab and the map window) is ONE history, and an
+	// Undo pressed in each at once applied the same step twice when the guard was each window's own.
+	it("takes one step at a time across two views of the same board", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		const { app: other } = windowFor(null, { entry, pageId: "p1" });
+		await app._moveNode("elena", { x: 40, y: 30 });
+		await app._moveNode("elena", { x: 60, y: 30 });
+		const [one, two] = await Promise.all([app._stepHistory("back"), other._stepHistory("back")]);
+		expect([one, two].filter(Boolean)).toHaveLength(1);
+		expect(readGraph(page).nodes.elena.x).toBe(40);
+	});
+
+	// A drop whose write has not come back yet is where the person is: a repaint in that breath drew the
+	// document as it was, and the face flashed back to where the drag began.
+	it("draws a person whose move is still landing where the move sends them", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		app._landingNudge.set("elena", { x: 70, y: 65 });
+		expect(app._plan().graph.nodes.elena).toMatchObject({ x: 70, y: 65 });
+		expect(readGraph(page).nodes.elena.x).toBe(20);
+		app._landingNudge.clear();
+		await app._moveNode("elena", { x: 45, y: 30 });
+		expect(app._landingNudge.size).toBe(0);
 	});
 
 	// A drag passes no key, because a drag is a gesture already.
@@ -4830,7 +5186,7 @@ describe("how heavily this reader wants the board drawn", () => {
 		// Without them every write below would be a silent no-op and every assertion about the
 		// readouts would pass against a window that never touched one.
 		made.rows = {};
-		for (const key of ["line", "head", "word"]) {
+		for (const key of ["line", "head", "word", "name"]) {
 			const row = { now: el({ attrs: {} }), up: el(), down: el() };
 			row.now.setAttribute = (k, v) => { row.now.attrs[k] = v; };
 			made.root.children[`[data-relmap-weight="${key}"][data-relmap-step="0"]`] = row.now;
@@ -4862,7 +5218,11 @@ describe("how heavily this reader wants the board drawn", () => {
 		const { app } = dialled();
 		const rows = app._weightDials();
 		// A stroke, the head on its end, then the words along it. See `RELMAP_WEIGHTS`.
-		expect(rows.map(r => r.key)).toEqual(["line", "head", "word"]);
+		expect(rows.map(r => r.key)).toEqual(["name", "word", "line", "head"]);
+		// Two runs on the footer, the rule and the captions box between them: the names, then the line.
+		const runs = app._weightRuns();
+		expect(runs.weightsBefore.map(r => r.key)).toEqual(["name"]);
+		expect(runs.weightsAfter.map(r => r.key)).toEqual(["word", "line", "head"]);
 		expect(rows.every(r => r.pct === RELMAP_WEIGHT_BASE)).toBe(true);
 		expect(rows.every(r => r.atBase)).toBe(true);
 	});
@@ -4874,10 +5234,10 @@ describe("how heavily this reader wants the board drawn", () => {
 	it("hands the stylesheet the same three numbers as a multiplier", () => {
 		const { app } = dialled();
 		expect(app._weightStyle()).toBe(
-			"--relmap-head-px:22px;--relmap-line-scale:1;--relmap-head-scale:1;--relmap-word-scale:1",
+			"--relmap-head-px:22px;--relmap-name-scale:1;--relmap-word-scale:1;--relmap-line-scale:1;--relmap-head-scale:1",
 		);
-		expect(app._weightStyle({ head: 150, line: 50, word: 200 })).toBe(
-			"--relmap-head-px:22px;--relmap-line-scale:0.5;--relmap-head-scale:1.5;--relmap-word-scale:2",
+		expect(app._weightStyle({ head: 150, line: 50, word: 200, name: 130 })).toBe(
+			"--relmap-head-px:22px;--relmap-name-scale:1.3;--relmap-word-scale:2;--relmap-line-scale:0.5;--relmap-head-scale:1.5",
 		);
 	});
 
@@ -5009,14 +5369,26 @@ describe("how heavily this reader wants the board drawn", () => {
 		expect(rows.head.now.attrs["aria-disabled"]).toBe("true");
 	});
 
-	it("writes all three properties onto the root for the stylesheet", async () => {
+	it("writes all four properties onto the root for the stylesheet", async () => {
 		const { app, root } = dialled();
 		await press(app, "head", 1);
 		expect(root.style.props).toEqual({
 			"--relmap-head-scale": "1.1",
 			"--relmap-line-scale": "1",
 			"--relmap-word-scale": "1",
+			"--relmap-name-scale": "1",
 		});
+	});
+
+	// THE NAMES DIAL (user, 2026-11-07) moves the names and the labels under them, and the group
+	// outlines measure the same multiplier, so it is redrawn like the other three.
+	it("moves the names on their own dial", async () => {
+		const { app, root } = dialled();
+		await press(app, "name", 1);
+		await press(app, "name", 1);
+		expect(pctOf(app, "name")).toBe(RELMAP_WEIGHT_BASE + 2 * RELMAP_WEIGHT_STEP);
+		expect(pctOf(app, "word")).toBe(RELMAP_WEIGHT_BASE);
+		expect(root.style.props["--relmap-name-scale"]).toBe("1.2");
 	});
 
 	it("ignores a press that names no weight of this window's", async () => {
@@ -5498,5 +5870,111 @@ describe("groups on the map", () => {
 		expect(app._tieBar.close).toHaveBeenCalled();
 		expect(app._groupBar.close).not.toHaveBeenCalled();
 		expect(app._groupBar.open).toHaveBeenCalledWith("hunt", { returnTo: null, focusName: true });
+	});
+});
+
+// ── Audit 2026-11-02 ────────────────────────────────────────────────────────────────────────────
+
+describe("the keyboard across a repaint", () => {
+	/** A focusable thing on the board, answering for one data attribute. */
+	const focusable = (attr, value) => {
+		const one = el({ attrs: { [attr]: value } });
+		one.getAttribute = key => one.attrs[key] ?? null;
+		one.focus = vi.fn();
+		return one;
+	};
+
+	// Without this every repaint dropped the focus on <body>, and the next Delete went to the canvas.
+	it("gives the focus back to the same face in the new markup", async () => {
+		const { app, board } = windowFor();
+		const was = focusable("data-relmap-open", "elena");
+		board.children.was = was;
+		board.ownerDocument = { activeElement: was };
+		const other = focusable("data-relmap-open", "stefan");
+		const now = focusable("data-relmap-open", "elena");
+		board.all["[data-relmap-open]"] = [other, now];
+		await app._repaintBoard();
+		expect(now.focus).toHaveBeenCalledWith({ preventScroll: true });
+		expect(other.focus).not.toHaveBeenCalled();
+	});
+
+	it("leaves the focus alone when it was not on the board", async () => {
+		const { app, board } = windowFor();
+		board.ownerDocument = { activeElement: el() };
+		const face = focusable("data-relmap-open", "elena");
+		board.all["[data-relmap-open]"] = [face];
+		await app._repaintBoard();
+		expect(face.focus).not.toHaveBeenCalled();
+	});
+});
+
+describe("an undo pressed while a bar is still writing", () => {
+	// The Undo press blurs the field, the blur starts the label's write, and the undo must wait for it
+	// to land before it looks at the stack, or it takes back the step before the label.
+	it("waits for the write a bar started before it does anything else", async () => {
+		const { app } = windowFor(structuredClone(TWO_PEOPLE));
+		const order = [];
+		let land;
+		// The blur's write, already sent through the window's one write path when the undo starts.
+		app._writeNow = () => new Promise(done => { land = done; }).then(() => { order.push("label landed"); return true; });
+		app._write(nodePatch("elena", { subtitle: "Iron Knight" }));
+		app._personBar = { flush: vi.fn(() => undefined) };
+		app._writeNudge = async () => { order.push("nudges"); };
+		app._writeSeats = async () => {};
+		const step = app._stepHistoryNow("back");
+		await Promise.resolve();
+		expect(order).toEqual([]);
+		land();
+		await step;
+		expect(order).toEqual(["label landed", "nudges"]);
+		// Let go of once it has landed, so the next undo has nothing to wait for.
+		expect(app._inflight.size).toBe(0);
+	});
+});
+
+describe("seating the party and the village, once per map", () => {
+	// The steading sheet's map tab is a second window of this class. Both open at load on the GM's
+	// client ran two passes side by side, and each seated the party under fresh ids.
+	it("runs one pass for two windows on the same map opened together", async () => {
+		const first = windowFor().app;
+		const second = windowFor().app;
+		let finish;
+		const seed = vi.fn(() => new Promise(done => { finish = done; }));
+		first._seedPages = seed;
+		second._seedPages = seed;
+		const a = first._ensurePage();
+		const b = second._ensurePage();
+		expect(seed).toHaveBeenCalledTimes(1);
+		finish();
+		await Promise.all([a, b]);
+		// Finished, a later window runs its own pass, which finds the people there and adds nobody.
+		const third = windowFor().app;
+		third._seedPages = vi.fn(async () => {});
+		await third._ensurePage();
+		expect(third._seedPages).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("choosing somebody to add", () => {
+	stubNotifications();
+
+	// Every actor reaches every client; the chooser used to name and picture the GM's hidden NPCs.
+	it("offers a player nobody they cannot see", async () => {
+		const { app, entry } = windowFor(structuredClone(TWO_PEOPLE));
+		globalThis.game.actors = { contents: [
+			{ uuid: "Actor.secret", name: "The Hidden Hand", type: "npc", visible: false },
+		] };
+		await app._addPerson();
+		expect(globalThis.ui.notifications.info).toHaveBeenCalled();
+		expect(entry.updates).toHaveLength(0);
+	});
+});
+
+describe("leaving a board with a line just drawn", () => {
+	it("forgets the line it was waiting to take hold of", () => {
+		const { app } = windowFor();
+		app._pendingPick = "link1";
+		app._leaveBoard();
+		expect(app._pendingPick).toBe("");
 	});
 });

@@ -62,7 +62,7 @@
         "move": {
           "name": "When you Clash with the aetherium spear and get a 7+",
           "rollType": null,
-          "description": "<p>You can mark a debility to blast your foe with lightning, dealing +1d6 damage (<em>forceful, loud</em>). When you point the spear at your foes and bellow a thunderous warcry, mark a debility and unleash a blast of lightning (<em>far, area, forceful, loud, dangerous</em>), rolling +STR to Let Fly.</p>"
+          "description": "<p>You can mark a debility to blast your foe with lightning, dealing +1d6 damage (<em>forceful, loud</em>). When you point the spear at your foes and bellow a thunderous warcry, mark a debility and unleash a blast of lightning (<em>far, area, forceful, loud, dangerous</em>), rolling +STR to Let Fly instead of +DEX (and you cannot choose to deplete ammo). <strong>On a 6-</strong>, besides whatever the GM says, the spearhead is drained of power and the shaft burns to cinders: clear the last 3 check boxes on the front of this card.</p>"
         },
         "options": []
       }

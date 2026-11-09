@@ -29,7 +29,9 @@ const DONE_SETTING = "sessionZeroDone";
 const WALKTHROUGHS = [
 	{ key: "introductions", opener: "openIntroductions", renderHook: "renderIntroductionsDialog", gmOnly: true },
 	{ key: "springBurst",   opener: "openSpringBurst",   renderHook: "renderSpringBurstDialog" },
-	{ key: "expedition",    opener: "openExpedition",    renderHook: "renderExpeditionDialog" },
+	// GM prep on a GM-only world setting: ExpeditionDialog.open refuses a player, so a player's stray
+	// record has nothing to reopen and would only wait out the render hook's timeout.
+	{ key: "expedition",    opener: "openExpedition",    renderHook: "renderExpeditionDialog", gmOnly: true },
 ];
 
 // Every key one of those records can be filed under — what tells a world bucket apart from a

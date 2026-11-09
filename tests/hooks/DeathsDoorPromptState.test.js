@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	RAISED_OPTION,
+	UNSTOPPABLE_FIGHTS_ON_OPTION,
 	onPreUpdateActorDeathsDoor,
 	onUpdateActorDeathsDoorRaised,
 	promptRaiseFromDead,
@@ -218,6 +219,19 @@ describe("onPreUpdateActorDeathsDoor: Unstoppable's stamp, laid at the drop", ()
 
 	it("stamps a Heavy reduced to 0 HP in battle", () => {
 		expect(write(heavy(), hp(0))[STAMP]).toBe(true);
+	});
+
+	// Battle Joy's committed half counts the drop's blood off this, rather than deciding "fights on" again.
+	it("says so on the options, and only for that drop", () => {
+		const fights = {};
+		onPreUpdateActorDeathsDoor(heavy(), hp(0), fights);
+		expect(fights[UNSTOPPABLE_FIGHTS_ON_OPTION]).toBe(true);
+		const outside = {};
+		onPreUpdateActorDeathsDoor(heavy({ battle: false }), hp(0), outside);
+		expect(outside[UNSTOPPABLE_FIGHTS_ON_OPTION]).toBeUndefined();
+		const standing = {};
+		onPreUpdateActorDeathsDoor(heavy(), hp(2), standing);
+		expect(standing[UNSTOPPABLE_FIGHTS_ON_OPTION]).toBeUndefined();
 	});
 
 	it("stamps nothing for one reduced to 0 HP outside battle, so a fight started later does not make them fight on", () => {

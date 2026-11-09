@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeDamageDie, stepDie, maxDie } from "../../module/utils/damage-die.js";
+import { normalizeDamageDie, stepDie, maxDie, ownHpChangeRe, OWN_HARM_RE } from "../../module/utils/damage-die.js";
 
 describe("normalizeDamageDie", () => {
 	it("passes a well-formed die through", () => {
@@ -74,5 +74,42 @@ describe("maxDie", () => {
 	it("defers to whichever die it recognises", () => {
 		expect(maxDie(null, "d8")).toBe("d8");
 		expect(maxDie("d8", null)).toBe("d8");
+	});
+});
+
+// One grammar for "HP lost or paid by the line's own speaker", shared by a PC's move options (utils/damage.js
+// readOptionDamage), a monster's self-costs (withoutSelfHpCosts) and an arcanum's roller harm (arcana-move-damage.js).
+describe("ownHpChangeRe: the speaker's own HP", () => {
+	const amount = (re, text) => re.exec(text)?.groups.amount ?? null;
+
+	it("reads a PC's loss, a flat count included, and never someone else's", () => {
+		const pc = ownHpChangeRe({ speaker: "pc", verbs: "loss", count: true });
+		expect(amount(pc, "They do it, but it costs you, lose 2d4 HP")).toBe("2d4");
+		expect(amount(pc, "Mark a debility, lose 1 HP")).toBe("1");
+		expect(amount(pc, "you lose 1d6 HP")).toBe("1d6");
+		for (const who of ["They", "It", "The target", "The foe", "The victim", "The enemy"]) {
+			expect(amount(pc, `${who} loses 1d4 HP`)).toBeNull();
+		}
+		// Somebody else losing something else in the same line does not take the reader's loss away.
+		expect(amount(pc, "Lose 1d8 HP. It loses 1 Charge.")).toBe("1d8");
+		expect(amount(pc, "gain 1d4 HP")).toBeNull();
+	});
+
+	it("reads a monster's price or gain, where \"you\" is the PC it is aimed at", () => {
+		const monster = ownHpChangeRe({ speaker: "monster", verbs: "cost" });
+		expect(amount(monster, "ignores armor; costs 1d4 HP")).toBe("1d4");
+		expect(amount(monster, "but lose 1d4 HP")).toBe("1d4");
+		expect(amount(monster, "gaining 1d4 HP")).toBe("1d4");
+		expect(amount(monster, "you lose 1d4 HP")).toBeNull();
+		expect(amount(monster, "they lose 1d6 HP")).toBeNull();
+		// A die only: a flat count is not a monster's self-cost.
+		expect(amount(monster, "costs 2 HP")).toBeNull();
+	});
+
+	it("reads damage a PC's move does its own roller", () => {
+		expect(OWN_HARM_RE.test("you take 2d4 damage (ignores armor)")).toBe(true);
+		expect(OWN_HARM_RE.test("you suffer 2d6+4 messy damage yourself")).toBe(true);
+		expect(OWN_HARM_RE.test("deal 1d10 damage but choose one: the ring eats at your life-force")).toBe(false);
+		expect(OWN_HARM_RE.test("the Scepter deals 2d4 damage")).toBe(false);
 	});
 });

@@ -8,6 +8,7 @@
 // Both surfaces re-render this markup rather than mutating it (the panel through a full render, the
 // popout through `sync`), so these bind onto freshly created nodes every time and never accumulate.
 
+import { warn } from "../utils/logger.js";
 
 /**
  * Every kind of mark the pin layer carries, as one selector.
@@ -54,7 +55,7 @@ export const JOURNEY_RIGHT_CLICK_MARKS = "[data-site-uuid]";
  * three acts that are about something other than the trip.
  */
 export function bindJourneyControls(root, {
-	showTier, zoom = null, toScene = null, placeSite = null, clearDrawn = null,
+	showTier, zoom = null, toScene = null, share = null, hideShare = null, placeSite = null, clearDrawn = null,
 } = {}) {
 	if (!root) return;
 
@@ -71,8 +72,27 @@ export function bindJourneyControls(root, {
 	// map-tab row beside "put a site on the map" (user, 2026-08-24) — both are acts on the picture
 	// showing here rather than facts about the trip, and the row of facts they used to sit above
 	// has gone.
+	//
+	// THE PRESS CARRIES WHAT THE BUTTON SAID (its `data-showing` / `data-state`), so the planner can
+	// drop a press whose button has gone stale under a double-click (ExpeditionDialog `_onePress`).
+	// And a rejection is caught here, where the promise used to be dropped: a refusal from the
+	// server is a console warning rather than an unhandled rejection.
+	const press = (fn, ...args) => Promise.resolve(fn(...args))
+		.catch(err => warn("couldn't finish that press on the route controls", err));
 	if (toScene) {
-		root.querySelector(".stonetop-journey-to-scene")?.addEventListener("click", () => toScene());
+		const button = root.querySelector(".stonetop-journey-to-scene");
+		button?.addEventListener("click", () => press(toScene, button.dataset?.showing ?? null));
+	}
+
+	// Show the players the way, on their own screens (utils/shared-route.js). One per surface and
+	// GM-only in the partial, like the scene button beside it: it writes a world setting.
+	if (share) {
+		const button = root.querySelector(".stonetop-journey-share");
+		button?.addEventListener("click", () => press(share, button.dataset?.state ?? null));
+	}
+	// And the stale share's second button, which only stops (audit RTE-12).
+	if (hideShare) {
+		root.querySelector(".stonetop-journey-share-hide")?.addEventListener("click", () => press(hideShare));
 	}
 
 	// Also one per surface, and GM-only in the partial: the button opens a chooser and then arms

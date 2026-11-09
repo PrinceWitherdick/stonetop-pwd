@@ -31,7 +31,7 @@
 import { format } from "../utils/i18n.js";
 import { displaceTokens, queryAsker } from "../utils/foundry-compat.js";
 import { touching } from "./engagements.js";
-import { combatantSide, combatantBodies, gridOf, tokenRect, tokenLevel, sceneRectOf, insideRect, fightOnScene } from "./fight-state.js";
+import { combatantSide, combatantBodies, gridOf, tokenRect, tokenLevel, sceneRectOf, insideRect, fightOnScene, snapshotFight } from "./fight-state.js";
 import { overlapShare, rectCenter } from "./overlay-geometry.js";
 
 /** The User query a player's send goes through when it moves a token they do not own. */
@@ -51,6 +51,25 @@ function isHidden(combatant) {
  */
 export function mayMove(combatant, user = globalThis.game?.user) {
 	return !!combatant && (!!user?.isGM || !isHidden(combatant));
+}
+
+/**
+ * Who a fighter could be sent at from the Fight tab's "Send at..." (FightTracker#_askSendAt), the path for a
+ * reader who cannot drag a row: everyone on the other side of the fight on the canvas scene who is still in it
+ * and whom this reader may see (fight-state.js#fighterOf's rule), in the order the tab lists them. Empty for a
+ * fighter this reader may not move (`mayMove`), one not on the canvas scene, or a fight on another map.
+ *
+ * @returns {Array<{id: string, name: string}>}
+ */
+export function sendAtChoices(combat, mover, { scene = globalThis.canvas?.scene, viewer = globalThis.game?.user } = {}) {
+	if (!combat || !mover?.token || !scene || mover.sceneId !== scene.id || !mayMove(mover, viewer)) return [];
+	const snapshot = snapshotFight(combat, { scene, viewer });
+	const self = snapshot?.fighters.find(f => f.id === mover.id);
+	// One out of the fight is not picked up by a drag either (fight-view.js#canPickUp).
+	if (!self || self.out) return [];
+	return snapshot.fighters
+		.filter(f => f.side !== self.side && f.visible !== false && !f.out && f.bodies > 0)
+		.map(f => ({ id: f.id, name: f.name }));
 }
 
 /** How much of the smaller footprint two tokens may share before one is standing on the other. */

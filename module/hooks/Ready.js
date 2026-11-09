@@ -5,11 +5,13 @@ import { openTimelineWindow } from "../dialogs/TimelineWindow.js";
 import { canCreateRelationshipMap, ensureRelationshipMapFolder, listRelationshipMaps } from "../relmap/relmap-doc.js";
 import { promptForNewRelationshipMap } from "../relmap/relmap-make.js";
 import { defaultBoard } from "../relmap/relmap-last.js";
+import { keepDeadChipsCurrent, keepSavedFacesCurrent, sweepStaleFaces } from "../relmap/relmap-faces.js";
+import { installChipMeasure } from "../utils/relmap-chip-measure.js";
 import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
 import { repairAllChronicleFlagScopes } from "../migration/chronicle-flag-scope.js";
-import { oncePerVersion, forgetSweep, sweepVersion } from "../migration/once-per-version.js";
+import { oncePerVersion, forgetSweep, sweepVersion, sweptThisVersion } from "../migration/once-per-version.js";
 import { repairCharacterTokenLinks, applyLinkChoices } from "../migration/link-character-tokens.js";
 import { CharacterTokenLinkDialog } from "../dialogs/CharacterTokenLinkDialog.js";
 import { createArcanumItem, newArcanumSlug, isArcanumData } from "../item/createArcanum.js";
@@ -57,7 +59,7 @@ import { LoveLetterDialog } from "../dialogs/LoveLetterDialog.js";
 import { StonetopArcanaInspireDialog } from "../item/StonetopArcanaInspireDialog.js";
 import { StonetopBrowserDialog } from "../dialogs/StonetopBrowserDialog.js";
 import { findVisibleJournal, SETTING_OVERVIEW_JOURNAL } from "../utils/seeded-journals.js";
-import { getStonetopSteadingActor, getStonetopSteadingActorOrWarn } from "../utils/world.js";
+import { getStonetopSteadingActor, getStonetopSteadingActorOrWarn, isSteadingActor } from "../utils/world.js";
 import { nextSeasonStamp, readCurrentSeason, readCurrentYear } from "../seasons/current-season.js";
 import { installCampaignYearSync, openCampaignYearDialog } from "../seasons/campaign-year-dialog.js";
 import { addBookAgesOnce } from "../timeline/timeline-book-ages.js";
@@ -84,10 +86,12 @@ import { grandfatherRetiredMoves } from "../migration/retired-move-grandfather.j
 import { grandfatherWouldBeHeroes } from "../migration/would-be-hero-grandfather.js";
 import { grandfatherCreationFinished, CREATION_FINISHED_SWEEP } from "../migration/creation-finished-grandfather.js";
 import { grandfatherUnstoppableFighting, UNSTOPPABLE_FIGHTING_SWEEP } from "../migration/unstoppable-fighting-grandfather.js";
+import { settleConsequenceBoonHp, CONSEQUENCE_BOON_HP_SWEEP } from "../migration/consequence-boon-hp.js";
 import { repairAllPossessionGrants } from "../migration/possession-grant-repair.js";
 import { repairMasteredArcanumCircles } from "../migration/mastered-arcanum-circles.js";
 import { adoptAllPrayerBeadPips } from "../migration/prayer-bead-preparation.js";
 import { settleAllArcanumBoxLayouts, settleOwnArcanumBoxLayouts } from "../migration/tulpa-move-boxes.js";
+import { ARCANA_AUDIT_1104_SWEEP, registerArcanaAudit1104Hooks, settleAllArcanaAudit1104, settleOwnArcanaAudit1104 } from "../migration/arcana-audit-1104.js";
 import { refreshHeldMoves } from "../migration/move-refresh.js";
 import { refreshSteadingImprovements } from "../migration/improvement-refresh.js";
 import { refreshSeededMonsters } from "../migration/bestiary-refresh.js";
@@ -201,6 +205,9 @@ const _SYSTEM_MACROS = [
 const _HOTBAR_LAYOUT_VERSION = 3;
 
 export async function onReady() {
+	// Before the migrations below: characters made from here on start stamped by the arcana count
+	// settle, and that settle's own writes stay off the timeline (migration/arcana-audit-1104.js).
+	registerArcanaAudit1104Hooks();
 	applySheetFont(getSetting("sheetFont"));
 	applySheetFontScale(getSetting("sheetFontScale"));
 	applyEditPencilRevealDelay(getSetting("editPencilRevealDelay"));
@@ -341,6 +348,10 @@ export async function onReady() {
 		// for the same reason.
 		try { await oncePerVersion(UNSTOPPABLE_FIGHTING_SWEEP, grandfatherUnstoppableFighting); }
 		catch (err) { console.error("Stonetop | Unstoppable fighting-on grandfathering failed", err); }
+		// Take a marked arcana Consequence's max HP and armor back out of a hand-set one typed as exactly it, now that
+		// the sheet counts it (migration/consequence-boon-hp.js). Once per WORLD, for the same reason.
+		try { await oncePerVersion(CONSEQUENCE_BOON_HP_SWEEP, settleConsequenceBoonHp); }
+		catch (err) { console.error("Stonetop | Consequence max HP settling failed", err); }
 		// Bring special-possession gear made before its grant was corrected up to the grant (the
 		// Tannery cuirass made as a stacking modifier; see migration/possession-grant-repair.js).
 		// Per VERSION, because a grant only changes with a release: each new version is one more
@@ -362,6 +373,13 @@ export async function onReady() {
 		// or a player's own client settling first all leave nothing to do twice.
 		try { await oncePerVersion("arcanumBoxLayouts", settleAllArcanumBoxLayouts); }
 		catch (err) { console.error("Stonetop | arcanum box layout settle failed", err); }
+		// Bring the counts on three minor arcana up to their corrected tracks (the mummified hand's
+		// three crystals, the blade's Blaze and the Silver Branch starting ticked) and a card's
+		// back-item uses under one key, in one write per character (migration/arcana-audit-1104.js).
+		// Per VERSION, safe to repeat: each character records the counts in the same write, and a
+		// moved key leaves nothing under the old one.
+		try { await oncePerVersion(ARCANA_AUDIT_1104_SWEEP, settleAllArcanaAudit1104); }
+		catch (err) { console.error("Stonetop | arcana count settle failed", err); }
 
 		// Point player tokens back at the characters they stand for. An unlinked PC token carries
 		// a private copy of its character, and the two drift because a roll writes to the sheet's
@@ -643,7 +661,7 @@ export async function onReady() {
 	// homebrew arcanum world Item pre-filled with the rolled results and opens its editor.
 	// Callable from a macro/console/hotbar:  game.stonetop.inspireArcanum()
 	game.stonetop.inspireArcanum    = () => new StonetopArcanaInspireDialog({
-		onCreate: ({ name, major, front }) => createArcanumItem({ name, major, front }),
+		onCreate: ({ name, major, gmNotes }) => createArcanumItem({ name, major, gmNotes }),
 	}).render(true);
 	// Manually re-apply the durable Book II art to the compendium + world journals + world
 	// actors, bypassing the once-per-version gate. The dev-loop entry point after
@@ -679,10 +697,34 @@ export async function onReady() {
 	// load, not awaited, one browse. And a sheet renamed while on its initials takes the new ones, on
 	// the GM client that made the rename (the disc is a file it writes).
 	Hooks.on("updateActor", reletterOnRename);
+	// Each person on a relationship map keeps a saved copy of their name and picture for when their
+	// actor is deleted; a rename or new art refreshes it on every board (relmap/relmap-faces.js), and
+	// the primary GM's load catches up whatever changed while no GM was on to write a hidden board.
+	Hooks.on("updateActor", (actor, changed, options, userId) => {
+		keepSavedFacesCurrent(actor, changed, options, userId)
+			.catch(err => console.warn("Stonetop | refreshing saved names on the relationship map failed", err));
+	});
+	sweepStaleFaces().catch(err => console.warn("Stonetop | refreshing saved names on the relationship map failed", err));
+	// Tag chips are packed into rows by their width in the face they are drawn in, Libre Caslon
+	// (utils/relmap-chip-measure.js); until it loads, by the per-character table.
+	installChipMeasure(document);
+	// Somebody who dies, or comes back, puts the Dead chip on (or takes it off) everyone standing for
+	// them on every board (relmap/relmap-dead.js); the same one-writer rule as the saved faces.
+	Hooks.on("updateActor", (actor, changed, options, userId) => {
+		keepDeadChipsCurrent(actor, changed, options, userId)
+			.catch(err => console.warn("Stonetop | updating the Dead chip on the relationship map failed", err));
+	});
 	// Stonetop's Other Settlements table (and another settlement's trade links) draw from settlement
 	// sheets, and core redraws a sheet only for its own document (settlement-actor.js).
 	Hooks.on("createActor", actor => redrawForSettlement(actor));
 	Hooks.on("updateActor", (actor, changed) => redrawForSettlement(actor, changed));
+	// A player's Requisition from their sheet goes on its trip's record as it lands (primary GM only).
+	Hooks.on("updateActor", (actor, changed) => {
+		if (!game.user?.isGM || !isSteadingActor(actor) || !foundry.utils.hasProperty(changed ?? {}, `flags.${STONETOP_SCOPE}.steading`)) return;
+		import("../timeline/timeline-expedition-record.js")
+			.then(({ recordExpeditionTakes }) => recordExpeditionTakes(actor.typedActor))
+			.catch(err => console.warn("Stonetop | recording a player's take on the trip failed", err));
+	});
 	Hooks.on("deleteActor", actor => redrawForSettlement(actor));
 	// A settlement's Residents follow each NPC's Home (settlement-residents.js): a new or re-homed NPC
 	// moves on the primary GM, a renamed settlement re-homes its people on the renaming client, and
@@ -714,6 +756,9 @@ export async function onReady() {
 	// right. Background: it is a flag read per character, and a write only the once.
 	if (!game.user.isGM) {
 		settleOwnArcanumBoxLayouts().catch(err => console.error("Stonetop | arcanum box layout settle failed", err));
+		// The back-item keys need the cards, so they wait only until the GM's sweep has run.
+		settleOwnArcanaAudit1104({ resourceKeys: !sweptThisVersion(ARCANA_AUDIT_1104_SWEEP) })
+			.catch(err => console.error("Stonetop | arcana count settle failed", err));
 	}
 	_registerCharacterAutoOpen();
 	_registerGmToolkitAdopt();

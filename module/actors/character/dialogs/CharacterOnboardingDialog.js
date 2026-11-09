@@ -1,12 +1,13 @@
 // Descriptions for animal companion trait tags — checked before compendium lookup.
-import { isMajorArcana } from "../../../arcana-icons.js";
+import { isMajorArcana, isMajorArcanumItem } from "../../../arcana-icons.js";
 import { parseMovePickCount, allowedMarkableActions, backgroundMoveNames, backgroundPossessionSlugs, startingMoveChoiceNames } from "../StonetopCharacter.js";
 import { ITEMS_PACK, ARCANA_PACK } from "../StonetopFlags.js";
 import { markQuestionBullets } from "../../../utils/question-bullets.js";
 import { openJournalSheetAsChild } from "../../../utils/front-on-open.js";
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { shuffle } from "../../../utils/arrays.js";
-import { normalizePlaybookGlyphs, composeInstinct, parseInstinct } from "../../../utils/strings.js";
+import { normalizePlaybookGlyphs, composeInstinct, parseInstinct, escHtml } from "../../../utils/strings.js";
+import { confirmOutcome } from "../../../utils/ask-with-buttons.js";
 import { splitFillBlank, fillBlank } from "../../../utils/fill-blanks.js";
 import { STAT_KEYS } from "../../../utils/roll-types.js";
 import { parseStatArray, statScoreLabel, DEFAULT_STAT_ARRAY } from "../stat-rules.js";
@@ -20,9 +21,10 @@ import { StonetopAutocomplete } from "../../../utils/autocomplete.js";
 import { wellVersedTopicSummary, backgroundMarkOption, moveChoiceKey, WELL_VERSED_MOVE, WELL_VERSED_TOPICS } from "./well-versed-topics.js";
 import { localize, format } from "../../../utils/i18n.js";
 import { LORE_TERM_TOOLTIPS } from "../../../utils/lore-terms.js";
-import { getHoverDescriptionSetting } from "../../../settings.js";
+import { getBooleanSetting, getHoverDescriptionSetting } from "../../../settings.js";
 import { moveGroupsForPlaybook, moveGroupKeys } from "./onboarding-move-groups.js";
 import { effectiveSubgroupMax } from "./possession-choice-cap.js";
+import { expectedInvocationCount } from "../invocation-count.js";
 import { requiredMovesUnmet } from "../move-requirement.js";
 import { playbookIconPath } from "../../../utils/playbook-actors.js";
 import { ensurePackIndex } from "../../../utils/pack-index.js";
@@ -36,8 +38,25 @@ import { lorePickMax, lorePickMin } from "../lore-pick-count.js";
 import { MAGNIFICENT_SPECIMEN_MOVE, companionKindOptions, companionTraitAllowance, trimCompanionTraits } from "../animal-companion.js";
 import { seekerMajorTrack, pickSeekerMajorMark, drawableMinorSlugs, seekerMinorStepComplete } from "../seeker-collection.js";
 import { plural } from "../../../utils/plural.js";
+import { isFinishedWorldArcanum } from "../../../item/createArcanum.js";
 
 const SEEKER_ARCANA_SLUGS = ["collection", "arcana-major", "arcana-minor"];
+
+/**
+ * The world's homebrew minor arcana that join the Seeker's draw, when the GM's world switch
+ * `arcanaSeekerDrawsHomebrew` is on (ruling A19; Book I p.136 "Draw 3 at random"). Finished cards
+ * only: a draft (flags.stonetop.draft) and a card without a slug are no card yet, and a major is
+ * the background's to grant, never drawn. Empty when the switch is off.
+ */
+export function seekerHomebrewMinors({ items = globalThis.game?.items, enabled } = {}) {
+	const on = enabled === undefined ? getBooleanSetting("arcanaSeekerDrawsHomebrew") : enabled;
+	if (!on) return [];
+	return [...(items ?? [])].filter(item => {
+		const flags = item?.flags?.stonetop ?? {};
+		return isFinishedWorldArcanum(item) && !!flags.slug
+			&& !isMajorArcanumItem({ slug: flags.slug, major: flags.major });
+	});
+}
 
 // The Ranger's animal-companion builder only applies to characters who have the
 // Animal Companion move (Beast-Bonded background or a free-pick choice).
@@ -136,7 +155,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	}
 
 	constructor(playbookDoc, onComplete, options = {}) {
-		const { onBack, onSave, onClose, onProgress, onLiveSave, onExit, initialSelections, startAtStep = null, ownedMoveCounts = null, retiredMoveNames = null, retiredCreationPicks = 0, crewTagBonus = 0, companionTraitBonus = 0, heldMinorArcana = null, ...appOptions } = options;
+		const { onBack, onSave, onClose, onProgress, onLiveSave, onExit, initialSelections, startAtStep = null, ownedMoveCounts = null, restoredPickCounts = null, characterLevel = 1, retiredMoveNames = null, retiredCreationPicks = 0, crewTagBonus = 0, companionTraitBonus = 0, heldMinorArcana = null, ...appOptions } = options;
 		super(appOptions);
 		this._playbookDoc        = playbookDoc;
 		this._onComplete         = onComplete;
@@ -156,6 +175,11 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		// remarkable traits, +1 per Big Magic) is correct after taking that move at
 		// level-up. New characters pass none; in-session move picks add on top.
 		this._ownedMoveCounts    = ownedMoveCounts ?? {};
+		// The owned copies this run restores as its own picks (free picks, either/or moves), by name:
+		// counted from the selections instead, so a free-pick Big Magic is not counted twice.
+		this._restoredPickCounts = restoredPickCounts ?? {};
+		// The character's level: a Lightbearer made above 1st level is owed its even levels' Invocations.
+		this._characterLevel = Math.max(1, Math.trunc(Number(characterLevel) || 1));
 		// Extra crew tags the character's marked moves allow (Veteran Crew's "Select 2 new tags",
 		// the crew stats' tagBonus), on top of the playbook's pick count. A new character has none.
 		this._crewTagBonus       = Math.max(0, Number(crewTagBonus) || 0);
@@ -273,7 +297,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			// "<context>:<index>" keys (the same box-flag suffix the live sheet uses).
 			// majorMarksFor tracks the slug those marks belong to, so switching the major
 			// resets to the rule default (1 ○ circle marked, or none for □-task arcana).
-			arcana:          { major: "", minorDraw: [], minorRoles: { mastered: "", found: "", lead: "" }, majorMarks: [], majorMarksFor: "" },
+			// minorSwappedIn: the drawn minors put there by hand with a card's swap picker rather than
+			// dealt, so "Draw again" knows it would throw away a choice (_confirmSeekerMinorRedraw).
+			arcana:          { major: "", minorDraw: [], minorRoles: { mastered: "", found: "", lead: "" }, minorSwappedIn: [], majorMarks: [], majorMarksFor: "" },
 			backgroundChoices: {},
 			// The mark a background-answered move asks beside the background's answer, by move name:
 			// Well Versed's "Mark 1 topic, in addition to the one noted in your Background" → the
@@ -979,6 +1005,40 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	_drawSeekerMinorArcana(minorOptions) {
 		this._selections.arcana.minorDraw = shuffle(drawableMinorSlugs(minorOptions, this._heldMinorArcana)).slice(0, 3);
 		this._selections.arcana.minorRoles = { mastered: "", found: "", lead: "" };
+		this._selections.arcana.minorSwappedIn = [];
+	}
+
+	// "Draw again": a fresh draw of three, once the player has agreed to lose what this one holds.
+	async _redrawSeekerMinorArcana() {
+		const arcana = await this._loadArcanaOptions();
+		if (!(await this._confirmSeekerMinorRedraw(arcana.minor))) return;
+		this._drawSeekerMinorArcana(arcana.minor);
+		await this.render(false);
+	}
+
+	// A redraw throws away the roles given to the drawn cards and any card swapped in by hand, so it
+	// asks first when there is either; a bare draw nobody has touched is redrawn without a word.
+	async _confirmSeekerMinorRedraw(minorOptions = []) {
+		const { minorDraw = [], minorRoles = {}, minorSwappedIn = [] } = this._selections.arcana;
+		const nameOf = slug => escHtml(minorOptions.find(option => option.slug === slug)?.name ?? slug);
+		const roles   = ["mastered", "found", "lead"].filter(role => minorRoles[role]);
+		const swapped = minorDraw.filter(slug => minorSwappedIn.includes(slug));
+		if (!roles.length && !swapped.length) return true;
+		const list = items => new Intl.ListFormat(globalThis.game?.i18n?.lang || "en", { type: "conjunction" }).format(items);
+		const key  = k => `stonetop.onboarding.redrawMinor.${k}`;
+		const content = [
+			format(key("body"), { cards: list(minorDraw.map(slug => `<strong>${nameOf(slug)}</strong>`)) }),
+			roles.length ? format(key("roles"), {
+				roles: list(roles.map(role => `${localize(key(`role.${role}`))} (${nameOf(minorRoles[role])})`)),
+			}) : "",
+			swapped.length ? format(key("swapped"), { cards: list(swapped.map(nameOf)) }) : "",
+		].join("");
+		return !!(await confirmOutcome({
+			title:   localize(key("title")),
+			content,
+			yes: { label: localize(key("yes")), icon: "fa-shuffle", className: "stonetop-dialog-btn--danger" },
+			no:  { label: localize(key("no")) },
+		}));
 	}
 
 	_ensureSeekerMinorDraw(minorOptions) {
@@ -1003,6 +1063,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		for (const role of Object.keys(roles)) {
 			if (roles[role] === oldSlug) roles[role] = newSlug;
 		}
+		// Remembered as picked, not dealt, so "Draw again" asks before throwing it away.
+		const swappedIn = this._selections.arcana.minorSwappedIn ?? [];
+		this._selections.arcana.minorSwappedIn = [...swappedIn.filter(slug => slug !== oldSlug), newSlug];
 	}
 
 	// A lore section with no options has nothing to select, so it shouldn't get its
@@ -1168,13 +1231,17 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			// Arcana live in their own GM-hidden compendium (split out of stonetop-items);
 			// the pack is arcana-only, but keep the moveType filter below as a defensive guard.
 			const pack = await ensurePackIndex(ARCANA_PACK, ["system.moveType"]);
-			if (!pack) return { major: [], minor: [] };
-			const entries = pack.index.filter(entry => entry.system?.moveType === "arcanum");
-			const docs = await Promise.all(entries.map(entry => pack.getDocument(entry._id)));
-			const options = docs.filter(Boolean).flatMap(doc => {
+			const entries = pack ? pack.index.filter(entry => entry.system?.moveType === "arcanum") : [];
+			const packDocs = pack ? await Promise.all(entries.map(entry => pack.getDocument(entry._id))) : [];
+			// Book I p.136 "Draw 3 at random": with the GM's switch on (ruling A19) the world's own
+			// finished minors join the deck. After the pack's, so a shipped slug always wins.
+			const docs = [...packDocs.filter(Boolean), ...seekerHomebrewMinors()];
+			const seen = new Set();
+			const options = docs.flatMap(doc => {
 				const flags = doc.flags?.stonetop ?? {};
 				const slug  = flags.slug;
-				if (!slug) return [];
+				if (!slug || seen.has(slug)) return [];
+				seen.add(slug);
 				return [{
 					slug,
 					name:        this._normalizeOnboardingText(doc.name ?? flags.front?.title ?? slug),
@@ -1509,10 +1576,15 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	// step precedes it, but re-visiting recomputes — see _refreshChoiceGroupLimits).
 	_effectiveMoveCounts() {
 		const counts = { ...this._ownedMoveCounts };
+		// The restored picks count once, from the selections below, whether or not they are kept.
+		for (const [name, n] of Object.entries(this._restoredPickCounts ?? {})) {
+			if (counts[name] != null) counts[name] = Math.max(0, counts[name] - (Number(n) || 0));
+		}
 		const idToName = new Map((this._movesCache ?? []).map(d => [d.id, d.name]));
 		const ids = [...this._selections.moves, ...Object.values(this._selections.moveChoices ?? {})];
 		for (const id of ids) {
-			const name = idToName.get(id);
+			// A restored pick is still its NAME until the move list loads (_reconcileMoveChoices).
+			const name = idToName.get(id) ?? (Object.hasOwn(this._restoredPickCounts ?? {}, id) ? id : null);
 			if (name) counts[name] = (counts[name] ?? 0) + 1;
 		}
 		return counts;
@@ -1631,12 +1703,16 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	 */
 	_invocationStepData() {
 		const raw     = this._rawInvocations;
-		const count   = raw.startingCount ?? 2;
+		const start   = raw.startingCount ?? 2;
+		const count   = this._invocationPickCount();
 		const chosen  = new Set(this._selections.invocations);
 		const learned = new Set((this._selections.learnedInvocations ?? []).filter(slug => !chosen.has(slug)));
 		const atLimit = chosen.size >= count;
 		return {
-			startingCount: count,
+			startingCount: start,
+			pickCount:     count,
+			levelExtra:    Math.max(0, count - start),
+			level:         this._characterLevel,
 			selectedCount: chosen.size,
 			learnedCount:  learned.size,
 			options: (raw.options ?? []).map(opt => ({
@@ -1648,6 +1724,20 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 				disabled:    learned.has(opt.slug) || (!chosen.has(opt.slug) && atLimit),
 			})),
 		};
+	}
+
+	// How many Invocations this run asks for. "Lightbearer, you start knowing 2 Invocations. Each time
+	// you reach an even-numbered level, learn 1 new Invocation" (Book I p.146), so a character made or
+	// re-made above 1st level is owed the even levels already reached too, less the ones a level-up
+	// taught that this run keeps (shown known and locked). Never fewer than the starting count.
+	_invocationPickCount() {
+		const raw = this._rawInvocations;
+		const start = Number(raw?.startingCount) || 0;
+		if (!start) return 0;
+		const chosen = new Set(this._selections.invocations ?? []);
+		const learned = (this._selections.learnedInvocations ?? []).filter(slug => !chosen.has(slug)).length;
+		const expected = expectedInvocationCount({ optionCount: raw.options?.length ?? 0, startingCount: start, level: this._characterLevel }) ?? start;
+		return Math.max(start, expected - learned);
 	}
 
 	// ── Completion check ──────────────────────────────────────────────
@@ -1695,7 +1785,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 				return choicesComplete && statChoicesComplete &&
 					this._selections.moves.length === this._movePickCount;
 			}
-			case "invocations":    return this._selections.invocations.length === (this._rawInvocations?.startingCount ?? 0);
+			case "invocations":    return this._selections.invocations.length === this._invocationPickCount();
 			case "initiates": {
 				const d = this._getInitiatesData();
 				const [min] = this._initiatesCountRange(d);
@@ -3398,7 +3488,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		html.find("[name='onboard-invocation']").on("change", ev => {
 			const slug    = ev.currentTarget.value;
 			const checked = ev.currentTarget.checked;
-			const limit   = this._rawInvocations?.startingCount ?? 2;
+			const limit   = this._invocationPickCount();
 			if (checked) {
 				if (this._selections.invocations.length < limit && !this._selections.invocations.includes(slug)) {
 					this._selections.invocations.push(slug);
@@ -3699,11 +3789,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			_refreshNextButton();
 		});
 
-		html.find(".stonetop-onboarding-redraw-minor").on("click", async () => {
-			const arcana = await this._loadArcanaOptions();
-			this._drawSeekerMinorArcana(arcana.minor);
-			await this.render(false);
-		});
+		html.find(".stonetop-onboarding-redraw-minor").on("click", () => this._redrawSeekerMinorArcana());
 
 		html.find(".stonetop-onboarding-minor-swap-select").on("change", async ev => {
 			const oldSlug = ev.currentTarget.dataset.slug;

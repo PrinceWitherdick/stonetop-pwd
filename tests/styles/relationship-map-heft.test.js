@@ -74,11 +74,7 @@ describe("the two arrows", () => {
 	});
 
 	// Core's `body.game .app button > i` carries a `margin-right: 3px` for a label that is not
-	// coming, and on a button this small three pixels is most of what centring there is. Set on all
-	// four sides so a core change to any one of them lands the same way.
-	it("takes core's icon-to-label margin off the glyph inside it", () => {
-		expect(rule(".stonetop-relmap-heft-step > i")).toMatch(/margin:\s*0;/);
-	});
+	// coming; core's icon-to-label margin comes off through the icon-only marker (tests/utils/icon-only-buttons.test.js).
 });
 
 // ⚠ THE THIRD FACE OF THE SAME TRAP, and the one that only bites on this line. Core pins a button's
@@ -170,9 +166,24 @@ describe("where the three dials stand", () => {
 		const check = foot.indexOf("stonetop-relmap-foot-check");
 		const heft = foot.indexOf('<div class="stonetop-relmap-heft"');
 		const gate = foot.indexOf("{{#if canEdit}}");
-		expect(check).toBeGreaterThan(-1);
-		expect(heft).toBeGreaterThan(check);
-		expect(heft).toBeLessThan(gate);
+		expect(heft).toBeGreaterThan(-1);
+		expect(check).toBeGreaterThan(heft);
+		expect(check).toBeLessThan(gate);
+	});
+
+	// THE NAMES DIAL, A RULE, THE CAPTIONS BOX, THEN THE LINE'S DIALS (user, 2026-11-07). The box is
+	// outside both runs of dials, so it is drawn whatever the dials turn out to be.
+	it("runs the names dial, the rule, the captions box, then the line's dials", () => {
+		const at = text => HBS.indexOf(text);
+		const before = at("{{#each weightsBefore}}");
+		const split = at('<span class="stonetop-relmap-heft-split"');
+		const check = at('<label class="stonetop-relmap-foot-check"');
+		const after = at("{{#each weightsAfter}}");
+		expect(before).toBeGreaterThan(-1);
+		expect(split).toBeGreaterThan(before);
+		expect(check).toBeGreaterThan(split);
+		expect(after).toBeGreaterThan(check);
+		expect(HBS.match(/stonetop-relmap-foot-check"/g)).toHaveLength(1);
 	});
 
 	// It is no longer inside the pan/zoom viewport, so `BOARD_CONTROLS` is not what keeps it alive
@@ -184,5 +195,21 @@ describe("where the three dials stand", () => {
 			HBS.indexOf("{{/each}}", HBS.indexOf('<div class="stonetop-relmap-heft-dial"')),
 		);
 		expect(dial.match(/data-relmap-action="weight"/g)).toHaveLength(3);
+	});
+});
+
+// THE RULE AFTER THE NAMES DIAL (user, 2026-11-07): the names dial stands first on the footer, and a
+// hairline parts it from the captions box and the dials that are about the lines.
+describe("the rule after the names dial", () => {
+	it("is drawn once, and says nothing to a screen reader", () => {
+		expect(HBS.match(/<span class="stonetop-relmap-heft-split" aria-hidden="true"><\/span>/g)).toHaveLength(1);
+	});
+
+	it("is a hairline the height of the line, which no flex squeeze can thin", () => {
+		const block = rule(".stonetop-relmap-heft-split");
+		expect(block, "no rule for the split").toBeTruthy();
+		expect(block).toMatch(/flex:\s*none/);
+		expect(block).toMatch(/width:\s*1px/);
+		expect(block).toMatch(/align-self:\s*stretch/);
 	});
 });

@@ -37,6 +37,7 @@ export class RequirementSnapshot {
  * @property {{ label: string, options: string[] }|null} backgroundAnswerNeeded
  * @property {Array<{ownedId:string, statKey:string, statAbbr:string}>|null} statChoices
  * @property {{ count:number, cap:number }|null} statChoiceNeeded owned stat-increase instances with no stat picked yet
+ * @property {{ slug:string, count:number, label:string }|null} possessionChoiceOwed a possession pick this move still owes
  * @property {string|null} subtitle - a line under the move's title about this character's own answers
  *   (Anger is a Gift: the righteous angers picked on the Details tab)
  */
@@ -81,6 +82,10 @@ export class MoveSnapshot {
 		// chosen (so they silently raise nothing) — { count, cap }, or null when every
 		// instance has a pick (or none is possible). Drives the "needs your input" cue.
 		this.statChoiceNeeded = b._statChoiceNeeded ?? null;
+		// A possession pick this move still owes (Big Magic's extra remarkable trait): { slug, count,
+		// label }, or null. Worked out per playbook, so the sheet sets it once it has the playbook
+		// (possession-choices-owed.js#attachPossessionChoicesOwed). Drives the card's cue.
+		this.possessionChoiceOwed = null;
 		// Defend's stored Readiness track: { value, cap, hasShield, hasGuardian, pips:[{index,filled}] }
 		// or null for every other move. Rendered as clickable circles beside the move.
 		this.readiness     = b._readiness ?? null;

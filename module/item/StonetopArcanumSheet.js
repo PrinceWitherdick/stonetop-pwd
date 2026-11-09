@@ -1,5 +1,5 @@
 import { arcanumCardImg } from "../arcana-icons.js";
-import { confirmOutcome } from "../utils/ask-with-buttons.js";
+import { askWithButtons, confirmOutcome } from "../utils/ask-with-buttons.js";
 import { ITEM_FLAG_SCOPE } from "../actors/character/StonetopFlags.js";
 import { centerArcanumTracks, wrapGlyphTextContainers, wrapStonetopGlyphsInEl } from "../utils/glyphs.js";
 import { markValueTooltips } from "../utils/value-tooltips.js";
@@ -8,18 +8,21 @@ import { enrichHTML, compendiumSourceOf } from "../utils/foundry-compat.js";
 import { isInCompendium } from "../utils/compendium-edit-guard.js";
 import { applyGuideRail } from "../utils/guide-rail.js";
 import { wireGrowableFields, refitGrowableFields } from "../utils/growable-fields.js";
-import { isDefaultImg } from "../utils/strings.js";
+import { isDefaultImg, joinNames, escHtml } from "../utils/strings.js";
 import { STAT_KEYS } from "../utils/roll-types.js";
 import { circleLabelsFromLines, circleLabelsToLines } from "../utils/gear-note.js";
 import { hasText } from "../actors/bestiary/codex.js";
 import { buildItemReadout, isGearItem } from "./item-readout.js";
 import { isArcanumData } from "./createArcanum.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { followerSourceUuid } from "../data/arcana-summons.js";
+import { arcanumHolders, viewerMaySeeArcanumBack } from "./arcanum-access.js";
 import {
 	defaultArcanumItemLine, defaultResourceDef, defaultBackMove, defaultFollower,
 	newUnlockRequirement, nextOptionSlug, ensureOptionSlug, validateArcanumFlags,
-	markTrackHtml, mysteryHtml, consequenceHtml,
+	markTrackHtml, insertMystery, insertConsequence,
 } from "./arcanum-edit.js";
+import { shiftHolderBackMarks } from "../hooks/arcana-card-edits.js";
 
 const VIEW_TEMPLATE = "systems/stonetop-pwd/templates/item/arcanum-sheet.hbs";
 const EDIT_TEMPLATE = "systems/stonetop-pwd/templates/item/arcanum-sheet-edit.hbs";
@@ -27,6 +30,32 @@ const EDIT_TEMPLATE = "systems/stonetop-pwd/templates/item/arcanum-sheet-edit.hb
 // The "Max = stat" picker options, derived from the shared stat list so the order and
 // labels match the rest of the app (and can't drift). { key, abbr } is the template shape.
 const STAT_OPTIONS = STAT_KEYS.map(key => ({ key, abbr: key.toUpperCase() }));
+
+// What unticking each presence box throws away, for the question asked first (_confirmToggleOff).
+// `name` is the field that names the section, quoted back so the author knows which one is meant.
+const TOGGLE_LOSSES = {
+	"front.item":         { noun: "The thing",                  name: "name",  what: "its name, weight and tag line",              yes: "Remove the thing" },
+	"back.item":          { noun: "The revealed item",          name: "name",  what: "its name, weight and tag line",              yes: "Remove the item" },
+	"back.item.resource": { noun: "The item's resource track",  name: "title", what: "its title, size and circle labels",          yes: "Remove the track" },
+	"back.resource":      { noun: "The resource track",         name: "title", what: "its title, size and circle labels",          yes: "Remove the track" },
+	"back.move":          { noun: "The condensed move",         name: "name",  what: "its trigger, roll and effect text",          yes: "Remove the move" },
+};
+
+/**
+ * Whether a sub-object a presence box made from `defaults` holds anything the author put there: a
+ * field that is neither blank nor what ticking the box filled in. A nested sub-object (the revealed
+ * item's own track) is judged the same way against its own defaults.
+ */
+function toggleHasContent(value, defaults = {}) {
+	if (!value || typeof value !== "object") return false;
+	return Object.entries(value).some(([key, v]) => {
+		if (v == null) return false;
+		if (typeof v === "string") return hasText(v);
+		if (Array.isArray(v)) return v.some(x => String(x ?? "").trim());
+		if (typeof v === "object") return toggleHasContent(v, key === "resource" ? defaultResourceDef() : {});
+		return v !== defaults[key];
+	});
+}
 
 // Glyph runs the toolbar inserts into the focused rich editor. Tracks need a run of 2+ to
 // become interactive on the character sheet (see CharacterArcana._injectMarkers); a lone
@@ -79,27 +108,6 @@ const ARC_SECTIONS = [
 // Window widths per mode: the edit view seats the section rail; the read-only card is narrow.
 const ARC_VIEW_WIDTH = 460;
 const ARC_EDIT_WIDTH = 680;
-
-// True when any character already holds this arcanum slug — in their owned/identified
-// list, or via saved marks/unlock counts keyed by it. Marks are saved by POSITION within a
-// track, so the editor uses this to warn that re-cutting a ◇/○/□ run shifts what those
-// players have already marked.
-function _arcanumSlugInUse(slug) {
-	if (!slug) return false;
-	const prefix = `${slug}:`;
-	const keyedBySlug = map => !!map && Object.keys(map).some(k => k === slug || k.startsWith(prefix));
-	for (const actor of globalThis.game?.actors ?? []) {
-		// Check the live scope AND the legacy "stonetop" scope a migrated world may still
-		// store arcana marks under, so renaming a slug never orphans either set of marks.
-		for (const arcana of [actor.flags?.[SYSTEM_ID]?.arcana, actor.flags?.stonetop?.arcana]) {
-			if (!arcana) continue;
-			if ([arcana.owned, arcana.identified, arcana.flipped, arcana.minorDraw]
-				.some(list => Array.isArray(list) && list.includes(slug))) return true;
-			if ([arcana.boxes, arcana.unlock, arcana.backOptions, arcana.minorRoles].some(keyedBySlug)) return true;
-		}
-	}
-	return false;
-}
 
 export function createStonetopArcanumSheetClass(BaseItemSheet) {
 	return class StonetopArcanumSheet extends BaseItemSheet {
@@ -252,6 +260,8 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 				// Leaving edit mode commits a pending draft: attach it to the originating
 				// character (once) so Save & Done / header Done both finish it in one click.
 				if (this._arcanumDraft) await this._commitArcanumDraft();
+				// Saving finishes the card: the stored draft mark goes, so the browser lists it.
+				await this._clearStoredDraft();
 			}
 			this._editMode = !this._editMode;
 			// Leaving edit re-arms the one-shot edit-width sizing so re-entering re-seats the
@@ -273,28 +283,66 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			catch (err) { console.error("Stonetop | Failed to add arcanum to character", err); }
 		}
 
+		// Drop the stored `flags.stonetop.draft` mark (set by createArcanumItem): the card is done.
+		async _clearStoredDraft() {
+			if (!this.item?.flags?.[ITEM_FLAG_SCOPE]?.draft || !game.items?.get(this.item.id)) return;
+			await this.item.update({ [`flags.${ITEM_FLAG_SCOPE}.draft`]: false }, { render: false });
+		}
+
+		// A stored draft reopened (after a reload, or a closed window): Finish reopens the editor as
+		// a pending draft, so Save & Done finishes it and Cancel discards it, as on the first open.
+		async _finishStoredDraft() {
+			if (!this._canEditArcanum()) return;
+			this._arcanumDraft = true;
+			this._editMode     = true;
+			await this.render(false);
+		}
+
 		// Discard an unsaved draft: confirm, then delete the world Item (which tears down this
 		// sheet). Returns true if discarded, false if the author chose to keep editing. A no-op
-		// for a non-draft (an existing card's edits are already persisted live).
-		async _discardDraft() {
-			if (!this._arcanumDraft || this._discarded) return false;
-			const ok = await confirmOutcome({
-				title:   "Discard arcanum?",
-				content: "<p>This arcanum hasn't been saved yet. Discard it? This can't be undone.</p>",
-				yes:     { label: "Discard the arcanum", icon: "fa-trash" },
-				no:      { label: "Keep editing" },
-			});
+		// for a non-draft (an existing card's edits are already persisted live). `stored`: a
+		// stored draft's Discard button (the view footer), open to anyone who may edit the card.
+		async _discardDraft({ stored = false } = {}) {
+			if ((stored ? !this._canEditArcanum() : !this._arcanumDraft) || this._discarded) return false;
+			const yes = { label: "Discard the arcanum", icon: "fa-trash" };
+			// Closing an unsaved draft asks with Discard alone: the question's own X keeps editing, and
+			// Enter presses nothing. The stored draft's Discard button is a delete, asked as one.
+			const ok = stored
+				? await confirmOutcome({
+					title:   "Discard arcanum?",
+					content: "<p>This arcanum is an unfinished draft. Discard it? This can't be undone.</p>",
+					yes,
+					no:      { label: "Keep it" },
+				})
+				: await askWithButtons({
+					title:   "Discard arcanum?",
+					content: "<p>This arcanum hasn't been saved yet. Discard it? This can't be undone.</p>",
+					buttons: [{ key: "yes", ...yes, value: true }],
+					defaultKey: false,
+				});
 			if (!ok) return false;
 			// Re-check after the await: the confirm is non-modal, so while it was open the author
 			// could have clicked "Save & Done" (which commits the draft and clears _arcanumDraft) —
 			// don't then delete the now-owned card and orphan its slug. Also bail if the world Item
 			// was deleted out from under us in the meantime.
-			if (!this._arcanumDraft || this._discarded || !this.item || !game.items?.get(this.item.id)) return false;
+			if ((!stored && !this._arcanumDraft) || this._discarded || !this.item || !game.items?.get(this.item.id)) return false;
 			// Suppress the discard prompt + editor flush on the delete-triggered re-entrant close.
+			const onSave = this._arcanumOnSave;
 			this._discarded     = true;
 			this._arcanumOnSave = null;
-			await this.item.delete();
-			return true;
+			try {
+				await this.item.delete();
+			} finally {
+				// A delete that did not land leaves the card as it was: a held draft's delete is refused
+				// and asked about first (hooks/arcana-card-edits.js#onPreDeleteItem), and a "Keep it"
+				// there must leave this sheet still flushing its editors and still attaching on Save.
+				// A yes re-issues the delete, which closes this sheet as any outside delete does.
+				if (game.items?.get(this.item.id)) {
+					this._discarded     = false;
+					this._arcanumOnSave = onSave;
+				}
+			}
+			return this._discarded;
 		}
 
 		async close(options) {
@@ -306,12 +354,17 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			// has been saved (no longer a draft) or discarded (torn down by item.delete()).
 			if (this._arcanumDraft && !this._discarded && !itemGone) {
 				const discarded = await this._discardDraft();
-				if (!discarded) return this;   // "Keep editing" → don't close
+				if (!discarded) return this;   // closed unanswered → don't close
 				return this;                   // discarded: item.delete() already closed the sheet
 			}
 			// Flush any pending rich-editor content before teardown. Skip it when the item was
 			// just deleted (nothing to flush, and the update would throw).
-			if (this._editMode && !this._discarded && !itemGone) await this._flushRichEditors();
+			if (this._editMode && !this._discarded && !itemGone) {
+				await this._flushRichEditors();
+				// A card opened straight into the editor with no pending attach (the console / macro /
+				// Create Item path) has always been finished by closing it, its edits being live.
+				await this._clearStoredDraft();
+			}
 			this._dropArcFieldWatch?.();
 			this._dropArcFieldWatch = null;
 			return super.close(options);
@@ -367,8 +420,12 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 				data.active       = { ...ARC_SECTIONS[activeIdx], index: activeIdx + 1 };
 				data.edit       = await this._buildEditContext(flags);
 				// Lock the slug once a character holds the card — changing it would orphan
-				// their saved marks and break the owned-slug link (the card would vanish).
-				data.edit.slugLocked = _arcanumSlugInUse(flags.slug);
+				// their saved marks and break the owned-slug link (the card would vanish). The
+				// option slugs lock with it (ruling A15): each keys a holder's unlock count. The
+				// warning names who holds it, so the author knows whose marks an edit would move.
+				const holders = arcanumHolders(flags.slug);
+				data.edit.slugLocked  = holders.length > 0;
+				data.edit.holderNames = joinNames(holders.map(actor => actor.name));
 				// A pending draft gets a Cancel (discard) button and a "Save & Done" primary;
 				// an existing card's re-edit only gets a plain "Done" (its edits persist live).
 				data.edit.isDraft    = !!this._arcanumDraft;
@@ -385,8 +442,22 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			if (front.unlock?.description) front.unlock.description  = centerArcanumTracks(front.unlock.description);
 			if (back.description)          back.description          = centerArcanumTracks(back.description);
 			data.front = front;
-			data.back = back;
 			data.slug = flags.slug ?? "";
+			// The back is gated per viewer (ruling A3): a player reads it here only once their own
+			// character has it (revealed, or identified and unlocked), when the table's peek switch
+			// is on, or on a card they authored. Withheld whole, title included, so nothing of it
+			// reaches the page; the template prints a line saying so instead.
+			const hasBack = !!(back.title || hasText(back.description) || back.move);
+			const mayReadBack = !hasBack || await viewerMaySeeArcanumBack(flags.slug, { itemIsOwner: !!this.item.isOwner });
+			data.back       = mayReadBack ? back : {};
+			data.backHidden = !mayReadBack;
+			// The GM's own notes (the Inspire wizard's rolls, Book II p.507 "that's all for you"):
+			// to a GM only, never a player, whoever authored the card.
+			const viewerIsGM = !!game.user?.isGM;
+			data.gmNotes = viewerIsGM && hasText(flags.gmNotes) ? await enrichHTML(flags.gmNotes) : "";
+			// An unfinished draft (a reload or a closed window mid-edit): say so, and offer the
+			// author Finish / Discard. Shown to everyone who can open it; only an editor gets the buttons.
+			data.draft = { isDraft: !!flags.draft, canFinish: this._canEditArcanum() };
 			// Card art resolved by the shared helper: shipped majors use their registered icon,
 			// homebrew majors fall back to author-chosen art (a stock placeholder counts as none),
 			// minor arcana have none. Keeps this in lockstep with the character-sheet snapshot.
@@ -417,16 +488,23 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			// Enrich the four rich-text fields in parallel — they're independent and each
 			// enrichHTML resolves @UUID links asynchronously, and this runs on every
 			// structural-edit re-render (toggling major, adding a mystery, etc.).
-			const [frontEnriched, unlockEnriched, backEnriched, moveEnriched] = await Promise.all([
+			// The GM notes field is a GM's alone, as on the card (getData): a player given the card to
+			// finish writing gets no field, so neither reads nor overwrites what the GM rolled there.
+			const showGmNotes = !!game.user?.isGM;
+			const [frontEnriched, unlockEnriched, backEnriched, moveEnriched, gmNotesEnriched] = await Promise.all([
 				enrichHTML(front.description ?? ""),
 				enrichHTML(unlock.description ?? ""),
 				enrichHTML(back.description ?? ""),
 				enrichHTML(back.move?.description ?? ""),
+				showGmNotes ? enrichHTML(flags.gmNotes ?? "") : "",
 			]);
 			return {
 				name:   this.item.name ?? "",
 				major:  !!flags.major,
 				img:    isDefaultImg(this.item.img) ? null : this.item.img,
+				showGmNotes,
+				gmNotes:         showGmNotes ? flags.gmNotes ?? "" : "",
+				gmNotesEnriched,
 				front: {
 					title:               front.title ?? "",
 					description:         front.description ?? "",
@@ -531,6 +609,15 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			markValueTooltips(root);
 			markDebilityTooltips(root);
 			wrapGlyphTextContainers(root);
+			// A stored draft's Finish / Discard (the view template's draft footer).
+			root.querySelector(".stonetop-arc-draft-finish")?.addEventListener("click", ev => {
+				ev.preventDefault();
+				this._finishStoredDraft();
+			});
+			root.querySelector(".stonetop-arc-draft-discard")?.addEventListener("click", ev => {
+				ev.preventDefault();
+				this._discardDraft({ stored: true });
+			});
 		}
 
 		// ── Edit dispatch ─────────────────────────────────────────────────────────
@@ -551,7 +638,7 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 
 			// Presence toggles add/remove a sub-object → restructure.
 			const toggle = t.closest("[data-arc-toggle]");
-			if (toggle) return this._onToggle(toggle.dataset.arcToggle, toggle.checked);
+			if (toggle) return this._onToggle(toggle.dataset.arcToggle, toggle.checked, toggle);
 
 			// Generic scalar / select field. Rich (prose-mirror) content is intentionally NOT
 			// saved here — it's flushed on Done/close/toggle/append (every path before a
@@ -578,7 +665,26 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 				await this._flushRichEditors();
 				return this.item.update({ [path]: value });
 			}
-			await this.item.update({ [path]: value }, { render: false });
+			await this.item.update({ [path]: value, ...this._pairedNameUpdate(path, value) }, { render: false });
+		}
+
+		/**
+		 * The card has two names: the Item's (the sidebar, the drop toast) and the front's title
+		 * (the sheets, the timeline, chat, the browser). While they are the same, renaming either
+		 * renames both, so a rename can't leave the card called two things (HB-13). Once the author
+		 * has made them differ on purpose, each is left alone. The other field's input is updated
+		 * in place too, since this save doesn't re-render.
+		 */
+		_pairedNameUpdate(path, value) {
+			const titlePath = `flags.${ITEM_FLAG_SCOPE}.front.title`;
+			const other = path === "name" ? titlePath : path === titlePath ? "name" : null;
+			if (!other || typeof value !== "string") return {};
+			const name  = this.item.name ?? "";
+			const title = this._flags().front?.title ?? "";
+			if (name !== title) return {};
+			const input = this.element?.[0]?.querySelector?.(`input[data-arc-field="${other}"]`);
+			if (input) input.value = value;
+			return { [other]: value };
 		}
 
 		_onEditClick(ev) {
@@ -607,10 +713,13 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			if (art) { ev.preventDefault(); return this._onPickArt(); }
 			const track = ev.target.closest(".stonetop-arc-marktrack");
 			if (track) { ev.preventDefault(); return this._appendToField(`flags.${ITEM_FLAG_SCOPE}.front.unlock.description`, markTrackHtml(track.dataset.marks)); }
+			// A mystery goes into the back's Moves section and a consequence into its Consequences
+			// list, each made the first time (arcanum-edit.js), so the parsers read them as the
+			// shipped majors' are read: clickable mysteries, the ladder, the curse badge (HB-2).
 			const myst = ev.target.closest(".stonetop-arc-add-mystery");
-			if (myst) { ev.preventDefault(); return this._appendToField(`flags.${ITEM_FLAG_SCOPE}.back.description`, mysteryHtml()); }
+			if (myst) { ev.preventDefault(); return this._insertBackBoxes(html => insertMystery(html)); }
 			const cons = ev.target.closest(".stonetop-arc-add-consequence");
-			if (cons) { ev.preventDefault(); return this._appendToField(`flags.${ITEM_FLAG_SCOPE}.back.description`, consequenceHtml(cons.dataset.weight)); }
+			if (cons) { ev.preventDefault(); return this._insertBackBoxes(html => insertConsequence(html, cons.dataset.weight)); }
 			// Manifested-follower list.
 			const fadd = ev.target.closest(".stonetop-arc-foll-add");
 			if (fadd) { ev.preventDefault(); return this._addFollower(); }
@@ -680,12 +789,32 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 		// SINGLE update that also flushes the other live editors (so unsaved edits survive the
 		// re-render) — a flush-then-append pair of rapid updates drops the second write.
 		async _appendToField(path, snippet) {
+			return this._editField(path, base => `${base}${snippet}`);
+		}
+
+		// The same single update, for a snippet that goes somewhere other than the end: `edit`
+		// gets the field's live value (unsaved typing included) and returns the new one.
+		/**
+		 * Set new □ into the back (`insert` answers arcanum-edit.js's `{html, at, by}`), then move every
+		 * holder's back marks from `at` on along with their boxes, so a Consequence a player marked
+		 * stays marked. Nothing moves when the edit did not land (a click while one is saving).
+		 */
+		async _insertBackBoxes(insert) {
+			let placed = null;
+			await this._editField(`flags.${ITEM_FLAG_SCOPE}.back.description`, html => {
+				placed = insert(html);
+				return placed.html;
+			});
+			if (placed?.by > 0) await shiftHolderBackMarks(this.item, placed.at, placed.by);
+		}
+
+		async _editField(path, edit) {
 			if (this._appending) return;
 			this._appending = true;
 			try {
 				const updates = this._collectEditorUpdates();
 				const base = (path in updates) ? updates[path] : (foundry.utils.getProperty(this.item, path) ?? "");
-				updates[path] = `${base}${snippet}`;
+				updates[path] = edit(base);
 				await this.item.update(updates);
 			} finally {
 				this._appending = false;
@@ -753,9 +882,34 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			return defaultArcanumItemLine();
 		}
 
-		async _onToggle(which, on) {
+		// `box`: the presence checkbox, ticked again when the author keeps what unticking would
+		// throw away (no update means no re-render to put it back).
+		async _onToggle(which, on, box = null) {
 			await this._flushRichEditors();
+			if (!on && !(await this._confirmToggleOff(which))) {
+				if (box) box.checked = true;
+				return;
+			}
 			await this.item.update({ [`flags.${ITEM_FLAG_SCOPE}.${which}`]: on ? this._defaultForToggle(which) : null });
+		}
+
+		// Unticking a presence box nulls its whole sub-object, so ask first when the author has put
+		// anything in it. One still at the blank defaults ticking made just goes.
+		async _confirmToggleOff(which) {
+			const value = which.split(".").reduce((node, key) => node?.[key], this._flags());
+			if (!toggleHasContent(value, this._defaultForToggle(which))) return true;
+			const loss = TOGGLE_LOSSES[which] ?? { noun: "This section", name: "name", what: "everything in it", yes: "Remove it" };
+			const named = String(value?.[loss.name] ?? "").trim();
+			const what = which === "back.item" && toggleHasContent(value.resource, defaultResourceDef())
+				? "its name, weight, tag line and resource track"
+				: loss.what;
+			return !!(await confirmOutcome({
+				title:   `${loss.yes}?`,
+				content: `<p>${loss.noun}${named ? ` <strong>${escHtml(named)}</strong>` : ""} goes, with ${what}.</p>
+					<p>Ticking the box again starts it blank.</p>`,
+				yes: { label: loss.yes, icon: "fa-trash", className: "stonetop-dialog-btn--danger" },
+				no:  { label: "Keep it" },
+			}));
 		}
 
 		async _addRequirement(type) {
@@ -779,17 +933,26 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			const root = this.element?.[0];
 			if (!root) return;
 			const taken = new Set();
-			const reqs = [...root.querySelectorAll(".stonetop-arc-req-row")].map(row => {
+			const stored = this._flags().front?.unlock?.requirements ?? [];
+			const reqs = [...root.querySelectorAll(".stonetop-arc-req-row")].map((row, index) => {
+				// Over the STORED row, so what the form has no field for (an option's `path`) survives
+				// an edit, and switching Option/Text keeps the other kind's words on the row for a
+				// switch back. Every reader branches on `type`, so the idle kind's fields are inert.
+				const now = { ...(stored[Number(row.dataset.reqIndex ?? index)] ?? {}) };
+				// Read off the row's inputs where it shows them, off the stored row where it doesn't.
+				for (const prop of ["content", "description", "slug", "max"]) {
+					const value = row.querySelector(`[data-req-prop="${prop}"]`)?.value;
+					if (value != null) now[prop] = value;
+				}
+				const toMax = raw => (raw ? Math.max(1, Number(raw) || 1) : 1);
 				const type = row.querySelector('[data-req-prop="type"]')?.value ?? "option";
 				if (type === "text") {
-					return { type: "text", content: row.querySelector('[data-req-prop="content"]')?.value ?? "" };
+					return { ...now, type: "text", content: now.content ?? "", ...(now.max != null ? { max: toMax(now.max) } : {}) };
 				}
-				const description = row.querySelector('[data-req-prop="description"]')?.value ?? "";
-				const slug = ensureOptionSlug(row.querySelector('[data-req-prop="slug"]')?.value ?? "", description, taken);
+				const description = now.description ?? "";
+				const slug = ensureOptionSlug(now.slug ?? "", description, taken);
 				taken.add(slug);
-				const maxRaw = row.querySelector('[data-req-prop="max"]')?.value;
-				const max = maxRaw ? Math.max(1, Number(maxRaw) || 1) : 1;
-				return { type: "option", slug, description, max };
+				return { ...now, type: "option", slug, description, max: toMax(now.max) };
 			});
 			return this.item.update({ [`flags.${ITEM_FLAG_SCOPE}.front.unlock.requirements`]: reqs }, { render });
 		}
@@ -798,7 +961,10 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 
 		async _addFollower() {
 			await this._flushRichEditors();
-			const followers = [...(this._flags().summon?.followers ?? []), defaultFollower()];
+			// Its identity from the start: the summoned follower card is matched back to this row by
+			// `sourceUuid`, so renaming the row later must not change it (or Add would offer a twin).
+			const follower = { ...defaultFollower(), sourceUuid: `${this._flags().slug ?? ""}:${foundry.utils.randomID(8)}` };
+			const followers = [...(this._flags().summon?.followers ?? []), follower];
 			await this.item.update({ [`flags.${ITEM_FLAG_SCOPE}.summon.followers`]: followers });
 		}
 
@@ -814,9 +980,21 @@ export function createStonetopArcanumSheetClass(BaseItemSheet) {
 			const root = this.element?.[0];
 			if (!root) return;
 			const num = el => { const x = el?.value; return x === "" || x == null ? 0 : (Number(x) || 0); };
-			const followers = [...root.querySelectorAll(".stonetop-arc-foll-row")].map(row => {
+			const stored = this._flags().summon?.followers ?? [];
+			const slug   = this._flags().slug ?? "";
+			const followers = [...root.querySelectorAll(".stonetop-arc-foll-row")].map((row, index) => {
 				const v = p => row.querySelector(`[data-foll-prop="${p}"]`)?.value ?? "";
+				// Over the STORED follower, so what the form has no field for (choices, askName,
+				// portraitIcon, viaCallUp, exceptional, a hand-set sourceUuid) survives an edit.
+				const was = stored[Number(row.dataset.follIndex ?? index)] ?? {};
+				// Stamped once: the id a summoned card was matched by before this field existed was
+				// derived from the name (arcana-summons.js#arcanaSummonFollowers), so keep that one,
+				// then never derive it again, and a rename no longer re-enables "Add as follower".
+				const named = String(was.name ?? "").trim() || v("name").trim();
+				const sourceUuid = was.sourceUuid || (named ? followerSourceUuid(slug, named) : undefined);
 				return {
+					...was,
+					...(sourceUuid ? { sourceUuid } : {}),
 					name:       v("name"),
 					pronoun:    v("pronoun"),
 					typeLabel:  v("typeLabel"),

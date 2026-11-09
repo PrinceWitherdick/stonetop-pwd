@@ -43,7 +43,7 @@ const PICK_WARN = {
 export class StonetopArcanaInspireDialog extends StonetopDialog {
 	/**
 	 * @param {object}   [opts]
-	 * @param {Function} opts.onCreate - async ({ name, major, front }) → Item. Creates the
+	 * @param {Function} opts.onCreate - async ({ name, major, gmNotes }) → Item. Creates the
 	 *                                    card and wires it to wherever the wizard was opened.
 	 */
 	constructor({ onCreate } = {}, options = {}) {
@@ -272,8 +272,12 @@ export class StonetopArcanaInspireDialog extends StonetopDialog {
 			this.element[0]?.querySelector("[name=arcName]")?.focus();
 			return;
 		}
-		const description = seedDescriptionHtml(this._chosenLines());
-		await this._onCreate?.({ name, major: this._major, front: description ? { description } : undefined });
+		// The rolls (Drawback, Spirit, Binding, Function, Origin...) are the GM's working notes, not
+		// card text: Book II p.507, "that's all for you". So they go to the card's GM-only notes
+		// field, never into the front a player reads (HB-10).
+		// The callers (Create Item, the console helper) seed them in the card's creation.
+		const gmNotes = seedDescriptionHtml(this._chosenLines());
+		await this._onCreate?.({ name, major: this._major, gmNotes });
 		this.close();
 	}
 }

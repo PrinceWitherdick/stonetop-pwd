@@ -33,6 +33,8 @@
       {{#if meal.statusText}}<p class="stonetop-camp-meal-status">{{meal.statusText}}</p>{{/if}}
       {{#if allAlongText}}<p class="stonetop-camp-meal-line">{{this.allAlongText}}</p>{{/if}}
       {{#if meal.forageText}}<p class="stonetop-camp-meal-line">{{meal.forageText}}</p>{{/if}}
+      {{!-- Followers whose PC is gone, still at the fire (audit ROAD-13). --}}
+      {{#each this.orphansLines}}<p class="stonetop-camp-meal-line stonetop-camp-orphans">{{this}}</p>{{/each}}
       {{#if meal.afterText}}<p class="stonetop-camp-meal-line">{{meal.afterText}}</p>{{/if}}
       {{#if meal.provisionsText}}<p class="stonetop-camp-meal-line stonetop-camp-meal-note">{{meal.provisionsText}}</p>{{/if}}
       {{!-- Break Bread (the Judge): the host's box, ticked until they say the meal was not a proper one. --}}
@@ -192,7 +194,7 @@
           its first half, so whichever button comes first starts pressable, and a redraw puts the GM's
           pick back (CampWindow#_keepRosterPick). --}}
     {{#if roster.show}}
-    <div class="stonetop-camp-roster">
+    <div class="stonetop-camp-roster stonetop-field-btns">
       <select name="campRosterActor" aria-label="Someone to bring to the fire or send away from it">
         {{#if add.show}}<optgroup label="Not at the fire">{{#each add.options}}<option value="{{this.id}}" data-camp-roster="add">{{this.name}}</option>{{/each}}</optgroup>{{/if}}
         {{#if sendAway.show}}<optgroup label="At the fire">{{#each sendAway.options}}<option value="{{this.id}}" data-camp-roster="send-away">{{this.name}}</option>{{/each}}</optgroup>{{/if}}

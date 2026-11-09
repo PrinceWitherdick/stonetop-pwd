@@ -58,7 +58,7 @@
         </div>
         {{else}}<span class="stonetop-cf-chosen-empty">none yet</span>{{/if}}
       </div>
-      <div class="stonetop-cf-tag-add-row">
+      <div class="stonetop-cf-tag-add-row stonetop-field-btns">
         <input type="text" class="stonetop-cf-input stonetop-cf-tag-input" placeholder="add your own tag (or comma-separated)…">
         <button type="button" class="stonetop-cf-tag-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add</button>
       </div>
@@ -163,7 +163,7 @@
         </div>
         {{else}}<span class="stonetop-cf-chosen-empty">none yet</span>{{/if}}
       </div>
-      <div class="stonetop-cf-tag-add-row">
+      <div class="stonetop-cf-tag-add-row stonetop-field-btns">
         <input type="text" class="stonetop-cf-input stonetop-cf-tag-input" placeholder="add your own (or comma-separated)…">
         <button type="button" class="stonetop-cf-tag-add stonetop-cf-mini-btn"><i class="fas fa-plus"></i> Add</button>
       </div>
@@ -212,7 +212,7 @@
       <div class="stonetop-cf-gear">
         <div class="stonetop-cf-pick-label">Gear</div>
         {{#each sel.gear}}
-        <div class="stonetop-cf-gear-row">
+        <div class="stonetop-cf-gear-row stonetop-field-btns">
           <input type="text" class="stonetop-cf-input stonetop-cf-gear-label" data-index="{{@index}}" value="{{this.label}}" placeholder="bow &amp; iron arrows, old cloak, supplies…">
           <button type="button" class="stonetop-cf-gear-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{@index}}"><i class="fas fa-times"></i></button>
         </div>

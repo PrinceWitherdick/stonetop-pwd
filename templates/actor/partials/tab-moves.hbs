@@ -256,6 +256,8 @@
 						      description: its ladder still shows, as it does on the roll card. --}}
 						{{#if (or description moveResults)}}<div class="stonetop-item-description">{{{moveBody description moveResults}}}</div>{{/if}}
 						{{#if requiresLabel}}<p class="stonetop-move-note">Requires: {{this.requiresLabel}}</p>{{/if}}
+						{{!-- A custom or dropped move named as a level's pick (C4, Book I p.528). --}}
+						{{> "stonetop.level-pick-toggle"}}
 					</li>
 				{{/each}}
 				</ol>

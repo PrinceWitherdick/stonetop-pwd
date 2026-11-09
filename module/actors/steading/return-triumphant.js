@@ -2,6 +2,10 @@ import { sign } from "../../utils/roll-engine.js";
 import { clearDebility, markedDebilities, openDebilityPicker } from "./steading-debilities.js";
 import { warn } from "../../utils/logger.js";
 import { STEADING_STAT_MAX } from "./StonetopSteading.js";
+import { askWithButtons } from "../../utils/ask-with-buttons.js";
+import { currentExpedition, expeditionLabel } from "../../utils/expedition-log-core.js";
+import { escHtml } from "../../utils/strings.js";
+import { format, localize } from "../../utils/i18n.js";
 
 // ── Return Triumphant (Book I p.339) ────────────────────────────────────────────
 // No dice: the move clears one of the steading's marked debilities, or raises Fortunes
@@ -39,6 +43,41 @@ async function creditTheTrip({ fromWalkthrough = false } = {}) {
 }
 
 /**
+ * The trip this move would credit, when that trip has ALREADY Returned Triumphant: `{ trip, label }`,
+ * else null. The walkthrough's door means its current trip; the steading sheet's means the current
+ * trip only if it came home this season, the same reading `creditTheTrip` makes. A failure to read
+ * is no reason to refuse the move, so it answers null.
+ */
+async function triumphantTrip({ fromWalkthrough = false } = {}) {
+	try {
+		const { tripLogStore, cameHomeNow } = await import("../../timeline/timeline-expedition-record.js");
+		const log = tripLogStore().read();
+		const trip = currentExpedition(log);
+		if (!trip?.returnedTriumphant) return null;
+		if (!fromWalkthrough && !cameHomeNow(trip)) return null;
+		return { trip, label: expeditionLabel(trip, log.list.indexOf(trip)) };
+	} catch (err) {
+		warn("could not tell whether this trip already Returned Triumphant", err);
+		return null;
+	}
+}
+
+/** Ask before the move is made a second time for one homecoming. True to make it again. */
+async function askTriumphAgain({ label }) {
+	const answer = await askWithButtons({
+		title:   localize("stonetop.expedition.triumphAgain.title"),
+		content: `<p>${format("stonetop.expedition.triumphAgain.ask", { name: `<strong>${escHtml(label)}</strong>` })}</p>`,
+		buttons: [
+			{ key: "again", label: localize("stonetop.expedition.triumphAgain.yes"), icon: "fa-house-chimney-heart", value: true },
+			{ key: "leave", label: localize("stonetop.expedition.triumphAgain.no"), icon: "fa-xmark", value: false },
+		],
+		// The safe answer is the default.
+		defaultKey: "leave",
+	});
+	return answer === true;
+}
+
+/**
  * Open the Return Triumphant walkthrough against a steading.
  *
  * @param {StonetopSteading} steading  The steading wrapper the writes land on.
@@ -50,8 +89,12 @@ async function creditTheTrip({ fromWalkthrough = false } = {}) {
  *                                     so the trip in hand is the one to credit. Any other door
  *                                     credits only a trip that came home this season.
  */
-export function openReturnTriumphant(steading, { onApplied, fromWalkthrough = false } = {}) {
+export async function openReturnTriumphant(steading, { onApplied, fromWalkthrough = false } = {}) {
 	if (!steading) return;
+	// Once per homecoming (p.339). A trip that already Returned Triumphant asks before a second
+	// debility goes, or a second point of Fortunes.
+	const already = await triumphantTrip({ fromWalkthrough });
+	if (already && !(await askTriumphAgain(already))) return;
 	const done = async () => {
 		onApplied?.();
 		await creditTheTrip({ fromWalkthrough });

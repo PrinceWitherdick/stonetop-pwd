@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -151,9 +151,12 @@ describe("RequisitionDialog", () => {
 			expect(asked.mock.calls[0][0].content).toContain(`value="3"`);
 			expect(asked.mock.calls[0][0].buttons.map(b => b.label)).toEqual(["Take them from the herd", "Take none"]);
 			expect(steading.herd).toEqual({ grown: 7, yearlings: 2, foals: 1 });
-			expect(dialog._character.addCustomInventoryItem).toHaveBeenCalledWith("3 horses from the herd", 1);
+			// Horses are followers, never a ◇ Inventory item (ruling E6).
+			expect(dialog._character.addCustomInventoryItem).not.toHaveBeenCalled();
 			const written = Object.values(dialog._characterActor.update.mock.calls[0][0]);
 			expect(written.map(f => f.name)).toEqual(["Horse 1", "Horse 2", "Horse 3"]);
+			// On the trip they were taken for (PREP-7), and stamped with where they came from (E6).
+			expect(written.every(f => f.party === true && f.requisitionedFrom === HERD_ASSET_NAME)).toBe(true);
 			expect(written[0].notes).toMatch(/^Requisitioned from the herd of horses\./);
 			// The herd itself is never marked out.
 			expect(dialog._steadingActor.setFlag).not.toHaveBeenCalled();
@@ -328,19 +331,19 @@ describe("RequisitionDialog", () => {
 		vi.stubGlobal("ui", { notifications: { info: vi.fn(), warn: vi.fn() } });
 		vi.spyOn(console, "warn").mockImplementation(() => {});
 		try {
-			const dialog = makeDialog([{ name: "Plow", checked: true }]);
+			const dialog = makeDialog([{ name: "Lantern", checked: true }]);
 			dialog.render = vi.fn();
 			dialog._steading.setAssetTaken = vi.fn(async () => true);
 			dialog._steading.returnAsset = vi.fn(async () => true);
 			dialog._character.addCustomInventoryItem = vi.fn(async () => { throw new Error("write failed"); });
-			expect(await dialog._takeAsset({ index: 0, name: "Plow" })).toBe(false);
-			expect(dialog._steading.returnAsset).toHaveBeenCalledWith(0);
+			expect(await dialog._takeAsset({ index: 0, name: "Lantern" })).toBe(false);
+			expect(dialog._steading.returnAsset).toHaveBeenCalledWith(0, { name: "Lantern" });
 
 			// Refused on the steading: nothing added, nothing handed back.
 			dialog._steading.setAssetTaken = vi.fn(async () => false);
 			dialog._steading.returnAsset.mockClear();
 			dialog._character.addCustomInventoryItem = vi.fn(async () => {});
-			expect(await dialog._takeAsset({ index: 0, name: "Plow" })).toBe(false);
+			expect(await dialog._takeAsset({ index: 0, name: "Lantern" })).toBe(false);
 			expect(dialog._character.addCustomInventoryItem).not.toHaveBeenCalled();
 			expect(dialog._steading.returnAsset).not.toHaveBeenCalled();
 		} finally {
@@ -378,5 +381,81 @@ describe("RequisitionDialog", () => {
 		} finally {
 			vi.unstubAllGlobals();
 		}
+	});
+});
+
+// The expedition audit's preparation fixes (2026-11-03).
+describe("RequisitionDialog: the expedition audit's fixes", () => {
+	const withUi = () => {
+		const warn = vi.fn();
+		const info = vi.fn();
+		vi.stubGlobal("ui", { notifications: { warn, info } });
+		return { warn, info };
+	};
+	afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+	// PREP-2: the option the player SAW names the asset; a row deleted above it since must not hand them the next one.
+	it("refuses a selected asset whose row has moved, rather than taking whatever sits there now", () => {
+		const dialog = makeDialog([{ name: "Plows", checked: true }, { name: "Wagon", checked: true }]);
+		const select = { value: "0", selectedOptions: [{ dataset: { name: "Carts" } }] };
+		const root = makeRoot({ ".stonetop-requisition-asset-select": select });
+		expect(dialog._getChosenAsset(root)).toMatchObject({ index: 0, name: "Carts", stale: true, asset: null });
+		select.selectedOptions = [{ dataset: { name: "Plows" } }];
+		expect(dialog._getChosenAsset(root)).toMatchObject({ index: 0, name: "Plows" });
+		expect(dialog._getChosenAsset(root).stale).toBeUndefined();
+		const hbs = fs.readFileSync(path.resolve(HERE, "../../../templates/dialogs/requisition-picker.hbs"), "utf8");
+		expect(hbs).toContain(`data-name="{{this.name}}"`);
+	});
+
+	// PREP-9: a mark the steading refuses takes nothing at all, so the asset cannot be taken again and again.
+	it("takes nothing when the steading write cannot be made", async () => {
+		const { warn } = withUi();
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const dialog = makeDialog([{ name: "The smithy's tongs", checked: true }]);
+		dialog.render = vi.fn();
+		dialog._steading.setAssetTaken = vi.fn(async () => { throw new Error("no permission"); });
+		expect(await dialog._takeAsset({ index: 0, name: "The smithy's tongs" })).toBe(false);
+		expect(dialog._character.addCustomInventoryItem).not.toHaveBeenCalled();
+		expect(warn.mock.calls[0][0]).toMatch(/nothing was taken/);
+	});
+
+	// E6: out on the walkthrough's current trip; a wagon is no ◇ item; a carried thing is, stamped with its asset.
+	it("tags the take with the open trip, adds only what a character carries, and stamps it", async () => {
+		withUi();
+		vi.stubGlobal("game", { settings: { get: () => ({ currentId: "t1", list: [{ id: "t1", title: "The Bear Hunt" }] }) } });
+		const dialog = makeDialog([{ name: "A wagon", checked: true }, { name: "The smithy's tongs", checked: true }]);
+		dialog.render = vi.fn();
+		dialog._steading.setAssetTaken = vi.fn(async () => true);
+
+		expect(await dialog._takeAsset({ index: 0, name: "A wagon" })).toBe(true);
+		expect(dialog._steading.setAssetTaken.mock.calls[0][1]).toEqual({ name: "Wren", id: "hero1", expedition: { id: "t1", title: "The Bear Hunt" } });
+		expect(dialog._character.addCustomInventoryItem).not.toHaveBeenCalled();
+
+		expect(await dialog._takeAsset({ index: 1, name: "The smithy's tongs" })).toBe(true);
+		expect(dialog._character.addCustomInventoryItem).toHaveBeenCalledWith("The smithy's tongs", 1, { requisitionedFrom: "The smithy's tongs" });
+	});
+
+	// PREP-7 and E6: a requisitioned animal travels with the party and says where it came from.
+	it("puts requisitioned animals on the trip, stamped with their asset", async () => {
+		withUi();
+		vi.stubGlobal("foundry", { utils: { randomID: () => "abc" } });
+		const dialog = makeDialog([]);
+		const match = (await import("../../../module/data/beasts.js")).beastFollowerForAsset("A sturdy mule");
+		await dialog._addRequisitionedFollower(match, "A sturdy mule", "A sturdy mule");
+		const [written] = Object.values(dialog._characterActor.update.mock.calls[0][0]);
+		expect(written).toMatchObject({ party: true, requisitionedFrom: "A sturdy mule" });
+	});
+
+	// E8: a Take with no roll still works, and says so in chat.
+	it("says a take with no Requisition roll in chat", async () => {
+		const create = vi.fn(async () => {});
+		vi.stubGlobal("ChatMessage", { create, getSpeaker: () => ({ alias: "Wren" }) });
+		await makeDialog([])._sayTakenUnrolled("A wagon");
+		const { content, speaker } = create.mock.calls[0][0];
+		expect(content).toContain("Requisition");
+		expect(content).toContain("<p>Wren took A wagon from Stonetop without a Requisition roll.</p>");
+		expect(speaker).toEqual({ alias: "Wren" });
+		const src = fs.readFileSync(path.resolve(HERE, "../../../module/actors/character/dialogs/RequisitionDialog.js"), "utf8");
+		expect(src).toContain("if (taken && Number.isInteger(choice.index) && !this._lastRoll?.message) await this._sayTakenUnrolled(choice.name);");
 	});
 });

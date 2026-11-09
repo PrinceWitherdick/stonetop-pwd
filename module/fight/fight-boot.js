@@ -30,6 +30,8 @@ import { installCombatWindow, installFightWindow, syncFightWindow } from "./figh
 import { fightVitalsKey } from "./fight-vitals.js";
 import { createFightTokenClass, installFightRing, syncFightRing } from "./fight-ring.js";
 import { installReadinessLoss } from "../combat/readiness-loss.js";
+import { installHiddenMirror } from "./fight-hidden.js";
+import { isFight } from "./in-battle.js";
 
 /**
  * `preCreateCombat`: mark a new Combat as a fight, and tie it to the scene it is started on.
@@ -63,7 +65,8 @@ export function stampSide(combatant, data = {}) {
  */
 export function refreshFightTab(tab = globalThis.ui?.combat) {
 	const combat = tab?.viewed;
-	if (!tab?.rendered || !combat) return;
+	// A Combat that is no fight draws no fight (FightTracker#_fightViewed), so nothing of it is worth redrawing for.
+	if (!tab?.rendered || !combat || !isFight(combat)) return;
 	const scene = combat.scene ?? globalThis.canvas?.scene ?? null;
 	const signature = snapshotFight(combat, { scene })?.result.signature ?? null;
 	if (signature !== tab.fightSignature || fightVitalsKey(combat) !== tab.fightVitals) tab.render({ parts: ["tracker"] });
@@ -81,6 +84,8 @@ export function registerFightTab({ config = globalThis.CONFIG, hooks = globalThi
 		// And the rules a fight ending keeps, which are Stonetop's however the tracker looks: a core Combat is
 		// the fight then, so its end lets Readiness, the Marshal's holds and the mooks' grudges go (p.216).
 		installReadinessLoss({ hooks });
+		// A token revealed on the map is revealed in the tracker too, which is what the window's opening reads.
+		installHiddenMirror({ hooks });
 		return false;
 	}
 	const Base = foundryNs?.applications?.sidebar?.tabs?.CombatTracker;
@@ -120,6 +125,8 @@ export function registerFightTab({ config = globalThis.CONFIG, hooks = globalThi
 	installFightRing({ hooks });
 	// Defend's Readiness goes when the fight ends, or a character leaves it or goes down (p.216).
 	installReadinessLoss({ hooks });
+	// A token hidden or revealed on the map takes its row in the fight with it (fight-hidden.js).
+	installHiddenMirror({ hooks });
 	// The canvas destroys the overlay with its interface group; drop the handles to it.
 	hooks.on("canvasTearDown", teardownFightOverlay);
 	// A change of palette (high contrast, a dark page, Follow Foundry re-resolving) gets the lines

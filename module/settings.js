@@ -474,6 +474,18 @@ export function registerSettings() {
 		default: false,
 	});
 
+	// Book I p.136, the Seeker's minor arcana: "Draw 3 at random". Off (the default) draws from
+	// the shipped deck only; on, the world's finished homebrew minors join it (ruling A19). Read at
+	// the draw, CharacterOnboardingDialog#_loadArcanaOptions. On the Preferences tab as a GM row.
+	game.settings.register(SYSTEM_ID, "arcanaSeekerDrawsHomebrew", {
+		name: "stonetop.settings.arcanaSeekerDrawsHomebrew.name",
+		hint: "stonetop.settings.arcanaSeekerDrawsHomebrew.hint",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: false,
+	});
+
 	// Identifying artifacts, Book I pp.430-431. When on, a Book II treasure dropped onto a
 	// character sheet lands with its tags, Value and ○ uses withheld, so the table plays out
 	// "describe it… hint at more than meets the eye" and a PC has to Know Things about it.
@@ -1122,6 +1134,25 @@ export function registerSettings() {
 		// it or the next save here writes the old copy back over theirs. The writer's id comes
 		// with it, so a client can tell its own echo from somebody else's change.
 		onChange: (value, _options, userId) => game.stonetop?.onExpeditionLog?.(value, userId),
+	});
+
+	// The route the GM has SHOWN THE PLAYERS from the Run an Expedition walkthrough (its "Show
+	// players" button), for the player's own view of it: the chat card and the steading sheet's
+	// "See the route" button (utils/shared-route.js, dialogs/SharedRouteWindow.js). Separate from
+	// `expeditionAnswers` because that log holds the GM's prep and notes, and from the Scene flag
+	// because the GM may show a route without drawing it on any scene. Shape:
+	//   { id, sharedAt, expeditionId, title, journey: { origin, destination, custom }, tier,
+	//     art: { src, out, frame, aspect } | null }   — or {} when nothing is shown.
+	// `art` is there because a player cannot browse the art folder to find the map's file; the GM's
+	// client resolves it and hands it on. A fresh `id` on every share makes a re-share a change.
+	// The onChange fires on every client, players included, so their views follow it.
+	game.settings.register(SYSTEM_ID, "sharedRoute", {
+		name: "Route Shown to Players",
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {},
+		onChange: value => globalThis.Hooks?.callAll?.(SHARED_ROUTE_HOOK, value),
 	});
 
 	// The system-macro hotbar layout version this client has been snapped to (see
@@ -1938,7 +1969,7 @@ export function registerSettings() {
 	// much magnification one pair of eyes needs is not a fact about the map, and storing it on the
 	// board would have one reader rewriting another's window), and NOT nested by world: it holds
 	// three numbers rather than an id, and that need is the same in every world they open. Shape:
-	// { head, line, word }. See relmap/relmap-weights.js.
+	// { head, line, word, name }. See relmap/relmap-weights.js.
 	game.settings.register(SYSTEM_ID, "relmapWeights", {
 		scope: "client",
 		config: false,
@@ -2613,6 +2644,13 @@ export function isFightTabEnabled() {
  * closes. See hooks/feature-switches.js.
  */
 export const FEATURE_SWITCH_HOOK = "stonetopFeatureSwitched";
+
+/**
+ * Fired on every client when the route shown to the players changes, with the setting's new value.
+ * A hook for the same reason as the one above: this file never loads the windows that follow it.
+ * See dialogs/SharedRouteWindow.js `registerSharedRouteHooks`.
+ */
+export const SHARED_ROUTE_HOOK = "stonetopSharedRouteChanged";
 
 /** Is the relationship map on in this world? Defaults to yes, unregistered included. */
 export function isRelationshipMapShown() {

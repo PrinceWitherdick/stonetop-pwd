@@ -9,7 +9,9 @@
 // a kind of their own (registerRestorableWindow, below). Transient dialogs — the level-up
 // wizard, the introductions walkthrough, pickers — are NOT tracked here: reopening a
 // half-finished wizard is worse than not, and the session-zero walkthroughs already have
-// their own reload-resume path (dialogs/walkthrough-resume.js).
+// their own reload-resume path (dialogs/walkthrough-resume.js). The one wizard that is,
+// Create a Site, is GM prep a table writes over a whole evening and asked to come back
+// (sites/create-site-restore.js); it saves its answers in `restoreView`.
 //
 // Per-client on purpose: window layout is personal, not shared world state (mirrors the
 // existing `characterSheetWidths` client setting). Defaults on; the "Restore Open
@@ -25,6 +27,7 @@
 
 import { getObjectSetting, getSetting, worldKey } from "../settings.js";
 import { SYSTEM_ID } from "../system-id.js";
+import { openApplications } from "./open-windows.js";
 
 const STATE_SETTING = "openWindowsState";
 const TOGGLE_SETTING = "restoreWindowsOnReload";
@@ -101,6 +104,13 @@ let _restack = null;
 // How long past the last staggered render to wait for stragglers before restacking whatever did
 // open. A sheet whose render threw never fires its hook, and it must not hold the others down.
 const RESTACK_GRACE_MS = 3000;
+
+// The reopened windows still to land when the restack stood down early (a click, or the grace above
+// running out), and the saved stack to slot each one into when it does. See _slotLate.
+let _late = null;
+
+// How long a window can still land late and be slotted. Past this it opens wherever core puts it.
+const LATE_GRACE_MS = 30000;
 
 // The key an app is persisted and later reopened under, or null for a window this does not restore.
 // A window of a registered kind names its own. A document sheet is keyed by its document's uuid: it
@@ -297,6 +307,10 @@ function _onRender(app) {
 		_applyTabs(app, pending);
 	}
 	_settleRestack(key);
+	if (_late?.waiting.delete(key)) {
+		const late = _late;
+		setTimeout(() => _slotLate(late, key, app), 0);
+	}
 	_schedulePersist();
 }
 
@@ -304,21 +318,87 @@ function _onRender(app) {
 // last one has. Held back while `scheduling`: a render that lands while a later lookup is still
 // awaited must not read an empty wait list as "all done".
 function _settleRestack(key) {
-	if (_restack?.waiting.delete(key) && !_restack.waiting.size && !_restack.scheduling) _finishRestack();
+	const restack = _restack;
+	if (restack?.waiting.delete(key) && !restack.waiting.size && !restack.scheduling) _finishRestackSoon(restack);
+}
+
+// ⚠ ONE TASK AFTER THE LAST RENDER HOOK, NOT IN IT. A window raises itself AFTER its render hook has
+// run: core's `render(true)` defaults to `focus: true` and raises once the frame is drawn
+// (appv1 `maximize().then(() => bringToTop())`), an ApplicationV2 does the same on `force`, and our
+// dialogs raise in FrontOnOpen once `super._render` returns. All of those are chained straight off the
+// render, so they have run by the next task. Restacked inside the hook, the last window to land put
+// itself back on top afterwards: a GM toolkit saved at the back came back in front of everything.
+function _finishRestackSoon(restack) {
+	setTimeout(() => { if (_restack === restack) _finishRestack(); }, 0);
 }
 
 // What counts as the user taking the stack back while a restore is still landing.
 const HANDOVER_EVENTS = ["pointerdown", "keydown"];
 
 // Stand the restore in flight down, leaving the stack as it is: its straggler timer and its watch
-// on the user's input both go. Hands back what was in flight, or null if nothing was.
+// on the user's input both go. Any window still to land is handed to _slotLate. Hands back what was
+// in flight, or null if nothing was.
 function _endRestack() {
 	const restack = _restack;
 	_restack = null;
 	if (!restack) return null;
 	clearTimeout(restack.timer);
 	for (const type of HANDOVER_EVENTS) window.removeEventListener(type, _onHandoverInput, true);
+	// The SAME list and set, not copies: a click can come while restoreOpenWindows is still looking
+	// windows up (Create a Site's code alone takes a moment to load), and every window it queues after
+	// that is late too.
+	if (restack.waiting.size || restack.scheduling) {
+		clearTimeout(_late?.timer);
+		const late = _late = { order: restack.order, waiting: restack.waiting, timer: null };
+		late.timer = setTimeout(() => { if (_late === late) _late = null; }, LATE_GRACE_MS);
+	}
 	return restack;
+}
+
+// The element of a window of either framework (an AppV1 element is a jQuery set).
+const _frameOf = (app) => (app?.element?.jquery ? app.element[0] : app?.element) ?? null;
+
+// Where a framed, open window sits in the stack, or null for one that isn't stacked.
+function _depthOf(app) {
+	if (!app || app.rendered === false || app.popOut === false || app.hasFrame === false) return null;
+	const z = app.position?.zIndex;
+	return Number.isFinite(z) ? z : null;
+}
+
+function _setDepth(app, z) {
+	app.position.zIndex = z;
+	const el = _frameOf(app);
+	if (el?.style) el.style.zIndex = String(z);
+}
+
+// A reopened window that landed after the restack stood down, put back where it was saved: directly
+// beneath the lowest of the reopened windows that were saved in front of it. Every window at or above
+// that depth moves up one to make room, so nothing else changes order, including a window the user
+// opened or clicked forward while this one was still loading. With nothing saved in front of it, it
+// was the front window and stays on top.
+//
+// Without this, every window still loading at the user's first click opened on top: the window left
+// in front reopens FIRST, so it was the one buried under everything that came after.
+function _slotLate(late, key, app) {
+	const depth = _depthOf(app);
+	if (depth === null) return;
+	const at = late.order.findIndex((entry) => entry.key === key);
+	const ahead = late.order.slice(at + 1).map(({ sheet }) => _depthOf(sheet)).filter((z) => z !== null);
+	if (!ahead.length) return;
+	const target = Math.min(...ahead);
+	if (depth < target) return;
+	let front = app;
+	let frontDepth = target;
+	for (const other of openApplications()) {
+		const z = other === app ? null : _depthOf(other);
+		if (z === null || z < target) continue;
+		_setDepth(other, z + 1);
+		if (z + 1 > frontDepth) { front = other; frontDepth = z + 1; }
+	}
+	_setDepth(app, target);
+	// AppV1's bringToTop does nothing for `ui.activeWindow`, which is still the late window: left so,
+	// a click on it would not bring it forward.
+	if (globalThis.ui) ui.activeWindow = front;
 }
 
 // A click or key press while reopened windows are still landing. See restoreOpenWindows.
@@ -328,11 +408,11 @@ function _onHandoverInput() {
 
 // Put the reopened windows back in the stack they were saved in, back-most first, so the window
 // that was in front ends in front. Only a z-index write per window, never a re-render. A window
-// still to land is skipped, and opens on top when it does.
+// still to land is skipped here, and slotted into its place when it does (_slotLate).
 function _finishRestack() {
 	const restack = _endRestack();
 	if (!restack) return;
-	for (const sheet of restack.order) {
+	for (const { sheet } of restack.order) {
 		if (sheet.rendered === false) continue;
 		try { (sheet.bringToFront ?? sheet.bringToTop)?.call(sheet); }
 		catch (_err) { /* a window mid-close keeps whatever depth it has */ }
@@ -343,6 +423,7 @@ function _onClose(app) {
 	const key = _trackKey(app);
 	if (!key) return;
 	_openApps.delete(key);
+	_late?.waiting.delete(key);
 	_schedulePersist();
 }
 
@@ -401,7 +482,8 @@ async function _windowFor(key) {
 // in the meantime the user opens a journal or clicks a sheet forward; raising every restored
 // window after that buries what they just chose. So the first click or key press puts back
 // whatever has landed so far, in the capture phase, before that input raises the window it is
-// aimed at, and from then on the stack is theirs.
+// aimed at, and from then on the stack is theirs. A window that lands after that is slotted in
+// beneath the reopened windows saved in front of it (_slotLate), not left on top.
 export async function restoreOpenWindows() {
 	if (!getSetting(TOGGLE_SETTING)) return;
 	const { state, flat } = _savedHere();
@@ -425,7 +507,7 @@ export async function restoreOpenWindows() {
 		const delay = i++ * 120;
 		// Queued front to back, so each lands at the head of the back-to-front restack order.
 		restack.waiting.add(key);
-		restack.order.unshift(sheet);
+		restack.order.unshift({ key, sheet });
 		setTimeout(() => {
 			try {
 				// Stage the saved tab so the render hook (fired once _tabs is bound) switches
@@ -461,7 +543,7 @@ export async function restoreOpenWindows() {
 	restack.scheduling = false;
 	if (_restack !== restack) return;
 	if (!restack.order.length) { _endRestack(); return; }
-	if (!restack.waiting.size) { _finishRestack(); return; }
+	if (!restack.waiting.size) { _finishRestackSoon(restack); return; }
 	restack.timer = setTimeout(() => {
 		if (_restack === restack) _finishRestack();
 	}, (i - 1) * 120 + RESTACK_GRACE_MS);

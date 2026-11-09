@@ -70,6 +70,19 @@ Handlebars.registerHelper("localize", (key, options) => (
 ));
 Handlebars.registerHelper("escapeHtml", value => escHtml(value));
 
+// The partials a partial includes, by the name stonetop.js registers them under. Only those that
+// another template pulls in with `{{> }}` and that the tests render through it: the route line,
+// which both the GM's pin layer and the players' shared-route layer draw.
+for (const [name, file] of [
+	["stonetop.expedition-journey-line", "templates/dialogs/partials/expedition-journey-line.hbs"],
+	// Going home's list of what is still out with the trip (expedition.hbs's home step).
+	["stonetop.expedition-home-assets", "templates/dialogs/partials/expedition-home-assets.hbs"],
+	// Going home's Reset Inventory card: everyone on the trip unpacks (p.89).
+	["stonetop.expedition-home-reset", "templates/dialogs/partials/expedition-home-reset.hbs"],
+]) {
+	Handlebars.registerPartial(name, fs.readFileSync(path.join(_systemRoot, file), "utf8"));
+}
+
 const _templates = new Map();
 
 global.renderTemplate = (templatePath, data) => {

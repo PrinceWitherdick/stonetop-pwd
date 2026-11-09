@@ -86,7 +86,7 @@ function modePickerHtml(prompt, active) {
  *  buttons around a number, and its own buttons say only "Decrease" and "Increase", so a
  *  shared name here would leave one of them unnamed to a screen reader. */
 function stepperHtml(ariaLabel) {
-	return `<div class="stonetop-roll-modifier-stepper" role="group" aria-label="${ariaLabel}">
+	return `<div class="stonetop-roll-modifier-stepper stonetop-field-btns" role="group" aria-label="${ariaLabel}">
 						<button type="button" class="stonetop-roll-modifier-step" data-step="-1" aria-label="Decrease">&minus;</button>
 						<input type="number" name="modifier" value="0" step="1" inputmode="numeric" autocomplete="off">
 						<button type="button" class="stonetop-roll-modifier-step" data-step="1" aria-label="Increase">+</button>

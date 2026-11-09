@@ -24,6 +24,7 @@
             {
               "type": "option",
               "slug": "learn-name",
+              "path": "name",
               "description": "… must learn the name of the shade whose skull this was;"
             },
             {
@@ -33,6 +34,7 @@
             {
               "type": "option",
               "slug": "call-spirits",
+              "path": "call-spirits",
               "description": "… use the Blessed's Call the Spirits move to call up the shade."
             }
           ]

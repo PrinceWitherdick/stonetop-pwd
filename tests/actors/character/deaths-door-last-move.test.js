@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { LAST_MOVE_TOTAL, lastMoveChoices, makeLastMove, DEATHS_DOOR_STATE } from "../../../module/actors/character/deaths-door.js";
 import { DeathsDoorDialog } from "../../../module/actors/character/dialogs/DeathsDoorDialog.js";
+import { makingLastMove } from "../../../module/fight/in-battle.js";
 
 const move = (id, name, rollType = "str", extra = {}) => ({ id, name, type: "move", system: { rollType }, ...extra });
 
@@ -32,6 +33,17 @@ describe("making it", () => {
 			asIfTotal: LAST_MOVE_TOTAL, rollMode: "normal", conditionNotes: ["One last move"],
 		});
 		expect(LAST_MOVE_TOTAL).toBe(12);
+	});
+
+	// EDG-2: at 0 HP the fight counts them out, so a last Clash with nothing targeted aimed at nobody. While the
+	// move is made they count as fighting (fight/in-battle.js#duringLastMove), and not a moment after.
+	it("counts the character as fighting while the move is made", async () => {
+		const actor = { id: "aeliana" };
+		let during = null;
+		const character = { _actor: actor, onRoll: vi.fn(async () => { during = makingLastMove(actor); return true; }) };
+		expect(await makeLastMove(character, move("m1", "Clash"), { rollable: {} })).toBe(true);
+		expect(during).toBe(true);
+		expect(makingLastMove(actor)).toBe(false);
 	});
 
 	it("says no move was made when its prompts were backed out of", async () => {

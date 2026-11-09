@@ -16,7 +16,7 @@ import { escHtml, decodeEntities, normaliseEditorText } from "./strings.js";
 import { step4Questions, step6Questions, SUPERSEDED_INTRO_QUESTIONS } from "../dialogs/introductions-data.js";
 import { CHART_GROUPS, chartPicked, chartEntryText } from "../dialogs/expedition-data.js";
 import {
-	journeyRoute, routePhrase, routeLegLines, routeLine, fillChartBlank,
+	journeyRoute, routePhrase, routeLegLines, routeLine, fillChartBlank, chartsFirstTravel,
 } from "./travel-route.js";
 import { hasFillBlank } from "./fill-blanks.js";
 import { SEASONAL_GAINS } from "../dialogs/spring-burst-data.js";
@@ -304,7 +304,9 @@ export function chartedLines(chart, route = null) {
 				const said = String(entry.answer ?? "").trim();
 				return {
 					id:   entry.id,
-					line: entry.key ? fillChartBlank(text, entry.key, route, said) : escHtml(text),
+					line: entry.key
+						? fillChartBlank(text, entry.key, route, said, { perLeg: chartsFirstTravel(picked) })
+						: escHtml(text),
 					said: (entry.key && hasFillBlank(text)) ? "" : said,
 					done: !!entry.done,
 				};
@@ -378,10 +380,9 @@ function buildExpeditionPage(exp, index, { withEmpty = false } = {}) {
 		// has no such heading.
 		proseCandidate("Other preparations", paragraphs(exp?.prep)),
 		proseCandidate("The journey", paragraphs(exp?.running)),
-		// LEGACY, like the three above. The arriving-home step's "Return Triumphant?" box is
-		// gone — that step offers the MOVE now, and making it clears a steading debility (or
-		// raises Fortunes), which the steading's own ledger records attributed to the move. So
-		// nothing writes `home.notes` any more; trips logged with the box keep printing theirs.
+		// The homecoming's to-do list (Going home's "Homecoming to-do", p.338 "Make yourself a to-do
+		// list"), written into the same `home.notes` the old "Return Triumphant?" box used, so trips
+		// logged with that box print theirs under the one heading too.
 		proseCandidate("Coming home", paragraphs(home.notes)),
 	]);
 	if (!sections.length && !withEmpty) return null;

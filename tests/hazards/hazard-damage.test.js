@@ -109,6 +109,7 @@ function deps(over = {}) {
 		apply: vi.fn(async (actor, amount) => ({ oldHp: actor.system.attributes.hp.value, newHp: Math.max(0, actor.system.attributes.hp.value - amount) })),
 		post: vi.fn(async () => ({})),
 		notify: vi.fn(),
+		markDying: vi.fn(async () => false),
 		...over,
 	};
 }
@@ -178,11 +179,29 @@ describe("Certain death (p.383): straight to 0 HP, no damage roll", () => {
 		expect(d.post.mock.calls[0][1]).toContain("Wisp: 8 → 0 HP");
 	});
 
-	it("leaves someone already at 0 HP alone, and says so", async () => {
+	it("leaves someone already at 0 HP and already dying alone, and says so", async () => {
 		const down = pc("andras", "Andras", 0);
 		const d = deps({ handTargets: () => [{ uuid: "Actor.andras", name: "Andras", hasActor: true }], resolve: async () => down });
 		expect(await hazardCertainDeath(page(FALL), d)).toEqual(["Andras is already at 0 HP."]);
 		expect(d.apply).not.toHaveBeenCalled();
+		// Asked, and refused: the GM's "Mark dying" rule says who may be marked (markDyingByFiat).
+		expect(d.markDying).toHaveBeenCalledWith(down);
+	});
+
+	// EDG-15 (round 2): "it should immediately reduce them to 0 HP and trigger the Death's Door move" (Book I p.383).
+	it("sends a character already at 0 HP but not dying (out of the action) to Death's Door", async () => {
+		const down = pc("andras", "Andras", 0);
+		const d = deps({ handTargets: () => [{ uuid: "Actor.andras", name: "Andras", hasActor: true }], resolve: async () => down, markDying: vi.fn(async () => true) });
+		expect(await hazardCertainDeath(page(FALL), d)).toEqual(["Andras was already at 0 HP, and now faces Death's Door (certain death, Book I p.383)."]);
+		expect(d.markDying).toHaveBeenCalledWith(down);
+		expect(d.apply).not.toHaveBeenCalled();
+	});
+
+	it("asks no Death's Door of a monster already at 0 HP", async () => {
+		const beast = { ...pc("boar", "Boar", 0), type: "monster" };
+		const d = deps({ handTargets: () => [{ uuid: "Actor.boar", name: "Boar", hasActor: true }], resolve: async () => beast, markDying: vi.fn(async () => true) });
+		expect(await hazardCertainDeath(page(FALL), d)).toEqual(["Boar is already at 0 HP."]);
+		expect(d.markDying).not.toHaveBeenCalled();
 	});
 
 	it("does nothing for a hazard that is not certain death, or when the GM backs out", async () => {

@@ -206,3 +206,48 @@ describe("StonetopCharacter.removeMove — resource-track cleanup", () => {
 		expect(actor.update).not.toHaveBeenCalled();
 	});
 });
+
+// What the sheet asks about before an untick (StonetopCharacterSheet#_onMoveCheck): only what a
+// re-tick would not give back.
+describe("StonetopCharacter.moveRemovalStakes", () => {
+	const build = actor => new TestCharacterBuilder(actor).build();
+
+	it("is empty for a plain move with nothing marked, picked or granted", async () => {
+		const actor = new FakeActorBuilder().withPlaybook("the-fox", "The Fox")
+			.addItem({ _id: "m1", type: "move", name: "Harden", system: { moveType: "playbook" } }).build();
+		const stakes = await build(actor).moveRemovalStakes("m1");
+		expect(stakes).toMatchObject({ name: "Harden", copiesLeft: 0, granted: [], statPick: null, marks: false, isEmpty: true });
+	});
+
+	it("names the foreign moves a cross-playbook move granted", async () => {
+		const actor = new FakeActorBuilder().withPlaybook("the-fox", "The Fox")
+			.addItem({ _id: "cross1", type: "move", name: "Versatile", system: { moveType: "playbook" } })
+			.addItem({ _id: "g1", type: "move", name: "Smash", system: { moveType: "playbook", playbook: "The Heavy" }, flags: { "stonetop-pwd": { grantedBy: { move: "Versatile", instanceId: "cross1" } } } })
+			.build();
+		const stakes = await build(actor).moveRemovalStakes("cross1");
+		expect(stakes.granted).toEqual(["Smash"]);
+		expect(stakes.isEmpty).toBe(false);
+	});
+
+	// Marks count only when the trim would drop one: the picks the copies left can't pay for.
+	it("counts a stat pick and marked options, and the copies a repeatable keeps", async () => {
+		const crew = { moveType: "playbook", markOptions: [{ slug: "size" }], markBudget: { base: 1, perExtra: 1 } };
+		const withPicks = picks => new FakeActorBuilder().withPlaybook("the-marshal", "The Marshal")
+			.withFlag("improvedStatChoices", { s1: "str" })
+			.withFlag("moves", { moveMarks: { "Veteran Crew": { size: picks } } })
+			.addItem({ _id: "s1", type: "move", name: "Improved Stat", system: { moveType: "playbook", cap: 2 } })
+			.addItem({ _id: "v1", type: "move", name: "Veteran Crew", system: crew })
+			.addItem({ _id: "v2", type: "move", name: "Veteran Crew", system: crew })
+			.build();
+		const char = build(withPicks([{ stat: "", level: 2 }, { stat: "", level: 4 }]));
+		expect(await char.moveRemovalStakes("s1")).toMatchObject({ statPick: "str", isEmpty: false });
+		expect(await char.moveRemovalStakes("v2")).toMatchObject({ marks: true, copiesLeft: 1, isEmpty: false });
+		// One pick, and the copy left still pays for it.
+		expect(await build(withPicks([{ stat: "", level: 2 }])).moveRemovalStakes("v2")).toMatchObject({ marks: false, copiesLeft: 1, isEmpty: true });
+	});
+
+	it("is null for an id the sheet doesn't hold", async () => {
+		const actor = new FakeActorBuilder().withPlaybook("the-fox", "The Fox").build();
+		expect(await build(actor).moveRemovalStakes("nope")).toBeNull();
+	});
+});

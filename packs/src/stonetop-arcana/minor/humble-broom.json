@@ -46,18 +46,13 @@
       },
       "back": {
         "title": "The Broom's Lullaby",
-        "item": {
-          "name": "The Broom's Lullaby",
-          "weight": 1,
-          "note": "<em>magical, area, near</em>",
-          "inventoryColumn": "regular"
-        },
+        "item": null,
         "description": "<p>When you <strong><em>start sweeping an area as you softly sing the lullaby</em></strong>, roll +CHA: <strong>on a 7+</strong>, those who see and hear you stop to watch and listen, at least for a bit, entranced or confused or bemused as fits their nature and the circumstances. They snap out of it if harmed or threatened. <strong>Also, on a 10+</strong>, you can hold their attention for the length of the lullaby, as long as no one is harmed or threatened.</p><p>When you <strong><em>sing the full lullaby, sweeping all the while</em></strong>, roll +CHA: <strong>on a 10+</strong>, all who hear you fall into a deep sleep and will be prone to dismiss this as just a dream; <strong>on a 7-9</strong>, all who hear you start to nod off or lapse into a light, jerking sleep, but they will certainly remember this when they come to; <strong>on a 6-</strong>, at least one of your audience snaps to and realizes just how weird all this is.</p>",
         "resource": null,
         "move": {
           "name": "When you start sweeping an area as you softly sing the lullaby",
           "rollType": "cha",
-          "description": "<p>Roll +CHA: <strong>on a 7+</strong>, those who see and hear you stop to watch and listen, entranced. <strong>On a 10+</strong>, you can hold their attention for the length of the lullaby. When you sing the full lullaby while sweeping, roll +CHA: <strong>on a 10+</strong>, all who hear fall into a deep sleep; <strong>on a 7-9</strong>, they nod off but will remember; <strong>on a 6-</strong>, at least one snaps to.</p>"
+          "description": "<p>(<em>magical, area, near</em>) Roll +CHA: <strong>on a 7+</strong>, those who see and hear you stop to watch and listen, entranced. <strong>On a 10+</strong>, you can hold their attention for the length of the lullaby. When you sing the full lullaby while sweeping, roll +CHA: <strong>on a 10+</strong>, all who hear fall into a deep sleep; <strong>on a 7-9</strong>, they nod off but will remember; <strong>on a 6-</strong>, at least one snaps to.</p>"
         },
         "options": []
       }

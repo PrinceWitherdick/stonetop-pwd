@@ -34,7 +34,8 @@ import { rollerCombatant } from "./damage-seed.js";
 import { followerCardFor } from "../actors/character/follower-masters.js";
 import { readableFlags, STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
 import { groupFollowerStanding, groupFollowerMembers } from "../utils/crew.js";
-import { ARRAY_HP_ROWS, followerFateHpPath, rosterMemberRow } from "../actors/character/follower-fate.js";
+import { ARRAY_HP_ROWS, followerFateHpPath, rosterMemberKey, rosterMemberRow } from "../actors/character/follower-fate.js";
+import { resolveRosterRef, rosterStamp } from "../actors/character/follower-roster-shifts.js";
 
 /** The flag holding the HP the group's currently hurt member has lost. */
 export const GROUP_WOUND_FLAG = "groupWound";
@@ -93,15 +94,28 @@ export function killsFromHit({ oldHp, newHp, group = null } = {}) {
 /**
  * What one lone blow does to one member of a group. PURE.
  *
- * @param {{hpMax: number, count: number, wound: number}} group
+ * A POOL ALREADY DRAINED BY A GROUP'S BLOWS reads its casualties as a share of the size (p.416: "If one group
+ * loses half its HP, then about half that group's numbers are out the action"), rounded to the nearest body. One
+ * fewer in the size then need not mean one fewer standing: a horde of six at a third of its pool stands two, and
+ * five at a third still stands two. So a member dropped from a drained pool is taken off the members STANDING:
+ * the group goes on as the survivors at a full pool (`pool`), which is the same number of bodies read the same
+ * way, and one fewer than before the blow, as the card says.
+ *
+ * @param {{hpMax: number, count: number, wound: number, hp?: number, standing?: number}} group  `hp` is the
+ *   pool's current HP, `standing` the members it leaves up (groupTokenInfo)
  * @param {number} damage  after armor
- * @returns {{down: boolean, harmed: boolean, count: number, wound: number, memberHp: number}}
+ * @returns {{down: boolean, harmed: boolean, count: number, wound: number, memberHp: number, pool?: number}}
  *   `harmed` is false for a blow that did no damage, `count` is the group's size afterwards, `wound` the
- *   hurt member's HP lost afterwards, and `memberHp` what that member has left (0 when they went down).
+ *   hurt member's HP lost afterwards, `memberHp` what that member has left (0 when they went down), and `pool`
+ *   the pool's HP afterwards, only when a drained pool was set back to full round the survivors.
  */
-export function memberHit({ hpMax, count, wound = 0 }, damage) {
+export function memberHit({ hpMax, count, wound = 0, hp = hpMax, standing = count }, damage) {
 	const dealt = Math.max(0, Math.round(Number(damage) || 0));
 	const lost = Math.max(0, Math.trunc(Number(wound) || 0)) + dealt;
+	const drained = Number.isFinite(Number(hp)) && Number(hp) < hpMax;
+	if (dealt > 0 && lost >= hpMax && drained) {
+		return { down: true, harmed: true, count: Math.max(0, Math.trunc(Number(standing) || 0) - 1), wound: 0, memberHp: 0, pool: hpMax };
+	}
 	if (dealt > 0 && lost >= hpMax) return { down: true, harmed: true, count: Math.max(0, count - 1), wound: 0, memberHp: 0 };
 	return { down: false, harmed: dealt > 0, count, wound: lost, memberHp: Math.max(0, hpMax - lost) };
 }
@@ -299,12 +313,56 @@ export async function applyRosterHit(targetActor, damage, { memberKey = null, re
 	}
 	const after = down ? group.standing - 1 : group.standing;
 	return {
-		roster: { characterUuid: group.character.uuid, ...card, key: member.key, name: member.name, oldHp, newHp, hpMax: group.hpMax },
+		roster: { characterUuid: group.character.uuid, ...card, key: member.key, name: member.name, oldHp, newHp, hpMax: group.hpMax, stamp: memberStamp(flags, card, member.key) },
 		down,
 		harmed: newHp < oldHp,
 		before: group.standing,
 		after,
 	};
+}
+
+/** The roster's number (follower-roster-shifts.js#rosterStamp) for the roster `key`'s member sits on. PURE. */
+function memberStamp(flags, card, key) {
+	return rosterStamp(flags, rosterMemberRow(card.ftype, key)?.follower, card.slug ?? "");
+}
+
+/**
+ * The key the member a damage card recorded (`roster.key`) sits at NOW, or null when they are gone or no longer
+ * as the blow left them. Read back through the roster's cuts (round-2 audit FOE-2) like any remembered row
+ * (follower-roster-shifts.js#resolveRosterRef), then held to the HP the card wrote. A card from before the cut
+ * log carries no stamp, so its row is taken where it was and, for a named member, held to their name too.
+ * PURE but for the flags handed in.
+ */
+export function rosterHitNow(flags, card, roster, hpMax) {
+	const row = rosterMemberRow(card.ftype, roster?.key);
+	if (!row) return null;
+	const stamped = roster.stamp != null;
+	const now = stamped ? resolveRosterRef(flags, { ...row, slug: card.slug ?? "", stamp: roster.stamp }) : row;
+	const key = now ? rosterMemberKey(now.follower, now.index) : null;
+	const member = key && groupFollowerMembers(flags, card, { down: true }).find(m => m.key === key);
+	if (!member) return null;
+	// Unstamped: a named member's name is theirs (an unnamed one's is a label made from where they sit), so it
+	// tells whether somebody else moved into the row.
+	if (!stamped && key.startsWith("named:") && roster.name && member.name !== roster.name) return null;
+	return rosterMemberHp(flags, card, key, hpMax) === Math.min(hpMax, Math.max(0, Math.trunc(Number(roster.newHp) || 0))) ? key : null;
+}
+
+/**
+ * The member a damage card's roster hit is on, where they sit now (rosterHitNow), for drawing the card's
+ * "Took it" picker after rows have moved. Falls back to what the card recorded when they can't be found.
+ *
+ * @param {object} roster  what applyRosterHit recorded
+ * @param {ReturnType<typeof rosterGroupFor>} group  the roster as it stands now, or null
+ * @returns {{key: string, name: string}}
+ */
+export function rosterHitHolder(roster, group) {
+	const recorded = { key: roster?.key, name: roster?.name ?? "" };
+	if (!group?.character) return recorded;
+	const card = { ftype: roster.ftype ?? group.ftype, slug: roster.slug ?? group.slug ?? "" };
+	const hpMax = Math.max(1, Math.trunc(Number(roster.hpMax ?? group.hpMax) || 0));
+	const key = rosterHitNow(readableFlags(group.character), card, roster, hpMax);
+	if (!key) return recorded;
+	return group.members.find(m => m.key === key) ?? { key, name: recorded.name };
 }
 
 /**
@@ -319,7 +377,8 @@ export async function applyRosterHit(targetActor, damage, { memberKey = null, re
  *   null when either member or the character cannot be found, or `toKey` is the member who took it
  */
 export async function moveRosterHit(roster, toKey, damage, { resolve = globalThis.fromUuidSync, stonetopMove = "" } = {}) {
-	if (!roster?.characterUuid || !toKey || toKey === roster.key) return null;
+	// The member who took it is matched to `toKey` where they sit now (fromKey below): rows may have moved since.
+	if (!roster?.characterUuid || !toKey) return null;
 	let character = null;
 	try { character = resolve?.(roster.characterUuid, { strict: false }) ?? null; } catch { character = null; }
 	if (!character) return null;
@@ -329,7 +388,17 @@ export async function moveRosterHit(roster, toKey, damage, { resolve = globalThi
 	if (!target) return null;
 	const hpMax = Math.max(1, Math.trunc(Number(roster.hpMax) || 0));
 	const taken = Math.max(0, Math.trunc(Number(roster.oldHp) || 0) - Math.trunc(Number(roster.newHp) || 0));
-	const wasHp = rosterMemberHp(flags, card, roster.key, hpMax);
+	// THE ROW MUST STILL BE THEIRS (round-2 audit FOE-2). Members are rows by index, and one struck off or named
+	// since (the fate's Dead, a Remove) moves every row after them up: the old key would then name whoever moved
+	// in, who would be "given back" HP they never lost while the one who took it kept the wound. So the member
+	// is found where they sit now, still at the HP the blow left them on (rosterHitNow).
+	const fromKey = rosterHitNow(flags, card, roster, hpMax);
+	if (!fromKey) {
+		globalThis.ui?.notifications?.warn?.(globalThis.game?.i18n?.format?.("stonetop.fight.groupHit.moveStale", { name: roster.name || "" }) ?? "");
+		return null;
+	}
+	if (fromKey === toKey) return null;
+	const wasHp = rosterMemberHp(flags, card, fromKey, hpMax);
 	const fromHp = Math.min(hpMax, wasHp + taken);
 	const oldHp = rosterMemberHp(flags, card, toKey, hpMax);
 	const newHp = Math.max(0, oldHp - Math.max(0, Math.round(Number(damage) || 0)));
@@ -339,10 +408,10 @@ export async function moveRosterHit(roster, toKey, damage, { resolve = globalThi
 	const down = newHp === 0 && oldHp > 0;
 	const after = standing + (wasHp <= 0 && fromHp > 0 ? 1 : 0) - (down ? 1 : 0);
 	// The member who takes it now, if it drops them, is asked their fate (ROSTER_FATE_OPTION).
-	await writeRoster(character, rosterHpUpdate(flags, card, { [roster.key]: fromHp, [toKey]: newHp }),
+	await writeRoster(character, rosterHpUpdate(flags, card, { [fromKey]: fromHp, [toKey]: newHp }),
 		rosterWriteOptions({ ...card, key: toKey, name: target.name }, down, stonetopMove));
 	return {
-		roster: { ...roster, key: toKey, name: target.name, oldHp, newHp },
+		roster: { ...roster, key: toKey, name: target.name, oldHp, newHp, stamp: memberStamp(flags, card, toKey) },
 		down,
 		after,
 		from: { name: roster.name, hp: fromHp },
@@ -362,10 +431,12 @@ export async function applyMemberHit(targetActor, damage) {
 	const hit = memberHit(group, damage);
 	const update = {};
 	if (hit.count !== group.count) update["system.count"] = hit.count;
+	// A drained pool set back to full round the survivors (memberHit): the same bodies, one fewer than before.
+	if (hit.pool !== undefined && hit.pool !== group.hp) update["system.attributes.hp.value"] = hit.pool;
 	if (hit.wound !== group.wound) update[`flags.${SYSTEM_ID}.${GROUP_WOUND_FLAG}`] = hit.wound;
 	// The first to go down: keep the size the group started at (GROUP_SIZE_FLAG).
 	if (hit.down && groupStartSize(targetActor) < group.count) update[`flags.${SYSTEM_ID}.${GROUP_SIZE_FLAG}`] = group.count;
 	if (Object.keys(update).length) await targetActor.update(update);
-	const after = groupCasualties({ hpMax: group.hpMax, hpCurrent: group.hp, count: hit.count });
+	const after = groupCasualties({ hpMax: group.hpMax, hpCurrent: hit.pool ?? group.hp, count: hit.count });
 	return { ...hit, before: group.standing, after: after.standing, hpMax: group.hpMax };
 }

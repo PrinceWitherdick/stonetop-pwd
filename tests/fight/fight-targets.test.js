@@ -155,6 +155,19 @@ describe("rollTargets", () => {
 		fightTabOn = false;
 		expect(withoutDowned(hand)).toBe(hand);
 	});
+
+	// A target whose own HP is at 0 is down with no fight to read, or with the Fight tab off: the one answer every
+	// caller reads (the Confirm's frozen targets, the counter-attack's foe, the roll's hand targets).
+	it("drops a target at 0 HP with no fight to read, Fight tab on or off", () => {
+		fight();
+		const crinwin = hp => ({ uuid: "Actor.crin", documentName: "Actor", type: "monster", name: "Crinwin", system: { attributes: { hp: { value: hp, max: 3 } } } });
+		const frozen = [{ uuid: "Actor.crin", name: "Crinwin" }];
+		expect(withoutDowned(frozen, { resolve: () => crinwin(0) })).toEqual([]);
+		expect(withoutDowned(frozen, { resolve: () => crinwin(2) })).toBe(frozen);
+		fightTabOn = false;
+		expect(withoutDowned(frozen, { resolve: () => crinwin(0) })).toEqual([]);
+		expect(withoutDowned(frozen, { resolve: () => { throw new Error("gone"); } })).toBe(frozen);
+	});
 });
 
 // FGT-3: the foe picker a player sees (Speak Softly's "They refused") never names a fighter the GM has hidden.

@@ -7,6 +7,9 @@
   "flags": {
     "stonetop": {
       "slug": "hectumel-codex",
+      "consequenceBoons": [
+        { "label": "Over a few days, you lose all your remaining hair", "armor": 1 }
+      ],
       "front": {
         "title": "Hec'tumel Codex",
         "item": {

@@ -96,6 +96,24 @@ export function companionIsExceptional(character) {
 	return exceptionalPickMarked(character, BEAST_OF_LEGEND);
 }
 
+/**
+ * Whether the animal companion has developed Beast of Legend's "They develop some unique ability or
+ * trait" (Book I p.131): the move LEARNED and that pick marked, as companionIsExceptional reads its own.
+ */
+export function companionHasUniqueTrait(character) {
+	return learnedPickMarked(character, BEAST_OF_LEGEND, "unique");
+}
+
+/**
+ * Whether that unique ability or trait still wants writing down: picked (companionHasUniqueTrait) and
+ * nothing on the card's Moves or Notes yet. `details` is the card's stored extras (`animalCompanion.details`).
+ * The card's "needs your input" cue; a cue only, nothing is blocked.
+ */
+export function companionUniqueTraitOwed(character, details = {}) {
+	if (!companionHasUniqueTrait(character)) return false;
+	return !String(details?.moves ?? "").trim() && !String(details?.notes ?? "").trim();
+}
+
 /** The follower types whose "exceptional" is a move's pick, and that move. */
 export const EXCEPTIONAL_FROM_MOVE = Object.freeze({ "crew": HEROES_TO_THE_LAST, "animal-companion": BEAST_OF_LEGEND });
 

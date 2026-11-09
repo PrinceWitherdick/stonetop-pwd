@@ -74,12 +74,15 @@ describe("the pouch's arithmetic", () => {
 		expect(spentAfterFree(0, 0, 0)).toBe(0);
 	});
 
-	// The user's ruling: growth arrives EMPTY; a shrink clamps; a pouch gained or lost settles nothing.
-	it("settles a max change: growth empty, shrink clamped", () => {
+	// The user's rulings: growth arrives EMPTY; a shrink loses EMPTY space first (2026-11-06), so the
+	// Stock stays while it fits; a pouch gained or lost settles nothing.
+	it("settles a max change: growth empty, shrink takes empty space first", () => {
 		expect(settledPouchSpent(0, 3, 4)).toBe(1);
 		expect(settledPouchSpent(1, 4, 6)).toBe(3);
-		expect(settledPouchSpent(1, 6, 4)).toBe(1);
-		expect(settledPouchSpent(5, 6, 4)).toBe(4);
+		expect(settledPouchSpent(1, 6, 4)).toBe(0);
+		expect(settledPouchSpent(5, 6, 4)).toBe(3);
+		expect(settledPouchSpent(2, 6, 5)).toBe(1);
+		expect(settledPouchSpent(0, 6, 5)).toBe(0);
 		expect(settledPouchSpent(2, 3, 3)).toBeNull();
 		expect(settledPouchSpent(0, null, 4)).toBeNull();
 		expect(settledPouchSpent(0, 4, null)).toBeNull();
@@ -333,14 +336,14 @@ describe("9. pouch growth arrives EMPTY", () => {
 		expect(await pouchOf(char)).toMatchObject({ max: 7, remaining: 3 });
 	});
 
-	it("removing Big Magic clamps the spent count to the smaller pouch", async () => {
+	it("removing Big Magic takes its empty room first, so the Stock stays", async () => {
 		const { char, actor } = blessed({ level: 2 });
 		await char.applyLevelUp(bigMagicId(), null, null);
 		expect(await pouchOf(char)).toMatchObject({ max: 6, remaining: 4 });
 		const bm = actor.items.find(i => i.name === "Big Magic");
 		await char.removeMove(bm._id);
-		expect(await pouchOf(char)).toMatchObject({ max: 4, remaining: 2 });
-		expect(spentOf(actor)).toBe(2);
+		expect(await pouchOf(char)).toMatchObject({ max: 4, remaining: 4 });
+		expect(spentOf(actor)).toBe(0);
 	});
 
 	it("Big Magic dropped on from a compendium adds empty room", async () => {
@@ -403,11 +406,21 @@ describe("9. pouch growth arrives EMPTY", () => {
 		expect(await pouchOf(built.char)).toMatchObject({ max: 4, remaining: 3 });
 	});
 
-	it("a level typed lower clamps the spent count to the smaller pouch", async () => {
+	it("a level typed lower loses the empty space first, keeping the Stock that fits", async () => {
 		const built = blessed({ level: 2, spent: 1 });
 		await sheetOn(built)._updateObject(null, { "system.attributes.level.value": 1 });
-		expect(await pouchOf(built.char)).toMatchObject({ max: 3, remaining: 2 });
-		expect(spentOf(built.actor)).toBe(1);
+		expect(await pouchOf(built.char)).toMatchObject({ max: 3, remaining: 3 });
+		expect(spentOf(built.actor)).toBe(0);
+	});
+
+	// A typo round trip (6 to 5 to 6) costs no Stock when the pouch had empty space.
+	it("a level typed down and back keeps the Stock of a pouch with empty space", async () => {
+		const built = blessed({ level: 6, spent: 2 });
+		expect(await pouchOf(built.char)).toMatchObject({ max: 6, remaining: 4 });
+		await sheetOn(built)._updateObject(null, { "system.attributes.level.value": 5 });
+		expect(await pouchOf(built.char)).toMatchObject({ max: 5, remaining: 4 });
+		await sheetOn(built)._updateObject(null, { "system.attributes.level.value": 6 });
+		expect(await pouchOf(built.char)).toMatchObject({ max: 6, remaining: 4 });
 	});
 
 	it("a save that leaves the level alone settles nothing", async () => {

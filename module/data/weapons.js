@@ -26,7 +26,8 @@
 //   damageDie    Overrides the PC's own damage die (e.g. naphtha "d8"); null = use the PC die.
 //   ammo         Weapon tracks ammo statuses (low ammo / all out); gates Let Fly's
 //                "deplete your ammo" 7-9 pick.
-//   iron         Iron weapon (relevant to "x piercing = Prosperity" and some fiction).
+//   iron         Iron weapon, exactly as Book I p.94-95 prints "iron" (and fine steel): what a monster's
+//                "Armor N vs. iron" box is asked against (weaponMaterial).
 //   uses         The item's track counts USES, one marked each time it is thrown (naphtha), not ammo statuses.
 //   tags         Display-only flavour tags with no damage-number effect (forceful, messy,
 //                awkward, reload, dangerous, silver, grabby).
@@ -36,6 +37,7 @@
 // (copied from Sword); this map uses the correct value.
 
 import { altStatGrantForMove } from "./alt-stat-grants.js";
+import { ARCANA_WEAPONS } from "./arcana-rules.js";
 
 /** The Fox's move that arms them with throwing blades and throws their knives (MOVE_GRANTED_WEAPONS). */
 export const ALL_IN_THE_WRIST = "All in the Wrist";
@@ -60,30 +62,32 @@ export const M = (over = {}) => ({
 export const WEAPON_META = {
 	// ---- Melee ---------------------------------------------------------------
 	"staff":              M({ name: "Staff",              range: ["close"] }),
-	"knife-dagger":       M({ name: "Knife or dagger",    range: ["hand"] }),
+	"knife-dagger":       M({ name: "Knife or dagger",    range: ["hand"], iron: true }),
 	"silver-alloy-dagger":M({ name: "Silver-alloy dagger",range: ["hand"], tags: ["silver"] }),
-	"spear":              M({ name: "Spear",              range: ["close", "thrown"], piercing: "prosperity" }),
-	"long-spear":         M({ name: "Long spear",         range: ["reach"], piercing: "prosperity" }),
+	"spear":              M({ name: "Spear",              range: ["close", "thrown"], piercing: "prosperity", iron: true }),
+	"long-spear":         M({ name: "Long spear",         range: ["reach"], piercing: "prosperity", iron: true }),
 	// The Marshal's Weapons of War spear is fine steel, a flat "2 piercing" rather than the
 	// iron spear's x. Its gear choice names this key through its own `weaponSlug`.
-	"long-spear-fine-steel": M({ name: "Long spear, fine steel", range: ["reach"], piercing: 2 }),
-	"maul":               M({ name: "Maul",               range: ["close"], tags: ["forceful", "awkward"] }),
-	"hatchet":            M({ name: "Hatchet",            range: ["hand", "thrown"], piercing: "prosperity" }),
-	"mattock":            M({ name: "Mattock",            range: ["close"], piercing: "prosperity", tags: ["messy", "awkward"] }),
+	// Steel is iron for "vs. iron" (the book pairs them: "Can't proceed with iron/steel", Book I).
+	"long-spear-fine-steel": M({ name: "Long spear, fine steel", range: ["reach"], piercing: 2, iron: true }),
+	"maul":               M({ name: "Maul",               range: ["close"], iron: true, tags: ["forceful", "awkward"] }),
+	"hatchet":            M({ name: "Hatchet",            range: ["hand", "thrown"], piercing: "prosperity", iron: true }),
+	"mattock":            M({ name: "Mattock",            range: ["close"], piercing: "prosperity", iron: true, tags: ["messy", "awkward"] }),
 	"mace-or-flail":      M({ name: "Mace or flail",      range: ["close"], iron: true, tags: ["forceful"] }),
 	"battleaxe":          M({ name: "Battleaxe",          range: ["close"], iron: true, tags: ["messy"] }),
 	"short-sword":        M({ name: "Short sword",        range: ["hand", "close"], iron: true }),
 	"sword":              M({ name: "Sword",              range: ["close"], iron: true, damageBonus: 1 }),
 	"warhammer":          M({ name: "Warhammer",          range: ["close"], iron: true, piercing: 2 }),
-	// "Mallet, iron or wood (hand)" (Book I p.94): nothing on the number, but a weapon all the same.
+	// "Mallet, iron or wood (hand)" (Book I p.94): nothing on the number, but a weapon all the same. Iron OR wood,
+	// so no material is known: a "vs. iron" box stays the table's to untick.
 	"mallet":             M({ name: "Mallet",             range: ["hand"] }),
 
 	// ---- Thrown / ranged (Let Fly) -------------------------------------------
 	// "Javelins, a few, iron (thrown, x piercing, +1 damage, all out)": the one "all out" box is an ammo
 	// status, so Let Fly's "deplete your ammo" pick is theirs to take (Book I p.73, p.94).
-	"javelins":           M({ name: "Javelins",           range: ["thrown"], piercing: "prosperity", damageBonus: 1, ammo: true }),
-	// Its item prints the same "low ammo / all out" pair as the composite bow's.
-	"bow-arrows":         M({ name: "Bow & arrows",       range: ["near"], piercing: "prosperity", ammo: true }),
+	"javelins":           M({ name: "Javelins",           range: ["thrown"], piercing: "prosperity", damageBonus: 1, ammo: true, iron: true }),
+	// Its item prints the same "low ammo / all out" pair as the composite bow's. "Bow & iron arrows" (Book I p.94).
+	"bow-arrows":         M({ name: "Bow & arrows",       range: ["near"], piercing: "prosperity", ammo: true, iron: true }),
 	// "Sling (near, reload, awkward, low ammo, all out)" (Book I p.94).
 	"sling":              M({ name: "Sling",              range: ["near"], ammo: true, tags: ["reload", "awkward"] }),
 	"crossbow":           M({ name: "Crossbow",           range: ["far"], damageBonus: 1, piercing: "prosperity", ammo: true, tags: ["reload"] }),
@@ -268,6 +272,73 @@ export function weaponArmorBits(meta) {
 	if (meta.ignoresArmor) bits.push("ignores armor");
 	return bits;
 }
+
+/**
+ * What a blow's weapon is MADE of, as far as the book says: "bronze" (Book I p.95's bronze weapons), "iron" (p.94-95's
+ * iron weapons, fine steel included), "silver" (the silver-alloy dagger, a silver tag), or null when nothing says. It
+ * is what a monster's "Armor N vs. iron" / "vs. bronze" exception is checked against on the damage card
+ * (combat/attack-flow.js versusRowsFor). Accepts a WEAPON_META entry or a serialized card weapon; a card weapon
+ * written before it carried a material is read off WEAPON_META by its slug.
+ */
+export function weaponMaterial(meta) {
+	if (!meta) return null;
+	if (typeof meta.material === "string" && meta.material) return meta.material;
+	const own = meta.bronze || meta.iron || meta.tags?.includes?.("silver") ? meta : (WEAPON_META[meta.slug] ?? meta);
+	if (own.bronze) return "bronze";
+	if (own.iron) return "iron";
+	if (own.tags?.includes?.("silver")) return "silver";
+	return null;
+}
+
+/**
+ * The catalog's "Extra arrows (x piercing, plenty left, low ammo, all out)" (Book I p.94). Not a weapon: a bow's
+ * spare quiver, whose statuses are the next ones a bow's "deplete your ammo" marks once the bow's own are spent
+ * ("mark the next available status (left to right)", p.94). See combat/attack-flow.js#withSpareArrows.
+ */
+export const EXTRA_ARROWS_SLUG = "extra-arrows";
+
+/**
+ * WEAPONS AN ARCANUM GRANTS for a Let Fly, each as its card prints it (Book II), offered in the weapon picker only
+ * while the card says it may be used (combat/arcana-attacks.js#arcanaAttackWeapons), with the printed stat in place
+ * of +DEX and the printed price asked before the attack is made (#payArcanaGrantCost).
+ *
+ *   card      the arcanum's slug
+ *   gate      `backBoxes`: the back's mysteries (by their printed name) that must be ticked, the card unlocked;
+ *             `carried`: the card's curio must be carried (`name`: under that side's name, i.e. its back realised;
+ *             data/arcana-rules.js#ARCANA_WEAPONS);
+ *             `identified`: the card must be identified (a front move the players have not read is not theirs).
+ *   stat      the stat the Let Fly rolls instead of +DEX
+ *   cost      "fury" (1 Fury off Storm's Fury), "debility" (mark one), "vortex" (the gathered energy goes)
+ *   gmDamage  the card names no damage: "inflicting damage and other effects of the GM's choosing"
+ */
+export const ARCANA_GRANTED_WEAPONS = Object.freeze({
+	// Storm Markings, CHOSEN OF THE STORM-BRINGER: "Add these to the list of potential manifestations granted by Storm's
+	// Fury: Roll +CON to Let Fly with a bolt of lightning (2d6 damage, thrown, forceful, loud, dangerous, ignores
+	// armor)", a manifestation, so it spends Fury "1-for-1" (Storm's Fury).
+	stormBolt: Object.freeze({
+		slug: "storm-markings-lightning-bolt", card: "storm-markings", grantedBy: "Chosen of the Storm-bringer",
+		gate: Object.freeze({ backBoxes: Object.freeze(["STORM'S FURY", "CHOSEN OF THE STORM-BRINGER"]) }),
+		stat: "con", cost: "fury",
+		meta: M({ name: "Bolt of lightning", range: ["thrown"], damageDie: "2d6", ignoresArmor: true, tags: ["forceful", "loud", "dangerous"] }),
+	}),
+	// The Azure Hand's front: having gathered the energy about the Hand, "choose 1 ... Fling the energy, rolling +INT to
+	// Let Fly (thrown, dangerous), inflicting damage and other effects of the GM's choosing". Choosing it ends the vortex.
+	azureFling: Object.freeze({
+		slug: "azure-hand-fling", card: "azure-hand", grantedBy: "Azure Hand",
+		gate: Object.freeze({ carried: "azure-hand", identified: true }),
+		stat: "int", cost: "vortex", gmDamage: true,
+		meta: M({ name: "Flung energy", range: ["thrown"], tags: ["dangerous"] }),
+	}),
+	// The Aetherium Spear (the corroded spearhead's back): "When you point the aetherium spear at your foes and bellow a
+	// thunderous warcry, mark a debility and unleash a blast of lightning (far, area, forceful, loud, dangerous), rolling
+	// +STR to Let Fly instead of +DEX (and you cannot choose to deplete ammo)". No ammo track, so no deplete row.
+	aetheriumBlast: Object.freeze({
+		slug: "aetherium-spear-blast", card: ARCANA_WEAPONS.aetheriumSpear.slug, grantedBy: ARCANA_WEAPONS.aetheriumSpear.name,
+		gate: Object.freeze({ carried: ARCANA_WEAPONS.aetheriumSpear.slug, name: ARCANA_WEAPONS.aetheriumSpear.name }),
+		stat: "str", cost: "debility",
+		meta: M({ name: "Blast of lightning", range: ["far"], area: true, tags: ["forceful", "loud", "dangerous"] }),
+	}),
+});
 
 /** A short readout of a weapon's mechanically-relevant traits — the weapon picker's
  *  subtitle, and the stat picker's note for a move-granted weapon. Accepts a WEAPON_META

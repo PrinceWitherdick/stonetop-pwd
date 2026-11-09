@@ -418,7 +418,7 @@ export function rollOnTable(table, rng = Math.random) {
 // ── Seed builders (feed the chosen results into the new card) ─────────────────────
 
 /**
- * Build the front-description seed for a created card from the chosen result lines —
+ * Build the GM-notes seed for a created card (flags.stonetop.gmNotes) from the chosen result lines:
  * an italic "Inspiration" heading + a bullet per pick (label: text). `lines` is an ordered
  * array of { label, text }; blank/empty entries are skipped. Returns "" for no lines.
  */

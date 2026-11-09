@@ -20,6 +20,10 @@ export class OutfitItem {
 		this.shield             = b._shield ?? false;
 		this.special            = b._special ?? false;
 		this.specialCategory    = b._specialCategory ?? null;
+		// Where the item's uses are kept in `inventory.resources` when that is not its slug: an
+		// arcanum's back item on a card that also has a back-power track (arcanumItemResourceKey).
+		// Set only then, so every other item keeps the shape it had.
+		if (b._resourceKey && b._resourceKey !== b._slug) this.resourceKey = b._resourceKey;
 	}
 }
 
@@ -39,5 +43,6 @@ export class OutfitItemBuilder {
 	withShield(v)             { this._shield             = v; return this; }
 	withSpecial(v)            { this._special            = v; return this; }
 	withSpecialCategory(v)    { this._specialCategory    = v; return this; }
+	withResourceKey(v)        { this._resourceKey        = v; return this; }
 	build()                   { return new OutfitItem(this); }
 }

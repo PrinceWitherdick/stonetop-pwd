@@ -152,12 +152,14 @@ describe("reopenOpenWalkthroughs with an expedition", () => {
 
 	// A player never reopens the Introductions from a saved record: they follow the session
 	// cursor, and a record of theirs reopened the window on a dead "Waiting for the GM" screen.
-	it("does not reopen the Introductions for a player", async () => {
+	// Nor the expedition walkthrough (audit WLK-5): it is GM prep on a GM-only setting, and
+	// ExpeditionDialog.open turns a player away, so a stray record of theirs has nothing to reopen.
+	it("does not reopen the Introductions or the expedition walkthrough for a player", async () => {
 		global.game.user = { isGM: false };
 		patchWalkthroughResume("introductions", { open: true, phase: 2 });
 		patchWalkthroughResume("expedition", { open: true, step: 4 });
 		await reopenOpenWalkthroughs();
-		expect(opened).toEqual(["expedition"]);
+		expect(opened).toEqual([]);
 	});
 
 	it("does not mistake an expedition-only world record for the pre-world-keying flat shape", async () => {

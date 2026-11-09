@@ -33,17 +33,20 @@ beforeEach(() => {
 	};
 });
 
-describe("the three weights", () => {
-	it("are the strokes, the arrowheads and the writing, in that order", () => {
+describe("the four weights", () => {
+	it("are the names, then the writing, the strokes and the arrowheads, in that order", () => {
 		// THE ANATOMY OF ONE LINE, in the order a reader meets it: there is a stroke, the stroke
 		// has a head on its end, and along it there are words. This is the run of dials along the
 		// footer, left to right, and an arrowhead is something a LINE HAS rather than a mark
 		// standing on its own -- so its dial follows the dial for the thing it is attached to.
-		expect(RELMAP_WEIGHTS).toEqual(["line", "head", "word"]);
+		// The names are the writing under each FACE rather than part of a line: first, with a rule
+		// after them on the footer (user, 2026-11-07).
+		// The writing next, beside the captions box (user, same day).
+		expect(RELMAP_WEIGHTS).toEqual(["name", "word", "line", "head"]);
 	});
 
 	it("start at the sheet's own answer", () => {
-		expect(getWeights()).toEqual({ head: 100, line: 100, word: 100 });
+		expect(getWeights()).toEqual({ head: 100, line: 100, word: 100, name: 100 });
 		expect(RELMAP_WEIGHT_BASE).toBe(100);
 	});
 
@@ -62,7 +65,7 @@ describe("reading one back", () => {
 	it("comes back as it was written", () => {
 		setWeights({ head: 150 });
 		expect(getWeights().head).toBe(150);
-		expect(stored[RELMAP_WEIGHT_SETTING]).toEqual({ head: 150, line: 100, word: 100 });
+		expect(stored[RELMAP_WEIGHT_SETTING]).toEqual({ head: 150, line: 100, word: 100, name: 100 });
 	});
 
 	// HELD TO THE BOUNDS RATHER THAN REFUSED, the same way a coordinate two screens off the board
@@ -98,16 +101,16 @@ describe("reading one back", () => {
 	});
 
 	it("fills in a key that is missing rather than leaving a hole", () => {
-		expect(readWeights({ line: 200 })).toEqual({ head: 100, line: 200, word: 100 });
-		expect(readWeights(null)).toEqual({ head: 100, line: 100, word: 100 });
-		expect(readWeights("nonsense")).toEqual({ head: 100, line: 100, word: 100 });
+		expect(readWeights({ line: 200 })).toEqual({ head: 100, line: 200, word: 100, name: 100 });
+		expect(readWeights(null)).toEqual({ head: 100, line: 100, word: 100, name: 100 });
+		expect(readWeights("nonsense")).toEqual({ head: 100, line: 100, word: 100, name: 100 });
 	});
 
 	// The setting is not registered in an older build or in a unit test, and neither is a reason to
 	// take a board down.
 	it("answers with the base rather than throwing when there is no setting at all", () => {
 		globalThis.game = {};
-		expect(getWeights()).toEqual({ head: 100, line: 100, word: 100 });
+		expect(getWeights()).toEqual({ head: 100, line: 100, word: 100, name: 100 });
 	});
 });
 
@@ -115,11 +118,11 @@ describe("writing one", () => {
 	it("leaves the other two exactly where they were", () => {
 		setWeights({ head: 150 });
 		setWeights({ word: 200 });
-		expect(getWeights()).toEqual({ head: 150, line: 100, word: 200 });
+		expect(getWeights()).toEqual({ head: 150, line: 100, word: 200, name: 100 });
 	});
 
 	it("answers with all three as they now stand", () => {
-		expect(setWeights({ line: 130 })).toEqual({ head: 100, line: 130, word: 100 });
+		expect(setWeights({ line: 130 })).toEqual({ head: 100, line: 130, word: 100, name: 100 });
 	});
 
 	it("writes once per press and to one key", () => {
@@ -143,16 +146,16 @@ describe("what the board is actually drawn with", () => {
 	// every other number is already a share.
 	it("turns each percentage into a multiplier", () => {
 		expect(weightScales({ head: 150, line: 100, word: 50 }))
-			.toEqual({ head: 1.5, line: 1, word: 0.5 });
+			.toEqual({ head: 1.5, line: 1, word: 0.5, name: 1 });
 	});
 
 	it("leaves everything exactly as it was at the base", () => {
-		expect(weightScales(getWeights())).toEqual({ head: 1, line: 1, word: 1 });
+		expect(weightScales(getWeights())).toEqual({ head: 1, line: 1, word: 1, name: 1 });
 	});
 
 	it("goes through the same gate a stored value does", () => {
 		expect(weightScales({ head: 9000 })).toEqual({
-			head: RELMAP_WEIGHT_MAX / 100, line: 1, word: 1,
+			head: RELMAP_WEIGHT_MAX / 100, line: 1, word: 1, name: 1,
 		});
 	});
 

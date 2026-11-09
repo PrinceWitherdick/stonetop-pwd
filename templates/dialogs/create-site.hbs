@@ -33,9 +33,15 @@
         <label class="stonetop-cf-label">Why is this site in the game?
           <input type="text" class="stonetop-cf-input" data-field="why" value="{{sel.why}}" placeholder="the villain's lair; to break up the journey; it's where the Mindgem's heart lies…">
         </label>
-        <label class="stonetop-cf-label">What you know so far
-          <textarea class="stonetop-cf-textarea" data-field="description" rows="6" placeholder="A dome-shaped tomb, mostly intact, with a few old oaks growing out of it. Looks like a small hill, with bits of worked stone poking out of the soil…">{{sel.description}}</textarea>
-        </label>
+        {{!-- The description is stored as HTML (the card prints it as rich text), so it is written
+              in an always-on rich-text editor rather than a textarea that would show the raw tags.
+              A div, not a <label>: the editor's toolbar buttons sit inside it. The editor has no
+              placeholder, so the example sits under it as a note. _captureLiveFields reads its
+              `value` like any other [data-field]. --}}
+        <div class="stonetop-cf-label">What you know so far
+          <prose-mirror class="stonetop-cs-rich" data-field="description" value="{{sel.description}}"></prose-mirror>
+          <p class="stonetop-cs-note">e.g. A dome-shaped tomb, mostly intact, with a few old oaks growing out of it. Looks like a small hill, with bits of worked stone poking out of the soil…</p>
+        </div>
         <div class="stonetop-cs-hint">
           <div class="stonetop-cf-pick-label">A site's story should answer</div>
           <ul class="stonetop-cs-hint-list">{{#each storyQuestions}}<li>{{this}}</li>{{/each}}</ul>
@@ -43,49 +49,77 @@
         {{/if}}
 
         {{#if is_manner}}
-        <label class="stonetop-cf-label">Manner of site
-          <select class="stonetop-cf-input stonetop-cs-manner">
-            <option value="">(choose a Book II entry)</option>
-            {{#each manners}}<option value="{{this.id}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
-          </select>
-        </label>
+        {{!-- Laid out the way the answers land on the finished card (site-card.hbs): the manner,
+              region and terrain abreast, as the card's top line prints them ("Haunted site ·
+              Ferrier's Fen · Hummock…"), then the Book II answers as one list in the card's order
+              (the manner's tables, then the region's further ones). --}}
+        <div class="stonetop-cs-foundation">
+          <label class="stonetop-cf-label stonetop-cs-foundation-part">Manner of site
+            <span class="stonetop-cs-foundation-field"><select class="stonetop-cf-input stonetop-cs-manner">
+              <option value="">(choose a Book II entry)</option>
+              {{#each manners}}<option value="{{this.id}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
+            </select></span>
+          </label>
+          <label class="stonetop-cf-label stonetop-cs-foundation-part">Region
+            <span class="stonetop-cs-foundation-field"><select class="stonetop-cf-input stonetop-cs-region">
+              <option value="">(anywhere / not yet placed)</option>
+              {{#each regions}}<option value="{{this.id}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
+            </select></span>
+          </label>
+          {{!-- Terrain keeps its place before a region is chosen, so the strip doesn't reflow when
+                one is: the terrain table is the region's, so until then it is a disabled stand-in. --}}
+          <div class="stonetop-cs-foundation-part">
+            {{#if terrainPick.slots.length}}
+            {{> "stonetop.cs-pick-slots" terrainPick}}
+            {{else}}
+            <div class="stonetop-cs-table-pick">
+              <div class="stonetop-cs-pick-head"><span class="stonetop-cs-pick-caption">Terrain</span></div>
+              <div class="stonetop-cs-pick-body">
+                <div class="stonetop-field-btns stonetop-cs-foundation-field">
+                  <select class="stonetop-cf-input stonetop-cs-pick" disabled aria-label="Terrain"><option>(choose a region first)</option></select>
+                  <button type="button" class="stonetop-cs-roll stonetop-cf-mini-btn" disabled aria-label="Roll terrain"><i class="fas fa-dice-d20"></i></button>
+                </div>
+              </div>
+            </div>
+            {{/if}}
+          </div>
+        </div>
         {{#if mannerHint}}<p class="stonetop-cs-note">{{this.mannerHint}} <span class="stonetop-cs-page">{{this.mannerPage}}</span></p>{{/if}}
-
-        {{#if tables.length}}
-        <button type="button" class="stonetop-cs-roll-all stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll the lot</button>
-        {{#each tables}}{{> "stonetop.cs-pick-slots" this}}{{/each}}
-        {{/if}}
-
-        <label class="stonetop-cf-label">Region
-          <select class="stonetop-cf-input stonetop-cs-region">
-            <option value="">(anywhere / not yet placed)</option>
-            {{#each regions}}<option value="{{this.id}}"{{#if selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
-          </select>
-        </label>
-        {{#if terrainPick.slots.length}}
-        {{> "stonetop.cs-pick-slots" terrainPick}}
-        {{#each terrainTables}}{{> "stonetop.cs-pick-slots" this}}{{/each}}
         {{#if regionNote}}<p class="stonetop-cs-note">{{this.regionNote}} <span class="stonetop-cs-page">{{this.regionPage}}</span></p>{{/if}}
+
+        {{#if hasPickTables}}
+        <div class="stonetop-cs-picks">
+          {{!-- Roll the lot rolls the manner's tables only, so it heads the list rather than the strip. --}}
+          {{#if tables.length}}
+          <div class="stonetop-cs-picks-head">
+            <button type="button" class="stonetop-cs-roll-all stonetop-cf-mini-btn"><i class="fas fa-dice-d20"></i> Roll the lot</button>
+          </div>
+          {{/if}}
+          <div class="stonetop-cs-picks-grid">
+            {{#each tables}}{{> "stonetop.cs-pick-slots" this}}{{/each}}
+            {{#each terrainTables}}{{> "stonetop.cs-pick-slots" this}}{{/each}}
+          </div>
+        </div>
         {{/if}}
         {{/if}}
 
         {{#if is_story}}
-        {{> "stonetop.cs-line-list" list="connections" label="Connections" rows=connectionRows chips=connectionChips placeholder="the Forest Folk must have known about this place…" addLabel="Add connection"}}
+        {{> "stonetop.cs-line-list" list="connections" label="Connections" rows=connectionRows menu=this.suggestionMenus.connections placeholder="the Forest Folk must have known about this place…" addLabel="Add connection"}}
 
         {{!-- Labels are passed as PLAIN text, not pre-escaped markup: the partial prints them
               through `{{ }}`, which escapes, so an "&amp;" handed in here would reach the screen
               as a literal "&amp;". Field placeholders live beside the schema in the JS, which is
               what lets one block serve lists of two keys and of four. --}}
-        {{> "stonetop.cs-pair-list" list="questions" label="Questions & answers" hint="leave an answer blank to come back to it" rows=questionRows chips=questionChips addLabel="Add question"}}
+        {{> "stonetop.cs-pair-list" list="questions" label="Questions & answers" hint="leave an answer blank to come back to it" rows=questionRows menu=this.suggestionMenus.questions addLabel="Add question" frameClass="stonetop-cs-card-list"}}
         {{/if}}
 
         {{#if is_timeline}}
-        {{> "stonetop.cs-pair-list" list="timeline" rows=timelineRows addLabel="Add event"}}
+        {{> "stonetop.cs-pair-list" list="timeline" rows=timelineRows addLabel="Add event" frameClass="stonetop-cs-card-list"}}
         <p class="stonetop-cs-note">If the site is more than a decade or so old, line its timeline up with the ages of the world (Book II p. 496).</p>
         {{/if}}
 
         {{#if is_contents}}
-        {{> "stonetop.cs-pair-list" list="denizens" label="Denizens" hint="people, beasts, spirits, constructs, undead" rows=denizenRows addLabel="Add denizen"}}
+        {{> "stonetop.cs-pair-list" list="denizens" label="Denizens" hint="people, beasts, spirits, constructs, undead" rows=denizenRows addLabel="Add denizen" frameClass="stonetop-cs-card-list"}}
 
         {{> "stonetop.cs-line-list" list="dangers" label="Dangers" rows=dangerRows kinds=dangerKinds placeholder="unstable construction; magical wards on the vault (create!)…" addLabel="Add danger"}}
 
@@ -104,9 +138,9 @@
           <ul class="stonetop-cs-hint-list">{{#each areaPrompts}}<li>{{this}}</li>{{/each}}</ul>
         </div>
         {{!-- No `label`: the areas list is a column of self-titling cards, and the step's banner
-              has already said what they are. `frameClass` keeps the cards at the step's own
-              spacing rather than the tighter gap a list of plain rows wants. --}}
-        {{> "stonetop.cs-pair-list" list="areas" rows=areaRows addLabel="Add area" frameClass="stonetop-cs-area-list"}}
+              has already said what they are. `frameClass` spaces the cards wider than the tighter
+              gap a list of plain rows wants (the timeline and denizens are cards too). --}}
+        {{> "stonetop.cs-pair-list" list="areas" rows=areaRows addLabel="Add area" frameClass="stonetop-cs-card-list"}}
         <div class="stonetop-cs-hint">
           <div class="stonetop-cf-pick-label">To make it dynamic rather than linear</div>
           <ul class="stonetop-cs-hint-list">{{#each layoutTips}}<li>{{this}}</li>{{/each}}</ul>
@@ -116,21 +150,23 @@
         {{#if is_plans}}
         {{> "stonetop.cs-line-list" list="plans" label="Plans" hint="if/then tactics, timetables, GM moves" rows=planRows placeholder="If the sentries notice the PCs: stop singing, bird calls to alert the others, the rest scatter and hide" addLabel="Add plan"}}
 
+        {{!-- Like the card lists, a table's fields read as text until hovered or clicked: its
+              caption as a bold title, its results and spans as plain words. --}}
         {{#each tableRows}}
-        <div class="stonetop-cs-rtable">
-          <div class="stonetop-cf-gear-row">
-            <input type="text" class="stonetop-cf-input stonetop-cs-table-caption" data-index="{{this.index}}" value="{{this.caption}}" placeholder="What the crinwin are up to">
+        <div class="stonetop-cs-rtable" style="--cs-roll-ch: {{this.rollCh}}">
+          <div class="stonetop-cf-gear-row stonetop-field-btns">
+            <input type="text" class="stonetop-cf-input stonetop-cs-table-caption stonetop-cs-title" data-index="{{this.index}}" value="{{this.caption}}" placeholder="What the crinwin are up to">
             <span class="stonetop-cs-die">{{this.die}}</span>
             <button type="button" class="stonetop-cs-table-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-index="{{this.index}}"><i class="fas fa-times"></i></button>
           </div>
           {{#each rows}}
-          <div class="stonetop-cf-gear-row stonetop-cs-trow-line">
+          <div class="stonetop-cf-gear-row stonetop-field-btns stonetop-cs-trow-line">
             <span class="stonetop-cs-roll-no">{{this.roll}}</span>
-            <input type="text" class="stonetop-cf-input stonetop-cs-trow" data-table="{{../index}}" data-index="{{this.rowIndex}}" value="{{this.text}}" placeholder="fighting over junk; mimicking the kids' songs…">
+            <input type="text" class="stonetop-cf-input stonetop-cs-trow stonetop-cs-body" data-table="{{../index}}" data-index="{{this.rowIndex}}" value="{{this.text}}" placeholder="fighting over junk; mimicking the kids' songs…">
             {{!-- How many faces of the die this row covers: the book's "1-3" row is 3. --}}
             <label class="stonetop-cs-trow-span-wrap" data-tooltip="How many faces of the die this result covers (a row the book prints as 1-3 covers 3)" data-tooltip-direction="UP">
               <span aria-hidden="true">&times;</span>
-              <input type="number" class="stonetop-cf-input stonetop-cs-trow-span" data-table="{{../index}}" data-index="{{this.rowIndex}}" min="1" max="{{@root.maxRowSpan}}" step="1" value="{{this.span}}" aria-label="Faces this result covers">
+              <input type="number" class="stonetop-cf-input stonetop-cs-trow-span stonetop-cs-body" data-table="{{../index}}" data-index="{{this.rowIndex}}" min="1" max="{{@root.maxRowSpan}}" step="1" value="{{this.span}}" aria-label="Faces this result covers">
             </label>
             <button type="button" class="stonetop-cs-trow-remove stonetop-cf-mini-btn stonetop-cf-mini-btn--danger" data-table="{{../index}}" data-index="{{this.rowIndex}}"><i class="fas fa-times"></i></button>
           </div>
@@ -153,15 +189,24 @@
           {{/if}}
           {{#if why}}<div class="stonetop-cf-preview-line"><strong>Why it's here</strong> {{this.why}}</div>{{/if}}
           {{#if description}}<div class="stonetop-cf-preview-line stonetop-cs-preview-desc">{{this.description}}</div>{{/if}}
+          {{!-- One line per answer, as the finished card prints them. --}}
           {{#if picks.length}}
-          <div class="stonetop-cf-preview-line">{{#each picks}}<strong>{{this.label}}</strong> {{this.value}}{{#unless @last}}; {{/unless}}{{/each}}</div>
+          <div class="stonetop-cs-preview-group">
+            {{#each picks}}<div class="stonetop-cf-preview-line"><strong>{{this.label}}</strong> {{this.value}}</div>{{/each}}
+          </div>
           {{/if}}
-          {{#if areas.length}}
-          <div class="stonetop-cf-preview-line"><strong>Areas</strong> {{#each areas}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}</div>
-          {{/if}}
-          {{#if counts.length}}
-          <div class="stonetop-cf-preview-stats">
-            {{#each counts}}<span><strong>{{this.label}}</strong> {{this.n}}</span>{{/each}}
+          {{!-- Every list the later steps filled, entry by entry (_reviewSections), flowed into
+                columns so a long write-up doesn't run the card down a single narrow strip. --}}
+          {{#if sections.length}}
+          <div class="stonetop-cs-preview-sections">
+            {{#each sections}}
+            <div class="stonetop-cs-preview-group">
+              <div class="stonetop-cf-preview-line"><strong>{{this.label}}</strong></div>
+              <ul class="stonetop-cs-preview-list">
+                {{#each items}}<li{{#if open}} class="stonetop-cs-preview-open"{{/if}}>{{#if lead}}<strong>{{this.lead}}</strong> {{/if}}{{#if text}}{{this.text}}{{else}}{{#if open}}<em>no answer yet</em>{{/if}}{{/if}}</li>{{/each}}
+              </ul>
+            </div>
+            {{/each}}
           </div>
           {{/if}}
         </div>

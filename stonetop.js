@@ -51,11 +51,12 @@ import { wireOptionDebility } from "./module/actors/character/option-debility.js
 import { wireCensureEnraged } from "./module/actors/character/censure-enraged.js";
 import { wireLoyalToTheEnd } from "./module/actors/character/companion-bond.js";
 import { wireFollowerDeathsDoor } from "./module/actors/character/follower-deaths-door.js";
-import { wireFollowerOrderDamage } from "./module/fight/follower-order-attack.js";
+import { wireFollowerOrderDamage, reconcileOrderedClashCounter } from "./module/fight/follower-order-attack.js";
 import { wireFollowerBalkCard, registerFollowerBalkHooks } from "./module/gm-toolkit/follower-balk.js";
 import { FOLLOWER_LOYALTY_QUERY, handleFollowerLoyaltyQuery } from "./module/actors/character/follower-bond.js";
 import { FOLLOWER_HANDOFF_QUERY, handleFollowerHandoffQuery } from "./module/actors/character/follower-handoff.js";
 import { wireImproviseCard, wireMarkConsequenceCard } from "./module/actors/character/arcana-seeker-moves.js";
+import { identifyArcanumAtTier } from "./module/actors/character/arcana-identify.js";
 import { wireSendBackCard } from "./module/actors/character/send-them-back.js";
 import { wirePouchCards } from "./module/actors/character/sacred-pouch.js";
 import { wireInvocationEffects, BATH_QUERY, handleBathQuery } from "./module/actors/character/invocation-apply.js";
@@ -72,6 +73,7 @@ import { installMapPinNameToggle } from "./module/hooks/MapPinNameToggle.js";
 import { registerMapBrightness } from "./module/hooks/map-brightness.js";
 import { installTimeBanner } from "./module/seasons/time-banner.js";
 import { installLoveLetterNotice } from "./module/actors/character/love-letter-notice.js";
+import { primeArcanaRules } from "./module/actors/character/repositories/FoundryArcanaRepository.js";
 import { registerExpeditionRouteHooks } from "./module/hooks/ExpeditionRouteOverlay.js";
 import { bumpEncounterNotesGeneration } from "./module/actors/gmtoolkit/gm-encounters-tab.js";
 import { gmToolkitActors } from "./module/actors/gmtoolkit/gm-toolkit-actor.js";
@@ -141,38 +143,47 @@ import { onSteadingPeopleUpdate, repaintOpenSteadingRosters } from "./module/act
 import { makeDialogsResizable, enableAutoHeightVerticalResize } from "./module/utils/resizable-dialogs.js";
 import { registerStonetopWindowTheme, registerStonetopLightTheme } from "./module/utils/window-theme.js";
 import { registerOrphanedTooltipCleanup } from "./module/utils/tooltip-handoff.js";
+import { watchIconOnlyButtons } from "./module/utils/icon-only-buttons.js";
 import { registerUserConfigCharacterFilter } from "./module/hooks/user-config-characters.js";
 import { registerAssignToPlayer } from "./module/hooks/assign-to-player.js";
 import { registerCampaignActorMenu } from "./module/campaign/campaign-actor-menu.js";
+import { registerScenePosterMapMenu } from "./module/book2-art/mark-poster-scene.js";
 import { installWindowRestore } from "./module/utils/window-restore.js";
 import { registerUuidRedirects } from "./module/migration/compat.js";
 import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
 import { StonetopFlags } from "./module/actors/character/StonetopFlags.js";
+import { onPreUpdateActorRecoverLock } from "./module/actors/character/recover-lock.js";
 import { payableStockSources, mustAskStockSource, stockReceipt } from "./module/actors/character/stock-cost.js";
 import { askStockSource } from "./module/actors/character/ask-stock-source.js";
 import { moveLearnedIn } from "./module/actors/character/owns-move.js";
 import { readProvisionsYield, rollProvisions, rollStock, withTrappingGear, TRAPPING_GEAR_SLUG } from "./module/actors/character/provisions.js";
 import { askWithButtons, confirmOutcome } from "./module/utils/ask-with-buttons.js";
-import { belongsToMessage, optionLabelText, wirePickedOptionButton, claimPickedOption, settlePickedOption, releasePickedOption, pickedOptionRecord } from "./module/utils/picked-option-button.js";
+import { belongsToMessage, optionLabelText, wirePickedOptionButton, claimPickedOption, settlePickedOption, releasePickedOption, pickedOptionRecord, registerPickedOptionClaimQuery } from "./module/utils/picked-option-button.js";
 import { readOptionDamage, readOptionDamageChoices } from "./module/utils/damage.js";
 import { SYSTEM_ID } from "./module/system-id.js";
 import { speakerActor } from "./module/utils/speaker-actor.js";
-import { withLateStampLatch } from "./module/utils/card-latch.js";
+import { withLateStampLatch, registerCardLatchQuery } from "./module/utils/card-latch.js";
 import { bootStep, recordBootPhase, reportBootHealth, bootReport } from "./module/utils/boot-guard.js";
 import { watchOwnHelpers } from "./module/utils/foreign-helper-check.js";
 import { registerCampHooks } from "./module/camp/camp-store.js";
 import { registerVitalsMirrorHooks } from "./module/actors/character/vitals-mirror.js";
+import { registerArcanaCardEditHooks } from "./module/hooks/arcana-card-edits.js";
 import { registerBronzeLineHooks } from "./module/actors/character/bronze-lines.js";
 import { registerPostDeathMoveHooks } from "./module/actors/character/post-death-moves.js";
 import { installBodysnatcherHooks } from "./module/actors/character/bodysnatcher.js";
+import { installGmPresenceRedraw } from "./module/hooks/gm-presence-redraw.js";
+import { installSummonConsequenceHooks } from "./module/actors/character/mindgem-servant.js";
 import { loseHp, wirePostDeathMoveCards } from "./module/actors/character/post-death-actions.js";
 import { registerRosterFateHooks } from "./module/fight/roster-fate.js";
 import { registerLevelUpClaimQuery } from "./module/actors/character/level-up-claim.js";
+import { registerSteadingAssetsQuery } from "./module/actors/steading/steading-asset-relay.js";
 import { FOLLOWER_NPC_HP_QUERY, handleFollowerNpcHpQuery } from "./module/actors/character/follower-hp.js";
 import { registerFollowerFateQueries } from "./module/actors/character/follower-fate-pick.js";
 import { wireCampCard } from "./module/camp/camp-flow.js";
+import { registerSharedRouteHooks, wireSharedRouteCard } from "./module/dialogs/SharedRouteWindow.js";
 import { registerCampWindowRestore } from "./module/camp/CampWindow.js";
 import { registerTimelineWindowRestore } from "./module/dialogs/TimelineWindow.js";
+import { registerCreateSiteRestore } from "./module/sites/create-site-restore.js";
 import { registerStruggleHooks } from "./module/struggle/struggle-flow.js";
 import { registerPcAskHooks, wirePcAskCard } from "./module/pc-asks/pc-ask-flow.js";
 import { registerFightTab } from "./module/fight/fight-boot.js";
@@ -287,6 +298,11 @@ Hooks.once("init", () => {
 	registerFollowerFateQueries(CONFIG.queries);
 	// And two clients levelling the same character at once: the GM's client says which one takes the level.
 	registerLevelUpClaimQuery(CONFIG.queries);
+	// And who takes a card's payout or once-only button first, the same way (utils/gm-claim.js).
+	registerPickedOptionClaimQuery(CONFIG.queries);
+	registerCardLatchQuery(CONFIG.queries);
+	// And a player's Requisition of a steading asset or herd horses, made in the GM's turn (steading-asset-relay.js).
+	registerSteadingAssetsQuery(CONFIG.queries);
 
 	// Every window and modal in the system is drag-resizable; the ad-hoc
 	// Dialog popups we spawn from sheets default to resizable too. The companion
@@ -313,6 +329,10 @@ Hooks.once("init", () => {
 	// and Foundry's tooltip, which goes by the pointer, would hang over where it was.
 	registerOrphanedTooltipCleanup();
 
+	// A button holding only an icon is marked `data-icon-only`, and stonetop.css takes off the
+	// margin core puts after every button icon for a label that isn't there.
+	watchIconOnlyButtons();
+
 	// User Configuration's Character dropdown lists playbook characters only, not
 	// NPCs, monsters, the steading or the GM Toolkit. A GM who means to hand a player
 	// an NPC does it from the actor's right-click menu instead (Assign to Player…).
@@ -320,6 +340,8 @@ Hooks.once("init", () => {
 	registerAssignToPlayer();
 	// Retire a PC, a PC or follower become a threat, and back into play (Book I p.584; module/campaign/).
 	registerCampaignActorMenu();
+	// "Stonetop map..." on a Scene's right-click menu: mark a GM's own Scene as one of the poster maps.
+	registerScenePosterMapMenu();
 
 	// Track open document sheets + their geometry and reopen them at the same spot on
 	// the next reload (per-client; toggled by the "Restore Open Windows on Reload"
@@ -666,6 +688,8 @@ Hooks.once("init", () => {
 		"stonetop.npc-quick-facts":     "systems/stonetop-pwd/templates/actor/partials/npc-quick-facts.hbs",
 		"stonetop.npc-tab-nav":         "systems/stonetop-pwd/templates/actor/partials/npc-tab-nav.hbs",
 		"stonetop.move-group":           "systems/stonetop-pwd/templates/actor/partials/move-group.hbs",
+		// A move card's "Taken as a level pick" box, on move-group.hbs and tab-moves.hbs's Other Moves.
+		"stonetop.level-pick-toggle":    "systems/stonetop-pwd/templates/actor/partials/level-pick-toggle.hbs",
 		"stonetop.tab-search-control":   "systems/stonetop-pwd/templates/actor/partials/tab-search-control.hbs",
 		"stonetop.catalog-shell":        "systems/stonetop-pwd/templates/dialogs/partials/catalog-shell.hbs",
 		// One other playbook's move, on the level-up's agreed and cross-playbook steps alike.
@@ -729,6 +753,7 @@ Hooks.once("init", () => {
 		"stonetop.steading-moves-sidebar":    "systems/stonetop-pwd/templates/actor/partials/steading-moves-sidebar.hbs",
 		"stonetop.steading-tab-overview":     "systems/stonetop-pwd/templates/actor/partials/steading-tab-overview.hbs",
 		"stonetop.steading-tab-neighbors":    "systems/stonetop-pwd/templates/actor/partials/steading-tab-neighbors.hbs",
+		"stonetop.people-header":             "systems/stonetop-pwd/templates/actor/partials/people-header.hbs",
 		"stonetop.steading-tab-improvements": "systems/stonetop-pwd/templates/actor/partials/steading-tab-improvements.hbs",
 		"stonetop.steading-tab-moves":        "systems/stonetop-pwd/templates/actor/partials/steading-tab-moves.hbs",
 		"stonetop.steading-tab-relmap":       "systems/stonetop-pwd/templates/actor/partials/steading-tab-relmap.hbs",
@@ -773,8 +798,12 @@ Hooks.once("init", () => {
 		"stonetop.guide-toc":                 "systems/stonetop-pwd/templates/dialogs/partials/guide-toc.hbs",
 		"stonetop.guide-tabs":                "systems/stonetop-pwd/templates/dialogs/partials/guide-tabs.hbs",
 		"stonetop.expedition-load":           "systems/stonetop-pwd/templates/dialogs/partials/expedition-load.hbs",
+		"stonetop.expedition-home-assets":    "systems/stonetop-pwd/templates/dialogs/partials/expedition-home-assets.hbs",
+		"stonetop.expedition-home-reset":     "systems/stonetop-pwd/templates/dialogs/partials/expedition-home-reset.hbs",
 		"stonetop.expedition-journey":        "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey.hbs",
 		"stonetop.expedition-journey-pins":   "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-pins.hbs",
+		"stonetop.expedition-journey-line":   "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-line.hbs",
+		"stonetop.shared-route-pins":         "systems/stonetop-pwd/templates/dialogs/partials/shared-route-pins.hbs",
 		"stonetop.expedition-journey-controls": "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-controls.hbs",
 		"stonetop.expedition-journey-drawhint": "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-drawhint.hbs",
 		"stonetop.expedition-journey-route":  "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-route.hbs",
@@ -892,6 +921,8 @@ Hooks.on("updateActor", onUpdateCondemned);
 registerTimelineWatch();
 // And the aggregate timeline window, if it was open when this client reloaded (utils/window-restore.js).
 registerTimelineWindowRestore();
+// And a Create a Site walkthrough, on the step it was left on with its answers (sites/create-site-restore.js).
+registerCreateSiteRestore();
 
 // -- READY -----------------------------------------------------
 // FIRST of the ready listeners, deliberately. This one reports whether the startup it is reporting
@@ -1061,6 +1092,11 @@ Hooks.once("ready", installTimeBanner);
 // the bar to hang from. See actors/character/love-letter-notice.js.
 Hooks.once("ready", installLoveLetterNotice);
 
+// The arcana cards whose boxes the fight reads by their printed labels (data/arcana-rules.js), read for the
+// characters that hold them so a blow struck before any sheet has opened still finds them; a card gained later
+// is read as it is gained.
+Hooks.once("ready", () => primeArcanaRules());
+
 // -- EXPEDITION ROUTE ON THE MAP -------------------------------
 // A journey put on a poster-map scene from the Run an Expedition walkthrough. The scene
 // carries the two place slugs and every client paints the line from them, players included.
@@ -1187,16 +1223,9 @@ Hooks.on("updateActor", onSteadingPeopleUpdate);
 
 // -- RECOVER LOCK ----------------------------------------------
 // The Recover special move can't be used again until the character takes more
-// damage; clear its lock flag the moment HP drops.
-Hooks.on("preUpdateActor", (actor, changes) => {
-	if (actor?.type !== "character") return;
-	const newHp = foundry.utils.getProperty(changes, "system.attributes.hp.value");
-	if (newHp === undefined) return;
-	const oldHp = actor.system?.attributes?.hp?.value ?? 0;
-	if (newHp < oldHp && actor.getFlag(SYSTEM_ID, "recover.spent")) {
-		foundry.utils.setProperty(changes, `flags.${SYSTEM_ID}.recover.spent`, false);
-	}
-});
+// damage; clear its lock flag the moment damage drops their HP (not HP lost, not a
+// max-HP clamp), and a follower body's when their HP box drops (recover-lock.js).
+Hooks.on("preUpdateActor", onPreUpdateActorRecoverLock);
 
 // -- DEATH AND DYING -------------------------------------------
 // A PC reduced to 0 HP is dying and must face their 0-HP move (Book I p.245). Record that
@@ -1545,15 +1574,10 @@ async function _syncArcanumIdentification(message, actor, total) {
 	const key  = cardCountedTier(message, Number(total) || 0, SYSTEM_ID);
 	const opts = { stonetopMove: "Know Things" };
 	try {
-		if (key === "success" || key === "critical") {
-			// Already read front and back? Then there is nothing to grant, and identifyAndReveal
-			// would be a no-op write that re-renders every open sheet.
-			if (character.revealedArcanaSlugs?.has?.(slug) && !character.backOwedArcanaSlugs?.has?.(slug)) return;
-			await character.identifyAndRevealArcanum(slug, opts);
-		} else if (key === "partial") {
-			if (character.identifiedArcanaSlugs?.has?.(slug)) return;   // a 6- shifted up to a 7-9 only
-			await character.identifyFrontOwedArcanum(slug, opts);
-		} else return;
+		// What to write is arcana-identify.js's: nothing for a card this character no longer holds (a Shift on
+		// an old card after it was removed must not hand it back face-up), nothing a higher tier already gave,
+		// and no back debt for a 7-9 on a card whose back is readable already.
+		if (!(await identifyArcanumAtTier(character, slug, key, opts))) return;
 		actor.sheet?.render(false);
 	} catch (err) {
 		console.error("Stonetop | Error re-applying the arcanum's identification:", err);
@@ -1641,6 +1665,12 @@ async function _resyncRewrittenTotal(message, actor, total) {
 		await reconcileClashCounter(message, actor, total);
 	} catch (err) {
 		console.error("Stonetop | Error matching a rewritten Clash's counter-attack:", err);
+	}
+	// And an ORDERED Clash's, struck once per order card (fight/follower-order-attack.js, audit FOE-1).
+	try {
+		await reconcileOrderedClashCounter(message, actor, total);
+	} catch (err) {
+		console.error("Stonetop | Error matching a rewritten ordered Clash's counter-attack:", err);
 	}
 }
 
@@ -2971,6 +3001,9 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 	wireSufferChoice(message, html);
 	// The card a new camp posts: its Join button, or how the camp ended (camp/camp-flow.js).
 	wireCampCard(message, html);
+	// The card a GM posts when they show the players the route: its See the route button opens the
+	// route the card carries (dialogs/SharedRouteWindow.js).
+	wireSharedRouteCard(message, html);
 	// Aid, Interfere and Persuade (vs. PCs): the other person's answer, drawn where the move asks
 	// for it (pc-asks/pc-ask-flow.js).
 	wirePcAskCard(message, html);
@@ -2984,8 +3017,14 @@ Hooks.on("renderChatMessageHTML", (message, html) => {
 // is settled, each character's share is paid by the one client elected to pay it. See
 // module/camp/camp-store.js.
 registerCampHooks();
+// On every client: the players' route windows, the steading sheets' See the route button and the
+// GM's walkthrough all follow the route the GM has shown the players (dialogs/SharedRouteWindow.js).
+registerSharedRouteHooks();
 // A character's stored armor and max HP, re-mirrored whenever they or their gear change, sheet open or not.
 registerVitalsMirrorHooks();
+// A world arcanum held by characters: a delete asks first and leaves each holder the card's name,
+// and an edit repaints the holders' open sheets.
+registerArcanaCardEditHooks();
 // A bronze weapon's line deleted from the sheet takes its "which weapon?" answer with it.
 registerBronzeLineHooks();
 // And a character's post-death Consequence and Mark moves (Poltergeist, Red Wrath), kept to what is marked
@@ -2993,6 +3032,10 @@ registerBronzeLineHooks();
 registerPostDeathMoveHooks();
 // A Ghost's Bodysnatcher: the damage their host takes, lost as HP; the possession ended at 0 HP or once it lapses.
 installBodysnatcherHooks();
+// The latest cards redrawn when a GM comes or goes: their buttons are gated on who is connected (hooks/gm-presence-redraw.js).
+installGmPresenceRedraw();
+// And a summoned follower changed as its card's marked Consequences say, the Mindgem's Mighty Servant (actors/character/mindgem-servant.js).
+installSummonConsequenceHooks();
 // A crew member a lone blow drops in a fight is asked their fate on the Marshal's player's screen.
 registerRosterFateHooks();
 // And a camp window open when this client reloaded comes back with the sheets, where it was left

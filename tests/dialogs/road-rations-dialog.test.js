@@ -21,6 +21,8 @@ vi.mock("../../module/utils/world.js", () => ({
 // isUnliving is Death's Door's own rule, so a Ghost here is one by the insert they wear.
 vi.mock("../../module/camp/camp-store.js", async () => ({
 	campVitalsFor:       async actor => ({ messKit: !!actor.carriesMessKit }),
+	// No prayer beads here (the vitals above carry none), so nobody fasts.
+	fastsTonight:        () => false,
 	isUnliving:          (await vi.importActual("../../module/actors/character/deaths-door-actor.js")).isUnliving,
 	packResources:       actor => ({ ...actor.pack }),
 	partyFollowerMouths: actor => actor.fed ?? 0,
@@ -32,7 +34,12 @@ vi.mock("../../module/camp/camp-store.js", async () => ({
 		resourceData: (slug, n) => (slug === "crew-supplies" ? { crewLeft: n } : actor.typedActor.inventoryResourceData(slug, n)),
 	}),
 }));
-vi.mock("../../module/actors/character/follower-roster.js", () => ({ partyFollowersOf: async () => [] }));
+// Followers left on the road by a PC out of play (audit ROAD-13): none unless a test says so.
+const orphaned = vi.hoisted(() => ({ list: [] }));
+vi.mock("../../module/actors/character/follower-roster.js", () => ({
+	partyFollowersOf: async () => [],
+	orphanedPartyFollowers: () => orphaned.list,
+}));
 
 const { RoadRationsDialog } = await import("../../module/dialogs/RoadRationsDialog.js");
 const { ExpeditionDialog } = await import("../../module/dialogs/ExpeditionDialog.js");
@@ -67,6 +74,19 @@ beforeEach(() => {
 });
 
 describe("the days-on-the-road window", () => {
+	// Expedition audit ROAD-13 (the user's ruling E13).
+	it("names the followers of a PC out of play, still on the road", async () => {
+		orphaned.list = [{ pcId: "rhi", pcName: "Rhianna", followers: [{ ftype: "crew", slug: "", name: "The Wolves", canHandOff: false }] }];
+		try {
+			const data = await new RoadRationsDialog([pc("Bo", { supplies: 4 })], { days: 1 }).getData();
+			expect(data.orphansLines).toHaveLength(1);
+			expect(data.orphansLines[0]).toContain("The Wolves");
+			expect(data.orphansLines[0]).toContain("on a living PC's row");
+		} finally {
+			orphaned.list = [];
+		}
+	});
+
 	it("names who carries a mess kit but leaves the box unticked (p.304: only if someone uses it)", async () => {
 		const ash = pc("Ash", { supplies: 4 }, { carriesMessKit: true });
 		const bo = pc("Bo", { supplies: 4 });
@@ -202,6 +222,41 @@ describe("the days-on-the-road window", () => {
 		await d._apply();
 		expect(ash.update).not.toHaveBeenCalled();
 		expect(chat[0].content).toContain("re-Outfit");
+	});
+
+	// Audit WLK-13: one refused write used to reject the lot after the others had landed, post no
+	// card and leave the button live, so a second press spent the packs that had paid a second time.
+	it("posts what landed when one pack's write is refused, and closes", async () => {
+		const warnings = [];
+		global.ui = { notifications: { warn: msg => warnings.push(msg) } };
+		const ash = pc("Ash", { supplies: 4 });
+		const bo = pc("Bo", { supplies: 4 }, { update: vi.fn(async () => { throw new Error("gone"); }) });
+		const d = new RoadRationsDialog([ash, bo], { days: 2 });
+		d.close = vi.fn(async () => {});
+		await d.getData();
+		const ledger = await d._apply();
+		expect(ash.updates).toHaveLength(1);
+		expect(d.close).toHaveBeenCalledOnce();
+		expect(chat).toHaveLength(1);
+		// Bo's two uses never left the pack, so the card says they went short.
+		expect(ledger.rows.find(r => r.actorId === "Bo").pays).toBe(0);
+		expect(ledger.short).toBe(2);
+		expect(chat[0].content).toContain("Went short");
+		expect(warnings[0]).toContain("Bo");
+		delete global.ui;
+	});
+});
+
+describe("the ledger as it landed", () => {
+	it("pays nothing for a row whose write was refused", async () => {
+		const { landedLedger } = await import("../../module/dialogs/RoadRationsDialog.js");
+		const ledger = { bill: 4, rows: [
+			{ actorId: "a", pays: 2, crewPays: 0, spend: [{ slug: "supplies", n: 2 }], crewSpend: [] },
+			{ actorId: "b", pays: 1, crewPays: 1, spend: [{ slug: "supplies", n: 1 }], crewSpend: [{ slug: "crew", n: 1 }] },
+		] };
+		const landed = landedLedger(ledger, [{ status: "fulfilled" }, { status: "rejected" }]);
+		expect(landed.rows[1]).toMatchObject({ pays: 0, crewPays: 0, spend: [], crewSpend: [] });
+		expect(landed).toMatchObject({ paid: 2, crewPaid: 0, short: 2, over: 0 });
 	});
 });
 

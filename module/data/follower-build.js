@@ -308,6 +308,9 @@ export function buildCustomFollower(input = {}) {
 		// The beast a follower was made from (data/beasts.js#followerInputFromBeast), which says whether it
 		// eats from a pack (follower-party.js#followerFeedsItself). Absent on one not made from a beast.
 		...(input.beastSlug ? { beastSlug: String(input.beastSlug) } : {}),
+		// Readiness held beyond the usual on a 7+ Defend, which also raises the cap: the Bronze Protector's +1
+		// (arcana-summons.js, arcana-summon-gates.js#followerReadinessBonus). Absent on everyone else.
+		...(Math.trunc(Number(input.readinessBonus) || 0) > 0 ? { readinessBonus: Math.trunc(Number(input.readinessBonus)) } : {}),
 	};
 }
 
@@ -337,6 +340,9 @@ export const ORDER_FOLLOWER_MOVES = Object.freeze([
 	{ key: "seek-insight",  label: "Seek Insight" },
 	{ key: "know-things",   label: "Know Things" },
 	{ key: "persuade-npcs", label: "Persuade (vs. NPCs)" },
+	// A player move a follower can be sent to make on the road: "If they split up, they can each roll the
+	// move" (Book I p.336, p.462). Its card carries Forage's list, and the provisions go to the leader.
+	{ key: "forage",        label: "Forage" },
 	{ key: "custom",        label: "Custom / other…" },
 ]);
 

@@ -8,16 +8,13 @@
 // Per character, StonetopCharacter#adoptPrayerBeadPips puts the old count on the Bolster track (keeping the
 // larger of the two) and drops the old key, in one write.
 
+import { sweepCharacters } from "./sweep-characters.js";
+
 /**
  * @param {object} [options]
  * @param {Iterable} [options.actors]
  * @returns {Promise<number>} how many characters were written to
  */
-export async function adoptAllPrayerBeadPips({ actors = globalThis.game?.actors ?? [] } = {}) {
-	let written = 0;
-	for (const actor of actors) {
-		if (actor?.type !== "character") continue;
-		if (await actor.typedActor?.adoptPrayerBeadPips?.()) written += 1;
-	}
-	return written;
+export async function adoptAllPrayerBeadPips({ actors } = {}) {
+	return sweepCharacters(actor => actor.typedActor?.adoptPrayerBeadPips?.(), { actors });
 }

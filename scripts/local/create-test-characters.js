@@ -173,7 +173,17 @@
 //             shapes, an overlap, groups nested inside groups (one of them a single person), a
 //             group of actorless circles, and on the Test board a shape nobody offers, an
 //             over-long name, a retired ink, two groups of the same people, a membership key for
-//             somebody taken off the map and a group with nobody left in it. The party (on the
+//             somebody taken off the map and a group with nobody left in it. All three boards
+//             also put LABELS under some names ("The Judge", "Iron Knight", "A faction, not a
+//             face"), stored per board, and the Test board's labels are the edge cases: exactly
+//             80 characters, over 80, padded with spaces, and spaces alone. And TAG CHIPS on some
+//             people ("Noble", "Healer", "Dead"), defined once per board and SHARED by id between the
+//             three, so the Add chip menu offers every board's chips: the village board seats the
+//             Graveyard's Hafgan the Elder, who is dead and so wears Dead by the system's own rule
+//             (relmap/relmap-dead.js), and the Test board's chips are the edge cases: seven on one
+//             person (two rows and a "+N"), a name at the 24-character cap and one past it, a colour
+//             of the reader's own with no icon, chips on a person with no label, an icon nobody
+//             offers, a chip defined and worn by nobody, and a chip worn that no board defines. The party (on the
 //             party and Test boards) is seated in a fixed order so each group is round people
 //             who sit side by side. The Test board arrives HIDDEN from the players, which is how every board made with
 //             "+" arrives and the only fixture the eye in the strip has. What is NOT seeded here is
@@ -4894,7 +4904,10 @@
   //
   // ⚠ THE CAPTION IS NOT TRIMMED HERE, and that is on purpose: one fixture below is deliberately
   // longer than RELMAP_LABEL_MAX so the "trim on the way out" rule has something to be seen
-  // doing. Names and notes ARE trimmed, to the bounds the store keeps (120 / 480).
+  // doing. Names and notes ARE trimmed, to the bounds the store keeps (120 / 480). A person's
+  // LABEL (`subtitle`, the words under a name) is not trimmed either, for the caption's reason: the
+  // Test board stores one over RELMAP_SUBTITLE_MAX, one padded with spaces and one of spaces alone,
+  // and `subtitleOf` cutting and trimming them on the way out is the thing to be seen.
   //
   // `groups` name their members by the same cast keys, stored the way the store keeps them: one
   // `members.<nodeId>: true` LEAF per person (module/relmap/relmap-store.js `groupMembersPatch`).
@@ -4903,10 +4916,11 @@
   // off the map leaves behind on purpose (`dropNodePatch` does not touch groups, so an undo puts
   // them back in their groups for free) and what `normalizeGraph` filters out on every read. A
   // group's NAME and SHAPE are not gated here either, for the caption's reason.
-  const relBoardGraph = (cast, links, groupDefs = []) => {
+  const relBoardGraph = (cast, links, groupDefs = [], { unwornChips = [] } = {}) => {
     const seats = relRingsLayout(cast.length);
     const ids = new Map();
     const nodes = {};
+    const chipsUsed = new Set(unwornChips);
     cast.forEach((person, i) => {
       const id = foundry.utils.randomID();
       ids.set(person.key, id);
@@ -4918,8 +4932,21 @@
         x:    relClamp(spot.left),
         y:    relClamp(spot.top),
         note: String(person.note ?? "").slice(0, 480),
+        subtitle: String(person.subtitle ?? ""),
       };
+      // TAG CHIPS, one `chips.<chipId>: true` LEAF per chip (relmap-store.js `nodeChipsPatch`), and
+      // Dead on whoever's actor is dead, which is what the system itself puts on a dead arrival.
+      const worn = [...(person.chips ?? [])];
+      if (person.dead && !worn.includes(RELMAP_DEAD_CHIP)) worn.unshift(RELMAP_DEAD_CHIP);
+      if (worn.length) {
+        nodes[id].chips = Object.fromEntries(worn.map(chipId => [chipId, true]));
+        worn.forEach(chipId => chipsUsed.add(chipId));
+      }
     });
+    // The board's own copy of every chip it uses (a chip worn that no board defines stays a leaf
+    // with nothing behind it: `normalizeGraph` drops it on the way out).
+    const chips = {};
+    for (const chipId of chipsUsed) if (RELMAP_TEST_CHIP_DEFS[chipId]) chips[chipId] = { ...RELMAP_TEST_CHIP_DEFS[chipId] };
     const edges = {};
     for (const link of links) {
       const a = ids.get(link.a);
@@ -4960,7 +4987,44 @@
       };
     }
     // `shape` is what Tidy up last put this board into, and a ring is what was actually laid.
-    return { version: RELMAP_VERSION, shape: "ring", nodes, edges, groups };
+    return { version: RELMAP_VERSION, shape: "ring", nodes, edges, groups, chips };
+  };
+
+  // ── Tag chips (`graph.chips`, `node.chips`) ──────────────────────────────
+  // A chip is defined on each board that uses it, under ONE id across all three, which is what makes
+  // it the same chip everywhere (module/relmap/relmap-chips.js): edit Noble on one board and every
+  // board's Noble follows. Stored the way the store keeps them: `{name, icon, ink}`, the icon a Font
+  // Awesome class from RELMAP_CHIP_ICONS (or "" for none), the ink one of the eight or a #rrggbb.
+  // ⚠ NOT GATED HERE, for the caption's reason: the Test board stores a name past the 24-character cap
+  // and an icon nobody offers, and the store cutting and dropping them on the way out is the fixture.
+  // `dead` is the system's own preset, written the way the system writes it the first time it is worn.
+  const RELMAP_DEAD_CHIP = "dead";
+  const RELMAP_TEST_CHIP_DEFS = {
+    [RELMAP_DEAD_CHIP]: { name: "Dead",      icon: "fa-skull",        ink: "crimson" },
+    "fx-noble":         { name: "Noble",     icon: "fa-crown",        ink: "ochre" },
+    "fx-healer":        { name: "Healer",    icon: "fa-leaf",         ink: "green" },
+    "fx-oathsworn":     { name: "Oathsworn", icon: "fa-handshake",    ink: "rust" },
+    "fx-spy":           { name: "Spy",       icon: "fa-user-secret",  ink: "indigo" },
+    "fx-debtor":        { name: "Owes a favour", icon: "fa-coins",    ink: "plum" },
+    "fx-branded":       { name: "Branded",   icon: "fa-gavel",        ink: "rose" },
+    "fx-outcast":       { name: "Outcast",   icon: "",                ink: "#7a3db8" },  // no icon, an ink of the reader's own
+    "fx-kin":           { name: "Kin",       icon: "fa-heart",        ink: "slate" },
+    // The Test board's edge cases.
+    "fx-longest":       { name: "Keeper of the Long Songs", icon: "fa-scroll", ink: "plum" },  // exactly 24, the cap
+    "fx-too-long":      { name: "More than twenty-four characters, cut on the way out", icon: "fa-book-open", ink: "indigo" },
+    "fx-odd-icon":      { name: "Odd icon",  icon: "fa-not-an-icon",  ink: "green" },  // not on the list: reads as no icon
+    "fx-unworn":        { name: "Nobody wears me", icon: "fa-ghost",  ink: "slate" },  // defined, offered, worn by nobody
+  };
+  // Worn on the Test board and defined on none: a chip leaf with nothing behind it.
+  const RELMAP_GHOST_CHIP = "fx-ghost";
+
+  // Whether an actor is dead, by the system's own rule (relmap/relmap-dead.js `isDeadActor`): a
+  // character through the Last Door with no insert, or an NPC whose status is Dead. The macro is
+  // standalone, so the rule is restated here; keep the two together.
+  const relIsDead = (actor) => {
+    if (actor?.type === "character") return actor.typedActor?.deathsDoorState === "dead";
+    if (actor?.type === "npc") return String(actor.system?.status ?? "").trim().toLowerCase() === "dead";
+    return false;
   };
 
   // THE ORDER THE PARTY IS SEATED IN, on the party board and the Test board alike. A group's outline
@@ -4976,31 +5040,97 @@
     return at < 0 ? RELMAP_PARTY_SEATS.length : at;
   };
 
+  // ── Labels under a name (`node.subtitle`) ───────────────────────────────
+  // A label is stored PER BOARD, never on the actor, so the same person can be "The Judge" on the
+  // party board and something else on the Test board. Half the party is left without one on each
+  // board so labelled and plain people sit side by side. The village board's labels are on the
+  // RELMAP_HOME_CAST rows below.
+  const RELMAP_PARTY_SUBTITLES = {
+    "Old Bartholomew": "The Judge",
+    "Brakkos":         "Iron Knight",
+    "Pim":             "Squire to Brakkos",
+    "Coria":           "Marshal of the watch",
+  };
+  // Chips on the party board. Brakkos and Coria wear the same chips on the village board, under the
+  // same ids, so the two boards share them. Aerin wears one with no label above it.
+  const RELMAP_PARTY_CHIPS = {
+    "Brakkos": ["fx-noble", "fx-oathsworn"],
+    "Pim":     ["fx-oathsworn"],
+    "Coria":   ["fx-oathsworn"],
+    "Quill":   ["fx-spy"],
+    "Aerin":   ["fx-kin"],
+  };
+
+  // The Test board, a legend: each label says what it is. WHAT IS DELIBERATELY OUT OF BOUNDS:
+  //   * Old Bartholomew's is exactly RELMAP_SUBTITLE_MAX (80), the longest kept untouched;
+  //   * Quill's is 109, stored whole and cut to 80 on the way out, and clamped to two lines;
+  //   * Wren's is padded with spaces, which the store trims;
+  //   * Maelis's is spaces ALONE, which reads as no label at all (an editor sees the "Add a label"
+  //     ghost on hover, a player sees nothing).
+  // Pim is alone in the "sage" group of one and Brakkos is in the board-wide hexagon, so both group
+  // outlines have a labelled member to reach round. Coria is left without one.
+  const RELMAP_TEST_SUBTITLES = {
+    "Sael":            "a short label",
+    "Aerin":           "a label long enough to wrap onto a second line under the name",
+    "Old Bartholomew": "exactly eighty characters of a label, the longest one the store keeps untouched.",
+    "Quill":           "more than eighty characters, which is more than a label may carry: stored whole, cut to eighty on the way out",
+    "Wren":            "   padded with spaces, trimmed on the way out   ",
+    "Maelis":          "     ",
+    "Pim":             "alone in a group of one",
+    "Brakkos":         "inside the board-wide hexagon",
+  };
+  // The Test board's chips, a legend like its labels:
+  //   * Sael wears SEVEN, which is two rows and a "+N" pill naming the rest;
+  //   * Aerin's is exactly the 24-character cap, cut with an ellipsis only by the row's width;
+  //   * Quill's name is past the cap, stored whole and cut to 24 on the way out;
+  //   * Wren's has no icon and an ink of the reader's own;
+  //   * Maelis has chips and a label of spaces alone, so the chips hang right under the name;
+  //   * Old Bartholomew's 80-character label AND two chips are the deepest a person reaches;
+  //   * Pim, alone in a group of one, wears one, so that outline has chips to go round;
+  //   * Coria wears an icon nobody offers (read as none) and a chip no board defines (dropped);
+  //   * "Nobody wears me" is defined on the board and offered by Add chip, but worn by nobody.
+  const RELMAP_TEST_CHIPS = {
+    "Sael":            ["fx-noble", "fx-healer", "fx-oathsworn", "fx-spy", "fx-debtor", "fx-branded", "fx-kin"],
+    "Aerin":           ["fx-longest"],
+    "Quill":           ["fx-too-long"],
+    "Wren":            ["fx-outcast"],
+    "Maelis":          ["fx-healer", "fx-spy"],
+    "Old Bartholomew": ["fx-branded", "fx-noble"],
+    "Pim":             ["fx-kin"],
+    "Coria":           ["fx-odd-icon", RELMAP_GHOST_CHIP],
+  };
+
   // Who stands on the map's own board. Residents first (they are the village board's own cast and
   // the ones the ledger accounts for), then the people a reader would have added by hand: the
   // example NPC, three of the neighbours, four of the party, and two nodes with NO ACTOR AT ALL.
   // Those last two are their own fixture: a node may be a plain named circle (a faction, a place,
   // somebody nobody has made a sheet for), and everything that resolves a portrait, sorts a
   // chooser or decides who counts as the party has to cope with one.
+  //
+  // `subtitle` is the label under a name. Short ones, a two-line one (Tierney), one on a person who
+  // is a group of one (Gethin, alone in "The Hillfolk"), and one on each actorless circle.
   const RELMAP_HOME_CAST = [
-    { name: "Maeve",   note: "Still sets a place at the table for her husband. Nobody in the village has ever said a word about it." },
+    { name: "Maeve",   subtitle: "Widowed", chips: ["fx-kin"], note: "Still sets a place at the table for her husband. Nobody in the village has ever said a word about it." },
     { name: "Pell" },
     { name: "Tobin",   note: "Has taken in four of Stonetop's orphans over the years, and named none of them out loud as his." },
     { name: "Tovia" },
     { name: "Ennis" },
     { name: "Yannic",  note: "Gone toward the Wood before first light most mornings, and back after dark with his basket full." },
-    { name: "Bronwen", note: "Knows every birth and every death in this village by heart, and roughly half the parentage." },
-    { name: "Vahid",   note: "Every rumour in Stonetop passes over his bar, and most of them pass back out again improved." },
-    { name: "Gethin Iron-Hand", note: "Branded by the Judge before the whole square. He wears the mark up in the high country and laughs about it." },
-    { name: "Tierney" },
+    { name: "Bronwen", subtitle: "Midwife", chips: ["fx-healer"], note: "Knows every birth and every death in this village by heart, and roughly half the parentage." },
+    { name: "Vahid",   subtitle: "Keeps the tavern", chips: ["fx-debtor"], note: "Every rumour in Stonetop passes over his bar, and most of them pass back out again improved." },
+    { name: "Gethin Iron-Hand", subtitle: "Branded by the Judge", chips: ["fx-branded", "fx-outcast"], note: "Branded by the Judge before the whole square. He wears the mark up in the high country and laughs about it." },
+    { name: "Tierney", subtitle: "Whisky runner to the coast, and the only one who knows the bog road at night", chips: ["fx-spy"] },
     { name: "Brogan" },
     { name: "Caradoc" },
     { name: "Wren" },
-    { name: "Brakkos" },
+    { name: "Brakkos", chips: ["fx-noble", "fx-oathsworn"] },
     { name: "Quill" },
-    { name: "Coria" },
-    { plain: "The Cult of the Black Water", note: "Named aloud by the Judge. Nobody yet knows which faces in Stonetop are under it." },
-    { plain: "Marshedge", note: "Not a person. A place two of these people answer to, which is exactly what a nameless node is for." },
+    { name: "Coria", chips: ["fx-oathsworn"] },
+    // From the Graveyard: through the Last Door with no insert, so dead by the system's rule, and he
+    // arrives wearing Dead without this row asking for it (`relIsDead`).
+    { name: "Hafgan the Elder", subtitle: "The Judge before Bartholomew", note: "Made his last ruling and stepped through the Last Door. They buried him facing the road." },
+    { plain: "The Cult of the Black Water", subtitle: "A faction, not a face", note: "Named aloud by the Judge. Nobody yet knows which faces in Stonetop are under it." },
+    { plain: "Marshedge", subtitle: "A place", note:"Not a person. A place two of these people answer to, which is exactly what a nameless node is for." },
   ];
 
   // The lines on the home board, and between them they reach every field a link has.
@@ -5231,27 +5361,34 @@
   // (`partySort`, a whole step ahead of the first page). Written that way here so that the first
   // open has nothing to correct: `liftPartyPage` compares before it writes, and a board already
   // at the front costs one comparison instead of a broadcast to the whole table.
-  const seedRelationshipMap = async ({ pcs = [], villagers = [], npc = null }) => {
+  const seedRelationshipMap = async ({ pcs = [], villagers = [], npc = null, graves = [] }) => {
     if (!game.user?.isGM || !pcs.length) return null;
 
     const byName = new Map();
-    for (const actor of [...pcs, ...villagers, npc].filter(Boolean)) {
+    for (const actor of [...pcs, ...villagers, npc, ...graves].filter(Boolean)) {
       if (!byName.has(actor.name)) byName.set(actor.name, actor);
     }
     // A cast row either points at an actor (and is dropped when that actor was never created, so
     // a partial run still produces a coherent board) or is a plain named circle with no sheet.
     const castRow = (row) => {
-      if (row.plain) return { key: row.plain, uuid: null, name: row.plain, img: "", note: row.note ?? "" };
+      const subtitle = row.subtitle ?? "";
+      const chips = row.chips ?? [];
+      if (row.plain) return { key: row.plain, uuid: null, name: row.plain, img: "", note: row.note ?? "", subtitle, chips };
       const actor = byName.get(row.name);
       return actor
-        ? { key: row.name, uuid: actor.uuid, name: actor.name, img: actor.img ?? "", note: row.note ?? "" }
+        ? { key: row.name, uuid: actor.uuid, name: actor.name, img: actor.img ?? "", note: row.note ?? "", subtitle, chips, dead: relIsDead(actor) }
         : null;
     };
+    // The party as a cast, with this board's own labels and chips (both per board, never per actor).
+    const pcCast = (labels, chips = {}) => seatedPcs.map(pc => ({
+      key: pc.name, uuid: pc.uuid, name: pc.name, img: pc.img ?? "", note: "", subtitle: labels[pc.name] ?? "",
+      chips: chips[pc.name] ?? [], dead: relIsDead(pc),
+    }));
 
     const homeCast  = RELMAP_HOME_CAST.map(castRow).filter(Boolean);
     // Seated in RELMAP_PARTY_SEATS order, so every party group is round neighbours.
     const seatedPcs = [...pcs].sort((a, b) => relPartySeat(a.name) - relPartySeat(b.name));
-    const partyCast = seatedPcs.map(pc => ({ key: pc.name, uuid: pc.uuid, name: pc.name, img: pc.img ?? "", note: "" }));
+    const partyCast = pcCast(RELMAP_PARTY_SUBTITLES, RELMAP_PARTY_CHIPS);
     if (!partyCast.length) return null;
 
     const homeGraph  = relBoardGraph(homeCast, RELMAP_HOME_LINKS, RELMAP_HOME_GROUPS);
@@ -5261,9 +5398,7 @@
     // from the party graph, because two boards holding the same person are two nodes — that is
     // what makes a board a board (see the header of module/relmap/relmap-doc.js) — and reusing the
     // party's ids would draw the Test board's lines onto portraits that are not on it.
-    const testGraph  = relBoardGraph(
-      seatedPcs.map(pc => ({ key: pc.name, uuid: pc.uuid, name: pc.name, img: pc.img ?? "", note: "" })),
-      RELMAP_TEST_LINKS, RELMAP_TEST_GROUPS);
+    const testGraph  = relBoardGraph(pcCast(RELMAP_TEST_SUBTITLES, RELMAP_TEST_CHIPS), RELMAP_TEST_LINKS, RELMAP_TEST_GROUPS, { unwornChips: ["fx-unworn"] });
 
     // The village board's ledger: every RESIDENT this board has been handed, by the identity the
     // store recognises a person by (their uuid). Only residents, because only residents are what
@@ -5412,11 +5547,13 @@
       people: Object.keys(graph.nodes).length,
       lines:  Object.keys(graph.edges).length,
       groups: Object.keys(graph.groups ?? {}).length,
+      labels: Object.values(graph.nodes).filter(n => n.subtitle).length,
+      chips:  Object.values(graph.nodes).reduce((sum, n) => sum + Object.keys(n.chips ?? {}).length, 0),
     });
     const home = count(homeGraph);
     const party = count(partyGraph);
     const test = count(testGraph);
-    console.log(`[TEST] Relationship map "${entry.name}" (${made ? "created: this world had no map at all" : "the world's own, written into rather than duplicated"}): ${home.people} people, ${home.lines} lines and ${home.groups} groups on the village board, ${party.people}, ${party.lines} and ${party.groups} on "${RELMAP_PARTY_PAGE}", ${test.people}, ${test.lines} and ${test.groups} on "${RELMAP_TEST_PAGE}" (hidden from the players until the eye is pressed). The introductions lines are seeded by the window on first open.`);
+    console.log(`[TEST] Relationship map "${entry.name}" (${made ? "created: this world had no map at all" : "the world's own, written into rather than duplicated"}): ${home.people} people, ${home.lines} lines, ${home.groups} groups, ${home.labels} labels and ${home.chips} chips on the village board, ${party.people}, ${party.lines}, ${party.groups}, ${party.labels} and ${party.chips} on "${RELMAP_PARTY_PAGE}", ${test.people}, ${test.lines}, ${test.groups}, ${test.labels} and ${test.chips} on "${RELMAP_TEST_PAGE}" (hidden from the players until the eye is pressed). The introductions lines are seeded by the window on first open.`);
     return { entry, home, party, test };
   };
 
@@ -6543,7 +6680,7 @@
   // can name one, exactly as an encounter's rows do. It is deliberately later than the
   // introductions above as well, though it does not read them: the party board's answer lines are
   // drawn by the WINDOW on first open, and by then the setting they come from is already written.
-  const relmap = await seedRelationshipMap({ pcs: created, villagers: testVillagers, npc: exampleNpc });
+  const relmap = await seedRelationshipMap({ pcs: created, villagers: testVillagers, npc: exampleNpc, graves: buried });
   if (relmap) {
     console.log(`[TEST] Relationship map ready. Open it from the shared macro, or with game.stonetop.openRelationshipMap("${relmap.entry.name}").`);
   }

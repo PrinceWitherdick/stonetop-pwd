@@ -812,3 +812,23 @@ describe("StonetopCharacter: repairPossessionGrants", () => {
 		expect(broken.actor.items[0].system.armor).toEqual({ base: 1 });
 	});
 });
+
+// What the sheet asks about before a possession is un-ticked (StonetopCharacterSheet#_onPossessionCheck).
+describe("StonetopCharacter.possessionRemovalStakes", () => {
+	it("is empty for a possession with no picks, no marked uses and no gear", async () => {
+		const { character } = makeCharacter();
+		expect(await character.possessionRemovalStakes("mastiffs"))
+			.toEqual({ label: "Mastiffs", picks: 0, uses: 0, items: [], isEmpty: true });
+	});
+
+	it("counts the picks, the marked uses and the gear it put on the sheet", async () => {
+		const actor = new FakeActorBuilder()
+			.withPlaybook("the-blessed", "The Blessed")
+			.withFlag("possessions", { selected: ["apiary"], subChoices: { apiary: ["a", "b"] }, uses: { apiary: 1 } })
+			.withItems([grantedItem({ _id: "a", name: "Beeswax", sourcePossession: "apiary" })])
+			.build();
+		const character = new TestCharacterBuilder(actor).addPlaybook(PLAYBOOK).build();
+		expect(await character.possessionRemovalStakes("apiary"))
+			.toEqual({ label: "Apiary", picks: 2, uses: 1, items: ["Beeswax"], isEmpty: false });
+	});
+});

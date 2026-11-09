@@ -28,6 +28,8 @@ import {innGatheringState, INN_SEASON_STEP} from "./inn-gathering.js";
 import {steadingHolds} from "./steading-holds.js";
 import {MILITIA_SEASON_STEP, militiaTactics} from "./season-effects.js";
 import { inTurn } from "../../utils/turn-queue.js";
+import { clampInt } from "../../utils/custom-move-data.js";
+import { relayAssetWrite } from "./steading-asset-relay.js";
 import { deletionEntry } from "../../utils/foundry-compat.js";
 import { improvementCategoryKey } from "../../data/improvement-categories.js";
 import { steadingSystemValue } from "./steading-system-value.js";
@@ -485,6 +487,14 @@ export const HERD_ASSET_BEAST = Object.freeze({ slug: "horse", herd: true });
  */
 export function isHerdAsset(row) {
 	return row?.beast?.herd === true || (row?.name === HERD_ASSET_NAME && row?.beast !== null);
+}
+
+/**
+ * Whether an asset row is the one a caller named: always, when it named none. An index is a POSITION,
+ * so every write that takes one also takes the name the caller saw, and refuses a row that moved under it.
+ */
+export function assetRowIs(row, name) {
+	return name === undefined || name === null || String(row?.name ?? "").trim() === String(name).trim();
 }
 
 /**
@@ -1786,26 +1796,45 @@ export class StonetopSteading {
 	 * @returns {Promise<number|null>} horses taken, or null when there is no tracked herd
 	 */
 	async requisitionFromHerd(count, { stonetopMove = "Requisition" } = {}) {
-		if (!this.improvementCompleted("herdOfHorses")) return null;
-		const herd = this.getHerd();
-		const take = Math.min(herd.grown, Math.max(0, Math.trunc(Number(count) || 0)));
-		if (!take) return 0;
-		await this.setHerd({ ...herd, grown: herd.grown - take }, { stonetopMove });
-		return take;
+		return relayAssetWrite(this, "fromHerd", [count, { stonetopMove }]);
+	}
+
+	/**
+	 * requisitionFromHerd, made on this client: read and written in the steading's turn (PREP-8).
+	 * `late`, from the relay's GM side, says the asker stopped waiting: nothing is taken then.
+	 */
+	async _requisitionFromHerdHere(count, { stonetopMove = "Requisition", late = null } = {}) {
+		return inTurn(`steading:${this._actor.id}`, async () => {
+			if (late?.()) return null;
+			if (!this.improvementCompleted("herdOfHorses")) return null;
+			const herd = this.getHerd();
+			const take = clampInt(count, 0, herd.grown);
+			if (!take) return 0;
+			await this.setHerd({ ...herd, grown: herd.grown - take }, { stonetopMove });
+			return take;
+		});
 	}
 
 	/**
 	 * Put `count` grown horses back in the tracked herd: a requisition from the herd taken back
-	 * (the expedition picker's row clicked again).
+	 * (the expedition picker's row clicked again), or the horses that came home (Going home).
 	 * @returns {Promise<number|null>} horses returned, or null when there is no tracked herd
 	 */
 	async returnToHerd(count, { stonetopMove = "Requisition" } = {}) {
-		if (!this.improvementCompleted("herdOfHorses")) return null;
-		const back = Math.max(0, Math.trunc(Number(count) || 0));
-		if (!back) return 0;
-		const herd = this.getHerd();
-		await this.setHerd({ ...herd, grown: herd.grown + back }, { stonetopMove });
-		return back;
+		return relayAssetWrite(this, "toHerd", [count, { stonetopMove }]);
+	}
+
+	/** returnToHerd, made on this client, in the steading's turn. `late` as _requisitionFromHerdHere. */
+	async _returnToHerdHere(count, { stonetopMove = "Requisition", late = null } = {}) {
+		return inTurn(`steading:${this._actor.id}`, async () => {
+			if (late?.()) return null;
+			if (!this.improvementCompleted("herdOfHorses")) return null;
+			const back = Math.max(0, Math.trunc(Number(count) || 0));
+			if (!back) return 0;
+			const herd = this.getHerd();
+			await this.setHerd({ ...herd, grown: herd.grown + back }, { stonetopMove });
+			return back;
+		});
 	}
 
 	/**
@@ -2740,17 +2769,27 @@ export class StonetopSteading {
 	 * Refused (false) for an asset already out, and for a row that no longer carries `name` when the
 	 * caller says which asset it meant: an index is a POSITION, and a row deleted above it since the
 	 * window was drawn makes the same index name a different asset. Read and written in the
-	 * steading's turn (editList), so two takes of one asset cannot both land.
+	 * steading's turn (editList), so two takes of one asset cannot both land. A turn is one client's,
+	 * so a player's take is made on the GM's client (steading-asset-relay.js), where every door queues.
 	 *
 	 * @param {number} index
 	 * @param {{name?: string, id?: string, expedition?: {id: string, title: string}}} takenBy
 	 * @param {{name?: string}} [expect]  the asset the caller meant, checked against the row
 	 */
 	async setAssetTaken(index, takenBy, { name } = {}) {
+		return relayAssetWrite(this, "take", [index, takenBy, name === undefined ? {} : { name }]);
+	}
+
+	/**
+	 * setAssetTaken, made on this client. A player's goes through the GM's (steading-asset-relay.js),
+	 * whose `late` says the asker stopped waiting: nothing is written then.
+	 */
+	async _setAssetTakenHere(index, takenBy, { name, late = null } = {}) {
 		return this.editList("assets", assets => {
+			if (late?.()) return false;
 			const row = assets[index];
 			if (!row?.name || row.takenBy) return false;
-			if (name !== undefined && String(row.name).trim() !== String(name).trim()) return false;
+			if (!assetRowIs(row, name)) return false;
 			assets[index] = { ...row, checked: false, takenBy };
 		});
 	}
@@ -2804,12 +2843,40 @@ export class StonetopSteading {
 		return changed;
 	}
 
-	/** Return a requisitioned asset to the steading: re-check it and clear the taken-by note. */
-	async returnAsset(index) {
+	/**
+	 * Return a requisitioned asset to the steading: re-check it and clear the taken-by note.
+	 * `name`, when given, is the asset the caller meant: refused (false) when the row at `index` is
+	 * another one, as setAssetTaken refuses (a row deleted above it shifted the positions).
+	 */
+	async returnAsset(index, { name } = {}) {
+		return relayAssetWrite(this, "return", [index, name === undefined ? {} : { name }]);
+	}
+
+	/** returnAsset, made on this client. `late` as _setAssetTakenHere. */
+	async _returnAssetHere(index, { name, late = null } = {}) {
 		return this.editList("assets", assets => {
-			if (!assets[index]) return false;
+			if (late?.()) return false;
+			if (!assets[index] || !assetRowIs(assets[index], name)) return false;
 			const { takenBy, ...rest } = assets[index];
 			assets[index] = { ...rest, checked: true };
+		});
+	}
+
+	/**
+	 * A requisitioned asset that did not come home (Book I p.308, "fail to bring it home safely"): its row
+	 * comes off the Assets list. The trip's own record keeps its name for the Chronicle. Refused (false)
+	 * for a row that is not `name`.
+	 */
+	async loseAsset(index, { name } = {}) {
+		return relayAssetWrite(this, "lose", [index, name === undefined ? {} : { name }]);
+	}
+
+	/** loseAsset, made on this client. `late` as _setAssetTakenHere. */
+	async _loseAssetHere(index, { name, late = null } = {}) {
+		return this.editList("assets", assets => {
+			if (late?.()) return false;
+			if (!assets[index]?.name || !assetRowIs(assets[index], name)) return false;
+			assets.splice(index, 1);
 		});
 	}
 

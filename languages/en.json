@@ -256,6 +256,7 @@
         "windows": "Windows",
         "hover": "On Hover Info",
         "timeline": "Timeline",
+        "arcana": "Arcana",
         "fights": "Fights",
         "worldScoped": "This one is the whole table's, not yours. Changing it changes it for everyone.",
         "worldScopedReload": "This one is the whole table's, not yours. Changing it changes it for everyone, then offers to reload the whole table.",
@@ -608,6 +609,10 @@
         "backOnFeet": "Back on your feet",
         "backOnFeetHint": "Out of the action. Back on your feet, you return with {hp} HP.",
         "deadHint": "They stepped through the Last Door.",
+        "clearDeadTitle": "Bring them back from the Last Door?",
+        "clearDeadBody": "<strong>{name}</strong> is dead and out of play. Clearing this puts them back in play as if they never died. Do it only to undo a mistake, or when the rarest of magic has brought them back.",
+        "clearDeadYes": "Bring them back into play",
+        "clearDeadNo": "Keep them dead",
         "monsterHint": "Their tenuous connection to humanity is lost: they became a monster under the GM's control.",
         "threatHint": "Their humanity is utterly lost: they became a threat in the GM's control.",
         "undeathNotDying": "{move} is {name}'s move at 0 HP, and {name} is not dying.",
@@ -819,8 +824,25 @@
         "filterPlaceholder": "Filter moves…",
         "filterLabel": "Filter moves",
         "requiresPrefix": "Requires:",
+        "tickPicker": {
+          "statTitle": "{move}: Increase a Stat",
+          "statPrompt": "Choose one stat to raise by +1 (max +{cap}).",
+          "statMaxed": "Already at the max (+{cap}): {stats}.",
+          "statOption": "{stat} ({from} to {to})",
+          "statAllMaxed": "{move}: every stat is already at the maximum (+{cap}).",
+          "foreignTitle": "{move}: Learn a Move",
+          "foreignPrompt": "Choose a move to learn from another playbook.",
+          "foreignSelectLabel": "Move to learn",
+          "foreignPouch": "{move} also grants a Sacred Pouch.",
+          "costsStock": "{move} (costs Stock)",
+          "needsPouch": "{move} (needs a sacred pouch)",
+          "learn": "Learn",
+          "cancel": "Cancel",
+          "foreignNothing": "{move}: you don't qualify for any move it could teach you yet, so it would give you nothing. It has been unticked.",
+          "foreignPouchOnly": "{move}: you don't qualify for any move it could teach you yet, but it grants a Sacred Pouch."
+        },
         "agreedTitle": "Agreed with the table",
-        "agreedHint": "A move from another playbook, or a custom move, if everyone (not just you) agrees (Book I, page 529).",
+        "agreedHint": "A move from an insert class you've unlocked (Book I, page 528), or one from another playbook or a custom move if everyone (not just you) agrees (page 529).",
         "agreedIntro": "Choose the move the table agreed on: one from another playbook that you qualify for, or a custom move.",
         "agreedCustomTitle": "A custom move",
         "agreedCustomHint": "Write it in the custom move editor. The level is taken when you save the move.",
@@ -855,6 +877,19 @@
         "refusedOutOfPlay": "This character has left play, so nothing changed. A character who is dead, lost to the GM, or retired no longer levels up.",
         "back": "Back",
         "next": "Next",
+        "laterTitle": "Choose my move later",
+        "laterHint": "Take the level now and pick its move during play: \"they can take time to think ... if they're stumped, they can pick a new move during play\" (Book I, page 529). The Moves tab will ask for it.",
+        "invocationAsideOwed": "You know fewer Invocations than your level calls for, so you'll also choose {count} on the last step.",
+        "invocationIntroMany": "Choose {count} new Invocations: one for this level and the ones still owed from earlier levels.",
+        "picksChosen": "{used} / {allowance} chosen",
+        "marksChosen": "{move}: {used} / {allowance} chosen",
+        "statCapNote": "{move}: max +{cap}",
+        "statAtMax": "(max)",
+        "marked": "marked",
+        "markedTimes": "marked ×{count}",
+        "resetAside": "This world resets XP to 0 on Level Up (Book I, page 582), so all {xp} XP is spent, not just the cost.",
+        "refusedMoveHeld": "{move} is already on the sheet (it was added while this window was open), so nothing changed. Pick another move.",
+        "readyReadOnly": "Ready to level up (only the character's owner or the GM can open Level Up)",
         "apply": "Apply Level Up"
       },
       "outfit": {
@@ -888,6 +923,11 @@
         "fullHpHint": "You're already at full HP.",
         "unlivingHint": "Unliving: no benefit. A Ghost or Revenant gains nothing from Recover.",
         "unlivingFollowersHint": "Unliving: you gain nothing from Recover, but your hurt followers still can.",
+        "fatePendingHint": "Your time has come: choose your fate (the Death's Door window) before anything else. Recover can't help now.",
+        "outOfPlayHint": "Out of play: this character can't Recover.",
+        "crewSuppliesRow": "Crew supplies",
+        "crewSuppliesSpent": "Expended {uses} for the crew ({left} left)",
+        "followersLocked": "{names} already Recovered and can't again until they take more damage.",
         "otherPayerNote": "Someone else can expend a use on your behalf. Their player is asked first when it is theirs to decide.",
         "followersButton": "Recover the followers ticked",
         "followersLegend": "Followers who Recover too (1 use of supplies each, +{heal} HP):",
@@ -1120,6 +1160,25 @@
       }
     },
     "arcana": {
+      "deathsDoor": {
+        "scales": {
+          "note": "<strong>{arcanum}</strong> (Proof Against Harm): you may mark a consequence before you roll to automatically get a 10+.",
+          "notWorn": "Your inventory doesn't mark the {arcanum} as worn. The move is for when you wear them.",
+          "button": "Mark a consequence: 10+",
+          "buttonTitle": "{arcanum}: mark one of its Consequences, then take a 10+ without rolling",
+          "chat": "{name} marks a Consequence of the {arcanum} and gets a 10+ without rolling.",
+          "rule": "When you wear the Rune-laden Scales and find yourself at Death's Door, you may mark a consequence before you roll to automatically get a 10+.",
+          "tierNote": "{arcanum}: a Consequence marked for a {tier}, without rolling."
+        },
+        "souls": {
+          "name": "Shell Game of Souls",
+          "note": "<strong>Shell Game of Souls</strong>: you can release a bound soul to go through the Last Door in your place. If you do, you survive as if you rolled a 7-9. Your body, though, still bears the marks of that which would have killed you. ({count} bound)",
+          "button": "Release a bound soul: survive as a 7-9",
+          "chat": "{name} releases a bound soul to go through the Last Door in their place, and survives as if they rolled a 7-9. Their body still bears the marks of what would have killed them.",
+          "tierNote": "A bound soul went through the Last Door in your place: counted as a {tier}.",
+          "writeFailed": "The bound soul couldn't be taken off the Shell Game of Souls, so nothing changed: the 6- still waits on its fate. See the console for details."
+        }
+      },
       "createGmOnly": "Only the GM can create homebrew arcana in this world.",
       "empty": "Drag arcana here from the Arcana compendium.",
       "showFront": "Show front",
@@ -1149,6 +1208,8 @@
       "backOwedTitle": "Study it",
       "unlockChoiceOwed": "Each mark on this card lets you choose one of the {name}. Marks still to choose for: {owed}.",
       "unlockChoiceChoose": "Choose",
+      "pacedMovesOwed": "\"{rule}\" ({page}). Moves still to choose: {owed}.",
+      "pacedMovesOver": "{learned} moves are ticked on the back, but this card has given {earned} so far: \"{rule}\" ({page}). A caution only: nothing is taken away.",
       "unidentifiedText": "This arcanum has not yet been identified. You can tell it's something, but not what.",
       "discover": "Arcana Discovered",
       "discoverTitle": "Arcanum Discovered",
@@ -1156,7 +1217,51 @@
       "discoverYes": "Reveal the arcanum",
       "discoverNo": "Not yet",
       "leadText": "You have a lead on this arcanum's whereabouts, but haven't recovered it yet.",
-      "missingText": "This arcanum's card can no longer be found in this world. Remove it to clear its marks."
+      "missingText": "This arcanum's card can no longer be found in this world. Remove it to clear its marks.",
+      "engine": {
+        "unlockOr": "or",
+        "notesLabel": "Notes",
+        "notesPlaceholder": "Your notes on this arcanum: what you recorded, crossed off or rolled…",
+        "notesSaveFailed": "Your note on this arcanum could not be saved.",
+        "rollUses": "Roll {formula}",
+        "rollUsesTitle": "Roll how many uses this holds ({formula}) and mark the rest as used",
+        "rollUsesFlavor": "{name}: {formula} uses",
+        "removeTitle": "Remove arcanum",
+        "removeBody": "Remove <strong>{name}</strong> from your arcana? This can't be undone.",
+        "removeYes": "Remove the arcanum",
+        "removeNo": "Keep it",
+        "removeMarked": "Its marked Consequences:",
+        "removeKeep": "Keep its Consequence marks (they come back if the card is added again)",
+        "removeFollower": "Also remove {name} from your Followers",
+        "writeRefused": "That mark could not be saved. The sheet has been refreshed.",
+        "dropAlreadyHeld": "{actor} already holds {name}.",
+        "dropLeadTitle": "A lead on {name}",
+        "dropLeadBody": "{actor} has a lead on <strong>{name}</strong>. Have you tracked it down and recovered it?",
+        "dropUnresolved": "{name} can't be found as an arcanum in this world (its card is not a world item or in the Arcana pack), so the sheet would show it as missing. Import it into the world first."
+      },
+      "homebrew": {
+        "backHidden": "The back is hidden until you unlock or are shown it.",
+        "gmNotesTitle": "GM notes",
+        "gmNotesHint": "Only for you: never shown on a character sheet, and on the card only to a GM.",
+        "draftNote": "This arcanum is an unfinished draft. It isn't listed in the Arcana browser until it's saved.",
+        "draftFinish": "Finish it",
+        "draftDiscard": "Discard",
+        "heldBy": "Held by {names}.",
+        "optionSlugLocked": "Locked: a character holds this card, and this key counts their ticks.",
+        "deleteTitle": "Delete a held arcanum?",
+        "deleteBody": "<p><strong>{name}</strong> is held by {names}.</p><p>Deleting it leaves each of them a stub named for the card, with Remove to clear its marks.</p>",
+        "deleteYes": "Delete the arcanum",
+        "deleteNo": "Keep it"
+      },
+      "improvise": {
+        "effectPrompt": "<p>Every unlock circle on <strong>{title}</strong> is marked already, so this step marks a new effect for <strong>{name}</strong>. Which effect?</p>",
+        "markNothing": "Mark nothing yet",
+        "effectMarked": "Every unlock circle on {title} is marked already, so {actor} marks a new effect for {name}: {effect}.",
+        "effectsAllMarked": "Every unlock circle on {title} is marked already, and so is every effect for {name}.",
+        "effectTaken": "That effect of {title} is marked already; nothing was marked.",
+        "setTrack": "Every unlock circle on {title} is marked already, so {actor} sets {name} to {value}.",
+        "boxTaken": "That step towards unlocking {title} is marked already; nothing was marked."
+      }
     },
     "inventory": {
       "regularItems": "Items",
@@ -1234,7 +1339,18 @@
       "removeItem": "Remove",
       "resetLabel": "Reset Inventory",
       "resetTitle": "Reset Inventory",
-      "resetConfirm": "Clear all item marks and the undefined ◇/□ pools? Item uses (e.g. supplies) are not affected.",
+      "resetConfirm": "Clear all item marks and the undefined ◇/□ pools, and empty your supplies? Anything you found on the trip stays on your list.",
+      "resetTooltip": "Back home: clear your marks, your ◇/□ reserves and your supplies (p.89). Your followers' too, if you tick them.",
+      "resetWho": "Clear the marks, the ◇/□ reserves and the supplies of everyone ticked? Anything found on the trip stays on its list.",
+      "resetKind": {
+        "self": "your character",
+        "custom": "follower",
+        "group": "group of followers",
+        "crew": "crew",
+        "animal-companion": "animal companion",
+        "initiate": "initiate",
+        "beast": "beast"
+      },
       "resetYes": "Clear the marks",
       "resetNo": "Keep them",
       "regularUndefinedPoolLabel": "Undefined",
@@ -1266,6 +1382,25 @@
         "closeNote": "<p>Close this window to leave it unmarked.</p>",
         "had": "Had it all along",
         "found": "Found it"
+      },
+      "noUndefinedMark": {
+        "title": "No undefined ◆ left",
+        "body": "<p>You are marking <strong>{name}</strong> ({weight} ◆), but you have {pool} undefined ◆ left, so you can't Have What You Need for it. If you found or picked it up out here, it adds its full weight to your load.</p>",
+        "found": "Found it out here",
+        "cancel": "Don't mark it"
+      },
+      "suppliesSource": {
+        "title": "Where is this food from?",
+        "body": "<p>This ◆ of {name} is empty, and you have no undefined ◆ left to Have What You Need for it. If it was packed at home or bought in a market, it is a fresh ◆ with {uses} uses.</p>",
+        "packed": "Packed it at home",
+        "bought": "Bought it",
+        "cancel": "Don't mark it"
+      },
+      "suppliesEmptied": "That ◆ of {name} was eaten empty, so it is carried empty. Have What You Need (an undefined ◆) or Outfit to pack a fresh one.",
+      "hadAllAlong": {
+        "receipt": "Had it all along: used {marks} ({left} left)",
+        "regularMark": "undefined ◆",
+        "smallMark": "undefined □"
       },
       "choosePossessionsButton": "Choose Special Possessions",
       "possessionsOverLimitOne": "This character has 1 more special possession than the playbook lets you choose.",
@@ -1358,6 +1493,10 @@
       "characterSheetsShared": {
         "name": "Players See Every Character Sheet",
         "hint": "When on (the default), every player can open every character's sheet to read it, but only its owner and the GM can change it. Turn it off to keep each sheet to its own player and the GM. A sheet you have shared or hidden yourself with Configure Ownership keeps what you set."
+      },
+      "arcanaSeekerDrawsHomebrew": {
+        "name": "Include homebrew minor arcana in the Seeker's draw",
+        "hint": "When on, the minor arcana made in this world (finished, not drafts) join the shipped ones in the deck a new Seeker draws 3 from. Off by default."
       },
       "arcanaPlayersSeeBothSides": {
         "name": "Arcana: Players See Both Sides",
@@ -1676,7 +1815,20 @@
       "savedTitle": "Selections Saved",
       "savedContent": "Your current character creation selections have been saved.",
       "continueEditing": "Continue Editing",
-      "closeForNow": "Close for Now"
+      "closeForNow": "Close for Now",
+      "redrawMinor": {
+        "title": "Draw three new cards?",
+        "body": "<p>Drawing again puts back {cards} and deals three others at random.</p>",
+        "roles": "<p>The roles you gave them are cleared too: {roles}.</p>",
+        "swapped": "<p>That includes {cards}, which you picked by hand.</p>",
+        "role": {
+          "mastered": "Mastered",
+          "found": "Found",
+          "lead": "Lead"
+        },
+        "yes": "Draw three new cards",
+        "no": "Keep these cards"
+      }
     },
     "rollCard": {
       "writerSilent": "The GM's client did not answer in time. It may still go through, so check the card before pressing again.",
@@ -1936,6 +2088,11 @@
       "gear": {
         "specialPossessions": "Special Possessions",
         "removePossession": "Remove this write-in possession",
+        "choicesOwed": {
+          "labelOne": "Choose 1 more trait",
+          "label": "Choose {count} more traits",
+          "tooltip": "Big Magic gave your sacred pouch another remarkable trait. Tap to choose it."
+        },
         "addPossession": "Something else (discuss with GM)",
         "addPossessionTitle": "Something else (discuss with GM)",
         "addPossessionButton": "Add it",
@@ -1972,6 +2129,10 @@
           "loyalSub": "Loyal to the End: roll for its fate (p.143)",
           "notLethalNote": "If the blow wasn't lethal, just close this. They're out of the action until they Recover or you say otherwise.",
           "notLethalClose": "Not lethal / decide later",
+          "reopenButton": "Decide their fate",
+          "outTitle": "Follower Down",
+          "outFallbackName": "Your follower",
+          "outOfAction": "{name} is out of the action until the GM says otherwise or they regain HP (Book I p.469).",
           "deathsDoorDesc": "They trigger Death's Door: you roll for them.",
           "gmDeathsDoorDesc": "They trigger Death's Door: their PC's player rolls for them."
         },
@@ -1988,7 +2149,10 @@
           "lendGained": "{name} regains {gain} HP ({from} to {to}).",
           "lendNoBox": "{name} has no HP box to raise.",
           "injuredButton": "Add the injured tag",
-          "removeCondition": "Remove the {tag} tag"
+          "removeCondition": "Remove the {tag} tag",
+          "uniqueOwedLabel": "Describe its unique ability",
+          "uniqueOwedTooltip": "Beast of Legend: \"They develop some unique ability or trait\" (Book I p.131). Tap to open the card and write it in its Moves or Notes.",
+          "uniqueOwedNotice": "Beast of Legend: \"They develop some unique ability or trait\" (Book I p.131). Your companion's card is open on the Followers tab: write it in its Moves or Notes."
         },
         "summon": {
           "title": "Manifest {name}",
@@ -2039,6 +2203,14 @@
           "regular": "{count} ◇ in reserve",
           "small": "{count} □ in reserve"
         },
+        "reset": {
+          "button": "Reset Inventory",
+          "title": "Reset Inventory",
+          "tooltip": "Back home: set down everything they carried and forget their reserve (p.89). Their gear list stays.",
+          "tooltipCrew": "Back home: empty every pip and every set of Supplies (p.89). Written-in items stay on the list.",
+          "confirm": "Untick everything {name} carried, and forget the ◇/□ their Outfit held in reserve? The lines on their gear list stay.",
+          "confirmCrew": "Empty every gear pip and every set of Supplies for {name}, and untick what members carry? Written-in items stay on the list."
+        },
         "order": {
           "lead": "{name} makes the move on your order ({move}, Order Followers p.462).",
           "balkNote": "Balked: 1 Loyalty spent ({loyalty} left)",
@@ -2049,6 +2221,8 @@
           "tierMoved": "The card no longer reads as a hit, so there is no damage to roll.",
           "attacks": "{name} attacks",
           "swarmLabel": "{name} attacks, all {count} at one foe (+{bonus})",
+          "downNote": "{name} is at 0 HP: out of the action (Book I p.469). Order them only if the GM agrees they can act.",
+          "counterNoToken": "{name} suffers the enemy's attack (Clash, p.215), but has no single token in the fight to strike it at. The GM says what it costs.",
           "strikeHardLabel": "{label}, striking hard (+1d6)",
           "depleteButton": "Deplete {name}'s ammo",
           "depleteMarked": "{name}'s ammo: {status}.",
@@ -2065,6 +2239,7 @@
           "labelOne": "Pick 1 more tag",
           "tooltip": "Veteran Crew gave your crew new tags to pick. Tap to open the crew's tag picker."
         },
+        "veteranCrewReselect": "Veteran Crew: \"You can also choose to reselect their Instinct and Cost\" (Book I p.126). Your crew's card is open on the Followers tab if you want to.",
         "wholeParty": {
           "label": "Follows the party as a whole",
           "hint": "(any PC may pay its cost or spend its Loyalty)",
@@ -2086,6 +2261,7 @@
           "partial": "The Lady waves {name} off: no longer dying, but out of the action (unconscious, or close enough) until the GM says otherwise.",
           "failure": "{name}'s time has come. They can make one last move as if they rolled a 12+, but after that they're dead.",
           "upButton": "Back to 1 HP",
+          "upStale": "{name} is no longer at 0 HP, or no longer on that roster row, so nothing was written. Set their HP on the Followers tab.",
           "deadButton": "Mark dead",
           "aidOffer": "Advantage from {source} (Aiding the Death's Door roll)",
           "tierMoved": "This card no longer reads that result: use the buttons of the result it shows now.",
@@ -2099,8 +2275,6 @@
           "cancel": "Cancel",
           "askTitle": "{name} balks",
           "ask": "Why won't {name} do as they're told? The card shows the reason to the table, with the player's answers.",
-          "orderLabel": "The order (optional):",
-          "orderPlaceholder": "e.g. hold the bridge",
           "reason": {
             "scared": "Scared",
             "overwhelmed": "Overwhelmed",
@@ -2109,7 +2283,6 @@
           },
           "title": "They balk",
           "lead": "{name} doesn't want to do as {leader} says.",
-          "order": "The order: {order}",
           "spend": "Spend 1 Loyalty ({loyalty} held)",
           "persuade": "Persuade them",
           "drop": "Let it drop",
@@ -2132,8 +2305,6 @@
           "title": "{name}: Use up their resources",
           "lead": "What does {name} lose?",
           "count": "How many uses:",
-          "howLabel": "How it shows (optional):",
-          "howPlaceholder": "e.g. a strap snaps and the waterskin is gone",
           "confirm": "Use it up",
           "cancel": "Cancel",
           "nothing": "{name} has nothing left to use up.",
@@ -2168,10 +2339,14 @@
         "markLevelShared": "Another mark was noted at this level too. This move is marked once per level: check the levels, or leave it if your table allows it.",
         "markLevelAhead": "Noted at a level above your current level ({level}). Check the level, or leave it if your table allows it.",
         "statIncreaseAtCap": "{move}: {stat} is already at +{cap}, so it was not raised. Choose another stat from the move's card.",
+        "possessionChoiceOwedOne": "{move}: your sacred pouch has 1 more remarkable trait to choose. Choose it now.",
+        "possessionChoiceOwedMany": "{move}: your sacred pouch has {count} more remarkable traits to choose. Choose them now.",
         "chooseStartingMoves": "Choose Starting Moves",
         "levelMovesIncompleteOne": "You still have 1 move to choose for level {level}.",
         "levelMovesIncompleteMany": "You still have {count} moves to choose for level {level}.",
-        "levelMovesIncompleteHint": "Turn on Edit and tick the playbook moves you've earned.",
+        "levelMovesIncompleteHint": "Choose it on the Moves tab: turn on Edit, then tick the move you've earned.",
+        "levelPickToggle": "Taken as a level pick",
+        "levelPickToggleHint": "Counts this move as the new move of one of your level-ups (Book I, page 528: \"Choose a new move from your class playbook, or an insert class that you've unlocked\").",
         "levelMovesOverLimitOne": "This character has 1 more move than expected for level {level}.",
         "levelMovesOverLimitMany": "This character has {count} more moves than expected for level {level}.",
         "levelMovesOverLimitHint": "Turn on Edit and remove a playbook move, or leave it if this is intentional.",
@@ -2973,6 +3148,10 @@
       "nameOnly": "Nobody in the world is named {name}, so the oath records the name alone.",
       "already": "{name} has already sworn an oath before you."
     },
+    "stockCost": {
+      "noPouch": "Costs Stock; you have no sacred pouch.",
+      "noPouchForPouch": "Works on a sacred pouch; you have none, so it does nothing for you until you gain one."
+    },
     "blessedMarks": {
       "openLabel": "Marks",
       "noneTooltip": "Nobody bears your marks. Click to open the roster.",
@@ -3013,6 +3192,11 @@
       "releaseCancel": "Keep holding it",
       "givenSpent": "{name} already used the advantage this roll gave.",
       "noneHeld": "{move}: you hold none left to spend.",
+      "notGiven": {
+        "noGm": "{name} could not be given advantage: no GM is online to write it.",
+        "timedOut": "{name} could not be given advantage: the GM's client did not answer in time. Check their sheet before pressing again.",
+        "refused": "{name} could not be given advantage: the GM's client refused it (this move cannot give it to them, or the card is not yours to press)."
+      },
       "whoHeard": "Who heard your order or warning? Each gains advantage on their next roll to do as you say.",
       "setUpStrike": {
         "unrolled": "Roll your damage with Set-Up Strike first: tick its line in the damage window.",
@@ -3084,6 +3268,7 @@
       "askEnter": "Lose themselves in battle",
       "askDecline": "Keep their head",
       "entered": "{name} spills blood and loses themselves in battle, ignoring fear, pain, mind-control and the effects of debilities as long as they keep fighting.",
+      "noFight": "No fight is running, so nothing will ask when it ends: when the action stops, click the Battle Joy glyph on {name}'s sheet to roll +CON.",
       "endedDropped": "{name} drops to 0 HP and stops fighting: their Battle Joy ends, with no roll.",
       "endedDown": "The action stops with {name} down: their Battle Joy ends, with no roll.",
       "regainButton": "That was a rush: regain 1d4 HP",
@@ -3214,6 +3399,19 @@
       "title": "Situational Awareness",
       "lead": "A fight breaks out: ask the GM 1 question you could ask when Seeking Insight."
     },
+    "posterMapScene": {
+      "menu": "Stonetop map...",
+      "title": "Which map is {scene}?",
+      "ask": "Is <strong>{scene}</strong> one of the Stonetop maps?",
+      "explain": "Marking a scene as a map lets expedition routes, place pins and site pins go on it. They only land in the right places when the picture is the poster map or the map page from the book, not trimmed.",
+      "none": "Not a Stonetop map",
+      "marked": "{scene} is now {map}.",
+      "unmarked": "{scene} is no longer a Stonetop map. Pins already on it stay until you delete them.",
+      "confirmTitle": "Is this one of the Stonetop maps?",
+      "confirmAsk": "The route goes on {map}, and <strong>{scene}</strong> isn't marked as any Stonetop map yet. If this scene is one of them, say which.",
+      "confirmYes": "This scene is {map}",
+      "confirmNo": "It isn't either of these"
+    },
     "expedition": {
       "fateMode": {
         "advTooltip": "Roll 2d6 and keep the higher",
@@ -3226,36 +3424,166 @@
         "unnamed": "this expedition",
         "yes": "Delete the expedition",
         "no": "Keep it",
-        "removePage": "Also remove its page from the Chronicle (you may have edited it there)"
+        "removePage": "Also remove its page from the Chronicle (you may have edited it there)",
+        "removeRows": "Also remove its rows from the timeline (everyone who went, and Stonetop's)",
+        "herdBack": "Put {count} back in the herd. They went out with this trip, and nothing else brings them home.",
+        "stopSharing": "Stop showing its route to the players"
       },
+      "triumphAgain": {
+        "title": "Return Triumphant again?",
+        "ask": "{name} already Returned Triumphant. The move is made once for each homecoming (Book I p.339).",
+        "yes": "Make the move again",
+        "no": "Leave it as it is"
+      },
+      "stamp": {
+        "setOutTitle": "Setting out now?",
+        "setOutAsk": "Are they setting out on {name} now? The trip notes the season they leave and who goes, and Level Up reminds anyone still on the road.",
+        "setOutYes": "They set out now",
+        "homeTitle": "Are they home now?",
+        "homeAsk": "Are they home from {name} now? It goes on the timeline of everyone who went, and Stonetop's, dated this season.",
+        "homeYes": "They're home: put it on the timeline",
+        "notYet": "Not yet",
+        "setOut": "Set out in {when}.",
+        "setOutNotYet": "Not marked as set out yet. Mark it when they leave.",
+        "party": "Party: {names}.",
+        "setOutRedo": "Redo: they set out now",
+        "setOutClear": "Clear: they haven't left",
+        "homeRedo": "Redo: they came home now",
+        "homeClear": "Clear: they aren't home yet",
+        "failed": "Couldn't save that on the expedition. Try again."
+      },
+      "save": {
+        "failed": "Couldn't save the expedition notes. They're kept in this window, and the next change you make saves them again."
+      },
+      "homeTodo": {
+        "prompt": "Your to-do list for their return: the answers you'll reveal, and the scenes to play",
+        "placeholder": "Owain's mother waits at the gate; the wagon's loss reaches Fion by supper…"
+      },
+      "assets": {
+        "moved": "{name} isn't where this list had it on {steading}'s sheet any more. The list is redrawn: check it and click again.",
+        "notOnHand": "{name} is no longer on hand at {steading}. The list is redrawn."
+      },
+      "surplus": {
+        "label": "Surplus loaded for the trip",
+        "load": "Load 1 Surplus onto the cart",
+        "unload": "Put 1 Surplus back in the stores",
+        "said": "{out} Surplus with the trip, {onHand} left at {steading}.",
+        "none": "{steading} has no Surplus left to load."
+      },
+      "homeAssets": {
+        "title": "Still out with this trip",
+        "with": "(with {name})",
+        "home": "Brought it home",
+        "lost": "Lost it (Meet with Disaster)",
+        "herd": "Count them home",
+        "none": "Nothing of {steading}'s is still out with this trip.",
+        "noSteading": "No steading sheet in this world, so nothing was requisitioned.",
+        "lostTitle": "Lost on the trip",
+        "lostAsk": "{name} didn't come home. It comes off {steading}'s Assets list (the trip keeps its name for the Chronicle). Failing to bring a borrowed asset home safely almost always counts as Meeting with Disaster (p.308): Fortunes drops by 1, and at −1 the GM picks what it costs.",
+        "lostDisaster": "Lost it: Meet with Disaster",
+        "lostQuiet": "Lost it, but no disaster",
+        "lostKeep": "Keep it out for now",
+        "horsesLostAsk": "{what} didn't come home to {steading}'s herd. Failing to bring a borrowed asset home safely almost always counts as Meeting with Disaster (p.308): Fortunes drops by 1, and at −1 the GM picks what it costs.",
+        "horsesNoDisaster": "No disaster"
+      },
+      "homeReset": {
+        "title": "Reset Inventory",
+        "intro": "Back home, everyone clears the marks from their Inventory (p.89): what they carry in town rarely matters. Anything they found stays on their list (p.90).",
+        "with": "(with {name})",
+        "aFollower": "A follower",
+        "clean": "Nothing to clear",
+        "allClear": "Everyone on this trip has already unpacked.",
+        "noParty": "No one is on this trip.",
+        "convalesce": "Then open each PC's Convalesce",
+        "button": "Reset Inventory",
+        "nonePicked": "Tick who should unpack first.",
+        "confirm": "Clear the marks, reserves and supplies of {names}? Anything they found stays on their lists.",
+        "done": "Inventory reset for {names}.",
+        "failed": "Could not reset {name}'s Inventory. See the console."
+      },
+      "requirements": {
+        "heading": "What Chart a Course requires of them",
+        "intro": "Remind them as they Outfit (p.303). Change these on Chart a Course.",
+        "addChallenge": "Add a challenge"
+      },
+      "gmOnly": "Only the GM can run the expedition walkthrough.",
       "route": {
         "goToOpen": " Open {map} and try again.",
-        "goToImport": " This world has no scene for it yet. The Import Book Art macro builds one.",
+        "goToImport": " No scene in this world is marked as {map}. Right-click your scene in the Scenes sidebar and choose Stonetop map, or build one with the Import Book Art macro.",
         "noScene": "There's no scene on screen to draw the route on.",
         "noDestination": "Pick where they're bound first, and the way there can go on the map.",
-        "notAMap": "This scene isn't one of the poster maps, so there's nowhere on it the route means anything.",
+        "notAMap": "This scene isn't marked as one of the Stonetop maps, so the route can't go on it.",
         "wrongMap": "{map} isn't the map this journey is drawn on.",
         "notCharted": "{map} isn't a map the travel table charts a course across.",
         "noSize": "This scene has no dimensions to place the route against.",
-        "wrongShape": "This scene's picture isn't the shape the map positions were measured against, so the route would run through the wrong valleys. Rebuild it from the Import Book Art macro to put it right.",
+        "wrongShape": "This scene's picture isn't the shape of the poster map or of the map page in the book, so the route would run through the wrong valleys. Use the poster scan or the book's map page without trimming it, or build the scene with the Import Book Art macro.",
         "offMapNamed": "{map} doesn't draw {places}, so the way there isn't on it.",
         "offMapWhole": "{map} can't draw the whole of this journey.",
         "refused": "The route can't go on this scene.",
         "draw": "Draw it on the scene",
         "take": "Take it off the scene",
-        "drawTip": "Draw this route on the map the table is looking at. It goes on the scene open on your canvas rather than on the picture in this window, so if that isn't {map}, this brings {map} up first.",
+        "drawTip": "Draw this route on the scene open on your canvas, not on the picture in this window. If that isn't {map}, this brings {map} up first: for the whole table when the players are on your scene, otherwise on your canvas only.",
         "drawTipMap": "the map it runs across",
-        "takeTip": "Take this route back off the map the table is looking at.",
+        "takeTip": "Take this route back off the scene in front of you.",
         "cleared": "The way there is off {scene}.",
         "placed": "The way to {place} is on {map}.",
-        "movedPlaced": "{map} is on the canvas now, and the way to {place} is on it.",
-        "movedPlacedDrawn": "{map} is on the canvas now, and the way you drew is on it.",
+        "movedPlaced": "{map} is on the canvas now for the whole table, and the way to {place} is on it.",
+        "movedPlacedDrawn": "{map} is on the canvas now for the whole table, and the way you drew is on it.",
+        "movedPlacedYours": "{map} is on your canvas now, and the way to {place} is on it.",
+        "movedPlacedYoursDrawn": "{map} is on your canvas now, and the way you drew is on it.",
+        "playersStay": " The players are still on {scene}, so it isn't in front of them yet.",
+        "failed": "The route couldn't go on the scene. The console has the details.",
         "panelOffMap": "This map doesn't draw {places}, so the way there isn't on it.",
         "panelShow": "Show {map}",
         "panelNoMap": "No one map draws both ends of this journey, so the way there isn't drawn. The legs below still hold.",
         "placedDrawn": "The way you drew is on {map}.",
         "panelDrawnOn": "This way was drawn on {map}, so it isn't on this one.",
         "panelStartOn": "They set out from a point on {map}, so the way there is only on that map."
+      },
+      "share": {
+        "show": "Show players",
+        "hide": "Hide from players",
+        "update": "Show players the new way",
+        "showTip": "Post this route to chat and put a See the route button on the steading sheet, so the players can open the map with the way drawn on it and the legs written out. Nothing goes on the canvas.",
+        "hideTip": "Stop showing this route to the players. The See the route button leaves the steading sheet; cards already in chat keep the route they posted.",
+        "updateTip": "The players are being shown the way to {place}. Show them this one instead.",
+        "updateTipUnnamed": "The players are being shown an older way. Show them this one instead.",
+        "shown": "The players can see the way to {place}. It is in chat and on the steading sheet.",
+        "shownDrawn": "The players can see the way you drew. It is in chat and on the steading sheet.",
+        "shownNoMap": "This world has no copy of {map}, so the players get the legs and times without a map.",
+        "hidden": "The players can no longer see the route.",
+        "hideStaleTip": "Stop showing the players the older way, without showing them this one. The See the route button leaves the steading sheet; cards already in chat keep the route they posted.",
+        "failed": "The route couldn't be shown to the players. The console has the details.",
+        "ask": {
+          "title": "Show the players the way",
+          "intro": "The players get the map with the way drawn on it and every leg written out. Your notes never go with it.",
+          "requirements": "Include the Chart a Course lines you chose ({count}), with their blanks filled in",
+          "stopsHint": "What should the players hear for each spot you put down by hand? Leave it blank to say where it is from the nearest place the map names.",
+          "start": "Where they set out from (your mark on the map)",
+          "stop": "Point {mark}",
+          "siteStop": "Point {mark} (your site {name}, which the players won't see unless you type it)",
+          "yes": "Show them the way",
+          "no": "Not now"
+        }
+      },
+      "shared": {
+        "windowTitle": "The route",
+        "title": "The way to {place}",
+        "titleDrawn": "The way they are going",
+        "total": "It will take {phrase}.",
+        "alt": "{map}, with the way from {from} to {to} drawn on it.",
+        "legs": "The legs of the journey",
+        "noMap": "This world has no copy of the map, so the way is written out below.",
+        "none": "The GM isn’t showing a route right now.",
+        "older": "This is an older route. The GM has shown a different one since, or stopped showing it.",
+        "seeRoute": "See the route",
+        "chipTip": "{summary}. Opens the map with the way drawn on it, and the legs written out.",
+        "stop": "Stop showing players",
+        "estimated": "about {time}",
+        "near": "near {place}",
+        "startNear": "a point near {place}",
+        "markName": "{name} (point {mark})",
+        "requirements": "What the journey asks of them"
       },
       "sites": {
         "place": "Put a site on the map",
@@ -3284,6 +3612,11 @@
         "drawnNote": "This way was drawn by hand, so the times beside it are measured off the map rather than printed in the book.",
         "clear": "Start over",
         "clearTip": "Throw the hand-drawn marks away and go back to the way the travel table works out.",
+        "clearTitle": "Start the route over?",
+        "clearAsk": "This route has {marks} on it. Starting over throws them all away at once and goes back to the way the travel table works out.",
+        "clearInstead": "To take back just the last mark, right-click the map instead.",
+        "clearYes": "Start over",
+        "clearNo": "Keep the route",
         "notOnMap": "{map} doesn't draw {place}, so the way can't stop there. Pick somewhere this map letters, or click the map itself.",
         "offTheMap": "That click was past the printed edge of {map}, so no mark was laid. Click inside the map itself.",
         "estimate": "Measured off {map} at the pace of the book's own printed journeys: a good guess, not a printed time."
@@ -3292,6 +3625,9 @@
         "offTheMap": "That click was past the printed edge of {map}, so where they set out from is unchanged. Click inside the map itself.",
         "pinLabel": "setting out"
       }
+    },
+    "suggestionMenu": {
+      "added": "added"
     },
     "relmap": {
       "disabled": "The relationship map is turned off in this world's settings.",
@@ -3318,6 +3654,7 @@
       "unsharedHint": "Every map in a collection starts out the GM's own. When they show you one, it appears here.",
       "openSheet": "{name}. Double-click to open their sheet, drag to move them.",
       "noSheet": "{name} has no character sheet in this world.",
+      "editLost": "You can no longer change this map, so what you were typing was not saved.",
       "gone": "That person's sheet is no longer in this world.",
       "deletedActor": "{name} (deleted actor). Their sheet is no longer in this world.",
       "added": "{name} has been added to the map.",
@@ -3327,6 +3664,91 @@
       "boardMoved": "The map changed while you were answering, so nothing was changed.",
       "linkHint": "Drag to another person to draw a line, or click to choose one.",
       "linkFrom": "Draw a line from {name}",
+      "subtitle": {
+        "add": "Add a label",
+        "edit": "Change the label under {name}",
+        "field": "Label under the name",
+        "placeholder": "e.g. Iron Knight, Deceased",
+        "bar": "The label under {name}",
+        "hint": "Enter starts a new line, up to {max}.",
+        "title": "Label for {name}",
+        "close": "Close without saving",
+        "where": "Name, label and chips placement",
+        "side": {
+          "below": "Below",
+          "above": "Above",
+          "left": "Left",
+          "right": "Right"
+        },
+        "italic": "Italicize",
+        "save": "Save"
+      },
+      "chips": {
+        "dead": "Dead",
+        "add": "Add chip",
+        "menuHeading": "Chips",
+        "newChip": "New chip…",
+        "added": "added",
+        "worn": "Chips on {name}",
+        "edit": "Change the chip {chip}",
+        "off": "Take {chip} off",
+        "spoken": "{name}, {chips}",
+        "more": "+{count}",
+        "name": "Chip name",
+        "namePlaceholder": "e.g. Noble, Outcast",
+        "colour": "Chip colour",
+        "colourOwn": "A colour of your own",
+        "icon": "Chip icon",
+        "noIcon": "No icon",
+        "preview": "How the chip looks",
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete this chip",
+        "deleteTitle": "Delete the chip {chip}?",
+        "deleteBody": "When you press Save, this takes {chip} off everyone wearing it on this board.",
+        "deleteElsewhere": "It is also on {count} other board(s) you can change, and is taken off everyone there too. Only this board's part can be undone.",
+        "usedTwin": "A chip called {chip} already exists, so that one was used, with its own colour and icon.",
+        "deleteYes": "Delete",
+        "needName": "Give the chip a name first.",
+        "inkDeepened": "{chose} was too pale to read on the board, so the chip uses {used} instead.",
+        "icons": {
+          "fa-skull": "Skull",
+          "fa-heart": "Heart",
+          "fa-heart-crack": "Broken heart",
+          "fa-crown": "Crown",
+          "fa-shield-halved": "Shield",
+          "fa-hand-fist": "Fist",
+          "fa-star": "Star",
+          "fa-eye": "Eye",
+          "fa-eye-slash": "Hidden eye",
+          "fa-mask": "Mask",
+          "fa-ghost": "Ghost",
+          "fa-coins": "Coins",
+          "fa-scroll": "Scroll",
+          "fa-book-open": "Book",
+          "fa-hammer": "Hammer",
+          "fa-wheat-awn": "Wheat",
+          "fa-leaf": "Leaf",
+          "fa-paw": "Paw",
+          "fa-dove": "Dove",
+          "fa-fire": "Fire",
+          "fa-droplet": "Droplet",
+          "fa-link": "Chain link",
+          "fa-lock": "Lock",
+          "fa-key": "Key",
+          "fa-question": "Question mark",
+          "fa-exclamation": "Exclamation mark",
+          "fa-user-secret": "Spy",
+          "fa-hourglass-half": "Hourglass",
+          "fa-handshake": "Handshake",
+          "fa-gavel": "Gavel",
+          "fa-house": "House",
+          "fa-ring": "Ring",
+          "fa-baby": "Baby",
+          "fa-moon": "Moon",
+          "fa-sun": "Sun"
+        }
+      },
       "linkFromTitle": "Draw a line from {name} to whom?",
       "linkPickTitle": "Draw a line to whom?",
       "linkToNamed": "Draw a line to {name}",
@@ -3551,6 +3973,10 @@
         "grouped": "drawing a group",
         "ungrouped": "deleting a group",
         "editedGroup": "changing a group",
+        "editedPerson": "changing a label",
+        "editedChips": "changing someone's chips",
+        "editedChip": "changing a chip",
+        "droppedChip": "deleting a chip",
         "resizedGroup": "resizing a group",
         "groupMembers": "changing who is in a group",
         "backHint": "Take back {what}. Yours alone: it takes back what you did on this map, and never what anyone else at the table did. Ctrl+Z.",
@@ -3578,6 +4004,10 @@
         "word": {
           "name": "Words",
           "hint": "How big the writing along the lines is set, as a percentage. Any line you have given a size of its own grows by the same share, so the loud ones stay louder than the quiet ones. This is yours alone: it changes every map you open and nobody else's window, and nothing on the map itself is altered."
+        },
+        "name": {
+          "name": "Names",
+          "hint": "How big each person's name and the label under it are set, as a percentage. Chips and group outlines keep their size. This is yours alone: it changes every map you open and nobody else's window, and nothing on the map itself is altered."
         }
       }
     },
@@ -3821,6 +4251,7 @@
       "milestone": {
         "levelup": "Reached level {level}",
         "learned": "Learned {move}.",
+        "learnLater": "Move still to choose.",
         "death": "Died",
         "insert": {
           "ghost": "Lingered as a Ghost",
@@ -3858,9 +4289,9 @@
       },
       "expedition": {
         "recorded": "On the timeline: home in {when}, for everyone who went and for Stonetop.",
-        "notYet": "Not on the timeline yet. It is written the first time you step in here with Next.",
-        "record": "Record on the timeline",
-        "again": "Record on the timeline again"
+        "notYet": "Not on the timeline yet. Put it there when they walk back in.",
+        "record": "They're home: put it on the timeline",
+        "failed": "Couldn't put the trip on every timeline, so it isn't marked as home yet. Try again from Going home."
       },
       "threatAsk": {
         "title": "Put this on the timeline?",
@@ -3900,6 +4331,7 @@
         "deathTitle": "{name}: certain death",
         "deathLine": "{name}: {from} → 0 HP, no damage roll (certain death, Book I p.383).",
         "alreadyDown": "{name} is already at 0 HP.",
+        "alreadyDownDoor": "{name} was already at 0 HP, and now faces Death's Door (certain death, Book I p.383).",
         "noHp": "{name} has no HP to lose.",
         "noOne": "There is nobody for {name} to catch: no one is targeted, and there are no characters or tokens to pick from."
       }
@@ -3970,7 +4402,11 @@
       "send": {
         "noRoom": "There is no free space next to {name}.",
         "noGM": "Only the GM can move {name}, and no GM is connected.",
-        "refused": "The GM's client did not move {name}."
+        "refused": "The GM's client did not move {name}.",
+        "atTitle": "Send {name} at someone",
+        "atQuestion": "Who should {name} close with? Their token steps up beside the one you pick.",
+        "atCancel": "Leave them where they are",
+        "nobody": "There is nobody on the other side for {name} to close with."
       },
       "roundsNote": "This fight was started in Foundry's tracker, which counts rounds and turns. Stonetop does not take turns.",
       "stopRounds": "Stop counting rounds",
@@ -4030,14 +4466,17 @@
         "show": "Show to players",
         "out": "Mark out of the fight",
         "backIn": "Back in the fight",
-        "ping": "Point this out on the map"
+        "ping": "Point this out on the map",
+        "sendAt": "Send at someone on the other side",
+        "sendAtAria": "Send {name} at someone on the other side"
       },
       "menu": {
         "switchSide": "Move to the other side",
         "headcount": "How many are in this token",
         "openSheet": "Open sheet",
         "remove": "Remove from the fight",
-        "stopShooting": "Stop shooting"
+        "stopShooting": "Stop shooting",
+        "sendAt": "Send at someone on the other side"
       },
       "headcount": {
         "title": "How many are in {name}?",
@@ -4158,12 +4597,33 @@
         "gmNaming": "The GM is naming what this blow costs.",
         "cardTwinTaken": "This blow was already answered on another copy of its card.",
         "ignoresArmorBox": "Ignores armor (the fiction says armor can't stop it)",
-        "ignoresArmorHint": "Book I p.239: apply \"ignores armor\" on the fly when the fiction dictates. Every row not yet applied takes the blow whole."
+        "ignoresArmorHint": "Book I p.239: apply \"ignores armor\" on the fly when the fiction dictates. Every row not yet applied takes the blow whole.",
+        "piercingBox": "Piercing on the fly",
+        "piercingHint": "Book I p.239: \"If the attack has the '[n] piercing' tag, ignore [n] points of armor for that attack.\" For a blow whose piercing the card can't know (a stat block's variant attack, a ruling). Apply uses the largest of this, the blow's own piercing and the other attackers'.",
+        "anotherGmConfirms": "Another GM will press this",
+        "downedToast": "{name} is at 0 HP: \"out of the action\" (Book I p.240). The attack still goes ahead if the table says so.",
+        "downedCard": "{name} struck this at 0 HP, which is \"out of the action\" (Book I p.240).",
+        "targetsDown": "{names}: already down, so not struck again.",
+        "theEnemy": "The enemy",
+        "foeDownTitle": "{names}: down",
+        "foeDown": "{names} is down, so there is no enemy's attack to suffer from them (Book I p.240: a foe at 0 HP is out of the fight).",
+        "artifactUnknown": "an artifact not yet worked out: its nature is unknown"
+      },
+      "arcanaAttacks": {
+          "noFury": "{name} holds no Fury, and Storm's Fury spends it \"1-for-1\" to manifest the bolt (Book II, Storm Markings). Its price was not paid.",
+          "noDebility": "{name} has no debility left to mark, the price of the {card}'s blast (Book II). Its price was not paid.",
+          "furyAsk": "{name} lets fly a bolt of lightning: spend 1 Fury (Storm's Fury, \"spend Fury 1-for-1 to manifest one of the following\")?",
+          "furyPay": "Spend 1 Fury",
+          "vortexAsk": "{name} flings the energy gathered about the {card}: that is the one choice, and the vortex is gone. Fling it?",
+          "vortexPay": "Fling the energy",
+          "cancel": "Not now",
+          "gmDamageCard": "The {card} names no damage: \"inflicting damage and other effects of the GM's choosing\". The GM sets the number (in the damage window) and says what else it does."
       },
       "groupHit": {
         "down": "one of them goes down, {after} still standing",
         "hurt": "one of them is hurt ({memberHp} of {hpMax} HP left), {after} still standing",
         "unhurt": "none of them is hurt, {after} still standing",
+        "moveStale": "{name} is no longer where the blow left them on the roster, so the blow can't be moved. Change their HP on the Followers tab.",
         "memberDown": "{member} takes it and goes down ({oldHp} → 0 HP), {after} still standing",
         "memberHurt": "{member} takes it ({oldHp} → {newHp} HP), {after} still standing",
         "memberUnhurt": "{member} takes it unhurt, {after} still standing",
@@ -4264,7 +4724,46 @@
         "charmAskNo": "Don't roll it",
         "secondIntent": "{name} parried: also pick 1 option from the Ambush list. The strike back was rolled without the +1d4 damage.",
         "secondIntentTookDie": "{name} parried and took +1d4 damage on the strike back: that is their pick from the Ambush list.",
+        "standFast": "Stand fast: roll +CON (Rune-laden Scales)",
+        "standFastOne": "{defender} stands fast in the Rune-laden Scales: roll +CON (if this is a magical attack)",
+        "standFastChoice": "{defender} stands fast on {ward}'s blow (Rune-laden Scales)",
+        "standFastMove": "stand fast",
+        "noteStandFastIgnore": "{defender} stood fast in the Rune-laden Scales: the magic washes over them with no ill effect (10+).",
+        "noteStandFastHalve": "{defender} stood fast in the Rune-laden Scales: only partially affected, they suffer half damage and a reduced effect (7-9).",
+        "noteStandFastMiss": "{defender} stood fast in the Rune-laden Scales, but the magic affects them fully (6-, mark XP).",
+        "standFastIgnoredLine": "the magic washed over them ({move}), no damage",
+        "charmRetierLate": "{name}'s charm roll moved, but the blow on {ward} is already applied: change the HP by hand if the new result matters.",
+        "charmRetierFailed": "{name}'s charm roll moved, but the damage card could not be told (no GM to write it, or no answer): the card still shows the old result.",
+        "charmRetierGone": "{name}'s charm roll is now a 10+, but the charm was already used up: lay it again by hand if Potent Workings keeps it.",
+        "standFastRetierLate": "{name}'s stand fast roll moved, but the blow on {ward} is already applied: change the HP by hand if the new result matters.",
+        "standFastRetierFailed": "{name}'s stand fast roll moved, but the damage card could not be told (no GM to write it, or no answer): the card still shows the old result.",
+        "refused": {
+          "noGm": "{defender}'s spend on {ward}'s blow was not recorded: no GM is online to write this card. Nothing was spent.",
+          "timedOut": "{defender}'s spend on {ward}'s blow was not recorded: the GM's client did not answer in time. Nothing was spent; press it again.",
+          "applied": "{defender}'s spend on {ward}'s blow was not recorded: the blow is already applied. Nothing was spent.",
+          "applying": "{defender}'s spend on {ward}'s blow was not recorded: the blow is being applied right now. Nothing was spent.",
+          "taken": "{defender}'s spend on {ward}'s blow was not recorded: that option was already taken on this blow (each option once per attack). Nothing was spent.",
+          "unpaid": "{defender}'s spend on {ward}'s blow was not recorded: there is not enough left to pay for it.",
+          "refused": "{defender}'s spend on {ward}'s blow was not recorded: the card no longer offers it. Nothing was spent."
+        },
         "secondIntentOpportunity": "If you picked \"Create an opportunity\": you or an ally gains advantage on the next move to act on it."
+      },
+      "arcanaDefence": {
+        "iceSphere": { "label": "{name}'s Ice Sphere: if this is fire, roll the damage twice and take the higher", "pill": "Ice Sphere: fire" },
+        "redwood": { "label": "{name}'s Redwood Effigy: if this is heat or fire, +{dice} damage", "pill": "Redwood Effigy +{dice}" }
+      },
+      "arcanaBlows": {
+        "blaze": { "label": "Flaming Sword: add the Blaze die, +{dice} damage", "pill": "{card} +{dice}" },
+        "aetherium": { "label": "Aetherium Spear: mark a debility to blast your foe with lightning, +{dice} damage, forceful, loud", "pill": "{card} +{dice}" },
+        "thunderbolt": { "label": "Thunderbolt Bow: a shot charged for ten deep breaths, +{dice} damage, area, dangerous", "pill": "{card} +{dice}" },
+        "stormsFury": { "label": "Storm's Fury: spend 1 Fury to imbue this strike with the force of thunder, +{dice} damage, forceful, loud", "pill": "{card} +{dice}" },
+        "doomSworn": { "label": "Promise of Doom: against the spirit or demon you swore to destroy, +{dice} damage", "pill": "{card} +{dice}" },
+        "doomOther": { "label": "Promise of Doom: against anything you did not swear to destroy, {dice} damage", "pill": "{card} {dice}" },
+        "herd": { "label": "Spirits of the Herd: the stampeding wisent charge with you, +{dice} damage, forceful, messy, area, dangerous", "pill": "{card} +{dice}" },
+        "bloodRage": { "label": "Blood-rage: attacking the nearest living creature, with advantage", "pill": "{card}: blood-rage" },
+        "noDebility": "{name} has no debility left to mark, so the lightning stays in the spear.",
+        "debilityAsk": "Which debility does {name} mark to blast the foe with lightning?",
+        "debilityCancel": "Not this time"
       },
       "heroMoves": {
         "undaunted": {
@@ -4301,7 +4800,8 @@
           "readout": "{foe} attacked: +1d4 on their next hit on you, and advantage on your next roll against them.",
           "label": "Rapier Wit: +{dice} damage, if this blow hits {name}, whose quip they answered by attacking",
           "pill": "{move} +{dice}",
-          "noGm": "No GM is connected to mark {name}'s {move} +1d4 as used, so it is still owed and may ride that foe's next blow too."
+          "noGm": "No GM is connected to mark {name}'s {move} +1d4 as used, so it is still owed and may ride that foe's next blow too.",
+          "noAnswer": "The GM's client did not mark {name}'s {move} +1d4 as used (it refused, or did not answer in time), so it may still be owed on that foe's next blow."
         },
         "truth": {
           "advButton": "They said Yes",
@@ -4334,7 +4834,9 @@
         "censureEnraged": {
           "source": "{move}: enraged ({name})",
           "readout": "Enraged: the next roll against {names} has advantage.",
-          "nobody": "Nobody was named, so nobody is enraged. Untick it and tick it again to name them."
+          "nobody": "Nobody was named, so nobody is enraged. Untick it and tick it again to name them.",
+          "noGm": "No GM is connected to mark {judge}'s {move} (enraged) as used, so it is still owed and will give the next roll advantage too. Ask {judge}'s player to untick it on the {move} card.",
+          "noAnswer": "The GM's client did not mark {judge}'s {move} (enraged) as used (it refused, or did not answer in time), so it may still be owed. Ask {judge}'s player to untick it on the {move} card if this roll used it."
         },
         "leapIn": {
           "button": "Leap in (Big Damn Hero)",
@@ -4361,6 +4863,10 @@
         "rememberMeSpend": {
           "label": "Something to Remember Me By, struck back with disadvantage (spend 1 Readiness): +{dice} damage, and you scar, mark or diminish them",
           "pill": "{move} +{dice}"
+        },
+        "strikeBack": {
+          "label": "Strike back at an attacker (Defend: spend 1 Readiness): deal your damage with disadvantage",
+          "pill": "Strike back"
         },
         "lineUnpaid": "{line} could no longer be paid for (spent elsewhere meanwhile), so this blow was not rolled.",
         "moveDamageWhole": "{move} deals the move's own damage, so the bonus or dice typed in were left off.",
@@ -4493,6 +4999,7 @@
       "lostFightOver": "The fight is over: {names} let go of their Readiness.",
       "lostLeftFight": "{name} leaves the fight and loses their Readiness.",
       "lostDown": "{name} is down and loses their Readiness.",
+      "lostStopped": "{name} stops fighting at 0 HP and loses their Readiness.",
       "follower": "Your follower"
     },
     "shieldWall": {

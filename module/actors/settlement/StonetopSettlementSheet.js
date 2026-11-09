@@ -63,6 +63,7 @@ import { StonetopAutocomplete } from "../../utils/autocomplete.js";
 import { openNpcNotesDialog } from "../steading/npc-notes-dialog.js";
 import { withLinkedActor } from "../../utils/actor-link.js";
 import { wireTabSearch } from "../../utils/tab-search.js";
+import { bindClipTooltips } from "../../utils/clip-tooltips.js";
 import { makeColumnsResizable } from "../../utils/resizable-columns.js";
 import { makeColumnsSortable } from "../../utils/sortable-columns.js";
 import { wireAvatarPreview, removeAvatarPreview } from "../../utils/avatar-preview.js";
@@ -288,6 +289,7 @@ export function createStonetopSettlementSheetClass(Base) {
 					.map(el => el.value ?? el.textContent).join(" "),
 				memory: (this._tabSearchTerms ??= {}), key: "residents",
 			});
+			bindClipTooltips(root, ".steading-people-cards .steading-person-text");
 			for (const table of root.querySelectorAll(".steading-residents-table[data-resize-key]")) {
 				makeColumnsResizable(table, table.dataset.resizeKey);
 				makeColumnsSortable(table, table.dataset.resizeKey);

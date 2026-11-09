@@ -55,9 +55,9 @@
           "labels": []
         },
         "move": {
-          "name": "When you wear the mask and eat someone's hair, blood, fingernail, etc.",
+          "name": "When you interact with an NPC known to whoever's visage you wear",
           "rollType": "cha",
-          "description": "<p>You and the mask become their flawless double until the next sunrise or until you remove the mask. When interacting with someone who knows your subject, roll +CHA: <strong>on a 10+</strong>, hold 3 Ken; <strong>on a 7-9</strong>, hold 1 Ken; <strong>on a 6-</strong>, they are deeply suspicious.</p>"
+          "description": "<p>(When you wear the mask and eat someone's hair, blood, fingernail, etc., you and the mask become their flawless double until the next sunrise or until you remove the mask.) Roll +CHA: <strong>on a 10+</strong>, hold 3 Ken; <strong>on a 7-9</strong>, hold 1 Ken; <strong>on a 6-</strong>, they are deeply suspicious. While interacting with them, spend Ken 1-for-1 to ask the GM: what do they expect me to do/say; what do they hope/want from me; what secret do I keep from them. When you remove the mask after wearing someone's visage, roll +CON: <strong>on a 10+</strong>, it hurts but comes off okay; <strong>on a 7-9</strong>, your face is raw and painful, mark a debility; <strong>on a 6-</strong>, lose 1d4 HP, mark a debility, and the mask leaves lasting, distinctive scars.</p>"
         },
         "options": []
       }

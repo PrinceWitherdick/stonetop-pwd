@@ -11,20 +11,23 @@ import { partyFollowersOf } from "../actors/character/follower-roster.js";
 import { sign, rollSeasonsCard, pbtaDiceFormula } from "../utils/roll-engine.js";
 import { normalizeRollMode, wireModePicker } from "./RollDialog.js";
 import { getStonetopSteadingActor, isSteadingActor } from "../utils/world.js";
-import { getSetting, isTimelineShown, setWorldSetting } from "../settings.js";
-import { capitalizeFirst, escHtml, decodeEntities, stripHtmlToText } from "../utils/strings.js";
+import { getSetting, setWorldSetting } from "../settings.js";
+import { capitalizeFirst, escHtml, htmlToPlainText, joinNames } from "../utils/strings.js";
 import { portraitOrNone, documentPortraitFrame } from "../utils/portrait-frame.js";
 import { wireAvatarPreview, removeAvatarPreview } from "../utils/avatar-preview.js";
 import { warn } from "../utils/logger.js";
 import { inTurn } from "../utils/turn-queue.js";
+import { countOf } from "../utils/plural.js";
+import { onePress } from "../utils/one-press.js";
 import { CHART_GROUPS, HOME_GROUP, chartPicked, chartEntryText, chartGroupOf } from "./expedition-data.js";
 import { pickOrWriteOption } from "./content-picker.js";
 import { contentElement } from "../utils/dialogv2-content.js";
-import { askWithButtons } from "../utils/ask-with-buttons.js";
+import { askWithButtons, confirmOutcome } from "../utils/ask-with-buttons.js";
 import { FATE_TABLES, fateTableList } from "../data/fate-tables.js";
 import { saveChronicleFromButton, findExpeditionChroniclePage, deleteExpeditionChroniclePage } from "../utils/chronicle.js";
 import { chartedLines } from "../utils/chronicle-core.js";
 import {
+	EXPEDITION_LOG_SETTING,
 	normalizeLog,
 	currentExpedition,
 	ensureCurrent,
@@ -36,16 +39,23 @@ import {
 	mergeLogs,
 	sameLog,
 } from "../utils/expedition-log-core.js";
-import { StonetopSteading, isHerdAsset } from "../actors/steading/StonetopSteading.js";
-import { askHorsesFromHerd, herdHorsesLabel, herdHorsesIn, herdHorsesOnLine } from "../actors/steading/herd-requisition.js";
+import { StonetopSteading, assetRowIs, isHerdAsset } from "../actors/steading/StonetopSteading.js";
+import { askHorsesBack, askHorsesFromHerd, herdHorsesLabel, herdHorsesIn, herdHorsesOnLine } from "../actors/steading/herd-requisition.js";
 import { openReturnTriumphant } from "../actors/steading/return-triumphant.js";
 import { STEADING_MOVE, improvementQuestions, askedAdvantageAnswers, herdCountAnswer, nervesAnswer } from "../actors/steading/improvement-rolls.js";
 import { shakenNervesOffers } from "../actors/character/fight-states.js";
 import { settleSteadingRoll } from "../actors/steading/steading-roll.js";
-import { requisitionMissCostAction } from "../actors/steading/steading-card-actions.js";
+import { payFortunesCost, requisitionMissCostAction, takeOnRequisitionMiss } from "../actors/steading/steading-card-actions.js";
 import { worldLogisticsNames } from "../actors/character/logistics.js";
-import { assetTakenLabel } from "../utils/requisition-asset.js";
+import { assetTakenLabel, offerToClearRequisitioned, takesMissingFrom } from "../utils/requisition-asset.js";
+import { followerLoadMarks } from "../actors/character/follower-outfit.js";
+import { followerHasInventoryToClear, pcHasInventoryToClear } from "../actors/character/homecoming-reset.js";
+import { readableFlags } from "../actors/character/StonetopFlags.js";
 import { charactersInPlay } from "../utils/characters-in-play.js";
+import { getPlayerCharacters } from "../utils/playbook-actors.js";
+// Who a trip credits (the party as it set out), read for the stamp's own note; the WRITER stays in
+// timeline-expedition-record.js, imported at call time.
+import { tripCredits } from "../timeline/timeline-expedition.js";
 // Who on the roster is past the Door: the dead don't outfit, and the three who came back set
 // out wearing the name of whatever brought them back.
 import { actorPastDeathKind } from "../actors/character/deaths-door-actor.js";
@@ -59,18 +69,19 @@ import { SpinTrack } from "../utils/flash-highlight.js";
 import { callStruggleAsOne, gmStruggleCall } from "../struggle/struggle-flow.js";
 import {
 	TRAVEL_MAPS, BEYOND_TIER,
-	travelPlace, travelMap, placesOnMap, placesBeyond, exitsOnMap, spotPercent, percentSpot,
+	travelPlace, travelMap, placesOnMap, placesBeyond, spotPercent, percentSpot,
 } from "../data/travel-times.js";
 import { liftSiteOffMap, placeSiteOnMap } from "../sites/place-site-on-map.js";
 import { placedSiteSpot, sitesOnMap } from "../sites/site-map-spots.js";
 import { SITE_ACCENT } from "../sites/site-view.js";
 import { pickPointOnImage, watchPointsOnImage } from "../utils/pick-point-on-image.js";
 import {
-	solveFrom, normalizeJourney, journeyRoute, formatTravelTime, routePhrase, routeLine,
-	stopsAlongTheWay, chartBlankValue,
+	solveFrom, normalizeJourney, journeyRoute, routePhrase, routeLine,
+	stopsAlongTheWay, chartBlankValue, chartBlankHint,
 } from "../utils/travel-route.js";
 import {
-	customStops, customTierFor, insideMap, markSpot, normalizeCustom, seedMarks, withMark,
+	customStops, customTierFor, insideMap, markSpot, nearestPlace, normalizeCustom, sameMark, seedMarks,
+	withMark,
 } from "../utils/custom-route.js";
 // Where the party sets out from: a place the books lettered, a point the GM put down on one of
 // their maps, or nowhere at all until the next click says. Every map question below takes it
@@ -79,22 +90,28 @@ import {
 import { hasStart, startEnd, startMark, startName, startTier } from "../utils/journey-start.js";
 import { resolveTravelMap, travelMapFile, browseTravelMapArt } from "../book2-art/travel-map-art.js";
 import { openTravelMap } from "./TravelMapWindow.js";
+import { journeyMapLayer, pinAnchors, timeLabel } from "./journey-map-layer.js";
+import {
+	readSharedRoute, shareRoute, sharedRequirementLines, sharedRoutePayload, sharedRouteState,
+	sharedRoutePlace, stopSharingRoute,
+} from "../utils/shared-route.js";
+import { postSharedRouteCard, sharedRouteNotice } from "./SharedRouteWindow.js";
 import { RoadRationsDialog } from "./RoadRationsDialog.js";
 import {
 	JOURNEY_MARKS, JOURNEY_RIGHT_CLICK_MARKS,
 	bindJourneyControls, bindJourneySiteRemoval, bindJourneyUndo, journeyPick,
 } from "./journey-controls.js";
-import { drawnOn, offMapNote, routePath, tierDraws, tierDrawing, tierDrawingEnds } from "../utils/route-path.js";
-import { posterSceneFor } from "../book2-art/poster-map-catalog.js";
+import { drawnOn, tierDraws, tierDrawing, tierDrawingEnds } from "../utils/route-path.js";
+import { usablePosterScene } from "../book2-art/poster-map-catalog.js";
+import { askRouteScenePosterMap } from "../book2-art/mark-poster-scene.js";
 import { format, localize } from "../utils/i18n.js";
 import { periodLabel } from "../seasons/current-season.js";
 import { loadGatedClause, overLoadGate } from "../actors/character/load-gates.js";
 import {
-	clearRouteOnScene, offMapNames, routeFlagTouched, sceneRouteCheck, sceneRouteRefusal,
+	clearRouteOnScene, routeFlagTouched, sceneRouteCheck, sceneRouteRefusal,
 	sceneJourney, sceneShowsJourney, showRouteOnScene,
 } from "../utils/scene-route.js";
 
-const ANSWERS_SETTING = "expeditionAnswers";
 
 // The route step's pin layer, rendered into BOTH the walkthrough's own map and the "See the whole
 // map" window's overlay. Named here because the dialog renders it directly (not only through a
@@ -121,19 +138,9 @@ const LOAD_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/partials/expeditio
 // changed.
 const LOAD_REFRESH_MS = 200;
 
-/**
- * An authored checklist line as words, for an `aria-label`: tags dropped, entities read back.
- *
- * The item texts are trusted HTML with `<strong>`/`<em>` in them and `&hellip;` at the end of a
- * couple, and a label read out as "You'll need to bring &hellip;" is worse than no label.
- *
- * `stripHtmlToText` is the one strip-HTML helper and says so; `decodeEntities` runs after it for
- * the one entity it does not carry (`&hellip;`, which is exactly the case above). Going through
- * the shared stripper rather than a private regex also buys the block-end -> space substitution
- * it exists for, so a two-part prompt cannot read back as "...is watched.They cross...".
- */
-function _plainText(html) {
-	return decodeEntities(stripHtmlToText(html));
+/** A shared tick-box line for an ask: `name` is what the answer reads back off the form. */
+function askCheck(name, text, checked = false) {
+	return `<label class="stonetop-camp-check stonetop-ask-check"><input type="checkbox" class="stonetop-check" name="${name}"${checked ? " checked" : ""}><span>${escHtml(text)}</span></label>`;
 }
 
 /**
@@ -370,6 +377,9 @@ const _STEPS = [
 		// same answer underneath it only put a stale copy beside a live one. A trip that already
 		// recorded one keeps it — the Chronicle still prints a stored `outfit` answer as
 		// "Outfit & supplies" (utils/chronicle-core.js).
+		//
+		// The charted requirements, read-only, under the prose that says to remind them (p.303).
+		requirements: true,
 	},
 	{
 		key:      "requisition",
@@ -441,8 +451,12 @@ const _STEPS = [
 		// supplies from the packs of the party on this trip (dialogs/RoadRationsDialog.js).
 		roadDays: true,
 		// What was charted, as the to-do list the book calls it (p.303), ticked off as each is dealt
-		// with (p.323). Read-only here apart from the tick: the words were settled on Chart a Course.
+		// with (p.323). The words were settled on Chart a Course; a challenge they couldn't have seen
+		// coming, or one added because a requirement went unmet (p.322), is added from here too.
 		chartTodo: true,
+		// Whether they have set out, and when: asked on the first Next in, and kept here to redo or
+		// clear (see `_noteTripStep`).
+		tripStamp: "setOut",
 		// No note field: the route is plotted on the step of its own before this one, and asking
 		// for the points of interest and legs a second time here only split the same answer across
 		// two pages. A trip that already recorded one keeps it — the Chronicle still prints a
@@ -518,6 +532,11 @@ const _STEPS = [
 		returnTriumphant: true,
 		// The note from the Requisition step's "Other preparations", read back where it is due.
 		projects: true,
+		// "Think about how you'll reveal the answers to these questions in play. Make yourself a
+		// to-do list" (p.338). The questions stay prompts; the list is the GM's answer to them.
+		homeTodo: true,
+		// Whether they are home, and when: asked on the first Next in, and kept here to redo or clear.
+		tripStamp: "home",
 		// The book's own test for whether it counts, printed where the call actually gets made.
 		// It is the commentary under the move (Book I p.339) plus the "not a given either way"
 		// branch from Aftermath (p.492), and it sits ABOVE the button rather than among the
@@ -540,24 +559,6 @@ const _STEPS = [
 					return isn't triumphant, the move doesn't trigger.</p>`,
 	},
 ];
-
-/**
- * Where a pin hangs its label, given where the pin itself sits on the picture.
- *
- * Both anchors read the same way: a label near an edge hangs INWARD, so it cannot spill out of the
- * picture and give whatever is showing it a horizontal scrollbar.
- *
- * MODULE LEVEL because three families of mark now want it — the book's places, its edge arrows and
- * the GM's own sites — and the third is built outside `_mapLayer`, where the closure this used to
- * be could not be reached. A second copy of these four numbers would put a site's label on the
- * wrong side of the pin at exactly the edges where it matters.
- */
-function pinAnchors(left, top) {
-	return {
-		anchorH: left > 78 ? "right" : left < 22 ? "left" : "centre",
-		anchorV: top > 84 ? "above" : "below",
-	};
-}
 
 export class ExpeditionDialog extends StepperDialog {
 	// The rail's die: what it last drew (so the next draw avoids repeating it) and the walk
@@ -669,6 +670,12 @@ export class ExpeditionDialog extends StepperDialog {
 	/** @param {{atStart?: boolean}} [options]  Open on the first step rather than the saved one
 	 *  (a trip minted a moment ago has nothing on any later step). */
 	static open({ atStart = false } = {}) {
+		// GM prep, on a world setting only a GM can write: a player's window would take every word
+		// typed into it and save none of them, and show the GM's notes on every trip besides.
+		if (!game.user?.isGM) {
+			ui.notifications?.warn?.(localize("stonetop.expedition.gmOnly"));
+			return null;
+		}
 		return openOrFocus("stonetop-expedition", () => {
 			const dialog = new ExpeditionDialog();
 			dialog._restoreStep();   // reopen on the step left off at before a reload
@@ -687,19 +694,21 @@ export class ExpeditionDialog extends StepperDialog {
 	 * in it rather than starting the night over — and a card whose trip has since been deleted
 	 * from the log simply gets a fresh one, which is why an unknown id is not an error here.
 	 *
-	 * IT WRITES THE SETTING BEFORE IT OPENS ANYTHING, so a window minted below reads the selection
-	 * out of the setting the way it reads everything else, with no argument to thread through the
-	 * constructor.
-	 *
 	 * AN ALREADY-OPEN WINDOW IS SWITCHED, not left where it was. `openOrFocus` brings the existing
 	 * one to the front WITHOUT running the factory, so a GM with the walkthrough already up would
-	 * otherwise press Run on one card and be handed whichever trip they last had open. Its
-	 * in-memory draft has to be dropped first: `_log()` memoizes for the window's lifetime, so
-	 * `_switchExpedition` would look for the trip just minted in a copy of the log taken before it
-	 * existed and no-op.
+	 * otherwise press Run on one card and be handed whichever trip they last had open.
 	 *
-	 * GM-ONLY IN PRACTICE, because `_persistLog` writes a world-scoped setting; the tab that calls
-	 * this is on a sheet only GMs can open.
+	 * AND THROUGH THAT WINDOW'S OWN COPY OF THE LOG. Its draft holds what the GM just typed, which
+	 * may still be on its way to the world: the click on Run is the blur that saved it. Reading the
+	 * setting instead wrote a log that lacked it, landed after it, and the draft dropped to make
+	 * way took the last copy with it.
+	 *
+	 * With no window up, the setting is read and written in the log's turn (as requisition writes
+	 * are), and the window minted after reads the selection out of the setting the way it reads
+	 * everything else.
+	 *
+	 * GM-ONLY, because `_persistLog` writes a world-scoped setting; the tab that calls this is on a
+	 * sheet only GMs can open.
 	 *
 	 * @param {object} options
 	 * @param {string} [options.tripId]  The trip to open. Ignored when the log has no such trip.
@@ -707,25 +716,35 @@ export class ExpeditionDialog extends StepperDialog {
 	 * @returns {Promise<string>} the id of the trip now being walked.
 	 */
 	static async openOnTrip({ tripId = "", title = "" } = {}) {
-		const log = normalizeLog(getSetting(ANSWERS_SETTING));
-		const known = tripId && log.list.some(e => e.id === tripId);
-		const entry = known ? null : { id: foundry.utils.randomID(), title: String(title ?? "").trim(), createdAt: Date.now() };
-		const id    = known ? tripId : entry.id;
-		await setWorldSetting(ANSWERS_SETTING, known ? selectExpedition(log, id) : addExpedition(log, entry));
-
+		const mint = () => ({ id: foundry.utils.randomID(), title: String(title ?? "").trim(), createdAt: Date.now() });
 		const open = findOpenApp(w => w.id === "stonetop-expedition");
 		if (open?.rendered) {
-			open._logDraft = null;
+			const known = !!tripId && open._log().list.some(e => e.id === tripId);
+			if (known) {
+				await open._switchExpedition(tripId);
+				open.bringToTop();
+				return tripId;
+			}
 			// A trip that did not exist a moment ago has nothing on any later step, so the reader
 			// belongs at the top of it. Switching to one that DOES exist leaves them where they
 			// were, which is the same courtesy the switcher in the log bar already extends.
-			if (!known) open._step = 0;
-			await open._switchExpedition(id);
+			const entry = mint();
+			await open._persistLog(addExpedition(open._log(), entry));
+			await open._closeMapWindows();
+			open._step = 0;
+			open.render(false);
 			open.bringToTop();
-			return id;
+			return entry.id;
 		}
-		// A new trip starts at the top, as it does in an open window above; the restore would
-		// have put it on whatever step the LAST trip was left on.
+		const { id, known } = await inTurn("expedition-log", async () => {
+			const log = normalizeLog(getSetting(EXPEDITION_LOG_SETTING));
+			const has = !!tripId && log.list.some(e => e.id === tripId);
+			const entry = has ? null : mint();
+			await setWorldSetting(EXPEDITION_LOG_SETTING, has ? selectExpedition(log, tripId) : addExpedition(log, entry));
+			return { id: has ? tripId : entry.id, known: has };
+		});
+		// A new trip starts at the top; the restore would have put it on whatever step the LAST
+		// trip was left on.
 		ExpeditionDialog.open({ atStart: !known });
 		return id;
 	}
@@ -822,7 +841,7 @@ export class ExpeditionDialog extends StepperDialog {
 		// only "4 — neutral / mixed" leaves the GM to look the answer back up on the page behind it.
 		html.find(".stonetop-exp-fate-btn").on("click", () => this._rollFate());
 		// Called from the journey, so the struggle starts with "part of a journey" ticked.
-		html.find(".stonetop-exp-struggle-btn").on("click", () => callStruggleAsOne({ journey: true }));
+		html.find(".stonetop-exp-struggle-btn").on("click", () => callStruggleAsOne({ journey: true, only: this._tripParty().map(a => a.id) }));
 		html.find(".stonetop-exp-road-btn").on("click", () => this._openRoadDays());
 		// Collapse / expand the exploration moves rail. By class rather than by re-rendering,
 		// for the reason the character sheet's own handle gives: the step reclaims the freed
@@ -881,12 +900,20 @@ export class ExpeditionDialog extends StepperDialog {
 		html.find(".stonetop-exp-asset-btn").on("click", ev => this._toggleRequisitionedAsset(
 			Number(ev.currentTarget.dataset.assetIndex),
 			ev.currentTarget.dataset.take === "true",
+			ev.currentTarget.dataset.assetName,
 		));
+		// Requisition step: Surplus loaded onto the cart for the trip, one at a time (ruling E7).
+		html.find(".stonetop-exp-surplus-step").on("click", ev => this._stepTripSurplus(Number(ev.currentTarget.dataset.step)));
+		// Going home: each asset still out comes home or was lost, and the herd's horses are counted back (E2).
+		html.find(".stonetop-exp-home-asset-btn").on("click", ev => this._settleHomeAsset(ev.currentTarget.dataset, ev.currentTarget));
+		// Going home: everyone ticked unpacks (Reset Inventory, p.89).
+		html.find(".stonetop-exp-home-reset-btn").on("click", ev => this._resetHomeInventories(ev.currentTarget));
 		// Arriving-home step: make the Return Triumphant move. Nothing of the trip is written —
 		// the move's whole effect is on the steading — so there is no re-render here; the
 		// walkthrough it opens repaints whatever steading sheet happens to be showing.
 		html.find(".stonetop-exp-triumph-btn").on("click", () => this._returnTriumphant());
-		html.find(".stonetop-exp-timeline-btn").on("click", ev => this._guardBusy(ev, () => this._recordTrip()));
+		// The trip's stamps (set out, come home): stamp now, redo now, or clear. The button says which.
+		html.find(".stonetop-exp-stamp-btn").on("click", ev => this._onStampButton(ev.currentTarget));
 		// Route step: pick a place off the map or the list, or change which map is showing. The
 		// same binder the popout uses, because it is the same partial (dialogs/journey-controls.js).
 		const journeyHandlers = {
@@ -902,7 +929,9 @@ export class ExpeditionDialog extends StepperDialog {
 		bindJourneyControls(html[0], {
 			...journeyHandlers,
 			zoom: key => this._openMapWindow(key),
-			toScene: () => this._putRouteOnScene(),
+			toScene: expected => this._putRouteOnScene(expected),
+			share: expected => this._shareRouteWithPlayers(expected),
+			hideShare: () => this._hideSharedRoute(),
 			placeSite: () => this._placeSiteFromPanel(html[0]),
 			clearDrawn: () => this._clearDrawnWay(),
 		});
@@ -1055,7 +1084,20 @@ export class ExpeditionDialog extends StepperDialog {
 			// The same, at the foot of the step rather than under its opening prose.
 			endAside:  step.endAside ?? null,
 			chartTodo: step.chartTodo ? this._chartTodo() : null,
+			// What Chart a Course required of them, read-only where they Outfit (p.303: "As the PCs
+			// Outfit or otherwise prepare, remind them of the requirements").
+			outfitRequirements: step.requirements ? this._outfitRequirements() : null,
 			homeProjects: step.projects ? { text: String(this._answers()?.prep ?? "").trim() } : null,
+			// The homecoming's to-do list (p.338: "Make yourself a to-do list"), into `home.notes`,
+			// which the Chronicle prints under "Coming home".
+			homeTodo: step.homeTodo
+				? {
+					path:        "home.notes",
+					value:       String(this._answers()?.home?.notes ?? ""),
+					prompt:      localize("stonetop.expedition.homeTodo.prompt"),
+					placeholder: localize("stonetop.expedition.homeTodo.placeholder"),
+				}
+				: null,
 			qa:        this._qaContext(step.qa),
 			// The Return Triumphant button, on the arriving-home step. GM-only, like the asset
 			// picker and for the same reason: the move writes to the steading sheet. It reports
@@ -1065,12 +1107,10 @@ export class ExpeditionDialog extends StepperDialog {
 			returnTriumphant: step.returnTriumphant && game.user?.isGM
 				? { hasSteading: !!getStonetopSteadingActor(), body: step.triumphBody ?? "" }
 				: null,
-			// Whether this trip is on the timeline yet, on the homecoming step. It is written by
-			// itself the first time the GM steps in here with Next; this says so, and offers to write
-			// it (again) for a trip reached by the table of contents or recorded before a change.
-			// Not while the timeline is switched off: the trip is still written, but there is no
-			// timeline on screen for the note to point at.
-			tripTimeline: step.returnTriumphant && game.user?.isGM && isTimelineShown() ? this._tripTimelineContext() : null,
+			// Whether this trip has set out (Running the journey) or come home (Going home), and the
+			// control that stamps, redoes or clears it. Shown with the timeline switched off too: the
+			// stamps are also what Level Up reads to remind a PC who is still on the road.
+			tripStamp: step.tripStamp && game.user?.isGM ? this._tripStampContext(step.tripStamp) : null,
 			// The exploration moves rail. On EVERY step, not only the ones that reach for a
 			// GM move: it is furniture, and a column that came and went as the reader stepped
 			// would shift the prose sideways under them twice a walkthrough. The list is the
@@ -1099,6 +1139,13 @@ export class ExpeditionDialog extends StepperDialog {
 		if (step.key === "requisition" && game.user?.isGM) {
 			data.assetPicker = this._buildAssetPicker();
 		}
+		// Going home gains what this trip still has out of the steading's stores (ruling E2): each asset
+		// to bring home or lose, each line of herd horses to count back. GM-only, as the picker.
+		if (step.key === "home" && game.user?.isGM) {
+			data.homeAssets = this._buildHomeAssets();
+			// And everyone on the trip unpacks: Reset Inventory (p.89, p.496), PCs and their followers at once.
+			data.homeReset = await this._buildHomeReset();
+		}
 		// The route step gains the maps and the travel times. Same shape as the readout above:
 		// built only on its own step, because it browses the art folder and measures an image.
 		if (step.journey) {
@@ -1107,10 +1154,11 @@ export class ExpeditionDialog extends StepperDialog {
 		return data;
 	}
 
-	// The steading's current Fortunes, for the Requisition roll. Falls back to +0
-	// if there's no steading sheet yet.
+	// The steading's current Fortunes, for the Requisition roll, read as every other reader reads it
+	// (StonetopSteading#getStatValue: the mirrored copy first, PREP-12). Falls back to +0 if there's no
+	// steading sheet yet.
 	_steadingFortunes() {
-		const value = getStonetopSteadingActor()?.system?.stats?.fortunes?.value;
+		const value = Number(this._steadingWrapper()?.steading?.getStatValue?.("fortunes"));
 		return Number.isFinite(value) ? value : 0;
 	}
 
@@ -1130,7 +1178,7 @@ export class ExpeditionDialog extends StepperDialog {
 	// IntroductionsDialog. A stale currentId falls back to the most recent trip.
 	_log() {
 		if (!this._logDraft) {
-			this._logDraft = normalizeLog(getSetting(ANSWERS_SETTING));
+			this._logDraft = normalizeLog(getSetting(EXPEDITION_LOG_SETTING));
 			// What another GM's write is merged against (see onLogChanged).
 			this._logBase = this._logDraft;
 		}
@@ -1147,18 +1195,30 @@ export class ExpeditionDialog extends StepperDialog {
 	// Another GM's write folded in while this one was on its way is sent on once it has landed:
 	// this write carried the copy from before, and reached the world after theirs. Only then, and
 	// only when the merge holds something the world does not, so two windows cannot ping-pong.
+	//
+	// A write the world refuses (a dropped socket, a server hiccup) is SAID, once per window, and
+	// swallowed: the draft keeps what was typed, so the next write of any field sends it again. Left
+	// to throw, it was an unhandled rejection from a change handler, and the box went on showing a
+	// value the world never got.
 	async _persistLog(log) {
 		this._logDraft = log;
 		this._logWrites = (this._logWrites ?? 0) + 1;
 		try {
-			await setWorldSetting(ANSWERS_SETTING, log);
+			await setWorldSetting(EXPEDITION_LOG_SETTING, log);
+			this._saveFailed = false;
+		} catch (err) {
+			warn("could not save the expedition log", err);
+			if (!this._saveFailed) ui.notifications?.warn?.(localize("stonetop.expedition.save.failed"));
+			this._saveFailed = true;
+			return false;
 		} finally {
 			this._logWrites -= 1;
 		}
-		if (this._logWrites || !this._foldedMidWrite) return;
+		if (this._logWrites || !this._foldedMidWrite) return true;
 		this._foldedMidWrite = false;
 		// The trips, not `currentId`: which trip each window is on is its own (see mergeLogs).
 		if (!sameLog(this._logDraft.list, this._logBase?.list)) await this._persistLog(this._logDraft);
+		return true;
 	}
 
 	// The trip currently being edited, or null before any exists.
@@ -1186,6 +1246,9 @@ export class ExpeditionDialog extends StepperDialog {
 		// Two documents, neither waiting on the other: the log is a world setting and the labels
 		// are a flag on the steading, and the sync works off the log already renamed above.
 		await Promise.all([this._persistLog(log), this._syncHeldAssets(log)]);
+		// A trip already on the timeline takes its new name there too, on every row still wearing
+		// the old one (a title the GM typed over in the timeline stays theirs).
+		if (entry.timelineRecorded) await this._recordTrip({ tripId: entry.id });
 		this.render(false);
 	}
 
@@ -1210,16 +1273,25 @@ export class ExpeditionDialog extends StepperDialog {
 	/**
 	 * Ask before a trip is deleted. The buttons say what each does, not Yes/No: the paragraph
 	 * above them is about losing notes for good, and a bare "Yes" doesn't say what it agrees to.
-	 * Resolves null for Keep it (or a closed window), else `{ removePage }`.
+	 * Resolves null for Keep it (or a closed window), else `{ removePage }` plus one answer for each
+	 * other tick offered (`removeRows`, `herdBack`, `stopSharing`).
 	 *
 	 * `hasPage` offers to take the trip's Chronicle page with it, OFF by default: the Chronicle is
 	 * the GM's to edit, so a page may hold words that are nowhere else (user's call, 2026-09-24).
+	 * `hasRows` offers its timeline rows on the same terms, OFF: a trip that happened is history.
+	 * `herdHorses` (how many went out with it) offers to put them back, ON: every other asset the trip
+	 * held goes home by itself on a delete, and horses are the one thing that did not. `shared` offers
+	 * to stop showing its route to the players, ON: a deleted trip's way is nobody's plan any more.
 	 */
-	async _askDeleteExpedition(label, { hasPage = false } = {}) {
+	async _askDeleteExpedition(label, { hasPage = false, hasRows = false, herdHorses = 0, shared = false } = {}) {
 		const key = "stonetop.expedition.delete";
-		const tick = hasPage
-			? `<label class="stonetop-camp-check stonetop-ask-check"><input type="checkbox" class="stonetop-check" name="removePage"><span>${escHtml(localize(`${key}.removePage`))}</span></label>`
-			: "";
+		const horses = countOf(herdHorses, "horse");
+		const tick = [
+			hasPage    && askCheck("removePage", localize(`${key}.removePage`)),
+			hasRows    && askCheck("removeRows", localize(`${key}.removeRows`)),
+			herdHorses > 0 && askCheck("herdBack", format(`${key}.herdBack`, { count: horses }), true),
+			shared     && askCheck("stopSharing", localize(`${key}.stopSharing`), true),
+		].filter(Boolean).join("");
 		return askWithButtons({
 			title:   localize(`${key}.title`),
 			// An element, so core's sanitizer leaves the tick box's name for the answer to read.
@@ -1227,7 +1299,9 @@ export class ExpeditionDialog extends StepperDialog {
 			buttons: [
 				{
 					key: "delete", label: localize(`${key}.yes`), icon: "fa-trash",
-					value: form => ({ removePage: !!form?.elements?.namedItem?.("removePage")?.checked }),
+					// Every tick, offered or not: one that was not offered reads false.
+					value: form => Object.fromEntries(["removePage", "removeRows", "herdBack", "stopSharing"]
+						.map(name => [name, !!form?.elements?.namedItem?.(name)?.checked])),
 				},
 				{ key: "keep", label: localize(`${key}.no`), icon: "fa-xmark", value: null },
 			],
@@ -1244,7 +1318,15 @@ export class ExpeditionDialog extends StepperDialog {
 		if (!current) return;
 		const label = current.title?.trim() ? current.title : localize("stonetop.expedition.delete.unnamed");
 		const hasPage = !!findExpeditionChroniclePage(current.id);
-		const answer = await this._askDeleteExpedition(label, { hasPage });
+		// Horses from the herd are the one take a delete does not send home by itself (the herd is
+		// never marked out, so there is nothing for the steading's reconcile to find).
+		const herdOut = herdHorsesIn(current.requisitioned);
+		const herdSteading = herdOut > 0 ? this._steadingWrapper()?.steading : null;
+		const herdHorses = herdSteading?.improvementCompleted?.("herdOfHorses") ? herdOut : 0;
+		const shared = readSharedRoute()?.expeditionId === current.id;
+		const answer = await this._askDeleteExpedition(label, {
+			hasPage, hasRows: !!current.timelineRecorded, herdHorses, shared,
+		});
 		if (!answer) return;
 		const log = deleteExpedition(this._log(), current.id);
 		// The trip is gone, so it is holding nothing, and every unnamed trip after it has just
@@ -1257,6 +1339,25 @@ export class ExpeditionDialog extends StepperDialog {
 				warn("Could not remove the expedition's Chronicle page:", err);
 			}
 		}
+		if (answer.herdBack) {
+			try {
+				await herdSteading.returnToHerd(herdHorses, { stonetopMove: "Requisition" });
+			} catch (err) {
+				warn("Could not put the expedition's horses back in the herd:", err);
+			}
+		}
+		if (answer.stopSharing) {
+			try {
+				await stopSharingRoute();
+			} catch (err) {
+				warn("Could not stop showing the deleted expedition's route:", err);
+			}
+		}
+		const record = await import("../timeline/timeline-expedition-record.js");
+		if (answer.removeRows) await record.forgetTripRows(current.id);
+		// An unnamed trip after this one has just been renumbered ("Expedition 3" is now
+		// "Expedition 2"), and a recorded one's rows follow it.
+		await this._retitleRenumbered();
 		await this._closeMapWindows();
 		this._step = 0;
 		this.render(false);
@@ -1270,8 +1371,32 @@ export class ExpeditionDialog extends StepperDialog {
 		await saveChronicleFromButton(button, {
 			context:    "Expedition",
 			// Through _persistLog so the GM guard on the world write lives in one place.
-			beforeSave: () => (this._logDraft ? this._persistLog(this._logDraft) : undefined),
+			beforeSave: () => {
+				const changed = this._foldPlayerTakes();
+				return (changed || this._logDraft) ? this._persistLog(this._log()) : undefined;
+			},
 		});
+	}
+
+	// A player's own Requisition tags the asset with this trip on the steading, but a player
+	// can't write the trip log, so the Chronicle's "Taken from the steading" list learns of
+	// those takes here. Adds the names to the current trip's record; true when it added any.
+	//
+	// Onto a COPY of the draft, never the entry in place: a fresh window's `_logBase` is the very same
+	// object, and a base changed with the draft made another GM's write merge the takes back out.
+	_foldPlayerTakes() {
+		const trip = this._currentExpedition();
+		const found = this._steadingWrapper();
+		if (!trip?.id || !found) return false;
+		const log = this._log();
+		const at = Array.isArray(log.list) ? log.list.findIndex(e => e.id === trip.id) : -1;
+		if (at < 0) return false;
+		const entry = log.list[at];
+		const extra = takesMissingFrom(entry.requisitioned, found.steading.getAssetsOnExpedition(trip.id));
+		if (!extra.length) return false;
+		const requisitioned = [...(Array.isArray(entry.requisitioned) ? entry.requisitioned : []), ...extra.map(name => ({ name }))];
+		this._logDraft = { ...log, list: log.list.map((e, i) => (i === at ? { ...e, requisitioned } : e)) };
+		return true;
 	}
 
 	// Build the current step's note field(s) for the template. `single` is one
@@ -1314,7 +1439,7 @@ export class ExpeditionDialog extends StepperDialog {
 					empty:    g.empty,
 					entries:  picked
 						.filter(e => e.group === g.key)
-						.map(e => this._chartRow(e, route)),
+						.map(e => this._chartRow(e, route, picked)),
 				})),
 				notes:  qa.notes ? field(qa.notes) : null,
 			};
@@ -1339,12 +1464,13 @@ export class ExpeditionDialog extends StepperDialog {
 	 *
 	 * The answer box saves on blur without a re-render, so the row keeps focus while typing.
 	 */
-	_chartRow(entry, route) {
+	_chartRow(entry, route, picked = []) {
 		const text = chartEntryText(entry);
 		// What the plotted route would say, where it has anything to say about this line. Offered
 		// as the answer box's placeholder, so a GM who leaves it alone still reads the map's
 		// answer and a GM who types gets theirs. The Chronicle resolves the pair the same way.
-		const derived = (route && entry.key) ? chartBlankValue(entry.key, route) : null;
+		// The days read per leg once the trip also says "First travel to ___" (see chartDaysPhrase).
+		const derived = (route && entry.key) ? chartBlankHint(entry.key, route, picked) : null;
 		return {
 			id:     entry.id,
 			text,
@@ -1352,7 +1478,8 @@ export class ExpeditionDialog extends StepperDialog {
 			hint:   derived ?? "What did you tell them?",
 			// The line is trusted authored HTML, so a screen reader needs the plain words to say
 			// which prompt this box belongs to.
-			plain:  _plainText(text),
+			// An `aria-label`: "You'll need to bring &hellip;" read out is worse than no label.
+			plain:  htmlToPlainText(text),
 		};
 	}
 
@@ -1399,6 +1526,17 @@ export class ExpeditionDialog extends StepperDialog {
 	_chartTodo() {
 		const groups = chartedLines(this._answers()?.chart, this._journeyRoute());
 		return { groups, hasRows: groups.length > 0 };
+	}
+
+	/**
+	 * The requirements alone, as the Outfit step reminds the table of them: the same resolved lines
+	 * Running the journey reads (blanks filled with what was said, or the route's figure). Read-only;
+	 * the words are Chart a Course's. Null when nothing was required, so the step prints nothing.
+	 */
+	_outfitRequirements() {
+		const label = CHART_GROUPS.find(g => g.key === "requirements")?.label;
+		const group = chartedLines(this._answers()?.chart, this._journeyRoute()).find(g => g.label === label);
+		return group?.entries?.length ? { entries: group.entries } : null;
 	}
 
 	/** Tick a charted line off as dealt with, or back on. Saved without a re-render. */
@@ -1551,6 +1689,8 @@ export class ExpeditionDialog extends StepperDialog {
 			return {
 				index:      asset.index,
 				name:       herd && ours ? `${asset.name} (${herdHorses} with this trip)` : asset.name,
+				// The row's own name, which its click hands back so a list that moved is caught (PREP-2).
+				assetName:  asset.name,
 				ours, elsewhere,
 				// What a click on this row means, decided here: one of ours is sent home.
 				take:       !ours,
@@ -1566,7 +1706,303 @@ export class ExpeditionDialog extends StepperDialog {
 			hasRows:      rows.length > 0,
 			rows,
 			takenCount:   rows.filter(r => r.ours).length,
+			surplus:      this._tripSurplusContext(found, trip),
 		};
+	}
+
+	/**
+	 * The Requisition step's "Surplus loaded for the trip" stepper (ruling E7; Book I p.305, "a cart laden
+	 * with at least 1 Surplus worth of supplies"): how much this trip carries, how much the steading has
+	 * left, and whether each way can move.
+	 */
+	_tripSurplusContext(found, trip) {
+		const out = Math.max(0, Math.trunc(Number(trip?.surplusOut) || 0));
+		const onHand = Math.max(0, Math.trunc(Number(found.steading.getStatValue("surplus")) || 0));
+		return {
+			out, onHand,
+			canLoad:   onHand > 0,
+			canUnload: out > 0,
+			// The words a screen reader hears for the count between the two buttons.
+			said: format("stonetop.expedition.surplus.said", { out, onHand, steading: found.actor.name }),
+		};
+	}
+
+	/**
+	 * Load one Surplus onto the trip (`step` 1) or put one back (`step` -1): the steading's Surplus goes
+	 * down or up by one (never below 0, the ledger naming Requisition) and the trip records how much it
+	 * carries as `surplusOut`, which Days on the Road reads to start its pack-animal tick on. One at a
+	 * time, in the log's turn, like the asset writes beside it.
+	 */
+	async _stepTripSurplus(step) {
+		if (step !== 1 && step !== -1) return;
+		return inTurn("expedition-log", async () => {
+			const found = this._steadingWrapper();
+			if (!found) {
+				ui.notifications?.warn?.("No steading sheet in this world to requisition from.");
+				return;
+			}
+			const { entry: trip } = ensureCurrent(this._log(), () => this._newExpedition());
+			const minted = !this._log().list.some(e => e.id === trip.id);
+			const { out, onHand } = this._tripSurplusContext(found, trip);
+			if (step > 0 && onHand <= 0) {
+				ui.notifications?.warn?.(format("stonetop.expedition.surplus.none", { steading: found.actor.name }));
+				return;
+			}
+			if (step < 0 && out <= 0) return;
+			try {
+				await found.steading.setSystemValue("attributes.surplus.value", Math.max(0, onHand - step), { stonetopMove: "Requisition" });
+			} catch (err) {
+				warn("Could not move the steading's Surplus:", err);
+				ui.notifications?.warn?.(`Could not update ${found.actor.name}'s Surplus.`);
+				return;
+			}
+			const wrote = await this._patchTrip(trip, entry => { entry.surplusOut = out + step; }, { mint: minted, queued: false });
+			if (wrote) {
+				this.render(false);
+				return;
+			}
+			// The trip went (another GM deleted it): its `surplusOut` was the move's only record, so the
+			// Surplus goes back as it was, as horses out of the herd do (_writeRequisitionedAsset).
+			await found.steading.setSystemValue("attributes.surplus.value", onHand, { stonetopMove: "Requisition" })
+				.catch(err => warn("Could not put the steading's Surplus back:", err));
+			this.render(false);
+		});
+	}
+
+	// ── Going home: what is still out with this trip (ruling E2, WLK-4 / PREP-3) ─────
+	// "If the PCs borrow an asset and fail to bring it home safely, that almost always counts as
+	// Meeting with Disaster (page 532). Reduce the town's Fortunes by 1 (or more!)" (Book I p.308), and
+	// "If the PCs Requisitioned any assets, how has that impacted the village?" (p.338). So the homecoming
+	// lists each asset the steading has out with this trip, to bring home or lose, and each line of herd
+	// horses still out, to count back. Read off the steading (where a thing IS) and the trip's lines.
+
+	_buildHomeAssets() {
+		const found = this._steadingWrapper();
+		if (!found) return { hasSteading: false, hasAny: false, rows: [], herd: [] };
+		const trip = this._currentExpedition();
+		const rows = found.steading.getAssetsOnExpedition(trip?.id ?? null).map(asset => ({
+			index: asset.index,
+			name:  asset.name,
+			// A player's take on this trip names who had it, so the GM knows whose sheet it was on.
+			with:  String(asset.takenBy?.name ?? "").trim(),
+		}));
+		const herd = (Array.isArray(trip?.requisitioned) ? trip.requisitioned : [])
+			.map((line, at) => ({ at, name: String(line?.name ?? ""), count: herdHorsesOnLine(line) }))
+			.filter(line => line.count > 0);
+		return {
+			hasSteading:  true,
+			steadingName: found.actor.name,
+			hasAny:       rows.length + herd.length > 0,
+			rows, herd,
+		};
+	}
+
+	// ── Going home: Reset Inventory ──────────────────────────────────────────────
+	// "When you return home, clear the marks from your Inventory insert; it rarely matters what you're
+	// carrying while you're in town" (Book I p.89), and "Reset Inventory" on the GM's downtime list (p.496).
+	// Followers "Outfit (page 306) just like PCs" (p.310), so they unpack with them. One row per PC on the
+	// trip and one per follower travelling with them, read off the sheets each render (homecoming-reset.js),
+	// so a row already unpacked, here or on its sheet, says so and cannot be ticked.
+
+	async _buildHomeReset() {
+		const party = this._tripParty();
+		const followers = await Promise.all(party.map(actor => partyFollowersOf(actor).catch(err => {
+			warn(`could not read ${actor.name}'s followers for Reset Inventory`, err);
+			return [];
+		})));
+		const rows = [];
+		party.forEach((actor, i) => {
+			const flags = readableFlags(actor);
+			rows.push({ actorId: actor.id, ftype: "", slug: "", name: actor.name, label: actor.name, canReset: pcHasInventoryToClear(flags) });
+			for (const fol of followers[i] ?? []) {
+				const slug = fol.slug ?? "";
+				const name = String(fol.name ?? "").trim() || localize("stonetop.expedition.homeReset.aFollower");
+				const sub = format("stonetop.expedition.homeReset.with", { name: actor.name });
+				rows.push({
+					actorId: actor.id, ftype: fol.ftype, slug, name, sub, follower: true,
+					label: `${name} ${sub}`,
+					canReset: followerHasInventoryToClear(flags, fol.ftype, slug),
+				});
+			}
+		});
+		return { rows, anyToClear: rows.some(r => r.canReset) };
+	}
+
+	/** The card's button: everyone ticked unpacks, after one ask. One press at a time. */
+	async _resetHomeInventories(control = null) {
+		const section = control?.closest?.(".stonetop-exp-home-reset") ?? null;
+		if (!section) return;
+		return onePress(this, "homeReset", () => this._resetHomeInventoriesNow(section), { control });
+	}
+
+	async _resetHomeInventoriesNow(section) {
+		const picks = [...section.querySelectorAll(".stonetop-exp-home-reset-check")]
+			.filter(el => el.checked && !el.disabled)
+			.map(el => ({ actorId: el.dataset.actor, ftype: el.dataset.ftype ?? "", slug: el.dataset.slug ?? "", name: el.dataset.name ?? "" }));
+		const convalesce = !!section.querySelector(".stonetop-exp-home-reset-convalesce-check")?.checked;
+		if (!picks.length) return void ui.notifications?.info?.(localize("stonetop.expedition.homeReset.nonePicked"));
+		const ok = await confirmOutcome({
+			title:   localize("stonetop.expedition.homeReset.title"),
+			content: `<p>${format("stonetop.expedition.homeReset.confirm", { names: `<strong>${escHtml(joinNames(picks.map(p => p.name)))}</strong>` })}</p>`,
+			yes:     { label: localize("stonetop.inventory.resetYes"), icon: "fa-eraser", className: "stonetop-dialog-btn--danger" },
+			no:      { label: localize("stonetop.inventory.resetNo") },
+		});
+		if (!ok) return;
+		// Each character's own marks and their followers' land in ONE update of that character.
+		const byActor = new Map();
+		for (const p of picks) {
+			if (!byActor.has(p.actorId)) byActor.set(p.actorId, { pc: false, followers: [] });
+			const entry = byActor.get(p.actorId);
+			if (p.ftype) entry.followers.push({ ftype: p.ftype, slug: p.slug });
+			else entry.pc = true;
+		}
+		const done = [];
+		for (const [id, pick] of byActor) {
+			const actor = game.actors?.get(id);
+			const character = actor?.typedActor;
+			if (typeof character?.resetForHomecoming !== "function") continue;
+			try {
+				if (await character.resetForHomecoming(pick)) done.push(actor.name);
+			} catch (err) {
+				warn(`could not reset ${actor.name}'s inventory`, err);
+				ui.notifications?.warn?.(format("stonetop.expedition.homeReset.failed", { name: actor.name }));
+			}
+		}
+		if (done.length) ui.notifications?.info?.(format("stonetop.expedition.homeReset.done", { names: joinNames(done) }));
+		// Then a few days' rest, if the GM ticked it: each PC on the trip gets their own Convalesce window,
+		// which says what it would do and asks which wounds and followers it covers.
+		if (convalesce) await this._openHomeConvalesce();
+		this.render(false);
+	}
+
+	/** Each PC on the trip's own Convalesce window (the sheet's), one after another. */
+	async _openHomeConvalesce() {
+		for (const actor of this._tripParty()) {
+			const sheet = actor?.sheet;
+			if (typeof sheet?._onConvalesceOpen !== "function") continue;
+			try { await sheet._onConvalesceOpen(); }
+			catch (err) { warn(`could not open ${actor.name}'s Convalesce`, err); }
+		}
+	}
+
+	/**
+	 * One of the homecoming list's buttons: `{action: "home"|"lost"|"herd", index, name, at}`.
+	 *
+	 * ONE PRESS AT A TIME, across the whole list: each press reads the row or the herd line before it
+	 * asks, so a double press on "Count them home" asked twice and put the horses back twice, and two
+	 * "Lost" presses on rows sharing a name lost both and could charge Meet with Disaster twice.
+	 */
+	async _settleHomeAsset(data = {}, control = null) {
+		return onePress(this, "homeAssets", () => this._settleHomeAssetNow(data), { control });
+	}
+
+	async _settleHomeAssetNow({ action, index, name, at } = {}) {
+		const found = this._steadingWrapper();
+		if (!found) return;
+		if (action === "herd") return this._countHerdHome(found, Number(at));
+		const i = Number(index);
+		if (!Number.isInteger(i) || !name) return;
+		const row = found.steading.getNamedAssets().find(a => a.index === i) ?? null;
+		if (!assetRowIs(row, name)) {
+			return this._assetMoved(found, name);
+		}
+		if (action === "home") {
+			const ok = await found.steading.returnAsset(i, { name }).catch(err => { warn("Could not bring the asset home:", err); return null; });
+			if (ok === null) ui.notifications?.warn?.(`Could not update ${found.actor.name}'s assets.`);
+			else if (!ok) this._assetMoved(found, name, { redraw: false });
+			else {
+				ui.notifications?.info?.(`${name} returned to ${found.actor.name}.`);
+				await this._offerToClearHolder(row);
+			}
+			this.render(false);
+			return;
+		}
+		if (action !== "lost") return;
+		const answer = await askWithButtons({
+			title:   localize("stonetop.expedition.homeAssets.lostTitle"),
+			content: `<p>${format("stonetop.expedition.homeAssets.lostAsk", { name: `<strong>${escHtml(name)}</strong>`, steading: escHtml(found.actor.name) })}</p>`,
+			buttons: [
+				{ key: "disaster", label: localize("stonetop.expedition.homeAssets.lostDisaster"), icon: "fa-house-crack", value: "disaster" },
+				{ key: "lost", label: localize("stonetop.expedition.homeAssets.lostQuiet"), icon: "fa-minus", value: "lost" },
+				{ key: "keep", label: localize("stonetop.expedition.homeAssets.lostKeep"), icon: "fa-xmark", value: null },
+			],
+		});
+		if (!answer) return;
+		const gone = await found.steading.loseAsset(i, { name }).catch(err => { warn("Could not take the lost asset off the list:", err); return null; });
+		if (gone === null) {
+			ui.notifications?.warn?.(`Could not update ${found.actor.name}'s assets.`);
+			this.render(false);
+			return;
+		}
+		if (!gone) return this._assetMoved(found, name);
+		// The trip's own record keeps the name (the Chronicle still prints what they took), marked lost.
+		await this._markTripLines(line => String(line?.name ?? "") === name && !line.herd, line => ({ ...line, lost: true }));
+		await this._offerToClearHolder(row);
+		if (answer === "disaster") await this._lostMeetsDisaster(found, name);
+		this.render(false);
+	}
+
+	/** A herd line counted home: how many came back go back in the herd, and the line is settled. */
+	async _countHerdHome(found, at) {
+		const line = this._currentExpedition()?.requisitioned?.[at] ?? null;
+		const taken = herdHorsesOnLine(line);
+		if (!taken) return;
+		const back = await askHorsesBack({ taken });
+		if (back === null) return;
+		if (back > 0) {
+			const put = await found.steading.returnToHerd(back, { stonetopMove: "Requisition" }).catch(err => { warn("Could not put the horses back in the herd:", err); return null; });
+			if (put === null) {
+				ui.notifications?.warn?.(`Could not update ${found.actor.name}'s herd.`);
+				return;
+			}
+		}
+		await this._markTripLines((l, i) => i === at, l => ({ ...l, home: true, back }));
+		const lost = taken - back;
+		if (lost > 0) {
+			const what = herdHorsesLabel(lost);
+			const answer = await askWithButtons({
+				title:   localize("stonetop.expedition.homeAssets.lostTitle"),
+				content: `<p>${format("stonetop.expedition.homeAssets.horsesLostAsk", { what: escHtml(what), steading: escHtml(found.actor.name) })}</p>`,
+				buttons: [
+					{ key: "disaster", label: localize("stonetop.expedition.homeAssets.lostDisaster"), icon: "fa-house-crack", value: "disaster" },
+					{ key: "lost", label: localize("stonetop.expedition.homeAssets.horsesNoDisaster"), icon: "fa-minus", value: null },
+				],
+			});
+			if (answer === "disaster") await this._lostMeetsDisaster(found, what);
+		}
+		this.render(false);
+	}
+
+	/** Meet with Disaster for something lost on the trip: Fortunes -1, or the GM's pick at -1 (p.532). */
+	async _lostMeetsDisaster(found, what) {
+		try {
+			const { notice } = await payFortunesCost(found.steading, { stonetopMove: "Requisition", cause: `${what} lost on the trip` });
+			if (notice) ui.notifications?.info?.(notice);
+		} catch (err) {
+			warn("Could not reduce the steading's Fortunes:", err);
+			ui.notifications?.warn?.(`Could not update ${found.actor.name}'s Fortunes.`);
+		}
+	}
+
+	/** Rewrite the current trip's `requisitioned` lines that `match`, in the log's turn. */
+	async _markTripLines(match, change) {
+		const trip = this._currentExpedition();
+		if (!trip) return;
+		await this._patchTrip(trip, entry => {
+			if (!Array.isArray(entry.requisitioned)) return false;
+			entry.requisitioned = entry.requisitioned.map((line, i) => (match(line, i) ? change(line) : line));
+		});
+	}
+
+	/**
+	 * Change one trip in this window's log, read afresh (timeline-expedition-record.js `patchTrip`): a trip
+	 * deleted meanwhile stays deleted unless `mint` says this write is minting it. `queued: false` for a
+	 * caller already in the expedition log's turn. Answers whether the trip was there to write.
+	 */
+	async _patchTrip(trip, patch, { mint = false, queued = true } = {}) {
+		const { patchTrip, patchTripNow } = await import("../timeline/timeline-expedition-record.js");
+		const store = { read: () => this._log(), write: log => this._persistLog(log) };
+		return (queued ? patchTrip : patchTripNow)(store, trip, patch, { mint });
 	}
 
 	// Take an asset out on this trip, or send it back. `take` is what the clicked row was
@@ -1587,20 +2023,42 @@ export class ExpeditionDialog extends StepperDialog {
 	// The Herd of Horses' row is the one asset not lent out whole: how many horses go is asked
 	// first (askHorsesFromHerd, the user's ruling), outside the queue so a window left open does
 	// not hold every other click, and that many leave the herd's count. Its row shows ticked while
-	// the trip has horses from it, and a click then puts them all back in the herd.
-	async _toggleRequisitionedAsset(index, take) {
+	// the trip has horses from it, and a click then puts them all back in the herd (an undo before they
+	// leave; Going home is where horses are counted back).
+	//
+	// `name` is the asset the row was drawn for (PREP-2): a row deleted above it since the render makes the
+	// same index another asset, and that click is refused and redrawn rather than taking or returning it.
+	// The herd take is capped at the count this trip's roll was made for, when it was made for one: that
+	// count is what "half the herd or less, treat a 6- as a 7-9" was read against (PREP-6). A take after
+	// this trip's roll came up 6- asks, and pays the 1 Fortunes, as the player's window does (PREP-4).
+	async _toggleRequisitionedAsset(index, take, name = undefined) {
 		let herdCount = 0;
 		const found = this._steadingWrapper();
 		const asset = found?.steading.getNamedAssets().find(a => a.index === index);
+		if (found && name !== "" && !assetRowIs(asset, name)) {
+			return this._assetMoved(found, name);
+		}
 		const herd = !!asset && isHerdAsset(asset);
 		if (take && herd) {
-			herdCount = await askHorsesFromHerd({ cap: found.steading.herdRequisitionCap(), preset: herdCountAnswer(this.element?.[0]), who: "this expedition" });
+			const rolled = Math.trunc(Number(this._rolls?.[this._rollKey("requisition")]?.herdCount) || 0);
+			const grown = found.steading.herdRequisitionCap();
+			herdCount = await askHorsesFromHerd({ cap: rolled > 0 ? Math.min(grown, rolled) : grown, preset: herdCountAnswer(this.element?.[0]), who: "this expedition" });
 			if (!herdCount) return;
 		}
-		return inTurn("expedition-log", () => this._writeRequisitionedAsset(index, take, { herdCount, herd }));
+		const write = () => inTurn("expedition-log", () => this._writeRequisitionedAsset(index, take, { herdCount, herd, name: asset?.name }));
+		if (!take || !found) return write();
+		const roll = this._rolls?.[this._rollKey("requisition")] ?? null;
+		const card = roll?.messageId ? globalThis.game?.messages?.get?.(roll.messageId) ?? null : null;
+		return takeOnRequisitionMiss({
+			card, missed: roll?.tier === "failure",
+			name: herd ? herdHorsesLabel(herdCount) : (asset?.name ?? ""),
+			steading: found.steading, canWrite: !!found.actor.isOwner,
+			take: async () => !!(await write()),
+		});
 	}
 
-	async _writeRequisitionedAsset(index, take, { herdCount = 0, herd = false } = {}) {
+	/** @returns {Promise<boolean|undefined>} true once something was taken (a return answers nothing) */
+	async _writeRequisitionedAsset(index, take, { herdCount = 0, herd = false, name: expected } = {}) {
 		if (!Number.isInteger(index)) return;
 		const found = this._steadingWrapper();
 		if (!found) {
@@ -1610,7 +2068,14 @@ export class ExpeditionDialog extends StepperDialog {
 		const { log: before, entry: trip } = ensureCurrent(this._log(), () => this._newExpedition());
 		const minted = !this._log().list.some(e => e.id === trip.id);
 		// `let`: horses taken from the herd are recorded as how many went, not as the herd.
-		let name = found.steading.getNamedAssets().find(a => a.index === index)?.name ?? "";
+		const row = found.steading.getNamedAssets().find(a => a.index === index) ?? null;
+		let name = row?.name ?? "";
+		// The row the click was decided on, checked again inside the turn: the steading may have moved
+		// under a click queued behind another.
+		if (!assetRowIs(row, expected)) {
+			return this._assetMoved(found, expected);
+		}
+		const guard = name ? { name } : {};
 
 		// KEYED ON THE NAME, WHICH IS ALSO THE WHOLE OF WHAT THE RECORD IS FOR. An asset's index is
 		// its POSITION in the steading's `assets` array, and the steading sheet's delete splices
@@ -1640,10 +2105,20 @@ export class ExpeditionDialog extends StepperDialog {
 				if (back) await found.steading.returnToHerd(back, { stonetopMove: "Requisition" });
 			} else if (take) {
 				const title = expeditionLabel(trip, before.list.findIndex(e => e.id === trip.id));
-				const ok = await found.steading.setAssetTaken(index, { expedition: { id: trip.id, title } });
-				if (!ok) return;
+				const ok = await found.steading.setAssetTaken(index, { expedition: { id: trip.id, title } }, guard);
+				if (!ok) {
+					// Out with someone else by now, or moved: say so, and draw the list as it stands.
+					ui.notifications?.warn?.(format("stonetop.expedition.assets.notOnHand", { name, steading: found.actor.name }));
+					this.render(false);
+					return;
+				}
 			} else {
-				await found.steading.returnAsset(index);
+				const ok = await found.steading.returnAsset(index, guard);
+				if (!ok) {
+					return this._assetMoved(found, name);
+				}
+				// Taken by a player on this trip: what their take left on their sheet is offered off (E6).
+				await this._offerToClearHolder(row);
 			}
 		} catch (err) {
 			warn("Could not update the steading's assets:", err);
@@ -1656,23 +2131,47 @@ export class ExpeditionDialog extends StepperDialog {
 		// back by this one. Onto the trip the asset went out with, by id, even if the window has
 		// switched since; a trip minted for this click is added as it was minted, and one deleted
 		// meanwhile is left deleted, and what the steading just lent it goes back.
-		const now = this._log();
-		const log = minted
-			? addExpedition(now, trip)
-			: { currentId: now.currentId, list: now.list.map(e => e.id === trip.id ? structuredClone(e) : e) };
-		const entry = log.list.find(e => e.id === trip.id);
-		if (!entry) return this._syncHeldAssets(now);
-		const record = Array.isArray(entry.requisitioned) ? entry.requisitioned : [];
-		// An asset returned from the steading sheet and then taken again here would otherwise be
-		// recorded twice on the one trip.
-		// Horses from the herd are always a fresh line: a second "2 horses from the herd" is two more.
-		if (take && herdCount) entry.requisitioned = [...record, { name, herd: herdCount }];
-		else if (take) entry.requisitioned = record.some(sameAsset) ? record : [...record, { name }];
-		else if (herd) entry.requisitioned = record.filter(r => !herdHorsesOnLine(r));
-		else entry.requisitioned = record.filter(r => !sameAsset(r));
-
-		await this._persistLog(log);
+		const wrote = await this._patchTrip(trip, entry => {
+			const record = Array.isArray(entry.requisitioned) ? entry.requisitioned : [];
+			// An asset returned from the steading sheet and then taken again here would otherwise be
+			// recorded twice on the one trip.
+			// Horses from the herd are always a fresh line: a second "2 horses from the herd" is two more.
+			// An undo takes back only the lines still out: one counted home on Going home is history.
+			if (take && herdCount) entry.requisitioned = [...record, { name, herd: herdCount }];
+			else if (take) entry.requisitioned = record.some(sameAsset) ? record : [...record, { name }];
+			else if (herd) entry.requisitioned = record.filter(r => !herdHorsesOnLine(r));
+			else entry.requisitioned = record.filter(r => !sameAsset(r));
+		}, { mint: minted, queued: false });
+		if (!wrote) {
+			// Horses out of the herd are on no asset row for the sweep to find: the trip's line was their
+			// only record, so they go straight back (PREP-6).
+			if (take && herdCount) {
+				await found.steading.returnToHerd(herdCount, { stonetopMove: "Requisition" })
+					.catch(err => warn("Could not put the horses back in the herd:", err));
+			}
+			return this._syncHeldAssets(this._log());
+		}
 		this.render(false);
+		return take ? true : undefined;
+	}
+
+	/**
+	 * The asset row a click meant is not where it was (a row deleted above it shifted the positions, PREP-2):
+	 * say so, and draw the list as it stands.
+	 */
+	_assetMoved(found, name, { redraw = true } = {}) {
+		ui.notifications?.warn?.(format("stonetop.expedition.assets.moved", { name, steading: found.actor.name }));
+		if (redraw) this.render(false);
+	}
+
+	/**
+	 * An asset out with a player came home: offer to take what their take left on their sheet off again
+	 * (requisition-asset.js#offerToClearRequisitioned). Quiet when there is nothing, or nobody to ask.
+	 */
+	async _offerToClearHolder(row) {
+		if (!row?.takenBy?.id) return;
+		await offerToClearRequisitioned({ holderId: row.takenBy.id, assetName: row.name })
+			.catch(err => warn("Could not offer to clear a returned asset off the sheet:", err));
 	}
 
 	// ── Arriving home: Return Triumphant ─────────────────────────────────────────
@@ -1698,10 +2197,17 @@ export class ExpeditionDialog extends StepperDialog {
 
 	// ── The trip, on the timeline ──────────────────────────────────────────────────
 	//
-	// See timeline/timeline-expedition.js, and the writer beside it. Driven by NEXT only (StepperDialog's
-	// `_onStepEntered`, `via: "next"`): stepping into Running the Journey stamps when they set out,
-	// stepping into the homecoming writes the rows. Back, the table of contents and a reload's restore
-	// only move the reader, and must not make a trip happen.
+	// See timeline/timeline-expedition.js, and the writer beside it. OFFERED on Next (StepperDialog's
+	// `_onStepEntered`, `via: "next"`): the first Next into Running the Journey asks whether they are
+	// setting out now, the first into the homecoming whether they are home. Back, the table of
+	// contents and a reload's restore only move the reader, and ask nothing.
+	//
+	// ASKED, NOT ASSUMED. A Next used to stamp outright, and Player moves (the page a GM reads WHILE
+	// travelling, for the camp questions and the camp die) is one Next from Going home: a glance
+	// ahead put a trip on the timeline as home seasons before it was, and the same Next through the
+	// steps while prepping stamped a departure in the planning season. "Not yet" leaves the stamp
+	// unset and is not asked again in this window; the step itself keeps a control for it either way
+	// (`_tripStampContext`), with a redo and a clear. A Next never mints a trip.
 
 	_onStepEntered(key, { via }) {
 		if (via !== "next" || !game.user?.isGM) return;
@@ -1710,13 +2216,66 @@ export class ExpeditionDialog extends StepperDialog {
 
 	async _noteTripStep(key) {
 		const trip = this._currentExpedition();
-		if (key === "running" && !trip?.setOut) {
-			const { timelineNow } = await import("../timeline/timeline-record.js");
-			const { log, entry } = ensureCurrent(this._log(), () => this._newExpedition());
-			entry.setOut = timelineNow();
-			await this._persistLog(log);
-		}
-		if (key === "home" && !trip?.timelineRecorded) await this._recordTrip();
+		if (!trip) return;
+		const kind = key === "running" && !trip.setOut ? "setOut"
+			: key === "home" && !trip.timelineRecorded ? "home"
+				: null;
+		if (!kind) return;
+		const asked = (this._stampAsked ??= new Set());
+		const askKey = `${trip.id}:${kind}`;
+		if (asked.has(askKey)) return;
+		asked.add(askKey);
+		if (!(await this._askTripStamp(kind, trip))) return;
+		await this._tripStamp(kind, "stamp");
+	}
+
+	/**
+	 * A press on one of the stamp buttons. One at a time: each writes the timeline's threads and the
+	 * log, and a second press mid-write would stamp twice. A latch of its own, because the button it
+	 * replaced called `_guardBusy`, which lives on StonetopDialog and not on this Application, so the
+	 * press threw before writing anything.
+	 */
+	async _onStampButton(button) {
+		await onePress(this, "stamp", async () => {
+			try {
+				await this._tripStamp(button?.dataset?.stampKind, button?.dataset?.stampAct);
+			} catch (err) {
+				warn("could not change the trip's stamp", err);
+				ui.notifications?.warn?.(localize("stonetop.expedition.stamp.failed"));
+			}
+		}, { control: button ?? null });
+	}
+
+	/** "Setting out now?" / "Are they home now?": true when the GM says it is happening now. */
+	async _askTripStamp(kind, trip) {
+		const key = "stonetop.expedition.stamp";
+		const list = this._log().list;
+		const name = expeditionLabel(trip, list.findIndex(e => e.id === trip.id));
+		const answer = await askWithButtons({
+			title:   localize(`${key}.${kind}Title`),
+			content: `<p>${format(`${key}.${kind}Ask`, { name: `<strong>${escHtml(name)}</strong>` })}</p>`,
+			buttons: [
+				{ key: "now", label: localize(`${key}.${kind}Yes`), icon: kind === "home" ? "fa-house-chimney" : "fa-person-hiking", value: true },
+				{ key: "later", label: localize(`${key}.notYet`), icon: "fa-hourglass-half", value: false },
+			],
+		});
+		return answer === true;
+	}
+
+	/**
+	 * Stamp, redo or clear one of the trip's two stamps, from the ask above or the step's own control.
+	 * `kind` is "setOut" or "home"; `act` is "stamp" or "redo" (both stamp NOW; a redone homecoming
+	 * re-dates the timeline row) or "clear" (a cleared homecoming takes its rows back off).
+	 */
+	async _tripStamp(kind, act) {
+		const record = await import("../timeline/timeline-expedition-record.js");
+		const store = this.tripLogStore();
+		let done;
+		if (kind === "setOut") done = act === "clear" ? await record.clearSetOut({ store }) : await record.stampSetOut({ store });
+		else if (act === "clear") done = await record.clearTripHome({ store });
+		else done = await record.recordTrip({ store, redate: act === "redo" });
+		if (!done) this.render(false);
+		return done;
 	}
 
 	/**
@@ -1734,20 +2293,44 @@ export class ExpeditionDialog extends StepperDialog {
 		};
 	}
 
-	/** Write (or rewrite) this trip's row on the timeline. GM-only; see the writer. */
-	async _recordTrip() {
-		const { recordTrip } = await import("../timeline/timeline-expedition-record.js");
-		await recordTrip({ store: this.tripLogStore() });
+	/** Re-title the rows of every recorded trip a delete renumbered, in one batch (see the writer). */
+	async _retitleRenumbered() {
+		const { retitleRenumberedTrips } = await import("../timeline/timeline-expedition-record.js");
+		return retitleRenumberedTrips({ store: this.tripLogStore() });
 	}
 
-	/** The homecoming step's note: whether this trip is on the timeline yet, and when. */
-	_tripTimelineContext() {
-		const recorded = this._currentExpedition()?.timelineRecorded ?? null;
+	/** Write (or rewrite) a trip's row on the timeline, keeping its date. GM-only; see the writer. */
+	async _recordTrip({ tripId = null } = {}) {
+		const { recordTrip } = await import("../timeline/timeline-expedition-record.js");
+		return recordTrip({ store: this.tripLogStore(), tripId });
+	}
+
+	/**
+	 * The step's own control for one of the trip's two stamps: whether they have set out (Running the
+	 * journey) or come home (Going home), when, for whom, and the buttons that stamp, redo or clear
+	 * it. Null with no trip yet: nothing has set out. `act` on each button is `_tripStamp`'s.
+	 */
+	_tripStampContext(kind) {
+		const trip = this._currentExpedition();
+		if (!trip) return null;
+		const key = "stonetop.expedition.stamp";
+		const stamp = kind === "setOut" ? trip.setOut : trip.timelineRecorded;
+		const set = !!stamp?.season;
+		const { names } = tripCredits(trip, getPlayerCharacters(), charactersInPlay());
+		const note = kind === "setOut"
+			? (set ? format(`${key}.setOut`, { when: periodLabel(stamp) }) : localize(`${key}.setOutNotYet`))
+			: (set ? format("stonetop.timeline.expedition.recorded", { when: periodLabel(stamp) }) : localize("stonetop.timeline.expedition.notYet"));
+		const buttons = (set
+			? [
+				{ act: "redo",  label: localize(`${key}.${kind}Redo`) },
+				{ act: "clear", label: localize(`${key}.${kind}Clear`) },
+			]
+			: [{ act: "stamp", label: kind === "setOut" ? localize(`${key}.setOutYes`) : localize("stonetop.timeline.expedition.record") }])
+			.map(button => ({ ...button, kind }));
 		return {
-			note: recorded?.season
-				? format("stonetop.timeline.expedition.recorded", { when: periodLabel(recorded) })
-				: localize("stonetop.timeline.expedition.notYet"),
-			button: localize(recorded ? "stonetop.timeline.expedition.again" : "stonetop.timeline.expedition.record"),
+			kind, note, buttons,
+			party: names.length ? format(`${key}.party`, { names: joinNames(names) }) : "",
+			icon:  kind === "setOut" ? "fa-person-hiking" : "fa-timeline",
 		};
 	}
 
@@ -1814,7 +2397,7 @@ export class ExpeditionDialog extends StepperDialog {
 				canSpend: !!found.actor.isOwner,
 			})
 			: { rollMode: this._requisitionMode(), missAsPartial: "", conditionNotes: [], spend: () => {} };
-		this._rolls[this._rollKey("requisition")] = await rollSeasonsCard({
+		const rolled = await rollSeasonsCard({
 			// sign() keeps a negative Fortunes value a valid formula ("2d6 -1", not "2d6 + -1").
 			formula:     `${pbtaDiceFormula(terms.rollMode)} ${sign(fortunes)}`,
 			alias:       "Requisition",
@@ -1826,6 +2409,9 @@ export class ExpeditionDialog extends StepperDialog {
 			tierActions: { failure: requisitionMissCostAction() },
 			actor: found?.actor ?? null,
 		});
+		// The herd count the roll was made for rides with it: the asset picker caps a herd take at it (PREP-6),
+		// and the card's id lets a take after a 6- latch the cost on it (PREP-4).
+		this._rolls[this._rollKey("requisition")] = { ...rolled, herdCount };
 		// Spent once the roll it bought is made, and not before.
 		await terms.spend();
 		this.render(false);
@@ -1936,21 +2522,6 @@ export class ExpeditionDialog extends StepperDialog {
 		return slugs.filter(slug => drawnOn(slug, destination)).at(-1) ?? slugs.at(-1);
 	}
 
-	/**
-	 * A destination's travel time, for a pin label or a list row.
-	 *
-	 * TILDED WHERE ANY OF IT WAS MEASURED, which is the same mark the readout's own leg list wears
-	 * and it means the same thing: a journey setting out from a point the GM put down joins the
-	 * book's roads across a leg this system measured off the map (see `solveFrom`), so its total is
-	 * the book's times plus a guess. Costs nothing on a trip leaving a lettered place, where no
-	 * route is estimated and the tilde never appears.
-	 */
-	_timeLabel(routes, slug) {
-		const route = routes.get(slug);
-		if (!route?.legs?.length) return null;
-		return `${route.estimated ? "~" : ""}${formatTravelTime(route.total)}`;
-	}
-
 	/** A place's gazetteer entry in the merged journal pack, when the books give it one. */
 	_journalUuid(place) {
 		return gazetteerUuid(place?.journalId);
@@ -1959,119 +2530,15 @@ export class ExpeditionDialog extends StepperDialog {
 	/**
 	 * Everything drawn ON one map: its picture, the route line, and a hotspot per place.
 	 *
-	 * Built for a NAMED tier rather than for whichever one the panel is showing, because two
-	 * surfaces draw it and they can be looking at different maps — the walkthrough's own panel
-	 * follows the destination, while a "See the whole map" window keeps showing whatever map it
-	 * was opened on until it is closed. One builder, so a pin means the same thing on both.
+	 * The layer itself is built by `journeyMapLayer` (dialogs/journey-map-layer.js), which the
+	 * players' own view of a shared route builds from too, so a pin means the same thing on every
+	 * surface. All this adds is the GM's own sites, which only a GM's client can resolve.
 	 *
-	 * Returns null when this world has no copy of that map, which is the ordinary state of a world
-	 * that never imported the book art.
-	 *
-	 * `stops` is the hand-drawn way's own run of stops when there is one, which changes what some
-	 * of the marks below MEAN rather than adding a fourth kind: a lettered place standing on the
-	 * drawn way wears its name and its number, and the far end of that way is where the party is
-	 * bound whether or not anything was ever picked from the list.
+	 * Returns null when this world has no copy of that map.
 	 */
-	_mapLayer(tier, art, { routes, route, start, origin, destination, stops = [] }) {
+	_mapLayer(tier, art, opts) {
 		if (!art) return null;
-		const path = routePath(route, tier, art.frame, art.aspect);
-		// Which lettered places stand on the drawn way. The origin is skipped: it is already drawn
-		// as the origin, and calling it a stop as well would label it twice over.
-		const onWay = new Set(stops.slice(1).map(stop => stop.slug).filter(Boolean));
-		// The end of a drawn way is where they are bound, which is the thing the destination pill
-		// has always said. Falls back to the picked destination, which is what it means with no
-		// way drawn.
-		const bound = stops.length > 1 ? stops.at(-1).slug : destination;
-		return {
-			...art,
-			tier,
-			alt: `${travelMap(tier)?.name ?? "The region"}, from the Stonetop rulebooks`,
-			path,
-			// Only ever set when there is no line: what the reader gets instead of one. The
-			// sentence is finished HERE rather than in the partial, so the readout and the
-			// refusal toast cannot come to word the same fact differently.
-			offMap: path ? null : this._offMapReadout(offMapNote(tier, route)),
-			// Where they set out from, when that is a point the GM put down rather than a place the
-			// books lettered. Null the rest of the time: a lettered start is already drawn by its
-			// own pin below, wearing the setting-out ring, and a second mark on top of it would be
-			// the same fact twice.
-			start: this._startPin(tier, art.frame, start),
-			// The bare marks of a hand-drawn way, each wearing the number the readout calls it by.
-			// Only the ones the GM put down: a stop that landed on a lettered place is drawn by
-			// that place's own pin below, lit up, rather than by a second mark on top of it.
-			marks: stops
-				.map((stop, i) => ({ stop, at: i }))
-				.filter(({ stop }) => stop.mark && stop.spot)
-				.map(({ stop, at }) => {
-					const { left, top } = spotPercent(stop.spot, art.frame);
-					// NO ANCHOR, unlike every pin on this picture: those are for hanging a NAME
-					// inward from an edge, and a numeral has no name to hang. It is centred on its
-					// own spot and stays inside the frame by being 20px wide.
-					return { mark: stop.mark, left, top, isEnd: at === stops.length - 1 };
-				}),
-			spots: placesOnMap(tier).map(place => {
-				const { left, top } = spotPercent(place.spots[tier], art.frame);
-				const time = this._timeLabel(routes, place.slug);
-				const isOrigin = place.slug === origin;
-				const isChosen = place.slug === bound;
-				const isStop = onWay.has(place.slug);
-				return {
-					slug: place.slug, name: place.name, left, top, time, isOrigin, isChosen, isStop,
-					// Labels only where they carry the answer, so eleven of them cannot collide —
-					// and a stop on the drawn way carries one, because the reader put it there and
-					// the leg list below names it.
-					showLabel: isOrigin || isChosen || isStop,
-					tooltip: isOrigin ? `${place.name}, setting out` : time ? `${place.name}, ${time}` : place.name,
-					...pinAnchors(left, top),
-				};
-			}),
-			exits: exitsOnMap(tier).map(exit => {
-				const { left, top } = spotPercent(exit, art.frame);
-				const time = exit.node ? this._timeLabel(routes, exit.node) : null;
-				return {
-					...exit, left, top, time,
-					isChosen: !!exit.node && exit.node === bound,
-					isStop: !!exit.node && onWay.has(exit.node),
-					tooltip: exit.node
-						? `${exit.label}${time ? `, ${time}` : ""}`
-						: `Zoom out to ${travelMap(exit.to)?.name ?? "the wider map"}`,
-					...pinAnchors(left, top),
-				};
-			}),
-			// The GM's own prep, on the same picture and by the same arithmetic. Last of the three,
-			// because it is the only one that is not the books'.
-			sites: this._sitePins(tier, art.frame),
-		};
-	}
-
-	/**
-	 * The mark a hand-placed start stands at on one map, or null.
-	 *
-	 * ONLY ON ITS OWN MAP. The fraction it is stored as means one valley on the Vicinity and quite
-	 * another on the World's End, so the other tab draws nothing and the readout says where the
-	 * journey is instead (see `offMapNote`). `startSpot` makes the same judgement for the first leg
-	 * of a drawn way, off the same start.
-	 *
-	 * NOT A BUTTON, and it takes no clicks at all — the same choice the drawn way's own numerals
-	 * make, for the same reason. Every gesture over this picture is about the trip: a plain click
-	 * moves the far end of the way, a shift-click adds a leg. A mark that swallowed those would be
-	 * the one thing on the map that stops the map working, and it has nothing of its own to do with
-	 * a click. Moving where they set out from is a right-click back past it and a click somewhere
-	 * else — the same ladder everything else on this picture comes off by.
-	 *
-	 * IT WEARS "setting out" AND NOT ITS OWN NAME, because its name is "a point on The Vicinity" and
-	 * that is a sentence about the map rather than a label to stand on it. The pill is the same
-	 * wording the destination list puts beside a lettered start, so the two read as one idea.
-	 */
-	_startPin(tier, frame, start) {
-		const mark = startMark(start);
-		if (!mark || startTier(start) !== tier) return null;
-		const { left, top } = spotPercent(mark, frame);
-		return {
-			left, top,
-			label: localize("stonetop.expedition.start.pinLabel"),
-			...pinAnchors(left, top),
-		};
+		return journeyMapLayer(tier, art, { ...opts, sites: this._sitePins(tier, art.frame) });
 	}
 
 	/**
@@ -2184,7 +2651,7 @@ export class ExpeditionDialog extends StepperDialog {
 
 		const row = place => ({
 			slug: place.slug, name: place.name,
-			time: this._timeLabel(routes, place.slug),
+			time: timeLabel(routes, place.slug),
 			isOrigin: place.slug === origin,
 			isChosen: place.slug === destination,
 			uuid: this._journalUuid(place),
@@ -2263,6 +2730,9 @@ export class ExpeditionDialog extends StepperDialog {
 				hasDays:  chartBlankValue("days", route) !== null,
 			} : null,
 			scene: this._sceneRouteState(route),
+			// Show the players the way, on their own screens rather than on the canvas. Its own button,
+			// independent of the scene one (see `_shareRouteWithPlayers`).
+			share: this._shareRouteState(route),
 			placeSite: this._placeSiteState(map),
 		};
 	}
@@ -2359,41 +2829,6 @@ export class ExpeditionDialog extends StepperDialog {
 	}
 
 	/**
-	 * The off-map note with its prose already written, or null when the line drew fine.
-	 *
-	 * `offMapNote` answers in slugs and names; turning that into a sentence is this layer's job,
-	 * and doing it here rather than in the partial is what lets the "Show <other map>" button be
-	 * the only markup the template owns.
-	 */
-	_offMapReadout(note) {
-		if (!note) return null;
-		const places = offMapNames(note);
-		return {
-			...note,
-			// A route pinned to the other tab is not a place gone missing, and saying so would send
-			// the reader hunting for one. It is fractions of the map it belongs to; naming that
-			// map, with the button back to it, is the whole of the answer.
-			//
-			// WHICH pinning, though, because there are two and they are different facts about the
-			// trip: the GM drew this way on that map, or the party is standing on it. `drawn` is
-			// what `pinnedOffMapNote` tells them apart with.
-			sentence: note.elsewhere
-				? format(
-					note.drawn
-						? "stonetop.expedition.route.panelDrawnOn"
-						: "stonetop.expedition.route.panelStartOn",
-					{ map: note.otherName ?? "" },
-				)
-				: places
-					? format("stonetop.expedition.route.panelOffMap", { places })
-					: localize("stonetop.expedition.route.panelNoMap"),
-			showLabel: note.otherName
-				? format("stonetop.expedition.route.panelShow", { map: note.otherName })
-				: "",
-		};
-	}
-
-	/**
 	 * Put the route onto the scene on screen, or take it off again.
 	 *
 	 * IT DRAWS FOR THE SCENE THE READER IS ON, not for the map tab the panel happens to be showing.
@@ -2407,7 +2842,65 @@ export class ExpeditionDialog extends StepperDialog {
 	 * because that is the only part of a "no" the reader can act on. The check itself is in
 	 * utils/scene-route.js, where it can be tested without a canvas.
 	 */
-	async _putRouteOnScene() {
+	async _putRouteOnScene(expected = null) {
+		return this._onePress("scene", expected,
+			() => this._sceneRouteShowing(),
+			() => this._putRouteOnSceneNow(),
+			"stonetop.expedition.route.failed");
+	}
+
+	/**
+	 * Run one press of a toggle button: once at a time, and only if the button still meant it.
+	 *
+	 * TWO WAYS A PRESS GOES STALE, and both undid the press before it (audit RTE-2). A double-click
+	 * lands its second press while the first is still writing, so the same act runs twice; or it
+	 * lands just after the write and before the hook has redrawn the button, so a "Draw" button
+	 * that already drew reads the scene, finds the line, and takes it straight back off. So:
+	 *  • a press while another of the same kind is in flight is dropped, and
+	 *  • the button sends what it SAID (`expected`, off its own `data-` attribute), and a press
+	 *    whose button no longer says what the world now is gets dropped too. A caller with no
+	 *    button to speak for (the tests, a macro) passes nothing and is never second-guessed.
+	 *
+	 * And every failure is said out loud, with the error in the console, rather than escaping as an
+	 * unhandled rejection from a click handler that dropped the promise (audit RTE-8).
+	 */
+	async _onePress(kind, expected, current, act, failKey) {
+		// Dropped if the button no longer says what the world is (`current` is read only when the button
+		// said something), and by onePress's latch if another press of this kind is in flight.
+		if (expected !== null && expected !== undefined && String(expected) !== String(current())) return undefined;
+		return onePress(this, kind, async () => {
+			try {
+				return await act();
+			} catch (err) {
+				warn(`couldn't finish the ${kind} press`, err);
+				ui.notifications?.error(localize(failKey));
+				return undefined;
+			}
+		});
+	}
+
+	/** The scene the players are on: the world's active scene, or null with none active. */
+	_tableScene() {
+		const scenes = game.scenes;
+		return scenes?.active ?? scenes?.find?.(scene => scene?.active) ?? null;
+	}
+
+	/**
+	 * The players' scene, when a line is going onto some OTHER scene and they are not following it
+	 * there: `showRouteOnScene` must leave theirs alone (audit ruling E14). Null otherwise.
+	 */
+	_spareTableScene(target) {
+		const table = this._tableScene();
+		return table && table.id !== target?.id ? table : null;
+	}
+
+	/** " The players are still on <scene>." when they did not follow, else "". */
+	_playersElsewhere(target) {
+		const table = this._spareTableScene(target);
+		return table ? format("stonetop.expedition.route.playersStay", { scene: table.name ?? "" }) : "";
+	}
+
+	async _putRouteOnSceneNow({ asked = false } = {}) {
 		const scene = globalThis.canvas?.scene ?? null;
 		const pick = this._journeyPick();
 
@@ -2428,7 +2921,17 @@ export class ExpeditionDialog extends StepperDialog {
 		if (!check.ok) {
 			// The wrong map under them is not a refusal any more, it is a scene switch.
 			if (await this._drawOnItsOwnMap(check, route, pick)) return;
-			const hasScene = !!posterSceneFor(check.wanted, game.scenes ?? []);
+			// ONLY A SCENE THAT IS THE MAP counts as having one, and never the one under them: a
+			// GM's own Scene merely named "The Vicinity" was sent off to open the Vicinity while
+			// standing on it.
+			const usable = usablePosterScene(check.wanted, game.scenes ?? []);
+			// A SCENE OF THEIR OWN, and none of ours for this map: ask whether this is it, rather
+			// than telling them the world has no such Scene when they built one (user report,
+			// 2026-11-04). Asked once per press; a Scene they have just marked is checked afresh.
+			if (!asked && !usable && check.reason === "not-a-map" && check.wanted && scene && game.user?.isGM) {
+				if (await askRouteScenePosterMap(scene, check.wanted)) return this._putRouteOnSceneNow({ asked: true });
+			}
+			const hasScene = !!usable && usable.id !== scene?.id;
 			ui.notifications?.warn(sceneRouteRefusal(check, { hasScene }));
 			return;
 		}
@@ -2437,10 +2940,13 @@ export class ExpeditionDialog extends StepperDialog {
 		// title too, which nothing ever read and which went stale the moment a trip was renamed.
 		// A hand-drawn way that ends on a mark of the GM's own has no place name to report, so the
 		// message names the map alone rather than inventing one.
-		const where = await showRouteOnScene(scene, pick);
-		ui.notifications?.info(where
+		// A scene the players are NOT on keeps its hands off theirs, and the notice says they are
+		// elsewhere (audit ruling E14): a line drawn where nobody at the table can see it is news.
+		const where = await showRouteOnScene(scene, pick, { spare: this._spareTableScene(scene) });
+		ui.notifications?.info((where
 			? format("stonetop.expedition.route.placed", { place: where, map: check.tierName })
-			: format("stonetop.expedition.route.placedDrawn", { map: check.tierName }));
+			: format("stonetop.expedition.route.placedDrawn", { map: check.tierName }))
+			+ this._playersElsewhere(scene));
 		// Nothing to redraw here: both writes above are Scene updates, and `_wireCanvasWatch` is
 		// already listening for exactly those. Redrawing from this side as well would render the
 		// panel twice for one press, and would still leave the case that matters uncovered — a
@@ -2478,7 +2984,7 @@ export class ExpeditionDialog extends StepperDialog {
 		const wanted = check.wanted ?? tierDrawing(route);
 		if (!wanted) return false;
 
-		const target = posterSceneFor(wanted, game.scenes ?? []);
+		const target = usablePosterScene(wanted, game.scenes ?? []);
 		if (!target || target.id === globalThis.canvas?.scene?.id) return false;
 		const there = sceneRouteCheck(target, route);
 		if (!there.ok) return false;
@@ -2488,16 +2994,288 @@ export class ExpeditionDialog extends StepperDialog {
 		// orders end in the same place — the overlay paints from the flag on every client, and
 		// redraws on `canvasReady` as much as on the update — so this is only about what the room
 		// sees. `view` is optional so a world running with the canvas switched off still writes.
-		await target.view?.();
-		const where = await showRouteOnScene(target, pick);
+		//
+		// WHOSE CANVAS MOVES (audit ruling E14). `Scene#view` moves this GM's canvas and nobody
+		// else's, so a GM standing on the scene the players are on used to walk off it alone, and
+		// the line then came off the one map the table could see. Where the GM is on the players'
+		// scene, the new one is ACTIVATED instead and the table goes with them; anywhere else only
+		// the GM moves, the players' scene keeps whatever line it has, and the notice says so.
+		// A canvas still loading refuses to switch (core only warns), so that is a refusal here
+		// too rather than a line written onto a map nobody brought up.
+		if (globalThis.canvas?.loading) return false;
+		const here = globalThis.canvas?.scene ?? null;
+		const table = this._tableScene();
+		const withTable = !!here && !!table && here.id === table.id && typeof target.activate === "function";
+		if (withTable) await target.activate();
+		else await target.view?.();
+		const where = await showRouteOnScene(target, pick, { spare: withTable ? null : this._spareTableScene(target) });
 		// SAYING THE CANVAS MOVED, and not only where the line went. A scene switch is the loudest
 		// thing this button can do and the one the GM did not ask for in so many words, so the
 		// notification names the map it brought up rather than reading as though they had been on
-		// it all along.
-		ui.notifications?.info(where
-			? format("stonetop.expedition.route.movedPlaced", { place: where, map: there.tierName })
-			: format("stonetop.expedition.route.movedPlacedDrawn", { map: there.tierName }));
+		// it all along, and whether it brought it up for everyone or for this GM alone.
+		const key = withTable ? "movedPlaced" : "movedPlacedYours";
+		ui.notifications?.info((where
+			? format(`stonetop.expedition.route.${key}`, { place: where, map: there.tierName })
+			: format(`stonetop.expedition.route.${key}Drawn`, { map: there.tierName }))
+			+ (withTable ? "" : this._playersElsewhere(target)));
 		return true;
+	}
+
+	// ── Showing the players ─────────────────────────────────────────────────────
+	// The route on a player's own screen rather than on the canvas: a chat card with the legs
+	// written out, and a "See the route" button on the steading sheet, both opening the map with
+	// the way drawn on it (utils/shared-route.js, dialogs/SharedRouteWindow.js).
+	//
+	// INDEPENDENT OF THE SCENE BUTTON (user, 2026-11-03). A GM may show the players the way
+	// without putting it on any scene, or draw it on a scene without posting anything, and
+	// neither press touches what the other wrote.
+
+	/**
+	 * The state of the "show players" button, or null when there is no button to draw.
+	 *
+	 * GM-ONLY, for the scene button's reason: it writes a world setting, which a player cannot.
+	 *
+	 * AND OFFERED WITH NO ROUTE IN HAND while something is still being shown, which is the scene
+	 * button's lesson again: a share outlives the trip that made it, and hiding the button there
+	 * would leave no control anywhere that could take it back off.
+	 */
+	_shareRouteState(route = null) {
+		if (!game.user?.isGM) return null;
+		const shared = readSharedRoute();
+		const trip = this._currentExpedition();
+		const hasRoute = !!(route ?? this._journeyRoute())?.legs?.length;
+		if (!shared && !hasRoute) return null;
+		const state = sharedRouteState(shared, {
+			expeditionId: trip?.id ?? null, journey: trip?.journey, hasRoute, title: trip?.title ?? "",
+		});
+		if (state === "same" || state === "orphan") {
+			return {
+				state, shared: true, icon: "fa-eye-slash",
+				label: localize("stonetop.expedition.share.hide"),
+				tooltip: localize("stonetop.expedition.share.hideTip"),
+			};
+		}
+		if (state === "stale") {
+			const place = sharedRoutePlace(shared);
+			return {
+				state, shared: false, icon: "fa-arrows-rotate",
+				label: localize("stonetop.expedition.share.update"),
+				tooltip: place
+					? format("stonetop.expedition.share.updateTip", { place })
+					: localize("stonetop.expedition.share.updateTipUnnamed"),
+				// AND A WAY TO STOP, beside the way to replace it (audit RTE-12). The players are being
+				// shown something this trip no longer is, and replacing it is not the only honest
+				// answer: a GM between plans may just want it gone.
+				hide: {
+					label: localize("stonetop.expedition.share.hide"),
+					tooltip: localize("stonetop.expedition.share.hideStaleTip"),
+				},
+			};
+		}
+		return {
+			state, shared: false, icon: "fa-eye",
+			label: localize("stonetop.expedition.share.show"),
+			tooltip: localize("stonetop.expedition.share.showTip"),
+		};
+	}
+
+	/**
+	 * Show the players this trip's way, or stop showing them what they are being shown.
+	 *
+	 * THE MAP'S FILE GOES WITH IT, resolved here, because a player's client cannot browse the art
+	 * folder to find it (book2-art/travel-map-art.js) but can load it once told the path. Which map:
+	 * the one that draws the whole way, else the one this panel is showing. A world with no copy of
+	 * that map still shares, and the players get the legs and the times without a picture.
+	 *
+	 * No redraw here: the setting's onChange reaches this window through `_sharedRouteChanged`, on
+	 * this client and on any other GM's, which is the same reason the scene button leaves it to its
+	 * hooks.
+	 */
+	async _shareRouteWithPlayers(expected = null) {
+		return this._onePress("share", expected,
+			() => this._shareRouteState()?.state ?? null,
+			() => this._shareRouteNow(),
+			"stonetop.expedition.share.failed");
+	}
+
+	/**
+	 * Stop showing the players anything, whatever this trip's own button says. The stale state's
+	 * second button (audit RTE-12): the players are being shown an older way and the GM wants it
+	 * gone rather than replaced.
+	 */
+	async _hideSharedRoute() {
+		return this._onePress("share", null, null, async () => {
+			if (!game.user?.isGM || !readSharedRoute()) return;
+			await stopSharingRoute();
+			ui.notifications?.info(localize("stonetop.expedition.share.hidden"));
+		}, "stonetop.expedition.share.failed");
+	}
+
+	async _shareRouteNow() {
+		if (!game.user?.isGM) return;
+		const route = this._journeyRoute();
+		const state = this._shareRouteState(route)?.state;
+		if (!state) return;
+		if (state === "same" || state === "orphan") {
+			await stopSharingRoute();
+			ui.notifications?.info(localize("stonetop.expedition.share.hidden"));
+			return;
+		}
+		// WHAT ELSE GOES WITH IT, asked only when there is something to ask (audit ruling E4, E17):
+		// the trip's Chart a Course lines, opt-in, and what the players should hear for each stop the
+		// GM put down by hand. Backing out shares nothing.
+		const asked = await this._askHowToShare(this._currentExpedition(), route);
+		if (!asked) return;
+		await this._writeShareLabels({ labels: asked.labels, startLabel: asked.startLabel });
+		const trip = this._currentExpedition();
+		const { tier, art, preferred } = await this._shareMap(this._journeyRoute() ?? route);
+		const payload = sharedRoutePayload({
+			trip, tier, art,
+			requirements: asked.requirements ? sharedRequirementLines(trip?.chart, this._journeyRoute() ?? route) : null,
+		});
+		if (!payload) return;
+		// The setting and the card are two documents, neither waiting on the other.
+		await Promise.all([shareRoute(payload), postSharedRouteCard(payload)]);
+		ui.notifications?.info(sharedRouteNotice(payload));
+		if (!payload.art && preferred) {
+			ui.notifications?.info(format("stonetop.expedition.share.shownNoMap", { map: preferred.name }));
+		}
+	}
+
+	/**
+	 * Which map a share goes out on, and that map's resolved file.
+	 *
+	 * The one that draws the whole way, else the one this panel is showing; and WHERE THE WORLD HAS
+	 * NO COPY OF THAT ONE, the other map, if it draws the way too (audit RTE-7). A world that
+	 * imported only the World's End still shows the players a walk to the Red Grove on it, through
+	 * the anchors that map keeps for exactly that. A way pinned to one map (drawn by hand, or setting
+	 * out from a mark) has that map or none: its marks mean nothing on the other.
+	 *
+	 * @returns {Promise<{tier: string|null, art: object|null, preferred: object|null}>}
+	 */
+	async _shareMap(route) {
+		const first = tierDrawing(route) ?? this._shownTier ?? null;
+		const preferred = travelMap(first);
+		const candidates = route?.pinned
+			? [route.tier]
+			: [first, ...TRAVEL_MAPS.map(m => m.slug)]
+				.filter((slug, i, all) => slug && all.indexOf(slug) === i)
+				.filter(slug => slug === first || tierDraws(slug, [route?.legs?.[0]?.from, route?.legs?.at(-1)?.to]));
+		const present = candidates.length ? await browseTravelMapArt().catch(() => null) : null;
+		for (const slug of candidates) {
+			const map = travelMap(slug);
+			if (!map || !present) continue;
+			// Null where the world has no copy of this map's file.
+			const art = await resolveTravelMap(map, present).catch(() => null);
+			if (art) return { tier: slug, art, preferred };
+		}
+		return { tier: first, art: null, preferred };
+	}
+
+	/**
+	 * Ask what goes out with the way, or answer at once when there is nothing to ask.
+	 *
+	 * TWO QUESTIONS, both optional:
+	 *  • "Include the Chart a Course lines": off by default, because the book leaves it to the GM
+	 *    ("Ideally, put this someplace public", Book I p.303). Only the lines and what fills their
+	 *    blanks ever go, never the notes (audit ruling E4).
+	 *  • What the players hear for each stop the GM put down by hand. A stop laid on one of the GM's
+	 *    own sites carries the site's name for the GM, and that name never reaches a player unless
+	 *    the GM types it here (audit ruling E17). Left blank, it reads "near <the nearest place>".
+	 *
+	 * @returns {Promise<{requirements: boolean, labels: Array<string>|null}|null>} null for "Not now".
+	 */
+	async _askHowToShare(trip, route) {
+		const lines = sharedRequirementLines(trip?.chart, route);
+		const custom = normalizeCustom(trip?.journey?.custom);
+		const start = this._journeyPick().start;
+		const stops = custom.on ? customStops(start, custom).filter(stop => stop.mark) : [];
+		// A start the GM put down by hand has no name of its own either: ask for its words too.
+		const startAt = startMark(start);
+		if (!lines.length && !stops.length && !startAt) return { requirements: false, labels: null };
+		const key = "stonetop.expedition.share.ask";
+		const box = lines.length ? askCheck("requirements", format(`${key}.requirements`, { count: lines.length })) : "";
+		const fields = stops.map((stop, i) => {
+			const near = nearestPlace(custom.tier, stop.spot);
+			const placeholder = near ? format("stonetop.expedition.shared.near", { place: near.name }) : "";
+			const which = stop.siteUuid
+				? format(`${key}.siteStop`, { mark: stop.mark, name: stop.name })
+				: format(`${key}.stop`, { mark: stop.mark });
+			return `<label class="stonetop-share-ask-stop"><span>${escHtml(which)}</span>`
+				+ `<input type="text" name="label-${i}" value="${escHtml(stop.label ?? "")}" placeholder="${escHtml(placeholder)}"></label>`;
+		}).join("");
+		let startField = "";
+		if (startAt) {
+			const near = nearestPlace(startTier(start), startAt);
+			const placeholder = near ? format("stonetop.expedition.shared.startNear", { place: near.name }) : "";
+			startField = `<label class="stonetop-share-ask-stop"><span>${escHtml(localize(`${key}.start`))}</span>`
+				+ `<input type="text" name="start-label" value="${escHtml(normalizeJourney(trip?.journey).start.label ?? "")}" placeholder="${escHtml(placeholder)}"></label>`;
+		}
+		const intro = `<p>${escHtml(localize(`${key}.intro`))}</p>`;
+		const stopsIntro = (stops.length || startAt) ? `<p class="stonetop-share-ask-hint">${escHtml(localize(`${key}.stopsHint`))}</p>` : "";
+		return askWithButtons({
+			title: localize(`${key}.title`),
+			content: contentElement(`${intro}${box}${stopsIntro}${startField}${fields}`),
+			buttons: [
+				{
+					key: "show", label: localize(`${key}.yes`), icon: "fa-eye",
+					value: form => ({
+						requirements: !!form?.elements?.namedItem?.("requirements")?.checked,
+						labels: stops.length
+							? stops.map((stop, i) => ({
+								...stop.spot,
+								label: String(form?.elements?.namedItem?.(`label-${i}`)?.value ?? "").trim(),
+							}))
+							: null,
+						...(startAt
+							? { startLabel: String(form?.elements?.namedItem?.("start-label")?.value ?? "").trim() }
+							: {}),
+					}),
+				},
+				{ key: "cancel", label: localize(`${key}.no`), icon: "fa-xmark", value: null },
+			],
+			defaultKey: "show",
+		});
+	}
+
+	/**
+	 * Keep what the GM typed for the players, so the next share offers it again: `labels`
+	 * (`[{ fx, fy, label }]`) against the marks they name, matched by position (see `sameMark`) so a
+	 * stored run the reader tidied on the way in still lines up, and `startLabel` for a start put
+	 * down by hand. A blank removes its words. One write for both, and none when nothing changed.
+	 */
+	async _writeShareLabels({ labels = null, startLabel = null } = {}) {
+		const { log, entry } = ensureCurrent(this._log(), () => this._newExpedition());
+		let changed = false;
+		const points = entry.journey?.custom?.points;
+		if (Array.isArray(labels) && Array.isArray(points)) {
+			for (const point of points) {
+				if (!point || point.slug) continue;
+				const said = labels.find(at => sameMark(at, point));
+				if (!said) continue;
+				const label = said.label ?? "";
+				if ((point.label ?? "") === label) continue;
+				if (label) point.label = label;
+				else delete point.label;
+				changed = true;
+			}
+		}
+		// On the start mark itself (journey-start.js `normalizeStart`), which a moved start leaves behind.
+		const start = entry.journey ? normalizeJourney(entry.journey).start : null;
+		if (typeof startLabel === "string" && start?.tier) {
+			const said = startLabel.trim();
+			if ((start.label ?? "") !== said) {
+				entry.journey.origin = startEnd({ ...start, label: said });
+				changed = true;
+			}
+		}
+		if (changed) await this._persistLog(log);
+	}
+
+	/** The shared route changed, on this client or another GM's: redraw the button and the maps. */
+	_sharedRouteChanged() {
+		if (this.rendered && this._stepNav().step?.journey) this._redrawWhenFree();
+		this._refreshMapWindows().catch(err => warn("couldn't redraw a travel map window", err));
 	}
 
 	// ── Sites on the map ────────────────────────────────────────────────────────
@@ -2801,7 +3579,10 @@ export class ExpeditionDialog extends StepperDialog {
 		// pin is about to go with the next redraw anyway, and there is nothing the reader can do.
 		if (!placed) return undefined;
 		const { page, spot } = placed;
-		const mark = { fx: spot.fx, fy: spot.fy };
+		// THE SITE GOES WITH THE STOP (audit ruling E17): its uuid and its name as it reads now, so
+		// the GM's readout and Chronicle say "the Swyn's barrow" rather than "point 2". GM prep
+		// both, and stripped wherever the trip is written for a player's client (`storedJourney`).
+		const mark = { fx: spot.fx, fy: spot.fy, siteUuid: uuid, name: page.name };
 		const { start } = this._journeyPick();
 		// With no start, the tap says where the party is — a site the GM has written up being a very
 		// likely answer to that, since it is somewhere they have already decided matters.
@@ -2930,7 +3711,26 @@ export class ExpeditionDialog extends StepperDialog {
 	 * had spent a minute laying out.
 	 */
 	async _clearDrawnWay(from = null) {
+		if (!(await this._confirmClearDrawnWay())) return undefined;
 		return this._writeDrawnWay(() => [], from);
+	}
+
+	/**
+	 * Ask before "Start over" throws the marks away, since it is one click, saved at once, with no
+	 * undo. Here rather than on the button so the panel and the map window both ask. Nothing drawn
+	 * means nothing to lose, so no question; Enter and closing the window keep the route.
+	 */
+	async _confirmClearDrawnWay() {
+		const n = this._customPath().points.length;
+		if (!n) return true;
+		const key = "stonetop.expedition.draw";
+		return !!(await confirmOutcome({
+			title:   localize(`${key}.clearTitle`),
+			content: `<p>${escHtml(format(`${key}.clearAsk`, { marks: countOf(n, "hand-drawn mark") }))}</p>
+				<p>${escHtml(localize(`${key}.clearInstead`))}</p>`,
+			yes: { label: localize(`${key}.clearYes`), icon: "fa-eraser", className: "stonetop-dialog-btn--danger" },
+			no:  { label: localize(`${key}.clearNo`) },
+		}));
 	}
 
 	/**
@@ -3117,9 +3917,26 @@ export class ExpeditionDialog extends StepperDialog {
 	 */
 	_wireLoadWatch() {
 		this._dropLoadWatch();
+		const key = this._stepNav().step?.key;
+		// The Requisition step's asset list says "live from the steading", and Going home lists what is
+		// still out: both redraw when the steading changes under them (a player's take, a row deleted on its
+		// sheet), so a click is never decided on a list that has moved (PREP-2). Through `_redrawWhenFree`,
+		// so a GM typing in the step's note keeps the words.
+		if (game.user?.isGM && (key === "requisition" || key === "home")) {
+			// Going home also lists who still has something to unpack, read off each character, so a
+			// character's change redraws it too (a Reset pressed on a sheet, a mark ticked).
+			const watched = actor => isSteadingActor(actor) || (key === "home" && actor?.type === "character");
+			const onSteading = (actor, _changed, options) => {
+				if (options?.stonetopLedgerWrite || !watched(actor)) return;
+				clearTimeout(this._loadTimer);
+				this._loadTimer = setTimeout(() => { this._loadTimer = null; if (this.rendered) this._redrawWhenFree(); }, LOAD_REFRESH_MS);
+			};
+			this._loadHooks = [["updateActor", Hooks.on("updateActor", onSteading)]];
+			return;
+		}
 		// The readout is GM-only and lives on one step. Off that step there is nothing on screen
 		// to keep honest, and a player never builds it at all.
-		if (!game.user?.isGM || this._stepNav().step?.key !== "outfit") return;
+		if (!game.user?.isGM || key !== "outfit") return;
 		// The ledger's own bookkeeping write follows each real change and never moves the load.
 		const onActor = (actor, _changed, options) => {
 			if (!options?.stonetopLedgerWrite && _carriesLoad(actor)) this._loadChanged();
@@ -3364,7 +4181,10 @@ export class ExpeditionDialog extends StepperDialog {
 			// Same act from either surface, and it goes through the panel for the same reason the
 			// gestures below do: the trip lives here, and the notification has to name the trip's
 			// own destination whichever window the GM pressed the button in.
-			toScene: () => this._putRouteOnScene(),
+			toScene: (expected = null) => this._putRouteOnScene(expected),
+			// And showing the players, which is the same act from either surface too.
+			share: (expected = null) => this._shareRouteWithPlayers(expected),
+			hideShare: () => this._hideSharedRoute(),
 			// Also the same act from either surface, with one thing the window has to supply: the
 			// picture. `pickPoint` is the window's own zoomable map, so the reader aims at 300 dpi
 			// and the answer still comes back as a fraction of the printed crop.
@@ -3591,7 +4411,8 @@ export class ExpeditionDialog extends StepperDialog {
 			const over   = !!load?.loadLevelOverloaded;
 
 			rows.push(this._pcRow(actor, snap, tier, over, Number(load?.totalMarks) || 0, limits, undeadKind));
-			for (const fol of this._partyFollowersOf(actor, partyFollowers[i])) rows.push(fol);
+			// The PC's village catalog weighs their followers' gear: a follower Outfits from it (follower-outfit.js).
+			for (const fol of this._partyFollowersOf(actor, partyFollowers[i], snap?.inventory?.outfit ?? null)) rows.push(fol);
 		});
 
 		// Summary counts every laden member (PCs + followers): heavy and overloaded are
@@ -3666,29 +4487,34 @@ export class ExpeditionDialog extends StepperDialog {
 	// follower's load is its ✓ gear marks (Book I p.472), bucketed by the standard caps: nothing
 	// raises a follower's. `followers` are the PC's party followers (follower-roster.js
 	// #partyFollowersOf); without them only the crew and custom followers can be read.
-	_partyFollowersOf(actor, followers = null) {
+	//
+	// The ✓ lines are WEIGHED, not counted (PREP-1): a line naming a catalog item weighs what the item
+	// weighs in `pcOutfit` (the PC's own catalog, which a follower Outfits from), a small item weighs
+	// nothing, a hand-written line weighs 1, and the undefined ◇ the follower's last Outfit reserved are
+	// added (follower-outfit.js#followerLoadMarks). So the row agrees with the "Load" line on the card.
+	_partyFollowersOf(actor, followers = null, pcOutfit = null) {
 		const rows = [];
 		const crew = followerInParty(actor, "crew") ? this._crewRow(actor) : null;
 		if (crew) rows.push(crew);
 		for (const fol of (Array.isArray(followers) ? followers : [])) {
 			if (!BUILT_IN_LOAD_TAGS[fol?.ftype] || !fol.party || fol.dead) continue;
-			rows.push(this._builtInFollowerRow(fol));
+			rows.push(this._builtInFollowerRow(fol, pcOutfit));
 		}
 		const map = actor.getFlag?.(SYSTEM_ID, "customFollowers") ?? {};
 		for (const [, f] of Object.entries(map)
 			.filter(([slug, f]) => followerInParty(actor, "custom", slug) && !f?.dead)
 			.sort(([, a], [, b]) => (Number(a?.order) || 0) - (Number(b?.order) || 0))) {
-			rows.push(this._followerRow(f));
+			rows.push(this._followerRow(f, pcOutfit));
 		}
 		return rows;
 	}
 
 	// An animal companion's, an initiate's or a beast's load row, off its follower record: the ✓ gear
 	// checklist and the face on its detail flags, where the Followers tab's card reads them, and a
-	// custom follower's are counted the same way.
-	_builtInFollowerRow(fol) {
+	// custom follower's are weighed the same way.
+	_builtInFollowerRow(fol, pcOutfit = null) {
 		const d = fol.details ?? {};
-		const marks = (Array.isArray(d.gear) ? d.gear : []).filter(g => g?.checked).length;
+		const marks = followerLoadMarks(d.gear, pcOutfit, d.outfit);
 		return this._makeFollowerRow(fol.name, marks, BUILT_IN_LOAD_TAGS[fol.ftype], d);
 	}
 
@@ -3706,9 +4532,9 @@ export class ExpeditionDialog extends StepperDialog {
 		return this._makeFollowerRow(crew.name || "The Crew", marks, "crew", crew.details);
 	}
 
-	// A custom follower's load row (gear is a ✓ checklist).
-	_followerRow(f) {
-		const marks  = (Array.isArray(f?.gear) ? f.gear : []).filter(g => g?.checked).length;
+	// A custom follower's load row (gear is a ✓ checklist, weighed as above).
+	_followerRow(f, pcOutfit = null) {
+		const marks  = followerLoadMarks(f?.gear, pcOutfit, f?.outfit);
 		const folTag = f?.isGroup ? this._groupTag(f) : "follower";
 		// A custom follower stores its whole card, portrait included, in the one object.
 		return this._makeFollowerRow(f?.name, marks, folTag, f);
@@ -3792,7 +4618,9 @@ export class ExpeditionDialog extends StepperDialog {
 	 */
 	_openRoadDays() {
 		const routeDays = Number(chartBlankValue("days", this._journeyRoute())) || null;
-		return new RoadRationsDialog(this._tripParty(), { routeDays }).render(true);
+		// Surplus loaded on the Requisition step (E7) means a laden cart: no meals to count, by default.
+		const packAnimal = (Number(this._currentExpedition()?.surplusOut) || 0) > 0;
+		return new RoadRationsDialog(this._tripParty(), { routeDays, packAnimal }).render(true);
 	}
 
 	// Toggle a PC in/out of the current trip's party (stored on the trip entry, so it's

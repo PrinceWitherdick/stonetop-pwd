@@ -53,6 +53,7 @@ beforeEach(() => {
 	global.ChatMessage = {
 		create: vi.fn(async data => data),
 		getSpeaker: vi.fn(() => ({ alias: "Corvin" })),
+		getWhisperRecipients: vi.fn(() => [{ id: "gm" }]),
 	};
 });
 
@@ -117,6 +118,9 @@ describe("_onArcanumMoveName", () => {
 		const { content } = ChatMessage.create.mock.calls[0][0];
 		expect(content).toContain("EMBER");
 		expect(content).toContain("The coals stay warm until morning.");
+		// ENG-7: the card is not unlocked for its owner here (no isArcanumUnlocked), so a back
+		// mystery posted from it goes to the GM alone.
+		expect(ChatMessage.create.mock.calls[0][0].whisper).toEqual(["gm"]);
 	});
 
 	it("still opens the dialog for an unlearned mystery that has options to read", async () => {

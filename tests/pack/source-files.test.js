@@ -123,10 +123,11 @@ describe("pack source files", () => {
 			note: "<em>implanted, magical</em>",
 			inventoryColumn: null,
 		});
+		// Book II p.550 prints the Rocks plain `magical`, no ◇ (arcana audit 11-04, MAJ-3): weightless.
 		expect(bySlug.get("whispering-rocks").front.item).toMatchObject({
 			name: "Whispering Rocks",
-			weight: 1,
-			inventoryColumn: "regular",
+			weight: null,
+			inventoryColumn: null,
 		});
 		// Two minors kept their tag line at `front.note`, a key nothing renders and the data
 		// exporter drops, so the sheet printed no tags under either title. The book prints

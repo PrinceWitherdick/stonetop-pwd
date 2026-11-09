@@ -42,11 +42,12 @@ import { clipText } from "../utils/strings.js";
 import { deletionEntry } from "../utils/foundry-compat.js";
 import { moveWithin, insertionIndexIn } from "../utils/list-reorder.js";
 import {
-	RELMAP_FLAG, RELMAP_VERSION, addEdgesPatch, addNodesPatch, edgePatch, emptyGraph, normalizeGraph,
-	relmapFlagPath, relmapPath,
+	RELMAP_FLAG, RELMAP_VERSION, addEdgesPatch, edgePatch, emptyGraph, normalizeGraph, relmapFlagPath,
+	relmapPath, storableGraph,
 } from "./relmap-store.js";
 import { RELMAP_PARTY_FLAG, RELMAP_PARTY_MARK, partyBoardPlan } from "./relmap-party.js";
 import { RELMAP_VILLAGE_FLAG, RELMAP_VILLAGE_MARK, villageBoardPlan } from "./relmap-village.js";
+import { seatPatch, withDeadArrivals } from "./relmap-dead.js";
 
 /** The folder every map is filed under. Its own colour: not the Chronicle's, and not one of the
  * seeded gazetteer tints, whose signature-checked scheme is a different lane entirely. */
@@ -93,10 +94,10 @@ export async function ensureRelationshipMapFolder() {
  * the folder, or files it beside the front it belongs to, has not stopped it being a map — and a
  * lookup that went by folder would quietly lose it. The folder is filing, the flag is identity.
  */
-export function listRelationshipMaps() {
-	return (game.journal?.contents ?? [])
-		.filter(entry => !!entry.getFlag?.(SYSTEM_ID, RELMAP_FLAG))
-		.sort((a, b) => a.name.localeCompare(b.name));
+export function listRelationshipMaps({ sorted = true } = {}) {
+	const maps = (game.journal?.contents ?? []).filter(entry => !!entry.getFlag?.(SYSTEM_ID, RELMAP_FLAG));
+	// A walk over every board for its data (relmap-faces.js `everyBoard`) has no use for the order.
+	return sorted ? maps.sort((a, b) => a.name.localeCompare(b.name)) : maps;
 }
 
 /**
@@ -436,7 +437,8 @@ function mapPageData(name, graph, sort, marks = {}, { shown = false } = {}) {
 			default: shown ? levels.INHERIT : levels.NONE,
 			...(mine ? { [mine]: levels.OWNER } : {}),
 		},
-		flags: { [SYSTEM_ID]: { [RELMAP_FLAG]: graph, ...marks } },
+		// Without what a read derives (the chip rows), which a carried normalized board still holds.
+		flags: { [SYSTEM_ID]: { [RELMAP_FLAG]: storableGraph(graph), ...marks } },
 	};
 }
 
@@ -501,6 +503,39 @@ export async function ensureFirstMapPage(entry) {
 		deletionEntry(relmapPath("shape")),
 	]));
 	return page;
+}
+
+/** The open-time pass running for each map on this client, by the map's id. See `seedMap`. */
+const SEEDING = new Map();
+
+/**
+ * Run a map's open-time pass (its first page, the party's board, the village, the tidy) ONCE AT A
+ * TIME PER MAP ON THIS CLIENT, NOT PER WINDOW.
+ *
+ * ⚠ THE STEADING SHEET'S MAP TAB IS A SECOND WINDOW ONTO THE SAME MAP, and a GM whose saved layout
+ * reopens both at load ran two passes over the same unchanged board side by side, each seating the
+ * party under fresh ids: everybody twice. So a pass already running for this map is handed back to
+ * the second caller to wait on instead of starting another. One that has FINISHED is forgotten,
+ * because it has written: a later window runs its own, which finds the people there and adds nobody.
+ *
+ * The pass itself is the caller's, since it reads the party and the steading through the window that
+ * asks; what is kept here is only which map has one under way.
+ *
+ * @param {string} entryId  the map's id.
+ * @param {Function} pass  `() => Promise`, started at once when no pass is running for this map.
+ * @returns {Promise}  the pass under way for this map, this caller's or the one already running.
+ */
+export function seedMap(entryId, pass) {
+	const key = String(entryId ?? "");
+	const running = SEEDING.get(key);
+	if (running) return running;
+	let started;
+	// A pass that throws before its first await is a failed pass like any other, not a throw out of
+	// here that leaves the map marked as seeding for ever.
+	try { started = Promise.resolve(pass()); } catch (err) { started = Promise.reject(err); }
+	const seeding = started.finally(() => { if (SEEDING.get(key) === seeding) SEEDING.delete(key); });
+	SEEDING.set(key, seeding);
+	return seeding;
 }
 
 /**
@@ -679,6 +714,26 @@ export function readGraph(doc) {
 }
 
 /**
+ * Only the chips a board defines, for a look across every board that needs nothing else: `readGraph`
+ * would lay out every person on it too. Normalized by the same reader (a graph of nothing but chips).
+ */
+export function readChips(doc) {
+	const chips = doc?.getFlag?.(SYSTEM_ID, RELMAP_FLAG)?.chips;
+	return chips && typeof chips === "object" ? normalizeGraph({ chips }).chips : {};
+}
+
+/**
+ * Whether anybody stored on this board stands for `uuid`, read off the flag without normalizing it: the
+ * cheap first look before a change to one actor reads a whole board. A person `readGraph` would drop
+ * still counts, which only means that board is read and found to need nothing.
+ */
+export function boardCarries(doc, uuid) {
+	const nodes = doc?.getFlag?.(SYSTEM_ID, RELMAP_FLAG)?.nodes;
+	if (!uuid || !nodes || typeof nodes !== "object") return false;
+	return Object.values(nodes).some(node => node && typeof node === "object" && String(node.uuid ?? "") === uuid);
+}
+
+/**
  * Apply one patch built by relmap-store.js.
  *
  * Everything funnels through here so the failure has one voice. A write can fail for a reason the
@@ -783,10 +838,12 @@ export async function syncPartyPage(entry, pcs = [], regards = new Map()) {
 	// this is the one thing here that has something to do on a map where nothing has changed.
 	await liftPartyPage(entry, page);
 
-	const plan = partyBoardPlan(readGraph(page), party, regards);
+	const graph = readGraph(page);
+	const plan = partyBoardPlan(graph, party, regards);
 	// ONE WRITE for the whole top-up, as leaf paths so it merges with somebody else's concurrent
-	// drag rather than replacing the `nodes` object out from under it.
-	const patch = { ...addNodesPatch(plan.nodes), ...addEdgesPatch(plan.edges) };
+	// drag rather than replacing the `nodes` object out from under it. A dead newcomer arrives
+	// wearing the Dead chip, in the same write (relmap-dead.js `seatPatch`).
+	const patch = { ...seatPatch(graph, plan.nodes), ...addEdgesPatch(plan.edges) };
 	// The keys onto the lines that had none, in the SAME write: a board whose newcomers landed and
 	// whose adoption did not is a board that would be guessed about again on the next open. See
 	// `adoptBareLines`.
@@ -858,7 +915,7 @@ async function createPartyPage(entry, party, regards) {
 	const made = await entry.createEmbeddedDocuments?.("JournalEntryPage", [
 		mapPageData(
 			localize("stonetop.relmap.pages.party"),
-			{ ...emptyGraph(), nodes: plan.nodes, edges: plan.edges },
+			withDeadArrivals({ ...emptyGraph(), nodes: plan.nodes, edges: plan.edges }),
 			partySort(listMapPages(entry)),
 			// The mark that says WHICH board this is, written in the same create as the board itself.
 			{ [RELMAP_PARTY_FLAG]: true },
@@ -957,7 +1014,8 @@ export async function syncVillagePage(entry, people = []) {
 	if (!page) return null;
 
 	const seated = villageSeated(page);
-	const plan = villageBoardPlan(readGraph(page), villagers, { seated });
+	const graph = readGraph(page);
+	const plan = villageBoardPlan(graph, villagers, { seated });
 	// Nothing new to seat AND nothing new to remember. The second half earns its keep on the pass
 	// that adopts a board somebody had already filled in by hand: nobody is added, and what has to
 	// be written down is that those residents are accounted for.
@@ -968,7 +1026,8 @@ export async function syncVillagePage(entry, people = []) {
 	// write, so a board cannot end up holding people it has no record of handing over.
 	const patch = {
 		[relmapFlagPath(RELMAP_VILLAGE_FLAG, "seated")]: plan.seated,
-		...addNodesPatch(plan.nodes),
+		// A villager who has died arrives wearing the Dead chip (relmap-dead.js `seatPatch`).
+		...seatPatch(graph, plan.nodes),
 	};
 	await applyPatch(page, patch);
 	// THE MARK AFTER THE BOARD, the order `createPartyPage` keeps and for the same reason: a mark

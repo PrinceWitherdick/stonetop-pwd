@@ -42,7 +42,7 @@
 		<span class="threat-edit__label">Grim portents <em class="threat-edit__hint">the doom track</em></span>
 		<div class="threat-list" data-list="grimPortents">
 			{{#each grimPortents}}
-			<div class="threat-list-row threat-list-row--portent" data-index="{{this.index}}">
+			<div class="threat-list-row threat-list-row--portent stonetop-field-btns" data-index="{{this.index}}">
 				<input type="checkbox" class="threat-list-done" data-field="done"{{#if done}} checked{{/if}} data-tooltip="Come to pass">
 				<input type="text" class="threat-list-text" data-field="text" value="{{this.text}}" placeholder="A concrete, observable milestone">
 				<button type="button" class="threat-list-remove" data-list="grimPortents" data-index="{{this.index}}" data-tooltip="Remove"><i class="fas fa-times"></i></button>
@@ -85,24 +85,15 @@
 
 		<div class="threat-edit__field">
 			<span class="threat-edit__label">GM moves</span>
-			{{#if suggestedMoves.length}}
-			<div class="threat-suggested">
-				<p class="threat-suggested__hint">Suggested for {{this.typeLabel}}. Click to add:</p>
-				<div class="threat-suggested__chips">
-					{{#each suggestedMoves}}
-					<button type="button" class="threat-suggested__chip{{#if used}} is-used{{/if}}" data-suggested-move="{{this.text}}">{{this.text}}</button>
-					{{/each}}
-				</div>
-			</div>
-			{{/if}}
-			{{> "stonetop.threat-string-list" key="gmMoves" rows=gmMoves placeholder="A GM move for this threat" addLabel="Add GM move"}}
+			{{!-- The type's suggested moves open from the Add button as a menu (utils/suggestion-menu.js). --}}
+			{{> "stonetop.threat-string-list" key="gmMoves" rows=gmMoves placeholder="A GM move for this threat" addLabel="Add GM move" menu=this.suggestedMoves.length}}
 		</div>
 
 		<div class="threat-edit__field">
 			<span class="threat-edit__label">Lesser threats</span>
 			<div class="threat-list" data-list="nested">
 				{{#each nested}}
-				<div class="threat-list-row threat-list-row--nested" data-index="{{this.index}}">
+				<div class="threat-list-row threat-list-row--nested stonetop-field-btns" data-index="{{this.index}}">
 					<input type="text" class="threat-list-text" data-field="name" value="{{this.name}}" placeholder="Name">
 					<select class="threat-list-select" data-field="type">
 						<option value="">type</option>

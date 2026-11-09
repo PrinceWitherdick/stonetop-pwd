@@ -9,16 +9,13 @@
 // Per character, CharacterArcana#repairMasteredUnlock ticks the rest of the mastered card's
 // circles. Only that one card: a part-marked track anywhere else is play.
 
+import { sweepCharacters } from "./sweep-characters.js";
+
 /**
  * @param {object} [options]
  * @param {Iterable} [options.actors]
  * @returns {Promise<number>} how many characters were written to
  */
-export async function repairMasteredArcanumCircles({ actors = globalThis.game?.actors ?? [] } = {}) {
-	let written = 0;
-	for (const actor of actors) {
-		if (actor?.type !== "character") continue;
-		if (await actor.typedActor?.repairMasteredUnlock?.()) written += 1;
-	}
-	return written;
+export async function repairMasteredArcanumCircles({ actors } = {}) {
+	return sweepCharacters(actor => actor.typedActor?.repairMasteredUnlock?.(), { actors });
 }

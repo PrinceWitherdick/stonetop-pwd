@@ -35,13 +35,17 @@
 // asserting something nobody said. Colour, stroke and size are how loudly a line says its piece;
 // direction is part of the piece.
 //
+// AND ONE FOR THE PEOPLE: whether a person's label is set in italics (`italic`), the Italicize toggle
+// in the person bar as it was last saved on this board. Read when somebody with no label yet is given
+// one (`labelItalicFor`), the same "carry the last choice over" for labels.
+//
 // LEAF WRITES, for the reason relmap-store.js opens with: two readers at one table, one settling on
 // a colour while the other settles on a size, write `...pen.ink` and `...pen.size` and the server
 // merges both. Writing the pen object would have the second land on a copy read before the first.
 
 import { SYSTEM_ID } from "../system-id.js";
 import {
-	RELMAP_DASH_DEFAULT, RELMAP_INK_DEFAULT, RELMAP_SIZE_NONE, readDash, readInk, readSize,
+	RELMAP_DASH_DEFAULT, RELMAP_INK_DEFAULT, RELMAP_SIZE_NONE, readDash, readInk, readItalic, readSize,
 	relmapFlagPath,
 } from "./relmap-store.js";
 
@@ -65,10 +69,16 @@ export const RELMAP_PEN_FLAG = "relationshipMapPen";
  * hands over labels, notes and directions through the same handler, and this is what says which of
  * them are the pen's business.
  */
-export const RELMAP_PEN_FIELDS = Object.freeze(["ink", "dash", "size"]);
+export const RELMAP_PEN_FIELDS = Object.freeze(["ink", "dash", "size", "italic"]);
 
-/** Each field held to the same gate the line itself goes through. See `readPen`. */
-const PEN_GATES = Object.freeze({ ink: readInk, dash: readDash, size: readSize });
+/** Each field held to the same gate the line or person itself goes through. See `readPen`. */
+const PEN_GATES = Object.freeze({ ink: readInk, dash: readDash, size: readSize, italic: readItalic });
+
+/** Whether a NEW label on this board starts in italics: as the last one saved, and italic before any. */
+export function labelItalicFor(entry) {
+	const pen = getPen(entry);
+	return "italic" in pen ? pen.italic : true;
+}
 
 /**
  * A stored pen, made safe, with ONLY the fields that were actually set.

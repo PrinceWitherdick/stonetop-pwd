@@ -91,7 +91,7 @@ export function openLedgerDialog(actor, ledger) {
 	const mayEdit = entries.some(canDelete);
 
 	const content = `<div class="stonetop-ledger-container">
-		<div class="stonetop-ledger-toolbar">
+		<div class="stonetop-ledger-toolbar stonetop-field-btns">
 			${mayEdit ? `<label class="stonetop-edit-toggle stonetop-ledger-edit-toggle" title="Edit entries">
 				<input type="checkbox" class="stonetop-ledger-edit-check">
 				<span class="stonetop-toggle-track">

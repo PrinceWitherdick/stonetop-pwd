@@ -178,6 +178,8 @@ function makeCharacterMock(actor) {
 		// empty Set means every dropped card counts as new (matches the real getter,
 		// which returns a Set of owned slugs).
 		ownedArcanaSlugs: new Set(),
+		// A dropped card resolves (ENG-10 warns and skips one that does not).
+		getArcanum: vi.fn(async slug => ({ slug })),
 		onDropMove: vi.fn(async () => false),
 		setPostDeathInsert: vi.fn(async () => {}),
 		moveResources: { add: vi.fn() },
@@ -304,6 +306,7 @@ describe("StonetopCharacterSheet event handlers", () => {
 		const actor = makeActor();
 		actor.typedActor.playbook = vi.fn(async () => null);
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({
 			levelMovesOverLimit: true,
 			levelMovesOverageKey: "2:3:4",
@@ -333,6 +336,7 @@ describe("StonetopCharacterSheet event handlers", () => {
 			actor.isOwner = owns;
 			actor.typedActor.playbook = vi.fn(async () => null);
 			actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+			actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 			actor.typedActor.revealedArcanaSlugs = new Set(revealed);
 			const snapshot = minimalSheetSnapshot({});
 			snapshot.arcana.minor = { hasOwned: true, items: [{
@@ -553,6 +557,7 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		const actor = makeActor();
 		actor.typedActor.playbook = vi.fn(async () => null);
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
 		const sheet = makeSheet(actor);
 
@@ -583,6 +588,7 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		const actor = makeActor();
 		actor.typedActor.playbook = vi.fn(async () => null);
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
 		const sheet = makeSheet(actor);
 		const condemn = async () => (await sheet.getData()).stonetop.condemn;
@@ -607,6 +613,7 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		const actor = makeActor();
 		actor.typedActor.playbook = vi.fn(async () => null);
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
 		actor.typedActor.canCondemn = false;
 		const sheet = makeSheet(actor);
@@ -644,6 +651,7 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		const actor = makeActor();
 		actor.typedActor.playbook = vi.fn(async () => null);
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
 		const sheet = makeSheet(actor);
 		const header = async () => (await sheet.getData()).stonetop;
@@ -687,6 +695,7 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		const actor = makeActor();
 		actor.typedActor.playbook = vi.fn(async () => null);
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
 		const sheet = makeSheet(actor);
 		const held = async () => (await sheet.getData()).stonetop.heldAdvantage;
@@ -733,6 +742,7 @@ describe("StonetopCharacterSheet holy light candle", () => {
 		const actor = makeActor();
 		actor.typedActor.playbook = vi.fn(async () => null);
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
 		const sheet = makeSheet(actor);
 		const glyph = async () => (await sheet.getData()).stonetop.heldDisadvantage;
@@ -857,6 +867,7 @@ describe("StonetopCharacterSheet ongoing Invocation", () => {
 		const { actor, sheet } = invokingSheet({ ongoing: "" });
 		actor.typedActor.playbook = vi.fn(async () => null);
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		actor.typedActor.buildSnapshot = vi.fn(async () => minimalSheetSnapshot({}));
 
 		expect((await sheet.getData()).stonetop.ongoingInvocation)
@@ -1202,6 +1213,7 @@ describe("StonetopCharacterSheet damage die editing", () => {
 		const actor = makeActor();
 		actor.typedActor.playbook = vi.fn(async () => null);
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		actor.typedActor.buildSnapshot = vi.fn(async () => {
 			const snap = minimalSheetSnapshot({});
 			snap.vitals.damage = "d8";
@@ -1220,6 +1232,7 @@ describe("StonetopCharacterSheet damage die editing", () => {
 		const actor = makeActor();
 		actor.typedActor.playbook = vi.fn(async () => null);
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		actor.typedActor.buildSnapshot = vi.fn(async () => {
 			const snap = minimalSheetSnapshot({});
 			snap.vitals.damage = "d8";
@@ -1291,6 +1304,7 @@ describe("StonetopCharacterSheet Details tab section visibility", () => {
 		const actor = makeActor();
 		actor.typedActor.playbook = vi.fn(async () => null);
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		actor.typedActor.buildSnapshot = vi.fn(async () => ({ ...minimalSheetSnapshot({}), playbook }));
 		const sheet = makeSheet(actor);
 		sheet._editMode = editMode;
@@ -1337,6 +1351,7 @@ describe("StonetopCharacterSheet Post-Death tab visibility", () => {
 		const actor = makeActor();
 		actor.typedActor.playbook = vi.fn(async () => null);
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		actor.typedActor.postDeathTabRequested = requested;
 		actor.typedActor.deathsDoorState = state;
 		actor.typedActor.buildSnapshot = vi.fn(async () => ({ ...minimalSheetSnapshot({}), postDeathInsert }));
@@ -1403,6 +1418,7 @@ describe("StonetopCharacterSheet Post-Death tab, asked for and sent away", () =>
 		const actor = makeActor();
 		actor.typedActor.playbook = vi.fn(async () => null);
 		actor.typedActor.possessionTriggerMoves = vi.fn(() => ({}));
+		actor.typedActor.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		actor.typedActor.postDeathTabRequested = requested;
 		actor.typedActor.deathsDoorState = state;
 		actor.typedActor.buildSnapshot = vi.fn(async () => ({ ...minimalSheetSnapshot({}), postDeathInsert: insert }));
@@ -2420,8 +2436,41 @@ describe("StonetopCharacterSheet Death's Door card past the Door", () => {
 		expect(living._stonetopCharacter.setDeathsDoorState).toHaveBeenCalledWith(null);
 
 		const dead = makeCardSheet("ghost", { state: DEATHS_DOOR_STATE.DEAD });
+		stubConfirm(true);
 		await dead._onDeathsDoorClear();
 		expect(dead._stonetopCharacter.restoreHp).not.toHaveBeenCalled();
+		expect(dead._stonetopCharacter.setDeathsDoorState).toHaveBeenCalledWith(null);
+	});
+
+	// One click used to put a dead PC back in play. Past the Last Door it asks first; nothing else does.
+	it("asks before Clear takes a dead PC back into play, and keeps them dead on a no or a close", async () => {
+		for (const answer of [false, null]) {
+			const dead = makeCardSheet(null, { state: DEATHS_DOOR_STATE.DEAD });
+			const wait = stubConfirm(answer);
+			await dead._onDeathsDoorClear();
+			expect(wait).toHaveBeenCalledTimes(1);
+			expect(dead._stonetopCharacter.setDeathsDoorState).not.toHaveBeenCalled();
+			expect(dead.render).not.toHaveBeenCalled();
+		}
+		const dead = makeCardSheet(null, { state: DEATHS_DOOR_STATE.DEAD });
+		dead.actor.name = "Wren";
+		const wait = stubConfirm(true);
+		await dead._onDeathsDoorClear();
+		const asked = wait.mock.calls[0][0];
+		expect(asked.window.title).toBe("Bring them back from the Last Door?");
+		expect(asked.content).toContain("<strong>Wren</strong> is dead and out of play");
+		expect(asked.buttons.map(b => b.label)).toEqual(["Bring them back into play", "Keep them dead"]);
+		expect(asked.buttons.find(b => b.default).action).toBe("no");
+		expect(asked.buttons[0].class).toBe("stonetop-dialog-btn--danger");
+		expect(dead._stonetopCharacter.setDeathsDoorState).toHaveBeenCalledWith(null);
+	});
+
+	it("doesn't ask to end out-of-the-action", async () => {
+		const living = makeCardSheet(null, { state: DEATHS_DOOR_STATE.OUT_OF_ACTION });
+		const wait = stubConfirm(false);
+		await living._onDeathsDoorClear();
+		expect(wait).not.toHaveBeenCalled();
+		expect(living._stonetopCharacter.setDeathsDoorState).toHaveBeenCalledWith(null);
 	});
 
 	// The insert's own move button is live only while they are dying: at 0 HP otherwise, it is spent.
@@ -2491,6 +2540,7 @@ describe("StonetopCharacterSheet Post-Death tab controls", () => {
 		const char = actor.typedActor;
 		char.playbook = vi.fn(async () => null);
 		char.possessionTriggerMoves = vi.fn(() => ({}));
+		char.possessionChoicesOwed = vi.fn(() => ({ byMove: {}, bySlug: {} }));
 		char.deathsDoorState = null;
 		char.sectionOptions = vi.fn(async () => []);
 		char.debilityChoices = [];
@@ -2635,5 +2685,118 @@ describe("the rollable click guard", () => {
 		const handler = vi.fn(async () => {});
 		await sheet._guardRollableClick(click(rollable("m1", "Seek Insight")), handler);
 		expect(handler).toHaveBeenCalledTimes(1);
+	});
+});
+
+// Edit-mode controls that used to throw work away without asking.
+describe("StonetopCharacterSheet un-ticks that ask first", () => {
+	const untick = (dataset) => ({ currentTarget: { checked: false, dataset } });
+	const noStakes = { name: "Harden", copiesLeft: 0, granted: [], statPick: null, marks: false, possessionPicks: [], possession: null,
+		startGear: false, companionTraits: false, invocations: false, isEmpty: true };
+
+	function moveSheet(stakes) {
+		const sheet = makeSheet(makeActor());
+		sheet._stonetopCharacter = { moveRemovalStakes: vi.fn(async () => stakes), removeMove: vi.fn(async () => {}) };
+		return sheet;
+	}
+
+	it("removes a move with nothing at stake without asking", async () => {
+		const sheet = moveSheet(noStakes);
+		const wait = stubConfirm(false);
+		await sheet._onMoveCheck(untick({ ownedId: "m1" }));
+		expect(wait).not.toHaveBeenCalled();
+		expect(sheet._stonetopCharacter.removeMove).toHaveBeenCalledWith("m1");
+	});
+
+	it("asks before a move takes its grants with it, and a no or a close keeps it ticked", async () => {
+		const stakes = { ...noStakes, name: "Versatile", granted: ["Smash"], statPick: "str", isEmpty: false };
+		for (const answer of [false, null]) {
+			const sheet = moveSheet(stakes);
+			const wait = stubConfirm(answer);
+			const ev = untick({ ownedId: "cross1" });
+			await sheet._onMoveCheck(ev);
+			expect(wait).toHaveBeenCalledTimes(1);
+			expect(sheet._stonetopCharacter.removeMove).not.toHaveBeenCalled();
+			expect(ev.currentTarget.checked).toBe(true);
+		}
+		const sheet = moveSheet(stakes);
+		const wait = stubConfirm(true);
+		await sheet._onMoveCheck(untick({ ownedId: "cross1" }));
+		const asked = wait.mock.calls[0][0];
+		expect(asked.window.title).toBe("Remove this move?");
+		expect(asked.content).toContain("Remove <strong>Versatile</strong> from your moves?");
+		expect(asked.content).toContain("<strong>Smash</strong>");
+		expect(asked.content).toContain("the +1 STR it gave you");
+		expect(asked.buttons.map(b => b.label)).toEqual(["Remove the move", "Keep the move"]);
+		expect(asked.buttons.find(b => b.default).action).toBe("no");
+		expect(sheet._stonetopCharacter.removeMove).toHaveBeenCalledWith("cross1");
+	});
+
+	it("asks about the one copy when a repeatable keeps others", async () => {
+		const sheet = moveSheet({ ...noStakes, name: "Veteran Crew", copiesLeft: 1, marks: true, isEmpty: false });
+		const wait = stubConfirm(true);
+		await sheet._onMoveCheck(untick({ ownedId: "v2" }));
+		const asked = wait.mock.calls[0][0];
+		expect(asked.window.title).toBe("Remove one copy of this move?");
+		expect(asked.content).toContain("Remove one copy of <strong>Veteran Crew</strong>? You'd still have 1.");
+		expect(asked.content).toContain("your other copies don't pay for");
+		expect(asked.buttons[0].label).toBe("Remove one copy");
+		expect(sheet._stonetopCharacter.removeMove).toHaveBeenCalledWith("v2");
+	});
+
+	function possessionSheet(stakes) {
+		const sheet = makeSheet(makeActor());
+		sheet._stonetopCharacter = { possessionRemovalStakes: vi.fn(async () => stakes), deselectPossession: vi.fn(async () => {}) };
+		return sheet;
+	}
+
+	it("un-ticks a possession with nothing on it without asking", async () => {
+		const sheet = possessionSheet({ label: "Mastiffs", picks: 0, uses: 0, items: [], isEmpty: true });
+		const wait = stubConfirm(false);
+		await sheet._onPossessionCheck(untick({ slug: "mastiffs" }));
+		expect(wait).not.toHaveBeenCalled();
+		expect(sheet._stonetopCharacter.deselectPossession).toHaveBeenCalledWith("mastiffs");
+	});
+
+	it("asks before a possession's picks, uses and gear go, and a no or a close keeps it ticked", async () => {
+		const stakes = { label: "Apiary", picks: 2, uses: 1, items: ["Beeswax", "Honey"], isEmpty: false };
+		for (const answer of [false, null]) {
+			const sheet = possessionSheet(stakes);
+			stubConfirm(answer);
+			const ev = untick({ slug: "apiary" });
+			await sheet._onPossessionCheck(ev);
+			expect(sheet._stonetopCharacter.deselectPossession).not.toHaveBeenCalled();
+			expect(ev.currentTarget.checked).toBe(true);
+		}
+		const sheet = possessionSheet(stakes);
+		const wait = stubConfirm(true);
+		await sheet._onPossessionCheck(untick({ slug: "apiary" }));
+		const asked = wait.mock.calls[0][0];
+		expect(asked.window.title).toBe("Remove this special possession?");
+		expect(asked.content).toContain("Untick <strong>Apiary</strong>?");
+		expect(asked.content).toContain("the 2 picks you made on it");
+		expect(asked.content).toContain("the use marked off it");
+		expect(asked.content).toContain("<strong>Beeswax</strong> & <strong>Honey</strong>");
+		expect(asked.buttons.map(b => b.label)).toEqual(["Remove the possession", "Keep the possession"]);
+		expect(asked.buttons.find(b => b.default).action).toBe("no");
+		expect(sheet._stonetopCharacter.deselectPossession).toHaveBeenCalledWith("apiary");
+	});
+
+	// customGroupSize reads a blank as 2, which cut the group and dropped every member past the second.
+	it("reverts a blank or non-numeric custom group size instead of cutting the group", async () => {
+		const actor = makeActor();
+		actor.flags["stonetop-pwd"].customFollowers = { band: { isGroup: true, size: 4, hpMax: 3, memberHp: [3, 2, 1, 3] } };
+		const sheet = makeSheet(actor);
+		for (const value of ["", "  ", "abc"]) {
+			await sheet._onCustomGroupSizeInput({ currentTarget: { value, dataset: { slug: "band" } } });
+		}
+		expect(actor.update).not.toHaveBeenCalled();
+		expect(sheet.render).toHaveBeenCalledTimes(3);
+
+		await sheet._onCustomGroupSizeInput({ currentTarget: { value: "3", dataset: { slug: "band" } } });
+		expect(actor.update).toHaveBeenCalledWith({
+			"flags.stonetop-pwd.customFollowers.band.size": 3,
+			"flags.stonetop-pwd.customFollowers.band.memberHp": [3, 2, 1],
+		});
 	});
 });

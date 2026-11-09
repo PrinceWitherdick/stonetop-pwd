@@ -58,7 +58,8 @@ describe("arcanum-edit helpers", () => {
 	describe("validateArcanumFlags", () => {
 		const complete = {
 			slug: "x",
-			front: { title: "T", description: "<p>front</p>", unlock: { description: "", requirements: [] } },
+			// An unlock step (ruling A14): a card with none stays locked, which the editor warns of.
+			front: { title: "T", description: "<p>front</p>", unlock: { description: "", requirements: [{ type: "option", slug: "o", description: "Do it", max: 1 }] } },
 			back:  { title: "B", description: "<p>payoff</p>", item: null, resource: null, move: null, options: [] },
 		};
 

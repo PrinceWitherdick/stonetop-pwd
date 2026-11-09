@@ -31,7 +31,7 @@ import { followerLoyalty, followerLoyaltyPath } from "../character/follower-bond
 import { loyaltyOwnerId } from "../../data/servant-of-daagon.js";
 import { readableFlags } from "../character/StonetopFlags.js";
 import { cardReadinessRef, readinessOnCard } from "../../fight/follower-readiness.js";
-import { followerOrderInfo, followerTakesOrders, openFollowerOrder } from "../../fight/follower-fight.js";
+import { followerOrderInfo, followerTakesOrders, openFollowerOrder, followerSwarm } from "../../fight/follower-fight.js";
 
 // Rich-text (HTMLField) fields edited inline via prose-mirror on the sheet.
 const NPC_RICH_TEXT_FIELDS = [
@@ -461,14 +461,21 @@ export function createStonetopNpcSheetClass(Base) {
 						if (!blow) return;
 						({ label, weapon, keywords } = blow);
 					}
+					// A GROUP follower's token is the whole group, and "when a group ... Clashes with or Lets Fly at a
+					// single foe ... roll one attacker's damage, +1 for each additional attacker" (Book I p.473): the
+					// ring's Swarm die, rolled with the fight's own +N left off, since the die already carries it (round-2
+					// audit FOE-4). Several foes, or a group-against-group exchange, keep the one member's die.
+					const swarm = card ? followerSwarm(this.actor, card) : null;
+					if (swarm) label = game.i18n.format("stonetop.character.followers.order.swarmLabel", { name: this.actor.name, count: swarm.standing, bonus: swarm.bonus });
 					// Aimed at whoever this NPC is fighting on the map, or the roller's own targets
 					// (fight/fight-targets.js), with that blow's armor clause for Apply, and the fight's +N
 					// for several attackers on one target (fight/damage-seed.js). A plain card, as before,
 					// when there is nobody to hit.
 					const rolled = await rollDamageAt(this.actor, {
-						formula, label, keywords, weapon,
+						formula: swarm?.formula ?? formula, label, keywords, weapon,
 						// The blow's own printed "w/disadvantage", as the monster sheet's buttons keep theirs.
 						rollMode: printed.rollMode,
+						seeded: !swarm,
 						shiftKey: ev.shiftKey,
 					});
 					if (rolled && card) await settleFollowerTokenReadinessOnAttack(this.actor, label);

@@ -1,5 +1,11 @@
 import { hasText } from "../actors/bestiary/codex.js";
 import { slugify, escHtml } from "../utils/strings.js";
+import { maskGlyphLabels } from "../utils/glyphs.js";
+import { movesSection } from "../data/arcana-moves.js";
+import { arcanumHasUnlockStep, consequencesSection } from "../actors/character/CharacterArcana.js";
+
+// The editor's unlock-step check is the sheet's own; re-exported for the editor's callers.
+export { arcanumHasUnlockStep };
 
 // Pure helpers for the arcanum editor (StonetopArcanumSheet edit mode). Kept free of
 // Foundry/DOM so they're unit-testable; the sheet wires them to controls + item.update().
@@ -80,10 +86,103 @@ export function mysteryHtml(name = "NEW MYSTERY") {
 		+ `describe the effect. On a 10+, choose 2; on a 7&ndash;9, choose 1.</p>`;
 }
 
-/** A consequence line weighted with 1–3 □ boxes (the cost it occupies on the track). */
+/**
+ * A consequence line weighted with 1-3 □ boxes (the cost it occupies on the track), as a list
+ * item: the shipped majors print their Consequences as a `<ul>` of `<li>□ ...</li>`, the shape the
+ * ladder, the curse badge and the nested gates read.
+ */
 export function consequenceHtml(weight = 1) {
 	const w = Math.max(1, Math.min(3, Math.round(Number(weight) || 1)));
-	return `<p>${"□".repeat(w)} Describe the consequence the bearer suffers.</p>`;
+	return `<li>${"□".repeat(w)} Describe the consequence the bearer suffers.</li>`;
+}
+
+// The two back sections are found by the sheet's own parsers: a "Moves" (or "Move") heading opens
+// the clickable mysteries (data/arcana-moves.js#movesSection), a "Consequences" heading the marked
+// costs (CharacterArcana.js#consequencesSection). Each runs to the next heading of any level, or the end.
+
+/** Offset (within `body`) of the closing tag of the LAST top-level `<ul>`, or -1 when there is none. */
+function _lastTopListClose(body) {
+	let depth = 0;
+	let close = -1;
+	for (const m of body.matchAll(/<(\/?)ul\b[^>]*>/gi)) {
+		if (!m[1]) { depth++; continue; }
+		if (depth === 0) continue;
+		depth--;
+		if (depth === 0) close = m.index;
+	}
+	return close;
+}
+
+/**
+ * How many back □ come before `offset` in `html`, counted as the sheet indexes the back's checkboxes
+ * (one per glyph, display-only labels skipped): the index a □ inserted at `offset` takes.
+ */
+function _boxesBefore(html, offset) {
+	return (maskGlyphLabels(html.slice(0, offset)).match(/□/g) || []).length;
+}
+
+/** `html` with `block` set in at `offset`, the index its first □ takes (`at`) and how many □ it adds (`by`). */
+function _insertBlock(html, offset, block) {
+	return {
+		html: html.slice(0, offset) + block + html.slice(offset),
+		at:   _boxesBefore(html, offset),
+		by:   _boxesBefore(block, block.length),
+	};
+}
+
+/**
+ * The back description with one more mystery in it, inside its Moves section, and the index its
+ * □ takes (`at`). The section is made the first time (`<h3>Moves</h3>`, set before the Consequences
+ * heading when there is one, the order every shipped major prints them in), so the mystery's □ and
+ * name are a move the sheet can click and learn, not prose after the costs. Every back □ from `at`
+ * on moves `by` (one) index along: holders' marks follow with shiftHolderBackMarks.
+ */
+export function insertMystery(description, name) {
+	const html  = String(description ?? "");
+	const block = mysteryHtml(name);
+	const moves = movesSection(html);
+	if (moves) return _insertBlock(html, moves.end, block);
+	const section = `<h3>Moves</h3>${block}`;
+	const cons = consequencesSection(html);
+	if (cons) return _insertBlock(html, cons.index, section);
+	return _insertBlock(html, html.length, section);
+}
+
+/** insertMystery's description alone. */
+export function insertMysteryHtml(description, name) {
+	return insertMystery(description, name).html;
+}
+
+/**
+ * The back description with one more Consequence, as a `<li>` at the end of the list under its
+ * Consequences heading, and the index its first □ takes (`at`). The heading and list are made the
+ * first time, at the end of the back.
+ */
+export function insertConsequence(description, weight = 1) {
+	const html = String(description ?? "");
+	const item = consequenceHtml(weight);
+	const cons = consequencesSection(html);
+	if (!cons) return _insertBlock(html, html.length, `<h3>Consequences</h3><ul>${item}</ul>`);
+	const { start } = cons;
+	const end   = start + cons.body.length;
+	const close = _lastTopListClose(cons.body);
+	if (close >= 0) return _insertBlock(html, start + close, item);
+	return _insertBlock(html, end, `<ul>${item}</ul>`);
+}
+
+/** insertConsequence's description alone. */
+export function insertConsequenceHtml(description, weight = 1) {
+	return insertConsequence(description, weight).html;
+}
+
+/**
+ * The Consequences section of a back, counted the way the sheet counts it: each run of □ is one
+ * consequence, each □ one checkbox. Null when the back has no Consequences heading.
+ */
+export function consequenceTally(backDescription) {
+	const cons = consequencesSection(maskGlyphLabels(backDescription ?? ""));
+	if (!cons) return null;
+	return { consequences: (cons.body.match(/□+/g) ?? []).length, boxes: (cons.body.match(/□/g) ?? []).length };
 }
 
 /**
@@ -108,6 +207,29 @@ export function validateArcanumFlags(flags) {
 
 	const hasPayoff = hasText(back.description) || !!back.move || !!back.item || !!back.resource;
 	if (!hasPayoff) issues.push({ level: "warn", message: "The back has no payoff yet: add a description, move, item, or resource track." });
+
+	// Book I p.444: a minor is unlocked by "a series of checkbox steps". With none, nothing a player
+	// does can unlock the card, so it waits on the GM's reveal.
+	if (!arcanumHasUnlockStep(f)) {
+		issues.push({ level: "warn", message: "Nothing on the front unlocks this card yet: add an unlock option, a ○ track or □ boxes in the unlock text, or □ tasks on the front. Until then it stays locked until the GM reveals it." });
+	}
+
+	// Book I p.446, advice for majors, never a block: "Create 5-10 consequences ... A major arcanum
+	// should have ~8 checkboxes total."
+	if (f.major) {
+		const tally     = consequenceTally(back.description);
+		const backBoxes = (maskGlyphLabels(back.description ?? "").match(/□/g) ?? []).length;
+		if (!tally && backBoxes) {
+			issues.push({ level: "warn", message: "The back has □ boxes but no Consequences heading, so the sheet can't count them as Consequences. Use the Consequence buttons to add them." });
+		} else if (tally) {
+			if (tally.consequences < 5 || tally.consequences > 10) {
+				issues.push({ level: "warn", message: `The book suggests 5-10 Consequences for a major arcanum (Book I p.446); this one has ${tally.consequences}.` });
+			}
+			if (tally.boxes < 6 || tally.boxes > 10) {
+				issues.push({ level: "warn", message: `The book suggests about 8 Consequence checkboxes in all (Book I p.446); this one has ${tally.boxes}.` });
+			}
+		}
+	}
 
 	return issues;
 }

@@ -15,7 +15,7 @@
 	<ul class="spe-req-list" aria-labelledby="spe-reqs-label-{{#if id}}{{this.id}}{{else}}new{{/if}}"
 	    data-empty="Nothing yet. Pick one of the book's prompts below, or write your own.">
 		{{#each requirements}}
-		<li class="spe-req" data-req-from="{{@index}}">
+		<li class="spe-req stonetop-field-btns" data-req-from="{{@index}}">
 			<input type="checkbox" class="spe-req-done" aria-label="Done"{{#if done}} checked{{/if}}>
 			<input type="text" class="spe-req-text" value="{{this.text}}" aria-label="Requirement">
 			<button type="button" class="spe-req-remove" data-tooltip="Remove this requirement" aria-label="Remove this requirement"><i class="fas fa-xmark" aria-hidden="true"></i></button>
@@ -45,7 +45,7 @@
 	</footer>
 
 	<template class="spe-req-tpl">
-		<li class="spe-req">
+		<li class="spe-req stonetop-field-btns">
 			<input type="checkbox" class="spe-req-done" aria-label="Done">
 			<input type="text" class="spe-req-text" aria-label="Requirement" placeholder="You must…">
 			<button type="button" class="spe-req-remove" data-tooltip="Remove this requirement" aria-label="Remove this requirement"><i class="fas fa-xmark" aria-hidden="true"></i></button>

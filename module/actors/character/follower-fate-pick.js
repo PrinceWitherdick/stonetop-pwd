@@ -19,10 +19,15 @@
 
 import { FollowerFateDialog } from "./dialogs/FollowerFateDialog.js";
 import { isCrewMemberRow, isCustomMemberRow } from "./follower-fate.js";
+import { rowButtonData, rowFromButton } from "./follower-roster-shifts.js";
 import { ownerUsers, autoOpenUserId } from "../../hooks/DeathsDoorPrompt.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { isPrimaryGM } from "../../utils/primary-gm.js";
-import { sendVerifiable, verifiedAsker } from "../../utils/owner-ask.js";
+import { sendVerifiable, stillAsking, verifiedAsker } from "../../utils/owner-ask.js";
+import { wireLatchedButtons, withCardLatch } from "../../utils/card-latch.js";
+import { moveChatCard } from "../../utils/chat.js";
+import { escHtml } from "../../utils/strings.js";
+import { format, localize } from "../../utils/i18n.js";
 
 /** Player's client to the GM's: open the GM's pick for this fallen follower. */
 export const FOLLOWER_FATE_OPEN_QUERY = "stonetop.followerFateOpen";
@@ -33,6 +38,14 @@ export const FOLLOWER_FATE_SETTLE_QUERY = "stonetop.followerFateSettle";
 /** How long the GM's client waits for the player's to take a pick, and how long that one checks back (ms). */
 const SETTLE_WAIT_MS = 15000;
 const SETTLE_VERIFY_MS = 8000;
+
+/** How long the GM's client waits on the player's to say it still wants a late-arriving pick opened (ms). */
+const OPEN_VERIFY_MS = 3000;
+
+/** The message flag latching an "out of the action" card's "Decide their fate" button. */
+export const FATE_REOPEN_FLAG = "followerFateReopened";
+const REOPEN_SELECTOR = ".stonetop-follower-fate-reopen";
+const FATE = "stonetop.character.followers.fate";
 
 /** The GM's three outcomes (p.469); a closed window is "not lethal". */
 export const GM_FATES = Object.freeze(["dead", "deathsdoor", "dying"]);
@@ -82,8 +95,10 @@ export async function openFollowerFate(character, fate, deps = {}) {
 	};
 	if (fateOpener(fate, { gm }) !== "gm") return playerWindow();
 	if (me?.isGM) return openGm(character, fate) ? "gm" : playerWindow();
-	const opened = await ask(gm, FOLLOWER_FATE_OPEN_QUERY, { characterUuid: character.uuid ?? null, fate, userId: me?.id ?? null },
-		{ fallback: null, what: "open a follower's fate" });
+	// Verifiable (audit EDG-8): a GM's client lagging past the wait opens nothing once this one has gone ahead with
+	// its own window, because it checks back first (handleFollowerFateOpenQuery) and the ask is no longer waited on.
+	const opened = await sendVerifiable(askId => ask(gm, FOLLOWER_FATE_OPEN_QUERY, { characterUuid: character.uuid ?? null, fate, userId: me?.id ?? null, askId },
+		{ fallback: null, what: "open a follower's fate" }));
 	// The GM's client could not be reached after all: the player picks, as with no GM at all.
 	return opened ? "gm" : playerWindow();
 }
@@ -98,6 +113,8 @@ export function openGmFatePick(character, fate, { Dialog = FollowerFateDialog, s
 	const dialog = new Dialog(character, {
 		name: fate.name, loyalty: 0, gmPick: true,
 		isCrewMember: isCrewMemberRow(fate.follower), isGroupMember: isCustomMemberRow(fate.follower),
+		// Closed with nothing picked: not lethal, or decided later, and the table is told so (FOE-5).
+		onDismiss: () => postFollowerOutOfAction(character, fate).catch(err => console.error("Stonetop | saying a follower is out of the action failed", err)),
 	}, action => {
 		if (GM_FATES.includes(action)) settle(character, fate, action).catch(err => console.error("Stonetop | settling a follower's fate failed", err));
 	});
@@ -134,14 +151,14 @@ export async function settleFatePick(character, fate, action, deps = {}) {
 export async function settleHere(character, fate, action) {
 	const sheet = character?.sheet;
 	if (!sheet) return false;
-	const { follower, slug = "", index = null, name = "" } = fate ?? {};
+	// `stamp`: the roster's number when they fell, so a cut made since finds the member again (FOE-2).
+	const { follower, slug = "", index = null, name = "", stamp = null } = fate ?? {};
 	if (action === "dead" && typeof sheet._followerDoorDeath === "function") {
-		return sheet._followerDoorDeath({ follower, slug, index, name, gmDead: true });
+		return sheet._followerDoorDeath({ follower, slug, index, name, stamp, gmDead: true });
 	}
 	if (typeof sheet._resolveFollowerFate !== "function") return false;
 	const loyalty = typeof sheet._followerFateLoyalty === "function" ? sheet._followerFateLoyalty(follower, slug) : 0;
-	await sheet._resolveFollowerFate(action, { name, loyalty, follower, slug, index });
-	return true;
+	return (await sheet._resolveFollowerFate(action, { name, loyalty, follower, slug, index, stamp })) !== false;
 }
 
 /** The character a fate query names, when the asker may act for it: null otherwise. */
@@ -154,11 +171,14 @@ function queriedCharacter(data, resolve) {
  * FOLLOWER_FATE_OPEN_QUERY on the primary GM's client: the asker must own the character. Answers true once the
  * window is open (the pick itself is not waited on).
  */
-export function handleFollowerFateOpenQuery(data, context = {}, { users = globalThis.game?.users, resolve = resolveSync, open = openGmFatePick } = {}) {
+export async function handleFollowerFateOpenQuery(data, context = {}, { users = globalThis.game?.users, resolve = resolveSync, open = openGmFatePick, asking = stillAsking } = {}) {
 	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return false;
 	const asker = queryAsker(data, context, users);
 	const character = queriedCharacter(data, resolve);
 	if (!asker || !character || !character.testUserPermission?.(asker, "OWNER") || !gmPicksFate(data?.fate)) return false;
+	// An ask that reached this client late, after the player's gave up waiting and opened its own window, opens no
+	// second one (audit EDG-8). An ask from a client without this check carries no id, and is opened as before.
+	if (data?.askId && !(await asking(asker, data, { timeout: OPEN_VERIFY_MS }))) return false;
 	return !!open(character, data.fate);
 }
 
@@ -167,11 +187,14 @@ export function handleFollowerFateOpenQuery(data, context = {}, { users = global
  * user owns. On v13 the payload's GM id is the sender's own word, so that GM's client is asked whether it sent
  * it (owner-ask.js#verifiedAsker); a player naming the GM is refused. Answers true once it is being settled.
  */
-export async function handleFollowerFateSettleQuery(data, context = {}, { users = globalThis.game?.users, resolve = resolveSync, settle = settleHere, verify = verifiedAsker } = {}) {
+export async function handleFollowerFateSettleQuery(data, context = {}, { users = globalThis.game?.users, resolve = resolveSync, settle = settleHere, verify = verifiedAsker, asking = stillAsking } = {}) {
 	const character = queriedCharacter(data, resolve);
 	if (!character?.isOwner || !GM_FATES.includes(data?.action) || !gmPicksFate(data?.fate)) return false;
 	const asker = await verify(data, context, users, { timeout: SETTLE_VERIFY_MS });
 	if (!asker?.isGM) return false;
+	// v14 names the sender, so verify skips its check-back; the GM's client is still asked whether it waits on
+	// this, since one that timed out has settled it itself already (audit EDG-15, the late settle). v13's verify asked.
+	if (context?.user && !(await asking(asker, data, { timeout: SETTLE_VERIFY_MS }))) return false;
 	settle(character, data.fate, data.action).catch(err => console.error("Stonetop | settling a follower's fate failed", err));
 	return true;
 }
@@ -181,4 +204,34 @@ export function registerFollowerFateQueries(queries = globalThis.CONFIG?.queries
 	if (!queries) return;
 	queries[FOLLOWER_FATE_OPEN_QUERY] = (data, context) => handleFollowerFateOpenQuery(data, context);
 	queries[FOLLOWER_FATE_SETTLE_QUERY] = (data, context) => handleFollowerFateSettleQuery(data, context);
+}
+
+// -- NOT LETHAL, OR DECIDED LATER (round-2 audit FOE-5) ---------------------------------------------
+// "If the source of the damage wasn't lethal, then the follower is out of the action until you say otherwise or
+// they regain HP" (Book I p.469). A fate window closed with nothing picked is that, or a pick put off: the table is
+// told, on a card whose one button opens the pick again for whoever picks (openFollowerFate: the GM when one is
+// here). Without it a stray Escape left the follower at 0 HP with no fate and no way back to one.
+
+/** The card's "Decide their fate" button, carrying the fate it reopens (read back with rowFromButton). PURE. */
+export function fateReopenButton(fate = {}) {
+	return `<div class="stonetop-attack-actions"><button type="button" class="stonetop-follower-fate-reopen" ${rowButtonData(fate)}><i class="fas fa-skull"></i> ${escHtml(localize(`${FATE}.reopenButton`))}</button></div>`;
+}
+
+/** Post the "out of the action" card for a fate window closed with nothing picked. */
+export async function postFollowerOutOfAction(character, fate) {
+	if (!character || !fate?.follower) return null;
+	const who = `<strong>${escHtml(fate.name || localize(`${FATE}.outFallbackName`))}</strong>`;
+	return globalThis.ChatMessage?.create?.({
+		content: moveChatCard(localize(`${FATE}.outTitle`), `<p>${format(`${FATE}.outOfAction`, { name: who })}</p>`, { actions: fateReopenButton(fate) }),
+		speaker: globalThis.ChatMessage?.getSpeaker?.({ actor: character }),
+	});
+}
+
+/** Wire the card's button (stonetop.js renderChatMessageHTML, by way of follower-deaths-door.js), once per card. */
+export function wireFollowerFateReopen(message, html) {
+	wireLatchedButtons(message, html, {
+		selector: REOPEN_SELECTOR, flag: FATE_REOPEN_FLAG, what: "reopening a follower's fate",
+		act: (actor, btn, buttons) => withCardLatch(message, FATE_REOPEN_FLAG, true, buttons,
+			async () => !!(await openFollowerFate(actor, rowFromButton(btn)))),
+	});
 }

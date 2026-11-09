@@ -35,6 +35,7 @@ import {
 } from "./custom-route.js";
 import { hasStart, normalizeStart, startKey, startName, storedStart } from "./journey-start.js";
 import { hasFillBlank, fillBlank } from "./fill-blanks.js";
+import { countOf } from "./plural.js";
 
 /** An en dash for printed ranges, as the book's own table sets them. */
 const RANGE_DASH = "–";
@@ -709,18 +710,88 @@ export function routeLegLines(route) {
 export function chartBlankValue(key, route) {
 	if (!route) return null;
 	if (key === "days") {
-		// A trip measured in hours that can run to a full day's march (MARCH_HOURS) is a day: Book
-		// II p.334 writes the Ruined Tower's 8-10 hours up as "It'll take at least a day each way",
-		// and Book I p.305 has the GM jot "at least 1 day there and back" for the cave bears. One
-		// shorter than that has no day count worth printing; "at least 1 days" for a morning's
-		// walk would read worse than the blank does.
+		// ANY JOURNEY WITH A TIME IS AT LEAST A DAY (audit ruling E15, 2026-11-03). Book I p.305
+		// has the GM jot "It'll take at least 1 day there and back" for the cave bears, three to
+		// four hours away, and Book II p.334 writes the Ruined Tower's 8-10 hours as "at least a
+		// day each way". A morning's walk still costs the day, so the floor is one. The phrase the
+		// blank is filled with says "each way" (see `chartDaysPhrase`), which is the book's own
+		// wording and keeps "1 day" honest for a trip that is really a few hours.
 		const total = route.total;
-		if (!total?.days?.max && !(total?.hours?.max >= MARCH_HOURS)) return null;
+		if (!total?.days?.max && !total?.hours?.max) return null;
 		return String(Math.max(1, atLeastDays(total)));
 	}
 	// A single-leg journey has nowhere to travel to first.
 	if (key === "firstTravel") return stopsAlongTheWay(route)[0] ?? null;
 	return null;
+}
+
+/** "1 day", "4 days": a whole count of days with its noun. */
+const dayCount = n => countOf(n, "day");
+
+/**
+ * The route cut at its named stops: one run of legs per "first travel to ___" the journey has.
+ *
+ * A stop is a NAMED place a leg arrives at short of the end, which is exactly what
+ * `stopsAlongTheWay` names, so the two cannot disagree about where the journey breaks. A bare mark
+ * on a drawn way is a bend in the line and not a leg of its own, so it never cuts.
+ */
+function namedSections(route) {
+	const legs = route?.legs ?? [];
+	const sections = [];
+	let run = [];
+	legs.forEach((leg, i) => {
+		run.push(leg);
+		if (i < legs.length - 1 && leg.to) {
+			sections.push({ to: leg.toName, legs: run });
+			run = [];
+		}
+	});
+	if (run.length) sections.push({ to: null, legs: run });
+	return sections;
+}
+
+/**
+ * What the "It'll take at least ___ days" blank says, in words, or null where the route cannot say.
+ *
+ * "EACH WAY", because that is what the number is: the table's times are one way, and the book's own
+ * Chart a Course for the Ruined Tower reads "at least a day each way" (Book II p.334).
+ *
+ * PER LEG when the trip also says "First travel to ___" (audit ruling E16): Book I p.303 has the GM
+ * "Chart a Course for each leg of the journey" once that requirement is chosen, and its own worked
+ * example reads "It'll take at least 4 days from Marshedge". So a journey cut at Marshedge reads
+ * "10 days to Marshedge, then 4 from there, each way" rather than one total that hides the stop.
+ * Each leg is at least a day, by the same floor as the whole.
+ */
+export function chartDaysPhrase(route, { perLeg = false } = {}) {
+	const whole = chartBlankValue("days", route);
+	if (whole === null) return null;
+	const sections = perLeg ? namedSections(route) : [];
+	if (sections.length < 2) return `${dayCount(Number(whole))} each way`;
+	const counts = sections.map(section => {
+		const total = section.legs.reduce((running, leg) => addLeg(running, leg), emptyTotal());
+		return Math.max(1, atLeastDays(total));
+	});
+	const parts = sections.map((section, i) => {
+		if (i === 0) return `${dayCount(counts[i])} to ${section.to}`;
+		return section.to ? `then ${counts[i]} to ${section.to}` : `then ${counts[i]} from there`;
+	});
+	return `${parts.join(", ")}, each way`;
+}
+
+/**
+ * What the GM's answer box under one Chart a Course line offers as its placeholder: the phrase the
+ * blank would be filled with, or null where the route has nothing to say about that line.
+ *
+ * `picked` is the trip's chosen lines, which decides whether the days read per leg.
+ */
+export function chartBlankHint(key, route, picked = []) {
+	if (key === "days") return chartDaysPhrase(route, { perLeg: chartsFirstTravel(picked) });
+	return chartBlankValue(key, route);
+}
+
+/** Has the trip chosen "First travel to ___"? Then its days are charted per leg. */
+export function chartsFirstTravel(picked) {
+	return (Array.isArray(picked) ? picked : []).some(entry => entry?.key === "firstTravel");
 }
 
 /**
@@ -748,8 +819,20 @@ export function chartBlankValue(key, route) {
  * @param {object|null} route
  * @param {string} [written]  what the GM said in this one blank, if anything
  */
-export function fillChartBlank(text, key, route, written = "") {
+export function fillChartBlank(text, key, route, written = "", { perLeg = false } = {}) {
 	if (!hasFillBlank(text)) return text;
-	const value = String(written).trim() || chartBlankValue(key, route);
+	const said = String(written).trim();
+	if (said) return fillBlank(text, said);
+	// The days line takes its whole phrase, noun and all: "at least ___ days" with "1 day each way"
+	// spliced into the blank alone would read "at least 1 day each way days".
+	if (key === "days") {
+		const phrase = chartDaysPhrase(route, { perLeg });
+		if (phrase === null) return text;
+		return fillBlank(String(text).replace(DAYS_BLANK_RE, "___"), phrase);
+	}
+	const value = chartBlankValue(key, route);
 	return value === null ? text : fillBlank(text, value);
 }
+
+/** A blank followed by the word "days", which the days phrase replaces whole. */
+const DAYS_BLANK_RE = /_{2,}\s+days\b/;

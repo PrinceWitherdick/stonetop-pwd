@@ -105,6 +105,8 @@ export class RelmapBoardBar {
 	} = {}) {
 		this.root = root ?? null;
 		this._surface = surface ?? (() => null);
+		// ⚠ A WRITE STARTED HERE IS THE WINDOW'S TO KEEP TRACK OF, not the bar's: every one goes through
+		// the window's own write (RelationshipMapWindow `_write`), which an undo waits on.
 		this._onField = onField ?? (() => {});
 		this._onPicked = onPicked ?? (() => {});
 		this._canEdit = canEdit;
@@ -411,9 +413,20 @@ export class RelmapBoardBar {
 	_flushWriting() {
 		if (!this._writing) return undefined;
 		this._disarm(this._writing.field);
-		if (!this.id || !this._field || !this._canEdit()) return undefined;
+		if (!this.id || !this._field) return undefined;
 		const said = this._field.value ?? "";
 		if (said === this._saved) return undefined;
+		// ⚠ SAID, NOT DROPPED QUIETLY. Edit rights taken away mid-sentence (the GM changing who owns the
+		// map) used to throw the words away with nothing on screen to say so.
+		// Once per lot of words, though: every later flush (the next blur, a board switch, Undo,
+		// closing) would otherwise say it again about the same words.
+		if (!this._canEdit()) {
+			if (this._lostSaid !== said) {
+				this._lostSaid = said;
+				globalThis.ui?.notifications?.warn?.(globalThis.game?.i18n?.localize?.("stonetop.relmap.editLost") ?? "");
+			}
+			return undefined;
+		}
 		this._saved = said;
 		return this._onField(this.id, { [this._writing.key]: said });
 	}

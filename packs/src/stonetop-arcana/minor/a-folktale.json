@@ -19,11 +19,13 @@
             {
               "type": "option",
               "slug": "herbalist-teacher",
+              "path": "herbalist",
               "description": "A Marshedge herbalist, steeped in lore, to teach you the ritual"
             },
             {
               "type": "option",
               "slug": "gwir-nettle-spirit",
+              "path": "spirit",
               "description": "The spirit of a gwir-nettle, friendly or bound, to reveal the secrets of its birth"
             }
           ]

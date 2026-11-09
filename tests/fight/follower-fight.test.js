@@ -211,8 +211,9 @@ describe("followerSwarm", () => {
 		expect(followerSwarm(crewToken(), cardOf(crewToken(), [withCrew({ down: 4 })]))).toMatchObject({ formula: "d6+1", standing: 2 });
 	});
 
-	// FOE-6: "at a single foe" (p.473). Not at several, not at a group token, not in a group-against-group exchange,
-	// where the abstraction's own +N rides the plain die (p.416).
+	// FOE-6: "at a single foe" (p.473). Not at several, not at a group token. FGT-5: read by who the blow is AT, not by
+	// the engagement: a crew in a group-against-group exchange striking the lone foe beside it still swarms it, and
+	// its blows at the other group (p.416's +N, damage-seed.js#groupBlowSeed) are never "single".
 	it("is offered only while the token fights one single-bodied foe, or the fight cannot place it", () => {
 		const place = (melee, fighters = [], clusters = []) => () => ({ combatant: { id: "crew" }, entry: { melee, shootingAt: [] }, fighters, result: { clusters } });
 		const at = (engagement, targets = []) => atSingleFoe({}, { engagement, targets });
@@ -220,14 +221,19 @@ describe("followerSwarm", () => {
 		expect(at(place(["a"], [{ id: "a", bodies: 1 }]))).toBe(true);
 		expect(at(place(["a", "b"]))).toBe(false);
 		expect(at(place(["a"], [{ id: "a", bodies: 6 }]))).toBe(false);
-		const exchange = place(["a"], [{ id: "a", bodies: 1 }], [{ heroIds: ["crew"], foeIds: ["a"], groups: { heroGroupBodies: 6, foeGroupBodies: 20 } }]);
-		expect(at(exchange)).toBe(false);
-		// The roller's own targets say who the blow is at first (p.473), as an ordered attack reads them; inside a
-		// group-against-group exchange even one targeted foe is not "single" (p.416: the abstraction's +N counts the crew).
+		const exchange = place(["a"], [{ id: "a", bodies: 1 }], [{ heroIds: ["crew"], foeIds: ["a", "horde"], groups: { heroGroupBodies: 6, foeGroupBodies: 20 } }]);
+		expect(at(exchange)).toBe(true);
+		const atHorde = place(["horde"], [{ id: "horde", bodies: 20 }], [{ heroIds: ["crew"], foeIds: ["horde"], groups: { heroGroupBodies: 6, foeGroupBodies: 20 } }]);
+		expect(at(atHorde)).toBe(false);
+		// The roller's own targets say who the blow is at first (p.473), as an ordered attack reads them, counted by the
+		// fight's own bodies when it has the token (a GM headcount's warband is several, though no group token).
 		const foe = { actor: { type: "monster", system: {} } };
 		expect(at(place(["a", "b"]), [foe])).toBe(true);
 		expect(at(() => null, [foe, foe])).toBe(false);
-		expect(at(exchange, [foe])).toBe(false);
+		expect(at(exchange, [foe])).toBe(true);
+		const warband = { document: { uuid: "Scene.s.Token.w" }, actor: { type: "npc", system: {} } };
+		const withWarband = () => ({ ...atHorde(), fighters: [{ id: "w", bodies: 5 }], combatants: new Map([["w", { id: "w", token: { uuid: "Scene.s.Token.w" } }]]) });
+		expect(at(withWarband, [warband])).toBe(false);
 		const card = cardOf(crewToken(), [withCrew()]);
 		expect(followerSwarm(crewToken(), card, { engagement: place(["a", "b"]) })).toBe(null);
 	});

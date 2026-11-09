@@ -77,7 +77,6 @@ describe("text-only chips trim themselves", () => {
 		".stonetop-cf-chip",
 		".stonetop-cf-preview-tag",
 		".stonetop .threat-themes__item",
-		".stonetop .threat-suggested__chip",
 		".stonetop-expedition-dialog .stonetop-exp-load-pill",
 		".stonetop-journey-canvas .stonetop-journey-tag",
 		".stonetop-rel-lane-count",
@@ -133,7 +132,6 @@ describe("chips with an icon or a count trim their label element", () => {
 		".stonetop-rapport-chip-name",
 		".stonetop-preparation-chip-name",
 		".stonetop-reminder-chip-text",
-		".stonetop .create-monster .cm-move-suggestion > span",
 		".stonetop-person-picker-chip-name",
 		".stonetop-timeline-entry-linked-text",
 		".stonetop-expedition-dialog .stonetop-exp-load-move > span",
@@ -144,6 +142,11 @@ describe("chips with an icon or a count trim their label element", () => {
 		// Caslon's line box, now trimmed (the font fixes its own line box; Blink still floors leading).
 		".stonetop-welcome-create-label",
 		".stonetop-relmap-tool > span",
+		// The person bar's words beside a control: Save, the four sides, Italicize, and the chip form's two.
+		".stonetop-relmap-personbar-save > span",
+		".stonetop-relmap-personbar-side > span",
+		".stonetop-relmap-personbar-italic > span",
+		".stonetop-relmap-chipform-btn > span",
 		".pbta.sheet .sheet-tabs:not(.stonetop-tab-rail) .item .stonetop-tab-label",
 	];
 
@@ -174,7 +177,18 @@ describe("chips with an icon or a count trim their label element", () => {
 		["templates/actor/partials/tab-followers.hbs", "stonetop-exceptional-toggle", "button", 1],
 		// Veteran Crew's "tags owed" cue, a flex chip with a hand icon.
 		["templates/actor/partials/tab-followers.hbs", "stonetop-crew-tags-owed", "span", 1],
+		// Big Magic's "trait owed" cue on the sacred pouch row, the same chip.
+		["templates/actor/partials/tab-equipment.hbs", "stonetop-possession-choices-owed", "span", 1],
+		// Beast of Legend's "unique ability or trait" cue on the companion card, the same chip.
+		["templates/actor/partials/tab-followers.hbs", "stonetop-companion-unique-owed", "span", 1],
 		["templates/dialogs/partials/catalog-shell.hbs", "stonetop-catalog-badge", "span", 1],
+		// The route pills: the scene button, Show players (its class also matches the stale share's
+		// Hide beside it, so two), that Hide, and the players' window's Stop showing (audit RTE-16).
+		// The steading header's See the route is built in JS (sharedRouteChipHtml, below).
+		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-to-scene", "button", 1],
+		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-share", "button", 2],
+		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-share-hide", "button", 1],
+		["templates/dialogs/shared-route.hbs", "stonetop-shared-route-stop", "button", 1],
 	])("wraps every label in %s (.%s)", (file, chipClass, tag, count) => {
 		const { count: found, bare } = everyChipWrapped(readRepo(file), chipClass, tag);
 		expect(found, `expected ${count} ${chipClass} in ${file}`).toBe(count);
@@ -220,6 +234,22 @@ describe("chips with an icon or a count trim their label element", () => {
 		}
 	});
 
+	// The reminder row's "+" and the relationship map's Add chip are one kind of control, a dashed add
+	// chip, so core's button rule comes off them in one shared rule and each keeps only its own size.
+	it("resets both dashed add chips through one shared class", () => {
+		const shared = declarations(MAIN, ".stonetop-add-chip");
+		for (const [prop, value] of [["width", "auto"], ["min-height", "0"], ["flex", "none"], ["border-style", "dashed"], ["box-shadow", "none"], ["font-family", "inherit"]]) {
+			expect(declared(shared, prop), prop).toBe(value);
+		}
+		expect(readRepo("templates/actor/partials/reminder-chips.hbs")).toMatch(/class="[^"]*stonetop-reminder-chip--add stonetop-add-chip"/);
+		expect(readRepo("templates/dialogs/relationship-map.hbs")).toMatch(/class="stonetop-relmap-personbar-add stonetop-add-chip"/);
+		// Neither restates the reset.
+		for (const sel of [".stonetop-reminder-chips button.stonetop-reminder-chip--add", ".stonetop-relmap-personbar-add"]) {
+			const body = declarations(MAIN, sel);
+			for (const prop of ["width", "min-height", "box-shadow", "font-family", "flex"]) expect(declared(body, prop), `${sel} ${prop}`).toBeNull();
+		}
+	});
+
 	// No trim reaches an input's text. The Libre Caslon Text @font-face now centres its line box on the
 	// capitals, but the chip's whole-pixel line leaves ~1px of leading whose top half Blink floors to a
 	// whole pixel, so the padding still lowers the words: geometric -0.36/+0.09/-0.02px at roots 14/16/20
@@ -234,6 +264,17 @@ describe("chips with an icon or a count trim their label element", () => {
 		const fn = chat.match(/export function rollKindBadge[\s\S]*?\n\}/)?.[0];
 		expect(fn, "rollKindBadge is gone from chat.js").toBeTruthy();
 		expect(fn).toContain('<span class="stonetop-chip-text">');
+	});
+
+	// Built in JS rather than in a template: the shared route card's See the route button, and the
+	// steading chip the in-place refresh draws (audit RTE-16).
+	it("wraps the shared route's built buttons' labels where they are built", () => {
+		const src = readRepo("module/utils/shared-route.js");
+		for (const name of ["sharedRouteCardHtml", "sharedRouteChipHtml"]) {
+			const fn = src.match(new RegExp(String.raw`export function ${name}[\s\S]*?\n\}`))?.[0];
+			expect(fn, `${name} is gone from shared-route.js`).toBeTruthy();
+			expect(fn).toContain('<span class="stonetop-chip-text">');
+		}
 	});
 });
 
@@ -293,6 +334,25 @@ describe("the Bolster button and the Suggested tag carry no hand nudge", () => {
 	});
 });
 
+// Measured 11-05 with the text-centring audit at 1x/1.25x/1.5x: the arcana tab's "Roll 1d4+8" (icon row, -1.3px)
+// and the crew member dialog's "Add" for a trait of their own (icon row, 0px), on core's button and even padding.
+// The crew member's edit pencil is icon-only and the unlock list's "or" a plain list label, so neither has words
+// to centre in a box. What would break the two buttons is a hand nudge on the label.
+describe("the arcana Roll uses button and the crew trait Add carry no hand nudge", () => {
+	it.each([
+		".stonetop-arcanum-roll-uses-btn",
+		".stonetop-individual-dialog .stonetop-trait-custom-row .stonetop-trait-custom-add",
+	])("%s", sel => {
+		const body = declarations(MAIN, sel);
+		expect(body, `${sel} has no rule`).toBeTruthy();
+		for (const prop of ["top", "bottom", "transform", "translate", "padding-top", "padding-bottom"]) {
+			expect(declared(body, prop) ?? null, `${sel} sets ${prop}`).toBeNull();
+		}
+		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+		expect(bottom).toBe(top);
+	});
+});
+
 // Measured 10-31 with the text-centring audit (z:/tmp/foundry-verify/forced-out-centre.mjs): Bodysnatcher's
 // "Forced out" roll-card button (icon row, -1 to 0px) and Death's Door's icon-led gold caution row (-0.5 to
 // 0px), at 1x/1.25x/1.5x in all three sheet fonts. The button is the chat card's shared button and the row a
@@ -339,7 +399,6 @@ describe("chip icons sit at a whole-pixel size", () => {
 		".stonetop-catalog-filter > i",
 		".stonetop-catalog-badge > i",
 		".stonetop-cf-chosen-tag i",
-		".stonetop .create-monster .cm-move-suggestion i",
 		".stonetop-person-picker-chip i",
 		".stonetop-order-followers-dialog .stonetop-of-tag i",
 		".stonetop-follower-dead-badge i",
@@ -347,6 +406,10 @@ describe("chip icons sit at a whole-pixel size", () => {
 		".stonetop .stonetop-moves-level-notice-dismiss i",
 		".stonetop-reminder-chip i",
 		".stonetop-crew-tags-owed > i",
+		".stonetop-possession-choices-owed > i",
+		".stonetop-companion-unique-owed > i",
+		".stonetop-relmap-chip > i",
+		".stonetop-relmap-personbar-add > i",
 	];
 
 	it.each(ICONS)("%s rounds its font-size to 1px", sel => {

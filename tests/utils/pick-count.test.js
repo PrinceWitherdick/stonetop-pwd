@@ -230,18 +230,20 @@ describe("what the shipped mysteries derive", () => {
 	});
 
 	it.each([
-		// A resource spent one at a time, a move that ADDS to another's list, and a d4 assignment
-		// table that is not a choice at all.
+		// A resource spent one at a time, and a move that ADDS to another's list. (The Ring of Daagon's
+		// CALL UP THE DEEP ONES used to be read as offering its d4 assignment table; that table follows the
+		// Servant's stat block and is the Call Up dialog's, so the move now prints no list: arcana audit
+		// 11-04, MAJ-8.)
 		"Demonhide Cloak :: UNHOLY VISAGE",
 		"Storm Markings :: CHOSEN OF THE STORM-BRINGER",
-		"Ring of Daagon :: CALL UP THE DEEP ONES",
 	])("%s ticks freely", name => {
 		expect(derived.has(name), `${name} prints no option list`).toBe(true);
 		expect(derived.get(name)).toBe(0);
 	});
 
 	it("covers every shipped mystery that prints a list", () => {
-		expect(derived.size).toBe(9);
+		expect(derived.size).toBe(8);
+		expect(derived.has("Ring of Daagon :: CALL UP THE DEEP ONES")).toBe(false);
 	});
 });
 

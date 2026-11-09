@@ -263,12 +263,9 @@ async function openCreateSite() {
 	// The same flow the Sites tab's own button runs. Any open GM Toolkit picks the new card up
 	// by watching its journal pages, so there is nothing to nudge from here.
 	const { createSiteFlow } = await import("../actors/gmtoolkit/gm-prep-actions.js");
-	// quietSave: this says where the site went, so the walkthrough's own Save for now notice would repeat it.
-	const page = await createSiteFlow(steading, { quietSave: true });
-	if (!page) return;
-	// Said HERE and not in the flow: creating from the tab shows you the card appear, but this
-	// path may leave the toolkit closed entirely, so it has to say where the site went.
-	ui.notifications?.info?.(`Added site: ${page.name}. It's at the foot of the GM Toolkit's Expeditions tab.`);
+	// announce: creating from the tab shows you the card appear, but this path may leave the toolkit
+	// closed entirely, so the walkthrough says where the site went (and skips its Save for now notice).
+	await createSiteFlow(steading, { announce: true });
 }
 
 /**
@@ -300,6 +297,6 @@ async function _openArcanaInspire() {
 	const { createArcanumItem } = await import("../item/createArcanum.js");
 	const { StonetopArcanaInspireDialog } = await import("../item/StonetopArcanaInspireDialog.js");
 	new StonetopArcanaInspireDialog({
-		onCreate: ({ name, major, front }) => createArcanumItem({ name, major, front }),
+		onCreate: ({ name, major, gmNotes }) => createArcanumItem({ name, major, gmNotes }),
 	}).render(true);
 }

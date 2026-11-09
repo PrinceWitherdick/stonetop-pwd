@@ -33,6 +33,11 @@ export function wireKeyboardButtons(root) {
 	if (!el?.addEventListener || el.dataset?.stonetopKeyButtons) return;
 	if (el.dataset) el.dataset.stonetopKeyButtons = "1";
 	el.addEventListener("keydown", ev => {
+		// Tab moves between this window's controls. Core binds Tab on `window` (cycle the map's tokens) and
+		// takes it whenever the focused element is not a field or a button in a form, which is every
+		// role="button" card and step heading here: the keyboard could never leave them. Stopping it at the
+		// window keeps the browser's own Tab and never reaches core.
+		if (ev.key === "Tab" && !ev.altKey && !ev.ctrlKey && !ev.metaKey) { ev.stopPropagation(); return; }
 		const button = pressesRoleButton(ev);
 		if (!button || !el.contains(button)) return;
 		// Space would scroll the window, Enter submit a surrounding form.

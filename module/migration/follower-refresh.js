@@ -13,7 +13,14 @@
 //     +2; the tag became the card's flag (2026-10-18);
 //   • the Blessed's Olwin was printed "Armor 1 (shield)" with no Gear, so her shield never bought its
 //     +1 Readiness; the playbook now gives her a ticked Shield row, seeded onto a card with no Gear
-//     stored (2026-10-18).
+//     stored (2026-10-18);
+//   • the Void elemental carried an invented cost, "profuse gratitude"; the crown prints none (2026-11-05);
+//   • the dool spirit's damage was d8, not the book's d6, and Halix's damage and moves dropped their
+//     "(tags vary)" and "(harmed only by silver or salt)" (2026-11-05);
+//   • Thistlewik's and the unliving chimera's armor was a bare number, dropping "2 vs. iron" and "0 vs. bronze"
+//     (2026-11-06).
+// The mantle wraiths became a group of three (2026-11-05) but are not listed: a group is a different
+// card (size, per-member HP), so one already summoned stays as it is.
 //
 // THE SAME RULE AS THE HELD MOVES (move-refresh.js), with the old values listed here by hand: the
 // lists are code, not pack data, so the history generator cannot read them. A card is corrected only
@@ -49,11 +56,36 @@ export const FOLLOWER_SUPERSEDED = {
 	"stone-idol:thistlewik": {
 		"notes": [
 			"Armor 6 (stone, resilience), 2 vs. iron. Special qualities: inert; indistinguishable voice. It hardly considers itself a follower."
+		],
+		// The plain 6 dropped its "2 vs. iron" (round-2 audit EDG-12): the card keeps the clause now.
+		"armor": [6]
+	},
+	// The plain 4 dropped its "0 vs. bronze" (round-2 audit EDG-12).
+	"rusty-cauldron:unliving-chimera": {
+		"armor": [4]
+	},
+	// The Void elemental's cost was invented: Book II p.539 prints none (2026-11-05 arcana audit).
+	"oversized-crown:void-elemental": {
+		"cost": [
+			"profuse gratitude"
 		]
 	},
+	// Halix's "(tags vary)" and "(harmed only by silver or salt)" were cut short (2026-11-05 arcana audit, Book II p.565).
 	"blackwood-fetishes:halix": {
 		"tags": [
 			["undead", "spirit", "magical", "hedonistic", "cautious", "devious", "stealthy", "exceptional"]
+		],
+		"damage": [
+			"ghostly touch d4 (hand, ignores armor) or host's weapon d6"
+		],
+		"moves": [
+			"Manifest a ghostly presence\nPossess an inebriated victim\nSpot a weakness, want, or fear\nSpin plots and falsehoods"
+		]
+	},
+	// The dool spirit feasts on fear for d6, not d8 (2026-11-05 arcana audit, Book II p.514).
+	"scroll-and-bone-flute:dool-spirit": {
+		"damage": [
+			"feast on fear d8 (close, hand, ignores armor, disadvantage)"
 		]
 	},
 	"mindgem:mighty-servant": {

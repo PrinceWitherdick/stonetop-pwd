@@ -57,6 +57,23 @@ describe("confirmOutcome", () => {
 		expect(asked.mock.calls[1][0]).not.toHaveProperty("render");
 	});
 
+	// A "discard your work?" question has no stay button (its X is that), so Enter must not land on
+	// Discard: core would make the first button Enter's and focus it, so the window takes the focus.
+	it("with defaultKey false, puts Enter on no button and focuses the window instead", async () => {
+		const asked = stubConfirm(null);
+		const render = vi.fn();
+		await askWithButtons({ title: "t", content: "", defaultKey: false, render, buttons: [{ key: "discard", label: "Discard", value: true }] });
+		const config = asked.mock.calls[0][0];
+		expect(config.buttons.some(b => b.default)).toBe(false);
+		const button = { removeAttribute: vi.fn() };
+		const element = { querySelectorAll: () => [button], setAttribute: vi.fn(), focus: vi.fn() };
+		config.render({}, { element });
+		expect(button.removeAttribute).toHaveBeenCalledWith("autofocus");
+		expect(element.setAttribute).toHaveBeenCalledWith("tabindex", "-1");
+		expect(element.focus).toHaveBeenCalled();
+		expect(render).toHaveBeenCalledWith(element);
+	});
+
 	it("keeps a caller's own window class", async () => {
 		const asked = stubConfirm(false);
 		await askWithButtons({ title: "t", content: "", classes: ["stonetop-camp-ask"], buttons: [{ key: "a", label: "A", value: 1 }] });

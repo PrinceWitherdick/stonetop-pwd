@@ -31,6 +31,7 @@
  */
 
 import { tookBackground } from "./took-background.js";
+import { localize } from "../../utils/i18n.js";
 
 /** The Blessed's sacred pouch, where Stock lives. Its `max` can be raised (Big Magic). */
 export const SACRED_POUCH_SLUG = "sacred-pouch";
@@ -160,10 +161,40 @@ export function stockReceipt(source, amount = 1, lost = 0) {
 }
 
 /**
- * The line a cross-playbook picker shows under a move that costs Stock, for a character with no
- * sacred pouch to pay it from. DISPLAY ONLY: the book lets them pick it, so it is never filtered.
+ * The lines a cross-playbook picker shows under a move for a character with no sacred pouch
+ * (languages/en.json `stonetop.stockCost`): one that costs Stock, and one that works on the pouch
+ * itself (Big Magic grows it, Borrow Power stores in it). DISPLAY ONLY: the book lets them pick
+ * it, so it is never filtered.
  */
-export const NO_POUCH_STOCK_NOTE = "Costs Stock; you have no sacred pouch.";
+const NO_POUCH_NOTE_KEYS = Object.freeze({
+	stock: "stonetop.stockCost.noPouch",
+	pouch: "stonetop.stockCost.noPouchForPouch",
+});
+
+/** Does this move's printed text work on a sacred pouch ("your sacred pouch", "your pouch")? */
+export function pouchMoveFromDescription(html) {
+	const text = String(html ?? "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ");
+	return /\bpouch\b/i.test(text);
+}
+
+/**
+ * The note for a move offered to someone with NO sacred pouch, or null: Stock first (a move that
+ * spends Stock and stores in the pouch, like Suck the Poison Out, is a Stock move), then the pouch.
+ * `kind` (noPouchNoteKind) lets the sheet word its own cue; `note` is the picker row's line.
+ *
+ * @returns {{kind: "stock"|"pouch", note: string}|null}
+ */
+export function noPouchNote(html) {
+	const kind = noPouchNoteKind(html);
+	return kind ? { kind, note: localize(NO_POUCH_NOTE_KEYS[kind]) } : null;
+}
+
+/** Which note noPouchNote says: "stock", "pouch", or null. */
+export function noPouchNoteKind(html) {
+	if (stockCostFromDescription(html)) return "stock";
+	if (pouchMoveFromDescription(html)) return "pouch";
+	return null;
+}
 
 /**
  * Does this move's own printed text say it costs Stock, and how much?

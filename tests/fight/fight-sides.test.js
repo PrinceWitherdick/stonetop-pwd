@@ -149,3 +149,27 @@ describe("bodiesFor", () => {
 		expect(bodiesFor({ type: "monster", organization: "horde", fightAsGroup: true, count: 4, hp: { max: 3 } })).toMatchObject({ bodies: 4 });
 	});
 });
+
+// FGT-2: a group's blows land on a crew token's pool, and p.416 reads them as casualties: "If one group loses half its
+// HP, then about half that group's numbers are out the action. Adjust the bonuses to damage and armor accordingly!"
+describe("bodiesFor: a crew's pool as casualties (FGT-2)", () => {
+	it("stands no more of the crew than its pool leaves standing, nor than its roster has up", () => {
+		// Pool 2/6 on a crew of six: two of six standing, as the crew card's casualty line says.
+		expect(bodiesFor({ type: "npc", hp: { value: 2, max: 6 }, roster: { standing: 6, size: 6 } })).toMatchObject({ bodies: 2, standing: 2, size: 6, routed: false });
+		// The roster lower than the pool reads (members hit one by one): the roster.
+		expect(bodiesFor({ type: "npc", hp: { value: 6, max: 6 }, roster: { standing: 3, size: 6 } })).toMatchObject({ bodies: 3, standing: 3 });
+		// A pool with HP left keeps one up; only 0 HP routs them.
+		expect(bodiesFor({ type: "npc", hp: { value: 1, max: 20 }, roster: { standing: 2, size: 2 } })).toMatchObject({ bodies: 1, out: false });
+		expect(bodiesFor({ type: "npc", hp: { value: 0, max: 6 }, roster: { standing: 6, size: 6 } })).toMatchObject({ bodies: 0, out: true, routed: true });
+	});
+});
+
+// EDG-1: Death's Door states put a character out of the action whatever their HP (Book I p.245, p.150).
+describe("bodiesFor: out of the action at Death's Door (EDG-1)", () => {
+	it("counts a character out of the action as out, at any HP, unless they fight on", () => {
+		expect(bodiesFor({ type: "character", hp: { value: 10, max: 20 }, outOfAction: true })).toMatchObject({ bodies: 0, out: true });
+		expect(bodiesFor({ type: "character", hp: { value: 10, max: 20 }, outOfAction: false })).toMatchObject({ bodies: 1, out: false });
+		// Unstoppable's fighting on, or Death's Door's last move (fight/in-battle.js), wins over both.
+		expect(bodiesFor({ type: "character", hp: { value: 0, max: 20 }, outOfAction: true, keepsFighting: true })).toMatchObject({ bodies: 1, out: false });
+	});
+});

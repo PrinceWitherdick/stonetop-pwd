@@ -55,11 +55,16 @@ export function defendReadinessHold(tier, { hasShield = false, hasGuardian = fal
  * difference lands on what is held NOW, so Readiness spent since stays spent. At the roll itself `set` and
  * `current` are both `prior`. Never below none. PURE.
  *
+ * NEVER PAST WHAT THE TIER HOLDS, or what is held already: a Defend "holds 3" on a 10+ (p.216), it never stacks on
+ * itself. Two rewrites of one card landing together (a GM's Shift and a relayed +1, each read on its own client
+ * against the card's old record) each added the same difference, and a 7-9 shifted to a 10+ came out at 5.
+ *
  * @returns {{next: number, set: number}}  what to hold now, and what this tier raised the pool to
  */
 export function readinessForTier({ prior, set = prior, current = prior, hold }) {
 	const target = Math.max(readinessCount(prior), readinessCount(hold));
-	return { next: readinessCount(readinessCount(current) + target - readinessCount(set)), set: target };
+	const moved = readinessCount(readinessCount(current) + target - readinessCount(set));
+	return { next: Math.min(moved, Math.max(readinessCount(current), target)), set: target };
 }
 
 /**

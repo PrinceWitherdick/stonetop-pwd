@@ -3,6 +3,7 @@ import {
 	solveFrom, solveTravel, formatTravelTime, atLeastPhrase, atLeastDays,
 	stopsAlongTheWay, routeLine, routeLegLines, fillChartBlank, chartBlankValue,
 	normalizeJourney, journeyRoute, journeyKey, routePhrase,
+	chartDaysPhrase, chartBlankHint, chartsFirstTravel,
 } from "../../module/utils/travel-route.js";
 import { MARCH_HOURS, TRAVEL_LEGS, TRAVEL_PLACES } from "../../module/data/travel-times.js";
 
@@ -223,9 +224,28 @@ describe("filling the Chart a Course blanks", () => {
 	const FIRST = "First travel to ___, and from there to your destination";
 	const lygos = to(from(), "lygos");
 
-	it("fills the day count from the route", () => {
+	it("fills the day count from the route, each way", () => {
 		expect(fillChartBlank(DAYS, "days", lygos))
-			.toBe("It'll take at least 40 days (and a corresponding amount of supplies)");
+			.toBe("It'll take at least 40 days each way (and a corresponding amount of supplies)");
+	});
+
+	// Audit ruling E16: Book I p.303, "If you choose 'First you must travel to ___,' then Chart a
+	// Course for each leg", and the worked example's "It'll take at least 4 days from Marshedge".
+	it("charts the days per leg once the trip must first travel somewhere", () => {
+		expect(chartDaysPhrase(lygos, { perLeg: true })).toBe("10 days to Marshedge, then 30 from there, each way");
+		expect(fillChartBlank(DAYS, "days", lygos, "", { perLeg: true }))
+			.toBe("It'll take at least 10 days to Marshedge, then 30 from there, each way (and a corresponding amount of supplies)");
+		// A journey with no stop on the way has nothing to cut.
+		expect(chartDaysPhrase(to(from(), "marshedge"), { perLeg: true })).toBe("10 days each way");
+		// The hint the walkthrough's answer box shows asks the trip's own list.
+		expect(chartBlankHint("days", lygos, [{ key: "firstTravel" }])).toContain("then 30 from there");
+		expect(chartBlankHint("days", lygos, [])).toBe("40 days each way");
+		expect(chartsFirstTravel([{ key: "days" }])).toBe(false);
+	});
+
+	it("puts the GM's own words in the blank and nothing else", () => {
+		expect(fillChartBlank(DAYS, "days", lygos, "45"))
+			.toBe("It'll take at least 45 days (and a corresponding amount of supplies)");
 	});
 
 	it("names the place you must reach first", () => {
@@ -236,9 +256,15 @@ describe("filling the Chart a Course blanks", () => {
 	it("leaves the blank alone when the route cannot answer it", () => {
 		const marshedge = to(from(), "marshedge");           // one leg, no stop on the way
 		expect(fillChartBlank(FIRST, "firstTravel", marshedge)).toBe(FIRST);
+	});
 
-		const grove = to(from(), "the-red-grove");            // hours only, so no day count
-		expect(fillChartBlank(DAYS, "days", grove)).toBe(DAYS);
+	// Audit ruling E15: Book I p.305's cave bears, three to four hours away, are "at least 1 day
+	// there and back". A journey with any time at all is at least a day.
+	it("calls a morning's walk a day each way", () => {
+		const grove = to(from(), "the-red-grove");            // 4-6 hours
+		expect(chartBlankValue("days", grove)).toBe("1");
+		expect(fillChartBlank(DAYS, "days", grove))
+			.toBe("It'll take at least 1 day each way (and a corresponding amount of supplies)");
 	});
 
 	it("leaves every other requirement untouched", () => {
@@ -264,9 +290,8 @@ describe("filling the Chart a Course blanks", () => {
 			}
 			if (chartBlankValue("days", route) === null) hourly.push(slug);
 		}
-		expect(hourly.sort()).toEqual([
-			"cave-bears-den", "the-crossroads", "the-maw", "the-red-grove",
-		]);
+		// Every destination with a time has a day count now (ruling E15).
+		expect(hourly).toEqual([]);
 	});
 
 	// User ruling 2026-10-02. Book II p.334 writes the Ruined Tower's own Chart a Course as "It'll
@@ -279,8 +304,8 @@ describe("filling the Chart a Course blanks", () => {
 		expect(tower.total.hours.max).toBeGreaterThanOrEqual(MARCH_HOURS);
 		expect(chartBlankValue("days", tower)).toBe("1");
 		expect(fillChartBlank(DAYS, "days", tower)).not.toBe(DAYS);
-		// One that cannot is still not a day.
-		expect(chartBlankValue("days", to(from(), "the-maw"))).toBeNull();
+		// One that cannot run to a day's march is still at least the day it costs (ruling E15).
+		expect(chartBlankValue("days", to(from(), "the-maw"))).toBe("1");
 	});
 });
 

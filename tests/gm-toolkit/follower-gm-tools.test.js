@@ -124,6 +124,12 @@ describe("the balk card", () => {
 		expect(balkCardBody({ name: "A", leaderName: "C", reason: "against", loyalty: 2 })).not.toContain('data-choice="spend" disabled');
 	});
 
+	it("doesn't print the order: it's said aloud at the table, not typed", () => {
+		const html = balkCardBody({ name: "Andras", leaderName: "Cadi", reason: "scared", order: "hold the bridge", loyalty: 1 });
+		expect(html).not.toContain("hold the bridge");
+		expect(html).not.toContain("The order");
+	});
+
 	it("is answered by the leader's owner, or the GM while none of them is here", () => {
 		const leader = { testUserPermission: (u) => u.id === "p1" };
 		const player = { id: "p1", isGM: false, active: true };

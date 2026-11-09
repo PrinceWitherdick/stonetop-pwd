@@ -25,12 +25,13 @@ import { openStruggleSetup } from "./StruggleSetupDialog.js";
 /**
  * The GM's way in, from any GM screen: open the struggle under way, or set up a new one. `journey`
  * pre-ticks "part of a journey" for a struggle called from the journey itself, which is when Home
- * on the Range and Trailblazer apply ("when a journey requires/causes you to...").
+ * on the Range and Trailblazer apply ("when a journey requires/causes you to..."). `only`: the ids of the
+ * characters who start ticked (the trip's party, from the walkthrough; audit ROAD-12); the rest stay listed.
  */
-export function callStruggleAsOne({ journey = false } = {}) {
+export function callStruggleAsOne({ journey = false, only = null } = {}) {
 	if (!game.user?.isGM) return null;
 	const live = liveStruggle();
-	return live ? openStruggleWindow(live.id) : openStruggleSetup({ journey, onClosed: answerNextAsk });
+	return live ? openStruggleWindow(live.id) : openStruggleSetup({ journey, ...(only ? { only } : {}), onClosed: answerNextAsk });
 }
 
 /** What a GM screen's button onto the move says right now (struggle-view.js#struggleCallView). */

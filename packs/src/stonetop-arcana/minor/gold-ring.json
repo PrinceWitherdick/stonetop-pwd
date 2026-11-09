@@ -52,7 +52,7 @@
         "move": {
           "name": "When you spend the better part of a day wearing the ring and worshipping Helior in full sunlight",
           "rollType": null,
-          "description": "<p>Hold 1 Daylight.</p><p>When you <strong><em>wear the ring in shadows or darkness and spend 1 Daylight</em></strong>, the ring shines forth with holy light (<em>near, area</em>) that is painful for creatures of darkness to look at.</p>"
+          "description": "<p>Hold 1 Daylight.</p><p>When you <strong><em>wear the ring in shadows or darkness and spend 1 Daylight</em></strong>, the ring shines forth with holy light (<em>near, area</em>) that is painful for creatures of darkness to look at. It glows for a few hours, until you extinguish it, or until another effect uses up its fuel or snuffs it out.</p><p>Alas, while it shines, the ring also shines like a psychic beacon, alerting servants of darkness for miles around to your presence and location.</p>"
         },
         "options": []
       }

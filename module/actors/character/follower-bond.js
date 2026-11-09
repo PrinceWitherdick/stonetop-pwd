@@ -20,11 +20,15 @@ import { FOLLOWER_FLAGS, fillFollowerSlug } from "./follower-roster.js";
 import { followsPartyAsWhole } from "./follower-party.js";
 import { readableFlags } from "./StonetopFlags.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
+import { sendVerifiable, stillAsking } from "../../utils/owner-ask.js";
 import { isPrimaryGM } from "../../utils/primary-gm.js";
 import { inSpenderTurn } from "../../utils/spender-queue.js";
 import { moveChatCard } from "../../utils/chat.js";
 import { escHtml } from "../../utils/strings.js";
 import { format } from "../../utils/i18n.js";
+
+/** How long the GM's client checks back that a Loyalty ask is still waited on (ms), well inside the asker's 10s. */
+const LOYALTY_VERIFY_MS = 3000;
 
 /** The most Loyalty a follower holds (p.464, and every printed track's three circles). */
 export const FOLLOWER_LOYALTY_MAX = 3;
@@ -139,9 +143,11 @@ export async function changeFollowerLoyalty(character, { ftype, slug = "", delta
 	const moveName = move || (Number(delta) > 0 ? STRENGTHEN_YOUR_BOND : SPEND_LOYALTY);
 	if (character.isOwner) return stepLoyaltyInTurn(character, path, { ftype, slug, delta, move: moveName });
 	if (!mayMoveLoyalty(character, ftype, slug, user)) return null;
-	const answer = await askGMClient(gm, FOLLOWER_LOYALTY_QUERY,
-		{ characterUuid: character.uuid, ftype, slug, delta, move: moveName, userId: user?.id ?? null },
-		{ fallback: null, what: "move the follower's Loyalty" });
+	// Verifiable (audit EDG-15, the late Loyalty): a GM's client answering after this one has given up checks back
+	// first and moves nothing, so a press that said "nothing moved" cannot land later, nor twice with a retry.
+	const answer = await sendVerifiable(askId => askGMClient(gm, FOLLOWER_LOYALTY_QUERY,
+		{ characterUuid: character.uuid, ftype, slug, delta, move: moveName, userId: user?.id ?? null, askId },
+		{ fallback: null, what: "move the follower's Loyalty" }));
 	return answer && typeof answer === "object" ? answer : null;
 }
 
@@ -150,7 +156,7 @@ export async function changeFollowerLoyalty(character, { ftype, slug = "", delta
  * (mayMoveLoyalty), by one step either way. Answers `{from, to}` or null.
  */
 export async function handleFollowerLoyaltyQuery(data, context = {}, deps = {}) {
-	const { users = globalThis.game?.users, resolve = resolveSync, actors = globalThis.game?.actors } = deps;
+	const { users = globalThis.game?.users, resolve = resolveSync, actors = globalThis.game?.actors, asking = stillAsking } = deps;
 	if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return null;
 	const asker = queryAsker(data, context, users);
 	const character = data?.characterUuid ? resolve(data.characterUuid) : null;
@@ -158,6 +164,8 @@ export async function handleFollowerLoyaltyQuery(data, context = {}, deps = {}) 
 	const path = followerLoyaltyPath(data?.ftype, data?.slug ?? "");
 	if (character?.type !== "character" || !path || !delta) return null;
 	if (!mayMoveLoyalty(character, data.ftype, data.slug ?? "", asker, actors)) return null;
+	// Still waited on? An ask that arrived after the asker timed out moves nothing (no id: an older client, moved as before).
+	if (data?.askId && !(await asking(asker, data, { timeout: LOYALTY_VERIFY_MS }))) return null;
 	return stepLoyaltyInTurn(character, path, {
 		ftype: data.ftype, slug: data.slug ?? "", delta, move: String(data?.move || (delta > 0 ? STRENGTHEN_YOUR_BOND : SPEND_LOYALTY)),
 	});

@@ -25,9 +25,12 @@ describe("parseArcanumMoves", () => {
 	});
 
 	it("leaves boxIndex null for a move the card prints with no box", () => {
-		const [move] = parseArcanumMoves(backOf("staff-of-the-lidless-orb"));
-		expect(move.name).toBe("POWER OF THE LIDLESS ORB");
+		// Every shipped mystery prints its box (the Lidless Orb's gained its in the 11-04 audit), so a
+		// homebrew-style back stands in.
+		const [move] = parseArcanumMoves("<h3>Moves</h3><p><strong>GAZE OF THE ORB</strong><br>When you look, roll +WIS.</p>");
+		expect(move.name).toBe("GAZE OF THE ORB");
 		expect(move.boxIndex).toBeNull();
+		expect(parseArcanumMoves(backOf("staff-of-the-lidless-orb"))[0].boxIndex).toBe(0);
 	});
 
 	it("finds the stat a move rolls, including the book's flat 'roll +nothing'", () => {

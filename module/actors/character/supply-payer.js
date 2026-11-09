@@ -15,7 +15,7 @@
 // opened is not eaten twice. A character paying out of their OWN purse instead folds the uses into the
 // move's one write (ownSupplySpend), as Recover and tending a debility do.
 
-import { SUPPLY_PURPOSE, defaultSupplyPurse, otherSupplyPayers } from "./supply-cost.js";
+import { SUPPLY_PURPOSE, defaultSupplyPurse, otherSupplyPayers, spreadSupplySpend, spreadSpendWords } from "./supply-cost.js";
 import { purseSpendUpdate } from "../../camp/camp-rules.js";
 import { carerStockAnswerer, recoverRefusal } from "./healers-arts.js";
 import { isOutOfPlaySafe } from "./deaths-door-actor.js";
@@ -48,16 +48,20 @@ export function supplyPayersFor(patient, purpose = SUPPLY_PURPOSE.RECOVER, {
 /**
  * `n` uses out of a character's OWN purse `slug`, read live, as the write a caller folds into its one
  * actor update (Recover and tending a debility each write once, the supplies with the HP or the
- * debility) and the chat row that says so. Null when that purse no longer holds `n`.
+ * debility) and the chat row that says so. Out of `slug` first and, when it runs short, the character's
+ * other eligible purses in table order (supply-cost.js#spreadSupplySpend, audit ROAD-7). Null when the
+ * purses between them no longer hold `n`.
  *
  * @param {object} character  the StonetopCharacter paying
- * @returns {{update: object, left: number, row: {label: string, value: string}}|null}
+ * @returns {{update: object, left: number, row: {label: string, value: string}}|null}  `left`: what the purses spent from hold now, together
  */
 export function ownSupplySpend(character, { slug, n = 1, purpose = SUPPLY_PURPOSE.RECOVER } = {}) {
-	const live = character?.supplyPurses?.(purpose)?.eligible?.find(p => p.slug === slug && p.remaining >= n) ?? null;
-	if (!live) return null;
-	const left = live.remaining - n;
-	return { update: character.inventoryResourceData(live.slug, left), left, row: { label: live.label, value: `Expended ${countOf(n, "use")} (${left} left)` } };
+	const parts = spreadSupplySpend(character?.supplyPurses?.(purpose)?.eligible, { slug, n });
+	if (!parts?.length) return null;
+	const update = {};
+	for (const part of parts) Object.assign(update, character.inventoryResourceData(part.slug, part.left));
+	const label = parts.map(p => p.label).join(" & ");
+	return { update, left: parts.reduce((sum, p) => sum + p.left, 0), row: { label, value: spreadSpendWords(parts, countOf) } };
 }
 
 /**
@@ -72,9 +76,12 @@ function payerPurse(purses, slug, n) {
 
 /** The chat row for uses another character paid on `patientName`'s behalf, from payOthersSupplies' receipt. */
 export function behalfSpendRow(payerName, receipt, patientName) {
+	// Spread over several purses, each says what it has left (as spreadSpendWords does for one's own).
+	const parts = Array.isArray(receipt.parts) && receipt.parts.length > 1 ? receipt.parts : null;
+	const left = parts ? parts.map(p => `${p.label} ${p.left} left`).join(", ") : `${receipt.left} left`;
 	return {
 		label: `${payerName}'s ${String(receipt.label ?? "").toLowerCase()}`,
-		value: `Expended ${countOf(receipt.spent, "use")} on ${patientName}'s behalf (${receipt.left} left)`,
+		value: `Expended ${countOf(receipt.spent, "use")} on ${patientName}'s behalf (${left})`,
 	};
 }
 
@@ -101,13 +108,21 @@ export function spendPayerSupplies(payer, { slug = null, n = 1, purpose = SUPPLY
 			uses -= 1;
 		}
 		const purse = payerPurse(purses, slug, uses);
-		if (!purse || purse.remaining < uses) return null;
-		const { update } = purseSpendUpdate([{ slug: purse.slug, n: uses }], {
+		// Out of that purse first and then the payer's others (spreadSupplySpend, audit ROAD-7).
+		const parts = purse ? spreadSupplySpend(purses.eligible, { slug: purse.slug, n: uses }) : null;
+		if (!parts?.length) return null;
+		const { update } = purseSpendUpdate(parts.map(p => ({ slug: p.slug, n: p.n })), {
 			resources: character.spendablePurseResources?.({ carriedOnly: false }) ?? {},
 			resourceData: (s, count) => character.inventoryResourceData(s, count),
 		});
 		await payer.update(update, moveName ? { stonetopMove: moveName } : {});
-		return { slug: purse.slug, label: purse.label, spent: uses, left: purse.remaining - uses, ...(refused ? { refused } : {}) };
+		return {
+			slug: parts[0].slug, label: parts.map(p => p.label).join(" & "), spent: uses,
+			left: parts.reduce((sum, p) => sum + p.left, 0),
+			// Spread over several purses: what each has left, for behalfSpendRow.
+			...(parts.length > 1 ? { parts: parts.map(p => ({ label: p.label, left: p.left })) } : {}),
+			...(refused ? { refused } : {}),
+		};
 	});
 }
 
@@ -161,8 +176,10 @@ export async function handleSupplyPayQuery(data, context = {}, { actors = global
 			if (!payer.isOwner || !patient.testUserPermission?.(user, "OWNER")) return null;
 			// No cap beyond the purse itself: one that cannot hold `n` is said, never asked about.
 			if (n < 1) return null;
-			purse = payerPurse(payer.typedActor?.supplyPurses?.(purpose), slug, n);
-			if (!purse || purse.remaining < n) {
+			const purses = payer.typedActor?.supplyPurses?.(purpose);
+			purse = payerPurse(purses, slug, n);
+			// Short in that purse is fine while the payer's others make it up (spreadSupplySpend, audit ROAD-7).
+			if (!purse || !spreadSupplySpend(purses?.eligible, { slug: purse.slug, n })) {
 				globalThis.ui?.notifications?.warn?.(purse
 					? `${payer.name}'s ${purse.label} holds ${purse.remaining}, not the ${countOf(n, "use")} asked for.`
 					: `${payer.name} has no supplies left to spend.`);

@@ -19,6 +19,7 @@ import { readableFlags } from "./StonetopFlags.js";
 import { askGMClient, queryAsker, resolveSync } from "../../utils/foundry-compat.js";
 import { isPrimaryGM } from "../../utils/primary-gm.js";
 import { format } from "../../utils/i18n.js";
+import { groupPoolCard, loneGroupToken } from "./follower-group-pool.js";
 
 /**
  * The query a player's client sends the primary GM's to set the HP of a follower's NPC it cannot write.
@@ -124,7 +125,30 @@ export async function setFollowerHp(character, row, value, options = {}) {
 	const update = followerHpWriteUpdate(flags, follower, slug, index, value);
 	if (!Object.keys(update).length) return null;
 	await updateWith(character, update, moveName);
+	await followGroupPoolToken(character, { follower, slug }, value, { moveName, scene: options.scene, cardFor: options.cardFor });
 	return "box";
+}
+
+/**
+ * A group's pool box written: its one token on the scene takes the same HP, so the Fight tab reads what the card
+ * says (follower-group-pool.js). Best-effort, by a client that may write the token; none, several, or one holding
+ * it already: nothing. Answers whether the token was written.
+ */
+export async function followGroupPoolToken(character, row, value, { moveName = null, scene, cardFor } = {}) {
+	const card = groupPoolCard(row);
+	if (!card) return false;
+	const token = loneGroupToken(character, card, { ...(scene !== undefined ? { scene } : {}), ...(cardFor ? { cardFor } : {}) });
+	if (!token?.isOwner) return false;
+	const hp = token.system?.attributes?.hp ?? {};
+	const to = followerNpcHpTarget(hp, hpCount(value));
+	if (Number(hp.value) === to) return false;
+	try {
+		await updateWith(token, { "system.attributes.hp.value": to }, moveName);
+		return true;
+	} catch (err) {
+		console.warn("Stonetop | could not carry the group's pool onto its token", err);
+		return false;
+	}
 }
 
 /**

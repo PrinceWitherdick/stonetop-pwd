@@ -113,4 +113,25 @@ describe("deaths-door-arcana: reading what a character holds", () => {
 		expect(await heldDeathsDoorDictates({})).toEqual([]);
 		expect(await heldDeathsDoorDictates(null)).toEqual([]);
 	});
+
+	// A5 (2026-11-04): a card removed with "Keep its Consequence marks" leaves those boxes in arcana.boxes, and
+	// "They stay marked even if their impact is passing, temporary, or undone" (Book I p.442).
+	it("still counts a card no longer held whose Death's Door Consequence was kept", async () => {
+		const character = holding({ owned: [], boxes: ticked(MAW, "Should you roll a 6- on Death's Door") });
+		const dictates = await heldDeathsDoorDictates(character);
+		expect(dictates.map(d => [d.slug, d.fate])).toEqual([["hungering-maw-of-hlad", "last-door"]]);
+		// Only the card with kept marks is fetched.
+		expect(character._arcana.getArcanum).toHaveBeenCalledTimes(1);
+	});
+
+	it("fetches nothing for a card not held with no ticked box kept, or only unticked ones", async () => {
+		const character = holding({ owned: [], boxes: { "redwood-effigy:back:9": false } });
+		expect(await heldDeathsDoorDictates(character)).toEqual([]);
+		expect(character._arcana.getArcanum).not.toHaveBeenCalled();
+	});
+
+	it("a kept box that is not the Death's Door one dictates nothing", async () => {
+		const character = holding({ owned: [], boxes: { "redwood-effigy:back:0": true } });
+		expect(await heldDeathsDoorDictates(character)).toEqual([]);
+	});
 });

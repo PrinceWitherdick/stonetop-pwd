@@ -179,9 +179,43 @@ describe("a ◆ of supplies (INV-4)", () => {
 		const char = makeChar(actor);
 		await char.resetInventorySelections();
 		expect(flag(actor, "inventory.resources")).toEqual({ supplies: 0, provisions: 2 });
-		// Marked by hand on the sheet at home, with no undefined ◆: still a full ◆.
-		await char.toggleCarriedItem("supplies", true, { weight: 1 });
+		// Marked by hand at home with no undefined ◆: the sheet asks, and "Packed it at home" packs it full.
+		expect(char.suppliesMarkAsk("supplies")).toEqual({ ask: true, emptied: false });
+		await char.toggleCarriedItem("supplies", true, { weight: 1, packed: true });
 		expect(flag(actor, "inventory.resources").supplies).toBe(4);
+	});
+
+	// ROAD-2 (the user's ruling E9): an emptied ◆ is never refilled by a tick.
+	it("is picked back up EMPTY once eaten empty, with nothing to ask", async () => {
+		const actor = mergingActor({ "inventory.regularPool": 1, "inventory.resources": {} });
+		const char = makeChar(actor);
+		await char.toggleCarriedItem("supplies", true, { weight: 1 });     // fresh: 4 uses, pool 0
+		await char.setInventoryResource("supplies", 0);                     // all eaten on the road
+		await char.toggleCarriedItem("supplies", false, { weight: 1 });    // set down empty
+		expect(flag(actor, "inventory.emptied")).toEqual({ supplies: true });
+		expect(char.suppliesMarkAsk("supplies")).toEqual({ ask: false, emptied: true });
+		const marked = await char.toggleCarriedItem("supplies", true, { weight: 1 });
+		expect(marked).toEqual({ drawn: 0, uses: 0 });
+		expect(flag(actor, "inventory.resources").supplies).toBe(0);
+		// An Outfit packs afresh and forgets it.
+		await char.applyOutfit({ supplies: true }, 0, 0);
+		expect(flag(actor, "inventory.emptied") ?? {}).toEqual({});
+		expect(flag(actor, "inventory.resources").supplies).toBe(4);
+	});
+
+	it("never packs an empty row silently: without `packed` and no draw it stays empty", async () => {
+		const actor = mergingActor({ "inventory.regularPool": 0, "inventory.resources": {} });
+		const char = makeChar(actor);
+		await char.toggleCarriedItem("more-supplies", true, { weight: 1 });
+		expect(flag(actor, "inventory.resources")["more-supplies"] ?? 0).toBe(0);
+	});
+
+	it("reports what a mark drew, for the Have What You Need card (ROAD-9)", async () => {
+		const actor = mergingActor({ "inventory.regularPool": 1, "inventory.resources": {} });
+		const char = makeChar(actor);
+		expect(await char.toggleCarriedItem("rope", true, { weight: 1 })).toMatchObject({ drawn: 1 });
+		expect(await char.toggleCarriedItem("lantern", true, { weight: 1 })).toMatchObject({ drawn: 0 });
+		expect(await char.toggleCarriedItem("rope", false, { weight: 1 })).toMatchObject({ drawn: 0 });
 	});
 
 	it("can be spent only while it is marked, and only up to its current size", async () => {
@@ -248,6 +282,41 @@ describe("Reset Inventory (INV-7)", () => {
 		await makeChar(actor).resetInventorySelections();
 		expect(flag(actor, "inventory.checked")).toBeNull();
 		expect(flag(actor, "possessions.choiceCarried")).toBeNull();
+	});
+
+	// Going home (Book I p.89, p.310): the character and the followers ticked unpack in ONE write.
+	it("unpacks the character, a follower and the crew in one update", async () => {
+		const actor = mergingActor({
+			"inventory.checked": { rope: true }, "inventory.resources": { supplies: 2, provisions: 5 },
+			"customFollowers": { abc: { name: "Bryn", gear: [{ label: "Spear", checked: true }], outfit: { regular: 1, small: 0 } } },
+			"crew": { name: "The Wolves", gear: { spears: 1 }, supplies: [4, 4], writtenGear: [{ id: "w1", label: "Litter", weight: 2 }] },
+		});
+		const wrote = await makeChar(actor).resetForHomecoming({ pc: true, followers: [{ ftype: "custom", slug: "abc" }, { ftype: "crew" }] });
+		expect(wrote).toBe(true);
+		expect(actor.update).toHaveBeenCalledTimes(1);
+		expect(flag(actor, "inventory.checked")).toBeNull();
+		expect(flag(actor, "inventory.resources")).toEqual({ supplies: 0, provisions: 5 });
+		expect(flag(actor, "customFollowers.abc.gear")).toEqual([{ label: "Spear", checked: false }]);
+		expect(flag(actor, "customFollowers.abc.outfit")).toBeNull();
+		expect(flag(actor, "crew.gear")).toEqual({ spears: 0 });
+		expect(flag(actor, "crew.supplies")).toEqual([0, 0]);
+		expect(flag(actor, "crew.writtenGear")).toHaveLength(1);
+	});
+
+	it("leaves the character's own marks alone when only a follower unpacks", async () => {
+		const actor = mergingActor({
+			"inventory.checked": { rope: true },
+			"customFollowers": { abc: { gear: [{ label: "Spear", checked: true }] } },
+		});
+		await makeChar(actor).resetForHomecoming({ pc: false, followers: [{ ftype: "custom", slug: "abc" }] });
+		expect(flag(actor, "inventory.checked")).toEqual({ rope: true });
+		expect(flag(actor, "customFollowers.abc.gear")).toEqual([{ label: "Spear", checked: false }]);
+	});
+
+	it("writes nothing when the followers picked have nothing out", async () => {
+		const actor = mergingActor({ "customFollowers": { abc: { gear: [] } } });
+		expect(await makeChar(actor).resetForHomecoming({ pc: false, followers: [{ ftype: "custom", slug: "abc" }] })).toBe(false);
+		expect(actor.update).not.toHaveBeenCalled();
 	});
 });
 

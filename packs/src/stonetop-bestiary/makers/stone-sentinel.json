@@ -71,7 +71,7 @@
       "img": "icons/svg/sword.svg",
       "system": {
         "description": "",
-        "rollFormula": ""
+        "rollFormula": "d10+5"
       },
       "_key": "!actors.items!mRpMqY81O24lXlPG.kDb4mXFaBZhPf3Bm"
     }

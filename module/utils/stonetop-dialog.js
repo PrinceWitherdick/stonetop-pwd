@@ -1,6 +1,7 @@
 import { FrontOnOpen } from "./front-on-open.js";
 import { mayClose, notePristineWork } from "./close-guard.js";
 import { attrValue } from "./strings.js";
+import { onePress } from "./one-press.js";
 
 // Minimum gap between progress re-renders. A long job reports once per document — a seeded
 // world has several hundred — and each render is a full getData + template + setPosition;
@@ -144,18 +145,7 @@ export class StonetopDialog extends Application {
 	 * @param {Function} fn  the work; awaited, and the latch is released in a `finally`
 	 */
 	async _guardBusy(ev, fn) {
-		if (this._busy) return;
-		this._busy = true;
-		const control = ev?.currentTarget;
-		if (control) control.disabled = true;
-		try {
-			return await fn();
-		} catch (err) {
-			if (control) control.disabled = false;
-			throw err;
-		} finally {
-			this._busy = false;
-		}
+		return onePress(this, "guard", fn, { control: ev?.currentTarget ?? null, reenable: "onError" });
 	}
 
 	/** Override to true for a content-hugging window that re-fits its height each render. */

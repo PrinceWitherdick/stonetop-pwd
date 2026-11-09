@@ -71,7 +71,7 @@
       "img": "icons/creatures/abilities/mouth-teeth-rows-red.webp",
       "system": {
         "description": "",
-        "rollFormula": ""
+        "rollFormula": "d6+2"
       },
       "_key": "!actors.items!BgPtjVOTWvJBYE7z.A1syzX4Pdp8mQpcG"
     }

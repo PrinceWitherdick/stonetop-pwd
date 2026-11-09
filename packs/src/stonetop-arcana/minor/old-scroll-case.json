@@ -52,7 +52,7 @@
         "move": {
           "name": "When you touch a piece of aetherium and draw its power into yourself",
           "rollType": "con",
-          "description": "<p><strong>On a 10+</strong>, you absorb the power and gain 1d8 HP (even if this puts you above your max HP). <strong>On a 7-9</strong>, the aetherium is drained and crumbles into a chalky mass of verdigris.</p>"
+          "description": "<p>Roll +CON: <strong>on a 7+</strong>, you absorb the power and gain 1d8 HP (even if this puts you above your max HP); <strong>but on a 7-9</strong>, the aetherium is drained and crumbles into a chalky mass of verdigris.</p><p>The spell lasts until you dismiss it or until you roll a 6- on any move. While it lasts, you need not sleep and gain advantage on any rolls with WIS. When <strong><em>the spell ends</em></strong>, you lose 1d8 HP.</p>"
         },
         "options": []
       }

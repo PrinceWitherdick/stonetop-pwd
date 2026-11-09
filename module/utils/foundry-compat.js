@@ -282,6 +282,22 @@ export function deletionTarget(keyPath, value) {
 }
 
 /**
+ * The plain dotted paths an update's change object touches, for a hook asking "did this write reach X?".
+ * Each core's spellings read back to the key they act on, beside their makers for the reason `deletionTarget`
+ * gives: v13's `-=key` deletion (via `deletionTarget`) and its `==key` replacement (`replacementEntry`, whose
+ * object value flattens out under it, so the `==` can sit mid-path). v14's operators keep the plain key.
+ * @param {object|null|undefined} changes  nested, dotted, or both, as core hands an update hook.
+ * @returns {string[]}
+ */
+export function changedKeys(changes) {
+	const flat = globalThis.foundry?.utils?.flattenObject?.(changes ?? {}) ?? {};
+	return Object.entries(flat).map(([key, value]) => {
+		const path = deletionTarget(key, value) ?? key;
+		return path.includes("==") ? path.split(".").map(part => (part.startsWith("==") ? part.slice(2) : part)).join(".") : path;
+	});
+}
+
+/**
  * The compendium-source uuid a world document was imported from: v14 stamps
  * `_stats.compendiumSource` at import time; older cores used the legacy `flags.core.sourceId`
  * flag. Returns null for a hand-made world document that never came from a compendium.

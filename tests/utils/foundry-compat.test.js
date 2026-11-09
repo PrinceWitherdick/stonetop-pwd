@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { chatModeIsPublic, currentChatMode, deletionEntry, getDragEventData, hasVideoExtension, imagePopout, imagePopoutTitle, setAppOption } from "../../module/utils/foundry-compat.js";
+import { changedKeys, chatModeIsPublic, currentChatMode, deletionEntry, getDragEventData, hasVideoExtension, imagePopout, imagePopoutTitle, setAppOption } from "../../module/utils/foundry-compat.js";
 
 describe("deletionEntry", () => {
 	afterEach(() => {
@@ -205,5 +205,20 @@ describe("chatModeIsPublic", () => {
 		expect(currentChatMode()).toBeNull();
 		globalThis.game = { release: { generation: 14 }, settings: { get: () => { throw new Error("not registered"); } } };
 		expect(currentChatMode()).toBeNull();
+	});
+});
+
+// The reader update hooks share: every core's spelling of a write, read back to the plain key it acts on.
+describe("changedKeys", () => {
+	it("flattens nested and dotted changes alike", () => {
+		expect(changedKeys({ system: { attributes: { hp: { value: 2 } } }, "flags.x.crew": 1 })).toEqual(["system.attributes.hp.value", "flags.x.crew"]);
+		expect(changedKeys(null)).toEqual([]);
+	});
+
+	it("reads v13's deletion and replacement back to the key, and only a deletion paired with null", () => {
+		expect(changedKeys({ flags: { x: { "-=stamp": null } } })).toEqual(["flags.x.stamp"]);
+		expect(changedKeys({ "flags.x.==crew": { a: 1 } })).toEqual(["flags.x.crew.a"]);
+		// A board key that merely starts with `-=` is an ordinary write.
+		expect(changedKeys({ flags: { x: { "-=stamp": 3 } } })).toEqual(["flags.x.-=stamp"]);
 	});
 });

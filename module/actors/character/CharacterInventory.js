@@ -26,6 +26,22 @@ export class CharacterInventory {
 	// instead of the item's full cost (which would invent marks). Items defined at
 	// Outfit have no entry, so un-marking them just drops their weight from the load.
 	get drawn()        { return this._flags.getFlag("drawn") ?? {}; }
+	// The printed supplies rows set down EMPTY (their food eaten), keyed by slug: re-marking one picks up
+	// the empty ◆ rather than packing a fresh one (supply-cost.js#suppliesUsesOnMark, audit ROAD-2).
+	// Outfit packs afresh and Reset clears the marks, so both forget it.
+	get emptied()      { return this._flags.getFlag("emptied") ?? {}; }
+
+	// Remember (or forget) that a supplies row was set down empty, as a fragment. Forgetting is a
+	// deletion of that slug (setFlag merges); empty when there is nothing to forget.
+	emptiedData(slug, isEmptied) {
+		if (isEmptied) return this._flags.subKeyData("emptied", slug, true);
+		return slug in this.emptied ? this._flags.subKeyDeletionData("emptied", slug) : {};
+	}
+
+	// Forget every emptied row (Outfit packs the food afresh), as a fragment.
+	clearEmptiedData() {
+		return this._flags.deletionData("emptied");
+	}
 
 	// One slug's mark, written as its own sub-key like setResource: re-sending the whole map from
 	// this client's copy would write back a stale mark for every OTHER slug a second client (or a
@@ -58,20 +74,20 @@ export class CharacterInventory {
 		return this._flags.subKeyDeletionData("resources", slug);
 	}
 
-	// Drop a removed arcanum's resource tracks (the back-power track keyed by slug and the
-	// back-item ammo track keyed "<slug>:item"), so a later re-acquire doesn't inherit stale
-	// charges. No-op when the card had no tracks.
-	async clearArcanumResources(slug) {
+	// A removed arcanum's traces in the inventory, as ONE fragment for the card's removal update
+	// (StonetopCharacter#removeArcanum): its resource tracks (the back-power track keyed by slug,
+	// the back-item track keyed "<slug>:item" when the card has both) and its carried mark, each a
+	// sub-key deletion, so a re-acquire inherits no stale charges and comes back set down. Nothing
+	// else in the map is re-sent, so a concurrent change to another track survives, and there is
+	// no second write to fail half-way. {} when the card left nothing behind.
+	arcanumRemovalData(slug) {
+		const data = {};
 		const resources = this.resources;
-		const itemKey = `${slug}:item`;
-		const kept = Object.entries(resources).filter(([k]) => k !== slug && k !== itemKey);
-		if (kept.length !== Object.keys(resources).length) {
-			// setFlag MERGES, so writing the smaller object leaves the removed slug/"<slug>:item"
-			// keys in place (see CharacterArcana.removeArcanum). Unset the whole map, then re-set
-			// the survivors, so a later re-acquire can't inherit stale charges.
-			await this._flags.unsetFlag("resources");
-			if (kept.length) await this._flags.setFlag("resources", Object.fromEntries(kept));
+		for (const key of [slug, `${slug}:item`]) {
+			if (key in resources) Object.assign(data, this._flags.subKeyDeletionData("resources", key));
 		}
+		if (slug in this.checked) Object.assign(data, this._flags.subKeyDeletionData("checked", slug));
+		return data;
 	}
 
 	async setRegularPool(count, options) {
@@ -149,7 +165,7 @@ export class CharacterInventory {
 
 	// Drops the item AND everything keyed to it: its carried mark (so it stops counting toward
 	// load and armor) and its uses / acquired-capacity tracks. The tracks go for the same reason
-	// clearArcanumResources drops an arcanum's — a re-acquired item must not inherit stale
+	// arcanumRemovalData drops an arcanum's — a re-acquired item must not inherit stale
 	// charges. Provisions is where that bites: a larder tossed to the crows with 2 uses left,
 	// then re-foraged, would otherwise come back holding those 2.
 	//
@@ -169,15 +185,16 @@ export class CharacterInventory {
 
 	// Clears item marks, both undefined ◇/□ reserves (which is what drives the
 	// derived load), and the per-item draw records. Item uses (resources) and
-	// added-special items are left alone. A special possession's chosen gear keeps its marks in
-	// another store (possessions.choiceCarried); StonetopCharacter#resetInventorySelections clears it,
-	// in the same update as this fragment.
+	// added-special items are left alone here: StonetopCharacter#inventoryResetData empties the
+	// supplies rows in the same update. A special possession's chosen gear keeps its marks in
+	// another store (possessions.choiceCarried), cleared there too.
 	resetSelectionsData() {
 		return {
 			...this._flags.deletionData("checked"),
 			...this._flags.deletionData("regularPool"),
 			...this._flags.deletionData("smallPool"),
 			...this._flags.deletionData("drawn"),
+			...this._flags.deletionData("emptied"),
 		};
 	}
 

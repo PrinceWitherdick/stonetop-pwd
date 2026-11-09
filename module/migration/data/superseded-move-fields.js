@@ -373,7 +373,7 @@ export const SUPERSEDED = {
 	"ZmhfrQdO9zqZDdWh": {"artifactLore":["9b55e0da69fcb93a"],"note":["b4f5296a3f26b8bd"]}, // Small clay jars
 	"zncvwY65OAmf1AMX": {"artifactLore":["9b55e0da69fcb93a"],"note":["34937880fbd2c8dd"]}, // An oversized ring
 	"ZR7pKmcd5zxFOrtD": {"description":["5757226d34400832"]}, // Sniff Out Corruption (The Ranger)
-	"zsUtUH50HBrTHaxz": {"description":["a5486cda4d1b6c9a"],"moveResults":["6c3377424b268b41"],"moveResults.failure":["2d3973f29f49a90a"]}, // Forage
+	"zsUtUH50HBrTHaxz": {"description":["a5486cda4d1b6c9a"],"moveResults":["5c426cd6113bc77d","6c3377424b268b41"],"moveResults.failure":["2d3973f29f49a90a","9e8caeae259dd8de"]}, // Forage
 	"ZU6p9lBMvSjWuXJi": {"description":["3721bdca17c7f4b8"]}, // Blot Out the Sun (The Ranger)
 	"zVHHzThbi5GNSvdF": {"description":["e2b0b455c92f7b97"],"moveResults":["9b55e0da69fcb93a"],"requirement":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Luminous Shield (The Lightbearer)
 };
@@ -942,7 +942,7 @@ export const CURRENT_FINGERPRINTS = {
 	"ZmhfrQdO9zqZDdWh": "43a73ab88062632d",
 	"zncvwY65OAmf1AMX": "46314d845131fc8f",
 	"ZR7pKmcd5zxFOrtD": "41d5c81c4d8c2e16",
-	"zsUtUH50HBrTHaxz": "781f8c1de51a7b2f",
+	"zsUtUH50HBrTHaxz": "2a934dd2074e811e",
 	"ZU6p9lBMvSjWuXJi": "25b3b545184117a9",
 	"zVHHzThbi5GNSvdF": "1e3fa16c7c792aa4",
 };

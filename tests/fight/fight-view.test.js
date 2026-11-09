@@ -140,6 +140,11 @@ describe("fightTrackerView", () => {
 		expect(player.clusters[0].foes[0]).toMatchObject({ name: "Crinwin", draggable: false, dropTarget: true });
 		expect(player.unengaged.foes.every(r => !r.draggable && r.dropTarget)).toBe(true);
 		expect(player.out[0]).toMatchObject({ draggable: false, dropTarget: false });
+		// FGT-8: the same send as a button, on whoever this reader may pick up, while the other side is there.
+		expect(bram.sendAt).toBe(true);
+		expect(aeliana.sendAt).toBe(false);
+		expect(player.clusters[0].foes[0].sendAt).toBe(false);
+		expect(player.out[0].sendAt).toBe(false);
 	});
 
 	it("hints over whichever loose fighters have somewhere to be sent, naming that direction", () => {
@@ -242,6 +247,12 @@ describe("the Fight tab's templates", () => {
 		expect(player).not.toContain('data-fight-drop="heroes"');
 		expect(player).not.toContain("Drag a foe onto a hero");
 		expect(player).toContain("Drag a hero onto a foe");
+		// FGT-8: and a button doing the same, for a reader who cannot drag.
+		expect(player).toMatch(/data-combatant-id="h"[\s\S]*?data-action="sendAt"/);
+		expect(player.match(/data-action="sendAt"/g)).toHaveLength(1);
+		// And the row's menu entry by the same rule (FightTracker.js#_getEntryContextOptions reads it off the row).
+		expect(player).toMatch(/data-combatant-id="h"[^>]*data-send-at>/);
+		expect(player.match(/data-send-at/g)).toHaveLength(1);
 	});
 
 	it("give a GM the hide and out controls, and a player neither", () => {

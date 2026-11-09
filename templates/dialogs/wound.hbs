@@ -131,7 +131,7 @@
 					<span class="wd-label">Plan requirements <em>(tick off as you adapt)</em></span>
 					<ul class="wd-req-list" data-empty="No requirements yet. Add what it takes to adapt.">
 						{{#each planRequirements}}
-						<li class="wd-req">
+						<li class="wd-req stonetop-field-btns">
 							<label class="checkbox"><input type="checkbox" class="stonetop-check wd-req-done"{{#if done}} checked{{/if}}></label>
 							<input type="text" class="wd-req-text" value="{{this.text}}" placeholder="e.g. months of practice">
 							<button type="button" class="wd-req-remove" data-tooltip="Remove" aria-label="Remove this requirement"><i class="fas fa-xmark"></i></button>
@@ -143,7 +143,7 @@
 
 				{{!-- Cloned per row by the dialog; kept here so the markup lives with the rest. --}}
 				<template class="wd-req-tpl">
-					<li class="wd-req">
+					<li class="wd-req stonetop-field-btns">
 						<label class="checkbox"><input type="checkbox" class="stonetop-check wd-req-done"></label>
 						<input type="text" class="wd-req-text" placeholder="e.g. months of practice">
 						<button type="button" class="wd-req-remove" data-tooltip="Remove" aria-label="Remove this requirement"><i class="fas fa-xmark"></i></button>

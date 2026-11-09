@@ -24,7 +24,15 @@ vi.mock("../../module/book2-art/travel-map-art.js", () => ({
 	resolveTravelMap:   () => Promise.resolve(null),
 }));
 
+// Who travels with each PC, as the roster would say: keyed by the PC's id, so a test sets it per actor.
+const partyFollowersByActor = new Map();
+vi.mock("../../module/actors/character/follower-roster.js", async importOriginal => ({
+	...(await importOriginal()),
+	partyFollowersOf: async actor => partyFollowersByActor.get(actor?.id) ?? [],
+}));
+
 const { ExpeditionDialog } = await import("../../module/dialogs/ExpeditionDialog.js");
+const { stubConfirm } = await import("../fakes/confirm.js");
 
 const steps = Object.create(ExpeditionDialog.prototype)._steps;
 const home  = steps.at(-1);
@@ -217,5 +225,124 @@ describe("Return Triumphant, on the step where it comes up", () => {
 		global.ui = { notifications: { warn } };
 		dialog(null)._returnTriumphant();
 		expect(warn).toHaveBeenCalledOnce();
+	});
+});
+
+// ── Reset Inventory, back home (Book I p.89, p.496) ─────────────────────────────────
+// "When you return home, clear the marks from your Inventory insert." The card lists each PC on the trip and
+// the followers travelling with them, ticked when there is something to clear; one press, after one ask,
+// lands each character's reset (and their followers') in one update of that character.
+
+describe("Going home's Reset Inventory card", () => {
+	const SCOPE = "stonetop-pwd";
+	const pc = (id, name, flags = {}) => ({
+		id, name, type: "character",
+		flags: { [SCOPE]: flags },
+		typedActor: { resetForHomecoming: vi.fn(async () => true) },
+		sheet: { _onConvalesceOpen: vi.fn(async () => {}) },
+	});
+	// A stand-in for the rendered card: its ticks and the Convalesce box, as the handler reads them.
+	const section = (checks, { convalesce = false } = {}) => ({
+		querySelectorAll: sel => sel === ".stonetop-exp-home-reset-check" ? checks : [],
+		querySelector: sel => sel === ".stonetop-exp-home-reset-convalesce-check" ? { checked: convalesce } : null,
+	});
+	const check = (actor, { ftype = "", slug = "", name = actor, checked = true, disabled = false } = {}) =>
+		({ checked, disabled, dataset: { actor, ftype, slug, name } });
+
+	let aria, bryn, d, info;
+	beforeEach(() => {
+		partyFollowersByActor.clear();
+		aria = pc("a1", "Aria", { inventory: { checked: { rope: true } } });
+		bryn = pc("b1", "Bryn", {});
+		info = vi.fn();
+		global.ui = { notifications: { info, warn: vi.fn() } };
+		global.game.actors = new Map([[aria.id, aria], [bryn.id, bryn]]);
+		d = dialog();
+		d._tripParty = () => [aria, bryn];
+		d.render = vi.fn();
+	});
+
+	it("lists each PC on the trip and their followers, ticked only where something is marked", async () => {
+		aria.flags[SCOPE].customFollowers = { f1: { name: "Wren", gear: [{ label: "Spear", checked: true }] } };
+		partyFollowersByActor.set("a1", [{ ftype: "custom", slug: "f1", name: "Wren" }]);
+		const card = await d._buildHomeReset();
+		expect(card.rows.map(r => [r.name, !!r.follower, r.canReset])).toEqual([
+			["Aria", false, true],
+			["Wren", true, true],
+			["Bryn", false, false],
+		]);
+		expect(card.rows[1].sub).toBe("(with Aria)");
+		expect(card.anyToClear).toBe(true);
+	});
+
+	it("is built for the GM on the home step, beside the assets still out", () => {
+		expect(DIALOG_JS).toMatch(/data\.homeReset = await this\._buildHomeReset\(\)/);
+		expect(HBS).toContain(`{{> "stonetop.expedition-home-reset" homeReset=homeReset}}`);
+		expect(HBS.indexOf("stonetop.expedition-home-assets")).toBeLessThan(HBS.indexOf("stonetop.expedition-home-reset"));
+		expect(DIALOG_JS).toMatch(/\.stonetop-exp-home-reset-btn"\)\.on\("click"/);
+	});
+
+	it("asks once, then resets each character with their ticked followers in one call", async () => {
+		const wait = stubConfirm(true);
+		await d._resetHomeInventoriesNow(section([
+			check("a1", { name: "Aria" }),
+			check("a1", { ftype: "custom", slug: "f1", name: "Wren (with Aria)" }),
+			check("a1", { ftype: "crew", name: "The Wolves (with Aria)", checked: false }),
+			check("b1", { name: "Bryn", checked: false, disabled: true }),
+		]));
+		expect(wait).toHaveBeenCalledTimes(1);
+		expect(wait.mock.calls[0][0].content).toContain("Aria &amp; Wren (with Aria)");
+		expect(aria.typedActor.resetForHomecoming).toHaveBeenCalledTimes(1);
+		expect(aria.typedActor.resetForHomecoming).toHaveBeenCalledWith({ pc: true, followers: [{ ftype: "custom", slug: "f1" }] });
+		expect(bryn.typedActor.resetForHomecoming).not.toHaveBeenCalled();
+		expect(info).toHaveBeenCalledWith(expect.stringContaining("Aria"));
+		expect(aria.sheet._onConvalesceOpen).not.toHaveBeenCalled();
+	});
+
+	it("writes nothing when the GM keeps the marks", async () => {
+		stubConfirm(false);
+		await d._resetHomeInventoriesNow(section([check("a1", { name: "Aria" })]));
+		expect(aria.typedActor.resetForHomecoming).not.toHaveBeenCalled();
+	});
+
+	it("does not ask when nothing is ticked", async () => {
+		const wait = stubConfirm(true);
+		await d._resetHomeInventoriesNow(section([check("a1", { checked: false })]));
+		expect(wait).not.toHaveBeenCalled();
+		expect(info).toHaveBeenCalledOnce();
+	});
+
+	// The HP half of the book's downtime example is Convalesce, which has rules of its own; the card opens each
+	// PC's own window rather than writing HP itself, and only when the GM ticks it.
+	it("opens each PC's own Convalesce window when that box is ticked", async () => {
+		stubConfirm(true);
+		await d._resetHomeInventoriesNow(section([check("a1", { name: "Aria" })], { convalesce: true }));
+		expect(aria.sheet._onConvalesceOpen).toHaveBeenCalledOnce();
+		expect(bryn.sheet._onConvalesceOpen).toHaveBeenCalledOnce();
+	});
+
+	it("renders ticks, a greyed row for the unpacked, the Convalesce box unticked and the button", async () => {
+		const html = await global.renderTemplate("systems/stonetop-pwd/templates/dialogs/partials/expedition-home-reset.hbs", {
+			homeReset: { anyToClear: true, rows: [
+				{ actorId: "a1", ftype: "", slug: "", name: "Aria", label: "Aria", canReset: true },
+				{ actorId: "a1", ftype: "custom", slug: "f1", name: "Wren", sub: "(with Aria)", label: "Wren (with Aria)", follower: true, canReset: true },
+				{ actorId: "b1", ftype: "", slug: "", name: "Bryn", label: "Bryn", canReset: false },
+			] },
+		});
+		expect(html).toContain("Reset Inventory");
+		expect(html).toMatch(/data-actor="a1" data-ftype="custom" data-slug="f1" data-name="Wren \(with Aria\)" checked/);
+		expect(html).toMatch(/data-actor="b1"[^>]*disabled/);
+		expect(html).toContain("Nothing to clear");
+		expect(html).toContain("is-follower");
+		expect(html).toMatch(/<input type="checkbox" class="stonetop-exp-home-reset-convalesce-check">/);
+		expect(html).toContain("stonetop-exp-home-reset-btn");
+	});
+
+	it("says so when everyone has unpacked, with no button to press", async () => {
+		const html = await global.renderTemplate("systems/stonetop-pwd/templates/dialogs/partials/expedition-home-reset.hbs", {
+			homeReset: { anyToClear: false, rows: [{ actorId: "b1", ftype: "", slug: "", name: "Bryn", label: "Bryn", canReset: false }] },
+		});
+		expect(html).toContain("already unpacked");
+		expect(html).not.toContain("stonetop-exp-home-reset-btn");
 	});
 });

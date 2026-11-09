@@ -140,23 +140,7 @@ class StonetopAutocompleteController {
 	}
 
 	_position(input) {
-		const popup = this._popup;
-		const rect = input.getBoundingClientRect();
-		const gap = 2;
-		const spaceBelow = window.innerHeight - rect.bottom - gap;
-		const spaceAbove = rect.top - gap;
-		// Open downward unless that would be cramped and there's more room above.
-		const openUp = spaceBelow < Math.min(MAX_HEIGHT, 160) && spaceAbove > spaceBelow;
-		popup.style.left = `${rect.left}px`;
-		popup.style.width = `${rect.width}px`;
-		popup.style.maxHeight = `${Math.max(80, Math.min(MAX_HEIGHT, openUp ? spaceAbove : spaceBelow))}px`;
-		if (openUp) {
-			popup.style.top = "auto";
-			popup.style.bottom = `${window.innerHeight - rect.top + gap}px`;
-		} else {
-			popup.style.bottom = "auto";
-			popup.style.top = `${rect.bottom + gap}px`;
-		}
+		placeFixedPopup(this._popup, input.getBoundingClientRect(), { maxHeight: MAX_HEIGHT, openUpBelow: 160, minHeight: 80 });
 	}
 
 	_onKeydown(ev, input, getOptions) {
@@ -205,6 +189,32 @@ class StonetopAutocompleteController {
 		this._suppress = false;
 		this.close();
 	}
+}
+
+/**
+ * Pin a `position: fixed` popup 2px under `rect` (the field or button it belongs to), or over it
+ * when the room below is under `openUpBelow` (capped at `maxHeight`) and there is more above. Its
+ * height is capped at `maxHeight` and the room it opens into, but never below `minHeight`. With a
+ * `minWidth` it is at least that wide and kept 8px inside the window; without, it matches `rect`.
+ * Shared by this popup and the suggestion menu (utils/suggestion-menu.js), which differ only in numbers.
+ */
+export function placeFixedPopup(popup, rect, { maxHeight, openUpBelow, minHeight, minWidth = null }) {
+	const gap = 2;
+	const below = window.innerHeight - rect.bottom - gap;
+	const above = rect.top - gap;
+	// Open downward unless that would be cramped and there's more room above.
+	const up = below < Math.min(maxHeight, openUpBelow) && above > below;
+	if (minWidth == null) {
+		popup.style.left = `${rect.left}px`;
+		popup.style.width = `${rect.width}px`;
+	} else {
+		const width = Math.min(Math.max(rect.width, minWidth), window.innerWidth - 16);
+		popup.style.width = `${width}px`;
+		popup.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+	}
+	popup.style.maxHeight = `${Math.max(minHeight, Math.min(maxHeight, up ? above : below))}px`;
+	popup.style.top = up ? "auto" : `${rect.bottom + gap}px`;
+	popup.style.bottom = up ? `${window.innerHeight - rect.top + gap}px` : "auto";
 }
 
 /** Process-wide singleton — one popup serves every registered input. */

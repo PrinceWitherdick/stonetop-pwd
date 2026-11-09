@@ -131,6 +131,17 @@ describe("winter on Forage", () => {
 			vi.doUnmock("../../../module/utils/roll-engine.js");
 		}
 	});
+
+	// Expedition audit ROAD-14: the season is the world's, whatever actor the PC is tied to.
+	it("reads the home steading's clock when the PC's own steading has none stamped", () => {
+		const home = steadingIn("winter");
+		const settlement = { id: "marshedge", type: "settlement", getFlag: () => null };
+		const actors = [home, settlement];
+		global.game.actors = { find: fn => actors.find(fn) ?? null, get: id => actors.find(a => a.id === id) ?? null };
+		const { char } = forager();
+		char.getSteadingActor = () => settlement;
+		expect(char.seasonMoveDisadvantage("Forage")).toBe("Winter");
+	});
 });
 
 // Ranger audit R6, On the Hoof: "roll with disadvantage in winter or barren terrain". Its window's box
@@ -146,8 +157,9 @@ describe("winter on On the Hoof", () => {
 	});
 	afterEach(() => { globalThis.Dialog = savedDialog; });
 
-	async function hoofWindow({ learned = true } = {}) {
+	async function hoofWindow({ learned = true, steading = null } = {}) {
 		const { char, actor } = forager();
+		if (steading) char.getSteadingActor = () => steading;
 		actor.items.push(makeLiveItem({ name: "On the Hoof", type: "move", system: { moveType: "playbook" }, flags: learned ? undefined : { "stonetop-pwd": { learned: false } } }));
 		actor.typedActor = char;
 		const Base = class {
@@ -170,6 +182,17 @@ describe("winter on On the Hoof", () => {
 		expect(leanBox(await hoofWindow())).not.toContain("checked");
 		worldWith(null);
 		expect(leanBox(await hoofWindow())).not.toContain("checked");
+	});
+
+	// Expedition audit ROAD-14, as Forage reads it: a PC tied to a settlement, or to a steading with no
+	// Seasons Change stamped, reads the home steading's clock (StonetopCharacter#currentSeason).
+	it("reads the home steading's clock when the PC's own steading has none stamped, as Forage does", async () => {
+		const home = steadingIn("winter");
+		const settlement = { id: "marshedge", type: "settlement", getFlag: () => null };
+		const actors = [home, settlement];
+		global.game.actors = { find: fn => actors.find(fn) ?? null, get: id => actors.find(a => a.id === id) ?? null };
+		const html = await hoofWindow({ steading: settlement });
+		expect(leanBox(html)).toContain("checked");
 	});
 
 	it("opens nothing for a Ranger who switched the move off", async () => {

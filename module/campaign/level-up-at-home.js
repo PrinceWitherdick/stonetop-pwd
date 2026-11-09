@@ -9,14 +9,15 @@
 // stamps a trip `setOut` when the GM steps into Running the Journey, and `timelineRecorded` when they
 // step into the homecoming. A trip with the first and not the second has left and not come home. A
 // table that never walks the expedition window stamps neither, and gets no reminder: silence, never a
-// false one. A character ticked out of that trip's party (`partyOut`) is at home whatever the others do.
+// false one. A character ticked out of that trip's party (`partyOut`) is at home whatever the others do,
+// and so is one not on the list of who set out (`party`, stamped at set-out): a PC made at home since.
 
 import { getObjectSetting } from "../settings.js";
-import { expeditionLabel, normalizeLog } from "../utils/expedition-log-core.js";
+import { EXPEDITION_LOG_SETTING, expeditionLabel, normalizeLog } from "../utils/expedition-log-core.js";
 import { format } from "../utils/i18n.js";
 
 /** The expedition log's world setting (settings.js). */
-export const EXPEDITION_LOG_SETTING = "expeditionAnswers";
+export { EXPEDITION_LOG_SETTING };
 
 /** Whether a logged trip has set out and not yet come home. */
 export function tripUnderway(trip) {
@@ -35,6 +36,7 @@ export function expeditionUnderwayFor(actorId, log) {
 	for (let i = list.length - 1; i >= 0; i--) {
 		const trip = list[i];
 		if (!tripUnderway(trip) || trip.partyOut?.[actorId]) continue;
+		if (Array.isArray(trip.party) && !trip.party.some(pc => pc?.id === actorId)) continue;
 		return { trip, label: expeditionLabel(trip, i) };
 	}
 	return null;

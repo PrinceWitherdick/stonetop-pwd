@@ -25,6 +25,19 @@ vi.mock("../../module/utils/chronicle.js", async importOriginal => ({
 	deleteExpeditionChroniclePage: async id => { chronicle.deleted.push(id); return true; },
 }));
 
+// The share and the timeline writer, stood in for where the delete reaches them (audit WLK-7).
+const sharing = vi.hoisted(() => ({ shared: null, stopped: 0 }));
+vi.mock("../../module/utils/shared-route.js", async importOriginal => ({
+	...(await importOriginal()),
+	readSharedRoute:  () => sharing.shared,
+	stopSharingRoute: async () => { sharing.stopped += 1; },
+}));
+const rows = vi.hoisted(() => ({ forgotten: [] }));
+vi.mock("../../module/timeline/timeline-expedition-record.js", async importOriginal => ({
+	...(await importOriginal()),
+	forgetTripRows: async id => { rows.forgotten.push(id); return 1; },
+}));
+
 const { ExpeditionDialog } = await import("../../module/dialogs/ExpeditionDialog.js");
 const { rollDieOfFate, fateDiceFormula } = await import("../../module/utils/die-of-fate.js");
 const { FATE_TABLES } = await import("../../module/data/fate-tables.js");
@@ -262,6 +275,65 @@ describe("another GM writing the log", () => {
 		expect(d.render).toHaveBeenCalledTimes(1);
 		delete global.document;
 	});
+
+	// Audit WLK-2: Run on a toolkit card is pressed by the click whose blur saved the last field, so
+	// that write is still on its way. The switch goes through the window's own copy, which has it.
+	it("keeps a field still on its way when Run switches the open window to another trip", async () => {
+		const other = { id: "trip-2", title: "Other", createdAt: 1 };
+		const d = openWindow([TRIP, other]);
+		d.bringToTop = vi.fn();
+		d._closeMapWindows = async () => {};
+		const wire = holdWrites();
+		const saving = d._saveField("chart.route", "Over the pass");
+		const opening = ExpeditionDialog.openOnTrip({ tripId: "trip-2" });
+		await vi.waitFor(() => expect(wire.count()).toBe(2));
+		wire.land();
+		expect(await opening).toBe("trip-2");
+		await saving;
+		expect(store.expeditionAnswers.currentId).toBe("trip-2");
+		expect(store.expeditionAnswers.list[0].chart).toEqual({ route: "Over the pass" });
+		expect(d.bringToTop).toHaveBeenCalled();
+	});
+
+	it("mints a trip into the open window's own copy, and goes to the top of it", async () => {
+		const d = openWindow();
+		d.bringToTop = vi.fn();
+		d._closeMapWindows = async () => {};
+		d._step = 4;
+		d._logDraft = { currentId: "trip-1", list: [{ ...TRIP, chart: { route: "Typed" } }] };
+		const id = await ExpeditionDialog.openOnTrip({ title: "To the Barrier Pass" });
+		expect(store.expeditionAnswers.currentId).toBe(id);
+		expect(store.expeditionAnswers.list.map(e => e.title)).toEqual(["The Long Walk", "To the Barrier Pass"]);
+		expect(store.expeditionAnswers.list[0].chart).toEqual({ route: "Typed" });
+		expect(d._step).toBe(0);
+	});
+});
+
+// Audit WLK-12: a write the world refuses is said once and kept in the window.
+describe("a write the world refuses", () => {
+	it("warns once, keeps the draft, and never rejects out of a change handler", async () => {
+		const warned = [];
+		global.ui.notifications.warn = msg => warned.push(msg);
+		const d = dialog();
+		game.settings.set = () => Promise.reject(new Error("socket gone"));
+		foundry.utils.setProperty ??= (target, path, value) => { target[path] = value; };
+		await expect(d._saveField("prep", "First")).resolves.toBeUndefined();
+		await expect(d._saveField("prep", "Second")).resolves.toBeUndefined();
+		expect(warned).toHaveLength(1);
+		expect(d._log().list[0].prep).toBe("Second");
+	});
+});
+
+// Audit WLK-5: GM prep on a GM-only setting. A player is turned away rather than handed a window
+// that saves nothing.
+describe("the walkthrough for a player", () => {
+	it("does not open, and says why", () => {
+		const warned = [];
+		global.ui.notifications.warn = msg => warned.push(msg);
+		game.user = { id: "p1", isGM: false };
+		expect(ExpeditionDialog.open()).toBeNull();
+		expect(warned[0]).toMatch(/Only the GM/);
+	});
 });
 
 describe("deleting a trip that has a Chronicle page", () => {
@@ -281,9 +353,9 @@ describe("deleting a trip that has a Chronicle page", () => {
 
 	it("reads the tick off the form when the delete is pressed", async () => {
 		stubAsk("delete", fakeForm({ removePage: { checked: true } }));
-		expect(await dialog()._askDeleteExpedition("x", { hasPage: true })).toEqual({ removePage: true });
+		expect(await dialog()._askDeleteExpedition("x", { hasPage: true })).toEqual({ removePage: true, removeRows: false, herdBack: false, stopSharing: false });
 		stubAsk("delete", fakeForm({ removePage: { checked: false } }));
-		expect(await dialog()._askDeleteExpedition("x", { hasPage: true })).toEqual({ removePage: false });
+		expect(await dialog()._askDeleteExpedition("x", { hasPage: true })).toEqual({ removePage: false, removeRows: false, herdBack: false, stopSharing: false });
 		stubAsk("keep");
 		expect(await dialog()._askDeleteExpedition("x", { hasPage: true })).toBeNull();
 	});
@@ -303,6 +375,60 @@ describe("deleting a trip that has a Chronicle page", () => {
 		await d._deleteCurrentExpedition();
 		expect(chronicle.deleted).toEqual(["trip-1"]);
 		expect(store.expeditionAnswers.list).toEqual([]);
+	});
+
+	// Audit WLK-7 (and RTE-12): the timeline rows unticked; horses still out and a route still shown
+	// ticked, since every other take goes home by itself and a deleted trip's way is nobody's plan.
+	it("offers its rows unticked, and the herd's horses and the players' route ticked", async () => {
+		const asked = stubAsk(null);
+		await dialog()._askDeleteExpedition("x", { hasRows: true, herdHorses: 2, shared: true });
+		const html = asked.mock.calls[0][0].content.innerHTML;
+		expect(html).toMatch(/name="removeRows">/);
+		expect(html).toMatch(/name="herdBack" checked>/);
+		expect(html).toContain("Put 2 horses back in the herd");
+		expect(html).toMatch(/name="stopSharing" checked>/);
+		expect(html).not.toContain("removePage");
+
+		stubAsk("delete", fakeForm({ removeRows: { checked: true }, herdBack: { checked: false }, stopSharing: { checked: true } }));
+		expect(await dialog()._askDeleteExpedition("x", { hasRows: true, herdHorses: 2, shared: true }))
+			.toEqual({ removePage: false, removeRows: true, herdBack: false, stopSharing: true });
+	});
+
+	it("does what was ticked: rows forgotten, horses back in the herd, the route taken down", async () => {
+		rows.forgotten = [];
+		sharing.stopped = 0;
+		sharing.shared = { id: "share-1", expeditionId: "trip-1" };
+		const returnToHerd = vi.fn(async () => 2);
+		const d = dialog([{ id: "trip-1", title: "The Long Walk", createdAt: 0, timelineRecorded: { season: "spring", year: 1 }, requisitioned: [{ name: "2 horses from the herd", herd: 2 }] }]);
+		d._closeMapWindows = async () => {};
+		d._syncHeldAssets = async () => {};
+		d._steadingWrapper = () => ({ steading: { improvementCompleted: () => true, returnToHerd } });
+		let offered;
+		d._askDeleteExpedition = async (_label, opts) => {
+			offered = opts;
+			return { removePage: false, removeRows: true, herdBack: true, stopSharing: true };
+		};
+		await d._deleteCurrentExpedition();
+		expect(offered).toEqual({ hasPage: false, hasRows: true, herdHorses: 2, shared: true });
+		expect(rows.forgotten).toEqual(["trip-1"]);
+		expect(returnToHerd).toHaveBeenCalledWith(2, { stonetopMove: "Requisition" });
+		expect(sharing.stopped).toBe(1);
+		sharing.shared = null;
+	});
+
+	// Audit WLK-8: deleting a trip renumbers the unnamed ones after it, and their rows follow.
+	it("re-titles a recorded unnamed trip the delete renumbered", async () => {
+		const d = dialog([
+			{ id: "trip-1", title: "", createdAt: 0 },
+			{ id: "trip-2", title: "", createdAt: 1, timelineRecorded: { season: "spring", year: 1 }, timelineTitle: "Expedition 2" },
+		]);
+		d._closeMapWindows = async () => {};
+		d._syncHeldAssets = async () => {};
+		d._askDeleteExpedition = async () => ({ removePage: false });
+		let retitled = 0;
+		d._retitleRenumbered = async () => { retitled += 1; return 1; };
+		await d._deleteCurrentExpedition();
+		expect(retitled).toBe(1);
 	});
 
 	it("keeps the page when not ticked", async () => {

@@ -1,6 +1,7 @@
 import { MinorArcanum } from "../../../model/MinorArcanum.js";
 import { FoundryPackStore } from "./FoundryPackStore.js";
-import { ITEM_FLAG_SCOPE, ARCANA_PACK } from "../StonetopFlags.js";
+import { ITEM_FLAG_SCOPE, ARCANA_PACK, StonetopFlags } from "../StonetopFlags.js";
+import { ARCANA_RULE_SLUGS, noteArcanumBack } from "../../../data/arcana-rules.js";
 
 // Shared slug → world-arcanum-Item index. Built lazily and reused across every repository
 // instance and every render, so resolving a homebrew slug is O(1) instead of a full
@@ -63,6 +64,7 @@ export class FoundryArcanaRepository {
 		const entry = await this._store.findEntry(e => e.flags?.[ITEM_FLAG_SCOPE]?.slug === slug);
 		if (!entry) return null;
 		const doc = await this._store.getDocument(entry._id);
+		noteArcanumBack(slug, doc.flags[ITEM_FLAG_SCOPE]?.back?.description);
 		return new MinorArcanum({ ...doc.flags[ITEM_FLAG_SCOPE], img: doc.img });
 	}
 
@@ -75,4 +77,57 @@ export class FoundryArcanaRepository {
 	async findBySlugs(slugs) {
 		return (await Promise.all(slugs.map(s => this.findBySlug(s)))).filter(Boolean);
 	}
+}
+
+// The rule cards whose backs this client has asked for, so each is read once.
+const _primedRuleSlugs = new Set();
+let _ruleGainHooksBound = false;
+
+/** The rule cards (ARCANA_RULE_SLUGS) these actors' characters hold. */
+function _heldRuleSlugs(actors) {
+	const held = new Set();
+	for (const actor of actors ?? []) {
+		if (actor?.type !== "character") continue;
+		for (const slug of new StonetopFlags(actor, "arcana").getFlag("owned") ?? []) {
+			if (ARCANA_RULE_SLUGS.includes(slug)) held.add(slug);
+		}
+	}
+	return held;
+}
+
+async function _primeHeld(actors, repo) {
+	const slugs = [..._heldRuleSlugs(actors)].filter(slug => !_primedRuleSlugs.has(slug));
+	if (!slugs.length) return;
+	for (const slug of slugs) _primedRuleSlugs.add(slug);
+	try {
+		await (repo ?? new FoundryArcanaRepository()).findBySlugs(slugs);
+	} catch (err) {
+		// Not read: let the next gain or update try again.
+		for (const slug of slugs) _primedRuleSlugs.delete(slug);
+		console.warn("Stonetop | Could not read the arcana cards the fight rules follow", err);
+	}
+}
+
+/**
+ * Read the backs of the cards the per-card rules name (data/arcana-rules.js) that a character in the world
+ * holds, at `ready`, so a blow struck before any sheet has loaded them still finds its boxes by their printed
+ * labels. Those rules are asked synchronously and read a card not yet loaded as unmarked, and they only ask
+ * about a card its bearer holds, so a card held later is read as it is gained: a character created, or one
+ * whose flags change (the owned list among them), primes what it now holds that is not read yet.
+ *
+ * @param {{actors?: Iterable<Actor>, hooks?: object, repo?: {findBySlugs: Function}}} [deps]
+ */
+export async function primeArcanaRules({ actors = globalThis.game?.actors, hooks = globalThis.Hooks, repo = null } = {}) {
+	if (!_ruleGainHooksBound && hooks?.on) {
+		_ruleGainHooksBound = true;
+		hooks.on("createActor", actor => { _primeHeld([actor], repo); });
+		hooks.on("updateActor", (actor, changes) => { if (changes?.flags) _primeHeld([actor], repo); });
+	}
+	await _primeHeld(actors, repo);
+}
+
+/** Forget what was primed and the hooks bound. Tests only. */
+export function _resetArcanaRulePriming() {
+	_primedRuleSlugs.clear();
+	_ruleGainHooksBound = false;
 }

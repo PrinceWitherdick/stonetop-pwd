@@ -31,7 +31,9 @@ import { askStockSource } from "./ask-stock-source.js";
 import { autoOpenUserId, ownerUsers } from "../../hooks/DeathsDoorPrompt.js";
 import { OWNER_ASK_MS, spendOrAskOwner, answerOwnerAsk, tooLate, gmAnswersNote } from "../../utils/owner-ask.js";
 import { escHtml } from "../../utils/strings.js";
-import { isUnliving, recoveredHpTo } from "./deaths-door-actor.js";
+import { isOutOfPlaySafe, isUnliving, recoveredHpTo } from "./deaths-door-actor.js";
+import { expeditionUnderwayFor } from "../../campaign/level-up-at-home.js";
+import { DEATHS_DOOR_STATE } from "./deaths-door.js";
 import { STONETOP_SCOPE } from "./StonetopFlags.js";
 
 export const HEALERS_ARTS = "Healer's Arts";
@@ -47,6 +49,30 @@ export const HEALERS_ARTS_ASK_MS = OWNER_ASK_MS;
 /** The characters who can tend a Recover: those with Healer's Arts LEARNED (owns-move.js). */
 export function healersArtsCarers(actors) {
 	return learnedHolders(actors, HEALERS_ARTS);
+}
+
+/**
+ * Who could be tending `patient`'s Recover (audit ROAD-8, the user's ruling E11): a Healer's Arts carer in
+ * play (isOutOfPlay: not dead or retired) and not dying; and while the patient is away on a trip that has set
+ * out and not come home (campaign/level-up-at-home.js#expeditionUnderwayFor), only someone on that trip. A
+ * carer at home cannot tend someone on the road, nor a carer on the road someone at home.
+ *
+ * @param {Actor[]} actors   every character to consider
+ * @param {Actor} patient
+ * @param {object} [o]
+ * @param {object|null} [o.log]  the expedition log (raw or normalized); null reads no trip
+ */
+export function recoverCarerActors(actors, patient, { log = null } = {}) {
+	const tripOf = id => (id && log ? expeditionUnderwayFor(id, log)?.trip ?? null : null);
+	const patientTrip = tripOf(patient?.id);
+	return healersArtsCarers(actors).filter(actor => {
+		if (isOutOfPlaySafe(actor)) return false;
+		if (actor.typedActor?.canFaceDeathsDoor) return false;
+		// Both at home, or both on the same trip: a carer at home cannot tend someone on the road, nor
+		// a carer on the road someone at home.
+		if (actor.id !== patient?.id && tripOf(actor.id) !== patientTrip) return false;
+		return true;
+	});
 }
 
 /** A carer's WIS, as the sheet stores it. */
@@ -81,6 +107,17 @@ export function recoverHeal({ base, hp, max, wis = null, stock = false, slow = f
 }
 
 /**
+ * Out of play (dead, Book I p.245), or a Death's Door fate still to choose (p.244): nothing to Recover
+ * (audit ROAD-6). The words why, or null. The sheet's Recover bar and the press-time refusal both ask.
+ */
+export function recoverOutOfPlayReason(patient) {
+	const i18n = globalThis.game?.i18n;
+	if (isOutOfPlaySafe(patient)) return i18n?.localize("stonetop.specialMoves.recover.outOfPlayHint");
+	if (patient?.typedActor?.deathsDoorState === DEATHS_DOOR_STATE.FATE_PENDING) return i18n?.localize("stonetop.specialMoves.recover.fatePendingHint");
+	return null;
+}
+
+/**
  * Why `patient` can no longer have the Recover a use of supplies is about to pay for, or null. `self`: their
  * own Recover, refused once it is spent. `tend`: the key of the debility being tended, refused once it is
  * cleared. Either one is refused while they are dying ("can't save themselves", Book I p.240) or Unliving.
@@ -99,6 +136,8 @@ export function recoverRefusal(patient, { self = false, tend = null } = {}) {
 		if (!debility?.marked) return i18n?.format("stonetop.specialMoves.recover.tend.alreadyTended", { debility: debility?.name ?? tend });
 	}
 	if (character?.canFaceDeathsDoor) return i18n?.format("stonetop.specialMoves.dyingHint", { move: character.zeroHpMove?.name ?? "Death's Door" });
+	const gone = recoverOutOfPlayReason(patient);
+	if (gone) return gone;
 	if (isUnliving(patient)) return i18n?.localize("stonetop.specialMoves.recover.unlivingHint");
 	return null;
 }

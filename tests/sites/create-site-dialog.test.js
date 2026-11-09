@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { CreateSiteDialog, _countLines, TERRAIN_KEY } from "../../module/sites/create-site-dialog.js";
+import { CreateSiteDialog, _reviewSections, TERRAIN_KEY } from "../../module/sites/create-site-dialog.js";
 import { siteManner, combinableRows, REGION_TABLE_PREFIX } from "../../module/data/site-tables.js";
 import Handlebars from "handlebars";
 import { readRepo } from "../fakes/css.js";
+import { stubConfirm } from "../fakes/confirm.js";
 import { shapeSiteSystem } from "../../module/sites/site-store.js";
 import { SITE_PAIR_LISTS } from "../../module/sites/site-schema.js";
 
@@ -65,68 +66,120 @@ describe("_pairRows", () => {
 		}
 	});
 
+	it("makes every paired list's row a titled card", () => {
+		const dlg = on({
+			...blankSel(),
+			questions: [{ prompt: "p" }], timeline: [{ when: "w" }], denizens: [{ name: "n" }], areas: [{ title: "t" }],
+		});
+		// The first cell (on the delete button's line) reads as a bold label and the rest as plain
+		// text until clicked, all boxed together in one card.
+		for (const list of Object.keys(SITE_PAIR_LISTS)) {
+			const [row] = dlg._pairRows(list);
+			expect(row.rowClass).toContain("stonetop-cs-card");
+			expect(row.cells.map(c => c.cls)).toEqual(row.cells.map((c, i) => i ? "stonetop-cs-body" : "stonetop-cs-title"));
+		}
+	});
+
 	it("is empty for a list that is not a paired one", () => {
 		expect(on(blankSel())._pairRows("dangers")).toEqual([]);
 	});
 });
 
-describe("suggestion chips", () => {
-	// The chip's "already added" state and the add handler's "once only" guard are the same
-	// question. Asking it of a hardcoded `prompt` made both right for questions alone: on every
-	// other list the chip never lit and each click appended another row.
-	it("marks a questions chip against the row's first key", () => {
+describe("suggestion menu items", () => {
+	// "Already added" and the pick handler's "once only" guard are the same question. Asking it of
+	// a hardcoded `prompt` made both right for questions alone: on every other list the item never
+	// showed as added and each pick appended another row.
+	it("marks a question against the row's first key", () => {
 		const dlg = on({ ...blankSel(), questions: [{ prompt: "Who built it?", answer: "" }] });
-		expect(dlg._pairChips("questions", ["Who built it?", "Who lives here?"]))
+		expect(dlg._suggestionItems("questions", ["Who built it?", "Who lives here?"]))
 			.toEqual([
-				{ list: "questions", text: "Who built it?", used: true },
-				{ list: "questions", text: "Who lives here?", used: false },
+				{ value: "Who built it?", label: "Who built it?", used: true },
+				{ value: "Who lives here?", label: "Who lives here?", used: false },
 			]);
 	});
 
-	it("marks a chip on a list whose first key is NOT called prompt", () => {
+	it("marks an item on a list whose first key is NOT called prompt", () => {
 		const dlg = on({ ...blankSel(), denizens: [{ name: "Crinwin", notes: "" }] });
-		expect(dlg._pairChips("denizens", ["Crinwin"])[0].used).toBe(true);
-		expect(on({ ...blankSel(), areas: [{ title: "Vault" }] })._pairChips("areas", ["Vault"])[0].used).toBe(true);
+		expect(dlg._suggestionItems("denizens", ["Crinwin"])[0].used).toBe(true);
+		expect(on({ ...blankSel(), areas: [{ title: "Vault" }] })._suggestionItems("areas", ["Vault"])[0].used).toBe(true);
 		expect(on({ ...blankSel(), timeline: [{ when: "Last autumn" }] })
-			._pairChips("timeline", ["Last autumn"])[0].used).toBe(true);
+			._suggestionItems("timeline", ["Last autumn"])[0].used).toBe(true);
 	});
 
-	it("does not mark a chip that merely matches a LATER key", () => {
+	it("does not mark an item that merely matches a LATER key", () => {
 		const dlg = on({ ...blankSel(), questions: [{ prompt: "", answer: "Who built it?" }] });
-		expect(dlg._pairChips("questions", ["Who built it?"])[0].used).toBe(false);
+		expect(dlg._suggestionItems("questions", ["Who built it?"])[0].used).toBe(false);
 	});
 
-	it("marks a plain string list's chip", () => {
+	it("marks a plain string list's item", () => {
 		expect(on({ ...blankSel(), connections: ["the Forest Folk knew"] })
-			._lineChips("connections", ["the Forest Folk knew", "nobody knew"]).map(c => c.used))
+			._suggestionItems("connections", ["the Forest Folk knew", "nobody knew"]).map(c => c.used))
 			.toEqual([true, false]);
+	});
+
+	it("adds a picked suggestion once, as a line or under a paired list's first key", () => {
+		const dlg = on({ ...blankSel() });
+		dlg._addSuggestion("connections", "nobody knew");
+		dlg._addSuggestion("connections", "nobody knew");
+		expect(dlg._sel.connections).toEqual(["nobody knew"]);
+		dlg._addSuggestion("questions", "Who built it?");
+		dlg._addSuggestion("questions", "Who built it?");
+		expect(dlg._sel.questions).toHaveLength(1);
+		expect(dlg._sel.questions[0].prompt).toBe("Who built it?");
+	});
+
+	// Which lists have a menu is said once, in the dialog's _SUGGESTIONS: the template reads it off
+	// the context rather than marking its own buttons.
+	it("marks the menu buttons off the dialog's own list, not the template's", () => {
+		const hbs = readRepo("templates/dialogs/create-site.hbs");
+		expect(hbs).not.toContain("menu=true");
+		expect(hbs).toContain("menu=this.suggestionMenus.connections");
+		expect(hbs).toContain("menu=this.suggestionMenus.questions");
 	});
 });
 
-describe("_countLines", () => {
+describe("_reviewSections", () => {
 	afterEach(() => { vi.restoreAllMocks(); });
 
-	it("counts only the lines that have something, in step order", () => {
-		expect(_countLines(shapeSiteSystem({
-			dangers: ["wasps"], areas: [{ title: "A" }], outside: ["a hill"], inside: ["dark"],
+	it("lists the entries of only the lists that have something, in step order", () => {
+		expect(_reviewSections(shapeSiteSystem({
+			dangers: ["wasps"], areas: [{ title: "A" }, { contents: "bones" }], outside: ["a hill"], inside: ["dark"],
 		}))).toEqual([
-			{ label: "Dangers", n: 1 },
-			{ label: "Impressions", n: 2 },   // outside + inside read as one line
-			{ label: "Areas", n: 1 },
+			{ label: "Dangers", items: [{ lead: "", text: "wasps" }] },
+			{ label: "Outside", items: [{ lead: "", text: "a hill" }] },
+			{ label: "Inside", items: [{ lead: "", text: "dark" }] },
+			// An area saved with no title still shows, under the name the card gives it.
+			{ label: "Areas", items: [{ lead: "", text: "A" }, { lead: "", text: "Area 2" }] },
 		]);
 	});
 
-	it("says so when a list the site saves is going uncounted", () => {
+	it("leads each paired entry with its question, date or name, and marks a question still open", () => {
+		const s = _reviewSections(shapeSiteSystem({
+			questions: [{ prompt: "Who built it?", answer: "" }, { prompt: "Why?", answer: "To keep her down" }],
+			timeline: [{ when: "Long ago", text: "The barrow is raised" }],
+			denizens: [{ name: "Maelis", notes: "one eye" }],
+			randomTables: [{ caption: "What stirs", rows: ["a", "b", "c", "d", "e", "f"] }],
+		}));
+		expect(s.find(x => x.label === "Questions").items).toEqual([
+			{ lead: "Who built it?", text: "", open: true },
+			{ lead: "Why?", text: "To keep her down", open: false },
+		]);
+		expect(s.find(x => x.label === "Timeline").items).toEqual([{ lead: "Long ago", text: "The barrow is raised" }]);
+		expect(s.find(x => x.label === "Denizens").items).toEqual([{ lead: "Maelis", text: "one eye" }]);
+		expect(s.find(x => x.label === "Tables").items).toEqual([{ lead: "What stirs", text: "1d6" }]);
+	});
+
+	it("says so when a list the site saves is going unshown", () => {
 		// The whole job of the review step is telling the GM what they have. A list added to the
-		// site and left out of the tally used to be invisible there with nothing to notice it.
+		// site and left out of the review used to be invisible there with nothing to notice it.
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		_countLines({ ...shapeSiteSystem(), hooks: [{ trigger: "t" }] });
+		_reviewSections({ ...shapeSiteSystem(), hooks: [{ trigger: "t" }] });
 		expect(warn).toHaveBeenCalledWith(expect.stringContaining("hooks"));
 	});
 
 	it("stays quiet for the site as it actually is", () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		_countLines(shapeSiteSystem({ questions: [{ prompt: "p" }] }));
+		_reviewSections(shapeSiteSystem({ questions: [{ prompt: "p" }] }));
 		expect(warn).not.toHaveBeenCalled();
 	});
 });
@@ -366,6 +419,15 @@ describe("the theme step's pick controls", () => {
 	});
 });
 
+// Every pick, roll, add and remove redraws the window, which threw the step column back to its top;
+// a new step still opens at its top, because StepperDialog zeroes the same column on a step change.
+describe("scroll", () => {
+	it("keeps the step column and the rail where they were through a redraw", () => {
+		expect(CreateSiteDialog.defaultOptions.scrollY).toEqual([".stonetop-guide-main", ".stonetop-guide-toc"]);
+		expect(CreateSiteDialog.prototype._stepScrollSelector).toBe(".stonetop-guide-main");
+	});
+});
+
 describe("cs-pick-slots.hbs", () => {
 	// The partial and the handlers are joined by nothing but data-key and data-slot, and both ends
 	// fail silently: a slot rendered without them is a control whose change and roll do nothing,
@@ -396,7 +458,7 @@ describe("cs-pick-slots.hbs", () => {
 		const d = dlg({ manner: "primordial" });
 		d._setPick("theme", 0, siteManner("primordial").tables.find(t => t.key === "theme").rows[0].text);
 		const html = render(d._pickSlots("theme"));
-		expect(html).toContain('class="stonetop-cs-combine stonetop-cf-mini-btn" data-key="theme"');
+		expect(html).toContain('class="stonetop-cs-combine stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-key="theme"');
 	});
 
 	it("offers nothing to combine on a table that takes one answer", () => {
@@ -519,5 +581,87 @@ describe("Roll the lot", () => {
 		// Still rollable one at a time.
 		cave._rollPick("beast", 0, () => 0);
 		expect(cave._sel.picks.beast).toEqual(["Bats. So many bats"]);
+	});
+
+	describe("a Manner or Region switch sets answers aside rather than losing them", () => {
+		it("brings a manner's answers back when it is chosen again", () => {
+			const d = dlg({ manner: "cave" });
+			d._setPick("structure", 0, "Long, narrow, meandering");
+			d._switchManner("haunted");
+			expect(d._sel.picks).toEqual({});
+			d._rollAll(() => 0);
+			const haunted = structuredClone(d._sel.picks);
+			d._switchManner("cave");
+			expect(d._sel.picks).toEqual({ structure: ["Long, narrow, meandering"] });
+			d._switchManner("haunted");
+			expect(d._sel.picks).toEqual(haunted);
+			// Nothing set aside rides into the write-up.
+			expect(d._seed().picks.every(p => haunted[p.key])).toBe(true);
+		});
+
+		it("brings a region's terrain, and the tables it opened, back likewise", () => {
+			const d = dlg({ regionId: "ruinedTower", regionPicks: {} });
+			d._setPick(TERRAIN_KEY, 0, "A building, at least somewhat intact");
+			d._setPick(`${REGION_TABLE_PREFIX}building`, 0, "Built after the tower's fall");
+			const before = { terrain: [...d._sel.terrain], regionPicks: structuredClone(d._sel.regionPicks) };
+			d._switchRegion("greatWood");
+			expect([d._sel.terrain, d._sel.regionPicks]).toEqual([[], {}]);
+			d._switchRegion("ruinedTower");
+			expect({ terrain: d._sel.terrain, regionPicks: d._sel.regionPicks }).toEqual(before);
+		});
+
+		it("keeps what it set aside across a reload", () => {
+			const left = dlg({ manner: "cave" });
+			left._step = 0;
+			left._setPick("structure", 0, "Long, narrow, meandering");
+			left._switchManner("haunted");
+			const view = JSON.parse(JSON.stringify({ step: null, sel: left._sel, setAside: left._setAside }));
+			const back = dlg({});
+			back._takeRestoredView(view);
+			back._switchManner("cave");
+			expect(back._sel.picks).toEqual({ structure: ["Long, narrow, meandering"] });
+		});
+	});
+
+	describe("asks before throwing answers away", () => {
+		afterEach(() => { delete globalThis.foundry?.applications?.api?.DialogV2; });
+
+		it("goes straight ahead while the manner's tables are empty", async () => {
+			const wait = stubConfirm(false);
+			expect(await dlg({ manner: "cave" })._confirmRollAll()).toBe(true);
+			expect(wait).not.toHaveBeenCalled();
+		});
+
+		it("asks once any table has an answer, and keeps them unless told otherwise", async () => {
+			const d = dlg({ manner: "cave" });
+			d._setPick("structure", 0, "Long, narrow, meandering");
+			const wait = stubConfirm(false);
+			expect(await d._confirmRollAll()).toBe(false);
+			expect(wait).toHaveBeenCalledOnce();
+			const asked = wait.mock.calls[0][0];
+			expect(asked.content).toContain("an answer");
+			// Enter lands on keeping them.
+			expect(asked.buttons.find(b => b.default).action).toBe("no");
+			stubConfirm(null);
+			expect(await d._confirmRollAll()).toBe(false);
+			stubConfirm(true);
+			expect(await d._confirmRollAll()).toBe(true);
+		});
+
+		it("counts a hand-picked conditional answer, which rolling the lot clears and never re-rolls", async () => {
+			const d = dlg({ manner: "cave" });
+			d._setPick("beast", 0, "Bats. So many bats");
+			const wait = stubConfirm(false);
+			expect(await d._confirmRollAll()).toBe(false);
+			expect(wait).toHaveBeenCalledOnce();
+		});
+
+		it("doesn't count terrain, which rolling the lot leaves alone", async () => {
+			const d = dlg({ manner: "cave", regionId: "greatWood" });
+			d._setPick(TERRAIN_KEY, 0, "Dense thicket");
+			const wait = stubConfirm(false);
+			expect(await d._confirmRollAll()).toBe(true);
+			expect(wait).not.toHaveBeenCalled();
+		});
 	});
 });

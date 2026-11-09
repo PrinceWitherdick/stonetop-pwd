@@ -41,6 +41,23 @@ export function dictatedFates(cards = [], boxStates = {}) {
 	return out;
 }
 
+/** The ticked back boxes of `slug` in an arcana box map (`slug:back:index`), as their keys. */
+export function tickedBackBoxes(boxes, slug) {
+	return Object.keys(boxes ?? {}).filter(k => k.startsWith(`${slug}:back:`) && boxes[k]);
+}
+
+/** The Rune-laden Scales' slug: its Death's Door offer (deaths-door-arcana-offers.js) and its stand fast (fight/defend-spend.js). */
+export const RUNE_LADEN_SCALES = "rune-laden-scales";
+
+/** Whether the character's inventory marks the arcanum `slug` worn (checked), held or not: the Scales, the Demonhide Cloak. */
+export const markedWorn = (character, slug) => !!character?._inventory?.checked?.[slug];
+
+/** Held and recovered: owned and not a lead (a lead is not yet in their hands). */
+export function holdsArcanum(character, slug) {
+	const arcana = character?._arcana;
+	return !!arcana?.ownedSlugs?.has?.(slug) && !arcana?.leadSlugs?.has?.(slug);
+}
+
 /**
  * Everything heldDeathsDoorDictates reads off the character, as one string: which of the three cards they own,
  * which are still leads, and which of their back boxes are ticked. The same key, the same answer, so a window
@@ -54,20 +71,28 @@ export function deathsDoorDictatesKey(character) {
 	const boxes = arcana.boxStates ?? {};
 	return JSON.stringify(DEATHS_DOOR_ARCANA.map(({ slug }) => [
 		owned.has(slug), leads.has(slug),
-		Object.keys(boxes).filter(k => k.startsWith(`${slug}:back:`) && boxes[k]).sort(),
+		tickedBackBoxes(boxes, slug).sort(),
 	]));
 }
 
 /**
  * What a character holds, read for dictatedFates: the cards they own and have recovered (a lead is not yet in
- * their hands), with the back text and name from the card itself. Only the three cards above are fetched.
+ * their hands), and the cards they no longer hold whose marked Consequences they kept, with the back text and
+ * name from the card itself. Only the three cards above are fetched.
+ *
+ * A card removed with "Keep its Consequence marks" ticked (the 2026-11-04 ruling A5) leaves its Consequence
+ * boxes in `arcana.boxes`, and a Consequence stays marked "even if [its] impact is passing, temporary, or
+ * undone" (Book I p.442), so the Redwood Effigy's revenant or the Maw's wraith still waits at the Door for a
+ * character no longer holding it.
  */
 export async function heldDeathsDoorDictates(character) {
 	const arcana = character?._arcana;
 	if (!arcana) return [];
 	const owned = arcana.ownedSlugs ?? new Set();
 	const leads = arcana.leadSlugs ?? new Set();
-	const slugs = DEATHS_DOOR_ARCANA.map(d => d.slug).filter(s => owned.has(s) && !leads.has(s));
+	const boxes = arcana.boxStates ?? {};
+	const slugs = DEATHS_DOOR_ARCANA.map(d => d.slug)
+		.filter(s => (owned.has(s) ? !leads.has(s) : tickedBackBoxes(boxes, s).length > 0));
 	if (!slugs.length) return [];
 	const cards = (await Promise.all(slugs.map(s => arcana.getArcanum(s)))).filter(Boolean).map(item => ({
 		slug: item.slug,

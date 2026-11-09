@@ -81,10 +81,15 @@ export function normalizeStart(origin) {
 	// wherever the reader happened to be looking.
 	const tier = travelMap(origin?.tier)?.slug ?? null;
 	if (tier && isFraction(origin?.fx) && isFraction(origin?.fy)) {
+		// What the GM told the players to call this spot (Show players), kept ON the mark: a start
+		// moved anywhere else is a new mark and arrives without it, so the words can never name the
+		// wrong place. A lettered place has its own name and never carries one.
+		const label = String(origin?.label ?? "").trim();
 		return {
 			slug: null, tier,
 			fx: roundMark(origin.fx),
 			fy: roundMark(origin.fy),
+			...(label ? { label } : {}),
 		};
 	}
 
@@ -182,7 +187,7 @@ export function startName(start) {
 export function startEnd(start) {
 	const at = normalizeStart(start);
 	if (!at.slug && !at.tier) return null;
-	return at.slug ?? { tier: at.tier, fx: at.fx, fy: at.fy };
+	return at.slug ?? { tier: at.tier, fx: at.fx, fy: at.fy, ...(at.label ? { label: at.label } : {}) };
 }
 
 /**

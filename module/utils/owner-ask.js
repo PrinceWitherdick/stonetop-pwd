@@ -57,6 +57,21 @@ async function sentBy(gm, data, timeout = 10000) {
 }
 
 /**
+ * Whether `asker`'s client still waits on the ask `data` carries (its `askId`, sent through sendVerifiable): an
+ * answerer about to act on an ask that may have arrived late checks this first, so a sender that timed out and
+ * went ahead without the answer is not answered a second time (a late Loyalty step, a fate settled twice). No
+ * answer is a no. A user asking themselves is always still asking.
+ *
+ * @param {User|null} asker
+ * @param {object} data  the payload, with `askId`
+ * @param {{timeout?: number}} [o]
+ */
+export async function stillAsking(asker, data, { timeout = 5000 } = {}) {
+	if (asker && asker.id === globalThis.game?.user?.id) return true;
+	return sentBy(asker, data, timeout);
+}
+
+/**
  * Send a User query that a GM may send, stamped with a one-off `askId` this client vouches for until `send`
  * settles (handleOwnerAskVerify), so a v13 answerer can tell this GM's ask from a player naming the GM.
  *

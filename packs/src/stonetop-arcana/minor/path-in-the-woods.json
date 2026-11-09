@@ -12,9 +12,9 @@
       "front": {
         "title": "A path in the woods",
         "item": null,
-        "description": "<p>Deep in the Great Wood sits a stone, carved with the crude pictograms of the Forest Folk, showing a trail fraught with trials and leading to great power.</p><p>If you <strong><em>set forth upon the trail at midsummer</em></strong>, you can unlock its mysteries, but you must…</p>",
+        "description": "<p>Deep in the Great Wood sits a stone, carved with the crude pictograms of the Forest Folk, showing a trail fraught with trials and leading to great power.</p>",
         "unlock": {
-          "description": "If you set forth upon the trail at midsummer, you can unlock its mysteries, but you must…",
+          "description": "If you <strong><em>set forth upon the trail at midsummer</em></strong>, you can unlock its mysteries, but you must…",
           "requirements": [
             {
               "type": "option",

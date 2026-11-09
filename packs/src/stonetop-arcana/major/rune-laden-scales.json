@@ -14,7 +14,7 @@
         "title": "Rune-laden Scales",
         "item": {
           "name": "Rune-laden Scales",
-          "weight": 1,
+          "weight": 2,
           "note": "<em>2 armor, magical</em>",
           "inventoryColumn": "regular",
           "armor": { "base": 2 }

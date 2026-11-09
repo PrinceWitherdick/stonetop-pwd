@@ -15,6 +15,12 @@ export class ArcanaUnlockOptionSnapshot {
 		// `count` of `max` ticks: the template draws `max` boxes and checks the first `count`.
 		this.count       = b._count;
 		this.max         = b._max;
+		// An either/or alternative (CharacterArcana#unlockRequirementsMet): the option's `path`, and
+		// whether it opens a path after another one (the tab heads it "or"). Absent on a plain option.
+		if (b._path) {
+			this.path     = b._path;
+			this.orBefore = !!b._orBefore;
+		}
 	}
 }
 
@@ -23,6 +29,7 @@ export class ArcanaUnlockOptionSnapshotBuilder {
 	withDescription(v) { this._description = v; return this; }
 	withCount(v)       { this._count       = v; return this; }
 	withMax(v)         { this._max         = v; return this; }
+	withPath(path, orBefore = false) { this._path = path; this._orBefore = orBefore; return this; }
 	build()            { return new ArcanaUnlockOptionSnapshot(this); }
 }
 
@@ -142,6 +149,9 @@ export class MinorArcanumSnapshot {
 		// more: a homebrew card the GM deleted. The tab draws a stub with Remove rather than nothing,
 		// or the held slug and its marks would linger with no way to clear them.
 		this.missing    = b._missing ?? false;
+		// The player's own free-text note on the card (CharacterArcana#notes): "record the diverted
+		// harm", a crossed-off option, a rolled count. Set only when there is one.
+		if (b._notes) this.notes = b._notes;
 	}
 }
 
@@ -162,6 +172,7 @@ export class MinorArcanumSnapshotBuilder {
 	withConsequences(v) { this._consequences = v; return this; }
 	withUnlockChoice(v) { this._unlockChoice = v; return this; }
 	withMissing(v)     { this._missing    = v; return this; }
+	withNotes(v)       { this._notes      = v; return this; }
 	build()            { return new MinorArcanumSnapshot(this); }
 }
 

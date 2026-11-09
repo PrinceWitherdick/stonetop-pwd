@@ -78,6 +78,34 @@ export function followerOutfitLoad(catalogRegular = [], checked = {}, undefinedR
 }
 
 /**
+ * The ◇ a follower carries now, off its checklist (expedition audit PREP-1): each ticked line naming one of
+ * the catalog's regular items weighs that item's ◇, one naming a small item weighs nothing ("Small items
+ * don't count towards a character's load", Book I p.306), and a hand-written line weighs the ◇ it is
+ * written with ("◇◇ litter", p.471) or 1. The undefined ◇ the last Outfit reserved are added. Read live off
+ * the list, so a line ticked on the card after the Outfit counts. With no catalog to read, each ticked line
+ * is 1. PURE.
+ *
+ * @param {Array<{label: string, checked: boolean}>} gear
+ * @param {object|null} pcOutfit  the leader's OutfitSnapshot
+ * @param {{regular?: number}} [reserved]  the follower's `outfit` record
+ */
+export function followerLoadMarks(gear = [], pcOutfit = null, reserved = {}) {
+	const { regular, small, smallGrid } = outfitCatalog(pcOutfit);
+	const smallItems = [...small, ...smallGrid];
+	const weigh = line => {
+		const label = String(line?.label ?? "");
+		const item = regular.find(i => sameName(i?.name, label));
+		if (item) return Math.max(0, Number(item.weight) || 0);
+		if (smallItems.some(i => sameName(i?.name, label))) return 0;
+		const glyphs = label.trim().match(/^[◇◆\s]+/u)?.[0]?.replace(/\s/gu, "").length ?? 0;
+		return glyphs || 1;
+	};
+	const carried = (Array.isArray(gear) ? gear : []).filter(g => g?.checked);
+	const marks = pcOutfit ? carried.reduce((sum, g) => sum + weigh(g), 0) : carried.length;
+	return marks + clampInt(reserved?.regular, 0, Infinity);
+}
+
+/**
  * What the Outfit window writes through, standing in for the character it usually outfits: the window keys
  * itself on `_actor.id` (one per follower here) and confirms through `applyOutfit`.
  */

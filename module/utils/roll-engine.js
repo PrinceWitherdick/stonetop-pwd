@@ -15,6 +15,7 @@ import {
 } from "./undo-xp-mark.js";
 import { inCardTurn } from "./card-queue.js";
 import { pressRollCard, registerRollCardAction } from "./roll-card-writer.js";
+import { NO_ANSWER, relayLanded } from "./relay-landed.js";
 import { speakerActor } from "./speaker-actor.js";
 import { composeDamageFormula, seedBonus, extraTerm } from "./damage.js";
 import { SYSTEM_ID } from "../system-id.js";
@@ -256,14 +257,16 @@ export async function rollSeasonsCard({ formula, title = "", alias = "", resultT
 	// Titled even when spoken under an alias: the title row is what carries the "?" that brings a
 	// hidden description back, and without it a table that hides descriptions would lose the ladder.
 	// `actor` rides an aliased speaker so a card button can find what it acts on (speakerActor).
-	await roll.toMessage({
+	const message = await roll.toMessage({
 		speaker: alias ? { alias, ...(actor?.id ? { actor: actor.id } : {}) } : ChatMessage.getSpeaker(),
 		flavor:  stonetopChatCard(title || alias, body, "stonetop-spring-card", description ? DESC_TOGGLE_HTML : ""),
 		// A season's own +Fortunes roll says which season it was, and what it counted as: this card
 		// has no Shift, so the tier it lands on is the one it keeps (seasonsRollTier).
 		...(seasonKey ? { flags: seasonsRollFlags(seasonKey, outcomeTier(tier)) } : {}),
 	});
-	return { total: roll.total, tier, label: result.label };
+	// The card's id, for a caller whose later step reads the card back (the expedition's Requisition: a
+	// take after its 6- latches the cost on it, steading-card-actions.js#takeOnRequisitionMiss).
+	return { total: roll.total, tier, label: result.label, messageId: message?.id ?? null };
 }
 
 /**
@@ -1098,11 +1101,15 @@ export async function rollStat(statKey, actor, options = {}) {
 			// Marked on the card's WRITER, in the card's turn, where every rewrite of it runs: the dice
 			// animation is long enough for a Burn Brightly or a Shift to land first, and only one client
 			// lining both up decides which came first. The writer reads the card as it is by then.
-			const done = await pressRollCard(card, MISS_XP_ACTION, { rollMode });
-			// The GM's client did not answer: mark it here on the same reading rather than lose the XP. The mark
-			// is recorded on the card first (MISS_XP_STATE_FLAG), so a GM's turn that still lands later finds it
-			// marked and marks nothing. On the character the CARD speaks for, as the GM's turn would mark: the
-			// sheet's own actor can be an unlinked token's private copy (utils/speaker-actor.js).
+			const asked = await pressRollCard(card, MISS_XP_ACTION, { rollMode }, { noAnswer: NO_ANSWER });
+			// No answer in time is not a no: the GM's turn may be queued behind another write to this card, and
+			// marking here at once would mark twice when it lands. So the card is watched a while longer for the
+			// GM's MISS_XP_STATE_FLAG (relay-landed.js); only a GM that never wrote it leaves it to this client.
+			const done = await missXpRelayDone(card, asked);
+			// Nobody could write the card, or the GM's client never marked it: mark it here on the same reading rather
+			// than lose the XP. The mark is recorded on the card first (MISS_XP_STATE_FLAG), so a GM's turn that still
+			// lands later finds it marked and marks nothing. On the character the CARD speaks for, as the GM's turn
+			// would mark: the sheet's own actor can be an unlinked token's private copy (utils/speaker-actor.js).
 			if (done === null) {
 				const speaker = speakerActor(card);
 				await inCardTurn(card, () => reconcileMissXp(card, card.rolls?.at?.(0)?.total ?? roll.total,
@@ -1122,6 +1129,20 @@ export async function rollStat(statKey, actor, options = {}) {
 	});
 
 	return roll;
+}
+
+/**
+ * What a miss's XP press relayed to the GM's client came to (rollStat): the GM's own answer, or for NO_ANSWER,
+ * true once the GM's turn has recorded the card's MISS_XP_STATE_FLAG within relay-landed.js's grace, else null,
+ * which leaves the mark to the asker's client.
+ *
+ * @param {ChatMessage} card
+ * @param {*} asked  pressRollCard's answer
+ * @param {{landed?: typeof relayLanded}} [deps]
+ */
+export async function missXpRelayDone(card, asked, { landed = relayLanded } = {}) {
+	if (asked !== NO_ANSWER) return asked;
+	return (await landed(card, () => card?.getFlag?.(SYSTEM_ID, MISS_XP_STATE_FLAG) != null)) ? true : null;
 }
 
 /**

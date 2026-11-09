@@ -1,5 +1,6 @@
 import { StepperDialog } from "../dialogs/StepperDialog.js";
 import { escHtml } from "../utils/strings.js";
+import { swapAside } from "../utils/set-aside.js";
 import {
 	THEMES, ASPECTS, INSTINCTS,
 	rollDistinct, rollOnTable, rollThingName, themeLabels, aspectTexts,
@@ -72,6 +73,9 @@ export class CreateThingDialog extends StepperDialog {
 		this._instinctCustom = "";
 		this._selectedMoves = new Set();
 		this._customMoves = [""];
+		// What each choice in the preset dropdown held when the GM switched away from it, by slug
+		// ("" = From scratch): switching back brings that back rather than the preset's own text.
+		this._presetEdits = {};
 	}
 
 	static get defaultOptions() {
@@ -90,7 +94,8 @@ export class CreateThingDialog extends StepperDialog {
 	get _autoHeight() { return true; }
 
 	// The union of moves offered as a checklist: the magical-entity type's suggested moves,
-	// the chosen preset's moves, and any already-selected move (so a switch never drops a pick).
+	// the chosen preset's moves, and any ticked move, so a tick carried in from another choice
+	// (a preset's own, or one remembered for this choice by _applyPreset) is always listed.
 	_moveOptions() {
 		const type = threatType(THING_TYPE);
 		const preset = thingBelowPreset(this._preset);
@@ -215,18 +220,45 @@ export class CreateThingDialog extends StepperDialog {
 		});
 	}
 
-	// Overwrite name/titles/themes/instinct/moves from a preset (empty slug = from scratch,
-	// which leaves the GM's own edits untouched).
+	// Switch the preset dropdown to `slug` (empty = From scratch). A preset writes the name,
+	// titles, themes, instinct and ticked moves, so what the choice being left held in those is
+	// kept first; a choice visited before gets its kept values back, and a preset's first visit
+	// fills in its own. From scratch with nothing kept leaves the fields as they are. The caller
+	// captures the live, unblurred fields (_capture) before this.
 	_applyPreset(slug) {
-		this._preset = slug;
+		if (slug === this._preset) return;
 		const preset = thingBelowPreset(slug);
-		if (!preset) return;
-		this._name = preset.name;
-		this._titlesText = (preset.titles ?? []).join("\n");
-		this._themeIds = new Set(preset.themeIds ?? []);
-		this._instinctCustom = preset.instinct ?? "";
-		this._instinctId = null;
-		this._selectedMoves = new Set(preset.moves ?? []);
+		const next = swapAside(this._presetEdits, this._preset, slug, this._presetFields(), () => (preset ? {
+			name:           preset.name,
+			titlesText:     (preset.titles ?? []).join("\n"),
+			themeIds:       preset.themeIds ?? [],
+			instinctCustom: preset.instinct ?? "",
+			instinctId:     null,
+			selectedMoves:  preset.moves ?? [],
+		} : null));
+		this._preset = slug;
+		if (next) this._setPresetFields(next);
+	}
+
+	// Exactly the fields a preset writes, copied so a later edit can't reach into the snapshot.
+	_presetFields() {
+		return {
+			name:           this._name,
+			titlesText:     this._titlesText,
+			themeIds:       [...this._themeIds],
+			instinctCustom: this._instinctCustom,
+			instinctId:     this._instinctId,
+			selectedMoves:  [...this._selectedMoves],
+		};
+	}
+
+	_setPresetFields(f) {
+		this._name = f.name;
+		this._titlesText = f.titlesText;
+		this._themeIds = new Set(f.themeIds);
+		this._instinctCustom = f.instinctCustom;
+		this._instinctId = f.instinctId;
+		this._selectedMoves = new Set(f.selectedMoves);
 	}
 
 	_onBeforeStepChange() { this._capture(this.element); this._captureCustomMoves(); }

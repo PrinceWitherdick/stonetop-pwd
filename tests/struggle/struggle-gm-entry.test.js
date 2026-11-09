@@ -48,6 +48,8 @@ describe("callStruggleAsOne", () => {
 	it("opens the setup when nothing is under way, as part of a journey when asked", () => {
 		expect(callStruggleAsOne({ journey: true })).toEqual({ setup: { journey: true, onClosed: answerNextAsk } });
 		expect(callStruggleAsOne()).toEqual({ setup: { journey: false, onClosed: answerNextAsk } });
+		// The walkthrough's button starts the trip's party ticked (audit ROAD-12).
+		expect(callStruggleAsOne({ journey: true, only: ["a1"] })).toEqual({ setup: { journey: true, only: ["a1"], onClosed: answerNextAsk } });
 	});
 
 	it("opens the struggle under way rather than a second setup", () => {
@@ -161,6 +163,6 @@ describe("the Run an Expedition walkthrough", () => {
 
 	it("shows it to a GM only, and calls it as part of a journey", () => {
 		expect(DIALOG).toContain("struggle:  step.struggle && game.user?.isGM ? gmStruggleCall() : null,");
-		expect(DIALOG).toContain('html.find(".stonetop-exp-struggle-btn").on("click", () => callStruggleAsOne({ journey: true }));');
+		expect(DIALOG).toContain('html.find(".stonetop-exp-struggle-btn").on("click", () => callStruggleAsOne({ journey: true, only: this._tripParty().map(a => a.id) }));');
 	});
 });

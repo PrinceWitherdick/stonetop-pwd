@@ -1,0 +1,10 @@
+{{!-- The column headings over a People list (one line per person): face | Name | Relations | Notes |
+      the remove button. ONE COPY for all four lists, Stonetop's Player Characters, Residents and
+      Neighbors (steading-tab-neighbors.hbs) and a settlement's Residents (settlement-people.hbs),
+      because the widths below are what resizable-columns.js reads: the face and the remove button
+      keep their width (`data-col-fixed`), and Name is never dragged narrower than `data-col-min`.
+      The stylesheet's opening `--st-person-cols` must start and end on the same two widths.
+
+      The caller passes the three words: `colName`, `colRelations`, `colNotes`. Long names, for the
+      reason tab-search-control.hbs gives: a partial's hash is merged into the caller's context. --}}
+<div class="steading-residents-header steading-person-header"><div class="steading-person-header-face" data-col-fixed="24px"></div><div class="steading-residents-header-cell steading-residents-col-name" data-col-min="90"><span class="steading-residents-header-label">{{this.colName}}</span></div><div class="steading-residents-header-cell steading-person-field--relations"><span class="steading-person-header-text">{{this.colRelations}}</span></div><div class="steading-residents-header-cell steading-person-field--notes"><span class="steading-person-header-text">{{this.colNotes}}</span></div><div class="steading-residents-col-actions" data-col-fixed="22px"></div></div>

@@ -100,9 +100,9 @@ export async function recordMilestones(target, milestones = [], { now, strict = 
 	return writeOnTrack(track, (stored, { now, createdAt, authorId }) => {
 		let entries = stored;
 		let moved = null;
-		for (const { refresh = [], ...fields } of list) {
+		for (const { refresh = [], refreshWhile = {}, ...fields } of list) {
 			const result = upsertByKey(entries, { season: now.season, year: now.year, createdAt, authorId, ...fields }, {
-				refresh, makeId: foundry.utils.randomID,
+				refresh, refreshWhile, makeId: foundry.utils.randomID,
 			});
 			entries = result.entries;
 			moved = moved ?? result.added ?? result.changed;
@@ -140,12 +140,31 @@ export async function forgetMilestones(target, keys = []) {
 /**
  * The same milestone on several tracks: everyone on an expedition, everyone who saw a site, and
  * Stonetop's own thread. Different pages, so the writes go out together.
+ *
+ * `strict` rejects when any track's write failed (the others may have landed; the milestone is keyed,
+ * so writing it again is safe), for a caller that stamps something only once every row is down.
  */
-export async function recordOnTracks(targets = [], milestone) {
-	const seen = new Set();
-	const tracks = targets.map(trackOf).filter(t => t && !seen.has(t.trackId) && seen.add(t.trackId));
+export async function recordOnTracks(targets = [], milestone, { strict = false } = {}) {
+	return recordManyOnTracks([{ targets, milestone }], { strict });
+}
+
+/**
+ * Several milestones, each on its own tracks, with ONE write per track whatever lands on it: a delete
+ * that renumbers three recorded trips writes Stonetop's thread once, not three times.
+ * @param {Array<{targets: Array, milestone: object}>} entries
+ */
+export async function recordManyOnTracks(entries = [], { strict = false } = {}) {
+	const byTrack = new Map();
+	for (const { targets = [], milestone } of entries) {
+		for (const track of targets.map(trackOf)) {
+			if (!track) continue;
+			if (!byTrack.has(track.trackId)) byTrack.set(track.trackId, { track, list: [] });
+			const { list } = byTrack.get(track.trackId);
+			if (!list.includes(milestone)) list.push(milestone);
+		}
+	}
 	const now = timelineNow();
-	return Promise.all(tracks.map(track => recordMilestones(track, [milestone], { now })));
+	return Promise.all([...byTrack.values()].map(({ track, list }) => recordMilestones(track, list, { now, strict })));
 }
 
 /**

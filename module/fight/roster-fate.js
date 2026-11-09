@@ -21,6 +21,8 @@ import { BEAST_CATALOG } from "../data/beasts.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { writtenHp } from "./out-of-the-fight.js";
 import { openFollowerFate } from "../actors/character/follower-fate-pick.js";
+import { rosterRef } from "../actors/character/follower-roster-shifts.js";
+import { poolMirrorFor } from "../actors/character/follower-group-pool.js";
 
 /**
  * `updateActor`: open the fate dialog a roster write asked for, on the client that answers for the
@@ -39,8 +41,10 @@ export function onUpdateActorRosterFate(actor, _changes, options = {}, _userId =
 	try {
 		if (!answers(actor)) return false;
 		if (typeof actor.sheet?._openFollowerFate !== "function") return false;
-		// The GM's pick when a GM is connected, the player's otherwise (follower-fate-pick.js, FOE-8).
-		open(actor, fate).catch(err => console.error("Stonetop | Could not open the roster member's fate:", err));
+		// The GM's pick when a GM is connected, the player's otherwise (follower-fate-pick.js, FOE-8). With the
+		// roster's number as it stands, so a member struck off before the pick is answered does not shift this
+		// one onto somebody else (actors/character/follower-roster-shifts.js, round-2 audit FOE-2).
+		open(actor, rosterRef(readableFlags(actor), fate)).catch(err => console.error("Stonetop | Could not open the roster member's fate:", err));
 		return true;
 	} catch (err) {
 		console.error("Stonetop | Could not open the roster member's fate:", err);
@@ -113,9 +117,49 @@ export async function onUpdateActorFollowerHp(actor, changes, options = {}, _use
 	}
 }
 
+/**
+ * `updateActor`: a GROUP follower's token HP written (a group blow on the crew's pool, a GM's hand on the token):
+ * the card's pool box follows, on the client that answers for the character, so the card's casualty line and the
+ * Fight tab read one number (actors/character/follower-group-pool.js). Returns whether this client wrote.
+ */
+export async function onUpdateActorGroupPool(actor, changes, options = {}, _userId = null, { answers = answersFor, cardFor = followerCardFor } = {}) {
+	try {
+		const written = writtenHp(changes);
+		if (written == null) return false;
+		const plan = poolMirrorFor(actor, written, { cardFor, answers });
+		if (!plan) return false;
+		await plan.character.update({ [`flags.${SYSTEM_ID}.${plan.path}`]: plan.value }, options?.stonetopMove ? { stonetopMove: options.stonetopMove } : {});
+		return true;
+	} catch (err) {
+		console.error("Stonetop | Could not mirror the group's pool onto their card:", err);
+		return false;
+	}
+}
+
+/**
+ * `updateActor`: an NPC's HP written. Finds the follower card it stands for ONCE (a world walk when the NPC carries
+ * no stamp) and hands it to both mirrors: the one-body follower's and the group's pool. At most one of them acts.
+ */
+export async function onUpdateActorFollowerNpc(actor, changes, options = {}, userId = null, { cardFor = followerCardFor, ...deps } = {}) {
+	if (actor?.type !== "npc" || writtenHp(changes) == null) return false;
+	let card;
+	try { card = cardFor(actor); } catch (err) {
+		console.error("Stonetop | Could not find the follower card for an NPC:", err);
+		return false;
+	}
+	if (!card?.character) return false;
+	// The pool mirror also asks after the scene's other tokens, with options: those still look themselves up.
+	const known = (other, opts) => (other === actor && opts === undefined ? card : cardFor(other, opts));
+	const [one, pool] = await Promise.all([
+		onUpdateActorFollowerHp(actor, changes, options, userId, { ...deps, cardFor: known }),
+		onUpdateActorGroupPool(actor, changes, options, userId, { ...deps, cardFor: known }),
+	]);
+	return one || pool;
+}
+
 /** Registered once, at module scope in stonetop.js. */
 export function registerRosterFateHooks() {
 	Hooks.on("updateActor", onUpdateActorRosterFate);
-	Hooks.on("updateActor", onUpdateActorFollowerHp);
+	Hooks.on("updateActor", onUpdateActorFollowerNpc);
 	// Their queries (follower NPC HP, follower fate) are registered with the others in stonetop.js's init.
 }

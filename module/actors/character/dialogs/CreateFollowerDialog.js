@@ -1,4 +1,5 @@
 import { StepperDialog } from "../../../dialogs/StepperDialog.js";
+import { StonetopAutocomplete } from "../../../utils/autocomplete.js";
 import {
 	FOLLOWER_HP_BASE, FOLLOWER_HP_MODS,
 	FOLLOWER_ARMOR_BASE, FOLLOWER_ARMOR_MODS,
@@ -210,6 +211,10 @@ export class CreateFollowerDialog extends StepperDialog {
 	activateListeners(html) {
 		super.activateListeners(html);
 		this._bindStepNav(html);
+		// The name field suggests the steading's residents through a <datalist>; a bare one opens the
+		// browser's own popup (unstyled, and scrollbar-less in Chromium), so swap it for ours like
+		// every other datalist-bearing dialog does.
+		StonetopAutocomplete.upgradeAll(html);
 
 		// Navigation
 		html.find(".stonetop-cf-create").on("click", () => this._finish());

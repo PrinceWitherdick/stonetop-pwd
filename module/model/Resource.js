@@ -40,6 +40,10 @@ export class ResourceDef {
 		// only how many pips the track draws at the least, and it grows to show whatever more is held
 		// (MoveResources.js#trackCap). Set only when true, so every other track keeps the shape it had.
 		if (data.uncapped) this.uncapped = true;
+		// A track whose size is ROLLED when first found (the Time-worn Missive's pouch of 1d4+8): the
+		// dice formula, offered as a "Roll" button while the track is untouched (CharacterArcana's
+		// arcana resources). Set only when present, as `uncapped` is.
+		if (data.rollUses) this.rollUses = String(data.rollUses);
 	}
 }
 

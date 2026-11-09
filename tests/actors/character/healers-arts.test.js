@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import {
-	HEALERS_ARTS, HEALERS_ARTS_QUERY, HEALERS_ARTS_ASK_MS, recoverHeal, recoverBreakdown, healersArtsCarers,
+	HEALERS_ARTS, HEALERS_ARTS_QUERY, HEALERS_ARTS_ASK_MS, recoverHeal, recoverBreakdown, healersArtsCarers, recoverCarerActors,
 	payHealersArtsStock, handleHealersArtsQuery, carerStockAnswerer, canReachCarerStock, spendsCarerStockDirectly,
 } from "../../../module/actors/character/healers-arts.js";
 import { createStonetopCharacterSheetClass, GUIDED_CHARACTER_MOVES } from "../../../module/actors/character/StonetopCharacterSheet.js";
@@ -109,6 +109,33 @@ describe("who can tend a Recover", () => {
 		const npc = { ...carer({ id: "npc" }), type: "npc" };
 		const on = carer();
 		expect(healersArtsCarers([off, npc, on, { type: "character", items: [] }]).map(a => a.id)).toEqual(["gwynn"]);
+	});
+
+	// Expedition audit ROAD-8 (the user's ruling E11): in play, not dying, and on the patient's trip.
+	it("leaves out the dead, the dying, and anyone not on the patient's trip while it is under way", () => {
+		const home = carer({ id: "home", name: "Home" });
+		const dying = carer({ id: "dying", name: "Dying" });
+		dying.typedActor.canFaceDeathsDoor = true;
+		const dead = { ...carer({ id: "dead", name: "Dead" }), flags: { "stonetop-pwd": { deathsDoor: "dead" } } };
+		const along = carer({ id: "along", name: "Along" });
+		const patient = { id: "bram" };
+		const actors = [home, dying, dead, along];
+		expect(recoverCarerActors(actors, patient).map(a => a.id)).toEqual(["home", "along"]);
+		const log = { currentId: "t1", list: [{ id: "t1", setOut: { year: 1 }, partyOut: { home: true } }] };
+		expect(recoverCarerActors(actors, patient, { log }).map(a => a.id)).toEqual(["along"]);
+		// Home again: anyone in play.
+		const back = { currentId: "t1", list: [{ id: "t1", setOut: { year: 1 }, timelineRecorded: { year: 1 }, partyOut: { home: true } }] };
+		expect(recoverCarerActors(actors, patient, { log: back }).map(a => a.id)).toEqual(["home", "along"]);
+	});
+
+	// Code review of 1.8.4: a carer never in the trip's party is at home, and a carer on the road cannot tend
+	// a patient at home.
+	it("pairs carer and patient by trip: both on it or both at home", () => {
+		const home = carer({ id: "home", name: "Home" });
+		const along = carer({ id: "along", name: "Along" });
+		const log = { currentId: "t1", list: [{ id: "t1", setOut: { year: 1 }, party: [{ id: "bram" }, { id: "along" }] }] };
+		expect(recoverCarerActors([home, along], { id: "bram" }, { log }).map(a => a.id)).toEqual(["along"]);
+		expect(recoverCarerActors([home, along], { id: "stayer" }, { log }).map(a => a.id)).toEqual(["home"]);
 	});
 });
 

@@ -1,0 +1,67 @@
+{{!-- THE ROUTE THE GM HAS SHOWN THE PLAYERS (dialogs/SharedRouteWindow.js): one regional map, as
+      large as the reader wants it, with the way drawn on it, and the same journey in words.
+
+      Built like the GM's "See the whole map" window (travel-map.hbs): ImageZoomWindow's viewport
+      with a column of text above and below it, so wheel-zoom, drag-pan and the fit all come along
+      untouched, and the root wears `stonetop-travel-map stonetop-journey` so the layout, the Map
+      Brightness filter and the leg styling are the ones that window already has.
+
+      IN READING ORDER, for the player who reads it with a screen reader: what the journey is and
+      how long it takes first, then the picture (whose alt text names the map and both ends), then
+      every leg, then the Chart a Course lines when the GM sent them. When the GM shows a new way
+      while this is open it is READ OUT, through a live region the window keeps OUTSIDE this
+      template (SharedRouteWindow `_announce`): this markup is replaced on every change, and a live
+      region that is replaced along with its words is never announced.
+
+      Context: `view` (utils/shared-route.js `sharedRouteView`, null when nothing is being shown),
+      `overlay` (the rendered shared-route-pins partial), `older`, `canStop`, and the copy. --}}
+<div class="stonetop-travel-map stonetop-journey stonetop-shared-route">
+
+  <div class="stonetop-travel-map-chrome stonetop-shared-route-head">
+    {{#if this.view}}
+    <h2 class="stonetop-shared-route-title">{{this.view.title}}</h2>
+    <p class="stonetop-journey-total{{#if this.view.estimated}} is-estimate{{/if}}">{{this.view.total}}</p>
+    {{#if this.older}}
+    <p class="stonetop-shared-route-older">{{this.olderText}}</p>
+    {{/if}}
+    {{else}}
+    <p class="stonetop-shared-route-none">{{this.noneText}}</p>
+    {{/if}}
+  </div>
+
+  {{#if this.view.map}}
+  <div class="stonetop-image-zoom-view">
+    <img class="stonetop-image-zoom-img" src="{{this.view.map.src}}" alt="{{this.view.map.alt}}" draggable="false">
+    <div class="stonetop-image-zoom-overlay stonetop-journey-canvas">{{{this.overlay}}}</div>
+  </div>
+  {{else if this.view}}
+  <p class="stonetop-journey-nomap">{{this.noMapText}}</p>
+  {{/if}}
+
+  {{#if this.view}}
+  <div class="stonetop-travel-map-foot">
+    <ol class="stonetop-journey-legs" aria-label="{{this.legsLabel}}">
+      {{#each this.view.legs}}
+      <li{{#if this.estimated}} class="is-estimate"{{/if}}>{{this.text}}</li>
+      {{/each}}
+    </ol>
+    {{#if this.view.estimateNote}}
+    <p class="stonetop-journey-estimate">
+      <i class="fas fa-ruler" aria-hidden="true"></i>
+      {{this.view.estimateNote}}
+    </p>
+    {{/if}}
+    {{!-- The Chart a Course lines, when the GM chose to send them (audit ruling E4): the lines and
+          what fills their blanks, never the GM's notes. The chat card's own markup
+          (utils/shared-route.js `sharedRequirementsHtml`), so the two say the same words. --}}
+    {{{this.requirementsHtml}}}
+    {{!-- The GM's way to take it back off from wherever they happen to be reading it. Only on the
+          live window: an older snapshot from a chat card is not what the players are being shown. --}}
+    {{#if this.canStop}}
+    <button type="button" class="stonetop-shared-route-stop">
+      <i class="fas fa-eye-slash" aria-hidden="true"></i> <span class="stonetop-chip-text">{{this.stopLabel}}</span>
+    </button>
+    {{/if}}
+  </div>
+  {{/if}}
+</div>

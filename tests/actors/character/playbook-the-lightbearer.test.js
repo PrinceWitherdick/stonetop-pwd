@@ -135,7 +135,10 @@ describe("a Would-be Hero with Invoke the Sun God through Versatile", () => {
 		await takeInvoke(char, "blinding-light");
 		await actor.setFlag(STONETOP_SCOPE, "ongoingInvocation", "blinding-light");
 		await actor.setFlag(STONETOP_SCOPE, "ongoingInvocationSecond", "dancing-light");
-		await char.removeMove(actor.items.find(i => i.name === "Versatile")._id);
+		const versatile = actor.items.find(i => i.name === "Versatile")._id;
+		// The sheet warns of it first (moveRemovalStakes reads the same plan the removal applies).
+		expect(await char.moveRemovalStakes(versatile)).toMatchObject({ granted: ["Invoke the Sun God"], invocations: true });
+		await char.removeMove(versatile);
 		expect(ownedMoveNames(actor)).not.toContain("Invoke the Sun God");
 		expect(actor.getFlag(STONETOP_SCOPE, "invocations")).toBeNull();
 		expect(actor.getFlag(STONETOP_SCOPE, "ongoingInvocation")).toBeNull();
@@ -160,7 +163,10 @@ describe("a Would-be Hero with Invoke the Sun God through Versatile", () => {
 describe("a Lightbearer losing Invoke the Sun God", () => {
 	it("keeps the playbook's own Invocations (R6 is for a borrowed list only)", async () => {
 		const { char, actor } = lbAt(2, { flags: { "invocations.selected": ["bath-of-healing-light", "blinding-light"], ongoingInvocation: "blinding-light" } });
-		await char.removeMove(actor.items.find(i => i.name === "Invoke the Sun God")._id);
+		const invoke = actor.items.find(i => i.name === "Invoke the Sun God")._id;
+		// So the untick's warning doesn't say they go.
+		expect(await char.moveRemovalStakes(invoke)).toMatchObject({ invocations: false });
+		await char.removeMove(invoke);
 		expect(known(actor)).toEqual(["bath-of-healing-light", "blinding-light"]);
 		expect(actor.getFlag(STONETOP_SCOPE, "ongoingInvocation")).toBe("blinding-light");
 	});

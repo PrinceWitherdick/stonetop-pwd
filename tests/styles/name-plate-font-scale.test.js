@@ -65,14 +65,17 @@ describe("the label above it still does", () => {
 		const rule = block(LABEL);
 		expect(rule, `${LABEL}'s rule is gone`).toBeTruthy();
 		expect(rule, `${LABEL} has been frozen along with the name below it`)
-			.toMatch(/font-size:\s*calc\(0\.65rem \* var\(--stonetop-font-scale, 1\)\)\s*;/);
+			.toMatch(/font-size:\s*var\(--st-fs-floor-sm\)\s*;/);
+		// The token is where the multiplier lives (styles/stonetop.css :root).
+		expect(CSS).toMatch(/--st-fs-floor-sm:\s*calc\(0\.84rem \* var\(--stonetop-font-scale, 1\)\);/);
 	});
 
 	// The label is the smaller of the two by a wide margin, which is the whole reason it is not
-	// swept in with the name. If it ever grows to a size where the header argument would apply to
-	// it as well, that is a decision to make deliberately rather than to inherit from this file.
+	// swept in with the name. It sits on the type floor (tests/styles/font-floor.test.js);
+	// if it ever grows to a size where the header argument would apply to it as well, that is a
+	// decision to make deliberately rather than to inherit from this file.
 	it("is the small half of the plate, which is why the two are treated differently", () => {
-		expect(block(LABEL)).toMatch(/font-size:\s*calc\(0\.65rem/);
+		expect(block(LABEL)).toMatch(/font-size:\s*var\(--st-fs-floor-sm\)/);
 		expect(block(NAME)).toMatch(/font-size:\s*40px/);
 	});
 });

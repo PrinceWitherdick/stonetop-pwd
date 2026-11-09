@@ -453,6 +453,17 @@ describe("where the pins land", () => {
 		const tier = travelMap("vicinity");
 		expect(tier.printedAspect).toBeGreaterThan(1);
 	});
+
+	// A GM's own Scene made from the book's map page IS the printed crop the positions are measured
+	// against, so a place lands at its fraction of the whole picture, with no poster insets.
+	it("places pins on a Scene showing the book's map page, through no insets", () => {
+		const page = { width: 5840, height: 4220 };
+		const pins = posterMapPins(posterMap("vicinity"), page);
+		expect(pins.length).toBeGreaterThan(0);
+		const spot = travelPlace("the-crossroads").spots.vicinity;
+		const pin = pins.find(p => p.slug === "the-crossroads");
+		expect(pin.x).toBeCloseTo(spot.fx * page.width, -1);
+	});
 });
 
 describe("placeMarkerNoteData", () => {

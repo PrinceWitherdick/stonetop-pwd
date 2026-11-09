@@ -34,7 +34,7 @@
       re-render on a note box two rows down that happens to have focus. --}}
 <li class="stonetop-gm-encounter{{#if used}} is-used{{/if}}{{#unless open}} is-collapsed{{/unless}}"
     data-encounter-id="{{this.id}}">
-	<div class="stonetop-gm-encounter-head">
+	<div class="stonetop-gm-encounter-head stonetop-field-btns">
 		<span class="stonetop-gm-encounter-grip" draggable="true" aria-hidden="true"
 		      data-tooltip="{{localize "stonetop.gmToolkit.encounters.reorder"}}" data-tooltip-direction="UP">
 			<i class="fas fa-grip-vertical"></i>
@@ -95,7 +95,7 @@
 		        aria-label="{{#if open}}{{localize "stonetop.gmToolkit.encounters.collapse"}}{{else}}{{localize "stonetop.gmToolkit.encounters.expand"}}{{/if}}">
 			<i class="fas fa-caret-down"></i>
 		</button>
-		<span class="stonetop-gm-encounter-tools">
+		<span class="stonetop-gm-encounter-tools stonetop-field-btns__tools">
 			<button type="button" class="stonetop-gm-encounter-remove"
 			        data-tooltip="{{localize "stonetop.gmToolkit.encounters.removeEncounter"}}" data-tooltip-direction="UP">
 				<i class="fas fa-trash"></i>

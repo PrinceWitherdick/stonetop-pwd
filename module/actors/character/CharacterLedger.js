@@ -141,10 +141,14 @@ const ARCANA_SLUG_LISTS = {
 	// A 7-9 on the Know Things roll to identify a card (Book I p.440) hands over the front and
 	// promises the back later; the debt is settled when the GM reveals it.
 	backOwed:   { added: "Arcanum back owed",  removed: "Arcanum back delivered",    merge: "Arcana backs owed" },
+	// The unlock latch (CharacterArcana#unlockedOnce): set in the write that completes a card's track,
+	// so a card that later says "erase all marks" stays unlocked. Cleared by Remove, or by taking the
+	// completing tick back before anything on the back is marked.
+	unlockedOnce: { added: "Arcanum unlocked", removed: "Arcanum unlock forgotten", merge: "Arcana unlocked" },
 };
 // Bookkeeping sub-flags with no play meaning of their own — a backfill guard, the onboarding
 // draw, per-card display state. They were logging lines like "Arcana set to on".
-const ARCANA_SILENT_KEYS = new Set(["leadBackfilled", "minorDraw", "majorMarksFor", "flipped", "seeBothSides"]);
+const ARCANA_SILENT_KEYS = new Set(["leadBackfilled", "minorDraw", "majorMarksFor", "flipped", "seeBothSides", "owedAtLatch", "completions"]);
 
 // Lore: `lore.counts.<loreSlug>:<optionSlug>` (a tick count) and `lore.texts.<loreSlug>:<optionSlug>`
 // (the written answer). Both were falling through to the "Lore" namespace label, so a ticked box
@@ -571,8 +575,23 @@ function crewNamedCount(names, ctx) {
  * Matched by NAME rather than by position: the array is spliced, so every index above the change
  * shifts and a positional diff would report the whole tail as replaced. A portrait pick rewrites
  * this same array with the membership untouched, which is exactly why this yields nothing then.
+ *
+ * A write that keeps the SAME LENGTH is not a join or a leave: naming appends and removing splices,
+ * so neither keeps it. It is a member edited in place (the pencil on a named member) or a portrait
+ * pick, and those are read by position instead. A rename then reads as a rename rather than one
+ * person leaving and a stranger joining.
  */
 function crewMembershipEntries(oldValue, newValue, crewName) {
+	// Same length with at most ONE name changed is an edit in place. More than one name moving is a
+	// reorder, or a removal and a naming in one write: the rows are paired by name instead, and the
+	// names left over are the joins and leaves.
+	let pairs = null;
+	if (Array.isArray(oldValue) && Array.isArray(newValue) && oldValue.length && oldValue.length === newValue.length) {
+		const nameAt = (row) => String(row?.name ?? "").trim();
+		const moved = oldValue.filter((was, i) => nameAt(was) !== nameAt(newValue[i])).length;
+		if (moved <= 1) return crewMemberEditEntries(oldValue, newValue);
+		pairs = crewRowsPairedByName(oldValue, newValue);
+	}
 	const tally = (value) => (Array.isArray(value) ? value : []).reduce((counts, row) => {
 		const name = String(row?.name ?? "").trim();
 		if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
@@ -595,6 +614,52 @@ function crewMembershipEntries(oldValue, newValue, crewName) {
 			entries.push({ action: `${name}${ordinal} ${verb}` });
 		}
 	}
+	if (pairs) entries.push(...crewMemberEditEntries(pairs.before, pairs.after));
+	return entries;
+}
+
+/** The rows of two rosters that carry the same name, paired off in order (repeats one for one). */
+function crewRowsPairedByName(oldValue, newValue) {
+	const nameAt = (row) => String(row?.name ?? "").trim();
+	const free = newValue.map((row, i) => i);
+	const before = [];
+	const after = [];
+	for (const was of oldValue) {
+		const name = nameAt(was);
+		if (!name) continue;
+		const at = free.findIndex(i => nameAt(newValue[i]) === name);
+		if (at < 0) continue;
+		before.push(was);
+		after.push(newValue[free[at]]);
+		free.splice(at, 1);
+	}
+	return { before, after };
+}
+
+/**
+ * What changed on each named member when the roster was rewritten in place: a new name, a new tag,
+ * and each trait gained or lost. Crew members pick these up and shed them in play, which is the
+ * story the Chronicle is there to keep. A portrait pick touches none of the three, so it stays
+ * quiet here as it always has.
+ */
+function crewMemberEditEntries(before, after) {
+	const text   = (v) => String(v ?? "").trim();
+	const traits = (row) => (Array.isArray(row?.traits) ? row.traits.map(text).filter(Boolean) : []);
+	const entries = [];
+	before.forEach((was, index) => {
+		const now     = after[index];
+		const oldName = text(was?.name);
+		const newName = text(now?.name);
+		const who     = newName || oldName || crewIndividualLabel(index);
+		if (oldName && newName && oldName !== newName) entries.push({ action: `${oldName} is now called ${newName}` });
+		const oldTag = text(was?.tag);
+		const newTag = text(now?.tag);
+		if (oldTag !== newTag) entries.push(followerFieldEntry(who, "tag", oldTag, newTag));
+		const had = traits(was);
+		const has = traits(now);
+		for (const trait of has) if (!had.includes(trait)) entries.push({ action: `${who} gained the trait ${trait}` });
+		for (const trait of had) if (!has.includes(trait)) entries.push({ action: `${who} lost the trait ${trait}` });
+	});
 	return entries;
 }
 

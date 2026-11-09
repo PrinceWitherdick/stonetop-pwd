@@ -693,6 +693,110 @@
       </div>
     </div>
 
+    {{!-- THE LABEL UNDER ONE PERSON'S NAME ("Iron Knight", "Deceased") AND THEIR CHIPS ("Dead").
+          utils/relmap-person-bar.js drives it. Outside the board and `hidden` rather than absent,
+          for the other two bars' reasons. Enter keeps what is typed, Escape puts it back.
+
+          The worn chips are painted into their list by the bar (each pill a button that opens the
+          chip's form, with an x beside it); the words for those arrive here as PATTERNS on the list.
+          Add chip drops the menu of every chip on every board (utils/suggestion-menu.js), led by
+          New chip. The form makes or changes a chip: a name, one of the eight colours or one of the
+          reader's own, and an icon. --}}
+    {{!-- THE LABEL, ITS SIDE AND ITS ITALICS ARE WRITTEN ON SAVE AND NOT BEFORE, as one step of the
+          undo, though the board shows every change at once: Enter in the box starts a new line (up to
+          `personBar.lines`), Ctrl+Enter or Save keeps it all, Escape, the x or a click away keeps none
+          of it. The side moves the name, label and chips together (`data-relmap-side` on the board).
+          After Dom Bosco's tags pull request to the relationship-map module.
+
+          LAID OUT LIKE A SMALL WINDOW: a title naming whose label it is (written by the bar), the body,
+          and a foot with Save. The four sides are real radios in the house segmented strip, named per
+          bar by the bar itself so two windows' groups never join; Italicize is a real checkbox in the
+          house spiral skin. --}}
+    <div class="stonetop-relmap-personbar" role="group" aria-label="{{personBar.label}}" hidden>
+      <div class="stonetop-relmap-personbar-head">
+        <span class="stonetop-relmap-personbar-title"></span>
+        <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-personbar-close" data-relmap-pbar="close"
+                aria-label="{{personBar.close}}" data-tooltip="{{personBar.close}}"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+      </div>
+      <div class="stonetop-relmap-personbar-body">
+      <textarea class="stonetop-relmap-personbar-field" data-relmap-pbar="subtitle" rows="{{personBar.lines}}"
+                maxlength="{{personBar.maxLength}}" aria-label="{{personBar.label}}"
+                placeholder="{{personBar.placeholder}}" autocomplete="off" spellcheck="false"></textarea>
+      <p class="stonetop-relmap-personbar-hint">{{personBar.hint}}</p>
+      <label class="stonetop-relmap-personbar-italic">
+        <input type="checkbox" class="stonetop-relmap-personbar-italic-check" data-relmap-pbar="italic" checked>
+        <span>{{personBar.italic}}</span>
+      </label>
+      <div class="stonetop-relmap-personbar-chips">
+        <ul class="stonetop-relmap-personbar-worn" role="list"
+            data-relmap-said-edit="{{personBar.chips.edit}}" data-relmap-said-off="{{personBar.chips.off}}"></ul>
+        <button type="button" class="stonetop-relmap-personbar-add stonetop-add-chip" data-relmap-pbar="chipadd"
+                aria-haspopup="menu" aria-expanded="false"
+                data-relmap-said-new="{{personBar.chips.newChip}}" data-relmap-said-heading="{{personBar.chips.menuHeading}}">
+          <i class="fas fa-tag" aria-hidden="true"></i><span class="stonetop-chip-text">{{personBar.chips.add}}</span><i class="fas fa-caret-down" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="stonetop-relmap-chipform" hidden>
+        <div class="stonetop-relmap-chipform-row stonetop-field-btns">
+          <input type="text" class="stonetop-relmap-chipform-name" data-relmap-pbar="chipname"
+                 maxlength="{{personBar.chips.nameMax}}" aria-label="{{personBar.chips.name}}"
+                 placeholder="{{personBar.chips.namePlaceholder}}" autocomplete="off" spellcheck="false">
+          <button type="button" class="stonetop-relmap-chipform-btn" data-relmap-pbar="chipcancel"><span>{{personBar.chips.cancel}}</span></button>
+          <button type="button" class="stonetop-relmap-chipform-btn is-primary" data-relmap-pbar="chipsave"><span>{{personBar.chips.save}}</span></button>
+        </div>
+        <div class="stonetop-relmap-chipform-row">
+          <div class="stonetop-relmap-chipform-inks" role="radiogroup" aria-label="{{personBar.chips.colour}}">
+            {{#each inks}}
+            <button type="button" class="stonetop-relmap-inkpop-swatch stonetop-relmap-ink--{{this.key}}"
+                    data-relmap-pbar="chipink" data-relmap-pbar-value="{{this.key}}" role="radio"
+                    aria-checked="false" tabindex="-1" aria-label="{{this.name}}" data-tooltip="{{this.name}}">
+              <span class="stonetop-relmap-ink-swatch" aria-hidden="true"></span>
+            </button>
+            {{/each}}
+          </div>
+          <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-chipform-inkmore"
+                  data-relmap-pbar="chipinkmore" aria-expanded="false"
+                  aria-label="{{personBar.chips.colourOwn}}" data-tooltip="{{personBar.chips.colourOwn}}">
+            <i class="fas fa-plus"></i>
+          </button>
+          <color-picker class="stonetop-relmap-tiebar-hex" data-relmap-pbar="chiphex"
+                        aria-label="{{personBar.chips.colourOwn}}" data-tooltip="{{personBar.chips.colourOwn}}"
+                        value="" hidden></color-picker>
+        </div>
+        <div class="stonetop-relmap-chipform-icons" role="radiogroup" aria-label="{{personBar.chips.icon}}">
+          {{#each personBar.chips.icons}}
+          <button type="button" class="stonetop-relmap-tiebar-btn" data-relmap-pbar="chipicon"
+                  data-relmap-pbar-value="{{this.key}}" role="radio" aria-checked="false" tabindex="-1"
+                  aria-label="{{this.name}}" data-tooltip="{{this.name}}"><i class="fas {{this.glyph}}"></i></button>
+          {{/each}}
+        </div>
+        <div class="stonetop-relmap-chipform-row stonetop-relmap-chipform-foot">
+          <span class="stonetop-relmap-chipform-preview" role="img" aria-label="{{personBar.chips.preview}}"></span>
+          <button type="button" class="stonetop-relmap-tiebar-btn stonetop-relmap-tiebar-rub" data-relmap-pbar="chipdrop"
+                  aria-label="{{personBar.chips.delete}}" data-tooltip="{{personBar.chips.delete}}" hidden>
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>
+      <fieldset class="stonetop-relmap-personbar-sides">
+        <legend class="stonetop-relmap-personbar-where">{{personBar.where}}</legend>
+        <div class="stonetop-segmented-picker stonetop-relmap-personbar-side-list">
+          {{#each personBar.sides}}
+          <label class="stonetop-segmented-picker-option stonetop-relmap-personbar-side">
+            <input type="radio" data-relmap-pbar="side" value="{{this.key}}">
+            <span>{{this.name}}</span>
+          </label>
+          {{/each}}
+        </div>
+      </fieldset>
+      </div>
+      {{!-- THE BAR'S FOOT, LAST: Save, after the chips and the chip form, so it is the final thing a
+            reader reaches, the way a window's own button closes it. --}}
+      <div class="stonetop-relmap-personbar-foot">
+        <button type="button" class="stonetop-relmap-personbar-save" data-relmap-pbar="save"><i class="fas fa-check" aria-hidden="true"></i><span>{{personBar.save}}</span></button>
+      </div>
+    </div>
+
     {{!-- OPEN THIS BOARD IN A WINDOW OF ITS OWN, in the corner of the board itself.
 
           ONLY ON A SURFACE THAT HAS SOMEWHERE TO POP OUT FROM, which today means the steading
@@ -754,11 +858,6 @@
         would want this — which is not obvious from two words, and is the whole reason the option
         exists. --}}
   <div class="stonetop-relmap-foot">
-    <label class="stonetop-relmap-foot-check" data-tooltip="{{this.labelsHint}}">
-      <input type="checkbox" class="stonetop-check" data-relmap-action="hidelabels"
-             {{#if hideLabels}}checked{{/if}}>
-      <span>{{this.labelsLabel}}</span>
-    </label>
 
     {{!-- HOW HEAVILY THIS BOARD IS DRAWN, FOR THIS READER: the arrowheads, the strokes and the
           writing, each as a percentage of what the stylesheet sets.
@@ -794,8 +893,8 @@
           ⚠ ONE HINT ON EACH DIAL AND A NAME ON EVERY BUTTON. Three tooltips each explaining that
           this belongs to the reader alone would be the same paragraph three times over on one line.
           What a dial has to say for itself is which of the three it is. --}}
-    <div class="stonetop-relmap-heft" role="group" aria-label="{{this.weightGroup}}">
-      {{#each weights}}
+    {{!-- ONE DIAL, written once and drawn in two runs below. --}}
+    {{#*inline "stonetopRelmapDial"}}
       <div class="stonetop-relmap-heft-dial" data-tooltip="{{this.hint}}">
         <i class="stonetop-relmap-heft-mark {{this.icon}}" aria-hidden="true"></i>
         {{!-- LIGHTER ON THE LEFT AND HEAVIER ON THE RIGHT, with the number between them, because
@@ -821,7 +920,25 @@
           <i class="fas fa-plus" aria-hidden="true"></i>
         </button>
       </div>
-      {{/each}}
+    {{/inline}}
+    <div class="stonetop-relmap-heft" role="group" aria-label="{{this.weightGroup}}">
+      {{#each weightsBefore}}{{> stonetopRelmapDial}}{{/each}}
+      {{!-- A RULE AFTER THE NAMES DIAL (user, 2026-11-07): the names are the writing under each
+            face, and everything after it is about the lines, so a hairline says the two are
+            different things. Decoration only: each dial already says which it is.
+
+            ⚠ AND THE CAPTIONS BOX STANDS STRAIGHT AFTER THE RULE (user, same day: "move the hide
+            labels button to the right of the seperator too since it only affects lines"), with the
+            Words dial first in the run after it, so the two controls on the captions sit together.
+            Two runs of dials rather than one loop with the box inside it, so the box never depends
+            on what the dials happen to be. --}}
+      <span class="stonetop-relmap-heft-split" aria-hidden="true"></span>
+      <label class="stonetop-relmap-foot-check" data-tooltip="{{this.labelsHint}}">
+        <input type="checkbox" class="stonetop-check" data-relmap-action="hidelabels"
+               {{#if hideLabels}}checked{{/if}}>
+        <span>{{this.labelsLabel}}</span>
+      </label>
+      {{#each weightsAfter}}{{> stonetopRelmapDial}}{{/each}}
     </div>
 
     {{!-- THE BOARD'S OWN TOOLS, behind the editing gate and nothing else, held against the

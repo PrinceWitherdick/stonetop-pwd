@@ -60,6 +60,7 @@
 // defend-spend.js.
 
 import { SYSTEM_ID } from "../system-id.js";
+import { isFightTabEnabled, isFightRingOn } from "../settings.js";
 import { format } from "../utils/i18n.js";
 import { ownsLearnedMoveNamed, ownedLearnedMove, ownsLearnedBookMoveNamed } from "../actors/character/owns-move.js";
 import { heldOnTrack, learnedTrack, takeBackHeld } from "../actors/character/MoveResources.js";
@@ -85,6 +86,7 @@ import { damageRowActor } from "../utils/damage.js";
 import { stonetopChatCard } from "../utils/chat.js";
 import { asArray } from "../utils/playbook-actors.js";
 import { HERO_MOVES } from "./hero-move-names.js";
+import { arcanaBlowOffers } from "../actors/character/arcana-blow-offers.js";
 
 export { HERO_MOVES };
 
@@ -673,6 +675,9 @@ function postToughLove(hero, said, other) {
 	});
 }
 
+/** The foe keys an Alpha's 10+ records hold on this character right now (ALPHA_FLAG). */
+export const alphaKeysHeld = actor => listFlag(actor, ALPHA_FLAG).map(entry => entry?.key).filter(Boolean);
+
 /**
  * Alpha: "on a 10+, you also have advantage on your next roll against them." Returns the source to
  * name, or null. The record is laid by the Alpha roll's 10+ (actors/character/tier-effects.js), one
@@ -681,7 +686,7 @@ function postToughLove(hero, said, other) {
  */
 export function alphaAgainst(actor, targets = []) {
 	if (!has(actor, HERO_MOVES.ALPHA) || !targets?.length) return null;
-	const known = new Set(listFlag(actor, ALPHA_FLAG).map(entry => entry?.key));
+	const known = new Set(alphaKeysHeld(actor));
 	return targets.every(target => known.has(foeKey(target))) ? HERO_MOVES.ALPHA : null;
 }
 
@@ -751,13 +756,32 @@ async function spendRapierWit(fox, keys, part) {
 }
 
 /**
- * Forget the quips a fight leaves behind, once it is over (combat/readiness-loss.js), as Payback's grudges
- * are (clearHarmedBy, the user's ruling, 2026-10-18): one at a NAMED foe (a linked actor's `Actor.<id>`) is
- * kept until it is used, since that foe can meet the Fox again on the next map; one at an unlinked token is
- * let go with its token. Whether anything was let go.
+ * The records a fight leaves behind against its foes, let go once it is over (combat/readiness-loss.js), the
+ * user's ruling (2026-10-18): each is kept against a NAMED foe (a linked actor's `Actor.<id>`), who is the same
+ * villain on the next map, and let go against an unlinked token, which goes with the fight and which nothing
+ * could match again. Payback's grudges (bare keys), so Payback is still owed the villain who hurt you last
+ * session; the Fox's Rapier Wit quips, kept until used; and the other "next roll against them" records (a
+ * Censure's enraged, a Truth or Consequences answer, a Speak Softly refusal, an Alpha's cowed foe), which also
+ * keep a person only named (`named:<name>`). Left, a dead crinwin's Censure was an unticked line on every PC's
+ * rolls for good. ONE write for them all. Whether anything was let go.
  */
-export async function clearRapierWit(fox) {
-	return keepEntries(fox, RAPIER_WIT_FLAG, listFlag(fox, RAPIER_WIT_FLAG), entry => namedFoeKey(entry?.key));
+export async function clearFightFoeRecords(actor) {
+	if (typeof actor?.update !== "function") return false;
+	const keptRecord = entry => namedFoeKey(entry?.key) || String(entry?.key ?? "").startsWith(SPEAK_SOFTLY_NAMED);
+	const keeps = [
+		[HARMED_BY_FLAG, namedFoeKey],
+		[RAPIER_WIT_FLAG, entry => namedFoeKey(entry?.key)],
+		...FIGHT_FOE_RECORD_FLAGS.map(flag => [flag, keptRecord]),
+	];
+	const update = {};
+	for (const [flag, keep] of keeps) {
+		const held = listFlag(actor, flag);
+		const left = held.filter(keep);
+		if (left.length !== held.length) update[`flags.${SYSTEM_ID}.${flag}`] = left;
+	}
+	if (!Object.keys(update).length) return false;
+	await actor.update(update);
+	return true;
 }
 
 /**
@@ -798,9 +822,12 @@ export async function spendRapierWitBlow(fox, attacker, {
 		globalThis.ui?.notifications?.warn?.(format(`${MOVE_KEY}.rapierWit.noGm`, { name: fox.name ?? "", move: HERO_MOVES.RAPIER_WIT }));
 		return false;
 	}
-	return !!(await askGMClient(gm, RAPIER_WIT_QUERY, {
+	const spent = !!(await askGMClient(gm, RAPIER_WIT_QUERY, {
 		foxUuid: fox.uuid, attackerUuid: attacker?.uuid ?? "", userId,
 	}, { fallback: false, what: "spend Rapier Wit's +1d4" }));
+	// The GM's client refused, or never answered: the +1d4 is still owed, and the table is told, as with no GM.
+	if (!spent) globalThis.ui?.notifications?.warn?.(format(`${MOVE_KEY}.rapierWit.noAnswer`, { name: fox.name ?? "", move: HERO_MOVES.RAPIER_WIT }));
+	return spent;
 }
 
 /**
@@ -926,9 +953,12 @@ export async function forgetTruth(actor, key, mode) {
 /** A Speak Softly record kept under a typed name rather than a token: its key starts with this. */
 export const SPEAK_SOFTLY_NAMED = "named:";
 
-/** The Marshal's Speak Softly entries owing their advantage, as `{key, name, named}`. */
 export const SPEAK_SOFTLY_FLAG = "speakSoftly";
 
+/** The "next roll against them" records clearFightFoeRecords lets go: Censure, Truth or Consequences, Speak Softly, Alpha. */
+export const FIGHT_FOE_RECORD_FLAGS = Object.freeze([CENSURE_ENRAGED_FLAG, TRUTH_FLAG, SPEAK_SOFTLY_FLAG, ALPHA_FLAG]);
+
+/** The Marshal's Speak Softly entries owing their advantage, as `{key, name, named}`. */
 function speakSoftlyEntries(actor) {
 	return listFlag(actor, SPEAK_SOFTLY_FLAG)
 		.filter(entry => entry?.key)
@@ -1088,15 +1118,16 @@ export async function spendCensureEnraged(roller, targets = [], {
 			await forgetCensureEnraged(judge, { keys });
 			continue;
 		}
-		if (!gm) {
-			console.warn(`Stonetop | no GM is online to spend ${judge.name}'s Censure (enraged): it stands for another roll`);
-			all = false;
-			continue;
-		}
-		const spent = await askGMClient(gm, CENSURE_ENRAGED_QUERY, {
+		// Nobody to write the Judge, or the GM's client refused or never answered: "the NEXT roll against them" is
+		// still owed, and would ride every roll after this one too. Said to the roller, with the way out (the Judge's
+		// player unticking the reaction on the Censure card lets it go: censure-enraged.js).
+		const spent = gm ? await askGMClient(gm, CENSURE_ENRAGED_QUERY, {
 			judgeUuid: judge.uuid, rollerUuid: roller?.uuid ?? "", keys, userId,
-		}, { fallback: false, what: "spend Censure's enraged advantage" });
-		if (!spent) all = false;
+		}, { fallback: false, what: "spend Censure's enraged advantage" }) : false;
+		if (!spent) {
+			all = false;
+			globalThis.ui?.notifications?.warn?.(format(`${MOVE_KEY}.censureEnraged.${gm ? "noAnswer" : "noGm"}`, { judge: judge.name ?? "", move: CENSURE }));
+		}
 	}
 	return all;
 }
@@ -1219,17 +1250,6 @@ export async function recordHarmedBy(actor, attacker, { cardFor = followerCardFo
  * sidebar actor) rather than by one token on one map (`Scene.<id>.Token.<id>`).
  */
 const namedFoeKey = key => typeof key === "string" && key.startsWith("Actor.");
-
-/**
- * Forget the grudges a fight leaves behind, once it is over (combat/readiness-loss.js): the mooks'.
- * A grudge against a NAMED foe outlasts the fight (the user's ruling, 2026-10-18): the villain who hurt
- * you last session is the same villain on the next map, and Payback is still owed against them. An
- * unlinked token's key is let go, since that token goes with the fight and nothing could match it again.
- * Whether anything was let go.
- */
-export async function clearHarmedBy(actor) {
-	return keepEntries(actor, HARMED_BY_FLAG, listFlag(actor, HARMED_BY_FLAG), namedFoeKey);
-}
 
 /**
  * The heroes whose grudges Payback may draw on: this character, and their allies in this fight. A
@@ -1404,6 +1424,19 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 			mode: "dis", strikeBack: true,
 		});
 	}
+	// Defend's own strike back for everyone else holding Readiness (Book I p.216, "strike back at an attacker
+	// (deal your damage, with disadvantage)"; the user's ruling, 2026-11-06): the same unticked line without the
+	// +1d4, on a blow that is no attack move's, wherever the fight ring is not offering its Strike back button
+	// (the Fight tab or the ring off, or no attacker the ring can read). Ticked, it is a strike back: disadvantage,
+	// no fight +N, 1 Readiness spent once the window is answered, and no "going on the offense?" afterwards.
+	else if (!strikeBack && !moveKey && heldReadiness(actor) > 0 && !ringStrikesBack(actor)) {
+		offers.push({
+			key: "strikeBack", mode: "dis", strikeBack: true, applied: false,
+			label: format(`${MOVE_KEY}.strikeBack.label`, {}),
+			pill: format(`${MOVE_KEY}.strikeBack.pill`, {}),
+			spend: hero => spendHeldReadiness(hero, 1),
+		});
+	}
 	// Second Intent: "When you Defend and spend 1 Readiness to Parry & Riposte, also pick 1 option from the
 	// Ambush list", and "Deal +1d4 damage" is on it. UNTICKED: the pick is the player's, and may be another
 	// option. Whether they took it here is what the Second Intent card then says (defend-spend.js). The book's
@@ -1482,7 +1515,20 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 		const both = has(actor, HERO_MOVES.GIANT_SLAYER);
 		add("bigGame", both ? HERO_MOVES.GIANT_SLAYER : HERO_MOVES.BIG_GAME, both ? "4" : "2", { applied: false });
 	}
+	// What the character's arcana add to the blow: the Flaming Sword's Blaze die, Storm's Fury, the Aetherium
+	// Spear and the rest (actors/character/arcana-blow-offers.js, audit EDG-5).
+	offers.push(...arcanaBlowOffers(actor, { weapon, moveKey, strikeBack }));
 	return offers;
+}
+
+/**
+ * Whether the fight ring offers this character its own Strike back button right now (fight/fight-ring.js
+ * #ringButtonsFor: the Fight tab and the ring on, and someone attacking them in a fight the ring can read). Read
+ * once per damage window, and only of a character holding Readiness.
+ */
+function ringStrikesBack(actor) {
+	if (!isFightTabEnabled() || !isFightRingOn()) return false;
+	return !!rollerEngagement(actor)?.entry?.attackers?.length;
 }
 
 /** A damage row's stat block, or an empty one. */
@@ -1673,6 +1719,21 @@ export async function leapIn(actor, { character = actor?.typedActor } = {}) {
 }
 
 /**
+ * The scene a foe's damage roll is fought on, for locked eyes: the foe's own token's, else a targeted token's, else
+ * whatever this reader is looking at. NOT simply the canvas: a counter-attack is rolled on the GM's client once the
+ * GM picks the attack, and the GM may be looking at another map (Book I p.139: "for the rest of the FIGHT").
+ */
+function lockedEyesScene(foe, targets = []) {
+	const own = foe?.token?.parent ?? foe?.getActiveTokens?.(false, true)?.[0]?.parent ?? null;
+	if (own) return own;
+	for (const target of targets ?? []) {
+		const doc = resolveSync(target?.uuid ?? "");
+		if (doc?.documentName === "Token" && doc.parent) return doc.parent;
+	}
+	return globalThis.canvas?.scene ?? null;
+}
+
+/**
  * The heroes whose locked eyes put a foe's damage roll at disadvantage against these targets: a target who
  * locked eyes with the roller, or who stands beside a hero who did. Empty when none.
  *
@@ -1684,15 +1745,18 @@ export async function leapIn(actor, { character = actor?.typedActor } = {}) {
  * @param {Array<{uuid: string}>} targets
  * @returns {string[]} the heroes' names
  */
-export function eyesLockedAgainst(foe, targets = []) {
+export function eyesLockedAgainst(foe, targets = [], { scene = lockedEyesScene(foe, targets) } = {}) {
 	if (!targets?.length) return [];
 	// Asked on every aimed damage roll, by anyone: the fight is only worked out once somebody in it has
 	// locked eyes with a foe.
-	const combatants = [...(fightOnScene(globalThis.canvas?.scene ?? null)?.combatants ?? [])];
+	const combatants = [...(fightOnScene(scene)?.combatants ?? [])];
 	if (!combatants.some(c => c.flags?.[SYSTEM_ID]?.[LOCKED_EYES_FLAG]?.length)) return [];
-	const place = rollerEngagement(foe);
+	const place = rollerEngagement(foe, { scene });
 	if (!place) return [];
-	const byUuid = new Map([...place.combatants.values()].map(c => [c.token?.uuid, c]));
+	const byToken = new Map([...place.combatants.values()].map(c => [c.token?.uuid, c]));
+	// A row aimed at the character rather than a token (a counter-attack rolled where their token is not on the
+	// canvas: combat/attack-flow.js#postIncomingDamage) is their combatant in this fight.
+	const byUuid = { get: uuid => byToken.get(uuid) ?? [...place.combatants.values()].find(c => uuid && c.actor?.uuid === uuid) };
 	const fighter = id => place.fighters.find(f => f.id === id);
 	const grid = gridOf(place.scene);
 	const lockers = place.fighters.filter(f => f.side === HEROES

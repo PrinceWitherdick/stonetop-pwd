@@ -92,12 +92,7 @@ describe("the square the history buttons are, having no words in them", () => {
 		expect(declared(".stonetop-relmap-tool", "line-height")).toBe("1.6");
 	});
 
-	it("takes core's icon-to-label margin back off, on every side", () => {
-		// `margin: 0` rather than `margin-right: 0`, so a core change to any other side lands the
-		// same way. Same fix, same reason, as `.stonetop-relmap-page-tool > i`.
-		expect(declared(`${PAIR} > i`, "margin")).toBe("0");
-		expect(declared(".stonetop-relmap-page-tool > i", "margin")).toBe("0");
-	});
+	// No margin rule here: core's icon-to-label margin comes off through the icon-only marker (tests/utils/icon-only-buttons.test.js).
 
 	it("centres the glyph's own box rather than a stretched column", () => {
 		expect(declared(PAIR, "justify-items")).toBe("center");
@@ -136,8 +131,9 @@ describe("the square the history buttons are, having no words in them", () => {
 // browser renders all of it without complaint, and one and a half pixels is exactly the size of
 // fault that reads as "the icons look off" without ever looking like a number.
 describe("the icons on the tie bar, which carry no labels either", () => {
+	// The arrows and the rubber are icon-only, so the marker takes their margin off; the triggers
+	// put their caret after a span and keep a rule of their own.
 	const ICONS = [
-		".stonetop-relmap-tiebar-btn > i",
 		".stonetop-relmap-tiebar-inkopen > i",
 		".stonetop-relmap-tiebar-dashopen > i",
 		".stonetop-relmap-tiebar-sizeopen > i",
@@ -246,13 +242,7 @@ describe("the slate fill on Add someone", () => {
 // every UI scale. That is why they take no `translateY` where `.stonetop-relmap-page-tool > i`
 // needs one.
 describe("the link and the trash on a portrait, which carry no labels either", () => {
-	it.each([".stonetop-relmap-handle > i", ".stonetop-relmap-bin > i"])(
-		"takes core's icon-to-label margin off %s, on every side", selector => {
-			// `margin: 0` rather than `margin-right: 0`, so a core change to any other side lands
-			// the same way. Same fix, same reason, as `.stonetop-relmap-page-tool > i` above.
-			expect(declared(selector, "margin")).toBe("0");
-		});
-
+	// No margin rule here: core's icon-to-label margin comes off through the icon-only marker (tests/utils/icon-only-buttons.test.js).
 	it("keeps both buttons square, so there is a centre to be off in the first place", () => {
 		// A disc: the width, the height and the 50% radius together. Any one of the three changed
 		// on its own turns the correction above into an offset of a different size.

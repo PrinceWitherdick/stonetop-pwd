@@ -117,7 +117,8 @@ describe("Wild Soul", () => {
 		const offered = await char.getForeignMovesForLevelUp(wildSoul().system.crossPlaybook, 7);
 		const alpha = offered.find(m => m.name === "Alpha");
 		expect(alpha).toBeTruthy();
-		expect(alpha.requiresLabel).toBe("Wild Speech or Spirit Tongue");
+		// The level gate is named too (audit 11-06 L13), as the book prints it.
+		expect(alpha.requiresLabel).toBe("Wild Speech or Spirit Tongue; level 6+");
 		expect((await char.getForeignMovesForLevelUp(wildSoul().system.crossPlaybook, 5)).map(m => m.name)).not.toContain("Alpha");
 
 		await char.applyLevelUp(wildSoul()._id, null, cross(alpha.compendiumId));

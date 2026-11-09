@@ -43,6 +43,7 @@ import {MoveResources, heldOnTrack, learnedTrack, takeBackHeld} from "./MoveReso
 import {BOLSTER, PREPARATION_ARCANA, PREPARATION_FOR_FLAG, PREPARATION_MAX} from "./roll-boosts.js";
 import { inSpenderTurn } from "../../utils/spender-queue.js";
 import {debilityData, walkItOffChoice} from "./walk-it-off.js";
+import {followerResetData} from "./homecoming-reset.js";
 import {normalizeWound as _normalizeWound, normalizeWoundList} from "./wound-record.js";
 import {moveMarkBudget, markOptionCapNote} from "./move-mark-budget.js";
 import {markEntries, filledMarks, filledMarkCount, trimEmptyTail, oncePerLevelCautions, ONCE_PER_LEVEL_MARKS} from "./pfg-marks.js";
@@ -58,13 +59,13 @@ import {ANIMAL_COMPANION_MOVE, RANGER_SLUG, MAGNIFICENT_SPECIMEN_MOVE, COMPANION
 import {fineWhiskyOffer as fineWhiskyOfferFrom, isPersuadeMove, FINE_WHISKY_SOURCE} from "./fine-whisky.js";
 import {tagLoadGatedMoves, overLoadGate} from "./load-gates.js";
 import {startOfPlayGear, START_GEAR_FLAG} from "./start-of-play-gear.js";
-import {RITES_OF_THE_LAND, SACRED_POUCH_SLUG, NO_POUCH_STOCK_NOTE, BLESSED_PLAYBOOK, isVessel, stockSourcesForFlags, stockCostFromDescription} from "./stock-cost.js";
+import {RITES_OF_THE_LAND, SACRED_POUCH_SLUG, noPouchNote, BLESSED_PLAYBOOK, isVessel, stockSourcesForFlags} from "./stock-cost.js";
 import {loseHpForStock} from "./provisions.js";
 import {readPouchSlots, pouchUsableMax, spentAfterStore, spentAfterFree, settledPouchSpent} from "./sacred-pouch.js";
-import {SUPPLY_SLUGS, supplyPursesFor, spendablePurseResources as _spendablePurseResources, suppliesUsesOnMark, suppliesGiveBack} from "./supply-cost.js";
+import {SUPPLY_SLUGS, supplyPursesFor, spendablePurseResources as _spendablePurseResources, suppliesUsesOnMark, suppliesGiveBack, suppliesMarkNeedsAsk} from "./supply-cost.js";
 import {askWriteInSource, WRITE_IN_SOURCE} from "./write-in-source.js";
 import {HOLY_LIGHT_FLAG, canWieldHolyLight, INVOKE_THE_SUN_GOD, holyLightAfterRoll, LUMINOUS_SHIELD} from "./holy-light.js";
-import {moveArmor, barkskinMarkedBy} from "./move-armor.js";
+import {moveArmor, barkskinMarkedBy, VERSUS_ARMOR_PREFIX} from "./move-armor.js";
 import {invocationLabels} from "./ongoing-invocation.js";
 import {choiceCountState} from "./initiates.js";
 import {ONGOING_INVOCATION_FLAG, ONGOING_SECOND_FLAG, ONGOING_EMPOWERED_FLAG, ONGOING_SNUFF_FLAG, ONGOING_SECOND_SNUFF_FLAG,
@@ -113,7 +114,7 @@ import {capitalizeFirst, slugify, composeInstinct, escHtml, joinNames, splitName
 import {splitFillBlank, fillBlank} from "../../utils/fill-blanks.js";
 import {localize as _loc, format} from "../../utils/i18n.js";
 import {orderedMoveName} from "../../data/follower-build.js";
-import {orderedAttackTierActions} from "../../fight/follower-order-attack.js";
+import {orderedAttackTierActions, orderCardFlags} from "../../fight/follower-order-attack.js";
 import {getStonetopSteadingActor, effectiveProsperity, FALLBACK_FOUR_PLUS_PROSPERITY} from "../../utils/world.js";
 import {readCurrentSeason} from "../../seasons/current-season.js";
 import {seasonLabel} from "../../seasons/seasons-change-reminders.js";
@@ -575,6 +576,11 @@ const ORIGIN_DESCRIPTIONS = {
 	stonetop: "<p>A tight-knit village of about three hundred souls, built around a massive standing stone at the edge of the Great Wood. Everyone is expected to pull their weight, take their turn at guard duty, and help protect the community when danger comes.</p>",
 	wild: "<p>The area around Stonetop includes the Great Wood, the Flats, and other dangerous places beyond the roads. The Forest Folk have vanished, crinwin grow bolder, and hunters bring back stories of fresh ruins, strange spirits, and twisted things in the trees.</p>",
 };
+
+// One update payload for several of this system's flags on a document: { key: value } -> flags.<scope>.key.
+function _scopedFlags(values) {
+	return Object.fromEntries(Object.entries(values).map(([key, value]) => [`flags.${STONETOP_SCOPE}.${key}`, value]));
+}
 
 // True for player-authored custom moves (flagged at creation by buildCustomMoveData).
 // The flag distinguishes them from foreign playbook moves that also land in "other".
@@ -1145,11 +1151,12 @@ export class StonetopCharacter {
 		// The carried curios of every owned arcanum, resolved to the side the card has realised.
 		// Hoisted out of _buildInventorySection (which is where they render) because the armor
 		// calculation below needs the same list, and rebuilding it would walk the arcana repo
-		// twice per render.
-		const [arcanaCarried, allOutfitItems] = await Promise.all([
-			this._arcana.weightedInventoryItems(),
+		// twice per render. The owned cards are fetched once for it and the Consequences' boons.
+		const [arcanaCards, allOutfitItems] = await Promise.all([
+			this._arcana.ownedCards(),
 			this._inventoryRepo.getAll(),
 		]);
+		const arcanaCarried = await this._arcana.weightedInventoryItems(arcanaCards);
 		// Every piece of gear this character could be wearing or bearing, from all four stores,
 		// with the marks that say which are actually carried. See _carriedGearSources.
 		//
@@ -1158,7 +1165,7 @@ export class StonetopCharacter {
 		// second pass over the outfit catalog — on every single render.
 		const gear = this._gearSources(playbookData, allOutfitItems, arcanaCarried);
 		// Before the moves section, which greys a capped mark option against these (_markCapState).
-		const moveBonuses = await this._ownedMoveBonuses(playbookData, ownedAllByName);
+		const moveBonuses = await this._ownedMoveBonuses(playbookData, ownedAllByName, arcanaCards);
 		// The Crew insert the crew's numbers start from: the Marshal's own, or the one a learned
 		// Crew borrows (crewSource).
 		const crewDef  = await this.crewSource(playbookData);
@@ -1206,7 +1213,7 @@ export class StonetopCharacter {
 			// every render, not written once.
 			.withVitals(_buildVitalsSection(actor, playbookData, armor, moveBonuses, wornArmorBase, insertHpPenalty(postDeath.activeInsert?.lore), unpierceableArmor, armorBase, { value: conditionalArmor, source: conditionalSource }))
 			.withMoves(moves)
-			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters, playbookData?.name ?? null, this._retiredPickCount(), this._levelPickCount()))
+			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters, playbookData?.name ?? null, this._retiredPickCount(), this._levelPickCount(moves.find(c => c.key === "playbook")?.moves ?? [])))
 			.withInventory(inventory)
 			.withArcana(await this._arcana.buildSnapshot(actor.system.stats ?? {}, this._inventory.checked, this._arcanumResources()))
 			.withPostDeathInsert(postDeath)
@@ -1289,7 +1296,9 @@ export class StonetopCharacter {
 			// A second bronze weapon is a write-in standing for the handout's bronze row (bronze-lines.js): it is
 			// that row's weapon, asked once which one, under its own id.
 			.map(i => rec(i._id, { ...readInventoryItemData(i), name: i.name }, { weaponSlug: bronzeRowOf(i) }));
-		const arcana = arcanaCarried.map(i => rec(i.slug, i));
+		// A curio's uses sit under its slug, or where the Arcana tab keeps a back item's that shares its
+		// card with a back-power track (OutfitItem#resourceKey): Let Fly reads and spends them there.
+		const arcana = arcanaCarried.map(i => rec(i.slug, i, i.resourceKey ? { ammoKey: i.resourceKey } : {}));
 		// Gear choices are the one store that is NOT inventory.checked, so their marks are
 		// collected alongside their items and unioned into `marks` below. Their weapon slug is
 		// the WEAPON_META key ("battleaxe"; the Marshal's fine-steel "long-spear" names its own),
@@ -1338,8 +1347,9 @@ export class StonetopCharacter {
 
 	// Sum the max-HP and armor bonuses granted by owned playbook moves (e.g. the
 	// Heavy's Carved Out of Wood / Cut from Granite). Read from the move definitions
-	// so it works regardless of when the owned copy was added.
-	async _ownedMoveBonuses(playbookData, ownedAllByName) {
+	// so it works regardless of when the owned copy was added. `arcanaCards`: the owned arcana
+	// cards when the caller already fetched them (CharacterArcana#ownedCards).
+	async _ownedMoveBonuses(playbookData, ownedAllByName, arcanaCards = null) {
 		const totals = { hp: 0, armor: 0, crewHp: 0, damageDie: null, crewDamageSteps: 0, crewDamageCap: "d10", crewRollSteps: 0, crewTags: 0, companionHp: 0, companionArmor: 0 };
 		// Player-authored custom moves aren't in the pack, so the name-matched playbook
 		// loop below never sees them — read their hp/armor straight off the embedded item.
@@ -1380,6 +1390,13 @@ export class StonetopCharacter {
 			foreignMarked.add(i.name);
 			_addMarkOptionBonuses(totals, i.system?.markOptions, marks[i.name]);
 		}
+		// And what the bearer's marked arcana Consequences add for good: the Redwood Effigy's "+1 armor and +4 max
+		// HP", the Creepy Cave's "+2 max HP and +1 armor against anything but bronze" (CharacterArcana.js
+		// #consequenceBoonsFrom, audit EDG-6). The "vs." armor is armor too, lost only against that one thing.
+		const boons = await this._arcana.consequenceBoons(arcanaCards);
+		totals.hp    += boons.hp;
+		totals.armor += boons.armor + (boons.versus?.armor ?? 0);
+		if (boons.versus) totals.armorVersus = boons.versus;
 		if (!playbookData) return totals;
 		for (const m of defs) {
 			// Require a genuine (non-custom) owned move of this name that is still LEARNED (the
@@ -1682,7 +1699,7 @@ export class StonetopCharacter {
 				.withWeight(weight)
 				.withChecked(checked[outfitItem.slug] ?? false)
 				.withResource(res ? new ResourceBuilder()
-					.withCurrent(Math.min(resources[outfitItem.slug] ?? 0, resMax ?? 0))
+					.withCurrent(Math.min(resources[outfitItem.resourceKey ?? outfitItem.slug] ?? 0, resMax ?? 0))
 					.withMax(resMax)
 					.withTitle(res.title ?? null)
 					.withLabels(res.labels ?? [])
@@ -2558,7 +2575,12 @@ export class StonetopCharacter {
 
 	async setInventoryItemChecked(slug, isChecked) { await this._inventory.setItemChecked(slug, isChecked); }
 	// `options` reaches the write, so a move spending a use can name itself to the ledger ({stonetopMove}).
-	async setInventoryResource(slug, count, options) { await this._inventory.setResource(slug, count, options); }
+	// A held arcanum's curio row writes where its card keeps the uses (CharacterArcana#carriedResourceKey):
+	// a back item whose card also has a back-power track keeps them under "<slug>:item".
+	async setInventoryResource(slug, count, options) {
+		const key = this._arcana.ownedSlugs.has(slug) ? await this._arcana.carriedResourceKey(slug) : slug;
+		await this._inventory.setResource(key, count, options);
+	}
 	// Fragment forms, for a move that changes several things at once and wants one write for the
 	// lot of them (see camp/camp-rules.js#campShareUpdate; heldAdvantageData is with the held modes).
 	inventoryResourceData(slug, count)              { return this._inventory.resourceData(slug, count); }
@@ -2839,7 +2861,7 @@ export class StonetopCharacter {
 	 */
 	seasonMoveDisadvantage(moveName) {
 		if (!moveName || !SEASON_MOVE_DISADVANTAGE.some(g => g.move === moveName)) return null;
-		const season = readCurrentSeason(this.getSteadingActor())?.season ?? null;
+		const season = this.currentSeason()?.season ?? null;
 		const hit = SEASON_MOVE_DISADVANTAGE.find(g => g.move === moveName && g.season === season);
 		return hit ? seasonLabel(hit.season) : null;
 	}
@@ -3035,7 +3057,7 @@ export class StonetopCharacter {
 	/**
 	 * The pouch's max went from `before` to `after` (the user's ruling, 2026-10-18): new room arrives
 	 * EMPTY, so the spent count rises by the growth and the Stock in it is unchanged; a smaller pouch
-	 * clamps the spent count to its new max. Answers whether it wrote.
+	 * loses empty space first (ruling 2026-11-06), so its Stock stays while it fits. Answers whether it wrote.
 	 */
 	async settlePouchMaxChange(before, after) {
 		const next = settledPouchSpent(this._possessions.uses[SACRED_POUCH_SLUG], before, after);
@@ -3079,6 +3101,17 @@ export class StonetopCharacter {
 		const storedSteadingId = resolvedFlagProperty(this._actor, "steadingId");
 		return (storedSteadingId ? game.actors?.get(storedSteadingId) : null)
 			?? getStonetopSteadingActor();
+	}
+
+	/**
+	 * The season this character is living in, as the steading's clock stamps it (`{season, year}`, see
+	 * seasons/current-season.js#readCurrentSeason), or null with none recorded. The season is the world's:
+	 * a PC tied to a settlement, or to a steading with no Seasons Change stamped, reads the home steading's
+	 * clock (audit ROAD-14). Every reader of "is it winter for this PC" asks here, so Forage's winter
+	 * (seasonMoveDisadvantage) and On the Hoof's never disagree.
+	 */
+	currentSeason() {
+		return readCurrentSeason(this.getSteadingActor()) ?? readCurrentSeason(getStonetopSteadingActor());
 	}
 
 	/**
@@ -3214,7 +3247,7 @@ export class StonetopCharacter {
 		return Math.max(0, Math.trunc(Number(this._inventory.regularPool) || 0));
 	}
 
-	async toggleCarriedItem(slug, isChecked, { small = false, weight = 1, loot = false, uses: setUses, stonetopMove } = {}) {
+	async toggleCarriedItem(slug, isChecked, { small = false, weight = 1, loot = false, uses: setUses, packed = false, stonetopMove } = {}) {
 		const writeOptions = stonetopMove ? { stonetopMove } : undefined;
 		const wasChecked = !!this._inventory.checked[slug];
 		const supplies   = SUPPLY_SLUGS.includes(slug);
@@ -3225,14 +3258,34 @@ export class StonetopCharacter {
 		const reserve = this._reserveDrawData(slug, isChecked, {
 			small, weight, loot, giveBack: supplies ? suppliesGiveBack({ drawn, uses, perSupply }) : null,
 		});
+		let held = uses;
 		if (setUses !== undefined) {
+			held = setUses;
 			Object.assign(update, this._inventory.resourceData(slug, setUses));
 		} else if (supplies && isChecked && !wasChecked) {
-			const packed = suppliesUsesOnMark({ drew: reserve.drawn, uses, perSupply });
-			if (packed !== uses) Object.assign(update, this._inventory.resourceData(slug, packed));
+			// `packed`: an empty row the player said was packed at home or bought (supply-cost.js#suppliesMarkNeedsAsk).
+			held = suppliesUsesOnMark({ drew: reserve.drawn, uses, perSupply, packed });
+			if (held !== uses) Object.assign(update, this._inventory.resourceData(slug, held));
 		}
+		// A supplies row set down with its food eaten remembers it, so marking it again picks up the empty ◆
+		// rather than packing a fresh one (audit ROAD-2); a row that holds food again forgets it.
+		if (supplies && !isChecked && wasChecked) Object.assign(update, this._inventory.emptiedData(slug, uses <= 0));
+		else if (supplies && isChecked && Number(held) > 0) Object.assign(update, this._inventory.emptiedData(slug, false));
 		Object.assign(update, reserve.update);
 		await this._actor.update(update, writeOptions);
+		return { drawn: isChecked ? reserve.drawn : 0, uses: held };
+	}
+
+	/**
+	 * Whether marking the printed supplies row `slug` has to ask where its food came from first
+	 * (supply-cost.js#suppliesMarkNeedsAsk): empty, never set down emptied, and no undefined ◆ to draw.
+	 * `emptied` says it was eaten empty, for the notice that it stays so.
+	 */
+	suppliesMarkAsk(slug) {
+		if (!SUPPLY_SLUGS.includes(slug) || this._inventory.checked[slug]) return { ask: false, emptied: false };
+		const uses = Number(this._inventory.resources[slug]) || 0;
+		const emptied = !!this._inventory.emptied[slug] && uses <= 0 && this.undefinedRegularMarks <= 0;
+		return { ask: suppliesMarkNeedsAsk({ uses, pool: this.undefinedRegularMarks, emptied: !!this._inventory.emptied[slug] }), emptied };
 	}
 
 	/**
@@ -3307,6 +3360,8 @@ export class StonetopCharacter {
 			this._inventory.poolData(regularPool),
 			this._inventory.poolData(smallPool, { small: true }),
 			this._inventory.clearDrawnData(),
+			// Packed afresh: no row is an emptied one any more (toggleCarriedItem, audit ROAD-2).
+			this._inventory.clearEmptiedData(),
 			...packing.map(([slug, count]) => this._inventory.resourceData(slug, count)),
 		));
 		// All in the Wrist: "Reset your ammo whenever you Outfit." The blades' track is the move's own
@@ -3325,11 +3380,32 @@ export class StonetopCharacter {
 	// them ("When you return home, clear the marks from your Inventory insert", Book I p.89): food in
 	// the larder is not tracked, and the next trip's ◆ of supplies is packed fresh.
 	async resetInventorySelections() {
-		await this._actor.update(Object.assign(
+		await this.resetForHomecoming();
+	}
+
+	/** That reset as one update fragment, for a caller that lands it with other changes. */
+	inventoryResetData() {
+		return Object.assign(
 			this._inventory.resetSelectionsData(),
 			this._possessions.clearCarriedData(),
 			...this._suppliesEmptied(SUPPLY_SLUGS).map(([slug, count]) => this._inventory.resourceData(slug, count)),
-		));
+		);
+	}
+
+	/**
+	 * Reset Inventory, back home (Book I p.89, p.496): this character's own marks when `pc`, and those of each
+	 * follower named in `followers` ({ftype, slug}; the crew is `{ftype: "crew"}`), all in ONE update, so the
+	 * sheet redraws once and the ledger reads it as one change. Resolves true when anything was written.
+	 */
+	async resetForHomecoming({ pc = true, followers = [] } = {}) {
+		const flags = readableFlags(this._actor);
+		const data = pc ? this.inventoryResetData() : {};
+		for (const f of Array.isArray(followers) ? followers : []) {
+			if (f?.ftype) Object.assign(data, followerResetData(flags, f.ftype, f.slug ?? ""));
+		}
+		if (!Object.keys(data).length) return false;
+		await this._actor.update(data, { stonetopMove: "Reset Inventory" });
+		return true;
 	}
 
 	/** `[slug, 0]` for each of these supplies rows that still holds a use, so emptying writes only what changes. */
@@ -3338,11 +3414,14 @@ export class StonetopCharacter {
 		return slugs.filter(slug => (Number(resources[slug]) || 0) > 0).map(slug => [slug, 0]);
 	}
 
-	async addCustomInventoryItem(name, weight) {
+	// `flags` rides on the item under the system's scope: a Requisition stamps the asset it came from
+	// (utils/requisition-asset.js#REQUISITIONED_FROM_FLAG), so bringing it home can offer to take it off.
+	async addCustomInventoryItem(name, weight, flags = null) {
 		await this._actor.createEmbeddedDocuments("Item", [{
 			name,
 			type: "move",
 			system: { moveType: "inventory-custom", inventoryColumn: "regular", weight: Math.max(1, weight) },
+			...(flags && Object.keys(flags).length ? { flags: { [STONETOP_SCOPE]: flags } } : {}),
 		}]);
 	}
 
@@ -3601,11 +3680,12 @@ export class StonetopCharacter {
 	// Move name → how many of that move the actor has LEARNED (an un-learned copy is kept on
 	// the sheet switched off, and grants nothing). Feeds sub-choice caps that grow with a move
 	// (the Blessed's sacred-pouch remarkable traits, +1 per Big Magic). `learnedOnly` false counts every
-	// copy still on the sheet, learned or not (_trimSubChoicesOverCap: only removal trims).
-	ownedMoveCounts({ learnedOnly = true } = {}) {
+	// copy still on the sheet, learned or not (_trimSubChoicesOverCap: only removal trims). `items`
+	// reads another set of items than the sheet's (a removal's plan reads the ones it leaves).
+	ownedMoveCounts({ learnedOnly = true, items: held = this._actor.items } = {}) {
 		const counts = {};
-		for (const [name, items] of this._buildOwnedMovesMap()) {
-			counts[name] = learnedOnly ? items.filter(i => moveLearnedIn(i, this._actor.items)).length : items.length;
+		for (const [name, items] of this._buildOwnedMovesMap(held)) {
+			counts[name] = learnedOnly ? items.filter(i => moveLearnedIn(i, held)).length : items.length;
 		}
 		return counts;
 	}
@@ -3622,6 +3702,25 @@ export class StonetopCharacter {
 			for (const cg of opt.choiceGroups) {
 				for (const sg of (cg.subgroups ?? [])) yield { opt, sg };
 			}
+		}
+	}
+
+	// The capped multi-select lines of the selected possessions whose cap grows with a move (the
+	// sacred pouch's remarkable traits, +1 per Big Magic), yielding `{ opt, bonusMoves, max, picks, size,
+	// moveCounts }`: the line's move names, its cap under `moveCounts`, its picks in the order they
+	// were made, and how many options it has. `moveCounts` may be a function, called once such a line turns up (most
+	// characters have none). Shared by the cue, the auto-open and the removal trim below.
+	*_moveCappedSubgroups(specialPossessions, moveCounts) {
+		const subChoices = this._possessions.subChoices;
+		for (const { opt, sg } of this._selectedPossessionSubgroups(specialPossessions)) {
+			const bonusMoves = (sg.maxSelectBonus?.moveBonus ?? []).map(mb => mb.moveName).filter(Boolean);
+			if (!sg.multiSelect || !bonusMoves.length) continue;
+			if (typeof moveCounts === "function") moveCounts = moveCounts();
+			const max = effectiveSubgroupMax(sg, moveCounts);
+			if (max == null) continue;
+			const line = new Set((sg.options ?? []).map(o => o.slug));
+			const picks = [...new Set(subChoices[opt.slug] ?? [])].filter(s => line.has(s));
+			yield { opt, bonusMoves, max, picks, size: line.size, moveCounts };
 		}
 	}
 
@@ -3644,21 +3743,48 @@ export class StonetopCharacter {
 	async possessionWithOpenChoiceFor(moveName) {
 		if (!moveName) return null;
 		const sp = (await this.playbook())?.specialPossessions;
-		const moveCounts = this.ownedMoveCounts();
-		const subChoices = this._possessions.subChoices;
-		for (const { opt, sg } of this._selectedPossessionSubgroups(sp)) {
-			if (!sg.multiSelect) continue;
-			if (!(sg.maxSelectBonus?.moveBonus ?? []).some(mb => mb.moveName === moveName)) continue;
-			const max = effectiveSubgroupMax(sg, moveCounts);
-			const picked = new Set(subChoices[opt.slug] ?? []);
-			const count = (sg.options ?? []).filter(o => picked.has(o.slug)).length;
-			if (max != null && count < max) return opt.slug;
+		for (const { opt, bonusMoves, max, picks } of this._moveCappedSubgroups(sp, () => this.ownedMoveCounts())) {
+			if (bonusMoves.includes(moveName) && picks.length < max) return opt.slug;
 		}
 		return null;
 	}
 
+	// The picks still owed on a possession whose cap grows with a LEARNED move. Big Magic: "choose
+	// an additional remarkable trait for your sacred pouch" (Book I p.106). Drives the "needs your
+	// input" cue on the move card (`byMove`) and the pouch row (`bySlug`), as crewTagsOwed does.
+	// Never more than the options left to pick. `{ byMove: {name: {slug, count}}, bySlug: {slug: n} }`.
+	possessionChoicesOwed(playbookData) {
+		const byMove = {};
+		const bySlug = {};
+		const lines = this._moveCappedSubgroups(playbookData?.specialPossessions, () => this.ownedMoveCounts());
+		for (const { opt, bonusMoves, max, picks, size, moveCounts } of lines) {
+			const movers = bonusMoves.filter(n => (moveCounts[n] ?? 0) > 0);
+			const owed = Math.min(max, size) - picks.length;
+			if (!movers.length || owed <= 0) continue;
+			bySlug[opt.slug] = (bySlug[opt.slug] ?? 0) + owed;
+			for (const name of movers) byMove[name] = { slug: opt.slug, count: owed };
+		}
+		return { byMove, bySlug };
+	}
+
 	async selectPossession(slug)   { await this._possessions.select(slug); await this._addPossessionGrants(slug); }
 	async deselectPossession(slug) { await this._possessions.deselect(slug); await this._removePossessionGrants(slug); }
+
+	/**
+	 * What deselectPossession(slug) would throw away, so the sheet can ask first: the picks made on
+	 * it, the uses marked off it, and the gear it put on the sheet (CharacterPossessions#deselect,
+	 * _removePossessionGrants). Ticking it again starts all three fresh. `isEmpty` when none is there.
+	 * @returns {Promise<null|{label: string, picks: number, uses: number, items: string[], isEmpty: boolean}>}
+	 */
+	async possessionRemovalStakes(slug) {
+		if (!slug) return null;
+		const opt   = ((await this.playbook())?.specialPossessions?.options ?? []).find(o => o.slug === slug);
+		const picks = new Set(this._possessions.subChoices[slug] ?? []).size;
+		const uses  = Math.max(0, Math.trunc(Number(this._possessions.uses[slug]) || 0));
+		const items = (await this._grantedItemsFor(slug)).map(i => i.name);
+		const label = opt?.label ?? this._possessions.custom.find(c => c?.slug === slug)?.label ?? slug;
+		return { label: stripHtmlToText(label), picks, uses, items, isEmpty: !picks && !uses && !items.length };
+	}
 
 	// Bundled-gear sync (see possession-grants.js). Materialize a possession's
 	// `grantsItems` as inventory items on select; tear them down on deselect.
@@ -3958,14 +4084,34 @@ export class StonetopCharacter {
 		}
 		await this._possessions.addSubChoice(possessionSlug, choiceSlug);
 	}
-	async setPossessionSubChoices(possessionSlug, choiceSlugs) {
-		// Onboarding replaces a bundle's picks wholesale, so anything dropped here has to
-		// give up its ◇ carry mark too — same reason as deselectSubChoice below.
-		const kept = new Set(choiceSlugs ?? []);
+	// Onboarding's apply replaces a bundle's picks wholesale, and so does a removal's trim. Each capped
+	// multi-select line is held to its cap here, as selectSubChoice refuses a pick past it: the latest
+	// picks go first. `moveCounts` is what the cap counts (default: the moves LEARNED).
+	async setPossessionSubChoices(possessionSlug, choiceSlugs, { moveCounts = null } = {}) {
+		const picks = await this._withinSubChoiceCaps(possessionSlug, choiceSlugs ?? [], moveCounts);
+		// Anything dropped here has to give up its ◇ carry mark too — same reason as deselectSubChoice below.
+		const kept = new Set(picks);
 		const dropped = (this._possessions.subChoices[possessionSlug] ?? [])
 			.filter(s => !kept.has(s) && this._possessions.isChoiceCarried(possessionSlug, s));
 		const also = await this._choiceGiveBackData(possessionSlug, dropped);
-		await this._possessions.writeSubChoices(possessionSlug, choiceSlugs ?? [], { uncarry: dropped, also });
+		await this._possessions.writeSubChoices(possessionSlug, picks, { uncarry: dropped, also });
+	}
+
+	// `choiceSlugs` with each capped multi-select line of `possessionSlug` cut to its cap, latest first.
+	async _withinSubChoiceCaps(possessionSlug, choiceSlugs, moveCounts) {
+		const opt = (await this.playbook())?.specialPossessions?.options?.find(o => o.slug === possessionSlug);
+		let kept = choiceSlugs;
+		for (const cg of (opt?.choiceGroups ?? [])) {
+			for (const sg of (cg.subgroups ?? [])) {
+				if (!sg.multiSelect) continue;
+				const max = effectiveSubgroupMax(sg, moveCounts ??= this.ownedMoveCounts());
+				if (max == null) continue;
+				const line = new Set((sg.options ?? []).map(o => o.slug));
+				const over = new Set(kept.filter(s => line.has(s)).slice(max));
+				if (over.size) kept = kept.filter(s => !over.has(s));
+			}
+		}
+		return kept;
 	}
 	async deselectSubChoice(possessionSlug, choiceSlug) {
 		// Giving up a gear-bundle option drops its ◇ carry mark too, so re-choosing that
@@ -4020,12 +4166,19 @@ export class StonetopCharacter {
 	async setChoiceGearCarried(possessionSlug, choiceSlug, isCarried) {
 		const key = `${possessionSlug}:${choiceSlug}`;
 		const update = this._possessions.choicesCarriedData({ [key]: isCarried });
+		let drawn = 0;
 		if (!!isCarried !== this._possessions.isChoiceCarried(possessionSlug, choiceSlug)) {
 			const bundle = this._buildChoiceGearByPossession(await this.playbook()).get(possessionSlug);
 			const row = [...(bundle?.regular ?? []), ...(bundle?.small ?? [])].find(r => r.choiceSlug === choiceSlug);
-			if (row) Object.assign(update, this._reserveDrawData(key, !!isCarried, { small: !(row.weight > 0), weight: row.weight }).update);
+			if (row) {
+				const reserve = this._reserveDrawData(key, !!isCarried, { small: !(row.weight > 0), weight: row.weight });
+				drawn = isCarried ? reserve.drawn : 0;
+				Object.assign(update, reserve.update);
+			}
 		}
 		await this._actor.update(update);
+		// What the mark drew from the undefined pool, for the sheet's Have What You Need card (audit ROAD-9).
+		return { drawn };
 	}
 	async setPossessionChoiceText(possessionSlug, choiceSlug, value) { await this._possessions.setChoiceText(possessionSlug, choiceSlug, value); }
 
@@ -4524,11 +4677,16 @@ export class StonetopCharacter {
 	// A move taken at the start of play takes back the gear it gave (_grantStartGear) when it goes,
 	// whether an onboarding re-run drops it or it is un-ticked (removeMove), unless another move
 	// still claims that gear. Gear the move never recorded (bought, or there before) is never touched.
-	async _releaseStartGear(item) {
+	// The plan is the gear's slug, or null; `left` as for the removal trims (_removeMoveNow).
+	_startGearReleasePlan(item, left = this._actor.items) {
 		const slug = item?.flags?.[STONETOP_SCOPE]?.[START_GEAR_FLAG];
-		if (!slug) return;
-		const claimed = this._actor.items.some(i => i._id !== item._id && i.flags?.[STONETOP_SCOPE]?.[START_GEAR_FLAG] === slug);
-		if (!claimed) await this._inventory.removeSpecial(slug);
+		if (!slug) return null;
+		return left.some(i => i._id !== item._id && i.flags?.[STONETOP_SCOPE]?.[START_GEAR_FLAG] === slug) ? null : slug;
+	}
+
+	async _releaseStartGear(item) {
+		const slug = this._startGearReleasePlan(item);
+		if (slug) await this._inventory.removeSpecial(slug);
 	}
 
 	/**
@@ -4884,10 +5042,20 @@ export class StonetopCharacter {
 		// a re-run of onboarding counts that pick as made (retiredCreationPickCount) rather than ask
 		// for another, and the original comes back as the free pick it was.
 		const wasCreationPick = originals.some(i => i.flags?.[STONETOP_SCOPE]?.[CREATION_PICK_FLAG]);
+		// Whether the original was a pick the level budget counted (_retiredPickCount), however the
+		// replacer came: a Bulwark from Versatile was not one, an agreed Bulwark was. And an agreed
+		// original comes back agreed, so the budget still counts it.
+		const row = await this._playbookMoveRow();
+		const wasCountedPick = originals.some(i => _countsTowardLevelBudget(i, row));
+		const wasLevelPick = originals.some(i => i.flags?.[STONETOP_SCOPE]?.[LEVEL_PICK_FLAG]);
 		for (const it of originals) await this.removeMove(it._id);
-		await added.setFlag(STONETOP_SCOPE, "retiredMove", replaced);
-		if (grantedBy) await added.setFlag(STONETOP_SCOPE, "retiredGrantedBy", grantedBy);
-		if (wasCreationPick) await added.setFlag(STONETOP_SCOPE, RETIRED_CREATION_PICK_FLAG, true);
+		await added.update(_scopedFlags({
+			retiredMove: replaced,
+			[RETIRED_COUNTED_PICK_FLAG]: wasCountedPick,
+			...(grantedBy ? { retiredGrantedBy: grantedBy } : {}),
+			...(wasCreationPick ? { [RETIRED_CREATION_PICK_FLAG]: true } : {}),
+			...(wasLevelPick ? { [RETIRED_LEVEL_PICK_FLAG]: true } : {}),
+		}));
 	}
 
 	// Hand back the move a now-removed replacing move retired (see _retireReplacedMove).
@@ -4901,8 +5069,12 @@ export class StonetopCharacter {
 		const grantedBy = flags.retiredGrantedBy;
 		if (grantedBy && !this._actor.items.some(i => i._id === grantedBy.instanceId)) return;
 		const restored = await this.addPlaybookMoveByName(gone.system?.playbook, retired);
-		if (restored && grantedBy) await restored.setFlag(STONETOP_SCOPE, "grantedBy", grantedBy);
-		if (restored && flags[RETIRED_CREATION_PICK_FLAG]) await restored.setFlag(STONETOP_SCOPE, CREATION_PICK_FLAG, true);
+		const back = {
+			...(grantedBy ? { grantedBy } : {}),
+			...(flags[RETIRED_CREATION_PICK_FLAG] ? { [CREATION_PICK_FLAG]: true } : {}),
+			...(flags[RETIRED_LEVEL_PICK_FLAG] ? { [LEVEL_PICK_FLAG]: true } : {}),
+		};
+		if (restored && Object.keys(back).length) await restored.update(_scopedFlags(back));
 	}
 
 	// How many of onboarding's free picks were given up to a replacing move (see
@@ -4925,6 +5097,49 @@ export class StonetopCharacter {
 		return entry ? this.addMove(entry.id) : null;
 	}
 
+	/**
+	 * What removeMove(ownedId) would take with it that ticking the move again does not give back,
+	 * so the sheet can ask first and say what goes. Each answer is the plan of the trim
+	 * _removeMoveNow applies, read against the sheet without the gone moves, so the two can't
+	 * disagree. Null for an id the sheet doesn't hold. `isEmpty` says nothing is at stake: a plain
+	 * move with nothing marked, picked or granted, whose untick a re-tick undoes.
+	 *
+	 * @returns {Promise<null|{name: string, copiesLeft: number, granted: string[], statPick: string|null,
+	 *   marks: boolean, possessionPicks: string[], possession: string|null, startGear: boolean,
+	 *   companionTraits: boolean, invocations: boolean, isEmpty: boolean}>}
+	 */
+	async moveRemovalStakes(ownedId) {
+		const item = ownedId ? this._actor.items.find(i => i._id === ownedId) : null;
+		if (!item) return null;
+		const orphans = this._movesGrantedBy(ownedId);
+		const gone    = [item, ...orphans];
+		const goneIds = new Set(gone.map(i => i._id));
+		const left    = this._actor.items.filter(i => !goneIds.has(i._id));
+		const label   = opt => stripHtmlToText(opt.label ?? opt.slug);
+		const [overCap, marks, companionTraits, possession, invocations] = await Promise.all([
+			this._subChoicesTrimPlan(gone, left),
+			this._moveMarksTrimPlan(gone, left),
+			this._companionTraitsTrimPlan(gone, left),
+			this._grantedPossessionReleasePlan(item, left),
+			this._unheldInvocationsPlan(left),
+		]);
+		const stakes = {
+			name:            item.name,
+			copiesLeft:      left.filter(i => i.type === "move" && i.name === item.name).length,
+			granted:         orphans.map(i => i.name),
+			statPick:        (this._actor.getFlag(STONETOP_SCOPE, "improvedStatChoices") ?? {})[ownedId] ?? null,
+			marks:           Object.keys(marks).length > 0,
+			possessionPicks: overCap.map(({ opt }) => label(opt)),
+			possession:      possession ? label(possession) : null,
+			startGear:       gone.some(g => this._startGearReleasePlan(g, left)),
+			companionTraits: !!companionTraits,
+			invocations:     !!invocations,
+		};
+		stakes.isEmpty = !stakes.granted.length && !stakes.statPick && !stakes.marks && !stakes.possessionPicks.length
+			&& !stakes.possession && !stakes.startGear && !stakes.companionTraits && !stakes.invocations;
+		return stakes;
+	}
+
 	// Removing a Big Magic shrinks the sacred pouch, so the removal is settled once around it
 	// (withPouchSettled); the work itself is _removeMoveNow.
 	async removeMove(ownedId) {
@@ -4937,14 +5152,9 @@ export class StonetopCharacter {
 		// recorded stat pick undone afterwards (see _revertStatIncreaseChoice), which reads
 		// the item's id + name.
 		const removed = this._actor.items.find(i => i._id === ownedId);
-		// Cascade: a cross-playbook move (Versatile/Worldly/…) tags each foreign move it
-		// granted with grantedBy.instanceId === its own item id. Removing the cross-playbook
-		// move must also remove those granted moves, or they'd linger in "Learned Moves" with
-		// a dangling "Granted by <gone move>" label and an ability the player no longer has.
-		const orphanItems = this._actor.items
-			.filter(i => i.type === "move" && i.flags?.[STONETOP_SCOPE]?.grantedBy?.instanceId === ownedId);
-		const orphans = orphanItems.map(i => i._id);
-		await this._actor.deleteEmbeddedDocuments("Item", [ownedId, ...orphans]);
+		const orphanItems = this._movesGrantedBy(ownedId);
+		const goneMoves = [removed, ...orphanItems];
+		await this._actor.deleteEmbeddedDocuments("Item", [ownedId, ...orphanItems.map(i => i._id)]);
 		if (removed) await this._revertStatIncreaseChoice(removed);
 		// A custom move's resource track is stored under its item id (see buildSnapshot), and
 		// ids are never reused — so the count has to go with the move or it sits in the flag
@@ -4954,35 +5164,53 @@ export class StonetopCharacter {
 		// Un-ticking a replacing move (A Mighty Rampart) hands back the move it retired
 		// (Bulwark), so an undo leaves the character as it was. The cascade counts too: un-
 		// learning the Versatile that granted a Rampart undoes the Rampart's swap as well.
-		for (const gone of [removed, ...orphanItems]) await this._restoreRetiredMove(gone);
-		await this._trimSubChoicesOverCap([removed, ...orphanItems]);
-		await this._trimMoveMarksOnRemoval([removed, ...orphanItems]);
-		await this._trimCompanionTraitsOnRemoval([removed, ...orphanItems]);
+		for (const gone of goneMoves) await this._restoreRetiredMove(gone);
+		// The trims moveRemovalStakes warns of, each planned against the sheet as it now stands and
+		// just before it applies, since each one's writes change what the next reads.
+		await this._trimSubChoicesOverCap(goneMoves);
+		await this._trimMoveMarksOnRemoval(goneMoves);
+		await this._trimCompanionTraitsOnRemoval(goneMoves);
 		await this._releaseGrantedPossession(removed);
 		// Un-ticking Armored taken at the start of play takes back its hauberk, as an onboarding
 		// re-run dropping it does. Read off the snapshots: their startGear flag outlives the delete.
-		for (const gone of [removed, ...orphanItems]) await this._releaseStartGear(gone);
+		for (const gone of goneMoves) await this._releaseStartGear(gone);
 		await this._clearUnheldInvocations();
 	}
+
+	// Cascade: a cross-playbook move (Versatile/Worldly/…) tags each foreign move it granted with
+	// grantedBy.instanceId === its own item id. Removing the cross-playbook move must also remove
+	// those granted moves, or they'd linger in "Learned Moves" with a dangling "Granted by <gone
+	// move>" label and an ability the player no longer has.
+	_movesGrantedBy(ownedId) {
+		return this._actor.items.filter(i => i.type === "move" && i.flags?.[STONETOP_SCOPE]?.grantedBy?.instanceId === ownedId);
+	}
+
+	// The removal trims below come in pairs: a plan, what the trim would drop were only `left` (the
+	// items still on the sheet) held, which writes nothing; and the apply, which writes the plan.
 
 	// A Would-be Hero who un-learns the Versatile that granted Invoke the Sun God (or has it taken
 	// off) keeps no Invocations: the learned list and every ongoing slot go, by the same MOVE_STATE
 	// test clearPlaybookData asks. Every flag in THAT row, so a slot added to it is cleared too. Never
 	// for a playbook with Invocations of its own (the Lightbearer's list is the playbook's, not a
-	// move's), and nothing written when there is nothing stored.
-	async _clearUnheldInvocations() {
+	// move's), and nothing written when there is nothing stored. The plan is the update, or null.
+	async _unheldInvocationsPlan(left = this._actor.items) {
 		const row = MOVE_STATE.find(state => state.flags.includes("invocations"));
-		if (!row) return;
+		if (!row) return null;
 		const flags = resolvedFlags(this._actor);
 		const stored = row.flags.filter(key => foundry.utils.getProperty(flags, key) !== undefined);
-		if (!stored.length || row.held(this._actor, ownedMoveNames(this._actor))) return;
-		if ((await this.playbook())?.invocations?.options?.length) return;
+		if (!stored.length || row.held(this._actor, ownedMoveNames({ items: left }))) return null;
+		if ((await this.playbook())?.invocations?.options?.length) return null;
 		const update = {};
 		for (const key of stored) {
 			const [deleteKey, deleteValue] = deletionEntry(`flags.${STONETOP_SCOPE}.${key}`);
 			update[deleteKey] = deleteValue;
 		}
-		await this._actor.update(update);
+		return update;
+	}
+
+	async _clearUnheldInvocations() {
+		const update = await this._unheldInvocationsPlan();
+		if (update) await this._actor.update(update);
 	}
 
 	// Un-learning Big Magic takes back the remarkable trait it unlocked ("one per Big
@@ -4992,22 +5220,20 @@ export class StonetopCharacter {
 	// Only REMOVAL trims (the user's ruling): an un-learned copy still on the sheet keeps the
 	// trait it paid for, so the cap here counts every copy still held, learned or not, not the
 	// learned-only ownedMoveCounts. Otherwise removing one of two copies, the other un-learned,
-	// would cut both copies' traits.
-	async _trimSubChoicesOverCap(goneMoves) {
+	// would cut both copies' traits. The plan is the over-cap lines (_moveCappedSubgroups entries).
+	async _subChoicesTrimPlan(goneMoves, left = this._actor.items) {
 		const goneNames = new Set(goneMoves.filter(Boolean).map(i => i.name));
-		if (!goneNames.size) return;
+		if (!goneNames.size) return [];
 		const sp = (await this.playbook())?.specialPossessions;
-		const moveCounts = this.ownedMoveCounts({ learnedOnly: false });
-		for (const { opt, sg } of this._selectedPossessionSubgroups(sp)) {
-			if (!sg.multiSelect) continue;
-			if (!(sg.maxSelectBonus?.moveBonus ?? []).some(mb => goneNames.has(mb.moveName))) continue;
-			const max = effectiveSubgroupMax(sg, moveCounts);
-			if (max == null) continue;
-			const lineSlugs = new Set((sg.options ?? []).map(o => o.slug));
-			const picked = this._possessions.subChoices[opt.slug] ?? [];
-			const drop = new Set(picked.filter(s => lineSlugs.has(s)).slice(max));
-			if (!drop.size) continue;
-			await this.setPossessionSubChoices(opt.slug, picked.filter(s => !drop.has(s)));
+		const moveCounts = this.ownedMoveCounts({ learnedOnly: false, items: left });
+		return [...this._moveCappedSubgroups(sp, moveCounts)]
+			.filter(({ bonusMoves, max, picks }) => picks.length > max && bonusMoves.some(n => goneNames.has(n)));
+	}
+
+	async _trimSubChoicesOverCap(goneMoves) {
+		// Collected first: each write below changes the sub-choices the walk reads.
+		for (const { opt, moveCounts } of await this._subChoicesTrimPlan(goneMoves)) {
+			await this.setPossessionSubChoices(opt.slug, this._possessions.subChoices[opt.slug] ?? [], { moveCounts });
 		}
 	}
 
@@ -5018,9 +5244,10 @@ export class StonetopCharacter {
 	// move's marks outright, so taking it again asks for a fresh choice rather than restoring the
 	// old one. Stat-choice slots (Potential for Greatness) are left alone: their +1 sits on the
 	// stored stat, and dropping the record would strand it. Only on removal: a grandfathered
-	// over-budget mark on a move still held keeps working (see setCountMark).
-	async _trimMoveMarksOnRemoval(goneMoves) {
-		const allMarks = this._moveResources.getMarks();
+	// over-budget mark on a move still held keeps working (see setCountMark). The plan is the
+	// update, empty when nothing drops.
+	async _moveMarksTrimPlan(goneMoves, left = this._actor.items) {
+		const allMarks = this._moveResources.getMarks() ?? {};
 		const marksPath = `flags.${STONETOP_SCOPE}.moves.moveMarks`;
 		const update = {};
 		const seen = new Set();
@@ -5034,7 +5261,7 @@ export class StonetopCharacter {
 			const boxes   = options.filter(o => o.choice !== "stat");
 			if (!boxes.length) continue;
 			const moveMarks = allMarks[name];
-			const remaining = this._actor.items.filter(i => i.type === "move" && i.name === name).length;
+			const remaining = left.filter(i => i.type === "move" && i.name === name).length;
 			// The last copy gone: the move's marks go whole (a merge can't drop a key, so it is a
 			// deletion), unless a stat slot is recorded there.
 			if (remaining === 0 && !options.some(o => o.choice === "stat" && moveMarks[o.slug] !== undefined)) {
@@ -5057,6 +5284,11 @@ export class StonetopCharacter {
 				update[`${marksPath}.${name}.${opt.slug}`] = markEntries(moveMarks[opt.slug]).filter((_, index) => !drop.has(`${opt.slug}:${index}`));
 			}
 		}
+		return update;
+	}
+
+	async _trimMoveMarksOnRemoval(goneMoves) {
+		const update = await this._moveMarksTrimPlan(goneMoves);
 		if (Object.keys(update).length) await this._actor.update(update);
 	}
 
@@ -5066,32 +5298,45 @@ export class StonetopCharacter {
 	// Only on removal: un-learning a copy keeps the picks, as un-learning Big Magic keeps its trait
 	// (_trimSubChoicesOverCap runs from here too), so re-learning it has them straight back. So the
 	// allowance here counts every book copy still on the sheet, learned or not: removing one of two
-	// copies, the other un-learned, keeps what the un-learned copy still pays for.
-	async _trimCompanionTraitsOnRemoval(goneMoves) {
-		if (!goneMoves.some(i => i?.name === MAGNIFICENT_SPECIMEN_MOVE && !_isCustomMove(i))) return;
+	// copies, the other un-learned, keeps what the un-learned copy still pays for. The plan is the
+	// traits kept, or null when none drop.
+	async _companionTraitsTrimPlan(goneMoves, left = this._actor.items) {
+		if (!goneMoves.some(i => i?.name === MAGNIFICENT_SPECIMEN_MOVE && !_isCustomMove(i))) return null;
 		const companion = resolvedFlags(this._actor)?.animalCompanion;
-		if (!companion?.type || !Array.isArray(companion.traits)) return;
+		if (!companion?.type || !Array.isArray(companion.traits)) return null;
 		const typeData = ((await this.companionSource())?.types ?? []).find(t => t.slug === companion.type);
-		if (!typeData) return;
-		const allowance = companionTraitAllowance(typeData, _bookSpecimens(this._buildOwnedMovesMap(), this._actor.items, { learnedOnly: false }));
+		if (!typeData) return null;
+		const allowance = companionTraitAllowance(typeData, _bookSpecimens(this._buildOwnedMovesMap(left), left, { learnedOnly: false }));
 		const kept = trimCompanionTraits(typeData, companion.traits, allowance);
-		if (kept.length !== companion.traits.length) await this._actor.setFlag(STONETOP_SCOPE, "animalCompanion.traits", kept);
+		return kept.length !== companion.traits.length ? kept : null;
+	}
+
+	async _trimCompanionTraitsOnRemoval(goneMoves) {
+		const kept = await this._companionTraitsTrimPlan(goneMoves);
+		if (kept) await this._actor.setFlag(STONETOP_SCOPE, "animalCompanion.traits", kept);
 	}
 
 	// Un-learning Initiate of the Secret Arts takes back the Sacred Pouch it brought: "You
 	// have a 'Sacred Pouch'" only while you have the move. The pouch is grant-only, so the
 	// sheet can't untick it, and it would otherwise outlive the move for good. Kept when
 	// another copy of a granting move remains, or when the playbook gives the possession
-	// on its own (a Blessed who learned Initiate keeps the pouch they started with).
-	async _releaseGrantedPossession(gone) {
+	// on its own (a Blessed who learned Initiate keeps the pouch they started with). The plan is
+	// the possession option that goes, or null.
+	async _grantedPossessionReleasePlan(gone, left = this._actor.items) {
 		const slug = gone?.system?.crossPlaybook?.grantsPossession;
-		if (!slug || !this._possessions.selected.has(slug)) return;
-		if (this._actor.items.some(i => i.type === "move" && i.system?.crossPlaybook?.grantsPossession === slug)) return;
+		if (!slug || !this._possessions.selected.has(slug)) return null;
+		if (left.some(i => i.type === "move" && i.system?.crossPlaybook?.grantsPossession === slug)) return null;
 		const sp  = (await this.playbook())?.specialPossessions;
 		const opt = sp?.options?.find(o => o.slug === slug);
-		if (!opt?.grantOnly || (sp.preselected ?? []).includes(slug)) return;
-		await this.deselectPossession(slug);
-		await this._possessions.forgetGranted(slug);
+		if (!opt?.grantOnly || (sp.preselected ?? []).includes(slug)) return null;
+		return opt;
+	}
+
+	async _releaseGrantedPossession(gone) {
+		const opt = await this._grantedPossessionReleasePlan(gone);
+		if (!opt) return;
+		await this.deselectPossession(opt.slug);
+		await this._possessions.forgetGranted(opt.slug);
 	}
 
 	// Apply the "either X OR Y" starting-move picks: grant the chosen move in each group and stamp
@@ -5179,6 +5424,7 @@ export class StonetopCharacter {
 		// the tier-gated Roll-damage action — or resolve a Let Fly "easy shot" with no roll.
 		// Returns null for non-attack moves. See module/combat/attack-flow.js.
 		let attackExtra = null;
+		let refundAttackPrice = null;
 		if (!descriptionOnly) {
 			const begun = await maybeBeginAttack(this._actor, item, { stat, weaponSlug });
 			// "cancel", not a bare `true`. Both stop the caller looking for another way to roll
@@ -5196,14 +5442,19 @@ export class StonetopCharacter {
 				await revealOnAttack(this._actor, item.name);
 			}
 			if (begun === "handled") return true;
-			attackExtra = begun;
+			// The arcanum's price, kept apart from the roll's options: refunded below when no dice land.
+			if (begun?.refundPrice) {
+				const { refundPrice, ...rest } = begun;
+				refundAttackPrice = refundPrice;
+				attackExtra = rest;
+			} else attackExtra = begun;
 		}
 
 		// Interfere and Persuade (vs. PCs) are aimed at another player's character, whose player
 		// answers on the card: asked whom before the dice, as an attack asks its target, so backing
 		// out rolls nothing (pc-asks/pc-ask-flow.js). Null for every other move.
 		const aimed = descriptionOnly ? null : await aimPcAskRoll(this._actor, item);
-		if (aimed === "cancel") return "cancel";
+		if (aimed === "cancel") { await refundAttackPrice?.(); return "cancel"; }
 
 		// The +forward is not read here: it is claimed with the held promises just before the dice, below.
 		const ongoing  = descriptionOnly ? 0 : this._actor.system?.attributes?.ongoing?.value ?? 0;
@@ -5286,16 +5537,19 @@ export class StonetopCharacter {
 			const surprise = descriptionOnly ? null : await spendSurpriseForRoll(this._actor, item);
 			surpriseSpent = !!surprise?.spent;
 			if (surprise) withSurprise = { ...promised, conditionNotes: [...(promised.conditionNotes ?? []), surprise.note] };
-			roll = await item.roll({ ...this.applyDebilityRollMode(stat, withSurprise), descriptionOnly });
+			// An arcanum's Let Fly rolls the stat its card prints (combat/arcana-attacks.js): its debility is that stat's.
+			roll = await item.roll({ ...this.applyDebilityRollMode(attackExtra?.statOverride ?? stat, withSurprise), descriptionOnly });
 		} catch (err) {
 			await owed?.refund();
 			if (surpriseSpent) await refundSurpriseForRoll(this._actor);
+			await refundAttackPrice?.();
 			throw err;
 		}
 		if (!roll) {
 			await owed?.refund();
 			if (surpriseSpent) await refundSurpriseForRoll(this._actor);
 			surpriseSpent = false;
+			await refundAttackPrice?.();
 		}
 
 		// What the taken lines cost, paid once the dice have landed, and a 12+'s "criticalNote" hook.
@@ -5436,12 +5690,15 @@ export class StonetopCharacter {
 
 	/** What the derived vitals are worked out from: the playbook, the carried gear and the move bonuses. */
 	async _derivedInputs() {
+		// Each read starts once, and each step waits only on the reads it uses: the move bonuses
+		// never wait on the outfit list.
 		const playbook = this.playbook();
+		const cards    = this._arcana.ownedCards();
 		const [playbookData, allOutfitItems, arcanaCarried, moveBonuses] = await Promise.all([
 			playbook,
 			this._inventoryRepo.getAll(),
-			this._arcana.weightedInventoryItems(),
-			playbook.then(pb => this._ownedMoveBonuses(pb, this._buildOwnedMovesMap())),
+			cards.then(arcanaCards => this._arcana.weightedInventoryItems(arcanaCards)),
+			Promise.all([playbook, cards]).then(([pb, arcanaCards]) => this._ownedMoveBonuses(pb, this._buildOwnedMovesMap(), arcanaCards)),
 		]);
 		return { playbookData, gear: this._gearSources(playbookData, allOutfitItems, arcanaCarried), moveBonuses };
 	}
@@ -5562,12 +5819,16 @@ export class StonetopCharacter {
 		const base = Math.max(0, this._inventory.calculateArmor(gear.items, Math.max(worn, granted.base), gear.marks) + moveBonuses.armor);
 		// How much of the total the move actually bought, which is nothing when the gear was already
 		// better: that is what a damage card offers back when the fiction says the clause is not met.
-		const conditional = Math.max(0, granted.base - worn);
+		const moveGated = Math.max(0, granted.base - worn);
+		// Else an arcana Consequence's armor that does not count against one thing (the Creepy Cave's "+1 armor
+		// against anything but bronze", _ownedMoveBonuses' `armorVersus`): the card's one box carries one clause.
+		const versus = !moveGated && moveBonuses.armorVersus?.armor > 0 ? moveBonuses.armorVersus : null;
+		const conditional = versus ? Math.min(base, versus.armor) : moveGated;
 		return {
 			worn,
 			base,
 			conditional,
-			conditionalSource: conditional > 0 ? granted.source : "",
+			conditionalSource: conditional > 0 ? (versus ? `${VERSUS_ARMOR_PREFIX}${versus.against}` : granted.source) : "",
 			armor: Math.max(0, base + this.armorAdjustment),
 			unpierceable: this._inventory.unpierceableArmor(gear.items, gear.marks),
 		};
@@ -6266,19 +6527,24 @@ export class StonetopCharacter {
 	 *   #orderFollowersModeSources), so the nerves are folded with each of them rather than with the net
 	 * @param {string} [opts.moveName]  - Card header, e.g. "Hari: Defy Danger"
 	 */
-	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", modeSources = null, moveName, moveKey = null, followerName = "", shieldWall = false, command = false, loyaltySpent = null, presenceSpent = null, attack = null } = {}) {
+	async onOrderFollowersRoll({ bonus = 0, rollMode = "normal", modeSources = null, moveName, moveKey = null, followerName = "", shieldWall = false, command = false, loyaltySpent = null, presenceSpent = null, attack = null, missActions = "" } = {}) {
 		const { rollStat } = await import("../../utils/roll-engine.js");
 		// Return the roll so the caller can react to the result — e.g. auto-holding
 		// Readiness when a follower is ordered to Defend and rolls 7+ (p.469).
 		// With the sides handed over, a straight roll reached by cancelling stays straight under the nerves;
 		// without them (a caller that hands only the net), the net is the one side.
-		const sources = Array.isArray(modeSources) ? modeSources : [rollMode];
+		const baseSources = Array.isArray(modeSources) ? modeSources : [rollMode];
+		// A follower sent to Forage forages in the same winter: "In winter, you have disadvantage" (Book I p.79,
+		// audit ROAD-10), a side of its own so a tag's advantage cancels it.
+		const winter = moveKey === "forage" ? this.seasonMoveDisadvantage(orderedMoveName(moveKey)) : null;
+		const sources = winter ? [...baseSources, "dis"] : baseSources;
 		const nerves = fightStateActive(this._actor, "nerves");
 		// Stentorian's "Spend 1 Command ... You have advantage to Order Followers" (Book I p.127), ticked in the
 		// window (dialogs/OrderFollowersDialog.js): named on the card, and the Command paid once the dice land.
 		const shouted = !!command && commandHeld(this._actor) > 0;
 		// Where an advantage came from, when the Marshal's Shield Wall gave it, and a disadvantage.
 		const conditionNotes = [
+			...(winter ? [winter] : []),
 			...(shieldWall ? ["Shield Wall"] : []),
 			...(shouted ? [HERO_MOVES.STENTORIAN] : []),
 			...(nerves ? [format("stonetop.nerves.rollNote", { move: WE_HAPPY_FEW })] : []),
@@ -6295,7 +6561,15 @@ export class StonetopCharacter {
 			...(conditionNotes.length ? { conditionNotes } : {}),
 			...this._orderedMoveText(moveKey, followerName),
 			// An ordered Clash or Let Fly: the follower's damage button on a hit (fight/follower-order-attack.js).
-			...(attack ? { tierActions: orderedAttackTierActions({ ...attack, move: moveKey }) } : {}),
+			// And what a 6- costs beyond the GM's move, when the follower's card says so (`missActions`: the
+			// Mindgem's Mighty Servant, "on a 6-, in addition to whatever the GM says, mark a consequence").
+			...((attack || missActions) ? { tierActions: {
+				...(attack ? orderedAttackTierActions({ ...attack, move: moveKey }) : {}),
+				...(missActions ? { failure: missActions } : {}),
+			} } : {}),
+			// Who was ordered, kept on the card, so a Shift that moves an ordered Clash later strikes its counter-blow
+			// once (follower-order-attack.js#reconcileOrderedClashCounter, audit FOE-1).
+			...(attack ? { messageFlags: orderCardFlags(attack, moveKey) } : {}),
 		});
 		if (roll && shouted) await takeBackHeld(this._actor, HERO_MOVES.STENTORIAN, 1);
 		return roll;
@@ -7183,11 +7457,49 @@ export class StonetopCharacter {
 	}
 	async getArcanum(slug)                           { return this._arcana.getArcanum(slug); }
 	async isArcanumUnlocked(slug)                    { return this._arcana.isArcanumUnlocked(slug); }
+	async arcanumBackOpenToOwner(slug, options)      { return this._arcana.backOpenToOwner(slug, options); }
 	async getArcanumMove(slug, moveSlug)             { return this._arcana.getArcanumMove(slug, moveSlug); }
 	async addArcanum(slug)                           { await this._arcana.addArcanum(slug); }
 	// Its tracks AND its carried mark go with it, so a card that comes back (given back, re-found)
 	// arrives set down and charged afresh, not already counting toward load.
-	async removeArcanum(slug)                        { await this._arcana.removeArcanum(slug); await this._inventory.clearArcanumResources(slug); await this._inventory.clearCarried(slug); }
+	/**
+	 * Remove a held card in ONE update: its arcana flags (CharacterArcana#removeArcanumData, which keeps
+	 * the card's marked Consequences when asked), its resource tracks and its carried mark, and any
+	 * custom followers named in `followers` (the Remove confirm's "Also remove ...").
+	 * @param {string} slug
+	 * @param {{keepConsequences?: boolean, followers?: string[]}} [options]
+	 */
+	async removeArcanum(slug, { followers = [], ...options } = {}) {
+		const data = {
+			...await this._arcana.removeArcanumData(slug, options),
+			...this._inventory.arcanumRemovalData(slug),
+			...Object.fromEntries(followers.map(id => deletionEntry(`flags.${STONETOP_SCOPE}.customFollowers.${id}`))),
+		};
+		if (Object.keys(data).length) await this._actor.update(data);
+	}
+	async markedArcanumConsequences(slug)            { return this._arcana.markedConsequences(slug); }
+	async setArcanumNote(slug, text, options)        { return this._arcana.setArcanumNote(slug, text, options); }
+	/**
+	 * The update settling the back-item uses the Arcana tab stored under "<slug>:item" on a card with
+	 * no back-power track, where every reader now looks under the bare slug (arcanumItemResourceKey).
+	 * The larger of the two counts is kept (the more uses spent is the safer reading) and the old key
+	 * goes. Null when there is nothing to move: once moved, nothing is left under the old key. Written
+	 * by the arcana audit's settle (migration/arcana-audit-1104.js) in the same update as its counts.
+	 */
+	async arcanumResourceKeysUpdate() {
+		const resources = this._inventory.resources;
+		const keys = Object.keys(resources).filter(key => key.endsWith(":item"));
+		const slugOf = key => key.slice(0, -":item".length);
+		const cards = await Promise.all(keys.map(key => this._arcana.getArcanum(slugOf(key))));
+		const data = {};
+		keys.forEach((key, i) => {
+			if (!cards[i] || cards[i].back?.resource) return;
+			const slug = slugOf(key);
+			const count = Math.max(Number(resources[slug]) || 0, Number(resources[key]) || 0);
+			Object.assign(data, this._inventory.resourceData(slug, count), this._inventory.resourceDeletionData(key));
+		});
+		return Object.keys(data).length ? data : null;
+	}
 	async identifyArcanum(slug, options)             { await this._arcana.identifyArcanum(slug, options); }
 	async identifyAndRevealArcanum(slug, options)    { await this._arcana.identifyAndRevealArcanum(slug, options); }
 	async identifyFrontOwedArcanum(slug, options)    { await this._arcana.identifyFrontOwedArcanum(slug, options); }
@@ -7212,11 +7524,19 @@ export class StonetopCharacter {
 	// (see _syncArcanumIdentification in stonetop.js).
 	get identifiedArcanaSlugs() { return this._arcana.identifiedSlugs; }
 	get ownedArcanaSlugs()      { return this._arcana.ownedSlugs; }
+	get leadArcanaSlugs()       { return this._arcana.leadSlugs; }
 	// Every card's □/○/◇ marks, keyed "slug:context:index" (CharacterArcana#boxStates).
 	get arcanaBoxStates()       { return this._arcana.boxStates; }
-	async setArcanumUnlockCount(arcanumSlug, optionSlug, count)          { await this._arcana.setUnlockCount(arcanumSlug, optionSlug, count); }
+	// How many times a card's unlock track has been completed (CharacterArcana#completionCount).
+	arcanaCompletionCount(slug) { return this._arcana.completionCount(slug); }
+	// What the marked arcana Consequences add for good, `{hp, armor, versus}` (CharacterArcana#consequenceBoons).
+	async arcanaConsequenceBoons() { return this._arcana.consequenceBoons(); }
+	// Every card's unlock-requirement counts, keyed "slug:option" (CharacterArcana#unlockCounts).
+	get arcanaUnlockCounts()    { return this._arcana.unlockCounts; }
+	async setArcanumUnlockCount(arcanumSlug, optionSlug, count, options) { await this._arcana.setUnlockCount(arcanumSlug, optionSlug, count, options); }
 	async setArcanumBackOptionCount(arcanumSlug, optionSlug, count)      { await this._arcana.setBackOptionCount(arcanumSlug, optionSlug, count); }
-	async setArcanumBoxChecked(slug, context, index, checked)            { await this._arcana.setArcanumBoxChecked(slug, context, index, checked); }
+	// Answers false when the card refused the tick (a locked slot, CharacterArcana#arcanumSlotLocked).
+	async setArcanumBoxChecked(slug, context, index, checked, options) { return this._arcana.setArcanumBoxChecked(slug, context, index, checked, options); }
 	async settleArcanumBoxLayouts(options)                             { return this._arcana.settleBoxLayouts(options); }
 	async setArcanumBoxesChecked(slug, context, ticks)                 { await this._arcana.setArcanumBoxesChecked(slug, context, ticks); }
 	async markNextArcanumUnlockStep(slug, options)                       { return this._arcana.markNextUnlockStep(slug, options); }
@@ -7297,7 +7617,7 @@ export class StonetopCharacter {
 			// Armored through Seasoned Warrior (see buildMovelistContext) has the move already.
 			const all = this.sortPlaybookMoves(
 				this.buildMovelistContext(entries, ownedAllByName, bgMoveNames, newLevel, playbookData.name, this._startingChoiceGroups(playbookData))
-			).filter(e => (!ownedAllByName.has(e.name) || (e.repeatable && e.ownedIds.length < e.repeatMax)) && !retired.has(e.name));
+			).filter(e => !_moveHeldFully(e.name, e.repeatMax, actor.items) && !retired.has(e.name));
 			availableMoves = all.filter(e => !e.locked);
 			lockedMoves    = all.filter(e => e.locked);
 		}
@@ -7307,20 +7627,30 @@ export class StonetopCharacter {
 		// who lacks the move today, because step 3 comes first: a Would-be Hero who takes
 		// Invoke the Sun God through Versatile on this very level-up is owed one at once, and
 		// the dialog opens that step off `availableInvocations` when they pick it.
+		//
+		// Every one owed is asked, on any level (the user's ruling, 2026-11-06): a Lightbearer who
+		// started above level 1 catches up here, as Beast-Bonded companion actions do. "Lightbearer,
+		// you start knowing 2 Invocations. Each time you reach an even-numbered level, learn 1 new
+		// Invocation." (Book I p.146). `invocationAllowance` is how many this level-up asks.
 		let needsInvocation     = false;
 		let availableInvocations = [];
-		if (newLevel % 2 === 0) {
+		let invocationAllowance = 1;
+		{
+			const even   = newLevel % 2 === 0;
 			const source = await this.invocationSource(playbookData, { learned: true });
-			const list   = source ?? await this.lightbearerInvocations();
+			const list   = source ?? (even ? await this.lightbearerInvocations() : null);
 			const selected = new Set(actor.getFlag(STONETOP_SCOPE, "invocations.selected") ?? []);
-			availableInvocations = (list?.options ?? []).filter(o => !selected.has(o.slug));
+			const open     = (list?.options ?? []).filter(o => !selected.has(o.slug));
 			// Asked only while they know fewer than the new level expects (the Invocations tab's
 			// "N of M"), so a character already at or over it is not made to learn another.
-			// An unstamped borrower has no expectation (null) and is asked as before.
+			// An unstamped borrower has no expectation (null) and is asked one on an even level.
 			const borrowed = !playbookData?.invocations?.options?.length;
-			const count    = invocationCountArgs(actor, list, { borrowed, level: newLevel });
-			const expected = expectedInvocationCount(count);
-			needsInvocation = !!source && availableInvocations.length > 0 && (expected == null || count.known < expected);
+			const count    = list ? invocationCountArgs(actor, list, { borrowed, level: newLevel }) : null;
+			const expected = count ? expectedInvocationCount(count) : null;
+			const owed     = !source ? 0 : expected == null ? (even ? 1 : 0) : Math.max(0, expected - count.known);
+			needsInvocation = owed > 0 && open.length > 0;
+			if (even || needsInvocation) availableInvocations = open;
+			if (needsInvocation) invocationAllowance = Math.min(owed, open.length);
 		}
 
 		// A Beast-Bonded Ranger marks another companion action at 3rd, 5th, 7th and 9th level
@@ -7362,6 +7692,7 @@ export class StonetopCharacter {
 			lockedMoves,
 			needsInvocation,
 			availableInvocations,
+			invocationAllowance,
 			companionActions,
 			// Current stat values, so the stat-increase picker can grey out any stat
 			// already at the chosen move's cap (+2 / +3).
@@ -7423,27 +7754,33 @@ export class StonetopCharacter {
 				if (def.cap != null) continue;          // no Improved/Superior Stat
 				if (def.crossPlaybook) continue;         // no third-playbook chaining
 				if (ownMoveNames.has(def.name)) continue; // the own playbook's move of that name
-				const ownedIds = (held.get(def.name) ?? []).map(i => i.id);
-				if (ownedIds.length >= Math.max(1, Number(def.repeatMax) || 1)) continue;
+				if (_moveHeldFully(def.name, def.repeatMax, this._actor.items)) continue;
 				if (retired.has(def.name) || seen.has(def.name)) continue;
+				const ownedIds = (held.get(def.name) ?? []).map(i => i.id);
 				if (!_foreignMoveQualifies(def, learnedNames, level, actorStats)) continue;
 				seen.add(def.name);
 				// The mark options ride along with the copies already held, so the level-up's marks step
 				// can ask a foreign Beast of Legend's pick as it asks the Ranger's own (LevelUpDialog).
 				out.push({
 					compendiumId: def.id, name: def.name, description: def.description ?? "", moveResults: def.moveResults ?? null, playbook: pb,
-					requiresLabel: requirementLabel(def.requirement, { replaces: def.replaces ?? null }),
+					// The level gate too, as the playbook's own rows say it (PlaybookMoveEntry).
+					requiresLabel: requirementLabel(def.requirement, { replaces: def.replaces ?? null, level: def.requirement?.level ?? null }),
 					markOptions: def.markOptions ?? null, markBudget: def.markBudget ?? null, ownedIds,
 				});
 			}
 		}
 		out.sort((a, b) => a.playbook.localeCompare(b.playbook) || a.name.localeCompare(b.name));
-		// A move that costs Stock, offered to someone with no sacred pouch to pay it from, says
-		// so on its row (`stockNote`). Said, never filtered: the book lets them take it. Not for a
-		// pick that brings its own pouch in the same step (Initiate of the Secret Arts).
+		// A move that costs Stock or works on the pouch itself (Big Magic, Borrow Power), offered to
+		// someone with no sacred pouch, says so on its row (`stockNote`, stock-cost.js#noPouchNote).
+		// Said, never filtered: the book lets them take it. Not for a pick that brings its own pouch
+		// in the same step (Initiate of the Secret Arts).
 		const hasPouch = crossPlaybook?.grantsPossession === SACRED_POUCH_SLUG
 			|| await this.holdsPossession(SACRED_POUCH_SLUG);
-		for (const m of out) m.stockNote = !hasPouch && stockCostFromDescription(m.description) ? NO_POUCH_STOCK_NOTE : null;
+		for (const m of out) {
+			const said = hasPouch ? null : noPouchNote(m.description);
+			m.stockNoteKind = said?.kind ?? null;
+			m.stockNote = said?.note ?? null;
+		}
 		return out;
 	}
 
@@ -7491,6 +7828,10 @@ export class StonetopCharacter {
 		};
 		const early = refusal();
 		if (early) return { applied: false, reason: early };
+		// A move added meanwhile (ticked on the Moves tab while this window was open) is not added twice.
+		if (await this._levelUpMoveHeld(selectedMoveCompendiumId ?? choices?.agreed?.foreignMoveId ?? null)) {
+			return { applied: false, reason: "moveHeld" };
+		}
 		// Then the GM's client says whether THIS client takes the level (level-up-claim.js): a GM
 		// and a player pressing Apply at once would otherwise both pass the level check below.
 		if (!(await claimLevelUp(this._actor, fromLevel))) return { applied: false, reason: "level" };
@@ -7531,7 +7872,9 @@ export class StonetopCharacter {
 			await step("companion", () => this._background.setMarkedActions(new Set([...this._background.markedActions, ...choices.companionActions])));
 		}
 		const invocationWaitsOnMove = !!(choices?.crossPlaybook || choices?.agreed);
-		if (selectedInvocationSlug && !invocationWaitsOnMove) await step("invocation", () => this._learnInvocation(selectedInvocationSlug));
+		// One slug, or several when Invocations owed from earlier levels are caught up (getLevelUpData).
+		const invocations = [selectedInvocationSlug].flat().filter(Boolean);
+		if (invocations.length && !invocationWaitsOnMove) await step("invocation", () => this._learnInvocation(invocations));
 		// "Until you Level Up, your instinct becomes ..." (Book II p.370, p.523): it ends now.
 		const endedInstinct = await step("instinct", () => this._instinct.clearTemporary());
 		const addedItem = await step("move", () => this._addLevelUpMove(selectedMoveCompendiumId, choices));
@@ -7549,7 +7892,7 @@ export class StonetopCharacter {
 		if (choices?.marks?.picks?.length) {
 			await step("marks", () => this._applyMarkChoices(choices.marks.moveName, choices.marks.picks));
 		}
-		if (selectedInvocationSlug && invocationWaitsOnMove) await step("invocation", () => this._learnInvocation(selectedInvocationSlug));
+		if (invocations.length && invocationWaitsOnMove) await step("invocation", () => this._learnInvocation(invocations));
 		return { applied: true, ...(failed.length ? { failed } : {}), ...(endedInstinct ? { endedInstinct } : {}) };
 	}
 
@@ -7562,9 +7905,19 @@ export class StonetopCharacter {
 	}
 
 	// Once only: an Invocation already known (a replayed step, a stale dialog) is not learned twice.
-	async _learnInvocation(slug) {
+	// `slugs`: every one this level-up learns (several when owed ones are caught up), in one write.
+	async _learnInvocation(slugs) {
 		const current = this._actor.getFlag(STONETOP_SCOPE, "invocations.selected") ?? [];
-		if (!current.includes(slug)) await this._actor.setFlag(STONETOP_SCOPE, "invocations.selected", [...current, slug]);
+		const add = [...new Set(slugs.filter(s => !current.includes(s)))];
+		if (add.length) await this._actor.setFlag(STONETOP_SCOPE, "invocations.selected", [...current, ...add]);
+	}
+
+	// Whether the move a level-up would add (`compendiumId`) is already held as fully as it can be
+	// (_moveHeldFully). True means the level-up must not add it again (it was ticked meanwhile).
+	async _levelUpMoveHeld(compendiumId) {
+		if (!compendiumId) return false;
+		const doc = await this._moveRepo.getPlaybookMoveDocument(compendiumId);
+		return !!doc?.name && _moveHeldFully(doc.name, doc.system?.repeatMax, this._actor.items);
 	}
 
 	// The move a level-up learns: the playbook pick, or a move the table agreed on (Book I p.529:
@@ -7588,9 +7941,31 @@ export class StonetopCharacter {
 		return item;
 	}
 
-	// How many moves the table agreed on at a level-up (LEVEL_PICK_FLAG), for the level move budget.
-	_levelPickCount() {
-		return this._actor.items.filter(i => i.type === "move" && i.flags?.[STONETOP_SCOPE]?.[LEVEL_PICK_FLAG]).length;
+	// How many owned moves the level move budget counts as picks (_countsTowardLevelBudget), against
+	// `row`, the playbook's own list as the Moves tab builds it.
+	_levelPickCount(row) {
+		return this._actor.items.filter(i => _countsTowardLevelBudget(i, row)).length;
+	}
+
+	// The playbook's own list as the Moves tab builds it (buildMovelistContext), for the level budget's
+	// rule where no snapshot is to hand; [] with no playbook, or none of its moves to be had.
+	async _playbookMoveRow() {
+		const playbookData = await this.playbook();
+		if (!playbookData) return [];
+		const entries = await this._moveRepo.getPlaybookMoves(playbookData.name);
+		const bgMoveNames = this._backgroundMoveNames(this._selectedBackground(playbookData));
+		return this.buildMovelistContext(entries, this._buildOwnedMovesMap(), bgMoveNames, this._characterLevel, playbookData.name, this._startingChoiceGroups(playbookData));
+	}
+
+	// The Moves tab's "Taken as a level pick" toggle (Book I p.528: "Choose a new move from your class
+	// playbook, or an insert class that you've unlocked"): a move outside the playbook's own list, put
+	// on the sheet by hand, is named as a level's pick so the move budget counts it.
+	async setLevelPick(itemId, on) {
+		const item = this._actor.items.find(i => i._id === itemId);
+		if (!item || item.type !== "move" || item.flags?.[STONETOP_SCOPE]?.grantedBy) return;
+		if (!!item.flags?.[STONETOP_SCOPE]?.[LEVEL_PICK_FLAG] === !!on) return;
+		if (on) await item.setFlag(STONETOP_SCOPE, LEVEL_PICK_FLAG, true);
+		else await item.unsetFlag(STONETOP_SCOPE, LEVEL_PICK_FLAG);
 	}
 
 	// Record an Improved/Superior Stat pick: bump the stat by +1, clamped to the move's cap
@@ -7760,15 +8135,19 @@ export class StonetopCharacter {
 	// How many playbook picks were given up to a replacing move, for the level move budget.
 	// A replacement that came through a cross-playbook pick is skipped: it and the move it
 	// retired both sit in Learned Moves, which the budget never counted.
+	// The stamp RETIRED_COUNTED_PICK_FLAG decides, whichever route the replacer came by; a
+	// replacement retired before the stamp falls back to the old reading (not through a cross pick).
 	_retiredPickCount() {
-		return this._actor.items.filter(i => i.type === "move"
-			&& i.flags?.[STONETOP_SCOPE]?.retiredMove
-			&& !i.flags?.[STONETOP_SCOPE]?.grantedBy).length;
+		return this._actor.items.filter(i => {
+			const f = i.type === "move" ? i.flags?.[STONETOP_SCOPE] : null;
+			if (!f?.retiredMove) return false;
+			return typeof f[RETIRED_COUNTED_PICK_FLAG] === "boolean" ? f[RETIRED_COUNTED_PICK_FLAG] : !f.grantedBy;
+		}).length;
 	}
 
-	_buildOwnedMovesMap() {
+	_buildOwnedMovesMap(items = this._actor.items) {
 		const map = new Map();
-		for (const item of this._actor.items.filter(i => i.type === "move")) {
+		for (const item of items.filter(i => i.type === "move")) {
 			if (!map.has(item.name)) map.set(item.name, []);
 			map.get(item.name).push(item);
 		}
@@ -7958,9 +8337,13 @@ function _hpFrom(actor, playbookData, moveBonuses = {}, insertHpPenalty = 0) {
 	// and be permanently dying, which is Unholy Vessel's job to end, not arithmetic's. The same
 	// floor covers a permanent adjustment deep enough to do it the other way round.
 	const derivedHp = (playbookData?.hp ?? 0) + (moveBonuses.hp ?? 0) - insertHpPenalty;
-	// The lasting hand-set change: arcana that cost or grant max HP outright ("reducing your max
-	// HP by 1d4+1", "+4 max HP"). Kept as a delta on top of the derived number so levelling and
-	// new move bonuses still land, rather than freezing max HP at whatever was typed.
+	// The lasting hand-set change: arcana that cost or grant max HP outright and are not counted
+	// for them ("reducing your max HP by 1d4+1"). A marked Consequence's own max HP (the Redwood
+	// Effigy's "+4 max HP", the Creepy Cave's +2) is already in `moveBonuses.hp`
+	// (CharacterArcana.js#consequenceBoonsFrom), so it is never typed here as well
+	// (migration/consequence-boon-hp.js took it back out of an adjustment typed as exactly it, and named any bigger one to the GM).
+	// Kept as a delta on top of the derived number so levelling and new move bonuses still land,
+	// rather than freezing max HP at whatever was typed.
 	const hpAdjust = Math.trunc(Number(attrs.hp?.adjustment) || 0);
 	const hpBase = playbookData ? Math.max(1, derivedHp) : 0;
 	// Built on hpBase, NOT on the un-floored derivedHp, so the number the sheet shows as the base
@@ -8086,6 +8469,34 @@ export const CREATION_PICK_FLAG = "creationPick";
 // The item flag a replacing move carries when the move it retired was onboarding's free pick. See
 // StonetopCharacter#retiredCreationPickCount.
 export const RETIRED_CREATION_PICK_FLAG = "retiredCreationPick";
+// Item flags on a replacing move: whether the move it retired was a pick the level budget counted
+// (_retiredPickCount), and whether it was an agreed level pick (restored with LEVEL_PICK_FLAG).
+export const RETIRED_COUNTED_PICK_FLAG = "retiredCountedPick";
+export const RETIRED_LEVEL_PICK_FLAG = "retiredLevelPick";
+
+// Whether an owned move is one of the level budget's picks, the one rule the Moves tab's count
+// (_levelPickCount) and a replaced move's stamp (_retireReplacedMove) read. `row` is the playbook's
+// own list as the Moves tab builds it (PlaybookMoveEntry or its snapshot: `isStarting`, `ownedIds`).
+// A copy in that row is a pick, except the first copy of a starting or background move, the one it
+// came with: a second Well Versed was a pick. A move outside it is one only when agreed as one
+// (LEVEL_PICK_FLAG). A cross-playbook grant never is: the cross move it came through was the pick.
+function _countsTowardLevelBudget(item, row) {
+	const f = item?.flags?.[STONETOP_SCOPE] ?? {};
+	if (item?.type !== "move" || f.grantedBy) return false;
+	const entry = row.find(m => m.ownedIds?.includes(item._id));
+	if (entry) return !(entry.isStarting && entry.ownedIds[0] === item._id);
+	return !!f[LEVEL_PICK_FLAG];
+}
+
+// Whether `items` hold the move `name` as fully as it can be held, so nothing offers it again: any
+// copy of a move that doesn't repeat, or as many copies as a repeatable one allows, whichever way
+// each came. "Each time you take this move" caps the move, not one route to it: Magnificent
+// Specimen twice through Wild Soul is held twice. Read by the level-up's own list, its foreign
+// picker and its moveHeld check.
+function _moveHeldFully(name, repeatMax, items) {
+	const copies = items.filter(i => i.type === "move" && i.name === name).length;
+	return copies > 0 && copies >= Math.max(1, Number(repeatMax) || 1);
+}
 
 // The item flag onboarding stamps on the "either X OR Y" option it granted, the one the character
 // STARTED with, so the other half taken later reads as an ordinary pick. See
@@ -8652,7 +9063,7 @@ function _rollLabelForMove(name, rollType, data = {}) {
 	return ROLL_LABELS_BY_TYPE[normalizedRollType] ?? null;
 }
 
-function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, loveLetters = [], playbookName = null, retiredPicks = 0, agreedPicks = 0) {
+function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, loveLetters = [], playbookName = null, retiredPicks = 0, levelPicks = 0) {
 	const playbookCat   = categories.find(c => c.key === "playbook");
 	const basicCat      = categories.find(c => c.key === "basic");
 	const expeditionCat = categories.find(c => c.key === "expedition");
@@ -8672,18 +9083,14 @@ function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, love
 	const movesIncomplete = pickCount > 0 && chosenCount < pickCount;
 
 	// Advancement budget: every level past 1 grants one move pick, on top of the
-	// `pickCount` starting "moves of your choice". Count OWNED INSTANCES of every
-	// non-starting playbook move so a repeatable retake (e.g. Improved Stat taken
-	// twice) counts each take, and a cross-playbook pick (Versatile) counts once —
-	// the foreign move it grants lives in the Learned category and is excluded.
-	// Background / auto-granted starting moves are `isStarting` and never counted.
+	// `pickCount` starting "moves of your choice". `levelPicks` counts the owned moves that
+	// were picks (_countsTowardLevelBudget): each copy of a playbook move, so a repeatable
+	// retake (Improved Stat twice) counts each take, but not a starting or background move's
+	// own copy; a cross-playbook pick (Versatile) once, never the foreign move it grants; and
+	// a move the table agreed on at a level-up (LEVEL_PICK_FLAG).
 	// A replacing move (A Mighty Rampart) gave up an earlier pick (Bulwark) to be taken,
 	// so each one it retired still counts: `retiredPicks`.
-	// A repeatable starting move taken again (the Seeker's Well Versed) spent a pick on each take
-	// past the first. A move the table agreed on at a level-up (another playbook's, or a custom
-	// one; LEVEL_PICK_FLAG) sits outside the playbook list but was that level's pick: `agreedPicks`.
-	const chosenInstances = (playbookCat?.moves ?? [])
-		.reduce((n, m) => n + Math.max(0, (m.ownedIds?.length ?? 0) - (m.isStarting ? 1 : 0)), 0) + retiredPicks + agreedPicks;
+	const chosenInstances = levelPicks + retiredPicks;
 	const expectedPicks = pickCount + Math.max(0, actorLevel - 1);
 	const levelMovesShortfall = Math.max(0, expectedPicks - chosenInstances);
 	const levelMovesOverage = Math.max(0, chosenInstances - expectedPicks);

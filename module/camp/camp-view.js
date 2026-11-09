@@ -4,7 +4,7 @@ import { CREW_SUPPLIES_LABEL, CREW_SUPPLIES_SLUG } from "../actors/character/sup
 import {
 	CAMP_BENEFIT, CAMP_STATE, HAD_ALL_ALONG, HAD_ALL_ALONG_REFUSAL, SETTLE_REFUSAL, breakBreadOffered,
 	CAMP_EXTRA, debilityToClear, eatsTonight, foodAfterTonight, healTo, homeFiresHp, homeFiresKeeper, homeFiresOffered, planExtras,
-	nightmaresWarded, precautionTonight, crewBill, UNLIVING_NEEDS,
+	nightmaresWarded, precautionTonight, crewBill, UNLIVING_NEEDS, FASTING_NEEDS, mouthTonight,
 	messKitAllAlong, messKitWouldHelp, provisionsAtFire, spareUses, suppliesAllAlong,
 } from "./camp-rules.js";
 import { countOf, plural } from "../utils/plural.js";
@@ -212,12 +212,37 @@ export function campSummaryRows(ledger, plan) {
 		const shared = shareRow(entry);
 		if (shared) rows.push(shared);
 	}
+	// "Once they settle in, but before you decide what's going to happen during the night, ask if they want to
+	// Keep Company" (Book I p.335; audit ROAD-16), the cue the Struggle as One summary gives too. Before what
+	// each person took from the night, which is where the card ends.
+	rows.push({ label: "Keep Company", value: KEEP_COMPANY_CUE });
 	for (const entry of plan) {
 		const site = precautionLine(entry.precaution);
 		rows.push({ label: entry.name, value: site ? `${outcomeLine(entry)} ${site}` : outcomeLine(entry) });
 	}
 	return rows;
 }
+
+/**
+ * The words for followers left on the road by a PC who is gone (follower-roster.js#orphanedPartyFollowers;
+ * audit ROAD-13): one sentence per PC, naming them and what to do. `where` is how the window counts a
+ * follower on a living PC ("row" on Days on the Road, "card" at the fire).
+ */
+export function orphanedFollowersLines(orphans, { where = "row" } = {}) {
+	if (!Array.isArray(orphans)) return [];
+	return orphans.map(({ pcName, followers }) => {
+		const names = joinNames(followers.map(f => f.name));
+		const handable = followers.filter(f => f.canHandOff);
+		const tied = followers.filter(f => !f.canHandOff);
+		const parts = [`${pcName} is out of play, but ${names} still ${plural(followers.length, "travels", "travel")} with the party and ${plural(followers.length, "needs", "need")} feeding.`];
+		if (handable.length) parts.push(`Hand ${handable.length === 1 ? handable[0].name : "them"} to a living PC (Hand off, on ${pcName}'s Followers tab).`);
+		if (tied.length) parts.push(`${joinNames(tied.map(f => f.name))} can't be handed off: count them as followers on a living PC's ${where}.`);
+		return parts.join(" ");
+	});
+}
+
+/** The camp's Keep Company cue (Book I p.332, p.335): a row of the settled camp's card, before each person's night. */
+export const KEEP_COMPANY_CUE = "Settled in: a good moment to Keep Company, before the night brings what it brings. Take turns asking a PC or NPC one of its questions.";
 
 /**
  * What A Safe Place left a member holding, as one sentence, or "" for a member without the move (no
@@ -233,7 +258,8 @@ function precautionLine(precaution) {
 
 function mealView(ledger) {
 	const { mouths, bill, offered, short, over, messKit, cooks } = ledger;
-	const atFire    = ledger.rows.filter(eatsTonight).length;
+	// The mouths at the fire: one the prayer beads feed eats nothing from the packs (camp-rules.js#mouthTonight).
+	const atFire    = ledger.rows.filter(mouthTonight).length;
 	const followers = mouths - atFire;
 	const followerWord = plural(followers, "follower", "followers");
 	let mouthsText;
@@ -409,6 +435,7 @@ function rowSentences(member, offer, { eats, benefit, clearing, hpAfter, dying =
 	if (member.unliving) says.push(`${UNLIVING_NEEDS}${others ? `, but ${others}` : ""}.`);
 	// The card's own mark already says they are going without, so only who still eats is left to say.
 	else if (!record.eats) { if (others) says.push(`${others} tonight.`); }
+	else if (member.fasting) says.push(`${FASTING_NEEDS}${others ? `, but ${others}` : ""}.`);
 	else says.push(others ? `Eating tonight, and ${others} too.` : "Eating tonight.");
 	if (record.messKit && record.vitals.messKit) says.push("Cooking with a mess kit.");
 	// A Safe Place asks nothing of the meal or the night, so it is said before either can end the list.
@@ -454,7 +481,9 @@ function rowView(member, at, ledger, { canEdit, isMine, canOpenSheet }) {
 		isMine,
 		canEdit,
 		unliving:   member.unliving,
-		unlivingText: member.unliving ? `${UNLIVING_NEEDS}, and takes nothing from the night.` : "",
+		unlivingText: member.unliving ? `${UNLIVING_NEEDS}, and takes nothing from the night.`
+			// The prayer beads feed them (camp-rules.js#FASTING_NEEDS): no mouth, but the night is theirs as anyone's.
+			: member.fasting && record.eats ? `${FASTING_NEEDS}, so eats nothing from the packs tonight.` : "",
 		stateText:  member.isHost ? "Making camp" : record.ready ? "Ready" : "Still choosing",
 		stateClass: member.isHost ? "is-host" : record.ready ? "is-ready" : "is-choosing",
 		purses: offer.purses.map(p => ({
@@ -550,7 +579,7 @@ function navView({ isOpen, manages, ledger, hostName }) {
  * @param {string[]} o.viewable  actor ids of the characters whose sheets the reader may open
  * @param {Array<{id: string, name: string}>} o.addable  who a GM could still bring to the fire
  */
-export function campWindowView({ state, hostName = "", ledger, manages = false, sendsAway = false, editable = [], mine = [], viewable = [], addable = [] }) {
+export function campWindowView({ state, hostName = "", ledger, manages = false, sendsAway = false, editable = [], mine = [], viewable = [], addable = [], orphans = [] }) {
 	const isOpen  = state === CAMP_STATE.OPEN;
 	const canEdit = new Set(editable);
 	const plays   = new Set(mine);
@@ -573,6 +602,8 @@ export function campWindowView({ state, hostName = "", ledger, manages = false, 
 		allAlongText: rows.some(r => r.allAlong.show)
 			? "Have What You Need: anyone can decide an undefined ◇ was supplies or a mess kit all along. The GM or any player can veto it."
 			: "",
+		// Followers whose PC is gone, still at the fire with nobody to count them (audit ROAD-13).
+		orphansLines: isOpen ? orphanedFollowersLines(orphans, { where: "card" }) : [],
 		rows,
 		add:        { show: isOpen && addable.length > 0, options: addable },
 		sendAway:   { show: isOpen && awayable.length > 0, options: awayable },

@@ -4,6 +4,7 @@ import {
 	fighterOf, userFighterId, rangedPairs, snapshotFight, engagementFor, controlledTokenIds,
 } from "../../module/fight/fight-state.js";
 import { SYSTEM_ID } from "../../module/system-id.js";
+import { duringLastMove } from "../../module/fight/in-battle.js";
 import { fakeActor, fakeToken, fakeScene, fakeCombatant, fakeCombat, fakeUsers, collection } from "../fakes/fight.js";
 
 // A fight's documents, read for the engagement engine. The fakes are in tests/fakes/fight.js.
@@ -124,6 +125,35 @@ describe("reading a fight", () => {
 		// Dropped outside battle and put in this fight since: down, not fighting on (Book I p.114).
 		expect(bodies(heavy({ deathsDoor: "dying" })).out).toBe(true);
 		expect(bodies(heavy({ deathsDoor: "out-of-action" })).out).toBe(true);
+	});
+
+	// EDG-1: a brush with death puts a character out of the fight whatever their HP says. Death's Door 7-9 is "out
+	// of the action" (Book I p.245), a Revenant's Undying 7-9 is at half HP (p.150), a 6- is the Last Door.
+	it("counts out a character out of the action, owed or past the Last Door, or out of play, at any HP", () => {
+		const scene = fakeScene();
+		const pc = flags => fakeActor({ id: "p", type: "character", flags: { [SYSTEM_ID]: flags }, system: { attributes: { hp: { value: 10, max: 20 } } } });
+		const bodies = actor => combatantBodies(fakeCombatant({ id: "c", token: fakeToken({ id: "t", actor }), scene }));
+		expect(bodies(pc({})).out).toBe(false);
+		expect(bodies(pc({ deathsDoor: "out-of-action", postDeathInsert: { slug: "revenant" } })).out).toBe(true);
+		expect(bodies(pc({ deathsDoor: "dead" })).out).toBe(true);
+		expect(bodies(pc({ deathsDoor: "fate-pending" })).out).toBe(true);
+		// A fate a post-death insert has answered is the living (deaths-door.js#effectiveDeathsDoorState).
+		expect(bodies(pc({ deathsDoor: "fate-pending", postDeathInsert: { slug: "ghost" } })).out).toBe(false);
+		// Retired, left Stonetop, become a threat (campaign/left-play.js).
+		expect(bodies(pc({ leftPlay: { how: "retired" } })).out).toBe(true);
+	});
+
+	// EDG-2: Death's Door's 6- "Make one last move as if you rolled a 12+" (p.244-245) is made at 0 HP, a fate owed.
+	it("counts a character making their last move as fighting, for as long as the move takes", async () => {
+		const scene = fakeScene();
+		const dying = fakeActor({ id: "d", type: "character", flags: { [SYSTEM_ID]: { deathsDoor: "fate-pending" } }, system: { attributes: { hp: { value: 0, max: 20 } } } });
+		const bodies = () => combatantBodies(fakeCombatant({ id: "c", token: fakeToken({ id: "t", actor: dying }), scene }));
+		expect(bodies().out).toBe(true);
+		const during = await duringLastMove(dying, () => bodies());
+		expect(during).toMatchObject({ bodies: 1, out: false });
+		expect(bodies().out).toBe(true);
+		await expect(duringLastMove(dying, () => { throw new Error("backed out"); })).rejects.toThrow("backed out");
+		expect(bodies().out).toBe(true);
 	});
 });
 

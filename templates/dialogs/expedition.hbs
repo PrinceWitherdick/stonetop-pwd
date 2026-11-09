@@ -28,7 +28,7 @@
           The opening step only — see the `editable` note in ExpeditionDialog getData.
           Every later step reads the trip's name off the banner above instead. --}}
     {{#if expedition.editable}}
-    <div class="stonetop-exp-bar">
+    <div class="stonetop-exp-bar stonetop-field-btns">
       <label class="stonetop-exp-bar-field">
         <span class="stonetop-exp-bar-label">Expedition</span>
         <input type="text" class="stonetop-exp-title" value="{{expedition.title}}"
@@ -143,6 +143,24 @@
           template is already the biggest in the dialogs folder. --}}
     {{#if journey}}{{> "stonetop.expedition-journey" journey=journey}}{{/if}}
 
+    {{!-- Outfit step: what Chart a Course required of them, read-only, so the reminder the
+          book asks for here (p.303) has the words in front of it. Changed on Chart a Course. --}}
+    {{#if this.outfitRequirements}}
+    <div class="stonetop-guide-aside stonetop-exp-requirements">
+      <h3 class="stonetop-guide-aside-head">{{localize "stonetop.expedition.requirements.heading"}}</h3>
+      <div class="stonetop-guide-aside-body stonetop-spring-body">
+        <p>{{localize "stonetop.expedition.requirements.intro"}}</p>
+      </div>
+      <ul class="stonetop-exp-todo-list">
+        {{#each this.outfitRequirements.entries}}
+        <li class="stonetop-exp-todo-item{{#if this.done}} is-done{{/if}}">
+          <span class="stonetop-exp-todo-text">{{{this.line}}}{{#if this.said}}<span class="stonetop-exp-todo-said">: {{this.said}}</span>{{/if}}</span>
+        </li>
+        {{/each}}
+      </ul>
+    </div>
+    {{/if}}
+
     {{!-- Outfit step: live party-load readout (GM-only; built in ExpeditionDialog
           getData). One row per party member, scoped to the current expedition. --}}
     {{#if loadReadout}}
@@ -172,7 +190,7 @@
                   tooltip: the button is disabled, and a disabled control fires no pointer
                   events, so a tooltip on it would never open. --}}
             <button type="button" class="stonetop-exp-asset-btn"
-                    data-asset-index="{{this.index}}" data-take="{{this.take}}"
+                    data-asset-index="{{this.index}}" data-take="{{this.take}}" data-asset-name="{{this.assetName}}"
                     aria-pressed="{{#if ours}}true{{else}}false{{/if}}"
                     {{#if elsewhere}}disabled{{/if}}>
               <span class="tick" aria-hidden="true">{{this.glyph}}</span>
@@ -186,9 +204,26 @@
           {{#if assetPicker.takenCount}}Going with them: <b>{{assetPicker.takenCount}}</b>. Bring it back safely.
           {{else}}Nothing of the village&rsquo;s is going with them yet.{{/if}}
         </p>
-        {{else}}
-        <p class="stonetop-exp-assets-empty">{{assetPicker.steadingName}} has no assets listed yet. Add them on the steading sheet.</p>
         {{/if}}
+        {{!-- Surplus loaded onto a cart for the trip (Book I p.305; ruling E7): it leaves the
+              steading's Surplus, and Days on the Road starts with its pack-animal tick on. --}}
+        {{#with assetPicker.surplus}}
+        <div class="stonetop-exp-surplus" role="group" aria-label="{{localize "stonetop.expedition.surplus.label"}}">
+          <span class="stonetop-exp-surplus-label">{{localize "stonetop.expedition.surplus.label"}}</span>
+          <span class="stonetop-exp-surplus-stepper">
+            <button type="button" class="stonetop-exp-surplus-step" data-step="-1"
+                    aria-label="{{localize "stonetop.expedition.surplus.unload"}}"{{#unless this.canUnload}} disabled{{/unless}}>&minus;</button>
+            <span class="stonetop-exp-surplus-count" aria-hidden="true">{{this.out}}</span>
+            <button type="button" class="stonetop-exp-surplus-step" data-step="1"
+                    aria-label="{{localize "stonetop.expedition.surplus.load"}}"{{#unless this.canLoad}} disabled{{/unless}}>+</button>
+          </span>
+          {{!-- The count in words, for the reader who can't see the number between the buttons. --}}
+          <span class="stonetop-exp-surplus-left">{{this.said}}</span>
+        </div>
+        {{/with}}
+        {{#unless assetPicker.hasRows}}
+        <p class="stonetop-exp-assets-empty">{{assetPicker.steadingName}} has no assets listed yet. Add them on the steading sheet.</p>
+        {{/unless}}
       {{else}}
       <p class="stonetop-exp-assets-empty">No steading sheet in this world yet, so there is nothing to requisition from.</p>
       {{/if}}
@@ -269,6 +304,13 @@
       {{else}}
       <p class="stonetop-exp-todo-empty">Nothing was charted for this trip. What you tell them on Chart a Course lands here.</p>
       {{/if}}
+      {{!-- A challenge they couldn't have seen coming, or one added for a requirement they went
+            without (p.322), is added from here: the same menu-or-your-own-words picker as Chart a
+            Course's own button, and the row lands in the same list. --}}
+      <button type="button" class="stonetop-gm-wonder-add-btn stonetop-exp-chart-add stonetop-exp-todo-add"
+              data-chart-group="challenges">
+        <i class="fas fa-plus" aria-hidden="true"></i> {{localize "stonetop.expedition.requirements.addChallenge"}}
+      </button>
     </div>
     {{/if}}
 
@@ -393,6 +435,11 @@
     {{!-- Going home: what was set in motion before they left, noted on the Requisition step. The
           book's reason for noting it at all is this moment (p.310): a Pull Together and a
           follower's task are rolled as the party returns. --}}
+    {{!-- Going home: what this trip still has out of the steading's stores, to bring home or lose
+          (Book I p.308, p.338; ruling E2). GM-only, built in getData. --}}
+    {{#if homeAssets}}{{> "stonetop.expedition-home-assets" homeAssets=homeAssets}}{{/if}}
+    {{!-- Going home: everyone on the trip unpacks (Book I p.89, p.496). GM-only, built in getData. --}}
+    {{#if homeReset}}{{> "stonetop.expedition-home-reset" homeReset=homeReset}}{{/if}}
     {{#if homeProjects}}
     <div class="stonetop-guide-aside stonetop-exp-projects">
       <h3 class="stonetop-guide-aside-head">Waiting on their return</h3>
@@ -404,6 +451,20 @@
       {{else}}
       <p class="stonetop-exp-todo-empty">Nothing was noted under Other preparations on the Requisition step.</p>
       {{/if}}
+    </div>
+    {{/if}}
+
+    {{!-- Going home: the GM's to-do list for the return (p.338, "Make yourself a to-do list"),
+          saved on change into `home.notes` like every field in this walkthrough. --}}
+    {{#if this.homeTodo}}
+    <div class="stonetop-spring-qa-wrap stonetop-exp-home-todo">
+      <div class="stonetop-spring-qa">
+        <p class="stonetop-spring-qa-prompt" aria-hidden="true">{{this.homeTodo.prompt}}</p>
+        <textarea class="stonetop-exp-field stonetop-spring-qa-answer" rows="3"
+                  aria-label="{{this.homeTodo.prompt}}"
+                  data-answer-path="{{this.homeTodo.path}}"
+                  placeholder="{{this.homeTodo.placeholder}}">{{this.homeTodo.value}}</textarea>
+      </div>
     </div>
     {{/if}}
 
@@ -425,16 +486,21 @@
     </div>
     {{/if}}
 
-    {{!-- The trip on the timeline: written by itself the first time the GM steps in here with Next,
-          for everyone who went and for Stonetop. This says whether it has been, and writes it
-          again on demand (a trip reached through the contents, or one whose party changed). --}}
-    {{#if tripTimeline}}
+    {{!-- The trip's stamp for this step: on Running the journey whether they have set out, on
+          Going home whether they are home (and so on the timeline). Asked on the first Next in;
+          this says where it stands, for whom, and stamps, redoes or clears it. GM-only. --}}
+    {{#if this.tripStamp}}
     <div class="stonetop-exp-timeline">
       <p class="stonetop-exp-timeline-note">
-        <i class="fas fa-timeline" aria-hidden="true"></i>
-        <span>{{tripTimeline.note}}</span>
+        <i class="fas {{this.tripStamp.icon}}" aria-hidden="true"></i>
+        <span>{{this.tripStamp.note}}{{#if this.tripStamp.party}} {{this.tripStamp.party}}{{/if}}</span>
       </p>
-      <button type="button" class="stonetop-exp-timeline-btn">{{tripTimeline.button}}</button>
+      <div class="stonetop-exp-stamp-buttons">
+        {{#each this.tripStamp.buttons}}
+        <button type="button" class="stonetop-exp-timeline-btn stonetop-exp-stamp-btn"
+                data-stamp-kind="{{this.kind}}" data-stamp-act="{{this.act}}">{{this.label}}</button>
+        {{/each}}
+      </div>
     </div>
     {{/if}}
 

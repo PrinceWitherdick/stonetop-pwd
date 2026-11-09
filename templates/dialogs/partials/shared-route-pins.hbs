@@ -1,0 +1,48 @@
+{{!-- The players' view of a route the GM has shown them (dialogs/SharedRouteWindow.js): the line,
+      where they set out, where they are bound and the stops on the way, over one regional map.
+      Its context is the thinned map object from utils/shared-route.js `sharedRouteView`.
+
+      NOTHING HERE IS A CONTROL. The GM's pin layer (expedition-journey-pins.hbs) is a planner, and
+      every pin on it is a button; this is a picture of the answer, so the marks are plain spans
+      that take no pointer events and the reader can drag the map from anywhere on it. They carry
+      no `data-slug` or `data-tier`, which is also what tells the zoom window's pan handler they are
+      scenery rather than something to click.
+
+      HIDDEN FROM A SCREEN READER as a whole, because the window says all of it in words: the total
+      and the legs are written out beside the map, and the picture's own alt text names the map and
+      the two ends of the way. Reading these labels as well would say the same journey twice.
+
+      NAMES ONLY, no times: the leg list carries the times, and a pin's time is the table's time to
+      that one place, which on a drawn way need not be the total the list adds up to. --}}
+<div class="stonetop-shared-route-layer" aria-hidden="true">
+{{> "stonetop.expedition-journey-line" this}}
+
+{{#each this.spots}}
+<span style="left:{{this.left}}%;top:{{this.top}}%"
+      class="stonetop-journey-pick stonetop-journey-spot h-{{this.anchorH}} v-{{this.anchorV}}{{#if this.isOrigin}} is-origin{{/if}}{{#if this.isStop}} is-stop{{/if}}{{#if this.isChosen}} is-chosen{{/if}}">
+  <span class="stonetop-journey-dot"></span>
+  <span class="stonetop-journey-tag">{{this.name}}</span>
+</span>
+{{/each}}
+
+{{#if this.start}}
+<span class="stonetop-journey-pick stonetop-journey-start h-{{this.start.anchorH}} v-{{this.start.anchorV}}"
+      style="left:{{this.start.left}}%;top:{{this.start.top}}%">
+  <span class="stonetop-journey-dot"></span>
+  <span class="stonetop-journey-tag">{{this.start.label}}</span>
+</span>
+{{/if}}
+
+{{#each this.exits}}
+<span style="left:{{this.left}}%;top:{{this.top}}%"
+      class="stonetop-journey-pick stonetop-journey-exit h-{{this.anchorH}} v-{{this.anchorV}}{{#if this.isStop}} is-stop{{/if}}{{#if this.isChosen}} is-chosen{{/if}}">
+  <span class="stonetop-journey-arrow"><i class="fas fa-angles-right"></i></span>
+  <span class="stonetop-journey-tag">{{this.label}}</span>
+</span>
+{{/each}}
+
+{{#each this.marks}}
+<span class="stonetop-journey-mark{{#if this.isEnd}} is-end{{/if}}"
+      style="left:{{this.left}}%;top:{{this.top}}%">{{this.mark}}</span>
+{{/each}}
+</div>

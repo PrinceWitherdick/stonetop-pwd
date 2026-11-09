@@ -321,19 +321,47 @@ const BOUNDS_PAD_BOTTOM = 90;
  * @param {Array<{left: number, top: number, right: number, bottom: number}>} [boxes]  anything else
  *   drawn on the board that must be framed with it, in board pixels: a group's outline, which can
  *   reach further out than the people it is drawn round.
+ * @param {Array<{curve: object, anchor?: object, size?: object}>} [lines]  the lines as `edgeShapes`
+ *   hands them out: each curve (`from`/`control`/`to`, in percentages) and, where it has one, its
+ *   caption's `anchor` and `size`. ⚠ A FAN BOWS FURTHER THAN ITS PEOPLE STAND: ten lines between
+ *   one pair reach about a quarter of the sheet off the straight run, so a board framed on its faces
+ *   alone cut the outer ones off when fitted, and the pan clamp stopped short of them. Left out, the
+ *   frame is exactly the faces' and the groups', as it always was. See `lineBounds`.
+ * @param {number} [nameScale]  the reader's name weight as a multiplier, from `weightScales`.
  */
-export function boardBounds(nodes = [], { width = RELMAP_BOARD_WIDTH, height = RELMAP_BOARD_WIDTH / RELMAP_BOARD_ASPECT } = {}, boxes = []) {
+export function boardBounds(
+	nodes = [], { width = RELMAP_BOARD_WIDTH, height = RELMAP_BOARD_WIDTH / RELMAP_BOARD_ASPECT } = {}, boxes = [],
+	lines = [], nameScale = 1,
+) {
 	const box = { left: 0, top: 0, right: width, bottom: height };
+	// BIGGER NAMES STAND FURTHER OUT, and the frame goes round them (`personReach`). At the base
+	// weight both of these come to nothing extra, so a board framed before the dial is framed the same.
+	const reach = personReach(nameScale);
+	const padX = BOUNDS_PAD_X * Math.max(1, Number(nameScale) || 1);
+	const padBottom = BOUNDS_PAD_BOTTOM + (reach.bottom - GROUP_REACH_BOTTOM);
 	for (const node of nodes) {
 		const x = (Number(node?.x) / 100) * width;
 		const y = (Number(node?.y) / 100) * height;
 		if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-		box.left = Math.min(box.left, x - BOUNDS_PAD_X);
-		box.right = Math.max(box.right, x + BOUNDS_PAD_X);
-		box.top = Math.min(box.top, y - BOUNDS_PAD_TOP);
-		box.bottom = Math.max(box.bottom, y + BOUNDS_PAD_BOTTOM);
+		if (sideOf(node) === "below") {
+			box.left = Math.min(box.left, x - padX);
+			box.right = Math.max(box.right, x + padX);
+			box.top = Math.min(box.top, y - BOUNDS_PAD_TOP);
+			// The label under the name hangs further down, and is framed with the rest of them.
+			box.bottom = Math.max(box.bottom, y + padBottom + underReach(node, reach).down);
+			continue;
+		}
+		// WORDS OVER OR BESIDE THE FACE: framed with the same margin past them that a name under it has,
+		// and never closer than a plain person is.
+		const plate = plateReach(node, reach);
+		box.left = Math.min(box.left, x - Math.max(padX, plate.left + BOUNDS_PAD_X - GROUP_REACH_X));
+		box.right = Math.max(box.right, x + Math.max(padX, plate.right + BOUNDS_PAD_X - GROUP_REACH_X));
+		box.top = Math.min(box.top, y - Math.max(BOUNDS_PAD_TOP, plate.top + BOUNDS_PAD_TOP - GROUP_REACH_TOP));
+		box.bottom = Math.max(box.bottom, y + Math.max(padBottom, plate.bottom + BOUNDS_PAD_BOTTOM - GROUP_REACH_BOTTOM));
 	}
-	for (const extra of boxes ?? []) {
+	const extras = [...(boxes ?? [])];
+	for (const line of lines ?? []) extras.push(...lineBounds(line, { width, height }));
+	for (const extra of extras) {
 		if (![extra?.left, extra?.top, extra?.right, extra?.bottom].every(Number.isFinite)) continue;
 		box.left = Math.min(box.left, extra.left);
 		box.right = Math.max(box.right, extra.right);
@@ -343,14 +371,356 @@ export function boardBounds(nodes = [], { width = RELMAP_BOARD_WIDTH, height = R
 	return box;
 }
 
+/** How much paper a line's own extent is framed with, in board pixels: the widest stroke a picked
+ * line is drawn at, and a margin so the outermost bow is not drawn against the window's edge. */
+const BOUNDS_PAD_LINE = 24;
+
+/**
+ * Where one line reaches, in board PIXELS, as the boxes `boardBounds` takes: its stroke, and its
+ * caption where it has one.
+ *
+ * THE STROKE'S TRUE EXTREMES, not its control point. A quadratic only travels half way to its
+ * control, so framing the control would frame twice the bow, and the fan this exists for is the
+ * case where that is a quarter of a sheet of empty paper. On each axis the extreme is an end or the
+ * one turning point `t = (a - b) / (a - 2b + c)`, where that falls inside the curve.
+ *
+ * THE CAPTION AS TURNED, centred on its anchor and tilted by its angle: the box round a chip `w` by
+ * `h` turned through `angle` reaches `|cos| w/2 + |sin| h/2` across and `|sin| w/2 + |cos| h/2` down.
+ * Its size is in flat units, which are hundredths of the sheet's WIDTH on both axes.
+ *
+ * @param {{curve: object, anchor?: object, size?: object}} line  one shape from the window's `edgeShapes`.
+ * @param {{width: number, height: number}} board  the sheet, in board pixels.
+ * @returns {Array<{left: number, top: number, right: number, bottom: number}>}
+ */
+export function lineBounds(line, { width = RELMAP_BOARD_WIDTH, height = RELMAP_BOARD_WIDTH / RELMAP_BOARD_ASPECT } = {}) {
+	const out = [];
+	const curve = line?.curve;
+	const px = p => ({ x: (Number(p?.left) / 100) * width, y: (Number(p?.top) / 100) * height });
+	if (curve?.from && curve.control && curve.to) {
+		const [a, b, c] = [px(curve.from), px(curve.control), px(curve.to)];
+		const span = axis => {
+			const values = [a[axis], c[axis]];
+			const bend = a[axis] - 2 * b[axis] + c[axis];
+			const t = bend ? (a[axis] - b[axis]) / bend : NaN;
+			if (t > 0 && t < 1) values.push(quadAt(a[axis], b[axis], c[axis], t));
+			return [Math.min(...values), Math.max(...values)];
+		};
+		const [left, right] = span("x");
+		const [top, bottom] = span("y");
+		out.push({
+			left: left - BOUNDS_PAD_LINE, right: right + BOUNDS_PAD_LINE,
+			top: top - BOUNDS_PAD_LINE, bottom: bottom + BOUNDS_PAD_LINE,
+		});
+	}
+	const anchor = line?.anchor;
+	const w = (Number(line?.size?.w) / 100) * width;
+	const h = (Number(line?.size?.h) / 100) * width;
+	if (anchor && w > 0 && h > 0) {
+		const at = px(anchor);
+		const rad = ((Number(anchor.angle) || 0) * Math.PI) / 180;
+		const cos = Math.abs(Math.cos(rad));
+		const sin = Math.abs(Math.sin(rad));
+		const across = (cos * w) / 2 + (sin * h) / 2 + BOUNDS_PAD_LINE;
+		const down = (sin * w) / 2 + (cos * h) / 2 + BOUNDS_PAD_LINE;
+		out.push({ left: at.x - across, right: at.x + across, top: at.y - down, bottom: at.y + down });
+	}
+	return out;
+}
+
 /**
  * HOW FAR A GROUP'S OUTLINE STANDS OFF ONE MEMBER'S CENTRE, in board pixels: the face, the name hung
- * under it (`.stonetop-relmap-name` is capped at 108px wide and sits 2px below the face, 18px tall),
+ * under it (`.stonetop-relmap-name` is capped at 126px wide and sits 2px below the face, 21px tall),
  * and a margin of paper so the outline never grazes either.
  */
-const GROUP_REACH_X = 54;
+const GROUP_REACH_X = 63;
 const GROUP_REACH_TOP = 36;
-const GROUP_REACH_BOTTOM = 56;
+const GROUP_REACH_BOTTOM = 59;
+/** The name chip's height (14px at a line-height of 1.5) and the gap over it, which make up
+ * `GROUP_REACH_BOTTOM` with the face's radius. */
+const NAME_CHIP_PX = 21;
+const NAME_GAP_PX = GROUP_REACH_BOTTOM - GROUP_REACH_TOP - NAME_CHIP_PX;
+
+/**
+ * THE LABEL UNDER A NAME ("Iron Knight", "Deceased"), in board pixels, kept with
+ * `.stonetop-relmap-subtitle`: it starts a pixel under the foot of the name chip, is at most
+ * `RELMAP_SUBTITLE_MAX_W` wide, and runs to two lines of 13px type at a line-height of 18px.
+ *
+ * Only a person who HAS one reaches further: a group outline and the board's framing grow for them
+ * and for nobody else, so a board with no labels on it lays out exactly as it always did. The lines'
+ * dodges and the caption spreader stay face-only, as they already are for the name.
+ */
+export const RELMAP_SUBTITLE_TOP_PX = GROUP_REACH_BOTTOM + 1;
+export const RELMAP_SUBTITLE_MAX_W = 156;
+const SUBTITLE_LINE_PX = 18;
+export const RELMAP_SUBTITLE_REACH_PX = 1 + 2 * SUBTITLE_LINE_PX;
+const SUBTITLE_REACH_X = RELMAP_SUBTITLE_MAX_W / 2;
+/** The most lines a label is drawn at (`.stonetop-relmap-subtitle-words`'s clamp), and the fewest any
+ * label is given room for: two, as every label was before a third could be written, so no outline shrinks. */
+export const RELMAP_SUBTITLE_LINES_MAX = 3;
+const SUBTITLE_LINES_MIN = 2;
+/** What one character of a label costs across, in ems of its 13px italic: erring wide, as an
+ * overestimate only gives a label a line of room it may not use. A wide (CJK) character is a whole em. */
+const TEXT_CHAR_EM = 0.6;
+const TEXT_WIDE_EM = 1.05;
+/** Chinese, Japanese and Korean glyphs, the full-width forms and emoji: set square, near a whole em. */
+const WIDE_CHAR = /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{1F300}-\u{1FAFF}\u{20000}-\u{3FFFD}]/u;
+/** The label's side padding (`.stonetop-relmap-subtitle`, 0.35em each side of 13px type). */
+const SUBTITLE_PAD_PX = 2 * 0.35 * 13;
+
+/**
+ * NAME, LABEL AND CHIPS BESIDE THE FACE, for a person whose block stands to the left or right
+ * (`side`): how far off the rim it stands, clear of the link handle and the delete button, which
+ * reach 12px past the face's corners. Kept with `.stonetop-relmap-node[data-relmap-side]`.
+ */
+export const RELMAP_PLATE_GAP_PX = 14;
+
+/** How wide a run of text is estimated to be, in pixels at `fontPx`, erring wide. */
+function textPx(text, fontPx) {
+	let em = 0;
+	for (const ch of String(text ?? "")) em += WIDE_CHAR.test(ch) ? TEXT_WIDE_EM : TEXT_CHAR_EM;
+	return em * fontPx;
+}
+
+/**
+ * HOW MANY LINES A LABEL IS DRAWN AT, estimated: each line typed, and each wrap a long one takes at the
+ * label's width, never more than the clamp. 0 for none. Room is given for at least two (`underReach`).
+ */
+export function subtitleLines(subtitle) {
+	const text = String(subtitle ?? "").trim();
+	if (!text) return 0;
+	const room = RELMAP_SUBTITLE_MAX_W - SUBTITLE_PAD_PX;
+	let lines = 0;
+	for (const line of text.split("\n")) lines += Math.max(1, Math.ceil(textPx(line, 13) / room));
+	return Math.min(RELMAP_SUBTITLE_LINES_MAX, lines);
+}
+
+/**
+ * TAG CHIPS ("Dead", "Noble") under the label, kept with `.stonetop-relmap-chips`: rows of pills
+ * `RELMAP_CHIP_H_PX` tall, `RELMAP_CHIP_GAP_PX` apart and as far under the label (or under the name,
+ * with no label), at most `RELMAP_CHIP_ROWS_MAX` rows and `RELMAP_CHIP_ROW_W` wide. WIDER THAN A LABEL:
+ * at a label's width a skull and "DEAD" beside a crown and "NOBLE" did not fit one row, and the type is
+ * not made smaller for it (a reader at this table is on a magnifier). The rows are
+ * laid out HERE (`chipLayout`) and drawn as laid out, so the stylesheet never wraps them and the
+ * height every outline reaches round is the height drawn.
+ *
+ * A pill's width is measured in the board's own font once it has loaded (`setChipTextMeasure`), else
+ * estimated from its characters (`CHIP_CHAR_PX`), over rather than under: an overestimate only moves a
+ * pill to the next row early, where an underestimate runs a row past the width every outline is
+ * measured for. THE CHIPS KEEP THEIR SIZE WHATEVER THE NAMES DIAL SAYS: the dial grows names and labels
+ * only, so the packing, and the room every outline gives the chips, is the same at every setting of it.
+ */
+export const RELMAP_CHIP_H_PX = 20;
+export const RELMAP_CHIP_GAP_PX = 3;
+export const RELMAP_CHIP_ROWS_MAX = 2;
+export const RELMAP_CHIP_ROW_W = 200;
+const CHIP_REACH_X = RELMAP_CHIP_ROW_W / 2;
+/**
+ * HOW WIDE EACH CHARACTER IS in the pill's capitals at 13px, its letter-spacing included: measured in
+ * Chromium over the chip's own face (Libre Caslon Text 600, z:/tmp/foundry-verify/relmap-chips-verify.mjs)
+ * and each rounded UP. A pill is drawn in capitals, so a name is looked up upper-cased. A character not
+ * listed (an accent, a symbol, an emoji) is taken as wide as the widest letter, never narrower.
+ */
+const CHIP_CHAR_PX = Object.freeze({
+	"0": 9.2, "1": 6.7, "2": 8.6, "3": 8.2, "4": 8.6, "5": 8.0, "6": 8.6, "7": 7.6, "8": 8.9,
+	"9": 8.6, A: 10.9, B: 10.5, C: 11.4, D: 12.1, E: 10.3, F: 9.7, G: 11.9, H: 12.8, I: 6.3,
+	J: 6.1, K: 11.3, L: 9.9, M: 14.1, N: 12.2, O: 12.1, P: 9.7, Q: 12.1, R: 10.9, S: 9.2, T: 10.9,
+	U: 11.5, V: 10.9, W: 14.1, X: 11.7, Y: 10.5, Z: 10.3, " ": 4.6, "'": 3.7, "-": 6.6, "+": 7.2,
+	".": 4.4, ",": 4.4, "&": 11.5, "?": 6.3, "!": 5.0
+});
+const CHIP_CHAR_WIDE = 14.2;
+/** The pill's border and side padding; an icon (the widest on the list is 17px) and the gap after it. */
+const CHIP_CHROME_PX = 2 + 2 * 7;
+const CHIP_ICON_PX = 17 + 4;
+
+/**
+ * HOW A PILL'S WORDS ARE MEASURED IN THE FONT THEY ARE ACTUALLY DRAWN IN. The table above was measured
+ * in Libre Caslon Text, and is the fallback: for tests, and for the moment before the font has loaded
+ * (or a reader whose browser substitutes another face). The live measure is
+ * utils/relmap-chip-measure.js, installed once at ready.
+ */
+let chipTextMeasure = null;
+
+/**
+ * Install how a pill's (upper-cased) words are measured, in board pixels at 13px with the pill's
+ * letter-spacing, or `null` for the table. A measure that answers anything but a finite width falls
+ * back to the table for that name.
+ */
+export function setChipTextMeasure(measure) {
+	chipTextMeasure = typeof measure === "function" ? measure : null;
+}
+
+function chipTextPx(name) {
+	const upper = String(name ?? "").toLocaleUpperCase();
+	const measured = chipTextMeasure?.(upper);
+	// A pixel over, and rounded up: an overestimate only moves a pill to the next row early.
+	if (Number.isFinite(measured) && measured >= 0) return Math.ceil(measured) + 1;
+	let text = 0;
+	for (const ch of upper) text += CHIP_CHAR_PX[ch] ?? CHIP_CHAR_WIDE;
+	return text;
+}
+
+/** How wide one pill is drawn, in board pixels; never wider than a row. */
+export function chipWidthPx({ name = "", icon = "" } = {}) {
+	return Math.min(RELMAP_CHIP_ROW_W, CHIP_CHROME_PX + (icon ? CHIP_ICON_PX : 0) + chipTextPx(name));
+}
+
+/**
+ * One person's chips in rows, in the order given: as many as fit in `RELMAP_CHIP_ROWS_MAX` rows, the
+ * rest `hidden` behind a "+N" pill that ends the last row (and is given room there).
+ *
+ * @template {{name: string, icon?: string}} T
+ * @param {T[]} chips
+ * @returns {{rows: T[][], hidden: T[]}}
+ */
+export function chipLayout(chips = []) {
+	const rows = [];
+	let row = [];
+	let used = 0;
+	for (const chip of chips ?? []) {
+		const w = chipWidthPx(chip);
+		if (row.length && used + RELMAP_CHIP_GAP_PX + w > RELMAP_CHIP_ROW_W) {
+			rows.push(row);
+			row = [];
+			used = 0;
+		}
+		used = row.length ? used + RELMAP_CHIP_GAP_PX + w : w;
+		row.push(chip);
+	}
+	if (row.length) rows.push(row);
+	if (rows.length <= RELMAP_CHIP_ROWS_MAX) return { rows, hidden: [] };
+
+	const shown = rows.slice(0, RELMAP_CHIP_ROWS_MAX);
+	const hidden = rows.slice(RELMAP_CHIP_ROWS_MAX).flat();
+	const last = shown.at(-1);
+	const rowWidth = list => list.reduce((sum, chip, i) => sum + (i ? RELMAP_CHIP_GAP_PX : 0) + chipWidthPx(chip), 0);
+	// Room for the "+N" pill at the end of the last row; it may take somebody off that row with it.
+	const more = () => chipWidthPx({ name: `+${hidden.length}` });
+	while (last.length && rowWidth(last) + RELMAP_CHIP_GAP_PX + more() > RELMAP_CHIP_ROW_W) hidden.unshift(last.pop());
+	return { rows: shown, hidden };
+}
+
+/** How far below the label (or the name) a person's chip rows reach, in board pixels. */
+export function chipReach(rows, chipH = RELMAP_CHIP_H_PX) {
+	const n = Math.max(0, Math.min(RELMAP_CHIP_ROWS_MAX, Math.floor(Number(rows) || 0)));
+	return n ? n * (RELMAP_CHIP_GAP_PX + chipH) : 0;
+}
+
+/**
+ * HOW FAR ONE PERSON'S WRITING REACHES FROM THEIR CENTRE, in board pixels, at the reader's name
+ * weight (relmap/relmap-weights.js `name`): the name chip and the label under it, which the stylesheet
+ * sets at `--relmap-name-scale` times their base sizes.
+ *
+ * ⚠ THE NUMBERS ARE `.stonetop-relmap-name`'S AND `.stonetop-relmap-subtitle`'S. The name chip is 14px
+ * type at a line-height of 1.5 (21px), 2px under the face and at most 126px wide; the label starts a
+ * pixel under that chip and runs to two 18px lines, at most 156px wide. The type, the line heights and
+ * the widths grow with the dial; the face and the two small gaps do not. The two line heights are
+ * ROUNDED to whole pixels, as the stylesheet rounds them (a fractional line box set the name a pixel
+ * high in its chip). At a weight of 1 this is
+ * exactly `GROUP_REACH_X`, `GROUP_REACH_BOTTOM`, `RELMAP_SUBTITLE_TOP_PX`, `RELMAP_SUBTITLE_REACH_PX`
+ * and `SUBTITLE_REACH_X`.
+ *
+ * NEVER NARROWER THAN THE FACE, which a name at half size would otherwise be.
+ *
+ * ⚠ GROUP OUTLINES DO NOT ASK THIS AT THE READER'S WEIGHT, only at the base (user, 2026-11-07: the
+ * boxes swelling as the names grew "looks odd"). It is also a correctness rule: a group's stored
+ * `grow` is measured from its snug outline, so an outline sized by one reader's dial would store
+ * room that every other reader sees as a different size. A big name may cross its group's edge;
+ * its chip is paper, so it sits over the stroke cleanly. The board's framing and the label bar's
+ * place do follow the dial.
+ *
+ * @param {number} [nameScale]  the reader's name weight as a multiplier, from `weightScales`.
+ * @returns {{x: number, top: number, bottom: number, subTop: number, subReach: number, subX: number}}
+ */
+export function personReach(nameScale = 1) {
+	const scale = Number(nameScale) > 0 ? Number(nameScale) : 1;
+	const bottom = GROUP_REACH_TOP + NAME_GAP_PX + Math.round(NAME_CHIP_PX * scale);
+	const x = Math.max(GROUP_REACH_TOP, GROUP_REACH_X * scale);
+	return {
+		x,
+		top: GROUP_REACH_TOP,
+		bottom,
+		subTop: bottom + 1,
+		subReach: 1 + SUBTITLE_LINES_MIN * Math.round(SUBTITLE_LINE_PX * scale),
+		subLine: Math.round(SUBTITLE_LINE_PX * scale),
+		nameLine: Math.round(NAME_CHIP_PX * scale),
+		scale,
+		subX: Math.max(x, SUBTITLE_REACH_X * scale),
+		// The chips do not grow with the names dial.
+		chipH: RELMAP_CHIP_H_PX,
+		chipX: Math.max(x, CHIP_REACH_X),
+	};
+}
+
+/**
+ * HOW FAR ONE PERSON'S LABEL AND CHIPS REACH past their name, given a `personReach`: `x` either side
+ * of their centre and `down` below the foot of the name. Nothing past the name for somebody with
+ * neither, so a board with no labels or chips lays out exactly as it always did.
+ *
+ * @param {{subtitle?: string, chipRows?: number}} node  `chipRows` from relmap-store.js `normalizeGraph`.
+ * @param {ReturnType<typeof personReach>} reach
+ */
+export function underReach(node, reach) {
+	// Two lines' room for any label, as there always was, and a third for one drawn three deep.
+	const lines = Math.max(SUBTITLE_LINES_MIN, subtitleLines(node?.subtitle));
+	const label = node?.subtitle ? 1 + lines * (reach.subLine ?? Math.round(SUBTITLE_LINE_PX)) : 0;
+	const chips = chipReach(node?.chipRows, reach.chipH);
+	const x = Math.max(reach.x, label ? reach.subX : 0, chips ? reach.chipX : 0);
+	return { x, down: label + chips };
+}
+
+/** One stored side as the geometry reads it: the store's `readSide`, which this file cannot import. */
+export function sideOf(node) {
+	const side = node?.side;
+	return side === "above" || side === "left" || side === "right" ? side : "below";
+}
+
+/**
+ * How wide one person's block of words is estimated to be, at a `personReach`: the widest of the name,
+ * the label's lines and the chip rows, each never wider than it is cut at. Asked only for a block
+ * standing BESIDE the face, where the width is the reach; under or over it, the caps are used, as they
+ * always were. The chips are at their base size whatever the names dial says.
+ */
+function plateWidth(node, reach) {
+	const s = reach.scale ?? 1;
+	const nameW = Math.min(2 * GROUP_REACH_X * s, textPx(node?.name, 14 * s) + 2 * 0.3 * 14 * s);
+	let labelW = 0;
+	if (node?.subtitle) {
+		for (const line of String(node.subtitle).split("\n")) {
+			labelW = Math.max(labelW, Math.min(RELMAP_SUBTITLE_MAX_W * s, (textPx(line, 13) + SUBTITLE_PAD_PX) * s));
+		}
+	}
+	let chipsW = 0;
+	for (const row of node?.chipLaid?.rows ?? []) {
+		const w = row.reduce((sum, chip, i) => sum + (i ? RELMAP_CHIP_GAP_PX : 0) + chipWidthPx(chip), 0);
+		chipsW = Math.max(chipsW, Math.min(RELMAP_CHIP_ROW_W, w));
+	}
+	return Math.max(nameW, labelW, chipsW);
+}
+
+/**
+ * HOW FAR ONE PERSON REACHES FROM THEIR CENTRE ON EACH SIDE, face and words, in board pixels at a
+ * `personReach`: `{left, right, top, bottom}`. What a group's outline, the board's frame, a group's
+ * floor and a newcomer's seat all go round.
+ *
+ * BELOW, the block hangs under the face exactly as it always has, so this is `underReach` spelled out
+ * on four sides and every board stored before sides existed lays out to the pixel as before. ABOVE, the
+ * same block, in the same order, stands over the face. BESIDE, it stands `RELMAP_PLATE_GAP_PX` off the
+ * rim, level with the middle of the face, and reaches as wide as its words are estimated (`plateWidth`).
+ */
+export function plateReach(node, reach) {
+	const under = underReach(node, reach);
+	const face = GROUP_REACH_TOP;
+	const side = sideOf(node);
+	if (side === "below") return { left: under.x, right: under.x, top: reach.top, bottom: reach.bottom + under.down };
+	const nameLine = reach.nameLine ?? NAME_CHIP_PX;
+	const tall = nameLine + under.down;
+	if (side === "above") return { left: under.x, right: under.x, top: face + NAME_GAP_PX + tall, bottom: face };
+	const half = Math.max(face, tall / 2);
+	const out = face + RELMAP_PLATE_GAP_PX + plateWidth(node, reach);
+	return side === "left"
+		? { left: out, right: face, top: half, bottom: half }
+		: { left: face, right: out, top: half, bottom: half };
+}
 export const RELMAP_GROUP_PAD_PX = 18;
 /** The paper between an inner group's LINE and the outer one, less the half of the inner name chip
  * that sits above it. MEASURED at a 20px chip: a nest of 16 let the chip touch the outer stroke, and
@@ -399,6 +769,33 @@ export const RELMAP_GROUP_GROW_MAX = 4000;
 export const RELMAP_GROUP_MIN_W = 2 * (GROUP_REACH_X + RELMAP_GROUP_PAD_PX);
 export const RELMAP_GROUP_MIN_H = GROUP_REACH_TOP + GROUP_REACH_BOTTOM + 2 * RELMAP_GROUP_PAD_PX;
 
+/**
+ * THE FLOOR FOR ONE GROUP, in board pixels: the snug outline round the biggest of its people taken
+ * alone. That is `RELMAP_GROUP_MIN_W` by `_H` until somebody in it has a label under their name, who
+ * stands wider and deeper (see RELMAP_SUBTITLE_REACH_PX). Held at the plain floor, a group of one
+ * labelled person shrunk to it had the label poking out of the bottom and the top edge through the face.
+ *
+ * @param {Array<{subtitle?: string, chipRows?: number}>} members
+ * @returns {{w: number, h: number}}
+ */
+export function groupFloor(members = []) {
+	// At the base name size, never the reader's: see `personReach`.
+	const reach = personReach();
+	let across = 2 * reach.x;
+	let extra = 0;
+	for (const member of members ?? []) {
+		// How far past a plain person, face and name under it, this one reaches: a label and chips
+		// under the name hang lower, and a block over or beside the face stands out on that side.
+		const plate = plateReach(member, reach);
+		across = Math.max(across, plate.left + plate.right);
+		extra = Math.max(extra, Math.max(0, plate.top - reach.top) + Math.max(0, plate.bottom - reach.bottom));
+	}
+	return {
+		w: across + 2 * RELMAP_GROUP_PAD_PX,
+		h: reach.top + reach.bottom + extra + 2 * RELMAP_GROUP_PAD_PX,
+	};
+}
+
 /** One stored group's offsets, read safely: whole pixels, none missing, each within the cap either way. */
 export function readGroupGrow(value) {
 	const grow = {};
@@ -439,7 +836,7 @@ export const RELMAP_GROUP_CORNERS = Object.freeze({
  * @param {object} [opts]
  * @param {boolean} [opts.square]
  */
-export function resizeRect(rect, corner, point, { square = false } = {}) {
+export function resizeRect(rect, corner, point, { square = false, min = null } = {}) {
 	const sides = RELMAP_GROUP_CORNERS[corner];
 	if (!sides || !rect || !Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return rect ? { ...rect } : null;
 	// Which way the dragged corner lies from the one held still: +1 right or down, -1 left or up.
@@ -447,8 +844,11 @@ export function resizeRect(rect, corner, point, { square = false } = {}) {
 	const wayY = sides.y === "bottom" ? 1 : -1;
 	const anchorX = rect[sides.x === "right" ? "left" : "right"];
 	const anchorY = rect[sides.y === "bottom" ? "top" : "bottom"];
-	let w = Math.max(RELMAP_GROUP_MIN_W, (point.x - anchorX) * wayX);
-	let h = Math.max(RELMAP_GROUP_MIN_H, (point.y - anchorY) * wayY);
+	// The group's own floor (`groupFloor`) where the caller knows it, never under the plain one.
+	const minW = Math.max(RELMAP_GROUP_MIN_W, Number(min?.w) || 0);
+	const minH = Math.max(RELMAP_GROUP_MIN_H, Number(min?.h) || 0);
+	let w = Math.max(minW, (point.x - anchorX) * wayX);
+	let h = Math.max(minH, (point.y - anchorY) * wayY);
 	if (square) w = h = Math.max(w, h);
 	const x = anchorX + w * wayX;
 	const y = anchorY + h * wayY;
@@ -572,6 +972,8 @@ export function groupsInside(groups = {}) {
 export function groupOutline(members = [], {
 	board, shape = "box", contain = [], nestPx = groupNestPx(), grow = null,
 } = {}) {
+	// At the base name size, never the reader's: see `personReach`.
+	const reach = personReach();
 	const width = Number(board?.width) || RELMAP_BOARD_WIDTH;
 	const height = Number(board?.height) || width / RELMAP_BOARD_ASPECT;
 	let left = Infinity; let top = Infinity; let right = -Infinity; let bottom = -Infinity;
@@ -579,10 +981,13 @@ export function groupOutline(members = [], {
 		const x = (Number(member?.x) / 100) * width;
 		const y = (Number(member?.y) / 100) * height;
 		if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-		left = Math.min(left, x - GROUP_REACH_X);
-		right = Math.max(right, x + GROUP_REACH_X);
-		top = Math.min(top, y - GROUP_REACH_TOP);
-		bottom = Math.max(bottom, y + GROUP_REACH_BOTTOM);
+		// A member with a label or chips under their name stands wider and deeper, and one whose words
+		// stand over or beside the face reaches out on that side: the outline goes round them too.
+		const plate = plateReach(member, reach);
+		left = Math.min(left, x - plate.left);
+		right = Math.max(right, x + plate.right);
+		top = Math.min(top, y - plate.top);
+		bottom = Math.max(bottom, y + plate.bottom);
 	}
 	if (!Number.isFinite(left)) return null;
 	left -= RELMAP_GROUP_PAD_PX; right += RELMAP_GROUP_PAD_PX; top -= RELMAP_GROUP_PAD_PX; bottom += RELMAP_GROUP_PAD_PX;
@@ -602,13 +1007,14 @@ export function groupOutline(members = [], {
 		// is drawn round that one and never slides off them. Never inside out either.
 		// A corner dragged in to the floor is not this: `growFor` stores it a hair OVER the floor, so
 		// it stays under the corner. The tolerance is float noise only.
-		if (right - left < RELMAP_GROUP_MIN_W - 1e-6) {
+		const floor = groupFloor(members);
+		if (right - left < floor.w - 1e-6) {
 			const mid = (snug.left + snug.right) / 2;
-			left = mid - RELMAP_GROUP_MIN_W / 2; right = mid + RELMAP_GROUP_MIN_W / 2;
+			left = mid - floor.w / 2; right = mid + floor.w / 2;
 		}
-		if (bottom - top < RELMAP_GROUP_MIN_H - 1e-6) {
+		if (bottom - top < floor.h - 1e-6) {
 			const mid = (snug.top + snug.bottom) / 2;
-			top = mid - RELMAP_GROUP_MIN_H / 2; bottom = mid + RELMAP_GROUP_MIN_H / 2;
+			top = mid - floor.h / 2; bottom = mid + floor.h / 2;
 		}
 	}
 	// AND ROUND EVERY GROUP INSIDE THIS ONE, LAST, a step clear of its line (and of the name sitting on
@@ -1514,10 +1920,19 @@ export function ringsLayout(count, { aspect = RELMAP_BOARD_ASPECT, r = nodeRadiu
  * ring at a fixed step looking for clear air, widening to a second ring, and gives up onto the
  * middle rather than refusing: a node stacked on another can be dragged apart in a second, while a
  * node that was never added leaves the reader wondering whether the button works.
+ *
+ * ⚠ A PERSON WITH A LABEL OR CHIPS UNDER THEIR NAME (`under`, their depth in board pixels, from
+ * relmap-store.js `takenSpots`) ALSO HOLDS THAT BOX. Kept only `2r + pad` from the face, a newcomer could be seated straight
+ * below somebody and come out with "Iron Knight" lying across the top of their own face. Only the
+ * people already standing can have one: a newcomer arrives with none.
  */
 export function freeSpot(taken = [], { aspect = RELMAP_BOARD_ASPECT, r = nodeRadiusPct(), pad = 3 } = {}) {
 	const ratio = ratioOf(aspect);
 	const clear = 2 * r + pad;
+	const labels = [
+		...(taken ?? []).filter(p => p?.under > 0).map(p => subtitleBox(flat(p, ratio), r, p.under, p.across)),
+		...(taken ?? []).filter(p => p?.plate).map(p => plateBox(flat(p, ratio), r, p.plate, p.side)),
+	];
 	// SEVERAL rings, not two. Two was enough while people arrived one at a time, and is not once a
 	// board carries a village: the outer ring fills, the half ring fills, and everybody after that
 	// lands on the pile in the middle.
@@ -1532,11 +1947,51 @@ export function freeSpot(taken = [], { aspect = RELMAP_BOARD_ASPECT, r = nodeRad
 				top: clampPct(50 + radius * ratio * Math.sin(angle)),
 			};
 			const here = flat(spot, ratio);
-			const clash = taken.some(p => p && dist(flat(p, ratio), here) < clear);
+			const clash = taken.some(p => p && dist(flat(p, ratio), here) < clear)
+				// The same daylight off a label's edge as off a face's rim: the newcomer's face, grown
+				// by that daylight, against the label's box, which is the question the caption
+				// spreader asks of a chip and a portrait.
+				|| labels.some(box => boxHitsCircle(box, here, r + pad));
 			if (!clash) return spot;
 		}
 	}
 	return { left: 50, top: 50 };
+}
+
+/**
+ * The box a person's label stands in, in FLAT units round their flat centre: `RELMAP_SUBTITLE_MAX_W`
+ * wide and hung `RELMAP_SUBTITLE_TOP_PX` below the centre, `RELMAP_SUBTITLE_REACH_PX` deep. The
+ * widest it can be drawn rather than the width of its words, which a seat has no way to measure.
+ *
+ * Pixels to flat units through the face: `r` is a portrait's radius, `RELMAP_NODE_PX / 2` pixels,
+ * on whatever sheet the caller is seating on, so one pixel is `r / (RELMAP_NODE_PX / 2)` of a unit.
+ *
+ * In the shape a caption's chip takes (`labelBox`), level, so that `boxHitsCircle` answers for both:
+ * a label and a caption sitting on somebody's face are one question.
+ */
+function subtitleBox(centre, r, depth = RELMAP_SUBTITLE_REACH_PX, across = SUBTITLE_REACH_X) {
+	const unit = r / (RELMAP_NODE_PX / 2);
+	const middle = { left: centre.left, top: centre.top + (RELMAP_SUBTITLE_TOP_PX + depth / 2) * unit };
+	return labelBox(middle, 2 * Math.max(SUBTITLE_REACH_X, across) * unit, depth * unit, 0);
+}
+
+/**
+ * The box a person's words stand in when they stand OVER or BESIDE the face (`plateReach`, board
+ * pixels from their centre), in flat units round their flat centre: everything the plate reaches
+ * on its own side, less the face, which the seat already keeps clear of.
+ */
+function plateBox(centre, r, plate, side) {
+	const unit = r / (RELMAP_NODE_PX / 2);
+	const face = RELMAP_NODE_PX / 2;
+	let left = -plate.left;
+	let right = plate.right;
+	const top = -plate.top;
+	let bottom = plate.bottom;
+	if (side === "above") bottom = -face;
+	else if (side === "left") right = -face;
+	else if (side === "right") left = face;
+	const middle = { left: centre.left + ((left + right) / 2) * unit, top: centre.top + ((top + bottom) / 2) * unit };
+	return labelBox(middle, (right - left) * unit, (bottom - top) * unit, 0);
 }
 
 // ── Bowing a line clear of somebody it has nothing to do with ────────────────────────
@@ -1675,11 +2130,18 @@ export function clearanceBow({
  *
  * `clearance` is `clearanceBow` measured on the pair's UNFANNED route, so every link in a fan gets
  * the same dodge and they part company by their fan index alone.
+ *
+ * ⚠ `reversed`: THIS LINK RUNS THE OTHER WAY FROM ITS PAIR'S FIXED ORDER (its two ends' ids, sorted).
+ * A bow bends a curve to the left of the way it is DRAWN, so the same fan bow on Ann→Bo and on Bo→Ann
+ * lands on opposite sides, and the fan's alternation then put Ann→Bo #3 exactly on top of Bo→Ann #2:
+ * two strokes, one hit target, one of them unreachable. Mirrored here, every member of a fan bends
+ * off the same physical line whichever way each was drawn. Not with a dodge, which is measured on the
+ * link's own drawn route and already points the right way.
  */
-export function edgeBow(fanIndex, clearance = 0) {
+export function edgeBow(fanIndex, clearance = 0, { reversed = false } = {}) {
 	const dodge = Number(clearance) || 0;
 	// Nothing in the way: the ordinary alternating fan, spreading both ways off a straight route.
-	if (!dodge) return fanBow(fanIndex);
+	if (!dodge) return (reversed ? -1 : 1) * fanBow(fanIndex) || 0;
 	// Bent aside: the fan spreads ONE WAY, further out with each link. Alternating here would put
 	// every second link back on the near side of the dodge, which is where the face is. A crowded
 	// pair that also has to dodge somebody therefore reaches a little further off its own line

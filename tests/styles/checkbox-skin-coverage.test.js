@@ -27,6 +27,7 @@ const SKINNED = [
 	"stonetop-poster-map-check", "road-mess-kit", "road-pack-animal", "undeath-forced-miss", "undeath-tether-destroyed",
 	"stonetop-identify-adv", "stonetop-rest-follower-check", "stonetop-camp-extra-check", "stonetop-invoke-check",
 	"stonetop-convalesce-wound-check", "stonetop-battle-hold-check", "stonetop-fight-targets-check",
+	"stonetop-relmap-personbar-italic-check",
 ];
 
 describe("the shared spiral checkbox skin", () => {

@@ -348,3 +348,19 @@ describe("the two vocabularies this depends on", () => {
 		}
 	});
 });
+
+// Audit RTE-15: two GMs loading after a version bump both reconciled, each found no Note for a
+// placed site, and each created one. Only the primary GM does it now.
+describe("putting placed sites onto the table's maps", () => {
+	it("leaves it to the primary GM when another GM is that one", async () => {
+		const { reconcileSitePins } = await import("../../module/sites/site-scene-pins.js");
+		global.game = {
+			user: { id: "gm-2", isGM: true },
+			users: { activeGM: { id: "gm-1" } },
+			system: { id: "stonetop-pwd" },
+		};
+		// Any read of the steading would throw: the gate has to come first.
+		const steading = new Proxy({}, { get: () => { throw new Error("read the steading"); } });
+		await expect(reconcileSitePins(steading)).resolves.toBe(0);
+	});
+});

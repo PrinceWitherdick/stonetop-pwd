@@ -33,13 +33,13 @@
 // rule holds for it: core's pop-out look, no `stonetop` class. What differs is only where it opens,
 // that it resizes, and that it remembers both.
 
-import { snapshotFight, combatantBodies, combatantSide, COUNT_FLAG, SIDE_FLAG } from "./fight-state.js";
+import { snapshotFight, combatantBodies, combatantSide, isFight, COUNT_FLAG, SIDE_FLAG } from "./fight-state.js";
 import { FIGHT_OVER, fightWindowPosition, noteFightWindowClosed, openFightWindow, rememberFightWindowPosition } from "./fight-window.js";
 import { fightTrackerView } from "./fight-view.js";
 import { canReadFoeVitals, combatantReminders, combatantVitals, fightVitalsKey, followerRoster } from "./fight-vitals.js";
 import { canSplit, mergeCandidates, mergeIntoGroup, splitGroup } from "./group-scale.js";
 import { otherSide, fightsAsGroup } from "./fight-sides.js";
-import { mayMove } from "./send-against.js";
+import { mayMove, sendAtChoices } from "./send-against.js";
 import { clearShots, hasShots } from "./fight-shots.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { followerCardMemo } from "../actors/character/follower-masters.js";
@@ -49,7 +49,8 @@ import { followBookCite } from "../books/rulebook-icons.js";
 import { format, localize } from "../utils/i18n.js";
 import { escHtml } from "../utils/strings.js";
 import { themedDialogClasses } from "../utils/window-theme.js";
-import { confirmOutcome } from "../utils/ask-with-buttons.js";
+import { askWithButtons, confirmOutcome } from "../utils/ask-with-buttons.js";
+import { contentElement } from "../utils/dialogv2-content.js";
 
 // Plain literals, not built from SYSTEM_ID: the precache check in tests finds template paths by
 // searching the source for them.
@@ -94,6 +95,7 @@ export function createFightTrackerClass(Base) {
 				endFight: FightTracker.#onEndFight,
 				stopRounds: FightTracker.#onStopRounds,
 				openFightWindow: FightTracker.#onOpenWindow,
+				sendAt: FightTracker.#onSendAt,
 			},
 		};
 
@@ -139,10 +141,26 @@ export function createFightTrackerClass(Base) {
 			return super._preFirstRender(context, options);
 		}
 
+		/**
+		 * The Combat this tab shows as a fight: the one core is viewing, when it IS a fight (stamped,
+		 * fight-boot.js#stampFight). Core views whatever Combat it finds, and a world that ran the old Character
+		 * Introductions still holds that window's active, tokenless roster: drawn as a fight, it listed every
+		 * character "on another map" under End and Line up buttons, while every roll ignored it (fightOnScene
+		 * reads fights only). A Combat that is no fight is drawn as no fight: when core views one, the tab shows
+		 * a fight it could cycle to instead (the active one, else the first), and the Start a fight button only
+		 * when there is none, so a real fight beside that roster is never out of reach.
+		 */
+		_fightViewed() {
+			const combat = this.viewed;
+			if (isFight(combat)) return combat;
+			const fights = this.combats.filter(isFight);
+			return fights.find(c => c.active) ?? fights[0] ?? null;
+		}
+
 		/** @override: the header, with no initiative, rounds or turn controls. */
 		async _prepareCombatContext(context, _options) {
-			const combat = this.viewed;
-			const combats = this.combats;
+			const combat = this._fightViewed();
+			const combats = this.combats.filter(isFight);
 			const index = combats.indexOf(combat);
 			const user = globalThis.game?.user;
 			Object.assign(context, {
@@ -150,7 +168,7 @@ export function createFightTrackerClass(Base) {
 				isGM: !!user?.isGM,
 				combat,
 				hasCombat: !!combat,
-				cycle: combats.length > 1 ? {
+				cycle: combat && combats.length > 1 ? {
 					text: format("stonetop.fight.cycle.count", { index: index + 1, count: combats.length }),
 					previousId: combats[index - 1]?.id ?? "",
 					nextId: combats[index + 1]?.id ?? "",
@@ -162,7 +180,7 @@ export function createFightTrackerClass(Base) {
 
 		/** @override: one card per engagement, in place of the turn list. */
 		async _prepareTrackerContext(context, _options) {
-			const combat = this.viewed;
+			const combat = this._fightViewed();
 			const user = globalThis.game?.user;
 			context.isGM = !!user?.isGM;
 			context.fight = null;
@@ -206,6 +224,22 @@ export function createFightTrackerClass(Base) {
 				standing: bodies.standing,
 				size: bodies.size,
 			};
+		}
+
+		/**
+		 * @override: the row's eye hides or shows the token too. Core keeps the two apart, and the fight shows a
+		 * player only a fighter neither hides (fight-state.js#fighterOf), so a row shown with its token still hidden
+		 * stayed hidden from every player. The combatant first: the token's own write is then mirrored onto a
+		 * combatant that already agrees, and writes nothing more (fight-hidden.js).
+		 */
+		async _onToggleHidden(combatant) {
+			if (!combatant) return;
+			const hidden = !combatant.hidden;
+			await combatant.update({ hidden });
+			const token = combatant.token;
+			if (token && !!token.hidden !== hidden && token.canUserModify?.(globalThis.game?.user, "update") !== false) {
+				await token.update({ hidden });
+			}
 		}
 
 		/** @inheritDoc */
@@ -371,6 +405,15 @@ export function createFightTrackerClass(Base) {
 					visible: target => gm() && canSplit(combatantOf(target)),
 					run: target => splitGroup(this.viewed, combatantOf(target)),
 				}),
+				// The same as dragging the row onto someone, for a reader who cannot drag: a magnifier user, a keyboard.
+				// Offered by the row's own rule (fight-view.js `sendAt`, drawn as `data-send-at`), so opening a menu builds
+				// no fight; the press works out who is there to pick from (_askSendAt).
+				contextMenuEntry({
+					label: "stonetop.fight.menu.sendAt",
+					icon: "fa-solid fa-person-walking-arrow-right",
+					visible: target => target?.dataset?.sendAt != null && !!combatantOf(target),
+					run: target => this._askSendAt(combatantOf(target)),
+				}),
 				contextMenuEntry({
 					label: "stonetop.fight.menu.openSheet",
 					icon: "fa-solid fa-user",
@@ -389,6 +432,32 @@ export function createFightTrackerClass(Base) {
 		/** @override: the encounter menu held initiative and turn tools only. */
 		_getCombatContextOptions() {
 			return [];
+		}
+
+		/**
+		 * "Send at...": who on the other side this fighter should close with, asked with a big button per name, then
+		 * sent as a drag onto that row would send them (send-against.js). Asked even when there is one choice: the
+		 * press moves a token, and a reader who mis-clicked gets to say no.
+		 */
+		async _askSendAt(mover) {
+			const combat = this._fightViewed();
+			if (!combat || !mover || !mayMove(mover)) return null;
+			const name = mover.name ?? "";
+			const choices = sendAtChoices(combat, mover);
+			if (!choices.length) {
+				globalThis.ui?.notifications?.info?.(format("stonetop.fight.send.nobody", { name }));
+				return null;
+			}
+			const picked = await askWithButtons({
+				title: format("stonetop.fight.send.atTitle", { name }),
+				content: contentElement(`<p>${escHtml(format("stonetop.fight.send.atQuestion", { name }))}</p>`),
+				buttons: [
+					...choices.map((choice, i) => ({ key: `t${i}`, label: choice.name, value: i })),
+					{ key: "cancel", label: localize("stonetop.fight.send.atCancel"), value: null },
+				],
+			});
+			if (!Number.isInteger(picked) || !choices[picked]) return null;
+			return globalThis.game?.stonetop?.fight?.sendAgainst?.(combat, mover.id, choices[picked].id);
 		}
 
 		/** Move a combatant to the other side. */
@@ -446,6 +515,12 @@ export function createFightTrackerClass(Base) {
 			return globalThis.game?.stonetop?.fight?.lineUp?.(this.viewed);
 		}
 
+		/** A row's "Send at..." button: the row's own fighter. */
+		static #onSendAt(_event, target) {
+			const id = target?.closest?.("[data-combatant-id]")?.dataset?.combatantId;
+			return this._askSendAt(this._fightViewed()?.combatants?.get(id) ?? null);
+		}
+
 		static #onOpenWindow() {
 			return openFightWindow({ byHand: true });
 		}
@@ -457,7 +532,7 @@ export function createFightTrackerClass(Base) {
 		}
 
 		static async #onEndFight() {
-			const combat = this.viewed;
+			const combat = this._fightViewed();
 			if (!combat || !globalThis.game?.user?.isGM) return;
 			const content = document.createElement("div");
 			content.innerHTML = `<p>${escHtml(localize("stonetop.fight.end.body"))}</p>`;

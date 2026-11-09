@@ -118,7 +118,7 @@ describe("the camp window's template", () => {
 
 	it("gives a GM one line and one list to bring someone to the fire or send anyone but the host away", async () => {
 		const html = await render([aeliana(), bram()], { sendsAway: true, addable: [{ id: "cora", name: "Cora" }] });
-		expect(html.match(/class="stonetop-camp-roster"/g)).toHaveLength(1);
+		expect(html.match(/class="stonetop-camp-roster stonetop-field-btns"/g)).toHaveLength(1);
 		expect(html.match(/<select name="campRosterActor"/g)).toHaveLength(1);
 		expect(html).toContain('<optgroup label="Not at the fire"><option value="cora" data-camp-roster="add">Cora</option></optgroup>');
 		expect(html).toContain('<optgroup label="At the fire"><option value="bram" data-camp-roster="send-away">Bram</option></optgroup>');

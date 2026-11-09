@@ -63,6 +63,7 @@ export class TravelMapWindow extends ImageZoomWindow {
 	 *   `markPlace(slug, ev, from, tier)` / `drawMark(mark, opts, from)` / `undoMark(from)` ->
 	 *                     Promise, the three gestures on the picture, written to the trip, and
 	 *   `toScene()` -> Promise, putting the route on the reader's own scene or taking it back off,
+ *   `share()` -> Promise, showing the players the route or no longer showing it,
 	 *   `markSite(uuid, ev, from)` -> Promise, the same three gestures for one of the GM's own
 	 *                     sites, which is a place on the way rather than a link to a journal, and
 	 *   `placeSite({tier, frame, pickPoint})` -> Promise, dropping one of the GM's own sites on the
@@ -158,7 +159,11 @@ export class TravelMapWindow extends ImageZoomWindow {
 		// the surface a GM is most likely to be reading the route from when they think of it.
 		bindJourneyControls(root, {
 			showTier: tier => this.showTier(tier),
-			toScene: () => this._source?.toScene?.(),
+			toScene: expected => this._source?.toScene?.(expected),
+			// And showing the players, for the same reason: one act, wherever it is asked for. The
+			// press carries what the button said, so a stale double-click is dropped over there.
+			share: expected => this._source?.share?.(expected),
+			hideShare: () => this._source?.hideShare?.(),
 			placeSite: () => this._placeSite(),
 			clearDrawn: () => this._through(source => source.clearDrawn?.(this)),
 		});

@@ -14,8 +14,10 @@
 
     {{!-- Who they are, for the order: their instinct (the trouble they cause), cost and Loyalty, and
           the book's rule for an order they would rather not follow (p.464, p.466). --}}
-    {{#if (or instinct cost hasLoyalty inuredNote)}}
+    {{#if (or instinct cost hasLoyalty inuredNote downNote)}}
     <div class="stonetop-of-about">
+      {{!-- At 0 HP: "out of the action" (Book I p.469). Said, never refused. --}}
+      {{#if downNote}}<div class="stonetop-of-about-row stonetop-of-down"><span class="stonetop-of-about-label">Down</span> {{this.downNote}}</div>{{/if}}
       {{#if instinct}}<div class="stonetop-of-about-row"><span class="stonetop-of-about-label">Instinct</span> <em>{{this.instinct}}</em></div>{{/if}}
       {{#if cost}}<div class="stonetop-of-about-row"><span class="stonetop-of-about-label">Cost</span> {{this.cost}}</div>{{/if}}
       {{#if hasLoyalty}}<div class="stonetop-of-about-row"><span class="stonetop-of-about-label">Loyalty</span> {{this.loyalty}} held</div>{{/if}}
@@ -56,11 +58,6 @@
           {{#each moves}}<option value="{{this.key}}" {{#if selected}}selected{{/if}}>{{this.label}}</option>{{/each}}
         </select>
       </label>
-      {{#if isCustom}}
-      <label class="stonetop-cf-label stonetop-of-custom-label">What are they doing?
-        <input type="text" class="stonetop-cf-input stonetop-of-custom" value="{{this.customMove}}" placeholder="e.g. scale the wall…">
-      </label>
-      {{/if}}
 
       {{!-- Resolve which tags help or hinder (a table judgment call) --}}
       <div class="stonetop-of-tags-block">

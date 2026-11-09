@@ -410,12 +410,14 @@ describe("the Expeditions tab: running one", () => {
 	// here would be two records of one trip.
 	it("leaves the walkthrough's own log in the world setting", () => {
 		const DIALOG_JS = read("module/dialogs/ExpeditionDialog.js");
-		expect(DIALOG_JS).toContain('const ANSWERS_SETTING = "expeditionAnswers";');
+		expect(read("module/utils/expedition-log-core.js")).toContain('export const EXPEDITION_LOG_SETTING = "expeditionAnswers";');
+		expect(DIALOG_JS).toContain("setWorldSetting(EXPEDITION_LOG_SETTING, log)");
 		expect(DIALOG_JS).toContain("static async openOnTrip(");
-		// An already-open window is SWITCHED rather than left where it was, and its memoized draft
-		// has to be dropped first or it looks for the trip just minted in a copy of the log taken
-		// before it existed.
-		expect(DIALOG_JS).toMatch(/open\._logDraft = null;[\s\S]{0,400}open\._switchExpedition\(id\)/);
+		// An already-open window is SWITCHED rather than left where it was, through ITS OWN copy of
+		// the log (audit WLK-2): dropping that copy for a re-read of the setting lost whatever the
+		// GM had just typed, whose write was still on its way when Run was pressed.
+		expect(DIALOG_JS).toMatch(/open\._switchExpedition\(tripId\)/);
+		expect(DIALOG_JS).not.toMatch(/open\._logDraft = null/);
 		// And the tab reaches that log ONLY through `openOnTrip`: no settings read of its own, and
 		// no second opinion about the shape a trip is stored in.
 		const TAB_JS = read("module/actors/gmtoolkit/gm-expeditions-tab.js");

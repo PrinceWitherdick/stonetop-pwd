@@ -60,6 +60,8 @@ function chromeRoot() {
 		origin: el({ value: "stonetop" }),
 		clear:  el(),
 		site:   el(),
+		// Show the players the route, which goes through the planner like the scene button does.
+		share:  el(),
 		// Laying the way out by hand: the button that throws the marks away, which is the whole of
 		// the chrome that mode has now (the gesture is the rest of it).
 		clearDrawn: el(),
@@ -77,6 +79,7 @@ function chromeRoot() {
 		".stonetop-journey-origin":     parts.origin,
 		".stonetop-journey-clear":      parts.clear,
 		".stonetop-journey-place-site": parts.site,
+		".stonetop-journey-share":      parts.share,
 		".stonetop-journey-clear-drawn": parts.clearDrawn,
 		".stonetop-journey-start-btn":  parts.setStart,
 		".stonetop-travel-map-chrome":  parts.chrome,
@@ -131,6 +134,7 @@ beforeEach(() => {
 		// its own, since the stop is laid at the site's recorded fraction, not the pointer's.
 		markSite: vi.fn(() => Promise.resolve()),
 		placeSite: vi.fn(() => Promise.resolve()),
+		share: vi.fn(() => Promise.resolve()),
 		takeSiteOffMap: vi.fn(() => Promise.resolve()),
 		drawMark: vi.fn(() => Promise.resolve()),
 		undoMark: vi.fn(() => Promise.resolve()),
@@ -206,6 +210,18 @@ describe("what it forwards to the planner", () => {
 // and this window supplies the one thing only it can — the picture. That matters because the
 // picture here is the good one to aim at, wheel-zoom and all, which is the whole reason a GM would
 // place from this window rather than from the panel's inch-wide map.
+// Showing the players the way is one act wherever it is asked for, so the window hands it straight
+// to the planner, which owns the trip and the setting it writes.
+describe("showing the players from the popout", () => {
+	it("hands the press to the planner", () => {
+		const app = windowFor("vicinity");
+		const root = chromeRoot();
+		app._bindChrome(root);
+		root.share.fire("click");
+		expect(source.share).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe("placing a site from the popout", () => {
 	it("hands the planner this map's tier, its registration, and its own aim", async () => {
 		const app = windowFor("vicinity");

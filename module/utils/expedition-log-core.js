@@ -9,6 +9,9 @@
 // Each op returns a fresh top-level { currentId, list } so a caller can persist it
 // without aliasing the cached setting. `ensureCurrent` additionally deep-clones the
 // entries, since its caller mutates the returned entry in place.
+
+/** The world setting the log lives in (registered in settings.js). Named here, once. */
+export const EXPEDITION_LOG_SETTING = "expeditionAnswers";
 const cloneEntry = e => structuredClone(e);
 
 /**

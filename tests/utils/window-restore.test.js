@@ -333,8 +333,8 @@ describe("restoring the stack", () => {
 	});
 
 	// A slow render can hold the restack back for seconds, and the user does not wait for it. The
-	// first click puts back what has landed, before that click raises its own window, and the
-	// windows still to land simply open on top: nothing raises them all again afterwards.
+	// first click puts back what has landed, before that click raises its own window, and nothing
+	// raises them all again afterwards.
 	it("hands the stack to the user at their first click, rather than burying what they chose", async () => {
 		const log = [];
 		for (const id of ["Actor.back", "Actor.middle", "Actor.front"]) {
@@ -356,6 +356,144 @@ describe("restoring the stack", () => {
 		// ...and it stops listening once it has handed over.
 		expect(listeners.pointerdown).toEqual([]);
 		expect(listeners.keydown).toEqual([]);
+	});
+});
+
+// The same, against a stack that keeps real depths, the way core's does: every frame drawn takes the
+// next z-index, and every raise takes the next one after that.
+describe("restoring the stack, by depth", () => {
+	let maxZ;
+
+	beforeEach(() => {
+		maxZ = 100;
+		global.ui = { windows: {}, activeWindow: null };
+	});
+	afterEach(() => { delete global.ui; });
+
+	function raise(app) {
+		app.position.zIndex = ++maxZ;
+		app.element.style.zIndex = String(app.position.zIndex);
+		ui.activeWindow = app;
+	}
+
+	// A window that, like core's `render(true)`, raises ITSELF a moment after its render hook has run
+	// (appv1 `maximize().then(() => bringToTop())`). `landsAfter` holds its render back that long.
+	function deepSheet(uuid, { landsAfter = 0 } = {}) {
+		const sheet = fakeSheet({ uuid, position: { left: 0, top: 0 } });
+		delete sheet._editMode;
+		sheet.rendered = false;
+		sheet.element = { style: {} };
+		sheet.bringToFront = vi.fn(() => { if (ui.activeWindow !== sheet) raise(sheet); });
+		sheet.render = vi.fn(() => {
+			const draw = () => {
+				sheet.rendered = true;
+				raise(sheet);
+				ui.windows[uuid] = sheet;
+				fire("renderActorSheet", sheet);
+				Promise.resolve().then(() => sheet.bringToFront());
+			};
+			if (landsAfter) setTimeout(draw, landsAfter); else draw();
+		});
+		return sheet;
+	}
+
+	// Some other window the user opens: drawn on top, and not one of ours.
+	function openOther(id) {
+		const app = { id, position: {}, element: { style: {} }, rendered: true };
+		raise(app);
+		ui.windows[id] = app;
+		return app;
+	}
+
+	const threeDeep = () => ({
+		"Actor.back":   { left: 0, top: 0, zIndex: 101 },
+		"Actor.middle": { left: 0, top: 0, zIndex: 105 },
+		"Actor.front":  { left: 0, top: 0, zIndex: 110 },
+	});
+	const z = (app) => app.position.zIndex;
+
+	it("keeps the saved stack when the last window to open raises itself after its hook", async () => {
+		const back = deepSheet("Actor.back");
+		const middle = deepSheet("Actor.middle");
+		const front = deepSheet("Actor.front");
+		settings.openWindowsState = threeDeep();
+		await restoreOpenWindows();
+		await vi.runAllTimersAsync();
+		expect(z(front)).toBeGreaterThan(z(middle));
+		expect(z(middle)).toBeGreaterThan(z(back));
+	});
+
+	it("slots a window that lands after the first click beneath the ones saved in front of it", async () => {
+		const back = deepSheet("Actor.back", { landsAfter: 2000 });
+		const middle = deepSheet("Actor.middle");
+		const front = deepSheet("Actor.front");
+		settings.openWindowsState = threeDeep();
+		await restoreOpenWindows();
+		await vi.advanceTimersByTimeAsync(200);
+		for (const fn of listeners.pointerdown ?? []) fn({});
+		await vi.runAllTimersAsync();
+		expect(back.rendered).toBe(true);
+		expect(z(front)).toBeGreaterThan(z(middle));
+		expect(z(middle)).toBeGreaterThan(z(back));
+		// The window really in front is the one a click on the late window has to rise above.
+		expect(ui.activeWindow).toBe(front);
+		expect(back.element.style.zIndex).toBe(String(z(back)));
+	});
+
+	it("leaves a window the user opened meanwhile above the late one", async () => {
+		const back = deepSheet("Actor.back", { landsAfter: 2000 });
+		const middle = deepSheet("Actor.middle");
+		const front = deepSheet("Actor.front");
+		settings.openWindowsState = threeDeep();
+		await restoreOpenWindows();
+		await vi.advanceTimersByTimeAsync(200);
+		for (const fn of listeners.pointerdown ?? []) fn({});
+		const journal = openOther("journal");
+		await vi.runAllTimersAsync();
+		expect(z(journal)).toBeGreaterThan(z(front));
+		expect(z(front)).toBeGreaterThan(z(middle));
+		expect(z(middle)).toBeGreaterThan(z(back));
+		expect(ui.activeWindow).toBe(journal);
+	});
+
+	it("slots every window when the click comes before any of them was even looked up", async () => {
+		const back = deepSheet("Actor.back");
+		const middle = deepSheet("Actor.middle");
+		const front = deepSheet("Actor.front");
+		settings.openWindowsState = threeDeep();
+		const restoring = restoreOpenWindows();
+		for (const fn of listeners.pointerdown ?? []) fn({});
+		await restoring;
+		await vi.runAllTimersAsync();
+		expect(z(front)).toBeGreaterThan(z(middle));
+		expect(z(middle)).toBeGreaterThan(z(back));
+		expect(ui.activeWindow).toBe(front);
+	});
+
+	it("slots a window that lands after the straggler grace the same way", async () => {
+		const back = deepSheet("Actor.back", { landsAfter: 10000 });
+		const middle = deepSheet("Actor.middle");
+		const front = deepSheet("Actor.front");
+		settings.openWindowsState = threeDeep();
+		await restoreOpenWindows();
+		await vi.runAllTimersAsync();
+		expect(back.rendered).toBe(true);
+		expect(z(front)).toBeGreaterThan(z(middle));
+		expect(z(middle)).toBeGreaterThan(z(back));
+	});
+
+	it("leaves a late window on top when it was the front one", async () => {
+		const back = deepSheet("Actor.back");
+		const middle = deepSheet("Actor.middle");
+		const front = deepSheet("Actor.front", { landsAfter: 2000 });
+		settings.openWindowsState = threeDeep();
+		await restoreOpenWindows();
+		await vi.advanceTimersByTimeAsync(400);
+		for (const fn of listeners.pointerdown ?? []) fn({});
+		await vi.runAllTimersAsync();
+		expect(z(front)).toBeGreaterThan(z(middle));
+		expect(z(middle)).toBeGreaterThan(z(back));
+		expect(ui.activeWindow).toBe(front);
 	});
 });
 

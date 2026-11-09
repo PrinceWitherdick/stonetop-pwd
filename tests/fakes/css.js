@@ -63,6 +63,7 @@ export function repoFileExists(rel) {
 export function stripComments(src) {
 	return src
 		.replace(/\{\{!--[\s\S]*?--\}\}/g, "")
+		.replace(/\{\{![\s\S]*?\}\}/g, "")
 		.replace(/\/\*[\s\S]*?\*\//g, "")
 		.replace(/\/\/[^\n]*/g, "");
 }

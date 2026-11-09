@@ -1,10 +1,11 @@
 {{!-- The chrome every editable list on the Create-a-Site wizard wears: its heading, its optional
-      suggestion chips and book prompts, its rows, and the button that adds one more.
+      book prompts, its rows, and the button that adds one more (a menu of the book's suggestions
+      when the list has them).
 
       A BLOCK partial — the caller supplies only the rows, as `{{#> "stonetop.cs-list-frame" …}}
       …rows… {{/…}}`. cs-line-list.hbs and cs-pair-list.hbs are both this frame plus a row body:
-      before it existed the wrapper, the label line, all five lines of the chips block and the add
-      button were duplicated between them, so a change to the chip markup or to the add button's
+      before it existed the wrapper, the label line, the suggestions and the add
+      button were duplicated between them, so a change to the add button's
       `data-list` contract was two edits and the one that got missed looked identical to the one
       that did not. That is the same trap cs-line-list.hbs was written to get the wizard out of,
       one level up.
@@ -15,29 +16,24 @@
         list        the `data-list` key the add button carries ("dangers")
         label       optional heading
         hint        optional parenthetical beside the heading, WITHOUT its brackets
-        chips       optional click-to-fill suggestions ({list, text, used})
+        menu        optional: the add button opens the list's suggestion menu (the items are
+                    built at the press, in create-site-dialog.js _SUGGESTIONS; user 2026-11-07:
+                    a dropdown off the Add button, never a row of chips)
         kinds       optional book prompts, rendered as a static hint list
         addLabel    the add button's wording ("Add danger")
         frameClass  optional extra class on the wrapper (areas space their cards wider)
 
       Every one of those names is cleared off the dialog's own context before rendering (see
       _PARTIAL_PARAMS in create-site-dialog.js): Handlebars MERGES a partial's hash into the
-      enclosing context, so a bare `chips` up there would be inherited by every list that was not
+      enclosing context, so a bare `menu` up there would be inherited by every list that was not
       passed one. --}}
 <div class="stonetop-cf-gear {{this.frameClass}}">
   {{#if label}}
   <div class="stonetop-cf-pick-label">{{this.label}}{{#if hint}} <span class="stonetop-cf-pick-hint">({{this.hint}})</span>{{/if}}</div>
   {{/if}}
-  {{#if chips}}
-  <div class="stonetop-cf-chips">
-    {{#each chips}}
-    <button type="button" class="stonetop-cf-chip stonetop-cs-suggest{{#if used}} is-selected{{/if}}" data-list="{{this.list}}" data-text="{{this.text}}">{{this.text}}</button>
-    {{/each}}
-  </div>
-  {{/if}}
   {{#if kinds}}
   <ul class="stonetop-cs-hint-list">{{#each kinds}}<li>{{this}}</li>{{/each}}</ul>
   {{/if}}
   {{> @partial-block}}
-  <button type="button" class="stonetop-cs-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-list="{{this.list}}"><i class="fas fa-plus"></i> {{this.addLabel}}</button>
+  <button type="button" class="stonetop-cs-add stonetop-cf-mini-btn stonetop-cf-mini-btn--add" data-list="{{this.list}}"{{#if menu}} aria-haspopup="menu" aria-expanded="false"{{/if}}><i class="fas fa-plus"></i> {{this.addLabel}}</button>
 </div>

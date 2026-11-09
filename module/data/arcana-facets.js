@@ -142,8 +142,23 @@ const _POWER_HEADING_RE = /<h[1-6]\b[^>]*>[^<]*\b(moves?|spells?)\b[^<]*<\/h[1-6
  * fields count only when filled in — a few cards carry an empty `move` / `resource` husk.
  */
 function _isPower(arc) {
-	if (arc?.back?.move?.name || arc?.back?.resource?.title) return true;
-	return _POWER_HEADING_RE.test(arc?.back?.description ?? "");
+	const back = arc?.back;
+	// A move counts by its trigger OR its effect: a homebrew card may write only the effect.
+	if (back?.move?.name || _hasProse(back?.move?.description)) return true;
+	// A resource counts once it has a size (titled or not), on the back or on the back's item.
+	if (_isFilledResource(back?.resource) || _isFilledResource(back?.item?.resource)) return true;
+	return _POWER_HEADING_RE.test(back?.description ?? "");
+}
+
+/** Text left in an HTML fragment once its tags are gone. */
+function _hasProse(html) {
+	return !!String(html ?? "").replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+}
+
+/** A resource track that is more than an empty husk: it has a title, a max above 0, or a stat max. */
+function _isFilledResource(resource) {
+	if (!resource) return false;
+	return !!String(resource.title ?? "").trim() || Number(resource.max) > 0 || !!resource.maxStat;
 }
 
 /** True when the arcanum manifests follower(s), homebrew `summon` or shipped registry. */

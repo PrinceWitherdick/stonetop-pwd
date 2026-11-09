@@ -71,6 +71,19 @@ describe("applyMemberHit", () => {
 		expect(await applyMemberHit(actor, 2)).toMatchObject({ down: false, memberHp: 1, after: 12 });
 		expect(actor.update).toHaveBeenCalledWith({ [`flags.${SYSTEM_ID}.${GROUP_WOUND_FLAG}`]: 2 });
 	});
+
+	// FGT-4: a pool a group's blows have drained reads its casualties as a share of the size (p.416), so one fewer in
+	// the size need not be one fewer standing: six at a third of the pool stand two, and five at a third still two.
+	it("takes a member dropped from a drained pool off the members standing, the survivors at a full pool", async () => {
+		const actor = horde({ count: 6, hp: 1 });
+		expect(memberHit({ hpMax: 3, count: 6, wound: 0, hp: 1, standing: 2 }, 3)).toEqual({ down: true, harmed: true, count: 1, wound: 0, memberHp: 0, pool: 3 });
+		expect(await applyMemberHit(actor, 3)).toMatchObject({ down: true, before: 2, after: 1 });
+		expect(actor.update).toHaveBeenCalledWith({
+			"system.count": 1, "system.attributes.hp.value": 3, [`flags.${SYSTEM_ID}.${GROUP_SIZE_FLAG}`]: 6,
+		});
+		// A blow short of a member leaves the drained pool as it is.
+		expect(memberHit({ hpMax: 3, count: 6, wound: 0, hp: 1, standing: 2 }, 2)).toMatchObject({ down: false, count: 6, wound: 2 });
+	});
 });
 
 describe("isLoneBlowOnGroup", () => {

@@ -45,7 +45,7 @@
 
         {{#if include}}
         <fieldset class="stonetop-camp-part stonetop-struggle-stats">
-          <legend class="stonetop-camp-part-label">Rolls (none picked: their choice)</legend>
+          <legend class="stonetop-camp-part-label">Can roll (they choose one; none picked: any stat)</legend>
           <div class="stonetop-struggle-chips">
             {{#each stats}}
             <label class="stonetop-struggle-chip"><input type="checkbox" class="stonetop-struggle-chip-input" data-pc="{{../actorId}}" data-field="stat" value="{{this.key}}"{{#if checked}} checked{{/if}}><span>+{{this.label}}</span></label>

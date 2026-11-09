@@ -37,6 +37,9 @@ import { coerceBroken } from "../actors/character/oath-broken.js";
 /** The update option a level-up sets to the move it learned (StonetopCharacter#applyLevelUp). */
 export const LEARNED_OPTION = "stonetopTimelineLearned";
 
+/** LEARNED_OPTION's value for a level taken with its move still to choose (Book I p.529). */
+export const LEARN_LATER = "__learnLater__";
+
 /** A level-up's key and title, live or backfilled: one shape, so the two share their key. */
 export const levelUpKey = level => `levelup:${level}`;
 export const LEVELUP_TITLE_KEY = "stonetop.timeline.milestone.levelup";
@@ -134,6 +137,8 @@ export function snapshotFrom({ system = {}, flags = {} } = {}) {
 			// The tracks an unlock and a Consequence are read off, by "slug:..." key (CharacterArcana).
 			unlock:     { ...(flags?.arcana?.unlock ?? {}) },
 			boxes:      { ...(flags?.arcana?.boxes ?? {}) },
+			// Cards whose track has once been completed (CharacterArcana#unlockedOnce): unlocked for good.
+			unlockedOnce: slugs(flags?.arcana?.unlockedOnce),
 		},
 		followers: {
 			custom,
@@ -164,7 +169,10 @@ export function detectMilestones(before, after, { learned = "", markPlaceholder 
 	// A level gained. One row per level; the move learned goes on the highest one.
 	if (before.level >= 1 && after.level > before.level) {
 		for (let level = before.level + 1; level <= after.level; level++) {
-			const body = level === after.level && learned ? { bodyKey: "stonetop.timeline.milestone.learned", bodyData: { move: learned } } : {};
+			const later = learned === LEARN_LATER;
+			const body = level === after.level && learned
+				? { bodyKey: later ? "stonetop.timeline.milestone.learnLater" : "stonetop.timeline.milestone.learned", bodyData: later ? {} : { move: learned } }
+				: {};
 			out.push({ source: "levelup", key: levelUpKey(level), titleKey: LEVELUP_TITLE_KEY, data: { level }, ...body });
 		}
 	}
@@ -319,14 +327,14 @@ export function arcanaTrackSlugs(before, after) {
  * @param {object} before  snapshotFrom(...)
  * @param {object} after   snapshotFrom(...)
  * @param {object} reads
- * @param {(unlock: object, boxes: object) => boolean} reads.unlocked  Is the card unlocked under these marks?
+ * @param {(unlock: object, boxes: object, unlockedOnce: string[]) => boolean} reads.unlocked  Is the card unlocked under these marks?
  * @param {{from: number, to: number}|null} [reads.consequences]  Its back's Consequence boxes, by index.
  * @param {(index: number) => string} [reads.consequenceLabel]  What the box at that index says.
  */
 export function detectArcanaTracks(slug, before, after, { unlocked, consequences = null, consequenceLabel = () => "" } = {}) {
 	const out = [];
-	const was = unlocked(before.arcana.unlock, before.arcana.boxes);
-	const now = unlocked(after.arcana.unlock, after.arcana.boxes);
+	const was = unlocked(before.arcana.unlock, before.arcana.boxes, before.arcana.unlockedOnce ?? []);
+	const now = unlocked(after.arcana.unlock, after.arcana.boxes, after.arcana.unlockedOnce ?? []);
 	if (now && !was) out.push({ source: "arcana", key: `arcana:${slug}:unlocked`, titleKey: "stonetop.timeline.milestone.arcanaUnlocked", data: {}, arcanaSlug: slug });
 	if (was && !now) out.push({ forget: `arcana:${slug}:unlocked` });
 	if (consequences) {

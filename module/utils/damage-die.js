@@ -35,6 +35,48 @@ export function isWholeDamageDie(str) {
 }
 
 /**
+ * WHOSE HIT POINTS A LINE SPENDS: one grammar for HP lost or paid by the line's own speaker, and for
+ * damage the speaker takes. Three readers ask it: a PC's move option (utils/damage.js#readOptionDamage's
+ * "lose 2d4 HP"), a monster's move ("costs 1d4 HP", stripped from its blow), and an arcanum's move
+ * ("you take 2d4 damage", aimed at the roller). They kept three subject lists of their own, which
+ * disagreed on who "the foe" or "the victim" was.
+ *
+ * A bare loss is the speaker's own. One with another subject right in front of it is somebody else's:
+ * "they lose 1d6 HP" is a blow. "You" is somebody else only to a monster, whose move is written at the
+ * PC it is aimed at; a PC's move is written at its reader.
+ */
+const OTHER_SUBJECTS = ["they", "it", "target", "foe", "victim", "enemy"];
+const othersTo = speaker => (speaker === "monster" ? [...OTHER_SUBJECTS, "you"] : OTHER_SUBJECTS);
+
+/** The verbs of an HP change: a loss, or (for a monster's move) a loss, a price or a gain. */
+const HP_VERBS = {
+	loss: ["lose", "loses", "losing"],
+	cost: ["costs?", "lose", "loses", "losing", "gains?", "gaining"],
+};
+
+/** A die in prose, spaces tolerated inside it ("2d4", "1 d 6 + 1"). */
+const PROSE_DIE = String.raw`\d*\s*d\s*\d+(?:\s*[+-]\s*\d+)?`;
+
+/**
+ * HP the speaker loses or pays: "lose 2d4 HP", "costs 1d4 HP", "but lose 1d4 HP". The amount is the
+ * `amount` group. A new regex per call, so a global one carries no `lastIndex` between callers.
+ *
+ * @param {object} o
+ * @param {"pc"|"monster"} o.speaker  whose move it is (who "you" is)
+ * @param {"loss"|"cost"} o.verbs     loss: forms of "lose"; cost: those, "costs" and "gains" too
+ * @param {boolean} [o.count]         a flat count too ("lose 1 HP"), not only a die
+ * @param {string} [o.flags]
+ */
+export function ownHpChangeRe({ speaker, verbs, count = false, flags = "i" }) {
+	const others = othersTo(speaker).join("|");
+	const amount = count ? `${PROSE_DIE}|\\d+` : PROSE_DIE;
+	return new RegExp(String.raw`(?<!\b(?:${others})\s+)\b(?:but\s+)?(?:${HP_VERBS[verbs].join("|")})\s+(?<amount>${amount})\s*HP\b`, flags);
+}
+
+/** Damage a PC's move does to its own roller: "you take 2d4 damage", "you suffer 2d6", "damage yourself". */
+export const OWN_HARM_RE = /\b(?:you|yourself)\s+(?:take|suffer)\b|\bdamage\s+yourself\b/i;
+
+/**
  * Take EVERY die expression out of `text`, each replaced by a single space.
  *
  * The one-die case is not the case that matters. A hand-typed attack name is free text, so

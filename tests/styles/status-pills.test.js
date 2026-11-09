@@ -34,7 +34,12 @@ const BADGE = ".stonetop-npc-status-badge";
 const SMALL = ".stonetop-npc-status-badge--sm";
 const BRAND = ".stonetop-condemned-tag";
 const DEAD = ".stonetop-dead-tag";
-const LABELS = [".stonetop-npc-status-badge-text", ".stonetop-condemned-tag-text", ".stonetop-dead-tag-text"];
+// The relationship map's tag chips ("Dead" on a board) are the same pill in board pixels, and centre
+// their word the same way.
+const LABELS = [
+	".stonetop-npc-status-badge-text", ".stonetop-condemned-tag-text", ".stonetop-dead-tag-text",
+	".stonetop-relmap-chip-text",
+];
 const TRIM = "trim-both cap alphabetic";
 
 /** The padding SHORTHAND a rule declares, whitespace-collapsed, or null if it declares none. */
@@ -85,6 +90,19 @@ describe("all three pills are built on the brand's numbers", () => {
 		expect(declarations(CSS, BADGE)).not.toContain("caps-nudge");
 		expect(declarations(CSS, BRAND)).not.toContain("caps-nudge");
 		expect(declarations(CSS, DEAD)).not.toContain("caps-nudge");
+	});
+});
+
+describe("the relationship map's tag chip is the same kind of pill", () => {
+	const chip = ownRule(CSS, ".stonetop-relmap-chip");
+	it("pins its height, with a line-height of 1 and no vertical padding", () => {
+		expect(chip).toBeTruthy();
+		expect(declared(chip, "line-height")).toBe("1");
+		expect(padding(chip)).toMatch(/^0 /);
+		// A whole 20px at every setting of the Names dial, which no longer reaches the chips.
+		expect(declared(chip, "height")).toBe("20px");
+		expect(declared(chip, "display")).toBe("inline-flex");
+		expect(declared(chip, "align-items")).toBe("center");
 	});
 });
 

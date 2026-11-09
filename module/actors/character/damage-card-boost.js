@@ -13,6 +13,7 @@ import { SYSTEM_ID } from "../../system-id.js";
 import { escHtml } from "../../utils/strings.js";
 import { writeCardRoll } from "../../utils/roll-card-writer.js";
 import { speakerActor } from "../../utils/speaker-actor.js";
+import { cardSettled } from "../../utils/applying-mark.js";
 
 /** Message flag: a follower's blow posted under their character's name, which is not the character's roll. */
 export const FOLLOWER_BLOW_FLAG = "followerBlow";
@@ -60,7 +61,9 @@ export function openDamageCard(message, flag, scope = SYSTEM_ID) {
 	const kind = damageCardKind(message, scope);
 	if (!kind || message.getFlag(scope, flag)) return null;
 	const damage = kind === "results" ? message.getFlag(scope, "damage") : null;
-	if (damage && (damage.applied ?? []).length) return null;
+	// Another client applying the rows right now: the card queue orders presses on one client only, so a boost
+	// written meanwhile would land after the rows were read, the +1 paid for and never dealt.
+	if (damage && cardSettled(damage)) return null;
 	return { kind, damage };
 }
 

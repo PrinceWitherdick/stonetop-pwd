@@ -10,13 +10,22 @@
 //
 // Asked of a Heavy who owns the move, has it switched on, and is not already raging.
 //
-//  - ANOTHER'S BLOOD is their own damage card (combat/attack-flow.js): asked on the roller's client,
-//    straight after the card posts. A follower's blow is not theirs.
+// BLOOD IS SPILLED WHEN HP IS LOST, not when damage is rolled: "If the target's armor is equal to or greater
+// than the damage, they don't lose any HP" (Book I p.239), and a blow armor stopped spilled nothing. So:
+//  - ANOTHER'S BLOOD is their own damage card APPLIED (combat/attack-flow.js#wireApplyDamage writes the rows
+//    it applied onto the card): every client sees that write, and the one that answers for the Heavy asks
+//    (installBattleJoyOnHurt's updateChatMessage). Only rows whose target really lost HP count. A follower's
+//    blow is not theirs, nor a blow struck at them (a counter-attack's card). A roll with nobody to Apply it to
+//    asks nothing: the glyph is still there to click.
 //  - THEIR OWN is any write that lowers their HP: an enemy's card applied, a move's harm to
 //    themselves, a hand-edited box. That write is usually the GM's, so it is spotted where it is made
 //    (preUpdateActor, the only place the outgoing HP can be read) and asked on the Heavy's own screen,
 //    picked the way Death's Door picks it (hooks/DeathsDoorPrompt.js#autoOpenUserId). Not at 0 HP:
-//    that is Death's Door, and nobody down is still fighting.
+//    that is Death's Door, and nobody down is still fighting, UNLESS Unstoppable keeps them fighting at 0
+//    ("When you are reduced to 0 HP in battle, you can keep fighting", p.114): that blood counts.
+// ANYWHERE, fight or not (the user's ruling, 2026-11-06, "When you spill blood"). With no fight running, the
+// card that says they are lost in it says it ends from the glyph, since no fight's end will come to ask.
+// Never of a Heavy who is down, dead, or past death (a Death's Door state, a post-death insert).
 //
 // AND THE OTHER END: "When the action stops, roll +CON." A fight ending, or the Heavy leaving the
 // last fight they were in, with the Battle Joy still on asks that on the same screen, through the
@@ -36,9 +45,12 @@ import { ownsLearnedMoveNamed } from "../actors/character/owns-move.js";
 import { HP_CEILING_OPTION } from "../actors/character/StonetopFlags.js";
 import { UNSTOPPABLE } from "../actors/character/deaths-door.js";
 import { keepsFightingAtZero, stopFightingUpdate } from "../actors/character/unstoppable.js";
-import { answersFor, openZeroHpMove } from "../hooks/DeathsDoorPrompt.js";
+import { inBattle } from "../fight/in-battle.js";
+import { resolveSync } from "../utils/foundry-compat.js";
+import { damageRowActor } from "../utils/damage.js";
+import { UNSTOPPABLE_FIGHTS_ON_OPTION, answersFor, openZeroHpMove } from "../hooks/DeathsDoorPrompt.js";
 import { healTo } from "../camp/camp-rules.js";
-import { each } from "../fight/fight-state.js";
+import { each, onMap, fightStanding } from "../fight/fight-state.js";
 import { canRewriteCard, postMoveNote, rolledTotalCard } from "../utils/chat.js";
 import { withCardLatch } from "../utils/card-latch.js";
 import { speakerActor } from "../utils/speaker-actor.js";
@@ -67,6 +79,10 @@ export function offersBattleJoy(actor, totals = []) {
 	if (actor.getFlag?.(SYSTEM_ID, BATTLE_JOY_FLAG)) return false;
 	// Only whoever can write the flag is asked: a GM relaying a player's card has no business answering.
 	if (actor.isOwner === false) return false;
+	// Nobody down, dead or past death is fighting: dying at 0 HP only while Unstoppable keeps them at it, and no
+	// other Death's Door state at all (out of the action, a fate being settled, through the Last Door). A Ghost,
+	// a Revenant or a Thrall has died (a post-death insert): their 0-HP road is behind them.
+	if (!fightStanding(actor).onTheirFeet) return false;
 	// No blood spilled on a blow that came to nothing.
 	return totals.some(n => Number(n) > 0);
 }
@@ -106,7 +122,10 @@ async function offer(actor, totals, why, ask) {
 	} finally {
 		asking.delete(actor.id);
 	}
-	await postMoveNote(actor, BATTLE_JOY, format(`${KEY}.entered`, { name: actor.name }));
+	// "As long as you keep fighting. When the action stops, roll +CON" (p.114): with no fight running, no fight's
+	// end will come to ask it, so the card says where it is ended from.
+	const entered = format(`${KEY}.entered`, { name: actor.name });
+	await postMoveNote(actor, BATTLE_JOY, inBattle(actor) ? entered : `${entered} ${format(`${KEY}.noFight`, { name: actor.name })}`);
 	return true;
 }
 
@@ -141,15 +160,81 @@ export function offerBattleJoyOnHurt(actor, lost, { ask = askLoseThemselves } = 
  * @param {number} oldHp
  * @param {*} newHp  the raw value in the change
  */
-export function hpLost(oldHp, newHp) {
+export function hpLost(oldHp, newHp, { fightsOn = false } = {}) {
 	const before = Number(oldHp) || 0;
 	const after = Number(newHp);
-	if (!Number.isFinite(after) || after <= 0) return 0;
-	return Math.max(0, before - after);
+	if (!Number.isFinite(after)) return 0;
+	// Down to 0: Death's Door, and nobody down is still fighting, unless Unstoppable keeps them at it (p.114).
+	if (after <= 0 && !fightsOn) return 0;
+	return Math.max(0, before - Math.max(0, after));
+}
+
+/** Two numbers' difference, never below 0, or null unless both are numbers. PURE. */
+function drop(from, to) {
+	if (from === null || from === undefined || to === null || to === undefined) return null;
+	const a = Number(from);
+	const b = Number(to);
+	return Number.isFinite(a) && Number.isFinite(b) ? Math.max(0, a - b) : null;
 }
 
 /**
- * Watch every character's HP for their own blood being spilled.
+ * The HP each row of a damage card's `applied` list really took off its target (p.239: armor that stops it all
+ * means "they don't lose any HP"), for the rows not yet in `seen`. A row with the HP before and after says so; a
+ * group member's hit says it through `before`/`after`; a row with neither counts what got through. A voided or
+ * ignored blow took nothing. PURE.
+ *
+ * @param {object[]} applied  the card's `damage.applied`
+ * @param {Set<string>} [seen]  rows already asked about
+ * @returns {{uuid: string, lost: number}[]}
+ */
+export function bloodDrawn(applied = [], seen = new Set()) {
+	const rows = [];
+	for (const row of Array.isArray(applied) ? applied : []) {
+		if (!row?.uuid || seen.has(row.uuid) || row.ignored) continue;
+		const lost = drop(row.oldHp, row.newHp) ?? drop(row.before, row.after) ?? Math.max(0, Number(row.effective) || 0);
+		rows.push({ uuid: row.uuid, lost });
+	}
+	return rows;
+}
+
+/**
+ * Whose blood a damage card's Apply has just spilled, for Battle Joy: the character whose own blow (or move's harm)
+ * the card is. Never a blow struck AT them (`selfHarm`, a counter-attack: their own blood is the hurt path's), nor a
+ * follower's. Null for anyone else. PURE apart from resolving the uuid.
+ */
+export function bloodSpiller(message, { resolve = resolveSync, scope = SYSTEM_ID } = {}) {
+	const damage = message?.getFlag?.(scope, "damage");
+	if (!damage || damage.selfHarm || message?.getFlag?.(scope, "followerBlow")) return null;
+	const striker = damage.attackerUuid ? damageRowActor(resolve(damage.attackerUuid)) : null;
+	return striker?.type === "character" ? striker : null;
+}
+
+/** The rows of each damage card already asked about on this client (bloodDrawn's `seen`), by message: let go with it. */
+const bloodSeen = new WeakMap();
+
+/**
+ * A damage card has just been applied (its `applied` list written): offer Battle Joy to the character whose blow it
+ * was, on the one client that answers for them, for the rows whose targets really lost HP. Each row asked once.
+ * Whether it asked.
+ */
+export function offerBattleJoyOnApplied(message, applied, { answers = answersFor, resolve = resolveSync, ask = askLoseThemselves } = {}) {
+	if (!Array.isArray(applied) || !applied.length) return false;
+	const striker = bloodSpiller(message, { resolve });
+	if (!striker || !answers(striker)) return false;
+	const seen = bloodSeen.get(message) ?? new Set();
+	// Never the Heavy's own row (an area blow that caught them): that is their own blood, asked as such.
+	const rows = bloodDrawn(applied, seen).filter(row => damageRowActor(resolve(row.uuid)) !== striker);
+	for (const row of applied) if (row?.uuid) seen.add(row.uuid);
+	bloodSeen.set(message, seen);
+	const totals = rows.map(row => row.lost);
+	if (!totals.some(n => n > 0)) return false;
+	const move = message.getFlag?.(SYSTEM_ID, "damage")?.move ?? "";
+	offerBattleJoyOnDamage(striker, move, totals, { ask }).catch(err => console.error("Stonetop | offering Battle Joy failed", err));
+	return true;
+}
+
+/**
+ * Watch every character's HP for their own blood being spilled, and every damage card's Apply for another's.
  *
  * @returns {() => void} stops listening
  */
@@ -166,7 +251,9 @@ export function installBattleJoyOnHurt({ hooks = globalThis.Hooks } = {}) {
 				// The HP test first: most character updates touch no HP, and it costs nothing to ask.
 				const raw = globalThis.foundry?.utils?.getProperty?.(changes, "system.attributes.hp.value");
 				if (raw === undefined || !ownsLearnedMoveNamed(actor, BATTLE_JOY)) return;
-				const lost = hpLost(actor.system?.attributes?.hp?.value, raw);
+				// Every point taken, a drop to 0 included: whether blood spilled on the way down counts is
+				// Unstoppable's, and that is asked once the write commits (below).
+				const lost = hpLost(actor.system?.attributes?.hp?.value, raw, { fightsOn: true });
 				if (lost > 0 && options) options[HP_LOST_OPTION] = lost;
 			} catch (err) {
 				console.error("Stonetop | reading HP lost for Battle Joy failed", err);
@@ -182,8 +269,21 @@ export function installBattleJoyOnHurt({ hooks = globalThis.Hooks } = {}) {
 			}
 			const lost = Number(options?.[HP_LOST_OPTION]) || 0;
 			if (lost <= 0 || actor?.type !== "character") return;
+			// Down to 0 HP, the blood counts only for a Heavy Unstoppable keeps fighting (p.114). The Death's Door
+			// hook decides that in this write's preUpdate and says so on the options; every preUpdate has run by
+			// the time the write commits, so this reads its answer whichever hook was registered first.
+			if (!(Number(actor.system?.attributes?.hp?.value) > 0) && !options?.[UNSTOPPABLE_FIGHTS_ON_OPTION]) return;
 			if (!answersFor(actor)) return;
 			offerBattleJoyOnHurt(actor, lost).catch(err => console.error("Stonetop | offering Battle Joy failed", err));
+		})],
+		// ANOTHER'S BLOOD: a damage card's Apply writing the rows it applied (combat/attack-flow.js#wireApplyDamage),
+		// seen on every client; the one that answers for the Heavy asks (offerBattleJoyOnApplied).
+		["updateChatMessage", hooks.on("updateChatMessage", (message, changes) => {
+			try {
+				offerBattleJoyOnApplied(message, globalThis.foundry?.utils?.getProperty?.(changes, `flags.${SYSTEM_ID}.damage.applied`));
+			} catch (err) {
+				console.error("Stonetop | reading blood spilled for Battle Joy failed", err);
+			}
 		})],
 	];
 	return () => {
@@ -192,12 +292,18 @@ export function installBattleJoyOnHurt({ hooks = globalThis.Hooks } = {}) {
 	};
 }
 
-/** Is this character still in some combat other than the one going (or the combatant leaving)? */
+/**
+ * Is this character still in some combat other than the one going (or the combatant leaving)? Only a combatant
+ * with a TOKEN counts (fight/in-battle.js#onMap), as inBattle counts one: a world that ran the old Character
+ * Introductions still holds that window's tokenless roster Combat with every PC in it, and counted, it had every
+ * Heavy "still fighting" for good, so no fight's end ever asked Battle Joy's +CON or Unstoppable's Death's Door.
+ */
 export function stillFighting(actor, combats, { exceptCombat = null, exceptCombatant = null } = {}) {
 	for (const combat of each(combats)) {
 		if (exceptCombat && combat.id === exceptCombat.id) continue;
 		for (const c of each(combat.combatants)) {
 			if (exceptCombatant && c.id === exceptCombatant.id) continue;
+			if (!onMap(c)) continue;
 			if (c.actor?.id === actor?.id) return true;
 		}
 	}

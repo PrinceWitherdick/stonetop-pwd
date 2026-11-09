@@ -51,6 +51,8 @@ describe("registerFightTab", () => {
 		expect(hooks.registered.has("closeCombatTracker")).toBe(true);
 		// And the clean-up a fight's end owes (combat/readiness-loss.js): a core Combat is the fight then.
 		for (const name of ["deleteCombat", "deleteCombatant", "updateActor"]) expect(hooks.registered.has(name), name).toBe(true);
+		// FGT-1: a token revealed on the map reveals its combatant (fight-hidden.js), beside the window's own watch.
+		expect(hooks.registered.get("updateToken")).toHaveLength(2);
 		// Nothing else of ours: no stamps on what joins a combat, no watcher, no map overlay.
 		for (const name of ["preCreateCombat", "preCreateCombatant", "refreshToken", "targetToken", "canvasPan", "canvasTearDown"]) {
 			expect(hooks.registered.has(name)).toBe(false);
@@ -197,5 +199,10 @@ describe("refreshFightTab", () => {
 		const empty = { rendered: true, viewed: null, render: vi.fn() };
 		refreshFightTab(empty);
 		expect(empty.render).not.toHaveBeenCalled();
+		// FGT-6: a Combat that is no fight (an old world's Introductions roster) draws as no fight, so nothing redraws for it.
+		const roster = tabWithFight("stale");
+		roster.viewed.flags = {};
+		refreshFightTab(roster);
+		expect(roster.render).not.toHaveBeenCalled();
 	});
 });

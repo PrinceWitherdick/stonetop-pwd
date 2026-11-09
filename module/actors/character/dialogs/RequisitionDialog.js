@@ -2,16 +2,17 @@ import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
 import { rollStat, sign, messageOfRoll } from "../../../utils/roll-engine.js";
 import { askWithButtons } from "../../../utils/ask-with-buttons.js";
 import { cardCountedTier } from "../../../utils/counted-tier.js";
-import { REQUISITION_MISS_COST_FLAG, payRequisitionMissCost, requisitionMissCostAction } from "../../steading/steading-card-actions.js";
+import { requisitionMissCostAction, takeOnRequisitionMiss } from "../../steading/steading-card-actions.js";
 import { StonetopSteading, HERD_ASSET_BEAST, HERD_ASSET_NAME, isHerdAsset } from "../../steading/StonetopSteading.js";
 import { askHorsesFromHerd, herdHorsesLabel } from "../../steading/herd-requisition.js";
 import { assetLabel, beastFollowerForAsset, followerInputFromBeast } from "../../../data/beasts.js";
 import { buildCustomFollower, nextFollowerOrder } from "../../../data/follower-build.js";
 import { bringDialogToFront } from "../../../utils/front-on-open.js";
 import { escHtml, joinNames } from "../../../utils/strings.js";
-import { CUSTOM_ASSET_VALUE, assetTakenLabel, wireCustomAssetSelect } from "../../../utils/requisition-asset.js";
+import {
+	CUSTOM_ASSET_VALUE, REQUISITIONED_FROM_FLAG, assetIsCarried, assetTakenLabel, openTripTag, wireCustomAssetSelect,
+} from "../../../utils/requisition-asset.js";
 import { SYSTEM_ID } from "../../../system-id.js";
-import { withCardLatch } from "../../../utils/card-latch.js";
 import { promptRoll } from "../../../dialogs/RollDialog.js";
 import { STEADING_MOVE, improvementQuestions } from "../../steading/improvement-rolls.js";
 import { settleSteadingRoll } from "../../steading/steading-roll.js";
@@ -19,6 +20,9 @@ import { askedAdvantageAnswers, herdCountAnswer } from "../../steading/improveme
 import { ownLogisticsNames } from "../logistics.js";
 import { ownShakenName, WE_HAPPY_FEW } from "../fight-states.js";
 import { format } from "../../../utils/i18n.js";
+import { postMoveNote } from "../../../utils/chat.js";
+import { getObjectSetting } from "../../../settings.js";
+import { EXPEDITION_LOG_SETTING } from "../../../utils/expedition-log-core.js";
 
 /**
  * The player-facing Requisition move. Lists the linked steading's on-hand assets
@@ -137,6 +141,13 @@ export class RequisitionDialog extends StonetopDialog {
 		takeButton?.addEventListener("click", async () => {
 			if (takeButton.disabled) return;
 			const choice = this._getChosenAsset(root);
+			// The row the list was drawn with has moved or gone (a row above it deleted, or it was taken
+			// meanwhile): say so and redraw, rather than taking whatever sits at that position now.
+			if (choice.stale) {
+				ui.notifications.warn(`${choice.name} is no longer on hand at ${this._steadingActor.name}.`);
+				this.render(false);
+				return;
+			}
 			if (!choice.name) {
 				ui.notifications.warn("Choose or enter an asset to requisition.");
 				return;
@@ -158,6 +169,9 @@ export class RequisitionDialog extends StonetopDialog {
 				ui.notifications.warn(`Could not finish taking ${choice.name}. If it was taken on a 6-, the GM can still pay the cost from the roll card's "Take it on a miss" button.`);
 				this.render(false);
 			}
+			// Taken with no Requisition roll from this window: still allowed (the table may have settled it
+			// some other way), but said in chat so the GM sees it (ruling E8).
+			if (taken && Number.isInteger(choice.index) && !this._lastRoll?.message) await this._sayTakenUnrolled(choice.name);
 			// A take re-renders the window; one that took nothing leaves this button to try again.
 			if (!taken) takeButton.disabled = false;
 		});
@@ -169,53 +183,61 @@ export class RequisitionDialog extends StonetopDialog {
 	 * Take one steading asset (or a typed custom one) into the character's items.
 	 *
 	 * Marked out on the steading FIRST: an asset another window took meanwhile (or a row deleted
-	 * under this one's index) is refused there, and nothing is added. A write the player has no
-	 * permission for still lets them take it, as before, with a warning. An item that then cannot
-	 * be added hands the asset back, so the steading never says it is out with someone who lacks it.
+	 * under this one's index) is refused there, and nothing is added. A write that cannot be made (no
+	 * permission on the steading, or the GM's client did not answer) takes nothing either: an item added
+	 * beside an asset still on hand could be requisitioned again and again (PREP-9). An item that then
+	 * cannot be added hands the asset back, so the steading never says it is out with someone who lacks it.
+	 *
+	 * Out on the walkthrough's current trip when one has not come home yet (ruling E6), so the trip's
+	 * asset list, its Going home and its delete all see it. Only something a character carries becomes an
+	 * Inventory item (requisition-asset.js#assetIsCarried); every item and follower a take makes is stamped
+	 * with the asset, so bringing it home can offer to take them off the sheet.
 	 * @returns {Promise<boolean>} whether it was taken
 	 */
 	async _takeAsset(choice) {
-		let denied = false;
 		let marked = false;
 		if (Number.isInteger(choice.index)) {
+			const trip = this._openTrip();
 			try {
 				marked = await this._steading.setAssetTaken(choice.index, {
 					name: this._characterActor.name,
 					id: this._characterActor.id,
+					...(trip ? { expedition: trip } : {}),
 				}, { name: choice.name });
 			} catch (err) {
 				console.warn("Stonetop | Could not mark asset taken on steading:", err);
-				denied = true;
+				ui.notifications.warn(`Could not mark ${choice.name} out on ${this._steadingActor.name}, so nothing was taken. Ask the GM to Requisition it for you.`);
+				return false;
 			}
-			if (!denied && marked === false) {
+			if (marked === false) {
 				ui.notifications.warn(`${choice.name} is no longer on hand at ${this._steadingActor.name}.`);
 				this.render(false);
 				return false;
 			}
 		}
 
-		try {
-			await this._character.addCustomInventoryItem(choice.name, 1);
-		} catch (err) {
-			console.warn("Stonetop | Could not add requisitioned asset to items:", err);
-			ui.notifications.warn(`Could not add ${choice.name} to your items.`);
-			if (marked) {
-				try {
-					await this._steading.returnAsset(choice.index);
-				} catch (returnErr) {
-					console.warn("Stonetop | Could not hand the asset back to the steading:", returnErr);
+		const beast = beastFollowerForAsset(choice.asset ?? choice.name);
+		// A typed "something else" is the player's own item request, so it is always one.
+		if (!Number.isInteger(choice.index) || assetIsCarried(choice.asset ?? choice.name, !!beast)) {
+			try {
+				await this._character.addCustomInventoryItem(choice.name, 1, Number.isInteger(choice.index) ? { requisitionedFrom: choice.name } : {});
+			} catch (err) {
+				console.warn("Stonetop | Could not add requisitioned asset to items:", err);
+				ui.notifications.warn(`Could not add ${choice.name} to your items.`);
+				if (marked) {
+					try {
+						await this._steading.returnAsset(choice.index, { name: choice.name });
+					} catch (returnErr) {
+						console.warn("Stonetop | Could not hand the asset back to the steading:", returnErr);
+					}
+					this.render(false);
 				}
-				this.render(false);
+				return false;
 			}
-			return false;
 		}
 		this._maybeOfferAsFollower(choice.asset ?? choice.name);
 
-		if (denied) {
-			ui.notifications.warn(
-				`${choice.name} added to your items, but you lack permission to update ${this._steadingActor.name}'s assets.`
-			);
-		} else if (Number.isInteger(choice.index)) {
+		if (Number.isInteger(choice.index)) {
 			ui.notifications.info(`${choice.name} requisitioned from ${this._steadingActor.name}.`);
 		} else {
 			ui.notifications.info(`${choice.name} added to your items.`);
@@ -240,56 +262,37 @@ export class RequisitionDialog extends StonetopDialog {
 
 	/**
 	 * A Take after this window's roll came up 6- (read off its card, so a GM's Shift counts): "you
-	 * can take the asset with you, but if you do, reduce Fortunes by 1" (p.308). Asked, then stamped
-	 * on the card and paid through Meet with Disaster's floor, so its own button cannot charge it
-	 * again. A player who cannot write the steading takes it all the same and is told the card's
-	 * button is how the GM pays it. Nothing to ask with no roll, a hit, or a cost already paid.
-	 *
-	 * Asked BEFORE `take` runs, paid only AFTER it reports something taken: a horse count closed,
-	 * or an asset another window took meanwhile, costs nothing.
+	 * can take the asset with you, but if you do, reduce Fortunes by 1" (p.308). The rule itself is
+	 * steading-card-actions.js#takeOnRequisitionMiss, shared with the walkthrough's asset picker.
 	 * @param {string} name
 	 * @param {{ask?: Function, take?: () => Promise<boolean>}} [opts]
 	 * @returns {Promise<boolean>} whether anything was taken
 	 */
 	async _payMissOnTake(name, { ask = askWithButtons, take = async () => true } = {}) {
 		const card = this._lastRoll?.message ?? null;
-		if (!card) return take();
-		if (cardCountedTier(card, card.rolls?.at?.(0)?.total, SYSTEM_ID) !== "failure") return take();
-		if (card.getFlag?.(SYSTEM_ID, REQUISITION_MISS_COST_FLAG)) return take();
-		const answer = await ask({
-			title: "Taken on a miss",
-			content: `<p>The Requisition was a 6-. You can take <strong>${escHtml(name)}</strong> with you, but if you do, reduce Fortunes by 1.</p>`,
-			buttons: [
-				{ key: "take", label: "Take it: reduce Fortunes by 1", icon: "fa-arrow-down", value: "take" },
-				{ key: "leave", label: "Leave it", icon: "fa-xmark", value: null },
-			],
+		return takeOnRequisitionMiss({
+			card,
+			missed: !!card && cardCountedTier(card, card.rolls?.at?.(0)?.total, SYSTEM_ID) === "failure",
+			name, steading: this._steading, canWrite: !!this._steadingActor.isOwner, take, ask,
 		});
-		if (answer !== "take") return false;
-		if (!(await take())) return false;
-		if (!this._steadingActor.isOwner) {
-			ui.notifications.warn(`You can't update ${this._steadingActor.name}'s Fortunes: the GM pays it from the roll card's "Take it on a miss" button.`);
-			return true;
-		}
-		// Latched on the card FIRST (card-latch.js#withCardLatch), so a window that could pay but not write
-		// the card never leaves the card's button to charge it again; a payment that throws takes the latch
-		// back. A card this user cannot write is left to its button, like a steading they cannot write.
-		let paying = false;
-		let notice = "";
+	}
+
+	/** The walkthrough's current trip, when it has not come home yet: what a take here goes out on (E6). */
+	_openTrip() {
+		return openTripTag(getObjectSetting(EXPEDITION_LOG_SETTING));
+	}
+
+	/**
+	 * Say in chat that an asset was taken with no Requisition roll from this window (ruling E8). The take
+	 * stands: the book's move is still the way to borrow it (p.308), and this is how the GM hears of it.
+	 */
+	async _sayTakenUnrolled(name) {
 		try {
-			await withCardLatch(card, REQUISITION_MISS_COST_FLAG, true, [], async () => {
-				paying = true;
-				({ notice } = await payRequisitionMissCost(this._steading));
-				return true;
-			});
+			await postMoveNote(this._characterActor, "Requisition",
+				`${this._characterActor.name} took ${name} from ${this._steadingActor.name} without a Requisition roll.`);
 		} catch (err) {
-			if (paying) throw err;
-			console.warn("Stonetop | Could not latch the Requisition card's miss cost:", err);
-			ui.notifications.warn(`You can't mark the Requisition card's miss cost paid: the GM pays it from the roll card's "Take it on a miss" button.`);
-			return true;
+			console.warn("Stonetop | Could not say the take in chat:", err);
 		}
-		// No notice: the card was settled meanwhile (its button, or another window), and the latch refused a second payment.
-		if (notice) ui.notifications.info(notice);
-		return true;
 	}
 
 	/**
@@ -315,18 +318,14 @@ export class RequisitionDialog extends StonetopDialog {
 			taken = await this._steading.requisitionFromHerd(count, { stonetopMove: "Requisition" });
 		} catch (err) {
 			console.warn("Stonetop | Could not take horses from the herd:", err);
-			ui.notifications.warn(`You lack permission to update ${this._steadingActor.name}'s herd.`);
+			ui.notifications.warn(`Could not take horses from ${this._steadingActor.name}'s herd, so none were taken. Ask the GM to Requisition them for you.`);
 			return false;
 		}
 		if (!taken) return false;
 		const label = herdHorsesLabel(taken);
-		try {
-			await this._character.addCustomInventoryItem(label, 1);
-		} catch (err) {
-			console.warn("Stonetop | Could not add requisitioned horses to items:", err);
-		}
+		// Horses are followers, never an Inventory item (ruling E6): no ◇ in anyone's pack.
 		const match = beastFollowerForAsset({ name: HERD_ASSET_NAME, beast: HERD_ASSET_BEAST });
-		if (match) await this._addRequisitionedFollower({ ...match, count: taken }, "the herd of horses");
+		if (match) await this._addRequisitionedFollower({ ...match, count: taken }, "the herd of horses", HERD_ASSET_NAME);
 		ui.notifications.info(`${label} requisitioned from ${this._steadingActor.name}.`);
 		this._onChange?.();
 		this.render(false);
@@ -347,12 +346,18 @@ export class RequisitionDialog extends StonetopDialog {
 		// _flags.assets — otherwise a default on-hand asset on an un-edited steading has
 		// no _flags.assets entry and resolves to "" (headline take path silently no-ops).
 		const asset = this._steading.getAvailableAssets().find(a => a.index === index);
-		return { index, name: asset?.name?.trim() ?? "", asset };
+		// The name the player SAW, off the option, is what they meant (PREP-2): an index is a position, and a
+		// row deleted above it since the window drew makes it name the next asset. Re-read by index, the name
+		// check further down could only ever agree with itself.
+		const shown = String(select.selectedOptions?.[0]?.dataset?.name ?? "").trim();
+		const live = asset?.name?.trim() ?? "";
+		if (shown && shown !== live) return { index, name: shown, asset: null, stale: true };
+		return { index, name: live, asset };
 	}
 
 	// If a just-requisitioned asset names a follower-capable animal, offer to add it
 	// to the character's Followers tab with the handout's stats (Book I p.474). A pure
-	// convenience; declining just leaves it as the plain inventory item already added.
+	// convenience; declining leaves it on the steading's list as out with this character.
 	// Takes the steading's asset row (whose `beast` field, when it has one, says exactly what
 	// it is) or a typed custom asset's name.
 	_maybeOfferAsFollower(asset) {
@@ -367,8 +372,8 @@ export class RequisitionDialog extends StonetopDialog {
 			content: `<p>You requisitioned <strong>${escHtml(assetName)}</strong>. Also add ${what} (<em>${escHtml(beast.name)}</em> - HP ${beast.hp}${count > 1 ? " each" : ""}, Cost ${escHtml(beast.cost)})?</p>`,
 			buttons: {
 				yes: { icon: '<i class="fas fa-dog"></i>', label: count > 1 ? `Add ${count} followers` : "Add as follower",
-					callback: () => this._addRequisitionedFollower(match, assetName) },
-				no:  { label: "No, just the item" },
+					callback: () => this._addRequisitionedFollower(match, assetName, assetName) },
+				no:  { label: count > 1 ? "Don't add them" : "Don't add it" },
 			},
 			default: "yes",
 			render:  bringDialogToFront,
@@ -376,7 +381,12 @@ export class RequisitionDialog extends StonetopDialog {
 		}).render(true);
 	}
 
-	async _addRequisitionedFollower(match, assetName) {
+	/**
+	 * `from` is the steading's asset row the animals came from, stamped on each card so bringing the asset
+	 * home can offer to take them off (requisition-asset.js#offerToClearRequisitioned). They travel with the
+	 * party (PREP-7): requisitioned for the trip, they are on it.
+	 */
+	async _addRequisitionedFollower(match, assetName, from = "") {
 		const input = followerInputFromBeast(match.beast, { name: match.beast.name, chosenTraits: match.chosenTraits });
 		if (!input) return;
 		const existing = this._characterActor.getFlag(SYSTEM_ID, "customFollowers") ?? {};
@@ -391,9 +401,11 @@ export class RequisitionDialog extends StonetopDialog {
 		const names  = Array.from({ length: count }, (_, i) => count > 1 ? `${input.name} ${i + 1}` : input.name);
 		const update = {};
 		names.forEach((name, i) => {
-			update[`flags.stonetop-pwd.customFollowers.${foundry.utils.randomID(16)}`] = {
+			update[`flags.${SYSTEM_ID}.customFollowers.${foundry.utils.randomID(16)}`] = {
 				...buildCustomFollower({ ...input, name, notes }),
 				order: order + i,
+				party: true,
+				...(from ? { [REQUISITIONED_FROM_FLAG]: from } : {}),
 			};
 		});
 		await this._characterActor.update(update);

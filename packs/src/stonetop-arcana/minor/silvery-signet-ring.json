@@ -47,7 +47,7 @@
       "back": {
         "title": "Sigil of Authority",
         "item": null,
-        "description": "<p>When you <strong><em>Strengthen Your Bond</em></strong> with a member of your community, you can choose to hold +1 Authority (max 3) in lieu of your follower holding +1 Loyalty. If you <strong><em>remove the ring</em></strong>, lose all Authority.</p><p>When you <strong><em>Persuade your follower(s) while holding Authority</em></strong>, you have advantage.</p><p>You can spend Authority 1-for-1 to:</p><ul><li>Wrap yourself in majesty for up to a few minutes, drawing all attention, cowing the weak-willed, and speaking in a voice that can hear (<em>far, area</em>)</li><li>Will someone in your presence to do as you wish, attempting to Persuade them without words</li><li>Have one of your nearby followers suffer an attack on your behalf, as if they held Readiness from Defending</li></ul>",
+        "description": "<p>When you <strong><em>Strengthen Your Bond</em></strong> with a member of your community, you can choose to hold +1 Authority (max 3) in lieu of your follower holding +1 Loyalty. If you <strong><em>remove the ring</em></strong>, lose all Authority.</p><p>When you <strong><em>Persuade your follower(s) while holding Authority</em></strong>, you have advantage.</p><p>You can spend Authority 1-for-1 to:</p><ul><li>Wrap yourself in majesty for up to a few minutes, drawing all attention, cowing the weak-willed, and speaking in a voice that all can hear (<em>far, area</em>)</li><li>Will someone in your presence to do as you wish, attempting to Persuade them without words</li><li>Have one of your nearby followers suffer an attack on your behalf, as if they held Readiness from Defending</li></ul>",
         "resource": {
           "max": 3,
           "maxStat": null,
@@ -57,7 +57,7 @@
         "move": {
           "name": "When you Strengthen Your Bond with a member of your community",
           "rollType": null,
-          "description": "<p>You can choose to hold +1 Authority (max 3) in lieu of your follower holding +1 Loyalty. If you remove the ring, lose all Authority. While holding Authority, you have advantage on Persuade. Spend Authority 1-for-1 to: wrap yourself in majesty; will someone to do as you wish; have a follower suffer an attack on your behalf.</p>"
+          "description": "<p>You can choose to hold +1 Authority (max 3) in lieu of your follower holding +1 Loyalty. If you remove the ring, lose all Authority. When you Persuade your follower(s) while holding Authority, you have advantage. Spend Authority 1-for-1 to: wrap yourself in majesty; will someone to do as you wish; have a follower suffer an attack on your behalf.</p>"
         },
         "options": []
       }

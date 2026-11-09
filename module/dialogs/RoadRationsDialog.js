@@ -1,12 +1,17 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import {
-	campVitalsFor, crewSuppliesOf, isUnliving, mealSpendTarget, packResources, partyCrewMouths, partyFollowerMouths,
+	campVitalsFor, crewSuppliesOf, fastsTonight, isUnliving, mealSpendTarget, packResources, partyCrewMouths,
+	partyFollowerMouths,
 } from "../camp/camp-store.js";
-import { UNLIVING_NEEDS, count, purseSpendUpdate } from "../camp/camp-rules.js";
-import { partyFollowersOf } from "../actors/character/follower-roster.js";
+import { FASTING_NEEDS, UNLIVING_NEEDS, count, purseSpendUpdate } from "../camp/camp-rules.js";
+import { orphanedPartyFollowers, partyFollowersOf } from "../actors/character/follower-roster.js";
+import { isOutOfPlaySafe } from "../actors/character/deaths-door-actor.js";
+import { orphanedFollowersLines } from "../camp/camp-view.js";
+import { partyCharacters } from "../utils/playbook-actors.js";
 import { postMoveToChat } from "../utils/chat.js";
 import { crewRoadText, ledgerAsPaid, roadLedger, roadSummaryRows, spendWords } from "../utils/road-rations.js";
 import { countOf, plural } from "../utils/plural.js";
+import { joinNames } from "../utils/strings.js";
 
 /** The ledger's name for the write, so the character's history says where the food went. */
 const ON_THE_ROAD = "On the road";
@@ -27,10 +32,32 @@ const ON_THE_ROAD = "On the road";
  * a mouth. Followers are named only when some travel with them.
  */
 function unlivingRoadText(row) {
-	if (!row.unliving) return "";
-	if (row.eats) return `${UNLIVING_NEEDS}, but counted as a mouth here: untick Eats to leave them out.`;
-	if (!row.followers) return `${UNLIVING_NEEDS}.`;
-	return `${UNLIVING_NEEDS}; ${plural(row.followers, "their follower still eats", "their followers still eat")}.`;
+	// The prayer beads feed their holder while they hold Preparation (camp-rules.js#FASTING_NEEDS), said the same way.
+	const needs = row.unliving ? UNLIVING_NEEDS : row.fasting ? FASTING_NEEDS : "";
+	if (!needs) return "";
+	if (row.eats) return `${needs}, but counted as a mouth here: untick Eats to leave them out.`;
+	if (!row.followers) return `${needs}.`;
+	return `${needs}; ${plural(row.followers, "their follower still eats", "their followers still eat")}.`;
+}
+
+/**
+ * The ledger as it actually landed: a row whose write was refused paid nothing, so what it would have
+ * covered is the party's shortfall on the card, not a meal it never ate. PURE.
+ *
+ * @param {object} ledger   ledgerAsPaid's answer
+ * @param {Array<{status: string}>} results  the settled writes, one per ledger row
+ */
+export function landedLedger(ledger, results = []) {
+	const rows = ledger.rows.map((row, i) => (results[i]?.status === "rejected"
+		? { ...row, spend: [], crewSpend: [], pays: 0, crewPays: 0 }
+		: row));
+	const crewPaid = rows.reduce((sum, r) => sum + (r.crewPays ?? 0), 0);
+	const paid = crewPaid + rows.reduce((sum, r) => sum + (r.pays ?? 0), 0);
+	return {
+		...ledger, rows, crewPaid, paid,
+		short: Math.max(0, ledger.bill - paid),
+		over:  Math.max(0, paid - ledger.bill),
+	};
 }
 
 export class RoadRationsDialog extends StonetopDialog {
@@ -39,7 +66,7 @@ export class RoadRationsDialog extends StonetopDialog {
 	 * @param {{days?: number, routeDays?: number|null}} [opts]  `routeDays`: what the charted route
 	 *   says the trip takes, for the hint beside the field
 	 */
-	constructor(actors = [], { days = 1, routeDays = null } = {}, options = {}) {
+	constructor(actors = [], { days = 1, routeDays = null, packAnimal = false } = {}, options = {}) {
 		super(options);
 		this._actors = actors.filter(Boolean);
 		this._days = Math.max(1, count(days) || 1);
@@ -47,7 +74,9 @@ export class RoadRationsDialog extends StonetopDialog {
 		// Both the GM's to say, so never assumed. A mess kit "requires water and fire" and counts only "if
 		// someone has and uses" one (Book I p.304, p.89): carrying it is not cooking with it.
 		this._messKit = false;
-		this._packAnimal = false;
+		// The pack-animal tick starts on when the trip loaded Surplus onto a cart on the Requisition step
+		// (ruling E7, p.305), and is still the GM's to untick.
+		this._packAnimal = !!packAnimal;
 		this._paid = {};           // actorId -> the GM's own figure
 		this._eats = {};           // actorId -> false for a mouth the GM sends without
 		this._followers = {};      // actorId -> followers fed, as the GM set it
@@ -85,6 +114,8 @@ export class RoadRationsDialog extends StonetopDialog {
 				name:      actor.name,
 				img:       actor.img ?? "",
 				unliving:  isUnliving(actor),
+				// No meal on the road for the prayer beads' holder (Book II p.526).
+				fasting:   fastsTonight(actor, vitals),
 				messKit:   !!vitals?.messKit,
 				followers: partyFollowerMouths(actor, party),
 				crewMouths: partyCrewMouths(actor, party),
@@ -98,7 +129,7 @@ export class RoadRationsDialog extends StonetopDialog {
 	_seated() {
 		return (this._members ?? []).map(m => ({
 			...m,
-			eats:      this._eats[m.actorId] ?? !m.unliving,
+			eats:      this._eats[m.actorId] ?? !(m.unliving || m.fasting),
 			followers: this._followers[m.actorId] ?? m.followers,
 		}));
 	}
@@ -135,6 +166,8 @@ export class RoadRationsDialog extends StonetopDialog {
 				: `${countOf(ledger.mouths, "mouth")}: ${countOf(ledger.perDay, "use")} a day, ${countOf(ledger.bill, "use")} in all.`,
 			shortText: ledger.short ? `${countOf(ledger.short, "use")} short: someone goes without (deprivation, p.335).` : "",
 			overText:  ledger.over ? `${countOf(ledger.over, "use")} more than the bill.` : "",
+			// Followers whose PC is out of play, still on the road with nobody counting them (audit ROAD-13).
+			orphansLines: orphanedFollowersLines(orphanedPartyFollowers(partyCharacters(), { outOfPlay: isOutOfPlaySafe }), { where: "row" }),
 		};
 	}
 
@@ -164,15 +197,24 @@ export class RoadRationsDialog extends StonetopDialog {
 		// The packs were read when the window opened: each purse pays what it holds NOW (ledgerAsPaid), so the
 		// card names only what was eaten, and what a pack no longer had is the party's shortfall.
 		const targets = new Map(this._actors.filter(a => a?.typedActor).map(a => [a.id, mealSpendTarget(a)]));
-		const ledger = ledgerAsPaid(this._ledger(), actorId => targets.get(actorId)?.resources ?? {});
-		// Each pack is its own actor, so the writes go out together.
-		await Promise.all(ledger.rows.map(row => {
+		const planned = ledgerAsPaid(this._ledger(), actorId => targets.get(actorId)?.resources ?? {});
+		// Each pack is its own actor, so the writes go out together, and SETTLED rather than all-or-
+		// nothing: one refused write (a sheet deleted while the window was open) used to reject the lot
+		// after the others had landed, post no card, and leave the button live, so a second press
+		// spent the packs that had already paid a second time.
+		const results = await Promise.allSettled(planned.rows.map(row => {
 			const actor = row.pays || row.crewPays ? byId.get(row.actorId) : null;
 			const target = targets.get(row.actorId);
 			if (!actor || !target) return null;
 			const { update } = purseSpendUpdate([...row.crewSpend, ...row.spend], target);
 			return Object.keys(update).length ? actor.update(update, { stonetopMove: ON_THE_ROAD }) : null;
 		}));
+		const ledger = landedLedger(planned, results);
+		const failed = planned.rows.filter((_, i) => results[i].status === "rejected").map(r => r.name);
+		if (failed.length) {
+			console.warn("Stonetop | Days on the road: some packs could not be written", results.filter(r => r.status === "rejected").map(r => r.reason));
+			ui.notifications?.warn?.(`Couldn't spend from ${joinNames(failed)}: what they would have eaten is on the card as gone short.`);
+		}
 		postMoveToChat(null, "Days on the road", roadSummaryRows(ledger));
 		await this.close();
 		return ledger;

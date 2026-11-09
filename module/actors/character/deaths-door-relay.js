@@ -61,6 +61,12 @@ export const DEATHS_DOOR_BOOST_QUERY = "stonetop.deathsDoorBoost";
 /** The boosts a marker lists as still on offer, in the order the window's footer shows them. */
 export const DEATHS_DOOR_BOOSTS = ["burn", "giveAll"];
 
+// The claim's ask waits askGMClient's default 10 seconds, then the window writes the marker itself (the header, 1).
+// A claim that reaches its turn here this long after it arrived is answered null with nothing written: its asker's
+// wait began a network hop earlier, and the marker the asker's own fallback wrote must not be overwritten by a
+// grant nobody is waiting for (the same rule as utils/gm-claim.js#GM_CLAIM_LATE_MS, under that ask's own wait).
+export const DEATHS_DOOR_CLAIM_LATE_MS = 8000;
+
 // A boost can roll "you get hurt"'s 2d4 on the GM's client before it answers, dice animation and all: longer than
 // the 10 seconds every other relay waits, which would report a lift that went through as one that did not.
 const BOOST_TIMEOUT_MS = 30000;
@@ -145,12 +151,15 @@ export function askDeathsDoorBoost(actor, { nonce, messageId, boost, cost = null
  */
 export async function handleDeathsDoorClaimQuery(data, context = {}, deps = {}) {
 	const game = globalThis.game;
-	const { users = game?.users, actors = game?.actors, messages = game?.messages, resolve = resolveSync } = deps;
+	const { users = game?.users, actors = game?.actors, messages = game?.messages, resolve = resolveSync, now: clock = Date.now } = deps;
 	if (!game?.user?.isGM || !isPrimaryGM()) return null;
+	const arrived = clock();
 	const user  = queryAsker(data, context, users);
 	const actor = actorOf(data, { actors, resolve });
 	if (!user || !actor?.testUserPermission?.(user, "OWNER") || !data?.nonce) return null;
 	return inTurn(`deaths-door:${actor.uuid ?? actor.id}`, async () => {
+		// Too late for its asker, who has stopped waiting and written its own marker: no ruling, nothing written.
+		if (clock() - arrived > DEATHS_DOOR_CLAIM_LATE_MS) return null;
 		const marker = deathsDoorRollMarker(actor);
 		const card   = marker ? deathsDoorRollCard(marker, messages) : null;
 		const now    = deathsDoorRollClock();

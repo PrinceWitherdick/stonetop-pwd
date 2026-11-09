@@ -1,5 +1,8 @@
 import { sign } from "../../utils/roll-engine.js";
 import { escHtml } from "../../utils/strings.js";
+import { askWithButtons } from "../../utils/ask-with-buttons.js";
+import { withCardLatch } from "../../utils/card-latch.js";
+import { SYSTEM_ID } from "../../system-id.js";
 import { meetWithDisaster } from "./steading-debilities.js";
 import { STEADING_STAT_MAX } from "./StonetopSteading.js";
 
@@ -189,6 +192,63 @@ export const STEADING_FORTUNES_CARD_ACTIONS = Object.freeze([
  */
 export function payRequisitionMissCost(steading) {
 	return payFortunesCost(steading, { stonetopMove: "Requisition", cause: "a Requisition taken on a miss" });
+}
+
+/**
+ * A Take after a Requisition card came up 6- (p.308): "you can take the asset with you, but if you do,
+ * reduce Fortunes by 1". THE one rule for both doors that take an asset, the player's Requisition window
+ * and the walkthrough's asset picker (expedition audit PREP-4: the walkthrough's used to take for free).
+ *
+ * Asked BEFORE `take` runs, paid only AFTER it reports something taken: a horse count closed, or an asset
+ * another window took meanwhile, costs nothing. Latched on the card first (card-latch.js#withCardLatch), so
+ * the card's own button cannot charge it again; a payment that throws takes the latch back and rethrows.
+ * A user who cannot write the steading, or the card, takes it all the same and is told the GM pays it from
+ * the card's button. Nothing is asked with no card, a hit, or a cost already paid.
+ *
+ * @param {object} o
+ * @param {ChatMessage|null} o.card     the roll's card
+ * @param {boolean} o.missed            whether the card counts as a 6- (its tier, as the caller reads it)
+ * @param {string} o.name               what is being taken, for the question
+ * @param {object} o.steading           the StonetopSteading that pays
+ * @param {boolean} o.canWrite          whether this user can write the steading
+ * @param {() => Promise<boolean>} [o.take]
+ * @param {Function} [o.ask]
+ * @returns {Promise<boolean>} whether anything was taken
+ */
+export async function takeOnRequisitionMiss({ card, missed, name, steading, canWrite, take = async () => true, ask = askWithButtons } = {}) {
+	if (!card || !missed || card.getFlag?.(SYSTEM_ID, REQUISITION_MISS_COST_FLAG)) return take();
+	const answer = await ask({
+		title: "Taken on a miss",
+		content: `<p>The Requisition was a 6-. You can take <strong>${escHtml(name)}</strong> with you, but if you do, reduce Fortunes by 1.</p>`,
+		buttons: [
+			{ key: "take", label: "Take it: reduce Fortunes by 1", icon: "fa-arrow-down", value: "take" },
+			{ key: "leave", label: "Leave it", icon: "fa-xmark", value: null },
+		],
+	});
+	if (answer !== "take") return false;
+	if (!(await take())) return false;
+	const notify = globalThis.ui?.notifications;
+	if (!canWrite) {
+		notify?.warn?.(`You can't update the steading's Fortunes: the GM pays it from the roll card's "Take it on a miss" button.`);
+		return true;
+	}
+	let paying = false;
+	let notice = "";
+	try {
+		await withCardLatch(card, REQUISITION_MISS_COST_FLAG, true, [], async () => {
+			paying = true;
+			({ notice } = await payRequisitionMissCost(steading));
+			return true;
+		});
+	} catch (err) {
+		if (paying) throw err;
+		console.warn("Stonetop | Could not latch the Requisition card's miss cost:", err);
+		notify?.warn?.(`You can't mark the Requisition card's miss cost paid: the GM pays it from the roll card's "Take it on a miss" button.`);
+		return true;
+	}
+	// No notice: the card was settled meanwhile (its button, or another window), and the latch refused a second payment.
+	if (notice) notify?.info?.(notice);
+	return true;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { PROVISIONS_SLUG } from "./provisions.js";
 import { asArray } from "../../utils/playbook-actors.js";
+import { clampInt } from "../../utils/custom-move-data.js";
 
 /**
  * WHAT CAN PAY A USE OF SUPPLIES — and, just as importantly, what cannot, and why.
@@ -122,25 +123,46 @@ export function spendablePurseResources(resources, { checked = null, max = null 
  * before anything was eaten, gives back what it drew. Camp's Have What You Need
  * (camp-rules.js#suppliesRowToMark) packs the same fresh ◆ onto an unmarked row.
  *
- * An EMPTY row marked without a draw is a fresh ◆ too: there is no food left on it to pick back up,
- * and the sheet can't tell a ◆ marked by hand at home (Outfit without the window) or bought in a
- * market from a misclick, so it packs full rather than sending the PC out with an empty ◆. Only a
- * row still holding food keeps what it holds, which is the refill this rule exists to stop.
+ * An EMPTY row marked without a draw is never filled silently (audit ROAD-2, the user's ruling E9). A
+ * row set down after its food was eaten remembers it (CharacterInventory#emptied), and marking it again
+ * picks the empty ◆ back up: untick and re-tick on the road used to pack a fresh one for nothing. A row
+ * that was never packed (marked by hand at home, Outfit without the window, or bought in a market) is
+ * packed full only once the player has said so ("Packed it at home" / "Bought it",
+ * suppliesMarkNeedsAsk), which is `packed` here.
  */
 
 /**
- * The uses a supplies row holds once it is marked: full when the mark drew an undefined ◆ or the
- * row was empty (a fresh one), else what it held (a ◆ picked back up with its food in it).
+ * The uses a supplies row holds once it is marked: full when the mark drew an undefined ◆, or the row
+ * was empty and the player said it was packed or bought (`packed`); else what it held (a ◆ picked back
+ * up with its food in it, or an emptied one picked back up empty).
  *
  * @param {object} o
  * @param {number} o.drew       undefined ◆ the mark took from the reserve
  * @param {number} o.uses       the uses stored on the row now
  * @param {number} o.perSupply  the uses in one ◆ of supplies now (getUsesPerSupply)
+ * @param {boolean} [o.packed]  an empty row the player said was packed at home or bought
  * @returns {number}
  */
-export function suppliesUsesOnMark({ drew = 0, uses = 0, perSupply = 4 } = {}) {
+export function suppliesUsesOnMark({ drew = 0, uses = 0, perSupply = 4, packed = false } = {}) {
 	const held = Math.max(0, Math.trunc(Number(uses) || 0));
-	return Number(drew) > 0 || held === 0 ? Math.max(0, Math.trunc(Number(perSupply) || 0)) : held;
+	const full = Math.max(0, Math.trunc(Number(perSupply) || 0));
+	if (Number(drew) > 0) return full;
+	if (held > 0) return held;
+	return packed ? full : 0;
+}
+
+/**
+ * Whether marking a supplies row has to ask where its food came from: the row is empty, was never set
+ * down emptied, and the mark draws no undefined ◆ (`pool` the regular reserve). Pure.
+ *
+ * @param {object} o
+ * @param {number} o.uses     the uses stored on the row now
+ * @param {number} o.pool     the undefined ◆ left
+ * @param {boolean} o.emptied the row was set down with its food eaten (CharacterInventory#emptied)
+ * @returns {boolean}
+ */
+export function suppliesMarkNeedsAsk({ uses = 0, pool = 0, emptied = false } = {}) {
+	return !emptied && Math.max(0, Math.trunc(Number(pool) || 0)) <= 0 && Math.max(0, Math.trunc(Number(uses) || 0)) === 0;
 }
 
 /**
@@ -235,6 +257,37 @@ export function otherSupplyPayers(patient, actors, purpose, { usesPerSupply } = 
  */
 export function defaultSupplyPurse(purses) {
 	return purses?.eligible?.[0] ?? null;
+}
+
+/**
+ * `n` uses spread over a character's eligible purses (supplyPursesFor's `eligible`): out of the one named
+ * `slug` first (the player's pick, else table order), then the others in table order, so a short first
+ * purse never refuses a spend the pack can pay (audit ROAD-7: Recover for several bodies). Each part says
+ * what it leaves. Null when the purses between them hold fewer than `n`. PURE.
+ *
+ * @returns {Array<{slug: string, label: string, n: number, left: number}>|null}
+ */
+export function spreadSupplySpend(eligible, { slug = null, n = 1 } = {}) {
+	const want = Math.max(0, Math.trunc(Number(n) || 0));
+	const list = Array.isArray(eligible) ? eligible : [];
+	const ordered = [...list.filter(p => p.slug === slug), ...list.filter(p => p.slug !== slug)];
+	const parts = [];
+	let owed = want;
+	for (const purse of ordered) {
+		if (owed <= 0) break;
+		const take = clampInt(purse.remaining, 0, owed);
+		if (!take) continue;
+		parts.push({ slug: purse.slug, label: purse.label, n: take, left: purse.remaining - take });
+		owed -= take;
+	}
+	return owed > 0 ? null : parts;
+}
+
+/** A spread spend (spreadSupplySpend) as the chat row's words: "Expended 3 uses (Supplies 0 left, More supplies 3 left)". */
+export function spreadSpendWords(parts, countOf) {
+	const total = (parts ?? []).reduce((sum, p) => sum + p.n, 0);
+	if ((parts ?? []).length === 1) return `Expended ${countOf(total, "use")} (${parts[0].left} left)`;
+	return `Expended ${countOf(total, "use")} (${parts.map(p => `${p.label} ${p.left} left`).join(", ")})`;
 }
 
 /**

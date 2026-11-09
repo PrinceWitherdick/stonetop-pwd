@@ -8,8 +8,10 @@
 // it is, and the chat says what they answered. Closing the window keeps it: nothing is lost by accident.
 //
 // THE THREAT PASSES when the fight ends, and a character CEASES TO FOCUS ON DEFENSE when they leave the
-// fight or go down to 0 HP. The GM's client clears those on its own (installReadinessLoss), once, and
-// says so. A character still fighting on another map keeps theirs.
+// fight, go down to 0 HP, or stop fighting at 0 on Unstoppable's word. The GM's client clears those on its own
+// (installReadinessLoss), once, and says so; with NO GM online, each player's client lets go of what it answers
+// for (DeathsDoorPrompt.js#answersFor), so a character dropped with nobody to run the GM's side is not left
+// holding Readiness they stopped defending with. A character still fighting on another map keeps theirs.
 //
 // WHAT COUNTS AS A FIGHT. With the Fight tab on, every Combat is stamped a fight as it is made
 // (fight/fight-boot.js#stampFight), and only those count. With the tab off nothing is stamped, and a core
@@ -28,12 +30,15 @@ import { heldReadiness, READINESS_FLAG } from "./defend-readiness.js";
 import { readableFlags } from "../actors/character/StonetopFlags.js";
 import { crewInShieldWall, setShieldWall, shieldWallEmptied, SHIELD_WALL_FLAG } from "../fight/shield-wall.js";
 import { countsAsFight, fightersOf, onMap } from "../fight/fight-state.js";
-import { clearHarmedBy, clearRapierWit } from "../fight/hero-moves.js";
+import { clearFightFoeRecords } from "../fight/hero-moves.js";
 import { characterBehind, followerCardFor } from "../actors/character/follower-masters.js";
 import { keepsFightingAtZero } from "../actors/character/unstoppable.js";
-import { isPrimaryGM } from "../utils/primary-gm.js";
+import { UNSTOPPABLE_FIGHTING_FLAG } from "../actors/character/deaths-door.js";
+import { answersFor } from "../hooks/DeathsDoorPrompt.js";
+import { isPrimaryGM, primaryGM } from "../utils/primary-gm.js";
 import { postMoveNote } from "../utils/chat.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
+import { changedKeys } from "../utils/foundry-compat.js";
 import { cardReadinessRef, followerReadinessRef, readinessHeldBy, readinessOnCard, clearFollowerReadiness } from "../fight/follower-readiness.js";
 import { clearFightHolds } from "./battle-holds.js";
 import { contentElement } from "../utils/dialogv2-content.js";
@@ -263,6 +268,20 @@ export function droppedHoldingReadiness(actor, changes = {}) {
 	return hpValueTouched(changes) && Number(actor.system?.attributes?.hp?.value) <= 0;
 }
 
+/**
+ * Whether an actor update has just lifted Unstoppable's "fighting on" stamp from a character at 0 HP who holds
+ * Readiness: "When you stop fighting, roll for Death's Door" (p.114), and one who has stopped fighting has stopped
+ * defending too (p.216, "cease to focus on defense"). The fight's end, leaving it, and the GM ruling the Door
+ * (hooks/DeathsDoorPrompt.js#markNotLethal) all lift it. The stamp being LAID (the drop itself) keeps them fighting.
+ */
+export function stoppedFightingHoldingReadiness(actor, changes = {}) {
+	if (actor?.type !== "character" || heldReadiness(actor) <= 0 || keepsFightingAtZero(actor)) return false;
+	if (!(Number(actor.system?.attributes?.hp?.value) <= 0)) return false;
+	// Either core's deletion spelling (read back to the plain key by changedKeys), or a null written over it. In
+	// whichever flag scope the character still reads (StonetopFlags.js#resolvedFlags), so the scope is not named.
+	return changedKeys(changes).some(key => key.split(".").includes(UNSTOPPABLE_FIGHTING_FLAG));
+}
+
 /** Clear these characters' (and followers') Readiness and post one note saying why. */
 async function loseAll(actors, noteKey, { cardFor = followerCardFor } = {}) {
 	if (!actors.length) return;
@@ -275,7 +294,9 @@ async function loseAll(actors, noteKey, { cardFor = followerCardFor } = {}) {
 
 /**
  * The GM's client lets Readiness go when the threat passes or a character stops defending: the fight
- * ends, they leave it, or they drop to 0 HP. Only the primary GM writes, so it happens once.
+ * ends, they leave it, they drop to 0 HP, or they stop fighting at 0. Only the primary GM writes, so it happens
+ * once. With no GM online at all, each client writes for the characters it answers for (answersFor): one client
+ * per character, the same one Death's Door opens on.
  *
  * @param {object} [deps]
  * @param {Function} [deps.cardFor]  follower-masters.js#followerCardFor (injectable for tests)
@@ -283,16 +304,21 @@ async function loseAll(actors, noteKey, { cardFor = followerCardFor } = {}) {
  */
 export function installReadinessLoss({ hooks = globalThis.Hooks, cardFor = followerCardFor } = {}) {
 	const listening = [];
+	// Whose writes this client makes: every one on the primary GM's; with no GM online, those it answers for (a
+	// follower's are its character's, whose card holds them).
+	const lead = () => !!globalThis.game?.user?.isGM && isPrimaryGM();
+	const mine = actor => { if (lead()) return true; const who = characterBehind(actor, cardFor) ?? actor; return !!who && answersFor(who); };
 	const on = (name, fn) => listening.push([name, hooks.on(name, (...args) => {
-		if (!globalThis.game?.user?.isGM || !isPrimaryGM()) return;
+		if (!lead() && primaryGM()) return;
 		Promise.resolve(fn(...args)).catch(err => console.error("Stonetop | letting go of Readiness failed", err));
 	})]);
+	const ours = actors => actors.filter(mine);
 
 	on("deleteCombat", async combat => {
 		// The mooks' grudges a fight leaves behind go with it: Payback's grudge against an unlinked token
 		// can never be matched again once its token is gone, and a list of dead tokens would follow a
 		// character forever. A NAMED foe's (a linked actor) is remembered: the villain who hurt you is
-		// still owed Payback in the next fight (the user's ruling, 2026-10-18; fight/hero-moves.js#clearHarmedBy).
+		// still owed Payback in the next fight (the user's ruling, 2026-10-18; fight/hero-moves.js#clearFightFoeRecords).
 		// Nemesis is deliberately NOT here at all: the book says "all of your future attacks against them",
 		// and a nemesis who walked away is the point of the move.
 		// One write each, together: a character with two tokens in the fight is one sheet, not two.
@@ -303,13 +329,9 @@ export function installReadinessLoss({ hooks = globalThis.Hooks, cardFor = follo
 			const holder = characterBehind(combatant.actor, cardFor);
 			if (holder?.type === "character") harmed.set(holder.id, holder);
 		}
-		// The Fox's Rapier Wit records (fight/hero-moves.js#clearRapierWit) follow the same rule: a quip at an
-		// unlinked token goes with it, one at a named foe is kept until it is used. Each holder's two writes
-		// go one after the other, so neither lands over the other.
-		await Promise.all([...harmed.values()].map(async holder => {
-			await clearHarmedBy(holder);
-			await clearRapierWit(holder);
-		}));
+		// The Fox's Rapier Wit quips and the other "next roll against them" records (Censure's enraged, Truth or
+		// Consequences, Speak Softly, Alpha) follow the same rule, all in one write per holder.
+		await Promise.all(ours([...harmed.values()]).map(clearFightFoeRecords));
 		// The grudges are let go at the end of ANY Combat, since Payback and Rapier Wit record them in a plain
 		// core Combat too (the GM's Fight tab off, or a Combat begun from core's tracker). Readiness and the
 		// holds below go with a fight (countsAsFight: with the tab off, any Combat with somebody on a map).
@@ -317,29 +339,47 @@ export function installReadinessLoss({ hooks = globalThis.Hooks, cardFor = follo
 		// The Marshal's holds were for this battle (the user's ruling, 2026-10-18): Stentorian's Command, Front
 		// Line Leader's Presence and Prepare a Welcome's Surprise go with it, one write per character, unless
 		// they still fight elsewhere (the same rule as Readiness).
-		await Promise.all(charactersLeft(combat).map(clearFightHolds));
+		await Promise.all(ours(charactersLeft(combat)).map(clearFightHolds));
 		// And the crew's shield wall (fight/shield-wall.js): read before the Readiness goes, written after the
 		// holds, so the two writes to one Marshal do not race.
-		const walls = shieldWallsLeft(combat, undefined, { cardFor });
+		const walls = ours(shieldWallsLeft(combat, undefined, { cardFor }));
 		await Promise.all(walls.map(marshal => setShieldWall(marshal, false)));
-		return loseAll(holdersLeft(combat, undefined, { cardFor }), "lostFightOver", { cardFor });
+		return loseAll(ours(holdersLeft(combat, undefined, { cardFor })), "lostFightOver", { cardFor });
 	});
 	on("deleteCombatant", combatant => {
 		const combat = combatant?.parent;
 		// The whole fight going is deleteCombat's to say. Only one who stood on a map was fighting.
 		if (!onMap(combatant) || !countsAsFight(combat, { leaving: combatant }) || !globalThis.game?.combats?.get?.(combat.id)) return;
 		const actor = combatant.actor;
-		if (actor?.type !== "character" || heldReadiness(actor) <= 0) return;
+		if (!actor || !mine(actor)) return;
+		// A follower taken out of the fight lets go of the Readiness on their card as a character does (p.469: they
+		// hold it "on Defend's terms"), unless a token over the same card still stands in a fight.
+		if (actor.type === "npc") {
+			if (readinessHeldBy(actor, { cardFor }) <= 0) return;
+			const pool = readinessPool(actor, cardFor);
+			const poolsFighting = fightingActorIds(globalThis.game?.combats, { exceptCombatant: combatant, actorOf: other => {
+				const theirs = readinessPool(other, cardFor);
+				return theirs ? { id: theirs } : null;
+			} });
+			if (!pool || poolsFighting.has(pool)) return;
+			return loseAll([actor], "lostLeftFight", { cardFor });
+		}
+		if (actor.type !== "character" || heldReadiness(actor) <= 0) return;
 		// Still in this fight as another token, or in another fight.
 		if (fightingActorIds(globalThis.game?.combats, { exceptCombatant: combatant }).has(actor.id)) return;
 		return loseAll([actor], "lostLeftFight");
 	});
 	on("updateActor", (actor, changes) => {
+		// The change tests come first: they are cheap, and `mine` can walk every character's followers.
 		// A crew whose Readiness is gone (spent, lost, or cleared) has no wall left to keep it in.
-		if (shieldWallEmptied(actor, changes)) setShieldWall(actor, false).catch(err => console.error("Stonetop | breaking the shield wall failed", err));
-		if (followerDroppedHoldingReadiness(actor, changes, { cardFor })) return loseAll([actor], "lostDown", { cardFor });
-		if (!droppedHoldingReadiness(actor, changes)) return;
-		return loseAll([actor], "lostDown");
+		const wallGone = shieldWallEmptied(actor, changes);
+		const lost = followerDroppedHoldingReadiness(actor, changes, { cardFor }) ? "lostFollowerDown"
+			: stoppedFightingHoldingReadiness(actor, changes) ? "lostStopped"
+			: droppedHoldingReadiness(actor, changes) ? "lostDown" : null;
+		if ((!wallGone && !lost) || !mine(actor)) return;
+		if (wallGone) setShieldWall(actor, false).catch(err => console.error("Stonetop | breaking the shield wall failed", err));
+		if (lost === "lostFollowerDown") return loseAll([actor], "lostDown", { cardFor });
+		if (lost) return loseAll([actor], lost);
 	});
 
 	return () => {

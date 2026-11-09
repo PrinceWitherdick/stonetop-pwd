@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
 	HERO_MOVES, CLASHED_FLAG, HARMED_BY_FLAG, KNOCKED_DOWN_FLAG,
 	foeKey, recordClash, clashedBefore, relentlessAgainst, foeAdvantage,
-	recordHarmedBy, clearHarmedBy, paybackEarned, recordKnockedDownBy, spendUpAgainBlow, spendUpAgainRoll, upAgainAgainst,
+	recordHarmedBy, clearFightFoeRecords, paybackEarned, recordKnockedDownBy, spendUpAgainBlow, spendUpAgainRoll, upAgainAgainst,
 	TOUGH_LOVE_FLAG, toughLoveAgainst, toughLoveHeld, callOut, workedItOut,
 	muscleboundWeapon, berserkNow, blowOffers, defenderDisadvantage, dangerousMode, holyLightOffers,
 	ALPHA_FLAG, alphaAgainst, recordAlphaOver, forgetAlphaOver, spendAlphaOver,
@@ -34,6 +34,12 @@ function hero(name, moves, extra = {}) {
 		system: { attributes: { hp: { value: 20, max: 20 } } },
 		...extra,
 	};
+}
+
+/** An update's flag paths written onto a hero() fake, as clearFightFoeRecords writes them (one write). */
+function writable(actor) {
+	actor.update = vi.fn(async data => { for (const [path, value] of Object.entries(data)) actor.flags[SYSTEM_ID][path.split(".").pop()] = value; });
+	return actor;
 }
 
 /** An unlinked monster token and the world actor behind it, with `fromUuidSync` wired to both. */
@@ -154,7 +160,7 @@ describe("what a blow adds", () => {
 		expect(paybackEarned(bram, rows)).toBe(true);
 		const offer = blowOffers(bram, { targets: rows }).find(o => o.key === "payback");
 		expect(offer).toMatchObject({ dice: "1d4", applied: true });
-		await clearHarmedBy(bram);
+		await clearFightFoeRecords(writable(bram));
 		expect(paybackEarned(bram, rows)).toBe(false);
 	});
 
@@ -168,14 +174,14 @@ describe("what a blow adds", () => {
 		await recordHarmedBy(bram, t.crin.actor);
 		await recordHarmedBy(bram, t.chief.actor);
 		expect(bram.getFlag(SYSTEM_ID, HARMED_BY_FLAG)).toEqual([t.crin.uuid, "Actor.chief"]);
-		expect(await clearHarmedBy(bram)).toBe(true);
+		expect(await clearFightFoeRecords(writable(bram))).toBe(true);
 		expect(bram.getFlag(SYSTEM_ID, HARMED_BY_FLAG)).toEqual(["Actor.chief"]);
 		expect(paybackEarned(bram, [target(t.chief)])).toBe(true);
 		expect(paybackEarned(bram, [target(t.crin)])).toBe(false);
 		// Only named foes left: nothing to let go, and nothing written.
-		bram.setFlag.mockClear();
-		expect(await clearHarmedBy(bram)).toBe(false);
-		expect(bram.setFlag).not.toHaveBeenCalled();
+		bram.update.mockClear();
+		expect(await clearFightFoeRecords(bram)).toBe(false);
+		expect(bram.update).not.toHaveBeenCalled();
 	});
 
 	it("reads an ally's grudges off the active Combat when the Fight tab is off", () => {

@@ -72,6 +72,17 @@
 			<span>{{{localize "stonetop.specialMoves.deathsDoor.roll.neverGonnaUsed" name=(escapeHtml neverGonnaName)}}}</span>
 		</p>
 		{{/if}}
+		{{! The Rune-laden Scales' PROOF AGAINST HARM: a Consequence for a 10+, before the dice (its button is in
+		    the footer). Not worn per the inventory: said in gold, never refused. Both strings arrive escaped. }}
+		{{#if scalesOffer}}
+		<p class="deaths-door-note">
+			<i class="fas fa-shield-halved"></i>
+			<span>{{{scalesOffer.text}}}</span>
+		</p>
+		{{#if scalesOffer.notWorn}}
+		<p class="deaths-door-dictated"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> {{{scalesOffer.notWorn}}}</p>
+		{{/if}}
+		{{/if}}
 
 		{{! Stakes first, then the roll — which is in the footer with "Not yet", the one place a
 		    dialog's actions live. }}
@@ -238,6 +249,20 @@
 			{{! A fate a held arcanum's marked Consequence dictates: flagged in gold and marked as the
 			    suggestion. The other fates stay clickable (flagged, never blocked). }}
 			{{> "stonetop.deaths-door-dictates"}}
+			{{! The Shell Game of Souls: a bound soul goes through the Last Door in their place, and they survive as
+			    if they rolled a 7-9. Offered beside the fates, never instead of them. }}
+			{{#if soulsOffer}}
+			<div class="deaths-door-soul-release">
+				<p class="deaths-door-note">
+					<i class="fas fa-ghost"></i>
+					<span>{{{soulsOffer.text}}}</span>
+				</p>
+				<button type="button" class="deaths-door-boost-btn deaths-door-release-soul-btn">
+					<i class="fas fa-ghost"></i>
+					<span>{{soulsOffer.button}}</span>
+				</button>
+			</div>
+			{{/if}}
 			<div class="deaths-door-fates">
 				{{#each this.fates}}
 				<button type="button" class="deaths-door-fate-btn{{#if this.dictated}} is-dictated{{/if}}" data-fate="{{this.key}}">
@@ -371,6 +396,12 @@
 	<button class="deaths-door-skip-roll-btn" type="button" title="{{localize "stonetop.specialMoves.deathsDoor.buttons.skipTitle" move=skipRollMove}}">
 		<i class="fas fa-shield-heart"></i>
 		<span>{{localize "stonetop.specialMoves.deathsDoor.buttons.skip"}}</span>
+	</button>
+	{{/if}}
+	{{#if scalesOffer}}
+	<button class="deaths-door-boost-btn deaths-door-scales-btn" type="button" title="{{scalesOffer.title}}">
+		<i class="fas fa-shield-halved"></i>
+		<span>{{scalesOffer.button}}</span>
 	</button>
 	{{/if}}
 	<button class="deaths-door-cancel-btn" type="button">{{localize "stonetop.specialMoves.deathsDoor.buttons.notYet"}}</button>

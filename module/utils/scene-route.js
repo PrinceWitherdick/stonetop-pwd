@@ -27,9 +27,9 @@ import { format, localize } from "./i18n.js";
 import { joinNames } from "./strings.js";
 import { bodyStyleTokens } from "./css-tokens.js";
 import {
-	flagScopes, posterMapFor, posterMapSlugOf, sceneOrigin, scopedFlag,
+	flagScopes, posterMapFor, posterMapSlugOf, sceneOrigin, scopedFlag, scopedFlagDeletions,
 } from "../book2-art/poster-map-catalog.js";
-import { frameFitsImage, frameFor, travelMap, travelPlace } from "../data/travel-times.js";
+import { sceneFrame, travelMap, travelPlace } from "../data/travel-times.js";
 import { MAP_PIN_ICON_SIZE } from "./map-pins.js";
 import { journeyKey, journeyRoute, normalizeJourney } from "./travel-route.js";
 // Where the party sets out from, which may be a mark of the GM's own rather than a slug: the
@@ -229,8 +229,9 @@ export function sceneRouteCheck(scene, route) {
 	// own differently-trimmed scan over one of the names we know breaks that claim silently. A
 	// map with no route on it is obviously missing one; a map with the route through the wrong
 	// valleys looks finished and is worse than useless.
-	const frame = frameFor(map.out);
-	if (!frameFitsImage(frame, width / height, tier.printedAspect)) return refuse("wrong-shape");
+	// The poster scan or the book's own map page: `sceneFrame` takes whichever this picture is.
+	const frame = sceneFrame(map.out, width / height, tier.printedAspect);
+	if (!frame) return refuse("wrong-shape");
 
 	const aspect = width / height;
 	const path = routePath(route, slug, frame, aspect);
@@ -290,8 +291,9 @@ export function sceneRoutePlan(scene) {
  * Why a Scene will not take this route, in words the reader can act on.
  *
  * Every branch names a map, because "which map does draw it" is the only fact any of these
- * refusals leaves the reader able to use. `hasScene` says whether this world has built that map
- * yet, which decides whether the answer is "open it" or "import the book art first".
+ * refusals leaves the reader able to use. `hasScene` says whether this world has another Scene
+ * that IS that map, which decides whether the answer is "open it" or "mark yours, or import the
+ * book art".
  */
 export function sceneRouteRefusal(check, { hasScene = false } = {}) {
 	const wanted = check?.wantedName;
@@ -300,7 +302,7 @@ export function sceneRouteRefusal(check, { hasScene = false } = {}) {
 	const goTo = wanted
 		? hasScene
 			? format("stonetop.expedition.route.goToOpen", { map: wanted })
-			: localize("stonetop.expedition.route.goToImport")
+			: format("stonetop.expedition.route.goToImport", { map: wanted })
 		: "";
 
 	switch (check?.reason) {
@@ -345,30 +347,57 @@ export function offMapNames(note) {
 }
 
 /**
+ * A journey in the shape it is stored in wherever it is SHOWN: on a Scene's flag, and in the route
+ * the GM shares with the players (utils/shared-route.js). Null when there is nothing to show.
+ *
+ * WHAT IS DRAWN GOES IN, and not the rest of the trip. A hand-drawn way carries its map and its
+ * marks and no destination, because while a way is drawn the destination is a pick the GM is
+ * keeping for later rather than anything the line is about — and writing it here would make the
+ * button think the copy had gone out of step every time they changed it.
+ *
+ * AND THE KIND IT IS NOT IS WRITTEN AS NULL, not left out. `update` MERGES a plain object into
+ * the one already stored, so a table route written as `{ origin, destination }` over a drawn
+ * way kept the old `custom` key, and since a drawn way outranks a destination the Scene went on
+ * painting the old line on every client while the button offered, forever, to draw the new one.
+ */
+export function storedJourney(journey) {
+	const { start, destination, custom } = normalizeJourney(journey);
+	// Whichever kind of start it is, in the shape the flag stores and `normalizeJourney` reads: a
+	// hand-placed one with the words the players read for it.
+	const origin = startEnd(start);
+	const drawn = custom.on && custom.points.length > 0;
+	if (!drawn && !destination) return null;
+	return drawn
+		? { origin, destination: null, custom: { tier: custom.tier, points: custom.points.map(publicMark) } }
+		: { origin, destination, custom: null };
+}
+
+/**
+ * One stored mark as it may go where a player's client reads it: a Scene flag broadcasts to every
+ * client, and so does the route shown to the players.
+ *
+ * A STOP LAID ON A SITE LOSES THE SITE (audit ruling E17). The uuid and the name snapshot are GM
+ * prep, and a player's screen must never be able to say them; the stop stays exactly where it was,
+ * as a bare mark, with whatever `label` the GM typed for the players.
+ */
+function publicMark(point) {
+	if (!point || point.slug) return point;
+	const { siteUuid: _uuid, name: _name, ...rest } = point;
+	return rest;
+}
+
+/**
  * Put a journey on a Scene, or take it off again.
  *
  * One write either way, and the flag is the whole of the state: the overlay redraws from it on
  * every client, including the players', because a Scene flag broadcasts and the point of this
  * button is the map the whole table is looking at.
  */
-export async function showRouteOnScene(scene, journey) {
-	const { start, destination, custom } = normalizeJourney(journey);
-	// Whichever kind of start it is, in the shape the flag stores and `normalizeJourney` reads.
-	const origin = startEnd(start);
-	const drawn = custom.on && custom.points.length > 0;
-	if (!drawn && !destination) return null;
-	// WHAT IS DRAWN GOES IN, and not the rest of the trip. A hand-drawn way carries its map and its
-	// marks and no destination, because while a way is drawn the destination is a pick the GM is
-	// keeping for later rather than anything the line on the Scene is about — and writing it here
-	// would make the button think the Scene had gone out of step every time they changed it.
-	//
-	// AND THE KIND IT IS NOT IS WRITTEN AS NULL, not left out. `update` MERGES a plain object into
-	// the one already stored, so a table route written as `{ origin, destination }` over a drawn
-	// way kept the old `custom` key, and since a drawn way outranks a destination the Scene went on
-	// painting the old line on every client while the button offered, forever, to draw the new one.
-	const payload = drawn
-		? { origin, destination: null, custom: { tier: custom.tier, points: custom.points } }
-		: { origin, destination, custom: null };
+export async function showRouteOnScene(scene, journey, { spare = null } = {}) {
+	const payload = storedJourney(journey);
+	if (!payload) return null;
+	const drawn = !!payload.custom;
+	const { custom, destination } = payload;
 	// ONE write, and it takes any LEGACY copy down on the way past. `scopedFlag` answers with the
 	// first scope that holds one and walks the historical ids AHEAD of the pinned one, so a flag
 	// left behind by a rename would otherwise outrank the route being drawn right now.
@@ -381,11 +410,17 @@ export async function showRouteOnScene(scene, journey) {
 	// a GM who drew the route on the Vicinity and then drew it on the World's End left the
 	// Vicinity painting the old one for good — on every client, with the panel's button now
 	// talking about the scene in front of them and no control anywhere that could reach the other.
-	await clearRouteElsewhere(scene);
+	//
+	// EXCEPT `spare`: the scene the PLAYERS are on, when the GM drew somewhere they did not follow
+	// (audit ruling E14). Clearing it took the only line the table could see off their screens.
+	await clearRouteElsewhere(scene, { spare });
 	// The name to tell the GM the line landed under, or null where the way ends at a mark of their
 	// own and there is no name to give — which the caller words for itself.
 	if (!drawn) return travelPlace(destination)?.name ?? destination;
-	return travelPlace(custom.points.at(-1)?.slug)?.name ?? null;
+	// The GM's own notice may name the site a way ends on: it is read from the trip, not the flag.
+	return travelPlace(custom.points.at(-1)?.slug)?.name
+		?? normalizeJourney(journey).custom.points.at(-1)?.name
+		?? null;
 }
 
 /**
@@ -401,13 +436,9 @@ export async function showRouteOnScene(scene, journey) {
  * there.
  */
 function routeFlagDeletions(scene, { except = null } = {}) {
-	const flags = scene?.flags ?? {};
-	const drop = {};
-	for (const scope of flagScopes()) {
-		if (scope === except) continue;
-		if (flags[scope]?.[SCENE_ROUTE_FLAG]) drop[`flags.${scope}.-=${SCENE_ROUTE_FLAG}`] = null;
-	}
-	return drop;
+	// Through `deletionEntry`, which writes v14's ForcedDeletion operator there and the `-=` key
+	// on v13 (memory forceddeletion.md); `routeFlagTouched` above already reads both spellings back.
+	return scopedFlagDeletions(scene, SCENE_ROUTE_FLAG, { except });
 }
 
 /**
@@ -442,10 +473,11 @@ export async function clearRouteOnScene(scene) {
  *
  * @returns {Promise<number>} how many Scenes were cleared.
  */
-export async function clearRouteElsewhere(keep, { scenes = globalThis.game?.scenes ?? [] } = {}) {
+export async function clearRouteElsewhere(keep, { scenes = globalThis.game?.scenes ?? [], spare = null } = {}) {
 	let cleared = 0;
 	for (const scene of scenes) {
 		if (scene === keep || scene?.id === keep?.id) continue;
+		if (spare && (scene === spare || scene?.id === spare.id)) continue;
 		if (!sceneJourney(scene)) continue;
 		try {
 			await scene.update(routeFlagDeletions(scene));
