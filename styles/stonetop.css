@@ -50131,12 +50131,14 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	justify-content: space-between;
 	gap: 6px;
 	padding: 4px 4px 4px 10px;
-	border-bottom: 1px solid var(--st-card-rule);
-	/* A SHADE OF ITS OWN, as a window's title bar has, in every palette: the panel with a little of
-	   the body ink in it. The corners follow the bar's own. */
+	/* THE HOUSE TITLE BAR: the slate band, light words and the Stonetop face of every Stonetop
+	   window's header (`.vtt .stonetop .window-header`), and in dark mode the same near-black band
+	   (`--st-window-header-bg`, set only by the dark palettes). The corners follow the bar's own. */
+	border-bottom: 1px solid var(--st-btn-primary-border);
 	border-radius: var(--st-radius-lg) var(--st-radius-lg) 0 0;
-	background: color-mix(in srgb, var(--st-text-body) 8%, var(--stonetop-bg));
-	color: var(--st-text-body);
+	background: var(--st-window-header-bg, var(--st-accent-fill));
+	color: var(--st-btn-primary-text);
+	font-family: var(--font-stonetop);
 	font-size: var(--relmap-bar-font);
 	font-weight: 600;
 	line-height: 1;
@@ -50160,11 +50162,23 @@ THE WINDOW'S FIRST ROW, and it reads as its own stratum rather than as chrome: w
 	text-box: trim-both cap alphabetic;
 }
 
-/* The title's x: the tie bar's icon square, borderless until it is pointed at. */
-.stonetop-relmap-personbar-head .stonetop-relmap-personbar-close {
+/* The title's x: the tie bar's icon square, borderless until it is pointed at, in the title's light
+   ink. Its hover and ring are the light ink too: the tie bar's slate ones vanish on the slate band.
+   The bar and the element in the selector so `inherit` outranks core's `body.game .app button
+   { color: revert }` (0,2,2), which otherwise draws the x in the browser's own button ink. */
+div.stonetop-relmap-personbar .stonetop-relmap-personbar-head button.stonetop-relmap-personbar-close {
 	flex: none;
 	border-color: transparent;
 	background: none;
+	color: inherit;
+}
+div.stonetop-relmap-personbar .stonetop-relmap-personbar-head button.stonetop-relmap-personbar-close:hover {
+	border-color: transparent;
+	background: color-mix(in srgb, currentColor 18%, transparent);
+}
+div.stonetop-relmap-personbar .stonetop-relmap-personbar-head button.stonetop-relmap-personbar-close:focus-visible {
+	outline-color: currentColor;
+	outline-offset: -2px;
 }
 
 .stonetop-relmap-personbar-body {
@@ -50266,14 +50280,13 @@ textarea.stonetop-relmap-personbar-field {
 	padding-bottom: var(--st-trim-bottom);
 }
 
-/* THE FOOT: Save, at the right, under the rule, in the title's shade. */
+/* THE FOOT: Save, at the right, under the rule, on the bar's own panel. No band of its own: a
+   Stonetop dialog's buttons sit on its body, not in a shaded strip. */
 .stonetop-relmap-personbar-foot {
 	display: flex;
 	justify-content: flex-end;
-	padding: 6px 10px;
+	padding: 6px 10px 8px;
 	border-top: 1px solid var(--st-card-rule);
-	border-radius: 0 0 var(--st-radius-lg) var(--st-radius-lg);
-	background: color-mix(in srgb, var(--st-text-body) 8%, var(--stonetop-bg));
 }
 
 /* SAVE: a tick and the word, in the house primary button's colours (as the chip form's Save). A flex
