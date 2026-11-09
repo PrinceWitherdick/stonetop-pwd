@@ -275,6 +275,27 @@ describe("the chips every board offers", () => {
 		expect(Object.keys(sent).some(key => key.endsWith("elena.chips.-=dead"))).toBe(true);
 		expect(chipElsewhere("dead", { boards: [other, board({})] })).toBe(1);
 	});
+
+	// The same boards `spreadChip` writes: a board this reader can only see is not reached by the
+	// deletion, so the question does not promise it.
+	it("counts for the delete question only the boards the deletion reaches", () => {
+		const raw = RAW();
+		raw.nodes.elena.chips = { dead: true };
+		const mine = board(raw);
+		const seenOnly = board(raw, { owner: false });
+		expect(chipElsewhere("dead", { boards: [mine, seenOnly] })).toBe(1);
+	});
+
+	it("warns about a board that refuses the edit, and still carries it to the rest", async () => {
+		const refuses = board(RAW(), { name: "Locked away" });
+		refuses.update = vi.fn(async () => { throw new Error("refused"); });
+		const takes = board(RAW());
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		expect(await spreadChip("dead", { name: "Fallen" }, { boards: [refuses, takes] })).toBe(1);
+		expect(takes.update).toHaveBeenCalled();
+		expect(warn.mock.calls[0][0]).toContain('"Locked away" to carry a chip there');
+		warn.mockRestore();
+	});
 });
 
 describe("how far chips reach under a person", () => {
@@ -309,6 +330,15 @@ describe("how far chips reach under a person", () => {
 		expect(underReach({ subtitle: "Iron Knight" }, reach).x).toBe(reach.subX);
 		expect(underReach({ subtitle: "Iron Knight", chipRows: 1 }, reach).down)
 			.toBe(RELMAP_SUBTITLE_REACH_PX + RELMAP_CHIP_GAP_PX + RELMAP_CHIP_H_PX);
+	});
+
+	it("keeps the chips at their base size whatever the names dial says", () => {
+		const chipped = { chipRows: 2 };
+		for (const dial of [0.5, 1.5, 2]) {
+			const reach = personReach(dial);
+			expect(reach.chipH).toBe(RELMAP_CHIP_H_PX);
+			expect(underReach(chipped, reach).down).toBe(chipReach(2));
+		}
 	});
 
 	it("grows a group's outline, its floor and the board's frame round a chipped person", () => {

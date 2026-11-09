@@ -800,6 +800,20 @@ describe("the label under a portrait's name", () => {
 		teardown();
 	});
 
+	// THE NAME OVER IT raises the same bar: a click on somebody's name edits their label and chips.
+	it("raises the same bar on a click on the name, and moves the person when the name is dragged", () => {
+		const { handlers, teardown } = wire(board);
+		press(board, board.portraits.n1.name);
+		expect(handlers.onPickPerson).toHaveBeenCalledWith("n1", board.portraits.n1.name);
+		expect(handlers.onOpen).not.toHaveBeenCalled();
+		expect(handlers.onPickNone).not.toHaveBeenCalled();
+		handlers.onPickPerson.mockClear();
+		press(board, board.portraits.n1.name, { to: [40, 0] });
+		expect(handlers.onMove).toHaveBeenCalled();
+		expect(handlers.onPickPerson).not.toHaveBeenCalled();
+		teardown();
+	});
+
 	// A press that travels is the person's drag, as one on the name is, and the bar does not also go up.
 	it("still moves the person when it is dragged, and raises nothing", () => {
 		const { handlers, teardown } = wire(board);

@@ -18,7 +18,7 @@ import { deletionEntry, deletionUpdate } from "../utils/foundry-compat.js";
 import { clipText } from "../utils/strings.js";
 import {
 	RELMAP_BOARD_ASPECT, RELMAP_CAPTION_FLOOR_PX, RELMAP_CAPTION_PX, boardMetrics, chipLayout, clampReach,
-	freeSpot, personReach, readGroupGrow, ringsLayout, underReach,
+	freeSpot, personReach, plateReach, readGroupGrow, ringsLayout, sideOf, underReach,
 } from "../utils/relmap-geometry.js";
 import { normalizeHex } from "./relmap-ink.js";
 
@@ -408,10 +408,39 @@ export const RELMAP_NAME_MAX = 120;
 /**
  * How long the label under a person's name may be ("Iron Knight", "Deceased", "Acolyte of the
  * Celebrated Seer"). It belongs to the person ON THIS MAP, never to the actor, so one face can be
- * "Squire" on one board and "Deceased" on another. Drawn at most two lines deep under the name, so it
+ * "Squire" on one board and "Deceased" on another. Drawn at most three lines deep under the name, so it
  * is a title and not a biography; the note is where the story goes.
+ *
+ * ENTER MAKES A NEW LINE, up to `RELMAP_SUBTITLE_LINES` of them ("The Iron Knight" / "Lord of the
+ * Vale"), and a long line still wraps; however it got there, no more than that many lines are drawn.
+ * The line breaks are stored in the one string, so a label written before lines existed reads as it did.
  */
-export const RELMAP_SUBTITLE_MAX = 80;
+export const RELMAP_SUBTITLE_MAX = 120;
+export const RELMAP_SUBTITLE_LINES = 3;
+
+/**
+ * WHERE A PERSON'S NAME, LABEL AND CHIPS STAND ROUND THEIR FACE: under it, as every board has always
+ * drawn them, or above it, or to its left or right, chosen per person in their bar, for a board where
+ * the lines run over the words under somebody. The three move together as one block.
+ *
+ * Unknown and absent both read as below, so a board stored before this field existed draws exactly as
+ * it did, with no migration. After Dom Bosco's tags pull request to the relationship-map module.
+ */
+export const RELMAP_SIDES = Object.freeze(["below", "above", "left", "right"]);
+export const RELMAP_SIDE_DEFAULT = "below";
+
+/** One stored side, read safely. Unknown and absent both read as below. */
+export function readSide(value) {
+	return RELMAP_SIDES.includes(value) ? value : RELMAP_SIDE_DEFAULT;
+}
+
+/**
+ * Whether a person's label is set in italics. It always was, so only a stored `false` turns it upright:
+ * absent, and anything else, read as italic, and no board stored before this field existed changes look.
+ */
+export function readItalic(value) {
+	return value !== false;
+}
 
 /** How long the notes behind a line or a person may be. Where the prose that will not fit on the
  * board goes, so it is generous: nothing on the board is measured against it. */
@@ -507,6 +536,72 @@ export function chipsWorn(node, graph) {
 		.sort(compareChips);
 }
 
+/**
+ * A normalized board with one person's UNSAVED change laid over it, for painting only: their label,
+ * side and italics, chips put on (defined on the board where it has never had them) and taken off,
+ * chips changed, and chips deleted (off everybody). A copy; `graph` is the caller's. The person gone,
+ * or no change, is `graph` itself.
+ *
+ * @param {object} graph
+ * @param {string} id
+ * @param {{fields?: object, wear?: object[], off?: string[], defs?: object, drop?: string[]}|null} change
+ *        as the person bar hands it over (utils/relmap-person-bar.js `_change`).
+ */
+export function withPersonChange(graph, id, change) {
+	const node = graph?.nodes?.[id];
+	if (!node || !change) return graph;
+	const { fields = {}, wear = [], off = [], defs = {}, drop = [] } = change;
+	const chips = { ...(graph.chips ?? {}) };
+	const worn = { ...(node.chips ?? {}) };
+	// A CHIP DELETED comes off everybody on the board, not only this person.
+	let nodes = graph.nodes;
+	if (drop.length) {
+		nodes = { ...nodes };
+		for (const chipId of drop) {
+			delete chips[chipId];
+			delete worn[chipId];
+			for (const [other, person] of Object.entries(nodes)) {
+				if (other !== id && person?.chips?.[chipId]) {
+					const rest = { ...person.chips };
+					delete rest[chipId];
+					nodes[other] = { ...person, chips: rest };
+				}
+			}
+		}
+	}
+	for (const chipId of off) delete worn[chipId];
+	for (const { id: chipId, name, icon = "", ink = RELMAP_INK_DEFAULT } of wear) {
+		if (!chipId || !chipNameOf(name)) continue;
+		worn[chipId] = true;
+		chips[chipId] ??= { name: chipNameOf(name), icon, ink };
+	}
+	for (const [chipId, def] of Object.entries(defs)) {
+		if (chips[chipId] && chipNameOf(def?.name)) chips[chipId] = { ...chips[chipId], ...def, name: chipNameOf(def.name) };
+	}
+	const next = { ...node, chips: worn };
+	if ("subtitle" in fields) next.subtitle = subtitleOf(fields.subtitle);
+	if ("side" in fields) next.side = readSide(fields.side);
+	if ("italic" in fields) next.italic = readItalic(fields.italic);
+	const out = { ...graph, chips, nodes: { ...nodes, [id]: next } };
+	// ⚠ AND THE CHIPS LAID OUT AGAIN (`chipLaid`, `chipRows`), which is what the board actually paints
+	// and every outline reaches round: the read worked them out from the stored chips, so a chip put on,
+	// taken off, changed or deleted here showed in the bar and not on the board. This person, and
+	// everybody wearing a chip changed or deleted.
+	const touched = new Set([...Object.keys(defs), ...drop]);
+	const wearsTouched = other => Object.keys(graph.nodes[other]?.chips ?? {}).some(chipId => touched.has(chipId));
+	for (const [other, person] of Object.entries(out.nodes)) {
+		if (other === id || wearsTouched(other)) out.nodes[other] = withChipsLaid(person, out);
+	}
+	return out;
+}
+
+/** A person with `chipLaid` and `chipRows` worked out afresh against `graph`, as `normalizeGraph` does. A copy. */
+function withChipsLaid(node, graph) {
+	const { chipLaid: _laid, chipRows: _rows, ...rest } = node;
+	const laid = chipLayout(chipsWorn(rest, graph));
+	return laid.rows.length ? { ...rest, chipRows: laid.rows.length, chipLaid: laid } : rest;
+}
+
 /** The order chips are listed in: presets first, then by name, then by id so it is total. */
 export function compareChips(a, b) {
 	const rank = chip => {
@@ -537,7 +632,15 @@ const str = (v, max = 0) => {
  * A label under a name, TRIMMED: one of only spaces is no label. Kept, it drew a blank chip where
  * "Add a label" belongs and made every outline round that person reach for words nobody can see.
  */
-const subtitleOf = v => str(v, RELMAP_SUBTITLE_MAX).trim();
+export function subtitleOf(v) {
+	// LINE BY LINE: spaces inside a line collapse, blank lines go, and only the first
+	// `RELMAP_SUBTITLE_LINES` stay, so a paste of a paragraph cannot hang a column under somebody.
+	const lines = str(v).split(/\r\n?|\n/)
+		.map(line => line.replace(/\s+/g, " ").trim())
+		.filter(Boolean)
+		.slice(0, RELMAP_SUBTITLE_LINES);
+	return clipText(lines.join("\n"), RELMAP_SUBTITLE_MAX).trim();
+}
 
 /** The chips one person wears, as `{chipId: true}`, keeping only ids `defined` holds. */
 function wornChips(raw, defined) {
@@ -600,6 +703,10 @@ export function normalizeGraph(raw) {
 			// the old value off this read (relmap-history.js `describeWrite`), so a label absent here is a
 			// label nobody can take back. Absent on every person put down before it existed: no migration.
 			subtitle: subtitleOf(node.subtitle),
+			// Where the name, label and chips stand, and whether the label is in italics: emitted on every
+			// node for the same reason, so a change to either can be taken back. Absent reads as below, italic.
+			side: readSide(node.side),
+			italic: readItalic(node.italic),
 			// Emitted on every node for the same reason, and only chips this board defines: a deleted
 			// chip's leaf stays in the flag, unread, so undoing the deletion brings it back on everyone.
 			chips: wornChips(node.chips, graph.chips),
@@ -732,6 +839,8 @@ const NODE_GATES = Object.freeze({
 	name: v => str(v, RELMAP_NAME_MAX),
 	note: v => str(v, RELMAP_NOTE_MAX),
 	subtitle: subtitleOf,
+	side: readSide,
+	italic: readItalic,
 });
 
 const EDGE_GATES = Object.freeze({
@@ -790,9 +899,10 @@ export function edgePatch(id, fields = {}) {
 /** Put somebody on the map. Every field written, so the node is whole from its first write. */
 export function addNodePatch(id, {
 	uuid = null, name = "", img = "", x = 50, y = 50, note = "", subtitle = "", chips = {},
+	side = RELMAP_SIDE_DEFAULT, italic = true,
 } = {}) {
 	// The label and chips too: undoing a removal puts the person back through here, label and all.
-	const patch = nodePatch(id, { uuid, name, img, x, y, note, subtitle });
+	const patch = nodePatch(id, { uuid, name, img, x, y, note, subtitle, side, italic });
 	if (!patch) return null;
 	const worn = Object.keys(chips ?? {}).filter(chipId => chips[chipId]);
 	return { ...patch, ...(nodeChipsPatch(id, worn) ?? {}) };
@@ -1024,6 +1134,9 @@ export function pruneDeadPatch(raw) {
 export function takenSpots(graph) {
 	const reach = personReach();
 	return Object.values(graph?.nodes ?? {}).map(n => {
+		// Somebody whose words stand over or beside the face holds THAT box (`plate`, board pixels).
+		const side = sideOf(n);
+		if (side !== "below") return { left: n.x, top: n.y, side, plate: plateReach(n, reach) };
 		const { x, down } = underReach(n, reach);
 		return down ? { left: n.x, top: n.y, under: down, across: x } : { left: n.x, top: n.y };
 	});
@@ -1082,7 +1195,7 @@ export function seatArrivals(graph, people = [], newId = () => foundry.utils.ran
 		const spot = seats?.[index] ?? freeSpot(taken, room);
 		nodes[id] = {
 			uuid: person.uuid, name: person.name ?? "", img: person.img ?? "",
-			x: spot.left, y: spot.top, note: "",
+			x: spot.left, y: spot.top, note: "", side: RELMAP_SIDE_DEFAULT, italic: true,
 		};
 		taken.push(spot);
 		seated.push(nodeIdentity(person));

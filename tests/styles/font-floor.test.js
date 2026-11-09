@@ -69,6 +69,7 @@ const EXEMPT = {
 	".stonetop-relmap-heft-step > i": "icon",
 	".stonetop-relmap-tiebar-btn": "icon-only square",
 	".stonetop-relmap-inkpop-swatch": "colour swatch",
+	".stonetop-relmap-chip": "board pixels: a tag chip on the map grows with the map's zoom, not the UI size",
 	".stonetop-person-picker-chip i": "icon (whole-pixel, chip-centring)",
 	".stonetop-timeline-card-actions button > i": "icon",
 	".stonetop-timeline-add > i": "icon",

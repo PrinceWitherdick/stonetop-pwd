@@ -40,15 +40,16 @@ import {
 import {
 	RELMAP_CHIP_ICONS, RELMAP_CHIP_NAME_MAX,
 	RELMAP_DASHES, RELMAP_DASH_DEFAULT, RELMAP_DIRS, RELMAP_FLAG, RELMAP_GROUP_DASHES, RELMAP_GROUP_SHAPES, RELMAP_INKS,
-	RELMAP_LABEL_MAX, RELMAP_SUBTITLE_MAX, RELMAP_SEAT_MIN, RELMAP_SIZES, RELMAP_SIZE_MAX, RELMAP_SIZE_MIN,
+	RELMAP_LABEL_MAX, RELMAP_SIDES, RELMAP_SIDE_DEFAULT, RELMAP_SUBTITLE_LINES, RELMAP_SUBTITLE_MAX, RELMAP_SEAT_MIN,
+	RELMAP_SIZES, RELMAP_SIZE_MAX, RELMAP_SIZE_MIN,
 	addEdgePatch, addGroupPatch, chipPatch, chipsWorn, dropChipPatch, nodeChipsPatch,
 	dropEdgePatch, dropGroupPatch, dropNodePatch, edgePatch, fanIndexes,
-	groupMembersPatch, groupPatch, nodePatch, pruneDeadPatch, readSeat, seatArrivals, takenSpots,
+	groupMembersPatch, groupPatch, nodePatch, pruneDeadPatch, readSeat, seatArrivals, takenSpots, withPersonChange,
 } from "../relmap/relmap-store.js";
 import { RELMAP_INK_ACROSS, RELMAP_INK_PRESETS, inkPaint, normalizeHex }
 	from "../relmap/relmap-ink.js";
 import { rememberBoard } from "../relmap/relmap-last.js";
-import { penFor, rememberPen } from "../relmap/relmap-pen.js";
+import { labelItalicFor, penFor, rememberPen } from "../relmap/relmap-pen.js";
 import { getLastSize, rememberSize } from "../relmap/relmap-size.js";
 import {
 	RELMAP_WEIGHTS, RELMAP_WEIGHT_BASE, RELMAP_WEIGHT_MAX, RELMAP_WEIGHT_MIN, RELMAP_WEIGHT_SPLIT, RELMAP_WEIGHT_STEP,
@@ -59,7 +60,7 @@ import {
 } from "../relmap/relmap-history.js";
 import { RelmapTieBar, TIE_DIR_ICONS } from "../utils/relmap-tie-bar.js";
 import { RelmapGroupBar } from "../utils/relmap-group-bar.js";
-import { RelmapPersonBar } from "../utils/relmap-person-bar.js";
+import { DRAFT_CHIP_ID, RelmapPersonBar } from "../utils/relmap-person-bar.js";
 import { chipPaint } from "../utils/relmap-chip-pill.js";
 import { chipElsewhere, chipLibrary, chipWearPatch, spreadChip } from "../relmap/relmap-chips.js";
 import { seatPatch } from "../relmap/relmap-dead.js";
@@ -69,7 +70,9 @@ import {
 	ensureFirstMapPage, getMapPage, isMapPageHidden, mapPageName, moveMapPage, readGraph, renameMapPage,
 	resolveMapBoard, seedMap, setMapPageHidden, syncPartyPage, syncVillagePage,
 } from "../relmap/relmap-doc.js";
-import { changedSavedFace } from "../relmap/relmap-faces.js";
+import { changedSavedFace, writeBoards } from "../relmap/relmap-faces.js";
+import { measuringContext } from "../utils/measuring-canvas.js";
+import { RELMAP_CHIP_FACE_HOOK } from "../utils/relmap-chip-measure.js";
 import { steadingListActors } from "../actors/steading/steading-people.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
 import { introRegards } from "../relmap/relmap-intros.js";
@@ -431,9 +434,6 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// the two write different patches to different halves of the graph -- and one map holding
 		// both would be one place to ask "is this a node or a line?" on every flush for ever.
 		this._pendingSeat = new Map();
-		// EVERY WRITE THIS WINDOW HAS SENT AND NOT HEARD BACK FROM, whatever sent it. An undo waits
-		// for all of them before it looks at the stack: see `_write` and `_stepHistoryNow`.
-		this._inflight = new Set();
 		// The history this view's undo buttons are listening to, and how to stop. See `_watchHistory`.
 		this._watching = null;
 		// WHO THIS READER HAS SELECTED on the board in front of them, to move together. Theirs
@@ -454,6 +454,12 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this._groupBar = null;
 		// The bar a person's label raises. See utils/relmap-person-bar.js.
 		this._personBar = null;
+		// WHAT THAT BAR IS CHANGING AND HAS NOT SAVED, `{id, change}`, painted over the stored board for
+		// this reader alone (`_withPersonDraft`), and the one SAVED and not yet back from the server, held
+		// on the board until it is so the board does not flash back. See `_savePerson`.
+		this._personDraft = null;
+		this._landingPerson = null;
+		this._personPaint = false;
 		this._litGroup = null;
 		this._pickedGroupParts = [];
 		// Its four resize corners, the size they were last drawn at, and one resize's worth of preview.
@@ -816,6 +822,17 @@ export class RelationshipMapWindow extends StonetopDialog {
 				label: localize("stonetop.relmap.subtitle.field"),
 				placeholder: localize("stonetop.relmap.subtitle.placeholder"),
 				maxLength: RELMAP_SUBTITLE_MAX,
+				lines: RELMAP_SUBTITLE_LINES,
+				hint: format("stonetop.relmap.subtitle.hint", { max: RELMAP_SUBTITLE_LINES }),
+				// WHERE THE NAME, LABEL AND CHIPS GO, one radio per side, and whether the label is italic.
+				// Nothing on this part of the bar is written until Save.
+				where: localize("stonetop.relmap.subtitle.where"),
+				// Above first, then below, left and right. The store's list is not reordered.
+				sides: ["above", "below", "left", "right"].filter(key => RELMAP_SIDES.includes(key))
+					.map(key => ({ key, name: localize(`stonetop.relmap.subtitle.side.${key}`) })),
+				italic: localize("stonetop.relmap.subtitle.italic"),
+				save: localize("stonetop.relmap.subtitle.save"),
+				close: localize("stonetop.relmap.subtitle.close"),
 				// THE CHIPS' WORDS. `edit` and `off` are PATTERNS with `{chip}` left in: the bar fills in
 				// which chip, and carries no i18n of its own.
 				chips: {
@@ -1051,9 +1068,14 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * spreader's obstacle list, the cast the partial walks) reads it, so they cannot come apart.
 	 */
 	_plan(graph = null) {
-		const whole = graph ?? this._withLanding(readGraph(this.boardDoc));
+		const stored = graph ?? this._withLanding(readGraph(this.boardDoc));
+		// A PERSON'S LABEL OR CHIPS BEING CHANGED IN THEIR BAR are drawn as changed, on every pass that
+		// paints or measures the board, so the outlines and the gaps agree with the words shown.
+		const whole = this._withPersonDraft(stored);
 		return {
 			graph: whole,
+			// The board without that change, for the bar to measure what it has changed against.
+			stored,
 			// THE SHEET GROWS WITH THE CAST, so a portrait's radius is not a constant: it is
 			// smaller, as a share of the board, on a board carrying more people.
 			board: boardMetrics(Object.keys(whole.nodes).length),
@@ -1165,7 +1187,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 	 * are on, and a ternary per question is three chances for one of them to be looking at a
 	 * different one.
 	 */
-	_boardContext({ graph, board, scales = weightScales() }, canEdit = this.canEdit) {
+	_boardContext({ graph, stored = graph, board, scales = weightScales() }, canEdit = this.canEdit) {
 		const r = board.r;
 		const fans = fanIndexes(graph);
 		// `canEdit` is handed in by a render that has already resolved the board (`getData`), and asked of a
@@ -1212,28 +1234,32 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// actor's: it is what the person is on this board. Folded into the face's sentence too, so a
 			// reader who cannot see the chip under it still hears it.
 			const subtitle = node.subtitle ?? "";
+			// Its lines as a screen reader hears them: "The Iron Knight, Lord of the Vale".
+			const spoken = subtitle.split("\n").join(", ");
 			// AND THE CHIPS ("Dead"), in the rows they are drawn in, which are the rows every outline
 			// reaches round: laid out once by the read (relmap-store.js `normalizeGraph`, `chipLaid`).
 			// Spoken with the name too: "Simon, Deceased, Dead". The rows and then the hidden ones are
 			// the worn order.
 			const laid = node.chipLaid ?? NO_CHIPS;
 			const worn = [...laid.rows.flat(), ...laid.hidden];
-			const called = [name, subtitle, ...worn.map(chip => chip.name)].filter(Boolean).join(", ");
+			const called = [name, spoken, ...worn.map(chip => chip.name)].filter(Boolean).join(", ");
 			return {
 				id,
 				name,
 				subtitle,
+				// Where the name, label and chips stand round the face, and whether the label is italic.
+				side: node.side ?? RELMAP_SIDE_DEFAULT,
+				// Said as the exception, so a label with nothing said about it stays italic, as it always was.
+				upright: node.italic === false,
 				chipRows: laid.rows.map(row => row.map(chipPaint)),
+				// "+N" for the chips that did not fit; the face's tooltip names them.
 				chipMore: laid.hidden.length
-					? {
-						label: format("stonetop.relmap.chips.more", { count: laid.hidden.length }),
-						tooltip: laid.hidden.map(chip => chip.name).join(", "),
-					}
+					? { label: format("stonetop.relmap.chips.more", { count: laid.hidden.length }) }
 					: null,
 				// The button's spoken name REPLACES its visible words, so it says them too, ahead of what
 				// a press does: "Iron Knight. Change the label under Lord Elroy".
 				subtitleLabel: subtitle
-					? `${subtitle}. ${format("stonetop.relmap.subtitle.edit", { name })}`
+					? `${spoken}. ${format("stonetop.relmap.subtitle.edit", { name })}`
 					: format("stonetop.relmap.subtitle.edit", { name }),
 				left: node.x,
 				top: node.y,
@@ -1315,6 +1341,8 @@ export class RelationshipMapWindow extends StonetopDialog {
 			// AND IT SAVES A SECOND `readGraph` PER REPAINT, which normalizes the whole map's
 			// worth of nodes and edges into a fresh object; the repaint has already paid for one.
 			graph,
+			// And the same board without the person bar's unsaved change (`_plan`), for that bar.
+			stored,
 		};
 		for (const shape of shapes) {
 			const { id, edge, curve, anchor } = shape;
@@ -1462,6 +1490,11 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this._tieBar = null;
 		this._groupBar = null;
 		this._personBar = null;
+		// The person bar's unsaved change went with the bar: the board this render drew it on is put back.
+		if (this._personDraft) {
+			this._personDraft = null;
+			this._paintPersonDraft();
+		}
 
 		// Adopted BEFORE the early return. Left until after it, a render that somehow produced no
 		// viewport would leave this pointing at the PREVIOUS render, and the next live update would
@@ -1584,17 +1617,19 @@ export class RelationshipMapWindow extends StonetopDialog {
 			canEdit: () => this.canEdit,
 		});
 
-		// AND THE LABEL UNDER A PERSON'S NAME: one field, written as one step per burst of typing.
+		// AND THE LABEL UNDER A PERSON'S NAME, its side, italics and chips: shown on the board as they are
+		// changed, and written as one step on Save.
 		this._personBar = new RelmapPersonBar(root, {
 			surface: () => this._surface,
 			personAt: id => this._personAt(id),
-			onField: (id, fields) => this._writeSubtitle(id, fields),
+			onPreview: (id, change) => this._previewPerson(id, change),
+			onSave: (id, change) => this._savePerson(id, change),
 			canEdit: () => this.canEdit,
-			// AND THEIR CHIPS: the menu's list, and the four writes the bar asks for.
+			// AND THEIR CHIPS: the menu's list, what a new chip is, and the question a Delete asks.
 			library: () => chipLibrary(readGraph(this.boardDoc), { doc: this.boardDoc }),
-			onWear: (id, chip) => this._wearChip(id, chip),
-			onTakeOff: (id, chipId) => this._takeOffChip(id, chipId),
-			onSaveChip: (id, chipId, def) => this._saveChip(id, chipId, def),
+			onNewChip: def => this._newChip(def),
+			// A new label starts in the italics the last one saved on this board had.
+			italicDefault: () => labelItalicFor(this.entry),
 			onDropChip: chipId => this._dropChip(chipId),
 			onNudged: (chose, used) => ui.notifications?.info?.(
 				format("stonetop.relmap.chips.inkDeepened", { chose, used }),
@@ -1962,6 +1997,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// comes back. Both are the same question about who is on the board.
 		on("deleteActor", actor => { if (onBoard(actor)) repaint(); });
 		on("createActor", actor => { if (onBoard(actor)) repaint(); });
+		// The chips' face has loaded (utils/relmap-chip-measure.js): the pills were packed by the
+		// per-character table until now, and are packed again in the face they are drawn in.
+		on(RELMAP_CHIP_FACE_HOOK, repaint);
 	}
 
 	/**
@@ -2530,9 +2568,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 	/**
 	 * One write per board that carries dead lines, by the primary GM only, never through the undo.
 	 *
-	 * ALL SENT AT ONCE, since every board is its own document. Every write is waited for before a
-	 * failure is passed on, so one board refusing still leaves the rest tidied, and the caller still
-	 * hears about the first refusal (`_seedPages` warns once).
+	 * ALL SENT AT ONCE, since every board is its own document, through relmap-faces.js `writeBoards`:
+	 * a board that refuses is warned about by name and the rest are still tidied. It never throws, so
+	 * `_seedPages`' catch is left for anything else going wrong on the way.
 	 */
 	async _pruneDead() {
 		if (!isPrimaryGM()) return;
@@ -2542,10 +2580,9 @@ export class RelationshipMapWindow extends StonetopDialog {
 			const raw = page?.getFlag?.(SYSTEM_ID, RELMAP_FLAG);
 			if (!raw || !page.isOwner) continue;
 			const prune = pruneDeadPatch(raw);
-			if (prune) writes.push(applyPatch(page, prune));
+			if (prune) writes.push([page, prune]);
 		}
-		const refused = (await Promise.allSettled(writes)).find(done => done.status === "rejected");
-		if (refused) throw refused.reason;
+		await writeBoards(writes, { why: "to tidy away its dead lines" });
 	}
 
 	/**
@@ -3349,18 +3386,10 @@ export class RelationshipMapWindow extends StonetopDialog {
 		// flushes it asks for. Pressing the footer's Undo blurs a bar's field first, and the blur's flush
 		// starts the write and marks the words saved; the undo's own flush then had nothing left to
 		// write, peeked at the step BEFORE the label, took that back, and then the label landed and
-		// emptied the redo stack. Taken in the same breath as the call, before anything is awaited.
-		const write = this._writeNow(patch, options);
-		this._inflight.add(write);
-		const done = () => this._inflight.delete(write);
-		// The caller has the write itself and answers for its failure; this only lets go of it.
-		write.then(done, done).catch(() => {});
-		return write;
-	}
-
-	/** Every write `_write` has sent that has not landed yet, as one promise; undefined for none. */
-	_writesLanded() {
-		return this._inflight.size ? Promise.allSettled([...this._inflight]) : undefined;
+		// emptied the redo stack. Taken in the same breath as the call, before anything is awaited, and
+		// kept by the BOARD'S history, so an undo in another window on this board waits for it too.
+		const history = this._history;
+		return history.track(this._writeNow(patch, options));
 	}
 
 	/** The write itself, once `_write` has taken note of it. */
@@ -3488,7 +3517,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		for (const bar of this._bars) await bar.flush();
 		// AND EVERY WRITE STARTED A MOMENT AGO AND NOT BACK YET, the one the blur of the Undo press
 		// itself started included: see `_write`.
-		await this._writesLanded();
+		await this._history.landed();
 		// ⚠ AND THE ARROW KEYS' MOVES, FOR THE SAME REASON. A nudge or a caption slide is held for a breath
 		// after the last key (NUDGE_COMMIT_MS), and an undo pressed inside that breath peeked at the change
 		// BEFORE it -- took that one back instead -- and then the nudge landed, recorded itself and emptied
@@ -4508,79 +4537,69 @@ export class RelationshipMapWindow extends StonetopDialog {
 	}
 
 	/**
-	 * One person as their label's bar wants them, off the PAINT: the node, and the point under their
-	 * name (board percentages) where the label sits and the bar takes its place. Null when the last
-	 * paint drew nobody of that id.
+	 * One person as their label's bar wants them: the node AS STORED, and the point under their name
+	 * (board percentages) where the label sits and the bar takes its place, off the PAINT. Null when the
+	 * last paint drew nobody of that id.
 	 */
 	_personAt(id) {
 		const graph = this._drawn?.graph;
-		const node = graph?.nodes?.[id];
+		const painted = graph?.nodes?.[id];
 		const board = this._drawn?.board;
-		if (!node || !board?.height) return null;
+		if (!painted || !board?.height) return null;
+		// ⚠ THE PERSON AS STORED, NOT AS PAINTED: the paint carries the bar's own unsaved change
+		// (`_withPersonDraft`), and a bar that took that for the stored person would think nothing changed.
+		const stored = this._drawn?.stored ?? graph;
+		const node = stored?.nodes?.[id] ?? painted;
 		// WHERE THEY STAND NOW, an arrow-key nudge not yet written (or not yet back) included: read off
 		// the paint alone, Enter on a label just after a nudge opened the bar where they had been.
-		const spot = this._nodeAt(id, graph) ?? node;
+		const spot = this._nodeAt(id, graph) ?? painted;
+		// Under the name as the reader has it sized (`personReach`), which is where the label is drawn;
+		// for somebody whose words stand over or beside the face, just under the face itself. By the
+		// STORED side, so the bar stays put while the reader tries the sides in it.
+		const below = (node.side ?? RELMAP_SIDE_DEFAULT) === RELMAP_SIDE_DEFAULT;
+		const drop = below ? personReach(this._drawn?.scales?.name).subTop : RELMAP_NODE_PX / 2 + 4;
 		return {
 			node,
-			// Under the name as the reader has it sized (`personReach`), which is where the label is drawn.
-			at: { left: spot.x, top: spot.y + (personReach(this._drawn?.scales?.name).subTop / board.height) * 100 },
+			at: { left: spot.x, top: spot.y + (drop / board.height) * 100 },
 			// The top of the face, for a bar with no room below it to sit above the person instead.
 			lift: { left: spot.x, top: spot.y - (RELMAP_NODE_PX / 2 / board.height) * 100 },
 			// What a screen reader hears the bar called: WHOSE label it is, by the name as painted.
 			label: format("stonetop.relmap.subtitle.bar", { name: this._nameOf(graph, id) }),
-			// The chips they wear, in the order the board draws them.
-			chips: chipsWorn(node, graph),
+			// And the title over the bar: "Label for Lord Elroy".
+			title: format("stonetop.relmap.subtitle.title", { name: this._nameOf(graph, id) }),
+			// The chips they wear as painted, the bar's change included, in the order the board draws them.
+			chips: chipsWorn(painted, graph),
+			// The chips this board has as stored: the ones the bar's Delete can reach.
+			boardChips: Object.keys(stored?.chips ?? {}),
 		};
 	}
 
 	// ── Chips ("Dead", "Noble") ─────────────────────────────────────
 	//
-	// Kept per board and shared between boards by id: see relmap/relmap-chips.js. Each press is its own
-	// step of the undo, never folded: putting a chip on and taking it straight off again are two changes.
-
-	/** Put a chip on somebody, copying its definition onto this board first if it has never had it. */
-	_wearChip(id, chip) {
-		const graph = readGraph(this.boardDoc);
-		return this._write(chipWearPatch(graph, id, chip), {
-			label: localize("stonetop.relmap.history.editedChips"),
-			onto: { kind: "nodes", id }, graph,
-		});
-	}
-
-	/** Take one chip off somebody. The chip stays on the board for the next person. */
-	_takeOffChip(id, chipId) {
-		return this._write(nodeChipsPatch(id, [], [chipId]), {
-			label: localize("stonetop.relmap.history.editedChips"),
-			onto: { kind: "nodes", id },
-		});
-	}
+	// Kept per board and shared between boards by id: see relmap/relmap-chips.js. Put on, taken off and
+	// changed in the person bar, shown at once and written with the label on its Save (`_savePerson`).
 
 	/**
-	 * The chip form's Save. A chip already here (`chipId`) is changed on this board, then on every
-	 * other board that has it. A new one is put on this person, unless a chip of that name already
-	 * exists anywhere, which is put on them instead: two "Noble"s would be one chip twice in the menu.
+	 * What a new chip named in the chip form is: the chip already called that anywhere, or a new one.
+	 * Two "Noble"s would be one chip twice in the menu.
 	 */
-	async _saveChip(id, chipId, def) {
-		if (chipId) {
-			const written = await this._write(chipPatch(chipId, def), {
-				label: localize("stonetop.relmap.history.editedChip"),
-			});
-			if (written) await spreadChip(chipId, def, { doc: this.boardDoc });
-			return written;
-		}
-		const graph = readGraph(this.boardDoc);
+	_newChip(def) {
 		const named = def.name.toLocaleLowerCase();
-		const twin = chipLibrary(graph, { doc: this.boardDoc }).find(chip => chip.name.toLocaleLowerCase() === named);
-		const chip = twin ?? { id: foundry.utils.randomID(), ...def };
-		return this._write(chipWearPatch(graph, id, chip), {
-			label: localize("stonetop.relmap.history.editedChips"),
-			onto: { kind: "nodes", id }, graph,
-		});
+		const twin = chipLibrary(readGraph(this.boardDoc), { doc: this.boardDoc })
+			.find(chip => chip.name.toLocaleLowerCase() === named);
+		if (!twin) return { id: foundry.utils.randomID(), ...def };
+		// The reader chose a colour and an icon for a chip that turns out to exist already: say so,
+		// or the form closing on a different-looking chip reads as their choice being ignored.
+		if ((twin.ink ?? "") !== (def.ink ?? "") || (twin.icon ?? "") !== (def.icon ?? "")) {
+			ui.notifications?.info?.(format("stonetop.relmap.chips.usedTwin", { chip: twin.name }));
+		}
+		return { id: twin.id, name: twin.name, icon: twin.icon, ink: twin.ink };
 	}
 
 	/**
-	 * Delete a chip: off everybody on this board (undoable) and off every other board that has it
-	 * (not). Asked first, saying how far it reaches. False when the reader thought better of it.
+	 * Ask whether to delete a chip, saying how far it reaches. Nothing is written: the person bar shows
+	 * it gone and `_savePerson` deletes it, off everybody on this board (undoable) and off every other
+	 * board that has it (not). False when the reader thought better of it.
 	 */
 	async _dropChip(chipId) {
 		const graph = readGraph(this.boardDoc);
@@ -4596,25 +4615,102 @@ export class RelationshipMapWindow extends StonetopDialog {
 			cancel: localize("stonetop.relmap.chips.cancel"),
 			danger: elsewhere > 0,
 		});
-		if (!go) return false;
-		const written = await this._write(dropChipPatch(graph, chipId), {
-			label: localize("stonetop.relmap.history.droppedChip"), graph,
-		});
-		if (written) await spreadChip(chipId, null, { doc: this.boardDoc });
-		return written;
+		return !!go;
 	}
 
 	/**
-	 * Write what the label bar holds.
-	 *
-	 * ⚠ ITS OWN COALESCE KEY, never `node:<id>`: that is the arrow keys' nudge of one person, and a
-	 * label typed and a nudge made within the fold window would come back as ONE undo step.
+	 * THE PERSON BAR'S CHANGE, SHOWN AND NOT WRITTEN: the board is repainted with it laid over the
+	 * stored board (`_withPersonDraft`), for this reader alone. Null puts the board back as stored.
 	 */
-	_writeSubtitle(id, fields) {
-		return this._write(nodePatch(id, fields), {
-			label: localize("stonetop.relmap.history.editedPerson"), coalesce: `subtitle:${id}`,
-			onto: { kind: "nodes", id },
+	_previewPerson(id, change) {
+		if (!change && !this._personDraft) return;
+		this._personDraft = change && id ? { id, change } : null;
+		this._paintPersonDraft();
+	}
+
+	/**
+	 * One repaint per frame for the bar's change, however many keys were typed in it: through `sync`,
+	 * so a press held on the board still holds it back.
+	 */
+	_paintPersonDraft() {
+		if (this._personPaint) return;
+		this._personPaint = true;
+		const frame = globalThis.requestAnimationFrame ?? (fn => setTimeout(fn, 0));
+		frame(() => {
+			this._personPaint = false;
+			this.sync();
 		});
+	}
+
+	/** The board with the person bar's change on it: one saved and on its way first, then the open one. */
+	_withPersonDraft(graph) {
+		let out = graph;
+		for (const draft of [this._landingPerson, this._personDraft]) {
+			if (draft) out = withPersonChange(out, draft.id, draft.change);
+		}
+		return out;
+	}
+
+	/**
+	 * The person bar's Save: the label, the side, the italics and the chips, as ONE write and one step of
+	 * the undo. Never folded into the step before it: each Save is a change the reader chose to make.
+	 * A chip changed here is then changed on every other board that has it, which is not undone.
+	 *
+	 * ⚠ HELD ON THE BOARD UNTIL IT LANDS (`_landingPerson`): the bar lets its change go as it closes,
+	 * and the board would otherwise flash back to the old label until the server answered.
+	 */
+	async _savePerson(id, change) {
+		if (!change) return false;
+		const graph = readGraph(this.boardDoc);
+		const { fields = {}, wear = [], off = [], defs = {}, drop = [] } = change;
+		const patch = {};
+		if (Object.keys(fields).length) Object.assign(patch, nodePatch(id, fields) ?? {});
+		if (off.length) Object.assign(patch, nodeChipsPatch(id, [], off) ?? {});
+		// A chip deleted: its definition and everybody's leaf for it, on this board.
+		const dropped = new Set(drop.filter(chipId => graph.chips[chipId]));
+		for (const chipId of dropped) Object.assign(patch, dropChipPatch(graph, chipId) ?? {});
+		const worn = new Set();
+		for (const chip of wear) {
+			// The form's stand-in for a chip with no id yet is never stored: its Save gives it one.
+			if (!chip?.id || chip.id === DRAFT_CHIP_ID || dropped.has(chip.id)) continue;
+			worn.add(chip.id);
+			// Defined on this board as changed, where it has never had it.
+			Object.assign(patch, chipWearPatch(graph, id, { ...chip, ...(defs[chip.id] ?? {}) }) ?? {});
+		}
+		const spread = [];
+		for (const [chipId, def] of Object.entries(defs)) {
+			if (dropped.has(chipId)) continue;
+			if (graph.chips[chipId]) Object.assign(patch, chipPatch(chipId, def) ?? {});
+			else if (!worn.has(chipId)) continue;
+			spread.push([chipId, def]);
+		}
+		// And off every other board that has it, once this one is written.
+		for (const chipId of dropped) spread.push([chipId, null]);
+		if (!Object.keys(patch).length) return false;
+		const label = Object.keys(fields).length ? "editedPerson"
+			: dropped.size ? "droppedChip"
+				: wear.length || off.length ? "editedChips" : "editedChip";
+		const landing = { id, change };
+		this._landingPerson = landing;
+		let written = false;
+		try {
+			written = await this._write(patch, {
+				label: localize(`stonetop.relmap.history.${label}`),
+				onto: { kind: "nodes", id }, graph,
+			});
+		} finally {
+			if (this._landingPerson === landing) {
+				this._landingPerson = null;
+				// Refused or failed, the board goes back to what is stored.
+				if (!written) this._paintPersonDraft();
+			}
+		}
+		if (!written) return false;
+		// THE ITALICS SAVED ARE WHAT THE NEXT NEW LABEL ON THIS BOARD STARTS IN (`labelItalicFor`). Not
+		// awaited, as the line pen is not: it rides alongside the write the reader is looking at.
+		if ("italic" in fields) rememberPen(this.entry, { italic: fields.italic });
+		for (const [chipId, def] of spread) await spreadChip(chipId, def, { doc: this.boardDoc });
+		return written;
 	}
 
 	/** A person's label on the board as painted NOW, for the focus to go back to. Walked, not built. */
@@ -5900,6 +5996,7 @@ export class RelationshipMapWindow extends StonetopDialog {
 		this._tieBar = null;
 		this._groupBar = null;
 		this._personBar = null;
+		this._personDraft = null;
 		this._teardownDrag?.();
 		this._teardownDrag = null;
 		// The two document-level listeners the undo keys need. A closed window that kept them would
@@ -6269,26 +6366,9 @@ const ELLIPSIS = "…";
  * BUILT FROM A REAL CAPTION rather than from a font written out here. The face comes down the
  * cascade from the dialog, and a copy of it in this file would be a second answer to drift from.
  */
-/**
- * The scratch canvas the measuring is done on, kept for the life of the page.
- *
- * ONE OF IT, and not one per pass. `captionMeasurer` runs on every repaint of the board — which is
- * every flag write any client makes to the page — and a canvas minted and thrown away each time is
- * an allocation on the path this feature has a measured raster budget for. Nothing about it is
- * per-board: `ctx.font` is assigned below from the live caption's own computed style, which is the
- * part that has to stay read rather than remembered.
- *
- * Keyed by document because a dialog can be popped out into a second window, and a canvas belongs
- * to the document that made it.
- */
-const CAPTION_CANVASES = new WeakMap();
-
-function measuringContext(doc) {
-	if (CAPTION_CANVASES.has(doc)) return CAPTION_CANVASES.get(doc);
-	const ctx = doc.createElement("canvas").getContext?.("2d") ?? null;
-	CAPTION_CANVASES.set(doc, ctx);
-	return ctx;
-}
+// The scratch canvas the measuring is done on, kept for the life of the page, is the one the tag chips
+// are measured on too (utils/measuring-canvas.js `measuringContext`). `ctx.font` is assigned below from
+// the live caption's own computed style, which is the part that has to stay read rather than remembered.
 
 /**
  * Whether the reader has set a size on this one caption.

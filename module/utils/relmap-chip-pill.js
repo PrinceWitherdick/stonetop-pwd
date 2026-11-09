@@ -23,7 +23,7 @@ export function chipPaint(chip) {
 export function chipPillHtml(paint, { tag = "span", attrs = "" } = {}) {
 	const style = paint.inkHex ? ` style="--relmap-ink-raw:${esc(paint.inkHex)}"` : "";
 	const icon = paint.icon ? `<i class="fas ${esc(paint.icon)}" aria-hidden="true"></i>` : "";
-	return `<${tag} class="stonetop-relmap-chip stonetop-relmap-ink--${esc(paint.inkKey)}"${attrs}${style}`
-		+ ` data-tooltip-text="${esc(paint.name)}">${icon}`
+	// No tooltip: the pill says its own name, and the face's tooltip lists every chip the person wears.
+	return `<${tag} class="stonetop-relmap-chip stonetop-relmap-ink--${esc(paint.inkKey)}"${attrs}${style}>${icon}`
 		+ `<span class="stonetop-relmap-chip-text">${esc(paint.name)}</span></${tag}>`;
 }

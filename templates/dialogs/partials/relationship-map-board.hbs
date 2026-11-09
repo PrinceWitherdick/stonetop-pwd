@@ -222,7 +222,7 @@
       ours on these and lets the drawn one be the rim. --}}
 {{#each nodes}}
 <div class="stonetop-relmap-node{{#if missing}} is-missing{{/if}}{{#if ownRing}} is-own-ring{{/if}}"
-     data-relmap-node="{{this.id}}" style="left:{{this.left}}%;top:{{this.top}}%">
+     data-relmap-node="{{this.id}}" data-relmap-side="{{this.side}}" style="left:{{this.left}}%;top:{{this.top}}%">
   <button type="button" class="stonetop-relmap-face" data-relmap-open="{{this.id}}"
           data-tooltip-text="{{this.tooltip}}" aria-label="{{this.tooltip}}">
     <span class="stonetop-relmap-portrait">
@@ -233,6 +233,12 @@
       {{/if}}
     </span>
   </button>
+  {{!-- THE PLATE: the name, and under it the label and chips, as ONE block hung off the face out of
+        the flow, so the three move together to the side the person stands their words on
+        (`data-relmap-side` above: below, as every board drew it, or above, left or right, chosen in
+        the person's bar). The geometry agrees with it in one place (relmap-geometry.js `plateReach`).
+        After Dom Bosco's tags pull request to the relationship-map module, which brought the idea. --}}
+  <div class="stonetop-relmap-plate">
   <span class="stonetop-relmap-name">{{this.name}}</span>
   {{!-- THE LABEL UNDER THE NAME ("Iron Knight", "Deceased"), this map's and not the actor's.
 
@@ -242,7 +248,7 @@
         focus: forty of those standing open on a crowded board would be most of what the eye saw.
         A reader who may only look gets the words alone, and nothing at all where there are none.
 
-        ⚠ THE WORDS ARE AN INNER SPAN, and that is what lets a long label stop at two lines: Chrome lays
+        ⚠ THE WORDS ARE AN INNER SPAN, and that is what lets a long label stop at three lines: Chrome lays
         a <button> out as a box of its own kind whatever `display` says, so a clamp set on the button
         itself never runs. The span does the clamping, in both branches alike. --}}
   {{!-- THE LABEL AND THE CHIPS stand in one column under the name (`-under`), so the chips sit right
@@ -251,25 +257,25 @@
 
         THE CHIPS ("Dead", "Noble") are laid out in rows by the window (relmap-geometry.js `chipLayout`)
         and drawn as laid out, so the height a group outline reaches round is the height drawn. Pills
-        that do not fit two rows end in a "+N" pill whose tooltip names them. For somebody who may edit,
+        that do not fit two rows end in a "+N" pill; the face's tooltip names every chip. For somebody who may edit,
         a click on them raises the person's bar, as a click on the label does. ⚠ THE PILL'S MARKUP IS
         ALSO BUILT IN SCRIPT (utils/relmap-chip-pill.js `chipPillHtml`) for the bar; a test holds the two
         the same. --}}
   <div class="stonetop-relmap-under">
   {{#if ../canEdit}}
-  <button type="button" class="stonetop-relmap-subtitle{{#unless subtitle}} is-empty{{/unless}}"
-          data-relmap-subtitle="{{this.id}}" aria-label="{{this.subtitleLabel}}"
-          {{#if subtitle}}data-tooltip-text="{{this.subtitle}}"{{/if}}><span class="stonetop-relmap-subtitle-words">{{#if subtitle}}{{this.subtitle}}{{else}}{{../addSubtitle}}{{/if}}</span></button>
+  <button type="button" class="stonetop-relmap-subtitle{{#unless subtitle}} is-empty{{/unless}}{{#if upright}} is-upright{{/if}}"
+          data-relmap-subtitle="{{this.id}}" aria-label="{{this.subtitleLabel}}"><span class="stonetop-relmap-subtitle-words">{{#if subtitle}}{{this.subtitle}}{{else}}{{../addSubtitle}}{{/if}}</span></button>
   {{else if subtitle}}
-  <span class="stonetop-relmap-subtitle" data-tooltip-text="{{this.subtitle}}"><span class="stonetop-relmap-subtitle-words">{{this.subtitle}}</span></span>
+  <span class="stonetop-relmap-subtitle{{#if upright}} is-upright{{/if}}"><span class="stonetop-relmap-subtitle-words">{{this.subtitle}}</span></span>
   {{/if}}
   {{#if chipRows}}
   <div class="stonetop-relmap-chips"{{#if ../canEdit}} data-relmap-chips="{{this.id}}"{{/if}}>
     {{#each chipRows}}
-    <div class="stonetop-relmap-chip-row">{{#each this}}<span class="stonetop-relmap-chip stonetop-relmap-ink--{{this.inkKey}}"{{#if inkHex}} style="--relmap-ink-raw:{{this.inkHex}}"{{/if}} data-tooltip-text="{{this.name}}">{{#if icon}}<i class="fas {{this.icon}}" aria-hidden="true"></i>{{/if}}<span class="stonetop-relmap-chip-text">{{this.name}}</span></span>{{/each}}{{#if @last}}{{#if ../chipMore}}<span class="stonetop-relmap-chip stonetop-relmap-chip--more" data-tooltip-text="{{../chipMore.tooltip}}"><span class="stonetop-relmap-chip-text">{{../chipMore.label}}</span></span>{{/if}}{{/if}}</div>
+    <div class="stonetop-relmap-chip-row">{{#each this}}<span class="stonetop-relmap-chip stonetop-relmap-ink--{{this.inkKey}}"{{#if inkHex}} style="--relmap-ink-raw:{{this.inkHex}}"{{/if}}>{{#if icon}}<i class="fas {{this.icon}}" aria-hidden="true"></i>{{/if}}<span class="stonetop-relmap-chip-text">{{this.name}}</span></span>{{/each}}{{#if @last}}{{#if ../chipMore}}<span class="stonetop-relmap-chip stonetop-relmap-chip--more"><span class="stonetop-relmap-chip-text">{{../chipMore.label}}</span></span>{{/if}}{{/if}}</div>
     {{/each}}
   </div>
   {{/if}}
+  </div>
   </div>
   {{!-- Focusable, and it does something on a plain CLICK as well as on a drag: dragging it to
         another portrait draws the line, and clicking it asks who to draw to. Drag is the quick way

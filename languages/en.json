@@ -3636,13 +3636,26 @@
         "edit": "Change the label under {name}",
         "field": "Label under the name",
         "placeholder": "e.g. Iron Knight, Deceased",
-        "bar": "The label under {name}"
+        "bar": "The label under {name}",
+        "hint": "Enter starts a new line, up to {max}.",
+        "title": "Label for {name}",
+        "close": "Close without saving",
+        "where": "Name, label and chips placement",
+        "side": {
+          "below": "Below",
+          "above": "Above",
+          "left": "Left",
+          "right": "Right"
+        },
+        "italic": "Italicize",
+        "save": "Save"
       },
       "chips": {
         "dead": "Dead",
         "add": "Add chip",
         "menuHeading": "Chips",
         "newChip": "New chip…",
+        "added": "added",
         "worn": "Chips on {name}",
         "edit": "Change the chip {chip}",
         "off": "Take {chip} off",
@@ -3659,8 +3672,9 @@
         "cancel": "Cancel",
         "delete": "Delete this chip",
         "deleteTitle": "Delete the chip {chip}?",
-        "deleteBody": "This takes {chip} off everyone wearing it on this board.",
-        "deleteElsewhere": "It is also on {count} other board(s), and is taken off everyone there too. Only this board's part can be undone.",
+        "deleteBody": "When you press Save, this takes {chip} off everyone wearing it on this board.",
+        "deleteElsewhere": "It is also on {count} other board(s) you can change, and is taken off everyone there too. Only this board's part can be undone.",
+        "usedTwin": "A chip called {chip} already exists, so that one was used, with its own colour and icon.",
         "deleteYes": "Delete",
         "needName": "Give the chip a name first.",
         "inkDeepened": "{chose} was too pale to read on the board, so the chip uses {used} instead.",
@@ -3960,7 +3974,7 @@
         },
         "name": {
           "name": "Names",
-          "hint": "How big each person's name, the label under it and their chips are set, as a percentage. Group outlines keep their size. This is yours alone: it changes every map you open and nobody else's window, and nothing on the map itself is altered."
+          "hint": "How big each person's name and the label under it are set, as a percentage. Chips and group outlines keep their size. This is yours alone: it changes every map you open and nobody else's window, and nothing on the map itself is altered."
         }
       }
     },

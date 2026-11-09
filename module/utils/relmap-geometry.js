@@ -343,11 +343,21 @@ export function boardBounds(
 		const x = (Number(node?.x) / 100) * width;
 		const y = (Number(node?.y) / 100) * height;
 		if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-		box.left = Math.min(box.left, x - padX);
-		box.right = Math.max(box.right, x + padX);
-		box.top = Math.min(box.top, y - BOUNDS_PAD_TOP);
-		// The label under the name hangs further down, and is framed with the rest of them.
-		box.bottom = Math.max(box.bottom, y + padBottom + underReach(node, reach).down);
+		if (sideOf(node) === "below") {
+			box.left = Math.min(box.left, x - padX);
+			box.right = Math.max(box.right, x + padX);
+			box.top = Math.min(box.top, y - BOUNDS_PAD_TOP);
+			// The label under the name hangs further down, and is framed with the rest of them.
+			box.bottom = Math.max(box.bottom, y + padBottom + underReach(node, reach).down);
+			continue;
+		}
+		// WORDS OVER OR BESIDE THE FACE: framed with the same margin past them that a name under it has,
+		// and never closer than a plain person is.
+		const plate = plateReach(node, reach);
+		box.left = Math.min(box.left, x - Math.max(padX, plate.left + BOUNDS_PAD_X - GROUP_REACH_X));
+		box.right = Math.max(box.right, x + Math.max(padX, plate.right + BOUNDS_PAD_X - GROUP_REACH_X));
+		box.top = Math.min(box.top, y - Math.max(BOUNDS_PAD_TOP, plate.top + BOUNDS_PAD_TOP - GROUP_REACH_TOP));
+		box.bottom = Math.max(box.bottom, y + Math.max(padBottom, plate.bottom + BOUNDS_PAD_BOTTOM - GROUP_REACH_BOTTOM));
 	}
 	const extras = [...(boxes ?? [])];
 	for (const line of lines ?? []) extras.push(...lineBounds(line, { width, height }));
@@ -444,6 +454,45 @@ export const RELMAP_SUBTITLE_MAX_W = 156;
 const SUBTITLE_LINE_PX = 18;
 export const RELMAP_SUBTITLE_REACH_PX = 1 + 2 * SUBTITLE_LINE_PX;
 const SUBTITLE_REACH_X = RELMAP_SUBTITLE_MAX_W / 2;
+/** The most lines a label is drawn at (`.stonetop-relmap-subtitle-words`'s clamp), and the fewest any
+ * label is given room for: two, as every label was before a third could be written, so no outline shrinks. */
+export const RELMAP_SUBTITLE_LINES_MAX = 3;
+const SUBTITLE_LINES_MIN = 2;
+/** What one character of a label costs across, in ems of its 13px italic: erring wide, as an
+ * overestimate only gives a label a line of room it may not use. A wide (CJK) character is a whole em. */
+const TEXT_CHAR_EM = 0.6;
+const TEXT_WIDE_EM = 1.05;
+/** Chinese, Japanese and Korean glyphs, the full-width forms and emoji: set square, near a whole em. */
+const WIDE_CHAR = /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{1F300}-\u{1FAFF}\u{20000}-\u{3FFFD}]/u;
+/** The label's side padding (`.stonetop-relmap-subtitle`, 0.35em each side of 13px type). */
+const SUBTITLE_PAD_PX = 2 * 0.35 * 13;
+
+/**
+ * NAME, LABEL AND CHIPS BESIDE THE FACE, for a person whose block stands to the left or right
+ * (`side`): how far off the rim it stands, clear of the link handle and the delete button, which
+ * reach 12px past the face's corners. Kept with `.stonetop-relmap-node[data-relmap-side]`.
+ */
+export const RELMAP_PLATE_GAP_PX = 14;
+
+/** How wide a run of text is estimated to be, in pixels at `fontPx`, erring wide. */
+function textPx(text, fontPx) {
+	let em = 0;
+	for (const ch of String(text ?? "")) em += WIDE_CHAR.test(ch) ? TEXT_WIDE_EM : TEXT_CHAR_EM;
+	return em * fontPx;
+}
+
+/**
+ * HOW MANY LINES A LABEL IS DRAWN AT, estimated: each line typed, and each wrap a long one takes at the
+ * label's width, never more than the clamp. 0 for none. Room is given for at least two (`underReach`).
+ */
+export function subtitleLines(subtitle) {
+	const text = String(subtitle ?? "").trim();
+	if (!text) return 0;
+	const room = RELMAP_SUBTITLE_MAX_W - SUBTITLE_PAD_PX;
+	let lines = 0;
+	for (const line of text.split("\n")) lines += Math.max(1, Math.ceil(textPx(line, 13) / room));
+	return Math.min(RELMAP_SUBTITLE_LINES_MAX, lines);
+}
 
 /**
  * TAG CHIPS ("Dead", "Noble") under the label, kept with `.stonetop-relmap-chips`: rows of pills
@@ -454,10 +503,11 @@ const SUBTITLE_REACH_X = RELMAP_SUBTITLE_MAX_W / 2;
  * laid out HERE (`chipLayout`) and drawn as laid out, so the stylesheet never wraps them and the
  * height every outline reaches round is the height drawn.
  *
- * A pill's width is an estimate from its characters (`CHIP_CHAR_PX`), over rather than under: an
- * overestimate only moves a pill to the next row early, where an underestimate runs a row past the width
- * every outline is measured for. Pills, widths and gaps all grow with the names dial together,
- * so the packing is the same at every setting of it.
+ * A pill's width is measured in the board's own font once it has loaded (`setChipTextMeasure`), else
+ * estimated from its characters (`CHIP_CHAR_PX`), over rather than under: an overestimate only moves a
+ * pill to the next row early, where an underestimate runs a row past the width every outline is
+ * measured for. THE CHIPS KEEP THEIR SIZE WHATEVER THE NAMES DIAL SAYS: the dial grows names and labels
+ * only, so the packing, and the room every outline gives the chips, is the same at every setting of it.
  */
 export const RELMAP_CHIP_H_PX = 20;
 export const RELMAP_CHIP_GAP_PX = 3;
@@ -482,11 +532,36 @@ const CHIP_CHAR_WIDE = 14.2;
 const CHIP_CHROME_PX = 2 + 2 * 7;
 const CHIP_ICON_PX = 17 + 4;
 
-/** How wide one pill is drawn, in board pixels at the base names weight; never wider than a row. */
-export function chipWidthPx({ name = "", icon = "" } = {}) {
+/**
+ * HOW A PILL'S WORDS ARE MEASURED IN THE FONT THEY ARE ACTUALLY DRAWN IN. The table above was measured
+ * in Libre Caslon Text, and is the fallback: for tests, and for the moment before the font has loaded
+ * (or a reader whose browser substitutes another face). The live measure is
+ * utils/relmap-chip-measure.js, installed once at ready.
+ */
+let chipTextMeasure = null;
+
+/**
+ * Install how a pill's (upper-cased) words are measured, in board pixels at 13px with the pill's
+ * letter-spacing, or `null` for the table. A measure that answers anything but a finite width falls
+ * back to the table for that name.
+ */
+export function setChipTextMeasure(measure) {
+	chipTextMeasure = typeof measure === "function" ? measure : null;
+}
+
+function chipTextPx(name) {
+	const upper = String(name ?? "").toLocaleUpperCase();
+	const measured = chipTextMeasure?.(upper);
+	// A pixel over, and rounded up: an overestimate only moves a pill to the next row early.
+	if (Number.isFinite(measured) && measured >= 0) return Math.ceil(measured) + 1;
 	let text = 0;
-	for (const ch of String(name ?? "").toLocaleUpperCase()) text += CHIP_CHAR_PX[ch] ?? CHIP_CHAR_WIDE;
-	return Math.min(RELMAP_CHIP_ROW_W, CHIP_CHROME_PX + (icon ? CHIP_ICON_PX : 0) + text);
+	for (const ch of upper) text += CHIP_CHAR_PX[ch] ?? CHIP_CHAR_WIDE;
+	return text;
+}
+
+/** How wide one pill is drawn, in board pixels; never wider than a row. */
+export function chipWidthPx({ name = "", icon = "" } = {}) {
+	return Math.min(RELMAP_CHIP_ROW_W, CHIP_CHROME_PX + (icon ? CHIP_ICON_PX : 0) + chipTextPx(name));
 }
 
 /**
@@ -565,10 +640,14 @@ export function personReach(nameScale = 1) {
 		top: GROUP_REACH_TOP,
 		bottom,
 		subTop: bottom + 1,
-		subReach: 1 + 2 * Math.round(SUBTITLE_LINE_PX * scale),
+		subReach: 1 + SUBTITLE_LINES_MIN * Math.round(SUBTITLE_LINE_PX * scale),
+		subLine: Math.round(SUBTITLE_LINE_PX * scale),
+		nameLine: Math.round(NAME_CHIP_PX * scale),
+		scale,
 		subX: Math.max(x, SUBTITLE_REACH_X * scale),
-		chipH: Math.round(RELMAP_CHIP_H_PX * scale),
-		chipX: Math.max(x, CHIP_REACH_X * scale),
+		// The chips do not grow with the names dial.
+		chipH: RELMAP_CHIP_H_PX,
+		chipX: Math.max(x, CHIP_REACH_X),
 	};
 }
 
@@ -581,10 +660,66 @@ export function personReach(nameScale = 1) {
  * @param {ReturnType<typeof personReach>} reach
  */
 export function underReach(node, reach) {
-	const label = node?.subtitle ? reach.subReach : 0;
+	// Two lines' room for any label, as there always was, and a third for one drawn three deep.
+	const lines = Math.max(SUBTITLE_LINES_MIN, subtitleLines(node?.subtitle));
+	const label = node?.subtitle ? 1 + lines * (reach.subLine ?? Math.round(SUBTITLE_LINE_PX)) : 0;
 	const chips = chipReach(node?.chipRows, reach.chipH);
 	const x = Math.max(reach.x, label ? reach.subX : 0, chips ? reach.chipX : 0);
 	return { x, down: label + chips };
+}
+
+/** One stored side as the geometry reads it: the store's `readSide`, which this file cannot import. */
+export function sideOf(node) {
+	const side = node?.side;
+	return side === "above" || side === "left" || side === "right" ? side : "below";
+}
+
+/**
+ * How wide one person's block of words is estimated to be, at a `personReach`: the widest of the name,
+ * the label's lines and the chip rows, each never wider than it is cut at. Asked only for a block
+ * standing BESIDE the face, where the width is the reach; under or over it, the caps are used, as they
+ * always were. The chips are at their base size whatever the names dial says.
+ */
+function plateWidth(node, reach) {
+	const s = reach.scale ?? 1;
+	const nameW = Math.min(2 * GROUP_REACH_X * s, textPx(node?.name, 14 * s) + 2 * 0.3 * 14 * s);
+	let labelW = 0;
+	if (node?.subtitle) {
+		for (const line of String(node.subtitle).split("\n")) {
+			labelW = Math.max(labelW, Math.min(RELMAP_SUBTITLE_MAX_W * s, (textPx(line, 13) + SUBTITLE_PAD_PX) * s));
+		}
+	}
+	let chipsW = 0;
+	for (const row of node?.chipLaid?.rows ?? []) {
+		const w = row.reduce((sum, chip, i) => sum + (i ? RELMAP_CHIP_GAP_PX : 0) + chipWidthPx(chip), 0);
+		chipsW = Math.max(chipsW, Math.min(RELMAP_CHIP_ROW_W, w));
+	}
+	return Math.max(nameW, labelW, chipsW);
+}
+
+/**
+ * HOW FAR ONE PERSON REACHES FROM THEIR CENTRE ON EACH SIDE, face and words, in board pixels at a
+ * `personReach`: `{left, right, top, bottom}`. What a group's outline, the board's frame, a group's
+ * floor and a newcomer's seat all go round.
+ *
+ * BELOW, the block hangs under the face exactly as it always has, so this is `underReach` spelled out
+ * on four sides and every board stored before sides existed lays out to the pixel as before. ABOVE, the
+ * same block, in the same order, stands over the face. BESIDE, it stands `RELMAP_PLATE_GAP_PX` off the
+ * rim, level with the middle of the face, and reaches as wide as its words are estimated (`plateWidth`).
+ */
+export function plateReach(node, reach) {
+	const under = underReach(node, reach);
+	const face = GROUP_REACH_TOP;
+	const side = sideOf(node);
+	if (side === "below") return { left: under.x, right: under.x, top: reach.top, bottom: reach.bottom + under.down };
+	const nameLine = reach.nameLine ?? NAME_CHIP_PX;
+	const tall = nameLine + under.down;
+	if (side === "above") return { left: under.x, right: under.x, top: face + NAME_GAP_PX + tall, bottom: face };
+	const half = Math.max(face, tall / 2);
+	const out = face + RELMAP_PLATE_GAP_PX + plateWidth(node, reach);
+	return side === "left"
+		? { left: out, right: face, top: half, bottom: half }
+		: { left: face, right: out, top: half, bottom: half };
 }
 export const RELMAP_GROUP_PAD_PX = 18;
 /** The paper between an inner group's LINE and the outer one, less the half of the inner name chip
@@ -646,16 +781,18 @@ export const RELMAP_GROUP_MIN_H = GROUP_REACH_TOP + GROUP_REACH_BOTTOM + 2 * REL
 export function groupFloor(members = []) {
 	// At the base name size, never the reader's: see `personReach`.
 	const reach = personReach();
-	let x = reach.x;
-	let down = 0;
+	let across = 2 * reach.x;
+	let extra = 0;
 	for (const member of members ?? []) {
-		const under = underReach(member, reach);
-		x = Math.max(x, under.x);
-		down = Math.max(down, under.down);
+		// How far past a plain person, face and name under it, this one reaches: a label and chips
+		// under the name hang lower, and a block over or beside the face stands out on that side.
+		const plate = plateReach(member, reach);
+		across = Math.max(across, plate.left + plate.right);
+		extra = Math.max(extra, Math.max(0, plate.top - reach.top) + Math.max(0, plate.bottom - reach.bottom));
 	}
 	return {
-		w: 2 * (x + RELMAP_GROUP_PAD_PX),
-		h: reach.top + reach.bottom + down + 2 * RELMAP_GROUP_PAD_PX,
+		w: across + 2 * RELMAP_GROUP_PAD_PX,
+		h: reach.top + reach.bottom + extra + 2 * RELMAP_GROUP_PAD_PX,
 	};
 }
 
@@ -844,14 +981,13 @@ export function groupOutline(members = [], {
 		const x = (Number(member?.x) / 100) * width;
 		const y = (Number(member?.y) / 100) * height;
 		if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-		// A member with a label or chips under their name stands wider and deeper: the outline goes round them too.
-		const under = underReach(member, reach);
-		const reachX = under.x;
-		const reachDown = reach.bottom + under.down;
-		left = Math.min(left, x - reachX);
-		right = Math.max(right, x + reachX);
-		top = Math.min(top, y - reach.top);
-		bottom = Math.max(bottom, y + reachDown);
+		// A member with a label or chips under their name stands wider and deeper, and one whose words
+		// stand over or beside the face reaches out on that side: the outline goes round them too.
+		const plate = plateReach(member, reach);
+		left = Math.min(left, x - plate.left);
+		right = Math.max(right, x + plate.right);
+		top = Math.min(top, y - plate.top);
+		bottom = Math.max(bottom, y + plate.bottom);
 	}
 	if (!Number.isFinite(left)) return null;
 	left -= RELMAP_GROUP_PAD_PX; right += RELMAP_GROUP_PAD_PX; top -= RELMAP_GROUP_PAD_PX; bottom += RELMAP_GROUP_PAD_PX;
@@ -1793,7 +1929,10 @@ export function ringsLayout(count, { aspect = RELMAP_BOARD_ASPECT, r = nodeRadiu
 export function freeSpot(taken = [], { aspect = RELMAP_BOARD_ASPECT, r = nodeRadiusPct(), pad = 3 } = {}) {
 	const ratio = ratioOf(aspect);
 	const clear = 2 * r + pad;
-	const labels = (taken ?? []).filter(p => p?.under > 0).map(p => subtitleBox(flat(p, ratio), r, p.under, p.across));
+	const labels = [
+		...(taken ?? []).filter(p => p?.under > 0).map(p => subtitleBox(flat(p, ratio), r, p.under, p.across)),
+		...(taken ?? []).filter(p => p?.plate).map(p => plateBox(flat(p, ratio), r, p.plate, p.side)),
+	];
 	// SEVERAL rings, not two. Two was enough while people arrived one at a time, and is not once a
 	// board carries a village: the outer ring fills, the half ring fills, and everybody after that
 	// lands on the pile in the middle.
@@ -1834,6 +1973,25 @@ function subtitleBox(centre, r, depth = RELMAP_SUBTITLE_REACH_PX, across = SUBTI
 	const unit = r / (RELMAP_NODE_PX / 2);
 	const middle = { left: centre.left, top: centre.top + (RELMAP_SUBTITLE_TOP_PX + depth / 2) * unit };
 	return labelBox(middle, 2 * Math.max(SUBTITLE_REACH_X, across) * unit, depth * unit, 0);
+}
+
+/**
+ * The box a person's words stand in when they stand OVER or BESIDE the face (`plateReach`, board
+ * pixels from their centre), in flat units round their flat centre: everything the plate reaches
+ * on its own side, less the face, which the seat already keeps clear of.
+ */
+function plateBox(centre, r, plate, side) {
+	const unit = r / (RELMAP_NODE_PX / 2);
+	const face = RELMAP_NODE_PX / 2;
+	let left = -plate.left;
+	let right = plate.right;
+	const top = -plate.top;
+	let bottom = plate.bottom;
+	if (side === "above") bottom = -face;
+	else if (side === "left") right = -face;
+	else if (side === "right") left = face;
+	const middle = { left: centre.left + ((left + right) / 2) * unit, top: centre.top + ((top + bottom) / 2) * unit };
+	return labelBox(middle, (right - left) * unit, (bottom - top) * unit, 0);
 }
 
 // ── Bowing a line clear of somebody it has nothing to do with ────────────────────────

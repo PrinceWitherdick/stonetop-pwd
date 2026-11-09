@@ -7,7 +7,7 @@ import {
 import {
 	RELMAP_CAPTION_PX, RELMAP_GROUP_GROW_MAX, RELMAP_GROUP_MIN_H, RELMAP_GROUP_MIN_W, RELMAP_GROUP_PAD_PX,
 	RELMAP_SUBTITLE_MAX_W, RELMAP_SUBTITLE_REACH_PX, RELMAP_SUBTITLE_TOP_PX, boardBounds, groupNestPx,
-	groupFloor, groupOutline, groupShapes, groupsInside, growFor, insideGroupShape, personReach, readGroupGrow,
+	groupFloor, groupOutline, groupShapes, groupsInside, growFor, insideGroupShape, personReach, plateReach, readGroupGrow,
 	resizeRect,
 } from "../../module/utils/relmap-geometry.js";
 
@@ -652,6 +652,25 @@ describe("the floor for a group with a label in it", () => {
 		const floor = groupFloor(labelled);
 		expect(floor.w).toBeCloseTo(snug.right - snug.left);
 		expect(floor.h).toBeCloseTo(snug.bottom - snug.top);
+	});
+
+	// A name and label standing over or beside the face reach out on THAT side, so the floor is the
+	// plate's own width across and its reach past a plain person up or down.
+	it("holds the words where they stand, over or beside the face, and not only under it", () => {
+		const reach = personReach();
+		for (const side of ["above", "left", "right"]) {
+			const member = { ...labelled[0], name: "Lord Elroy", side };
+			const plate = plateReach(member, reach);
+			const extra = Math.max(0, plate.top - reach.top) + Math.max(0, plate.bottom - reach.bottom);
+			expect(groupFloor([member])).toEqual({
+				w: plate.left + plate.right + 2 * RELMAP_GROUP_PAD_PX,
+				h: reach.top + reach.bottom + extra + 2 * RELMAP_GROUP_PAD_PX,
+			});
+		}
+		const beside = { ...labelled[0], name: "Lord Elroy", side: "right" };
+		expect(groupFloor([beside]).w).toBeGreaterThan(groupFloor([{ ...beside, side: "below" }]).w);
+		// The biggest person sets it, whichever side theirs stand on.
+		expect(groupFloor([labelled[0], beside]).w).toBe(groupFloor([beside]).w);
 	});
 
 	it("is never shrunk past by a corner dragged in, so the label stays inside", () => {

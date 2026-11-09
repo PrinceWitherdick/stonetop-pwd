@@ -99,7 +99,8 @@ describe("the relationship map's tag chip is the same kind of pill", () => {
 		expect(chip).toBeTruthy();
 		expect(declared(chip, "line-height")).toBe("1");
 		expect(padding(chip)).toMatch(/^0 /);
-		expect(declared(chip, "height")).toMatch(/^round\(20px/);
+		// A whole 20px at every setting of the Names dial, which no longer reaches the chips.
+		expect(declared(chip, "height")).toBe("20px");
 		expect(declared(chip, "display")).toBe("inline-flex");
 		expect(declared(chip, "align-items")).toBe("center");
 	});

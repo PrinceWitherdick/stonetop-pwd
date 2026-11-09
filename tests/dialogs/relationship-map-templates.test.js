@@ -3,8 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import Handlebars from "handlebars";
 import {
-	RELMAP_CHIP_GAP_PX, RELMAP_CHIP_H_PX, RELMAP_CHIP_ROW_W, RELMAP_NODE_PX, RELMAP_SUBTITLE_MAX_W, RELMAP_SUBTITLE_REACH_PX,
-	RELMAP_SUBTITLE_TOP_PX, chipReach,
+	RELMAP_CHIP_GAP_PX, RELMAP_CHIP_H_PX, RELMAP_CHIP_ROW_W, RELMAP_NODE_PX, RELMAP_PLATE_GAP_PX, RELMAP_SUBTITLE_LINES_MAX,
+	RELMAP_SUBTITLE_MAX_W, RELMAP_SUBTITLE_REACH_PX, RELMAP_SUBTITLE_TOP_PX, chipReach, personReach,
 } from "../../module/utils/relmap-geometry.js";
 import { chipPaint, chipPillHtml } from "../../module/utils/relmap-chip-pill.js";
 
@@ -91,9 +91,33 @@ describe("the board template", () => {
 			expect(html).toContain(">Add a label</span></button>");
 		});
 
+		// The side moves the name, label and chips together, so they stand in one plate the node places.
+		it("puts the name, label and chips in one plate, on the side the person stands them", () => {
+			const ctx = withLabels(true);
+			ctx.nodes[0] = { ...ctx.nodes[0], side: "left" };
+			ctx.nodes[1] = { ...ctx.nodes[1], side: "below" };
+			const html = render(ctx);
+			expect(html).toMatch(/data-relmap-node="n1" data-relmap-side="left"/);
+			expect(html).toMatch(/data-relmap-node="n2" data-relmap-side="below"/);
+			expect(html).toMatch(/<div class="stonetop-relmap-plate">\s*<span class="stonetop-relmap-name">[^<]*<\/span>[^]*?<div class="stonetop-relmap-under">/);
+		});
+
+		// ITALIC UNLESS SAID OTHERWISE: a node that says nothing is drawn as every label always was.
+		it("sets a label upright only where the person's bar turned the italics off", () => {
+			const ctx = withLabels(true);
+			ctx.nodes[0] = { ...ctx.nodes[0], upright: true };
+			const html = render(ctx);
+			expect(html).toMatch(/class="stonetop-relmap-subtitle is-upright"\s+data-relmap-subtitle="n1"/);
+			expect(html).toMatch(/class="stonetop-relmap-subtitle is-empty"\s+data-relmap-subtitle="n2"/);
+			const reader = withLabels(false);
+			reader.nodes[0] = { ...reader.nodes[0], upright: true };
+			expect(render(reader)).toContain('<span class="stonetop-relmap-subtitle is-upright"><span class="stonetop-relmap-subtitle-words">Iron Knight</span></span>');
+		});
+
 		it("is only the words for a reader, and nothing where there are none", () => {
 			const html = render(withLabels(false));
-			expect(html).toContain('<span class="stonetop-relmap-subtitle" data-tooltip-text="Iron Knight"><span class="stonetop-relmap-subtitle-words">Iron Knight</span></span>');
+			// No tooltip of its own: the face's tooltip already says the label, whole.
+			expect(html).toContain('<span class="stonetop-relmap-subtitle"><span class="stonetop-relmap-subtitle-words">Iron Knight</span></span>');
 			expect(html).not.toContain("data-relmap-subtitle");
 			expect(html).not.toContain("Add a label");
 			expect((html.match(/class="stonetop-relmap-subtitle"/g) ?? []).length).toBe(1);
@@ -111,7 +135,7 @@ describe("the board template", () => {
 			ctx.addSubtitle = "Add a label";
 			ctx.nodes[0] = {
 				...ctx.nodes[0], subtitle: "", subtitleLabel: "Change the label under Elena",
-				chipRows: [[dead], [noble]], chipMore: { label: "+2", tooltip: "Healer, Outcast" },
+				chipRows: [[dead], [noble]], chipMore: { label: "+2" },
 			};
 			ctx.nodes[1] = { ...ctx.nodes[1], subtitle: "", chipRows: [], chipMore: null };
 			return ctx;
@@ -122,8 +146,9 @@ describe("the board template", () => {
 			expect(html).toMatch(/<div class="stonetop-relmap-under">\s*<button type="button" class="stonetop-relmap-subtitle is-empty"/);
 			expect((html.match(/class="stonetop-relmap-chip-row"/g) ?? []).length).toBe(2);
 			expect(html).toContain('data-relmap-chips="n1"');
-			// The "+N" pill ends the LAST row, with the rest named in its tooltip.
-			expect(html).toMatch(/Noble[^]*?stonetop-relmap-chip--more" data-tooltip-text="Healer, Outcast"[^]*?>\+2</);
+			// The "+N" pill ends the LAST row. No tooltip on it, nor on any chip: the face's tooltip names them all.
+			expect(html).toMatch(/Noble[^]*?<span class="stonetop-relmap-chip stonetop-relmap-chip--more"><span class="stonetop-relmap-chip-text">\+2</);
+			expect(html).not.toMatch(/stonetop-relmap-chip[^>]*data-tooltip/);
 			// Nobody wearing any: no chip markup at all.
 			expect((html.match(/class="stonetop-relmap-chips"/g) ?? []).length).toBe(1);
 		});
@@ -1278,24 +1303,45 @@ describe("a portrait's box is the circle and nothing else", () => {
 
 	// THE REGRESSION ITSELF: the name back in the flow, making the node about 92px tall and
 	// carrying the circle ten pixels off the coordinate every line is aimed at.
+	// The name is hung in the PLATE, which carries the label and chips under it and is out of the flow,
+	// the name's gap under the face as `personReach` measures it.
 	it("hangs the name out of the flow rather than stacking it under the face", () => {
-		expect(rule("name")).toMatch(/position:\s*absolute/);
+		const plate = rule("plate");
+		const reach = personReach();
+		const nameGap = reach.bottom - reach.top - reach.nameLine;
+		expect(plate).toMatch(/position:\s*absolute/);
+		expect(plate).toMatch(/top:\s*100%/);
+		expect(plate).toMatch(new RegExp(`margin-top:\\s*${nameGap}px;`));
+		expect(plate).toMatch(/flex-direction:\s*column/);
+		expect(rule("name")).not.toMatch(/position:\s*absolute/);
+	});
+
+	// WHERE THE WORDS STAND: the plate moves to the side the node says, and the geometry reaches round
+	// it there (`plateReach`), so the gap off the rim is the geometry's own number.
+	it("stands the plate over or beside the face when the person says so", () => {
+		const sideRule = side => [...css.matchAll(new RegExp(`\\.stonetop-relmap-node\\[data-relmap-side="${side}"\\] > \\.stonetop-relmap-plate\\s*\\{([^}]*)\\}`, "g"))]
+			.map(found => found[1]).join("\n");
+		expect(sideRule("above")).toMatch(/bottom:\s*100%/);
+		expect(sideRule("left")).toMatch(new RegExp(`right:\\s*calc\\(100% \\+ ${RELMAP_PLATE_GAP_PX}px\\)`));
+		expect(sideRule("right")).toMatch(new RegExp(`left:\\s*calc\\(100% \\+ ${RELMAP_PLATE_GAP_PX}px\\)`));
 	});
 
 	// ⚠ THE LABEL UNDER THE NAME IS MEASURED BY THE GEOMETRY TOO: a group outline and the board's
 	// framing reach round it by these numbers, so the stylesheet and the constants must agree.
 	it("hangs the label under the name where the geometry measures it", () => {
 		const sub = rule("subtitle");
-		// The column the label stands in carries its place: the label is the column's first entry.
+		// The column the label stands in follows the name in the plate: the label is the column's first entry.
 		const under = rule("under");
-		expect(under).toMatch(/position:\s*absolute/);
+		expect(under).not.toMatch(/position:\s*absolute/);
 		// The face's bottom edge, then everything between it and the label's top. The name chip's
 		// height (21px) grows with the reader's names dial and the two gaps round it do not, which
 		// is exactly how `personReach` measures it.
 		const chip = 21;
 		const below = RELMAP_SUBTITLE_TOP_PX - RELMAP_NODE_PX / 2 - chip;
 		const scaled = n => `calc\\(${n}px \\* var\\(--relmap-name-scale, 1\\)\\)`;
-		expect(under).toMatch(new RegExp(`top:\\s*calc\\(100% \\+ ${below}px \\+ ${chip}px \\* var\\(--relmap-name-scale, 1\\)\\)`));
+		// In the plate the name's own line is its height, so the column stands the rest of the gap under it.
+		const reach = personReach();
+		expect(under).toMatch(new RegExp(`margin-top:\\s*${below - (reach.bottom - reach.top - reach.nameLine)}px;`));
 		expect(sub).toMatch(new RegExp(`max-width:\\s*${scaled(RELMAP_SUBTITLE_MAX_W)}`));
 		expect(sub).toMatch(new RegExp(`max-width:\\s*${scaled(RELMAP_SUBTITLE_MAX_W)}`));
 		expect(sub).toMatch(new RegExp(`font-size:\\s*${scaled(13)}`));
@@ -1309,12 +1355,15 @@ describe("a portrait's box is the circle and nothing else", () => {
 		const rounded = n => `round\\(${n}px \\* var\\(--relmap-name-scale, 1\\), 1px\\)`;
 		expect(rule("name")).toMatch(new RegExp(`line-height:\\s*${rounded(21)}`));
 		expect(sub).toMatch(new RegExp(`line-height:\\s*${rounded(18)}`));
-		expect(under).toMatch(new RegExp(`top:\\s*calc\\(100% \\+ ${below}px \\+ ${rounded(chip)}\\)`));
 		const line = Number(sub.match(/line-height:\s*calc\((\d+)px \* var\(--relmap-name-scale, 1\)\)/)?.[1]);
-		// ⚠ THE CLAMP IS ON THE INNER SPAN: Chrome ignores one set on a <button>.
+		// ⚠ THE CLAMP IS ON THE INNER SPAN: Chrome ignores one set on a <button>. Three lines drawn at most,
+		// as the geometry gives room for; every label is given at least two, as it always was.
 		const words = rule("subtitle-words");
 		const lines = Number(words.match(/-webkit-line-clamp:\s*(\d+)/)?.[1]);
-		expect(1 + line * lines).toBe(RELMAP_SUBTITLE_REACH_PX);
+		expect(lines).toBe(RELMAP_SUBTITLE_LINES_MAX);
+		expect(1 + line * 2).toBe(RELMAP_SUBTITLE_REACH_PX);
+		// Each line typed is kept as its own line.
+		expect(words).toMatch(/white-space:\s*pre-line/);
 		expect(words).toMatch(/display:\s*-webkit-box/);
 		expect(sub).not.toMatch(/line-clamp/);
 	});
@@ -1333,11 +1382,13 @@ describe("a portrait's box is the circle and nothing else", () => {
 		const pill = rule("chip");
 		expect(chips).toMatch(new RegExp(`gap:\\s*${RELMAP_CHIP_GAP_PX}px;`));
 		expect(chips).toMatch(new RegExp(`margin:\\s*${RELMAP_CHIP_GAP_PX}px 0 0;`));
-		expect(pill).toMatch(new RegExp(`height:\\s*round\\(${RELMAP_CHIP_H_PX}px \\* var\\(--relmap-name-scale, 1\\), 1px\\)`));
+		// At their base size whatever the names dial says, as `personReach` measures them.
+		expect(pill).toMatch(new RegExp(`height:\\s*${RELMAP_CHIP_H_PX}px;`));
+		for (const part of [chips, pill, rule("chip-row")]) expect(part).not.toMatch(/--relmap-name-scale/);
 		expect(chipReach(2)).toBe(2 * (RELMAP_CHIP_GAP_PX + RELMAP_CHIP_H_PX));
 		// Never wrapped by the stylesheet: the rows are the window's, at the width it packs them to.
 		expect(rule("chip-row")).not.toMatch(/flex-wrap:\s*wrap/);
-		const wide = `max-width:\\s*calc\\(${RELMAP_CHIP_ROW_W}px \\* var\\(--relmap-name-scale, 1\\)\\)`;
+		const wide = `max-width:\\s*${RELMAP_CHIP_ROW_W}px;`;
 		expect(rule("chip-row")).toMatch(new RegExp(wide));
 		expect(pill).toMatch(new RegExp(wide));
 	});

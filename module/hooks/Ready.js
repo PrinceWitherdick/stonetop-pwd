@@ -6,6 +6,7 @@ import { canCreateRelationshipMap, ensureRelationshipMapFolder, listRelationship
 import { promptForNewRelationshipMap } from "../relmap/relmap-make.js";
 import { defaultBoard } from "../relmap/relmap-last.js";
 import { keepDeadChipsCurrent, keepSavedFacesCurrent, sweepStaleFaces } from "../relmap/relmap-faces.js";
+import { installChipMeasure } from "../utils/relmap-chip-measure.js";
 import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
 import { maybeRescueStrandedWorld } from "../migration/rescue.js";
@@ -704,6 +705,9 @@ export async function onReady() {
 			.catch(err => console.warn("Stonetop | refreshing saved names on the relationship map failed", err));
 	});
 	sweepStaleFaces().catch(err => console.warn("Stonetop | refreshing saved names on the relationship map failed", err));
+	// Tag chips are packed into rows by their width in the face they are drawn in, Libre Caslon
+	// (utils/relmap-chip-measure.js); until it loads, by the per-character table.
+	installChipMeasure(document);
 	// Somebody who dies, or comes back, puts the Dead chip on (or takes it off) everyone standing for
 	// them on every board (relmap/relmap-dead.js); the same one-writer rule as the saved faces.
 	Hooks.on("updateActor", (actor, changed, options, userId) => {

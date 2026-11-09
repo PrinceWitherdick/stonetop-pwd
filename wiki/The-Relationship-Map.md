@@ -33,7 +33,21 @@ Your GM can turn the whole feature off with the world setting **Relationship Map
 
 ### Labels under a name
 
-A person can carry a short label under their name, such as *Iron Knight*, *Acolyte of the Celebrated Seer* or *Deceased*. Rest the pointer on someone and click **Add a label** under their name (or click a label that is already there), type, and press `Enter`. `Esc` leaves it as it was, and an empty label removes it. A label belongs to that person on that board only, so the same character can be *Squire* on one board and *Deceased* on another. Long labels wrap onto two lines, and the full text shows when you rest the pointer on it.
+A person can carry a short label under their name, such as *Iron Knight*, *Acolyte of the Celebrated Seer* or *Deceased*. Rest the pointer on someone and click **Add a label** under their name (or click their name, or a label that is already there) to open their label bar, and type. `Enter` starts a new line, up to three. A label belongs to that person on that board only, so the same character can be *Squire* on one board and *Deceased* on another. The full text shows when you rest the pointer on their portrait.
+
+In the same bar you can:
+
+- choose where the name, label and chips stand: **Above**, **Below**, **Left** or **Right** of the portrait;
+- turn **Italicize** off to set the label upright (a new label starts the way the last one saved on that board was);
+- put **tag chips** on them, such as *Noble* or *Outcast* (see below).
+
+Every change shows on the board as you make it, for you alone. **Save** (or `Ctrl`+`Enter`) keeps them all as one undo step. `Esc`, the **×**, or clicking away puts everything back as it was. An empty label removes it.
+
+Thanks to Dom Bosco ([@domfortunato](https://github.com/domfortunato)), whose pull request to the [relationship-map module](https://github.com/PrinceWitherdick/relationship-map-pwd/pull/2) brought the lines, the choice of side and the Save button.
+
+### Tag chips
+
+**Add chip** in a person's label bar puts a small coloured tag under their name. Pick one already made on any board, or choose **New chip…** to name one and give it one of the eight colours (or your own) and an icon. Click a chip in the bar to change it, or its **×** to take it off. Changing or deleting a chip changes it on every board you can change that has it; deleting asks first. A built-in **Dead** chip follows the character or NPC: someone put on a board while dead arrives wearing it, and it goes on and off by itself as they die and come back.
 
 ## Drawing lines
 
@@ -59,7 +73,7 @@ Click **Group** and drag a box round some people (the hunters, the elders) to ma
 
 ## Line and word weights
 
-The **-** and **+** buttons in the map's bottom bar set how heavily the map is drawn **for you**: **Lines**, **Arrowheads** and **Words**, as percentages. Click a percentage to put it back to 100%. Raise them on a big screen or for easier reading; nobody else's map changes.
+The **-** and **+** buttons in the map's bottom bar set how heavily the map is drawn **for you**: **Names** (each person's name and label), **Words**, **Lines** and **Arrowheads**, as percentages. Chips and group outlines keep their size whatever **Names** says. Click a percentage to put it back to 100%. Raise them on a big screen or for easier reading; nobody else's map changes.
 
 ## See also
 - [Relationships, Notes and Reminders](Relationships-Notes-and-Reminders)

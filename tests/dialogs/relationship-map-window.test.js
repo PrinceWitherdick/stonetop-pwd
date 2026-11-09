@@ -61,6 +61,7 @@ vi.mock("../../module/dialogs/content-picker.js", () => ({
 const { RelationshipMapWindow, openRelationshipMap } =
 	await import("../../module/dialogs/RelationshipMapWindow.js");
 const { listVisibleMapPages, mapBoardRole, readGraph } = await import("../../module/relmap/relmap-doc.js");
+const { labelItalicFor } = await import("../../module/relmap/relmap-pen.js");
 const { forgetAllHistory } = await import("../../module/relmap/relmap-history.js");
 const { dropNodePatch, edgePatch, nodePatch } = await import("../../module/relmap/relmap-store.js");
 const { RELMAP_SEAT_MIN } = await import("../../module/relmap/relmap-store.js");
@@ -1371,6 +1372,32 @@ describe("what a portrait says when it is rested on", () => {
 		expect(held.at.left).toBe(20);
 		expect(held.at.top).toBeGreaterThan(30);
 		expect(app._personAt("somebody-else")).toBeNull();
+	});
+
+	// WHERE THE WORDS STAND, AND THE ITALICS, for the board; a label's lines heard as a list.
+	it("carries each person's side and italics, and says a label's lines one after another", () => {
+		const cast = foundry.utils.deepClone(CAST);
+		cast.nodes.elena.subtitle = "The Iron Knight\nLord of the Vale";
+		cast.nodes.elena.side = "left";
+		cast.nodes.elena.italic = false;
+		const { app } = windowFor(cast, { isOwner: false });
+		const nodes = Object.fromEntries(app._boardContext(app._plan()).nodes.map(node => [node.id, node]));
+		expect(nodes.elena).toMatchObject({ side: "left", upright: true });
+		expect(nodes.ghost).toMatchObject({ side: "below", upright: false });
+		expect(nodes.elena.tooltip).toMatch(/^Elena, The Iron Knight, Lord of the Vale\b/);
+	});
+
+	// Words standing over or beside the face leave the bar to open just under the face itself.
+	it("opens the bar just under the face for somebody whose words stand elsewhere", () => {
+		const cast = foundry.utils.deepClone(CAST);
+		cast.nodes.elena.subtitle = "Iron Knight";
+		const below = windowFor(cast).app;
+		below._boardContext(below._plan());
+		cast.nodes.elena.side = "above";
+		const above = windowFor(cast).app;
+		above._boardContext(above._plan());
+		expect(above._personAt("elena").at.top).toBeLessThan(below._personAt("elena").at.top);
+		expect(above._personAt("elena").at.top).toBeGreaterThan(30);
 	});
 });
 
@@ -3929,6 +3956,9 @@ function livingMap(boards) {
 }
 
 const ONE_LIVING_BOARD = () => livingMap([{ id: "p1", name: "Stonetop", graph: TWO_PEOPLE }]);
+/** The person bar's change, as its Save hands it over. */
+const saved = ({ fields = {}, wear = [], off = [], defs = {}, drop = [] } = {}) => ({ fields, wear, off, defs, drop });
+const DEAD_CHIP = Object.freeze({ id: "dead", name: "Dead", icon: "fa-skull", ink: "crimson" });
 
 describe("taking a change back", () => {
 	// The stacks outlive the window they were filled through, which is the point of them -- so a
@@ -4048,7 +4078,7 @@ describe("taking a change back", () => {
 	it("never folds a label typed into an arrow-key nudge of the same person", async () => {
 		const { entry, pages: [page] } = ONE_LIVING_BOARD();
 		const { app } = windowFor(null, { entry, pageId: "p1" });
-		await app._writeSubtitle("elena", { subtitle: "Iron Knight" });
+		await app._savePerson("elena", saved({ fields: { subtitle: "Iron Knight" } }));
 		await app._moveNode("elena", { x: 25, y: 30 }, { coalesce: "node:elena" });
 
 		await app._stepHistory("back");
@@ -4074,12 +4104,12 @@ describe("taking a change back", () => {
 		expect(readGraph(page).chips.dead).toBeUndefined();
 	});
 
-	// TAG CHIPS ("Dead"): one press to put on, one undo to take back, and a chip made and worn in one
-	// breath is one step that takes the chip away again with it.
+	// TAG CHIPS ("Dead"): put on with the rest of the person bar's change, one undo to take back, and a
+	// chip made and worn in one Save is one step that takes the chip away again with it.
 	it("puts a chip on somebody and takes it back, the chip's copy on this board and all", async () => {
 		const { entry, pages: [page] } = ONE_LIVING_BOARD();
 		const { app } = windowFor(null, { entry, pageId: "p1" });
-		await app._wearChip("elena", { id: "dead", name: "Dead", icon: "fa-skull", ink: "crimson" });
+		await app._savePerson("elena", saved({ wear: [DEAD_CHIP] }));
 		expect(readGraph(page).chips.dead).toEqual({ name: "Dead", icon: "fa-skull", ink: "crimson" });
 		expect(readGraph(page).nodes.elena.chips).toEqual({ dead: true });
 
@@ -4091,40 +4121,112 @@ describe("taking a change back", () => {
 	it("takes a chip off somebody, and puts it back on", async () => {
 		const { entry, pages: [page] } = ONE_LIVING_BOARD();
 		const { app } = windowFor(null, { entry, pageId: "p1" });
-		await app._wearChip("elena", { id: "dead", name: "Dead", icon: "fa-skull", ink: "crimson" });
-		await app._takeOffChip("elena", "dead");
+		await app._savePerson("elena", saved({ wear: [DEAD_CHIP] }));
+		await app._savePerson("elena", saved({ off: ["dead"] }));
 		expect(readGraph(page).nodes.elena.chips).toEqual({});
 		expect(readGraph(page).chips.dead).toBeTruthy();
 		await app._stepHistory("back");
 		expect(readGraph(page).nodes.elena.chips).toEqual({ dead: true });
 	});
 
-	it("makes a new chip on somebody, or puts on the one already called that", async () => {
+	// ONE SAVE IS ONE STEP, whatever it changed: the label, the side and the chips come back together.
+	it("writes the label, side and chips of one Save as one step", async () => {
 		const { entry, pages: [page] } = ONE_LIVING_BOARD();
 		const { app } = windowFor(null, { entry, pageId: "p1" });
-		await app._saveChip("elena", null, { name: "Noble", icon: "fa-crown", ink: "ochre" });
-		const [id] = Object.keys(readGraph(page).chips);
-		expect(readGraph(page).chips[id]).toEqual({ name: "Noble", icon: "fa-crown", ink: "ochre" });
-		await app._saveChip("stefan", null, { name: "noble", icon: "", ink: "rose" });
-		expect(Object.keys(readGraph(page).chips)).toEqual([id]);
-		expect(readGraph(page).nodes.stefan.chips).toEqual({ [id]: true });
+		await app._savePerson("elena", saved({ fields: { subtitle: "Fallen", side: "left" }, wear: [DEAD_CHIP] }));
+		expect(readGraph(page).nodes.elena).toMatchObject({ subtitle: "Fallen", side: "left", chips: { dead: true } });
+		await app._stepHistory("back");
+		expect(readGraph(page).nodes.elena).toMatchObject({ subtitle: "", side: "below", chips: {} });
+		expect(app._history.canUndo).toBe(false);
 	});
 
-	it("changes a chip on this board as one step", async () => {
+	it("makes a new chip, or hands back the one already called that", async () => {
 		const { entry, pages: [page] } = ONE_LIVING_BOARD();
 		const { app } = windowFor(null, { entry, pageId: "p1" });
-		await app._wearChip("elena", { id: "dead", name: "Dead", icon: "fa-skull", ink: "crimson" });
-		await app._saveChip("elena", "dead", { name: "Fallen", icon: "fa-ghost", ink: "#123456" });
+		const made = app._newChip({ name: "Noble", icon: "fa-crown", ink: "ochre" });
+		await app._savePerson("elena", saved({ wear: [made] }));
+		expect(readGraph(page).chips[made.id]).toEqual({ name: "Noble", icon: "fa-crown", ink: "ochre" });
+		expect(app._newChip({ name: "noble", icon: "", ink: "rose" })).toEqual(made);
+	});
+
+	it("changes a chip on this board, with the person, as one step", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._savePerson("elena", saved({ wear: [DEAD_CHIP] }));
+		await app._savePerson("elena", saved({ defs: { dead: { name: "Fallen", icon: "fa-ghost", ink: "#123456" } } }));
 		expect(readGraph(page).chips.dead).toEqual({ name: "Fallen", icon: "fa-ghost", ink: "#123456" });
 		await app._stepHistory("back");
 		expect(readGraph(page).chips.dead).toEqual({ name: "Dead", icon: "fa-skull", ink: "crimson" });
 	});
 
+	it("defines a chip put on and changed in the same Save as changed", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._savePerson("elena", saved({ wear: [DEAD_CHIP], defs: { dead: { name: "Fallen", icon: "fa-ghost", ink: "rose" } } }));
+		expect(readGraph(page).chips.dead).toEqual({ name: "Fallen", icon: "fa-ghost", ink: "rose" });
+	});
+
+	// SHOWN BEFORE IT IS SAVED: the board is painted with the bar's change over the stored map, and the
+	// bar is told about the person as stored, so it still knows what it has changed.
+	it("paints the person bar's change without writing it, and paints the board as stored once it goes", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		app._personDraft = { id: "elena", change: saved({ fields: { subtitle: "Fallen", italic: false }, wear: [DEAD_CHIP] }) };
+		const plan = app._plan();
+		expect(plan.graph.nodes.elena).toMatchObject({ subtitle: "Fallen", italic: false, chips: { dead: true } });
+		expect(plan.graph.chips.dead).toEqual({ name: "Dead", icon: "fa-skull", ink: "crimson" });
+		expect(readGraph(page).nodes.elena.subtitle).toBe("");
+		app._boardContext(plan);
+		const held = app._personAt("elena");
+		expect(held.node.subtitle).toBe("");
+		expect(held.chips.map(chip => chip.id)).toEqual(["dead"]);
+		expect(held.boardChips).toEqual([]);
+
+		app._previewPerson("elena", null);
+		expect(app._personDraft).toBeNull();
+		expect(app._plan().graph.nodes.elena.subtitle).toBe("");
+	});
+
+	// A NEW LABEL STARTS IN THE ITALICS THE LAST ONE SAVED ON THIS MAP HAD, kept on the map's pen.
+	it("remembers the italics a label was saved in, for the next new label on this map", async () => {
+		const { entry } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		expect(labelItalicFor(entry)).toBe(true);
+		await app._savePerson("elena", saved({ fields: { subtitle: "Smith" } }));
+		expect(entry.updates).toEqual([]);
+		await app._savePerson("elena", saved({ fields: { italic: false } }));
+		expect(entry.updates).toEqual([{ "flags.stonetop-pwd.relationshipMapPen.italic": false }]);
+	});
+
+	// ⚠ ON THE BOARD ITSELF, not just in the graph: the pills are drawn from the read's chip layout.
+	it("draws a chip taken off in the bar off the board, and back on once the change is let go", async () => {
+		const { entry } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		await app._savePerson("elena", saved({ wear: [DEAD_CHIP] }));
+		// Stonetop's rows are the painted chips themselves, which the template draws.
+		const pills = () => JSON.stringify(app._boardContext(app._plan()).nodes.find(node => node.id === "elena").chipRows);
+		expect(pills()).toContain("Dead");
+		app._previewPerson("elena", saved({ off: ["dead"] }));
+		expect(pills()).not.toContain("Dead");
+		app._previewPerson("elena", null);
+		expect(pills()).toContain("Dead");
+	});
+
+	it("holds a saved change on the board until it has landed", async () => {
+		const { entry, pages: [page] } = ONE_LIVING_BOARD();
+		const { app } = windowFor(null, { entry, pageId: "p1" });
+		const saving = app._savePerson("elena", saved({ fields: { subtitle: "Fallen" } }));
+		expect(app._plan().graph.nodes.elena.subtitle).toBe("Fallen");
+		await saving;
+		expect(app._landingPerson).toBeNull();
+		expect(readGraph(page).nodes.elena.subtitle).toBe("Fallen");
+	});
+
 	it("asks before deleting a chip, and an undo brings it back onto everybody", async () => {
 		const { entry, pages: [page] } = ONE_LIVING_BOARD();
 		const { app } = windowFor(null, { entry, pageId: "p1" });
-		await app._wearChip("elena", { id: "dead", name: "Dead", icon: "fa-skull", ink: "crimson" });
-		await app._wearChip("stefan", { id: "dead", name: "Dead", icon: "fa-skull", ink: "crimson" });
+		await app._savePerson("elena", saved({ wear: [DEAD_CHIP] }));
+		await app._savePerson("stefan", saved({ wear: [DEAD_CHIP] }));
 		app._confirm = vi.fn(async () => false);
 		expect(await app._dropChip("dead")).toBe(false);
 		expect(readGraph(page).chips.dead).toBeTruthy();
@@ -4133,8 +4235,18 @@ describe("taking a change back", () => {
 		expect(await app._dropChip("dead")).toBe(true);
 		// On no other board, so not the destructive skin: this board's part is all there is, and undoable.
 		expect(app._confirm.mock.calls[0][0].danger).toBe(false);
+		// ASKING WRITES NOTHING: the bar shows it gone, and its Save deletes it.
+		expect(readGraph(page).chips.dead).toBeTruthy();
+		app._personDraft = { id: "elena", change: saved({ drop: ["dead"] }) };
+		const shown = app._plan().graph;
+		expect(shown.chips.dead).toBeUndefined();
+		expect(shown.nodes.stefan.chips).toEqual({});
+		app._personDraft = null;
+
+		await app._savePerson("elena", saved({ drop: ["dead"] }));
 		expect(readGraph(page).chips.dead).toBeUndefined();
 		expect(readGraph(page).nodes.elena.chips).toEqual({});
+		expect(readGraph(page).nodes.stefan.chips).toEqual({});
 
 		await app._stepHistory("back");
 		expect(readGraph(page).nodes.elena.chips).toEqual({ dead: true });

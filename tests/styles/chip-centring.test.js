@@ -142,6 +142,11 @@ describe("chips with an icon or a count trim their label element", () => {
 		// Caslon's line box, now trimmed (the font fixes its own line box; Blink still floors leading).
 		".stonetop-welcome-create-label",
 		".stonetop-relmap-tool > span",
+		// The person bar's words beside a control: Save, the four sides, Italicize, and the chip form's two.
+		".stonetop-relmap-personbar-save > span",
+		".stonetop-relmap-personbar-side > span",
+		".stonetop-relmap-personbar-italic > span",
+		".stonetop-relmap-chipform-btn > span",
 		".pbta.sheet .sheet-tabs:not(.stonetop-tab-rail) .item .stonetop-tab-label",
 	];
 

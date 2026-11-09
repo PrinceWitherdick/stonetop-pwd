@@ -118,6 +118,15 @@ export function dragTranslation({ dx = 0, dy = 0, scale = 1 } = {}) {
 }
 
 /**
+ * WHO a part of a person on the board belongs to: their face, name, label or chips all stand inside
+ * the person's own `[data-relmap-node]`, so its id answers for every one of them, and a new part needs
+ * no attribute of its own to be found.
+ */
+function personOf(el) {
+	return el?.closest?.("[data-relmap-node]")?.dataset?.relmapNode;
+}
+
+/**
  * Where a portrait has been carried to, written for the stylesheet to fold into its own transform.
  *
  * TWO CUSTOM PROPERTIES AND NOT AN INLINE `transform`, and this is the whole reason the drop lands
@@ -1249,14 +1258,15 @@ export function wireRelmapDrag(root, {
 		// THE LABEL UNDER A NAME ("Iron Knight", "Add a label"), pressed and not dragged: its bar goes
 		// up. A press that travels is still the person's drag, as one on the name is, and `swallowClick`
 		// above has already eaten the click that drag would have left behind.
-		// THE CHIPS UNDER IT ("Dead") are the same press: they live on the same bar.
-		const subtitle = ev.target.closest?.("[data-relmap-subtitle], [data-relmap-chips]");
+		// THE CHIPS UNDER IT ("Dead") are the same press: they live on the same bar. AND SO IS THE NAME
+		// over them: a click on somebody's name raises the bar that edits their label and chips.
+		const subtitle = ev.target.closest?.("[data-relmap-subtitle], [data-relmap-chips], .stonetop-relmap-name");
 		// ⚠ EXCEPT WITH "DRAW LINES" ARMED, when the label is the person as the face is, and the click is
 		// the tool's (below). Raising the bar instead left the aim live with its band following the
 		// pointer, and Escape in the field then went to the aim and not to the words.
 		if (subtitle && !(linking?.() && canEdit())) {
 			ev.preventDefault();
-			if (canEdit()) onPickPerson?.(subtitle.dataset.relmapSubtitle ?? subtitle.dataset.relmapChips, subtitle);
+			if (canEdit()) onPickPerson?.(personOf(subtitle), subtitle);
 			return;
 		}
 		// ⚠ A SINGLE CLICK ON A FACE OPENS NOTHING ANY MORE (user, 2026-09-10). The board is the
@@ -1275,8 +1285,7 @@ export function wireRelmapDrag(root, {
 		// own). Left to fall through, a click on somebody's name was a click on bare paper: it let go
 		// of every bar, the whole selection and a Draw-lines pick.
 		const face = ev.target.closest?.("[data-relmap-open]") ?? subtitle ?? ev.target.closest?.("[data-relmap-node]");
-		const faceId = face?.dataset.relmapOpen ?? face?.dataset.relmapSubtitle ?? face?.dataset.relmapChips
-			?? face?.dataset.relmapNode;
+		const faceId = personOf(face);
 		// WITH "DRAW LINES" ARMED, A CLICK ON A FACE IS THE TOOL'S, from the mouse and the keyboard
 		// alike: the first picks who to draw from, the next on somebody else draws the line, and the
 		// same face again lets the pick go. Enter on a face draws lines instead of opening a sheet

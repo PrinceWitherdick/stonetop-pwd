@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import Handlebars from "handlebars";
-import { CHIP_ICON_COLUMNS, RelmapPersonBar } from "../../module/utils/relmap-person-bar.js";
+import { CHIP_ICON_COLUMNS, DRAFT_CHIP_ID, RelmapPersonBar } from "../../module/utils/relmap-person-bar.js";
 import { closeSuggestionMenu } from "../../module/utils/suggestion-menu.js";
 import { RELMAP_CHIP_ICONS, RELMAP_INKS } from "../../module/relmap/relmap-store.js";
 
@@ -37,6 +37,9 @@ let state, handlers, bar, el;
 const $ = sel => el.querySelector(sel);
 const $$ = sel => [...el.querySelectorAll(sel)];
 const menu = () => document.querySelector(".stonetop-suggestion-menu");
+/** The bar's change as it was last shown on the board. */
+const shown = () => handlers.onPreview.mock.calls.at(-1)?.[1];
+const change = ({ fields = {}, wear = [], off = [], defs = {}, drop = [] } = {}) => ({ fields, wear, off, defs, drop });
 const press = sel => $(sel).click();
 const keydown = (target, key) => {
 	const ev = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
@@ -50,17 +53,19 @@ beforeEach(() => {
 	foundry.utils.escapeHTML ??= s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 	document.body.innerHTML = Handlebars.compile(WINDOW)(CONTEXT);
 	el = document.querySelector(".stonetop-relmap-personbar");
-	state = { node: { name: "Simon", subtitle: "" }, chips: [DEAD] };
+	// Simon wears Dead as stored; `chips` is what the board paints on him, `boardChips` what it has.
+	state = { node: { name: "Simon", subtitle: "", chips: { dead: true } }, chips: [DEAD], boardChips: ["dead", "c1"] };
 	handlers = {
 		surface: () => ({
 			painted: () => ({ width: 1000, height: 800 }), offset: { x: 0, y: 0 }, viewSize: { width: 1000, height: 800 },
 		}),
-		personAt: vi.fn(id => (id === "n1" ? { node: state.node, at: { left: 50, top: 50 }, chips: state.chips } : null)),
-		onField: vi.fn(() => Promise.resolve(true)),
+		personAt: vi.fn(id => (id === "n1" ? {
+			node: state.node, at: { left: 50, top: 50 }, chips: state.chips, boardChips: state.boardChips,
+		} : null)),
+		onSave: vi.fn(() => Promise.resolve(true)),
+		onPreview: vi.fn(),
 		library: vi.fn(() => [DEAD, NOBLE]),
-		onWear: vi.fn(() => Promise.resolve(true)),
-		onTakeOff: vi.fn(() => Promise.resolve(true)),
-		onSaveChip: vi.fn(() => Promise.resolve(true)),
+		onNewChip: vi.fn(def => ({ id: "new1", ...def })),
 		onDropChip: vi.fn(() => Promise.resolve(true)),
 		onNeedName: vi.fn(),
 		onNudged: vi.fn(),
@@ -88,11 +93,51 @@ describe("the chips a person wears", () => {
 		expect($(".stonetop-relmap-personbar-worn").hidden).toBe(true);
 	});
 
-	it("takes a chip off with its x, and hands the focus to Add chip", () => {
+	it("takes a chip off with its x, on the board at once, and hands the focus to Add chip", () => {
 		bar.open("n1");
 		press(".stonetop-relmap-personbar-chipoff");
-		expect(handlers.onTakeOff).toHaveBeenCalledWith("n1", "dead");
+		expect(shown()).toEqual(change({ off: ["dead"] }));
+		expect(handlers.onSave).not.toHaveBeenCalled();
 		expect(document.activeElement).toBe($("[data-relmap-pbar='chipadd']"));
+	});
+
+	it("writes the chips put on and taken off with the label, in one Save", () => {
+		bar.open("n1");
+		press(".stonetop-relmap-personbar-chipoff");
+		press("[data-relmap-pbar='chipadd']");
+		menu().querySelectorAll('[role="menuitem"]')[2].click();
+		press("[data-relmap-pbar='save']");
+		expect(handlers.onSave).toHaveBeenCalledTimes(1);
+		expect(handlers.onSave).toHaveBeenCalledWith("n1", change({ wear: [NOBLE], off: ["dead"] }));
+	});
+
+	it("puts a chip taken off back on, and lets go of one put on and taken off again", () => {
+		bar.open("n1");
+		press(".stonetop-relmap-personbar-chipoff");
+		// The board repainted with Dead off him, as the window does on the change.
+		state.chips = [];
+		bar.refresh();
+		press("[data-relmap-pbar='chipadd']");
+		menu().querySelectorAll('[role="menuitem"]')[1].click();
+		expect(shown()).toBeNull();
+		press("[data-relmap-pbar='chipadd']");
+		menu().querySelectorAll('[role="menuitem"]')[2].click();
+		expect(shown()).toEqual(change({ wear: [NOBLE] }));
+		state.chips = [NOBLE];
+		bar.refresh();
+		press(".stonetop-relmap-personbar-chipoff");
+		expect(shown()).toBeNull();
+	});
+
+	it("takes every chip change off the board when the bar is closed without Save", () => {
+		bar.open("n1");
+		press(".stonetop-relmap-personbar-chipoff");
+		bar.close();
+		expect(shown()).toBeNull();
+		expect(handlers.onSave).not.toHaveBeenCalled();
+		bar.open("n1");
+		press("[data-relmap-pbar='save']");
+		expect(handlers.onSave).not.toHaveBeenCalled();
 	});
 
 	it("repaints the row when the board changes under it, and only then", () => {
@@ -117,11 +162,38 @@ describe("Add chip", () => {
 		expect(rows[2].querySelector(".stonetop-suggestion-menu-icon").getAttribute("style")).toBe("--relmap-ink-raw:#336699");
 	});
 
-	it("puts a chip from the menu on the person", () => {
+	it("follows its button when a box holding it scrolls, once a frame, and not for other scrollers", async () => {
+		bar.open("n1");
+		const button = $("[data-relmap-pbar='chipadd']");
+		press("[data-relmap-pbar='chipadd']");
+		const measured = vi.spyOn(button, "getBoundingClientRect");
+		const elsewhere = document.createElement("div");
+		document.body.appendChild(elsewhere);
+		const frame = () => new Promise(done => setTimeout(done, 40));
+		elsewhere.dispatchEvent(new Event("scroll"));
+		await frame();
+		expect(measured).not.toHaveBeenCalled();
+		el.dispatchEvent(new Event("scroll"));
+		el.dispatchEvent(new Event("scroll"));
+		expect(measured).not.toHaveBeenCalled();
+		await frame();
+		expect(measured).toHaveBeenCalledTimes(1);
+	});
+
+	it("says which chips are already on them", () => {
+		bar.open("n1");
+		press("[data-relmap-pbar='chipadd']");
+		const rows = [...menu().querySelectorAll('[role="menuitem"]')];
+		expect(rows[1].querySelector(".stonetop-autocomplete-hint")?.textContent).toBeTruthy();
+		expect(rows[2].querySelector(".stonetop-autocomplete-hint")).toBeNull();
+	});
+
+	it("puts a chip from the menu on the person, on the board at once", () => {
 		bar.open("n1");
 		press("[data-relmap-pbar='chipadd']");
 		menu().querySelectorAll('[role="menuitem"]')[2].click();
-		expect(handlers.onWear).toHaveBeenCalledWith("n1", NOBLE);
+		expect(shown()).toEqual(change({ wear: [NOBLE] }));
+		expect(handlers.onSave).not.toHaveBeenCalled();
 	});
 
 	it("goes when the bar does", () => {
@@ -148,7 +220,7 @@ describe("the chip form", () => {
 		expect($("[data-relmap-pbar='chipicon'][data-relmap-pbar-value='']").getAttribute("aria-checked")).toBe("true");
 	});
 
-	it("saves a new chip with the colour and icon chosen, and puts the form away", () => {
+	it("keeps a new chip with the colour and icon chosen, and puts the form away", () => {
 		openNew();
 		$("[data-relmap-pbar='chipname']").value = "  Noble  ";
 		press("[data-relmap-pbar='chipink'][data-relmap-pbar-value='ochre']");
@@ -159,18 +231,46 @@ describe("the chip form", () => {
 		expect(lit("chipicon")).toEqual(["fa-crown"]);
 		expect(lit("chipink")).toEqual(["ochre"]);
 		press("[data-relmap-pbar='chipsave']");
-		expect(handlers.onSaveChip).toHaveBeenCalledWith("n1", null, { name: "Noble", icon: "fa-crown", ink: "ochre" });
+		expect(handlers.onNewChip).toHaveBeenCalledWith({ name: "Noble", icon: "fa-crown", ink: "ochre" });
+		expect(shown()).toEqual(change({ wear: [{ id: "new1", name: "Noble", icon: "fa-crown", ink: "ochre" }] }));
+		expect(handlers.onSave).not.toHaveBeenCalled();
 		expect($(".stonetop-relmap-chipform").hidden).toBe(true);
 	});
 
-	it("saves on Enter in the name, and says so when there is no name", () => {
+	// THE FORM SHOWS ON THE BOARD AS IT IS FILLED IN, before its own Save.
+	it("shows a new chip on the board as it is named and coloured, and takes it off on Cancel", async () => {
+		openNew();
+		expect(shown() ?? null).toBeNull();
+		const name = $("[data-relmap-pbar='chipname']");
+		name.value = "Outcast";
+		name.dispatchEvent(new Event("input"));
+		// The name, like the label, is shown once typing pauses.
+		await vi.waitFor(() => expect(shown()).toEqual(change({ wear: [{ id: DRAFT_CHIP_ID, name: "Outcast", icon: "", ink: "slate" }] })));
+		press("[data-relmap-pbar='chipink'][data-relmap-pbar-value='ochre']");
+		expect(shown().wear[0].ink).toBe("ochre");
+		press("[data-relmap-pbar='chipcancel']");
+		expect(shown()).toBeNull();
+	});
+
+	it("shows a worn chip changed as it is changed, and puts it back on Escape", () => {
+		state.chips = [DEAD, NOBLE];
+		bar.open("n1");
+		press(".stonetop-relmap-personbar-worn button[data-relmap-pbar-value='c1']");
+		press("[data-relmap-pbar='chipicon'][data-relmap-pbar-value='fa-ghost']");
+		expect(shown()).toEqual(change({ defs: { c1: { name: "Noble", icon: "fa-ghost", ink: "#336699" } } }));
+		keydown($("[data-relmap-pbar='chipname']"), "Escape");
+		expect(shown()).toBeNull();
+		expect(el.hidden).toBe(false);
+	});
+
+	it("keeps on Enter in the name, and says so when there is no name", () => {
 		openNew();
 		keydown($("[data-relmap-pbar='chipname']"), "Enter");
 		expect(handlers.onNeedName).toHaveBeenCalled();
-		expect(handlers.onSaveChip).not.toHaveBeenCalled();
+		expect(handlers.onNewChip).not.toHaveBeenCalled();
 		$("[data-relmap-pbar='chipname']").value = "Outcast";
 		keydown($("[data-relmap-pbar='chipname']"), "Enter");
-		expect(handlers.onSaveChip).toHaveBeenCalledWith("n1", null, { name: "Outcast", icon: "", ink: "slate" });
+		expect(handlers.onNewChip).toHaveBeenCalledWith({ name: "Outcast", icon: "", ink: "slate" });
 	});
 
 	it("opens on a worn chip as it is, with Delete, and changes that chip", () => {
@@ -184,7 +284,57 @@ describe("the chip form", () => {
 		expect($$("[data-relmap-pbar='chipink'][aria-checked='true']")).toHaveLength(0);
 		press("[data-relmap-pbar='chipicon'][data-relmap-pbar-value='fa-ghost']");
 		press("[data-relmap-pbar='chipsave']");
-		expect(handlers.onSaveChip).toHaveBeenCalledWith("n1", "c1", { name: "Noble", icon: "fa-ghost", ink: "#336699" });
+		expect($(".stonetop-relmap-chipform").hidden).toBe(true);
+		press("[data-relmap-pbar='save']");
+		expect(handlers.onSave).toHaveBeenCalledWith("n1", change({ defs: { c1: { name: "Noble", icon: "fa-ghost", ink: "#336699" } } }));
+	});
+
+	// A chip put on in this bar is not on the board until Save, so there is nothing there to delete.
+	it("offers no Delete on a chip this board does not have yet", () => {
+		state.boardChips = ["dead"];
+		state.chips = [DEAD, NOBLE];
+		bar.open("n1");
+		press(".stonetop-relmap-personbar-worn button[data-relmap-pbar-value='c1']");
+		expect($("[data-relmap-pbar='chipdrop']").hidden).toBe(true);
+	});
+
+	// ⚠ THE BAR'S OWN SAVE, AT THE FOOT, WITH THE FORM STILL OPEN: it keeps the chip as the form's Save
+	// would, with the label. It used to put the bar away and the chip went with the form.
+	it("saves the chip in the open form with the label, when the bar's own Save is pressed", () => {
+		openNew();
+		$("[data-relmap-pbar='chipname']").value = "Outcast";
+		press("[data-relmap-pbar='chipicon'][data-relmap-pbar-value='fa-crown']");
+		$("[data-relmap-pbar='subtitle']").value = "Exile";
+		press("[data-relmap-pbar='save']");
+		expect(handlers.onSave).toHaveBeenCalledTimes(1);
+		expect(handlers.onSave).toHaveBeenCalledWith("n1", change({
+			fields: { subtitle: "Exile" },
+			wear: [{ id: "new1", name: "Outcast", icon: "fa-crown", ink: "slate" }],
+		}));
+		expect(el.hidden).toBe(true);
+	});
+
+	it("lets a new chip that was never named go, and still saves the label", () => {
+		openNew();
+		$("[data-relmap-pbar='subtitle']").value = "Exile";
+		press("[data-relmap-pbar='save']");
+		expect(handlers.onSave).toHaveBeenCalledWith("n1", change({ fields: { subtitle: "Exile" } }));
+		expect(handlers.onNewChip).not.toHaveBeenCalled();
+		expect(handlers.onNeedName).not.toHaveBeenCalled();
+		expect(el.hidden).toBe(true);
+	});
+
+	it("saves nothing, and stays open, while a worn chip's name has been rubbed out", () => {
+		state.chips = [DEAD, NOBLE];
+		bar.open("n1");
+		press(".stonetop-relmap-personbar-worn button[data-relmap-pbar-value='c1']");
+		$("[data-relmap-pbar='chipname']").value = "  ";
+		$("[data-relmap-pbar='subtitle']").value = "Exile";
+		press("[data-relmap-pbar='save']");
+		expect(handlers.onNeedName).toHaveBeenCalled();
+		expect(handlers.onSave).not.toHaveBeenCalled();
+		expect(el.hidden).toBe(false);
+		expect($(".stonetop-relmap-chipform").hidden).toBe(false);
 	});
 
 	it("asks to delete a chip, and stays open if the reader thinks better of it", async () => {
@@ -195,6 +345,31 @@ describe("the chip form", () => {
 		await Promise.resolve();
 		expect(handlers.onDropChip).toHaveBeenCalledWith("dead");
 		expect($(".stonetop-relmap-chipform").hidden).toBe(false);
+		expect(shown() ?? null).toBeNull();
+	});
+
+	// A DELETE IS SHOWN AT ONCE AND DONE ON SAVE, like everything else on the bar.
+	it("shows a chip deleted, deletes it on Save, and not when the bar is let go", async () => {
+		bar.open("n1");
+		press(".stonetop-relmap-personbar-worn button[data-relmap-pbar-value='dead']");
+		press("[data-relmap-pbar='chipdrop']");
+		await vi.waitFor(() => expect(shown()).toEqual(change({ drop: ["dead"] })));
+		expect($(".stonetop-relmap-chipform").hidden).toBe(true);
+		// Not offered again from Add chip while it is going.
+		press("[data-relmap-pbar='chipadd']");
+		const offered = [...menu().querySelectorAll('[role="menuitem"]')].map(row => row.textContent);
+		expect(offered.some(text => text.includes("Dead"))).toBe(false);
+		closeSuggestionMenu();
+		bar.close();
+		expect(shown()).toBeNull();
+		expect(handlers.onSave).not.toHaveBeenCalled();
+
+		bar.open("n1");
+		press(".stonetop-relmap-personbar-worn button[data-relmap-pbar-value='dead']");
+		press("[data-relmap-pbar='chipdrop']");
+		await vi.waitFor(() => expect(shown()).toEqual(change({ drop: ["dead"] })));
+		press("[data-relmap-pbar='save']");
+		expect(handlers.onSave).toHaveBeenCalledWith("n1", change({ drop: ["dead"] }));
 	});
 
 	it("steps back one thing per Escape: the form, then the bar", () => {

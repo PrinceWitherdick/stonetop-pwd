@@ -11,8 +11,8 @@
 // Changes to OTHER boards are made by the client that made the change, to the boards it may edit,
 // and never through the undo history: only this board's part of an edit is somebody's Ctrl+Z.
 
-import { applyPatch, canSeeMapPage, readGraph } from "./relmap-doc.js";
-import { everyBoard } from "./relmap-faces.js";
+import { canSeeMapPage, readChips, readGraph } from "./relmap-doc.js";
+import { everyBoard, writeBoards } from "./relmap-faces.js";
 import {
 	RELMAP_CHIP_PRESETS, addChipPatch, chipPatch, compareChips, dropChipPatch, nodeChipsPatch,
 } from "./relmap-store.js";
@@ -39,7 +39,7 @@ export function chipLibrary(graph, { doc = null, boards = everyBoard(), localize
 	for (const [id, chip] of Object.entries(graph?.chips ?? {})) byId.set(id, { id, ...chip, here: true });
 	for (const board of boards ?? []) {
 		if (!board || board === doc || !canSeeMapPage(board)) continue;
-		for (const [id, chip] of Object.entries(readGraph(board).chips)) {
+		for (const [id, chip] of Object.entries(readChips(board))) {
 			if (!byId.has(id)) byId.set(id, { id, ...chip, here: false });
 		}
 	}
@@ -82,28 +82,23 @@ export function chipWearPatch(graph, nodeId, chip) {
 export async function spreadChip(id, def, { doc = null, boards = everyBoard() } = {}) {
 	const writes = [];
 	for (const board of boards ?? []) {
-		if (!board || board === doc || !board.isOwner) continue;
-		const graph = readGraph(board);
-		if (!graph.chips[id]) continue;
-		const patch = def ? chipPatch(id, def) : dropChipPatch(graph, id);
+		if (!board || board === doc || !board.isOwner || !readChips(board)[id]) continue;
+		// A deletion takes the chip off everybody wearing it, so only that needs the whole board.
+		const patch = def ? chipPatch(id, def) : dropChipPatch(readGraph(board), id);
 		if (patch) writes.push([board, patch]);
 	}
-	const landed = await Promise.all(writes.map(async ([board, patch]) => {
-		try { return await applyPatch(board, patch); }
-		catch (err) {
-			console.warn(`Stonetop | could not carry a chip to the relationship map "${board?.name}"`, err);
-			return false;
-		}
-	}));
-	return landed.filter(Boolean).length;
+	return writeBoards(writes, { why: "to carry a chip there" });
 }
 
-/** How many OTHER boards this reader may see that have this chip: what the delete question says. */
+/**
+ * How many OTHER boards a deletion of this chip reaches: what the delete question says. The same
+ * boards `spreadChip` writes (the ones this reader owns), so the count never promises more than happens.
+ */
 export function chipElsewhere(id, { doc = null, boards = everyBoard() } = {}) {
 	let count = 0;
 	for (const board of boards ?? []) {
-		if (!board || board === doc || !canSeeMapPage(board)) continue;
-		if (readGraph(board).chips[id]) count++;
+		if (!board || board === doc || !board.isOwner) continue;
+		if (readChips(board)[id]) count++;
 	}
 	return count;
 }
