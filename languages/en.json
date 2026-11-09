@@ -1339,7 +1339,18 @@
       "removeItem": "Remove",
       "resetLabel": "Reset Inventory",
       "resetTitle": "Reset Inventory",
-      "resetConfirm": "Clear all item marks and the undefined ◇/□ pools? Item uses (e.g. supplies) are not affected.",
+      "resetConfirm": "Clear all item marks and the undefined ◇/□ pools, and empty your supplies? Anything you found on the trip stays on your list.",
+      "resetTooltip": "Back home: clear your marks, your ◇/□ reserves and your supplies (p.89). Your followers' too, if you tick them.",
+      "resetWho": "Clear the marks, the ◇/□ reserves and the supplies of everyone ticked? Anything found on the trip stays on its list.",
+      "resetKind": {
+        "self": "your character",
+        "custom": "follower",
+        "group": "group of followers",
+        "crew": "crew",
+        "animal-companion": "animal companion",
+        "initiate": "initiate",
+        "beast": "beast"
+      },
       "resetYes": "Clear the marks",
       "resetNo": "Keep them",
       "regularUndefinedPoolLabel": "Undefined",
@@ -2191,6 +2202,14 @@
           "load": "{load} load",
           "regular": "{count} ◇ in reserve",
           "small": "{count} □ in reserve"
+        },
+        "reset": {
+          "button": "Reset Inventory",
+          "title": "Reset Inventory",
+          "tooltip": "Back home: set down everything they carried and forget their reserve (p.89). Their gear list stays.",
+          "tooltipCrew": "Back home: empty every pip and every set of Supplies (p.89). Written-in items stay on the list.",
+          "confirm": "Untick everything {name} carried, and forget the ◇/□ their Outfit held in reserve? The lines on their gear list stay.",
+          "confirmCrew": "Empty every gear pip and every set of Supplies for {name}, and untick what members carry? Written-in items stay on the list."
         },
         "order": {
           "lead": "{name} makes the move on your order ({move}, Order Followers p.462).",
@@ -3459,7 +3478,6 @@
         "herd": "Count them home",
         "none": "Nothing of {steading}'s is still out with this trip.",
         "noSteading": "No steading sheet in this world, so nothing was requisitioned.",
-        "clearMarks": "Back home, everyone clears the marks from their Inventory insert (p.89): what they carry in town rarely matters.",
         "lostTitle": "Lost on the trip",
         "lostAsk": "{name} didn't come home. It comes off {steading}'s Assets list (the trip keeps its name for the Chronicle). Failing to bring a borrowed asset home safely almost always counts as Meeting with Disaster (p.308): Fortunes drops by 1, and at −1 the GM picks what it costs.",
         "lostDisaster": "Lost it: Meet with Disaster",
@@ -3467,6 +3485,21 @@
         "lostKeep": "Keep it out for now",
         "horsesLostAsk": "{what} didn't come home to {steading}'s herd. Failing to bring a borrowed asset home safely almost always counts as Meeting with Disaster (p.308): Fortunes drops by 1, and at −1 the GM picks what it costs.",
         "horsesNoDisaster": "No disaster"
+      },
+      "homeReset": {
+        "title": "Reset Inventory",
+        "intro": "Back home, everyone clears the marks from their Inventory (p.89): what they carry in town rarely matters. Anything they found stays on their list (p.90).",
+        "with": "(with {name})",
+        "aFollower": "A follower",
+        "clean": "Nothing to clear",
+        "allClear": "Everyone on this trip has already unpacked.",
+        "noParty": "No one is on this trip.",
+        "convalesce": "Then open each PC's Convalesce",
+        "button": "Reset Inventory",
+        "nonePicked": "Tick who should unpack first.",
+        "confirm": "Clear the marks, reserves and supplies of {names}? Anything they found stays on their lists.",
+        "done": "Inventory reset for {names}.",
+        "failed": "Could not reset {name}'s Inventory. See the console."
       },
       "requirements": {
         "heading": "What Chart a Course requires of them",

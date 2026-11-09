@@ -283,6 +283,41 @@ describe("Reset Inventory (INV-7)", () => {
 		expect(flag(actor, "inventory.checked")).toBeNull();
 		expect(flag(actor, "possessions.choiceCarried")).toBeNull();
 	});
+
+	// Going home (Book I p.89, p.310): the character and the followers ticked unpack in ONE write.
+	it("unpacks the character, a follower and the crew in one update", async () => {
+		const actor = mergingActor({
+			"inventory.checked": { rope: true }, "inventory.resources": { supplies: 2, provisions: 5 },
+			"customFollowers": { abc: { name: "Bryn", gear: [{ label: "Spear", checked: true }], outfit: { regular: 1, small: 0 } } },
+			"crew": { name: "The Wolves", gear: { spears: 1 }, supplies: [4, 4], writtenGear: [{ id: "w1", label: "Litter", weight: 2 }] },
+		});
+		const wrote = await makeChar(actor).resetForHomecoming({ pc: true, followers: [{ ftype: "custom", slug: "abc" }, { ftype: "crew" }] });
+		expect(wrote).toBe(true);
+		expect(actor.update).toHaveBeenCalledTimes(1);
+		expect(flag(actor, "inventory.checked")).toBeNull();
+		expect(flag(actor, "inventory.resources")).toEqual({ supplies: 0, provisions: 5 });
+		expect(flag(actor, "customFollowers.abc.gear")).toEqual([{ label: "Spear", checked: false }]);
+		expect(flag(actor, "customFollowers.abc.outfit")).toBeNull();
+		expect(flag(actor, "crew.gear")).toEqual({ spears: 0 });
+		expect(flag(actor, "crew.supplies")).toEqual([0, 0]);
+		expect(flag(actor, "crew.writtenGear")).toHaveLength(1);
+	});
+
+	it("leaves the character's own marks alone when only a follower unpacks", async () => {
+		const actor = mergingActor({
+			"inventory.checked": { rope: true },
+			"customFollowers": { abc: { gear: [{ label: "Spear", checked: true }] } },
+		});
+		await makeChar(actor).resetForHomecoming({ pc: false, followers: [{ ftype: "custom", slug: "abc" }] });
+		expect(flag(actor, "inventory.checked")).toEqual({ rope: true });
+		expect(flag(actor, "customFollowers.abc.gear")).toEqual([{ label: "Spear", checked: false }]);
+	});
+
+	it("writes nothing when the followers picked have nothing out", async () => {
+		const actor = mergingActor({ "customFollowers": { abc: { gear: [] } } });
+		expect(await makeChar(actor).resetForHomecoming({ pc: false, followers: [{ ftype: "custom", slug: "abc" }] })).toBe(false);
+		expect(actor.update).not.toHaveBeenCalled();
+	});
 });
 
 // One inventory action is one actor.update: one round trip, one diff for the ledger, one re-render.

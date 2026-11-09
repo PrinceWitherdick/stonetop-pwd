@@ -799,7 +799,7 @@ describe("WLK-4 / PREP-3 / E2: Going home lists what is still out", () => {
 		expect(wait).toHaveBeenCalledTimes(1);
 	});
 
-	it("renders the list with outcome buttons and the clear-your-marks line, from the home step", async () => {
+	it("renders the list with outcome buttons, from the home step", async () => {
 		const html = await global.renderTemplate("systems/stonetop-pwd/templates/dialogs/partials/expedition-home-assets.hbs", {
 			homeAssets: { hasSteading: true, hasAny: true, steadingName: "Stonetop", rows: [{ index: 1, name: "A wagon", with: "Wren" }], herd: [{ at: 0, name: "2 horses from the herd", count: 2 }] },
 		});
@@ -808,7 +808,8 @@ describe("WLK-4 / PREP-3 / E2: Going home lists what is still out", () => {
 		expect(html).toContain("Lost it (Meet with Disaster)");
 		expect(html).toContain(`data-action="herd" data-at="0"`);
 		expect(html).toContain("(with Wren)");
-		expect(html).toContain("clears the marks from their Inventory insert (p.89)");
+		// Clearing the marks is its own card now, with a button that does it (expedition-home-reset.hbs).
+		expect(html).not.toContain("clears the marks");
 		expect(repoFile("templates/dialogs/expedition.hbs")).toContain(`{{> "stonetop.expedition-home-assets" homeAssets=homeAssets}}`);
 	});
 });

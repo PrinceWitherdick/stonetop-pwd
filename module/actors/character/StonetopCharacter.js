@@ -43,6 +43,7 @@ import {MoveResources, heldOnTrack, learnedTrack, takeBackHeld} from "./MoveReso
 import {BOLSTER, PREPARATION_ARCANA, PREPARATION_FOR_FLAG, PREPARATION_MAX} from "./roll-boosts.js";
 import { inSpenderTurn } from "../../utils/spender-queue.js";
 import {debilityData, walkItOffChoice} from "./walk-it-off.js";
+import {followerResetData} from "./homecoming-reset.js";
 import {normalizeWound as _normalizeWound, normalizeWoundList} from "./wound-record.js";
 import {moveMarkBudget, markOptionCapNote} from "./move-mark-budget.js";
 import {markEntries, filledMarks, filledMarkCount, trimEmptyTail, oncePerLevelCautions, ONCE_PER_LEVEL_MARKS} from "./pfg-marks.js";
@@ -3379,11 +3380,32 @@ export class StonetopCharacter {
 	// them ("When you return home, clear the marks from your Inventory insert", Book I p.89): food in
 	// the larder is not tracked, and the next trip's ◆ of supplies is packed fresh.
 	async resetInventorySelections() {
-		await this._actor.update(Object.assign(
+		await this.resetForHomecoming();
+	}
+
+	/** That reset as one update fragment, for a caller that lands it with other changes. */
+	inventoryResetData() {
+		return Object.assign(
 			this._inventory.resetSelectionsData(),
 			this._possessions.clearCarriedData(),
 			...this._suppliesEmptied(SUPPLY_SLUGS).map(([slug, count]) => this._inventory.resourceData(slug, count)),
-		));
+		);
+	}
+
+	/**
+	 * Reset Inventory, back home (Book I p.89, p.496): this character's own marks when `pc`, and those of each
+	 * follower named in `followers` ({ftype, slug}; the crew is `{ftype: "crew"}`), all in ONE update, so the
+	 * sheet redraws once and the ledger reads it as one change. Resolves true when anything was written.
+	 */
+	async resetForHomecoming({ pc = true, followers = [] } = {}) {
+		const flags = readableFlags(this._actor);
+		const data = pc ? this.inventoryResetData() : {};
+		for (const f of Array.isArray(followers) ? followers : []) {
+			if (f?.ftype) Object.assign(data, followerResetData(flags, f.ftype, f.slug ?? ""));
+		}
+		if (!Object.keys(data).length) return false;
+		await this._actor.update(data, { stonetopMove: "Reset Inventory" });
+		return true;
 	}
 
 	/** `[slug, 0]` for each of these supplies rows that still holds a use, so emptying writes only what changes. */

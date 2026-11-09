@@ -1,0 +1,41 @@
+{{!-- Going home: everyone on the trip unpacks (ExpeditionDialog#_buildHomeReset). "When you return home,
+      clear the marks from your Inventory insert" (Book I p.89), the GM's downtime list's "Reset Inventory"
+      (p.496). One row per PC on the trip, each of their followers and their crew under them; a row with
+      nothing left to clear says so and cannot be ticked. What they found on the trip stays on their lists
+      (p.90): only the marks go. Same card chrome as the list above. --}}
+<section class="stonetop-exp-assets stonetop-exp-home-reset" aria-labelledby="stonetop-exp-home-reset-title">
+  <div class="stonetop-exp-assets-head">
+    <h3 class="stonetop-exp-assets-title" id="stonetop-exp-home-reset-title">{{localize "stonetop.expedition.homeReset.title"}}</h3>
+  </div>
+  <p class="stonetop-exp-assets-hint">{{localize "stonetop.expedition.homeReset.intro"}}</p>
+  {{#if this.homeReset.rows.length}}
+  <ul class="stonetop-exp-assets-list">
+    {{#each this.homeReset.rows}}
+    <li class="stonetop-exp-asset stonetop-exp-home-reset-row{{#if this.follower}} is-follower{{/if}}{{#unless this.canReset}} is-clean{{/unless}}">
+      <label class="stonetop-exp-home-reset-label">
+        <input type="checkbox" class="stonetop-exp-home-reset-check" data-actor="{{this.actorId}}" data-ftype="{{this.ftype}}" data-slug="{{this.slug}}" data-name="{{this.label}}" {{#if this.canReset}}checked{{else}}disabled{{/if}}>
+        <span class="stonetop-exp-home-reset-name">{{this.name}}</span>
+        {{#if this.sub}}<span class="stonetop-exp-home-reset-sub">{{this.sub}}</span>{{/if}}
+        {{#unless this.canReset}}<span class="stonetop-exp-home-reset-sub">{{localize "stonetop.expedition.homeReset.clean"}}</span>{{/unless}}
+      </label>
+    </li>
+    {{/each}}
+  </ul>
+  {{#if this.homeReset.anyToClear}}
+  <div class="stonetop-exp-home-reset-controls">
+    {{!-- The book's downtime example has everyone reset their HP too (p.496): that is Convalesce, with its own
+          rules (Torment's Blessing, the Unliving, the dying), so this opens each PC's own Convalesce window
+          rather than writing HP here. Unticked: a few days' rest is the table's to say. --}}
+    <label class="stonetop-exp-home-reset-convalesce">
+      <input type="checkbox" class="stonetop-exp-home-reset-convalesce-check">
+      <span>{{localize "stonetop.expedition.homeReset.convalesce"}}</span>
+    </label>
+    <button type="button" class="stonetop-exp-home-reset-btn"><i class="fas fa-eraser" aria-hidden="true"></i> {{localize "stonetop.expedition.homeReset.button"}}</button>
+  </div>
+  {{else}}
+  <p class="stonetop-exp-assets-foot">{{localize "stonetop.expedition.homeReset.allClear"}}</p>
+  {{/if}}
+  {{else}}
+  <p class="stonetop-exp-assets-empty">{{localize "stonetop.expedition.homeReset.noParty"}}</p>
+  {{/if}}
+</section>

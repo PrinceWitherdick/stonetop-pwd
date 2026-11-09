@@ -6,6 +6,7 @@ import {BackgroundInputChoice} from "./elements/background-input-choice.js";
 import {PossessionUseButton} from "./elements/possession-use-button.js";
 import {OutfitMoveDialog} from "./dialogs/OutfitMoveDialog.js";
 import {FollowerOutfitter, followerOutfitSnapshot} from "./follower-outfit.js";
+import {followerHasInventoryToClear, pcHasInventoryToClear} from "./homecoming-reset.js";
 import {RequisitionDialog} from "./dialogs/RequisitionDialog.js";
 import {CustomMoveDialog, characterMoveSaver} from "./dialogs/CustomMoveDialog.js";
 import {AddInventoryItemDialog, characterInventoryItemSaver} from "./dialogs/AddInventoryItemDialog.js";
@@ -81,7 +82,7 @@ import { personalSymbolAction, displayPersonalSymbol } from "./personal-symbol.j
 import { sacredPouchPanel, storeInPouch, takeFromPouch, replenishPouch } from "./sacred-pouch.js";
 import { attachPossessionChoicesOwed, possessionChoicesOwedView } from "./possession-choices-owed.js";
 import { crewExists, crewBackgroundTag, crewTagsOwed, effectiveCrewSize, customGroupSize, crewAnonymousCount, crewAnonMemberLabel, crewIndividualLabel, customGroupMemberLabel, customGroupPresent, groupFollowerMembers, groupFollowerStanding, CREW_SIZE_MAX } from "../../utils/crew.js";
-import {resolvedFlags, resolvedFlagProperty, STONETOP_SCOPE, ITEM_FLAG_SCOPE, HP_CEILING_OPTION} from "./StonetopFlags.js";
+import {resolvedFlags, readableFlags, resolvedFlagProperty, STONETOP_SCOPE, ITEM_FLAG_SCOPE, HP_CEILING_OPTION} from "./StonetopFlags.js";
 import { askFollowerBalk } from "../../gm-toolkit/follower-balk.js";
 import { USE_UP_RESOURCES, useUpChoices, useUpUpdate } from "./follower-use-up.js";
 import { FOLLOWER_FLAGS as _FOLLOWER_FLAGS, fillFollowerSlug as _fillSlug, followerDetailBase as _followerDetailBase, clampFollowerHp as _clampHp, intOverrideOrNull as _intOverrideOrNull, companionBase, crewMemberHpMax, followerHpMaxOverride, ownedBeastSlugs, orderedCustomFollowers } from "./follower-roster.js";
@@ -2058,6 +2059,16 @@ export function createStonetopCharacterSheetClass(Base) {
 				context.stonetop.followers.beasts?.length ||
 				context.stonetop.followers.custom?.length
 			);
+			// The Inventory tab's Reset Inventory (p.89): shown in play, not only under the wrench, whenever
+			// the character or one of their followers has something to set down. The followers it offers
+			// are the cards that would show their own Reset button (withOutfit's `canReset`).
+			const fol = context.stonetop.followers;
+			this._inventoryResetFollowers = [fol.animalCompanion, fol.crew, ...(fol.initiates ?? []), ...(fol.beasts ?? []), ...(fol.custom ?? [])]
+				.filter(card => card?.canReset)
+				.map(card => ({ ftype: card.ftype, slug: card.slug ?? "", name: card.orderName, isGroup: !!card.isGroup }));
+			context.stonetop.inventoryReset = {
+				show: this.isEditable && (pcHasInventoryToClear(readableFlags(this.actor)) || this._inventoryResetFollowers.length > 0),
+			};
 			// Owners can always reach the tab (even with no followers yet) so they can
 			// run the Create-a-Follower walkthrough or drop a monster to convert it;
 			// non-owners only see it once the character actually has followers. The
@@ -3792,6 +3803,9 @@ export function createStonetopCharacterSheetClass(Base) {
 					].filter(Boolean);
 					card.outfitLine = parts.join(" · ");
 				}
+				// Reset Inventory, back home (p.89, homecoming-reset.js): offered only while there is
+				// something to set down, so a card already unpacked has no button to wonder about.
+				card.canReset = this.isEditable && !card.dead && followerHasInventoryToClear(sf, card.ftype, card.slug ?? "");
 				return card;
 			};
 			const finalize = (card) => withParty(withFolds(withOrderData(withExceptional(withOutfit(withConditions(withTagEdits(withSectionEdits(withBarkskin(withGroupFight(withStatOverrides(card)))))))))));
@@ -5561,6 +5575,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-follower-outfit").on("click", ev => {
 				const { ftype, slug, followerName } = ev.currentTarget.dataset;
 				this._onFollowerOutfit(ftype, slug ?? "", followerName).catch(err => console.error("Stonetop | outfitting a follower failed", err));
+			});
+			// Reset a follower's (or the crew's) Inventory, back home (homecoming-reset.js).
+			html.find(".stonetop-follower-reset").on("click", ev => {
+				const { ftype, slug, followerName } = ev.currentTarget.dataset;
+				this._onFollowerReset(ftype, slug ?? "", followerName).catch(err => console.error("Stonetop | resetting a follower's inventory failed", err));
 			});
 			// The three debilities a follower can be given (p.243), toggled under the card's pencil.
 			html.find(".stonetop-follower-debility-toggle").on("click", async ev => {
@@ -9413,16 +9432,54 @@ export function createStonetopCharacterSheetClass(Base) {
 			}
 		}
 
+		/**
+		 * Reset Inventory, back home (Book I p.89): the character's own marks, reserves and supplies, and, ticked
+		 * beside them, each follower and the crew with something marked (p.310), all in ONE update. With no
+		 * follower to offer it is the plain yes-or-no it always was. Read again here, so a mark set or cleared
+		 * since the sheet drew is counted as it is now.
+		 */
 		async _onInventoryReset() {
-			const ok = await confirmOutcome({
+			const flags = readableFlags(this.actor);
+			const self = pcHasInventoryToClear(flags);
+			const followers = (this._inventoryResetFollowers ?? [])
+				.filter(f => followerHasInventoryToClear(flags, f.ftype, f.slug));
+			const yes = { label: game.i18n.localize("stonetop.inventory.resetYes"), icon: "fa-eraser", className: "stonetop-dialog-btn--danger" };
+			const no  = { label: game.i18n.localize("stonetop.inventory.resetNo") };
+			if (!followers.length) {
+				const ok = await confirmOutcome({
+					title:   game.i18n.localize("stonetop.inventory.resetTitle"),
+					content: `<p>${game.i18n.localize("stonetop.inventory.resetConfirm")}</p>`,
+					yes, no,
+				});
+				if (!ok) return;
+				// One actor update, which re-renders the sheet.
+				await this._stonetopCharacter.resetInventorySelections();
+				return;
+			}
+			// The shared opt-in row beside a question (.stonetop-ask-check), one per body, each ticked, with
+			// who they are beside the name: the character, or which kind of follower.
+			const check = (name, text, kind) => `<label class="stonetop-camp-check stonetop-ask-check"><input type="checkbox" class="stonetop-check" name="${name}" checked><span>${escHtml(text)} <span class="stonetop-ask-check-sub">(${escHtml(kind)})</span></span></label>`;
+			const kindOf = f => game.i18n.localize(`stonetop.inventory.resetKind.${f.ftype === "custom" && f.isGroup ? "group" : f.ftype}`);
+			const body = `<p>${game.i18n.localize("stonetop.inventory.resetWho")}</p>`
+				+ (self ? check("self", this.actor.name, game.i18n.localize("stonetop.inventory.resetKind.self")) : "")
+				+ followers.map((f, i) => check(`follower-${i}`, f.name, kindOf(f))).join("");
+			const answer = await askWithButtons({
 				title:   game.i18n.localize("stonetop.inventory.resetTitle"),
-				content: `<p>${game.i18n.localize("stonetop.inventory.resetConfirm")}</p>`,
-				yes:     { label: game.i18n.localize("stonetop.inventory.resetYes"), icon: "fa-eraser" },
-				no:      { label: game.i18n.localize("stonetop.inventory.resetNo") },
+				content: contentElement(body),
+				buttons: [
+					{ key: "yes", ...yes, value: form => ({
+						pc: self && !!form?.elements?.namedItem?.("self")?.checked,
+						followers: followers.filter((_, i) => form?.elements?.namedItem?.(`follower-${i}`)?.checked)
+							.map(({ ftype, slug }) => ({ ftype, slug })),
+					}) },
+				],
+				// The ticks are the choice, and the window's X keeps everything; Enter presses nothing, since
+				// the one answer clears marks.
+				defaultKey: false,
 			});
-			if (!ok) return;
-			// One actor update, which re-renders the sheet.
-			await this._stonetopCharacter.resetInventorySelections();
+			if (!answer || typeof answer !== "object") return;
+			if (!answer.pc && !answer.followers.length) return;
+			await this._stonetopCharacter.resetForHomecoming(answer);
 		}
 
 		async _onInventoryPoolEdit(ev) {
@@ -9482,6 +9539,23 @@ export function createStonetopCharacterSheetClass(Base) {
 					title: format("stonetop.character.followers.outfit.title", { name: name || "Follower" }),
 				},
 			).render(true);
+		}
+
+		/**
+		 * Reset a follower's Inventory, back home (Book I p.89, p.310): their carried gear set down, the
+		 * reserve their Outfit held forgotten, and for the crew its pips and Supplies emptied. Asked first,
+		 * as every wipe of several marks is; the lines on their list stay.
+		 */
+		async _onFollowerReset(ftype, slug = "", name = "") {
+			if (!this.isEditable || !ftype) return;
+			const ok = await confirmOutcome({
+				title:   game.i18n.localize("stonetop.character.followers.reset.title"),
+				content: `<p>${format(`stonetop.character.followers.reset.${ftype === "crew" ? "confirmCrew" : "confirm"}`, { name: escHtml(name || "this follower") })}</p>`,
+				yes:     { label: game.i18n.localize("stonetop.inventory.resetYes"), icon: "fa-eraser", className: "stonetop-dialog-btn--danger" },
+				no:      { label: game.i18n.localize("stonetop.inventory.resetNo") },
+			});
+			if (!ok) return;
+			await this._stonetopCharacter.resetForHomecoming({ pc: false, followers: [{ ftype, slug }] });
 		}
 
 		async _onOutfitOpen() {

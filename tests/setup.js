@@ -77,6 +77,8 @@ for (const [name, file] of [
 	["stonetop.expedition-journey-line", "templates/dialogs/partials/expedition-journey-line.hbs"],
 	// Going home's list of what is still out with the trip (expedition.hbs's home step).
 	["stonetop.expedition-home-assets", "templates/dialogs/partials/expedition-home-assets.hbs"],
+	// Going home's Reset Inventory card: everyone on the trip unpacks (p.89).
+	["stonetop.expedition-home-reset", "templates/dialogs/partials/expedition-home-reset.hbs"],
 ]) {
 	Handlebars.registerPartial(name, fs.readFileSync(path.join(_systemRoot, file), "utf8"));
 }

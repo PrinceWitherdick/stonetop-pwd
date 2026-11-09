@@ -1,9 +1,12 @@
 <div class="tab equipment" data-group="primary" data-tab="inventory">
 
-	{{#if stonetop.editMode}}
+	{{!-- Back home, everyone unpacks (Book I p.89). The GM does it for the party on the walkthrough's Going
+	      home step, so this is the backup, under the wrench (the user's call, 2026-11-08), and only while this
+	      character or one of their followers has something marked (inventoryReset.show). --}}
+	{{#if (and stonetop.editMode stonetop.inventoryReset.show)}}
 	<div class="stonetop-inventory-toolbar">
-		<button type="button" class="stonetop-inventory-reset-btn" title="{{localize 'stonetop.inventory.resetTitle'}}">
-			<i class="fas fa-undo"></i> {{localize "stonetop.inventory.resetLabel"}}
+		<button type="button" class="stonetop-inventory-reset-btn" data-tooltip="{{localize 'stonetop.inventory.resetTooltip'}}" data-tooltip-direction="UP">
+			<i class="fas fa-eraser"></i> {{localize "stonetop.inventory.resetLabel"}}
 		</button>
 	</div>
 	{{/if}}

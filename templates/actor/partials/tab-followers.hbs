@@ -680,6 +680,10 @@
 						{{#if canOutfit}}{{#unless edit.gear}}
 						<button type="button" class="stonetop-follower-outfit stonetop-inline-btn" data-ftype="{{this.ftype}}" data-slug="{{this.slug}}" data-follower-name="{{this.orderName}}"><i class="fas fa-suitcase"></i> {{localize "stonetop.character.followers.outfit.button"}}</button>
 						{{/unless}}{{/if}}
+						{{!-- Back home, they set it all down (p.89, p.310): offered only while something is marked. --}}
+						{{#if canReset}}{{#unless edit.gear}}
+						<button type="button" class="stonetop-follower-reset stonetop-inline-btn" data-ftype="{{this.ftype}}" data-slug="{{this.slug}}" data-follower-name="{{this.orderName}}" data-tooltip="{{localize "stonetop.character.followers.reset.tooltip"}}" data-tooltip-direction="UP"><i class="fas fa-eraser"></i> {{localize "stonetop.character.followers.reset.button"}}</button>
+						{{/unless}}{{/if}}
 					</div>
 				</div>
 			</div>
@@ -852,6 +856,11 @@
 					{{/each}}
 				</div>
 			</div>
+			{{!-- Back home, the crew sets it all down (p.89): every pip above and every set of Supplies
+			      emptied, the written-in lines kept. Offered only while something is marked. --}}
+			{{#if canReset}}
+			<button type="button" class="stonetop-follower-reset stonetop-inline-btn" data-ftype="crew" data-slug="" data-follower-name="{{this.orderName}}" data-tooltip="{{localize "stonetop.character.followers.reset.tooltipCrew"}}" data-tooltip-direction="UP"><i class="fas fa-eraser"></i> {{localize "stonetop.character.followers.reset.button"}}</button>
+			{{/if}}
 		</details>
 		{{/if}}
 

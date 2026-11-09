@@ -438,6 +438,8 @@
     {{!-- Going home: what this trip still has out of the steading's stores, to bring home or lose
           (Book I p.308, p.338; ruling E2). GM-only, built in getData. --}}
     {{#if homeAssets}}{{> "stonetop.expedition-home-assets" homeAssets=homeAssets}}{{/if}}
+    {{!-- Going home: everyone on the trip unpacks (Book I p.89, p.496). GM-only, built in getData. --}}
+    {{#if homeReset}}{{> "stonetop.expedition-home-reset" homeReset=homeReset}}{{/if}}
     {{#if homeProjects}}
     <div class="stonetop-guide-aside stonetop-exp-projects">
       <h3 class="stonetop-guide-aside-head">Waiting on their return</h3>

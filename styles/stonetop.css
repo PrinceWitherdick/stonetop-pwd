@@ -1725,6 +1725,8 @@ body :is(.app, .window-app).stonetop-height-resized {
    first-line checkbox row (.stonetop-camp-check), so a label that wraps reads as one item; this
    only sets it off from the question above. */
 .application.dialog.stonetop-ask .stonetop-ask-check { margin: 6px 0 0; }
+/* Who a ticked row is, after the name (Reset Inventory's "(follower)"): same size, so the row keeps one middle. */
+.application.dialog.stonetop-ask .stonetop-ask-check-sub { color: var(--st-text-muted); font-style: italic; }
 /* Bath of Healing Light's picks (actors/character/invocation-apply.js): a row per choice, the box
    (two for a "can pick this twice") before its words, and the Reduced box under the list. A row
    with nothing to act on (no debility marked) stays readable but reads as out of reach. */
@@ -4878,9 +4880,13 @@ input.stonetop-name-field {
    and only removes them inside AppV1 windows (`body.game .app … { content: unset }`).
    A move's tickable option list lives in raw chat messages (outside `.app`), so those
    core glyphs render on top of our SVG-skinned background as artifacts. Kill the pseudos
-   so only our background shows. */
+   so only our background shows. `.stonetop-check`, the shared skin, is drawn in DialogV2 windows
+   too (`.application`, not `.app`: a confirm's opt-in ticks, Reset Inventory's who-to-clear list),
+   where core's orange glyph sat over the box and below the middle of its label. */
 .stonetop-picklist-check::before,
-.stonetop-picklist-check::after {
+.stonetop-picklist-check::after,
+.stonetop-check::before,
+.stonetop-check::after {
 	content: none !important;
 }
 
@@ -8906,11 +8912,16 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
    what they name, so both are named. The skins are the shared ones (`.stonetop-check`, and the
    round-radio block); `color: inherit` because the radio draws its ring in currentColor, and core
    gives an input a colour of its own. */
+/* The middle of a line box is not the middle of its capitals: Signika's and IM Fell's caps sit above
+   it (--st-caps-nudge, the per-font measure settings.js publishes), so the box rises by that much to
+   meet them. Capped at 0.08em: IM Fell's 0.155em is the gap for a letterspaced pill and overshoots a
+   box by 2px; at 0.08em every sheet font measures within about 1px of its caps at 14-22px roots and
+   1x/1.25x/1.5x (2026-11-08, Reset Inventory's who-to-clear ticks). */
 .stonetop-camp-check > input {
 	flex: 0 0 auto;
 	position: relative;
 	top: 0;
-	margin: calc((1lh - var(--st-check-size)) / 2) 0 0;
+	margin: calc((1lh - var(--st-check-size)) / 2 - min(var(--st-caps-nudge, 0em), 0.08em)) 0 0;
 	font-size: inherit;
 	line-height: inherit;
 	color: inherit;
@@ -28839,7 +28850,8 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	font-size: var(--st-fs-sm);
 	color: var(--st-quiet-ink);
 }
-.stonetop-follower-outfit {
+.stonetop-follower-outfit,
+.stonetop-follower-reset {
 	margin-top: 4px;
 }
 
@@ -40726,6 +40738,42 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-expedition-dialog .stonetop-exp-home-asset-btn {
 	display: inline-block; flex: 0 0 auto; width: auto; min-height: 0; margin: 0;
 	padding: 3px 10px; font-size: var(--st-fs-2xs); line-height: 1.35; white-space: nowrap;
+}
+
+/* Going home: Reset Inventory (p.89). A tick per PC on the trip and, indented under them, one per
+   follower; a row with nothing to clear is greyed and cannot be ticked. The Convalesce tick and the
+   button share a footer row. Same card chrome as the list above. */
+.stonetop-expedition-dialog .stonetop-exp-home-reset .stonetop-exp-assets-title { margin: 0; font-size: inherit; border: 0; }
+.stonetop-expedition-dialog .stonetop-exp-home-reset-row { align-items: center; padding: 4px 12px; }
+.stonetop-expedition-dialog .stonetop-exp-home-reset-row.is-follower { padding-left: 32px; }
+.stonetop-expedition-dialog .stonetop-exp-home-reset-label {
+	display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px;
+	flex: 1 1 100%; min-width: 0; margin: 0; cursor: pointer;
+	font-family: var(--font-stonetop); font-size: var(--st-fs-xs); line-height: 1.35;
+}
+.stonetop-expedition-dialog .stonetop-exp-home-reset-check { flex: 0 0 auto; margin: 0; }
+.stonetop-expedition-dialog .stonetop-exp-home-reset-sub {
+	font-size: var(--st-fs-2xs); color: var(--st-text-muted); font-style: italic;
+}
+.stonetop-expedition-dialog .stonetop-exp-home-reset-row.is-clean .stonetop-exp-home-reset-label {
+	cursor: default; color: var(--st-text-faint);
+}
+.stonetop-expedition-dialog .stonetop-exp-home-reset-controls {
+	display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px;
+	padding: 8px 12px; border-top: 1px solid rgb(var(--st-ink-rgb) / 0.08);
+}
+.stonetop-expedition-dialog .stonetop-exp-home-reset-convalesce {
+	display: flex; align-items: center; gap: 6px; flex: 1 1 14em; min-width: 0; margin: 0; cursor: pointer;
+	font-size: var(--st-fs-2xs); color: var(--st-text-muted);
+}
+.stonetop-expedition-dialog .stonetop-exp-home-reset-convalesce input { flex: 0 0 auto; margin: 0; }
+/* Centred by trimming, like every chip (the --st-trim-top block): its line box, centred as it was, put
+   the label 1.5px high. Inline-block so the trim takes; the tokens give back the height it took. */
+.stonetop-expedition-dialog .stonetop-exp-home-reset-btn {
+	display: inline-block; flex: 0 0 auto; width: auto; min-height: 0; margin: 0 0 0 auto;
+	box-sizing: content-box; text-box: trim-both cap alphabetic;
+	padding: calc(3px + var(--st-trim-top)) 10px calc(3px + var(--st-trim-bottom));
+	font-size: var(--st-fs-2xs); line-height: 1.35; white-space: nowrap;
 }
 
 /* ── Run an Expedition · The route step · maps and travel times ────────────────

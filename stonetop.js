@@ -799,6 +799,7 @@ Hooks.once("init", () => {
 		"stonetop.guide-tabs":                "systems/stonetop-pwd/templates/dialogs/partials/guide-tabs.hbs",
 		"stonetop.expedition-load":           "systems/stonetop-pwd/templates/dialogs/partials/expedition-load.hbs",
 		"stonetop.expedition-home-assets":    "systems/stonetop-pwd/templates/dialogs/partials/expedition-home-assets.hbs",
+		"stonetop.expedition-home-reset":     "systems/stonetop-pwd/templates/dialogs/partials/expedition-home-reset.hbs",
 		"stonetop.expedition-journey":        "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey.hbs",
 		"stonetop.expedition-journey-pins":   "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-pins.hbs",
 		"stonetop.expedition-journey-line":   "systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-line.hbs",

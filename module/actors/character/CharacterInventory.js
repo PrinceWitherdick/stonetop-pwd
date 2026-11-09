@@ -185,9 +185,9 @@ export class CharacterInventory {
 
 	// Clears item marks, both undefined ◇/□ reserves (which is what drives the
 	// derived load), and the per-item draw records. Item uses (resources) and
-	// added-special items are left alone. A special possession's chosen gear keeps its marks in
-	// another store (possessions.choiceCarried); StonetopCharacter#resetInventorySelections clears it,
-	// in the same update as this fragment.
+	// added-special items are left alone here: StonetopCharacter#inventoryResetData empties the
+	// supplies rows in the same update. A special possession's chosen gear keeps its marks in
+	// another store (possessions.choiceCarried), cleared there too.
 	resetSelectionsData() {
 		return {
 			...this._flags.deletionData("checked"),

@@ -49,6 +49,8 @@ import { payFortunesCost, requisitionMissCostAction, takeOnRequisitionMiss } fro
 import { worldLogisticsNames } from "../actors/character/logistics.js";
 import { assetTakenLabel, offerToClearRequisitioned, takesMissingFrom } from "../utils/requisition-asset.js";
 import { followerLoadMarks } from "../actors/character/follower-outfit.js";
+import { followerHasInventoryToClear, pcHasInventoryToClear } from "../actors/character/homecoming-reset.js";
+import { readableFlags } from "../actors/character/StonetopFlags.js";
 import { charactersInPlay } from "../utils/characters-in-play.js";
 import { getPlayerCharacters } from "../utils/playbook-actors.js";
 // Who a trip credits (the party as it set out), read for the stamp's own note; the WRITER stays in
@@ -904,6 +906,8 @@ export class ExpeditionDialog extends StepperDialog {
 		html.find(".stonetop-exp-surplus-step").on("click", ev => this._stepTripSurplus(Number(ev.currentTarget.dataset.step)));
 		// Going home: each asset still out comes home or was lost, and the herd's horses are counted back (E2).
 		html.find(".stonetop-exp-home-asset-btn").on("click", ev => this._settleHomeAsset(ev.currentTarget.dataset, ev.currentTarget));
+		// Going home: everyone ticked unpacks (Reset Inventory, p.89).
+		html.find(".stonetop-exp-home-reset-btn").on("click", ev => this._resetHomeInventories(ev.currentTarget));
 		// Arriving-home step: make the Return Triumphant move. Nothing of the trip is written —
 		// the move's whole effect is on the steading — so there is no re-render here; the
 		// walkthrough it opens repaints whatever steading sheet happens to be showing.
@@ -1139,6 +1143,8 @@ export class ExpeditionDialog extends StepperDialog {
 		// to bring home or lose, each line of herd horses to count back. GM-only, as the picker.
 		if (step.key === "home" && game.user?.isGM) {
 			data.homeAssets = this._buildHomeAssets();
+			// And everyone on the trip unpacks: Reset Inventory (p.89, p.496), PCs and their followers at once.
+			data.homeReset = await this._buildHomeReset();
 		}
 		// The route step gains the maps and the travel times. Same shape as the readout above:
 		// built only on its own step, because it browses the art folder and measures an image.
@@ -1789,6 +1795,94 @@ export class ExpeditionDialog extends StepperDialog {
 			hasAny:       rows.length + herd.length > 0,
 			rows, herd,
 		};
+	}
+
+	// ── Going home: Reset Inventory ──────────────────────────────────────────────
+	// "When you return home, clear the marks from your Inventory insert; it rarely matters what you're
+	// carrying while you're in town" (Book I p.89), and "Reset Inventory" on the GM's downtime list (p.496).
+	// Followers "Outfit (page 306) just like PCs" (p.310), so they unpack with them. One row per PC on the
+	// trip and one per follower travelling with them, read off the sheets each render (homecoming-reset.js),
+	// so a row already unpacked, here or on its sheet, says so and cannot be ticked.
+
+	async _buildHomeReset() {
+		const party = this._tripParty();
+		const followers = await Promise.all(party.map(actor => partyFollowersOf(actor).catch(err => {
+			warn(`could not read ${actor.name}'s followers for Reset Inventory`, err);
+			return [];
+		})));
+		const rows = [];
+		party.forEach((actor, i) => {
+			const flags = readableFlags(actor);
+			rows.push({ actorId: actor.id, ftype: "", slug: "", name: actor.name, label: actor.name, canReset: pcHasInventoryToClear(flags) });
+			for (const fol of followers[i] ?? []) {
+				const slug = fol.slug ?? "";
+				const name = String(fol.name ?? "").trim() || localize("stonetop.expedition.homeReset.aFollower");
+				const sub = format("stonetop.expedition.homeReset.with", { name: actor.name });
+				rows.push({
+					actorId: actor.id, ftype: fol.ftype, slug, name, sub, follower: true,
+					label: `${name} ${sub}`,
+					canReset: followerHasInventoryToClear(flags, fol.ftype, slug),
+				});
+			}
+		});
+		return { rows, anyToClear: rows.some(r => r.canReset) };
+	}
+
+	/** The card's button: everyone ticked unpacks, after one ask. One press at a time. */
+	async _resetHomeInventories(control = null) {
+		const section = control?.closest?.(".stonetop-exp-home-reset") ?? null;
+		if (!section) return;
+		return onePress(this, "homeReset", () => this._resetHomeInventoriesNow(section), { control });
+	}
+
+	async _resetHomeInventoriesNow(section) {
+		const picks = [...section.querySelectorAll(".stonetop-exp-home-reset-check")]
+			.filter(el => el.checked && !el.disabled)
+			.map(el => ({ actorId: el.dataset.actor, ftype: el.dataset.ftype ?? "", slug: el.dataset.slug ?? "", name: el.dataset.name ?? "" }));
+		const convalesce = !!section.querySelector(".stonetop-exp-home-reset-convalesce-check")?.checked;
+		if (!picks.length) return void ui.notifications?.info?.(localize("stonetop.expedition.homeReset.nonePicked"));
+		const ok = await confirmOutcome({
+			title:   localize("stonetop.expedition.homeReset.title"),
+			content: `<p>${format("stonetop.expedition.homeReset.confirm", { names: `<strong>${escHtml(joinNames(picks.map(p => p.name)))}</strong>` })}</p>`,
+			yes:     { label: localize("stonetop.inventory.resetYes"), icon: "fa-eraser", className: "stonetop-dialog-btn--danger" },
+			no:      { label: localize("stonetop.inventory.resetNo") },
+		});
+		if (!ok) return;
+		// Each character's own marks and their followers' land in ONE update of that character.
+		const byActor = new Map();
+		for (const p of picks) {
+			if (!byActor.has(p.actorId)) byActor.set(p.actorId, { pc: false, followers: [] });
+			const entry = byActor.get(p.actorId);
+			if (p.ftype) entry.followers.push({ ftype: p.ftype, slug: p.slug });
+			else entry.pc = true;
+		}
+		const done = [];
+		for (const [id, pick] of byActor) {
+			const actor = game.actors?.get(id);
+			const character = actor?.typedActor;
+			if (typeof character?.resetForHomecoming !== "function") continue;
+			try {
+				if (await character.resetForHomecoming(pick)) done.push(actor.name);
+			} catch (err) {
+				warn(`could not reset ${actor.name}'s inventory`, err);
+				ui.notifications?.warn?.(format("stonetop.expedition.homeReset.failed", { name: actor.name }));
+			}
+		}
+		if (done.length) ui.notifications?.info?.(format("stonetop.expedition.homeReset.done", { names: joinNames(done) }));
+		// Then a few days' rest, if the GM ticked it: each PC on the trip gets their own Convalesce window,
+		// which says what it would do and asks which wounds and followers it covers.
+		if (convalesce) await this._openHomeConvalesce();
+		this.render(false);
+	}
+
+	/** Each PC on the trip's own Convalesce window (the sheet's), one after another. */
+	async _openHomeConvalesce() {
+		for (const actor of this._tripParty()) {
+			const sheet = actor?.sheet;
+			if (typeof sheet?._onConvalesceOpen !== "function") continue;
+			try { await sheet._onConvalesceOpen(); }
+			catch (err) { warn(`could not open ${actor.name}'s Convalesce`, err); }
+		}
 	}
 
 	/**
@@ -3829,8 +3923,11 @@ export class ExpeditionDialog extends StepperDialog {
 		// sheet), so a click is never decided on a list that has moved (PREP-2). Through `_redrawWhenFree`,
 		// so a GM typing in the step's note keeps the words.
 		if (game.user?.isGM && (key === "requisition" || key === "home")) {
+			// Going home also lists who still has something to unpack, read off each character, so a
+			// character's change redraws it too (a Reset pressed on a sheet, a mark ticked).
+			const watched = actor => isSteadingActor(actor) || (key === "home" && actor?.type === "character");
 			const onSteading = (actor, _changed, options) => {
-				if (options?.stonetopLedgerWrite || !isSteadingActor(actor)) return;
+				if (options?.stonetopLedgerWrite || !watched(actor)) return;
 				clearTimeout(this._loadTimer);
 				this._loadTimer = setTimeout(() => { this._loadTimer = null; if (this.rendered) this._redrawWhenFree(); }, LOAD_REFRESH_MS);
 			};
