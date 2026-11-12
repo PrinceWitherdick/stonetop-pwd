@@ -35,12 +35,21 @@
 	descent-override: 22.4375%;
 }
 
+/* IM FELL ENGLISH'S LINE BOX, CENTRED ON ITS CAPITALS, the same fix as Libre Caslon's above. Both
+   files say ascent 1854 and descent 744 (upm 2048; hhea and OS/2 win agree, USE_TYPO_METRICS off),
+   and Chromium draws the H 0.6875em tall, so a line box's middle fell 0.073em BELOW the capitals'
+   middle: every flex-centred button, the guide windows' footers and the sheet's inline buttons
+   showed their words 1.5-2px high at a 20px UI font (2026-11-11). Same sum (1.2686em), and
+   ascent - descent = 0.6875em: 97.80%/29.05%. All three faces carry the pair, the bracket-only
+   italic too. Guarded by tests/styles/caslon-metrics.test.js. */
 @font-face {
 	font-family: "IM Fell English";
 	src: url("../assets/fonts/im-fell-english/IMFeENrm28P.ttf") format("truetype");
 	font-weight: normal;
 	font-style: normal;
 	font-display: swap;
+	ascent-override: 97.802734375%;
+	descent-override: 29.052734375%;
 }
 @font-face {
 	font-family: "IM Fell English";
@@ -48,6 +57,8 @@
 	font-weight: normal;
 	font-style: italic;
 	font-display: swap;
+	ascent-override: 97.802734375%;
+	descent-override: 29.052734375%;
 }
 
 @font-face {
@@ -101,6 +112,8 @@
 	font-weight: normal;
 	font-style: italic;
 	font-display: swap;
+	ascent-override: 97.802734375%;
+	descent-override: 29.052734375%;
 	unicode-range: U+0028-0029, U+005B, U+005D;
 }
 @font-face {
@@ -715,6 +728,11 @@
 	   that has not applied the setting yet lands on the same answer a fresh one does.
 	   See _FONT_CAPS_NUDGE for how the numbers were arrived at. */
 	--st-caps-nudge: 0.073em;
+	/* How far a spiral bullet rises for the face's caps nudge, capped as .stonetop-camp-check caps it.
+	   A :root token, safe ONLY because --st-caps-nudge is itself set on :root alone (here, and
+	   settings.js#applySheetFont on documentElement): its var() is substituted here, and `em` stays a
+	   unit resolved on each bullet. A nudge ever set on a narrower element would be frozen at :root's. */
+	--st-caps-lift: min(var(--st-caps-nudge, 0em), 0.08em);
 
 	/* ── Chip centring ─────────────────────────────────────────────────────
 	   How every chip, pill and count badge puts its label in the middle of its box. The label's
@@ -4876,6 +4894,14 @@ input.stonetop-name-field {
 	background: var(--stonetop-checkbox-checked-icon) no-repeat center / contain !important;
 }
 
+/* Foundry core drops every AppV1 radio 2px (`body.game .app input[type="radio"] { position: relative;
+   top: 2px }`, in its compatibility layer), so a radio sits 2px below its label's middle in a centred
+   row and below the first line in a top-aligned list. Taken back ONCE for every system window: unlayered,
+   this outranks core's layered rule however plain it is, and `:where()` gives it no specificity, so any
+   rule of ours that places a radio still wins. Every rule that used to cancel the nudge on its own (a
+   `top: 0`, or a `translateY(-2px)` read as a Chromium quirk) no longer has to. */
+:where(.stonetop input[type="radio"]) { position: relative; top: 0; }
+
 /* Foundry v13 paints checkbox/radio state via ::before/::after Font Awesome glyphs
    and only removes them inside AppV1 windows (`body.game .app … { content: unset }`).
    A move's tickable option list lives in raw chat messages (outside `.app`), so those
@@ -5595,7 +5621,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -6354,7 +6380,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.25em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -8912,16 +8938,16 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
    what they name, so both are named. The skins are the shared ones (`.stonetop-check`, and the
    round-radio block); `color: inherit` because the radio draws its ring in currentColor, and core
    gives an input a colour of its own. */
-/* The middle of a line box is not the middle of its capitals: Signika's and IM Fell's caps sit above
-   it (--st-caps-nudge, the per-font measure settings.js publishes), so the box rises by that much to
-   meet them. Capped at 0.08em: IM Fell's 0.155em is the gap for a letterspaced pill and overshoots a
-   box by 2px; at 0.08em every sheet font measures within about 1px of its caps at 14-22px roots and
-   1x/1.25x/1.5x (2026-11-08, Reset Inventory's who-to-clear ticks). */
+/* The middle of a line box is not the middle of its capitals: Signika's caps sit above it
+   (--st-caps-nudge, the per-font measure settings.js publishes), so the box rises by that much to
+   meet them. Libre Caslon's and IM Fell's @font-face balance their line box on the capitals, so
+   theirs is nearly nothing. The 0.08em cap dates from IM Fell's unbalanced 0.155em (2026-11-08,
+   Reset Inventory's who-to-clear ticks) and is kept as a guard for any face added later. */
 .stonetop-camp-check > input {
 	flex: 0 0 auto;
 	position: relative;
 	top: 0;
-	margin: calc((1lh - var(--st-check-size)) / 2 - min(var(--st-caps-nudge, 0em), 0.08em)) 0 0;
+	margin: calc((1lh - var(--st-check-size)) / 2 - var(--st-caps-lift)) 0 0;
 	font-size: inherit;
 	line-height: inherit;
 	color: inherit;
@@ -9445,7 +9471,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
    read from the token that rule redeclares. */
 .stonetop-rel-value li { position: relative; padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap)); margin: 2px 0; }
 .stonetop-rel-value li::before {
-	content: ""; position: absolute; left: 0; top: 0.2em;
+	content: ""; position: absolute; left: 0; top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px); height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
 	opacity: 0.6;
@@ -9547,7 +9573,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -10366,7 +10392,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -16252,7 +16278,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -16961,7 +16987,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -18149,7 +18175,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -18852,7 +18878,7 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -24286,7 +24312,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -24799,7 +24825,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -24886,7 +24912,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -26133,14 +26159,6 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
    rest of the wizard uses, instead of the browser default. */
 .stonetop-onboarding-radio { flex-shrink: 0; accent-color: slategrey; }
 
-/* Sub-choice lines center the radio against the label; Chromium renders a radio ~2px
-   below its flex center (phantom line-box leading), so pull it back up — same quirk and
-   fix as .stonetop-onboarding-bg-option. Scoped to the suboption row so the baseline-
-   aligned move-choice cards (which reuse .stonetop-onboarding-radio) are untouched. */
-.stonetop-onboarding-suboption input[type="radio"] {
-	transform: translateY(-2px);
-}
-
 /* ── Standalone possession-choices editor (sacred-pouch modal) ──────────────── */
 /* Reuses the shared .stonetop-choice-group / -subgroup / -option-label styling;
    this adds the modal chrome, the cap badge, the disabled-option dimming, and the
@@ -26636,10 +26654,6 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 
 .stonetop-onboarding-bg-option input[type="radio"] {
 	border-radius: 50%;
-	/* Chromium sits a radio ~2px below its flex box's true center (phantom line-box
-	   leading above the glyph), so align-items:center leaves it low next to the label.
-	   The offset is a constant 2px regardless of font size; nudge it back up. */
-	transform: translateY(-2px);
 }
 
 .stonetop-onboarding-bg-option input[type="radio"]:checked {
@@ -26930,9 +26944,6 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	flex-shrink: 0;
 	margin: 0;
 	accent-color: slategrey;
-	/* Same Chromium radio-in-flex quirk as .stonetop-onboarding-bg-option: the radio
-	   renders ~2px below its flex center. Pull it up to line up with the icon and name. */
-	transform: translateY(-2px);
 }
 
 .stonetop-onboarding-arcana-option--minor-role {
@@ -27029,9 +27040,6 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 .stonetop-onboarding-minor-roles label input[type="radio"] {
 	margin: 0;
 	flex-shrink: 0;
-	/* Same Chromium radio-in-flex quirk: the native radio renders ~2px below the row's
-	   center. Nudge it up to line up with the role label. */
-	transform: translateY(-2px);
 }
 
 /* "Review both sides": each drawn card's front and back, folded under its name until opened. */
@@ -27971,7 +27979,7 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	content: "";
 	position: absolute;
 	left: -1.35em;
-	top: 0.18em;
+	top: calc((1lh - 0.85em) / 2 - var(--st-caps-lift));
 	width: 0.85em;
 	height: 0.85em;
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -30656,7 +30664,17 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
    instead of wrapping as one continuous run. Hang the spiral bullet in the left
    padding via an absolutely-positioned marker instead. This rule sizes/positions
    the marker for the whole spiral-list family; bullet size from --stonetop-bullet-size,
-   bullet → text gap from --stonetop-spiral-gap (matching Overview > Resources). */
+   bullet → text gap from --stonetop-spiral-gap (matching Overview > Resources).
+
+   EVERY SPIRAL BULLET'S `top` IS ONE FORMULA, here and in each list's own rule:
+   `calc((1lh - <bullet height>) / 2 - var(--st-caps-lift))`. 1lh is the entry's
+   first line (the ::before inherits its font and leading), so the bullet's middle meets that line's
+   middle at any size; Libre Caslon's and IM Fell's @font-face put their capitals there, and Signika's
+   sit higher by --st-caps-lift (the caps nudge, capped; a :root token). The rest is written out in each
+   rule, never as a :root token: a custom property resolves its var()s where it is DECLARED, so a token
+   would freeze the per-rule bullet size at :root's value. It replaced a fixed em offset per
+   list (0.1-0.3em) under a px-sized bullet, tuned at one UI size, that sat 2-4.5px high at a 20px root
+   (2026-11-11, z:/tmp/foundry-verify/bullet-family-centre.mjs). Guarded by tests/styles/spiral-bullets.test.js. */
 .stonetop-basic-move-panel li::before,
 .stonetop-chat-move-description li::before,
 :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-roll-card-description li::before,
@@ -30670,7 +30688,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 .stonetop-follower-rule li::before {
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	margin-top: 0;
@@ -30768,7 +30786,7 @@ li.question-bullet::before {
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.3em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background-color: currentColor;
@@ -30822,7 +30840,8 @@ li.question-bullet::before {
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.15em;
+	/* On the bold question's first line: the spiral family's one formula (see the block-flow rule). */
+	top: calc((1lh - var(--stonetop-question-spiral-size, 14px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-question-spiral-size, 14px);
 	height: var(--stonetop-question-spiral-size, 14px);
 	background-color: currentColor;
@@ -32576,7 +32595,7 @@ li.question-bullet::before {
 	flex: 0 0 var(--stonetop-bullet-size, 12px);
 	width: var(--stonetop-bullet-size, 12px);
 	height: var(--stonetop-bullet-size, 12px);
-	margin-top: 0.25em;
+	margin-top: calc((1lh - var(--stonetop-bullet-size, 12px)) / 2 - var(--st-caps-lift));
 	background-image: var(--stonetop-spiral-icon);
 	background-size: contain;
 	background-repeat: no-repeat;
@@ -32756,7 +32775,7 @@ li.question-bullet::before {
 	/* Hang the marker beside the text's first line. The journal's display font has
 	   tall metrics, so a small em-relative top offset aligns the icon with the
 	   glyphs' visual center (matching the chat cards / sheet spiral lists). */
-	top: 0.3em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background-image: var(--stonetop-spiral-icon);
@@ -33587,7 +33606,7 @@ body.game .sheet.app.stonetop-bestiary-page .stonetop-bestiary-page-edit .editor
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.1em;
+	top: calc((1lh - var(--stonetop-question-spiral-size, 14px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-question-spiral-size, 14px);
 	height: var(--stonetop-question-spiral-size, 14px);
 	background-image: var(--stonetop-question-spiral-icon);
@@ -36318,7 +36337,7 @@ th:has(> .stonetop-roll-table-btn) {
 	/* Against the NAME's line box, not the li's: the name is set a notch smaller and
 	   bolder than the body, so 0.2em of the li's own size sat the spiral low of the cap
 	   line it should hang beside. */
-	top: 0.3em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -36455,7 +36474,7 @@ th:has(> .stonetop-roll-table-btn) {
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -36702,7 +36721,7 @@ th:has(> .stonetop-roll-table-btn) {
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.1em;
+	top: calc((1lh - var(--stonetop-question-spiral-size, 14px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-question-spiral-size, 14px);
 	height: var(--stonetop-question-spiral-size, 14px);
 	background-image: var(--stonetop-question-spiral-icon);
@@ -37581,7 +37600,7 @@ th:has(> .stonetop-roll-table-btn) {
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -37841,7 +37860,7 @@ th:has(> .stonetop-roll-table-btn) {
 	position: absolute;
 	left: 0;
 	/* Measured: centres the bullet on the capitals of a 1.4-line entry (within 0.1px, 1x-1.5x). */
-	top: 0.3em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -38492,7 +38511,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -39175,7 +39194,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -39442,7 +39461,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	left: 0;
 	/* The row's own 3px top padding is already past the text's first line, so this is the
 	   block-flow family's `0.2em` measured from there rather than from the row's top edge. */
-	top: calc(3px + 0.2em);
+	top: calc(3px + (1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -39570,7 +39589,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -39856,7 +39875,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -42628,7 +42647,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -43664,7 +43683,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -46847,7 +46866,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -46919,7 +46938,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -47074,7 +47093,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.25em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -47344,7 +47363,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.2em;
+	top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px);
 	height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain;
@@ -48273,7 +48292,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
 }
 :is(.stonetop-shared-route-requirements, :is(#chat, #chat-notifications, #chat-popout) .message .stonetop-shared-route-requirements) .stonetop-shared-route-reqs li::before {
-	content: ""; position: absolute; left: 0; top: 0.2em;
+	content: ""; position: absolute; left: 0; top: calc((1lh - var(--stonetop-bullet-size, 10px)) / 2 - var(--st-caps-lift));
 	width: var(--stonetop-bullet-size, 10px); height: var(--stonetop-bullet-size, 10px);
 	background: var(--stonetop-spiral-icon) no-repeat center / contain; opacity: 0.55;
 }

@@ -55,7 +55,7 @@ describe("the camp window's controls", () => {
 		// properties it declares, so leaving `top` unsaid leaves every radio low.
 		expect(declared(seat, "top")).toBe("0");
 		// Centred on the line, then raised to the caps by the font's own measure (capped: see the rule).
-		expect(declared(seat, "margin")).toBe("calc((1lh - var(--st-check-size)) / 2 - min(var(--st-caps-nudge, 0em), 0.08em)) 0 0");
+		expect(declared(seat, "margin")).toBe("calc((1lh - var(--st-check-size)) / 2 - var(--st-caps-lift)) 0 0");
 		// Both skins it seats are drawn at that one size.
 		expect(declarations(CSS, ".stonetop-camp-radio")).toMatch(/height:\s*var\(--st-check-size\) !important/);
 		expect(declarations(CSS, ".stonetop-camp-extra-check")).toMatch(/height:\s*var\(--st-check-size\) !important/);

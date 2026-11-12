@@ -2393,11 +2393,12 @@ const _FONT_MAP = {
  * Why it cannot be one number in the stylesheet: capitals have no descenders, so their ink fills
  * only the upper part of the em box and centring that box leaves the empty descender space pooling
  * underneath. The size of that gap is `(capHeight + descent - ascent) / 2`, which is a property of
- * the FACE — and these three disagree by a factor of ten. IM Fell English is an antique face with
- * a very deep descent and needs ~0.155em; Libre Caslon needs ~0.016em. (Caslon's gap is 0 since its
- * @font-face overrides balanced ascent and descent on the capitals; what is left is Blink placing
- * the line on whole pixels, re-measured 2026-10-24 on the Dead pill with text-box off, root 12-24px:
- * 0.016em reads -0.32px mean against -0.37px for the trimmed pill.) A constant tuned on either
+ * the FACE. Signika needs 0.073em. Libre Caslon and IM Fell English need almost nothing: their
+ * @font-face overrides balance ascent and descent on the capitals, so what is left is Blink placing
+ * the line on whole pixels. Caslon 0.016em (re-measured 2026-10-24 on the Dead pill with text-box
+ * off, root 12-24px: -0.32px mean against -0.37px for the trimmed pill); IM Fell 0.012em (it needed
+ * 0.155em before its override; caps-nudge-probe.mjs, 2026-11-11, untrimmed caps in a
+ * line-box-centred pill, roots 12-24px). A constant tuned on either
  * is visibly wrong on the other, which is exactly how the brand pill came to sit high for everyone
  * on the default font while measuring perfect against the one it had been tuned against.
  *
@@ -2408,7 +2409,7 @@ const _FONT_MAP = {
  */
 const _FONT_CAPS_NUDGE = {
 	"libre-caslon":    "0.016em",
-	"im-fell-english": "0.155em",
+	"im-fell-english": "0.012em",
 	"signika":         "0.073em",
 };
 

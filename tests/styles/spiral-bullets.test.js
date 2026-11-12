@@ -204,3 +204,50 @@ describe("the question spiral is given a box built for its shape", () => {
 		}
 	});
 });
+
+// Every spiral bullet sits on its entry's FIRST line by one formula, (1lh - its height) / 2 less the
+// face's caps nudge. Each list used to carry its own em offset (0.1-0.3em) under a bullet sized in px,
+// tuned at one UI size: at a 20px root the bullets sat 2-4.5px high (measured 2026-11-11 with
+// z:/tmp/foundry-verify/bullet-family-centre.mjs; with the formula all 53 within 1.5px in all three
+// faces at roots 16 and 20).
+describe("every spiral bullet is seated on its first line by 1lh", () => {
+	const bulletRules = [...stripComments(CSS).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+		.map(([, prelude, body]) => ({ prelude: prelude.trim().replace(/\s+/g, " "), body }))
+		.filter(r => /::before/.test(r.prelude) && /bullet-size|spiral-icon|question-spiral/.test(r.body)
+			&& /position:\s*absolute/.test(r.body) && /(^|[;\s])top\s*:/.test(r.body));
+
+	it("finds the family", () => {
+		expect(bulletRules.length).toBeGreaterThan(30);
+	});
+
+	// Not first-line bullets: the GM Toolkit's wonder head hangs its spiral off a question INPUT (the
+	// line is inside the field's border and padding), and the empty "add" row centres its spiral in an
+	// align-items: center row (50% less half its size).
+	const NOT_ON_A_LINE = [".stonetop-gm-wonder-head::before", ".stonetop-gm-wonder-add::before"];
+
+	it("places none of them a fixed em below the top", () => {
+		const fixed = bulletRules
+			.filter(r => !NOT_ON_A_LINE.includes(r.prelude))
+			.map(r => ({ sel: r.prelude.slice(-80), top: r.body.match(/(?:^|[;\s])top\s*:\s*([^;]+);/)[1].trim() }))
+			// A box one line tall, with the art centred inside it, needs no offset at all.
+			.filter(({ top }) => top !== "0" && !(top.includes("(1lh - ") && top.endsWith(") / 2 - var(--st-caps-lift))")));
+		expect(fixed).toEqual([]);
+	});
+
+	// A custom property resolves its var()s where it is DECLARED. Folded into a :root token, the formula
+	// would freeze the bullet size and the caps nudge at :root's values: the sheets' scaled bullet size
+	// and any bullet of another height would be placed for a 10px one.
+	it("writes the formula out in each rule rather than as a :root token", () => {
+		const root = declarations(CSS, ":root") ?? "";
+		expect(root).not.toMatch(/1lh - var\(--stonetop-bullet-size/);
+	});
+
+	// The one part that IS a :root token, the capped caps nudge, is safe only while the nudge itself is
+	// set on :root alone (here and settings.js#applySheetFont); set on a narrower element it would freeze.
+	it("lifts by the capped caps nudge, a :root token over a :root-only nudge", () => {
+		expect(declarations(CSS, ":root") ?? "").toMatch(/--st-caps-lift:\s*min\(var\(--st-caps-nudge, 0em\), 0\.08em\)/);
+		const setters = [...stripComments(CSS).matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+			.filter(([, , body]) => /--st-caps-nudge\s*:/.test(body)).map(([, prelude]) => prelude.trim());
+		expect(setters).toEqual([":root"]);
+	});
+});
