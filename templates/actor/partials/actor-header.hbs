@@ -46,6 +46,15 @@
 				<button type="button" class="stonetop-inline-btn stonetop-would-be-restore"
 				        data-tooltip="{{localize 'stonetop.wouldBeHero.restoreTooltip'}}" data-tooltip-direction="DOWN"><i class="fas fa-rotate-left" aria-hidden="true"></i> {{localize "stonetop.wouldBeHero.restoreButton"}}</button>
 				{{/unless}}{{/if}}
+				{{!-- A homebrew playbook this world doesn't have. Beside the drop zone, never in it: that
+				      span's text is read as the chat speaker's alias. --}}
+				{{#if stonetop.playbookMissing}}
+				<span class="stonetop-playbook-missing">{{stonetop.playbookMissing.name}} isn't in this world{{#unless stonetop.playbookMissing.canRestore}}: ask your GM to add it{{/unless}}.</span>
+				{{#if stonetop.playbookMissing.canRestore}}
+				<button type="button" class="stonetop-inline-btn stonetop-playbook-restore"
+				        data-tooltip="This character carries a copy of their homebrew playbook. Add it to this world, so their sheet works again." data-tooltip-direction="DOWN"><i class="fas fa-rotate-left" aria-hidden="true"></i> Restore it</button>
+				{{/if}}
+				{{/if}}
 				{{#if stonetop.postDeathInsert.activeInsert}}
 				{{#if stonetop.playbook.name}}
 				{{! The playbook goes grey the moment the insert lands — that identity IS replaced.

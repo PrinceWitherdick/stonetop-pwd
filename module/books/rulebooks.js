@@ -24,6 +24,7 @@
 // discover.
 import { SYSTEM_ID } from "../system-id.js";
 import { localize } from "../utils/i18n.js";
+import { readMarkers, setMarker } from "../utils/marker-setting.js";
 
 /**
  * Where the paths live: ONE world setting holding a record keyed by book number.
@@ -189,27 +190,14 @@ async function writeRulebookPath(book, path) {
  */
 export const FORGOTTEN_RULEBOOKS_SETTING = "rulebooksForgotten";
 
-function forgottenRulebooks() {
-	try {
-		const stored = globalThis.game?.settings?.get?.(SYSTEM_ID, FORGOTTEN_RULEBOOKS_SETTING);
-		return (stored && typeof stored === "object") ? stored : {};
-	} catch (_) { /* setting not registered in this world */ }
-	return {};
-}
-
 /** Did the GM forget this book in this world, rather than never having given one? */
 export function wasRulebookForgotten(book) {
-	return forgottenRulebooks()[String(book)] === true;
+	return readMarkers(FORGOTTEN_RULEBOOKS_SETTING)[String(book)] === true;
 }
 
-/** Write the Forget marker only when it changes, so an ordinary pick costs no second write. */
-async function markRulebookForgotten(book, forgotten) {
-	const key = String(book);
-	if (wasRulebookForgotten(book) === forgotten) return;
-	const next = { ...forgottenRulebooks() };
-	if (forgotten) next[key] = true;
-	else delete next[key];
-	await globalThis.game?.settings?.set?.(SYSTEM_ID, FORGOTTEN_RULEBOOKS_SETTING, next);
+/** Write the Forget marker (utils/marker-setting.js writes only a change). */
+function markRulebookForgotten(book, forgotten) {
+	return setMarker(FORGOTTEN_RULEBOOKS_SETTING, String(book), forgotten);
 }
 
 /** Foundry's bundled pdf.js viewer, as a path relative to the game route. */

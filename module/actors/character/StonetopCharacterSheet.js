@@ -95,7 +95,9 @@ import {normalizeDamageDie} from "../../utils/damage-die.js";
 import {normalizeRollType} from "../../utils/roll-types.js";
 import {moveRollable} from "../../utils/move-rollable.js";
 import {escHtml, isDefaultImg, normalizePlaybookGlyphs, composeInstinct, stripHtmlToText} from "../../utils/strings.js";
-import {playbookIconPath, partyCharacters, playerOf} from "../../utils/playbook-actors.js";
+import {partyCharacters, playerOf} from "../../utils/playbook-actors.js";
+import { playbookAvatar, isHomebrewPlaybookItem, isHomebrewPublished } from "../../playbooks/playbook-catalog.js";
+import { carriedCopyOf } from "../../playbooks/homebrew-missing.js";
 import {postMoveToChat, moveChatCard, pickableMoveDescription, whisperedAs} from "../../utils/chat.js";
 import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
 import {statApproaches} from "../../utils/stat-approaches.js";
@@ -2027,6 +2029,16 @@ export function createStonetopCharacterSheetClass(Base) {
 			// The header's way back from a crossing-off made by mistake, beside "The Hero". Drawn for the
 			// owner whenever there is one to undo, shown in edit mode alone (actor-header.hbs).
 			context.stonetop.wouldBeRestorable = this.isEditable && canRestoreWouldBe(this.actor);
+			// A homebrew playbook this world doesn't have (deleted here, or the character came from
+			// another world): said beside the empty name, and the GM may bring it back from the copy
+			// the character carries (playbooks/homebrew-store.js#restoreCarriedPlaybook).
+			const recorded = this.actor.system?.playbook;
+			if (recorded?.slug && !context.stonetop.playbook) {
+				context.stonetop.playbookMissing = {
+					name: recorded.name || "This character's playbook",
+					canRestore: !!game.user?.isGM && !!carriedCopyOf(this.actor),
+				};
+			}
 			const selections = playbookDoc ? this._readSelectionsFromActor(playbookDoc) : null;
 			context.stonetop.hasIncompleteBackgroundQuestions = playbookDoc
 				? CharacterOnboardingDialog.hasIncompleteQuestions(playbookDoc, selections)
@@ -4578,6 +4590,22 @@ export function createStonetopCharacterSheetClass(Base) {
 				});
 				if (ok && await asteriskMoveUsed(this.actor, moveName)) this.render(false);
 			});
+			// A homebrew playbook this world doesn't have, brought back from the copy the character
+			// carries (GM only: it writes world Items).
+			html.find("button.stonetop-playbook-restore").on("click", async ev => {
+				ev.preventDefault();
+				ev.stopPropagation();
+				if (!game.user?.isGM) return;
+				const { restoreCarriedPlaybook } = await import("../../playbooks/homebrew-store.js");
+				try {
+					const item = await restoreCarriedPlaybook(this.actor);
+					if (item) ui.notifications.info(`Restored ${item.name}. It's hidden from players' picker until you tick "Show to players" in the Playbook Builder.`);
+					this.render(false);
+				} catch (err) {
+					console.error("Stonetop | couldn't restore that playbook", err);
+					ui.notifications.error(err?.message || "Couldn't restore the playbook.");
+				}
+			});
 			// ...and put back when that was a mistake (WouldBeHeroAsterisk.js#restoreWouldBe).
 			html.find("button.stonetop-would-be-restore").on("click", async ev => {
 				ev.preventDefault();
@@ -7001,6 +7029,16 @@ export function createStonetopCharacterSheetClass(Base) {
 			return hp ? { "system.attributes.hp.max": hp, "system.attributes.hp.value": hp } : {};
 		}
 
+		/**
+		 * A homebrew playbook travels with the character who takes it, by a drop or by onboarding, so
+		 * another world (or this one, should it be deleted) can bring it back (playbooks/homebrew-store.js).
+		 */
+		async _carryHomebrewCopy(actor, playbookDoc) {
+			if (!isHomebrewPlaybookItem(playbookDoc)) return;
+			const { carryPlaybookCopy, readHomebrewBundle } = await import("../../playbooks/homebrew-store.js");
+			await carryPlaybookCopy(actor, readHomebrewBundle(playbookDoc));
+		}
+
 		async _onDropPlaybook(playbookDoc) {
 			if (!this.isEditable) return;
 			// The three post-death inserts are `type: "playbook"` Items too, so this one handler
@@ -7011,6 +7049,12 @@ export function createStonetopCharacterSheetClass(Base) {
 			// below measured their recorded answers against the Heavy's lore keys and deleted
 			// the lot. Ask the only question that actually separates them instead.
 			const slug = playbookDoc.system?.slug;
+			// A homebrew playbook the GM hasn't shown to players is the GM's to hand out: the picker
+			// hides it, and a drag from the Items sidebar doesn't get round that.
+			if (!game.user?.isGM && isHomebrewPlaybookItem(playbookDoc) && !isHomebrewPublished(playbookDoc)) {
+				ui.notifications?.warn?.(`The GM isn't showing ${playbookDoc.name} to players yet.`);
+				return;
+			}
 			// Through the same redirect every other drop uses: on a legacy UNLINKED token's sheet
 			// `this.actor` is the token's own copy, so an insert dropped there wrote the slug and
 			// the three granted move Items onto that one token — the player's own sheet showed no
@@ -7057,6 +7101,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				},
 				...(newPlaybook ? this._playbookHpInit(playbookDoc) : {}),
 			});
+			await this._carryHomebrewCopy(actor, playbookDoc);
 			await target.ensureStartingMoves();
 			// The playbook's preselected possessions (the Judge's Scribe's tools) are held from
 			// now on, whether or not onboarding runs, so their gear arrives with the drop.
@@ -15393,7 +15438,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				...(newPlaybook ? this._playbookHpInit(playbookDoc) : {}),
 			};
 			if (slug && isDefaultImg(this.actor.img)) {
-				const icon = playbookIconPath(slug);
+				const icon = playbookAvatar(slug, playbookDoc);
 				updates.img = icon;
 				updates["prototypeToken.texture.src"] = icon;
 			}
@@ -15406,6 +15451,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			}
 			updates[`flags.${STONETOP_SCOPE}.onboardingStats`] = statFlagObj;
 			await this.actor.update(updates);
+			await this._carryHomebrewCopy(this.actor, playbookDoc);
 
 			if (selections.backgroundSlug) {
 				await this._stonetopCharacter.background.selectBackground(selections.backgroundSlug);

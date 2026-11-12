@@ -14,9 +14,10 @@ beforeEach(() => picker.pick.mockReset());
 const ids = rows => rows.map(r => r.id);
 
 describe("the first window", () => {
-	it("offers the GM four broad kinds", () => {
+	// A homebrew playbook is world prep, so the GM alone sees that row; a player's list below is unchanged.
+	it("offers the GM five broad kinds, a homebrew playbook among them", () => {
 		expect(ids(contentOptionsFor(true, { canArcana: true })))
-			.toEqual(["gear", "move", "improvement", "dangers"]);
+			.toEqual(["gear", "move", "playbook", "improvement", "dangers"]);
 	});
 
 	// A player may make only an inventory item under Gear & Treasure, so the group would be a

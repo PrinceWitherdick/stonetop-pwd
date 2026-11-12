@@ -3,14 +3,15 @@ import { deletionEntry } from "../utils/foundry-compat.js";
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { shuffle } from "../utils/arrays.js";
 import { stonetopSteadingHeaderButton } from "../utils/world.js";
-import { playbookSlug, getPlayerCharacters, playbookIconPath, playerOf } from "../utils/playbook-actors.js";
+import { playbookSlug, getPlayerCharacters, playerOf } from "../utils/playbook-actors.js";
+import { playbookAvatar } from "../playbooks/playbook-catalog.js";
 // The order the introductions go around the table in: a world setting of its own, never the
 // Combat tracker. See utils/introductions-order.js for why.
 import { introductionsRoster, adoptLegacyIntroOrder, writeIntroOrder, moveId, reshuffle } from "../utils/introductions-order.js";
 import { wrapLoreTerms } from "../utils/lore-terms.js";
 // Authored prompts/questions live in introductions-data.js so the Chronicle
 // compiler can resolve a recorded answer's question index back to its text.
-import { INTRO_PLAYBOOK_DATA as _PLAYBOOK_DATA } from "./introductions-data.js";
+import { introDataFor } from "./introductions-data.js";
 import { saveChronicleFromButton, writeChronicle } from "../utils/chronicle.js";
 import { getSetting, setSetting } from "../settings.js";
 import { getWalkthroughResume, patchWalkthroughResume, markWalkthroughDone, saveWalkthroughPosition } from "./walkthrough-resume.js";
@@ -85,8 +86,8 @@ const _PHASES = [
 	{
 		kind: "narrate", title: "Your place in Stonetop", icon: "fa-location-dot", roundKey: "r3",
 		getInstruction: (pc) => {
-			const d = _PLAYBOOK_DATA[playbookSlug(pc)];
-			return d
+			const d = introDataFor(playbookSlug(pc));
+			return d?.step3
 				? `On your <strong>third turn</strong>, ${d.step3}`
 				: `On your <strong>third turn</strong>, tell us something about your character and their place in Stonetop.`;
 		},
@@ -95,12 +96,12 @@ const _PHASES = [
 	{
 		kind: "answer", title: "Bonds & ties", icon: "fa-link", stepKey: "step4",
 		getInstruction: () => `<strong>Answer a question</strong> from your playbook, naming one or more NPCs who live in Stonetop. Each turn, answer another, or pass. When everyone has passed, go on.`,
-		getQuestions:   (pc) => _PLAYBOOK_DATA[playbookSlug(pc)]?.step4 ?? null,
+		getQuestions:   (pc) => introDataFor(playbookSlug(pc))?.step4 ?? null,
 	},
 	{
 		kind: "ask", title: "Asking the others", icon: "fa-comments", stepKey: "step6",
 		getInstruction: () => `<strong>Ask your fellow PCs one of these.</strong> When others ask you, answer as you like. Each turn, ask another, or pass. When everyone has passed, go on.`,
-		getQuestions:   (pc) => _PLAYBOOK_DATA[playbookSlug(pc)]?.step6 ?? null,
+		getQuestions:   (pc) => introDataFor(playbookSlug(pc))?.step6 ?? null,
 	},
 	{
 		kind: "final", title: "Let spring burst forth", icon: "fa-seedling",
@@ -1672,7 +1673,7 @@ export class IntroductionsDialog extends StonetopDialog {
 				name:         actor.name,
 				playerName:   ownerId ? (game.users?.get(ownerId)?.name ?? "") : "",
 				playbookName: actor.system?.playbook?.name ?? "",
-				icon:         playbookIconPath(slug),
+				icon:         playbookAvatar(slug),
 				index:        this._pcIndex + 1,
 				total:        pcs.length,
 			};

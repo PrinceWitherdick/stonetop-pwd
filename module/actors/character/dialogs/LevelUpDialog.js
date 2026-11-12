@@ -5,7 +5,7 @@ import { moveGroupsForPlaybook, moveGroupKeys } from "./onboarding-move-groups.j
 import { moveMarkBudget, markOptionCapNote } from "../move-mark-budget.js";
 import { annotateInvocationEffects } from "../invocation-effects.js";
 import { getHoverDescriptionSetting } from "../../../settings.js";
-import { playbookIconPath } from "../../../utils/playbook-actors.js";
+import { playbookAvatar } from "../../../playbooks/playbook-catalog.js";
 import { INVOKE_THE_SUN_GOD } from "../holy-light.js";
 import { insertInertNote } from "../insert-inert-note.js";
 import { localize, format } from "../../../utils/i18n.js";
@@ -469,7 +469,7 @@ export class LevelUpDialog extends StonetopDialog {
 			// Playbook avatar art, shown beside the intro of steps unique to one playbook
 			// (currently only the Lightbearer-only invocation step) to brand them.
 			playbookName:    d.playbookName,
-			playbookIcon:    playbookIconPath(d.playbookSlug),
+			playbookIcon:    playbookAvatar(d.playbookSlug),
 			newLevel:        d.newLevel,
 			// Level Up is made at home (Book I p.528): a reminder, never a block, while a trip they are on is underway.
 			awayWarning:     isOverview ? levelUpAwayNote(this._character?._actor) : "",

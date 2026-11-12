@@ -36,6 +36,8 @@ import { pastWelcomeGuide, reopenOpenWalkthroughs } from "../dialogs/walkthrough
 import { reopenOpenBookReaders } from "../books/reader-resume.js";
 import { rulebookMacroApi } from "../books/rulebook-api.js";
 import { adoptStoredRulebooks } from "../books/adopt-stored-rulebooks.js";
+import { adoptLibraryPlaybooks } from "../playbooks/playbook-library.js";
+import { noticeMissingPlaybooks } from "../playbooks/homebrew-missing.js";
 import { adoptSettlementPortraits, reletterOnRename } from "../actors/settlement/settlement-portrait.js";
 import { redrawForSettlement } from "../actors/settlement/settlement-actor.js";
 import { isResidentsWriter, onCreateActorForResidents, onPreUpdateActorForResidents, onUpdateActorForResidents, sweepSettlementResidents } from "../actors/settlement/settlement-residents.js";
@@ -692,6 +694,12 @@ export async function onReady() {
 	// the book art is, so a new world's GM Toolkit opens the books without asking for them again
 	// (books/adopt-stored-rulebooks.js). Self-gated to the primary GM; not awaited, it is one browse.
 	adoptStoredRulebooks().catch(err => console.error("Stonetop | picking up kept rulebooks failed", err));
+	// The same for homebrew playbooks: the ones saved in the GM's other worlds are in
+	// stonetop-playbooks/ (playbooks/playbook-library.js), and this world gets the ones it lacks and is
+	// offered newer versions of the ones it has. The "plays a playbook this world doesn't have" notice
+	// waits for it, so a character whose playbook is about to arrive isn't named. Primary GM only.
+	adoptLibraryPlaybooks({ afterAdding: noticeMissingPlaybooks })
+		.catch(err => console.error("Stonetop | the playbook library run failed", err));
 	// Settlement portraits (actors/settlement/settlement-portrait.js). A sheet still on an image of
 	// ours takes its square of book art when the art is on disk, else its letter: primary GM, every
 	// load, not awaited, one browse. And a sheet renamed while on its initials takes the new ones, on

@@ -9,6 +9,9 @@
 //   step4  — the four "answer one, naming an NPC" questions for the looping "Bonds & ties" step.
 //   step6  — the four "ask your fellow PCs" questions for the looping "Asking the others" step.
 
+import { homebrewIntroData } from "../playbooks/playbook-catalog.js";
+import { escHtml } from "../utils/strings.js";
+
 export const INTRO_PLAYBOOK_DATA = {
 	"the-blessed": {
 		step3: `describe your <strong>sacred pouch</strong> and its remarkable trait. Then, tell us about <strong>Danu's shrine</strong> in Stonetop and how she is worshipped.`,
@@ -161,12 +164,30 @@ export const SUPERSEDED_INTRO_QUESTIONS = Object.freeze({
 	"Who most needs/deserves your protection?": Object.freeze(["Who most needs or deserves your protection?"]),
 });
 
-/** The four round-4/5 "answer one, naming an NPC" questions, or null if unknown. */
-export function step4Questions(slug) {
-	return INTRO_PLAYBOOK_DATA[slug]?.step4 ?? null;
+/**
+ * A playbook's Introductions data: the book's (above), else a HOMEBREW playbook's own
+ * (playbooks/playbook-catalog.js homebrewIntroData), else null. The book's entries are HTML; a
+ * homebrew playbook's are the GM's plain text, escaped here so both read the same way. A homebrew
+ * step left empty answers null, which skips that round for the playbook, as an unknown one does.
+ */
+export function introDataFor(slug) {
+	const shipped = INTRO_PLAYBOOK_DATA[slug];
+	if (shipped) return shipped;
+	const own = homebrewIntroData(slug);
+	if (!own) return null;
+	return {
+		step3: own.step3 ? escHtml(own.step3) : null,
+		step4: own.step4.length ? own.step4.map(escHtml) : null,
+		step6: own.step6.length ? own.step6.map(escHtml) : null,
+	};
 }
 
-/** The four round-6/7 "ask your fellow PCs" questions, or null if unknown. */
+/** The round-4/5 "answer one, naming an NPC" questions, or null if unknown. */
+export function step4Questions(slug) {
+	return introDataFor(slug)?.step4 ?? null;
+}
+
+/** The round-6/7 "ask your fellow PCs" questions, or null if unknown. */
 export function step6Questions(slug) {
-	return INTRO_PLAYBOOK_DATA[slug]?.step6 ?? null;
+	return introDataFor(slug)?.step6 ?? null;
 }

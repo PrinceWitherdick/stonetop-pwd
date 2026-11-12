@@ -49,6 +49,14 @@
 	{{!-- Step content --}}
 	<div class="stonetop-onboarding-step">
 
+		{{!-- A homebrew playbook's notes for the table, folded, on the first page only. --}}
+		{{#if this.homebrewNotes}}
+		<details class="stonetop-onboarding-homebrew-notes">
+			<summary class="stonetop-onboarding-homebrew-notes-summary">About this playbook</summary>
+			<div class="stonetop-onboarding-homebrew-notes-body">{{{this.homebrewNotes}}}</div>
+		</details>
+		{{/if}}
+
 		{{!-- ── Background ─────────────────────────────────────────── --}}
 		{{#if isBackground}}
 		<h3 class="stonetop-onboarding-step-title">Background</h3>
@@ -263,7 +271,7 @@
 
 		{{!-- ── Instinct ──────────────────────────────────────────── --}}
 		{{#if isInstinct}}
-		<h3 class="stonetop-onboarding-step-title">Instinct</h3>
+		<h3 class="stonetop-onboarding-step-title">{{this.instinctTitle}}</h3>
 		<p class="stonetop-onboarding-step-hint">Choose 1, or write your own below</p>
 		<div class="stonetop-onboarding-cards stonetop-onboarding-cards--compact">
 			{{#each instincts}}

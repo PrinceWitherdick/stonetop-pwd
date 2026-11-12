@@ -139,6 +139,15 @@ const CONTENT_OPTIONS = [
 		create: () => _openWorldMove(),
 	},
 	{
+		id: "playbook",
+		label: "Homebrew Playbook",
+		icon: "fa-book",
+		// World prep: what players may pick as a character is the GM's call.
+		gmOnly: true,
+		hint: "A character playbook of your own or a third party's: build it by hand, or import a shared playbook file. Players see it in the playbook picker once you show it to them.",
+		create: () => _openPlaybookBuilder(),
+	},
+	{
 		id: "improvement",
 		label: "Steading Improvement",
 		icon: "fa-screwdriver-wrench",
@@ -198,6 +207,12 @@ async function _openWorldMove() {
 	const { CustomMoveDialog, worldMoveSaver } =
 		await import("../actors/character/dialogs/CustomMoveDialog.js");
 	new CustomMoveDialog(worldMoveSaver(), {}).render(true);
+}
+
+/** A new homebrew playbook in the Playbook Builder. */
+async function _openPlaybookBuilder() {
+	const { openPlaybookBuilder } = await import("../playbooks/PlaybookBuilderDialog.js");
+	openPlaybookBuilder();
 }
 
 /** A draggable steading-improvement card. */

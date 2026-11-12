@@ -1,7 +1,7 @@
 // Descriptions for animal companion trait tags — checked before compendium lookup.
 import { isMajorArcana, isMajorArcanumItem } from "../../../arcana-icons.js";
 import { parseMovePickCount, allowedMarkableActions, backgroundMoveNames, backgroundPossessionSlugs, startingMoveChoiceNames } from "../StonetopCharacter.js";
-import { ITEMS_PACK, ARCANA_PACK } from "../StonetopFlags.js";
+import { ARCANA_PACK } from "../StonetopFlags.js";
 import { markQuestionBullets } from "../../../utils/question-bullets.js";
 import { openJournalSheetAsChild } from "../../../utils/front-on-open.js";
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
@@ -26,9 +26,10 @@ import { moveGroupsForPlaybook, moveGroupKeys } from "./onboarding-move-groups.j
 import { effectiveSubgroupMax } from "./possession-choice-cap.js";
 import { expectedInvocationCount } from "../invocation-count.js";
 import { requiredMovesUnmet } from "../move-requirement.js";
-import { playbookIconPath } from "../../../utils/playbook-actors.js";
+import { playbookAvatar, isHomebrewPlaybookItem } from "../../../playbooks/playbook-catalog.js";
+import { FoundryMoveRepository } from "../repositories/FoundryMoveRepository.js";
 import { ensurePackIndex } from "../../../utils/pack-index.js";
-import { SYSTEM_ID } from "../../../system-id.js";
+import { SYSTEM_ID, ITEM_FLAG_SCOPE } from "../../../system-id.js";
 import { crewSetupLimit } from "./CrewSetupDialog.js";
 import { crewWriteInTagBoxes, crewTagsWithWriteIns } from "../crew-write-ins.js";
 import { CREATION_MARK_MOVES, creationMarkCopies, creationMarkCrewTags, creationMarksComplete, creationMarkRadios } from "./creation-marks.js";
@@ -1391,13 +1392,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		}).html ?? "";
 	}
 
-	async _loadPlaybookMoves() {
-		const pack = await ensurePackIndex(ITEMS_PACK,
-			["system.playbook", "system.isStartingMove", "system.requirement"]);
-		if (!pack) return [];
-		const relevant = pack.index.filter(e => e.system?.playbook === this._playbookDoc.name);
-		const docs = await Promise.all(relevant.map(e => pack.getDocument(e._id)));
-		return docs.filter(Boolean);
+	// The playbook's move DOCUMENTS: the pack's plus a homebrew playbook's, read the one way every
+	// move list is (FoundryMoveRepository).
+	_loadPlaybookMoves() {
+		return new FoundryMoveRepository().getPlaybookMoveDocuments(this._playbookDoc.name);
 	}
 
 	// Resume stores each "either X OR Y" pick as the owned move's NAME, because its
@@ -2701,9 +2699,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 		return {
 			playbookName:      this._playbookDoc.name,
-			// Use the playbook avatar art (assets/icons/playbooks/<slug>_icon.webp),
-			// matching the picker, not the flat playbook item icon.
-			playbookImg:       playbookIconPath(this._playbookDoc.system?.slug) ?? this._playbookDoc.img,
+			// The playbook avatar art (assets/icons/playbooks/<slug>_icon.webp), matching the
+			// picker, not the flat playbook item icon; a homebrew playbook's own picture.
+			playbookImg:       playbookAvatar(this._playbookDoc.system?.slug, this._playbookDoc) ?? this._playbookDoc.img,
 			stepType,
 			hasFaq:            this._currentFaq.length > 0,
 			stepNumber:        this._step + 1,
@@ -2712,6 +2710,11 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			showBack:          !isFirst || hasBack,
 			isBackground:      stepType === "background",
 			isInstinct:        stepType === "instinct",
+			// A homebrew playbook may call them Drives (playbooks/homebrew-bundle.js instinctLabel).
+			instinctTitle:     this._playbookDoc.flags?.[ITEM_FLAG_SCOPE]?.instinctLabel === "Drive" ? "Drive" : "Instinct",
+			// A homebrew playbook's notes for the table (its own level-up rules, an insert, borrowed
+			// moves), on the first page. Stored as formatter-made HTML (playbooks/playbook-text.js).
+			homebrewNotes:     isFirst && isHomebrewPlaybookItem(this._playbookDoc) ? (this._playbookDoc.flags?.[ITEM_FLAG_SCOPE]?.notes ?? "") : "",
 			isAppearance:      stepType === "appearance",
 			isOrigin:          stepType === "origin",
 			isStats:           stepType === "stats",

@@ -1,6 +1,8 @@
 import { MoveDefinition } from "../../../model/MoveDefinition.js";
 import { FoundryPackStore } from "./FoundryPackStore.js";
 import { ITEMS_PACK } from "../StonetopFlags.js";
+import { homebrewPlaybookMoves, homebrewMoveById, playbookCatalogGeneration, allPlaybookNames } from "../../../playbooks/playbook-catalog.js";
+import { looseName } from "../../../utils/strings.js";
 
 // Every field MoveDefinition reads, plus the two the stores filter on (moveType, playbook). A live
 // pack's index holds ONLY the fields asked for, so one left out arrives undefined and falls to its
@@ -20,20 +22,52 @@ export class FoundryMoveRepository {
 		this._store            = new FoundryPackStore(ITEMS_PACK, MOVE_DEFINITION_FIELDS);
 		this._playbookCache    = new Map();
 		this._postDeathCache   = new Map();
+		this._homebrewCache    = new Map();
 		this._basicCache       = null;
 		this._expeditionCache  = null;
 	}
 
+	// A playbook's moves: the pack's (cached, they cannot change at runtime) plus a HOMEBREW
+	// playbook's world moves (playbooks/playbook-catalog.js), rebuilt whenever a world playbook or
+	// move changes, so a GM's edit shows at once. Only moves carrying the homebrew flag join, so an
+	// official Fox move a GM dragged into the sidebar never doubles the Fox's list.
 	async getPlaybookMoves(playbookName) {
-		if (this._playbookCache.has(playbookName)) return this._playbookCache.get(playbookName);
-		const entries = await this._store.filterEntries(e => e.system?.playbook === playbookName);
-		const moves   = entries.map(e => new MoveDefinition(e));
-		this._playbookCache.set(playbookName, moves);
-		return moves;
+		let packMoves = this._playbookCache.get(playbookName);
+		if (!packMoves) {
+			const entries = await this._store.filterEntries(e => e.system?.playbook === playbookName);
+			packMoves = entries.map(e => new MoveDefinition(e));
+			this._playbookCache.set(playbookName, packMoves);
+		}
+		const homebrew = homebrewPlaybookMoves(playbookName);
+		if (!homebrew.length) return packMoves;
+		return [...packMoves, ...this._homebrewDefinitions(playbookName, homebrew)];
 	}
 
+	// A homebrew playbook's moves as definitions, kept while the catalog's generation and the list
+	// itself stay the same: one sheet render asks for a playbook's moves several times.
+	_homebrewDefinitions(name, items) {
+		const generation = playbookCatalogGeneration();
+		const hit = this._homebrewCache.get(name);
+		if (hit && hit.generation === generation && hit.items.length === items.length && hit.items.every((item, i) => item === items[i])) return hit.defs;
+		const defs = items.map(i => new MoveDefinition(i));
+		this._homebrewCache.set(name, { generation, items, defs });
+		return defs;
+	}
+
+	// A playbook's move DOCUMENTS, for a reader that needs whole Items (the onboarding walkthrough):
+	// the pack's, then a homebrew playbook's world moves, which are documents already.
+	async getPlaybookMoveDocuments(playbookName) {
+		const entries = await this._store.filterEntries(e => e.system?.playbook === playbookName);
+		const docs = await Promise.all(entries.map(e => this._store.getDocument(e._id)));
+		return [...docs.filter(Boolean), ...homebrewPlaybookMoves(playbookName)];
+	}
+
+	// By the id getPlaybookMoves handed out: a homebrew world move's id, else a pack id. Every
+	// grant (addMove, a background's move, an either/or pick, a cross-playbook pick) copies the
+	// move onto the character through here. The world is asked first: it answers at once, where
+	// the pack is a server round trip that would find nothing for a homebrew move.
 	async getPlaybookMoveDocument(id) {
-		return this._store.getDocument(id);
+		return homebrewMoveById(id) ?? (await this._store.getDocument(id));
 	}
 
 	async getBasicMoves() {
@@ -67,4 +101,23 @@ export class FoundryMoveRepository {
 	async getPostDeathMoveDocument(id) {
 		return this._store.getDocument(id);
 	}
+}
+
+/**
+ * The moves `names` names, matched loosely (utils/strings.js looseName: a PDF's "Lion’s" is the
+ * book's "Lion's"), from every playbook but those in `except`: a background that gives ANOTHER
+ * playbook's move. The book's playbooks are asked first, then the homebrew ones; the first to have
+ * a name gives it. A free function over any move repository (`repo.getPlaybookMoves`).
+ */
+export async function findOtherPlaybookMoves(repo, names, { except = [] } = {}) {
+	const wanted = new Set([...names].map(n => looseName(n)));
+	if (!wanted.size) return [];
+	const playbooks = allPlaybookNames().filter(p => !except.includes(p));
+	const lists = await Promise.all(playbooks.map(p => repo.getPlaybookMoves(p)));
+	const found = [];
+	for (const e of lists.flat()) {
+		const key = looseName(e.name);
+		if (wanted.has(key)) { found.push(e); wanted.delete(key); }
+	}
+	return found;
 }

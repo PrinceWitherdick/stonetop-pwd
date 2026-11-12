@@ -21,13 +21,7 @@ import { isPrimaryGM } from "../utils/primary-gm.js";
 import { format, localize } from "../utils/i18n.js";
 import { RULEBOOKS, hasRulebook, wasRulebookForgotten, adoptRulebookPath } from "./rulebooks.js";
 import { RULEBOOK_DIR, rulebookFileName } from "./book-store.js";
-
-/** A browsed path's file name, lower-cased, with any query or hash and URL escaping taken off. */
-function fileNameOf(path) {
-	const last = String(path ?? "").split(/[?#]/)[0].split("/").pop() ?? "";
-	try { return decodeURIComponent(last).toLowerCase(); }
-	catch { return last.toLowerCase(); }
-}
+import { fileNameOf } from "../utils/strings.js";
 
 /**
  * Which of the books a listing of `stonetop-books/` holds, as `{ [book]: path }`.

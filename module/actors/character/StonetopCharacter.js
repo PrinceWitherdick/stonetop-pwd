@@ -33,6 +33,8 @@ import {
 	ValueMax,
 	VitalsSnapshotBuilder,
 } from "../../model/CharacterSnapshot.js";
+import { allPlaybookNames } from "../../playbooks/playbook-catalog.js";
+import { findOtherPlaybookMoves } from "./repositories/FoundryMoveRepository.js";
 import {PlaybookMoveEntry} from "./PlaybookMoveEntry.js";
 import {normalizeRollMode, tookOffer} from "../../dialogs/RollDialog.js";
 import {deletionEntry, deletionUpdate} from "../../utils/foundry-compat.js";
@@ -48,7 +50,7 @@ import {normalizeWound as _normalizeWound, normalizeWoundList} from "./wound-rec
 import {moveMarkBudget, markOptionCapNote} from "./move-mark-budget.js";
 import {markEntries, filledMarks, filledMarkCount, trimEmptyTail, oncePerLevelCautions, ONCE_PER_LEVEL_MARKS} from "./pfg-marks.js";
 import {MARK_STAT_CAPS} from "./stat-rules.js";
-import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, MIRRORED_HP_PENALTY_FLAG, HP_CEILING_OPTION, resolvedFlags, readableFlags, resolvedFlagProperty} from "./StonetopFlags.js";
+import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, MIRRORED_HP_PENALTY_FLAG, HP_CEILING_OPTION, BACKGROUND_GRANT_FLAG, resolvedFlags, readableFlags, resolvedFlagProperty, HOMEBREW_PLAYBOOK_COPY_FLAG} from "./StonetopFlags.js";
 import {DEATHS_DOOR_FLAG, DEATHS_DOOR_STATE, FINAL_CONSEQUENCE, UNSTOPPABLE, UNSTOPPABLE_FIGHTING_FLAG, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, lostToTheGm, stateOnTakingInsert, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
 import {heroDisplayName, WBH_HERO_FLAG} from "./WouldBeHeroAsterisk.js";
 import {tookBackground} from "./took-background.js";
@@ -110,7 +112,7 @@ import {effectiveSubgroupMax, sumMoveBonus} from "./dialogs/possession-choice-ca
 import {partitionMovesByGroup} from "./dialogs/onboarding-move-groups.js";
 import {backgroundMarkOption, hasBackgroundMarkOptions, moveChoiceKey} from "./dialogs/well-versed-topics.js";
 import {FoundryRepositoryFactory} from "./repositories/FoundryRepositoryFactory.js";
-import {capitalizeFirst, slugify, composeInstinct, escHtml, joinNames, splitNames, stripHtmlToText} from "../../utils/strings.js";
+import {capitalizeFirst, slugify, composeInstinct, escHtml, joinNames, looseName, splitNames, stripHtmlToText} from "../../utils/strings.js";
 import {splitFillBlank, fillBlank} from "../../utils/fill-blanks.js";
 import {localize as _loc, format} from "../../utils/i18n.js";
 import {orderedMoveName} from "../../data/follower-build.js";
@@ -4312,13 +4314,17 @@ export class StonetopCharacter {
 		const playbookData = await this.playbook();
 		const backgrounds  = playbookData?.backgrounds ?? [];
 		const gives = state => backgroundMoveNames(backgrounds.find(b => b.slug === state?.slug), state?.setupChoices);
-		const kept  = gives(to);
-		const gone  = new Set([...gives(from)].filter(name => !kept.has(name)));
+		// Compared loosely, as the copies are found below: two backgrounds giving the same move under
+		// different apostrophes give the same move, and the new one keeps it.
+		const kept  = new Set([...gives(to)].map(looseName));
+		const gone  = new Set([...gives(from)].filter(name => !kept.has(looseName(name))));
 		if (!gone.size) return [];
 		const dropped = [];
 		for (const name of gone) {
-			const copies = this._actor.items.filter(i => i.type === "move" && i.name === name
-				&& (!i.system?.playbook || i.system.playbook === playbookData?.name));
+			// Another playbook's move a background gave (ensureStartingMoves) is the background's only
+			// when stamped; this playbook's own copies are judged as they always were.
+			const copies = this._actor.items.filter(i => i.type === "move" && looseName(i.name) === looseName(name)
+				&& (!i.system?.playbook || i.system.playbook === playbookData?.name || _isBackgroundGrant(i)));
 			const stamped = copies.filter(_isBackgroundGrant);
 			if (stamped.length) { dropped.push(...stamped); continue; }
 			const legacy = _earliestFirst(copies.filter(i => !_heldBesidesBackground(i)))[0];
@@ -4785,7 +4791,8 @@ export class StonetopCharacter {
 		// Passes, because taking back a replacing move hands back the one it retired (A Mighty
 		// Rampart returns Bulwark), and that one is the old playbook's too.
 		for (let pass = 0; pass < 5; pass++) {
-			const doomed = this._actor.items.filter(i => i.type === "move" && oldNames.has(i.system?.playbook));
+			// The old background's grants go too, another playbook's move among them (ensureStartingMoves).
+			const doomed = this._actor.items.filter(i => i.type === "move" && (oldNames.has(i.system?.playbook) || _isBackgroundGrant(i)));
 			if (!doomed.length) break;
 			for (const item of doomed) {
 				// Already gone with the move that granted it.
@@ -4815,6 +4822,9 @@ export class StonetopCharacter {
 			WBH_HERO_FLAG,
 			// Unstoppable's "fighting on at 0 HP" stamp: the move it reads goes with the Heavy.
 			UNSTOPPABLE_FIGHTING_FLAG,
+			// The old homebrew playbook's carried copy: a new one is carried by whatever takes the new
+			// playbook, and a stale one would otherwise be offered back under the new playbook's slug.
+			HOMEBREW_PLAYBOOK_COPY_FLAG,
 			// Each move's track and marks are keyed by its name.
 			...gone.map(name => `moves.backgroundChoices.${name}`),
 			...gone.map(name => `moves.moveMarks.${name}`),
@@ -4980,6 +4990,14 @@ export class StonetopCharacter {
 			if (legacy) await legacy.setFlag(STONETOP_SCOPE, BACKGROUND_GRANT_FLAG, bgStamp);
 			else if (copies.length < repeatMax) fromBackground.push(e);
 		}
+		// A background may give ANOTHER playbook's move (a homebrew playbook's "Frosty, from the
+		// Heavy"). Not in this playbook's list, so found among every other playbook's, the book's and
+		// the world's homebrew ones, matched loosely (a PDF writes "Lion’s" where the book has
+		// "Lion's"). Granted stamped like any background move, so a change of background takes it back.
+		const ownNames = new Set(entries.map(e => looseName(e.name)));
+		const heldLoose = new Set([...ownedNames].map(looseName));
+		const foreign = [...bgMoveNames].filter(n => !ownNames.has(looseName(n)) && !heldLoose.has(looseName(n)));
+		fromBackground.push(...await findOtherPlaybookMoves(this._moveRepo, foreign, { except: [playbookName, playbookData?.name] }));
 		if (missing.length || fromBackground.length) {
 			const docs = await Promise.all([...missing, ...fromBackground].map(e => this._moveRepo.getPlaybookMoveDocument(e.id)));
 			const data = docs.map((d, index) => {
@@ -7724,7 +7742,7 @@ export class StonetopCharacter {
 	async getForeignMovesForLevelUp(crossPlaybook, level) {
 		const ownName = (await this.playbook())?.name ?? this._actor.system?.playbook?.name ?? null;
 		const allowed = crossPlaybook?.playbooks === "any"
-			? _ALL_PLAYBOOK_NAMES.filter(p => p !== ownName)
+			? allPlaybookNames().filter(p => p !== ownName)
 			: (crossPlaybook?.playbooks ?? []).filter(p => p !== ownName);
 		// The copies held of each move, by name. A move held is not offered again unless it repeats
 		// ("each time you take this move") and fewer copies than it allows are held: Magnificent
@@ -8186,12 +8204,8 @@ function _evenLevelsBetween(from, to) {
 	return Math.floor(to / 2) - Math.floor((from - 1) / 2);
 }
 
-// The 9 playbooks by display name (as stored in a move's system.playbook), for the
-// Versatile "any other playbook" cross-playbook pick.
-const _ALL_PLAYBOOK_NAMES = [
-	"The Blessed", "The Fox", "The Heavy", "The Judge", "The Lightbearer",
-	"The Marshal", "The Ranger", "The Seeker", "The Would-Be Hero",
-];
+// "Any other playbook" (Versatile) reads allPlaybookNames() (playbooks/playbook-catalog.js): the
+// nine shipped playbooks plus the world's homebrew ones, by display name.
 
 // A foreign move qualifies for a cross-playbook pick when the actor has its required
 // moves LEARNED (`learnedNames`: a switched-off move opens nothing; the one it replaces
@@ -8530,8 +8544,8 @@ function _isHeldBeforeBackground(item) {
 // The item flag ensureStartingMoves stamps on the copy of a move a background GAVE (its value is
 // the background's slug), so a repeatable one (the Scion's Veteran Crew, repeatMax 2) can be told
 // from a copy taken at a level-up: a change of background takes back only the stamped copy, and a
-// new background gives its own copy beside one the character already picked.
-export const BACKGROUND_GRANT_FLAG = "backgroundGrant";
+// new background gives its own copy beside one the character already picked. Kept in StonetopFlags.js.
+export { BACKGROUND_GRANT_FLAG };
 
 function _isBackgroundGrant(item) {
 	return !!item?.flags?.[STONETOP_SCOPE]?.[BACKGROUND_GRANT_FLAG];

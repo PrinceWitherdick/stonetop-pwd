@@ -39,6 +39,7 @@ import { HERO_MOVES, alphaKeysHeld, foeKey, recordAlphaOver, forgetAlphaOver } f
 import { OMENS_OF_FATE, settleOmensTier } from "./destined.js";
 import { reconcileGivenAdvantage } from "./give-advantage-flow.js";
 import { learnedTrack, takeBackHeld } from "./MoveResources.js";
+import { ownedLearnedMove } from "./owns-move.js";
 
 /** The message flag holding what a roll's tier effects have done, keyed as TIER_EFFECTS is. */
 export const TIER_EFFECTS_FLAG = "tierEffects";
@@ -60,25 +61,39 @@ const count = value => Math.max(0, Math.trunc(Number(value) || 0));
  * before the roll is never taken back, as Defend's Readiness is settled (defend-readiness.js#
  * readinessForTier). Resolves to how many this card has added now; undefined for a character without the
  * move learned, so their card carries no record.
+ *
+ * Any learned move's track is raised the same way to what `holds[tier]` holds (NERVE_HOLD for Silver
+ * Tongued): never lowered by the roll, never past its max, and a card moved off its tier takes back only
+ * what it added.
  */
-async function settleNerve(actor, tier, added) {
-	if (!learnedTrack(actor, SILVER_TONGUED)) return added === undefined ? undefined : count(added);
+async function settleHeld(actor, move, holds, tier, added) {
+	if (!learnedTrack(actor, move)) return added === undefined ? undefined : count(added);
 	const done = count(added);
 	// Read and raised in the character's spending turn (utils/spender-queue.js); a take-back takes its own turn.
 	const { now, takeBack } = await inSpenderTurn(actor, async () => {
-		const track = learnedTrack(actor, SILVER_TONGUED);
+		const track = learnedTrack(actor, move);
 		if (!track) return { now: done, takeBack: 0 };
-		const hold = Math.min(track.max, NERVE_HOLD[tier] ?? 0);
+		const hold = Math.min(track.max, count(holds?.[tier]));
 		const want = Math.max(0, hold - Math.max(0, track.held - done));
 		if (want > done) {
 			const next = Math.min(track.max, track.held + want - done);
-			if (next !== track.held) await track.resources.setUses(SILVER_TONGUED, next, { stonetopMove: SILVER_TONGUED });
+			if (next !== track.held) await track.resources.setUses(move, next, { stonetopMove: move });
 			return { now: done + (next - track.held), takeBack: 0 };
 		}
 		return { now: want, takeBack: done - want };
 	});
-	if (takeBack > 0) await takeBackHeld(actor, SILVER_TONGUED, takeBack);
+	if (takeBack > 0) await takeBackHeld(actor, move, takeBack);
 	return now;
+}
+
+/**
+ * A move whose own track says what a roll holds: `system.resource.holdOnRoll = {success, partial, failure}`
+ * ("on a 10+, hold 3 Fear; on a 7-9, hold 1"). Written by the Playbook Builder for a homebrew move
+ * (playbooks/homebrew-bundle.js), read from the move's words. Null for every other move.
+ */
+export function holdOnRollFor(actor, move) {
+	const holds = ownedLearnedMove(actor, move)?.system?.resource?.holdOnRoll;
+	return holds && typeof holds === "object" && Object.values(holds).some(v => count(v) > 0) ? holds : null;
 }
 
 /**
@@ -154,10 +169,17 @@ const TIER_EFFECTS = {
 			return n;
 		},
 	},
-	// How many Nerve this card put on Silver Tongued's track (settleNerve).
+	// How many Nerve this card put on Silver Tongued's track (settleHeld).
 	nerveHeld: {
 		moves: [SILVER_TONGUED],
-		settle: (actor, _move, tier, done) => settleNerve(actor, tier, done),
+		settle: (actor, _move, tier, done) => settleHeld(actor, SILVER_TONGUED, NERVE_HOLD, tier, done),
+	},
+	// How many this card put on a track whose move says what a roll holds (holdOnRollFor): matched by the
+	// move's DATA, not its name, so any move can carry it (a homebrew "Pariah": "on a 10+, hold 3 Fear").
+	heldOnRoll: {
+		moves: [],
+		matches: (actor, move) => move !== SILVER_TONGUED && !!holdOnRollFor(actor, move),
+		settle: (actor, move, tier, done) => settleHeld(actor, move, holdOnRollFor(actor, move), tier, done),
 	},
 	// The holy light: true when this card lit it (Wielder), or what it snuffed (Luminous Shield).
 	holyLight: {
@@ -242,7 +264,7 @@ export const TIER_EFFECT_MOVES = Object.freeze([...new Set(Object.values(TIER_EF
 export async function settleTierEffects(actor, move, tier, done = null, { character = actor?.typedActor, targets = [], surpriseSpent = false } = {}) {
 	const record = {};
 	for (const [key, effect] of Object.entries(TIER_EFFECTS)) {
-		if (!effect.moves.includes(move) && !(effect.recorded && done?.[key] != null)) continue;
+		if (!effect.moves.includes(move) && !(effect.recorded && done?.[key] != null) && !effect.matches?.(actor, move)) continue;
 		const now = await effect.settle(actor, move, tier, done?.[key], character, { targets, surpriseSpent });
 		// An effect with nothing to keep (an Alpha aimed at nobody) leaves no trace on the card.
 		if (now !== undefined) record[key] = now;

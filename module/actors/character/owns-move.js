@@ -101,6 +101,10 @@ export function worldLearnedHolderNames(name) {
 export function isPlayerAuthoredMove(item) {
 	const flags = item?.flags;
 	if (flags?.[SYSTEM_ID]?.custom) return true;
+	// A HOMEBREW playbook's move (playbooks/playbook-catalog.js HOMEBREW_MOVE_FLAG) is the
+	// table's own writing too: a homebrew "Ambush" is not the Fox's, so it borrows none of the
+	// book's behaviour, and the system-update refresh (migration/move-refresh.js) leaves its text alone.
+	if (flags?.[SYSTEM_ID]?.homebrewPlaybook) return true;
 	if (!flags || isCutOver(item)) return false;
 	return LEGACY_FLAG_SCOPES.some(scope => !!flags[scope]?.custom);
 }

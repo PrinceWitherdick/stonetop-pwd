@@ -7,7 +7,7 @@
 // this toggle, which sets or clears LEVEL_PICK_FLAG (StonetopCharacter#setLevelPick), the flag the
 // budget counts. A copy granted through a cross-playbook move is never one: the cross move was the pick.
 
-import { STONETOP_SCOPE } from "./StonetopFlags.js";
+import { STONETOP_SCOPE, BACKGROUND_GRANT_FLAG } from "./StonetopFlags.js";
 import { LEVEL_PICK_FLAG } from "./StonetopCharacter.js";
 
 /** Whether `item` is stamped as a level's pick. */
@@ -23,7 +23,9 @@ export const isLevelPick = item => !!item?.flags?.[STONETOP_SCOPE]?.[LEVEL_PICK_
 export function levelPickToggleFor(items, ownedIds = []) {
 	const byId = id => (typeof items?.get === "function" ? items.get(id) : [...(items ?? [])].find(i => (i?._id ?? i?.id) === id));
 	const copies = (ownedIds ?? []).map(byId)
-		.filter(i => i?.type === "move" && !i.flags?.[STONETOP_SCOPE]?.grantedBy);
+		// A move granted by another move, or by the background (another playbook's move among
+		// them), was never a level's pick.
+		.filter(i => i?.type === "move" && !i.flags?.[STONETOP_SCOPE]?.grantedBy && !i.flags?.[STONETOP_SCOPE]?.[BACKGROUND_GRANT_FLAG]);
 	if (!copies.length) return null;
 	const stamped = copies.find(isLevelPick);
 	const item = stamped ?? copies[0];

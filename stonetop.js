@@ -147,6 +147,9 @@ import { watchIconOnlyButtons } from "./module/utils/icon-only-buttons.js";
 import { registerUserConfigCharacterFilter } from "./module/hooks/user-config-characters.js";
 import { registerAssignToPlayer } from "./module/hooks/assign-to-player.js";
 import { registerCampaignActorMenu } from "./module/campaign/campaign-actor-menu.js";
+import { registerHomebrewPlaybookMenu } from "./module/playbooks/homebrew-item-menu.js";
+import { registerMissingPlaybookNotice } from "./module/playbooks/homebrew-missing.js";
+import { registerPlaybookLibrary } from "./module/playbooks/playbook-library.js";
 import { registerScenePosterMapMenu } from "./module/book2-art/mark-poster-scene.js";
 import { installWindowRestore } from "./module/utils/window-restore.js";
 import { registerUuidRedirects } from "./module/migration/compat.js";
@@ -340,6 +343,9 @@ Hooks.once("init", () => {
 	registerAssignToPlayer();
 	// Retire a PC, a PC or follower become a threat, and back into play (Book I p.584; module/campaign/).
 	registerCampaignActorMenu();
+	registerHomebrewPlaybookMenu();
+	registerMissingPlaybookNotice();
+	registerPlaybookLibrary();
 	// "Stonetop map..." on a Scene's right-click menu: mark a GM's own Scene as one of the poster maps.
 	registerScenePosterMapMenu();
 

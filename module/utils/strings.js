@@ -114,6 +114,23 @@ export function wholeWordPattern(word, flags = "") {
 	return new RegExp(`(?<!\\p{L})${literal}(?!\\p{L})`, `${flags.replace("u", "")}u`);
 }
 
+/** A listed or browsed path's file name, lower-cased, with any query or hash and URL escaping taken off. */
+export function fileNameOf(path) {
+	const last = String(path ?? "").split(/[?#]/)[0].split("/").pop() ?? "";
+	try { return decodeURIComponent(last).toLowerCase(); }
+	catch { return last.toLowerCase(); }
+}
+
+/**
+ * A name folded for a loose comparison: case, runs of space and curly apostrophes (a PDF's
+ * "Lion’s" for "Lion's") set aside; with `article`, a leading the/a/an/your too. The one such
+ * folder, so every path that matches a playbook, move or possession by name agrees on "the same".
+ */
+export function looseName(name, { article = false } = {}) {
+	const folded = String(name ?? "").replace(/[’‘`]/g, "'").replace(/\s+/g, " ").trim().toLowerCase();
+	return article ? folded.replace(/^(the|a|an|your)\s+/, "") : folded;
+}
+
 // Join names for display: ["Astor","Halix"] → "Astor & Halix"; three or more use an
 // Oxford-free serial comma ("A, B & C"). Blanks are dropped, so a missing name can't leave a
 // stray separator behind.

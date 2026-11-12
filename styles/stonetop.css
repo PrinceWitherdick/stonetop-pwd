@@ -8808,11 +8808,22 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
    magnifier; the gold is the bar and the wash. */
 .stonetop-camp-row.is-going-without { border-style: dashed; }
 
+/* THE GOLD CAUTION EDGE: a bar and a wash on what must be read before going on. Camp's going-without
+   line, a struggle's cue, what an import or a PDF read could not settle (the Playbook Builder and the
+   review window) and a homebrew playbook's notes in onboarding; each keeps its own spacing below. */
+.stonetop-camp-without,
+.stonetop-struggle-cue,
+.stonetop-pb-builder-report,
+.stonetop-pb-review-confirm,
+.stonetop-pb-review-unsure,
+.stonetop-onboarding-homebrew-notes {
+	border-left: 3px solid var(--st-gold-border);
+	background: var(--st-gold-bg);
+}
+
 .stonetop-camp-without {
 	margin: 0;
 	padding: 4px 8px;
-	border-left: 3px solid var(--st-gold-border);
-	background: var(--st-gold-bg);
 	font-size: var(--st-fs-sm);
 	line-height: 1.35;
 	color: var(--st-text-body);
@@ -9136,8 +9147,6 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-struggle-cue {
 	margin: 0;
 	padding: 4px 8px;
-	border-left: 3px solid var(--st-gold-border);
-	background: var(--st-gold-bg);
 	color: var(--st-text-body);
 }
 
@@ -9772,6 +9781,139 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-custom-move-field--num input { width: 100%; }
 .stonetop-custom-move-check label { display: inline-flex; align-items: center; gap: 6px; font-family: inherit; font-weight: normal; }
 .stonetop-custom-move-check input { width: auto; }
+
+/* Playbook Builder (playbooks/PlaybookBuilderDialog.js). It wears the custom-move dialog's frame
+   (that class is on its window too); what follows is only its own pieces: the repeating cards
+   (backgrounds, possessions, question sections), the folding move cards, the import report. */
+.stonetop-pb-builder.window-app { min-width: 560px; }
+/* A card (a background, a possession, a question section) and a folding move card share one frame. */
+.stonetop-pb-builder-card,
+.stonetop-pb-builder-move {
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.15);
+	border-radius: var(--st-radius-lg);
+	background: rgba(0, 0, 0, 0.02);
+}
+.stonetop-pb-builder-card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px 10px;
+}
+.stonetop-pb-builder-card-head { display: flex; gap: 6px; }
+.stonetop-pb-builder-card-head > input { flex: 1 1 auto; font-weight: bold; }
+.stonetop-pb-builder-card textarea { width: 100%; resize: vertical; }
+.stonetop-pb-builder-btn { flex: 0 0 auto; width: auto; padding: 0 10px; white-space: nowrap; }
+.stonetop-pb-builder-add { align-self: flex-start; }
+.stonetop-pb-builder-inline-check { display: inline-flex; align-items: center; gap: 6px; font-size: var(--st-fs-sm); }
+.stonetop-pb-builder-inline-check input { width: auto; }
+.stonetop-pb-builder-flag { color: var(--st-gold-text); font-style: normal; }
+
+.stonetop-pb-builder-pdf { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid rgb(var(--st-ink-rgb) / 0.12); }
+.stonetop-pb-builder-read { font-size: var(--st-fs-xs); }
+.stonetop-pb-builder-try { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.stonetop-pb-builder-read > summary { cursor: pointer; font-weight: bold; }
+
+.stonetop-pb-builder-picture { display: flex; align-items: center; gap: 12px; }
+.stonetop-pb-builder-picture-img { width: 64px; height: 64px; object-fit: contain; border: none; }
+
+.stonetop-pb-builder-share { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid rgb(var(--st-ink-rgb) / 0.12); }
+.stonetop-pb-builder-share-title { margin: 0; font-family: var(--font-stonetop); font-weight: bold; font-size: var(--st-fs-sm); }
+.stonetop-pb-builder-share-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.stonetop-pb-builder-danger { display: flex; justify-content: flex-end; }
+
+/* The gold caution edge (with camp's going-without line), rounded on the playbook windows' boxes. */
+.stonetop-pb-builder-report,
+.stonetop-pb-review-confirm,
+.stonetop-pb-review-unsure,
+.stonetop-onboarding-homebrew-notes { border-radius: var(--st-radius-sm); }
+.stonetop-pb-builder-report { padding: 8px 10px; }
+.stonetop-pb-builder-report-title { margin: 0 0 4px; font-weight: bold; font-size: var(--st-fs-sm); }
+.stonetop-pb-builder-report-line { margin: 2px 0; font-size: var(--st-fs-xs); }
+.stonetop-pb-builder-report-line.is-error { color: var(--st-danger-ink); }
+
+/* One move per folding card (framed with the cards above); the summary line is its name and what
+   it is at a glance. */
+.stonetop-pb-builder-count { margin: 4px 0 0; font-size: var(--st-fs-xs); font-style: italic; }
+.stonetop-pb-builder-move-summary {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	padding: 6px 10px;
+	cursor: pointer;
+}
+.stonetop-pb-builder-move-name { font-family: var(--font-stonetop); font-weight: bold; }
+.stonetop-pb-builder-move-tags { font-size: var(--st-fs-xs); font-style: italic; color: var(--color-text-dark-secondary); }
+.stonetop-pb-builder-move-body { display: flex; flex-direction: column; gap: 8px; padding: 4px 10px 10px; }
+.stonetop-pb-builder-move-foot { display: flex; justify-content: flex-end; }
+
+/* Checking a PDF import (playbooks/PlaybookImportReview.js): a scrolling body above a pinned
+   footer. What needs an answer and what was hard to place wear the gold caution edge; a piece the
+   GM has moved wears a quiet slate one, so the two never read alike. */
+.stonetop-pb-review .window-content { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+.stonetop-pb-review-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.stonetop-pb-review-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 14px; font-size: var(--st-fs-base); }
+.stonetop-pb-review-nav { flex: 0 0 auto; }
+.stonetop-pb-review-name { margin: 0; font-family: var(--font-stonetop); border: none; }
+.stonetop-pb-review-desc { margin: 2px 0 0; font-style: italic; }
+.stonetop-pb-review-lead { margin: 6px 0 0; font-size: var(--st-fs-sm); }
+.stonetop-pb-review-issue { margin: 4px 0 0; font-size: var(--st-fs-sm); color: var(--st-gold-text); }
+.stonetop-pb-review-h3 { margin: 0 0 6px; font-family: var(--font-stonetop); font-size: var(--st-fs-base); font-weight: bold; border: none; }
+
+.stonetop-pb-review-confirm,
+.stonetop-pb-review-unsure { padding: 8px 12px; }
+.stonetop-pb-review-unsure p { margin: 0; font-size: var(--st-fs-sm); }
+.stonetop-pb-review-question { padding: 6px 0; }
+.stonetop-pb-review-question + .stonetop-pb-review-question { border-top: 1px solid rgb(var(--st-ink-rgb) / 0.12); }
+.stonetop-pb-review-q-label { margin: 0; font-weight: bold; }
+.stonetop-pb-review-question.is-answered .stonetop-pb-review-q-label::after { content: " ✓"; color: var(--st-text-body); }
+.stonetop-pb-review-q-why { margin: 2px 0 6px; font-size: var(--st-fs-sm); }
+.stonetop-pb-review-q-answers { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+.stonetop-pb-review-q-answers input[type="text"] { flex: 1 1 260px; }
+.stonetop-pb-review-q-choice { display: inline-flex; align-items: center; gap: 6px; }
+/* Core's 2px radio drop is taken back for every system window (the :where() reset). */
+.stonetop-pb-review-q-choice input[type="radio"] { width: auto; margin: 0; }
+.stonetop-pb-review-q-number { width: 5em; }
+.stonetop-pb-review-source { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-size: var(--st-fs-sm); }
+.stonetop-pb-review-source select { width: auto; }
+
+.stonetop-pb-review-facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0 0 10px; font-size: var(--st-fs-sm); }
+/* Core styles a <dt> as an embossed label; these are plain ones. */
+.stonetop-pb-review .stonetop-pb-review-facts dt { font-weight: bold; color: var(--st-text-body); text-shadow: none; font-family: inherit; }
+.stonetop-pb-review-facts dd { margin: 0; }
+.stonetop-pb-review-group { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.stonetop-pb-review-group-title { margin: 0; font-family: var(--font-stonetop); font-size: var(--st-fs-sm); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid rgb(var(--st-ink-rgb) / 0.2); }
+.stonetop-pb-review-count { font-weight: normal; color: var(--color-text-dark-secondary); }
+.stonetop-pb-review-block {
+	padding: 6px 10px;
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.15);
+	border-left-width: 3px;
+	border-radius: var(--st-radius-sm);
+	background: rgb(var(--st-paper-rgb));
+}
+.stonetop-pb-review-block.is-unsure { border-left-color: var(--st-gold-border); background: var(--st-gold-bg); }
+.stonetop-pb-review-block.is-moved { border-left-color: slategrey; }
+.stonetop-pb-review-block-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.stonetop-pb-review-block-title { font-family: var(--font-stonetop); }
+.stonetop-pb-review-block-tags { font-size: var(--st-fs-xs); font-style: italic; color: var(--color-text-dark-secondary); }
+.stonetop-pb-review-belongs { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: var(--st-fs-xs); }
+.stonetop-pb-review-belongs select { width: auto; font-size: var(--st-fs-sm); }
+.stonetop-pb-review-why { margin: 4px 0 0; font-size: var(--st-fs-xs); }
+.stonetop-pb-review-block-text > summary { cursor: pointer; list-style: none; }
+.stonetop-pb-review-block-text > summary::-webkit-details-marker { display: none; }
+.stonetop-pb-review-more,
+.stonetop-pb-review-less { font-weight: bold; font-size: var(--st-fs-xs); }
+.stonetop-pb-review-less,
+.stonetop-pb-review-block-text[open] .stonetop-pb-review-excerpt-text,
+.stonetop-pb-review-block-text[open] .stonetop-pb-review-more { display: none; }
+.stonetop-pb-review-block-text[open] .stonetop-pb-review-less { display: inline; }
+.stonetop-pb-review-excerpt,
+.stonetop-pb-review-full { margin-top: 4px; font-size: var(--st-fs-sm); white-space: pre-line; }
+.stonetop-pb-review-from { margin: 0; flex: 1 1 auto; font-size: var(--st-fs-xs); color: var(--color-text-dark-secondary); }
+.stonetop-pb-review-block-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+/* Its words are a trimmed .stonetop-chip-text, centred on their capitals by the flex box: as bare text
+   the line box put them 1px high in Signika and 2px in IM Fell English at a 20px UI font. */
+.stonetop-pb-review-act { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; width: auto; padding: 0 8px; font-size: var(--st-fs-xs); white-space: nowrap; }
+.stonetop-pb-review-nav { justify-content: space-between; }
 
 /* Steading-improvement builder (dialogs/ImprovementBuilderDialog.js) — the same
    left-rail stepped-sheet frame as the custom-move dialog above: shared
@@ -12973,6 +13115,24 @@ form:has(.stonetop-arcanum-sheet-side[data-slug="richly-woven-rug"]) .stonetop-a
 }
 .stonetop-edit-mode .stonetop-playbook-row .stonetop-would-be-restore {
 	display: inline-flex;
+}
+
+/* A homebrew playbook this world doesn't have (playbooks/homebrew-store.js): said beside the empty
+   name in the gold caution tone, with the GM's way to bring it back. Shown in and out of edit mode:
+   a sheet that half works should say why. */
+.stonetop-playbook-row .stonetop-playbook-missing {
+	align-self: flex-end;
+	margin-bottom: 4px;
+	font-size: var(--st-fs-sm);
+	font-style: italic;
+	color: var(--st-gold-text);
+}
+.stonetop-playbook-row .stonetop-playbook-restore {
+	align-self: flex-end;
+	flex: none;
+	margin-bottom: 4px;
+	font-size: var(--st-fs-sm);
+	white-space: nowrap;
 }
 
 /* The strike in the maroon core rules every heading with (`h1`–`h4` get
@@ -25026,6 +25186,18 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	color: var(--st-text-body);
 	line-height: 1.2;
 }
+/* "Homebrew" under a playbook the table built or imported (playbooks/playbook-catalog.js). A plain
+   small-caps line like the holders note, NOT a boxed pill: there is no box for the words to sit
+   off-centre in. */
+.stonetop .stonetop-playbook-picker-card-badge {
+	font-family: var(--font-stonetop);
+	font-size: var(--st-fs-xs);
+	font-variant: small-caps;
+	letter-spacing: 0.04em;
+	text-align: center;
+	color: var(--st-text-body);
+	line-height: 1.2;
+}
 .stonetop .stonetop-playbook-picker-card.is-taken { border-style: dashed; }
 .stonetop .stonetop-playbook-picker-card.is-taken:not(:hover) { border-color: slategrey; }
 
@@ -25160,6 +25332,17 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 	font-style: italic;
 }
 
+/* A homebrew playbook's notes for the table (its own level-up rules, an insert, moves it borrows),
+   folded above the first page's choices. The gold caution edge (with the builder's report): read
+   this, the sheet won't do it. */
+.stonetop-onboarding-homebrew-notes {
+	margin: 0 0 12px;
+	padding: 6px 10px;
+	font-size: var(--st-fs-sm);
+}
+.stonetop-onboarding-homebrew-notes-summary { cursor: pointer; font-weight: bold; }
+.stonetop-onboarding-homebrew-notes-body p { margin: 6px 0 0; }
+
 /* ── Background & Instinct cards ─────────────────────────────────── */
 
 .stonetop-onboarding-cards {
@@ -25233,9 +25416,13 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 }
 
 .stonetop-onboarding-card-desc p { margin: 3px 0; }
-.stonetop-onboarding-card-desc ul { margin: 3px 0; padding-left: 0; list-style: none; }
-.stonetop-onboarding-card-desc li { margin: 2px 0; }
-.stonetop-onboarding-card-desc li::before {
+/* The homebrew notes' lists (playbook-text.js writes <ul>) wear the same spiral. */
+.stonetop-onboarding-card-desc ul,
+.stonetop-onboarding-homebrew-notes-body ul { margin: 3px 0; padding-left: 0; list-style: none; }
+.stonetop-onboarding-card-desc li,
+.stonetop-onboarding-homebrew-notes-body li { margin: 2px 0; }
+.stonetop-onboarding-card-desc li::before,
+.stonetop-onboarding-homebrew-notes-body li::before {
 	content: ""; flex-shrink: 0; width: 9px; height: 9px; margin-top: 3px;
 	background-image: var(--stonetop-spiral-icon);
 	background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.5;
@@ -30685,6 +30872,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 .stonetop-arcanum-chat-card li::before,
 .stonetop-outfit-rule-note li::before,
 .stonetop-onboarding-card-desc li::before,
+.stonetop-onboarding-homebrew-notes-body li::before,
 .stonetop-follower-rule li::before {
 	position: absolute;
 	left: 0;
@@ -30748,6 +30936,7 @@ li.question-bullet::before {
 .stonetop-arcanum-chat-card li,
 .stonetop-outfit-rule-note li,
 .stonetop-onboarding-card-desc li,
+.stonetop-onboarding-homebrew-notes-body li,
 .stonetop-follower-rule li {
 	position: relative;
 	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));

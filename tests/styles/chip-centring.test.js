@@ -195,6 +195,11 @@ describe("chips with an icon or a count trim their label element", () => {
 		// And the current share's Change what they're told beside its Hide.
 		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-share-reword", "button", 1],
 		["templates/dialogs/shared-route.hbs", "stonetop-shared-route-stop", "button", 1],
+		// The PDF import review's Split / Join, and its answer radios' words (playbook-review-centre.mjs, 11-11:
+		// bare, the words sat up to 2px high beside the icon and 1.5px off the radio in IM Fell English at a 20px
+		// UI font; trimmed, within 0.8px in all three faces at roots 16 and 20).
+		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-act", "button", 2],
+		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-q-choice", "label", 2],
 	])("wraps every label in %s (.%s)", (file, chipClass, tag, count) => {
 		const { count: found, bare } = everyChipWrapped(readRepo(file), chipClass, tag);
 		expect(found, `expected ${count} ${chipClass} in ${file}`).toBe(count);
@@ -304,6 +309,9 @@ describe("icon-and-label buttons centre by flex, unnudged", () => {
 		// The shared picker window's second footer button (Bolster's "It no longer applies" beside Save), on the
 		// CTA's box (measured 11-01: -0.7px, the same as Save, at 1x/1.25x/1.5x).
 		".stonetop-content-picker-footer > .stonetop-content-picker-secondary",
+		// The PDF import review's Split / Join, centring a trimmed .stonetop-chip-text (measured 11-11 with
+		// playbook-review-centre.mjs: -0.1 to -0.7px at 1x/1.25x/1.5x in all three faces, roots 16 and 20).
+		".stonetop-pb-review-act",
 	])("%s", sel => {
 		const body = declarations(MAIN, sel);
 		expect(body, `${sel} has no rule`).toBeTruthy();
@@ -311,6 +319,52 @@ describe("icon-and-label buttons centre by flex, unnudged", () => {
 		expect(declared(body, "align-items")).toBe("center");
 		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
 		expect(bottom).toBe(top);
+	});
+});
+
+// The Playbook Builder's icon buttons (.stonetop-pb-builder-btn: Read from a PDF, Choose picture, Import / Export,
+// Add, Remove, Delete, Try character creation) take core's flex button, and the sheet header's Restore it takes the
+// house .stonetop-inline-btn. Measured 11-11 with playbook-builder-centre.mjs: 0 findings in all three faces at UI
+// roots 16 and 20, 1x/1.25x/1.5x (chips within 1px, rows within 1px). What would break them is a hand nudge or a
+// display that isn't flex in their own rules, so neither may carry one.
+describe("the Playbook Builder's buttons and the sheet's Restore it centre by flex, unnudged", () => {
+	const NUDGES = ["top", "bottom", "translate", "transform", "margin-top", "padding-top", "padding-bottom", "vertical-align", "line-height"];
+	it.each([
+		".stonetop-pb-builder-btn",
+		".stonetop-playbook-row .stonetop-playbook-restore",
+	])("%s", sel => {
+		const body = declarations(MAIN, sel);
+		expect(body, `${sel} has no rule`).toBeTruthy();
+		for (const prop of NUDGES) expect(declared(body, prop), `${sel} nudges with ${prop}`).toBeNull();
+		const display = declared(body, "display");
+		if (display) expect(display).toMatch(/flex/);
+		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+		expect(bottom).toBe(top);
+	});
+
+	it("Restore it stands on the house inline button, which centres by flex with even padding", () => {
+		const body = declarations(MAIN, ".stonetop-inline-btn");
+		expect(declared(body, "display")).toBe("inline-flex");
+		expect(declared(body, "align-items")).toBe("center");
+		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+		expect(bottom).toBe(top);
+		expect(readRepo("templates/actor/partials/actor-header.hbs")).toMatch(/class="stonetop-inline-btn stonetop-playbook-restore"/);
+	});
+});
+
+// Core drops every AppV1 radio 2px (`body.game .app input[type="radio"] { position: relative; top: 2px }`,
+// layered), and our unlayered rule beats it only for the properties it names. The import review's answer
+// radios measured 2px below their words until their rule named `top` (playbook-review-centre.mjs, 11-11).
+describe("the PDF import review's radios take back core's 2px drop", () => {
+	// Through the one reset every system window shares (tests/styles/radio-reset.test.js): the review
+	// is a `stonetop` window, and its own radio rule sets no `top` of its own.
+	it("through the shared reset, as a stonetop window", () => {
+		const reset = declarations(MAIN, ':where(.stonetop input[type="radio"])');
+		expect(declared(reset, "top")).toBe("0");
+		expect(readRepo("module/playbooks/PlaybookImportReview.js")).toMatch(/classes:\s*\[\s*"stonetop",/);
+		const body = declarations(MAIN, '.stonetop-pb-review-q-choice input[type="radio"]');
+		expect(body, "the review radio rule is gone").toBeTruthy();
+		expect(declared(body, "top")).toBeNull();
 	});
 });
 

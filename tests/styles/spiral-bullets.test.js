@@ -110,6 +110,8 @@ describe("the lists whose marker was not a spiral", () => {
 			"the post-death crossed-off marks drew native discs"],
 		[".undeath-summary li::before",
 			"the undeath dialog's summary drew native discs"],
+		[".stonetop-onboarding-homebrew-notes-body li::before",
+			"a homebrew playbook's notes drew no bullet at all: the ::before stayed an empty inline box"],
 		[".stonetop-npc-impressions-list li::before",
 			"an NPC's impressions drew a chevron"],
 	];

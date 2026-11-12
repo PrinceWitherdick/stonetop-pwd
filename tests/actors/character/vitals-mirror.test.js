@@ -14,7 +14,7 @@ import { INSPIRATION_FLAG } from "../../../module/actors/character/inspiration.j
 import { BLESSING_FLAG } from "../../../module/actors/character/roll-boosts.js";
 import { ONGOING_INVOCATION_FLAGS } from "../../../module/actors/character/ongoing-invocation.js";
 import { HOLY_LIGHT_FLAG } from "../../../module/actors/character/holy-light.js";
-import { MIRRORED_HP_PENALTY_FLAG } from "../../../module/actors/character/StonetopFlags.js";
+import { MIRRORED_HP_PENALTY_FLAG, HOMEBREW_PLAYBOOK_COPY_FLAG } from "../../../module/actors/character/StonetopFlags.js";
 
 // The stored armor and max HP are what the token bar, the Fight tab and the ledger read. They have to
 // follow a change made with the character's sheet closed, on exactly one client: the one that made it.
@@ -64,7 +64,7 @@ describe("what moves a vital", () => {
 			READINESS_FLAG, LEDGER_KEY, CAMP_FLAG, CAMP_OWED_FLAG, CAMP_HUNGER_FLAG, DEATHS_DOOR_FLAG, DEATHS_DOOR_ROLLING_FLAG,
 			UNSTOPPABLE_FIGHTING_FLAG, CLASHED_FLAG, HARMED_BY_FLAG, KNOCKED_DOWN_FLAG, ALPHA_FLAG,
 			RAPIER_WIT_FLAG, TRUTH_FLAG, SPEAK_SOFTLY_FLAG, CENSURE_ENRAGED_FLAG, FOCUS_FIRE_FLAG, FOCUS_FIRE_USED_FLAG, TOUGH_LOVE_FLAG,
-			INSPIRATION_FLAG, BLESSING_FLAG, "invocations", ...ONGOING_INVOCATION_FLAGS, MIRRORED_HP_PENALTY_FLAG,
+			INSPIRATION_FLAG, BLESSING_FLAG, "invocations", ...ONGOING_INVOCATION_FLAGS, MIRRORED_HP_PENALTY_FLAG, HOMEBREW_PLAYBOOK_COPY_FLAG,
 		].sort());
 		// The Candle against the Dark's armor reads the light, so lighting it must re-mirror.
 		expect(FLAG_NOISE.has(HOLY_LIGHT_FLAG)).toBe(false);

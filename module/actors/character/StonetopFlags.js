@@ -10,6 +10,12 @@ export const STONETOP_SCOPE = _scope;
  */
 export const MIRRORED_HP_PENALTY_FLAG = "mirroredHpPenalty";
 
+/** Actor flag: the copy of a homebrew playbook a character carries to other worlds (playbooks/homebrew-store.js). */
+export const HOMEBREW_PLAYBOOK_COPY_FLAG = "homebrewPlaybookCopy";
+
+/** Item flag: the background (its slug) that GAVE this move copy (StonetopCharacter.js#ensureStartingMoves). */
+export const BACKGROUND_GRANT_FLAG = "backgroundGrant";
+
 /**
  * Update option: this write takes HP down to a max that fell (or a typed number over it, p.53 "your
  * current HP can never go higher than your max"). Hit points lost that way are not damage taken, so the

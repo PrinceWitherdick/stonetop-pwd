@@ -18,6 +18,12 @@
 			<img class="stonetop-playbook-picker-card-icon" src="{{this.img}}" alt="">
 			{{/if}}
 			<span class="stonetop-playbook-picker-card-name">{{this.name}}</span>
+			{{!-- A homebrew playbook (playbooks/playbook-catalog.js) says so, so nobody mistakes it for the book's.
+			      A draft is drawn only for the GM, who is told players can't see it yet. --}}
+			{{#if this.homebrew}}
+			<span class="stonetop-playbook-picker-card-badge">{{#if this.draft}}Homebrew draft: players can't see it yet{{else}}Homebrew{{/if}}</span>
+			{{#if this.author}}<span class="stonetop-playbook-picker-card-badge">by {{this.author}}</span>{{/if}}
+			{{/if}}
 			{{!-- Flagged, never blocked: "No doubling up" (Book I p.49) is the table's to waive. --}}
 			{{#if takenBy}}
 			<span class="stonetop-playbook-picker-card-holders">{{this.takenBy}}</span>

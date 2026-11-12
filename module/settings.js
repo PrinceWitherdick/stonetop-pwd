@@ -1,5 +1,6 @@
 import { DEFAULT_ROOT as DEFAULT_BOOK2_ART_ROOT } from "./book2-art/art-root.js";
 import { RULEBOOKS_SETTING, FORGOTTEN_RULEBOOKS_SETTING } from "./books/rulebooks.js";
+import { FORGOTTEN_LIBRARY_SETTING } from "./playbooks/playbook-library.js";
 import { POSTER_MAPS, posterMapSlugOf } from "./book2-art/poster-map-catalog.js";
 import { SYSTEM_ID } from "./system-id.js";
 import { START_YEAR_CHANGED_HOOK, forgetStartYear } from "./seasons/campaign-year.js";
@@ -776,6 +777,16 @@ export function registerSettings() {
 	// picked up again on the next load (see books/adopt-stored-rulebooks.js).
 	game.settings.register(SYSTEM_ID, FORGOTTEN_RULEBOOKS_SETTING, {
 		name: "Forgotten Rulebook PDFs",
+		scope: "world",
+		config: false,
+		type: Object,
+		default: {}
+	});
+
+	// The homebrew playbooks the GM deleted from THIS world, so the playbook library
+	// (playbooks/playbook-library.js) doesn't bring them back on the next load. `{ [slug]: true }`.
+	game.settings.register(SYSTEM_ID, FORGOTTEN_LIBRARY_SETTING, {
+		name: "Homebrew Playbooks Deleted From This World",
 		scope: "world",
 		config: false,
 		type: Object,

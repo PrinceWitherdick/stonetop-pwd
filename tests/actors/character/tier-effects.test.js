@@ -500,3 +500,35 @@ describe("a rewritten card that bends its tier", () => {
 		expect(tracks[PREPARE_A_WELCOME]).toBe(2);
 	});
 });
+
+// A move whose own track says what a roll holds (system.resource.holdOnRoll), as the Playbook Builder
+// writes for a homebrew move: matched by the move's DATA, settled as Silver Tongued's Nerve is.
+describe("a track whose move says what a roll holds", () => {
+	const PARIAH = "Pariah";
+	const stranger = held => {
+		const made = hero({ moves: [PARIAH], held: { [PARIAH]: held }, max: 4 });
+		made.actor.items[0].system.resource.holdOnRoll = { success: 3, partial: 1 };
+		return made;
+	};
+
+	it("fills to what the tier holds, and a moved card takes back only what it added", async () => {
+		const { actor, tracks } = stranger(0);
+		const card = await rolled(actor, PARIAH, "partial");
+		expect(tracks[PARIAH]).toBe(1);
+		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 1 });
+		await shift(card, actor, 10);
+		expect(tracks[PARIAH]).toBe(3);
+		await shift(card, actor, 4);
+		expect(tracks[PARIAH]).toBe(0);
+	});
+
+	it("never lowers what is held, and leaves a move without it alone", async () => {
+		const { actor, tracks } = stranger(4);
+		await rolled(actor, PARIAH, "partial");
+		expect(tracks[PARIAH]).toBe(4);
+		const plain = hero({ moves: ["Creeper"], held: { Creeper: 0 } });
+		const card = await rolled(plain.actor, "Creeper", "success");
+		expect(plain.tracks.Creeper).toBe(0);
+		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toBeUndefined();
+	});
+});
