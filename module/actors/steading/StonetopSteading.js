@@ -29,7 +29,7 @@ import {steadingHolds} from "./steading-holds.js";
 import {MILITIA_SEASON_STEP, militiaTactics} from "./season-effects.js";
 import { inTurn } from "../../utils/turn-queue.js";
 import { clampInt } from "../../utils/custom-move-data.js";
-import { relayAssetWrite } from "./steading-asset-relay.js";
+import { relayAssetWrite, relayEcho } from "./steading-asset-relay.js";
 import { deletionEntry } from "../../utils/foundry-compat.js";
 import { improvementCategoryKey } from "../../data/improvement-categories.js";
 import { steadingSystemValue } from "./steading-system-value.js";
@@ -943,8 +943,8 @@ export class StonetopSteading {
 		await this._actor.update(data, options);
 	}
 
-	async setFlags(updates) {
-		await this.applyChanges({ flags: updates });
+	async setFlags(updates, options = {}) {
+		await this.applyChanges({ flags: updates }, options);
 	}
 
 	/**
@@ -955,13 +955,14 @@ export class StonetopSteading {
 	 * completion had just added.
 	 * @param {string} list  the flag key
 	 * @param {(arr: object[]) => (void|false)} edit  changes the copy in place; `false` writes nothing
+	 * @param {object} [options]  the update's options (a relayed write's echo, steading-asset-relay.js#relayEcho)
 	 * @returns {Promise<boolean>} whether anything was written
 	 */
-	async editList(list, edit) {
+	async editList(list, edit, options = {}) {
 		return inTurn(`steading:${this._actor.id}`, async () => {
 			const arr = foundry.utils.deepClone(this._flags[list] ?? STEADING_DEFAULTS[list] ?? []);
 			if (edit(arr) === false) return false;
-			await this.setFlags({ [list]: arr });
+			await this.setFlags({ [list]: arr }, options);
 			return true;
 		});
 	}
@@ -1801,16 +1802,17 @@ export class StonetopSteading {
 
 	/**
 	 * requisitionFromHerd, made on this client: read and written in the steading's turn (PREP-8).
-	 * `late`, from the relay's GM side, says the asker stopped waiting: nothing is taken then.
+	 * `late`, from the relay's GM side, says the asker stopped waiting: nothing is taken then. `relayId` tags the
+	 * write so an asker that stopped waiting still sees it land (steading-asset-relay.js#relayEcho).
 	 */
-	async _requisitionFromHerdHere(count, { stonetopMove = "Requisition", late = null } = {}) {
+	async _requisitionFromHerdHere(count, { stonetopMove = "Requisition", late = null, relayId = null } = {}) {
 		return inTurn(`steading:${this._actor.id}`, async () => {
 			if (late?.()) return null;
 			if (!this.improvementCompleted("herdOfHorses")) return null;
 			const herd = this.getHerd();
 			const take = clampInt(count, 0, herd.grown);
 			if (!take) return 0;
-			await this.setHerd({ ...herd, grown: herd.grown - take }, { stonetopMove });
+			await this.setHerd({ ...herd, grown: herd.grown - take }, { stonetopMove, ...relayEcho(relayId, take) });
 			return take;
 		});
 	}
@@ -1824,15 +1826,15 @@ export class StonetopSteading {
 		return relayAssetWrite(this, "toHerd", [count, { stonetopMove }]);
 	}
 
-	/** returnToHerd, made on this client, in the steading's turn. `late` as _requisitionFromHerdHere. */
-	async _returnToHerdHere(count, { stonetopMove = "Requisition", late = null } = {}) {
+	/** returnToHerd, made on this client, in the steading's turn. `late` and `relayId` as _requisitionFromHerdHere. */
+	async _returnToHerdHere(count, { stonetopMove = "Requisition", late = null, relayId = null } = {}) {
 		return inTurn(`steading:${this._actor.id}`, async () => {
 			if (late?.()) return null;
 			if (!this.improvementCompleted("herdOfHorses")) return null;
 			const back = Math.max(0, Math.trunc(Number(count) || 0));
 			if (!back) return 0;
 			const herd = this.getHerd();
-			await this.setHerd({ ...herd, grown: herd.grown + back }, { stonetopMove });
+			await this.setHerd({ ...herd, grown: herd.grown + back }, { stonetopMove, ...relayEcho(relayId, back) });
 			return back;
 		});
 	}
@@ -2782,16 +2784,17 @@ export class StonetopSteading {
 
 	/**
 	 * setAssetTaken, made on this client. A player's goes through the GM's (steading-asset-relay.js),
-	 * whose `late` says the asker stopped waiting: nothing is written then.
+	 * whose `late` says the asker stopped waiting: nothing is written then, and whose `relayId` tags the write
+	 * so an asker that stopped waiting still sees it land (steading-asset-relay.js#relayEcho).
 	 */
-	async _setAssetTakenHere(index, takenBy, { name, late = null } = {}) {
+	async _setAssetTakenHere(index, takenBy, { name, late = null, relayId = null } = {}) {
 		return this.editList("assets", assets => {
 			if (late?.()) return false;
 			const row = assets[index];
 			if (!row?.name || row.takenBy) return false;
 			if (!assetRowIs(row, name)) return false;
 			assets[index] = { ...row, checked: false, takenBy };
-		});
+		}, relayEcho(relayId, true));
 	}
 
 	/**
@@ -2852,14 +2855,14 @@ export class StonetopSteading {
 		return relayAssetWrite(this, "return", [index, name === undefined ? {} : { name }]);
 	}
 
-	/** returnAsset, made on this client. `late` as _setAssetTakenHere. */
-	async _returnAssetHere(index, { name, late = null } = {}) {
+	/** returnAsset, made on this client. `late` and `relayId` as _setAssetTakenHere. */
+	async _returnAssetHere(index, { name, late = null, relayId = null } = {}) {
 		return this.editList("assets", assets => {
 			if (late?.()) return false;
 			if (!assets[index] || !assetRowIs(assets[index], name)) return false;
 			const { takenBy, ...rest } = assets[index];
 			assets[index] = { ...rest, checked: true };
-		});
+		}, relayEcho(relayId, true));
 	}
 
 	/**
@@ -2871,13 +2874,13 @@ export class StonetopSteading {
 		return relayAssetWrite(this, "lose", [index, name === undefined ? {} : { name }]);
 	}
 
-	/** loseAsset, made on this client. `late` as _setAssetTakenHere. */
-	async _loseAssetHere(index, { name, late = null } = {}) {
+	/** loseAsset, made on this client. `late` and `relayId` as _setAssetTakenHere. */
+	async _loseAssetHere(index, { name, late = null, relayId = null } = {}) {
 		return this.editList("assets", assets => {
 			if (late?.()) return false;
 			if (!assets[index]?.name || !assetRowIs(assets[index], name)) return false;
 			assets.splice(index, 1);
-		});
+		}, relayEcho(relayId, true));
 	}
 
 	async buildSnapshot() {

@@ -82,6 +82,10 @@ describe("text-only chips trim themselves", () => {
 		".stonetop-rel-lane-count",
 		".stonetop-fight-badge",
 		".stonetop-steading-plan button.spe-prompt",
+		// Going home's Reset Inventory and its Convalesce, one rule (fixall-1110-centre.mjs: 0 findings in all
+		// three faces at UI roots 16 and 20).
+		".stonetop-expedition-dialog .stonetop-exp-home-reset-btn",
+		".stonetop-expedition-dialog .stonetop-exp-home-convalesce-btn",
 	];
 
 	it.each(SELF)("%s trims and pads with both tokens", sel => {
@@ -183,11 +187,13 @@ describe("chips with an icon or a count trim their label element", () => {
 		["templates/actor/partials/tab-followers.hbs", "stonetop-companion-unique-owed", "span", 1],
 		["templates/dialogs/partials/catalog-shell.hbs", "stonetop-catalog-badge", "span", 1],
 		// The route pills: the scene button, Show players (its class also matches the stale share's
-		// Hide beside it, so two), that Hide, and the players' window's Stop showing (audit RTE-16).
+		// Hide and the current share's Change what they're told beside it, so three), that Hide, and the players' window's Stop showing (audit RTE-16).
 		// The steading header's See the route is built in JS (sharedRouteChipHtml, below).
 		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-to-scene", "button", 1],
-		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-share", "button", 2],
+		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-share", "button", 3],
 		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-share-hide", "button", 1],
+		// And the current share's Change what they're told beside its Hide.
+		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-share-reword", "button", 1],
 		["templates/dialogs/shared-route.hbs", "stonetop-shared-route-stop", "button", 1],
 	])("wraps every label in %s (.%s)", (file, chipClass, tag, count) => {
 		const { count: found, bare } = everyChipWrapped(readRepo(file), chipClass, tag);

@@ -591,6 +591,42 @@ export async function markPosterMapScenes({
 	return total;
 }
 
+/**
+ * The place pins to take off a Scene that is no longer a poster map: ours (the `posterPin` flag) and
+ * still exactly where and what we last left them (`markerSpec`). A pin the GM has moved or renamed is
+ * theirs, as markerDrift reads it, and stays. A pin with no record is read as untouched, as there. PURE.
+ */
+export function strandedPinIds(notes = []) {
+	return [...notes].filter(note => {
+		if (!pinKeyOf(note)) return false;
+		const last = pinSpecOf(note);
+		return !last || (note.x === last.x && note.y === last.y && note.text === last.text);
+	}).map(note => note.id);
+}
+
+/**
+ * Take this system's untouched place pins off `scene` (strandedPinIds): run when it gives up its poster-map
+ * stamp, since the pins sit where that map's places are and mean nothing on another picture. Answers how many.
+ */
+export async function liftPosterMapPins(scene) {
+	const ids = strandedPinIds(scene?.notes?.contents ?? []);
+	if (ids.length) await scene.deleteEmbeddedDocuments("Note", ids);
+	return ids.length;
+}
+
+/**
+ * Forget which of map `slug`'s pins have been laid (the record placedKeys reads), for a map whose stamp has
+ * just moved onto a new Scene. The record says "deleted on purpose" of a pin it lists that is not on the
+ * Scene, which is true of the Scene it was laid on and never of a fresh one: without this, a stamp moved
+ * from the importer's Scene to a GM's own laid no pins at all on it.
+ */
+export async function forgetPlacedPins(slug, { read = getObjectSetting, write = setSetting } = {}) {
+	const record = read(MARKER_RECORD_SETTING);
+	if (!record || !(slug in record)) return;
+	const { [slug]: _gone, ...rest } = record;
+	await write(MARKER_RECORD_SETTING, rest);
+}
+
 /** A poster-map Scene this system actually stamped, by flag alone. See markPosterMapScenes. */
 function isOurPosterMapScene(scene, map) {
 	return scopedFlag(scene, "posterMap") === map.slug;

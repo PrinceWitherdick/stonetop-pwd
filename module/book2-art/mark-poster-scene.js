@@ -41,24 +41,44 @@ export function posterMapFlagUpdate(scene, slug) {
  * sidebar. Any other Scene holding this map's stamp gives it up.
  *
  * Then the place pins go down on it straight away, through the same pass a world load runs, rather than
- * arriving unannounced on the next load. Best effort: the stamp is what was asked for.
+ * arriving unannounced on the next load, and on THIS GM's client: the load's pass runs on the primary GM's
+ * alone, so an assistant GM marking a Scene would otherwise see no pins until the primary GM reloaded. A
+ * Scene that gives the stamp up (unmarked, marked as another map, or a second Scene taking this map's) has
+ * the pins it was given taken back off, those nobody has moved or renamed (poster-maps.js#liftPosterMapPins).
+ * And a map moving onto a Scene it was not on starts its pin record afresh (forgetPlacedPins), so every pin
+ * goes down there. Best effort: the stamp is what was asked for.
  */
-export async function setScenePosterMap(scene, slug, { scenes = globalThis.game?.scenes ?? [] } = {}) {
+export async function setScenePosterMap(scene, slug, { scenes = globalThis.game?.scenes ?? [], pins = null } = {}) {
 	if (!scene) return;
 	const wanted = slug && posterMapFor(slug) ? slug : null;
-	if (wanted) {
-		// Independent documents, so their stamps come off together.
-		await Promise.all([...scenes]
-			.filter(other => other?.id !== scene.id && scopedFlag(other, FLAG) === wanted)
-			.map(other => other.update(posterMapFlagUpdate(other, null))));
-	}
+	const was = scopedFlag(scene, FLAG) ?? null;
+	const losing = wanted
+		? [...scenes].filter(other => other?.id !== scene.id && scopedFlag(other, FLAG) === wanted)
+		: [];
+	// Independent documents, so their stamps come off together.
+	await Promise.all(losing.map(other => other.update(posterMapFlagUpdate(other, null))));
 	const update = posterMapFlagUpdate(scene, wanted);
 	if (Object.keys(update).length) await scene.update(update);
-	if (!wanted) return;
+	// The same stamp again keeps this Scene's pin record (the map hasn't moved), but a duplicate that
+	// gave the stamp up still has its pins taken back off.
+	const same = was === wanted;
 	try {
-		const { markPosterMapScenes } = await import("./poster-maps.js");
-		// This Scene only: every other stamped Scene's pins are as the last pass left them.
-		await markPosterMapScenes({ scenes: [scene] });
+		const api = (losing.length || !same) ? (pins ?? await import("./poster-maps.js")) : null;
+		for (const other of [...losing, ...(was && !same ? [scene] : [])]) await api.liftPosterMapPins(other);
+		if (wanted && !same) await api.forgetPlacedPins(wanted);
+	} catch (err) {
+		error(`Poster maps: could not take the old place pins off for "${scene.name}"`, err);
+	}
+	if (wanted) await layPins(scene, pins);
+}
+
+/** Lay `scene`'s place pins on this client (see setScenePosterMap). Best effort. */
+async function layPins(scene, pins = null) {
+	try {
+		const { markPosterMapScenes } = pins ?? await import("./poster-maps.js");
+		// This Scene only: every other stamped Scene's pins are as the last pass left them. Laid here, by the
+		// GM who asked, whether or not theirs is the client the load's pass runs on.
+		await markPosterMapScenes({ scenes: [scene], primary: () => true });
 	} catch (err) {
 		error(`Poster maps: could not lay the place pins on "${scene.name}"`, err);
 	}

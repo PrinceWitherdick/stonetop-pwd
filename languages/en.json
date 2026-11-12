@@ -3495,6 +3495,7 @@
         "allClear": "Everyone on this trip has already unpacked.",
         "noParty": "No one is on this trip.",
         "convalesce": "Then open each PC's Convalesce",
+        "convalesceButton": "Open each PC's Convalesce",
         "button": "Reset Inventory",
         "nonePicked": "Tick who should unpack first.",
         "confirm": "Clear the marks, reserves and supplies of {names}? Anything they found stays on their lists.",
@@ -3553,6 +3554,8 @@
         "shownNoMap": "This world has no copy of {map}, so the players get the legs and times without a map.",
         "hidden": "The players can no longer see the route.",
         "hideStaleTip": "Stop showing the players the older way, without showing them this one. The See the route button leaves the steading sheet; cards already in chat keep the route they posted.",
+        "reword": "Change what they're told",
+        "rewordTip": "Show the players this way again, with new words for the stops you put down by hand, where they set out from, or the Chart a Course lines. It posts a new card to chat.",
         "failed": "The route couldn't be shown to the players. The console has the details.",
         "ask": {
           "title": "Show the players the way",

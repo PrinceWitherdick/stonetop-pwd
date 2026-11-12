@@ -91,5 +91,13 @@
     <i class="fas fa-eye-slash" aria-hidden="true"></i> <span class="stonetop-chip-text">{{journey.share.hide.label}}</span>
   </button>
   {{/if}}
+  {{!-- The players are being shown this way: beside "hide it", a way to send it again with new words
+        for its stops and its Chart a Course lines, which never move the way itself. --}}
+  {{#if journey.share.reword}}
+  <button type="button" class="stonetop-journey-share-reword"
+          data-tooltip="{{journey.share.reword.tooltip}}">
+    <i class="fas fa-pen" aria-hidden="true"></i> <span class="stonetop-chip-text">{{journey.share.reword.label}}</span>
+  </button>
+  {{/if}}
   {{/if}}
 </div>

@@ -25,6 +25,7 @@ import { memberMax } from "../../camp/camp-followers.js";
 import { crewSuppliesOf } from "../../camp/camp-store.js";
 import { plural } from "../../utils/plural.js";
 import { SYSTEM_ID } from "../../system-id.js";
+import { isShiftingRow, resolveRosterRef, rosterShiftsPath, rosterStamp } from "./follower-roster-shifts.js";
 
 /**
  * Every follower body below their max HP, alive, as a list a window can offer: `id` is stable for the
@@ -143,7 +144,7 @@ export async function restFollowers(character, ids, {
 	// only when its box was written, never because its lock was.
 	const boxed = Object.keys(update).length > 0;
 	if (boxed) {
-		const write = lock ? { ...update, ...recoverLockUpdate(heals.filter(h => !h.body.npcHeld).map(h => h.body)) } : update;
+		const write = lock ? { ...update, ...recoverLockUpdate(heals.filter(h => !h.body.npcHeld).map(h => h.body), flags) } : update;
 		await (moveName ? character.update(write, { stonetopMove: moveName }) : character.update(write));
 	}
 	const healed = [];
@@ -154,7 +155,7 @@ export async function restFollowers(character, ids, {
 		healed.push({ id: body.id, name: body.name, from: body.from, to });
 		if (body.npcHeld) npcHealed.push(body);
 	}
-	const npcLocks = lock ? recoverLockUpdate(npcHealed) : {};
+	const npcLocks = lock ? recoverLockUpdate(npcHealed, flags) : {};
 	if (Object.keys(npcLocks).length) await character.update(npcLocks, { stonetopLedger: true });
 	return healed;
 }
@@ -202,6 +203,12 @@ export function recoverFollowerPlan(character, hurt, { ids = null, canPay = true
 // lock), and lifted by the character's preUpdateActor hook when that row's HP box drops (recoverUnlockChanges):
 // an NPC-held follower's box mirrors its NPC (fight/roster-fate.js#onUpdateActorFollowerHp), so a blow on the
 // token lifts it too.
+//
+// A group member's row is an index into the roster, and a member struck off moves every later row up one, so a
+// member's lock also keeps the roster's number when it was set (follower-roster-shifts.js#rosterStamp, as every
+// other remembered row does) and is read back through the cuts made since: the lock follows its member, and one
+// whose member was cut out matches nobody. Its key carries that number too, so a newcomer who moves into the
+// same slot and Recovers gets a lock of their own instead of overwriting the first.
 
 /** The flag (under the system scope) holding the follower Recover locks. */
 export const RECOVER_FOLLOWERS_FLAG = "recoverFollowers";
@@ -212,19 +219,41 @@ export function recoverLockedIds(flags) {
 	return new Set(Object.entries(locks && typeof locks === "object" ? locks : {}).filter(([, v]) => !!v).map(([id]) => id));
 }
 
-/** The bodies (followerRestBodies) whose Recover is not spent. PURE. */
-export function recoverableBodies(flags, bodies) {
-	const locked = recoverLockedIds(flags);
-	return (Array.isArray(bodies) ? bodies : []).filter(b => !locked.has(b.id));
+/** A row's key for matching a lock against a body: follower type, slug, index. */
+const rowKey = (follower, slug, index) => `${follower}|${slug ?? ""}|${index ?? ""}`;
+
+/** The row a stored lock names NOW (resolveRosterRef), or null when its member was struck off since. PURE. */
+function lockRowNow(flags, lock) {
+	const now = resolveRosterRef(flags, lock);
+	return now ? { follower: now.follower, slug: lock.slug ?? "", index: now.index } : null;
 }
 
-/** The update that locks each body Recover healed (`bodies` carry `id` and `row`). PURE. */
-export function recoverLockUpdate(bodies) {
+/** The bodies (followerRestBodies) whose Recover is not spent. PURE. */
+export function recoverableBodies(flags, bodies) {
+	const locks = flags?.[RECOVER_FOLLOWERS_FLAG];
+	const lockedRows = new Set();
+	for (const lock of Object.values(locks && typeof locks === "object" ? locks : {})) {
+		if (!lock?.follower) continue;
+		const now = lockRowNow(flags, lock);
+		if (now) lockedRows.add(rowKey(now.follower, now.slug, now.index));
+	}
+	return (Array.isArray(bodies) ? bodies : []).filter(b => !lockedRows.has(rowKey(b.row?.follower, b.row?.slug, b.row?.index)));
+}
+
+/**
+ * The update that locks each body Recover healed (`bodies` carry `id` and `row`). `flags` (the character's
+ * resolved flags) stamps a group member's lock with the roster's number now. PURE.
+ */
+export function recoverLockUpdate(bodies, flags = null) {
 	const update = {};
 	for (const b of Array.isArray(bodies) ? bodies : []) {
 		if (!b?.id || !b.row?.follower) continue;
-		update[`flags.${SYSTEM_ID}.${RECOVER_FOLLOWERS_FLAG}.${b.id}`] = {
-			follower: b.row.follower, slug: b.row.slug ?? "", ...(b.row.index != null ? { index: b.row.index } : {}),
+		const slug = b.row.slug ?? "";
+		const stamp = isShiftingRow(b.row.follower) ? rosterStamp(flags, b.row.follower, slug) : null;
+		const key = stamp ? `${b.id}@${stamp}` : b.id;
+		update[`flags.${SYSTEM_ID}.${RECOVER_FOLLOWERS_FLAG}.${key}`] = {
+			follower: b.row.follower, slug, ...(b.row.index != null ? { index: b.row.index } : {}),
+			...(stamp != null ? { stamp } : {}),
 		};
 	}
 	return update;
@@ -233,6 +262,10 @@ export function recoverLockUpdate(bodies) {
 /**
  * Lift, in the same write, the Recover lock of every body whose HP box this update LOWERS: the preUpdateActor
  * half of the lock. `changes` is Foundry's expanded diff; mutated in place. Returns the ids lifted.
+ *
+ * A member's row is read where it is before this write and where it is after it (a strike-off in this same
+ * write moves it), so the box compared is the member's own on both sides. A lock whose member is gone, before
+ * or by this write, is cleared.
  */
 export function recoverUnlockChanges(actor, changes) {
 	if (!changes?.flags?.[SYSTEM_ID]) return [];
@@ -240,17 +273,30 @@ export function recoverUnlockChanges(actor, changes) {
 	const locks = flags[RECOVER_FOLLOWERS_FLAG];
 	if (!locks || typeof locks !== "object") return [];
 	const lifted = [];
-	for (const [id, row] of Object.entries(locks)) {
-		if (!row?.follower) continue;
-		const path = followerFateHpPath(row.follower, row.slug ?? "", row.index);
-		if (!path) continue;
-		const next = foundry.utils.getProperty(changes, `flags.${SYSTEM_ID}.${path}`);
-		if (next === undefined || next === null || next === "") continue;
-		const before = Number(foundry.utils.getProperty(flags, path));
-		if (Number.isFinite(before) && Number(next) < before) {
-			foundry.utils.setProperty(changes, `flags.${SYSTEM_ID}.${RECOVER_FOLLOWERS_FLAG}.${id}`, null);
-			lifted.push(id);
+	const lift = id => {
+		foundry.utils.setProperty(changes, `flags.${SYSTEM_ID}.${RECOVER_FOLLOWERS_FLAG}.${id}`, null);
+		lifted.push(id);
+	};
+	for (const [id, lock] of Object.entries(locks)) {
+		if (!lock?.follower) continue;
+		const was = lockRowNow(flags, lock);
+		if (!was) { lift(id); continue; }
+		let now = was;
+		const shiftsPath = isShiftingRow(lock.follower) ? rosterShiftsPath(lock.follower, lock.slug ?? "") : null;
+		const nextShifts = shiftsPath ? foundry.utils.getProperty(changes, `flags.${SYSTEM_ID}.${shiftsPath}`) : undefined;
+		if (nextShifts !== undefined) {
+			const after = {};
+			foundry.utils.setProperty(after, shiftsPath, nextShifts);
+			now = lockRowNow(after, lock);
+			if (!now) { lift(id); continue; }
 		}
+		const pathBefore = followerFateHpPath(was.follower, was.slug, was.index);
+		const pathAfter = followerFateHpPath(now.follower, now.slug, now.index);
+		if (!pathBefore || !pathAfter) continue;
+		const next = foundry.utils.getProperty(changes, `flags.${SYSTEM_ID}.${pathAfter}`);
+		if (next === undefined || next === null || next === "") continue;
+		const before = Number(foundry.utils.getProperty(flags, pathBefore));
+		if (Number.isFinite(before) && Number(next) < before) lift(id);
 	}
 	return lifted;
 }

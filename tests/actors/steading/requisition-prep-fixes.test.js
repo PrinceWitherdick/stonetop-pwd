@@ -81,6 +81,48 @@ describe("PREP-8: a player's asset and herd writes are made on the GM's client",
 		await expect(relayAssetWrite(steading, "take", [], { target: () => ({ query: async () => { throw new Error("timeout"); } }) })).rejects.toThrow(/No answer/);
 	});
 
+	it("counts a write the GM's client made after the asker stopped waiting as made, by its echo", async () => {
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const steading = new StonetopSteading(assetActor([{ name: "Wagon", checked: true }]));
+		const listeners = new Map();
+		const hooks = { on: (name, fn) => { listeners.set(1, fn); return 1; }, off: (name, id) => listeners.delete(id) };
+		let sent = null;
+		// No answer in time; the write lands a moment later, tagged with the asker's id.
+		const query = async (_q, data) => {
+			sent = data;
+			setTimeout(() => listeners.get(1)?.({ uuid: "Actor.stead" }, {}, { stonetopAssetRelay: { id: data.relayId, value: 2 } }), 5);
+			throw new Error("timeout");
+		};
+		const out = await relayAssetWrite(steading, "fromHerd", [2, {}], { target: () => ({ query }), hooks, echoMs: 1000, newId: () => "r1" });
+		expect(sent.relayId).toBe("r1");
+		expect(out).toBe(2);
+		expect(listeners.size).toBe(0);
+		// Another write's echo, or none at all, is still no answer.
+		const silent = async () => { setTimeout(() => listeners.get(1)?.({ uuid: "Actor.stead" }, {}, { stonetopAssetRelay: { id: "other", value: 2 } }), 5); throw new Error("timeout"); };
+		await expect(relayAssetWrite(steading, "fromHerd", [2, {}], { target: () => ({ query: silent }), hooks, echoMs: 30, newId: () => "r2" })).rejects.toThrow(/No answer/);
+	});
+
+	it("fails at once when the GM's client answers that its write threw, without waiting for an echo", async () => {
+		const steading = new StonetopSteading(assetActor([{ name: "Wagon", checked: true }]));
+		const hooks = { on: () => 1, off: vi.fn() };
+		const started = Date.now();
+		await expect(relayAssetWrite(steading, "fromHerd", [2, {}], {
+			target: () => ({ query: async () => ({ error: true }) }), hooks, echoMs: 60000, newId: () => "r3",
+		})).rejects.toThrow(/couldn't fromHerd/);
+		expect(Date.now() - started).toBeLessThan(1000);
+		expect(hooks.off).toHaveBeenCalled();
+	});
+
+	it("tags the GM's write with the asker's id", async () => {
+		vi.stubGlobal("game", { user: { id: "gm", isGM: true }, users: { activeGM: { id: "gm" }, get: id => ({ id, isGM: false }) } });
+		const actor = assetActor([{ name: "Wagon", checked: true }]);
+		const steading = new StonetopSteading(actor);
+		const update = vi.spyOn(actor, "update");
+		const deps = { resolve: () => actor, wrap: () => steading, users: game.users };
+		await handleSteadingAssetsQuery({ steadingUuid: actor.uuid, op: "take", args: [0, { name: "Wren" }, { name: "Wagon" }], relayId: "r9", userId: "p" }, {}, deps);
+		expect(update.mock.calls.at(-1)[1]).toMatchObject({ stonetopAssetRelay: { id: "r9", value: true } });
+	});
+
 	it("makes the write on the GM's side for an asker who could have made it, and refuses one who could not", async () => {
 		vi.stubGlobal("game", { user: { id: "gm", isGM: true }, users: { activeGM: { id: "gm" }, get: id => ({ id, isGM: false }) } });
 		const actor = assetActor([{ name: "Wagon", checked: true }]);

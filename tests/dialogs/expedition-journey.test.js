@@ -1745,6 +1745,38 @@ describe("showing the players the route", () => {
 		expect(posted).toHaveLength(1);
 	});
 
+	// Code review 11-10: a way on show can be sent again with new words, which never move the way itself.
+	it("offers a way on show a second button that sends it again", async () => {
+		const chart = { picked: [{ id: "b", group: "requirements", key: "bring", answer: "warm clothes" }] };
+		const d = dialog({ destination: "the-crossroads" }, chart);
+		const asks = [];
+		d._askHowToShare = async (_trip, _route, opts = {}) => { asks.push(opts); return { requirements: true, labels: null }; };
+		await d._shareRouteWithPlayers();
+		const journey = await d._buildJourney();
+		expect(journey.share.state).toBe("same");
+		expect(journey.share.reword.label).toBe("Change what they're told");
+		const html = await renderTemplate(
+			"systems/stonetop-pwd/templates/dialogs/partials/expedition-journey-controls.hbs", { journey });
+		expect(html).toContain("stonetop-journey-share-reword");
+		await d._reshareRoute();
+		// Shared again rather than hidden: a second card, and the share still on.
+		expect(posted).toHaveLength(2);
+		expect(store.sharedRoute).not.toEqual({});
+		// Code review 11-11: the lines box starts as the share being replaced had it.
+		expect(asks.map(o => !!o.requirementsOn)).toEqual([false, true]);
+	});
+
+	// Code review 11-11: with nothing to change, sending it again would only post the same card twice.
+	it("offers no second send when there is nothing to change", async () => {
+		const d = dialog({ destination: "the-crossroads" });
+		await d._shareRouteWithPlayers();
+		const journey = await d._buildJourney();
+		expect(journey.share.state).toBe("same");
+		expect(journey.share.reword).toBeUndefined();
+		await d._reshareRoute();
+		expect(posted).toHaveLength(1);
+	});
+
 	// ...and a renamed trip is an older share: its old name heads the players' window.
 	it("counts a rename as an older share", async () => {
 		const d = dialog({ destination: "the-crossroads" });

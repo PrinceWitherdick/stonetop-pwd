@@ -40769,7 +40769,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-expedition-dialog .stonetop-exp-home-reset-convalesce input { flex: 0 0 auto; margin: 0; }
 /* Centred by trimming, like every chip (the --st-trim-top block): its line box, centred as it was, put
    the label 1.5px high. Inline-block so the trim takes; the tokens give back the height it took. */
-.stonetop-expedition-dialog .stonetop-exp-home-reset-btn {
+.stonetop-expedition-dialog .stonetop-exp-home-reset-btn,
+.stonetop-expedition-dialog .stonetop-exp-home-convalesce-btn {
 	display: inline-block; flex: 0 0 auto; width: auto; min-height: 0; margin: 0 0 0 auto;
 	box-sizing: content-box; text-box: trim-both cap alphabetic;
 	padding: calc(3px + var(--st-trim-top)) 10px calc(3px + var(--st-trim-bottom));
@@ -40857,6 +40858,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-journey .stonetop-journey-to-scene,
 .stonetop-journey .stonetop-journey-share,
 .stonetop-journey .stonetop-journey-share-hide,
+.stonetop-journey .stonetop-journey-share-reword,
 .stonetop-journey .stonetop-journey-place-site {
 	flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; width: auto;
 	font-size: var(--st-fs-2xs);
@@ -40875,7 +40877,8 @@ a.stonetop-share-journal > i { margin-right: 3px; }
    travel to the right end of the row together on the site button's auto margin. */
 .stonetop-journey .stonetop-journey-to-scene,
 .stonetop-journey .stonetop-journey-share,
-.stonetop-journey .stonetop-journey-share-hide {
+.stonetop-journey .stonetop-journey-share-hide,
+.stonetop-journey .stonetop-journey-share-reword {
 	padding: 3px 10px; line-height: 1.4;
 }
 /* UNLESS IT IS THE ONLY ONE OF THE PAIR, in which case it carries the margin itself. The two are
@@ -40897,6 +40900,7 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-journey .stonetop-journey-to-scene:hover,
 .stonetop-journey .stonetop-journey-share:hover,
 .stonetop-journey .stonetop-journey-share-hide:hover,
+.stonetop-journey .stonetop-journey-share-reword:hover,
 .stonetop-journey .stonetop-journey-place-site:hover {
 	background: var(--st-slate-hover-bg); border-color: var(--st-slate-hover-border);
 }

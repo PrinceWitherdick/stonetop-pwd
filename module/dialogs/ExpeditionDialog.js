@@ -908,6 +908,10 @@ export class ExpeditionDialog extends StepperDialog {
 		html.find(".stonetop-exp-home-asset-btn").on("click", ev => this._settleHomeAsset(ev.currentTarget.dataset, ev.currentTarget));
 		// Going home: everyone ticked unpacks (Reset Inventory, p.89).
 		html.find(".stonetop-exp-home-reset-btn").on("click", ev => this._resetHomeInventories(ev.currentTarget));
+		html.find(".stonetop-exp-home-convalesce-btn").on("click", ev => onePress(this, "homeReset", async () => {
+			await this._openHomeConvalesce();
+			this.render(false);
+		}, { control: ev.currentTarget }));
 		// Arriving-home step: make the Return Triumphant move. Nothing of the trip is written —
 		// the move's whole effect is on the steading — so there is no re-render here; the
 		// walkthrough it opens repaints whatever steading sheet happens to be showing.
@@ -932,6 +936,7 @@ export class ExpeditionDialog extends StepperDialog {
 			toScene: expected => this._putRouteOnScene(expected),
 			share: expected => this._shareRouteWithPlayers(expected),
 			hideShare: () => this._hideSharedRoute(),
+			reshare: () => this._reshareRoute(),
 			placeSite: () => this._placeSiteFromPanel(html[0]),
 			clearDrawn: () => this._clearDrawnWay(),
 		});
@@ -1840,7 +1845,12 @@ export class ExpeditionDialog extends StepperDialog {
 			.filter(el => el.checked && !el.disabled)
 			.map(el => ({ actorId: el.dataset.actor, ftype: el.dataset.ftype ?? "", slug: el.dataset.slug ?? "", name: el.dataset.name ?? "" }));
 		const convalesce = !!section.querySelector(".stonetop-exp-home-reset-convalesce-check")?.checked;
-		if (!picks.length) return void ui.notifications?.info?.(localize("stonetop.expedition.homeReset.nonePicked"));
+		if (!picks.length) {
+			// Nobody to unpack, but the rest was ticked: that half stands on its own.
+			if (!convalesce) return void ui.notifications?.info?.(localize("stonetop.expedition.homeReset.nonePicked"));
+			await this._openHomeConvalesce();
+			return void this.render(false);
+		}
 		const ok = await confirmOutcome({
 			title:   localize("stonetop.expedition.homeReset.title"),
 			content: `<p>${format("stonetop.expedition.homeReset.confirm", { names: `<strong>${escHtml(joinNames(picks.map(p => p.name)))}</strong>` })}</p>`,
@@ -3043,16 +3053,27 @@ export class ExpeditionDialog extends StepperDialog {
 		if (!game.user?.isGM) return null;
 		const shared = readSharedRoute();
 		const trip = this._currentExpedition();
-		const hasRoute = !!(route ?? this._journeyRoute())?.legs?.length;
+		const way = route ?? this._journeyRoute();
+		const hasRoute = !!way?.legs?.length;
 		if (!shared && !hasRoute) return null;
 		const state = sharedRouteState(shared, {
 			expeditionId: trip?.id ?? null, journey: trip?.journey, hasRoute, title: trip?.title ?? "",
+			requirements: Array.isArray(shared?.requirements) ? sharedRequirementLines(trip?.chart, way) : null,
 		});
 		if (state === "same" || state === "orphan") {
 			return {
 				state, shared: true, icon: "fa-eye-slash",
 				label: localize("stonetop.expedition.share.hide"),
 				tooltip: localize("stonetop.expedition.share.hideTip"),
+				// AND A WAY TO SEND IT AGAIN WITH NEW WORDS: what each hand-put stop is called, where they set
+				// out from, the Chart a Course lines. None of those moves the way, so the share still reads as
+				// this one, and the button beside it only hides.
+				// Offered only when there is something to change: with no lines and no hand-put stops,
+				// sending it again would post the same card twice.
+				...(state === "same" && this._shareQuestions(trip, way).any ? { reword: {
+					label: localize("stonetop.expedition.share.reword"),
+					tooltip: localize("stonetop.expedition.share.rewordTip"),
+				} } : {}),
 			};
 		}
 		if (state === "stale") {
@@ -3111,12 +3132,22 @@ export class ExpeditionDialog extends StepperDialog {
 		}, "stonetop.expedition.share.failed");
 	}
 
-	async _shareRouteNow() {
+	/**
+	 * Send the way that is being shown again, asking afresh what goes with it (the "same" state's second
+	 * button): the players' words for each stop and the start, and the Chart a Course lines.
+	 */
+	async _reshareRoute() {
+		return this._onePress("share", null, null, () => this._shareRouteNow({ again: true }), "stonetop.expedition.share.failed");
+	}
+
+	async _shareRouteNow({ again = false } = {}) {
 		if (!game.user?.isGM) return;
 		const route = this._journeyRoute();
 		const state = this._shareRouteState(route)?.state;
 		if (!state) return;
-		if (state === "same" || state === "orphan") {
+		// Nothing to change (no lines, no hand-put stops): sending it again would post the same card twice.
+		if (again && (state !== "same" || !this._shareQuestions(this._currentExpedition(), route).any)) return;
+		if (!again && (state === "same" || state === "orphan")) {
 			await stopSharingRoute();
 			ui.notifications?.info(localize("stonetop.expedition.share.hidden"));
 			return;
@@ -3124,7 +3155,11 @@ export class ExpeditionDialog extends StepperDialog {
 		// WHAT ELSE GOES WITH IT, asked only when there is something to ask (audit ruling E4, E17):
 		// the trip's Chart a Course lines, opt-in, and what the players should hear for each stop the
 		// GM put down by hand. Backing out shares nothing.
-		const asked = await this._askHowToShare(this._currentExpedition(), route);
+		// Sent again, the lines box starts as the share being replaced had it, so rewording a stop
+		// doesn't quietly drop the lines the players were reading.
+		const asked = await this._askHowToShare(this._currentExpedition(), route, {
+			requirementsOn: again && Array.isArray(readSharedRoute()?.requirements),
+		});
 		if (!asked) return;
 		await this._writeShareLabels({ labels: asked.labels, startLabel: asked.startLabel });
 		const trip = this._currentExpedition();
@@ -3173,6 +3208,20 @@ export class ExpeditionDialog extends StepperDialog {
 	}
 
 	/**
+	 * What a share could ask about (see _askHowToShare): the Chart a Course lines, the stops the GM
+	 * put down by hand, and a hand-put start. `any` is false when there is nothing to ask.
+	 */
+	_shareQuestions(trip, route) {
+		const lines = sharedRequirementLines(trip?.chart, route);
+		const custom = normalizeCustom(trip?.journey?.custom);
+		const start = this._journeyPick().start;
+		const stops = custom.on ? customStops(start, custom).filter(stop => stop.mark) : [];
+		// A start the GM put down by hand has no name of its own either: ask for its words too.
+		const startAt = startMark(start);
+		return { lines, custom, start, stops, startAt, any: !!(lines.length || stops.length || startAt) };
+	}
+
+	/**
 	 * Ask what goes out with the way, or answer at once when there is nothing to ask.
 	 *
 	 * TWO QUESTIONS, both optional:
@@ -3185,16 +3234,11 @@ export class ExpeditionDialog extends StepperDialog {
 	 *
 	 * @returns {Promise<{requirements: boolean, labels: Array<string>|null}|null>} null for "Not now".
 	 */
-	async _askHowToShare(trip, route) {
-		const lines = sharedRequirementLines(trip?.chart, route);
-		const custom = normalizeCustom(trip?.journey?.custom);
-		const start = this._journeyPick().start;
-		const stops = custom.on ? customStops(start, custom).filter(stop => stop.mark) : [];
-		// A start the GM put down by hand has no name of its own either: ask for its words too.
-		const startAt = startMark(start);
-		if (!lines.length && !stops.length && !startAt) return { requirements: false, labels: null };
+	async _askHowToShare(trip, route, { requirementsOn = false } = {}) {
+		const { lines, custom, start, stops, startAt, any } = this._shareQuestions(trip, route);
+		if (!any) return { requirements: false, labels: null };
 		const key = "stonetop.expedition.share.ask";
-		const box = lines.length ? askCheck("requirements", format(`${key}.requirements`, { count: lines.length })) : "";
+		const box = lines.length ? askCheck("requirements", format(`${key}.requirements`, { count: lines.length }), requirementsOn) : "";
 		const fields = stops.map((stop, i) => {
 			const near = nearestPlace(custom.tier, stop.spot);
 			const placeholder = near ? format("stonetop.expedition.shared.near", { place: near.name }) : "";
@@ -4185,6 +4229,7 @@ export class ExpeditionDialog extends StepperDialog {
 			// And showing the players, which is the same act from either surface too.
 			share: (expected = null) => this._shareRouteWithPlayers(expected),
 			hideShare: () => this._hideSharedRoute(),
+			reshare: () => this._reshareRoute(),
 			// Also the same act from either surface, with one thing the window has to supply: the
 			// picture. `pickPoint` is the window's own zoomable map, so the reader aims at 300 dpi
 			// and the answer still comes back as a fraction of the printed crop.

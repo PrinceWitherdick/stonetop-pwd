@@ -321,6 +321,16 @@ describe("Going home's Reset Inventory card", () => {
 		expect(bryn.sheet._onConvalesceOpen).toHaveBeenCalledOnce();
 	});
 
+	it("opens the Convalesce windows with nobody ticked to unpack, when that box is ticked", async () => {
+		const wait = stubConfirm(true);
+		await d._resetHomeInventoriesNow(section([check("a1", { checked: false })], { convalesce: true }));
+		expect(wait).not.toHaveBeenCalled();
+		expect(aria.typedActor.resetForHomecoming).not.toHaveBeenCalled();
+		expect(aria.sheet._onConvalesceOpen).toHaveBeenCalledOnce();
+		expect(bryn.sheet._onConvalesceOpen).toHaveBeenCalledOnce();
+		expect(info).not.toHaveBeenCalled();
+	});
+
 	it("renders ticks, a greyed row for the unpacked, the Convalesce box unticked and the button", async () => {
 		const html = await global.renderTemplate("systems/stonetop-pwd/templates/dialogs/partials/expedition-home-reset.hbs", {
 			homeReset: { anyToClear: true, rows: [
@@ -344,5 +354,10 @@ describe("Going home's Reset Inventory card", () => {
 		});
 		expect(html).toContain("already unpacked");
 		expect(html).not.toContain("stonetop-exp-home-reset-btn");
+		expect(html).not.toContain("stonetop-exp-home-reset-convalesce-check");
+		// No Reset, but the Convalesce half still has a button of its own.
+		expect(html).toContain("stonetop-exp-home-convalesce-btn");
+		expect(html).toMatch(/Open each PC.{1,6}s Convalesce/);
+		expect(html).not.toMatch(/fa-eraser/);
 	});
 });

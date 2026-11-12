@@ -164,6 +164,7 @@ export class TravelMapWindow extends ImageZoomWindow {
 			// press carries what the button said, so a stale double-click is dropped over there.
 			share: expected => this._source?.share?.(expected),
 			hideShare: () => this._source?.hideShare?.(),
+			reshare: () => this._source?.reshare?.(),
 			placeSite: () => this._placeSite(),
 			clearDrawn: () => this._through(source => source.clearDrawn?.(this)),
 		});

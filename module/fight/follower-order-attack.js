@@ -153,27 +153,46 @@ export function rewriteOwesCounter({ move, tier, countered = false, pressed = fa
 /**
  * Strike an ordered Clash's counter-blow once (FOE-1): latch the card, then the sheet strikes it on the
  * follower's own token (StonetopCharacterSheet#_followerSuffersCounter), naming the card so Apply lands it on a
- * member ordered alone. Answers whether it was struck from here (false: already struck, or no sheet to strike it).
+ * member ordered alone. Answers whether it was struck from here (false: already struck, the latch could not be
+ * written, or no sheet to strike it).
+ *
+ * The latch is claimed on the active GM's client (utils/card-latch.js#withCardLatch), so two clients settling
+ * the same card at once (a rewrite's reconcile and the damage press) strike it once between them; and the blow
+ * is struck only once the latch has landed, so a later rewrite or press never strikes it again. A blow that
+ * throws gives the latch back.
  *
  * @param {ChatMessage|null} message  the order's card
  * @param {Actor} character  the follower's leader
  * @param {{ftype: string, slug?: string, name?: string, member?: string, memberName?: string}} order
+ * @param {{latch?: Function}} [options]  `latch` is for the tests (withCardLatch's shape)
  */
-export async function strikeOrderCounter(message, character, order = {}) {
+export async function strikeOrderCounter(message, character, order = {}, { latch = withCardLatch } = {}) {
 	if (!character || message?.getFlag?.(SYSTEM_ID, ORDER_COUNTERED_FLAG)) return false;
 	const sheet = character.sheet;
 	if (typeof sheet?._followerSuffersCounter !== "function") return false;
-	if (message?.setFlag) {
-		try {
-			await message.setFlag(SYSTEM_ID, ORDER_COUNTERED_FLAG, true);
-		} catch (err) {
-			console.warn("Stonetop | could not latch the ordered Clash's counter-blow on its card", err);
+	let started = false;
+	const strike = async () => {
+		started = true;
+		await sheet._followerSuffersCounter({ ftype: order.ftype ?? "", slug: order.slug ?? "" }, {
+			member: order.member ?? "", name: order.memberName || order.name || "", counterOf: message?.id ?? "",
+		});
+		return true;
+	};
+	// No card found for the roll (a 6- struck at once): nothing to latch, and nothing to strike it again from.
+	if (!message?.setFlag) return strike();
+	try {
+		return await latch(message, ORDER_COUNTERED_FLAG, true, [], strike);
+	} catch (err) {
+		console.warn("Stonetop | could not strike the ordered Clash's counter-blow", err);
+		// The latch couldn't be written (no GM to claim it, a card this user can't write), so the blow
+		// is NOT struck unlatched, where a second client could strike it again. It is still owed
+		// (Book I p.215), so the player is told to deal it by hand rather than left with a console line.
+		if (!started) {
+			const who = order.memberName || order.name || "the follower";
+			globalThis.ui?.notifications?.warn?.(`The enemy's counter-blow on ${who} couldn't be struck from here (the card couldn't be marked; is a GM connected?). Deal it to ${who} by hand.`);
 		}
+		return false;
 	}
-	await sheet._followerSuffersCounter({ ftype: order.ftype ?? "", slug: order.slug ?? "" }, {
-		member: order.member ?? "", name: order.memberName || order.name || "", counterOf: message?.id ?? "",
-	});
-	return true;
 }
 
 /**
