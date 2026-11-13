@@ -337,7 +337,7 @@
 		{{!-- ── Origin & Name ─────────────────────────────────────── --}}
 		{{#if isOrigin}}
 		<h3 class="stonetop-onboarding-step-title">Origin &amp; Name</h3>
-		<p class="stonetop-onboarding-step-hint">Where are you from? What are you called?</p>
+		<p class="stonetop-onboarding-step-hint">{{#if this.originNote}}{{this.originNote}}{{else}}Where are you from? What are you called?{{/if}}</p>
 
 		<div class="stonetop-onboarding-origin-grid">
 			{{#each origins}}
@@ -347,6 +347,25 @@
 			</label>
 			{{/each}}
 		</div>
+
+		{{!-- The place picked: a write-in to name, and a homebrew playbook's question about it. --}}
+		{{#each origins}}
+		{{#if this.selected}}
+		{{#if this.writeIn}}
+		<div class="stonetop-onboarding-name-row stonetop-onboarding-origin-place-row">
+			<label class="stonetop-onboarding-name-label" for="onboard-origin-place">Where?</label>
+			<input id="onboard-origin-place" type="text" class="onboard-origin-place" value="{{@root.originPlace}}"
+			       placeholder="Name the place, and talk it over with the GM">
+		</div>
+		{{/if}}
+		{{#if this.question}}
+		<div class="stonetop-onboarding-origin-question">
+			<label class="stonetop-onboarding-origin-question-text" for="onboard-origin-answer">{{this.question}}</label>
+			<textarea id="onboard-origin-answer" class="onboard-origin-answer" rows="2" placeholder="Your answer (you can fill this in later)">{{@root.originAnswer}}</textarea>
+		</div>
+		{{/if}}
+		{{/if}}
+		{{/each}}
 
 		{{!-- Name input --}}
 		<div class="stonetop-onboarding-name-row">
@@ -426,10 +445,13 @@
 		{{#if isPossession}}
 		<h3 class="stonetop-onboarding-step-title">Special Possessions</h3>
 		<p class="stonetop-onboarding-step-hint">{{possession.pickNote}}</p>
+		{{!-- Nothing to pick when the playbook gives every one ("You begin play with the following"). --}}
+		{{#if this.possession.pickCount}}
 		<p class="stonetop-onboarding-possession-counter">
 			<span class="stonetop-onboarding-possession-count">{{possession.selectedCount}}</span>
 			/ {{possession.pickCount}} chosen
 		</p>
+		{{/if}}
 		<div class="stonetop-onboarding-cards">
 			{{#each possession.options}}
 			<div class="stonetop-onboarding-possession-group{{#if isSelected}} is-selected{{/if}}">
@@ -504,6 +526,7 @@
 
 			{{!-- Write-in possession: anything not on the list, on par with the other
 			     options. Filling it spends a pick like any listed possession. --}}
+			{{#if this.possession.pickCount}}
 			<div class="stonetop-onboarding-possession-group stonetop-onboarding-possession-group--custom{{#if possession.custom.filled}} is-selected{{/if}}">
 				<div class="stonetop-onboarding-card stonetop-onboarding-card--possession stonetop-onboarding-card--custom{{#if possession.custom.filled}} is-selected{{/if}}">
 					<div class="stonetop-onboarding-card-header">
@@ -516,6 +539,7 @@
 					       {{#if possession.custom.disabled}}disabled{{/if}}>
 				</div>
 			</div>
+			{{/if}}
 		</div>
 		{{/if}}
 

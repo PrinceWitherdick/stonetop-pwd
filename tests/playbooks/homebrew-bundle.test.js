@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
 	BUNDLE_FORMAT, BUNDLE_VERSION, emptyBundle, normalizeBundle, bundleToItemData, itemsToBundle, bundleForExport, diffBundles, mergeReimport, writeInsAsBlanks, blankWriteIn, statCapFrom, markOptionsFrom, holdOnRollFrom,
+	MARK_WRITE_IN_LABEL, advanceFrom, advancementToFlags,
 } from "../../module/playbooks/homebrew-bundle.js";
 import { formatPlaybookText, formatPlaybookInline, playbookTextFromHtml } from "../../module/playbooks/playbook-text.js";
 import { isHomebrewPlaybookItem, homebrewMoveSlug } from "../../module/playbooks/playbook-catalog.js";
@@ -198,14 +199,18 @@ describe("what a move's own words make it do", () => {
 		expect(bundleToItemData(bundle, { slug: "homebrew-the-tester" }).moves[0].system).toMatchObject({ cap: 2, repeatMax: 3 });
 	});
 
-	it("'Mark one:' and its bullets become mark boxes; a write-in bullet is left as words", () => {
+	it("'Mark one:' and its bullets become mark boxes, a '(discuss with GM)' bullet a box with words to write in", () => {
 		const description = "Something small makes you exceptional. Mark one:\n- You're the best at games of chance.\n- You can safely wander the forest alone.\n- (discuss with GM)\n\nWhile acting on it, roll with advantage.";
-		expect(markOptionsFrom(description)).toEqual({ labels: ["You're the best at games of chance.", "You can safely wander the forest alone."], count: 1 });
+		expect(markOptionsFrom(description)).toEqual({ labels: ["You're the best at games of chance.", "You can safely wander the forest alone.", MARK_WRITE_IN_LABEL], count: 1 });
 		const { bundle } = normalizeBundle(testerBundle({ moves: [{ name: "Eccentricity", description }] }));
+		// The list is the move's boxes now, so the words don't print it a second time; read again, nothing moves.
+		expect(bundle.moves[0].description).toBe("Something small makes you exceptional. Mark one:\n\nWhile acting on it, roll with advantage.");
+		expect(normalizeBundle(bundle).bundle.moves[0]).toEqual(bundle.moves[0]);
 		const sys = bundleToItemData(bundle, { slug: "homebrew-the-tester" }).moves[0].system;
 		expect(sys.markOptions).toEqual([
 			{ slug: "you-re-the-best-at-games-of-chance", label: "You're the best at games of chance.", marks: 1 },
 			{ slug: "you-can-safely-wander-the-forest-alone", label: "You can safely wander the forest alone.", marks: 1 },
+			{ slug: "something-else-discuss-with-the-gm", label: MARK_WRITE_IN_LABEL, marks: 1, writeIn: true },
 		]);
 		expect(sys.markBudget).toEqual({ base: 1, perExtra: 1 });
 		expect(markOptionsFrom("Spend Doubt to:\n- ask\n- step back")).toBeNull();
@@ -217,6 +222,38 @@ describe("what a move's own words make it do", () => {
 		const items = bundleToItemData(bundle, { slug: "homebrew-the-tester" });
 		const back = itemsToBundle(items.playbook, items.moves);
 		expect(normalizeBundle(bundleForExport(back)).bundle.moves[0]).toMatchObject({ cap: 3, marks: ["a", "b"], markCount: 2 });
+	});
+});
+
+describe("a playbook's own Level Up", () => {
+	it("reads what each advance does off its words", () => {
+		expect(advanceFrom("Increase one of your stats (to a max of +2).")).toEqual({ kind: "stat", max: 2 });
+		expect(advanceFrom("Increase one of your stats.")).toEqual({ kind: "stat", max: 3 });
+		expect(advanceFrom("Increase your max HP to 15.")).toEqual({ kind: "hp", to: 15 });
+		expect(advanceFrom("Increase your max HP by 4.")).toEqual({ kind: "hp", by: 4 });
+		expect(advanceFrom("Increase your damage die to a d8.")).toEqual({ kind: "damage", die: "d8" });
+		expect(advanceFrom("Choose a new move from your playbook.")).toEqual({ kind: "move" });
+		expect(advanceFrom("Work with the GM to choose a move from any other playbook.")).toEqual({ kind: "otherMove" });
+		expect(advanceFrom("Learn a song.")).toEqual({ kind: "note" });
+	});
+
+	it("survives a round trip through the Items, and none is stored for the book's Level Up", () => {
+		const advancement = { replacesUsual: true, options: ["Increase your max HP to 15.", "Learn a song."], note: "At level 3, change playbooks." };
+		const raw = testerBundle();
+		raw.playbook.advancement = advancement;
+		const { bundle } = normalizeBundle(raw);
+		const items = bundleToItemData(bundle, { slug: "homebrew-the-tester" });
+		expect(items.playbook.flags.stonetop.advancement).toEqual(advancementToFlags(advancement));
+		expect(itemsToBundle(items.playbook, items.moves).playbook.advancement).toEqual({ ...advancement, switchPlaybook: false });
+		expect(advancementToFlags({ replacesUsual: true, options: [] })).toBeNull();
+	});
+
+	it("an empty list can't replace the usual move: Level Up stays the book's", () => {
+		const raw = testerBundle();
+		raw.playbook.advancement = { replacesUsual: true, options: [] };
+		const { bundle, issues } = normalizeBundle(raw);
+		expect(bundle.playbook.advancement.replacesUsual).toBe(false);
+		expect(issues.map(i => i.message)).toContain("The playbook's own Level Up has no advances to mark, so Level Up works as the book's does.");
 	});
 });
 

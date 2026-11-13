@@ -55,6 +55,16 @@ const MIN_COLUMN_LINES = 4;      // a left edge needs this many lines to be a co
 const SUBCOLUMN_MAX_LINES = 12;  // a "column" this short, on its neighbour's baselines, is a second row of options
 
 /**
+ * How far apart two runs' baselines may sit and still be one row: a fraction of the bigger face,
+ * unless one face dwarfs the other. Then the smaller's: a 52pt emblem ("?" in the Standout's
+ * corner) would otherwise make a row that swallows three lines of 8pt prose beside it.
+ */
+function _rowTolerance(a, b) {
+	const big = Math.max(a, b), small = Math.min(a, b);
+	return BASELINE_TOLERANCE * (big > small * 2.5 ? small : big);
+}
+
+/**
  * A widget token for a dingbat run: { box, ticked, pips } counts.
  */
 function widgetOf(str) {
@@ -83,7 +93,7 @@ export function layoutPage(page, roles) {
 	const rows = [];
 	for (const r of runs) {
 		// From the newest row back: runs come sorted by y, so the row a run joins is nearly always the last.
-		const row = rows.findLast(rw => Math.abs(rw.y - r.y) <= BASELINE_TOLERANCE * Math.max(rw.size, r.size));
+		const row = rows.findLast(rw => Math.abs(rw.y - r.y) <= _rowTolerance(rw.size, r.size));
 		if (row) { row.runs.push(r); row.size = Math.max(row.size, r.size); }
 		else rows.push({ y: r.y, size: r.size, runs: [r] });
 	}

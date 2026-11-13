@@ -44,11 +44,17 @@ export function emptyBundle() {
 			hp: 16, damage: "d6",
 			instinctLabel: "Instinct",
 			backgrounds: [], instincts: [], appearance: [], origin: [],
+			// The playbook's own words over the place of origin ("We already know your name, but where
+			// are you from?"), shown where character creation asks it.
+			originNote: "",
 			possessions: { pickCount: 2, pickNote: "Pick 2", options: [] },
 			startingMovesNote: "", moveChoices: [], moveGroups: [],
 			lore: [],
 			introductions: { step3: "", step4: [], step6: [] },
 			inserts: [],
+			// The playbook's own Level Up (the Familiar Face's "mark one of the following instead of the
+			// usual effect"): its advances, one line each, read for what they do by advanceFrom.
+			advancement: { replacesUsual: false, options: [], note: "", switchPlaybook: false },
 		},
 		moves: [],
 	};
@@ -269,9 +275,14 @@ export function normalizeBundle(raw) {
 		.filter(line => line.length);
 
 	pb.origin = list(p.origin, 20).map(o => ({
-		region: plainLine(o?.region, 80),
+		region: plainLine(o?.region, 80) || (o?.writeIn ? "Somewhere else" : ""),
 		names: list(o?.names, 30).map(n => plainLine(n, 40)).filter(Boolean),
+		// What the playbook asks someone from there ("What part of the monastery schedule do you miss?").
+		question: plainLine(o?.question, 300),
+		// A place the player names themselves ("Tell us: ___ (discuss with GM)").
+		writeIn: !!o?.writeIn,
 	})).filter(o => o.region);
+	pb.originNote = plainLine(p.originNote, 300);
 
 	const poss = p.possessions && typeof p.possessions === "object" ? p.possessions : {};
 	pb.possessions = {
@@ -283,7 +294,8 @@ export function normalizeBundle(raw) {
 			preselected: !!o?.preselected,
 		})).filter(o => o.label),
 	};
-	if (!pb.possessions.pickNote) pb.possessions.pickNote = `Pick ${pb.possessions.pickCount}`;
+	// "Pick 0" over a list with nothing in it says nothing worth reading.
+	if (!pb.possessions.pickNote && pb.possessions.pickCount > 0) pb.possessions.pickNote = `Pick ${pb.possessions.pickCount}`;
 
 	pb.startingMovesNote = str(p.startingMovesNote, 400);
 	pb.moveChoices = list(p.moveChoices, 10).map(c => ({
@@ -311,6 +323,25 @@ export function normalizeBundle(raw) {
 		step4: list(intro.step4, 8).map(q => plainLine(q, 200)).filter(Boolean),
 		step6: list(intro.step6, 8).map(q => plainLine(q, 200)).filter(Boolean),
 	};
+
+	const adv = p.advancement && typeof p.advancement === "object" ? p.advancement : {};
+	pb.advancement = {
+		replacesUsual: !!adv.replacesUsual,
+		options: list(adv.options, 12).map(l => plainLine(l, 200)).filter(Boolean),
+		note: plainLine(adv.note, 600),
+		// "When you Level Up, switch to a different playbook" (the Standout): Level Up takes the level,
+		// then the player picks a new playbook. It has no advances of its own to mark.
+		switchPlaybook: !!adv.switchPlaybook,
+	};
+	if (pb.advancement.switchPlaybook && (pb.advancement.options.length || pb.advancement.replacesUsual)) {
+		pb.advancement.options = [];
+		pb.advancement.replacesUsual = false;
+		check("The playbook's Level Up switches to a different playbook, so its advances were dropped: a character never marks one.");
+	}
+	if (pb.advancement.replacesUsual && !pb.advancement.options.length) {
+		pb.advancement.replacesUsual = false;
+		check("The playbook's own Level Up has no advances to mark, so Level Up works as the book's does.");
+	}
 
 	pb.inserts = _normalizeInserts(p.inserts, check, new Set(list(raw.moves, MAX_MOVES).map(m => String(m?.insert ?? "")).filter(Boolean)));
 
@@ -424,6 +455,57 @@ export function backgroundGaps(bundle) {
 
 const WORD_COUNT = { one: 1, two: 2, three: 3, a: 1, an: 1 };
 
+const PICK_COUNT = /\(?\s*(?:choose|pick)\s+(\d+|one|two|three)\b[^)\n]*\)?/i;
+
+/**
+ * A special possession that holds its own pick (the Standout's "Weapons of War (Choose 1)" and its
+ * weapons, one bullet each): `{lead, pickNote, pickCount, options}`, or null when its words hold no
+ * such list. The system draws it as the book's Weapons of War, a sub-pick under the possession
+ * (`choices`); `possessionChoicesText` writes it back the same way. A bracket the PDF left open at
+ * the end of a weapon ("(reach, 2 piercing") is closed.
+ */
+export function possessionChoicesFrom(description) {
+	const lines = String(description ?? "").split("\n");
+	const bullets = lines.filter(l => /^\s*-\s+/.test(l));
+	if (bullets.length < 2) return null;
+	const rest = lines.filter(l => !/^\s*-\s+/.test(l)).join("\n");
+	const m = rest.match(PICK_COUNT);
+	if (!m) return null;
+	const n = /^\d+$/.test(m[1]) ? Number(m[1]) : WORD_COUNT[m[1].toLowerCase()];
+	const options = bullets.map(l => {
+		const label = l.replace(/^\s*-\s+/, "").trim();
+		const open = (label.match(/\(/g) ?? []).length - (label.match(/\)/g) ?? []).length;
+		return open > 0 ? label + ")".repeat(open) : label;
+	});
+	return {
+		lead: rest.replace(m[0], "").replace(/\s+/g, " ").trim(),
+		pickNote: m[0].replace(/^\(\s*|\s*\)$/g, "").trim(),
+		pickCount: Math.max(1, Math.min(n || 1, options.length)),
+		options,
+	};
+}
+
+/** possessionChoicesFrom's inverse: a possession's words with its sub-pick written back in. */
+export function possessionChoicesText(lead, choices) {
+	const head = [String(lead ?? "").trim(), `(${choices.pickNote || `Choose ${choices.pickCount}`})`].filter(Boolean).join(" ");
+	return [head, ...choices.options.map(o => `- ${o}`)].join("\n");
+}
+
+/**
+ * What a special possession does to the character's vitals, read off its words: the Standout's
+ * Determination, "increase your damage to a d8 and your max HP by 4". `{hpBonus?, damageDie?}`,
+ * empty when it does neither.
+ */
+export function possessionBonusFrom(description) {
+	const t = String(description ?? "").replace(/\*/g, "");
+	const out = {};
+	const hp = t.match(/\bmax(?:imum)? hp (?:by|\+)\s*\+?(\d+)/i) ?? t.match(/\+(\d+) max(?:imum)? hp\b/i);
+	if (hp) out.hpBonus = Math.min(20, Number(hp[1]));
+	const die = t.match(/\bdamage(?: die)? to (?:an? )?(d(?:4|6|8|10|12))\b/i);
+	if (die) out.damageDie = die[1].toLowerCase();
+	return out;
+}
+
 /**
  * "Increase one of your stats by 1 (to a max of +2)": the cap the book's Improved Stat carries
  * (+2) and Superior Stat (+3). Level Up asks which stat to raise only for a move with a cap, so a
@@ -441,20 +523,80 @@ export function statCapFrom(description) {
  * @returns {{labels: string[], count: number}|null}
  */
 export function markOptionsFrom(description) {
+	const found = _markList(description);
+	return found ? { labels: found.labels, count: found.count } : null;
+}
+
+/** A write-in left blank on the page, "(discuss with GM)": one more option, a box with words to type. */
+const MARK_WRITE_IN = /^\(?\s*(?:discuss with (?:the )?gm|work (?:it )?out with (?:the )?gm)\s*\)?$/i;
+export const MARK_WRITE_IN_LABEL = "Something else: ___ (discuss with the GM)";
+
+/** Is this mark option one the player writes in (its label holds a "___" blank)? */
+export const isWriteInMark = label => /_{3,}/.test(String(label ?? ""));
+
+/**
+ * The "Mark one:" list in a move's words: its labels (a "(discuss with GM)" blank becomes the
+ * write-in MARK_WRITE_IN_LABEL), how many to mark, and the lines it takes up, or null.
+ */
+function _markList(description) {
 	const lines = String(description ?? "").split("\n");
 	for (let i = 0; i < lines.length; i++) {
 		const lead = lines[i].replace(/\*/g, "").match(/\bmark (one|two|three|a|an|\d)\b[^:]*:\s*$/i);
 		if (!lead) continue;
 		const labels = [];
+		let end = i;
 		for (let j = i + 1; j < lines.length; j++) {
 			if (!lines[j].trim()) { if (labels.length) break; continue; }
 			if (!/^- /.test(lines[j])) break;
 			labels.push(lines[j].slice(2).replace(/\*/g, "").trim());
+			end = j;
 		}
-		const real = labels.filter(l => l && !/^\(?discuss with (the )?gm\)?$/i.test(l));
-		if (real.length >= 2) return { labels: real, count: Number(lead[1]) || WORD_COUNT[lead[1].toLowerCase()] || 1 };
+		const real = labels.filter(l => l && !MARK_WRITE_IN.test(l));
+		if (real.length < 2) continue;
+		const writeIn = labels.some(l => MARK_WRITE_IN.test(l));
+		return {
+			labels: writeIn ? [...real, MARK_WRITE_IN_LABEL] : real,
+			count: Number(lead[1]) || WORD_COUNT[lead[1].toLowerCase()] || 1,
+			from: i + 1, to: end,
+		};
 	}
 	return null;
+}
+
+/**
+ * The move's words without its mark list, once that list IS the move's mark boxes: the sheet draws
+ * the boxes under the words, and a list printed twice is two lists that can't count each other
+ * (the book's own Heroes to the Last keeps only "Each time you take this move, pick 1:").
+ */
+function _withoutMarkList(description, marks) {
+	const found = _markList(description);
+	if (!found || !marks.length) return description;
+	const own = new Set(marks.map(l => looseName(l)));
+	if (!found.labels.every(l => own.has(looseName(l)))) return description;
+	const lines = String(description).split("\n");
+	lines.splice(found.from, found.to - found.from + 1);
+	return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/**
+ * What one of a playbook's own advances does, read off its words: a stat to raise (and how high),
+ * max HP to set or raise, a damage die, a move from this playbook or another; "note" for anything
+ * else, which the table settles. The Familiar Face's "Increase your max HP to 15".
+ * @returns {{kind: "stat"|"hp"|"damage"|"move"|"otherMove"|"note", max?: number, to?: number, by?: number, die?: string}}
+ */
+export function advanceFrom(label) {
+	const t = String(label ?? "").replace(/\*/g, "");
+	let m;
+	if (/\bincrease (?:one of )?your stats?\b/i.test(t)) {
+		m = t.match(/\(\s*to a max(?:imum)? of \+?(\d)\s*\)/i);
+		return { kind: "stat", max: m ? Math.max(1, Math.min(3, Number(m[1]))) : 3 };
+	}
+	if ((m = t.match(/\bmax(?:imum)? hp to (\d+)/i))) return { kind: "hp", to: Math.min(HP_LIMITS.max, Number(m[1])) };
+	if ((m = t.match(/\bmax(?:imum)? hp by \+?(\d+)/i))) return { kind: "hp", by: Math.min(20, Number(m[1])) };
+	if ((m = t.match(/\bdamage die to (?:an? )?(d(?:4|6|8|10|12))\b/i))) return { kind: "damage", die: m[1].toLowerCase() };
+	if (/\b(?:any other|another|other) playbooks?\b/i.test(t)) return { kind: "otherMove" };
+	if (/\bmove from your (?:own )?playbook\b|\bnew move\b/i.test(t)) return { kind: "move" };
+	return { kind: "note" };
 }
 
 /**
@@ -501,12 +643,13 @@ export function normalizeMove(m) {
 	// are read from the move's own words, so a move typed by hand gets them as well as an import.
 	const explicitMarks = Array.isArray(m?.marks) ? m.marks.map(l => plainLine(l, 120)).filter(Boolean).slice(0, 20) : [];
 	const readMarks = explicitMarks.length ? null : markOptionsFrom(description);
+	const marks = explicitMarks.length ? explicitMarks : (readMarks?.labels ?? []);
 	return {
 		cap: clampInt(m?.cap, 0, 3, 0) || statCapFrom(description),
-		marks: explicitMarks.length ? explicitMarks : (readMarks?.labels ?? []),
+		marks,
 		markCount: clampInt(m?.markCount ?? readMarks?.count, 1, 5, 1),
 		name: str(m?.name, MAX.name),
-		description,
+		description: _withoutMarkList(description, marks),
 		starting: !!m?.starting,
 		level: clampInt(m?.level, 1, 10, 1),
 		requires: str(m?.requires, 200),
@@ -597,16 +740,23 @@ export function bundleToItemData(bundle, { slug, source = "builder" } = {}) {
 		backgrounds,
 		instincts: pb.instincts.map(i => ({ word: i.word, description: i.description })),
 		appearance: pb.appearance.map(line => [...line]),
-		origin: pb.origin.map(o => ({ region: o.region, names: [...o.names] })),
+		origin: pb.origin.map(o => ({ region: o.region, names: [...o.names], ...(o.question ? { question: o.question } : {}), ...(o.writeIn ? { writeIn: true } : {}) })),
+		originNote: pb.originNote,
 		specialPossessions: {
 			pickNote: pb.possessions.pickNote,
 			pickCount: pb.possessions.pickCount,
 			preselected: pb.possessions.options.map((o, i) => o.preselected ? possSlugs[i] : null).filter(Boolean),
-			options: pb.possessions.options.map((o, i) => ({
-				slug: possSlugs[i],
-				label: formatPlaybookInline(o.label),
-				description: formatPlaybookText(o.description).replace(/^<p>([\s\S]*)<\/p>$/, "$1"),
-			})),
+			options: pb.possessions.options.map((o, i) => {
+				const choices = possessionChoicesFrom(o.description);
+				const words = choices ? choices.lead : o.description;
+				return {
+					slug: possSlugs[i],
+					label: formatPlaybookInline(o.label),
+					description: formatPlaybookText(words).replace(/^<p>([\s\S]*)<\/p>$/, "$1"),
+					...(choices ? { choices: _possessionChoicesToFlags(choices) } : {}),
+					...possessionBonusFrom(o.description),
+				};
+			}),
 		},
 		moves: {
 			startingMovesNote: pb.startingMovesNote,
@@ -628,6 +778,7 @@ export function bundleToItemData(bundle, { slug, source = "builder" } = {}) {
 		moveGroups: pb.moveGroups.map((g, i) => ({ key: slugify(g.label) || `group-${i + 1}`, label: g.label, moves: [...g.moves] })),
 		notes: formatPlaybookText(pb.notes),
 		inserts: pb.inserts.map(insertToFlags),
+		advancement: advancementToFlags(pb.advancement),
 	};
 
 	const playbook = {
@@ -640,6 +791,45 @@ export function bundleToItemData(bundle, { slug, source = "builder" } = {}) {
 
 	const moves = bundle.moves.map(m => moveToItemData(m, { playbookName: pb.name, slug }));
 	return { playbook, moves };
+}
+
+// A possession's own pick as its Item stores it, in the book's Weapons of War shape: a weapon row
+// (every option carrying a ◇) is gear the sheet lists as carried once picked, with its ○ ammo track.
+function _possessionChoicesToFlags(choices) {
+	// Slugged by the name before its first comma or bracket ("◇ Sword, iron (close…)" is `sword`), as
+	// the book's Weapons of War are: a weapon's tags in a fight are looked up by that slug (weapon-meta).
+	const slugs = _uniqueSlugs(choices.options.map(l => l.replace(/[◇○☐*]/g, "").split(/[,(]/)[0].trim()));
+	const gear = choices.options.every(l => /^\s*◇/.test(l));
+	return {
+		pickNote: choices.pickNote,
+		pickCount: choices.pickCount,
+		...(gear ? { gear: true } : {}),
+		options: choices.options.map((label, j) => {
+			const ammo = (label.match(/○/g) ?? []).length;
+			return { slug: slugs[j], label: formatPlaybookInline(label), ...(gear && ammo ? { resource: { max: ammo, title: null, labels: [] } } : {}) };
+		}),
+	};
+}
+
+/**
+ * The playbook's own Level Up as its Item stores it, or null for the book's: each advance slugged by
+ * its words (a character's marks are stored by slug, so reordering the list keeps them) and read for
+ * what it does (advanceFrom), which Level Up and the sheet act on.
+ */
+export function advancementToFlags(adv) {
+	if (adv?.switchPlaybook) return { switchPlaybook: true, replacesUsual: false, note: plainLine(adv.note, 600), options: [] };
+	if (!adv?.options?.length) {
+		// A note on its own is kept so the Builder reopens with it; with no advances the playbook still
+		// levels up the book's way (StonetopPlaybook#advancement reads it as null).
+		const note = plainLine(adv?.note, 600);
+		return note ? { replacesUsual: false, note, options: [] } : null;
+	}
+	const slugs = _uniqueSlugs(adv.options);
+	return {
+		replacesUsual: !!adv.replacesUsual,
+		note: plainLine(adv.note, 600),
+		options: adv.options.map((label, i) => ({ slug: slugs[i], label: plainLine(label, 200), ...advanceFrom(label) })),
+	};
 }
 
 /**
@@ -724,7 +914,8 @@ export function moveToItemData(m, { playbookName, slug }) {
 			// A stat move's ceiling: what makes Level Up ask which stat (the book's Improved Stat).
 			cap: m.cap ?? null,
 			// Tick-one options, drawn as mark boxes; a repeatable move gets the same again each time.
-			markOptions: m.marks?.length ? m.marks.map((label, i) => ({ slug: slugify(label).slice(0, 40) || `mark-${i + 1}`, label, marks: 1 })) : null,
+			// One the player writes in ("Something else: ___") keeps what they type beside its box.
+			markOptions: m.marks?.length ? m.marks.map((label, i) => ({ slug: slugify(label).slice(0, 40) || `mark-${i + 1}`, label, marks: 1, ...(isWriteInMark(label) ? { writeIn: true } : {}) })) : null,
 			markBudget: m.marks?.length ? { base: m.markCount ?? 1, perExtra: m.markCount ?? 1 } : null,
 			resource: m.resource ? { max: m.resource.max, title: m.resource.title || null, labels: [...m.resource.labels], ...(m.resource.holdOnRoll ? { holdOnRoll: { ...m.resource.holdOnRoll } } : {}) } : null,
 		},
@@ -776,17 +967,30 @@ export function itemsToBundle(playbook, moves = []) {
 	});
 	pb.instincts = (f.instincts ?? []).map(i => ({ word: String(i.word ?? ""), description: String(i.description ?? "") }));
 	pb.appearance = (f.appearance ?? []).map(line => (Array.isArray(line) ? line : []).map(String));
-	pb.origin = (f.origin ?? []).map(o => ({ region: String(o.region ?? ""), names: (o.names ?? []).map(String) }));
+	pb.origin = (f.origin ?? []).map(o => ({ region: String(o.region ?? ""), names: (o.names ?? []).map(String), question: String(o.question ?? ""), writeIn: !!o.writeIn }));
+	pb.originNote = String(f.originNote ?? "");
+	pb.advancement = {
+		replacesUsual: !!f.advancement?.replacesUsual,
+		options: (f.advancement?.options ?? []).map(o => String(o.label ?? "")).filter(Boolean),
+		note: String(f.advancement?.note ?? ""),
+		switchPlaybook: !!f.advancement?.switchPlaybook,
+	};
 	const sp = f.specialPossessions ?? {};
 	const pre = new Set(sp.preselected ?? []);
 	pb.possessions = {
 		pickCount: Number(sp.pickCount) || 0,
 		pickNote: String(sp.pickNote ?? ""),
-		options: (sp.options ?? []).map(o => ({
-			label: playbookTextFromHtml(o.label),
-			description: playbookTextFromHtml(o.description),
-			preselected: pre.has(o.slug),
-		})),
+		options: (sp.options ?? []).map(o => {
+			const words = playbookTextFromHtml(o.description);
+			const sub = o.choices?.options?.length ? o.choices : null;
+			return {
+				label: playbookTextFromHtml(o.label),
+				description: sub
+					? possessionChoicesText(words, { pickNote: String(sub.pickNote ?? ""), pickCount: Number(sub.pickCount) || 1, options: sub.options.map(c => playbookTextFromHtml(c.label)) })
+					: words,
+				preselected: pre.has(o.slug),
+			};
+		}),
 	};
 	pb.startingMovesNote = String(f.moves?.startingMovesNote ?? "");
 	pb.moveChoices = (f.moves?.choices ?? []).map(c => ({ label: String(c.label ?? ""), options: [...(c.options ?? [])] }));
@@ -881,6 +1085,8 @@ export function diffBundles(before, after) {
 	if (json(a.lore ?? []) !== json(b.lore ?? [])) lines.push("The questions for character creation changed.");
 	if (json(a.introductions ?? {}) !== json(b.introductions ?? {})) lines.push("The Introductions questions changed.");
 	if (json(a.notes ?? "") !== json(b.notes ?? "")) lines.push("The notes changed.");
+	if (json(a.advancement ?? {}) !== json(b.advancement ?? {})) lines.push("The playbook's own Level Up changed.");
+	if (json(a.origin ?? []) !== json(b.origin ?? []) || json(a.originNote ?? "") !== json(b.originNote ?? "")) lines.push("The places of origin changed.");
 	return { lines, changedMoves };
 }
 
@@ -937,11 +1143,11 @@ export function mergeReimport({ base, mine, theirs }) {
 
 	const out = structuredClone(T);
 	const pb = out.playbook;
-	for (const key of ["name", "description", "summary", "author", "complexity", "statsNote", "hp", "damage", "instinctLabel", "startingMovesNote", "notes"]) {
+	for (const key of ["name", "description", "summary", "author", "complexity", "statsNote", "hp", "damage", "instinctLabel", "startingMovesNote", "notes", "originNote"]) {
 		pb[key] = pick(key === "notes" ? "the notes" : `the playbook's ${key}`, B.playbook[key], M.playbook[key], T.playbook[key]);
 	}
-	for (const key of ["appearance", "origin", "lore", "introductions", "moveChoices", "moveGroups", "inserts"]) {
-		pb[key] = structuredClone(pick(`the ${key === "lore" ? "questions" : key}`, B.playbook[key], M.playbook[key], T.playbook[key]));
+	for (const key of ["appearance", "origin", "lore", "introductions", "moveChoices", "moveGroups", "inserts", "advancement"]) {
+		pb[key] = structuredClone(pick(`the ${key === "lore" ? "questions" : key === "advancement" ? "playbook's own Level Up" : key}`, B.playbook[key], M.playbook[key], T.playbook[key]));
 	}
 	pb.possessions = {
 		pickCount: pick("the special possessions count", B.playbook.possessions.pickCount, M.playbook.possessions.pickCount, T.playbook.possessions.pickCount),

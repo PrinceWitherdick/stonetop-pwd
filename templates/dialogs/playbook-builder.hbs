@@ -209,9 +209,13 @@
 					<p class="stonetop-custom-move-hint">One line per row of choices, the choices separated by commas.</p>
 				</div>
 				<div class="stonetop-custom-move-field">
+					<label for="stonetop-pb-origin-note-{{this.uid}}">Asked over the places</label>
+					<input type="text" id="stonetop-pb-origin-note-{{this.uid}}" data-field="playbook.originNote" value="{{this.pb.originNote}}" placeholder="Where are you from? What are you called?">
+				</div>
+				<div class="stonetop-custom-move-field">
 					<label for="stonetop-pb-origin-{{this.uid}}">Places of origin and names</label>
 					<textarea id="stonetop-pb-origin-{{this.uid}}" data-lines="playbook.origin" data-parse="origin" rows="7" placeholder="Stonetop: Aderyn, Braith, Cerys">{{this.originText}}</textarea>
-					<p class="stonetop-custom-move-hint">One place per line: the place, a colon, then names separated by commas. A place with no names may end at the colon.</p>
+					<p class="stonetop-custom-move-hint">One place per line: the place, a colon, then names separated by commas. A place with no names may end at the colon. Add " | " and a question to ask someone from there ("Barrier Pass: | What do you miss most?"). "Somewhere else: ___" lets a player name a place of their own.</p>
 				</div>
 			</section>
 
@@ -464,6 +468,35 @@
 				</div>
 				{{/each}}
 				<button type="button" class="stonetop-pb-builder-btn stonetop-pb-builder-add" data-action="add-lore"><i class="fas fa-plus" aria-hidden="true"></i> Add a question section</button>
+			</section>
+
+			{{!-- ── The playbook's own Level Up ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="advancement"{{#unless (eq this.activeTab "advancement")}} hidden{{/unless}}>
+				<p class="stonetop-custom-move-hint">For a playbook that levels up its own way, like one that says "When you Level Up, mark one of the following instead of the usual effect". Leave it empty and Level Up works as the book's does: a new move.</p>
+				<div class="stonetop-custom-move-field stonetop-custom-move-check">
+					<label><input type="checkbox" class="stonetop-check" data-field="playbook.advancement.switchPlaybook" {{#if this.pb.advancement.switchPlaybook}}checked{{/if}}> Level Up switches to a different playbook</label>
+					<p class="stonetop-custom-move-hint">For a playbook to start on, like one that says "When you Level Up, switch to a different playbook". Level Up takes the level with no move, then opens the playbook picker. The advances below are then not used.</p>
+				</div>
+				<div class="stonetop-custom-move-field">
+					<label for="stonetop-pb-adv-{{this.uid}}">Advances</label>
+					<textarea id="stonetop-pb-adv-{{this.uid}}" data-lines="playbook.advancement.options" data-parse="list" rows="7" placeholder="Increase one of your stats (to a max of +2).">{{this.advancementText}}</textarea>
+					<p class="stonetop-custom-move-hint">One per line, as the playbook words it. Each is marked once. Two lines alike are two boxes.</p>
+				</div>
+				{{#if this.advancementRead.length}}
+				<ul class="stonetop-pb-builder-advance-read">
+					{{#each this.advancementRead}}<li><strong>{{this.label}}</strong> {{this.does}}</li>{{/each}}
+				</ul>
+				<p class="stonetop-custom-move-hint">How Level Up reads each line. Reword one if it's read wrong ("Increase your max HP to 15", "Increase your damage die to a d8", "Choose a new move from your playbook").</p>
+				{{/if}}
+				<div class="stonetop-custom-move-field stonetop-custom-move-check">
+					<label><input type="checkbox" class="stonetop-check" data-field="playbook.advancement.replacesUsual" {{#if this.pb.advancement.replacesUsual}}checked{{/if}}> Instead of the usual new move</label>
+					<p class="stonetop-custom-move-hint">Ticked, Level Up asks for one of these and takes a move only when the one picked says to. Unticked, a character takes a move and marks one of these as well.</p>
+				</div>
+				<div class="stonetop-custom-move-field">
+					<label for="stonetop-pb-adv-note-{{this.uid}}">Anything else about levelling up</label>
+					<input type="text" id="stonetop-pb-adv-note-{{this.uid}}" data-field="playbook.advancement.note" value="{{this.pb.advancement.note}}" placeholder="When you Level Up to Level 3 or higher, you can change to a different playbook.">
+					<p class="stonetop-custom-move-hint">Shown in Level Up and on the Details tab. The table acts on it.</p>
+				</div>
 			</section>
 
 			{{!-- ── Introductions ── --}}

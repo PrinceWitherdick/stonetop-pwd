@@ -302,6 +302,15 @@
 					       value="{{this.region}}"{{#if selected}} checked{{/if}}>
 					<strong class="stonetop-item-name">{{this.region}}</strong>
 				</label>
+				{{#if this.question}}<p class="stonetop-origin-question">{{this.question}}</p>{{/if}}
+				{{#if this.selected}}
+				{{#if this.writeIn}}
+				<input type="text" class="stonetop-origin-place" value="{{this.place}}" placeholder="Where? (talk it over with the GM)" aria-label="The place you're from">
+				{{/if}}
+				{{#if this.question}}
+				<textarea class="stonetop-origin-answer" rows="2" placeholder="Your answer" aria-label="{{this.question}}">{{this.answer}}</textarea>
+				{{/if}}
+				{{/if}}
 				<div class="stonetop-origin-names">
 					{{#each names}}
 					<label class="stonetop-origin-name-label{{#if checked}} is-checked{{/if}}">
@@ -321,16 +330,72 @@
 			{{#if selected}}
 			<div class="stonetop-item is-checked stonetop-origin-readonly">
 				<div class="stonetop-item-header">
-					<strong class="stonetop-item-name">{{this.region}}</strong>
+					<strong class="stonetop-item-name">{{#if (and this.writeIn this.place)}}{{this.place}}{{else}}{{this.region}}{{/if}}</strong>
 				</div>
 				{{#if description}}
 				<div class="stonetop-origin-description">{{{this.description}}}</div>
+				{{/if}}
+				{{#if this.question}}
+				<p class="stonetop-origin-question">{{this.question}}</p>
+				{{#if this.answer}}<p class="stonetop-origin-answer-text">{{this.answer}}</p>{{/if}}
 				{{/if}}
 			</div>
 			{{/if}}
 			{{/each}}
 			{{/if}}
 			{{/if}}
+		</div>
+		{{/if}}
+
+		{{!-- A homebrew playbook's own Level Up (the Familiar Face's): its advances, each ticked
+		      once marked, by Level Up or by hand here ("mark one of the following before play"). --}}
+		{{#if this.stonetop.advancement}}
+		<div class="details-section stonetop-advancement{{#if this.stonetop.detailsEdit.advancement}} stonetop-section-editing{{/if}}">
+			<div class="stonetop-details-heading-row">
+				{{#if this.stonetop.advancement.replacesUsual}}
+				{{> "stonetop.section-heading" title="Advancement" note="Level Up marks one of these instead of a new move"}}
+				{{else}}
+				{{> "stonetop.section-heading" title="Advancement"}}
+				{{/if}}
+				{{#if this.stonetop.advancement.switchPlaybook}}
+				{{> "stonetop.section-collapse" collapse="advancement"}}
+				{{else}}
+				{{> "stonetop.details-section-edit-toggle" section="advancement" editing=this.stonetop.detailsEdit.advancement collapse="advancement"}}
+				{{/if}}
+			</div>
+			{{#if this.stonetop.advancement.options.length}}
+			<ul class="stonetop-advancement-list">
+				{{#each this.stonetop.advancement.options}}
+				<li class="stonetop-advancement-option{{#if this.checked}} is-checked{{/if}}">
+					<label class="stonetop-advancement-label">
+						<input type="checkbox" class="stonetop-check stonetop-advancement-check" data-slug="{{this.slug}}" data-kind="{{this.kind}}"
+						       {{#if this.checked}}checked{{/if}}{{#unless @root.stonetop.detailsEdit.advancement}} disabled{{/unless}}>
+						<span class="stonetop-advancement-text">{{this.label}}{{#if this.markedNote}} <span class="stonetop-advancement-note">({{this.markedNote}})</span>{{/if}}</span>
+					</label>
+					{{#if (and @root.stonetop.detailsEdit.advancement this.stats.length)}}
+					<select class="stonetop-advancement-stat" aria-label="The stat it raises">
+						<option value="">Which stat?</option>
+						{{#each this.stats}}<option value="{{this.key}}"{{#if this.atCap}} disabled{{/if}}>{{this.abbr}}</option>{{/each}}
+					</select>
+					{{/if}}
+				</li>
+				{{/each}}
+			</ul>
+			{{/if}}
+			{{#if this.stonetop.advancement.note}}<p class="stonetop-advancement-aside">{{this.stonetop.advancement.note}}</p>{{/if}}
+			{{!-- The Standout's: Level Up is a change of playbook, with no advances to mark. --}}
+			{{#if this.stonetop.advancement.switchPlaybook}}<p class="stonetop-advancement-aside">Level Up takes the level, then opens the playbook picker for the new one.</p>{{/if}}
+		</div>
+		{{/if}}
+
+		{{!-- A homebrew playbook's notes for the table: formatter-made HTML (playbooks/playbook-text.js). --}}
+		{{#if this.stonetop.homebrewNotes}}
+		<div class="details-section stonetop-playbook-notes">
+			<div class="stonetop-details-heading-row">
+				{{> "stonetop.section-heading" title="Playbook notes"}}
+				{{> "stonetop.section-collapse" collapse="playbook-notes"}}
+			</div>
+			<div class="stonetop-playbook-notes-body">{{{this.stonetop.homebrewNotes}}}</div>
 		</div>
 		{{/if}}
 

@@ -14,6 +14,7 @@
 			<p class="stonetop-pb-review-lead">Imported from <strong>{{this.fileName}}</strong>. Nothing is saved yet. Answer anything below, move any piece that landed in the wrong place, then finish it in the builder.</p>
 			<h2 class="stonetop-pb-review-name">{{this.name}}</h2>
 			{{#if this.description}}<p class="stonetop-pb-review-desc">{{this.description}}</p>{{/if}}
+			{{#if this.existing}}<p class="stonetop-pb-review-issue stonetop-pb-review-existing">{{this.existing}}</p>{{/if}}
 			{{#each this.issues}}<p class="stonetop-pb-review-issue">{{this}}</p>{{/each}}
 		</header>
 
@@ -81,7 +82,9 @@
 				<dt>Max HP</dt><dd data-fact="hp">{{this.hp}}</dd>
 				<dt>Damage</dt><dd data-fact="damage">{{this.damage}}</dd>
 				{{#if this.looks}}<dt>Appearance</dt><dd>{{this.looks}}</dd>{{/if}}
-				{{#if this.origins}}<dt>Origins</dt><dd>{{this.origins}}</dd>{{/if}}
+				{{#if this.origins}}<dt>Origins</dt><dd>{{this.origins}}{{#if this.originQuestions}} (each with its own question){{/if}}</dd>{{/if}}
+				{{#if this.possessionsGiven}}<dt>Possessions</dt><dd>{{this.possessionsGiven}}</dd>{{/if}}
+				{{#if this.advancement}}<dt>Level Up</dt><dd>{{this.advancement}}</dd>{{/if}}
 				{{#if this.introCount}}<dt>Introductions</dt><dd>{{this.introCount}} questions</dd>{{/if}}
 			</dl>
 		</section>

@@ -4,6 +4,20 @@ import { notePristineWork } from "../utils/close-guard.js";
 import { persistOpenWindowsSoon } from "../utils/window-restore.js";
 import { IMPORT_REVIEW_RESTORE_KIND, reopenPlaybookBuilder } from "./playbook-builder-restore.js";
 import { BLOCK_KINDS, assemblePlaybook, blockOptionLines, INSERT_ALWAYS, INSERT_NONE } from "./pdf/read-playbook.js";
+import { homebrewPlaybookByName } from "./playbook-catalog.js";
+
+/**
+ * "This world already has The Familiar Face": said on Start here, before the GM answers anything, so
+ * a re-import of the same PDF is known for one from the start. Finishing offers to update it.
+ */
+function _existingNote(name) {
+	let doc = null;
+	try { doc = name ? homebrewPlaybookByName(name) : null; } catch { doc = null; }
+	if (!doc) return "";
+	const players = (globalThis.game?.actors ?? []).filter?.(a => a.type === "character" && a.system?.playbook?.slug === doc.system?.slug).length ?? 0;
+	const who = players === 1 ? "one character plays it" : players > 1 ? `${players} characters play it` : "no character plays it yet";
+	return `This world already has ${doc.name} (${who}). When you finish, you can update it from this PDF, keeping what you changed by hand, or keep this as a separate playbook.`;
+}
 
 /**
  * CHECK A PDF IMPORT BEFORE IT REACHES THE BUILDER. The reader (pdf/read-playbook.js) hands over
@@ -331,7 +345,15 @@ export class PlaybookImportReview extends StonetopDialog {
 			damage: this._previewOf("damage", f.damage, answered),
 			looks: f.appearance.length ? `${f.appearance.length} rows of appearance choices` : "",
 			origins: f.origin.length ? f.origin.map(o => o.region).join(", ") : "",
+			originQuestions: f.origin.filter(o => o.question).length,
 			introCount: f.introductions.step4.length + f.introductions.step6.length,
+			// The playbook's own Level Up, when it has one ("mark one of the following instead").
+			advancement: f.advancement?.switchPlaybook ? "Switches to a different playbook (no move, then the playbook picker)"
+				: f.advancement?.options?.length
+				? `${f.advancement.options.length} advances of its own${f.advancement.replacesUsual ? ", marked instead of the usual new move" : ""}` : "",
+			possessionsGiven: f.possessions?.allGiven ? "Every character starts with all of them" : "",
+			// A playbook this world already has (by name): finishing offers to update it, so say so now.
+			existing: _existingNote(f.name),
 			issues: this._issues.map(i => i.message),
 			confirm: d.confirm.map(c => this._confirmView(c, answered.has(c.key))),
 			unsureCount: d.blocks.filter(b => b.unsure && !this._moved(b)).length,

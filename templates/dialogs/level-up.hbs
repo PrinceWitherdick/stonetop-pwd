@@ -36,6 +36,28 @@
 	</div>
 	{{/if}}
 
+	{{!-- ── A homebrew playbook's own Level Up: mark one of its advances ─── --}}
+	{{#if this.isAdvance}}
+	<div class="stonetop-levelup-step">
+		<p class="stonetop-levelup-intro" tabindex="-1" data-levelup-focus>{{this.advanceStep.intro}}</p>
+		{{#if this.advanceStep.options.length}}
+		<div class="stonetop-levelup-mark-list">
+			{{#each this.advanceStep.options}}
+			<div class="stonetop-levelup-stat-option stonetop-levelup-advance-option stonetop-levelup-pickable{{#if this.selected}} is-selected{{/if}}{{#if this.disabled}} is-at-cap{{/if}}"
+				role="button" aria-pressed="{{#if this.selected}}true{{else}}false{{/if}}"{{#if this.disabled}} aria-disabled="true"{{/if}} tabindex="0"
+				data-advance-slug="{{this.slug}}">
+				<span class="stonetop-levelup-stat-name">{{this.label}}</span>
+				{{#if this.existingLabel}}<span class="stonetop-levelup-stat-value">{{this.existingLabel}}</span>{{/if}}
+			</div>
+			{{/each}}
+		</div>
+		{{/if}}
+		{{#if this.advanceStep.note}}
+		<p class="stonetop-levelup-aside">{{this.advanceStep.note}}</p>
+		{{/if}}
+	</div>
+	{{/if}}
+
 	{{!-- ── Step 2: Choose a Move ──────────────────────────────────────── --}}
 	{{#if isMove}}
 	<div class="stonetop-levelup-step">

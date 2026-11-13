@@ -279,7 +279,20 @@
 						       {{#if (or disabled (not @root.stonetop.movesEdit))}}disabled{{/if}}>
 						{{/each}}
 					</span>
+					{{#if this.writeIn}}
+					{{!-- A write-in ("Something else: ___"): once marked, the blank holds what the player wrote. --}}
+					{{#if this.writeIn.marked}}
+					<span class="stonetop-move-mark-label">{{this.writeIn.before}}{{#unless @root.stonetop.movesEdit}} {{#if this.writeIn.text}}<strong>{{this.writeIn.text}}</strong>{{else}}___{{/if}}{{#if this.writeIn.after}} {{this.writeIn.after}}{{/if}}{{/unless}}</span>
+					{{#if @root.stonetop.movesEdit}}
+					<input type="text" class="stonetop-move-mark-writein" data-move-name="{{../name}}" data-mark-slug="{{this.slug}}"
+					       value="{{this.writeIn.text}}" placeholder="{{this.writeIn.after}}" aria-label="{{this.label}}">
+					{{/if}}
+					{{else}}
+					<span class="stonetop-move-mark-label">{{this.label}}</span>
+					{{/if}}
+					{{else}}
 					<span class="stonetop-move-mark-label"{{#if capNote}} data-tooltip="{{this.capNote}}" data-tooltip-direction="UP"{{/if}}>{{this.label}}</span>
+					{{/if}}
 					{{#if background}}<span class="stonetop-move-mark-background" data-tooltip="{{background.tooltip}}" data-tooltip-direction="UP">{{background.label}}</span>{{/if}}
 					{{#if duplicateNote}}<i class="fas fa-triangle-exclamation stonetop-move-mark-duplicate" data-tooltip="{{this.duplicateNote}}" data-tooltip-direction="UP" aria-label="{{this.duplicateNote}}"></i>{{/if}}
 					{{#each checks}}{{#if checked}}{{> "stonetop.move-mark-level" moveName=../../name slug=../slug index=index level=level}}{{#if levelCaution}}<i class="fas fa-triangle-exclamation stonetop-move-mark-level-caution" data-tooltip="{{this.levelCaution}}" data-tooltip-direction="UP" aria-label="{{this.levelCaution}}"></i>{{/if}}{{/if}}{{/each}}

@@ -88,4 +88,18 @@ export class StonetopPlaybook {
 	get inserts() {
 		return Array.isArray(this._stonetopFields.inserts) ? this._stonetopFields.inserts : [];
 	}
+
+	// A homebrew playbook's own Level Up (homebrew-bundle.js advancementToFlags): `{replacesUsual,
+	// note, options: [{slug, label, kind, max?, to?, by?, die?}]}`, or `{switchPlaybook: true, note}` for
+	// one whose Level Up is a change of playbook (the Standout), or null for the book's Level Up.
+	get advancement() {
+		const a = this._stonetopFields.advancement;
+		if (a?.switchPlaybook) return { switchPlaybook: true, replacesUsual: false, note: String(a.note ?? ""), options: [] };
+		return a && Array.isArray(a.options) && a.options.length ? a : null;
+	}
+
+	// A homebrew playbook's notes for the table, as formatter-made HTML (playbooks/playbook-text.js).
+	get notes() {
+		return this._stonetopFields.notes ?? "";
+	}
 }

@@ -52,7 +52,7 @@ import {normalizeWound as _normalizeWound, normalizeWoundList} from "./wound-rec
 import {moveMarkBudget, markOptionCapNote} from "./move-mark-budget.js";
 import {markEntries, filledMarks, filledMarkCount, trimEmptyTail, oncePerLevelCautions, ONCE_PER_LEVEL_MARKS} from "./pfg-marks.js";
 import {MARK_STAT_CAPS} from "./stat-rules.js";
-import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, MIRRORED_HP_PENALTY_FLAG, HP_CEILING_OPTION, BACKGROUND_GRANT_FLAG, resolvedFlags, readableFlags, resolvedFlagProperty, HOMEBREW_PLAYBOOK_COPY_FLAG} from "./StonetopFlags.js";
+import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, MIRRORED_HP_PENALTY_FLAG, HP_CEILING_OPTION, BACKGROUND_GRANT_FLAG, resolvedFlags, readableFlags, resolvedFlagProperty, HOMEBREW_PLAYBOOK_COPY_FLAG, HOMEBREW_ADVANCES_FLAG} from "./StonetopFlags.js";
 import {DEATHS_DOOR_FLAG, DEATHS_DOOR_STATE, FINAL_CONSEQUENCE, UNSTOPPABLE, UNSTOPPABLE_FIGHTING_FLAG, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, lostToTheGm, stateOnTakingInsert, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
 import {heroDisplayName, WBH_HERO_FLAG} from "./WouldBeHeroAsterisk.js";
 import {tookBackground} from "./took-background.js";
@@ -876,6 +876,16 @@ export class StonetopCharacter {
 	// An increase is also clamped to the option's own boxes (`marks`), less the box the
 	// background fills (the Patriot's Things Below is Well Versed's, outside the budget):
 	// that box can't be marked again. A duplicate already stored is kept, never cleared.
+	// What the player wrote in a write-in mark (homebrew-bundle.js isWriteInMark), on its first mark.
+	async setMarkText(moveName, optionSlug, text) {
+		const entries = markEntries(this._moveResources.getMarks()[moveName]?.[optionSlug]);
+		if (!entries.length) return;
+		const value = String(text ?? "").trim().slice(0, 200);
+		entries[0] = { ...entries[0] };
+		if (value) entries[0].text = value; else delete entries[0].text;
+		await this._actor.update(this._moveResources.markUpdate(moveName, optionSlug, entries));
+	}
+
 	async setCountMark(moveName, optionSlug, newCount) {
 		const allMarks = this._moveResources.getMarks();
 		const count    = await this._clampedMarkCount(moveName, allMarks[moveName] ?? {}, optionSlug, newCount);
@@ -1219,7 +1229,7 @@ export class StonetopCharacter {
 			// every render, not written once.
 			.withVitals(_buildVitalsSection(actor, playbookData, armor, moveBonuses, wornArmorBase, insertHpPenalty(postDeath.activeInsert?.lore), unpierceableArmor, armorBase, { value: conditionalArmor, source: conditionalSource }))
 			.withMoves(moves)
-			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters, playbookData?.name ?? null, this._retiredPickCount(), this._levelPickCount(moves.find(c => c.key === "playbook")?.moves ?? [])))
+			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters, playbookData?.name ?? null, this._retiredPickCount() + _advanceLevelPicks(playbookData, this.homebrewAdvances), this._levelPickCount(moves.find(c => c.key === "playbook")?.moves ?? [])))
 			.withInventory(inventory)
 			.withArcana(await this._arcana.buildSnapshot(actor.system.stats ?? {}, this._inventory.checked, this._arcanumResources()))
 			.withPostDeathInsert(postDeath)
@@ -1427,7 +1437,58 @@ export class StonetopCharacter {
 			// Per-option marks (e.g. Potential for Greatness): apply each checked box.
 			_addMarkOptionBonuses(totals, m.markOptions, marks[m.name]);
 		}
+		// A homebrew playbook's own advances that were marked: its max HP and damage die.
+		_addAdvanceBonuses(totals, playbookData, this._actor.getFlag(STONETOP_SCOPE, HOMEBREW_ADVANCES_FLAG));
+		// A held special possession that raises them (the Standout's Determination: d8, +4 max HP).
+		_addPossessionBonuses(totals, playbookData, this._selectedPossessionSlugs(playbookData));
 		return totals;
+	}
+
+	/** The advances of a homebrew playbook's own Level Up this character has marked, by slug. */
+	get homebrewAdvances() {
+		return this._actor.getFlag(STONETOP_SCOPE, HOMEBREW_ADVANCES_FLAG) ?? {};
+	}
+
+	/**
+	 * Mark one of a homebrew playbook's own advances (the Familiar Face's "Increase one of your stats
+	 * (to a max of +2)"), at Level Up or by hand before play. A stat advance raises `stat` by 1 up to
+	 * its max and remembers which, so unmarking it takes it back; max HP and the damage die follow
+	 * the mark (_addAdvanceBonuses). A move is taken by Level Up's own steps, not here.
+	 * @returns {Promise<boolean>} whether it was marked
+	 */
+	async markHomebrewAdvance(slug, { stat = null, level = null, atLevelUp = false } = {}) {
+		const pb = await this.playbook();
+		const opt = pb?.advancement?.options?.find(o => o.slug === slug);
+		if (!opt || this.homebrewAdvances[slug]) return false;
+		const entry = { level: level ?? (this._actor.system?.attributes?.level?.value ?? 1), ...(atLevelUp ? { atLevelUp: true } : {}) };
+		const update = {};
+		if (opt.kind === "stat") {
+			if (!_STAT_DEFS[stat]) return false;
+			const current = Number(this._actor.system?.stats?.[stat]?.value) || 0;
+			const cap = Number(opt.max) || 3;
+			if (current >= cap) {
+				ui.notifications?.warn?.(`${_STAT_DEFS[stat].name} is already at +${cap}, the most this advance raises it to.`);
+				return false;
+			}
+			update[`system.stats.${stat}.value`] = current + 1;
+			entry.stat = stat;
+		}
+		update[`flags.${STONETOP_SCOPE}.${HOMEBREW_ADVANCES_FLAG}.${slug}`] = entry;
+		await this._actor.update(update, { stonetopMove: "Level Up" });
+		return true;
+	}
+
+	/** Take back a marked advance: the stat it raised goes back down by the 1 it gave. */
+	async unmarkHomebrewAdvance(slug) {
+		const entry = this.homebrewAdvances[slug];
+		if (!entry) return false;
+		const update = deletionUpdate(`flags.${STONETOP_SCOPE}.${HOMEBREW_ADVANCES_FLAG}.${slug}`);
+		if (entry.stat && _STAT_DEFS[entry.stat]) {
+			const current = Number(this._actor.system?.stats?.[entry.stat]?.value) || 0;
+			update[`system.stats.${entry.stat}.value`] = current - 1;
+		}
+		await this._actor.update(update, { stonetopMove: "Level Up" });
+		return true;
 	}
 
 	// Whether the character holds a learned, non-custom copy of `name`, off `ownedAllByName`
@@ -4866,6 +4927,9 @@ export class StonetopCharacter {
 			// The old homebrew playbook's carried copy: a new one is carried by whatever takes the new
 			// playbook, and a stale one would otherwise be offered back under the new playbook's slug.
 			HOMEBREW_PLAYBOOK_COPY_FLAG,
+			// The old homebrew playbook's own advances, keyed only by slug: another playbook with an advance
+			// of the same words would read it as taken (and _addAdvanceBonuses would apply its HP or die).
+			HOMEBREW_ADVANCES_FLAG,
 			// Each move's track and marks are keyed by its name.
 			...gone.map(name => `moves.backgroundChoices.${name}`),
 			...gone.map(name => `moves.moveMarks.${name}`),
@@ -4895,6 +4959,10 @@ export class StonetopCharacter {
 			for (const mark of filledMarks(flags.moves?.moveMarks?.[name] ?? {})) {
 				if (stats[mark.stat]) drop[mark.stat] = (drop[mark.stat] ?? 0) + 1;
 			}
+		}
+		// A stat advance's +1 goes with its mark, as unmarkHomebrewAdvance takes it back.
+		for (const entry of Object.values(flags[HOMEBREW_ADVANCES_FLAG] ?? {})) {
+			if (entry?.stat && stats[entry.stat]) drop[entry.stat] = (drop[entry.stat] ?? 0) + 1;
 		}
 		for (const [key, count] of Object.entries(drop)) {
 			update[`system.stats.${key}.value`] = Math.max((stats[key].value ?? 0) - count, -1);
@@ -7815,6 +7883,10 @@ export class StonetopCharacter {
 			// What a capped mark option is weighed against, so the mark step greys an option that
 			// would buy nothing (the crew's die already at d10): see _markCapState.
 			markCapState: this._markCapState(await this._crewStatsFor(playbookData, ownedAllByName)),
+			// A homebrew playbook's own Level Up (the Familiar Face's "mark one of the following instead
+			// of the usual effect"): its advances, each marked once, or null for the book's Level Up.
+			// Once every one is marked, Level Up works as the book's does.
+			advancement: _levelUpAdvancement(playbookData, this.homebrewAdvances),
 		};
 	}
 
@@ -7983,6 +8055,13 @@ export class StonetopCharacter {
 		if (invocations.length && !invocationWaitsOnMove) await step("invocation", () => this._learnInvocation(invocations));
 		// "Until you Level Up, your instinct becomes ..." (Book II p.370, p.523): it ends now.
 		const endedInstinct = await step("instinct", () => this._instinct.clearTemporary());
+		// A homebrew playbook's own advance, marked in place of the usual move (or with the move it says to take).
+		if (choices?.advance?.slug) {
+			// A refusal comes back as false, not thrown (the stat reached its cap, or the advance was
+			// marked from another window meanwhile): the level is paid for, so it is named as failed.
+			const marked = await step("advance", () => this.markHomebrewAdvance(choices.advance.slug, { stat: choices.advance.stat ?? null, atLevelUp: true }));
+			if (marked === false) failed.push("advance");
+		}
 		const addedItem = await step("move", () => this._addLevelUpMove(selectedMoveCompendiumId, choices));
 		if (addedItem && choices?.stat) {
 			await step("stat", () => this._applyStatIncreaseChoice(addedItem, choices.stat, choices.cap ?? null));
@@ -8400,6 +8479,56 @@ function _buildWoundsSection(actor) {
 }
 
 
+// A homebrew playbook's own Level Up for the Level Up window: its advances, with the ones marked
+// already, or null when it has none or every one is marked.
+function _levelUpAdvancement(playbookData, marked) {
+	const adv = playbookData?.advancement;
+	// The Standout's "switch to a different playbook": no advances, the change of playbook is the level-up.
+	if (adv?.switchPlaybook) return { switchPlaybook: true, replacesUsual: false, note: String(adv.note ?? ""), options: [] };
+	if (!adv?.options?.length) return null;
+	const options = adv.options.map(o => ({ ...o, marked: !!marked?.[o.slug] }));
+	if (options.every(o => o.marked)) return null;
+	return { replacesUsual: !!adv.replacesUsual, note: String(adv.note ?? ""), options };
+}
+
+// The levels spent on one of a homebrew playbook's own advances that isn't a move (max HP, a stat):
+// each took the place of that level's move, so the Moves tab's level budget counts it as the pick.
+// A move advance adds the move itself, which counts on its own; one marked before play spent no level.
+// An advance marked ALONGSIDE the usual move (`replacesUsual` false) took no level's move: the move counts.
+function _advanceLevelPicks(playbookData, marked) {
+	if (!playbookData?.advancement?.replacesUsual) return 0;
+	const options = playbookData.advancement.options ?? [];
+	return options.filter(o => marked?.[o.slug]?.atLevelUp && o.kind !== "move" && o.kind !== "otherMove").length;
+}
+
+/**
+ * A homebrew playbook's own advances that were marked (StonetopCharacter#markHomebrewAdvance), into
+ * `totals`: "Increase your max HP to 15" as the HP that takes it there from the playbook's own,
+ * "by 4" as 4, "Increase your damage die to a d8" as the die. Stats were written when marked.
+ */
+function _addAdvanceBonuses(totals, playbookData, marked) {
+	const options = playbookData?.advancement?.options;
+	if (!Array.isArray(options) || !marked) return;
+	for (const o of options) {
+		if (!marked[o.slug]) continue;
+		if (o.kind === "hp") totals.hp += o.to ? Math.max(0, Number(o.to) - (Number(playbookData.hp) || 0)) : (Number(o.by) || 0);
+		else if (o.kind === "damage" && o.die) totals.damageDie = totals.damageDie ? maxDie(totals.damageDie, o.die) : o.die;
+	}
+}
+
+/**
+ * The special possessions held that raise max HP or the damage die (homebrew-bundle.js
+ * possessionBonusFrom: the Standout's Determination, "increase your damage to a d8 and your max HP
+ * by 4"), into `totals`. The book's possessions carry neither.
+ */
+function _addPossessionBonuses(totals, playbookData, held) {
+	for (const o of playbookData?.specialPossessions?.options ?? []) {
+		if (!held?.has(o.slug)) continue;
+		totals.hp += Number(o.hpBonus) || 0;
+		if (o.damageDie) totals.damageDie = totals.damageDie ? maxDie(totals.damageDie, o.damageDie) : o.damageDie;
+	}
+}
+
 /**
  * The DERIVED damage die: the playbook's, raised by any owned move that raises it. Null without a
  * playbook, since there is nothing to derive from.
@@ -8791,14 +8920,19 @@ function _buildPlaybookSection(playbookData, background, instinct, appearance, o
 		), savedAppearance?.[i] ?? "")
 	);
 
-	const originOptions = (playbookData.origin ?? []).map(({ region, names }) =>
-		new OriginOptionSnapshot(
+	// A homebrew playbook may ask its own question of someone from each place (the Familiar Face's
+	// "What part of the monastery schedule do you miss the most?"): that, not the book's word on the
+	// place, and the player's answer. A write-in place ("Somewhere else") shows the place they named.
+	const originOptions = (playbookData.origin ?? []).map(({ region, names, question = "", writeIn = false }) => {
+		const selected = region === savedOrigin;
+		return new OriginOptionSnapshot(
 			region,
-			names.map(name => ({ name, checked: name === actorName })),
-			region === savedOrigin,
-			_originDescriptionForRegion(region)
-		)
-	);
+			(names ?? []).map(name => ({ name, checked: name === actorName })),
+			selected,
+			question || writeIn ? "" : _originDescriptionForRegion(region),
+			{ question: String(question ?? ""), writeIn: !!writeIn, place: selected ? origin.place ?? "" : "", answer: selected ? origin.answer ?? "" : "" },
+		);
+	});
 
 	return new PlaybookSnapshotBuilder()
 		.withSlug(playbookData.slug)
@@ -8930,9 +9064,13 @@ function _buildMarkOptions(entry, markCounts, capState = {}, backgroundSlug = nu
 		// A mark stored past the option's boxes (Veteran Crew picked twice before its options became
 		// once each) is kept and shown, so it can be unticked.
 		const ownBoxes = fromBackground ? Math.max(marks - 1, count) : Math.max(marks, count);
+		// A write-in ("Something else: ___ (discuss with the GM)"): the words either side of the blank,
+		// and what the player wrote in it, kept on the option's first mark.
+		const blank = opt.writeIn ? String(opt.label ?? "").split(/_{3,}/) : null;
 		return {
 			slug:   opt.slug,
 			label:  opt.label,
+			writeIn: blank ? { before: blank[0].trim(), after: blank.slice(1).join(" ").trim(), text: entries[0]?.text ?? "", marked: count > 0 } : null,
 			// Only while a box is still there to tick: a fully marked option has nothing to grey.
 			capNote: capNote && count < ownBoxes ? capNote : null,
 			background: fromBackground

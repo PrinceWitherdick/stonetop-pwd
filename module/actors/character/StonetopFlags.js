@@ -12,6 +12,9 @@ export const MIRRORED_HP_PENALTY_FLAG = "mirroredHpPenalty";
 
 /** Actor flag: the copy of a homebrew playbook a character carries to other worlds (playbooks/homebrew-store.js). */
 export const HOMEBREW_PLAYBOOK_COPY_FLAG = "homebrewPlaybookCopy";
+// The advances a homebrew playbook's own Level Up marked ("Increase your max HP to 15"), by the
+// advance's slug: { [slug]: { level, stat? } }. Read by StonetopCharacter (its HP and damage die).
+export const HOMEBREW_ADVANCES_FLAG = "homebrewAdvances";
 
 /** Item flag: the background (its slug) that GAVE this move copy (StonetopCharacter.js#ensureStartingMoves). */
 export const BACKGROUND_GRANT_FLAG = "backgroundGrant";

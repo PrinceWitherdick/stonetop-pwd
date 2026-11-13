@@ -62,7 +62,10 @@ describe("reading The Tester", () => {
 		expect(pb.instinctLabel).toBe("Instinct");
 		expect(pb.instincts).toEqual([{ word: "Curiosity", description: "To find out." }, { word: "Caution", description: "To look twice." }]);
 		expect(pb.appearance).toEqual([["young", "old"], ["quiet", "loud", "hoarse"]]);
-		expect(pb.origin).toEqual([{ region: "Stonetop", names: ["Ade", "Bryn", "Cai", "Dafydd", "Efa"] }, { region: "Gordin's Delve", names: [] }]);
+		expect(pb.origin).toEqual([
+			{ region: "Stonetop", names: ["Ade", "Bryn", "Cai", "Dafydd", "Efa"], question: "", writeIn: false },
+			{ region: "Gordin's Delve", names: [], question: "", writeIn: false },
+		]);
 	});
 
 	it("reads moves: starting, repeatable, required, rolled, with a track", () => {

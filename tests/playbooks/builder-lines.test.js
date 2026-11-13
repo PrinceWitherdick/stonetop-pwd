@@ -16,8 +16,22 @@ describe("the builder's one-per-line boxes", () => {
 	});
 
 	it("origins: 'Region: names', a region with no names kept", () => {
-		const data = [{ region: "Stonetop", names: ["Aderyn", "Braith"] }, { region: "Gordin's Delve", names: [] }];
+		const data = [
+			{ region: "Stonetop", names: ["Aderyn", "Braith"], question: "", writeIn: false },
+			{ region: "Gordin's Delve", names: [], question: "", writeIn: false },
+		];
 		expect(L.parseOriginLines(L.originLines(data))).toEqual(data);
+	});
+
+	it("origins: ' | ' asks someone from the place a question, and '___' is a place the player names", () => {
+		const text = ["Barrier Pass: | What do you miss most?", "Stonetop: Ade, Bryn | Where do you go to think?", "Somewhere else: ___"].join("\n");
+		const data = L.parseOriginLines(text);
+		expect(data).toEqual([
+			{ region: "Barrier Pass", names: [], question: "What do you miss most?", writeIn: false },
+			{ region: "Stonetop", names: ["Ade", "Bryn"], question: "Where do you go to think?", writeIn: false },
+			{ region: "Somewhere else", names: [], question: "", writeIn: true },
+		]);
+		expect(L.originLines(data)).toBe(text);
 	});
 
 	it("either/or picks split on '/' or the book's capital OR, never a lowercase 'or'", () => {

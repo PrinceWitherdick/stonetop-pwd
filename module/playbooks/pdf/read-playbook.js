@@ -35,6 +35,10 @@ const STAT_WORDS = /^(?:strength|dexterity|intelligence|wisdom|constitution|char
 const CREDIT = /\s*Created by\b.*?(?:from the Noun Project)?\s*$|^\s*from the Noun Project\s*$/i;
 const BACK_PAGE = /^(inventory|small items|possessions, items, loot|other things|followers|player['’]?s (agenda|principles)|prosperity|when in doubt|triggering moves|hold and spend|notes|undefined)\b/i;
 const TITLE_CAPS = /^[^a-z]*[A-Z][^a-z]*$/;
+// "Once, you can …" opening a sentence: a thing done once ever. "Once per session, you can …".
+const ONCE = /(?:^|[.!?]\s+|\n)once,?\s+you\s+(?:can|may)\b/i;
+const SWITCH_PLAYBOOK = /\bwhen you level up\b[^.]*\b(?:switch|change|move on)\b[^.]*\b(?:different|new|another|other)\s+playbook\b/i;
+const ONCE_PER =/\bonce (?:per|a|each) (session|day|adventure|expedition|season|fight)\b/i;
 
 const KNOWN = [
 	["stats", /^stats$/i],
@@ -103,6 +107,8 @@ function _stream(pageRuns) {
 		for (const line of col.lines) {
 			const cleaned = { ...line, page: p + 1, col: c + 1, text: line.text.replace(CREDIT, "").trim() };
 			if (!cleaned.text && !cleaned.lead.boxes) continue;
+			// An emblem set as type (the Standout's 52pt "?"): no word in it, far bigger than any heading.
+			if (!cleaned.lead.boxes && !/[\p{L}\p{N}]/u.test(cleaned.text) && cleaned.maxSize >= 20) continue;
 			if (!cleaned.lead.boxes && STAT_WORDS.test(cleaned.text.replace(/[()]/g, " ").replace(/StrengthStrength|DexterityDexterity/g, ""))) {
 				// The stat box's own labels: kept only where the HP and damage are read from.
 				cleaned.statChrome = true;
@@ -189,7 +195,15 @@ function _lineText(line, { skipLead = true } = {}) {
 	let afterGlyph = false;
 	for (const p of line.parts) {
 		if (p.role === "dingbat") {
-			if (leading) continue;
+			// The leading checkbox is the item's, not its words; a load diamond after it is the gear's
+			// weight ("☐ ◇ Sword", "◇ hacksaws" opening a wrapped line) and stays.
+			if (leading) {
+				const diamonds = p.text.replace(/[^u]/g, "");
+				if (!diamonds) continue;
+				out += diamonds.replace(/u/g, "◇");
+				afterGlyph = true;
+				continue;
+			}
 			const s = p.text.replace(/\s+/g, "");
 			out += s.replace(/l/g, "○").replace(/u/g, "◇").replace(/n/g, "☐").replace(/4/g, "✓");
 			afterGlyph = !!s;
@@ -313,7 +327,10 @@ function _prose(entries, baseX = null) {
 		// A wide gap is a new paragraph, unless the line before stopped mid-sentence (the template's
 		// leading is uneven: "(choose" over "1 or 2)" can sit as far apart as two paragraphs).
 		else if (gap > (spacing ?? 9.5) * 1.5 && !(!_endsSentence(prevText) && (/^[^A-Z“"‘'(]/.test(text) || _ranFull(prev, prevText, text, right)))) out += `\n\n${text}`;
-		else if (/\n- [^\n]*$/.test(out) && line.x <= x0 + 8) out += `\n\n${text}`;
+		// A line back at the margin after a bullet starts a paragraph, unless the bullet's sentence runs
+		// on into it: the template sets a boxed option's second line at the margin, under the box
+		// ("☐ Work with the GM to choose a move from / any other playbook, …").
+		else if (/\n- [^\n]*$/.test(out) && line.x <= x0 + 8 && !(near && !_endsSentence(prevText) && /^[a-z]/.test(text))) out += `\n\n${text}`;
 		else out += (/[A-Za-z]-$/.test(out) && /^[a-z]/.test(text) ? "" : " ") + text;
 		bulletX = bullet ? line.x : null;
 		prevY = line.y;
@@ -363,7 +380,8 @@ function _read(pageRuns, report, issue) {
 			statsNote: emptyBundle().playbook.statsNote, hp: 16, damage: "d6",
 			instinctLabel: "Instinct", startingMovesNote: "",
 			possessions: { pickNote: "", pickCount: 0 },
-			appearance: [], origin: [],
+			appearance: [], origin: [], originNote: "",
+			advancement: null,
 			introductions: { step3: "", step4: [], step6: [] },
 		},
 		confirm: [],
@@ -427,7 +445,7 @@ function _read(pageRuns, report, issue) {
 	const customs = [];
 	for (const s of sections) {
 		switch (s.kind) {
-			case "stats": _stats(s, draft, lines); break;
+			case "stats": _stats(s, draft, lines, pageRuns); break;
 			case "moves": _moves(s, draft); break;
 			case "backgrounds": _backgrounds(s, draft); break;
 			case "instincts": _instincts(s, draft); break;
@@ -443,6 +461,8 @@ function _read(pageRuns, report, issue) {
 	}
 	for (const s of customs) _custom(s, draft);
 	for (const ins of inserts) _insertParts(ins, draft);
+	_advancement(draft);
+	_settleDamagePair(draft);
 
 	// A move the starting-moves line names is a starting move, ticked or not.
 	for (const b of draft.blocks) {
@@ -472,7 +492,21 @@ function _kindLabel(kind) {
 		origin: "Origins", possessions: "Special Possessions", intro: "Introductions", custom: "its own section", name: "the name" })[kind] ?? kind;
 }
 
-function _stats(s, draft, lines) {
+/**
+ * The HP the page SHOWS when the box holds two. The template draws each label twice, a white outline
+ * and then the ink over it; a creator who retyped the number changed the ink only, so the outline
+ * still says the template's 16. pdf.js hands a page's runs over in the order they were drawn, so of
+ * two whole "HP (max N)" runs on one spot, the later one is on top. Null when that can't be told.
+ */
+function _visibleHp(runs = []) {
+	const hits = runs.map(r => ({ r, n: String(r.str ?? "").trim().match(/^HP\s*\(max\s*(\d+)\)$/i)?.[1] })).filter(h => h.n);
+	if (hits.length < 2) return null;
+	const top = hits[hits.length - 1];
+	const stacked = hits.filter(h => Math.abs(h.r.x - top.r.x) < 2 && Math.abs(h.r.y - top.r.y) < 2);
+	return stacked.length >= 2 ? Number(top.n) : null;
+}
+
+function _stats(s, draft, lines, pageRuns) {
 	const f = draft.fields;
 	const note = s.note.match(/[^.]*assign[^.]*[+-]\d[^.]*\./i)?.[0]?.trim();
 	if (note) f.statsNote = note;
@@ -488,14 +522,18 @@ function _stats(s, draft, lines) {
 		f.damage = `d${dice[0][1]}`;
 		if (dice[0][2]) {
 			draft.confirm.push({ key: "damage", type: "choice", label: "Damage die", why: `The damage box says "${dice[0][0].replace(/\s+/g, "")}". Which does a new character start with? (Put any rule for the other in Notes.)`,
-				value: null, choices: [`d${dice[0][1]}`, `d${dice[0][2]}`] });
+				value: null, choices: [`d${dice[0][1]}`, `d${dice[0][2]}`], pair: [`d${dice[0][1]}`, `d${dice[0][2]}`] });
 		}
 	} else {
 		draft.confirm.push({ key: "damage", type: "choice", label: "Damage die", why: "No damage die was found in the stats box.", value: f.damage, choices: [...DAMAGE_DICE] });
 	}
 
 	const hps = [...new Set([...text.matchAll(/HP\s*\(max\s*(\d+)\)/gi)].map(m => Number(m[1])))];
-	if (hps.length > 1) {
+	const shown = hps.length > 1 ? _visibleHp(pageRuns?.pages?.[s.page - 1]?.runs) : null;
+	if (shown !== null && hps.includes(shown)) {
+		f.hp = shown;
+		draft.report.sections.push(`HP (max ${shown}): the ${hps.filter(n => n !== shown).join(" and ")} printed under it is the template's own, hidden by it`);
+	} else if (hps.length > 1) {
 		f.hp = hps[0];
 		draft.confirm.push({ key: "hp", type: "number", label: "Max HP", why: `The HP box holds two different numbers (${hps.join(" and ")}), printed one over the other, so the PDF can't say which one shows. Look at the playbook and pick the one you see.`, value: null, choices: hps });
 	} else if (hps.length === 1) {
@@ -516,7 +554,7 @@ function _moves(s, draft, { keepNote = false, from = "Moves" } = {}) {
 		const title = titleCase(item.title.replace(/^\((.*)\)$/, "$1"));
 		const extra = { ticked: !!item.ticked, boxes: item.boxes, pips: item.pips ?? [], rawTitle: item.title };
 		if (/^custom$/i.test(title)) {
-			draft.add("skip", { title: "Custom move", text: _itemText(item), extra, from, unsure: true,
+			draft.add("skip", { title: "Custom move", text: _itemFlat(item), extra, from, unsure: true,
 				why: "A write-in move the player makes up with the GM. Left out unless you want it as a move or a note." });
 			continue;
 		}
@@ -582,8 +620,10 @@ function _options(line) {
 }
 
 function _origin(s, draft) {
-	const { items } = _items(s.lines, { greedy: true });
-	const questions = [];
+	const { items, loose } = _items(s.lines, { greedy: true });
+	// The section's own words over the list ("We already know your name, but where are you from?").
+	const note = _prose(loose).replace(/\*/g, "").replace(/\s+/g, " ").trim();
+	if (note) draft.fields.originNote = note;
 	for (const item of items) {
 		const text = _itemFlat(item).replace(/\*/g, "");
 		const i = text.indexOf(":");
@@ -592,11 +632,16 @@ function _origin(s, draft) {
 		const rest = text.slice(i + 1).trim();
 		const names = rest.split(/\s*,\s*|\s+or\s+/).map(n => n.replace(/^or\s+/i, "").replace(/[.,]$/, "").trim()).filter(Boolean);
 		const looksLikeNames = names.length >= 2 && names.every(n => /^[A-Z][\w'’-]*(\s[A-Z][\w'’-]*)?$/.test(n));
-		if (/discuss with gm|tell us/i.test(region + rest) && !looksLikeNames) continue;
-		draft.fields.origin.push({ region, names: looksLikeNames ? names : [] });
-		if (!looksLikeNames && rest && !/pick a name/i.test(rest)) questions.push(`- ${region}: ${rest}`);
+		// "☐ Tell Us: ____ (discuss with GM)": a place the player names themselves.
+		if (/discuss with (?:the )?gm|tell us/i.test(region + rest) && !looksLikeNames) {
+			if (!draft.fields.origin.some(o => o.writeIn)) draft.fields.origin.push({ region: "Somewhere else", names: [], question: "", writeIn: true });
+			continue;
+		}
+		// Words after the place that aren't names are what the playbook asks someone from there
+		// ("Barrier Pass: What part of the monastery schedule do you miss the most?").
+		const question = !looksLikeNames && rest && !/pick a name/i.test(rest) ? rest : "";
+		draft.fields.origin.push({ region, names: looksLikeNames ? names : [], question, writeIn: false });
 	}
-	if (questions.length) draft.add("note", { title: "Place of origin questions", text: questions.join("\n"), from: "Place of origin" });
 }
 
 /**
@@ -638,11 +683,82 @@ function _possessions(s, draft) {
 		draft.add("possession", { title: label, text: m ? m[2].trim() : "", extra: { ticked: !!item.ticked }, from: "Special possessions" });
 		count++;
 	}
-	const prose = _prose(loose);
+	// No boxes at all: "You begin play with the following:", then a paragraph per possession, each
+	// opening on its name in bold ("The tools of your station, whatever things…"). Every character
+	// starts with all of them, so they're read as possessions already ticked, with nothing to pick.
+	let rest = loose;
+	if (!count && loose.length) {
+		const given = _givenPossessions(loose);
+		if (given) {
+			for (const g of given.items) draft.add("possession", { title: g.label, text: g.text, extra: { ticked: true }, from: "Special possessions" });
+			f.possessions.pickNote = given.lead || "You begin play with all of these.";
+			f.possessions.allGiven = true;
+			count = given.items.length;
+			rest = [];
+		}
+	}
+	const prose = _prose(rest);
 	if (prose) {
 		draft.add("note", { title: "Special possessions", text: prose, from: "Special possessions", unsure: !count,
 			why: count ? "" : "No possessions with checkboxes were found, only this text. If it describes possessions every character starts with, split it into one piece each, then put each in Special possessions." });
 	}
+}
+
+/**
+ * Lines into paragraphs, at gaps wider than the lines' own spacing (the smallest gap between two
+ * lines of one column) or a change of column.
+ */
+function _paragraphs(lines) {
+	const kept = lines.filter(l => !l.statChrome);
+	const gaps = [];
+	for (let i = 1; i < kept.length; i++) {
+		if (_sameColumn(kept[i], kept[i - 1]) && kept[i].y > kept[i - 1].y) gaps.push(kept[i].y - kept[i - 1].y);
+	}
+	const spacing = gaps.length ? Math.min(...gaps) : 9.5;
+	const out = [];
+	let prev = null;
+	for (const l of kept) {
+		const gap = prev && _sameColumn(l, prev) ? l.y - prev.y : Infinity;
+		if (!out.length || gap > spacing * 1.5) out.push([]);
+		out.at(-1).push(l);
+		prev = l;
+	}
+	return out;
+}
+
+/**
+ * Possessions set as paragraphs, each opening on its name in bold, under a lead-in ("You begin play
+ * with the following:"): `{ lead, items: [{label, text}] }`, or null when the text isn't that shape.
+ * A possession's name runs to the first comma ("The tools of your station"); what follows it is
+ * what it is and the questions about it.
+ */
+function _givenPossessions(lines) {
+	const lead = [];
+	const items = [];
+	for (const para of _paragraphs(lines)) {
+		const text = _prose(para).replace(/\*/g, "").replace(/\s+/g, " ").trim();
+		if (!text) continue;
+		const parts = para[0].parts.filter(p => p.role !== "dingbat");
+		let before = "";
+		let bold = false;
+		for (const p of parts) {
+			if (p.role === "bold" && /[a-z]{3,}/i.test(p.text)) { bold = true; break; }
+			before += p.text;
+		}
+		// Up to a short word ahead of the bold ("The tools of your station").
+		if (!bold || before.trim().length > 4) {
+			if (items.length) items.at(-1).text += `\n\n${text}`;
+			else lead.push(text);
+			continue;
+		}
+		const m = text.match(/^([^,:;.]{2,60})[,:;.]\s*(.*)$/s);
+		const label = (m ? m[1] : text).trim();
+		const body = m ? m[2].trim() : "";
+		items.push({ label, text: body.charAt(0).toUpperCase() + body.slice(1) });
+	}
+	const leadText = lead.join(" ").trim();
+	if (!items.length || (items.length < 2 && !/\b(?:begin|start)\b[^.]*\bwith\b/i.test(leadText))) return null;
+	return { lead: leadText, items };
 }
 
 function _intro(s, draft) {
@@ -693,6 +809,68 @@ function _questionTitle(prompt) {
 	return title.length > 90 ? `${title.slice(0, 87).replace(/\s+\S*$/, "")}…` : title;
 }
 
+/**
+ * The playbook's own Level Up, from wherever it was written ("Beginning & Advancement"): "When you
+ * Level Up, mark one of the following (in any order) instead of the usual effect:" and its options,
+ * one line each. Its words stay in the notes as well; this is what Level Up acts on.
+ */
+function _advancement(draft) {
+	// "When you Level Up, switch to a different playbook." (the Standout, a playbook to start on): its
+	// Level Up IS a change of playbook. Often printed under a move, so it is taken out of that move.
+	for (const b of draft.blocks) {
+		if (b.insert || !b.text) continue;
+		const paras = String(b.text).split(/\n{2,}/);
+		// Not the Familiar Face's "When you Level Up to Level 3 or higher, you CAN choose to change…":
+		// an option at a later level, kept as its own Level Up's note.
+		const at = paras.findIndex(p => SWITCH_PLAYBOOK.test(p.replace(/\*/g, "")) && !/\blevel up to level\b|\byou (?:can|may)\b/i.test(p));
+		if (at < 0) continue;
+		const note = paras[at].replace(/\*/g, "").replace(/\s+/g, " ").trim();
+		draft.fields.advancement = { replacesUsual: false, options: [], note, switchPlaybook: true };
+		draft.report.sections.push("Level Up switches to a different playbook → Level Up");
+		if (paras.length > 1) b.text = paras.filter((_, i) => i !== at).join("\n\n");
+		else if (b.kind === "note") { b.unsure = false; b.why = ""; }
+		return;
+	}
+	for (const b of draft.blocks) {
+		if (b.insert) continue;
+		const text = _fullText(b).replace(/\*/g, "");
+		const lines = text.split("\n");
+		const at = lines.findIndex(l => /\bwhen you level up\b[^:]*\bmark (?:one|1)\b[^:]*:\s*$/i.test(l));
+		if (at < 0) continue;
+		const options = [];
+		for (let j = at + 1; j < lines.length; j++) {
+			if (!lines[j].trim()) { if (options.length) break; continue; }
+			if (!/^- /.test(lines[j])) break;
+			options.push(lines[j].slice(2).trim());
+		}
+		if (options.length < 2) continue;
+		// "When you Level Up to Level 3 or higher, you can choose to change to a different playbook…"
+		const note = lines.find(l => /\blevel up to level \d+\b/i.test(l))?.trim() ?? "";
+		draft.fields.advancement = { replacesUsual: /\binstead of the usual\b/i.test(lines[at]), options, note };
+		draft.report.sections.push(`Its own Level Up (${options.length} advances) → Level Up`);
+		// Placed now: the words stay a note for the table, and Level Up does what they say.
+		if (b.kind === "note") { b.unsure = false; b.why = ""; }
+		return;
+	}
+}
+
+/**
+ * "d6/d8" in the damage box, when something on the playbook raises the one to the other (the
+ * Standout's Determination, "increase your damage to a d8"): a new character starts on the first,
+ * and the system raises it while that is held. Nothing to ask.
+ */
+function _settleDamagePair(draft) {
+	const at = draft.confirm.findIndex(q => q.key === "damage" && q.pair);
+	if (at < 0) return;
+	const [base, raised] = draft.confirm[at].pair;
+	const re = new RegExp(`\\bdamage(?: die)? to (?:an? )?${raised}\\b`, "i");
+	const by = draft.blocks.find(b => !b.insert && ["possession", "move", "startingMove"].includes(b.kind) && re.test(_fullText(b).replace(/\*/g, "")));
+	if (!by) return;
+	draft.confirm.splice(at, 1);
+	draft.fields.damage = base;
+	draft.report.sections.push(`Damage ${base}/${raised}: starts at ${base}; "${by.title}" raises it to ${raised}`);
+}
+
 /** A section the book's playbooks don't have: read by its shape, every piece marked for the GM. */
 function _custom(s, draft) {
 	const { items, loose } = _items(s.lines);
@@ -706,7 +884,8 @@ function _custom(s, draft) {
 
 	// A move printed as its own section ("Your Finest Hour"), named among the starting moves.
 	if (!items.length && _names(draft.fields.startingMovesNote, heading)) {
-		draft.add("startingMove", { title: heading, text: _prose(s.lines), from, unsure: true,
+		// Sure, not gold: the starting moves' own words name it ("You start with Your Finest Hour").
+		draft.add("startingMove", { title: heading, text: _prose(s.lines), from,
 			why: `"${heading}" is printed as a section of its own, not as a move, but the starting moves name it.` });
 		retag("a starting move");
 		return;
@@ -726,7 +905,9 @@ function _custom(s, draft) {
 		return;
 	}
 	// Questions: checkbox options under prompts. Each prompt with its options is one question.
-	if (items.length && !/advancement|level up|beginning/i.test(heading)) {
+	// Not a playbook's own advancement, however it's headed: its boxes are advances, not answers.
+	const levelsUp = /advancement|level up|beginning/i.test(heading) || /\bwhen you level up\b[^.]*\bmark\b/i.test(_sectionText(s));
+	if (items.length && !levelsUp) {
 		const groups = [];
 		let group = null;
 		for (const line of s.lines) {
@@ -1044,6 +1225,8 @@ function _moveFromBlock(b, starting) {
 		const held = plain.match(/hold\s+\d+\s+([A-Z][a-z]+)/)?.[1] ?? "";
 		resource = { max: Math.min(20, pips.reduce((n, p) => n + p.count, 0)), title: (!fromTitle && track.label) ? track.label : held, labels: [] };
 	}
+	// "Once per session, you can…": one box to mark it used, cleared by hand.
+	if (!resource && ONCE_PER.test(plain)) resource = { max: 1, title: `Used this ${plain.match(ONCE_PER)[1].toLowerCase()}`, labels: [] };
 	return {
 		name: b.title, description, starting, level, requires, requiresMoves: [],
 		repeatMax: (b.extra?.boxes ?? 1) > 1 ? b.extra.boxes : 1, rollType: roll, results, resource,
@@ -1091,7 +1274,9 @@ export function assemblePlaybook(draft) {
 	// The picker's hover blurb, from the playbook's own opening words when the GM has none yet.
 	if (!pb.summary && pb.description) pb.summary = _blurb(pb.description);
 	pb.appearance = (f.appearance ?? []).map(r => [...r]);
-	pb.origin = (f.origin ?? []).map(o => ({ region: o.region, names: [...o.names] }));
+	pb.origin = (f.origin ?? []).map(o => ({ region: o.region, names: [...o.names], question: o.question ?? "", writeIn: !!o.writeIn }));
+	pb.originNote = f.originNote ?? "";
+	if (f.advancement) pb.advancement = { replacesUsual: f.advancement.replacesUsual, options: [...f.advancement.options], note: f.advancement.note, switchPlaybook: !!f.advancement.switchPlaybook };
 	pb.introductions = { step3: f.introductions?.step3 ?? "", step4: [...(f.introductions?.step4 ?? [])], step6: [...(f.introductions?.step6 ?? [])] };
 	pb.possessions.pickNote = f.possessions?.pickNote || pb.possessions.pickNote;
 	pb.possessions.pickCount = f.possessions?.pickCount ?? pb.possessions.pickCount;
@@ -1111,8 +1296,10 @@ export function assemblePlaybook(draft) {
 				pb.backgrounds.push({
 					label: b.title, description: text, ..._backgroundMoves(text),
 					possessions: _backgroundPossessions(text),
-					// The background's own pip row ("CURSED  Doom ○○○"): a track of its own.
-					track: pips ? { label: label && label.toUpperCase() !== label ? label : "Track", max: pips } : null,
+					// The background's own pip row ("CURSED  Doom ○○○"): a track of its own. With none, a
+					// background that works once ("Once, you can call on a favour…") gets one box to mark it used.
+					track: pips ? { label: label && label.toUpperCase() !== label ? label : "Track", max: pips }
+						: ONCE.test(text.replace(/\*/g, "")) ? { label: "Used", max: 1 } : null,
 				});
 				break;
 			}
@@ -1148,7 +1335,12 @@ export function assemblePlaybook(draft) {
 			default: break; // "skip"
 		}
 	}
-	if (!pb.possessions.options.length) pb.possessions.pickCount = 0;
+	// Every one ticked and nothing to pick ("You begin play with the following:"): each is preselected,
+	// which a character holds without spending a pick, so none is left to pick. With none at all
+	// there's nothing to pick and nothing to say about it.
+	if (f.possessions?.allGiven) pb.possessions.pickCount = 0;
+	if (!pb.possessions.options.length) { pb.possessions.pickCount = 0; pb.possessions.pickNote = ""; }
+	else if (!f.possessions?.pickNote) pb.possessions.pickNote = `Pick ${pb.possessions.pickCount}`;
 
 	const either = String(pb.startingMovesNote).match(/([A-Z][\w'’ ]+?)\s+OR\s+([A-Z][\w'’ ]+?)(?=[;,.]|$)/g) ?? [];
 	pb.moveChoices = either.map(e => ({ label: "Choose one", options: e.split(/\s+OR\s+/).map(x => x.trim()) }));

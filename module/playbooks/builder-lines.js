@@ -30,17 +30,28 @@ export function appearanceLines(rows = []) {
 	return rows.map(row => row.join(", ")).join("\n");
 }
 
-/** "Region: Name, Name" per line. A region with no names ("Gordin's Delve: ") keeps an empty list. */
+/**
+ * "Region: Name, Name" per line. A region with no names ("Gordin's Delve: ") keeps an empty list.
+ * " | " and a question after it is what the playbook asks someone from there ("Barrier Pass: |
+ * What do you miss?"); a blank, "Somewhere else: ___", is a place the player names themselves.
+ */
 export function parseOriginLines(text) {
 	return lines(text).map(line => {
-		const i = line.indexOf(":");
-		return i < 0
-			? { region: line, names: [] }
-			: { region: line.slice(0, i).trim(), names: commaList(line.slice(i + 1)) };
+		const bar = line.indexOf("|");
+		const question = bar < 0 ? "" : line.slice(bar + 1).trim();
+		const head = bar < 0 ? line : line.slice(0, bar).trim();
+		const i = head.indexOf(":");
+		const region = (i < 0 ? head : head.slice(0, i)).trim();
+		const rest = i < 0 ? "" : head.slice(i + 1).trim();
+		if (/^_{3,}$/.test(rest)) return { region, names: [], question, writeIn: true };
+		return { region, names: commaList(rest), question, writeIn: false };
 	}).filter(o => o.region);
 }
 export function originLines(list = []) {
-	return list.map(o => `${o.region}: ${o.names.join(", ")}`.trimEnd()).join("\n");
+	return list.map(o => {
+		const head = `${o.region}: ${o.writeIn ? "___" : (o.names ?? []).join(", ")}`.trimEnd();
+		return o.question ? `${head} | ${o.question}` : head;
+	}).join("\n");
 }
 
 /**

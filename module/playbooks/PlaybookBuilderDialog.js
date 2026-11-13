@@ -9,7 +9,7 @@ import { PLAYBOOK_BUILDER_RESTORE_KIND, NEW_PLAYBOOK_PREFIX } from "./playbook-b
 import { STAT_KEYS } from "../utils/roll-types.js";
 import { parseStatArray, statScoreLabel, DEFAULT_STAT_ARRAY } from "../actors/character/stat-rules.js";
 import { lorePickMin, lorePickMax } from "../actors/character/lore-pick-count.js";
-import { emptyBundle, normalizeBundle, normalizeMove, backgroundGaps, diffBundles, mergeReimport, DAMAGE_DICE, HP_LIMITS } from "./homebrew-bundle.js";
+import { emptyBundle, normalizeBundle, normalizeMove, backgroundGaps, diffBundles, mergeReimport, advanceFrom, DAMAGE_DICE, HP_LIMITS } from "./homebrew-bundle.js";
 import {
 	saveHomebrewPlaybook, readHomebrewBundle, readImportBase, deleteHomebrewPlaybook, holdersOfHomebrew,
 	readBundleFile, importCollision, saveProblem, offerToRefreshCopies, downloadBundle, writeInsChangedOnSave,
@@ -39,6 +39,7 @@ const SECTIONS = [
 	{ key: "looks",       title: "Looks & Origins",     icon: "fa-user" },
 	{ key: "possessions", title: "Special Possessions", icon: "fa-sack-xmark" },
 	{ key: "moves",       title: "Moves",               icon: "fa-scroll" },
+	{ key: "advancement", title: "Level Up",            icon: "fa-arrow-up-right-dots" },
 	{ key: "inserts",     title: "Inserts",             icon: "fa-puzzle-piece" },
 	{ key: "lore",        title: "Questions",           icon: "fa-circle-question" },
 	{ key: "intro",       title: "Introductions",       icon: "fa-people-group" },
@@ -56,6 +57,18 @@ const LINE_PARSERS = {
 	lore:       L.parseLoreOptionLines,
 	insertOptions: L.parseInsertOptionLines,
 };
+
+/** What an advance of the playbook's own Level Up does, in words, as Level Up will act on it. */
+function _advanceDoes(a) {
+	switch (a.kind) {
+		case "stat": return `raises a stat by 1, to +${a.max} at most`;
+		case "hp": return a.to ? `sets max HP to ${a.to}` : `adds ${a.by} max HP`;
+		case "damage": return `makes the damage die a ${a.die}`;
+		case "move": return "takes a new move from this playbook";
+		case "otherMove": return "takes a move from another playbook, agreed with the table";
+		default: return "is marked; the table works out what it does";
+	}
+}
 
 /** A rail section's title: the instincts panel is "Drives" for a playbook that calls them that. */
 const _sectionTitle = (section, pb) => section.key === "instincts" && pb.instinctLabel === "Drive" ? "Drives" : section.title;
@@ -311,6 +324,9 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			instinctsText: L.instinctLines(pb.instincts),
 			appearanceText: L.appearanceLines(pb.appearance),
 			originText: L.originLines(pb.origin),
+			// The playbook's own Level Up: one advance per line, and what each was read as doing.
+			advancementText: L.lineList(pb.advancement?.options ?? []),
+			advancementRead: (pb.advancement?.options ?? []).map(label => ({ label, does: _advanceDoes(advanceFrom(label)) })),
 			possessions: pb.possessions.options.map((o, i) => ({ index: i, ...o })),
 			choicesText: L.choiceLines(pb.moveChoices),
 			groupsText: L.groupLines(pb.moveGroups),

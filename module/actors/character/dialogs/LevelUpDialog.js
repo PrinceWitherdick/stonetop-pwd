@@ -1,4 +1,5 @@
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
+import { withMarkOptionList } from "../mark-option-list.js";
 import { holdCentre } from "../../../utils/hold-centre.js";
 import { markProseSpiralBullets } from "../../../utils/journal-spiral-bullets.js";
 import { moveGroupsForPlaybook, moveGroupKeys } from "./onboarding-move-groups.js";
@@ -38,12 +39,24 @@ const LEVELUP_WIDE_STEPS = ["move", "agreed", "foreignMove", "invocation"];
 // predicate fires (`overview` and `move` are always present). Next/Back navigation and the
 // "is this the final step?" check all derive from this single ordering via _adjacentStep —
 // keep this the one source of truth for step order + skip logic.
-const LEVELUP_STEPS = ["overview", "move", "agreed", "foreignMove", "stat", "marks", "companion", "invocation"];
+const LEVELUP_STEPS = ["overview", "advance", "advanceStat", "move", "agreed", "foreignMove", "stat", "marks", "companion", "invocation"];
 
 // The move step's "Agreed with the table" card (Book I p.529: a move from another playbook "If
 // everyone (not just you) agrees", or a custom one, p.528 step 3's insert class). Picking it is a
 // move pick like any other; the agreed step that follows says which move.
 const AGREED_ID = "__agreed__";
+
+// What picking a homebrew advance leads to, said on its row, or null when it is done on the spot.
+function _advanceWhatNext(o) {
+	switch (o.kind) {
+		case "stat": return "Pick the stat next";
+		case "move": return "Pick the move next";
+		case "otherMove": return "Agree the move next";
+		case "hp": return o.to ? `Max HP to ${o.to}` : `+${o.by} max HP`;
+		case "damage": return `Damage die ${o.die}`;
+		default: return "The table settles it";
+	}
+}
 const AGREED_CUSTOM = "__custom__";
 
 // The move step's "Choose my move later" card (Book I p.529: "they can take time to think ... if
@@ -66,7 +79,7 @@ function _xpRuleText() {
 
 // The selector that finds a pickable card again after the re-render its pick causes, so the
 // keyboard focus stays on it. Off the one data key each card family carries.
-const PICK_KEYS = ["compendiumId", "statKey", "markSlug", "actionSlug", "slug"];
+const PICK_KEYS = ["advanceSlug", "compendiumId", "statKey", "markSlug", "actionSlug", "slug"];
 function _pickableSelector(el) {
 	for (const key of PICK_KEYS) {
 		const value = el?.dataset?.[key];
@@ -169,6 +182,11 @@ export class LevelUpDialog extends StonetopDialog {
 		this._step       = "overview"; // "overview" | "move" | "foreignMove" | "stat" | "marks" | "invocation"
 		this._selectedMoveId         = null;
 		this._selectedStat           = null;
+		// A homebrew playbook's own advance picked (its slug), when it has its own Level Up.
+		this._selectedAdvance        = null;
+		// The stat a homebrew stat advance raises: its own pick, apart from an Improved/Superior Stat
+		// move taken alongside it (`replacesUsual` false), which asks for its own stat.
+		this._selectedAdvanceStat    = null;
 		// The Invocations picked: one on an even level, or every one owed when catching up (C3).
 		this._selectedInvocations    = [];
 		// The keyboard's place for the next draw (a selector), or null: see _render.
@@ -275,10 +293,13 @@ export class LevelUpDialog extends StonetopDialog {
 	getData() {
 		const d = this._data;
 		const isOverview    = this._step === "overview";
+		const isAdvance     = this._step === "advance";
 		const isMove        = this._step === "move";
 		const isAgreed      = this._step === "agreed";
 		const isForeignMove = this._step === "foreignMove";
-		const isStat        = this._step === "stat";
+		// The advance's stat step draws the same stat list as the move's.
+		const isAdvanceStat = this._step === "advanceStat";
+		const isStat        = this._step === "stat" || isAdvanceStat;
 		const isMarks       = this._step === "marks";
 		const isCompanion   = this._step === "companion";
 		const isInvocation  = this._step === "invocation";
@@ -286,7 +307,9 @@ export class LevelUpDialog extends StonetopDialog {
 		const markDesc     = this._markStepDescriptor();
 		// The wizard's final step — no active step remains after the current one. See
 		// LEVELUP_STEPS / _adjacentStep for the single source of step order + skip logic.
-		const isLastStep = this._adjacentStep(+1) === undefined;
+		// An advance step with nothing picked yet isn't the last: the pick decides what follows it.
+		const switching = !!d.advancement?.switchPlaybook;
+		const isLastStep = this._adjacentStep(+1) === undefined && !(isAdvance && !this._selectedAdvance && !switching);
 
 		const playbookName = d.playbookName ?? null;
 		// The 0-HP move of an insert they wear (Undying, Tethered, Dark Succor), or null: Death's Door is behind them.
@@ -298,7 +321,8 @@ export class LevelUpDialog extends StonetopDialog {
 			..._cardIds(`${idBase}-m${i}`, { description: m.description, requiresLabel: m.requiresLabel, insertNote: insertInertNote(m.name, insertMove) }),
 			compendiumId:  m.compendiumId,
 			name:          m.name,
-			description:   m.description,
+			// Its mark options listed, as it has no boxes to show them on yet (mark-option-list.js).
+			description:   withMarkOptionList(m.description, m.markOptions),
 			// The move's stored tiers, for the moves whose description states no outcome (Borrow
 			// Power, Veil): without them the card shows no ladder at all (utils/move-tiers.js).
 			moveResults:   m.moveResults ?? null,
@@ -372,10 +396,12 @@ export class LevelUpDialog extends StonetopDialog {
 			&& !(selectedEntry?.crossPlaybook?.grantsPossession && this._grantsNewPossession);
 
 		const canContinue = isOverview
+			|| (isAdvance && (this._selectedAdvance !== null || !!d.advancement?.switchPlaybook))
 			|| (isMove && this._selectedMoveId !== null)
 			|| (isAgreed && this._selectedAgreedId !== null)
 			|| (isForeignMove && !foreignBlocked && (this._selectedForeignMoveId !== null || foreignMoves.length === 0))
-			|| (isStat && this._selectedStat !== null)
+			|| (isAdvanceStat && this._selectedAdvanceStat !== null)
+			|| (isStat && !isAdvanceStat && this._selectedStat !== null)
 			|| (isMarks && marksComplete)
 			|| (isCompanion && this._selectedCompanionActions.length === (d.companionActions?.allowance ?? 0))
 			|| (isInvocation && this._selectedInvocations.length === invocationAllowance);
@@ -399,14 +425,22 @@ export class LevelUpDialog extends StonetopDialog {
 		} : null;
 
 		// Stat-increase step: the six stats, greying out any already at the chosen
-		// move's cap (+2 Improved / +3 Superior).
-		const statCap = selectedEntry?.cap ?? null;
-		const statOptions = (d.stats ?? []).map(s => ({
-			...s,
-			valueLabel: s.value >= 0 ? `+${s.value}` : `${s.value}`,
-			atCap:      statCap != null && s.value >= statCap,
-			selected:   s.key === this._selectedStat,
-		}));
+		// move's cap (+2 Improved / +3 Superior), or the homebrew advance's ("to a max of +2").
+		// The move's step counts the +1 the advance already gave its stat this level.
+		const advance = this._advanceOption();
+		const statAdvance = isAdvanceStat && advance?.kind === "stat" ? advance : null;
+		const statCap = statAdvance ? (Number(statAdvance.max) || 3) : (selectedEntry?.cap ?? null);
+		const advanceRaised = !isAdvanceStat && advance?.kind === "stat" ? this._selectedAdvanceStat : null;
+		const statOptions = (d.stats ?? []).map(s => {
+			const value = s.value + (s.key === advanceRaised ? 1 : 0);
+			return {
+				...s,
+				value,
+				valueLabel: value >= 0 ? `+${value}` : `${value}`,
+				atCap:      statCap != null && value >= statCap,
+				selected:   s.key === (isAdvanceStat ? this._selectedAdvanceStat : this._selectedStat),
+			};
+		});
 
 		// Mark step (a budgeted move just picked): each option is a clickable checkbox-style
 		// row. A picked option highlights; an unpicked one locks when it's full or the take's
@@ -435,8 +469,32 @@ export class LevelUpDialog extends StonetopDialog {
 			}),
 		} : null;
 
+		// A homebrew playbook's own Level Up: its advances, the ones marked at earlier levels shown as such.
+		const adv = d.advancement ?? null;
+		const advanceStep = adv ? {
+			replacesUsual: adv.replacesUsual,
+			switchPlaybook: !!adv.switchPlaybook,
+			note:  adv.note,
+			// The Standout's: the level is taken here, with no move; the playbook picker opens after.
+			intro: adv.switchPlaybook
+				? `${playbookName ?? "This playbook"} doesn't level up in place: you switch to a different playbook. Level Up takes the level, then the playbook picker opens for the new one.`
+				: adv.replacesUsual
+				? `${playbookName ?? "This playbook"} levels up its own way: mark one of these instead of the usual new move. Each can be marked once.`
+				: `Mark one of ${playbookName ?? "this playbook"}'s advances. Each can be marked once.`,
+			options: adv.options.map((o, i) => ({
+				slug: o.slug, label: o.label,
+				selected: o.slug === this._selectedAdvance,
+				disabled: o.marked,
+				existingLabel: o.marked ? localize("stonetop.specialMoves.levelUp.marked") : _advanceWhatNext(o),
+				// Two advances worded alike ("Increase one of your stats" twice) are two boxes on the page.
+				id: `${idBase}-adv${i}`,
+			})),
+		} : null;
+
 		return {
 			isOverview,
+			isAdvance,
+			advanceStep,
 			isMove,
 			isAgreed,
 			isForeignMove,
@@ -447,7 +505,8 @@ export class LevelUpDialog extends StonetopDialog {
 			isLastStep,
 			// Level Up step 6 (Book I p.528), naming a temporary Instinct this level-up ends and an
 			// insert whose Instinct replaced the playbook's.
-			reviewLine:      isLastStep ? this._reviewLine() : "",
+			// Not before a change of playbook: its creation asks for a new Instinct and Appearance anyway.
+			reviewLine:      isLastStep && !switching ? this._reviewLine() : "",
 			markStep,
 			companionStep,
 			canContinue,
@@ -463,9 +522,10 @@ export class LevelUpDialog extends StonetopDialog {
 			customId:        AGREED_CUSTOM,
 			agreedId:        AGREED_ID,
 			// Apply on a custom move opens the custom move editor; the level is taken when it saves.
-			applyLabel:      localize(isAgreed && this._selectedAgreedId === AGREED_CUSTOM
-				? "stonetop.specialMoves.levelUp.applyCustom"
-				: "stonetop.specialMoves.levelUp.apply"),
+			applyLabel:      switching && isAdvance ? "Level Up and pick a playbook"
+				: localize(isAgreed && this._selectedAgreedId === AGREED_CUSTOM
+					? "stonetop.specialMoves.levelUp.applyCustom"
+					: "stonetop.specialMoves.levelUp.apply"),
 			// Playbook avatar art, shown beside the intro of steps unique to one playbook
 			// (currently only the Lightbearer-only invocation step) to brand them.
 			playbookName:    d.playbookName,
@@ -502,9 +562,10 @@ export class LevelUpDialog extends StonetopDialog {
 				? format("stonetop.specialMoves.levelUp.picksChosen", { used: this._selectedInvocations.length, allowance: invocationAllowance })
 				: "",
 			statOptions,
-			statMoveName:    selectedEntry?.name ?? null,
+			statMoveName:    statAdvance ? statAdvance.label : (selectedEntry?.name ?? null),
 			statCap,
-			statCapLabel:    selectedEntry?.name && statCap != null
+			statCapLabel:    statAdvance ? `${statAdvance.label} Each stat goes up by 1, to +${statCap} at most.`
+				: selectedEntry?.name && statCap != null
 				? format("stonetop.specialMoves.levelUp.statCapNote", { move: selectedEntry.name, cap: statCap }) : "",
 			statAtMaxLabel:  localize("stonetop.specialMoves.levelUp.statAtMax"),
 			statAllAtCap:    statOptions.length > 0 && statOptions.every(s => s.atCap),
@@ -527,6 +588,22 @@ export class LevelUpDialog extends StonetopDialog {
 		const names = [...new Set(this._foreignMoves.map(m => m.playbook).filter(Boolean))].sort();
 		if (names.length < 2) return [];
 		return names.map(name => ({ key: name, label: name.replace(/^The\s+/i, "") }));
+	}
+
+	// The homebrew advance picked, from the playbook's own Level Up, or null.
+	_advanceOption() {
+		if (!this._selectedAdvance) return null;
+		return this._data?.advancement?.options?.find(o => o.slug === this._selectedAdvance) ?? null;
+	}
+
+	// Whether this level-up takes a move at all: always by the book; with a homebrew playbook's own
+	// Level Up that replaces it, only when the advance picked is "a new move from your playbook".
+	_takesMove() {
+		const adv = this._data?.advancement;
+		// The Standout's: the new playbook's creation brings the moves, not this level-up.
+		if (adv?.switchPlaybook) return false;
+		if (!adv?.replacesUsual) return true;
+		return this._advanceOption()?.kind === "move";
 	}
 
 	// The PlaybookMoveEntry for the currently-selected move (carries `cap`/`name`), or null.
@@ -646,13 +723,16 @@ export class LevelUpDialog extends StonetopDialog {
 	// their move-driven predicate fires (`overview`/`move` are always present).
 	_stepActive(step) {
 		switch (step) {
+			case "advance":     return !!this._data?.advancement;
+			case "move":        return this._takesMove();
 			case "agreed":      return this._isAgreed();
 			case "foreignMove": return this._needsForeignMoveChoice();
+			case "advanceStat": return this._advanceOption()?.kind === "stat";
 			case "stat":        return this._needsStatChoice();
 			case "marks":       return this._needsMarkChoice();
 			case "companion":   return !!this._data?.companionActions;
 			case "invocation":  return this._needsInvocationChoice();
-			default:            return true; // overview, move
+			default:            return true; // overview
 		}
 	}
 
@@ -809,8 +889,30 @@ export class LevelUpDialog extends StonetopDialog {
 		// keyboard back on the card pressed (M1).
 		wireKeyboardButtons(html);
 
-		html.find(".stonetop-levelup-stat-option:not(.is-at-cap)").on("click", ev => {
-			this._selectedStat = ev.currentTarget.dataset.statKey;
+		// Only the stat rows: the mark, companion and advance rows wear the same class for its look,
+		// and a redraw started here would run before their own handler wrote the pick, dropping theirs.
+		html.find(".stonetop-levelup-stat-option[data-stat-key]:not(.is-at-cap)").on("click", ev => {
+			const key = ev.currentTarget.dataset.statKey;
+			if (this._step === "advanceStat") {
+				// A different stat for the advance changes what the move's own stat step allows.
+				if (key !== this._selectedAdvanceStat) this._selectedStat = null;
+				this._selectedAdvanceStat = key;
+			} else this._selectedStat = key;
+			this.render(false);
+		});
+
+		// ── Advance step (a homebrew playbook's own Level Up) ─────────────
+		// The advance decides what follows: a move from this playbook (the move step), one agreed
+		// from another (the agreed step), a stat (the stat step), or nothing more (max HP, a die).
+		html.find(".stonetop-levelup-advance-option:not(.is-at-cap)").on("click", ev => {
+			const slug = ev.currentTarget.dataset.advanceSlug;
+			if (slug !== this._selectedAdvance) {
+				this._selectedAdvance = slug;
+				this._selectedAdvanceStat = null;
+				const kind = this._advanceOption()?.kind;
+				this._selectedMoveId = kind === "otherMove" ? AGREED_ID : null;
+				this._clearMoveDependents();
+			}
 			this.render(false);
 		});
 
@@ -907,6 +1009,9 @@ export class LevelUpDialog extends StonetopDialog {
 	async _apply() {
 		const entry = this._selectedMoveEntry();
 		const choices = {};
+		// A homebrew playbook's own advance: marked by the level-up, with the stat it raised.
+		const advance = this._advanceOption();
+		if (advance) choices.advance = { slug: advance.slug, stat: advance.kind === "stat" ? this._selectedAdvanceStat : null };
 		if (this._selectedStat && entry?.cap != null) {
 			choices.stat = this._selectedStat;
 			choices.cap  = entry.cap;
@@ -952,7 +1057,8 @@ export class LevelUpDialog extends StonetopDialog {
 			{ fromLevel: this._data.level, moveName },
 		);
 		if (result?.reason === "moveHeld") return this._backToMoves(agreedForeign?.name ?? entry?.name ?? "");
-		return this._finish(result, { addedMoveName: agreedForeign?.name ?? entry?.name ?? null, foreignMoveName });
+		return this._finish(result, { addedMoveName: agreedForeign?.name ?? entry?.name ?? null, foreignMoveName,
+			switchPlaybook: !!this._data?.advancement?.switchPlaybook });
 	}
 
 	// The move picked was put on the sheet while this window was open (L7): nothing was written. Say
@@ -1013,7 +1119,7 @@ export class LevelUpDialog extends StonetopDialog {
 	}
 
 	// After an apply: close, say what happened, and hand back to the sheet.
-	async _finish(result, { addedMoveName = null, foreignMoveName } = {}) {
+	async _finish(result, { addedMoveName = null, foreignMoveName, switchPlaybook = false } = {}) {
 		this._finishing = true;
 		// Closed BEFORE the sheet hears back: when there's XP for another level, the sheet
 		// opens the next level-up, and a window still closing under this id would be found by
@@ -1039,7 +1145,7 @@ export class LevelUpDialog extends StonetopDialog {
 		// editor when a Blessed levels into Big Magic (an additional remarkable trait). A
 		// cross-playbook pick hands back the foreign move it learned too: a Seeker who takes
 		// Big Magic through Initiate of the Secret Arts is owed that trait just the same.
-		if (this._onDone) this._onDone(addedMoveName, { applied: true, foreignMoveName });
+		if (this._onDone) this._onDone(addedMoveName, { applied: true, foreignMoveName, ...(switchPlaybook ? { switchPlaybook: true } : {}) });
 		this._focusAfterApply();
 	}
 

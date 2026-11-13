@@ -96,7 +96,7 @@ import {normalizeRollType} from "../../utils/roll-types.js";
 import {moveRollable} from "../../utils/move-rollable.js";
 import {escHtml, isDefaultImg, normalizePlaybookGlyphs, composeInstinct, stripHtmlToText} from "../../utils/strings.js";
 import {partyCharacters, playerOf} from "../../utils/playbook-actors.js";
-import { playbookAvatar, isHomebrewPlaybookItem, isHomebrewPublished } from "../../playbooks/playbook-catalog.js";
+import { playbookAvatar, isHomebrewPlaybookItem, isHomebrewPublished, homebrewPlaybookBySlug } from "../../playbooks/playbook-catalog.js";
 import { carriedCopyOf } from "../../playbooks/homebrew-missing.js";
 import {postMoveToChat, moveChatCard, pickableMoveDescription, whisperedAs} from "../../utils/chat.js";
 import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
@@ -331,6 +331,9 @@ function _formatResultLine(text) {
 function _guidedCharacterMoveHasAction(guide, rollable = null) {
 	return Boolean(rollable || guide?.roll);
 }
+
+// The most draws in a row a render asked for mid-draw may chain (StonetopCharacterSheet#_render).
+const RENDER_AGAIN_LIMIT = 3;
 
 /**
  * Potent Workings' offer in the Amulets & Talismans crafting window: "you may spend 1 additional
@@ -1370,6 +1373,20 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		async _render(force, options) {
+			// Core drops a render asked for while one is still drawing (application-v1.mjs returns on
+			// RENDERING), so a write landing mid-draw never showed until something else redrew the
+			// sheet: Level Up's mark on the move it had just added read "0 / 1 chosen" until reopened.
+			// Note it, draw once more when this draw is done, and leave the draw in progress alone
+			// (the work below would pull the timeline out from under it). The latest options ride along.
+			const states = this.constructor.RENDER_STATES;
+			if (states && this._state === states.RENDERING) {
+				this._renderAgain = { force: !!force || !!this._renderAgain?.force, options: { ...this._renderAgain?.options, ...options } };
+				return;
+			}
+			// How many draws in a row the latch has asked for: a write made during every draw that never
+			// settles would otherwise redraw forever, so the chain stops at RENDER_AGAIN_LIMIT.
+			const chain = this._renderAgainChain ?? 0;
+			this._renderAgainChain = 0;
 			// Foundry replaces the whole window content on every render, so a fresh
 			// <img> portrait is built and the browser must re-fetch/decode it before
 			// it paints — a visible flicker on each data-only re-render (toggling
@@ -1404,7 +1421,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			// See timeline/timeline-tab.js.
 			detachTimelineTab(this);
 			holdTimelineTabView(this, options?.view);
-			await super._render(force, options);
+			try {
+				await super._render(force, options);
+			} catch (err) {
+				// A draw that failed draws nothing more: a latch left armed would fire on some later render.
+				this._renderAgain = null;
+				throw err;
+			}
 			const newImg = portraitOf(this.element?.[0]);
 			if (oldImg && newImg
 				&& oldSrc === newImg.getAttribute("src")
@@ -1444,6 +1467,16 @@ export function createStonetopCharacterSheetClass(Base) {
 			// arrives on a tab nobody clicked. Cheap and idempotent otherwise: a panel already mounted
 			// is moved into the tab this render built, and one never opened is not built now either.
 			syncTimelineTab(this, this.element?.[0]);
+			// A render asked for while this one drew (above): draw again, now that it may.
+			const again = this._renderAgain;
+			this._renderAgain = null;
+			if (again && this.rendered) {
+				if (chain >= RENDER_AGAIN_LIMIT) console.warn(`Stonetop | ${this.actor?.name}'s sheet kept being asked to redraw while drawing; stopped after ${RENDER_AGAIN_LIMIT}.`);
+				else {
+					this._renderAgainChain = chain + 1;
+					this.render(again.force, again.options);
+				}
+			}
 		}
 
 		/**
@@ -1783,6 +1816,12 @@ export function createStonetopCharacterSheetClass(Base) {
 			};
 			context.stonetop.detailsShow = Object.fromEntries(Object.entries(detailsFilled)
 				.map(([section, filled]) => [section, filled || context.stonetop.detailsEdit[section]]));
+			// A homebrew playbook's own Level Up (its advances, ticked as marked) and its notes for
+			// the table, which were otherwise seen only once, on character creation's first page.
+			const hbPlaybook = homebrewPlaybookBySlug(this.actor.system?.playbook?.slug)?.asPlaybook?.() ?? null;
+			context.stonetop.homebrewNotes = hbPlaybook?.notes ?? "";
+			context.stonetop.detailsEdit.advancement = sectionEdit("advancement");
+			context.stonetop.advancement = _advancementContext(hbPlaybook?.advancement, this._stonetopCharacter.homebrewAdvances, this.actor.system?.stats);
 			const relRows = this._buildRelationshipRows();
 			const relEditing = context.stonetop.detailsEdit.relationships;
 			context.stonetop.relationships    = relEditing ? relRows : relRows.filter(r => r.shown);
@@ -5223,10 +5262,18 @@ export function createStonetopCharacterSheetClass(Base) {
 				// box and typing in it unticks the row's radios. Scoped to the row (data-line),
 				// since all four rows are on screen together.
 				html.find(".stonetop-appearance-custom").on("change", this._onAppearanceCustomChange.bind(this));
-				html.find("[name=stonetop-origin]").on("change", ev =>
-					this._stonetopCharacter.origin.select(ev.currentTarget.value)
-				);
+				// A different region asks a different question, so its answer starts empty (as onboarding does).
+				html.find("[name=stonetop-origin]").on("change", ev => {
+					const origin = this._stonetopCharacter.origin;
+					const region = ev.currentTarget.value;
+					return origin.select(region, region !== origin.selected ? { answer: "" } : {});
+				});
 				html.find(".stonetop-origin-name-check").on("change", this._onOriginNameClick.bind(this));
+				// A homebrew playbook's question for the place, and the place a player wrote in.
+				html.find(".stonetop-origin-answer").on("change", ev => this._stonetopCharacter.origin.setAnswer(ev.currentTarget.value));
+				// A homebrew playbook's advances, marked by hand ("mark one of the following before play").
+				html.find(".stonetop-advancement-check").on("change", this._onAdvanceCheck.bind(this));
+				html.find(".stonetop-origin-place").on("change", ev => this._stonetopCharacter.origin.setPlace(ev.currentTarget.value));
 				// A regular move check and a repeatable-move check run the identical
 				// add/remove-plus-prompts flow, so both bind to the one handler.
 				html.find(".stonetop-move-check, .stonetop-repeat-check").on("change", this._onMoveCheck.bind(this));
@@ -6793,7 +6840,11 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (lvl) {
 					const { moveName, markSlug, idx } = lvl.dataset;
 					this._stonetopCharacter.setMarkLevel(moveName, markSlug, Number(idx), parseInt(lvl.value, 10));
+					return;
 				}
+				// A write-in mark's words ("Something else: ___").
+				const writeIn = ev.target.closest(".stonetop-move-mark-writein");
+				if (writeIn) this._stonetopCharacter.setMarkText(writeIn.dataset.moveName, writeIn.dataset.markSlug, writeIn.value);
 			}, true);
 
 			html[0].addEventListener("click", ev => {
@@ -8620,6 +8671,24 @@ export function createStonetopCharacterSheetClass(Base) {
 			return el?.closest?.(".stonetop-appearance-row") ?? null;
 		}
 
+		// A homebrew advance ticked or unticked on the Details tab. A stat advance asks which stat
+		// first (its select beside the box), since the mark raises it.
+		async _onAdvanceCheck(ev) {
+			const box = ev.currentTarget;
+			const slug = box.dataset.slug;
+			if (box.checked) {
+				const stat = box.closest(".stonetop-advancement-option")?.querySelector(".stonetop-advancement-stat")?.value ?? null;
+				if (box.dataset.kind === "stat" && !stat) {
+					box.checked = false;
+					ui.notifications?.warn?.("Pick the stat it raises first, in the list beside it.");
+					return;
+				}
+				await this._stonetopCharacter.markHomebrewAdvance(slug, { stat });
+			} else {
+				await this._stonetopCharacter.unmarkHomebrewAdvance(slug);
+			}
+		}
+
 		async _onOriginNameClick(ev) {
 			await this._stonetopCharacter.updateName(ev.currentTarget.value);
 		}
@@ -9666,8 +9735,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			return new LevelUpDialog(
 				this._stonetopCharacter,
 				levelUpData,
-				(addedMoveName, { applied = false, foreignMoveName = null } = {}) => {
+				(addedMoveName, { applied = false, foreignMoveName = null, switchPlaybook = false } = {}) => {
 					this.render(false);
+					// The Standout's Level Up: "switch to a different playbook". The level is taken; the
+					// new playbook is picked and built as in creation (a change of playbook clears the old).
+					if (applied && switchPlaybook) {
+						this._onNewCharacter({ switchPlaybook: true }).catch(err => console.error(err));
+						return;
+					}
 					// What the new move owes at once (a Big Magic's freed trait, Veteran Crew's tags…).
 					// Learned through a cross-playbook move (the Seeker's Initiate, Wild Soul, Versatile),
 					// it's the foreign move that owes it.
@@ -14700,6 +14775,12 @@ export function createStonetopCharacterSheetClass(Base) {
 				return;
 			}
 
+			// A Level Up that switches playbook (the Standout's) has said so already: straight to the picker.
+			if (existingPlaybook && options.switchPlaybook) {
+				openPicker();
+				return;
+			}
+
 			if (existingPlaybook) {
 				// Says what a different playbook clears; the clearing itself runs when the new one
 				// is applied (_applyPlaybookSelections → clearPlaybookData), and only if it differs.
@@ -15204,6 +15285,8 @@ export function createStonetopCharacterSheetClass(Base) {
 				instinctValue:   f.instinct?.selected ?? "",
 				appearance:      foundry.utils.deepClone(f.appearance?.selected ?? {}),
 				originRegion:    f.origin?.selected ?? "",
+				originPlace:     f.origin?.place ?? "",
+				originAnswer:    f.origin?.answer ?? "",
 				name:            this.actor.name ?? "",
 				stats: (s => Object.fromEntries(
 					["str","dex","con","int","wis","cha"].map(k => [k, k in s ? s[k] : null])
@@ -15544,7 +15627,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				// "Pick N" bundles (Weapons of war, Symbol of authority…): replace the
 				// chosen sub-options wholesale, but only for possessions actually selected.
 				// Replacing (not adding) drops picks the player deselected on a re-run.
-				const selectedSet = new Set(slugsToSelect);
+				// A possession the background hands over counts too (the Standout's Veteran gets Weapons
+				// of War, and picks its weapon on the possessions page): it is selected further down.
+				const selectedSet = new Set([...slugsToSelect, ...backgroundPossessionSlugs(selectedBackground, selections.backgroundSetup?.choices)]);
 				pendingSubChoices = Object.entries(selections.possessionChoices ?? {}).filter(([possessionSlug]) => selectedSet.has(possessionSlug));
 				// Fill-in blanks written into a sub-option (the Would-Be Hero's personal token),
 				// persisted for the selected possessions the same way as their picks above.
@@ -15666,7 +15751,9 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (value?.trim()) await this._stonetopCharacter.appearance.select(Number(lineIdx), value.trim());
 			}
 			if (selections.originRegion) {
-				await this._stonetopCharacter.origin.select(selections.originRegion);
+				await this._stonetopCharacter.origin.select(selections.originRegion, {
+					place: selections.originPlace ?? "", answer: selections.originAnswer ?? "",
+				});
 			}
 			if (selections.name?.trim()) {
 				await this._stonetopCharacter.updateName(selections.name.trim());
@@ -15818,5 +15905,34 @@ export function createStonetopCharacterSheetClass(Base) {
 			}
 			if (Object.keys(upd).length) await this.actor.update(upd);
 		}
+	};
+}
+
+const _ADVANCE_STATS = [["str", "STR"], ["dex", "DEX"], ["int", "INT"], ["wis", "WIS"], ["con", "CON"], ["cha", "CHA"]];
+
+/**
+ * A homebrew playbook's own Level Up for the Details tab: each advance, ticked when marked, with the
+ * level it was marked at and the stat a stat advance raised; a stat advance not yet marked offers
+ * the stats it could still raise. Null for a playbook without one.
+ */
+function _advancementContext(adv, marked = {}, stats = {}) {
+	if (adv?.switchPlaybook) return { switchPlaybook: true, note: String(adv.note ?? ""), replacesUsual: false, options: [] };
+	if (!adv?.options?.length) return null;
+	return {
+		note: String(adv.note ?? ""),
+		replacesUsual: !!adv.replacesUsual,
+		options: adv.options.map(o => {
+			const m = marked?.[o.slug] ?? null;
+			const statName = m?.stat ? (_ADVANCE_STATS.find(([k]) => k === m.stat)?.[1] ?? "") : "";
+			const cap = Number(o.max) || 3;
+			return {
+				slug: o.slug, label: o.label, kind: o.kind, checked: !!m,
+				isStat: o.kind === "stat",
+				markedNote: m ? [m.atLevelUp ? `level ${m.level}` : "before play", statName ? `+1 ${statName}` : ""].filter(Boolean).join(", ") : "",
+				stats: o.kind === "stat" && !m
+					? _ADVANCE_STATS.map(([key, abbr]) => ({ key, abbr, atCap: (Number(stats?.[key]?.value) || 0) >= cap }))
+					: [],
+			};
+		}),
 	};
 }

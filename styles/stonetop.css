@@ -3349,6 +3349,86 @@ input.stonetop-name-field {
 	margin-bottom: 0;
 }
 
+/* A homebrew playbook's question for someone from the place, the answer to it, and a place a
+   player wrote in (the Familiar Face's "Somewhere else"). */
+.stonetop-origin-question {
+	margin: 4px 0 2px;
+	font-size: var(--st-fs-floor-sm);
+	font-style: italic;
+	line-height: 1.35;
+	color: var(--color-text-dark-secondary);
+}
+.stonetop-origin-option .stonetop-origin-question { padding-left: 20px; }
+.stonetop-origin-answer-text {
+	margin: 2px 0 0;
+	font-size: var(--st-fs-floor-sm);
+	line-height: 1.35;
+	white-space: pre-line;
+}
+.stonetop-origin-option .stonetop-origin-answer,
+.stonetop-origin-option .stonetop-origin-place {
+	display: block;
+	width: calc(100% - 20px);
+	margin: 2px 0 4px 20px;
+	font-size: var(--st-fs-floor-sm);
+}
+.stonetop-origin-option .stonetop-origin-answer {
+	resize: vertical;
+	min-height: 3em;
+}
+
+/* A homebrew playbook's own Level Up on the Details tab: its advances, ticked once marked. Each row
+   is a box and its words, the box held to the first line of words that may wrap. */
+.stonetop-advancement-list {
+	list-style: none;
+	margin: 4px 0 0;
+	padding: 0;
+}
+.stonetop-advancement-list .stonetop-advancement-option::before { content: none !important; }
+.stonetop-advancement-option {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	gap: 4px 8px;
+	margin: 0 0 4px;
+	font-size: var(--st-fs-floor-sm);
+	line-height: 1.35;
+}
+.stonetop-advancement-label {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	flex: 1 1 0;
+	min-width: 12em;
+	cursor: pointer;
+}
+.stonetop-advancement-label > input.stonetop-advancement-check {
+	flex: 0 0 auto;
+	position: relative;
+	top: 0;
+	margin: calc((1lh - var(--st-check-size)) / 2 - var(--st-caps-lift)) 0 0;
+	/* 1lh is read off the input's own leading, which is the row's line only once inherited. */
+	font-size: inherit;
+	line-height: inherit;
+}
+.stonetop-advancement-text { flex: 1 1 0; min-width: 0; }
+.stonetop-advancement-note { color: var(--color-text-dark-secondary); font-style: italic; }
+.stonetop-advancement-stat {
+	flex: 0 0 auto;
+	width: auto;
+	height: auto;
+	font-size: var(--st-fs-floor-sm);
+}
+.stonetop-advancement-aside,
+.stonetop-playbook-notes-body {
+	margin: 6px 0 0;
+	font-size: var(--st-fs-floor-sm);
+	line-height: 1.4;
+	color: var(--color-text-dark-secondary);
+}
+.stonetop-playbook-notes-body p { margin: 0 0 6px; }
+.stonetop-playbook-notes-body p:last-child { margin-bottom: 0; }
+
 /* ~ Selection fields */
 
 /* -- Sheet layout (sidebar persists across all tabs) ------- */
@@ -5020,12 +5100,54 @@ input.stonetop-name-field {
 	font-size: 1em;
 	text-align: center;
 }
+/* The words take what is left of the line and wrap inside it. With the row's flex-wrap and an auto
+   basis, words a little too long for the line moved WHOLE onto the next one and stranded the box
+   above them (Eccentricity's "You can safely wander the forest alone." in a narrow move card). A
+   zero basis always fits beside the box; max-content stops it growing past its own words, so the
+   "(level 2)" after a short label still hugs it. */
 .stonetop-move-mark-label {
 	font-family: var(--font-stonetop);
 	line-height: 1.2;
-	flex: 1 1 auto;
+	flex: 1 1 0;
+	max-width: max-content;
 	min-width: 0;
 	overflow-wrap: anywhere;
+}
+/* Words that take two lines would have the row's centring hang the box between them, so a row with
+   words aligns to its top and the boxes sit in a box one line of those words tall, centred in it. A
+   one-line row lands where centring put it. (1lh inside line-height resolves against the parent.) */
+.stonetop-move-mark:has(> .stonetop-move-mark-label) {
+	align-items: flex-start;
+	font-family: var(--font-stonetop);
+	line-height: 1.2;
+}
+.stonetop-move-mark:has(> .stonetop-move-mark-label) > .stonetop-move-mark-checks {
+	min-height: 1lh;
+	align-items: center;
+	/* The middle of a line is not the middle of its capitals (Signika's sit above it): up by the
+	   measured difference, as every other box beside words (--st-caps-lift; measured 1.4px low before). */
+	position: relative;
+	top: calc(-1 * var(--st-caps-lift));
+}
+.stonetop-move-mark:has(> .stonetop-move-mark-label) > :is(.stonetop-move-mark-level-text, .stonetop-move-mark-level-wrap, i) {
+	line-height: 1lh;
+}
+
+/* A write-in mark ("Something else: ___ (discuss with the GM)"): what the player wrote, on the line.
+   Its words before the blank ("Something else:") stay whole; the box takes the rest of the line. */
+.stonetop-move-mark-label:has(+ .stonetop-move-mark-writein) {
+	flex: 0 0 auto;
+	max-width: none;
+	white-space: nowrap;
+	overflow-wrap: normal;
+}
+.stonetop-move-mark-writein {
+	flex: 1 1 6em;
+	min-width: 5em;
+	height: 1.4em;
+	padding: 0 4px;
+	font-family: var(--font-stonetop);
+	font-size: 1em;
 }
 
 .stonetop-item-name {
@@ -9850,6 +9972,9 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 .stonetop-pb-builder-report { padding: 8px 10px; }
 .stonetop-pb-builder-report-title { margin: 0 0 4px; font-weight: bold; font-size: var(--st-fs-sm); }
 .stonetop-pb-builder-report-line { margin: 2px 0; font-size: var(--st-fs-xs); }
+/* The Level Up panel's read-back: each advance and what Level Up will do with it. */
+.stonetop-pb-builder-advance-read { margin: 0 0 4px; padding: 0; list-style: none; font-size: var(--st-fs-xs); }
+.stonetop-pb-builder-advance-read li { margin: 2px 0; }
 .stonetop-pb-builder-report-line.is-error { color: var(--st-danger-ink); }
 
 /* One move per folding card (framed with the cards above); the summary line is its name and what
@@ -25564,11 +25689,14 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 .stonetop-onboarding-card-desc p { margin: 3px 0; }
 /* The homebrew notes' lists (playbook-text.js writes <ul>) wear the same spiral. */
 .stonetop-onboarding-card-desc ul,
-.stonetop-onboarding-homebrew-notes-body ul { margin: 3px 0; padding-left: 0; list-style: none; }
+.stonetop-onboarding-homebrew-notes-body ul,
+.stonetop-playbook-notes-body ul { margin: 3px 0; padding-left: 0; list-style: none; }
 .stonetop-onboarding-card-desc li,
-.stonetop-onboarding-homebrew-notes-body li { margin: 2px 0; }
+.stonetop-onboarding-homebrew-notes-body li,
+.stonetop-playbook-notes-body li { margin: 2px 0; }
 .stonetop-onboarding-card-desc li::before,
-.stonetop-onboarding-homebrew-notes-body li::before {
+.stonetop-onboarding-homebrew-notes-body li::before,
+.stonetop-playbook-notes-body li::before {
 	content: ""; flex-shrink: 0; width: 9px; height: 9px; margin-top: 3px;
 	background-image: var(--stonetop-spiral-icon);
 	background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.5;
@@ -25746,6 +25874,35 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 }
 
 .onboard-name-input:focus { outline: none; border-color: slategrey; }
+
+/* A write-in place, and a homebrew playbook's question about the place picked. */
+.onboard-origin-place {
+	flex: 1;
+	font-size: 1em;
+	padding: 5px 10px;
+	border: 1.5px solid var(--st-on-dark-rule-soft, #ccc);
+	border-radius: var(--st-radius);
+}
+.stonetop-onboarding-origin-question {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-bottom: 12px;
+}
+.stonetop-onboarding-origin-question-text {
+	font-size: var(--st-fs-base);
+	font-style: italic;
+}
+.onboard-origin-answer {
+	width: 100%;
+	font-size: 1em;
+	padding: 5px 10px;
+	resize: vertical;
+	border: 1.5px solid var(--st-on-dark-rule-soft, #ccc);
+	border-radius: var(--st-radius);
+}
+.onboard-origin-place:focus,
+.onboard-origin-answer:focus { outline: none; border-color: slategrey; }
 
 /* Name suggestions */
 .stonetop-onboarding-names-section {
@@ -31019,6 +31176,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 .stonetop-outfit-rule-note li::before,
 .stonetop-onboarding-card-desc li::before,
 .stonetop-onboarding-homebrew-notes-body li::before,
+.stonetop-playbook-notes-body li::before,
 .stonetop-follower-rule li::before {
 	position: absolute;
 	left: 0;
@@ -31083,6 +31241,7 @@ li.question-bullet::before {
 .stonetop-outfit-rule-note li,
 .stonetop-onboarding-card-desc li,
 .stonetop-onboarding-homebrew-notes-body li,
+.stonetop-playbook-notes-body li,
 .stonetop-follower-rule li {
 	position: relative;
 	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
