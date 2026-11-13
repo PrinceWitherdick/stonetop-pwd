@@ -11,7 +11,8 @@
 // half-finished wizard is worse than not, and the session-zero walkthroughs already have
 // their own reload-resume path (dialogs/walkthrough-resume.js). The one wizard that is,
 // Create a Site, is GM prep a table writes over a whole evening and asked to come back
-// (sites/create-site-restore.js); it saves its answers in `restoreView`.
+// (sites/create-site-restore.js); it saves its answers in `restoreView`. So does the Playbook
+// Builder (playbooks/playbook-builder-restore.js), a form, not a wizard, with the same evening in it.
 //
 // Per-client on purpose: window layout is personal, not shared world state (mirrors the
 // existing `characterSheetWidths` client setting). Defaults on; the "Restore Open

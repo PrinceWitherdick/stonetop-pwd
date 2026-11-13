@@ -112,6 +112,8 @@ export class Movelist {
 		this.loveLetters       = b._loveLetters ?? [];
 		this.startingMovesNote = b._startingMovesNote;
 		this.postDeathGroup    = b._postDeathGroup ?? null;
+		// A homebrew insert's moves the character holds, one group per insert (its own tab picks them).
+		this.insertGroups      = b._insertGroups ?? [];
 		this.movesIncomplete   = b._movesIncomplete ?? false;
 		this.levelMovesIncomplete = b._levelMovesIncomplete ?? false;
 		this.levelMovesShortfall  = b._levelMovesShortfall ?? 0;
@@ -133,6 +135,7 @@ export class MovelistBuilder {
 	withLoveLetters(v)       { this._loveLetters       = v; return this; }
 	withStartingMovesNote(v) { this._startingMovesNote = v; return this; }
 	withPostDeathGroup(v)    { this._postDeathGroup    = v; return this; }
+	withInsertGroups(v)      { this._insertGroups      = v; return this; }
 	withMovesIncomplete(v)   { this._movesIncomplete   = v; return this; }
 	withLevelMovesIncomplete(v) { this._levelMovesIncomplete = v; return this; }
 	withLevelMovesShortfall(v)  { this._levelMovesShortfall  = v; return this; }

@@ -99,7 +99,7 @@
 					       data-owned-id="{{this.ownedId}}"
 					       data-move-name="{{../name}}"
 					       {{#if checked}}checked{{/if}}
-					       {{#if (or disabled (not @root.stonetop.movesEdit))}}disabled{{/if}}>
+					       {{#if (or disabled (not (or @root.stonetop.movesEdit ../pickable)))}}disabled{{/if}}>
 					{{/each}}
 				</span>
 				{{else}}
@@ -114,8 +114,10 @@
 			             A move whose requirements aren't met stays faded (.move-locked) but is
 			             still pickable in edit mode, so a player can deliberately learn it anyway
 			             — it then shows the "requirement not met" warning. A move given up
-			             for its replacement (replacedBy) is the exception: never re-tickable. --}}
-				       {{#if (or (and isStarting owned) replacedBy (not @root.stonetop.movesEdit))}}disabled{{/if}}>
+			             for its replacement (replacedBy) is the exception: never re-tickable.
+			             `pickable`: a homebrew insert's move list with a pick still owed, open
+			             without edit mode (CharacterHomebrewInserts#buildView). --}}
+				       {{#if (or (and isStarting owned) replacedBy (not (or @root.stonetop.movesEdit this.pickable)))}}disabled{{/if}}>
 				{{/if}}
 				{{!-- THE TITLE IS THE ROLL. There is no dice icon beside a move any more: the
 				      name element IS the `.rollable`, carrying the stat and the classes the

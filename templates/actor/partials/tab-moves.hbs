@@ -150,6 +150,16 @@
 		    editing=stonetop.movesEdit}}
 		{{/if}}
 
+		{{!-- A homebrew insert's moves the character holds, under the insert's name. Its own tab is
+		      where they are picked; here they sit with the rest, to roll. --}}
+		{{#each stonetop.movelist.insertGroups}}
+		{{> "stonetop.move-group"
+		    title=this.label
+		    note=null
+		    collapseId=(concat "insertMoves:" this.key)
+		    moves=this.moves}}
+		{{/each}}
+
 		{{#if stonetop.movelist.postDeathGroup}}
 		{{> "stonetop.move-group"
 		    title=stonetop.movelist.postDeathGroup.label

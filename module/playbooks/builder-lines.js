@@ -90,6 +90,58 @@ export function loreOptionLines(list = []) {
 	return list.map(o => o.freeText ? `write: ${o.description}` : (o.max > 1 ? `${o.description} (x${o.max})` : o.description)).join("\n");
 }
 
+/**
+ * An insert list's options: a lore section's lines, plus "ticked: terrifying" for an option every
+ * character starts with ticked (printed ticked on the page).
+ */
+const TICKED = /^ticked\s*:\s*/i;
+export function parseInsertOptionLines(text) {
+	return lines(text).map(line => {
+		const preselected = TICKED.test(line);
+		const [o] = parseLoreOptionLines(line.replace(TICKED, ""));
+		return o ? { ...o, preselected: preselected && !o.freeText } : null;
+	}).filter(Boolean);
+}
+export function insertOptionLines(list = []) {
+	return list.map(o => `${o.preselected ? "ticked: " : ""}${loreOptionLines([o])}`).join("\n");
+}
+
+/** Bonus picks a move gives a list, both ways: "Implements of Evil +2, Extra Gear +1". */
+export function parseBonusPicks(text) {
+	return commaList(text).map(part => {
+		const m = part.match(/^(.*?)\s*\+\s*(\d+)\s*$/);
+		return m ? { move: m[1].trim(), count: Math.max(1, Math.min(10, Number(m[2]))) } : { move: part.trim(), count: 1 };
+	}).filter(b => b.move);
+}
+export function bonusPickList(list = []) {
+	return list.map(b => `${b.move} +${b.count}`).join(", ");
+}
+
 /** A comma list of names, both ways (a background's moves, a requirement's moves, track labels). */
 export function parseNameList(text) { return commaList(text); }
 export function nameList(list = []) { return list.join(", "); }
+
+/**
+ * Write `value` at a dotted bundle path ("playbook.backgrounds.0.track.label"), making any object
+ * on the way that is missing OR null. A background with no track holds `track: null`, and core's
+ * setProperty walks into the null and throws, which took every builder button down with it.
+ * Numeric steps index the arrays already there. Returns the object written into.
+ */
+export function setBundlePath(target, path, value) {
+	const keys = String(path ?? "").split(".").filter(Boolean);
+	if (!keys.length || !target || typeof target !== "object") return target;
+	// A blank field under nothing (an empty "Its own track" box) leaves the nothing as it is: making
+	// `{ label: "", max: 0 }` of it changed the playbook as the builder holds it, so a window just
+	// saved counted as unsaved.
+	const blank = value === "" || value === 0 || value === false || value === null || value === undefined;
+	let obj = target;
+	for (const key of keys.slice(0, -1)) {
+		if (obj[key] === null || typeof obj[key] !== "object") {
+			if (blank) return target;
+			obj[key] = {};
+		}
+		obj = obj[key];
+	}
+	obj[keys.at(-1)] = value;
+	return target;
+}

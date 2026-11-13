@@ -82,4 +82,10 @@ export class StonetopPlaybook {
 	get lore() {
 		return this._stonetopFields.lore ?? [];
 	}
+
+	// A homebrew playbook's INSERTS (homebrew-bundle.js insertToFlags): a page a move unlocks, with
+	// lists to tick, moves of its own and maybe a form to take. The book's playbooks have none here.
+	get inserts() {
+		return Array.isArray(this._stonetopFields.inserts) ? this._stonetopFields.inserts : [];
+	}
 }

@@ -144,7 +144,7 @@ const CONTENT_OPTIONS = [
 		icon: "fa-book",
 		// World prep: what players may pick as a character is the GM's call.
 		gmOnly: true,
-		hint: "A character playbook of your own or a third party's: build it by hand, or import a shared playbook file. Players see it in the playbook picker once you show it to them.",
+		hint: "A character playbook of your own or a third party's: read it from a PDF, or build it by hand. Players see it in the playbook picker once you show it to them.",
 		create: () => _openPlaybookBuilder(),
 	},
 	{
@@ -198,9 +198,25 @@ export function contentOptionsFor(isGM, { canArcana = false } = {}) {
  * reusable, draggable artifact rather than a bare document.
  */
 export async function openCreateStonetopContent() {
+	// One chooser at a time: pressing Create Item again while it's up brings it forward instead of
+	// stacking a second identical window over it.
+	if (_chooserOpen) {
+		// Only one that is drawn: the first may still be opening (core's bringToTop reads its element).
+		const open = Object.values(globalThis.ui?.windows ?? {})
+			.find(w => w.options?.classes?.includes("stonetop-content-picker-dialog") && w.title === CHOOSER_TITLE);
+		if (open?.rendered && open.element?.[0]) open.bringToTop();
+		return null;
+	}
 	const options = contentOptionsFor(!!game.user?.isGM, { canArcana: canCreateArcana() });
-	return runPickedOption(options, await pickContentOption({ title: "Create Stonetop Content", options }));
+	let picked;
+	_chooserOpen = true;
+	try { picked = await pickContentOption({ title: CHOOSER_TITLE, options }); }
+	finally { _chooserOpen = false; }
+	return runPickedOption(options, picked);
 }
+
+const CHOOSER_TITLE = "Create Stonetop Content";
+let _chooserOpen = false;
 
 /** A reusable world move, saved where every character sheet can drag it. */
 async function _openWorldMove() {
@@ -209,10 +225,10 @@ async function _openWorldMove() {
 	new CustomMoveDialog(worldMoveSaver(), {}).render(true);
 }
 
-/** A new homebrew playbook in the Playbook Builder. */
+/** A new homebrew playbook: asked whether it comes from a PDF, then the Playbook Builder. */
 async function _openPlaybookBuilder() {
-	const { openPlaybookBuilder } = await import("../playbooks/PlaybookBuilderDialog.js");
-	openPlaybookBuilder();
+	const { startNewPlaybook } = await import("../playbooks/PlaybookBuilderDialog.js");
+	startNewPlaybook();
 }
 
 /** A draggable steading-improvement card. */

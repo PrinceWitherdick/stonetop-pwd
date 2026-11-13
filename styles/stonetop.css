@@ -9813,8 +9813,29 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-pb-builder-try { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .stonetop-pb-builder-read > summary { cursor: pointer; font-weight: bold; }
 
-.stonetop-pb-builder-picture { display: flex; align-items: center; gap: 12px; }
+/* The picture the playbook will carry, with its button underneath, both on the left edge. */
+.stonetop-pb-builder-picture { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .stonetop-pb-builder-picture-img { width: 64px; height: 64px; object-fit: contain; border: none; }
+/* Core's icons/svg art (the generic book a homebrew playbook gets without a picture of its own) is
+   drawn in white, so wherever a playbook's picture shows on the parchment it sits on a slate tile,
+   the way core shows that art, or it vanishes. The onboarding header needs none: it is already a
+   coloured band. */
+:is(.stonetop-pb-builder-picture-img, .stonetop-playbook-picker-card-icon,
+	.stonetop-levelup-intro-icon, .stonetop-intros-pc-icon)[src^="icons/svg/"] {
+	box-sizing: border-box;
+	padding: 8px;
+	border-radius: var(--st-radius);
+	background: var(--st-btn-primary-bg);
+}
+/* The 36-40px heading icons take a thinner margin, so the book stays readable. */
+:is(.stonetop-levelup-intro-icon, .stonetop-intros-pc-icon)[src^="icons/svg/"] { padding: 4px; }
+/* The character sheet's portrait takes the playbook's picture while the actor has none of its own. */
+img.stonetop-portrait[src="icons/svg/book.svg"] {
+	box-sizing: border-box;
+	padding: 32px;
+	object-fit: contain;
+	background: var(--st-btn-primary-bg);
+}
 
 .stonetop-pb-builder-share { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid rgb(var(--st-ink-rgb) / 0.12); }
 .stonetop-pb-builder-share-title { margin: 0; font-family: var(--font-stonetop); font-weight: bold; font-size: var(--st-fs-sm); }
@@ -9846,16 +9867,29 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-pb-builder-move-body { display: flex; flex-direction: column; gap: 8px; padding: 4px 10px 10px; }
 .stonetop-pb-builder-move-foot { display: flex; justify-content: flex-end; }
 
-/* Checking a PDF import (playbooks/PlaybookImportReview.js): a scrolling body above a pinned
+/* Checking a PDF import (playbooks/PlaybookImportReview.js): a rail of pages above a pinned
    footer. What needs an answer and what was hard to place wear the gold caution edge; a piece the
    GM has moved wears a quiet slate one, so the two never read alike. */
 .stonetop-pb-review .window-content { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
 .stonetop-pb-review-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-.stonetop-pb-review-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 14px; font-size: var(--st-fs-base); }
+/* A left rail of pages, like the Welcome guide (the shared .stonetop-guide-split / -toc / -main
+   chrome and partials/guide-tabs.hbs): Start here, then one page per section. The panel column
+   scrolls on its own beside the rail. */
+.stonetop-pb-review-body { flex: 1 1 auto; min-width: 0; min-height: 0; overflow-y: auto; padding: 12px 16px; font-size: var(--st-fs-base); }
+.stonetop-pb-review-panel { display: flex; flex-direction: column; gap: 14px; }
+.stonetop-pb-review-panel[hidden] { display: none; }
+/* The rail sizes to its longest section name (the Welcome rail's rule), and a section holding a
+   hard-to-place piece shows its count in the gold the piece itself wears. */
+.stonetop-pb-review-split > .stonetop-guide-toc { width: max-content; }
+.stonetop-pb-review-split .stonetop-guide-toc-text { white-space: nowrap; }
+.stonetop-pb-review-split .stonetop-guide-toc-item.is-unsure .stonetop-guide-toc-count { color: var(--st-gold-text); font-weight: bold; }
 .stonetop-pb-review-nav { flex: 0 0 auto; }
 .stonetop-pb-review-name { margin: 0; font-family: var(--font-stonetop); border: none; }
 .stonetop-pb-review-desc { margin: 2px 0 0; font-style: italic; }
 .stonetop-pb-review-lead { margin: 6px 0 0; font-size: var(--st-fs-sm); }
+/* The "Imported from" line heads the page, above the playbook's name: flush with the panel's top
+   (level with the rail's first entry) and set off from the name below it. */
+.stonetop-pb-review-head > .stonetop-pb-review-lead:first-child { margin: 0 0 10px; }
 .stonetop-pb-review-issue { margin: 4px 0 0; font-size: var(--st-fs-sm); color: var(--st-gold-text); }
 .stonetop-pb-review-h3 { margin: 0 0 6px; font-family: var(--font-stonetop); font-size: var(--st-fs-base); font-weight: bold; border: none; }
 
@@ -9880,7 +9914,7 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 /* Core styles a <dt> as an embossed label; these are plain ones. */
 .stonetop-pb-review .stonetop-pb-review-facts dt { font-weight: bold; color: var(--st-text-body); text-shadow: none; font-family: inherit; }
 .stonetop-pb-review-facts dd { margin: 0; }
-.stonetop-pb-review-group { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.stonetop-pb-review-group { display: flex; flex-direction: column; gap: 6px; }
 .stonetop-pb-review-group-title { margin: 0; font-family: var(--font-stonetop); font-size: var(--st-fs-sm); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid rgb(var(--st-ink-rgb) / 0.2); }
 .stonetop-pb-review-count { font-weight: normal; color: var(--color-text-dark-secondary); }
 .stonetop-pb-review-block {
@@ -9892,6 +9926,20 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 }
 .stonetop-pb-review-block.is-unsure { border-left-color: var(--st-gold-border); background: var(--st-gold-bg); }
 .stonetop-pb-review-block.is-moved { border-left-color: slategrey; }
+/* Start here's colour key: each line a small sample of the piece edge it explains (above). Core's
+   list-entry margin is zeroed; the list spaces its lines with gap. */
+.stonetop-pb-review-key-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.stonetop-pb-review-key-item {
+	margin: 0;
+	padding: 4px 10px;
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.15);
+	border-left-width: 3px;
+	border-radius: var(--st-radius-sm);
+	background: rgb(var(--st-paper-rgb));
+	font-size: var(--st-fs-sm);
+}
+.stonetop-pb-review-key-item.is-unsure { border-left-color: var(--st-gold-border); background: var(--st-gold-bg); }
+.stonetop-pb-review-key-item.is-moved { border-left-color: slategrey; }
 .stonetop-pb-review-block-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .stonetop-pb-review-block-title { font-family: var(--font-stonetop); }
 .stonetop-pb-review-block-tags { font-size: var(--st-fs-xs); font-style: italic; color: var(--color-text-dark-secondary); }
@@ -18626,6 +18674,87 @@ button.stonetop-mark-sign-btn.is-active:hover {
    reads this tab through a magnifier. Every property core's app-button rule sets is declared,
    `width` above all, or `body.game .app button { width: 100% }` stretches each across the row. */
 
+/* A homebrew playbook's INSERT tab (tab-homebrew-insert.hbs): its words, the switch into its form and
+   out again, what the character is while in it, and each list's "Picked N of M". The switch is a
+   flex button around a trimmed .stonetop-chip-text, as the post-death tab's outcome buttons are. */
+.stonetop-hb-insert-desc {
+	margin: 0 0 10px;
+	font-style: italic;
+	color: var(--color-text-dark-secondary);
+}
+.stonetop-hb-insert-desc p { margin: 0 0 6px; }
+
+.stonetop-hb-insert-form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 12px;
+	margin: 0 0 12px;
+	padding: 8px 10px;
+	border: 1px solid var(--st-card-rule);
+	border-radius: var(--st-radius-sm);
+	background: var(--st-card-fill);
+}
+.stonetop-hb-insert-form.is-worn {
+	border-color: var(--st-btn-primary-border);
+}
+.stonetop-hb-insert-form-state {
+	flex: 1 1 16em;
+	margin: 0;
+	font-size: var(--st-fs-sm);
+	color: var(--color-text-dark-secondary);
+}
+.stonetop .stonetop-hb-insert-form-btn {
+	display: inline-flex;
+	align-items: center;
+	width: auto;
+	flex: 0 0 auto;
+	min-height: calc(28px * var(--stonetop-font-scale, 1));
+	margin: 0;
+	padding: 2px 12px;
+	line-height: 1.25;
+	font-size: var(--st-fs-base);
+	font-weight: 600;
+	background: var(--st-card-fill);
+	border: 1px solid var(--st-btn-primary-border);
+	border-radius: var(--st-radius-sm);
+	color: var(--color-text-dark-primary);
+	cursor: pointer;
+}
+.stonetop .stonetop-hb-insert-form-btn:hover { background: var(--st-card-rule); }
+.stonetop .stonetop-hb-insert-form-btn:focus-visible {
+	outline: 2px solid var(--st-btn-primary-border);
+	outline-offset: 2px;
+}
+.stonetop .stonetop-hb-insert-form-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.stonetop-hb-insert-banner {
+	margin: 0 0 12px;
+	padding: 0;
+}
+.stonetop-hb-insert-banner-row {
+	display: flex;
+	gap: 8px;
+	margin: 0 0 2px;
+}
+/* As the import review's facts list: a sheet's `dt` otherwise takes a heading face and its shadow. */
+.stonetop-hb-insert-banner dt {
+	flex: 0 0 auto;
+	font-weight: 600;
+	font-family: inherit;
+	text-shadow: none;
+	color: var(--color-text-dark-primary);
+}
+.stonetop-hb-insert-banner dt::after { content: ":"; }
+.stonetop-hb-insert-banner dd { margin: 0; }
+
+.stonetop-hb-insert-allowance {
+	margin: 2px 0 0;
+	font-size: var(--st-fs-sm);
+	font-style: normal;
+	color: var(--color-text-dark-secondary);
+}
+
 /* The section ends on its last row of buttons, and `.details-section { margin: 0 }` left the next
    heading sitting on them. The same 14px the Details tab puts between its sections. */
 .details-section.stonetop-pdi-outcomes {
@@ -20540,6 +20669,8 @@ button.stonetop-mark-sign-btn.is-active:hover {
 .stonetop-tab-rail .item[data-tab="improvements"]  { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hammer-nails.svg'); }
 .stonetop-tab-rail .item[data-tab="relmap"]        { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/relationship-map.svg'); }
 .stonetop-tab-rail .item[data-tab="timeline"]      { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hourglass.svg'); }
+/* A homebrew playbook's insert (tab-homebrew-insert.hbs): one tab each, keyed "hb-insert-<insert key>". */
+.stonetop-tab-rail .item[data-tab^="hb-insert-"]   { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/direction-signs.svg'); }
 .stonetop-tab-rail .item[data-tab="threats"]       { --st-tab-icon: url('/systems/stonetop-pwd/assets/icons/tabs/hazard-sign.svg'); }
 /* No row for `sites`: it is a section at the foot of the Expeditions panel now, not a tab, so
    nothing on any sheet renders `data-tab="sites"`. `site-mound.svg` itself stays in the tree —

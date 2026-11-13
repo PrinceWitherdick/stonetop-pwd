@@ -92,3 +92,21 @@ export function plainLine(raw, max = 200) {
 	return clipText(String(raw ?? "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim(), max);
 }
 
+
+/**
+ * A playbook's name, read off its file name: "Stonetop_Abhorsen v_3.pdf" is "Abhorsen", "lexchxn -
+ * The Familiar Face - v1.0.0.pdf" is "The Familiar Face". The system's name, "playbook", a version
+ * and a part that is only the creator's handle are left out. Empty when nothing is left.
+ */
+export function playbookNameFromFileName(fileName) {
+	const stem = String(fileName ?? "").replace(/\.[a-z0-9]{2,4}$/i, "").replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
+	const version = /^v(?:ersion)?\s*\d[\w.]*$/i;
+	const clean = part => part
+		.replace(/\b(?:stonetop|playbook|pdf|final|print)\b/gi, " ")
+		.replace(/\bv(?:ersion)?\s*\d[\w.]*\s*$/i, " ")
+		.replace(/\s+/g, " ").trim();
+	const parts = stem.split(/\s+-\s+/).map(clean).filter(p => p && !version.test(p));
+	// Several parts ("handle - Name - v1"): the one that reads like a playbook's name.
+	const named = parts.find(p => /^the\s/i.test(p)) ?? parts.find(p => /\s/.test(p) || /^[A-Z]/.test(p)) ?? parts[0] ?? "";
+	return named.replace(/^./, c => c.toUpperCase()).slice(0, 60);
+}

@@ -1,7 +1,7 @@
 import { MoveDefinition } from "../../../model/MoveDefinition.js";
 import { FoundryPackStore } from "./FoundryPackStore.js";
 import { ITEMS_PACK } from "../StonetopFlags.js";
-import { homebrewPlaybookMoves, homebrewMoveById, playbookCatalogGeneration, allPlaybookNames } from "../../../playbooks/playbook-catalog.js";
+import { homebrewPlaybookMoves, homebrewInsertMoves, homebrewInsertOf, homebrewMoveById, playbookCatalogGeneration, allPlaybookNames } from "../../../playbooks/playbook-catalog.js";
 import { looseName } from "../../../utils/strings.js";
 
 // Every field MoveDefinition reads, plus the two the stores filter on (moveType, playbook). A live
@@ -41,6 +41,17 @@ export class FoundryMoveRepository {
 		const homebrew = homebrewPlaybookMoves(playbookName);
 		if (!homebrew.length) return packMoves;
 		return [...packMoves, ...this._homebrewDefinitions(playbookName, homebrew)];
+	}
+
+	// One INSERT's moves of a homebrew playbook (the Stranger's Monster Compendium), as definitions.
+	// Never among getPlaybookMoves: the insert's own tab offers them, never Level Up.
+	getHomebrewInsertMoves(playbookName, insertKey) {
+		const items = homebrewInsertMoves(playbookName, insertKey);
+		if (!items.length) return [];
+		const defs = this._homebrewDefinitions(`${playbookName}::insert:${insertKey}`, items);
+		// Which of the insert's moves lists each is picked from ("" for one outside any list).
+		defs.forEach((d, i) => { d.insertList = homebrewInsertOf(items[i])?.list ?? ""; });
+		return defs;
 	}
 
 	// A homebrew playbook's moves as definitions, kept while the catalog's generation and the list

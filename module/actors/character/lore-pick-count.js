@@ -27,6 +27,15 @@ function _countRange(section) {
 }
 
 /**
+ * The count a line of words asks for ("pick 2", "choose 1 or 2"), as {min, max}, or null when it
+ * names none. The same reading as a lore list's, for words that aren't one yet (a PDF's "Armament
+ * pick 2", an insert list's prompt).
+ */
+export function pickCountRange(text) {
+	return _countRange({ description: text, options: [] });
+}
+
+/**
  * How many tales a section's count is for. The Fox's tall tales are "a couple of your more
  * memorable adventures", and each list says "(choose 1 per tale)": `tales` on the section turns
  * that into a count for the whole list. Every other section is one.

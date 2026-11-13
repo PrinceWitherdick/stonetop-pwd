@@ -211,9 +211,14 @@ function buildLine(raw, columnLeft) {
 
 	const text = parts.map(p => p.role === "dingbat" ? "" : p.text).join("").replace(/\s+/g, " ").trim();
 	const headingText = parts.filter(p => p.role === "heading").map(p => p.text).join("").replace(/\s+/g, " ").trim();
+	// Where its words end on the right: whether a line ran to the column's edge (and the next one
+	// carries on its sentence) or stopped short (a list item of its own).
+	const inked = parts.filter(p => p.role !== "gap" && p.text.trim());
+	const end = inked.length ? Math.max(...inked.map(p => p.x + (p.w || 0))) : x;
 	return {
 		y: raw.y,
 		x,
+		end,
 		indent: Math.max(0, x - columnLeft),
 		parts,
 		text,

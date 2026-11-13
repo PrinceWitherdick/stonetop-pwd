@@ -82,6 +82,20 @@ export function isHomebrewPlaybookItem(item) {
 /** The flag key (under the system id) naming the homebrew playbook a move belongs to. */
 export const HOMEBREW_MOVE_FLAG = "homebrewPlaybook";
 
+/**
+ * The flag key (under the system id, beside HOMEBREW_MOVE_FLAG) marking a homebrew playbook's move
+ * as one of an INSERT's: `{ key, list }` (homebrew-bundle.js). Insert moves are never offered as
+ * the playbook's own (homebrewPlaybookMoves leaves them out); the insert's tab offers them.
+ */
+export const HOMEBREW_INSERT_FLAG = "homebrewInsert";
+
+/** The insert a homebrew move belongs to (`{key, list}`), or null for any other move. */
+export function homebrewInsertOf(item) {
+	if (!homebrewMoveSlug(item)) return null;
+	const ins = item.flags?.[SYSTEM_ID]?.[HOMEBREW_INSERT_FLAG];
+	return ins?.key ? { key: String(ins.key), list: String(ins.list ?? "") } : null;
+}
+
 /** The slug of the homebrew playbook this move belongs to, or null for any other move. */
 export function homebrewMoveSlug(item) {
 	if (item?.type !== "move") return null;
@@ -193,7 +207,25 @@ export function homebrewPlaybookMoves(name, items) {
 	const pb = homebrewPlaybookByName(name, items);
 	if (!pb) return [];
 	const moves = _catalog(items).movesBySlug.get(pb.system.slug) ?? [];
-	return moves.filter(m => m.system?.playbook === pb.name);
+	// An INSERT's moves are not the playbook's own: Level Up, onboarding and the starting moves never
+	// offer them (the insert's tab does, homebrewInsertMoves).
+	return moves.filter(m => m.system?.playbook === pb.name && !homebrewInsertOf(m));
+}
+
+/**
+ * The moves of one insert (`key`) of a homebrew playbook, by the playbook's display name, or of
+ * every insert when `key` is omitted.
+ */
+export function homebrewInsertMoves(name, key = null, items) {
+	if (isShippedPlaybookName(name)) return [];
+	const pb = homebrewPlaybookByName(name, items);
+	if (!pb) return [];
+	const moves = _catalog(items).movesBySlug.get(pb.system.slug) ?? [];
+	return moves.filter(m => {
+		if (m.system?.playbook !== pb.name) return false;
+		const ins = homebrewInsertOf(m);
+		return !!ins && (key === null || ins.key === key);
+	});
 }
 
 /** A world move Item by id, but ONLY when it is a homebrew playbook move (see FoundryMoveRepository). */

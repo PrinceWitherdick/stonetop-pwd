@@ -4,16 +4,19 @@
 // only creates, updates and deletes documents, so a test fakes `Item`, `Folder` and `game.items`.
 
 import {
-	normalizeBundle, bundleToItemData, itemsToBundle, bundleForExport,
+	normalizeBundle, bundleToItemData, itemsToBundle, bundleForExport, writeInsTurnedToTicks,
 } from "./homebrew-bundle.js";
 import {
 	homebrewPlaybookBySlug, homebrewMoveSlug, mintHomebrewSlug, playbookNameProblem,
 	invalidatePlaybookCatalog, isHomebrewPlaybookItem, homebrewMovesOfSlug, HOMEBREW_SLUG_PREFIX,
+	HOMEBREW_INSERT_FLAG,
 } from "./playbook-catalog.js";
-import { STONETOP_SCOPE, HOMEBREW_PLAYBOOK_COPY_FLAG } from "../actors/character/StonetopFlags.js";
+import { SYSTEM_ID, ITEM_FLAG_SCOPE } from "../system-id.js";
+import { STONETOP_SCOPE, HOMEBREW_PLAYBOOK_COPY_FLAG, StonetopFlags } from "../actors/character/StonetopFlags.js";
+import { CharacterLore } from "../actors/character/CharacterLore.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { carriedCopyOf } from "./homebrew-missing.js";
-import { ownershipLevels } from "../utils/foundry-compat.js";
+import { ownershipLevels, deletionEntry } from "../utils/foundry-compat.js";
 import { escHtml, looseName, slugify } from "../utils/strings.js";
 
 /**
@@ -100,6 +103,24 @@ export async function cascadeRename(slug, oldName, newName, actors = game.actors
 /** The fields a held copy of a homebrew move is refreshed in: what the move does, never what it holds. */
 const REFRESHED_FIELDS = ["description", "rollType", "moveResults", "requirement", "repeatMax", "cap", "markOptions", "markBudget", "resource", "isStartingMove"];
 
+const INSERT_FLAG_PATH = `flags.${SYSTEM_ID}.${HOMEBREW_INSERT_FLAG}`;
+const _insertFlag = item => item?.flags?.[SYSTEM_ID]?.[HOMEBREW_INSERT_FLAG] ?? null;
+
+/**
+ * Bring `item`'s insert flag to `want`'s, into `update`. An update MERGES flags, so a move taken out
+ * of an insert needs the flag deleted outright, or it would stay filed under the insert.
+ */
+function _syncInsertFlag(update, item, want) {
+	const have = _insertFlag(item);
+	const next = _insertFlag(want);
+	if (JSON.stringify(have) === JSON.stringify(next)) return;
+	if (next) update[INSERT_FLAG_PATH] = { ...next };
+	else if (have) {
+		const [key, value] = deletionEntry(INSERT_FLAG_PATH);
+		update[key] = value;
+	}
+}
+
 
 /**
  * Characters' copies of a homebrew playbook's moves that no longer match the playbook's own: a
@@ -123,6 +144,7 @@ export function staleHeldCopies(slug, { actors = game.actors, items = game.items
 				const want = now.system?.[key] ?? null;
 				if (JSON.stringify(item.system?.[key] ?? null) !== JSON.stringify(want)) update[`system.${key}`] = want;
 			}
+			_syncInsertFlag(update, item, now);
 			if (Object.keys(update).length) out.push({ actor, item, update });
 		}
 	}
@@ -200,9 +222,12 @@ export async function restoreCarriedPlaybook(actor, actors = game.actors) {
  * @param {string} [opts.source]       "builder" | "json" | "pdf" | "library", kept on the playbook
  * @param {string} [opts.slug]         keep this slug for a NEW playbook (a restore, or one from the library)
  * @param {string} [opts.fromLibrary]  the library version this save came from (it isn't written back)
+ * @param {object} [opts.importBase]   the playbook AS READ from the PDF or file this save follows,
+ *   before the GM changed anything: the next import of a newer version compares against it, so
+ *   what the GM fixed by hand is kept wherever the PDF itself didn't change (mergeReimport)
  * @returns {Promise<{item: Item, created: number, updated: number, deleted: number}>}
  */
-export async function saveHomebrewPlaybook(bundle, { existing = null, source = "builder", slug: wantedSlug = null, fromLibrary = null } = {}) {
+export async function saveHomebrewPlaybook(bundle, { existing = null, source = "builder", slug: wantedSlug = null, fromLibrary = null, importBase = null } = {}) {
 	const { bundle: clean } = normalizeBundle(bundle);
 	if (!clean) throw new Error("Not a homebrew playbook bundle.");
 	const problem = saveProblem(clean, existing);
@@ -216,7 +241,13 @@ export async function saveHomebrewPlaybook(bundle, { existing = null, source = "
 	const reusable = wantedSlug && String(wantedSlug).startsWith(HOMEBREW_SLUG_PREFIX) && !homebrewPlaybookBySlug(wantedSlug);
 	const slug = existing?.system?.slug ?? (reusable ? wantedSlug : mintHomebrewSlug(name));
 	const { playbook, moves } = bundleToItemData(clean, { slug, source: existing ? (existing.flags?.stonetop?.homebrew?.source ?? source) : source });
+	// One string, so an update replaces it whole: as an object, a key the old base had and the new one
+	// doesn't would survive the merge. Left out, the base the playbook already has stays.
+	const base = importBase ? normalizeBundle(importBase).bundle : null;
+	if (base) playbook.flags[ITEM_FLAG_SCOPE].homebrew.importBase = JSON.stringify({ playbook: base.playbook, moves: base.moves });
 	const folder = await _playbookFolder(name);
+	// Read before the update replaces them: the write-ins this save makes ticks of.
+	const turned = existing ? writeInsTurnedToTicks(existing.flags?.[ITEM_FLAG_SCOPE], playbook.flags[ITEM_FLAG_SCOPE]) : null;
 
 	let item;
 	if (existing) {
@@ -241,7 +272,10 @@ export async function saveHomebrewPlaybook(bundle, { existing = null, source = "
 		const prior = byName.get(data.name.toLowerCase());
 		if (prior) {
 			keep.add(prior.id);
-			toUpdate.push({ _id: prior.id, name: data.name, folder: folder.id, system: data.system, flags: data.flags });
+			const update = { _id: prior.id, name: data.name, folder: folder.id, system: data.system, flags: data.flags };
+			// The insert flag is merged in with `flags` when it's set; one the move no longer has is deleted.
+			if (!_insertFlag(data) && _insertFlag(prior)) _syncInsertFlag(update, prior, data);
+			toUpdate.push(update);
 		} else {
 			toCreate.push({ ...data, folder: folder.id, ownership: { default: OBSERVER() } });
 		}
@@ -252,6 +286,7 @@ export async function saveHomebrewPlaybook(bundle, { existing = null, source = "
 	if (toDelete.length) await Item.deleteDocuments(toDelete);
 	invalidatePlaybookCatalog();
 
+	if (turned?.moves.length) await tickAnsweredWriteIns(slug, turned.moves);
 	// A rename follows onto every character who plays it (their name for it, their moves' link).
 	if (oldName && oldName !== name) await cascadeRename(slug, oldName, name);
 	// Everyone who plays it carries the saved version to other worlds.
@@ -294,10 +329,55 @@ export async function offerToRefreshCopies(item) {
 	ui.notifications.info(`Updated ${n} ${n === 1 ? "copy" : "copies"} of ${item.name}'s moves.`);
 }
 
+/**
+ * A character who typed an answer into a write-in that is now a tick with a blank
+ * (writeInsTurnedToTicks) keeps it as that tick: ticked, with their words in its blank. Without this
+ * the words sat in an unticked option, read nowhere and counted as no pick. One write per character.
+ */
+export async function tickAnsweredWriteIns(slug, moves, actors = game.actors) {
+	const writes = [];
+	for (const actor of [...(actors ?? [])]) {
+		if (actor?.type !== "character" || actor.system?.playbook?.slug !== slug) continue;
+		const update = {};
+		for (const { store, from, to } of moves) {
+			const flags = new StonetopFlags(actor, store);
+			const lore = new CharacterLore(flags);
+			const words = String(lore.texts[from] ?? "").trim();
+			if (!words || (lore.counts[to] ?? 0) > 0) continue;
+			Object.assign(update, flags.subKeyData("counts", to, 1));
+			if (to !== from) Object.assign(update, flags.subKeyData("texts", to, lore.texts[from]));
+		}
+		if (Object.keys(update).length) writes.push(actor.update(update));
+	}
+	await Promise.all(writes);
+}
+
+/**
+ * What saving `item` as it is would turn from a write-in into a tick with a blank (writeInsAsBlanks),
+ * as a notice for the builder: a playbook saved before write-ins became ticks changes on its next save.
+ */
+export function writeInsChangedOnSave(item) {
+	const bundle = readHomebrewBundle(item);
+	if (!bundle) return [];
+	const { playbook } = bundleToItemData(bundle, { slug: item.system.slug, source: "builder" });
+	return writeInsTurnedToTicks(item.flags?.[ITEM_FLAG_SCOPE], playbook.flags[ITEM_FLAG_SCOPE]).labels;
+}
+
 /** A homebrew playbook Item and its moves, as a bundle (for the builder, or an export). */
 export function readHomebrewBundle(item) {
 	if (!isHomebrewPlaybookItem(item)) return null;
 	return itemsToBundle(item, movesOfHomebrew(item.system.slug));
+}
+
+/**
+ * The playbook as it was last READ from a PDF or file, before the GM's own changes (stored by
+ * saveHomebrewPlaybook's `importBase`), or null for one never imported or saved before this was kept.
+ */
+export function readImportBase(item) {
+	const raw = item?.flags?.[ITEM_FLAG_SCOPE]?.homebrew?.importBase;
+	if (typeof raw !== "string" || !raw) return null;
+	try { return normalizeBundle({ format: "stonetop-homebrew-playbook", version: 1, ...JSON.parse(raw) }).bundle; }
+	catch { return null; }
 }
 
 /** Delete a homebrew playbook and every move Item that belongs to it (characters' copies stay). */

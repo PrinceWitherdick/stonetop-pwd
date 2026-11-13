@@ -200,6 +200,8 @@ describe("chips with an icon or a count trim their label element", () => {
 		// UI font; trimmed, within 0.8px in all three faces at roots 16 and 20).
 		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-act", "button", 2],
 		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-q-choice", "label", 2],
+		// A homebrew insert's Transform / Revert on the character sheet: a flex button whose words trim.
+		["templates/actor/partials/tab-homebrew-insert.hbs", "stonetop-hb-insert-form-btn", "button", 1],
 	])("wraps every label in %s (.%s)", (file, chipClass, tag, count) => {
 		const { count: found, bare } = everyChipWrapped(readRepo(file), chipClass, tag);
 		expect(found, `expected ${count} ${chipClass} in ${file}`).toBe(count);

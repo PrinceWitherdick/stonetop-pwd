@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readPlaybook, assemblePlaybook } from "../../module/playbooks/pdf/read-playbook.js";
+import { readPlaybook, assemblePlaybook, INSERT_ALWAYS, INSERT_NONE } from "../../module/playbooks/pdf/read-playbook.js";
 import { fontRole, layoutDocument } from "../../module/playbooks/pdf/layout.js";
 import { normalizeBundle, bundleToItemData } from "../../module/playbooks/homebrew-bundle.js";
 import { buildPageRuns } from "../fakes/pdf-page-builder.js";
@@ -69,7 +69,8 @@ describe("reading The Tester", () => {
 		const byName = Object.fromEntries(bundle.moves.map(m => [m.name, m]));
 		expect(byName.Prod).toMatchObject({ starting: true, rollType: "int", resource: { max: 3, title: "Doubt" } });
 		expect(byName.Prod.description).toMatch(/^When you \*\*\*prod something\*\*\*, roll \+INT/);
-		expect(byName.Prod.results).toEqual({ success: "it breaks", partial: "it wobbles", failure: "it bites." });
+		// Read the way the sheet reads a move's tiers (move-tiers.js#parseTiersFromProse).
+		expect(byName.Prod.results).toEqual({ success: "It breaks.", partial: "It wobbles.", failure: "It bites." });
 		expect(byName["Improved Stat"]).toMatchObject({ repeatMax: 3, starting: false });
 		expect(byName["Prod and Poke"]).toMatchObject({ level: 6, requires: "Requires level 6+ and Prod", requiresMoves: ["Prod"] });
 		expect(byName["Prod and Poke"].description).toContain("\n- Ask a question\n- Take a step back");
@@ -79,16 +80,20 @@ describe("reading The Tester", () => {
 	it("reads possessions, their boxed-in options, and skips the write-in", () => {
 		expect(pb.possessions.pickCount).toBe(1);
 		expect(pb.possessions.options.map(o => o.label)).toEqual(["Tester's kit", "Notebook", "Weapons"]);
-		expect(pb.possessions.options[0].description).toBe("levers, ◇a mallet");
+		expect(pb.possessions.options[0].description).toBe("levers, ◇ a mallet");
 		expect(pb.possessions.options[1].description).toMatch(/^\(○○○ uses\)/);
 		expect(pb.possessions.options[2].description).toContain("\n- Spear, iron (close)\n- Sling (near)");
 	});
 
-	it("turns its own question block into lore sections, one per prompt", () => {
-		const belonging = pb.lore.filter(l => l.title === "Belonging");
-		expect(belonging[0].description).toMatch(/\(choose 1 or 2\)$/);
-		expect(belonging[0].options.map(o => o.freeText ? `✎${o.description}` : o.description)).toEqual(["… ignored you", "… doted on you", "✎Something else"]);
-		expect(belonging[1]).toMatchObject({ description: "Tell us, where do you go to think?", options: [{ freeText: true }] });
+	it("turns its own question block into lore sections under its heading, each titled by its question", () => {
+		const at = pb.lore.findIndex(l => l.title === "Belonging");
+		// The heading, as a section with no options: character creation's umbrella over the questions.
+		expect(pb.lore[at]).toMatchObject({ description: "", options: [] });
+		const [first, second] = pb.lore.slice(at + 1, at + 3);
+		expect(first.title).toBe("When you were young they …");
+		expect(first.description).toMatch(/\(choose 1 or 2\)$/);
+		expect(first.options.map(o => o.freeText ? `✎${o.description}` : o.description)).toEqual(["… ignored you", "… doted on you", "✎Something else"]);
+		expect(second).toMatchObject({ title: "Where do you go to think?", description: "Tell us, where do you go to think?", options: [{ freeText: true }] });
 	});
 
 	it("reads the Introductions' third turn and both question rounds", () => {
@@ -99,11 +104,12 @@ describe("reading The Tester", () => {
 		});
 	});
 
-	it("skips the stock inventory sheet and reads an insert's moves as moves", () => {
+	it("skips the stock inventory sheet and keeps a part beside it as an insert of its own", () => {
 		expect(report.pages[2]).toMatch(/stock inventory sheet \(skipped\)/);
 		const tinker = bundle.moves.find(m => m.name === "Tinker");
-		expect(tinker).toMatchObject({ starting: false, requires: `From the playbook's "Tester's Toolbox"` });
-		expect(pb.notes).toContain("The tools inside you.");
+		expect(tinker).toMatchObject({ starting: false, insert: "tester-s-toolbox", insertList: "" });
+		expect(pb.inserts[0]).toMatchObject({ name: "Tester's Toolbox", description: "The tools inside you.", unlockedBy: "" });
+		expect(pb.notes).not.toContain("The tools inside you.");
 	});
 
 	it("survives normalising into Items", () => {
@@ -128,7 +134,7 @@ describe("what the reader flags", () => {
 	});
 
 	it("one plain HP, damage die and stats line ask nothing", () => {
-		expect(readPlaybook(tester()).draft.confirm).toEqual([]);
+		expect(readPlaybook(tester({ insert: "none" })).draft.confirm).toEqual([]);
 	});
 
 	it("a PDF with no text layer says so and reads nothing", () => {
@@ -167,5 +173,90 @@ describe("the PDF's own facts", () => {
 		const { draft, report } = readPlaybook(runs);
 		expect(draft).not.toBeNull();
 		expect(report.issues.map(i => i.message).join("\n")).toMatch(/9 pages/);
+	});
+});
+
+describe("inserts", () => {
+	const insertQ = draft => draft.confirm.find(c => c.insert);
+
+	it("finds none in a playbook with no extra page, or only the stock pages", () => {
+		for (const insert of ["none", "boilerplate"]) {
+			const { draft, report } = readPlaybook(tester({ insert }));
+			expect(draft.inserts).toEqual([]);
+			expect(insertQ(draft)).toBeUndefined();
+			expect(report.sections.join()).not.toMatch(/insert/);
+		}
+	});
+
+	it("is sure of one set as the template sets it, and guesses the move that names it", () => {
+		const { draft, report } = readPlaybook(tester({ insert: "titled" }));
+		expect(draft.inserts).toHaveLength(1);
+		expect(draft.inserts[0]).toMatchObject({ name: "Tester's Toolbox", page: 3, sure: true, guess: "Tooled Up" });
+		expect(insertQ(draft)).toMatchObject({ type: "choice", value: "Tooled Up" });
+		expect(insertQ(draft).label).toMatch(/Page 3 looks like an insert called "Tester's Toolbox"/);
+		expect(report.pages[2]).toMatch(/the Tester's Toolbox insert \(Gadgets, Instinct, Tricks\)/);
+	});
+
+	it("asks, with no answer picked, about one it isn't sure of", () => {
+		const { draft } = readPlaybook(tester({ insert: "plain" }));
+		expect(draft.inserts[0]).toMatchObject({ sure: false, guess: "" });
+		expect(insertQ(draft).value).toBeNull();
+		expect(draft.blocks.filter(b => b.insert).every(b => b.unsure)).toBe(true);
+	});
+
+	it("reads its lists, its moves and what its moves' words add", () => {
+		const { bundle } = readAssembled(tester({ insert: "titled" }));
+		const ins = bundle.playbook.inserts[0];
+		expect(ins).toMatchObject({ key: "tester-s-toolbox", unlockedBy: "Tooled Up", form: { enabled: true } });
+		expect(ins.description).toBe("The tools inside you, waiting for a reason to come out and be used.");
+		const [gadgets, instinct, tricks] = ins.lists;
+		expect(gadgets).toMatchObject({ key: "gadgets", kind: "pick", pick: 2, prompt: "pick 2", bonusPicks: [{ move: "Extra Gear", count: 1 }] });
+		// Printed ticked: pre-picked. Smaller boxes under "Lenses (pick 1)": choices of their own.
+		expect(gadgets.options.map(o => `${o.preselected ? "+" : ""}${o.freeText ? "?" : ""}${o.description}`)).toEqual([
+			"Spring Fist: d6+1 (close, forceful)", "Tin Plate: Armor 1", "+Humming", "Lenses: brass", "Lenses: glass", "?Lenses: something else", "?Something else",
+		]);
+		expect(instinct).toMatchObject({ kind: "pick", pick: 1, prompt: "pick 1, follow it to fold back up" });
+		// "Each time you take this move, choose a new trick": one more trick per extra Tooled Up.
+		expect(tricks).toMatchObject({ kind: "moves", pick: 1, perUnlock: 1 });
+		const insertMoves = bundle.moves.filter(m => m.insert).map(m => `${m.name}${m.starting ? "*" : ""}@${m.insertList}`);
+		expect(insertMoves).toEqual(["Unfold*@", "Extra Gear@tricks", "Whirr@tricks", "Clank@tricks"]);
+	});
+
+	it("keeps the insert's lists and moves out of the playbook's own", () => {
+		const { bundle } = readAssembled(tester({ insert: "titled" }));
+		const own = bundle.moves.filter(m => !m.insert).map(m => m.name);
+		expect(own).toContain("Tooled Up");
+		expect(own).not.toContain("Whirr");
+		expect(bundle.playbook.lore.map(l => l.title)).not.toContain("Gadgets");
+	});
+
+	it("never lets an insert's Instinct take the playbook's instincts", () => {
+		const { draft, bundle, report } = readAssembled(tester({ insert: "titled", frontInstinct: false }));
+		expect(bundle.playbook.instincts).toEqual([]);
+		expect(report.issues.map(i => i.message).join()).toMatch(/No "Instincts" section/);
+		expect(draft.inserts[0].sure).toBe(true);
+	});
+
+	it("an answer picks the move that opens it, or none, or takes it apart again", () => {
+		const read = () => readPlaybook(tester({ insert: "titled" })).draft;
+		const answer = (draft, value) => { draft.confirm.find(c => c.insert).value = value; return assemblePlaybook(draft).bundle; };
+		expect(answer(read(), "Prod").playbook.inserts[0].unlockedBy).toBe("Prod");
+		expect(answer(read(), INSERT_ALWAYS).playbook.inserts[0].unlockedBy).toBe("");
+		const apart = answer(read(), INSERT_NONE);
+		expect(apart.playbook.inserts).toEqual([]);
+		const whirr = apart.moves.find(m => m.name === "Whirr");
+		expect(whirr.insert).toBeFalsy();
+		expect(whirr.requires).toBe(`From the playbook's "Tester's Toolbox"`);
+		expect(apart.playbook.lore.map(l => l.title)).toContain("Gadgets");
+		expect(apart.playbook.notes).toContain("The tools inside you");
+	});
+
+	it("survives normalising into Items, its moves flagged", () => {
+		const { bundle } = readAssembled(tester({ insert: "titled" }));
+		const { bundle: clean, issues } = normalizeBundle(bundle);
+		expect(issues).toEqual(expect.not.arrayContaining([expect.objectContaining({ message: expect.stringMatching(/insert/) })]));
+		const { playbook, moves } = bundleToItemData(clean, { slug: "homebrew-the-tester" });
+		expect(playbook.flags.stonetop.inserts[0].lists.map(l => l.slug)).toEqual(["tester-s-toolbox-gadgets", "tester-s-toolbox-instinct", "tester-s-toolbox-tricks"]);
+		expect(moves.find(m => m.name === "Whirr").flags["stonetop-pwd"].homebrewInsert).toEqual({ key: "tester-s-toolbox", list: "tricks" });
 	});
 });

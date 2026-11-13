@@ -1,0 +1,40 @@
+{{!-- A homebrew playbook's INSERT, as its own tab (the Stranger's Monster Compendium): drawn once
+      per open insert from `stonetop.homebrewInserts` (CharacterHomebrewInserts#buildView), inside
+      character.hbs's {{#each}}, so `this` is the insert and the sheet is `@root.stonetop`.
+
+      Its lists use the playbook lore partial, under `data-hb-insert` so the sheet sends their ticks
+      to the insert's own store (never the Details tab's). A list over its count is FLAGGED on each
+      pick, never blocked. Its moves are the move cards the Moves tab draws, ticked the same way. --}}
+<div class="tab stonetop-hb-insert" data-group="primary" data-tab="{{this.tabKey}}">
+	<section class="sheet-tab">
+		{{#if this.description}}<div class="stonetop-hb-insert-desc">{{{this.description}}}</div>{{/if}}
+
+		{{#if this.form}}
+		<div class="stonetop-hb-insert-form{{#if this.form.wearing}} is-worn{{/if}}">
+			<p class="stonetop-hb-insert-form-state">{{#if this.form.wearing}}In this form now. The weapons and armor ticked below are yours while it lasts.{{else}}Not in this form. Its weapons and armor are yours only while you are.{{/if}}</p>
+			<button type="button" class="stonetop-hb-insert-form-btn" data-hb-insert-form="{{this.key}}" data-on="{{#if this.form.wearing}}false{{else}}true{{/if}}"{{#unless @root.editable}} disabled{{/unless}}>
+				<span class="stonetop-chip-text">{{#if this.form.wearing}}{{this.form.off}}{{else}}{{this.form.on}}{{/if}}</span>
+			</button>
+		</div>
+		{{#if this.banner.length}}
+		<dl class="stonetop-hb-insert-banner">
+			{{#each this.banner}}<div class="stonetop-hb-insert-banner-row"><dt>{{this.title}}</dt><dd>{{this.picked}}</dd></div>{{/each}}
+		</dl>
+		{{/if}}
+		{{/if}}
+
+		<div data-hb-insert="{{this.key}}">
+			{{> "stonetop.lore-section" lore=this.lore editMode=(or @root.stonetop.editMode this.editing)}}
+		</div>
+
+		{{#each this.moveGroups}}
+		{{> "stonetop.move-group"
+		    title=this.title
+		    note=this.note
+		    moves=this.moves
+		    editSection="moves"
+		    collapseId=this.collapseId
+		    editing=@root.stonetop.movesEdit}}
+		{{/each}}
+	</section>
+</div>

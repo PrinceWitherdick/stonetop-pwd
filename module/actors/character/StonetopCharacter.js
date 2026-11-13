@@ -33,7 +33,9 @@ import {
 	ValueMax,
 	VitalsSnapshotBuilder,
 } from "../../model/CharacterSnapshot.js";
-import { allPlaybookNames } from "../../playbooks/playbook-catalog.js";
+import { allPlaybookNames, homebrewInsertOf } from "../../playbooks/playbook-catalog.js";
+import { CharacterHomebrewInserts } from "./CharacterHomebrewInserts.js";
+import { insertOpening } from "./homebrew-inserts.js";
 import { findOtherPlaybookMoves } from "./repositories/FoundryMoveRepository.js";
 import {PlaybookMoveEntry} from "./PlaybookMoveEntry.js";
 import {normalizeRollMode, tookOffer} from "../../dialogs/RollDialog.js";
@@ -806,6 +808,8 @@ export class StonetopCharacter {
 		this._inventory = new CharacterInventory(new StonetopFlags(actor, "inventory"));
 		this._arcana = new CharacterArcana(new StonetopFlags(actor, "arcana"), repos.arcana);
 		this._lore = new CharacterLore(new StonetopFlags(actor, "lore"));
+		// A homebrew playbook's inserts (the Stranger's Monster Compendium): their picks and worn forms.
+		this._homebrewInserts = new CharacterHomebrewInserts(actor);
 		this._postDeath = new CharacterPostDeath(
 			new StonetopFlags(actor, "postDeathInsert"),
 			new CharacterInstincts(new StonetopFlags(actor, "postDeathInstinct")),
@@ -1226,6 +1230,7 @@ export class StonetopCharacter {
 			.withCompanionDef(await this.companionSource(playbookData))
 			.withViewerIsGM(!!view.viewerIsGM)
 			.withGearTags(this.gearTagsFrom(gear))
+			.withHomebrewInserts(this._homebrewInserts.buildView(playbookData, { items: this._actor.items, categories: moves, editMode: !!view.editMode }))
 			.build();
 		return { snapshot, gear };
 	}
@@ -1311,12 +1316,22 @@ export class StonetopCharacter {
 			.map(r => rec(`${r.possessionSlug}:${r.choiceSlug}`, { ...r, name: r.label, note: r.label }, {
 				weaponSlug: r.weaponSlug, ammoStore: "possessions", carried: r.checked,
 			}));
+		// A homebrew insert's FORM while the character wears it (homebrew-inserts.js#insertFormGear): the
+		// claws they attack with and the hide they're armored in, from the options ticked on its lists.
+		// Carried while worn, so their marks are set here; keyed "hbinsert:…", which no other store uses.
+		const formRows = this._homebrewInserts.formGear(playbookData, this._actor.items)
+			.map(g => rec(g.slug, { name: g.name, note: g.note, armor: g.armor }));
 		const items = [
 			...outfit, ...custom, ...arcana,
 			...choiceRows.map(({ carried, ...rest }) => rest),
+			...formRows,
 		];
-		const marks = choiceRows.length
-			? { ...this._inventory.checked, ...Object.fromEntries(choiceRows.map(r => [r.slug, r.carried])) }
+		const marks = choiceRows.length || formRows.length
+			? {
+				...this._inventory.checked,
+				...Object.fromEntries(choiceRows.map(r => [r.slug, r.carried])),
+				...Object.fromEntries(formRows.map(r => [r.slug, true])),
+			}
 			: this._inventory.checked;
 		return { items, marks };
 	}
@@ -1476,6 +1491,31 @@ export class StonetopCharacter {
 			}
 		}
 
+		// A homebrew playbook's INSERTS: each one's own moves, picked on its own tab and never offered as the
+		// playbook's (playbook-catalog.js#homebrewPlaybookMoves leaves them out). One category per insert that
+		// is open, or whose moves the character still holds (an insert whose opening move went keeps them in
+		// view, under its name, rather than among the learned moves).
+		if (playbookData) {
+			for (const ins of CharacterHomebrewInserts.insertsOf(playbookData)) {
+				const defs = this._moveRepo.getHomebrewInsertMoves?.(playbookData.name, ins.key) ?? [];
+				if (!defs.length) continue;
+				const open = insertOpening(ins, this._actor.items).open;
+				const holds = this._actor.items.some(i => homebrewInsertOf(i)?.key === ins.key);
+				if (!open && !holds) continue;
+				const context = this.sortPlaybookMoves(this.buildMovelistContext(defs, ownedAllByName, new Set(), actorLevel, playbookData.name, []));
+				const shown = open ? context : context.filter(m => m.owned);
+				const category = new MoveCategorySnapshotBuilder()
+					.withKey(`hb-insert:${ins.key}`)
+					.withTitle(ins.name)
+					.withNote(null)
+					.withMoves(_sortOwnedFirst(shown.map(m => _buildMoveEntry(m, { type: "playbook", slug: playbookData.slug }, this._moveResources.getMoveResources(), new Set(), {}, {}, this._moveResources.getMarks(), _statValueMap(this._actor.system?.stats), capState, new Map(), actorLevel, {}))))
+					.build();
+				// The moves list each is picked from, for the insert's tab (CharacterHomebrewInserts#buildView).
+				category.insertLists = Object.fromEntries(defs.map(d => [d.name, d.insertList ?? ""]));
+				categories.push(category);
+			}
+		}
+
 		// "Learned Moves": moves gained from OTHER playbooks via a cross-playbook pick
 		// (Versatile/Worldly/…). They keep their origin playbook in system.playbook (so they
 		// don't surface under the actor's own playbook category) and carry a `grantedBy` item
@@ -1489,7 +1529,7 @@ export class StonetopCharacter {
 		// vanishes from the cross-playbook picker, which skips names the actor already owns.
 		// Nothing on the actor should be un-seeable; better a card with a plain origin label.
 		const shownPlaybookIds = new Set(
-			(categories.find(c => c.key === "playbook")?.moves ?? []).flatMap(m => m.ownedIds ?? []));
+			categories.filter(c => c.key === "playbook" || c.key.startsWith("hb-insert:")).flatMap(c => c.moves ?? []).flatMap(m => m.ownedIds ?? []));
 		const learnedItems = this._actor.items.filter(i =>
 			i.type === "move"
 			&& (i.flags?.[STONETOP_SCOPE]?.grantedBy || i.system?.moveType === "playbook")
@@ -4623,8 +4663,9 @@ export class StonetopCharacter {
 	 * `choiceGroups` (moves.choices), whose moves are never a free pick.
 	 */
 	creationPickItems(playbookName, backgrounds = [], choiceGroups = []) {
+		// An insert's moves are never a free pick: its own tab gives them (homebrew-inserts.js).
 		const moves = this._actor.items.filter(i => i.type === "move" && i.system?.moveType === "playbook"
-			&& i.system?.playbook === playbookName && !i.flags?.[STONETOP_SCOPE]?.grantedBy);
+			&& i.system?.playbook === playbookName && !i.flags?.[STONETOP_SCOPE]?.grantedBy && !homebrewInsertOf(i));
 		const stamped = moves.filter(i => i.flags?.[STONETOP_SCOPE]?.[CREATION_PICK_FLAG]);
 		if (stamped.length) return stamped;
 		if ((this._actor.system?.attributes?.level?.value ?? 1) > 1) return [];
@@ -5022,6 +5063,44 @@ export class StonetopCharacter {
 			const docs = await Promise.all(missingUniversal.map(e => this._moveRepo.getBasicMoveDocument(e.id)));
 			await this._actor.createEmbeddedDocuments("Item", docs.filter(Boolean).map(d => d.toObject()));
 		}
+		await this.syncInsertHeldMoves(playbookData);
+	}
+
+	/**
+	 * The moves a homebrew insert gives everyone who opens it (printed ticked on the insert: the
+	 * Stranger's Metamorphosis), added for each insert the character has open and doesn't hold yet.
+	 * Never takes one away: a character who loses the opening move keeps what they have, under the
+	 * insert's name on the Moves tab.
+	 * @returns {Promise<number>} how many were added
+	 */
+	async syncInsertHeldMoves(playbookData = null) {
+		playbookData ??= await this.playbook();
+		const inserts = CharacterHomebrewInserts.insertsOf(playbookData);
+		if (!inserts.length || !this._moveRepo.getHomebrewInsertMoves) return 0;
+		const held = new Set(this._actor.items.filter(i => i.type === "move").map(i => looseName(i.name)));
+		const wanted = inserts
+			.filter(ins => insertOpening(ins, this._actor.items).open)
+			.flatMap(ins => this._moveRepo.getHomebrewInsertMoves(playbookData.name, ins.key))
+			.filter(d => d.isStarting && !held.has(looseName(d.name)));
+		if (!wanted.length) return 0;
+		const docs = await Promise.all(wanted.map(d => this._moveRepo.getPlaybookMoveDocument(d.id)));
+		const data = docs.filter(Boolean).map(d => d.toObject());
+		if (data.length) await this._actor.createEmbeddedDocuments("Item", data);
+		return data.length;
+	}
+
+	/** Wear (or leave) a homebrew insert's form: its gear is the character's while worn. */
+	async setInsertForm(key, on) {
+		await this._homebrewInserts.setWearing(key, on);
+	}
+
+	/** One insert list option's count. Never refused (a list over its count is flagged instead). */
+	async setInsertLoreCount(listSlug, optionSlug, count) {
+		await this._homebrewInserts.setCount(listSlug, optionSlug, count);
+	}
+
+	async setInsertLoreText(listSlug, optionSlug, value) {
+		await this._homebrewInserts.setText(listSlug, optionSlug, value);
 	}
 
 	// `skipIfOwned` (onboarding) passes over a copy granted through a cross-playbook pick: a Heavy
@@ -5037,7 +5116,16 @@ export class StonetopCharacter {
 		const created = await this._actor.createEmbeddedDocuments("Item", [_withStonetopFlags(doc.toObject(), flags)]);
 		const added = created?.[0] ?? null;
 		if (added) await this._retireReplacedMove(added);
+		// The move that opens a homebrew insert brings the moves it always gives (Otherkin: Metamorphosis).
+		if (added && !homebrewInsertOf(added)) await this._addInsertHeldMovesFor(added);
 		return added;
+	}
+
+	/** After `added`: the held moves of any homebrew insert it opens (syncInsertHeldMoves), if it opens one. */
+	async _addInsertHeldMovesFor(added) {
+		const playbookData = await this.playbook();
+		const opens = CharacterHomebrewInserts.insertsOf(playbookData).some(ins => ins.unlockedBy && looseName(ins.unlockedBy) === looseName(added.name));
+		if (opens) await this.syncInsertHeldMoves(playbookData);
 	}
 
 	// Book I p.529: "If a move replaces a different move, then it requires the one it
@@ -9083,7 +9171,11 @@ function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, love
 	const expeditionCat = categories.find(c => c.key === "expedition");
 	const postDeathCat  = categories.find(c => c.key === "post-death");
 	const learnedCat    = categories.find(c => c.key === "learned");
-	const otherCats     = categories.filter(c => !["basic", "playbook", "expedition", "post-death", "learned"].includes(c.key));
+	const otherCats     = categories.filter(c => !["basic", "playbook", "expedition", "post-death", "learned"].includes(c.key) && !c.key.startsWith("hb-insert:"));
+	// A homebrew insert's moves the character holds, under the insert's name (its own tab picks them).
+	const insertGroups  = categories.filter(c => c.key.startsWith("hb-insert:"))
+		.map(c => ({ key: c.key.slice("hb-insert:".length), label: c.title, moves: c.moves.filter(m => m.owned) }))
+		.filter(g => g.moves.length);
 	const postDeathGroup = postDeathCat && pdiLabel
 		? { label: pdiLabel, moves: postDeathCat.moves }
 		: null;
@@ -9132,6 +9224,7 @@ function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, love
 		.withLoveLetters(loveLetters)
 		.withStartingMovesNote(startingNote)
 		.withPostDeathGroup(postDeathGroup)
+		.withInsertGroups(insertGroups)
 		.withMovesIncomplete(movesIncomplete)
 		.withLevelMovesIncomplete(levelMovesIncomplete)
 		.withLevelMovesShortfall(levelMovesShortfall)

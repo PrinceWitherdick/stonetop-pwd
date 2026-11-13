@@ -1,15 +1,31 @@
 {{!-- Check a PDF import before it reaches the Playbook Builder (playbooks/PlaybookImportReview.js):
-      what needs confirming, then the playbook laid out by section, every piece movable with its
-      "Belongs in" list. Nothing is saved from here. --}}
+      a left rail of pages like the Welcome guide. "Start here" holds what needs confirming and the
+      stats; then one page per section of the playbook, every piece movable with its "Belongs in"
+      list. Pages switch client-side (applyGuideRail); every panel is always in the DOM. Nothing is
+      saved from here. --}}
 <form class="stonetop-pb-review-form" autocomplete="off">
-	<div class="stonetop-pb-review-body">
+	<div class="stonetop-guide-split stonetop-pb-review-split">
+		{{> "stonetop.guide-tabs" tabs=this.tabs btnClass="stonetop-pb-review-tab" ariaLabel="Playbook sections"}}
 
+		<div class="stonetop-guide-main stonetop-pb-review-body">
+
+		<section class="stonetop-pb-review-panel" data-tab="overview"{{#unless this.overviewSelected}} hidden{{/unless}}>
 		<header class="stonetop-pb-review-head">
+			<p class="stonetop-pb-review-lead">Imported from <strong>{{this.fileName}}</strong>. Nothing is saved yet. Answer anything below, move any piece that landed in the wrong place, then finish it in the builder.</p>
 			<h2 class="stonetop-pb-review-name">{{this.name}}</h2>
 			{{#if this.description}}<p class="stonetop-pb-review-desc">{{this.description}}</p>{{/if}}
-			<p class="stonetop-pb-review-lead">Read from <strong>{{this.fileName}}</strong>. Nothing is saved yet. Answer anything below, move any piece that landed in the wrong place, then open it in the builder to finish.</p>
 			{{#each this.issues}}<p class="stonetop-pb-review-issue">{{this}}</p>{{/each}}
 		</header>
+
+		{{!-- The key: each line is a sample of the edge it explains, drawn as the pieces are. --}}
+		<section class="stonetop-pb-review-key" aria-label="What the colours mean">
+			<h3 class="stonetop-pb-review-h3">What the colours mean</h3>
+			<ul class="stonetop-pb-review-key-list">
+				<li class="stonetop-pb-review-key-item is-unsure"><strong>Gold</strong> needs you: a question to answer, or a piece the PDF couldn't place for certain. A gold count in the list on the left means that page holds one.</li>
+				<li class="stonetop-pb-review-key-item is-moved"><strong>Slate</strong> is a piece you moved to another section.</li>
+				<li class="stonetop-pb-review-key-item"><strong>Plain</strong> was read with confidence. Give it a glance all the same; any piece can still be moved.</li>
+			</ul>
+		</section>
 
 		{{#if this.confirm.length}}
 		<section class="stonetop-pb-review-confirm" aria-label="Please confirm">
@@ -21,6 +37,12 @@
 				<div class="stonetop-pb-review-q-answers">
 					{{#if this.isText}}
 					<input type="text" data-confirm="{{this.key}}" value="{{this.value}}" aria-label="{{this.label}}">
+					{{/if}}
+					{{#if this.isSelect}}
+					<select class="stonetop-pb-review-q-select" data-confirm="{{this.key}}" aria-label="{{this.label}}">
+						{{#unless this.value}}<option value="" selected>Choose…</option>{{/unless}}
+						{{#each this.options}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
+					</select>
 					{{/if}}
 					{{#each this.choices}}
 					<label class="stonetop-pb-review-q-choice"><input type="radio" name="confirm-{{../key}}" data-confirm="{{../key}}" value="{{this.value}}"{{#if this.checked}} checked{{/if}}> <span class="stonetop-chip-text">{{this.label}}</span></label>
@@ -39,11 +61,12 @@
 
 		{{#if this.unsureCount}}
 		<section class="stonetop-pb-review-unsure">
-			<p><strong>{{this.unsureCount}} {{#if (eq this.unsureCount 1)}}piece was{{else}}pieces were{{/if}} hard to place.</strong> They are edged in gold below, each with what it was read as and why. Use its <em>Belongs in</em> list to move it.</p>
+			<p><strong>{{this.unsureCount}} {{#if (eq this.unsureCount 1)}}piece was{{else}}pieces were{{/if}} hard to place.</strong> The pages holding them have a gold count in the list on the left, and on those pages each one is edged in gold, with what it was read as and why. Use its <em>Belongs in</em> list to move it.</p>
 			{{#each this.sources}}
 			<label class="stonetop-pb-review-source">All {{this.count}} hard-to-place pieces from <strong>{{this.from}}</strong> belong in
 				<select data-source="{{this.from}}">
 					{{#each this.kindOptions}}<option value="{{this.value}}">{{this.label}}</option>{{/each}}
+					{{#each this.insertOptions}}<optgroup label="{{this.label}}">{{#each this.options}}<option value="{{this.value}}">{{this.label}}</option>{{/each}}</optgroup>{{/each}}
 				</select>
 			</label>
 			{{/each}}
@@ -52,18 +75,23 @@
 
 		<section class="stonetop-pb-review-sheet" aria-label="Preview">
 			<h3 class="stonetop-pb-review-h3">How the playbook will look</h3>
+			<p class="stonetop-pb-review-lead">Each section of the playbook has its own page in the list on the left.</p>
 			<dl class="stonetop-pb-review-facts">
 				<dt>Stats</dt><dd>{{this.statsNote}}</dd>
-				<dt>Max HP</dt><dd>{{this.hp}}</dd>
-				<dt>Damage</dt><dd>{{this.damage}}</dd>
+				<dt>Max HP</dt><dd data-fact="hp">{{this.hp}}</dd>
+				<dt>Damage</dt><dd data-fact="damage">{{this.damage}}</dd>
 				{{#if this.looks}}<dt>Appearance</dt><dd>{{this.looks}}</dd>{{/if}}
 				{{#if this.origins}}<dt>Origins</dt><dd>{{this.origins}}</dd>{{/if}}
 				{{#if this.introCount}}<dt>Introductions</dt><dd>{{this.introCount}} questions</dd>{{/if}}
 			</dl>
+		</section>
+		</section>
 
-			{{#each this.groups}}
+		{{#each this.groups}}
+		<section class="stonetop-pb-review-panel" data-tab="{{this.kind}}"{{#unless this.selected}} hidden{{/unless}}>
 			<section class="stonetop-pb-review-group" data-kind="{{this.kind}}">
 				<h4 class="stonetop-pb-review-group-title">{{this.title}} <span class="stonetop-pb-review-count">{{this.count}}</span></h4>
+				{{#if this.lead}}<p class="stonetop-pb-review-lead">{{this.lead}}</p>{{/if}}
 				{{#each this.blocks}}
 				<article class="stonetop-pb-review-block{{#if this.unsure}} is-unsure{{/if}}{{#if this.moved}} is-moved{{/if}}" data-id="{{this.id}}">
 					<div class="stonetop-pb-review-block-head">
@@ -72,6 +100,7 @@
 						<label class="stonetop-pb-review-belongs">Belongs in
 							<select data-block="{{this.id}}">
 								{{#each this.kindOptions}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
+								{{#each this.insertOptions}}<optgroup label="{{this.label}}">{{#each this.options}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}</optgroup>{{/each}}
 							</select>
 						</label>
 					</div>
@@ -93,19 +122,20 @@
 				</article>
 				{{/each}}
 			</section>
-			{{/each}}
 		</section>
+		{{/each}}
+		</div>
 	</div>
 
 	<footer class="stonetop-guide-nav stonetop-pb-review-nav">
 		<span class="stonetop-custom-move-nav-btns">
 			<button type="button" class="stonetop-custom-move-save stonetop-guide-btn--primary stonetop-pb-review-go">
-				<i class="fas fa-arrow-right" aria-hidden="true"></i> Open in the builder
+				<i class="fas fa-arrow-right" aria-hidden="true"></i> Finish in the builder
 			</button>
 			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-cancel">Cancel</button>
 		</span>
 		<span class="stonetop-custom-move-nav-btns">
-			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-reset" title="Undo every move, split, join and answer"><i class="fas fa-rotate-left" aria-hidden="true"></i> Start over</button>
+			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-reset" title="Undo every move, split, join and answer"{{#unless this.changed}} disabled{{/unless}}><i class="fas fa-rotate-left" aria-hidden="true"></i> Start over</button>
 		</span>
 	</footer>
 </form>

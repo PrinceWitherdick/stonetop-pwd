@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-	BUNDLE_FORMAT, BUNDLE_VERSION, emptyBundle, normalizeBundle, bundleToItemData, itemsToBundle, bundleForExport, diffBundles, statCapFrom, markOptionsFrom, holdOnRollFrom,
+	BUNDLE_FORMAT, BUNDLE_VERSION, emptyBundle, normalizeBundle, bundleToItemData, itemsToBundle, bundleForExport, diffBundles, mergeReimport, writeInsAsBlanks, blankWriteIn, statCapFrom, markOptionsFrom, holdOnRollFrom,
 } from "../../module/playbooks/homebrew-bundle.js";
 import { formatPlaybookText, formatPlaybookInline, playbookTextFromHtml } from "../../module/playbooks/playbook-text.js";
 import { isHomebrewPlaybookItem, homebrewMoveSlug } from "../../module/playbooks/playbook-catalog.js";
@@ -142,7 +142,9 @@ describe("bundle ⇄ Items", () => {
 		expect(f.backgrounds[1].setup.choices[0]).toMatchObject({ apply: "move", options: [{ value: "Prod" }, { value: "Frosty" }] });
 		expect(f.specialPossessions).toMatchObject({ pickCount: 1, preselected: ["tester-s-kit"] });
 		expect(f.specialPossessions.options[0].description).toBe("levers, ◇ a mallet");
-		expect(f.lore[0].options[1]).toMatchObject({ type: "text" });
+		// A write-in among options to tick is one more to tick, with a blank to fill in (writeInsAsBlanks).
+		expect(f.lore[0].options[1]).not.toHaveProperty("type");
+		expect(f.lore[0].options[1].description).toMatch(/___$/);
 		expect(f.moves.choices).toEqual([{ label: "Choose one", options: ["Prod", "Poke"] }]);
 	});
 
@@ -257,5 +259,85 @@ describe("what a roll holds, read off a move's words", () => {
 		expect(scare.system.resource.holdOnRoll).toEqual({ success: 3, partial: 1 });
 		raw.moves[0].resource.holdOnRoll = { success: 2, partial: 0 };
 		expect(normalizeBundle(raw).bundle.moves[0].resource.holdOnRoll).toEqual({ success: 2 });
+	});
+});
+
+describe("a write-in among options to tick", () => {
+	it("becomes one more to tick, with a blank to fill", () => {
+		const opts = writeInsAsBlanks([
+			{ description: "… ignored you", max: 1, freeText: false },
+			{ description: "Something else", max: 1, freeText: true },
+		]);
+		expect(opts[1]).toEqual({ description: "Something else: ___", max: 1, freeText: false });
+	});
+
+	it("keeps a nested choice's stem, and a blank already written", () => {
+		expect(blankWriteIn("To devour: something else")).toBe("To devour: ___");
+		expect(blankWriteIn("Adopted by ___")).toBe("Adopted by ___");
+		expect(blankWriteIn("Who? (write in)")).toBe("Who? ___");
+	});
+
+	it("leaves a list of nothing but write-ins as questions to answer in words", () => {
+		const opts = [{ description: "Your answer", max: 1, freeText: true }];
+		expect(writeInsAsBlanks(opts)).toBe(opts);
+	});
+});
+
+describe("what changed since the saved version", () => {
+	it("is nothing, for a playbook saved and read straight back", () => {
+		const { bundle } = normalizeBundle(testerBundle());
+		const { playbook, moves } = bundleToItemData(bundle, { slug: "homebrew-the-tester", source: "pdf" });
+		const back = itemsToBundle({ ...playbook, system: { ...playbook.system, slug: "homebrew-the-tester" } }, moves);
+		expect(diffBundles(back, bundle).lines).toEqual([]);
+	});
+
+	it("still names a move whose words changed", () => {
+		const before = testerBundle();
+		const after = testerBundle();
+		after.moves[1].description = "Like Prod, but much gentler.";
+		expect(diffBundles(before, after).lines).toEqual(["Changed moves: Poke"]);
+	});
+});
+
+describe("importing a newer version over the GM's own work", () => {
+	const base = () => testerBundle();
+	it("keeps what the GM changed where the new version says what the old one did", () => {
+		const mine = base();
+		mine.moves[1].description = "Fixed by the GM.";
+		mine.playbook.summary = "The GM's own blurb.";
+		const theirs = base();
+		theirs.moves[0].description = "When you ***prod something***, roll +INT, harder.";
+		const { bundle, kept, replaced } = mergeReimport({ base: base(), mine, theirs });
+		expect(bundle.moves.find(m => m.name === "Poke").description).toBe("Fixed by the GM.");
+		expect(bundle.moves.find(m => m.name === "Prod").description).toMatch(/harder/);
+		expect(bundle.playbook.summary).toBe("The GM's own blurb.");
+		expect(kept).toEqual(expect.arrayContaining(['move "Poke"', "the playbook's summary"]));
+		expect(replaced).toEqual([]);
+	});
+
+	it("puts the new words in where both changed, and says so", () => {
+		const mine = base();
+		mine.moves[0].description = "The GM's Prod.";
+		const theirs = base();
+		theirs.moves[0].description = "The new PDF's Prod.";
+		const { bundle, replaced } = mergeReimport({ base: base(), mine, theirs });
+		expect(bundle.moves.find(m => m.name === "Prod").description).toBe("The new PDF's Prod.");
+		expect(replaced).toEqual(['move "Prod"']);
+	});
+
+	it("keeps a move the GM added and leaves out one the GM deleted", () => {
+		const mine = base();
+		mine.moves.push({ name: "House Rule", description: "The table's own." });
+		mine.moves = mine.moves.filter(m => m.name !== "Poke");
+		const { bundle } = mergeReimport({ base: base(), mine, theirs: base() });
+		expect(bundle.moves.map(m => m.name).sort()).toEqual(["House Rule", "Prod"]);
+	});
+
+	it("never takes the publish switch, picture or slug from the PDF", () => {
+		const mine = base();
+		mine.playbook.published = false;
+		mine.playbook.img = "worlds/x/stranger.webp";
+		const { bundle } = mergeReimport({ base: base(), mine, theirs: base() });
+		expect(bundle.playbook).toMatchObject({ published: false, img: "worlds/x/stranger.webp", slug: "homebrew-the-tester" });
 	});
 });

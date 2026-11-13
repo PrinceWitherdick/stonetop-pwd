@@ -187,6 +187,7 @@ import { registerSharedRouteHooks, wireSharedRouteCard } from "./module/dialogs/
 import { registerCampWindowRestore } from "./module/camp/CampWindow.js";
 import { registerTimelineWindowRestore } from "./module/dialogs/TimelineWindow.js";
 import { registerCreateSiteRestore } from "./module/sites/create-site-restore.js";
+import { registerPlaybookBuilderRestore } from "./module/playbooks/playbook-builder-restore.js";
 import { registerAuthoringRestore } from "./module/dialogs/authoring-restore.js";
 import { registerCreateFollowerRestore } from "./module/actors/character/dialogs/create-follower-restore.js";
 import { registerLoveLetterRestore } from "./module/dialogs/love-letter-restore.js";
@@ -692,6 +693,7 @@ Hooks.once("init", () => {
 		"stonetop.tab-followers":    "systems/stonetop-pwd/templates/actor/partials/tab-followers.hbs",
 		"stonetop.tab-arcana":       "systems/stonetop-pwd/templates/actor/partials/tab-arcana.hbs",
 		"stonetop.tab-post-death":      "systems/stonetop-pwd/templates/actor/partials/tab-post-death.hbs",
+		"stonetop.tab-homebrew-insert": "systems/stonetop-pwd/templates/actor/partials/tab-homebrew-insert.hbs",
 		"stonetop.tab-special-moves":   "systems/stonetop-pwd/templates/actor/partials/tab-special-moves.hbs",
 		"stonetop.tab-notes":           "systems/stonetop-pwd/templates/actor/partials/tab-notes.hbs",
 		"stonetop.tab-timeline":        "systems/stonetop-pwd/templates/actor/partials/tab-timeline.hbs",
@@ -936,6 +938,8 @@ registerTimelineWatch();
 registerTimelineWindowRestore();
 // And a Create a Site walkthrough, on the step it was left on with its answers (sites/create-site-restore.js).
 registerCreateSiteRestore();
+// And the Playbook Builder, with every field typed in it, saved or not (playbooks/playbook-builder-restore.js).
+registerPlaybookBuilderRestore();
 // And the authoring windows: the Improvement Builder, a custom move and an inventory item, as typed
 // (dialogs/authoring-restore.js).
 registerAuthoringRestore();

@@ -47,3 +47,26 @@ describe("the builder's one-per-line boxes", () => {
 		expect(L.parseNameList(" Frosty,  We Happy Few , ,Underestimated")).toEqual(["Frosty", "We Happy Few", "Underestimated"]);
 	});
 });
+
+describe("writing a field back into the bundle", () => {
+	it("walks through a null on the way (a background with no track), making the object", () => {
+		const bundle = { playbook: { backgrounds: [{ label: "Moon Blessed", track: null }] } };
+		L.setBundlePath(bundle, "playbook.backgrounds.0.track.label", "Doom");
+		L.setBundlePath(bundle, "playbook.backgrounds.0.track.max", 3);
+		expect(bundle.playbook.backgrounds[0].track).toEqual({ label: "Doom", max: 3 });
+	});
+
+	it("leaves a missing track missing when its boxes are blank", () => {
+		const bundle = { playbook: { backgrounds: [{ label: "Moon Blessed", track: null }] } };
+		L.setBundlePath(bundle, "playbook.backgrounds.0.track.label", "");
+		L.setBundlePath(bundle, "playbook.backgrounds.0.track.max", 0);
+		expect(bundle.playbook.backgrounds[0].track).toBeNull();
+	});
+
+	it("writes into the arrays already there by their index", () => {
+		const bundle = { moves: [{ name: "A" }, { name: "B" }] };
+		L.setBundlePath(bundle, "moves.1.name", "Bee");
+		expect(bundle.moves.map(m => m.name)).toEqual(["A", "Bee"]);
+		expect(Array.isArray(bundle.moves)).toBe(true);
+	});
+});

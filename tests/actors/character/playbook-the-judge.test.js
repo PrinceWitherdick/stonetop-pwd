@@ -206,7 +206,7 @@ describe("a move given up for its replacement", () => {
 		const card = section.find(c => c.key === "playbook").moves.find(m => m.name === "Bulwark");
 		expect(card).toMatchObject({ replacedBy: "A Mighty Rampart", locked: true });
 		const hbs = fs.readFileSync(path.join(process.cwd(), "templates", "actor", "partials", "move-group.hbs"), "utf8");
-		expect(hbs).toContain("{{#if (or (and isStarting owned) replacedBy (not @root.stonetop.movesEdit))}}disabled{{/if}}");
+		expect(hbs).toContain("{{#if (or (and isStarting owned) replacedBy (not (or @root.stonetop.movesEdit this.pickable)))}}disabled{{/if}}");
 		expect(hbs).toContain(`{{localize "stonetop.character.moves.replacedBy" move=replacedBy}}`);
 		expect(game.i18n.format("stonetop.character.moves.replacedBy", { move: "A Mighty Rampart" })).toBe("Replaced by A Mighty Rampart");
 	});

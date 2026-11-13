@@ -253,7 +253,7 @@
 					<p class="stonetop-custom-move-hint">One pick per line, the moves separated by "/".</p>
 				</div>
 
-				<p class="stonetop-pb-builder-count">{{this.moveCount}} moves, {{this.startingCount}} starting. Characters already holding a move keep their own copy when you change it here.</p>
+				<p class="stonetop-pb-builder-count">{{this.moveCount}} moves, {{this.startingCount}} starting{{#if this.insertMoveCount}}, {{this.insertMoveCount}} in inserts{{/if}}. Characters already holding a move keep their own copy when you change it here.</p>
 				{{#each this.moves}}
 				<details class="stonetop-pb-builder-move" data-index="{{this.index}}"{{#if this.open}} open{{/if}}>
 					<summary class="stonetop-pb-builder-move-summary">
@@ -268,6 +268,15 @@
 						<div class="stonetop-pb-builder-move-checks">
 							<label class="stonetop-pb-builder-inline-check"><input type="checkbox" class="stonetop-check" data-field="moves.{{this.index}}.starting" {{#if this.starting}}checked{{/if}}> Starting move</label>
 						</div>
+						{{#if this.showPartOf}}
+						<div class="stonetop-custom-move-field">
+							<label>Part of</label>
+							<select data-insert-ref="{{this.index}}" aria-label="Where this move belongs: the playbook, or one of its inserts">
+								{{#each this.partOptions}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
+							</select>
+							<p class="stonetop-custom-move-hint">An insert's moves are never offered at Level Up: the insert's own page offers them. In an insert, "Starting move" means everyone who opens it has the move.</p>
+						</div>
+						{{/if}}
 						<div class="stonetop-custom-move-row">
 							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
 								<label>From level</label>
@@ -361,6 +370,85 @@
 				</div>
 			</section>
 
+			{{!-- ── Inserts ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="inserts"{{#unless (eq this.activeTab "inserts")}} hidden{{/unless}}>
+				<p class="stonetop-custom-move-hint">An insert is a page a playbook adds of its own, like the Stranger's Monster Compendium: a move opens it, and it holds lists a player ticks and moves of its own to pick from. Characters see it as a tab of its own once they have the move that opens it. Put moves in it with "Part of" on the Moves panel.</p>
+				{{#each this.inserts}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-insert">
+					<div class="stonetop-field-btns stonetop-pb-builder-card-head">
+						<input type="text" data-field="playbook.inserts.{{this.index}}.name" value="{{this.name}}" placeholder="Insert name" aria-label="Insert name">
+						<button type="button" class="stonetop-pb-builder-btn" data-action="remove-insert" data-index="{{this.index}}" aria-label="Remove this insert (its moves stay, as the playbook's own)"><i class="fas fa-trash" aria-hidden="true"></i></button>
+					</div>
+					<textarea data-field="playbook.inserts.{{this.index}}.description" rows="3" aria-label="What the insert says at the top" placeholder="What the insert says at the top">{{this.description}}</textarea>
+					<div class="stonetop-custom-move-field">
+						<label>Opened by</label>
+						<select data-field="playbook.inserts.{{this.index}}.unlockedBy" aria-label="The move that opens this insert">
+							{{#each this.openerOptions}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
+						</select>
+					</div>
+					{{#each this.flags}}<p class="stonetop-custom-move-hint stonetop-pb-builder-flag">{{this}}</p>{{/each}}
+					<div class="stonetop-pb-builder-move-checks">
+						<label class="stonetop-pb-builder-inline-check"><input type="checkbox" class="stonetop-check" data-field="playbook.inserts.{{this.index}}.form.enabled" {{#if this.formEnabled}}checked{{/if}}> A form to take on</label>
+					</div>
+					<div class="stonetop-custom-move-row">
+						<div class="stonetop-custom-move-field">
+							<label>Button to take it on</label>
+							<input type="text" data-field="playbook.inserts.{{this.index}}.form.on" value="{{this.formOn}}" placeholder="Transform">
+						</div>
+						<div class="stonetop-custom-move-field">
+							<label>Button to leave it</label>
+							<input type="text" data-field="playbook.inserts.{{this.index}}.form.off" value="{{this.formOff}}" placeholder="Revert">
+						</div>
+					</div>
+					<p class="stonetop-custom-move-hint">With a form, the character's sheet gets a switch. While it's on, every ticked option written like a weapon ("Razor Claws: d8+2 (close, messy)") is a weapon they attack with, and one written "Thick Hide: Armor 2" is their armor.</p>
+					{{#if this.looseMoves}}<p class="stonetop-custom-move-hint">Its moves outside a list: {{this.looseMoves}}.</p>{{/if}}
+
+					{{#each this.lists}}
+					<div class="stonetop-pb-builder-card stonetop-pb-builder-insert-list">
+						<div class="stonetop-field-btns stonetop-pb-builder-card-head">
+							<input type="text" data-field="playbook.inserts.{{this.insertIndex}}.lists.{{this.index}}.title" value="{{this.title}}" placeholder="List title" aria-label="List title">
+							<button type="button" class="stonetop-pb-builder-btn" data-action="remove-insert-list" data-index="{{this.insertIndex}}" data-list-index="{{this.index}}" aria-label="Remove this list"><i class="fas fa-trash" aria-hidden="true"></i></button>
+						</div>
+						<textarea data-field="playbook.inserts.{{this.insertIndex}}.lists.{{this.index}}.prompt" rows="2" aria-label="What the list says" placeholder="pick 2">{{this.prompt}}</textarea>
+						<div class="stonetop-custom-move-row">
+							<div class="stonetop-custom-move-field">
+								<label>Holds</label>
+								<select data-field="playbook.inserts.{{this.insertIndex}}.lists.{{this.index}}.kind">
+									{{#each this.kindOptions}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
+								</select>
+							</div>
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>Pick</label>
+								<input type="number" data-field="playbook.inserts.{{this.insertIndex}}.lists.{{this.index}}.pick" data-kind="int" min="0" max="20" value="{{this.pick}}" aria-label="How many a character picks">
+							</div>
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>At least</label>
+								<input type="number" data-field="playbook.inserts.{{this.insertIndex}}.lists.{{this.index}}.min" data-kind="int" min="0" max="20" value="{{this.min}}" aria-label="The fewest a character picks">
+							</div>
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>+ per extra copy</label>
+								<input type="number" data-field="playbook.inserts.{{this.insertIndex}}.lists.{{this.index}}.perUnlock" data-kind="int" min="0" max="5" value="{{this.perUnlock}}" aria-label="More picks for each copy of the opening move after the first">
+							</div>
+						</div>
+						{{#if this.pickFlag}}<p class="stonetop-custom-move-hint stonetop-pb-builder-flag">{{this.pickFlag}}</p>{{/if}}
+						<div class="stonetop-custom-move-field">
+							<label>Moves that give more picks</label>
+							<input type="text" data-bonus="playbook.inserts.{{this.insertIndex}}.lists.{{this.index}}.bonusPicks" value="{{this.bonusText}}" placeholder="Implements of Evil +2">
+						</div>
+						{{#if this.isMoves}}
+						<p class="stonetop-custom-move-hint">Its moves: {{#if this.moveNames}}{{this.moveNames}}{{else}}none yet. Set a move's "Part of" to this list on the Moves panel.{{/if}}</p>
+						{{else}}
+						<textarea data-lines="playbook.inserts.{{this.insertIndex}}.lists.{{this.index}}.options" data-parse="insertOptions" rows="5" aria-label="The options, one per line">{{this.optionsText}}</textarea>
+						<p class="stonetop-custom-move-hint">One option per line. Start a line with "ticked:" for one every character starts with. Put "___" in an option for a blank to fill in; a "write:" line becomes one ("Something else: ___"). Picking more than the count is allowed, and said on the sheet.</p>
+						{{/if}}
+					</div>
+					{{/each}}
+					<button type="button" class="stonetop-pb-builder-btn stonetop-pb-builder-add" data-action="add-insert-list" data-index="{{this.index}}"><i class="fas fa-plus" aria-hidden="true"></i> Add a list</button>
+				</div>
+				{{/each}}
+				<button type="button" class="stonetop-pb-builder-btn stonetop-pb-builder-add" data-action="add-insert"><i class="fas fa-plus" aria-hidden="true"></i> Add an insert</button>
+			</section>
+
 			{{!-- ── Questions (lore) ── --}}
 			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="lore"{{#unless (eq this.activeTab "lore")}} hidden{{/unless}}>
 				<p class="stonetop-custom-move-hint">The playbook's own questions, like the Stranger's "Belonging". Write "(choose 2)" in the prompt to set how many a player picks.</p>
@@ -372,7 +460,7 @@
 					</div>
 					<textarea data-field="playbook.lore.{{this.index}}.description" rows="2" aria-label="The prompt" placeholder="When you were young they... (choose 1 or 2)">{{this.description}}</textarea>
 					<textarea data-lines="playbook.lore.{{this.index}}.options" data-parse="lore" rows="5" aria-label="The options, one per line">{{this.optionsText}}</textarea>
-					<p class="stonetop-custom-move-hint">One option per line. Start a line with "write:" for a write-in answer; end it with "(x2)" if it can be ticked twice. {{this.pickNote}}</p>
+					<p class="stonetop-custom-move-hint">One option per line. Put "___" in an option for a blank the player fills in ("Adopted by ___"); start a line with "write:" for an answer written in words (among options to tick, it becomes "Something else: ___"); end it with "(x2)" if it can be ticked twice. {{this.pickNote}}</p>
 				</div>
 				{{/each}}
 				<button type="button" class="stonetop-pb-builder-btn stonetop-pb-builder-add" data-action="add-lore"><i class="fas fa-plus" aria-hidden="true"></i> Add a question section</button>

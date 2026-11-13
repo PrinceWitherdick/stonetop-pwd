@@ -51,9 +51,12 @@ export function buildPageRuns(pages, { shuffle = true, meta = {} } = {}) {
 					const font = FONTS[t.f] ?? FONTS.body;
 					// Split body text into words and space runs, as the template writes them.
 					const pieces = t.f === "ding" ? [t.t] : t.t.split(/( )/).filter(Boolean);
+					// A token may set its own size: an insert title's flavour run on in body type, a nested
+					// option's smaller box.
+					const tsize = t.size ?? size;
 					for (const piece of pieces) {
-						const w = piece.length * CHAR_W * (size / 8);
-						runs.push({ str: piece, x, y, w, size, font: font.id });
+						const w = piece.length * CHAR_W * (tsize / 8);
+						runs.push({ str: piece, x, y, w, size: tsize, font: font.id });
 						x += w;
 					}
 				}

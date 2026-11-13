@@ -238,6 +238,7 @@ import {localize, format} from "../../utils/i18n.js";
 import {promptRaiseFromDead} from "../../hooks/DeathsDoorPrompt.js";
 import { wireKeyboardButtons } from "../../utils/keyboard-buttons.js";
 import { replaceKeepingTooltip, dropTooltipWithin, restoreTooltip } from "../../utils/tooltip-handoff.js";
+import { INSERT_TAB_PREFIX } from "./homebrew-inserts.js";
 
 const _STAT_KEYS = new Set(["str", "dex", "con", "int", "wis", "cha"]);
 const _STAT_CHOICES = [..._STAT_KEYS].map(k => [k, k.toUpperCase()]);
@@ -1722,6 +1723,12 @@ export function createStonetopCharacterSheetClass(Base) {
 			// shows no body at all. Clamp before the paint, as the NPC sheet does for its own tabs.
 			if (this._tabs?.[0]?.active === "timeline"
 				&& !(context.stonetop.timelineShown && !context.stonetop.classicLayout)) {
+				this._tabs[0].active = "moves";
+			}
+			// The same for a homebrew insert's tab whose insert has closed (its opening move went).
+			const activeTab = this._tabs?.[0]?.active ?? "";
+			if (activeTab.startsWith(INSERT_TAB_PREFIX)
+				&& !(context.stonetop.homebrewInserts ?? []).some(i => i.tabKey === activeTab)) {
 				this._tabs[0].active = "moves";
 			}
 			context.stonetop.hideUnselected = this.actor.getFlag(STONETOP_SCOPE, "hideUnselected") ?? true;
@@ -5184,6 +5191,13 @@ export function createStonetopCharacterSheetClass(Base) {
 				}
 			}
 
+			// A homebrew insert's move list with a pick still owed is open without edit mode (the
+			// Stranger's first monster move, right after Otherkin; CharacterHomebrewInserts `pickable`).
+			// Its boxes take the move handler then too; in edit mode the block below binds every box.
+			if (!this.hasActiveEdits) {
+				html.find(".stonetop-hb-insert .stonetop-move-check:not([disabled]), .stonetop-hb-insert .stonetop-repeat-check:not([disabled])")
+					.on("change", this._onMoveCheck.bind(this));
+			}
 			// The Details-tab change handlers below are wired whenever any section is
 			// editable — either the global wrench or an individual section pencil.
 			if (this.hasActiveEdits) {
@@ -6716,15 +6730,43 @@ export function createStonetopCharacterSheetClass(Base) {
 
 			html[0].addEventListener("change", ev => {
 				const cb = ev.target.closest(".stonetop-lore-option-check");
-				if (!cb || ev.target.closest("[data-pdi='lore']")) return;
+				if (!cb || ev.target.closest("[data-pdi='lore'], [data-hb-insert]")) return;
 				this._onLoreOptionCheck(cb);
 			}, true);
 
 			html[0].addEventListener("change", ev => {
 				const ta = ev.target.closest(".stonetop-lore-option-text");
-				if (!ta || ev.target.closest("[data-pdi='lore']")) return;
+				if (!ta || ev.target.closest("[data-pdi='lore'], [data-hb-insert]")) return;
 				const { loreSlug, optionSlug } = ta.dataset;
 				this._stonetopCharacter.setLoreOptionText(loreSlug, optionSlug, ta.value);
+			}, true);
+
+			// A homebrew insert's lists (tab-homebrew-insert.hbs): their own store, and never refused, as a
+			// list over its count is flagged on the sheet instead (homebrew-inserts.js).
+			html[0].addEventListener("change", ev => {
+				if (!ev.target.closest("[data-hb-insert]") || !this.isEditable) return;
+				const cb = ev.target.closest(".stonetop-lore-option-check");
+				if (cb) {
+					const { loreSlug, optionSlug, idx } = cb.dataset;
+					this._stonetopCharacter.setInsertLoreCount(loreSlug, optionSlug, cb.checked ? Number(idx) + 1 : Number(idx));
+					return;
+				}
+				const ta = ev.target.closest(".stonetop-lore-option-text");
+				if (ta) this._stonetopCharacter.setInsertLoreText(ta.dataset.loreSlug, ta.dataset.optionSlug, ta.value);
+			}, true);
+
+			// Taking on an insert's form, or leaving it: its gear is the character's while worn.
+			html[0].addEventListener("click", ev => {
+				const btn = ev.target.closest("[data-hb-insert-form]");
+				if (!btn || !this.isEditable) return;
+				ev.preventDefault();
+				btn.disabled = true;
+				this._stonetopCharacter.setInsertForm(btn.dataset.hbInsertForm, btn.dataset.on === "true")
+					.catch(err => {
+						console.error("Stonetop | couldn't change the insert's form", err);
+						ui.notifications?.error("Couldn't change form. See the console for details.");
+					})
+					.finally(() => { btn.disabled = false; });
 			}, true);
 
 			html[0].addEventListener("change", ev => {
@@ -14561,6 +14603,8 @@ export function createStonetopCharacterSheetClass(Base) {
 		// or "exited" (closed mid-creation). Fire-and-forget — a failed write must
 		// never interrupt the player's creation flow.
 		_setOnboardingState(state, extra = {}) {
+			// A character deleted mid-creation (its picker closing as it goes) has nothing to stamp.
+			if (!globalThis.game?.actors?.has?.(this.actor.id)) return;
 			this.actor.setFlag(STONETOP_SCOPE, "onboardingProgress", { state, ...extra })
 				.catch(err => console.error("Stonetop | failed to record onboarding progress", err));
 		}
