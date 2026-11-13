@@ -1878,7 +1878,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	_isLoreSectionAnswered(section) {
 		const opts = section?.options ?? [];
 		if (!opts.length) return true;
-		if (opts.some(o => o.type === "text")) {
+		// A list to TICK that also holds a write-in is answered by its ticks: the page draws it as a
+		// pick list (_loreSectionData), with nowhere to type, so a written answer can't be required.
+		// No book playbook mixes the two; a homebrew one written before its write-ins became blanks did.
+		if (opts.every(o => o.type === "text")) {
 			const textOptions = this._countedTextOptions(section);
 			const min = this._parseTextAnswerMin(section, textOptions.length);
 			return this._countLoreSectionTextAnswers(section, textOptions) >= min;
@@ -2712,6 +2715,8 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			isInstinct:        stepType === "instinct",
 			// A homebrew playbook may call them Drives (playbooks/homebrew-bundle.js instinctLabel).
 			instinctTitle:     this._playbookDoc.flags?.[ITEM_FLAG_SCOPE]?.instinctLabel === "Drive" ? "Drive" : "Instinct",
+			// The write-in's own words follow it: a playbook of Drives asks for a custom drive.
+			instinctNoun:      this._playbookDoc.flags?.[ITEM_FLAG_SCOPE]?.instinctLabel === "Drive" ? "drive" : "instinct",
 			// A homebrew playbook's notes for the table (its own level-up rules, an insert, borrowed
 			// moves), on the first page. Stored as formatter-made HTML (playbooks/playbook-text.js).
 			homebrewNotes:     isFirst && isHomebrewPlaybookItem(this._playbookDoc) ? (this._playbookDoc.flags?.[ITEM_FLAG_SCOPE]?.notes ?? "") : "",

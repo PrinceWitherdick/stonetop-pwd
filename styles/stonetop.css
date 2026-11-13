@@ -12662,6 +12662,21 @@ form:has(.stonetop-arcanum-sheet-side[data-slug="richly-woven-rug"]) .stonetop-a
 	font-family: inherit;
 }
 
+/* A blank in an option to TICK ("Something else: ___", "…adopted by ___"): a box in the line, not
+   a full-width block under it. As a block it made the row two lines tall, and the tick, centred on
+   the row, sat between the words and the box instead of on the words. Homebrew playbooks' write-ins
+   are all of this shape (writeInsAsBlanks), so most of their lists end in one. */
+.stonetop-lore-option-text.stonetop-lore-fill {
+	display: inline-block;
+	width: 14em;
+	max-width: 100%;
+	min-height: 0;
+	height: auto;
+	resize: none;
+	vertical-align: baseline;
+	margin: 0;
+}
+
 /* Read-only Details tab */
 
 .stonetop-lore-option--text.stonetop-lore-option--readonly .stonetop-lore-option-desc {

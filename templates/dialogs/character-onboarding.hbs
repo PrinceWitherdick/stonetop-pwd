@@ -285,15 +285,15 @@
 			{{/each}}
 		</div>
 		<label class="stonetop-onboarding-custom-label stonetop-onboarding-instinct-custom">
-			<span>Custom instinct</span>
+			<span>Custom {{this.instinctNoun}}</span>
 			<input type="text" class="onboard-instinct-word"
 			       value="{{this.customInstinctWord}}"
-			       aria-label="Instinct word"
+			       aria-label="{{this.instinctTitle}} word"
 			       placeholder="One word">
 			<input type="text" class="onboard-instinct-desc"
 			       value="{{this.customInstinctDescription}}"
-			       aria-label="Instinct description"
-			       placeholder="Instinct description">
+			       aria-label="{{this.instinctTitle}} description"
+			       placeholder="{{this.instinctTitle}} description">
 		</label>
 		{{/if}}
 
