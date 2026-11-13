@@ -217,10 +217,16 @@ function _isAppV2(app) {
 
 // Build the full persisted map from the live registry: key → geometry for every open
 // tracked window. Drops any that have since lost their document or position.
+//
+// Each window is read on its own: a `restoreView` reads a live form, and one that throws (a window
+// halfway through closing) is left out of this save alone. Unguarded, it threw out of the whole
+// collect, and every other open window lost its place and its typed work on the next reload.
 function _collectState() {
 	const state = {};
 	for (const [key, app] of _openApps) {
-		const pos = _snapshotPosition(app);
+		let pos;
+		try { pos = _snapshotPosition(app); }
+		catch (err) { console.warn(`Stonetop | couldn't save the window ${key} for a reload`, err); continue; }
 		if (pos) state[key] = pos;
 	}
 	return state;
@@ -270,6 +276,13 @@ function _schedulePersist() {
 	}, 500);
 }
 
+// For a window whose work lives in `restoreView` and changes without a render (a form being typed
+// in): save soon, so the work survives a page that goes down without the unload flush below (a
+// crashed tab or a killed app), not only a reload.
+export function persistOpenWindowsSoon() {
+	_schedulePersist();
+}
+
 // Synchronous final write, called from beforeunload. Client settings persist to
 // localStorage, so the write lands even as the page tears down.
 function _flushNow() {
@@ -300,6 +313,9 @@ function _applyTabs(app, tabs) {
 function _onRender(app) {
 	const key = _trackKey(app);
 	if (!key) return;
+	// A window whose key changed while open (a new homebrew playbook, saved, is keyed by its Item from
+	// then on) is the same window: the key it had must not reopen a second copy of it after a reload.
+	for (const [other, open] of _openApps) if (open === app && other !== key) _openApps.delete(other);
 	_openApps.set(key, app);
 	const pending = _pendingTabs.get(key);
 	if (pending) {

@@ -5,6 +5,15 @@ import {
 	createLoveLetter, updateLoveLetter, sendLoveLetter, isDraftLoveLetter, loveLetterDrafts,
 	loveLetterRecipientOptions, loveLetterRollOptions,
 } from "../actors/character/love-letters.js";
+import { persistOpenWindowsSoon } from "../utils/window-restore.js";
+import { LOVE_LETTER_RESTORE_KIND, NEW_LETTER_PREFIX } from "./love-letter-restore.js";
+
+/** The form fields a reload carries back, by `name`. */
+const FORM_FIELDS = [
+	"recipient", "name", "description", "rollType", "resultStyle", "success", "partial", "failure",
+	"options", "pickSuccess", "pickPartial", "pickFailure", "listSuccess", "listPartial", "listFailure",
+	"markXp", "signed",
+];
 
 /**
  * GM authoring dialog for a love letter (Book I, p.568) — a single-use move addressed to
@@ -16,6 +25,9 @@ import {
  * A letter can also be saved as a draft: it goes onto the recipient's sheet unsent, where only
  * the GM sees it, and the window stays open on it. A blank window lists the saved drafts to pick
  * one back up; a draft's window offers Send beside Save as draft.
+ *
+ * A reload brings the window back with the letter as typed, sent or not (love-letter-restore.js):
+ * what is typed lives only in the form until a save, so the form is copied as it changes.
  */
 export class LoveLetterDialog extends StonetopDialog {
 	/**
@@ -23,12 +35,76 @@ export class LoveLetterDialog extends StonetopDialog {
 	 * @param {Item}     [opts.item]    - existing love letter to edit; null = create
 	 * @param {Actor}    [opts.actor]   - the recipient (edit mode); ignored in create mode
 	 * @param {Function} [opts.onSaved] - called after a successful save
+	 * @param {string}   [opts.letterId] - a reload's: the id a new letter's window was saved under
 	 */
-	constructor({ item = null, actor = null, onSaved = null } = {}, options = {}) {
+	constructor({ item = null, actor = null, onSaved = null, letterId = null } = {}, options = {}) {
 		super(options);
 		this._item = item;
 		this._actor = actor ?? item?.parent ?? null;
 		this._onSaved = onSaved;
+		// Keeps a new letter's window apart from any other new one for a reload (`restoreKey`).
+		this._letterId = letterId || foundry.utils.randomID(8);
+		// The form as last typed, by field name; copied on every input, so a reload has it.
+		this._form = null;
+		// A reload's copy of the form, written over the drawn one once (activateListeners).
+		this._pendingForm = null;
+	}
+
+	// ---- Reload --------------------------------------------------------------------------
+	// utils/window-restore.js reopens this window after a reload (love-letter-restore.js) with the
+	// form as it was typed.
+
+	/** What a reload saves this window under: the letter's uuid once saved, else this window's id. */
+	get restoreKey() {
+		return `${LOVE_LETTER_RESTORE_KIND}:${this._item?.uuid ?? NEW_LETTER_PREFIX + this._letterId}`;
+	}
+
+	/** The copy of the form, never the form itself: a window mid-close would read back blank. */
+	get restoreView() {
+		return this._form ? { form: this._form } : null;
+	}
+
+	/** A reload's reopening draw carries that back (`options.view`); it goes on at the first draw. */
+	async _render(force, options = {}) {
+		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
+		return super._render(force, options);
+	}
+
+	/** Keep only the known fields, each as a string or (Mark XP) a boolean. */
+	_takeRestoredView(view) {
+		const form = view?.form;
+		if (!form || typeof form !== "object" || Array.isArray(form)) return;
+		const kept = {};
+		for (const key of FORM_FIELDS) {
+			const v = form[key];
+			if (key === "markXp" ? typeof v === "boolean" : typeof v === "string") kept[key] = v;
+		}
+		if (Object.keys(kept).length) this._pendingForm = this._form = kept;
+	}
+
+	/** Copy the form's fields as they stand now. */
+	_readFormCopy(root) {
+		const copy = {};
+		for (const key of FORM_FIELDS) {
+			const els = [...root.querySelectorAll(`[name="${key}"]`)];
+			if (!els.length) continue;
+			if (els[0].type === "radio") copy[key] = els.find(el => el.checked)?.value ?? "";
+			else if (els[0].type === "checkbox") copy[key] = !!els[0].checked;
+			else copy[key] = els[0].value ?? "";
+		}
+		return copy;
+	}
+
+	/** Write a reload's copy over the freshly drawn form. A recipient no longer offered stays unpicked. */
+	_writeFormCopy(root, form) {
+		for (const [key, v] of Object.entries(form)) {
+			const els = [...root.querySelectorAll(`[name="${key}"]`)];
+			if (!els.length) continue;
+			if (els[0].type === "radio") els.forEach(el => { el.checked = el.value === v; });
+			else if (els[0].type === "checkbox") els[0].checked = v === true;
+			else if (els[0].tagName === "SELECT" && ![...els[0].options].some(o => o.value === v)) continue;
+			else els[0].value = v;
+		}
 	}
 
 	// Convenience entry point for the hotbar macro / console: game.stonetop.openLoveLetter().
@@ -116,6 +192,16 @@ export class LoveLetterDialog extends StonetopDialog {
 		super.activateListeners(html);
 		const root = html[0];
 
+		// A reload's letter goes over the drawn one before the panels below sync to it.
+		if (this._pendingForm) {
+			this._writeFormCopy(root, this._pendingForm);
+			this._pendingForm = null;
+		}
+		// Copy the form as it is typed, and save the window for a reload (`restoreView`).
+		const keep = () => { this._form = this._readFormCopy(root); persistOpenWindowsSoon(); };
+		root.addEventListener("input", keep);
+		root.addEventListener("change", keep);
+
 		// Reveal the 10+/7-9/6- result fields only when the letter actually rolls.
 		const results = root.querySelector(".stonetop-love-letter-results");
 		const rollSelect = root.querySelector("[name=rollType]");
@@ -144,6 +230,8 @@ export class LoveLetterDialog extends StonetopDialog {
 	_showLetter(item) {
 		this._item = item;
 		this._actor = item.parent ?? this._actor;
+		// What was typed is the letter's now: the window draws it from the letter.
+		this._form = null;
 		this.render(false);
 		// A V1 re-render keeps the old header, so put the new title on it by hand.
 		const titleEl = this.element?.[0]?.querySelector?.(".window-title");

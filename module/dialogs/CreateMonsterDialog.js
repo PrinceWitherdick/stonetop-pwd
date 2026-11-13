@@ -28,6 +28,9 @@ import {
 import { formatCustomMoveDescription } from "../utils/custom-move-text.js";
 import { applyGuideRail } from "../utils/guide-rail.js";
 import { openSuggestionMenu } from "../utils/suggestion-menu.js";
+import { notePristineWork } from "../utils/close-guard.js";
+import { persistOpenWindowsSoon } from "../utils/window-restore.js";
+import { CREATE_MONSTER_RESTORE_KIND, NEW_MONSTER_KEY } from "./create-monster-restore.js";
 
 const DEFAULTS = { organization: "group", size: "medium", armorBase: 0 };
 
@@ -69,7 +72,85 @@ export class CreateMonsterDialog extends StonetopDialog {
 	}
 
 	// promise() resolves to the created monster Actor, or null if cancelled — see
-	// StonetopDialog's result-dialog protocol.
+	// StonetopDialog's result-dialog protocol. Whoever awaits it does nothing more with it (the
+	// worksheet makes the stat block itself), so a reload that drops the caller loses nothing.
+
+	// ---- Reload --------------------------------------------------------------------------
+	// utils/window-restore.js reopens the worksheet after a reload (create-monster-restore.js), on
+	// the section it was on with every box as it was ticked and every card as it was written.
+
+	/** What a reload saves this window under. One worksheet at a time (its fixed id), so one key. */
+	get restoreKey() {
+		return `${CREATE_MONSTER_RESTORE_KIND}:${NEW_MONSTER_KEY}`;
+	}
+
+	/**
+	 * The section and the whole worksheet. The worksheet lives only in the form, so it is read off
+	 * the form while there is one; a window with no form (mid-close, or not drawn yet) answers with
+	 * what it last read, so a reload never saves it blank.
+	 */
+	get restoreView() {
+		const form = this._form();
+		if (form) this._lastSelections = this._readSelections(form);
+		const sel = this._lastSelections ?? this._pendingSelections;
+		if (!sel) return null;
+		const folder = typeof this._folder === "string" ? this._folder : (this._folder?.id ?? null);
+		return { tab: this._activeTab, name: this._name, folder, sel };
+	}
+
+	/** A reload's reopening draw carries that back (`options.view`); it goes on before the first draw. */
+	async _render(force, options = {}) {
+		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
+		return super._render(force, options);
+	}
+
+	/**
+	 * Hold a reload's worksheet until the form is drawn (activateListeners writes it in). Only what has
+	 * the shape this version keeps is taken; anything else opens as the blank worksheet does.
+	 */
+	_takeRestoredView(view) {
+		if (this._pendingSelections || this._lastSelections) return;
+		if (typeof view?.name === "string") this._name = view.name;
+		if (typeof view?.folder === "string") this._folder = view.folder;
+		if (SECTIONS.some(sec => sec.key === view?.tab)) this._activeTab = view.tab;
+		const sel = view?.sel;
+		if (sel && typeof sel === "object" && !Array.isArray(sel)) this._pendingSelections = sel;
+	}
+
+	/** The worksheet form, which IS this window's root in AppV1 (see activateListeners). */
+	_form() {
+		const root = this.element?.[0];
+		return root?.matches?.(".create-monster") ? root : (root?.querySelector?.(".create-monster") ?? null);
+	}
+
+	/**
+	 * Write a reload's worksheet back into the freshly drawn form: text by name, radios and ticks by
+	 * value, then one card per saved move and attack, as the GM had added them.
+	 */
+	_applySelections(form, sel) {
+		const str = v => (typeof v === "string" ? v : "");
+		const list = v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : []);
+		for (const name of ["concept", "name", "instinct", "creatureType", "armorSource", "customTags", "attackName"]) {
+			const el = form.querySelector(`[name="${name}"]`);
+			if (el && typeof sel[name] === "string") el.value = sel[name];
+		}
+		for (const name of ["organization", "size", "armorBase"]) {
+			const value = sel[name];
+			if (value === undefined || value === null || value === "") continue;
+			for (const el of form.querySelectorAll(`input[name="${name}"]`)) el.checked = el.value === String(value);
+		}
+		const ticks = { nature: sel.natureTags, notable: sel.notableTags, hpMod: sel.hpMods, armorMod: sel.armorMods, damageTag: sel.damageTags, damageMod: sel.damageMods };
+		for (const [name, values] of Object.entries(ticks)) {
+			const on = new Set(list(values));
+			for (const el of form.querySelectorAll(`input[name="${name}"]`)) el.checked = on.has(el.value);
+		}
+		for (const m of Array.isArray(sel.moves) ? sel.moves : []) {
+			if (m && typeof m === "object") this._addMoveCard(form, { name: str(m.name), description: str(m.description) });
+		}
+		for (const a of Array.isArray(sel.extraAttacks) ? sel.extraAttacks : []) {
+			if (a && typeof a === "object") this._addAttackCard(form, { attack: { name: str(a.name), die: str(a.die), tags: list(a.tags) } });
+		}
+	}
 
 	getData() {
 		const opt = (list, selectedId) => list.map(o => ({ ...o, selected: String(o.id) === String(selectedId) }));
@@ -142,7 +223,22 @@ export class CreateMonsterDialog extends StonetopDialog {
 		form.querySelector(".cm-create")?.addEventListener("click", () => this._submit(form));
 		this._wireMoves(form);
 		this._wireAttacks(form);
+		// A reload's worksheet goes in once, onto the first drawn form. The close guard takes its
+		// baseline from the blank form FIRST, so what came back through the reload still counts as
+		// unmade and closing asks before losing it.
+		if (this._pendingSelections) {
+			notePristineWork(this);
+			const sel = this._pendingSelections;
+			this._pendingSelections = null;
+			this._applySelections(form, sel);
+			this._lastSelections = this._readSelections(form);
+			this._selectTab(form, this._activeTab);
+			this._recompute(form);
+		}
 		this._syncNext(form);
+		// Typing never redraws, so the worksheet saves itself for a reload as it changes.
+		form.addEventListener("input", () => persistOpenWindowsSoon());
+		form.addEventListener("change", () => persistOpenWindowsSoon());
 	}
 
 	// THE ADD-A-CARD REPEATER, which both authored lists are: a `<template>` in the .hbs cloned
@@ -188,8 +284,17 @@ export class CreateMonsterDialog extends StonetopDialog {
 	// Append one editable attack card. A card changes the damage line the moment it exists,
 	// before a key is pressed: the summary has to show the extra blow rather than wait for the
 	// first keystroke to reach it.
-	_addAttackCard(form, { focus = false } = {}) {
-		return this._addCard(form, "attack", { focus, afterChange: () => this._recompute(form) });
+	_addAttackCard(form, { focus = false, attack = null } = {}) {
+		return this._addCard(form, "attack", {
+			focus,
+			afterChange: () => this._recompute(form),
+			// A reload's card, written back as it was.
+			fill: attack ? card => {
+				card.querySelector(".cm-attack-name").value = attack.name;
+				card.querySelector(".cm-attack-die").value = attack.die;
+				for (const el of card.querySelectorAll(".cm-attack-tag")) el.checked = attack.tags.includes(el.value);
+			} : null,
+		});
 	}
 
 	// Read the authored attack cards, dropping any left entirely blank.

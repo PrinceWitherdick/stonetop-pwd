@@ -9,6 +9,10 @@ import { enrichHTML, filePicker } from "../../../utils/foundry-compat.js";
 import { isDefaultImg } from "../../../utils/strings.js";
 import { ARTIFACT_STATE } from "../artifact-identify.js";
 import { applyGuideRail, guideRailStep } from "../../../utils/guide-rail.js";
+import { persistOpenWindowsSoon } from "../../../utils/window-restore.js";
+import {
+	ADD_ITEM_RESTORE_KIND, authoringRestoreKey, fieldsFromView, readFormFields, writeFormFields,
+} from "../../../dialogs/authoring-restore.js";
 
 // The rail's pages, in authoring order. `key` matches a `<section data-tab>` in the template;
 // `titleKey` is a `stonetop.inventory.section.*` locale key. The last two pages (the write-up,
@@ -68,12 +72,18 @@ export class AddInventoryItemDialog extends StonetopDialog {
 	 * @param {Item}     [opts.item]          an existing item to edit; null = create
 	 * @param {string}   [opts.titleKey]      i18n key overriding the window title
 	 * @param {Function} [opts.onSaved]       called after a successful save (to refresh the sheet)
+	 * @param {string}   [opts.restoreId]     a reload's: the id a new item's window was saved under
 	 */
 	constructor(saver, {
 		column = "regular", allowColumnChoice = false, allowImage = false, treasure = null,
-		item = null, titleKey = null, onSaved = null,
+		item = null, titleKey = null, onSaved = null, restoreId = null,
 	} = {}, options = {}) {
 		super(options);
+		// Keeps a new item's window apart from any other new one for a reload (`restoreKey`).
+		this._restoreId = restoreId || foundry.utils.randomID(8);
+		// The form's fields as last typed, for a reload (`restoreView`); and a reload's, to put back.
+		this._liveFields = null;
+		this._restoredFields = null;
 		this._saver = saver;
 		this._item = item;
 		this._values = item ? inventoryItemFormValues(item) : { ...BLANK_VALUES, column: column === "small" ? "small" : "regular" };
@@ -101,6 +111,52 @@ export class AddInventoryItemDialog extends StonetopDialog {
 			classes: ["stonetop", "stonetop-add-item-dialog"],
 			scrollY: [".stonetop-add-item-main"],
 		});
+	}
+
+	// ---- Reload --------------------------------------------------------------------------
+	// utils/window-restore.js reopens this window after a reload (dialogs/authoring-restore.js) with
+	// every field as typed, and the way it was opened (which column, treasure or not, the art well).
+
+	get restoreKey() {
+		return authoringRestoreKey(ADD_ITEM_RESTORE_KIND, this._saver, { item: this._item, windowId: this._restoreId });
+	}
+
+	/** The page, the fields as last typed, and how it was opened. Read as the page unloads too, so never off the form. */
+	get restoreView() {
+		return {
+			tab: this._activeTab,
+			fields: this._liveFields,
+			opened: {
+				column: this._column, allowColumnChoice: this._allowColumnChoice, allowImage: this._allowImage,
+				treasure: !!this._treasure, titleKey: this._titleKey,
+			},
+		};
+	}
+
+	async _render(force, options = {}) {
+		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
+		return super._render(force, options);
+	}
+
+	_takeRestoredView(view) {
+		if (this._restoredFields) return;
+		const o = view?.opened;
+		if (o && typeof o === "object") {
+			if (!this._item && (o.column === "regular" || o.column === "small")) this._column = this._values.column = o.column;
+			if (typeof o.allowColumnChoice === "boolean") this._allowColumnChoice = o.allowColumnChoice;
+			if (typeof o.allowImage === "boolean") this._allowImage = o.allowImage;
+			if (typeof o.treasure === "boolean" && o.treasure !== !!this._treasure) {
+				this._treasure = o.treasure;
+				if (this._treasure && this.position) this.position.height = 560;
+			}
+			if (typeof o.titleKey === "string" && o.titleKey.startsWith("stonetop.")) this._titleKey = o.titleKey;
+		}
+		this._restoredFields = fieldsFromView(view?.fields);
+		// The write-up is a live editor, which takes its text from the template rather than a field.
+		if (this._treasure && typeof this._restoredFields?.lore === "string") {
+			this._values = { ...this._values, artifact: { ...this._values.artifact, lore: this._restoredFields.lore } };
+		}
+		if (this._sections().some(s => s.key === view?.tab)) this._activeTab = view.tab;
 	}
 
 	/** The rail's pages for this dialog: the artifact pages only in treasure mode. */
@@ -171,6 +227,17 @@ export class AddInventoryItemDialog extends StonetopDialog {
 	activateListeners(html) {
 		super.activateListeners(html);
 		const root = html[0];
+
+		// A reload's fields go back over the fresh form before anything below reads it.
+		if (this._restoredFields) {
+			writeFormFields(root, this._restoredFields);
+			this._restoredFields = null;
+		}
+		// Typing never re-renders, so the fields are kept here as they change, and saved for a reload.
+		// Clicks too: a tag chip and the art well's Clear change a field without an input event.
+		const noteWork = () => { this._liveFields = readFormFields(root); persistOpenWindowsSoon(); };
+		this._liveFields = readFormFields(root);
+		for (const type of ["input", "change", "click"]) root.addEventListener(type, noteWork);
 
 		const noteInput = root.querySelector("[name=note]");
 		const chips = Array.from(root.querySelectorAll(".stonetop-add-item-chip"));
@@ -299,7 +366,12 @@ export class AddInventoryItemDialog extends StonetopDialog {
 			new FilePickerClass({
 				type: "image",
 				current: input.value,
-				callback: path => { input.value = path; paint(); },
+				callback: path => {
+					input.value = path;
+					paint();
+					// Picked art is part of the work a reload keeps (activateListeners' change listener).
+					input.dispatchEvent(new Event("change", { bubbles: true }));
+				},
 			}).render(true);
 		});
 		clearBtn?.addEventListener("click", () => { input.value = ""; paint(); });
@@ -402,7 +474,11 @@ export class AddInventoryItemDialog extends StonetopDialog {
 
 /** Write target that adds the authored item straight onto one character's sheet. */
 export function characterInventoryItemSaver(character) {
-	return { create: (input) => character.createCustomInventoryItem(input) };
+	return {
+		// What a reload rebuilds this saver from (dialogs/authoring-restore.js).
+		restoreAs: { saver: "characterInventoryItem", actor: character?._actor?.uuid ?? null },
+		create: (input) => character.createCustomInventoryItem(input),
+	};
 }
 
 /**
@@ -421,6 +497,7 @@ export function characterInventoryItemSaver(character) {
  */
 export function worldInventoryItemSaver({ treasure = false } = {}) {
 	return {
+		restoreAs: { saver: treasure ? "worldTreasure" : "worldInventoryItem" },
 		create: (input) => createWorldItem(
 			inventoryItemCreateData(input),
 			treasure ? "stonetop.inventory.treasureCreated" : "stonetop.inventory.worldCreated",

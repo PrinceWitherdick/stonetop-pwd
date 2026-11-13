@@ -187,6 +187,13 @@ import { registerSharedRouteHooks, wireSharedRouteCard } from "./module/dialogs/
 import { registerCampWindowRestore } from "./module/camp/CampWindow.js";
 import { registerTimelineWindowRestore } from "./module/dialogs/TimelineWindow.js";
 import { registerCreateSiteRestore } from "./module/sites/create-site-restore.js";
+import { registerAuthoringRestore } from "./module/dialogs/authoring-restore.js";
+import { registerCreateFollowerRestore } from "./module/actors/character/dialogs/create-follower-restore.js";
+import { registerLoveLetterRestore } from "./module/dialogs/love-letter-restore.js";
+import { registerStruggleSetupRestore } from "./module/struggle/struggle-setup-restore.js";
+import { registerCreateMonsterRestore } from "./module/dialogs/create-monster-restore.js";
+import { registerCreateHazardRestore } from "./module/hazards/create-hazard-restore.js";
+import { registerTimelineEntryRestore } from "./module/dialogs/timeline-entry-restore.js";
 import { registerStruggleHooks } from "./module/struggle/struggle-flow.js";
 import { registerPcAskHooks, wirePcAskCard } from "./module/pc-asks/pc-ask-flow.js";
 import { registerFightTab } from "./module/fight/fight-boot.js";
@@ -929,6 +936,17 @@ registerTimelineWatch();
 registerTimelineWindowRestore();
 // And a Create a Site walkthrough, on the step it was left on with its answers (sites/create-site-restore.js).
 registerCreateSiteRestore();
+// And the authoring windows: the Improvement Builder, a custom move and an inventory item, as typed
+// (dialogs/authoring-restore.js).
+registerAuthoringRestore();
+// And Create a Follower, a love letter, and the Struggle as One setup, as typed.
+registerCreateFollowerRestore();
+registerLoveLetterRestore();
+registerStruggleSetupRestore();
+// And Make a Monster, Make a Hazard and a timeline entry, as typed; each finishes by itself after a reload.
+registerCreateMonsterRestore();
+registerCreateHazardRestore();
+registerTimelineEntryRestore();
 
 // -- READY -----------------------------------------------------
 // FIRST of the ready listeners, deliberately. This one reports whether the startup it is reporting

@@ -39,7 +39,7 @@ import {WOUND_STATUS_GLYPH, WOUND_STATUS_LABEL} from "./wound-display.js";
 import {normalizeWound, normalizeWoundList} from "./wound-record.js";
 import {PlaybookPickerDialog} from "./dialogs/PlaybookPickerDialog.js";
 import {ANIMAL_COMPANION_TRAIT_GLOSSARY, CharacterOnboardingDialog} from "./dialogs/CharacterOnboardingDialog.js";
-import {CreateFollowerDialog} from "./dialogs/CreateFollowerDialog.js";
+import {CreateFollowerDialog, applyCustomFollower} from "./dialogs/CreateFollowerDialog.js";
 import {MonsterToFollowerDialog} from "./dialogs/MonsterToFollowerDialog.js";
 import {NpcToFollowerDialog} from "./dialogs/NpcToFollowerDialog.js";
 import {OrderFollowersDialog} from "./dialogs/OrderFollowersDialog.js";
@@ -12451,15 +12451,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			});
 		}
 
-		// Persist a built custom follower under a fresh id and re-render. `data` is
-		// the buildCustomFollower() shape; we stamp a creation-order key for stable
-		// ordering on the Followers tab.
+		// Persist a built custom follower and re-render. Stored by applyCustomFollower
+		// (CreateFollowerDialog.js), which a walkthrough a reload brought back calls too.
 		async _applyCustomFollower(data) {
 			if (!data) return;
-			const id = foundry.utils.randomID(16);
-			await this.actor.update({
-				[`flags.stonetop-pwd.customFollowers.${id}`]: { ...data, order: this._nextFollowerOrder() },
-			});
+			await applyCustomFollower(this.actor, data);
 			this.render(false);
 		}
 

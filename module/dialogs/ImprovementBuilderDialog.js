@@ -22,6 +22,8 @@ import { improvementPreviewHtml, improvementPreviewNotes } from "../utils/improv
 import { confirmOutcome } from "../utils/ask-with-buttons.js";
 import { hasUnsavedWork, notePristineWork } from "../utils/close-guard.js";
 import { escHtml } from "../utils/strings.js";
+import { persistOpenWindowsSoon } from "../utils/window-restore.js";
+import { IMPROVEMENT_BUILDER_RESTORE_KIND, authoringRestoreKey } from "./authoring-restore.js";
 
 /**
  * The authoring sheet for a steading improvement, in the shape the book's own
@@ -363,6 +365,8 @@ export function freeImprovementName(name, taken) {
 /** Write target: a reusable homebrew card in the journal, dragged onto a steading later. */
 export function improvementCardSaver() {
 	return {
+		// What a reload rebuilds this saver from (dialogs/authoring-restore.js).
+		restoreAs: { saver: "improvementCard" },
 		submitLabel: "Create card",
 		hint: "Author a reusable improvement card, then drag it onto any steading's Improvements tab.",
 		sources: () => [builtinSources()],
@@ -380,6 +384,7 @@ export function improvementCardSaver() {
  */
 export function steadingImprovementSaver(steading, onSaved = null) {
 	return {
+		restoreAs: { saver: "steadingImprovement", actor: steading?._actor?.uuid ?? null },
 		submitLabel: "Add improvement",
 		hint: "Add a custom improvement to track alongside the book's built-ins.",
 		// This steading's own additions are offered too, as a starting point for a variant
@@ -426,6 +431,7 @@ export function steadingImprovementSaver(steading, onSaved = null) {
 export function improvementEditSaver(steading, slug, onSaved = null) {
 	const def = steading?.improvementDef?.(slug) ?? null;
 	return {
+		restoreAs: { saver: "improvementEdit", actor: steading?._actor?.uuid ?? null, slug },
 		submitLabel: "Save changes",
 		hint: "Rewrite this improvement. Its ticked steps are kept wherever they still apply.",
 		title: `Edit ${def?.label ?? "Improvement"}`,
@@ -527,6 +533,12 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 	constructor(saver, options = {}) {
 		super(options);
 		this._saver = saver;
+		// Keeps a new improvement's window apart from any other new one for a reload (`restoreKey`);
+		// a reload hands back the id it was saved under (dialogs/authoring-restore.js).
+		this._restoreId = options?.restoreId || foundry.utils.randomID(8);
+		// The definition the form makes, as last typed, for a reload; and a reload's, to put back.
+		this._liveDef = null;
+		this._restoredDef = null;
 		// Which rail panel is showing. Switching is client-side (see _selectTab), so this
 		// only seeds the first render and nothing typed is ever re-rendered away.
 		this._activeTab = SECTIONS[0].key;
@@ -561,6 +573,40 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 	}
 
 	get title() { return this._saver.title ?? "Create Steading Improvement"; }
+
+	// ---- Reload --------------------------------------------------------------------------
+	// utils/window-restore.js reopens this window after a reload (dialogs/authoring-restore.js) with
+	// the improvement as typed: the definition the form makes, filled back in the way an edit opens.
+
+	get restoreKey() {
+		return authoringRestoreKey(IMPROVEMENT_BUILDER_RESTORE_KIND, this._saver, { windowId: this._restoreId });
+	}
+
+	/** The panel and the definition, as last typed. Read as the page unloads too, so never off the form. */
+	get restoreView() {
+		return { tab: this._activeTab, def: this._liveDef };
+	}
+
+	async _render(force, options = {}) {
+		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
+		return super._render(force, options);
+	}
+
+	_takeRestoredView(view) {
+		if (this._restoredDef) return;
+		const def = view?.def;
+		const isMap = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+		if (isMap(def) && (def.sections === undefined || Array.isArray(def.sections))
+			&& (def.grants === undefined || def.grants === null || isMap(def.grants))) this._restoredDef = def;
+		if (SECTIONS.some(sec => sec.key === view?.tab)) this._activeTab = view.tab;
+	}
+
+	/** Keep the definition the form makes, for a reload: typing never re-renders. */
+	_noteWork(root) {
+		try { this._liveDef = this._readDef(root); }
+		catch (_err) { /* keeps what it last had */ }
+		persistOpenWindowsSoon();
+	}
 
 	getData() {
 		const activeIndex = Math.max(0, SECTIONS.findIndex(s => s.key === this._activeTab));
@@ -613,6 +659,18 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 		// "Add" button reads as though there is nothing to do.
 		if (this._saver.editing) this._fillFrom(root, this._saver.editing);
 		else this._addGroup(root);
+		// A reload's improvement goes over that. What the window would have opened with is taken for
+		// the close-guard FIRST, so what came back through the reload still counts as unsaved work.
+		if (this._restoredDef) {
+			const def = this._restoredDef;
+			this._restoredDef = null;
+			notePristineWork(this);
+			try { this._fillFrom(root, def); }
+			catch (err) { console.warn("Stonetop | couldn't put a reloaded improvement back in the form", err); }
+		}
+		// Typing, ticking, adding and moving rows: kept as they happen. Clicks are how rows come and go.
+		for (const type of ["input", "change", "click"]) root.addEventListener(type, () => this._noteWork(root));
+		this._noteWork(root);
 
 		root.querySelector(".stonetop-improvement-builder-source")
 			?.addEventListener("change", event => this._onPickSource(root, event.currentTarget));
@@ -1066,6 +1124,8 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 		this._clearMarkError(root);
 
 		if (this._activeTab === "preview") this._renderPreview(root);
+		// "Start from" fills the form after a question, with no event of its own to note it by.
+		this._noteWork(root);
 	}
 
 	// ── Preview ─────────────────────────────────────────────────

@@ -36,6 +36,10 @@ import { customTagChip, kindChip } from "../timeline/timeline-view.js";
 import { DEFAULT_TAG_COLOUR, TAG_NAME_MAX, liveTag } from "../timeline/timeline-tags.js";
 import { createCustomTag, worldCustomTags } from "../timeline/timeline-tag-store.js";
 import { renderTemplate } from "../utils/foundry-compat.js";
+import { readTrack } from "../timeline/timeline-store.js";
+import { writeTimelineEntry } from "../timeline/timeline-entry-write.js";
+import { persistOpenWindowsSoon } from "../utils/window-restore.js";
+import { TIMELINE_ENTRY_RESTORE_KIND } from "./timeline-entry-restore.js";
 
 /** One chip in the Tag row: the template's own partial, so a tag made after render matches the rest. */
 const TAG_CHIP_TEMPLATE = "systems/stonetop-pwd/templates/dialogs/partials/timeline-entry-tag.hbs";
@@ -52,9 +56,26 @@ export class TimelineEntryDialog extends StonetopDialog {
 	 * @param {number}  [opts.nowYear]      The clock's stored year, when it is not `year` (an edit, or
 	 *                                      an add slot on an older season).
 	 * @param {string}  [opts.trackName]    Whose thread this is, for the window title.
+	 * @param {object}  [opts.target]       Where the answer will be written ({ track, entryId? }, see
+	 *                                      timeline-entry-write.js). Only for a reload: a dialog that
+	 *                                      knows it can come back after one and write the entry itself.
+	 *                                      Without it the dialog is not restored.
+	 * @param {string}  [opts.restoreId]    A reload's: the id this window was saved under (its answer
+	 *                                      and its target come back in the saved view, at the first draw)
 	 */
-	constructor({ entry = null, season = "", year = 1, yearOnly = false, nowYear = year, trackName = "" } = {}, options = {}) {
+	constructor({ entry = null, season = "", year = 1, yearOnly = false, nowYear = year, trackName = "", target = null, restoreId = null } = {}, options = {}) {
 		super(options);
+		this._target = target;
+		this._restoreId = restoreId || foundry.utils.randomID(8);
+		// One minted by a reload is nothing until its saved view goes on (_render).
+		this._awaitingView = !!restoreId;
+		// What was typed before a reload, laid over what the entry opens with (getData).
+		this._typed = null;
+		this._setUp({ entry, season, year, yearOnly, nowYear, trackName });
+	}
+
+	/** Everything the dialog opens with, from the entry being edited or the date a new one opens on. */
+	_setUp({ entry = null, season = "", year = 1, yearOnly = false, nowYear = year, trackName = "" }) {
 		this._entry = entry;
 		this._trackName = trackName;
 		// The chosen date lives on the instance rather than in the DOM, because the season is
@@ -82,6 +103,104 @@ export class TimelineEntryDialog extends StonetopDialog {
 		// opens as no tag, which is how the card already reads it.
 		this._showTags = !entry || (entry.source ?? "hand") === "hand";
 		this._tag = this._showTags ? liveTag(entry, worldCustomTags()) : "";
+	}
+
+	// ---- Reload --------------------------------------------------------------------------
+	// utils/window-restore.js reopens this dialog after a reload (timeline-entry-restore.js), with
+	// everything typed in it. The timeline that awaited its answer does not come back with it, so the
+	// dialog brought back writes the entry itself, through the timeline's own writer.
+
+	/** What a reload saves this window under, or null for a dialog with nowhere to write after one. */
+	get restoreKey() {
+		return this._target?.track?.trackId ? `${TIMELINE_ENTRY_RESTORE_KIND}:${this._restoreId}` : null;
+	}
+
+	/**
+	 * Where the answer goes, what the dialog opened with, and what has been typed. Read live, as the
+	 * page unloads too; only the fields that are there are read, so a window mid-close keeps what it
+	 * last had rather than saving blanks.
+	 */
+	get restoreView() {
+		if (!this._target?.track?.trackId) return null;
+		this._noteTyped();
+		return {
+			target: this._target,
+			nowYear: this._nowYear,
+			trackName: this._trackName,
+			typed: this._typed,
+		};
+	}
+
+	/** Copy whatever the form holds into `_typed`, field by field, only where the field is drawn. */
+	_noteTyped() {
+		const root = this.element?.[0];
+		const typed = {
+			...(this._typed ?? {}),
+			season: this._season, yearOnly: this._yearOnly, placeUuid: this._placeUuid, tag: this._tag,
+		};
+		if (root) {
+			const read = (key, selector) => {
+				const el = root.querySelector(selector);
+				if (el) typed[key] = el.value;
+			};
+			read("title", ".stonetop-timeline-entry-title");
+			read("place", ".stonetop-timeline-entry-place");
+			read("body", ".stonetop-timeline-entry-body");
+			read("foes", ".stonetop-timeline-entry-foes");
+			if (root.querySelector(".stonetop-season-year-input")) typed.year = this._readYear(root);
+		}
+		if (typed.year === undefined) typed.year = this._year;
+		this._typed = typed;
+	}
+
+	/** A reload's reopening draw carries the view back; with nowhere to write, the window stays shut. */
+	async _render(force, options = {}) {
+		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
+		if (this._gone || (this._awaitingView && !this._reloaded)) return;
+		return super._render(force, options);
+	}
+
+	/**
+	 * Put a reload's dialog back: the thread it writes to, the entry it edits (read afresh, so a row
+	 * changed since by someone else opens as it now is underneath what was typed), and the typing.
+	 * An edit whose entry has gone since has nothing to save onto, and stays shut.
+	 */
+	_takeRestoredView(view) {
+		if (this._reloaded) return;
+		const target = view?.target;
+		const trackId = target?.track?.trackId;
+		if (typeof trackId !== "string" || !trackId) { this._gone = true; return; }
+		const entryId = typeof target.entryId === "string" ? target.entryId : null;
+		let entry = null;
+		if (entryId) {
+			entry = readTrack(trackId).entries.find(e => e.id === entryId) ?? null;
+			if (!entry) { this._gone = true; return; }
+		}
+		this._reloaded = true;
+		const str = v => (typeof v === "string" ? v : "");
+		this._target = {
+			track: { trackId, trackKind: str(target.track.trackKind), name: str(target.track.name) },
+			...(entryId ? { entryId } : {}),
+		};
+		const nowYear = Number.isFinite(view.nowYear) ? view.nowYear : 1;
+		const typed = view.typed && typeof view.typed === "object" ? view.typed : {};
+		this._setUp({
+			entry,
+			season: str(typed.season),
+			year: Number.isFinite(typed.year) ? typed.year : nowYear,
+			yearOnly: typed.yearOnly === true,
+			nowYear,
+			trackName: str(view.trackName),
+		});
+		// The date and the picks the reader made, over what the entry opened with.
+		if (SEASON_IDS.includes(typed.season) || typed.season === "") this._season = typed.season;
+		if (Number.isFinite(typed.year)) this._year = clampYear(typed.year, 1, HISTORY_YEAR_BOUNDS);
+		this._yearOnly = !this._season && typed.yearOnly === true;
+		if (typeof typed.placeUuid === "string") this._placeUuid = typed.placeUuid;
+		if (this._showTags && typeof typed.tag === "string") this._tag = typed.tag;
+		const texts = {};
+		for (const key of ["title", "place", "body", "foes"]) if (typeof typed[key] === "string") texts[key] = typed[key];
+		this._typed = texts;
 	}
 
 	static get defaultOptions() {
@@ -117,13 +236,16 @@ export class TimelineEntryDialog extends StonetopDialog {
 				minYear:   HISTORY_YEAR_BOUNDS.min,
 				maxYear:   HISTORY_YEAR_BOUNDS.max,
 			}),
-			entryTitle: this._entry?.title ?? "",
-			place:      this._entry?.place ?? "",
+			// What was typed before a reload, where there is any, over what the entry opens with.
+			entryTitle: this._typed?.title ?? this._entry?.title ?? "",
+			place:      this._typed?.place ?? this._entry?.place ?? "",
 			placeLinked: !!this._placeUuid,
-			body:       this._entry?.body ?? "",
+			body:       this._typed?.body ?? this._entry?.body ?? "",
 			places:     placeSuggestions(),
 			isKills:    this._isKills,
-			foesText:   this._foesText,
+			// The field's text, NOT `_foesText`: that stays what the row opened with, which is how
+			// `_save` tells an edited list from an untouched one.
+			foesText:   this._typed?.foes ?? this._foesText,
 			showTags:   this._showTags,
 			tagOptions: this._showTags ? this._tagOptions() : [],
 			tagNameMax: TAG_NAME_MAX,
@@ -170,6 +292,12 @@ export class TimelineEntryDialog extends StonetopDialog {
 			?.addEventListener("click", ev => this._guardBusy(ev, () => this._save(root)));
 		root.querySelector(".stonetop-timeline-entry-cancel")
 			?.addEventListener("click", () => this.close());
+
+		// Typing never redraws, and the date and tag are pressed rather than typed, so every one of
+		// those saves the dialog for a reload as it happens.
+		if (this.restoreKey) {
+			for (const type of ["input", "change", "click"]) root.addEventListener(type, () => persistOpenWindowsSoon());
+		}
 	}
 
 	/**
@@ -410,6 +538,25 @@ export class TimelineEntryDialog extends StonetopDialog {
 		if (this._isKills) {
 			const text = StonetopDialog.readValue(root, ".stonetop-timeline-entry-foes");
 			if (text.trim() !== this._foesText.trim()) result.foes = linesToFoes(text);
+		}
+		if (!this._reloaded) return this._resolveWith(result);
+		return this._writeAfterReload(result);
+	}
+
+	/**
+	 * Brought back by a reload: the timeline that awaited this answer is gone, so the dialog writes it
+	 * through the timeline's own writer. A refused write is said, and the dialog stays open with what
+	 * was typed, to try again.
+	 */
+	async _writeAfterReload(result) {
+		try {
+			await writeTimelineEntry(this._target, result);
+		} catch (err) {
+			this.reportWriteFailure(localize("stonetop.timeline.windowTitle"), err);
+			// _guardBusy gives the button back only on a throw, and this one has been said already.
+			const save = this.element?.[0]?.querySelector(".stonetop-timeline-entry-save");
+			if (save) save.disabled = false;
+			return;
 		}
 		return this._resolveWith(result);
 	}

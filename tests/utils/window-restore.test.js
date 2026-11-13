@@ -108,6 +108,17 @@ describe("snapshotting open sheets", () => {
 		expect(saved("Actor.toggled").editMode).toBe(true);
 	});
 
+	it("saves every other window when one's restoreView throws", () => {
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		const broken = fakeSheet({ uuid: "Actor.broken" });
+		Object.defineProperty(broken, "restoreView", { get() { throw new TypeError("half torn down"); } });
+		fire("renderActorSheet", fakeSheet({ uuid: "Actor.fine" }));
+		fire("renderActorSheet", broken);
+		vi.advanceTimersByTime(500);
+		expect(saved("Actor.fine")).toMatchObject({ left: 100, top: 50 });
+		expect(saved("Actor.broken")).toBeUndefined();
+	});
+
 	it("drops a closed sheet from the snapshot", () => {
 		const sheet = fakeSheet({ uuid: "Actor.closed", editMode: true });
 		fire("renderActorSheet", sheet);
@@ -649,6 +660,19 @@ describe("a window registered by its kind", () => {
 		fire("closeCampWindow", app);
 		vi.advanceTimersByTime(500);
 		expect(saved("camp:c1:h1")).toBeUndefined();
+	});
+
+	// A new homebrew playbook's builder is keyed by a draft id until it is saved, then by its Item.
+	it("forgets the key a window had once it names another, so a reload opens it once", async () => {
+		const { registerRestorableWindow } = await import("../../module/utils/window-restore.js");
+		registerRestorableWindow(CampWindow, "camp", vi.fn());
+		const app = campWindow("camp:new-1");
+		fire("renderCampWindow", app);
+		app.restoreKey = "camp:saved-1";
+		fire("renderCampWindow", app);
+		vi.advanceTimersByTime(500);
+		expect(saved("camp:new-1")).toBeUndefined();
+		expect(saved("camp:saved-1")).toBeDefined();
 	});
 
 	// The order stonetop.js runs them in: the camp registers at module scope, and init installs.

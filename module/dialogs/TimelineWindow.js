@@ -34,6 +34,7 @@ import { getStonetopSteadingActor } from "../utils/world.js";
 import { playbookTitle, playbookTitleChanged } from "../utils/playbook-actors.js";
 import { localize, format } from "../utils/i18n.js";
 import { promptForTimelineEntry } from "./TimelineEntryDialog.js";
+import { writeTimelineEntry } from "../timeline/timeline-entry-write.js";
 import { pickContentOption } from "./content-picker.js";
 import { bringDialogToFront } from "../utils/front-on-open.js";
 import { escHtml } from "../utils/strings.js";
@@ -44,7 +45,7 @@ import {
 	trackForActor,
 } from "../timeline/timeline-store.js";
 import {
-	TIMELINE_CARD_SOURCES, TIMELINE_SEASON_SOURCE, TIMELINE_TRACK_STEADING, addEntry, moveEntry, patchEntry, readEntries, removeEntry,
+	TIMELINE_CARD_SOURCES, TIMELINE_SEASON_SOURCE, TIMELINE_TRACK_STEADING, moveEntry, readEntries, removeEntry,
 } from "../timeline/timeline-core.js";
 import { SYSTEM_ID } from "../system-id.js";
 import {
@@ -557,21 +558,28 @@ export class TimelineWindow extends StonetopDialog {
 		// a row the system writes in the same moment land in the same season.
 		const stamp = timelineNow();
 		const date = when ?? stamp;
+		// Where the answer goes, handed to the dialog too: a reload brings the dialog back without
+		// this window waiting on it, and it then writes the entry itself (timeline-entry-write.js).
+		const target = { track: this._trackDescriptor(trackId) };
 		const input = await promptForTimelineEntry({
 			season:   date.season,
 			year:     date.year ?? stamp.year,
 			yearOnly: !!date.yearOnly,
 			nowYear:  stamp.year,
 			trackName: this._trackNameFor(trackId),
+			target,
 		});
 		if (!input) return;
+		await this._writeEntry(target, input);
+	}
 
-		await this._mutate(trackId, entries => addEntry(entries, {
-			...input,
-			source:    "hand",
-			createdAt: Date.now(),
-			authorId:  game.user?.id ?? "",
-		}, foundry.utils.randomID), { create: true });
+	/** Write the entry dialog's answer, saying a refused write to the reader as `_mutate` does. */
+	async _writeEntry(target, input) {
+		try {
+			await writeTimelineEntry(target, input);
+		} catch (err) {
+			this.reportWriteFailure(localize("stonetop.timeline.windowTitle"), err);
+		}
 	}
 
 	/**
@@ -594,9 +602,10 @@ export class TimelineWindow extends StonetopDialog {
 	async _onEditEntry(trackId, entryId) {
 		const entry = readTrack(trackId).entries.find(e => e.id === entryId);
 		if (!entry) return;
-		const input = await promptForTimelineEntry({ entry, nowYear: timelineNow().year, trackName: this._trackNameFor(trackId) });
+		const target = { track: this._trackDescriptor(trackId), entryId };
+		const input = await promptForTimelineEntry({ entry, nowYear: timelineNow().year, trackName: this._trackNameFor(trackId), target });
 		if (!input) return;
-		await this._mutate(trackId, entries => patchEntry(entries, entryId, input));
+		await this._writeEntry(target, input);
 	}
 
 	async _onRemoveEntry(trackId, entryId) {

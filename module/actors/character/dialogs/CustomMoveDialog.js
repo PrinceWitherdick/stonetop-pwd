@@ -4,6 +4,10 @@ import { customMoveDescriptionToPlainText } from "../../../utils/custom-move-tex
 import { buildCustomMoveData } from "../../../utils/custom-move-data.js";
 import { createWorldItem } from "../../../utils/world-item.js";
 import { applyGuideRail, guideRailStep } from "../../../utils/guide-rail.js";
+import { persistOpenWindowsSoon } from "../../../utils/window-restore.js";
+import {
+	CUSTOM_MOVE_RESTORE_KIND, authoringRestoreKey, fieldsFromView, readFormFields, writeFormFields,
+} from "../../../dialogs/authoring-restore.js";
 
 /**
  * A "saver" for a custom move backed by an actor-embedded item (the on-sheet
@@ -12,6 +16,8 @@ import { applyGuideRail, guideRailStep } from "../../../utils/guide-rail.js";
  */
 export function characterMoveSaver(character) {
 	return {
+		// What a reload rebuilds this saver from (dialogs/authoring-restore.js).
+		restoreAs: { saver: "characterMove", actor: character?._actor?.uuid ?? null },
 		create: (input) => character.addCustomMove(input),
 		update: (item, input) => character.updateCustomMove(item.id ?? item._id, input),
 	};
@@ -25,6 +31,7 @@ export function characterMoveSaver(character) {
  */
 export function worldMoveSaver() {
 	return {
+		restoreAs: { saver: "worldMove" },
 		// A dropped world move is a COPY (onDropMove embeds it whole), so the editor says an edit
 		// here does not reach sheets that already hold it.
 		world: true,
@@ -75,9 +82,15 @@ export class CustomMoveDialog extends StonetopDialog {
 	 * @param {object}   [opts.seed]    - `{ name, system }` to fill a NEW move in with (a threat's or
 	 *                                    hazard's player move handed to the players, threat-view.js
 	 *                                    #wireSharePlayerMoves); saving still creates
+	 * @param {string}   [opts.restoreId] - a reload's: the id a new move's window was saved under
 	 */
-	constructor(saver, { item = null, onSaved = null, seed = null } = {}, options = {}) {
+	constructor(saver, { item = null, onSaved = null, seed = null, restoreId = null } = {}, options = {}) {
 		super(options);
+		// Keeps a new move's window apart from any other new one for a reload (`restoreKey`).
+		this._restoreId = restoreId || foundry.utils.randomID(8);
+		// The form's fields as last typed, for a reload (`restoreView`); and a reload's, to put back.
+		this._liveFields = null;
+		this._restoredFields = null;
 		this._saver = saver;
 		this._item = item;
 		this._seed = item ? null : seed;
@@ -102,6 +115,30 @@ export class CustomMoveDialog extends StonetopDialog {
 			// Keep the reader's place in the active panel across a re-render.
 			scrollY: [".stonetop-custom-move-main"],
 		});
+	}
+
+	// ---- Reload --------------------------------------------------------------------------
+	// utils/window-restore.js reopens this window after a reload (dialogs/authoring-restore.js) with
+	// every field as typed. Null for a saver that can't be rebuilt (the Level Up window's).
+
+	get restoreKey() {
+		return authoringRestoreKey(CUSTOM_MOVE_RESTORE_KIND, this._saver, { item: this._item, windowId: this._restoreId });
+	}
+
+	/** The panel and the fields, as last typed. Read as the page unloads too, so never off the form. */
+	get restoreView() {
+		return { tab: this._activeTab, fields: this._liveFields };
+	}
+
+	async _render(force, options = {}) {
+		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
+		return super._render(force, options);
+	}
+
+	_takeRestoredView(view) {
+		if (this._restoredFields) return;
+		this._restoredFields = fieldsFromView(view?.fields);
+		if (SECTIONS.some(s => s.key === view?.tab)) this._activeTab = view.tab;
 	}
 
 	get title() {
@@ -175,6 +212,17 @@ export class CustomMoveDialog extends StonetopDialog {
 	activateListeners(html) {
 		super.activateListeners(html);
 		const root = html[0];
+
+		// A reload's fields go back over the fresh form before anything below reads it.
+		if (this._restoredFields) {
+			writeFormFields(root, this._restoredFields);
+			this._restoredFields = null;
+		}
+		// Typing never re-renders, so the fields are kept here as they change, and saved for a reload.
+		const noteWork = () => { this._liveFields = readFormFields(root); persistOpenWindowsSoon(); };
+		this._liveFields = readFormFields(root);
+		root.addEventListener("input", noteWork);
+		root.addEventListener("change", noteWork);
 
 		// Show the 10+/7-9/6- result fields only when the move actually rolls.
 		const results = root.querySelector(".stonetop-custom-move-results");

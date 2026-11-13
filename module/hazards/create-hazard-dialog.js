@@ -4,8 +4,12 @@ import {
 	HAZARD_DAMAGE_DICE, HAZARD_DAMAGE_EFFECTS, HAZARD_DAMAGE_ADVICE, HAZARD_MOVE_PROMPTS,
 } from "./hazard-data.js";
 import { hazardDamageLine } from "./hazard-view.js";
-import { shapeHazardSystem, setHazardName } from "./hazard-store.js";
+import { shapeHazardSystem, setHazardName, createHazard } from "./hazard-store.js";
 import { htmlToPlainText, plainTextKeeper } from "../journal/card-vm.js";
+import { notePristineWork } from "../utils/close-guard.js";
+import { persistOpenWindowsSoon } from "../utils/window-restore.js";
+import { getStonetopSteadingActorOrWarn } from "../utils/world.js";
+import { CREATE_HAZARD_RESTORE_KIND, NEW_HAZARD_KEY } from "./create-hazard-restore.js";
 
 // ── CreateHazardDialog ───────────────────────────────────────────────────────
 // A walkthrough for "Preparing hazards" (Book I, Dangers, pp. 381-389), the
@@ -105,6 +109,73 @@ export class CreateHazardDialog extends SaveForNow(StepperDialog) {
 	get _steps() { return _STEPS; }
 	get _autoHeight() { return true; }
 
+	// ---- Reload --------------------------------------------------------------------------
+	// utils/window-restore.js reopens this walkthrough after a reload (create-hazard-restore.js), on
+	// the step it was on with every answer, the way Create a Site comes back.
+
+	/** What a reload saves this window under: the page being edited, or "new". */
+	get restoreKey() {
+		return `${CREATE_HAZARD_RESTORE_KIND}:${this._page?.uuid ?? NEW_HAZARD_KEY}`;
+	}
+
+	/**
+	 * The step, by key, and every answer. Read live, as the page unloads too, so a field typed in and
+	 * never left still counts (_captureLiveFields only reads the fields that are there).
+	 */
+	get restoreView() {
+		try { this._captureLiveFields(); }
+		catch (_err) { /* a window mid-close keeps what it last had */ }
+		return { step: this._steps[this._step]?.key ?? null, sel: this._sel };
+	}
+
+	/** A reload's reopening draw carries that back (`options.view`); it goes on before the first draw. */
+	async _render(force, options = {}) {
+		if (options?.view && this._renderedStep === undefined) this._takeRestoredView(options.view);
+		return super._render(force, options);
+	}
+
+	/**
+	 * Put a reload's step and answers back. The close-guard is told what the window would have opened
+	 * with FIRST (blank, or the page as saved), so the answers that came back through the reload still
+	 * count as unsaved and closing asks before losing them.
+	 *
+	 * Each answer is taken only where it has the shape this version keeps it in; the rows are rebuilt
+	 * entry by entry, so a list written by an older version can't hand a row the wrong kind of value.
+	 */
+	_takeRestoredView(view) {
+		if (this._reloaded) return;
+		this._reloaded = true;
+		notePristineWork(this);
+		const sel = view?.sel;
+		if (sel && typeof sel === "object" && !Array.isArray(sel)) {
+			const str = v => (typeof v === "string" ? v : null);
+			for (const key of ["name", "description", "damageDie", "damageExtra", "instinct", "advanceTrigger"]) {
+				if (str(sel[key]) !== null) this._sel[key] = sel[key];
+			}
+			if (typeof sel.certainDeath === "boolean") this._sel.certainDeath = sel.certainDeath;
+			if (Array.isArray(sel.damageEffects)) this._sel.damageEffects = sel.damageEffects.filter(e => typeof e === "string");
+			if (Array.isArray(sel.gmMoves)) {
+				const moves = sel.gmMoves.filter(m => typeof m === "string");
+				this._sel.gmMoves = moves.length ? moves : [""];
+			}
+			if (Array.isArray(sel.grimPortents)) {
+				this._sel.grimPortents = sel.grimPortents
+					.filter(p => p && typeof p.text === "string")
+					.map(p => ({ text: p.text, done: !!p.done }));
+			}
+			if (sel.impendingDoom && typeof sel.impendingDoom.text === "string") {
+				this._sel.impendingDoom = { text: sel.impendingDoom.text, done: !!sel.impendingDoom.done };
+			}
+			if (Array.isArray(sel.playerMoves)) {
+				this._sel.playerMoves = sel.playerMoves
+					.filter(m => m && typeof m.label === "string" && typeof m.text === "string")
+					.map(m => ({ label: m.label, text: m.text }));
+			}
+		}
+		const step = this._steps.findIndex(s => s.key === view?.step);
+		if (step >= 0) this._step = step;
+	}
+
 	// Working state seeded from an existing page (edit mode). Doom-track `done` states
 	// ride along invisibly so saving an edit never un-ticks a portent that came to pass.
 	_seedFromPage(page) {
@@ -200,6 +271,10 @@ export class CreateHazardDialog extends SaveForNow(StepperDialog) {
 
 		html.find(".stonetop-ch-create").on("click", () => this._finish());
 		html.find(".stonetop-guide-save-for-now").on("click", () => this._saveForNow());
+
+		// Typing never redraws, so the walkthrough saves itself for a reload as it changes.
+		html[0]?.addEventListener("input", () => persistOpenWindowsSoon());
+		html[0]?.addEventListener("change", () => persistOpenWindowsSoon());
 
 		// Scalar text fields persist on blur (no re-render, so focus survives typing);
 		// the damage extras re-render for the live damage line.
@@ -311,6 +386,14 @@ export class CreateHazardDialog extends SaveForNow(StepperDialog) {
 			await this._page.update({ system: shapeHazardSystem(seed) });
 			await setHazardName(this._page, seed.name);
 			this._resolveWith(this._page);
+		} else if (this._reloaded) {
+			// Brought back by a reload: the Threats & Dangers tab that awaited the seed is gone, so the
+			// walkthrough files the hazard itself, onto the steading, as that tab would have.
+			const steading = getStonetopSteadingActorOrWarn({ because: "there is nowhere to file GM prep" });
+			if (!steading) return;
+			const page = await createHazard(steading, seed);
+			if (!page) return;
+			this._resolveWith(page);
 		} else {
 			this._resolveWith(seed);
 		}
