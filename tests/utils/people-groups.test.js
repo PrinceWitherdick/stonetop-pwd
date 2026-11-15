@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { groupPeople, peopleGroupOf, personNote } from "../../module/utils/people-groups.js";
+import { groupPeople, peopleGroupOf, personNote, personOptionDetail, personOptionLabel } from "../../module/utils/people-groups.js";
 
 // WHO IS A NEIGHBOUR, and who decides.
 //
@@ -132,5 +132,46 @@ describe("who somebody is, in one line", () => {
 	it("says nothing about somebody with nothing written down", () => {
 		expect(personNote(npc("Pell"))).toBe("");
 		expect(personNote(null)).toBe("");
+	});
+});
+
+// WHO IS WHO IN A DROPDOWN. A native <option> has room for one line, so the name carries its own
+// reminder: the player for a played character ("Pim (Alex)"), else the same note the person picker
+// shows. The player is whoever playerOf says, so a GM (who owns everything) never counts.
+describe("a dropdown's label for somebody", () => {
+	/** A character the given users own, by id. */
+	const owned = (name, playbook, ownerIds = []) => ({
+		...pc(name, playbook),
+		testUserPermission: (user, level) => level === "OWNER" && (user.isGM || ownerIds.includes(user.id)),
+	});
+	const user = (id, name, { isGM = false, character = null } = {}) => ({ id, name, isGM, character });
+
+	it("names the player who has the character assigned", () => {
+		const pim = owned("Pim", "The Lightbearer", ["u1", "u2"]);
+		const users = [user("u1", "Sam"), user("u2", "Alex", { character: { id: "Pim" } })];
+		expect(personOptionLabel(pim, { users })).toBe("Pim (Alex)");
+	});
+
+	it("names an owning player when nobody has it assigned", () => {
+		const pim = owned("Pim", "The Lightbearer", ["u1"]);
+		expect(personOptionLabel(pim, { users: [user("u1", "Sam")] })).toBe("Pim (Sam)");
+	});
+
+	it("falls back to the playbook for a character only the GM holds", () => {
+		const pim = owned("Pim", "The Lightbearer");
+		const users = [user("gm", "Gamemaster", { isGM: true })];
+		expect(personOptionLabel(pim, { users })).toBe("Pim (The Lightbearer)");
+	});
+
+	it("says an NPC's trade, and their home only when it is not Stonetop", () => {
+		expect(personOptionLabel(npc("Quill", { occupation: "smith" }), { users: [] })).toBe("Quill (smith)");
+		expect(personOptionLabel(npc("Tovia", { occupation: "trader", home: "Marshedge" }), { users: [] }))
+			.toBe("Tovia (trader, Marshedge)");
+	});
+
+	it("leaves the bare name when there is nothing to add", () => {
+		expect(personOptionLabel(npc("Pell"), { users: [] })).toBe("Pell");
+		expect(personOptionLabel({ id: "m", name: "Gnarl", type: "monster" }, { users: [] })).toBe("Gnarl");
+		expect(personOptionDetail(null)).toBe("");
 	});
 });

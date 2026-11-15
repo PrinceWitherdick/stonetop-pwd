@@ -4,6 +4,7 @@ import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { shuffle } from "../utils/arrays.js";
 import { stonetopSteadingHeaderButton } from "../utils/world.js";
 import { playbookSlug, getPlayerCharacters, playerOf } from "../utils/playbook-actors.js";
+import { personOptionLabel } from "../utils/people-groups.js";
 import { playbookAvatar } from "../playbooks/playbook-catalog.js";
 // The order the introductions go around the table in: a world setting of its own, never the
 // Combat tracker. See utils/introductions-order.js for why.
@@ -1712,7 +1713,7 @@ export class IntroductionsDialog extends StonetopDialog {
 				// turn order the table is already reading down.
 				const about = pcs
 					.filter(other => other.id !== actor.id)
-					.map(other => ({ id: other.id, name: other.name, isSelected: other.id === draft.who }));
+					.map(other => ({ id: other.id, name: personOptionLabel(other), isSelected: other.id === draft.who }));
 				const nameOf = id => pcs.find(other => other.id === id)?.name ?? "";
 				const editing = this._editingAnswer?.actorId === actor.id && this._editingAnswer.stepKey === stepKey
 					? this._editingAnswer : null;

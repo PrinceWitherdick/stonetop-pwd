@@ -2,6 +2,7 @@ import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { isDefaultImg } from "../utils/strings.js";
 import { partyCharacters } from "../utils/playbook-actors.js";
+import { personOptionLabel } from "../utils/people-groups.js";
 import { isOutOfPlay } from "../actors/character/deaths-door-actor.js";
 import { ownsLearnedMoveNamed } from "../actors/character/owns-move.js";
 import { STRUGGLE_MOVES } from "./struggle-rules.js";
@@ -61,6 +62,8 @@ async function rosterEntry(actor) {
 	return {
 		actorId: actor.id,
 		name: actor.name,
+		// What the Aid dropdown calls them: "Pim (Alex)".
+		label: personOptionLabel(actor),
 		// A placeholder (mystery-man) is no portrait: drop it so the card shows none, not a blank square.
 		img: isDefaultImg(actor.img) ? "" : actor.img,
 		owns,

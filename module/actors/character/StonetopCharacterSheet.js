@@ -239,6 +239,7 @@ import {promptRaiseFromDead} from "../../hooks/DeathsDoorPrompt.js";
 import { wireKeyboardButtons } from "../../utils/keyboard-buttons.js";
 import { replaceKeepingTooltip, dropTooltipWithin, restoreTooltip } from "../../utils/tooltip-handoff.js";
 import { INSERT_TAB_PREFIX } from "./homebrew-inserts.js";
+import { personOptionDetail, personOptionLabel } from "../../utils/people-groups.js";
 
 const _STAT_KEYS = new Set(["str", "dex", "con", "int", "wis", "cha"]);
 const _STAT_CHOICES = [..._STAT_KEYS].map(k => [k, k.toUpperCase()]);
@@ -811,7 +812,7 @@ function _recoverCareHtml(carers) {
 		<label class="stonetop-homestead-field stonetop-recover-carer"><span>Under the care of</span>
 			<select name="recoverCarer">
 				<option value="">No one</option>
-				${carers.map(c => `<option value="${_esc(c.id)}">${_esc(c.name)} (WIS ${sign(c.wis)})</option>`).join("")}
+				${carers.map(c => `<option value="${_esc(c.id)}">${_esc(c.name)} (${_esc([c.detail, `WIS ${sign(c.wis)}`].filter(Boolean).join(", "))})</option>`).join("")}
 			</select>
 		</label>
 		<label class="stonetop-homestead-choice stonetop-recover-stock" style="display:none">
@@ -13522,7 +13523,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				ui.notifications?.warn?.("No other character is available to take this follower.");
 				return;
 			}
-			const opts = targets.map(a => `<option value="${a.id}">${escHtml(a.name)}</option>`).join("");
+			const opts = targets.map(a => `<option value="${a.id}">${escHtml(personOptionLabel(a))}</option>`).join("");
 			new Dialog({
 				title:   `Hand off ${name}`,
 				content: `<p>Move <strong>${escHtml(name)}</strong>, with their Loyalty, current HP, and notes, to another character:</p>
@@ -13670,7 +13671,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const payable = payableStockSources(sources, HEALERS_ARTS_STOCK);
 				const reachable = canReachCarerStock(actor, { patient: this.actor });
 				return {
-					id: actor.id, name: actor.name, wis: carerWis(actor), payable, direct: spendsCarerStockDirectly(actor, { patient: this.actor }),
+					id: actor.id, name: actor.name, detail: personOptionDetail(actor), wis: carerWis(actor), payable, direct: spendsCarerStockDirectly(actor, { patient: this.actor }),
 					canPay: payable.length > 0 && reachable,
 					whyNot: !payable.length
 						? `${actor.name} has no Stock left to spend.`

@@ -44,7 +44,7 @@ const AID_FOLLOWER = "follower:";
 function aidPeople(roster, draft) {
 	const people = new Map();
 	for (const pc of roster) {
-		people.set(`${AID_PC}${pc.actorId}`, { name: pc.name, label: pc.name, kind: "pc", rolling: !!draft.pcs[pc.actorId]?.include });
+		people.set(`${AID_PC}${pc.actorId}`, { name: pc.name, label: pc.label || pc.name, kind: "pc", rolling: !!draft.pcs[pc.actorId]?.include });
 		for (const f of pc.followers ?? []) {
 			people.set(`${AID_FOLLOWER}${f.fkey}`, { name: f.name, label: `${f.name} (${pc.name}'s)`, kind: "follower", rolling: !!draft.followers[f.fkey]?.include });
 		}

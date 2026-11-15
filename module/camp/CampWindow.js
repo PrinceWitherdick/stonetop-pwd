@@ -4,6 +4,7 @@ import { partyCharacters } from "../utils/playbook-actors.js";
 import { orphanedPartyFollowers } from "../actors/character/follower-roster.js";
 import { isOutOfPlaySafe } from "../actors/character/deaths-door-actor.js";
 import { escHtml } from "../utils/strings.js";
+import { personOptionLabel } from "../utils/people-groups.js";
 import { registerRestorableWindow } from "../utils/window-restore.js";
 import {
 	CAMP_BENEFIT, CAMP_STATE, HAD_ALL_ALONG, campLedger, count, coverTheRest, offerStep,
@@ -119,6 +120,8 @@ export class CampWindow extends StonetopDialog {
 			state:    stateOfCamp(this._camp),
 			hostName: host?.name ?? "",
 			ledger:   campLedger(members),
+			// "Pim (Alex)" in the Send away list, the same as the Bring someone list beside it.
+			optionLabels: Object.fromEntries(members.map(m => [m.actorId, actorOf(m.actorId) ? personOptionLabel(actorOf(m.actorId)) : ""])),
 			// The host's own player or a GM, never every owner (camp-store.js#managesCamp).
 			manages:  managesCamp(host, user),
 			// One driver a row: the client that will pay that character's share. A player drives
@@ -129,7 +132,7 @@ export class CampWindow extends StonetopDialog {
 			// A sheet opens for anyone with at least Limited on the character, which is what core asks.
 			viewable: members.filter(m => actorOf(m.actorId)?.testUserPermission?.(user, "LIMITED")).map(m => m.actorId),
 			addable:  user?.isGM
-				? partyCharacters().filter(a => canCamp(a) && !seated.has(a.id)).map(a => ({ id: a.id, name: a.name }))
+				? partyCharacters().filter(a => canCamp(a) && !seated.has(a.id)).map(a => ({ id: a.id, name: personOptionLabel(a) }))
 				: [],
 			// The undo for Bring someone, so it is in the same hands.
 			sendsAway: !!user?.isGM,

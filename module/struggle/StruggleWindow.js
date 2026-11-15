@@ -6,6 +6,7 @@ import { askWithButtons } from "../camp/camp-ask.js";
 import { SYSTEM_ID } from "../system-id.js";
 import { ROW_KIND, STAT_KEYS, STRUGGLE_FLAG, STRUGGLE_MESSAGE_FLAG, STRUGGLE_ROLL_FLAG, STRUGGLE_STATUS, isLive } from "./struggle-rules.js";
 import { struggleWindowView } from "./struggle-view.js";
+import { personOptionLabel } from "../utils/people-groups.js";
 import {
 	boardFor, bumpRow, cancelStruggle, currentStruggle, endStruggle, leaveOut, readerFor, rescue, revealStruggle,
 	isStruggleHost, rollRow, setBundleAlly, setSpots, takesPart, touchesFlag, undoRescue,
@@ -99,15 +100,17 @@ export class StruggleWindow extends StonetopDialog {
 		const reader = readerFor(struggle);
 		const statValues = {};
 		const rollerNames = {};
+		const pcLabels = {};
 		for (const row of struggle.rows) {
 			const actor = game.actors?.get(row.actorId);
 			rollerNames[row.actorId] = actor?.name ?? "";
+			if (actor) pcLabels[row.actorId] = personOptionLabel(actor);
 			if (row.kind === ROW_KIND.PC && reader.drives.has(row.key)) {
 				statValues[row.key] = Object.fromEntries(STAT_KEYS.map(s => [s, Number(actor?.system?.stats?.[s]?.value) || 0]));
 			}
 		}
 		const approaches = await defyDangerApproaches();
-		return struggleWindowView(struggle, board, reader, { statValues, approaches, rollerNames });
+		return struggleWindowView(struggle, board, reader, { statValues, approaches, rollerNames, pcLabels });
 	}
 
 	/**

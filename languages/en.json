@@ -4015,6 +4015,7 @@
       }
     },
     "people": {
+      "optionLabel": "{name} ({detail})",
       "choose": "Choose",
       "chosenCount": "Choose {count} people",
       "chosen": "Picked:",

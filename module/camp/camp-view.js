@@ -579,13 +579,13 @@ function navView({ isOpen, manages, ledger, hostName }) {
  * @param {string[]} o.viewable  actor ids of the characters whose sheets the reader may open
  * @param {Array<{id: string, name: string}>} o.addable  who a GM could still bring to the fire
  */
-export function campWindowView({ state, hostName = "", ledger, manages = false, sendsAway = false, editable = [], mine = [], viewable = [], addable = [], orphans = [] }) {
+export function campWindowView({ state, hostName = "", ledger, manages = false, sendsAway = false, editable = [], mine = [], viewable = [], addable = [], orphans = [], optionLabels = {} }) {
 	const isOpen  = state === CAMP_STATE.OPEN;
 	const canEdit = new Set(editable);
 	const plays   = new Set(mine);
 	const sees    = new Set(viewable);
 	// Never the host: a camp without its host has nobody to settle it, and Break up is for that.
-	const awayable = sendsAway ? ledger.rows.filter(m => !m.isHost).map(m => ({ id: m.actorId, name: m.name })) : [];
+	const awayable = sendsAway ? ledger.rows.filter(m => !m.isHost).map(m => ({ id: m.actorId, name: optionLabels[m.actorId] || m.name })) : [];
 	const rows = ledger.rows.map((member, at) => rowView(member, at, ledger, {
 		canEdit: isOpen && canEdit.has(member.actorId),
 		isMine:  plays.has(member.actorId),
