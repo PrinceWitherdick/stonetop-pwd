@@ -180,6 +180,12 @@ export function homebrewPlaybookBySlug(slug, items) {
 	return _catalog(items).bySlug.get(slug) ?? null;
 }
 
+/** The inserts (the Stranger's Monster Compendium) the homebrew playbook `slug` carries, as its Item stores them; none for any other. */
+export function homebrewPlaybookInserts(slug, items) {
+	const inserts = homebrewPlaybookBySlug(slug, items)?.flags?.[ITEM_FLAG_SCOPE]?.inserts;
+	return Array.isArray(inserts) ? inserts : [];
+}
+
 export function homebrewPlaybookByName(name, items) {
 	const key = String(name ?? "").trim().toLowerCase();
 	if (!key) return null;

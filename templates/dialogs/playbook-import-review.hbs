@@ -1,6 +1,6 @@
 {{!-- Check a PDF import before it reaches the Playbook Builder (playbooks/PlaybookImportReview.js):
-      a left rail of pages like the Welcome guide. "Start here" holds what needs confirming and the
-      stats; then one page per section of the playbook, every piece movable with its "Belongs in"
+      a left rail of pages like the Welcome guide. "Start here" holds what needs confirming (the
+      stats, HP, name and description are seen and edited in the builder, not here); then one page per section of the playbook, every piece movable with its "Belongs in"
       list. Pages switch client-side (applyGuideRail); every panel is always in the DOM. Nothing is
       saved from here. --}}
 <form class="stonetop-pb-review-form" autocomplete="off">
@@ -11,26 +11,19 @@
 
 		<section class="stonetop-pb-review-panel" data-tab="overview"{{#unless this.overviewSelected}} hidden{{/unless}}>
 		<header class="stonetop-pb-review-head">
-			<p class="stonetop-pb-review-lead">Imported from <strong>{{this.fileName}}</strong>. Nothing is saved yet. Answer anything below, move any piece that landed in the wrong place, then finish it in the builder.</p>
-			<h2 class="stonetop-pb-review-name">{{this.name}}</h2>
-			{{#if this.description}}<p class="stonetop-pb-review-desc">{{this.description}}</p>{{/if}}
+			<h2 class="stonetop-pb-review-imported"><i class="fas fa-circle-check stonetop-pb-review-imported-icon" aria-hidden="true"></i>Successfully imported from <strong>{{this.fileName}}</strong></h2>
+			<p class="stonetop-pb-review-lead">Nothing is saved yet. Answer anything below, move any piece that landed in the wrong place, then finish it in the builder, where the name, description and every other word can be edited.</p>
 			{{#if this.existing}}<p class="stonetop-pb-review-issue stonetop-pb-review-existing">{{this.existing}}</p>{{/if}}
 			{{#each this.issues}}<p class="stonetop-pb-review-issue">{{this}}</p>{{/each}}
 		</header>
 
-		{{!-- The key: each line is a sample of the edge it explains, drawn as the pieces are. --}}
-		<section class="stonetop-pb-review-key" aria-label="What the colours mean">
-			<h3 class="stonetop-pb-review-h3">What the colours mean</h3>
-			<ul class="stonetop-pb-review-key-list">
-				<li class="stonetop-pb-review-key-item is-unsure"><strong>Gold</strong> needs you: a question to answer, or a piece the PDF couldn't place for certain. A gold count in the list on the left means that page holds one.</li>
-				<li class="stonetop-pb-review-key-item is-moved"><strong>Slate</strong> is a piece you moved to another section.</li>
-				<li class="stonetop-pb-review-key-item"><strong>Plain</strong> was read with confidence. Give it a glance all the same; any piece can still be moved.</li>
-			</ul>
-		</section>
+		{{!-- Heads the questions and the hard-to-place pieces below; gone when the import has neither. --}}
+		{{#if this.hasIssues}}
+		<h3 class="stonetop-pb-review-h3 stonetop-pb-review-issues-head">To check</h3>
+		{{/if}}
 
 		{{#if this.confirm.length}}
 		<section class="stonetop-pb-review-confirm" aria-label="Please confirm">
-			<h3 class="stonetop-pb-review-h3">Please confirm</h3>
 			{{#each this.confirm}}
 			<div class="stonetop-pb-review-question{{#if this.answered}} is-answered{{/if}}" data-key="{{this.key}}">
 				<p class="stonetop-pb-review-q-label">{{this.label}}</p>
@@ -62,69 +55,64 @@
 
 		{{#if this.unsureCount}}
 		<section class="stonetop-pb-review-unsure">
-			<p><strong>{{this.unsureCount}} {{#if (eq this.unsureCount 1)}}piece was{{else}}pieces were{{/if}} hard to place.</strong> The pages holding them have a gold count in the list on the left, and on those pages each one is edged in gold, with what it was read as and why. Use its <em>Belongs in</em> list to move it.</p>
-			{{#each this.sources}}
-			<label class="stonetop-pb-review-source">All {{this.count}} hard-to-place pieces from <strong>{{this.from}}</strong> belong in
-				<select data-source="{{this.from}}">
-					{{#each this.kindOptions}}<option value="{{this.value}}">{{this.label}}</option>{{/each}}
-					{{#each this.insertOptions}}<optgroup label="{{this.label}}">{{#each this.options}}<option value="{{this.value}}">{{this.label}}</option>{{/each}}</optgroup>{{/each}}
-				</select>
-			</label>
-			{{/each}}
+			<p><strong>{{this.unsureCount}} {{#if (eq this.unsureCount 1)}}piece needs{{else}}pieces need{{/if}} a look.</strong></p>
+			<p class="stonetop-pb-review-unsure-why">The importer wasn't sure how to read {{#if (eq this.unsureCount 1)}}it{{else}}them{{/if}}. Find {{#if (eq this.unsureCount 1)}}it{{else}}them{{/if}} on:</p>
+			<ul class="stonetop-pb-review-unsure-where">{{#each this.unsureSections}}<li><a class="stonetop-pb-review-unsure-link" role="button" tabindex="0" data-goto-tab="{{this.key}}">{{this.title}}</a></li>{{/each}}</ul>
+			<p class="stonetop-pb-review-unsure-todo">Each one is edged in red, with a note saying what to check. If it's fine as it is, press <em>Looks right</em>. If it's in the wrong section, choose the right one in its <em>Belongs in</em> list.</p>
 		</section>
 		{{/if}}
 
-		<section class="stonetop-pb-review-sheet" aria-label="Preview">
-			<h3 class="stonetop-pb-review-h3">How the playbook will look</h3>
-			<p class="stonetop-pb-review-lead">Each section of the playbook has its own page in the list on the left.</p>
-			<dl class="stonetop-pb-review-facts">
-				<dt>Stats</dt><dd>{{this.statsNote}}</dd>
-				<dt>Max HP</dt><dd data-fact="hp">{{this.hp}}</dd>
-				<dt>Damage</dt><dd data-fact="damage">{{this.damage}}</dd>
-				{{#if this.looks}}<dt>Appearance</dt><dd>{{this.looks}}</dd>{{/if}}
-				{{#if this.origins}}<dt>Origins</dt><dd>{{this.origins}}{{#if this.originQuestions}} (each with its own question){{/if}}</dd>{{/if}}
-				{{#if this.possessionsGiven}}<dt>Possessions</dt><dd>{{this.possessionsGiven}}</dd>{{/if}}
-				{{#if this.advancement}}<dt>Level Up</dt><dd>{{this.advancement}}</dd>{{/if}}
-				{{#if this.introCount}}<dt>Introductions</dt><dd>{{this.introCount}} questions</dd>{{/if}}
-			</dl>
-		</section>
 		</section>
 
 		{{#each this.groups}}
 		<section class="stonetop-pb-review-panel" data-tab="{{this.kind}}"{{#unless this.selected}} hidden{{/unless}}>
+			{{!-- A page can hold more than one kind (Starting moves and Other moves on Moves): each kind
+			      is its own part under the character sheet's section heading (the red underline); a page
+			      of one kind heads its one part with the page's name. Join reaches only within a part. --}}
+			{{#each this.parts}}
 			<section class="stonetop-pb-review-group" data-kind="{{this.kind}}">
-				<h4 class="stonetop-pb-review-group-title">{{this.title}} <span class="stonetop-pb-review-count">{{this.count}}</span></h4>
+				{{> "stonetop.section-heading" title=this.title}}
 				{{#if this.lead}}<p class="stonetop-pb-review-lead">{{this.lead}}</p>{{/if}}
 				{{#each this.blocks}}
-				<article class="stonetop-pb-review-block{{#if this.unsure}} is-unsure{{/if}}{{#if this.moved}} is-moved{{/if}}" data-id="{{this.id}}">
+				{{!-- A piece's controls (Belongs in, Split, Join) stay hidden until its pencil is pressed
+				      (is-editing). A flagged piece (is-unsure) has no pencil: it shows Belongs in, Looks right,
+				      Split and Join from the start. The pencil shows on hover or focus, and is a check while pressed. --}}
+				<article class="stonetop-pb-review-block{{#if this.unsure}} is-unsure{{/if}}{{#if this.moved}} is-moved{{/if}}{{#if this.editing}} is-editing{{/if}}" data-id="{{this.id}}">
 					<div class="stonetop-pb-review-block-head">
 						<strong class="stonetop-pb-review-block-title">{{this.title}}</strong>
 						{{#if this.tags}}<span class="stonetop-pb-review-block-tags">{{this.tags}}</span>{{/if}}
-						<label class="stonetop-pb-review-belongs">Belongs in
+						{{!-- Belongs in and Looks right share a field row: the button stands the dropdown's height. --}}
+						<span class="stonetop-pb-review-belongs-row stonetop-field-btns">
+						<label class="stonetop-pb-review-belongs" data-tooltip="The section this piece will be built into. Choose another to move it there, or Leave it out to drop it from the playbook.">Belongs in
 							<select data-block="{{this.id}}">
 								{{#each this.kindOptions}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
 								{{#each this.insertOptions}}<optgroup label="{{this.label}}">{{#each this.options}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}</optgroup>{{/each}}
+								<optgroup label="Not in the playbook"><option value="skip"{{#if this.leftOut}} selected{{/if}}>Leave it out</option></optgroup>
 							</select>
 						</label>
+						{{#if this.unsure}}<button type="button" class="stonetop-pb-review-act stonetop-pb-review-ok" data-looks-right="{{this.id}}" data-tooltip="Keep this piece where it is and take the red off."><i class="fas fa-check" aria-hidden="true"></i> <span class="stonetop-chip-text">Looks right</span></button>{{/if}}
+						</span>
+						{{#unless this.unsure}}{{#if this.editing}}<a class="stonetop-pb-review-edit stonetop-section-done" role="button" tabindex="0" data-edit="{{this.id}}" aria-expanded="true" aria-label="Hide the controls for {{this.title}}"><i class="fas fa-check" aria-hidden="true"></i></a>{{else}}<a class="stonetop-pb-review-edit stonetop-section-edit" role="button" tabindex="0" data-edit="{{this.id}}" aria-expanded="false" aria-label="Move, split or join {{this.title}}"><i class="fas fa-pencil" aria-hidden="true"></i></a>{{/if}}{{/unless}}
 					</div>
-					{{#if this.unsure}}<p class="stonetop-pb-review-why">{{this.why}}</p>{{/if}}
+					{{#if this.unsure}}<p class="stonetop-pb-review-why"><strong>Why it's marked:</strong> {{this.why}}</p>{{/if}}
+					{{#if this.leftOutWhy}}<p class="stonetop-pb-review-why">{{this.leftOutWhy}}</p>{{/if}}
 					{{#if this.moved}}<p class="stonetop-pb-review-why">Moved here by you. It was read as: {{this.readAsLabel}}.</p>{{/if}}
 					{{#if this.long}}
 					<details class="stonetop-pb-review-block-text"{{#if this.open}} open{{/if}}>
-						<summary class="stonetop-pb-review-excerpt"><span class="stonetop-pb-review-excerpt-text">{{this.excerpt}}</span> <span class="stonetop-pb-review-more">Show all</span><span class="stonetop-pb-review-less">Show less</span></summary>
+						<summary class="stonetop-pb-review-excerpt"><span class="stonetop-pb-review-excerpt-text">{{this.excerpt}}</span> <span class="stonetop-pb-review-more" data-tooltip="Show the whole of this piece">Show all</span><span class="stonetop-pb-review-less">Show less</span></summary>
 						<div class="stonetop-pb-review-full">{{this.full}}</div>
 					</details>
 					{{else}}
 					{{#if this.full}}<div class="stonetop-pb-review-full">{{this.full}}</div>{{/if}}
 					{{/if}}
 					<div class="stonetop-pb-review-block-foot">
-						<p class="stonetop-pb-review-from">Read from {{this.from}}</p>
-						{{#if this.canSplit}}<button type="button" class="stonetop-pb-review-act" data-split="{{this.id}}"><i class="fas fa-scissors" aria-hidden="true"></i> <span class="stonetop-chip-text">Split into {{this.splitCount}}</span></button>{{/if}}
-						{{#if this.canJoin}}<button type="button" class="stonetop-pb-review-act" data-join="{{this.id}}"><i class="fas fa-arrow-up" aria-hidden="true"></i> <span class="stonetop-chip-text">Join to the one above</span></button>{{/if}}
+						{{#if this.canSplit}}<button type="button" class="stonetop-pb-review-act" data-split="{{this.id}}" data-tooltip="Cut this piece into one piece per paragraph. Each new one is named by its opening words."><i class="fas fa-scissors" aria-hidden="true"></i> <span class="stonetop-chip-text">Split into {{this.splitCount}}</span></button>{{/if}}
+						{{#if this.canJoin}}<button type="button" class="stonetop-pb-review-act" data-join="{{this.id}}" data-tooltip="Add this piece's words to the end of the one above it, for a piece the PDF cut in two."><i class="fas fa-arrow-up" aria-hidden="true"></i> <span class="stonetop-chip-text">Join to the one above</span></button>{{/if}}
 					</div>
 				</article>
 				{{/each}}
 			</section>
+			{{/each}}
 		</section>
 		{{/each}}
 		</div>
@@ -138,7 +126,9 @@
 			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-cancel">Cancel</button>
 		</span>
 		<span class="stonetop-custom-move-nav-btns">
-			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-reset" title="Undo every move, split, join and answer"{{#unless this.changed}} disabled{{/unless}}><i class="fas fa-rotate-left" aria-hidden="true"></i> Start over</button>
+			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-undo" title="Undo the last move, split, join or answer (Ctrl+Z)"{{#unless this.canUndo}} disabled{{/unless}}><i class="fas fa-rotate-left" aria-hidden="true"></i> <span class="stonetop-chip-text">Undo</span></button>
+			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-redo" title="Redo what was undone (Ctrl+Y)"{{#unless this.canRedo}} disabled{{/unless}}><i class="fas fa-rotate-right" aria-hidden="true"></i> <span class="stonetop-chip-text">Redo</span></button>
+			<button type="button" class="stonetop-custom-move-cancel stonetop-pb-review-reset" title="Undo every move, split, join and answer, back to how the PDF was read"{{#unless this.changed}} disabled{{/unless}}><i class="fas fa-backward-fast" aria-hidden="true"></i> <span class="stonetop-chip-text">Start over</span></button>
 		</span>
 	</footer>
 </form>

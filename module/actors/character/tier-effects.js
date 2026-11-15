@@ -39,7 +39,8 @@ import { HERO_MOVES, alphaKeysHeld, foeKey, recordAlphaOver, forgetAlphaOver } f
 import { OMENS_OF_FATE, settleOmensTier } from "./destined.js";
 import { reconcileGivenAdvantage } from "./give-advantage-flow.js";
 import { learnedTrack, takeBackHeld } from "./MoveResources.js";
-import { ownedLearnedMove } from "./owns-move.js";
+import { ownedLearnedMove, bookMoveName } from "./owns-move.js";
+import { homebrewInsertOf, homebrewMoveSlug, homebrewPlaybookInserts } from "../../playbooks/playbook-catalog.js";
 
 /** The message flag holding what a roll's tier effects have done, keyed as TIER_EFFECTS is. */
 export const TIER_EFFECTS_FLAG = "tierEffects";
@@ -66,7 +67,7 @@ const count = value => Math.max(0, Math.trunc(Number(value) || 0));
  * Tongued): never lowered by the roll, never past its max, and a card moved off its tier takes back only
  * what it added.
  */
-async function settleHeld(actor, move, holds, tier, added) {
+async function settleHeld(actor, move, holds, tier, added, bonus = 0) {
 	if (!learnedTrack(actor, move)) return added === undefined ? undefined : count(added);
 	const done = count(added);
 	// Read and raised in the character's spending turn (utils/spender-queue.js); a take-back takes its own turn.
@@ -74,7 +75,9 @@ async function settleHeld(actor, move, holds, tier, added) {
 		const track = learnedTrack(actor, move);
 		if (!track) return { now: done, takeBack: 0 };
 		const hold = Math.min(track.max, count(holds?.[tier]));
-		const want = Math.max(0, hold - Math.max(0, track.held - done));
+		// What the track would hold without this card; a bonus (holdMoreBonus) rides on top of the hold.
+		const base = Math.max(0, track.held - done);
+		const want = Math.max(0, Math.min(track.max, Math.max(base, hold) + count(bonus)) - base);
 		if (want > done) {
 			const next = Math.min(track.max, track.held + want - done);
 			if (next !== track.held) await track.resources.setUses(move, next, { stonetopMove: move });
@@ -94,6 +97,81 @@ async function settleHeld(actor, move, holds, tier, added) {
 export function holdOnRollFor(actor, move) {
 	const holds = ownedLearnedMove(actor, move)?.system?.resource?.holdOnRoll;
 	return holds && typeof holds === "object" && Object.values(holds).some(v => count(v) > 0) ? holds : null;
+}
+
+/**
+ * More to hold on a roll, by tier (`{success, partial, failure}`), from a line taken in its roll window (the
+ * Stranger's Ephemera: "Spend ☐ to hold +1 Fear when you roll the Pariah move, even on a 6-"), in the one
+ * shape kept; null for none. Paid after the dice and handed to settleTierEffects as `holdMore`
+ * (StonetopCharacter#onRoll), so nothing waits between the two. PURE.
+ */
+export function holdMoreBonus(bonus) {
+	const out = { success: count(bonus?.success), partial: count(bonus?.partial), failure: count(bonus?.failure) };
+	return Object.values(out).some(Boolean) ? out : null;
+}
+
+// A tier's words that put the form on: "take on its traits, armament, moves…", "you transform". Not when the
+// words say it doesn't happen ("you fail to transform", "you can't turn into it").
+const TAKES_FORM = /\b(?:take\s+on|transform|turn\s+into)/gi;
+const NOT_BEFORE = /\b(?:fail(?:s|ed)?\s+to|don['’]?t|do\s+not|can['’]?t|cannot|won['’]?t|not|never|unable\s+to|without|instead\s+of)\s+(?:\w+\s+){0,2}$/i;
+// A tier that opens on another's outcome ("as a 7+ but you lose yourself"): it does what that tier does.
+const AS_TIER = /^\W*as\s+(?:on\s+)?a\s+(7\+|7-9|10\+)/i;
+const AS_TIERS = { "7+": ["success", "partial"], "7-9": ["partial"], "10+": ["success"] };
+
+function _takesForm(text) {
+	for (const m of text.matchAll(TAKES_FORM)) if (!NOT_BEFORE.test(text.slice(0, m.index))) return true;
+	return false;
+}
+
+/** Which of a move's tiers put its form on: by their own words, or by opening "as a 7+" on a tier that does. */
+function _formTiers(results) {
+	const text = t => String(results[t]?.value ?? "");
+	const own = Object.fromEntries(["success", "partial", "failure"].map(t => [t, _takesForm(text(t))]));
+	return Object.fromEntries(Object.entries(own).map(([t, on]) => {
+		const as = text(t).match(AS_TIER)?.[1];
+		return [t, on || (!!as && AS_TIERS[as].some(other => other !== t && own[other]))];
+	}));
+}
+
+/**
+ * A homebrew insert's own rolled move that puts its form on (the Stranger's Metamorphosis: "When you reveal
+ * the monster within roll +CON: on a 7+, take on its traits, armament, moves…; on a 6-, as a 7+ but you lose
+ * yourself to your instinct"): `{key, tiers: {success, partial, failure}}`, the insert and which tiers do,
+ * read off the move's results; null for any other move, or an insert with no form switch. A move on one of
+ * the insert's lists is a pick, not the way in, so only a move the insert always gives counts.
+ */
+export function insertFormRollFor(actor, move) {
+	const item = ownedLearnedMove(actor, move);
+	const ins = homebrewInsertOf(item);
+	if (!ins || ins.list) return null;
+	const def = homebrewPlaybookInserts(homebrewMoveSlug(item)).find(i => i?.key === ins.key);
+	if (!def?.form?.enabled) return null;
+	const results = item.system?.moveResults ?? {};
+	const tiers = _formTiers(results);
+	return Object.values(tiers).some(Boolean) ? { key: ins.key, tiers } : null;
+}
+
+/**
+ * Put an insert's form on, or take it back off, by the tier of the roll that reveals it (insertFormRollFor).
+ * `done` is `{key, prior, set}`: whether the form was worn before the roll, and whether THIS card put it on.
+ * A form already worn is left alone, and a Shift off a form-giving tier takes off only what this card put on.
+ */
+async function settleInsertForm(actor, move, tier, done, character) {
+	const form = insertFormRollFor(actor, move);
+	const inserts = (character ?? actor?.typedActor)?._homebrewInserts;
+	if (!form || !inserts) return done ?? undefined;
+	const wearing = inserts.wearing(form.key);
+	const prior = done ? !!done.prior : wearing;
+	const wants = !!form.tiers[tier];
+	if (wants && !wearing && !prior) {
+		await inserts.setWearing(form.key, true);
+		return { key: form.key, prior, set: true };
+	}
+	if (!wants && done?.set) {
+		if (wearing) await inserts.setWearing(form.key, false);
+		return { key: form.key, prior, set: false };
+	}
+	return { key: form.key, prior, set: !!done?.set };
 }
 
 /**
@@ -176,10 +254,25 @@ const TIER_EFFECTS = {
 	},
 	// How many this card put on a track whose move says what a roll holds (holdOnRollFor): matched by the
 	// move's DATA, not its name, so any move can carry it (a homebrew "Pariah": "on a 10+, hold 3 Fear").
+	// `{added, bonus}` instead when a line taken on the roll held more (`holdMore`, holdMoreBonus): the bonus is kept
+	// on the card, so a Shift settles the new tier with it.
 	heldOnRoll: {
 		moves: [],
-		matches: (actor, move) => move !== SILVER_TONGUED && !!holdOnRollFor(actor, move),
-		settle: (actor, move, tier, done) => settleHeld(actor, move, holdOnRollFor(actor, move), tier, done),
+		// Not the book's Silver Tongued, whose Nerve nerveHeld settles; a homebrew move of that name is its own.
+		matches: (actor, move) => !!holdOnRollFor(actor, move) && (move !== SILVER_TONGUED || !bookMoveName(ownedLearnedMove(actor, move))),
+		async settle(actor, move, tier, done, _character, { holdMore = null } = {}) {
+			const bonus = done == null ? holdMoreBonus(holdMore) : (done?.bonus ?? null);
+			const added = done != null && typeof done === "object" ? done.added : done;
+			const now = await settleHeld(actor, move, holdOnRollFor(actor, move), tier, added, bonus?.[tier] ?? 0);
+			return bonus && now !== undefined ? { added: now, bonus } : now;
+		},
+	},
+	// `{key, prior, set}`: a homebrew insert's form this card put on (insertFormRollFor), matched by the move's
+	// data, as heldOnRoll is.
+	insertForm: {
+		moves: [],
+		matches: (actor, move) => !!insertFormRollFor(actor, move),
+		settle: (actor, move, tier, done, character) => settleInsertForm(actor, move, tier, done, character),
 	},
 	// The holy light: true when this card lit it (Wielder), or what it snuffed (Luminous Shield).
 	holyLight: {
@@ -259,17 +352,37 @@ export const TIER_EFFECT_MOVES = Object.freeze([...new Set(Object.values(TIER_EF
  * @param {object[]} [options.targets]  the foes the roll was aimed at (at the roll itself; Alpha keeps them)
  * @param {boolean} [options.surpriseSpent]  whether the roll spent a Surprise (at the roll itself; Prepare a
  *   Welcome keeps it), combat/battle-holds.js#spendSurpriseForRoll
+ * @param {string[]|null} [options.only]  only these effects (a homebrew move: HOMEBREW_TIER_EFFECTS)
+ * @param {object|null} [options.holdMore]  more to hold by tier, from a line taken on the roll (holdMoreBonus)
  * @returns {Promise<object>}
  */
-export async function settleTierEffects(actor, move, tier, done = null, { character = actor?.typedActor, targets = [], surpriseSpent = false } = {}) {
+export async function settleTierEffects(actor, move, tier, done = null, { character = actor?.typedActor, targets = [], surpriseSpent = false, only = null, holdMore = null } = {}) {
 	const record = {};
 	for (const [key, effect] of Object.entries(TIER_EFFECTS)) {
+		if (only && !only.includes(key)) continue;
 		if (!effect.moves.includes(move) && !(effect.recorded && done?.[key] != null) && !effect.matches?.(actor, move)) continue;
-		const now = await effect.settle(actor, move, tier, done?.[key], character, { targets, surpriseSpent });
+		const now = await effect.settle(actor, move, tier, done?.[key], character, { targets, surpriseSpent, holdMore });
 		// An effect with nothing to keep (an Alpha aimed at nobody) leaves no trace on the card.
 		if (now !== undefined) record[key] = now;
 	}
 	return record;
+}
+
+/**
+ * What a move a player or a homebrew playbook wrote can do when rolled: only what its own DATA says (a
+ * homebrew Pariah's "on a 10+, hold 3 Fear"), never a book move's effect it happens to share a name with
+ * (owns-move.js#bookMoveName). `TIER_EFFECTS` keys.
+ */
+export const HOMEBREW_TIER_EFFECTS = Object.freeze(["heldOnRoll", "insertForm"]);
+
+/**
+ * The effects a rolled move may settle: every one for a book move (null, no limit), HOMEBREW_TIER_EFFECTS
+ * for one written by a player or a homebrew playbook that its data gives one to, or false for none.
+ * `item` is the rolled move's Item.
+ */
+export function tierEffectsAllowed(actor, item) {
+	if (bookMoveName(item)) return null;
+	return holdOnRollFor(actor, item?.name) || insertFormRollFor(actor, item?.name) ? HOMEBREW_TIER_EFFECTS : false;
 }
 
 /** Write a record on its card, when there is anything to write. Whether it wrote. */
@@ -315,8 +428,11 @@ export async function reconcileTierEffects(message, total, { actor = undefined, 
 	// The tier the card COUNTS as: a roll that treats a 7-9 as a 10+ (or a 6- as a 7-9) lifted within the
 	// bent tier has not moved, and one lifted into it settles as what it counts as (utils/counted-tier.js).
 	const tier = outcomeTier(cardCountedTier(message, Number(total), scope));
+	// A move a player or a homebrew playbook wrote only ever settles its own data's effects, as at the roll.
+	const item = roller.items?.find?.(i => i.type === "move" && i.name === move);
+	const only = item && !bookMoveName(item) ? HOMEBREW_TIER_EFFECTS : null;
 	try {
-		const next = await settleTierEffects(roller, move, tier, done);
+		const next = await settleTierEffects(roller, move, tier, done, { only });
 		if (!Object.keys(next).length || JSON.stringify(next) === JSON.stringify(done)) return false;
 		return recordTierEffects(message, next, { scope });
 	} catch (err) {

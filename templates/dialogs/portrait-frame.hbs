@@ -3,8 +3,10 @@
 <div class="stonetop-portrait-frame-root">
 	<div class="stonetop-frame-body">
 		{{!-- role="application" so a screen reader hands the arrow keys to the stage rather than
-		      consuming them for its own navigation; the live readout below is the label. --}}
-		<div class="stonetop-frame-stage" role="application" tabindex="0" aria-label="">
+		      consuming them for its own navigation; the live readout below is the label.
+		      data-keyboard-focus: Foundry's keybindings stand down while it has focus, so the arrow
+		      keys move the square and not the scene behind. --}}
+		<div class="stonetop-frame-stage" role="application" tabindex="0" aria-label="" data-keyboard-focus="true">
 			<img class="stonetop-frame-stage-img" src="{{this.stageSrc}}" data-fallback="{{this.fallbackSrc}}" alt="">
 			<div class="stonetop-frame-layer"></div>
 		</div>

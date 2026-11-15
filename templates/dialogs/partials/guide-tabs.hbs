@@ -19,8 +19,9 @@
       served by the rail than by the stack it replaced. Suppressed at zero by the caller, which
       passes no count at all for an empty list.
 
-      `unsure` (optional) paints that count gold: the page holds something the GM should look at
-      (the playbook import review's hard-to-place pieces). --}}
+      `unsure` (optional) paints that count red: the page holds something the GM should look at
+      (the playbook import review's flagged pieces, where the count is then of those alone).
+      `countTip` (optional) says what the number counts, as the count's tooltip. --}}
 <nav class="stonetop-guide-toc" aria-label="{{this.ariaLabel}}">
 	<ol class="stonetop-guide-toc-list">
 		{{#each tabs}}
@@ -28,7 +29,7 @@
 			<button type="button" class="stonetop-guide-toc-btn {{../btnClass}}" data-tab="{{this.key}}"{{#if selected}} aria-current="true"{{/if}}>
 				<i class="fas {{this.icon}} stonetop-guide-toc-icon"></i>
 				<span class="stonetop-guide-toc-text">{{this.title}}</span>
-				{{#if count}}<span class="stonetop-guide-toc-count">{{this.count}}</span>{{/if}}
+				{{#if count}}<span class="stonetop-guide-toc-count"{{#if this.countTip}} data-tooltip="{{this.countTip}}"{{/if}}>{{this.count}}</span>{{/if}}
 			</button>
 		</li>
 		{{/each}}

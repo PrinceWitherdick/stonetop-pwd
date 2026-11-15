@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Window } from "happy-dom";
+import { readFileSync } from "node:fs";
 import { PortraitFrameDialog } from "../../module/utils/PortraitFrameDialog.js";
 import { actorFrameHandle, followerFrameHandle } from "../../module/utils/portrait-frame-handles.js";
 
@@ -63,5 +65,63 @@ describe("the frame dialog's Tokenizer note", () => {
 		const data = dialogFor(actorFrameHandle(ACTOR)).getData();
 		expect(data.stageSrc).toContain("bryn.webp");
 		expect(data.fallbackSrc).toContain("bryn.webp");
+	});
+});
+
+// The arrow keys nudge the square only from inside the dialog (_bindKeys listens on the dialog root).
+// The stage's pointerdown cancels the press's default, which also cancels the focus a click gives, so
+// a press on the picture then an arrow did nothing until the stage was tabbed to. The press now hands
+// the stage the keyboard itself.
+describe("the frame dialog's arrow keys", () => {
+	function staged() {
+		const window = new Window();
+		const document = window.document;
+		const root = document.createElement("div");
+		root.innerHTML = `<div class="stonetop-frame-stage" tabindex="0" data-keyboard-focus="true"></div>`;
+		document.body.append(root);
+		const dialog = dialogFor(actorFrameHandle(ACTOR));
+		dialog._root = root;
+		dialog._stageEl = root.querySelector(".stonetop-frame-stage");
+		dialog._stageEl.setPointerCapture = vi.fn();
+		dialog._stage = { w: 400, h: 400 };
+		dialog._rect = [0.25, 0.25, 0.5, 0.5];
+		dialog._paint = vi.fn();
+		dialog._bindPointer();
+		dialog._bindKeys();
+		return { dialog, root, stage: dialog._stageEl, window, document };
+	}
+
+	it("a press on the picture gives it the keyboard, and an arrow then moves the square", () => {
+		const { dialog, stage, window, document } = staged();
+		const { PointerEvent, KeyboardEvent } = window;
+		stage.dispatchEvent(new PointerEvent("pointerdown", { button: 0, clientX: 150, clientY: 150, bubbles: true, cancelable: true }));
+		stage.dispatchEvent(new PointerEvent("pointerup", { button: 0, bubbles: true }));
+		expect(document.activeElement).toBe(stage);
+		const before = dialog._rect[0];
+		// Foundry's keybindings listen on the window: the arrow that moves the square must not pan the scene.
+		const foundry = vi.fn();
+		window.addEventListener("keydown", foundry);
+		document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+		expect(dialog._rect[0]).toBeGreaterThan(before);
+		expect(foundry).not.toHaveBeenCalled();
+		// A key the square doesn't use (Escape) still reaches it.
+		document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+		expect(foundry).toHaveBeenCalledTimes(1);
+	});
+
+	it("marks both editors' stage data-keyboard-focus, which Foundry's keybindings stand down for", () => {
+		for (const file of ["templates/dialogs/portrait-frame.hbs", "templates/dialogs/playbook-emblem-cut.hbs"]) {
+			expect(readFileSync(file, "utf8"), file).toMatch(/class="stonetop-frame-stage"[^>]*data-keyboard-focus="true"/);
+		}
+	});
+
+	it("leaves an arrow to a focused field alone", () => {
+		const { dialog, root, window, document } = staged();
+		const { KeyboardEvent } = window;
+		const field = document.createElement("input");
+		root.append(field);
+		const before = [...dialog._rect];
+		field.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+		expect(dialog._rect).toEqual(before);
 	});
 });

@@ -54,6 +54,7 @@ function _advanceWhatNext(o) {
 		case "otherMove": return "Agree the move next";
 		case "hp": return o.to ? `Max HP to ${o.to}` : `+${o.by} max HP`;
 		case "damage": return `Damage die ${o.die}`;
+		case "switch": return "Then pick the new playbook";
 		default: return "The table settles it";
 	}
 }
@@ -396,7 +397,7 @@ export class LevelUpDialog extends StonetopDialog {
 			&& !(selectedEntry?.crossPlaybook?.grantsPossession && this._grantsNewPossession);
 
 		const canContinue = isOverview
-			|| (isAdvance && (this._selectedAdvance !== null || !!d.advancement?.switchPlaybook))
+			|| (isAdvance && (this._selectedAdvance !== null || !!d.advancement?.switchPlaybook || !!d.advancement?.optional))
 			|| (isMove && this._selectedMoveId !== null)
 			|| (isAgreed && this._selectedAgreedId !== null)
 			|| (isForeignMove && !foreignBlocked && (this._selectedForeignMoveId !== null || foreignMoves.length === 0))
@@ -478,6 +479,8 @@ export class LevelUpDialog extends StonetopDialog {
 			// The Standout's: the level is taken here, with no move; the playbook picker opens after.
 			intro: adv.switchPlaybook
 				? `${playbookName ?? "This playbook"} doesn't level up in place: you switch to a different playbook. Level Up takes the level, then the playbook picker opens for the new one.`
+				: adv.optional
+				? `Every one of ${playbookName ?? "this playbook"}'s advances is marked: this level takes a new move as usual, or pick the change of playbook instead.`
 				: adv.replacesUsual
 				? `${playbookName ?? "This playbook"} levels up its own way: mark one of these instead of the usual new move. Each can be marked once.`
 				: `Mark one of ${playbookName ?? "this playbook"}'s advances. Each can be marked once.`,
@@ -522,7 +525,7 @@ export class LevelUpDialog extends StonetopDialog {
 			customId:        AGREED_CUSTOM,
 			agreedId:        AGREED_ID,
 			// Apply on a custom move opens the custom move editor; the level is taken when it saves.
-			applyLabel:      switching && isAdvance ? "Level Up and pick a playbook"
+			applyLabel:      (switching || this._switchPicked()) && isAdvance ? "Level Up and pick a playbook"
 				: localize(isAgreed && this._selectedAgreedId === AGREED_CUSTOM
 					? "stonetop.specialMoves.levelUp.applyCustom"
 					: "stonetop.specialMoves.levelUp.apply"),
@@ -590,6 +593,13 @@ export class LevelUpDialog extends StonetopDialog {
 		return names.map(name => ({ key: name, label: name.replace(/^The\s+/i, "") }));
 	}
 
+	// Whether the pick is a change of playbook offered beside the advances (the Familiar Face's "Level
+	// Up to Level 3 or higher, you can choose to change to a different playbook"): no advance is
+	// marked, no move taken, and the playbook picker opens once the level is taken.
+	_switchPicked() {
+		return this._advanceOption()?.kind === "switch";
+	}
+
 	// The homebrew advance picked, from the playbook's own Level Up, or null.
 	_advanceOption() {
 		if (!this._selectedAdvance) return null;
@@ -600,8 +610,9 @@ export class LevelUpDialog extends StonetopDialog {
 	// Level Up that replaces it, only when the advance picked is "a new move from your playbook".
 	_takesMove() {
 		const adv = this._data?.advancement;
-		// The Standout's: the new playbook's creation brings the moves, not this level-up.
-		if (adv?.switchPlaybook) return false;
+		// The Standout's: the new playbook's creation brings the moves, not this level-up. So does the
+		// Familiar Face's change of playbook, picked in place of an advance from level 3.
+		if (adv?.switchPlaybook || this._switchPicked()) return false;
 		if (!adv?.replacesUsual) return true;
 		return this._advanceOption()?.kind === "move";
 	}
@@ -788,7 +799,8 @@ export class LevelUpDialog extends StonetopDialog {
 			return;
 		}
 		if (this._foreignMovesForId === entry.compendiumId) return; // already loaded for this move
-		this._foreignMoves = await this._character.getForeignMovesForLevelUp(entry.crossPlaybook, this._data.newLevel);
+		this._foreignMoves = await this._character.getForeignMovesForLevelUp(entry.crossPlaybook, this._data.newLevel,
+			{ grantedBy: entry.description ?? "", grantedByName: entry.name ?? "" });
 		// "Also grants a Sacred Pouch" only on the take that brings one: a second Initiate adds nothing.
 		const grants = entry.crossPlaybook.grantsPossession ?? null;
 		this._grantsNewPossession = !!grants && !(await this._character.holdsPossession?.(grants));
@@ -912,6 +924,10 @@ export class LevelUpDialog extends StonetopDialog {
 				const kind = this._advanceOption()?.kind;
 				this._selectedMoveId = kind === "otherMove" ? AGREED_ID : null;
 				this._clearMoveDependents();
+			} else if (this._data?.advancement?.optional) {
+				// Nothing need be picked once every advance is marked: a second click takes the switch back.
+				this._selectedAdvance = null;
+				this._clearMoveDependents();
 			}
 			this.render(false);
 		});
@@ -1011,7 +1027,7 @@ export class LevelUpDialog extends StonetopDialog {
 		const choices = {};
 		// A homebrew playbook's own advance: marked by the level-up, with the stat it raised.
 		const advance = this._advanceOption();
-		if (advance) choices.advance = { slug: advance.slug, stat: advance.kind === "stat" ? this._selectedAdvanceStat : null };
+		if (advance && advance.kind !== "switch") choices.advance = { slug: advance.slug, stat: advance.kind === "stat" ? this._selectedAdvanceStat : null };
 		if (this._selectedStat && entry?.cap != null) {
 			choices.stat = this._selectedStat;
 			choices.cap  = entry.cap;
@@ -1058,7 +1074,7 @@ export class LevelUpDialog extends StonetopDialog {
 		);
 		if (result?.reason === "moveHeld") return this._backToMoves(agreedForeign?.name ?? entry?.name ?? "");
 		return this._finish(result, { addedMoveName: agreedForeign?.name ?? entry?.name ?? null, foreignMoveName,
-			switchPlaybook: !!this._data?.advancement?.switchPlaybook });
+			switchPlaybook: !!this._data?.advancement?.switchPlaybook || this._switchPicked() });
 	}
 
 	// The move picked was put on the sheet while this window was open (L7): nothing was written. Say

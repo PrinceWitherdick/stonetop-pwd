@@ -1,5 +1,5 @@
 // Foundry's own copy of pdf.js, loaded once, for reading a PDF the user picks (the Playbook
-// Builder's "Read from a PDF…"). The same route and worker the Import Book Art macro uses (that
+// Builder's "Read a PDF or playbook file…"). The same route and worker the Import Book Art macro uses (that
 // macro keeps its own copy of these lines because it is a self-contained compendium command).
 //
 // Foundry v13 and v14 both serve pdf.js 4.0.379 at /scripts/pdfjs/build/. Nothing is fetched from

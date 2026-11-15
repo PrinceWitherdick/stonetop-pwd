@@ -149,6 +149,7 @@ import { registerAssignToPlayer } from "./module/hooks/assign-to-player.js";
 import { registerCampaignActorMenu } from "./module/campaign/campaign-actor-menu.js";
 import { registerHomebrewPlaybookMenu } from "./module/playbooks/homebrew-item-menu.js";
 import { registerMissingPlaybookNotice } from "./module/playbooks/homebrew-missing.js";
+import { registerMovePossessionGrants } from "./module/actors/character/homebrew-move-possession.js";
 import { registerPlaybookLibrary } from "./module/playbooks/playbook-library.js";
 import { registerScenePosterMapMenu } from "./module/book2-art/mark-poster-scene.js";
 import { installWindowRestore } from "./module/utils/window-restore.js";
@@ -156,7 +157,7 @@ import { registerUuidRedirects } from "./module/migration/compat.js";
 import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
 import { StonetopFlags } from "./module/actors/character/StonetopFlags.js";
 import { onPreUpdateActorRecoverLock } from "./module/actors/character/recover-lock.js";
-import { payableStockSources, mustAskStockSource, stockReceipt } from "./module/actors/character/stock-cost.js";
+import { payableStockSources, mustAskStockSource, stockReceipt, purseLeftNote } from "./module/actors/character/stock-cost.js";
 import { askStockSource } from "./module/actors/character/ask-stock-source.js";
 import { moveLearnedIn } from "./module/actors/character/owns-move.js";
 import { readProvisionsYield, rollProvisions, rollStock, withTrappingGear, TRAPPING_GEAR_SLUG } from "./module/actors/character/provisions.js";
@@ -353,6 +354,7 @@ Hooks.once("init", () => {
 	registerCampaignActorMenu();
 	registerHomebrewPlaybookMenu();
 	registerMissingPlaybookNotice();
+	registerMovePossessionGrants();
 	registerPlaybookLibrary();
 	// "Stonetop map..." on a Scene's right-click menu: mark a GM's own Scene as one of the poster maps.
 	registerScenePosterMapMenu();
@@ -2362,8 +2364,8 @@ function _chatWireSpendStock(message, html) {
 			const { lost } = await character.spendStock(source, amount, { moveName, speaker: message.speaker });
 			const receipt = stockReceipt(source, amount, lost);
 			return {
-				stamp: { amount, label: source.label, vessel: !!source.vessel, lost },
-				notice: source.vessel ? `${receipt}.` : `${receipt} (${source.remaining - amount} left).`,
+				stamp: { amount, label: source.label, vessel: !!source.vessel, ...(source.standIn ? { standIn: source.standIn } : {}), lost },
+				notice: `${receipt}${purseLeftNote(source, amount)}.`,
 			};
 		},
 	});

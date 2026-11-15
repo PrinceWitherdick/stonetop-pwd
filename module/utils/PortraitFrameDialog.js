@@ -143,6 +143,8 @@ export class PortraitFrameDialog extends StonetopDialog {
 		this._rect = keep ?? suggestSquare(pw, ph);
 		this._loaded = this._rect ? [...this._rect] : null;
 		this._paint();
+		// The arrow keys work at once, before any click.
+		this._stageEl.focus({ preventScroll: true });
 		this.setPosition({ height: "auto" });
 	}
 
@@ -180,6 +182,10 @@ export class PortraitFrameDialog extends StonetopDialog {
 	}
 
 	_box() { return this._stage ? rectToBox(this._rect, this._stage.w, this._stage.h) : null; }
+
+	/** The smallest square, as a share of the stage's shorter side. A subclass on a bigger picture
+	 *  than a portrait (the playbook picture cutter, on a whole PDF page) allows smaller. */
+	get _minShare() { return SQ_MIN; }
 
 	/** Dialog-local commit: redraw, refresh the previews, update the readout. No document write. */
 	_commit(box) {
@@ -265,6 +271,9 @@ export class PortraitFrameDialog extends StonetopDialog {
 			this._drag = { x0: x, y0: y, start, box: null, rect, ...hitTestBox(x, y, start) };
 			stage.setPointerCapture(ev.pointerId);
 			ev.preventDefault();
+			// preventDefault also cancels the focus a click would give, and the arrow keys only reach
+			// _bindKeys from inside the dialog: hand the stage the keyboard, so a press then an arrow nudges.
+			stage.focus({ preventScroll: true });
 		});
 
 		stage.addEventListener("pointermove", (ev) => {
@@ -289,7 +298,7 @@ export class PortraitFrameDialog extends StonetopDialog {
 			d.box = d.mode === "move"
 				? clampBox({ side: d.start.side, left: x - d.dx, top: y - d.dy }, w, h)
 				: d.mode === "resize"
-					? resizeBox(d.corner, d.start, x, y, w, h)
+					? resizeBox(d.corner, d.start, x, y, w, h, this._minShare)
 					: boxFromDrag(d.x0, d.y0, x, y, w, h);
 			this._drawBox(d.box, "ghost");
 			const preview = frameStyle(normalizeRect(boxToRect(d.box, w, h)));
@@ -302,7 +311,7 @@ export class PortraitFrameDialog extends StonetopDialog {
 			if (!d) return;
 			// Three no-op guards, all ported. They are the difference between "I clicked to focus"
 			// and "I destroyed the square".
-			const min = Math.min(this._stage.w, this._stage.h) * SQ_MIN;
+			const min = Math.min(this._stage.w, this._stage.h) * this._minShare;
 			if (!d.box) return this._paint();                                  // never moved
 			if (d.mode === "draw" && d.box.side < min) return this._paint();   // a click, not a square
 			if (d.start && rectEq(boxToRect(d.box, this._stage.w, this._stage.h),
@@ -319,9 +328,13 @@ export class PortraitFrameDialog extends StonetopDialog {
 		this._root.addEventListener("keydown", (ev) => {
 			if (!this._stage) return;
 			if (ev.target.closest?.("input, textarea, select, [contenteditable]")) return;
-			const next = nudgeBox(this._box(), ev.key, { shift: ev.shiftKey }, this._stage.w, this._stage.h);
+			const next = nudgeBox(this._box(), ev.key, { shift: ev.shiftKey }, this._stage.w, this._stage.h, this._minShare);
 			if (!next) return;              // Tab and Escape still reach the dialog
 			ev.preventDefault();            // or the arrows scroll the dialog body
+			// Nor do they reach Foundry: its keybindings listen on the window, and the arrows pan the
+			// scene behind the dialog. (The stage also says data-keyboard-focus, which Foundry honours
+			// while it has focus; this covers a press with a footer button focused.)
+			ev.stopPropagation();
 			this._commit(next);
 		});
 	}

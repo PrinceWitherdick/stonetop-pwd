@@ -5,6 +5,7 @@
 // all-of by one caller and either-or by another.
 
 import { statRequirementLabel } from "./stat-requirement.js";
+import { escapeRegExp } from "../../utils/strings.js";
 
 // The moves a requirement needs ALL of, with the move a move replaces folded in. Book I p.529:
 // "If a move replaces a different move, then it requires the one it replaces." The data spells
@@ -51,18 +52,27 @@ export function anyMovesLabel(req) {
 // book does, the move it replaces ("level 6+; replaces Bulwark"). The replaced move is named once,
 // there, not also as a required move. The note is display-only: the engine can't check "Sheriff
 // background" off it, so it never locks anything. Null when there is nothing to show.
+//
+// A note that already says what the moves and level say (a homebrew playbook's printed "(Requires level
+// 6+ and Otherkin)") is the line: the parts it names are not said again beside it, and its own
+// "Requires" goes, since every place this is shown says that first.
 export function requirementLabel(req, { replaces = null, level = null } = {}) {
 	const parts = [];
+	const note = String(req?.note ?? "").trim().replace(/^\((.*)\)$/, "$1").replace(/^\s*requires?\s*:?\s*/i, "").trim();
+	// Said as a whole name ("Wild" is not said by "Wildborn"), and the level as the same number.
+	const noteSays = text => !!note && new RegExp(String.raw`(?<![\w'’])${escapeRegExp(String(text).trim())}(?![\w'’])`, "i").test(note);
 	const moves = (req?.moves ?? []).filter(m => m !== replaces);
-	if (moves.length) parts.push(moves.join(", "));
+	const notedMoves = moves.length && moves.every(noteSays);
+	const notedLevel = !!note && level != null && new RegExp(String.raw`\blevel\s*${Number(level)}(?!\d)`, "i").test(note);
+	if (moves.length && !notedMoves) parts.push(moves.join(", "));
 	const anyOf = anyMovesLabel(req);
 	if (anyOf)        parts.push(anyOf);
 	const stats = statRequirementLabel(req?.stats);
 	if (stats)        parts.push(stats);
 	const marks = marksRequirementLabel(req);
 	if (marks)        parts.push(marks);
-	if (req?.note)    parts.push(req.note);
-	if (level)        parts.push(`level ${level}+`);
+	if (note)         parts.push(note);
+	if (level && !notedLevel) parts.push(`level ${level}+`);
 	if (replaces)     parts.push(`replaces ${replaces}`);
 	return parts.length ? parts.join("; ") : null;
 }

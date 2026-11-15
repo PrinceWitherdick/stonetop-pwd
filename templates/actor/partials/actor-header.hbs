@@ -205,6 +205,12 @@
 			{{#each stonetop.fightStates as |g|}}{{#if g.show}}
 			{{> "stonetop.header-toggle-glyph" stem=g.stem onClass=g.onClass on=g.on labelKey=g.labelKey tooltipKey=g.tooltipKey editable=../editable}}
 			{{/if}}{{/each}}
+			{{! A homebrew playbook's other form (homebrew-inserts.js#insertFormGlyph): the insert tab's
+			    Transform switch, here too, because the form changes the whole sheet. Its words are the
+			    playbook's own, so they ride as plain text (labelText/tooltipText), never language keys. }}
+			{{#each stonetop.insertFormGlyphs as |g|}}
+			{{> "stonetop.header-toggle-glyph" stem=g.stem onClass=g.onClass on=g.on labelText=g.labelText tooltipText=g.tooltipText insertKey=g.key editable=../editable}}
+			{{/each}}
 			{{! Inspiration from a Marshal's We Happy Few (inspiration.js): a pill with the count IN WORDS,
 			    drawn only while some is held. A <button> that acts fearlessly (1 Inspiration) where the
 			    sheet is editable, a plain readout where it is not. The other two spends are on cards. }}

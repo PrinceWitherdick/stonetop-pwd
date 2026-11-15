@@ -85,7 +85,7 @@ describe("moving a block rebuilds it as its new kind", () => {
 
 describe("the review window", () => {
 	function render(draft, extra = {}) {
-		const view = { _draft: draft, _fileName: "tester.pdf", _issues: [], _open: new Set(), ...extra };
+		const view = { _draft: draft, _fileName: "tester.pdf", _issues: [], _open: new Set(), _editing: new Set(), _undo: [], _redo: [], _settled: JSON.stringify({ blocks: draft.blocks, confirm: draft.confirm }), ...extra };
 		Object.setPrototypeOf(view, PlaybookImportReview.prototype);
 		const data = PlaybookImportReview.prototype.getData.call(view);
 		const window = new Window();
@@ -99,10 +99,47 @@ describe("the review window", () => {
 		return { view, data, root: window.document.body };
 	}
 
+	it("puts Leave it out last in Belongs in, under its own heading, after the inserts' sections", () => {
+		const draft = freshDraft();
+		const { root } = render(draft);
+		const select = root.querySelector("select[data-block]");
+		const last = select.lastElementChild;
+		expect(last.tagName).toBe("OPTGROUP");
+		expect(last.getAttribute("label")).toBe("Not in the playbook");
+		expect([...last.querySelectorAll("option")].map(o => o.value)).toEqual(["skip"]);
+		expect([...select.querySelectorAll("option[value=skip]")].length).toBe(1);
+		// A piece left out has it selected.
+		const custom = draft.blocks.find(b => b.kind === "skip");
+		if (custom) expect(root.querySelector(`select[data-block="${custom.id}"]`).value).toBe("skip");
+	});
+
+	it("Looks right passes a flagged piece where it is: the red, its note and its Start here count go", () => {
+		const draft = freshDraft();
+		const tinker = block(draft, "Tinker");
+		const before = render(draft);
+		const piece = before.root.querySelector(`[data-id="${tinker.id}"]`);
+		expect(piece.querySelector(`[data-looks-right="${tinker.id}"]`)).toBeTruthy();
+		expect(piece.querySelector(".stonetop-pb-review-why").textContent).toMatch(/^Why it's marked:/);
+		// Only a flagged piece offers it.
+		expect(before.root.querySelectorAll("[data-looks-right]").length).toBe(before.data.unsureCount);
+
+		tinker.checked = true;
+		const after = render(draft);
+		const passed = after.root.querySelector(`[data-id="${tinker.id}"]`);
+		expect(passed.classList.contains("is-unsure")).toBe(false);
+		expect(passed.querySelector("[data-looks-right]")).toBeNull();
+		expect(passed.closest("[data-kind]").dataset.kind).toBe("move"); // not moved
+		expect(after.data.unsureCount).toBe(before.data.unsureCount - 1);
+		// The stylesheet shows it on a flagged piece without the pencil.
+		// No pencil on a flagged piece: its controls already show. Passed, it gets one back.
+		expect(piece.querySelector("[data-edit]")).toBeNull();
+		expect(passed.querySelector("[data-edit]")).toBeTruthy();
+	});
+
 	it("lays the playbook out by section, unsure pieces marked, each with a Belongs in list", () => {
 		const draft = freshDraft();
 		const { data, root } = render(draft);
-		expect(data.groups.map(g => g.kind)).toEqual(["background", "instinct", "possession", "startingMove", "move", "question", "note"]);
+		expect(data.groups.map(g => g.kind)).toEqual(["background", "instinct", "possession", "move", "question"]);
 		expect(data.unsureCount).toBeGreaterThan(0);
 		expect(root.querySelectorAll(".stonetop-pb-review-block.is-unsure").length).toBe(data.unsureCount);
 		expect(root.querySelectorAll("select[data-block]").length).toBe(draft.blocks.length);
@@ -113,16 +150,22 @@ describe("the review window", () => {
 		expect(tinker.querySelector(".stonetop-pb-review-why").textContent).toMatch(/Tester's Toolbox/);
 	});
 
-	it("splits into rail pages: Start here, then one per section, gold where a piece is hard to place", () => {
+	it("splits into rail pages: Start here, then one per section, red where a piece needs a look", () => {
 		const draft = freshDraft({ hp: ["HP (max 16)", "HP (max 10)"] });
 		const { data, root } = render(draft);
 		expect(data.tabs.map(t => t.key)).toEqual(["overview", ...data.groups.map(g => g.kind)]);
-		expect(data.tabs[0]).toMatchObject({ title: "Start here", count: 1, unsure: true, selected: true });
+		expect(data.tabs[0]).toMatchObject({ title: "Start here", count: 1, countTip: "1 question to answer", unsure: true, selected: true });
 		for (const g of data.groups) {
 			const tab = data.tabs.find(t => t.key === g.kind);
-			expect(tab.count).toBe(g.count);
-			expect(!!tab.unsure).toBe(g.blocks.some(b => b.unsure));
+			const flagged = g.blocks.filter(b => b.unsure).length;
+			// A page with pieces to look at counts those alone; any other counts all its pieces.
+			expect(tab.count).toBe(flagged || g.count);
+			expect(tab.countTip).toBe(flagged
+				? `${flagged} ${flagged === 1 ? "piece needs" : "pieces need"} a look`
+				: `${g.count} ${g.count === 1 ? "piece" : "pieces"}`);
+			expect(!!tab.unsure).toBe(flagged > 0);
 		}
+		expect(root.querySelector('.stonetop-pb-review-tab[data-tab="move"] .stonetop-guide-toc-count').dataset.tooltip).toMatch(/needs? a look$/);
 		const move = root.querySelector('.stonetop-pb-review-tab[data-tab="move"]').closest("li");
 		expect(move.classList.contains("is-unsure")).toBe(true);
 		// Only Start here shows; every section is still in the DOM behind its own page.
@@ -131,11 +174,24 @@ describe("the review window", () => {
 		expect(root.querySelector('.stonetop-pb-review-panel[data-tab="move"] [data-kind="move"]')).toBeTruthy();
 	});
 
+	it("puts the starting moves with the other moves, and the notes with the questions, each part headed", () => {
+		const draft = freshDraft();
+		const { root } = render(draft);
+		const parts = tab => [...root.querySelectorAll(`.stonetop-pb-review-panel[data-tab="${tab}"] .stonetop-pb-review-group`)]
+			.map(g => [g.dataset.kind, g.querySelector(".stonetop-move-group-title")?.textContent.trim()]);
+		expect(parts("move")).toEqual([["startingMove", "Starting moves"], ["move", "Other moves"]]);
+		expect(parts("question")).toEqual([["question", "Questions for character creation"], ["note", "Notes for the table"]]);
+		expect(root.querySelector('.stonetop-pb-review-tab[data-tab="startingMove"], .stonetop-pb-review-tab[data-tab="note"]')).toBeNull();
+		// A page of one kind heads its one part with the page's own name, on the sheet's heading.
+		expect(root.querySelector('.stonetop-pb-review-panel[data-tab="background"] .stonetop-move-group-title')?.textContent.trim()).toBe("Backgrounds");
+
+	});
+
 	it("keeps the page it was on across a re-render, and falls back when that page empties", () => {
 		const draft = freshDraft();
 		const { view, root } = render(draft, { _activeTab: "move" });
 		expect([...root.querySelectorAll(".stonetop-pb-review-panel")].filter(p => !p.hidden).map(p => p.dataset.tab)).toEqual(["move"]);
-		draft.blocks.filter(b => b.kind === "move").forEach(b => { b.kind = "skip"; });
+		draft.blocks.filter(b => (b.kind === "move" || b.kind === "startingMove")).forEach(b => { b.kind = "skip"; }); // the Moves page holds both
 		const data = PlaybookImportReview.prototype.getData.call(view);
 		expect(view._activeTab).toBe("overview");
 		expect(data.overviewSelected).toBe(true);
@@ -163,10 +219,33 @@ describe("the review window", () => {
 		expect(root.querySelector('.stonetop-pb-review-panel[data-tab="move"]').hidden).toBe(true);
 	});
 
-	it("offers to move every hard-to-place piece from one part of the PDF at once", () => {
-		const { data } = render(freshDraft());
-		const toolbox = data.sources.find(s => s.from === "Tester's Toolbox (page 3)");
-		expect(toolbox.count).toBe(3); // its opening note and two moves
+	it("names the pages holding a hard-to-place piece on Start here, by their names in the rail", () => {
+		const draft = freshDraft();
+		const { data, root } = render(draft);
+		const unsureTabs = data.tabs.filter(t => t.unsure && t.key !== "overview").map(t => t.title);
+		expect(unsureTabs).toContain("Moves");
+		expect([...root.querySelectorAll(".stonetop-pb-review-unsure-where > li")].map(li => li.textContent)).toEqual(unsureTabs);
+		expect([...root.querySelectorAll(".stonetop-pb-review-unsure-where [data-goto-tab]")].map(a => a.dataset.gotoTab)).toEqual(data.tabs.filter(t => t.unsure && t.key !== "overview").map(t => t.key));
+		// Each name opens its page.
+		const { view, root: live } = render(draft);
+		view.element = [live];
+		const link = [...live.querySelectorAll("[data-goto-tab]")].find(a => a.textContent === "Moves");
+		PlaybookImportReview.prototype._selectTab.call(view, link.dataset.gotoTab);
+		expect(view._activeTab).toBe("move");
+		expect([...live.querySelectorAll(".stonetop-pb-review-panel")].filter(p => !p.hidden).map(p => p.dataset.tab)).toEqual(["move"]);
+		// Every hard-to-place piece moved by hand: its page drops off the line.
+		for (const b of draft.blocks.filter(x => x.unsure)) b.kind = b.kind === "skip" ? "move" : "skip";
+		expect(render(draft).root.querySelector(".stonetop-pb-review-unsure")).toBeNull();
+	});
+
+	it("heads Start here with the file it was imported from, not the playbook's name or description", () => {
+		const draft = freshDraft();
+		draft.fields.description = "A wanderer with a bag of tricks.";
+		const { root } = render(draft);
+		const head = root.querySelector(".stonetop-pb-review-head");
+		expect(head.querySelector(".stonetop-pb-review-imported").textContent).toBe("Successfully imported from tester.pdf");
+		expect(head.textContent).not.toContain(draft.fields.name);
+		expect(head.textContent).not.toContain(draft.fields.description);
 	});
 
 	it("asks for the HP with no answer picked, and won't finish until it is answered", () => {
@@ -201,10 +280,85 @@ describe("the review window", () => {
 	});
 });
 
+describe("undo and redo", () => {
+	const fresh = () => new PlaybookImportReview({ draft: freshDraft() });
+	const kindOf = (view, title) => block(view._draft, title).kind;
+
+	it("steps back and forward over moves and splits, one change at a time", () => {
+		const draft = freshDraft();
+		block(draft, "Mend").text = "Fix one thing.\n\nOr two, at a cost.";
+		const view = new PlaybookImportReview({ draft });
+		expect(view.undo()).toBe(false);
+		view._place(block(view._draft, "Tinker"), "startingMove");
+		view._commit();
+		const count = view._draft.blocks.length;
+		view.splitBlock(block(draft, "Mend").id);
+		view._commit();
+		expect(view._draft.blocks.length).toBeGreaterThan(count);
+
+		expect(view.undo()).toBe(true);
+		expect(view._draft.blocks.length).toBe(count);
+		expect(kindOf(view, "Tinker")).toBe("startingMove");
+		expect(view.undo()).toBe(true);
+		expect(kindOf(view, "Tinker")).toBe("move");
+		expect(view.hasChanges()).toBe(false);
+		expect(view.undo()).toBe(false);
+
+		expect(view.redo()).toBe(true);
+		expect(kindOf(view, "Tinker")).toBe("startingMove");
+		expect(view.redo()).toBe(true);
+		expect(view._draft.blocks.length).toBeGreaterThan(count);
+		expect(view.redo()).toBe(false);
+	});
+
+	it("drops what was undone once something new is done", () => {
+		const view = fresh();
+		view._place(block(view._draft, "Tinker"), "startingMove");
+		view._commit();
+		view.undo();
+		view._place(block(view._draft, "Mend"), "skip");
+		view._commit();
+		expect(view.redo()).toBe(false);
+		expect(kindOf(view, "Tinker")).toBe("move");
+	});
+
+	it("counts a finished answer as one step however many times it is settled, and undoes it", () => {
+		const draft = freshDraft({ hp: ["HP (max 16)", "HP (max 10)"] });
+		const view = new PlaybookImportReview({ draft });
+		draft.confirm.find(c => c.key === "hp").value = 1;
+		draft.confirm.find(c => c.key === "hp").value = 14; // typed on, before leaving the box
+		view._commit();
+		view._commit();
+		expect(view._undo.length).toBe(1);
+		view.undo();
+		expect(draft.confirm.find(c => c.key === "hp").value).toBeNull();
+	});
+
+	it("can undo Start over", () => {
+		const view = fresh();
+		view._place(block(view._draft, "Tinker"), "startingMove");
+		view._commit();
+		view.startOver();
+		view._commit();
+		expect(kindOf(view, "Tinker")).toBe("move");
+		view.undo();
+		expect(kindOf(view, "Tinker")).toBe("startingMove");
+	});
+
+	it("draws Undo and Redo left of Start over, asleep until there is something to step over", () => {
+		const src = readRepo("templates/dialogs/playbook-import-review.hbs");
+		const order = ["stonetop-pb-review-undo", "stonetop-pb-review-redo", "stonetop-pb-review-reset"].map(c => src.indexOf(c));
+		expect(order.every(i => i > 0)).toBe(true);
+		expect([...order].sort((a, b) => a - b)).toEqual(order);
+		expect(src).toMatch(/stonetop-pb-review-undo"[^>]*\{\{#unless this\.canUndo\}\} disabled/);
+		expect(src).toMatch(/stonetop-pb-review-redo"[^>]*\{\{#unless this\.canRedo\}\} disabled/);
+	});
+});
+
 describe("splitting, joining and starting over", () => {
 	function review(draft) {
 		const view = Object.create(PlaybookImportReview.prototype);
-		Object.assign(view, { _draft: draft, _fileName: "t.pdf", _issues: [], _open: new Set(), _original: structuredClone({ blocks: draft.blocks, confirm: draft.confirm }) });
+		Object.assign(view, { _draft: draft, _fileName: "t.pdf", _issues: [], _open: new Set(), _editing: new Set(), _original: structuredClone({ blocks: draft.blocks, confirm: draft.confirm }) });
 		return view;
 	}
 
@@ -273,7 +427,7 @@ describe("the review across a reload", () => {
 		const review = new PlaybookImportReview({ draft, fileName: "tester.pdf", issues: [{ severity: "check", message: "Look at page 3." }], report: { issues: [], pages: ["Page 1: x"], sections: [] }, builderKey: KEY });
 		block(draft, "Tinker").kind = "startingMove";
 		draft.confirm.find(c => c.key === "hp").value = 10;
-		review._activeTab = "startingMove";
+		review._activeTab = "move";
 		review._open.add(block(draft, "Tinker").id);
 		return { draft, review, view: JSON.parse(JSON.stringify(review.restoreView)) };
 	}
@@ -295,12 +449,12 @@ describe("the review across a reload", () => {
 		expect(back.restoreKey).toBe("playbookImportReview:r1");
 		expect(back._draft.blocks).toEqual(JSON.parse(JSON.stringify(draft.blocks)));
 		expect(back._draft.confirm.find(c => c.key === "hp").value).toBe(10);
-		expect(back._activeTab).toBe("startingMove");
+		expect(back._activeTab).toBe("move");
 		expect([...back._open]).toEqual([block(draft, "Tinker").id]);
 		expect(back._fileName).toBe("tester.pdf");
 		expect(back._builderKey).toBe(KEY);
 		expect(back._issues.map(i => i.message)).toEqual(["Look at page 3."]);
-		expect(back.getData().tabs.find(t => t.selected).key).toBe("startingMove");
+		expect(back.getData().tabs.find(t => t.selected).key).toBe("move");
 		back.startOver();
 		expect(block(back._draft, "Tinker").kind).toBe("move");
 		expect(back._draft.confirm.find(c => c.key === "hp").value).toBeNull();
@@ -359,6 +513,26 @@ describe("the review across a reload", () => {
 		expect(back._resolveWith).toHaveBeenCalledTimes(1);
 	});
 
+	it("carries the emblem taken from the PDF through a reload onto the playbook, unless the builder has a picture", async () => {
+		const builder = { rendered: true, restoreKey: KEY, _mayReplace: vi.fn(async () => true), _takeReviewed: vi.fn(async () => "read"), bringToTop: vi.fn() };
+		vi.stubGlobal("ui", { windows: { 1: builder }, notifications: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } });
+		const { back, root } = restored();
+		back._report.emblemImg = "stonetop-playbooks/art/the-tester-emblem.webp";
+		await back._finish(root);
+		const [result, ctx] = builder._takeReviewed.mock.calls[0];
+		expect(ctx.report.emblemImg).toBe("stonetop-playbooks/art/the-tester-emblem.webp");
+
+		const { PlaybookBuilderDialog } = await import("../../module/playbooks/PlaybookBuilderDialog.js");
+		const take = (img) => {
+			const adopt = vi.fn(async () => true);
+			const self = { _bundle: { playbook: { img } }, _adopt: adopt, render: vi.fn() };
+			return PlaybookBuilderDialog.prototype._takeReviewed.call(self, structuredClone(result), ctx).then(() => adopt.mock.calls[0][0].playbook.img);
+		};
+		expect(await take("")).toBe("stonetop-playbooks/art/the-tester-emblem.webp");
+		// A builder that already has a picture keeps it: the emblem isn't put on the read playbook.
+		expect(await take("worlds/x/my-pick.webp")).toBeFalsy();
+	});
+
 	it("stays open when the GM won't let the builder's unsaved work be replaced", async () => {
 		const builder = { rendered: true, restoreKey: KEY, _mayReplace: vi.fn(async () => false), _takeReviewed: vi.fn() };
 		vi.stubGlobal("ui", { windows: { 1: builder }, notifications: { warn: vi.fn(), error: vi.fn() } });
@@ -407,7 +581,7 @@ describe("Start over", () => {
 
 describe("an insert in the review", () => {
 	function render(draft, extra = {}) {
-		const view = { _draft: draft, _fileName: "tester.pdf", _issues: [], _open: new Set(), ...extra };
+		const view = { _draft: draft, _fileName: "tester.pdf", _issues: [], _open: new Set(), _editing: new Set(), _undo: [], _redo: [], _settled: JSON.stringify({ blocks: draft.blocks, confirm: draft.confirm }), ...extra };
 		Object.setPrototypeOf(view, PlaybookImportReview.prototype);
 		const data = PlaybookImportReview.prototype.getData.call(view);
 		const window = new Window();
@@ -507,5 +681,15 @@ describe("an insert in the review", () => {
 		back._takeRestoredView(view);
 		expect(back._draft.inserts[0]).toMatchObject({ name: "Tester's Toolbox", guess: "Tooled Up" });
 		expect(assemblePlaybook(back._draft).bundle.playbook.inserts[0].unlockedBy).toBe("Tooled Up");
+	});
+});
+
+describe("a piece's pencil", () => {
+	it("hides Belongs in, Split and Join until it is pressed, but a flagged piece shows them all from the start", () => {
+		const css = readRepo("styles/stonetop.css");
+		expect(css).toContain(".stonetop-pb-review-block:not(.is-editing):not(.is-unsure) :is(.stonetop-pb-review-belongs-row, .stonetop-pb-review-act) { display: none; }");
+		expect(css).toContain(".stonetop-pb-review-block:not(.is-editing):not(.is-unsure) .stonetop-pb-review-block-foot,");
+		const hbs = readRepo("templates/dialogs/playbook-import-review.hbs");
+		expect(hbs).toMatch(/class="stonetop-pb-review-edit stonetop-section-edit" role="button" tabindex="0" data-edit="{{this.id}}"/);
 	});
 });

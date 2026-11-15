@@ -37,6 +37,7 @@ import { reopenOpenBookReaders } from "../books/reader-resume.js";
 import { rulebookMacroApi } from "../books/rulebook-api.js";
 import { adoptStoredRulebooks } from "../books/adopt-stored-rulebooks.js";
 import { adoptLibraryPlaybooks } from "../playbooks/playbook-library.js";
+import { tidyHomebrewFolders } from "../playbooks/homebrew-store.js";
 import { noticeMissingPlaybooks } from "../playbooks/homebrew-missing.js";
 import { adoptSettlementPortraits, reletterOnRename } from "../actors/settlement/settlement-portrait.js";
 import { redrawForSettlement } from "../actors/settlement/settlement-actor.js";
@@ -699,7 +700,11 @@ export async function onReady() {
 	// offered newer versions of the ones it has. The "plays a playbook this world doesn't have" notice
 	// waits for it, so a character whose playbook is about to arrive isn't named. Primary GM only.
 	adoptLibraryPlaybooks({ afterAdding: noticeMissingPlaybooks })
-		.catch(err => console.error("Stonetop | the playbook library run failed", err));
+		.catch(err => console.error("Stonetop | the playbook library run failed", err))
+		// Then each homebrew playbook's moves go into its subfolders, where an older version left them
+		// beside the playbook (homebrew-store.js#tidyHomebrewFolders). Primary GM; nothing once tidied.
+		.then(() => tidyHomebrewFolders())
+		.catch(err => console.error("Stonetop | tidying the homebrew playbook folders failed", err));
 	// Settlement portraits (actors/settlement/settlement-portrait.js). A sheet still on an image of
 	// ours takes its square of book art when the art is on disk, else its letter: primary GM, every
 	// load, not awaited, one browse. And a sheet renamed while on its initials takes the new ones, on

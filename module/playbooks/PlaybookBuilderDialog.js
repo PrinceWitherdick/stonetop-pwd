@@ -1,7 +1,7 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { applyGuideRail, guideRailStep } from "../utils/guide-rail.js";
 import { askWithButtons } from "../utils/ask-with-buttons.js";
-import { escHtml } from "../utils/strings.js";
+import { escHtml, looseName, slugify } from "../utils/strings.js";
 import { filePicker } from "../utils/foundry-compat.js";
 import { hasUnsavedWork, notePristineWork } from "../utils/close-guard.js";
 import { persistOpenWindowsSoon } from "../utils/window-restore.js";
@@ -12,12 +12,42 @@ import { lorePickMin, lorePickMax } from "../actors/character/lore-pick-count.js
 import { emptyBundle, normalizeBundle, normalizeMove, backgroundGaps, diffBundles, mergeReimport, advanceFrom, DAMAGE_DICE, HP_LIMITS } from "./homebrew-bundle.js";
 import {
 	saveHomebrewPlaybook, readHomebrewBundle, readImportBase, deleteHomebrewPlaybook, holdersOfHomebrew,
-	readBundleFile, importCollision, saveProblem, offerToRefreshCopies, downloadBundle, writeInsChangedOnSave,
+	readBundleFile, importCollision, saveProblem, offerToRefreshCopies, writeInsChangedOnSave,
 } from "./homebrew-store.js";
 import { isHomebrewPlaybookItem, playbookAvatar, homebrewPlaybookByName } from "./playbook-catalog.js";
-import { droppedFileKind } from "./dropped-file.js";
+import { droppedFileKind, fileKindOf } from "./dropped-file.js";
+import { rollFromWords, trackFromWords } from "./move-words.js";
 import * as L from "./builder-lines.js";
-import { playbookNameFromFileName } from "./playbook-text.js";
+import { playbookNameFromFileName, formatPlaybookText, formatPlaybookInline } from "./playbook-text.js";
+import { ITEM_FLAG_SCOPE } from "../system-id.js";
+
+/**
+ * A background's words for its read view, with a move the import lifted out of them put back where the
+ * PDF prints it. A roll printed inside a background (the Stranger's Moon Blessed) becomes a move of its
+ * own, and its place in the words says "You get the ***Moon Blessed*** move." (homebrew-bundle.js): the
+ * read view shows that move's words there instead, as the playbook does. The text boxes keep the line.
+ * @param {string} text
+ * @param {function(string): object|undefined} findMove  this playbook's move of that name
+ */
+export function backgroundWordsInPlace(text, findMove) {
+	return String(text ?? "").replace(/^[ \t]*You get the \*\*\*(.+?)\*\*\* move\.[ \t]*$/gm, (line, name) => {
+		const words = String(findMove(name)?.description ?? "").trim();
+		return words || line;
+	});
+}
+
+/** A blank playbook for a new window: shown to players unless the GM closes the header's eye. */
+function shownBundle() {
+	const bundle = emptyBundle();
+	bundle.playbook.published = true;
+	return bundle;
+}
+
+/** Whether `bundle` is a blank one, a new window's (shown) or emptyBundle()'s (hidden): nothing to lose. */
+function isBlankBundle(bundle) {
+	const json = JSON.stringify(bundle);
+	return json === JSON.stringify(shownBundle()) || json === JSON.stringify(emptyBundle());
+}
 
 /**
  * THE PLAYBOOK BUILDER: the GM's window for making, importing, fixing and sharing a HOMEBREW
@@ -85,6 +115,20 @@ function _lorePickNote(section) {
 	return min === max ? `Players pick ${max}.` : `Players pick ${min} to ${max}.`;
 }
 
+/**
+ * Where lore section `i` sits among headings, as character creation groups them: a section with no
+ * options heads every question after it up to the next heading. `groupStart` opens the frame (on the
+ * heading), `groupEnd` closes it (on its last question, or the heading itself when none follow).
+ */
+export function loreGroupShape(lore, i) {
+	const isHeading = s => !(s?.options?.length);
+	let open = false;
+	for (let j = 0; j <= i; j++) if (isHeading(lore[j])) open = true;
+	const groupStart = isHeading(lore[i]);
+	const groupEnd = open && (i === lore.length - 1 || isHeading(lore[i + 1]));
+	return { groupStart, groupEnd };
+}
+
 
 const blankBackground = () => ({ label: "", description: "", moves: [], moveChoice: [], possessions: [], track: null });
 const blankPossession = () => ({ label: "", description: "", preselected: false });
@@ -117,12 +161,16 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 		this._item = isHomebrewPlaybookItem(item) ? item : null;
 		this._bundle = bundle
 			? (normalizeBundle(bundle).bundle ?? emptyBundle())
-			: (this._item ? readHomebrewBundle(this._item) : emptyBundle());
+			: (this._item ? readHomebrewBundle(this._item) : shownBundle());
 		this._issues = [...issues, ...this._writeInNotice()];
 		this._readReport = null;
 		this._source = source;
 		this._activeTab = SECTIONS[0].key;
 		this._openMoves = new Set();
+		// What is open for editing (its pencil pressed): a whole page ("page:stats") or one card on it
+		// ("bg:0", "pos:2", "lore:1", "ins:0"). Everything else is drawn as the playbook PDF prints it.
+		// A move's card is open while it's in _openMoves.
+		this._editing = new Set();
 		// The form is read back by index ("moves.3.name"), so it is read only while it shows the
 		// bundle as it is now: every render() marks the bundle changed, and a draw that began after
 		// the last change marks the form current (_formIsCurrent).
@@ -201,7 +249,7 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			const file = this._handTypePdf;
 			this._handTypePdf = null;
 			const { openPdfBeside } = await import("./PlaybookPdfWindow.js");
-			this._pdfWindow = openPdfBeside(file, this);
+			this._pdfWindow = openPdfBeside(file, this, { landscape: this._handTypeLandscape });
 		}
 		return out;
 	}
@@ -291,10 +339,18 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 
 		const statArray = parseStatArray(pb.statsNote);
 		const hpUnusual = pb.hp < HP_LIMITS.usualMin || pb.hp > HP_LIMITS.usualMax;
+		// Open for editing: its pencil was pressed, or it's blank (nothing to show but the text boxes).
+		const ed = key => !!this._editing?.has(key);
+		const blank = v => !String(v ?? "").trim();
+		const boxes = n => Array.from({ length: Math.max(0, Math.min(Number(n) || 0, 20)) }, () => ({}));
+		const ownMove = name => this._bundle.moves.find(m => String(m.name ?? "").toLowerCase() === String(name).toLowerCase());
+		const adv = pb.advancement ?? {};
 
 		return {
 			uid: this.appId,
 			activeTab: this._activeTab,
+			// Library playbooks this world doesn't have: Add from my library shows only for some (activateListeners asks).
+			libraryCount: this._libraryCount ?? 0,
 			sections: SECTIONS.map((s, i) => ({ key: s.key, icon: s.icon, title: sectionTitle(s), selected: i === activeIndex })),
 			active: { icon: SECTIONS[activeIndex].icon, title: sectionTitle(SECTIONS[activeIndex]), count: `${activeIndex + 1} / ${SECTIONS.length}` },
 			atFirst: activeIndex === 0,
@@ -307,6 +363,39 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			readReport: this._readReport ?? null,
 			pb,
 			isDrive: pb.instinctLabel === "Drive",
+			// Each page's own pencil: open, or drawn as the playbook prints it. A page with nothing on it
+			// opens for typing, except those that may well stay empty (they say so instead).
+			pages: {
+				playbook: ed("page:playbook") || blank(pb.name),
+				stats: ed("page:stats"),
+				instincts: ed("page:instincts") || !pb.instincts.length,
+				looks: ed("page:looks") || (!pb.appearance.length && !pb.origin.length && blank(pb.originNote)),
+				possessions: ed("page:possessions"),
+				moves: ed("page:moves"),
+				advancement: ed("page:advancement"),
+				intro: ed("page:intro"),
+				notes: ed("page:notes"),
+			},
+			read: {
+				descriptionHtml: formatPlaybookText(pb.description),
+				instincts: pb.instincts.map(x => ({ word: x.word, html: formatPlaybookInline(x.description) })),
+				appearance: pb.appearance.map(row => ({ options: row.map(text => ({ text })) })),
+				originNoteHtml: formatPlaybookInline(pb.originNote),
+				origin: pb.origin.map(o => ({ region: o.region, names: o.writeIn ? "___" : (o.names ?? []).join(", "), question: o.question ?? "" })),
+				startingNoteHtml: formatPlaybookInline(pb.startingMovesNote),
+				choices: pb.moveChoices.map(c => c.options.join(" or ")),
+				groups: pb.moveGroups.map(g => ({ label: g.label, moves: g.moves.join(", ") })),
+				hasMovesHead: !blank(pb.startingMovesNote) || pb.moveChoices.length > 0 || pb.moveGroups.length > 0,
+				advance: (adv.options ?? []).map(label => ({ html: formatPlaybookInline(label) })),
+				advanceIntro: adv.replacesUsual ? "When you Level Up, mark one of these instead of taking a new move:" : "When you Level Up, take a new move and mark one of these as well:",
+				advanceNoteHtml: formatPlaybookInline(adv.note),
+				advanceUsual: !adv.switchPlaybook && !(adv.options ?? []).length && !adv.switchFromLevel && blank(adv.note),
+				step3Html: formatPlaybookInline(pb.introductions.step3),
+				step4: pb.introductions.step4 ?? [],
+				step6: pb.introductions.step6 ?? [],
+				introEmpty: blank(pb.introductions.step3) && !(pb.introductions.step4 ?? []).length && !(pb.introductions.step6 ?? []).length,
+				notesHtml: formatPlaybookText(pb.notes),
+			},
 			damageOptions: DAMAGE_DICE.map(d => ({ value: d, selected: d === pb.damage })),
 			statFlag: statArray ? "" : `This note doesn't hand out exactly six scores, so characters will get the book's ${DEFAULT_STAT_ARRAY.map(statScoreLabel).join(", ")} instead.`,
 			statPreview: statArray ? statArray.map(statScoreLabel).join(", ") : "",
@@ -314,6 +403,10 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 
 			backgrounds: pb.backgrounds.map((b, i) => ({
 				index: i, label: b.label, description: b.description,
+				// Its text boxes, or as the PDF prints it. A blank one (just added) opens for typing.
+				editing: ed(`bg:${i}`) || (blank(b.label) && blank(b.description)),
+				descriptionHtml: formatPlaybookText(backgroundWordsInPlace(b.description, ownMove)),
+				trackBoxes: boxes(b.track?.max),
 				movesText: L.nameList(b.moves), moveChoiceText: L.nameList(b.moveChoice),
 				foreign: gaps[i].foreign.join(", "),
 				possessionsText: L.nameList(b.possessions ?? []),
@@ -327,14 +420,21 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			// The playbook's own Level Up: one advance per line, and what each was read as doing.
 			advancementText: L.lineList(pb.advancement?.options ?? []),
 			advancementRead: (pb.advancement?.options ?? []).map(label => ({ label, does: _advanceDoes(advanceFrom(label)) })),
-			possessions: pb.possessions.options.map((o, i) => ({ index: i, ...o })),
+			possessions: pb.possessions.options.map((o, i) => ({
+				index: i, ...o,
+				editing: ed(`pos:${i}`) || (blank(o.label) && blank(o.description)),
+				descriptionHtml: formatPlaybookText(o.description),
+			})),
 			choicesText: L.choiceLines(pb.moveChoices),
 			groupsText: L.groupLines(pb.moveGroups),
 
 			moves: this._bundle.moves.map((m, i) => ({
 				index: i,
 				...m,
-				open: this._openMoves.has(i),
+				// Its text boxes while open (its pencil pressed, or a new one with no name yet), else as printed.
+				open: this._openMoves.has(i) || blank(m.name),
+				descriptionHtml: formatPlaybookText(m.description),
+				trackBoxes: boxes(m.resource?.max),
 				summaryTags: [m.insert ? `in ${insertByKey.get(m.insert)?.name || "an insert"}` : "", m.starting ? (m.insert ? "always held" : "starting") : "", m.level > 1 ? `level ${m.level}+` : "", m.repeatMax > 1 ? `up to ${m.repeatMax} times` : "", m.rollType ? `roll +${m.rollType.toUpperCase()}` : "", m.resource ? `${m.resource.title || "track"} ×${m.resource.max}` : ""].filter(Boolean).join(" · "),
 				requiresMovesText: L.nameList(m.requiresMoves),
 				rollOptions: [
@@ -366,6 +466,9 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 				if (!ins.lists.length) flags.push("It has no lists yet.");
 				return {
 					index: i, key: ins.key, name: ins.name, description: ins.description,
+					editing: ed(`ins:${i}`) || blank(ins.name),
+					descriptionHtml: formatPlaybookText(ins.description),
+					openedBy: ins.unlockedBy || "",
 					formEnabled: !!ins.form?.enabled, formOn: ins.form?.on ?? "Transform", formOff: ins.form?.off ?? "Revert",
 					flags,
 					openerOptions: [
@@ -384,6 +487,8 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 						pick: l.pick, min: l.min, perUnlock: l.perUnlock,
 						bonusText: L.bonusPickList(l.bonusPicks),
 						optionsText: L.insertOptionLines(l.options),
+						promptHtml: formatPlaybookInline(l.prompt),
+						optionsRead: (l.options ?? []).map(o => ({ html: formatPlaybookInline(o.description), ticked: !!o.preselected, boxes: boxes(Math.max(1, o.max || 1)) })),
 						moveNames: this._bundle.moves.filter(m => m.insert === ins.key && m.insertList === l.key).map(m => m.name).join(", "),
 						pickFlag: l.pick > 0 ? "" : "Pick 0: nobody can take anything from it.",
 					})),
@@ -391,8 +496,14 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 				};
 			}),
 
-			lore: pb.lore.map((s, i) => ({
+			lore: pb.lore.map((s, i, all) => ({
 				index: i, title: s.title, description: s.description,
+				// A section with no options is a heading over every question after it, up to the next
+				// heading (onboarding's _nearestFoldedHeaderIndex): the Builder frames them together.
+				...loreGroupShape(all, i),
+				editing: ed(`lore:${i}`) || (blank(s.title) && blank(s.description) && !s.options.length),
+				descriptionHtml: formatPlaybookInline(s.description),
+				optionsRead: s.options.map(o => ({ html: formatPlaybookInline(o.description), writeIn: !!o.freeText, boxes: boxes(Math.max(1, o.max || 1)) })),
 				optionsText: L.loreOptionLines(s.options),
 				pickNote: _lorePickNote(s),
 			})),
@@ -401,8 +512,65 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 		};
 	}
 
+	/**
+	 * Shown to players or not, as an eye in the window's header left of Close (it was a checkbox on the
+	 * Playbook panel). Open: players see the playbook in their picker; closed: only the GM does. On a
+	 * saved playbook it takes effect at once (players' pickers read the saved Item); on a new one it is
+	 * kept with the rest of the window and saved with it.
+	 */
+	_getHeaderButtons() {
+		const buttons = super._getHeaderButtons();
+		buttons.unshift({ label: "", class: "stonetop-pb-builder-shown", icon: "fas fa-eye", onclick: ev => this._toggleShown(ev) });
+		return buttons;
+	}
+
+	/** The eye drawn as the playbook stands: its glyph, words for its tooltip and a screen reader, its state. */
+	_drawShown() {
+		const eye = this.element?.[0]?.querySelector(".window-header .stonetop-pb-builder-shown");
+		if (!eye) return;
+		const shown = !!this._bundle.playbook.published;
+		const icon = eye.querySelector("i");
+		if (icon) icon.className = `fas ${shown ? "fa-eye" : "fa-eye-slash"}`;
+		const words = shown
+			? "Shown to players: they can pick it in the playbook picker. Click to hide it from them."
+			: "Hidden from players: only you see it in the playbook picker. Click to show it to them.";
+		eye.dataset.tooltip = words;
+		eye.setAttribute("aria-label", words);
+		eye.setAttribute("role", "button");
+		eye.setAttribute("aria-pressed", String(shown));
+		eye.classList.toggle("is-hidden", !shown);
+	}
+
+	async _toggleShown(ev) {
+		ev?.preventDefault?.();
+		this._readForm();
+		const shown = !this._bundle.playbook.published;
+		this._bundle.playbook.published = shown;
+		this._drawShown();
+		persistOpenWindowsSoon();
+		if (!this._item) return;
+		// A saved playbook: straight onto it, and onto what the close guard counts as saved, so the
+		// eye alone never reads as unsaved work.
+		try {
+			// A plain update, not setFlag: "stonetop" is the shipped content's scope, not this system's
+			// id, and setFlag refuses any scope that isn't the system's or an active module's.
+			await this._item.update({ [`flags.${ITEM_FLAG_SCOPE}.homebrew.published`]: shown });
+			if (typeof this._pristineWork === "string") {
+				const was = JSON.parse(this._pristineWork);
+				if (was?.playbook) { was.playbook.published = shown; this._pristineWork = JSON.stringify(was); }
+			}
+			ui.notifications.info(shown ? `Players can pick ${this._item.name} now.` : `${this._item.name} is hidden from players.`);
+		} catch (err) {
+			console.error("Stonetop | couldn't change whether players see this playbook", err);
+			ui.notifications.error("Couldn't change whether players see this playbook. Try again, or press Save.");
+			this._bundle.playbook.published = !shown;
+			this._drawShown();
+		}
+	}
+
 	activateListeners(html) {
 		super.activateListeners(html);
+		this._drawShown();
 		// The form now on screen is the bundle as getData read it.
 		this._formRev = this._drawingRev;
 		const root = html[0];
@@ -411,23 +579,42 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 		root.querySelector(".stonetop-pb-builder-back")?.addEventListener("click", () => this._step(root, -1));
 		root.querySelector(".stonetop-pb-builder-next")?.addEventListener("click", () => this._step(root, 1));
 
-		// Remember which move cards are open, so a re-render (adding a card) keeps them.
-		root.querySelectorAll(".stonetop-pb-builder-move").forEach(d => d.addEventListener("toggle", () => {
-			const i = Number(d.dataset.index);
-			if (d.open) this._openMoves.add(i); else this._openMoves.delete(i);
-		}));
 		// A move's name is its summary line: keep it current as it is typed, without a render.
 		root.querySelectorAll(".stonetop-pb-builder-move [data-field$='.name']").forEach(input => input.addEventListener("input", () => {
 			const label = input.closest(".stonetop-pb-builder-move")?.querySelector(".stonetop-pb-builder-move-name");
 			if (label) label.textContent = input.value.trim() || "New move";
 		}));
 
+		// A move's words, once written, fill in its roll, results and track where those are still empty,
+		// as an imported move's are: a playbook typed in by hand (one with no text in its PDF) needn't
+		// split every "on a 10+ … on a 7-9 …" into its boxes by hand.
+		root.querySelectorAll(".stonetop-pb-builder-move textarea[data-field$='.description']").forEach(area => area.addEventListener("change", () => {
+			fillMoveFromWords(area.closest(".stonetop-pb-builder-move"), area.value);
+		}));
+
 		root.querySelectorAll("[data-action]").forEach(el => el.addEventListener("click", ev => this._onAction(ev, el.dataset.action, el.dataset)));
+		// A pencil or check is an <a role=button> (the sheets' own): Enter and Space press it, as a button's would.
+		root.querySelectorAll("a[role=button][data-action]").forEach(el => el.addEventListener("keydown", ev => {
+			if (ev.key !== "Enter" && ev.key !== " ") return;
+			ev.preventDefault();
+			el.click();
+		}));
 		// Typing never re-renders, so it saves the window for a reload itself (`restoreView`).
 		root.addEventListener("input", () => persistOpenWindowsSoon());
 		root.addEventListener("change", () => persistOpenWindowsSoon());
-		root.querySelector(".stonetop-pb-builder-import-file")?.addEventListener("change", ev => this._importJson(ev.currentTarget));
-		root.querySelector(".stonetop-pb-builder-pdf-file")?.addEventListener("change", ev => this._readPdf(ev.currentTarget));
+		// Read a PDF or playbook file: one picker for both, the file says which.
+		root.querySelector(".stonetop-pb-builder-pdf-file")?.addEventListener("change", ev => this._readPicked(ev.currentTarget));
+		// Add from my library shows only when the library holds a playbook this world doesn't. Asked once
+		// per window (and again after a save): it reads the server's library folder.
+		if (!this._libraryAsked) {
+			this._libraryAsked = true;
+			import("./playbook-library.js").then(({ libraryPlaybooksNotHere }) => libraryPlaybooksNotHere()).then(list => {
+				const n = list?.length ?? 0;
+				if (n === (this._libraryCount ?? 0)) return;
+				this._libraryCount = n;
+				if (this.rendered) this.render(false);
+			}).catch(err => console.warn("Stonetop | couldn't read the playbook library", err));
+		}
 		// A PDF or a shared playbook file dropped anywhere on the window is read as if it were picked.
 		root.addEventListener("dragover", ev => { if (droppedFileKind(ev.dataTransfer, { peek: true })) ev.preventDefault(); });
 		root.addEventListener("drop", ev => {
@@ -519,20 +706,36 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 		}
 	}
 
+	/** A card gone from a list ("bg", 2): it closes, and the open ones after it keep their place. */
+	_dropPart(kind, index) {
+		this._editing = new Set([...this._editing].flatMap(key => {
+			const [k, n] = key.split(":");
+			if (k !== kind) return [key];
+			const at = Number(n);
+			return at === index ? [] : [`${k}:${at > index ? at - 1 : at}`];
+		}));
+	}
+
 	async _onAction(ev, action, data) {
 		ev.preventDefault();
 		this._readForm();
 		const pb = this._bundle.playbook;
 		const i = Number(data.index);
 		switch (action) {
-			case "add-background": pb.backgrounds.push(blankBackground()); break;
-			case "remove-background": pb.backgrounds.splice(i, 1); break;
-			case "add-possession": pb.possessions.options.push(blankPossession()); break;
-			case "remove-possession": pb.possessions.options.splice(i, 1); break;
-			case "add-lore": pb.lore.push(blankLore()); break;
+			// A pencil, and its check: a page's or a card's text boxes, or back to how the PDF prints it.
+			case "edit-part": if (data.part) this._editing.add(data.part); break;
+			case "done-part": this._editing.delete(data.part); break;
+			case "edit-move": this._openMoves.add(i); break;
+			case "done-move": this._openMoves.delete(i); break;
+			case "add-background": pb.backgrounds.push(blankBackground()); this._editing.add(`bg:${pb.backgrounds.length - 1}`); break;
+			case "remove-background": pb.backgrounds.splice(i, 1); this._dropPart("bg", i); break;
+			case "add-possession": pb.possessions.options.push(blankPossession()); this._editing.add(`pos:${pb.possessions.options.length - 1}`); break;
+			case "remove-possession": pb.possessions.options.splice(i, 1); this._dropPart("pos", i); break;
+			case "add-lore": pb.lore.push(blankLore()); this._editing.add(`lore:${pb.lore.length - 1}`); break;
 			case "add-insert": {
 				pb.inserts ??= [];
 				pb.inserts.push(blankInsert(freshKey("insert", pb.inserts.map(x => x.key))));
+				this._editing.add(`ins:${pb.inserts.length - 1}`);
 				break;
 			}
 			case "remove-insert": {
@@ -541,6 +744,7 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 				// Its moves stay, as the playbook's own: removing the insert never loses a move.
 				for (const m of this._bundle.moves) if (m.insert === gone.key) { m.insert = ""; m.insertList = ""; }
 				pb.inserts.splice(i, 1);
+				this._dropPart("ins", i);
 				break;
 			}
 			case "add-insert-list": {
@@ -557,7 +761,7 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 				ins.lists.splice(j, 1);
 				break;
 			}
-			case "remove-lore": pb.lore.splice(i, 1); break;
+			case "remove-lore": pb.lore.splice(i, 1); this._dropPart("lore", i); break;
 			case "add-move": {
 				this._bundle.moves.push(normalizeMove({ name: "" }));
 				this._openMoves.add(this._bundle.moves.length - 1);
@@ -569,10 +773,10 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 				break;
 			}
 			case "pick-image": return this._pickImage();
-			case "import-json": return this.element?.[0]?.querySelector(".stonetop-pb-builder-import-file")?.click();
+			// Not _guardBusy: that keeps the button greyed after it opens the cutter, until a redraw.
+			case "cut-image": return this._cutImage();
 			case "from-library": return this._guardBusy(ev, () => this._fromLibrary());
 			case "read-pdf": return this.element?.[0]?.querySelector(".stonetop-pb-builder-pdf-file")?.click();
-			case "export-json": return this._exportJson();
 			case "save": return this._guardBusy(ev, () => this._save());
 			case "delete": return this._delete();
 			case "try": return this._guardBusy(ev, () => this._tryIt());
@@ -595,8 +799,11 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 
 	// ---- Save / delete --------------------------------------------------------------------
 
-	/** @returns {Promise<boolean>} whether it saved */
-	async _save() {
+	/**
+	 * @param {{quiet?: boolean}} [o]  `quiet` leaves out the "Saved" note, for a caller that says so itself
+	 * @returns {Promise<boolean>} whether it saved
+	 */
+	async _save({ quiet = false } = {}) {
 		this._readForm();
 		const problem = saveProblem(normalizeBundle(this._bundle).bundle ?? this._bundle, this._item);
 		if (problem) {
@@ -626,8 +833,10 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			// itself, a box that reads back a little differently (an empty stat cap's null is 0 in its
 			// box) made a window that had just saved count as unsaved.
 			this._pristineWork = null;
-			const shown = this._bundle.playbook.published ? "Players can pick it now." : "Players can't see it until you tick \"Show to players\".";
-			ui.notifications.info(`Saved ${item.name}. ${shown}`);
+			const shown = this._bundle.playbook.published ? "Players can pick it now." : "It's hidden from players: the eye at the top of this window shows it to them.";
+			if (!quiet) ui.notifications.info(`Saved ${item.name}. ${shown}`);
+			// One added from the library is here now: ask the library again on this draw.
+			this._libraryAsked = false;
 			this.render(false);
 			await offerToRefreshCopies(item);
 			return true;
@@ -647,7 +856,7 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 		if (!this._item || hasUnsavedWork(this)) {
 			const go = await askWithButtons({
 				title: "Save before trying it?",
-				content: "<p>Character creation reads the saved playbook, so your changes need saving first. Saving doesn't show it to players unless \"Show to players\" is ticked.</p>",
+				content: "<p>Character creation reads the saved playbook, so your changes need saving first. Saving shows it to players unless the eye at the top of this window is closed.</p>",
 				buttons: [{ key: "save", label: "Save and try it", icon: "fa-floppy-disk", value: true }],
 				defaultKey: false,
 			});
@@ -667,7 +876,7 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			: "";
 		const answer = await askWithButtons({
 			title: `Delete ${this._item.name}?`,
-			content: `<p>This deletes the playbook and its moves from this world. Your other worlds keep theirs, and this world won't get it back from your playbook library unless you add it again (Add from my library in the Playbook Builder).</p>${warn}`,
+			content: `<p>This deletes the playbook and its moves from this world. Your other worlds keep theirs, and this world won't get it back from your playbook library unless you add it again (Add from my library, at the top of the Playbook Builder).</p>${warn}`,
 			buttons: [{ key: "delete", label: "Delete the playbook", icon: "fa-trash", className: "stonetop-dialog-btn--danger", value: true }],
 			defaultKey: false,
 		});
@@ -679,16 +888,11 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 
 	// ---- JSON -----------------------------------------------------------------------------
 
-	_exportJson() {
-		const { bundle } = normalizeBundle(this._bundle);
-		if (bundle) downloadBundle(bundle);
-	}
-
 	/**
 	 * An imported playbook that this world already has (same name, or the window is editing it):
 	 * offer to UPDATE that one, so every character who plays it stays linked, and say what changed
 	 * since the saved version. Otherwise it becomes a playbook of its own. Changes `bundle` (its
-	 * slug, and keeps the saved one's "Show to players") and `this._item`.
+	 * slug, and keeps the saved one's shown-to-players eye) and `this._item`.
 	 *
 	 * @returns {Promise<{saved: object|null}|null>}  the saved version it updates (null for a playbook
 	 *   of its own), or null when the GM backed out
@@ -702,6 +906,8 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 		if (!same) {
 			this._item = null;
 			bundle.playbook.slug = "";
+			// A playbook of its own: shown to players, as a new one is (the eye in the header hides it).
+			bundle.playbook.published = true;
 			return { saved: null };
 		}
 		if (!editing) {
@@ -732,7 +938,7 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 
 	/** Ask before an import or a PDF read throws away unsaved edits. @returns {Promise<boolean>} */
 	async _mayReplace(what) {
-		if (!hasUnsavedWork(this) || JSON.stringify(this._bundle) === JSON.stringify(emptyBundle())) return true;
+		if (!hasUnsavedWork(this) || isBlankBundle(this._bundle)) return true;
 		const go = await askWithButtons({
 			title: "Replace what's in the builder?",
 			content: `<p>${what} replaces everything in this window, and what you've changed here hasn't been saved.</p>`,
@@ -755,6 +961,25 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 		// The same playbook already in this world (its slug, else its name) is updated in place on
 		// Save, so the characters who hold it stay linked; or the import becomes one of its own.
 		if (await this._adopt(bundle, { source: "json", issues })) this.render(false);
+	}
+
+	/**
+	 * `issues` without the notes about background moves borrowed from other playbooks ("Frosty from
+	 * the Heavy") when every move a note names is found in this world, spelled loosely as character
+	 * creation matches it (findOtherPlaybookMoves): those moves already work, so the note is noise.
+	 */
+	async _withoutFoundBorrowed(issues, ownName) {
+		const borrowed = issues.filter(i => i?.borrowed?.length);
+		if (!borrowed.length) return issues;
+		try {
+			const { FoundryMoveRepository, findOtherPlaybookMoves } = await import("../actors/character/repositories/FoundryMoveRepository.js");
+			const names = [...new Set(borrowed.flatMap(i => i.borrowed))];
+			const found = new Set((await findOtherPlaybookMoves(new FoundryMoveRepository(), names, { except: [ownName] })).map(e => looseName(e.name)));
+			return issues.filter(i => !i?.borrowed?.length || !i.borrowed.every(n => found.has(looseName(n))));
+		} catch (err) {
+			console.warn("Stonetop | couldn't look up the borrowed background moves", err);
+			return issues;
+		}
 	}
 
 	/**
@@ -788,10 +1013,12 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 		// leaves nothing to merge a later import over (the saved playbook keeps any base it had).
 		this._importBase = read;
 		this._bundle = bundle;
-		this._issues = [...changes, ...issues];
+		this._issues = [...changes, ...(await this._withoutFoundBorrowed(issues, bundle.playbook.name))];
 		this._readReport = readReport;
 		this._source = source;
+		// What was open for editing was the last playbook's cards: the new one opens closed.
 		this._openMoves.clear();
+		this._editing.clear();
 		return true;
 	}
 
@@ -833,6 +1060,19 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 		this.render(false);
 	}
 
+	/** The file picked with Read a PDF or playbook file: read as the kind it is. */
+	_readPicked(input) {
+		const file = input?.files?.[0];
+		if (input) input.value = "";
+		if (!file) return null;
+		const kind = fileKindOf(file);
+		if (!kind) {
+			ui.notifications.warn(`${file.name} isn't a PDF or a playbook file. Pick a playbook's PDF, or a .json playbook file someone shared.`);
+			return null;
+		}
+		return this.readDroppedFile(file, kind);
+	}
+
 	/** Read a file dropped on the window (or on the Items sidebar): a PDF, or a shared playbook file. */
 	readDroppedFile(file, kind) {
 		const input = { files: [file] };
@@ -844,26 +1084,33 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 	/**
 	 * Fill the builder from a playbook PDF the GM picked (pdf/read-playbook.js). The file is read
 	 * in memory and dropped; nothing is uploaded, and nothing is saved until the GM presses Save.
-	 * A draft from a PDF is never shown to players until the GM ticks "Show to players".
+	 * Nothing reaches players until Save; then it shows in their picker unless the header's eye hides it.
 	 *
-	 * @returns {Promise<"read"|"by-hand"|null>} "read" once the window holds the playbook; "by-hand"
-	 *   when the PDF had no text and the GM chose to type it in; null for anything else (no file, a
-	 *   file that wouldn't read, a review backed out of). New playbooks (startNewPlaybook) go on that.
+	 * @returns {Promise<"read"|"by-hand"|"saved"|null>} "read" once the window holds the playbook;
+	 *   "by-hand" when the PDF had no text and the GM chose to type it in; "saved" for a known playbook
+	 *   read whole, saved and announced without the builder (_saveKnown); null for anything else (no
+	 *   file, a file that wouldn't read, a review backed out of). New playbooks (startNewPlaybook) go on that.
 	 */
 	async _readPdf(input) {
 		const file = input?.files?.[0];
 		if (input) input.value = "";
 		if (!file) return null;
 		if (!(await this._mayReplace("Reading a PDF"))) return null;
-		let result;
+		let result, runs, known = null, knownPlaybooks = null;
 		try {
 			ui.notifications.info(`Reading ${file.name}…`);
-			const [{ loadPdfjs }, { readPageRuns }, { readPlaybook }] = await Promise.all([
+			const [{ loadPdfjs }, { readPageRuns }, { readPlaybook }, knownModule] = await Promise.all([
 				import("../utils/pdfjs-loader.js"),
 				import("./pdf/pdf-text-source.js"),
 				import("./pdf/read-playbook.js"),
+				import("./known/known-playbooks.js"),
 			]);
-			const runs = await readPageRuns(await loadPdfjs(), await file.arrayBuffer());
+			knownPlaybooks = knownModule;
+			const bytes = new Uint8Array(await file.arrayBuffer());
+			// A third-party playbook the system knows (known/known-playbooks.js), by its bytes: read as any
+			// other, then settled as it should be. pdf.js takes the bytes it is handed, so it gets a copy.
+			known = await knownPlaybooks.knownPlaybookFor(bytes);
+			runs = await readPageRuns(await loadPdfjs(), bytes.slice(), { glyphTables: knownPlaybooks.glyphTablesFor(known) });
 			result = readPlaybook(runs);
 		} catch (err) {
 			console.error("Stonetop | couldn't read that PDF", err);
@@ -877,6 +1124,8 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			this._readForm();
 			if (!this._bundle.playbook.name) this._bundle.playbook.name = playbookNameFromFileName(file.name);
 			this._handTypePdf = file;
+			// A landscape sheet of two columns is too small to read at the window's width: one column fills it.
+			this._handTypeLandscape = (runs.pages?.[0]?.w ?? 0) > (runs.pages?.[0]?.h ?? 0);
 			if (this.rendered) this.render(false);
 			return "by-hand";
 		}
@@ -894,6 +1143,25 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			ui.notifications.error("That PDF couldn't be read. Fill the builder in by hand instead.");
 			return null;
 		}
+		// Its picture, the emblem printed beside its name, taken NOW while the PDF is in hand: the review
+		// can finish after a reload, when the PDF is gone. The path rides in the report, which the review
+		// keeps across a reload, and _takeReviewed puts it on the playbook. Skipped when this window
+		// already has a picture (a re-import keeps the one chosen).
+		// The PDF and where its emblem is are kept in memory for Cut from the PDF (a reload asks again).
+		this._pdfFile = file;
+		this._emblemHint = null;
+		if (!this._bundle.playbook.img) {
+			result.report.emblemImg = (await this._emblemFromPdf(file, result.report.emblem, result.draft.fields?.name ?? "")) ?? "";
+		}
+		// A known playbook with nothing left to ask skips the review, as the rulebook's playbooks need
+		// none: its pieces are where they belong and its questions are answered. With nothing to check
+		// either, it is saved without the builder (_takeReviewed -> _saveKnown).
+		if (known && knownPlaybooks.settleKnownDraft(result.draft, known)) {
+			const { assemblePlaybook } = await import("./pdf/read-playbook.js");
+			const assembled = assemblePlaybook(result.draft);
+			knownPlaybooks.finishKnownBundle(assembled.bundle, known);
+			return this._takeReviewed(assembled, { fileName: file.name, report: result.report, known });
+		}
 		// The GM checks the read first: confirms what the PDF can't settle, moves what landed wrong.
 		const { PlaybookImportReview } = await import("./PlaybookImportReview.js");
 		// The review is told which builder it came from: after a reload nothing is awaiting it, and it
@@ -906,15 +1174,112 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 	}
 
 	/**
+	 * The playbook's emblem, cut from its PDF (pdf/pdf-emblem.js) and saved beside the playbook
+	 * library (playbook-library.js), so the GM's other worlds that get the playbook get its picture
+	 * too. The path, or null when there is none to take or it couldn't be saved; the GM can always
+	 * choose a picture by hand.
+	 */
+	async _emblemFromPdf(file, region, name) {
+		if (!region) return null;
+		try {
+			const [{ loadPdfjs }, { renderEmblem }] = await Promise.all([
+				import("../utils/pdfjs-loader.js"),
+				import("./pdf/pdf-emblem.js"),
+			]);
+			const blob = await renderEmblem(await loadPdfjs(), await file.arrayBuffer(), region, { onFound: hint => { this._emblemHint = hint; } });
+			if (!blob) return null;
+			return await this._savePicture(blob, name);
+		} catch (err) {
+			console.warn("Stonetop | couldn't take the playbook's emblem from its PDF", err);
+			return null;
+		}
+	}
+
+	/**
+	 * A picture made here (the emblem taken from a PDF, or one cut by hand), saved beside the playbook
+	 * library so the GM's other worlds that get the playbook get its picture too. A hand cut gets a
+	 * name of its own each time: the same path again would show the old picture from the browser's cache.
+	 * @returns {Promise<string|null>} its path
+	 */
+	async _savePicture(blob, name, { fresh = false } = {}) {
+		const [{ LIBRARY_DIR }, { ensureDataDir, uploadFile }] = await Promise.all([
+			import("./playbook-library.js"),
+			import("../utils/foundry-compat.js"),
+		]);
+		const dir = `${LIBRARY_DIR}/art`;
+		await ensureDataDir(LIBRARY_DIR);
+		await ensureDataDir(dir);
+		const stem = `${slugify(name) || "playbook"}-emblem${fresh ? `-${Date.now().toString(36)}` : ""}`;
+		const picture = new File([blob], `${stem}.webp`, { type: "image/webp" });
+		return await uploadFile("data", dir, picture);
+	}
+
+	/**
+	 * Cut from the PDF: the PDF read this session, or one the GM picks now (after a reload, or for a
+	 * playbook typed in or loaded from a file), opened in the cutter at the emblem the importer found.
+	 */
+	async _cutImage() {
+		// One cutter at a time: a second press while the PDF is opening would open two.
+		if (this._opening) return;
+		this._readForm();
+		const file = this._pdfFile ?? (await this._pickPdfFile());
+		if (!file) return;
+		this._opening = true;
+		try { await this._openCutter(file); } finally { this._opening = false; }
+	}
+
+	async _openCutter(file) {
+		if (file !== this._pdfFile) { this._pdfFile = file; this._emblemHint = null; }
+		const [{ loadPdfjs }, { openEmblemCutter }] = await Promise.all([
+			import("../utils/pdfjs-loader.js"),
+			import("./PlaybookEmblemCut.js"),
+		]);
+		await openEmblemCutter({
+			pdfjs: await loadPdfjs(), data: await file.arrayBuffer(), fileName: file.name, hint: this._emblemHint,
+			onCut: async blob => {
+				let path = null;
+				try { path = await this._savePicture(blob, this._bundle.playbook.name || playbookNameFromFileName(file.name), { fresh: true }); }
+				catch (err) { console.warn("Stonetop | couldn't save the cut picture", err); }
+				if (!path) {
+					ui.notifications.error("The picture couldn't be saved. You may not have permission to upload files.");
+					return false;
+				}
+				this._readForm();
+				this._bundle.playbook.img = path;
+				if (this.rendered) this.render(false);
+				return true;
+			},
+		});
+	}
+
+	/** Ask for a PDF with the browser's own file dialog. Resolves to the File, or null if none was picked. */
+	_pickPdfFile() {
+		return new Promise(resolve => {
+			const input = document.createElement("input");
+			input.type = "file";
+			input.accept = ".pdf,application/pdf";
+			input.addEventListener("change", () => resolve(input.files?.[0] ?? null), { once: true });
+			input.addEventListener("cancel", () => resolve(null), { once: true });
+			input.click();
+		});
+	}
+
+	/**
 	 * Fill the window from a finished import review: what was confirmed there is settled, and what is
 	 * left is worth a second look here. Shared by the review this window awaited and one a reload
 	 * brought back. The caller has already asked _mayReplace.
 	 * @returns {Promise<"read"|null>} null when the bundle didn't read or the GM backed out
 	 */
-	async _takeReviewed(reviewed, { fileName = "", report = null } = {}) {
+	async _takeReviewed(reviewed, { fileName = "", report = null, known = null } = {}) {
+		// The emblem taken when the PDF was read (_readPdf), whichever way the review came back: to the
+		// window that opened it, or after a reload to one reopened for it.
+		const read = reviewed?.bundle?.playbook;
+		if (read && !read.img && !this._bundle?.playbook?.img && typeof report?.emblemImg === "string" && report.emblemImg) read.img = report.emblemImg;
 		const { bundle, issues } = normalizeBundle(reviewed?.bundle);
 		if (!bundle) return null;
-		bundle.playbook.published = false;
+		// Shown to players unless the GM hides it (the eye in the header); one that updates a playbook
+		// this world has keeps that one's choice (_linkToExisting).
+		bundle.playbook.published = true;
 		const adopted = await this._adopt(bundle, {
 			source: "pdf",
 			issues: [...(report?.issues ?? []).filter(i => i.severity === "missing"), ...(reviewed.issues ?? []), ...issues],
@@ -928,11 +1293,104 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			const n = bundle.moves.filter(m => m.insert === ins.key).length;
 			return `the ${ins.name} insert${n ? ` (${n} ${n === 1 ? "move" : "moves"})` : ""}`;
 		});
-		const parts = [`${own} ${own === 1 ? "move" : "moves"}`, `${bundle.playbook.backgrounds.length} backgrounds`, ...inserts];
-		ui.notifications.info(`Read ${bundle.playbook.name || fileName}: ${parts.slice(0, -1).join(", ")}${parts.length > 1 ? " and " : ""}${parts.at(-1)}. Check each panel before you save.`);
+		const bgs = bundle.playbook.backgrounds.length;
+		const parts = [`${own} ${own === 1 ? "move" : "moves"}`, `${bgs} ${bgs === 1 ? "background" : "backgrounds"}`, ...inserts];
+		const counted = `${parts.slice(0, -1).join(", ")}${parts.length > 1 ? " and " : ""}${parts.at(-1)}`;
+		// Asked before the draw below: while a window redraws it doesn't count as rendered.
+		const wasOpen = this.rendered;
+		// Drawn first: until then an open window's form is the one before the import, and a save reads
+		// the form back over the bundle unless a redraw is owed (_formIsCurrent).
 		this.render(false);
+		// A playbook the system knows (known/known-playbooks.js), read whole with nothing to check: no
+		// builder to look over, it's saved and the GM told so.
+		if (known && this._issues.every(i => i?.severity === "info")) return this._saveKnown(counted, { wasOpen });
+		ui.notifications.info(known
+			? `Read ${bundle.playbook.name || fileName}, a playbook the system knows: ${counted}. Check what's marked before you save.`
+			: `Read ${bundle.playbook.name || fileName}: ${counted}. Check each panel before you save.`);
 		return "read";
 	}
+
+	/**
+	 * Save a known playbook that came in whole (_takeReviewed) and say so in a small window, rather
+	 * than hand the GM the builder to look over and save. The builder stays a press away, to change
+	 * anything in it; a save that doesn't go through (its warning says why) shows the builder instead.
+	 *
+	 * @param {string} counted  what was read, as "34 moves, 4 backgrounds and the Monster Compendium insert"
+	 * @param {{wasOpen?: boolean}} [o]  whether the builder was on screen when the PDF was read
+	 * @returns {Promise<"read"|"saved">} "read" when the window should show the playbook (the GM asked
+	 *   to open it, or the save didn't go through); "saved" when there's nothing more to show
+	 */
+	async _saveKnown(counted, { wasOpen = false } = {}) {
+		const updating = !!this._item;
+		// Only notes are left by now ("Since the saved version: ..."), worth a line each.
+		const notes = this._issues.map(i => i.message).filter(m => typeof m === "string" && m);
+		if (!(await this._save({ quiet: true }))) {
+			this.render(false);
+			return "read";
+		}
+		const item = this._item;
+		const pb = this._bundle.playbook;
+		const by = pb.author ? ` by ${escHtml(pb.author)}` : "";
+		const shown = pb.published
+			? "your players can pick it now"
+			: "it's hidden from players until you show it to them (the eye at the top of the Playbook Builder)";
+		const change = wasOpen
+			? "To change anything in it, it's open in the Playbook Builder behind this window."
+			: "To change anything in it, open it in the Playbook Builder: with the button below, or later by right-clicking it in the Items sidebar.";
+		const choice = await askWithButtons({
+			title: `${item.name} is ready`,
+			content: `<p><strong>${escHtml(item.name)}</strong>${by} is a playbook the system knows, and all of it was read: ${escHtml(counted)}, each where it belongs.</p>`
+				+ `<p>It's saved${updating ? " over the one this world had" : ""}, and ${shown}.</p>`
+				+ (notes.length ? `<ul>${notes.map(n => `<li>${escHtml(n)}</li>`).join("")}</ul>` : "")
+				+ `<p>${change}</p>`,
+			buttons: [
+				{ key: "done", label: "Done", icon: "fa-check", value: "done" },
+				{ key: "try", label: "Try character creation", icon: "fa-user-plus", value: "try" },
+				// An open builder already shows it.
+				...(wasOpen ? [] : [{ key: "open", label: "Open it in the Playbook Builder", icon: "fa-book-open", value: "open" }]),
+			],
+			defaultKey: "done",
+		});
+		if (choice === "open") return "read";
+		if (choice === "try") await this._tryIt();
+		return "saved";
+	}
+}
+
+/**
+ * Fill a move card's still-empty Roll, results and Track from its words (move-words.js), straight into
+ * the fields, so nothing redraws under the GM's typing: what is read can be changed or cleared like
+ * anything typed. A field the GM has filled is never touched.
+ * @param {HTMLElement|null} card  the move's card in the builder
+ * @param {string} words           its "What it does"
+ * @returns {string[]} what was filled in, for a test or a note
+ */
+export function fillMoveFromWords(card, words) {
+	if (!card) return [];
+	const filled = [];
+	const field = suffix => card.querySelector(`[data-field$=".${suffix}"]`);
+	const roll = field("rollType");
+	const results = ["success", "partial", "failure"].map(k => field(`results.${k}`));
+	if (roll && !roll.value && results.every(r => r && !r.value.trim())) {
+		const read = rollFromWords(words);
+		if (read.rollType) {
+			roll.value = read.rollType;
+			["success", "partial", "failure"].forEach((k, i) => { results[i].value = read.results[k]; });
+			filled.push("its roll");
+		}
+	}
+	const track = card.querySelector("[data-resource]");
+	const max = track?.querySelector("[name=resourceMax]");
+	if (max && !(Number(max.value) > 0)) {
+		const read = trackFromWords(words);
+		if (read) {
+			max.value = String(read.max);
+			const title = track.querySelector("[name=resourceTitle]");
+			if (title && !title.value.trim()) title.value = read.title;
+			filled.push("its track");
+		}
+	}
+	return filled;
 }
 
 /**
@@ -1003,5 +1461,7 @@ export async function startNewPlaybook() {
 		notePristineWork(builder);
 		const outcome = await builder._readPdf({ files: [file] });
 		if (outcome === "read" || outcome === "by-hand") return builder.render(true);
+		// A known playbook read whole and saved (_saveKnown): the GM was told, and chose no builder.
+		if (outcome === "saved") return null;
 	}
 }

@@ -7090,6 +7090,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-nerves-icon,
 .stonetop-roiling-icon,
 .stonetop-unseen-icon,
+.stonetop-insert-form-icon,
 .stonetop-held-advantage-icon,
 .stonetop-held-disadvantage-icon,
 .stonetop-nav-arrow {
@@ -7117,6 +7118,7 @@ body.stonetop-hide-roll-descriptions :is(#chat, #chat-notifications, #chat-popou
 .stonetop-nerves-icon,
 .stonetop-roiling-icon,
 .stonetop-unseen-icon,
+.stonetop-insert-form-icon,
 .stonetop-held-advantage-icon,
 .stonetop-held-disadvantage-icon {
 	display: block;
@@ -8932,12 +8934,12 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 
 /* THE GOLD CAUTION EDGE: a bar and a wash on what must be read before going on. Camp's going-without
    line, a struggle's cue, what an import or a PDF read could not settle (the Playbook Builder and the
-   review window) and a homebrew playbook's notes in onboarding; each keeps its own spacing below. */
+   review window) and a homebrew playbook's notes in onboarding; each keeps its own spacing below.
+   The review's hard-to-place box is NOT here: it wears the red of the pieces it points to. */
 .stonetop-camp-without,
 .stonetop-struggle-cue,
 .stonetop-pb-builder-report,
 .stonetop-pb-review-confirm,
-.stonetop-pb-review-unsure,
 .stonetop-onboarding-homebrew-notes {
 	border-left: 3px solid var(--st-gold-border);
 	background: var(--st-gold-bg);
@@ -9922,6 +9924,113 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 	padding: 8px 10px;
 }
 .stonetop-pb-builder-card-head { display: flex; gap: 6px; }
+/* A question heading (a section with no options, like the Stranger's "Belonging") and the questions
+   under it, up to the next heading, in one frame: the heading is its title bar, the questions its
+   cards. Drawn as a lone empty card, it read as a question with nothing in it. */
+.stonetop-pb-builder-lore-group {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 0 8px 8px;
+	border: 1px solid rgb(var(--st-ink-rgb) / 0.3);
+	border-radius: var(--st-radius-lg);
+}
+.stonetop-pb-builder-card.stonetop-pb-builder-lore-heading {
+	margin: 0 -8px;
+	gap: 2px;
+	border: none;
+	border-bottom: 1px solid rgb(var(--st-ink-rgb) / 0.3);
+	border-radius: var(--st-radius-lg) var(--st-radius-lg) 0 0;
+	background: rgb(var(--st-ink-rgb) / 0.06);
+}
+.stonetop-pb-builder-lore-group > .stonetop-pb-builder-card.is-editing:first-child { margin: 8px 0 0; }
+/* EVERY PAGE AS THE PLAYBOOK PDF PRINTS IT (playbook-builder.hbs): a card, or a whole page, drawn to
+   read, with a pencil that opens its text boxes and a check that closes them. A head sits on one
+   baseline, so a box glyph (its own vertical-align, as everywhere it's drawn) and a track's circles
+   keep to the words; the pencil centres on the head's line (the faces are balanced, so a line box
+   centres on its capitals; baseline-set, it sat 1.1-1.4px low beside Libre Caslon). */
+/* One row: the heading, its note (which wraps inside itself) and its track, then the pencil. Wrapped,
+   the pencil fell to a line of its own (23-30px off its heading at a 20-24px UI font). */
+.stonetop-pb-builder-read-head { display: flex; align-items: baseline; gap: 4px 12px; flex-wrap: nowrap; }
+.stonetop-pb-builder-read-head > :is(.stonetop-pb-builder-read-name, .stonetop-pb-builder-read-item-name, .stonetop-pb-builder-identity-name) { flex: 0 1 auto; min-width: 0; }
+.stonetop-pb-builder-read-head > .stonetop-pb-builder-read-note { flex: 1 1 auto; min-width: 0; }
+.stonetop-pb-builder-read-name,
+.stonetop-pb-builder-read-item-name { font-family: var(--font-stonetop); font-weight: bold; text-transform: uppercase; letter-spacing: 0.03em; }
+.stonetop-pb-builder-read-item-name { margin: 0; font-size: var(--st-fs-sm); }
+.stonetop-pb-builder-read-note { font-size: var(--st-fs-xs); font-style: italic; color: var(--color-text-dark-secondary); }
+p.stonetop-pb-builder-read-note { margin: 0; }
+.stonetop-pb-builder-read-track { font-size: var(--st-fs-sm); white-space: nowrap; }
+.stonetop-pb-builder-read-desc { font-size: var(--st-fs-sm); }
+.stonetop-pb-builder-read-desc > :first-child { margin-top: 0; }
+.stonetop-pb-builder-read-desc > :last-child { margin-bottom: 0; }
+.stonetop-pb-builder-read-text { margin: 0; font-size: var(--st-fs-sm); }
+.stonetop-pb-builder-read-prompt { font-style: italic; }
+.stonetop-pb-builder-read-indent { padding-left: 1.5em; }
+.stonetop-pb-builder-read-meta { margin: 0; font-size: var(--st-fs-xs); }
+.stonetop-pb-builder-read-item { display: flex; flex-direction: column; gap: 2px; }
+.stonetop-pb-builder-read-subhead { margin-top: 4px; }
+/* A page's own head above its cards (Special possessions and how many to pick). */
+.stonetop-pb-builder-read-pagehead { padding: 0 2px; }
+/* An appearance row: its choices across the line, as the PDF sets them, wrapping between choices. */
+.stonetop-pb-builder-read-row { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+.stonetop-pb-builder-read-choice { white-space: nowrap; }
+/* A walkthrough step's number, as the PDF's Introductions number them: a small dark square. */
+.stonetop-pb-builder-read-step {
+	display: inline-block;
+	min-width: 1.4em;
+	margin-right: 4px;
+	padding: 0 0.2em;
+	border-radius: 2px;
+	background: rgb(var(--st-ink-rgb) / 0.85);
+	color: rgb(var(--st-paper-rgb));
+	font-weight: bold;
+	text-align: center;
+}
+/* Its number dropped by the face's caps nudge: Signika's figures sat 1px high in the box. */
+.stonetop-pb-builder-read-step-n { position: relative; top: var(--st-caps-nudge, 0em); }
+/* Damage and Max HP as the stats box prints them: a label over its value. */
+.stonetop-pb-builder-read-stats { display: flex; gap: 10px; margin: 2px 0 0; }
+/* Plain spans, not a <dl>: core styles a <dt> as an embossed heading. */
+.stonetop-pb-builder-read-stats > div { display: flex; flex-direction: column; align-items: center; min-width: 5em; padding: 4px 10px; border: 1px solid rgb(var(--st-ink-rgb) / 0.25); border-radius: var(--st-radius-sm); }
+.stonetop-pb-builder-read-stat-label { font-size: var(--st-fs-2xs); text-transform: uppercase; letter-spacing: 0.05em; }
+.stonetop-pb-builder-read-stat-value { font-family: var(--font-stonetop); font-weight: bold; font-size: var(--st-fs-lg); }
+/* An insert's list inside its card. */
+.stonetop-pb-builder-read-list { display: flex; flex-direction: column; gap: 2px; }
+/* The playbook's name and picture, as the PDF heads its first page. */
+.stonetop-pb-builder-identity-top { display: flex; gap: 12px; align-items: flex-start; }
+.stonetop-pb-builder-identity-words { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.stonetop-pb-builder-identity-name { font-family: var(--font-stonetop); font-size: var(--st-fs-xl); line-height: 1.2; }
+.stonetop-pb-builder-identity-intro { font-style: italic; }
+/* The pencil: the shared .stonetop-section-edit, at the head's right, hidden until its card (or page)
+   is hovered or the pencil has keyboard focus (the import review's pieces work the same way). */
+/* Centred on the heading's FIRST line: as tall as one line of the heading's own face (1lh, in that
+   face and size), its glyph centred in it. The faces are balanced, so that line box centres on the
+   capitals; centred on the whole row, the pencil sat low of a heading whose note wraps. */
+.stonetop-pb-builder-read-edit {
+	margin-left: auto;
+	align-self: flex-start;
+	display: inline-flex;
+	align-items: center;
+	height: 1lh;
+	font-family: var(--font-stonetop);
+	font-weight: bold;
+}
+.stonetop-pb-builder-identity-words .stonetop-pb-builder-read-edit { font-size: var(--st-fs-xl); line-height: 1.2; }
+/* Beside the playbook's name (its largest heading) lifted by half the face's caps nudge: unlifted it sat
+   1.47px low in Signika at 1x; the whole nudge overshot at 1.25-1.5x (Font Awesome rounds its glyph to
+   whole pixels). Half keeps it within 0.84px in all three faces at 1x-1.5x. The smaller headings need none. */
+.stonetop-pb-builder-identity-words .stonetop-pb-builder-read-edit > i { position: relative; top: calc(-0.5 * min(var(--st-caps-nudge, 0em), 0.08em)); }
+.stonetop-pb-builder-read-edit.stonetop-section-edit { opacity: 0; transition: opacity 0.12s; }
+:is(.stonetop-pb-builder-read, .stonetop-pb-builder-read-pagehead):hover .stonetop-pb-builder-read-edit.stonetop-section-edit { opacity: 0.5; transition-delay: var(--st-edit-reveal-delay); }
+:is(.stonetop-pb-builder-read, .stonetop-pb-builder-read-pagehead):hover .stonetop-pb-builder-read-edit.stonetop-section-edit:hover,
+.stonetop-pb-builder-read-edit.stonetop-section-edit:focus-visible { opacity: 1; transition-delay: 0s; }
+@media (hover: none) { .stonetop-pb-builder-read-edit.stonetop-section-edit { opacity: 0.5; } }
+/* The check that closes the text boxes: the green .stonetop-section-done, always shown. On a card it
+   ends the card's head row; on a whole page it heads the page, at the right. */
+.stonetop-pb-builder-read-done { align-self: center; line-height: 1; }
+.stonetop-pb-builder-edit-page { display: flex; flex-direction: column; gap: 10px; }
+.stonetop-pb-builder-edit-bar { display: flex; justify-content: flex-end; margin-bottom: -6px; }
+.stonetop-pb-builder-move.is-editing .stonetop-pb-builder-read-done { margin-left: auto; }
 .stonetop-pb-builder-card-head > input { flex: 1 1 auto; font-weight: bold; }
 .stonetop-pb-builder-card textarea { width: 100%; resize: vertical; }
 .stonetop-pb-builder-btn { flex: 0 0 auto; width: auto; padding: 0 10px; white-space: nowrap; }
@@ -9931,12 +10040,17 @@ ul.stonetop-move-tiers[data-rolled-tier="failure"] > li[data-tier="failure"] { -
 .stonetop-pb-builder-flag { color: var(--st-gold-text); font-style: normal; }
 
 .stonetop-pb-builder-pdf { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid rgb(var(--st-ink-rgb) / 0.12); }
+.stonetop-pb-builder-pdf-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Flex boxes round trimmed words, centred on their capitals (bare, Signika sat 1px high). */
+:is(.stonetop-pb-builder-pdf-btns, .stonetop-pb-builder-picture-btns) > .stonetop-pb-builder-btn { display: inline-flex; align-items: center; gap: 6px; }
 .stonetop-pb-builder-read { font-size: var(--st-fs-xs); }
 .stonetop-pb-builder-try { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .stonetop-pb-builder-read > summary { cursor: pointer; font-weight: bold; }
 
 /* The picture the playbook will carry, with its button underneath, both on the left edge. */
 .stonetop-pb-builder-picture { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.stonetop-pb-builder-picture-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+
 .stonetop-pb-builder-picture-img { width: 64px; height: 64px; object-fit: contain; border: none; }
 /* Core's icons/svg art (the generic book a homebrew playbook gets without a picture of its own) is
    drawn in white, so wherever a playbook's picture shows on the parchment it sits on a slate tile,
@@ -9961,7 +10075,6 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 
 .stonetop-pb-builder-share { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid rgb(var(--st-ink-rgb) / 0.12); }
 .stonetop-pb-builder-share-title { margin: 0; font-family: var(--font-stonetop); font-weight: bold; font-size: var(--st-fs-sm); }
-.stonetop-pb-builder-share-btns { display: flex; flex-wrap: wrap; gap: 8px; }
 .stonetop-pb-builder-danger { display: flex; justify-content: flex-end; }
 
 /* The gold caution edge (with camp's going-without line), rounded on the playbook windows' boxes. */
@@ -9985,7 +10098,6 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	align-items: baseline;
 	gap: 10px;
 	padding: 6px 10px;
-	cursor: pointer;
 }
 .stonetop-pb-builder-move-name { font-family: var(--font-stonetop); font-weight: bold; }
 .stonetop-pb-builder-move-tags { font-size: var(--st-fs-xs); font-style: italic; color: var(--color-text-dark-secondary); }
@@ -10004,23 +10116,42 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 .stonetop-pb-review-panel { display: flex; flex-direction: column; gap: 14px; }
 .stonetop-pb-review-panel[hidden] { display: none; }
 /* The rail sizes to its longest section name (the Welcome rail's rule), and a section holding a
-   hard-to-place piece shows its count in the gold the piece itself wears. */
+   hard-to-place piece shows its count in the red the piece itself wears (gold was too easy to miss). */
 .stonetop-pb-review-split > .stonetop-guide-toc { width: max-content; }
 .stonetop-pb-review-split .stonetop-guide-toc-text { white-space: nowrap; }
-.stonetop-pb-review-split .stonetop-guide-toc-item.is-unsure .stonetop-guide-toc-count { color: var(--st-gold-text); font-weight: bold; }
+.stonetop-pb-review-split .stonetop-guide-toc-item.is-unsure .stonetop-guide-toc-count { color: var(--st-red-text); font-weight: bold; }
 .stonetop-pb-review-nav { flex: 0 0 auto; }
-.stonetop-pb-review-name { margin: 0; font-family: var(--font-stonetop); border: none; }
-.stonetop-pb-review-desc { margin: 2px 0 0; font-style: italic; }
 .stonetop-pb-review-lead { margin: 6px 0 0; font-size: var(--st-fs-sm); }
-/* The "Imported from" line heads the page, above the playbook's name: flush with the panel's top
-   (level with the rail's first entry) and set off from the name below it. */
-.stonetop-pb-review-head > .stonetop-pb-review-lead:first-child { margin: 0 0 10px; }
+/* "Successfully imported from <file>" heads the page on a line of its own: flush with the panel's top
+   (level with the rail's first entry), in the heading face. Core's h2 rule underneath is taken off. */
+.stonetop-pb-review-imported { margin: 0; font-family: var(--font-stonetop); font-size: var(--st-fs-xl); font-weight: normal; line-height: 1.25; border: none; overflow-wrap: anywhere; }
+/* The green tick before "Successfully imported from". A failed read never opens this window (the builder
+   shows an error instead), so there is no red cross to pair it with. --st-green-border reads grey at this
+   size, so the tick carries its own clearer green. `top` drops the glyph to the caps' middle: Font Awesome
+   paints high in its box by an amount that follows the sheet font (Signika 0.5-0.85px at 1/1.25/1.5x, the
+   serif faces under half that), so the drop is a share of that font's --st-caps-nudge. */
+.stonetop-pb-review-imported-icon { --st-pb-review-tick: hsl(140 50% 34%); position: relative; top: calc(var(--st-caps-nudge, 0em) * 0.55); margin-right: 0.4em; color: var(--st-pb-review-tick); }
+:root.stonetop-dark .stonetop-pb-review-imported-icon { --st-pb-review-tick: hsl(140 45% 58%); }
 .stonetop-pb-review-issue { margin: 4px 0 0; font-size: var(--st-fs-sm); color: var(--st-gold-text); }
 .stonetop-pb-review-h3 { margin: 0 0 6px; font-family: var(--font-stonetop); font-size: var(--st-fs-base); font-weight: bold; border: none; }
+/* Heads the boxes under it, so it sits close to them: the panel's 14px gap less 8px leaves 6px. */
+.stonetop-pb-review-h3.stonetop-pb-review-issues-head { margin-bottom: -8px; }
 
 .stonetop-pb-review-confirm,
 .stonetop-pb-review-unsure { padding: 8px 12px; }
+/* The hard-to-place box: the red edge and wash its pieces wear, so the box and what it names match. */
+.stonetop-pb-review-unsure { border-left: 3px solid var(--st-red-border); background: var(--st-red-bg); }
 .stonetop-pb-review-unsure p { margin: 0; font-size: var(--st-fs-sm); }
+/* What was hard, then on its own line what the reader isn't sure of, the pages holding it as a
+   spiral list (by their rail names; the shared playbook-notes bullets), then what to do. */
+.stonetop-pb-review-unsure p.stonetop-pb-review-unsure-why { margin-top: 2px; }
+.stonetop-pb-review-unsure p.stonetop-pb-review-unsure-todo { margin-top: 6px; }
+/* The list sits indented under its line (the shared notes rule zeroes a list's padding). */
+.stonetop-pb-review-unsure ul.stonetop-pb-review-unsure-where { padding-left: 1em; }
+/* Each page's name opens it. Plain weight by the user's call (11-14), an exception to bold-means-clickable:
+   the red on hover and the pointer are its cues. */
+.stonetop-pb-review-unsure-link { color: inherit; text-decoration: none; cursor: pointer; }
+.stonetop-pb-review-unsure-link:hover { color: var(--st-red-text); text-shadow: none; }
 .stonetop-pb-review-question { padding: 6px 0; }
 .stonetop-pb-review-question + .stonetop-pb-review-question { border-top: 1px solid rgb(var(--st-ink-rgb) / 0.12); }
 .stonetop-pb-review-q-label { margin: 0; font-weight: bold; }
@@ -10032,16 +10163,17 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 /* Core's 2px radio drop is taken back for every system window (the :where() reset). */
 .stonetop-pb-review-q-choice input[type="radio"] { width: auto; margin: 0; }
 .stonetop-pb-review-q-number { width: 5em; }
-.stonetop-pb-review-source { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-size: var(--st-fs-sm); }
-.stonetop-pb-review-source select { width: auto; }
 
-.stonetop-pb-review-facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0 0 10px; font-size: var(--st-fs-sm); }
-/* Core styles a <dt> as an embossed label; these are plain ones. */
-.stonetop-pb-review .stonetop-pb-review-facts dt { font-weight: bold; color: var(--st-text-body); text-shadow: none; font-family: inherit; }
-.stonetop-pb-review-facts dd { margin: 0; }
 .stonetop-pb-review-group { display: flex; flex-direction: column; gap: 6px; }
-.stonetop-pb-review-group-title { margin: 0; font-family: var(--font-stonetop); font-size: var(--st-fs-sm); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid rgb(var(--st-ink-rgb) / 0.2); }
-.stonetop-pb-review-count { font-weight: normal; color: var(--color-text-dark-secondary); }
+/* Moves, and an insert's page (the Stranger's Monster Compendium), in up to two columns, as the PDF prints them: filled down the left, then the right (CSS
+   columns, not a grid, for that order). A column is at least 18rem, so a narrow window keeps one. */
+.stonetop-pb-review-group:is([data-kind="startingMove"], [data-kind="move"], [data-kind^="insert-"]) { display: block; columns: 2 18rem; column-gap: 10px; }
+.stonetop-pb-review-group:is([data-kind="startingMove"], [data-kind="move"], [data-kind^="insert-"]) > * { break-inside: avoid; margin: 0 0 6px; }
+.stonetop-pb-review-group:is([data-kind="startingMove"], [data-kind="move"], [data-kind^="insert-"]) > :last-child { margin-bottom: 0; }
+.stonetop-pb-review-group:is([data-kind="startingMove"], [data-kind="move"], [data-kind^="insert-"]) > :is(.stonetop-move-group-title, .stonetop-pb-review-lead) { column-span: all; margin: 0 0 6px; }
+/* Each part is headed as the character sheet heads a section (.stonetop-move-group-title: core's
+   h3, the red underline); the part's own 6px gap spaces it from the pieces. */
+.stonetop-pb-review-group > .stonetop-move-group-title { margin: 0; }
 .stonetop-pb-review-block {
 	padding: 6px 10px;
 	border: 1px solid rgb(var(--st-ink-rgb) / 0.15);
@@ -10049,27 +10181,35 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 	border-radius: var(--st-radius-sm);
 	background: rgb(var(--st-paper-rgb));
 }
-.stonetop-pb-review-block.is-unsure { border-left-color: var(--st-gold-border); background: var(--st-gold-bg); }
+.stonetop-pb-review-block.is-unsure { border-left-color: var(--st-red-border); background: var(--st-red-bg); }
 .stonetop-pb-review-block.is-moved { border-left-color: slategrey; }
-/* Start here's colour key: each line a small sample of the piece edge it explains (above). Core's
-   list-entry margin is zeroed; the list spaces its lines with gap. */
-.stonetop-pb-review-key-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.stonetop-pb-review-key-item {
-	margin: 0;
-	padding: 4px 10px;
-	border: 1px solid rgb(var(--st-ink-rgb) / 0.15);
-	border-left-width: 3px;
-	border-radius: var(--st-radius-sm);
-	background: rgb(var(--st-paper-rgb));
-	font-size: var(--st-fs-sm);
-}
-.stonetop-pb-review-key-item.is-unsure { border-left-color: var(--st-gold-border); background: var(--st-gold-bg); }
-.stonetop-pb-review-key-item.is-moved { border-left-color: slategrey; }
 .stonetop-pb-review-block-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .stonetop-pb-review-block-title { font-family: var(--font-stonetop); }
 .stonetop-pb-review-block-tags { font-size: var(--st-fs-xs); font-style: italic; color: var(--color-text-dark-secondary); }
-.stonetop-pb-review-belongs { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: var(--st-fs-xs); }
-.stonetop-pb-review-belongs select { width: auto; font-size: var(--st-fs-sm); }
+/* A piece's pencil: the shared .stonetop-section-edit (bare, dimmed), hidden until the piece is
+   hovered or the pencil has keyboard focus, as on the sheets' sections. Pressed, it becomes the
+   green .stonetop-section-done check and stays visible, so there's always a way to close it. */
+.stonetop-pb-review-edit { margin-left: auto; line-height: 1; }
+.stonetop-pb-review-block.is-editing .stonetop-pb-review-edit { margin-left: 0; }
+.stonetop-pb-review-edit.stonetop-section-edit { opacity: 0; transition: opacity 0.12s; }
+.stonetop-pb-review-block:hover .stonetop-pb-review-edit.stonetop-section-edit {
+	opacity: 0.5;
+	transition-delay: var(--st-edit-reveal-delay);
+}
+.stonetop-pb-review-block:hover .stonetop-pb-review-edit.stonetop-section-edit:hover,
+.stonetop-pb-review-edit.stonetop-section-edit:focus-visible { opacity: 1; transition-delay: 0s; }
+@media (hover: none) { .stonetop-pb-review-edit.stonetop-section-edit { opacity: 0.5; } }
+/* A flagged piece (is-unsure) has no pencil and shows every control from the start: Belongs in,
+   Looks right, Split and Join. Every other piece keeps them behind its pencil. */
+.stonetop-pb-review-block:not(.is-editing):not(.is-unsure) :is(.stonetop-pb-review-belongs-row, .stonetop-pb-review-act) { display: none; }
+/* The row holding Belongs in (and a flagged piece's Looks right) sits at the right of the head. Its
+   caption stays on one line, so the label is no taller than its dropdown. */
+.stonetop-pb-review-belongs-row { margin-left: auto; }
+.stonetop-pb-review-belongs { display: inline-flex; align-items: center; gap: 6px; font-size: var(--st-fs-xs); white-space: nowrap; }
+/* The dropdown stretches with the row too: core sizes it in px (its height, kept here as the least),
+   so at a large UI font Looks right's words outgrow it and the two would part by a few px. */
+.stonetop-pb-review-belongs { align-self: stretch; }
+.stonetop-pb-review-belongs select { width: auto; height: auto; min-height: calc(var(--form-field-height) + 1px); align-self: stretch; font-size: var(--st-fs-sm); }
 .stonetop-pb-review-why { margin: 4px 0 0; font-size: var(--st-fs-xs); }
 .stonetop-pb-review-block-text > summary { cursor: pointer; list-style: none; }
 .stonetop-pb-review-block-text > summary::-webkit-details-marker { display: none; }
@@ -10081,8 +10221,11 @@ img.stonetop-portrait[src="icons/svg/book.svg"] {
 .stonetop-pb-review-block-text[open] .stonetop-pb-review-less { display: inline; }
 .stonetop-pb-review-excerpt,
 .stonetop-pb-review-full { margin-top: 4px; font-size: var(--st-fs-sm); white-space: pre-line; }
-.stonetop-pb-review-from { margin: 0; flex: 1 1 auto; font-size: var(--st-fs-xs); color: var(--color-text-dark-secondary); }
-.stonetop-pb-review-block-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+/* Split and Join, at the right under Belongs in. Only drawn while the pencil is pressed (or on a
+   flagged piece), and only when the piece has one of them (no empty strip under a piece). */
+.stonetop-pb-review-block-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+.stonetop-pb-review-block:not(.is-editing):not(.is-unsure) .stonetop-pb-review-block-foot,
+.stonetop-pb-review-block-foot:not(:has(button)) { display: none; }
 /* Its words are a trimmed .stonetop-chip-text, centred on their capitals by the flex box: as bare text
    the line box put them 1px high in Signika and 2px in IM Fell English at a 20px UI font. */
 .stonetop-pb-review-act { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; width: auto; padding: 0 8px; font-size: var(--st-fs-xs); white-space: nowrap; }
@@ -13442,7 +13585,8 @@ button.stonetop-dead-tag:hover {
 .stonetop-battle-joy,
 .stonetop-nerves,
 .stonetop-roiling,
-.stonetop-unseen {
+.stonetop-unseen,
+.stonetop-insert-form {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -13469,6 +13613,7 @@ button.stonetop-holy-light:focus-visible,
 .stonetop-nerves:focus-visible,
 .stonetop-roiling:focus-visible,
 .stonetop-unseen:focus-visible,
+.stonetop-insert-form:focus-visible,
 .stonetop-held-advantage:focus-visible,
 .stonetop-held-disadvantage:focus-visible {
 	outline: 2px solid var(--color-shadow-primary, slategrey);
@@ -14023,17 +14168,20 @@ button.stonetop-battle-joy:not(.is-raging):hover { color: var(--st-text-body); }
    colour is declared AFTER its base rule. */
 .stonetop-nerves,
 .stonetop-roiling,
-.stonetop-unseen {
+.stonetop-unseen,
+.stonetop-insert-form {
 	transition: color 0.15s ease;
 }
 
 button.stonetop-nerves,
 button.stonetop-roiling,
-button.stonetop-unseen { cursor: pointer; }
+button.stonetop-unseen,
+button.stonetop-insert-form { cursor: pointer; }
 
 button.stonetop-nerves:not(.is-shaken):hover,
 button.stonetop-roiling:not(.is-roiling):hover,
-button.stonetop-unseen:not(.is-unseen):hover { color: var(--st-text-body); }
+button.stonetop-unseen:not(.is-unseen):hover,
+button.stonetop-insert-form:not(.is-transformed):hover { color: var(--st-text-body); }
 
 /* The Marshal's shaken nerves (We Happy Few's 6-): disadvantage on every roll until they are shared. */
 .stonetop-nerves-icon {
@@ -14064,6 +14212,20 @@ button.stonetop-unseen:not(.is-unseen):hover { color: var(--st-text-body); }
 }
 
 .stonetop-unseen.is-unseen { color: var(--st-green-text); }
+
+/* A homebrew playbook's other form (an insert with a Transform switch: the Stranger's monster within,
+   actors/character/homebrew-inserts.js#insertFormGlyph). The same flag as the insert tab's switch, shown
+   here because the form changes the whole sheet (its weapons and armor, the lines a roll offers) while
+   the switch is on one tab. Sized to the enrage glyph's painted area: 0.965 wide to 1 tall, so 41px.
+   Red while worn, as Battle Joy is: a dangerous state, on. */
+.stonetop-insert-form-icon {
+	height: 41px;
+	aspect-ratio: 463.17 / 479.89;
+	-webkit-mask-image: url('/systems/stonetop-pwd/assets/icons/werewolf.svg');
+	mask-image: url('/systems/stonetop-pwd/assets/icons/werewolf.svg');
+}
+
+.stonetop-insert-form.is-transformed { color: var(--st-red-text); }
 
 /* The Marshal's battle holds window (combat/battle-holds.js): one ticked row per hold. */
 .stonetop-battle-hold-row {
@@ -25690,13 +25852,16 @@ input[type="checkbox"].steading-hide-unearned-improvements-check:focus-visible {
 /* The homebrew notes' lists (playbook-text.js writes <ul>) wear the same spiral. */
 .stonetop-onboarding-card-desc ul,
 .stonetop-onboarding-homebrew-notes-body ul,
-.stonetop-playbook-notes-body ul { margin: 3px 0; padding-left: 0; list-style: none; }
+.stonetop-playbook-notes-body ul,
+ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style: none; }
 .stonetop-onboarding-card-desc li,
 .stonetop-onboarding-homebrew-notes-body li,
-.stonetop-playbook-notes-body li { margin: 2px 0; }
+.stonetop-playbook-notes-body li,
+.stonetop-pb-review-unsure-where > li { margin: 2px 0; }
 .stonetop-onboarding-card-desc li::before,
 .stonetop-onboarding-homebrew-notes-body li::before,
-.stonetop-playbook-notes-body li::before {
+.stonetop-playbook-notes-body li::before,
+.stonetop-pb-review-unsure-where > li::before {
 	content: ""; flex-shrink: 0; width: 9px; height: 9px; margin-top: 3px;
 	background-image: var(--stonetop-spiral-icon);
 	background-size: contain; background-repeat: no-repeat; background-position: center; opacity: 0.5;
@@ -31177,6 +31342,7 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 .stonetop-onboarding-card-desc li::before,
 .stonetop-onboarding-homebrew-notes-body li::before,
 .stonetop-playbook-notes-body li::before,
+.stonetop-pb-review-unsure-where > li::before,
 .stonetop-follower-rule li::before {
 	position: absolute;
 	left: 0;
@@ -31242,6 +31408,7 @@ li.question-bullet::before {
 .stonetop-onboarding-card-desc li,
 .stonetop-onboarding-homebrew-notes-body li,
 .stonetop-playbook-notes-body li,
+.stonetop-pb-review-unsure-where > li,
 .stonetop-follower-rule li {
 	position: relative;
 	padding-left: calc(var(--stonetop-bullet-size, 10px) + var(--stonetop-spiral-gap));
@@ -45475,6 +45642,24 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 	max-height: min(680px, calc(100vh - 80px));
 }
 
+/* The playbook picture cutter (playbooks/PlaybookEmblemCut.js): the framer above on a page of the
+   PDF. Its own parts: the page choice, the see-through switch, and a second SQUARE preview (a
+   playbook picture is never shown round). A landscape page needs more room than a portrait. */
+.stonetop-pb-emblem-cut-dialog.window-app { max-height: min(760px, calc(100vh - 60px)); }
+.stonetop-pb-emblem-cut-dialog .stonetop-pb-emblem-page-row { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--st-fs-xs); }
+.stonetop-pb-emblem-cut-dialog .stonetop-pb-emblem-page { width: auto; }
+/* A checkbox and its trimmed words, centred on their capitals by the flex box. */
+/* On one line: wrapped, the box centres on both lines and leaves the first (measured 13px off in
+   Libre Caslon at 1.5x). */
+.stonetop-pb-emblem-cut-dialog .stonetop-pb-emblem-clear { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: var(--st-fs-xs); white-space: nowrap; cursor: pointer; }
+.stonetop-pb-emblem-cut-dialog .stonetop-pb-emblem-clear input { flex: 0 0 auto; margin: 0; }
+/* Its footer buttons: flex boxes round trimmed words, centred on their capitals (bare, they sat 1px high). */
+.stonetop-pb-emblem-cut-dialog .stonetop-frame-footer button { display: inline-flex; align-items: center; gap: 6px; }
+.stonetop-pb-emblem-cut-dialog .stonetop-pb-emblem-preview--32 { width: 32px; height: 32px; border-radius: var(--st-radius-sm); }
+/* See-through: the previews multiply onto their own background, so the paper drops out there as it
+   will in the picture (which inkToAlpha makes clear for real when it is cut). */
+.stonetop-pb-emblem-cut-dialog .is-clear .stonetop-frame-preview img { mix-blend-mode: multiply; }
+
 /* The pips on a follower card's portrait — crop, and Tokenizer beside it: smaller affordances
    inside a control that already opens on click. Hidden until the card is hovered or something
    in it has focus, so a page of followers is not a page of pips.
@@ -56999,6 +57184,8 @@ html.stonetop-high-contrast .stonetop-timeline-kind--custom { --tl-kind: var(--t
 
    More specific than the plain `.stonetop-relmap-line` rule that sets it solid, so it wins
    wherever it sits; it is here because this is where the mode's rules live. */
+/* The PDF import review's green tick (.stonetop-pb-review-imported-icon): in this block, which sits last. */
+:root.stonetop-high-contrast .stonetop-pb-review-imported-icon { --st-pb-review-tick: var(--st-green-border); }
 :root.stonetop-high-contrast .stonetop-relmap-line {
 	stroke-dasharray: var(--relmap-dash, none);
 }

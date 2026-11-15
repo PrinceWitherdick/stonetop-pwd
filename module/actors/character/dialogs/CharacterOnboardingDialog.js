@@ -237,6 +237,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		this._rawCrew            = f.crew                ?? null;
 		this._rawAnimalCompanion = f.animalCompanion     ?? null;
 		this._rawLore            = f.lore               ?? [];
+		// A homebrew playbook's questions each stand on their own: a write-in isn't handed the picks of
+		// the list before it as a reminder, as a book playbook's follow-up is (the Stranger's "To what
+		// ancient place are you drawn?" has nothing to do with "What do people call you now?").
+		this._loreStandsAlone    = !!f.homebrew;
 		this._rawMoveChoices     = f.moves?.choices      ?? [];
 		this._movePickCount  = this._parseMovePickCount();
 		this._movesCache              = null;
@@ -1168,7 +1172,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 				previousSelectedOptions.push(...pickedDescriptions(this._rawLore[j]));
 			}
 			contextTitle = headerIdx >= 0 ? this._normalizeOnboardingText(this._rawLore[headerIdx].title ?? "") : "";
-		} else if (isTextSection && previousSection) {
+		} else if (isTextSection && previousSection && !this._loreStandsAlone) {
 			previousSelectedOptions = pickedDescriptions(previousSection);
 			contextTitle = previousSelectedOptions.length ? this._normalizeOnboardingText(previousSection.title ?? "") : "";
 		}

@@ -433,14 +433,14 @@ const ANCHORS = {
  * the room available from that anchor, which is why this never needs `clampBox` — the cap already
  * bounds it, and clamping afterwards would slide a box the user is resizing.
  */
-export function resizeBox(corner, box, x, y, w, h) {
+export function resizeBox(corner, box, x, y, w, h, minShare = SQ_MIN) {
 	const anchor = ANCHORS[corner];
 	if (!anchor || !box) return box;
 	const [ax0, ay0, sx, sy] = anchor;
 	const ax = box.left + ax0 * box.side;
 	const ay = box.top + ay0 * box.side;
 	const room = Math.min(sx > 0 ? w - ax : ax, sy > 0 ? h - ay : ay);
-	const min = Math.min(w, h) * SQ_MIN;
+	const min = Math.min(w, h) * minShare;
 	let side = Math.max(sx * (x - ax), sy * (y - ay));
 	side = Math.min(Math.max(side, min), room);
 	return { side, left: sx > 0 ? ax : ax - side, top: sy > 0 ? ay : ay - side };
@@ -457,16 +457,17 @@ export function boxFromDrag(x0, y0, x, y, w, h) {
  * Escape still reach the dialog instead of being swallowed by a blanket preventDefault.
  *
  * `+`/`-` resize about the CENTRE, so growing a square already flush with the top pushes it down
- * rather than refusing to grow.
+ * rather than refusing to grow. `minShare` is the smallest side as a share of the stage's shorter
+ * side (SQ_MIN for a portrait; the playbook picture cutter, on a whole page, allows smaller).
  */
-export function nudgeBox(box, key, { shift = false } = {}, w, h) {
+export function nudgeBox(box, key, { shift = false } = {}, w, h, minShare = SQ_MIN) {
 	if (!box) return null;
 	const step = shift ? 10 : 2;
 	const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[key];
 	if (move) return clampBox({ ...box, left: box.left + move[0], top: box.top + move[1] }, w, h);
 	const grow = { "+": step, "=": step, "-": -step, _: -step }[key];
 	if (grow === undefined) return null;
-	const min = Math.min(w, h) * SQ_MIN;
+	const min = Math.min(w, h) * minShare;
 	const side = Math.min(Math.max(box.side + grow, min), w, h);
 	const delta = (side - box.side) / 2;
 	return clampBox({ side, left: box.left - delta, top: box.top - delta }, w, h);

@@ -16,6 +16,8 @@ import { clampInt } from "../utils/custom-move-data.js";
 import { slugify, looseName, clipText } from "../utils/strings.js";
 import { SYSTEM_ID, ITEM_FLAG_SCOPE } from "../system-id.js";
 import { HOMEBREW_MOVE_FLAG, HOMEBREW_INSERT_FLAG, HOMEBREW_SLUG_PREFIX } from "./playbook-catalog.js";
+import { possessionUsesFrom, possessionGearFrom, possessionRulesFrom } from "./possession-gear.js";
+import { crossPlaybookFrom, backgroundRollFrom, rollFromWords } from "./move-words.js";
 
 export const BUNDLE_FORMAT  = "stonetop-homebrew-playbook";
 export const BUNDLE_VERSION = 1;
@@ -54,7 +56,7 @@ export function emptyBundle() {
 			inserts: [],
 			// The playbook's own Level Up (the Familiar Face's "mark one of the following instead of the
 			// usual effect"): its advances, one line each, read for what they do by advanceFrom.
-			advancement: { replacesUsual: false, options: [], note: "", switchPlaybook: false },
+			advancement: { replacesUsual: false, options: [], note: "", switchPlaybook: false, switchFromLevel: 0 },
 		},
 		moves: [],
 	};
@@ -332,6 +334,10 @@ export function normalizeBundle(raw) {
 		// "When you Level Up, switch to a different playbook" (the Standout): Level Up takes the level,
 		// then the player picks a new playbook. It has no advances of its own to mark.
 		switchPlaybook: !!adv.switchPlaybook,
+		// "When you Level Up to Level 3 or higher, you can choose to change to a different playbook"
+		// (the Familiar Face): from this level on, Level Up offers a change of playbook beside the
+		// advances. 0 for none.
+		switchFromLevel: adv.switchPlaybook ? 0 : clampInt(adv.switchFromLevel, 0, 10, 0),
 	};
 	if (pb.advancement.switchPlaybook && (pb.advancement.options.length || pb.advancement.replacesUsual)) {
 		pb.advancement.options = [];
@@ -357,6 +363,20 @@ export function normalizeBundle(raw) {
 		out.moves.push(move);
 	}
 	if (Array.isArray(raw.moves) && raw.moves.length > MAX_MOVES) check(`Only the first ${MAX_MOVES} moves were kept.`);
+
+	// A roll printed INSIDE a background ("When you whisper the name of a monstrous follower under a moon-lit
+	// sky, roll +CHA: on a 10+…", the Stranger's Moon Blessed) is nothing a character can roll there: it
+	// becomes a move of its own, named for the background, given by it and only ever by it (as the book's
+	// Bark an Order is the Sheriff's). Its paragraph leaves the background's words, so it is printed once.
+	for (const b of pb.backgrounds) {
+		const lifted = backgroundRollFrom(b.description);
+		if (!lifted || !b.label || seen.has(b.label.toLowerCase()) || out.moves.length >= MAX_MOVES) continue;
+		const { rollType, results } = rollFromWords(lifted.paragraph);
+		out.moves.push(normalizeMove({ name: b.label, description: lifted.paragraph, rollType, results, background: b.label }));
+		seen.add(b.label.toLowerCase());
+		b.description = [lifted.before, `You get the ***${b.label}*** move.`, lifted.after].filter(Boolean).join("\n\n");
+		b.moves = [...new Set([...b.moves, b.label])];
+	}
 
 	// Every reference to one of this playbook's own moves takes that move's exact spelling, so the
 	// paths that match a move by name exactly (either/or picks, move groups, requirements) find it
@@ -384,7 +404,8 @@ export function normalizeBundle(raw) {
 	});
 	pb.backgrounds.forEach((b, i) => {
 		const missing = gaps[i].foreign;
-		if (missing.length) check(`The background "${b.label || "unnamed"}" gives moves from other playbooks: ${missing.join(", ")}. A character gets each from the playbook it belongs to, so that playbook has to be in this world (the book's always are) and spell the move the same way.`);
+		// `borrowed` names them, so the builder can drop the note when every one is found in this world.
+		if (missing.length) issues.push({ severity: "check", borrowed: [...missing], message: `The background "${b.label || "unnamed"}" gives moves from other playbooks: ${missing.join(", ")}. A character gets each from the playbook it belongs to, so that playbook has to be in this world (the book's always are) and spell the move the same way.` });
 	});
 	return { bundle: out, issues };
 }
@@ -415,10 +436,10 @@ function _linkInsertMoves(bundle, ownByLoose, check) {
 	for (const ins of inserts) {
 		if (ins.unlockedBy) {
 			const own = ownByLoose.get(looseName(ins.unlockedBy));
-			if (!own) check(`The insert "${ins.name}" opens with "${ins.unlockedBy}", which isn't one of this playbook's moves, so no character will see it until a move of that name is added.`);
+			if (!own) check(`The insert "${ins.name}" is granted by "${ins.unlockedBy}", which isn't one of this playbook's moves, so no character will see it until a move of that name is added.`);
 			else {
 				ins.unlockedBy = own;
-				if (insertMoves.has(looseName(own))) check(`The insert "${ins.name}" opens with "${own}", which is one of the insert's own moves, so no character could ever open it. Pick one of the playbook's moves.`);
+				if (insertMoves.has(looseName(own))) check(`The insert "${ins.name}" is granted by "${own}", which is one of the insert's own moves, so no character could ever get it. Pick one of the playbook's moves.`);
 			}
 		}
 		for (const l of ins.lists) {
@@ -659,6 +680,8 @@ export function normalizeMove(m) {
 		// the playbook's own moves. Checked against the playbook's inserts by normalizeBundle.
 		insert: slugify(m?.insert ?? ""),
 		insertList: slugify(m?.insertList ?? ""),
+		// The background this move is ONLY for, by its name ("Moon Blessed"); "" for anyone's.
+		background: str(m?.background, MAX.name),
 		rollType: CUSTOM_MOVE_ROLL_TYPES.includes(rollType) ? rollType : "",
 		results: {
 			success: str(results.success, 600),
@@ -749,11 +772,20 @@ export function bundleToItemData(bundle, { slug, source = "builder" } = {}) {
 			options: pb.possessions.options.map((o, i) => {
 				const choices = possessionChoicesFrom(o.description);
 				const words = choices ? choices.lead : o.description;
+				// Its uses ("(○○○ uses)") as a track, and the gear it lists as inventory rows it gives
+				// when picked, read from its words as the book's kits are written (possession-gear.js).
+				const uses = possessionUsesFrom(o.description);
+				const gear = choices ? null : possessionGearFrom(o.description);
+				// With its gear drawn as rows, what it says after the list is all the card still says.
+				const rules = gear ? possessionRulesFrom(o.description) : "";
 				return {
 					slug: possSlugs[i],
 					label: formatPlaybookInline(o.label),
 					description: formatPlaybookText(words).replace(/^<p>([\s\S]*)<\/p>$/, "$1"),
 					...(choices ? { choices: _possessionChoicesToFlags(choices) } : {}),
+					...(uses ? { resource: uses } : {}),
+					...(gear ? { grantsItems: gear } : {}),
+					...(rules ? { rulesNote: formatPlaybookText(rules).replace(/^<p>([\s\S]*)<\/p>$/, "$1") } : {}),
 					...possessionBonusFrom(o.description),
 				};
 			}),
@@ -789,16 +821,18 @@ export function bundleToItemData(bundle, { slug, source = "builder" } = {}) {
 		flags: { [ITEM_FLAG_SCOPE]: flags },
 	};
 
-	const moves = bundle.moves.map(m => moveToItemData(m, { playbookName: pb.name, slug }));
+	const backgroundSlugs = new Map(pb.backgrounds.map((b, i) => [looseName(b.label), bgSlugs[i]]));
+	const moves = bundle.moves.map(m => moveToItemData(m, { playbookName: pb.name, slug, backgroundSlugs }));
 	return { playbook, moves };
 }
 
 // A possession's own pick as its Item stores it, in the book's Weapons of War shape: a weapon row
 // (every option carrying a ◇) is gear the sheet lists as carried once picked, with its ○ ammo track.
 function _possessionChoicesToFlags(choices) {
-	// Slugged by the name before its first comma or bracket ("◇ Sword, iron (close…)" is `sword`), as
-	// the book's Weapons of War are: a weapon's tags in a fight are looked up by that slug (weapon-meta).
-	const slugs = _uniqueSlugs(choices.options.map(l => l.replace(/[◇○☐*]/g, "").split(/[,(]/)[0].trim()));
+	// Slugged by the name before its first comma, colon or bracket ("◇ Sword, iron (close…)" is `sword`,
+	// "Necromancer's Bells: +2 Authority…" `necromancer-s-bells`), as the book's Weapons of War are: a
+	// weapon's tags in a fight are looked up by that slug (weapon-meta).
+	const slugs = _uniqueSlugs(choices.options.map(l => l.replace(/[◇○☐*]/g, "").split(/[,(:]/)[0].trim()));
 	const gear = choices.options.every(l => /^\s*◇/.test(l));
 	return {
 		pickNote: choices.pickNote,
@@ -825,9 +859,11 @@ export function advancementToFlags(adv) {
 		return note ? { replacesUsual: false, note, options: [] } : null;
 	}
 	const slugs = _uniqueSlugs(adv.options);
+	const from = clampInt(adv.switchFromLevel, 0, 10, 0);
 	return {
 		replacesUsual: !!adv.replacesUsual,
 		note: plainLine(adv.note, 600),
+		...(from ? { switchFromLevel: from } : {}),
 		options: adv.options.map((label, i) => ({ slug: slugs[i], label: plainLine(label, 200), ...advanceFrom(label) })),
 	};
 }
@@ -893,12 +929,19 @@ export function insertFromFlags(f) {
 	};
 }
 
-export function moveToItemData(m, { playbookName, slug }) {
+export function moveToItemData(m, { playbookName, slug, backgroundSlugs = new Map() }) {
 	const hasResults = !!(m.rollType && (m.results.success || m.results.partial || m.results.failure));
 	const requirement = {};
 	if (m.level > 1) requirement.level = m.level;
 	if (m.requiresMoves.length) requirement.moves = [...m.requiresMoves];
 	if (m.requires) requirement.note = m.requires;
+	// A move only one background gives (a Moon Blessed's own roll): never offered to anyone else, as the
+	// book's Bark an Order is the Sheriff's (StonetopCharacter#buildMovelistContext).
+	const onlyFor = m.background ? backgroundSlugs.get(looseName(m.background)) : null;
+	if (onlyFor) {
+		requirement.background = onlyFor;
+		if (!requirement.note) requirement.note = `${m.background} background`;
+	}
 	return {
 		name: m.name,
 		type: "move",
@@ -918,6 +961,9 @@ export function moveToItemData(m, { playbookName, slug }) {
 			markOptions: m.marks?.length ? m.marks.map((label, i) => ({ slug: slugify(label).slice(0, 40) || `mark-${i + 1}`, label, marks: 1, ...(isWriteInMark(label) ? { writeIn: true } : {}) })) : null,
 			markBudget: m.marks?.length ? { base: m.markCount ?? 1, perExtra: m.markCount ?? 1 } : null,
 			resource: m.resource ? { max: m.resource.max, title: m.resource.title || null, labels: [...m.resource.labels], ...(m.resource.holdOnRoll ? { holdOnRoll: { ...m.resource.holdOnRoll } } : {}) } : null,
+			// "Take a move from the Blessed for which you qualify" (a homebrew Witchcraft): Level Up then
+			// asks for that move, as it does for the book's Wild Soul (move-words.js#crossPlaybookFrom).
+			...(() => { const c = crossPlaybookFrom(m.description); return c ? { crossPlaybook: c } : {}; })(),
 		},
 		flags: { [SYSTEM_ID]: {
 			[HOMEBREW_MOVE_FLAG]: slug,
@@ -974,6 +1020,7 @@ export function itemsToBundle(playbook, moves = []) {
 		options: (f.advancement?.options ?? []).map(o => String(o.label ?? "")).filter(Boolean),
 		note: String(f.advancement?.note ?? ""),
 		switchPlaybook: !!f.advancement?.switchPlaybook,
+		switchFromLevel: Number(f.advancement?.switchFromLevel) || 0,
 	};
 	const sp = f.specialPossessions ?? {};
 	const pre = new Set(sp.preselected ?? []);
@@ -1012,6 +1059,15 @@ export function itemsToBundle(playbook, moves = []) {
 	};
 	pb.inserts = (Array.isArray(f.inserts) ? f.inserts : []).map(insertFromFlags);
 	out.moves = moves.map(itemToMove).sort((a, b) => a.name.localeCompare(b.name));
+	// A move only a background gives is stored by the background's slug; the bundle names the background.
+	const bgLabel = new Map((f.backgrounds ?? []).map(b => [b.slug, playbookTextFromHtml(b.label ?? "")]));
+	for (const m of out.moves) {
+		if (!m.background) continue;
+		m.background = bgLabel.get(m.background) ?? "";
+		// The note moveToItemData writes for it ("Moon Blessed background") is the save's, not the GM's:
+		// read back as typed, the next import took it for a hand edit to keep (mergeReimport).
+		if (m.background && m.requires === `${m.background} background`) m.requires = "";
+	}
 	return out;
 }
 
@@ -1029,6 +1085,8 @@ export function itemToMove(item) {
 		level: Number(r.level) || 1,
 		requires: String(r.note ?? ""),
 		requiresMoves: [...(r.moves ?? [])].map(String),
+		// Only this background's (its slug here; itemsToBundle names it).
+		background: String(r.background ?? ""),
 		repeatMax: Number(s.repeatMax) || 1,
 		cap: Number(s.cap) || null,
 		marks: (s.markOptions ?? []).map(o => String(o.label ?? "")).filter(Boolean),

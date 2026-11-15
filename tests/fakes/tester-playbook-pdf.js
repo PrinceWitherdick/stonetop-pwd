@@ -31,7 +31,7 @@ export function tester({ drive = false, hp = ["HP (max 16)"], insert = "plain", 
 			{ x: 203, lines: [
 				H("Introductions"),
 				["Wait here for everyone else."],
-				{ tokens: [step(3), " On your third turn, tell us what you broke."], indent: 3 },
+				{ tokens: [step(3), " On your third turn, tell us ", B("what you broke"), "."], indent: 3 },
 				{ tokens: [step(4), " On your next turn, answer one of these."], indent: 3 },
 				BOX("Who mended it?"),
 				BOX("Who blamed you for it?"),

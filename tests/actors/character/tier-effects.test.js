@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
 	settleTierEffects, recordTierEffects, reconcileTierEffects, TIER_EFFECTS_FLAG, TIER_EFFECT_MOVES, SILVER_TONGUED,
+	tierEffectsAllowed, HOMEBREW_TIER_EFFECTS,
 } from "../../../module/actors/character/tier-effects.js";
 import { FIGHT_STATES, fightStateOn, WE_HAPPY_FEW } from "../../../module/actors/character/fight-states.js";
 import { PREPARE_A_WELCOME } from "../../../module/combat/battle-holds.js";
@@ -522,6 +523,34 @@ describe("a track whose move says what a roll holds", () => {
 		expect(tracks[PARIAH]).toBe(0);
 	});
 
+	// The 11-13 live run: the roll only ran tier effects for a BOOK move (bookMoveName), so a homebrew
+	// Pariah's Fear never filled. A homebrew move is let through for its own data's effect, and only that.
+	const homebrew = item => { item.flags = { [SYSTEM_ID]: { homebrewPlaybook: "homebrew-the-stranger" } }; return item; };
+
+	it("is let through for a homebrew move when rolled, for its own hold and nothing else", () => {
+		const { actor } = stranger(0);
+		homebrew(actor.items[0]);
+		expect(tierEffectsAllowed(actor, actor.items[0])).toEqual(HOMEBREW_TIER_EFFECTS);
+		const plain = hero({ moves: ["Creeper"] });
+		homebrew(plain.actor.items[0]);
+		expect(tierEffectsAllowed(plain.actor, plain.actor.items[0])).toBe(false);
+		const book = hero({ moves: [WE_HAPPY_FEW] });
+		expect(tierEffectsAllowed(book.actor, book.actor.items[0])).toBeNull();
+	});
+
+	it("never gives a homebrew move a book move's effect for its name, at the roll or on a Shift", async () => {
+		const made = hero({ moves: [SILVER_TONGUED], held: { [SILVER_TONGUED]: 0 }, max: 4 });
+		const item = homebrew(made.actor.items[0]);
+		item.system.resource.holdOnRoll = { success: 2, partial: 1 };
+		const only = tierEffectsAllowed(made.actor, item);
+		const message = card(SILVER_TONGUED);
+		await recordTierEffects(message, await settleTierEffects(made.actor, SILVER_TONGUED, "partial", null, { only }));
+		expect(message.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 1 });
+		await shift(message, made.actor, 11);
+		expect(message.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 2 });
+		expect(made.tracks[SILVER_TONGUED]).toBe(2);
+	});
+
 	it("never lowers what is held, and leaves a move without it alone", async () => {
 		const { actor, tracks } = stranger(4);
 		await rolled(actor, PARIAH, "partial");
@@ -530,5 +559,27 @@ describe("a track whose move says what a roll holds", () => {
 		const card = await rolled(plain.actor, "Creeper", "success");
 		expect(plain.tracks.Creeper).toBe(0);
 		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toBeUndefined();
+	});
+
+	// The Stranger's Ephemera: "Spend ☐ to hold +1 Fear when you roll the Pariah move, even on a 6-". Paid
+	// before the tier settles, it rides on top of the tier's hold, and a Shift keeps it.
+	it("holds a taken line's bonus on top of the tier's, even on a 6-, and keeps it through a Shift", async () => {
+		const { actor, tracks } = stranger(0);
+		const card = await rolled(actor, PARIAH, "partial", { holdMore: { success: 1, partial: 1, failure: 1 } });
+		expect(tracks[PARIAH]).toBe(2);
+		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: { added: 2, bonus: { success: 1, partial: 1, failure: 1 } } });
+		await shift(card, actor, 10);
+		expect(tracks[PARIAH]).toBe(4);
+		await shift(card, actor, 4);
+		expect(tracks[PARIAH]).toBe(1);
+		// For that roll alone: one settled without it holds none.
+		await rolled(actor, PARIAH, "failure");
+		expect(tracks[PARIAH]).toBe(1);
+	});
+
+	it("adds the bonus to what is already held", async () => {
+		const { actor, tracks } = stranger(3);
+		await rolled(actor, PARIAH, "partial", { holdMore: { success: 1, partial: 1, failure: 0 } });
+		expect(tracks[PARIAH]).toBe(4);
 	});
 });

@@ -31,6 +31,32 @@ export function plainOption(html) {
 		.replace(/&quot;/g, "\"").replace(/&#0?39;|&apos;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
 }
 
+/** The header glyph's base class for an insert's form (header-toggle-glyph.hbs; its icon is `<stem>-icon`). */
+export const INSERT_FORM_STEM = "stonetop-insert-form";
+
+/**
+ * What the header draws for one insert form (CharacterHomebrewInserts#formStates), on the Battle Joy's
+ * terms: one state, flipped, with a read-only face for a viewer who cannot write. Its words are the
+ * playbook's own (the insert's name, its switch's labels), so they are plain text, not language keys.
+ * @param {{key: string, name: string, on: string, off: string, wearing: boolean}} state
+ */
+export function insertFormGlyph(state, { editable = false } = {}) {
+	const name = state.name || "Insert";
+	const wearing = !!state.wearing;
+	const now = wearing
+		? `${name}: in this form now. Its weapons and armor are yours while it lasts.`
+		: `${name}: not in this form.`;
+	const press = wearing ? state.off : state.on;
+	return {
+		key: state.key,
+		stem: INSERT_FORM_STEM,
+		onClass: "is-transformed",
+		on: wearing,
+		labelText: editable ? `${press} (${name})` : now,
+		tooltipText: editable ? `${now} Press to ${press}.` : now,
+	};
+}
+
 /**
  * Is `insert` open to the character, and how many learned copies of the move that opens it do
  * they hold? An insert with no opening move is open to everyone (once).

@@ -18,6 +18,7 @@ import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { carriedCopyOf } from "./homebrew-missing.js";
 import { ownershipLevels, deletionEntry } from "../utils/foundry-compat.js";
 import { escHtml, looseName, slugify } from "../utils/strings.js";
+import { isPrimaryGM } from "../utils/primary-gm.js";
 
 /**
  * The playbook library (playbook-library.js) hooks in here rather than being imported, so this file
@@ -50,8 +51,11 @@ export function holdersOfHomebrew(slug, name, actors = game.actors) {
 	});
 }
 
+/** The id of the folder a document sits in: Foundry hands the Folder itself, a plain record its id. */
+const _folderIdOf = doc => doc?.folder?.id ?? doc?.folder ?? null;
+
 async function _folder(name, parent = null) {
-	const existing = game.folders?.find(f => f.type === "Item" && f.name === name && (f.folder?.id ?? null) === (parent?.id ?? null));
+	const existing = game.folders?.find(f => f.type === "Item" && f.name === name && _folderIdOf(f) === (parent?.id ?? null));
 	if (existing) return existing;
 	return Folder.create({ name, type: "Item", folder: parent?.id ?? null, sorting: "a" });
 }
@@ -60,6 +64,64 @@ async function _folder(name, parent = null) {
 async function _playbookFolder(name) {
 	const root = await _folder(HOMEBREW_ROOT_FOLDER);
 	return _folder(name, root);
+}
+
+/**
+ * Take away a playbook's folder (a deleted playbook's, or a renamed one's old one) and its subfolders,
+ * but only when nothing is left anywhere in it: whatever else the GM keeps there keeps it all.
+ */
+async function _dropEmptyFolder(homeId) {
+	const folders = [...(game.folders ?? [])].filter(f => f.type === "Item");
+	const tree = new Set([homeId]);
+	for (let grew = true; grew;) {
+		grew = false;
+		for (const f of folders) if (!tree.has(f.id) && tree.has(_folderIdOf(f))) { tree.add(f.id); grew = true; }
+	}
+	if ([...(game.items ?? [])].some(i => tree.has(_folderIdOf(i)))) return;
+	try { await Folder.deleteDocuments([...tree]); }
+	catch (err) { console.warn("Stonetop | couldn't take away an emptied playbook folder", err); }
+}
+
+/** Inside a playbook's folder, the subfolder its own moves go in (each insert's go in one named for it). */
+export const HOMEBREW_MOVES_FOLDER = "Moves";
+
+/**
+ * Which subfolder of the playbook's folder a move goes in: "Moves", or its insert's name ("Monster
+ * Compendium"), so the playbook Item isn't buried among thirty moves. Made on first ask, once.
+ * @param {{id: string}} home  the playbook's folder
+ * @param {Array<{key: string, name: string}>} inserts  the playbook's inserts
+ * @returns {(move: object) => Promise<object>} the move's folder
+ */
+function _moveFolderPicker(home, inserts = []) {
+	const insertName = new Map(inserts.map(i => [i.key, String(i.name ?? "").trim() || "Insert"]));
+	const made = new Map();
+	return move => {
+		const key = _insertFlag(move)?.key;
+		const name = (key && insertName.get(key)) || HOMEBREW_MOVES_FOLDER;
+		if (!made.has(name)) made.set(name, _folder(name, home));
+		return made.get(name);
+	};
+}
+
+/**
+ * Tidy what an older version filed: every homebrew playbook's moves sat straight in its folder,
+ * beside the playbook. Those go into its subfolders (_moveFolderPicker); a move the GM filed anywhere
+ * else stays. Primary GM, every load; does nothing once tidied.
+ * @returns {Promise<number>} how many moves were moved
+ */
+export async function tidyHomebrewFolders() {
+	if (!game.user?.isGM || !isPrimaryGM()) return 0;
+	const updates = [];
+	for (const pb of (game.items ?? []).filter(isHomebrewPlaybookItem)) {
+		const home = _folderIdOf(pb);
+		if (!home) continue;
+		const loose = movesOfHomebrew(pb.system.slug).filter(m => _folderIdOf(m) === home);
+		if (!loose.length) continue;
+		const folderFor = _moveFolderPicker({ id: home }, pb.flags?.[ITEM_FLAG_SCOPE]?.inserts ?? []);
+		for (const m of loose) updates.push({ _id: m.id, folder: (await folderFor(m)).id });
+	}
+	if (updates.length) await Item.updateDocuments(updates);
+	return updates.length;
 }
 
 /**
@@ -246,6 +308,8 @@ export async function saveHomebrewPlaybook(bundle, { existing = null, source = "
 	const base = importBase ? normalizeBundle(importBase).bundle : null;
 	if (base) playbook.flags[ITEM_FLAG_SCOPE].homebrew.importBase = JSON.stringify({ playbook: base.playbook, moves: base.moves });
 	const folder = await _playbookFolder(name);
+	// Where it was: a rename moves it to a folder of the new name, and the old one goes once it's empty.
+	const oldHome = existing ? _folderIdOf(existing) : null;
 	// Read before the update replaces them: the write-ins this save makes ticks of.
 	const turned = existing ? writeInsTurnedToTicks(existing.flags?.[ITEM_FLAG_SCOPE], playbook.flags[ITEM_FLAG_SCOPE]) : null;
 
@@ -256,7 +320,7 @@ export async function saveHomebrewPlaybook(bundle, { existing = null, source = "
 		const { type: _type, ...changes } = playbook;
 		await existing.update({ ...changes, folder: folder.id, img: playbook.img ?? existing.img });
 		item = existing;
-		// The folder follows the name. An emptied old folder is left for the GM to tidy.
+		// The folder follows the name; the old one is taken away below once the moves have left it.
 	} else {
 		// Players can see a draft in the Items sidebar (the user's call: no harm in it). Taking one is
 		// what's gated, by the picker and the sheet's drop.
@@ -268,16 +332,19 @@ export async function saveHomebrewPlaybook(bundle, { existing = null, source = "
 	const keep = new Set();
 	const toCreate = [];
 	const toUpdate = [];
+	// The moves in subfolders of the playbook's: its own in "Moves", each insert's in its own.
+	const folderFor = _moveFolderPicker(folder, clean.playbook.inserts ?? []);
 	for (const data of moves) {
 		const prior = byName.get(data.name.toLowerCase());
+		const moveFolder = await folderFor(data);
 		if (prior) {
 			keep.add(prior.id);
-			const update = { _id: prior.id, name: data.name, folder: folder.id, system: data.system, flags: data.flags };
+			const update = { _id: prior.id, name: data.name, folder: moveFolder.id, system: data.system, flags: data.flags };
 			// The insert flag is merged in with `flags` when it's set; one the move no longer has is deleted.
 			if (!_insertFlag(data) && _insertFlag(prior)) _syncInsertFlag(update, prior, data);
 			toUpdate.push(update);
 		} else {
-			toCreate.push({ ...data, folder: folder.id, ownership: { default: OBSERVER() } });
+			toCreate.push({ ...data, folder: moveFolder.id, ownership: { default: OBSERVER() } });
 		}
 	}
 	const toDelete = held.filter(m => !keep.has(m.id)).map(m => m.id);
@@ -285,6 +352,7 @@ export async function saveHomebrewPlaybook(bundle, { existing = null, source = "
 	if (toCreate.length) await Item.createDocuments(toCreate);
 	if (toDelete.length) await Item.deleteDocuments(toDelete);
 	invalidatePlaybookCatalog();
+	if (oldHome && oldHome !== folder.id) await _dropEmptyFolder(oldHome);
 
 	if (turned?.moves.length) await tickAnsweredWriteIns(slug, turned.moves);
 	// A rename follows onto every character who plays it (their name for it, their moves' link).
@@ -315,11 +383,14 @@ export async function saveHomebrewPlaybook(bundle, { existing = null, source = "
 export async function offerToRefreshCopies(item) {
 	const stale = staleHeldCopies(item.system.slug);
 	if (!stale.length) return;
-	const who = [...new Set(stale.map(s => s.actor.name))];
+	// By character, not by name: three characters called Angharad are said as "Angharad (3 characters)".
+	const byName = new Map();
+	for (const s of stale) byName.set(s.actor.name, (byName.get(s.actor.name) ?? new Set()).add(s.actor.id ?? s.actor));
+	const who = [...byName].map(([name, ids]) => (ids.size > 1 ? `${name} (${ids.size} characters)` : name));
 	const moves = [...new Set(stale.map(s => s.item.name))];
 	const answer = await askWithButtons({
 		title: "Update the characters' copies?",
-		content: `<p><strong>${escHtml(who.join(", "))}</strong> ${who.length === 1 ? "holds" : "hold"} an older copy of ${moves.length === 1 ? "a move" : `${moves.length} moves`} you changed: ${escHtml(moves.join(", "))}.</p>`
+		content: `<p><strong>${escHtml(who.join(", "))}</strong> ${new Set(stale.map(s => s.actor.id ?? s.actor)).size === 1 ? "holds" : "hold"} an older copy of ${moves.length === 1 ? "a move" : `${moves.length} moves`} you changed: ${escHtml(moves.join(", "))}.</p>`
 			+ "<p>Update their copies to match? What they hold on those moves (filled pips, ticked options) stays as it is. Leave them, and their sheets keep the old wording.</p>",
 		buttons: [{ key: "update", label: "Update their copies", icon: "fa-rotate", value: true }],
 		defaultKey: false,
@@ -384,8 +455,10 @@ export function readImportBase(item) {
 export async function deleteHomebrewPlaybook(item) {
 	if (!isHomebrewPlaybookItem(item)) return;
 	const moveIds = movesOfHomebrew(item.system.slug).map(m => m.id);
+	const home = _folderIdOf(item);
 	if (moveIds.length) await Item.deleteDocuments(moveIds);
 	await item.delete();
+	if (home) await _dropEmptyFolder(home);
 	invalidatePlaybookCatalog();
 }
 

@@ -8,7 +8,7 @@ import { normalizeBundle, bundleToItemData, MARK_WRITE_IN_LABEL } from "../../mo
 // special possessions every character starts with (no boxes, a bold name per paragraph), a question
 // per place of origin and a place to write in, a "Mark one:" list with a "(discuss with GM)" blank,
 // things done "Once", and its own Level Up list, whose last option wraps back to the margin.
-function neighbour() {
+function neighbour({ extraNote = false } = {}) {
 	const runs = buildPageRuns([{ columns: [
 		{ x: 30, lines: [
 			H("The Neighbour", "", 24),
@@ -35,6 +35,7 @@ function neighbour() {
 		// Below the Stats and Moves lines, which run on across two columns as the template's do.
 		{ x: 220, y: 300, lines: [
 			H("Growing Older"),
+			...(extraNote ? [["For each useful tag you have, mark one of the"], ["following before play."], { gap: 10 }] : []),
 			["When you ", BI("Level Up"), ", mark one of the following"],
 			["(in any order) instead of the usual effect:"],
 			BOX("Increase one of your stats (to a max of +2)."),
@@ -47,6 +48,7 @@ function neighbour() {
 			{ gap: 10 },
 			["When you ", BI("Level Up to Level 3 or higher"), ","],
 			["you can change to another playbook."],
+			...(extraNote ? [{ gap: 10 }, ["Ask the GM about your station."]] : []),
 		] },
 		{ x: 423, lines: [
 			H("Background", "(Choose 1)"),
@@ -82,8 +84,8 @@ function neighbour() {
 	return runs;
 }
 
-const read = () => {
-	const { draft, report } = readPlaybook(neighbour());
+const read = (opts) => {
+	const { draft, report } = readPlaybook(neighbour(opts));
 	const { bundle } = assemblePlaybook(draft);
 	return { draft, report, bundle: normalizeBundle(bundle).bundle };
 };
@@ -127,7 +129,7 @@ describe("a playbook that levels up its own way", () => {
 		expect(bundle.playbook.notes).not.toMatch(/origin/i);
 	});
 
-	it("reads its own Level Up, the wrapped last option whole, and keeps the words as a note", () => {
+	it("reads its own Level Up, the wrapped last option whole, and lists it once: not again in the notes", () => {
 		const { draft, report, bundle } = read();
 		expect(bundle.playbook.advancement).toEqual({
 			replacesUsual: true,
@@ -140,10 +142,21 @@ describe("a playbook that levels up its own way", () => {
 			],
 			note: "When you Level Up to Level 3 or higher, you can change to another playbook.",
 			switchPlaybook: false,
+			// "Level Up to Level 3 or higher, you can change to another playbook": offered from level 3.
+			switchFromLevel: 3,
 		});
 		expect(report.sections).toContain("Its own Level Up (5 advances) → Level Up");
-		expect(bundle.playbook.notes).toContain("\n- Work with the GM to choose a move from any other playbook, as long as you meet its requirements.\n");
-		// Placed: nothing left for the GM to settle about it.
+		// One list per card: the Details tab shows the advances under Advancement, so not in the notes too.
+		expect(bundle.playbook.notes ?? "").not.toContain("Work with the GM");
+		// Every word of it is Level Up's now, so the block is left out, saying where it went.
+		expect(draft.blocks.find(b => b.title === "Growing Older")).toMatchObject({ kind: "skip", unsure: false, why: "Its words are the playbook's own Level Up, on the Level Up panel." });
+	});
+
+	it("keeps what else the block says, and a 'before play' line about the advances goes with them", () => {
+		const { draft, bundle } = read({ extraNote: true });
+		expect(bundle.playbook.advancement.note).toBe("For each useful tag you have, mark one of the following before play. When you Level Up to Level 3 or higher, you can change to another playbook.");
+		expect(bundle.playbook.notes).toContain("Ask the GM about your station.");
+		expect(bundle.playbook.notes).not.toContain("mark one of the following before play");
 		expect(draft.blocks.find(b => b.title === "Growing Older")).toMatchObject({ kind: "note", unsure: false });
 	});
 

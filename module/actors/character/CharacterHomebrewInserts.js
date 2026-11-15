@@ -59,6 +59,23 @@ export class CharacterHomebrewInserts {
 	}
 
 	/**
+	 * Each insert form the character can take on (its insert is open) or still wears (one left on after
+	 * the move that opens it went, so it can be taken off), as `{key, name, on, off, wearing}`: the
+	 * header's glyph for it (homebrew-inserts.js#insertFormGlyph).
+	 */
+	formStates(playbookData, items) {
+		return CharacterHomebrewInserts.insertsOf(playbookData)
+			.filter(ins => ins.form?.enabled)
+			.map(ins => ({
+				key: ins.key, name: String(ins.name ?? ""),
+				on: ins.form.on || "Transform", off: ins.form.off || "Revert",
+				wearing: this.wearing(ins.key), open: insertOpening(ins, items).open,
+			}))
+			.filter(s => s.open || s.wearing)
+			.map(({ open: _open, ...s }) => s);
+	}
+
+	/**
 	 * What each OPEN insert's tab draws, in the order the playbook lists them.
 	 *
 	 * @param {object} playbookData

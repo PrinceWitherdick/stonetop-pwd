@@ -14,11 +14,13 @@ export class PlaybookPdfWindow extends StonetopDialog {
 	 * @param {File|Blob} file
 	 * @param {object} [opts]
 	 * @param {string} [opts.title]
+	 * @param {string} [opts.zoom]  the viewer's opening zoom ("page-width", or a percentage like "150")
 	 */
-	constructor(file, { title = "" } = {}, options = {}) {
+	constructor(file, { title = "", zoom = "" } = {}, options = {}) {
 		super(options);
 		this._url = URL.createObjectURL(file);
 		this._title = title || file?.name || "Playbook PDF";
+		this._zoom = zoom;
 	}
 
 	static get defaultOptions() {
@@ -35,7 +37,9 @@ export class PlaybookPdfWindow extends StonetopDialog {
 
 	getData() {
 		const viewer = globalThis.foundry?.utils?.getRoute?.("scripts/pdfjs/web/viewer.html") ?? "/scripts/pdfjs/web/viewer.html";
-		return { src: `${viewer}?${new URLSearchParams({ file: this._url })}`, frameTitle: this._title };
+		// What to load goes in the query; what to do once loaded (the zoom) in the hash.
+		const hash = this._zoom ? `#zoom=${encodeURIComponent(this._zoom)}` : "";
+		return { src: `${viewer}?${new URLSearchParams({ file: this._url })}${hash}`, frameTitle: this._title };
 	}
 
 	async close(options = {}) {
@@ -50,8 +54,10 @@ export class PlaybookPdfWindow extends StonetopDialog {
  * when the screen is wide enough for both, and the PDF narrows (to no less than 420) when it isn't
  * quite. Only a screen too small for both lets them overlap. Returns the window.
  */
-export function openPdfBeside(file, builder) {
-	const win = new PlaybookPdfWindow(file, { title: `${file?.name ?? "Playbook PDF"} (to type in by hand)` });
+export function openPdfBeside(file, builder, { landscape = false } = {}) {
+	// A landscape playbook is two columns of small print: at 150% one column fills the window, readable
+	// enough to type from. An upright one fits its width.
+	const win = new PlaybookPdfWindow(file, { title: `${file?.name ?? "Playbook PDF"} (to type in by hand)`, zoom: landscape ? "150" : "page-width" });
 	const pos = builder?.position ?? {};
 	const gap = 10;
 	const screenW = window.innerWidth;

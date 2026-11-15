@@ -80,7 +80,7 @@
 		      macro). Un-owned rows (the unpicked side of an either/or choice) stay
 		      non-draggable. Whether the title ROLLS is gated on rollType below. --}}
 		{{#if owned}}
-		<li class="item stonetop-item is-checked{{#if granterOff}} move-unlearned{{/if}}{{#if requirementsUnmet}} move-requirements-unmet{{/if}}{{#if (or markBudget.needsChoice statChoiceNeeded backgroundAnswerNeeded possessionChoiceOwed)}} move-needs-choice{{/if}}{{#if isStarting}} move-starting{{/if}}" data-item-id="{{this.ownedId}}">
+		<li class="item stonetop-item is-checked{{#if granterOff}} move-unlearned{{/if}}{{#if requirementsUnmet}} move-requirements-unmet{{/if}}{{#if (or markBudget.needsChoice statChoiceNeeded backgroundAnswerNeeded possessionChoiceOwed occultDrawOwed)}} move-needs-choice{{/if}}{{#if isStarting}} move-starting{{/if}}" data-item-id="{{this.ownedId}}">
 		{{else}}
 		<li class="stonetop-item{{#if (and locked (not owned))}} move-locked{{/if}}{{#if requirementsUnmet}} move-requirements-unmet{{/if}}{{#if (or markBudget.needsChoice statChoiceNeeded)}} move-needs-choice{{/if}}{{#if isStarting}} move-starting{{/if}}">
 		{{/if}}
@@ -145,6 +145,8 @@
 				{{!-- A pick this move still owes elsewhere (Big Magic's extra remarkable trait, Book I p.106):
 				      opens the pouch's add-only editor (possession-choices-owed.js). --}}
 				{{#if (and owned @root.editable possessionChoiceOwed)}}<i class="fas fa-hand-pointer stonetop-move-possession-choice-needed" data-possession-choices-owed="{{this.possessionChoiceOwed.slug}}" data-tooltip="{{this.possessionChoiceOwed.label}}" aria-label="{{this.possessionChoiceOwed.label}}" data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
+				{{!-- A homebrew move's Minor Arcana draw still to make (Occult Interest: occult-draw.js). --}}
+				{{#if (and owned @root.editable occultDrawOwed)}}<i class="fas fa-hand-pointer stonetop-move-occult-draw" data-move-name="{{this.name}}" data-count="{{this.occultDrawOwed.count}}" data-tooltip="Draw {{this.occultDrawOwed.count}} Minor Arcana and keep one, its secrets unlocked" aria-label="Draw {{this.occultDrawOwed.count}} Minor Arcana and keep one" data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
 				{{#if (and owned resource)}}
 				{{!-- Eats the header line's free space so the track sits at the right edge
 				      while it shares the title's line, and starts at the LEFT when a narrow

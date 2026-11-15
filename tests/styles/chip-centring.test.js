@@ -198,10 +198,21 @@ describe("chips with an icon or a count trim their label element", () => {
 		// The PDF import review's Split / Join, and its answer radios' words (playbook-review-centre.mjs, 11-11:
 		// bare, the words sat up to 2px high beside the icon and 1.5px off the radio in IM Fell English at a 20px
 		// UI font; trimmed, within 0.8px in all three faces at roots 16 and 20).
-		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-act", "button", 2],
+		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-act", "button", 3],
 		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-q-choice", "label", 2],
+		// Its footer's Undo, Redo and Start over: flex outline buttons, an icon beside the words.
+		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-undo", "button", 1],
+		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-redo", "button", 1],
+		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-reset", "button", 1],
+		// The Followers tab's dashed Create / Add buttons, a homebrew background's "Create your <kind>" among them.
+		["templates/actor/partials/tab-followers.hbs", "stonetop-follower-add-btn", "button", 5],
 		// A homebrew insert's Transform / Revert on the character sheet: a flex button whose words trim.
 		["templates/actor/partials/tab-homebrew-insert.hbs", "stonetop-hb-insert-form-btn", "button", 1],
+		// The playbook picture cutter's footer and its Clear background switch (measured 11-14 at
+		// 1x/1.25x/1.5x in all three faces: within 0.8px).
+		["templates/dialogs/playbook-emblem-cut.hbs", "stonetop-frame-save", "button", 1],
+		["templates/dialogs/playbook-emblem-cut.hbs", "stonetop-frame-suggest", "button", 1],
+		["templates/dialogs/playbook-emblem-cut.hbs", "stonetop-pb-emblem-clear", "label", 1],
 	])("wraps every label in %s (.%s)", (file, chipClass, tag, count) => {
 		const { count: found, bare } = everyChipWrapped(readRepo(file), chipClass, tag);
 		expect(found, `expected ${count} ${chipClass} in ${file}`).toBe(count);

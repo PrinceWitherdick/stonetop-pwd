@@ -1,5 +1,5 @@
 import { askWithButtons } from "../../utils/ask-with-buttons.js";
-import { stockSourceChoiceLabel } from "./stock-cost.js";
+import { stockSourceChoiceLabel, paidInPlaceOfStock } from "./stock-cost.js";
 
 /**
  * Which purse pays, asked with a button per purse (affirmatives first) and one to leave it
@@ -16,8 +16,8 @@ export async function askStockSource(payable, amount, moveName) {
 		buttons: [
 			...payable.map(s => ({
 				key:   s.key,
-				label: s.vessel ? stockSourceChoiceLabel(s, amount) : `Spend ${amount} ${stockSourceChoiceLabel(s, amount)}`,
-				icon:  s.vessel ? "fa-droplet" : "fa-mortar-pestle",
+				label: paidInPlaceOfStock(s) ? stockSourceChoiceLabel(s, amount) : `Spend ${amount} ${stockSourceChoiceLabel(s, amount)}`,
+				icon:  s.vessel || s.standIn?.kind === "hp" ? "fa-droplet" : s.standIn ? "fa-hand" : "fa-mortar-pestle",
 				value: s.key,
 			})),
 			{ key: "unpaid", label: "Leave it unpaid", icon: "fa-xmark", value: null },

@@ -1,5 +1,5 @@
 import {getStonetopProsperity} from "./world.js";
-import {DAMAGE_DIE_RE, isWholeDamageDie, attackSeparatorRe, ownHpChangeRe} from "./damage-die.js";
+import {DAMAGE_DIE_RE, isWholeDamageDie, attackSeparatorRe, ownHpChangeRe, stepDie} from "./damage-die.js";
 import {capitalizeFirst} from "./strings.js";
 import {HP_LOSS_OPTION} from "../actors/character/StonetopFlags.js";
 
@@ -180,7 +180,16 @@ export function composeDamageFormula(base, { bonus = 0, extraDice = "", seed = n
 	if (flat) terms.push(flat > 0 ? `+${flat}` : String(flat));
 	// A bonus with no base leaves the leading sign stranded at the head of the formula, which
 	// Roll rejects. Nothing at all rolls a flat 0 rather than throwing on an empty formula.
-	return terms.join("").replace(/^\+/, "") || "0";
+	const formula = terms.join("").replace(/^\+/, "") || "0";
+	// A line that makes every die one size larger (a homebrew Deadly: "increase all damage dice by one
+	// size"), carried in `extraDice` as `{dieStep}`: the weapon's die and every added die alike.
+	const steps = (Array.isArray(extraDice) ? extraDice : []).reduce((n, e) => n + (Number(e?.dieStep) || 0), 0);
+	return steps ? stepFormulaDice(formula, steps) : formula;
+}
+
+/** Every `NdX` in `formula` made `steps` sizes larger (d4 → d6 → … → d12, capped there). */
+export function stepFormulaDice(formula, steps) {
+	return String(formula ?? "").replace(/(\d*)d(\d+)/g, (all, n, x) => `${n}${stepDie(`d${x}`, steps)}`);
 }
 
 /**

@@ -11,6 +11,7 @@
 
 import { homebrewIntroData } from "../playbooks/playbook-catalog.js";
 import { escHtml } from "../utils/strings.js";
+import { formatPlaybookInline } from "../playbooks/playbook-text.js";
 
 export const INTRO_PLAYBOOK_DATA = {
 	"the-blessed": {
@@ -167,7 +168,8 @@ export const SUPERSEDED_INTRO_QUESTIONS = Object.freeze({
 /**
  * A playbook's Introductions data: the book's (above), else a HOMEBREW playbook's own
  * (playbooks/playbook-catalog.js homebrewIntroData), else null. The book's entries are HTML; a
- * homebrew playbook's are the GM's plain text, escaped here so both read the same way. A homebrew
+ * homebrew playbook's are the GM's text, escaped here so both read the same way (step 3 keeps its
+ * **bold** and *italic*, as the book's step 3s set words in bold). A homebrew
  * step left empty answers null, which skips that round for the playbook, as an unknown one does.
  */
 export function introDataFor(slug) {
@@ -176,7 +178,7 @@ export function introDataFor(slug) {
 	const own = homebrewIntroData(slug);
 	if (!own) return null;
 	return {
-		step3: own.step3 ? escHtml(own.step3) : null,
+		step3: own.step3 ? formatPlaybookInline(own.step3) : null,
 		step4: own.step4.length ? own.step4.map(escHtml) : null,
 		step6: own.step6.length ? own.step6.map(escHtml) : null,
 	};

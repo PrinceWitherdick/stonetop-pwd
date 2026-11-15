@@ -40,6 +40,9 @@ import {normalizeWound, normalizeWoundList} from "./wound-record.js";
 import {PlaybookPickerDialog} from "./dialogs/PlaybookPickerDialog.js";
 import {ANIMAL_COMPANION_TRAIT_GLOSSARY, CharacterOnboardingDialog} from "./dialogs/CharacterOnboardingDialog.js";
 import {CreateFollowerDialog, applyCustomFollower} from "./dialogs/CreateFollowerDialog.js";
+import {backgroundFollowerOffer} from "./homebrew-roll-bends.js";
+import {occultDrawsOwed, runOccultDraw} from "./occult-draw.js";
+import {capitalizeFirst} from "../../utils/strings.js";
 import {MonsterToFollowerDialog} from "./dialogs/MonsterToFollowerDialog.js";
 import {NpcToFollowerDialog} from "./dialogs/NpcToFollowerDialog.js";
 import {OrderFollowersDialog} from "./dialogs/OrderFollowersDialog.js";
@@ -88,7 +91,7 @@ import { USE_UP_RESOURCES, useUpChoices, useUpUpdate } from "./follower-use-up.j
 import { FOLLOWER_FLAGS as _FOLLOWER_FLAGS, fillFollowerSlug as _fillSlug, followerDetailBase as _followerDetailBase, clampFollowerHp as _clampHp, intOverrideOrNull as _intOverrideOrNull, companionBase, crewMemberHpMax, followerHpMaxOverride, ownedBeastSlugs, orderedCustomFollowers } from "./follower-roster.js";
 import {createArcanumItem} from "../../item/createArcanum.js";
 import {rollStat, sign, classifyResult, messageOfRoll} from "../../utils/roll-engine.js";
-import { recordTierEffects, settleFollowerReadiness } from "./tier-effects.js";
+import { recordTierEffects, settleFollowerReadiness, insertFormRollFor } from "./tier-effects.js";
 import {defendReadinessHold} from "../../combat/defend-readiness.js";
 import {dieFromDamage, printedBlow} from "../../utils/damage.js";
 import {normalizeDamageDie} from "../../utils/damage-die.js";
@@ -96,13 +99,13 @@ import {normalizeRollType} from "../../utils/roll-types.js";
 import {moveRollable} from "../../utils/move-rollable.js";
 import {escHtml, isDefaultImg, normalizePlaybookGlyphs, composeInstinct, stripHtmlToText} from "../../utils/strings.js";
 import {partyCharacters, playerOf} from "../../utils/playbook-actors.js";
-import { playbookAvatar, isHomebrewPlaybookItem, isHomebrewPublished, homebrewPlaybookBySlug } from "../../playbooks/playbook-catalog.js";
+import { playbookAvatar, isHomebrewPlaybookItem, isHomebrewPublished, homebrewPlaybookBySlug, homebrewPlaybookInserts } from "../../playbooks/playbook-catalog.js";
 import { carriedCopyOf } from "../../playbooks/homebrew-missing.js";
 import {postMoveToChat, moveChatCard, pickableMoveDescription, whisperedAs} from "../../utils/chat.js";
 import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
 import {statApproaches} from "../../utils/stat-approaches.js";
 import {wirePickTally} from "../../utils/pick-tally.js";
-import {canPayStock, defaultStockSource, payableStockSources, mustAskStockSource, stockSourceChoiceLabel, stockReceipt, vesselHpFormula, stockCostFromDescription, RITES_OF_THE_LAND} from "./stock-cost.js";
+import {canPayStock, defaultStockSource, payableStockSources, mustAskStockSource, stockSourceChoiceLabel, stockReceipt, vesselHpFormula, stockCostFromDescription, purseLeftNote, RITES_OF_THE_LAND} from "./stock-cost.js";
 import {defaultSupplyPurse, SUPPLY_PURPOSE, SUPPLY_SLUGS, spreadSupplySpend} from "./supply-cost.js";
 import {supplyPayersFor, payOthersSupplies, spendPayerSupplies, ownSupplySpend, behalfSpendRow} from "./supply-payer.js";
 import {canRetire, openRetireDialog} from "../../campaign/retire-pc.js";
@@ -238,7 +241,7 @@ import {localize, format} from "../../utils/i18n.js";
 import {promptRaiseFromDead} from "../../hooks/DeathsDoorPrompt.js";
 import { wireKeyboardButtons } from "../../utils/keyboard-buttons.js";
 import { replaceKeepingTooltip, dropTooltipWithin, restoreTooltip } from "../../utils/tooltip-handoff.js";
-import { INSERT_TAB_PREFIX } from "./homebrew-inserts.js";
+import { INSERT_TAB_PREFIX, INSERT_FORM_STEM, insertFormGlyph } from "./homebrew-inserts.js";
 import { personOptionDetail, personOptionLabel } from "../../utils/people-groups.js";
 
 const _STAT_KEYS = new Set(["str", "dex", "con", "int", "wis", "cha"]);
@@ -2053,6 +2056,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			attachPossessionChoicesOwed(_movelistMoves(context.stonetop.movelist),
 				context.stonetop.inventory?.possessions?.items,
 				possessionChoicesOwedView(this._stonetopCharacter.possessionChoicesOwed(playbookDoc)));
+			// A homebrew move's draw still to make (the Familiar Face's Occult Interest, occult-draw.js): its hand.
+			const occultOwed = occultDrawsOwed(this.actor);
+			for (const m of _movelistMoves(context.stonetop.movelist)) {
+				if (m && typeof m === "object") m.occultDrawOwed = m.owned && occultOwed.has(m.name) ? { count: occultOwed.get(m.name) } : null;
+			}
 			// Tough Love's card, by move name as the template looks it up: the PCs this hero has called on
 			// it, while the move is learned (fight/hero-moves.js#toughLoveHeld).
 			context.stonetop.toughLove = this._learnedMoveNames().has(HERO_MOVES.TOUGH_LOVE)
@@ -2423,6 +2431,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			// Three more on/off states a fight turns on: the Marshal's shaken nerves, the Storm Markings'
 			// anger, a Fox's or Ranger's being unseen. Same glyph, same terms (./fight-states.js).
 			context.stonetop.fightStates = fightStateGlyphs(this.actor, { editable: context.editable });
+			// A homebrew playbook's other form (an insert with a Transform switch: the Stranger's monster
+			// within), on the same terms: the insert tab's own switch, shown here as well because the form
+			// changes the whole sheet (its weapons and armor, the lines a roll offers) and the tab is one of
+			// many (./homebrew-inserts.js#insertFormGlyph).
+			context.stonetop.insertFormGlyphs = (context.stonetop.insertForms ?? []).map(state => insertFormGlyph(state, { editable: context.editable }));
 			// Inspiration an ally holds from a Marshal's We Happy Few (./inspiration.js): shown only while
 			// held, with the count in words, and pressed to act fearlessly (the other two spends have cards).
 			context.stonetop.inspiration = inspirationChip(this.actor, { editable: context.editable });
@@ -3911,7 +3924,11 @@ export function createStonetopCharacterSheetClass(Base) {
 			// the Moves tab, a mid-play switch to Beast-Bonded, or learned through another playbook's
 			// move: onboarding asks about none of those. "Create your companion" (_onCreateCompanion).
 			const companionSetupOffer = !!companionDef && !acSlug && ownsLearned(ANIMAL_COMPANION_MOVE);
-			return { ...groups, possessionFollowerOffers, crewSetupOffer, companionSetupOffer };
+			// And the follower a homebrew background gives ("work with the GM to create a monstrous follower.
+			// They start with loyalty 2"), until one made from it is on the sheet (homebrew-roll-bends.js).
+			const backgroundFollower = backgroundFollowerOffer(playbookDoc, this._stonetopCharacter?.background?.selectedSlug, customMap);
+			this._backgroundFollower = backgroundFollower;
+			return { ...groups, possessionFollowerOffers, crewSetupOffer, companionSetupOffer, backgroundFollower };
 		}
 
 		// `borrowed`: the list is the Lightbearer's, drawn on through Invoke the Sun God by someone
@@ -5391,6 +5408,12 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!cue) return;
 				ev.preventDefault();
 				ev.stopPropagation();
+				// A possession's own pick (Weapons of War's "Choose 1") is made on its card, in edit mode.
+				if (cue.dataset.possessionChoicesInline) {
+					this._editingSections.add("possessions");
+					this.render(false);
+					return;
+				}
 				this._openPossessionChoices(cue.dataset.possessionChoicesOwed, { addOnly: true });
 			}, true);
 			html.find(".stonetop-levelup-open-btn").on("click", this._onLevelUpOpen.bind(this));
@@ -5429,6 +5452,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find("button.stonetop-battle-joy").on("click", this._onBattleJoyToggle.bind(this));
 			html.find(Object.values(FIGHT_STATES).map(def => `button.${def.stem}`).join(", "))
 				.on("click", this._onFightStateToggle.bind(this));
+			// A homebrew insert's form, on the same `button.` terms.
+			html.find(`button.${INSERT_FORM_STEM}`).on("click", this._onInsertFormToggle.bind(this));
 			// Releasing a held advantage, on the same `button.` terms: the read-only copy is a
 			// <span> and must not be wired.
 			html.find("button.stonetop-held-advantage").on("click", this._onReleaseHeldAdvantage.bind(this));
@@ -5635,6 +5660,18 @@ export function createStonetopCharacterSheetClass(Base) {
 
 			// Create a follower via the Book I walkthrough (NPCs & Followers, p.474).
 			html.find(".stonetop-create-follower-btn").on("click", () => this._onCreateFollowerOpen());
+			// The follower a homebrew background gives (backgroundFollowerOffer): the same walkthrough, its
+			// type filled in, and the Loyalty it starts with set on the card it makes.
+			html.find(".stonetop-create-bg-follower").on("click", () => this._onCreateFollowerOpen({ fromBackground: this._backgroundFollower }));
+			// A homebrew move's Minor Arcana draw still owed (occult-draw.js): draw, keep one, unlocked.
+			html.find(".stonetop-move-occult-draw").on("click", async ev => {
+				ev.preventDefault();
+				ev.stopPropagation();
+				if (!this.isEditable) return;
+				const name = ev.currentTarget.dataset.moveName;
+				const count = Number(ev.currentTarget.dataset.count) || 3;
+				if (await runOccultDraw(this.actor, name, { count, held: this._heldMinorArcana() })) this.render(false);
+			});
 			// Materialize a playbook possession-follower (dog / Hounds / Mastiffs) as a card.
 			html.find(".stonetop-add-possession-follower").on("click", ev =>
 				this._onAddPossessionFollower(ev.currentTarget.dataset.slug));
@@ -7692,11 +7729,20 @@ export function createStonetopCharacterSheetClass(Base) {
 				learnedMoveNames: learned.keys(),
 				...this._altStatBackground(),
 			});
-			if (!rows.length) return null;
 			const grants = [];
 			for (const g of rows) {
 				grants.push(g.ownsMove ? learned.get(g.ownsMove) : await this._backgroundGrantQuote(g.background, quotedAs));
 			}
+			// A homebrew move's or background's own "roll +CHA instead" for this move (homebrew-roll-bends.js),
+			// beside the book's: a stat a book row already grants is offered once.
+			if (roll.moveName) {
+				for (const { altStat, grant } of (await this._stonetopCharacter?.homebrewStatGrants?.(roll.moveName, roll.defaultStat)) ?? []) {
+					if (rows.some(r => r.altStat === altStat)) continue;
+					rows.push({ whenMove: roll.moveName, altStat, ownsMove: grant.name });
+					grants.push(grant);
+				}
+			}
+			if (!rows.length) return null;
 			return { rows, grants };
 		}
 
@@ -8283,13 +8329,17 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * would tell a Blessed that a veil they cast last session cannot be rolled for.
 		 */
 		_stockCostHtml(cost, { deferred = false } = {}) {
-			const purses = cost.sources.map(s =>
+			// A homebrew move's prices in place of Stock (Witchcraft's) read as one line naming the move; the
+			// picker below lists each.
+			const insteadFrom = [...new Set(cost.sources.filter(s => s.standIn).map(s => s.standIn.from).filter(Boolean))];
+			const purses = cost.sources.filter(s => !s.standIn).map(s =>
 				`<span class="stonetop-move-cost-purse${s.remaining >= cost.amount ? "" : " is-empty"}">`
 				// A Vessel's HP has no count to show; it reads as the trade the background offers.
 				+ (s.vessel
 					? `or lose <strong>${vesselHpFormula(cost.amount)}</strong> HP (Vessel)`
 					: `${_esc(s.label)} <strong>${s.remaining}</strong> of ${s.max}`)
-				+ `</span>`).join("");
+				+ `</span>`).join("")
+				+ (insteadFrom.length ? `<span class="stonetop-move-cost-purse">or pay in its place, as ${_esc(insteadFrom.join(" or "))} says</span>` : "");
 			// Only asked when there is genuinely a choice; one payable purse is spent silently.
 			// Always asked when the Vessel's HP is on offer, even alone: the book says a Vessel
 			// "may choose" to bleed, so it is never taken without being named. The pouch sits
@@ -8335,7 +8385,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				return false;
 			}
 			const { lost } = await this._stonetopCharacter.spendStock(source, cost.amount, { moveName });
-			const left = source.vessel ? "" : ` (${source.remaining - cost.amount} left)`;
+			const left = purseLeftNote(source, cost.amount);
 			ui.notifications?.info(`${moveName}: ${stockReceipt(source, cost.amount, lost)}${left}.`);
 			this.render(false);
 			return { ...source, lost };
@@ -8860,7 +8910,8 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (!crossPlaybook) return; // not a cross-playbook move
 			const grantsPossession = crossPlaybook.grantsPossession ?? null;
 			const level   = this.actor.system?.attributes?.level?.value ?? 1;
-			const foreign = await this._stonetopCharacter.getForeignMovesForLevelUp(crossPlaybook, level);
+			const foreign = await this._stonetopCharacter.getForeignMovesForLevelUp(crossPlaybook, level,
+				{ grantedBy: addedItem.system?.description ?? "", grantedByName: addedItem.name ?? "" });
 			// Only on the take that brings the pouch: a second Initiate finds it already held.
 			const newPossession = !!grantsPossession && !(await this._stonetopCharacter.holdsPossession(grantsPossession));
 			// Nothing new qualifies (e.g. a repeat take that already scooped every eligible move).
@@ -10461,6 +10512,45 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		/**
+		 * A homebrew insert's form, from the header glyph. Taking it off is plain, as the insert tab's switch
+		 * is (what it costs to revert is the playbook's rule, said at the table). Taking it on asks first when
+		 * a move of the character's puts it on by its roll (the Stranger's Metamorphosis,
+		 * tier-effects.js#insertFormRollFor): roll that, through the Moves tab's own path, whose result puts
+		 * the form on; or take it on without rolling. With no such move it simply switches.
+		 */
+		async _onInsertFormToggle(ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			if (!this.isEditable) return;
+			const key = ev.currentTarget.dataset.insertFormKey;
+			if (!key) return;
+			const shiftKey = ev.shiftKey;
+			if (this._stonetopCharacter.wearingInsertForm(key)) {
+				await this._stonetopCharacter.setInsertForm(key, false);
+				this.render(false);
+				return;
+			}
+			const roller = this.actor.items.find(i => i.type === "move" && insertFormRollFor(this.actor, i.name)?.key === key);
+			if (roller) {
+				const ins = homebrewPlaybookInserts(this.actor.system?.playbook?.slug).find(i => i?.key === key);
+				const on = ins?.form?.on || "Transform";
+				const how = await askWithButtons({
+					title: `${on}: ${ins?.name || "your other form"}`,
+					content: `<p><strong>${escHtml(roller.name)}</strong> is the move that brings this form out. Roll it, and its result puts the form on; or take the form on without rolling, if the roll was made at the table or the GM says so.</p>`,
+					buttons: [
+						{ key: "roll", label: `Roll ${roller.name}`, icon: "fa-dice", value: "roll" },
+						{ key: "take", label: `${on} without rolling`, icon: "fa-person-rays", value: "take" },
+					],
+					defaultKey: "roll",
+				});
+				if (how === "roll") return this.rollMoveById(roller.id, { shiftKey });
+				if (how !== "take") return;
+			}
+			await this._stonetopCharacter.setInsertForm(key, true);
+			this.render(false);
+		}
+
+		/**
 		 * We Happy Few: "Act fearlessly in the face of terror or overwhelming odds", 1 Inspiration. The
 		 * fiction is the table's; the sheet asks, spends one and says so in chat (./inspiration-flow.js).
 		 */
@@ -10626,14 +10716,21 @@ export function createStonetopCharacterSheetClass(Base) {
 
 		// Open the Create-a-Follower walkthrough (Book I, NPCs & Followers, p.474).
 		// On finish it hands back buildCustomFollower() data, which we persist.
-		async _onCreateFollowerOpen() {
+		async _onCreateFollowerOpen({ fromBackground = null } = {}) {
 			if (!this.isEditable) return;
+			const typeLabel = fromBackground ? capitalizeFirst(fromBackground.kind) : "";
 			new CreateFollowerDialog(
 				this.actor,
 				(data) => this._applyCustomFollower(data),
 				// Recruit a villager: offer the linked steading's residents as name
-				// suggestions on the walkthrough's first step (NPCs & Followers p.474).
-				{ residentNames: this._steadingResidentNames() },
+				// suggestions on the walkthrough's first step (NPCs & Followers p.474). A background's
+				// follower keeps where it came from (so the offer goes) and starts at its Loyalty; the
+				// walkthrough adds both itself, so one a reload brought back does too.
+				{
+					residentNames: this._steadingResidentNames(),
+					...(typeLabel ? { preset: { typeLabel } } : {}),
+					...(fromBackground ? { fromBackground: { slug: fromBackground.slug, loyalty: fromBackground.loyalty } } : {}),
+				},
 			).render(true);
 		}
 
@@ -15922,6 +16019,7 @@ function _advancementContext(adv, marked = {}, stats = {}) {
 	return {
 		note: String(adv.note ?? ""),
 		replacesUsual: !!adv.replacesUsual,
+		switchFromLevel: Number(adv.switchFromLevel) || 0,
 		options: adv.options.map(o => {
 			const m = marked?.[o.slug] ?? null;
 			const statName = m?.stat ? (_ADVANCE_STATS.find(([k]) => k === m.stat)?.[1] ?? "") : "";

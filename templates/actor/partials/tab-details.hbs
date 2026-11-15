@@ -385,6 +385,8 @@
 			{{#if this.stonetop.advancement.note}}<p class="stonetop-advancement-aside">{{this.stonetop.advancement.note}}</p>{{/if}}
 			{{!-- The Standout's: Level Up is a change of playbook, with no advances to mark. --}}
 			{{#if this.stonetop.advancement.switchPlaybook}}<p class="stonetop-advancement-aside">Level Up takes the level, then opens the playbook picker for the new one.</p>{{/if}}
+			{{!-- The Familiar Face's: from a level on, a change of playbook offered beside the advances. --}}
+			{{#if this.stonetop.advancement.switchFromLevel}}<p class="stonetop-advancement-aside">From level {{this.stonetop.advancement.switchFromLevel}}, Level Up also offers a change of playbook in place of an advance.</p>{{/if}}
 		</div>
 		{{/if}}
 

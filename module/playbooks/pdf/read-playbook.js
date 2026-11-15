@@ -27,7 +27,7 @@ import { layoutDocument } from "./layout.js";
 import { emptyBundle, HP_LIMITS, DAMAGE_DICE } from "../homebrew-bundle.js";
 import { wholeWordPattern, looseName, slugify } from "../../utils/strings.js";
 import { pickCountRange } from "../../actors/character/lore-pick-count.js";
-import { parseTiersFromProse } from "../../utils/move-tiers.js";
+import { rollFromWords, heldFromWords, onceTitle } from "../move-words.js";
 
 // Brackets are taken off before this is tried ("(WIS)(WIS)" is " WIS  WIS "), so the bare
 // abbreviations are here too: missed, the stat box's labels ran on into the move above them.
@@ -38,7 +38,6 @@ const TITLE_CAPS = /^[^a-z]*[A-Z][^a-z]*$/;
 // "Once, you can …" opening a sentence: a thing done once ever. "Once per session, you can …".
 const ONCE = /(?:^|[.!?]\s+|\n)once,?\s+you\s+(?:can|may)\b/i;
 const SWITCH_PLAYBOOK = /\bwhen you level up\b[^.]*\b(?:switch|change|move on)\b[^.]*\b(?:different|new|another|other)\s+playbook\b/i;
-const ONCE_PER =/\bonce (?:per|a|each) (session|day|adventure|expedition|season|fight)\b/i;
 
 const KNOWN = [
 	["stats", /^stats$/i],
@@ -51,7 +50,9 @@ const KNOWN = [
 	["intro", /^introductions\b/i],
 ];
 
-const titleCase = s => String(s).toLowerCase().replace(/(^|[\s(“"'-])([a-z])/g, (m, a, b) => a + b.toUpperCase())
+// A letter after a quote opening a word is capitalised; after an apostrophe inside one it is not
+// ("I DON'T" is "I Don't", "LADY'S DOOR" "Lady's Door").
+const titleCase = s => String(s).toLowerCase().replace(/(^|[\s(“"-]|(?<![\p{L}\p{N}])['‘’])([a-z])/gu, (m, a, b) => a + b.toUpperCase())
 	.replace(/\b(Of|The|And|A|An|In|On|To|For|With|From|At|By|Or)\b/g, (m, w, i) => (i === 0 ? w : w.toLowerCase()))
 	.replace(/^./, c => c.toUpperCase());
 
@@ -109,6 +110,8 @@ function _stream(pageRuns) {
 			if (!cleaned.text && !cleaned.lead.boxes) continue;
 			// An emblem set as type (the Standout's 52pt "?"): no word in it, far bigger than any heading.
 			if (!cleaned.lead.boxes && !/[\p{L}\p{N}]/u.test(cleaned.text) && cleaned.maxSize >= 20) continue;
+			// A divider typed as a row of dashes ("-----" between a list's two halves): no words, no box.
+			if (!cleaned.lead.boxes && /^[-\u2013\u2014_.\s]{3,}$/.test(cleaned.text)) continue;
 			if (!cleaned.lead.boxes && STAT_WORDS.test(cleaned.text.replace(/[()]/g, " ").replace(/StrengthStrength|DexterityDexterity/g, ""))) {
 				// The stat box's own labels: kept only where the HP and damage are read from.
 				cleaned.statChrome = true;
@@ -117,6 +120,42 @@ function _stream(pageRuns) {
 		}
 	}));
 	return lines;
+}
+
+/**
+ * Where to look for the playbook's emblem (the Stranger's raven, the Standout's "?" in a ring): the
+ * stretch of the name's page right of the name, from the top of the page down to the first heading
+ * under the name. In points, top-left origin, with every text run inside it that is NOT part of the
+ * emblem (the blurb wrapping beside it) as boxes to blank out first. An emblem set as type (a big
+ * wordless glyph) is kept. pdf/pdf-emblem.js renders it; null when there is no room beside the name.
+ * @returns {{page: number, box: {x0,y0,x1,y1}, mask: {x0,y0,x1,y1}[]}|null}  page is 1-based
+ */
+export function emblemRegion(pageRuns, nameSection, sections = []) {
+	const page = pageRuns?.pages?.[nameSection.page - 1];
+	if (!page) return null;
+	const runs = page.runs ?? [];
+	const near = (a, b, tol) => Math.abs(a - b) <= tol;
+	const title = runs.filter(r => near(r.size, nameSection.size, 1.5) && near(r.y, nameSection.y, nameSection.size * 0.6));
+	if (!title.length) return null;
+	const left = Math.min(...title.map(r => r.x));
+	const right = Math.max(...title.map(r => r.x + r.w));
+	const below = sections
+		.filter(s => s !== nameSection && s.title && s.page === nameSection.page && s.y > nameSection.y + 2)
+		.map(s => s.y - s.size)
+		.filter(y => y > nameSection.y);
+	const box = {
+		x0: right + 2,
+		y0: 0,
+		x1: page.w,
+		y1: below.length ? Math.min(...below) - 1 : Math.min(page.h, nameSection.y + nameSection.size * 2.5),
+	};
+	if (box.x1 - box.x0 < 20 || box.y1 - box.y0 < 20) return null;
+	// Text inside the box is blanked, but not an emblem set as type: no letter or digit in it, large.
+	const typeset = r => !/[\p{L}\p{N}]/u.test(r.str) && r.size >= 20;
+	const mask = runs
+		.filter(r => !typeset(r) && !title.includes(r) && r.x < box.x1 && r.x + r.w > box.x0 - 40 && r.y > box.y0 && r.y - r.size < box.y1 && r.x + r.w > left)
+		.map(r => ({ x0: r.x - 1, y0: r.y - r.size * 1.05, x1: r.x + r.w + 1, y1: r.y + r.size * 0.3 }));
+	return { page: nameSection.page, box, mask };
 }
 
 /** Is this line a section heading? Avara face, or set clearly larger than the body. */
@@ -189,7 +228,7 @@ function _mode(values) {
 // ---- Items -----------------------------------------------------------------------------------
 
 /** The line's prose with the book's emphasis typed as the builder's asterisks. */
-function _lineText(line, { skipLead = true } = {}) {
+function _lineText(line, { skipLead = true, bold = false } = {}) {
 	let out = "";
 	let leading = skipLead;
 	let afterGlyph = false;
@@ -219,10 +258,17 @@ function _lineText(line, { skipLead = true } = {}) {
 		if (afterGlyph && !m[1] && /^[\p{L}\p{N}]/u.test(core)) out += " ";
 		afterGlyph = false;
 		// Punctuation alone in a styled face (an italic comma after a tag) is not worth a span.
-		const wrap = /^[\p{P}\s]+$/u.test(core) ? "" : p.role === "bolditalic" ? "***" : p.role === "italic" ? "*" : "";
+		// Bold is left plain unless asked for: elsewhere it sets titles, which are read off by role.
+		const wrap = /^[\p{P}\s]+$/u.test(core) ? "" : p.role === "bolditalic" ? "***" : p.role === "italic" ? "*" : bold && p.role === "bold" ? "**" : "";
 		out += m[1] + (wrap ? wrap + core + wrap : core) + m[3];
 	}
 	return out.replace(/\s+/g, " ").trim().replace(CREDIT, "");
+}
+
+/** A line set wholly in bold (a sub-heading in the body face): every word of it bold. */
+function _allBold(line) {
+	const inked = line.parts.filter(p => p.role !== "gap" && p.role !== "dingbat" && p.text.trim());
+	return inked.length > 0 && !line.lead.boxes && inked.every(p => p.role === "bold" || /^[\p{P}\s]+$/u.test(p.text)) && inked.some(p => p.role === "bold");
 }
 
 /** The item's caps title (bold, ALL CAPS) off its first line, and the rest of that line. */
@@ -245,7 +291,20 @@ function _title(line) {
 		rest = rest.replace(new RegExp(`^\\**${word}\\**\\s*`), "");
 	}
 	rest = rest.replace(/^○+\s*/, "");
+	// "ABHORSEN'S DOOR *": a move marked for a footnote keeps its mark, on its name.
+	if (/^\*+$/.test(rest.trim())) { title += rest.trim(); rest = ""; }
 	return { title, rest };
+}
+
+/**
+ * The rest of a caps name that ran over its line ("I DON'T THINK YOU HAVE A CLUE / WHAT IT'S LIKE
+ * TO COMMUNICATE / WITH THESE KIDS"): a line that is nothing but more of it, or null.
+ */
+function _titleCarried(item, line) {
+	if (!item?.title || item.first || item.body.length || line.lead.boxes || !_sameColumn(line, item.line)) return null;
+	if (line.y - item.lastTitleY > 12) return null;
+	const t = _title(line);
+	return t.title && !t.rest ? t.title : null;
 }
 
 /**
@@ -265,11 +324,19 @@ function _items(lines, { greedy = false } = {}) {
 			// compared within a column: the next column's lines all sit further right.
 			if (cur && !t.title && _sameColumn(line, cur.line) && line.indent > cur.line.indent + 6) { cur.body.push({ line, bullet: true }); continue; }
 			if (t.title || !cur || !cur.title) {
-				cur = { line, title: t.title, first: t.rest, body: [], boxes: line.lead.boxes, ticked: line.lead.ticked, pips: line.pips, x: line.x, subs: [] };
+				cur = { line, title: t.title, first: t.rest, body: [], boxes: line.lead.boxes, ticked: line.lead.ticked, pips: line.pips, x: line.x, subs: [], lastTitleY: line.y };
 				items.push(cur);
 				continue;
 			}
 			cur.body.push({ line, bullet: true });
+			continue;
+		}
+		const carried = _titleCarried(cur, line);
+		if (carried) {
+			// The footnote's mark goes after the whole name, wherever the first line put it.
+			const mark = cur.title.match(/\*+$/)?.[0] ?? "";
+			cur.title = `${cur.title.slice(0, cur.title.length - mark.length)} ${carried}`.replace(/\s+/g, " ").trim().replace(/\s*(\*+)$/, "$1") + mark;
+			cur.lastTitleY = line.y;
 			continue;
 		}
 		if (cur && (cur.title || line.indent > cur.line.indent + 6 || (greedy && line.y > cur.line.y))) { cur.body.push({ line }); continue; }
@@ -306,6 +373,7 @@ function _prose(entries, baseX = null) {
 	let prev = null;      // the last line written, and its text
 	let prevText = "";
 	let bulletX = null;   // the x of the bullet being written, while one is open
+	let markedX = null;   // the x its words start at, when the PDF marks its bullets ("•")
 	const x0 = baseX ?? Math.min(...entries.map(e => (e.line ?? e).x));
 	const right = Math.max(...entries.map(e => (e.line ?? e).end ?? -Infinity));
 	for (const e of entries) {
@@ -316,12 +384,21 @@ function _prose(entries, baseX = null) {
 		const gap = prevY === null ? 0 : line.y - prevY;
 		if (prevY !== null && spacing === null && gap > 0) spacing = gap;
 		const boxed = !!line.lead?.boxes && e !== entries[0];
-		const bullet = e.bullet || line.x > x0 + 8 || boxed;
+		const marked = !!line.lead?.bullet;
+		const bullet = e.bullet || marked || line.x > x0 + 8 || boxed;
 		const near = gap <= (spacing ?? 9.5) * 1.5;
 		// A bullet's sentence carried on to the next line: the line before ran to the edge, and this one
 		// picks up in lower case ("…participate in something / monstrous."). A capital is a new bullet.
 		const carried = !!prev && near && _ranFull(prev, prevText, text, right) && !/^[A-Z“"‘'(]/.test(text);
+		// Where the PDF marks its bullets, a line without a mark, set at the bullet's words, is that
+		// bullet's next line whatever its first letter ("Bring 1 nearby target with you through the /
+		// Last Door immediately").
+		const underMark = !marked && !boxed && !e.bullet && markedX !== null && near && Math.abs((line.textX ?? line.x) - markedX) < 3;
+		// A hanging indent: a sentence the line before left unfinished, carried on further in
+		// ("In Stonetop's Pavilion of the Gods, the Lady's / shrine has… (choose 1)").
+		const hanging = !marked && !boxed && !e.bullet && bulletX === null && !!prev && near && !_endsSentence(prevText) && /^[^A-Z“"‘'(•\-–]/.test(text);
 		if (!out) out = bullet ? `- ${text}` : text;
+		else if (underMark || hanging) out += (/[A-Za-z]-$/.test(out) ? "" : " ") + text;
 		else if (bullet && !e.bullet && !boxed && bulletX !== null && Math.abs(line.x - bulletX) < 2 && carried) out += ` ${text}`;
 		else if (bullet) out += `\n- ${text}`;
 		// A wide gap is a new paragraph, unless the line before stopped mid-sentence (the template's
@@ -331,8 +408,11 @@ function _prose(entries, baseX = null) {
 		// on into it: the template sets a boxed option's second line at the margin, under the box
 		// ("☐ Work with the GM to choose a move from / any other playbook, …").
 		else if (/\n- [^\n]*$/.test(out) && line.x <= x0 + 8 && !(near && !_endsSentence(prevText) && /^[a-z]/.test(text))) out += `\n\n${text}`;
-		else out += (/[A-Za-z]-$/.test(out) && /^[a-z]/.test(text) ? "" : " ") + text;
+		// A word broken at its hyphen joins again: "consid-/ered", and "Black-/Feather Woman" keeps it.
+		else out += (/[A-Za-z]-$/.test(out) && /^[A-Za-z]/.test(text) ? "" : " ") + text;
+		if (underMark || hanging) { prevY = line.y; prev = line; prevText = text; continue; }
 		bulletX = bullet ? line.x : null;
+		markedX = marked ? (line.textX ?? line.x) : null;
 		prevY = line.y;
 		prev = line;
 		prevText = text;
@@ -369,7 +449,13 @@ function _itemText(item) {
 // ---- The reader: sections -> a draft ---------------------------------------------------------
 
 function _read(pageRuns, report, issue) {
-	const lines = _stream(pageRuns);
+	const all = _stream(pageRuns);
+	// A footnote ("* The first time you use any move marked with an asterisk…"): set smaller than the
+	// prose, opening on its asterisk. It belongs to no section; under the moves it would read as the
+	// last move's own words.
+	const prose = _mode(all.flatMap(l => l.parts.filter(p => p.role === "body").map(p => Math.round(p.size)))) || 8;
+	const footnotes = all.filter(l => !l.lead.boxes && /^\*/.test(l.text) && l.maxSize <= prose - 0.75);
+	const lines = all.filter(l => !footnotes.includes(l));
 	const sections = _sections(lines);
 	let ids = 0;
 	const draft = {
@@ -408,6 +494,8 @@ function _read(pageRuns, report, issue) {
 		f.name = nameSection.title.trim();
 		nameSection.kind = "name";
 		f.description = _prose(nameSection.lines).replace(/\*/g, "");
+		// Where the playbook's emblem sits, beside its name, for the builder to take as its picture.
+		report.emblem = emblemRegion(pageRuns, nameSection, sections);
 	} else {
 		draft.confirm.push({ key: "name", type: "text", label: "What is this playbook called?", why: "No name was found at the top of the first page.", value: "" });
 	}
@@ -460,6 +548,10 @@ function _read(pageRuns, report, issue) {
 		if (s.kind && !["skip", "backpage", "preamble"].includes(s.kind)) report.sections.push(`${s.title} → ${_kindLabel(s.kind)}`);
 	}
 	for (const s of customs) _custom(s, draft);
+	if (footnotes.length) {
+		draft.add("note", { title: "Footnote", text: _prose(footnotes), from: `A footnote (page ${footnotes[0].page})` });
+		report.sections.push("A footnote → Notes");
+	}
 	for (const ins of inserts) _insertParts(ins, draft);
 	_advancement(draft);
 	_settleDamagePair(draft);
@@ -555,7 +647,7 @@ function _moves(s, draft, { keepNote = false, from = "Moves" } = {}) {
 		const extra = { ticked: !!item.ticked, boxes: item.boxes, pips: item.pips ?? [], rawTitle: item.title };
 		if (/^custom$/i.test(title)) {
 			draft.add("skip", { title: "Custom move", text: _itemFlat(item), extra, from, unsure: true,
-				why: "A write-in move the player makes up with the GM. Left out unless you want it as a move or a note." });
+				why: "A blank \"write your own\" move, for the player to make up with the GM. It's left out; choose Move to give players one." });
 			continue;
 		}
 		draft.add(item.ticked ? "startingMove" : "move", { title, text: _itemText(item), extra, from });
@@ -572,6 +664,8 @@ function _backgroundMoves(text) {
 			.map(x => x.replace(/\s+from\s+the\s+.*$/i, "").trim()).filter(Boolean).map(titleCase);
 	}
 	for (const m of plain.matchAll(/\b(?:gain|get|start with|take)\s+the\s+(.+?)\s+move\b/gi)) moves.push(titleCase(m[1].replace(/[“”"]/g, "")));
+	// "…and have inherited an Enchiridon of Death, go mark that move now."
+	for (const m of plain.matchAll(/\b(?:have|has|inherited|been given|received)\s+(?:an?\s+|the\s+)?([A-Z][^,.;:\n]*?),\s*(?:go\s+)?mark\s+(?:that|this|the)\s+move\b/g)) moves.push(titleCase(m[1].trim()));
 	return { moves: [...new Set(moves)], moveChoice };
 }
 
@@ -587,6 +681,10 @@ function _backgroundPossessions(text) {
 	// Weapons of War as a special possession" names Weapons of War.
 	for (const m of plain.matchAll(/\b(?:get|gain|add|take|start with)\s+([^.:;\n]+?)\s+as\s+(?:a|an|your)?\s*(?:additional|extra|bonus)?\s*special possession/gi)) {
 		out.push(m[1].replace(/^(?:the|a|an|your)\s+/i, "").trim());
+	}
+	// "You have a rookery in addition to your usual choice of special possessions".
+	for (const m of plain.matchAll(/\b(?:have|get|gain|take)\s+(?:a|an|the|your)?\s*([^.:;,\n]+?)\s+in addition to (?:your|the) usual (?:choice|pick) of special possessions/gi)) {
+		out.push(m[1].trim());
 	}
 	return [...new Set(out)];
 }
@@ -766,17 +864,43 @@ function _intro(s, draft) {
 	const steps = new Map();
 	let step = 0;
 	const free = [];
+	let last = null; // where the line before went: { line, into }
 	for (const line of s.lines) {
 		const digit = (line.headingText || "").match(/^(\d)$/)?.[1] ?? line.text.match(/^(\d)\s+On your/i)?.[1];
-		if (digit) { step = Number(digit); steps.set(step, { text: [line], items: [] }); continue; }
+		if (digit) {
+			step = Number(digit);
+			const text = [line];
+			// A step's number centred on its two lines sits under its first ("Go around again. Ask
+			// another question from 6, / or pass…" with the 7 between them): that first line is the
+			// step's, not the one before's.
+			if (last && last.into.at(-1) === last.line && !last.line.lead.boxes && line.y - last.line.y > 0 && line.y - last.line.y <= 8 && last.line.x > line.x + 8) {
+				last.into.pop();
+				text.push(last.line);
+			}
+			steps.set(step, { text, items: [] });
+			last = null;
+			continue;
+		}
 		if (!step) { free.push(line); continue; }
 		const cur = steps.get(step);
-		if (line.lead.boxes) cur.items.push([line]);
-		else if (cur.items.length && line.x > cur.items[cur.items.length - 1][0].x + 6) cur.items[cur.items.length - 1].push(line);
-		else cur.text.push(line);
+		const item = cur.items.at(-1);
+		let into;
+		if (line.lead.boxes) cur.items.push(into = [line]);
+		// An option's question carried on to the next line: set further in, or back at the column's
+		// edge under its box while the question isn't finished ("Do you have a plan to find a trainee
+		// or a / replacement?").
+		else if (item && (line.x > item[0].x + 6 || (!_endsSentence(item.map(l => l.text).join(" ")) && line.y - item.at(-1).y <= 12))) (into = item).push(line);
+		else (into = cur.text).push(line);
+		last = { line, into };
 	}
 	const join = ls => ls.map(l => _lineText(l)).join(" ").replace(/^\d\s+/, "").replace(/\*/g, "").replace(/\s+/g, " ").trim();
-	if (steps.has(3)) intro.step3 = join(steps.get(3).text).replace(/^On your third turn,?\s*/i, "");
+	// Step 3 keeps its bold ("tell us **where you belong**"), as the book's own step 3s do; a bold run
+	// broken over two lines is one run again.
+	if (steps.has(3)) {
+		intro.step3 = steps.get(3).text.map(l => _lineText(l, { bold: true })).join(" ")
+			.replace(/\*\*\s+\*\*/g, " ").replace(/\s+/g, " ").trim().replace(/^(\*\*)?\d\s+/, "$1")
+			.replace(/^(\*\*)?On your third turn(\*\*)?,?(\*\*)?\s*/i, (m, a, b, c) => ((a ? 1 : 0) + (b ? 1 : 0) + (c ? 1 : 0)) % 2 ? "**" : "");
+	}
 	if (steps.has(4)) intro.step4 = steps.get(4).items.map(join).filter(Boolean);
 	if (steps.has(6)) intro.step6 = steps.get(6).items.map(join).filter(Boolean);
 	if (!steps.size) {
@@ -792,13 +916,19 @@ function _intro(s, draft) {
 function _blankAfterDanglingWord(text) {
 	const t = String(text ?? "").trim();
 	if (/_{3,}/.test(t)) return t;
-	return /\b(?:from|by|with|of|to|for|at|about|named|called|into|toward|towards|against|than|as)$/i.test(t) ? `${t} ___` : t;
+	return /\b(?:from|by|with|of|to|for|at|about|named|called|into|toward|towards|against|than|as|upon|the|a|an|your|my)$/i.test(t) ? `${t} ___` : t;
 }
 
 /**
  * A short title for one of several questions under a heading: its own question ("How did you
  * arrive in Stonetop?"), else the clause that leads into its options ("When you were young they …").
  */
+/** Whether a prompt asks its reader something: a question mark, or "(choose 1 or 2)" / "(pick 1)". */
+function _asksAQuestion(prompt) {
+	const plain = String(prompt ?? "").replace(/\*/g, "");
+	return /\?/.test(plain) || /\((?:choose|pick)\s+(?:\d|one|two|three|any)/i.test(plain);
+}
+
 function _questionTitle(prompt) {
 	const plain = String(prompt ?? "").replace(/\*/g, "").replace(/\s*\((?:choose|pick)[^)]*\)\s*/gi, " ").replace(/\s+/g, " ").trim();
 	if (!plain) return "";
@@ -845,13 +975,42 @@ function _advancement(draft) {
 		}
 		if (options.length < 2) continue;
 		// "When you Level Up to Level 3 or higher, you can choose to change to a different playbook…"
-		const note = lines.find(l => /\blevel up to level \d+\b/i.test(l))?.trim() ?? "";
-		draft.fields.advancement = { replacesUsual: /\binstead of the usual\b/i.test(lines[at]), options, note };
+		const later = lines.find(l => /\blevel up to level \d+\b/i.test(l))?.trim() ?? "";
+		// "For each particularly useful tag you possess, mark one of the following before play": it
+		// speaks of the advances, so it goes with them (Level Up and the Details tab show the note).
+		const lifted = new Set([lines[at], ...options.map(o => `- ${o}`), later].map(l => l.trim()).filter(Boolean));
+		const about = lines.filter(l => l.trim() && !lifted.has(l.trim()) && !/^- /.test(l) && /\bone of the following\b/i.test(l)).map(l => l.trim());
+		const note = [...about, later].filter(Boolean).join(" ");
+		const switchAt = _laterSwitch(later);
+		draft.fields.advancement = { replacesUsual: /\binstead of the usual\b/i.test(lines[at]), options, note, ...switchAt };
 		draft.report.sections.push(`Its own Level Up (${options.length} advances) → Level Up`);
-		// Placed now: the words stay a note for the table, and Level Up does what they say.
-		if (b.kind === "note") { b.unsure = false; b.why = ""; }
+		// The words Level Up now holds come out of the notes, or the Details tab lists every advance
+		// twice (one list per card); whatever else the block says stays a note.
+		for (const l of about) lifted.add(l);
+		const keep = s => !lifted.has(String(s).replace(/\*/g, "").trim()) && !lifted.has(`- ${String(s).replace(/\*/g, "").trim()}`);
+		if (Array.isArray(b.options)) b.options = b.options.filter(o => keep(o.description ?? o.label ?? o));
+		b.text = String(b.text ?? "").split("\n").filter(l => keep(l)).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+		if (b.kind === "note") {
+			b.unsure = false;
+			b.why = "";
+			if (!_fullText(b).replace(/\*/g, "").trim()) {
+				// Read as left out, so the review doesn't say the GM moved it there.
+				b.kind = b.readAs = "skip";
+				b.why = "Its words are the playbook's own Level Up, on the Level Up panel.";
+			}
+		}
 		return;
 	}
+}
+
+/**
+ * "When you Level Up to Level 3 or higher, you can choose to change to a different playbook" (the
+ * Familiar Face): a change of playbook Level Up offers beside the advances from that level on, as
+ * `{switchFromLevel}`; {} for words that say no such thing.
+ */
+function _laterSwitch(line) {
+	const m = String(line ?? "").replace(/\*/g, "").match(/\blevel up to level (\d+)\b[^.]*\b(?:switch|change|move on)\b[^.]*\b(?:different|new|another|other)\s+playbook\b/i);
+	return m ? { switchFromLevel: Math.max(2, Math.min(10, Number(m[1]))) } : {};
 }
 
 /**
@@ -893,13 +1052,13 @@ function _custom(s, draft) {
 	// Moves of an insert ("Monster Moves"): caps-titled items with a body.
 	if (titled.length && titled.length >= items.length / 2 && titled.some(i => i.body.length)) {
 		const intro = [s.note, _prose(loose)].filter(Boolean).join(" ");
-		if (intro) draft.add("note", { title: heading, text: intro, from, unsure: true, why: `The opening text of "${heading}", a part of the playbook the book's playbooks don't have.` });
+		if (intro) draft.add("note", { title: heading, text: intro, from, unsure: true, why: `The opening words of "${heading}", a part the rulebook's playbooks don't have. Kept as a note for the table.` });
 		for (const item of titled) {
 			const title = titleCase(item.title.replace(/^\((.*)\)$/, "$1"));
 			if (draft.blocks.some(b => ["move", "startingMove"].includes(b.kind) && b.title.toLowerCase() === title.toLowerCase())) continue;
 			draft.add("move", { title, text: _itemText(item), from, unsure: true,
 				extra: { ticked: !!item.ticked, boxes: item.boxes, pips: item.pips ?? [], rawTitle: item.title, requires: `From the playbook's "${heading}"` },
-				why: `Read as a move from "${heading}", a part of the playbook the book's playbooks don't have. Characters can take it only through whatever "${heading}" says.` });
+				why: `A move from "${heading}", a part the rulebook's playbooks don't have. Characters can take it only the way "${heading}" says, not at Level Up.` });
 		}
 		retag("moves");
 		return;
@@ -927,6 +1086,18 @@ function _custom(s, draft) {
 			if (!group || group.options.length) { group = { prompt: [], options: [] }; groups.push(group); }
 			group.prompt.push(line);
 		}
+		// A question named by a bold line of its own ("Worship of the Lady", then "The worship of the Lady
+		// is… (choose 1)"): that line is its title. Words above it in the same stretch (the section's
+		// own introduction, "She has many titles…") are not the question's: a note of their own.
+		for (const g of groups) {
+			const k = g.prompt.findLastIndex(_allBold);
+			if (k < 0 || (k === g.prompt.length - 1 && !g.options.length)) continue;
+			g.title = _lineText(g.prompt[k]).replace(/\*/g, "").trim();
+			const lead = _prose(g.prompt.slice(0, k));
+			if (lead) draft.add("note", { title: heading, text: lead, from, unsure: true,
+				why: `The opening words of "${heading}", before its first question. Kept as a note for the table.` });
+			g.prompt = g.prompt.slice(k + 1);
+		}
 		const asked = groups.filter(g => g.options.length || _prose(g.prompt));
 		for (const g of groups) {
 			const text = _prose(g.prompt);
@@ -934,13 +1105,15 @@ function _custom(s, draft) {
 			// Several questions under one heading (the Stranger's five under "Belonging"): each is
 			// titled by its own question, and the heading stands over them as a group.
 			const several = asked.length > 1;
-			draft.add("question", { title: several ? (_questionTitle(text) || heading) : heading, text,
+			draft.add("question", { title: g.title || (several ? (_questionTitle(text) || heading) : heading), text,
 				extra: several ? { group: heading } : {},
 				options: g.options.length
 					? g.options.map(o => (o.freeText ? o : { ...o, description: _blankAfterDanglingWord(o.description) }))
 					: [{ description: "Your answer", max: 1, freeText: true }],
-				from, unsure: true,
-				why: `"${heading}" isn't a section the book's playbooks have. Read as a question each player answers in character creation.` });
+				// Asked as a question ("…what do people call you now? (choose 1 to 3)"), it is one, whatever the
+				// heading: only a prompt that asks nothing is left for the GM to place.
+				from, unsure: !_asksAQuestion(text),
+				why: `"${heading}" isn't a usual playbook section. It will be asked as a question in character creation.` });
 		}
 		retag("questions");
 		return;
@@ -948,7 +1121,7 @@ function _custom(s, draft) {
 	const prose = _prose([...s.lines.filter(l => !l.statChrome)]);
 	if (prose) {
 		draft.add("note", { title: `${heading}${s.note ? ` ${s.note}` : ""}`, text: prose, from, unsure: true,
-			why: `"${heading}" has no place on a character sheet, so it is kept as a note for the table.` });
+			why: `"${heading}" doesn't fit anywhere on a character sheet, so it's kept as a note for the table.` });
 	}
 	retag("Notes");
 }
@@ -1116,7 +1289,7 @@ function _insertOptions(lines) {
 function _insertParts(record, draft) {
 	const ins = record.data;
 	const from = `${ins.name} (page ${ins.page})`;
-	const doubt = ins.sure ? null : `The reader isn't sure "${ins.name}" is an insert (${ins.why}). Answer the question at the top to keep it as one, or say it isn't.`;
+	const doubt = ins.sure ? null : `The importer isn't sure "${ins.name}" is an insert, a tab of its own that a move grants (${ins.why}). Answer its question on Start here.`;
 	const base = { from, insert: ins.id };
 	for (const s of record.sections) {
 		const { items, loose } = _items(s.lines);
@@ -1139,7 +1312,7 @@ function _insertParts(record, draft) {
 				const held = s.insertHead && !!item.ticked;
 				draft.add(held ? "startingMove" : "move", { ...base, title, text: _itemText(item),
 					extra: { ticked: !!item.ticked, boxes: item.boxes, pips: item.pips ?? [], rawTitle: item.title, insertList: listKey },
-					unsure: !!doubt, why: doubt ?? (held ? `Printed ticked on "${ins.name}": everyone who opens the insert has it.` : "") });
+					unsure: !!doubt, why: doubt ?? (held ? `Printed ticked on "${ins.name}": everyone granted the insert has it.` : "") });
 			}
 			continue;
 		}
@@ -1152,9 +1325,9 @@ function _insertParts(record, draft) {
 			const uncounted = /\bper\b|\bplus\b/i.test(s.note);
 			const whys = [];
 			if (doubt) whys.push(doubt);
-			if (nested) whys.push("Some of its choices sit under another one; each became an option of its own.");
-			if (!range) whys.push("It doesn't say how many to pick, so it counts as one.");
-			else if (uncounted) whys.push(`It counts "${s.note.trim()}", which the sheet can't count for you: it takes ${range.max} and only says when there are more.`);
+			if (nested) whys.push("Some choices were printed under other choices. Each became a choice of its own; check they still make sense.");
+			if (!range) whys.push("The PDF doesn't say how many to pick, so players will pick 1. You can change the number in the builder.");
+			else if (uncounted) whys.push(`The PDF says "${s.note.trim()}". The sheet can't count that exactly, so it will let players tick ${range.max} and warn them if they tick more.`);
 			draft.add("question", { ...base, title: titleCase(s.title), text, options: options.length ? options : [{ description: "Your answer", max: 1, freeText: true }],
 				unsure: whys.length > 0, why: whys.join(" ") });
 			continue;
@@ -1165,7 +1338,7 @@ function _insertParts(record, draft) {
 }
 
 /**
- * The GM's question for an insert: which move opens it. The reader's guess is the move whose words
+ * The GM's question for an insert: which move grants it. The reader's guess is the move whose words
  * name the insert ("Fill out the Stranger's Monster Compendium insert"); only a sure insert with a
  * guess comes pre-answered.
  */
@@ -1175,9 +1348,9 @@ function _askInsert(record, draft) {
 	ins.guess = opener?.title ?? "";
 	draft.confirm.push({
 		key: `insert:${ins.id}`, type: "choice", insert: ins.id,
-		label: `Page ${ins.page} looks like an insert called "${ins.name}". Which move opens it?`,
+		label: `Page ${ins.page} looks like an insert called "${ins.name}". Which move grants it?`,
 		why: ins.sure
-			? (ins.guess ? `"${ins.guess}" names it. Its parts are kept apart from the playbook's: its moves are never offered at Level Up, and its lists aren't asked in character creation.` : `Nothing names the move that opens it (${ins.why}).`)
+			? (ins.guess ? `"${ins.guess}" names it. Its parts are kept apart from the playbook's: its moves are never offered at Level Up, and its lists aren't asked in character creation.` : `Nothing names the move that grants it (${ins.why}).`)
 			: `The reader isn't sure (${ins.why}). If it's an ordinary part of the playbook, say it isn't an insert.`,
 		value: ins.sure && ins.guess ? ins.guess : null,
 	});
@@ -1205,32 +1378,49 @@ function _moveFromBlock(b, starting) {
 	const requires = reqMatch ? reqMatch[1] : (b.extra?.requires ?? "");
 	const description = reqMatch ? text.slice(reqMatch[0].length).trim() : text;
 	const level = Number(requires.match(/level\s*(\d+)\s*\+/i)?.[1] ?? 1);
-	const plain = description.replace(/\*/g, "");
-	const results = { success: "", partial: "", failure: "" };
-	// The tiers as the sheet itself reads them out of a move's words (move-tiers.js), "on a 7+" and
-	// all. A "roll +STAT" with no tiers of its own that sits in a sentence naming another move ("when
-	// you taste blood and Seek Insight you may roll +CON", Nightbreed) bends THAT move's roll; it is
-	// not a roll of this one.
-	const tiers = parseTiersFromProse(plain);
-	const rollAt = plain.match(/roll\s*\+\s*(STR|DEX|CON|INT|WIS|CHA)\b/i);
-	const sentence = rollAt ? plain.slice(0, rollAt.index).split(/[.!?]\s/).pop() + rollAt[0] : "";
-	const bendsAnother = /\b(instead|seek insight|defy danger|clash|know things|persuade|let fly|defend|aid|interfere|forage|make camp|recover)\b/i.test(sentence);
-	const roll = rollAt && (tiers || !bendsAnother) ? rollAt[1].toLowerCase() : "";
-	if (roll && tiers) for (const k of Object.keys(results)) results[k] = String(tiers[k]?.value ?? "").trim();
+	// The roll and its tiers, read as a move typed by hand is (move-words.js).
+	const { rollType: roll, results } = rollFromWords(description);
 	let resource = null;
 	const pips = b.extra?.pips ?? [];
 	const track = pips.find(p => p.count > 0);
 	if (track) {
 		const fromTitle = track.label && String(b.extra?.rawTitle ?? b.title).toUpperCase().includes(track.label.toUpperCase());
-		const held = plain.match(/hold\s+\d+\s+([A-Z][a-z]+)/)?.[1] ?? "";
-		resource = { max: Math.min(20, pips.reduce((n, p) => n + p.count, 0)), title: (!fromTitle && track.label) ? track.label : held, labels: [] };
+		// A pip with no word beside it is named by what the move holds, else by how often it is used
+		// (Turn the Soil's "Once per expedition" is "Used this expedition").
+		// "ENCHIRIODON ○○ … (2 uses, slow)": named by its uses.
+		const named = (!fromTitle && track.label) ? track.label : (heldFromWords(description)?.title || onceTitle(description) || (/\(\s*\d+\s+uses\b/i.test(description) ? "Uses" : ""));
+		// The printed track's count is the move's own: never raised by what other moves count.
+		resource = { max: Math.min(20, pips.reduce((n, p) => n + p.count, 0)), title: named, labels: [], fromPips: true };
 	}
 	// "Once per session, you can…": one box to mark it used, cleared by hand.
-	if (!resource && ONCE_PER.test(plain)) resource = { max: 1, title: `Used this ${plain.match(ONCE_PER)[1].toLowerCase()}`, labels: [] };
+	if (!resource && onceTitle(description)) resource = { max: 1, title: onceTitle(description), labels: [] };
+	// "…hold 2 Authority. Spend Authority 1-to-1…" with no track printed for it: the sheet still needs
+	// somewhere to keep what is held, as much as the move itself counts.
+	if (!resource) {
+		const held = heldFromWords(description);
+		if (held) resource = { max: held.max, title: held.title, labels: [] };
+	}
 	return {
 		name: b.title, description, starting, level, requires, requiresMoves: [],
 		repeatMax: (b.extra?.boxes ?? 1) > 1 ? b.extra.boxes : 1, rollType: roll, results, resource,
 	};
+}
+
+/**
+ * A currency one move holds with no track printed for it ("hold 2 Authority") is spent and gained by
+ * the playbook's other moves too ("spend 5 Authority", "+2 Authority"): its track holds the most any
+ * of them counts, or the sheet couldn't keep what they give.
+ */
+function _heldAcrossMoves(moves) {
+	for (const m of moves) {
+		const r = m.resource;
+		if (!r?.title || r.fromPips) continue;
+		const stem = r.title.replace(/s$/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		const pattern = new RegExp(`\\b(\\d+)\\s+${stem}s?\\b`, "g");
+		const counts = moves.flatMap(o => [...String(o.description).replace(/\*/g, "").matchAll(pattern)].map(x => Number(x[1])));
+		r.max = Math.max(r.max, ...counts.filter(n => n > 0 && n <= 20));
+	}
+	for (const m of moves) if (m.resource) delete m.resource.fromPips;
 }
 
 /**
@@ -1276,7 +1466,7 @@ export function assemblePlaybook(draft) {
 	pb.appearance = (f.appearance ?? []).map(r => [...r]);
 	pb.origin = (f.origin ?? []).map(o => ({ region: o.region, names: [...o.names], question: o.question ?? "", writeIn: !!o.writeIn }));
 	pb.originNote = f.originNote ?? "";
-	if (f.advancement) pb.advancement = { replacesUsual: f.advancement.replacesUsual, options: [...f.advancement.options], note: f.advancement.note, switchPlaybook: !!f.advancement.switchPlaybook };
+	if (f.advancement) pb.advancement = { replacesUsual: f.advancement.replacesUsual, options: [...f.advancement.options], note: f.advancement.note, switchPlaybook: !!f.advancement.switchPlaybook, switchFromLevel: Number(f.advancement.switchFromLevel) || 0 };
 	pb.introductions = { step3: f.introductions?.step3 ?? "", step4: [...(f.introductions?.step4 ?? [])], step6: [...(f.introductions?.step6 ?? [])] };
 	pb.possessions.pickNote = f.possessions?.pickNote || pb.possessions.pickNote;
 	pb.possessions.pickCount = f.possessions?.pickCount ?? pb.possessions.pickCount;
@@ -1347,6 +1537,7 @@ export function assemblePlaybook(draft) {
 
 	pb.inserts = [...inserts.values()].filter(i => !i.dissolved).map(i => _finishInsert(i, moves));
 	_linkMoves(pb, moves, issues);
+	_heldAcrossMoves(moves);
 	bundle.moves = moves;
 	pb.notes = notes.join("\n\n").trim();
 	if (!moves.length) issues.push({ severity: "check", message: "No moves were found. If the playbook has moves of its own, add them on the Moves panel." });

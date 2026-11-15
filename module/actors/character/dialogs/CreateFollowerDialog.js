@@ -109,6 +109,14 @@ export async function applyCustomFollower(actor, data) {
 	});
 }
 
+// `{ slug, loyalty }` of a background's follower, in the one shape kept, or null.
+function _backgroundOrigin(from) {
+	const slug = typeof from?.slug === "string" ? from.slug : "";
+	if (!slug) return null;
+	const loyalty = Number.isFinite(Number(from.loyalty)) && from.loyalty !== null && from.loyalty !== "" ? Number(from.loyalty) : null;
+	return { slug, loyalty };
+}
+
 export class CreateFollowerDialog extends StepperDialog {
 	constructor(actor, onApply, options = {}) {
 		super(options);
@@ -118,6 +126,9 @@ export class CreateFollowerDialog extends StepperDialog {
 		// Steading resident/neighbor names offered as suggestions on the concept step,
 		// so "recruit a villager as a follower" is a guided flow (NPCs & Followers p.474).
 		this._residentNames = Array.isArray(options.residentNames) ? options.residentNames : [];
+		// A background's follower ("Create your monstrous follower"): the background it came from, so the
+		// offer goes once it is made, and the Loyalty it starts at. Saved for a reload with the answers.
+		this._fromBackground = _backgroundOrigin(options.fromBackground);
 		// Working selection. Stats are stored as picks and derived live so the
 		// totals stay honest as the player toggles options.
 		this._sel = {
@@ -129,6 +140,8 @@ export class CreateFollowerDialog extends StepperDialog {
 			instinct: "", moves: "", cost: "",
 			gear: [],
 			isGroup: false, groupSize: 3,
+			// What the caller already knows (a background's "monstrous follower"): its type, filled in.
+			...(options.preset?.typeLabel ? { typeLabel: String(options.preset.typeLabel) } : {}),
 		};
 	}
 
@@ -165,7 +178,7 @@ export class CreateFollowerDialog extends StepperDialog {
 	get restoreView() {
 		try { this._captureLiveFields(); }
 		catch (_err) { /* a window mid-close keeps what it last had */ }
-		return { step: this._steps[this._step]?.key ?? null, sel: this._sel };
+		return { step: this._steps[this._step]?.key ?? null, sel: this._sel, fromBackground: this._fromBackground };
 	}
 
 	/** A reload's reopening draw carries that back (`options.view`); it goes on before the first draw. */
@@ -199,6 +212,7 @@ export class CreateFollowerDialog extends StepperDialog {
 		}
 		const step = this._steps.findIndex(s => s.key === view?.step);
 		if (step >= 0) this._step = step;
+		this._fromBackground ??= _backgroundOrigin(view?.fromBackground);
 	}
 
 	// ── Derived stats ──────────────────────────────────────────────────────────
@@ -420,7 +434,10 @@ export class CreateFollowerDialog extends StepperDialog {
 			isGroup:   sel.isGroup,
 			size:      sel.isGroup ? sel.groupSize : 0,
 		});
-		await this._onApply?.(data);
+		const from = this._fromBackground;
+		await this._onApply?.(from ? {
+			...data, fromBackground: from.slug, ...(from.loyalty != null ? { loyalty: from.loyalty } : {}),
+		} : data);
 		ui.notifications?.info?.(`${data.name || "Follower"} added to your followers.`);
 		// A finish: the close-guard has nothing to ask.
 		this.close({ discard: true });

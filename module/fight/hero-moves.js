@@ -87,6 +87,7 @@ import { stonetopChatCard } from "../utils/chat.js";
 import { asArray } from "../utils/playbook-actors.js";
 import { HERO_MOVES } from "./hero-move-names.js";
 import { arcanaBlowOffers } from "../actors/character/arcana-blow-offers.js";
+import { homebrewBlowOffers } from "../actors/character/homebrew-roll-bends.js";
 
 export { HERO_MOVES };
 
@@ -1518,6 +1519,8 @@ export function blowOffers(actor, { targets = [], weapon = null, strikeBack = fa
 	// What the character's arcana add to the blow: the Flaming Sword's Blaze die, Storm's Fury, the Aetherium
 	// Spear and the rest (actors/character/arcana-blow-offers.js, audit EDG-5).
 	offers.push(...arcanaBlowOffers(actor, { weapon, moveKey, strikeBack }));
+	// A homebrew playbook's own (a Stranger's Deadly: every die one size larger), read from its words.
+	offers.push(...homebrewBlowOffers(actor));
 	return offers;
 }
 

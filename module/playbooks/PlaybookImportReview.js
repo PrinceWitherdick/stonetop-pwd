@@ -34,6 +34,11 @@ function _existingNote(name) {
 
 const KIND_LABEL = Object.fromEntries(BLOCK_KINDS.map(k => [k.kind, k.label]));
 
+/** A rail count's tooltip: "1 piece needs a look", "12 pieces". */
+function _countTip(n, one, many) {
+	return `${n} ${n === 1 ? one : many}`;
+}
+
 /** A block's text cut at its blank lines. */
 export function splitParagraphs(text) {
 	return String(text ?? "").split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
@@ -51,9 +56,22 @@ const GROUP_TITLE = {
 	move: "Moves", question: "Questions for character creation", note: "Notes for the table", skip: "Left out",
 };
 /** A rail entry's name where the page heading's is too long for the rail. */
-const GROUP_TAB = { question: "Questions", note: "Notes" };
-/** What the preview shows for a number still to be confirmed at the top of the page. */
-const NOT_ANSWERED = "Not answered yet (see Please confirm, above)";
+const GROUP_TAB = { question: "Questions & notes" };
+/**
+ * The section pages, in rail order. A page can hold more than one kind: the starting moves sit with
+ * the other moves, and the notes for the table with the questions. Each kind stays its own part
+ * (and its own Belongs in choice); a page that holds several names each part.
+ */
+const PAGES = [
+	{ key: "background", kinds: ["background"] },
+	{ key: "instinct", kinds: ["instinct"] },
+	{ key: "possession", kinds: ["possession"] },
+	{ key: "move", title: "Moves", kinds: ["startingMove", "move"] },
+	{ key: "question", title: "Questions and notes", kinds: ["question", "note"] },
+	{ key: "skip", kinds: ["skip"] },
+];
+/** A part's heading on a page it shares (a page of one kind uses its own title). */
+const PART_TITLE = { startingMove: "Starting moves", move: "Other moves", question: "Questions for character creation", note: "Notes for the table" };
 /** Each section's rail glyph (Font Awesome 6). */
 const GROUP_ICON = {
 	background: "fa-scroll", instinct: "fa-fire", possession: "fa-gem", startingMove: "fa-play",
@@ -64,14 +82,16 @@ const OVERVIEW = { key: "overview", title: "Start here", icon: "fa-clipboard-che
 
 /** What a piece can be inside an insert, and what each is called there. */
 const INSERT_KINDS = Object.freeze([
-	{ kind: "question", label: "A list to pick from" },
-	{ kind: "move", label: "One of its moves" },
-	{ kind: "startingMove", label: "A move it always gives" },
+	{ kind: "question", label: "A list to tick" },
+	{ kind: "move", label: "A move to choose" },
+	{ kind: "startingMove", label: "A move everyone with it gets" },
 	{ kind: "note", label: "Its description" },
 ]);
 const INSERT_KIND_LABEL = Object.fromEntries(INSERT_KINDS.map(k => [k.kind, k.label]));
 const INSERT_KIND_SET = new Set(INSERT_KINDS.map(k => k.kind));
 const INSERT_ICON = "fa-puzzle-piece";
+/** How many steps Undo reaches back. */
+const UNDO_LIMIT = 100;
 
 export class PlaybookImportReview extends StonetopDialog {
 	/**
@@ -93,11 +113,19 @@ export class PlaybookImportReview extends StonetopDialog {
 		this._builderKey = builderKey;
 		this._reviewId = reviewId || foundry.utils.randomID(8);
 		this._open = new Set();
+		// Pieces whose pencil is pressed: their Belongs in, Split and Join show. Kept across the
+		// re-render a move, split or join makes.
+		this._editing = new Set();
 		// Which rail page is showing. Kept here because every move, split and join re-renders;
 		// getData checks it against the pages that still exist.
 		this._activeTab = OVERVIEW.key;
 		// As read, for "Start over": every split, join, move and answer undone at once.
 		this._original = draft ? structuredClone({ blocks: draft.blocks, confirm: draft.confirm }) : null;
+		// Undo / Redo: the draft as it stood before each change, and the changes undone. Kept for this
+		// window only (a reload starts a fresh history; Start over still reaches back to the PDF).
+		this._undo = [];
+		this._redo = [];
+		this._settled = this._original ? JSON.stringify(this._original) : null;
 	}
 
 	// ---- Reload --------------------------------------------------------------------------
@@ -159,6 +187,9 @@ export class PlaybookImportReview extends StonetopDialog {
 		else if (Array.isArray(report?.issues)) this._issues = report.issues;
 		if (typeof view.builderKey === "string") this._builderKey = view.builderKey;
 		if (typeof view.tab === "string") this._activeTab = view.tab;
+		this._undo = [];
+		this._redo = [];
+		this._settled = JSON.stringify(this._historyState());
 		if (Array.isArray(view.open)) this._open = new Set(view.open.filter(id => typeof id === "string"));
 	}
 
@@ -190,12 +221,78 @@ export class PlaybookImportReview extends StonetopDialog {
 		return JSON.stringify({ blocks: this._draft.blocks, confirm: this._draft.confirm }) !== JSON.stringify(this._original);
 	}
 
+	// ---- Undo / Redo ---------------------------------------------------------------------------
+
+	/** What a step of history holds: every piece and every answer. */
+	_historyState() {
+		return { blocks: this._draft.blocks, confirm: this._draft.confirm };
+	}
+
+	/**
+	 * Close one step of history: when the draft differs from where it last settled, the settled state
+	 * goes on the undo stack and the redo stack is dropped. Called once a change is finished (a move,
+	 * a split, a ticked answer, a typed one on leaving its box), so typing a name is one step, not one
+	 * per letter. Safe to call twice: an unchanged draft adds nothing.
+	 */
+	_commit() {
+		if (!this._draft) return;
+		const now = JSON.stringify(this._historyState());
+		if (now === this._settled) return;
+		if (this._settled != null) this._undo.push(this._settled);
+		if (this._undo.length > UNDO_LIMIT) this._undo.shift();
+		this._redo = [];
+		this._settled = now;
+	}
+
+	/** Lay a settled state over the draft, in place (as Start over does). */
+	_applyState(json) {
+		const { blocks, confirm } = JSON.parse(json);
+		this._draft.blocks.splice(0, this._draft.blocks.length, ...blocks);
+		this._draft.confirm.splice(0, this._draft.confirm.length, ...confirm);
+		this._settled = json;
+	}
+
+	/** Step back one change. @returns {boolean} whether there was one */
+	undo() {
+		this._commit();
+		const prev = this._undo.pop();
+		if (prev === undefined) return false;
+		this._redo.push(this._settled);
+		this._applyState(prev);
+		return true;
+	}
+
+	/** Step forward again over a change undone. @returns {boolean} whether there was one */
+	redo() {
+		this._commit();
+		const next = this._redo.pop();
+		if (next === undefined) return false;
+		this._undo.push(this._settled);
+		this._applyState(next);
+		return true;
+	}
+
+	/** Undo, Redo and Start over wake and sleep as the history changes, without a redraw. */
+	_syncHistoryButtons(root) {
+		const set = (sel, on) => { const b = root?.querySelector(sel); if (b) b.disabled = !on; };
+		set(".stonetop-pb-review-undo", this._undo.length > 0);
+		set(".stonetop-pb-review-redo", this._redo.length > 0);
+		set(".stonetop-pb-review-reset", this.hasChanges());
+	}
+
+	/** A change that redraws the window: closed as a step of history first, so the redraw shows it. */
+	_changed() {
+		this._commit();
+		this.render(false);
+	}
+
 	/** Put every piece back as it was read, and clear the answers. */
 	startOver() {
 		const copy = structuredClone(this._original);
 		this._draft.blocks.splice(0, this._draft.blocks.length, ...copy.blocks);
 		this._draft.confirm.splice(0, this._draft.confirm.length, ...copy.confirm);
 		this._open.clear();
+		this._editing.clear();
 	}
 
 	/**
@@ -272,7 +369,7 @@ export class PlaybookImportReview extends StonetopDialog {
 	_insertOptions(b = null) {
 		const here = b ? this._insertOf(b) : "";
 		return this._liveInserts().map(i => ({
-			label: `In the insert "${i.name}"`,
+			label: `On the "${i.name}" tab`,
 			options: INSERT_KINDS.map(k => ({ value: `${k.kind}@${i.id}`, label: k.label, selected: !!b && here === i.id && b.kind === k.kind })),
 		}));
 	}
@@ -293,11 +390,19 @@ export class PlaybookImportReview extends StonetopDialog {
 		const d = this._draft;
 		const f = d.fields;
 		const answered = new Set(d.confirm.filter(c => c.value !== null && c.value !== "").map(c => c.key));
-		const groups = BLOCK_KINDS.map(({ kind }) => {
-			const blocks = d.blocks.filter(b => b.kind === kind && !this._insertOf(b)).map((b, i) => ({ ...this._blockView(b), canJoin: i > 0 }));
+		const groups = PAGES.map(page => {
+			const parts = page.kinds.map(kind => {
+				const blocks = d.blocks.filter(b => b.kind === kind && !this._insertOf(b)).map((b, i) => ({ ...this._blockView(b), canJoin: i > 0 }));
+				return { kind, title: PART_TITLE[kind], blocks, count: blocks.length };
+			}).filter(p => p.count);
+			const blocks = parts.flatMap(p => p.blocks);
+			const kind = page.key;
+			const title = page.title ?? (kind === "instinct" && f.instinctLabel === "Drive" ? "Drives" : GROUP_TITLE[kind]);
+			// A page of one kind heads its one part with its own name.
+			if (page.kinds.length === 1) for (const p of parts) p.title = title;
 			return {
-				kind, title: kind === "instinct" && f.instinctLabel === "Drive" ? "Drives" : GROUP_TITLE[kind],
-				icon: GROUP_ICON[kind], blocks, count: blocks.length, unsure: blocks.some(b => b.unsure),
+				kind, title,
+				icon: GROUP_ICON[kind], parts, blocks, count: blocks.length, unsureCount: blocks.filter(b => b.unsure).length, unsure: blocks.some(b => b.unsure),
 			};
 		}).filter(g => g.count);
 		// An insert's pieces have a page of their own, in page order, whatever each one is.
@@ -310,8 +415,7 @@ export class PlaybookImportReview extends StonetopDialog {
 			});
 			groups.push({
 				kind: `insert-${ins.id}`, title: ins.name, tabTitle: ins.name,
-				lead: "An insert: a page of its own that a move opens. Its lists and moves stay apart from the playbook's own: Level Up never offers its moves, and character creation never asks its lists.",
-				icon: INSERT_ICON, blocks, count: blocks.length, unsure: blocks.some(b => b.unsure),
+				icon: INSERT_ICON, parts: [{ kind: `insert-${ins.id}`, title: ins.name, lead: "An insert becomes a tab of its own on the character sheet, opened by the move that grants it. Its lists and moves stay on that tab: Level Up never offers its moves, and character creation never asks its lists.", blocks, count: blocks.length }], blocks, count: blocks.length, unsureCount: blocks.filter(b => b.unsure).length, unsure: blocks.some(b => b.unsure),
 			});
 		}
 
@@ -322,51 +426,37 @@ export class PlaybookImportReview extends StonetopDialog {
 		const activeTab = this._activeTab;
 		const unanswered = d.confirm.length - answered.size;
 		const tabs = [
-			{ ...OVERVIEW, count: unanswered || null, unsure: unanswered > 0, selected: activeTab === OVERVIEW.key },
-			...groups.map(g => ({ key: g.kind, title: g.tabTitle ?? GROUP_TAB[g.kind] ?? g.title, icon: g.icon, count: g.count, unsure: g.unsure, selected: activeTab === g.kind })),
+			{ ...OVERVIEW, count: unanswered || null, countTip: unanswered ? _countTip(unanswered, "question to answer", "questions to answer") : "", unsure: unanswered > 0, selected: activeTab === OVERVIEW.key },
+			// A page holding pieces to look at counts THEM, in red; any other counts its pieces, muted.
+			...groups.map(g => ({
+				key: g.kind, title: g.tabTitle ?? GROUP_TAB[g.kind] ?? g.title, icon: g.icon,
+				count: g.unsureCount || g.count,
+				countTip: g.unsureCount ? _countTip(g.unsureCount, "piece needs a look", "pieces need a look") : _countTip(g.count, "piece", "pieces"),
+				unsure: g.unsure, selected: activeTab === g.kind,
+			})),
 		];
 		for (const g of groups) g.selected = activeTab === g.kind;
+		const unsurePages = tabs.filter(t => t.unsure && t.key !== OVERVIEW.key).map(t => ({ key: t.key, title: t.title }));
 
-		// Pieces the reader was unsure of, by where they came from, for moving a whole insert at once.
-		const sources = new Map();
-		for (const b of d.blocks.filter(x => x.unsure)) {
-			const s = sources.get(b.from) ?? { from: b.from, count: 0 };
-			s.count++;
-			sources.set(b.from, s);
-		}
 		return {
 			fileName: this._fileName,
-			name: f.name || "Unnamed playbook",
-			description: f.description,
-			statsNote: f.statsNote,
-			// A number still to be confirmed is shown as that, not as the reader's first guess: the
-			// Stranger's HP box reads 16 and 18 printed over each other, and showed "16" before the answer.
-			hp: this._previewOf("hp", f.hp, answered),
-			damage: this._previewOf("damage", f.damage, answered),
-			looks: f.appearance.length ? `${f.appearance.length} rows of appearance choices` : "",
-			origins: f.origin.length ? f.origin.map(o => o.region).join(", ") : "",
-			originQuestions: f.origin.filter(o => o.question).length,
-			introCount: f.introductions.step4.length + f.introductions.step6.length,
-			// The playbook's own Level Up, when it has one ("mark one of the following instead").
-			advancement: f.advancement?.switchPlaybook ? "Switches to a different playbook (no move, then the playbook picker)"
-				: f.advancement?.options?.length
-				? `${f.advancement.options.length} advances of its own${f.advancement.replacesUsual ? ", marked instead of the usual new move" : ""}` : "",
-			possessionsGiven: f.possessions?.allGiven ? "Every character starts with all of them" : "",
 			// A playbook this world already has (by name): finishing offers to update it, so say so now.
 			existing: _existingNote(f.name),
 			issues: this._issues.map(i => i.message),
 			confirm: d.confirm.map(c => this._confirmView(c, answered.has(c.key))),
-			unsureCount: d.blocks.filter(b => b.unsure && !this._moved(b)).length,
-			sources: [...sources.values()].filter(s => s.count > 1).map(s => ({
-				...s,
-				kindOptions: [{ value: "", label: "Leave each where it is" }, ...BLOCK_KINDS.map(k => ({ value: k.kind, label: k.label }))],
-				insertOptions: this._insertOptions(),
-			})),
+			unsureCount: d.blocks.filter(b => this._needsLook(b)).length,
+			// The pages holding them, by their names in the rail, for Start here to name.
+			unsureSections: unsurePages,
+			unsureSectionCount: unsurePages.length,
+			// Start here's "To check" heading: a question to answer or a piece to look at.
+			get hasIssues() { return this.confirm.length > 0 || this.unsureCount > 0; },
 			groups,
 			tabs,
 			overviewSelected: activeTab === OVERVIEW.key,
 			// Start over is offered only once there is something to undo.
 			changed: this.hasChanges(),
+			canUndo: this._undo.length > 0,
+			canRedo: this._redo.length > 0,
 		};
 	}
 
@@ -383,7 +473,34 @@ export class PlaybookImportReview extends StonetopDialog {
 		});
 	}
 
+	/** Show or hide a piece's Belongs in, Split and Join (its pencil). */
+	_setEditing(piece, on) {
+		const id = piece?.dataset.id;
+		if (!id) return;
+		if (on) this._editing.add(id); else this._editing.delete(id);
+		piece.classList.toggle("is-editing", on);
+		// The sheets' toggle: a pencil while closed, the green check while open (no re-render).
+		const toggle = piece.querySelector("[data-edit]");
+		if (!toggle) return;
+		toggle.setAttribute("aria-expanded", String(on));
+		toggle.classList.toggle("stonetop-section-edit", !on);
+		toggle.classList.toggle("stonetop-section-done", on);
+		const title = piece.querySelector(".stonetop-pb-review-block-title")?.textContent ?? "";
+		toggle.setAttribute("aria-label", on ? `Hide the controls for ${title}` : `Move, split or join ${title}`);
+		const icon = toggle.querySelector("i");
+		icon?.classList.toggle("fa-pencil", !on);
+		icon?.classList.toggle("fa-check", on);
+	}
+
 	/** Has the GM put this block somewhere other than where it was read? */
+	/**
+	 * A piece still waiting on the GM: the reader flagged it, and it hasn't been moved or passed with
+	 * "Looks right" since. Moving it or passing it takes the red off.
+	 */
+	_needsLook(b) {
+		return !!b.unsure && !b.checked && !this._moved(b);
+	}
+
 	_moved(b) {
 		return b.kind !== b.readAs || this._insertOf(b) !== this._readInsertOf(b);
 	}
@@ -406,21 +523,26 @@ export class PlaybookImportReview extends StonetopDialog {
 			full,
 			long: full.length > 180,
 			open: this._open.has(b.id),
+			editing: this._editing.has(b.id),
 			tags: tags.join(" · "),
-			from: b.from,
-			unsure: b.unsure && !this._moved(b),
+			unsure: this._needsLook(b),
 			moved: this._moved(b),
 			readAsLabel: readInsertName ? `${INSERT_KIND_LABEL[b.readAs] ?? KIND_LABEL[b.readAs]} in "${readInsertName}"` : KIND_LABEL[b.readAs],
 			why: b.why,
+			// A piece the reader left out on purpose, sure of it, still says why (a playbook's own Level Up
+			// list, taken onto the Level Up panel, is left out of the notes).
+			leftOutWhy: !b.unsure && !this._moved(b) && b.kind === "skip" ? (b.why ?? "") : "",
 			splitCount: splitParagraphs(b.text).length,
 			canSplit: splitParagraphs(b.text).length > 1,
-			kindOptions: BLOCK_KINDS.map(k => ({ value: k.kind, label: k.label, selected: !inInsert && k.kind === b.kind })),
+			kindOptions: BLOCK_KINDS.filter(k => k.kind !== "skip").map(k => ({ value: k.kind, label: k.label, selected: !inInsert && k.kind === b.kind })),
+			// Not a section: drawn last in Belongs in, under its own heading.
+			leftOut: !inInsert && b.kind === "skip",
 			insertOptions: this._insertOptions(b),
 		};
 	}
 
 	/**
-	 * An insert's question: which move opens it. The playbook's moves as they stand now (a piece moved
+	 * An insert's question: which move grants it. The playbook's moves as they stand now (a piece moved
 	 * into Moves is offered at once), then "always", then "not an insert".
 	 */
 	_insertChoices(c) {
@@ -433,12 +555,6 @@ export class PlaybookImportReview extends StonetopDialog {
 		].map(o => ({ ...o, selected: o.value === c.value }));
 	}
 
-	/** A preview fact the GM is asked to confirm: their answer once given, else a pointer to the question. */
-	_previewOf(key, guess, answered) {
-		const q = this._draft.confirm.find(c => c.key === key);
-		if (!q) return guess;
-		return answered.has(key) ? q.value : NOT_ANSWERED;
-	}
 
 	_confirmView(c, answered) {
 		const value = c.value;
@@ -458,14 +574,36 @@ export class PlaybookImportReview extends StonetopDialog {
 		super.activateListeners(html);
 		const root = html[0];
 		root.querySelectorAll(".stonetop-pb-review-tab").forEach(btn => btn.addEventListener("click", () => this._selectTab(btn.dataset.tab)));
+		// Start here's list of the pages holding a hard-to-place piece: each name opens its page. An
+		// <a role=button>, so Enter and Space press it as a button's would.
+		root.querySelectorAll("[data-goto-tab]").forEach(link => {
+			const go = () => this._selectTab(link.dataset.gotoTab);
+			link.addEventListener("click", go);
+			link.addEventListener("keydown", ev => {
+				if (ev.key !== "Enter" && ev.key !== " ") return;
+				ev.preventDefault();
+				go();
+			});
+		});
+		// The pencil: shows or hides a piece's controls in place (no re-render).
+		root.querySelectorAll("[data-edit]").forEach(btn => {
+			const flip = () => this._setEditing(btn.closest(".stonetop-pb-review-block"), !this._editing.has(btn.dataset.edit));
+			btn.addEventListener("click", flip);
+			// An <a role=button> (the sheets' pencil): Enter and Space press it, as a button's would.
+			btn.addEventListener("keydown", ev => {
+				if (ev.key !== "Enter" && ev.key !== " ") return;
+				ev.preventDefault();
+				flip();
+			});
+		});
+		// "Looks right": the GM has read a flagged piece and it stays as it is. Undoable like a move.
+		root.querySelectorAll("[data-looks-right]").forEach(btn => btn.addEventListener("click", () => {
+			const block = this._draft.blocks.find(b => b.id === btn.dataset.looksRight);
+			if (block) { block.checked = true; this._changed(); }
+		}));
 		root.querySelectorAll("select[data-block]").forEach(sel => sel.addEventListener("change", () => {
 			const block = this._draft.blocks.find(b => b.id === sel.dataset.block);
-			if (block) { this._place(block, sel.value); this.render(false); }
-		}));
-		root.querySelectorAll("select[data-source]").forEach(sel => sel.addEventListener("change", () => {
-			if (!sel.value) return;
-			for (const b of this._draft.blocks) if (b.unsure && b.from === sel.dataset.source) this._place(b, sel.value);
-			this.render(false);
+			if (block) { this._place(block, sel.value); this._changed(); }
 		}));
 		root.querySelectorAll(".stonetop-pb-review-block-text").forEach(d => d.addEventListener("toggle", () => {
 			const id = d.closest("[data-id]")?.dataset.id;
@@ -478,18 +616,36 @@ export class PlaybookImportReview extends StonetopDialog {
 		root.querySelectorAll("input[type=text][data-confirm]").forEach(el => el.addEventListener("input", () => this._readConfirm(root, el.dataset.confirm)));
 		// Answering never re-renders, so it saves the window for a reload itself.
 		root.addEventListener("input", () => persistOpenWindowsSoon());
-		root.addEventListener("change", () => persistOpenWindowsSoon());
+		// A finished answer (a tick, or a typed one on leaving its box) is one step of history.
+		root.addEventListener("change", () => {
+			this._commit();
+			this._syncHistoryButtons(root);
+			persistOpenWindowsSoon();
+		});
+		root.querySelector(".stonetop-pb-review-undo")?.addEventListener("click", () => { if (this.undo()) this.render(false); });
+		root.querySelector(".stonetop-pb-review-redo")?.addEventListener("click", () => { if (this.redo()) this.render(false); });
+		// Ctrl+Z / Ctrl+Y (and Ctrl+Shift+Z), except in a box being typed in, where they undo the typing.
+		root.addEventListener("keydown", ev => {
+			if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return;
+			if (ev.target?.matches?.("input[type=text], input[type=number], textarea")) return;
+			const key = String(ev.key).toLowerCase();
+			const step = key === "z" ? (ev.shiftKey ? "redo" : "undo") : key === "y" ? "redo" : null;
+			if (!step) return;
+			ev.preventDefault();
+			ev.stopPropagation();
+			if (this[step]()) this.render(false);
+		});
 		root.querySelectorAll("input[data-confirm-other]").forEach(el => el.addEventListener("input", () => {
 			const radio = root.querySelector(`input[type=radio][data-confirm="${el.dataset.confirmOther}"][value="__other"]`);
 			if (radio) radio.checked = true;
 			this._readConfirm(root, el.dataset.confirmOther);
 		}));
-		root.querySelectorAll("[data-split]").forEach(btn => btn.addEventListener("click", () => { this.splitBlock(btn.dataset.split); this.render(false); }));
-		root.querySelectorAll("[data-join]").forEach(btn => btn.addEventListener("click", () => { this.joinUp(btn.dataset.join); this.render(false); }));
+		root.querySelectorAll("[data-split]").forEach(btn => btn.addEventListener("click", () => { this.splitBlock(btn.dataset.split); this._changed(); }));
+		root.querySelectorAll("[data-join]").forEach(btn => btn.addEventListener("click", () => { this.joinUp(btn.dataset.join); this._changed(); }));
 		root.querySelector(".stonetop-pb-review-reset")?.addEventListener("click", () => {
 			if (!this.hasChanges()) return;
 			this.startOver();
-			this.render(false);
+			this._changed();
 			ui.notifications?.info("Everything is back as it was read from the PDF.");
 		});
 		root.querySelector(".stonetop-pb-review-cancel")?.addEventListener("click", () => this.close());
@@ -519,12 +675,9 @@ export class PlaybookImportReview extends StonetopDialog {
 			}
 		}
 		// Taking an insert apart (or putting it back) moves its pieces: draw them where they now are.
-		if (c.insert && wasApart !== (c.value === INSERT_NONE)) { this.render(false); return; }
+		if (c.insert && wasApart !== (c.value === INSERT_NONE)) { this._changed(); return; }
 		const row = root.querySelector(`.stonetop-pb-review-question[data-key="${key}"]`);
 		row?.classList.toggle("is-answered", c.value !== null && c.value !== "");
-		// The preview's line for it follows the answer (no redraw: the GM may be typing a number).
-		const fact = root.querySelector(`[data-fact="${key}"]`);
-		if (fact) fact.textContent = c.value !== null && c.value !== "" ? String(c.value) : NOT_ANSWERED;
 		// An answer doesn't re-render, so it wakes Start over itself.
 		const reset = root.querySelector(".stonetop-pb-review-reset");
 		if (reset) reset.disabled = !this.hasChanges();

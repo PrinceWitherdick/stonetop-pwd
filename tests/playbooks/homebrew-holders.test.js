@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
 	cascadeRename, staleHeldCopies, refreshHeldCopies, carryPlaybookCopy, carriedPlaybook,
-	restoreCarriedPlaybook, saveProblem, saveHomebrewPlaybook,
+	restoreCarriedPlaybook, saveProblem, saveHomebrewPlaybook, tidyHomebrewFolders, deleteHomebrewPlaybook,
 } from "../../module/playbooks/homebrew-store.js";
 import { normalizeBundle, bundleToItemData } from "../../module/playbooks/homebrew-bundle.js";
 import { invalidatePlaybookCatalog, homebrewPlaybookBySlug } from "../../module/playbooks/playbook-catalog.js";
@@ -46,7 +46,11 @@ function world() {
 		updateDocuments: vi.fn(async list => list.map(u => { const i = items.get(u._id); Object.assign(i, structuredClone(u)); return i; })),
 		deleteDocuments: vi.fn(async ids => ids.forEach(id => items.splice(items.findIndex(i => i.id === id), 1))),
 	});
-	vi.stubGlobal("Folder", { create: vi.fn(async data => { const f = { ...data, id: `f${folders.length + 1}`, type: "Item" }; folders.push(f); return f; }) });
+	let f = 0;
+	vi.stubGlobal("Folder", {
+		create: vi.fn(async data => { const folder = { ...data, id: `f${++f}`, type: "Item" }; folders.push(folder); return folder; }),
+		deleteDocuments: vi.fn(async ids => ids.forEach(id => folders.splice(folders.findIndex(x => x.id === id), 1))),
+	});
 	return { items, folders };
 }
 
@@ -226,5 +230,76 @@ describe("characters whose homebrew playbook isn't here", () => {
 		await carryPlaybookCopy(gone, tester());
 		await restoreCarriedPlaybook(gone);
 		expect(charactersMissingPlaybook([gone])).toEqual([]);
+	});
+});
+
+// A playbook's folder holds the playbook; its moves go in subfolders: "Moves", and one per insert.
+describe("a homebrew playbook's folders", () => {
+	function withInsert(name = "The Tester") {
+		const raw = tester(name);
+		raw.playbook.inserts = [{ key: "toolbox", name: "Tester's Toolbox", description: "Tools.", lists: [{ key: "tricks", title: "Tricks", kind: "moves", pick: 1 }] }];
+		raw.moves.push({ name: "Whirr", insert: "toolbox", insertList: "tricks", description: "It whirrs." });
+		return normalizeBundle(raw).bundle;
+	}
+	const pathOf = id => {
+		const names = [];
+		for (let f = game.folders.find(x => x.id === id); f; f = game.folders.find(x => x.id === f.folder)) names.unshift(f.name);
+		return names.join(" / ");
+	};
+	const placed = () => Object.fromEntries(game.items.map(i => [i.name, pathOf(i.folder)]));
+
+	it("files the moves under the playbook, by insert", async () => {
+		await saveHomebrewPlaybook(withInsert());
+		expect(placed()).toEqual({
+			"The Tester": "Homebrew Playbooks / The Tester",
+			Prod: "Homebrew Playbooks / The Tester / Moves",
+			Poke: "Homebrew Playbooks / The Tester / Moves",
+			Whirr: "Homebrew Playbooks / The Tester / Tester's Toolbox",
+		});
+	});
+
+	it("makes each folder once, however often it's saved", async () => {
+		const { item } = await saveHomebrewPlaybook(withInsert());
+		await saveHomebrewPlaybook(withInsert(), { existing: item });
+		expect(game.folders.map(f => f.name).sort()).toEqual(["Homebrew Playbooks", "Moves", "Tester's Toolbox", "The Tester"]);
+	});
+
+	it("tidies moves an older version left beside the playbook, and only those", async () => {
+		await saveHomebrewPlaybook(withInsert());
+		const home = game.items.find(i => i.name === "The Tester").folder;
+		const elsewhere = { name: "Kept Here", type: "Item", id: "fx", folder: null };
+		game.folders.push(elsewhere);
+		for (const m of game.items.filter(i => i.type === "move")) m.folder = home;
+		game.items.find(i => i.name === "Poke").folder = "fx";
+		expect(await tidyHomebrewFolders()).toBe(2);
+		expect(placed()).toMatchObject({ Prod: "Homebrew Playbooks / The Tester / Moves", Poke: "Kept Here", Whirr: "Homebrew Playbooks / The Tester / Tester's Toolbox" });
+		expect(await tidyHomebrewFolders()).toBe(0);
+	});
+
+	it("tidies nothing for a player", async () => {
+		await saveHomebrewPlaybook(withInsert());
+		const home = game.items.find(i => i.name === "The Tester").folder;
+		for (const m of game.items.filter(i => i.type === "move")) m.folder = home;
+		game.user.isGM = false;
+		expect(await tidyHomebrewFolders()).toBe(0);
+	});
+
+	it("takes away a deleted playbook's folders, unless the GM keeps something else there", async () => {
+		const { item } = await saveHomebrewPlaybook(withInsert());
+		await deleteHomebrewPlaybook(item);
+		expect(game.folders.map(f => f.name)).toEqual(["Homebrew Playbooks"]);
+
+		const again = (await saveHomebrewPlaybook(withInsert())).item;
+		const moves = game.folders.find(f => f.name === "Moves");
+		game.items.push({ id: "note", name: "GM's note", type: "loot", folder: moves.id });
+		await deleteHomebrewPlaybook(again);
+		expect(game.folders.map(f => f.name).sort()).toEqual(["Homebrew Playbooks", "Moves", "Tester's Toolbox", "The Tester"]);
+	});
+
+	it("moves the folders with a rename, and takes the old ones away", async () => {
+		const { item } = await saveHomebrewPlaybook(withInsert());
+		await saveHomebrewPlaybook(withInsert("The Prober"), { existing: item });
+		expect(placed()).toMatchObject({ "The Prober": "Homebrew Playbooks / The Prober", Prod: "Homebrew Playbooks / The Prober / Moves" });
+		expect(game.folders.some(f => f.name === "The Tester")).toBe(false);
 	});
 });

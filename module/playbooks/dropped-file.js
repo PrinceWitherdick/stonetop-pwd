@@ -6,7 +6,11 @@
 export function droppedFileKind(dataTransfer, { peek = false } = {}) {
 	if (!dataTransfer || ![...(dataTransfer.types ?? [])].includes("Files")) return null;
 	if (peek) return "file";
-	const file = dataTransfer.files?.[0];
+	return fileKindOf(dataTransfer.files?.[0]);
+}
+
+/** A file's kind, picked or dropped: "pdf", "json" (a shared playbook file), or null for anything else. */
+export function fileKindOf(file) {
 	if (!file) return null;
 	if (/\.pdf$/i.test(file.name) || file.type === "application/pdf") return "pdf";
 	if (/\.json$/i.test(file.name) || file.type === "application/json") return "json";

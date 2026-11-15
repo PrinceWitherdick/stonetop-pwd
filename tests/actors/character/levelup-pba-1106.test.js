@@ -51,14 +51,14 @@ describe("L1: Big Magic's owed remarkable trait", () => {
 	it("is owed while the pouch has fewer traits than 1 + Big Magic", async () => {
 		const { char } = blessed({ traits: [TRAITS[0]], items: [moveItem("Big Magic")] });
 		const owed = char.possessionChoicesOwed(await char.playbook());
-		expect(owed).toEqual({ byMove: { "Big Magic": { slug: POUCH, count: 1 } }, bySlug: { [POUCH]: 1 } });
+		expect(owed).toEqual({ byMove: { "Big Magic": { slug: POUCH, count: 1 } }, bySlug: { [POUCH]: 1 }, inline: [] });
 	});
 
 	it("is not owed once the trait is picked, nor for a Blessed without Big Magic", async () => {
 		const done = blessed({ traits: TRAITS.slice(0, 2), items: [moveItem("Big Magic")] }).char;
-		expect(done.possessionChoicesOwed(await done.playbook())).toEqual({ byMove: {}, bySlug: {} });
+		expect(done.possessionChoicesOwed(await done.playbook())).toEqual({ byMove: {}, bySlug: {}, inline: [] });
 		const plain = blessed({ traits: [] }).char;
-		expect(plain.possessionChoicesOwed(await plain.playbook())).toEqual({ byMove: {}, bySlug: {} });
+		expect(plain.possessionChoicesOwed(await plain.playbook())).toEqual({ byMove: {}, bySlug: {}, inline: [] });
 	});
 
 	it("counts only a LEARNED Big Magic, and two of them owe two", async () => {

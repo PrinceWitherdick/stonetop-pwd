@@ -99,9 +99,9 @@ describe("reading The Tester", () => {
 		expect(second).toMatchObject({ title: "Where do you go to think?", description: "Tell us, where do you go to think?", options: [{ freeText: true }] });
 	});
 
-	it("reads the Introductions' third turn and both question rounds", () => {
+	it("reads the Introductions' third turn, keeping its bold, and both question rounds", () => {
 		expect(pb.introductions).toEqual({
-			step3: "tell us what you broke.",
+			step3: "tell us **what you broke**.",
 			step4: ["Who mended it?", "Who blamed you for it?"],
 			step6: ["Which of you laughed?"],
 		});

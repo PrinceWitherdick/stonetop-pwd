@@ -185,3 +185,89 @@ describe("the insert's tab, as the templates draw it", async () => {
 		expect(tab.querySelector(".stonetop-hb-insert-allowance").textContent).toBe("Picked 1 of 1.");
 	});
 });
+
+// The form's glyph in the character header (homebrew-inserts.js#insertFormGlyph): the same flag as the
+// insert tab's switch, beside the name, because the form changes the whole sheet.
+describe("the insert's form in the header", async () => {
+	const Handlebars = (await import("handlebars")).default;
+	const { Window } = await import("happy-dom");
+	const { readRepo } = await import("../../fakes/css.js");
+	const { insertFormGlyph } = await import("../../../module/actors/character/homebrew-inserts.js");
+
+	it("is offered once the insert is open, and kept while worn after it closes", async () => {
+		expect((await character({ held: [] }).buildSnapshot()).insertForms).toEqual([]);
+		expect((await character().buildSnapshot()).insertForms).toEqual([
+			{ key: INSERT.key, name: "Tester's Toolbox", on: "Unfold", off: "Fold up", wearing: false },
+		]);
+		// Worn, and the move that opens it gone: still there, so it can be taken off.
+		expect((await character({ held: [], wearing: true }).buildSnapshot()).insertForms).toEqual([
+			expect.objectContaining({ key: INSERT.key, wearing: true }),
+		]);
+	});
+
+	it("says the playbook's own words: its switch's labels and the insert's name", () => {
+		const state = { key: "box", name: "Tester's Toolbox", on: "Unfold", off: "Fold up", wearing: false };
+		expect(insertFormGlyph(state, { editable: true })).toEqual({
+			key: "box", stem: "stonetop-insert-form", onClass: "is-transformed", on: false,
+			labelText: "Unfold (Tester's Toolbox)",
+			tooltipText: "Tester's Toolbox: not in this form. Press to Unfold.",
+		});
+		expect(insertFormGlyph({ ...state, wearing: true }, { editable: true })).toMatchObject({
+			on: true,
+			labelText: "Fold up (Tester's Toolbox)",
+			tooltipText: "Tester's Toolbox: in this form now. Its weapons and armor are yours while it lasts. Press to Fold up.",
+		});
+		// A viewer who can't write is told the state, and offered nothing to press.
+		expect(insertFormGlyph({ ...state, wearing: true })).toMatchObject({
+			labelText: "Tester's Toolbox: in this form now. Its weapons and armor are yours while it lasts.",
+			tooltipText: "Tester's Toolbox: in this form now. Its weapons and armor are yours while it lasts.",
+		});
+	});
+
+	// The header's line exactly as actor-header.hbs writes it, through the shared toggle partial.
+	const LINES = readRepo("templates/actor/partials/actor-header.hbs").match(/\{\{#each stonetop\.insertFormGlyphs as \|g\|\}\}[\s\S]*?\{\{\/each\}\}/)[0];
+	const draw = (glyphs, editable) => {
+		const h = Handlebars.create();
+		h.registerHelper("localize", k => `KEY:${k}`);
+		h.registerPartial("stonetop.header-toggle-glyph", readRepo("templates/actor/partials/header-toggle-glyph.hbs"));
+		const d = new Window().document;
+		d.body.innerHTML = h.compile(LINES)({ stonetop: { insertFormGlyphs: glyphs }, editable });
+		return d.body;
+	};
+
+	it("draws a button that names its insert, its words as TEXT, never as a language key or HTML", () => {
+		const state = { key: "box", name: "<b>Toolbox</b>", on: "Unfold", off: "Fold up", wearing: true };
+		const root = draw([insertFormGlyph(state, { editable: true })], true);
+		const btn = root.querySelector("button.stonetop-insert-form");
+		expect(btn.classList.contains("is-transformed")).toBe(true);
+		expect(btn.getAttribute("aria-pressed")).toBe("true");
+		expect(btn.dataset.insertFormKey).toBe("box");
+		expect(btn.querySelector(".stonetop-insert-form-icon")).toBeTruthy();
+		// Imported words go in core's text-only tooltip, not the one it reads as HTML.
+		expect(btn.hasAttribute("data-tooltip")).toBe(false);
+		expect(btn.getAttribute("data-tooltip-text")).toBe("<b>Toolbox</b>: in this form now. Its weapons and armor are yours while it lasts. Press to Fold up.");
+		expect(btn.querySelector("b")).toBeNull();
+		expect(btn.getAttribute("aria-label")).toBe("Fold up (<b>Toolbox</b>)");
+		expect(root.innerHTML).not.toContain("KEY:");
+	});
+
+	it("draws a plain mark for a viewer who can't write, with nothing to press", () => {
+		const root = draw([insertFormGlyph({ key: "box", name: "Toolbox", on: "Unfold", off: "Fold up", wearing: false })], false);
+		expect(root.querySelector("button")).toBeNull();
+		const mark = root.querySelector("span.stonetop-insert-form");
+		expect(mark.classList.contains("is-transformed")).toBe(false);
+		expect(mark.getAttribute("data-tooltip-text")).toBe("Toolbox: not in this form.");
+	});
+
+	it("leaves the book's glyphs on their language keys", () => {
+		const h = Handlebars.create();
+		h.registerHelper("localize", k => `KEY:${k}`);
+		const html = h.compile(readRepo("templates/actor/partials/header-toggle-glyph.hbs"))({
+			stem: "stonetop-battle-joy", onClass: "is-raging", on: false, labelKey: "a.label", tooltipKey: "a.tip", editable: true,
+		});
+		expect(html).toContain('aria-label="KEY:a.label"');
+		expect(html).toContain('data-tooltip="KEY:a.tip"');
+		expect(html).not.toContain("data-tooltip-text");
+		expect(html).not.toContain("data-insert-form-key");
+	});
+});

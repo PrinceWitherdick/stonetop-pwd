@@ -18,6 +18,7 @@ const PARTIALS = {
 	"stonetop.roster-row": "templates/dialogs/partials/roster-row.hbs",
 	"stonetop.roster-add": "templates/dialogs/partials/roster-add.hbs",
 	"stonetop.guide-tabs": "templates/dialogs/partials/guide-tabs.hbs",
+	"stonetop.section-heading": "templates/actor/partials/section-heading.hbs",
 };
 
 /**

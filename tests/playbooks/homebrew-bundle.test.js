@@ -244,7 +244,7 @@ describe("a playbook's own Level Up", () => {
 		const { bundle } = normalizeBundle(raw);
 		const items = bundleToItemData(bundle, { slug: "homebrew-the-tester" });
 		expect(items.playbook.flags.stonetop.advancement).toEqual(advancementToFlags(advancement));
-		expect(itemsToBundle(items.playbook, items.moves).playbook.advancement).toEqual({ ...advancement, switchPlaybook: false });
+		expect(itemsToBundle(items.playbook, items.moves).playbook.advancement).toEqual({ ...advancement, switchPlaybook: false, switchFromLevel: 0 });
 		expect(advancementToFlags({ replacesUsual: true, options: [] })).toBeNull();
 	});
 

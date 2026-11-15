@@ -16,7 +16,7 @@ function useWorld(...items) {
 }
 
 beforeEach(() => useWorld(tester({
-	introductions: { step3: "tell us what you broke & why <b>", step4: ["Who mended it?"], step6: [] },
+	introductions: { step3: "tell us **what you broke** & why <b>", step4: ["Who mended it?"], step6: [] },
 	moveGroups: [{ key: "poking", label: "Poking", moves: ["Prod", "Poke"] }, { key: "waiting", label: "Waiting", moves: ["Wait"] }],
 })));
 afterEach(() => { vi.unstubAllGlobals(); invalidatePlaybookCatalog(); });
@@ -27,7 +27,7 @@ describe("Introductions read a homebrew playbook's own questions", () => {
 	});
 
 	it("escapes the GM's text, since the book's entries are HTML and drawn raw", () => {
-		expect(introDataFor("homebrew-the-tester").step3).toBe("tell us what you broke &amp; why &lt;b&gt;");
+		expect(introDataFor("homebrew-the-tester").step3).toBe("tell us <strong>what you broke</strong> &amp; why &lt;b&gt;");
 		expect(step4Questions("homebrew-the-tester")).toEqual(["Who mended it?"]);
 	});
 

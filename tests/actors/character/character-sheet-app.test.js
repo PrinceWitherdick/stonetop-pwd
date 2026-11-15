@@ -2800,3 +2800,82 @@ describe("StonetopCharacterSheet un-ticks that ask first", () => {
 		});
 	});
 });
+
+// A homebrew insert's form from its header glyph (homebrew-inserts.js#insertFormGlyph): off plainly, on by
+// the move whose roll brings it out when there is one (tier-effects.js#insertFormRollFor), else plainly.
+describe("the header glyph for a homebrew insert's form", () => {
+	const SLUG = "homebrew-the-tester";
+	const PLAYBOOK = {
+		type: "playbook", name: "The Tester", system: { slug: SLUG },
+		flags: { stonetop: { homebrew: { v: 1, published: true }, inserts: [{ key: "box", name: "Toolbox", form: { enabled: true, on: "Unfold", off: "Fold up" } }] } },
+	};
+	const UNFOLD = {
+		id: "m-unfold", type: "move", name: "Unfold",
+		flags: { "stonetop-pwd": { homebrewPlaybook: SLUG, homebrewInsert: { key: "box", list: "" } } },
+		system: { rollType: "con", moveResults: { success: { value: "You take on the form." }, partial: { value: "You take on the form, but it costs you." }, failure: { value: "Nothing comes." } } },
+	};
+	const click = () => ({ preventDefault: vi.fn(), stopPropagation: vi.fn(), currentTarget: { dataset: { insertFormKey: "box" } }, shiftKey: false });
+	let savedItems;
+	beforeEach(async () => {
+		savedItems = global.game.items;
+		global.game.items = [PLAYBOOK];
+		(await import("../../../module/playbooks/playbook-catalog.js")).invalidatePlaybookCatalog();
+	});
+	afterEach(async () => {
+		global.game.items = savedItems;
+		(await import("../../../module/playbooks/playbook-catalog.js")).invalidatePlaybookCatalog();
+	});
+
+	function sheetFor({ wearing = false, items = [] } = {}) {
+		const actor = makeActor();
+		actor.system.playbook = { slug: SLUG, name: "The Tester" };
+		actor.items = items;
+		actor.typedActor.wearingInsertForm = vi.fn(() => wearing);
+		actor.typedActor.setInsertForm = vi.fn(async () => {});
+		const sheet = makeSheet(actor);
+		sheet.rollMoveById = vi.fn(async () => true);
+		return { sheet, character: actor.typedActor };
+	}
+
+	it("takes a worn form off, with no question", async () => {
+		const asked = stubAsk("roll");
+		const { sheet, character } = sheetFor({ wearing: true, items: [UNFOLD] });
+		await sheet._onInsertFormToggle(click());
+		expect(character.setInsertForm).toHaveBeenCalledWith("box", false);
+		expect(asked).not.toHaveBeenCalled();
+	});
+
+	it("offers the roll that brings the form out, and rolls it through the Moves tab's path", async () => {
+		const asked = stubAsk("roll");
+		const { sheet, character } = sheetFor({ items: [UNFOLD] });
+		await sheet._onInsertFormToggle(click());
+		const config = asked.mock.calls[0][0];
+		expect(config.window.title).toBe("Unfold: Toolbox");
+		expect(config.buttons.map(b => b.label)).toEqual(["Roll Unfold", "Unfold without rolling"]);
+		expect(sheet.rollMoveById).toHaveBeenCalledWith("m-unfold", { shiftKey: false });
+		// The roll's own result puts the form on (tier-effects.js#settleInsertForm), not the click.
+		expect(character.setInsertForm).not.toHaveBeenCalled();
+	});
+
+	it("takes the form on without rolling when asked to, and does nothing when the question is shut", async () => {
+		stubAsk("take");
+		const taken = sheetFor({ items: [UNFOLD] });
+		await taken.sheet._onInsertFormToggle(click());
+		expect(taken.character.setInsertForm).toHaveBeenCalledWith("box", true);
+		expect(taken.sheet.rollMoveById).not.toHaveBeenCalled();
+
+		stubAsk(null);
+		const shut = sheetFor({ items: [UNFOLD] });
+		await shut.sheet._onInsertFormToggle(click());
+		expect(shut.character.setInsertForm).not.toHaveBeenCalled();
+		expect(shut.sheet.rollMoveById).not.toHaveBeenCalled();
+	});
+
+	it("simply switches when no move of theirs brings the form out", async () => {
+		const asked = stubAsk("roll");
+		const { sheet, character } = sheetFor({ items: [] });
+		await sheet._onInsertFormToggle(click());
+		expect(asked).not.toHaveBeenCalled();
+		expect(character.setInsertForm).toHaveBeenCalledWith("box", true);
+	});
+});

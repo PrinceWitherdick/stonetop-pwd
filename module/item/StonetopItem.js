@@ -2,7 +2,7 @@ import {StonetopPlaybook} from "./StonetopPlaybook.js";
 import {rollFormula, rollStat} from "../utils/roll-engine.js";
 import {rollDamageAt} from "../combat/attack-flow.js";
 import {damageCardText, attackRollMode, attackWeapon, readMoveAttack} from "../utils/damage.js";
-import {normalizeRollType} from "../utils/roll-types.js";
+import {isFixedRollValue, normalizeRollType} from "../utils/roll-types.js";
 import {filterStatOptionLines, escHtml} from "../utils/strings.js";
 import {moveCardBody} from "../utils/move-tiers.js";
 import {stonetopThumbnail} from "../utils/item-icon.js";
@@ -295,10 +295,13 @@ export function createStonetopItemClass(BaseItem) {
 			}
 
 			// "ask" moves (Defy Danger/Interfere) carry per-stat option lines to filter.
-			const isStatChoice = rollType === "ask" && !!options.statOverride;
+			// A number rolled instead of a stat ("roll +3 instead", isFixedRollValue) picks no stat: the
+			// whole text and the move's own name, its source named among the card's notes.
+			const fixedValue = isFixedRollValue(options.statOverride);
+			const isStatChoice = rollType === "ask" && !!options.statOverride && !fixedValue;
 			// A fixed-stat move rolled with an alternate stat (e.g. Skill at Arms → Clash
 			// with DEX) isn't an "ask" move but should still label the chosen stat.
-			const usingAltStat = !!options.statOverride && options.statOverride !== rollType;
+			const usingAltStat = !!options.statOverride && options.statOverride !== rollType && !fixedValue;
 			const description = this.system?.description ?? "";
 			// The signoff is appended LAST, below the ladder, rather than carried through the
 			// rewrite: "XOXO, your GM" closes the letter, and a set of tier rows printed under

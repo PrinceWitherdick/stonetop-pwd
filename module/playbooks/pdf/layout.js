@@ -64,6 +64,9 @@ function _rowTolerance(a, b) {
 	return BASELINE_TOLERANCE * (big > small * 2.5 ? small : big);
 }
 
+/** A list bullet in a dingbat run: never a box, a tick or a pip. */
+export const BULLET = "•";
+
 /**
  * A widget token for a dingbat run: { box, ticked, pips } counts.
  */
@@ -191,17 +194,22 @@ function buildLine(raw, columnLeft) {
 	const x = raw.segs[0].x;
 	const maxSize = Math.max(...parts.map(p => p.size));
 
-	// Leading widgets: the boxes before the first word ("n", "n4", "n n n").
-	let boxes = 0, ticked = 0, i = 0;
+	// Leading widgets: the boxes before the first word ("n", "n4", "n n n"), or a list bullet ("•").
+	// The template draws its bullets as pictures, so most PDFs have none to read; one that carries
+	// them as marks (a playbook printed to PDF, read back by outline-text.js) says which line opens
+	// a bullet and which carries the one before on.
+	let boxes = 0, ticked = 0, bullet = false, i = 0;
 	while (i < parts.length && (parts[i].role === "dingbat" || !parts[i].text.trim())) {
 		if (parts[i].role === "dingbat") {
 			const w = widgetOf(parts[i].text);
 			if (w.pips && !w.box) break;
 			boxes += w.box;
 			ticked += w.ticked;
+			if (parts[i].text.includes(BULLET)) bullet = true;
 		}
 		i++;
 	}
+	const textX = parts[i]?.x ?? raw.segs[0].x;
 
 	// Pip tracks anywhere on the line, each with the word just before it ("Fear ●●●●").
 	const pips = [];
@@ -234,7 +242,8 @@ function buildLine(raw, columnLeft) {
 		text,
 		headingText,
 		maxSize,
-		lead: { boxes, ticked: ticked > 0 },
+		lead: { boxes, ticked: ticked > 0, bullet },
+		textX,
 		pips,
 	};
 }

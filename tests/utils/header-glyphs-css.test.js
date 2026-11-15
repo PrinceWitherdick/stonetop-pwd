@@ -56,6 +56,15 @@ const GLYPHS = [
 		viewBox: /viewBox="17\.50 32\.02 479\.75 400\.55"/,
 		ratio: /aspect-ratio:\s*479\.75\s*\/\s*400\.55/,
 	},
+	// A homebrew playbook's other form (homebrew-inserts.js#insertFormGlyph), on the same terms.
+	{
+		name: "a homebrew insert's form",
+		icon: ".stonetop-insert-form-icon",
+		control: ".stonetop-insert-form",
+		svg: "assets/icons/werewolf.svg",
+		viewBox: /viewBox="24\.42 16\.06 463\.17 479\.89"/,
+		ratio: /aspect-ratio:\s*463\.17\s*\/\s*479\.89/,
+	},
 ];
 
 describe.each(GLYPHS)("$name", ({ icon, control, svg, viewBox, ratio }) => {
@@ -116,11 +125,17 @@ describe("where they stand", () => {
 		expect(CSS).not.toMatch(/button\.stonetop-battle-joy:hover\s*\{/);
 	});
 
+	it("does not let hover overrule a worn form's colour", () => {
+		expect(CSS).toMatch(/button\.stonetop-insert-form:not\(\.is-transformed\):hover\s*\{/);
+		expect(CSS).not.toMatch(/button\.stonetop-insert-form:hover/);
+	});
+
 	// Both "state is on" modifiers must be declared AFTER their base rule: an equal-specificity
 	// modifier sitting earlier silently loses the tie.
 	it.each([
 		[".stonetop-battle-joy", ".stonetop-battle-joy.is-raging"],
 		[".stonetop-blessed-marks", ".stonetop-blessed-marks.is-marking"],
+		[".stonetop-insert-form", ".stonetop-insert-form.is-transformed"],
 	])("declares %s's on-state after its base rule", (base, modifier) => {
 		const baseAt = CSS.indexOf(`\n${base},`) >= 0 ? CSS.indexOf(`\n${base},`) : CSS.indexOf(`\n${base} {`);
 		const modAt = CSS.indexOf(`\n${modifier} {`);

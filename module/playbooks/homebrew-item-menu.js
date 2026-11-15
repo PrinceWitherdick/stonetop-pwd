@@ -7,6 +7,7 @@ import { contextMenuEntry } from "../utils/foundry-compat.js";
 import { isHomebrewPlaybookItem } from "./playbook-catalog.js";
 import { isRemovedFromLibrary } from "./playbook-library.js";
 import { droppedFileKind } from "./dropped-file.js";
+import { notePristineWork } from "../utils/close-guard.js";
 
 const itemOfRow = target => globalThis.game?.items?.get?.(target?.dataset?.entryId) ?? null;
 const isGM = () => !!globalThis.game?.user?.isGM;
@@ -89,8 +90,16 @@ function wireSidebarDrop(_app, html) {
 		ev.stopPropagation();
 		const { PlaybookBuilderDialog } = await import("./PlaybookBuilderDialog.js");
 		const builder = new PlaybookBuilderDialog({});
-		await builder._render(true);
-		builder.readDroppedFile(file, kind);
+		if (kind !== "pdf") {
+			await builder._render(true);
+			builder.readDroppedFile(file, kind);
+			return;
+		}
+		// A PDF is read before the builder opens, as a new playbook's is (startNewPlaybook): a known
+		// playbook read whole is saved without it (PlaybookBuilderDialog#_saveKnown).
+		notePristineWork(builder);
+		const outcome = await builder.readDroppedFile(file, kind);
+		if (outcome === "read" || outcome === "by-hand") builder.render(true);
 	}, true);
 }
 
