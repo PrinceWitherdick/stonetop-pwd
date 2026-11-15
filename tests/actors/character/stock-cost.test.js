@@ -136,6 +136,17 @@ describe("the Vessel's third purse", () => {
 		// A chat stamp from before the Vessel purse existed still reads.
 		expect(stockReceipt({ amount: 1, label: "Boon" }, 1)).toBe("Spent 1 Boon");
 	});
+
+	// A purse that went through JSON (Healer's Arts' spend result, a socket reply) has lost its receipt
+	// method, and still reads as what it paid, not as "Spent 2 HP".
+	it("words a plain copy of a purse from its data", () => {
+		const plain = source => JSON.parse(JSON.stringify(source));
+		const [, hp] = stockSources({ pouchStored: 1, vesselHp: 7 });
+		expect(stockReceipt(plain(hp), 2, 5)).toBe("Lost 5 HP in place of 2 Stock");
+		expect(stockReceipt({ label: "Weak", standIn: { kind: "debility", key: "weak", name: "Weak" } }, 1)).toBe("Marked Weak in place of 1 Stock");
+		expect(stockReceipt({ label: "HP", standIn: { kind: "hp", amount: 2 } }, 1, 2)).toBe("Lost 2 HP in place of 1 Stock");
+		expect(stockReceipt({ label: "a scar", standIn: { kind: "other", text: "a scar" } }, 1)).toBe("In place of 1 Stock: a scar");
+	});
 });
 
 describe("stockSources", () => {

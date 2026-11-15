@@ -148,7 +148,8 @@ export class StruggleSetupDialog extends StonetopDialog {
 	 * opened by itself for the same ask (struggle-flow.js#answerNextAsk), so long as nobody has typed in it.
 	 */
 	async _render(force, options = {}) {
-		if (options?.view) this._takeRestoredView(options.view);
+		// Drawn or not (see above); the base's own offer of the same view is then a no-op.
+		this._offerRestoredView(options);
 		return super._render(force, options);
 	}
 

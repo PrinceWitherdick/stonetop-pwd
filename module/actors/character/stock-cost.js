@@ -245,10 +245,19 @@ export function stockSourceChoiceLabel(source, amount = 1) {
 /**
  * What a paid cost says afterwards, on a card or a notification: "Spent 1 Stock", or for a
  * Vessel "Lost 5 HP in place of 1 Stock" (the purse's receipt). `lost` is the HP the purse took.
- * A purse with no receipt of its own (a stamp from before the Vessel purse existed) was a count.
+ *
+ * A purse that lost its methods (a plain copy: Healer's Arts' spend result, a socket reply, a
+ * stamp) is worded from its data instead: `vessel` and `standIn` survive a JSON trip, `receipt`
+ * does not. With neither, it was a count.
  */
 export function stockReceipt(source, amount = 1, lost = 0) {
-	return source?.receipt ? source.receipt(amount, lost) : `Spent ${amount} ${source?.label ?? "Stock"}`;
+	if (typeof source?.receipt === "function") return source.receipt(amount, lost);
+	if (source?.vessel) return `Lost ${lost} HP in place of ${amount} Stock`;
+	const s = source?.standIn;
+	if (s?.kind === "debility") return `Marked ${s.name} in place of ${amount} Stock`;
+	if (s?.kind === "hp") return `Lost ${lost} HP in place of ${amount} Stock`;
+	if (s?.kind === "other") return `In place of ${amount} Stock: ${s.text}`;
+	return `Spent ${amount} ${source?.label ?? "Stock"}`;
 }
 
 /**

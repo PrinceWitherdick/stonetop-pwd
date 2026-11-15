@@ -161,7 +161,8 @@ export class PlaybookImportReview extends StonetopDialog {
 
 	/** A reload's reopening draw carries the view back; with no draft in it, the window stays shut. */
 	async _render(force, options = {}) {
-		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
+		// Before the gate below, which a reload's draft opens (the base's own offer is then a no-op).
+		if (!this.rendered) this._offerRestoredView(options);
 		if (!this._draft) return;
 		return super._render(force, options);
 	}

@@ -5,6 +5,7 @@ import {
 	onItemChangeCrewSheets, onUpdateActorCrewRoster, onUpdateActorCrewSheets, releaseCrewPerson, replaceCrewPerson,
 	syncCrewMemberPeople, CREW_SHEET_REDRAW_MS,
 } from "../../../module/actors/character/crew-people.js";
+import { MAKER_STAGGER_MS, sweepOnce, sweepQueued } from "../../../module/actors/character/follower-actors.js";
 import { followerCardFor, followerMasterIndex } from "../../../module/actors/character/follower-masters.js";
 
 // A Marshal's NAMED crew members each get a Person (an npc in Followers) so they can go on the
@@ -262,6 +263,24 @@ describe("onUpdateActorCrewRoster", () => {
 		expect(person.update.mock.calls[0][1]).toEqual({ stonetopLedger: true, stonetopCrewSync: true });
 	});
 
+	// Its own roster write-back is marked, so it never plans the same sync again over what it just wrote.
+	it("marks the sync's own roster write, and skips a roster write so marked", async () => {
+		const person = makePerson("Actor.p1", {
+			name: "Wrenna",
+			flags: { crewMemberCard: { name: "Wren", img: "", frame: null, occupation: "Pim's crew", traits: "" } },
+			system: { occupation: "Pim's crew", traits: "" },
+		});
+		const character = makeCharacter([{ name: "Wren", personUuid: "Actor.p1" }]);
+		await syncCrewMemberPeople(character);
+		const [, options] = character.update.mock.calls.at(-1);
+		expect(options).toEqual({ stonetopCrewSync: true });
+		person.update.mockClear();
+		character.flags[SYS].crew.individuals = [{ name: "Wrenny", personUuid: "Actor.p1" }];
+		onUpdateActorCrewRoster(character, { flags: { [SYS]: { crew: { individuals: [] } } } }, options, "user1");
+		await new Promise(resolve => setTimeout(resolve, 0));
+		expect(person.update).not.toHaveBeenCalled();
+	});
+
 	it("ignores another user's edit, an edit outside the roster, and a character it cannot write", async () => {
 		const person = personFor();
 		const character = makeCharacter([{ name: "Wrenna", personUuid: "Actor.p1" }]);
@@ -294,11 +313,71 @@ describe("one sweep at a time per character", () => {
 			.toEqual([["Wrenna", "Actor.p1"], ["Ash", "Actor.new0"]]);
 	});
 
-	it("does not queue a second pass of a kind already queued", async () => {
+	it("shares one pass between two asks of a kind still waiting its turn", async () => {
 		const character = makeCharacter([{ name: "Wren" }]);
 		const [first, second] = await Promise.all([ensureCrewMemberPeople(character), ensureCrewMemberPeople(character)]);
-		expect([first, second]).toEqual([1, 0]);
+		expect([first, second]).toEqual([1, 1]);
 		expect(created).toHaveLength(1);
+	});
+
+	it("a waiting pass runs the newest ask's plan, once", async () => {
+		const older = vi.fn(async () => 1);
+		const newer = vi.fn(async () => 2);
+		const [a, b] = await Promise.all([sweepOnce("pcW", "k", older), sweepOnce("pcW", "k", newer)]);
+		expect([a, b]).toEqual([2, 2]);
+		expect(older).not.toHaveBeenCalled();
+		expect(newer).toHaveBeenCalledTimes(1);
+	});
+
+	// The running pass planned before the edit, so dropping the new ask would leave the edit uncarried.
+	it("an ask while a pass of its kind is RUNNING runs once more after it", async () => {
+		let release;
+		const gate = new Promise(resolve => { release = resolve; });
+		const ran = [];
+		const first = sweepOnce("pcR", "k", async () => { ran.push("first"); await gate; return 1; });
+		await vi.waitFor(() => expect(ran).toEqual(["first"]));
+		expect(sweepQueued("pcR", "k")).toBe(false);
+		const second = sweepOnce("pcR", "k", async () => { ran.push("second"); return 1; });
+		expect(sweepQueued("pcR", "k")).toBe(true);
+		release();
+		expect(await Promise.all([first, second])).toEqual([1, 1]);
+		expect(ran).toEqual(["first", "second"]);
+	});
+
+	it("carries a second roster rename made while the first one's sync is still writing", async () => {
+		const stamp = name => ({ crewMemberCard: { name, img: "", frame: null, occupation: "Pim's crew", traits: "" } });
+		const a = makePerson("Actor.a", { name: "Ash", flags: stamp("Ash"), system: { occupation: "Pim's crew", traits: "" } });
+		const b = makePerson("Actor.b", { name: "Bree", flags: stamp("Bree"), system: { occupation: "Pim's crew", traits: "" } });
+		const character = makeCharacter([{ name: "Asha", personUuid: "Actor.a" }, { name: "Bree", personUuid: "Actor.b" }]);
+		let release;
+		// The first write waits until the second rename is in; any after it land at once.
+		a.update = vi.fn()
+			.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }))
+			.mockImplementation(async () => {});
+		const first = syncCrewMemberPeople(character);
+		await vi.waitFor(() => expect(a.update).toHaveBeenCalled());
+		character.flags[SYS].crew.individuals = [{ name: "Asha", personUuid: "Actor.a" }, { name: "Breena", personUuid: "Actor.b" }];
+		const second = syncCrewMemberPeople(character);
+		release();
+		await Promise.all([first, second]);
+		expect(b.update).toHaveBeenCalled();
+		expect(b.update.mock.calls[0][0].name).toBe("Breena");
+	});
+
+	// Sweeps started by one render wait this client's turn once between them, not once each.
+	it("waits this client's makerRank turn once for sweeps queued together", async () => {
+		vi.useFakeTimers();
+		try {
+			globalThis.game.users = { contents: [{ id: "user0", active: true }, { id: "user1", active: true }] };
+			const character = { id: "pcT", testUserPermission: () => true };
+			const ran = [];
+			const runs = ["a", "b", "c"].map(kind => sweepOnce(character, kind, async () => { ran.push(kind); return 1; }));
+			await vi.advanceTimersByTimeAsync(MAKER_STAGGER_MS);
+			expect(ran).toEqual(["a", "b", "c"]);
+			await Promise.all(runs);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 
@@ -320,6 +399,21 @@ describe("leaving the crew", () => {
 		const gone = makePerson("Actor.g");
 		await releaseCrewPerson({ personUuid: "Actor.g" }, { remove: true });
 		expect(gone.delete).toHaveBeenCalled();
+	});
+
+	// Left marked, a Person nobody may delete would sit outside every "Link a Person" list for good.
+	it("a removal asking to delete a Person this user may not delete takes them off the crew instead, and says so", async () => {
+		const warn = vi.fn();
+		globalThis.ui = { notifications: { warn } };
+		const kept = makePerson("Actor.k2", { canUserModify: () => false });
+		await releaseCrewPerson({ personUuid: "Actor.k2" }, { remove: true });
+		expect(kept.delete).not.toHaveBeenCalled();
+		expect(Object.keys(kept.update.mock.calls[0][0]).some(k => k.includes("crewMember"))).toBe(true);
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining("stay as a Person"));
+
+		const stuck = makePerson("Actor.s", { delete: vi.fn(async () => { throw new Error("no"); }) });
+		await releaseCrewPerson({ personUuid: "Actor.s" }, { remove: true });
+		expect(stuck.update).toHaveBeenCalled();
 	});
 
 	it("linking a hand-made Person deletes the one the crew made, but never one linked by hand", async () => {
@@ -428,11 +522,23 @@ describe("redrawing a crew member's open sheet", () => {
 
 	it("forgets a crew card the character's sheet was still building, so the redraw reads the change", () => {
 		const forgetCrewCard = vi.fn();
-		const character = makeCharacter([{ name: "Wren", personUuid: "Actor.p1" }], { sheet: { forgetCrewCard } });
+		const character = makeCharacter([{ name: "Wren", personUuid: "Actor.p1" }], { _sheet: { forgetCrewCard } });
 		const mine = makePerson("Actor.p1", { sheet: sheet(true) });
 		openSheets(mine);
 		onUpdateActorCrewSheets(character, { name: "Pimm" });
 		expect(forgetCrewCard).toHaveBeenCalledBefore(mine.sheet.render);
+	});
+
+	// The `sheet` getter builds a whole character sheet; one never built has no crew card in flight.
+	it("never builds the character's sheet just to forget its crew card", () => {
+		const character = makeCharacter([{ name: "Wren", personUuid: "Actor.p1" }]);
+		const built = vi.fn();
+		Object.defineProperty(character, "sheet", { get: built });
+		const mine = makePerson("Actor.p1", { sheet: sheet(true) });
+		openSheets(mine);
+		onUpdateActorCrewSheets(character, { name: "Pimm" });
+		expect(built).not.toHaveBeenCalled();
+		expect(mine.sheet.render).toHaveBeenCalled();
 	});
 
 	it("leaves them be when the update is not to a character", () => {

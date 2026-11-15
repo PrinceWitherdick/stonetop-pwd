@@ -98,6 +98,20 @@ describe("the form, as plain values", () => {
 		expect(readFormFields(b)).toEqual(fields);
 	});
 
+	it("reads a radio group with nothing picked as an empty string, so a reload puts it back unpicked", () => {
+		const window = new Window();
+		window.document.body.innerHTML = `
+			<input type="radio" name="style" value="prose">
+			<input type="radio" name="style" value="list">
+			<input type="radio" name="tone" value="warm" checked>
+			<input type="radio" name="tone" value="cold">`;
+		const root = window.document.body;
+		expect(readFormFields(root)).toEqual({ style: "", tone: "warm" });
+		root.querySelector("[value=prose]").checked = true;
+		writeFormFields(root, { style: "", tone: "cold" });
+		expect(readFormFields(root)).toEqual({ style: "", tone: "cold" });
+	});
+
 	it("puts back only what fits each field", () => {
 		const b = form();
 		writeFormFields(b, { name: 7, rollType: "nonsense", noXpOnMiss: "yes", description: "kept" });

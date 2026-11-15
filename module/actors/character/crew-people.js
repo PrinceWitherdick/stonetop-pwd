@@ -309,8 +309,10 @@ export function redrawCrewMemberSheets(character) {
 	});
 	if (!open.length) return;
 	// The sheets share one build of the crew card (StonetopCharacterSheet#crewMemberCard); one
-	// still in flight was started before this change, so it is not theirs to share.
-	character.sheet?.forgetCrewCard?.();
+	// still in flight was started before this change, so it is not theirs to share. Read off the
+	// cached sheet: the `sheet` getter would build a whole character sheet just to clear a field,
+	// and one never built has no build in flight.
+	character._sheet?.forgetCrewCard?.();
 	for (const app of open) app.render(false);
 }
 
@@ -467,7 +469,9 @@ export async function syncCrewMemberPeople(character) {
 				console.warn("Stonetop | Could not bring this crew member's Person back in step.", person?.name, err);
 			}
 		}
-		if (rows) await character.update({ [INDIVIDUALS_PATH]: rows });
+		// Marked as the sync's own write, so the roster hook does not plan this sync again over
+		// it. Not silent to the ledger: a member renamed on their own sheet is still news.
+		if (rows) await character.update({ [INDIVIDUALS_PATH]: rows }, { [CREW_SYNC_OPTION]: true });
 		return moved;
 	}, "Stonetop | Could not sync this character's crew member People.");
 }
@@ -501,7 +505,7 @@ export function onUpdateActorCrewPerson(actor, changed, options, userId) {
  * by a client that could not write the Person).
  */
 export function onUpdateActorCrewRoster(actor, changed, options, userId) {
-	if (userId !== game.user?.id || actor?.type !== "character") return;
+	if (userId !== game.user?.id || actor?.type !== "character" || options?.[CREW_SYNC_OPTION]) return;
 	const crew = changed?.flags?.[SYSTEM_ID]?.crew;
 	const touched = !!changed && ("name" in changed
 		|| (!!crew && typeof crew === "object" && ("individuals" in crew || "name" in crew)));
@@ -525,14 +529,23 @@ export async function markCrewPersonDead(row) {
 /**
  * A member removed from the roster: their Person is deleted, or kept as a Person in their own right
  * (no longer on the crew, so nothing syncs it again).
+ *
+ * A user who may not delete actors, or a delete that fails, still takes the Person off the crew:
+ * left marked, it would sit outside every "Link a Person" list for good. They are told it was kept.
  */
 export async function releaseCrewPerson(row, { remove = false } = {}) {
 	const person = crewPersonFor(row);
 	if (!person) return;
 	if (remove) {
-		if (person.canUserModify?.(game.user, "delete") === false) return;
-		await person.delete().catch(err => console.warn("Stonetop | Could not delete a crew member's Person.", err));
-		return;
+		if (person.canUserModify?.(game.user, "delete") !== false) {
+			try {
+				await person.delete();
+				return;
+			} catch (err) {
+				console.warn("Stonetop | Could not delete a crew member's Person.", err);
+			}
+		}
+		globalThis.ui?.notifications?.warn?.(`${person.name} could not be deleted, so they stay as a Person, no longer on the crew.`);
 	}
 	if (!person.isOwner) return;
 	const [key, value] = deletionEntry(`flags.${SYSTEM_ID}.${CREW_MEMBER_FLAG}`);

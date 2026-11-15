@@ -56,6 +56,28 @@ class Kept extends StonetopDialog {
 	get _focusKeyAttribute() { return "data-kept-focus"; }
 }
 
+describe("a reload's view", () => {
+	// A window whose own _render takes the view before a gate of its own (Timeline, Import Review, Struggle
+	// setup) and then the base's _render: the same view is restored once, not twice.
+	it("is handed to _takeRestoredView once, however many _render layers offer it", async () => {
+		vi.spyOn(Application.prototype, "_render").mockImplementation(async () => {});
+		class Restores extends StonetopDialog {
+			_takeRestoredView = vi.fn();
+			async _render(force, options = {}) {
+				if (!this.rendered) this._offerRestoredView(options);
+				return super._render(force, options);
+			}
+		}
+		const app = new Restores();
+		const view = { form: { name: "x" } };
+		await app._render(true, { view });
+		expect(app._takeRestoredView).toHaveBeenCalledTimes(1);
+		expect(app._takeRestoredView).toHaveBeenCalledWith(view);
+		await app._render(true, {});
+		expect(app._takeRestoredView).toHaveBeenCalledTimes(1);
+	});
+});
+
 afterEach(() => {
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();

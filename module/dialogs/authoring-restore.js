@@ -75,7 +75,10 @@ export function parseAuthoringKey(key, kind) {
 const FIELDS = "input[name], textarea[name], select[name], prose-mirror[name]";
 const SKIP_TYPES = new Set(["file", "button", "submit", "reset", "image"]);
 
-/** Every named field's value: a string, or a boolean for a checkbox, or the picked radio's value. */
+/**
+ * Every named field's value: a string, or a boolean for a checkbox, or the picked radio's value ("" for
+ * a radio group with nothing picked, so a reload puts it back unpicked rather than on the template's default).
+ */
 export function readFormFields(root) {
 	const out = {};
 	for (const el of root?.querySelectorAll?.(FIELDS) ?? []) {
@@ -83,7 +86,10 @@ export function readFormFields(root) {
 		const type = String(el.type ?? "").toLowerCase();
 		if (!name || SKIP_TYPES.has(type)) continue;
 		if (type === "checkbox") out[name] = !!el.checked;
-		else if (type === "radio") { if (el.checked) out[name] = String(el.value); }
+		else if (type === "radio") {
+			if (el.checked) out[name] = String(el.value);
+			else if (!Object.hasOwn(out, name)) out[name] = "";
+		}
 		else out[name] = String(el.value ?? "");
 	}
 	return out;

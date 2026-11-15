@@ -163,7 +163,7 @@ export function recoverBreakdown(heal, carerName = "") {
  * one emptied since the window opened pays nothing. With no key, a lone purse that is not a Vessel's
  * HP pays, as the sheet's own spend does; a Vessel's HP is only ever taken when it was picked.
  *
- * @returns {Promise<{key: string, label: string, vessel: boolean, lost: number, remaining: number|null}|null>}
+ * @returns {Promise<{key: string, label: string, vessel: boolean, standIn: object|null, lost: number, remaining: number|null}|null>}
  */
 async function spendCarerStock(carer, sourceKey) {
 	const character = carer?.typedActor;
@@ -175,7 +175,7 @@ async function spendCarerStock(carer, sourceKey) {
 	const speaker = globalThis.ChatMessage?.getSpeaker?.({ actor: carer });
 	const { lost } = await character.spendStock(source, HEALERS_ARTS_STOCK, { moveName: HEALERS_ARTS, speaker });
 	return {
-		key: source.key, label: source.label, vessel: !!source.vessel, lost,
+		key: source.key, label: source.label, vessel: !!source.vessel, standIn: source.standIn ?? null, lost,
 		remaining: source.vessel ? null : source.remaining - HEALERS_ARTS_STOCK,
 	};
 }

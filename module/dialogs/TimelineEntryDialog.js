@@ -155,7 +155,8 @@ export class TimelineEntryDialog extends StonetopDialog {
 
 	/** A reload's reopening draw carries the view back; with nowhere to write, the window stays shut. */
 	async _render(force, options = {}) {
-		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
+		// Before the gate below, which a reload's view opens (the base's own offer is then a no-op).
+		if (!this.rendered) this._offerRestoredView(options);
 		if (this._gone || (this._awaitingView && !this._reloaded)) return;
 		return super._render(force, options);
 	}

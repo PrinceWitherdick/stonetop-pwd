@@ -151,22 +151,30 @@ export async function awaitMakerTurn(character) {
 	if (rank > 0) await _wait(rank * MAKER_STAGGER_MS);
 }
 
-// Per character: the sweep queued last, and the kinds queued or running. Every sweep that writes
-// to a character or to its followers' actors (this file's two, and crew-people.js's two) goes
-// through ONE queue per character, so a render that starts all of them runs them one after the
-// other: two passes each building an update from what they read before the other's write landed
-// would tread on each other. A kind already queued or running is not queued again: a follower
-// add re-renders the sheet, and so does the write a sweep makes at the end of it, and without
-// this the second pass would see the same unanswered followers as the first (its creates have
-// not landed yet) and make them twice.
+// Per character: the sweep queued last, and per kind, the run still waiting its turn. Every sweep
+// that writes to a character or to its followers' actors (this file's two, and crew-people.js's
+// two) goes through ONE queue per character, so a render that starts all of them runs them one
+// after the other: two passes each building an update from what they read before the other's
+// write landed would tread on each other.
+//
+// A kind still WAITING is not queued twice: the waiting run takes the newer request's function
+// (the fresher closure) and answers for both. A kind already RUNNING queues one more run after
+// it: the running pass planned before the new edit, so it cannot carry it. That follow-up reads
+// the state again once the running pass's writes have landed, so it never makes what the first
+// one made (a follower add re-renders the sheet, and so does the write a sweep makes at the end).
+//
+// The makerRank wait starts when a sweep is QUEUED, not when its turn comes, and every sweep
+// queued before it ends shares it: a render that starts four sweeps waits once, as it did when
+// they waited side by side, not four times over. A sweep queued after it ended was asked for by a
+// newer change, which every connected owner saw at the same moment, so it waits its own turn.
 const _sweepQueues = new Map();
 
 /**
  * Run one sweep of `kind` over this character, after any sweep already queued for it, and after
- * this client's turn in the makerRank queue. Resolves to `fn`'s result; to 0 when a sweep of the
- * same kind is already queued or running (it is about to answer for the same state), or when the
- * sweep throws, which is logged with `failure`: every sweep is fired and forgotten from a render
- * or a hook, so a throw must never reach its caller.
+ * this client's turn in the makerRank queue. Resolves to `fn`'s result, or to 0 when the sweep
+ * throws, which is logged with `failure`: every sweep is fired and forgotten from a render or a
+ * hook, so a throw must never reach its caller. A request for a kind already waiting shares that
+ * run (and its result), which now calls this `fn`.
  *
  * @param {Actor}    character
  * @param {string}   kind
@@ -176,29 +184,63 @@ const _sweepQueues = new Map();
  */
 export function sweepOnce(character, kind, fn, failure = "Stonetop | A follower sweep failed.") {
 	const key = character?.id ?? character;
-	const queue = _sweepQueues.get(key) ?? { tail: Promise.resolve(), kinds: new Set() };
-	if (queue.kinds.has(kind)) return Promise.resolve(0);
-	queue.kinds.add(kind);
+	const queue = _sweepQueues.get(key) ?? { tail: Promise.resolve(), waiting: new Map(), active: 0, turn: null };
 	_sweepQueues.set(key, queue);
-	const run = queue.tail.then(async () => {
+	const waiting = queue.waiting.get(kind);
+	if (waiting) {
+		waiting.fn = fn;
+		return waiting.run;
+	}
+	if (!queue.turn || queue.turn.settled) queue.turn = makerTurn(character);
+	const pending = { fn, run: null, turn: queue.turn };
+	queue.waiting.set(kind, pending);
+	queue.active++;
+	pending.run = queue.tail.then(async () => {
+		// From here on a new request is a follow-up, not this run.
+		if (queue.waiting.get(kind) === pending) queue.waiting.delete(kind);
 		try {
-			await awaitMakerTurn(character);
-			return await fn();
+			const turnFailed = await pending.turn.done;
+			if (turnFailed) throw turnFailed;
+			return await pending.fn();
 		} catch (err) {
 			console.error(failure, err);
 			return 0;
 		} finally {
-			queue.kinds.delete(kind);
-			if (!queue.kinds.size && _sweepQueues.get(key) === queue) _sweepQueues.delete(key);
+			queue.active--;
+			if (!queue.active && _sweepQueues.get(key) === queue) _sweepQueues.delete(key);
 		}
 	});
-	queue.tail = run;
-	return run;
+	queue.tail = pending.run;
+	return pending.run;
 }
 
-/** Whether a sweep of `kind` is already queued or running for this character. */
+/**
+ * This client's makerRank wait, started now. `done` resolves to null, or to the error makerRank
+ * threw (it walks the connected users), which the sweep then logs as its own: held as a value
+ * rather than a rejection, because nothing awaits it until the sweep's turn in the queue comes.
+ */
+function makerTurn(character) {
+	const turn = { settled: false, done: null };
+	turn.done = (async () => {
+		try {
+			await awaitMakerTurn(character);
+			return null;
+		} catch (err) {
+			return err;
+		} finally {
+			turn.settled = true;
+		}
+	})();
+	return turn;
+}
+
+/**
+ * Whether a sweep of `kind` is queued for this character and has not started yet: it will plan
+ * from the state as it is when it starts, so planning it again now is wasted work. A sweep that
+ * is already running answers false, because it planned before whatever is asking now.
+ */
 export function sweepQueued(character, kind) {
-	return !!_sweepQueues.get(character?.id ?? character)?.kinds.has(kind);
+	return !!_sweepQueues.get(character?.id ?? character)?.waiting.has(kind);
 }
 
 /**
@@ -451,11 +493,10 @@ function _npcMoves(actor) {
  * @param {object[]} snapshots  the finished cards' drag snapshots (_followerDragSnapshot)
  */
 export async function syncFollowerActors(character, snapshots = []) {
-	// The queue first: a pass already queued or running is about to answer for these snapshots,
-	// so planning them again is work whose result we would throw away.
-	if (sweepQueued(character, "follower-sync")) return 0;
-
-	// Then the cheap scan, as above: the steady state is "every actor already matches its card",
+	// No early return on a queued pass: it carries the snapshots it was handed, and these are
+	// newer, so sweepOnce hands this call's plan to the waiting pass instead.
+	//
+	// The cheap scan, as above: the steady state is "every actor already matches its card",
 	// and the price of that answer on every render must be one walk of a handful of snapshots.
 	//
 	// Guarded, and separately from the writes below, because this is where a malformed snapshot
