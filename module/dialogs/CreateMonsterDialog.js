@@ -29,8 +29,9 @@ import { formatCustomMoveDescription } from "../utils/custom-move-text.js";
 import { applyGuideRail } from "../utils/guide-rail.js";
 import { openSuggestionMenu } from "../utils/suggestion-menu.js";
 import { notePristineWork } from "../utils/close-guard.js";
-import { persistOpenWindowsSoon } from "../utils/window-restore.js";
+import { persistOnTyping } from "../utils/window-restore.js";
 import { CREATE_MONSTER_RESTORE_KIND, NEW_MONSTER_KEY } from "./create-monster-restore.js";
+import { writeFormFields } from "./authoring-restore.js";
 
 const DEFAULTS = { organization: "group", size: "medium", armorBase: 0 };
 
@@ -85,23 +86,17 @@ export class CreateMonsterDialog extends StonetopDialog {
 	}
 
 	/**
-	 * The section and the whole worksheet. The worksheet lives only in the form, so it is read off
-	 * the form while there is one; a window with no form (mid-close, or not drawn yet) answers with
-	 * what it last read, so a reload never saves it blank.
+	 * The section and the whole worksheet, as the close-guard reads it (`_workState`). The worksheet
+	 * lives only in the form, so a window with no form (mid-close, or not drawn yet) answers with what
+	 * it last read, so a reload never saves it blank.
 	 */
 	get restoreView() {
-		const form = this._form();
-		if (form) this._lastSelections = this._readSelections(form);
+		const work = this._workState();
+		if (work) this._lastSelections = work;
 		const sel = this._lastSelections ?? this._pendingSelections;
 		if (!sel) return null;
 		const folder = typeof this._folder === "string" ? this._folder : (this._folder?.id ?? null);
 		return { tab: this._activeTab, name: this._name, folder, sel };
-	}
-
-	/** A reload's reopening draw carries that back (`options.view`); it goes on before the first draw. */
-	async _render(force, options = {}) {
-		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
-		return super._render(force, options);
 	}
 
 	/**
@@ -124,21 +119,23 @@ export class CreateMonsterDialog extends StonetopDialog {
 	}
 
 	/**
-	 * Write a reload's worksheet back into the freshly drawn form: text by name, radios and ticks by
-	 * value, then one card per saved move and attack, as the GM had added them.
+	 * Write a reload's worksheet back into the freshly drawn form: text by name and radios by value
+	 * (authoring-restore.js#writeFormFields), ticks by value, then one card per saved move and
+	 * attack, as the GM had added them.
 	 */
 	_applySelections(form, sel) {
 		const str = v => (typeof v === "string" ? v : "");
 		const list = v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : []);
+		const fields = {};
 		for (const name of ["concept", "name", "instinct", "creatureType", "armorSource", "customTags", "attackName"]) {
-			const el = form.querySelector(`[name="${name}"]`);
-			if (el && typeof sel[name] === "string") el.value = sel[name];
+			if (typeof sel[name] === "string") fields[name] = sel[name];
 		}
+		// A radio's value is saved as read (armorBase may be the number 0); the form's are strings.
 		for (const name of ["organization", "size", "armorBase"]) {
 			const value = sel[name];
-			if (value === undefined || value === null || value === "") continue;
-			for (const el of form.querySelectorAll(`input[name="${name}"]`)) el.checked = el.value === String(value);
+			if (value !== undefined && value !== null && value !== "") fields[name] = String(value);
 		}
+		writeFormFields(form, fields);
 		const ticks = { nature: sel.natureTags, notable: sel.notableTags, hpMod: sel.hpMods, armorMod: sel.armorMods, damageTag: sel.damageTags, damageMod: sel.damageMods };
 		for (const [name, values] of Object.entries(ticks)) {
 			const on = new Set(list(values));
@@ -237,8 +234,7 @@ export class CreateMonsterDialog extends StonetopDialog {
 		}
 		this._syncNext(form);
 		// Typing never redraws, so the worksheet saves itself for a reload as it changes.
-		form.addEventListener("input", () => persistOpenWindowsSoon());
-		form.addEventListener("change", () => persistOpenWindowsSoon());
+		persistOnTyping(form);
 	}
 
 	// THE ADD-A-CARD REPEATER, which both authored lists are: a `<template>` in the .hbs cloned
@@ -412,8 +408,7 @@ export class CreateMonsterDialog extends StonetopDialog {
 	// What the close-guard compares (utils/close-guard.js): the whole worksheet, read off the form
 	// (it lives only there; the window never redraws once open).
 	_workState() {
-		const root = this.element?.[0];
-		const form = root?.matches?.(".create-monster") ? root : root?.querySelector?.(".create-monster");
+		const form = this._form();
 		return form ? this._readSelections(form) : null;
 	}
 

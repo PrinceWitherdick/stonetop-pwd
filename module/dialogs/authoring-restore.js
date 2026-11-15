@@ -4,9 +4,8 @@
 // in it only in its form until Save, so a reload (a setting that asks for one, a dropped connection)
 // used to throw all of it away.
 //
-// Its own small module so stonetop.js can register it at load WITHOUT importing the dialogs. The
-// classes are named here rather than passed, since window-restore builds the hook names from them;
-// tests/dialogs/authoring-restore.test.js holds these names and the classes' own together.
+// Registered by name from this small module (utils/window-restore.js#registerRestorableWindow says
+// why); tests/dialogs/authoring-restore.test.js holds these names and the classes' own together.
 //
 // WHERE A WINDOW SAVES TO is the part a reload has to rebuild, and it is never guessed from the
 // window: every saver factory stamps `restoreAs` ({ saver, actor?, slug? }) on the saver it returns.
@@ -16,7 +15,7 @@
 // The key is "<kind>:<saver>|<actor uuid>|<target>", the target being the item edited (its uuid),
 // the improvement edited ("slug-<slug>"), or "new-<id>" so two new ones open at once are kept apart.
 
-import { registerRestorableWindow } from "../utils/window-restore.js";
+import { NEW_WINDOW_PREFIX, persistOnTyping, registerRestorableWindow, restoreKeyRest } from "../utils/window-restore.js";
 
 export const IMPROVEMENT_BUILDER_RESTORE_KIND = "improvementBuilder";
 export const IMPROVEMENT_BUILDER_WINDOW_CLASS = "ImprovementBuilderDialog";
@@ -25,7 +24,7 @@ export const CUSTOM_MOVE_WINDOW_CLASS = "CustomMoveDialog";
 export const ADD_ITEM_RESTORE_KIND = "addInventoryItem";
 export const ADD_ITEM_WINDOW_CLASS = "AddInventoryItemDialog";
 
-const NEW_PREFIX = "new-";
+const NEW_PREFIX = NEW_WINDOW_PREFIX;
 const SLUG_PREFIX = "slug-";
 
 /**
@@ -54,9 +53,9 @@ export function authoringRestoreKey(kind, saver, { item = null, windowId = "" } 
 
 /** A key's parts, or null when it isn't one of `kind`'s. */
 export function parseAuthoringKey(key, kind) {
-	const at = String(key ?? "").indexOf(":");
-	if (at < 0 || key.slice(0, at) !== kind) return null;
-	const [saver, actor, target] = key.slice(at + 1).split("|");
+	const rest = restoreKeyRest(key, kind);
+	if (rest === null) return null;
+	const [saver, actor, target] = rest.split("|");
 	if (!saver || !target) return null;
 	return {
 		saver,
@@ -109,6 +108,22 @@ export function writeFormFields(root, fields) {
 		else if (el.tagName === "SELECT") { if ([...el.options].some(o => o.value === value)) el.value = value; }
 		else el.value = value;
 	}
+}
+
+/**
+ * Keep a form-held window's fields for a reload: a reload's copy (`app._restoredFields`) goes back
+ * over the fresh form, then `app._liveFields` follows the typing (`read`, every named field unless
+ * narrowed) and each change saves the open windows soon. Call at the top of activateListeners,
+ * before anything reads the form. `clicks` for a window whose chips change a field without an
+ * input event.
+ */
+export function trackFormFields(app, root, { read = readFormFields, clicks = false } = {}) {
+	if (app._restoredFields) {
+		writeFormFields(root, app._restoredFields);
+		app._restoredFields = null;
+	}
+	app._liveFields = read(root);
+	persistOnTyping(root, { clicks, onEach: () => { app._liveFields = read(root); } });
 }
 
 /** The saved fields, if they are a plain map of strings and booleans; else null. */

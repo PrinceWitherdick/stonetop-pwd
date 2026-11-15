@@ -4,7 +4,8 @@
 //  - We Happy Few's 6- shakes the Marshal's nerves (fight-states.js).
 //  - Prepare a Welcome's 10+ regains 1 Surprise (combat/battle-holds.js).
 //  - Commune with Aratis's 10+ holds 2 Sanction (roll-boosts.js).
-//  - Silver Tongued's 10+ holds 3 Nerve and its 7-9 holds 1 (nerveHeld below).
+//  - Silver Tongued's 10+ holds 3 Nerve and its 7-9 holds 1, as any move whose data says what a roll holds
+//    (heldOnRoll below).
 //  - Wielder of the White Flame's 7+ lights the holy light; Luminous Shield's 6- snuffs it (holy-light.js).
 //  - Defend holds Readiness by tier (combat/defend-readiness.js), and so does a follower ORDERED to Defend
 //    (Book I p.469: "When a PC Orders Followers to Defend and gets a 7+, the follower holds Readiness"),
@@ -48,24 +49,27 @@ export const TIER_EFFECTS_FLAG = "tierEffects";
 /** The Fox's Silver Tongued, whose roll holds Nerve on its own track. */
 export const SILVER_TONGUED = "Silver Tongued";
 
-/** "On a 10+, hold 3 Nerve; on a 7-9, hold 1 Nerve." Nothing on a 6-. */
-const NERVE_HOLD = Object.freeze({ success: 3, partial: 1 });
+/**
+ * What a roll holds for a BOOK move whose pack entry says so (`system.resource.holdOnRoll`), for a copy a
+ * character took before the pack carried it: the held copy is what holdOnRollFor reads, and one taken
+ * earlier has the track without the numbers until the move refresh brings it up to the pack.
+ */
+const BOOK_HOLD_ON_ROLL = Object.freeze({
+	// "On a 10+, hold 3 Nerve; on a 7-9, hold 1 Nerve." Nothing on a 6-.
+	[SILVER_TONGUED]: Object.freeze({ success: 3, partial: 1 }),
+});
 
 const count = value => Math.max(0, Math.trunc(Number(value) || 0));
 
 /**
- * Silver Tongued: "When you use words to avoid suspicion or trouble, roll +CHA: on a 10+, hold 3 Nerve; on
- * a 7-9, hold 1 Nerve." Read as "you now hold 3" (or 1): the LEARNED copy's track (MoveResources.js#
- * learnedTrack, which counts what is held) is raised to that, never lowered by the roll and never past
- * its max. `added` is how many pips this card has put there so far (0 at the roll). What the track would
- * hold without this card is what it holds now less those, so Nerve spent since stays spent and Nerve held
- * before the roll is never taken back, as Defend's Readiness is settled (defend-readiness.js#
- * readinessForTier). Resolves to how many this card has added now; undefined for a character without the
- * move learned, so their card carries no record.
- *
- * Any learned move's track is raised the same way to what `holds[tier]` holds (NERVE_HOLD for Silver
- * Tongued): never lowered by the roll, never past its max, and a card moved off its tier takes back only
- * what it added.
+ * A move whose roll holds on its own track (Silver Tongued: "When you use words to avoid suspicion or
+ * trouble, roll +CHA: on a 10+, hold 3 Nerve; on a 7-9, hold 1 Nerve"). Read as "you now hold 3" (or 1):
+ * the LEARNED copy's track (MoveResources.js#learnedTrack, which counts what is held) is raised to what
+ * `holds[tier]` holds, never lowered by the roll and never past its max. `added` is how many pips this card
+ * has put there so far (0 at the roll). What the track would hold without this card is what it holds now
+ * less those, so a hold spent since stays spent and one held before the roll is never taken back, as
+ * Defend's Readiness is settled (defend-readiness.js#readinessForTier). Resolves to how many this card has
+ * added now; undefined for a character without the move learned, so their card carries no record.
  */
 async function settleHeld(actor, move, holds, tier, added, bonus = 0) {
 	if (!learnedTrack(actor, move)) return added === undefined ? undefined : count(added);
@@ -92,10 +96,12 @@ async function settleHeld(actor, move, holds, tier, added, bonus = 0) {
 /**
  * A move whose own track says what a roll holds: `system.resource.holdOnRoll = {success, partial, failure}`
  * ("on a 10+, hold 3 Fear; on a 7-9, hold 1"). Written by the Playbook Builder for a homebrew move
- * (playbooks/homebrew-bundle.js), read from the move's words. Null for every other move.
+ * (playbooks/homebrew-bundle.js), read from the move's words, and carried by the pack for a book move that
+ * holds on a roll (Silver Tongued; BOOK_HOLD_ON_ROLL for a copy taken before it did). Null for every other move.
  */
 export function holdOnRollFor(actor, move) {
-	const holds = ownedLearnedMove(actor, move)?.system?.resource?.holdOnRoll;
+	const item = ownedLearnedMove(actor, move);
+	const holds = item?.system?.resource?.holdOnRoll ?? BOOK_HOLD_ON_ROLL[bookMoveName(item)];
 	return holds && typeof holds === "object" && Object.values(holds).some(v => count(v) > 0) ? holds : null;
 }
 
@@ -247,19 +253,13 @@ const TIER_EFFECTS = {
 			return n;
 		},
 	},
-	// How many Nerve this card put on Silver Tongued's track (settleHeld).
-	nerveHeld: {
-		moves: [SILVER_TONGUED],
-		settle: (actor, _move, tier, done) => settleHeld(actor, SILVER_TONGUED, NERVE_HOLD, tier, done),
-	},
 	// How many this card put on a track whose move says what a roll holds (holdOnRollFor): matched by the
-	// move's DATA, not its name, so any move can carry it (a homebrew "Pariah": "on a 10+, hold 3 Fear").
-	// `{added, bonus}` instead when a line taken on the roll held more (`holdMore`, holdMoreBonus): the bonus is kept
-	// on the card, so a Shift settles the new tier with it.
+	// move's DATA, not its name, so any move can carry it (Silver Tongued's Nerve, a homebrew "Pariah": "on a
+	// 10+, hold 3 Fear"). `{added, bonus}` instead when a line taken on the roll held more (`holdMore`,
+	// holdMoreBonus): the bonus is kept on the card, so a Shift settles the new tier with it.
 	heldOnRoll: {
 		moves: [],
-		// Not the book's Silver Tongued, whose Nerve nerveHeld settles; a homebrew move of that name is its own.
-		matches: (actor, move) => !!holdOnRollFor(actor, move) && (move !== SILVER_TONGUED || !bookMoveName(ownedLearnedMove(actor, move))),
+		matches: (actor, move) => !!holdOnRollFor(actor, move),
 		async settle(actor, move, tier, done, _character, { holdMore = null } = {}) {
 			const bonus = done == null ? holdMoreBonus(holdMore) : (done?.bonus ?? null);
 			const added = done != null && typeof done === "object" ? done.added : done;
@@ -376,13 +376,28 @@ export async function settleTierEffects(actor, move, tier, done = null, { charac
 export const HOMEBREW_TIER_EFFECTS = Object.freeze(["heldOnRoll", "insertForm"]);
 
 /**
- * The effects a rolled move may settle: every one for a book move (null, no limit), HOMEBREW_TIER_EFFECTS
- * for one written by a player or a homebrew playbook that its data gives one to, or false for none.
- * `item` is the rolled move's Item.
+ * The tier effects a rolled move may settle, `{moveName, only}`, or null for none. A book move settles every
+ * one (`only` null) under its book name (owns-move.js#bookMoveName); one written by a player or a homebrew
+ * playbook settles HOMEBREW_TIER_EFFECTS under its own, and only when its data gives it one. `item` is the
+ * rolled move's Item.
  */
 export function tierEffectsAllowed(actor, item) {
-	if (bookMoveName(item)) return null;
-	return holdOnRollFor(actor, item?.name) || insertFormRollFor(actor, item?.name) ? HOMEBREW_TIER_EFFECTS : false;
+	const book = bookMoveName(item);
+	if (book) return { moveName: book, only: null };
+	const name = item?.name;
+	return name && (holdOnRollFor(actor, name) || insertFormRollFor(actor, name))
+		? { moveName: name, only: HOMEBREW_TIER_EFFECTS }
+		: null;
+}
+
+/**
+ * A card recorded before Silver Tongued's Nerve was settled as any other move's hold kept it as `nerveHeld`:
+ * read as heldOnRoll, so a later Shift still undoes what that card added.
+ */
+function withLegacyKeys(done) {
+	if (done?.nerveHeld == null || done.heldOnRoll != null) return done;
+	const { nerveHeld, ...rest } = done;
+	return { ...rest, heldOnRoll: nerveHeld };
 }
 
 /** Write a record on its card, when there is anything to write. Whether it wrote. */
@@ -416,8 +431,9 @@ export async function reconcileTierEffects(message, total, { actor = undefined, 
 	} catch (err) {
 		console.error("Stonetop | taking back the advantage a moved roll card gave failed", err);
 	}
-	const done = message?.getFlag?.(scope, TIER_EFFECTS_FLAG);
-	if (!done || typeof done !== "object" || !Number.isFinite(Number(total))) return false;
+	const recorded = message?.getFlag?.(scope, TIER_EFFECTS_FLAG);
+	if (!recorded || typeof recorded !== "object" || !Number.isFinite(Number(total))) return false;
+	const done = withLegacyKeys(recorded);
 	const roller = actor === undefined ? speakerActor(message) : actor;
 	if (roller?.type !== "character") return false;
 	if (roller.isOwner === false) {
@@ -428,11 +444,14 @@ export async function reconcileTierEffects(message, total, { actor = undefined, 
 	// The tier the card COUNTS as: a roll that treats a 7-9 as a 10+ (or a 6- as a 7-9) lifted within the
 	// bent tier has not moved, and one lifted into it settles as what it counts as (utils/counted-tier.js).
 	const tier = outcomeTier(cardCountedTier(message, Number(total), scope));
-	// A move a player or a homebrew playbook wrote only ever settles its own data's effects, as at the roll.
+	// A move a player or a homebrew playbook wrote only ever settles its own data's effects, as at the roll
+	// (tierEffectsAllowed). A card for no move the roller holds (a follower's order, titled for the
+	// follower) settles whatever it recorded.
 	const item = roller.items?.find?.(i => i.type === "move" && i.name === move);
-	const only = item && !bookMoveName(item) ? HOMEBREW_TIER_EFFECTS : null;
+	const gate = item ? tierEffectsAllowed(roller, item) : { only: null };
+	if (!gate) return false;
 	try {
-		const next = await settleTierEffects(roller, move, tier, done, { only });
+		const next = await settleTierEffects(roller, move, tier, done, { only: gate.only });
 		if (!Object.keys(next).length || JSON.stringify(next) === JSON.stringify(done)) return false;
 		return recordTierEffects(message, next, { scope });
 	} catch (err) {

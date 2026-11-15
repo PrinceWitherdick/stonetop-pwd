@@ -4,6 +4,8 @@
 // Builder by hand, which has only its words. Pure: plain strings in, plain objects out.
 
 import { parseTiersFromProse } from "../utils/move-tiers.js";
+import { escapeRegExp, nounStem } from "../utils/strings.js";
+import { truncateValue } from "../utils/ledger-core.js";
 
 /** "Once per session, you can…": a thing done once a stretch of play. */
 export const ONCE_PER = /\bonce (?:per|a|each) (session|day|adventure|expedition|season|fight)\b/i;
@@ -52,11 +54,16 @@ export function heldFromWords(words) {
 	const plain = String(words ?? "").replace(/\*/g, "");
 	const title = plain.match(/\bhold\s+(?:\d+|one|two|three)\s+([A-Z][\w'’-]*)/)?.[1] ?? "";
 	if (!title) return null;
-	// Counted singular or plural alike ("1 Reminder, or 2 Reminders"); the title as first printed.
-	const stem = title.replace(/s$/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-	const counts = [...plain.matchAll(new RegExp(`\\b(\\d+)\\s+${stem}s?\\b`, "g"))].map(m => Number(m[1]));
-	const max = Math.max(1, ...counts.filter(n => n > 0 && n <= 20));
-	return { title, max };
+	return { title, max: Math.max(1, ...heldCounts(title, plain)) };
+}
+
+/**
+ * Every "<n> <Title>" count in `text`, singular or plural alike ("1 Reminder, or 2 Reminders"), kept
+ * from 1 to 20: what a held currency's track has to have room for.
+ */
+export function heldCounts(title, text) {
+	const pattern = new RegExp(`\\b(\\d+)\\s+${escapeRegExp(nounStem(title))}[sS]?\\b`, "g");
+	return [...String(text ?? "").replace(/\*/g, "").matchAll(pattern)].map(m => Number(m[1])).filter(n => n > 0 && n <= 20);
 }
 
 /**
@@ -243,7 +250,8 @@ export function rollBendsFrom(words) {
 				...k, moves: moves.length ? moves : null,
 				...(spends ? { spends } : {}), ...(marks ? { marks } : {}), ...(whileHolding ? { whileHolding } : {}),
 				...(whileTransformed ? { whileTransformed: true } : {}),
-				text: s.length > 220 ? `${s.slice(0, 217).replace(/\s+\S*$/, "")}…` : s,
+				// At most 220 characters, the ellipsis included.
+				text: truncateValue(s, 219),
 			});
 		}
 	}
@@ -256,7 +264,7 @@ export function rollBendsFrom(words) {
  * the sentence. Null when the words say nothing of it.
  */
 export function trackFillFrom(words, label) {
-	const name = String(label ?? "").trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const name = escapeRegExp(String(label ?? "").trim());
 	if (!name) return null;
 	const plain = String(words ?? "").replace(/\*/g, "").replace(/\s+/g, " ");
 	const m = plain.match(new RegExp(String.raw`\b(?:at|on|when\s+you\s+(?:reach|mark|hit|have))\s+(\d+)\s+${name}\b[^.!?]*[.!?]`, "i"));
@@ -352,4 +360,12 @@ export function trackFromWords(words) {
 	if (held) return { max: held.max, title: held.title, labels: [] };
 	const once = onceTitle(words);
 	return once ? { max: 1, title: once, labels: [] } : null;
+}
+
+/**
+ * Whether a background's words give an insert's moves in the character's own shape, not only while its
+ * form is worn ("access to your monster moves in your human guise", the Stranger's Cursed).
+ */
+export function insertMovesInHumanGuise(words) {
+	return /\b(?:in|with)\s+your\s+human\s+(?:guise|form|shape)\b/i.test(String(words ?? ""));
 }

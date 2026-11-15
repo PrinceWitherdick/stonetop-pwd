@@ -6,7 +6,7 @@ import { canCreateRelationshipMap, ensureRelationshipMapFolder, listRelationship
 import { promptForNewRelationshipMap } from "../relmap/relmap-make.js";
 import { defaultBoard } from "../relmap/relmap-last.js";
 import { keepDeadChipsCurrent, keepSavedFacesCurrent, sweepStaleFaces } from "../relmap/relmap-faces.js";
-import { onItemChangeCrewSheets, onUpdateActorCrewPerson, onUpdateActorCrewSheets } from "../actors/character/crew-people.js";
+import { onItemChangeCrewSheets, onUpdateActorCrewPerson, onUpdateActorCrewRoster, onUpdateActorCrewSheets } from "../actors/character/crew-people.js";
 import { installChipMeasure } from "../utils/relmap-chip-measure.js";
 import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
@@ -731,6 +731,9 @@ export async function onReady() {
 	// A named crew member's Person renamed or given a face on its own sheet takes the Marshal's roster
 	// with it, on the client that made the edit (actors/character/crew-people.js).
 	Hooks.on("updateActor", onUpdateActorCrewPerson);
+	// And the other way: a member renamed, re-tagged or given a face on the roster takes their Person
+	// with them, on the client that made the edit (the sheet's render still runs it as a backfill).
+	Hooks.on("updateActor", onUpdateActorCrewRoster);
 	// And a crew member's open sheet reads their HP, Loyalty and tags off the crew card, so it draws
 	// again when that card changes (on every client: it is only a redraw).
 	Hooks.on("updateActor", onUpdateActorCrewSheets);

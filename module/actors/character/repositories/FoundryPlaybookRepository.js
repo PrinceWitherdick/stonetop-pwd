@@ -1,6 +1,6 @@
 import { FoundryPackStore } from "./FoundryPackStore.js";
 import { ITEMS_PACK } from "../StonetopFlags.js";
-import { homebrewPlaybookBySlug } from "../../../playbooks/playbook-catalog.js";
+import { homebrewPlaybookBySlug, HOMEBREW_SLUG_PREFIX } from "../../../playbooks/playbook-catalog.js";
 
 export class FoundryPlaybookRepository {
 	constructor() {
@@ -12,6 +12,7 @@ export class FoundryPlaybookRepository {
 	// playbook from the world (playbooks/playbook-catalog.js), read fresh each call and never
 	// cached, so a GM's edit in the Playbook Builder shows on the next render.
 	async findBySlug(slug) {
+		if (String(slug ?? "").startsWith(HOMEBREW_SLUG_PREFIX)) return homebrewPlaybookBySlug(slug)?.asPlaybook?.() ?? null;
 		if (this._cache.has(slug)) return this._cache.get(slug);
 		const entry = await this._store.findEntry(e => e.system?.slug === slug);
 		if (!entry) return homebrewPlaybookBySlug(slug)?.asPlaybook?.() ?? null;

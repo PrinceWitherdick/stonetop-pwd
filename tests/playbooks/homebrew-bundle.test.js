@@ -284,6 +284,12 @@ describe("what a roll holds, read off a move's words", () => {
 		expect(holdOnRollFrom("roll +CHA: on a 10+, hold 3 Fear; on a 7-9, hold 1 Fear.", "Fear")).toEqual({ success: 3, partial: 1 });
 		expect(holdOnRollFrom("on a 7+, they appear but hold 1 Reign; on a 10+, hold 2 Reign; on a 6-, hold no Reign", "Reign")).toEqual({ success: 2, partial: 1 });
 		expect(holdOnRollFrom("on a 10+, hold 2 Readiness", "Fear")).toBeNull();
+		// One tier alone still holds: it is a rung, not a ladder.
+		expect(holdOnRollFrom("When you face them down, roll +CHA. On a 10+, hold 3 Fear.", "Fear")).toEqual({ success: 3 });
+		// A PDF's en dash, read as the move card reads it.
+		expect(holdOnRollFrom("roll +CHA: on a 10+, hold 3 Fear; on a 7–9, hold 1 Fear.", "Fear")).toEqual({ success: 3, partial: 1 });
+		// The 10+ raising the 7+'s hold says more after it: its own hold still wins.
+		expect(holdOnRollFrom("on a 7+, they appear but hold 1 Reign; on a 10+, hold 2 Reign and take +1 forward.", "Reign")).toEqual({ success: 2, partial: 1 });
 		expect(holdOnRollFrom("When you take this on, hold 2 Surprises.", "Surprises")).toBeNull();
 	});
 

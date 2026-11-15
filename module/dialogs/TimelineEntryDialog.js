@@ -38,7 +38,7 @@ import { createCustomTag, worldCustomTags } from "../timeline/timeline-tag-store
 import { renderTemplate } from "../utils/foundry-compat.js";
 import { readTrack } from "../timeline/timeline-store.js";
 import { writeTimelineEntry } from "../timeline/timeline-entry-write.js";
-import { persistOpenWindowsSoon } from "../utils/window-restore.js";
+import { persistOnTyping } from "../utils/window-restore.js";
 import { TIMELINE_ENTRY_RESTORE_KIND } from "./timeline-entry-restore.js";
 
 /** One chip in the Tag row: the template's own partial, so a tag made after render matches the rest. */
@@ -295,9 +295,7 @@ export class TimelineEntryDialog extends StonetopDialog {
 
 		// Typing never redraws, and the date and tag are pressed rather than typed, so every one of
 		// those saves the dialog for a reload as it happens.
-		if (this.restoreKey) {
-			for (const type of ["input", "change", "click"]) root.addEventListener(type, () => persistOpenWindowsSoon());
-		}
+		if (this.restoreKey) persistOnTyping(root, { clicks: true });
 	}
 
 	/**

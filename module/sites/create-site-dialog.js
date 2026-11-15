@@ -13,9 +13,10 @@ import { createSite, shapeSiteSystem, setSiteName } from "./site-store.js";
 import { getStonetopSteadingActorOrWarn } from "../utils/world.js";
 import { announceSiteAdded } from "../actors/gmtoolkit/gm-prep-actions.js";
 import { MAX_ROW_SPAN, SITE_LINE_LISTS, SITE_PAIR_LISTS, clampRowSpan, expandTableRows, numberTableRows, pairKeys, tableRowRanges } from "./site-schema.js";
-import { escHtml, stripHtmlToText } from "../utils/strings.js";
+import { escHtml, isPlainObject, stripHtmlToText } from "../utils/strings.js";
 import { confirmOutcome } from "../utils/ask-with-buttons.js";
 import { notePristineWork } from "../utils/close-guard.js";
+import { persistOnTyping } from "../utils/window-restore.js";
 import { CREATE_SITE_RESTORE_KIND, NEW_SITE_KEY, createSiteWindowId } from "./create-site-restore.js";
 import { openSuggestionMenu } from "../utils/suggestion-menu.js";
 import { swapAside } from "../utils/set-aside.js";
@@ -326,7 +327,7 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 	_takeRestoredView(view) {
 		notePristineWork(this);
 		const sel = view?.sel;
-		if (sel && typeof sel === "object" && !Array.isArray(sel)) {
+		if (isPlainObject(sel)) {
 			for (const [key, base] of Object.entries(this._sel)) {
 				const value = sel[key];
 				const fits = Array.isArray(base)
@@ -337,9 +338,8 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 		}
 		// The answers a Manner or Region switch set aside (_switchManner), so switching back after a
 		// reload still finds them.
-		const isMap = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 		for (const kind of ["manner", "region"]) {
-			if (isMap(view?.setAside?.[kind])) this._setAside[kind] = view.setAside[kind];
+			if (isPlainObject(view?.setAside?.[kind])) this._setAside[kind] = view.setAside[kind];
 		}
 		const step = this._steps.findIndex(s => s.key === view?.step);
 		if (step >= 0) this._step = step;
@@ -663,6 +663,8 @@ export class CreateSiteDialog extends SaveForNow(StepperDialog) {
 
 		html.find(".stonetop-cs-create").on("click", () => this._finish());
 		html.find(".stonetop-guide-save-for-now").on("click", () => this._saveForNow());
+		// Like the hazard wizard: what is typed is saved for a reload as it changes, not only at unload.
+		persistOnTyping(html[0]);
 
 		// Scalar text fields persist on blur (no re-render, so focus survives typing).
 		html.find("[data-field]").on("change", ev => {

@@ -429,11 +429,10 @@ export function createStonetopNpcSheetClass(Base) {
 			if (typeof sheet?.orderFollower !== "function") return;
 			const member = (await sheet.crewMemberCard?.(this.actor.uuid))?.member;
 			if (!member) return;
-			const pipeList = raw => String(raw ?? "").split("|").map(s => s.trim()).filter(Boolean);
 			await sheet.orderFollower({
 				name:        member.orderName,
-				tags:        pipeList(member.orderTagsCsv),
-				moves:       pipeList(member.orderMovesCsv),
+				tags:        [...(member.orderTags ?? [])],
+				moves:       [...(member.orderMoves ?? [])],
 				exceptional: member.exceptional,
 				moveKey:     null,
 				member:      member.orderName,

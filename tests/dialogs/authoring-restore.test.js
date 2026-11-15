@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Window } from "happy-dom";
 import {
 	IMPROVEMENT_BUILDER_WINDOW_CLASS, CUSTOM_MOVE_WINDOW_CLASS, ADD_ITEM_WINDOW_CLASS,
-	authoringRestoreKey, parseAuthoringKey, readFormFields, writeFormFields,
+	authoringRestoreKey, parseAuthoringKey, readFormFields, writeFormFields, trackFormFields,
 	reopenImprovementBuilder, reopenCustomMove, reopenAddInventoryItem,
 } from "../../module/dialogs/authoring-restore.js";
 import { ImprovementBuilderDialog, improvementCardSaver, improvementEditSaver, steadingImprovementSaver } from "../../module/dialogs/ImprovementBuilderDialog.js";
@@ -247,5 +247,42 @@ describe("the Steading Improvement builder", () => {
 		game.user.isGM = false;
 		game.user.can = () => false;
 		expect(await reopenImprovementBuilder("improvementBuilder:improvementCard||new-w4")).toBeNull();
+	});
+});
+
+describe("trackFormFields", () => {
+	const form = () => {
+		const doc = new Window().document;
+		const root = doc.createElement("div");
+		root.innerHTML = `<input type="text" name="name"><input type="checkbox" name="hidden"><button type="button">Chip</button>`;
+		return { root, fire: type => root.dispatchEvent(new doc.defaultView.Event(type)) };
+	};
+
+	it("puts a reload's fields back once, then keeps the form as it is typed", () => {
+		const { root, fire } = form();
+		const app = { _restoredFields: { name: "Shove", hidden: true } };
+		trackFormFields(app, root);
+		expect(root.querySelector("[name=name]").value).toBe("Shove");
+		expect(app._restoredFields).toBeNull();
+		expect(app._liveFields).toEqual({ name: "Shove", hidden: true });
+		root.querySelector("[name=name]").value = "Shove hard";
+		fire("input");
+		expect(app._liveFields.name).toBe("Shove hard");
+	});
+
+	it("keeps only what `read` keeps, and follows clicks only when asked", () => {
+		const { root, fire } = form();
+		const app = {};
+		trackFormFields(app, root, { read: el => ({ name: readFormFields(el).name }) });
+		expect(app._liveFields).toEqual({ name: "" });
+		root.querySelector("[name=name]").value = "Lantern";
+		fire("click");
+		expect(app._liveFields.name).toBe("");
+		const clicked = form();
+		const other = {};
+		trackFormFields(other, clicked.root, { clicks: true });
+		clicked.root.querySelector("[name=hidden]").checked = true;
+		clicked.fire("click");
+		expect(other._liveFields.hidden).toBe(true);
 	});
 });

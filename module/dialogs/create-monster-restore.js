@@ -2,10 +2,9 @@
 // (utils/window-restore.js): the same section, every box ticked and every card written, at the same
 // place on screen. A worksheet is a fair while of thought, and it lives only in its form.
 //
-// Its own small module so stonetop.js can register it at load WITHOUT importing the worksheet and the
-// monster-builder tables behind it. That is also why the class is named here rather than passed:
-// window-restore builds the hook names from it, and tests/dialogs/create-monster-restore.test.js holds
-// this name and the class's own together, so a rename of the class can't quietly stop it being restored.
+// Registered by name from this small module, so a load doesn't pull in the worksheet and the
+// monster-builder tables behind it (utils/window-restore.js#registerRestorableWindow says why);
+// tests/dialogs/create-monster-restore.test.js holds this name and the class's own together.
 //
 // Nothing waits on the worksheet's answer: it makes the stat block itself, so the one a reload brings
 // back finishes exactly as the one it replaced would have.

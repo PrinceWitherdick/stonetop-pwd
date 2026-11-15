@@ -901,9 +901,9 @@ export class LevelUpDialog extends StonetopDialog {
 		// keyboard back on the card pressed (M1).
 		wireKeyboardButtons(html);
 
-		// Only the stat rows: the mark, companion and advance rows wear the same class for its look,
-		// and a redraw started here would run before their own handler wrote the pick, dropping theirs.
-		html.find(".stonetop-levelup-stat-option[data-stat-key]:not(.is-at-cap)").on("click", ev => {
+		// The stat rows, by their own hook: the mark, companion and advance rows wear the same class for
+		// its look, and a redraw started here would run before their own handler wrote the pick.
+		html.find("[data-action=pick-stat]:not(.is-at-cap)").on("click", ev => {
 			const key = ev.currentTarget.dataset.statKey;
 			if (this._step === "advanceStat") {
 				// A different stat for the advance changes what the move's own stat step allows.

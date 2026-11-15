@@ -60,6 +60,14 @@ describe("outline text: shapes", () => {
 		expect(hashText("abc")).toMatch(/^[0-9a-z]+$/);
 	});
 
+	it("keeps every hash it has ever printed: the known PDFs' glyph tables are keyed by them", () => {
+		expect(hashText("abc")).toBe("1dtlchkfkb1");
+		expect(hashText("")).toBe("wvjl67o803");
+		expect(hashText("abc", 7)).toBe("154j5ko83iz");
+		expect(hashText("known:theabhorseninwaiting")).toBe("1qlrn2ydto7");
+		expect(shapeHash([13, 14, 18], [0, 0, 4.5, 5])).toBe("279vh9p85ne");
+	});
+
 	it("places each shape on the page, and marks a white one apart", () => {
 		const shapes = shapesOf(opList([{ shape: SHAPES.T, x: 10, y: 20 }, { shape: SHAPES.h, x: 30, y: 20, white: true }]), OPS, VIEWPORT);
 		expect(shapes[0]).toMatchObject({ hash: SHAPES.T.key, x0: 10, ty: 20, white: false });

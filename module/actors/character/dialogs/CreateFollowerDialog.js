@@ -10,7 +10,7 @@ import {
 } from "../../../data/follower-build.js";
 import { STONETOP_SCOPE } from "../StonetopFlags.js";
 import { notePristineWork } from "../../../utils/close-guard.js";
-import { persistOpenWindowsSoon } from "../../../utils/window-restore.js";
+import { persistOnTyping } from "../../../utils/window-restore.js";
 import { CREATE_FOLLOWER_RESTORE_KIND } from "./create-follower-restore.js";
 
 // ── CreateFollowerDialog ─────────────────────────────────────────────────────
@@ -174,11 +174,12 @@ export class CreateFollowerDialog extends StepperDialog {
 		return `${CREATE_FOLLOWER_RESTORE_KIND}:${uuid}`;
 	}
 
-	/** The step, by key, and every answer. Read live, as the page unloads too. */
+	/** The step, by key, and every answer (`_workState`, what the close-guard reads). Read live, as the page unloads too. */
 	get restoreView() {
-		try { this._captureLiveFields(); }
+		let sel = this._sel;
+		try { sel = this._workState(); }
 		catch (_err) { /* a window mid-close keeps what it last had */ }
-		return { step: this._steps[this._step]?.key ?? null, sel: this._sel, fromBackground: this._fromBackground };
+		return { step: this._steps[this._step]?.key ?? null, sel, fromBackground: this._fromBackground };
 	}
 
 	/** A reload's reopening draw carries that back (`options.view`); it goes on before the first draw. */
@@ -305,8 +306,7 @@ export class CreateFollowerDialog extends StepperDialog {
 		// Navigation
 		html.find(".stonetop-cf-create").on("click", () => this._finish());
 		// Typing never re-renders, so it saves the window for a reload itself (`restoreView`).
-		html[0]?.addEventListener("input", () => persistOpenWindowsSoon());
-		html[0]?.addEventListener("change", () => persistOpenWindowsSoon());
+		persistOnTyping(html[0]);
 
 		// Text fields → persist on blur (no re-render, so focus survives typing).
 		html.find("[data-field]").on("change", ev => {

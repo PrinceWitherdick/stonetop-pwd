@@ -8,7 +8,7 @@ import { ownsLearnedMoveNamed } from "../actors/character/owns-move.js";
 import { STRUGGLE_MOVES } from "./struggle-rules.js";
 import { followerKey, newSetupDraft, setupHelpers, setupRows, setupView } from "./struggle-setup.js";
 import { clearAsk, liveStruggle, startStruggle } from "./struggle-store.js";
-import { persistOpenWindowsSoon } from "../utils/window-restore.js";
+import { persistOnTyping } from "../utils/window-restore.js";
 import { STRUGGLE_SETUP_RESTORE_KIND, GM_SETUP_KEY, STRUGGLE_SETUP_WINDOW_ID } from "./struggle-setup-restore.js";
 
 const TEMPLATE = "systems/stonetop-pwd/templates/dialogs/struggle-setup.hbs";
@@ -148,12 +148,13 @@ export class StruggleSetupDialog extends StonetopDialog {
 	 * opened by itself for the same ask (struggle-flow.js#answerNextAsk), so long as nobody has typed in it.
 	 */
 	async _render(force, options = {}) {
-		if (options?.view && !this._reloaded && !this._touched) this._takeRestoredView(options.view);
+		if (options?.view) this._takeRestoredView(options.view);
 		return super._render(force, options);
 	}
 
 	/** Take a reload's draft, if it was for this same ask (or this same no-ask setup). */
 	_takeRestoredView(view) {
+		if (this._reloaded || this._touched) return;
 		const draft = view?.draft;
 		if (!draft || typeof draft !== "object" || Array.isArray(draft)) return;
 		if ((view.askId ?? "") !== (this._ask?.id ?? "")) return;
@@ -247,9 +248,7 @@ export class StruggleSetupDialog extends StonetopDialog {
 		root?.addEventListener?.("click", ev => this._onClick(ev));
 		root?.addEventListener?.("change", ev => this._onChange(ev));
 		// Keep the draft as typed and save the window for a reload (`restoreView`): the form is alive here.
-		const keep = () => { this._touched = true; this._capture(); persistOpenWindowsSoon(); };
-		root?.addEventListener?.("input", keep);
-		root?.addEventListener?.("change", keep);
+		persistOnTyping(root, { onEach: () => { this._touched = true; this._capture(); } });
 	}
 
 	/** Read every field back into the draft, so a redraw (a character ticked in or out) keeps what was typed. */

@@ -125,11 +125,6 @@ export async function createFollowerActor(snapshot, character, { folder = null }
 	}
 }
 
-// Characters a sweep is mid-flight on. A follower add re-renders the sheet, and so does the
-// write this sweep makes at the end of it — without this, the second pass would see the same
-// unanswered followers as the first (its creates have not landed yet) and make them twice.
-const _sweepsInFlight = new Set();
-
 // How long a client that is NOT first in line waits before looking again. Two people with the
 // same sheet open both see every write to it, so both would otherwise start creating in the same
 // instant; staggering them means the later one re-reads the flags and finds the work already
@@ -148,6 +143,62 @@ export function makerRank(character) {
 		.sort();
 	const rank = owners.indexOf(game.user?.id);
 	return rank < 0 ? 0 : rank;
+}
+
+/** Wait this client's turn in the makerRank queue before a sweep writes anything. */
+export async function awaitMakerTurn(character) {
+	const rank = makerRank(character);
+	if (rank > 0) await _wait(rank * MAKER_STAGGER_MS);
+}
+
+// Per character: the sweep queued last, and the kinds queued or running. Every sweep that writes
+// to a character or to its followers' actors (this file's two, and crew-people.js's two) goes
+// through ONE queue per character, so a render that starts all of them runs them one after the
+// other: two passes each building an update from what they read before the other's write landed
+// would tread on each other. A kind already queued or running is not queued again: a follower
+// add re-renders the sheet, and so does the write a sweep makes at the end of it, and without
+// this the second pass would see the same unanswered followers as the first (its creates have
+// not landed yet) and make them twice.
+const _sweepQueues = new Map();
+
+/**
+ * Run one sweep of `kind` over this character, after any sweep already queued for it, and after
+ * this client's turn in the makerRank queue. Resolves to `fn`'s result; to 0 when a sweep of the
+ * same kind is already queued or running (it is about to answer for the same state), or when the
+ * sweep throws, which is logged with `failure`: every sweep is fired and forgotten from a render
+ * or a hook, so a throw must never reach its caller.
+ *
+ * @param {Actor}    character
+ * @param {string}   kind
+ * @param {Function} fn        async () => number, run once this client's turn comes
+ * @param {string}   failure   what to log when the sweep throws
+ * @returns {Promise<number>}
+ */
+export function sweepOnce(character, kind, fn, failure = "Stonetop | A follower sweep failed.") {
+	const key = character?.id ?? character;
+	const queue = _sweepQueues.get(key) ?? { tail: Promise.resolve(), kinds: new Set() };
+	if (queue.kinds.has(kind)) return Promise.resolve(0);
+	queue.kinds.add(kind);
+	_sweepQueues.set(key, queue);
+	const run = queue.tail.then(async () => {
+		try {
+			await awaitMakerTurn(character);
+			return await fn();
+		} catch (err) {
+			console.error(failure, err);
+			return 0;
+		} finally {
+			queue.kinds.delete(kind);
+			if (!queue.kinds.size && _sweepQueues.get(key) === queue) _sweepQueues.delete(key);
+		}
+	});
+	queue.tail = run;
+	return run;
+}
+
+/** Whether a sweep of `kind` is already queued or running for this character. */
+export function sweepQueued(character, kind) {
+	return !!_sweepQueues.get(character?.id ?? character)?.kinds.has(kind);
 }
 
 /**
@@ -175,20 +226,15 @@ export async function ensureFollowerActors(character, snapshots = []) {
 	// GM, next time they have the sheet open. Silent: a player who cannot create actors can do
 	// nothing about it, and a notification on every render would be noise, not news.
 	if (!Actor.canUserCreate(game.user)) return 0;
-	if (_sweepsInFlight.has(character.id)) return 0;
 
-	_sweepsInFlight.add(character.id);
-	try {
-		const rank = makerRank(character);
-		if (rank > 0) await _wait(rank * MAKER_STAGGER_MS);
-
+	return sweepOnce(character, "follower-actors", async () => {
 		// One folder for the batch: every create would otherwise ask after it again, and the
 		// first of them is what makes it.
 		const folder = (await ensureFollowerFolder())?.id ?? null;
 
 		// Re-read each link off the document rather than trusting the snapshot: it was taken
-		// before the wait above, and the whole point of that wait is to let another client's
-		// writes land first.
+		// before this pass's turn came (sweepOnce), and the whole point of that wait is to let
+		// another client's writes land first.
 		const made = new Map();
 		for (const snapshot of missing) {
 			if (answeredFor(snapshot, storedActorUuid(character, snapshot.detailBase))) continue;
@@ -220,17 +266,8 @@ export async function ensureFollowerActors(character, snapshots = []) {
 		}
 		if (Object.keys(update).length) await character.update(update);
 		return Object.keys(update).length;
-	} catch (err) {
-		console.error("Stonetop | Could not make this character's follower actors.", err);
-		return 0;
-	} finally {
-		_sweepsInFlight.delete(character.id);
-	}
+	}, "Stonetop | Could not make this character's follower actors.");
 }
-
-// Characters a sync is mid-flight on. The sheet re-renders freely — a portrait pick calls render
-// itself — and each render would otherwise start another pass over updates that have not landed.
-const _syncsInFlight = new Set();
 
 /**
  * Every write this sweep makes, marked as the machine's rather than a person's.
@@ -414,9 +451,9 @@ function _npcMoves(actor) {
  * @param {object[]} snapshots  the finished cards' drag snapshots (_followerDragSnapshot)
  */
 export async function syncFollowerActors(character, snapshots = []) {
-	// The in-flight guard first: a pass already running is about to answer for these snapshots,
+	// The queue first: a pass already queued or running is about to answer for these snapshots,
 	// so planning them again is work whose result we would throw away.
-	if (_syncsInFlight.has(character?.id)) return 0;
+	if (sweepQueued(character, "follower-sync")) return 0;
 
 	// Then the cheap scan, as above: the steady state is "every actor already matches its card",
 	// and the price of that answer on every render must be one walk of a handful of snapshots.
@@ -442,16 +479,14 @@ export async function syncFollowerActors(character, snapshots = []) {
 	}
 	if (!drifted.length) return 0;
 
-	_syncsInFlight.add(character?.id);
-	let moved = 0;
-	try {
-		// The same queue the creating sweep waits in, for a sharper version of the same reason.
-		// Two people with this sheet open both see every write to it, so both would otherwise
-		// reconcile in the same instant — and while writing a field twice is merely wasteful,
-		// ADDING a move twice leaves the follower carrying it twice, which nothing takes back.
-		const rank = makerRank(character);
-		if (rank > 0) await _wait(rank * MAKER_STAGGER_MS);
-
+	// The same queue the creating sweep waits in, for a sharper version of the same reason.
+	// Two people with this sheet open both see every write to it, so both would otherwise
+	// reconcile in the same instant, and while writing a field twice is merely wasteful,
+	// ADDING a move twice leaves the follower carrying it twice, which nothing takes back.
+	// sweepOnce's catch covers makerRank, which walks the connected users and asks the
+	// character about each one's permissions before any single actor is in hand.
+	return sweepOnce(character, "follower-sync", async () => {
+		let moved = 0;
 		for (const { actor, follower } of drifted) {
 			// Re-planned after the wait rather than trusting the scan above, because the whole
 			// point of the wait is to let the other client's writes land first.
@@ -471,12 +506,6 @@ export async function syncFollowerActors(character, snapshots = []) {
 				console.warn("Stonetop | Could not bring this follower's actor back in step.", actor?.name, err);
 			}
 		}
-	} catch (err) {
-		// Outside the per-actor guard above: makerRank walks the connected users and asks the
-		// character about each one's permissions, and that is before any single actor is in hand.
-		console.error("Stonetop | Could not sync this character's follower actors.", err);
-	} finally {
-		_syncsInFlight.delete(character?.id);
-	}
-	return moved;
+		return moved;
+	}, "Stonetop | Could not sync this character's follower actors.");
 }

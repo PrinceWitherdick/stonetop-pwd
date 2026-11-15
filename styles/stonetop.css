@@ -3384,7 +3384,6 @@ input.stonetop-name-field {
 	margin: 4px 0 0;
 	padding: 0;
 }
-.stonetop-advancement-list .stonetop-advancement-option::before { content: none !important; }
 .stonetop-advancement-option {
 	display: flex;
 	flex-wrap: wrap;
@@ -15475,7 +15474,10 @@ button.stonetop-mark-sign-btn.is-active:hover {
 	flex-shrink: 0;
 	width: auto;
 	height: auto;
-	padding: 3px 8px;
+	/* No vertical padding: the toolbar is a .stonetop-field-btns row, which stretches this to the
+	   24px fields beside it, and 3px each side made its content 25px, a pixel taller than they are
+	   (field-btns-sweep.mjs, 11-15). The flex centring puts the word in the middle of the 24. */
+	padding: 0 8px;
 	border: 1px solid var(--st-danger-ink);
 	border-radius: var(--st-radius-sm);
 	background: none;
@@ -30183,17 +30185,26 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 
 /* Roster: crew-size stepper + anonymous member HP rows. --st-square: the number box's height and
    each step's width, so the steps (stretched to the box's height by .stonetop-field-btns) stay
-   square. */
+   square.
+
+   The row WRAPS, and its caption never does. In a two-column Followers tab a custom group's card
+   is ~370px wide, and "Group size" broke onto two lines while the suffix wrapped too: the row grew
+   to 34px and the steps stretched to it, 34px tall beside the 24px box (field-btns-sweep.mjs,
+   11-15). Now the suffix drops whole to a line of its own when it doesn't fit, and the steps keep
+   to the first line, which the box sets. The caption and stepper come first in the row and stay
+   on that first line together. */
 .stonetop-crew-size-row {
 	--st-square: 24px;
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
-	gap: 6px;
+	gap: 4px 6px;
 	margin-bottom: 6px;
 	font-size: var(--st-fs-sm);
 }
 
 .stonetop-crew-size-label {
+	white-space: nowrap;
 	font-weight: 600;
 	color: var(--st-quiet-ink);
 	text-transform: uppercase;
@@ -31729,22 +31740,12 @@ li.question-bullet::before {
 	border-radius: var(--st-radius);
 }
 
-/* "Add a trait of your own" under the grid: the field takes the row, Add sits at its end.
-   The dialog-scoped `.form-group input[type="text"]` rule below makes every text field
-   full-width and `flex: none`, which would push Add onto a line of its own, so the field
-   is put back to growing here at a higher specificity. The Person row (which Person on the
-   world's sidebar this member is, and "Link a Person…") is the same shape: field, then button. */
-.stonetop-individual-dialog :is(.stonetop-trait-custom-row, .stonetop-individual-person > .stonetop-field-btns) {
-	display: flex;
-	align-items: center;
-	gap: 6px;
+/* "Add a trait of your own" under the grid, and the Person row (which Person on the world's
+   sidebar this member is, and "Link a Person…"): a field, then its button, across the whole form
+   group. The row is laid out by .stonetop-field-btns; the field in it fills what the button leaves,
+   since the label-above rule below reaches only a group's own field, never one in a row. */
+.stonetop-individual-dialog .form-group > .stonetop-field-btns {
 	width: 100%;
-}
-
-.stonetop-individual-dialog .form-group :is(.stonetop-trait-custom-row, .stonetop-individual-person > .stonetop-field-btns) input[type="text"] {
-	flex: 1 1 auto;
-	width: auto;
-	min-width: 0;
 }
 
 .stonetop-individual-dialog .stonetop-trait-custom-row .stonetop-trait-custom-add {
@@ -31771,7 +31772,9 @@ li.question-bullet::before {
 	font-weight: 600;
 }
 
-.stonetop-individual-dialog .form-group input[type="text"] {
+/* The group's own field, the full width under its label. Not one inside a row (`>`): `flex: none`
+   there would push the row's button onto a line of its own. */
+.stonetop-individual-dialog .form-group > input[type="text"] {
 	width: 100%;
 	flex: none;
 }
@@ -35947,14 +35950,20 @@ th:has(> .stonetop-roll-table-btn) {
    regular weight and broke onto two lines the moment it was selected. Each label carries a
    zero-height bold copy of itself (`data-label`), so every entry is measured at its bold width
    whether selected or not and the rail never shifts as the steps change. Sized by the text,
-   so it follows the user's Foundry font size rather than a pixel guess. */
+   so it follows the user's Foundry font size rather than a pixel guess.
+
+   The copy is laid back over the label's own line (`margin-top: -1lh`) rather than squashed to
+   zero height, because the label is trimmed to its cap band (see .stonetop-guide-toc-btn): a
+   trim's bottom edge goes on the LAST line in the box, and a zero-height copy after the words
+   took it, leaving the words untrimmed underneath and the entry 5px taller with them 2.5px high
+   (rail-all.mjs, 11-15). Overlaid, the copy's line IS the words' line, so its trimmed bottom is
+   theirs; it keeps no `overflow: hidden`, which would wall its line off from the trim. */
 .stonetop-welcome-split > .stonetop-guide-toc { width: max-content; }
 .stonetop-welcome-split .stonetop-guide-toc-text { white-space: nowrap; }
 .stonetop-welcome-split .stonetop-guide-toc-text::after {
 	content: attr(data-label);
 	display: block;
-	height: 0;
-	overflow: hidden;
+	margin-top: -1lh;
 	visibility: hidden;
 	font-weight: 700;
 }
@@ -36764,6 +36773,19 @@ th:has(> .stonetop-roll-table-btn) {
 
 .stonetop-guide-toc-item { margin: 0; }
 
+/* How an entry centres its words (measured 11-15 with the text-centring audit and a raster pass,
+   rail-all.mjs: every rail shape, three faces, roots 16/20, 1x/1.25x/1.5x). The entry is a flex row
+   pinned to the TOP (`flex-start`), because a long title wraps and the icon and count belong beside
+   its first line, not halfway down it. So nothing here is centred by flex: each part lines up by
+   sharing ONE line height. `1.25em` is a length, so the button resolves it once and every child
+   inherits the same pixels (a bare `1.25` would give the smaller icon and count their own, shorter
+   lines). Rounded to a whole pixel, so every entry starts on the pixel grid: at a fractional line
+   the third entry's icon read up to 2px off its words at a 20px UI font, a whole one keeps every
+   part within 1px. The words are then trimmed to their cap band and padded back out with the chip tokens,
+   so their caps sit in the middle of that line in every face; the count is trimmed the same way;
+   the icon draws on the same line, untrimmed. Untrimmed, the selected entry's words sat 1.5px
+   high in Signika and IM Fell English (1px in Libre Caslon): their line boxes don't centre on the
+   capitals, and the old `margin-top: 1px` on the icon only matched it to the words. */
 .stonetop-guide-toc-btn {
 	display: flex;
 	align-items: flex-start;
@@ -36776,7 +36798,8 @@ th:has(> .stonetop-roll-table-btn) {
 	border-radius: var(--st-radius-sm);
 	font-family: var(--font-stonetop);
 	font-size: var(--st-fs-sm);
-	line-height: 1.25;
+	line-height: 1.25em;
+	line-height: round(1.25em, 1px);
 	color: inherit;
 	cursor: pointer;
 	transition: background 0.15s;
@@ -36788,9 +36811,22 @@ th:has(> .stonetop-roll-table-btn) {
 	flex: 0 0 auto;
 	width: 16px;
 	text-align: center;
-	margin-top: 1px;
+	/* The button's line, not Font Awesome's `line-height: 1`, so the glyph sits on the words' line. */
+	line-height: inherit;
+	/* A whole-pixel glyph, like every chip icon (see "Chip icons at a WHOLE-PIXEL size"). */
 	font-size: var(--st-fs-xs);
+	font-size: round(var(--st-fs-xs), 1px);
 	color: var(--color-text-dark-secondary);
+}
+
+/* The person picker's count is its own element (it is rewritten as the find box narrows), the
+   same part of the entry as the shared count. */
+.stonetop-guide-toc-text,
+.stonetop-guide-toc-count,
+.stonetop-guide-toc-btn > .stonetop-person-picker-count {
+	text-box: trim-both cap alphabetic;
+	padding-top: var(--st-trim-top);
+	padding-bottom: var(--st-trim-bottom);
 }
 
 .stonetop-guide-toc-text { flex: 1 1 auto; min-width: 0; }

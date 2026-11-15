@@ -316,6 +316,9 @@ export class StonetopDialog extends Application {
 	}
 
 	async _render(force, options) {
+		// A reload's reopening draw carries the window's typed work back (`options.view`, utils/
+		// window-restore.js): a window that keeps any takes it with `_takeRestoredView` before its first draw.
+		if (options?.view && !this.rendered) this._takeRestoredView?.(options.view);
 		const page = this._keptPlaceKey;
 		// Undefined before the first draw, which has no place to keep anyway.
 		const samePage = this._drawnPlaceKey === undefined || page === this._drawnPlaceKey;

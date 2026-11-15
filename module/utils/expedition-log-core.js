@@ -10,6 +10,8 @@
 // without aliasing the cached setting. `ensureCurrent` additionally deep-clones the
 // entries, since its caller mutates the returned entry in place.
 
+import { isPlainObject } from "./strings.js";
+
 /** The world setting the log lives in (registered in settings.js). Named here, once. */
 export const EXPEDITION_LOG_SETTING = "expeditionAnswers";
 const cloneEntry = e => structuredClone(e);
@@ -127,7 +129,6 @@ export function sameLog(a, b) {
 	return sameValue(a, b);
 }
 
-const isPlainObject = v => v !== null && typeof v === "object" && !Array.isArray(v);
 const hasIds = list => Array.isArray(list) && list.every(item => isPlainObject(item) && typeof item.id === "string" && item.id);
 
 // An absent key and an `undefined` one are the same answer: the setting is stored as JSON,

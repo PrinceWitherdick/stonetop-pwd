@@ -16,16 +16,11 @@
 //   ("fi"), or the template's dingbat letters ("n" a box, "4" a tick, "l" a pip, "u" a diamond);
 //   baseline offset: points from the shape's translate down to its baseline.
 
+import { cyrb53Halves } from "../../hooks/journal-sync-core.js";
+
 /** The cheap 53-bit string hash (cyrb53), as base 36: a shape's key in a glyph table. */
 export function hashText(str, seed = 0) {
-	let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
-	for (let i = 0; i < str.length; i++) {
-		const ch = str.charCodeAt(i);
-		h1 = Math.imul(h1 ^ ch, 2654435761);
-		h2 = Math.imul(h2 ^ ch, 1597334677);
-	}
-	h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-	h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+	const [h1, h2] = cyrb53Halves(str, seed);
 	return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
 

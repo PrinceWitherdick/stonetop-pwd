@@ -28,8 +28,20 @@ export const BEND_EFFECTS = Object.freeze({
 export function* learnedHomebrewMoves(actor) {
 	for (const item of actor?.items ?? []) {
 		if (item?.type !== "move" || !item.flags?.[SYSTEM_ID]?.[HOMEBREW_MOVE_FLAG] || !moveLearnedIn(item, actor.items)) continue;
-		yield { item, words: playbookTextFromHtml(item.system?.description ?? "") };
+		yield { item, words: _wordsOf(item) };
 	}
+}
+
+// Each move's words, kept until its description changes: a sheet draw and a roll walk the same moves
+// several times over (armor, bends, stand-ins, draws), and the words only change with an edit.
+const _words = new WeakMap();
+function _wordsOf(item) {
+	const src = item.system?.description ?? "";
+	const kept = _words.get(item);
+	if (kept?.src === src) return kept.words;
+	const words = playbookTextFromHtml(src);
+	_words.set(item, { src, words });
+	return words;
 }
 
 /** Whether `bend` rides a roll made under `moveName`: one it names ("Persuade" is either Persuade), or any. */
@@ -40,15 +52,18 @@ export function bendRides(bend, moveName) {
 }
 
 /**
- * The selected background of a HOMEBREW playbook, as the bends read it: `{slug, label, description,
- * resources: [{key, label, max}]}`, or null (no background, or a book playbook's).
+ * The selected background of a HOMEBREW playbook, as the bends read it: `{slug, label, description, words,
+ * resources: [{key, label, max}]}`, or null (no background, or a book playbook's). `words` is the
+ * description as every reader of a background's rules takes it (playbookTextFromHtml), read once here.
  */
 export function homebrewBackgroundOf(playbookData, selectedSlug) {
 	if (!String(playbookData?.slug ?? "").startsWith(HOMEBREW_SLUG_PREFIX) || !selectedSlug) return null;
 	const b = (playbookData.backgrounds ?? []).find(x => x?.slug === selectedSlug);
 	if (!b) return null;
+	const description = b.description ?? "";
 	return {
-		slug: b.slug, label: playbookTextFromHtml(b.label ?? b.slug), description: b.description ?? "",
+		slug: b.slug, label: playbookTextFromHtml(b.label ?? b.slug), description,
+		words: playbookTextFromHtml(description),
 		resources: (b.setup?.resources ?? []).map(r => ({ key: r.key, label: String(r.label ?? ""), max: Number(r.max) || 1 })),
 	};
 }
@@ -65,7 +80,7 @@ export function homebrewRollBends(actor, background = null) {
 		});
 	}
 	if (background) {
-		rollBendsFrom(playbookTextFromHtml(background.description)).forEach((bend, i) => {
+		rollBendsFrom(background.words).forEach((bend, i) => {
 			out.push({ key: `hb-bg-${background.slug}-${i}`, source: background.label, bend, background });
 		});
 	}
@@ -84,7 +99,7 @@ export function lastDoorAdoptions(actor) {
 	const selected = actor?.typedActor?.backgroundState?.().slug ?? actor?.flags?.[SYSTEM_ID]?.background?.selected;
 	const bg = pb ? homebrewBackgroundOf({ slug: pb.system?.slug, backgrounds: pb.flags?.[ITEM_FLAG_SCOPE]?.backgrounds }, selected) : null;
 	if (!bg) return { slugs: [], background: "" };
-	return { slugs: lastDoorInsertsFrom(playbookTextFromHtml(bg.description)), background: bg.label };
+	return { slugs: lastDoorInsertsFrom(bg.words), background: bg.label };
 }
 
 /**
@@ -132,7 +147,7 @@ export function homebrewBlowOffers(actor) {
 export function backgroundFollowerOffer(playbookData, selectedSlug, customFollowers = {}) {
 	const background = homebrewBackgroundOf(playbookData, selectedSlug);
 	if (!background) return null;
-	const read = backgroundFollowerFrom(playbookTextFromHtml(background.description));
+	const read = backgroundFollowerFrom(background.words);
 	if (!read) return null;
 	if (Object.values(customFollowers ?? {}).some(f => f?.fromBackground === background.slug)) return null;
 	return { slug: background.slug, background: background.label, kind: read.kind, loyalty: read.loyalty };

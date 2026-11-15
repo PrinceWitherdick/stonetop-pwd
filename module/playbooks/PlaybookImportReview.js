@@ -5,6 +5,8 @@ import { persistOpenWindowsSoon } from "../utils/window-restore.js";
 import { IMPORT_REVIEW_RESTORE_KIND, reopenPlaybookBuilder } from "./playbook-builder-restore.js";
 import { BLOCK_KINDS, assemblePlaybook, blockOptionLines, INSERT_ALWAYS, INSERT_NONE } from "./pdf/read-playbook.js";
 import { homebrewPlaybookByName } from "./playbook-catalog.js";
+import { countOf } from "../utils/plural.js";
+import { truncateValue } from "../utils/ledger-core.js";
 
 /**
  * "This world already has The Familiar Face": said on Start here, before the GM answers anything, so
@@ -33,11 +35,6 @@ function _existingNote(name) {
  */
 
 const KIND_LABEL = Object.fromEntries(BLOCK_KINDS.map(k => [k.kind, k.label]));
-
-/** A rail count's tooltip: "1 piece needs a look", "12 pieces". */
-function _countTip(n, one, many) {
-	return `${n} ${n === 1 ? one : many}`;
-}
 
 /** A block's text cut at its blank lines. */
 export function splitParagraphs(text) {
@@ -426,12 +423,12 @@ export class PlaybookImportReview extends StonetopDialog {
 		const activeTab = this._activeTab;
 		const unanswered = d.confirm.length - answered.size;
 		const tabs = [
-			{ ...OVERVIEW, count: unanswered || null, countTip: unanswered ? _countTip(unanswered, "question to answer", "questions to answer") : "", unsure: unanswered > 0, selected: activeTab === OVERVIEW.key },
+			{ ...OVERVIEW, count: unanswered || null, countTip: unanswered ? countOf(unanswered, "question to answer", "questions to answer") : "", unsure: unanswered > 0, selected: activeTab === OVERVIEW.key },
 			// A page holding pieces to look at counts THEM, in red; any other counts its pieces, muted.
 			...groups.map(g => ({
 				key: g.kind, title: g.tabTitle ?? GROUP_TAB[g.kind] ?? g.title, icon: g.icon,
 				count: g.unsureCount || g.count,
-				countTip: g.unsureCount ? _countTip(g.unsureCount, "piece needs a look", "pieces need a look") : _countTip(g.count, "piece", "pieces"),
+				countTip: g.unsureCount ? countOf(g.unsureCount, "piece needs a look", "pieces need a look") : countOf(g.count, "piece", "pieces"),
 				unsure: g.unsure, selected: activeTab === g.kind,
 			})),
 		];
@@ -519,7 +516,7 @@ export class PlaybookImportReview extends StonetopDialog {
 		return {
 			id: b.id,
 			title: b.title || "(untitled)",
-			excerpt: full.length > 180 ? `${full.slice(0, 180).trimEnd()}…` : full,
+			excerpt: truncateValue(full, 180),
 			full,
 			long: full.length > 180,
 			open: this._open.has(b.id),

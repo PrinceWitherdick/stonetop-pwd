@@ -7,7 +7,7 @@ import { hazardDamageLine } from "./hazard-view.js";
 import { shapeHazardSystem, setHazardName, createHazard } from "./hazard-store.js";
 import { htmlToPlainText, plainTextKeeper } from "../journal/card-vm.js";
 import { notePristineWork } from "../utils/close-guard.js";
-import { persistOpenWindowsSoon } from "../utils/window-restore.js";
+import { persistOnTyping } from "../utils/window-restore.js";
 import { getStonetopSteadingActorOrWarn } from "../utils/world.js";
 import { CREATE_HAZARD_RESTORE_KIND, NEW_HAZARD_KEY } from "./create-hazard-restore.js";
 
@@ -273,8 +273,7 @@ export class CreateHazardDialog extends SaveForNow(StepperDialog) {
 		html.find(".stonetop-guide-save-for-now").on("click", () => this._saveForNow());
 
 		// Typing never redraws, so the walkthrough saves itself for a reload as it changes.
-		html[0]?.addEventListener("input", () => persistOpenWindowsSoon());
-		html[0]?.addEventListener("change", () => persistOpenWindowsSoon());
+		persistOnTyping(html[0]);
 
 		// Scalar text fields persist on blur (no re-render, so focus survives typing);
 		// the damage extras re-render for the live damage line.

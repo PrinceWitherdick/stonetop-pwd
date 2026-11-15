@@ -1,4 +1,4 @@
-import { capitalizeFirst, decodeEntities, escHtml, formatOutcomeDetail, splitPickList, stripHtmlToText } from "./strings.js";
+import { capitalizeFirst, decodeEntities, escHtml, formatOutcomeDetail, sameNoun, splitPickList, stripHtmlToText } from "./strings.js";
 import { firstOptionList, pickableMoveDescription } from "./chat.js";
 import { MOVE_TIERS, MOVE_TIERS_CLASS, ROLLED_TIER_ATTR } from "./move-results.js";
 import { outcomeTier } from "./counted-tier.js";
@@ -117,11 +117,10 @@ const _HOLD_IN_RE = /\bhold\s+(?:\d+|one|two|three)\b(\s+[A-Z][\w'’-]*)?/i;
 function _raisesHold(entries, rest) {
 	const want = rest.match(_HOLD_ONLY_RE);
 	if (!want || !entries?.length) return false;
-	const noun = s => String(s ?? "").trim().toLowerCase().replace(/s$/, "");
 	for (let i = entries.length - 1; i >= 0; i--) {
 		const had = entries[i].text.match(_HOLD_IN_RE);
 		if (!had) continue;
-		if (want[2] && had[1] && noun(want[2]) !== noun(had[1])) return false;
+		if (want[2] && had[1] && !sameNoun(want[2], had[1])) return false;
 		const currency = had[1] ?? (want[2] ? ` ${want[2]}` : "");
 		entries[i].text = entries[i].text.replace(had[0], `hold ${want[1]}${currency}`);
 		return true;
@@ -405,8 +404,11 @@ function _tierCorpus(moveResults) {
  * When the inline options of one rung are shared by the others ("on a 10+, pick 3; on a 7-9,
  * pick 1: a; b; c"), they are lifted off that rung and handed back as `sharedOptions`, a
  * non-enumerable property of the result, for the ladder to list under its rows.
+ *
+ * A ladder needs two rungs, so one rung alone is null by default. `minRows: 1` takes it, for a
+ * reader that asks what ONE tier does ("on a 10+, hold 3 Fear", homebrew-bundle.js#holdOnRollFrom).
  */
-export function parseTiersFromProse(description, stored = null) {
+export function parseTiersFromProse(description, stored = null, { minRows = 2 } = {}) {
 	const src = String(description ?? "");
 	if (!src.trim()) return null;
 	// TWO OR MORE ROLLS, each with tiers of its own (the Seasons Change's four seasons, the Humble
@@ -514,7 +516,7 @@ export function parseTiersFromProse(description, stored = null) {
 	// so only the 7-9 is quotable, and hoisting that alone leaves a one-row ladder under a
 	// sentence that now trails off. Below the bar the description is simply left as written.
 	// Stored moveResults are exempt: a custom move with one rung filled in meant it.
-	return moveTierRows(results).length >= 2 ? results : null;
+	return moveTierRows(results).length >= minRows ? results : null;
 }
 
 // A roll that is MADE ("roll +WIS", "rolls +Fortunes", "roll 1d4+Population"), as opposed to one

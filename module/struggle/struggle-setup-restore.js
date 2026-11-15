@@ -2,16 +2,15 @@
 // sheet is (utils/window-restore.js): who is ticked, the danger and approach as typed, every row's
 // stats and Aid, at the same place on screen.
 //
-// Its own small module so stonetop.js can register it at load WITHOUT importing the setup. That is
-// also why the class is named here rather than passed: window-restore builds the hook names from it,
-// and tests/struggle/struggle-setup-restore.test.js holds this name and the class's own together.
+// Registered by name from this small module (utils/window-restore.js#registerRestorableWindow says
+// why); tests/struggle/struggle-setup-restore.test.js holds this name and the class's own together.
 //
 // Nothing waits on the setup: calling it writes the struggle itself (struggle-store.js#startStruggle).
 // What came back through the reload is only the draft, and a setup that answered a player's ask comes
 // back only while that ask is still up. The reload answers waiting asks by itself too
 // (struggle-flow.js#answerNextAsk), so this one opens through the same one-setup-at-a-time door.
 
-import { registerRestorableWindow } from "../utils/window-restore.js";
+import { registerRestorableWindow, restoreKeyRest } from "../utils/window-restore.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 
 export const STRUGGLE_SETUP_RESTORE_KIND = "struggleSetup";
@@ -26,10 +25,9 @@ export const GM_SETUP_KEY = "gm";
  * it answered has come down.
  */
 export async function reopenStruggleSetup(key) {
-	const at = String(key ?? "").indexOf(":");
-	if (at < 0 || key.slice(0, at) !== STRUGGLE_SETUP_RESTORE_KIND) return null;
+	const rest = restoreKeyRest(key, STRUGGLE_SETUP_RESTORE_KIND);
+	if (rest === null) return null;
 	if (!game.user?.isGM) return null;
-	const rest = key.slice(at + 1);
 	const [{ liveStruggle, askOf }, { answerNextAsk }, { StruggleSetupDialog }] = await Promise.all([
 		import("./struggle-store.js"), import("./struggle-flow.js"), import("./StruggleSetupDialog.js"),
 	]);

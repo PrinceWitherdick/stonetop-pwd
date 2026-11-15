@@ -22,6 +22,8 @@ describe("a move's mark options on a card it is chosen from", () => {
 	it("read entities and curly quotes as the words they are, so a list already there isn't added again", () => {
 		const html = "<p>Mark one:</p><ul><li>Salt &amp; iron</li><li>The witch&rsquo;s&nbsp;eye</li></ul>";
 		expect(withMarkOptionList(html, [{ label: "Salt & iron" }, { label: "The witch's eye" }])).toBe(html);
+		const typeset = "<p>Mark one:</p><ul><li>&ldquo;Wait&rdquo;&hellip;</li><li>Ash &#8211; bone</li><li>Rue&#x2019;s</li></ul>";
+		expect(withMarkOptionList(typeset, [{ label: "\"Wait\"..." }, { label: "Ash - bone" }, { label: "Rue's" }])).toBe(typeset);
 	});
 
 	it("go under the mark lead-in, not a roll's \"choose\" that comes first", () => {

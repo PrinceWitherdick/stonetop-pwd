@@ -141,7 +141,7 @@ import {isGear} from "../../migration/superseded-values.js";
 import {StonetopSteading} from "../steading/StonetopSteading.js";
 import {rulesHas} from "../steading/improvement-rules.js";
 import {BEND_EFFECTS, bendRides, homebrewBackgroundOf, homebrewRollBends, homebrewStockStandIns, learnedHomebrewMoves, moveWithTrackTitled} from "./homebrew-roll-bends.js";
-import {armorFromWords, stockStandInsFrom, trackFillFrom, possessionRollHoldFrom} from "../../playbooks/move-words.js";
+import {armorFromWords, insertMovesInHumanGuise, stockStandInsFrom, trackFillFrom, possessionRollHoldFrom} from "../../playbooks/move-words.js";
 import {playbookTextFromHtml} from "../../playbooks/playbook-text.js";
 
 /**
@@ -1460,7 +1460,7 @@ export class StonetopCharacter {
 			_addMarkOptionBonuses(totals, m.markOptions, marks[m.name]);
 		}
 		// A homebrew playbook's own advances that were marked: its max HP and damage die.
-		_addAdvanceBonuses(totals, playbookData, this._actor.getFlag(STONETOP_SCOPE, HOMEBREW_ADVANCES_FLAG));
+		_addAdvanceBonuses(totals, playbookData, this.homebrewAdvances);
 		// A held special possession that raises them (the Standout's Determination: d8, +4 max HP).
 		_addPossessionBonuses(totals, playbookData, this._selectedPossessionSlugs(playbookData));
 		// A learned homebrew move's armor (Formless: "+1 Armor when you go unarmored"), read from its words.
@@ -1476,7 +1476,7 @@ export class StonetopCharacter {
 	 */
 	_addHomebrewMoveArmor(totals, playbookData) {
 		const background = homebrewBackgroundOf(playbookData, this.backgroundState().slug);
-		const humanGuise = /\b(?:in|with)\s+your\s+human\s+(?:guise|form|shape)\b/i.test(stripHtmlToText(background?.description ?? ""));
+		const humanGuise = insertMovesInHumanGuise(background?.words);
 		for (const { item: i, words } of learnedHomebrewMoves(this._actor)) {
 			const insertKey = homebrewInsertOf(i)?.key;
 			if (insertKey && !humanGuise && !this._homebrewInserts.wearing(insertKey)) continue;
@@ -2917,9 +2917,11 @@ export class StonetopCharacter {
 		if (!moveName || !String(pb?.slug ?? "").startsWith(HOMEBREW_SLUG_PREFIX) || !holdOnRollFor(this._actor, moveName)) return [];
 		const out = [];
 		let maxes = null;
+		let selected = null;
 		for (const opt of pb.specialPossessions?.options ?? []) {
 			const read = possessionRollHoldFrom(playbookTextFromHtml(opt.description ?? ""));
-			if (!read || looseName(read.move) !== looseName(moveName) || !(await this.holdsPossession(opt.slug, pb))) continue;
+			if (!read || looseName(read.move) !== looseName(moveName)) continue;
+			if (!this._holdsPossessionIn(opt.slug, pb, selected ??= this._selectedPossessionSlugs(pb))) continue;
 			maxes ??= this.computePossessionMaxUses(pb.specialPossessions, this._buildOwnedMovesMap(), this._characterLevel) ?? {};
 			const cap = Number(maxes[opt.slug] ?? opt.resource?.max) || 0;
 			const spent = Number(this._possessions.uses?.[opt.slug]) || 0;
@@ -2972,7 +2974,7 @@ export class StonetopCharacter {
 				const next = Math.min(track.max, now + 1);
 				// "At 3 Doom, the GM advances a dark plot … and resets the Doom track": the table is told
 				// when the mark fills it, and the track is emptied when the words say so.
-				const fill = trackFillFrom(playbookTextFromHtml(background.description), track.label);
+				const fill = trackFillFrom(background.words, track.label);
 				const filled = !!fill && next >= fill.at && now < fill.at;
 				await this._background.setSetupResource(track.key, filled && fill.resets ? 0 : next);
 				if (filled) {
@@ -3259,35 +3261,20 @@ export class StonetopCharacter {
 	}
 
 	/**
-	 * Pay `amount` Stock out of `source` (one of stockSources' purses). The purse knows which way
-	 * its track counts (the pouch up as it empties, the Boon down); a Vessel's HP has no track and
-	 * is paid by a visible 2d4 roll instead. Returns `{ lost }`, the HP a Vessel lost (0 otherwise).
+	 * Pay `amount` Stock out of `source` (one of stockSources' purses). The purse knows how it is
+	 * paid (stock-cost.js: the pouch counts up as it empties, the Boon down, a Vessel's HP is a
+	 * visible 2d4 roll, a stand-in the debility, HP or price a homebrew move names); this hands it
+	 * the character's writes. Returns `{ lost }`, the HP the purse took (0 otherwise).
 	 */
 	async spendStock(source, amount = 1, { moveName = "", speaker } = {}) {
-		if (source?.vessel) {
-			const { lost } = await loseHpForStock(this._actor, { amount, moveName, speaker });
-			return { lost };
-		}
-		// A price a homebrew move names in place of Stock (stock-cost.js#standInPurses): the debility
-		// the player picked, the HP it says, or one the table settles, which the receipt names.
-		const standIn = source?.standIn;
-		if (standIn) {
-			const options = moveName ? { stonetopMove: moveName } : {};
-			if (standIn.kind === "debility") await this.markDebility(standIn.key, { moveName });
-			if (standIn.kind === "hp") {
-				const lost = standIn.amount * Math.max(1, Math.trunc(Number(amount) || 1));
-				await applyHpLossToActor(this._actor, lost, options);
-				return { lost };
-			}
-			return { lost: 0 };
-		}
-		const next = source.after(amount);
-		if (source.key === "boon") {
-			await this._moveResources.setUses(RITES_OF_THE_LAND, next, moveName ? { stonetopMove: moveName } : undefined);
-		} else {
-			await this._possessions.setUses(SACRED_POUCH_SLUG, next);
-		}
-		return { lost: 0 };
+		const stonetopMove = moveName ? { stonetopMove: moveName } : null;
+		return source.pay({
+			setPouchSpent: next => this._possessions.setUses(SACRED_POUCH_SLUG, next),
+			setBoonHeld:   next => this._moveResources.setUses(RITES_OF_THE_LAND, next, stonetopMove ?? undefined),
+			loseVesselHp:  n => loseHpForStock(this._actor, { amount: n, moveName, speaker }),
+			markDebility:  key => this.markDebility(key, { moveName }),
+			loseHp:        lost => applyHpLossToActor(this._actor, lost, stonetopMove ?? {}),
+		}, amount);
 	}
 
 	// -- The sacred pouch's room (sacred-pouch.js) -------------------------------------------
@@ -5985,9 +5972,8 @@ export class StonetopCharacter {
 		// no Surprise, so its 10+ regains none, and with no record on its card a later Shift brings nothing along.
 		// A homebrew move settles only what its own data says it does (tier-effects.js#tierEffectsAllowed): a
 		// homebrew Pariah's "on a 10+, hold 3 Fear" fills its Fear track.
-		const allowed = tierEffectsAllowed(this._actor, item);
-		const tierMove = allowed === null ? bookMoveName(item) : allowed ? item.name : null;
-		if (!descriptionOnly && tierMove && Number.isFinite(roll?.total)) await this._settleRolledTierEffects(roll, tierMove, withSurprise, aimedAt, { surpriseSpent, ...(holdMore ? { holdMore } : {}), ...(allowed ? { only: allowed } : {}) });
+		const gate = tierEffectsAllowed(this._actor, item);
+		if (!descriptionOnly && gate && Number.isFinite(roll?.total)) await this._settleRolledTierEffects(roll, gate.moveName, withSurprise, aimedAt, { surpriseSpent, ...(holdMore ? { holdMore } : {}), ...(gate.only ? { only: gate.only } : {}) });
 
 		// Clash's 6-: "your maneuver fails and you suffer your enemy's attack". A flat consequence
 		// with nothing in the tier to decide, so it fires off the dice rather than off a button —

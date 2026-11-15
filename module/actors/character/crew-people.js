@@ -22,7 +22,7 @@
 // row rides every splice and in-place edit the roster makes, so the link needs no ids of its own.
 // The back-link on the Person is `crewMember`, never `followerOrigin`, for the same reason.
 
-import { ensureFollowerFolder, makerRank, MAKER_STAGGER_MS, worldActorFromUuid } from "./follower-actors.js";
+import { ensureFollowerFolder, sweepOnce, sweepQueued, worldActorFromUuid } from "./follower-actors.js";
 import { followerMarkerImg, isFollowerMarkerImg } from "../../data/follower-actor.js";
 import { followerOwnershipFrom } from "./shared-sheets.js";
 import { resolvedFlags } from "./StonetopFlags.js";
@@ -30,6 +30,7 @@ import { deletionEntry } from "../../utils/foundry-compat.js";
 import { rectEq, sameSrc } from "../../utils/portrait-frame.js";
 import { isDefaultImg } from "../../utils/strings.js";
 import { SYSTEM_ID } from "../../system-id.js";
+import { openApplications } from "../../utils/open-windows.js";
 
 /** The flag on a Person naming whose crew they are on: `{characterUuid}`. */
 export const CREW_MEMBER_FLAG = "crewMember";
@@ -42,8 +43,6 @@ const INDIVIDUALS_PATH = `flags.${SYSTEM_ID}.crew.individuals`;
 
 // Fresh every time: Foundry writes into the options object it is handed (see follower-actors.js#silent).
 const silentSync = () => ({ stonetopLedger: true, [CREW_SYNC_OPTION]: true });
-
-const _wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /* -------------------------------------------- */
 /*  Pure pieces                                 */
@@ -303,25 +302,44 @@ export function crewMemberOf(person) {
  */
 export function redrawCrewMemberSheets(character) {
 	if (character?.type !== "character" || !character.uuid) return;
-	for (const person of globalThis.game?.actors?.contents ?? []) {
-		if (person?.type !== "npc" || crewOwnerUuid(person) !== character.uuid) continue;
-		if (person.sheet?.rendered) person.sheet.render(false);
-	}
+	const open = openApplications().filter(app => {
+		const person = app?.actor;
+		return person?.type === "npc" && app === person.sheet && app.rendered
+			&& crewOwnerUuid(person) === character.uuid;
+	});
+	if (!open.length) return;
+	// The sheets share one build of the crew card (StonetopCharacterSheet#crewMemberCard); one
+	// still in flight was started before this change, so it is not theirs to share.
+	character.sheet?.forgetCrewCard?.();
+	for (const app of open) app.render(false);
 }
+
+/** How long a run of item changes on one character waits before its member sheets redraw. */
+export const CREW_SHEET_REDRAW_MS = 50;
+const _pendingRedraws = new Map();
 
 /**
  * `updateActor`: ANY change to the character, not only to `crew`. The card is built from more than
  * the crew's own flags: Heroes to the Last's picks live with the move marks, the background's tag
  * with the background, the max HP with the moves, and "Following" with the character's name. Only
- * open member sheets redraw, so a character with none (the usual case) costs a walk of the actors.
+ * open member sheets redraw, and only the open windows are walked.
  */
 export function onUpdateActorCrewSheets(actor) {
 	redrawCrewMemberSheets(actor);
 }
 
-/** `createItem` / `deleteItem`: a move learned or dropped (Heroes to the Last, Veteran Crew...). */
+/**
+ * `createItem` / `deleteItem`: a move learned or dropped (Heroes to the Last, Veteran Crew...).
+ * Gathered per character: a batch of twenty items is twenty hooks, and one redraw answers them all.
+ */
 export function onItemChangeCrewSheets(item) {
-	redrawCrewMemberSheets(item?.parent);
+	const character = item?.parent;
+	if (character?.type !== "character" || !character.uuid) return;
+	clearTimeout(_pendingRedraws.get(character.uuid));
+	_pendingRedraws.set(character.uuid, setTimeout(() => {
+		_pendingRedraws.delete(character.uuid);
+		redrawCrewMemberSheets(character);
+	}, CREW_SHEET_REDRAW_MS));
 }
 
 function crewContext(character) {
@@ -344,15 +362,13 @@ export function linkableCrewPeople(keep = "") {
 /*  Writes                                      */
 /* -------------------------------------------- */
 
-const _sweepsInFlight = new Set();
-const _syncsInFlight  = new Set();
-
 /**
  * Give every named crew member a Person, and remember it on their row.
  *
  * Run from the character sheet after it renders, beside ensureFollowerActors and under the same
- * guards: free in the steady state; only an owner who may create actors; one pass per character
- * at a time; connected owners staggered so two open sheets do not both make one.
+ * guards: free in the steady state; only an owner who may create actors; in the same per-character
+ * queue as the follower sweeps (follower-actors.js#sweepOnce), so no two of them write the
+ * character at once; connected owners staggered so two open sheets do not both make one.
  *
  * A row whose STORED link no longer resolves counts as answered: deleting a member's Person is a
  * decision, and a sweep that remade it on the next render would make it impossible to be rid of.
@@ -364,12 +380,8 @@ export async function ensureCrewMemberPeople(character) {
 	if (!missing().length) return 0;
 	if (!character?.isOwner) return 0;
 	if (!globalThis.Actor?.canUserCreate?.(game.user)) return 0;
-	if (_sweepsInFlight.has(character.id)) return 0;
 
-	_sweepsInFlight.add(character.id);
-	try {
-		const rank = makerRank(character);
-		if (rank > 0) await _wait(rank * MAKER_STAGGER_MS);
+	return sweepOnce(character, "crew-people", async () => {
 		const wanted = missing();
 		if (!wanted.length) return 0;
 
@@ -407,12 +419,7 @@ export async function ensureCrewMemberPeople(character) {
 		const linked = made.length - lost.length;
 		if (linked) await character.update({ [INDIVIDUALS_PATH]: rows }, { stonetopLedger: true });
 		return linked;
-	} catch (err) {
-		console.error("Stonetop | Could not make this character's crew member People.", err);
-		return 0;
-	} finally {
-		_sweepsInFlight.delete(character.id);
-	}
+	}, "Stonetop | Could not make this character's crew member People.");
 }
 
 /**
@@ -422,7 +429,7 @@ export async function ensureCrewMemberPeople(character) {
  * @returns {Promise<number>} how many members were brought into step
  */
 export async function syncCrewMemberPeople(character) {
-	if (!character || _syncsInFlight.has(character.id)) return 0;
+	if (!character || sweepQueued(character, "crew-sync")) return 0;
 	const plan = () => {
 		const ctx = crewContext(character);
 		const out = [];
@@ -443,10 +450,7 @@ export async function syncCrewMemberPeople(character) {
 	}
 	if (!drifted.length) return 0;
 
-	_syncsInFlight.add(character.id);
-	try {
-		const rank = makerRank(character);
-		if (rank > 0) await _wait(rank * MAKER_STAGGER_MS);
+	return sweepOnce(character, "crew-sync", async () => {
 		let moved = 0;
 		let rows = null;
 		for (const { person, row, step } of plan()) {
@@ -465,12 +469,7 @@ export async function syncCrewMemberPeople(character) {
 		}
 		if (rows) await character.update({ [INDIVIDUALS_PATH]: rows });
 		return moved;
-	} catch (err) {
-		console.error("Stonetop | Could not sync this character's crew member People.", err);
-		return 0;
-	} finally {
-		_syncsInFlight.delete(character.id);
-	}
+	}, "Stonetop | Could not sync this character's crew member People.");
 }
 
 /**
@@ -492,6 +491,23 @@ export function onUpdateActorCrewPerson(actor, changed, options, userId) {
 	if (!character?.isOwner) return;
 	syncCrewMemberPeople(character)
 		.catch(err => console.warn("Stonetop | Could not carry a crew member's new name to the roster.", err));
+}
+
+/**
+ * `updateActor`: the roster side of the same thing. A member renamed, re-tagged or given a new face
+ * on the roster (or the crew renamed, or the character, which the Persons' occupation reads) is
+ * carried to their Person straight away, on the client that made the edit, rather than waiting
+ * for the next render of the sheet (which still runs the sync too, as a backfill for edits made
+ * by a client that could not write the Person).
+ */
+export function onUpdateActorCrewRoster(actor, changed, options, userId) {
+	if (userId !== game.user?.id || actor?.type !== "character") return;
+	const crew = changed?.flags?.[SYSTEM_ID]?.crew;
+	const touched = !!changed && ("name" in changed
+		|| (!!crew && typeof crew === "object" && ("individuals" in crew || "name" in crew)));
+	if (!touched || !actor.isOwner) return;
+	syncCrewMemberPeople(actor)
+		.catch(err => console.warn("Stonetop | Could not carry a roster edit to the crew member's Person.", err));
 }
 
 /**

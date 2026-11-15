@@ -6,6 +6,7 @@ import { progressSlice, SEED_FOLDER_PHASE, SEED_BULK_CREATE_FRACTION } from "../
 import { ITEMS_PACK } from "../actors/character/StonetopFlags.js";
 import { TREASURE_CATALOG } from "../data/treasure-catalog.js";
 import { WRITEUP_EDITED_FLAG } from "../utils/inventory-item-data.js";
+import { findOrCreateFolder } from "../utils/create-once.js";
 
 // On load, import the Book II treasures — the "Treasures & Wonders" folder of the
 // stonetop-items Item compendium — into the world's Items sidebar under a folder of the
@@ -126,27 +127,24 @@ async function importTreasureItems(pack, { onProgress } = {}) {
 
 // Find-or-create a world Item folder by name+parent, tinting it. Reuses an existing match
 // (from an earlier partial seed, or a GM-made folder of the same name in the same place)
-// rather than duplicating — and, if that folder is still uncoloured, back-fills the tint so a
-// world part-seeded before the colours shipped catches up (a GM's own tint is left alone).
+// rather than duplicating (utils/create-once.js, so an overlapping seed makes one too) — and, if
+// that folder is still uncoloured, back-fills the tint so a world part-seeded before the colours
+// shipped catches up (a GM's own tint is left alone).
 // Returns the folder id, or null if creation fails — in which case the caller files the items
 // at the sidebar root, so a single failure never aborts the import.
 async function ensureItemFolder(name, parentId, color) {
-	const existing = (game.folders ?? []).find(f =>
-		f.type === "Item" && f.name === name && (f.folder?.id ?? null) === (parentId ?? null)
-	);
-	if (existing) {
-		if (color && !existing._source?.color) {
-			try { await existing.update({ color }); } catch (err) { error(`Failed to tint the "${name}" item folder:`, err); }
-		}
-		return existing.id;
-	}
+	let folder;
 	try {
-		const created = await Folder.create({ name, type: "Item", folder: parentId ?? null, color: color ?? null });
-		return created?.id ?? null;
+		folder = await findOrCreateFolder("Item", name, parentId, { color: color ?? null });
 	} catch (err) {
 		error(`Failed to create the "${name}" item folder:`, err);
 		return null;
 	}
+	// A folder made just now already wears the tint it was made with.
+	if (color && folder && !(folder._source?.color ?? folder.color)) {
+		try { await folder.update({ color }); } catch (err) { error(`Failed to tint the "${name}" item folder:`, err); }
+	}
+	return folder?.id ?? null;
 }
 
 // --- Back-filling the book's write-ups -------------------------------------

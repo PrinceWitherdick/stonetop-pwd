@@ -136,7 +136,7 @@ describe("Metamorphosis puts the insert's form on", () => {
 		const { actor } = character();
 		expect(insertFormRollFor(actor, "Metamorphosis")).toEqual({ key: "monster-compendium", tiers: { success: true, partial: true, failure: true } });
 		expect(insertFormRollFor(actor, "Formless")).toBeNull();
-		expect(tierEffectsAllowed(actor, actor.items[0])).toEqual(HOMEBREW_TIER_EFFECTS);
+		expect(tierEffectsAllowed(actor, actor.items[0])).toEqual({ moveName: "Metamorphosis", only: HOMEBREW_TIER_EFFECTS });
 		world(false);
 		expect(insertFormRollFor(actor, "Metamorphosis")).toBeNull();
 	});

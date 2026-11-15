@@ -4,10 +4,7 @@ import { customMoveDescriptionToPlainText } from "../../../utils/custom-move-tex
 import { buildCustomMoveData } from "../../../utils/custom-move-data.js";
 import { createWorldItem } from "../../../utils/world-item.js";
 import { applyGuideRail, guideRailStep } from "../../../utils/guide-rail.js";
-import { persistOpenWindowsSoon } from "../../../utils/window-restore.js";
-import {
-	CUSTOM_MOVE_RESTORE_KIND, authoringRestoreKey, fieldsFromView, readFormFields, writeFormFields,
-} from "../../../dialogs/authoring-restore.js";
+import { CUSTOM_MOVE_RESTORE_KIND, authoringRestoreKey, fieldsFromView, trackFormFields } from "../../../dialogs/authoring-restore.js";
 
 /**
  * A "saver" for a custom move backed by an actor-embedded item (the on-sheet
@@ -130,11 +127,6 @@ export class CustomMoveDialog extends StonetopDialog {
 		return { tab: this._activeTab, fields: this._liveFields };
 	}
 
-	async _render(force, options = {}) {
-		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
-		return super._render(force, options);
-	}
-
 	_takeRestoredView(view) {
 		if (this._restoredFields) return;
 		this._restoredFields = fieldsFromView(view?.fields);
@@ -213,16 +205,9 @@ export class CustomMoveDialog extends StonetopDialog {
 		super.activateListeners(html);
 		const root = html[0];
 
-		// A reload's fields go back over the fresh form before anything below reads it.
-		if (this._restoredFields) {
-			writeFormFields(root, this._restoredFields);
-			this._restoredFields = null;
-		}
-		// Typing never re-renders, so the fields are kept here as they change, and saved for a reload.
-		const noteWork = () => { this._liveFields = readFormFields(root); persistOpenWindowsSoon(); };
-		this._liveFields = readFormFields(root);
-		root.addEventListener("input", noteWork);
-		root.addEventListener("change", noteWork);
+		// A reload's fields go back over the fresh form before anything below reads it, and the fields
+		// are kept as they are typed, for a reload.
+		trackFormFields(this, root);
 
 		// Show the 10+/7-9/6- result fields only when the move actually rolls.
 		const results = root.querySelector(".stonetop-custom-move-results");

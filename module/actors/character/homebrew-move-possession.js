@@ -23,11 +23,14 @@ export function possessionGrantedByMove(item, options, items = item?.parent?.ite
 	return name ? possessionMatching(name, options) : null;
 }
 
-/** Mark the possession `item` hands over on its character, when it isn't held already. Whether it did. */
+/**
+ * Mark the possession `item` hands over on its character, when it isn't held already. Whether it did.
+ * A book move hands over nothing here, so it never waits on the playbook.
+ */
 export async function markPossessionFromMove(item) {
 	const actor = item?.parent;
 	const character = actor?.type === "character" ? actor.typedActor : null;
-	if (!character?.playbook) return false;
+	if (!character?.playbook || !item.flags?.[SYSTEM_ID]?.[HOMEBREW_MOVE_FLAG]) return false;
 	const playbookData = await character.playbook();
 	const opt = possessionGrantedByMove(item, playbookData?.specialPossessions?.options ?? []);
 	if (!opt || await character.holdsPossession(opt.slug, playbookData)) return false;

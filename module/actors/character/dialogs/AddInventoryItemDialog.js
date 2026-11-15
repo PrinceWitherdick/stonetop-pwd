@@ -9,10 +9,7 @@ import { enrichHTML, filePicker } from "../../../utils/foundry-compat.js";
 import { isDefaultImg } from "../../../utils/strings.js";
 import { ARTIFACT_STATE } from "../artifact-identify.js";
 import { applyGuideRail, guideRailStep } from "../../../utils/guide-rail.js";
-import { persistOpenWindowsSoon } from "../../../utils/window-restore.js";
-import {
-	ADD_ITEM_RESTORE_KIND, authoringRestoreKey, fieldsFromView, readFormFields, writeFormFields,
-} from "../../../dialogs/authoring-restore.js";
+import { ADD_ITEM_RESTORE_KIND, authoringRestoreKey, fieldsFromView, trackFormFields } from "../../../dialogs/authoring-restore.js";
 
 // The rail's pages, in authoring order. `key` matches a `<section data-tab>` in the template;
 // `titleKey` is a `stonetop.inventory.section.*` locale key. The last two pages (the write-up,
@@ -133,11 +130,6 @@ export class AddInventoryItemDialog extends StonetopDialog {
 		};
 	}
 
-	async _render(force, options = {}) {
-		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
-		return super._render(force, options);
-	}
-
 	_takeRestoredView(view) {
 		if (this._restoredFields) return;
 		const o = view?.opened;
@@ -228,16 +220,10 @@ export class AddInventoryItemDialog extends StonetopDialog {
 		super.activateListeners(html);
 		const root = html[0];
 
-		// A reload's fields go back over the fresh form before anything below reads it.
-		if (this._restoredFields) {
-			writeFormFields(root, this._restoredFields);
-			this._restoredFields = null;
-		}
-		// Typing never re-renders, so the fields are kept here as they change, and saved for a reload.
-		// Clicks too: a tag chip and the art well's Clear change a field without an input event.
-		const noteWork = () => { this._liveFields = readFormFields(root); persistOpenWindowsSoon(); };
-		this._liveFields = readFormFields(root);
-		for (const type of ["input", "change", "click"]) root.addEventListener(type, noteWork);
+		// A reload's fields go back over the fresh form before anything below reads it, and the fields
+		// are kept as they are typed, for a reload. Clicks too: a tag chip and the art well's Clear
+		// change a field without an input event.
+		trackFormFields(this, root, { clicks: true });
 
 		const noteInput = root.querySelector("[name=note]");
 		const chips = Array.from(root.querySelectorAll(".stonetop-add-item-chip"));

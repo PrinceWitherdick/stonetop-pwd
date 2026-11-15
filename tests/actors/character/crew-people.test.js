@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
 	applyCrewRowPatch, crewMemberOf, crewMemberPersonData, crewPersonOccupation, crewPersonReconcile, crewPersonTraits,
 	crewPersonTraitsFollowRoster, crewRowWriteBack, ensureCrewMemberPeople, markCrewPersonDead, onUpdateActorCrewPerson,
-	onItemChangeCrewSheets, onUpdateActorCrewSheets, releaseCrewPerson, replaceCrewPerson, syncCrewMemberPeople,
+	onItemChangeCrewSheets, onUpdateActorCrewRoster, onUpdateActorCrewSheets, releaseCrewPerson, replaceCrewPerson,
+	syncCrewMemberPeople, CREW_SHEET_REDRAW_MS,
 } from "../../../module/actors/character/crew-people.js";
 import { followerCardFor, followerMasterIndex } from "../../../module/actors/character/follower-masters.js";
 
@@ -246,6 +247,61 @@ describe("onUpdateActorCrewPerson", () => {
 	});
 });
 
+describe("onUpdateActorCrewRoster", () => {
+	const personFor = () => makePerson("Actor.p1", {
+		flags: { crewMemberCard: { name: "Wren", img: "", frame: null, occupation: "Pim's crew", traits: "" } },
+		system: { occupation: "Pim's crew", traits: "" },
+	});
+
+	it("carries a roster rename to the Person on the client that made it", async () => {
+		const person = personFor();
+		const character = makeCharacter([{ name: "Wrenna", personUuid: "Actor.p1" }]);
+		onUpdateActorCrewRoster(character, { flags: { [SYS]: { crew: { individuals: [] } } } }, {}, "user1");
+		await vi.waitFor(() => expect(person.update).toHaveBeenCalled());
+		expect(person.update.mock.calls[0][0].name).toBe("Wrenna");
+		expect(person.update.mock.calls[0][1]).toEqual({ stonetopLedger: true, stonetopCrewSync: true });
+	});
+
+	it("ignores another user's edit, an edit outside the roster, and a character it cannot write", async () => {
+		const person = personFor();
+		const character = makeCharacter([{ name: "Wrenna", personUuid: "Actor.p1" }]);
+		const roster = { flags: { [SYS]: { crew: { individuals: [] } } } };
+		onUpdateActorCrewRoster(character, roster, {}, "someoneElse");
+		onUpdateActorCrewRoster(character, { flags: { [SYS]: { crew: { individualsHp: { 0: 2 } } } } }, {}, "user1");
+		onUpdateActorCrewRoster(person, { name: "X" }, {}, "user1");
+		character.isOwner = false;
+		onUpdateActorCrewRoster(character, roster, {}, "user1");
+		await new Promise(resolve => setTimeout(resolve, 0));
+		expect(person.update).not.toHaveBeenCalled();
+	});
+});
+
+describe("one sweep at a time per character", () => {
+	it("runs the crew sweeps one after the other, so neither builds its rows from a stale read", async () => {
+		const person = makePerson("Actor.p1", {
+			flags: { crewMemberCard: { name: "Wren", img: "", frame: null, occupation: "Pim's crew", traits: "" } },
+			system: { occupation: "Pim's crew", traits: "" },
+			name: "Wrenna",
+		});
+		const character = makeCharacter([{ name: "Wren", personUuid: "Actor.p1" }, { name: "Ash" }]);
+		// Both started by the same render: the sync's row write must land on the rows the make
+		// pass wrote, not the other way round.
+		const [made, synced] = await Promise.all([ensureCrewMemberPeople(character), syncCrewMemberPeople(character)]);
+		expect(made).toBe(1);
+		expect(synced).toBe(1);
+		expect(person.update).toHaveBeenCalled();
+		expect(character.flags[SYS].crew.individuals.map(r => [r.name, r.personUuid]))
+			.toEqual([["Wrenna", "Actor.p1"], ["Ash", "Actor.new0"]]);
+	});
+
+	it("does not queue a second pass of a kind already queued", async () => {
+		const character = makeCharacter([{ name: "Wren" }]);
+		const [first, second] = await Promise.all([ensureCrewMemberPeople(character), ensureCrewMemberPeople(character)]);
+		expect([first, second]).toEqual([1, 0]);
+		expect(created).toHaveLength(1);
+	});
+});
+
 describe("leaving the crew", () => {
 	it("a death marks the Person Dead and takes them off the crew", async () => {
 		const person = makePerson("Actor.p1");
@@ -329,6 +385,10 @@ describe("crewPersonTraitsFollowRoster", () => {
 
 describe("redrawing a crew member's open sheet", () => {
 	const sheet = (rendered) => ({ rendered, render: vi.fn() });
+	// The open windows, as Foundry files them: each person's sheet, pointing back at its actor.
+	const openSheets = (...people) => {
+		globalThis.ui = { windows: Object.fromEntries(people.map((p, i) => [i, Object.assign(p.sheet, { actor: p })])) };
+	};
 
 	it("redraws the open sheets of that character's crew on any change to the character", () => {
 		const character = makeCharacter([{ name: "Wren", personUuid: "Actor.p1" }]);
@@ -336,7 +396,7 @@ describe("redrawing a crew member's open sheet", () => {
 		const closed = makePerson("Actor.p2", { sheet: sheet(false) });
 		const other = makePerson("Actor.p3", { sheet: sheet(true) });
 		other.flags[SYS].crewMember = { characterUuid: "Actor.pc2" };
-		game.actors = { contents: [character, mine, closed, other] };
+		openSheets(mine, closed, other);
 		onUpdateActorCrewSheets(character, { flags: { [SYS]: { crew: { individualsHp: { 0: 2 } } } } });
 		expect(mine.sheet.render).toHaveBeenCalledWith(false);
 		expect(closed.sheet.render).not.toHaveBeenCalled();
@@ -346,21 +406,39 @@ describe("redrawing a crew member's open sheet", () => {
 		expect(mine.sheet.render).toHaveBeenCalledTimes(2);
 	});
 
-	it("redraws them when the character learns or drops a move", () => {
-		const character = makeCharacter([{ name: "Wren", personUuid: "Actor.p1" }]);
+	it("redraws them once when the character learns or drops a batch of moves", () => {
+		vi.useFakeTimers();
+		try {
+			const character = makeCharacter([{ name: "Wren", personUuid: "Actor.p1" }]);
+			const mine = makePerson("Actor.p1", { sheet: sheet(true) });
+			openSheets(mine);
+			// A batch create fires one hook per item; the sheet draws once for the lot.
+			for (let i = 0; i < 20; i++) onItemChangeCrewSheets({ parent: character });
+			expect(mine.sheet.render).not.toHaveBeenCalled();
+			vi.advanceTimersByTime(CREW_SHEET_REDRAW_MS);
+			expect(mine.sheet.render).toHaveBeenCalledTimes(1);
+			onItemChangeCrewSheets({ parent: null });
+			onItemChangeCrewSheets({ parent: mine });
+			vi.advanceTimersByTime(CREW_SHEET_REDRAW_MS);
+			expect(mine.sheet.render).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("forgets a crew card the character's sheet was still building, so the redraw reads the change", () => {
+		const forgetCrewCard = vi.fn();
+		const character = makeCharacter([{ name: "Wren", personUuid: "Actor.p1" }], { sheet: { forgetCrewCard } });
 		const mine = makePerson("Actor.p1", { sheet: sheet(true) });
-		game.actors = { contents: [character, mine] };
-		onItemChangeCrewSheets({ parent: character });
-		expect(mine.sheet.render).toHaveBeenCalledTimes(1);
-		onItemChangeCrewSheets({ parent: null });
-		onItemChangeCrewSheets({ parent: mine });
-		expect(mine.sheet.render).toHaveBeenCalledTimes(1);
+		openSheets(mine);
+		onUpdateActorCrewSheets(character, { name: "Pimm" });
+		expect(forgetCrewCard).toHaveBeenCalledBefore(mine.sheet.render);
 	});
 
 	it("leaves them be when the update is not to a character", () => {
-		const character = makeCharacter([{ name: "Wren", personUuid: "Actor.p1" }]);
+		makeCharacter([{ name: "Wren", personUuid: "Actor.p1" }]);
 		const mine = makePerson("Actor.p1", { sheet: sheet(true) });
-		game.actors = { contents: [character, mine] };
+		openSheets(mine);
 		onUpdateActorCrewSheets(mine, { name: "Wrenna" });
 		expect(mine.sheet.render).not.toHaveBeenCalled();
 	});

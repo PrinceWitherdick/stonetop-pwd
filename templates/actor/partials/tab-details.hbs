@@ -1,7 +1,7 @@
 <div class="tab details{{#unless stonetop.editMode}} stonetop-readonly{{/unless}}" data-group="primary" data-tab="details">
 
 		{{#if stonetop.detailsShow.lore}}
-		<div class="stonetop-lore-section-wrapper{{#if stonetop.detailsEdit.lore}} stonetop-section-editing{{/if}}">
+		<div class="stonetop-lore-section-wrapper{{#if stonetop.detailsEdit.lore}} stonetop-section-editing{{/if}}" data-lore-store="lore">
 			{{#if stonetop.playbook.lore.hasEntries}}{{> "stonetop.details-section-edit-toggle" section="lore" editing=stonetop.detailsEdit.lore collapse="lore"}}{{/if}}
 			{{!-- Lore renders its own playbook-specific headings, so it has never had a
 			      "Lore" one of its own — it would be redundant above them. Folded, though,

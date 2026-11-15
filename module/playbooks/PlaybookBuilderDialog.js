@@ -4,12 +4,12 @@ import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { escHtml, looseName, slugify } from "../utils/strings.js";
 import { filePicker } from "../utils/foundry-compat.js";
 import { hasUnsavedWork, notePristineWork } from "../utils/close-guard.js";
-import { persistOpenWindowsSoon } from "../utils/window-restore.js";
-import { PLAYBOOK_BUILDER_RESTORE_KIND, NEW_PLAYBOOK_PREFIX } from "./playbook-builder-restore.js";
+import { docOrNewKey, persistOnTyping, persistOpenWindowsSoon } from "../utils/window-restore.js";
+import { PLAYBOOK_BUILDER_RESTORE_KIND } from "./playbook-builder-restore.js";
 import { STAT_KEYS } from "../utils/roll-types.js";
 import { parseStatArray, statScoreLabel, DEFAULT_STAT_ARRAY } from "../actors/character/stat-rules.js";
 import { lorePickMin, lorePickMax } from "../actors/character/lore-pick-count.js";
-import { emptyBundle, normalizeBundle, normalizeMove, backgroundGaps, diffBundles, mergeReimport, advanceFrom, DAMAGE_DICE, HP_LIMITS } from "./homebrew-bundle.js";
+import { INSERT_FORM_DEFAULTS, emptyBundle, normalizeBundle, normalizeMove, backgroundGaps, diffBundles, mergeReimport, advanceFrom, DAMAGE_DICE, HP_LIMITS } from "./homebrew-bundle.js";
 import {
 	saveHomebrewPlaybook, readHomebrewBundle, readImportBase, deleteHomebrewPlaybook, holdersOfHomebrew,
 	readBundleFile, importCollision, saveProblem, offerToRefreshCopies, writeInsChangedOnSave,
@@ -56,8 +56,8 @@ function isBlankBundle(bundle) {
  * world as a playbook Item and its moves (homebrew-store.js).
  *
  * Laid out as a left-rail stepped sheet like the custom-move editor. Typing never re-renders:
- * every field names the bundle path it writes (`data-field`, `data-list` for a comma list,
- * `data-lines` for a one-per-line box, builder-lines.js), and the form is read back into the
+ * every field names the bundle path it writes (`data-field`, its cards by ref, cardRef; with
+ * `data-parse` for a box typed as a list, builder-lines.js), and the form is read back into the
  * bundle before anything that re-renders (adding or removing a card, an import, a save).
  */
 
@@ -76,8 +76,9 @@ const SECTIONS = [
 	{ key: "notes",       title: "Notes",               icon: "fa-note-sticky" },
 ];
 
-// The one-per-line boxes: `data-parse` -> how the box's text is read back into the bundle.
-const LINE_PARSERS = {
+// The boxes typed as a list (one entry per line, or separated by commas): `data-parse` -> how the
+// box's text is read back into the bundle.
+const FIELD_PARSERS = {
 	instincts:  L.parseInstinctLines,
 	appearance: L.parseAppearanceLines,
 	origin:     L.parseOriginLines,
@@ -86,6 +87,8 @@ const LINE_PARSERS = {
 	list:       L.parseLineList,
 	lore:       L.parseLoreOptionLines,
 	insertOptions: L.parseInsertOptionLines,
+	names:      L.parseNameList,
+	bonus:      L.parseBonusPicks,
 };
 
 /** What an advance of the playbook's own Level Up does, in words, as Level Up will act on it. */
@@ -133,7 +136,7 @@ export function loreGroupShape(lore, i) {
 const blankBackground = () => ({ label: "", description: "", moves: [], moveChoice: [], possessions: [], track: null });
 const blankPossession = () => ({ label: "", description: "", preselected: false });
 const blankLore = () => ({ title: "", description: "", options: [] });
-const blankInsert = key => ({ key, name: "", description: "", unlockedBy: "", form: { enabled: false, on: "Transform", off: "Revert" }, lists: [] });
+const blankInsert = key => ({ key, name: "", description: "", unlockedBy: "", form: { enabled: false, ...INSERT_FORM_DEFAULTS }, lists: [] });
 const blankInsertList = key => ({ key, title: "", prompt: "", kind: "pick", pick: 1, min: 0, perUnlock: 0, bonusPicks: [], options: [] });
 /** A key not yet in `taken`: `<base>-1`, `<base>-2`… Minted once, so a character's ticks keep their place. */
 const freshKey = (base, taken) => { let n = 1; while (taken.includes(`${base}-${n}`)) n++; return `${base}-${n}`; };
@@ -144,6 +147,70 @@ const readPartOf = value => {
 	const [insert = "", insertList = ""] = String(value ?? "").split("::");
 	return { insert, insertList: insert ? insertList : "" };
 };
+
+// Each card the builder draws (a move, a background, a possession, a question section, an insert, an
+// insert's list) and the playbook as a whole get a ref of their own ("@7") for as long as the object
+// lives. Refs are held here, never written into the bundle. A field names its card by ref
+// ("moves.@7.name"), and the form names the playbook it was drawn from (`data-bundle`), so a form drawn
+// before a card was removed or the playbook was replaced (an import, a save's re-read) can only write
+// onto the card it was drawn from: a card or a playbook no longer in the window takes nothing.
+const REFS = new WeakMap();
+let lastRef = 0;
+
+/** The ref of a card (or of the playbook), minted the first time it is asked for. */
+export function cardRef(obj) {
+	if (!obj || typeof obj !== "object") return "";
+	let ref = REFS.get(obj);
+	if (!ref) { ref = `@${++lastRef}`; REFS.set(obj, ref); }
+	return ref;
+}
+
+/** The card in `list` whose ref is `ref`, and where it is: -1 when it isn't there (any more). */
+const indexOfRef = (list, ref) => (Array.isArray(list) && ref ? list.findIndex(card => card && REFS.get(card) === ref) : -1);
+
+/**
+ * A field's path ("moves.@7.name") as the bundle holds it now ("moves.3.name"), or null when a card it
+ * names has gone from the bundle.
+ */
+function resolveRefPath(bundle, path) {
+	const out = [];
+	let at = bundle;
+	for (const step of String(path ?? "").split(".")) {
+		if (step.startsWith("@")) {
+			const i = indexOfRef(at, step);
+			if (i < 0) return null;
+			out.push(String(i));
+			at = at[i];
+		} else {
+			out.push(step);
+			at = at?.[step];
+		}
+	}
+	return out.join(".");
+}
+
+/**
+ * A save's re-read of the playbook (`to`) takes over the cards' refs from the playbook as it was
+ * (`from`), so what was open for editing stays open: moves by name, as a save re-sorts them, the rest
+ * by place. The playbook itself keeps the new ref it gets, so the form drawn before the save isn't
+ * read again until it is redrawn (`_readForm`).
+ */
+export function carryRefs(from, to) {
+	const carry = (a, b) => { if (a && b && REFS.has(a)) REFS.set(b, REFS.get(a)); };
+	const byPlace = (a = [], b = []) => a.forEach((card, i) => carry(card, b[i]));
+	const pa = from?.playbook ?? {};
+	const pb = to?.playbook ?? {};
+	byPlace(pa.backgrounds, pb.backgrounds);
+	byPlace(pa.possessions?.options, pb.possessions?.options);
+	byPlace(pa.lore, pb.lore);
+	byPlace(pa.inserts, pb.inserts);
+	(pa.inserts ?? []).forEach((ins, i) => byPlace(ins?.lists, pb.inserts?.[i]?.lists));
+	const left = [...(to?.moves ?? [])];
+	for (const move of from?.moves ?? []) {
+		const at = left.findIndex(m => m.name === move.name);
+		if (at >= 0) carry(move, left.splice(at, 1)[0]);
+	}
+}
 
 export class PlaybookBuilderDialog extends StonetopDialog {
 	/**
@@ -166,17 +233,12 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 		this._readReport = null;
 		this._source = source;
 		this._activeTab = SECTIONS[0].key;
+		// The refs (cardRef) of the moves open for editing.
 		this._openMoves = new Set();
-		// What is open for editing (its pencil pressed): a whole page ("page:stats") or one card on it
-		// ("bg:0", "pos:2", "lore:1", "ins:0"). Everything else is drawn as the playbook PDF prints it.
-		// A move's card is open while it's in _openMoves.
+		// What is open for editing (its pencil pressed): a whole page ("page:stats") or one card on it,
+		// by its ref ("bg:@4", "pos:@9", "lore:@12", "ins:@15"). Everything else is drawn as the playbook
+		// PDF prints it. A move's card is open while it's in _openMoves.
 		this._editing = new Set();
-		// The form is read back by index ("moves.3.name"), so it is read only while it shows the
-		// bundle as it is now: every render() marks the bundle changed, and a draw that began after
-		// the last change marks the form current (_formIsCurrent).
-		this._bundleRev = 0;
-		this._drawingRev = -1;
-		this._formRev = -1;
 	}
 
 	static get defaultOptions() {
@@ -203,46 +265,45 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 
 	/** What a reload saves this window under: its Item's uuid once saved, else its draft id. */
 	get restoreKey() {
-		return `${PLAYBOOK_BUILDER_RESTORE_KIND}:${this._item?.uuid ?? NEW_PLAYBOOK_PREFIX + this._draftId}`;
+		return docOrNewKey(PLAYBOOK_BUILDER_RESTORE_KIND, this._item, this._draftId);
 	}
 
-	/** The panel and the whole playbook as typed. Read live, as the page unloads too. */
+	/**
+	 * The panel and the whole playbook as typed: the playbook is what the close guard compares
+	 * (_workState), so the two can't drift. Read live, as the page unloads too.
+	 */
 	get restoreView() {
-		try { this._readForm(); }
+		let bundle = this._bundle;
+		try { bundle = JSON.parse(this._workState()); }
 		catch (_err) { /* a window mid-close keeps what it last had */ }
 		return {
 			tab: this._activeTab,
-			bundle: this._bundle,
+			bundle,
 			source: this._source,
 			librarySlug: this._librarySlug ?? null,
 			issues: this._issues.filter(i => typeof i?.message === "string").map(i => ({ message: i.message, severity: i.severity })),
-			openMoves: [...this._openMoves],
+			// Open moves by place: refs live only as long as this window.
+			openMoves: this._bundle.moves.flatMap((m, i) => (this._openMoves.has(cardRef(m)) ? [i] : [])),
 			importBase: this._importBase ?? null,
 		};
 	}
 
-	/** A reload's reopening draw carries that back (`options.view`); it goes on before the first draw. */
 	/**
-	 * Every render follows a change to the bundle (an added card, an import, a save's re-read), so
-	 * until it has drawn, the form on screen is out of date and must not be read back over the
-	 * bundle (_readForm). Anything typed and not yet read is read BEFORE the change that renders.
+	 * Every render follows a change to the bundle (an added card, an import, a save's re-read). Anything
+	 * typed and not yet read is read BEFORE the change that renders. A render asked for while a draw is
+	 * under way is dropped by core, so until the next draw reads the bundle (getData) one is owed.
 	 */
 	render(force, options) {
-		this._bundleRev++;
+		this._redrawOwed = true;
 		return super.render(force, options);
 	}
 
-	/** Whether the form on screen was drawn from the bundle as it is now. */
-	get _formIsCurrent() {
-		return this._formRev === this._bundleRev;
-	}
-
 	async _render(force, options = {}) {
-		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
 		const out = await super._render(force, options);
-		// A render asked for while this one was drawing is dropped by core, so the form can still be
-		// behind the bundle: draw once more, or the window shows (and never reads) the old form.
-		if (this.rendered && !this._formIsCurrent) this.render(false);
+		// A render asked for while this one was drawing was dropped by core: draw once more, or the
+		// window shows the playbook as it was (and a form drawn from a playbook since replaced reads
+		// nothing back, _readForm).
+		if (this.rendered && this._redrawOwed) this.render(false);
 		// A PDF with no text, to be typed in by hand: open it beside the window once the window is up
 		// (a new playbook reads its PDF before its first draw, so it waits for that).
 		if (this._handTypePdf && this.rendered) {
@@ -276,7 +337,10 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 		if (["builder", "json", "pdf", "library"].includes(view?.source)) this._source = view.source;
 		if (typeof view?.librarySlug === "string" && !this._item) this._librarySlug = view.librarySlug;
 		if (Array.isArray(view?.issues)) this._issues = view.issues.filter(i => typeof i?.message === "string");
-		if (Array.isArray(view?.openMoves)) this._openMoves = new Set(view.openMoves.filter(Number.isInteger));
+		if (Array.isArray(view?.openMoves)) {
+			const moves = this._bundle.moves;
+			this._openMoves = new Set(view.openMoves.filter(i => Number.isInteger(i) && moves[i]).map(i => cardRef(moves[i])));
+		}
 		if (SECTIONS.some(sec => sec.key === view?.tab)) this._activeTab = view.tab;
 		if (view?.importBase) this._importBase = normalizeBundle(view.importBase).bundle;
 	}
@@ -297,6 +361,7 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 
 	// ---- What the close guard compares ------------------------------------------------------
 
+	/** The playbook as typed. Also what a reload keeps (`restoreView`). Throws when the form won't read. */
 	_workState() {
 		this._readForm();
 		return JSON.stringify(this._bundle);
@@ -318,7 +383,8 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 	// ---- Render ---------------------------------------------------------------------------
 
 	getData() {
-		this._drawingRev = this._bundleRev;
+		// This draw reads the bundle as it is now: no redraw is owed until it changes again (render).
+		this._redrawOwed = false;
 		const pb = this._bundle.playbook;
 		const activeIndex = Math.max(0, SECTIONS.findIndex(s => s.key === this._activeTab));
 		const sectionTitle = s => _sectionTitle(s, pb);
@@ -348,6 +414,8 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 
 		return {
 			uid: this.appId,
+			// The playbook this form is drawn from (cardRef): a form drawn from another isn't read back.
+			bundleRef: cardRef(this._bundle),
 			activeTab: this._activeTab,
 			// Library playbooks this world doesn't have: Add from my library shows only for some (activateListeners asks).
 			libraryCount: this._libraryCount ?? 0,
@@ -402,9 +470,9 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			hpFlag: hpUnusual ? `Most playbooks start between ${HP_LIMITS.usualMin} and ${HP_LIMITS.usualMax} HP.` : "",
 
 			backgrounds: pb.backgrounds.map((b, i) => ({
-				index: i, label: b.label, description: b.description,
+				ref: cardRef(b), label: b.label, description: b.description,
 				// Its text boxes, or as the PDF prints it. A blank one (just added) opens for typing.
-				editing: ed(`bg:${i}`) || (blank(b.label) && blank(b.description)),
+				editing: ed(`bg:${cardRef(b)}`) || (blank(b.label) && blank(b.description)),
 				descriptionHtml: formatPlaybookText(backgroundWordsInPlace(b.description, ownMove)),
 				trackBoxes: boxes(b.track?.max),
 				movesText: L.nameList(b.moves), moveChoiceText: L.nameList(b.moveChoice),
@@ -420,19 +488,19 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			// The playbook's own Level Up: one advance per line, and what each was read as doing.
 			advancementText: L.lineList(pb.advancement?.options ?? []),
 			advancementRead: (pb.advancement?.options ?? []).map(label => ({ label, does: _advanceDoes(advanceFrom(label)) })),
-			possessions: pb.possessions.options.map((o, i) => ({
-				index: i, ...o,
-				editing: ed(`pos:${i}`) || (blank(o.label) && blank(o.description)),
+			possessions: pb.possessions.options.map(o => ({
+				...o, ref: cardRef(o),
+				editing: ed(`pos:${cardRef(o)}`) || (blank(o.label) && blank(o.description)),
 				descriptionHtml: formatPlaybookText(o.description),
 			})),
 			choicesText: L.choiceLines(pb.moveChoices),
 			groupsText: L.groupLines(pb.moveGroups),
 
-			moves: this._bundle.moves.map((m, i) => ({
-				index: i,
+			moves: this._bundle.moves.map(m => ({
 				...m,
+				ref: cardRef(m),
 				// Its text boxes while open (its pencil pressed, or a new one with no name yet), else as printed.
-				open: this._openMoves.has(i) || blank(m.name),
+				open: this._openMoves.has(cardRef(m)) || blank(m.name),
 				descriptionHtml: formatPlaybookText(m.description),
 				trackBoxes: boxes(m.resource?.max),
 				summaryTags: [m.insert ? `in ${insertByKey.get(m.insert)?.name || "an insert"}` : "", m.starting ? (m.insert ? "always held" : "starting") : "", m.level > 1 ? `level ${m.level}+` : "", m.repeatMax > 1 ? `up to ${m.repeatMax} times` : "", m.rollType ? `roll +${m.rollType.toUpperCase()}` : "", m.resource ? `${m.resource.title || "track"} ×${m.resource.max}` : ""].filter(Boolean).join(" · "),
@@ -458,18 +526,18 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			startingCount: this._bundle.moves.filter(m => m.starting && !m.insert).length,
 			insertMoveCount: this._bundle.moves.filter(m => m.insert).length,
 
-			inserts: inserts.map((ins, i) => {
+			inserts: inserts.map(ins => {
 				const opener = this._bundle.moves.find(m => m.name && m.name === ins.unlockedBy);
 				const flags = [];
 				if (opener?.insert) flags.push(`"${ins.unlockedBy}" is one of this insert's own moves, so no character could ever open it. Pick one of the playbook's moves.`);
 				else if (ins.unlockedBy && !opener) flags.push(`No move here is called "${ins.unlockedBy}", so no character will see this insert until one is.`);
 				if (!ins.lists.length) flags.push("It has no lists yet.");
 				return {
-					index: i, key: ins.key, name: ins.name, description: ins.description,
-					editing: ed(`ins:${i}`) || blank(ins.name),
+					ref: cardRef(ins), key: ins.key, name: ins.name, description: ins.description,
+					editing: ed(`ins:${cardRef(ins)}`) || blank(ins.name),
 					descriptionHtml: formatPlaybookText(ins.description),
 					openedBy: ins.unlockedBy || "",
-					formEnabled: !!ins.form?.enabled, formOn: ins.form?.on ?? "Transform", formOff: ins.form?.off ?? "Revert",
+					formEnabled: !!ins.form?.enabled, formOn: ins.form?.on ?? INSERT_FORM_DEFAULTS.on, formOff: ins.form?.off ?? INSERT_FORM_DEFAULTS.off,
 					flags,
 					openerOptions: [
 						{ value: "", label: "No move: every character has it", selected: !ins.unlockedBy },
@@ -477,8 +545,8 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 						...(ins.unlockedBy && !ownMoveNames.includes(ins.unlockedBy) ? [{ value: ins.unlockedBy, label: `${ins.unlockedBy} (no such move)`, selected: true }] : []),
 						...ownMoveNames.map(n => ({ value: n, label: n, selected: n === ins.unlockedBy })),
 					],
-					lists: ins.lists.map((l, j) => ({
-						insertIndex: i, index: j, key: l.key, title: l.title, prompt: l.prompt,
+					lists: ins.lists.map(l => ({
+						insertRef: cardRef(ins), ref: cardRef(l), key: l.key, title: l.title, prompt: l.prompt,
 						isMoves: l.kind === "moves",
 						kindOptions: [
 							{ value: "pick", label: "Options to tick", selected: l.kind !== "moves" },
@@ -497,11 +565,11 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			}),
 
 			lore: pb.lore.map((s, i, all) => ({
-				index: i, title: s.title, description: s.description,
+				ref: cardRef(s), title: s.title, description: s.description,
 				// A section with no options is a heading over every question after it, up to the next
 				// heading (onboarding's _nearestFoldedHeaderIndex): the Builder frames them together.
 				...loreGroupShape(all, i),
-				editing: ed(`lore:${i}`) || (blank(s.title) && blank(s.description) && !s.options.length),
+				editing: ed(`lore:${cardRef(s)}`) || (blank(s.title) && blank(s.description) && !s.options.length),
 				descriptionHtml: formatPlaybookInline(s.description),
 				optionsRead: s.options.map(o => ({ html: formatPlaybookInline(o.description), writeIn: !!o.freeText, boxes: boxes(Math.max(1, o.max || 1)) })),
 				optionsText: L.loreOptionLines(s.options),
@@ -571,8 +639,6 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 	activateListeners(html) {
 		super.activateListeners(html);
 		this._drawShown();
-		// The form now on screen is the bundle as getData read it.
-		this._formRev = this._drawingRev;
 		const root = html[0];
 		root.querySelectorAll(".stonetop-pb-builder-tab").forEach(btn =>
 			btn.addEventListener("click", () => this._selectTab(root, btn.dataset.tab)));
@@ -600,8 +666,7 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 			el.click();
 		}));
 		// Typing never re-renders, so it saves the window for a reload itself (`restoreView`).
-		root.addEventListener("input", () => persistOpenWindowsSoon());
-		root.addEventListener("change", () => persistOpenWindowsSoon());
+		persistOnTyping(root);
 		// Read a PDF or playbook file: one picker for both, the file says which.
 		root.querySelector(".stonetop-pb-builder-pdf-file")?.addEventListener("change", ev => this._readPicked(ev.currentTarget));
 		// Add from my library shows only when the library holds a playbook this world doesn't. Asked once
@@ -655,42 +720,40 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 	// ---- Form -> bundle -------------------------------------------------------------------
 
 	/**
-	 * Read every field back into the bundle. Does nothing before the first render, nor while a
-	 * redraw is owed (_formIsCurrent): the fields name bundle paths by index, so a form drawn from
-	 * the bundle before a save re-sorted its moves (or an import replaced it) would write each move's
-	 * words onto another move.
+	 * Read every field back into the bundle. Does nothing before the first render, nor for a form drawn
+	 * from a playbook since replaced (an import, a save's re-read; `data-bundle`): its fields are another
+	 * playbook's. A field names its card by ref (cardRef), so one whose card has gone writes nothing.
 	 */
 	_readForm() {
 		const root = this.element?.[0];
-		if (!root || !this._formIsCurrent) return;
-		for (const el of root.querySelectorAll("[data-field]")) {
+		const form = root?.querySelector?.("[data-bundle]");
+		if (!form || form.dataset.bundle !== cardRef(this._bundle)) return;
+		const write = (path, value) => {
+			const at = resolveRefPath(this._bundle, path);
+			if (at) L.setBundlePath(this._bundle, at, value);
+		};
+		for (const el of form.querySelectorAll("[data-field]")) {
 			let value;
-			if (el.type === "checkbox") value = el.checked;
+			if (el.dataset.parse) {
+				const parse = FIELD_PARSERS[el.dataset.parse];
+				if (!parse) continue;
+				value = parse(el.value);
+			} else if (el.type === "checkbox") value = el.checked;
 			else if (el.dataset.kind === "int") value = Math.trunc(Number(el.value) || 0);
 			else value = el.value;
-			L.setBundlePath(this._bundle, el.dataset.field, value);
+			write(el.dataset.field, value);
 		}
-		for (const el of root.querySelectorAll("[data-list]")) {
-			L.setBundlePath(this._bundle, el.dataset.list, L.parseNameList(el.value));
-		}
-		for (const el of root.querySelectorAll("[data-lines]")) {
-			const parse = LINE_PARSERS[el.dataset.parse];
-			if (parse) L.setBundlePath(this._bundle, el.dataset.lines, parse(el.value));
-		}
+		const moveOf = ref => this._bundle.moves[indexOfRef(this._bundle.moves, ref)];
 		// Which insert (and moves list) a move is part of.
-		for (const el of root.querySelectorAll("[data-insert-ref]")) {
-			const move = this._bundle.moves[Number(el.dataset.insertRef)];
+		for (const el of form.querySelectorAll("[data-insert-ref]")) {
+			const move = moveOf(el.dataset.insertRef);
 			if (move) Object.assign(move, readPartOf(el.value));
 		}
-		for (const el of root.querySelectorAll("[data-bonus]")) {
-			L.setBundlePath(this._bundle, el.dataset.bonus, L.parseBonusPicks(el.value));
-		}
 		// A move's resource track: a max of 0 is no track at all.
-		for (const el of root.querySelectorAll("[data-resource]")) {
-			const i = Number(el.dataset.resource);
-			const max = Math.trunc(Number(el.querySelector("[name=resourceMax]")?.value) || 0);
-			const move = this._bundle.moves[i];
+		for (const el of form.querySelectorAll("[data-resource]")) {
+			const move = moveOf(el.dataset.resource);
 			if (!move) continue;
+			const max = Math.trunc(Number(el.querySelector("[name=resourceMax]")?.value) || 0);
 			move.resource = max > 0 ? {
 				max: Math.min(max, 20),
 				title: el.querySelector("[name=resourceTitle]")?.value?.trim() ?? "",
@@ -706,70 +769,61 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 		}
 	}
 
-	/** A card gone from a list ("bg", 2): it closes, and the open ones after it keep their place. */
-	_dropPart(kind, index) {
-		this._editing = new Set([...this._editing].flatMap(key => {
-			const [k, n] = key.split(":");
-			if (k !== kind) return [key];
-			const at = Number(n);
-			return at === index ? [] : [`${k}:${at > index ? at - 1 : at}`];
-		}));
-	}
-
 	async _onAction(ev, action, data) {
 		ev.preventDefault();
 		this._readForm();
 		const pb = this._bundle.playbook;
-		const i = Number(data.index);
+		// The card pressed on, by its ref; and a card dropped from a list closes with it.
+		const ref = data.ref;
+		const drop = (list, kind) => {
+			const at = indexOfRef(list, ref);
+			if (at < 0) return null;
+			this._editing.delete(`${kind}:${ref}`);
+			return list.splice(at, 1)[0];
+		};
+		const insert = pb.inserts?.[indexOfRef(pb.inserts, data.insert ?? ref)];
 		switch (action) {
 			// A pencil, and its check: a page's or a card's text boxes, or back to how the PDF prints it.
 			case "edit-part": if (data.part) this._editing.add(data.part); break;
 			case "done-part": this._editing.delete(data.part); break;
-			case "edit-move": this._openMoves.add(i); break;
-			case "done-move": this._openMoves.delete(i); break;
-			case "add-background": pb.backgrounds.push(blankBackground()); this._editing.add(`bg:${pb.backgrounds.length - 1}`); break;
-			case "remove-background": pb.backgrounds.splice(i, 1); this._dropPart("bg", i); break;
-			case "add-possession": pb.possessions.options.push(blankPossession()); this._editing.add(`pos:${pb.possessions.options.length - 1}`); break;
-			case "remove-possession": pb.possessions.options.splice(i, 1); this._dropPart("pos", i); break;
-			case "add-lore": pb.lore.push(blankLore()); this._editing.add(`lore:${pb.lore.length - 1}`); break;
+			case "edit-move": if (ref) this._openMoves.add(ref); break;
+			case "done-move": this._openMoves.delete(ref); break;
+			case "add-background": { const bg = blankBackground(); pb.backgrounds.push(bg); this._editing.add(`bg:${cardRef(bg)}`); break; }
+			case "remove-background": drop(pb.backgrounds, "bg"); break;
+			case "add-possession": { const pos = blankPossession(); pb.possessions.options.push(pos); this._editing.add(`pos:${cardRef(pos)}`); break; }
+			case "remove-possession": drop(pb.possessions.options, "pos"); break;
+			case "add-lore": { const lore = blankLore(); pb.lore.push(lore); this._editing.add(`lore:${cardRef(lore)}`); break; }
+			case "remove-lore": drop(pb.lore, "lore"); break;
 			case "add-insert": {
 				pb.inserts ??= [];
-				pb.inserts.push(blankInsert(freshKey("insert", pb.inserts.map(x => x.key))));
-				this._editing.add(`ins:${pb.inserts.length - 1}`);
+				const ins = blankInsert(freshKey("insert", pb.inserts.map(x => x.key)));
+				pb.inserts.push(ins);
+				this._editing.add(`ins:${cardRef(ins)}`);
 				break;
 			}
 			case "remove-insert": {
-				const gone = pb.inserts?.[i];
-				if (!gone) break;
+				const gone = drop(pb.inserts, "ins");
 				// Its moves stay, as the playbook's own: removing the insert never loses a move.
-				for (const m of this._bundle.moves) if (m.insert === gone.key) { m.insert = ""; m.insertList = ""; }
-				pb.inserts.splice(i, 1);
-				this._dropPart("ins", i);
+				if (gone) for (const m of this._bundle.moves) if (m.insert === gone.key) { m.insert = ""; m.insertList = ""; }
 				break;
 			}
 			case "add-insert-list": {
-				const ins = pb.inserts?.[i];
-				if (ins) ins.lists.push(blankInsertList(freshKey("list", ins.lists.map(x => x.key))));
+				if (insert) insert.lists.push(blankInsertList(freshKey("list", insert.lists.map(x => x.key))));
 				break;
 			}
 			case "remove-insert-list": {
-				const ins = pb.inserts?.[i];
-				const j = Number(data.listIndex);
-				const gone = ins?.lists?.[j];
-				if (!gone) break;
-				for (const m of this._bundle.moves) if (m.insert === ins.key && m.insertList === gone.key) m.insertList = "";
-				ins.lists.splice(j, 1);
+				const gone = insert ? drop(insert.lists, "list") : null;
+				if (gone) for (const m of this._bundle.moves) if (m.insert === insert.key && m.insertList === gone.key) m.insertList = "";
 				break;
 			}
-			case "remove-lore": pb.lore.splice(i, 1); this._dropPart("lore", i); break;
 			case "add-move": {
-				this._bundle.moves.push(normalizeMove({ name: "" }));
-				this._openMoves.add(this._bundle.moves.length - 1);
+				const move = normalizeMove({ name: "" });
+				this._bundle.moves.push(move);
+				this._openMoves.add(cardRef(move));
 				break;
 			}
 			case "remove-move": {
-				this._bundle.moves.splice(i, 1);
-				this._openMoves = new Set([...this._openMoves].filter(n => n !== i).map(n => (n > i ? n - 1 : n)));
+				if (drop(this._bundle.moves, "move")) this._openMoves.delete(ref);
 				break;
 			}
 			case "pick-image": return this._pickImage();
@@ -825,7 +879,10 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 				this._librarySlug = null;
 				this._importBase = null;
 			this._item = item;
+			const was = this._bundle;
 			this._bundle = readHomebrewBundle(item);
+			// The cards open for editing stay open (the form drawn before the save is not read again).
+			carryRefs(was, this._bundle);
 			this._issues = [];
 			this._readReport = null;
 			// What is saved is the new untouched state, taken as the window first opened with it: after
@@ -1298,8 +1355,8 @@ export class PlaybookBuilderDialog extends StonetopDialog {
 		const counted = `${parts.slice(0, -1).join(", ")}${parts.length > 1 ? " and " : ""}${parts.at(-1)}`;
 		// Asked before the draw below: while a window redraws it doesn't count as rendered.
 		const wasOpen = this.rendered;
-		// Drawn first: until then an open window's form is the one before the import, and a save reads
-		// the form back over the bundle unless a redraw is owed (_formIsCurrent).
+		// Drawn first: until then an open window's form is the one before the import, which a save
+		// mustn't read back over it (nor does it: _readForm reads only a form drawn from this playbook).
 		this.render(false);
 		// A playbook the system knows (known/known-playbooks.js), read whole with nothing to check: no
 		// builder to look over, it's saved and the GM told so.

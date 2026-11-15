@@ -5,6 +5,7 @@ import {
 	insertTabKey, insertListSlug, insertOpening, listAllowance, listRequirement, optionCount, picksMade, pickedLabels,
 	insertFormGear, flagOverPicks,
 } from "./homebrew-inserts.js";
+import { INSERT_FORM_DEFAULTS } from "../../playbooks/homebrew-bundle.js";
 
 /**
  * A character's side of a homebrew playbook's INSERTS (homebrew-inserts.js has the rules): the
@@ -64,15 +65,12 @@ export class CharacterHomebrewInserts {
 	 * header's glyph for it (homebrew-inserts.js#insertFormGlyph).
 	 */
 	formStates(playbookData, items) {
-		return CharacterHomebrewInserts.insertsOf(playbookData)
-			.filter(ins => ins.form?.enabled)
-			.map(ins => ({
-				key: ins.key, name: String(ins.name ?? ""),
-				on: ins.form.on || "Transform", off: ins.form.off || "Revert",
-				wearing: this.wearing(ins.key), open: insertOpening(ins, items).open,
-			}))
-			.filter(s => s.open || s.wearing)
-			.map(({ open: _open, ...s }) => s);
+		return CharacterHomebrewInserts.insertsOf(playbookData).flatMap(ins => {
+			if (!ins.form?.enabled) return [];
+			const wearing = this.wearing(ins.key);
+			if (!wearing && !insertOpening(ins, items).open) return [];
+			return [{ key: ins.key, name: String(ins.name ?? ""), on: ins.form.on || INSERT_FORM_DEFAULTS.on, off: ins.form.off || INSERT_FORM_DEFAULTS.off, wearing }];
+		});
 	}
 
 	/**
@@ -145,7 +143,7 @@ export class CharacterHomebrewInserts {
 				tabKey: insertTabKey(ins.key),
 				name: ins.name,
 				description: ins.description ?? "",
-				form: ins.form?.enabled ? { wearing, on: ins.form.on || "Transform", off: ins.form.off || "Revert" } : null,
+				form: ins.form?.enabled ? { wearing, on: ins.form.on || INSERT_FORM_DEFAULTS.on, off: ins.form.off || INSERT_FORM_DEFAULTS.off } : null,
 				banner,
 				lore,
 				// A list with picks still to make is shown to tick, edit mode or not: a character who has just

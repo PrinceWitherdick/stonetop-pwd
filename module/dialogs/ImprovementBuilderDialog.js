@@ -21,8 +21,8 @@ import {
 import { improvementPreviewHtml, improvementPreviewNotes } from "../utils/improvement-preview.js";
 import { confirmOutcome } from "../utils/ask-with-buttons.js";
 import { hasUnsavedWork, notePristineWork } from "../utils/close-guard.js";
-import { escHtml } from "../utils/strings.js";
-import { persistOpenWindowsSoon } from "../utils/window-restore.js";
+import { escHtml, isPlainObject } from "../utils/strings.js";
+import { persistOnTyping, persistOpenWindowsSoon } from "../utils/window-restore.js";
 import { IMPROVEMENT_BUILDER_RESTORE_KIND, authoringRestoreKey } from "./authoring-restore.js";
 
 /**
@@ -587,17 +587,11 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 		return { tab: this._activeTab, def: this._liveDef };
 	}
 
-	async _render(force, options = {}) {
-		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
-		return super._render(force, options);
-	}
-
 	_takeRestoredView(view) {
 		if (this._restoredDef) return;
 		const def = view?.def;
-		const isMap = (v) => !!v && typeof v === "object" && !Array.isArray(v);
-		if (isMap(def) && (def.sections === undefined || Array.isArray(def.sections))
-			&& (def.grants === undefined || def.grants === null || isMap(def.grants))) this._restoredDef = def;
+		if (isPlainObject(def) && (def.sections === undefined || Array.isArray(def.sections))
+			&& (def.grants === undefined || def.grants === null || isPlainObject(def.grants))) this._restoredDef = def;
 		if (SECTIONS.some(sec => sec.key === view?.tab)) this._activeTab = view.tab;
 	}
 
@@ -605,7 +599,6 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 	_noteWork(root) {
 		try { this._liveDef = this._readDef(root); }
 		catch (_err) { /* keeps what it last had */ }
-		persistOpenWindowsSoon();
 	}
 
 	getData() {
@@ -669,7 +662,7 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 			catch (err) { console.warn("Stonetop | couldn't put a reloaded improvement back in the form", err); }
 		}
 		// Typing, ticking, adding and moving rows: kept as they happen. Clicks are how rows come and go.
-		for (const type of ["input", "change", "click"]) root.addEventListener(type, () => this._noteWork(root));
+		persistOnTyping(root, { clicks: true, onEach: () => this._noteWork(root) });
 		this._noteWork(root);
 
 		root.querySelector(".stonetop-improvement-builder-source")
@@ -1126,6 +1119,7 @@ export class ImprovementBuilderDialog extends StonetopDialog {
 		if (this._activeTab === "preview") this._renderPreview(root);
 		// "Start from" fills the form after a question, with no event of its own to note it by.
 		this._noteWork(root);
+		persistOpenWindowsSoon();
 	}
 
 	// ── Preview ─────────────────────────────────────────────────

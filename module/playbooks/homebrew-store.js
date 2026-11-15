@@ -19,6 +19,7 @@ import { carriedCopyOf } from "./homebrew-missing.js";
 import { ownershipLevels, deletionEntry } from "../utils/foundry-compat.js";
 import { escHtml, looseName, slugify } from "../utils/strings.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
+import { findOrCreateFolder, folderIdOf } from "../utils/create-once.js";
 
 /**
  * The playbook library (playbook-library.js) hooks in here rather than being imported, so this file
@@ -33,11 +34,6 @@ export const HOMEBREW_ROOT_FOLDER = "Homebrew Playbooks";
 
 const OBSERVER = () => ownershipLevels().OBSERVER;
 
-/** Every world move Item belonging to the homebrew playbook `slug`, whatever its name says. */
-export function movesOfHomebrew(slug, items) {
-	return homebrewMovesOfSlug(slug, items);
-}
-
 /**
  * The characters holding the homebrew playbook `slug`: committed (system.playbook.slug), or still
  * choosing it (onboardingProgress names it). A rename or a delete has to think about them.
@@ -51,13 +47,9 @@ export function holdersOfHomebrew(slug, name, actors = game.actors) {
 	});
 }
 
-/** The id of the folder a document sits in: Foundry hands the Folder itself, a plain record its id. */
-const _folderIdOf = doc => doc?.folder?.id ?? doc?.folder ?? null;
-
-async function _folder(name, parent = null) {
-	const existing = game.folders?.find(f => f.type === "Item" && f.name === name && _folderIdOf(f) === (parent?.id ?? null));
-	if (existing) return existing;
-	return Folder.create({ name, type: "Item", folder: parent?.id ?? null, sorting: "a" });
+/** The Item folder `name` inside `parent`, made if missing; two saves at once make one (utils/create-once.js). */
+function _folder(name, parent = null) {
+	return findOrCreateFolder("Item", name, parent?.id ?? null, { sorting: "a" });
 }
 
 /** The playbook's own folder ("Homebrew Playbooks/<Name>"), made if missing. */
@@ -75,9 +67,9 @@ async function _dropEmptyFolder(homeId) {
 	const tree = new Set([homeId]);
 	for (let grew = true; grew;) {
 		grew = false;
-		for (const f of folders) if (!tree.has(f.id) && tree.has(_folderIdOf(f))) { tree.add(f.id); grew = true; }
+		for (const f of folders) if (!tree.has(f.id) && tree.has(folderIdOf(f))) { tree.add(f.id); grew = true; }
 	}
-	if ([...(game.items ?? [])].some(i => tree.has(_folderIdOf(i)))) return;
+	if ([...(game.items ?? [])].some(i => tree.has(folderIdOf(i)))) return;
 	try { await Folder.deleteDocuments([...tree]); }
 	catch (err) { console.warn("Stonetop | couldn't take away an emptied playbook folder", err); }
 }
@@ -113,9 +105,9 @@ export async function tidyHomebrewFolders() {
 	if (!game.user?.isGM || !isPrimaryGM()) return 0;
 	const updates = [];
 	for (const pb of (game.items ?? []).filter(isHomebrewPlaybookItem)) {
-		const home = _folderIdOf(pb);
+		const home = folderIdOf(pb);
 		if (!home) continue;
-		const loose = movesOfHomebrew(pb.system.slug).filter(m => _folderIdOf(m) === home);
+		const loose = homebrewMovesOfSlug(pb.system.slug).filter(m => folderIdOf(m) === home);
 		if (!loose.length) continue;
 		const folderFor = _moveFolderPicker({ id: home }, pb.flags?.[ITEM_FLAG_SCOPE]?.inserts ?? []);
 		for (const m of loose) updates.push({ _id: m.id, folder: (await folderFor(m)).id });
@@ -193,7 +185,7 @@ function _syncInsertFlag(update, item, want) {
  * @returns {Array<{actor: Actor, item: Item, update: object}>}
  */
 export function staleHeldCopies(slug, { actors = game.actors, items = game.items } = {}) {
-	const source = new Map(movesOfHomebrew(slug, items).map(m => [looseName(m.name), m]));
+	const source = new Map(homebrewMovesOfSlug(slug, items).map(m => [looseName(m.name), m]));
 	const out = [];
 	for (const actor of actors ?? []) {
 		if (actor?.type !== "character") continue;
@@ -222,7 +214,7 @@ export async function refreshHeldCopies(slug, opts = {}) {
 		list.push({ _id: s.item.id, ...s.update });
 		byActor.set(s.actor, list);
 	}
-	for (const [actor, updates] of byActor) await actor.updateEmbeddedDocuments("Item", updates, LEDGER_QUIET);
+	await Promise.all([...byActor].map(([actor, updates]) => actor.updateEmbeddedDocuments("Item", updates, LEDGER_QUIET)));
 	return stale.length;
 }
 
@@ -309,7 +301,7 @@ export async function saveHomebrewPlaybook(bundle, { existing = null, source = "
 	if (base) playbook.flags[ITEM_FLAG_SCOPE].homebrew.importBase = JSON.stringify({ playbook: base.playbook, moves: base.moves });
 	const folder = await _playbookFolder(name);
 	// Where it was: a rename moves it to a folder of the new name, and the old one goes once it's empty.
-	const oldHome = existing ? _folderIdOf(existing) : null;
+	const oldHome = existing ? folderIdOf(existing) : null;
 	// Read before the update replaces them: the write-ins this save makes ticks of.
 	const turned = existing ? writeInsTurnedToTicks(existing.flags?.[ITEM_FLAG_SCOPE], playbook.flags[ITEM_FLAG_SCOPE]) : null;
 
@@ -327,7 +319,7 @@ export async function saveHomebrewPlaybook(bundle, { existing = null, source = "
 		item = await Item.create({ ...playbook, folder: folder.id, ownership: { default: OBSERVER() } });
 	}
 
-	const held = movesOfHomebrew(slug);
+	const held = homebrewMovesOfSlug(slug);
 	const byName = new Map(held.map(m => [m.name.toLowerCase(), m]));
 	const keep = new Set();
 	const toCreate = [];
@@ -437,7 +429,7 @@ export function writeInsChangedOnSave(item) {
 /** A homebrew playbook Item and its moves, as a bundle (for the builder, or an export). */
 export function readHomebrewBundle(item) {
 	if (!isHomebrewPlaybookItem(item)) return null;
-	return itemsToBundle(item, movesOfHomebrew(item.system.slug));
+	return itemsToBundle(item, homebrewMovesOfSlug(item.system.slug));
 }
 
 /**
@@ -454,8 +446,8 @@ export function readImportBase(item) {
 /** Delete a homebrew playbook and every move Item that belongs to it (characters' copies stay). */
 export async function deleteHomebrewPlaybook(item) {
 	if (!isHomebrewPlaybookItem(item)) return;
-	const moveIds = movesOfHomebrew(item.system.slug).map(m => m.id);
-	const home = _folderIdOf(item);
+	const moveIds = homebrewMovesOfSlug(item.system.slug).map(m => m.id);
+	const home = folderIdOf(item);
 	if (moveIds.length) await Item.deleteDocuments(moveIds);
 	await item.delete();
 	if (home) await _dropEmptyFolder(home);

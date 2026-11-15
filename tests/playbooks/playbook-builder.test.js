@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Window } from "happy-dom";
-import { PlaybookBuilderDialog, loreGroupShape } from "../../module/playbooks/PlaybookBuilderDialog.js";
+import { PlaybookBuilderDialog, loreGroupShape, cardRef, carryRefs } from "../../module/playbooks/PlaybookBuilderDialog.js";
 import { normalizeBundle, normalizeMove, emptyBundle } from "../../module/playbooks/homebrew-bundle.js";
 import { invalidatePlaybookCatalog } from "../../module/playbooks/playbook-catalog.js";
 import { rosterHandlebars } from "../fakes/hbs.js";
@@ -45,25 +45,29 @@ function everythingOpen(bundle) {
 	const pb = bundle.playbook ?? {};
 	return new Set([
 		...["playbook", "stats", "instincts", "looks", "possessions", "moves", "advancement", "intro", "notes"].map(k => `page:${k}`),
-		...(pb.backgrounds ?? []).map((_, i) => `bg:${i}`),
-		...(pb.possessions?.options ?? []).map((_, i) => `pos:${i}`),
-		...(pb.lore ?? []).map((_, i) => `lore:${i}`),
-		...(pb.inserts ?? []).map((_, i) => `ins:${i}`),
+		...(pb.backgrounds ?? []).map(b => `bg:${cardRef(b)}`),
+		...(pb.possessions?.options ?? []).map(o => `pos:${cardRef(o)}`),
+		...(pb.lore ?? []).map(s => `lore:${cardRef(s)}`),
+		...(pb.inserts ?? []).map(i => `ins:${cardRef(i)}`),
 	]);
 }
 
+/** A card's field, named by the card's ref: `fieldOf(root, "moves", move, "name")`. */
+const fieldOf = (root, path, card, rest) => root.querySelector(`[data-field='${path}.${cardRef(card)}.${rest}']`);
+
+/**
+ * The builder's form for `bundle` (a copy), drawn into a page. Every page, card and move is open for
+ * editing, so their text boxes are drawn to read back, unless `extra` says otherwise: its `_editing`
+ * and `_openMoves` may be functions of the copy drawn, as they name cards by ref.
+ */
 function renderInto(bundle, extra = {}) {
-	const fake = {
-		_bundle: structuredClone(bundle), _item: null, _issues: [], _activeTab: "playbook",
-		_openMoves: new Set([0, 1]), appId: 7, _bundleRev: 0,
-		// Every page and card open for editing, so their text boxes are drawn to read back.
-		_editing: everythingOpen(bundle), ...extra,
-	};
-	// Whether the form on screen shows the bundle as it is: the builder's own getter (_readForm reads it).
-	Object.defineProperty(fake, "_formIsCurrent", Object.getOwnPropertyDescriptor(PlaybookBuilderDialog.prototype, "_formIsCurrent"));
+	const fake = { _bundle: structuredClone(bundle), _item: null, _issues: [], _activeTab: "playbook", appId: 7 };
+	const own = (value, fallback) => (typeof value === "function" ? value(fake._bundle) : value ?? fallback);
+	Object.assign(fake, extra, {
+		_editing: own(extra._editing, everythingOpen(fake._bundle)),
+		_openMoves: own(extra._openMoves, new Set(fake._bundle.moves.map(cardRef))),
+	});
 	const html = rosterHandlebars().compile(SOURCE)(PlaybookBuilderDialog.prototype.getData.call(fake));
-	// Drawn, as activateListeners marks it.
-	fake._formRev = fake._drawingRev;
 	const window = new Window();
 	window.document.body.innerHTML = html;
 	// happy-dom quirk: options written back to back with `selected` on the third report the
@@ -84,23 +88,45 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); invalidatePlaybookCatalog(); });
 
 describe("the Playbook Builder's form", () => {
-	it("isn't read back while a redraw is owed, so a re-sorted or replaced playbook keeps its own words", () => {
+	it("isn't read back over a playbook that replaced the one it was drawn from", () => {
 		const { fake, root } = renderInto(TESTER);
 		const first = fake._bundle.moves[0].name;
-		root.querySelector("[data-field='moves.0.name']").value = "Typed Over";
+		fieldOf(root, "moves", fake._bundle.moves[0], "name").value = "Typed Over";
+		root.querySelector("[data-field='playbook.name']").value = "Typed Name";
 		// A save re-reads the playbook (its moves re-sorted) and asks for a redraw; until it draws, the
-		// old form's "moves.0.*" belong to another move.
+		// old form is another playbook's.
 		fake._bundle = structuredClone(TESTER);
 		fake._bundle.moves.reverse();
-		fake._bundleRev++;
 		PlaybookBuilderDialog.prototype._readForm.call(fake);
 		expect(fake._bundle.moves.at(-1).name).toBe(first);
 		expect(fake._bundle.moves.map(m => m.name)).not.toContain("Typed Over");
-		// Drawn again, the form reads back as usual.
-		PlaybookBuilderDialog.prototype.getData.call(fake);
-		fake._formRev = fake._drawingRev;
+		expect(fake._bundle.playbook.name).toBe(TESTER.playbook.name);
+	});
+
+	it("writes each card's words onto its own card when one was removed before the redraw", () => {
+		const { fake, root } = renderInto(TESTER);
+		const [gone, kept] = fake._bundle.moves;
+		fieldOf(root, "moves", gone, "name").value = "Typed Over";
+		fieldOf(root, "moves", kept, "name").value = "Prod Harder";
+		// Removed, and not drawn again yet: its fields are still on screen.
+		fake._bundle.moves.splice(0, 1);
 		PlaybookBuilderDialog.prototype._readForm.call(fake);
-		expect(fake._bundle.moves[0].name).toBe("Typed Over");
+		expect(fake._bundle.moves).toEqual([kept]);
+		expect(kept.name).toBe("Prod Harder");
+		expect(gone.name).toBe(TESTER.moves[0].name);
+	});
+
+	it("keeps the cards open across a save's re-read: moves by name, the rest by place", () => {
+		const from = structuredClone(TESTER);
+		const to = structuredClone(TESTER);
+		to.moves.reverse();
+		// Drawn, so its cards have refs.
+		const [move, bg] = [from.moves[0], from.playbook.backgrounds[0]].map(cardRef);
+		carryRefs(from, to);
+		expect(cardRef(to.moves[1])).toBe(move);
+		expect(cardRef(to.playbook.backgrounds[0])).toBe(bg);
+		// The playbook itself is another: a form drawn before the save isn't read over the re-read.
+		expect(cardRef(to)).not.toBe(cardRef(from));
 	});
 
 	it("keeps only this reading for a later import to merge over: a library pick after a PDF keeps none", async () => {
@@ -117,22 +143,30 @@ describe("the Playbook Builder's form", () => {
 		const renders = [];
 		app.render = function (force) { renders.push(force); };
 		Object.defineProperty(app, "rendered", { get: () => true });
-		// Core's _render, standing in: the bundle changes after this draw's getData read it.
+		// Core's _render, standing in: getData reads the bundle, then a render is asked for (and dropped).
 		const proto = Object.getPrototypeOf(PlaybookBuilderDialog.prototype);
 		const real = proto._render;
-		proto._render = async function () { this._drawingRev = this._bundleRev; this._bundleRev++; this._formRev = this._drawingRev; };
-		try { await PlaybookBuilderDialog.prototype._render.call(app, false, {}); }
-		finally { proto._render = real; }
-		expect(renders).toEqual([false]);
+		let askedMidDraw = true;
+		proto._render = async function () { this._redrawOwed = false; if (askedMidDraw) this._redrawOwed = true; };
+		try {
+			await PlaybookBuilderDialog.prototype._render.call(app, false, {});
+			expect(renders).toEqual([false]);
+			// Nothing asked for mid-draw: drawn once.
+			askedMidDraw = false;
+			await PlaybookBuilderDialog.prototype._render.call(app, false, {});
+			expect(renders).toEqual([false]);
+		} finally { proto._render = real; }
 	});
 
 	it("reads back exactly the playbook it was drawn from", () => {
 		const { fake } = renderInto(TESTER);
-		fake._bundle = emptyBundle();
-		fake._bundle.moves = TESTER.moves.map(() => ({}));
-		fake._bundle.playbook.backgrounds = TESTER.playbook.backgrounds.map(() => ({}));
-		fake._bundle.playbook.possessions.options = TESTER.playbook.possessions.options.map(() => ({}));
-		fake._bundle.playbook.lore = TESTER.playbook.lore.map(() => ({}));
+		// Emptied where it stands (the form names the playbook and the cards it was drawn from): a blank
+		// playbook holding the same cards, each card emptied.
+		const b = fake._bundle;
+		const blank = emptyBundle();
+		const cards = { backgrounds: b.playbook.backgrounds, options: b.playbook.possessions.options, lore: b.playbook.lore };
+		for (const card of [...b.moves, ...Object.values(cards).flat()]) for (const k of Object.keys(card)) delete card[k];
+		b.playbook = { ...blank.playbook, backgrounds: cards.backgrounds, possessions: { ...blank.playbook.possessions, options: cards.options }, lore: cards.lore };
 		PlaybookBuilderDialog.prototype._readForm.call(fake);
 		// Shown to players is the header's eye now, not a field: it isn't in the form to read back.
 		fake._bundle.playbook.published = TESTER.playbook.published;
@@ -141,9 +175,10 @@ describe("the Playbook Builder's form", () => {
 
 	it("an edit in a field lands at its path, and a track with no boxes is no track", () => {
 		const { fake, root } = renderInto(TESTER);
-		root.querySelector("[data-field='moves.1.name']").value = "Prod Harder";
-		root.querySelector("[data-resource='1'] [name=resourceMax]").value = "0";
-		root.querySelector("[data-lines='playbook.instincts']").value = "Boldness: To leap.";
+		const prod = fake._bundle.moves[1];
+		fieldOf(root, "moves", prod, "name").value = "Prod Harder";
+		root.querySelector(`[data-resource='${cardRef(prod)}'] [name=resourceMax]`).value = "0";
+		root.querySelector("[data-field='playbook.instincts']").value = "Boldness: To leap.";
 		PlaybookBuilderDialog.prototype._readForm.call(fake);
 		expect(fake._bundle.moves[1].name).toBe("Prod Harder");
 		expect(fake._bundle.moves[1].resource).toBeNull();
@@ -158,7 +193,7 @@ describe("the Playbook Builder's form", () => {
 		});
 		expect(fear.moves[1].resource.holdOnRoll).toEqual({ success: 3, failure: 1 });
 		const { fake, root } = renderInto(fear);
-		expect(root.querySelector("[data-resource='1'] [name=holdFailure]").value).toBe("1");
+		expect(root.querySelector(`[data-resource='${cardRef(fake._bundle.moves[1])}'] [name=holdFailure]`).value).toBe("1");
 		PlaybookBuilderDialog.prototype._readForm.call(fake);
 		expect(normalizeBundle(fake._bundle).bundle.moves[1].resource.holdOnRoll).toEqual({ success: 3, failure: 1 });
 	});
@@ -202,20 +237,23 @@ describe("the builder across a reload", () => {
 	});
 
 	it("comes back with the playbook as typed, on the panel it was left on, still unsaved", () => {
-		const { fake, root } = renderInto(emptyBundle());
-		const left = Object.assign(new PlaybookBuilderDialog(), { element: fake.element });
-		left._formRev = left._bundleRev; // its form is drawn
+		const { fake, root } = renderInto(TESTER);
+		// Its form is the one drawn.
+		const left = Object.assign(new PlaybookBuilderDialog(), { element: fake.element, _bundle: fake._bundle });
 		root.querySelector("[data-field='playbook.name']").value = "The Lantern";
 		left._activeTab = "moves";
-		left._openMoves = new Set([0]);
+		left._openMoves = new Set([cardRef(left._bundle.moves[1])]);
 		left._source = "pdf";
 		const view = JSON.parse(JSON.stringify(left.restoreView));
+		// The playbook a reload keeps is the one the close guard compares; open moves go by place.
+		expect(JSON.stringify(view.bundle)).toBe(left._workState());
+		expect(view.openMoves).toEqual([1]);
 
 		const back = new PlaybookBuilderDialog({ draftId: "abc123" });
 		back._takeRestoredView(view);
 		expect(back._bundle.playbook.name).toBe("The Lantern");
 		expect(back._activeTab).toBe("moves");
-		expect([...back._openMoves]).toEqual([0]);
+		expect([...back._openMoves]).toEqual([cardRef(back._bundle.moves[1])]);
 		expect(back._source).toBe("pdf");
 		// Closing still asks: what came back through the reload was never saved.
 		expect(back._pristineWork).toBe(JSON.stringify(shownBlank()));
@@ -500,24 +538,24 @@ describe("the builder's inserts", () => {
 	}).bundle;
 
 	it("reads back exactly the inserts it was drawn from", () => {
-		const { fake } = renderInto(WITH_INSERT, { _activeTab: "inserts", _openMoves: new Set([0, 1, 2, 3]) });
-		const blank = structuredClone(WITH_INSERT);
+		const { fake } = renderInto(WITH_INSERT, { _activeTab: "inserts" });
+		// Emptied where it stands: the form names the playbook and the cards it was drawn from.
+		const blank = fake._bundle;
 		for (const m of blank.moves) { m.insert = ""; m.insertList = ""; }
 		blank.playbook.inserts[0].lists[0].options = [];
 		blank.playbook.inserts[0].lists[0].bonusPicks = [];
 		blank.playbook.inserts[0].unlockedBy = "";
-		fake._bundle = blank;
 		PlaybookBuilderDialog.prototype._readForm.call(fake);
 		expect(normalizeBundle(fake._bundle).bundle).toEqual(WITH_INSERT);
 	});
 
 	it("offers each move a place: the playbook, the insert, or its moves list", () => {
-		const { root } = renderInto(WITH_INSERT, { _openMoves: new Set([0, 1, 2, 3]) });
-		const whirr = root.querySelector("[data-insert-ref='3']");
+		const { fake, root } = renderInto(WITH_INSERT);
+		const whirr = root.querySelector(`[data-insert-ref='${cardRef(fake._bundle.moves[3])}']`);
 		expect([...whirr.options].map(o => o.value)).toEqual(["", "toolbox::", "toolbox::tricks"]);
 		expect(whirr.value).toBe("toolbox::tricks");
 		// The opening move is picked from the playbook's own moves only.
-		const opener = root.querySelector("[data-field='playbook.inserts.0.unlockedBy']");
+		const opener = fieldOf(root, "playbook.inserts", fake._bundle.playbook.inserts[0], "unlockedBy");
 		expect([...opener.options].map(o => o.value)).toEqual(["", "Poke", "Prod"]);
 		expect(opener.value).toBe("Prod");
 	});
@@ -544,9 +582,11 @@ describe("the builder's inserts", () => {
 		Object.setPrototypeOf(fake, PlaybookBuilderDialog.prototype);
 		fake.render = vi.fn();
 		const ev = { preventDefault() {} };
-		await PlaybookBuilderDialog.prototype._onAction.call(fake, ev, "remove-insert-list", { index: "0", listIndex: "1" });
+		const ins = fake._bundle.playbook.inserts[0];
+		await PlaybookBuilderDialog.prototype._onAction.call(fake, ev, "remove-insert-list", { insert: cardRef(ins), ref: cardRef(ins.lists[1]) });
 		expect(fake._bundle.moves.find(m => m.name === "Whirr")).toMatchObject({ insert: "toolbox", insertList: "" });
-		await PlaybookBuilderDialog.prototype._onAction.call(fake, ev, "remove-insert", { index: "0" });
+		expect(ins.lists.map(l => l.key)).toEqual(["gadgets"]);
+		await PlaybookBuilderDialog.prototype._onAction.call(fake, ev, "remove-insert", { ref: cardRef(ins) });
 		expect(fake._bundle.playbook.inserts).toEqual([]);
 		expect(fake._bundle.moves.filter(m => m.insert)).toEqual([]);
 		expect(fake._bundle.moves.map(m => m.name)).toContain("Whirr");
@@ -558,8 +598,10 @@ describe("the builder's inserts", () => {
 		fake.render = vi.fn();
 		const ev = { preventDefault() {} };
 		await PlaybookBuilderDialog.prototype._onAction.call(fake, ev, "add-insert", {});
-		await PlaybookBuilderDialog.prototype._onAction.call(fake, ev, "add-insert-list", { index: "1" });
-		await PlaybookBuilderDialog.prototype._onAction.call(fake, ev, "add-insert-list", { index: "1" });
+		const added = cardRef(fake._bundle.playbook.inserts[1]);
+		expect(fake._editing.has(`ins:${added}`)).toBe(true);
+		await PlaybookBuilderDialog.prototype._onAction.call(fake, ev, "add-insert-list", { ref: added });
+		await PlaybookBuilderDialog.prototype._onAction.call(fake, ev, "add-insert-list", { ref: added });
 		expect(fake._bundle.playbook.inserts[1].key).toBe("insert-1");
 		expect(fake._bundle.playbook.inserts[1].lists.map(l => l.key)).toEqual(["list-1", "list-2"]);
 	});
@@ -637,10 +679,10 @@ describe("the builder's backgrounds, read as the PDF prints them", () => {
 		bundle.playbook.backgrounds = [{ ...bundle.playbook.backgrounds?.[0], label: "Cursed", description: "You are cursed.\n\nWhen you ***defy the curse***, mark Doom.\n- once\n- twice", moves: ["Night Crawler"], moveChoice: [], possessions: [], track: { label: "Doom", max: 3 }, ...bg }];
 		return bundle;
 	}
-	const show = (bundle, editing = []) => renderInto(bundle, { _activeTab: "backgrounds", _editing: new Set(editing.map(i => `bg:${i}`)) });
+	const show = (bundle, editing = []) => renderInto(bundle, { _activeTab: "backgrounds", _editing: b => new Set(editing.map(i => `bg:${cardRef(b.playbook.backgrounds[i])}`)) });
 
 	it("draws a box and the name, the track's circles at the right, its words and what it gives, and no text boxes", () => {
-		const { root } = show(bundleWith({}));
+		const { fake, root } = show(bundleWith({}));
 		const card = root.querySelector(".stonetop-pb-builder-bg");
 		expect(card.classList.contains("is-editing")).toBe(false);
 		expect(card.querySelector(".stonetop-pb-builder-read-name").textContent.trim()).toBe("□ Cursed");
@@ -650,15 +692,16 @@ describe("the builder's backgrounds, read as the PDF prints them", () => {
 		expect(card.querySelectorAll(".stonetop-pb-builder-read-desc li").length).toBe(2);
 		expect(card.querySelector(".stonetop-pb-builder-read-meta").textContent).toBe("Gives: Night Crawler");
 		expect(card.querySelector("input, textarea")).toBeNull();
-		expect(card.querySelector("[data-action=edit-part]").dataset.part).toBe("bg:0");
+		expect(card.querySelector("[data-action=edit-part]").dataset.part).toBe(`bg:${cardRef(fake._bundle.playbook.backgrounds[0])}`);
 	});
 
 	it("opens its text boxes when its pencil is pressed, with a check to close them", () => {
-		const { root } = show(bundleWith({}), [0]);
+		const { fake, root } = show(bundleWith({}), [0]);
+		const bg = fake._bundle.playbook.backgrounds[0];
 		const card = root.querySelector(".stonetop-pb-builder-bg");
 		expect(card.classList.contains("is-editing")).toBe(true);
-		expect(card.querySelector("[data-field='playbook.backgrounds.0.label']").value).toBe("Cursed");
-		expect(card.querySelector("[data-action=done-part][data-part='bg:0']")).toBeTruthy();
+		expect(fieldOf(card, "playbook.backgrounds", bg, "label").value).toBe("Cursed");
+		expect(card.querySelector(`[data-action=done-part][data-part='bg:${cardRef(bg)}']`)).toBeTruthy();
 		expect(card.querySelector("[data-action=remove-background]")).toBeTruthy();
 	});
 
@@ -668,18 +711,25 @@ describe("the builder's backgrounds, read as the PDF prints them", () => {
 	});
 
 	it("keeps the right ones open when one above is removed, and opens one just added", async () => {
-		const fake = { _bundle: bundleWith({}), _editing: new Set(["bg:2"]), _readForm: vi.fn(), render: vi.fn() };
-		fake._dropPart = PlaybookBuilderDialog.prototype._dropPart;
-		fake._bundle.playbook.backgrounds.push({ ...fake._bundle.playbook.backgrounds[0], label: "B" }, { ...fake._bundle.playbook.backgrounds[0], label: "C" });
-		const press = (action, index, part) => PlaybookBuilderDialog.prototype._onAction.call(fake, { preventDefault() {} }, action, { index: String(index), part });
-		await press("remove-background", 0);
-		expect([...fake._editing]).toEqual(["bg:1"]);
+		const fake = { _bundle: bundleWith({}), _editing: new Set(), _openMoves: new Set(), _readForm: vi.fn(), render: vi.fn() };
+		const bgs = fake._bundle.playbook.backgrounds;
+		bgs.push({ ...bgs[0], label: "B" }, { ...bgs[0], label: "C" });
+		const [a, b, c] = bgs;
+		const part = card => `bg:${cardRef(card)}`;
+		fake._editing.add(part(c));
+		const press = (action, data = {}) => PlaybookBuilderDialog.prototype._onAction.call(fake, { preventDefault() {} }, action, data);
+		await press("remove-background", { ref: cardRef(a) });
+		expect(bgs).toEqual([b, c]);
+		expect([...fake._editing]).toEqual([part(c)]);
 		await press("add-background");
-		expect(fake._editing.has("bg:2")).toBe(true);
-		await press("done-part", 0, "bg:1");
-		expect(fake._editing.has("bg:1")).toBe(false);
-		await press("edit-part", 0, "bg:0");
-		expect(fake._editing.has("bg:0")).toBe(true);
+		expect(fake._editing.has(part(bgs[2]))).toBe(true);
+		await press("done-part", { part: part(c) });
+		expect(fake._editing.has(part(c))).toBe(false);
+		await press("edit-part", { part: part(b) });
+		expect(fake._editing.has(part(b))).toBe(true);
+		// Removed while open, it closes with it.
+		await press("remove-background", { ref: cardRef(b) });
+		expect(fake._editing.has(part(b))).toBe(false);
 	});
 });
 
@@ -714,7 +764,7 @@ describe("the builder's pages, read as the PDF prints them", () => {
 
 	it("draws no text boxes on any page while nothing is open, and a pencil on each", () => {
 		const { root } = renderInto(TESTER, closed);
-		expect(root.querySelectorAll("[data-field], [data-lines], [data-list], [data-insert-ref]").length).toBe(0);
+		expect(root.querySelectorAll("[data-field], [data-insert-ref], [data-resource]").length).toBe(0);
 		for (const key of ["playbook", "stats", "instincts", "looks", "possessions", "moves", "advancement", "intro", "notes"]) {
 			expect(root.querySelector(`[data-action=edit-part][data-part="page:${key}"]`), key).toBeTruthy();
 		}
@@ -751,10 +801,9 @@ describe("the builder's pages, read as the PDF prints them", () => {
 		const bundle = structuredClone(TESTER);
 		bundle.playbook.possessions.options.push({ label: "", description: "", preselected: false });
 		bundle.playbook.instincts = [];
-		const { root } = renderInto(bundle, closed);
-		const last = bundle.playbook.possessions.options.length - 1;
-		expect(root.querySelector(`[data-field='playbook.possessions.options.${last}.label']`)).toBeTruthy();
-		expect(root.querySelector("section[data-tab=instincts] [data-lines='playbook.instincts']")).toBeTruthy();
+		const { fake, root } = renderInto(bundle, closed);
+		expect(fieldOf(root, "playbook.possessions.options", fake._bundle.playbook.possessions.options.at(-1), "label")).toBeTruthy();
+		expect(root.querySelector("section[data-tab=instincts] [data-field='playbook.instincts']")).toBeTruthy();
 	});
 
 	it("frames a question heading with the questions under it, up to the next heading", () => {

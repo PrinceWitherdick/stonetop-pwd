@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { LoveLetterDialog } from "../../module/dialogs/LoveLetterDialog.js";
 import { LOVE_LETTER_WINDOW_CLASS, reopenLoveLetter } from "../../module/dialogs/love-letter-restore.js";
+import { writeFormFields } from "../../module/dialogs/authoring-restore.js";
 
 // A reload brings the love letter window back (love-letter-restore.js, by way of
 // utils/window-restore.js) with the letter as typed: the form is copied as it changes, and the copy
@@ -39,14 +40,14 @@ describe("the love letter across a reload", () => {
 		typed.querySelector("[name=rollType]").value = "str";
 		typed.querySelector("[name=resultStyle][value=list]").checked = true;
 		typed.querySelector("[name=markXp]").checked = false;
-		left._form = left._readFormCopy(typed);
+		left._liveFields = left._readFormCopy(typed);
 		const view = JSON.parse(JSON.stringify(left.restoreView));
 
 		const back = await reopenLoveLetter("loveLetter:new-l1");
 		expect(back.restoreKey).toBe("loveLetter:new-l1");
 		back._takeRestoredView(view);
 		const drawn = form();
-		back._writeFormCopy(drawn, back._pendingForm);
+		writeFormFields(drawn, back._restoredFields);
 		expect(drawn.querySelector("[name=recipient]").value).toBe("a1");
 		expect(drawn.querySelector("[name=name]").value).toBe("Come home");
 		expect(drawn.querySelector("[name=description]").value).toBe("Your mother writes.");
@@ -60,13 +61,13 @@ describe("the love letter across a reload", () => {
 	it("ignores what doesn't fit, and leaves a recipient no longer offered unpicked", () => {
 		const back = new LoveLetterDialog();
 		back._takeRestoredView({ form: { name: 5, markXp: "yes", recipient: "gone", nonsense: "x" } });
-		expect(back._pendingForm).toEqual({ recipient: "gone" });
+		expect(back._restoredFields).toEqual({ recipient: "gone" });
 		const drawn = form();
-		back._writeFormCopy(drawn, back._pendingForm);
+		writeFormFields(drawn, back._restoredFields);
 		expect(drawn.querySelector("[name=recipient]").value).toBe("");
-		back._pendingForm = null;
+		back._restoredFields = null;
 		back._takeRestoredView({ form: "nonsense" });
-		expect(back._pendingForm).toBeNull();
+		expect(back._restoredFields).toBeNull();
 	});
 
 	it("brings back the letter being edited, or a new one with the typing when that letter has gone", async () => {

@@ -11,7 +11,7 @@
 // (`counts["<insert>-<list>:<option>"]`, `texts[...]`, the lore store's shape), and whether the
 // character wears an insert's form in `flags.stonetop.insertForm[<insert key>]`.
 
-import { looseName } from "../../utils/strings.js";
+import { htmlToPlainText, looseName } from "../../utils/strings.js";
 import { moveLearnedIn } from "./owns-move.js";
 import { homebrewInsertOf } from "../../playbooks/playbook-catalog.js";
 import { insertGearFromOption } from "../../playbooks/insert-gear.js";
@@ -27,8 +27,7 @@ const _moves = items => [...(items ?? [])].filter(i => i?.type === "move");
 
 /** An option's words without their markup, for a label or the gear reader. */
 export function plainOption(html) {
-	return String(html ?? "").replace(/<[^>]*>/g, "").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-		.replace(/&quot;/g, "\"").replace(/&#0?39;|&apos;/g, "'").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+	return htmlToPlainText(html).replace(/\s+/g, " ").trim();
 }
 
 /** The header glyph's base class for an insert's form (header-toggle-glyph.hbs; its icon is `<stem>-icon`). */

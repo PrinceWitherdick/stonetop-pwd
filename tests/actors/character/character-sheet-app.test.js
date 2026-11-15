@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { Window } from "happy-dom";
 import { stubAsk, stubConfirm } from "../../fakes/confirm.js";
+import { readRepo } from "../../fakes/css.js";
 import { createStonetopCharacterSheetClass, woundEditPatch } from "../../../module/actors/character/StonetopCharacterSheet.js";
 import { WoundDialog } from "../../../module/actors/character/dialogs/WoundDialog.js";
 import { DeathsDoorDialog } from "../../../module/actors/character/dialogs/DeathsDoorDialog.js";
@@ -2801,6 +2802,80 @@ describe("StonetopCharacterSheet un-ticks that ask first", () => {
 	});
 });
 
+// A named crew member's Person sheet reads the crew card (StonetopNpcSheet#_crewMemberContext): every open
+// member sheet asking at once shares one build of it, and the Order lists come across as arrays.
+describe("crewMemberCard", () => {
+	const CREW = {
+		ftype: "crew", name: "The Grey Company", tags: ["archers"], instinct: "", cost: "",
+		individuals: [{ index: 0, personUuid: "Actor.p1", orderName: "Wren", tag: "brave", traits: [], orderTags: ["archers", "brave"], orderMoves: ["Volley"], exceptional: false }],
+	};
+
+	it("builds the crew card once for every sheet asking while it is built, and again after", async () => {
+		const sheet = makeSheet(makeActor());
+		sheet._followerCards = vi.fn(async () => [CREW]);
+		const [a, b] = await Promise.all([sheet.crewMemberCard("Actor.p1"), sheet.crewMemberCard("Actor.p1")]);
+		expect(sheet._followerCards).toHaveBeenCalledTimes(1);
+		expect(a.member.orderTags).toEqual(["archers", "brave"]);
+		expect(b.member.orderMoves).toEqual(["Volley"]);
+		await sheet.crewMemberCard("Actor.p1");
+		expect(sheet._followerCards).toHaveBeenCalledTimes(2);
+	});
+
+	it("builds afresh once the character changed mid-build", async () => {
+		const sheet = makeSheet(makeActor());
+		sheet._followerCards = vi.fn(async () => [CREW]);
+		const first = sheet.crewMemberCard("Actor.p1");
+		sheet.forgetCrewCard();
+		await Promise.all([first, sheet.crewMemberCard("Actor.p1")]);
+		expect(sheet._followerCards).toHaveBeenCalledTimes(2);
+	});
+});
+
+// The lore lists' boxes and write-ins go to the store their container names (`data-lore-store`): the
+// playbook's own, a homebrew insert's, or a post-death insert's.
+describe("the lore lists' stores", () => {
+	const inStore = (store, dataset) => ({ dataset, closest: () => (store ? { dataset: { loreStore: store } } : null) });
+
+	it("writes each list's ticks and text to its own store", async () => {
+		const actor = makeActor();
+		const char = actor.typedActor;
+		Object.assign(char, {
+			setInsertLoreCount: vi.fn(async () => {}), setInsertLoreText: vi.fn(async () => {}),
+			setPostDeathLoreText: vi.fn(async () => {}), setLoreOptionText: vi.fn(async () => {}),
+		});
+		const sheet = makeSheet(actor);
+		sheet._onLoreOptionCheck = vi.fn();
+		sheet._onInsertLoreTick = vi.fn();
+		const box = store => ({ ...inStore(store, { loreSlug: "l", optionSlug: "o", idx: "1" }), checked: true });
+		const field = store => ({ ...inStore(store, { loreSlug: "l", optionSlug: "o" }), value: "words" });
+
+		await sheet._loreStore(box("insert")).setCount(box("insert"));
+		expect(char.setInsertLoreCount).toHaveBeenCalledWith("l", "o", 2);
+		await sheet._loreStore(field("insert")).setText(field("insert"));
+		expect(char.setInsertLoreText).toHaveBeenCalledWith("l", "o", "words");
+
+		const pdiBox = box("pdi");
+		sheet._loreStore(pdiBox).setCount(pdiBox);
+		expect(sheet._onInsertLoreTick).toHaveBeenCalledWith(pdiBox);
+		await sheet._loreStore(field("pdi")).setText(field("pdi"));
+		expect(char.setPostDeathLoreText).toHaveBeenCalledWith("l", "o", "words");
+
+		// The playbook's own lore, named or not (a list drawn with no store named is the Details tab's).
+		const loreBox = box(null);
+		sheet._loreStore(loreBox).setCount(loreBox);
+		expect(sheet._onLoreOptionCheck).toHaveBeenCalledWith(loreBox);
+		await sheet._loreStore(field("lore")).setText(field("lore"));
+		expect(char.setLoreOptionText).toHaveBeenCalledWith("l", "o", "words");
+	});
+
+	it("marks each list's container with its store", () => {
+		const read = rel => readRepo(`templates/actor/partials/${rel}`);
+		expect(read("tab-details.hbs")).toMatch(/stonetop-lore-section-wrapper[^>]*data-lore-store="lore"/);
+		expect(read("tab-homebrew-insert.hbs")).toContain('data-hb-insert="{{this.key}}" data-lore-store="insert"');
+		expect(read("tab-post-death.hbs")).toContain('data-pdi="lore" data-lore-store="pdi"');
+	});
+});
+
 // A homebrew insert's form from its header glyph (homebrew-inserts.js#insertFormGlyph): off plainly, on by
 // the move whose roll brings it out when there is one (tier-effects.js#insertFormRollFor), else plainly.
 describe("the header glyph for a homebrew insert's form", () => {
@@ -2877,5 +2952,21 @@ describe("the header glyph for a homebrew insert's form", () => {
 		await sheet._onInsertFormToggle(click());
 		expect(asked).not.toHaveBeenCalled();
 		expect(character.setInsertForm).toHaveBeenCalledWith("box", true);
+	});
+
+	// The insert tab's switch takes the same path, its `data-on` saying which way: so it offers the roll too.
+	it("asks the same from the insert tab's switch, and takes the form off from it plainly", async () => {
+		const tabSwitch = on => ({ dataset: { hbInsertForm: "box", on: String(on) } });
+		const asked = stubAsk("roll");
+		const { sheet, character } = sheetFor({ items: [UNFOLD] });
+		await sheet._onInsertFormToggle(click(), tabSwitch(true));
+		expect(asked).toHaveBeenCalledTimes(1);
+		expect(sheet.rollMoveById).toHaveBeenCalledWith("m-unfold", { shiftKey: false });
+
+		const worn = sheetFor({ wearing: true, items: [UNFOLD] });
+		await worn.sheet._onInsertFormToggle(click(), tabSwitch(false));
+		expect(worn.character.setInsertForm).toHaveBeenCalledWith("box", false);
+		expect(asked).toHaveBeenCalledTimes(1);
+		expect(character.setInsertForm).not.toHaveBeenCalled();
 	});
 });

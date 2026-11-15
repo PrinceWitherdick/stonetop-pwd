@@ -65,10 +65,12 @@ export function stableStringify(value) {
 	return JSON.stringify(value ?? null);
 }
 
-// cyrb53 string hash → 16-hex-char digest. For change-detection only (not security):
-// fast, dependency-free, and stable across loads/platforms.
-export function hashString(str) {
-	let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+// The cyrb53 string hash's two 32-bit halves, `[h1, h2]`, for `seed` (0 unless given). The one
+// copy of its core: hashString prints it as hex here, and the PDF reader's glyph tables key their
+// shapes by it in base 36 (playbooks/pdf/outline-text.js#hashText). Both printings are stored, so
+// this must never change.
+export function cyrb53Halves(str, seed = 0) {
+	let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
 	for (let i = 0; i < str.length; i++) {
 		const ch = str.charCodeAt(i);
 		h1 = Math.imul(h1 ^ ch, 2654435761);
@@ -76,6 +78,13 @@ export function hashString(str) {
 	}
 	h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
 	h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+	return [h1, h2];
+}
+
+// cyrb53 string hash → 16-hex-char digest. For change-detection only (not security):
+// fast, dependency-free, and stable across loads/platforms.
+export function hashString(str) {
+	const [h1, h2] = cyrb53Halves(str);
 	return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
 }
 

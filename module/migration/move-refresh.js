@@ -27,6 +27,7 @@ import { ensurePackIndex } from "../utils/pack-index.js";
 import { isPlayerAuthoredMove } from "../actors/character/owns-move.js";
 import { STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
 import { deletionEntry, compendiumSourceOf } from "../utils/foundry-compat.js";
+import { isPlainObject } from "../utils/strings.js";
 import { WRITEUP_EDITED_FLAG } from "../utils/inventory-item-data.js";
 import { MADE_UNDER_FLAG } from "./made-under.js";
 import { SweepFailures } from "./sweep-failures.js";
@@ -90,8 +91,6 @@ export function refreshable(item) {
 	}
 	return true;
 }
-
-const isPlainObject = value => !!value && typeof value === "object" && !Array.isArray(value);
 
 /**
  * Add to `update` a deletion for every key `stored` has at `path`, at any depth, that `value` does

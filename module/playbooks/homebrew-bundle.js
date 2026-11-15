@@ -13,7 +13,9 @@ import { formatPlaybookText, formatPlaybookInline, playbookTextFromHtml, plainLi
 import { CUSTOM_MOVE_ROLL_TYPES } from "../utils/roll-types.js";
 import { buildMoveTierResults } from "../utils/move-results.js";
 import { clampInt } from "../utils/custom-move-data.js";
-import { slugify, looseName, clipText } from "../utils/strings.js";
+import { slugify, looseName, clipText, sameNoun, uniqueSlugs } from "../utils/strings.js";
+import { parseTiersFromProse } from "../utils/move-tiers.js";
+import { stableStringify } from "../hooks/journal-sync-core.js";
 import { SYSTEM_ID, ITEM_FLAG_SCOPE } from "../system-id.js";
 import { HOMEBREW_MOVE_FLAG, HOMEBREW_INSERT_FLAG, HOMEBREW_SLUG_PREFIX } from "./playbook-catalog.js";
 import { possessionUsesFrom, possessionGearFrom, possessionRulesFrom } from "./possession-gear.js";
@@ -129,15 +131,14 @@ export function blankWriteIn(description) {
 
 /** Unique slugs for `wanted` keys, minting from `names` when a key is missing or taken. */
 function _uniqueKeys(wanted, names, fallback) {
-	const used = new Set();
-	return wanted.map((k, i) => {
-		const base = slugify(k) || slugify(names[i]) || `${fallback}-${i + 1}`;
-		let key = base;
-		for (let n = 2; used.has(key); n++) key = `${base}-${n}`;
-		used.add(key);
-		return key;
-	});
+	return uniqueSlugs(wanted.map((k, i) => slugify(k) || slugify(names[i]) || `${fallback}-${i + 1}`));
 }
+
+/**
+ * What an insert's form is put on and taken off with when the GM names neither: the button words
+ * on the sheet. The one copy, for the bundle, the PDF reader and the builder alike.
+ */
+export const INSERT_FORM_DEFAULTS = Object.freeze({ on: "Transform", off: "Revert" });
 
 /**
  * A playbook's INSERTS (the Stranger's Monster Compendium): a page of its own that a move unlocks
@@ -189,8 +190,8 @@ function _normalizeInserts(raw, check, movedInto = new Set()) {
 			unlockedBy: str(i.unlockedBy, MAX.name),
 			form: {
 				enabled: !!form.enabled,
-				on: plainLine(form.on, 30) || "Transform",
-				off: plainLine(form.off, 30) || "Revert",
+				on: plainLine(form.on, 30) || INSERT_FORM_DEFAULTS.on,
+				off: plainLine(form.off, 30) || INSERT_FORM_DEFAULTS.off,
 			},
 			lists,
 		};
@@ -622,27 +623,21 @@ export function advanceFrom(label) {
 
 /**
  * What a roll holds on the move's own track, read off its words: "on a 10+, hold 3 Fear; on a 7-9,
- * hold 1 Fear" for a track called Fear. "On a 7+" counts for both hits, and a later "on a 10+"
- * overrides it (the Monster Squad's "on a 7+ … hold 1 Reign; on a 10+, hold 2 Reign"). A hold of
- * some other currency than the track's is not this track's. Null when the words hold nothing.
+ * hold 1 Fear" for a track called Fear. The tiers are the sheet's own reading of them
+ * (parseTiersFromProse), so a PDF's "7–9" and a "7+" that counts for both hits are read as the move
+ * card reads them. A later "on a 10+" overrides a "7+" (the Monster Squad's "on a 7+ … hold 1 Reign;
+ * on a 10+, hold 2 Reign"), which is why a rung's LAST hold is the one it gives. A hold of some
+ * other currency than the track's is not this track's. Null when the words hold nothing.
  * @returns {{success?: number, partial?: number, failure?: number}|null}
  */
 export function holdOnRollFrom(description, trackTitle = "") {
-	const plain = String(description ?? "").replace(/\*/g, "");
-	const word = w => looseName(w, { article: true }).replace(/s$/, "");
+	const tiers = parseTiersFromProse(String(description ?? "").replace(/\*/g, ""), null, { minRows: 1 });
+	if (!tiers) return null;
 	const out = {};
-	// Not \b after the tier: "10+," has no word boundary between its "+" and the comma.
-	for (const part of plain.split(/(?=\bon an? (?:10\+|7-9|7\+|6-|miss)(?![\w+-]))/i)) {
-		const tier = part.match(/^on an? (10\+|7-9|7\+|6-|miss)(?![\w+-])/i)?.[1]?.toLowerCase();
-		if (!tier) continue;
-		const hold = part.match(/\bhold (\d+)(?:\s+([A-Za-z]+))?/i);
-		if (!hold) continue;
-		if (trackTitle && hold[2] && word(hold[2]) !== word(trackTitle)) continue;
-		const n = Math.min(20, Number(hold[1]));
-		if (tier === "7+") { out.success = n; out.partial = n; }
-		else if (tier === "10+") out.success = n;
-		else if (tier === "7-9") out.partial = n;
-		else out.failure = n;
+	for (const key of ["success", "partial", "failure"]) {
+		const holds = [...String(tiers[key]?.value ?? "").matchAll(/\bhold (\d+)(?:\s+([A-Za-z]+))?/gi)]
+			.filter(h => !trackTitle || !h[2] || sameNoun(h[2], trackTitle));
+		if (holds.length) out[key] = Math.min(20, Number(holds.at(-1)[1]));
 	}
 	return Object.keys(out).length ? out : null;
 }
@@ -701,14 +696,7 @@ export function normalizeMove(m) {
 // ---- Bundle → Items -------------------------------------------------------------------------
 
 function _uniqueSlugs(labels) {
-	const used = new Set();
-	return labels.map((label, i) => {
-		const base = slugify(label) || `option-${i + 1}`;
-		let slug = base;
-		for (let n = 2; used.has(slug); n++) slug = `${base}-${n}`;
-		used.add(slug);
-		return slug;
-	});
+	return uniqueSlugs(labels.map((label, i) => slugify(label) || `option-${i + 1}`));
 }
 
 /**
@@ -909,7 +897,7 @@ export function insertFromFlags(f) {
 		name: String(f?.name ?? ""),
 		description: playbookTextFromHtml(f?.description ?? ""),
 		unlockedBy: String(f?.unlockedBy ?? ""),
-		form: { enabled: !!form.enabled, on: String(form.on ?? "Transform"), off: String(form.off ?? "Revert") },
+		form: { enabled: !!form.enabled, on: String(form.on ?? INSERT_FORM_DEFAULTS.on), off: String(form.off ?? INSERT_FORM_DEFAULTS.off) },
 		lists: (f?.lists ?? []).map(l => ({
 			key: String(l.key ?? ""),
 			title: String(l.title ?? ""),
@@ -1220,17 +1208,18 @@ export function mergeReimport({ base, mine, theirs }) {
 }
 
 /**
- * A value as one comparable string: object keys in order, text with its whitespace run together.
- * Two versions of a playbook that differ only in how they were stored compare equal.
+ * A value as one comparable string: object keys in order (stableStringify), text with its whitespace
+ * run together, a key holding `undefined` left out as JSON leaves it out. Two versions of a playbook
+ * that differ only in how they were stored compare equal.
  */
 export function canonicalJson(value) {
-	const canon = v => {
+	const fold = v => {
 		if (typeof v === "string") return v.replace(/\s+/g, " ").trim();
-		if (Array.isArray(v)) return v.map(canon);
-		if (v && typeof v === "object") return Object.fromEntries(Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => [k, canon(v[k])]));
+		if (Array.isArray(v)) return v.map(fold);
+		if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined).map(([k, x]) => [k, fold(x)]));
 		return v;
 	};
-	return JSON.stringify(canon(value));
+	return stableStringify(fold(value));
 }
 
 /** The JSON a GM saves and shares: a normalized bundle plus where it came from. */

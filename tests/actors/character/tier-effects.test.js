@@ -186,15 +186,33 @@ describe("Commune with Aratis's Sanction", () => {
 describe("Silver Tongued's Nerve", () => {
 	const fox = held => hero({ moves: [SILVER_TONGUED], held: { [SILVER_TONGUED]: held }, max: 3 });
 
-	it("is a move whose tier does something to the roller", () => {
-		expect(TIER_EFFECT_MOVES).toContain(SILVER_TONGUED);
+	// Settled as any move whose data says what a roll holds (heldOnRoll): the pack carries the numbers,
+	// and a copy taken before it did reads the book's.
+	it("is settled by its data, not its name", () => {
+		expect(TIER_EFFECT_MOVES).not.toContain(SILVER_TONGUED);
+	});
+
+	it("holds what the pack's copy says, where it says it", async () => {
+		const made = fox(0);
+		made.actor.items[0].system.resource.holdOnRoll = { success: 2, partial: 1 };
+		await rolled(made.actor, SILVER_TONGUED, "success");
+		expect(made.tracks[SILVER_TONGUED]).toBe(2);
+	});
+
+	it("reads a card recorded as nerveHeld, so a Shift still undoes what it added", async () => {
+		const { actor, tracks } = fox(3);
+		const message = card(SILVER_TONGUED);
+		message.flags[SYSTEM_ID][TIER_EFFECTS_FLAG] = { heldOnRoll: 2 };
+		expect(await shift(message, actor, 5)).toBe(true);
+		expect(tracks[SILVER_TONGUED]).toBe(1);
+		expect(message.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 0 });
 	});
 
 	it("fills to 3 on a 10+ and to 1 on a 7-9, and holds nothing more on a 6-", async () => {
 		const hit = fox(0);
 		const card10 = await rolled(hit.actor, SILVER_TONGUED, "success");
 		expect(hit.tracks[SILVER_TONGUED]).toBe(3);
-		expect(card10.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 3 });
+		expect(card10.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 3 });
 
 		const partial = fox(0);
 		await rolled(partial.actor, SILVER_TONGUED, "partial");
@@ -204,7 +222,7 @@ describe("Silver Tongued's Nerve", () => {
 		const card6 = await rolled(miss.actor, SILVER_TONGUED, "failure");
 		expect(miss.tracks[SILVER_TONGUED]).toBe(1);
 		// Still recorded, so a Shift up off the 6- can hold what the new tier asks.
-		expect(card6.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 0 });
+		expect(card6.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 0 });
 	});
 
 	it("does not lower 3 Nerve already held on a 7-9, nor take any of it back when the card is lowered", async () => {
@@ -220,7 +238,7 @@ describe("Silver Tongued's Nerve", () => {
 		const { actor, tracks } = fox(1);
 		const hit = await rolled(actor, SILVER_TONGUED, "success");
 		expect(tracks[SILVER_TONGUED]).toBe(3);
-		expect(hit.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 2 });
+		expect(hit.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 2 });
 		await shift(hit, actor, 6);
 		expect(tracks[SILVER_TONGUED]).toBe(1);
 	});
@@ -231,10 +249,10 @@ describe("Silver Tongued's Nerve", () => {
 		expect(tracks[SILVER_TONGUED]).toBe(1);
 		await shift(card, actor, 10);
 		expect(tracks[SILVER_TONGUED]).toBe(3);
-		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 3 });
+		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 3 });
 		await shift(card, actor, 6);
 		expect(tracks[SILVER_TONGUED]).toBe(0);
-		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 0 });
+		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 0 });
 	});
 
 	it("leaves Nerve spent since spent when the card is lowered, and lifts by the difference again", async () => {
@@ -530,19 +548,19 @@ describe("a track whose move says what a roll holds", () => {
 	it("is let through for a homebrew move when rolled, for its own hold and nothing else", () => {
 		const { actor } = stranger(0);
 		homebrew(actor.items[0]);
-		expect(tierEffectsAllowed(actor, actor.items[0])).toEqual(HOMEBREW_TIER_EFFECTS);
+		expect(tierEffectsAllowed(actor, actor.items[0])).toEqual({ moveName: PARIAH, only: HOMEBREW_TIER_EFFECTS });
 		const plain = hero({ moves: ["Creeper"] });
 		homebrew(plain.actor.items[0]);
-		expect(tierEffectsAllowed(plain.actor, plain.actor.items[0])).toBe(false);
+		expect(tierEffectsAllowed(plain.actor, plain.actor.items[0])).toBeNull();
 		const book = hero({ moves: [WE_HAPPY_FEW] });
-		expect(tierEffectsAllowed(book.actor, book.actor.items[0])).toBeNull();
+		expect(tierEffectsAllowed(book.actor, book.actor.items[0])).toEqual({ moveName: WE_HAPPY_FEW, only: null });
 	});
 
 	it("never gives a homebrew move a book move's effect for its name, at the roll or on a Shift", async () => {
 		const made = hero({ moves: [SILVER_TONGUED], held: { [SILVER_TONGUED]: 0 }, max: 4 });
 		const item = homebrew(made.actor.items[0]);
 		item.system.resource.holdOnRoll = { success: 2, partial: 1 };
-		const only = tierEffectsAllowed(made.actor, item);
+		const { only } = tierEffectsAllowed(made.actor, item);
 		const message = card(SILVER_TONGUED);
 		await recordTierEffects(message, await settleTierEffects(made.actor, SILVER_TONGUED, "partial", null, { only }));
 		expect(message.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 1 });

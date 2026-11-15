@@ -75,11 +75,47 @@ function _kindOf(key) {
 	return at > 0 ? key.slice(0, at) : null;
 }
 
+/** What follows "<kind>:" in a restore key, or null when `key` is not one of `kind`'s. */
+export function restoreKeyRest(key, kind) {
+	const str = String(key ?? "");
+	return _kindOf(str) === kind ? str.slice(kind.length + 1) : null;
+}
+
+/**
+ * The rest of a key for a window over nothing saved yet: this, then the window's own id, so two new
+ * ones open at once are kept apart. A saved one's rest is its document's uuid, which can't start so.
+ */
+export const NEW_WINDOW_PREFIX = "new-";
+
+/** The key for a window over `doc` once saved, else over the new one with the id `newId`. */
+export function docOrNewKey(kind, doc, newId) {
+	return `${kind}:${doc?.uuid ?? NEW_WINDOW_PREFIX + newId}`;
+}
+
+/**
+ * Read the rest of a docOrNewKey key: the saved document (null when it has gone since), or the new
+ * window's id (null for a bare prefix).
+ */
+export async function readDocOrNewKey(rest) {
+	if (rest.startsWith(NEW_WINDOW_PREFIX)) return { doc: null, newId: rest.slice(NEW_WINDOW_PREFIX.length) || null };
+	return { doc: await fromUuid(rest).catch(() => null), newId: null };
+}
+
 // Restore the windows of `windowClass` from a key rather than a document: watch the class's own
 // render and close hooks, and on the next ready hand each saved key of `kind` to `reopen`, which
-// answers with the window to render where it was, or null for one that should not come back. The
-// class itself is passed, never a spelling of its name, because AppV1 names the hooks after
-// `constructor.name`. Safe to call before or after installWindowRestore.
+// answers with the window to render where it was, or null for one that should not come back. Safe
+// to call before or after installWindowRestore.
+//
+// THE CLASS IS NAMED, NOT IMPORTED, by whoever registers it: each kind is registered at module scope
+// in stonetop.js from a small `*-restore.js` module of its own, so a load doesn't pull in the window
+// (and the book data or builder code behind it) until a reload actually reopens one; `reopen`
+// imports it then. What is passed is `{ name }`, because AppV1 names the hooks after
+// `constructor.name`, so each kind's test holds that name and the class's own together: a rename
+// of the class can't quietly stop it being restored.
+//
+// The window itself says its key (`restoreKey`, "<kind>:<rest>"), saves what was typed in it in
+// `restoreView` (never read off a form a closing window may have half torn down), takes that back
+// in `_takeRestoredView` before its first draw, and saves soon as it is typed in (persistOnTyping).
 export function registerRestorableWindow(windowClass, kind, reopen) {
 	_reopeners.set(kind, reopen);
 	const pair = [`render${windowClass.name}`, `close${windowClass.name}`];
@@ -282,6 +318,17 @@ function _schedulePersist() {
 // crashed tab or a killed app), not only a reload.
 export function persistOpenWindowsSoon() {
 	_schedulePersist();
+}
+
+/**
+ * Save the open windows soon whenever `root` is typed in (input and change; `clicks` too, for a
+ * window whose chips or buttons change what it saves). `onEach` runs first, for a window that keeps
+ * a copy of its form for `restoreView`.
+ */
+export function persistOnTyping(root, { clicks = false, onEach = null } = {}) {
+	if (typeof root?.addEventListener !== "function") return;
+	const note = () => { onEach?.(); persistOpenWindowsSoon(); };
+	for (const type of clicks ? ["input", "change", "click"] : ["input", "change"]) root.addEventListener(type, note);
 }
 
 // Synchronous final write, called from beforeunload. Client settings persist to

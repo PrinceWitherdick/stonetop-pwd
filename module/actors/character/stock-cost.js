@@ -27,7 +27,14 @@
  * they never earned, while one who has actually banked three reads as holding one.
  *
  * Foundry-free: every source is plain numbers plus an `after` that hands back the number to
- * store, so the whole thing is testable without a world.
+ * store, so the whole thing is testable without a world. Each also says how it is paid and how it
+ * reads, so no caller branches on which kind of purse it holds:
+ *
+ *   · `pay(payer, amount)` pays the cost through `payer`, the character's writes for the move
+ *     being paid for (StonetopCharacter#spendStock hands them over), and answers `{lost}`, the HP
+ *     it took.
+ *   · `choiceLabel(amount)` is the purse as a choice in the "Spend from" picker.
+ *   · `receipt(amount, lost)` is what the paid cost says afterwards.
  */
 
 import { tookBackground } from "./took-background.js";
@@ -63,6 +70,9 @@ export function vesselHpFormula(amount = 1) {
 	return `${2 * Math.max(1, Math.trunc(Number(amount) || 1))}d4`;
 }
 
+/** A purse's "(from Witchcraft)" tail, naming the move a stand-in is from. */
+const viaMove = from => (from ? ` (${from})` : "");
+
 /**
  * @param {object} snapshot
  * @param {number} snapshot.pouchMax        the pouch's capacity
@@ -84,16 +94,24 @@ export function stockSources({ pouchMax = DEFAULT_SACRED_POUCH_MAX, pouchStored 
 	const purse = (key, label, max, stored, countsHeld) => {
 		const cap = Math.max(0, Math.trunc(Number(max) || 0));
 		const have = Math.min(cap, Math.max(0, Math.trunc(Number(stored) || 0)));
+		const remaining = countsHeld ? have : Math.max(0, cap - have);
+		// What to WRITE BACK after spending. The two purses move in opposite directions, so
+		// this is asked of the purse rather than worked out at each spend site — the arithmetic
+		// is the one thing about them that differs, and the one thing easy to get backwards.
+		const after = amount => {
+			const n = Math.max(0, Math.trunc(Number(amount) || 0));
+			return countsHeld ? Math.max(0, have - n) : Math.min(cap, have + n);
+		};
 		return {
-			key, label, max: cap, stored: have, countsHeld,
-			remaining: countsHeld ? have : Math.max(0, cap - have),
-			// What to WRITE BACK after spending. The two purses move in opposite directions, so
-			// this is asked of the purse rather than worked out at each spend site — the arithmetic
-			// is the one thing about them that differs, and the one thing easy to get backwards.
-			after: amount => {
-				const n = Math.max(0, Math.trunc(Number(amount) || 0));
-				return countsHeld ? Math.max(0, have - n) : Math.min(cap, have + n);
+			key, label, max: cap, stored: have, countsHeld, remaining, after,
+			// The Boon is Rites of the Land's track, the ledger naming the move; the pouch is a possession's.
+			pay: async (payer, amount) => {
+				if (countsHeld) await payer.setBoonHeld(after(amount));
+				else await payer.setPouchSpent(after(amount));
+				return { lost: 0 };
 			},
+			choiceLabel: () => `${label} (${remaining} left)`,
+			receipt: amount => `Spent ${amount} ${label}`,
 		};
 	};
 	const out = [];
@@ -112,6 +130,13 @@ export function stockSources({ pouchMax = DEFAULT_SACRED_POUCH_MAX, pouchStored 
 			key: VESSEL_PURSE, label: "HP", max: 0, stored: 0, countsHeld: false, vessel: true,
 			remaining: Number(vesselHp) > 0 ? Infinity : 0,
 			after: () => null,
+			// A visible 2d4 roll per Stock, and the HP it throws is lost (provisions.js#loseHpForStock).
+			pay: async (payer, amount) => {
+				const { lost } = await payer.loseVesselHp(amount);
+				return { lost };
+			},
+			choiceLabel: amount => `Lose ${vesselHpFormula(amount)} HP instead`,
+			receipt: (amount, lost = 0) => `Lost ${lost} HP in place of ${amount} Stock`,
 		});
 	}
 	out.push(...standInPurses(standIns, openDebilities, hp));
@@ -128,14 +153,43 @@ function standInPurses(standIns, openDebilities, hp) {
 	const out = [];
 	(standIns ?? []).forEach((s, i) => {
 		const base = { max: 0, stored: 0, countsHeld: false, after: () => null, remaining: Infinity };
+		const via = viaMove(s?.from);
 		if (s?.kind === "debility") {
 			for (const d of openDebilities ?? []) {
-				out.push({ ...base, key: `instead-debility-${d.key}`, label: d.name, standIn: { kind: "debility", key: d.key, name: d.name, from: s.from ?? "" } });
+				out.push({
+					...base, key: `instead-debility-${d.key}`, label: d.name,
+					standIn: { kind: "debility", key: d.key, name: d.name, from: s.from ?? "" },
+					// The debility the player picked: the purse IS the choice of which.
+					pay: async (payer) => {
+						await payer.markDebility(d.key);
+						return { lost: 0 };
+					},
+					choiceLabel: () => `Mark ${d.name} instead${via}`,
+					receipt: amount => `Marked ${d.name} in place of ${amount} Stock`,
+				});
 			}
 		} else if (s?.kind === "hp") {
-			out.push({ ...base, key: `instead-hp-${i}`, label: "HP", remaining: Number(hp) > 0 ? Infinity : 0, standIn: { kind: "hp", amount: s.amount, from: s.from ?? "" } });
+			out.push({
+				...base, key: `instead-hp-${i}`, label: "HP", remaining: Number(hp) > 0 ? Infinity : 0,
+				standIn: { kind: "hp", amount: s.amount, from: s.from ?? "" },
+				// The HP the move names, per Stock: never rolled, unlike the Vessel's.
+				pay: async (payer, amount) => {
+					const lost = s.amount * Math.max(1, Math.trunc(Number(amount) || 1));
+					await payer.loseHp(lost);
+					return { lost };
+				},
+				choiceLabel: amount => `Lose ${s.amount * Math.max(1, amount)} HP instead${via}`,
+				receipt: (amount, lost = 0) => `Lost ${lost} HP in place of ${amount} Stock`,
+			});
 		} else if (s?.text) {
-			out.push({ ...base, key: `instead-other-${i}`, label: s.text, standIn: { kind: "other", text: s.text, from: s.from ?? "" } });
+			out.push({
+				...base, key: `instead-other-${i}`, label: s.text,
+				standIn: { kind: "other", text: s.text, from: s.from ?? "" },
+				// A price the table settles: nothing to write, and the receipt names it.
+				pay: async () => ({ lost: 0 }),
+				choiceLabel: () => `${capitalizeFirst(s.text)} instead${via}`,
+				receipt: amount => `In place of ${amount} Stock: ${s.text}`,
+			});
 		}
 	});
 	return out;
@@ -183,30 +237,18 @@ export function mustAskStockSource(payable) {
 	return payable.length > 1 || payable.some(paidInPlaceOfStock);
 }
 
-/** How a purse reads as a choice: "Stock (2 left)", or "Lose 2d4 HP instead". */
+/** How a purse reads as a choice: "Stock (2 left)", or "Lose 2d4 HP instead" (the purse's choiceLabel). */
 export function stockSourceChoiceLabel(source, amount = 1) {
-	if (source.vessel) return `Lose ${vesselHpFormula(amount)} HP instead`;
-	const s = source.standIn;
-	if (s) {
-		const via = s.from ? ` (${s.from})` : "";
-		if (s.kind === "debility") return `Mark ${s.name} instead${via}`;
-		if (s.kind === "hp") return `Lose ${s.amount * Math.max(1, amount)} HP instead${via}`;
-		return `${capitalizeFirst(s.text)} instead${via}`;
-	}
-	return `${source.label} (${source.remaining} left)`;
+	return source?.choiceLabel ? source.choiceLabel(amount) : `${source?.label} (${source?.remaining} left)`;
 }
 
 /**
  * What a paid cost says afterwards, on a card or a notification: "Spent 1 Stock", or for a
- * Vessel "Lost 5 HP in place of 1 Stock". `lost` is the HP the Vessel's roll took.
+ * Vessel "Lost 5 HP in place of 1 Stock" (the purse's receipt). `lost` is the HP the purse took.
+ * A purse with no receipt of its own (a stamp from before the Vessel purse existed) was a count.
  */
 export function stockReceipt(source, amount = 1, lost = 0) {
-	if (source?.vessel) return `Lost ${lost} HP in place of ${amount} Stock`;
-	const s = source?.standIn;
-	if (s?.kind === "debility") return `Marked ${s.name} in place of ${amount} Stock`;
-	if (s?.kind === "hp") return `Lost ${lost} HP in place of ${amount} Stock`;
-	if (s?.kind === "other") return `In place of ${amount} Stock: ${s.text}`;
-	return `Spent ${amount} ${source?.label ?? "Stock"}`;
+	return source?.receipt ? source.receipt(amount, lost) : `Spent ${amount} ${source?.label ?? "Stock"}`;
 }
 
 /**

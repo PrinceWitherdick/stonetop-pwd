@@ -4,19 +4,14 @@
 // options are the move's boxes and a list printed twice is two lists that can't count each other. A
 // card read before the move is taken has no boxes, so it lists them. PURE.
 
-import { escHtml } from "../../utils/strings.js";
+import { decodeEntities, escHtml } from "../../utils/strings.js";
 
-const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " ", rsquo: "'", lsquo: "'", rdquo: "\"", ldquo: "\"", ndash: "-", mdash: "-", hellip: "..." };
-
-// Words as read, for telling whether the description names an option already: tags and entities
-// gone, curly quotes and dashes straightened, spaces folded.
+// Words as read, for telling whether the description names an option already: tags gone, entities
+// decoded (decodeEntities), curly quotes, dashes and ellipses straightened, spaces folded.
 function _loose(text) {
-	return String(text ?? "")
-		.replace(/<[^>]*>/g, " ")
-		.replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-		.replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
-		.replace(/&([a-z]+);/gi, (m, n) => ENTITIES[n.toLowerCase()] ?? m)
+	return decodeEntities(String(text ?? "").replace(/<[^>]*>/g, " "))
 		.replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, "\"").replace(/[\u2013\u2014]/g, "-")
+		.replace(/\u2026/g, "...")
 		.replace(/[\s\u00a0]+/g, " ")
 		.trim();
 }

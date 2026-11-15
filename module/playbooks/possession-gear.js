@@ -4,6 +4,8 @@
 // the inventory when the possession is picked (possession-grants.js), as the Fox's Burglar's kit does.
 // A ◇ item is a regular item weighing its ◇s; a bare one a small item. Pure: words in, data out.
 
+import { capitalizeFirst } from "../utils/strings.js";
+
 // The possession's own uses, opening its words: "(○○○ uses):", "○○○○○ uses:", "(○ per session) :".
 const USES_LEAD = /^\s*\(?\s*(○+)\s*(?:uses?\b|per\s+(?:session|day|adventure|expedition|season|fight)\b)[^)\n:]*\)?\s*:?\s*/i;
 
@@ -67,8 +69,6 @@ export function possessionRulesFrom(words) {
 	return text.slice(at).replace(/^[\s*]*[.;]?\s*/, "").trim();
 }
 
-const _cap = s => s.charAt(0).toUpperCase() + s.slice(1);
-
 /**
  * The gear a possession's words list, as `grantsItems` rows ({name, column, weight?, note?,
  * resource?, resourceSuffix?}), or null when they list none. A list is three or more short things,
@@ -88,7 +88,7 @@ export function possessionGearFrom(words) {
 		const diamonds = (part.match(/^[◇\s]*/)?.[0].match(/◇/g) ?? []).length;
 		const body = part.replace(/^[◇\s]+/, "");
 		const paren = body.match(/\(([^)]*)\)?/);
-		const name = _cap(body.replace(/\s*\(.*$/, "").replace(/^(?:a|an|the)\s+/i, "").trim());
+		const name = capitalizeFirst(body.replace(/\s*\(.*$/, "").replace(/^(?:a|an|the)\s+/i, "").trim());
 		if (!name || name.split(/\s+/).length > MAX_ITEM_WORDS || /[○◇☐]/.test(name)) return null;
 		const row = { name, column: diamonds ? "regular" : "small", ...(diamonds ? { weight: diamonds } : {}) };
 		if (paren) {

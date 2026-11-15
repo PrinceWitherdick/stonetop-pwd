@@ -1,5 +1,5 @@
 import { ITEM_FLAG_SCOPE, SYSTEM_ID } from "../system-id.js";
-import { slugify } from "../utils/strings.js";
+import { slugify, uniqueSlug } from "../utils/strings.js";
 import { playbookIconPath } from "../utils/playbook-actors.js";
 
 /**
@@ -321,11 +321,7 @@ export function homebrewMoveGroups(name, items) {
 export function mintHomebrewSlug(name, items) {
 	const base = HOMEBREW_SLUG_PREFIX + (slugify(name) || "playbook");
 	const taken = _catalog(items).bySlug;
-	if (!taken.has(base) && !RESERVED_SLUGS.has(base)) return base;
-	for (let n = 2; ; n++) {
-		const candidate = `${base}-${n}`;
-		if (!taken.has(candidate) && !RESERVED_SLUGS.has(candidate)) return candidate;
-	}
+	return uniqueSlug(base, slug => taken.has(slug) || RESERVED_SLUGS.has(slug));
 }
 
 /**

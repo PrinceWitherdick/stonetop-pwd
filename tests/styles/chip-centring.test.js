@@ -1,5 +1,6 @@
+import fs from "node:fs";
 import { describe, expect, it } from "vitest";
-import { declarations, declared, readCss, readRepo } from "../fakes/css.js";
+import { declarations, declared, ownRule, readCss, readRepo, repoPath } from "../fakes/css.js";
 
 /**
  * Every chip centres its label by TRIMMING the label's line box to its cap band, never by nudging.
@@ -409,12 +410,14 @@ describe("the Bolster button and the Suggested tag carry no hand nudge", () => {
 
 // Measured 11-05 with the text-centring audit at 1x/1.25x/1.5x: the arcana tab's "Roll 1d4+8" (icon row, -1.3px)
 // and the crew member dialog's "Add" for a trait of their own (icon row, 0px), on core's button and even padding.
+// Its "Link a Person…" beside the Person field was measured with "Add" on 11-15 (chip and icon row, -0.5px each).
 // The crew member's edit pencil is icon-only and the unlock list's "or" a plain list label, so neither has words
 // to centre in a box. What would break the two buttons is a hand nudge on the label.
-describe("the arcana Roll uses button and the crew trait Add carry no hand nudge", () => {
+describe("the arcana Roll uses button and the crew dialog's Add and Link a Person carry no hand nudge", () => {
 	it.each([
 		".stonetop-arcanum-roll-uses-btn",
 		".stonetop-individual-dialog .stonetop-trait-custom-row .stonetop-trait-custom-add",
+		".stonetop-individual-dialog .stonetop-individual-person .stonetop-individual-person-link",
 	])("%s", sel => {
 		const body = declarations(MAIN, sel);
 		expect(body, `${sel} has no rule`).toBeTruthy();
@@ -506,5 +509,74 @@ describe("the fixed discs trim their numeral", () => {
 
 	it("trims the relationship heart's numeral", () => {
 		expect(declarations(MAIN, ".stonetop-rel-heart-badge-value")).toMatch(TRIM);
+	});
+});
+
+/**
+ * The shared left rail (.stonetop-guide-toc-btn): the Welcome guide, the playbook import review, the
+ * Playbook Builder, the rosters, the content and person pickers, Death's Door and the rest share one
+ * rule. Its selected entry is filled, so it reads as a chip, and its words sat 1.5px high in Signika
+ * and IM Fell English (1px in Libre Caslon) on an untrimmed `line-height: 1.25`. Measured 11-15 with the
+ * text-centring audit plus a raster pass over every rail shape, three faces, UI roots 16 and 20, at
+ * 1x/1.25x/1.5x (rail-all.mjs): now within 0.7px in Signika and Fell, 1px in Caslon, and every icon and
+ * count within about 1px of its words. The audit cannot see an entry with a count (two text children),
+ * so the raster pass is what covers those; this file holds the mechanism in place.
+ */
+describe("the shared left rail centres its words by trimming them", () => {
+	it("pins its parts to the top, on one whole-pixel line height they all inherit", () => {
+		const body = declarations(MAIN, ".stonetop-guide-toc-btn");
+		expect(declared(body, "display")).toBe("flex");
+		// A wrapped title keeps its icon and count beside its first line.
+		expect(declared(body, "align-items")).toBe("flex-start");
+		// A length, so the icon and count inherit the words' line rather than a shorter one of their own.
+		expect(body).toMatch(/line-height:\s*1\.25em;\s*line-height:\s*round\(1\.25em, 1px\)/);
+		expect(body).not.toMatch(/line-height:\s*1\.25\s*;/);
+	});
+
+	it.each([".stonetop-guide-toc-text", ".stonetop-guide-toc-count", ".stonetop-guide-toc-btn > .stonetop-person-picker-count"])(
+		"%s trims and pads with both tokens", sel => {
+			const body = declarations(MAIN, sel);
+			expect(body, `${sel} has no rule`).toBeTruthy();
+			expect(body).toMatch(TRIM);
+			expect(declared(body, "padding-top")).toBe("var(--st-trim-top)");
+			expect(declared(body, "padding-bottom")).toBe("var(--st-trim-bottom)");
+		});
+
+	it("draws the icon on the words' line at a whole-pixel size, unnudged", () => {
+		const body = ownRule(MAIN, ".stonetop-guide-toc-icon");
+		expect(declared(body, "line-height")).toBe("inherit");
+		expect(declared(body, "font-size")).toMatch(/^round\(.+, 1px\)$/);
+		expect(declared(body, "margin-top")).toBeNull();
+		expect(declared(body, "top")).toBeNull();
+	});
+
+	it("lays the Welcome guide's bold-width copy over the words' line, so the trim's bottom edge is theirs", () => {
+		const body = ownRule(MAIN, ".stonetop-welcome-split .stonetop-guide-toc-text::after");
+		expect(declared(body, "margin-top")).toBe("-1lh");
+		expect(declared(body, "visibility")).toBe("hidden");
+		// A zero-height copy, or one walled off by overflow, took the trim's end and left the words untrimmed.
+		expect(declared(body, "height")).toBeNull();
+		expect(declared(body, "overflow")).toBeNull();
+	});
+
+	/** Every source file that builds a rail entry, repo-relative. */
+	function railSources(dir) {
+		return fs.readdirSync(repoPath(dir), { withFileTypes: true }).flatMap(e => {
+			const rel = `${dir}/${e.name}`;
+			if (e.isDirectory()) return railSources(rel);
+			return /\.(hbs|js)$/.test(e.name) && readRepo(rel).includes('class="stonetop-guide-toc-btn') ? [rel] : [];
+		});
+	}
+
+	it("wraps every rail entry's words in .stonetop-guide-toc-text, which is what takes the trim", () => {
+		const files = [...railSources("templates"), ...railSources("module")];
+		expect(files.length, "the rail's sources went missing").toBeGreaterThanOrEqual(13);
+		const bare = [];
+		for (const file of files) {
+			const btns = [...readRepo(file).matchAll(/<button\b[^>]*class="stonetop-guide-toc-btn\b[^"]*"[^>]*>([\s\S]*?)<\/button>/g)];
+			expect(btns.length, `no rail button read in ${file}`).toBeGreaterThan(0);
+			for (const m of btns) if (!m[1].includes('class="stonetop-guide-toc-text"')) bare.push(`${file}: ${m[0].slice(0, 80)}`);
+		}
+		expect(bare).toEqual([]);
 	});
 });

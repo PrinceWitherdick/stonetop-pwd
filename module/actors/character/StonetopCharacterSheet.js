@@ -100,6 +100,7 @@ import {moveRollable} from "../../utils/move-rollable.js";
 import {escHtml, isDefaultImg, normalizePlaybookGlyphs, composeInstinct, stripHtmlToText} from "../../utils/strings.js";
 import {partyCharacters, playerOf} from "../../utils/playbook-actors.js";
 import { playbookAvatar, isHomebrewPlaybookItem, isHomebrewPublished, homebrewPlaybookBySlug, homebrewPlaybookInserts } from "../../playbooks/playbook-catalog.js";
+import { INSERT_FORM_DEFAULTS } from "../../playbooks/homebrew-bundle.js";
 import { carriedCopyOf } from "../../playbooks/homebrew-missing.js";
 import {postMoveToChat, moveChatCard, pickableMoveDescription, whisperedAs} from "../../utils/chat.js";
 import {moveBodyHtml, moveCardBody} from "../../utils/move-tiers.js";
@@ -998,6 +999,15 @@ function _makeReadinessPips(val, max = 3) {
 	const count = Math.max(max, val);
 	return Array.from({ length: count }, (_, i) => ({ index: i, filled: i < val }));
 }
+
+// An Order button's tag and move lists: trimmed text, blanks dropped.
+const cleanList = (list) => (list ?? []).map(v => String(v ?? "").trim()).filter(Boolean);
+// The same list as the button's `data-tags` / `data-moves` carry it, pipe-joined. No follower tag
+// contains a pipe; a move line is free text, so a pipe in one becomes a slash rather than split it
+// into two chips.
+const orderCsv = (list) => cleanList(list).map(v => v.replace(/\|/g, "/")).join("|");
+// And back off the dataset.
+const fromOrderCsv = (raw) => cleanList(String(raw ?? "").split("|"));
 
 // A follower "bears a shield" (+1 Readiness on a 7+ Defend) if any checked gear
 // entry names a shield. Gear labels are free text on every follower type, so a
@@ -3653,22 +3663,22 @@ export function createStonetopCharacterSheetClass(Base) {
 				return card;
 			};
 			// Stash the data the Order button (and its dialog) needs as plain values:
-			// a clean tag list (pipe-joined — no follower tag contains a pipe), the
-			// exceptional flag, and a display name. Initiates carry their epithet in
-			// `label`, not `name`, so fall through to it. Also derives the Loyalty
-			// total for the Spend button.
+			// a clean tag list, the exceptional flag, and a display name. Initiates carry
+			// their epithet in `label`, not `name`, so fall through to it. Also derives
+			// the Loyalty total for the Spend button. The lists are arrays for every JS
+			// reader (crewMemberCard, orderableFollowers); the Order button's dataset
+			// carries them pipe-joined (orderCsv), the one place they become a string.
 			const withOrderData = (card) => {
 				if (!card) return card;
-				const tags = (card.tags ?? [])
-					.map(t => (typeof t === "string" ? t : t?.label))
-					.filter(Boolean);
-				card.orderTagsCsv = tags.join("|");
+				const tags = cleanList((card.tags ?? []).map(t => (typeof t === "string" ? t : t?.label)));
+				card.orderTags    = tags;
+				card.orderTagsCsv = orderCsv(tags);
 				// A follower's moves earn the same +1/+2 as a tag ("at least one
 				// appropriate tag or move", p.462), so the Order dialog chips them
-				// alongside the tags. Pipe-joined like the tags — a move line is free
-				// text, so strip any pipe rather than let it split into two chips.
-				const moves = (card.movesLines ?? []).map(m => String(m).replace(/\|/g, "/"));
-				card.orderMovesCsv = moves.join("|");
+				// alongside the tags.
+				const moves = cleanList(card.movesLines ?? []);
+				card.orderMoves    = moves;
+				card.orderMovesCsv = orderCsv(moves);
 				card.orderName    = card.name || card.label || card.namePlaceholder || card.typeLabel || "Follower";
 				// Worded by the shared labeller, so the card and the roster row cannot end up
 				// describing the same act two ways (see portraitActionLabel).
@@ -3765,13 +3775,15 @@ export function createStonetopCharacterSheetClass(Base) {
 				// Build each member's Order data from the crew's tags plus their own.
 				if (card.ftype === "crew" && Array.isArray(card.individuals)) {
 					card.individuals = card.individuals.map(ind => {
-						const own = [ind.tag, ...(Array.isArray(ind.traits) ? ind.traits : [])].filter(Boolean);
+						const orderTags = cleanList([...tags, ind.tag, ...(Array.isArray(ind.traits) ? ind.traits : [])]);
 						return {
 							...ind,
 							orderName:    ind.name || crewIndividualLabel(ind.index),
-							orderTagsCsv: [...tags, ...own].join("|"),
+							orderTags,
+							orderTagsCsv: orderCsv(orderTags),
 							// The crew's moves belong to every member of it, so a member
 							// ordered on their own can still lean on one.
+							orderMoves:    moves,
 							orderMovesCsv: card.orderMovesCsv,
 							exceptional:  !!card.exceptional,
 						};
@@ -6478,12 +6490,11 @@ export function createStonetopCharacterSheetClass(Base) {
 				const btn = ev.target.closest(".stonetop-follower-order");
 				if (!btn) return;
 				ev.stopPropagation();
-				const pipeList = (raw) => (raw || "").split("|").map(s => s.trim()).filter(Boolean);
 				this.orderFollower({
 					name:        btn.dataset.followerName || "Follower",
-					tags:        pipeList(btn.dataset.tags),
+					tags:        fromOrderCsv(btn.dataset.tags),
 					// Their moves count toward the same bonus as their tags (p.462).
-					moves:       pipeList(btn.dataset.moves),
+					moves:       fromOrderCsv(btn.dataset.moves),
 					exceptional: btn.dataset.exceptional === "true",
 					// A group-fight Clash/Let Fly button pre-selects that move; the plain
 					// Order button leaves it at the default (Defy Danger).
@@ -6873,40 +6884,25 @@ export function createStonetopCharacterSheetClass(Base) {
 					.catch(err => this._arcanaWriteRefused(err));
 			}, true);
 
+			// Every lore list's boxes and write-ins (lore-options-edit.hbs), whichever store keeps them: the
+			// list's container names it (`data-lore-store`, _loreStore).
 			html[0].addEventListener("change", ev => {
 				const cb = ev.target.closest(".stonetop-lore-option-check");
-				if (!cb || ev.target.closest("[data-pdi='lore'], [data-hb-insert]")) return;
-				this._onLoreOptionCheck(cb);
+				const ta = cb ? null : ev.target.closest(".stonetop-lore-option-text");
+				const store = (cb || ta) && this._loreStore(cb ?? ta);
+				if (!store) return;
+				if (cb) store.setCount(cb);
+				else store.setText(ta);
 			}, true);
 
-			html[0].addEventListener("change", ev => {
-				const ta = ev.target.closest(".stonetop-lore-option-text");
-				if (!ta || ev.target.closest("[data-pdi='lore'], [data-hb-insert]")) return;
-				const { loreSlug, optionSlug } = ta.dataset;
-				this._stonetopCharacter.setLoreOptionText(loreSlug, optionSlug, ta.value);
-			}, true);
-
-			// A homebrew insert's lists (tab-homebrew-insert.hbs): their own store, and never refused, as a
-			// list over its count is flagged on the sheet instead (homebrew-inserts.js).
-			html[0].addEventListener("change", ev => {
-				if (!ev.target.closest("[data-hb-insert]") || !this.isEditable) return;
-				const cb = ev.target.closest(".stonetop-lore-option-check");
-				if (cb) {
-					const { loreSlug, optionSlug, idx } = cb.dataset;
-					this._stonetopCharacter.setInsertLoreCount(loreSlug, optionSlug, cb.checked ? Number(idx) + 1 : Number(idx));
-					return;
-				}
-				const ta = ev.target.closest(".stonetop-lore-option-text");
-				if (ta) this._stonetopCharacter.setInsertLoreText(ta.dataset.loreSlug, ta.dataset.optionSlug, ta.value);
-			}, true);
-
-			// Taking on an insert's form, or leaving it: its gear is the character's while worn.
+			// Taking on an insert's form, or leaving it, from its tab: its gear is the character's while worn.
+			// The header glyph's path (_onInsertFormToggle), so a move that brings the form out is offered
+			// here too.
 			html[0].addEventListener("click", ev => {
 				const btn = ev.target.closest("[data-hb-insert-form]");
 				if (!btn || !this.isEditable) return;
-				ev.preventDefault();
 				btn.disabled = true;
-				this._stonetopCharacter.setInsertForm(btn.dataset.hbInsertForm, btn.dataset.on === "true")
+				this._onInsertFormToggle(ev, btn)
 					.catch(err => {
 						console.error("Stonetop | couldn't change the insert's form", err);
 						ui.notifications?.error("Couldn't change form. See the console for details.");
@@ -7003,13 +6999,6 @@ export function createStonetopCharacterSheetClass(Base) {
 					.setPostDeathLoreText(el.dataset.section, el.dataset.option, el.value));
 			}, true);
 
-			html[0].addEventListener("change", ev => {
-				if (!ev.target.closest("[data-pdi='lore']")) return;
-				const cb = ev.target.closest(".stonetop-lore-option-check");
-				if (!cb) return;
-				this._onInsertLoreTick(cb);
-			}, true);
-
 			// The tab's own controls, in play and in edit mode alike: the outcome buttons, the Favor pips,
 			// the GM's Mark controls and the master's task. One delegated handler keyed by the button's
 			// `data-pdi-action`, so a control added to the tab needs no listener of its own.
@@ -7019,14 +7008,6 @@ export function createStonetopCharacterSheetClass(Base) {
 				ev.preventDefault();
 				ev.stopPropagation();
 				this._onPostDeathControl(btn);
-			}, true);
-
-			html[0].addEventListener("change", ev => {
-				if (!ev.target.closest("[data-pdi='lore']")) return;
-				const ta = ev.target.closest(".stonetop-lore-option-text");
-				if (!ta) return;
-				const { loreSlug, optionSlug } = ta.dataset;
-				this._stonetopCharacter.setPostDeathLoreText(loreSlug, optionSlug, ta.value);
 			}, true);
 
 			// (Pronoun is a structural field routed through the shared
@@ -9176,6 +9157,40 @@ export function createStonetopCharacterSheetClass(Base) {
 			return this._stonetopCharacter.setLoreOptionCount(loreSlug, optionSlug, newCount);
 		}
 
+		/**
+		 * The store a lore list's box or write-in writes to, named by its container's `data-lore-store`:
+		 *  - "lore": the playbook's own (Details tab), its ticks held to the list's cap (_onLoreOptionCheck).
+		 *  - "insert": a homebrew insert's (tab-homebrew-insert.hbs), never refused, as a list over its count
+		 *    is flagged on the sheet instead (homebrew-inserts.js); editors only.
+		 *  - "pdi": a post-death insert's (Post-Death tab), each tick an option taken or given back
+		 *    (_onInsertLoreTick).
+		 * `{setCount(checkbox), setText(field)}`, or null for a list this user cannot write.
+		 */
+		_loreStore(el) {
+			const character = this._stonetopCharacter;
+			const text = write => ta => write(ta.dataset.loreSlug, ta.dataset.optionSlug, ta.value);
+			switch (el.closest("[data-lore-store]")?.dataset.loreStore ?? "lore") {
+				case "insert":
+					return this.isEditable ? {
+						setCount: cb => {
+							const { loreSlug, optionSlug, idx } = cb.dataset;
+							return character.setInsertLoreCount(loreSlug, optionSlug, cb.checked ? Number(idx) + 1 : Number(idx));
+						},
+						setText: text((lore, option, value) => character.setInsertLoreText(lore, option, value)),
+					} : null;
+				case "pdi":
+					return {
+						setCount: cb => this._onInsertLoreTick(cb),
+						setText: text((lore, option, value) => character.setPostDeathLoreText(lore, option, value)),
+					};
+				default:
+					return {
+						setCount: cb => this._onLoreOptionCheck(cb),
+						setText: text((lore, option, value) => character.setLoreOptionText(lore, option, value)),
+					};
+			}
+		}
+
 		// One lore section's stored counts, by option slug (stored flat as "section:option").
 		_loreSectionCounts(loreSlug) {
 			const prefix = `${loreSlug}:`;
@@ -10572,20 +10587,25 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		/**
-		 * A homebrew insert's form, from the header glyph. Taking it off is plain, as the insert tab's switch
-		 * is (what it costs to revert is the playbook's rule, said at the table). Taking it on asks first when
+		 * A homebrew insert's form, from the header glyph (`data-insert-form-key`, which flips it) or the
+		 * insert tab's switch (`data-hb-insert-form`, whose `data-on` says which way). Taking it off is plain
+		 * (what it costs to revert is the playbook's rule, said at the table). Taking it on asks first when
 		 * a move of the character's puts it on by its roll (the Stranger's Metamorphosis,
 		 * tier-effects.js#insertFormRollFor): roll that, through the Moves tab's own path, whose result puts
 		 * the form on; or take it on without rolling. With no such move it simply switches.
+		 *
+		 * @param {Event} ev
+		 * @param {HTMLElement} [el]  the control clicked, for a delegated listener (default `ev.currentTarget`)
 		 */
-		async _onInsertFormToggle(ev) {
+		async _onInsertFormToggle(ev, el = ev.currentTarget) {
 			ev.preventDefault();
 			ev.stopPropagation();
 			if (!this.isEditable) return;
-			const key = ev.currentTarget.dataset.insertFormKey;
+			const key = el?.dataset?.insertFormKey ?? el?.dataset?.hbInsertForm;
 			if (!key) return;
 			const shiftKey = ev.shiftKey;
-			if (this._stonetopCharacter.wearingInsertForm(key)) {
+			const on = el.dataset.on != null ? el.dataset.on === "true" : !this._stonetopCharacter.wearingInsertForm(key);
+			if (!on) {
 				await this._stonetopCharacter.setInsertForm(key, false);
 				this.render(false);
 				return;
@@ -10593,7 +10613,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			const roller = this.actor.items.find(i => i.type === "move" && insertFormRollFor(this.actor, i.name)?.key === key);
 			if (roller) {
 				const ins = homebrewPlaybookInserts(this.actor.system?.playbook?.slug).find(i => i?.key === key);
-				const on = ins?.form?.on || "Transform";
+				const on = ins?.form?.on || INSERT_FORM_DEFAULTS.on;
 				const how = await askWithButtons({
 					title: `${on}: ${ins?.name || "your other form"}`,
 					content: `<p><strong>${escHtml(roller.name)}</strong> is the move that brings this form out. Roll it, and its result puts the form on; or take the form on without rolling, if the roll was made at the table or the GM says so.</p>`,
@@ -13344,12 +13364,6 @@ export function createStonetopCharacterSheetClass(Base) {
 		}
 
 		/**
-		 * One follower's finished card, as the drag-to-scene payload carries it (_followerDragSnapshot):
-		 * built with the tab, so a sheet never rendered this session (an order from the token on the map)
-		 * builds its cards first (_followerCards, the tab's own build without the rest of the sheet). Null
-		 * when there is no such card.
-		 */
-		/**
 		 * What a named crew member's Person sheet shows, read off the finished crew card: the crew's
 		 * tags, instinct and cost, and the member's own tag, traits, HP and Order data (the same fields
 		 * their "Order <name>" button on the card carries). Built fresh, never from the drag cache, which
@@ -13359,7 +13373,7 @@ export function createStonetopCharacterSheetClass(Base) {
 		 */
 		async crewMemberCard(personUuid) {
 			if (!personUuid) return null;
-			const crew = (await this._followerCards()).find(card => card?.ftype === "crew");
+			const crew = await this._sharedCrewCard();
 			const member = (crew?.individuals ?? []).find(ind => ind?.personUuid === personUuid);
 			if (!member) return null;
 			const text = v => String(v ?? "").trim();
@@ -13389,13 +13403,39 @@ export function createStonetopCharacterSheetClass(Base) {
 					traits:        (Array.isArray(member.traits) ? member.traits : []).map(text).filter(Boolean),
 					hpCurrent:     member.hpCurrent,
 					hpMax:         member.hpMax,
-					orderTagsCsv:  member.orderTagsCsv ?? "",
-					orderMovesCsv: member.orderMovesCsv ?? "",
+					orderTags:     [...(member.orderTags ?? [])],
+					orderMoves:    [...(member.orderMoves ?? [])],
 					exceptional:   !!member.exceptional,
 				},
 			};
 		}
 
+		/**
+		 * The finished crew card, ONE build for every member sheet that asks while it is being built:
+		 * a change to the character redraws each open member sheet, and each would otherwise build
+		 * the whole Followers tab again. Dropped once settled, so a later ask builds from the state
+		 * then, and by forgetCrewCard when the character changes mid-build.
+		 */
+		_sharedCrewCard() {
+			if (this._crewCardBuild) return this._crewCardBuild;
+			const build = this._followerCards().then(cards => cards.find(card => card?.ftype === "crew") ?? null);
+			// Its own rejection is the caller's (crewMemberCard's reader catches it); this only lets go.
+			build.catch(() => {}).finally(() => { if (this._crewCardBuild === build) this._crewCardBuild = null; });
+			this._crewCardBuild = build;
+			return build;
+		}
+
+		/** Forget a crew card still being built: the character changed, so the next ask builds anew. */
+		forgetCrewCard() {
+			this._crewCardBuild = null;
+		}
+
+		/**
+		 * One follower's finished card, as the drag-to-scene payload carries it (_followerDragSnapshot):
+		 * built with the tab, so a sheet never rendered this session (an order from the token on the map)
+		 * builds its cards first (_followerCards, the tab's own build without the rest of the sheet). Null
+		 * when there is no such card.
+		 */
 		async _followerCardSnapshot(ftype, slug = "") {
 			const key = `${ftype}:${slug ?? ""}`;
 			if (!this._followerDragData?.has(key)) {
@@ -14406,7 +14446,6 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * ones the Order button would use.
 		 */
 		async orderableFollowers() {
-			const split = csv => String(csv ?? "").split("|").map(s => s.trim()).filter(Boolean);
 			return (await this._followerCards())
 				.filter(card => card?.ftype && card.canOrder && !card.dead)
 				.map(card => ({
@@ -14414,7 +14453,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					slug:        card.slug ?? "",
 					name:        card.orderName,
 					img:         card.storedImg ?? card.img ?? "",
-					tags:        [...split(card.orderTagsCsv), ...split(card.orderMovesCsv)],
+					tags:        [...(card.orderTags ?? []), ...(card.orderMoves ?? [])],
 					exceptional: !!card.exceptional,
 					isGroup:     !!card.isGroup || card.groupHpMax != null,
 					party:       !!card.party,

@@ -24,10 +24,11 @@
 // is read as questions, moves or notes by its shape, and marked UNSURE for the GM to settle.
 
 import { layoutDocument } from "./layout.js";
-import { emptyBundle, HP_LIMITS, DAMAGE_DICE } from "../homebrew-bundle.js";
-import { wholeWordPattern, looseName, slugify } from "../../utils/strings.js";
+import { emptyBundle, HP_LIMITS, DAMAGE_DICE, INSERT_FORM_DEFAULTS } from "../homebrew-bundle.js";
+import { capitalizeFirst, escapeRegExp, wholeWordPattern, looseName, nounStem, slugify, uniqueSlug } from "../../utils/strings.js";
+import { truncateValue } from "../../utils/ledger-core.js";
 import { pickCountRange } from "../../actors/character/lore-pick-count.js";
-import { rollFromWords, heldFromWords, onceTitle } from "../move-words.js";
+import { rollFromWords, heldFromWords, heldCounts, onceTitle } from "../move-words.js";
 
 // Brackets are taken off before this is tried ("(WIS)(WIS)" is " WIS  WIS "), so the bare
 // abbreviations are here too: missed, the stat box's labels ran on into the move above them.
@@ -287,7 +288,7 @@ function _title(line) {
 	// "CURSED  Doom ●●●": the word before the pips names the track; it is not the prose.
 	const label = line.pips?.[0]?.label;
 	if (label && !title.toUpperCase().endsWith(label.toUpperCase())) {
-		const word = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		const word = escapeRegExp(label);
 		rest = rest.replace(new RegExp(`^\\**${word}\\**\\s*`), "");
 	}
 	rest = rest.replace(/^○+\s*/, "");
@@ -934,9 +935,9 @@ function _questionTitle(prompt) {
 	if (!plain) return "";
 	const sentences = plain.match(/[^.?!]+[.?!]?/g)?.map(x => x.trim()).filter(Boolean) ?? [plain];
 	const asked = sentences.find(x => x.endsWith("?"));
-	let title = (asked ?? sentences.at(-1)).replace(/^(?:tell us|so|and|but),\s*/i, "");
-	title = title.charAt(0).toUpperCase() + title.slice(1);
-	return title.length > 90 ? `${title.slice(0, 87).replace(/\s+\S*$/, "")}…` : title;
+	const title = (asked ?? sentences.at(-1)).replace(/^(?:tell us|so|and|but),\s*/i, "");
+	// At most 90 characters, the ellipsis included.
+	return truncateValue(capitalizeFirst(title), 89);
 }
 
 /**
@@ -1142,7 +1143,7 @@ function _custom(s, draft) {
 
 /** "the Stranger's Monster Compendium insert", "Monster Compendium insert": the title named as an insert. */
 function _insertMention(title) {
-	const words = String(title).trim().split(/\s+/).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+	const words = String(title).trim().split(/\s+/).map(escapeRegExp);
 	return new RegExp(`\\b${words.join("\\s+")}\\s+insert\\b`, "i");
 }
 
@@ -1415,10 +1416,7 @@ function _heldAcrossMoves(moves) {
 	for (const m of moves) {
 		const r = m.resource;
 		if (!r?.title || r.fromPips) continue;
-		const stem = r.title.replace(/s$/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-		const pattern = new RegExp(`\\b(\\d+)\\s+${stem}s?\\b`, "g");
-		const counts = moves.flatMap(o => [...String(o.description).replace(/\*/g, "").matchAll(pattern)].map(x => Number(x[1])));
-		r.max = Math.max(r.max, ...counts.filter(n => n > 0 && n <= 20));
+		r.max = Math.max(r.max, ...moves.flatMap(o => heldCounts(r.title, o.description)));
 	}
 	for (const m of moves) if (m.resource) delete m.resource.fromPips;
 }
@@ -1437,7 +1435,8 @@ function _blurb(description) {
 		out = out ? `${out} ${x}` : x;
 	}
 	if (!out) out = plain;
-	return out.length > 200 ? `${out.slice(0, 197).replace(/\s+\S*$/, "")}…` : out;
+	// At most 200 characters, the ellipsis included.
+	return truncateValue(out, 199);
 }
 
 /** Options for a question built from a block that has none: its bullet lines, else a write-in. */
@@ -1556,9 +1555,7 @@ function _insertsFor(draft) {
 	const used = new Set();
 	for (const record of draft?.inserts ?? []) {
 		const answer = (draft.confirm ?? []).find(c => c.insert === record.id)?.value ?? null;
-		const base = slugify(record.name) || slugify(record.id) || "insert";
-		let key = base;
-		for (let n = 2; used.has(key); n++) key = `${base}-${n}`;
+		const key = uniqueSlug(slugify(record.name) || slugify(record.id) || "insert", used);
 		used.add(key);
 		out.set(record.id, {
 			record,
@@ -1580,9 +1577,7 @@ function _insertPiece(b, ins, moves, issues) {
 		case "question": {
 			const q = _questionFromBlock(b);
 			const range = pickCountRange(q.description);
-			const used = new Set(ins.lists.map(l => l.key));
-			let key = slugify(q.title) || `list-${ins.lists.length + 1}`;
-			for (let n = 2; used.has(key); n++) key = `${slugify(q.title) || "list"}-${n}`;
+			const key = uniqueSlug(slugify(q.title) || `list-${ins.lists.length + 1}`, ins.lists.map(l => l.key));
 			ins.lists.push({ key, title: q.title, prompt: q.description, kind: "pick", pick: range?.max ?? 1, min: range?.min ?? 0,
 				perUnlock: 0, bonusPicks: [], options: q.options.map(o => ({ ...o })) });
 			return true;
@@ -1610,7 +1605,7 @@ function _insertPiece(b, ins, moves, issues) {
 	}
 }
 
-const _stem = w => looseName(w, { article: true }).replace(/s$/, "");
+const _stem = w => nounStem(looseName(w, { article: true }));
 /** The insert list a phrase names ("a new monster move" → Monster Moves, "monstrous armaments" → Armament). */
 const _listNamed = (lists, phrase) => {
 	const words = String(phrase).toLowerCase().split(/[^a-z]+/).filter(Boolean).map(_stem);
@@ -1649,7 +1644,7 @@ function _finishInsert(ins, moves) {
 		name: ins.record.name,
 		description: ins.description.join("\n\n").trim(),
 		unlockedBy: ins.unlockedBy,
-		form: { enabled: gear || turns, on: "Transform", off: "Revert" },
+		form: { enabled: gear || turns, ...INSERT_FORM_DEFAULTS },
 		lists: ins.lists.map(({ key, title, prompt, kind, pick, min, perUnlock, bonusPicks, options }) => ({ key, title, prompt, kind, pick, min, perUnlock, bonusPicks, options })),
 	};
 }

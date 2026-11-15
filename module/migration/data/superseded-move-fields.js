@@ -49,7 +49,7 @@ export const SUPERSEDED = {
 	"8kDdDVArsGPANnHn": {"description":["80e8bb905f29b395"],"requirement":["9b55e0da69fcb93a"]}, // Empowered Invocations (The Lightbearer)
 	"8Os95px6ZVwbmsW7": {"artifactLore":["9b55e0da69fcb93a"],"note":["a135501fd171ddae"]}, // An obsidian pendant
 	"8pdvBJpnPOW6S4C2": {"description":["add833eddbebc9d1"]}, // Keep the Home-Fires Burning (The Lightbearer)
-	"8V7Cl4kwyfj1uFIm": {"description":["cdd11431928269d3"],"moveResults":["9b55e0da69fcb93a"],"resource":["24d0f90f8f4f4abf","9b55e0da69fcb93a"],"resource.spendOptions":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Silver Tongued (The Fox)
+	"8V7Cl4kwyfj1uFIm": {"description":["cdd11431928269d3"],"moveResults":["9b55e0da69fcb93a"],"resource":["24d0f90f8f4f4abf","9b55e0da69fcb93a","c5013a8414c14597"],"resource.holdOnRoll":["9b55e0da69fcb93a"],"resource.spendOptions":["9b55e0da69fcb93a"],"rollType":["9b55e0da69fcb93a"]}, // Silver Tongued (The Fox)
 	"8y1VU6xTwuJ5FX95": {"description":["d516a1ce198ce938"],"requirement":["9b55e0da69fcb93a"],"resource":["870bfbc9ac24d95a","9b55e0da69fcb93a"],"resource.max":["fdf51f506af94a1e"]}, // Unstoppable (The Heavy)
 	"92hjysJMCuuRFrry": {"description":["e61ce28b65d7def1"],"requirement":["9b55e0da69fcb93a"]}, // A Bundle of Sticks Unbroken (The Judge)
 	"9dBbIzB3KED00xMw": {"artifactLore":["9b55e0da69fcb93a"],"note":["a135501fd171ddae","a42a43af0ba1a168"]}, // A sturdy, banded box
@@ -451,7 +451,7 @@ export const CURRENT_FINGERPRINTS = {
 	"8pdvBJpnPOW6S4C2": "1b3c80b0eeee8dcf",
 	"8PiJj6DTihBa8IlP": "5da021d068ea8b84",
 	"8rkHWoVtDM2iiZv7": "c8f0b54acda68f44",
-	"8V7Cl4kwyfj1uFIm": "ad6c7303ea516e23",
+	"8V7Cl4kwyfj1uFIm": "dcbd1c2e5b6b18da",
 	"8y1VU6xTwuJ5FX95": "e864dcf437546bb4",
 	"92hjysJMCuuRFrry": "21929345947c6a43",
 	"95ZhkBt14sPTvXZV": "480fd15779e8c102",

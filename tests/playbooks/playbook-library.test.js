@@ -64,6 +64,9 @@ describe("sameContent", () => {
 	it("sees a reworded move", () => {
 		expect(sameContent(tester(), tester("The Tester", { prod: "Shove it." }))).toBe(false);
 	});
+	it("doesn't take reflowed whitespace for an update, as diffBundles doesn't", () => {
+		expect(sameContent(tester(), tester("The Tester", { prod: "Poke\n   it." }))).toBe(true);
+	});
 });
 
 describe("planAdoption", () => {

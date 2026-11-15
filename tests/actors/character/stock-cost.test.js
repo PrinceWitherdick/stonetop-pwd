@@ -186,6 +186,28 @@ describe("stockSources", () => {
 		expect(stockSources({ boonMax: 4, boonStored: 0 })[1].after(1)).toBe(0);
 	});
 
+	// Each purse pays itself through the character's writes (StonetopCharacter#spendStock), so no
+	// caller branches on which kind it holds.
+	it("pays each purse its own way", async () => {
+		const calls = [];
+		const payer = {
+			setPouchSpent: async n => calls.push(["pouch", n]),
+			setBoonHeld:   async n => calls.push(["boon", n]),
+			loseVesselHp:  async n => { calls.push(["vessel", n]); return { lost: 6 }; },
+			markDebility:  async key => calls.push(["debility", key]),
+			loseHp:        async n => calls.push(["hp", n]),
+		};
+		const sources = stockSources({
+			pouchStored: 1, boonMax: 4, boonStored: 3, vesselHp: 7, hp: 9,
+			standIns: [{ kind: "debility" }, { kind: "hp", amount: 5 }, { kind: "other", text: "an item" }],
+			openDebilities: [{ key: "weakened", name: "Weakened" }],
+		});
+		const paid = [];
+		for (const s of sources) paid.push(await s.pay(payer, 2));
+		expect(calls).toEqual([["pouch", 3], ["boon", 1], ["vessel", 2], ["debility", "weakened"], ["hp", 10]]);
+		expect(paid.map(p => p.lost)).toEqual([0, 0, 6, 0, 10, 0]);
+	});
+
 	// An empty purse is still listed: "Stock 0 of 3" is the sentence that explains the missing
 	// Roll button, where dropping the row would just look like the dialog forgot something.
 	it("still lists a purse that is empty", () => {

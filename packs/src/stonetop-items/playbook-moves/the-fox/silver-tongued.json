@@ -25,6 +25,10 @@
     "resource": {
       "max": 3,
       "title": "Nerve",
+      "holdOnRoll": {
+        "success": 3,
+        "partial": 1
+      },
       "spendOptions": [
         "Move about or maneuver unchallenged",
         "Withstand direct scrutiny or questioning",

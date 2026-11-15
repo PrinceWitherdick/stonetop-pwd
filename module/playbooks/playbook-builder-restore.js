@@ -3,20 +3,14 @@
 // on screen. A playbook is an evening's typing, and a reload (a setting that asks for one, a dropped
 // connection) used to throw all of it away.
 //
-// Its own small module so stonetop.js can register it at load WITHOUT importing the builder and the
-// bundle code behind it. That is also why the class is named here rather than passed: window-restore
-// builds the hook names from it, and tests/playbooks/playbook-builder.test.js holds this name and the
-// class's own together, so a rename of the class can't quietly stop it being restored.
+// Registered by name from this small module, so a load doesn't pull in the builder and the bundle
+// code behind it (utils/window-restore.js#registerRestorableWindow says why);
+// tests/playbooks/playbook-builder.test.js holds this name and the class's own together.
 
-import { registerRestorableWindow } from "../utils/window-restore.js";
+import { readDocOrNewKey, registerRestorableWindow, restoreKeyRest } from "../utils/window-restore.js";
 
 export const PLAYBOOK_BUILDER_RESTORE_KIND = "playbookBuilder";
 export const PLAYBOOK_BUILDER_WINDOW_CLASS = "PlaybookBuilderDialog";
-/**
- * The rest of the key for a playbook not saved yet: "new-" and the window's own draft id, so two new
- * playbooks open at once are kept apart. A saved one's is its Item's uuid, which can't start so.
- */
-export const NEW_PLAYBOOK_PREFIX = "new-";
 
 // "Check the imported playbook" (PlaybookImportReview) comes back too: every move, split, join and
 // answer, on the page it was left on. It is keyed by an id of its own, and remembers the builder it
@@ -31,14 +25,10 @@ export const IMPORT_REVIEW_WINDOW_CLASS = "PlaybookImportReview";
  * what was typed in it, rather than losing that.
  */
 export async function reopenPlaybookBuilder(key) {
-	const at = String(key ?? "").indexOf(":");
-	if (at < 0 || key.slice(0, at) !== PLAYBOOK_BUILDER_RESTORE_KIND) return null;
+	const rest = restoreKeyRest(key, PLAYBOOK_BUILDER_RESTORE_KIND);
+	if (rest === null) return null;
 	if (!game.user?.isGM) return null;
-	const rest = key.slice(at + 1);
-	let item = null;
-	let draftId = null;
-	if (rest.startsWith(NEW_PLAYBOOK_PREFIX)) draftId = rest.slice(NEW_PLAYBOOK_PREFIX.length) || null;
-	else item = await fromUuid(rest).catch(() => null);
+	const { doc: item, newId: draftId } = await readDocOrNewKey(rest);
 	const { PlaybookBuilderDialog } = await import("./PlaybookBuilderDialog.js");
 	return new PlaybookBuilderDialog({ item, draftId });
 }
@@ -48,10 +38,9 @@ export async function reopenPlaybookBuilder(key) {
  * saved view (PlaybookImportReview#restoreView) and goes on at its first draw.
  */
 export async function reopenImportReview(key) {
-	const at = String(key ?? "").indexOf(":");
-	if (at < 0 || key.slice(0, at) !== IMPORT_REVIEW_RESTORE_KIND) return null;
+	const reviewId = restoreKeyRest(key, IMPORT_REVIEW_RESTORE_KIND);
+	if (reviewId === null) return null;
 	if (!game.user?.isGM) return null;
-	const reviewId = key.slice(at + 1);
 	if (!reviewId) return null;
 	const { PlaybookImportReview } = await import("./PlaybookImportReview.js");
 	return new PlaybookImportReview({ reviewId });

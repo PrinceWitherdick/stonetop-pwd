@@ -3,15 +3,13 @@
 // written so far, at the same place on screen. "Save for now" keeps a half-made hazard, but only if
 // it was pressed before the reload; this keeps the rest.
 //
-// Its own small module so stonetop.js can register it at load WITHOUT importing the walkthrough. That
-// is also why the class is named here rather than passed: window-restore builds the hook names from
-// it, and tests/hazards/create-hazard-restore.test.js holds this name and the class's own together,
-// so a rename of the class can't quietly stop it being restored.
+// Registered by name from this small module (utils/window-restore.js#registerRestorableWindow says
+// why); tests/hazards/create-hazard-restore.test.js holds this name and the class's own together.
 //
 // A walkthrough that was MAKING a hazard comes back without the Threats & Dangers tab that awaited
 // its answer, so it files the hazard itself when it finishes (CreateHazardDialog#_finish).
 
-import { registerRestorableWindow } from "../utils/window-restore.js";
+import { registerRestorableWindow, restoreKeyRest } from "../utils/window-restore.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 
 export const CREATE_HAZARD_RESTORE_KIND = "createHazard";
@@ -28,10 +26,9 @@ const createHazardWindowId = (page) => (page ? `stonetop-create-hazard-${page.id
  * GM prep), or the hazard being edited has gone or can no longer be edited by them.
  */
 export async function reopenCreateHazard(key) {
-	const at = String(key ?? "").indexOf(":");
-	if (at < 0 || key.slice(0, at) !== CREATE_HAZARD_RESTORE_KIND) return null;
+	const rest = restoreKeyRest(key, CREATE_HAZARD_RESTORE_KIND);
+	if (rest === null) return null;
 	if (!game.user?.isGM) return null;
-	const rest = key.slice(at + 1);
 	let page = null;
 	if (rest !== NEW_HAZARD_KEY) {
 		page = await fromUuid(rest).catch(() => null);

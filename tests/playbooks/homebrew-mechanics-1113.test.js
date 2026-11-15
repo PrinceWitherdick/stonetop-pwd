@@ -3,7 +3,7 @@
 // inside a background, a background's follower, and a Minor Arcana draw.
 
 import { describe, it, expect } from "vitest";
-import { rollBendsFrom, armorFromWords, damageFromWords, backgroundRollFrom, backgroundFollowerFrom, occultDrawFrom } from "../../module/playbooks/move-words.js";
+import { rollBendsFrom, armorFromWords, damageFromWords, backgroundRollFrom, backgroundFollowerFrom, occultDrawFrom, insertMovesInHumanGuise } from "../../module/playbooks/move-words.js";
 import { composeDamageFormula, stepFormulaDice } from "../../module/utils/damage.js";
 import { bendRides, homebrewBackgroundOf, backgroundFollowerOffer, homebrewRollBends, homebrewBlowOffers } from "../../module/actors/character/homebrew-roll-bends.js";
 import { occultDrawsOwed } from "../../module/actors/character/occult-draw.js";
@@ -50,6 +50,17 @@ describe("a homebrew move that changes another move's roll", () => {
 		expect(background.resources).toEqual([{ key: "cursed-doom", label: "Doom", max: 3 }]);
 		expect(homebrewRollBends(actor, background).map(b => b.source)).toEqual(["Dead Head", "Cursed"]);
 		expect(homebrewBackgroundOf({ slug: "the-fox", backgrounds: playbook.backgrounds }, "cursed")).toBeNull();
+	});
+
+	// The background's words are read once, on the record every reader of its rules takes.
+	it("carries the background's words, and reads whether its insert's moves come in human guise", () => {
+		const playbook = { slug: "homebrew-the-tester", backgrounds: [{ slug: "cursed", label: "Cursed", description: "<p>You have access to your <em>monster moves</em> in your human guise.</p>" }] };
+		const background = homebrewBackgroundOf(playbook, "cursed");
+		expect(background.words).toContain("in your human guise");
+		expect(background.words).not.toContain("<");
+		expect(insertMovesInHumanGuise(background.words)).toBe(true);
+		expect(insertMovesInHumanGuise("Only while you wear the form.")).toBe(false);
+		expect(insertMovesInHumanGuise(undefined)).toBe(false);
 	});
 });
 

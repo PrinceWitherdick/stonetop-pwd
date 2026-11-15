@@ -262,7 +262,7 @@
 			{{#each statOptions}}
 			<div class="stonetop-levelup-stat-option stonetop-levelup-pickable{{#if selected}} is-selected{{/if}}{{#if atCap}} is-at-cap{{/if}}"
 				role="button" aria-pressed="{{#if selected}}true{{else}}false{{/if}}"{{#if atCap}} aria-disabled="true"{{else}} tabindex="0"{{/if}}
-				data-stat-key="{{this.key}}">
+				data-action="pick-stat" data-stat-key="{{this.key}}">
 				<span class="stonetop-levelup-stat-name">{{this.name}}</span>
 				<span class="stonetop-levelup-stat-value">{{this.valueLabel}}{{#if atCap}} <em>{{@root.statAtMaxLabel}}</em>{{/if}}</span>
 			</div>

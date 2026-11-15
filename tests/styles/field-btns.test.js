@@ -156,11 +156,48 @@ describe("square steppers read --st-square in their own rules", () => {
 	});
 });
 
+describe("the crew member dialog's field rows", () => {
+	// The Person row and "Add a trait of your own" sit in form groups whose label-above rule makes a
+	// group's field full width and `flex: none`. Reaching a row's field too, that pushed the button off
+	// the row, and it was put back by a second rule out-specifying the first. The label-above rule now
+	// reaches only a group's own field, and the row's field fills what its button leaves (measured
+	// 11-15 at 1x/1.25x/1.5x: both buttons the field's 26px, on one line, as before).
+	it("leaves a row's field alone, so nothing has to beat it back", () => {
+		expect(declared(declarations(CSS, '.stonetop-individual-dialog .form-group > input[type="text"]'), "flex")).toBe("none");
+		expect(CSS).not.toMatch(/\.stonetop-individual-dialog \.form-group input\[type="text"\]/);
+		expect(CSS).not.toMatch(/\.stonetop-individual-dialog \.form-group :is\(/);
+		expect(declared(declarations(CSS, ".stonetop-individual-dialog .form-group > .stonetop-field-btns"), "width")).toBe("100%");
+	});
+
+	it("are marked rows, each a direct child of its form group", () => {
+		const src = readRepo("module/actors/character/StonetopCharacterSheet.js");
+		expect(src).toMatch(/<div class="form-group stonetop-individual-person">\s*<label>Person<\/label>\s*<div class="stonetop-field-btns">/);
+		expect(src).toMatch(/<div class="stonetop-individual-traits-grid">[^\n]*<\/div>\s*<div class="stonetop-trait-custom-row stonetop-field-btns">/);
+	});
+});
+
 describe("no button rule pins a marked button's height with !important", () => {
 	// The rule's own height is !important; a button rule that is too would win on specificity and
 	// pin the button short again (the follower gear X was `height: 18px !important` beside 26px).
 	it("the follower gear X leaves its height to the row", () => {
 		const sel = ".stonetop-follower-gear-item .stonetop-follower-gear-remove";
 		expect(declared(declarations(CSS, sel), "height"), sel).toBeFalsy();
+	});
+});
+
+describe("the rows the browser sweep caught a button off its field's height in (11-15)", () => {
+	// field-btns-sweep.mjs, 1x/1.25x/1.5x: before, 34px group-size steps beside a 24px box and a 25px
+	// ledger Delete beside 24px fields; after, every button the field's height.
+	it("lets the crew and group size row wrap its suffix rather than grow, with a caption that never breaks", () => {
+		// In a two-column Followers tab "Group size" broke onto two lines and the suffix wrapped too,
+		// so the row stood 34px and stretched the steps to it.
+		const row = declarations(CSS, ".stonetop-crew-size-row");
+		expect(declared(row, "flex-wrap")).toBe("wrap");
+		expect(declared(declarations(CSS, ".stonetop-crew-size-label"), "white-space")).toBe("nowrap");
+	});
+
+	it("gives the ledger's Delete no vertical padding of its own, so the row's stretch sets its height", () => {
+		const body = declarations(CSS, ".stonetop-ledger-edit-mode .stonetop-ledger-delete-selected");
+		expect(declared(body, "padding")).toBe("0 8px");
 	});
 });

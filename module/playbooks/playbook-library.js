@@ -27,7 +27,7 @@ import { askWithButtons } from "../utils/ask-with-buttons.js";
 import { escHtml, fileNameOf, joinNames, looseName } from "../utils/strings.js";
 import { readMarkers, setMarker } from "../utils/marker-setting.js";
 import { ITEM_FLAG_SCOPE } from "../system-id.js";
-import { normalizeBundle, bundleForExport, diffBundles, BUNDLE_FORMAT, BUNDLE_VERSION } from "./homebrew-bundle.js";
+import { normalizeBundle, bundleForExport, canonicalJson, diffBundles, BUNDLE_FORMAT, BUNDLE_VERSION } from "./homebrew-bundle.js";
 import { homebrewPlaybooks, homebrewPlaybookBySlug, isHomebrewPlaybookItem, HOMEBREW_SLUG_PREFIX } from "./playbook-catalog.js";
 import {
 	saveHomebrewPlaybook, readHomebrewBundle, setPlaybookLibrary, offerToRefreshCopies,
@@ -99,7 +99,9 @@ export function tombstoneData(slug, savedAt) {
 /**
  * Do two bundles hold the same playbook? "Show to players" and the slug are left out: whether
  * players see it is each world's own call, and a save that changed nothing else should not have
- * every other world asked about it.
+ * every other world asked about it. Compared as diffBundles compares (homebrew-bundle.js#
+ * canonicalJson), so text that only reflowed its whitespace, or keys stored in another order, is
+ * not an update either.
  */
 export function sameContent(a, b) {
 	const key = bundle => {
@@ -108,7 +110,7 @@ export function sameContent(a, b) {
 		clean.playbook.published = false;
 		clean.playbook.slug = "";
 		clean.moves = [...clean.moves].sort((x, y) => x.name.localeCompare(y.name));
-		return JSON.stringify(clean);
+		return canonicalJson(clean);
 	};
 	const ka = key(a);
 	return ka !== null && ka === key(b);
