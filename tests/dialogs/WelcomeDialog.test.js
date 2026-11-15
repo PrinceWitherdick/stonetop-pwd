@@ -28,12 +28,12 @@ afterEach(() => {
 });
 
 describe("the banner's step count", () => {
-	// Book Art keeps its place in the rail but is optional and unnumbered; the five Book I steps
-	// read 1 to 5 of 5.
+	// Book Art and Third-party playbooks keep their place in the rail but are optional and
+	// unnumbered; the five Book I steps read 1 to 5 of 5.
 	it("numbers only Book I's five steps", () => {
 		const guide = new WelcomeDialog();
-		const labels = [0, 1, 2, 3, 4, 5, 6].map(i => guide._countLabel(i));
-		expect(labels).toEqual(["", "", "Step 1 of 5", "Step 2 of 5", "Step 3 of 5", "Step 4 of 5", "Step 5 of 5"]);
+		const labels = [0, 1, 2, 3, 4, 5, 6, 7].map(i => guide._countLabel(i));
+		expect(labels).toEqual(["", "", "", "Step 1 of 5", "Step 2 of 5", "Step 3 of 5", "Step 4 of 5", "Step 5 of 5"]);
 	});
 });
 

@@ -54,11 +54,13 @@ function premiseSource() {
 // rail button's `data-tab`; `title` labels the rail entry and the banner; `icon`
 // is a Font Awesome 6 glyph. The overview is the landing panel. The five `step` entries
 // are Book I's "Getting Started" steps and drive the banner's "Step N of 5" count. Book
-// Art keeps its place in the rail but is not one of the book's steps: it has no `step`,
-// so its banner shows only the "optional" tag (the overview shows neither).
+// Art and Third-party playbooks keep their place in the rail but are not the book's steps:
+// they have no `step`, so their banners show only the "optional" tag (the overview shows
+// neither). Both sit before character creation because both are world prep for it.
 const SECTIONS = [
 	{ key: "overview",     title: "Getting started",       icon: "fa-signs-post" },
 	{ key: "book-art",     title: "Import the book art",     icon: "fa-images",         optional: true },
+	{ key: "playbooks",    title: "Third-party playbooks", icon: "fa-book",           optional: true },
 	{ key: "setting",      title: "Review the setting",    icon: "fa-book-open",      step: 1 },
 	{ key: "expectations", title: "Set expectations",      icon: "fa-scale-balanced", step: 2 },
 	{ key: "characters",   title: "Create characters",     icon: "fa-user-plus",      step: 3 },
@@ -232,6 +234,7 @@ export class WelcomeDialog extends Application {
 		html.find('[data-action="spring-burst"]').on("click", () => this._openSpringBurst());
 		html.find('[data-action="configure-players"]').on("click", () => this._openPlayerConfig());
 		html.find('[data-action="import-book-art"]').on("click", () => this._runImportBookArt());
+		html.find('[data-action="homebrew-playbook"]').on("click", () => this._startHomebrewPlaybook());
 		html.find('[data-action="rebuild-portraits"]').on("click", ev => this._rebuildPortraits(ev.currentTarget));
 		html.find(".stonetop-welcome-create").on("click", ev =>
 			this._onCreateCharacter(ev.currentTarget.dataset.userId, ev.currentTarget));
@@ -328,6 +331,13 @@ export class WelcomeDialog extends Application {
 		// it shows its already-imported state.
 		if (this.rendered) await this.render(false);
 		return result;
+	}
+
+	// The same start as the Create chooser's "Homebrew Playbook" row: asks "from a PDF, or by
+	// hand?", then opens the Playbook Builder. Leaves this guide open behind it.
+	async _startHomebrewPlaybook() {
+		const { startNewPlaybook } = await import("../playbooks/PlaybookBuilderDialog.js");
+		return startNewPlaybook();
 	}
 
 	/**

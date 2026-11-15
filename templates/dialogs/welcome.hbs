@@ -98,6 +98,22 @@
         </div>
       </section>
 
+      {{!-- Optional, unnumbered: third-party playbooks. Before character creation, so a
+            playbook added here is already in the picker when the players make characters. --}}
+      <section class="stonetop-welcome-section" data-tab="playbooks"{{#unless (eq activeTab "playbooks")}} hidden{{/unless}}>
+        <p>If someone at your table wants to play a playbook that isn't in the books, such as a community or homebrew one, add it to this world <strong>before your players make their characters</strong>, so it is waiting in the playbook picker for them.</p>
+        <p>Have the playbook as a PDF? One made with the <em>community Stonetop playbook template</em> can be read in: you check each piece that was read, answer anything it wasn't sure of, then finish it in the <strong>Playbook Builder</strong>. Without a PDF, or with one that is only pictures of text, type it into the builder yourself. Someone else's playbook file (from <em>Export Playbook File</em> on a playbook's right-click menu in the Items sidebar) loads with <strong>Read a PDF or playbook file</strong> in the builder.</p>
+        <button type="button" class="stonetop-welcome-action" data-action="homebrew-playbook">
+          <i class="fas fa-book"></i> Add a Playbook
+        </button>
+        <div class="stonetop-welcome-notice stonetop-welcome-notice--info">
+          <i class="fas fa-circle-info"></i>
+          <div class="stonetop-welcome-notice-body">
+            <span>Players see a playbook once you save it; to keep it to yourself, close the <strong>eye</strong> at the top of the builder. Every playbook you save is kept in your <strong>playbook library</strong> too, so your other worlds pick it up by themselves. You can add more later with the Items sidebar's <strong>Create Item</strong> button, under <strong>Homebrew Playbook</strong>, and reopen one in the builder from its right-click menu there.</span>
+          </div>
+        </div>
+      </section>
+
       {{!-- Step 1: review the setting --}}
       <section class="stonetop-welcome-section" data-tab="setting"{{#unless (eq activeTab "setting")}} hidden{{/unless}}>
         <p>Open the Setting Overview together and give everyone 10&ndash;15 minutes with it, then field questions. Some things (like &ldquo;where did the Forest Folk go?&rdquo;) are mysteries to discover in play.</p>
