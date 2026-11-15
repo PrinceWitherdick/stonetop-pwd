@@ -66,7 +66,8 @@ describe("the NPC quick-facts block", () => {
 	it("still renders every value through .stonetop-npc-prose", () => {
 		// The grid rule and the ::first-letter rule both hang off that class as the second
 		// child of a field; swap a value to a bare <span> and it silently leaves the tracks.
+		// Seven: the six fields plus a crew member's Cost, read off their crew card.
 		const values = QUICK_FACTS.match(/class="stonetop-npc-prose/g) ?? [];
-		expect(values.length).toBe(6);
+		expect(values.length).toBe(7);
 	});
 });

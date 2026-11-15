@@ -107,8 +107,8 @@ describe("the Details fold", () => {
 	});
 
 	it("reuses the crew sections' fold machinery rather than growing a second kind", () => {
-		// One toggle handler, one persisted set, one accordion — `stonetop-crew-collapsible` is
-		// what the sheet binds and what the accordion queries for siblings.
+		// One toggle handler, one persisted set — `stonetop-crew-collapsible` is
+		// what the sheet binds.
 		const fold = TPL.match(/<details class="[^"]*stonetop-follower-details-fold[^"]*"[^>]*>/)?.[0];
 		expect(fold).toBeTruthy();
 		expect(fold).toContain("stonetop-crew-collapsible");
@@ -300,13 +300,13 @@ describe("every fold on the card opens from the same edge", () => {
 	});
 });
 
-describe("the accordion", () => {
-	it("shuts a card's other folds when one opens, and a modifier pins instead", () => {
+describe("each fold opens on its own", () => {
+	it("never shuts a card's other folds when one opens (the user's call: no accordion)", () => {
 		const code = stripComments(SHEET);
-		expect(code).toMatch(/pinFold = ev\.shiftKey \|\| ev\.ctrlKey \|\| ev\.metaKey/);
-		expect(code).toMatch(/if \(fold\.open && !pinFold\)/);
-		// Scoped to the card, or opening the crew's Roster would shut the dog's Details.
-		expect(code).toMatch(/fold\.closest\("\.stonetop-follower-card"\)/);
+		const handler = code.slice(code.indexOf('.stonetop-crew-collapsible").on("toggle"'));
+		const body = handler.slice(0, handler.indexOf("_persistCrewSections()"));
+		expect(body).not.toMatch(/\.open = false/);
+		expect(code).not.toMatch(/pinFold/);
 	});
 });
 
@@ -326,8 +326,7 @@ describe("editing overrides the folds without overwriting them", () => {
 
 	// ...and the toggle handler must not write it back either. A fold rendered open fires `toggle`
 	// as it is parsed, and a Details fold the pencil opened is not in the set, so the handler used
-	// to record it and let the accordion shut the card's other folds: the Roster holding the group
-	// size field included, which is the very field the pencil was opened to reach.
+	// to record it, and it outlived the pencil.
 	it("marks a fold only the pencil holds open, and the toggle handler leaves it alone", () => {
 		expect(SHEET).toMatch(/card\.detailsForced\s*=\s*editing && !this\._openCrewSections\.has\(`details:\$\{cardId\}`\)/);
 		const fold = TPL.match(/<details class="[^"]*stonetop-follower-details-fold[^"]*"[^>]*>/)?.[0];

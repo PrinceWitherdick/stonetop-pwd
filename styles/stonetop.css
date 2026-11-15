@@ -30557,6 +30557,12 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 	top: 8px;
 	right: 12px;
 }
+/* A foldable section (the crew's Roster) keeps its fold caret at the right end of its
+   heading, which is exactly that corner, so its pencil steps one caret's width left. */
+.stonetop-crew-collapsible > .stonetop-follower-edit,
+.stonetop-crew-collapsible > .stonetop-follower-done {
+	right: calc(12px + 1.6em);
+}
 
 /* Card-level edit pencil: a single control in the top-right corner of the whole
    card (above the HP box) that makes the entire body editable. Hover-reveal like
@@ -31726,15 +31732,16 @@ li.question-bullet::before {
 /* "Add a trait of your own" under the grid: the field takes the row, Add sits at its end.
    The dialog-scoped `.form-group input[type="text"]` rule below makes every text field
    full-width and `flex: none`, which would push Add onto a line of its own, so the field
-   is put back to growing here at a higher specificity. */
-.stonetop-individual-dialog .stonetop-trait-custom-row {
+   is put back to growing here at a higher specificity. The Person row (which Person on the
+   world's sidebar this member is, and "Link a Person…") is the same shape: field, then button. */
+.stonetop-individual-dialog :is(.stonetop-trait-custom-row, .stonetop-individual-person > .stonetop-field-btns) {
 	display: flex;
 	align-items: center;
 	gap: 6px;
 	width: 100%;
 }
 
-.stonetop-individual-dialog .form-group .stonetop-trait-custom-row input[type="text"] {
+.stonetop-individual-dialog .form-group :is(.stonetop-trait-custom-row, .stonetop-individual-person > .stonetop-field-btns) input[type="text"] {
 	flex: 1 1 auto;
 	width: auto;
 	min-width: 0;
@@ -31742,6 +31749,12 @@ li.question-bullet::before {
 
 .stonetop-individual-dialog .stonetop-trait-custom-row .stonetop-trait-custom-add {
 	flex: none;
+}
+
+/* One line, or "Link a / Person…" wraps and the button grows taller than the field beside it. */
+.stonetop-individual-dialog .stonetop-individual-person .stonetop-individual-person-link {
+	flex: none;
+	white-space: nowrap;
 }
 
 /* Scoped dialog overrides */
@@ -43140,6 +43153,12 @@ a.stonetop-share-journal > i { margin-right: 3px; }
 .stonetop-npc-following-pc i { font-size: 0.85em; opacity: 0.75; margin-right: 2px; }
 /* A follower's Loyalty and Readiness beside their leader, read off the card, then the Order window. */
 .stonetop-npc-follower-stat { color: var(--st-text-muted); }
+/* A crew member's chips under their name, standing in for the traits line (the crew card's own
+   .stonetop-follower-tags row and chips); the line it replaces sat 2px under the pronouns. */
+.stonetop-npc-crew-tags { margin-top: 2px; }
+/* "(the crew's)" after an instinct a crew member takes from their crew: muted, never smaller
+   (the type floor, tests/styles/font-floor.test.js). */
+.stonetop-npc-crew-note { color: var(--color-text-dark-secondary); }
 .stonetop-npc-following-list .stonetop-npc-order { padding: 0 8px; line-height: 1.6; }
 /* Pronouns / traits inputs. Each is sized to match the span it replaces in play
    mode (.stonetop-npc-pronouns-display / .stonetop-npc-traits-display) so toggling

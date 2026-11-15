@@ -23,7 +23,7 @@ Each card shows the follower's **HP**, **Instinct**, **Cost**, tags, gear, moves
 - **Debility (p.243)**, when they're weakened, dazed or miserable.
 
 > **Did you know?**
-> - Each card's sections fold like an accordion: opening one closes the others. Hold `Shift`, `Ctrl` or `Cmd` while clicking to keep several open at once.
+> - Each section on a card folds on its own, and stays as you left it when you reopen the sheet.
 > - The magnifying glass beside **Followers** filters the cards by name (`Esc` clears it).
 > - The small portrait on a card opens bigger when clicked, with the same framing and Tokenizer buttons as your own portrait.
 > - **Drag a follower's card onto the map** to put their token there. Drags that start on a button or a box don't count, so you can still click those normally.
@@ -64,6 +64,8 @@ A crew or group follower is one card for many people. Its card adds:
 - **Restock supplies** (a crew only).
 
 When members fall, they're struck off the roster (a group keeps at least two).
+
+A crew member you name gets their own character in the **Followers** folder, so they can go on the relationship map and have their own feelings about each player character. Their sheet shows what the crew card says about them: who they follow, the crew's Loyalty and Readiness, their HP, the crew's tags with their own beside them, and the crew's instinct and cost if they don't have their own. An **Order** button there opens the same window as their button on the card. To change any of this, edit the crew card.
 
 ## Away from the fight
 

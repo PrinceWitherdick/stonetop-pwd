@@ -230,6 +230,7 @@ import {headerPortraitContext, usedActorPortraits, wirePortraitPopout, pointImag
 import {addPopoutHeaderControl, addPortraitFrameControl, addTokenizerControl} from "../../utils/popout-header-control.js";
 import {canOpenTokenizer, openTokenizer} from "../../utils/portrait-tokenizer.js";
 import {ensureFollowerActors, followerActorFromLink, syncFollowerActors} from "./follower-actors.js";
+import {adoptCrewPerson, crewPersonFor, ensureCrewMemberPeople, linkableCrewPeople, markCrewPersonDead, releaseCrewPerson, replaceCrewPerson, syncCrewMemberPeople} from "./crew-people.js";
 import {INITIATE_BACKGROUND, activeInitiateOptions, backgroundChoicePatch, initiateBackground, initiateExceptional, initiateGearSeedData, initiateMoves, initiateOption} from "./initiates.js";
 import {markLoreCaps, loreTickFits} from "./lore-pick-count.js";
 import {barkskinMarks, wearsBarkskin, MOVE_ARMOR_BASE} from "./move-armor.js";
@@ -5117,6 +5118,12 @@ export function createStonetopCharacterSheetClass(Base) {
 				.catch(err => console.error("Stonetop | follower actor creation failed", err));
 			syncFollowerActors(this.actor, followerSnapshots)
 				.catch(err => console.error("Stonetop | follower actor sync failed", err));
+			// The crew's NAMED members are people of their own, beside the crew's group actor: each
+			// gets a Person in Followers, kept in step both ways (crew-people.js). In that order, so a
+			// member named this render is linked before anything tries to sync them.
+			ensureCrewMemberPeople(this.actor)
+				.then(() => syncCrewMemberPeople(this.actor))
+				.catch(err => console.error("Stonetop | crew member People failed", err));
 
 			// The token's HP bar reads the PERSISTED max and combat reads the PERSISTED armor,
 			// neither of which the sheet itself ever does. Same call site and the same
@@ -5901,16 +5908,38 @@ export function createStonetopCharacterSheetClass(Base) {
 				// entirely, HP re-keyed, the headcount down by one.
 				const update = crewIndividualRemovalUpdate(crew, idx);
 				if (!update) return;
-				const name = crew.individuals[idx]?.name || "this crew member";
+				const row  = crew.individuals[idx];
+				const name = row?.name || "this crew member";
 				clampStoredGroupHp(update);
-				const ok = await confirmOutcome({
-					title:   "Remove crew member",
-					content: `<p>Remove <strong>${escHtml(name)}</strong> from the crew? This can't be undone.</p>`,
-					yes:     { label: "Remove them from the crew", icon: "fa-user-minus" },
-					no:      { label: "Keep them" },
-				});
-				if (!ok) return;
+				// A member with a Person of their own (crew-people.js) is asked about it too: the
+				// Person may carry hearts and a place on the relationship map worth keeping.
+				const person = crewPersonFor(row);
+				let deletePerson = false;
+				if (person) {
+					const answer = await askWithButtons({
+						title:   "Remove crew member",
+						content: `<p>Remove <strong>${escHtml(name)}</strong> from the crew? This can't be undone.</p>`
+							+ `<p>They have a Person of their own in the Followers folder.</p>`,
+						buttons: [
+							{ key: "keepPerson", label: "Remove them, keep their Person", icon: "fa-user-minus", value: "keep" },
+							{ key: "deletePerson", label: "Remove them and delete their Person", icon: "fa-trash", value: "delete" },
+							{ key: "no", label: "Keep them", icon: "fa-xmark", value: null },
+						],
+						defaultKey: "no",
+					});
+					if (!answer) return;
+					deletePerson = answer === "delete";
+				} else {
+					const ok = await confirmOutcome({
+						title:   "Remove crew member",
+						content: `<p>Remove <strong>${escHtml(name)}</strong> from the crew? This can't be undone.</p>`,
+						yes:     { label: "Remove them from the crew", icon: "fa-user-minus" },
+						no:      { label: "Keep them" },
+					});
+					if (!ok) return;
+				}
 				await this.actor.update(update);
+				if (person) await releaseCrewPerson(row, { remove: deletePerson });
 				this.render(false);
 			});
 
@@ -6017,38 +6046,21 @@ export function createStonetopCharacterSheetClass(Base) {
 			// already updates the DOM, so we only record the state (no re-render) for the
 			// next render to honour.
 			//
-			// Accordion: opening one fold closes the others ON THAT CARD, so a card is never
-			// taller than its header, its vitals band and one open section. Shift- / ctrl- /
-			// cmd-clicking a summary pins it instead, for the times you want the Roster and
-			// the Inventory side by side. The modifier is read on CLICK, which runs before
-			// the browser's default toggle, and consumed by the toggle below.
-			let pinFold = false;
-			html.find(".stonetop-crew-collapsible > summary").on("click", ev => {
-				pinFold = ev.shiftKey || ev.ctrlKey || ev.metaKey;
-			});
+			// Each fold opens and shuts on its own: opening one never closes its neighbours
+			// (the user's call; an accordion that did was taken out).
 			html.find(".stonetop-crew-collapsible").on("toggle", ev => {
 				const fold = ev.currentTarget;
 				const id   = fold.dataset.section;
 				if (!id) return;
 				this._openCrewSections ??= new Set();
 				// A Details fold only the pencil holds open (withFolds) fires that same parse-time
-				// toggle, but the player did not open it: recorded, it would outlive the pencil, and
-				// the accordion would shut the folds they did open, the Roster's size field included.
+				// toggle, but the player did not open it: recorded, it would outlive the pencil.
 				if (fold.open && "forcedOpen" in fold.dataset) return;
 				// Nothing to record when the set already agrees: a fold rendered open fires a
-				// toggle as it is parsed, and a sibling shut below has already been unregistered.
+				// toggle as it is parsed.
 				if (fold.open === this._openCrewSections.has(id)) return;
 				if (fold.open) this._openCrewSections.add(id);
 				else           this._openCrewSections.delete(id);
-				if (fold.open && !pinFold) {
-					const card = fold.closest(".stonetop-follower-card");
-					for (const other of card?.querySelectorAll(".stonetop-crew-collapsible[open]") ?? []) {
-						if (other === fold) continue;
-						other.open = false;
-						this._openCrewSections.delete(other.dataset.section);
-					}
-				}
-				pinFold = false;
 				this._persistCrewSections();
 			});
 
@@ -6116,6 +6128,9 @@ export function createStonetopCharacterSheetClass(Base) {
 					? (this.actor.getFlag(STONETOP_SCOPE, "crew.individuals") ?? [])[individualIndex]
 					: null;
 				if (editing && !current) return;
+				// The Person they already have (crew-people.js), shown so a hand-made one can be
+				// linked in its place instead of keeping two of them.
+				const currentPerson = editing ? crewPersonFor(current) : null;
 				const currentTraits = Array.isArray(current?.traits) ? current.traits.filter(t => typeof t === "string" && t.trim()) : [];
 				// Fall back to the shared crew suggestion lists (module/data/steading-members.js)
 				// when the playbook pack doesn't carry its own crew.individualOptions.
@@ -6216,6 +6231,14 @@ export function createStonetopCharacterSheetClass(Base) {
 							<input type="text" name="ind-name" list="ind-names" placeholder="Enter a name…" value="${escHtml(current?.name ?? "")}">
 							<datalist id="ind-names">${namesHtml}</datalist>
 						</div>
+						<div class="form-group stonetop-individual-person">
+							<label>Person</label>
+							<div class="stonetop-field-btns">
+								<input type="text" class="stonetop-individual-person-name" readonly tabindex="-1" placeholder="A new Person is made for them" value="${escHtml(currentPerson?.name ?? "")}">
+								<button type="button" class="stonetop-individual-person-link stonetop-inline-btn"><i class="fas fa-link"></i> Link a Person…</button>
+							</div>
+							<input type="hidden" name="ind-person" value="${escHtml(currentPerson?.uuid ?? "")}">
+						</div>
 						<div class="form-group">
 							<label>Tag</label>
 							<input type="text" name="ind-tag" list="ind-tags" placeholder="Choose or type a tag…" autocomplete="off" value="${escHtml(current?.tag ?? "")}">
@@ -6249,6 +6272,15 @@ export function createStonetopCharacterSheetClass(Base) {
 								const name = dlgHtml.find("[name='ind-name']").val().trim() || (current?.name ?? "");
 								if (!name) return;
 								const tag    = dlgHtml.find("[name='ind-tag']").val().trim();
+								// A Person linked by hand goes on this crew before the row points at
+								// them; the one it replaces is deleted if the crew made it, else let go.
+								const personUuid = String(dlgHtml.find("[name='ind-person']").val() ?? "").trim();
+								const priorUuid  = String(current?.personUuid ?? "").trim();
+								const relinked   = !!personUuid && personUuid !== priorUuid;
+								if (relinked) {
+									const picked = globalThis.fromUuidSync?.(personUuid, { strict: false });
+									if (!(await adoptCrewPerson(picked, this.actor))) return;
+								}
 								const traits = [];
 								dlgHtml.find("[name='traits']:checked").each((_, cb) => {
 									if (cb.dataset.literal) {
@@ -6284,7 +6316,9 @@ export function createStonetopCharacterSheetClass(Base) {
 								if (editing) {
 									if (!individuals[individualIndex]) return;
 									individuals[individualIndex] = { ...individuals[individualIndex], name, tag, traits };
+									if (relinked) individuals[individualIndex].personUuid = personUuid;
 									await this.actor.update({ "flags.stonetop-pwd.crew.individuals": individuals });
+									if (relinked && priorUuid) await replaceCrewPerson(priorUuid, this.actor);
 									this.render(false);
 									return;
 								}
@@ -6305,6 +6339,7 @@ export function createStonetopCharacterSheetClass(Base) {
 								const memberPortrait = rosterPortraitList(this.actor, "crew-member");
 								const [carriedFace]  = memberPortrait.splice(anonIndex, 1);
 								const named = { name, tag, traits };
+								if (relinked) named.personUuid = personUuid;
 								if (carriedFace?.img)           named.img           = carriedFace.img;
 								if (carriedFace?.portraitFrame) named.portraitFrame = carriedFace.portraitFrame;
 								const update = {
@@ -6368,6 +6403,31 @@ export function createStonetopCharacterSheetClass(Base) {
 							customInput.focus();
 						};
 						dlgHtml[0].querySelector(".stonetop-trait-custom-add")?.addEventListener("click", addCustomTrait);
+						// Link a Person who already exists (one made by hand before the crew made its
+						// own), rather than a new one. Their name fills the Name field, which is
+						// what the roster and the Person will then share.
+						dlgHtml[0].querySelector(".stonetop-individual-person-link")?.addEventListener("click", async () => {
+							const keep   = dlgHtml[0].querySelector("[name='ind-person']")?.value ?? "";
+							const people = linkableCrewPeople(keep);
+							if (!people.length) {
+								ui.notifications?.info("There is nobody in the world to link: every Person is already on a crew or is a follower.");
+								return;
+							}
+							const uuid = await pickPersonOnMap({
+								options:     people.map(actor => ({ id: actor.uuid, name: actor.name, actor })),
+								title:       "Link a Person",
+								hint:        "Who is this crew member? Their Person keeps the same name and face as the roster.",
+								icon:        "fa-link",
+								buttonLabel: "Link",
+								formatLabel: who => `Link ${who}`,
+							});
+							const picked = people.find(actor => actor.uuid === uuid);
+							if (!picked) return;
+							dlgHtml[0].querySelector("[name='ind-person']").value = picked.uuid;
+							dlgHtml[0].querySelector(".stonetop-individual-person-name").value = picked.name;
+							const nameInput = dlgHtml[0].querySelector("[name='ind-name']");
+							if (nameInput) nameInput.value = picked.name;
+						});
 						customInput?.addEventListener("keydown", ev => {
 							if (ev.key !== "Enter") return;
 							// Stop here: the dialog listens for Enter on the document to Save.
@@ -12830,9 +12890,14 @@ export function createStonetopCharacterSheetClass(Base) {
 				// Checked against the LIVE roster: a row healed or shifted since the dialog opened
 				// is left alone rather than erasing whoever now sits at that index.
 				if (isCrewMemberRow(follower)) {
-					const update = crewMemberDeathUpdate(this.actor.getFlag(STONETOP_SCOPE, "crew"), follower, index);
+					const crewNow = this.actor.getFlag(STONETOP_SCOPE, "crew");
+					// Read before the update splices them out: a named member's Person stays, marked
+					// Dead, so the relationship map and their sheet keep them (crew-people.js).
+					const fallenRow = follower === "crew-individual" ? crewNow?.individuals?.[Number(index)] : null;
+					const update = crewMemberDeathUpdate(crewNow, follower, index);
 					if (update) {
 						await this.actor.update(update);
+						if (fallenRow) await markCrewPersonDead(fallenRow);
 						body += `<p>${escHtml(game.i18n.localize("stonetop.character.followers.fate.crewDeadCard"))}</p>`;
 					} else {
 						ui.notifications?.warn?.(game.i18n.format("stonetop.character.followers.fate.crewStale", { name: plainWho }));
@@ -13284,6 +13349,53 @@ export function createStonetopCharacterSheetClass(Base) {
 		 * builds its cards first (_followerCards, the tab's own build without the rest of the sheet). Null
 		 * when there is no such card.
 		 */
+		/**
+		 * What a named crew member's Person sheet shows, read off the finished crew card: the crew's
+		 * tags, instinct and cost, and the member's own tag, traits, HP and Order data (the same fields
+		 * their "Order <name>" button on the card carries). Built fresh, never from the drag cache, which
+		 * is only as new as this sheet's last render. Null when no row points at that Person.
+		 *
+		 * @param {string} personUuid
+		 */
+		async crewMemberCard(personUuid) {
+			if (!personUuid) return null;
+			const crew = (await this._followerCards()).find(card => card?.ftype === "crew");
+			const member = (crew?.individuals ?? []).find(ind => ind?.personUuid === personUuid);
+			if (!member) return null;
+			const text = v => String(v ?? "").trim();
+			return {
+				crew: {
+					name:     text(crew.name),
+					// With each tag's own chip class and tooltip, as the card draws them (a condition, a
+					// debility given as a tag, p.243, is marked by its class).
+					tags:     (crew.tags ?? [])
+						.map(t => typeof t === "string"
+							? { label: text(t), cls: "", tooltip: "" }
+							: { label: text(t?.label), cls: text(t?.cls), tooltip: text(t?.tooltip) })
+						.filter(t => t.label),
+					instinct: text(crew.instinct),
+					cost:     text(crew.cost),
+					// Heroes to the Last's two picks, which the card draws as chips of their own beside
+					// its tags (never in `tags`), each with a tooltip naming the pick.
+					exceptional:     !!crew.exceptional,
+					exceptionalHint: text(crew.exceptionalHint),
+					inured:          !!crew.inured,
+					inuredHint:      text(crew.inuredHint),
+				},
+				member: {
+					index:         member.index,
+					orderName:     member.orderName,
+					tag:           text(member.tag),
+					traits:        (Array.isArray(member.traits) ? member.traits : []).map(text).filter(Boolean),
+					hpCurrent:     member.hpCurrent,
+					hpMax:         member.hpMax,
+					orderTagsCsv:  member.orderTagsCsv ?? "",
+					orderMovesCsv: member.orderMovesCsv ?? "",
+					exceptional:   !!member.exceptional,
+				},
+			};
+		}
+
 		async _followerCardSnapshot(ftype, slug = "") {
 			const key = `${ftype}:${slug ?? ""}`;
 			if (!this._followerDragData?.has(key)) {

@@ -43,7 +43,7 @@ export const ensureFollowerFolder = () => ensureNamedActorFolder(FOLLOWER_FOLDER
 
 /** A world Actor for a uuid, or null. World only: fromUuidSync hands back a bare index stub for
  *  a compendium entry, which is not a document anything here can act on. */
-function worldActorFromUuid(uuid) {
+export function worldActorFromUuid(uuid) {
 	if (!uuid) return null;
 	try {
 		const doc = globalThis.fromUuidSync?.(String(uuid));
@@ -136,12 +136,12 @@ const _sweepsInFlight = new Set();
 // done. Ranked by user id rather than randomly, so the order is stable — and it is only a
 // stagger, not an election: if the first in line never renders this sheet, the next one still
 // makes them a beat later, which is what keeps this working at a table with no GM present.
-const MAKER_STAGGER_MS = 500;
+export const MAKER_STAGGER_MS = 500;
 
 const _wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** This client's place in the queue of connected owners: 0 goes first, and waits for nobody. */
-function makerRank(character) {
+export function makerRank(character) {
 	const owners = (game.users?.contents ?? [])
 		.filter(u => u.active && character?.testUserPermission?.(u, "OWNER"))
 		.map(u => u.id)
