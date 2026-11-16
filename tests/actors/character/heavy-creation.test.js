@@ -298,3 +298,17 @@ describe("the Heavy's pack data", () => {
 		expect(stray).toEqual([]);
 	});
 });
+
+// A possession the BACKGROUND hands over (the Standout's Veteran gets Weapons of War) has its own
+// pick made on the possessions page like any other: the live import of 2026-11-12 lost it.
+describe("a pick inside a possession the background gives", () => {
+	it("is kept, though the player never picked the possession itself", async () => {
+		const { char, sheet } = fresh();
+		const doc = playbookDoc("the-heavy");
+		const bg = doc.flags.stonetop.backgrounds.find(b => b.slug === "sheriff");
+		bg.extraPossessions = ["weapons-of-war"];
+		await sheet._applyPlaybookSelections(doc, HEAVY_RUN({ possessions: [], possessionChoices: { "weapons-of-war": ["sword"] } }));
+		expect([...char._possessions.selected]).toContain("weapons-of-war");
+		expect(char._possessions.subChoices["weapons-of-war"]).toEqual(["sword"]);
+	});
+});

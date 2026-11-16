@@ -676,6 +676,9 @@
             "card": "<strong>{who}</strong> refuses the Last Door and gains the <strong>{what}</strong> insert.",
             "next": "Choose your Terrible Purpose and your first Consequence."
           },
+          "adopted": {
+            "intro": "You came back from the Last Door, and something of it came back with you. Here is what that costs."
+          },
           "undying": {
             "intro": "You gave up the body you clung to, and your spirit lingers on. Your Terrible Purpose stays with you; as a Ghost, you choose a first Consequence of your own."
           },
@@ -747,7 +750,10 @@
           "debilityAsk": "<strong>Hard to Kill</strong> &mdash; mark a debility of your choice to regain 1 HP:",
           "debilityNone": "<strong>Hard to Kill</strong>: all three debilities are already marked, so there's none left to trade.",
           "fateSpectator": "The fate is {name}'s to choose. If they have left, close this and open Death's Door again from the sheet to choose it for them.",
-          "fateRecorded": "Your fate is recorded. The GM will take it from here."
+          "fateRecorded": "Your fate is recorded. The GM will take it from here.",
+          "adoptWhy": "{background}: you came back from the Last Door, and may take one of these inserts whatever the result. You pass as human until the insert says otherwise.",
+          "adoptButton": "Become a {insert}",
+          "adoptCard": "{name} returns from the Last Door changed, and takes the {insert} insert."
         },
         "fate": {
           "title": "Refuse to Go",
@@ -1916,7 +1922,11 @@
       "following": "Following",
       "followerLoyalty": "Loyalty {value}",
       "followerReadiness": "Readiness {value}",
+      "followerHp": "HP {value}/{max}",
       "order": "Order",
+      "orderMember": "Order {name}",
+      "crewInstinctNote": "(the crew's)",
+      "cost": "Cost",
       "connections": "Connections",
       "motivations": "Motivations",
       "embodiment": "Embodiment",
@@ -2091,7 +2101,10 @@
         "choicesOwed": {
           "labelOne": "Choose 1 more trait",
           "label": "Choose {count} more traits",
-          "tooltip": "Big Magic gave your sacred pouch another remarkable trait. Tap to choose it."
+          "tooltip": "Big Magic gave your sacred pouch another remarkable trait. Tap to choose it.",
+          "pickOne": "Choose 1",
+          "pick": "Choose {count}",
+          "pickTooltip": "This possession has a pick still to make. Tap to choose it on its card."
         },
         "addPossession": "Something else (discuss with GM)",
         "addPossessionTitle": "Something else (discuss with GM)",
@@ -3495,6 +3508,7 @@
         "allClear": "Everyone on this trip has already unpacked.",
         "noParty": "No one is on this trip.",
         "convalesce": "Then open each PC's Convalesce",
+        "convalesceButton": "Open each PC's Convalesce",
         "button": "Reset Inventory",
         "nonePicked": "Tick who should unpack first.",
         "confirm": "Clear the marks, reserves and supplies of {names}? Anything they found stays on their lists.",
@@ -3553,6 +3567,8 @@
         "shownNoMap": "This world has no copy of {map}, so the players get the legs and times without a map.",
         "hidden": "The players can no longer see the route.",
         "hideStaleTip": "Stop showing the players the older way, without showing them this one. The See the route button leaves the steading sheet; cards already in chat keep the route they posted.",
+        "reword": "Change what they're told",
+        "rewordTip": "Show the players this way again, with new words for the stops you put down by hand, where they set out from, or the Chart a Course lines. It posts a new card to chat.",
         "failed": "The route couldn't be shown to the players. The console has the details.",
         "ask": {
           "title": "Show the players the way",
@@ -4012,6 +4028,7 @@
       }
     },
     "people": {
+      "optionLabel": "{name} ({detail})",
       "choose": "Choose",
       "chosenCount": "Choose {count} people",
       "chosen": "Picked:",

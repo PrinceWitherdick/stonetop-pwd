@@ -30,7 +30,9 @@
 			{{#with stonetop.followerTrack}}
 			{{#if hasLoyalty}}<span class="stonetop-npc-follower-stat">{{localize "stonetop.npc.followerLoyalty" value=loyalty}}</span>{{/if}}
 			{{#if readiness}}<span class="stonetop-npc-follower-stat">{{localize "stonetop.npc.followerReadiness" value=readiness}}</span>{{/if}}
-			{{#if canOrder}}<button type="button" class="stonetop-npc-order stonetop-inline-btn"><i class="fas fa-hand-point-right"></i> {{localize "stonetop.npc.order"}}</button>{{/if}}
+			{{!-- A crew member's own HP, off their roster slot (edited on the card or in the fight). --}}
+			{{#if this.hp}}<span class="stonetop-npc-follower-stat">{{this.hp}}</span>{{/if}}
+			{{#if canOrder}}<button type="button" class="stonetop-npc-order stonetop-inline-btn"{{#if this.orderLabel}} data-crew-member="1"{{/if}}><i class="fas fa-hand-point-right"></i> {{#if this.orderLabel}}{{this.orderLabel}}{{else}}{{localize "stonetop.npc.order"}}{{/if}}</button>{{/if}}
 			{{/with}}
 		</span>
 	</section>
@@ -69,11 +71,20 @@
 		<strong class="stonetop-npc-stat-key">{{localize "stonetop.npc.instinct"}}</strong>
 		{{#if stonetop.editMode}}
 		<input class="stonetop-npc-stat-input" type="text" name="system.instinct"
-		       value="{{system.instinct}}" placeholder='{{localize "stonetop.npc.instinctPlaceholder"}}'>
+		       value="{{system.instinct}}" placeholder='{{#if stonetop.crewMember.instinct}}{{stonetop.crewMember.instinct}}{{else}}{{localize "stonetop.npc.instinctPlaceholder"}}{{/if}}'>
 		{{else}}
-		<span class="stonetop-npc-prose">{{#if system.instinct}}{{system.instinct}}{{else}}<em class="stonetop-npc-empty">{{localize "stonetop.npc.instinctEmpty"}}</em>{{/if}}</span>
+		{{!-- A crew member with no instinct of their own acts on the crew's (read off the card). --}}
+		<span class="stonetop-npc-prose">{{#if system.instinct}}{{system.instinct}}{{else}}{{#if stonetop.instinctFromCrew}}{{stonetop.crewMember.instinct}} <em class="stonetop-npc-crew-note">{{localize "stonetop.npc.crewInstinctNote"}}</em>{{else}}<em class="stonetop-npc-empty">{{localize "stonetop.npc.instinctEmpty"}}</em>{{/if}}{{/if}}</span>
 		{{/if}}
 	</section>
+
+	{{!-- Cost — a crew member's is their crew's, read off the card (never stored on this sheet). --}}
+	{{#if stonetop.crewMember.cost}}
+	<section class="stonetop-npc-field stonetop-npc-stat-line stonetop-npc-crew-cost">
+		<strong class="stonetop-npc-stat-key">{{localize "stonetop.npc.cost"}}</strong>
+		<span class="stonetop-npc-prose">{{stonetop.crewMember.cost}}</span>
+	</section>
+	{{/if}}
 
 	{{!-- Occupation — sits just below Instinct. --}}
 	{{#if (or stonetop.editMode system.occupation)}}

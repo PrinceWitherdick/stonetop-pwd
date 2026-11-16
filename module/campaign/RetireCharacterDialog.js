@@ -1,6 +1,7 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { steadingPeopleActors } from "../actors/steading/steading-people.js";
 import { getStonetopSteadingActor } from "../utils/world.js";
+import { personOptionLabel } from "../utils/people-groups.js";
 import { LEFT_PLAY_HOW } from "./left-play.js";
 import { RETIRE_CHOICES, RETIRE_NPC, retireCharacter } from "./retire-pc.js";
 
@@ -58,7 +59,7 @@ export class RetireCharacterDialog extends StonetopDialog {
 			npcOptions: [
 				npcOption(RETIRE_NPC.RESIDENT, `A new Resident of Stonetop, named ${this._actor?.name ?? ""}`),
 				npcOption(RETIRE_NPC.NEIGHBOR, "A new Neighbor (they live elsewhere in the region)"),
-				...this._people().map(a => npcOption(a.id, `Already on the sheet as ${a.name}`)),
+				...this._people().map(a => npcOption(a.id, `Already on the sheet as ${personOptionLabel(a)}`)),
 				npcOption(RETIRE_NPC.NONE, "No NPC"),
 			],
 		};

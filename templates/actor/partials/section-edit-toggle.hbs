@@ -10,13 +10,17 @@
       remember the fold under. It is deliberately its own id, not `section`: two
       move groups share the edit section "moves" but fold independently. Opt-in,
       so a section with nothing worth hiding (or its own collapse already, like
-      the Arcana headings) simply omits it. --}}
-{{#if stonetop.canEdit}}
-{{#unless stonetop.editMode}}
+      the Arcana headings) simply omits it.
+
+      The sheet's switches are read off the partial's own context and, failing that, off @root: a
+      caller inside an {{#each}} (a homebrew insert's tab, drawn once per insert) has the insert as
+      its context, and without the fallback its moves had no pencil at all. --}}
+{{#if (or stonetop.canEdit @root.stonetop.canEdit)}}
+{{#unless (or stonetop.editMode @root.stonetop.editMode)}}
 {{#if editing}}
 <a class="stonetop-section-done {{this.toggleClass}}" data-section="{{this.section}}" title="Done editing"><i class="fas fa-check"></i></a>
 {{else}}
-{{#if (lookup stonetop.recentlyEdited section)}}
+{{#if (lookup (or stonetop.recentlyEdited @root.stonetop.recentlyEdited) section)}}
 {{!-- Just left edit mode: a non-interactive check that fades out, then a
      re-render swaps in the hover pencil below. --}}
 <a class="stonetop-section-done {{this.toggleClass}} steading-section-toggle-faded" tabindex="-1"><i class="fas fa-check"></i></a>

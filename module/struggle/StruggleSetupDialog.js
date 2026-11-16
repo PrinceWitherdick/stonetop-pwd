@@ -2,14 +2,17 @@ import { StonetopDialog } from "../utils/stonetop-dialog.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { isDefaultImg } from "../utils/strings.js";
 import { partyCharacters } from "../utils/playbook-actors.js";
+import { personOptionLabel } from "../utils/people-groups.js";
 import { isOutOfPlay } from "../actors/character/deaths-door-actor.js";
 import { ownsLearnedMoveNamed } from "../actors/character/owns-move.js";
 import { STRUGGLE_MOVES } from "./struggle-rules.js";
 import { followerKey, newSetupDraft, setupHelpers, setupRows, setupView } from "./struggle-setup.js";
 import { clearAsk, liveStruggle, startStruggle } from "./struggle-store.js";
+import { persistOnTyping } from "../utils/window-restore.js";
+import { STRUGGLE_SETUP_RESTORE_KIND, GM_SETUP_KEY, STRUGGLE_SETUP_WINDOW_ID } from "./struggle-setup-restore.js";
 
 const TEMPLATE = "systems/stonetop-pwd/templates/dialogs/struggle-setup.hbs";
-const WINDOW_ID = "stonetop-struggle-setup";
+const WINDOW_ID = STRUGGLE_SETUP_WINDOW_ID;
 const SCROLLER = ".stonetop-guide-main";
 const REDRAWS_ON = new Set(["include", "aidPick"]);
 
@@ -59,6 +62,8 @@ async function rosterEntry(actor) {
 	return {
 		actorId: actor.id,
 		name: actor.name,
+		// What the Aid dropdown calls them: "Pim (Alex)".
+		label: personOptionLabel(actor),
 		// A placeholder (mystery-man) is no portrait: drop it so the card shows none, not a blank square.
 		img: isDefaultImg(actor.img) ? "" : actor.img,
 		owns,
@@ -96,6 +101,9 @@ export function openStruggleSetup({ ask = null, askActor = null, only = null, jo
  * CALL FOR STRUGGLE AS ONE: the GM's side of starting one. Nothing it holds is written anywhere until
  * the GM calls for rolls; then startStruggle writes the struggle onto the toolkit, and every client in
  * it opens the shared window from that update.
+ *
+ * A reload brings it back with the draft as the GM left it (struggle-setup-restore.js). Calling writes
+ * the struggle itself, so nothing waits on it; an ask's setup comes back only while its ask is still up.
  */
 export class StruggleSetupDialog extends StonetopDialog {
 	constructor({ ask = null, askActor = null, only = null, journey = false, onClosed = null } = {}, options = {}) {
@@ -110,6 +118,73 @@ export class StruggleSetupDialog extends StonetopDialog {
 		this._roster = null;
 		this._draft = null;
 		this._calling = false;
+		// What a reload saves this window under, fixed now: close() lets go of the asker before the
+		// close hook reads the key, and the key it was tracked under is the one that must come down.
+		this._restoreRest = askActor?.uuid ?? GM_SETUP_KEY;
+		// A reload's draft, laid over the fresh one once the roster is read (getData).
+		this._restoredDraft = null;
+		// Set by the GM's first edit: a reload's draft never lands on a setup somebody has started on.
+		this._touched = false;
+	}
+
+	// ---- Reload --------------------------------------------------------------------------
+	// utils/window-restore.js reopens this window after a reload (struggle-setup-restore.js).
+
+	/** The setup the GM opened, or the one answering a character's ask. */
+	get restoreKey() {
+		return `${STRUGGLE_SETUP_RESTORE_KIND}:${this._restoreRest}`;
+	}
+
+	/**
+	 * The draft, kept current as the GM types (activateListeners), and the ask it answers. Never read
+	 * from the form here: a window mid-close would read its rows back as blank.
+	 */
+	get restoreView() {
+		return this._draft ? { draft: this._draft, askId: this._ask?.id ?? "" } : null;
+	}
+
+	/**
+	 * A reload's draw carries the draft back (`options.view`). It may also land on a setup the reload
+	 * opened by itself for the same ask (struggle-flow.js#answerNextAsk), so long as nobody has typed in it.
+	 */
+	async _render(force, options = {}) {
+		// Drawn or not (see above); the base's own offer of the same view is then a no-op.
+		this._offerRestoredView(options);
+		return super._render(force, options);
+	}
+
+	/** Take a reload's draft, if it was for this same ask (or this same no-ask setup). */
+	_takeRestoredView(view) {
+		if (this._reloaded || this._touched) return;
+		const draft = view?.draft;
+		if (!draft || typeof draft !== "object" || Array.isArray(draft)) return;
+		if ((view.askId ?? "") !== (this._ask?.id ?? "")) return;
+		this._reloaded = true;
+		this._restoredDraft = draft;
+		if (this._draft) this._layRestoredDraft();
+	}
+
+	/**
+	 * Lay the reload's draft over the fresh one, field by field and only in the shape the fresh one
+	 * has: a character or follower no longer on the roster is dropped, a new one keeps its defaults.
+	 */
+	_layRestoredDraft() {
+		const saved = this._restoredDraft;
+		this._restoredDraft = null;
+		if (!saved || !this._draft) return;
+		const draft = this._draft;
+		for (const key of ["danger", "approach"]) if (typeof saved[key] === "string") draft[key] = saved[key];
+		if (typeof saved.journey === "boolean") draft.journey = saved.journey;
+		const lay = (into, from) => {
+			if (!from || typeof from !== "object" || Array.isArray(from)) return;
+			for (const [key, base] of Object.entries(into)) {
+				const v = from[key];
+				if (Array.isArray(base)) { if (Array.isArray(v)) into[key] = v.filter(x => typeof x === "string"); }
+				else if (v !== null && v !== undefined && typeof v === typeof base) into[key] = v;
+			}
+		};
+		for (const [id, choice] of Object.entries(draft.pcs)) lay(choice, saved.pcs?.[id]);
+		for (const [fkey, choice] of Object.entries(draft.followers)) lay(choice, saved.followers?.[fkey]);
 	}
 
 	static get defaultOptions() {
@@ -154,6 +229,7 @@ export class StruggleSetupDialog extends StonetopDialog {
 				only: this._only,
 			});
 		}
+		if (this._restoredDraft) this._layRestoredDraft();
 		return setupView(this._roster, this._draft, { askerName: this._askActor?.name ?? "", live: !!liveStruggle() });
 	}
 
@@ -172,6 +248,8 @@ export class StruggleSetupDialog extends StonetopDialog {
 		const root = html?.[0] ?? html;
 		root?.addEventListener?.("click", ev => this._onClick(ev));
 		root?.addEventListener?.("change", ev => this._onChange(ev));
+		// Keep the draft as typed and save the window for a reload (`restoreView`): the form is alive here.
+		persistOnTyping(root, { onEach: () => { this._touched = true; this._capture(); } });
 	}
 
 	/** Read every field back into the draft, so a redraw (a character ticked in or out) keeps what was typed. */

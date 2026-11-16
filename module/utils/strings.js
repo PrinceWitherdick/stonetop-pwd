@@ -114,6 +114,70 @@ export function wholeWordPattern(word, flags = "") {
 	return new RegExp(`(?<!\\p{L})${literal}(?!\\p{L})`, `${flags.replace("u", "")}u`);
 }
 
+/** A listed or browsed path's file name, lower-cased, with any query or hash and URL escaping taken off. */
+export function fileNameOf(path) {
+	const last = String(path ?? "").split(/[?#]/)[0].split("/").pop() ?? "";
+	try { return decodeURIComponent(last).toLowerCase(); }
+	catch { return last.toLowerCase(); }
+}
+
+/**
+ * A name folded for a loose comparison: case, runs of space and curly apostrophes (a PDF's
+ * "Lion’s" for "Lion's") set aside; with `article`, a leading the/a/an/your too. The one such
+ * folder, so every path that matches a playbook, move or possession by name agrees on "the same".
+ */
+export function looseName(name, { article = false } = {}) {
+	const folded = String(name ?? "").replace(/[’‘`]/g, "'").replace(/\s+/g, " ").trim().toLowerCase();
+	return article ? folded.replace(/^(the|a|an|your)\s+/, "") : folded;
+}
+
+/**
+ * A noun with a plural "s" taken off ("Reminders" is "Reminder"), its case kept: the one singular or
+ * plural fold, so a hold of "2 Reminders" and a track called "Reminder" are the same currency
+ * wherever a move's words are read (move-tiers.js, move-words.js, homebrew-bundle.js).
+ */
+export function nounStem(word) {
+	return String(word ?? "").trim().replace(/s$/i, "");
+}
+
+/** Whether two nouns name the same thing, singular or plural, case, spacing and article aside. */
+export function sameNoun(a, b) {
+	return nounStem(looseName(a, { article: true })) === nounStem(looseName(b, { article: true }));
+}
+
+/**
+ * `base`, or `base-2`, `base-3`… the first one not `taken`: the one numeric-suffix uniquer, so every
+ * minted key and slug counts the same way, and a stored "-2" stays the "-2" it was minted as.
+ * `taken` is a Set or Map (anything with `has`), an array, or a predicate.
+ */
+export function uniqueSlug(base, taken) {
+	const isTaken = typeof taken === "function" ? taken
+		: Array.isArray(taken) ? s => taken.includes(s)
+		: s => !!taken?.has(s);
+	let slug = base;
+	for (let n = 2; isTaken(slug); n++) slug = `${base}-${n}`;
+	return slug;
+}
+
+/** {@link uniqueSlug} over a list: each base made unique against the ones before it. */
+export function uniqueSlugs(bases) {
+	const used = new Set();
+	return bases.map(base => {
+		const slug = uniqueSlug(base, used);
+		used.add(slug);
+		return slug;
+	});
+}
+
+/**
+ * Whether `value` is an object to read keys off: not null and not an array. Loose on purpose: a
+ * class instance passes too, as it did in every copy this replaces (a guard over flag data, a stored
+ * window view, a merge's three sides).
+ */
+export function isPlainObject(value) {
+	return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
 // Join names for display: ["Astor","Halix"] → "Astor & Halix"; three or more use an
 // Oxford-free serial comma ("A, B & C"). Blanks are dropped, so a missing name can't leave a
 // stray separator behind.
@@ -162,6 +226,12 @@ export function stripHtmlToText(value) {
 		.trim();
 }
 
+// The named entities decodeEntities knows, `&amp;` aside (it goes last, on its own).
+const _NAMED_ENTITIES = Object.freeze({
+	mdash: "—", ndash: "–", hellip: "…", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“",
+	nbsp: " ", quot: '"', apos: "'", lt: "<", gt: ">",
+});
+
 /**
  * Decode the entities our authored prose carries, PRESERVING typography.
  *
@@ -178,24 +248,25 @@ export function stripHtmlToText(value) {
  * Both call sites (the Chronicle's stored qa prompt, the FAQ's section/question labels) produce
  * PLAIN TEXT labels rather than markup, so decoding `&lt;`/`&gt;` here can't inject anything.
  *
- * `&amp;` is decoded LAST so a double-encoded source (`&amp;mdash;`) can't decode twice.
+ * Every numeric form is decoded (`&#8220;`, `&#x201C;`), not only the ones named above, so a
+ * reader that needs one (mark-option-list.js, telling whether a move's words already list an
+ * option) has no reason to keep a decoder of its own.
+ *
+ * `&amp;` (and `&#38;`, the same ampersand) is decoded LAST so a double-encoded source
+ * (`&amp;mdash;`) can't decode twice. `&nbsp;` and `&#160;` come back as a plain space.
  *
  * Distinct from {@link stripHtmlToText}, which deliberately flattens `&rsquo;` to an ASCII `'`
  * for one-line tooltips and ledger previews. This one keeps the curly mark.
  */
 export function decodeEntities(text) {
 	return String(text ?? "")
-		.replace(/&mdash;|&#8212;|&#x2014;/gi, "—")
-		.replace(/&ndash;|&#8211;|&#x2013;/gi, "–")
-		.replace(/&hellip;|&#8230;/gi, "…")
-		.replace(/&rsquo;|&#8217;/gi, "’")
-		.replace(/&lsquo;|&#8216;/gi, "‘")
-		.replace(/&nbsp;|&#160;/gi, " ")
-		.replace(/&quot;|&#34;/gi, '"')
-		.replace(/&#39;|&#x27;/gi, "'")
-		.replace(/&lt;|&#60;/gi, "<")
-		.replace(/&gt;|&#62;/gi, ">")
-		.replace(/&amp;|&#38;/gi, "&");
+		.replace(/&#(?:x([0-9a-f]+)|([0-9]+));/gi, (match, hex, dec) => {
+			const code = hex ? parseInt(hex, 16) : Number(dec);
+			if (code === 38 || !(code > 0 && code <= 0x10ffff)) return match;
+			return code === 160 ? " " : String.fromCodePoint(code);
+		})
+		.replace(/&(mdash|ndash|hellip|rsquo|lsquo|rdquo|ldquo|nbsp|quot|apos|lt|gt);/gi, (_, name) => _NAMED_ENTITIES[name.toLowerCase()])
+		.replace(/&amp;|&#38;|&#x26;/gi, "&");
 }
 
 /**
@@ -211,9 +282,30 @@ export function htmlToPlainText(html) {
  * Text as a change-detection hash reads it: entities decoded, runs of whitespace collapsed to one
  * space, trimmed. An editor re-saving the same words (`&#x27;` back as `'`, a reflowed line) then
  * does not read as an edit. Shared by the Chronicle's prose hashes and the timeline's season rows.
+ *
+ * FROZEN DECODING. Both hashes already sit on pages in running worlds, so this decodes exactly the
+ * entities decodeEntities decoded when they were stamped (_decodeHashEntities), and no more: had it
+ * followed decodeEntities when that learned every numeric form and `&ldquo;`/`&rdquo;`/`&apos;`, a
+ * pristine section holding one of those would hash differently and read as edited by the GM.
  */
 export function normaliseEditorText(text) {
-	return decodeEntities(text).replace(/\s+/g, " ").trim();
+	return _decodeHashEntities(text).replace(/\s+/g, " ").trim();
+}
+
+/** decodeEntities as it was when the stored hashes were stamped. Never extend it (see above). */
+function _decodeHashEntities(text) {
+	return String(text ?? "")
+		.replace(/&mdash;|&#8212;|&#x2014;/gi, "—")
+		.replace(/&ndash;|&#8211;|&#x2013;/gi, "–")
+		.replace(/&hellip;|&#8230;/gi, "…")
+		.replace(/&rsquo;|&#8217;/gi, "’")
+		.replace(/&lsquo;|&#8216;/gi, "‘")
+		.replace(/&nbsp;|&#160;/gi, " ")
+		.replace(/&quot;|&#34;/gi, '"')
+		.replace(/&#39;|&#x27;/gi, "'")
+		.replace(/&lt;|&#60;/gi, "<")
+		.replace(/&gt;|&#62;/gi, ">")
+		.replace(/&amp;|&#38;/gi, "&");
 }
 
 // A move outcome's flattened value reads "<lead-in> pick 1: <option> / <option> / …"

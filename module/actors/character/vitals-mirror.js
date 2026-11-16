@@ -27,7 +27,7 @@ import {
 import { INSPIRATION_FLAG } from "./inspiration.js";
 import { BLESSING_FLAG } from "./roll-boosts.js";
 import { NEEDS_SUN_FLAG, ONGOING_INVOCATION_FLAGS } from "./ongoing-invocation.js";
-import { MIRRORED_HP_PENALTY_FLAG, readableFlags } from "./StonetopFlags.js";
+import { MIRRORED_HP_PENALTY_FLAG, HOMEBREW_PLAYBOOK_COPY_FLAG, readableFlags } from "./StonetopFlags.js";
 import { DEATHS_DOOR_FLAG, DEATHS_DOOR_ROLLING_FLAG, UNSTOPPABLE_FIGHTING_FLAG } from "./deaths-door.js";
 
 // What the vitals are worked out from on the character document itself, outside its flags. Its items
@@ -57,6 +57,9 @@ export const FLAG_NOISE = new Set([
 	INSPIRATION_FLAG, BLESSING_FLAG, NEEDS_SUN_FLAG.split(".")[0], ...ONGOING_INVOCATION_FLAGS,
 	// The mirror's own bookkeeping, written in the same update as the max it describes.
 	MIRRORED_HP_PENALTY_FLAG,
+	// The copy of a homebrew playbook a character carries to other worlds (playbooks/homebrew-store.js
+	// PLAYBOOK_COPY_FLAG): rewritten on every save of the playbook, and no vital reads it.
+	HOMEBREW_PLAYBOOK_COPY_FLAG,
 ]);
 
 // A mark on somebody ELSE's sheet that a character's armor reads: the Blessed's Barkskin

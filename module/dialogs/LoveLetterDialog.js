@@ -5,6 +5,16 @@ import {
 	createLoveLetter, updateLoveLetter, sendLoveLetter, isDraftLoveLetter, loveLetterDrafts,
 	loveLetterRecipientOptions, loveLetterRollOptions,
 } from "../actors/character/love-letters.js";
+import { docOrNewKey } from "../utils/window-restore.js";
+import { readFormFields, trackFormFields } from "./authoring-restore.js";
+import { LOVE_LETTER_RESTORE_KIND } from "./love-letter-restore.js";
+
+/** The form fields a reload carries back, by `name`. */
+const FORM_FIELDS = [
+	"recipient", "name", "description", "rollType", "resultStyle", "success", "partial", "failure",
+	"options", "pickSuccess", "pickPartial", "pickFailure", "listSuccess", "listPartial", "listFailure",
+	"markXp", "signed",
+];
 
 /**
  * GM authoring dialog for a love letter (Book I, p.568) — a single-use move addressed to
@@ -16,6 +26,9 @@ import {
  * A letter can also be saved as a draft: it goes onto the recipient's sheet unsent, where only
  * the GM sees it, and the window stays open on it. A blank window lists the saved drafts to pick
  * one back up; a draft's window offers Send beside Save as draft.
+ *
+ * A reload brings the window back with the letter as typed, sent or not (love-letter-restore.js):
+ * what is typed lives only in the form until a save, so the form is copied as it changes.
  */
 export class LoveLetterDialog extends StonetopDialog {
 	/**
@@ -23,12 +36,51 @@ export class LoveLetterDialog extends StonetopDialog {
 	 * @param {Item}     [opts.item]    - existing love letter to edit; null = create
 	 * @param {Actor}    [opts.actor]   - the recipient (edit mode); ignored in create mode
 	 * @param {Function} [opts.onSaved] - called after a successful save
+	 * @param {string}   [opts.letterId] - a reload's: the id a new letter's window was saved under
 	 */
-	constructor({ item = null, actor = null, onSaved = null } = {}, options = {}) {
+	constructor({ item = null, actor = null, onSaved = null, letterId = null } = {}, options = {}) {
 		super(options);
 		this._item = item;
 		this._actor = actor ?? item?.parent ?? null;
 		this._onSaved = onSaved;
+		// Keeps a new letter's window apart from any other new one for a reload (`restoreKey`).
+		this._letterId = letterId || foundry.utils.randomID(8);
+		// The form as last typed, by field name; copied on every input, so a reload has it.
+		this._liveFields = null;
+		// A reload's copy of the form, written over the drawn one once (activateListeners).
+		this._restoredFields = null;
+	}
+
+	// ---- Reload --------------------------------------------------------------------------
+	// utils/window-restore.js reopens this window after a reload (love-letter-restore.js) with the
+	// form as it was typed.
+
+	/** What a reload saves this window under: the letter's uuid once saved, else this window's id. */
+	get restoreKey() {
+		return docOrNewKey(LOVE_LETTER_RESTORE_KIND, this._item, this._letterId);
+	}
+
+	/** The copy of the form, never the form itself: a window mid-close would read back blank. */
+	get restoreView() {
+		return this._liveFields ? { form: this._liveFields } : null;
+	}
+
+	/** Keep only the known fields, each as a string or (Mark XP) a boolean. */
+	_takeRestoredView(view) {
+		const form = view?.form;
+		if (!form || typeof form !== "object" || Array.isArray(form)) return;
+		const kept = {};
+		for (const key of FORM_FIELDS) {
+			const v = form[key];
+			if (key === "markXp" ? typeof v === "boolean" : typeof v === "string") kept[key] = v;
+		}
+		if (Object.keys(kept).length) this._restoredFields = this._liveFields = kept;
+	}
+
+	/** Copy the form's fields as they stand now (authoring-restore.js#readFormFields, the known ones only). */
+	_readFormCopy(root) {
+		const all = readFormFields(root);
+		return Object.fromEntries(FORM_FIELDS.filter(key => Object.hasOwn(all, key)).map(key => [key, all[key]]));
 	}
 
 	// Convenience entry point for the hotbar macro / console: game.stonetop.openLoveLetter().
@@ -116,6 +168,10 @@ export class LoveLetterDialog extends StonetopDialog {
 		super.activateListeners(html);
 		const root = html[0];
 
+		// A reload's letter goes over the drawn one before the panels below sync to it (a recipient no
+		// longer offered stays unpicked), and the form is copied as it is typed, for a reload.
+		trackFormFields(this, root, { read: (el) => this._readFormCopy(el) });
+
 		// Reveal the 10+/7-9/6- result fields only when the letter actually rolls.
 		const results = root.querySelector(".stonetop-love-letter-results");
 		const rollSelect = root.querySelector("[name=rollType]");
@@ -144,6 +200,8 @@ export class LoveLetterDialog extends StonetopDialog {
 	_showLetter(item) {
 		this._item = item;
 		this._actor = item.parent ?? this._actor;
+		// What was typed is the letter's now: the window draws it from the letter.
+		this._liveFields = null;
 		this.render(false);
 		// A V1 re-render keeps the old header, so put the new title on it by hand.
 		const titleEl = this.element?.[0]?.querySelector?.(".window-title");

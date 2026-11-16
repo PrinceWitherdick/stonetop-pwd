@@ -426,7 +426,7 @@ function withOffers(answer, ticked) {
 	const typed = answer.extraDice ? [answer.extraDice] : [];
 	// `key` rides along so the caller can tell which lines were ticked and settle what they cost
 	// (combat/attack-flow.js#takenOffers: a Resolve spent, a tag added to the blow).
-	return { ...answer, extraDice: [...typed, ...ticked.map(offer => ({ key: offer.key, dice: offer.dice, pill: offer.pill }))] };
+	return { ...answer, extraDice: [...typed, ...ticked.map(offer => ({ key: offer.key, dice: offer.dice, pill: offer.pill, ...(offer.dieStep ? { dieStep: offer.dieStep } : {}) }))] };
 }
 
 /** The composed formula a set of answers would actually roll, for the window's preview line. */
@@ -487,7 +487,8 @@ export function promptDamage({
 	// A move's line may add a die, a flat number (the Ranger's "+2 damage" at a weak spot) — both read by
 	// `extraTerm`, which the typed field deliberately does not share — or a ROLL MODE rather than a
 	// number: the moves that put a blow at disadvantage because of who it is aimed at (Uncanny Reflexes).
-	const extras = (Array.isArray(offers) ? offers : []).filter(offer => offer?.key && (extraTerm(offer) || offer.mode));
+	// …or a step up in every die's size (`dieStep`, a homebrew Deadly's), which the composed formula applies.
+	const extras = (Array.isArray(offers) ? offers : []).filter(offer => offer?.key && (extraTerm(offer) || offer.mode || offer.dieStep));
 	// A ticked mode line moves the picker rather than fighting it, so the window has ONE answer to "how
 	// is this rolled" and the box says where it came from.
 	// FOLDED, not stepped one at a time: two ticked lines that both blunt the blow are two voices

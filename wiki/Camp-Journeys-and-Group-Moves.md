@@ -21,6 +21,7 @@ The **Make Camp** button at the bottom settles the night once everyone eating ha
 > - Followers who eat at camp regain half their max HP when the camp settles. Mark which followers are with the party on their cards (see [Followers](Followers)).
 > - A split party can run two camps. Joining a different camp asks first.
 > - A Ghost or Revenant needs no food or sleep and takes nothing from the night; the window says so.
+> - Someone holding a length of prayer beads (its back realised) needs no food while they hold at least 1 Preparation (Book II p.526). Their row says **Needs no food while holding Preparation (prayer beads)**; they still sleep and take the night's benefit.
 > - A Thrall with Ravenous eats an extra 1d4 provisions or uses of supplies, added to the meal. One with Quicksilver Dreams gives everyone else at the fire nightmares: each holds disadvantage on their next roll. Ghosts and Revenants don't dream, and the ash of Keep the Home-Fires Burning wards it off.
 
 ## Struggle as One

@@ -28,7 +28,8 @@ export const ONCE_PER_LEVEL_MARKS = new Set([POTENTIAL_FOR_GREATNESS]);
 export function markEntries(stored) {
 	if (Array.isArray(stored)) {
 		return stored.map(e => (e && typeof e === "object")
-			? { stat: e.stat ?? "", level: e.level ?? null, ...(e.creation ? { creation: true } : {}) }
+			// `text`: what the player wrote in a write-in mark ("Something else: ___").
+			? { stat: e.stat ?? "", level: e.level ?? null, ...(e.creation ? { creation: true } : {}), ...(e.text ? { text: String(e.text) } : {}) }
 			: { stat: typeof e === "string" ? e : "", level: null });
 	}
 	if (typeof stored === "number") return Array.from({ length: stored }, () => ({ stat: "", level: null }));

@@ -21,8 +21,8 @@
 import {
 	HOME_STONETOP, npcHome, personFolderList, personListIndex,
 } from "../actors/steading/steading-people.js";
-import { playbookTitle } from "./playbook-actors.js";
-import { localize } from "./i18n.js";
+import { playbookTitle, playerOf } from "./playbook-actors.js";
+import { format, localize } from "./i18n.js";
 
 /** The lists, in the order a rail should offer them. */
 export const PEOPLE_GROUP_PLAYERS = "players";
@@ -80,6 +80,31 @@ export function personNote(actor) {
 	const home = npcHome(actor);
 	const elsewhere = home === HOME_STONETOP ? "" : home;
 	return [occupation, elsewhere].filter(Boolean).join(", ");
+}
+
+/**
+ * The bracketed part of a dropdown label: the PLAYER for a played character, otherwise the same
+ * few words as `personNote` (a playbook for a character nobody plays, a trade and a home for an NPC).
+ *
+ * WHY THE PLAYER BEATS THE PLAYBOOK HERE. A dropdown of characters is asked by somebody looking for
+ * "Alex's character", and at a table that is how the characters are known; the playbook is the
+ * fallback for a sheet the GM is holding. The format is the one the playbook picker already says a
+ * holder in ("Pim (Alex)").
+ */
+export function personOptionDetail(actor, { users = globalThis.game?.users } = {}) {
+	if (!actor) return "";
+	if (actor.type === "character") {
+		const player = playerOf(actor, { users });
+		if (player?.name) return player.name;
+	}
+	return personNote(actor);
+}
+
+/** "Name (detail)" for an `<option>`, or the bare name when there is nothing to add. Not escaped. */
+export function personOptionLabel(actor, opts = {}) {
+	const name = actor?.name ?? "";
+	const detail = personOptionDetail(actor, opts);
+	return detail ? format("stonetop.people.optionLabel", { name, detail }) : name;
 }
 
 /**

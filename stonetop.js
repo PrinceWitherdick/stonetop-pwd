@@ -147,13 +147,17 @@ import { watchIconOnlyButtons } from "./module/utils/icon-only-buttons.js";
 import { registerUserConfigCharacterFilter } from "./module/hooks/user-config-characters.js";
 import { registerAssignToPlayer } from "./module/hooks/assign-to-player.js";
 import { registerCampaignActorMenu } from "./module/campaign/campaign-actor-menu.js";
+import { registerHomebrewPlaybookMenu } from "./module/playbooks/homebrew-item-menu.js";
+import { registerMissingPlaybookNotice } from "./module/playbooks/homebrew-missing.js";
+import { registerMovePossessionGrants } from "./module/actors/character/homebrew-move-possession.js";
+import { registerPlaybookLibrary } from "./module/playbooks/playbook-library.js";
 import { registerScenePosterMapMenu } from "./module/book2-art/mark-poster-scene.js";
 import { installWindowRestore } from "./module/utils/window-restore.js";
 import { registerUuidRedirects } from "./module/migration/compat.js";
 import { adoptLegacyClientSettings } from "./module/migration/copy-settings.js";
 import { StonetopFlags } from "./module/actors/character/StonetopFlags.js";
 import { onPreUpdateActorRecoverLock } from "./module/actors/character/recover-lock.js";
-import { payableStockSources, mustAskStockSource, stockReceipt } from "./module/actors/character/stock-cost.js";
+import { payableStockSources, mustAskStockSource, stockReceipt, purseLeftNote } from "./module/actors/character/stock-cost.js";
 import { askStockSource } from "./module/actors/character/ask-stock-source.js";
 import { moveLearnedIn } from "./module/actors/character/owns-move.js";
 import { readProvisionsYield, rollProvisions, rollStock, withTrappingGear, TRAPPING_GEAR_SLUG } from "./module/actors/character/provisions.js";
@@ -184,6 +188,14 @@ import { registerSharedRouteHooks, wireSharedRouteCard } from "./module/dialogs/
 import { registerCampWindowRestore } from "./module/camp/CampWindow.js";
 import { registerTimelineWindowRestore } from "./module/dialogs/TimelineWindow.js";
 import { registerCreateSiteRestore } from "./module/sites/create-site-restore.js";
+import { registerPlaybookBuilderRestore } from "./module/playbooks/playbook-builder-restore.js";
+import { registerAuthoringRestore } from "./module/dialogs/authoring-restore.js";
+import { registerCreateFollowerRestore } from "./module/actors/character/dialogs/create-follower-restore.js";
+import { registerLoveLetterRestore } from "./module/dialogs/love-letter-restore.js";
+import { registerStruggleSetupRestore } from "./module/struggle/struggle-setup-restore.js";
+import { registerCreateMonsterRestore } from "./module/dialogs/create-monster-restore.js";
+import { registerCreateHazardRestore } from "./module/hazards/create-hazard-restore.js";
+import { registerTimelineEntryRestore } from "./module/dialogs/timeline-entry-restore.js";
 import { registerStruggleHooks } from "./module/struggle/struggle-flow.js";
 import { registerPcAskHooks, wirePcAskCard } from "./module/pc-asks/pc-ask-flow.js";
 import { registerFightTab } from "./module/fight/fight-boot.js";
@@ -340,6 +352,10 @@ Hooks.once("init", () => {
 	registerAssignToPlayer();
 	// Retire a PC, a PC or follower become a threat, and back into play (Book I p.584; module/campaign/).
 	registerCampaignActorMenu();
+	registerHomebrewPlaybookMenu();
+	registerMissingPlaybookNotice();
+	registerMovePossessionGrants();
+	registerPlaybookLibrary();
 	// "Stonetop map..." on a Scene's right-click menu: mark a GM's own Scene as one of the poster maps.
 	registerScenePosterMapMenu();
 
@@ -679,6 +695,7 @@ Hooks.once("init", () => {
 		"stonetop.tab-followers":    "systems/stonetop-pwd/templates/actor/partials/tab-followers.hbs",
 		"stonetop.tab-arcana":       "systems/stonetop-pwd/templates/actor/partials/tab-arcana.hbs",
 		"stonetop.tab-post-death":      "systems/stonetop-pwd/templates/actor/partials/tab-post-death.hbs",
+		"stonetop.tab-homebrew-insert": "systems/stonetop-pwd/templates/actor/partials/tab-homebrew-insert.hbs",
 		"stonetop.tab-special-moves":   "systems/stonetop-pwd/templates/actor/partials/tab-special-moves.hbs",
 		"stonetop.tab-notes":           "systems/stonetop-pwd/templates/actor/partials/tab-notes.hbs",
 		"stonetop.tab-timeline":        "systems/stonetop-pwd/templates/actor/partials/tab-timeline.hbs",
@@ -923,6 +940,19 @@ registerTimelineWatch();
 registerTimelineWindowRestore();
 // And a Create a Site walkthrough, on the step it was left on with its answers (sites/create-site-restore.js).
 registerCreateSiteRestore();
+// And the Playbook Builder, with every field typed in it, saved or not (playbooks/playbook-builder-restore.js).
+registerPlaybookBuilderRestore();
+// And the authoring windows: the Improvement Builder, a custom move and an inventory item, as typed
+// (dialogs/authoring-restore.js).
+registerAuthoringRestore();
+// And Create a Follower, a love letter, and the Struggle as One setup, as typed.
+registerCreateFollowerRestore();
+registerLoveLetterRestore();
+registerStruggleSetupRestore();
+// And Make a Monster, Make a Hazard and a timeline entry, as typed; each finishes by itself after a reload.
+registerCreateMonsterRestore();
+registerCreateHazardRestore();
+registerTimelineEntryRestore();
 
 // -- READY -----------------------------------------------------
 // FIRST of the ready listeners, deliberately. This one reports whether the startup it is reporting
@@ -2334,8 +2364,8 @@ function _chatWireSpendStock(message, html) {
 			const { lost } = await character.spendStock(source, amount, { moveName, speaker: message.speaker });
 			const receipt = stockReceipt(source, amount, lost);
 			return {
-				stamp: { amount, label: source.label, vessel: !!source.vessel, lost },
-				notice: source.vessel ? `${receipt}.` : `${receipt} (${source.remaining - amount} left).`,
+				stamp: { amount, label: source.label, vessel: !!source.vessel, ...(source.standIn ? { standIn: source.standIn } : {}), lost },
+				notice: `${receipt}${purseLeftNote(source, amount)}.`,
 			};
 		},
 	});

@@ -2,7 +2,7 @@
 // MAJ-2, MAJ-11, ENG-4, ENG-5, ENG-8, ENG-14, ENG-15).
 import fs from "fs";
 import path from "path";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import {
 	CharacterArcana, arcanumItemResourceKey, arcanumSlotLocked, arcanumUnlockedUnder, rolledTrackTouched, rolledUsesCount,
 	unlockBoxCount, unlockRequirementsMet,
@@ -304,8 +304,12 @@ describe("MNB-2 / HB-12: one resource key", () => {
 });
 
 describe("the back-item key settle (StonetopCharacter#arcanumResourceKeysUpdate)", () => {
+	// The whole character module, loaded once before the tests: under a full suite's load its import alone
+	// can take longer than a test's 5s.
+	let StonetopCharacter;
+	beforeAll(async () => { ({ StonetopCharacter } = await import("../../../module/actors/character/StonetopCharacter.js")); }, 30000);
+
 	it("moves a '<slug>:item' count into the bare key on a card with no back-power track, once", async () => {
-		const { StonetopCharacter } = await import("../../../module/actors/character/StonetopCharacter.js");
 		const store = { resources: { bow: 1, "bow:item": 2, "book:item": 4, book: 1 } };
 		const bow = card("bow", { item: { name: "Bow", resource: { max: 2 } } });
 		const book = card("book", { resource: { max: 6 }, item: { name: "Skin", resource: { max: 5 } } });

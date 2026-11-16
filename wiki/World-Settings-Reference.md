@@ -39,6 +39,7 @@ A change to any Advancement row redraws open character sheets, so the XP track s
 | Setting | Default | What it changes |
 |---|---|---|
 | **Arcana Creation: GM Only** | On | Only the GM sees the buttons that create homebrew arcana on the Arcana tab. Players can still edit cards they own. |
+| **Include homebrew minor arcana in the Seeker's draw** | Off | The minor arcana made in this world (finished, not drafts) join the shipped ones in the deck a new Seeker draws 3 from. |
 | **Arcana: Players See Both Sides** | Off | Lets players open the back of a card they haven't unlocked yet. Off, a locked back stays hidden until you reveal it on that card. A player always sees a back once they unlock it. |
 | **Artifacts Arrive Unidentified** | Off | A treasure dropped onto a character sheet arrives with its tags, Value and uses withheld, until the player learns more (Book I, pp.430-431). Either way you can hide or hand over any single artifact from the mask icon on its gear row. |
 

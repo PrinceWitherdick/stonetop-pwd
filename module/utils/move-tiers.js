@@ -1,4 +1,4 @@
-import { capitalizeFirst, decodeEntities, escHtml, formatOutcomeDetail, splitPickList, stripHtmlToText } from "./strings.js";
+import { capitalizeFirst, decodeEntities, escHtml, formatOutcomeDetail, sameNoun, splitPickList, stripHtmlToText } from "./strings.js";
 import { firstOptionList, pickableMoveDescription } from "./chat.js";
 import { MOVE_TIERS, MOVE_TIERS_CLASS, ROLLED_TIER_ATTR } from "./move-results.js";
 import { outcomeTier } from "./counted-tier.js";
@@ -104,6 +104,29 @@ const _GENERAL_RE = /^(?:regardless\b|in any case\b|in all cases\b|whatever the 
 // A rung that RESTATES another as its starting point ("on a 10+, as a 7-9, but both apply"):
 // what was said for the rung before is folded into "as a 7-9", so it is not said twice.
 const _RESTATES_RE = /^as\s+(?:(?:a|an|per\s+a|with\s+a)\s+)?(?:7\s*\p{Pd}\s*9|10\+|above)\b/iu;
+
+// A rung that only says how much is held ("hold 2 Reign"), and the hold it can raise.
+const _HOLD_ONLY_RE = /^hold\s+(\d+|one|two|three)\b(?:\s+([A-Z][\w'’-]*))?\s*[.;]?$/i;
+const _HOLD_IN_RE = /\bhold\s+(?:\d+|one|two|three)\b(\s+[A-Z][\w'’-]*)?/i;
+
+/**
+ * Whether `rest` ("hold 2 Reign") raises a hold the rung already says ("…but hold 1 Reign", from an
+ * "on a 7+" before it): if so, that hold is rewritten in place and true returned. Only the same
+ * currency (singular or plural alike), or a rung that names none.
+ */
+function _raisesHold(entries, rest) {
+	const want = rest.match(_HOLD_ONLY_RE);
+	if (!want || !entries?.length) return false;
+	for (let i = entries.length - 1; i >= 0; i--) {
+		const had = entries[i].text.match(_HOLD_IN_RE);
+		if (!had) continue;
+		if (want[2] && had[1] && !sameNoun(want[2], had[1])) return false;
+		const currency = had[1] ?? (want[2] ? ` ${want[2]}` : "");
+		entries[i].text = entries[i].text.replace(had[0], `hold ${want[1]}${currency}`);
+		return true;
+	}
+	return false;
+}
 
 // An abbreviation whose full stop does not end a sentence, so what follows keeps its case.
 const _ABBREV_END_RE = /\b(?:e\.g|i\.e|vs|cf)\.$/i;
@@ -381,8 +404,11 @@ function _tierCorpus(moveResults) {
  * When the inline options of one rung are shared by the others ("on a 10+, pick 3; on a 7-9,
  * pick 1: a; b; c"), they are lifted off that rung and handed back as `sharedOptions`, a
  * non-enumerable property of the result, for the ladder to list under its rows.
+ *
+ * A ladder needs two rungs, so one rung alone is null by default. `minRows: 1` takes it, for a
+ * reader that asks what ONE tier does ("on a 10+, hold 3 Fear", homebrew-bundle.js#holdOnRollFrom).
  */
-export function parseTiersFromProse(description, stored = null) {
+export function parseTiersFromProse(description, stored = null, { minRows = 2 } = {}) {
 	const src = String(description ?? "");
 	if (!src.trim()) return null;
 	// TWO OR MORE ROLLS, each with tiers of its own (the Seasons Change's four seasons, the Humble
@@ -435,6 +461,9 @@ export function parseTiersFromProse(description, stored = null) {
 				// "on a 10+, as a 7-9, but both apply": the restatement replaces what the 7+ before it
 				// said for this rung, rather than following it.
 				if (_RESTATES_RE.test(rest)) for (const key of current) parts[key] = [];
+				// "on a 7+, they appear… but hold 1 Reign; on a 10+, hold 2 Reign" (a homebrew Monster
+				// Squad): the 10+ raises the hold the 7+ gave it, rather than adding a second one.
+				else if (rest && current.length === 1 && _raisesHold(parts[current[0]], rest)) { colonOpen = false; return; }
 				if (rest) push(current, rest, true);
 				colonOpen = /:$/.test(rest);
 				return;
@@ -487,7 +516,7 @@ export function parseTiersFromProse(description, stored = null) {
 	// so only the 7-9 is quotable, and hoisting that alone leaves a one-row ladder under a
 	// sentence that now trails off. Below the bar the description is simply left as written.
 	// Stored moveResults are exempt: a custom move with one rung filled in meant it.
-	return moveTierRows(results).length >= 2 ? results : null;
+	return moveTierRows(results).length >= minRows ? results : null;
 }
 
 // A roll that is MADE ("roll +WIS", "rolls +Fortunes", "roll 1d4+Population"), as opposed to one

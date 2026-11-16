@@ -11,11 +11,12 @@
  * Kept Foundry-free so the reading can be tested with plain objects.
  */
 
-// "choose N-M" (hyphen or en dash), "choose N or M", "choose N, maybe M", in that order; then a
-// lone "choose N". With no count at all, a list of single-take boxes is a "pick 1".
+// "choose N-M" (hyphen or en dash) or "choose N to M" (a homebrew Stranger's "choose 1 to 3"),
+// "choose N or M", "choose N, maybe M", in that order; then a lone "choose N". With no count at
+// all, a list of single-take boxes is a "pick 1".
 function _countRange(section) {
 	const desc = String(section?.description ?? "").toLowerCase();
-	const pair = desc.match(/(?:choose|pick)\s+(\d+)\s*[\u2013-]\s*(\d+)/)
+	const pair = desc.match(/(?:choose|pick)\s+(\d+)\s*(?:[\u2013-]|to\b)\s*(\d+)/)
 		?? desc.match(/(?:choose|pick)\s+(\d+)\s+or\s+(\d+)/)
 		?? desc.match(/(?:choose|pick)\s+(\d+)[,\s]+maybe\s+(\d+)/);
 	if (pair) return { min: parseInt(pair[1], 10), max: parseInt(pair[2], 10) };
@@ -24,6 +25,15 @@ function _countRange(section) {
 	const opts = section?.options ?? [];
 	if (opts.length > 0 && opts.every(o => !o.type && (o.max ?? 1) === 1)) return { min: 1, max: 1 };
 	return null;
+}
+
+/**
+ * The count a line of words asks for ("pick 2", "choose 1 or 2"), as {min, max}, or null when it
+ * names none. The same reading as a lore list's, for words that aren't one yet (a PDF's "Armament
+ * pick 2", an insert list's prompt).
+ */
+export function pickCountRange(text) {
+	return _countRange({ description: text, options: [] });
 }
 
 /**

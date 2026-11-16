@@ -1,4 +1,5 @@
 import { deepFreeze } from "../../../utils/localized-once.js";
+import { homebrewMoveGroups } from "../../../playbooks/playbook-catalog.js";
 
 // Per-playbook groupings for the onboarding "Starting Moves" filter chips. Each
 // playbook gets three chips, each a single word that defines a cluster of that
@@ -18,7 +19,9 @@ import { deepFreeze } from "../../../utils/localized-once.js";
 // process while `moveGroupsForPlaybook` still reads this table live, so a write here after first
 // render would leave the two permanently disagreeing — a move showing on its onboarding chip and
 // landing in the sheet's "Other" bucket, with nothing failing. Anything wanting a fourth group or
-// a homebrew playbook belongs in this literal, where both readers see it.
+// a shipped playbook belongs in this literal, where both readers see it. A HOMEBREW playbook's
+// groups live on its own Item (playbooks/playbook-catalog.js homebrewMoveGroups) and are read
+// fresh every time, never through the frozen index: the GM can edit them while the world runs.
 
 export const ONBOARDING_MOVE_GROUPS = deepFreeze({
 	"The Blessed": [
@@ -68,9 +71,14 @@ export const ONBOARDING_MOVE_GROUPS = deepFreeze({
 	],
 });
 
+// A playbook's groups: the table's for a shipped playbook, else a homebrew playbook's own.
+function _groupsFor(playbookName) {
+	return ONBOARDING_MOVE_GROUPS[playbookName] ?? homebrewMoveGroups(playbookName) ?? [];
+}
+
 // The chips (key + label only) to show for a playbook, or [] when none are defined.
 export function moveGroupsForPlaybook(playbookName) {
-	return (ONBOARDING_MOVE_GROUPS[playbookName] ?? []).map(g => ({ key: g.key, label: g.label }));
+	return _groupsFor(playbookName).map(g => ({ key: g.key, label: g.label }));
 }
 
 // Reverse index of the table above: playbook -> move name -> the group keys listing it, in
@@ -88,8 +96,9 @@ const _groupKeyIndex = new Map();
 function groupKeyIndexFor(playbookName) {
 	let index = _groupKeyIndex.get(playbookName);
 	if (index) return index;
+	const shipped = !!ONBOARDING_MOVE_GROUPS[playbookName];
 	index = new Map();
-	for (const group of ONBOARDING_MOVE_GROUPS[playbookName] ?? []) {
+	for (const group of _groupsFor(playbookName)) {
 		// Once per GROUP, not once per occurrence: a name listed twice within one group's `moves`
 		// is a table typo, and pushing its key twice would send `["combat", "combat"]` out to a
 		// `groupsAttr` and to anything that counts the result.
@@ -101,7 +110,8 @@ function groupKeyIndexFor(playbookName) {
 	// Frozen for the same reason the table is: this is handed out (copied) to callers, but the
 	// arrays inside are the ones `partitionMovesByGroup` reads straight.
 	for (const keys of index.values()) Object.freeze(keys);
-	_groupKeyIndex.set(playbookName, index);
+	// Only the frozen table's answers are kept; a homebrew playbook's are rebuilt each call.
+	if (shipped) _groupKeyIndex.set(playbookName, index);
 	return index;
 }
 
@@ -136,7 +146,7 @@ export const UNGROUPED_MOVE_LABEL = "Other";
  *   unrecognized or homebrew playbook), which tells the caller to render one flat list.
  */
 export function partitionMovesByGroup(playbookName, moves) {
-	const groups = ONBOARDING_MOVE_GROUPS[playbookName];
+	const groups = _groupsFor(playbookName);
 	if (!groups?.length) return [];
 	const buckets = new Map(groups.map(g => [g.key, { key: g.key, label: g.label, moves: [] }]));
 	buckets.set(UNGROUPED_MOVE_KEY, { key: UNGROUPED_MOVE_KEY, label: UNGROUPED_MOVE_LABEL, moves: [] });

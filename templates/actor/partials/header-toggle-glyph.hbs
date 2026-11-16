@@ -12,16 +12,22 @@
         stem      the base class; the icon is `<stem>-icon` ("stonetop-holy-light")
         on        is the state currently ON
         onClass   the modifier worn while it is ("is-lit")
-        labelKey  / tooltipKey   i18n keys for this state, already picked --}}
+        labelKey  / tooltipKey   i18n keys for this state, already picked
+        labelText / tooltipText  plain words instead, already picked, for a state whose words come
+                  from a homebrew playbook rather than the language file (an insert's form). The
+                  tooltip goes in `data-tooltip-text`, which core shows as TEXT: imported words are
+                  never handed to `data-tooltip`, which core reads as HTML
+        insertKey which homebrew insert's form this is, for the click (data-insert-form-key) --}}
 {{#if editable}}
 <button type="button" class="{{this.stem}}{{#if on}} {{this.onClass}}{{/if}}"
         aria-pressed="{{#if on}}true{{else}}false{{/if}}"
-        aria-label="{{localize labelKey}}"
-        data-tooltip="{{localize tooltipKey}}"
+        aria-label="{{#if this.labelText}}{{this.labelText}}{{else}}{{localize labelKey}}{{/if}}"
+        {{#if this.tooltipText}}data-tooltip-text="{{this.tooltipText}}"{{else}}data-tooltip="{{localize tooltipKey}}"{{/if}}
+        {{#if this.insertKey}}data-insert-form-key="{{this.insertKey}}"{{/if}}
         data-tooltip-direction="UP"><span class="{{this.stem}}-icon" aria-hidden="true"></span></button>
 {{else}}
 <span class="{{this.stem}}{{#if on}} {{this.onClass}}{{/if}}"
-      aria-label="{{localize labelKey}}"
-      data-tooltip="{{localize tooltipKey}}"
+      aria-label="{{#if this.labelText}}{{this.labelText}}{{else}}{{localize labelKey}}{{/if}}"
+      {{#if this.tooltipText}}data-tooltip-text="{{this.tooltipText}}"{{else}}data-tooltip="{{localize tooltipKey}}"{{/if}}
       data-tooltip-direction="UP"><span class="{{this.stem}}-icon" aria-hidden="true"></span></span>
 {{/if}}

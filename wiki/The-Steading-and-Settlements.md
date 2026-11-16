@@ -40,8 +40,13 @@ The **Residents** tab has three lists: **Player Characters**, **Residents of Sto
 - Drag NPCs from the sidebar onto a list to add them, or **Add Resident**.
 - **Residents follow their Home.** An NPC whose **Home** names a settlement is on that settlement's Residents, wherever they were made, and changing someone's Home on their sheet moves them. Dropping someone who lives elsewhere asks **Move (name) to (place)?** first. The remove cross asks **Where does (name) live now?** rather than just taking them off the list.
 - **Drag player characters onto the Player Characters list** to keep them with Stonetop; their Keep in mind reminders show there.
-- Each person is a card showing their **Occupation**, **Traits**, **Relations** and **Notes**, kept A to Z by name. Click a list's pencil to edit its fields; the pencil beside a resident's Notes then opens that NPC's notes in a pop-up editor, and changes go straight to their sheet.
+- Each person is one line: face, name with their occupation and traits, **Relations** and **Notes**, under a **Name | Relations | Notes** header. Text that doesn't fit ends in an ellipsis; hover it to read the whole thing. On a narrow sheet each person takes two lines instead.
+- The list is A to Z by name. Click **Name** in the header to flip the order; the sheet remembers it. Drag the edge of **Name** or **Relations** to make that column wider.
+- Click a list's pencil to edit its fields (still one line per person); the pencil beside a resident's Notes then opens that NPC's notes in a pop-up editor, and changes go straight to their sheet.
 - The magnifying glass filters the list.
+
+![The Residents tab: Player Characters and Residents of Stonetop, each person on one line under a Name, Relations and Notes header, with long text cut short by an ellipsis](images/the-steading-and-settlements-residents.webp)
+
 - The **Relationships** card at the bottom rates how Stonetop stands with each other settlement (see [Other settlements](#other-settlements)).
 
 > **Did you know?**

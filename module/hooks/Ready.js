@@ -6,6 +6,7 @@ import { canCreateRelationshipMap, ensureRelationshipMapFolder, listRelationship
 import { promptForNewRelationshipMap } from "../relmap/relmap-make.js";
 import { defaultBoard } from "../relmap/relmap-last.js";
 import { keepDeadChipsCurrent, keepSavedFacesCurrent, sweepStaleFaces } from "../relmap/relmap-faces.js";
+import { onItemChangeCrewSheets, onUpdateActorCrewPerson, onUpdateActorCrewRoster, onUpdateActorCrewSheets } from "../actors/character/crew-people.js";
 import { installChipMeasure } from "../utils/relmap-chip-measure.js";
 import { maybeOfferMigration } from "../migration/announce.js";
 import { finishSystemIdMigration } from "../migration/finish-run.js";
@@ -36,6 +37,9 @@ import { pastWelcomeGuide, reopenOpenWalkthroughs } from "../dialogs/walkthrough
 import { reopenOpenBookReaders } from "../books/reader-resume.js";
 import { rulebookMacroApi } from "../books/rulebook-api.js";
 import { adoptStoredRulebooks } from "../books/adopt-stored-rulebooks.js";
+import { adoptLibraryPlaybooks } from "../playbooks/playbook-library.js";
+import { tidyHomebrewFolders } from "../playbooks/homebrew-store.js";
+import { noticeMissingPlaybooks } from "../playbooks/homebrew-missing.js";
 import { adoptSettlementPortraits, reletterOnRename } from "../actors/settlement/settlement-portrait.js";
 import { redrawForSettlement } from "../actors/settlement/settlement-actor.js";
 import { isResidentsWriter, onCreateActorForResidents, onPreUpdateActorForResidents, onUpdateActorForResidents, sweepSettlementResidents } from "../actors/settlement/settlement-residents.js";
@@ -692,6 +696,16 @@ export async function onReady() {
 	// the book art is, so a new world's GM Toolkit opens the books without asking for them again
 	// (books/adopt-stored-rulebooks.js). Self-gated to the primary GM; not awaited, it is one browse.
 	adoptStoredRulebooks().catch(err => console.error("Stonetop | picking up kept rulebooks failed", err));
+	// The same for homebrew playbooks: the ones saved in the GM's other worlds are in
+	// stonetop-playbooks/ (playbooks/playbook-library.js), and this world gets the ones it lacks and is
+	// offered newer versions of the ones it has. The "plays a playbook this world doesn't have" notice
+	// waits for it, so a character whose playbook is about to arrive isn't named. Primary GM only.
+	adoptLibraryPlaybooks({ afterAdding: noticeMissingPlaybooks })
+		.catch(err => console.error("Stonetop | the playbook library run failed", err))
+		// Then each homebrew playbook's moves go into its subfolders, where an older version left them
+		// beside the playbook (homebrew-store.js#tidyHomebrewFolders). Primary GM; nothing once tidied.
+		.then(() => tidyHomebrewFolders())
+		.catch(err => console.error("Stonetop | tidying the homebrew playbook folders failed", err));
 	// Settlement portraits (actors/settlement/settlement-portrait.js). A sheet still on an image of
 	// ours takes its square of book art when the art is on disk, else its letter: primary GM, every
 	// load, not awaited, one browse. And a sheet renamed while on its initials takes the new ones, on
@@ -714,6 +728,17 @@ export async function onReady() {
 		keepDeadChipsCurrent(actor, changed, options, userId)
 			.catch(err => console.warn("Stonetop | updating the Dead chip on the relationship map failed", err));
 	});
+	// A named crew member's Person renamed or given a face on its own sheet takes the Marshal's roster
+	// with it, on the client that made the edit (actors/character/crew-people.js).
+	Hooks.on("updateActor", onUpdateActorCrewPerson);
+	// And the other way: a member renamed, re-tagged or given a face on the roster takes their Person
+	// with them, on the client that made the edit (the sheet's render still runs it as a backfill).
+	Hooks.on("updateActor", onUpdateActorCrewRoster);
+	// And a crew member's open sheet reads their HP, Loyalty and tags off the crew card, so it draws
+	// again when that card changes (on every client: it is only a redraw).
+	Hooks.on("updateActor", onUpdateActorCrewSheets);
+	Hooks.on("createItem", onItemChangeCrewSheets);
+	Hooks.on("deleteItem", onItemChangeCrewSheets);
 	// Stonetop's Other Settlements table (and another settlement's trade links) draw from settlement
 	// sheets, and core redraws a sheet only for its own document (settlement-actor.js).
 	Hooks.on("createActor", actor => redrawForSettlement(actor));

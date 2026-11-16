@@ -115,6 +115,15 @@ global.foundry = {
 			.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 			.replace(/"/g, "&quot;").replace(/'/g, "&#39;"),
 		getProperty: (obj, path) => path.split(".").reduce((value, key) => value?.[key], obj),
+		// Core's: walks the dotted path, making a plain object for any step that is missing.
+		setProperty: (obj, path, value) => {
+			const keys = path.split(".");
+			const last = keys.pop();
+			let target = obj;
+			for (const key of keys) target = (target[key] ??= {});
+			target[last] = value;
+			return true;
+		},
 		// Mirrors Foundry's debounce (common/utils/helpers.mjs): each call cancels the pending
 		// one, so a burst collapses to a single trailing invocation. Faithful on purpose — a
 		// pass-through fake would let a test "pass" against a coalescing production path and

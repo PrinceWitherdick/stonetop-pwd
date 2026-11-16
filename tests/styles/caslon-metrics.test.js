@@ -57,6 +57,35 @@ describe("the Libre Caslon Text @font-face rules", () => {
 	});
 });
 
+// IM Fell English, the same fix (2026-11-11). Both files: ascent 1854, descent 744 (upm 2048), and
+// Chromium draws the H 0.6875em tall, so a line box's middle sat 0.073em under the capitals' middle and
+// every flex-centred button showed its words 1.5-2px high at a 20px UI font. Measured after, with
+// caps-nudge-probe.mjs: a line-height: normal row's caps 0.002em from its middle (were 0.081em).
+const IM_FELL_H_EM = 0.6875;
+const fellFaces = [...CSS.matchAll(/@font-face\s*\{([^}]*)\}/g)]
+	.map(m => m[1])
+	.filter(body => /font-family:\s*"IM Fell English"/.test(body));
+
+describe("the IM Fell English @font-face rules", () => {
+	it("are all found (regular, italic and the upright-bracket italic)", () => {
+		expect(fellFaces).toHaveLength(3);
+	});
+
+	it.each(fellFaces.map((body, i) => [i, body]))("face %i centres its line box on its capitals", (_, body) => {
+		const file = body.match(/url\("\.\.\/([^"]+)"\)/)[1];
+		const { upm, ascent, descent } = vertical(path.join(ROOT, file));
+		const a = percent(body, "ascent-override");
+		const d = percent(body, "descent-override");
+		expect(a + d).toBeCloseTo(((ascent + descent) / upm) * 100, 6);
+		expect(a - d).toBeCloseTo(IM_FELL_H_EM * 100, 6);
+	});
+
+	it("no longer needs the deep caps nudge it carried before (settings.js)", () => {
+		const settings = fs.readFileSync(path.join(ROOT, "module/settings.js"), "utf8");
+		expect(settings).toMatch(/"im-fell-english":\s*"0\.012em"/);
+	});
+});
+
 describe("what used to compensate for the old metrics", () => {
 	it("no longer lifts the Welcome create label or the relationship map's tool labels by hand", () => {
 		expect(CSS).not.toContain("--st-relmap-ink-lift");

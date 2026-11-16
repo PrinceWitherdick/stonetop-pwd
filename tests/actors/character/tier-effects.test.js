@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
 	settleTierEffects, recordTierEffects, reconcileTierEffects, TIER_EFFECTS_FLAG, TIER_EFFECT_MOVES, SILVER_TONGUED,
+	tierEffectsAllowed, HOMEBREW_TIER_EFFECTS,
 } from "../../../module/actors/character/tier-effects.js";
 import { FIGHT_STATES, fightStateOn, WE_HAPPY_FEW } from "../../../module/actors/character/fight-states.js";
 import { PREPARE_A_WELCOME } from "../../../module/combat/battle-holds.js";
@@ -185,15 +186,33 @@ describe("Commune with Aratis's Sanction", () => {
 describe("Silver Tongued's Nerve", () => {
 	const fox = held => hero({ moves: [SILVER_TONGUED], held: { [SILVER_TONGUED]: held }, max: 3 });
 
-	it("is a move whose tier does something to the roller", () => {
-		expect(TIER_EFFECT_MOVES).toContain(SILVER_TONGUED);
+	// Settled as any move whose data says what a roll holds (heldOnRoll): the pack carries the numbers,
+	// and a copy taken before it did reads the book's.
+	it("is settled by its data, not its name", () => {
+		expect(TIER_EFFECT_MOVES).not.toContain(SILVER_TONGUED);
+	});
+
+	it("holds what the pack's copy says, where it says it", async () => {
+		const made = fox(0);
+		made.actor.items[0].system.resource.holdOnRoll = { success: 2, partial: 1 };
+		await rolled(made.actor, SILVER_TONGUED, "success");
+		expect(made.tracks[SILVER_TONGUED]).toBe(2);
+	});
+
+	it("reads a card recorded as nerveHeld, so a Shift still undoes what it added", async () => {
+		const { actor, tracks } = fox(3);
+		const message = card(SILVER_TONGUED);
+		message.flags[SYSTEM_ID][TIER_EFFECTS_FLAG] = { heldOnRoll: 2 };
+		expect(await shift(message, actor, 5)).toBe(true);
+		expect(tracks[SILVER_TONGUED]).toBe(1);
+		expect(message.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 0 });
 	});
 
 	it("fills to 3 on a 10+ and to 1 on a 7-9, and holds nothing more on a 6-", async () => {
 		const hit = fox(0);
 		const card10 = await rolled(hit.actor, SILVER_TONGUED, "success");
 		expect(hit.tracks[SILVER_TONGUED]).toBe(3);
-		expect(card10.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 3 });
+		expect(card10.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 3 });
 
 		const partial = fox(0);
 		await rolled(partial.actor, SILVER_TONGUED, "partial");
@@ -203,7 +222,7 @@ describe("Silver Tongued's Nerve", () => {
 		const card6 = await rolled(miss.actor, SILVER_TONGUED, "failure");
 		expect(miss.tracks[SILVER_TONGUED]).toBe(1);
 		// Still recorded, so a Shift up off the 6- can hold what the new tier asks.
-		expect(card6.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 0 });
+		expect(card6.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 0 });
 	});
 
 	it("does not lower 3 Nerve already held on a 7-9, nor take any of it back when the card is lowered", async () => {
@@ -219,7 +238,7 @@ describe("Silver Tongued's Nerve", () => {
 		const { actor, tracks } = fox(1);
 		const hit = await rolled(actor, SILVER_TONGUED, "success");
 		expect(tracks[SILVER_TONGUED]).toBe(3);
-		expect(hit.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 2 });
+		expect(hit.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 2 });
 		await shift(hit, actor, 6);
 		expect(tracks[SILVER_TONGUED]).toBe(1);
 	});
@@ -230,10 +249,10 @@ describe("Silver Tongued's Nerve", () => {
 		expect(tracks[SILVER_TONGUED]).toBe(1);
 		await shift(card, actor, 10);
 		expect(tracks[SILVER_TONGUED]).toBe(3);
-		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 3 });
+		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 3 });
 		await shift(card, actor, 6);
 		expect(tracks[SILVER_TONGUED]).toBe(0);
-		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ nerveHeld: 0 });
+		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 0 });
 	});
 
 	it("leaves Nerve spent since spent when the card is lowered, and lifts by the difference again", async () => {
@@ -498,5 +517,87 @@ describe("a rewritten card that bends its tier", () => {
 		expect(tracks[PREPARE_A_WELCOME]).toBe(1);
 		await shift(plain, actor, 12);
 		expect(tracks[PREPARE_A_WELCOME]).toBe(2);
+	});
+});
+
+// A move whose own track says what a roll holds (system.resource.holdOnRoll), as the Playbook Builder
+// writes for a homebrew move: matched by the move's DATA, settled as Silver Tongued's Nerve is.
+describe("a track whose move says what a roll holds", () => {
+	const PARIAH = "Pariah";
+	const stranger = held => {
+		const made = hero({ moves: [PARIAH], held: { [PARIAH]: held }, max: 4 });
+		made.actor.items[0].system.resource.holdOnRoll = { success: 3, partial: 1 };
+		return made;
+	};
+
+	it("fills to what the tier holds, and a moved card takes back only what it added", async () => {
+		const { actor, tracks } = stranger(0);
+		const card = await rolled(actor, PARIAH, "partial");
+		expect(tracks[PARIAH]).toBe(1);
+		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 1 });
+		await shift(card, actor, 10);
+		expect(tracks[PARIAH]).toBe(3);
+		await shift(card, actor, 4);
+		expect(tracks[PARIAH]).toBe(0);
+	});
+
+	// The 11-13 live run: the roll only ran tier effects for a BOOK move (bookMoveName), so a homebrew
+	// Pariah's Fear never filled. A homebrew move is let through for its own data's effect, and only that.
+	const homebrew = item => { item.flags = { [SYSTEM_ID]: { homebrewPlaybook: "homebrew-the-stranger" } }; return item; };
+
+	it("is let through for a homebrew move when rolled, for its own hold and nothing else", () => {
+		const { actor } = stranger(0);
+		homebrew(actor.items[0]);
+		expect(tierEffectsAllowed(actor, actor.items[0])).toEqual({ moveName: PARIAH, only: HOMEBREW_TIER_EFFECTS });
+		const plain = hero({ moves: ["Creeper"] });
+		homebrew(plain.actor.items[0]);
+		expect(tierEffectsAllowed(plain.actor, plain.actor.items[0])).toBeNull();
+		const book = hero({ moves: [WE_HAPPY_FEW] });
+		expect(tierEffectsAllowed(book.actor, book.actor.items[0])).toEqual({ moveName: WE_HAPPY_FEW, only: null });
+	});
+
+	it("never gives a homebrew move a book move's effect for its name, at the roll or on a Shift", async () => {
+		const made = hero({ moves: [SILVER_TONGUED], held: { [SILVER_TONGUED]: 0 }, max: 4 });
+		const item = homebrew(made.actor.items[0]);
+		item.system.resource.holdOnRoll = { success: 2, partial: 1 };
+		const { only } = tierEffectsAllowed(made.actor, item);
+		const message = card(SILVER_TONGUED);
+		await recordTierEffects(message, await settleTierEffects(made.actor, SILVER_TONGUED, "partial", null, { only }));
+		expect(message.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 1 });
+		await shift(message, made.actor, 11);
+		expect(message.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: 2 });
+		expect(made.tracks[SILVER_TONGUED]).toBe(2);
+	});
+
+	it("never lowers what is held, and leaves a move without it alone", async () => {
+		const { actor, tracks } = stranger(4);
+		await rolled(actor, PARIAH, "partial");
+		expect(tracks[PARIAH]).toBe(4);
+		const plain = hero({ moves: ["Creeper"], held: { Creeper: 0 } });
+		const card = await rolled(plain.actor, "Creeper", "success");
+		expect(plain.tracks.Creeper).toBe(0);
+		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toBeUndefined();
+	});
+
+	// The Stranger's Ephemera: "Spend ☐ to hold +1 Fear when you roll the Pariah move, even on a 6-". Paid
+	// before the tier settles, it rides on top of the tier's hold, and a Shift keeps it.
+	it("holds a taken line's bonus on top of the tier's, even on a 6-, and keeps it through a Shift", async () => {
+		const { actor, tracks } = stranger(0);
+		const card = await rolled(actor, PARIAH, "partial", { holdMore: { success: 1, partial: 1, failure: 1 } });
+		expect(tracks[PARIAH]).toBe(2);
+		expect(card.getFlag(SYSTEM_ID, TIER_EFFECTS_FLAG)).toEqual({ heldOnRoll: { added: 2, bonus: { success: 1, partial: 1, failure: 1 } } });
+		await shift(card, actor, 10);
+		expect(tracks[PARIAH]).toBe(4);
+		await shift(card, actor, 4);
+		expect(tracks[PARIAH]).toBe(1);
+		// For that roll alone: one settled without it holds none.
+		await rolled(actor, PARIAH, "failure");
+		expect(tracks[PARIAH]).toBe(1);
+	});
+
+	it("adds the bonus to what is already held", async () => {
+		const { actor, tracks } = stranger(3);
+		await rolled(actor, PARIAH, "partial", { holdMore: { success: 1, partial: 1, failure: 0 } });
+		expect(tracks[PARIAH]).toBe(4);
 	});
 });

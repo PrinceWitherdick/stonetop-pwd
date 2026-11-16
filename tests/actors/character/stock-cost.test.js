@@ -136,6 +136,31 @@ describe("the Vessel's third purse", () => {
 		// A chat stamp from before the Vessel purse existed still reads.
 		expect(stockReceipt({ amount: 1, label: "Boon" }, 1)).toBe("Spent 1 Boon");
 	});
+
+	// A purse that went through JSON (Healer's Arts' spend result, a socket reply) has lost its receipt
+	// method, and still reads as what it paid, not as "Spent 2 HP".
+	it("words a plain copy of a purse from its data", () => {
+		const plain = source => JSON.parse(JSON.stringify(source));
+		const [, hp] = stockSources({ pouchStored: 1, vesselHp: 7 });
+		expect(stockReceipt(plain(hp), 2, 5)).toBe("Lost 5 HP in place of 2 Stock");
+		expect(stockReceipt({ label: "Weak", standIn: { kind: "debility", key: "weak", name: "Weak" } }, 1)).toBe("Marked Weak in place of 1 Stock");
+		expect(stockReceipt({ label: "HP", standIn: { kind: "hp", amount: 2 } }, 1, 2)).toBe("Lost 2 HP in place of 1 Stock");
+		expect(stockReceipt({ label: "a scar", standIn: { kind: "other", text: "a scar" } }, 1)).toBe("In place of 1 Stock: a scar");
+	});
+
+	// Release 1.8.5 review: the fallback repeated each purse's wording; now both read one place, and a
+	// copy the paying side already worded reads that.
+	it("words a live purse and its plain copy the same way, and reads a receipt sent as text", () => {
+		const plain = source => JSON.parse(JSON.stringify(source));
+		const sources = stockSources({
+			pouchStored: 1, vesselHp: 7, hp: 7,
+			standIns: [{ kind: "debility" }, { kind: "hp", amount: 2 }, { kind: "other", text: "a scar" }],
+			openDebilities: [{ key: "weak", name: "Weak" }],
+		});
+		expect(sources.length).toBeGreaterThan(4);
+		for (const s of sources) expect(stockReceipt(plain(s), 1, 3)).toBe(stockReceipt(s, 1, 3));
+		expect(stockReceipt({ label: "HP", vessel: true, receipt: "Lost 4 HP in place of 1 Stock" }, 1, 9)).toBe("Lost 4 HP in place of 1 Stock");
+	});
 });
 
 describe("stockSources", () => {
@@ -184,6 +209,28 @@ describe("stockSources", () => {
 		// Neither runs off its end.
 		expect(stockSources({ pouchStored: 3 })[0].after(1)).toBe(3);
 		expect(stockSources({ boonMax: 4, boonStored: 0 })[1].after(1)).toBe(0);
+	});
+
+	// Each purse pays itself through the character's writes (StonetopCharacter#spendStock), so no
+	// caller branches on which kind it holds.
+	it("pays each purse its own way", async () => {
+		const calls = [];
+		const payer = {
+			setPouchSpent: async n => calls.push(["pouch", n]),
+			setBoonHeld:   async n => calls.push(["boon", n]),
+			loseVesselHp:  async n => { calls.push(["vessel", n]); return { lost: 6 }; },
+			markDebility:  async key => calls.push(["debility", key]),
+			loseHp:        async n => calls.push(["hp", n]),
+		};
+		const sources = stockSources({
+			pouchStored: 1, boonMax: 4, boonStored: 3, vesselHp: 7, hp: 9,
+			standIns: [{ kind: "debility" }, { kind: "hp", amount: 5 }, { kind: "other", text: "an item" }],
+			openDebilities: [{ key: "weakened", name: "Weakened" }],
+		});
+		const paid = [];
+		for (const s of sources) paid.push(await s.pay(payer, 2));
+		expect(calls).toEqual([["pouch", 3], ["boon", 1], ["vessel", 2], ["debility", "weakened"], ["hp", 10]]);
+		expect(paid.map(p => p.lost)).toEqual([0, 0, 6, 0, 10, 0]);
 	});
 
 	// An empty purse is still listed: "Stock 0 of 3" is the sentence that explains the missing

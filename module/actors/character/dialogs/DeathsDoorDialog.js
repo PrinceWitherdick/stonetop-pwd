@@ -1,5 +1,5 @@
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
-import { attrValue, escHtml } from "../../../utils/strings.js";
+import { attrValue, capitalizeFirst, escHtml } from "../../../utils/strings.js";
 import { TIER_LABELS } from "../../../utils/move-results.js";
 import { classifyResult, messageOfRoll } from "../../../utils/roll-engine.js";
 import { promptRoll } from "../../../dialogs/RollDialog.js";
@@ -20,6 +20,7 @@ import { ROLLED_FLAG, countedNote, countedTier, outcomeTier } from "../../../uti
 import { activatePostDeathChoices, buildPostDeathChoices, flushPostDeathChoices, outstandingLabel } from "../post-death-choices.js";
 import { endBattleJoyUnrolled } from "../../../combat/battle-joy-offer.js";
 import { SYSTEM_ID } from "../../../system-id.js";
+import { lastDoorAdoptions } from "../homebrew-roll-bends.js";
 import { deletionUpdate } from "../../../utils/foundry-compat.js";
 import { postDyingCard } from "../../../hooks/DeathsDoorPrompt.js";
 import { format, localize } from "../../../utils/i18n.js";
@@ -671,6 +672,9 @@ export class DeathsDoorDialog extends StonetopDialog {
 			// it: the ladder shows where it stands, and the footer asks.
 			isStrong:    !this._boostsPending && key === "success",
 			isWeak:      !this._boostsPending && key === "partial",
+			// A homebrew background's "When you visit the Last Door and return, you may adopt the Ghost or Revenant
+			// insert regardless of the result" (the Stranger's Grave Tender): offered on a 10+ or a 7-9, to the roller.
+			adoptOffer:  this._adoptOffer(key),
 			// A resumed 6- has no total to show but is still a miss awaiting its fate.
 			isMiss:      !this._boostsPending && (key === "failure" || this._fatePending),
 			boostsPending:   this._boostsPending,
@@ -826,6 +830,8 @@ export class DeathsDoorDialog extends StonetopDialog {
 			this._onChooseFate(ev.currentTarget.dataset.fate).catch(err => this._onFateFailed(err)));
 		html.find(".deaths-door-insert-btn").on("click", (ev) =>
 			this._onTakeInsert(ev.currentTarget.dataset.slug).catch(err => this._onFateFailed(err)));
+		html.find(".deaths-door-adopt-btn").on("click", (ev) =>
+			this._onAdoptInsert(ev.currentTarget.dataset.adopt).catch(err => this._onFateFailed(err)));
 		// The last move, picked and made at 12+, or none (made in the fiction): either way, then the Door.
 		html.find(".deaths-door-last-move-btn").on("click", () =>
 			this._onMakeLastMove(html.find(".deaths-door-last-move-pick").val()).catch(err => this._onFateFailed(err)));
@@ -2018,6 +2024,46 @@ export class DeathsDoorDialog extends StonetopDialog {
 		ui.notifications?.info?.(format(`${_I18N}.fateSettled`, { actor: this._actorName }));
 		this.renderIfOpen();
 		return true;
+	}
+
+	/**
+	 * The inserts a homebrew background lets this character take on coming back (homebrew-roll-bends.js
+	 * #lastDoorAdoptions), as the result step's buttons: null on a miss (the fates offer them), while a boost
+	 * may still move the tier, for a window only watching, and for a character already wearing an insert.
+	 */
+	_adoptOffer(key) {
+		if (this._boostsPending || this._spectator || this._adopted || (key !== "success" && key !== "partial")) return null;
+		const actor = this._character?._actor;
+		if (!actor || this._character?._postDeath?.activeSlug) return null;
+		const { slugs, background } = lastDoorAdoptions(actor);
+		const inserts = slugs.map(slug => ({ slug, name: _REFUSAL_INSERTS.find(i => i.slug === slug)?.name ?? capitalizeFirst(slug) }));
+		if (!inserts.length) return null;
+		return { inserts, why: format(`${_I18N}.result.adoptWhy`, { background }) };
+	}
+
+	/**
+	 * Take a post-death insert on a 10+ or a 7-9, as the background allows. The character came back, so
+	 * nothing about their hit points or the Door's state changes (deaths-door.js#stateOnTakingInsert); the
+	 * insert's moves land and its questions follow, as after a refusal.
+	 */
+	async _onAdoptInsert(slug) {
+		if (this._adopted || !slug) return;
+		this._adopted = true;
+		try {
+			await this._character.setPostDeathInsert(slug);
+		} catch (err) {
+			this._adopted = false;
+			throw err;
+		}
+		// Noruba's Ice Sphere marked: a Ghost chosen this way has the sphere for its tether all the same.
+		await this._fillDictatedTether(slug);
+		const name = _REFUSAL_INSERTS.find(i => i.slug === slug)?.name ?? slug;
+		// They came back, and chose this: the questions are introduced as that, not as a refusal.
+		this._takenIntro = localize(`${_I18N}.taken.adopted.intro`);
+		this._step = "choices";
+		await this._refreshChoices();
+		await this._post(name, `<p>${format(`${_I18N}.result.adoptCard`, { name: escHtml(this._actorName), insert: escHtml(name) })}</p>`);
+		this.renderIfOpen();
 	}
 
 	/** Grant a post-death insert — the actual mechanical consequence of refusing to go. */

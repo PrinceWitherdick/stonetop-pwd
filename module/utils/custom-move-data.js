@@ -4,8 +4,12 @@ import { buildMoveTierResults, parseTierInput } from "./move-results.js";
 import { STONETOP_SCOPE } from "../actors/character/StonetopFlags.js";
 
 // Coerce a value to an integer clamped to [lo, hi]; non-numeric / out-of-range → nearest bound.
-export function clampInt(value, lo, hi) {
-	return Math.max(lo, Math.min(hi, Math.trunc(Number(value) || 0)));
+// With a `fallback`, a value that is no finite number at all (missing, "abc", Infinity) is that
+// instead (an imported playbook's unreadable count keeps its default).
+export function clampInt(value, lo, hi, fallback) {
+	const n = Math.trunc(Number(value));
+	if (!Number.isFinite(n) && fallback !== undefined) return fallback;
+	return Math.max(lo, Math.min(hi, n || 0));
 }
 
 /**

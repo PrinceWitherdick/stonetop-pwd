@@ -33,6 +33,10 @@ import {
 	ValueMax,
 	VitalsSnapshotBuilder,
 } from "../../model/CharacterSnapshot.js";
+import { allPlaybookNames, homebrewInsertOf, homebrewPlaybookInserts, HOMEBREW_SLUG_PREFIX } from "../../playbooks/playbook-catalog.js";
+import { CharacterHomebrewInserts } from "./CharacterHomebrewInserts.js";
+import { insertOpening } from "./homebrew-inserts.js";
+import { findOtherPlaybookMoves } from "./repositories/FoundryMoveRepository.js";
 import {PlaybookMoveEntry} from "./PlaybookMoveEntry.js";
 import {normalizeRollMode, tookOffer} from "../../dialogs/RollDialog.js";
 import {deletionEntry, deletionUpdate} from "../../utils/foundry-compat.js";
@@ -48,7 +52,7 @@ import {normalizeWound as _normalizeWound, normalizeWoundList} from "./wound-rec
 import {moveMarkBudget, markOptionCapNote} from "./move-mark-budget.js";
 import {markEntries, filledMarks, filledMarkCount, trimEmptyTail, oncePerLevelCautions, ONCE_PER_LEVEL_MARKS} from "./pfg-marks.js";
 import {MARK_STAT_CAPS} from "./stat-rules.js";
-import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, MIRRORED_HP_PENALTY_FLAG, HP_CEILING_OPTION, resolvedFlags, readableFlags, resolvedFlagProperty} from "./StonetopFlags.js";
+import {StonetopFlags, STONETOP_SCOPE, ITEM_FLAG_SCOPE, MIRRORED_HP_PENALTY_FLAG, HP_CEILING_OPTION, BACKGROUND_GRANT_FLAG, resolvedFlags, readableFlags, resolvedFlagProperty, HOMEBREW_PLAYBOOK_COPY_FLAG, HOMEBREW_ADVANCES_FLAG} from "./StonetopFlags.js";
 import {DEATHS_DOOR_FLAG, DEATHS_DOOR_STATE, FINAL_CONSEQUENCE, UNSTOPPABLE, UNSTOPPABLE_FIGHTING_FLAG, canFaceDeathsDoor, deathsDoorRollOptions, effectiveDeathsDoorState, lostToTheGm, stateOnTakingInsert, zeroHpMove, zeroHpResolution} from "./deaths-door.js";
 import {heroDisplayName, WBH_HERO_FLAG} from "./WouldBeHeroAsterisk.js";
 import {tookBackground} from "./took-background.js";
@@ -98,7 +102,7 @@ import {shippedRapportTrack} from "./up-with-people.js";
 import {foldModes, layModes} from "../../utils/roll-mode.js";
 import {fightStateActive, revealOnAttack, WE_HAPPY_FEW} from "./fight-states.js";
 import {spendSurpriseForRoll, refundSurpriseForRoll} from "../../combat/battle-holds.js";
-import {settleTierEffects, recordTierEffects, reconcileTierEffects} from "./tier-effects.js";
+import {settleTierEffects, recordTierEffects, reconcileTierEffects, tierEffectsAllowed, insertFormRollFor, holdOnRollFor, holdMoreBonus} from "./tier-effects.js";
 import {xpToLevelUp, xpAfterLevelUp, withXpLock} from "../../utils/xp.js";
 import {CharacterArcana} from "./CharacterArcana.js";
 import {seekerArcanaState, seekerArcanaChosen, seekerCardRoles, majorMarkBoxes, withMinorRole, seekerMajorSwitchPlan, seekerMajorOwed} from "./seeker-collection.js";
@@ -110,7 +114,7 @@ import {effectiveSubgroupMax, sumMoveBonus} from "./dialogs/possession-choice-ca
 import {partitionMovesByGroup} from "./dialogs/onboarding-move-groups.js";
 import {backgroundMarkOption, hasBackgroundMarkOptions, moveChoiceKey} from "./dialogs/well-versed-topics.js";
 import {FoundryRepositoryFactory} from "./repositories/FoundryRepositoryFactory.js";
-import {capitalizeFirst, slugify, composeInstinct, escHtml, joinNames, splitNames, stripHtmlToText} from "../../utils/strings.js";
+import {capitalizeFirst, slugify, composeInstinct, escHtml, joinNames, looseName, splitNames, stripHtmlToText} from "../../utils/strings.js";
 import {splitFillBlank, fillBlank} from "../../utils/fill-blanks.js";
 import {localize as _loc, format} from "../../utils/i18n.js";
 import {orderedMoveName} from "../../data/follower-build.js";
@@ -119,7 +123,7 @@ import {getStonetopSteadingActor, effectiveProsperity, FALLBACK_FOUR_PLUS_PROSPE
 import {readCurrentSeason} from "../../seasons/current-season.js";
 import {seasonLabel} from "../../seasons/seasons-change-reminders.js";
 import {moveChatCard, postMoveNote} from "../../utils/chat.js";
-import {normalizeRollType} from "../../utils/roll-types.js";
+import {isFixedRollValue, normalizeRollType} from "../../utils/roll-types.js";
 import {buildCustomMoveData, clampInt} from "../../utils/custom-move-data.js";
 import {buildInventoryItemData, readInventoryItemData, WRITEUP_EDITED_FLAG} from "../../utils/inventory-item-data.js";
 import { bronzeRowOf } from "./bronze-lines.js";
@@ -128,7 +132,7 @@ import {isLoveLetter, isResolvedLoveLetter, isDraftLoveLetter} from "./love-lett
 import {deriveLoadLevel, loadLimitsFor} from "../../utils/load.js";
 import {maxDie, stepDie, normalizeDamageDie} from "../../utils/damage-die.js";
 import {WEAPONS_OF_WAR_COMMON, WEAPONS_OF_WAR_PIERCING, ALL_IN_THE_WRIST} from "../../data/weapons.js";
-import {X_PIERCING_MAX} from "../../utils/damage.js";
+import {X_PIERCING_MAX, applyHpLossToActor} from "../../utils/damage.js";
 import {healTo} from "../../camp/camp-rules.js";
 import {isOutOfPlaySafe, recoveredHpTo, slowToHeal} from "./deaths-door-actor.js";
 import {LEARNED_OPTION} from "../../timeline/timeline-milestones.js";
@@ -136,6 +140,9 @@ import {inTurn} from "../../utils/turn-queue.js";
 import {isGear} from "../../migration/superseded-values.js";
 import {StonetopSteading} from "../steading/StonetopSteading.js";
 import {rulesHas} from "../steading/improvement-rules.js";
+import {BEND_EFFECTS, bendRides, homebrewBackgroundOf, homebrewRollBends, homebrewStockStandIns, learnedHomebrewMoves, moveWithTrackTitled} from "./homebrew-roll-bends.js";
+import {armorFromWords, insertMovesInHumanGuise, stockStandInsFrom, trackFillFrom, possessionRollHoldFrom} from "../../playbooks/move-words.js";
+import {playbookTextFromHtml} from "../../playbooks/playbook-text.js";
 
 /**
  * The state a playbook move leaves on a character, and whether anything they hold still makes it:
@@ -444,6 +451,13 @@ function _foldTakenOffers(options, taken) {
 		else if (offer.effect === "partialAsSuccess") folded.partialCountsAsSuccess = offer.source;
 		else if (offer.effect === "criticalNote") Object.assign(folded, _withCriticalNote(folded, offer));
 		else if (offer.effect === "disadvantage") Object.assign(folded, foldDisadvantage(folded, offer.source));
+		// A homebrew move's "roll +3 instead of rolling as normal" (Your Finest Hour): the number, not a
+		// stat, added; and "add +1 to any roll" (the Cursed's): +1 on top (homebrew-roll-bends.js).
+		else if (offer.effect === "statValue") Object.assign(folded, { statOverride: `+${offer.value}`, statValue: Number(offer.value) || 0, conditionNotes: [...(folded.conditionNotes ?? []), offer.source] });
+		else if (offer.effect === "modifier") Object.assign(folded, { modifier: (Number(folded.modifier) || 0) + (Number(offer.value) || 0), conditionNotes: [...(folded.conditionNotes ?? []), offer.source] });
+		// A line that changes nothing about the dice, only what the roll holds after (the Stranger's Ephemera:
+		// "hold +1 Fear when you roll the Pariah move"): named on the card, paid by its `spend`.
+		else if (offer.effect === "holdMore") folded.conditionNotes = [...(folded.conditionNotes ?? []), offer.source];
 		else Object.assign(folded, foldAdvantage(folded, offer.source));
 		if (offer.tierActions) Object.assign(folded, _withTierActions(folded, offer.tierActions));
 		// A 12+ line beside the row's own effect (Slippery): printed as a criticalNote's is, named once.
@@ -463,12 +477,23 @@ function _foldTakenOffers(options, taken) {
  * Nothing for a roll that never happened.
  */
 async function _payTakenOffers(taken, roll, moveName) {
-	if (!roll) return;
-	for (const offer of taken) await offer.spend?.(moveName);
+	if (!roll) return null;
 	const message = messageOfRoll(roll);
-	if (Number(cardTotal(message) ?? roll.total) >= CRITICAL_TOTAL) {
+	const total = Number(cardTotal(message) ?? roll.total);
+	// The tier the card counts as (a Herd of Horses' 6- as a 7-9), as its tier effects read it: a line whose
+	// price buys nothing on this tier (Ephemera's hold on a 6-) is told, and keeps its use.
+	const tier = outcomeTier(cardCountedTier(message, total, STONETOP_SCOPE));
+	// What the lines paid for this roll to hold more (Ephemera's `{holdMore}`), summed for its tier effects.
+	let holdMore = null;
+	for (const offer of taken) {
+		const paid = await offer.spend?.(moveName, { tier });
+		const more = holdMoreBonus(paid?.holdMore);
+		if (more) holdMore = holdMoreBonus(Object.fromEntries(["success", "partial", "failure"].map(t => [t, (holdMore?.[t] ?? 0) + more[t]])));
+	}
+	if (total >= CRITICAL_TOTAL) {
 		for (const offer of taken) if (offer.effect === "criticalNote") await offer.onCritical?.(message);
 	}
+	return holdMore;
 }
 
 /**
@@ -804,6 +829,8 @@ export class StonetopCharacter {
 		this._inventory = new CharacterInventory(new StonetopFlags(actor, "inventory"));
 		this._arcana = new CharacterArcana(new StonetopFlags(actor, "arcana"), repos.arcana);
 		this._lore = new CharacterLore(new StonetopFlags(actor, "lore"));
+		// A homebrew playbook's inserts (the Stranger's Monster Compendium): their picks and worn forms.
+		this._homebrewInserts = new CharacterHomebrewInserts(actor);
 		this._postDeath = new CharacterPostDeath(
 			new StonetopFlags(actor, "postDeathInsert"),
 			new CharacterInstincts(new StonetopFlags(actor, "postDeathInstinct")),
@@ -870,6 +897,16 @@ export class StonetopCharacter {
 	// An increase is also clamped to the option's own boxes (`marks`), less the box the
 	// background fills (the Patriot's Things Below is Well Versed's, outside the budget):
 	// that box can't be marked again. A duplicate already stored is kept, never cleared.
+	// What the player wrote in a write-in mark (homebrew-bundle.js isWriteInMark), on its first mark.
+	async setMarkText(moveName, optionSlug, text) {
+		const entries = markEntries(this._moveResources.getMarks()[moveName]?.[optionSlug]);
+		if (!entries.length) return;
+		const value = String(text ?? "").trim().slice(0, 200);
+		entries[0] = { ...entries[0] };
+		if (value) entries[0].text = value; else delete entries[0].text;
+		await this._actor.update(this._moveResources.markUpdate(moveName, optionSlug, entries));
+	}
+
 	async setCountMark(moveName, optionSlug, newCount) {
 		const allMarks = this._moveResources.getMarks();
 		const count    = await this._clampedMarkCount(moveName, allMarks[moveName] ?? {}, optionSlug, newCount);
@@ -1213,7 +1250,7 @@ export class StonetopCharacter {
 			// every render, not written once.
 			.withVitals(_buildVitalsSection(actor, playbookData, armor, moveBonuses, wornArmorBase, insertHpPenalty(postDeath.activeInsert?.lore), unpierceableArmor, armorBase, { value: conditionalArmor, source: conditionalSource }))
 			.withMoves(moves)
-			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters, playbookData?.name ?? null, this._retiredPickCount(), this._levelPickCount(moves.find(c => c.key === "playbook")?.moves ?? [])))
+			.withMovelist(_buildMovelist(moves, inventory.other, pdiLabel, actorLevel, inventory.loveLetters, playbookData?.name ?? null, this._retiredPickCount() + _advanceLevelPicks(playbookData, this.homebrewAdvances), this._levelPickCount(moves.find(c => c.key === "playbook")?.moves ?? [])))
 			.withInventory(inventory)
 			.withArcana(await this._arcana.buildSnapshot(actor.system.stats ?? {}, this._inventory.checked, this._arcanumResources()))
 			.withPostDeathInsert(postDeath)
@@ -1224,6 +1261,8 @@ export class StonetopCharacter {
 			.withCompanionDef(await this.companionSource(playbookData))
 			.withViewerIsGM(!!view.viewerIsGM)
 			.withGearTags(this.gearTagsFrom(gear))
+			.withHomebrewInserts(this._homebrewInserts.buildView(playbookData, { items: this._actor.items, categories: moves, editMode: !!view.editMode }))
+			.withInsertForms(this._homebrewInserts.formStates(playbookData, this._actor.items))
 			.build();
 		return { snapshot, gear };
 	}
@@ -1309,12 +1348,22 @@ export class StonetopCharacter {
 			.map(r => rec(`${r.possessionSlug}:${r.choiceSlug}`, { ...r, name: r.label, note: r.label }, {
 				weaponSlug: r.weaponSlug, ammoStore: "possessions", carried: r.checked,
 			}));
+		// A homebrew insert's FORM while the character wears it (homebrew-inserts.js#insertFormGear): the
+		// claws they attack with and the hide they're armored in, from the options ticked on its lists.
+		// Carried while worn, so their marks are set here; keyed "hbinsert:…", which no other store uses.
+		const formRows = this._homebrewInserts.formGear(playbookData, this._actor.items)
+			.map(g => rec(g.slug, { name: g.name, note: g.note, armor: g.armor }));
 		const items = [
 			...outfit, ...custom, ...arcana,
 			...choiceRows.map(({ carried, ...rest }) => rest),
+			...formRows,
 		];
-		const marks = choiceRows.length
-			? { ...this._inventory.checked, ...Object.fromEntries(choiceRows.map(r => [r.slug, r.carried])) }
+		const marks = choiceRows.length || formRows.length
+			? {
+				...this._inventory.checked,
+				...Object.fromEntries(choiceRows.map(r => [r.slug, r.carried])),
+				...Object.fromEntries(formRows.map(r => [r.slug, true])),
+			}
 			: this._inventory.checked;
 		return { items, marks };
 	}
@@ -1410,7 +1459,78 @@ export class StonetopCharacter {
 			// Per-option marks (e.g. Potential for Greatness): apply each checked box.
 			_addMarkOptionBonuses(totals, m.markOptions, marks[m.name]);
 		}
+		// A homebrew playbook's own advances that were marked: its max HP and damage die.
+		_addAdvanceBonuses(totals, playbookData, this.homebrewAdvances);
+		// A held special possession that raises them (the Standout's Determination: d8, +4 max HP).
+		_addPossessionBonuses(totals, playbookData, this._selectedPossessionSlugs(playbookData));
+		// A learned homebrew move's armor (Formless: "+1 Armor when you go unarmored"), read from its words.
+		this._addHomebrewMoveArmor(totals, playbookData);
 		return totals;
+	}
+
+	/**
+	 * Each LEARNED homebrew move's armor (move-words.js#armorFromWords) into `totals`: a flat bonus into
+	 * `armor`, an unarmored one into `unarmoredArmor` (counted by _armorFrom only while nothing is worn).
+	 * An insert's move counts while its form is worn, unless the character's background says its moves
+	 * are theirs in their own shape ("access to your monster moves in your human guise", the Cursed).
+	 */
+	_addHomebrewMoveArmor(totals, playbookData) {
+		const background = homebrewBackgroundOf(playbookData, this.backgroundState().slug);
+		const humanGuise = insertMovesInHumanGuise(background?.words);
+		for (const { item: i, words } of learnedHomebrewMoves(this._actor)) {
+			const insertKey = homebrewInsertOf(i)?.key;
+			if (insertKey && !humanGuise && !this._homebrewInserts.wearing(insertKey)) continue;
+			const read = armorFromWords(words);
+			if (read?.armor) totals.armor += read.armor;
+			if (read?.unarmored) totals.unarmoredArmor = (totals.unarmoredArmor ?? 0) + read.unarmored;
+		}
+	}
+
+	/** The advances of a homebrew playbook's own Level Up this character has marked, by slug. */
+	get homebrewAdvances() {
+		return this._actor.getFlag(STONETOP_SCOPE, HOMEBREW_ADVANCES_FLAG) ?? {};
+	}
+
+	/**
+	 * Mark one of a homebrew playbook's own advances (the Familiar Face's "Increase one of your stats
+	 * (to a max of +2)"), at Level Up or by hand before play. A stat advance raises `stat` by 1 up to
+	 * its max and remembers which, so unmarking it takes it back; max HP and the damage die follow
+	 * the mark (_addAdvanceBonuses). A move is taken by Level Up's own steps, not here.
+	 * @returns {Promise<boolean>} whether it was marked
+	 */
+	async markHomebrewAdvance(slug, { stat = null, level = null, atLevelUp = false } = {}) {
+		const pb = await this.playbook();
+		const opt = pb?.advancement?.options?.find(o => o.slug === slug);
+		if (!opt || this.homebrewAdvances[slug]) return false;
+		const entry = { level: level ?? (this._actor.system?.attributes?.level?.value ?? 1), ...(atLevelUp ? { atLevelUp: true } : {}) };
+		const update = {};
+		if (opt.kind === "stat") {
+			if (!_STAT_DEFS[stat]) return false;
+			const current = Number(this._actor.system?.stats?.[stat]?.value) || 0;
+			const cap = Number(opt.max) || 3;
+			if (current >= cap) {
+				ui.notifications?.warn?.(`${_STAT_DEFS[stat].name} is already at +${cap}, the most this advance raises it to.`);
+				return false;
+			}
+			update[`system.stats.${stat}.value`] = current + 1;
+			entry.stat = stat;
+		}
+		update[`flags.${STONETOP_SCOPE}.${HOMEBREW_ADVANCES_FLAG}.${slug}`] = entry;
+		await this._actor.update(update, { stonetopMove: "Level Up" });
+		return true;
+	}
+
+	/** Take back a marked advance: the stat it raised goes back down by the 1 it gave. */
+	async unmarkHomebrewAdvance(slug) {
+		const entry = this.homebrewAdvances[slug];
+		if (!entry) return false;
+		const update = deletionUpdate(`flags.${STONETOP_SCOPE}.${HOMEBREW_ADVANCES_FLAG}.${slug}`);
+		if (entry.stat && _STAT_DEFS[entry.stat]) {
+			const current = Number(this._actor.system?.stats?.[entry.stat]?.value) || 0;
+			update[`system.stats.${entry.stat}.value`] = current - 1;
+		}
+		await this._actor.update(update, { stonetopMove: "Level Up" });
+		return true;
 	}
 
 	// Whether the character holds a learned, non-custom copy of `name`, off `ownedAllByName`
@@ -1474,6 +1594,31 @@ export class StonetopCharacter {
 			}
 		}
 
+		// A homebrew playbook's INSERTS: each one's own moves, picked on its own tab and never offered as the
+		// playbook's (playbook-catalog.js#homebrewPlaybookMoves leaves them out). One category per insert that
+		// is open, or whose moves the character still holds (an insert whose opening move went keeps them in
+		// view, under its name, rather than among the learned moves).
+		if (playbookData) {
+			for (const ins of CharacterHomebrewInserts.insertsOf(playbookData)) {
+				const defs = this._moveRepo.getHomebrewInsertMoves?.(playbookData.name, ins.key) ?? [];
+				if (!defs.length) continue;
+				const open = insertOpening(ins, this._actor.items).open;
+				const holds = this._actor.items.some(i => homebrewInsertOf(i)?.key === ins.key);
+				if (!open && !holds) continue;
+				const context = this.sortPlaybookMoves(this.buildMovelistContext(defs, ownedAllByName, new Set(), actorLevel, playbookData.name, []));
+				const shown = open ? context : context.filter(m => m.owned);
+				const category = new MoveCategorySnapshotBuilder()
+					.withKey(`hb-insert:${ins.key}`)
+					.withTitle(ins.name)
+					.withNote(null)
+					.withMoves(_sortOwnedFirst(shown.map(m => _buildMoveEntry(m, { type: "playbook", slug: playbookData.slug }, this._moveResources.getMoveResources(), new Set(), {}, {}, this._moveResources.getMarks(), _statValueMap(this._actor.system?.stats), capState, new Map(), actorLevel, {}))))
+					.build();
+				// The moves list each is picked from, for the insert's tab (CharacterHomebrewInserts#buildView).
+				category.insertLists = Object.fromEntries(defs.map(d => [d.name, d.insertList ?? ""]));
+				categories.push(category);
+			}
+		}
+
 		// "Learned Moves": moves gained from OTHER playbooks via a cross-playbook pick
 		// (Versatile/Worldly/…). They keep their origin playbook in system.playbook (so they
 		// don't surface under the actor's own playbook category) and carry a `grantedBy` item
@@ -1487,7 +1632,7 @@ export class StonetopCharacter {
 		// vanishes from the cross-playbook picker, which skips names the actor already owns.
 		// Nothing on the actor should be un-seeable; better a card with a plain origin label.
 		const shownPlaybookIds = new Set(
-			(categories.find(c => c.key === "playbook")?.moves ?? []).flatMap(m => m.ownedIds ?? []));
+			categories.filter(c => c.key === "playbook" || c.key.startsWith("hb-insert:")).flatMap(c => c.moves ?? []).flatMap(m => m.ownedIds ?? []));
 		const learnedItems = this._actor.items.filter(i =>
 			i.type === "move"
 			&& (i.flags?.[STONETOP_SCOPE]?.grantedBy || i.system?.moveType === "playbook")
@@ -1722,9 +1867,11 @@ export class StonetopCharacter {
 			// Possession gear kept at home (the Distillery's stills and barrels, `immobile`): no mark,
 			// no small-item allowance, and its note shown so the card says why.
 			const stashed = !!possessionSlug && isStashedGrantItem(item);
+			// Carried possession gear shows the tags its grant gave it (a homebrew Grave tender's tools' "shovel
+			// (close, clumsy, forceful)"); the book's grants carry none but the stashed rows' "immobile".
 			const note = stashed ? item.system.note
 				: item.system?.sourcePossession
-				? null
+				? (_transformPiercingNote(item.system?.note ?? null, prosperity) || null)
 				: (item.system?.sourceLabel
 					? `from ${item.system.sourceLabel}`
 					// A write-in's "x piercing" tag scales with the steading's Prosperity, same
@@ -2729,7 +2876,159 @@ export class StonetopCharacter {
 		const oathbreaker = this._oathbreakerOffer(moveName);
 		if (oathbreaker) offers.push(oathbreaker);
 		offers.push(...this._speakSoftlyNamedOffers(), ...this._recordedFoeOffers(moveName));
+		offers.push(...await this._homebrewRollOffers(moveName, { book }));
+		offers.push(...await this._possessionHoldOffers(moveName));
 		return offers;
+	}
+
+	/**
+	 * The homebrew bends (homebrew-roll-bends.js) of this character: their learned homebrew moves' and
+	 * their homebrew background's, `[{key, source, bend, item?, background?}]`.
+	 */
+	async _homebrewBends() {
+		const background = homebrewBackgroundOf(await this.playbook(), this.backgroundState().slug);
+		return homebrewRollBends(this._actor, background);
+	}
+
+	/**
+	 * Whether a bend can be taken now: "so long as you hold Fear" holds something on that track, and a line
+	 * that spends one ("spend Memory to Persuade with advantage") has one to spend. A track no learned move
+	 * names can't be checked, so it gates nothing.
+	 */
+	_bendAvailable(bend, moveName = null) {
+		// "…and transform you may add +1": only while a form is worn, or on the roll that puts one on.
+		if (bend.whileTransformed && !this._inFormFor(moveName)) return false;
+		for (const title of [bend.whileHolding, bend.spends].filter(Boolean)) {
+			const owner = moveWithTrackTitled(this._actor, title);
+			if (owner && !(learnedTrack(this._actor, owner.name)?.held > 0)) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * The lines a held HOMEBREW possession adds to a roll of `moveName` (move-words.js#possessionRollHoldFrom):
+	 * the Stranger's Ephemera, "Spend ☐ to hold +1 Fear when you roll the Pariah move, even on a 6-", while a
+	 * use is left. Taken, it spends the use after the dice and the roll holds that much more on the move's
+	 * track (`spend` resolves to `{holdMore}`, tier-effects.js#holdMoreBonus), on every tier but a 6- unless the
+	 * words say "even on a 6-"; on a 6- they don't cover, the use is kept.
+	 */
+	async _possessionHoldOffers(moveName) {
+		const pb = await this.playbook();
+		if (!moveName || !String(pb?.slug ?? "").startsWith(HOMEBREW_SLUG_PREFIX) || !holdOnRollFor(this._actor, moveName)) return [];
+		const out = [];
+		let maxes = null;
+		let selected = null;
+		for (const opt of pb.specialPossessions?.options ?? []) {
+			const read = possessionRollHoldFrom(playbookTextFromHtml(opt.description ?? ""));
+			if (!read || looseName(read.move) !== looseName(moveName)) continue;
+			if (!this._holdsPossessionIn(opt.slug, pb, selected ??= this._selectedPossessionSlugs(pb))) continue;
+			maxes ??= this.computePossessionMaxUses(pb.specialPossessions, this._buildOwnedMovesMap(), this._characterLevel) ?? {};
+			const cap = Number(maxes[opt.slug] ?? opt.resource?.max) || 0;
+			const spent = Number(this._possessions.uses?.[opt.slug]) || 0;
+			if (cap && spent >= cap) continue;
+			const label = stripHtmlToText(opt.label ?? opt.slug);
+			out.push({
+				key: `hb-poss-${opt.slug}`, applied: false, source: label, effect: "holdMore",
+				label: `${label}: spend ${cap ? "a use" : "it"} to hold +${read.hold} ${read.track}${read.evenOnMiss ? ", even on a 6-" : ""}.`,
+				// A 6- holds nothing more unless the words say "even on a 6-": the use is not spent on it then.
+				spend: async (_move, { tier } = {}) => {
+					if (tier === "failure" && !read.evenOnMiss) return null;
+					if (cap) await this._possessions.setUses(opt.slug, Math.min(cap, (Number(this._possessions.uses?.[opt.slug]) || 0) + 1));
+					return { holdMore: { success: read.hold, partial: read.hold, failure: read.evenOnMiss ? read.hold : 0 } };
+				},
+			});
+		}
+		return out;
+	}
+
+	/**
+	 * Whether a line read as "only when transformed" (move-words.js#rollBendsFrom `whileTransformed`) can be
+	 * taken on a roll of `moveName`: an insert's form is worn, or this is the roll that puts it on (the
+	 * Stranger's Metamorphosis, tier-effects.js#insertFormRollFor). A character with no form to wear can't
+	 * be checked, so the line is offered as before.
+	 */
+	_inFormFor(moveName) {
+		const slug = this._actor.system?.playbook?.slug;
+		const forms = homebrewPlaybookInserts(slug).filter(i => i?.form?.enabled);
+		if (!forms.length) return true;
+		if (forms.some(i => this._homebrewInserts.wearing(i.key))) return true;
+		return !!(moveName && insertFormRollFor(this._actor, moveName));
+	}
+
+	/**
+	 * What taking a bend's line costs, paid after the dice as the book's lines are (_payTakenOffers): a held
+	 * one off a move's track ("spend Memory"), or a mark on a track ("mark Doom": the background's own, else
+	 * a move's). Null when it costs nothing.
+	 */
+	_bendSpend({ bend, background }) {
+		if (bend.spends) {
+			const owner = moveWithTrackTitled(this._actor, bend.spends);
+			return owner ? () => takeBackHeld(this._actor, owner.name, 1) : null;
+		}
+		if (!bend.marks) return null;
+		const want = bend.marks.toLowerCase();
+		const track = background?.resources?.find(r => r.label.toLowerCase() === want);
+		if (track) {
+			return async () => {
+				const now = Number(this._background.setupResources?.[track.key]) || 0;
+				const next = Math.min(track.max, now + 1);
+				// "At 3 Doom, the GM advances a dark plot … and resets the Doom track": the table is told
+				// when the mark fills it, and the track is emptied when the words say so.
+				const fill = trackFillFrom(background.words, track.label);
+				const filled = !!fill && next >= fill.at && now < fill.at;
+				await this._background.setSetupResource(track.key, filled && fill.resets ? 0 : next);
+				if (filled) {
+					await postMoveNote(this._actor, `${background.label}: ${fill.at} ${track.label}`,
+						fill.resets ? `${fill.text} (The ${track.label} track is emptied.)` : fill.text);
+				}
+			};
+		}
+		const owner = moveWithTrackTitled(this._actor, bend.marks);
+		if (!owner) return null;
+		return async () => {
+			const t = learnedTrack(this._actor, owner.name);
+			if (t && t.held < t.max) await t.resources.setUses(owner.name, t.held + 1, { stonetopMove: owner.name });
+		};
+	}
+
+	/**
+	 * The roll window's lines from this character's homebrew moves and background, for a roll made under
+	 * `moveName` (_rollOffersNamed): every bend but a stat swap (the stat picker's: homebrewStatGrants), on
+	 * the moves it names, or on any move roll. A move a player wrote under a book move's name (`book` false)
+	 * gets only the any-move lines, as the book's rows keep. Never a move's line on its own roll.
+	 */
+	async _homebrewRollOffers(moveName, { book = true } = {}) {
+		const out = [];
+		for (const entry of await this._homebrewBends()) {
+			const { key, source, bend, item } = entry;
+			if (bend.kind === "stat" || item?.name === moveName) continue;
+			if (bend.moves ? !(book && bendRides(bend, moveName)) : !moveName) continue;
+			if (!this._bendAvailable(bend, moveName)) continue;
+			const spend = this._bendSpend(entry);
+			out.push({
+				key, applied: false, source, label: `${source}: ${bend.text}`,
+				...(BEND_EFFECTS[bend.kind] ? { effect: BEND_EFFECTS[bend.kind] } : {}),
+				...(bend.value != null ? { value: bend.value } : {}),
+				...(spend ? { spend } : {}),
+			});
+		}
+		return out;
+	}
+
+	/**
+	 * The stats this character's homebrew moves and background let `moveName` be rolled with instead
+	 * ("When you Seek Insight within a dream, you may roll with +CHA instead of +WIS"), for the sheet's
+	 * stat picker beside the book's grants: `[{altStat, grant}]`, `grant` the move Item or the
+	 * background's sentence as the picker quotes it. Not `defaultStat`, and each stat once.
+	 */
+	async homebrewStatGrants(moveName, defaultStat) {
+		const out = [];
+		for (const { source, bend, item } of await this._homebrewBends()) {
+			if (bend.kind !== "stat" || bend.stat === defaultStat || !bendRides(bend, moveName)) continue;
+			if (out.some(o => o.altStat === bend.stat) || !this._bendAvailable(bend, moveName)) continue;
+			out.push({ altStat: bend.stat, grant: item ?? { name: source, system: { description: `<p>${escHtml(bend.text)}</p>` } } });
+		}
+		return out;
 	}
 
 	/**
@@ -2954,26 +3253,28 @@ export class StonetopCharacter {
 			pouchMax:      await this.sacredPouchMax(playbookData),
 			hasPouch:      await this.holdsPossession(SACRED_POUCH_SLUG, playbookData),
 			vesselHp:      this.isVessel ? this.hp : null,
+			// What a homebrew move pays instead (Witchcraft's debility, 5 HP or an item): by choice only.
+			standIns:      homebrewStockStandIns(this._actor),
+			openDebilities: this.debilityChoices.filter(d => !d.marked && !d.standIn).map(d => ({ key: d.key, name: d.name })),
+			hp:            this.hp,
 		});
 	}
 
 	/**
-	 * Pay `amount` Stock out of `source` (one of stockSources' purses). The purse knows which way
-	 * its track counts (the pouch up as it empties, the Boon down); a Vessel's HP has no track and
-	 * is paid by a visible 2d4 roll instead. Returns `{ lost }`, the HP a Vessel lost (0 otherwise).
+	 * Pay `amount` Stock out of `source` (one of stockSources' purses). The purse knows how it is
+	 * paid (stock-cost.js: the pouch counts up as it empties, the Boon down, a Vessel's HP is a
+	 * visible 2d4 roll, a stand-in the debility, HP or price a homebrew move names); this hands it
+	 * the character's writes. Returns `{ lost }`, the HP the purse took (0 otherwise).
 	 */
 	async spendStock(source, amount = 1, { moveName = "", speaker } = {}) {
-		if (source?.vessel) {
-			const { lost } = await loseHpForStock(this._actor, { amount, moveName, speaker });
-			return { lost };
-		}
-		const next = source.after(amount);
-		if (source.key === "boon") {
-			await this._moveResources.setUses(RITES_OF_THE_LAND, next, moveName ? { stonetopMove: moveName } : undefined);
-		} else {
-			await this._possessions.setUses(SACRED_POUCH_SLUG, next);
-		}
-		return { lost: 0 };
+		const stonetopMove = moveName ? { stonetopMove: moveName } : null;
+		return source.pay({
+			setPouchSpent: next => this._possessions.setUses(SACRED_POUCH_SLUG, next),
+			setBoonHeld:   next => this._moveResources.setUses(RITES_OF_THE_LAND, next, stonetopMove ?? undefined),
+			loseVesselHp:  n => loseHpForStock(this._actor, { amount: n, moveName, speaker }),
+			markDebility:  key => this.markDebility(key, { moveName }),
+			loseHp:        lost => applyHpLossToActor(this._actor, lost, stonetopMove ?? {}),
+		}, amount);
 	}
 
 	// -- The sacred pouch's room (sacred-pouch.js) -------------------------------------------
@@ -3646,7 +3947,12 @@ export class StonetopCharacter {
 	// caller that has already resolved it.
 	async holdsPossession(slug, playbookData = undefined) {
 		const pb = playbookData === undefined ? await this.playbook() : playbookData;
-		return this._selectedPossessionSlugs(pb).has(slug) && !this._grantSuspended(slug, pb);
+		return this._holdsPossessionIn(slug, pb, this._selectedPossessionSlugs(pb));
+	}
+
+	// The one rule for "held", given the playbook (and its _selectedPossessionSlugs, for a caller asking of many).
+	_holdsPossessionIn(slug, playbookData, selected = this._selectedPossessionSlugs(playbookData)) {
+		return selected.has(slug) && !this._grantSuspended(slug, playbookData);
 	}
 
 	// A grant-only possession (the Seeker's Sacred Pouch, from Initiate of the Secret Arts) whose
@@ -3764,7 +4070,27 @@ export class StonetopCharacter {
 			bySlug[opt.slug] = (bySlug[opt.slug] ?? 0) + owed;
 			for (const name of movers) byMove[name] = { slug: opt.slug, count: owed };
 		}
-		return { byMove, bySlug };
+		// A held possession's own pick left unmade ("Weapons of War (Choose 1)", skipped in character
+		// creation): owed until it is made. Not one the playbook says can wait ("now or later", the
+		// Heavy's). Picked on the card itself, in the possessions' edit mode (`inline`). A possession the
+		// move-capped pass above already counted (the sacred pouch under Big Magic) is left to it: its
+		// picks are that same line, made in the move's add-only editor.
+		const inline = [];
+		const movesCounted = new Set(Object.keys(bySlug));
+		const sp = playbookData?.specialPossessions;
+		// Held as holdsPossession reads it (_holdsPossessionIn).
+		const selected = this._selectedPossessionSlugs(playbookData);
+		for (const opt of sp?.options ?? []) {
+			const c = opt?.choices;
+			if (!this._holdsPossessionIn(opt.slug, playbookData, selected) || movesCounted.has(opt.slug) || !c?.options?.length || c.optional) continue;
+			const want = Math.min(Math.max(1, Number(c.pickCount) || 1), c.options.length);
+			const line = new Set(c.options.map(o => o.slug));
+			const have = new Set((this._possessions.subChoices[opt.slug] ?? []).filter(s => line.has(s))).size;
+			if (have >= want) continue;
+			bySlug[opt.slug] = (bySlug[opt.slug] ?? 0) + want - have;
+			inline.push(opt.slug);
+		}
+		return { byMove, bySlug, inline };
 	}
 
 	async selectPossession(slug)   { await this._possessions.select(slug); await this._addPossessionGrants(slug); }
@@ -4312,13 +4638,17 @@ export class StonetopCharacter {
 		const playbookData = await this.playbook();
 		const backgrounds  = playbookData?.backgrounds ?? [];
 		const gives = state => backgroundMoveNames(backgrounds.find(b => b.slug === state?.slug), state?.setupChoices);
-		const kept  = gives(to);
-		const gone  = new Set([...gives(from)].filter(name => !kept.has(name)));
+		// Compared loosely, as the copies are found below: two backgrounds giving the same move under
+		// different apostrophes give the same move, and the new one keeps it.
+		const kept  = new Set([...gives(to)].map(looseName));
+		const gone  = new Set([...gives(from)].filter(name => !kept.has(looseName(name))));
 		if (!gone.size) return [];
 		const dropped = [];
 		for (const name of gone) {
-			const copies = this._actor.items.filter(i => i.type === "move" && i.name === name
-				&& (!i.system?.playbook || i.system.playbook === playbookData?.name));
+			// Another playbook's move a background gave (ensureStartingMoves) is the background's only
+			// when stamped; this playbook's own copies are judged as they always were.
+			const copies = this._actor.items.filter(i => i.type === "move" && looseName(i.name) === looseName(name)
+				&& (!i.system?.playbook || i.system.playbook === playbookData?.name || _isBackgroundGrant(i)));
 			const stamped = copies.filter(_isBackgroundGrant);
 			if (stamped.length) { dropped.push(...stamped); continue; }
 			const legacy = _earliestFirst(copies.filter(i => !_heldBesidesBackground(i)))[0];
@@ -4617,8 +4947,9 @@ export class StonetopCharacter {
 	 * `choiceGroups` (moves.choices), whose moves are never a free pick.
 	 */
 	creationPickItems(playbookName, backgrounds = [], choiceGroups = []) {
+		// An insert's moves are never a free pick: its own tab gives them (homebrew-inserts.js).
 		const moves = this._actor.items.filter(i => i.type === "move" && i.system?.moveType === "playbook"
-			&& i.system?.playbook === playbookName && !i.flags?.[STONETOP_SCOPE]?.grantedBy);
+			&& i.system?.playbook === playbookName && !i.flags?.[STONETOP_SCOPE]?.grantedBy && !homebrewInsertOf(i));
 		const stamped = moves.filter(i => i.flags?.[STONETOP_SCOPE]?.[CREATION_PICK_FLAG]);
 		if (stamped.length) return stamped;
 		if ((this._actor.system?.attributes?.level?.value ?? 1) > 1) return [];
@@ -4785,7 +5116,8 @@ export class StonetopCharacter {
 		// Passes, because taking back a replacing move hands back the one it retired (A Mighty
 		// Rampart returns Bulwark), and that one is the old playbook's too.
 		for (let pass = 0; pass < 5; pass++) {
-			const doomed = this._actor.items.filter(i => i.type === "move" && oldNames.has(i.system?.playbook));
+			// The old background's grants go too, another playbook's move among them (ensureStartingMoves).
+			const doomed = this._actor.items.filter(i => i.type === "move" && (oldNames.has(i.system?.playbook) || _isBackgroundGrant(i)));
 			if (!doomed.length) break;
 			for (const item of doomed) {
 				// Already gone with the move that granted it.
@@ -4815,6 +5147,12 @@ export class StonetopCharacter {
 			WBH_HERO_FLAG,
 			// Unstoppable's "fighting on at 0 HP" stamp: the move it reads goes with the Heavy.
 			UNSTOPPABLE_FIGHTING_FLAG,
+			// The old homebrew playbook's carried copy: a new one is carried by whatever takes the new
+			// playbook, and a stale one would otherwise be offered back under the new playbook's slug.
+			HOMEBREW_PLAYBOOK_COPY_FLAG,
+			// The old homebrew playbook's own advances, keyed only by slug: another playbook with an advance
+			// of the same words would read it as taken (and _addAdvanceBonuses would apply its HP or die).
+			HOMEBREW_ADVANCES_FLAG,
 			// Each move's track and marks are keyed by its name.
 			...gone.map(name => `moves.backgroundChoices.${name}`),
 			...gone.map(name => `moves.moveMarks.${name}`),
@@ -4844,6 +5182,10 @@ export class StonetopCharacter {
 			for (const mark of filledMarks(flags.moves?.moveMarks?.[name] ?? {})) {
 				if (stats[mark.stat]) drop[mark.stat] = (drop[mark.stat] ?? 0) + 1;
 			}
+		}
+		// A stat advance's +1 goes with its mark, as unmarkHomebrewAdvance takes it back.
+		for (const entry of Object.values(flags[HOMEBREW_ADVANCES_FLAG] ?? {})) {
+			if (entry?.stat && stats[entry.stat]) drop[entry.stat] = (drop[entry.stat] ?? 0) + 1;
 		}
 		for (const [key, count] of Object.entries(drop)) {
 			update[`system.stats.${key}.value`] = Math.max((stats[key].value ?? 0) - count, -1);
@@ -4980,6 +5322,14 @@ export class StonetopCharacter {
 			if (legacy) await legacy.setFlag(STONETOP_SCOPE, BACKGROUND_GRANT_FLAG, bgStamp);
 			else if (copies.length < repeatMax) fromBackground.push(e);
 		}
+		// A background may give ANOTHER playbook's move (a homebrew playbook's "Frosty, from the
+		// Heavy"). Not in this playbook's list, so found among every other playbook's, the book's and
+		// the world's homebrew ones, matched loosely (a PDF writes "Lion’s" where the book has
+		// "Lion's"). Granted stamped like any background move, so a change of background takes it back.
+		const ownNames = new Set(entries.map(e => looseName(e.name)));
+		const heldLoose = new Set([...ownedNames].map(looseName));
+		const foreign = [...bgMoveNames].filter(n => !ownNames.has(looseName(n)) && !heldLoose.has(looseName(n)));
+		fromBackground.push(...await findOtherPlaybookMoves(this._moveRepo, foreign, { except: [playbookName, playbookData?.name] }));
 		if (missing.length || fromBackground.length) {
 			const docs = await Promise.all([...missing, ...fromBackground].map(e => this._moveRepo.getPlaybookMoveDocument(e.id)));
 			const data = docs.map((d, index) => {
@@ -5004,6 +5354,49 @@ export class StonetopCharacter {
 			const docs = await Promise.all(missingUniversal.map(e => this._moveRepo.getBasicMoveDocument(e.id)));
 			await this._actor.createEmbeddedDocuments("Item", docs.filter(Boolean).map(d => d.toObject()));
 		}
+		await this.syncInsertHeldMoves(playbookData);
+	}
+
+	/**
+	 * The moves a homebrew insert gives everyone who opens it (printed ticked on the insert: the
+	 * Stranger's Metamorphosis), added for each insert the character has open and doesn't hold yet.
+	 * Never takes one away: a character who loses the opening move keeps what they have, under the
+	 * insert's name on the Moves tab.
+	 * @returns {Promise<number>} how many were added
+	 */
+	async syncInsertHeldMoves(playbookData = null) {
+		playbookData ??= await this.playbook();
+		const inserts = CharacterHomebrewInserts.insertsOf(playbookData);
+		if (!inserts.length || !this._moveRepo.getHomebrewInsertMoves) return 0;
+		const held = new Set(this._actor.items.filter(i => i.type === "move").map(i => looseName(i.name)));
+		const wanted = inserts
+			.filter(ins => insertOpening(ins, this._actor.items).open)
+			.flatMap(ins => this._moveRepo.getHomebrewInsertMoves(playbookData.name, ins.key))
+			.filter(d => d.isStarting && !held.has(looseName(d.name)));
+		if (!wanted.length) return 0;
+		const docs = await Promise.all(wanted.map(d => this._moveRepo.getPlaybookMoveDocument(d.id)));
+		const data = docs.filter(Boolean).map(d => d.toObject());
+		if (data.length) await this._actor.createEmbeddedDocuments("Item", data);
+		return data.length;
+	}
+
+	/** Is the character wearing the form of the homebrew insert `key`? */
+	wearingInsertForm(key) {
+		return this._homebrewInserts.wearing(key);
+	}
+
+	/** Wear (or leave) a homebrew insert's form: its gear is the character's while worn. */
+	async setInsertForm(key, on) {
+		await this._homebrewInserts.setWearing(key, on);
+	}
+
+	/** One insert list option's count. Never refused (a list over its count is flagged instead). */
+	async setInsertLoreCount(listSlug, optionSlug, count) {
+		await this._homebrewInserts.setCount(listSlug, optionSlug, count);
+	}
+
+	async setInsertLoreText(listSlug, optionSlug, value) {
+		await this._homebrewInserts.setText(listSlug, optionSlug, value);
 	}
 
 	// `skipIfOwned` (onboarding) passes over a copy granted through a cross-playbook pick: a Heavy
@@ -5019,7 +5412,16 @@ export class StonetopCharacter {
 		const created = await this._actor.createEmbeddedDocuments("Item", [_withStonetopFlags(doc.toObject(), flags)]);
 		const added = created?.[0] ?? null;
 		if (added) await this._retireReplacedMove(added);
+		// The move that opens a homebrew insert brings the moves it always gives (Otherkin: Metamorphosis).
+		if (added && !homebrewInsertOf(added)) await this._addInsertHeldMovesFor(added);
 		return added;
+	}
+
+	/** After `added`: the held moves of any homebrew insert it opens (syncInsertHeldMoves), if it opens one. */
+	async _addInsertHeldMovesFor(added) {
+		const playbookData = await this.playbook();
+		const opens = CharacterHomebrewInserts.insertsOf(playbookData).some(ins => ins.unlockedBy && looseName(ins.unlockedBy) === looseName(added.name));
+		if (opens) await this.syncInsertHeldMoves(playbookData);
 	}
 
 	// Book I p.529: "If a move replaces a different move, then it requires the one it
@@ -5538,7 +5940,9 @@ export class StonetopCharacter {
 			surpriseSpent = !!surprise?.spent;
 			if (surprise) withSurprise = { ...promised, conditionNotes: [...(promised.conditionNotes ?? []), surprise.note] };
 			// An arcanum's Let Fly rolls the stat its card prints (combat/arcana-attacks.js): its debility is that stat's.
-			roll = await item.roll({ ...this.applyDebilityRollMode(attackExtra?.statOverride ?? stat, withSurprise), descriptionOnly });
+			// A taken "roll +3 instead" line rolls no stat at all, so no debility touches it (isFixedRollValue).
+			const debilityStat = isFixedRollValue(withSurprise.statOverride) ? null : attackExtra?.statOverride ?? stat;
+			roll = await item.roll({ ...this.applyDebilityRollMode(debilityStat, withSurprise), descriptionOnly });
 		} catch (err) {
 			await owed?.refund();
 			if (surpriseSpent) await refundSurpriseForRoll(this._actor);
@@ -5553,7 +5957,7 @@ export class StonetopCharacter {
 		}
 
 		// What the taken lines cost, paid once the dice have landed, and a 12+'s "criticalNote" hook.
-		await _payTakenOffers(taken, roll, item.name);
+		const holdMore = await _payTakenOffers(taken, roll, item.name);
 		// And Alpha's and But I Get Up Again's advantage against these foes, which was for this one roll: the
 		// next roll against them has been made, hit or miss. Before the tier effects, so an Alpha rolled again
 		// at the same foe spends the old record and its own 10+ lays a fresh one.
@@ -5566,8 +5970,10 @@ export class StonetopCharacter {
 		// character along, undoing only what this roll did (actors/character/tier-effects.js). Never for a move a
 		// player wrote under a book move's name (owns-move.js#bookMoveName): a homebrew "Prepare a Welcome" spent
 		// no Surprise, so its 10+ regains none, and with no record on its card a later Shift brings nothing along.
-		const tierMove = bookMoveName(item);
-		if (!descriptionOnly && tierMove && Number.isFinite(roll?.total)) await this._settleRolledTierEffects(roll, tierMove, withSurprise, aimedAt, { surpriseSpent });
+		// A homebrew move settles only what its own data says it does (tier-effects.js#tierEffectsAllowed): a
+		// homebrew Pariah's "on a 10+, hold 3 Fear" fills its Fear track.
+		const gate = tierEffectsAllowed(this._actor, item);
+		if (!descriptionOnly && gate && Number.isFinite(roll?.total)) await this._settleRolledTierEffects(roll, gate.moveName, withSurprise, aimedAt, { surpriseSpent, ...(holdMore ? { holdMore } : {}), ...(gate.only ? { only: gate.only } : {}) });
 
 		// Clash's 6-: "your maneuver fails and you suffer your enemy's attack". A flat consequence
 		// with nothing in the tier to decide, so it fires off the dice rather than off a button —
@@ -5602,15 +6008,16 @@ export class StonetopCharacter {
 	 * 7-9) settles the effects of the tier it counts as, the same one a later rewrite reads.
 	 *
 	 * `surpriseSpent`: whether this roll spent a Surprise (Prepare a Welcome), which its 10+ needs to regain one.
+	 * `holdMore`: what a line taken on the roll paid for it to hold more (tier-effects.js#holdMoreBonus).
 	 */
-	async _settleRolledTierEffects(roll, moveName, options, targets, { surpriseSpent = false } = {}) {
+	async _settleRolledTierEffects(roll, moveName, options, targets, { surpriseSpent = false, only = null, holdMore = null } = {}) {
 		const card = messageOfRoll(roll);
 		const liveTotal = () => cardTotal(card) ?? roll.total;
 		const tierAt = total => outcomeTier(card?.getFlag?.(STONETOP_SCOPE, ROLLED_FLAG)
 			? cardCountedTier(card, total, STONETOP_SCOPE)
 			: countedTier(total, rolledRecord("", options)));
 		const tier = tierAt(liveTotal());
-		await recordTierEffects(card, await settleTierEffects(this._actor, moveName, tier, null, { character: this, targets, surpriseSpent }));
+		await recordTierEffects(card, await settleTierEffects(this._actor, moveName, tier, null, { character: this, targets, surpriseSpent, only, holdMore }));
 		if (card && tierAt(liveTotal()) !== tier) await reconcileTierEffects(card, liveTotal(), { actor: this._actor });
 	}
 
@@ -5816,7 +6223,9 @@ export class StonetopCharacter {
 			// character with Barkskin of their own never needs asking (see moveArmor).
 			markedWithBarkskin: () => barkskinMarkedBy(this._actor, globalThis.game?.actors ?? []),
 		});
-		const base = Math.max(0, this._inventory.calculateArmor(gear.items, Math.max(worn, granted.base), gear.marks) + moveBonuses.armor);
+		// A homebrew move's "+1 Armor when you go unarmored" (Formless): only while no armor is worn, bark included.
+		const unarmored = worn === 0 && granted.base === 0 ? (Number(moveBonuses.unarmoredArmor) || 0) : 0;
+		const base = Math.max(0, this._inventory.calculateArmor(gear.items, Math.max(worn, granted.base), gear.marks) + moveBonuses.armor + unarmored);
 		// How much of the total the move actually bought, which is nothing when the gear was already
 		// better: that is what a damage card offers back when the fiction says the clause is not met.
 		const moveGated = Math.max(0, granted.base - worn);
@@ -6492,8 +6901,9 @@ export class StonetopCharacter {
 		const owed = await this._claimNextRollOwed(rest.moveName);
 		let roll;
 		try {
-			roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(stat,
-				this._foldOwed(_foldTakenOffers(standing, taken), owed)));
+			const folded = this._foldOwed(_foldTakenOffers(standing, taken), owed);
+			// "Roll +3 instead" rolls no stat, so no stat's debility (isFixedRollValue).
+			roll = await rollStat(stat, this._actor, this.applyDebilityRollMode(isFixedRollValue(folded.statOverride) ? null : stat, folded));
 		} catch (err) {
 			await owed.refund();
 			throw err;
@@ -7709,6 +8119,10 @@ export class StonetopCharacter {
 			// What a capped mark option is weighed against, so the mark step greys an option that
 			// would buy nothing (the crew's die already at d10): see _markCapState.
 			markCapState: this._markCapState(await this._crewStatsFor(playbookData, ownedAllByName)),
+			// A homebrew playbook's own Level Up (the Familiar Face's "mark one of the following instead
+			// of the usual effect"): its advances, each marked once, or null for the book's Level Up.
+			// Once every one is marked, Level Up works as the book's does.
+			advancement: _levelUpAdvancement(playbookData, this.homebrewAdvances, newLevel),
 		};
 	}
 
@@ -7720,11 +8134,12 @@ export class StonetopCharacter {
 	// (cap != null), other cross-playbook moves (no third-playbook chaining), moves
 	// already owned (a repeatable one held fewer times than its repeatMax excepted), playbook-locked moves (Dangerous, Potential for Greatness; see
 	// _foreignMoveQualifies), and a move the character's OWN playbook has by the same name.
-	// Level, required-move and stat prereqs are honored.
-	async getForeignMovesForLevelUp(crossPlaybook, level) {
+	// Level, required-move and stat prereqs are honored. `grantedBy` is the picked move's words, read for
+	// what it pays in place of Stock (Witchcraft), which its Stock moves' rows then say instead.
+	async getForeignMovesForLevelUp(crossPlaybook, level, { grantedBy = "", grantedByName = "" } = {}) {
 		const ownName = (await this.playbook())?.name ?? this._actor.system?.playbook?.name ?? null;
 		const allowed = crossPlaybook?.playbooks === "any"
-			? _ALL_PLAYBOOK_NAMES.filter(p => p !== ownName)
+			? allPlaybookNames().filter(p => p !== ownName)
 			: (crossPlaybook?.playbooks ?? []).filter(p => p !== ownName);
 		// The copies held of each move, by name. A move held is not offered again unless it repeats
 		// ("each time you take this move") and fewer copies than it allows are held: Magnificent
@@ -7776,10 +8191,14 @@ export class StonetopCharacter {
 		// in the same step (Initiate of the Secret Arts).
 		const hasPouch = crossPlaybook?.grantsPossession === SACRED_POUCH_SLUG
 			|| await this.holdsPossession(SACRED_POUCH_SLUG);
+		const insteadOf = hasPouch ? null : stockStandInsFrom(playbookTextFromHtml(grantedBy));
+		const paidAs = insteadOf ? insteadOf.map(s => s.kind === "debility" ? "mark a debility" : s.kind === "hp" ? `lose ${s.amount} HP` : s.text) : null;
 		for (const m of out) {
 			const said = hasPouch ? null : noPouchNote(m.description);
 			m.stockNoteKind = said?.kind ?? null;
-			m.stockNote = said?.note ?? null;
+			m.stockNote = said?.kind === "stock" && paidAs
+				? `Costs Stock, which you pay as ${grantedByName || "the move"} says: ${paidAs.length > 1 ? `${paidAs.slice(0, -1).join(", ")} or ${paidAs.at(-1)}` : paidAs[0]}.`
+				: said?.note ?? null;
 		}
 		return out;
 	}
@@ -7877,6 +8296,13 @@ export class StonetopCharacter {
 		if (invocations.length && !invocationWaitsOnMove) await step("invocation", () => this._learnInvocation(invocations));
 		// "Until you Level Up, your instinct becomes ..." (Book II p.370, p.523): it ends now.
 		const endedInstinct = await step("instinct", () => this._instinct.clearTemporary());
+		// A homebrew playbook's own advance, marked in place of the usual move (or with the move it says to take).
+		if (choices?.advance?.slug) {
+			// A refusal comes back as false, not thrown (the stat reached its cap, or the advance was
+			// marked from another window meanwhile): the level is paid for, so it is named as failed.
+			const marked = await step("advance", () => this.markHomebrewAdvance(choices.advance.slug, { stat: choices.advance.stat ?? null, atLevelUp: true }));
+			if (marked === false) failed.push("advance");
+		}
 		const addedItem = await step("move", () => this._addLevelUpMove(selectedMoveCompendiumId, choices));
 		if (addedItem && choices?.stat) {
 			await step("stat", () => this._applyStatIncreaseChoice(addedItem, choices.stat, choices.cap ?? null));
@@ -8186,12 +8612,8 @@ function _evenLevelsBetween(from, to) {
 	return Math.floor(to / 2) - Math.floor((from - 1) / 2);
 }
 
-// The 9 playbooks by display name (as stored in a move's system.playbook), for the
-// Versatile "any other playbook" cross-playbook pick.
-const _ALL_PLAYBOOK_NAMES = [
-	"The Blessed", "The Fox", "The Heavy", "The Judge", "The Lightbearer",
-	"The Marshal", "The Ranger", "The Seeker", "The Would-Be Hero",
-];
+// "Any other playbook" (Versatile) reads allPlaybookNames() (playbooks/playbook-catalog.js): the
+// nine shipped playbooks plus the world's homebrew ones, by display name.
 
 // A foreign move qualifies for a cross-playbook pick when the actor has its required
 // moves LEARNED (`learnedNames`: a switched-off move opens nothing; the one it replaces
@@ -8297,6 +8719,69 @@ function _buildWoundsSection(actor) {
 	});
 }
 
+
+// A homebrew playbook's own Level Up for the Level Up window: its advances, with the ones marked
+// already, or null when it has none or every one is marked.
+function _levelUpAdvancement(playbookData, marked, newLevel = 0) {
+	const adv = playbookData?.advancement;
+	// The Standout's "switch to a different playbook": no advances, the change of playbook is the level-up.
+	if (adv?.switchPlaybook) return { switchPlaybook: true, replacesUsual: false, note: String(adv.note ?? ""), options: [] };
+	if (!adv?.options?.length) return null;
+	const options = adv.options.map(o => ({ ...o, marked: !!marked?.[o.slug] }));
+	const allMarked = options.every(o => o.marked);
+	// The Familiar Face's "When you Level Up to Level 3 or higher, you can choose to change to a
+	// different playbook": from that level on, one more pick beside its advances. Never marked, so it
+	// is offered at every later level too, even once every advance is marked.
+	const from = Number(adv.switchFromLevel) || 0;
+	const canSwitch = from > 0 && newLevel >= from;
+	if (allMarked && !canSwitch) return null;
+	if (canSwitch) options.push({ slug: SWITCH_ADVANCE, label: "Change to a different playbook", kind: "switch", marked: false });
+	// Every advance marked: the level is the book's (a new move), with the switch to take instead if they
+	// like, so nothing need be picked here.
+	if (allMarked) return { replacesUsual: false, optional: true, note: String(adv.note ?? ""), options };
+	return { replacesUsual: !!adv.replacesUsual, note: String(adv.note ?? ""), options };
+}
+
+/** The Level Up pick that changes playbook instead of marking an advance (see _levelUpAdvancement). */
+export const SWITCH_ADVANCE = "~switch-playbook";
+
+// The levels spent on one of a homebrew playbook's own advances that isn't a move (max HP, a stat):
+// each took the place of that level's move, so the Moves tab's level budget counts it as the pick.
+// A move advance adds the move itself, which counts on its own; one marked before play spent no level.
+// An advance marked ALONGSIDE the usual move (`replacesUsual` false) took no level's move: the move counts.
+function _advanceLevelPicks(playbookData, marked) {
+	if (!playbookData?.advancement?.replacesUsual) return 0;
+	const options = playbookData.advancement.options ?? [];
+	return options.filter(o => marked?.[o.slug]?.atLevelUp && o.kind !== "move" && o.kind !== "otherMove").length;
+}
+
+/**
+ * A homebrew playbook's own advances that were marked (StonetopCharacter#markHomebrewAdvance), into
+ * `totals`: "Increase your max HP to 15" as the HP that takes it there from the playbook's own,
+ * "by 4" as 4, "Increase your damage die to a d8" as the die. Stats were written when marked.
+ */
+function _addAdvanceBonuses(totals, playbookData, marked) {
+	const options = playbookData?.advancement?.options;
+	if (!Array.isArray(options) || !marked) return;
+	for (const o of options) {
+		if (!marked[o.slug]) continue;
+		if (o.kind === "hp") totals.hp += o.to ? Math.max(0, Number(o.to) - (Number(playbookData.hp) || 0)) : (Number(o.by) || 0);
+		else if (o.kind === "damage" && o.die) totals.damageDie = totals.damageDie ? maxDie(totals.damageDie, o.die) : o.die;
+	}
+}
+
+/**
+ * The special possessions held that raise max HP or the damage die (homebrew-bundle.js
+ * possessionBonusFrom: the Standout's Determination, "increase your damage to a d8 and your max HP
+ * by 4"), into `totals`. The book's possessions carry neither.
+ */
+function _addPossessionBonuses(totals, playbookData, held) {
+	for (const o of playbookData?.specialPossessions?.options ?? []) {
+		if (!held?.has(o.slug)) continue;
+		totals.hp += Number(o.hpBonus) || 0;
+		if (o.damageDie) totals.damageDie = totals.damageDie ? maxDie(totals.damageDie, o.damageDie) : o.damageDie;
+	}
+}
 
 /**
  * The DERIVED damage die: the playbook's, raised by any owned move that raises it. Null without a
@@ -8530,8 +9015,8 @@ function _isHeldBeforeBackground(item) {
 // The item flag ensureStartingMoves stamps on the copy of a move a background GAVE (its value is
 // the background's slug), so a repeatable one (the Scion's Veteran Crew, repeatMax 2) can be told
 // from a copy taken at a level-up: a change of background takes back only the stamped copy, and a
-// new background gives its own copy beside one the character already picked.
-export const BACKGROUND_GRANT_FLAG = "backgroundGrant";
+// new background gives its own copy beside one the character already picked. Kept in StonetopFlags.js.
+export { BACKGROUND_GRANT_FLAG };
 
 function _isBackgroundGrant(item) {
 	return !!item?.flags?.[STONETOP_SCOPE]?.[BACKGROUND_GRANT_FLAG];
@@ -8689,14 +9174,19 @@ function _buildPlaybookSection(playbookData, background, instinct, appearance, o
 		), savedAppearance?.[i] ?? "")
 	);
 
-	const originOptions = (playbookData.origin ?? []).map(({ region, names }) =>
-		new OriginOptionSnapshot(
+	// A homebrew playbook may ask its own question of someone from each place (the Familiar Face's
+	// "What part of the monastery schedule do you miss the most?"): that, not the book's word on the
+	// place, and the player's answer. A write-in place ("Somewhere else") shows the place they named.
+	const originOptions = (playbookData.origin ?? []).map(({ region, names, question = "", writeIn = false }) => {
+		const selected = region === savedOrigin;
+		return new OriginOptionSnapshot(
 			region,
-			names.map(name => ({ name, checked: name === actorName })),
-			region === savedOrigin,
-			_originDescriptionForRegion(region)
-		)
-	);
+			(names ?? []).map(name => ({ name, checked: name === actorName })),
+			selected,
+			question || writeIn ? "" : _originDescriptionForRegion(region),
+			{ question: String(question ?? ""), writeIn: !!writeIn, place: selected ? origin.place ?? "" : "", answer: selected ? origin.answer ?? "" : "" },
+		);
+	});
 
 	return new PlaybookSnapshotBuilder()
 		.withSlug(playbookData.slug)
@@ -8828,9 +9318,13 @@ function _buildMarkOptions(entry, markCounts, capState = {}, backgroundSlug = nu
 		// A mark stored past the option's boxes (Veteran Crew picked twice before its options became
 		// once each) is kept and shown, so it can be unticked.
 		const ownBoxes = fromBackground ? Math.max(marks - 1, count) : Math.max(marks, count);
+		// A write-in ("Something else: ___ (discuss with the GM)"): the words either side of the blank,
+		// and what the player wrote in it, kept on the option's first mark.
+		const blank = opt.writeIn ? String(opt.label ?? "").split(/_{3,}/) : null;
 		return {
 			slug:   opt.slug,
 			label:  opt.label,
+			writeIn: blank ? { before: blank[0].trim(), after: blank.slice(1).join(" ").trim(), text: entries[0]?.text ?? "", marked: count > 0 } : null,
 			// Only while a box is still there to tick: a fully marked option has nothing to grey.
 			capNote: capNote && count < ownBoxes ? capNote : null,
 			background: fromBackground
@@ -9069,7 +9563,11 @@ function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, love
 	const expeditionCat = categories.find(c => c.key === "expedition");
 	const postDeathCat  = categories.find(c => c.key === "post-death");
 	const learnedCat    = categories.find(c => c.key === "learned");
-	const otherCats     = categories.filter(c => !["basic", "playbook", "expedition", "post-death", "learned"].includes(c.key));
+	const otherCats     = categories.filter(c => !["basic", "playbook", "expedition", "post-death", "learned"].includes(c.key) && !c.key.startsWith("hb-insert:"));
+	// A homebrew insert's moves the character holds, under the insert's name (its own tab picks them).
+	const insertGroups  = categories.filter(c => c.key.startsWith("hb-insert:"))
+		.map(c => ({ key: c.key.slice("hb-insert:".length), label: c.title, moves: c.moves.filter(m => m.owned) }))
+		.filter(g => g.moves.length);
 	const postDeathGroup = postDeathCat && pdiLabel
 		? { label: pdiLabel, moves: postDeathCat.moves }
 		: null;
@@ -9118,6 +9616,7 @@ function _buildMovelist(categories, other, pdiLabel = null, actorLevel = 1, love
 		.withLoveLetters(loveLetters)
 		.withStartingMovesNote(startingNote)
 		.withPostDeathGroup(postDeathGroup)
+		.withInsertGroups(insertGroups)
 		.withMovesIncomplete(movesIncomplete)
 		.withLevelMovesIncomplete(levelMovesIncomplete)
 		.withLevelMovesShortfall(levelMovesShortfall)

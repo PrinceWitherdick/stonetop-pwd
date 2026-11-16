@@ -110,6 +110,10 @@
 				      (_mergeTabOrder), so moving it moves it in classic and modern at once. --}}
 				{{#if stonetop.showPostDeath}}{{> "stonetop.tab-nav-item" tab="post-death" label=(localize "stonetop.sheet.tabs.postDeath")}}{{/if}}
 				{{> "stonetop.tab-nav-item" tab="moves"         label=(localize "stonetop.sheet.tabs.moves") attention=stonetop.canLevelUp attentionLabel=(localize "stonetop.specialMoves.levelUp.ready")}}
+				{{!-- A homebrew playbook's inserts, each a tab of its own once the character has opened it.
+				      `stonetop` is handed down: inside the {{#each}} the context is the insert, and the
+				      nav item reads the layout off `stonetop.classicLayout`. --}}
+				{{#each stonetop.homebrewInserts}}{{> "stonetop.tab-nav-item" stonetop=@root.stonetop tab=this.tabKey label=this.name attention=this.attention attentionLabel=this.attentionLabel}}{{/each}}
 				{{#if stonetop.invocations}}{{> "stonetop.tab-nav-item" tab="invocations" label=(localize "stonetop.sheet.tabs.invocations")}}{{/if}}
 				{{#if stonetop.showFollowersTab}}{{> "stonetop.tab-nav-item" tab="followers" label=(localize "stonetop.sheet.tabs.followers")}}{{/if}}
 				{{> "stonetop.tab-nav-item" tab="inventory"     label=(localize "stonetop.sheet.tabs.inventory")}}
@@ -137,6 +141,7 @@
 					      which panel is SHOWN is the nav's business, not this order's. --}}
 					{{#if stonetop.showPostDeath}}{{> "stonetop.tab-post-death"}}{{/if}}
 					{{> "stonetop.tab-moves"}}
+					{{#each stonetop.homebrewInserts}}{{> "stonetop.tab-homebrew-insert"}}{{/each}}
 					{{#if stonetop.invocations}}{{> "stonetop.tab-invocations"}}{{/if}}
 					{{#if stonetop.showFollowersTab}}{{> "stonetop.tab-followers"}}{{/if}}
 					{{> "stonetop.tab-equipment"}}

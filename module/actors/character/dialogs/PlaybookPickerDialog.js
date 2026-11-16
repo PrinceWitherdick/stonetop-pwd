@@ -6,6 +6,8 @@ import { ITEMS_PACK, STONETOP_SCOPE } from "../StonetopFlags.js";
 import { ensurePackIndex } from "../../../utils/pack-index.js";
 import { isOutOfPlaySafe } from "../deaths-door-actor.js";
 import { hasLeftPlay } from "../../../campaign/left-play.js";
+import { shippedPlaybookInfo, homebrewPickerRows, isHomebrewPlaybookItem, isHomebrewPublished } from "../../../playbooks/playbook-catalog.js";
+import { escHtml } from "../../../utils/strings.js";
 
 /**
  * The player a character belongs to: whoever holds it as their assigned character, else the
@@ -61,18 +63,6 @@ export function playbookHolders({ actors = [], users = [], excludeActorId = null
 	return holders;
 }
 
-const PLAYBOOK_DESCRIPTIONS = {
-	"the-blessed":       { complexity: "Medium",       desc: "Nature priest. Speaks to spirits and beasts. Works subtle magics via sacred markings and materials." },
-	"the-fox":           { complexity: "Low",          desc: "Clever, quick, and skillful. Not above bending the rules or fighting dirty. Can be quite the charmer, too." },
-	"the-heavy":         { complexity: "Low / Medium", desc: "Not just a violent individual, our violent individual. A champion, yes, but a bit of a liability, too." },
-	"the-judge":         { complexity: "Low",          desc: "Settler of disputes, chronicler, and divine bulwark against chaos. Insightful, tough, not necessarily persuasive." },
-	"the-lightbearer":   { complexity: "High",         desc: "Invokes divine power via flame and candle. Beacon of hope, charity, and mercy. Fiery foe of the dark." },
-	"the-marshal":       { complexity: "High",         desc: "Leads the town's militia, plus a crew of followers. Makes choices about who lives and who dies." },
-	"the-ranger":        { complexity: "Low",          desc: "At home in the wild, the one you want with you when you travel. A resourceful guide and deadly hunter." },
-	"the-seeker":        { complexity: "High",         desc: "Collector of lost lore and power, with potent artifacts that might well lead to their ruin." },
-	"the-would-be-hero": { complexity: "Medium",       desc: "They're in over their head and full of fear and anger, but they just might outshine us all." },
-};
-
 export class PlaybookPickerDialog extends StonetopDialog {
 	constructor(onPick, options = {}) {
 		const { onClose, actorId = null, ...appOptions } = options;
@@ -117,6 +107,8 @@ export class PlaybookPickerDialog extends StonetopDialog {
 			if (this.rendered && !this._picking) this.render(false);
 		}, 200);
 		const ifCharacter = actor => { if (actor?.type === "character") refresh(); };
+		// A world homebrew playbook made, edited (published or hidden), or deleted: its card follows.
+		const ifHomebrew = item => { if (!item?.parent && isHomebrewPlaybookItem(item)) refresh(); };
 		this._hooks = [
 			["createActor", Hooks.on("createActor", ifCharacter)],
 			["deleteActor", Hooks.on("deleteActor", ifCharacter)],
@@ -127,6 +119,9 @@ export class PlaybookPickerDialog extends StonetopDialog {
 				if (stFlags && Object.keys(stFlags).some(k => k.replace(/^-=/, "") === "onboardingProgress")) refresh();
 			})],
 			["updateUser", Hooks.on("updateUser", (_user, changes) => { if (changes && "character" in changes) refresh(); })],
+			["createItem", Hooks.on("createItem", ifHomebrew)],
+			["updateItem", Hooks.on("updateItem", ifHomebrew)],
+			["deleteItem", Hooks.on("deleteItem", ifHomebrew)],
 		];
 	}
 
@@ -141,7 +136,7 @@ export class PlaybookPickerDialog extends StonetopDialog {
 			const pack = await ensurePackIndex(ITEMS_PACK, ["type", "system.slug", "img"]);
 			if (pack) {
 				const entries = [...pack.index].filter(e =>
-					e.type === "playbook" && !!PLAYBOOK_DESCRIPTIONS[e.system?.slug ?? ""]
+					e.type === "playbook" && !!shippedPlaybookInfo(e.system?.slug)
 				);
 				const docs = await Promise.all(entries.map(e => pack.getDocument(e._id)));
 				this._playbooks = docs
@@ -149,7 +144,8 @@ export class PlaybookPickerDialog extends StonetopDialog {
 					.sort((a, b) => a.name.localeCompare(b.name))
 					.map(d => {
 						const slug = d.system?.slug ?? "";
-						const info = PLAYBOOK_DESCRIPTIONS[slug] ?? {};
+						// The blurbs live in playbooks/playbook-catalog.js, beside the homebrew rows.
+					const info = shippedPlaybookInfo(slug) ?? {};
 						// Use the same avatar art applied to a character on pick
 						// (assets/icons/playbooks/<slug>_icon.webp), not the flat
 						// playbook item icon.
@@ -165,15 +161,20 @@ export class PlaybookPickerDialog extends StonetopDialog {
 					});
 			}
 		}
+		// HOMEBREW playbooks (world Items, playbooks/playbook-catalog.js), read fresh each render, not
+		// cached with the shipped ones: a GM may publish one while the picker is open. A player sees
+		// only published ones; the GM sees drafts too, marked.
+		const homebrew = homebrewPickerRows({ isGM: !!game.user?.isGM });
+		const allPlaybooks = [...this._playbooks, ...homebrew];
 		// Read fresh each render rather than cached with the playbooks: another player may pick
 		// while this one is choosing. Display only; nothing is written.
 		const holders = playbookHolders({
 			actors:         game.actors,
 			users:          game.users,
 			excludeActorId: this._actorId,
-			playbooks:      this._playbooks,
+			playbooks:      allPlaybooks,
 		});
-		const playbooks = this._playbooks.map(p => {
+		const playbooks = allPlaybooks.map(p => {
 			const held = holders.get(p.slug) ?? { taken: [], dead: [] };
 			return {
 				...p,
@@ -211,6 +212,13 @@ export class PlaybookPickerDialog extends StonetopDialog {
 		try { doc = await fromUuid(uuid); } catch (err) { console.error("Stonetop | could not load that playbook", err); }
 		if (!doc) {
 			this._picking = false;
+			return;
+		}
+		// A card clicked in the moment before the refresh took a just-hidden homebrew playbook away.
+		if (!game.user?.isGM && isHomebrewPlaybookItem(doc) && !isHomebrewPublished(doc)) {
+			ui.notifications?.warn?.(`The GM isn't showing ${doc.name} to players right now.`);
+			this._picking = false;
+			this.render(false);
 			return;
 		}
 		// A pick whose walkthrough failed to open leaves the picker usable, rather than on screen
@@ -252,8 +260,9 @@ export class PlaybookPickerDialog extends StonetopDialog {
 		const tip = document.createElement("div");
 		tip.className = "stonetop-playbook-picker-tooltip";
 		tip.innerHTML =
-			(complexity ? `<span class="stonetop-playbook-picker-tooltip-complexity">${complexity} complexity</span>` : "") +
-			`<p class="stonetop-playbook-picker-tooltip-desc">${description}</p>`;
+			// Escaped: a homebrew playbook's blurb is text a GM typed or imported, not ours.
+			(complexity ? `<span class="stonetop-playbook-picker-tooltip-complexity">${escHtml(complexity)} complexity</span>` : "") +
+			`<p class="stonetop-playbook-picker-tooltip-desc">${escHtml(description)}</p>`;
 		// Append inside the dialog, not <body>, so the tooltip shares the picker's
 		// stacking context and stays above its content. (The window has no
 		// transform, so the tooltip's fixed positioning still tracks the viewport.)

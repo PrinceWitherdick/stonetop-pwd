@@ -120,7 +120,7 @@ describe("resting them", () => {
 			"flags.stonetop-pwd.customFollowers.c1.hpCurrent": 4,
 			"flags.stonetop-pwd.customFollowers.g1.memberHp": [4, null, 0],
 			"flags.stonetop-pwd.recoverFollowers.custom:c1": { follower: "custom", slug: "c1" },
-			"flags.stonetop-pwd.recoverFollowers.custom:g1:member:0": { follower: "custom-member", slug: "g1", index: 0 },
+			"flags.stonetop-pwd.recoverFollowers.custom:g1:member:0": { follower: "custom-member", slug: "g1", index: 0, stamp: 0 },
 		}, { stonetopMove: "Recover" });
 	});
 

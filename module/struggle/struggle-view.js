@@ -109,8 +109,9 @@ export function bumpMatters(row, struggle) {
  * @param {object} [ctx.statValues]   rowKey => {str: 2, ...}, for the rows this reader drives
  * @param {object} [ctx.approaches]   stat => Defy Danger's printed clause for it
  * @param {object} [ctx.rollerNames]  actorId => the character a follower's roll is made through
+ * @param {object} [ctx.pcLabels]     actorId => a PC's dropdown label, "Pim (Alex)"
  */
-export function struggleRowView(row, { struggle, board, reader, statValues = {}, approaches = {}, rollerNames = {} }) {
+export function struggleRowView(row, { struggle, board, reader, statValues = {}, approaches = {}, rollerNames = {}, pcLabels = {} }) {
 	const status = struggle.status;
 	const drives = reader.drives.has(row.key);
 	const visible = canSeeResult(row, struggle, reader);
@@ -233,7 +234,7 @@ export function struggleRowView(row, { struggle, board, reader, statValues = {},
 				: {
 					all: false,
 					label: "Get them out",
-					options: targets.map((t, i) => ({ value: t.key, label: t.name, selected: i === 0 })),
+					options: targets.map((t, i) => ({ value: t.key, label: (t.kind === ROW_KIND.PC && pcLabels[t.actorId]) || t.name, selected: i === 0 })),
 				};
 			view.rescue.hint = "Say how, if you can. If it doesn't hold up, the GM will say so.";
 		}
@@ -301,7 +302,7 @@ export function endPreviewLines(board) {
  * @param {object} struggle  readStruggle's answer
  * @param {object} board     struggleBoard's answer
  * @param {object} reader    {isGM, drives: Set<rowKey>, mine: Set<rowKey>}
- * @param {object} [extra]   statValues, approaches, rollerNames (see struggleRowView)
+ * @param {object} [extra]   statValues, approaches, rollerNames, pcLabels (see struggleRowView)
  */
 export function struggleWindowView(struggle, board, reader, extra = {}) {
 	const status = struggle.status;

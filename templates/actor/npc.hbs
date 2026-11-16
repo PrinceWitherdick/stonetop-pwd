@@ -66,7 +66,20 @@
 						       value="{{system.traits}}" placeholder='{{localize "stonetop.npc.traitsPlaceholder"}}'>
 						{{else}}
 						{{#if system.pronouns}}<span class="stonetop-npc-pronouns-display">{{system.pronouns}}</span>{{/if}}
+						{{!-- A crew member whose traits line is still the roster's: the crew card's chips in
+						      its place (the crew's shared tags, then their own tag and traits). A line typed
+						      on this sheet by hand is shown as typed. --}}
+						{{#if stonetop.crewChipsInHeader}}
+						<div class="stonetop-follower-tags stonetop-npc-crew-tags">
+							{{!-- Heroes to the Last's two picks, drawn as the crew card draws them (tab-followers.hbs). --}}
+							{{#if stonetop.crewMember.exceptional}}<span class="stonetop-follower-tag stonetop-follower-tag--exceptional stonetop-follower-tag--derived is-selected" data-tooltip="{{stonetop.crewMember.exceptionalHint}}" data-tooltip-direction="UP"><span class="stonetop-chip-text">exceptional</span></span>{{/if}}
+							{{#if stonetop.crewMember.inured}}<span class="stonetop-follower-tag stonetop-follower-tag--exceptional stonetop-follower-tag--derived stonetop-follower-tag--inured is-selected" data-tooltip="{{stonetop.crewMember.inuredHint}}" data-tooltip-direction="UP"><span class="stonetop-chip-text">inured to terror &amp; horror</span></span>{{/if}}
+							{{#each stonetop.crewMember.crewChips}}<span class="stonetop-follower-tag{{#if this.cls}} {{this.cls}}{{/if}}{{#if this.tooltip}} stonetop-follower-tag--tooltip{{/if}}"{{#if this.tooltip}} data-tooltip="{{this.tooltip}}" data-tooltip-direction="UP"{{/if}}>{{this.label}}</span>{{/each}}
+							{{#each stonetop.crewMember.ownChips}}<span class="stonetop-follower-tag stonetop-follower-tag--trait">{{this}}</span>{{/each}}
+						</div>
+						{{else}}
 						{{#if system.traits}}<p class="stonetop-npc-prose stonetop-npc-traits-display">{{system.traits}}</p>{{/if}}
+						{{/if}}
 						{{/if}}
 					</div>
 				</div>

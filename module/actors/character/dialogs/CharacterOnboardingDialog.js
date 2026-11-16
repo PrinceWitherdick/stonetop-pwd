@@ -1,7 +1,8 @@
 // Descriptions for animal companion trait tags — checked before compendium lookup.
 import { isMajorArcana, isMajorArcanumItem } from "../../../arcana-icons.js";
+import { withMarkOptionList } from "../mark-option-list.js";
 import { parseMovePickCount, allowedMarkableActions, backgroundMoveNames, backgroundPossessionSlugs, startingMoveChoiceNames } from "../StonetopCharacter.js";
-import { ITEMS_PACK, ARCANA_PACK } from "../StonetopFlags.js";
+import { ARCANA_PACK } from "../StonetopFlags.js";
 import { markQuestionBullets } from "../../../utils/question-bullets.js";
 import { openJournalSheetAsChild } from "../../../utils/front-on-open.js";
 import { StonetopDialog } from "../../../utils/stonetop-dialog.js";
@@ -26,9 +27,10 @@ import { moveGroupsForPlaybook, moveGroupKeys } from "./onboarding-move-groups.j
 import { effectiveSubgroupMax } from "./possession-choice-cap.js";
 import { expectedInvocationCount } from "../invocation-count.js";
 import { requiredMovesUnmet } from "../move-requirement.js";
-import { playbookIconPath } from "../../../utils/playbook-actors.js";
+import { playbookAvatar, isHomebrewPlaybookItem } from "../../../playbooks/playbook-catalog.js";
+import { FoundryMoveRepository } from "../repositories/FoundryMoveRepository.js";
 import { ensurePackIndex } from "../../../utils/pack-index.js";
-import { SYSTEM_ID } from "../../../system-id.js";
+import { SYSTEM_ID, ITEM_FLAG_SCOPE } from "../../../system-id.js";
 import { crewSetupLimit } from "./CrewSetupDialog.js";
 import { crewWriteInTagBoxes, crewTagsWithWriteIns } from "../crew-write-ins.js";
 import { CREATION_MARK_MOVES, creationMarkCopies, creationMarkCrewTags, creationMarksComplete, creationMarkRadios } from "./creation-marks.js";
@@ -228,11 +230,17 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		this._rawInstincts       = f.instincts           ?? [];
 		this._rawAppearance      = f.appearance          ?? [];
 		this._origins            = f.origin              ?? [];
+		// A homebrew playbook's own words over the list ("We already know your name, but where are you from?").
+		this._originNote         = String(f.originNote ?? "");
 		this._rawPossessions     = f.specialPossessions  ?? null;
 		this._rawInvocations     = f.invocations         ?? null;
 		this._rawCrew            = f.crew                ?? null;
 		this._rawAnimalCompanion = f.animalCompanion     ?? null;
 		this._rawLore            = f.lore               ?? [];
+		// A homebrew playbook's questions each stand on their own: a write-in isn't handed the picks of
+		// the list before it as a reminder, as a book playbook's follow-up is (the Stranger's "To what
+		// ancient place are you drawn?" has nothing to do with "What do people call you now?").
+		this._loreStandsAlone    = !!f.homebrew;
 		this._rawMoveChoices     = f.moves?.choices      ?? [];
 		this._movePickCount  = this._parseMovePickCount();
 		this._movesCache              = null;
@@ -250,6 +258,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			instinctValue:   "",
 			appearance:      {},
 			originRegion:    "",
+			// A write-in place ("Somewhere else": the Marches), and the answer to the question a
+			// homebrew playbook asks someone from the place picked.
+			originPlace:     "",
+			originAnswer:    "",
 			name:            "",
 			stats:           { str: null, dex: null, con: null, int: null, wis: null, cha: null },
 			possessions:     [],
@@ -342,7 +354,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		if (this._rawAppearance.length) steps.push("appearance");
 		if (this._origins.length)       steps.push("origin");
 		steps.push("stats");
-		if ((this._rawPossessions?.pickCount ?? 0) > 0 && this._rawPossessions?.options?.length) {
+		// Shown with nothing to pick too, when the playbook gives some to every character ("You begin
+		// play with the following:"): the player meets them, and the questions they ask, here.
+		if (((this._rawPossessions?.pickCount ?? 0) > 0 || (this._rawPossessions?.preselected ?? []).length) && this._rawPossessions?.options?.length) {
 			steps.push("possession");
 		}
 		if (this._movePickCount > 0 || this._rawMoveChoices.length) steps.push("moves");
@@ -488,6 +502,14 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 	// ── Move helpers ──────────────────────────────────────────────────
 
+	// A place picked, and named when it's the write-in one ("Somewhere else").
+	_originChosen() {
+		const region = this._selections.originRegion;
+		if (!region) return false;
+		const picked = this._origins.find(o => o.region === region);
+		return !picked?.writeIn || !!String(this._selections.originPlace ?? "").trim();
+	}
+
 	_isGordinsDelve(region) {
 		return String(region ?? "").toLowerCase().includes("gordin");
 	}
@@ -500,11 +522,13 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 	_appearanceLineLabel(options, lineIdx) {
 		const text = options.map(o => String(o ?? "").toLowerCase()).join(" ");
-		if (text.includes("voice") || text.includes("spoken")) return "Voice";
-		if (/(robe|clothes|cloak|gear|fur|leather|groomed|shaggy|threadbare|polish|badge)/.test(text)) return "Garb";
-		if (/(body|frame|curvy|strapping|thin|solid|willowy|lithe|heavyset|gangly|ripped|stocky|wiry|compact|lean|wolfish|bony|limbed|big|scrawny|sinewy|slender|thick)/.test(text)) return "Build";
+		// Words matched from their START: "something recognisable" holds "thin", which once made a
+		// homebrew row of clothes a "Build". (No book playbook's label moves with this.)
+		if (/\b(?:voice|spoken|throat|tongue)/.test(text)) return "Voice";
+		if (/\b(?:robe|clothes|cloak|gear|fur|leather|groomed|shaggy|threadbare|polish|badge|garb|attire|dress)/.test(text)) return "Garb";
+		if (/\b(?:body|frame|curvy|strapping|thin|solid|willowy|lithe|heavyset|gangly|ripped|stocky|wiry|compact|lean|wolfish|bony|limbed|big|scrawny|sinewy|slender|thick)/.test(text)) return "Build";
 		if (/(scar|nose|missing|fingers|hands|frown|jaw|smirk|eyes|back)/.test(text)) return "Feature";
-		if (/(step|stride|strut)/.test(text)) return "Bearing";
+		if (/\b(?:step|stride|strut)/.test(text)) return "Bearing";
 		return lineIdx === 0 ? "Appearance" : "Look";
 	}
 
@@ -1148,7 +1172,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 				previousSelectedOptions.push(...pickedDescriptions(this._rawLore[j]));
 			}
 			contextTitle = headerIdx >= 0 ? this._normalizeOnboardingText(this._rawLore[headerIdx].title ?? "") : "";
-		} else if (isTextSection && previousSection) {
+		} else if (isTextSection && previousSection && !this._loreStandsAlone) {
 			previousSelectedOptions = pickedDescriptions(previousSection);
 			contextTitle = previousSelectedOptions.length ? this._normalizeOnboardingText(previousSection.title ?? "") : "";
 		}
@@ -1391,13 +1415,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 		}).html ?? "";
 	}
 
-	async _loadPlaybookMoves() {
-		const pack = await ensurePackIndex(ITEMS_PACK,
-			["system.playbook", "system.isStartingMove", "system.requirement"]);
-		if (!pack) return [];
-		const relevant = pack.index.filter(e => e.system?.playbook === this._playbookDoc.name);
-		const docs = await Promise.all(relevant.map(e => pack.getDocument(e._id)));
-		return docs.filter(Boolean);
+	// The playbook's move DOCUMENTS: the pack's plus a homebrew playbook's, read the one way every
+	// move list is (FoundryMoveRepository).
+	_loadPlaybookMoves() {
+		return new FoundryMoveRepository().getPlaybookMoveDocuments(this._playbookDoc.name);
 	}
 
 	// Resume stores each "either X OR Y" pick as the owned move's NAME, because its
@@ -1773,7 +1794,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			}
 			case "instinct":       return !!this._selections.instinctValue.trim();
 			case "appearance":     return this._rawAppearance.every((_, i) => !!this._selections.appearance[i]);
-			case "origin":         return !!this._selections.originRegion && !!this._selections.name?.trim();
+			case "origin":         return this._originChosen() && !!this._selections.name?.trim();
 			case "stats":          return this._validateStats();
 			// At the count or past it: one too many (a write-in the sheet added) is flagged, not a step left undone.
 			case "possession":     return this._possessionPickTotal() >= (this._rawPossessions?.pickCount ?? 0) &&
@@ -1880,7 +1901,10 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 	_isLoreSectionAnswered(section) {
 		const opts = section?.options ?? [];
 		if (!opts.length) return true;
-		if (opts.some(o => o.type === "text")) {
+		// A list to TICK that also holds a write-in is answered by its ticks: the page draws it as a
+		// pick list (_loreSectionData), with nowhere to type, so a written answer can't be required.
+		// No book playbook mixes the two; a homebrew one written before its write-ins became blanks did.
+		if (opts.every(o => o.type === "text")) {
 			const textOptions = this._countedTextOptions(section);
 			const min = this._parseTextAnswerMin(section, textOptions.length);
 			return this._countLoreSectionTextAnswers(section, textOptions) >= min;
@@ -1896,7 +1920,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			return this._isLoreSectionAnswered(section);
 		}
 		if (stepType === "origin") {
-			return !!this._selections.originRegion && !!this._selections.name?.trim();
+			return this._originChosen() && !!this._selections.name?.trim();
 		}
 		// The Seeker's two arcana pages carry their questions inside their own Next gate (the major's
 		// "at least 2", the minor's three via seekerMinorStepComplete), so the resume reads that same
@@ -2028,7 +2052,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 					originRegion: this._selections.originRegion || "",
 					name: this._selections.name || "",
 					missing: [
-						...(!this._selections.originRegion ? ["originRegion"] : []),
+						...(!this._originChosen() ? ["originRegion"] : []),
 						...(!this._selections.name?.trim() ? ["name"] : []),
 					],
 				};
@@ -2298,6 +2322,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 				nameGroups: this._isGordinsDelve(o.region) ? this._originNameGroups() : [],
 				isGordinsDelve: this._isGordinsDelve(o.region),
 				selected: this._selections.originRegion === o.region,
+				// A homebrew playbook's question for someone from there, and a place to write in.
+				question: String(o.question ?? ""),
+				writeIn:  !!o.writeIn,
 			}));
 		}
 
@@ -2368,7 +2395,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 						groupIndex,
 						id:          doc.id,
 						name:        this._normalizeOnboardingText(doc.name),
-						description: this._normalizeOnboardingText(doc.system?.description),
+						description: this._normalizeOnboardingText(withMarkOptionList(doc.system?.description, doc.system?.markOptions)),
 						// The stored tiers, so a move whose outcomes live only there still shows its
 						// ladder on the card (`moveBody`, utils/move-tiers.js).
 						moveResults: doc.system?.moveResults ?? null,
@@ -2390,7 +2417,7 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 					return {
 						id:          doc.id,
 						name:        this._normalizeOnboardingText(doc.name),
-						description: this._normalizeOnboardingText(doc.system?.description),
+						description: this._normalizeOnboardingText(withMarkOptionList(doc.system?.description, doc.system?.markOptions)),
 						moveResults: doc.system?.moveResults ?? null,
 						selected:    chosenIds.has(doc.id),
 						disabled:    !chosenIds.has(doc.id) && atLimit,
@@ -2701,9 +2728,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 		return {
 			playbookName:      this._playbookDoc.name,
-			// Use the playbook avatar art (assets/icons/playbooks/<slug>_icon.webp),
-			// matching the picker, not the flat playbook item icon.
-			playbookImg:       playbookIconPath(this._playbookDoc.system?.slug) ?? this._playbookDoc.img,
+			// The playbook avatar art (assets/icons/playbooks/<slug>_icon.webp), matching the
+			// picker, not the flat playbook item icon; a homebrew playbook's own picture.
+			playbookImg:       playbookAvatar(this._playbookDoc.system?.slug, this._playbookDoc) ?? this._playbookDoc.img,
 			stepType,
 			hasFaq:            this._currentFaq.length > 0,
 			stepNumber:        this._step + 1,
@@ -2712,6 +2739,13 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			showBack:          !isFirst || hasBack,
 			isBackground:      stepType === "background",
 			isInstinct:        stepType === "instinct",
+			// A homebrew playbook may call them Drives (playbooks/homebrew-bundle.js instinctLabel).
+			instinctTitle:     this._playbookDoc.flags?.[ITEM_FLAG_SCOPE]?.instinctLabel === "Drive" ? "Drive" : "Instinct",
+			// The write-in's own words follow it: a playbook of Drives asks for a custom drive.
+			instinctNoun:      this._playbookDoc.flags?.[ITEM_FLAG_SCOPE]?.instinctLabel === "Drive" ? "drive" : "instinct",
+			// A homebrew playbook's notes for the table (its own level-up rules, an insert, borrowed
+			// moves), on the first page. Stored as formatter-made HTML (playbooks/playbook-text.js).
+			homebrewNotes:     isFirst && isHomebrewPlaybookItem(this._playbookDoc) ? (this._playbookDoc.flags?.[ITEM_FLAG_SCOPE]?.notes ?? "") : "",
 			isAppearance:      stepType === "appearance",
 			isOrigin:          stepType === "origin",
 			isStats:           stepType === "stats",
@@ -2728,6 +2762,9 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 			// Only the last page lists what was skipped: earlier, the player is still on the way.
 			skippedSteps:      isLast ? this._skippedRequiredSteps() : [],
 			backgrounds, instincts, appearanceLines, origins,
+			originNote:        stepType === "origin" ? this._originNote : "",
+			originPlace:       this._selections.originPlace ?? "",
+			originAnswer:      this._selections.originAnswer ?? "",
 			selectedInstinct:  this._selections.instinctValue,
 			customInstinctWord:        customInstinct.word,
 			customInstinctDescription: customInstinct.description,
@@ -3142,8 +3179,18 @@ export class CharacterOnboardingDialog extends StonetopDialog {
 
 		// ── Origin ────────────────────────────────────────────────────
 		html.find("[name='onboard-origin']").on("change", ev => {
+			// Another place's answer isn't this one's: a question answered for Barrier Pass doesn't
+			// follow the player to Marshedge.
+			if (this._selections.originRegion !== ev.currentTarget.value) this._selections.originAnswer = "";
 			this._selections.originRegion = ev.currentTarget.value;
 			this.render(false);
+		});
+		html.find(".onboard-origin-place").on("input", ev => {
+			this._selections.originPlace = ev.currentTarget.value;
+			_refreshNextButton();
+		});
+		html.find(".onboard-origin-answer").on("input", ev => {
+			this._selections.originAnswer = ev.currentTarget.value;
 		});
 
 		// ── Name ──────────────────────────────────────────────────────

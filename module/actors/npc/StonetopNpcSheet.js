@@ -27,6 +27,7 @@ import { partyCharacters } from "../../utils/playbook-actors.js";
 import { mountTabRail } from "../../utils/tab-rail.js";
 import { withSheetSizeMemory, sizeOnceOnOpen } from "../../utils/sheet-size.js";
 import { followerCardFor } from "../character/follower-masters.js";
+import { crewMemberOf, crewPersonTraitsFollowRoster } from "../character/crew-people.js";
 import { followerLoyalty, followerLoyaltyPath } from "../character/follower-bond.js";
 import { loyaltyOwnerId } from "../../data/servant-of-daagon.js";
 import { readableFlags } from "../character/StonetopFlags.js";
@@ -338,6 +339,9 @@ export function createStonetopNpcSheetClass(Base) {
 			// the character they follow, never copied here. An Order button for whoever may order them: their
 			// character's owners and the GM, through the same window the card opens.
 			st.followerTrack = card ? this._followerTrack(card) : null;
+			// A named crew member's Person is nobody's follower actor (the crew's one actor is the GROUP), but
+			// they follow the same character, and everything their crew card says about them is read here.
+			if (!card) await this._crewMemberContext(st, system);
 
 			// Relationships and Stats render conditionally (see npc.hbs), so either can vanish
 			// while it is the active tab — unticking "has game stats", or the last candidate
@@ -367,6 +371,72 @@ export function createStonetopNpcSheetClass(Base) {
 				readiness: readinessOnCard(cardReadinessRef(card.character, card.ftype, card.slug)),
 				canOrder: !!order && (!!game.user?.isGM || !!card.character.isOwner),
 			};
+		}
+
+		/**
+		 * A named crew member: whose crew, the crew's Loyalty and Readiness, their HP, the crew's tags with
+		 * their own, the crew's instinct and cost where they have none of their own, and the Order button
+		 * the card gives them. All read off the crew card (StonetopCharacterSheet#crewMemberCard), none of
+		 * it stored here. Never through followerCardFor, which would make them the crew's group token.
+		 */
+		async _crewMemberContext(st, system) {
+			st.crewMember = null;
+			const link = crewMemberOf(this.actor);
+			if (!link) return;
+			let data = null;
+			try {
+				data = await link.character.sheet?.crewMemberCard?.(this.actor.uuid);
+			} catch (err) {
+				console.warn("Stonetop | Could not read this crew member's card.", err);
+			}
+			if (!data) return;
+			const { character } = link;
+			const { crew, member } = data;
+			st.following = [{ id: character.id, name: character.name }];
+			st.isFollowing = true;
+			const track = this._followerTrack({ character, ftype: "crew", slug: "" });
+			const ownChips = [member.tag, ...member.traits].filter(Boolean);
+			const own = new Set(ownChips.map(t => t.toLowerCase()));
+			const instinct = String(system?.instinct ?? "").trim();
+			st.followerTrack = {
+				...(track ?? { hasLoyalty: false, loyalty: null, readiness: 0 }),
+				canOrder: !!game.user?.isGM || !!character.isOwner,
+				orderLabel: game.i18n.format("stonetop.npc.orderMember", { name: member.orderName }),
+				hp: game.i18n.format("stonetop.npc.followerHp", { value: member.hpCurrent, max: member.hpMax }),
+			};
+			st.crewMember = {
+				// Heroes to the Last's picks first, as the card draws them, then the crew's shared tags
+				// (less any the member's own repeats), then theirs.
+				exceptional:     !!crew.exceptional,
+				exceptionalHint: crew.exceptionalHint ?? "",
+				inured:          !!crew.inured,
+				inuredHint:      crew.inuredHint ?? "",
+				crewChips: crew.tags.filter(({ label }) => !own.has(label.toLowerCase()) && !(crew.exceptional && label.toLowerCase() === "exceptional")),
+				ownChips,
+				instinct: crew.instinct,
+				cost:     crew.cost,
+				order:    member,
+			};
+			st.crewChipsInHeader = !st.editMode && crewPersonTraitsFollowRoster(this.actor)
+				&& (st.crewMember.exceptional || st.crewMember.inured || (st.crewMember.crewChips.length + ownChips.length) > 0);
+			st.instinctFromCrew = !instinct && !!crew.instinct;
+		}
+
+		/** Order this crew member on their own, read fresh off the card (as their card button does). */
+		async _orderCrewMember() {
+			const link = crewMemberOf(this.actor);
+			const sheet = link?.character?.sheet;
+			if (typeof sheet?.orderFollower !== "function") return;
+			const member = (await sheet.crewMemberCard?.(this.actor.uuid))?.member;
+			if (!member) return;
+			await sheet.orderFollower({
+				name:        member.orderName,
+				tags:        [...(member.orderTags ?? [])],
+				moves:       [...(member.orderMoves ?? [])],
+				exceptional: member.exceptional,
+				moveKey:     null,
+				member:      member.orderName,
+			}, { ftype: "crew", slug: "" });
 		}
 
 		// Candidate rows for the Relationships tab: the player characters, plus anyone
@@ -502,6 +572,12 @@ export function createStonetopNpcSheetClass(Base) {
 			root.querySelectorAll(".stonetop-npc-order").forEach(el => {
 				el.addEventListener("click", ev => {
 					ev.preventDefault();
+					// A crew member: the order their own button on the crew card makes (crew tags + theirs,
+					// named, so the window offers no Who row).
+					if (el.dataset.crewMember) {
+						this._orderCrewMember().catch(err => console.error("Stonetop | ordering a crew member failed", err));
+						return;
+					}
 					const info = followerOrderInfo(this.actor, followerCardFor(this.actor));
 					if (info) openFollowerOrder(info).catch(err => console.error("Stonetop | ordering a follower failed", err));
 				});

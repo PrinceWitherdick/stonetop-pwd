@@ -90,7 +90,8 @@ describe("the lines a Clash made with a granted weapon takes", () => {
 		await rollWithLight({ takenOffers: ["priced"], offered: [priced] });
 		expect(rolledWith(clash).rollMode).toBe("adv");
 		expect(spend).toHaveBeenCalledTimes(1);
-		expect(spend).toHaveBeenCalledWith("Clash");
+		// With the tier the card counts as, for a line whose price buys nothing on it (Ephemera's on a 6-).
+		expect(spend).toHaveBeenCalledWith("Clash", { tier: expect.any(String) });
 
 		seams.begin = async () => "cancel";
 		spend.mockClear();

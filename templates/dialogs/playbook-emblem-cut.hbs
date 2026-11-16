@@ -1,0 +1,38 @@
+{{!-- Cut a homebrew playbook's picture from its PDF (playbooks/PlaybookEmblemCut.js). The portrait
+      framer's editor (portrait-frame.hbs), on a page of the PDF: the same classes, so it looks and
+      works the same, with a page choice, a see-through switch and two square previews in its rail.
+      ONE top-level element, as there: AppV1 hands activateListeners only html[0]. --}}
+<div class="stonetop-portrait-frame-root">
+	<div class="stonetop-frame-body">
+		{{!-- data-keyboard-focus: Foundry's keybindings stand down while the stage has focus, so the
+		      arrow keys move the square and not the scene behind. --}}
+		<div class="stonetop-frame-stage" role="application" tabindex="0" aria-label="" data-keyboard-focus="true">
+			<img class="stonetop-frame-stage-img" alt="">
+			<div class="stonetop-frame-layer"></div>
+		</div>
+		<div class="stonetop-frame-rail">
+			<p class="stonetop-frame-hint">Put the square round the playbook's picture. Drag inside the
+				square to move it, a corner to resize, or anywhere outside to draw a new one. Arrow keys
+				nudge it, Shift for bigger steps, and + or &minus; resize.</p>
+			{{#if this.manyPages}}
+			<label class="stonetop-pb-emblem-page-row">Page
+				<select class="stonetop-pb-emblem-page" aria-label="Page of {{this.fileName}}">
+					{{#each this.pages}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
+				</select>
+			</label>
+			{{/if}}
+			<label class="stonetop-pb-emblem-clear" data-tooltip="Make the white paper round the picture see-through, so it sits on any background as the book's playbook pictures do."><input type="checkbox"{{#if this.clear}} checked{{/if}}> <span class="stonetop-chip-text">Clear background</span></label>
+			{{!-- The picture as the builder and the playbook picker show it, square. --}}
+			<div class="stonetop-frame-previews" aria-hidden="true">
+				<span class="stonetop-frame-preview stonetop-frame-preview--75"><img alt=""></span>
+				<span class="stonetop-frame-preview stonetop-pb-emblem-preview--32"><img alt=""></span>
+			</div>
+			<p class="stonetop-frame-readout" aria-live="polite"></p>
+			<p class="stonetop-frame-error" hidden></p>
+		</div>
+	</div>
+	<footer class="stonetop-frame-footer">
+		<button type="button" class="stonetop-frame-save"><i class="fas fa-check" aria-hidden="true"></i> <span class="stonetop-chip-text">Use this picture</span></button>
+		<button type="button" class="stonetop-frame-suggest"><i class="fas fa-crosshairs" aria-hidden="true"></i> <span class="stonetop-chip-text">{{#if this.found}}Back to the emblem found{{else}}Back to the top right{{/if}}</span></button>
+	</footer>
+</div>

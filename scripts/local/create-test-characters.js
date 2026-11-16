@@ -153,7 +153,8 @@
 //             the map's own home board (which the system adopts as the VILLAGE board, so it holds
 //             all eight residents plus three neighbours, the example NPC, four of the party and
 //             two circles with no actor behind them at all) and "The Party", holding the whole
-//             roster. Both of those are left MARKED as the boards they are, so the window's own
+//             roster plus the Marshal's named crew as People (seedCrewPeople). Both of those are left
+//             MARKED as the boards they are, so the window's own
 //             seeding passes have nothing to add and cannot seat anybody twice.
 //             The lines between them are the point: they cover all eight inks, all four
 //             directions, both dashes, every family-tie state (including the unanswered ones "Find
@@ -3203,7 +3204,11 @@
   // ── Toggle: delete existing test fixtures ──────────────────────────────
   // Any actor carrying the test flag — the [TEST] characters, the seeded Monster stat blocks,
   // and the example NPC (as well as any NPC fixtures left by older versions of this macro).
-  const existing = game.actors.filter(a => a.getFlag(FLAG_SCOPE, TEST_FLAG));
+  // Plus any crew member's Person the SHEET made for a test character (crew-people.js): those are
+  // made on render, carry no test flag, and would otherwise outlive the Marshal they belong to.
+  const testActorUuids = new Set(game.actors.filter(a => a.getFlag(FLAG_SCOPE, TEST_FLAG)).map(a => a.uuid));
+  const existing = game.actors.filter(a => a.getFlag(FLAG_SCOPE, TEST_FLAG)
+    || testActorUuids.has(a.getFlag(FLAG_SCOPE, "crewMember")?.characterUuid));
   if (existing.length) {
     // Confirm before wiping — deletion is permanent and unrecoverable.
     const names = existing.map(a => a.name).sort((x, y) => x.localeCompare(y));
@@ -5354,6 +5359,136 @@
     { name: "nobody left standing in it: stored, and drawn as nothing", ink: "rust", members: [], ghosts: 2 },
   ];
 
+  // ── The Marshal's crew, as People ──────────────────────────────────────
+  // Every NAMED crew member gets a Person of their own (an npc in the "Followers" folder), linked
+  // from their roster row by `personUuid` and back by `crewMember` (module/actors/character/
+  // crew-people.js), so they can go on the relationship map and keep hearts toward the PCs. The
+  // sheet makes them itself the first time it renders; they are made HERE, in the same shape,
+  // because the relationship map below needs their uuids now and the macro never renders a sheet.
+  //
+  // What the fixture covers:
+  //   * three named members, each with a linked Person carrying hearts toward some of the PCs, so
+  //     renaming one (on the roster's pencil OR the Person's own sheet) and changing a face can be
+  //     watched following on the other side;
+  //   * a FOURTH named member, Ffion, with NO Person, beside a hand-made "Ffion" Person a GM made
+  //     before the feature existed. Opening Coria's sheet makes a second Ffion; the pencil's
+  //     "Link a Person…" then points her at the hand-made one and deletes the copy the sheet made,
+  //     which is the duplicate the feature was asked for to get rid of;
+  //   * two anonymous members left over (the crew is six by default), for "Name them".
+  // All four Persons are on the party board, in a "Coria's crew" group, with lines to the party.
+  //
+  // `hearts` name a PC by preset name; one who was never created is skipped.
+  const TEST_CREW_MEMBERS = [
+    { name: "Hywel", tag: "old", traits: ["scars", "tells tall tales"],
+      hearts: {
+        Coria:   { hearts: 5, notes: "Followed her father before her. Would follow her into the Maw and complain the whole way down." },
+        Brakkos: { hearts: 4, notes: "Respects a man who holds the line." },
+        Pim:     { hearts: 2, notes: "Thinks the boy will get somebody killed. Probably himself." },
+      } },
+    { name: "Gwenllian", tag: "sharp-eyed", traits: ["whistler", "grudge against Quill"],
+      hearts: {
+        Coria: { hearts: 4 },
+        Quill: { hearts: 1, notes: "Counts her purse every time he walks past, and has been right twice." },
+      } },
+    { name: "Ifan", tag: "rookie", traits: ["idolizes Brakkos", "nightmares"],
+      hearts: {
+        Brakkos: { hearts: 5, notes: "Copies the way he stands." },
+        Coria:   { hearts: 3, notes: "Afraid of her, which she says is the right start." },
+      } },
+  ];
+  // Named on the roster with no Person yet, and the Person made for her by hand.
+  const TEST_CREW_UNLINKED = { name: "Ffion", tag: "kind", traits: ["sings"] };
+  const TEST_CREW_HANDMADE = {
+    name: "Ffion",
+    occupation: "Coria's crew (made by hand)",
+    notes: "<p>Made by hand, before crew members had People of their own. Open Coria's sheet, press the pencil beside Ffion on the crew roster, and use <strong>Link a Person…</strong> to make her this Ffion. The copy the sheet made for her is deleted.</p>",
+    hearts: { Coria: { hearts: 4, notes: "Sings on the march. Coria has never once asked her to stop." } },
+  };
+  const TEST_CREW_LINKS = [
+    { a: "Coria",     b: "Hywel",     label: "her sergeant in all but name",        ink: "green", dir: "both", kin: "none" },
+    { a: "Ifan",      b: "Brakkos",   label: "copies the way he stands",            ink: "ochre", dir: "a-b",  kin: "none" },
+    { a: "Gwenllian", b: "Quill",     label: "counts her purse when he walks past", ink: "rust",  dir: "a-b",  kin: "none" },
+    { a: "Coria",     b: "Ffion",     label: "has never asked her to stop singing", ink: "rose",  dir: "a-b",  kin: "none" },
+  ];
+  const TEST_CREW_GROUP = { name: "Coria's crew", shape: "oval", ink: "green", members: ["Hywel", "Gwenllian", "Ifan", "Ffion"] };
+
+  // The crew member's Person as crew-people.js#crewMemberPersonData builds one, plus the test flag
+  // (so a re-run deletes it) and the hearts. The stamp says the Person and the roster agree, so
+  // the sheet's first render finds nothing to sync.
+  const crewPersonOccupation = (whose, crewName) => {
+    const base = whose ? `${whose}'s crew` : "Crew";
+    return crewName ? `${crewName} (${base})` : base;
+  };
+  const crewPersonTraits = (row) => [row.tag, ...(row.traits ?? [])].filter(Boolean).join(", ");
+
+  // Returns { marshal, people } (people in roster order, the hand-made Ffion last), or null when no
+  // Marshal was created (SKIP_PLAYBOOKS, or a partial run).
+  const seedCrewPeople = async (pcs = [], marshal = null) => {
+    if (!marshal) return null;
+    const pcByName = new Map(pcs.map(pc => [pc.name, pc]));
+    const relationshipsFor = (hearts = {}) => {
+      const out = {};
+      for (const [pcName, entry] of Object.entries(hearts)) {
+        const pc = pcByName.get(pcName);
+        if (pc) out[pc.id] = buildRelEntry(entry);
+      }
+      return out;
+    };
+    const crewName   = marshal.getFlag(FLAG_SCOPE, "crew")?.name ?? "";
+    const occupation = crewPersonOccupation(marshal.name, crewName);
+    const marker     = `${BESTIARY_ICON_DIR}/human-individual.svg`;
+    // The system's own folder (follower-actors.js#ensureFollowerFolder), NOT a test folder: it is
+    // where the sheet files every follower's actor, and real ones may already be in it.
+    let folder = game.folders?.find(f => f.type === "Actor" && f.name === "Followers");
+    if (!folder) folder = await Folder.create({ name: "Followers", type: "Actor", color: "#6b5a3e" });
+    const ownership = foundry.utils.deepClone(marshal.ownership ?? {});
+    const token = {
+      displayName: CONST.TOKEN_DISPLAY_MODES.HOVER, disposition: CONST.TOKEN_DISPOSITIONS.FRIENDLY,
+      actorLink: true, texture: { src: marker },
+    };
+
+    const people = [];
+    const rows = [];
+    for (const member of TEST_CREW_MEMBERS) {
+      const row = { name: member.name, tag: member.tag, traits: [...member.traits] };
+      const traits = crewPersonTraits(row);
+      const person = await Actor.create({
+        name: member.name, type: "npc", img: marker, folder: folder?.id ?? null, ownership,
+        system: { occupation, traits, hasStats: false, relationships: relationshipsFor(member.hearts) },
+        prototypeToken: token,
+        flags: { [FLAG_SCOPE]: {
+          [TEST_FLAG]: true,
+          crewMember: { characterUuid: marshal.uuid, made: true },
+          crewMemberCard: { name: member.name, img: "", frame: null, occupation, traits },
+        } },
+      });
+      if (!person) continue;
+      people.push(person);
+      rows.push({ ...row, personUuid: person.uuid });
+    }
+    rows.push({ name: TEST_CREW_UNLINKED.name, tag: TEST_CREW_UNLINKED.tag, traits: [...TEST_CREW_UNLINKED.traits] });
+
+    // The hand-made one: a plain Person at the sidebar root, on nobody's crew, as a GM would have
+    // made her. Not in Followers, and no crew flags, which is what makes her linkable.
+    const handmade = await Actor.create({
+      name: TEST_CREW_HANDMADE.name, type: "npc", img: marker, ownership,
+      system: {
+        occupation: TEST_CREW_HANDMADE.occupation, notes: TEST_CREW_HANDMADE.notes,
+        relationships: relationshipsFor(TEST_CREW_HANDMADE.hearts),
+      },
+      prototypeToken: token,
+      flags: { [FLAG_SCOPE]: { [TEST_FLAG]: true } },
+    });
+    if (handmade) people.push(handmade);
+
+    // The whole array in one write (a dotted write into an array flag turns it into an object).
+    // Quiet: the ledger would otherwise file four "joined the crew" rows dated today.
+    await marshal.update({ [`flags.${FLAG_SCOPE}.crew.individuals`]: rows }, { stonetopLedger: true });
+    const linked = people.length - (handmade ? 1 : 0);
+    console.log(`[TEST] Named ${rows.length} of ${marshal.name}'s crew (${rows.map(r => r.name).join(", ")}): ${linked} have a Person in Followers, Ffion does not yet, and a hand-made "Ffion" waits to be linked.`);
+    return { marshal, people };
+  };
+
   // Build all three boards and file them as one map. Returns what was written, or null when there is
   // no party to put on it (a run that created nothing has no map worth making).
   //
@@ -5361,7 +5496,7 @@
   // (`partySort`, a whole step ahead of the first page). Written that way here so that the first
   // open has nothing to correct: `liftPartyPage` compares before it writes, and a board already
   // at the front costs one comparison instead of a broadcast to the whole table.
-  const seedRelationshipMap = async ({ pcs = [], villagers = [], npc = null, graves = [] }) => {
+  const seedRelationshipMap = async ({ pcs = [], villagers = [], npc = null, graves = [], crew = [] }) => {
     if (!game.user?.isGM || !pcs.length) return null;
 
     const byName = new Map();
@@ -5390,9 +5525,16 @@
     const seatedPcs = [...pcs].sort((a, b) => relPartySeat(a.name) - relPartySeat(b.name));
     const partyCast = pcCast(RELMAP_PARTY_SUBTITLES, RELMAP_PARTY_CHIPS);
     if (!partyCast.length) return null;
+    // The Marshal's crew (seedCrewPeople) after the party, side by side so their group is round
+    // neighbours. Their portraits are Persons, so renaming one shows here too.
+    for (const person of crew) {
+      partyCast.push({ key: person.name, uuid: person.uuid, name: person.name, img: person.img ?? "", note: "", subtitle: "", chips: [] });
+    }
 
     const homeGraph  = relBoardGraph(homeCast, RELMAP_HOME_LINKS, RELMAP_HOME_GROUPS);
-    const partyGraph = relBoardGraph(partyCast, RELMAP_PARTY_LINKS, RELMAP_PARTY_GROUPS);
+    const partyGraph = relBoardGraph(partyCast,
+      crew.length ? [...RELMAP_PARTY_LINKS, ...TEST_CREW_LINKS] : RELMAP_PARTY_LINKS,
+      crew.length ? [...RELMAP_PARTY_GROUPS, TEST_CREW_GROUP] : RELMAP_PARTY_GROUPS);
     // The Test board seats the SAME cast as the party board and shares nothing else with it: its
     // own node ids, its own ring, its own lines. Built from a second copy of the cast rather than
     // from the party graph, because two boards holding the same person are two nodes — that is
@@ -6680,7 +6822,13 @@
   // can name one, exactly as an encounter's rows do. It is deliberately later than the
   // introductions above as well, though it does not read them: the party board's answer lines are
   // drawn by the WINDOW on first open, and by then the setting they come from is already written.
-  const relmap = await seedRelationshipMap({ pcs: created, villagers: testVillagers, npc: exampleNpc, graves: buried });
+  // The Marshal's named crew and their People first: the party board seats them.
+  const crewPeople = await seedCrewPeople(created, created.find(a => createdSlugs.get(a.id) === "marshal") ?? null)
+    .catch(err => {
+      console.error("[TEST] Naming the Marshal's crew failed.", err);
+      return null;
+    });
+  const relmap = await seedRelationshipMap({ pcs: created, villagers: testVillagers, npc: exampleNpc, graves: buried, crew: crewPeople?.people ?? [] });
   if (relmap) {
     console.log(`[TEST] Relationship map ready. Open it from the shared macro, or with game.stonetop.openRelationshipMap("${relmap.entry.name}").`);
   }

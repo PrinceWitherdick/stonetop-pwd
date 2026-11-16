@@ -22,3 +22,12 @@ export function normalizeRollType(rollType) {
 	}
 	return String(rollType);
 }
+
+/**
+ * A "stat" that is a number rather than a stat: a homebrew move's "roll +3 instead of rolling as normal"
+ * (Your Finest Hour, StonetopCharacter#_foldTakenOffers) rolls "+3". No stat is rolled then, so no debility
+ * touches it, and an "ask" move keeps its whole text and its own name (StonetopItem#roll).
+ */
+export function isFixedRollValue(stat) {
+	return typeof stat === "string" && /^[+-]\d+$/.test(stat.trim());
+}

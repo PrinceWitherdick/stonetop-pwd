@@ -106,11 +106,17 @@ export class InstinctSection {
 
 /** One origin region option. */
 export class OriginOptionSnapshot {
-	constructor(region, names, selected, description = "") {
+	constructor(region, names, selected, description = "", { question = "", writeIn = false, place = "", answer = "" } = {}) {
 		this.region      = region;
 		this.names       = names; // { name: string, checked: boolean }[]
 		this.selected    = selected;
 		this.description = description;
+		// A homebrew playbook's own question for someone from here, and the player's answer to it.
+		this.question    = question;
+		this.answer      = answer;
+		// A place the player names themselves, and the name they gave it.
+		this.writeIn     = writeIn;
+		this.place       = place;
 	}
 }
 

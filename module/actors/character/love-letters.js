@@ -14,6 +14,7 @@ import { normalizeRollType, STAT_KEYS } from "../../utils/roll-types.js";
 import { formatCustomMoveDescription } from "../../utils/custom-move-text.js";
 import { buildMoveTierResults, parseTierInput } from "../../utils/move-results.js";
 import { clampInt } from "../../utils/custom-move-data.js";
+import { personOptionLabel } from "../../utils/people-groups.js";
 
 export const LOVE_LETTER_FLAG = "loveLetter";
 export const LOVE_LETTER_RESOLVED_FLAG = "loveLetterResolved";
@@ -167,11 +168,12 @@ export function loveLetterDrafts(actors = game.actors) {
 
 // The character actors a love letter can be addressed to, for the recipient picker. Every
 // world character the GM can see, most-recently-updated ish (game.actors order), as
-// { id, name, selected } rows.
+// { id, name, selected } rows. `name` says who plays them ("Pim (Alex)"), so two similar
+// names, or a table that knows characters by their players, can tell them apart.
 export function loveLetterRecipientOptions(selectedId = null) {
 	return game.actors
 		.filter(a => a.type === "character")
-		.map(a => ({ id: a.id, name: a.name, selected: a.id === selectedId }));
+		.map(a => ({ id: a.id, name: personOptionLabel(a), selected: a.id === selectedId }));
 }
 
 // The roll-type dropdown options: no-roll + the six stats + Fortunes (no "ask"). `stat` is

@@ -25,22 +25,45 @@ function readWork(app) {
 		if (state === null || state === undefined) return null;
 		return typeof state === "string" ? state : JSON.stringify(state);
 	} catch (err) {
+		// Unreadable is not "nothing to lose": a window whose form throws (the Playbook Builder's did, on
+		// a background with no track) would otherwise close without asking and drop what was typed.
 		console.warn("Stonetop | couldn't read a window's work to guard its close", err);
-		return null;
+		return UNREADABLE_WORK;
 	}
 }
 
-/** Take the untouched state, once: call after every render; only the first one that reads counts. */
+/** What readWork answers for a window whose work it couldn't read: never equal to a real snapshot. */
+const UNREADABLE_WORK = "\u0000unreadable";
+
+/**
+ * Take the untouched state, once: call after every render; only the first one that READS counts. One
+ * that throws is not kept (as the untouched state, every later throw would equal it and the window
+ * would close without asking): the window is marked as having opened unread, and the next render tries
+ * again.
+ */
 export function notePristineWork(app) {
 	if (app._pristineWork !== undefined && app._pristineWork !== null) return;
-	app._pristineWork = readWork(app);
+	const work = readWork(app);
+	if (work === UNREADABLE_WORK) {
+		app._pristineWork = null;
+		app._pristineUnread = true;
+		return;
+	}
+	app._pristineWork = work;
+	app._pristineUnread = false;
 }
 
-/** Has the window been written in since it opened? */
+/**
+ * Has the window been written in since it opened? Where that can't be told (its work won't read now,
+ * or hasn't read once since it opened), it answers yes, so closing asks rather than drops what was typed.
+ */
 export function hasUnsavedWork(app) {
-	if (app?._pristineWork === undefined || app._pristineWork === null) return false;
+	const known = app?._pristineWork !== undefined && app._pristineWork !== null;
+	if (!known && !app?._pristineUnread) return false;
 	const now = readWork(app);
-	return now !== null && now !== app._pristineWork;
+	if (now === null) return false;
+	if (now === UNREADABLE_WORK || !known) return true;
+	return now !== app._pristineWork;
 }
 
 /**

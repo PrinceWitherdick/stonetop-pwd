@@ -26,7 +26,7 @@
 // offers the Recover without the Stock.
 
 import { learnedHolders, ownsLearnedMoveNamed } from "./owns-move.js";
-import { payableStockSources, mustAskStockSource } from "./stock-cost.js";
+import { payableStockSources, mustAskStockSource, stockReceipt } from "./stock-cost.js";
 import { askStockSource } from "./ask-stock-source.js";
 import { autoOpenUserId, ownerUsers } from "../../hooks/DeathsDoorPrompt.js";
 import { OWNER_ASK_MS, spendOrAskOwner, answerOwnerAsk, tooLate, gmAnswersNote } from "../../utils/owner-ask.js";
@@ -163,7 +163,7 @@ export function recoverBreakdown(heal, carerName = "") {
  * one emptied since the window opened pays nothing. With no key, a lone purse that is not a Vessel's
  * HP pays, as the sheet's own spend does; a Vessel's HP is only ever taken when it was picked.
  *
- * @returns {Promise<{key: string, label: string, vessel: boolean, lost: number, remaining: number|null}|null>}
+ * @returns {Promise<{key: string, label: string, vessel: boolean, standIn: object|null, lost: number, remaining: number|null}|null>}
  */
 async function spendCarerStock(carer, sourceKey) {
 	const character = carer?.typedActor;
@@ -174,9 +174,12 @@ async function spendCarerStock(carer, sourceKey) {
 	if (!source) return null;
 	const speaker = globalThis.ChatMessage?.getSpeaker?.({ actor: carer });
 	const { lost } = await character.spendStock(source, HEALERS_ARTS_STOCK, { moveName: HEALERS_ARTS, speaker });
+	// Worded HERE, by the live purse, and sent as text: the answer may cross a socket, which keeps
+	// data but not methods (stock-cost.js#stockReceipt reads the string).
 	return {
-		key: source.key, label: source.label, vessel: !!source.vessel, lost,
+		key: source.key, label: source.label, vessel: !!source.vessel, standIn: source.standIn ?? null, lost,
 		remaining: source.vessel ? null : source.remaining - HEALERS_ARTS_STOCK,
+		receipt: stockReceipt(source, HEALERS_ARTS_STOCK, lost),
 	};
 }
 

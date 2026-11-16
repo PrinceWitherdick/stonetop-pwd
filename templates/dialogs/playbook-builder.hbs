@@ -1,0 +1,770 @@
+{{!-- The Playbook Builder (playbooks/PlaybookBuilderDialog.js): a homebrew playbook, edited as one
+      in-memory bundle. Every field names the bundle path it writes in `data-field`, each card on the
+      way by its ref ("moves.@7.name", PlaybookBuilderDialog.js#cardRef); `data-parse` reads a box typed
+      as a list (one entry per line, or separated by commas, builder-lines.js). `data-bundle` names the
+      playbook the form is drawn from. Typing never re-renders; the rail switches panels client-side
+      like the custom-move editor's. --}}
+<form class="stonetop-custom-move-form stonetop-pb-builder-form" autocomplete="off" data-bundle="{{this.bundleRef}}">
+	<div class="stonetop-guide-split">
+
+		{{> "stonetop.guide-tabs" tabs=this.sections btnClass="stonetop-pb-builder-tab" ariaLabel="Playbook sections"}}
+
+		<div class="stonetop-guide-main stonetop-pb-builder-main">
+			<div class="stonetop-guide-banner">
+				<i class="fas {{this.active.icon}} stonetop-guide-banner-icon stonetop-pb-builder-banner-icon"></i>
+				<div class="stonetop-guide-banner-info">
+					<div class="stonetop-guide-banner-title stonetop-pb-builder-banner-title">{{this.active.title}}</div>
+					<div class="stonetop-guide-banner-sub">A homebrew playbook for this world</div>
+				</div>
+				<div class="stonetop-guide-count stonetop-pb-builder-banner-count">{{this.active.count}}</div>
+			</div>
+
+			{{!-- ── Playbook: name, picture, the picker's card, and getting one in or out ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="playbook"{{#unless (eq this.activeTab "playbook")}} hidden{{/unless}}>
+				{{!-- Start from a file: a playbook PDF the GM owns (pdf/read-playbook.js: read in the browser, never
+				      uploaded), or a playbook file another table shared (homebrew-bundle.js). One button for both: the
+				      file says which it is. Add from my library shows only when the library holds a playbook this
+				      world doesn't (one deleted here; every other one arrives on its own). --}}
+				<div class="stonetop-pb-builder-pdf">
+					<div class="stonetop-pb-builder-pdf-btns">
+						<button type="button" class="stonetop-pb-builder-btn" data-action="read-pdf"><i class="fas fa-file-import" aria-hidden="true"></i> <span class="stonetop-chip-text">Read a PDF or playbook file…</span></button>
+						{{#if this.libraryCount}}<button type="button" class="stonetop-pb-builder-btn" data-action="from-library"><i class="fas fa-books" aria-hidden="true"></i> <span class="stonetop-chip-text">Add from my library…</span></button>{{/if}}
+					</div>
+					<p class="stonetop-custom-move-hint">Fills this window from a playbook PDF made with the community Stonetop playbook template, or from a playbook file someone shared with you. A PDF gets read mostly right, not all of it: check every panel before you save. A scanned playbook, or one printed to PDF as a picture, has no text to read; type that one in.{{#if this.libraryCount}} Add from my library brings in a playbook from your other worlds that this world doesn't have.{{/if}}</p>
+					<input type="file" class="stonetop-pb-builder-pdf-file" accept=".pdf,application/pdf,.json,application/json" hidden>
+				</div>
+
+				{{#if this.issues.length}}
+				<div class="stonetop-pb-builder-report" role="status">
+					<p class="stonetop-pb-builder-report-title">Check these before you save</p>
+					{{#each this.issues}}
+					<p class="stonetop-pb-builder-report-line{{#if this.isError}} is-error{{/if}}">{{this.message}}</p>
+					{{/each}}
+				</div>
+				{{/if}}
+				{{#if this.readReport}}
+				<details class="stonetop-pb-builder-read">
+					<summary>What was read from {{this.readReport.file}}</summary>
+					{{#each this.readReport.pages}}<p class="stonetop-pb-builder-report-line">{{this}}</p>{{/each}}
+					{{#each this.readReport.sections}}<p class="stonetop-pb-builder-report-line">{{this}}</p>{{/each}}
+				</details>
+				{{/if}}
+
+				{{#unless this.pages.playbook}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-read stonetop-pb-builder-identity">
+					<div class="stonetop-pb-builder-identity-top">
+						<img class="stonetop-pb-builder-picture-img" src="{{this.img}}" alt="">
+						<div class="stonetop-pb-builder-identity-words">
+							<div class="stonetop-pb-builder-read-head"><span class="stonetop-pb-builder-identity-name">{{this.pb.name}}</span><a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-part" data-part="page:playbook" aria-label="Edit the playbook's name and picture" data-tooltip="Edit the playbook's name and picture"><i class="fas fa-pencil" aria-hidden="true"></i></a></div>
+							{{#if this.pb.author}}<p class="stonetop-pb-builder-read-meta">by {{this.pb.author}}</p>{{/if}}
+							{{#if this.pb.complexity}}<p class="stonetop-pb-builder-read-meta"><strong>Complexity:</strong> {{this.pb.complexity}}</p>{{/if}}
+						</div>
+					</div>
+					{{#if this.read.descriptionHtml}}<div class="stonetop-onboarding-card-desc stonetop-pb-builder-read-desc stonetop-pb-builder-identity-intro">{{{this.read.descriptionHtml}}}</div>{{/if}}
+					{{#if this.pb.summary}}<p class="stonetop-pb-builder-read-meta"><strong>In the playbook picker:</strong> {{this.pb.summary}}</p>{{/if}}
+					{{#if this.holderNames}}<p class="stonetop-custom-move-hint">Played by {{this.holderNames}}.</p>{{/if}}
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-edit-page">
+				<div class="stonetop-pb-builder-edit-bar"><a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-part" data-part="page:playbook" aria-label="Done editing the playbook's name and picture" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a></div>
+				<div class="stonetop-pb-builder-picture">
+					<img class="stonetop-pb-builder-picture-img" src="{{this.img}}" alt="">
+					{{!-- Choose a picture file, or cut one from the playbook's PDF by hand (PlaybookEmblemCut.js):
+					      for an emblem the importer missed or cut badly. --}}
+					<div class="stonetop-pb-builder-picture-btns">
+						<button type="button" class="stonetop-pb-builder-btn" data-action="pick-image"><i class="fas fa-image" aria-hidden="true"></i> <span class="stonetop-chip-text">Choose picture…</span></button>
+						<button type="button" class="stonetop-pb-builder-btn" data-action="cut-image" data-tooltip="Show a page of the playbook's PDF and put a square round its picture."><i class="fas fa-crop-simple" aria-hidden="true"></i> <span class="stonetop-chip-text">Cut from the PDF…</span></button>
+					</div>
+				</div>
+
+				<div class="stonetop-custom-move-field">
+					<label for="stonetop-pb-name-{{this.uid}}">Name</label>
+					<input type="text" id="stonetop-pb-name-{{this.uid}}" data-field="playbook.name" value="{{this.pb.name}}" placeholder="The Stranger" maxlength="80">
+					{{#if this.holderNames}}
+					<p class="stonetop-custom-move-hint">Played by {{this.holderNames}}. Renaming it renames it on their sheets too.</p>
+					{{else}}
+					<p class="stonetop-custom-move-hint">Must differ from the book's playbooks and any other homebrew one.</p>
+					{{/if}}
+				</div>
+
+				<div class="stonetop-custom-move-field">
+					<label for="stonetop-pb-summary-{{this.uid}}">Picker blurb</label>
+					<textarea id="stonetop-pb-summary-{{this.uid}}" data-field="playbook.summary" rows="2" placeholder="One or two sentences shown when a player hovers this playbook in the picker.">{{this.pb.summary}}</textarea>
+				</div>
+				<div class="stonetop-custom-move-row">
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-complexity-{{this.uid}}">Complexity</label>
+						<input type="text" id="stonetop-pb-complexity-{{this.uid}}" data-field="playbook.complexity" value="{{this.pb.complexity}}" placeholder="Low, Medium or High">
+					</div>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-author-{{this.uid}}">Made by</label>
+						<input type="text" id="stonetop-pb-author-{{this.uid}}" data-field="playbook.author" value="{{this.pb.author}}" placeholder="The playbook's creator" maxlength="80">
+					</div>
+				</div>
+				<p class="stonetop-custom-move-hint">Players see "by …" under the playbook in the picker. Credit the creator of a playbook you didn't write.</p>
+				<div class="stonetop-custom-move-field">
+					<label for="stonetop-pb-desc-{{this.uid}}">Introduction</label>
+					<textarea id="stonetop-pb-desc-{{this.uid}}" data-field="playbook.description" rows="3" placeholder="The flavour text under the playbook's name.">{{this.pb.description}}</textarea>
+				</div>
+				</div>
+				{{/unless}}
+
+				<div class="stonetop-pb-builder-try">
+					<button type="button" class="stonetop-pb-builder-btn" data-action="try"><i class="fas fa-user-plus" aria-hidden="true"></i> Try character creation</button>
+					<p class="stonetop-custom-move-hint">Walk through making a character with this playbook, as a player would. Nobody is created and nothing is kept.</p>
+				</div>
+
+				{{!-- Sharing needs no button: a save goes to the library, and a file for another table is on the
+				      playbook's right-click menu in the Items sidebar (homebrew-item-menu.js). --}}
+				<div class="stonetop-pb-builder-share">
+					<p class="stonetop-pb-builder-share-title">Sharing</p>
+					<p class="stonetop-custom-move-hint">Saving also puts this playbook in your playbook library, so your other Stonetop worlds on this server get it on their own. To give it to another table, right-click it in the Items sidebar and choose Export Playbook File.</p>
+				</div>
+				{{#if this.isSaved}}
+				<div class="stonetop-pb-builder-danger">
+					<button type="button" class="stonetop-pb-builder-btn stonetop-dialog-btn--danger" data-action="delete"><i class="fas fa-trash" aria-hidden="true"></i> Delete this playbook…</button>
+				</div>
+				{{/if}}
+			</section>
+
+			{{!-- ── Stats & HP ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="stats"{{#unless (eq this.activeTab "stats")}} hidden{{/unless}}>
+				{{#if this.pages.stats}}
+				<div class="stonetop-pb-builder-edit-page">
+					<div class="stonetop-pb-builder-edit-bar"><a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-part" data-part="page:stats" aria-label="Done editing the stats and HP" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a></div>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-stats-{{this.uid}}">Stats</label>
+						<input type="text" id="stonetop-pb-stats-{{this.uid}}" data-field="playbook.statsNote" value="{{this.pb.statsNote}}">
+						{{#if this.statFlag}}
+						<p class="stonetop-custom-move-hint stonetop-pb-builder-flag">{{this.statFlag}}</p>
+						{{else}}
+						<p class="stonetop-custom-move-hint">Characters assign {{this.statPreview}}.</p>
+						{{/if}}
+					</div>
+					{{!-- Damage first, then Max HP. --}}
+					<div class="stonetop-custom-move-row">
+						<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+							<label for="stonetop-pb-damage-{{this.uid}}">Damage</label>
+							<select id="stonetop-pb-damage-{{this.uid}}" data-field="playbook.damage">
+								{{#each this.damageOptions}}
+								<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.value}}</option>
+								{{/each}}
+							</select>
+						</div>
+						<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+							<label for="stonetop-pb-hp-{{this.uid}}">Max HP</label>
+							<input type="number" id="stonetop-pb-hp-{{this.uid}}" data-field="playbook.hp" data-kind="int" min="1" max="40" value="{{this.pb.hp}}">
+						</div>
+					</div>
+					{{#if this.hpFlag}}<p class="stonetop-custom-move-hint stonetop-pb-builder-flag">{{this.hpFlag}}</p>{{/if}}
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-read">
+					<div class="stonetop-pb-builder-read-head"><span class="stonetop-pb-builder-read-name">Stats &amp; HP</span><a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-part" data-part="page:stats" aria-label="Edit the stats and HP" data-tooltip="Edit the stats and HP"><i class="fas fa-pencil" aria-hidden="true"></i></a></div>
+					<p class="stonetop-pb-builder-read-text">{{#if this.statPreview}}Assign these scores to your stats: {{this.statPreview}}{{else}}{{this.pb.statsNote}}{{/if}}</p>
+					{{#if this.statFlag}}<p class="stonetop-custom-move-hint stonetop-pb-builder-flag">{{this.statFlag}}</p>{{/if}}
+					<div class="stonetop-pb-builder-read-stats">
+						<div><span class="stonetop-pb-builder-read-stat-label">Damage</span><span class="stonetop-pb-builder-read-stat-value">{{this.pb.damage}}</span></div>
+						<div><span class="stonetop-pb-builder-read-stat-label">Max HP</span><span class="stonetop-pb-builder-read-stat-value">{{this.pb.hp}}</span></div>
+					</div>
+					{{#if this.hpFlag}}<p class="stonetop-custom-move-hint stonetop-pb-builder-flag">{{this.hpFlag}}</p>{{/if}}
+				</div>
+				{{/if}}
+			</section>
+
+			{{!-- ── Backgrounds ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="backgrounds"{{#unless (eq this.activeTab "backgrounds")}} hidden{{/unless}}>
+				<p class="stonetop-custom-move-hint">Each character picks one. Write ***bold italic*** for a move's trigger and start a line with "- " for a bullet.</p>
+				{{#each this.backgrounds}}
+				{{!-- Each background is drawn as the playbook PDF prints it: a box and its name, its track at the
+				      right, its words, then what it gives. The pencil (on hover or focus) opens its text boxes;
+				      the check closes them. A blank one opens for typing. Nothing here is saved until Save. --}}
+				{{#unless this.editing}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-read stonetop-pb-builder-bg" data-bg="{{this.ref}}">
+					<div class="stonetop-pb-builder-read-head">
+						<span class="stonetop-pb-builder-read-name"><span class="stonetop-glyph stonetop-glyph--checkbox" aria-hidden="true">□</span> {{this.label}}</span>
+						{{#if this.trackBoxes.length}}<span class="stonetop-pb-builder-read-track">{{#if this.trackLabel}}{{this.trackLabel}}: {{/if}}<span class="stonetop-glyph-run">{{#each this.trackBoxes}}<span class="stonetop-glyph stonetop-glyph--circle" aria-hidden="true">○</span>{{/each}}</span></span>{{/if}}
+						<a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-part" data-part="bg:{{this.ref}}" aria-label="Edit {{this.label}}" data-tooltip="Edit {{this.label}}"><i class="fas fa-pencil" aria-hidden="true"></i></a>
+					</div>
+					{{#if this.descriptionHtml}}<div class="stonetop-onboarding-card-desc stonetop-pb-builder-read-desc">{{{this.descriptionHtml}}}</div>{{/if}}
+					{{#if this.movesText}}<p class="stonetop-pb-builder-read-meta"><strong>Gives:</strong> {{this.movesText}}</p>{{/if}}
+					{{#if this.moveChoiceText}}<p class="stonetop-pb-builder-read-meta"><strong>Or one of:</strong> {{this.moveChoiceText}}</p>{{/if}}
+					{{#if this.possessionsText}}<p class="stonetop-pb-builder-read-meta"><strong>Also gives:</strong> {{this.possessionsText}}</p>{{/if}}
+					{{#if this.unknownPossessions}}
+					<p class="stonetop-custom-move-hint stonetop-pb-builder-flag">Not one of this playbook's special possessions: {{this.unknownPossessions}}. Add it on the Special Possessions panel, or characters won't get it.</p>
+					{{/if}}
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-bg is-editing" data-bg="{{this.ref}}">
+					<div class="stonetop-field-btns stonetop-pb-builder-card-head">
+						<input type="text" data-field="playbook.backgrounds.{{this.ref}}.label" value="{{this.label}}" placeholder="Background name" aria-label="Background name">
+						<button type="button" class="stonetop-pb-builder-btn" data-action="remove-background" data-ref="{{this.ref}}" aria-label="Remove this background"><i class="fas fa-trash" aria-hidden="true"></i></button>
+						<a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-part" data-part="bg:{{this.ref}}" aria-label="Done editing {{this.label}}" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a>
+					</div>
+					<textarea data-field="playbook.backgrounds.{{this.ref}}.description" rows="4" aria-label="What the background says">{{this.description}}</textarea>
+					<div class="stonetop-custom-move-field">
+						<label>Gives these moves</label>
+						<input type="text" data-field="playbook.backgrounds.{{this.ref}}.moves" data-parse="names" value="{{this.movesText}}" placeholder="Move names, separated by commas">
+					</div>
+					<div class="stonetop-custom-move-field">
+						<label>Or lets them pick one of</label>
+						<input type="text" data-field="playbook.backgrounds.{{this.ref}}.moveChoice" data-parse="names" value="{{this.moveChoiceText}}" placeholder="Two or more move names, separated by commas">
+					</div>
+					{{#if this.foreign}}
+					<p class="stonetop-custom-move-hint">From other playbooks: {{this.foreign}}. A character gets each from the playbook it belongs to, so that playbook has to be in this world (the book's always are).</p>
+					{{/if}}
+					<div class="stonetop-custom-move-field">
+						<label>Also gives these special possessions</label>
+						<input type="text" data-field="playbook.backgrounds.{{this.ref}}.possessions" data-parse="names" value="{{this.possessionsText}}" placeholder="Possession names, separated by commas, on top of the pick">
+					</div>
+					{{#if this.unknownPossessions}}
+					<p class="stonetop-custom-move-hint stonetop-pb-builder-flag">Not one of this playbook's special possessions: {{this.unknownPossessions}}. Add it on the Special Possessions panel, or characters won't get it.</p>
+					{{/if}}
+					<div class="stonetop-custom-move-row">
+						<div class="stonetop-custom-move-field">
+							<label>Its own track</label>
+							<input type="text" data-field="playbook.backgrounds.{{this.ref}}.track.label" value="{{this.trackLabel}}" placeholder="Doom, Omens…">
+						</div>
+						<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+							<label>Boxes</label>
+							<input type="number" data-field="playbook.backgrounds.{{this.ref}}.track.max" data-kind="int" min="0" max="20" value="{{this.trackMax}}" aria-label="How many boxes the track has (0 for none)">
+						</div>
+					</div>
+				</div>
+				{{/unless}}
+				{{/each}}
+				<button type="button" class="stonetop-pb-builder-btn stonetop-pb-builder-add" data-action="add-background"><i class="fas fa-plus" aria-hidden="true"></i> Add a background</button>
+			</section>
+
+			{{!-- ── Instincts (or Drives) ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="instincts"{{#unless (eq this.activeTab "instincts")}} hidden{{/unless}}>
+				{{#if this.pages.instincts}}
+				<div class="stonetop-pb-builder-edit-page">
+					<div class="stonetop-pb-builder-edit-bar"><a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-part" data-part="page:instincts" aria-label="Done editing the instincts" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a></div>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-instincts-{{this.uid}}">{{#if this.isDrive}}Drives{{else}}Instincts{{/if}}</label>
+						<textarea id="stonetop-pb-instincts-{{this.uid}}" data-field="playbook.instincts" data-parse="instincts" rows="8" placeholder="Freedom: To chafe against rules, expectations, obligations.">{{this.instinctsText}}</textarea>
+						<p class="stonetop-custom-move-hint">One per line: the word, a colon, then what it means.</p>
+					</div>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-instinct-label-{{this.uid}}">This playbook calls them</label>
+						<select id="stonetop-pb-instinct-label-{{this.uid}}" data-field="playbook.instinctLabel">
+							<option value="Instinct"{{#unless this.isDrive}} selected{{/unless}}>Instincts</option>
+							<option value="Drive"{{#if this.isDrive}} selected{{/if}}>Drives</option>
+						</select>
+					</div>
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-read">
+					<div class="stonetop-pb-builder-read-head"><span class="stonetop-pb-builder-read-name">{{#if this.isDrive}}Drive{{else}}Instinct{{/if}}</span><span class="stonetop-pb-builder-read-note">(Choose 1)</span><a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-part" data-part="page:instincts" aria-label="Edit the instincts" data-tooltip="Edit the instincts"><i class="fas fa-pencil" aria-hidden="true"></i></a></div>
+					{{#each this.read.instincts}}
+					<div class="stonetop-pb-builder-read-item">
+						<p class="stonetop-pb-builder-read-item-name"><span class="stonetop-glyph stonetop-glyph--checkbox" aria-hidden="true">□</span> {{this.word}}</p>
+						{{#if this.html}}<p class="stonetop-pb-builder-read-text">{{{this.html}}}</p>{{/if}}
+					</div>
+					{{/each}}
+				</div>
+				{{/if}}
+			</section>
+
+			{{!-- ── Looks & origins ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="looks"{{#unless (eq this.activeTab "looks")}} hidden{{/unless}}>
+				{{#if this.pages.looks}}
+				<div class="stonetop-pb-builder-edit-page">
+					<div class="stonetop-pb-builder-edit-bar"><a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-part" data-part="page:looks" aria-label="Done editing the looks and origins" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a></div>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-appearance-{{this.uid}}">Appearance</label>
+						<textarea id="stonetop-pb-appearance-{{this.uid}}" data-field="playbook.appearance" data-parse="appearance" rows="5" placeholder="young, middle-aged, old">{{this.appearanceText}}</textarea>
+						<p class="stonetop-custom-move-hint">One line per row of choices, the choices separated by commas.</p>
+					</div>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-origin-note-{{this.uid}}">Asked over the places</label>
+						<input type="text" id="stonetop-pb-origin-note-{{this.uid}}" data-field="playbook.originNote" value="{{this.pb.originNote}}" placeholder="Where are you from? What are you called?">
+					</div>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-origin-{{this.uid}}">Places of origin and names</label>
+						<textarea id="stonetop-pb-origin-{{this.uid}}" data-field="playbook.origin" data-parse="origin" rows="7" placeholder="Stonetop: Aderyn, Braith, Cerys">{{this.originText}}</textarea>
+						<p class="stonetop-custom-move-hint">One place per line: the place, a colon, then names separated by commas. A place with no names may end at the colon. Add " | " and a question to ask someone from there ("Barrier Pass: | What do you miss most?"). "Somewhere else: ___" lets a player name a place of their own.</p>
+					</div>
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-read">
+					<div class="stonetop-pb-builder-read-head"><span class="stonetop-pb-builder-read-name">Appearance</span><span class="stonetop-pb-builder-read-note">Choose 1 on each line, or make something up</span><a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-part" data-part="page:looks" aria-label="Edit the looks and origins" data-tooltip="Edit the looks and origins"><i class="fas fa-pencil" aria-hidden="true"></i></a></div>
+					{{#each this.read.appearance}}
+					<p class="stonetop-pb-builder-read-text stonetop-pb-builder-read-row">{{#each this.options}}<span class="stonetop-pb-builder-read-choice"><span class="stonetop-glyph stonetop-glyph--checkbox" aria-hidden="true">□</span> {{this.text}}</span>{{/each}}</p>
+					{{/each}}
+					{{#if this.read.origin.length}}
+					<div class="stonetop-pb-builder-read-head stonetop-pb-builder-read-subhead"><span class="stonetop-pb-builder-read-name">Place of origin and name</span></div>
+					{{#if this.read.originNoteHtml}}<p class="stonetop-pb-builder-read-text stonetop-pb-builder-read-prompt">{{{this.read.originNoteHtml}}}</p>{{/if}}
+					{{#each this.read.origin}}
+					<p class="stonetop-pb-builder-read-text"><span class="stonetop-glyph stonetop-glyph--checkbox" aria-hidden="true">□</span> <strong>{{this.region}}:</strong> {{this.names}}{{#if this.question}} <em>{{this.question}}</em>{{/if}}</p>
+					{{/each}}
+					{{/if}}
+				</div>
+				{{/if}}
+			</section>
+
+			{{!-- ── Special possessions ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="possessions"{{#unless (eq this.activeTab "possessions")}} hidden{{/unless}}>
+				{{#if this.pages.possessions}}
+				<div class="stonetop-pb-builder-edit-page">
+					<div class="stonetop-pb-builder-edit-bar"><a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-part" data-part="page:possessions" aria-label="Done editing how many to pick" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a></div>
+					<div class="stonetop-custom-move-row">
+						<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+							<label for="stonetop-pb-pick-{{this.uid}}">Pick</label>
+							<input type="number" id="stonetop-pb-pick-{{this.uid}}" data-field="playbook.possessions.pickCount" data-kind="int" min="0" max="10" value="{{this.pb.possessions.pickCount}}">
+						</div>
+						<div class="stonetop-custom-move-field">
+							<label for="stonetop-pb-picknote-{{this.uid}}">As the playbook says it</label>
+							<input type="text" id="stonetop-pb-picknote-{{this.uid}}" data-field="playbook.possessions.pickNote" value="{{this.pb.possessions.pickNote}}" placeholder="Pick 2, in addition to any background items">
+						</div>
+					</div>
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-read-head stonetop-pb-builder-read-pagehead"><span class="stonetop-pb-builder-read-name">Special possessions</span><span class="stonetop-pb-builder-read-note">({{#if this.pb.possessions.pickNote}}{{this.pb.possessions.pickNote}}{{else}}Pick {{this.pb.possessions.pickCount}}{{/if}})</span><a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-part" data-part="page:possessions" aria-label="Edit how many to pick" data-tooltip="Edit how many to pick"><i class="fas fa-pencil" aria-hidden="true"></i></a></div>
+				{{/if}}
+				{{#each this.possessions}}
+				{{#unless this.editing}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-read">
+					<div class="stonetop-pb-builder-read-head">
+						<span class="stonetop-pb-builder-read-name">{{#if this.preselected}}<span class="stonetop-glyph stonetop-glyph--checkbox-checked" aria-hidden="true">☑</span>{{else}}<span class="stonetop-glyph stonetop-glyph--checkbox" aria-hidden="true">□</span>{{/if}} {{this.label}}</span>
+						{{#if this.preselected}}<span class="stonetop-pb-builder-read-note">every character starts with it</span>{{/if}}
+						<a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-part" data-part="pos:{{this.ref}}" aria-label="Edit {{this.label}}" data-tooltip="Edit {{this.label}}"><i class="fas fa-pencil" aria-hidden="true"></i></a>
+					</div>
+					{{#if this.descriptionHtml}}<div class="stonetop-onboarding-card-desc stonetop-pb-builder-read-desc">{{{this.descriptionHtml}}}</div>{{/if}}
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-card is-editing">
+					<div class="stonetop-field-btns stonetop-pb-builder-card-head">
+						<input type="text" data-field="playbook.possessions.options.{{this.ref}}.label" value="{{this.label}}" placeholder="Possession name" aria-label="Possession name">
+						<button type="button" class="stonetop-pb-builder-btn" data-action="remove-possession" data-ref="{{this.ref}}" aria-label="Remove this possession"><i class="fas fa-trash" aria-hidden="true"></i></button>
+						<a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-part" data-part="pos:{{this.ref}}" aria-label="Done editing {{this.label}}" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a>
+					</div>
+					<textarea data-field="playbook.possessions.options.{{this.ref}}.description" rows="2" aria-label="What it is">{{this.description}}</textarea>
+					<label class="stonetop-pb-builder-inline-check"><input type="checkbox" class="stonetop-check" data-field="playbook.possessions.options.{{this.ref}}.preselected" {{#if this.preselected}}checked{{/if}}> Every character starts with this one</label>
+				</div>
+				{{/unless}}
+				{{/each}}
+				<button type="button" class="stonetop-pb-builder-btn stonetop-pb-builder-add" data-action="add-possession"><i class="fas fa-plus" aria-hidden="true"></i> Add a possession</button>
+			</section>
+
+			{{!-- ── Moves ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="moves"{{#unless (eq this.activeTab "moves")}} hidden{{/unless}}>
+				{{#if this.pages.moves}}
+				<div class="stonetop-pb-builder-edit-page">
+					<div class="stonetop-pb-builder-edit-bar"><a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-part" data-part="page:moves" aria-label="Done editing the starting moves" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a></div>
+				<div class="stonetop-custom-move-field">
+					<label for="stonetop-pb-startnote-{{this.uid}}">Starting moves, as the playbook says it</label>
+					<input type="text" id="stonetop-pb-startnote-{{this.uid}}" data-field="playbook.startingMovesNote" value="{{this.pb.startingMovesNote}}" placeholder="You start with Pariah, a move from your background, and 1 of your choice.">
+					<p class="stonetop-custom-move-hint">"1 of your choice" lets characters pick that many more. Tick "starting" on the moves everyone gets.</p>
+				</div>
+				<div class="stonetop-custom-move-field">
+					<label for="stonetop-pb-choices-{{this.uid}}">Either/or starting picks</label>
+					<textarea id="stonetop-pb-choices-{{this.uid}}" data-field="playbook.moveChoices" data-parse="choices" rows="2" placeholder="Ambush / Skill at Arms">{{this.choicesText}}</textarea>
+					<p class="stonetop-custom-move-hint">One pick per line, the moves separated by "/".</p>
+				</div>
+				<div class="stonetop-custom-move-field">
+					<label for="stonetop-pb-groups-{{this.uid}}">Move groups (optional)</label>
+					<textarea id="stonetop-pb-groups-{{this.uid}}" data-field="playbook.moveGroups" data-parse="groups" rows="2" placeholder="Night: Child of the Night, Nightmare">{{this.groupsText}}</textarea>
+					<p class="stonetop-custom-move-hint">Filters on the Moves step of character creation. One group per line: a label, a colon, then move names.</p>
+				</div>
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-read">
+					<div class="stonetop-pb-builder-read-head"><span class="stonetop-pb-builder-read-name">Starting moves</span><a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-part" data-part="page:moves" aria-label="Edit the starting moves" data-tooltip="Edit the starting moves"><i class="fas fa-pencil" aria-hidden="true"></i></a></div>
+					{{#if this.read.startingNoteHtml}}<p class="stonetop-pb-builder-read-text">{{{this.read.startingNoteHtml}}}</p>{{/if}}
+					{{#each this.read.choices}}<p class="stonetop-pb-builder-read-text">Choose one: {{this}}</p>{{/each}}
+					{{#each this.read.groups}}<p class="stonetop-pb-builder-read-meta"><strong>{{this.label}}:</strong> {{this.moves}}</p>{{/each}}
+					{{#unless this.read.hasMovesHead}}<p class="stonetop-pb-builder-read-text">Nothing said about starting moves yet.</p>{{/unless}}
+				</div>
+				{{/if}}
+
+				<p class="stonetop-pb-builder-count">{{this.moveCount}} moves, {{this.startingCount}} starting{{#if this.insertMoveCount}}, {{this.insertMoveCount}} in inserts{{/if}}. Characters already holding a move keep their own copy when you change it here.</p>
+				{{#each this.moves}}
+				{{#unless this.open}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-read stonetop-pb-builder-move-read" data-ref="{{this.ref}}">
+					<div class="stonetop-pb-builder-read-head">
+						<span class="stonetop-pb-builder-read-name">{{#if this.starting}}<span class="stonetop-glyph stonetop-glyph--checkbox-checked" aria-hidden="true">☑</span>{{else}}<span class="stonetop-glyph stonetop-glyph--checkbox" aria-hidden="true">□</span>{{/if}} {{this.name}}</span>
+						{{#if this.trackBoxes.length}}<span class="stonetop-pb-builder-read-track">{{#if this.resourceTitle}}{{this.resourceTitle}}: {{/if}}<span class="stonetop-glyph-run">{{#each this.trackBoxes}}<span class="stonetop-glyph stonetop-glyph--circle" aria-hidden="true">○</span>{{/each}}</span></span>{{/if}}
+						<a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-move" data-ref="{{this.ref}}" aria-label="Edit {{this.name}}" data-tooltip="Edit {{this.name}}"><i class="fas fa-pencil" aria-hidden="true"></i></a>
+					</div>
+					{{#if this.summaryTags}}<p class="stonetop-pb-builder-read-note">{{this.summaryTags}}</p>{{/if}}
+					{{#if this.requires}}<p class="stonetop-pb-builder-read-note"><em>{{this.requires}}</em></p>{{/if}}
+					{{#if this.descriptionHtml}}<div class="stonetop-onboarding-card-desc stonetop-pb-builder-read-desc">{{{this.descriptionHtml}}}</div>{{/if}}
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-move is-editing" data-ref="{{this.ref}}">
+					<div class="stonetop-pb-builder-move-summary">
+						<span class="stonetop-pb-builder-move-name">{{#if this.name}}{{this.name}}{{else}}New move{{/if}}</span>
+						{{#if this.summaryTags}}<span class="stonetop-pb-builder-move-tags">{{this.summaryTags}}</span>{{/if}}
+						<a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-move" data-ref="{{this.ref}}" aria-label="Done editing {{this.name}}" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a>
+					</div>
+					<div class="stonetop-pb-builder-move-body">
+						<div class="stonetop-custom-move-field">
+							<label>Name</label>
+							<input type="text" data-field="moves.{{this.ref}}.name" value="{{this.name}}" placeholder="Move name">
+						</div>
+						<div class="stonetop-pb-builder-move-checks">
+							<label class="stonetop-pb-builder-inline-check"><input type="checkbox" class="stonetop-check" data-field="moves.{{this.ref}}.starting" {{#if this.starting}}checked{{/if}}> Starting move</label>
+						</div>
+						{{#if this.showPartOf}}
+						<div class="stonetop-custom-move-field">
+							<label>Part of</label>
+							<select data-insert-ref="{{this.ref}}" aria-label="Where this move belongs: the playbook, or one of its inserts">
+								{{#each this.partOptions}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
+							</select>
+							<p class="stonetop-custom-move-hint">An insert's moves are never offered at Level Up: the insert's own page offers them. In an insert, "Starting move" means everyone granted it has the move.</p>
+						</div>
+						{{/if}}
+						<div class="stonetop-custom-move-row">
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>From level</label>
+								<input type="number" data-field="moves.{{this.ref}}.level" data-kind="int" min="1" max="10" value="{{this.level}}">
+							</div>
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>Can be taken</label>
+								<input type="number" data-field="moves.{{this.ref}}.repeatMax" data-kind="int" min="1" max="9" value="{{this.repeatMax}}" aria-label="How many times it can be taken">
+							</div>
+							<div class="stonetop-custom-move-field">
+								<label>Needs these moves first</label>
+								<input type="text" data-field="moves.{{this.ref}}.requiresMoves" data-parse="names" value="{{this.requiresMovesText}}" placeholder="Move names, separated by commas">
+							</div>
+						</div>
+						<div class="stonetop-custom-move-field">
+							<label>Requirement, as printed</label>
+							<input type="text" data-field="moves.{{this.ref}}.requires" value="{{this.requires}}" placeholder="Requires level 6+ and Pariah">
+						</div>
+						<div class="stonetop-custom-move-field">
+							<label>Only for the background</label>
+							<input type="text" data-field="moves.{{this.ref}}.background" value="{{this.background}}" placeholder="Leave empty for any character">
+							<p class="stonetop-custom-move-hint">For a move a background gives and nobody else can take, like a roll printed inside the background: that background's name. Level Up never offers it to anyone else.</p>
+						</div>
+						<div class="stonetop-custom-move-field">
+							<label>What it does</label>
+							<textarea data-field="moves.{{this.ref}}.description" rows="6">{{this.description}}</textarea>
+						</div>
+						<div class="stonetop-custom-move-field">
+							<label>Roll</label>
+							<select data-field="moves.{{this.ref}}.rollType">
+								{{#each this.rollOptions}}
+								<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>
+								{{/each}}
+							</select>
+						</div>
+						<div class="stonetop-custom-move-results">
+							<p class="stonetop-custom-move-hint">What each result says, for the roll card. Leave these empty for a move that doesn't roll. Words like "roll +CHA: on a 10+, … on a 7-9, …" fill these and the Roll in when you leave "What it does".</p>
+							<div class="stonetop-custom-move-field"><label>10+</label><input type="text" data-field="moves.{{this.ref}}.results.success" value="{{this.results.success}}"></div>
+							<div class="stonetop-custom-move-field"><label>7-9</label><input type="text" data-field="moves.{{this.ref}}.results.partial" value="{{this.results.partial}}"></div>
+							<div class="stonetop-custom-move-field"><label>6-</label><input type="text" data-field="moves.{{this.ref}}.results.failure" value="{{this.results.failure}}"></div>
+						</div>
+						<div class="stonetop-custom-move-row">
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>Raises a stat to</label>
+								<input type="number" data-field="moves.{{this.ref}}.cap" data-kind="int" min="0" max="3" value="{{this.cap}}" placeholder="—" aria-label="Raises one stat by 1, to at most this (empty: it raises no stat)">
+							</div>
+							<div class="stonetop-custom-move-field">
+								<label>Tick-one options</label>
+								<textarea data-field="moves.{{this.ref}}.marks" data-parse="list" rows="2" placeholder="One per line: boxes a player ticks on this move">{{this.marksText}}</textarea>
+							</div>
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>Ticks</label>
+								<input type="number" data-field="moves.{{this.ref}}.markCount" data-kind="int" min="1" max="5" value="{{this.markCount}}" aria-label="How many options a player ticks">
+							</div>
+						</div>
+						<p class="stonetop-custom-move-hint">A move that raises a stat ("to a max of +2") needs "Raises a stat to" filled in, or Level Up won't ask which stat. Both are read from the move's own words when they say so.</p>
+						<div class="stonetop-custom-move-row" data-resource="{{this.ref}}">
+							<div class="stonetop-custom-move-field">
+								<label>Track</label>
+								<input type="text" name="resourceTitle" value="{{this.resourceTitle}}" placeholder="Fear, Doom, Hold…">
+							</div>
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>Boxes</label>
+								<input type="number" name="resourceMax" min="0" max="20" value="{{this.resourceMax}}" aria-label="How many boxes the track has (0 for none)">
+							</div>
+							<div class="stonetop-custom-move-field">
+								<label>Box labels</label>
+								<input type="text" name="resourceLabels" value="{{this.resourceLabels}}" placeholder="Optional, separated by commas">
+							</div>
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>A 10+ holds</label>
+								<input type="number" name="holdSuccess" min="0" max="20" value="{{this.holdSuccess}}" aria-label="How many a 10+ fills on the track">
+							</div>
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>A 7-9 holds</label>
+								<input type="number" name="holdPartial" min="0" max="20" value="{{this.holdPartial}}" aria-label="How many a 7-9 fills on the track">
+							</div>
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>A miss holds</label>
+								<input type="number" name="holdFailure" min="0" max="20" value="{{this.holdFailure}}" aria-label="How many a 6 or less fills on the track">
+							</div>
+						</div>
+						<p class="stonetop-custom-move-hint">When the move is rolled, its track fills to what the result holds ("on a 10+, hold 3"). Read from its words when they say so; empty, the track is filled by hand. A move that holds something by name ("hold 2 Authority") or is used "once per session" gets its track filled in when you leave "What it does".</p>
+						<div class="stonetop-pb-builder-move-foot">
+							<button type="button" class="stonetop-pb-builder-btn stonetop-dialog-btn--danger" data-action="remove-move" data-ref="{{this.ref}}"><i class="fas fa-trash" aria-hidden="true"></i> Remove this move</button>
+						</div>
+					</div>
+				</div>
+				{{/unless}}
+				{{/each}}
+				<button type="button" class="stonetop-pb-builder-btn stonetop-pb-builder-add" data-action="add-move"><i class="fas fa-plus" aria-hidden="true"></i> Add a move</button>
+
+			</section>
+
+			{{!-- ── Inserts ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="inserts"{{#unless (eq this.activeTab "inserts")}} hidden{{/unless}}>
+				<p class="stonetop-custom-move-hint">An insert is a page a playbook adds of its own, like the Stranger's Monster Compendium: a move grants it, and it holds lists a player ticks and moves of its own to pick from. Characters see it as a tab of its own once they have the move that grants it. Put moves in it with "Part of" on the Moves panel.</p>
+				{{#each this.inserts}}
+				{{#unless this.editing}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-read stonetop-pb-builder-insert">
+					<div class="stonetop-pb-builder-read-head"><span class="stonetop-pb-builder-read-name">{{this.name}}</span><a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-part" data-part="ins:{{this.ref}}" aria-label="Edit {{this.name}}" data-tooltip="Edit {{this.name}}"><i class="fas fa-pencil" aria-hidden="true"></i></a></div>
+					{{#if this.descriptionHtml}}<div class="stonetop-onboarding-card-desc stonetop-pb-builder-read-desc">{{{this.descriptionHtml}}}</div>{{/if}}
+					<p class="stonetop-pb-builder-read-meta"><strong>Opened by:</strong> {{#if this.openedBy}}{{this.openedBy}}{{else}}no move: every character has it{{/if}}</p>
+					{{#if this.formEnabled}}<p class="stonetop-pb-builder-read-meta"><strong>A form to take on:</strong> {{this.formOn}} / {{this.formOff}}</p>{{/if}}
+					{{#each this.flags}}<p class="stonetop-custom-move-hint stonetop-pb-builder-flag">{{this}}</p>{{/each}}
+					{{#if this.looseMoves}}<p class="stonetop-pb-builder-read-meta"><strong>Its moves:</strong> {{this.looseMoves}}</p>{{/if}}
+					{{#each this.lists}}
+					<div class="stonetop-pb-builder-read-list">
+						<div class="stonetop-pb-builder-read-head stonetop-pb-builder-read-subhead"><span class="stonetop-pb-builder-read-name">{{this.title}}</span>{{#if this.promptHtml}}<span class="stonetop-pb-builder-read-note">{{{this.promptHtml}}}</span>{{/if}}</div>
+						{{#if this.isMoves}}
+						<p class="stonetop-pb-builder-read-meta"><strong>Moves:</strong> {{#if this.moveNames}}{{this.moveNames}}{{else}}none yet{{/if}}</p>
+						{{else}}
+						{{#each this.optionsRead}}<p class="stonetop-pb-builder-read-text"><span class="stonetop-glyph-run">{{#each this.boxes}}{{#if ../ticked}}<span class="stonetop-glyph stonetop-glyph--checkbox-checked" aria-hidden="true">☑</span>{{else}}<span class="stonetop-glyph stonetop-glyph--checkbox" aria-hidden="true">□</span>{{/if}}{{/each}}</span> {{{this.html}}}</p>{{/each}}
+						{{/if}}
+					</div>
+					{{/each}}
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-insert is-editing">
+					<div class="stonetop-field-btns stonetop-pb-builder-card-head">
+						<input type="text" data-field="playbook.inserts.{{this.ref}}.name" value="{{this.name}}" placeholder="Insert name" aria-label="Insert name">
+						<button type="button" class="stonetop-pb-builder-btn" data-action="remove-insert" data-ref="{{this.ref}}" aria-label="Remove this insert (its moves stay, as the playbook's own)"><i class="fas fa-trash" aria-hidden="true"></i></button>
+						<a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-part" data-part="ins:{{this.ref}}" aria-label="Done editing {{this.name}}" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a>
+					</div>
+					<textarea data-field="playbook.inserts.{{this.ref}}.description" rows="3" aria-label="What the insert says at the top" placeholder="What the insert says at the top">{{this.description}}</textarea>
+					<div class="stonetop-custom-move-field">
+						<label>Opened by</label>
+						<select data-field="playbook.inserts.{{this.ref}}.unlockedBy" aria-label="The move that grants this insert">
+							{{#each this.openerOptions}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
+						</select>
+					</div>
+					{{#each this.flags}}<p class="stonetop-custom-move-hint stonetop-pb-builder-flag">{{this}}</p>{{/each}}
+					<div class="stonetop-pb-builder-move-checks">
+						<label class="stonetop-pb-builder-inline-check"><input type="checkbox" class="stonetop-check" data-field="playbook.inserts.{{this.ref}}.form.enabled" {{#if this.formEnabled}}checked{{/if}}> A form to take on</label>
+					</div>
+					<div class="stonetop-custom-move-row">
+						<div class="stonetop-custom-move-field">
+							<label>Button to take it on</label>
+							<input type="text" data-field="playbook.inserts.{{this.ref}}.form.on" value="{{this.formOn}}" placeholder="Transform">
+						</div>
+						<div class="stonetop-custom-move-field">
+							<label>Button to leave it</label>
+							<input type="text" data-field="playbook.inserts.{{this.ref}}.form.off" value="{{this.formOff}}" placeholder="Revert">
+						</div>
+					</div>
+					<p class="stonetop-custom-move-hint">With a form, the character's sheet gets a switch. While it's on, every ticked option written like a weapon ("Razor Claws: d8+2 (close, messy)") is a weapon they attack with, and one written "Thick Hide: Armor 2" is their armor.</p>
+					{{#if this.looseMoves}}<p class="stonetop-custom-move-hint">Its moves outside a list: {{this.looseMoves}}.</p>{{/if}}
+
+					{{#each this.lists}}
+					<div class="stonetop-pb-builder-card stonetop-pb-builder-insert-list">
+						<div class="stonetop-field-btns stonetop-pb-builder-card-head">
+							<input type="text" data-field="playbook.inserts.{{this.insertRef}}.lists.{{this.ref}}.title" value="{{this.title}}" placeholder="List title" aria-label="List title">
+							<button type="button" class="stonetop-pb-builder-btn" data-action="remove-insert-list" data-insert="{{this.insertRef}}" data-ref="{{this.ref}}" aria-label="Remove this list"><i class="fas fa-trash" aria-hidden="true"></i></button>
+						</div>
+						<textarea data-field="playbook.inserts.{{this.insertRef}}.lists.{{this.ref}}.prompt" rows="2" aria-label="What the list says" placeholder="pick 2">{{this.prompt}}</textarea>
+						<div class="stonetop-custom-move-row">
+							<div class="stonetop-custom-move-field">
+								<label>Holds</label>
+								<select data-field="playbook.inserts.{{this.insertRef}}.lists.{{this.ref}}.kind">
+									{{#each this.kindOptions}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
+								</select>
+							</div>
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>Pick</label>
+								<input type="number" data-field="playbook.inserts.{{this.insertRef}}.lists.{{this.ref}}.pick" data-kind="int" min="0" max="20" value="{{this.pick}}" aria-label="How many a character picks">
+							</div>
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>At least</label>
+								<input type="number" data-field="playbook.inserts.{{this.insertRef}}.lists.{{this.ref}}.min" data-kind="int" min="0" max="20" value="{{this.min}}" aria-label="The fewest a character picks">
+							</div>
+							<div class="stonetop-custom-move-field stonetop-custom-move-field--num">
+								<label>+ per extra copy</label>
+								<input type="number" data-field="playbook.inserts.{{this.insertRef}}.lists.{{this.ref}}.perUnlock" data-kind="int" min="0" max="5" value="{{this.perUnlock}}" aria-label="More picks for each copy of the opening move after the first">
+							</div>
+						</div>
+						{{#if this.pickFlag}}<p class="stonetop-custom-move-hint stonetop-pb-builder-flag">{{this.pickFlag}}</p>{{/if}}
+						<div class="stonetop-custom-move-field">
+							<label>Moves that give more picks</label>
+							<input type="text" data-field="playbook.inserts.{{this.insertRef}}.lists.{{this.ref}}.bonusPicks" data-parse="bonus" value="{{this.bonusText}}" placeholder="Implements of Evil +2">
+						</div>
+						{{#if this.isMoves}}
+						<p class="stonetop-custom-move-hint">Its moves: {{#if this.moveNames}}{{this.moveNames}}{{else}}none yet. Set a move's "Part of" to this list on the Moves panel.{{/if}}</p>
+						{{else}}
+						<textarea data-field="playbook.inserts.{{this.insertRef}}.lists.{{this.ref}}.options" data-parse="insertOptions" rows="5" aria-label="The options, one per line">{{this.optionsText}}</textarea>
+						<p class="stonetop-custom-move-hint">One option per line. Start a line with "ticked:" for one every character starts with. Put "___" in an option for a blank to fill in; a "write:" line becomes one ("Something else: ___"). Picking more than the count is allowed, and said on the sheet.</p>
+						{{/if}}
+					</div>
+					{{/each}}
+					<button type="button" class="stonetop-pb-builder-btn stonetop-pb-builder-add" data-action="add-insert-list" data-ref="{{this.ref}}"><i class="fas fa-plus" aria-hidden="true"></i> Add a list</button>
+				</div>
+				{{/unless}}
+				{{/each}}
+				<button type="button" class="stonetop-pb-builder-btn stonetop-pb-builder-add" data-action="add-insert"><i class="fas fa-plus" aria-hidden="true"></i> Add an insert</button>
+			</section>
+
+			{{!-- ── Questions (lore) ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="lore"{{#unless (eq this.activeTab "lore")}} hidden{{/unless}}>
+				<p class="stonetop-custom-move-hint">The playbook's own questions, like the Stranger's "Belonging". Write "(choose 2)" in the prompt to set how many a player picks.</p>
+				{{#each this.lore}}
+				{{!-- A heading (no options) and the questions after it, up to the next heading, share one frame: character creation shows the heading over them. --}}
+				{{#if this.groupStart}}<div class="stonetop-pb-builder-lore-group" role="group" aria-label="{{this.title}}">{{/if}}
+				{{#unless this.editing}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-read{{#if this.groupStart}} stonetop-pb-builder-lore-heading{{/if}}">
+					<div class="stonetop-pb-builder-read-head"><span class="stonetop-pb-builder-read-name">{{this.title}}</span><a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-part" data-part="lore:{{this.ref}}" aria-label="Edit {{this.title}}" data-tooltip="Edit {{this.title}}"><i class="fas fa-pencil" aria-hidden="true"></i></a></div>
+					{{#if this.descriptionHtml}}<p class="stonetop-pb-builder-read-text stonetop-pb-builder-read-prompt">{{{this.descriptionHtml}}}</p>{{/if}}
+					{{#each this.optionsRead}}
+					<p class="stonetop-pb-builder-read-text"><span class="stonetop-glyph-run">{{#each this.boxes}}<span class="stonetop-glyph stonetop-glyph--checkbox" aria-hidden="true">□</span>{{/each}}</span> {{{this.html}}}{{#if this.writeIn}} ________{{/if}}</p>
+					{{/each}}
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-card is-editing">
+					<div class="stonetop-field-btns stonetop-pb-builder-card-head">
+						<input type="text" data-field="playbook.lore.{{this.ref}}.title" value="{{this.title}}" placeholder="Section title" aria-label="Section title">
+						<button type="button" class="stonetop-pb-builder-btn" data-action="remove-lore" data-ref="{{this.ref}}" aria-label="Remove this section"><i class="fas fa-trash" aria-hidden="true"></i></button>
+						<a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-part" data-part="lore:{{this.ref}}" aria-label="Done editing {{this.title}}" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a>
+					</div>
+					<textarea data-field="playbook.lore.{{this.ref}}.description" rows="2" aria-label="The prompt" placeholder="When you were young they... (choose 1 or 2)">{{this.description}}</textarea>
+					<textarea data-field="playbook.lore.{{this.ref}}.options" data-parse="lore" rows="5" aria-label="The options, one per line">{{this.optionsText}}</textarea>
+					<p class="stonetop-custom-move-hint">One option per line. Put "___" in an option for a blank the player fills in ("Adopted by ___"); start a line with "write:" for an answer written in words (among options to tick, it becomes "Something else: ___"); end it with "(x2)" if it can be ticked twice. {{this.pickNote}}</p>
+				</div>
+				{{/unless}}
+				{{#if this.groupEnd}}</div>{{/if}}
+				{{/each}}
+				<button type="button" class="stonetop-pb-builder-btn stonetop-pb-builder-add" data-action="add-lore"><i class="fas fa-plus" aria-hidden="true"></i> Add a question section</button>
+			</section>
+
+			{{!-- ── The playbook's own Level Up ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="advancement"{{#unless (eq this.activeTab "advancement")}} hidden{{/unless}}>
+				{{#if this.pages.advancement}}
+				<div class="stonetop-pb-builder-edit-page">
+					<div class="stonetop-pb-builder-edit-bar"><a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-part" data-part="page:advancement" aria-label="Done editing the Level Up" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a></div>
+					<p class="stonetop-custom-move-hint">For a playbook that levels up its own way, like one that says "When you Level Up, mark one of the following instead of the usual effect". Leave it empty and Level Up works as the book's does: a new move.</p>
+					<div class="stonetop-custom-move-field stonetop-custom-move-check">
+						<label><input type="checkbox" class="stonetop-check" data-field="playbook.advancement.switchPlaybook" {{#if this.pb.advancement.switchPlaybook}}checked{{/if}}> Level Up switches to a different playbook</label>
+						<p class="stonetop-custom-move-hint">For a playbook to start on, like one that says "When you Level Up, switch to a different playbook". Level Up takes the level with no move, then opens the playbook picker. The advances below are then not used.</p>
+					</div>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-adv-{{this.uid}}">Advances</label>
+						<textarea id="stonetop-pb-adv-{{this.uid}}" data-field="playbook.advancement.options" data-parse="list" rows="7" placeholder="Increase one of your stats (to a max of +2).">{{this.advancementText}}</textarea>
+						<p class="stonetop-custom-move-hint">One per line, as the playbook words it. Each is marked once. Two lines alike are two boxes.</p>
+					</div>
+					{{#if this.advancementRead.length}}
+					<ul class="stonetop-pb-builder-advance-read">
+						{{#each this.advancementRead}}<li><strong>{{this.label}}</strong> {{this.does}}</li>{{/each}}
+					</ul>
+					<p class="stonetop-custom-move-hint">How Level Up reads each line. Reword one if it's read wrong ("Increase your max HP to 15", "Increase your damage die to a d8", "Choose a new move from your playbook").</p>
+					{{/if}}
+					<div class="stonetop-custom-move-field stonetop-custom-move-check">
+						<label><input type="checkbox" class="stonetop-check" data-field="playbook.advancement.replacesUsual" {{#if this.pb.advancement.replacesUsual}}checked{{/if}}> Instead of the usual new move</label>
+						<p class="stonetop-custom-move-hint">Ticked, Level Up asks for one of these and takes a move only when the one picked says to. Unticked, a character takes a move and marks one of these as well.</p>
+					</div>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-adv-switch-{{this.uid}}">Can change playbook from level</label>
+						<input type="number" id="stonetop-pb-adv-switch-{{this.uid}}" data-field="playbook.advancement.switchFromLevel" data-kind="int" min="0" max="10" value="{{#if this.pb.advancement.switchFromLevel}}{{this.pb.advancement.switchFromLevel}}{{/if}}" placeholder="—">
+						<p class="stonetop-custom-move-hint">For one that says "When you Level Up to Level 3 or higher, you can choose to change to a different playbook". From that level, Level Up offers a change of playbook in place of an advance. Leave it empty for none.</p>
+					</div>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-adv-note-{{this.uid}}">Anything else about levelling up</label>
+						<input type="text" id="stonetop-pb-adv-note-{{this.uid}}" data-field="playbook.advancement.note" value="{{this.pb.advancement.note}}" placeholder="When you Level Up to Level 3 or higher, you can change to a different playbook.">
+						<p class="stonetop-custom-move-hint">Shown in Level Up and on the Details tab. The table acts on it.</p>
+					</div>
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-read">
+					<div class="stonetop-pb-builder-read-head"><span class="stonetop-pb-builder-read-name">Level Up</span><a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-part" data-part="page:advancement" aria-label="Edit the Level Up" data-tooltip="Edit the Level Up"><i class="fas fa-pencil" aria-hidden="true"></i></a></div>
+					{{#if this.read.advanceUsual}}
+					<p class="stonetop-pb-builder-read-text">Levels up as the book's playbooks do: a new move.</p>
+					{{else}}
+					{{#if this.pb.advancement.switchPlaybook}}
+					<p class="stonetop-pb-builder-read-text">When you Level Up, switch to a different playbook.</p>
+					{{else if this.read.advance.length}}
+					<p class="stonetop-pb-builder-read-text">{{this.read.advanceIntro}}</p>
+					{{#each this.read.advance}}<p class="stonetop-pb-builder-read-text"><span class="stonetop-glyph stonetop-glyph--checkbox" aria-hidden="true">□</span> {{{this.html}}}</p>{{/each}}
+					{{/if}}
+					{{#if this.pb.advancement.switchFromLevel}}<p class="stonetop-pb-builder-read-text">When you Level Up to level {{this.pb.advancement.switchFromLevel}} or higher, you can change to a different playbook.</p>{{/if}}
+					{{#if this.read.advanceNoteHtml}}<p class="stonetop-pb-builder-read-text">{{{this.read.advanceNoteHtml}}}</p>{{/if}}
+					{{/if}}
+				</div>
+				{{/if}}
+			</section>
+
+			{{!-- ── Introductions ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="intro"{{#unless (eq this.activeTab "intro")}} hidden{{/unless}}>
+				{{#if this.pages.intro}}
+				<div class="stonetop-pb-builder-edit-page">
+					<div class="stonetop-pb-builder-edit-bar"><a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-part" data-part="page:intro" aria-label="Done editing the introductions" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a></div>
+					<p class="stonetop-custom-move-hint">What this playbook's player is asked during the Introductions walkthrough at the first session.</p>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-step3-{{this.uid}}">Step 3: "On your third turn, …"</label>
+						<input type="text" id="stonetop-pb-step3-{{this.uid}}" data-field="playbook.introductions.step3" value="{{this.pb.introductions.step3}}" placeholder="tell us **where you belong**, your shame, and the side of you others fear.">
+						<p class="stonetop-custom-move-hint">Put **two asterisks** around words to set them in bold, as the book does.</p>
+					</div>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-step4-{{this.uid}}">Step 4: questions naming people in Stonetop</label>
+						<textarea id="stonetop-pb-step4-{{this.uid}}" data-field="playbook.introductions.step4" data-parse="list" rows="4" placeholder="Who is your closest kin?">{{this.step4Text}}</textarea>
+					</div>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-step6-{{this.uid}}">Step 6: questions for the other player characters</label>
+						<textarea id="stonetop-pb-step6-{{this.uid}}" data-field="playbook.introductions.step6" data-parse="list" rows="4" placeholder="Which of you believes the rumours about me?">{{this.step6Text}}</textarea>
+						<p class="stonetop-custom-move-hint">One question per line. Leave a step empty and it is skipped for this playbook.</p>
+					</div>
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-read">
+					<div class="stonetop-pb-builder-read-head"><span class="stonetop-pb-builder-read-name">Introductions</span><a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-part" data-part="page:intro" aria-label="Edit the introductions" data-tooltip="Edit the introductions"><i class="fas fa-pencil" aria-hidden="true"></i></a></div>
+					{{#if this.read.introEmpty}}
+					<p class="stonetop-pb-builder-read-text">Nothing of its own: the Introductions walkthrough asks this player what it asks everyone.</p>
+					{{else}}
+					{{#if this.pb.introductions.step3}}<p class="stonetop-pb-builder-read-text"><span class="stonetop-pb-builder-read-step"><span class="stonetop-pb-builder-read-step-n">3</span></span> On your third turn, {{{this.read.step3Html}}}</p>{{/if}}
+					{{#if this.read.step4.length}}<p class="stonetop-pb-builder-read-text"><span class="stonetop-pb-builder-read-step"><span class="stonetop-pb-builder-read-step-n">4</span></span> Ask about people in Stonetop:</p>
+					{{#each this.read.step4}}<p class="stonetop-pb-builder-read-text stonetop-pb-builder-read-indent"><span class="stonetop-glyph stonetop-glyph--checkbox" aria-hidden="true">□</span> {{this}}</p>{{/each}}{{/if}}
+					{{#if this.read.step6.length}}<p class="stonetop-pb-builder-read-text"><span class="stonetop-pb-builder-read-step"><span class="stonetop-pb-builder-read-step-n">6</span></span> Ask the other player characters:</p>
+					{{#each this.read.step6}}<p class="stonetop-pb-builder-read-text stonetop-pb-builder-read-indent"><span class="stonetop-glyph stonetop-glyph--checkbox" aria-hidden="true">□</span> {{this}}</p>{{/each}}{{/if}}
+					{{/if}}
+				</div>
+				{{/if}}
+			</section>
+
+			{{!-- ── Notes ── --}}
+			<section class="stonetop-custom-move-section stonetop-pb-builder-section" data-tab="notes"{{#unless (eq this.activeTab "notes")}} hidden{{/unless}}>
+				{{#if this.pages.notes}}
+				<div class="stonetop-pb-builder-edit-page">
+					<div class="stonetop-pb-builder-edit-bar"><a class="stonetop-pb-builder-read-done stonetop-section-done" role="button" tabindex="0" data-action="done-part" data-part="page:notes" aria-label="Done editing the notes" data-tooltip="Done: show it as the playbook prints it"><i class="fas fa-check" aria-hidden="true"></i></a></div>
+					<div class="stonetop-custom-move-field">
+						<label for="stonetop-pb-notes-{{this.uid}}">Notes for the table</label>
+						<textarea id="stonetop-pb-notes-{{this.uid}}" data-field="playbook.notes" rows="12" placeholder="Anything this playbook does that the sheet has no place for: its own level-up rules, an insert, moves it borrows from other playbooks.">{{this.pb.notes}}</textarea>
+						<p class="stonetop-custom-move-hint">Shown with the playbook. The system doesn't act on it; you and the players do.</p>
+					</div>
+				</div>
+				{{else}}
+				<div class="stonetop-pb-builder-card stonetop-pb-builder-read">
+					<div class="stonetop-pb-builder-read-head"><span class="stonetop-pb-builder-read-name">Notes for the table</span><a class="stonetop-pb-builder-read-edit stonetop-section-edit" role="button" tabindex="0" data-action="edit-part" data-part="page:notes" aria-label="Edit the notes" data-tooltip="Edit the notes"><i class="fas fa-pencil" aria-hidden="true"></i></a></div>
+					{{#if this.read.notesHtml}}<div class="stonetop-onboarding-card-desc stonetop-pb-builder-read-desc">{{{this.read.notesHtml}}}</div>{{else}}<p class="stonetop-pb-builder-read-text">No notes.</p>{{/if}}
+				</div>
+				{{/if}}
+			</section>
+		</div>
+	</div>
+
+	<footer class="stonetop-guide-nav stonetop-custom-move-nav">
+		<span class="stonetop-custom-move-nav-btns">
+			<button type="button" class="stonetop-custom-move-save stonetop-guide-btn--primary" data-action="save">
+				<i class="fas fa-check" aria-hidden="true"></i> Save
+			</button>
+			<button type="button" class="stonetop-custom-move-cancel" data-action="close">Close</button>
+		</span>
+		<span class="stonetop-custom-move-nav-btns">
+			<button type="button" class="stonetop-pb-builder-back"{{#if this.atFirst}} disabled{{/if}}><span class="stonetop-nav-arrow stonetop-nav-arrow--back"></span>Back</button>
+			<button type="button" class="stonetop-pb-builder-next"{{#if this.atLast}} disabled{{/if}}>Next<span class="stonetop-nav-arrow"></span></button>
+		</span>
+	</footer>
+</form>

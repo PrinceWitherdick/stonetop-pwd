@@ -55,7 +55,7 @@ export const JOURNEY_RIGHT_CLICK_MARKS = "[data-site-uuid]";
  * three acts that are about something other than the trip.
  */
 export function bindJourneyControls(root, {
-	showTier, zoom = null, toScene = null, share = null, hideShare = null, placeSite = null, clearDrawn = null,
+	showTier, zoom = null, toScene = null, share = null, hideShare = null, reshare = null, placeSite = null, clearDrawn = null,
 } = {}) {
 	if (!root) return;
 
@@ -93,6 +93,10 @@ export function bindJourneyControls(root, {
 	// And the stale share's second button, which only stops (audit RTE-12).
 	if (hideShare) {
 		root.querySelector(".stonetop-journey-share-hide")?.addEventListener("click", () => press(hideShare));
+	}
+	// And the current share's second button, which sends it again with new words.
+	if (reshare) {
+		root.querySelector(".stonetop-journey-share-reword")?.addEventListener("click", () => press(reshare));
 	}
 
 	// Also one per surface, and GM-only in the partial: the button opens a chooser and then arms

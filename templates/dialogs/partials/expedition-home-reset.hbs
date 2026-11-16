@@ -34,6 +34,10 @@
   </div>
   {{else}}
   <p class="stonetop-exp-assets-foot">{{localize "stonetop.expedition.homeReset.allClear"}}</p>
+  {{!-- Nothing left to unpack, but a few days' rest is still the table's to call. --}}
+  <div class="stonetop-exp-home-reset-controls">
+    <button type="button" class="stonetop-exp-home-convalesce-btn"><i class="fas fa-bed" aria-hidden="true"></i> {{localize "stonetop.expedition.homeReset.convalesceButton"}}</button>
+  </div>
   {{/if}}
   {{else}}
   <p class="stonetop-exp-assets-empty">{{localize "stonetop.expedition.homeReset.noParty"}}</p>

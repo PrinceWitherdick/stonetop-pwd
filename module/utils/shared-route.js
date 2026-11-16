@@ -132,7 +132,7 @@ export function sharedRequirementLines(chart, route = null) {
  * "orphan" is the scene button's lesson: a share outlives the trip that made it, so the button
  * must still offer to take it back off when there is nothing on this trip to show in its place.
  */
-export function sharedRouteState(shared, { expeditionId = null, journey = null, hasRoute = false, title = null } = {}) {
+export function sharedRouteState(shared, { expeditionId = null, journey = null, hasRoute = false, title = null, requirements = null } = {}) {
 	if (!shared) return "none";
 	if (!hasRoute) return "orphan";
 	const sameTrip = (shared.expeditionId ?? null) === (expeditionId ?? null);
@@ -140,7 +140,12 @@ export function sharedRouteState(shared, { expeditionId = null, journey = null, 
 	// card, so a share made under the old name goes on announcing it. Asked only when the caller
 	// says what the trip is called now; `null` means "do not compare".
 	const sameTitle = title === null || String(shared.title ?? "") === String(title ?? "").trim();
-	return sameTrip && sameTitle && journeyKey(shared.journey) === journeyKey(journey) ? "same" : "stale";
+	// THE CHART A COURSE LINES SENT WITH IT, when they were: the GM changing them on Chart a Course
+	// leaves the players reading the old ones. Asked only when the caller passes the lines as they
+	// would go out now; a share sent without them has nothing here to go stale.
+	const sameLines = requirements === null || !Array.isArray(shared.requirements)
+		|| JSON.stringify(shared.requirements) === JSON.stringify(requirements);
+	return sameTrip && sameTitle && sameLines && journeyKey(shared.journey) === journeyKey(journey) ? "same" : "stale";
 }
 
 /** Where a share's way ends, as a name, or null where it ends at a mark of the GM's own. */

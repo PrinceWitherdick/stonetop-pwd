@@ -217,9 +217,10 @@
 					<strong class="stonetop-item-name">{{{this.label}}}</strong>
 					{{#if preselectedSource}}<span class="stonetop-item-source">{{this.preselectedSource}}</span>{{/if}}
 					{{#if isCustom}}<span class="stonetop-item-source">Write-in</span>{{/if}}
-					{{!-- A remarkable trait Big Magic still owes (Book I p.106): opens the add-only editor. --}}
-					{{#if (and checked @root.editable choicesOwed)}}
-					<span class="stonetop-possession-choices-owed" role="button" tabindex="0" data-possession-choices-owed="{{this.slug}}" data-tooltip="{{this.choicesOwed.tooltip}}" data-tooltip-direction="UP"><i class="fas fa-hand-pointer" aria-hidden="true"></i><span class="stonetop-chip-text">{{this.choicesOwed.label}}</span></span>
+					{{!-- A remarkable trait Big Magic still owes (Book I p.106): opens the add-only editor. A
+					     possession's own "Choose 1" left unmade (`inline`): opens the possessions' edit mode. --}}
+					{{#if (and checked @root.editable choicesOwed (not (and choicesOwed.inline @root.stonetop.possessionsEdit)))}}
+					<span class="stonetop-possession-choices-owed" role="button" tabindex="0" data-possession-choices-owed="{{this.slug}}"{{#if choicesOwed.inline}} data-possession-choices-inline="1"{{/if}} data-tooltip="{{this.choicesOwed.tooltip}}" data-tooltip-direction="UP"><i class="fas fa-hand-pointer" aria-hidden="true"></i><span class="stonetop-chip-text">{{this.choicesOwed.label}}</span></span>
 					{{/if}}
 					{{#if (and checked resource)}}
 					<span class="stonetop-item-resources">
@@ -312,7 +313,7 @@
 							</span>
 							<span class="stonetop-inv-label">{{this.name}}</span>
 						</label>
-						{{#if resource}}<span class="stonetop-inv-note">(<span class="stonetop-inv-resources">{{> "stonetop.resource-track" resource=resource btnClass="stonetop-inv-resource-btn stonetop-inventory-resource-btn" slug=slug}}</span>{{#if resourceSuffix}} {{this.resourceSuffix}}{{/if}})</span>{{/if}}
+						{{#if resource}}<span class="stonetop-inv-note">(<span class="stonetop-inv-resources">{{> "stonetop.resource-track" resource=resource btnClass="stonetop-inv-resource-btn stonetop-inventory-resource-btn" slug=slug}}</span>{{#if resourceSuffix}} {{this.resourceSuffix}}{{/if}})</span>{{else if this.note}}<span class="stonetop-inv-note">({{{this.note}}})</span>{{/if}}
 						{{!-- No delete control: bundled gear belongs to its possession and is
 						     added/removed with the possession, not individually. --}}
 					</div>
@@ -337,7 +338,7 @@
 							       {{#if disabled}}disabled{{/if}}>
 							<span class="stonetop-inv-label">{{this.name}}</span>
 						</label>
-						{{#if resource}}<span class="stonetop-inv-note">(<span class="stonetop-inv-resources">{{> "stonetop.resource-track" resource=resource btnClass="stonetop-inv-resource-btn stonetop-inventory-resource-btn" slug=slug}}</span>{{#if resourceSuffix}} {{this.resourceSuffix}}{{/if}})</span>{{/if}}
+						{{#if resource}}<span class="stonetop-inv-note">(<span class="stonetop-inv-resources">{{> "stonetop.resource-track" resource=resource btnClass="stonetop-inv-resource-btn stonetop-inventory-resource-btn" slug=slug}}</span>{{#if resourceSuffix}} {{this.resourceSuffix}}{{/if}})</span>{{else if this.note}}<span class="stonetop-inv-note">({{{this.note}}})</span>{{/if}}
 						{{!-- No delete control: bundled gear belongs to its possession and is
 						     added/removed with the possession, not individually. --}}
 					</div>

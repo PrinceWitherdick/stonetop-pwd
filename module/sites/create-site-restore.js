@@ -1,17 +1,16 @@
 // Create a Site, reopened after a reload where it was left, the way the character sheet is
 // (utils/window-restore.js): the same step, every answer written so far, at the same place on screen.
 //
-// Its own small module so stonetop.js can register it at load WITHOUT importing the walkthrough,
-// which drags in the whole Create-a-Site book data (gm-prep-actions.js#openSiteWizard says why that
-// waits for a GM who opens it). That is also why the class is named here rather than passed:
-// window-restore builds the hook names from it, and tests/sites/create-site-dialog.test.js holds this
-// name and the class's own together, so a rename of the class can't quietly stop it being restored.
+// Registered by name from this small module, so a load doesn't drag in the whole Create-a-Site book
+// data (gm-prep-actions.js#openSiteWizard says why that waits for a GM who opens it; utils/
+// window-restore.js#registerRestorableWindow, why by name); tests/sites/create-site-dialog.test.js
+// holds this name and the class's own together.
 //
 // A walkthrough that was MAKING a site comes back without whoever opened it: the reload dropped the
 // caller waiting on its answer. That loses nothing, since the window files the site itself when it
 // finishes (CreateSiteDialog#_finish), and this one also says where it went.
 
-import { registerRestorableWindow } from "../utils/window-restore.js";
+import { registerRestorableWindow, restoreKeyRest } from "../utils/window-restore.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 
 export const CREATE_SITE_RESTORE_KIND = "createSite";
@@ -28,10 +27,9 @@ export const createSiteWindowId = (page) => (page ? `stonetop-create-site-${page
  * GM prep), or the site being edited has gone or can no longer be edited by them.
  */
 export async function reopenCreateSite(key) {
-	const at = String(key ?? "").indexOf(":");
-	if (at < 0 || key.slice(0, at) !== CREATE_SITE_RESTORE_KIND) return null;
+	const rest = restoreKeyRest(key, CREATE_SITE_RESTORE_KIND);
+	if (rest === null) return null;
 	if (!game.user?.isGM) return null;
-	const rest = key.slice(at + 1);
 	let page = null;
 	if (rest !== NEW_SITE_KEY) {
 		page = await fromUuid(rest).catch(() => null);

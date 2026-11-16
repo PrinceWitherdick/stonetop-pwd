@@ -1263,27 +1263,34 @@
 	{{#if stonetop.canAddFollower}}
 	<div class="stonetop-follower-add-bar">
 		<button type="button" class="stonetop-create-follower-btn stonetop-follower-add-btn">
-			<i class="fas fa-user-plus"></i> Create a follower
+			<i class="fas fa-user-plus"></i> <span class="stonetop-chip-text">Create a follower</span>
 		</button>
 		{{!-- The crew a learned Crew is owed but has never been set up (a Crew borrowed through
 		      another playbook's move, or a Marshal whose onboarding stopped short). --}}
 		{{#if stonetop.followers.crewSetupOffer}}
 		<button type="button" class="stonetop-create-crew stonetop-follower-add-btn">
-			<i class="fas fa-users"></i> Create your crew
+			<i class="fas fa-users"></i> <span class="stonetop-chip-text">Create your crew</span>
+		</button>
+		{{/if}}
+		{{!-- The follower a homebrew background gives ("create a monstrous follower. They start with
+		      loyalty 2"), until one made from it is on the sheet. --}}
+		{{#if stonetop.followers.backgroundFollower}}
+		<button type="button" class="stonetop-create-bg-follower stonetop-follower-add-btn" data-tooltip="{{stonetop.followers.backgroundFollower.background}}{{#if stonetop.followers.backgroundFollower.loyalty}}: starts with Loyalty {{stonetop.followers.backgroundFollower.loyalty}}{{/if}}" data-tooltip-direction="UP">
+			<i class="fas fa-user-plus"></i> <span class="stonetop-chip-text">Create your {{stonetop.followers.backgroundFollower.kind}}</span>
 		</button>
 		{{/if}}
 		{{!-- Likewise the companion a learned Animal Companion is owed (taken anywhere but
 		      onboarding: a level-up, the Moves tab, Beast-Bonded mid-play, another playbook's move). --}}
 		{{#if stonetop.followers.companionSetupOffer}}
 		<button type="button" class="stonetop-create-companion stonetop-follower-add-btn">
-			<i class="fas fa-paw"></i> Create your companion
+			<i class="fas fa-paw"></i> <span class="stonetop-chip-text">Create your companion</span>
 		</button>
 		{{/if}}
 		{{!-- Playbook possession-followers (the dog / Hounds / Mastiffs) you hold but
 		      haven't added yet — one click builds an editable card. --}}
 		{{#each stonetop.followers.possessionFollowerOffers}}
 		<button type="button" class="stonetop-add-possession-follower stonetop-follower-add-btn" data-slug="{{this.slug}}">
-			<i class="fas fa-dog"></i> Add {{this.name}}{{#if isGroup}} (group){{/if}}
+			<i class="fas fa-dog"></i> <span class="stonetop-chip-text">Add {{this.name}}{{#if isGroup}} (group){{/if}}</span>
 		</button>
 		{{/each}}
 		<span class="stonetop-follower-add-hint"><i class="fas fa-hand-pointer"></i> &hellip;or drag a monster onto this sheet to convert it to a follower.</span>

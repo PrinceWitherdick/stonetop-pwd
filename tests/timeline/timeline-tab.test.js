@@ -332,7 +332,7 @@ describe("where the reader had got to survives a reload", () => {
 			const src = readRepo(file);
 			expect(src).toMatch(/get restoreView\(\) \{\s*return timelineTabView\(this\);/);
 			// Before the sheet draws, so the foot of its `_render` finds the view when it builds the panel.
-			expect(src).toMatch(/holdTimelineTabView\(this, options\?\.view\);\s*await super\._render\(force, options\);/);
+			expect(src).toMatch(/holdTimelineTabView\(this, options\?\.view\);\s*(?:try \{\s*)?await super\._render\(force, options\);/);
 		}
 	});
 });

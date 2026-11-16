@@ -80,7 +80,7 @@
 		      macro). Un-owned rows (the unpicked side of an either/or choice) stay
 		      non-draggable. Whether the title ROLLS is gated on rollType below. --}}
 		{{#if owned}}
-		<li class="item stonetop-item is-checked{{#if granterOff}} move-unlearned{{/if}}{{#if requirementsUnmet}} move-requirements-unmet{{/if}}{{#if (or markBudget.needsChoice statChoiceNeeded backgroundAnswerNeeded possessionChoiceOwed)}} move-needs-choice{{/if}}{{#if isStarting}} move-starting{{/if}}" data-item-id="{{this.ownedId}}">
+		<li class="item stonetop-item is-checked{{#if granterOff}} move-unlearned{{/if}}{{#if requirementsUnmet}} move-requirements-unmet{{/if}}{{#if (or markBudget.needsChoice statChoiceNeeded backgroundAnswerNeeded possessionChoiceOwed occultDrawOwed)}} move-needs-choice{{/if}}{{#if isStarting}} move-starting{{/if}}" data-item-id="{{this.ownedId}}">
 		{{else}}
 		<li class="stonetop-item{{#if (and locked (not owned))}} move-locked{{/if}}{{#if requirementsUnmet}} move-requirements-unmet{{/if}}{{#if (or markBudget.needsChoice statChoiceNeeded)}} move-needs-choice{{/if}}{{#if isStarting}} move-starting{{/if}}">
 		{{/if}}
@@ -99,7 +99,7 @@
 					       data-owned-id="{{this.ownedId}}"
 					       data-move-name="{{../name}}"
 					       {{#if checked}}checked{{/if}}
-					       {{#if (or disabled (not @root.stonetop.movesEdit))}}disabled{{/if}}>
+					       {{#if (or disabled (not (or @root.stonetop.movesEdit ../pickable)))}}disabled{{/if}}>
 					{{/each}}
 				</span>
 				{{else}}
@@ -114,8 +114,10 @@
 			             A move whose requirements aren't met stays faded (.move-locked) but is
 			             still pickable in edit mode, so a player can deliberately learn it anyway
 			             — it then shows the "requirement not met" warning. A move given up
-			             for its replacement (replacedBy) is the exception: never re-tickable. --}}
-				       {{#if (or (and isStarting owned) replacedBy (not @root.stonetop.movesEdit))}}disabled{{/if}}>
+			             for its replacement (replacedBy) is the exception: never re-tickable.
+			             `pickable`: a homebrew insert's move list with a pick still owed, open
+			             without edit mode (CharacterHomebrewInserts#buildView). --}}
+				       {{#if (or (and isStarting owned) replacedBy (not (or @root.stonetop.movesEdit this.pickable)))}}disabled{{/if}}>
 				{{/if}}
 				{{!-- THE TITLE IS THE ROLL. There is no dice icon beside a move any more: the
 				      name element IS the `.rollable`, carrying the stat and the classes the
@@ -143,6 +145,8 @@
 				{{!-- A pick this move still owes elsewhere (Big Magic's extra remarkable trait, Book I p.106):
 				      opens the pouch's add-only editor (possession-choices-owed.js). --}}
 				{{#if (and owned @root.editable possessionChoiceOwed)}}<i class="fas fa-hand-pointer stonetop-move-possession-choice-needed" data-possession-choices-owed="{{this.possessionChoiceOwed.slug}}" data-tooltip="{{this.possessionChoiceOwed.label}}" aria-label="{{this.possessionChoiceOwed.label}}" data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
+				{{!-- A homebrew move's Minor Arcana draw still to make (Occult Interest: occult-draw.js). --}}
+				{{#if (and owned @root.editable occultDrawOwed)}}<i class="fas fa-hand-pointer stonetop-move-occult-draw" data-move-name="{{this.name}}" data-count="{{this.occultDrawOwed.count}}" data-tooltip="Draw {{this.occultDrawOwed.count}} Minor Arcana and keep one, its secrets unlocked" aria-label="Draw {{this.occultDrawOwed.count}} Minor Arcana and keep one" data-tooltip-direction="UP" role="button" tabindex="0"></i>{{/if}}
 				{{#if (and owned resource)}}
 				{{!-- Eats the header line's free space so the track sits at the right edge
 				      while it shares the title's line, and starts at the LEFT when a narrow
@@ -277,7 +281,20 @@
 						       {{#if (or disabled (not @root.stonetop.movesEdit))}}disabled{{/if}}>
 						{{/each}}
 					</span>
+					{{#if this.writeIn}}
+					{{!-- A write-in ("Something else: ___"): once marked, the blank holds what the player wrote. --}}
+					{{#if this.writeIn.marked}}
+					<span class="stonetop-move-mark-label">{{this.writeIn.before}}{{#unless @root.stonetop.movesEdit}} {{#if this.writeIn.text}}<strong>{{this.writeIn.text}}</strong>{{else}}___{{/if}}{{#if this.writeIn.after}} {{this.writeIn.after}}{{/if}}{{/unless}}</span>
+					{{#if @root.stonetop.movesEdit}}
+					<input type="text" class="stonetop-move-mark-writein" data-move-name="{{../name}}" data-mark-slug="{{this.slug}}"
+					       value="{{this.writeIn.text}}" placeholder="{{this.writeIn.after}}" aria-label="{{this.label}}">
+					{{/if}}
+					{{else}}
+					<span class="stonetop-move-mark-label">{{this.label}}</span>
+					{{/if}}
+					{{else}}
 					<span class="stonetop-move-mark-label"{{#if capNote}} data-tooltip="{{this.capNote}}" data-tooltip-direction="UP"{{/if}}>{{this.label}}</span>
+					{{/if}}
 					{{#if background}}<span class="stonetop-move-mark-background" data-tooltip="{{background.tooltip}}" data-tooltip-direction="UP">{{background.label}}</span>{{/if}}
 					{{#if duplicateNote}}<i class="fas fa-triangle-exclamation stonetop-move-mark-duplicate" data-tooltip="{{this.duplicateNote}}" data-tooltip-direction="UP" aria-label="{{this.duplicateNote}}"></i>{{/if}}
 					{{#each checks}}{{#if checked}}{{> "stonetop.move-mark-level" moveName=../../name slug=../slug index=index level=level}}{{#if levelCaution}}<i class="fas fa-triangle-exclamation stonetop-move-mark-level-caution" data-tooltip="{{this.levelCaution}}" data-tooltip-direction="UP" aria-label="{{this.levelCaution}}"></i>{{/if}}{{/if}}{{/each}}

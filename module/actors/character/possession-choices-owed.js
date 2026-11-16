@@ -17,13 +17,19 @@ export function possessionChoicesOwedView(owed) {
 		byMove[move] = { ...o, label: format(`stonetop.character.moves.${key}`, { move, count: o.count }) };
 	}
 	const bySlug = {};
+	const inline = new Set(owed?.inline ?? []);
 	for (const [slug, count] of Object.entries(owed?.bySlug ?? {})) {
+		// Picked on the card itself (a "Choose 1" list of its own), not in the pouch's editor.
+		const onCard = inline.has(slug);
 		bySlug[slug] = {
 			count,
-			label: count === 1
+			inline: onCard,
+			label: onCard
+				? (count === 1 ? format("stonetop.character.gear.choicesOwed.pickOne", {}) : format("stonetop.character.gear.choicesOwed.pick", { count }))
+				: count === 1
 				? format("stonetop.character.gear.choicesOwed.labelOne", {})
 				: format("stonetop.character.gear.choicesOwed.label", { count }),
-			tooltip: format("stonetop.character.gear.choicesOwed.tooltip", {}),
+			tooltip: format(`stonetop.character.gear.choicesOwed.${onCard ? "pickTooltip" : "tooltip"}`, {}),
 		};
 	}
 	return { byMove, bySlug };

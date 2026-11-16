@@ -97,6 +97,19 @@ describe("watching windows", () => {
 		expect(document.getElementById("v2").hasAttribute(ICON_ONLY_ATTR)).toBe(false);
 		on.closeApplication({ element: [v1] });
 	});
+
+	// AppV1's hook chain stops at `baseApplication`: an actor sheet fires renderActorSheet and never
+	// renderApplication. Listening on renderApplication alone left every sheet unmarked (the crew
+	// roster's pen and X, live in v14, 2026-11-15).
+	it.each(["ActorSheet", "ItemSheet"])("watches a sheet that fires render%s, not renderApplication", base => {
+		const on = {};
+		watchIconOnlyButtons({ on: (name, fn) => { on[name] = fn; } });
+		document.body.innerHTML = "<div class=\"app\"><button id=pen><i class=\"fas fa-pen\"></i></button></div>";
+		const sheet = document.body.firstElementChild;
+		on[`render${base}`]({ element: [sheet] });
+		expect(document.getElementById("pen").hasAttribute(ICON_ONLY_ATTR)).toBe(true);
+		on[`close${base}`]({ element: [sheet] });
+	});
 });
 
 describe("the wiring", () => {

@@ -114,6 +114,16 @@ describe("where the share stands against the GM's trip", () => {
 	it("is stale when the same way belongs to another trip", () => {
 		expect(sharedRouteState(crossroads(), { expeditionId: "trip-2", journey, hasRoute: true })).toBe("stale");
 	});
+	// Code review 11-10: the Chart a Course lines sent with it go stale when the GM changes them.
+	it("is stale when the Chart a Course lines it carried have changed since", () => {
+		const lines = [{ label: "Requirements", lines: ["At least 2 days of food"] }];
+		const shared = { ...crossroads(), requirements: lines };
+		const at = { expeditionId: "trip-1", journey, hasRoute: true };
+		expect(sharedRouteState(shared, { ...at, requirements: lines })).toBe("same");
+		expect(sharedRouteState(shared, { ...at, requirements: [{ label: "Requirements", lines: ["At least 3 days of food"] }] })).toBe("stale");
+		// A share sent without them has none to go stale.
+		expect(sharedRouteState(crossroads(), { ...at, requirements: [] })).toBe("same");
+	});
 	// The scene button's lesson: with no route in hand, there must still be a way to take it off.
 	it("is orphan when something is shown and this trip has no route", () => {
 		expect(sharedRouteState(crossroads(), { expeditionId: "trip-1", journey: {}, hasRoute: false })).toBe("orphan");

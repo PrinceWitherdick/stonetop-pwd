@@ -21,6 +21,7 @@ import { SYSTEM_ID } from "../system-id.js";
 import { stableStringify } from "../hooks/journal-sync-core.js";
 import { replacementEntry } from "./foundry-compat.js";
 import { inTurn } from "./turn-queue.js";
+import { createOnce } from "./create-once.js";
 
 // Per-page flag holding the change-detection hash of each prose section's body as WE last
 // wrote it (keyed by heading). Lets seedChroniclePages keep a still-pristine section
@@ -50,8 +51,8 @@ const SORT_STEP = 10;
 // Every Chronicle writer looks a folder, journal or page up and then creates what it did not
 // find. Two of them overlapping (the live Introductions sync and a Save pressed during a slow
 // write) would both find nothing and both create. Two guards, one per level:
-//   • the folder and the journals: createOnce below, so a second ask while the first create is
-//     in flight waits for that one;
+//   • the folder and the journals: createOnce (utils/create-once.js), so a second ask while the
+//     first create is in flight waits for that one;
 //   • a journal's pages: withChronicleLock, one page pass per journal at a time.
 
 /**
@@ -64,16 +65,6 @@ export function withChronicleLock(journal, fn) {
 	return inTurn(`chronicle:${journal?.id ?? ""}`, fn);
 }
 
-// A folder or journal being created right now, by what it is, so a second ask for it while the
-// first create is in flight waits for that one instead of making another.
-const _creating = new Map();
-function createOnce(key, make) {
-	if (_creating.has(key)) return _creating.get(key);
-	const pending = Promise.resolve().then(make).finally(() => _creating.delete(key));
-	_creating.set(key, pending);
-	return pending;
-}
-
 const flagOf = (doc, key) => doc?.getFlag?.(SYSTEM_ID, key) ?? doc?.flags?.[SYSTEM_ID]?.[key];
 
 /**
@@ -83,7 +74,7 @@ const flagOf = (doc, key) => doc?.getFlag?.(SYSTEM_ID, key) ?? doc?.flags?.[SYST
 export async function ensureChronicleFolder() {
 	const found = findChronicleFolder();
 	if (found) return stampChronicleFolder(found);
-	return (await createOnce("folder", () => Folder.create({
+	return (await createOnce("chronicle:folder", () => Folder.create({
 		name: CHRONICLE_FOLDER_NAME,
 		type: "JournalEntry",
 		color: CHRONICLE_FOLDER_COLOR,
@@ -143,7 +134,7 @@ export async function ensureChronicleJournal(name, defaultOwnership) {
 		await stampChronicleFolder(findChronicleFolder());
 		return found;
 	}
-	return (await createOnce(`journal:${name}`, async () => {
+	return (await createOnce(`chronicle:journal:${name}`, async () => {
 		const folder = await ensureChronicleFolder();
 		if (!folder) return null;
 		return JournalEntry.create({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { makeRewriter, remapPageData, managedHash, stableStringify, carryOverPageState, planSourceRestamp } from "../../module/hooks/journal-sync-core.js";
+import { makeRewriter, remapPageData, managedHash, hashString, stableStringify, carryOverPageState, planSourceRestamp } from "../../module/hooks/journal-sync-core.js";
 
 // The managed-journal update channel decides "did the GM edit this?" by comparing a
 // content fingerprint to the baseline we stamped. These tests pin the two properties
@@ -32,6 +32,16 @@ describe("makeRewriter / remapPageData", () => {
 		expect(prose.body).toBe("p @UUID[JournalEntry.world123]");
 		expect(qa.pairs[0]).toEqual({ prompt: "q @UUID[JournalEntry.world123]", answer: "a @UUID[JournalEntry.world123]" });
 		expect(groups.groups[0]).toEqual({ heading: "h @UUID[JournalEntry.world123]", body: "b @UUID[JournalEntry.world123]" });
+	});
+});
+
+describe("hashString", () => {
+	// Stored fingerprints (journals, chronicle prose, superseded pack values) are compared with these,
+	// so a digest must never change.
+	it("keeps every digest it has ever printed", () => {
+		expect(hashString("abc")).toBe("7a91f9f91ac18c8d");
+		expect(hashString("")).toBe("488bdcb81aee8d83");
+		expect(hashString("Stonetop ’ 😀")).toBe("de5629ac72a5abe8");
 	});
 });
 

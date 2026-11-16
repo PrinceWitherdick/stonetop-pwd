@@ -1,5 +1,6 @@
+import fs from "node:fs";
 import { describe, expect, it } from "vitest";
-import { declarations, declared, readCss, readRepo } from "../fakes/css.js";
+import { declarations, declared, ownRule, readCss, readRepo, repoPath } from "../fakes/css.js";
 
 /**
  * Every chip centres its label by TRIMMING the label's line box to its cap band, never by nudging.
@@ -71,7 +72,6 @@ describe("text-only chips trim themselves", () => {
 		".stonetop-levelup-move-chip",
 		".stonetop-onboarding-possession-badge",
 		".stonetop-call-up-dialog .stonetop-cu-preview-tag",
-		".stonetop-follower-tag",
 		".stonetop-monster-org-pill",
 		".stonetop-cf-tag",
 		".stonetop-cf-chip",
@@ -82,6 +82,10 @@ describe("text-only chips trim themselves", () => {
 		".stonetop-rel-lane-count",
 		".stonetop-fight-badge",
 		".stonetop-steading-plan button.spe-prompt",
+		// Going home's Reset Inventory and its Convalesce, one rule (fixall-1110-centre.mjs: 0 findings in all
+		// three faces at UI roots 16 and 20).
+		".stonetop-expedition-dialog .stonetop-exp-home-reset-btn",
+		".stonetop-expedition-dialog .stonetop-exp-home-convalesce-btn",
 	];
 
 	it.each(SELF)("%s trims and pads with both tokens", sel => {
@@ -119,6 +123,39 @@ describe("text-only chips trim themselves", () => {
 		const body = declarations(MAIN, ".stonetop-follower-tag.stonetop-exceptional-toggle");
 		expect(declared(body, "text-box")).toBe("none");
 		expect(declared(body, "padding")).toBe("1px 8px");
+	});
+});
+
+// Lowercase-by-convention chips centre their x-height, which is what the eye reads in "old" or
+// "tells tall tales"; centred on their capitals they sat 1-2px low (live, 2026-11-15).
+describe("lowercase chips trim to their x-height", () => {
+	it("has x-height tokens beside the cap ones, zeroed where text-box is unsupported", () => {
+		const root = declarations(MAIN, ":root");
+		expect(declared(root, "--st-trim-ex-top")).toBe("calc((1lh - 1ex) / 2)");
+		expect(declared(root, "--st-trim-ex-bottom")).toBe("calc((1lh - 1ex) / 2)");
+		expect(FALLBACK).toMatch(/--st-trim-ex-top:\s*0px/);
+		expect(FALLBACK).toMatch(/--st-trim-ex-bottom:\s*0px/);
+	});
+
+	it("a follower's tag pill trims itself to ex and pads with both ex tokens", () => {
+		const body = declarations(MAIN, ".stonetop-follower-tag");
+		expect(body).toMatch(/text-box:\s*trim-both ex alphabetic/);
+		expect(declared(body, "padding")).toMatch(/var\(--st-trim-ex-top\)[\s\S]*var\(--st-trim-ex-bottom\)/);
+		expect(declared(body, "display")).toBe("inline-block");
+	});
+
+	it("the exceptional toggle's label trims to ex like the tags beside it", () => {
+		const body = declarations(MAIN, ".stonetop-follower-tag.stonetop-exceptional-toggle > .stonetop-chip-text");
+		expect(body).toMatch(/text-box:\s*trim-both ex alphabetic/);
+	});
+
+	// The toggle sat 2.6px taller than the tags on its line, and the row stretched them to match, so
+	// their words rode high. It is a tag's size now, and the row no longer stretches.
+	it("keeps the tag row from stretching its pills, and the toggle a tag's size", () => {
+		expect(declared(declarations(MAIN, ".stonetop-follower-tags"), "align-items")).toBe("center");
+		const toggle = declarations(MAIN, ".stonetop-follower-tag.stonetop-exceptional-toggle");
+		expect(declared(toggle, "font-size")).toBe("var(--st-fs-sm)");
+		expect(declared(toggle, "line-height")).toBe("normal");
 	});
 });
 
@@ -183,12 +220,32 @@ describe("chips with an icon or a count trim their label element", () => {
 		["templates/actor/partials/tab-followers.hbs", "stonetop-companion-unique-owed", "span", 1],
 		["templates/dialogs/partials/catalog-shell.hbs", "stonetop-catalog-badge", "span", 1],
 		// The route pills: the scene button, Show players (its class also matches the stale share's
-		// Hide beside it, so two), that Hide, and the players' window's Stop showing (audit RTE-16).
+		// Hide and the current share's Change what they're told beside it, so three), that Hide, and the players' window's Stop showing (audit RTE-16).
 		// The steading header's See the route is built in JS (sharedRouteChipHtml, below).
 		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-to-scene", "button", 1],
-		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-share", "button", 2],
+		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-share", "button", 3],
 		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-share-hide", "button", 1],
+		// And the current share's Change what they're told beside its Hide.
+		["templates/dialogs/partials/expedition-journey-controls.hbs", "stonetop-journey-share-reword", "button", 1],
 		["templates/dialogs/shared-route.hbs", "stonetop-shared-route-stop", "button", 1],
+		// The PDF import review's Split / Join, and its answer radios' words (playbook-review-centre.mjs, 11-11:
+		// bare, the words sat up to 2px high beside the icon and 1.5px off the radio in IM Fell English at a 20px
+		// UI font; trimmed, within 0.8px in all three faces at roots 16 and 20).
+		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-act", "button", 3],
+		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-q-choice", "label", 2],
+		// Its footer's Undo, Redo and Start over: flex outline buttons, an icon beside the words.
+		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-undo", "button", 1],
+		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-redo", "button", 1],
+		["templates/dialogs/playbook-import-review.hbs", "stonetop-pb-review-reset", "button", 1],
+		// The Followers tab's dashed Create / Add buttons, a homebrew background's "Create your <kind>" among them.
+		["templates/actor/partials/tab-followers.hbs", "stonetop-follower-add-btn", "button", 5],
+		// A homebrew insert's Transform / Revert on the character sheet: a flex button whose words trim.
+		["templates/actor/partials/tab-homebrew-insert.hbs", "stonetop-hb-insert-form-btn", "button", 1],
+		// The playbook picture cutter's footer and its Clear background switch (measured 11-14 at
+		// 1x/1.25x/1.5x in all three faces: within 0.8px).
+		["templates/dialogs/playbook-emblem-cut.hbs", "stonetop-frame-save", "button", 1],
+		["templates/dialogs/playbook-emblem-cut.hbs", "stonetop-frame-suggest", "button", 1],
+		["templates/dialogs/playbook-emblem-cut.hbs", "stonetop-pb-emblem-clear", "label", 1],
 	])("wraps every label in %s (.%s)", (file, chipClass, tag, count) => {
 		const { count: found, bare } = everyChipWrapped(readRepo(file), chipClass, tag);
 		expect(found, `expected ${count} ${chipClass} in ${file}`).toBe(count);
@@ -298,6 +355,9 @@ describe("icon-and-label buttons centre by flex, unnudged", () => {
 		// The shared picker window's second footer button (Bolster's "It no longer applies" beside Save), on the
 		// CTA's box (measured 11-01: -0.7px, the same as Save, at 1x/1.25x/1.5x).
 		".stonetop-content-picker-footer > .stonetop-content-picker-secondary",
+		// The PDF import review's Split / Join, centring a trimmed .stonetop-chip-text (measured 11-11 with
+		// playbook-review-centre.mjs: -0.1 to -0.7px at 1x/1.25x/1.5x in all three faces, roots 16 and 20).
+		".stonetop-pb-review-act",
 	])("%s", sel => {
 		const body = declarations(MAIN, sel);
 		expect(body, `${sel} has no rule`).toBeTruthy();
@@ -305,6 +365,52 @@ describe("icon-and-label buttons centre by flex, unnudged", () => {
 		expect(declared(body, "align-items")).toBe("center");
 		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
 		expect(bottom).toBe(top);
+	});
+});
+
+// The Playbook Builder's icon buttons (.stonetop-pb-builder-btn: Read from a PDF, Choose picture, Import / Export,
+// Add, Remove, Delete, Try character creation) take core's flex button, and the sheet header's Restore it takes the
+// house .stonetop-inline-btn. Measured 11-11 with playbook-builder-centre.mjs: 0 findings in all three faces at UI
+// roots 16 and 20, 1x/1.25x/1.5x (chips within 1px, rows within 1px). What would break them is a hand nudge or a
+// display that isn't flex in their own rules, so neither may carry one.
+describe("the Playbook Builder's buttons and the sheet's Restore it centre by flex, unnudged", () => {
+	const NUDGES = ["top", "bottom", "translate", "transform", "margin-top", "padding-top", "padding-bottom", "vertical-align", "line-height"];
+	it.each([
+		".stonetop-pb-builder-btn",
+		".stonetop-playbook-row .stonetop-playbook-restore",
+	])("%s", sel => {
+		const body = declarations(MAIN, sel);
+		expect(body, `${sel} has no rule`).toBeTruthy();
+		for (const prop of NUDGES) expect(declared(body, prop), `${sel} nudges with ${prop}`).toBeNull();
+		const display = declared(body, "display");
+		if (display) expect(display).toMatch(/flex/);
+		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+		expect(bottom).toBe(top);
+	});
+
+	it("Restore it stands on the house inline button, which centres by flex with even padding", () => {
+		const body = declarations(MAIN, ".stonetop-inline-btn");
+		expect(declared(body, "display")).toBe("inline-flex");
+		expect(declared(body, "align-items")).toBe("center");
+		const [top, , bottom = top] = (declared(body, "padding") ?? "0").split(/\s+/);
+		expect(bottom).toBe(top);
+		expect(readRepo("templates/actor/partials/actor-header.hbs")).toMatch(/class="stonetop-inline-btn stonetop-playbook-restore"/);
+	});
+});
+
+// Core drops every AppV1 radio 2px (`body.game .app input[type="radio"] { position: relative; top: 2px }`,
+// layered), and our unlayered rule beats it only for the properties it names. The import review's answer
+// radios measured 2px below their words until their rule named `top` (playbook-review-centre.mjs, 11-11).
+describe("the PDF import review's radios take back core's 2px drop", () => {
+	// Through the one reset every system window shares (tests/styles/radio-reset.test.js): the review
+	// is a `stonetop` window, and its own radio rule sets no `top` of its own.
+	it("through the shared reset, as a stonetop window", () => {
+		const reset = declarations(MAIN, ':where(.stonetop input[type="radio"])');
+		expect(declared(reset, "top")).toBe("0");
+		expect(readRepo("module/playbooks/PlaybookImportReview.js")).toMatch(/classes:\s*\[\s*"stonetop",/);
+		const body = declarations(MAIN, '.stonetop-pb-review-q-choice input[type="radio"]');
+		expect(body, "the review radio rule is gone").toBeTruthy();
+		expect(declared(body, "top")).toBeNull();
 	});
 });
 
@@ -336,12 +442,14 @@ describe("the Bolster button and the Suggested tag carry no hand nudge", () => {
 
 // Measured 11-05 with the text-centring audit at 1x/1.25x/1.5x: the arcana tab's "Roll 1d4+8" (icon row, -1.3px)
 // and the crew member dialog's "Add" for a trait of their own (icon row, 0px), on core's button and even padding.
+// Its "Link a Person…" beside the Person field was measured with "Add" on 11-15 (chip and icon row, -0.5px each).
 // The crew member's edit pencil is icon-only and the unlock list's "or" a plain list label, so neither has words
 // to centre in a box. What would break the two buttons is a hand nudge on the label.
-describe("the arcana Roll uses button and the crew trait Add carry no hand nudge", () => {
+describe("the arcana Roll uses button and the crew dialog's Add and Link a Person carry no hand nudge", () => {
 	it.each([
 		".stonetop-arcanum-roll-uses-btn",
 		".stonetop-individual-dialog .stonetop-trait-custom-row .stonetop-trait-custom-add",
+		".stonetop-individual-dialog .stonetop-individual-person .stonetop-individual-person-link",
 	])("%s", sel => {
 		const body = declarations(MAIN, sel);
 		expect(body, `${sel} has no rule`).toBeTruthy();
@@ -433,5 +541,74 @@ describe("the fixed discs trim their numeral", () => {
 
 	it("trims the relationship heart's numeral", () => {
 		expect(declarations(MAIN, ".stonetop-rel-heart-badge-value")).toMatch(TRIM);
+	});
+});
+
+/**
+ * The shared left rail (.stonetop-guide-toc-btn): the Welcome guide, the playbook import review, the
+ * Playbook Builder, the rosters, the content and person pickers, Death's Door and the rest share one
+ * rule. Its selected entry is filled, so it reads as a chip, and its words sat 1.5px high in Signika
+ * and IM Fell English (1px in Libre Caslon) on an untrimmed `line-height: 1.25`. Measured 11-15 with the
+ * text-centring audit plus a raster pass over every rail shape, three faces, UI roots 16 and 20, at
+ * 1x/1.25x/1.5x (rail-all.mjs): now within 0.7px in Signika and Fell, 1px in Caslon, and every icon and
+ * count within about 1px of its words. The audit cannot see an entry with a count (two text children),
+ * so the raster pass is what covers those; this file holds the mechanism in place.
+ */
+describe("the shared left rail centres its words by trimming them", () => {
+	it("pins its parts to the top, on one whole-pixel line height they all inherit", () => {
+		const body = declarations(MAIN, ".stonetop-guide-toc-btn");
+		expect(declared(body, "display")).toBe("flex");
+		// A wrapped title keeps its icon and count beside its first line.
+		expect(declared(body, "align-items")).toBe("flex-start");
+		// A length, so the icon and count inherit the words' line rather than a shorter one of their own.
+		expect(body).toMatch(/line-height:\s*1\.25em;\s*line-height:\s*round\(1\.25em, 1px\)/);
+		expect(body).not.toMatch(/line-height:\s*1\.25\s*;/);
+	});
+
+	it.each([".stonetop-guide-toc-text", ".stonetop-guide-toc-count", ".stonetop-guide-toc-btn > .stonetop-person-picker-count"])(
+		"%s trims and pads with both tokens", sel => {
+			const body = declarations(MAIN, sel);
+			expect(body, `${sel} has no rule`).toBeTruthy();
+			expect(body).toMatch(TRIM);
+			expect(declared(body, "padding-top")).toBe("var(--st-trim-top)");
+			expect(declared(body, "padding-bottom")).toBe("var(--st-trim-bottom)");
+		});
+
+	it("draws the icon on the words' line at a whole-pixel size, unnudged", () => {
+		const body = ownRule(MAIN, ".stonetop-guide-toc-icon");
+		expect(declared(body, "line-height")).toBe("inherit");
+		expect(declared(body, "font-size")).toMatch(/^round\(.+, 1px\)$/);
+		expect(declared(body, "margin-top")).toBeNull();
+		expect(declared(body, "top")).toBeNull();
+	});
+
+	it("lays the Welcome guide's bold-width copy over the words' line, so the trim's bottom edge is theirs", () => {
+		const body = ownRule(MAIN, ".stonetop-welcome-split .stonetop-guide-toc-text::after");
+		expect(declared(body, "margin-top")).toBe("-1lh");
+		expect(declared(body, "visibility")).toBe("hidden");
+		// A zero-height copy, or one walled off by overflow, took the trim's end and left the words untrimmed.
+		expect(declared(body, "height")).toBeNull();
+		expect(declared(body, "overflow")).toBeNull();
+	});
+
+	/** Every source file that builds a rail entry, repo-relative. */
+	function railSources(dir) {
+		return fs.readdirSync(repoPath(dir), { withFileTypes: true }).flatMap(e => {
+			const rel = `${dir}/${e.name}`;
+			if (e.isDirectory()) return railSources(rel);
+			return /\.(hbs|js)$/.test(e.name) && readRepo(rel).includes('class="stonetop-guide-toc-btn') ? [rel] : [];
+		});
+	}
+
+	it("wraps every rail entry's words in .stonetop-guide-toc-text, which is what takes the trim", () => {
+		const files = [...railSources("templates"), ...railSources("module")];
+		expect(files.length, "the rail's sources went missing").toBeGreaterThanOrEqual(13);
+		const bare = [];
+		for (const file of files) {
+			const btns = [...readRepo(file).matchAll(/<button\b[^>]*class="stonetop-guide-toc-btn\b[^"]*"[^>]*>([\s\S]*?)<\/button>/g)];
+			expect(btns.length, `no rail button read in ${file}`).toBeGreaterThan(0);
+			for (const m of btns) if (!m[1].includes('class="stonetop-guide-toc-text"')) bare.push(`${file}: ${m[0].slice(0, 80)}`);
+		}
+		expect(bare).toEqual([]);
 	});
 });

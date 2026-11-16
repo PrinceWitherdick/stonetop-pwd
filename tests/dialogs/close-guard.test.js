@@ -262,3 +262,30 @@ describe("Save for now", () => {
 		}
 	});
 });
+
+describe("a window whose work can't be read", () => {
+	it("counts as unsaved, so closing asks rather than dropping what was typed", () => {
+		let broken = false;
+		const app = { _workState: () => { if (broken) throw new TypeError("Cannot read properties of null (reading 'label')"); return { name: "The Stranger" }; } };
+		notePristineWork(app);
+		expect(hasUnsavedWork(app)).toBe(false);
+		broken = true;
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		expect(hasUnsavedWork(app)).toBe(true);
+	});
+
+	it("still asks when its work never read, and takes the first reading once it does", () => {
+		let broken = true;
+		const app = { _workState: () => { if (broken) throw new TypeError("no form yet"); return { name: "The Stranger" }; } };
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		notePristineWork(app);
+		// Unreadable from the first render: not kept as the untouched state, so a throw later isn't "unchanged".
+		expect(app._pristineWork).toBeNull();
+		expect(hasUnsavedWork(app)).toBe(true);
+		// The next render reads it: that is what the window opened with.
+		broken = false;
+		notePristineWork(app);
+		expect(app._pristineWork).toBe(JSON.stringify({ name: "The Stranger" }));
+		expect(hasUnsavedWork(app)).toBe(false);
+	});
+});

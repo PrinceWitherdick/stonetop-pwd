@@ -101,6 +101,11 @@ export class CharacterSnapshot {
 		// The wearer tags on the carried gear, `[{ tag, items }]` (actors/character/gear-reminders.js):
 		// what the header's reminder chips show, worked out from this render's gear.
 		this.gearTags        = b._gearTags ?? [];
+		// A homebrew playbook's open inserts, each its own sheet tab (CharacterHomebrewInserts#buildView).
+		this.homebrewInserts = b._homebrewInserts ?? [];
+		// Each insert form the character can wear, or still wears (CharacterHomebrewInserts#formStates): the
+		// header's glyph for it, the same flag as the insert tab's switch.
+		this.insertForms     = b._insertForms ?? [];
 	}
 }
 
@@ -123,5 +128,7 @@ export class CharacterSnapshotBuilder {
 	withCompanionDef(v)    { this._companionDef    = v; return this; }
 	withViewerIsGM(v)      { this._isGM            = v; return this; }
 	withGearTags(v)        { this._gearTags        = v; return this; }
+	withHomebrewInserts(v) { this._homebrewInserts = v; return this; }
+	withInsertForms(v)     { this._insertForms     = v; return this; }
 	build()                { return new CharacterSnapshot(this); }
 }

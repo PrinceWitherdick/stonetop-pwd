@@ -340,7 +340,8 @@ describe("L15 + L16: a greyed mark option says why in text; the window's words a
 describe("M1: the keyboard stays in the Level Up window", () => {
 	it("every step's intro can take focus, and the overview's is the window's first stop", () => {
 		const intros = TEMPLATE.match(/class="stonetop-levelup-intro(?: [^"]*)?"[^>]*>/g);
-		expect(intros.length).toBe(8);
+		// Nine steps: overview, a homebrew playbook's own advance, move, agreed, foreign, stat, marks, companion, invocation.
+		expect(intros.length).toBe(9);
 		for (const tag of intros) expect(tag).toContain('tabindex="-1" data-levelup-focus');
 		expect(intros[0]).toContain("data-autofocus");
 	});

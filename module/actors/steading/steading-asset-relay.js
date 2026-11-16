@@ -33,6 +33,46 @@ const OPTIONS_AT = Object.freeze({ take: 2, return: 1, lose: 1, fromHerd: 1, toH
 export const ASSET_RELAY_ASK_MS = 10000;
 
 /**
+ * How long, after the GM's answer never came, a player's client still watches for its write to land (ms). The
+ * GM's side starts no write after ASSET_RELAY_LATE_MS, but one started in time can finish after the asker's
+ * wait ran out (a slow connection), and its player was then told it failed while the steading says it was made.
+ */
+export const ASSET_RELAY_ECHO_MS = 15000;
+
+/** The update option a relayed write carries, `{id, value}`, so its asker knows it landed (relayEcho). */
+export const ASSET_RELAY_OPTION = "stonetopAssetRelay";
+
+/**
+ * The update options that tag a relayed write with its request id and what it answers, so the asker sees it
+ * land on its own client's updateActor hook (Foundry hands a write's options to every client's). Empty for a
+ * write made for this client itself. PURE.
+ */
+export function relayEcho(relayId, value) {
+	return relayId ? { [ASSET_RELAY_OPTION]: { id: relayId, value } } : {};
+}
+
+/**
+ * Watch the steading `uuid` for the write tagged `id` (relayEcho). `landed()` answers `{value}` once it has,
+ * else null; `wait(ms)` resolves with that once it lands or `ms` runs out; `stop()` drops the watch.
+ */
+function watchEcho(uuid, id, hooks = globalThis.Hooks) {
+	let seen = null;
+	let wake = null;
+	const hookId = hooks?.on?.("updateActor", (actor, _changes, options) => {
+		const echo = options?.[ASSET_RELAY_OPTION];
+		if (actor?.uuid !== uuid || echo?.id !== id) return;
+		seen = { value: echo.value };
+		wake?.();
+	});
+	const stop = () => { if (hookId != null) hooks?.off?.("updateActor", hookId); };
+	const wait = ms => (seen || hookId == null ? Promise.resolve(seen) : new Promise(resolve => {
+		const timer = setTimeout(() => resolve(seen), ms);
+		wake = () => { clearTimeout(timer); resolve(seen); };
+	}));
+	return { landed: () => seen, wait, stop };
+}
+
+/**
  * A write that reaches the steading's turn this long after it arrived is not made (ms): the asker's wait
  * began a network hop earlier and ends at ASSET_RELAY_ASK_MS, and it has already told its player the
  * write failed, so a write made now would leave the steading saying an asset is out that nobody holds.
@@ -54,22 +94,38 @@ export function assetRelayTarget(g = globalThis.game) {
  * same RELAYED_ASSET_WRITES method the GM's side calls.
  *
  * A refusal or no answer from the GM's side throws, so a caller's "could not write the steading" path
- * runs exactly as it does for a write refused here.
+ * runs exactly as it does for a write refused here. With no answer, the write is first watched for a while
+ * longer (ASSET_RELAY_ECHO_MS): one the GM's client made late counts as made, with what it answered.
  *
  * @param {object} steading  the StonetopSteading
  * @param {string} op        a key of RELAYED_ASSET_WRITES
  * @param {Array} args       the method's arguments, plain data
  */
-export async function relayAssetWrite(steading, op, args, { target = assetRelayTarget } = {}) {
+export async function relayAssetWrite(steading, op, args, {
+	target = assetRelayTarget, hooks = globalThis.Hooks, echoMs = ASSET_RELAY_ECHO_MS,
+	newId = () => globalThis.foundry?.utils?.randomID?.() ?? `${Date.now()}-${Math.random()}`,
+} = {}) {
 	const gm = target();
 	const actor = steading?._actor ?? null;
 	if (!gm || !actor?.uuid) return steading[RELAYED_ASSET_WRITES[op]](...args);
-	const answer = await askGMClient(gm, STEADING_ASSETS_QUERY, {
-		steadingUuid: actor.uuid, op, args, userId: globalThis.game?.user?.id ?? null,
-	}, { fallback: { error: true }, what: "write the steading's assets", timeout: ASSET_RELAY_ASK_MS });
-	if (answer?.refused) throw new Error(`The GM's client refused to ${op} a steading asset for this user.`);
-	if (!answer || answer.error) throw new Error(`No answer from the GM's client to ${op} a steading asset.`);
-	return answer.value;
+	const relayId = newId();
+	// Watched from before the ask, so an echo that beats the answer home is not missed.
+	const echo = watchEcho(actor.uuid, relayId, hooks);
+	try {
+		const answer = await askGMClient(gm, STEADING_ASSETS_QUERY, {
+			steadingUuid: actor.uuid, op, args, relayId, userId: globalThis.game?.user?.id ?? null,
+		}, { fallback: { unanswered: true }, what: "write the steading's assets", timeout: ASSET_RELAY_ASK_MS });
+		if (answer?.refused) throw new Error(`The GM's client refused to ${op} a steading asset for this user.`);
+		// The GM's client answered that its write threw: it failed, and no echo is coming.
+		if (answer?.error) throw new Error(`The GM's client couldn't ${op} a steading asset.`);
+		if (answer && !answer.unanswered) return answer.value;
+		// Only a missing answer is watched for a late write.
+		const landed = echo.landed() ?? await echo.wait(echoMs);
+		if (landed) return landed.value;
+		throw new Error(`No answer from the GM's client to ${op} a steading asset.`);
+	} finally {
+		echo.stop();
+	}
 }
 
 /**
@@ -92,7 +148,8 @@ export async function handleSteadingAssetsQuery(data, context = {}, deps = {}) {
 	const args = Array.isArray(data.args) ? [...data.args] : [];
 	const at = OPTIONS_AT[data.op];
 	const given = args[at];
-	args[at] = { ...(given && typeof given === "object" ? given : {}), late: () => now() - arrived > ASSET_RELAY_LATE_MS };
+	const relayId = typeof data.relayId === "string" && data.relayId ? data.relayId : null;
+	args[at] = { ...(given && typeof given === "object" ? given : {}), late: () => now() - arrived > ASSET_RELAY_LATE_MS, relayId };
 	try {
 		return { value: await steading[method](...args) };
 	} catch (err) {

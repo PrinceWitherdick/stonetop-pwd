@@ -237,6 +237,21 @@
 		</div>
 		{{/if}}
 
+		{{#if adoptOffer}}
+		{{! A homebrew background's "you may adopt the Ghost or Revenant insert regardless of the result" (the
+		    Stranger's Grave Tender): on a 10+ or a 7-9 too. The fate buttons' look; never one of the fates. }}
+		<div class="deaths-door-actions deaths-door-adopt">
+			<p class="deaths-door-roll-option-hint">{{this.adoptOffer.why}}</p>
+			<div class="deaths-door-fates">
+				{{#each this.adoptOffer.inserts}}
+				<button type="button" class="deaths-door-fate-btn deaths-door-adopt-btn" data-adopt="{{this.slug}}">
+					<span class="deaths-door-fate-label">{{localize "stonetop.specialMoves.deathsDoor.result.adoptButton" insert=this.name}}</span>
+				</button>
+				{{/each}}
+			</div>
+		</div>
+		{{/if}}
+
 		{{#if isMiss}}
 		<div class="deaths-door-actions">
 			{{#if spectator}}

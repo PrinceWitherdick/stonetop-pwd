@@ -25,6 +25,7 @@ Where our filename differs from the original, the game-icons.net source name is 
 | storm-rage.svg | lightning-storm | Lorc | https://lorcblog.blogspot.com |
 | triquetra.svg | triquetra | Delapouite | https://delapouite.com |
 | unseen.svg | hood | Lorc | https://lorcblog.blogspot.com |
+| werewolf.svg | werewolf | Lorc | https://lorcblog.blogspot.com |
 
 `move.svg` recolours the glyph and sets it on the system's dark octagon token; the artwork
 itself is unchanged.

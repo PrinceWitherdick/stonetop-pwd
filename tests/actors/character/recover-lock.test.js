@@ -77,7 +77,7 @@ describe("a follower body's lock", () => {
 		const update = recoverLockUpdate(bodies);
 		expect(update).toEqual({
 			[`flags.${SCOPE}.recoverFollowers.initiate:ash`]: { follower: "initiate", slug: "ash" },
-			[`flags.${SCOPE}.recoverFollowers.crew::anon:1`]: { follower: "crew-member", slug: "", index: 1 },
+			[`flags.${SCOPE}.recoverFollowers.crew::anon:1`]: { follower: "crew-member", slug: "", index: 1, stamp: 0 },
 		});
 		const flags = { recoverFollowers: { "initiate:ash": { follower: "initiate", slug: "ash" }, "crew::anon:1": null } };
 		expect([...recoverLockedIds(flags)]).toEqual(["initiate:ash"]);
@@ -106,5 +106,37 @@ describe("a follower body's lock", () => {
 		const heal = { flags: { [SCOPE]: { initiatesHp: { ash: 8 } } } };
 		expect(recoverUnlockChanges(actor, heal)).toEqual([]);
 		expect(recoverUnlockChanges(actor, { flags: { [SCOPE]: { notes: "x" } } })).toEqual([]);
+	});
+
+	it("follows a crew member when someone before them is struck off (FOE-2)", () => {
+		// Hari (anon 2) Recovered; then anon 0 was struck off, so Hari is anon 1 and a newcomer is anon 2.
+		const flags = {
+			crew: { memberHp: [5, 5, 5], rosterShifts: [{ n: 1, row: "crew-member", index: 0 }] },
+			recoverFollowers: { "crew::anon:2": { follower: "crew-member", slug: "", index: 2, stamp: 0 } },
+		};
+		const crew = [
+			{ id: "crew::anon:1", name: "Hari", row: { follower: "crew-member", slug: "", index: 1 } },
+			{ id: "crew::anon:2", name: "New", row: { follower: "crew-member", slug: "", index: 2 } },
+		];
+		expect(recoverableBodies(flags, crew).map(b => b.id)).toEqual(["crew::anon:2"]);
+		// The newcomer's own lock gets a key of its own, not Hari's.
+		expect(Object.keys(recoverLockUpdate([crew[1]], flags))).toEqual([`flags.${SCOPE}.recoverFollowers.crew::anon:2@1`]);
+		// A blow on Hari (now index 1) lifts Hari's lock; one on the newcomer doesn't.
+		const actor = pc({ flags });
+		expect(recoverUnlockChanges(actor, { flags: { [SCOPE]: { crew: { memberHp: [5, 5, 1] } } } })).toEqual([]);
+		expect(recoverUnlockChanges(actor, { flags: { [SCOPE]: { crew: { memberHp: [5, 1, 5] } } } })).toEqual(["crew::anon:2"]);
+	});
+
+	it("reads a strike-off made in the same write, and clears the lock of a member cut out", () => {
+		const actor = pc({ flags: {
+			crew: { memberHp: [3, 4, 6] },
+			recoverFollowers: { "crew::anon:2": { follower: "crew-member", slug: "", index: 2, stamp: 0 } },
+		} });
+		// Anon 0 struck off: Hari moves from 6 at index 2 to 6 at index 1. No blow, so the lock stays.
+		const cut0 = { flags: { [SCOPE]: { crew: { memberHp: [4, 6], rosterShifts: [{ n: 1, row: "crew-member", index: 0 }] } } } };
+		expect(recoverUnlockChanges(actor, cut0)).toEqual([]);
+		// Hari himself struck off: his lock goes with him.
+		const cut2 = { flags: { [SCOPE]: { crew: { memberHp: [3, 4], rosterShifts: [{ n: 1, row: "crew-member", index: 2 }] } } } };
+		expect(recoverUnlockChanges(actor, cut2)).toEqual(["crew::anon:2"]);
 	});
 });

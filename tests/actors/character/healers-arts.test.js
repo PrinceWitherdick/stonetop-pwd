@@ -170,6 +170,19 @@ describe("paying the carer's Stock", () => {
 		expect(wait).not.toHaveBeenCalled();
 	});
 
+	// The spend comes back as plain data (it may cross a socket), so it carries what its receipt is worded from.
+	it("hands back a Vessel's spend with what its receipt needs, and a stand-in's with its stand-in", async () => {
+		const vessel = { key: "hp", label: "HP", vessel: true, remaining: Infinity };
+		const weak = { key: "instead-debility-weak", label: "Weak", remaining: Infinity, standIn: { kind: "debility", key: "weak", name: "Weak", from: "" } };
+		global.game.users = usersOf([player("p-gwynn", "Alex")], { id: "gm", query: vi.fn() });
+		const gwynn = carer({ owners: ["p-gwynn"], purses: [vessel, weak] });
+		gwynn.typedActor.spendStock = vi.fn(async () => ({ lost: 5 }));
+		const bled = await payHealersArtsStock({ carer: gwynn, patient: { id: "bram", name: "Bram" }, sourceKey: "hp" });
+		expect(bled).toMatchObject({ key: "hp", vessel: true, standIn: null, lost: 5, receipt: expect.stringContaining("Lost 5 HP in place of") });
+		const marked = await payHealersArtsStock({ carer: gwynn, patient: { id: "bram", name: "Bram" }, sourceKey: weak.key });
+		expect(marked.standIn).toEqual(weak.standIn);
+	});
+
 	// "If you also spend 1 Stock" is the carer's call. At a table where every player owns every sheet,
 	// owning Gwynn does not make Bram's player the one who decides on her Stock: they ask her player.
 	it("asks the carer's player when this client only OWNS the carer, playing someone else", async () => {

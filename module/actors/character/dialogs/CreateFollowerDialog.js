@@ -6,8 +6,12 @@ import {
 	FOLLOWER_DAMAGE_OPTIONS, FOLLOWER_DAMAGE_TAG_GROUPS, FOLLOWER_TAG_GROUPS,
 	FOLLOWER_INSTINCT_EXAMPLES, FOLLOWER_COST_EXAMPLES,
 	deriveHp, deriveArmor, deriveDamageDie, formatDamage,
-	normalizeTags, buildCustomFollower,
+	normalizeTags, buildCustomFollower, nextFollowerOrder,
 } from "../../../data/follower-build.js";
+import { STONETOP_SCOPE } from "../StonetopFlags.js";
+import { notePristineWork } from "../../../utils/close-guard.js";
+import { persistOnTyping } from "../../../utils/window-restore.js";
+import { CREATE_FOLLOWER_RESTORE_KIND } from "./create-follower-restore.js";
 
 // ── CreateFollowerDialog ─────────────────────────────────────────────────────
 // A walkthrough for "Creating followers" (Book I, NPCs & Followers, pp.474–479).
@@ -16,6 +20,9 @@ import {
 // equip them — then hands the built follower back to the caller to store on the
 // character (see StonetopCharacterSheet._applyCustomFollower).
 // Mirrors the Expedition/Death's-Door dialogs (shared `.stonetop-spring-*` styles),
+// A reload brings it back on the step it was left on with every answer (create-follower-restore.js);
+// with no sheet behind it then to hand the follower to, it stores the follower itself
+// (applyCustomFollower, the one the sheet's callback calls too).
 // including Expedition's jump-to-step rail: nine steps is too many to reach only via
 // Back/Next, so `_STEPS` doubles as the rail's table of contents (each entry's title and
 // icon label its row). The template opts in by wrapping its content in
@@ -89,14 +96,39 @@ const _TEXT_FIELDS = new Set([
 	"name", "pronoun", "typeLabel", "notes", "instinct", "moves", "cost",
 ]);
 
+/**
+ * Store a built custom follower on the character under a fresh id, with a creation-order stamp for
+ * stable ordering on the Followers tab. `data` is the buildCustomFollower() shape. The sheet's
+ * callback and a walkthrough a reload brought back (which has no sheet callback) both store it here.
+ */
+export async function applyCustomFollower(actor, data) {
+	if (!actor || !data) return;
+	const id = foundry.utils.randomID(16);
+	await actor.update({
+		[`flags.stonetop-pwd.customFollowers.${id}`]: { ...data, order: nextFollowerOrder(actor.getFlag(STONETOP_SCOPE, "customFollowers") ?? {}) },
+	});
+}
+
+// `{ slug, loyalty }` of a background's follower, in the one shape kept, or null.
+function _backgroundOrigin(from) {
+	const slug = typeof from?.slug === "string" ? from.slug : "";
+	if (!slug) return null;
+	const loyalty = Number.isFinite(Number(from.loyalty)) && from.loyalty !== null && from.loyalty !== "" ? Number(from.loyalty) : null;
+	return { slug, loyalty };
+}
+
 export class CreateFollowerDialog extends StepperDialog {
 	constructor(actor, onApply, options = {}) {
 		super(options);
 		this._actor   = actor;
-		this._onApply = onApply;
+		// No callback (a reload's reopening): the follower is stored on the character directly.
+		this._onApply = onApply ?? (data => applyCustomFollower(actor, data));
 		// Steading resident/neighbor names offered as suggestions on the concept step,
 		// so "recruit a villager as a follower" is a guided flow (NPCs & Followers p.474).
 		this._residentNames = Array.isArray(options.residentNames) ? options.residentNames : [];
+		// A background's follower ("Create your monstrous follower"): the background it came from, so the
+		// offer goes once it is made, and the Loyalty it starts at. Saved for a reload with the answers.
+		this._fromBackground = _backgroundOrigin(options.fromBackground);
 		// Working selection. Stats are stored as picks and derived live so the
 		// totals stay honest as the player toggles options.
 		this._sel = {
@@ -108,6 +140,8 @@ export class CreateFollowerDialog extends StepperDialog {
 			instinct: "", moves: "", cost: "",
 			gear: [],
 			isGroup: false, groupSize: 3,
+			// What the caller already knows (a background's "monstrous follower"): its type, filled in.
+			...(options.preset?.typeLabel ? { typeLabel: String(options.preset.typeLabel) } : {}),
 		};
 	}
 
@@ -128,6 +162,59 @@ export class CreateFollowerDialog extends StepperDialog {
 
 	get _steps() { return _STEPS; }
 	get _autoHeight() { return true; }
+
+	// ── Reload ─────────────────────────────────────────────────────────────────
+	// utils/window-restore.js reopens this walkthrough after a reload (create-follower-restore.js):
+	// the same step, every answer, for the same character.
+
+	/** What a reload saves this window under: the character it builds a follower for. */
+	get restoreKey() {
+		const uuid = this._actor?.uuid;
+		if (!uuid || this._actor?.pack) return null;
+		return `${CREATE_FOLLOWER_RESTORE_KIND}:${uuid}`;
+	}
+
+	/** The step, by key, and every answer (`_workState`, what the close-guard reads). Read live, as the page unloads too. */
+	get restoreView() {
+		let sel = this._sel;
+		try { sel = this._workState(); }
+		catch (_err) { /* a window mid-close keeps what it last had */ }
+		return { step: this._steps[this._step]?.key ?? null, sel, fromBackground: this._fromBackground };
+	}
+
+	/** A reload's reopening draw carries that back (`options.view`); it goes on before the first draw. */
+	async _render(force, options = {}) {
+		if (options?.view && !this.rendered) this._takeRestoredView(options.view);
+		return super._render(force, options);
+	}
+
+	/**
+	 * Put a reload's step and answers back. The close-guard is told what the window opened with
+	 * FIRST (blank), so the answers that came back still count as unsaved and closing asks. Each
+	 * answer is taken only in the shape this version keeps it in; gear rows only as labelled rows.
+	 */
+	_takeRestoredView(view) {
+		if (this._reloaded) return;
+		this._reloaded = true;
+		notePristineWork(this);
+		const sel = view?.sel;
+		if (sel && typeof sel === "object" && !Array.isArray(sel)) {
+			for (const [key, base] of Object.entries(this._sel)) {
+				const value = sel[key];
+				if (Array.isArray(base)) {
+					if (!Array.isArray(value)) continue;
+					this._sel[key] = key === "gear"
+						? value.filter(g => g && typeof g.label === "string").map(g => ({ label: g.label }))
+						: value.filter(v => typeof v === "string");
+				} else if (value !== null && value !== undefined && typeof value === typeof base) {
+					this._sel[key] = value;
+				}
+			}
+		}
+		const step = this._steps.findIndex(s => s.key === view?.step);
+		if (step >= 0) this._step = step;
+		this._fromBackground ??= _backgroundOrigin(view?.fromBackground);
+	}
 
 	// ── Derived stats ──────────────────────────────────────────────────────────
 	get _hp()        { return deriveHp({ base: this._sel.hpBase, mods: this._sel.hpMods }); }
@@ -218,6 +305,8 @@ export class CreateFollowerDialog extends StepperDialog {
 
 		// Navigation
 		html.find(".stonetop-cf-create").on("click", () => this._finish());
+		// Typing never re-renders, so it saves the window for a reload itself (`restoreView`).
+		persistOnTyping(html[0]);
 
 		// Text fields → persist on blur (no re-render, so focus survives typing).
 		html.find("[data-field]").on("change", ev => {
@@ -345,7 +434,10 @@ export class CreateFollowerDialog extends StepperDialog {
 			isGroup:   sel.isGroup,
 			size:      sel.isGroup ? sel.groupSize : 0,
 		});
-		await this._onApply?.(data);
+		const from = this._fromBackground;
+		await this._onApply?.(from ? {
+			...data, fromBackground: from.slug, ...(from.loyalty != null ? { loyalty: from.loyalty } : {}),
+		} : data);
 		ui.notifications?.info?.(`${data.name || "Follower"} added to your followers.`);
 		// A finish: the close-guard has nothing to ask.
 		this.close({ discard: true });

@@ -57,6 +57,25 @@ describe("an ordered Clash's counter-blow (FOE-1, Book I p.215)", () => {
 		expect(suffers).toHaveBeenCalledTimes(1);
 	});
 
+	it("strikes nothing when the latch can't be written, or another client's latch wins", async () => {
+		const suffers = vi.fn(async () => true);
+		const marshal = { sheet: { _followerSuffersCounter: suffers } };
+		const order = { ftype: "crew", slug: "" };
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const refused = card();
+		refused.setFlag = vi.fn(async () => { throw new Error("no permission"); });
+		const notify = vi.fn();
+		vi.stubGlobal("ui", { notifications: { warn: notify } });
+		expect(await strikeOrderCounter(refused, marshal, { ...order, name: "The Crew" })).toBe(false);
+		// ...but the player is told the blow is still owed, not left with a console line.
+		expect(notify).toHaveBeenCalledWith(expect.stringContaining("Deal it to The Crew by hand"));
+		vi.unstubAllGlobals();
+		// The GM's client already latched it for another press.
+		expect(await strikeOrderCounter(card(), marshal, order, { latch: async () => false })).toBe(false);
+		expect(suffers).not.toHaveBeenCalled();
+		warn.mockRestore();
+	});
+
 	it("a card moved down onto a 6- strikes the blow it never took; one already countered strikes none", async () => {
 		const suffers = vi.fn(async () => true);
 		const marshal = { sheet: { _followerSuffersCounter: suffers } };
