@@ -36,5 +36,6 @@
 - [Chronicle, Journals and Love Letters](Chronicle-Journals-and-Love-Letters)
 - [Arcana for GMs](Arcana-for-GMs)
 - [Homebrew Content](Homebrew-Content)
+- [Homebrew Playbooks](Homebrew-Playbooks)
 - [Macros and Console Commands](Macros-and-Console-Commands)
 - [World Settings Reference](World-Settings-Reference)

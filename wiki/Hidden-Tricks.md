@@ -88,7 +88,13 @@ Almost every label explains itself on hover: stats, debilities, gear tags, **Val
 
 ## Remembered for you
 
-Your browser remembers each sheet's size and column widths, which sections you folded, the relationships layout, the windows you had open (they come back after a reload), and where you were in the rulebook. Walkthroughs (Introductions, Spring Burst, expeditions, character creation) reopen where you left off.
+Your browser remembers each sheet's size and column widths, which sections you folded, the relationships layout, the windows you had open (they come back after a reload), and where you were in the rulebook. Walkthroughs (Introductions, Spring Burst, expeditions, character creation, Create a Site) reopen where you left off.
+
+Windows you were typing into come back after a reload with what you'd typed, even after a crashed tab: the Improvement Builder, a custom move, an inventory item, **Create a follower**, a love letter, the Struggle as One setup, Make a Monster, Make a Hazard, a timeline entry, the Playbook Builder and the playbook import review.
+
+## Who's who in a list
+
+Anywhere you pick a character from a list (a love letter's recipient, handing over a follower, Recover's carer, Make Camp's **Bring someone**, Struggle as One, Introductions, Retire), each name says who it is: "Pim (Alex)" for a played character, the playbook for one nobody plays, and an NPC's trade (and home, if not Stonetop).
 
 ## See also
 - [Home](Home)

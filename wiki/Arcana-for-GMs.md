@@ -43,6 +43,12 @@ The world setting **Artifacts Arrive Unidentified** makes new artifacts start hi
 
 **Create Item**, then **Gear & Treasure**, offers **Blank arcanum** or **Inspire me…**, which rolls Book II's artifact creation tables to start you off. Homebrew arcana use the same card sheet as the bundled ones. Whether players may make their own is the world setting **Arcana Creation: GM Only**.
 
+- A new card is a draft until you press **Finish it** (or **Discard** it). Drafts aren't listed in the Arcana browser.
+- A homebrew card's back is private. Only the GM, the card's author, and a player whose character holds it identified and has unlocked it (or been shown it) can read it. Everyone else sees **The back is hidden until you unlock or are shown it.** (Turning on **Arcana: Players See Both Sides** shows every back.)
+- **GM notes** on a card are only ever shown to a GM. **Inspire me…** puts its rolls there.
+- Editing a card that characters hold updates their sheets. Deleting one asks first; holders keep its name.
+- **Include homebrew minor arcana in the Seeker's draw** (off by default) adds your finished minor arcana to the deck a new Seeker draws 3 from. It's on the GM's **Preferences** tab under **Arcana**, and in Configure Settings.
+
 ## See also
 - [Arcana and Artifacts](Arcana-and-Artifacts)
 - [Homebrew Content](Homebrew-Content)

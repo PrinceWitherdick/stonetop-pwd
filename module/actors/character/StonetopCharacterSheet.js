@@ -4676,7 +4676,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const { restoreCarriedPlaybook } = await import("../../playbooks/homebrew-store.js");
 				try {
 					const item = await restoreCarriedPlaybook(this.actor);
-					if (item) ui.notifications.info(`Restored ${item.name}. It's hidden from players' picker until you tick "Show to players" in the Playbook Builder.`);
+					if (item) ui.notifications.info(`Restored ${item.name}. It's hidden from players' picker until you open the eye at the top of the Playbook Builder.`);
 					this.render(false);
 				} catch (err) {
 					console.error("Stonetop | couldn't restore that playbook", err);

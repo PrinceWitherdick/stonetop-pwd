@@ -70,10 +70,22 @@ const windowOf = app => {
 };
 
 /**
+ * The class names whose render/close hooks, between them, every V1 window fires. AppV1 fires one
+ * hook per class up its inheritance chain but STOPS at the class's `baseApplication`, so an actor
+ * sheet fires `renderActorSheet` and never `renderApplication`. Listening on `renderApplication`
+ * alone left every character, steading, NPC and item sheet unmarked, and their glyph-only buttons
+ * 1.5px left of centre (seen live on the crew roster's pen and X, 2026-11-15). In v14 core only
+ * these two set a `baseApplication`; every other V1 app's chain runs up to `Application`.
+ */
+export const V1_HOOK_BASES = Object.freeze(["Application", "ActorSheet", "ItemSheet"]);
+
+/**
  * Watch every V1 window as it first renders, and let it go when it closes. Call once, in init.
- * `renderApplication` / `closeApplication` fire for every V1 app, whatever its class.
+ * Watching twice is harmless (watchWindow keeps one observer per window).
  */
 export function watchIconOnlyButtons(hooks = globalThis.Hooks) {
-	hooks?.on?.("renderApplication", app => watchWindow(windowOf(app)));
-	hooks?.on?.("closeApplication", app => unwatchWindow(windowOf(app)));
+	for (const base of V1_HOOK_BASES) {
+		hooks?.on?.(`render${base}`, app => watchWindow(windowOf(app)));
+		hooks?.on?.(`close${base}`, app => unwatchWindow(windowOf(app)));
+	}
 }

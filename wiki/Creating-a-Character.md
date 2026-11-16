@@ -18,6 +18,7 @@ The **Choose a Playbook** window shows one card per playbook, each with its port
 
 - **Hover a card** to see a short description of the playbook and how complex it is to play (from Low to High complexity).
 - The **Setting Overview** button at the top opens the Setting Overview journal, a short tour of Stonetop and the lands around it.
+- Playbooks your GM added (community or third-party ones) are in the picker too, marked **Homebrew** with their author. See [Homebrew Playbooks](Homebrew-Playbooks).
 - A playbook another player already holds says **Taken by** and names the character and player. It is a reminder, not a lock: the book asks each player to pick a different playbook, but your table may agree otherwise, so you can still pick it. Characters who have died or left play are listed as "(dead)" or "(out of play)" and do not count as taking the playbook.
 
 Click a card to pick it and move on to the walkthrough.
@@ -35,7 +36,7 @@ Every playbook has these steps, in this order, when the playbook has something t
 | **Background** | Pick your background. Some backgrounds ask follow-up questions, such as naming neighbors or choosing traits. |
 | **Instinct** | Pick an instinct, or write your own (one word plus a description). |
 | **Appearance** | Choose one option on each line, or write in your own. |
-| **Origin & Name** | Pick where you or your family come from, then type a name or click a suggested name. |
+| **Origin & Name** | Pick where you or your family come from, then type a name or click a suggested name. Some homebrew playbooks ask a question about the place you pick; answer it now or later, and it shows on your **Details** tab. A **Somewhere else** origin asks **Where?** |
 | **Stats** | Assign your playbook's scores to the six stats. |
 | **Special Possessions** | Choose your special possessions, including any "pick N from this list" bundles, or describe a write-in possession to agree with your GM. |
 | **Starting Moves** | Tick your starting moves. A counter shows how many you have chosen out of how many you may pick. |

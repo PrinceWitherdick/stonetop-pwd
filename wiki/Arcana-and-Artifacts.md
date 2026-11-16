@@ -21,7 +21,7 @@ Each card has a title, the front's text, and a list of things to mark on the fro
 | **Collapse / expand card** | the small button in the card's top corner | Folds the card down to its title and the first paragraph of its front, or opens it again. Remembered per card. |
 | **Show back** / **Show front** | card footer | Flips the card to its other side. |
 | **Show both sides** / **Show front only** | card footer | Lays the card open with front and back side by side, or goes back to one side. |
-| **Remove** | card footer, when the section is in edit mode | Takes the arcanum off your sheet after you confirm (**Remove the arcanum** or **Keep it**). This can't be undone. |
+| **Remove** | card footer, when the section is in edit mode | Takes the arcanum off your sheet after you confirm (**Remove the arcanum** or **Keep it**). This can't be undone. If any Consequences are marked, **Keep its Consequence marks** (ticked) holds them for when the card comes back. A follower the card summoned can go too: tick **Also remove (name) from your Followers**. |
 
 The flip and both-sides buttons only appear when you're allowed to read the back. That happens when:
 
@@ -35,13 +35,18 @@ Otherwise the back stays hidden until you unlock it or the GM reveals it. Your c
 
 **Choosing what a mark gives you.** Some cards let you pick something each time you mark them. When you have a pick still to make, the card shows a strip saying **Each mark on this card lets you choose one of the …**, with how many are still owed, and a **Choose** button. Click it to make your picks.
 
-**Tracks on the back.** Some backs carry a row of uses or charges. Click a box to fill the track up to it; click the last filled box to empty it.
+**Tracks on the back.** Some backs carry a row of uses or charges. Click a box to fill the track up to it; click the last filled box to empty it. A card whose uses are rolled (for example 1d4+8) has a **Roll 1d4+8** button while its track is untouched: it rolls in chat and marks the rest as used.
+
+**Your notes.** Once a card is identified, a **Notes** box sits under it for what you recorded, crossed off or rolled. Only you (and the GM) can write in it.
+
+**Unlocking.** Some cards can be unlocked more than one way (either this or that); any one way is enough. Once every mark is filled the card stays unlocked, even if the card's own rules later tell you to erase all its marks.
 
 > **Did you know?**
 > - Click a card's **title** to post that side of the card to chat (front title for the front, back title for the back). It follows your current chat roll mode, so a private roll mode keeps it private.
 > - Move names printed in bold inside a card's text are buttons. Click one, or tab to it and press `Enter` or `Space`, to make that move. If the move needs a roll or a choice, you get the usual roll window; otherwise its text goes straight to chat.
 > - Hover a card's small picture to see it larger beside the sheet. Click it to open the picture full size in its own window.
 > - The flip and both-sides buttons work in Play mode too, so you can read a spread at the table without switching to Edit mode.
+> - A card that summons a creature has to be identified and unlocked first (the Ring of Daagon's Call Up only needs the Ring identified). If another character already has that creature as a follower, a gold note says so; whether it can serve two at once is the GM's call.
 
 ## Unidentified arcana
 

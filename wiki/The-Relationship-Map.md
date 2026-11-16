@@ -2,7 +2,7 @@
 
 The relationship map is a shared board of who knows whom: portraits of the party and the village, joined by labelled lines and gathered into named groups. Everyone can work on a map the GM has shown them, at the same time, and each person can undo their own changes.
 
-![The steading's Relationship Map tab: portraits joined by labelled lines, groups drawn as a box and ovals around some of them, and the toolbar along the bottom](images/the-relationship-map-board.webp)
+![The steading's Relationship Map tab on The Party board: portraits joined by labelled lines, named groups drawn as a box and ovals, labels such as Iron Knight under some names with Noble and Oathsworn chips, and the Names, Words, Lines and Arrowheads dials in the bottom bar](images/the-relationship-map-board.webp)
 
 ## Opening it
 
@@ -40,6 +40,8 @@ In the same bar you can:
 - choose where the name, label and chips stand: **Above**, **Below**, **Left** or **Right** of the portrait;
 - turn **Italicize** off to set the label upright (a new label starts the way the last one saved on that board was);
 - put **tag chips** on them, such as *Noble* or *Outcast* (see below).
+
+![The label bar open for Brakkos: Iron Knight typed in, Italicize ticked, Noble and Oathsworn chips with Add chip, the Above, Below, Left and Right placement strip and Save](images/the-relationship-map-label-bar.webp)
 
 Every change shows on the board as you make it, for you alone. **Save** (or `Ctrl`+`Enter`) keeps them all as one undo step. `Esc`, the **×**, or clicking away puts everything back as it was. An empty label removes it.
 

@@ -21,6 +21,7 @@ Each card shows the follower's **HP**, **Instinct**, **Cost**, tags, gear, moves
 - Tags with an explanation on hover, and **Add a tag…** to give them a new one.
 - **Outfit**, to pack their gear for an expedition.
 - **Debility (p.243)**, when they're weakened, dazed or miserable.
+- **Reset Inventory**, shown only while something is marked: back home, they set down everything they carried and forget what their Outfit held in reserve (p.89). Their gear list stays. The crew's Inventory fold has its own, which empties every gear pip and every set of Supplies and unticks what members carry; written-in items stay.
 
 > **Did you know?**
 > - Each section on a card folds on its own, and stays as you left it when you reopen the sheet.
@@ -66,6 +67,17 @@ A crew or group follower is one card for many people. Its card adds:
 When members fall, they're struck off the roster (a group keeps at least two).
 
 A crew member you name gets their own character in the **Followers** folder, so they can go on the relationship map and have their own feelings about each player character. Their sheet shows what the crew card says about them: who they follow, the crew's Loyalty and Readiness, their HP, the crew's tags with their own beside them, and the crew's instinct and cost if they don't have their own. An **Order** button there opens the same window as their button on the card. To change any of this, edit the crew card.
+
+![Hywel's own sheet: the crew's tags beside his own as chips, Following Coria with Loyalty and HP, an Order Hywel button, and the crew's instinct and cost](images/followers-crew-person.webp)
+
+![Coria's crew roster in edit mode: Hywel, Gwenllian, Ifan and Ffion each with a face, HP, tag and traits, and a pencil (Edit name, tag and traits) beside each Remove](images/followers-crew-roster.webp)
+
+- **Editing a named member.** With the roster in edit mode, the pencil beside a named member (**Edit name, tag and traits**) opens **Edit (name)**, filled in with what they have. Their traits are listed ticked: untick one to take it away, or type in **Add a trait of your own…** and press **Add** for one they gained in play. Clearing the name keeps the old one. The Chronicle reads the change as what it is ("Eira is now called Eirlys", a trait gained or lost), not as one person leaving and a stranger joining.
+![The Edit Hywel window: Name, Person with Link a Person..., Tag, the traits grid with scars and tells tall tales ticked, Add a trait of your own... and Save](images/followers-crew-edit.webp)
+
+- **Name and face go both ways.** Renaming the member's character or giving them a new picture changes the roster too, and the other way round. Tag and traits only go from the crew card to their sheet.
+- **Link a Person…** in the member's window uses an NPC you already made instead of making a new one. A character the sheet made for them is deleted when you link another; one you made by hand is kept.
+- **Removing a member** asks what happens to their character: **Remove them, keep their Person**, **Remove them and delete their Person**, or **Keep them**. When a member dies, their character is marked Dead.
 
 ## Away from the fight
 

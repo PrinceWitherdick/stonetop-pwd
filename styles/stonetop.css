@@ -757,6 +757,14 @@
 	--st-trim-top: calc((1lh - 1cap) / 2 + var(--st-caps-trim-nudge));
 	--st-trim-bottom: calc((1lh - 1cap) / 2 - var(--st-caps-trim-nudge));
 
+	/* The same for a chip whose words are lowercase by convention (a follower's tags and traits:
+	   "old", "scars", "tells tall tales"). Centred on their capitals, their x-height, which is most of
+	   what the eye sees, sat 1 to 2px low (live, DPR 4 and the wiki shots, 2026-11-15). Such a chip
+	   trims to `ex` instead and pads with these, so it stays the same height. No nudge: trimmed to
+	   ex, the x-height measured within 0.75px of the middle at 1x / 1.25x / 1.5x, averaging ~0. */
+	--st-trim-ex-top: calc((1lh - 1ex) / 2);
+	--st-trim-ex-bottom: calc((1lh - 1ex) / 2);
+
 	/* ── Blue "step/sequence" tint ────────────────────────────────────────
 	   Mirrors the green accent palette for ordered, numbered sequences — the
 	   circle step badges in the Welcome guide read as steps, not active states. */
@@ -14398,7 +14406,7 @@ button.stonetop-held-disadvantage:hover { color: var(--st-text-body); }
 	.stonetop-relmap-chip-text { transform: translateY(var(--st-caps-nudge, 0.073em)); }
 	/* Every other chip: nothing is trimmed, so there is no height to put back, and each keeps the
 	   padding it had before trimming. The count disc goes back to flex centring its line box. */
-	:root { --st-trim-top: 0px; --st-trim-bottom: 0px; }
+	:root { --st-trim-top: 0px; --st-trim-bottom: 0px; --st-trim-ex-top: 0px; --st-trim-ex-bottom: 0px; }
 	.stonetop-condemn-count,
 	.stonetop-marks-count { display: inline-flex; align-items: center; justify-content: center; padding-top: 0; }
 	.stonetop-fight-badge { display: inline-flex; align-items: center; justify-content: center; }
@@ -29612,17 +29620,23 @@ ul.stonetop-pb-review-unsure-where { margin: 3px 0; padding-left: 0; list-style:
 	letter-spacing: 0.04em;
 }
 
+/* `align-items: center`, not the default stretch: a pill is trimmed to its cap band and centred by
+   its own padding, so one stretched to a taller neighbour's height kept its words at the top. The
+   Exceptional toggle used to be that neighbour (2.6px taller), and lifted every tag on its line
+   1.3px to 2px (measured live on the painted caps at 1x / 1.25x / 1.5x, 2026-11-15). */
 .stonetop-follower-tags {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: 4px;
 }
 
 .stonetop-follower-tag {
 	display: inline-block;
-	/* Trimmed to its cap band, height kept; see the Chip centring tokens in :root. */
-	text-box: trim-both cap alphabetic;
-	padding: calc(1px + var(--st-trim-top)) 8px calc(1px + var(--st-trim-bottom));
+	/* Tags and traits are lowercase words, so the pill is trimmed to its x-height band, not its cap
+	   band, height kept; see --st-trim-ex-top in :root. */
+	text-box: trim-both ex alphabetic;
+	padding: calc(1px + var(--st-trim-ex-top)) 8px calc(1px + var(--st-trim-ex-bottom));
 	background: hsl(210 12% 92%);
 	border: 1px solid rgba(100,116,139,0.3);
 	border-radius: 999px;
@@ -30916,12 +30930,20 @@ details.stonetop-follower-details-fold.stonetop-crew-collapsible {
 	user-select: none;
 	opacity: 0.7;
 	font-family: var(--font-stonetop);
-	font-size: var(--st-fs-base);
-	line-height: 1.4;
+	/* The plain tag's size, so it is exactly as tall as the tags it sits among (it was --st-fs-base at
+	   line-height 1.4: 2.6px taller, which stretched its whole line). */
+	font-size: var(--st-fs-sm);
+	line-height: normal;
 	/* Its label is a wrapped span that trims and pads ITSELF (it can carry a lock icon, and a flex
 	   chip cannot trim a bare text node), so the base tag's own trim and padding come off here. */
 	padding: 1px 8px;
 	text-box: none;
+}
+/* Its label is lowercase like the tags beside it, so it trims to its x-height as they do. */
+.stonetop-follower-tag.stonetop-exceptional-toggle > .stonetop-chip-text {
+	text-box: trim-both ex alphabetic;
+	padding-top: var(--st-trim-ex-top);
+	padding-bottom: var(--st-trim-ex-bottom);
 }
 .stonetop-exceptional-toggle:hover { opacity: 1; }
 .stonetop-follower-tag.stonetop-exceptional-toggle.is-selected {

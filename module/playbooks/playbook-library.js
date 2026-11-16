@@ -411,7 +411,7 @@ async function _adoptRun(afterAdding) {
 		}
 	}
 	if (added.length) {
-		ui.notifications?.info?.(`Added ${joinNames(added)} from your playbook library, the homebrew playbooks you saved in your other worlds. They're in the Items sidebar under Homebrew Playbooks, hidden from players' picker until you tick "Show to players" in the Playbook Builder.`);
+		ui.notifications?.info?.(`Added ${joinNames(added)} from your playbook library, the homebrew playbooks you saved in your other worlds. They're in the Items sidebar under Homebrew Playbooks, hidden from players' picker until you open the eye at the top of the Playbook Builder.`);
 	}
 	// Before the offers below, which wait on the GM: what the world is still missing is known now.
 	afterAdding();

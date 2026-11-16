@@ -58,7 +58,7 @@ A rail down the left side lists the steps. Click any of them to jump there, or u
 | --- | --- |
 | **Getting started** | The premise of the game, a **New to Foundry?** link, and **Open Setting Overview**. |
 | **Import the book art** (marked optional) | Explains the art importer and offers **Import Book Art** (or **Import Book Art Again** if this world found art you already imported). When finer portraits can be cut from art on disk, a **Build N more portraits from art you already have** button appears too. |
-| **Third-party playbooks** (marked optional) | For a community or homebrew playbook someone wants to play: add it before characters are made, so it is in the playbook picker. **Add a Playbook** asks whether you have it as a PDF (one made with the community Stonetop playbook template is read in and reviewed) or will type it in, then opens the Playbook Builder. Players see it once you tick **Show to players**. |
+| **Third-party playbooks** (marked optional) | For a community or homebrew playbook someone wants to play: add it before characters are made, so it is in the playbook picker. **Add a Playbook** asks whether you have it as a PDF (one made with the community Stonetop playbook template is read in and reviewed) or will type it in, then opens the Playbook Builder. Players can pick it while the eye at the top of the Builder is open. See [Homebrew Playbooks](Homebrew-Playbooks). |
 | **Review the setting** | Suggests 10 to 15 minutes with the Setting Overview, then questions. **Open Setting Overview**. |
 | **Set expectations** | Points you at the Setting Overview's **Agenda & Principles** tab, and at talking through content to exclude, veil or handle with care. |
 | **Create characters** | One row per player, with a dot showing whether they are online. **Create Character** opens a new character on that player's screen with a big Create Character button. If they already have one, the button reads **Another Character** and asks whether the new one joins theirs or replaces it. While they work, their row shows the playbook they picked and a live progress count. If nobody has joined the world yet, a **Configure Players** button takes you to Foundry's player management page (you leave the game and come back). |
@@ -67,7 +67,7 @@ A rail down the left side lists the steps. Click any of them to jump there, or u
 
 Click a character name on the **Create characters** panel to open that sheet.
 
-![The Welcome to Stonetop guide on step 4, Create characters, listing the player and their finished characters, with the Another Character button](images/your-first-session-welcome-characters.webp)
+![The Welcome to Stonetop guide on Create characters (step 3 of 5, with the optional Third-party playbooks step in the rail), listing the player and their finished characters, with the Another Character button](images/your-first-session-welcome-characters.webp)
 
 ### New to Foundry?
 

@@ -321,6 +321,9 @@ describe("a world loading the library", () => {
 		await adoptLibraryPlaybooks();
 		expect(readHomebrewBundle(homebrewPlaybookBySlug(slug)).playbook.published).toBe(false);
 		expect(ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("hidden from players' picker"));
+		// The Builder's control is the eye in its header; there is no "Show to players" box to tick.
+		expect(ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("open the eye at the top of the Playbook Builder"));
+		expect(ui.notifications.info).not.toHaveBeenCalledWith(expect.stringContaining("Show to players"));
 	});
 
 	/** This world holds an OLDER copy than the library's, which another world has since saved over. */

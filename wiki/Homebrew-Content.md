@@ -9,13 +9,14 @@ The Items sidebar's **Create Item** button opens a chooser instead of Foundry's 
 | Group | Choices |
 |---|---|
 | **Move** | A custom move players can roll. |
+| **Homebrew Playbook** | GM only. A character playbook of your own or a third party's, read from a PDF or built by hand. See [Homebrew Playbooks](Homebrew-Playbooks). |
 | **Steading Improvement** | An improvement for Stonetop, with requirements and effects. |
 | **Gear & Treasure** | **Inventory Item**; **Treasure** (GM only, hidden until handed over); **Blank arcanum**; **Inspire me…** (rolls Book II's artifact creation tables). |
 | **Dangers & Places** | **Threat**; **Site**; and the Things Below: **A Thing Below**, **A corrupted site**, **A corrupted being**, **An emanation**. |
 
 Each is saved once as a world item. Drag it onto the sheet or tab where it belongs: a move or item onto a character, an improvement onto the steading's **Improvements** tab, a threat onto the GM Toolkit's **Threats & Dangers** tab.
 
-![The Create Stonetop Content picker](images/homebrew-content-chooser.webp)
+![The Create Stonetop Content picker: Gear & Treasure, Move, Homebrew Playbook, Steading Improvement and Dangers & Places, with Continue](images/homebrew-content-chooser.webp)
 
 ## Custom moves
 
@@ -49,6 +50,7 @@ Homebrew threat ideas can be kept as cards in a GM-only journal and dragged onto
 See [Arcana for GMs](Arcana-for-GMs#homebrew-arcana). Whether players can make their own is the world setting **Arcana Creation: GM Only**.
 
 ## See also
+- [Homebrew Playbooks](Homebrew-Playbooks)
 - [The GM Toolkit](The-GM-Toolkit)
 - [The Steading and Settlements](The-Steading-and-Settlements#improvements)
 - [World Settings Reference](World-Settings-Reference)

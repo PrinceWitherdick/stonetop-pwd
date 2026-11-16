@@ -72,7 +72,6 @@ describe("text-only chips trim themselves", () => {
 		".stonetop-levelup-move-chip",
 		".stonetop-onboarding-possession-badge",
 		".stonetop-call-up-dialog .stonetop-cu-preview-tag",
-		".stonetop-follower-tag",
 		".stonetop-monster-org-pill",
 		".stonetop-cf-tag",
 		".stonetop-cf-chip",
@@ -124,6 +123,39 @@ describe("text-only chips trim themselves", () => {
 		const body = declarations(MAIN, ".stonetop-follower-tag.stonetop-exceptional-toggle");
 		expect(declared(body, "text-box")).toBe("none");
 		expect(declared(body, "padding")).toBe("1px 8px");
+	});
+});
+
+// Lowercase-by-convention chips centre their x-height, which is what the eye reads in "old" or
+// "tells tall tales"; centred on their capitals they sat 1-2px low (live, 2026-11-15).
+describe("lowercase chips trim to their x-height", () => {
+	it("has x-height tokens beside the cap ones, zeroed where text-box is unsupported", () => {
+		const root = declarations(MAIN, ":root");
+		expect(declared(root, "--st-trim-ex-top")).toBe("calc((1lh - 1ex) / 2)");
+		expect(declared(root, "--st-trim-ex-bottom")).toBe("calc((1lh - 1ex) / 2)");
+		expect(FALLBACK).toMatch(/--st-trim-ex-top:\s*0px/);
+		expect(FALLBACK).toMatch(/--st-trim-ex-bottom:\s*0px/);
+	});
+
+	it("a follower's tag pill trims itself to ex and pads with both ex tokens", () => {
+		const body = declarations(MAIN, ".stonetop-follower-tag");
+		expect(body).toMatch(/text-box:\s*trim-both ex alphabetic/);
+		expect(declared(body, "padding")).toMatch(/var\(--st-trim-ex-top\)[\s\S]*var\(--st-trim-ex-bottom\)/);
+		expect(declared(body, "display")).toBe("inline-block");
+	});
+
+	it("the exceptional toggle's label trims to ex like the tags beside it", () => {
+		const body = declarations(MAIN, ".stonetop-follower-tag.stonetop-exceptional-toggle > .stonetop-chip-text");
+		expect(body).toMatch(/text-box:\s*trim-both ex alphabetic/);
+	});
+
+	// The toggle sat 2.6px taller than the tags on its line, and the row stretched them to match, so
+	// their words rode high. It is a tag's size now, and the row no longer stretches.
+	it("keeps the tag row from stretching its pills, and the toggle a tag's size", () => {
+		expect(declared(declarations(MAIN, ".stonetop-follower-tags"), "align-items")).toBe("center");
+		const toggle = declarations(MAIN, ".stonetop-follower-tag.stonetop-exceptional-toggle");
+		expect(declared(toggle, "font-size")).toBe("var(--st-fs-sm)");
+		expect(declared(toggle, "line-height")).toBe("normal");
 	});
 });
 
