@@ -196,10 +196,11 @@ export function sweepOnce(character, kind, fn, failure = "Stonetop | A follower 
 	queue.waiting.set(kind, pending);
 	queue.active++;
 	pending.run = queue.tail.then(async () => {
-		// From here on a new request is a follow-up, not this run.
-		if (queue.waiting.get(kind) === pending) queue.waiting.delete(kind);
 		try {
+			// Still waiting through the makerRank stagger: a request in that wait shares this run,
+			// which has not planned yet. Only from here on is a new request a follow-up.
 			const turnFailed = await pending.turn.done;
+			if (queue.waiting.get(kind) === pending) queue.waiting.delete(kind);
 			if (turnFailed) throw turnFailed;
 			return await pending.fn();
 		} catch (err) {
@@ -518,7 +519,9 @@ export async function syncFollowerActors(character, snapshots = []) {
 		console.error("Stonetop | Could not work out which follower actors need updating.", err);
 		return 0;
 	}
-	if (!drifted.length) return 0;
+	// Nothing drifted on THESE cards, but a pass already waiting carries older ones (a rename
+	// undone before its turn came) and would write them: hand it this call's empty plan.
+	if (!drifted.length && !sweepQueued(character, "follower-sync")) return 0;
 
 	// The same queue the creating sweep waits in, for a sharper version of the same reason.
 	// Two people with this sheet open both see every write to it, so both would otherwise

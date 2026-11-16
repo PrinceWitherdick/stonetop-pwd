@@ -302,10 +302,12 @@ export function crewMemberOf(person) {
  */
 export function redrawCrewMemberSheets(character) {
 	if (character?.type !== "character" || !character.uuid) return;
+	// The flag first: this runs on every character update on every client, and `person.sheet` is a
+	// getter that can build a sheet, so it is only asked of a Person who is on this crew.
 	const open = openApplications().filter(app => {
 		const person = app?.actor;
-		return person?.type === "npc" && app === person.sheet && app.rendered
-			&& crewOwnerUuid(person) === character.uuid;
+		return person?.type === "npc" && crewOwnerUuid(person) === character.uuid
+			&& app.rendered && app === person.sheet;
 	});
 	if (!open.length) return;
 	// The sheets share one build of the crew card (StonetopCharacterSheet#crewMemberCard); one
@@ -352,12 +354,16 @@ function crewContext(character) {
  * The world's people who could be linked to a member from the crew member window: npcs this user
  * can write, that are not somebody's follower actor and not already on a crew. `keep` is the one
  * this member is linked to now, which stays on the list.
+ *
+ * "On a crew" is asked of the roster (crewMemberOf), not of the flag alone: a member removed by a
+ * user who could neither delete their Person nor write it leaves the flag behind, and a Person no
+ * row points at any more is on nobody's crew, so it is free to link again.
  */
 export function linkableCrewPeople(keep = "") {
 	return (globalThis.game?.actors?.contents ?? []).filter(actor =>
 		actor.type === "npc" && actor.isOwner
 		&& !actor.flags?.[SYSTEM_ID]?.followerOrigin
-		&& (!crewOwnerUuid(actor) || actor.uuid === keep));
+		&& (actor.uuid === keep || !crewOwnerUuid(actor) || !crewMemberOf(actor)));
 }
 
 /* -------------------------------------------- */
@@ -454,20 +460,25 @@ export async function syncCrewMemberPeople(character) {
 
 	return sweepOnce(character, "crew-sync", async () => {
 		let moved = 0;
-		let rows = null;
+		const pulls = [];
 		for (const { person, row, step } of plan()) {
 			// A pull needs the character, and a client that cannot write it leaves the whole step,
 			// stamp included, for one that can: stamping it here would lose the Person's edit.
 			if (step.rowPatch && !character.isOwner) continue;
 			try {
 				if (Object.keys(step.personUpdate).length) await person.update(step.personUpdate, silentSync());
-				if (step.rowPatch) {
-					rows = crewRowWriteBack(rows ?? crewIndividuals(character), row.personUuid, step.rowPatch) ?? rows;
-				}
+				if (step.rowPatch) pulls.push({ personUuid: row.personUuid, patch: step.rowPatch });
 				moved++;
 			} catch (err) {
 				console.warn("Stonetop | Could not bring this crew member's Person back in step.", person?.name, err);
 			}
+		}
+		// The pulls go onto the roster as it is NOW, not as planned: the Person updates above
+		// awaited, and a roster edit that landed meanwhile (a trait added to another member) would
+		// otherwise be written back over. Only the pulled fields of the pulled rows change.
+		let rows = null;
+		for (const { personUuid, patch } of pulls) {
+			rows = crewRowWriteBack(rows ?? crewIndividuals(character), personUuid, patch) ?? rows;
 		}
 		// Marked as the sync's own write, so the roster hook does not plan this sync again over
 		// it. Not silent to the ledger: a member renamed on their own sheet is still news.
@@ -532,6 +543,8 @@ export async function markCrewPersonDead(row) {
  *
  * A user who may not delete actors, or a delete that fails, still takes the Person off the crew:
  * left marked, it would sit outside every "Link a Person" list for good. They are told it was kept.
+ * One who cannot write the Person either leaves the flag, but no row points at them, so they are
+ * off the crew all the same (crewMemberOf answers null, and linkableCrewPeople lists them).
  */
 export async function releaseCrewPerson(row, { remove = false } = {}) {
 	const person = crewPersonFor(row);

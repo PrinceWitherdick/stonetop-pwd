@@ -178,7 +178,7 @@ describe("paying the carer's Stock", () => {
 		const gwynn = carer({ owners: ["p-gwynn"], purses: [vessel, weak] });
 		gwynn.typedActor.spendStock = vi.fn(async () => ({ lost: 5 }));
 		const bled = await payHealersArtsStock({ carer: gwynn, patient: { id: "bram", name: "Bram" }, sourceKey: "hp" });
-		expect(bled).toMatchObject({ key: "hp", vessel: true, standIn: null, lost: 5 });
+		expect(bled).toMatchObject({ key: "hp", vessel: true, standIn: null, lost: 5, receipt: expect.stringContaining("Lost 5 HP in place of") });
 		const marked = await payHealersArtsStock({ carer: gwynn, patient: { id: "bram", name: "Bram" }, sourceKey: weak.key });
 		expect(marked.standIn).toEqual(weak.standIn);
 	});

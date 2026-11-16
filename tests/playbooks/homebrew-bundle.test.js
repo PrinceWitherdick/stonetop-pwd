@@ -293,6 +293,13 @@ describe("what a roll holds, read off a move's words", () => {
 		expect(holdOnRollFrom("When you take this on, hold 2 Surprises.", "Surprises")).toBeNull();
 	});
 
+	// Release 1.8.5 review: a rung's LAST hold wins, so a hold the words only test after the grant
+	// was read as the grant.
+	it("skips a hold the words test rather than grant", () => {
+		expect(holdOnRollFrom("On a 10+, hold 3 Fear; while you hold 1 Fear or more, enemies hesitate.", "Fear")).toEqual({ success: 3 });
+		expect(holdOnRollFrom("On a 7-9, hold 2 Fear. If you still hold 2, take +1 forward.", "Fear")).toEqual({ partial: 2 });
+	});
+
 	it("is written on the move's track, and the GM's numbers win", () => {
 		const { bundle } = normalizeBundle(testerBundle());
 		const prod = bundleToItemData(bundle, { slug: "homebrew-the-tester" }).moves.find(m => m.name === "Prod");
@@ -339,6 +346,31 @@ describe("what changed since the saved version", () => {
 		const after = testerBundle();
 		after.moves[1].description = "Like Prod, but much gentler.";
 		expect(diffBundles(before, after).lines).toEqual(["Changed moves: Poke"]);
+	});
+
+	// Release 1.8.5 review: every run of whitespace used to fold to one space, so a move split into
+	// two paragraphs compared equal to the run-on one and never reached the GM's other worlds.
+	it("names a move split into paragraphs, but not a list a save set off with a blank line", () => {
+		const before = testerBundle();
+		before.moves[1].description = "First part. Second part.";
+		const split = testerBundle();
+		split.moves[1].description = "First part.\n\nSecond part.";
+		expect(diffBundles(before, split).lines).toEqual(["Changed moves: Poke"]);
+
+		const listed = testerBundle();
+		listed.moves[1].description = "Choose one:\n- a\n- b\nThen roll.";
+		const spaced = testerBundle();
+		spaced.moves[1].description = "Choose one:\n\n- a\n- b\n\nThen roll.";
+		expect(diffBundles(listed, spaced).lines).toEqual([]);
+	});
+
+	it("is nothing, for a playbook with paragraphs and a list saved and read straight back", () => {
+		const raw = testerBundle();
+		raw.moves[1].description = "Choose one:\n- a\n- b\nThen roll.\n\nA second paragraph.";
+		const { bundle } = normalizeBundle(raw);
+		const { playbook, moves } = bundleToItemData(bundle, { slug: "homebrew-the-tester", source: "pdf" });
+		const back = itemsToBundle({ ...playbook, system: { ...playbook.system, slug: "homebrew-the-tester" } }, moves);
+		expect(diffBundles(back, bundle).lines).toEqual([]);
 	});
 });
 

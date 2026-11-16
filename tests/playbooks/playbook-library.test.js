@@ -67,6 +67,10 @@ describe("sameContent", () => {
 	it("doesn't take reflowed whitespace for an update, as diffBundles doesn't", () => {
 		expect(sameContent(tester(), tester("The Tester", { prod: "Poke\n   it." }))).toBe(true);
 	});
+	// Release 1.8.5 review: a paragraph break is drawn, so splitting one is an edit worth sharing.
+	it("sees a move split into two paragraphs", () => {
+		expect(sameContent(tester("The Tester", { prod: "Poke it. Then run." }), tester("The Tester", { prod: "Poke it.\n\nThen run." }))).toBe(false);
+	});
 });
 
 describe("planAdoption", () => {

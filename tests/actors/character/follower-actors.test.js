@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
-	createFollowerActor, ensureFollowerActors, followerActorFromLink, syncFollowerActors,
+	createFollowerActor, ensureFollowerActors, followerActorFromLink, syncFollowerActors, sweepOnce,
 } from "../../../module/actors/character/follower-actors.js";
 import { followerNpcActorData } from "../../../module/data/follower-actor.js";
 
@@ -354,6 +354,21 @@ describe("syncFollowerActors", () => {
 		// No prototypeToken.texture here: writing `img` is what
 		// StonetopActor#_syncPrototypeTokenImage watches, and it carries a token that was following.
 		expect(wrote(npc).img).toBe("worlds/art/enfys.webp");
+	});
+
+	// Release 1.8.5 review: a pass waiting its turn kept the cards it was queued with, and a later
+	// render that found no drift returned before handing it the newer ones.
+	it("lets a waiting pass go when the rename it was queued for is undone before its turn", async () => {
+		const npc = makeFollowerActor("Actor.a");
+		character = makeCharacter({ f1: "Actor.a" });
+		let release;
+		const ahead = sweepOnce(character, "follower-actors", () => new Promise(resolve => { release = resolve; }));
+		await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+		const renamed = syncFollowerActors(character, [snap({ name: "Rob" })]);
+		const undone = syncFollowerActors(character, [snap()]);
+		release(0);
+		await Promise.all([ahead, renamed, undone]);
+		expect(npc.update).not.toHaveBeenCalled();
 	});
 
 	it("carries a rename through to the token's own label", async () => {

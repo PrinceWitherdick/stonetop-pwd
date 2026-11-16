@@ -147,6 +147,20 @@ describe("the Vessel's third purse", () => {
 		expect(stockReceipt({ label: "HP", standIn: { kind: "hp", amount: 2 } }, 1, 2)).toBe("Lost 2 HP in place of 1 Stock");
 		expect(stockReceipt({ label: "a scar", standIn: { kind: "other", text: "a scar" } }, 1)).toBe("In place of 1 Stock: a scar");
 	});
+
+	// Release 1.8.5 review: the fallback repeated each purse's wording; now both read one place, and a
+	// copy the paying side already worded reads that.
+	it("words a live purse and its plain copy the same way, and reads a receipt sent as text", () => {
+		const plain = source => JSON.parse(JSON.stringify(source));
+		const sources = stockSources({
+			pouchStored: 1, vesselHp: 7, hp: 7,
+			standIns: [{ kind: "debility" }, { kind: "hp", amount: 2 }, { kind: "other", text: "a scar" }],
+			openDebilities: [{ key: "weak", name: "Weak" }],
+		});
+		expect(sources.length).toBeGreaterThan(4);
+		for (const s of sources) expect(stockReceipt(plain(s), 1, 3)).toBe(stockReceipt(s, 1, 3));
+		expect(stockReceipt({ label: "HP", vessel: true, receipt: "Lost 4 HP in place of 1 Stock" }, 1, 9)).toBe("Lost 4 HP in place of 1 Stock");
+	});
 });
 
 describe("stockSources", () => {

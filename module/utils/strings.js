@@ -282,9 +282,30 @@ export function htmlToPlainText(html) {
  * Text as a change-detection hash reads it: entities decoded, runs of whitespace collapsed to one
  * space, trimmed. An editor re-saving the same words (`&#x27;` back as `'`, a reflowed line) then
  * does not read as an edit. Shared by the Chronicle's prose hashes and the timeline's season rows.
+ *
+ * FROZEN DECODING. Both hashes already sit on pages in running worlds, so this decodes exactly the
+ * entities decodeEntities decoded when they were stamped (_decodeHashEntities), and no more: had it
+ * followed decodeEntities when that learned every numeric form and `&ldquo;`/`&rdquo;`/`&apos;`, a
+ * pristine section holding one of those would hash differently and read as edited by the GM.
  */
 export function normaliseEditorText(text) {
-	return decodeEntities(text).replace(/\s+/g, " ").trim();
+	return _decodeHashEntities(text).replace(/\s+/g, " ").trim();
+}
+
+/** decodeEntities as it was when the stored hashes were stamped. Never extend it (see above). */
+function _decodeHashEntities(text) {
+	return String(text ?? "")
+		.replace(/&mdash;|&#8212;|&#x2014;/gi, "—")
+		.replace(/&ndash;|&#8211;|&#x2013;/gi, "–")
+		.replace(/&hellip;|&#8230;/gi, "…")
+		.replace(/&rsquo;|&#8217;/gi, "’")
+		.replace(/&lsquo;|&#8216;/gi, "‘")
+		.replace(/&nbsp;|&#160;/gi, " ")
+		.replace(/&quot;|&#34;/gi, '"')
+		.replace(/&#39;|&#x27;/gi, "'")
+		.replace(/&lt;|&#60;/gi, "<")
+		.replace(/&gt;|&#62;/gi, ">")
+		.replace(/&amp;|&#38;/gi, "&");
 }
 
 // A move outcome's flattened value reads "<lead-in> pick 1: <option> / <option> / …"

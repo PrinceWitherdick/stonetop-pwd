@@ -111,7 +111,7 @@ export function stockSources({ pouchMax = DEFAULT_SACRED_POUCH_MAX, pouchStored 
 				return { lost: 0 };
 			},
 			choiceLabel: () => `${label} (${remaining} left)`,
-			receipt: amount => `Spent ${amount} ${label}`,
+			receipt(amount, lost) { return receiptWords(this, amount, lost); },
 		};
 	};
 	const out = [];
@@ -136,7 +136,7 @@ export function stockSources({ pouchMax = DEFAULT_SACRED_POUCH_MAX, pouchStored 
 				return { lost };
 			},
 			choiceLabel: amount => `Lose ${vesselHpFormula(amount)} HP instead`,
-			receipt: (amount, lost = 0) => `Lost ${lost} HP in place of ${amount} Stock`,
+			receipt(amount, lost) { return receiptWords(this, amount, lost); },
 		});
 	}
 	out.push(...standInPurses(standIns, openDebilities, hp));
@@ -165,7 +165,7 @@ function standInPurses(standIns, openDebilities, hp) {
 						return { lost: 0 };
 					},
 					choiceLabel: () => `Mark ${d.name} instead${via}`,
-					receipt: amount => `Marked ${d.name} in place of ${amount} Stock`,
+					receipt(amount, lost) { return receiptWords(this, amount, lost); },
 				});
 			}
 		} else if (s?.kind === "hp") {
@@ -179,7 +179,7 @@ function standInPurses(standIns, openDebilities, hp) {
 					return { lost };
 				},
 				choiceLabel: amount => `Lose ${s.amount * Math.max(1, amount)} HP instead${via}`,
-				receipt: (amount, lost = 0) => `Lost ${lost} HP in place of ${amount} Stock`,
+				receipt(amount, lost) { return receiptWords(this, amount, lost); },
 			});
 		} else if (s?.text) {
 			out.push({
@@ -188,7 +188,7 @@ function standInPurses(standIns, openDebilities, hp) {
 				// A price the table settles: nothing to write, and the receipt names it.
 				pay: async () => ({ lost: 0 }),
 				choiceLabel: () => `${capitalizeFirst(s.text)} instead${via}`,
-				receipt: amount => `In place of ${amount} Stock: ${s.text}`,
+				receipt(amount, lost) { return receiptWords(this, amount, lost); },
 			});
 		}
 	});
@@ -246,16 +246,24 @@ export function stockSourceChoiceLabel(source, amount = 1) {
  * What a paid cost says afterwards, on a card or a notification: "Spent 1 Stock", or for a
  * Vessel "Lost 5 HP in place of 1 Stock" (the purse's receipt). `lost` is the HP the purse took.
  *
- * A purse that lost its methods (a plain copy: Healer's Arts' spend result, a socket reply, a
- * stamp) is worded from its data instead: `vessel` and `standIn` survive a JSON trip, `receipt`
- * does not. With neither, it was a count.
+ * A purse that lost its methods (a plain copy: a socket reply, a stamp) reads its `receipt` STRING
+ * when the paying side wrote one (Healer's Arts' spend result does), else is worded from its data:
+ * `vessel` and `standIn` survive a JSON trip. With neither, it was a count.
  */
 export function stockReceipt(source, amount = 1, lost = 0) {
 	if (typeof source?.receipt === "function") return source.receipt(amount, lost);
-	if (source?.vessel) return `Lost ${lost} HP in place of ${amount} Stock`;
+	if (typeof source?.receipt === "string" && source.receipt) return source.receipt;
+	return receiptWords(source, amount, lost);
+}
+
+/**
+ * THE wording of every receipt, from the purse's data alone: each purse's `receipt` calls it, and so
+ * does stockReceipt for a plain copy, so the two can never word one payment two ways.
+ */
+function receiptWords(source, amount = 1, lost = 0) {
 	const s = source?.standIn;
+	if (source?.vessel || s?.kind === "hp") return `Lost ${lost ?? 0} HP in place of ${amount} Stock`;
 	if (s?.kind === "debility") return `Marked ${s.name} in place of ${amount} Stock`;
-	if (s?.kind === "hp") return `Lost ${lost} HP in place of ${amount} Stock`;
 	if (s?.kind === "other") return `In place of ${amount} Stock: ${s.text}`;
 	return `Spent ${amount} ${source?.label ?? "Stock"}`;
 }

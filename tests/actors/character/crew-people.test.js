@@ -3,7 +3,7 @@ import {
 	applyCrewRowPatch, crewMemberOf, crewMemberPersonData, crewPersonOccupation, crewPersonReconcile, crewPersonTraits,
 	crewPersonTraitsFollowRoster, crewRowWriteBack, ensureCrewMemberPeople, markCrewPersonDead, onUpdateActorCrewPerson,
 	onItemChangeCrewSheets, onUpdateActorCrewRoster, onUpdateActorCrewSheets, releaseCrewPerson, replaceCrewPerson,
-	syncCrewMemberPeople, CREW_SHEET_REDRAW_MS,
+	linkableCrewPeople, syncCrewMemberPeople, CREW_SHEET_REDRAW_MS,
 } from "../../../module/actors/character/crew-people.js";
 import { MAKER_STAGGER_MS, sweepOnce, sweepQueued } from "../../../module/actors/character/follower-actors.js";
 import { followerCardFor, followerMasterIndex } from "../../../module/actors/character/follower-masters.js";
@@ -547,5 +547,70 @@ describe("redrawing a crew member's open sheet", () => {
 		openSheets(mine);
 		onUpdateActorCrewSheets(mine, { name: "Wrenna" });
 		expect(mine.sheet.render).not.toHaveBeenCalled();
+	});
+});
+
+// Release 1.8.5 review (11-15).
+describe("release 1.8.5 review: crew", () => {
+	const stamp = name => ({ crewMemberCard: { name, img: "", frame: null, occupation: "Pim's crew", traits: "" } });
+
+	// The pulls used to be laid on the rows as read before the later Person writes awaited, so a
+	// roster edit landing in between was written back over, and the sync's own mark kept anything
+	// from planning it again.
+	it("lays its pulls on the roster as it is when it writes, keeping an edit made mid-pass", async () => {
+		const character = makeCharacter([{ name: "Ash", personUuid: "Actor.a" }, { name: "Breena", personUuid: "Actor.b" }]);
+		makePerson("Actor.a", { name: "Ashen", flags: stamp("Ash"), system: { occupation: "Pim's crew", traits: "" } });
+		const b = makePerson("Actor.b", { name: "Bree", flags: stamp("Bree"), system: { occupation: "Pim's crew", traits: "" } });
+		b.update = vi.fn(async () => {
+			const rows = character.flags[SYS].crew.individuals;
+			character.flags[SYS].crew.individuals = rows.map(r => r.personUuid === "Actor.b" ? { ...r, traits: ["loyal"] } : r);
+		});
+		expect(await syncCrewMemberPeople(character)).toBe(2);
+		expect(character.flags[SYS].crew.individuals).toEqual([
+			{ name: "Ashen", personUuid: "Actor.a" },
+			{ name: "Breena", personUuid: "Actor.b", traits: ["loyal"] },
+		]);
+	});
+
+	// A user who could neither delete nor write the Person leaves its flag; no row points at it, so
+	// it must not sit outside every "Link a Person" list for good.
+	it("lists a Person whose crew flag outlived their row, but never one still on a crew", () => {
+		makeCharacter([{ name: "Wren", personUuid: "Actor.on" }]);
+		const on = makePerson("Actor.on");
+		const left = makePerson("Actor.left");
+		const free = makePerson("Actor.free", { flags: { crewMember: undefined } });
+		globalThis.game.actors = { contents: [on, left, free] };
+		expect(linkableCrewPeople().map(a => a.uuid)).toEqual(["Actor.left", "Actor.free"]);
+		expect(linkableCrewPeople("Actor.on").map(a => a.uuid)).toEqual(["Actor.on", "Actor.left", "Actor.free"]);
+	});
+
+	it("never asks the sheet of a Person on another crew, on a character's update", () => {
+		const character = makeCharacter([]);
+		const sheetGetter = vi.fn(() => ({ rendered: true, render: vi.fn() }));
+		const other = makePerson("Actor.o", { flags: { crewMember: { characterUuid: "Actor.pc2" } } });
+		Object.defineProperty(other, "sheet", { get: sheetGetter });
+		globalThis.ui = { windows: { 0: { rendered: true, render: vi.fn(), actor: other } } };
+		onUpdateActorCrewSheets(character, { name: "Pimm" });
+		expect(sheetGetter).not.toHaveBeenCalled();
+	});
+
+	// A request made during the makerRank stagger used to queue a second whole pass behind the one
+	// that had not planned yet.
+	it("shares a pass still in its makerRank wait with a request made during it", async () => {
+		vi.useFakeTimers();
+		try {
+			globalThis.game.users = { contents: [{ id: "user0", active: true }, { id: "user1", active: true }] };
+			const character = { id: "pcStagger", testUserPermission: () => true };
+			const ran = [];
+			const first = sweepOnce(character, "k", async () => { ran.push("first"); return 1; });
+			await vi.advanceTimersByTimeAsync(MAKER_STAGGER_MS / 5);
+			expect(sweepQueued(character, "k")).toBe(true);
+			const second = sweepOnce(character, "k", async () => { ran.push("second"); return 2; });
+			await vi.advanceTimersByTimeAsync(MAKER_STAGGER_MS);
+			expect(await Promise.all([first, second])).toEqual([2, 2]);
+			expect(ran).toEqual(["second"]);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

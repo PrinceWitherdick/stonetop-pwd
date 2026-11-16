@@ -621,21 +621,32 @@ export function advanceFrom(label) {
 	return { kind: "note" };
 }
 
+// A "hold N" the words test rather than grant: "while you hold 1", "if they still hold 2", "hold 1
+// Fear or more".
+const _HOLD_CONDITION_BEFORE = /\b(?:while|if|when|whenever|unless|until|as long as)\s+(?:you|they|he|she|it)?\s*(?:still\s+)?$/i;
+const _HOLD_CONDITION_AFTER = /^\s*(?:or (?:more|fewer|less)|\+)/i;
+
 /**
  * What a roll holds on the move's own track, read off its words: "on a 10+, hold 3 Fear; on a 7-9,
  * hold 1 Fear" for a track called Fear. The tiers are the sheet's own reading of them
  * (parseTiersFromProse), so a PDF's "7–9" and a "7+" that counts for both hits are read as the move
  * card reads them. A later "on a 10+" overrides a "7+" (the Monster Squad's "on a 7+ … hold 1 Reign;
  * on a 10+, hold 2 Reign"), which is why a rung's LAST hold is the one it gives. A hold of some
- * other currency than the track's is not this track's. Null when the words hold nothing.
+ * other currency than the track's is not this track's, and nor is a hold the words only test
+ * ("while you hold 1 Fear or more"): that is a condition, not a grant. Null when the words hold
+ * nothing.
  * @returns {{success?: number, partial?: number, failure?: number}|null}
  */
 export function holdOnRollFrom(description, trackTitle = "") {
 	const tiers = parseTiersFromProse(String(description ?? "").replace(/\*/g, ""), null, { minRows: 1 });
 	if (!tiers) return null;
+	const condition = (h, text) => _HOLD_CONDITION_BEFORE.test(text.slice(Math.max(0, h.index - 40), h.index))
+		|| _HOLD_CONDITION_AFTER.test(text.slice(h.index + h[0].length));
 	const out = {};
 	for (const key of ["success", "partial", "failure"]) {
-		const holds = [...String(tiers[key]?.value ?? "").matchAll(/\bhold (\d+)(?:\s+([A-Za-z]+))?/gi)]
+		const text = String(tiers[key]?.value ?? "");
+		const holds = [...text.matchAll(/\bhold (\d+)(?:\s+([A-Za-z]+))?/gi)]
+			.filter(h => !condition(h, text))
 			.filter(h => !trackTitle || !h[2] || sameNoun(h[2], trackTitle));
 		if (holds.length) out[key] = Math.min(20, Number(holds.at(-1)[1]));
 	}
@@ -1207,14 +1218,37 @@ export function mergeReimport({ base, mine, theirs }) {
 	return { bundle: normalizeBundle(out).bundle ?? out, kept, replaced };
 }
 
+// A blank line, and a line that opens a bullet (playbook-text.js#formatPlaybookText's two rules).
+const _PARAGRAPH_BREAK = /\n[^\S\n]*\n\s*/;
+const _BULLET_LINE = /^\s*[-*•]\s/;
+
+/**
+ * Text as canonicalJson compares it: whitespace run together, EXCEPT a blank line between two
+ * paragraphs, which formatPlaybookText draws as a new paragraph, so a move split in two is a real
+ * edit. A blank line beside a bullet draws nothing (a list is its own block either way), and a save
+ * sets a list off with one, so that one folds like any other whitespace.
+ */
+function _foldText(text) {
+	const blocks = text.replace(/\r\n?/g, "\n").trim().split(_PARAGRAPH_BREAK);
+	let out = "";
+	blocks.forEach((block, i) => {
+		if (i) {
+			const prevLine = blocks[i - 1].split("\n").at(-1);
+			out += _BULLET_LINE.test(block) || _BULLET_LINE.test(prevLine) ? " " : "\n\n";
+		}
+		out += block.replace(/\s+/g, " ").trim();
+	});
+	return out;
+}
+
 /**
  * A value as one comparable string: object keys in order (stableStringify), text with its whitespace
- * run together, a key holding `undefined` left out as JSON leaves it out. Two versions of a playbook
- * that differ only in how they were stored compare equal.
+ * run together but its paragraph breaks kept (_foldText), a key holding `undefined` left out as JSON
+ * leaves it out. Two versions of a playbook that differ only in how they were stored compare equal.
  */
 export function canonicalJson(value) {
 	const fold = v => {
-		if (typeof v === "string") return v.replace(/\s+/g, " ").trim();
+		if (typeof v === "string") return _foldText(v);
 		if (Array.isArray(v)) return v.map(fold);
 		if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).filter(([, x]) => x !== undefined).map(([k, x]) => [k, fold(x)]));
 		return v;

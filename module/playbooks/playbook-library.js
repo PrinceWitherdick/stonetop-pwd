@@ -101,7 +101,7 @@ export function tombstoneData(slug, savedAt) {
  * players see it is each world's own call, and a save that changed nothing else should not have
  * every other world asked about it. Compared as diffBundles compares (homebrew-bundle.js#
  * canonicalJson), so text that only reflowed its whitespace, or keys stored in another order, is
- * not an update either.
+ * not an update either. A paragraph split or joined is.
  */
 export function sameContent(a, b) {
 	const key = bundle => {
