@@ -2620,13 +2620,13 @@ export function applyNoItalics(value) {
 // Disadvantage) instead of the sticky selector on the character and steading sheets.
 // The two are exclusive by design: whichever one is answering, the other is not drawn.
 export function getAskRollModeEachRollSetting() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "askRollModeEachRoll") ?? false;
+	return getBooleanSetting("askRollModeEachRoll", false);
 }
 
 // Whether to prompt for a one-off situational modifier before a move/stat roll. Ignored
 // while the mode is being asked per roll, since that window carries the stepper anyway.
 export function getPromptRollModifierSetting() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "promptRollModifier") ?? false;
+	return getBooleanSetting("promptRollModifier", false);
 }
 
 // Whether the damage window opens before a damage roll (how to roll it, plus a one-off
@@ -2634,12 +2634,12 @@ export function getPromptRollModifierSetting() {
 // asks before the setting is registered — a macro firing early, a test — gets the shipped
 // behaviour rather than silently losing the window.
 export function getPromptDamageModifierSetting() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "promptDamageModifier") ?? true;
+	return getBooleanSetting("promptDamageModifier", true);
 }
 
 // Whether actor sheets should open in Edit mode rather than Play mode.
 export function getOpenSheetsInEditMode() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "openSheetsInEditMode") ?? false;
+	return getBooleanSetting("openSheetsInEditMode", false);
 }
 
 /**
@@ -2767,7 +2767,7 @@ export function isAttackFxOn() {
 
 /** This reader's timeline layout: "horizontal" (the default) or "vertical". */
 export function getTimelineOrientation() {
-	const value = globalThis.game?.settings?.get?.(SYSTEM_ID, "timelineOrientation");
+	const value = _readSetting("timelineOrientation");
 	return value === "vertical" ? "vertical" : "horizontal";
 }
 
@@ -2800,7 +2800,7 @@ export function setTimelineHiddenTracks(trackIds) {
 
 /** Has this reader picked their own threads, or is the aggregate still on its default? */
 export function getTimelineThreadsChosen() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "timelineThreadsChosen") === true;
+	return _readSetting("timelineThreadsChosen") === true;
 }
 
 /** Remember that this reader has picked their threads; the default never applies again. */
@@ -2810,7 +2810,7 @@ export function setTimelineThreadsChosen(chosen) {
 
 /** The kinds the GM has repainted for this world, cleaned: `{kind: "#rrggbb"}`. */
 export function getTimelineKindColours() {
-	return normalizeKindColours(globalThis.game?.settings?.get?.(SYSTEM_ID, "timelineKindColours"));
+	return normalizeKindColours(_readSetting("timelineKindColours"));
 }
 
 /** Repaint the world's kinds. World-scoped: only a GM's write is accepted. */
@@ -2833,7 +2833,7 @@ export function setTimelineAges(ages) {
 
 /** Where the Ages' colour walk stands: the next step to try. */
 export function getTimelineAgeColourSeq() {
-	const seq = Math.trunc(Number(globalThis.game?.settings?.get?.(SYSTEM_ID, "timelineAgeColourSeq")));
+	const seq = Math.trunc(Number(_readSetting("timelineAgeColourSeq")));
 	return Number.isFinite(seq) && seq > 0 ? seq : 0;
 }
 
@@ -3157,6 +3157,20 @@ export function getSetting(key) {
 }
 
 /**
+ * Any setting's stored value, or `undefined` when there is nothing to read: no `game` yet, or a
+ * key this world never registered (core's `ClientSettings#get` THROWS on one rather than
+ * returning undefined, so `?.` and `??` alone do not cover it). The raw read under the getters
+ * here that shape their own value, each of which then answers with its own default.
+ */
+function _readSetting(key) {
+	try {
+		return globalThis.game?.settings?.get?.(SYSTEM_ID, key);
+	} catch (_) {
+		return undefined;
+	}
+}
+
+/**
  * A plain-object setting, read tolerantly: `{}` rather than a throw when the key is not
  * registered in this world (an older build, or a unit test that never called registerSettings),
  * and `{}` rather than a surprise when the stored value is a scalar or an array.
@@ -3221,7 +3235,7 @@ export function worldKey() {
 // next (see the registration above).
 
 function _settingOverviewStore() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "settingOverviewShown");
+	return _readSetting("settingOverviewShown");
 }
 
 /** The stored world map, or null when the value is absent or still the legacy shape. */
@@ -3360,8 +3374,8 @@ function _px(v) {
  */
 export function getSheetSize(actorId) {
 	if (!actorId) return { width: null, height: null };
-	const size = globalThis.game?.settings?.get?.(SYSTEM_ID, "sheetSizes")?.[actorId];
-	const legacy = globalThis.game?.settings?.get?.(SYSTEM_ID, "characterSheetWidths")?.[actorId];
+	const size = _readSetting("sheetSizes")?.[actorId];
+	const legacy = _readSetting("characterSheetWidths")?.[actorId];
 	return {
 		width: _px(size?.width) ?? _px(legacy),
 		height: _px(size?.height),
@@ -3393,7 +3407,7 @@ export function setSheetSize(actorId, { width, height } = {}) {
 // move groups, which differ only in the setting key they persist under.
 function getSectionList(key, actorId) {
 	if (!actorId) return [];
-	const arr = globalThis.game?.settings?.get?.(SYSTEM_ID, key)?.[actorId];
+	const arr = _readSetting(key)?.[actorId];
 	return Array.isArray(arr) ? arr : [];
 }
 
@@ -3493,7 +3507,7 @@ export function setSheetSectionsCollapsed(actorId, sections) {
 // expanded). Per-actor, per-user.
 export function getSidebarCollapsed(actorId) {
 	if (!actorId) return false;
-	const map = globalThis.game?.settings?.get?.(SYSTEM_ID, "characterSidebarCollapsed");
+	const map = _readSetting("characterSidebarCollapsed");
 	return !!map?.[actorId];
 }
 
@@ -3505,15 +3519,15 @@ export function setSidebarCollapsed(actorId, collapsed) {
 	return game.settings.set(SYSTEM_ID, "characterSidebarCollapsed", { ...map, [actorId]: next });
 }
 
+// Both default ON, unregistered included: a tooltip built before registration (or in a test)
+// shows, which is what ships.
 export function getHoverDescriptionSetting(key, { ignoreMaster = false } = {}) {
-	const settings = globalThis.game?.settings;
-	const masterEnabled = ignoreMaster ? true : settings?.get?.(SYSTEM_ID, "hoverDescriptionsEnabled") ?? true;
-	const settingEnabled = settings?.get?.(SYSTEM_ID, key) ?? true;
-	return masterEnabled && settingEnabled;
+	const masterEnabled = ignoreMaster || getBooleanSetting("hoverDescriptionsEnabled", true);
+	return masterEnabled && getBooleanSetting(key, true);
 }
 
 export function getRollStatChipsSetting() {
-	return globalThis.game?.settings?.get?.(SYSTEM_ID, "showRollStatChips") ?? true;
+	return getBooleanSetting("showRollStatChips", true);
 }
 
 export function applyMoveDescriptionBodyClass(show) {
