@@ -116,8 +116,8 @@ const _EOS_HOTBAR_SLOT  = 10;
 // (GM-only; re-running it is safe: a section or Q&A pair edited in the journal is left as the
 // GM wrote it, and only what still matches what the compiler last wrote follows the source). Sits
 // straight after the _SYSTEM_MACROS a new world gets and, like End of Session, is handled
-// separately from that set and keyed on its command so it won't collide with a user macro
-// of the same name. It was slot 9 until the two legacy macros left new worlds' bars; a
+// separately from that set (placed, never re-snapped). Like every system macro it is found by
+// its command as well as its name, so it won't collide with a user macro of the same name. It was slot 9 until the two legacy macros left new worlds' bars; a
 // world that already has it placed keeps it where it is.
 const _CHRONICLE_MACRO_NAME   = "The Chronicle";
 const _CHRONICLE_MACRO_IMG    = "systems/stonetop-pwd/assets/icons/macros/bookmarklet.svg";
@@ -155,7 +155,7 @@ const _RETIRED_BROWSER_MACROS = [
 // The ordered system hotbar macros, in their canonical order. The single source of truth
 // for both _ensureHotbarMacro (places any that are missing) and _reorderSystemMacros (snaps
 // them into this order). Chronicle (7) / End of Session (10, the key marked 0) are handled
-// separately below because they also key on their command. "Browse Stonetop" reads
+// separately below because they are placed but never re-snapped. "Browse Stonetop" reads
 // GM-hidden compendia and the GM's own NPC notes — a GM-only block places these, so they
 // never reach a player's hotbar.
 //
@@ -858,11 +858,9 @@ export async function onReady() {
 		for (const macro of _SYSTEM_MACROS) await _ensureHotbarMacro(macro);
 		await _ensureHotbarMacro({
 			name: _CHRONICLE_MACRO_NAME, img: _CHRONICLE_MACRO_IMG, command: _CHRONICLE_MACRO_SCRIPT, slot: _CHRONICLE_HOTBAR_SLOT,
-			match: m => m.command === _CHRONICLE_MACRO_SCRIPT && m.name === _CHRONICLE_MACRO_NAME,
 		});
 		await _ensureHotbarMacro({
 			name: _EOS_MACRO_NAME, img: _EOS_MACRO_IMG, command: _EOS_MACRO_SCRIPT, slot: _EOS_HOTBAR_SLOT,
-			match: m => m.command === _EOS_MACRO_SCRIPT && m.name === _EOS_MACRO_NAME,
 		});
 		await _reorderSystemMacros();
 		await _ensureTestPopulateMacro();
@@ -1453,23 +1451,26 @@ function _firstFreeHotbarSlot(from = 1) {
 // on the user's hotbar — so once it's placed, a manual rearrangement sticks. It
 // takes its default `slot` only if that slot is free; otherwise it falls back to the
 // first empty slot, so we never bump a macro the GM put there. The fixed system
-// order is applied per layout version by _reorderSystemMacros. `match` overrides the
-// default name-based lookup (the End of Session macro also keys on its command to
-// avoid clashing with any user macro of the same name). Run these serially — each
-// assignHotbarMacro writes the same user.hotbar document, so concurrent calls would
-// clobber each other.
+// order is applied per layout version by _reorderSystemMacros. The lookup keys on the
+// command as well as the name (_findSystemMacro), the same match the re-snap and the
+// player pass use, so a GM's own macro that happens to be called "Die of Fate" is never
+// adopted and has its icon overwritten; ours is created beside it. (The commands have never
+// changed since these shipped, so no world's real system copy is missed.) Run these
+// serially — each assignHotbarMacro writes the same user.hotbar document, so concurrent
+// calls would clobber each other.
 //
 // GM-only (every call site sits inside a game.user.isGM block), which is what lets it
 // set ownership: a Macro is created at ownership.default NONE, and only a GM may change
 // that. A `shared` macro is raised to OBSERVER — on creation AND on an existing macro in
 // a world that predates the flag, so the fix reaches tables already playing.
 //
-// A `legacy` macro is only ever found, never created (see _SYSTEM_MACROS), and is found by
-// its command as well as its name, so a GM's own "Weather" in a new world is not adopted.
-async function _ensureHotbarMacro({ name, img, command, slot, match, shared, legacy }) {
+// A `legacy` macro is only ever found, never created (see _SYSTEM_MACROS), so a GM's own
+// "Weather" in a new world is neither adopted nor joined by a new one of ours.
+//
+// Exported for its test — onReady is the only caller.
+export async function _ensureHotbarMacro({ name, img, command, slot, shared, legacy }) {
 	const OBSERVER = CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
-	if (legacy) match ??= m => m.name === name && m.command === command;
-	let macro = game.macros.find(match ?? (m => m.name === name));
+	let macro = _findSystemMacro({ name, command });
 	if (!macro && legacy) return;
 	if (!macro) {
 		macro = await Macro.create({
@@ -1491,6 +1492,12 @@ async function _ensureHotbarMacro({ name, img, command, slot, match, shared, leg
 	if (target) await game.user.assignHotbarMacro(macro, target);
 }
 
+// The world's copy of one of our macros: name AND command, so a macro of the user's own that
+// shares a name is never mistaken for it.
+function _findSystemMacro({ name, command }) {
+	return game.macros.find(m => m.name === name && m.command === command);
+}
+
 // Place the shared system macros (currently just the Die of Fate) on a PLAYER's hotbar.
 // The player never creates the Macro — a player-created copy would be a second document
 // owned by them alone, one per player — so this only slots the world macro the GM's pass
@@ -1504,7 +1511,7 @@ async function _ensureHotbarMacro({ name, img, command, slot, match, shared, leg
 // Exported for its test — onReady is the only caller.
 export async function ensurePlayerHotbarMacros() {
 	for (const { name, command, playerSlot } of _SYSTEM_MACROS.filter(m => m.shared)) {
-		const macro = game.macros.find(m => m.name === name && m.command === command);
+		const macro = _findSystemMacro({ name, command });
 		if (!macro?.canExecute) continue;
 		if (Object.values(game.user.hotbar).includes(macro.id)) continue;
 
@@ -1528,7 +1535,7 @@ async function _reorderSystemMacros() {
 	if (getSetting("systemHotbarLayoutVersion") >= _HOTBAR_LAYOUT_VERSION) return;
 
 	const macros = _SYSTEM_MACROS
-		.map(o => ({ macro: game.macros.find(m => m.name === o.name && m.command === o.command), slot: o.slot }))
+		.map(o => ({ macro: _findSystemMacro(o), slot: o.slot }))
 		.filter(o => o.macro);
 
 	// Lift our macros off the hotbar so their canonical slots open up (a user macro
