@@ -2208,7 +2208,10 @@ async function _consolidateGmPrepFamily(steading, { folderFlagId, pageType, ensu
 // who already imported: art lives OUTSIDE the world, so a GM who imported in another world
 // already has it here (reapply re-points it) and skips straight to marking this resolved.
 // Resolves exactly once, then the flag stops it re-checking.
-async function _postBook2ArtReminderOnce() {
+//
+// Exported for its test — onReady is the only caller.
+export async function _postBook2ArtReminderOnce() {
+	if (!_isPostingGm()) return;
 	if (getSetting("book2ArtReminderShown")) return;
 	// Hold off until the Welcome guide has stopped auto-opening — the GM finished session
 	// zero or ticked "Don't show this again". Mirrors _openGmWelcomeGuide's gate. Not flagged
@@ -2402,7 +2405,18 @@ function _buildGmPlaybookArtContent({ maps, diagrams }) {
 		"stonetop-art-reminder-card");
 }
 
-async function _postStartupWelcomeMessageOnce() {
+// Every GM client reaches the two latched cards above and below, and both post to a chat every
+// GM shares: two GMs whose `ready` lands together would both read the latch unset and both post.
+// So only the primary GM posts them, as remindDestinedOmenRoll does; the others leave the latch
+// alone and the primary sets it. Paired with isGM because isPrimaryGM() alone is true when NO GM
+// is connected.
+function _isPostingGm() {
+	return !!game.user?.isGM && isPrimaryGM();
+}
+
+// Exported for its test — onReady is the only caller.
+export async function _postStartupWelcomeMessageOnce() {
+	if (!_isPostingGm()) return;
 	if (getSetting("startupWelcomeShown")) return;
 	if (!globalThis.ChatMessage?.create) return;
 	await ChatMessage.create({

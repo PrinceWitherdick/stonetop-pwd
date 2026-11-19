@@ -114,6 +114,24 @@ describe("postFxMasterSuggestionOnce", () => {
 		expect(stored[FXMASTER_SUGGESTION_SETTING]).toBeUndefined();
 	});
 
+	// Every GM client reaches this, and two whose `ready` lands together would both read the latch
+	// unset and both whisper the card. The second GM leaves the latch for the primary to set.
+	it("does nothing on a second GM's client, and leaves the latch for the primary", async () => {
+		world({ settings: PAST_THE_GUIDE });
+		const primary = { id: "gm1", isGM: true, active: true };
+		const second = { id: "gm2", isGM: true, active: true };
+		global.game.user = second;
+		global.game.users = Object.assign([primary, second], { activeGM: primary });
+
+		expect(await postFxMasterSuggestionOnce()).toBe(false);
+		expect(created).toHaveLength(0);
+		expect(stored[FXMASTER_SUGGESTION_SETTING]).toBeUndefined();
+
+		global.game.user = primary;
+		expect(await postFxMasterSuggestionOnce()).toBe(true);
+		expect(created).toHaveLength(1);
+	});
+
 	// Ready.js runs this in a sweep that starts before chat necessarily has its API; answering
 	// "not yet" leaves the flag clear so the next load posts, rather than eating the one card.
 	it("defers rather than latching when ChatMessage isn't up yet", async () => {
