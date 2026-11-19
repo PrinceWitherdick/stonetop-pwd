@@ -54,7 +54,7 @@ import {readCurrentSeason, recordCurrentSeason, currentSeasonView, readCurrentYe
 import {readCurrentWeather, currentWeatherView} from "../../seasons/current-weather.js";
 import {openSeasonPicker} from "../../seasons/season-picker.js";
 import {SEASONAL_GAINS} from "../../dialogs/spring-burst-data.js";
-import {applySeasonalGains, tradeOpportunityLinksHtml, wireTradeOpportunityLinks} from "./seasonal-gains.js";
+import {applySeasonalGains, MECHANICAL_GAIN_KEYS, tradeOpportunityLinksHtml, wireTradeOpportunityLinks} from "./seasonal-gains.js";
 import {contentGuidelinesView, plansView, wireSteadingNotesTab} from "./steading-plans.js";
 import {editSteadingPlan} from "./SteadingPlanDialog.js";
 import {addStonetopSteadingButton} from "../../utils/world.js";
@@ -175,6 +175,24 @@ function upkeepCopy(due) {
 		lost: summary => `The upkeep of ${due.label} goes unpaid, and the steading loses it.${summary.length ? ` Reverted: ${summary.join("; ")}.` : ""}`,
 	};
 }
+
+/**
+ * Offer an upkeep's Pay button, or the note that says there is not enough to pay with, by whether
+ * the steading can afford it now. The Seasons Change window draws both, one hidden, off the Surplus
+ * it opened with, and runs this as the live Surplus moves (a harvest or a yield in the same window).
+ * @param {{ payBtn: HTMLElement, shortNote: HTMLElement|null }} els
+ * @param {boolean} affordable
+ */
+export function refreshUpkeepAfford({ payBtn, shortNote }, affordable) {
+	payBtn.hidden = !affordable;
+	// Given back when it can be afforded again: a pay that found the Surplus short leaves the
+	// button down, and Surplus found since is exactly what "unless some is found" asked for.
+	if (affordable) payBtn.disabled = false;
+	if (shortNote) shortNote.hidden = affordable;
+}
+
+/** The Well-Trained Militia's tactics note's lead-in, by whether the drills can be paid for now. */
+export const militiaLead = affordable => (affordable ? "Or skip" : "No Surplus for the drills");
 
 /** Any improvement question (improvementQuestions) as its control: a tick, a pick, or a count. */
 export function improvementQuestionHtml(q) {
@@ -1847,17 +1865,29 @@ export function createStonetopSteadingSheetClass(Base) {
 		}
 
 		// Read the season dialog's ticked gains + notes off the DOM (the Chronicle step's
-		// "Record the season" button), apply the two gains with a mechanical effect
-		// (Population boom, Unexpected bounty), record this season into the chosen `year`'s
+		// "Record the season" button), apply the three gains with a mechanical effect
+		// (Population boom, Unexpected bounty, Tor's blessing), record this season into the chosen `year`'s
 		// page of the "Seasons Change" Chronicle journal (with the net Surplus change since the
 		// dialog opened), then open it. Completing a Winter advances the steading's current
 		// year so the next picker defaults to the new one. GM-only.
 		//
 		// Fortunes is NOT reset here: that is its own button on the roll step, so the GM takes
 		// it deliberately after the roll rather than as a side effect of closing the window.
-		async _saveSeasonChange(seasonId, html, fortunes, initialSurplus = null, year = this._seasonsCurrentYear()) {
+		//
+		// `fortunes` is only the figure to file when the season's opening Fortunes was never
+		// noted, and the live figure when it is omitted: the opening figure wins whenever there is one.
+		async _saveSeasonChange(seasonId, html, fortunes = null, initialSurplus = null, year = this._seasonsCurrentYear()) {
 			const root = html?.jquery ? html[0] : (html?.[0] ?? html);
 			if (!root) return;
+			// The Fortunes the season OPENED with, the one its roll was made off — not the figure the
+			// window happened to read when it opened. A window opened early to look would otherwise
+			// file a mid-play figure, the very case StonetopSteading#openingFortunes is noted to guard
+			// against (the herd's foals and the Inn read the same note). Read before the gains below,
+			// which write the steading. Nothing noted means the window never saw the roll made nor the
+			// reset taken, so Fortunes has not been reset and the live figure is still the season's own.
+			const opening = this._stonetopSteading.openingFortunes?.(year, seasonId) ?? null;
+			const chronicleFortunes = opening
+				?? (Number.isFinite(fortunes) ? fortunes : this._stonetopSteading.getStatValue("fortunes"));
 			const checkedKeys = Array.from(root.querySelectorAll(".stonetop-season-gain-check:checked"))
 				.map(el => el.dataset.gainKey);
 			const gainNames = checkedKeys
@@ -1894,7 +1924,7 @@ export function createStonetopSteadingSheetClass(Base) {
 			const surplusChange = Number.isFinite(initialSurplus) ? finalSurplus - initialSurplus : 0;
 
 			const notes   = root.querySelector(".stonetop-season-notes")?.value ?? "";
-			const journal = await recordSeasonsChange({ seasonId, year, gainNames, fortunes, surplusChange, notes });
+			const journal = await recordSeasonsChange({ seasonId, year, gainNames, fortunes: chronicleFortunes, surplusChange, notes });
 
 			// This season has begun: stamp it on the steading so the sheet header reads it,
 			// and carry the picker's year with it in the same write. Winter closes out the
@@ -2026,10 +2056,10 @@ export function createStonetopSteadingSheetClass(Base) {
 			</div>`;
 
 			// Seasonal gains as a checklist the GM ticks (recorded into the Seasons Change
-			// journal by the Chronicle step's "Record the season"). The two with a mechanical
-			// effect — Population boom (+1 Population) and Unexpected bounty (+1 Surplus) — are
-			// applied by that same button when ticked rather than via their own buttons; it
-			// relabels to say so. Gain copy comes from the shared SEASONAL_GAINS so the dialog
+			// journal by the Chronicle step's "Record the season"). The three with a mechanical
+			// effect (seasonal-gains.js#MECHANICAL_GAIN_KEYS: Population boom, Unexpected bounty,
+			// Tor's blessing) are applied by that same button when ticked rather than via their
+			// own buttons; it relabels to say so. Gain copy comes from the shared SEASONAL_GAINS so the dialog
 			// and Chronicle stay in lockstep.
 			const gainsRef = `<div class="stonetop-season-gains">
 				<p class="stonetop-season-gains-label">Seasonal gains <span class="stonetop-season-gains-hint">(tick what they pick)</span></p>
@@ -2072,8 +2102,11 @@ export function createStonetopSteadingSheetClass(Base) {
 			//
 			// No divider of its own: the blocks share a step, and joinBlocks puts one BETWEEN them, so
 			// the first never opens on a rule.
+			//
+			// The Surplus it quotes is a live cell (the render callback's stats hook), since a harvest
+			// or a yield in the same window can move it.
 			const upkeepBlock = ({ icon, name, sentence, body }) => `<div class="stonetop-season-watch">
-					<p class="stonetop-season-note"><i class="fas ${icon}"></i> <strong>${name}</strong> ${sentence} Surplus: <strong>${surplus}</strong>.</p>
+					<p class="stonetop-season-note"><i class="fas ${icon}"></i> <strong>${name}</strong> ${sentence} Surplus: <strong data-season-stat="surplus">${surplus}</strong>.</p>
 					${body}
 				</div>`;
 
@@ -2089,18 +2122,24 @@ export function createStonetopSteadingSheetClass(Base) {
 			//
 			// One owed EVERY season is owed at the start of it (the watch's own words), so it opens
 			// the window, before the season's roll; one owed in named seasons is a cost of that season.
+			//
+			// The pay button and the could-not-pay note are both always drawn, one of them hidden: a
+			// harvest or a yield taken in this same window can raise the Surplus after it opens, and
+			// the upkeep wiring swaps them as it moves (refreshUpkeepAfford) rather than leaving Pay
+			// missing until a reopen.
 			const upkeepHtml = due => {
 				const copy = upkeepCopy(due);
 				const short = surplus < due.surplus;
+				const hidden = on => (on ? " hidden" : "");
 				return upkeepBlock({
 					icon: copy.icon,
 					name: _esc(due.label),
 					sentence: copy.sentence,
-					body: `${short && copy.shortNote ? `<p class="stonetop-season-note"><em>${copy.shortNote}</em></p>` : ""}
+					body: `${copy.shortNote ? `<p class="stonetop-season-note" data-upkeep-short="${_esc(due.slug)}"${hidden(!short)}><em>${copy.shortNote}</em></p>` : ""}
 						<div class="stonetop-season-actions" data-upkeep-slug="${_esc(due.slug)}">
-						${short ? "" : `<button class="stonetop-season-btn" data-action="pay-upkeep" data-upkeep-slug="${_esc(due.slug)}">
+						<button class="stonetop-season-btn" data-action="pay-upkeep" data-upkeep-slug="${_esc(due.slug)}"${hidden(short)}>
 							<i class="fas ${copy.payIcon}"></i> ${copy.pay}
-						</button>`}
+						</button>
 						<button class="stonetop-season-btn stonetop-season-btn--warn" data-action="lose-upkeep" data-upkeep-slug="${_esc(due.slug)}">
 							<i class="fas fa-person-walking-arrow-right"></i> ${copy.lose}
 						</button>
@@ -2127,13 +2166,15 @@ export function createStonetopSteadingSheetClass(Base) {
 					icon: "fa-bullseye",
 					name: "Well-Trained Militia",
 					sentence: "wants <strong>1 Surplus</strong> and a week of drills this summer, or it loses its training in 1 tactic.",
-					body: `${surplus >= 1 ? `<div class="stonetop-season-actions">
-						<button class="stonetop-season-btn" data-action="drill-militia">
+					// Drawn but hidden when short, as the upkeeps' Pay is: Surplus found in this same
+					// window offers the drill without a reopen (the militia wiring's live refresher).
+					body: `<div class="stonetop-season-actions"${surplus >= 1 ? "" : " hidden"}>
+						<button class="stonetop-season-btn" data-action="drill-militia"${surplus >= 1 ? "" : " hidden"}>
 							<i class="fas fa-bullseye"></i> Drill this summer (1 Surplus)
 						</button>
-					</div>` : ""}
+					</div>
 					${tactics.length
-						? `<p class="stonetop-season-note"><em>${surplus >= 1 ? "Or skip" : "No Surplus for the drills"}: the militia forgets one of these. Click the one it loses.</em></p>
+						? `<p class="stonetop-season-note"><em><span data-militia-lead>${militiaLead(surplus >= 1)}</span>: the militia forgets one of these. Click the one it loses.</em></p>
 							<ol class="stonetop-disaster-choices">
 								${tactics.map(t => `<li class="stonetop-disaster-choice" data-tactic="${t.index}">
 									<span class="stonetop-disaster-choice-label">${_esc(String(t.label).split(":")[0])}</span>
@@ -2512,13 +2553,16 @@ export function createStonetopSteadingSheetClass(Base) {
 					// The trade opportunity gain's neighbours (seasonal-gains.js).
 					wireTradeOpportunityLinks(root);
 
-					// The rail's numbers follow the steading while the window is open.
+					// The rail's numbers follow the steading while the window is open, and so does every
+					// other cell quoting one (each upkeep's "Surplus: N"). Anything else that turns on a
+					// live figure — which upkeeps can be paid, whether the militia can drill — registers
+					// on `liveRefreshers` below and is run after the cells.
+					const liveRefreshers = [];
 					if (statsHook !== null) Hooks.off("updateActor", statsHook);
 					statsHook = Hooks.on("updateActor", actor => {
 						if (actor?.id !== this.actor.id) return;
 						const set = (attr, key, text) => {
-							const el = root.querySelector(`[data-season-${attr}="${key}"]`);
-							if (el) el.textContent = text;
+							root.querySelectorAll(`[data-season-${attr}="${key}"]`).forEach(el => { el.textContent = text; });
 						};
 						const fortunesNow = sign(this._stonetopSteading.getStatValue("fortunes"));
 						set("stat", "fortunes", fortunesNow);
@@ -2527,6 +2571,7 @@ export function createStonetopSteadingSheetClass(Base) {
 						// And the two button labels that quote a figure (see fortunesBtns).
 						set("live", "fortunes", fortunesNow);
 						set("live", "reset", sign(resetFortunesNow()));
+						for (const refresh of liveRefreshers) refresh();
 					});
 
 					// Once per season, like the Surplus rolls below: the season's +Fortunes roll is
@@ -2775,14 +2820,16 @@ export function createStonetopSteadingSheetClass(Base) {
 					}
 
 					// The close-out, on the Chronicle step: applies any ticked mechanical gains
-					// (Population boom, Unexpected bounty), files the Chronicle page, stamps the
-					// season on the clock, then closes. Relabelled to name the gains it is about
-					// to write, so the click says what it does.
+					// (MECHANICAL_GAIN_KEYS: Population boom, Unexpected bounty, Tor's blessing),
+					// files the Chronicle page, stamps the season on the clock, then closes.
+					// Relabelled to name the gains it is about to write, so the click says what it
+					// does. Off the same list seasonalGainChanges applies, so a ticked Tor's
+					// blessing (written by this click too) relabels it as the other two do.
 					const recordBtn = root.querySelector("[data-action='record-season']");
 					const refreshRecordLabel = () => {
 						if (!recordBtn) return;
-						const willApply = !!root.querySelector(".stonetop-season-gain-check[data-gain-key='population']:checked")
-							|| !!root.querySelector(".stonetop-season-gain-check[data-gain-key='bounty']:checked");
+						const willApply = MECHANICAL_GAIN_KEYS.some(key =>
+							root.querySelector(`.stonetop-season-gain-check[data-gain-key='${key}']:checked`));
 						recordBtn.innerHTML = `<i class="fas fa-book"></i> ${willApply
 							? "Apply those gains, record the season &amp; close"
 							: "Record the season &amp; close"}`;
@@ -2795,7 +2842,9 @@ export function createStonetopSteadingSheetClass(Base) {
 						recordBtn.disabled = true;
 						try {
 							// `surplus` (captured at open) is the baseline for the Chronicle's net change.
-							await this._saveSeasonChange(seasonId, root, fortunes, surplus, year);
+							// Fortunes is NOT the figure captured at open: _saveSeasonChange files the
+							// season's opening Fortunes, and the live one when none was noted.
+							await this._saveSeasonChange(seasonId, root, null, surplus, year);
 						} catch (err) { recordBtn.disabled = false; throw err; }
 						dialog.close();
 					});
@@ -2838,20 +2887,36 @@ export function createStonetopSteadingSheetClass(Base) {
 						const box = root.querySelector(`.stonetop-season-actions[data-upkeep-slug="${CSS.escape(due.slug)}"]`);
 						const payBtn  = box?.querySelector("[data-action='pay-upkeep']") ?? null;
 						const loseBtn = box?.querySelector("[data-action='lose-upkeep']") ?? null;
+						const shortNote = root.querySelector(`[data-upkeep-short="${CSS.escape(due.slug)}"]`);
 						const copy = upkeepCopy(due);
+						// True from the click until the write lands or is given back, so a stats update
+						// that arrives mid-write (the write itself, or a harvest rolled meanwhile) cannot
+						// hand the pay button back before the step is closed.
+						let busy = false;
 						const settle = () => {
+							busy = true;
 							if (payBtn) payBtn.disabled = true;
 							if (loseBtn) loseBtn.disabled = true;
 						};
 						const reopen = () => {
+							busy = false;
 							if (payBtn) payBtn.disabled = false;
 							if (loseBtn) loseBtn.disabled = false;
 						};
-						// Asked of the STEADING, not of whether a given button came back from the
-						// query: with too little Surplus the pay button is never rendered, so keying
-						// "already settled" off its return value would read false on a season that is done.
+						// Asked of the STEADING, not of the pay button: it is hidden while it cannot be
+						// afforded, and its state says nothing about whether the season is done.
 						this._disableIfSeasonStepDone(loseBtn, due.key, year, seasonId);
 						if (this._stonetopSteading.seasonStepApplied(due.key, year, seasonId)) settle();
+
+						// The window is drawn off the Surplus it opened with; a harvest or a yield taken
+						// here since may have raised it (or a spend lowered it), so whether Pay is offered
+						// follows the LIVE figure. Only while the season's question is still open and
+						// nothing is in flight: a settled upkeep keeps its dead buttons, whatever the
+						// Surplus does next.
+						liveRefreshers.push(() => {
+							if (!payBtn || busy || this._stonetopSteading.seasonStepApplied(due.key, year, seasonId)) return;
+							refreshUpkeepAfford({ payBtn, shortNote }, this._stonetopSteading.getStatValue("surplus") >= due.surplus);
+						});
 
 						// Spends and closes the step in one write, off a LIVE Surplus read: the herd
 						// feed and the surplus roll in this same dialog may have moved it since the
@@ -2861,6 +2926,7 @@ export function createStonetopSteadingSheetClass(Base) {
 							step: due.key, year, seasonId, seasonsMove, amount: due.surplus,
 							lock: settle,
 							shortUnlock: () => {
+								busy = false;
 								if (payBtn) payBtn.disabled = true;
 								if (loseBtn) loseBtn.disabled = false;
 							},
@@ -2958,26 +3024,49 @@ export function createStonetopSteadingSheetClass(Base) {
 					// second tactic after paying.
 					const drillMilitiaBtn = root.querySelector("[data-action='drill-militia']");
 					const tacticEls = Array.from(root.querySelectorAll("[data-tactic]"));
+					// True from a click until its write lands or is given back, as an upkeep's is, so a
+					// stats update mid-write cannot hand the drill back before the step is closed.
+					let militiaBusy = false;
 					const settleMilitia = () => {
+						militiaBusy = true;
 						if (drillMilitiaBtn) drillMilitiaBtn.disabled = true;
 						tacticEls.forEach(el => el.classList.add("is-disabled"));
 					};
 					// Asked of the STEADING rather than of the button, for the watch's reason: with
-					// no Surplus the drill button is never rendered at all.
+					// no Surplus the drill button is hidden, and its state says nothing about whether
+					// the summer is done.
 					if (this._stonetopSteading.seasonStepApplied(MILITIA_SEASON_STEP, year, seasonId)) {
 						this._disableIfSeasonStepDone(drillMilitiaBtn, MILITIA_SEASON_STEP, year, seasonId);
 						settleMilitia();
 					}
+
+					// The window is drawn off the Surplus it opened with; a harvest or a yield taken here
+					// since may have raised it (or a spend lowered it), so whether the drill is offered
+					// follows the LIVE figure, while the summer's question is still open and nothing is
+					// in flight. The tactics note's lead-in follows it too.
+					const drillActions = drillMilitiaBtn?.closest(".stonetop-season-actions") ?? null;
+					const militiaLeadEl = root.querySelector("[data-militia-lead]");
+					liveRefreshers.push(() => {
+						if (!drillMilitiaBtn || militiaBusy
+							|| this._stonetopSteading.seasonStepApplied(MILITIA_SEASON_STEP, year, seasonId)) return;
+						const affordable = this._stonetopSteading.getStatValue("surplus") >= 1;
+						refreshUpkeepAfford({ payBtn: drillMilitiaBtn, shortNote: null }, affordable);
+						if (drillActions) drillActions.hidden = !affordable;
+						if (militiaLeadEl) militiaLeadEl.textContent = militiaLead(affordable);
+					});
+
 					this._wireSurplusUpkeep(drillMilitiaBtn, {
 						step: MILITIA_SEASON_STEP, year, seasonId, seasonsMove,
 						lock: settleMilitia,
 						// A militia that cannot be paid for must still be able to forget a tactic,
 						// so the drill button stays down and only the tactics come back.
 						shortUnlock: () => {
+							militiaBusy = false;
 							drillMilitiaBtn.disabled = true;
 							tacticEls.forEach(el => el.classList.remove("is-disabled"));
 						},
 						unlock: () => {
+							militiaBusy = false;
 							drillMilitiaBtn.disabled = false;
 							tacticEls.forEach(el => el.classList.remove("is-disabled"));
 						},
@@ -2998,6 +3087,7 @@ export function createStonetopSteadingSheetClass(Base) {
 								this.render(false);
 								if (!result?.summary?.length) ui.notifications.info("The militia forgets a tactic.");
 							} catch (err) {
+								militiaBusy = false;
 								tacticEls.forEach(t => t.classList.remove("is-disabled"));
 								if (drillMilitiaBtn) drillMilitiaBtn.disabled = false;
 								throw err;

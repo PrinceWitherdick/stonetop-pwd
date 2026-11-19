@@ -80,6 +80,7 @@ import { refitGmPrepPins } from "./ThreatNotePins.js";
 import { fileGmPrepJournalsInChronicle } from "../journal/gm-prep-page.js";
 import { reconcileSitePins } from "../sites/site-scene-pins.js";
 import { isPrimaryGM } from "../utils/primary-gm.js";
+import { bestEffort } from "../utils/best-effort.js";
 import { migrateAllSteadingPeople, ensurePeopleFolders, backfillAllResidentHomes } from "../actors/steading/steading-people.js";
 import { PERSON_DEFAULT_IMG } from "../utils/person-portrait.js";
 import { NEW_SHOOT_MARKER, LEGACY_SHOOT_MARKERS } from "../data/follower-actor.js";
@@ -116,8 +117,8 @@ const _EOS_HOTBAR_SLOT  = 10;
 // (GM-only; re-running it is safe: a section or Q&A pair edited in the journal is left as the
 // GM wrote it, and only what still matches what the compiler last wrote follows the source). Sits
 // straight after the _SYSTEM_MACROS a new world gets and, like End of Session, is handled
-// separately from that set and keyed on its command so it won't collide with a user macro
-// of the same name. It was slot 9 until the two legacy macros left new worlds' bars; a
+// separately from that set (placed, never re-snapped). Like every system macro it is found by
+// its command as well as its name, so it won't collide with a user macro of the same name. It was slot 9 until the two legacy macros left new worlds' bars; a
 // world that already has it placed keeps it where it is.
 const _CHRONICLE_MACRO_NAME   = "The Chronicle";
 const _CHRONICLE_MACRO_IMG    = "systems/stonetop-pwd/assets/icons/macros/bookmarklet.svg";
@@ -155,7 +156,7 @@ const _RETIRED_BROWSER_MACROS = [
 // The ordered system hotbar macros, in their canonical order. The single source of truth
 // for both _ensureHotbarMacro (places any that are missing) and _reorderSystemMacros (snaps
 // them into this order). Chronicle (7) / End of Session (10, the key marked 0) are handled
-// separately below because they also key on their command. "Browse Stonetop" reads
+// separately below because they are placed but never re-snapped. "Browse Stonetop" reads
 // GM-hidden compendia and the GM's own NPC notes — a GM-only block places these, so they
 // never reach a player's hotbar.
 //
@@ -233,8 +234,9 @@ export async function onReady() {
 	// The GM's timeline colours, for the same reason: `onChange` repaints only on a change.
 	applyTimelineKindColours(getTimelineKindColours());
 	// Fold the pre-world-keying Setting Overview gate under this world, so every OTHER
-	// world stops reading it as already-shown (see settings.js).
-	await migrateFlatSettingOverviewShown();
+	// world stops reading it as already-shown (see settings.js). Caught: at worst the Overview
+	// pops once more, which is not worth the rest of the load.
+	await bestEffort("Setting Overview gate migration", migrateFlatSettingOverviewShown);
 	// Before any sheet renders: carry a GM's pre-move choice for the three classic-layout boxes
 	// out of browser localStorage and into the world scope they now live in. Without it an
 	// upgraded world silently reverts to the classic layout. See adoptClassicLayoutScope.
@@ -260,12 +262,17 @@ export async function onReady() {
 	// switch can be thrown either way at any time. Self-gated the same way.
 	try { await _reconcileSharedCharacterSheets(); }
 	catch (err) { console.error("Stonetop | shared character sheet reconcile failed", err); }
-	await _migrateGmPrepPagesToSingleJournal();
+	await bestEffort("GM-prep single-journal consolidation", _migrateGmPrepPagesToSingleJournal);
 	// Convert each steading's plain-text Residents/Neighbors rows into linked NPC actors
 	// (idempotent; primary-GM only so two connected GMs can't double-create). Swept every
 	// load, not once per world: players can't create actors, so a background that seeds
 	// neighbors during onboarding leaves text rows for the GM to pick up here.
-	if (isPrimaryGM()) {
+	//
+	// Paired with isGM because isPrimaryGM() alone is true when NO GM is connected: a player
+	// alone in the world would otherwise run every sweep below, failing each world write and
+	// stamping the world-scope once-per-version gates it has no right to set, and could be shown
+	// the GM's token-link question. The same pairing as isResidentsWriter (settlement-residents.js).
+	if (game.user.isGM && isPrimaryGM()) {
 		// Un-duplicate any chronicle journal a build with the misfiled flag key re-seeded. Swept
 		// every load rather than latched: it is idempotent by construction (nothing is left for
 		// it to match once it has run), so there is no gate that can get stuck. See
@@ -496,7 +503,13 @@ export async function onReady() {
 	catch (err) { console.error("Stonetop | system-id rescue failed", err); }
 	try { await finishSystemIdMigration(); }
 	catch (err) { console.error("Stonetop | system-id migration finish failed", err); }
-	await ensureStonetopSingleton();
+	// The world's steading: found (and its ownership re-asserted) or minted. Caught, because
+	// nothing below may assume it succeeded anyway: it runs on the primary GM's client alone,
+	// so every other GM and every player already reaches the rest of this load without waiting
+	// for it, and a fresh world's steading can arrive after their `ready`. A failure here used
+	// to end the load for the primary GM alone (no game.stonetop, no macros, no Welcome guide),
+	// over a find-or-mint that simply asks again next load.
+	await bestEffort("steading singleton", ensureStonetopSingleton);
 
 	// The sheet-partial preload was kicked off in the init hook (core doesn't await init
 	// hooks, so awaiting it there orders nothing). Await it here — before the auto-opening
@@ -767,7 +780,9 @@ export async function onReady() {
 			.then(() => adoptHomes && oncePerVersion("settlementResidentHomes", () => {}))
 			.catch(err => console.error("Stonetop | filing settlement residents failed", err));
 	}
-	if (isPrimaryGM()) {
+	// A connected primary GM, for the same reason: the portrait writes and the world-scope stamp
+	// are a GM's, and with no GM connected isPrimaryGM() is true on every player's client.
+	if (game.user.isGM && isPrimaryGM()) {
 		// An earlier build's poster map is replaced on the first pass a world sees and never after,
 		// so a GM who later picks that map on purpose keeps it (settlement-portrait.js).
 		const legacyMaps = !sweepVersion("settlementLegacyMaps");
@@ -792,19 +807,32 @@ export async function onReady() {
 	// the character is rarely the one who pressed the button. See creation-flow.js.
 	registerCreationFlowCleanup();
 
-	// Both of these read `seedingComplete` to tell a fresh world from an established one, so
-	// both MUST stay above runWorldSetup() (which is what sets it). See their own comments.
-	if (game.user.isGM) await stampWorldLayoutBaseline();
-	if (game.user.isGM) await _applyCoreSettingDefaultsForNewWorld();
-	if (game.user.isGM) await _ensurePlayerActorCreationGrant();
-	// The world HAVING a toolkit and this GM being pointed at one are two questions, and only the
-	// second is answered once per user. _assignGmToolkitToGm returns on its latch before it reaches
-	// the mint, so a world whose gamemasters have all been assigned already would never re-check —
-	// which is how a world that reached zero (emptied before the delete guard shipped, or by a
-	// macro passing noHook) would stay empty, and how a toolkit still wearing Foundry's mystery-man
-	// would never pick up the portrait. Asking here, unlatched, is what makes both self-correcting.
-	if (game.user.isGM) await _ensureGmToolkit();
-	if (game.user.isGM) await _assignGmToolkitToGm();
+	const isGM = game.user.isGM;
+	// Whether the world setup below may run this load. See the two steps that can say no.
+	let worldAgeSettled = true;
+	if (isGM) {
+		// These two read `seedingComplete` to tell a fresh world from an established one, so
+		// both MUST stay above runWorldSetup() (which is what sets it). See their own comments.
+		//
+		// Caught, but with a consequence: if either fails, the world setup is held back until
+		// the next load. Run anyway, it would set `seedingComplete` on a fresh world, and the
+		// retry would then read that world as an established one and decide it wrongly: the
+		// classic layout stamped on a world that never had it, the new-world defaults skipped.
+		worldAgeSettled = await bestEffort("world layout baseline", stampWorldLayoutBaseline)
+			&& await bestEffort("new-world core defaults", _applyCoreSettingDefaultsForNewWorld);
+		if (!worldAgeSettled) console.warn("Stonetop | World setup held back until the next load: the steps that must precede it failed.");
+		await bestEffort("player actor-creation grant", _ensurePlayerActorCreationGrant);
+		// The world HAVING a toolkit and this GM being pointed at one are two questions, and only the
+		// second is answered once per user. _assignGmToolkitToGm returns on its latch before it reaches
+		// the mint, so a world whose gamemasters have all been assigned already would never re-check —
+		// which is how a world that reached zero (emptied before the delete guard shipped, or by a
+		// macro passing noHook) would stay empty, and how a toolkit still wearing Foundry's mystery-man
+		// would never pick up the portrait. Asking here, unlatched, is what makes both self-correcting.
+		// Each caught on its own: both are find-or-mint / once-per-user steps that ask again next
+		// load, and the toolkit is not worth the GM's macros and Welcome guide.
+		await bestEffort("GM Toolkit", _ensureGmToolkit);
+		await bestEffort("GM Toolkit assignment", _assignGmToolkitToGm);
+	}
 
 	// Set this world up: the durable-art re-apply, the gazetteer seed, the bestiary and the
 	// treasure library — narrated by the setup progress window when there is actually a wait
@@ -825,52 +853,26 @@ export async function onReady() {
 	// window the GM sees. So the Setting Overview can open a beat before art lands on it —
 	// which is fine, since a document update re-renders an open sheet — but nothing below may
 	// assume the journals have their final artwork.
-	const isGM = game.user.isGM;
-	const wasFreshWorld = isGM && pendingSetupWork().journals;
+	const wasFreshWorld = isGM && worldAgeSettled && pendingSetupWork().journals;
 	let seeding = Promise.resolve();
 	if (isGM) {
-		seeding = runWorldSetup();
-		if (!wasFreshWorld) await seeding;
+		if (worldAgeSettled) seeding = runWorldSetup();
+		// Caught, like what follows it: the orientation windows below read off whatever journals
+		// there are, and a setup that failed part-way is retried next load.
+		if (!wasFreshWorld) await bestEffort("world setup", () => seeding);
 
-		await _retireIntroductionsMacro();
-		// Both before the placement below, and in this order, so the slot the old "Browse the
-		// Arcana" held is free for the "Browse Stonetop" that replaced it: deleting a macro
-		// leaves its id sitting in `user.hotbar`, and the sweep is what takes it out. That sweep
-		// is world-wide rather than scoped to those two — see its own comment for why it has to
-		// be, and why it is its own call rather than a tail of the retirement.
-		await _retireMergedBrowserMacros();
-		await _clearDanglingHotbarSlots();
-		// Place any missing system macros at their default slots (existing placements
-		// are left alone, so a manual rearrangement sticks). Their fixed starting order
-		// — 1 Welcome · 2 Run an Expedition · 3 Write a Love Letter · 4 Die of Fate ·
-		// 5 Browse Stonetop · 6 Relationship Map · 7 The Chronicle · 10 End of Session, plus
-		// 8 Seasons Change · 9 Weather in an older world that already has them — is
-		// applied for the _SYSTEM_MACROS set per layout version by _reorderSystemMacros, below;
-		// Chronicle and End of Session are placed (but not reordered) by their own
-		// _ensureHotbarMacro calls.
-		for (const macro of _SYSTEM_MACROS) await _ensureHotbarMacro(macro);
-		await _ensureHotbarMacro({
-			name: _CHRONICLE_MACRO_NAME, img: _CHRONICLE_MACRO_IMG, command: _CHRONICLE_MACRO_SCRIPT, slot: _CHRONICLE_HOTBAR_SLOT,
-			match: m => m.command === _CHRONICLE_MACRO_SCRIPT && m.name === _CHRONICLE_MACRO_NAME,
-		});
-		await _ensureHotbarMacro({
-			name: _EOS_MACRO_NAME, img: _EOS_MACRO_IMG, command: _EOS_MACRO_SCRIPT, slot: _EOS_HOTBAR_SLOT,
-			match: m => m.command === _EOS_MACRO_SCRIPT && m.name === _EOS_MACRO_NAME,
-		});
-		await _reorderSystemMacros();
-		await _ensureTestPopulateMacro();
-		await _ensureBook2ArtMacro();
+		await _ensureSystemMacros();
 	} else {
 		// A player's share of the same pass: the Die of Fate belongs on everyone's bar.
-		try { await ensurePlayerHotbarMacros(); }
-		catch (err) { console.error("Stonetop | player hotbar macro placement failed", err); }
+		await bestEffort("player hotbar macro placement", ensurePlayerHotbarMacros);
 	}
 	if (game.user.isGM) {
 		// Read BEFORE the greeting is posted: afterwards every world has had it, and the attack
 		// effects card below is only for a world greeted before the greeting named its modules.
 		const greeted = !!getSetting("startupWelcomeShown");
-		await _postStartupWelcomeMessageOnce();
-		await _postBook2ArtReminderOnce();
+		// Caught, like the suggestions below: neither card is worth the GM's Welcome guide.
+		await bestEffort("startup greeting", _postStartupWelcomeMessageOnce);
+		await bestEffort("book art reminder", _postBook2ArtReminderOnce);
 		// After the art reminder, and for the same reason it is ordered where it is: both are
 		// once-per-world nudges held until the GM is past the Welcome guide, and a world owed
 		// both should read about its missing pictures before it reads about optional weather.
@@ -899,14 +901,14 @@ export async function onReady() {
 		// art that is already there and already looks fine, so it yields to both.
 		_offerGmPlaybookArtOnce()
 			.catch(err => console.error("Stonetop | GM playbook art offer failed:", err));
-		await remindDestinedOmenRoll();
+		await bestEffort("Omens of Fate reminder", remindDestinedOmenRoll);
 	}
 
 	// Established worlds have their journals already; open the orientation material now,
 	// before the Welcome guide, so a resumed walkthrough can still land on top. Fresh
 	// worlds defer this until the background seed finishes (below), since the Setting
 	// Overview journal doesn't exist yet.
-	if (!wasFreshWorld) await _openSettingOverview();
+	if (!wasFreshWorld) await bestEffort("Setting Overview", _openSettingOverview);
 
 	// Reopen any GM walkthrough — session-zero (Introductions / Let Spring Burst Forth)
 	// or Run an Expedition — that was open when this client last reloaded, at the page it
@@ -923,7 +925,8 @@ export async function onReady() {
 	// or ended. After, so it joins the resumed copy rather than racing it.
 	const resumeWalkthroughs = () => reopenOpenWalkthroughs()
 		.catch(err => console.error("Stonetop | reopening walkthroughs failed", err))
-		.then(() => IntroductionsDialog.resumeRunningSession());
+		.then(() => IntroductionsDialog.resumeRunningSession())
+		.catch(err => console.error("Stonetop | resuming the Introductions failed", err));
 	let welcomeDialog = null;
 	if (game.user.isGM && !pastWelcomeGuide()) {
 		hookOrTimeout("renderWelcomeDialog", 2500).then(resumeWalkthroughs)
@@ -939,14 +942,14 @@ export async function onReady() {
 	// than sequenced behind the Welcome guide the way the walkthroughs are: a book is reference
 	// the reader parked beside their sheet, so it belongs UNDER whatever opens after it rather
 	// than needing to land on top.
-	reopenOpenBookReaders();
+	reopenOpenBookReaders().catch(err => console.error("Stonetop | rulebook reader resume failed", err));
 
 	// A player logging in / reloading mid-introductions: rejoin the running session by
 	// opening the dialog whenever the GM has it open (following read-only until it's their
 	// turn). The onChange handler covers live changes; this covers the no-event initial
 	// load. Held while no GM is online (opened when one connects). For a GM it only sets up
 	// the cursor bookkeeping; the GM's own reopen is resumeRunningSession, above.
-	IntroductionsDialog.openForActiveSession();
+	await bestEffort("Introductions rejoin", () => IntroductionsDialog.openForActiveSession());
 
 	// Fresh world: the gazetteer is still importing in the background. Once it lands, pop
 	// the orientation Setting Overview and refresh the (already-open) Welcome guide so its
@@ -1441,28 +1444,70 @@ function _firstFreeHotbarSlot(from = 1) {
 	return null;
 }
 
+// The GM's macro pass: retire the macros that left, place any missing system macro, re-snap
+// the order once per layout version, and seed the two Macro Directory entries.
+//
+// Each step is caught on its own, and so is each macro's placement: none of them needs the one
+// before it to have SUCCEEDED, only to have finished, so one macro that will not create or place
+// must not leave every macro after it off the bar (or take the GM's Welcome guide with it). A
+// failed retirement or sweep at worst lets a new macro flow into the next free slot instead of
+// its own.
+//
+// GM-only (the call site sits inside onReady's isGM block). Exported for its test.
+export async function _ensureSystemMacros() {
+	await bestEffort("Introductions macro retirement", _retireIntroductionsMacro);
+	// Both before the placement below, and in this order, so the slot the old "Browse the
+	// Arcana" held is free for the "Browse Stonetop" that replaced it: deleting a macro
+	// leaves its id sitting in `user.hotbar`, and the sweep is what takes it out. That sweep
+	// is world-wide rather than scoped to those two — see its own comment for why it has to
+	// be, and why it is its own call rather than a tail of the retirement.
+	await bestEffort("browser macro retirement", _retireMergedBrowserMacros);
+	await bestEffort("dangling hotbar slot sweep", _clearDanglingHotbarSlots);
+	// Place any missing system macros at their default slots (existing placements
+	// are left alone, so a manual rearrangement sticks). Their fixed starting order
+	// — 1 Welcome · 2 Run an Expedition · 3 Write a Love Letter · 4 Die of Fate ·
+	// 5 Browse Stonetop · 6 Relationship Map · 7 The Chronicle · 10 End of Session, plus
+	// 8 Seasons Change · 9 Weather in an older world that already has them — is
+	// applied for the _SYSTEM_MACROS set per layout version by _reorderSystemMacros, below;
+	// Chronicle and End of Session are placed (but not reordered) after them.
+	const placed = [
+		..._SYSTEM_MACROS,
+		{ name: _CHRONICLE_MACRO_NAME, img: _CHRONICLE_MACRO_IMG, command: _CHRONICLE_MACRO_SCRIPT, slot: _CHRONICLE_HOTBAR_SLOT },
+		{ name: _EOS_MACRO_NAME, img: _EOS_MACRO_IMG, command: _EOS_MACRO_SCRIPT, slot: _EOS_HOTBAR_SLOT },
+	];
+	for (const macro of placed) {
+		await bestEffort(`"${macro.name}" hotbar macro`, () => _ensureHotbarMacro(macro));
+	}
+	await bestEffort("system hotbar re-snap", _reorderSystemMacros);
+	await bestEffort("test populate macro seed", _ensureTestPopulateMacro);
+	await bestEffort("Import Book Art macro seed", _ensureBook2ArtMacro);
+}
+
 // Find-or-create a global script macro and place it on the hotbar. Idempotent:
 // refreshes the icon if it drifted, and only places the macro when it isn't already
 // on the user's hotbar — so once it's placed, a manual rearrangement sticks. It
 // takes its default `slot` only if that slot is free; otherwise it falls back to the
 // first empty slot, so we never bump a macro the GM put there. The fixed system
-// order is applied per layout version by _reorderSystemMacros. `match` overrides the
-// default name-based lookup (the End of Session macro also keys on its command to
-// avoid clashing with any user macro of the same name). Run these serially — each
-// assignHotbarMacro writes the same user.hotbar document, so concurrent calls would
-// clobber each other.
+// order is applied per layout version by _reorderSystemMacros. The lookup keys on the
+// command as well as the name (_findSystemMacro), the same match the re-snap and the
+// player pass use, so a GM's own macro that happens to be called "Die of Fate" is never
+// adopted and has its icon overwritten; ours is created beside it. (The commands have never
+// changed since these shipped, so no world's real system copy is missed.) Run these
+// serially — each assignHotbarMacro writes the same user.hotbar document, so concurrent
+// calls would clobber each other.
 //
-// GM-only (every call site sits inside a game.user.isGM block), which is what lets it
+// GM-only (its one caller, _ensureSystemMacros, runs inside onReady's isGM block), which is what lets it
 // set ownership: a Macro is created at ownership.default NONE, and only a GM may change
 // that. A `shared` macro is raised to OBSERVER — on creation AND on an existing macro in
 // a world that predates the flag, so the fix reaches tables already playing.
 //
-// A `legacy` macro is only ever found, never created (see _SYSTEM_MACROS), and is found by
-// its command as well as its name, so a GM's own "Weather" in a new world is not adopted.
-async function _ensureHotbarMacro({ name, img, command, slot, match, shared, legacy }) {
+// A `legacy` macro is only ever found, never created (see _SYSTEM_MACROS), so a GM's own
+// "Weather" in a new world is neither adopted nor joined by a new one of ours.
+//
+// Exported for its test — onReady is the only caller.
+export async function _ensureHotbarMacro({ name, img, command, slot, shared, legacy }) {
 	const OBSERVER = CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
-	if (legacy) match ??= m => m.name === name && m.command === command;
-	let macro = game.macros.find(match ?? (m => m.name === name));
+	let macro = _findSystemMacro({ name, command });
 	if (!macro && legacy) return;
 	if (!macro) {
 		macro = await Macro.create({
@@ -1484,6 +1529,12 @@ async function _ensureHotbarMacro({ name, img, command, slot, match, shared, leg
 	if (target) await game.user.assignHotbarMacro(macro, target);
 }
 
+// The world's copy of one of our macros: name AND command, so a macro of the user's own that
+// shares a name is never mistaken for it.
+function _findSystemMacro({ name, command }) {
+	return game.macros.find(m => m.name === name && m.command === command);
+}
+
 // Place the shared system macros (currently just the Die of Fate) on a PLAYER's hotbar.
 // The player never creates the Macro — a player-created copy would be a second document
 // owned by them alone, one per player — so this only slots the world macro the GM's pass
@@ -1494,15 +1545,20 @@ async function _ensureHotbarMacro({ name, img, command, slot, match, shared, leg
 // Same non-destructive placement as the GM's: never evicts whatever is in the target slot,
 // and never moves a macro that is already on the bar, so a player's own arrangement sticks.
 //
+// Each placement caught on its own, for the GM pass's reason: one that fails must not leave the
+// rest off the bar.
+//
 // Exported for its test — onReady is the only caller.
 export async function ensurePlayerHotbarMacros() {
 	for (const { name, command, playerSlot } of _SYSTEM_MACROS.filter(m => m.shared)) {
-		const macro = game.macros.find(m => m.name === name && m.command === command);
+		const macro = _findSystemMacro({ name, command });
 		if (!macro?.canExecute) continue;
 		if (Object.values(game.user.hotbar).includes(macro.id)) continue;
 
 		const target = _isHotbarSlotFree(playerSlot) ? playerSlot : _firstFreeHotbarSlot();
-		if (target) await game.user.assignHotbarMacro(macro, target);
+		if (target) {
+			await bestEffort(`"${name}" player hotbar placement`, () => game.user.assignHotbarMacro(macro, target));
+		}
 	}
 }
 
@@ -1521,7 +1577,7 @@ async function _reorderSystemMacros() {
 	if (getSetting("systemHotbarLayoutVersion") >= _HOTBAR_LAYOUT_VERSION) return;
 
 	const macros = _SYSTEM_MACROS
-		.map(o => ({ macro: game.macros.find(m => m.name === o.name && m.command === o.command), slot: o.slot }))
+		.map(o => ({ macro: _findSystemMacro(o), slot: o.slot }))
 		.filter(o => o.macro);
 
 	// Lift our macros off the hotbar so their canonical slots open up (a user macro
@@ -1589,7 +1645,7 @@ async function _ensureTestPopulateMacro() {
 // the hotbar. The shipped compendium doc is the single source of truth: its
 // command/img are copied on first seed and re-synced while the world copy exists,
 // so a system update refreshes it. Seeded once — a GM who deletes it keeps it
-// gone. GM-only (called from the isGM block in onReady).
+// gone. GM-only (called from _ensureSystemMacros, inside the isGM block in onReady).
 async function _ensureBook2ArtMacro() {
 	const src = await loadBook2ArtMacroSource();
 	if (!src?.command) return;
@@ -1624,8 +1680,8 @@ async function _retireIntroductionsMacro() {
 // both match). GM-only: the call site sits inside a game.user.isGM block, and only a GM may
 // delete a world Macro.
 //
-// Deleting them is only half of freeing their slots — see _clearDanglingHotbarSlots, which the
-// ready sequence calls straight after this and which is what the placement below depends on.
+// Deleting them is only half of freeing their slots — see _clearDanglingHotbarSlots, which
+// _ensureSystemMacros calls straight after this and which is what the placement below depends on.
 async function _retireMergedBrowserMacros() {
 	const ids = _RETIRED_BROWSER_MACROS
 		.map(({ name, command }) => game.macros.find(m => m.name === name && m.command === command)?.id)
@@ -1691,19 +1747,21 @@ async function _clearDanglingHotbarSlots() {
 // One batched write per collection rather than a round trip each: this now matches most of the
 // actor list rather than a handful of NPCs, and each separate update is its own socket round trip,
 // document diff and sidebar repaint, all of it on the blocking startup path.
+// Through _updateActorsBatched, so one actor the batch cannot write (it and its three neighbours
+// below) costs only itself rather than leaving every clean actor behind it stale.
 //
 // Idempotent: once bumped, nothing matches, so re-running every load is a cheap no-op needing no
 // version flag. Primary-GM only (the caller gates it) so two connected GMs can't both write the
 // same documents.
-async function _migrateTokenNameplates() {
+//
+// Exported for its test — onReady is the only caller.
+export async function _migrateTokenNameplates() {
 	const NONE = CONST.TOKEN_DISPLAY_MODES.NONE;
 	const HOVER = CONST.TOKEN_DISPLAY_MODES.HOVER;
 	const unnamed = (mode) => (mode ?? NONE) === NONE;
 
 	const stale = game.actors?.filter(a => unnamed(a.prototypeToken?.displayName)) ?? [];
-	if (stale.length) {
-		await Actor.updateDocuments(stale.map(a => ({ _id: a.id, "prototypeToken.displayName": HOVER })));
-	}
+	await _updateActorsBatched(stale, () => ({ "prototypeToken.displayName": HOVER }), "nameplate backfill");
 
 	// One request per affected scene, and none at all for a scene with nothing to bump — which
 	// after the first load is every scene. See utils/placed-tokens.js, shared with the two other
@@ -1722,13 +1780,13 @@ async function _migrateTokenNameplates() {
 // One batched write rather than a round trip each, for the reason its neighbours state: on the
 // load where this fires it fires for every art-less NPC in the world at once, and a world seeded
 // with a full steading roster has a lot of those.
-async function _migrateNpcPlaceholderPortraits() {
+//
+// Exported for its test — onReady is the only caller.
+export async function _migrateNpcPlaceholderPortraits() {
 	const stale = game.actors?.filter(
 		a => a.type === "npc" && a.img !== PERSON_DEFAULT_IMG && isDefaultImg(a.img)
 	) ?? [];
-	if (stale.length) {
-		await Actor.updateDocuments(stale.map(a => ({ _id: a.id, img: PERSON_DEFAULT_IMG })));
-	}
+	await _updateActorsBatched(stale, () => ({ img: PERSON_DEFAULT_IMG }), "NPC placeholder portrait");
 }
 
 // Point a stock prototype token at the portrait its actor is already wearing, so somebody who
@@ -1746,15 +1804,16 @@ async function _migrateNpcPlaceholderPortraits() {
 // every character, NPC and monster with art and a stock token, which in an established world is
 // most of the actor list — and each separate update is its own socket round-trip, document diff
 // and sheet/directory repaint, all of it on the blocking startup path.
-async function _migrateTokenImagesToPortraits() {
+//
+// Exported for its test — onReady is the only caller.
+export async function _migrateTokenImagesToPortraits() {
 	const stale = game.actors?.filter(a =>
 		a.type !== "stonetop" && a.system?.customType !== "stonetop"
 		&& !isDefaultImg(a.img)
 		&& a.prototypeToken?.texture?.src !== undefined
 		&& isDefaultImg(a.prototypeToken.texture.src)
 	) ?? [];
-	const updates = stale.map(a => ({ _id: a.id, "prototypeToken.texture.src": a.img }));
-	if (updates.length) await Actor.updateDocuments(updates);
+	await _updateActorsBatched(stale, a => ({ "prototypeToken.texture.src": a.img }), "token-image backfill");
 }
 
 // Lift an initiate of Danu off the marker's old file. The shoot an art-less initiate wears
@@ -1775,18 +1834,16 @@ async function _migrateTokenImagesToPortraits() {
 // TokenDocument carries its own `texture.src`, copied from the prototype when it was placed, so
 // an initiate already on a map would draw a broken image on every load forever; `prototypeToken`
 // only governs the NEXT one dragged out.
-async function _migrateShootMarker() {
+//
+// Exported for its test — onReady is the only caller.
+export async function _migrateShootMarker() {
 	const wasOurs = p => LEGACY_SHOOT_MARKERS.includes(String(p ?? "").replace(/^\//, ""));
-	const updates = [];
-	for (const actor of game.actors ?? []) {
-		const update = { _id: actor.id };
-		if (wasOurs(actor.img)) update.img = NEW_SHOOT_MARKER;
-		if (wasOurs(actor.prototypeToken?.texture?.src)) {
-			update["prototypeToken.texture.src"] = NEW_SHOOT_MARKER;
-		}
-		if (Object.keys(update).length > 1) updates.push(update);
-	}
-	if (updates.length) await Actor.updateDocuments(updates);
+	const tokenWasOurs = actor => wasOurs(actor.prototypeToken?.texture?.src);
+	const stale = game.actors?.filter(actor => wasOurs(actor.img) || tokenWasOurs(actor)) ?? [];
+	await _updateActorsBatched(stale, actor => ({
+		...(wasOurs(actor.img) ? { img: NEW_SHOOT_MARKER } : {}),
+		...(tokenWasOurs(actor) ? { "prototypeToken.texture.src": NEW_SHOOT_MARKER } : {}),
+	}), "shoot-marker lift");
 
 	// One request per affected scene, and none at all for a scene with nothing to lift — which
 	// after the first load is every scene. See utils/placed-tokens.js.
@@ -2201,7 +2258,10 @@ async function _consolidateGmPrepFamily(steading, { folderFlagId, pageType, ensu
 // who already imported: art lives OUTSIDE the world, so a GM who imported in another world
 // already has it here (reapply re-points it) and skips straight to marking this resolved.
 // Resolves exactly once, then the flag stops it re-checking.
-async function _postBook2ArtReminderOnce() {
+//
+// Exported for its test — onReady is the only caller.
+export async function _postBook2ArtReminderOnce() {
+	if (!_isPostingGm()) return;
 	if (getSetting("book2ArtReminderShown")) return;
 	// Hold off until the Welcome guide has stopped auto-opening — the GM finished session
 	// zero or ticked "Don't show this again". Mirrors _openGmWelcomeGuide's gate. Not flagged
@@ -2395,7 +2455,18 @@ function _buildGmPlaybookArtContent({ maps, diagrams }) {
 		"stonetop-art-reminder-card");
 }
 
-async function _postStartupWelcomeMessageOnce() {
+// Every GM client reaches the two latched cards above and below, and both post to a chat every
+// GM shares: two GMs whose `ready` lands together would both read the latch unset and both post.
+// So only the primary GM posts them, as remindDestinedOmenRoll does; the others leave the latch
+// alone and the primary sets it. Paired with isGM because isPrimaryGM() alone is true when NO GM
+// is connected.
+function _isPostingGm() {
+	return !!game.user?.isGM && isPrimaryGM();
+}
+
+// Exported for its test — onReady is the only caller.
+export async function _postStartupWelcomeMessageOnce() {
+	if (!_isPostingGm()) return;
 	if (getSetting("startupWelcomeShown")) return;
 	if (!globalThis.ChatMessage?.create) return;
 	await ChatMessage.create({

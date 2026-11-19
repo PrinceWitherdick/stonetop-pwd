@@ -1572,8 +1572,13 @@ export function createStonetopCharacterSheetClass(Base) {
 			// the session, once for every character sheet anybody ever opened on that tab.
 			closeTimelineTab(this);
 			this._masonries?.forEach(m => m.disconnect());
+			// The basic-move panel and the move cross-reference tooltip both live on
+			// document.body. activateListeners replaces them per render, but a sheet that is
+			// closed rather than re-rendered never reaches that, so both go here.
 			this._movePanel?.remove();
 			this._movePanel = null;
+			this._moveRefPanel?.remove();
+			this._moveRefPanel = null;
 			// The art hover preview lives on document.body, so it survives the sheet's DOM
 			// being torn down — clear it or it orphans if the sheet closes (e.g. Escape) while
 			// the cursor is still over a card's art and no mouseleave ever fires.
@@ -4081,31 +4086,28 @@ export function createStonetopCharacterSheetClass(Base) {
 			});
 			html.find(".stonetop-moves-level-notice-dismiss").on("click", async ev => {
 				const key = ev.currentTarget.dataset.overageKey;
-				if (key) await this.actor.setFlag(STONETOP_SCOPE, "moves.dismissedLevelOverage", key);
-				this.render(false);
+				await this._renderAfter(key ? this.actor.setFlag(STONETOP_SCOPE, "moves.dismissedLevelOverage", key) : null);
 			});
 
 			// Reveal the "Drop a playbook here" hint only while a drag is actually
 			// over the sheet — a blank sheet shouldn't show a confusing dashed box,
-			// but the player can still drop a playbook anywhere on it. dragenter and
-			// dragleave bubble up from every child, so track the nesting depth and
-			// only clear the hint once the drag has truly left the form.
-			let dragDepth = 0;
-			// Drop affordance for the Relationships section. Its clear() is folded into
-			// clearDropHint because the sheet-wide drop handler runs in the capture phase and
-			// stops propagation before a listener on the section would ever see the drop.
+			// but the player can still drop a playbook anywhere on it. The playbook zone
+			// itself lights up while the drag is over it, and so does the Relationships
+			// section. All three count the drag's nesting depth through the shared helper,
+			// so none flickers off as the pointer crosses a child (the zone's instinct
+			// badge), and all three clears are folded into clearDropHint because the
+			// sheet-wide drop handler runs in the capture phase and stops propagation before
+			// a listener on any of them would ever see the drop.
+			const clearDraggingHint = wireRelationshipDropHighlight(html[0], "stonetop-dragging-playbook");
+			const clearPlaybookZone = wireRelationshipDropHighlight(
+				html[0].querySelector(".stonetop-playbook-drop-zone"), "drag-over");
 			const clearRelHighlight = wireRelationshipDropHighlight(
 				html[0].querySelector(".stonetop-character-relationships"));
 			const clearDropHint = () => {
-				dragDepth = 0;
-				html[0].classList.remove("stonetop-dragging-playbook");
+				clearDraggingHint();
+				clearPlaybookZone();
 				clearRelHighlight();
 			};
-			html[0].addEventListener("dragenter", () => {
-				dragDepth++;
-				html[0].classList.add("stonetop-dragging-playbook");
-			});
-			html[0].addEventListener("dragleave", () => { if (--dragDepth <= 0) clearDropHint(); });
 
 			html[0].addEventListener("dragover", (ev) => ev.preventDefault());
 			html[0].addEventListener("drop", async (ev) => {
@@ -4145,8 +4147,7 @@ export function createStonetopCharacterSheetClass(Base) {
 						return;
 					}
 					if (doc?.system?.customType === "stonetop") {
-						await this.actor.setFlag(STONETOP_SCOPE, "steadingId", doc.id);
-						this.render(false);
+						await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "steadingId", doc.id));
 					} else if (doc?.type === "monster") {
 						// Dropping a monster offers to convert it to a follower (NPCs &
 						// Followers, p.475): keep its stats, add tags, choose a cost.
@@ -4181,13 +4182,6 @@ export function createStonetopCharacterSheetClass(Base) {
 					await this._onDropItemCreate(item.toObject());
 				}
 			}, true);
-
-			const dropZone = html[0].querySelector(".stonetop-playbook-drop-zone");
-			if (dropZone) {
-				dropZone.addEventListener("dragenter", () => dropZone.classList.add("drag-over"));
-				dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
-				dropZone.addEventListener("drop", () => dropZone.classList.remove("drag-over"));
-			}
 
 			html.find(".cell--stats .stat-value").each((_, el) => {
 				el.value = el.value.replace(/^\+/, "");
@@ -4551,8 +4545,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!this.isEditable) return;
 				const idx     = Number(ev.currentTarget.dataset.index);
 				const current = this._stonetopCharacter.defendReadiness;
-				await this._stonetopCharacter.setDefendReadiness(current === idx + 1 ? idx : idx + 1);
-				this.render(false);
+				await this._renderAfter(this._stonetopCharacter.setDefendReadiness(current === idx + 1 ? idx : idx + 1));
 			});
 
 			// Big Damn Hero's leap, beside Defend: no roll, Defend's 10+ applied, once per fight
@@ -4562,8 +4555,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				ev.stopPropagation();
 				if (!this.isEditable) return;
 				ev.currentTarget.disabled = true;
-				await leapIn(this.actor, { character: this._stonetopCharacter });
-				this.render(false);
+				await this._renderAfter(leapIn(this.actor, { character: this._stonetopCharacter }));
 			});
 
 			// A post-death move's own buttons (move-group.hbs): what its rule costs or spends, and the rolls
@@ -5366,17 +5358,14 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-possession-custom-remove").on("click", this._onRemoveCustomPossession.bind(this));
 			html.find(".stonetop-possession-custom-add").on("click", this._onAddCustomPossession.bind(this));
 			// The Marshal's personal symbol, displayed: crew +1 Loyalty (max 3). Disabled for the
-			// write so a double click cannot count twice; the render that follows redraws it.
+			// write so a double click cannot count twice; the render that follows redraws it, and
+			// _renderAfter reports the write if it fails (and never rethrows, so the button comes back).
 			html.find(".stonetop-personal-symbol-btn").on("click", async ev => {
 				const btn = ev.currentTarget;
 				if (btn.disabled) return;
 				btn.disabled = true;
-				try {
-					await displayPersonalSymbol(this.actor);
-				} finally {
-					btn.disabled = false;
-					this.render(false);
-				}
+				await this._renderAfter(displayPersonalSymbol(this.actor));
+				btn.disabled = false;
 			});
 			// The sacred pouch's row (sacred-pouch.js): an entry taken out (discarded, inflicted, a power
 			// lost), and the downtime refill. Disabled for the ask, as the symbol's button is.
@@ -5534,8 +5523,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const path = _followerStructuralPath(el.dataset.ftype, el.dataset.field)
 					?? followerDetailPath(el.dataset.ftype, el.dataset.slug, el.dataset.field);
 				if (!path) return;
-				await this.actor.setFlag(STONETOP_SCOPE, path, el.value.trim());
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, el.value.trim()));
 			});
 			// Armor-source field: a free-type input with a suggestion dropdown (leather,
 			// shield, hides…). Picking a suggestion fires `change`, saved by the handler
@@ -5551,8 +5539,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const path = followerDetailPath(el.dataset.ftype, el.dataset.slug, "exceptional");
 				if (!path) return;
 				const turnOn = !el.classList.contains("is-selected");
-				await this.actor.setFlag(STONETOP_SCOPE, path, turnOn);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, turnOn));
 			});
 			// Crew tag picker + its custom write-in row: store only the player's chosen tags
 			// plus the write-in. The background-auto tag is the disabled option, so
@@ -5570,8 +5557,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const printed  = html.find(".stonetop-crew-tag-option").toArray().map(el => el.value);
 				const overflow = crewWriteInOverflow(this.actor.getFlag(STONETOP_SCOPE, "crew.tags"), { availableTags: printed });
 				const tags = crewTagsWithWriteIns(listed, boxes, Number.isFinite(limit) ? limit : Infinity, overflow);
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.tags", tags);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.tags", tags));
 			});
 			// Animal-companion trait picker + its custom write-in row: pick up to the type's
 			// pickCount. Same "checked, not disabled" gather as the crew tags; the limit is
@@ -5581,8 +5567,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const traits = html.find(".stonetop-ac-trait-option:checked:not(:disabled)").toArray().map(el => el.value);
 				const custom = html.find(".stonetop-ac-trait-custom").val()?.trim();
 				if (custom) traits.push(custom);
-				await this.actor.setFlag(STONETOP_SCOPE, "animalCompanion.traits", traits);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "animalCompanion.traits", traits));
 			});
 			// Initiate of Danu trait lines: "pick 1 on each line". Each radio row writes
 			// its choice to initiateDetails.<slug>.rows[rowIdx] — the same object store
@@ -5596,27 +5581,22 @@ export function createStonetopCharacterSheetClass(Base) {
 				const path = `initiateDetails.${slug}.rows`;
 				const rows = foundry.utils.deepClone(this.actor.getFlag(STONETOP_SCOPE, path) ?? {});
 				rows[rowIdx] = el.value;
-				await this.actor.setFlag(STONETOP_SCOPE, path, rows);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, rows));
 			});
 			// Crew instinct / cost pickers (pick one from the playbook list)
 			html.find(".stonetop-crew-instinct-option").on("change", async ev => {
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.instinct", ev.currentTarget.value);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.instinct", ev.currentTarget.value));
 			});
 			html.find(".stonetop-crew-cost-option").on("change", async ev => {
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.cost", ev.currentTarget.value);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.cost", ev.currentTarget.value));
 			});
 			// Crew instinct / cost write-ins (the insert's blank rows): save the typed value
 			// verbatim; picking a radio above overwrites it, matching onboarding.
 			html.find(".stonetop-crew-instinct-custom").on("change", async ev => {
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.instinct", ev.currentTarget.value.trim());
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.instinct", ev.currentTarget.value.trim()));
 			});
 			html.find(".stonetop-crew-cost-custom").on("change", async ev => {
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.cost", ev.currentTarget.value.trim());
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.cost", ev.currentTarget.value.trim()));
 			});
 			// Gear checklist: toggle carried, rename, add, remove
 			const readFollowerGear = (ftype, slug) => {
@@ -5630,8 +5610,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const i = Number(el.dataset.index);
 				if (!path || !list[i]) return;
 				list[i].checked = el.checked;
-				await this.actor.setFlag(STONETOP_SCOPE, path, list);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, list));
 			});
 			html.find(".stonetop-follower-gear-label").on("change", async ev => {
 				const el = ev.currentTarget;
@@ -5647,8 +5626,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const { path, list } = readFollowerGear(el.dataset.ftype, el.dataset.slug);
 				if (!path) return;
 				list.push({ label: "", checked: false });
-				await this.actor.setFlag(STONETOP_SCOPE, path, list);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, list));
 			});
 			html.find(".stonetop-follower-gear-remove").on("click", async ev => {
 				const el = ev.currentTarget;
@@ -5656,8 +5634,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const i = Number(el.dataset.index);
 				if (!path) return;
 				list.splice(i, 1);
-				await this.actor.setFlag(STONETOP_SCOPE, path, list);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, list));
 			});
 
 			// Tapping one of a follower's own moves posts it to chat, spoken with the
@@ -5714,8 +5691,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-follower-tag-remove").on("click", async ev => {
 				if (!this.isEditable) return;
 				const { ftype, slug, tag } = ev.currentTarget.dataset;
-				await removeFollowerCondition(this.actor, ftype || "animal-companion", slug ?? "", tag);
-				this.render(false);
+				await this._renderAfter(removeFollowerCondition(this.actor, ftype || "animal-companion", slug ?? "", tag));
 			});
 			// Outfit a follower (follower-outfit.js), from their card's gear list.
 			html.find(".stonetop-follower-outfit").on("click", ev => {
@@ -5731,8 +5707,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			html.find(".stonetop-follower-debility-toggle").on("click", async ev => {
 				if (!this.isEditable) return;
 				const { ftype, slug, tag } = ev.currentTarget.dataset;
-				await toggleFollowerCondition(this.actor, ftype, slug ?? "", tag);
-				this.render(false);
+				await this._renderAfter(toggleFollowerCondition(this.actor, ftype, slug ?? "", tag));
 			});
 			// The tag editor under a follower card's pencil (Updating followers, p.480): remove a
 			// tag, or add one (or several, comma-separated) from the field.
@@ -5803,8 +5778,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!path) return;
 				const idx     = Number(ev.currentTarget.dataset.index);
 				const current = Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0;
-				await this.actor.setFlag(STONETOP_SCOPE, path, current === idx + 1 ? idx : idx + 1);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, path, current === idx + 1 ? idx : idx + 1));
 			});
 			// Spend Loyalty / Readiness (p.464 / p.469): open a small chooser for the
 			// rulebook's spend options, decrement the track, and post a chat note.
@@ -5858,8 +5832,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				ev.currentTarget.closest(".stonetop-crew-gear-item")?.classList.toggle("is-checked", checked);
 				const gear    = foundry.utils.deepClone(this.actor.getFlag(STONETOP_SCOPE, "crew.gear") ?? {});
 				gear[slug]    = checked ? (Number(weight) || 1) : 0;
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.gear", gear);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.gear", gear));
 			});
 			// The insert's blank inventory lines (p.144): write an item in (a name and 1 or 2 ◇), or
 			// strike one off, its pips leaving the crew's load with it (crew-write-ins.js).
@@ -5870,8 +5843,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					weight: row?.querySelector(".stonetop-crew-gear-add-weight")?.value,
 				}, foundry.utils.randomID(8));
 				if (!rows) { nameEl?.focus(); return; }
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.writtenGear", rows);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.writtenGear", rows));
 			};
 			html.find(".stonetop-crew-gear-add").on("click", ev => addCrewItem(ev.currentTarget.closest(".stonetop-crew-gear-add-row")));
 			html.find(".stonetop-crew-gear-add-name").on("keydown", ev => {
@@ -5884,8 +5856,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				ev.stopPropagation();
 				const id = ev.currentTarget.dataset.slug;
 				if (!id) return;
-				await this.actor.update(removeCrewWrittenGearUpdate(this.actor.getFlag(STONETOP_SCOPE, "crew.writtenGear"), id, STONETOP_SCOPE));
-				this.render(false);
+				await this._renderAfter(this.actor.update(removeCrewWrittenGearUpdate(this.actor.getFlag(STONETOP_SCOPE, "crew.writtenGear"), id, STONETOP_SCOPE)));
 			});
 			// Crew supplies pip circles — one set (one ◇ of supplies) per member, stored as an
 			// array of use counts. The array grows to reach whichever set was clicked rather than
@@ -5898,8 +5869,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const arr = Array.isArray(current) ? [...current] : [];
 				while (arr.length <= setIdx) arr.push(0);
 				arr[setIdx] = newVal;
-				await this.actor.setFlag(STONETOP_SCOPE, "crew.supplies", arr);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "crew.supplies", arr));
 			});
 			// Clamp a stored group-fight pool that now sits over its max. The pool is ONE
 			// member's HP (the abstraction's own rule — see the crew card's note), so the
@@ -5950,9 +5920,11 @@ export function createStonetopCharacterSheetClass(Base) {
 					});
 					if (!ok) return;
 				}
-				await this.actor.update(update);
-				if (person) await releaseCrewPerson(row, { remove: deletePerson });
-				this.render(false);
+				// One promise for both writes, so a failure in either is reported and the sheet repaints.
+				await this._renderAfter((async () => {
+					await this.actor.update(update);
+					if (person) await releaseCrewPerson(row, { remove: deletePerson });
+				})());
 			});
 
 			// Crew roster size — total headcount; never below the number of named
@@ -5975,8 +5947,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					update["flags.stonetop-pwd.crew.memberPortrait"] = memberPortrait.slice(0, anonCount);
 				}
 				clampStoredGroupHp(update);
-				await this.actor.update(update);
-				this.render(false);
+				await this._renderAfter(this.actor.update(update));
 			};
 			html.find(".stonetop-crew-size-step").on("click", ev => {
 				const delta = Number(ev.currentTarget.dataset.delta) || 0;
@@ -6004,8 +5975,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!path) return;
 				const idx     = Number(ev.currentTarget.dataset.index);
 				const current = Math.max(0, Number(this.actor.getFlag(STONETOP_SCOPE, path)) || 0);
-				await this.actor.update({ [`flags.stonetop-pwd.${path}`]: current === idx + 1 ? idx : idx + 1 });
-				this.render(false);
+				await this._renderAfter(this.actor.update({ [`flags.stonetop-pwd.${path}`]: current === idx + 1 ? idx : idx + 1 }));
 			});
 			// "Uses ammo" toggle (Damage section, edit mode): opts a ranged follower
 			// into the ◇ low ammo / ◇ all out track. Turning it off clears any marked
@@ -6020,8 +5990,7 @@ export function createStonetopCharacterSheetClass(Base) {
 					const ammoPath = _followerAmmoPath(ftype, slug ?? "");
 					if (ammoPath) update[`flags.stonetop-pwd.${ammoPath}`] = 0;
 				}
-				await this.actor.update(update);
-				this.render(false);
+				await this._renderAfter(this.actor.update(update));
 			});
 			// Follower ammo checks (◇ low ammo, ◇ all out): a cumulative 0→1→2 track, so
 			// checking "all out" implies "low ammo" and clearing "low" resets to full.
@@ -6031,17 +6000,16 @@ export function createStonetopCharacterSheetClass(Base) {
 				if (!path) return;
 				const idx    = Number(index);
 				const newVal = ev.currentTarget.checked ? idx + 1 : idx;
-				await this.actor.update({ [`flags.stonetop-pwd.${path}`]: newVal });
-				this.render(false);
+				await this._renderAfter(this.actor.update({ [`flags.stonetop-pwd.${path}`]: newVal }));
 			});
 
 			// Restore the abstracted group-fight pool to full (clears the override).
 			// A data-slug marks a custom group's pool; without one it's the crew's.
 			html.find(".stonetop-group-hp-reset").on("click", async ev => {
 				const slug = ev.currentTarget.dataset.slug;
-				if (slug) await this.actor.update({ [`flags.stonetop-pwd.customFollowers.${slug}.groupHp`]: null });
-				else      await this.actor.unsetFlag(STONETOP_SCOPE, "crew.groupHp");
-				this.render(false);
+				await this._renderAfter(slug
+					? this.actor.update({ [`flags.stonetop-pwd.customFollowers.${slug}.groupHp`]: null })
+					: this.actor.unsetFlag(STONETOP_SCOPE, "crew.groupHp"));
 			});
 
 			// Custom group roster size (mirrors the crew size stepper): _setCustomGroupSize.
@@ -6329,9 +6297,10 @@ export function createStonetopCharacterSheetClass(Base) {
 									if (!individuals[individualIndex]) return;
 									individuals[individualIndex] = { ...individuals[individualIndex], name, tag, traits };
 									if (relinked) individuals[individualIndex].personUuid = personUuid;
-									await this.actor.update({ "flags.stonetop-pwd.crew.individuals": individuals });
-									if (relinked && priorUuid) await replaceCrewPerson(priorUuid, this.actor);
-									this.render(false);
+									await this._renderAfter((async () => {
+										await this.actor.update({ "flags.stonetop-pwd.crew.individuals": individuals });
+										if (relinked && priorUuid) await replaceCrewPerson(priorUuid, this.actor);
+									})());
 									return;
 								}
 								// Promote the targeted anonymous member: append the named
@@ -6367,8 +6336,7 @@ export function createStonetopCharacterSheetClass(Base) {
 								if (memberPortrait.length || carriedFace !== undefined) {
 									update["flags.stonetop-pwd.crew.memberPortrait"] = memberPortrait;
 								}
-								await this.actor.update(update);
-								this.render(false);
+								await this._renderAfter(this.actor.update(update));
 							},
 						},
 					},
@@ -6511,8 +6479,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const updated = ev.currentTarget.checked
 					? [...current, slug]
 					: current.filter(s => s !== slug);
-				await this.actor.setFlag(STONETOP_SCOPE, "invocations.selected", updated);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "invocations.selected", updated));
 			});
 			// Tapping an Invocation's title uses it: the window asks whether to Invoke the Sun
 			// God (+WIS) and whether to empower it, then posts the card and rolls.
@@ -6566,8 +6533,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				const itemId = ev.currentTarget.dataset.itemId;
 				const item   = this.actor.items.get(itemId);
 				if (item?.flags?.[STONETOP_SCOPE]?.custom && !canAuthorCustomMoves()) return;
-				await this._stonetopCharacter.setMoveLearned(itemId, ev.currentTarget.checked);
-				this.render(false);
+				await this._renderAfter(this._stonetopCharacter.setMoveLearned(itemId, ev.currentTarget.checked));
 			});
 			html.find(".stonetop-level-pick-check").on("change", async ev => {
 				if (!this.isEditable) return;
@@ -7122,8 +7088,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				else target.before(dragSource);
 				const newOrder = [...nav.querySelectorAll(".item[data-tab]")].map(t => t.dataset.tab);
 				this._applyTabOrder(root, newOrder);
-				await this.actor.setFlag(STONETOP_SCOPE, "tabOrder", newOrder);
-				this.render(false);
+				await this._renderAfter(this.actor.setFlag(STONETOP_SCOPE, "tabOrder", newOrder));
 				dragSource = null;
 			});
 
@@ -8135,8 +8100,7 @@ export function createStonetopCharacterSheetClass(Base) {
 				buttons.pouchStore = {
 					label: guide.pouchStore.label,
 					callback: async () => {
-						await storeInPouch(this.actor, guide.pouchStore.kind, { moveName: name });
-						this.render(false);
+						await this._renderAfter(storeInPouch(this.actor, guide.pouchStore.kind, { moveName: name }));
 					},
 				};
 			}
@@ -8814,8 +8778,7 @@ export function createStonetopCharacterSheetClass(Base) {
 			if (Number.isFinite(rawPool) && rawPool > memberHpMax) {
 				update[`flags.stonetop-pwd.customFollowers.${slug}.groupHp`] = memberHpMax;
 			}
-			await this.actor.update(update);
-			this.render(false);
+			await this._renderAfter(this.actor.update(update));
 		}
 
 		// The custom group's size box. Blank/non-numeric input reverts to the current size rather than
