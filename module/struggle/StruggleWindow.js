@@ -1,4 +1,5 @@
 import { StonetopDialog } from "../utils/stonetop-dialog.js";
+import { LiveDocumentWindow } from "../utils/live-document-window.js";
 import { openOrFocus } from "../utils/open-or-focus.js";
 import { registerRestorableWindow } from "../utils/window-restore.js";
 import { statApproaches } from "../utils/stat-approaches.js";
@@ -17,8 +18,6 @@ const ID_PREFIX = "stonetop-struggle";
 const SCROLLER  = ".stonetop-guide-main";
 /** The kind a struggle window is saved under by utils/window-restore.js, at the head of its key. */
 const RESTORE_KIND = "struggle";
-/** A burst of rolls lands one update per character within a second; the window redraws once for it. */
-const RENDER_DEBOUNCE_MS = 80;
 
 /** The window id for a struggle: one window per struggle, on each client. */
 export function struggleWindowId(struggleId) {
@@ -64,13 +63,10 @@ async function defyDangerApproaches() {
  * It stays up after the struggle ends, showing how it went, until its reader closes it. A struggle
  * called off closes it at once, since there is nothing left in it to read.
  */
-export class StruggleWindow extends StonetopDialog {
+export class StruggleWindow extends LiveDocumentWindow {
 	constructor({ struggleId } = {}, options = {}) {
 		super(StonetopDialog.perDocumentOptions(ID_PREFIX, struggleId, options));
 		this._struggleId = struggleId;
-		this._hooks = null;
-		this._renderTimer = null;
-		this._writes = Promise.resolve();
 	}
 
 	static get defaultOptions() {
@@ -126,26 +122,6 @@ export class StruggleWindow extends StonetopDialog {
 	async _render(force, options) {
 		if (!this.rendered && !struggleWindowWanted(this._struggleId)) return;
 		await super._render(force, options);
-	}
-
-	activateListeners(html) {
-		super.activateListeners(html);
-		this._watch();
-		const root = html?.[0] ?? html;
-		root?.addEventListener?.("click", ev => this._onClick(ev));
-		root?.addEventListener?.("change", ev => this._onChange(ev));
-	}
-
-	async close(options = {}) {
-		this._unwatch();
-		return super.close(options);
-	}
-
-	/** Run one write after the last, so each reads the struggle as the one before left it. */
-	_queue(noun, task) {
-		const run = this._writes.then(task);
-		this._writes = run.catch(err => this.reportWriteFailure(noun, err));
-		return this._writes;
 	}
 
 	_rowControl(key, selector) {
@@ -226,55 +202,42 @@ export class StruggleWindow extends StonetopDialog {
 	 * their row), a GM's Shift Up or Down on one of its roll cards, and who is online, since that moves
 	 * who drives whose row.
 	 */
-	_watch() {
-		if (this._hooks) return;
+	_watchedHooks() {
 		const onActor = (actor, changes) => {
 			if (isStruggleHost(actor)) {
 				if (touchesFlag(changes, STRUGGLE_FLAG)) this._scheduleRender();
 				return;
 			}
 			if (actor?.type !== "character") return;
-			const inIt = currentStruggle()?.rows.some(r => r.actorId === actor.id);
-			if (inIt || touchesFlag(changes, STRUGGLE_ROLL_FLAG)) this._scheduleRender();
+			// The cheap test first; both are pure, so the order changes nothing else.
+			if (touchesFlag(changes, STRUGGLE_ROLL_FLAG) || currentStruggle()?.rows.some(r => r.actorId === actor.id)) this._scheduleRender();
 		};
 		const onMessage = message => {
 			if (message?.getFlag?.(SYSTEM_ID, STRUGGLE_MESSAGE_FLAG)?.id === this._struggleId) this._scheduleRender();
 		};
-		this._hooks = [
-			["updateActor",       Hooks.on("updateActor", onActor)],
-			["updateChatMessage", Hooks.on("updateChatMessage", onMessage)],
-			["createChatMessage", Hooks.on("createChatMessage", onMessage)],
-			["userConnected",     Hooks.on("userConnected", () => this._scheduleRender())],
+		return [
+			["updateActor",       onActor],
+			["updateChatMessage", onMessage],
+			["createChatMessage", onMessage],
+			["userConnected",     () => this._scheduleRender()],
 		];
 	}
 
-	_unwatch() {
-		for (const [hook, id] of this._hooks ?? []) Hooks.off(hook, id);
-		this._hooks = null;
-		clearTimeout(this._renderTimer);
-		this._renderTimer = null;
-	}
-
-	/** Redraw soon, or close: the struggle was called off, replaced, or this client is no longer in it. */
-	_scheduleRender() {
-		clearTimeout(this._renderTimer);
-		this._renderTimer = setTimeout(() => {
-			this._renderTimer = null;
-			if (!this.rendered) return;
-			const struggle = currentStruggle();
-			if (!struggle || struggle.id !== this._struggleId || struggle.status === STRUGGLE_STATUS.CANCELLED) {
-				if (struggle?.status === STRUGGLE_STATUS.CANCELLED && struggle.id === this._struggleId && !game.user?.isGM) {
-					ui.notifications?.info?.("The GM called off the Struggle as One.");
-				}
-				this.close();
-				return;
+	/** After the debounce (LiveDocumentWindow#_scheduleRender): close if the struggle was called off, replaced, or this client is no longer in it; else redraw. */
+	_redrawOrClose() {
+		const struggle = currentStruggle();
+		if (!struggle || struggle.id !== this._struggleId || struggle.status === STRUGGLE_STATUS.CANCELLED) {
+			if (struggle?.status === STRUGGLE_STATUS.CANCELLED && struggle.id === this._struggleId && !game.user?.isGM) {
+				ui.notifications?.info?.("The GM called off the Struggle as One.");
 			}
-			if (isLive(struggle) && !takesPart(struggle)) {
-				this.close();
-				return;
-			}
-			this.render(false);
-		}, RENDER_DEBOUNCE_MS);
+			this.close();
+			return;
+		}
+		if (isLive(struggle) && !takesPart(struggle)) {
+			this.close();
+			return;
+		}
+		this.render(false);
 	}
 }
 
