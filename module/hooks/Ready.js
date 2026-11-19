@@ -265,7 +265,12 @@ export async function onReady() {
 	// (idempotent; primary-GM only so two connected GMs can't double-create). Swept every
 	// load, not once per world: players can't create actors, so a background that seeds
 	// neighbors during onboarding leaves text rows for the GM to pick up here.
-	if (isPrimaryGM()) {
+	//
+	// Paired with isGM because isPrimaryGM() alone is true when NO GM is connected: a player
+	// alone in the world would otherwise run every sweep below, failing each world write and
+	// stamping the world-scope once-per-version gates it has no right to set, and could be shown
+	// the GM's token-link question. The same pairing as isResidentsWriter (settlement-residents.js).
+	if (game.user.isGM && isPrimaryGM()) {
 		// Un-duplicate any chronicle journal a build with the misfiled flag key re-seeded. Swept
 		// every load rather than latched: it is idempotent by construction (nothing is left for
 		// it to match once it has run), so there is no gate that can get stuck. See
@@ -767,7 +772,9 @@ export async function onReady() {
 			.then(() => adoptHomes && oncePerVersion("settlementResidentHomes", () => {}))
 			.catch(err => console.error("Stonetop | filing settlement residents failed", err));
 	}
-	if (isPrimaryGM()) {
+	// A connected primary GM, for the same reason: the portrait writes and the world-scope stamp
+	// are a GM's, and with no GM connected isPrimaryGM() is true on every player's client.
+	if (game.user.isGM && isPrimaryGM()) {
 		// An earlier build's poster map is replaced on the first pass a world sees and never after,
 		// so a GM who later picks that map on purpose keeps it (settlement-portrait.js).
 		const legacyMaps = !sweepVersion("settlementLegacyMaps");
